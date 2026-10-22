@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { homebrewGearSchema } from "@/lib/schemas/homebrew";
 import { ITEM_TAGS } from "@/lib/schemas/item-tags";
-import type { SheetSummon } from "@/lib/schemas/summon";
+import { summonAttackSchema, type SheetSummon } from "@/lib/schemas/summon";
 import { ABILITIES } from "@/lib/schemas/abilities";
 import { GENDERS, storedGender, type Gender } from "@/lib/gender";
 import { conditionMetaSchema, ROUND_CEILING, type ConditionMetaMap } from "@/lib/schemas/condition-meta";
@@ -576,19 +576,13 @@ export const wildShapeSchema = z
       .optional(),
     // The form's walking speed in feet.
     speed: z.number().int().min(0).max(120).optional(),
-    // Natural attacks with statblock numbers; pc_attack uses these while
-    // transformed instead of the sheet's weapons.
-    attacks: z
-      .array(
-        z.object({
-          name: z.string().trim().min(1).max(40),
-          toHit: z.number().int().min(-5).max(20),
-          damage: z.string().trim().min(1).max(30),
-          type: z.string().trim().max(20),
-        }),
-      )
-      .max(4)
-      .optional(),
+    // Natural attacks with statblock numbers, riders and reach included;
+    // pc_attack uses these while transformed instead of the sheet's weapons.
+    // An empty list is a form with no attack at all (a frog), which leaves
+    // the character nothing to attack with.
+    attacks: z.array(summonAttackSchema).max(4).optional(),
+    // The form's Multiattack: attacks one Attack action holds.
+    attacksPerTurn: z.number().int().min(1).max(4).optional(),
   })
   .nullable();
 export type WildShape = z.infer<typeof wildShapeSchema>;
@@ -607,17 +601,8 @@ export const petSchema = z.object({
   maxHp: z.number().int().min(1).max(300),
   ac: z.number().int().min(1).max(30),
   speed: z.number().int().min(0).max(120),
-  attacks: z
-    .array(
-      z.object({
-        name: z.string().trim().min(1).max(40),
-        toHit: z.number().int().min(-5).max(20),
-        damage: z.string().trim().min(1).max(30),
-        type: z.string().trim().max(20),
-      }),
-    )
-    .max(3)
-    .default([]),
+  // Its natural attacks with their riders (src/lib/srd/creature-attacks.ts).
+  attacks: z.array(summonAttackSchema).max(3).default([]),
   // One line of senses/traits for the DM to narrate.
   notes: z.string().trim().max(300).default(""),
 });

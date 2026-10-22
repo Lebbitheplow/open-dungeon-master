@@ -16,7 +16,10 @@ import {
   wildShapeCapsFor,
   wildShapeForms,
   wildShapeHours,
+  wildShapeRecord,
 } from "@/lib/srd/beast-forms";
+import { attackSummary } from "@/lib/srd/creature-attacks";
+import { speedWords } from "@/lib/srd/srd-creatures";
 import { isUnlimited, matchResource, RAGING, recoveringPrefix, resourceLevel, type ResourceDef } from "@/lib/srd/class-resources";
 import { effectiveMaxHp, incapacitatedBy, wearsHeavyArmor } from "@/lib/dm/condition-logic";
 import { classLevelFor, classListFor } from "@/lib/srd/multiclass";
@@ -691,26 +694,18 @@ export function computeUseResource(
             retry: true,
           };
         }
-        outcome.patch.wildShape = {
-          form: known.name,
-          beastHp: known.hp,
-          beastMaxHp: known.hp,
-          beastAc: known.ac,
+        // Wild Shape swaps the physical scores; INT/WIS/CHA stay the
+        // druid's own, so only these three are stored.
+        outcome.patch.wildShape = wildShapeRecord(known, {
           kind: "wildshape",
-          // Wild Shape swaps the physical scores; INT/WIS/CHA stay the
-          // druid's own, so only these three are stored.
-          abilities: {
-            str: known.abilities.str,
-            dex: known.abilities.dex,
-            con: known.abilities.con,
-          },
-          speed: known.speed,
-          attacks: known.attacks,
-        };
-        outcome.result.form = `${known.name}: ${known.hp} HP, AC ${known.ac}, speed ${known.speed} ft, STR ${known.abilities.str}/DEX ${known.abilities.dex}/CON ${known.abilities.con}`;
-        outcome.result.attacks = known.attacks
-          .map((attack) => `${attack.name} +${attack.toHit} (${attack.damage} ${attack.type})`)
-          .join(", ");
+          abilities: { str: known.abilities.str, dex: known.abilities.dex, con: known.abilities.con },
+        });
+        outcome.result.form = `${known.name}: ${known.hp} HP, AC ${known.ac}, speed ${speedWords(known.speeds)}, STR ${known.abilities.str}/DEX ${known.abilities.dex}/CON ${known.abilities.con}`;
+        // A form with no attack (a frog, a sea horse) leaves the druid none:
+        // their own weapons melded into it.
+        outcome.result.attacks = known.attacks.length
+          ? `${known.attacks.map(attackSummary).join(", ")}${(known.attacksPerTurn ?? 1) > 1 ? ` (${known.attacksPerTurn} per Attack action)` : ""}`
+          : "none: this form has no attack, and the druid's own weapons merged into it";
         if (known.traits) {
           outcome.result.formTraits = known.traits;
         }

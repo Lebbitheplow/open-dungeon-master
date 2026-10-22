@@ -7,9 +7,9 @@ import type { CatalogEntry } from "@/lib/dm/catalog-types";
 import { sceneOptions } from "@/lib/ambience/catalog";
 import { BOARD_ADJUDICATIONS } from "@/lib/dm/catalog-board";
 import { ENCOUNTER_OUTCOMES, type EncounterOutcome } from "@/lib/dm/encounter-logic";
-import { summonFormNames } from "@/lib/srd/summon-forms";
-import { familiarFormNames } from "@/lib/srd/familiar-forms";
-import { BEAST_FORMS } from "@/lib/srd/beast-forms";
+// The SRD creature table's names alone: the blocks stay on the server.
+import CREATURE_NAMES from "@/lib/srd/srd-creature-names.json";
+import { spellCreatureNames } from "@/lib/srd/spell-creatures";
 import { SAMPLE_TRAPS } from "@/lib/srd/trap-specs";
 import {
   ABILITY_OPTIONS as ABILITIES,
@@ -254,7 +254,7 @@ export const COMBAT_ADJUDICATIONS: CatalogEntry[] = [
         help: "A Death cleric 17: a second enemy within 5 feet of the first, struck by the same necromancy spell from the same slot.",
       },
       // The engine's beast form table, the one the server checks the CR on.
-      { name: "variant", label: "Polymorph's beast", kind: "select", options: BEAST_FORMS.map((beast) => ({ value: beast.name.toLowerCase(), label: beast.name })), help: "Polymorph or True Polymorph: what the creature becomes on a failed WIS save, no higher in CR than it." },
+      { name: "variant", label: "Polymorph's beast", kind: "select", options: CREATURE_NAMES.beasts.map((name) => ({ value: name.toLowerCase(), label: name })), help: "Polymorph or True Polymorph: what the creature becomes on a failed WIS save, no higher in CR than it." },
       ...AREA_PLACEMENT_FIELDS,
       REASON,
     ],
@@ -296,11 +296,11 @@ export const COMBAT_ADJUDICATIONS: CatalogEntry[] = [
         label: "Choice",
         kind: "select",
         // The creatures the summoning spells, Polymorph, Animal Shapes and
-        // Shapechange bring, from the engine's own form table, and Find
-        // Familiar's forms from the familiar table; the server checks the
-        // kind and challenge rating the slot allows, and Pact of the Chain
-        // for its four forms.
-        options: [...new Set([...summonFormNames(), ...familiarFormNames()])].sort().map((name) => ({ value: name.toLowerCase(), label: name })),
+        // Shapechange bring, and Find Familiar's forms, from the engine's
+        // own creature table (src/lib/srd/srd-creatures.ts) and the spells'
+        // own (spell-creatures.ts); the server checks the kind and challenge
+        // rating the slot allows, and Pact of the Chain for its four forms.
+        options: [...new Set([...CREATURE_NAMES.beasts, ...CREATURE_NAMES.others, ...spellCreatureNames()])].sort().map((name) => ({ value: name.toLowerCase(), label: name })),
         other: { label: "Another choice", placeholder: "enlarge" },
         help: "A summoning spell's creature, Find Familiar's form, Polymorph's, Animal Shapes' or Shapechange's beast; or type Enlarge/Reduce, Protection from Energy's type, Enhance Ability, Fire Shield.",
       },

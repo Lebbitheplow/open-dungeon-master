@@ -7,6 +7,28 @@ import { z } from "zod";
 // no place for: the natural attacks, Multiattack, the damage the creature
 // shrugs off, and who made it with what, so the spell's end, its duration or
 // 0 hit points send it away (src/lib/dm/summon-store.ts).
+// What a natural attack's hit does besides its damage (src/lib/srd/
+// creature-attacks.ts CreatureOnHit): a save and what failing it costs, or
+// a grapple, and the sentences no field holds.
+export const creatureOnHitSchema = z.object({
+  save: z.enum(["str", "dex", "con", "int", "wis", "cha"]).optional(),
+  dc: z.number().int().min(1).max(30).optional(),
+  damage: z.string().trim().min(1).max(20).optional(),
+  damageType: z.string().trim().max(20).optional(),
+  halfOnSave: z.boolean().optional(),
+  condition: z.string().trim().max(20).optional(),
+  alsoCondition: z.string().trim().max(20).optional(),
+  rounds: z.number().int().min(1).max(14400).optional(),
+  repeatSave: z.boolean().optional(),
+  escapeDc: z.number().int().min(1).max(30).optional(),
+  maxSize: z.string().trim().max(12).optional(),
+  unconsciousFailBy: z.number().int().min(1).max(30).optional(),
+  unconsciousAtMost: z.number().int().min(1).max(30).optional(),
+  exempt: z.array(z.string().trim().max(20)).max(4).optional(),
+  drainMaxHp: z.enum(["all"]).optional(),
+  manual: z.array(z.string().trim().max(300)).max(6).optional(),
+});
+
 export const summonAttackSchema = z.object({
   name: z.string().trim().min(1).max(40),
   toHit: z.number().int().min(-5).max(30),
@@ -20,10 +42,14 @@ export const summonAttackSchema = z.object({
     .max(2)
     .optional(),
   // Melee reach in feet (5 when absent), or a ranged attack's normal and long
-  // range in feet.
+  // range in feet; a thrown one has both.
   reach: z.number().int().min(5).max(30).optional(),
   range: z.number().int().min(5).max(600).optional(),
   longRange: z.number().int().min(5).max(1200).optional(),
+  thrown: z.boolean().optional(),
+  // "One prone creature": it strikes only a creature that is prone.
+  proneTargetsOnly: z.boolean().optional(),
+  onHit: creatureOnHitSchema.optional(),
 });
 export type SummonAttack = z.infer<typeof summonAttackSchema>;
 

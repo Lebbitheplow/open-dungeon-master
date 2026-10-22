@@ -1,6 +1,6 @@
 import { subclassSpellsFor } from "@/lib/srd/features";
 import { FEAT_ONLY_SPEED } from "@/lib/srd/feature-effects";
-import { formSees } from "@/lib/srd/shape-rules";
+import { formSees } from "@/lib/srd/form-sees";
 import { hasMediumArmorMaster } from "@/lib/srd/feat-combat";
 import backgroundsJson from "@/lib/srd/backgrounds.json";
 import classesJson from "@/lib/srd/classes.json";
@@ -406,7 +406,7 @@ export function computeSheetDerived(
   },
 ): SheetDerived {
   // A Polymorph's beast is its own creature: none of the character's
-  // proficiencies, features, feats or gear (shape-rules.ts formSees).
+  // proficiencies, features, feats or gear (form-sees.ts).
   sheet = formSees(sheet);
   const pb = proficiencyBonus(sheet.level);
   // Ability-setting magic items raise the scores every other number reads.

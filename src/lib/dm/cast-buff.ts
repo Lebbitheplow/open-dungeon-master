@@ -16,7 +16,9 @@ import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { publishPersisted } from "@/lib/events";
 import { findSpellByName, spellEngineName, spellFactsFor, spellMechanicsFor } from "@/lib/content";
-import { beastFormsHolding, findBeastForm, formatCr, formList } from "@/lib/srd/beast-forms";
+import { beastFormsHolding, findBeastForm, formatCr, formList, wildShapeRecord } from "@/lib/srd/beast-forms";
+import { attackSummary } from "@/lib/srd/creature-attacks";
+import { speedWords } from "@/lib/srd/srd-creatures";
 import { shapedAbilities, shapeForms, shapeProblem, shapeRuleFor } from "@/lib/srd/shape-rules";
 import { conditionEffectsFor } from "@/lib/srd/condition-effects";
 import { applyDmMutation, castBarred } from "@/lib/dm/mutations";
@@ -378,17 +380,11 @@ export function handleCastBuff(
       // (a polymorphed mind is the beast's), speed, and natural attacks.
       // Damage past the pool reverts the form (mutations.ts apply_damage).
       const shaped = patchSheet(target.id, {
-        wildShape: {
-          form: polymorphForm.name,
-          beastHp: polymorphForm.hp,
-          beastMaxHp: polymorphForm.hp,
-          beastAc: polymorphForm.ac,
+        wildShape: wildShapeRecord(polymorphForm, {
           kind: "polymorph",
-          ...(shapeRule.keepsTraining ? { keepsTraining: true } : {}),
+          keepsTraining: shapeRule.keepsTraining,
           abilities: shapedAbilities(shapeRule, polymorphForm, fresh.abilities),
-          speed: polymorphForm.speed,
-          attacks: polymorphForm.attacks,
-        },
+        }),
       });
       if (shaped) {
         publishPersisted(campaign.id, "sheet_updated", { sheet: shaped });
@@ -451,10 +447,8 @@ export function handleCastBuff(
     ...(maxHpGain ? { hitPoints: `+${maxHpGain} to the maximum and current hit points of each` } : {}),
     ...(polymorphForm
       ? {
-          form: `${polymorphForm.name}: ${polymorphForm.hp} HP, AC ${polymorphForm.ac}, speed ${polymorphForm.speed} ft`,
-          formAttacks: polymorphForm.attacks
-            .map((attack) => `${attack.name} +${attack.toHit} (${attack.damage} ${attack.type})`)
-            .join(", "),
+          form: `${polymorphForm.name}: ${polymorphForm.hp} HP, AC ${polymorphForm.ac}, speed ${speedWords(polymorphForm.speeds)}`,
+          formAttacks: polymorphForm.attacks.length ? polymorphForm.attacks.map(attackSummary).join(", ") : "none: this form has no attack",
           ...(polymorphForm.traits ? { formTraits: polymorphForm.traits } : {}),
         }
       : {}),

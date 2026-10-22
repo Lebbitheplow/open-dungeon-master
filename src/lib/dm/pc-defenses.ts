@@ -10,7 +10,7 @@ import { chosenResistances, featureDamageImmunities } from "@/lib/srd/trait-rule
 import { authoredResistances } from "@/lib/srd/authored-effects";
 import { magicItemRiders } from "@/lib/srd/magic-items";
 import { DAMAGE_TYPES, PHYSICAL_TYPES, rageApplies, resistsAllDamage } from "@/lib/dm/damage-logic";
-import { formSees } from "@/lib/srd/shape-rules";
+import { formSees } from "@/lib/srd/form-sees";
 import { holdsFeature } from "@/lib/srd/feature-names";
 import { isDwarf, srdRaceId } from "@/lib/srd/race-id";
 

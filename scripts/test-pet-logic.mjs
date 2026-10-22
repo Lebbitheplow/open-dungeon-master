@@ -37,11 +37,12 @@ test("Find Familiar gates the familiar and unknown forms are refused", () => {
   const denied = buildPet(sheet({ spellcasting: null }), { kind: "familiar", form: "owl" });
   assert.match(denied.error, /does not know Find Familiar/);
   const unknown = buildPet(sheet(), { kind: "familiar", form: "badger" });
-  assert.match(unknown.error, /Unknown familiar form "badger"\. The forms there are: owl, raven, cat, .*Ask the player which/);
+  // The spell's own list (SRD 5.1, Find Familiar), crab to weasel.
+  assert.match(unknown.error, /Unknown familiar form "badger"\. The forms there are: bat, cat, crab, frog, hawk, lizard, octopus, owl, poisonous snake, quipper, rat, raven, sea horse, spider, weasel\. Ask the player which/);
   assert.doesNotMatch(unknown.error, /imp|quasit/, "a form only Pact of the Chain gives was offered");
   // A creature of its own is no familiar form inside its name; no form named is asked for.
   assert.match(buildPet(sheet(), { kind: "familiar", form: "giant owl" }).error, /Unknown familiar form "giant owl"/);
-  assert.match(buildPet(sheet(), { kind: "familiar", form: "" }).error, /A familiar needs its form: owl, .*Ask the player which/);
+  assert.match(buildPet(sheet(), { kind: "familiar", form: "" }).error, /A familiar needs its form: bat, .*owl, .*Ask the player which/);
 });
 
 test("Pact of the Chain unlocks the special forms, and only then", () => {

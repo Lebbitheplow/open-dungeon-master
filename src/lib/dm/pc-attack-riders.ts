@@ -11,6 +11,7 @@ import type { Campaign } from "@/lib/db/campaigns";
 import type { PendingAttack } from "@/lib/db/dm-turns";
 import { getActiveEncounter, getEnemy, patchEnemyConditions, type EncounterEnemy } from "@/lib/db/encounters";
 import { rollEnemySave } from "@/lib/dm/forced-save";
+import type { CreatureOnHit } from "@/lib/srd/creature-attacks";
 import { resourceLeft } from "@/lib/dm/attack-rules";
 import type { ManeuverPick } from "@/lib/dm/pc-attack-plan";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
@@ -133,6 +134,8 @@ export type ParkedAttack = PendingAttack & {
     hurl?: boolean;
     poison?: boolean;
     tempHp?: { amount: number; feature: string };
+    // A creature's natural attack's rider (src/lib/dm/natural-onhit.ts).
+    creature?: CreatureOnHit;
   };
 };
 

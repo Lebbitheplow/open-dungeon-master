@@ -22,6 +22,8 @@ import { restoreOwnForm, writeEnemyForm } from "@/lib/db/enemy-form";
 import { spellFactsFor } from "@/lib/content";
 import { spellSaveDcFor, type CastingSheet } from "@/lib/srd";
 import { BEAST_FORMS, beastFormsHolding, findBeastForm, formatCr, formList } from "@/lib/srd/beast-forms";
+import { attackSummary } from "@/lib/srd/creature-attacks";
+import { speedWords } from "@/lib/srd/srd-creatures";
 import { conditionUntargetable } from "@/lib/srd/condition-effect-queries";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { rollEnemySave } from "@/lib/dm/forced-save";
@@ -186,8 +188,8 @@ export function castShapeAtEnemy(
     ok: true,
     ...base,
     conditionApplied: POLYMORPHED,
-    form: `${form.name} (CR ${formatCr(form.cr)}): ${form.hp} HP, AC ${form.ac}, speed ${form.speed} ft`,
-    formAttacks: form.attacks.map((attack) => `${attack.name} +${attack.toHit} (${attack.damage} ${attack.type})`).join(", "),
+    form: `${form.name} (CR ${formatCr(form.cr)}): ${form.hp} HP, AC ${form.ac}, speed ${speedWords(form.speeds)}`,
+    formAttacks: form.attacks.length ? form.attacks.map(attackSummary).join(", ") : "none: the beast has no attack",
     duration: rule.rounds ? "1 hour, or until the caster's concentration ends" : "until the caster's concentration ends; held the full hour, until dispelled",
     note: `${live.displayName} becomes a ${form.name}: the beast's statistics replace its own (it keeps its alignment and personality), it cannot speak or cast spells, and it fights with the beast's attacks through enemy_attack. When the beast drops to 0 hit points or the spell ends, its own form returns with the hit points it had, the excess damage carrying over. Narrate exactly this.`,
   };

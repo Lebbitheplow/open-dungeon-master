@@ -32,6 +32,9 @@ import { allSpellNames } from "@/lib/srd/spell-lists";
 import { matchWeapon, SPECIAL_WEAPONS } from "@/lib/srd/weapons";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { summonAttackProfile } from "@/lib/dm/summon-rules";
+import { naturalAttackProfile, pickNaturalAttack } from "@/lib/dm/natural-attack";
+import { findBeastForm } from "@/lib/srd/beast-forms";
+import type { CreatureAttack } from "@/lib/srd/creature-attacks";
 import { noneNamed, type ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
 import { weaponMaterial } from "@/lib/dm/damage-logic";
@@ -85,6 +88,9 @@ export function buildAttackProfile(
   let grantedBonusAction = false;
   let grantedWithActivation: string | null = null;
   const natural = !granted && !args.spell?.trim() ? authoredNaturalWeapon(sheet, weaponName, derived.abilityMods) : null;
+  // A beast form's natural attacks (an empty list for a form with none), or
+  // null for a form the table does not know.
+  const shapedAttacks = shapeAttacks(sheet.wildShape);
   // A lineage's bite or claws (src/lib/srd/racial-weapons.ts).
   const racial = !granted && !natural && !args.spell?.trim() && !sheet.wildShape ? racialNaturalWeapon(sheet.features, weaponName) : null;
   if (granted) {
@@ -222,6 +228,10 @@ export function buildAttackProfile(
     }
     profile = summoned;
     kind = "natural";
+  } else if (shapedAttacks && !shapedAttacks.length) {
+    // A form whose stat block has no attack (a frog, a sea horse): the
+    // character's weapons melded into it, so there is nothing to swing.
+    return { error: `${sheet.name}'s ${sheet.wildShape?.form} form has no attack: its stat block has none, and ${sheet.name}'s own weapons merged into the form. Nothing was rolled.`, refused: "rules" };
   } else if (racial) {
     profile = weaponAttackProfile(derived, [...sheet.proficiencies.weapons, "simple", racial.srd.name.toLowerCase()], { displayName: racial.srd.name, srd: racial.srd, unarmed: false, carried: true }, {
       riders,
@@ -229,7 +239,7 @@ export function buildAttackProfile(
     });
     profile = { ...profile, proficient: true, riderNotes: [...profile.riderNotes, `${racial.feature}: ${racial.srd.damage}`] };
     kind = "weapon";
-  } else if (!sheet.wildShape?.attacks?.length && (natural || naturalWeaponGated(sheet, weaponName))) {
+  } else if (!shapedAttacks?.length && (natural || naturalWeaponGated(sheet, weaponName))) {
     // A weapon a subclass feature is (Form of the Beast's claws, the
     // Soulknife's psychic blade, Radiant Sun Bolt): a proficient weapon of
     // its kind, with no item behind it (src/lib/srd/authored-effects-more.ts).
@@ -244,37 +254,19 @@ export function buildAttackProfile(
     });
     profile = { ...profile, proficient: true, riderNotes: [...profile.riderNotes, `${natural.feature}: ${srd.damage}`] };
     kind = "weapon";
-  } else if (sheet.wildShape?.attacks?.length) {
+  } else if (shapedAttacks?.length && sheet.wildShape) {
     // Transformed: the form's natural attacks replace the sheet's weapons,
-    // with the statblock's own to-hit and damage. The attack is named whole,
-    // or is the form's only one.
-    const attacks = sheet.wildShape.attacks;
-    const wantedAttack = textKey(args.weapon ?? "");
-    const natural = wantedAttack ? attacks.find((attack) => textKey(attack.name) === wantedAttack) : attacks.length === 1 ? attacks[0] : undefined;
+    // with the statblock's own to-hit, damage, riders and reach. The attack
+    // is named whole, or is the form's only one.
+    const form = sheet.wildShape.form;
+    const natural = pickNaturalAttack(shapedAttacks, args.weapon);
     if (!natural) {
-      const names = attacks.map((attack) => attack.name);
-      return wantedAttack
-        ? noneNamed(`${sheet.name}'s ${sheet.wildShape.form} form has no attack called`, (args.weapon ?? "").trim(), names)
-        : { error: `${sheet.name}'s ${sheet.wildShape.form} form has several attacks; name one in weapon: ${names.join(", ")}.`, retry: true };
+      const names = shapedAttacks.map((attack) => attack.name);
+      return args.weapon?.trim()
+        ? noneNamed(`${sheet.name}'s ${form} form has no attack called`, args.weapon.trim(), names)
+        : { error: `${sheet.name}'s ${form} form has several attacks; name one in weapon: ${names.join(", ")}.`, retry: true };
     }
-    profile = {
-      weapon: `${sheet.wildShape.form} ${natural.name}`,
-      toHit: natural.toHit,
-      damageExpression: natural.damage,
-      damageType: natural.type,
-      ranged: false,
-      thrown: false,
-      reachTiles: 1,
-      rangeTiles: 1,
-      proficient: true,
-      improvised: false,
-      ability: "str",
-      magicBonus: 0,
-      twoHanded: false,
-      sneakEligible: false,
-      heavy: false,
-      riderNotes: [`natural attack while transformed (${sheet.wildShape.form})`],
-    };
+    profile = naturalAttackProfile(natural, { weapon: `${form} ${natural.name}`, note: `natural attack while transformed (${form})` });
     kind = "natural";
   } else {
     // Hands: a shield on the arm leaves one free, and the off-hand swing
@@ -372,4 +364,14 @@ export function buildAttackProfile(
     profile = { ...profile, reachTiles: profile.reachTiles + reach.tiles, riderNotes: [...profile.riderNotes, `${reach.feature}: ${reach.tiles * 5} more feet of reach`] };
   }
   return { profile, derived, riders, scalingNote, grantedBonusAction, grantedWithActivation, kind, special };
+}
+
+// The natural attacks a beast form fights with: the record's own, or for a
+// record written before forms carried them, the table's form of that name.
+// Null for a form the table does not hold (a beast the caller described).
+export function shapeAttacks(wildShape: CharacterSheet["wildShape"] | undefined): CreatureAttack[] | null {
+  if (!wildShape) {
+    return null;
+  }
+  return wildShape.attacks ?? findBeastForm(wildShape.form)?.attacks ?? null;
 }

@@ -6,6 +6,7 @@
 
 import { immutableForm } from "@/lib/dm/monster-traits";
 import { BEAST_FORMS, formatCr, formList, type BeastForm } from "@/lib/srd/beast-forms";
+import { enemyAttackOf } from "@/lib/srd/creature-attacks";
 import { xpForCr } from "@/lib/srd/encounter-math";
 import type { EnemyAttack, EnemySaveMods, EnemyStats, SaveAbility } from "@/lib/bestiary/statblock";
 import type { ToolError } from "@/lib/dm/tool-errors";
@@ -82,13 +83,12 @@ export function enemyShapeNoEffect(rule: EnemyShapeSpell, enemy: { displayName: 
 const ABILITIES: SaveAbility[] = ["str", "dex", "con", "int", "wis", "cha"];
 const modifier = (score: number) => Math.floor((score - 10) / 2);
 
-// "40 ft climb" in a form's trait line: the movement the table keeps only as
-// words, written the way a parsed block writes its speed ("40, climb 30").
+// The form's movement the way a parsed block writes its speed: "40, climb 30".
 function speedOf(form: BeastForm): string {
-  const modes = [...(form.traits ?? "").matchAll(/(\d+) ft (fly|swim|climb|burrow)\b/gi)].map(
-    ([, feet, mode]) => `${mode.toLowerCase()} ${feet}`,
-  );
-  return [String(form.speed), ...new Set(modes)].join(", ");
+  const modes = (["fly", "swim", "climb", "burrow"] as const)
+    .filter((mode) => form.speeds[mode])
+    .map((mode) => `${mode} ${form.speeds[mode]}`);
+  return [String(form.speed), ...modes].join(", ");
 }
 
 // The beast's whole stat block in place of the creature's (SRD 5.1: its game
@@ -96,11 +96,13 @@ function speedOf(form: BeastForm): string {
 // alignment. `own` rides along so the spell's end can give it back exactly.
 export function beastEnemyStats(form: BeastForm, own: EnemyStats, spell: string, ownHp: { ac: number; maxHp: number; currentHp: number }): EnemyStats {
   const saveMods = Object.fromEntries(ABILITIES.map((ability) => [ability, modifier(form.abilities[ability])])) as EnemySaveMods;
-  const attacks: EnemyAttack[] = form.attacks.map((attack) => ({ ...attack, mode: "melee" }));
-  // A Multiattack with one swing of each attack (a bear's bite and claws) is
-  // that routine; the same attack twice (an ape's fists) needs none.
+  // Each attack with its reach or range, its rider dice and what its hit
+  // carries (a constrictor's grapple, a spider's poison), which the enemy's
+  // own engine lands.
+  const attacks: EnemyAttack[] = form.attacks.map(enemyAttackOf);
+  // The Multiattack as the block writes it: a bear's bite and claws, an
+  // ape's two fists.
   const perTurn = form.attacksPerTurn ?? 1;
-  const eachOnce = perTurn > 1 && attacks.length === perTurn;
   return {
     ac: form.ac,
     maxHp: form.hp,
@@ -111,7 +113,7 @@ export function beastEnemyStats(form: BeastForm, own: EnemyStats, spell: string,
     // The first line tells whoever runs it what it is and how it ends.
     traits: [
       `Polymorphed (${spell}): a ${form.name} until the spell ends or the beast drops to 0 hit points; then its own form returns and the excess damage carries over. It cannot speak or cast spells.`,
-      ...(form.traits ? [form.traits] : []),
+      ...form.traitLines,
     ],
     resist: "",
     immune: "",
@@ -120,7 +122,7 @@ export function beastEnemyStats(form: BeastForm, own: EnemyStats, spell: string,
     cr: form.cr,
     xp: xpForCr(form.cr),
     attacksPerTurn: perTurn,
-    ...(eachOnce ? { routines: [attacks.map((attack) => ({ attack: attack.name, count: 1 }))] } : {}),
+    ...(form.routines ? { routines: form.routines } : {}),
     size: form.size,
     type: "beast",
     abilities: { ...form.abilities },

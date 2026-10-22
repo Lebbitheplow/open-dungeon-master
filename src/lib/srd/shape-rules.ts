@@ -58,31 +58,8 @@ export function shapeForms(rule: ShapeRule, target: { name: string; level: numbe
   return BEAST_FORMS.filter((form) => !shapeProblem(rule, form, target, casterLevel));
 }
 
-// The creature a transformed character is, for every number read from the
-// sheet (SRD 5.1): Polymorph's and Animal Shapes' beast has none of the
-// character's proficiencies, features, feats or lineage, and its gear has
-// melded into the form; Wild Shape and Shapechange keep them. The scores and
-// the AC come from the form itself (wildShape), read where they are read.
-export function formSees<T extends {
-  wildShape?: { kind?: "wildshape" | "polymorph"; keepsTraining?: boolean } | null;
-  features?: Array<{ name: string }>;
-  feats?: string[];
-  race?: string;
-  equipment?: unknown[];
-  proficiencies?: { saves: string[]; skills: string[]; expertise?: string[] };
-}>(sheet: T): T {
-  if (sheet.wildShape?.kind !== "polymorph" || sheet.wildShape.keepsTraining) {
-    return sheet;
-  }
-  return {
-    ...sheet,
-    ...(sheet.features ? { features: [] } : {}),
-    ...(sheet.feats ? { feats: [] } : {}),
-    ...(sheet.race !== undefined ? { race: "beast" } : {}),
-    ...(sheet.equipment ? { equipment: [] } : {}),
-    ...(sheet.proficiencies ? { proficiencies: { ...sheet.proficiencies, saves: [], skills: [], expertise: [] } } : {}),
-  };
-}
+// The sheet a transformed character's numbers are read from is
+// src/lib/srd/form-sees.ts, which the browser loads without the beast table.
 
 // The ability scores the form gives: the beast's, with the target's own
 // mind where the spell keeps it.
