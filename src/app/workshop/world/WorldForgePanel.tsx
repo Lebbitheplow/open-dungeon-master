@@ -182,11 +182,17 @@ export function WorldForgePanel({
   // The tour and the palette ask for a view, or for a new entry, by name
   // (src/lib/tours/prepare.ts).
   // A tour's steps replace the place rather than adding to history.
+  // A tour step for a view this server does not offer here has nothing to
+  // show (an AI view with no text model, a workshop view at the table), and
+  // one already open needs no new place. The tour asks again on each render
+  // of its step, so going there anyway replaced the place over and over:
+  // the app's screens froze on Outline with no text model.
+  const offered = (asked: View) =>
+    VIEWS.some((entry) => entry.value === asked) && (canWrite || !AI_VIEWS.has(asked)) && !(atTable && WORKSHOP_VIEWS.has(asked));
   useTourPrepare((name) => {
-    if (name.split(":")[0] === "open-world-entry") void go({ view: "wiki" }, "replace");
+    if (name.split(":")[0] === "open-world-entry" && view !== "wiki") void go({ view: "wiki" }, "replace");
     const asked = name.startsWith("world-view-") ? (name.slice("world-view-".length) as View) : null;
-    // A tour step for a view this server does not offer has nothing to show.
-    if (asked && VIEWS.some((entry) => entry.value === asked)) void go({ view: asked }, "replace");
+    if (asked && asked !== view && offered(asked)) void go({ view: asked }, "replace");
   });
 
   const open = (ref: string | null) => void go(ref ? { view: "wiki", entry: ref } : { entry: null });
