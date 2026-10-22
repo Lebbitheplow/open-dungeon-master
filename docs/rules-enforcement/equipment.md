@@ -68,7 +68,7 @@ Inventory and encumbrance
 Currency
 - Stored as whole gold plus 0 to 99 copper. Deliberate rule, declared in `srd/currency.ts`:
   `modify_gold` never refuses a loss, it empties the purse and reports `short`. The paying
-  paths (purchase, buy_item, deposit, withdraw, trade) refuse.
+  paths (purchase, at a shop or not, deposit, withdraw, trade) refuse.
 
 Shops and trade
 - ODM's own rules (rules-coverage "Commerce"): markup ladder 0.8 to 2, keeper buys at half
