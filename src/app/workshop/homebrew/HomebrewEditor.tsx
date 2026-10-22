@@ -18,6 +18,13 @@ import { draftFindings, draftFromCatalog, type HomebrewDraft } from "@/app/works
 import { KIND_SINGULAR } from "@/app/workshop/homebrew/types";
 import { HazardFields } from "@/app/workshop/homebrew/HazardFields";
 import { CopySource } from "@/app/workshop/homebrew/CopySource";
+import dynamic from "next/dynamic";
+
+// The class form and the catalog it borrows from load when a class is
+// opened, not with the workshop (scripts/bundle-budget.json).
+const ClassFields = dynamic(() => import("@/app/workshop/homebrew/ClassFields").then((module) => module.ClassFields), {
+  loading: () => <p className="text-xs text-stone-500">Loading the class form...</p>,
+});
 
 // A spell draft that already names its classes searches that class's list
 // first; the catalogue is otherwise the whole book.
@@ -55,6 +62,7 @@ export function HomebrewEditor({
   onSave,
   onDuplicate,
   onDelete,
+  workshopClasses = [],
 }: {
   draft: HomebrewDraft;
   isNew: boolean;
@@ -67,6 +75,8 @@ export function HomebrewEditor({
   onSave: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
+  // The author's own classes, for a subclass to sit under.
+  workshopClasses?: Array<{ id: string; name: string }>;
 }) {
   const findings = draftFindings(draft, variantRules, isNew ? undefined : savedName);
   const refused = findings.some((finding) => finding.level === "error");
@@ -99,8 +109,9 @@ export function HomebrewEditor({
       {draft.kind === "item" ? <ItemFields data={draft.data} onChange={setData} /> : null}
       {draft.kind === "spell" ? <SpellFields data={draft.data} onChange={setData} /> : null}
       {draft.kind === "hazard" ? <HazardFields data={draft.data} onChange={setData} /> : null}
-      {draft.kind !== "item" && draft.kind !== "spell" && draft.kind !== "hazard" ? (
-        <OptionFields kind={draft.kind} data={draft.data} onChange={setData} />
+      {draft.kind === "class" ? <ClassFields data={draft.data} set={(patch) => setData({ ...draft.data, ...patch })} /> : null}
+      {draft.kind !== "item" && draft.kind !== "spell" && draft.kind !== "hazard" && draft.kind !== "class" ? (
+        <OptionFields kind={draft.kind} data={draft.data} onChange={setData} workshopClasses={workshopClasses} />
       ) : null}
 
       <TextArea

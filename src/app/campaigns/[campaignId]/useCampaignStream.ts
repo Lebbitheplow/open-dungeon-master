@@ -45,6 +45,8 @@ import { registerBrowserSpecies } from "@/lib/srd/race-id";
 import { registerBrowserSubclassExtras, type SubclassExtras } from "@/lib/srd/subclass-tables";
 import { registerBrowserTableFeats } from "@/lib/srd/feat-effects";
 import type { TableBreak } from "@/lib/dm/table-break-logic";
+import { registerWorkshopClasses } from "@/lib/classes/workshop-registry";
+import type { WorkshopClass } from "@/lib/homebrew/class-data";
 
 export type DmStatus =
   | "idle"
@@ -1258,6 +1260,8 @@ export function useCampaignStream(campaignId: string) {
       for (const [classId, tables] of Object.entries((data.subclasses ?? {}) as SubclassExtras)) {
         registerBrowserSubclassExtras(classId, tables);
       }
+      // The table's workshop classes (src/lib/classes/workshop-registry.ts).
+      registerWorkshopClasses((data.classes ?? []) as WorkshopClass[]);
       // The table's whole list: a feat its DM forgot leaves with it.
       registerBrowserTableFeats(data.feats ?? {}, campaignId, { replace: true });
       dispatch({

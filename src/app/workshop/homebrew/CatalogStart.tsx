@@ -22,6 +22,7 @@ export const CONTENT_KIND: Record<EditorKind, string> = {
   feat: "feats",
   background: "backgrounds",
   race: "races",
+  class: "classes",
   archetype: "archetypes",
   hazard: "hazards",
 };

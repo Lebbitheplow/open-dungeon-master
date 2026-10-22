@@ -31,6 +31,7 @@ import {
   type HomebrewEntryView,
 } from "@/app/workshop/homebrew/types";
 import { textKey } from "@/lib/language/text-logic";
+import { workshopClassId } from "@/lib/homebrew/class-data";
 
 // The Homebrew system: the user's items, spells and character options, one
 // kind at a time, with the editor in a sheet. User-scoped like the bestiary,
@@ -437,6 +438,7 @@ export function HomebrewPanel({
               onSave={() => void save()}
               onDuplicate={() => void duplicate()}
               onDelete={() => void remove()}
+              workshopClasses={entries.filter((entry) => entry.kind === "class").map((entry) => ({ id: workshopClassId(entry.id), name: entry.name }))}
             />
           </div>
         ) : null}

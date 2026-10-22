@@ -19,6 +19,7 @@ import {
   searchSpells,
   type ItemEntry,
 } from "@/lib/content";
+import { bundledClassRows } from "@/lib/workshop/class-catalog";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -172,6 +173,11 @@ export async function GET(
     }
     if (kind === "archetypes" && !packInstalled) {
       results = [...results, ...bundledArchetypeRows(url.searchParams.get("class") ?? "", q, results as Array<{ name: string }>)];
+    }
+    // The bundled classes, the SRD's and the settings', whole: a workshop
+    // class starts from one with its features by level.
+    if (kind === "classes") {
+      results = [...results, ...bundledClassRows(q, results as Array<{ name: string }>)];
     }
   }
   return Response.json({ results, packInstalled, unadmitted: unadmittedNames(scope, user.id, kind, q) });

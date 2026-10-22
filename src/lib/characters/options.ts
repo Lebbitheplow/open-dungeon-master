@@ -12,6 +12,7 @@ import {
 } from "@/lib/content/mechanics";
 import { CUSTOM_BACKGROUNDS } from "@/lib/backgrounds";
 import { CUSTOM_CLASSES } from "@/lib/classes";
+import { isWorkshopClassId, workshopClassFrom, type WorkshopClass } from "@/lib/homebrew/class-data";
 import type { Genre } from "@/lib/schemas/game-settings-options";
 import { SRD_BACKGROUNDS, SRD_CLASSES, SRD_RACES } from "@/lib/srd";
 import { resolveBackgroundGear } from "@/lib/srd/adventuring-gear";
@@ -183,8 +184,44 @@ export function srdClassOptions(): ClassOption[] {
 // reads it (catalog.ts classGrantsFor): the pack's druid armor is a sentence
 // ("shields (druids will not wear armor or use shields made of metal)") that
 // the sheet refuses and the no-metal rule cannot read.
+// A class made in the workshop: its own numbers, as the engines read them
+// (src/lib/homebrew/class-data.ts).
+export function workshopClassOption(def: WorkshopClass, desc = ""): ClassOption {
+  const klass = def.klass;
+  return {
+    id: klass.id,
+    name: klass.name,
+    hitDie: klass.hitDie,
+    saves: klass.saves,
+    skillChoices: klass.skillChoices,
+    armor: klass.armor,
+    weapons: klass.weapons,
+    tools: klass.tools ?? [],
+    spellAbility: klass.spellAbility,
+    casterType: klass.casterType,
+    blurb: klass.blurb,
+    knownCaster: klass.knownCaster,
+    castingLabel: klass.castingLabel,
+    spellListFrom: klass.spellListFrom,
+    desc,
+    documentSlug: "homebrew",
+    source: "Homebrew",
+  };
+}
+
+// The workshop classes among a class search's rows, as the engines read them.
+export function workshopClassesOf(rows: ContentRow[]): WorkshopClass[] {
+  return rows.flatMap((row) =>
+    isWorkshopClassId(row.slug) ? (workshopClassFrom({ id: row.slug.slice("homebrew-".length), name: row.name, data: row.data ?? {} }) ?? []) : [],
+  );
+}
+
 export function packClassOptions(rows: ContentRow[]): ClassOption[] {
-  const packOptions: ClassOption[] = rows.map((row) => {
+  const workshop = rows.flatMap((row) => {
+    const def = isWorkshopClassId(row.slug) ? workshopClassFrom({ id: row.slug.slice("homebrew-".length), name: row.name, data: row.data ?? {} }) : null;
+    return def ? [workshopClassOption(def, String(row.data?.desc ?? ""))] : [];
+  });
+  const packOptions: ClassOption[] = rows.filter((row) => !isWorkshopClassId(row.slug)).map((row) => {
     const bundled = SRD_CLASSES.find((klass) => klass.id === row.slug);
     return {
       id: row.slug,
@@ -201,7 +238,7 @@ export function packClassOptions(rows: ContentRow[]): ClassOption[] {
     };
   });
   const packIds = new Set(packOptions.map((option) => option.id));
-  return [...packOptions, ...customClassOptions().filter((option) => !packIds.has(option.id))];
+  return [...packOptions, ...customClassOptions().filter((option) => !packIds.has(option.id)), ...workshop];
 }
 
 function customBackgroundOptions(): BackgroundOption[] {

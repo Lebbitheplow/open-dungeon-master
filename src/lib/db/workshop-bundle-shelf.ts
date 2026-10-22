@@ -1,4 +1,5 @@
 import { getDatabase, parseJson } from "@/lib/db/core";
+import { isWorkshopClassId, workshopClassId } from "@/lib/homebrew/class-data";
 import { createHomebrew, listHomebrew, type HomebrewEntry } from "@/lib/db/homebrew";
 import { createHomebrewMonster, listHomebrewMonsters, type HomebrewMonster } from "@/lib/bestiary/homebrew-monsters";
 import { draftFromData } from "@/lib/bestiary/monster-draft";
@@ -63,6 +64,14 @@ export function portableStatBlock(ref: string): string {
   return row?.name ?? "";
 }
 
+// A workshop class's id ("homebrew-<entry id>", src/lib/homebrew/class-data.ts)
+// written by name, as another server can read it; anything else as it is.
+export function portableClassRef(classId: string, byId: Map<string, HomebrewEntry>): string {
+  if (!isWorkshopClassId(classId)) return classId;
+  const entry = byId.get(classId.slice("homebrew-".length));
+  return entry ? `${PORTABLE_REF}class:${entry.name}` : classId;
+}
+
 // A pregen's sheet with its homebrew ids written by kind and name.
 export function portableSheet(sheet: CreateSheetInput, byId: Map<string, HomebrewEntry>): CreateSheetInput {
   const portable = (ref: string | undefined) => {
@@ -74,12 +83,26 @@ export function portableSheet(sheet: CreateSheetInput, byId: Map<string, Homebre
   const equipment = Array.isArray(record.equipment)
     ? (record.equipment as Array<Record<string, unknown>>).map((item) => (typeof item.slug === "string" ? { ...item, slug: portable(item.slug) } : item))
     : record.equipment;
-  return { ...sheet, race: portable(sheet.race) ?? sheet.race, background: portable(sheet.background) ?? sheet.background, ...(equipment ? { equipment } : {}) } as CreateSheetInput;
+  const classes = Array.isArray(record.classes)
+    ? (record.classes as Array<Record<string, unknown>>).map((entry) => ({ ...entry, id: portableClassRef(String(entry.id ?? ""), byId) }))
+    : undefined;
+  return {
+    ...sheet,
+    class: portableClassRef(sheet.class, byId),
+    ...(classes ? { classes } : {}),
+    race: portable(sheet.race) ?? sheet.race,
+    background: portable(sheet.background) ?? sheet.background,
+    ...(equipment ? { equipment } : {}),
+  } as CreateSheetInput;
 }
 
 function sheetNames(sheet: CreateSheetInput): { ids: string[]; items: string[]; spells: string[]; feats: string[]; subclasses: string[] } {
   const record = sheet as unknown as Record<string, unknown>;
   const ids = [sheet.race, sheet.background].filter((ref): ref is string => typeof ref === "string" && ref.startsWith("homebrew:"));
+  // A workshop class the sheet holds, as the entry it is.
+  for (const classId of [sheet.class, ...(Array.isArray(record.classes) ? (record.classes as Array<{ id?: unknown }>).map((entry) => String(entry.id ?? "")) : [])]) {
+    if (typeof classId === "string" && isWorkshopClassId(classId)) ids.push(`homebrew:${classId.slice("homebrew-".length)}`);
+  }
   const equipment = Array.isArray(record.equipment) ? (record.equipment as Array<Record<string, unknown>>) : [];
   for (const item of equipment) {
     if (typeof item.slug === "string" && item.slug.startsWith("homebrew:")) ids.push(item.slug);
@@ -133,7 +156,10 @@ export function shelfForBundle(input: {
         (entry.kind === "archetype" && has(names.subclasses, entry.name)),
     );
   const keepMonsters = input.scope === "used" ? monsters.filter(usedMonster) : monsters;
-  const keepHomebrew = input.scope === "used" ? homebrew.filter(usedEntry) : homebrew;
+  const used = input.scope === "used" ? homebrew.filter(usedEntry) : homebrew;
+  // A kept subclass of a workshop class brings its class along.
+  const parents = new Set(used.filter((entry) => entry.kind === "archetype").map((entry) => String(entry.data.classSlug ?? "")).filter(isWorkshopClassId));
+  const keepHomebrew = [...used, ...homebrew.filter((entry) => !used.includes(entry) && parents.has(workshopClassId(entry.id)))];
   const missing = [...new Set(refs)].filter((ref) => !resolveMonster(ref, input.setting, { userIds: [input.ownerUserId] }));
   return {
     monsters: keepMonsters,
@@ -210,7 +236,12 @@ export function writeShelfArrivals(userId: string, workshopId: string, bundle: W
   const byKey = new Map(owned.map((entry) => [`${entry.kind}:${textKey(entry.name)}`, entry]));
   const names = new Map<string, Set<string>>();
   for (const entry of owned) (names.get(entry.kind) ?? names.set(entry.kind, new Set()).get(entry.kind)!).add(textKey(entry.name));
-  for (const entry of bundle.homebrew) {
+  // Classes first, so a subclass of one lands under the class as it is here.
+  const arrivals = [...bundle.homebrew.filter((entry) => entry.kind === "class"), ...bundle.homebrew.filter((entry) => entry.kind !== "class")];
+  for (const arrival of arrivals) {
+    const parent = String(arrival.data.classSlug ?? "");
+    const parentId = arrival.kind === "archetype" && parent.startsWith(`${PORTABLE_REF}class:`) ? ids.get(`class:${textKey(parent.slice(`${PORTABLE_REF}class:`.length))}`) : undefined;
+    const entry = parentId ? { ...arrival, data: { ...arrival.data, classSlug: workshopClassId(parentId) } } : arrival;
     const normalized = normalizeHomebrewData(entry.kind, entry.data, entry.name);
     if ("error" in normalized) continue;
     const key = `${entry.kind}:${textKey(entry.name)}`;
@@ -282,6 +313,12 @@ export function landedSheet(sheet: CreateSheetInput, arrival: { entryFor: (kind:
     return id ? `homebrew:${id}` : ref;
   };
   const rename = (kind: string, name: string) => arrival.renames.get(`${kind}:${textKey(name)}`) ?? name;
+  // A workshop class written by name, back to its id here.
+  const localClass = (ref: string) => {
+    if (!ref.startsWith(`${PORTABLE_REF}class:`)) return ref;
+    const id = arrival.entryFor("class", ref.slice(`${PORTABLE_REF}class:`.length));
+    return id ? workshopClassId(id) : ref;
+  };
   const record = sheet as unknown as Record<string, unknown>;
   const equipment = Array.isArray(record.equipment)
     ? (record.equipment as Array<Record<string, unknown>>).map((item) => ({
@@ -292,6 +329,10 @@ export function landedSheet(sheet: CreateSheetInput, arrival: { entryFor: (kind:
     : record.equipment;
   return {
     ...sheet,
+    class: localClass(sheet.class),
+    ...(Array.isArray(record.classes)
+      ? { classes: (record.classes as Array<Record<string, unknown>>).map((entry) => ({ ...entry, id: localClass(String(entry.id ?? "")) })) }
+      : {}),
     race: local(sheet.race) ?? sheet.race,
     background: local(sheet.background) ?? sheet.background,
     ...(equipment ? { equipment } : {}),

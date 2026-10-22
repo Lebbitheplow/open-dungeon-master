@@ -222,7 +222,7 @@ function ensureSchema(db: SqliteDatabase) {
     CREATE TABLE IF NOT EXISTS homebrew_entries (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      kind TEXT NOT NULL CHECK (kind IN ('spell','feat','item','race','background','archetype','monster','hazard')),
+      kind TEXT NOT NULL CHECK (kind IN ('spell','feat','item','race','background','archetype','monster','hazard','class')),
       slug TEXT NOT NULL,
       name TEXT NOT NULL,
       data_json TEXT NOT NULL,
@@ -2507,21 +2507,22 @@ function ensureSchema(db: SqliteDatabase) {
 // battle_tokens, so no cascade is being suppressed here. The pragma is a
 // no-op inside a transaction, which is why the copy is not wrapped in one;
 // the guard above makes a half-finished run safe to repeat instead.
-// Widens homebrew_entries.kind to take 'hazard'. The new table is the
-// stored DDL with the kind list widened, so every column the table has gained
-// arrives as it is; detected from that DDL, so it runs once and is
-// idempotent if interrupted.
+// Widens homebrew_entries.kind to take 'hazard' and then 'class' (a class
+// made in the workshop). The new table is the stored DDL with the kind list
+// widened, so every column the table has gained arrives as it is; detected
+// from that DDL, so it runs once and is idempotent if interrupted.
 function rebuildHomebrewKinds(db: SqliteDatabase) {
   const ddl = db
     .prepare(`SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'homebrew_entries'`)
     .get() as { sql: string } | undefined;
-  if (!ddl || ddl.sql.includes("'hazard'")) {
+  if (!ddl || ddl.sql.includes("'class'")) {
     return;
   }
   const widened = ddl.sql
     .replace(/CREATE TABLE\s+(?:IF NOT EXISTS\s+)?"?homebrew_entries"?/i, "CREATE TABLE homebrew_entries_rebuilt")
-    .replace("'archetype','monster')", "'archetype','monster','hazard')");
-  if (!widened.includes("'hazard'")) {
+    .replace("'archetype','monster')", "'archetype','monster','hazard')")
+    .replace("'monster','hazard')", "'monster','hazard','class')");
+  if (!widened.includes("'class'")) {
     return;
   }
   db.pragma("foreign_keys = OFF");

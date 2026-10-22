@@ -16,6 +16,7 @@ export const HOMEBREW_KINDS = [
   "archetype",
   "monster",
   "hazard",
+  "class",
 ] as const;
 
 export type HomebrewKind = (typeof HOMEBREW_KINDS)[number];

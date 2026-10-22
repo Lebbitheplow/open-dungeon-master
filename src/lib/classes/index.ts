@@ -22,6 +22,7 @@ import featureNamesJson from "@/lib/classes/feature-names.json";
 import srdClassesJson from "@/lib/srd/classes.json";
 
 export { classFeatureDescription } from "@/lib/classes/feature-text";
+import { workshopClassDef } from "@/lib/classes/workshop-registry";
 
 export type CustomClass = SrdClass & {
   // Genres that surface this class in the picker's recommended group.
@@ -82,8 +83,9 @@ export const CUSTOM_CLASS_FEATURES: Record<string, CustomFeatureTable> = Object.
   ]),
 );
 
+// A setting class, or one made in the workshop (src/lib/classes/workshop-registry.ts).
 export function findCustomClass(id: string): CustomClass | null {
-  return CUSTOM_CLASSES.find((entry) => entry.id === id) ?? null;
+  return CUSTOM_CLASSES.find((entry) => entry.id === id) ?? workshopClassDef(id)?.klass ?? null;
 }
 
 // The class slug to use for spell-list searches and spell-count advice:

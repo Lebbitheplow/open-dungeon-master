@@ -81,6 +81,7 @@ import FeatChoicesFields from "@/app/characters/builder/FeatChoicesFields";
 import { useArchetypes, useWorldPack } from "@/app/characters/builder/useBuilderOptions";
 import type { AsiChoice, CharacterSheet } from "@/lib/schemas/sheet";
 import { textKey } from "@/lib/language/text-logic";
+import { workshopClassList } from "@/lib/classes/workshop-registry";
 
 
 // Guided level-up, one level at a time. The dialog gathers the CHOICES the
@@ -207,7 +208,8 @@ export function LevelUpDialog({
     if (!multiclassAllowed || classList.length >= MULTICLASS_CAP) {
       return [];
     }
-    return ALL_CLASSES.filter(
+    // The table's workshop classes beside the rest (the campaign snapshot's).
+    return [...ALL_CLASSES, ...workshopClassList().map((def) => def.klass)].filter(
       (candidate) => !classList.some((entry) => entry.id.toLowerCase() === candidate.id),
     )
       .map((candidate) => ({ option: candidate, check: canMulticlassInto(sheet, candidate.id) }))

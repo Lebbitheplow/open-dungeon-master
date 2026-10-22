@@ -43,6 +43,8 @@ type LibraryCharacter = {
   name: string;
   race: string;
   class: string;
+  // A workshop class's name (the class holds its id).
+  className?: string;
   subclass: string;
   background: string;
   level: number;
@@ -479,7 +481,7 @@ function CharacterCard({
               {character.name}
             </span>
             <span className="inline-flex rounded-full border border-amber-500/30 bg-amber-400/10 px-2 py-0.5 text-[11px] text-amber-200">
-              Level {character.level} {titleCase(character.class)}
+              Level {character.level} {character.className ?? titleCase(character.class)}
             </span>
           </div>
         </div>

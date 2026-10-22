@@ -21,6 +21,7 @@ import { traitParagraphs } from "@/lib/workshop/species-traits";
 import type { RulebookPage } from "@/lib/rulebook/types";
 import { textKey } from "@/lib/language/text-logic";
 import { thirdCasterProfileForPackSubclass } from "@/lib/srd/third-caster";
+import { classMechanicsOf } from "@/lib/workshop/class-catalog";
 
 // What the engine runs for a published row, handed to the workshop's "start
 // from" pickers (src/app/workshop/homebrew/CatalogStart.tsx) beside the row
@@ -379,6 +380,12 @@ function withMechanicsOnly(kind: string, results: unknown[], params: { classSlug
   if (kind === "archetypes") {
     return results.map((row) => {
       const table = archetypeMechanicsOf(row as Row, String(params.classSlug ?? "").toLowerCase());
+      return table ? { ...(row as Row), table } : row;
+    });
+  }
+  if (kind === "classes") {
+    return results.map((row) => {
+      const table = classMechanicsOf(row as Row & { slug?: string });
       return table ? { ...(row as Row), table } : row;
     });
   }

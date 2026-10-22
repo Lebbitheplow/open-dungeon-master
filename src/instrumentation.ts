@@ -18,6 +18,15 @@ export async function register() {
     // itself is left running in the background. A failure here must not stop
     // the server: the worst case is the keyword fallback search already has.
     if (process.env.NEXT_PHASE !== "phase-production-build") {
+      // The classes made in the workshop, registered with the engines before
+      // the first request reads a sheet that holds one (src/lib/db/homebrew.ts).
+      try {
+        const { syncWorkshopClasses } = await import("@/lib/db/homebrew");
+        syncWorkshopClasses();
+      } catch (error) {
+        console.error("[workshop] could not register the workshop's classes", error);
+      }
+
       // What the last process held in memory and a restart took from the
       // DM, put right from the database before the first request
       // (src/lib/dm/restart-recovery.ts). A failure must not stop the server.

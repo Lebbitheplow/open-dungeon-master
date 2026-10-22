@@ -54,7 +54,9 @@ const AUTHORED_FEATS = (authoredFeatsJson as { feats: FeatFacts[] }).feats;
 
 // ---- classes, races, backgrounds ----
 
-export function classGrantsFor(classId: string): ClassGrants | null {
+// `authors`: whose workshop classes count (a table's, or one person's own
+// shelf); a forgotten one still answers for the sheet that holds it.
+export function classGrantsFor(classId: string, authors?: string | string[]): ClassGrants | null {
   const id = lower(classId);
   // The bundled row first: it is the one the engines' own tables are keyed
   // by, and the pack's copy of an SRD class says the same in prose.
@@ -62,7 +64,8 @@ export function classGrantsFor(classId: string): ClassGrants | null {
   if (bundled) {
     return bundled;
   }
-  const rows = listClasses({ limit: 200 }) as ContentRow[];
+  const userIds = Array.isArray(authors) ? authors : authors ? [authors] : [];
+  const rows = listClasses({ limit: 200, userIds, includeArchived: true }) as ContentRow[];
   return packClassOptions(rows).find((option) => lower(option.id) === id) ?? null;
 }
 
@@ -297,7 +300,7 @@ export function legalityContextFor(input: ContextInput): LegalityContext {
     level: input.level,
     hpMethod: settings ? (settings.hpMethod ?? "average") : null,
     startingWealth: settings?.startingWealth ?? "equipment",
-    classOf: classGrantsFor,
+    classOf: (classId) => classGrantsFor(classId, owner),
     race: raceGrantsFor(input.sheet.race, owner),
     background: backgroundGrantsFor(input.sheet.background, owner),
     baseline: input.baseline ?? null,

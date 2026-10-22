@@ -14,6 +14,7 @@
 // through src/lib/help.
 import namesJson from "@/lib/classes/feature-names.json";
 import { textKey } from "@/lib/language/text-logic";
+import { workshopClassDef } from "@/lib/classes/workshop-registry";
 
 export type RawFeature = { n: string; d: string };
 export type FeaturesFile = {
@@ -68,8 +69,10 @@ export function registerFeatureText(file: FeaturesFile): void {
 // Rules text for a custom class feature, or null: an SRD feature name needs
 // no gloss (the model knows it), and in the browser a genre's text is null
 // until its catalog has landed.
+// A workshop class's words ride its registration (workshop-registry.ts).
 export function classFeatureDescription(classId: string, featureName: string): string | null {
-  return TEXT[classId]?.[textKey(featureName)] ?? null;
+  const key = textKey(featureName);
+  return TEXT[classId]?.[key] ?? workshopClassDef(classId)?.text[key] ?? null;
 }
 
 // Fetches the catalogs these classes' text lives in, once each. SRD and

@@ -1,6 +1,7 @@
 import { getContentDb } from "@/lib/content/db";
 import { packWeightLb } from "@/lib/content/weight";
 import { listHomebrew } from "@/lib/db/homebrew";
+import { workshopClassId } from "@/lib/homebrew/class-data";
 import { normalizeSpellMech } from "@/lib/homebrew/gear";
 import type { HomebrewKind } from "@/lib/schemas/homebrew";
 import { servedSpellRows } from "@/lib/content/spell-overrides";
@@ -506,7 +507,11 @@ export function listRaces(options: SearchOptions & { includeSubraces?: boolean }
 }
 
 export function listClasses(options: SearchOptions = {}): ContentEntry[] {
-  return searchSimpleTable("classes", { ...options, limit: options.limit ?? MAX_LIMIT });
+  return [
+    ...searchSimpleTable("classes", { ...options, limit: options.limit ?? MAX_LIMIT }),
+    // The workshop's classes, under the id a sheet holds (src/lib/homebrew/class-data.ts).
+    ...homebrewEntries(options, "class", options.q).map((entry) => ({ ...entry, slug: workshopClassId(entry.slug.slice("homebrew:".length)) })),
+  ];
 }
 
 export function listArchetypes(classSlug: string, options: SearchOptions = {}): ContentEntry[] {
