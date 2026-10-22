@@ -376,7 +376,7 @@ export function ContentImportPicker({
               <p role="alert" className="flex flex-wrap items-center gap-1.5 text-xs text-amber-300/90">
                 <AlertTriangle className="size-3.5 shrink-0" />
                 <span>Could not check what this would bring in or replace here.</span>
-                <button type="button" onClick={() => void refreshPlan()} className={ui.btnSmall}>
+                <button type="button" onClick={() => void refreshPlan()} className={`${ui.btnSmall} min-h-10`}>
                   Check again
                 </button>
               </p>

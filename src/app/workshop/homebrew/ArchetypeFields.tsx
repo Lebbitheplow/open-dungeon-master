@@ -210,7 +210,7 @@ export function ArchetypeFields({
         options={[...CLASS_IDS.map((value) => ({ value: value as string, label: capital(value) })), ...workshopClasses.map((klass) => ({ value: klass.id, label: klass.name }))]}
         onChange={(classSlug) => set({ classSlug })}
         className="w-56"
-        hint={`The builder offers it under ${classLabel} from level ${ownClass?.subclassLevel ?? subclassLevelFor(classId) ?? 3}, the level the class picks its subclass, and at that level-up.`}
+        hint={`The builder offers it under this class from level ${ownClass?.subclassLevel ?? subclassLevelFor(classId) ?? 3}.`}
       />
       {mayCast ? (
         <SelectField

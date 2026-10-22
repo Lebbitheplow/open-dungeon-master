@@ -440,9 +440,12 @@ function writeBundleRows(
         { ...encounter.map, mapId: idAt(ids.maps, encounter.map.map) },
         { themes: MAP_THEMES, ambients: AMBIENTS, scenes: sceneIds() },
       );
-      const slots = (encounter.enemies as Array<{ monster?: unknown; count?: unknown }>)
-        .filter((row) => typeof row?.monster === "string" && row.monster)
-        .reduce((sum, row) => sum + Math.min(99, Math.max(1, Math.round(Number(row.count) || 1))), 0);
+      // A roster row written as a bare name is one monster, as the roster
+      // reads it (workshop-bundle-shelf.ts rosterMonsters); counted, so its
+      // placements and overrides are not cut off on arrival.
+      const slots = (encounter.enemies as Array<string | { monster?: unknown; count?: unknown }>)
+        .filter((row) => (typeof row === "string" ? Boolean(row.trim()) : typeof row?.monster === "string" && row.monster))
+        .reduce((sum, row) => sum + (typeof row === "string" ? 1 : Math.min(99, Math.max(1, Math.round(Number(row.count) || 1)))), 0);
       const id = crypto.randomUUID();
       db.prepare(
         `INSERT INTO encounter_templates

@@ -148,7 +148,7 @@ export function ReviewStep({
             Try again sends only what failed. Or open it now and bring the rest in from the lobby: Bring in prep for a
             workshop, House rules and Lore for what you typed here.
           </p>
-          <button type="button" className="cc-link min-h-10" disabled={followUp.busy} onClick={followUp.onOpen}>
+          <button type="button" className="cc-link inline-flex min-h-10 items-center" disabled={followUp.busy} onClick={followUp.onOpen}>
             {solo ? "Open the adventure as it is" : "Open the campaign as it is"}
           </button>
         </div>
