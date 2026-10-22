@@ -7,7 +7,7 @@ import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { lanOrigins, shareableAddresses, isLoopbackOrigin, livePublicUrl } = await import(
+const { lanOrigins, shareableAddresses, isLoopbackOrigin, livePublicUrl, requestPublicOrigin } = await import(
   "../src/lib/server-address.ts"
 );
 
@@ -93,6 +93,62 @@ test("with nothing from the server the tab's address is the only answer", () => 
   assert.deepEqual(shareableAddresses({ current: "https://play.example.com" }), [
     "https://play.example.com",
   ]);
+});
+
+test("Discord's return address skips a saved Wi-Fi address this machine no longer holds", () => {
+  // The live bug: a desktop app's Wi-Fi address sat in the saved Public URL,
+  // so sign-in sent Discord to http://192.168.1.169:3210 and Discord refused.
+  const behindTunnel = {
+    savedPublicUrl: "http://192.168.1.169:3210",
+    interfaces,
+    forwardedHost: "dungeon.example.org",
+    forwardedProto: "https",
+    requestUrl: "http://127.0.0.1:3005/api/auth/discord/start",
+  };
+  assert.equal(
+    requestPublicOrigin({ ...behindTunnel, envPublicUrl: "https://dungeon.example.org/" }),
+    "https://dungeon.example.org",
+  );
+  assert.equal(requestPublicOrigin({ ...behindTunnel, envPublicUrl: "" }), "https://dungeon.example.org");
+  assert.equal(
+    requestPublicOrigin({ ...behindTunnel, envPublicUrl: "", forwardedHost: null, forwardedProto: null }),
+    "http://127.0.0.1:3005",
+  );
+});
+
+test("a saved public URL that can be true still leads the return address", () => {
+  const base = {
+    envPublicUrl: "https://dungeon.example.org",
+    interfaces,
+    forwardedHost: "dungeon.example.org",
+    forwardedProto: "https",
+    requestUrl: "http://127.0.0.1:3005/api/mcp",
+  };
+  assert.equal(
+    requestPublicOrigin({ ...base, savedPublicUrl: "https://abc.trycloudflare.com/" }),
+    "https://abc.trycloudflare.com",
+  );
+  assert.equal(
+    requestPublicOrigin({ ...base, savedPublicUrl: "http://192.168.1.128:3005" }),
+    "http://192.168.1.128:3005",
+  );
+  assert.equal(requestPublicOrigin({ ...base, savedPublicUrl: "" }), "https://dungeon.example.org");
+});
+
+test("without a saved or configured address the proxy's forwarded host is used", () => {
+  const base = { savedPublicUrl: "", envPublicUrl: "", interfaces, requestUrl: "http://127.0.0.1:3005/x" };
+  assert.equal(
+    requestPublicOrigin({ ...base, forwardedHost: "play.example.com, inner.local", forwardedProto: "http, https" }),
+    "http://play.example.com",
+  );
+  assert.equal(
+    requestPublicOrigin({ ...base, forwardedHost: "play.example.com", forwardedProto: null }),
+    "https://play.example.com",
+  );
+  assert.equal(
+    requestPublicOrigin({ ...base, forwardedHost: "  ", forwardedProto: null }),
+    "http://127.0.0.1:3005",
+  );
 });
 
 console.log(`test-server-address: ${passed} passed`);
