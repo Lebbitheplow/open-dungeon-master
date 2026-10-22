@@ -72,8 +72,13 @@ export function SegmentedControl<T extends string>({
     if (!dir) return;
     e.preventDefault();
     const i = options.findIndex((o) => o.value === value);
-    const next = options[(i + dir + options.length) % options.length];
-    if (next) onChange(next.value);
+    const at = (i + dir + options.length) % options.length;
+    const next = options[at];
+    if (!next) return;
+    onChange(next.value);
+    // The focus goes with the choice, as a radio group's does: left on the
+    // old option (now out of the Tab order), Space there chose it back.
+    group.current?.querySelectorAll<HTMLElement>('[role="radio"]')[at]?.focus();
   };
   return (
     <div

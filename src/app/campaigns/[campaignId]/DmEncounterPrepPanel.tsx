@@ -143,7 +143,9 @@ export function DmEncounterPrepPanel({
   // The tour's "open the editor" step, answered only where the editor is a
   // sheet; in the console the form is always on screen.
   useTourPrepare((name) => {
-    if (name === "open-encounter-editor" && rows && !editorOpen) openEditor(null);
+    if (name !== "open-encounter-editor") return;
+    if (rows && !editorOpen) openEditor(null);
+    return true;
   });
 
   useOpenOnArrival(openOnArrival, loaded ? templates : null, openEditor);

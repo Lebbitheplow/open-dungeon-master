@@ -125,7 +125,9 @@ export function DmMapLibraryPanel({
 
   // The tour's "open the new-map controls" step.
   useTourPrepare((name) => {
-    if (name === "open-map-create") setCreating(true);
+    if (name !== "open-map-create") return;
+    setCreating(true);
+    return true;
   });
 
   // Selecting a map is the same act in both layouts; in the gallery it also

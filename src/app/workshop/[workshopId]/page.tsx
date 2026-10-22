@@ -238,14 +238,18 @@ function WorkshopPageInner({ workshopId }: { workshopId: string }) {
   }
 
   // "Create an entry" from the palette: go to the system, then ask its panel
-  // to open its editor. The panel answers only once its rows have loaded, so
-  // the request is made twice, a beat apart; the panels ignore a request for
-  // an editor that is already open.
+  // to open its editor. The panel answers only once it has loaded, so the
+  // request is made again a beat later, but only when nothing answered the
+  // first: asked twice, an editor the author had already saved and closed
+  // opened again, blank, over the tool (M6 journey 8).
   const [creating, setCreating] = useState<{ prepare: string; ask: number } | null>(null);
   useEffect(() => {
     if (!creating) return;
+    let answered = false;
     const timers = [450, 1400].map((delay) =>
-      window.setTimeout(() => requestTourPrepare(creating.prepare), delay),
+      window.setTimeout(() => {
+        if (!answered) answered = requestTourPrepare(creating.prepare);
+      }, delay),
     );
     return () => timers.forEach((timer) => window.clearTimeout(timer));
   }, [creating]);
