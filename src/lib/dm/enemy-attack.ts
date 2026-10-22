@@ -158,7 +158,13 @@ export function handleEnemyAttack(
   if (natures) {
     return natures;
   }
-  const attacks = found.stats.attacks.length ? found.stats.attacks : synthesizeStats(found.cr).attacks;
+  // A legendary action that bought an attack printed only among the legendary
+  // actions (an ankheg queen's Acid Glob) may swing it, and only then.
+  const owed = (encounter.legendary.strikes ?? []).includes(found.id);
+  const attacks = [
+    ...(found.stats.attacks.length ? found.stats.attacks : synthesizeStats(found.cr).attacks),
+    ...(owed ? (found.stats.legendaryAttacks ?? []) : []),
+  ];
   if (!attacks.length) {
     return { error: `${found.displayName} has no usable attacks; narrate a different action.`, retry: true };
   }

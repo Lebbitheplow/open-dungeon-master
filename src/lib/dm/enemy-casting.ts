@@ -1,5 +1,5 @@
 import type { Campaign } from "@/lib/db/campaigns";
-import { getActiveEncounter, saveEncounter, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
+import { getActiveEncounter, saveEncounter, turnKey, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
 import type { SaveAbility } from "@/lib/bestiary/statblock";
 import type { SpellCondition } from "@/lib/srd/spell-mech-types";
 import { spellDamageFor, spellFactsFor, spellMechanicsFor } from "@/lib/content";
@@ -50,6 +50,15 @@ export type EnemyUse = {
   // The block gives it no count and no save: a long rest or a cure ends it.
   untilLongRest?: boolean;
   lasting?: boolean;
+  // More conditions the same failure lays, a condition that ends when the
+  // creature takes damage, and one a failure by a margin adds
+  // (src/lib/dm/save-effect.ts).
+  also?: string[];
+  endsOnDamage?: boolean;
+  failBy?: { margin: number; condition: string };
+  // The second save the same use forces, by the ability it is read as
+  // (src/lib/dm/ability-entries.ts): the result names it for the DM.
+  followUp?: string;
   // A spell or a magical ability, which Magic Resistance answers.
   magical: boolean;
   // The numbers are the block's (or the spell's): the caller's are ignored.
@@ -115,6 +124,7 @@ export function prepareEnemyUse(campaign: Campaign, input: Input): EnemyUse | To
   }
   const bought = boughtByLegendary(encounter, enemy.id);
   let legendary: string | null = null;
+  let partOf = false;
   const use: Omit<EnemyUse, "commit"> = { enemy, name: "", magical: false, fromBlock: false, corrections: [] };
   let spend: (ledger: AbilityLedger | undefined) => AbilityLedger | undefined = (ledger) => ledger;
 
@@ -191,6 +201,7 @@ export function prepareEnemyUse(campaign: Campaign, input: Input): EnemyUse | To
     }
   } else if (abilityName) {
     const ability = findMonsterAbility(enemy.stats, abilityName);
+    const now = { turn: turnKey(encounter), round: encounter.round };
     if (!ability) {
       if (hasBlock) {
         return { error: `${enemy.displayName} has no ability called ${abilityName}.${describe(enemy)}`, retry: true };
@@ -205,11 +216,16 @@ export function prepareEnemyUse(campaign: Campaign, input: Input): EnemyUse | To
         }
         legendary = key;
       }
-      const refusal = abilityRefusal(enemy.displayName, ability, ledgerOf(encounter, enemy.id));
+      const refusal = abilityRefusal(enemy.displayName, ability, ledgerOf(encounter, enemy.id), now);
       if (refusal) {
         return refusal;
       }
-      spend = (next) => spendAbility(ability, next);
+      // A second save rides on the use it belongs to: no action of its own.
+      if (ability.partOf) {
+        partOf = true;
+      }
+      spend = (next) => spendAbility(ability, next, now);
+      const second = (enemy.stats.specials ?? []).find((entry) => entry.partOf && abilityKey(entry.partOf) === key);
       use.fromBlock = true;
       Object.assign(use, {
         ...(ability.save ? { save: ability.save } : {}),
@@ -222,6 +238,10 @@ export function prepareEnemyUse(campaign: Campaign, input: Input): EnemyUse | To
         ...(ability.repeatSave ? { saveEnds: true } : {}),
         ...(ability.untilLongRest ? { untilLongRest: true } : {}),
         ...(ability.lasting ? { lasting: true } : {}),
+        ...(ability.also?.length ? { also: ability.also } : {}),
+        ...(ability.endsOnDamage ? { endsOnDamage: true } : {}),
+        ...(ability.failBy ? { failBy: ability.failBy } : {}),
+        ...(second ? { followUp: second.name } : {}),
         magical: Boolean(ability.magical),
       });
     }
@@ -232,8 +252,10 @@ export function prepareEnemyUse(campaign: Campaign, input: Input): EnemyUse | To
     };
   }
 
-  // The creature's action, or the legendary action that bought this.
-  const allowed = canEnemyAct({ enemy, encounter, kind: legendary ? "legendary" : "action" });
+  // The creature's action, or the legendary action that bought this; a
+  // second save is part of the action already taken, so it is held only to
+  // what stops any act (incapacitated, surprised).
+  const allowed = canEnemyAct({ enemy, encounter, kind: legendary || partOf ? "legendary" : "action" });
   if (!allowed.ok) {
     return toolError(allowed);
   }
@@ -265,7 +287,7 @@ export function prepareEnemyUse(campaign: Campaign, input: Input): EnemyUse | To
       if (legendary) {
         const rest = (ledger?.bought ?? []).filter((entry, index, list) => entry !== legendary || list.indexOf(entry) !== index);
         ledger = { ...(ledger ?? {}), bought: rest };
-      } else {
+      } else if (!partOf) {
         spendEnemyAction(live, enemy.id);
       }
       if (ledger) {

@@ -43,5 +43,7 @@ export function regenerationTurnStart(campaign: Campaign, encounter: Encounter, 
     const risen = risenConditions(fresh.conditions, fresh.conditionMeta);
     patchEnemyConditions(enemy.id, risen.conditions, risen.meta);
   }
-  return [`${enemy.displayName} regenerates ${healed} hit points and stirs from 0; it is still prone until it stands.`];
+  return [
+    `${enemy.displayName} regenerates ${healed} hit points and stirs from 0; it is still prone until it stands.${regeneration.onlyIf ? ` Its Regeneration works only if ${regeneration.onlyIf}: if it does not, take them back with apply_damage.` : ""}`,
+  ];
 }
