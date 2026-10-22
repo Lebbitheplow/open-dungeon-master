@@ -351,7 +351,7 @@ const monsterSchema = z.object({
 // (src/lib/homebrew/gear.ts), so a bundle written by an older build cannot
 // hand the engine a weapon it cannot roll.
 const homebrewSchema = z.object({
-  kind: z.enum(["spell", "feat", "item", "race", "background", "archetype", "hazard"]),
+  kind: z.enum(["spell", "feat", "item", "race", "background", "archetype", "hazard", "class"]),
   name: z.string().trim().min(1).max(80),
   data: z.record(z.string(), z.unknown()).default({}),
 });

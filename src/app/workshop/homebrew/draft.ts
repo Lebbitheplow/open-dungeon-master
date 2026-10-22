@@ -6,7 +6,7 @@ import {
 } from "@/lib/homebrew/gear";
 import { itemEngineSummary, validateDraft, type Finding, type ItemDraft } from "@/lib/rulesets/validate";
 import { publishedNameProblem } from "@/lib/homebrew/published-names";
-import { backgroundFindings, featFindings, hazardFindings, speciesFindings, subclassFindings } from "@/lib/rulesets/validate-options";
+import { backgroundFindings, classFindings, featFindings, hazardFindings, speciesFindings, subclassFindings } from "@/lib/rulesets/validate-options";
 import type { VariantRules } from "@/lib/rulesets/logic";
 import type { SrdArmor } from "@/lib/srd/armor";
 import type { SrdWeapon } from "@/lib/srd/weapons";
@@ -16,6 +16,7 @@ import type { EditorKind } from "@/app/workshop/homebrew/types";
 import { engineSpellNamed, materialOf, spellFlagsOf } from "@/lib/srd/spell-facts";
 import { readWeightLb } from "@/lib/content/weight";
 import { textKey } from "@/lib/language/text-logic";
+import { blankClassData } from "@/lib/homebrew/class-data";
 
 // The editor's working copy of an entry and what can be said about it
 // before it is saved. Pure so the panel's findings run client-side on
@@ -57,6 +58,8 @@ export function blankDraft(kind: EditorKind): HomebrewDraft {
         name: "",
         data: { desc: "", traits: "", size: "Medium", speed: { walk: 30 }, asi: [], languages: "Common", vision: "" },
       };
+    case "class":
+      return { kind, name: "", data: blankClassData() };
     case "archetype":
       return { kind, name: "", data: { desc: "", classSlug: "fighter", levels: {} } };
     case "hazard":
@@ -157,6 +160,7 @@ function kindFindings(draft: HomebrewDraft, variantRules: Partial<VariantRules>)
   if (draft.kind === "background") return backgroundFindings(draft.data);
   if (draft.kind === "race") return speciesFindings(draft.data);
   if (draft.kind === "archetype") return subclassFindings(draft.data);
+  if (draft.kind === "class") return classFindings(draft.data);
   if (draft.kind === "hazard") return hazardFindings(draft.data);
   return [];
 }
@@ -357,12 +361,28 @@ export function draftFromCatalog(
     case "hazard":
       // The SRD hazard's whole block (src/lib/workshop/hazard-catalog.ts).
       return { kind, name: copyName(entry.name), data: { desc: String(data.desc ?? ""), ...(entry.table ?? {}), copiedFrom } };
+    case "class":
+      // The published class's numbers and its features by level, with their
+      // words (class-catalog.ts), so the copy plays the same until changed.
+      // The description is the class's own line, or the pack's words before
+      // its first heading: the rest of a pack's write-up is the features,
+      // which the copy already holds by level.
+      return {
+        kind,
+        name: copyName(entry.name),
+        data: {
+          ...base.data,
+          ...((entry.table ?? {}) as Data),
+          desc: introOf(String((entry.table as Data | undefined)?.desc ?? "")) || introOf(String(data.desc ?? "")),
+          copiedFrom,
+        },
+      };
     case "archetype":
       return {
         kind,
         name: copyName(entry.name),
         data: {
-          desc: String(data.desc ?? "").split(/^#{3,6}\s/m)[0].trim() || String(data.desc ?? ""),
+          desc: introOf(String(data.desc ?? "")) || String(data.desc ?? ""),
           classSlug: extra.classSlug ?? "fighter",
           // The published subclass's features by level, with their words, and
           // its always-prepared spells (catalog-mechanics.ts).
@@ -387,6 +407,11 @@ function componentsOf(data: Data): string {
     flag(data.material) || flag(data.requires_material_components) || typeof data.material_specified === "string" ? "M" : "",
   ].filter(Boolean);
   return letters.join(", ") || "V, S";
+}
+
+// A pack write-up's opening words, before its first feature heading.
+function introOf(text: string): string {
+  return text.split(/^#{3,6}\s/m)[0].trim();
 }
 
 function classesOf(data: Data): string[] {

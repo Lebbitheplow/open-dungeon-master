@@ -12,12 +12,15 @@ import {
   srdBackgroundOptions,
   srdClassOptions,
   srdRaceOptions,
+  workshopClassesOf,
   type BackgroundOption,
   type ClassOption,
   type ContentRow,
   type RaceOption,
 } from "@/lib/characters/options";
 import type { WorldPack } from "@/lib/worlds/types";
+import { registerWorkshopClasses } from "@/lib/classes/workshop-registry";
+import { isWorkshopClassId } from "@/lib/homebrew/class-data";
 
 // The option rows themselves are built in src/lib/characters/options.ts,
 // which the server reads too; they are re-exported here because this is
@@ -98,8 +101,14 @@ export function useBuilderOptions(keepRaceId?: string) {
           setRaces(options);
         }
         const classRows = (classesData.results ?? []) as ContentRow[];
+        // The table's workshop classes, read by the builder's engines as on
+        // the server (src/lib/classes/workshop-registry.ts), and offered with
+        // or without a content pack.
+        registerWorkshopClasses(workshopClassesOf(classRows));
         if (classRows.length && installed) {
           setClasses(packClassOptions(classRows));
+        } else if (classRows.length) {
+          setClasses([...srdClassOptions(), ...packClassOptions(classRows).filter((option) => isWorkshopClassId(option.id))]);
         }
         const backgroundRows = (backgroundsData.results ?? []) as ContentRow[];
         if (backgroundRows.length) {

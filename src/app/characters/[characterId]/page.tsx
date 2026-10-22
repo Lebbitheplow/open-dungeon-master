@@ -20,6 +20,8 @@ import { SheetSections, StorySoFar, type CharacterEvent } from "./SheetSections"
 import { currentQuery, navigateTo, workshopReturnPath } from "@/lib/navigation";
 import { UseInCampaignDialog } from "./UseInCampaignDialog";
 import { slugOf } from "@/lib/language/text-logic";
+import { registerWorkshopClasses, workshopClassName } from "@/lib/classes/workshop-registry";
+import type { WorkshopClass } from "@/lib/homebrew/class-data";
 
 // Where this character is playing; see src/lib/db/characters.ts.
 type CharacterAssignment = {
@@ -196,6 +198,8 @@ export default function CharacterDetailPage({
       .then((response) => (response.ok ? response.json() : null))
       .then((data) => {
         if (data?.character) {
+          // The workshop classes it holds, before anything reads its class.
+          registerWorkshopClasses((data.workshopClasses ?? []) as WorkshopClass[]);
           setCharacter(data.character);
           setEvents(data.events ?? []);
         }
@@ -376,7 +380,7 @@ export default function CharacterDetailPage({
                 <GameIcon icon={{ kind: "glyph", key: "rest-level-up" }} size="size-5" />
                 Level {character.level}
               </span>
-              {titleCase(character.race)} {titleCase(character.class)}
+              {titleCase(character.race)} {workshopClassName(character.class) ?? titleCase(character.class)}
               {character.subclass ? ` (${character.subclass})` : ""}
               {character.background ? ` · ${titleCase(character.background)}` : ""}
             </p>

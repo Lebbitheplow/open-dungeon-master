@@ -200,3 +200,32 @@ export function hazardFindings(data: Data): Finding[] {
   }
   return out;
 }
+
+// A workshop class against the SRD's twelve: what none of them has together.
+export function classFindings(data: Data): Finding[] {
+  const out: Finding[] = [];
+  const saves = Array.isArray(data.saves) ? (data.saves as string[]) : [];
+  if (saves.length !== 2) {
+    out.push({ level: "error", text: "A class is proficient in two saving throws: pick two different abilities." });
+  }
+  // Each SRD class pairs a common save (Dexterity, Constitution, Wisdom)
+  // with a rarer one.
+  const strong = ["dex", "con", "wis"];
+  if (saves.length === 2 && saves.every((save) => strong.includes(save))) {
+    out.push({ level: "warn", text: "Two of the three saves that come up most (Dexterity, Constitution, Wisdom): every SRD class takes one of them and one rarer one." });
+  }
+  const hitDie = Number(data.hitDie ?? 8);
+  const casting = String(data.casterType ?? "none");
+  const armor = Array.isArray(data.armor) ? (data.armor as string[]) : [];
+  if (casting === "full" && (hitDie >= 10 || armor.includes("heavy"))) {
+    out.push({ level: "warn", text: `A full caster with ${hitDie >= 10 ? `a d${hitDie} hit die` : "heavy armor"}: no SRD full caster has more than a d8 or wears heavy armor without a subclass.` });
+  }
+  const skills = rec(data.skillChoices) as { count?: unknown };
+  if (Number(skills.count ?? 2) > 4) {
+    out.push({ level: "warn", text: "More than four skill picks: the rogue's four are the most any SRD class gives." });
+  }
+  if (!Object.keys(rec(data.levels)).length) {
+    out.push({ level: "warn", text: "No features: a character of this class gains only hit points as they level." });
+  }
+  return out;
+}

@@ -7,7 +7,7 @@ import classesJson from "@/lib/srd/classes.json";
 import racesJson from "@/lib/srd/races.json";
 import skillsJson from "@/lib/srd/skills.json";
 import spellSlotsJson from "@/lib/srd/spell-slots.json";
-import { CUSTOM_CLASSES } from "@/lib/classes";
+import { CUSTOM_CLASSES, findCustomClass } from "@/lib/classes";
 import { computeArmorClass, unarmoredFormulaFor, type AcBreakdown } from "@/lib/srd/armor";
 import { conditionAcRiders } from "@/lib/srd/condition-effects";
 import { combatRiders, defenseRiders, halfProficiencyCovers } from "@/lib/srd/feature-effects";
@@ -46,8 +46,9 @@ const SLOT_TABLES = spellSlotsJson as unknown as {
 // SRD classes first, then the setting-specific custom catalog.
 export const ALL_CLASSES: SrdClass[] = [...SRD_CLASSES, ...CUSTOM_CLASSES];
 
-export function findClass(id: string) {
-  return ALL_CLASSES.find((entry) => entry.id === id) ?? null;
+// A workshop class is registered at run time (src/lib/classes/index.ts).
+export function findClass(id: string): SrdClass | null {
+  return ALL_CLASSES.find((entry) => entry.id === id) ?? findCustomClass(id);
 }
 
 export function findRace(id: string) {

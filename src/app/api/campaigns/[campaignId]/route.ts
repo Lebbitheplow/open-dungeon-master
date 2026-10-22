@@ -50,6 +50,7 @@ import { tableBreakOn } from "@/lib/dm/table-break";
 import { latestEventOfType, publishPersisted, publishWithSeq } from "@/lib/events";
 import type { HandoutShown, TitleCard } from "@/lib/scene/state";
 import { narrationAudioFor } from "@/lib/tts";
+import { tableAuthors, workshopClassesFor } from "@/lib/db/homebrew";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -136,6 +137,9 @@ export async function GET(
     // The workshop and pack subclasses its sheets hold: their feature text
     // and always-prepared spells, read in the browser as on the server.
     subclasses: subclassExtrasAtTable(campaignId, sheets),
+    // The table's workshop classes, read in the browser as on the server: a
+    // sheet holding one, and the level-up dialog's multiclass list.
+    classes: workshopClassesFor(tableAuthors(campaignId)),
     // The table's workshop feats: what each runs as, and its text.
     feats: Object.fromEntries(tableFeatsFrom(getDatabase(), campaignId)),
     // The character this user is playing when they have several (11.3).

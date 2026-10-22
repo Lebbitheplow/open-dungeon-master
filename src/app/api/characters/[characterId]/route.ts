@@ -12,6 +12,7 @@ import { listEventsForLibraryCharacter } from "@/lib/db/character-events";
 import { mirrorToCampaignSheets, portraitStatus, queueLibraryPortrait } from "@/lib/portrait";
 import { admitSheet, refusal } from "@/lib/characters/admit";
 import { attachmentSchema, createSheetSchema } from "@/lib/schemas/sheet";
+import { workshopClassDefs } from "@/lib/classes/workshop-registry";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -48,6 +49,8 @@ export async function GET(
       campaigns: listAssignmentsForCharacter(user.id, characterId),
     },
     events: listEventsForLibraryCharacter(characterId),
+    // The workshop classes it holds, read in the browser as on the server.
+    workshopClasses: workshopClassDefs([character.class, ...((character.sheet as { classes?: Array<{ id: string }> } | undefined)?.classes ?? []).map((entry) => entry.id)]),
   });
 }
 

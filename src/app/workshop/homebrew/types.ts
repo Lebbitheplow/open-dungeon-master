@@ -18,6 +18,7 @@ export const HOMEBREW_EDITOR_KINDS = [
   "feat",
   "background",
   "race",
+  "class",
   "archetype",
   "hazard",
 ] as const satisfies ReadonlyArray<HomebrewKind>;
@@ -30,6 +31,7 @@ export const KIND_LABELS: Record<EditorKind, string> = {
   feat: "Feats",
   background: "Backgrounds",
   race: "Species",
+  class: "Classes",
   archetype: "Subclasses",
   hazard: "Hazards",
 };
@@ -40,6 +42,7 @@ export const KIND_SINGULAR: Record<EditorKind, string> = {
   feat: "feat",
   background: "background",
   race: "species",
+  class: "class",
   archetype: "subclass",
   hazard: "hazard",
 };
@@ -52,6 +55,7 @@ export const KIND_BLURB: Record<EditorKind, string> = {
   feat: "Feats the character builder offers beside the SRD ones.",
   background: "Backgrounds the builder offers, with the skills it grants.",
   race: "Species the builder offers, with their speed and ability bonuses.",
+  class: "Classes the builder offers beside the SRD's: the hit die, saves, training and spellcasting the engines read, and features by level.",
   archetype: "Subclasses the builder offers under a class, with their features by level.",
   hazard: "Traps, poisons and diseases the hazard and afflict tools run by name: the save, the damage and what lingers come from the block.",
 };

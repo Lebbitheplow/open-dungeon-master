@@ -15,6 +15,7 @@ export const KIND_GLYPHS: Record<EditorKind, string> = {
   feat: "rest-inspiration",
   background: "tab-journal",
   race: "tab-characters",
+  class: "tab-party",
   archetype: "rest-level-up",
   hazard: "cue-dread",
 };

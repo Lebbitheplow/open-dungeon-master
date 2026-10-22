@@ -43,6 +43,7 @@ import { SheetGearRows, type PendingWear } from "@/components/sheet/SheetGearRow
 import { LoadBreakdown } from "@/components/sheet/LoadBreakdown";
 import { ResourceRow, SlotRow, STEP_BUTTON } from "@/components/sheet/SheetCounters";
 import { namesLookup } from "@/lib/battlemap/condition-notes";
+import { workshopClassName } from "@/lib/classes/workshop-registry";
 
 function titleCase(value: string) {
   return value.replace(/[-_]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -232,9 +233,9 @@ export function CharacterSheetDialog({
                   Level {sheet.level} {sheet.raceLabel ?? titleCase(sheet.race)}{" "}
                   {(sheet.classes?.length ?? 0) > 1
                     ? (sheet.classes ?? [])
-                        .map((entry) => `${titleCase(entry.id)} ${entry.level}`)
+                        .map((entry) => `${workshopClassName(entry.id) ?? titleCase(entry.id)} ${entry.level}`)
                         .join(" / ")
-                    : `${titleCase(sheet.class)}${sheet.subclass ? ` (${titleCase(sheet.subclass)})` : ""}`}
+                    : `${workshopClassName(sheet.class) ?? titleCase(sheet.class)}${sheet.subclass ? ` (${titleCase(sheet.subclass)})` : ""}`}
                   {sheet.background ? ` · ${titleCase(sheet.background)}` : ""}
                   {sheet.alignment ? ` · ${sheet.alignment}` : ""}
                 </p>

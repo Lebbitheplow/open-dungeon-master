@@ -51,10 +51,12 @@ export function OptionFields({
   kind,
   data,
   onChange,
+  workshopClasses = [],
 }: {
-  kind: Exclude<EditorKind, "item" | "spell" | "hazard">;
+  kind: Exclude<EditorKind, "item" | "spell" | "hazard" | "class">;
   data: Data;
   onChange: (next: Data) => void;
+  workshopClasses?: Array<{ id: string; name: string }>;
 }) {
   const set = (patch: Data) => onChange({ ...data, ...patch });
   switch (kind) {
@@ -65,6 +67,6 @@ export function OptionFields({
     case "race":
       return <SpeciesFields data={data} set={set} />;
     case "archetype":
-      return <ArchetypeFields data={data} set={set} />;
+      return <ArchetypeFields data={data} set={set} workshopClasses={workshopClasses} />;
   }
 }

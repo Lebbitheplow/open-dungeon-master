@@ -4,6 +4,7 @@ import subclassesJson from "@/lib/srd/subclasses.json";
 import racesJson from "@/lib/srd/races.json";
 import classesJson from "@/lib/srd/classes.json";
 import { CUSTOM_CLASS_FEATURES, findCustomClass } from "@/lib/classes";
+import { workshopClassDef } from "@/lib/classes/workshop-registry";
 import type { SheetFeature } from "@/lib/schemas/sheet";
 import { chosenFightingStyles, fightingStyleChoices, fightingStyleSlots } from "@/lib/srd/feature-effects";
 import { findOptionByFeatureName, isOptionName, optionSlotsFor } from "@/lib/srd/options";
@@ -125,7 +126,7 @@ export function subclassFeatureDescription(
   featureName: string,
   extras?: SubclassExtras,
 ): string | null {
-  const table = CLASS_FEATURES[classId];
+  const table = featureTableOf(classId);
   const chosen = table ? findSubclass(table, subclass) : null;
   if (!chosen) {
     // A workshop or pack subclass carries its features' own text.
@@ -164,6 +165,12 @@ const CLASS_FEATURES: Record<string, ClassFeatureTable> = {
   ...CUSTOM_CLASS_FEATURES,
 };
 
+// A class's table: the bundled or setting one, or a workshop class's,
+// registered at run time (src/lib/classes/index.ts registerWorkshopClasses).
+function featureTableOf(classId: string): ClassFeatureTable | undefined {
+  return CLASS_FEATURES[classId] ?? workshopClassDef(classId)?.features;
+}
+
 function clampLevel(level: number) {
   return Math.max(1, Math.min(20, Math.floor(level)));
 }
@@ -171,7 +178,7 @@ function clampLevel(level: number) {
 // The character level at which a class picks its subclass; null for classes
 // outside the SRD table (custom/homebrew classes).
 export function subclassLevelFor(classId: string): number | null {
-  return CLASS_FEATURES[classId]?.subclassLevel ?? null;
+  return featureTableOf(classId)?.subclassLevel ?? null;
 }
 
 // Whether a class may pick its subclass at this level: `locked` with the
@@ -217,7 +224,7 @@ export function expertiseSlotsFor(classId: string, level: number): number {
 // Empty for unknown classes. The character builder and the level-up dialog
 // merge these with whatever the content pack offers.
 export function subclassNamesFor(classId: string): string[] {
-  return (CLASS_FEATURES[classId]?.subclasses ?? []).map((entry) => entry.name);
+  return (featureTableOf(classId)?.subclasses ?? []).map((entry) => entry.name);
 }
 
 function leveledNames(levels: Record<string, string[]>, level: number): SheetFeature[] {
@@ -308,7 +315,7 @@ function findSubclass(table: ClassFeatureTable, stored: string): SubclassTable |
 // the creation check ask it "is this one of the class's subclasses", where
 // the loose match above would answer yes to half a name.
 export function bundledSubclassName(classId: string, subclass: string): string | null {
-  const table = CLASS_FEATURES[classId];
+  const table = featureTableOf(classId);
   const wanted = textKey(subclass);
   if (!table || !wanted) {
     return null;
@@ -349,7 +356,7 @@ export function classFeaturesFor(
   // table's workshop subclasses and the content pack's prose archetypes.
   extras?: SubclassExtras,
 ): SheetFeature[] {
-  const table = CLASS_FEATURES[classId];
+  const table = featureTableOf(classId);
   if (!table) {
     return [];
   }
@@ -366,7 +373,7 @@ export function classFeaturesFor(
 // feature names by level and its always-prepared spells. Null for a
 // subclass the tables do not carry.
 export function subclassTableFor(classId: string, stored: string): SubclassTable | null {
-  const table = CLASS_FEATURES[classId];
+  const table = featureTableOf(classId);
   return table ? findSubclass(table, stored) : null;
 }
 
@@ -405,7 +412,7 @@ function choiceSpellsBy(chosen: SubclassTable, features: ReadonlyArray<{ name: s
 }
 
 function subclassTableOf(classId: string, subclass: string, extras?: SubclassExtras): SubclassTable | null {
-  const table = CLASS_FEATURES[classId];
+  const table = featureTableOf(classId);
   return table ? (findSubclass(table, subclass) ?? extraTableNamed(classId, subclass, extras)) : null;
 }
 

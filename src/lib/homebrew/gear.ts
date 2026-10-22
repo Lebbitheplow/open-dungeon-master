@@ -1,4 +1,5 @@
 import type { SrdArmor } from "@/lib/srd/armor";
+import { normalizeClassData } from "@/lib/homebrew/class-data";
 import type { SrdWeapon } from "@/lib/srd/weapons";
 import type { MagicItemEffect } from "@/lib/srd/magic-items";
 import type { SpellMech } from "@/lib/srd/spell-mechanics";
@@ -227,6 +228,11 @@ function normalizeHomebrewKind(
       const data = { desc: text(source.desc, GEAR_LIMITS.descMax) };
       return normalizeHazardData(source, data);
     }
+    case "class": {
+      // A class (src/lib/homebrew/class-data.ts): the numbers every class has.
+      const normalized = normalizeClassData((raw ?? {}) as Raw);
+      return "error" in normalized ? normalized : { data: normalized.data as unknown as HomebrewData };
+    }
     case "monster": {
       // The bestiary owns monsters (src/lib/bestiary/monster-draft.ts).
       const source = (raw ?? {}) as Raw;
@@ -312,6 +318,17 @@ export function describeHomebrew(kind: HomebrewKind, data: Raw): string {
   }
   if (kind === "race") {
     return [String(data.size ?? ""), `speed ${(data.speed as Raw | undefined)?.walk ?? 30}`].join(", ");
+  }
+  if (kind === "class") {
+    const casting = String(data.casterType ?? "none");
+    const levels = Object.keys((data.levels as Raw | undefined) ?? {});
+    return [
+      `d${String(data.hitDie ?? 8)}`,
+      casting === "none" ? "" : `${casting === "pact" ? "pact magic" : `${casting} caster`}, ${String(data.spellListFrom ?? "")} list`,
+      levels.length ? `${levels.length} feature levels` : "",
+    ]
+      .filter(Boolean)
+      .join(", ");
   }
   if (kind === "background") {
     return String(data.skill_proficiencies ?? "");

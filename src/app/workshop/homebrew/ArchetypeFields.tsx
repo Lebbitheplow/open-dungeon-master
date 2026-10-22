@@ -159,7 +159,16 @@ function SpellLists({
   );
 }
 
-export function ArchetypeFields({ data, set }: { data: Data; set: (patch: Data) => void }) {
+export function ArchetypeFields({
+  data,
+  set,
+  workshopClasses = [],
+}: {
+  data: Data;
+  set: (patch: Data) => void;
+  // The author's own classes (homebrew kind "class"), which a subclass can sit under.
+  workshopClasses?: Array<{ id: string; name: string }>;
+}) {
   const classId = String(data.classSlug ?? "fighter");
   const levels = (data.levels ?? {}) as Record<string, FeatureRow[]>;
   const flat: Flat[] = Object.entries(levels)
@@ -177,6 +186,8 @@ export function ArchetypeFields({ data, set }: { data: Data; set: (patch: Data) 
   // Knight or an Arcane Trickster does. A copy of either, or a subclass that
   // borrowed their Spellcasting, casts by its rules until turned off
   // (src/lib/srd/subclass-tables.ts castingProfileOf).
+  const ownClass = workshopClasses.find((klass) => klass.id === classId);
+  const classLabel = ownClass?.name ?? capital(classId);
   const mayCast = subclassMayCast(classId);
   const spellcastingRow = flat.find((row) => thirdCasterProfileForFeature(row.feature.n));
   const featureProfile = spellcastingRow ? thirdCasterProfileForFeature(spellcastingRow.feature.n) : null;
@@ -195,7 +206,7 @@ export function ArchetypeFields({ data, set }: { data: Data; set: (patch: Data) 
       <SelectField
         label="Class"
         value={classId}
-        options={CLASS_IDS.map((value) => ({ value, label: capital(value) }))}
+        options={[...CLASS_IDS.map((value) => ({ value: value as string, label: capital(value) })), ...workshopClasses.map((klass) => ({ value: klass.id, label: klass.name }))]}
         onChange={(classSlug) => set({ classSlug })}
         className="w-56"
         hint="The builder offers it under this class."
@@ -278,7 +289,7 @@ export function ArchetypeFields({ data, set }: { data: Data; set: (patch: Data) 
           Granted by name when a character takes this subclass. A borrowed feature keeps its name so the engine runs it; renaming it makes it words for the DM.
         </p>
       </div>
-      <SpellLists data={data} set={set} castsNothing={casting === "none" && !casterClass(classId)} classLabel={capital(classId)} />
+      <SpellLists data={data} set={set} castsNothing={casting === "none" && !casterClass(classId)} classLabel={classLabel} />
     </div>
   );
 }

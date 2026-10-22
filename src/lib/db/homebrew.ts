@@ -2,6 +2,8 @@ import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { getContentDb } from "@/lib/content/db";
 import { repairedWeight } from "@/lib/content/item-weights";
 import { gearFromHomebrewData } from "@/lib/homebrew/gear";
+import { workshopClassFrom, type WorkshopClass } from "@/lib/homebrew/class-data";
+import { registerWorkshopClasses } from "@/lib/classes/workshop-registry";
 import { SRD_ARMOR } from "@/lib/srd/armor";
 import { magicItemNamed } from "@/lib/srd/magic-items";
 import { matchGear } from "@/lib/srd/adventuring-gear";
@@ -158,7 +160,31 @@ export function createHomebrew(userId: string, input: CreateHomebrewInput): Home
   if (!entry) {
     throw new Error("Failed to create homebrew entry.");
   }
+  if (entry.kind === "class") {
+    syncWorkshopClasses();
+  }
   return entry;
+}
+
+// A table's workshop classes, for the browser (or one person's shelf): every
+// one its authors keep, the forgotten ones too, since a sheet may hold one.
+export function workshopClassesFor(userIds: string[]): WorkshopClass[] {
+  return [...new Set(userIds)]
+    .flatMap((userId) => listHomebrew(userId, "class", { archived: true }))
+    .flatMap((entry) => workshopClassFrom(entry) ?? []);
+}
+
+// Every class kept in any workshop, registered with the engines
+// (src/lib/classes/index.ts registerWorkshopClasses), so a sheet holding one
+// is read as a bundled class's is. Who may pick one is the catalog's question
+// (src/lib/characters/catalog.ts); a forgotten class still answers for the
+// sheets that hold it. Run at start-up and after any write to a class.
+export function syncWorkshopClasses(): void {
+  const rows = getDatabase().prepare(`SELECT * FROM homebrew_entries WHERE kind = 'class'`).all() as HomebrewRow[];
+  registerWorkshopClasses(
+    rows.map(mapEntry).flatMap((entry) => workshopClassFrom(entry) ?? []),
+    { replace: true },
+  );
 }
 
 export function updateHomebrew(
@@ -178,6 +204,9 @@ export function updateHomebrew(
       nowIso(),
       id,
     );
+  if (existing.kind === "class") {
+    syncWorkshopClasses();
+  }
   return getHomebrew(userId, id);
 }
 
@@ -350,8 +379,12 @@ export function restoreHomebrew(userId: string, id: string): boolean {
 }
 
 export function deleteHomebrew(userId: string, id: string): boolean {
+  const kind = getHomebrew(userId, id)?.kind;
   const result = getDatabase()
     .prepare(`DELETE FROM homebrew_entries WHERE id = ? AND user_id = ?`)
     .run(id, userId);
+  if (kind === "class") {
+    syncWorkshopClasses();
+  }
   return result.changes > 0;
 }
