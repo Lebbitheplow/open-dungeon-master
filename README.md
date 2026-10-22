@@ -153,9 +153,10 @@ enforced and what is guidance: [docs/rules-coverage.md](docs/rules-coverage.md).
 ## Quick start
 
 You need **Node 22.18+, 24 or 26+** (or Docker) and **a storyteller**: a local
-model server such as llama.cpp or Ollama, an API key (OpenAI, OpenRouter or any
-OpenAI-compatible provider), or a CLI agent you already pay for (Codex, Grok Build,
-Claude Code, opencode). Pictures and voice are optional.
+model server (llama.cpp recommended; Ollama, LM Studio and vLLM also work), an
+API key (OpenAI, OpenRouter or any OpenAI-compatible provider), or a CLI agent you
+already pay for (Codex, Grok Build, Claude Code, opencode). Pictures and voice are
+optional.
 
 The two simplest storytellers: a **ChatGPT Plus** or **SuperGrok** plan, whose Codex
 or Grok Build agent narrates and paints the pictures on one subscription, signed in

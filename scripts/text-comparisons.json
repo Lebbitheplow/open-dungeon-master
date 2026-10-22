@@ -1925,7 +1925,7 @@
     "lib/setup/discovery-logic.ts#[a-z]": [["key",3,"URLs, model ids, key prefixes"]],
     "lib/setup/discovery-logic.ts#\\b": [["key",5,"URLs, model ids, key prefixes"]],
     "lib/setup/discovery-logic.ts#re-affix": [["key",1,"endpoint paths, model ids, server owner names, key prefixes"]],
-    "lib/setup/discovery-logic.ts#re-word": [["key",4,"endpoint paths, model ids, server owner names, key prefixes"]],
+    "lib/setup/discovery-logic.ts#re-word": [["key",5,"endpoint paths, model ids, server owner names, key prefixes, the localhost host name"]],
     "lib/setup/discovery-logic.ts#str-eq": [["key",2,"endpoint paths, model ids, server owner names, key prefixes"]],
     "lib/setup/discovery-logic.ts#str-includes": [["key",9,"endpoint paths, model ids, server owner names, key prefixes"]],
     "lib/setup/discovery-logic.ts#toLowerCase": [["key",3,"URLs, model ids, key prefixes"]],

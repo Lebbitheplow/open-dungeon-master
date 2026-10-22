@@ -697,9 +697,8 @@ try {
     assert.equal(storyContextTokens({ textProvider: "custom", localTextModel: "", customBaseUrl: "https://openrouter.ai/api/v1", customModel: "sao10k/l3-lunaris-8b" }), 8_192);
     assert.equal(storyContextTokens({ textProvider: "custom", localTextModel: "", customBaseUrl: "https://openrouter.ai/api/v1", customModel: "nobody/knows" }), 16_384, "an unknown model keeps the conservative default");
     assert.equal(storyContextTokens({ textProvider: "custom", localTextModel: "", customBaseUrl: "http://127.0.0.1:8001/v1", customModel: "gpt-5.6" }), 16_384, "a private server is not the catalog's provider; its /props decides");
-    // Where a local window comes from, whatever the platform: Windows caps an
-    // unset LOCAL_TEXT_CONTEXT at 64K (model-client.ts), so set it past every
-    // window here.
+    // Where a local window comes from: an unset LOCAL_TEXT_CONTEXT caps it at
+    // 64K (model-client.ts), so set it past every window here.
     process.env.LOCAL_TEXT_CONTEXT = "1048576";
     assert.equal(localContextTokens("qwen3.6:35b-a3b-q8_0"), 40_960, "what Ollama said of it earlier in this process");
     assert.equal(localContextTokens("gemma-4-31b-it-GGUF"), 262_144, "the catalog's window for weights nobody has asked Ollama about");
@@ -708,6 +707,14 @@ try {
     assert.equal(localContextTokens("my-merge:latest"), 65_536, "what Ollama said of it");
     assert.equal(localContextTokens("never-heard-of"), 131_072);
     delete process.env.LOCAL_TEXT_CONTEXT;
+    // Unset, Ollama is asked for no more than 64K on every platform: the
+    // cache for the whole window is reserved when the model loads, and
+    // gpt-oss-20b's native 128K would not fit beside it on a 16 GB card.
+    textModels.rememberLocalContextWindow("gpt-oss:20b", 131_072);
+    textModels.rememberLocalModelParams("gpt-oss:20b", 20_900_000_000);
+    assert.equal(localContextTokens("gpt-oss:20b"), 65_536, "the floor model at 64K, not its native 128K");
+    assert.equal(localContextTokens("gemma4:31b-it-qat"), 65_536);
+    assert.equal(localContextTokens("qwen3.6:35b-a3b-q8_0"), 40_960, "a smaller window of its own stays");
     // A small model asks Ollama for 32K, not its native 262K: the short
     // rules never need more, and the cache would not fit a 4 GB card.
     textModels.rememberLocalContextWindow("qwen3.5:9b", 262_144);

@@ -5,7 +5,7 @@ import { DEFAULT_STORY_SETTINGS } from "@/lib/defaults";
 import { endpointKind } from "@/lib/dm/sampling-logic";
 import { probeCustomContextWindow, storyContextTokens, storyWindowAssumed } from "@/lib/model-client";
 import { serverEnv } from "@/lib/server-env";
-import { soleListedModel } from "@/lib/model-registry/discovery";
+import { ollamaModelInfo, soleListedModel } from "@/lib/model-registry/discovery";
 import { recordModelProbe } from "@/lib/model-registry/probes";
 import { keyForListing } from "@/lib/setup/discovery-logic";
 // The same three-stage probe the CLI runs (scripts/probe-openai-backend.mjs):
@@ -25,6 +25,8 @@ const probeSchema = z.object({
   // An unsaved key typed into the field; the stored key or env is the
   // fallback, mirroring how a real turn would resolve it.
   apiKey: z.string().trim().max(400).optional(),
+  // The provider the guided setup is about to save; absent, the saved one.
+  provider: z.enum(["local", "custom"]).optional(),
 });
 
 // Tries a backend exactly as the DM loop needs it before anyone plays on it.
@@ -43,13 +45,14 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
-  const { which, baseUrl, model, apiKey } = parsed.data;
+  const { which, baseUrl, model, apiKey, provider: unsaved } = parsed.data;
   const config = getGlobalConfig();
   // Mirror how a real turn resolves this backend (configuredDefaultStorySettings
   // + model-client): "local" means Ollama at OLLAMA_BASE_URL, everything else
   // is the OpenAI-compatible endpoint. Otherwise the probe would test a
   // different endpoint than the campaign actually talks to.
   const provider =
+    unsaved ||
     (which === "utility" ? config.text.utilityProvider : config.text.provider) ||
     serverEnv(which === "utility" ? "UTILITY_TEXT_PROVIDER" : "DEFAULT_TEXT_PROVIDER") ||
     (which === "utility"
@@ -127,7 +130,9 @@ export async function POST(request: Request) {
         customBaseUrl: resolvedBaseUrl,
         customModel: resolvedModel,
       };
-      if (!local) await probeCustomContextWindow(resolvedBaseUrl, resolvedKey, resolvedModel);
+      // Ollama's own word on the model's window, which caps what it is asked for.
+      if (local) await ollamaModelInfo(resolvedModel, ollamaBaseUrl);
+      else await probeCustomContextWindow(resolvedBaseUrl, resolvedKey, resolvedModel);
       window = { tokens: storyContextTokens(settings), reported: !storyWindowAssumed(settings) };
     }
     return Response.json(window ? { ...result, window } : result);

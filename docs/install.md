@@ -30,8 +30,9 @@ Software:
     or gpt-oss-20b on a 16 GB card.
     A server that lists exactly one chat model runs it with no model chosen;
     with several, pick one in the guided setup. Or:
-  - any other OpenAI-compatible server with tool calling: Ollama, LM Studio, vLLM,
-    TabbyAPI, KoboldCpp, or a remote API key like OpenAI or OpenRouter. Or:
+  - any other model server with tool calling (Ollama, LM Studio, vLLM, TabbyAPI,
+    KoboldCpp: supported, with llama.cpp the one we recommend), or a remote API
+    key like OpenAI or OpenRouter. Or:
   - a CLI agent already installed and signed in on the server's computer: Claude
     Code, Codex, opencode or Grok Build, running on the plan you already pay for.
     Pick it in **Admin > Agent program**. Works for a server started with npm or
@@ -83,7 +84,9 @@ takes it from there, one question at a time:
 - **The storyteller.** It looks at what is already running on the computer
   (llama.cpp, Ollama, LM Studio, vLLM, KoboldCpp, TabbyAPI, Jan) and offers each
   server with the models it serves, the best fit the model catalog knows of
-  preselected. Or paste an API key (OpenAI, OpenRouter, any OpenAI-compatible
+  preselected. When nothing answers, it gives the llama-server commands for
+  this machine; an Ollama it finds is connected through Ollama's own API, so
+  the app sets the model's window. Or paste an API key (OpenAI, OpenRouter, any OpenAI-compatible
   provider) and pick from the models it can reach. Or pick an agent program you
   already pay for (Claude Code, Codex, opencode, Grok Build): it shows whether each
   is installed and signed in, and the exact command to fix it when not. Or choose a

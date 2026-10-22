@@ -14,7 +14,7 @@ import type { ScanResult } from "@/app/setup/SetupParts";
 import { StorytellerStep } from "@/app/setup/StorytellerStep";
 import { WelcomeStep } from "@/app/setup/WelcomeStep";
 import { YourAgentStep, type MadeConnection } from "@/app/setup/YourAgentStep";
-import { storySourceForUrl } from "@/lib/setup/discovery-logic";
+import { normalizeBaseUrl, storySourceForUrl } from "@/lib/setup/discovery-logic";
 import { fillsStep, suggestNarration, suggestPictures } from "@/lib/setup/suggest";
 import {
   PAINTING_AGENTS,
@@ -41,9 +41,12 @@ const KEYS = ["welcome", "story", "pictures", "voice", "players", "agent", "read
 type StepKey = (typeof KEYS)[number];
 const STEP_INDEX = Object.fromEntries(KEYS.map((key, index) => [key, index])) as Record<StepKey, number>;
 
-function storyChoice(draft: Draft): StoryChoice | null {
+function storyChoice(draft: Draft, found: ScanResult["text"]): StoryChoice | null {
   if (draft.story === "none") return { kind: "none" };
-  if (draft.story === "local") return { kind: "local", baseUrl: draft.local.baseUrl, model: draft.local.model, apiKey: draft.local.apiKey };
+  if (draft.story === "local") {
+    const server = draft.local.typed ? undefined : found.find((entry) => entry.baseUrl === normalizeBaseUrl(draft.local.baseUrl));
+    return { kind: "local", baseUrl: draft.local.baseUrl, model: draft.local.model, apiKey: draft.local.apiKey, ollama: Boolean(server?.ollamaNative) };
+  }
   if (draft.story === "key") {
     return { kind: "key", provider: draft.key.provider, baseUrl: draft.key.baseUrl, model: draft.key.model, apiKey: draft.key.apiKey };
   }
@@ -155,7 +158,7 @@ export function SetupWizard({ config: initialConfig, env, info }: { config: Mask
       return draft.serverName.trim() === config.serverName.trim() ? null : namePatch(draft.serverName);
     }
     if (key === "story") {
-      const choice = storyChoice(draft);
+      const choice = storyChoice(draft, scan?.text ?? []);
       if (!choice) return { error: "Choose who tells the story." };
       const built = storyPatch(choice, config.text.customBaseUrl);
       return "error" in built ? built : built.patch;

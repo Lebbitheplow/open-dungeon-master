@@ -4,7 +4,7 @@ import { ExternalLink, Loader2, RefreshCw, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
-import { STORY_WINDOW_NEEDS } from "@/lib/story-window";
+import { DEFAULT_WINDOW, STORY_WINDOW_NEEDS, windowLabel } from "@/lib/story-window";
 import { BackendProbe } from "@/app/admin/BackendProbe";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { AgentPanel } from "@/app/setup/AgentPanel";
@@ -79,7 +79,7 @@ export function StorytellerStep({
           onPick={() => pick("local")}
           glyph="ui-ai"
           title="A model on this computer"
-          sub="llama.cpp, Ollama, LM Studio, vLLM or another server you run. Free to play and private; needs at least 16 GB of graphics memory."
+          sub="llama.cpp recommended; Ollama, LM Studio, vLLM and other servers work too. Free to play and private; needs at least 16 GB of graphics memory."
           badge={scanning ? { text: "Looking…", tone: "off" } : found.length ? { text: `Found ${found.length}`, tone: "ready" } : null}
         />
         <ChoiceCard
@@ -295,9 +295,22 @@ function LocalPanel({
       ) : null}
 
       {local.baseUrl && local.model ? (
-        <BackendProbe which="story" baseUrl={normalizeBaseUrl(local.baseUrl)} model={local.model} apiKey={local.apiKey} />
+        <BackendProbe
+          which="story"
+          baseUrl={normalizeBaseUrl(local.baseUrl)}
+          model={local.model}
+          apiKey={local.apiKey}
+          provider={chosenFound?.ollamaNative ? "local" : "custom"}
+        />
       ) : null}
-      <p className="text-[11px] leading-4 text-stone-500">{STORY_WINDOW_NEEDS} The server sets it (llama-server -c, Ollama&apos;s num_ctx).</p>
+      <p className="text-[11px] leading-4 text-stone-500">
+        {STORY_WINDOW_NEEDS}{" "}
+        {chosenFound?.ollamaNative
+          ? `The app asks this Ollama for up to ${windowLabel(DEFAULT_WINDOW)} itself.`
+          : chosenFound?.kind === "ollama"
+            ? `Ollama runs a model at its own context length, 4K on a card under 24 GB: start it with OLLAMA_CONTEXT_LENGTH=${DEFAULT_WINDOW}.`
+            : "The server sets it (llama-server's -c)."}
+      </p>
     </div>
   );
 }

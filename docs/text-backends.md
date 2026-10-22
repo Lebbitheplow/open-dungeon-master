@@ -39,15 +39,24 @@ on for tool calls. If the server runs with `--api-key`, set
 addresses: a player's campaign always runs on the server's, and only an
 admin's own campaign can set another in its Story AI panel.
 
-Use llama.cpp where you can. Ollama renders the chat with its own code
-rather than the model's template, has no reasoning budget, and ships some
-models with a presence penalty that suppresses tool calls (the app now sends
-0). Qwen3.5 9B on Ollama called no tool in the six town turns it finished,
-narrating or writing nothing instead; llama-server, sent the same request
-for the same model at the same Q4_K_M quant, called them. If Ollama is what
-you have, the same 35B model is committed as a Modelfile with the context and
-samplers baked in; build it and point the app at `http://127.0.0.1:11434/v1`,
-model `qwen3.6-dm`:
+llama.cpp is the server we recommend, and the one the guided setup's hints
+and the desktop app set up. Ollama, LM Studio, vLLM and other servers are
+supported. Ollama renders the chat with its own code rather than the model's
+template, has no reasoning budget, and ships some models with a presence
+penalty that suppresses tool calls (the app now sends 0). Qwen3.5 9B
+on Ollama called no tool in the six town turns it finished, narrating or
+writing nothing instead; llama-server, sent the same request for the same
+model at the same Q4_K_M quant, called them.
+
+The guided setup connects an Ollama on the server's own machine through
+Ollama's API (the "Local" provider), which takes the context window with
+every call: the model's own, up to 64K
+([Local models](#local-models-legacy-local-provider-ollama)). Its
+OpenAI-compatible endpoint ignores a window sent with the request and runs
+every model at Ollama's own context length, 4K on a card under 24 GB, too
+small to narrate. To point the app at `http://127.0.0.1:11434/v1` by hand
+anyway, use the same 35B model committed as a Modelfile with the context and
+samplers baked in, model `qwen3.6-dm`:
 
 ```bash
 ollama pull qwen3.6:35b-a3b-q8_0
@@ -72,10 +81,10 @@ request is fitted to the window the backend really has
 
 Measured on Qwen3.6-35B-A3B and Gemma 4 E4B; a bigger party or a longer
 story leaves less of each window for history. llama-server reports its
-window on `/props`, read at the start of each turn. Ollama's OpenAI-compatible
-endpoint and most other servers report none, so a table plans for 16K and
-lets the server decide: set `OPENAI_COMPAT_CONTEXT` to the window the server
-runs. **Test backend** (the guided setup, and Admin > Text model defaults)
+window on `/props`, read at the start of each turn. On Ollama's own API the
+app sets the window itself. Ollama's OpenAI-compatible endpoint and most
+other servers report none, so a table plans for 16K and lets the server
+decide: set `OPENAI_COMPAT_CONTEXT` to the window the server runs. **Test backend** (the guided setup, and Admin > Text model defaults)
 says which window a campaign on that backend gets and whether it is enough.
 Hosted models take their window from the model catalog, and the model pickers
 leave out a model whose window is too small to narrate.
@@ -300,7 +309,8 @@ llama-server -m gpt-oss-20b-MXFP4.gguf --alias gpt-oss-20b \
 
 ## Local models (legacy "Local" provider, Ollama)
 
-The legacy Ollama-native provider was built around the Gemma 4
+Supported; llama.cpp (above) is the recommended server. The legacy
+Ollama-native provider was built around the Gemma 4
 quantization-aware-trained (QAT, Q4_0) builds. The storyteller's minimum
 ([Hardware for a local model](#hardware-for-a-local-model)) holds here too: the
 E2B, E4B and 12B are below 16 billion parameters and play only on the short
@@ -316,8 +326,9 @@ ollama pull gemma4:31b-it-qat       # 19 GB
 ```
 
 Measured on an M2 Max (32 GB), real story prompts, ~300-token turns. RAM is
-resident memory from `ollama ps` at the app's context settings (the E-models
-stream per-layer embeddings, so they sit below their download size):
+resident memory from `ollama ps` at each model's full native window, which
+the app asked for at the time (the E-models stream per-layer embeddings, so
+they sit below their download size):
 
 | Model | Disk | RAM | Context | Generation | Typical turn | Cold load |
 |---|---|---|---|---|---|---|
@@ -326,9 +337,11 @@ stream per-layer embeddings, so they sit below their download size):
 | 12B | 7.2 GB | 7.7 GB | 256K | 21 tok/s | 11.5 s | ~9 s |
 | 26B MoE | 16 GB | 15 GB | 256K | 48 tok/s | 4.7 s | ~30 s |
 
-The app runs each model at its full native context window by default. Gemma 4
-uses sliding-window attention for most layers, so the KV cache stays small —
-the 12B measured ~7.6 GB of RAM even with 50K+ tokens of story in context.
+The app asks Ollama for the model's own context window, up to 64K (32K for
+a model under 16 billion parameters); `LOCAL_TEXT_CONTEXT` sets another.
+Gemma 4 uses sliding-window attention for most layers, so its KV cache stays
+small even past that: the 12B measured ~7.6 GB of RAM with 50K+ tokens of
+story in context.
 
 The 26B MoE is both the strongest writer and nearly the fastest (only ~4B
 params active per token), but wants headroom: prefer 24 GB+ RAM, more if you
@@ -547,9 +560,12 @@ context.
 
 Deep prefill is the one real cost of huge contexts (~160 tok/s at 50K depth
 on the 12B), and it only bites when the cache goes cold on a very long story;
-set `LOCAL_TEXT_CONTEXT` to cap the window if you'd rather bound that.
-Windows caps the default local context at 65K tokens for smoother first-run
-behavior, but you can still set `LOCAL_TEXT_CONTEXT` higher if your machine
-has the headroom. A model under 16B parameters is capped at 32K: Qwen3.5 9B's
+set `LOCAL_TEXT_CONTEXT` lower if you'd rather bound that. By default the app
+asks Ollama for no more than 64K on every platform: Ollama reserves the cache
+for the whole window when it loads the model, used or not, and gpt-oss-20b's
+native 128K is about 3 GB of cache on top of the model, more than a 16 GB
+card has to spare.
+Set `LOCAL_TEXT_CONTEXT` higher if your machine has the headroom. A model
+under 16B parameters is capped at 32K: Qwen3.5 9B's
 native 262K window would ask Ollama for about 8 GB of cache, more than the
 weights, on the cards such a model is chosen for.

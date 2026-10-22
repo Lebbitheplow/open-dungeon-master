@@ -488,7 +488,7 @@ export function AdminSettingsPanel() {
               onChange={(event) =>
                 setConfig({ ...config, text: { ...config.text, customBaseUrl: event.target.value } })
               }
-              placeholder={env.customBaseUrl || "http://127.0.0.1:11434/v1"}
+              placeholder={env.customBaseUrl || "http://127.0.0.1:8001/v1"}
             />
           </Field>
           <ModelChoiceField
@@ -599,7 +599,7 @@ export function AdminSettingsPanel() {
                   text: { ...config.text, utilityBaseUrl: event.target.value },
                 })
               }
-              placeholder="http://127.0.0.1:11434/v1"
+              placeholder="http://127.0.0.1:8001/v1"
             />
           </Field>
           <SecretField
