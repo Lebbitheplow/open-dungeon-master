@@ -184,7 +184,7 @@ export function OutlineView({ api, world, onOpen, onOpenSystem }: { api: WorldAp
           <textarea className={cn(ui.input, "min-h-28")} placeholder="A drowned kingdom where the tide-priests ration dry land, and smugglers trade in the bones of sea giants..." aria-label="Your idea for the world" maxLength={4_000} value={idea} onChange={(event) => setIdea(event.target.value)} />
           <div className="flex flex-wrap items-center gap-2">
             <input className={cn(ui.input, "max-w-md flex-1 text-xs")} placeholder="Steer it (optional): grim, low magic, say" aria-label="Steer the outline" maxLength={300} value={hint} onChange={(event) => setHint(event.target.value)} />
-            <KitButton tone="primary" busy={drafting} disabled={drafting || !idea.trim()} onClick={draft}>
+            <KitButton tone="primary" busy={drafting} disabled={drafting || !idea.trim()} onClick={draft} data-tour="world-outline">
               {drafting ? null : <Wand2 className="size-3.5" />} Draft an outline
             </KitButton>
           </div>

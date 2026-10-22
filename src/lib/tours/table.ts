@@ -243,6 +243,12 @@ export const DM_TOUR: TourStep[] = [
     prepare: "open-dm",
   },
   {
+    id: "world",
+    title: "The world, at the table",
+    body: "Whoever runs the story has this tab: the campaign's own copy of its WorldForge world, so a change here stays at this table. Reveal to the party turns a secret into lore the players read, and the DM can put it on every screen as a handout. An Atlas map reaches the players' Map tab only once you show it to the party.",
+    anchors: ["tab-world", "tab-more"],
+  },
+  {
     id: "party-rail",
     title: "The party at a glance",
     body: "Every hero's face, hit points and class, down the left of the table, the one whose turn it is glowing. Select a card to open the party.",

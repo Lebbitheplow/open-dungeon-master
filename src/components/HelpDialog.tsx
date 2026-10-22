@@ -263,7 +263,8 @@ export function HelpDialog({
           </li>
           <li>
             <span className="text-stone-300">Map:</span> the scene map, the overworld and
-            discovered locations, when maps are enabled.
+            discovered locations, when maps are enabled, and the party&apos;s Atlas: the world maps the
+            DM has shown the party, with only the pins and regions they chose to show.
           </li>
           <li>
             <span className="text-stone-300">Story:</span> three sub-tabs. Chapters is the tale so
@@ -278,6 +279,12 @@ export function HelpDialog({
           <li>
             <span className="text-stone-300">Chat:</span> private whispers between you and the DM,
             and side chat between players that the DM and the campaign transcript never see.
+          </li>
+          <li>
+            <span className="text-stone-300">World:</span> whoever runs the story only. The
+            campaign&apos;s own copy of its WorldForge world: a change there stays at this table.{" "}
+            <span className="text-stone-300">Reveal to the party</span> turns a secret into lore every
+            player can read, and the DM can put it on every screen as a handout.
           </li>
           <li>
             <span className="text-stone-300">Context:</span> party lead only. What the DM was

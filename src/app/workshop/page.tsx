@@ -320,7 +320,7 @@ export default function WorkshopListPage() {
             <EmptyState
               art="map"
               title="No workshops yet."
-              hint="A workshop is yours alone. Nothing in it reaches a table until you import it."
+              hint="A workshop is yours alone: prep a game on your own time. Nothing in it reaches a table until a campaign brings it in, when it is created, from its lobby or from its Settings."
             />
           ) : null}
         </div>

@@ -25,7 +25,7 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
 import { removeTempDir } from "../lib/remove-temp-dir.mjs";
-import { enterApp, freePort, launchBrowser, newContext, pageHarness, serveFolder, signIn, startServer } from "./lib.mjs";
+import { enterApp, freePort, launchBrowser, newContext, pageHarness, seeAllTours, serveFolder, signIn, startServer } from "./lib.mjs";
 
 const { values: args } = parseArgs({
   options: {
@@ -116,6 +116,9 @@ try {
       const t0 = Date.now();
       try {
         await signIn(apiContext, base, ids.lead, ids.password);
+        // The lead has seen every tour at its current version; tours-account
+        // walks its own accounts, and a scenario about a tour replays it.
+        await seeAllTours(apiContext.request, base);
         if (app) {
           await enterApp(page, shell.base, base, ids, harness.touch);
         } else {

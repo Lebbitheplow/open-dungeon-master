@@ -177,6 +177,21 @@ export async function signIn(context, base, username, password) {
   }
 }
 
+// Records every tour as finished on the signed-in account, at the version
+// the registry holds now (src/lib/tours/registry.ts). The browser's old
+// per-tour flags (newContext) only ever carry version 1, so a tour revised
+// to a higher version opened again over every scenario's first click. A
+// scenario that marks a tour finished at version 1 changes nothing: the
+// account keeps the higher version (mergeLedgers).
+export async function seeAllTours(request, base) {
+  const { TOUR_IDS, tourVersion } = await import("../../src/lib/tours/registry.ts");
+  const finished = TOUR_IDS.map((id) => ({ id, version: tourVersion(id), how: "ended" }));
+  const response = await request.post(`${base}/api/profile/tours`, { data: { finished } });
+  if (!response.ok()) {
+    throw new Error(`marking the tours seen answered ${response.status()}`);
+  }
+}
+
 // Closes whatever greets a page: the welcome tour, a "got it", a dialog.
 export async function settle(page) {
   for (let index = 0; index < 3; index += 1) {

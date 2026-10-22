@@ -24,7 +24,25 @@ export const TOUR_IDS: readonly string[] = [
 // account holding a lower version sees it once more, and finishing it records
 // the new one. Nothing else re-opens a finished tour; Help replays any of
 // them by hand.
-const REVISED: Readonly<Record<string, number>> = {};
+// scripts/fixtures/tour-content.json records each tour's version and
+// content, so scripts/test-tours.mjs fails a tour that changed and was not
+// raised here.
+const REVISED: Readonly<Record<string, number>> = {
+  // M5 item 6 (audit WF-22): the tours teach what is made and where it goes.
+  // The hub adds how prep reaches a table; WorldForge adds Create, Outline,
+  // what links an entry to a stat block, item, battle map or fight, the
+  // Atlas over the Region and the party's Atlas, Reveal to the party, and
+  // what a WorldForge file cannot carry; Region names the Atlas backdrop;
+  // Bestiary, Homebrew and Share say that hand-built monsters and items
+  // now travel; the DM's table tour adds the World tab.
+  "workshop-hub": 2,
+  "workshop-world": 2,
+  "workshop-region": 2,
+  "workshop-bestiary": 2,
+  "workshop-homebrew": 2,
+  "workshop-share": 2,
+  "table-dm": 2,
+};
 
 export function tourVersion(tourId: string): number {
   return REVISED[tourId] ?? 1;

@@ -185,6 +185,7 @@ export function GuidedTour({
       {spot ? (
         <div
           aria-hidden
+          data-tour-spot={current.anchor}
           className="pointer-events-none fixed z-[81] rounded-xl border border-amber-200/60 shadow-[0_0_0_9999px_rgba(5,3,13,0.76),0_0_24px_rgba(212,171,58,0.35)] transition-[top,left,width,height] duration-200 ease-snap motion-reduce:transition-none"
           style={{ top: spot.top, left: spot.left, width: spot.width, height: spot.height }}
         />
@@ -194,6 +195,9 @@ export function GuidedTour({
         data-guided-tour
         role="dialog"
         aria-label="Guided tour"
+        // Which step is showing, for scripts/browser/scenarios that walk a
+        // tour and check each step found its target.
+        data-tour-step={current.step.id}
         className="panel ornate texture-noise fixed z-[82] w-[min(22rem,calc(100vw-1.5rem))] rounded-xl p-4 shadow-elev-2 transition-[top,left] duration-200 ease-snap motion-reduce:transition-none"
         style={{ top: card.top, left: card.left }}
       >

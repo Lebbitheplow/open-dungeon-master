@@ -198,7 +198,7 @@ export function WikiView({
             // An empty world is where an author most expects WorldForge to
             // make anything; Create says where each thing is made instead.
             <div className="flex flex-col items-start gap-2 px-1 py-1" data-testid="world-empty-create">
-              <p className="text-xs text-stone-400">WorldForge keeps the story. A monster to fight, an item to hold or a map to stand on is made in its own tool, and Create takes you there.</p>
+              <p className="text-xs text-stone-400">WorldForge keeps the story: its people, places, factions and lore. A monster to fight, an item to hold or a map to stand on is made in its own tool, and Create takes you there; an entry here can then link to it.</p>
               <div className="flex flex-wrap gap-2">
                 {onDraftWorld ? (
                   <button type="button" onClick={onDraftWorld} className={ui.btnSmall} data-testid="world-empty-outline">

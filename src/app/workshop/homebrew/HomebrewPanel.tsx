@@ -406,7 +406,11 @@ export function HomebrewPanel({
       {!loaded && !loadError ? (
         <p className="text-xs text-stone-500" aria-busy="true">Reading your shelf...</p>
       ) : loaded && ofKind.length === 0 ? (
-        <EmptyState art="chest" title="Nothing of your own yet. Start from something in the books and change what you like." />
+        <EmptyState
+          art="chest"
+          title="Nothing of your own yet. Start from something in the books and change what you like."
+          hint="The character builder, shops and inventories offer what you make here beside the books' own."
+        />
       ) : shown.length === 0 ? (
         <p className="live-in text-xs text-stone-500">Nothing by that name.</p>
       ) : null}

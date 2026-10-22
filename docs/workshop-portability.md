@@ -43,7 +43,7 @@ means the words only. **No** means not carried, with the reason.
 | Region map (terrain, pins, roads, labels, notes, backdrop, anchors) | Yes. New since #158. | Yes. Replaces the target's, as the preview warns. | Region panel | Travel tools |
 | Storyboard cards | Yes, with picks, arrows and routes | Compiled, see below | | |
 | House rules and variant flags | Yes, as one tick | Yes, as one tick | | Rules retrieval |
-| Hand-built monsters and homebrew | Yes. Your own entry of the same name wins. | Not a campaign kind. They live on the owner's shelf. | | Resolved by slug or name for the owner |
+| Hand-built monsters and homebrew | Yes: the whole shelf, or only what the workshop uses. Your own entry of the same name wins; a different one arrives beside it under the bundle's name. | Not a kind of its own. A monster an NPC, a fight or a World entry names, and an item a World entry links to, is copied into the table owner's Bestiary or Homebrew, or the owner's identical one reused (`src/lib/db/import-monsters.ts`). The import's result names each. | | Resolved by slug or name for the table's authors |
 | World pack draft | Yes. It was dropped by every UI import before #158. | No. It is a workshop tool. | | |
 
 ## Relationships
@@ -64,7 +64,7 @@ means the words only. **No** means not carried, with the reason.
 | Arrow "then" | Index | Link | Order of the arc's beats | Beats in order |
 | Arrow "one route of several" | Index plus route | Link plus route | The route becomes a planned moment with its condition. Routes rejoin where they meet. | Moments the storyteller fires or drops |
 | Arrow "only if" | Index plus route | Link plus route | The scene becomes a planned moment with its condition | Same |
-| Roster names a hand-built monster | Monster rides along | | Resolves only for the same owner, as the preview warns | |
+| Roster names a hand-built monster | Monster rides along | | Copied into the table owner's Bestiary, or their identical one reused, and the roster pointed at it | The same monster fights |
 
 ### What a card becomes in a campaign
 

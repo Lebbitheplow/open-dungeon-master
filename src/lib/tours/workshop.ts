@@ -52,13 +52,13 @@ export const HUB_TOUR: TourStep[] = [
   {
     id: "welcome",
     title: "Inside a workshop",
-    body: "One card per tool, each wearing a live count of what it holds. A workshop holds only what your game needs: nothing here has to be filled in before you play. This tour shows the frame; each tool opens with a short tour of its own the first time.",
+    body: "Prep for a game, made before the table sits down. Whatever you make here lands in one tool, which says where it lives and what you can do with it, and reaches a table when a campaign brings the workshop in. Nothing has to be filled in before you play. Each tool opens with a short tour of its own the first time.",
     anchors: [],
   },
   {
     id: "create",
     title: "Start from what you want",
-    body: "Create asks what you want to end up with (a fight, a battle map, an NPC, a monster, an item or a whole world outline), says where it will live, and opens the tool that makes it.",
+    body: "Create asks what you want to end up with (a fight, a battle map, an NPC, a monster, an item or a whole world), says where it will live, and opens the tool that makes it. Make it by hand or copy one that exists; with a text model on the server, Draft with AI and Draft a world from an idea are offered too.",
     anchors: ["workshop-create"],
   },
   {
@@ -70,8 +70,14 @@ export const HUB_TOUR: TourStep[] = [
   {
     id: "systems",
     title: "The tools",
-    body: "WorldForge is the world's wiki: it reads and writes the same people, places, factions and lore that Cast, Region, Factions and Lore edit, so a change in one shows in the other. Storyboard plans the arc. Party, Battle maps, Encounters, Bestiary, Homebrew and Tables each build one kind of material. Rules holds the house and variant rules. Plugin turns a workshop into a world pack other servers can install. Share packs it all up as a bundle.",
+    body: "WorldForge is the world's wiki: its people, places, factions and lore are the same records Cast, Region, Factions and Lore edit, and an entry can link to the stat block, item, battle map or fight it is about. Storyboard plans the arc. Party, Battle maps, Encounters, Bestiary, Homebrew and Tables each build one kind of thing the table plays with. Rules holds the house and variant rules. Plugin turns the workshop into a world pack; Share packs it all up as a bundle.",
     anchors: ["hub-systems"],
+  },
+  {
+    id: "to-table",
+    title: "How it reaches a table",
+    body: "A campaign brings a workshop in when it is created, from its lobby, or later from the table's Settings. You tick what comes, and the review says what each pick brings along: WorldForge brings the records it describes, and the hand-built monsters and items your prep uses are copied into that table's Bestiary and Homebrew. The campaign gets its own copy; the workshop keeps its own.",
+    anchors: [],
   },
   {
     id: "actions",
@@ -194,7 +200,7 @@ export const SYSTEM_TOURS: Record<string, TourStep[]> = {
     {
       id: "files",
       title: "Pictures and files",
-      body: "Hang a picture in place of the tiles, read in a map from Azgaar's Fantasy Map Generator, or save the region as a PNG.",
+      body: "Hang a picture in place of the tiles, read in a map from Azgaar's Fantasy Map Generator, or save the region as a PNG. A WorldForge Atlas map can be the backdrop too: use it from the Atlas, then place the places pinned on it here; each then moves with its pin.",
       anchors: ["region-files"],
     },
     {
@@ -286,6 +292,20 @@ export const SYSTEM_TOURS: Record<string, TourStep[]> = {
       lazy: true,
     },
   ]),
+  factions: tool([
+    {
+      id: "add",
+      title: "Name a power",
+      body: "A faction is who it is to the table and what it wants. What the table knows of them is for everyone; what they want is kept from players, though the AI DM is told it, and in a campaign it moves on in the background as chapters close.",
+      anchors: ["factions-add"],
+    },
+    {
+      id: "list",
+      title: "Where the party stands",
+      body: "The pips set how the party stands with each faction. Each one is also an entry in WorldForge, where its members, seat and ties are written: edit a faction and World entry opens it.",
+      anchors: ["factions-list"],
+    },
+  ]),
   bestiary: tool([
     {
       id: "build",
@@ -304,7 +324,7 @@ export const SYSTEM_TOURS: Record<string, TourStep[]> = {
     {
       id: "list",
       title: "Your monsters",
-      body: "Tap one to open the full stat block: abilities, attacks, traits, senses, spells, and a kit that assembles it from ancestry, class and gear. The rating is derived for you and shows its working. Monsters belong to your account, so they follow you into every workshop.",
+      body: "Tap one to open the full stat block: abilities, attacks, traits, senses, spells, and a kit that assembles it from ancestry, class and gear. The rating is derived for you and shows its working. Give it a World entry to tie it to your setting, and add it to a fight in Encounters. Monsters belong to your account and follow you into every workshop; a campaign that brings in prep using one gets its own copy, and the workshop's bundle carries it to other servers.",
       anchors: ["bestiary-list"],
     },
   ]),
@@ -338,7 +358,7 @@ export const SYSTEM_TOURS: Record<string, TourStep[]> = {
     {
       id: "save",
       title: "Keep it",
-      body: "Saves the piece. A finding marked as an error blocks saving until it is fixed.",
+      body: "Saves the piece. A finding marked as an error blocks saving until it is fixed. An item can then be given a World entry; one a World entry links to is copied into a campaign that brings that world in, and the workshop's bundle can carry your whole shelf.",
       anchors: ["homebrew-save"],
       prepare: "open-homebrew-editor",
       lazy: true,
@@ -496,7 +516,7 @@ export const SYSTEM_TOURS: Record<string, TourStep[]> = {
     {
       id: "export",
       title: "Download or compile",
-      body: "Download bundle writes everything here as one file another server can import. Compile a world pack builds a draft pack from it.",
+      body: "Download bundle writes everything here as one file another server can import: every tool's records, the WorldForge world, pictures within the size caps, and your hand-built monsters and homebrew (all of your shelf, or only what this workshop uses). Compile a world pack builds a draft pack and lists what a pack leaves out that the bundle carries.",
       anchors: ["share-export"],
     },
   ]),

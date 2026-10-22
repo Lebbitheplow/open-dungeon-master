@@ -426,7 +426,12 @@ export function DmEncounterPrepPanel({
             })}
           </ul>
         ) : (
-          <EmptyState size="sm" art="map" title="Nothing prepared. Write a roster below and it is one button at the table." />
+          <EmptyState
+            size="sm"
+            art="map"
+            title="Nothing prepared. Write a roster below and it is one button at the table."
+            hint="Pick monsters from the Bestiary or the rulebook and a map to fight on; the difficulty is measured against the party."
+          />
         )}
         </Listed>
       </section>

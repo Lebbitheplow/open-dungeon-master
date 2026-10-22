@@ -145,7 +145,12 @@ export function LoreRows({
       </ul>
 
       {entries.length === 0 ? (
-        <EmptyState size="md" art="scrolls" title={steersStory ? "No lore yet. Write your world's places, factions, and history; the DM treats it as canon." : "The party lead has not written any world lore yet."} />
+        <EmptyState
+          size="md"
+          art="scrolls"
+          title={steersStory ? "No lore yet. Write your world's places, factions, and history; the DM treats it as canon." : "The party lead has not written any world lore yet."}
+          hint={steersStory ? "Each entry is read by players or kept from them, as you choose. Pinned ones reach the narrator every turn." : undefined}
+        />
       ) : shown.length === 0 ? (
         <p className="live-in text-xs text-stone-500">Nothing by that title, body or tag.</p>
       ) : null}

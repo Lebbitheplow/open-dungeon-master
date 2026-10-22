@@ -99,7 +99,7 @@ const TAB_PRESENTATION: Record<PanelTab, [string, LucideIcon, string]> = {
     "Character sheets, HP and conditions for the whole party, and their bonds with the people they have met.",
   ],
   battle: ["Battle", RAIL_ICONS.battle, "The tactical battle map. Move your token on your turn."],
-  map: ["Map", RAIL_ICONS.map, "The scene map and discovered locations."],
+  map: ["Map", RAIL_ICONS.map, "The scene map, the places the party has found, and the Atlas maps the DM has shown."],
   story: [
     "Story",
     RAIL_ICONS.story,
