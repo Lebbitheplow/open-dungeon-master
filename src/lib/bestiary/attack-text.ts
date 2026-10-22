@@ -47,9 +47,18 @@ export type OnHitRider = {
   manual?: string[];
 };
 
+// What a hit deals instead in a case the engine can tell: at half its hit
+// points or fewer (a swarm's weaker bite, "if the troll is bloodied"), or at
+// range (a thrown spear's "in melee or ... at range"). A whole blow: its
+// dice, its types and the dice riding it.
+export type AttackAlternative = { when: "bloodied" | "ranged"; damage: string; type: string; riders?: TypedDice[] };
+
 export type AttackText = {
   mode?: "melee" | "ranged" | "both";
   spellAttack?: boolean;
+  // The damage prints as magical ("magical bludgeoning damage").
+  magical?: boolean;
+  alternatives?: AttackAlternative[];
   reach?: number;
   range?: { normal: number; long: number };
   // The hit's own damage type, then each rider's.
@@ -99,31 +108,59 @@ export function readAttackText(desc: string): AttackText {
   // Some documents print their labels in Markdown ("_Hit:_ 5 (1d4+3)").
   const text = desc.replace(/[_*]/g, "").replace(/\s+/g, " ").trim();
   const out: AttackText = { types: [], riders: [] };
-  const kind = /(melee or ranged|melee|ranged)\s+(weapon|spell)\s+attack/i.exec(text);
+  // The kind as printed, and its misprints: "Melee Weapon or Ranged Attack"
+  // (Black Flag), "Melee Weapon Damage:" and "Ranged Magical Attack:" (Tome
+  // of Beasts).
+  const kind =
+    /(melee or ranged|melee|ranged)\s+(weapon|spell|magical)\s+(?:attack|damage)\b/i.exec(text) ??
+    /\b(melee)\s+(weapon|spell)\s+or\s+ranged(?:\s+(?:weapon|spell))?\s+attack/i.exec(text);
   if (kind) {
     const word = kind[1].toLowerCase();
-    out.mode = word === "melee or ranged" ? "both" : word === "melee" ? "melee" : "ranged";
-    out.spellAttack = kind[2].toLowerCase() === "spell";
+    const both = word === "melee or ranged" || /\bor\s+ranged/i.test(kind[0]);
+    out.mode = both ? "both" : word === "melee" ? "melee" : "ranged";
+    out.spellAttack = /^(?:spell|magical)$/i.test(kind[2]);
   }
   // Tome of Beasts 3 prints its numbers bare: "+8 to hit, 10 ft." (reach),
-  // "+5 to hit 30/120'" or a ranged "+7 to hit, 60 ft." (range).
-  const near = /to hit,?\s+(?:reach\s+)?(\d{1,3})\s*(?:ft\b|')/i.exec(text);
-  const reach = /reach\s+(\d{1,3})\s*ft/i.exec(text) ?? (out.mode !== "ranged" ? near : null);
+  // "+5 to hit 30/120'" or a ranged "+7 to hit, 60 ft." (range), and once
+  // "+8 to hit 5.'". Feet are spelled "feet" in A5e and a few lines, and some
+  // ranges print no unit at all ("range 80/320,").
+  const FEET = "(?:ft\\b|feet\\b|')";
+  const near = new RegExp(`to hit,?\\s+(?:reach\\s+)?(\\d{1,3})\\.?\\s*${FEET}`, "i").exec(text);
+  const reach = new RegExp(`reach\\s+(\\d{1,3})\\s*${FEET}`, "i").exec(text) ?? (out.mode !== "ranged" ? near : null);
+  // A swarm's "reach 0 ft." (a creature in its space) is a reach too.
   if (reach) {
     out.reach = Number(reach[1]);
   }
   const range =
-    /range\s+(\d{1,4})(?:\s*\/\s*(\d{1,4}))?\s*(?:ft\b|')/i.exec(text) ??
-    /to hit,?\s+(\d{1,4})\s*\/\s*(\d{1,4})\s*(?:ft\b|')/i.exec(text) ??
+    new RegExp(`\\branged?\\s+(\\d{1,4})(?:\\s*\\/\\s*(\\d{1,4}))?\\s*${FEET}`, "i").exec(text) ??
+    /\branged?\s+(\d{1,4})\s*\/\s*(\d{1,4})\b/i.exec(text) ??
+    new RegExp(`to hit,?\\s+(\\d{1,4})\\s*\\/\\s*(\\d{1,4})\\s*${FEET}`, "i").exec(text) ??
     (out.mode === "ranged" ? near : null);
   if (range) {
     out.range = { normal: Number(range[1]), long: Number(range[2] ?? range[1]) };
+  }
+  // A kind the line leaves out ("Attack: +4 to hit, reach 5 ft. or range
+  // 20/60 ft."), or a melee line that prints only a range: "range 5 ft." is
+  // its reach (a mamura's claw, a bar brawl's "range 0 ft."), and a range
+  // with a long range is a ranged attack misprinted (an A5e drider's
+  // longbow, a guardian naga's spit).
+  if (!out.mode && (out.reach !== undefined || out.range)) {
+    out.mode = out.reach !== undefined && out.range ? "both" : out.range ? "ranged" : "melee";
+  } else if (out.mode === "melee" && out.reach === undefined && out.range) {
+    if (out.range.long === out.range.normal && !/\//.test(range?.[0] ?? "")) {
+      out.reach = out.range.normal;
+    } else {
+      out.mode = "ranged";
+    }
+    if (out.mode === "melee") {
+      delete out.range;
+    }
   }
   const hit = hitClause(text);
   // A choice of types ("cold, fire, lightning, poison, or thunder damage (its
   // choice)") is read as the first type named.
   const words = DAMAGE_WORDS.join("|");
-  const typeList = `(${words})\\b(?:,?\\s+(?:or\\s+)?(?:${words})\\b)*`;
+  const typeList = `(?:magical\\s+)?(${words})\\b(?:,?\\s+(?:or\\s+)?(?:${words})\\b)*`;
   // The hit's own type is the one its clause opens with ("Hit: 1 piercing
   // damage", "Hit: 7 (1d8 + 3) piercing damage"); else the first typed dice
   // before a saving throw, whose damage is the save's and not the hit's (a
@@ -135,7 +172,7 @@ export function readAttackText(desc: string): AttackText {
   const base = /^\s*(\d{1,3})\s*\(\s*(\d{1,3}d\d{1,3}(?:\s*[+-]\s*\d{1,3})?)\s*\)/i.exec(hit);
   // A flat hit with no dice ("Hit: 1 piercing damage", a homunculus) is its
   // own base.
-  const flat = !base ? new RegExp(`^\\s*(\\d{1,3})\\s+(${words})\\s+damage`, "i").exec(hit) : null;
+  const flat = !base ? new RegExp(`^\\s*(\\d{1,3})\\s+(?:magical\\s+)?(${words})\\s+damage`, "i").exec(hit) : null;
   let printed = base ? Number(base[1]) : flat ? Number(flat[1]) : 0;
   if (base) {
     out.baseDice = compact(base[2]);
@@ -146,6 +183,9 @@ export function readAttackText(desc: string): AttackText {
   // of the type determined by Apothecary") is untyped, never its rider's.
   if (own) {
     out.types.push(own[1].toLowerCase());
+    if (/\bmagical\s/i.test(own[0])) {
+      out.magical = true;
+    }
   } else if (base || flat) {
     out.types.push("untyped");
   }
@@ -159,7 +199,13 @@ export function readAttackText(desc: string): AttackText {
   const manual: string[] = [];
   let unread = 0;
   const saveAt = hit.search(/saving throw/i);
+  // The dice an "or ..." blow carries are its own, not this one's.
+  const ors = orClauses(hit.split(/saving throw/i)[0], words);
+  const orSpans = ors.map((or) => [or.index, or.index + or.length]);
   for (const plus of hit.matchAll(/(?:plus|\+|and)\s+(\d+)\s*\(\s*(\d{1,3}d\d{1,3}(?:\s*[+-]\s*\d+)?)\s*\)\s*/gi)) {
+    if (orSpans.some(([from, to]) => (plus.index ?? 0) >= from && (plus.index ?? 0) < to)) {
+      continue;
+    }
     const after = hit.slice((plus.index ?? 0) + plus[0].length);
     const typed = new RegExp(`^${typeList}(?:\\s+damage\\b)?`, "i").exec(after);
     if (/^and/i.test(plus[0]) && (!typed || (saveAt >= 0 && (plus.index ?? 0) > saveAt))) {
@@ -174,6 +220,9 @@ export function readAttackText(desc: string): AttackText {
     printed += Number(plus[1]);
     if (!typed && !bare) {
       unread += 1;
+      // Dice no damage type names ("plus 2 (1d4) Charisma damage", a chort
+      // devil's): the DM's, said so on the hit.
+      manual.push(`${plus[0].replace(/^(?:plus|\+|and)\s+/i, "").trim()} ${after.split(/[.;,]/)[0].trim()}`.trim());
       continue;
     }
     const type = typed ? typed[1].toLowerCase() : "untyped";
@@ -181,6 +230,10 @@ export function readAttackText(desc: string): AttackText {
     if (!out.types.includes(type)) {
       out.types.push(type);
     }
+  }
+  const alternatives = readAlternatives(ors, manual, out.types[0]);
+  if (alternatives.length) {
+    out.alternatives = alternatives;
   }
   // The printed average counts every rider of the hit; a blow whose riders
   // were not all read has no printed dice to stand on.
@@ -196,6 +249,65 @@ export function readAttackText(desc: string): AttackText {
     out.onHit = { ...onHit, manual: [...(onHit?.manual ?? []), ...manual] };
   } else if (onHit) {
     out.onHit = onHit;
+  }
+  return out;
+}
+
+// "or 5 (2d4) piercing damage if the swarm has half of its hit points or
+// fewer", "or 7 (1d8 + 3) slashing damage if used with two hands": each "or"
+// blow of the hit, before its save. One the engine can tell (half its hit
+// points, at range) is an alternative; any other (two hands, a charge, a
+// form, Enlarge) is a line in `manual` for the DM, who knows how it was made.
+const BLOODIED = /\bhalf (?:of )?its (?:hit points|hp)\b|\bhalf or fewer hit points\b|\bis bloodied\b/i;
+
+type OrClause = { index: number; length: number; text: string; average: string; dice: string; type: string | null; riders: TypedDice[]; condition: string };
+
+// Each "or" blow of a hit: its dice and types, the dice riding it before its
+// condition ("or 9 (2d8) piercing damage plus 7 (2d6) poison damage if the
+// hydra has half its hit points or fewer"), and the condition, which ends at
+// the next comma or rider: a rider after it ("if used with two hands, plus 3
+// (1d6) fire damage", "if used in two hands plus 14 (4d6) necrotic damage")
+// rides every blow.
+function orClauses(hit: string, words: string): OrClause[] {
+  const types = `(?:magical\\s+)?(?:${words})\\b(?:,?\\s+(?:or\\s+)?(?:${words})\\b)*`;
+  const dice = "\\d{1,3}d\\d{1,3}(?:\\s*[+-]\\s*\\d{1,3})?";
+  const rider = `(?:,?\\s*(?:plus|\\+|and)\\s+\\d+\\s*\\(\\s*${dice}\\s*\\)\\s*(?:${types})?(?:\\s+damage)?)`;
+  const or = new RegExp(`,?\\s+or\\s+(\\d+)\\s*\\(\\s*(${dice})\\s*\\)\\s*(${types})?\\s*(?:damage\\b)?(?:\\s*\\([^)]*\\))?(${rider}*)\\s*((?:if|when|while|at|against|in|with|on|to)\\b(?:(?!\\s(?:plus|\\+|and)\\s+\\d+\\s*\\()[^,.;])*)?`, "gi");
+  return [...hit.matchAll(or)].map((match) => ({
+    index: match.index ?? 0,
+    length: match[0].length,
+    text: match[0].replace(/^,?\s+/, "").trim(),
+    average: match[1],
+    dice: compact(match[2]),
+    type: match[3] ? (new RegExp(`(${words})`, "i").exec(match[3])?.[1].toLowerCase() ?? null) : null,
+    riders: [...(match[4] ?? "").matchAll(new RegExp(`\\(\\s*(${dice})\\s*\\)\\s*(?:magical\\s+)?(${words})?`, "gi"))].map((entry) => ({
+      dice: compact(entry[1]),
+      type: entry[2]?.toLowerCase() ?? "untyped",
+    })),
+    condition: (match[5] ?? "").trim(),
+  }));
+}
+
+// The "or" blows the engine can tell apart (half its hit points, at range)
+// as alternatives; any other (two hands, a charge, a form, Enlarge) is a line
+// in `manual` for the DM, who knows how the blow was made.
+// An "or" blow that names no type ("or 5 (2d4) if the bar brawl has half its
+// hit points or fewer") deals the hit's own.
+function readAlternatives(ors: OrClause[], manual: string[], ownType: string | undefined): AttackAlternative[] {
+  const out: AttackAlternative[] = [];
+  for (const or of ors) {
+    const when = BLOODIED.test(or.condition) ? "bloodied" : /^(?:at range|if thrown|when thrown)\b/i.test(or.condition) ? "ranged" : null;
+    const type = or.type ?? ownType;
+    if (when && type) {
+      out.push({
+        when,
+        damage: [or.dice, ...or.riders.map((rider) => rider.dice)].join("+"),
+        type: [type, ...or.riders.map((rider) => rider.type).filter((entry) => entry !== type)].join("/"),
+        ...(or.riders.length ? { riders: or.riders } : {}),
+      });
+    } else {
+      manual.push(or.text);
+    }
   }
   return out;
 }
@@ -270,6 +382,11 @@ function readOnHit(hit: string, effectOnly: boolean): OnHitRider | null {
   }
   const sentences = hit.split(/(?<=\.)\s+/).map((sentence) => sentence.trim()).filter(Boolean);
   let manual = sentences.filter((sentence) => /\b(?:disease|diseased|cursed|curse|lycanthrop\w*|swallowed|petrif\w*|strength score is reduced|stable but poisoned)\b/i.test(sentence));
+  // What a hit (or its save) does that no engine models: a push or a pull,
+  // a speed cut, a dropped weapon, lost reactions. The sentence goes to the
+  // DM, as the issue-473 audit found some 290 of them dropped.
+  const unmodelled = /\b(?:pushed|pulled|knocked back|flung|hurled|speed (?:is )?(?:halved|reduced)|half (?:its )?speed|drops?\b[^.]*\b(?:weapon|holding|held)|can't take reactions|can't regain hit points|teleport\w*)\b/i;
+  manual = [...manual, ...sentences.filter((sentence) => unmodelled.test(sentence) && !manual.includes(sentence))];
   // A hit that only lays an effect: the condition its first sentence names
   // ("The target is restrained by webbing", "it is knocked prone"), and what
   // else it says (the webbing's escape, an attachment, a sleep) for the DM.
@@ -436,11 +553,40 @@ export function multiattackParts(sentence: string): string[] {
 // "two slam attacks, two stomp attacks, or one of each" as its two
 // alternatives, and a line that opens on its count ("Three Pitchfork
 // attacks or...") as made; cut into sentences.
+// A5e's way of saying it: "attacks once with its bite and twice with its
+// claws", "attacks three times with its tentacle", "attacks with its horns
+// and its claws", "attacks twice".
+const TIMES: Record<string, string> = { once: "one", twice: "two", thrice: "three", "three times": "three", "four times": "four", "five times": "five", "six times": "six" };
+const TIMES_WORD = "once|twice|thrice|three times|four times|five times|six times";
+
+function a5eMultiattack(text: string): string {
+  // "attacks" the verb, never the noun of "makes two attacks with its claws".
+  const verb = `(?<!\\b(?:${COUNT_WORD}|melee|ranged|weapon|spell|its|his|her|their)\\s)\\battacks`;
+  return text
+    .replace(new RegExp(`${verb}\\s+(${TIMES_WORD})\\s+with\\s+(its|his|her|their)\\s`, "gi"), (_, times: string, its: string) => `makes ${TIMES[times.toLowerCase()]} attack${times.toLowerCase() === "once" ? "" : "s"} with ${its} `)
+    .replace(new RegExp(`${verb}\\s+with\\s+(its|his|her|their)\\s`, "gi"), (_, its: string) => `makes one attack with ${its} `)
+    .replace(new RegExp(`\\band\\s+(${TIMES_WORD})\\s+with\\s+(its|his|her|their)\\s`, "gi"), (_, times: string, its: string) => `and ${TIMES[times.toLowerCase()]} attack${times.toLowerCase() === "once" ? "" : "s"} with ${its} `)
+    .replace(/(\bmakes one attack with (?:its|his|her|their) [^.,;]+?) and (its|his|her|their) /gi, "$1 and one attack with $2 ")
+    .replace(new RegExp(`${verb}\\s+(${TIMES_WORD})(?=\\s*[.;]|$)`, "gi"), (_, times: string) => `makes ${TIMES[times.toLowerCase()]} attacks`);
+}
+
+// Tome of Beasts 3 names its attacks with no noun and often no verb: "Three
+// Claws.", "One Bite and two Kicks or three Spit Worms.", "Uses its
+// Frightful Presence then one Bite and two Claws." Each count before a
+// capitalized name is that many of the attack so named.
+// The count in either case, the name only capitalized.
+const ANY_CASE_COUNT = "(?:[Aa]n?|[Oo]ne|[Tt]wo|[Tt]hree|[Ff]our|[Ff]ive|[Ss]ix|[Ss]even|[Ee]ight|[Nn]ine|[Tt]en|\\d{1,2})";
+
+function namedCounts(text: string): string {
+  return text
+    .replace(new RegExp(`\\bthen\\s+(?=${COUNT_WORD}\\s)`, "gi"), "then makes ")
+    .replace(new RegExp(`\\b(${ANY_CASE_COUNT})\\s+((?:[A-Z][\\p{L}'’-]*)(?:\\s+[A-Z][\\p{L}'’-]*)*)(?!\\s+attacks?\\b)(?=\\s*(?:[,.;]|\\s(?:or|and|plus)\\s|$))`, "gu"), "$1 $2 attacks");
+}
+
 export function multiattackSentences(desc: string): string[] {
-  return desc
-    .replace(/\s+/g, " ")
-    .trim()
+  return namedCounts(a5eMultiattack(desc.replace(/\s+/g, " ").trim()))
     .replace(new RegExp(`^(?=${COUNT_WORD}\\s)`, "i"), "makes ")
+    .replace(/(^|[.;]\s+)(?=(?:[Oo]ne|[Tt]wo|[Tt]hree|[Ff]our|[Ff]ive|[Ss]ix)\s+[A-Z])/g, "$1makes ")
     .replace(new RegExp(`(\\battacks?),\\s+(?=${COUNT_WORD}\\s[^.,;]*?attacks?,?\\s+or\\s+one of each\\b)`, "gi"), "$1 or ")
     .replace(/,?\s+or\s+one of each\b/gi, "")
     .replace(new RegExp(`\\buses\\s+(?:its\\s+)?((?:${NAME_WORD}\\s+){0,3}${NAME_WORD})\\s+(twice|three times)\\b`, "giu"), (_, name: string, times: string) =>

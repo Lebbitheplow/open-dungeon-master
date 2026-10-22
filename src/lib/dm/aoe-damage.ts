@@ -421,6 +421,7 @@ export function handleAoeDamage(
           // A legendary creature spends a resistance on an area's binding
           // condition, as it would on one cast at it alone (legendary-logic.ts).
           resist: Boolean(plan?.conditions.length) && bindsWorthResisting(plan?.conditions ?? [], Boolean(plan?.mech?.condition?.endsWith)),
+          against: plan?.conditions ?? (enemyUse?.condition ? [enemyUse.condition] : []),
           ...(plan ? spellSaveOptions(plan.mech, enemy) : {}),
           ...(plan ? { record: { turn, detail: `${enemy.displayName}: ${ability.toUpperCase()} save against ${plan.spell}` } } : {}),
         });
@@ -461,7 +462,7 @@ export function handleAoeDamage(
         sheets,
         sheetsById,
         part.type,
-        plan ? { magical: true, ...(elementalAdeptApplies(plan.caster, part.type) ? { ignoreResistance: true } : {}) } : undefined,
+        plan ? { magical: true, spell: true, ...(elementalAdeptApplies(plan.caster, part.type) ? { ignoreResistance: true } : {}) } : undefined,
       );
       if (applied.damageNote) {
         row.note = [row.note, applied.damageNote].filter(Boolean).join(" ");

@@ -205,6 +205,13 @@ export function checkMonsterDraft(raw: unknown): DraftCheck {
     immune: text(source.immune, RESIST_MAX),
     vulnerable: text(source.vulnerable, RESIST_MAX),
     conditionImmune: text(source.conditionImmune, RESIST_MAX),
+    // A lair's printed options, kept by a copy (lair_action offers them).
+    ...(Array.isArray(source.lairOptions) && source.lairOptions.some((line) => text(line, FULL_TRAIT_MAX))
+      ? { lairOptions: source.lairOptions.map((line) => text(line, FULL_TRAIT_MAX)).filter(Boolean).slice(0, 8) }
+      : {}),
+    // Black Flag's condition resistances, kept by a copy (forced-save.ts).
+    ...(text(source.conditionResist, RESIST_MAX) ? { conditionResist: text(source.conditionResist, RESIST_MAX) } : {}),
+    ...(text(source.conditionVulnerable, RESIST_MAX) ? { conditionVulnerable: text(source.conditionVulnerable, RESIST_MAX) } : {}),
     cr,
     // Never taken from the client: XP is a function of CR and a row where
     // they disagree would quietly break every encounter budget it appears in.
@@ -212,6 +219,8 @@ export function checkMonsterDraft(raw: unknown): DraftCheck {
     attacksPerTurn: clamp(source.attacksPerTurn, 1, MAX_SWINGS, 1),
     size,
     type,
+    // The type's bracket tags ("shapechanger"), which Polymorph reads.
+    ...(text(source.subtype, 80) ? { subtype: text(source.subtype, 80).toLowerCase() } : {}),
     ...(routines.length ? { routines } : {}),
     ...(specials.value.length ? { specials: specials.value } : {}),
     ...(spellcasting ? { spellcasting } : {}),

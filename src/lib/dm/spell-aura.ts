@@ -52,6 +52,7 @@ const FEET_PER_TILE = 5;
 export function hurtEnemy(campaign: Campaign, encounter: Encounter, enemy: EncounterEnemy, amount: number, type: string, why: string): string {
   const adjusted = damageAdjust(amount, type, enemy.stats.resist, enemy.stats.immune, enemy.stats.vulnerable, {
     magical: true,
+    spell: true,
     resistAll: resistsAllDamage(enemy.conditions),
   });
   if (adjusted.amount <= 0) {

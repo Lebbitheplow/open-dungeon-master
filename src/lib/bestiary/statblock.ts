@@ -1,6 +1,7 @@
 import { printedBlockOf, type PrintedBlock } from "@/lib/bestiary/printed-block";
 import { xpForCr } from "@/lib/srd/encounter-math";
 import { correctedMonsterData } from "@/lib/bestiary/pack-corrections";
+import { readDefences } from "@/lib/bestiary/defences";
 import {
   ATTACK_GROUP,
   COUNT_WORD,
@@ -9,6 +10,7 @@ import {
   multiattackParts,
   multiattackSentences,
   parseRoutines,
+  type AttackAlternative,
   type OnHitRider,
   type RoutineStep,
   type TypedDice,
@@ -43,6 +45,9 @@ export type EnemyAttack = {
   // "melee", "ranged", or "both" for a thrown weapon.
   mode?: "melee" | "ranged" | "both";
   spellAttack?: boolean;
+  // The hit prints its damage as magical ("magical bludgeoning damage"),
+  // which "from nonmagical attacks" does not cover.
+  magical?: boolean;
   // Reach in feet, and range in feet (normal and long).
   reach?: number;
   range?: { normal: number; long: number };
@@ -51,12 +56,18 @@ export type EnemyAttack = {
   riders?: TypedDice[];
   // What a hit does besides its damage: a save, a condition, a grapple.
   onHit?: OnHitRider;
+  // What the hit deals instead at half its hit points or fewer, or at range
+  // (src/lib/bestiary/attack-text.ts readAlternatives).
+  alternatives?: AttackAlternative[];
+  // A bonus action's attack (the block's Bonus Actions): made beside the
+  // action's swings, once a round, never as one of them.
+  bonusAction?: boolean;
   // Never stored: set on a planned swing that follows only a hit
   // (src/lib/dm/enemy-profile.ts plannedSwings, a routine step's ifHit).
   onlyIfHit?: boolean;
 };
 
-export type { OnHitRider, RoutineStep, TypedDice };
+export type { AttackAlternative, OnHitRider, RoutineStep, TypedDice };
 
 export type SaveAbility = "str" | "dex" | "con" | "int" | "wis" | "cha";
 export type EnemySaveMods = Record<SaveAbility, number>;
@@ -81,6 +92,11 @@ export type EnemyStats = {
   immune: string;
   vulnerable: string;
   conditionImmune: string;
+  // Black Flag's resistance and vulnerability to a condition: advantage, or
+  // disadvantage, on a save against it (src/lib/dm/forced-save.ts). Absent
+  // on blocks from every other book and on old snapshots.
+  conditionResist?: string;
+  conditionVulnerable?: string;
   cr: number;
   xp: number;
   // Attacks per turn from the Multiattack action (1 when absent). Optional:
@@ -106,6 +122,10 @@ export type EnemyStats = {
   // SRD creature type in lowercase ("undead"). Optional: synthesized stats
   // and old snapshots lack it; creatureTypeOf() covers the fallback.
   type?: string;
+  // The tags a type prints in brackets ("shapechanger", "demon", "elf"),
+  // lowercase: Polymorph reads a shapechanger's (enemy-polymorph-logic.ts).
+  // Absent on blocks with none and on old snapshots.
+  subtype?: string;
   // The rest of a printed stat block (docs/workshop-parity-audit.md phase
   // 12). All optional: synthesized blocks and old snapshots lack them, and
   // every reader falls back to the field it read before. Scores are the six
@@ -125,6 +145,12 @@ export type EnemyStats = {
   // beast's, and this is everything its own form gives back when the spell
   // ends (src/lib/dm/enemy-polymorph.ts). Absent on every other block.
   polymorphedFrom?: EnemyOwnForm;
+  // The lair actions a book prints for its lair (Tome of Beasts: in a
+  // "Cave Dragon's Lair" trait, or under "Lair Actions" in the creature's
+  // lore), one option each. Offered by lair_action in a fight the DM starts
+  // in the lair; never a reason to call a fight a lair fight. Absent on
+  // blocks without them and on old snapshots.
+  lairOptions?: string[];
   // The whole printed block, word for word (src/lib/bestiary/printed-block.ts):
   // the lines above are the compact view the fights read. Blocks made by
   // hand and old snapshots lack it.
@@ -251,7 +277,10 @@ export function parseMultiattackCount(description: string): number | null {
   return count >= 2 ? Math.min(MAX_MULTIATTACK, count) : null;
 }
 
-const MAX_ATTACKS = 4;
+// Every attack a pack block prints fits (the most is five: Black Flag's pit
+// fiend, whose Multiattack names its Hurl Flame), and the workshop's cap
+// (src/lib/bestiary/monster-draft.ts) is the same, so a copy keeps them all.
+const MAX_ATTACKS = 6;
 const MAX_TRAITS = 4;
 const TRAIT_CHARS = 140;
 
@@ -303,17 +332,36 @@ function traitLine(entry: RawAction): string | null {
   return `${name}: ${desc.length > TRAIT_CHARS ? `${desc.slice(0, TRAIT_CHARS - 3)}...` : desc}`;
 }
 
+// "30, fly 60": the walking speed first, since every reader takes the first
+// number as the walk (src/lib/battlemap/movement.ts speedToTiles). Tome of
+// Beasts 3 spells burrow "bur.", and the SRD werecreatures keep their animal
+// form's speed in a note ("40 ft. in wolf form"), carried in brackets.
+const SPEED_MODES: Record<string, string> = { "bur.": "burrow", bur: "burrow" };
+
 function formatSpeed(raw: unknown): string {
   if (typeof raw === "string") {
     return raw;
   }
   if (raw && typeof raw === "object") {
-    return Object.entries(raw as Record<string, unknown>)
-      .filter(([, value]) => typeof value === "number")
-      .map(([mode, value]) => (mode === "walk" ? String(value) : `${mode} ${value}`))
-      .join(", ");
+    const entries = Object.entries(raw as Record<string, unknown>);
+    const walk = entries.find(([mode, value]) => mode === "walk" && typeof value === "number");
+    const modes = entries
+      .filter(([mode, value]) => mode !== "walk" && typeof value === "number")
+      .map(([mode, value]) => `${SPEED_MODES[mode] ?? mode} ${value}`);
+    const note = entries.find(([mode, value]) => mode === "notes" && typeof value === "string" && value.trim());
+    // With no walking speed printed, the first mode is the one it moves by,
+    // as before (the board knows no flying or swimming of its own).
+    const line = [...(walk ? [String(walk[1])] : []), ...modes].join(", ");
+    return note ? `${line} (${String(note[1]).trim()})` : line;
   }
   return "30";
+}
+
+// A5e's Titanic is bigger than Gargantuan; the board and the grapple rules
+// stop at Gargantuan, so it reads as that.
+function sizeOf(raw: unknown): string {
+  const size = asString(raw).trim();
+  return /^titanic$/i.test(size) ? "Gargantuan" : size;
 }
 
 export function parseMonster(raw: Record<string, unknown>, crFromRow: number): EnemyStats {
@@ -323,9 +371,14 @@ export function parseMonster(raw: Record<string, unknown>, crFromRow: number): E
   const specials = Array.isArray(data.special_abilities)
     ? (data.special_abilities as RawAction[])
     : [];
+  // Black Flag, A5e and the 2023 and third Tomes of Beasts print a Bonus
+  // Actions section: its attacks join the block's, marked, and the rest are
+  // lines the DM reads beside the actions.
+  const bonusActions = Array.isArray(data.bonus_actions) ? (data.bonus_actions as RawAction[]) : [];
 
   const attacks: EnemyAttack[] = [];
   const nonAttackActions: RawAction[] = [];
+  const nonAttackBonus: RawAction[] = [];
   let attacksPerTurn = 1;
   let multiattack = "";
   for (const action of actions) {
@@ -340,7 +393,17 @@ export function parseMonster(raw: Record<string, unknown>, crFromRow: number): E
       nonAttackActions.push(action);
     }
   }
-  const routines = multiattack ? parseRoutines(multiattack, attacks.map((attack) => attack.name)) : null;
+  for (const action of bonusActions) {
+    const attack = parseAttack(action);
+    if (attack && attacks.length < MAX_ATTACKS) {
+      attacks.push({ ...attack, bonusAction: true });
+    } else if (!attack) {
+      nonAttackBonus.push(action);
+    }
+  }
+  // A Multiattack routine is the action's: a bonus action's attack is never
+  // one of its steps.
+  const routines = multiattack ? parseRoutines(multiattack, attacks.filter((attack) => !attack.bonusAction).map((attack) => attack.name)) : null;
 
   // The lines the engine reads come first, so the cap on the rest never
   // drops a Legendary Resistance or a Magic Resistance.
@@ -348,16 +411,19 @@ export function parseMonster(raw: Record<string, unknown>, crFromRow: number): E
     .map(traitLine)
     .filter((line): line is string => line !== null);
   // Every line, uncut: the engine's cap is for the prompt, not the record.
-  const fullTraits = [...nonAttackActions, ...specials]
-    .map((entry) => {
-      const name = asString(entry.name);
-      const desc = asString(entry.desc).replace(/\s+/g, " ").trim();
-      return name && desc ? `${name}: ${desc}` : null;
-    })
-    .filter((entry): entry is string => entry !== null);
+  const fullLine = (entry: RawAction, label = "") => {
+    const name = asString(entry.name);
+    const desc = asString(entry.desc).replace(/\s+/g, " ").trim();
+    return name && desc ? `${label}${name}: ${desc}` : null;
+  };
+  const fullTraits = [
+    ...[...nonAttackActions, ...specials].map((entry) => fullLine(entry)),
+    ...nonAttackBonus.map((entry) => fullLine(entry, "Bonus action: ")),
+  ].filter((entry): entry is string => entry !== null);
   const traits = [
     ...lines.filter(keptWhateverTheCap),
     ...lines.filter((line) => !keptWhateverTheCap(line)).slice(0, MAX_TRAITS),
+    ...sectionLines(nonAttackBonus, "Bonus action"),
     ...sectionLines(data.reactions, "Reaction"),
     ...sectionLines(data.legendary_actions, "Legendary action"),
   ];
@@ -372,6 +438,7 @@ export function parseMonster(raw: Record<string, unknown>, crFromRow: number): E
   // text; and the spellcasting a block prints.
   const specialsWithNumbers = [
     ...nonAttackActions,
+    ...nonAttackBonus,
     ...specials,
     ...(Array.isArray(data.legendary_actions) ? (data.legendary_actions as RawAction[]) : []),
   ]
@@ -383,7 +450,9 @@ export function parseMonster(raw: Record<string, unknown>, crFromRow: number): E
   const regenerating = specials.find((entry) => /^regeneration\b/i.test(asString(entry.name)));
   const regeneration = regenerating ? parseRegeneration(asString(regenerating.desc)) : null;
 
-  const printed = printedBlockOf(data, actions, specials);
+  const printed = printedBlockOf(data, actions, specials, bonusActions);
+  const lair = lairOptionsOf(data, specials);
+  const defences = readDefences(data, specials);
 
   const dexterity = asNumber(data.dexterity) ?? 10;
   const cr = asNumber(data.cr) ?? crFromRow;
@@ -421,10 +490,7 @@ export function parseMonster(raw: Record<string, unknown>, crFromRow: number): E
     attacks,
     traits,
     ...(fullTraits.length ? { fullTraits } : {}),
-    resist: asString(data.damage_resistances),
-    immune: asString(data.damage_immunities),
-    vulnerable: asString(data.damage_vulnerabilities),
-    conditionImmune: asString(data.condition_immunities),
+    ...defences,
     cr,
     xp: xpForCr(cr),
     attacksPerTurn,
@@ -432,12 +498,72 @@ export function parseMonster(raw: Record<string, unknown>, crFromRow: number): E
     ...(specialsWithNumbers.length ? { specials: specialsWithNumbers } : {}),
     ...(spellcasting ? { spellcasting } : {}),
     ...(regeneration ? { regeneration } : {}),
-    ...(asString(data.size) ? { size: asString(data.size) } : {}),
+    ...(sizeOf(data.size) ? { size: sizeOf(data.size) } : {}),
     ...(type ? { type } : {}),
+    ...(subtypeOf(data) ? { subtype: subtypeOf(data) } : {}),
     ...parseBlockExtras(data, abilityFields),
     ...(spellcasting?.spells.length ? { spells: [...new Set(spellcasting.spells.map((spell) => spell.name))] } : {}),
+    ...(lair.length ? { lairOptions: lair } : {}),
     ...(printed ? { printed } : {}),
   };
+}
+
+// The options a lair offers, from the list after "takes a lair action ...
+// one of the following" in a lair trait, else under the lore's "Lair
+// Actions" heading. Each item one option, its spacing made plain.
+const LAIR_OPTIONS = 8;
+
+function lairOptionsOf(data: Record<string, unknown>, specials: RawAction[]): string[] {
+  const listed = (text: string) =>
+    text
+      .split(/\n\s*[-*\u2022]\s+/)
+      .slice(1)
+      .map((item) => item.split(/\n\s*\n|\n#+\s/)[0].replace(/\s+/g, " ").trim())
+      .filter((item) => item.length > 10)
+      .slice(0, LAIR_OPTIONS);
+  const trait = specials.find((entry) => /lair/i.test(asString(entry.name)) && /takes? a lair action/i.test(asString(entry.desc)));
+  if (trait) {
+    const options = listed(asString(trait.desc));
+    if (options.length) {
+      return options;
+    }
+  }
+  const lore = asString(data.desc);
+  const heading = /#+\s*Lair Actions\s*\n/i.exec(lore);
+  if (!heading) {
+    return [];
+  }
+  const section = lore.slice(heading.index + heading[0].length).split(/\n#+\s/)[0];
+  return /lair action/i.test(section) ? listed(section) : [];
+}
+
+// "Humanoid (human, shapechanger)" or a subtype field: the bracket's tags.
+function subtypeOf(data: Record<string, unknown>): string {
+  const field = asString(data.subtype).trim();
+  const bracket = /\(([^)]+)\)/.exec(asString(data.type))?.[1] ?? "";
+  return [field, bracket].filter(Boolean).join(", ").toLowerCase().slice(0, 80);
+}
+
+// The SRD's habitats (its environments field) as the workshop's eleven
+// (src/lib/bestiary/block-sections.ts ENVIRONMENTS); a plane, a tomb or a
+// laboratory is none of them.
+const HABITATS: Array<[RegExp, string]> = [
+  [/arctic|tundra|\bice\b|polar/i, "arctic"],
+  [/coast/i, "coastal"],
+  [/desert/i, "desert"],
+  [/forest|jungle/i, "forest"],
+  [/grassland|plain/i, "grassland"],
+  [/\bhills?\b/i, "hill"],
+  [/mountain|volcano/i, "mountain"],
+  [/swamp|marsh/i, "swamp"],
+  [/underdark|\bcaves?\b/i, "underdark"],
+  [/underwater|ocean|\blake\b|\bsea\b/i, "underwater"],
+  [/urban|city|settlement/i, "urban"],
+];
+
+function habitatsOf(raw: unknown): string[] {
+  const places = (Array.isArray(raw) ? raw : []).map((entry) => asString(entry));
+  return [...new Set(places.flatMap((place) => HABITATS.filter(([pattern]) => pattern.test(place)).map(([, habitat]) => habitat)))];
 }
 
 // The rest of an Open5e block: scores, skills, senses, languages and
@@ -446,7 +572,7 @@ export function parseMonster(raw: Record<string, unknown>, crFromRow: number): E
 function parseBlockExtras(
   data: Record<string, unknown>,
   abilityFields: Record<SaveAbility, [score: string, save: string]>,
-): Pick<EnemyStats, "abilities" | "skills" | "senses" | "languages" | "alignment"> {
+): Pick<EnemyStats, "abilities" | "skills" | "senses" | "languages" | "alignment" | "environment"> {
   const abilities: Partial<Record<SaveAbility, number>> = {};
   for (const [ability, [scoreField]] of Object.entries(abilityFields) as Array<[SaveAbility, [string, string]]>) {
     const score = asNumber(data[scoreField]);
@@ -475,6 +601,11 @@ function parseBlockExtras(
   const passive = /passive perception\s*(\d+)/i.exec(sensesText);
   if (passive) {
     senses.passivePerception = Number(passive[1]);
+  } else if (String(data.document__slug ?? "") === "blackflag" && asNumber(data.perception) !== null) {
+    // Black Flag prints its passive Perception in a field of its own (an
+    // aboleth's 20), never in its senses; the other books' perception field
+    // is the skill's bonus, which skills already carry.
+    senses.passivePerception = asNumber(data.perception) as number;
   }
   return {
     ...(Object.keys(abilities).length ? { abilities } : {}),
@@ -482,6 +613,7 @@ function parseBlockExtras(
     ...(Object.keys(senses).length ? { senses } : {}),
     ...(asString(data.languages) ? { languages: asString(data.languages).slice(0, 200) } : {}),
     ...(asString(data.alignment) ? { alignment: asString(data.alignment).slice(0, 40) } : {}),
+    ...(habitatsOf(data.environments).length ? { environment: habitatsOf(data.environments) } : {}),
   };
 }
 
@@ -535,7 +667,8 @@ export function keenSensesOf(stats: Pick<EnemyStats, "traits">): Array<"sight" |
   for (const line of stats.traits ?? []) {
     const name = /^keen ([a-z ,]+?)\s*[:.]/i.exec(line.trim())?.[1]?.toLowerCase() ?? "";
     for (const sense of ["sight", "hearing", "smell"] as const) {
-      if (name.includes(sense) || name.startsWith("senses")) {
+      // Tome of Beasts 2 calls smell "scent" ("Keen Scent").
+      if (name.includes(sense) || name.startsWith("senses") || (sense === "smell" && name.includes("scent"))) {
         senses.add(sense);
       }
     }

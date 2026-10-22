@@ -174,12 +174,20 @@ export function checkAttackExtras(raw: Raw, attack: string): Checked<Partial<Ene
   if (mode) {
     out.mode = mode;
   }
+  // A bonus action's attack stays one when a block is copied.
+  if (raw.bonusAction === true) {
+    out.bonusAction = true;
+  }
   if (raw.spellAttack === true) {
     out.spellAttack = true;
   }
-  const reach = clamp(raw.reach, 5, 60);
+  if (raw.magical === true) {
+    out.magical = true;
+  }
+  // A swarm's reach of 0 (a creature in its space) is kept.
+  const reach = clamp(raw.reach, 0, 60);
   if (reach !== null) {
-    out.reach = Math.max(5, Math.round(reach / 5) * 5);
+    out.reach = Math.round(reach / 5) * 5;
   }
   const range = (raw.range ?? null) as Raw | null;
   if (range && typeof range === "object") {
@@ -201,6 +209,23 @@ export function checkAttackExtras(raw: Raw, attack: string): Checked<Partial<Ene
   }
   if (onHit.value) {
     out.onHit = onHit.value;
+  }
+  const alternatives: NonNullable<EnemyAttack["alternatives"]> = [];
+  for (const entry of Array.isArray(raw.alternatives) ? raw.alternatives.slice(0, 4) : []) {
+    const source = (entry ?? {}) as Raw;
+    const rolled = dice(source.damage);
+    const when = source.when === "bloodied" || source.when === "ranged" ? source.when : null;
+    if (!rolled || !when) {
+      return { error: `${attack}: an alternative blow needs dice the table can roll and when it applies (bloodied or ranged).`, retry: true };
+    }
+    const riders = checkRiders(source.riders, attack);
+    if ("error" in riders) {
+      return riders;
+    }
+    alternatives.push({ when, damage: rolled, type: text(source.type, BLOCK_LIMITS.damageType).toLowerCase() || "untyped", ...(riders.value.length ? { riders: riders.value } : {}) });
+  }
+  if (alternatives.length) {
+    out.alternatives = alternatives;
   }
   return { value: out };
 }
