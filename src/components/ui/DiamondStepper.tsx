@@ -38,7 +38,9 @@ export function DiamondStepper({
   return (
     // A list, not a progressbar: a progressbar's children are presentational,
     // and these are buttons.
-    <ol className={cn("diamond-stepper", named && "pb-5", className)} aria-label="Steps">
+    // A named stepper keeps a row for the names under it, in rem as the
+    // names are, so the step heading below stays clear at any text size.
+    <ol className={cn("diamond-stepper", named && "pb-7", className)} data-named={named || undefined} aria-label="Steps">
       {steps.map((step, index) => {
         const state = index < current ? "done" : index === current ? "current" : "upcoming";
         const canGoBack = state === "done" && Boolean(onSelect);
@@ -74,7 +76,7 @@ export function DiamondStepper({
                   aria-hidden="true"
                   data-diamond-name=""
                   className={cn(
-                    "pointer-events-none absolute top-full mt-2 whitespace-nowrap font-mono text-[11px] leading-none tracking-wide",
+                    "pointer-events-none absolute top-full mt-2 whitespace-nowrap font-mono text-[0.6875rem] leading-none tracking-wide",
                     index === 0 ? "left-0" : index === steps.length - 1 ? "right-0" : "left-1/2 -translate-x-1/2",
                     state === "current" ? "text-amber-200" : state === "done" ? "text-amber-300/70" : "text-stone-400",
                   )}

@@ -43,6 +43,38 @@ export default {
     check((await visible(page, root, /^Back to summary$/).count()) === 0, "the summary has no Back to summary");
     await t.shot("summary");
 
+    // The step names under the diamonds keep their own row: the step's
+    // heading starts clear of them, at 1rem and with the text enlarged,
+    // and the names grow with the text.
+    const clearance = () =>
+      page.evaluate(() => {
+        const builder = document.querySelector("[data-builder-root]");
+        const names = [...builder.querySelectorAll("[data-diamond-name]")];
+        const heading = builder.querySelector("section[data-active] .wizard-step-heading");
+        const bottom = Math.max(...names.map((name) => name.getBoundingClientRect().bottom));
+        // Printed names side by side must not touch.
+        const shown = names.filter((name) => getComputedStyle(name).visibility !== "hidden").map((name) => name.getBoundingClientRect());
+        const touching = shown.some((box, index) => index > 0 && box.left < shown[index - 1].right + 2);
+        return {
+          touching,
+          shown: shown.length,
+          gap: Math.round(heading.getBoundingClientRect().top - bottom),
+          size: parseFloat(getComputedStyle(names[0]).fontSize),
+        };
+      });
+    const plain = await clearance();
+    check(!plain.touching, "the step names do not run together");
+    check(t.viewport !== "desktop" || plain.shown === 6, `every step name is printed on a desktop (${plain.shown})`);
+    check(plain.gap >= 8, `the step heading starts below the step names (${plain.gap}px clear)`);
+    await page.evaluate(() => (document.documentElement.style.fontSize = "150%"));
+    await sleep(300);
+    const enlarged = await clearance();
+    await t.shot("summary-enlarged");
+    await page.evaluate(() => (document.documentElement.style.fontSize = ""));
+    check(!enlarged.touching && enlarged.shown >= 1, `enlarged, the printed names do not run together (${enlarged.shown} shown)`);
+    check(enlarged.gap >= 8, `and with the text enlarged (${enlarged.gap}px clear)`);
+    check(enlarged.size > plain.size, `the step names grow with the text (${plain.size}px to ${enlarged.size}px)`);
+
     // A row goes to its step, and Back to summary returns focus to it.
     await t.tap(page.locator(`${root}section[data-active] [data-summary-edit="calling"]`).first());
     await onStep(page, root, 3, "Class");
@@ -93,9 +125,17 @@ export default {
     await t.tap(visible(page, root, /^Keep them$/).first());
     for (let step = 1; step < 6; step += 1) {
       const next = page.locator(`${root}button.wizard-continue`).locator("visible=true").first();
-      await eventually(() => next.isEnabled(), { timeoutMs: 10_000, label: `Continue on step ${step}` });
-      await t.tap(next);
-      await onStep(page, root, step + 1);
+      // A tap during the step wipe can be lost, so tap again until the
+      // step moves on.
+      await eventually(
+        async () => {
+          if (new RegExp(`^Step ${step + 1}:`).test(await currentStep(page, root))) return true;
+          if (await next.isEnabled()) await t.tap(next);
+          await sleep(800);
+          return new RegExp(`^Step ${step + 1}:`).test(await currentStep(page, root));
+        },
+        { timeoutMs: 20_000, label: `Continue from step ${step}` },
+      );
       await sleep(300);
     }
     await eventually(() => summary.count(), { timeoutMs: 10_000, label: "the summary at the end of a new build" });

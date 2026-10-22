@@ -180,6 +180,16 @@ await test("the wizard footer shows Back to summary as a named button", () => {
   assert.match(markup, /<button type="button" data-wizard-secondary=""[^>]*min-h-11[^>]*>Back to summary<\/button>/);
 });
 
+await test("the step names keep their own row above the step heading", () => {
+  const css = read("src/app/styles/creator.css");
+  const rule = css.slice(css.indexOf(".diamond-stepper {"), css.indexOf("}", css.indexOf(".diamond-stepper {")));
+  assert.doesNotMatch(rule, /(^|\s)padding:/, "no shorthand padding outranks the names' row");
+  const stepper = read("src/components/ui/DiamondStepper.tsx");
+  assert.match(stepper, /named && "pb-7"/);
+  assert.match(stepper, /text-\[0\.6875rem\] leading-none/, "the names grow with the text");
+  assert.match(css, /@container \(width < 22rem\) \{\n\s+\.diamond-step:not\(\[data-state="current"\]\) \[data-diamond-name\] \{ visibility: hidden; \}/, "too narrow for six, only the current name is printed");
+});
+
 await test("the edit page's level-up note points to the summary", () => {
   const page = read("src/app/characters/[characterId]/edit/page.tsx");
   assert.match(page, /on its summary/);
