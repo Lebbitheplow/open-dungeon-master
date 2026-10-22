@@ -1,6 +1,7 @@
 import { ROUND_CEILING } from "@/lib/schemas/condition-meta";
 import { isValidExpression } from "@/lib/dice";
-import type { OnHitRider, RoutineStep, TypedDice } from "@/lib/bestiary/attack-text";
+import type { OnHitRider, TypedDice } from "@/lib/bestiary/attack-text";
+import type { RoutineStep } from "@/lib/bestiary/multiattack-text";
 import type { EnemyAttack, SaveAbility } from "@/lib/bestiary/statblock";
 import type {
   MonsterAbility,

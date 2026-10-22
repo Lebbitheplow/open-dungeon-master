@@ -6,7 +6,7 @@
 // by its name, and `special_abilities` a trait's: a Multiattack that names
 // an attack by a short form of its name ("its stinger" for Tail Stinger),
 // since the routine reads attacks by their whole name
-// (src/lib/bestiary/attack-text.ts), an attack line whose words are
+// (src/lib/bestiary/multiattack-text.ts), an attack line whose words are
 // misprinted ("it:" for "Hit:", "escaped DC" for "escape DC", "reach 5.
 // ft."), and Tome of Beasts 3's spell lists, printed with no commas between
 // the spells ("At will: minor illusion silent image"), which no reader can

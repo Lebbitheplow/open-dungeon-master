@@ -24,7 +24,7 @@ const mk = await monsterKit(world, kit);
 const { getContentDb } = await import("../src/lib/content/db.ts");
 const { parseMonster, parseMultiattackCount } = await import("../src/lib/bestiary/statblock.ts");
 const { COUNT_WORD, multiattackAlternatives, multiattackItems, multiattackParts, multiattackSentences, parseRoutines } =
-  await import("../src/lib/bestiary/attack-text.ts");
+  await import("../src/lib/bestiary/multiattack-text.ts");
 const { plannedSwings } = await import("../src/lib/dm/enemy-profile.ts");
 const { parseAttack } = await import("../src/lib/bestiary/attack-parse.ts");
 const { correctedMonsterData } = await import("../src/lib/bestiary/pack-corrections.ts");

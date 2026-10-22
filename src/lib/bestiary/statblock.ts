@@ -2,19 +2,9 @@ import { printedBlockOf, type PrintedBlock } from "@/lib/bestiary/printed-block"
 import { xpForCr } from "@/lib/srd/encounter-math";
 import { correctedMonsterData } from "@/lib/bestiary/pack-corrections";
 import { readDefences } from "@/lib/bestiary/defences";
-import {
-  ATTACK_GROUP,
-  COUNT_WORD,
-  multiattackAlternatives,
-  multiattackItems,
-  multiattackParts,
-  multiattackSentences,
-  parseRoutines,
-  type AttackAlternative,
-  type OnHitRider,
-  type RoutineStep,
-  type TypedDice,
-} from "@/lib/bestiary/attack-text";
+import type { AttackAlternative, OnHitRider, TypedDice } from "@/lib/bestiary/attack-text";
+import { parseMultiattackCount, parseRoutines, type RoutineStep } from "@/lib/bestiary/multiattack-text";
+import { asNumber, asString, formatSpeed, lairOptionsOf, parseBlockExtras, sizeOf, subtypeOf } from "@/lib/bestiary/block-fields";
 import { parseAttack } from "@/lib/bestiary/attack-parse";
 import {
   ENGINE_TRAIT_NAMES,
@@ -71,6 +61,7 @@ export type EnemyAttack = {
 };
 
 export type { AttackAlternative, OnHitRider, RoutineStep, TypedDice };
+export { parseMultiattackCount };
 
 export type SaveAbility = "str" | "dex" | "con" | "int" | "wis" | "cha";
 export type EnemySaveMods = Record<SaveAbility, number>;
@@ -226,64 +217,6 @@ export function creatureTypeOf(stats: Pick<EnemyStats, "type">): CreatureType {
   return normalizeCreatureType(stats.type) ?? "monstrosity";
 }
 
-const MULTIATTACK_WORDS: Record<string, number> = {
-  two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
-};
-// The same ceiling enemy-attack.ts holds a turn to: a guard against a
-// corrupt block, well above any SRD creature (the tarrasque makes five).
-const MAX_MULTIATTACK = 10;
-
-function countOf(word: string): number {
-  const lower = word.toLowerCase();
-  return MULTIATTACK_WORDS[lower] ?? (lower === "a" || lower === "an" || lower === "one" ? 1 : Number(lower));
-}
-
-// "The wolf makes two bite attacks." -> 2. As many as the stat block says
-// (SRD 5.1, Multiattack): "makes five attacks" is five swings, "makes two
-// attacks: ..." two, and "makes three claw attacks and one bite attack"
-// four: every group the first way to spend the turn lists, through each
-// "makes" in it ("makes four attacks with its tendrils, uses Reel, and makes
-// one attack with its bite" is five), up to an alternative ("or two ranged
-// attacks", ", or it makes..."), and a "can also make" extra. The hydra's
-// "as many bite attacks as it has heads" reads as the five heads it starts
-// with.
-export function parseMultiattackCount(description: string): number | null {
-  if (/as many [^.]*attacks? as it has heads/i.test(description)) {
-    return 5;
-  }
-  const sentences = multiattackSentences(description);
-  const first = sentences.find((sentence) => /\bmakes?\s/i.test(sentence));
-  if (!first) {
-    return null;
-  }
-  const header = new RegExp(`\\bmakes?\\s+(${COUNT_WORD})\\s+(?:\\w+\\s+)?attacks?\\s*:`, "i").exec(first);
-  let count = header ? countOf(header[1]) : 0;
-  // The first part that makes attacks: "can either use Drift Backward or
-  // make two attacks" is two.
-  for (const part of header ? [] : multiattackParts(first)) {
-    for (const clause of part.split(/\bmakes?\s+/i).slice(1)) {
-      // "two rapier or two shortbow attacks": the noun said once, for both.
-      const [alternative, ...others] = multiattackAlternatives(clause);
-      const listed = others.length && !/\battacks?\b/i.test(alternative) ? `${alternative} attacks` : alternative;
-      for (const item of multiattackItems(listed)) {
-        const group = ATTACK_GROUP.exec(item);
-        if (!group) {
-          break;
-        }
-        count += countOf(group[1]);
-      }
-    }
-    if (count) {
-      break;
-    }
-  }
-  for (const sentence of sentences) {
-    const also = /can also make (a|an|one|two)\b[^.]*?attacks?/i.exec(sentence);
-    count += also ? countOf(also[1]) : 0;
-  }
-  return count >= 2 ? Math.min(MAX_MULTIATTACK, count) : null;
-}
-
 // Every attack a pack block prints fits (the most is five: Black Flag's pit
 // fiend, whose Multiattack names its Hurl Flame), and the workshop's cap
 // (src/lib/bestiary/monster-draft.ts) is the same, so a copy keeps them all.
@@ -298,14 +231,6 @@ type RawAction = {
   damage_dice?: unknown;
   damage_bonus?: unknown;
 };
-
-function asNumber(value: unknown): number | null {
-  return typeof value === "number" && Number.isFinite(value) ? value : null;
-}
-
-function asString(value: unknown): string {
-  return typeof value === "string" ? value : "";
-}
 
 // The lines a block keeps whatever the cap: the traits the engine reads by
 // name, and the legendary and reaction lines, which carry their section.
@@ -337,38 +262,6 @@ function traitLine(entry: RawAction): string | null {
     return null;
   }
   return `${name}: ${desc.length > TRAIT_CHARS ? `${desc.slice(0, TRAIT_CHARS - 3)}...` : desc}`;
-}
-
-// "30, fly 60": the walking speed first, since every reader takes the first
-// number as the walk (src/lib/battlemap/movement.ts speedToTiles). Tome of
-// Beasts 3 spells burrow "bur.", and the SRD werecreatures keep their animal
-// form's speed in a note ("40 ft. in wolf form"), carried in brackets.
-const SPEED_MODES: Record<string, string> = { "bur.": "burrow", bur: "burrow" };
-
-function formatSpeed(raw: unknown): string {
-  if (typeof raw === "string") {
-    return raw;
-  }
-  if (raw && typeof raw === "object") {
-    const entries = Object.entries(raw as Record<string, unknown>);
-    const walk = entries.find(([mode, value]) => mode === "walk" && typeof value === "number");
-    const modes = entries
-      .filter(([mode, value]) => mode !== "walk" && typeof value === "number")
-      .map(([mode, value]) => `${SPEED_MODES[mode] ?? mode} ${value}`);
-    const note = entries.find(([mode, value]) => mode === "notes" && typeof value === "string" && value.trim());
-    // With no walking speed printed, the first mode is the one it moves by,
-    // as before (the board knows no flying or swimming of its own).
-    const line = [...(walk ? [String(walk[1])] : []), ...modes].join(", ");
-    return note ? `${line} (${String(note[1]).trim()})` : line;
-  }
-  return "30";
-}
-
-// A5e's Titanic is bigger than Gargantuan; the board and the grapple rules
-// stop at Gargantuan, so it reads as that.
-function sizeOf(raw: unknown): string {
-  const size = asString(raw).trim();
-  return /^titanic$/i.test(size) ? "Gargantuan" : size;
 }
 
 export function parseMonster(raw: Record<string, unknown>, crFromRow: number): EnemyStats {
@@ -530,115 +423,6 @@ export function parseMonster(raw: Record<string, unknown>, crFromRow: number): E
     ...(spellcasting?.spells.length ? { spells: [...new Set(spellcasting.spells.map((spell) => spell.name))] } : {}),
     ...(lair.length ? { lairOptions: lair } : {}),
     ...(printed ? { printed } : {}),
-  };
-}
-
-// The options a lair offers, from the list after "takes a lair action ...
-// one of the following" in a lair trait, else under the lore's "Lair
-// Actions" heading. Each item one option, its spacing made plain.
-const LAIR_OPTIONS = 8;
-
-function lairOptionsOf(data: Record<string, unknown>, specials: RawAction[]): string[] {
-  const listed = (text: string) =>
-    text
-      .split(/\n\s*[-*\u2022]\s+/)
-      .slice(1)
-      .map((item) => item.split(/\n\s*\n|\n#+\s/)[0].replace(/\s+/g, " ").trim())
-      .filter((item) => item.length > 10)
-      .slice(0, LAIR_OPTIONS);
-  const trait = specials.find((entry) => /lair/i.test(asString(entry.name)) && /takes? a lair action/i.test(asString(entry.desc)));
-  if (trait) {
-    const options = listed(asString(trait.desc));
-    if (options.length) {
-      return options;
-    }
-  }
-  const lore = asString(data.desc);
-  const heading = /#+\s*Lair Actions\s*\n/i.exec(lore);
-  if (!heading) {
-    return [];
-  }
-  const section = lore.slice(heading.index + heading[0].length).split(/\n#+\s/)[0];
-  return /lair action/i.test(section) ? listed(section) : [];
-}
-
-// "Humanoid (human, shapechanger)" or a subtype field: the bracket's tags.
-function subtypeOf(data: Record<string, unknown>): string {
-  const field = asString(data.subtype).trim();
-  const bracket = /\(([^)]+)\)/.exec(asString(data.type))?.[1] ?? "";
-  return [field, bracket].filter(Boolean).join(", ").toLowerCase().slice(0, 80);
-}
-
-// The SRD's habitats (its environments field) as the workshop's eleven
-// (src/lib/bestiary/block-sections.ts ENVIRONMENTS); a plane, a tomb or a
-// laboratory is none of them.
-const HABITATS: Array<[RegExp, string]> = [
-  [/arctic|tundra|\bice\b|polar/i, "arctic"],
-  [/coast/i, "coastal"],
-  [/desert/i, "desert"],
-  [/forest|jungle/i, "forest"],
-  [/grassland|plain/i, "grassland"],
-  [/\bhills?\b/i, "hill"],
-  [/mountain|volcano/i, "mountain"],
-  [/swamp|marsh/i, "swamp"],
-  [/underdark|\bcaves?\b/i, "underdark"],
-  [/underwater|ocean|\blake\b|\bsea\b/i, "underwater"],
-  [/urban|city|settlement/i, "urban"],
-];
-
-function habitatsOf(raw: unknown): string[] {
-  const places = (Array.isArray(raw) ? raw : []).map((entry) => asString(entry));
-  return [...new Set(places.flatMap((place) => HABITATS.filter(([pattern]) => pattern.test(place)).map(([, habitat]) => habitat)))];
-}
-
-// The rest of an Open5e block: scores, skills, senses, languages and
-// alignment, so a monster started from the pack arrives with the whole
-// printed block rather than the half the engine runs.
-function parseBlockExtras(
-  data: Record<string, unknown>,
-  abilityFields: Record<SaveAbility, [score: string, save: string]>,
-): Pick<EnemyStats, "abilities" | "skills" | "senses" | "languages" | "alignment" | "environment"> {
-  const abilities: Partial<Record<SaveAbility, number>> = {};
-  for (const [ability, [scoreField]] of Object.entries(abilityFields) as Array<[SaveAbility, [string, string]]>) {
-    const score = asNumber(data[scoreField]);
-    if (score !== null) {
-      abilities[ability] = score;
-    }
-  }
-  const skills: Record<string, number> = {};
-  const rawSkills = data.skills;
-  if (rawSkills && typeof rawSkills === "object" && !Array.isArray(rawSkills)) {
-    for (const [name, bonus] of Object.entries(rawSkills as Record<string, unknown>)) {
-      const value = asNumber(bonus);
-      if (value !== null) {
-        skills[name.trim().toLowerCase().replace(/_/g, " ")] = value;
-      }
-    }
-  }
-  const sensesText = asString(data.senses);
-  const senses: EnemySenses = {};
-  for (const sense of ["darkvision", "blindsight", "tremorsense", "truesight"] as const) {
-    const match = new RegExp(`${sense}\\s*(\\d+)`, "i").exec(sensesText);
-    if (match) {
-      senses[sense] = Number(match[1]);
-    }
-  }
-  const passive = /passive perception\s*(\d+)/i.exec(sensesText);
-  if (passive) {
-    senses.passivePerception = Number(passive[1]);
-  } else if (String(data.document__slug ?? "") === "blackflag" && asNumber(data.perception) !== null) {
-    // Black Flag prints its passive Perception in a field of its own (an
-    // aboleth's 20), never in its senses; the other books' perception field
-    // is the skill's bonus, which skills already carry.
-    senses.passivePerception = asNumber(data.perception) as number;
-  }
-  return {
-    ...(Object.keys(abilities).length ? { abilities } : {}),
-    ...(Object.keys(skills).length ? { skills } : {}),
-    ...(Object.keys(senses).length ? { senses } : {}),
-    ...(asString(data.languages) ? { languages: asString(data.languages).slice(0, 200) } : {}),
-    ...(asString(data.alignment) ? { alignment: asString(data.alignment).slice(0, 40) } : {}),
-    ...(habitatsOf(data.environments).length ? { environment: habitatsOf(data.environments) } : {}),
   };
 }
 
