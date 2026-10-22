@@ -50,7 +50,14 @@ export default {
       check(Number(kept.data.hitDie) === 8, `a new class keeps the d8 default (${kept.data.hitDie})`);
       check(Array.isArray(kept.data.saves) && kept.data.saves.length === 2, "a new class keeps two saving throws");
 
-      // Listed under Classes, and opened again with what was kept.
+      // The sheet stays on the class it kept, now saved rather than new.
+      await eventually(async () => ((await keep.textContent()) ?? "").trim() === "Save", { timeoutMs: 10_000, label: "the editor on the kept class" });
+      // Listed under Classes once the sheet closes, and opened again with
+      // what was kept.
+      for (let attempt = 0; attempt < 3 && (await page.getByRole("dialog").count()); attempt += 1) {
+        await page.keyboard.press("Escape");
+        await sleep(300);
+      }
       await eventually(() => page.getByRole("dialog").count().then((count) => count === 0), { timeoutMs: 10_000, label: "the editor closing" });
       const row = page.locator(`${root}ul button`, { hasText: name }).first();
       await eventually(() => row.isVisible(), { timeoutMs: 10_000, label: "the class in the list" });
