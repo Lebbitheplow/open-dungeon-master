@@ -96,6 +96,9 @@ for (const file of fs.readdirSync(scenarioDir).filter((name) => name.endsWith(".
     throw new Error(`${file} does not export a scenario ({ name, run })`);
   }
   if (wanted && !wanted.some((name) => scenario.name.includes(name))) continue;
+  // A measurement, not a check (54-large-world-measure.mjs): it runs only
+  // when --only names it in full.
+  if (scenario.onlyWhenNamed && !wanted?.includes(scenario.name)) continue;
   if (app && scenario.app === false) continue;
   scenarios.push(scenario);
 }

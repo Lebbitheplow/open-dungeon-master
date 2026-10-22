@@ -169,11 +169,19 @@ export function worldEntities(campaignId: string, doc: WorldDoc = getWorldDoc(ca
     });
   }
   const names = new Map(out.map((entity) => [entity.ref, entity.name]));
+  // Each Cast member's links, found once: reading the whole list for each
+  // of them took most of a 4,000-entry world's 0.5 s (audit WF-24).
+  const linksFrom = new Map<string, WorldDoc["links"]>();
+  for (const link of doc.links) {
+    const list = linksFrom.get(link.from);
+    if (list) list.push(link);
+    else linksFrom.set(link.from, [link]);
+  }
   return out
     .map((entity) => ({
       ...entity,
       bound: entity.entry.bindings.map((binding) => resolveBinding(campaignId, binding)),
-      inPlay: entity.shelf === "npc" ? playAdapters(doc, entity.ref, held.get(entity.ref)!, names) : [],
+      inPlay: entity.shelf === "npc" ? playAdapters({ links: linksFrom.get(entity.ref) ?? [] }, entity.ref, held.get(entity.ref)!, names) : [],
     }))
     .sort(byName);
 }
@@ -188,6 +196,17 @@ export function worldView(campaignId: string): { doc: WorldDoc; entities: WorldE
   const shown = pruneDoc(doc, new Set(entities.map((entity) => entity.ref)));
   delete shown.origins;
   return { doc: shown, entities };
+}
+
+// What the world routes send (audit WF-24): the view without the
+// document's entries, which every entity already carries as its `entry`.
+// They were a third of a big world's answer, sent twice. The client puts
+// them back (src/app/workshop/world/useWorld.ts fromAnswer).
+export function worldAnswer(campaignId: string): { doc: Omit<WorldDoc, "entries">; entities: WorldEntity[] } {
+  const { doc, entities } = worldView(campaignId);
+  const sent: Partial<WorldDoc> = { ...doc };
+  delete sent.entries;
+  return { doc: sent as Omit<WorldDoc, "entries">, entities };
 }
 
 function ownedBy(campaignId: string, ref: string): boolean {
