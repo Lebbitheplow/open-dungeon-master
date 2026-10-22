@@ -52,6 +52,19 @@ test("paths are root relative and the fallback chain is own icon, then family", 
   assert.deepEqual(iconCandidates({ kind: "feat", key: "Alert" }), [], "no painting, no family: nothing is asked for");
 });
 
+test("every pixel tile the screens name ships in public/", () => {
+  // The sidebar icons moved from PNG to WebP while PIXEL_ICONS still named
+  // the PNGs, so the builder's header and every other tile showed a broken
+  // image. Read from the source, since ui.tsx brings the browser's motion
+  // listeners with it.
+  const source = readFileSync(path.join(ROOT, "src", "lib", "ui.tsx"), "utf8");
+  const block = source.match(/export const PIXEL_ICONS = \{([\s\S]*?)\} as const;/);
+  assert.ok(block, "PIXEL_ICONS is where this test reads it");
+  const tiles = [...block[1].matchAll(/"(\/[^"]+)"/g)].map((m) => m[1]);
+  assert.ok(tiles.length >= 7, `found ${tiles.length} tiles`);
+  assert.deepEqual(tiles.filter((src) => !existsSync(path.join(ROOT, "public", src))), []);
+});
+
 if (existsSync(path.join(ICONS, "manifest.json"))) {
   const manifest = JSON.parse(readFileSync(path.join(ICONS, "manifest.json"), "utf8"));
 
