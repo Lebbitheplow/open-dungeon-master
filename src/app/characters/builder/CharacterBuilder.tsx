@@ -741,8 +741,9 @@ function CharacterBuilderForm({
         />
       ) : (
       <FeatJudgeContext.Provider value={featJudge}>
-      {/* The build math table (F10) beside the steps from lg, under them below it. */}
-      <div className="flex min-h-0 flex-1 flex-col gap-3 lg:flex-row lg:gap-5">
+      {/* The build math table (F10): beside the steps where the builder is wide, under them where it is not. */}
+      <div className="@container flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 @4xl:flex-row @4xl:gap-5">
       <Wizard
         className="min-w-0 flex-1"
         step={step}
@@ -782,6 +783,7 @@ function CharacterBuilderForm({
         }
       />
       <BuildMathPanel derived={derived} scores={state.scores} klass={klass} atTable={Boolean(table.rules)} />
+      </div>
       </div>
       </FeatJudgeContext.Provider>
       )}

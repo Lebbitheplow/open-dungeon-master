@@ -49,17 +49,11 @@ export type BuildMathInput = {
   atTable: boolean;
 };
 
-// "DEX modifier" reads as "Dex" in a working line.
-function partLabel(label: string): string {
-  const ability = /^([A-Z]{3}) modifier$/.exec(label);
-  return ability ? ability[1][0] + ability[1].slice(1).toLowerCase() : label;
-}
-
-// The parts as a line: "Dex +3, proficiency +2". A base (the 10 of a
-// passive score, the 8 of a save DC) is a number, not a bonus.
+// The parts as a line, in the sheet's own words and signs, as the sheet's
+// own breakdown writes them: "DEX modifier +3, proficiency +2".
 export function workingOf(parts: DerivedPart[]): string {
   return parts
-    .map((part) => `${partLabel(part.label)} ${part.label === "base" ? part.value : formatModifier(part.value)}`)
+    .map((part) => `${part.label} ${formatModifier(part.value)}`)
     .join(", ");
 }
 
@@ -196,7 +190,7 @@ export function buildMathSections({ derived, scores, klass, atTable }: BuildMath
             value: `${formatModifier(row.weapon.toHit)} to hit, ${row.weapon.damage} ${row.weapon.damageType}`,
             working: [
               `to hit: ${workingOf(row.weapon.toHitParts)}`,
-              `damage adds ${partLabel(`${row.weapon.ability} modifier`)}`,
+              `damage adds ${row.weapon.ability} modifier`,
               ...row.weapon.notes,
             ].join("; "),
           },

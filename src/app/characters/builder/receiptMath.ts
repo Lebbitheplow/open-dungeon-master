@@ -9,7 +9,7 @@
 // copy cannot be bought at all. The receipt only spells that arithmetic out
 // per line; the purse and the server still decide.
 
-import { weaponAttackProfile, weaponOf, type ResolvedWeapon } from "@/lib/dm/attack-logic";
+import { weaponAttackProfile, weaponOf, type AttackProfile, type ResolvedWeapon } from "@/lib/dm/attack-logic";
 import { magicWeaponOfRow } from "@/lib/dm/gear-attack";
 import type { EquipmentItem as SheetItem } from "@/lib/schemas/sheet";
 import type { DerivedPart, SheetDerived } from "@/lib/srd";
@@ -151,6 +151,9 @@ export function withAddedQty<T extends { name: string; qty: number; slug?: strin
 // the same riders: fighting styles, Martial Arts, a magic weapon's bonus.
 // Null for anything that is not a weapon. A row resolves its weapon the way
 // carriedWeapons in src/lib/battlemap/hand.ts does.
+// The ability an attack swings with, as the sheet's parts name it.
+const ATTACK_ABILITY: Record<AttackProfile["ability"], string> = { str: "STR", dex: "DEX" };
+
 export function weaponLineFor(
   item: SheetItem,
   derived: Pick<SheetDerived, "abilityMods" | "proficiencyBonus">,
@@ -174,7 +177,7 @@ export function weaponLineFor(
   if (!profile.proficient) {
     notes.push("Not proficient");
   }
-  const abilityPart = { label: `${profile.ability.toUpperCase()} modifier`, value: derived.abilityMods[profile.ability] };
+  const abilityPart = { label: `${ATTACK_ABILITY[profile.ability]} modifier`, value: derived.abilityMods[profile.ability] };
   const proficiency = { label: "proficiency", value: profile.proficient ? derived.proficiencyBonus : 0 };
   const magicPart = { label: "magic", value: profile.magicBonus };
   // A fighting style's to-hit (Archery) is the rest; the notes name it.
@@ -185,7 +188,7 @@ export function weaponLineFor(
     damageType: profile.damageType,
     notes,
     toHitParts: [abilityPart, proficiency, magicPart, features].filter((part, index) => index === 0 || part.value !== 0),
-    ability: profile.ability.toUpperCase(),
+    ability: ATTACK_ABILITY[profile.ability],
   };
 }
 

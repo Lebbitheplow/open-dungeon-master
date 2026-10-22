@@ -9,9 +9,11 @@ import { buildMathSections, createChangeAnnouncer } from "./buildMath";
 import type { BuilderDerived } from "./useBuilderDerived";
 
 // The build math table (backlog F10): every number the sheet will carry,
-// with the parts each is made of, beside the picks on every step. From the
-// lg breakpoint it is a column of its own, always open; below it, it sits
-// under the steps, folded until opened. The rows are buildMath.ts's, read
+// with the parts each is made of, beside the picks on every step. Where the
+// builder is wide (a 56rem container, which creator.css gives the page on a
+// desktop) it is a column of its own, always open; where it is narrow, a
+// phone or the companion dialog, it sits under the steps, folded until
+// opened. The rows are buildMath.ts's, read
 // from the calculations the save uses.
 export function BuildMathPanel({
   derived,
@@ -61,8 +63,8 @@ export function BuildMathPanel({
       data-build-math=""
       className={cn(
         "flex min-h-0 shrink-0 flex-col rounded-xl border border-stone-800 bg-stone-950/60",
-        open ? "max-h-[45%]" : "",
-        "lg:h-full lg:max-h-none lg:w-[24rem] xl:w-[28rem]",
+        open ? "max-h-[55%]" : "",
+        "@4xl:h-full @4xl:max-h-none @4xl:w-[24rem] @6xl:w-[28rem]",
       )}
     >
       <div className="flex shrink-0 items-center gap-2 px-3 py-1">
@@ -74,7 +76,7 @@ export function BuildMathPanel({
           aria-expanded={open}
           aria-controls={bodyId}
           onClick={() => setOpen((was) => !was)}
-          className="flex min-h-11 items-center gap-1 rounded-md px-2 text-base text-sky-300 transition-colors hover:bg-stone-800 lg:hidden"
+          className="flex min-h-11 items-center gap-1 rounded-md px-2 text-base text-sky-300 transition-colors hover:bg-stone-800 @4xl:hidden"
         >
           {open ? "Hide the numbers" : "Show the numbers"}
           <ChevronDown aria-hidden="true" className={cn("size-4 transition-transform", open && "rotate-180")} />
@@ -83,10 +85,26 @@ export function BuildMathPanel({
       <p role="status" aria-live="polite" className="sr-only">
         {spoken}
       </p>
-      <div id={bodyId} className={cn("min-h-0 flex-1 overflow-y-auto px-3 pb-3", open ? "block" : "hidden", "lg:block")}>
+      {/* Scrolls on its own, so it takes a tab stop and is named for it. */}
+      <div
+        id={bodyId}
+        role="region"
+        aria-labelledby={headingId}
+        tabIndex={0}
+        className={cn(
+          "min-h-0 flex-1 overflow-y-auto rounded-b-xl px-3 pb-3 outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70",
+          open ? "block" : "hidden",
+          "@4xl:block",
+        )}
+      >
         {sections.length ? (
-          <table className="w-full border-collapse text-left">
+          <table className="w-full table-fixed border-collapse text-left">
             <caption className="sr-only">Every number on the sheet and how it is made</caption>
+            <colgroup>
+              <col className="w-[34%]" />
+              <col className="w-[26%]" />
+              <col />
+            </colgroup>
             <thead>
               <tr>
                 <th scope="col" className="px-2 pb-1 text-sm font-semibold text-stone-400">
@@ -120,7 +138,7 @@ export function BuildMathPanel({
                     <th scope="row" className={cn(cell, "font-normal text-stone-200")}>
                       {row.label}
                     </th>
-                    <td className={cn(cell, "whitespace-nowrap font-mono text-amber-100")}>{row.value}</td>
+                    <td className={cn(cell, "break-words font-mono text-amber-100")}>{row.value}</td>
                     <td className={cn(cell, "break-words text-stone-400")}>{row.working}</td>
                   </tr>
                 ))}

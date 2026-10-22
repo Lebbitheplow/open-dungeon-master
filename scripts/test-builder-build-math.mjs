@@ -159,16 +159,16 @@ for (const { label, fields, weapon } of CASES) {
 test("the working names its parts: a rogue's Dexterity save and an expert's Stealth", () => {
   const built = builder.build(CASES[2].fields);
   const rows = rowsOf(tableOf({ ...built, klass: builder.classes.find((entry) => entry.id === "rogue") }));
-  assert.equal(rows.get("save-dex").working, "Dex +3, proficiency +2");
-  assert.equal(rows.get("skill-stealth").working, "Dex +3, expertise +4");
-  assert.equal(rows.get("skill-athletics").working, "Str -1");
-  assert.match(rows.get("weapon-Rapier").working, /^to hit: Dex \+3, proficiency \+2; damage adds Dex/);
+  assert.equal(rows.get("save-dex").working, "DEX modifier +3, proficiency +2");
+  assert.equal(rows.get("skill-stealth").working, "DEX modifier +3, expertise +4");
+  assert.equal(rows.get("skill-athletics").working, "STR modifier -1");
+  assert.match(rows.get("weapon-Rapier").working, /^to hit: DEX modifier \+3, proficiency \+2; damage adds DEX modifier/);
 });
 
-test("a wizard's spell save DC shows its base as a number", () => {
+test("a wizard's spell save DC shows its parts", () => {
   const built = builder.build(CASES[1].fields);
   const rows = rowsOf(tableOf({ ...built, klass: builder.classes.find((entry) => entry.id === "wizard") }));
-  assert.equal(rows.get("spell-dc").working, "base 8, proficiency +2, Int +3");
+  assert.equal(rows.get("spell-dc").working, "base +8, proficiency +2, INT modifier +3");
   assert.equal(rows.get("slots-1").label, "1st-level slots");
   assert.equal(rows.get("slots-2").label, "2nd-level slots");
 });
@@ -295,8 +295,12 @@ test("the panel is a real table with row and column headers and a polite status"
   assert.match(panel, /scope="colgroup"/);
   assert.match(panel, /role="status" aria-live="polite"/);
   assert.match(panel, /aria-expanded=\{open\}/);
-  // Folded below lg, always open from lg.
-  assert.match(panel, /open \? "block" : "hidden", "lg:block"/);
+  // Folded where the builder is narrow, always open where it is wide, and
+  // its scrolling body is a named tab stop.
+  assert.match(panel, /open \? "block" : "hidden",\s*"@4xl:block"/);
+  assert.match(panel, /role="region"\s*aria-labelledby=\{headingId\}\s*tabIndex=\{0\}/);
+  // The page that holds the builder widens for the table on a desktop.
+  assert.match(read("../src/app/styles/creator.css"), /main:has\(\[data-build-math\]\)/);
   // A changed row is lit only where the device plays effects.
   assert.match(panel, /useLowEffects\(\)/);
   assert.match(panel, /!low &&/);

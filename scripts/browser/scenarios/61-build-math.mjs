@@ -19,6 +19,7 @@ export default {
     const panel = page.locator(`${root}[data-build-math]`).first();
     const table = panel.locator("table");
     const toggle = panel.locator("button[aria-expanded]");
+    // creator.css widens the page from 64rem, room for the table beside.
     const wide = (page.viewportSize()?.width ?? 0) >= 1024;
     if (wide) {
       if (await toggle.isVisible()) found.push("the fold button shows beside the steps");
