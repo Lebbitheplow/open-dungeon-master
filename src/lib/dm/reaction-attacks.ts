@@ -8,7 +8,7 @@
 // (src/lib/dm/last-hit.ts): same round and turn, by that creature, and not
 // answered by Giant Killer already.
 
-import { sizeRank } from "@/lib/bestiary/statblock";
+import { sizeRank } from "@/lib/bestiary/enemy-numbers";
 import type { EncounterEnemy } from "@/lib/db/encounters";
 import { tilesBetween } from "@/lib/dm/attack-spatial";
 import { freshLastHit, writeLastHit } from "@/lib/dm/last-hit";

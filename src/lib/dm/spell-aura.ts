@@ -139,6 +139,8 @@ function auraHits(campaign: Campaign, encounter: Encounter, enemy: EncounterEnem
 // every condition (condition-logic.ts), cast by a character or a creature.
 type TurnStartHold = {
   tag: string;
+  // The conditions the casting keeps on the creature (restrained).
+  held: string[];
   spell: string;
   save: SaveAbilityId | undefined;
   noSave: boolean;
@@ -159,6 +161,7 @@ function turnStartHolds(campaign: Campaign, conditions: string[], meta: Conditio
       }
       const tag = `${textKey(entry.spell)}|${entry.source}`;
       if (seen.has(tag)) {
+        holds.find((hold) => hold.tag === tag)?.held.push(condition);
         continue;
       }
       seen.add(tag);
@@ -172,6 +175,7 @@ function turnStartHolds(campaign: Campaign, conditions: string[], meta: Conditio
       const slot = entry.slotLevel ?? hurt.baseLevel;
       holds.push({
         tag,
+        held: [condition],
         spell: resolved.name,
         save: resolved.mech.save,
         noSave: Boolean(hurt.noSave),
@@ -208,6 +212,7 @@ function turnStartDamage(campaign: Campaign, encounter: Encounter, enemy: Encoun
     if (!hold.noSave && hold.save) {
       const save = rollEnemySave(campaign.id, live, hold.save, hold.dc, {
         magical: true,
+        against: hold.held,
         record: { detail: `${live.displayName}: ${hold.save.toUpperCase()} save against ${hold.spell}` },
       });
       if (save.success) {

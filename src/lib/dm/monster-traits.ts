@@ -85,6 +85,7 @@ const ENGINE_READS = [
   /^(?:acid|cold|fire|force|lightning|necrotic|poison|psychic|radiant|thunder) absorption\b/i,
   /^immutable form\b/i, /^limited magic immunity\b/i, /^martial advantage\b/i, /^surprise attack\b/i,
   /^shapechanger\b/i, /^reaction:\s*parry\b/i, /^legendary action/i, /^lair action/i,
+  /^turn(?:ing)? (?:resistance|defiance|immunity|vulnerability)\b/i, /^turning:/i,
   /^(?:the \w+ can take \d+ legendary actions)/i, /^multiattack\b/i,
 ];
 

@@ -2,15 +2,9 @@ import { isValidExpression } from "@/lib/dice";
 import { xpForCr } from "@/lib/srd/encounter-math";
 import { synthesizeStats } from "@/lib/bestiary/synthesize";
 import { crLabel, deriveCr, expectedFor, type DerivedCr } from "@/lib/bestiary/derive-cr";
-import {
-  creatureTypeOf,
-  normalizeCreatureType,
-  normalizePrintedBlock,
-  type EnemyAttack,
-  type EnemySaveMods,
-  type EnemyStats,
-  type SaveAbility,
-} from "@/lib/bestiary/statblock";
+import { creatureTypeOf, normalizeCreatureType } from "@/lib/bestiary/creature-type";
+import { normalizePrintedBlock } from "@/lib/bestiary/printed-block";
+import type { EnemyAttack, EnemySaveMods, EnemyStats, SaveAbility } from "@/lib/bestiary/statblock";
 import {
   checkAttackExtras,
   checkRegeneration,

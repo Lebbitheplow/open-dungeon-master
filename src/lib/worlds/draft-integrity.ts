@@ -9,7 +9,7 @@
 import { getContentDb } from "@/lib/content/db";
 import { SRD_ARMOR } from "@/lib/srd/armor";
 import { SRD_WEAPONS } from "@/lib/srd/weapons";
-import { normalizeCreatureType } from "@/lib/bestiary/statblock";
+import { normalizeCreatureType } from "@/lib/bestiary/creature-type";
 import type { WorldPack } from "@/lib/worlds/types";
 import { textKey } from "@/lib/language/text-logic";
 

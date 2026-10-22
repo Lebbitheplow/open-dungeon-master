@@ -2,6 +2,7 @@ import { printedBlockOf, type PrintedBlock } from "@/lib/bestiary/printed-block"
 import { xpForCr } from "@/lib/srd/encounter-math";
 import { correctedMonsterData } from "@/lib/bestiary/pack-corrections";
 import { readDefences } from "@/lib/bestiary/defences";
+import { normalizeCreatureType } from "@/lib/bestiary/creature-type";
 import type { AttackAlternative, OnHitRider, TypedDice } from "@/lib/bestiary/attack-text";
 import { parseMultiattackCount, parseRoutines, type RoutineStep } from "@/lib/bestiary/multiattack-text";
 import { asNumber, asString, formatSpeed, lairOptionsOf, parseBlockExtras, sizeOf, subtypeOf } from "@/lib/bestiary/block-fields";
@@ -178,44 +179,7 @@ export type EnemySenses = {
   passivePerception?: number;
 };
 
-// The fourteen SRD creature types. They are also the bestiary thumbnail
-// plates in public/assets/placeholders/monster, which is why the list is
-// closed: a type with no plate would be a monster with no picture.
-export const CREATURE_TYPES = [
-  "aberration",
-  "beast",
-  "celestial",
-  "construct",
-  "dragon",
-  "elemental",
-  "fey",
-  "fiend",
-  "giant",
-  "humanoid",
-  "monstrosity",
-  "ooze",
-  "plant",
-  "undead",
-] as const;
-
-export type CreatureType = (typeof CREATURE_TYPES)[number];
-
-// "Humanoid (goblinoid)" -> "humanoid". Open5e files swarms under their own
-// type, which has no plate; a swarm of rats is drawn as the beast it is.
-export function normalizeCreatureType(raw: unknown): CreatureType | null {
-  const word = String(raw ?? "").trim().toLowerCase().split(/[\s(]/)[0];
-  if (word === "swarm") {
-    return "beast";
-  }
-  return (CREATURE_TYPES as readonly string[]).includes(word) ? (word as CreatureType) : null;
-}
-
-// The type to draw or print for a stat block: its own when it carries one,
-// and monstrosity for a synthesized block or a pre-type snapshot, the plate
-// that promises the least about what is under it.
-export function creatureTypeOf(stats: Pick<EnemyStats, "type">): CreatureType {
-  return normalizeCreatureType(stats.type) ?? "monstrosity";
-}
+export { CREATURE_TYPES, creatureTypeOf, normalizeCreatureType, type CreatureType } from "@/lib/bestiary/creature-type";
 
 // Every attack a pack block prints fits (the most is five: Black Flag's pit
 // fiend, whose Multiattack names its Hurl Flame), and the workshop's cap
@@ -426,69 +390,4 @@ export function parseMonster(raw: Record<string, unknown>, crFromRow: number): E
   };
 }
 
-// Size comparison for the grapple/shove cap: a creature can only grab or
-// push a target at most one size larger than itself. Unknown sizes read as
-// Medium so old stat snapshots stay grabbable.
-const SIZE_ORDER = ["tiny", "small", "medium", "large", "huge", "gargantuan"];
-
-export function sizeRank(size: string | undefined): number {
-  const index = SIZE_ORDER.indexOf((size ?? "").trim().toLowerCase());
-  return index === -1 ? SIZE_ORDER.indexOf("medium") : index;
-}
-
-// Save modifier for an enemy, with a fallback for stat snapshots taken
-// before saveMods existed: dex maps to the stored dexMod, everything else
-// scales with CR.
-export function saveModFor(stats: EnemyStats, ability: SaveAbility): number {
-  const explicit = stats.saveMods?.[ability];
-  if (typeof explicit === "number" && Number.isFinite(explicit)) {
-    return explicit;
-  }
-  if (ability === "dex") {
-    return stats.dexMod;
-  }
-  return Math.min(5, Math.round(stats.cr * 0.3));
-}
-
-// An enemy's passive Perception: the 5e formula against its Wisdom. Used by
-// the Hide action so a stealth roll is compared to something real rather
-// than left to the model's judgement.
-// The number a hiding character has to beat. The block's own printed
-// passive Perception wins; then its Perception skill; then, for a block
-// that says nothing, the Wisdom modifier as before.
-export function passivePerceptionFor(stats: EnemyStats): number {
-  const printed = stats.senses?.passivePerception;
-  if (typeof printed === "number" && Number.isFinite(printed)) {
-    return printed;
-  }
-  const perception = stats.skills?.perception;
-  if (typeof perception === "number" && Number.isFinite(perception)) {
-    return 10 + perception;
-  }
-  return 10 + saveModFor(stats, "wis");
-}
-
-// The senses a block's Keen trait sharpens ("Keen Hearing and Smell", "Keen
-// Sight", "Keen Senses": all three). SRD 5.1: advantage on Wisdom
-// (Perception) checks that rely on them.
-export function keenSensesOf(stats: Pick<EnemyStats, "traits">): Array<"sight" | "hearing" | "smell"> {
-  const senses = new Set<"sight" | "hearing" | "smell">();
-  for (const line of stats.traits ?? []) {
-    const name = /^keen ([a-z ,]+?)\s*[:.]/i.exec(line.trim())?.[1]?.toLowerCase() ?? "";
-    for (const sense of ["sight", "hearing", "smell"] as const) {
-      // Tome of Beasts 2 calls smell "scent" ("Keen Scent").
-      if (name.includes(sense) || name.startsWith("senses") || (sense === "smell" && name.includes("scent"))) {
-        senses.add(sense);
-      }
-    }
-  }
-  return [...senses];
-}
-
-// The passive Perception a creature watches with when something tries to
-// slip past it (a hider, an ambush): advantage is +5 on a passive score
-// (SRD 5.1, Passive Checks), and a Keen sense gives it, since sight, sound
-// and scent all give a hidden creature away.
-export function watchfulPassivePerception(stats: EnemyStats): number {
-  return passivePerceptionFor(stats) + (keenSensesOf(stats).length ? 5 : 0);
-}
+export { keenSensesOf, passivePerceptionFor, saveModFor, sizeRank, watchfulPassivePerception } from "@/lib/bestiary/enemy-numbers";

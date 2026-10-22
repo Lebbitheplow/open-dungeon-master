@@ -398,4 +398,4 @@ export function hasTrait(stats: { traits?: string[] } | undefined, flag: TraitFl
 
 // Trait names statblock.ts keeps whatever the cap on trait lines, because
 // the engine reads them.
-export const ENGINE_TRAIT_NAMES = /^(magic resistance|pack tactics|nimble escape|sunlight (?:sensitivity|weakness|hypersensitivity)|undead fortitude|(?:[a-z'-]+ )?regeneration|magic weapons?|legendary resistance|spellcasting|innate spellcasting|keen (?:sight|hearing|smell|senses|scent)|(?:acid|cold|fire|force|lightning|necrotic|poison|psychic|radiant|thunder) absorption|immutable form|limited magic immunity|martial advantage|surprise attack)\b/i;
+export const ENGINE_TRAIT_NAMES = /^(magic resistance|pack tactics|nimble escape|sunlight (?:sensitivity|weakness|hypersensitivity)|undead fortitude|(?:[a-z'-]+ )?regeneration|magic weapons?|legendary resistance|spellcasting|innate spellcasting|keen (?:sight|hearing|smell|senses|scent)|(?:acid|cold|fire|force|lightning|necrotic|poison|psychic|radiant|thunder) absorption|immutable form|limited magic immunity|martial advantage|surprise attack|turn(?:ing)? (?:resistance|defiance|immunity|vulnerability)|turning(?=:))\b/i;

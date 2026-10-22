@@ -84,7 +84,7 @@ import { waypointProperty } from "@/lib/dm/waypoint-logic";
 import { languageDirective } from "@/lib/dm/table-language-logic";
 import { OFFER_NOTE_PREFIX, renderOffersBlock, type OfferLine } from "@/lib/dm/proposal-logic";
 import { ENEMY_TURNS_CUE } from "@/lib/dm/enemies-due";
-import { CREATURE_TYPES } from "@/lib/bestiary/statblock";
+import { CREATURE_TYPES } from "@/lib/bestiary/creature-type";
 import { CHECK_KEY_PROPERTIES, NONE, SAVE_AGAINST } from "@/lib/dm/roll-about";
 import { stopWordsFor } from "@/lib/language/language";
 import { textKey } from "@/lib/language/text-logic";
