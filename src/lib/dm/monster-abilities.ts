@@ -24,7 +24,7 @@ const DAMAGE_WORDS = [
   "piercing", "poison", "psychic", "radiant", "slashing", "thunder",
 ];
 
-const CONDITION_WORDS = [
+export const CONDITION_WORDS = [
   "blinded", "charmed", "deafened", "frightened", "grappled", "incapacitated",
   "paralyzed", "petrified", "poisoned", "restrained", "stunned", "unconscious",
 ];
@@ -73,11 +73,20 @@ function compactDice(raw: string): string {
   return raw.replace(/\s+/g, "");
 }
 
+// "DC 13 Constitution saving throw": an ability's and an attack's rider.
+export const SAVE_DC = /DC\s*(\d{1,2})\s+(strength|dexterity|constitution|intelligence|wisdom|charisma)\s+saving throw/i;
+
+// A condition word as a line prints it, as the engine names it.
+export function conditionName(word: string): string {
+  const name = textKey(word);
+  return name === "knocked prone" ? "prone" : name;
+}
+
 // The rider or effect clause of a line: DC, save, damage, condition and how
 // long it lasts. Shared by abilities and by attacks' "Hit:" riders.
 export function parseSaveEffect(text: string): Omit<MonsterAbility, "name" | "recharge" | "perDay" | "perRest" | "legendaryCost"> {
   const out: Omit<MonsterAbility, "name"> = {};
-  const save = /DC\s*(\d{1,2})\s+(strength|dexterity|constitution|intelligence|wisdom|charisma)\s+saving throw/i.exec(text);
+  const save = SAVE_DC.exec(text);
   if (save) {
     out.dc = Number(save[1]);
     out.save = ABILITY_WORDS[save[2].toLowerCase()];
@@ -99,8 +108,7 @@ export function parseSaveEffect(text: string): Omit<MonsterAbility, "name" | "re
     "i",
   ).exec(text);
   if (condition) {
-    const word = condition[1].toLowerCase();
-    out.condition = word === "knocked prone" ? "prone" : word;
+    out.condition = conditionName(condition[1]);
   }
   const span = /for (\d{1,3}) (round|minute|hour|day)s?\b/i.exec(text);
   if (/until the end of (?:its|the [a-z' ]+?'s|your) next turn/i.test(text)) {

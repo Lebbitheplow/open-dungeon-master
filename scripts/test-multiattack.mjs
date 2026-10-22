@@ -7,7 +7,9 @@
 // Multiattack in it is read: the swings planned without an asked attack
 // equal the count the text names, and each text no routine or count can be
 // read from is pinned with its reason in multiattack-unread.json
-// (`node scripts/test-multiattack.mjs --write` rewrites it).
+// (`node scripts/test-multiattack.mjs --write` rewrites it), and every attack
+// line that prints its bonus is read, Tome of Beasts 3's unlabelled ones
+// included.
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { openWorld } from "./lib/enforce-world.mjs";
@@ -25,6 +27,7 @@ const { COUNT_WORD, multiattackAlternatives, multiattackItems, multiattackParts,
   await import("../src/lib/bestiary/attack-text.ts");
 const { plannedSwings } = await import("../src/lib/dm/enemy-profile.ts");
 const { parseAttack } = await import("../src/lib/bestiary/attack-parse.ts");
+const { correctedMonsterData } = await import("../src/lib/bestiary/pack-corrections.ts");
 
 // SRD 5.1 text, in the pack's shape.
 const SRD = {
@@ -168,12 +171,17 @@ function unreadGroup(desc, names) {
 }
 
 // The type a Hit: clause prints for the hit itself, before any saving throw
-// it calls for: the first "<type> damage" there.
+// it calls for: the type beside the number it opens with ("12 (2d8+3)
+// piercing and 3 (1d6) fire damage"), else the first "<type> damage" there,
+// and of a choice of types ("bludgeoning, piercing, or slashing damage") the
+// first named.
 const DAMAGE_TYPES = ["acid", "bludgeoning", "cold", "fire", "force", "lightning", "necrotic", "piercing", "poison", "psychic", "radiant", "slashing", "thunder"];
 function printedHitType(desc) {
   const at = desc.indexOf("Hit:");
-  const own = at < 0 ? "" : desc.slice(at + 4).split(/\b(?:saving throw|must (?:succeed|make))\b/i)[0];
-  return new RegExp(`\\b(${DAMAGE_TYPES.join("|")})\\s+damage`, "i").exec(own)?.[1]?.toLowerCase() ?? null;
+  const own = at < 0 ? "" : desc.slice(at + 4).replace(/[_*]/g, "").split(/\b(?:saving throw|must (?:succeed|make))\b/i)[0];
+  const types = DAMAGE_TYPES.join("|");
+  const opening = new RegExp(`^\\s*\\d+\\s*(?:\\([^)]*\\)\\s*)?(${types})\\b`, "i").exec(own);
+  return (opening ?? new RegExp(`\\b(${types})\\b(?:,?\\s+(?:or\\s+)?(?:${types})\\b)*\\s+damage`, "i").exec(own))?.[1]?.toLowerCase() ?? null;
 }
 
 await test("A hit's own type comes first, a rider's after it: the Flying Snake bites piercing, then poison (SRD 5.1, Flying Snake).", () => {
@@ -182,7 +190,127 @@ await test("A hit's own type comes first, a rider's after it: the Flying Snake b
   assert.equal(parseAttack(SRD["poisonous-snake"].actions[0])?.type.split("/")[0], "piercing");
 });
 
+await test("A bonus of +0 printed on the line is an attack's (SRD 5.1 Bat, Cat, Crab, Lizard, Rat); a field of 0 with none printed is no attack.", () => {
+  const bite = { name: "Bite", desc: "Melee Weapon Attack: +0 to hit, reach 5 ft., one creature. Hit: 1 piercing damage.", damage_bonus: 1 };
+  assert.deepEqual(parseAttack(bite), { name: "Bite", toHit: 0, damage: "1", type: "piercing", mode: "melee", reach: 5 });
+  assert.equal(parseAttack({ name: "Reel", desc: "The roper pulls each creature grappled by it up to 25 ft. straight toward it.", attack_bonus: 0 }), null);
+});
+
+await test("A hit that lays an effect and no damage is an attack: the SRD condition it names is its rider, the rest is the DM's (SRD 5.1 Giant Spider's Web, Lamia's Intoxicating Touch), and the lamia's Multiattack may use the touch.", () => {
+  const web = {
+    name: "Web (Recharge 5-6)",
+    desc: "Ranged Weapon Attack: +5 to hit, range 30/60 ft., one creature. Hit: The target is restrained by webbing. As an action, the restrained target can make a DC 12 Strength check, bursting the webbing on a success. The webbing can also be attacked and destroyed (AC 10; hp 5; vulnerability to fire damage; immunity to bludgeoning, poison, and psychic damage).",
+    attack_bonus: 5,
+  };
+  const read = parseAttack(web);
+  assert.equal(read?.damage, "0");
+  assert.equal(read?.onHit?.condition, "restrained");
+  assert.deepEqual(read?.onHit?.manual?.[0], "As an action, the restrained target can make a DC 12 Strength check, bursting the webbing on a success.");
+  const touch = {
+    name: "Intoxicating Touch",
+    desc: "Melee Spell Attack: +5 to hit, reach 5 ft., one creature. Hit: The target is magically cursed for 1 hour. Until the curse ends, the target has disadvantage on Wisdom saving throws and all ability checks.",
+  };
+  const cursed = parseAttack(touch);
+  assert.equal(cursed?.damage, "0");
+  assert.equal(cursed?.onHit?.condition, undefined);
+  assert.deepEqual(cursed?.onHit?.manual, ["The target is magically cursed for 1 hour.", "Until the curse ends, the target has disadvantage on Wisdom saving throws and all ability checks."]);
+});
+
+await test("A choice of damage types is its first named; a type left to a trait is untyped, never a rider's; a misprinted average rolls its dice; a rider that holds only sometimes is the DM's, not the hit's.", () => {
+  const staff = parseAttack({ name: "Thorned Staff", desc: "Melee Weapon Attack: +7 to hit, reach 5 ft., one target. Hit: 10 (2d6+3) piercing damage plus 18 (4d8) cold, fire, lightning, poison, or thunder damage (the archdruid's choice)." });
+  assert.equal(staff?.damage, "2d6+3+4d8");
+  assert.equal(staff?.type, "piercing/cold");
+  const slam = parseAttack({ name: "Slam", desc: "Melee Weapon Attack: +9 to hit, reach 5 ft., one target. Hit: 21 (3d10+5) bludgeoning, piercing, or slashing damage, as determined by its maker." });
+  assert.equal(slam?.type, "bludgeoning");
+  const dagger = parseAttack({ name: "Alchemical Dagger", desc: "Melee Weapon Attack: +5 to hit, reach 5 ft., one target. Hit: 5 (1d4 + 3) piercing damage plus 3 (1d6) damage of the type determined by Apothecary." });
+  assert.deepEqual([dagger?.damage, dagger?.type], ["1d4+3+1d6", "piercing/untyped"]);
+  const bolt = parseAttack({ name: "Horseman's Bolt", desc: "Ranged Spell Attack: +8 to hit, range 120 ft., one target. Hit: 22 (4d6 + 4) damage of the type defined in Enchanted Weapons." });
+  assert.deepEqual([bolt?.damage, bolt?.type], ["4d6+4", "untyped"]);
+  const bite = parseAttack({ name: "Bite", desc: "Melee Weapon Attack: +10 to hit, reach 5 ft., one target. Hit: 28 (4d8+5) piercing damage." });
+  assert.equal(bite?.damage, "4d8+5");
+  const swarm = parseAttack({ name: "Bites", desc: "Melee Weapon Attack: +10 to hit, reach 0 ft., one creature in the swarm's space. Hit: 21 (6d6) piercing damage plus 7 (2d6) poison damage if Ia'Affrat has half of its hit points or fewer." });
+  assert.equal(swarm?.damage, "6d6");
+  assert.deepEqual(swarm?.onHit?.manual, ["7 (2d6) poison damage if Ia'Affrat has half of its hit points or fewer"]);
+});
+
+await test("Tome of Beasts 3's lines, which print no Hit: label, read their bonus, reach or range, damage, riders and save.", () => {
+  const axe = parseAttack({ name: "Iron Axe", desc: "Melee Weapon Attack: +8 to hit, 10 ft., one target, 18 (3d8+5) slashing damage." });
+  assert.deepEqual(axe, { name: "Iron Axe", toHit: 8, damage: "3d8+5", type: "slashing", mode: "melee", reach: 10 });
+  // Read as a pack row is: its shortened save spelled out first.
+  const row = correctedMonsterData({ document__slug: "tob3", slug: "test", actions: [{ name: "Bite", desc: "Melee Weapon Attack: +5 to hit, 10 ft., one creature,. 7 (1d8+3) piercing damage + 7 (2d6) poison and the target must make DC 13 Con save or be poisoned for 1 min. The target can re-save at end of each of its turns, success ends effect on itself." }] });
+  const bite = parseAttack(row.actions[0]);
+  assert.deepEqual([bite?.damage, bite?.type, bite?.onHit?.save, bite?.onHit?.dc, bite?.onHit?.condition, bite?.onHit?.rounds], ["1d8+3+2d6", "piercing/poison", "con", 13, "poisoned", 10]);
+  const claws = parseAttack({ name: "Anointed Claws", desc: "Melee Weapon Attack: +10 to hit, 5 ft., one target, 11 (2d6+4) slashing damage and 22 (5d8) radiant." });
+  assert.deepEqual([claws?.damage, claws?.type], ["2d6+4+5d8", "slashing/radiant"]);
+  const stone = parseAttack({ name: "Skipping Stone", desc: "Ranged Weapon Attack: +9 to hit 20/60' one target 15 (2d8+6) bludgeoning damage." });
+  assert.deepEqual([stone?.mode, stone?.range], ["ranged", { normal: 20, long: 60 }]);
+  const flame = parseAttack({ name: "Hurl Flame", desc: "Ranged Spell Attack: +5 to hit, 60 ft., one target, 10 (2d6+3) fire." });
+  assert.deepEqual([flame?.damage, flame?.type, flame?.range], ["2d6+3", "fire", { normal: 60, long: 60 }]);
+  const whip = parseAttack({ name: "Tendril Whip", desc: "Melee Weapon Attack: +9 to hit, 20 ft., one creature,. Target grappled (escape DC 16)." });
+  assert.deepEqual([whip?.damage, whip?.reach, whip?.onHit?.condition, whip?.onHit?.escapeDc], ["0", 20, "grappled", 16]);
+});
+
+await test("A pack row's misprinted attack line is read as corrected (pack-corrections.ts), not by a reading of the misprint.", () => {
+  const claw = { name: "Claw", desc: "Melee Weapon Attack: +16 to hit, reach 10 ft., one target. it: 16 (2d6 + 9) slashing damage." };
+  const corrected = correctedMonsterData({ document__slug: "tob-2023", slug: "ancientwinddragon-tob1-2023", actions: [claw] });
+  assert.equal(corrected.actions[0].desc, "Melee Weapon Attack: +16 to hit, reach 10 ft., one target. Hit: 16 (2d6 + 9) slashing damage.");
+  const rug = correctedMonsterData({
+    document__slug: "tob2",
+    slug: "animated-bearskin-rug",
+    actions: [{ name: "Envelop", desc: "Melee Weapon Attack: +6 to hit, reach 5 ft., one Medium or smaller creature. Hit: The creature is grappled (escaped DC 14). Until this grapple ends, the target is restrained, and the rug can't envelop another target." }],
+  });
+  assert.equal(parseAttack(rug.actions[0])?.onHit?.escapeDc, 14);
+});
+
+await test("A document's shortened save and duration is read spelled out, by attacks and abilities alike.", () => {
+  const hag = parseMonster(
+    {
+      document__slug: "blackflag",
+      slug: "test",
+      actions: [{ name: "Poison Spray", desc: "_Ranged Spell Attack:_ +8 to hit, range 60 ft., one target. _Hit:_ 22 (4d8+4) poison damage, and the target must succeed on a DC 16 STR save or be restrained until the end of its next turn." }],
+      special_abilities: [{ name: "Stench", desc: "Each creature within 10 feet of it must succeed on a DC 13 Con. save or be poisoned for 1 hr." }],
+    },
+    5,
+  );
+  assert.deepEqual(hag.attacks[0].onHit, { save: "str", dc: 16, condition: "restrained", rounds: 1 });
+  assert.deepEqual([hag.specials?.[0]?.save, hag.specials?.[0]?.dc, hag.specials?.[0]?.condition, hag.specials?.[0]?.rounds], ["con", 13, "poisoned", 600]);
+  assert.equal(correctedMonsterData({ document__slug: "tob3", slug: "test", reactions: [{ name: "Shriek", desc: "DC 12 Wis save or be frightened for 2 mins." }] }).reactions[0].desc, "DC 12 Wisdom saving throw or be frightened for 2 minutes.");
+  // An action's name is looked up among the corrections as their own key only.
+  assert.equal(correctedMonsterData({ document__slug: "tob3", slug: "test", actions: [{ name: "constructor", desc: "DC 12 Wis save." }] }).actions[0].desc, "DC 12 Wisdom saving throw.");
+});
+
 if (world.hasPack) {
+await test("Every attack line in the pack that prints its bonus is read, and a hit that prints dice deals them.", () => {
+  const rows = getContentDb().prepare("SELECT slug, document_slug, data_json FROM monsters ORDER BY document_slug, slug").all();
+  const unread = [];
+  const lost = [];
+  let read = 0;
+  for (const row of rows) {
+    const data = correctedMonsterData(JSON.parse(row.data_json));
+    for (const action of ["actions", "bonus_actions", "reactions", "legendary_actions"].flatMap((key) => (Array.isArray(data[key]) ? data[key] : []))) {
+      const desc = String(action?.desc ?? "").replace(/[_*]/g, "");
+      if (!/[+-]\s?\d{1,2} to hit/i.test(desc)) {
+        continue;
+      }
+      const attack = parseAttack(action);
+      const id = `${row.document_slug}/${row.slug} ${action.name}`;
+      if (!attack) {
+        unread.push(id);
+        continue;
+      }
+      read += 1;
+      // A hit opening with its dice ("Hit: 7 (1d8 + 3)", or Tome of Beasts
+      // 3's "one target, 18 (3d8+5)") deals more than nothing.
+      if (attack.damage === "0" && /(?:hit:|one (?:target|creature),?)\s*\d{1,3}\s*\(\s*\d{1,3}d\d/i.test(desc)) {
+        lost.push(id);
+      }
+    }
+  }
+  assert.ok(read > 5500, `${read} attack lines read`);
+  assert.deepEqual(unread, []);
+  assert.deepEqual(lost, []);
+});
+
 await test("Every Multiattack in the pack plans the swings its text counts; each it cannot read is pinned with its reason.", () => {
   const rows = getContentDb().prepare("SELECT slug, document_slug, data_json, cr FROM monsters ORDER BY document_slug, slug").all();
   const unread = {};
@@ -232,9 +360,8 @@ await test("Every attack line in the pack with a Hit: clause is typed first by t
     for (const action of ["actions", "bonus_actions", "reactions"].flatMap((key) => (Array.isArray(data[key]) ? data[key] : []))) {
       const printed = printedHitType(String(action?.desc ?? ""));
       const type = printed ? parseAttack(action)?.type : null;
-      // "untyped" is a hit that prints a choice of types ("bludgeoning,
-      // piercing, or slashing") or none of its own: read as no type, never
-      // as another.
+      // "untyped" is a hit that prints no type of its own ("damage of the
+      // type determined by Apothecary"): read as no type, never as another.
       if (!type || type === "untyped") {
         continue;
       }
