@@ -57,7 +57,10 @@ export function workingOf(parts: DerivedPart[]): string {
     .join(", ");
 }
 
-const ORDINALS = ["", "1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th"];
+// The slot levels in order, keyed as the sheet keys its slots.
+const SLOT_LEVELS: Array<[string, string]> = [
+  ["1", "1st"], ["2", "2nd"], ["3", "3rd"], ["4", "4th"], ["5", "5th"], ["6", "6th"], ["7", "7th"], ["8", "8th"], ["9", "9th"],
+];
 
 export function buildMathSections({ derived, scores, klass, atTable }: BuildMathInput): BuildMathSection[] {
   const { preview, hp, shownAbilities, effectiveLevel } = derived;
@@ -156,15 +159,12 @@ export function buildMathSections({ derived, scores, klass, atTable }: BuildMath
     })),
   });
 
-  const slotRows = Object.entries(derived.spellSlots)
-    .filter(([, slot]) => slot.max > 0)
-    .sort(([a], [b]) => Number(a) - Number(b))
-    .map(([level, slot]) => ({
-      id: `slots-${level}`,
-      label: `${ORDINALS[Number(level)] ?? level}-level slots`,
-      value: String(slot.max),
-      working: `${klass.name} table at level ${effectiveLevel}`,
-    }));
+  const slotRows = SLOT_LEVELS.flatMap(([level, ordinal]) => {
+    const slot = derived.spellSlots[level];
+    return slot && slot.max > 0
+      ? [{ id: `slots-${level}`, label: `${ordinal}-level slots`, value: String(slot.max), working: `${klass.name} table at level ${effectiveLevel}` }]
+      : [];
+  });
   if (sheet.spellSaveDc !== null || slotRows.length) {
     sections.push({
       id: "spells",
