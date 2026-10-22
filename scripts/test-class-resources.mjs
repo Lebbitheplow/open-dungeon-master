@@ -185,7 +185,8 @@ test("the passive defs are the ones something else spends", () => {
   // Signature Spells and Overchannel are spent by the cast itself
   // (src/lib/dm/caster-features.ts). The Arcane Ward's pool and its
   // raised-today mark are kept by the abjuration cast and the damage path.
-  assert.deepEqual(passive, ["relentless_endurance", "inspiration", "relentless_rage", "signature_spell_1", "signature_spell_2", "overchannel", "sub_arcane_ward", "sub_arcane_ward_raised"]);
+  // Psionic Recovery is spent by its authored spend, which returns a die.
+  assert.deepEqual(passive, ["relentless_endurance", "inspiration", "relentless_rage", "signature_spell_1", "signature_spell_2", "overchannel", "sub_psionic_recovery", "sub_arcane_ward", "sub_arcane_ward_raised"]);
 });
 
 test("Relentless Endurance spends once, then refuses", () => {
@@ -240,6 +241,7 @@ const CHARGED_ELSEWHERE = {
   sub_unwavering_mark: "the bonus attack, not the use, costs the bonus action",
   sub_telekinetic_master: "the slotless cast, then pc_attack's bonus attack",
   sub_embodiment_of_the_law: "the enchantment spell's cast is the cost (the use marks it for the bonus action)",
+  sub_waxing_and_waning: "the slotless spell's cast is the cost; the phase is the Lunar Phase choice",
 };
 
 test("every feature whose text names a cost carries it", () => {

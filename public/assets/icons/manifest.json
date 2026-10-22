@@ -17424,6 +17424,26 @@
       "classId": "cleric"
     },
     {
+      "id": "feature-visions-of-the-past",
+      "group": "feature",
+      "key": "Visions of the Past",
+      "label": "Visions of the Past",
+      "src": "/assets/icons/feature/visions-of-the-past.webp",
+      "bytes": 4442,
+      "seed": 157727466,
+      "classId": "cleric"
+    },
+    {
+      "id": "feature-emboldening-bond",
+      "group": "feature",
+      "key": "Emboldening Bond",
+      "label": "Emboldening Bond",
+      "src": "/assets/icons/feature/emboldening-bond.webp",
+      "bytes": 1776,
+      "seed": 896875657,
+      "classId": "cleric"
+    },
+    {
       "id": "feature-steps-of-night",
       "group": "feature",
       "key": "Steps of Night",
@@ -17452,6 +17472,16 @@
       "bytes": 3038,
       "seed": 1885518925,
       "classId": "druid"
+    },
+    {
+      "id": "feature-eldritch-cannon",
+      "group": "feature",
+      "key": "Eldritch Cannon",
+      "label": "Eldritch Cannon",
+      "src": "/assets/icons/feature/eldritch-cannon.webp",
+      "bytes": 2876,
+      "seed": 720770962,
+      "classId": "artificer"
     },
     {
       "id": "feature-spirit-totem",
@@ -17594,6 +17624,16 @@
       "classId": "bard"
     },
     {
+      "id": "feature-universal-speech",
+      "group": "feature",
+      "key": "Universal Speech",
+      "label": "Universal Speech",
+      "src": "/assets/icons/feature/universal-speech.webp",
+      "bytes": 3698,
+      "seed": 559878114,
+      "classId": "bard"
+    },
+    {
       "id": "feature-performance-of-creation",
       "group": "feature",
       "key": "Performance of Creation",
@@ -17714,6 +17754,16 @@
       "classId": "warlock"
     },
     {
+      "id": "feature-dark-delirium",
+      "group": "feature",
+      "key": "Dark Delirium",
+      "label": "Dark Delirium",
+      "src": "/assets/icons/feature/dark-delirium.webp",
+      "bytes": 2876,
+      "seed": 696810648,
+      "classId": "warlock"
+    },
+    {
       "id": "feature-entropic-ward",
       "group": "feature",
       "key": "Entropic Ward",
@@ -17754,13 +17804,23 @@
       "classId": "warlock"
     },
     {
-      "id": "feature-tentacle-of-the-deep",
+      "id": "feature-tentacle-of-the-deeps",
       "group": "feature",
-      "key": "Tentacle of the Deep",
-      "label": "Tentacle of the Deep",
-      "src": "/assets/icons/feature/tentacle-of-the-deep.webp",
-      "bytes": 3084,
-      "seed": 674992243,
+      "key": "Tentacle of the Deeps",
+      "label": "Tentacle of the Deeps",
+      "src": "/assets/icons/feature/tentacle-of-the-deeps.webp",
+      "bytes": 3828,
+      "seed": 1438887936,
+      "classId": "warlock"
+    },
+    {
+      "id": "feature-grasping-tentacles",
+      "group": "feature",
+      "key": "Grasping Tentacles",
+      "label": "Grasping Tentacles",
+      "src": "/assets/icons/feature/grasping-tentacles.webp",
+      "bytes": 4000,
+      "seed": 662438357,
       "classId": "warlock"
     },
     {
@@ -17933,6 +17993,34 @@
       "classId": "sorcerer"
     },
     {
+      "id": "feature-lunar-embodiment-free-spell",
+      "group": "feature",
+      "key": "Lunar Embodiment free spell",
+      "label": "Lunar Embodiment free spell",
+      "src": "/assets/icons/feature/lunar-embodiment-free-spell.webp",
+      "bytes": 3240,
+      "seed": 1305604306
+    },
+    {
+      "id": "feature-lunar-boons",
+      "group": "feature",
+      "key": "Lunar Boons",
+      "label": "Lunar Boons",
+      "src": "/assets/icons/feature/lunar-boons.webp",
+      "bytes": 2020,
+      "seed": 1565159407,
+      "classId": "sorcerer"
+    },
+    {
+      "id": "feature-waxing-and-waning-castings",
+      "group": "feature",
+      "key": "Waxing and Waning castings",
+      "label": "Waxing and Waning castings",
+      "src": "/assets/icons/feature/waxing-and-waning-castings.webp",
+      "bytes": 3984,
+      "seed": 261915510
+    },
+    {
       "id": "feature-portent-dice",
       "group": "feature",
       "key": "Portent Dice",
@@ -17949,26 +18037,6 @@
       "src": "/assets/icons/feature/illusory-self.webp",
       "bytes": 2132,
       "seed": 454905582,
-      "classId": "wizard"
-    },
-    {
-      "id": "feature-instinctive-charm",
-      "group": "feature",
-      "key": "Instinctive Charm",
-      "label": "Instinctive Charm",
-      "src": "/assets/icons/feature/instinctive-charm.webp",
-      "bytes": 2876,
-      "seed": 33701069,
-      "classId": "wizard"
-    },
-    {
-      "id": "feature-hypnotic-gaze",
-      "group": "feature",
-      "key": "Hypnotic Gaze",
-      "label": "Hypnotic Gaze",
-      "src": "/assets/icons/feature/hypnotic-gaze.webp",
-      "bytes": 2062,
-      "seed": 1489801024,
       "classId": "wizard"
     },
     {
@@ -17990,6 +18058,25 @@
       "bytes": 3142,
       "seed": 47675517,
       "classId": "wizard"
+    },
+    {
+      "id": "feature-the-third-eye",
+      "group": "feature",
+      "key": "The Third Eye",
+      "label": "The Third Eye",
+      "src": "/assets/icons/feature/the-third-eye.webp",
+      "bytes": 2866,
+      "seed": 1630618444,
+      "classId": "wizard"
+    },
+    {
+      "id": "feature-power-surges",
+      "group": "feature",
+      "key": "Power Surges",
+      "label": "Power Surges",
+      "src": "/assets/icons/feature/power-surges.webp",
+      "bytes": 4436,
+      "seed": 365254780
     },
     {
       "id": "feature-bladesong",
@@ -18060,6 +18147,15 @@
       "bytes": 2404,
       "seed": 378888480,
       "classId": "wizard"
+    },
+    {
+      "id": "feature-manifest-mind-casting",
+      "group": "feature",
+      "key": "Manifest Mind casting",
+      "label": "Manifest Mind casting",
+      "src": "/assets/icons/feature/manifest-mind-casting.webp",
+      "bytes": 2054,
+      "seed": 1678104945
     },
     {
       "id": "feature-master-scrivener",
@@ -18180,6 +18276,15 @@
       "bytes": 2382,
       "seed": 351689859,
       "classId": "ranger"
+    },
+    {
+      "id": "feature-reflexive-resistance",
+      "group": "feature",
+      "key": "Reflexive Resistance",
+      "label": "Reflexive Resistance",
+      "src": "/assets/icons/feature/reflexive-resistance.webp",
+      "bytes": 2968,
+      "seed": 1273839371
     },
     {
       "id": "feature-wails-from-the-grave",
@@ -18394,16 +18499,6 @@
       "classId": "artificer"
     },
     {
-      "id": "feature-eldritch-cannon",
-      "group": "feature",
-      "key": "Eldritch Cannon",
-      "label": "Eldritch Cannon",
-      "src": "/assets/icons/feature/eldritch-cannon.webp",
-      "bytes": 2876,
-      "seed": 720770962,
-      "classId": "artificer"
-    },
-    {
       "id": "feature-arcane-jolt",
       "group": "feature",
       "key": "Arcane Jolt",
@@ -18603,6 +18698,26 @@
       "classId": "paladin"
     },
     {
+      "id": "feature-elk-trample",
+      "group": "feature",
+      "key": "Elk Trample",
+      "label": "Elk Trample",
+      "src": "/assets/icons/feature/elk-trample.webp",
+      "bytes": 3498,
+      "seed": 775127484,
+      "classId": "barbarian"
+    },
+    {
+      "id": "feature-wolf-takedown",
+      "group": "feature",
+      "key": "Wolf Takedown",
+      "label": "Wolf Takedown",
+      "src": "/assets/icons/feature/wolf-takedown.webp",
+      "bytes": 4198,
+      "seed": 276564241,
+      "classId": "barbarian"
+    },
+    {
       "id": "feature-spirit-shield",
       "group": "feature",
       "key": "Spirit Shield",
@@ -18650,16 +18765,6 @@
       "src": "/assets/icons/feature/mighty-impel.webp",
       "bytes": 1768,
       "seed": 1954581068,
-      "classId": "barbarian"
-    },
-    {
-      "id": "feature-elemental-fury",
-      "group": "feature",
-      "key": "Elemental Fury",
-      "label": "Elemental Fury",
-      "src": "/assets/icons/feature/elemental-fury.webp",
-      "bytes": 2998,
-      "seed": 1528379804,
       "classId": "barbarian"
     },
     {
@@ -18803,6 +18908,16 @@
       "classId": "fighter"
     },
     {
+      "id": "feature-psionic-recovery",
+      "group": "feature",
+      "key": "Psionic Recovery",
+      "label": "Psionic Recovery",
+      "src": "/assets/icons/feature/psionic-recovery.webp",
+      "bytes": 4058,
+      "seed": 2013865908,
+      "classId": "fighter"
+    },
+    {
       "id": "feature-protective-field",
       "group": "feature",
       "key": "Protective Field",
@@ -18873,13 +18988,13 @@
       "classId": "monk"
     },
     {
-      "id": "feature-path-of-the-kensei",
+      "id": "feature-agile-parry",
       "group": "feature",
-      "key": "Path of the Kensei",
-      "label": "Path of the Kensei",
-      "src": "/assets/icons/feature/path-of-the-kensei.webp",
-      "bytes": 3106,
-      "seed": 604350886,
+      "key": "Agile Parry",
+      "label": "Agile Parry",
+      "src": "/assets/icons/feature/agile-parry.webp",
+      "bytes": 3776,
+      "seed": 204308719,
       "classId": "monk"
     },
     {
@@ -18973,13 +19088,13 @@
       "classId": "monk"
     },
     {
-      "id": "feature-ascendant-aspect",
+      "id": "feature-explosive-fury",
       "group": "feature",
-      "key": "Ascendant Aspect",
-      "label": "Ascendant Aspect",
-      "src": "/assets/icons/feature/ascendant-aspect.webp",
-      "bytes": 2612,
-      "seed": 2043440279,
+      "key": "Explosive Fury",
+      "label": "Explosive Fury",
+      "src": "/assets/icons/feature/explosive-fury.webp",
+      "bytes": 3816,
+      "seed": 2056323635,
       "classId": "monk"
     },
     {
@@ -19010,6 +19125,16 @@
       "src": "/assets/icons/feature/aura-of-the-guardian.webp",
       "bytes": 3162,
       "seed": 2097593352,
+      "classId": "paladin"
+    },
+    {
+      "id": "feature-living-legend-reroll",
+      "group": "feature",
+      "key": "Living Legend Reroll",
+      "label": "Living Legend Reroll",
+      "src": "/assets/icons/feature/living-legend-reroll.webp",
+      "bytes": 7262,
+      "seed": 1598162118,
       "classId": "paladin"
     },
     {
@@ -19253,6 +19378,26 @@
       "classId": "warlock"
     },
     {
+      "id": "feature-armor-of-hexes",
+      "group": "feature",
+      "key": "Armor of Hexes",
+      "label": "Armor of Hexes",
+      "src": "/assets/icons/feature/armor-of-hexes.webp",
+      "bytes": 2596,
+      "seed": 493037127,
+      "classId": "warlock"
+    },
+    {
+      "id": "feature-master-of-hexes",
+      "group": "feature",
+      "key": "Master of Hexes",
+      "label": "Master of Hexes",
+      "src": "/assets/icons/feature/master-of-hexes.webp",
+      "bytes": 1526,
+      "seed": 1182034625,
+      "classId": "warlock"
+    },
+    {
       "id": "feature-projected-ward",
       "group": "feature",
       "key": "Projected Ward",
@@ -19260,6 +19405,26 @@
       "src": "/assets/icons/feature/projected-ward.webp",
       "bytes": 4962,
       "seed": 2030802225,
+      "classId": "wizard"
+    },
+    {
+      "id": "feature-hypnotic-gaze",
+      "group": "feature",
+      "key": "Hypnotic Gaze",
+      "label": "Hypnotic Gaze",
+      "src": "/assets/icons/feature/hypnotic-gaze.webp",
+      "bytes": 2062,
+      "seed": 1489801024,
+      "classId": "wizard"
+    },
+    {
+      "id": "feature-instinctive-charm",
+      "group": "feature",
+      "key": "Instinctive Charm",
+      "label": "Instinctive Charm",
+      "src": "/assets/icons/feature/instinctive-charm.webp",
+      "bytes": 2876,
+      "seed": 33701069,
       "classId": "wizard"
     },
     {
@@ -19321,6 +19486,76 @@
       "bytes": 3256,
       "seed": 94307925,
       "classId": "artificer"
+    },
+    {
+      "id": "feature-ferocious-charger",
+      "group": "feature",
+      "key": "Ferocious Charger",
+      "label": "Ferocious Charger",
+      "src": "/assets/icons/feature/ferocious-charger.webp",
+      "bytes": 2898,
+      "seed": 1247240132,
+      "classId": "fighter"
+    },
+    {
+      "id": "feature-psionic-strike",
+      "group": "feature",
+      "key": "Psionic Strike",
+      "label": "Psionic Strike",
+      "src": "/assets/icons/feature/psionic-strike.webp",
+      "bytes": 2700,
+      "seed": 276140742,
+      "classId": "fighter"
+    },
+    {
+      "id": "feature-hour-of-reaping",
+      "group": "feature",
+      "key": "Hour of Reaping",
+      "label": "Hour of Reaping",
+      "src": "/assets/icons/feature/hour-of-reaping.webp",
+      "bytes": 5012,
+      "seed": 1242649062,
+      "classId": "monk"
+    },
+    {
+      "id": "feature-hand-of-healing",
+      "group": "feature",
+      "key": "Hand of Healing",
+      "label": "Hand of Healing",
+      "src": "/assets/icons/feature/hand-of-healing.webp",
+      "bytes": 3486,
+      "seed": 1625947743,
+      "classId": "monk"
+    },
+    {
+      "id": "feature-hand-of-harm",
+      "group": "feature",
+      "key": "Hand of Harm",
+      "label": "Hand of Harm",
+      "src": "/assets/icons/feature/hand-of-harm.webp",
+      "bytes": 4132,
+      "seed": 1776072699,
+      "classId": "monk"
+    },
+    {
+      "id": "feature-revelation-in-flesh",
+      "group": "feature",
+      "key": "Revelation in Flesh",
+      "label": "Revelation in Flesh",
+      "src": "/assets/icons/feature/revelation-in-flesh.webp",
+      "bytes": 3750,
+      "seed": 1781313261,
+      "classId": "sorcerer"
+    },
+    {
+      "id": "feature-command-undead",
+      "group": "feature",
+      "key": "Command Undead",
+      "label": "Command Undead",
+      "src": "/assets/icons/feature/command-undead.webp",
+      "bytes": 2662,
+      "seed": 1231103530,
+      "classId": "wizard"
     },
     {
       "id": "feature-flurry-of-blows",

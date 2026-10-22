@@ -82,6 +82,12 @@ export function planMarks(input: {
   return plan;
 }
 
+// The critical range a mark this attack rides gives against its creature
+// (Hexblade's Curse: 19), or 20.
+export function markCritRange(applies: Set<string>): number {
+  return Math.min(20, ...[...applies].map((condition) => conditionEffectsFor(condition)?.critRangeVsMarked ?? 20));
+}
+
 // Writes the marks an attack placed or moved.
 export function writeMarks(campaignId: string, sheetId: string, assign: MarkPlan["assign"]) {
   if (!assign.length) {

@@ -170,7 +170,8 @@ export const SRD_CLASSES = {
     subclass: {
       name: "Circle of the Land",
       features: {
-        2: ["Bonus Cantrip", "Natural Recovery"], 3: ["Circle Spells"], 6: ["Land's Stride"],
+        // Circle Spells is a 2nd-level feature; its spells begin at 3rd.
+        2: ["Bonus Cantrip", "Natural Recovery", "Circle Spells"], 6: ["Land's Stride"],
         10: ["Nature's Ward"], 14: ["Nature's Sanctuary"],
       },
     },

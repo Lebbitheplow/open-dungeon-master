@@ -25,6 +25,8 @@ import { textKey } from "@/lib/language/text-logic";
 import { nameChoice } from "@/lib/srd/feature-names";
 import { favoredEnemies } from "@/lib/srd/check-traits";
 import { sameRulesKey } from "@/lib/srd/name-forms";
+import { activeAuthored } from "@/lib/srd/authored-effects";
+import { ABILITY_NAMES } from "@/lib/srd/legality/types";
 
 type Sheet = Pick<CharacterSheet, "name" | "class" | "level" | "classes" | "features" | "feats" | "conditions" | "resources" | "spellcasting">;
 
@@ -130,6 +132,36 @@ const SHILLELAGH_WEAPONS = new Set(["club", "quarterstaff"]);
 // the spell does not touch this attack: the base weapon's die becomes a d8
 // (a quarterstaff's two-handed d8 stays one), and the spellcasting ability
 // stands in for Strength when it is better.
+// Hex Warrior (Hexblade 1): the weapon the warlock bound at the end of a
+// long rest ("Hex Warrior (Longsword)") swings with Charisma when it is the
+// better modifier, for its attack and damage rolls alike.
+export function hexWarriorSwing(
+  sheet: Sheet & { features: Array<{ name: string; classId?: string; source?: string }> },
+  resolved: ResolvedWeapon,
+  derived: SheetDerived,
+): { derived: SheetDerived; note: string } | null {
+  const srd = resolved.srd;
+  if (!srd) {
+    return null;
+  }
+  for (const { effect, held } of activeAuthored(sheet, "weapon_ability")) {
+    // Battle Ready: any magic weapon. Hex Warrior: the weapon its option names.
+    const fits = effect.magicOnly ? Boolean(resolved.gear) : Boolean(held.choice) && textKey(held.choice ?? "") === textKey(srd.name);
+    if (!fits) {
+      continue;
+    }
+    const mod = derived.abilityMods[effect.ability];
+    if (mod <= Math.max(derived.abilityMods.str, derived.abilityMods.dex)) {
+      return null;
+    }
+    return {
+      derived: { ...derived, abilityMods: { ...derived.abilityMods, str: mod, dex: mod } },
+      note: `${held.feature}: ${srd.name} swings with ${ABILITY_NAMES[effect.ability] ?? effect.ability}`,
+    };
+  }
+  return null;
+}
+
 export function shillelaghSwing(
   sheet: Sheet,
   resolved: ResolvedWeapon,

@@ -13,38 +13,70 @@
 import type { AuthoredEntry } from "@/lib/srd/authored-effects-types";
 
 const RAGING = { raging: true } as const;
+const TOTEMS = ["Bear", "Eagle", "Elk", "Tiger", "Wolf"];
+// Elemental Cleaver's elements: the option name and its damage type.
+const ELEMENTS: Array<[string, string]> = [["Acid", "acid"], ["Cold", "cold"], ["Fire", "fire"], ["Lightning", "lightning"], ["Thunder", "thunder"]];
 const STORM_DAMAGE: Array<[number, string]> = [[3, "2"], [5, "3"], [10, "4"], [15, "5"], [20, "6"]];
 
 export const AUTHORED_DATA_A: Record<string, AuthoredEntry> = {
   // ---- barbarian ----
   "barbarian::Totem Spirit": {
     subclass: "Path of the Totem Warrior",
-    spends: [{ name: "Totem Spirit", fight: "out", does: { kind: "choose", options: ["Bear", "Eagle", "Wolf"] } }],
+    spends: [{ name: "Totem Spirit", fight: "out", does: { kind: "choose", options: TOTEMS } }],
     effects: [
       { kind: "resist", types: "all", except: ["psychic"], gate: { ...RAGING, choice: "bear" } },
       { kind: "bonus_route", action: "dash", gate: { ...RAGING, choice: "eagle" } },
+      { kind: "oa_disadv", gate: { ...RAGING, choice: "eagle" } },
+      { kind: "speed", amount: 15, gate: { ...RAGING, choice: "elk" } },
       { kind: "pack_adv", rangeFt: 5, gate: { ...RAGING, choice: "wolf" } },
     ],
   },
   "barbarian::Aspect of the Beast": {
     subclass: "Path of the Totem Warrior",
-    spends: [{ name: "Aspect of the Beast", fight: "out", does: { kind: "choose", options: ["Bear", "Eagle", "Wolf"] } }],
+    spends: [{ name: "Aspect of the Beast", fight: "out", does: { kind: "choose", options: TOTEMS } }],
     effects: [
       {
         kind: "check_adv",
         abilities: ["str"],
         about: "push_pull_lift_break",
         gate: { choice: "bear" },
-        note: "Eagle's sight and Wolf's tracking pace are narrated.",
+        note: "Eagle's sight, Elk's travel pace and Wolf's tracking pace are narrated; Tiger's two skills are picked with the subclass's training (subclass-training.ts).",
       },
     ],
   },
   "barbarian::Totemic Attunement": {
     subclass: "Path of the Totem Warrior",
-    spends: [{ name: "Totemic Attunement", fight: "out", does: { kind: "choose", options: ["Bear", "Eagle", "Wolf"] } }],
+    spends: [
+      { name: "Totemic Attunement", fight: "out", does: { kind: "choose", options: TOTEMS } },
+      // Elk: a bonus action during the move, through a Large or smaller
+      // creature's space: STR save (8 + proficiency + Strength) or prone and
+      // 1d12 + Strength bludgeoning.
+      {
+        name: "Elk Trample",
+        aliases: ["Totemic Attunement Elk"],
+        action: "bonus",
+        gate: { ...RAGING, choice: "elk" },
+        does: { kind: "save_effect", save: "str", dcAbility: "str", dice: "1d12+str", type: "bludgeoning", condition: "prone", rangeFt: 5 },
+      },
+      // Wolf: a bonus action after a melee weapon hit knocks a Large or
+      // smaller creature prone.
+      {
+        name: "Wolf Takedown",
+        aliases: ["Totemic Attunement Wolf"],
+        action: "bonus",
+        gate: { ...RAGING, choice: "wolf" },
+        does: { kind: "note", text: "The Large or smaller creature the barbarian hit with a melee weapon attack this turn is knocked prone (set_condition prone)." },
+      },
+    ],
     effects: [
       { kind: "guard_aura", rangeFt: 5, gate: { ...RAGING, choice: "bear" } },
-      { kind: "move", fly: "walk", gate: { ...RAGING, choice: "eagle" }, note: "Wolf's bonus-action knockdown is narrated." },
+      { kind: "move", fly: "walk", gate: { ...RAGING, choice: "eagle" }, note: "Falling at the end of the turn with nothing holding the barbarian up is the DM's to hold." },
+      {
+        kind: "bonus_attack",
+        after: "attack",
+        gate: { ...RAGING, choice: "tiger" },
+        note: "Only after moving at least 20 feet straight toward a Large or smaller target; the DM keeps to that.",
+      },
     ],
   },
   "barbarian::Ancestral Protectors": {
@@ -59,13 +91,33 @@ export const AUTHORED_DATA_A: Record<string, AuthoredEntry> = {
       {
         name: "Spirit Shield",
         gate: RAGING,
-        does: { kind: "reduce", amount: [[6, "2d6"], [10, "3d6"], [14, "4d6"]], who: "ally", rangeFt: 30 },
+        does: {
+          kind: "reduce",
+          amount: [[6, "2d6"], [10, "3d6"], [14, "4d6"]],
+          who: "ally",
+          rangeFt: 30,
+          reflect: { feature: "Vengeful Ancestors", type: "force" },
+        },
       },
     ],
   },
   "barbarian::Storm Aura": {
     subclass: "Path of the Storm Herald",
-    spends: [{ name: "Storm Aura", action: "bonus", gate: RAGING, does: { kind: "storm_aura" } }],
+    spends: [
+      // The environment, chosen once and changed at a new level: "Storm Aura
+      // (Desert)", read by the aura, Storm Soul and Raging Storm.
+      { name: "Storm Environment", aliases: ["Storm Aura environment"], fight: "out", does: { kind: "choose", options: ["Desert", "Sea", "Tundra"] } },
+      { name: "Storm Aura", action: "bonus", gate: RAGING, does: { kind: "storm_aura" } },
+    ],
+  },
+  "barbarian::Storm Soul": {
+    subclass: "Path of the Storm Herald",
+    effects: [
+      { kind: "resist", types: ["fire"], gate: { choiceOf: { feature: "Storm Aura", value: "desert" } } },
+      { kind: "resist", types: ["lightning"], gate: { choiceOf: { feature: "Storm Aura", value: "sea" } } },
+      { kind: "move", swim: 30, gate: { choiceOf: { feature: "Storm Aura", value: "sea" } }, note: "Breathing underwater is narrated." },
+      { kind: "resist", types: ["cold"], gate: { choiceOf: { feature: "Storm Aura", value: "tundra" } }, note: "Shrugging off extreme heat or cold, lighting objects and freezing water are narrated." },
+    ],
   },
   "barbarian::Shielding Storm": {
     subclass: "Path of the Storm Herald",
@@ -77,22 +129,30 @@ export const AUTHORED_DATA_A: Record<string, AuthoredEntry> = {
       },
     ],
   },
+  // Desert: a reaction right after a creature in the aura hits the barbarian,
+  // DEX save or fire equal to half the barbarian level. Sea: a reaction on
+  // hitting a creature in the aura, STR save or prone. Tundra rides the
+  // aura's own activation (Storm Aura with targetEnemyId, src/lib/dm/
+  // authored-spend-effects.ts), STR save or speed 0.
   "barbarian::Raging Storm": {
     subclass: "Path of the Storm Herald",
-    effects: [
-      { kind: "retaliate", formula: (level) => Math.floor(level / 2), type: "fire", gate: { ...RAGING, condition: "storm aura (desert)" } },
-    ],
     reactions: [
       {
         name: "Raging Storm",
-        gate: RAGING,
+        gate: { ...RAGING, condition: "storm aura (desert)" },
         does: {
-          kind: "save_condition",
-          save: "str",
-          dcAbility: "con",
-          condition: "prone",
-          variants: { sea: "prone", tundra: "raging storm (tundra)" },
+          kind: "strike_back",
+          amount: (level) => Math.floor(level / 2),
+          type: "fire",
+          melee: false,
+          rangeFt: 10,
+          save: { ability: "dex", dcAbility: "con" },
         },
+      },
+      {
+        name: "Raging Storm",
+        gate: { ...RAGING, condition: "storm aura (sea)" },
+        does: { kind: "save_condition", save: "str", dcAbility: "con", condition: "prone" },
       },
     ],
   },
@@ -122,6 +182,39 @@ export const AUTHORED_DATA_A: Record<string, AuthoredEntry> = {
     narrated:
       "Rerolls the Wild Surge table, whose effects are narrated; use_reaction spends the reaction from the sheet's feature.",
   },
+  // Bigby Presents: Giant's Power and Giant's Havoc at 3rd, Elemental Cleaver
+  // at 6th, Mighty Impel at 10th, Demiurgic Colossus at 14th. Giant's Power's
+  // cantrip is the option chosen; a barbarian keeps no spell list, so the
+  // feature's name carries it, as a non-caster's racial cantrip does.
+  "barbarian::Giant's Power": {
+    subclass: "Path of the Giant",
+    spends: [{ name: "Giant's Power Cantrip", aliases: ["Giant's Power"], fight: "out", does: { kind: "choose", options: ["Druidcraft", "Thaumaturgy"] } }],
+  },
+  "barbarian::Giant's Havoc": {
+    subclass: "Path of the Giant",
+    effects: [
+      {
+        kind: "reach",
+        tiles: 1,
+        gate: RAGING,
+        note: "Crushing Throw's Rage damage on a Strength thrown hit, and growing Large, are the DM's to add.",
+      },
+    ],
+  },
+  "barbarian::Elemental Cleaver": {
+    subclass: "Path of the Giant",
+    // Chosen on entering the rage, and changed with a bonus action in it.
+    spends: [{ name: "Elemental Cleaver", does: { kind: "choose", options: ELEMENTS.map(([name]) => name) } }],
+    effects: ELEMENTS.map(([name, type]) => ({
+      kind: "rider" as const,
+      dice: [[6, "1d6"], [14, "2d6"]] as Array<[number, string]>,
+      type,
+      when: "weapon" as const,
+      requiresCondition: "raging",
+      gate: { choice: name },
+      note: "The infused weapon's own damage turns to the element too, and it gains thrown (20/60); a bonus action changes the element.",
+    })),
+  },
   "barbarian::Mighty Impel": {
     subclass: "Path of the Giant",
     spends: [
@@ -134,7 +227,8 @@ export const AUTHORED_DATA_A: Record<string, AuthoredEntry> = {
           save: "str",
           dcAbility: "str",
           rangeFt: 10,
-          onFail: "is hurled up to 30 feet through the air: move its token with move_token (forced)",
+          onFail:
+            "is moved to an unoccupied space the barbarian can see within 30 feet of them: move its token with move_token (forced). It must be Medium or smaller (Large or smaller from 14th level), and one left in the air falls and lands prone",
         },
       },
     ],
@@ -144,28 +238,9 @@ export const AUTHORED_DATA_A: Record<string, AuthoredEntry> = {
     effects: [
       {
         kind: "reach",
-        tiles: 1,
+        tiles: 2,
         gate: RAGING,
-        note: "Growing Large, and Elemental Cleaver's doubled throw and extra 1d10, ride the Elemental Cleaver weapon the DM tracks.",
-      },
-    ],
-  },
-  "barbarian::Elemental Fury": {
-    subclass: "Path of the Giant",
-    spends: [
-      {
-        name: "Elemental Fury",
-        gate: RAGING,
-        oncePerTurn: true,
-        does: {
-          kind: "save_effect",
-          save: "con",
-          dcAbility: "con",
-          dice: "3d8",
-          type: "thunder",
-          typeFromVariant: ["acid", "cold", "fire", "lightning", "thunder"],
-          rangeFt: 10,
-        },
+        note: "Growing Large or Huge is the DM's to place; Elemental Cleaver's 2d6 is its own rider.",
       },
     ],
   },
@@ -275,10 +350,16 @@ export const AUTHORED_DATA_A: Record<string, AuthoredEntry> = {
     subclass: "Death Domain",
     effects: [{ kind: "ignore_resist", types: ["necrotic"] }],
   },
+  // cast_at_enemy secondTargetEnemyId (src/lib/dm/authored-reaper.ts): a
+  // necromancy cantrip from 1st level, a 1st to 5th level necromancy spell
+  // from 17th, at no further cost.
+  "cleric::Reaper": {
+    subclass: "Death Domain",
+    effects: [{ kind: "twin_spell", school: "necromancy", minLevel: 0, maxLevel: 0, note: "The necromancy cantrip it teaches is picked with the cleric's cantrips." }],
+  },
   "cleric::Improved Reaper": {
     subclass: "Death Domain",
-    // cast_at_enemy secondTargetEnemyId (src/lib/dm/authored-reaper.ts).
-    effects: [{ kind: "twin_spell", school: "necromancy", maxLevel: 5, costPerLevel: "1d8" }],
+    effects: [{ kind: "twin_spell", school: "necromancy", minLevel: 1, maxLevel: 5 }],
   },
   "cleric::Blessing of the Forge": {
     subclass: "Forge Domain",
@@ -332,9 +413,43 @@ export const AUTHORED_DATA_A: Record<string, AuthoredEntry> = {
       { kind: "mark", condition: "order's wrath", effect: "ally_bonus_dice", oncePerTurn: true, dice: "2d8", damageType: "psychic" },
     ],
   },
+  "cleric::Emboldening Bond": {
+    subclass: "Peace Domain",
+    counter: "sub_emboldening_bond",
+    spends: [
+      {
+        name: "Emboldening Bond",
+        pool: { id: "sub_emboldening_bond" },
+        action: "action",
+        does: {
+          kind: "buff",
+          target: "allies",
+          condition: "emboldening bond",
+          rounds: 100,
+          rangeFt: 30,
+          // The cleric and one fewer than their proficiency bonus of others.
+          count: (level) => 1 + Math.floor((Math.max(1, Math.min(20, level)) - 1) / 4),
+        },
+      },
+    ],
+  },
+  // Range 30 feet, 60 with Expansive Bond (17th), which also gives the
+  // creature taking the damage resistance to it.
   "cleric::Protective Bond": {
     subclass: "Peace Domain",
-    reactions: [{ name: "Protective Bond", usedBy: "party", does: { kind: "take_for_ally", rangeFt: 60 } }],
+    reactions: [
+      {
+        name: "Protective Bond",
+        usedBy: "party",
+        does: { kind: "take_for_ally", rangeFt: [[6, 30], [17, 60]], resistFrom: 17 },
+      },
+    ],
+  },
+  "cleric::Expansive Bond": {
+    subclass: "Peace Domain",
+    // Protective Bond's 60-foot reach and the resistance to what it takes
+    // from 17th level (its reaction's rangeFt ladder and resistFrom).
+    heldBy: { file: "src/lib/dm/authored-reactions.ts", call: "resistFrom" },
   },
   "cleric::Vigilant Blessing": {
     subclass: "Twilight Domain",

@@ -6,7 +6,6 @@ import { cn } from "@/lib/cn";
 import { describeSkill } from "@/lib/help";
 import { SRD_SKILLS } from "@/lib/srd";
 import { expertiseAllowed, expertiseSlotsFor, THIEVES_TOOLS } from "@/lib/srd/features";
-import { FIGHTING_STYLES } from "@/lib/srd/feature-effects";
 import type { ClassOption } from "../useBuilderOptions";
 import type { BuilderActions, BuilderDerived } from "../useBuilderDerived";
 import type { BuilderState } from "../useBuilderState";
@@ -35,7 +34,7 @@ export function ClassChoices({
   actions: BuilderActions;
   klass: ClassOption | undefined;
 }) {
-  const { effectiveLevel, proficientSkills, styleSlots, optionSlots, toolGrants } = derived;
+  const { effectiveLevel, proficientSkills, styleSlots, styleChoices, optionSlots, toolGrants } = derived;
   const expertiseSlots = klass ? expertiseSlotsFor(klass.id, effectiveLevel) : 0;
   // Only picks in a skill the character still has count: dropping a class
   // skill takes its expertise with it, here and in the step's gate.
@@ -164,7 +163,7 @@ export function ClassChoices({
           }
         >
           <div className="grid gap-1.5 sm:grid-cols-2">
-            {FIGHTING_STYLES.map((style) => {
+            {styleChoices.map((style) => {
               const selected = state.stylePicks.includes(style.id);
               return (
                 <button

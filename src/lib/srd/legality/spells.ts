@@ -20,6 +20,7 @@ import {
   dedupeNames,
   grantedSpellsOf,
   maxSpellLevelOf,
+  onWiderList,
   spellListProblems,
   spellbookOf,
   withCasterViews,
@@ -149,7 +150,8 @@ export function spellNameProblems(view: CasterView, list: string, rules: NameRul
       }
       return;
     }
-    if (!lists.includes(list)) {
+    // A patron's expanded list and a Divine Soul's cleric list widen it.
+    if (!lists.includes(list) && !onWiderList(view, spell)) {
       problems.push(`${spell.name} is not on the ${list} spell list, so a ${labelOf(view)} cannot learn or prepare it.`);
       return;
     }

@@ -25,6 +25,8 @@ import { computeSheetDerived } from "@/lib/srd";
 import { matchResource } from "@/lib/srd/class-resources";
 import { classLevelOf, holdsFeature } from "@/lib/srd/trait-rules";
 import { effectiveMaxHp, incapacitatedBy, removeConditions, type ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { activeAuthored } from "@/lib/srd/authored-effects";
+import { withinFeet } from "@/lib/dm/authored-saves";
 import { rollFeatureSave } from "@/lib/dm/contest-roll";
 import { healDeathHook } from "@/lib/dm/death";
 import { applyEnemyDamage, publishEncounter } from "@/lib/dm/enemy-damage";
@@ -419,8 +421,9 @@ function indomitable(campaign: Campaign, sheet: CharacterSheet): Resolution {
   const dc = failed.dc!;
   const against = /\bvs\.? (.+)$/i.exec(failed.detail)?.[1];
   const save = rollFeatureSave(campaign, sheet, ability, dc, "Indomitable reroll", against);
+  const bulwark = bulwarkReroll(campaign, sheet, ability, dc, against);
   if (!save.success) {
-    return { result: { indomitable: `The reroll fails too (${ability.toUpperCase()} ${save.total ?? "failed"} vs DC ${dc}); the failure stands.` } };
+    return { result: { indomitable: `The reroll fails too (${ability.toUpperCase()} ${save.total ?? "failed"} vs DC ${dc}); the failure stands.`, ...bulwark } };
   }
   const now = getSheetById(sheet.id) ?? sheet;
   const meta = now.conditionMeta as ConditionMetaMap;
@@ -435,6 +438,43 @@ function indomitable(campaign: Campaign, sheet: CharacterSheet): Resolution {
       indomitable: `The reroll succeeds (${ability.toUpperCase()} ${save.total} vs DC ${dc})${
         lifted.length ? `: ${lifted.join(", ")} no longer holds them` : ""
       }.`,
+      ...bulwark,
     },
   };
+}
+
+// Bulwark (Banneret 18): with an Intelligence, Wisdom or Charisma save
+// rerolled and the fighter not incapacitated, one ally in range that failed
+// the same save rerolls it too, and an effect that save ends lets go.
+function bulwarkReroll(campaign: Campaign, sheet: CharacterSheet, ability: Ability, dc: number, against: string | undefined): { bulwark?: string } {
+  const held = activeAuthored(sheet, "indomitable_ally")[0];
+  if (!held || !["int", "wis", "cha"].includes(ability) || incapacitatedBy(sheet.conditions)) {
+    return {};
+  }
+  const encounter = getActiveEncounter(campaign.id);
+  const failed = listRecentRolls(campaign.id, 60).find((roll) => {
+    if (roll.characterId === sheet.id || roll.kind !== "saving_throw" || roll.dc !== dc || roll.total >= dc) {
+      return false;
+    }
+    const rolledAbility = (/\b(str|dex|con|int|wis|cha)\b/i.exec(roll.detail)?.[1] ?? "").toLowerCase();
+    return rolledAbility === ability && (!encounter || withinFeet(encounter.id, sheet.id, roll.characterId ?? "", held.effect.rangeFt));
+  });
+  const ally = failed?.characterId ? getSheetById(failed.characterId) : null;
+  if (!ally || ally.campaignId !== campaign.id) {
+    return {};
+  }
+  const save = rollFeatureSave(campaign, ally, ability, dc, "Bulwark reroll", against);
+  if (!save.success) {
+    return { bulwark: `Bulwark: ${ally.name} rerolls too and fails again (${save.total ?? "failed"} vs DC ${dc}).` };
+  }
+  const meta = ally.conditionMeta as ConditionMetaMap;
+  const lifted = ally.conditions.filter((name) => meta[name]?.saveEnds?.ability === ability && meta[name]?.saveEnds?.dc === dc);
+  if (lifted.length) {
+    const cleared = removeConditions(ally.conditions, ally.conditionMeta, lifted);
+    const updated = patchSheet(ally.id, { conditions: cleared.conditions, conditionMeta: cleared.meta });
+    if (updated) {
+      publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
+    }
+  }
+  return { bulwark: `Bulwark: ${ally.name} rerolls and succeeds (${save.total} vs DC ${dc})${lifted.length ? `: ${lifted.join(", ")} no longer holds them` : ""}.` };
 }

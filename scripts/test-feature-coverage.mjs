@@ -260,6 +260,10 @@ test("every authored subclass feature is enforced, a resource, or carries rules 
 // or a parsed feature-effects entry), a counter, or on the narrated list
 // with the reason written down. A NEW authored feature with mechanical
 // wording and none of these fails here.
+// Issue 474's line: the narrated authored features once its wider words
+// (damage, initiative, senses, cantrips) were read. Lower it as they get hooks.
+const NARRATED_CEILING = 89;
+
 await (async () => {
   const { authoredCoverage } = await import("../src/lib/srd/authored-coverage.ts");
   const coverage = authoredCoverage();
@@ -269,14 +273,20 @@ await (async () => {
     const thin = coverage.narrated.filter((entry) => entry.reason.trim().length < 20).map((entry) => entry.key);
     assert.deepEqual(thin, [], "a narrated authored feature says why in a sentence");
   });
-  test("the authored narrated list holds the line: it may shrink, never grow", () => {
+  test("the authored narrated list holds the line: it may shrink, never grow", async () => {
+    const { MECHANICAL_FIRST } = await import("../src/lib/srd/authored-coverage.ts");
     // 2026-09-30: 33 narrated (8 pure roleplay or information, 6 companions
     // and summons the DM fields, 19 waiting on another engine; see
     // /tmp/odm-enf2/fixes/authored.md). The final round gave the 17 waiting
     // features their hooks (/tmp/odm-enf2/fixes/final-engine.md): 15 left,
     // 8 roleplay, 6 companions, Unstable Backlash's narrated table. Lower
     // this number as they get hooks.
-    assert.ok(coverage.narrated.length <= 15, `${coverage.narrated.length} narrated authored features; the ceiling is 15`);
+    const first = coverage.narrated.filter((entry) => MECHANICAL_FIRST.test(entry.text));
+    assert.ok(first.length <= 15, `${first.length} narrated authored features under the first audit's words; the ceiling is 15`);
+    // Issue 474 widened the words a mechanical line is read by (damage,
+    // initiative, senses, cantrips) and gave every feature they caught a
+    // hook, training, or a written reason. Its own line, held the same way.
+    assert.ok(coverage.narrated.length <= NARRATED_CEILING, `${coverage.narrated.length} narrated authored features; the ceiling is ${NARRATED_CEILING}`);
   });
 })();
 
@@ -438,6 +448,15 @@ test("a counter with mechanical wording carries a typed effect or is deliberatel
     // Its 2d12 per spell level is rolled by the cast itself, not by a
     // use_resource fx (src/lib/dm/caster-features.ts payOverchannel).
     "overchannel",
+    // Issue 474's fuller guidance. The Dancing Item and the drake are
+    // creatures of their own (the drake's bite is pet_attack's); Grasping
+    // Tentacles' temporary hit points are the cast's (authored-spells.ts
+    // castTempHp); Limited Wish's 1d4 is the long rests before it returns
+    // (resource-tools.ts recoveryMarker); an elixir is drunk, its d6 rolled
+    // and its healing given by the heal tools; Lunar Phenomenon's burst is
+    // aoe_damage and heal at the phase the sorcerer holds.
+    "sub_animating_performance", "sub_drake_companion", "sub_grasping_tentacles",
+    "sub_limited_wish", "art_experimental_elixir", "sub_lunar_phenomenon",
   ]);
   const mechanical = /(\d+d\d+)|regains? \d|temporary hit points|teleport[^.]{0,30}\d+ ?(?:ft|feet)/i;
   // A counter an authored spend or reaction draws on is executed there

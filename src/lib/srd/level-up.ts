@@ -29,7 +29,7 @@ import type {
 import { ABILITIES } from "@/lib/schemas/sheet";
 import { XP_THRESHOLDS, findSkill, levelForXp } from "@/lib/srd";
 import { ABILITY_SCORE_CAP, applyAsiChoices, earnedAsiCountFor } from "@/lib/srd/asi";
-import { applySubclassTraining, autoSubclassPicks, subclassGrants } from "@/lib/srd/subclass-training";
+import { applySubclassTraining, autoSubclassPicks, grantsForHeldTraining, subclassGrants } from "@/lib/srd/subclass-training";
 import type { SubclassExtras } from "@/lib/srd/subclass-tables";
 import { asiTaken, withAsiLedger } from "@/lib/srd/asi-ledger";
 import { applyFeatIncrease, featSaveProficiency, featsAsRun } from "@/lib/srd/feat-effects";
@@ -426,8 +426,9 @@ export function buildLevelUp(
   const trainedBefore = new Set(
     subclassGrants(before, context.subclassExtras).map((grant) => `${grant.classId}|${textKey(grant.name)}`),
   );
-  const freshTraining = subclassGrants(classes, context.subclassExtras).filter(
-    (grant) => !trainedBefore.has(`${grant.classId}|${textKey(grant.name)}`),
+  const freshTraining = grantsForHeldTraining(
+    subclassGrants(classes, context.subclassExtras).filter((grant) => !trainedBefore.has(`${grant.classId}|${textKey(grant.name)}`)),
+    proficiencies,
   );
   const trainingChoices = context.autoPicks
     ? autoSubclassPicks(freshTraining, proficiencies, request.featChoices)

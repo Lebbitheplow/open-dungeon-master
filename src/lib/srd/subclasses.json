@@ -1,6 +1,6 @@
 {
   "_license": "Original content for Open Dungeon Master. These tables describe the mechanics of widely played 5e class options in our own wording; no publisher's descriptive text is reproduced. Game mechanics are not copyrightable, expression is, so every blurb and every line of rules text here is written from scratch. Keep it that way when adding entries.",
-  "_shape": "classes[classId] = [{ name, aliases?, desc, levels: { level: [{ n: featureName, d: oneLineRulesText }] }, spells?: { level: [alwaysPreparedSpell] } }]. Feature names must also be covered by scripts/test-feature-coverage.mjs.",
+  "_shape": "classes[classId] = [{ name, aliases?, desc, levels: { level: [{ n: featureName, d: oneLineRulesText }] }, spells?: { level: [spell] }, expanded?: { level: [spell] }, choiceSpells?: { feature, expanded?, options: { option: { level: [spell] } } } }]. `spells` are known or always prepared and free (domain, circle, oath lists, a learned cantrip); `expanded` are added to the spells the class may learn but are not granted (a warlock patron's list); `choiceSpells` hang off the option chosen for a feature (\"Genie's Vessel (Efreeti)\"). Feature names must also be covered by scripts/test-feature-coverage.mjs.",
   "classes": {
     "barbarian": [
       {
@@ -18,13 +18,13 @@
             },
             {
               "n": "Totem Spirit",
-              "d": "Choose a totem: Bear gives resistance to all damage but psychic while raging, Eagle gives a Dash bonus action and no opportunity-attack advantage against you, Wolf gives allies advantage on melee attacks against enemies within 5 feet of you."
+              "d": "Choose a totem, whose gift holds while you rage: Bear gives resistance to all damage but psychic; Eagle gives other creatures disadvantage on opportunity attacks against you and lets you Dash as a bonus action; Elk raises your walking speed by 15 feet; Tiger adds 10 feet to your long jump and 3 feet to your high jump; Wolf gives your allies advantage on melee attacks against any hostile creature within 5 feet of you."
             }
           ],
           "6": [
             {
               "n": "Aspect of the Beast",
-              "d": "A permanent boon from the totem: Bear doubles carrying capacity and gives advantage on Strength checks to push, pull, lift or break, Eagle grants sight to 1 mile and no disadvantage on Perception in dim light, Wolf lets you track at a fast pace and move stealthily at a normal pace."
+              "d": "A lasting gift from your totem: Bear doubles your carrying capacity and gives advantage on Strength checks to push, pull, lift or break; Eagle lets you see clearly up to a mile away, and dim light no longer hampers your Perception; Elk doubles the travel pace of you and up to ten companions within 60 feet of you; Tiger makes you proficient in two of Athletics, Acrobatics, Stealth and Survival; Wolf lets you track at a fast pace and move stealthily at a normal pace."
             }
           ],
           "10": [
@@ -36,7 +36,7 @@
           "14": [
             {
               "n": "Totemic Attunement",
-              "d": "While raging: Bear makes enemies within 5 feet suffer disadvantage attacking anyone but you, Eagle grants flight equal to your walking speed for a turn at a time, Wolf lets a bonus action knock a Large or smaller creature prone when you hit it."
+              "d": "While raging: Bear gives each hostile creature within 5 feet of you disadvantage on attacks against anyone but you or another with this feature; Eagle gives you a flying speed equal to your walking speed, though you fall if you end your turn in the air with nothing holding you up; Elk lets you pass through a Large or smaller creature's space as a bonus action, and it is knocked prone and takes 1d12 + your Strength modifier bludgeoning damage unless it succeeds on a Strength save (DC 8 + your proficiency bonus + your Strength modifier); Tiger lets you make one melee weapon attack as a bonus action after moving at least 20 feet straight toward a Large or smaller target; Wolf lets you knock a Large or smaller creature prone as a bonus action when you hit it with a melee weapon attack."
             }
           ]
         }
@@ -52,7 +52,7 @@
           "3": [
             {
               "n": "Ancestral Protectors",
-              "d": "While raging, the first creature you hit each turn has disadvantage on attacks against anyone but you, and its damage against others is halved until your next turn."
+              "d": "While raging, the first creature you hit on each of your turns has disadvantage on attack rolls against anyone but you until the start of your next turn or until your rage ends, and when it hits a creature other than you, that creature has resistance to the attack's damage."
             }
           ],
           "6": [
@@ -86,13 +86,13 @@
           "3": [
             {
               "n": "Storm Aura",
-              "d": "A 10-foot aura while raging, activated as a bonus action: Desert deals 2 fire damage to every other creature in it, Sea forces one creature you pick to make a Dexterity save or take 1d6 lightning, Tundra grants every ally in it 2 temporary hit points. Damage and hit points scale with barbarian level."
+              "d": "Choose an environment (desert, sea or tundra), changed when you gain a barbarian level. When you enter your rage its 10-foot aura wakes, and on each later turn of the rage a bonus action wakes it again. Desert: each other creature in it takes 2 fire damage (3 at 5th level, 4 at 10th, 5 at 15th, 6 at 20th). Sea: one creature of your choice in it makes a Dexterity save or takes 1d6 lightning damage, half on a success (2d6 at 10th, 3d6 at 15th, 4d6 at 20th). Tundra: each creature of your choice in it gains 2 temporary hit points (rising with the desert's numbers). Its save DC is 8 + your proficiency bonus + your Constitution modifier."
             }
           ],
           "6": [
             {
               "n": "Storm Soul",
-              "d": "Resistance to your aura's damage type and a matching boon: Desert gives fire resistance and heat protection, Sea gives lightning resistance, swim speed and water breathing, Tundra gives cold resistance and lets you freeze 5 feet of water."
+              "d": "A lasting boon of your environment. Desert: you resist fire damage, shrug off extreme heat, and can set an unattended flammable object alight with a touch as an action. Sea: you resist lightning damage, breathe underwater and gain a 30-foot swimming speed. Tundra: you resist cold damage, shrug off extreme cold, and can freeze a 5-foot cube of water with a touch as an action."
             }
           ],
           "10": [
@@ -104,7 +104,7 @@
           "14": [
             {
               "n": "Raging Storm",
-              "d": "Your aura gains a rider once per turn: Desert deals fire damage to a creature that hits you, Sea knocks a creature prone on a failed Strength save, Tundra halves a creature's speed on a failed Strength save."
+              "d": "Your aura's environment sharpens. Desert: right after a creature in the aura hits you, a reaction makes it save on Dexterity or take fire damage equal to half your barbarian level. Sea: when you hit a creature in the aura, a reaction makes it save on Strength or be knocked prone. Tundra: whenever the aura's effect activates, one creature you can see in it saves on Strength or has its speed reduced to 0 until the start of your next turn."
             }
           ]
         }
@@ -142,7 +142,7 @@
           "14": [
             {
               "n": "Rage Beyond Death",
-              "d": "While raging, dropping to 0 hit points does not knock you out; you fight on and only die if the rage ends while you are still at 0."
+              "d": "While you rage, having 0 hit points doesn't knock you unconscious. You still make death saving throws and suffer the usual effects of taking damage at 0 hit points, but if you would die from failed death saves you don't die until your rage ends, and then only if you still have 0 hit points."
             }
           ]
         }
@@ -158,7 +158,7 @@
           "3": [
             {
               "n": "Form of the Beast",
-              "d": "When you rage, grow a natural weapon until the rage ends: Bite deals 1d8 piercing and heals you when you are below half hit points, Claws deal 1d6 slashing and grant an extra attack with them, Tail deals 1d8 piercing with 10-foot reach and adds to AC as a reaction."
+              "d": "When you enter your rage, grow one natural weapon until it ends, a melee weapon that uses Strength: Bite (1d8 piercing; once on each of your turns, a bite that hits while you have less than half your hit points restores hit points equal to your proficiency bonus), Claws (1d6 slashing, one in each hand; once on each of your turns, attacking with a claw in the Attack action lets you make one more claw attack) or Tail (1d8 piercing with a 10-foot reach; when a creature you can see within 10 feet hits you, a reaction adds 1d8 to your AC against that attack)."
             }
           ],
           "6": [
@@ -176,7 +176,7 @@
           "14": [
             {
               "n": "Call the Hunt",
-              "d": "A proficiency-bonus number of times per long rest, when you enter your rage, grant up to five allies an extra d6 of damage on one hit per turn, and gain 5 temporary hit points for each ally who accepts."
+              "d": "When you enter your rage, a proficiency-bonus number of times per long rest, you can choose a number of other willing creatures you can see within 30 feet equal to your Constitution modifier (minimum one). You gain 5 temporary hit points for each that accepts, and until the rage ends each of them can, once on each of its turns, roll a d6 and add it to the damage of an attack that hits."
             }
           ]
         }
@@ -196,13 +196,13 @@
             },
             {
               "n": "Wild Surge",
-              "d": "Roll on your wild magic table each time you rage; the rolled effect lasts as long as the rage."
+              "d": "When you enter your rage, roll a d8 for a magical effect that lasts the rage (save DC 8 + your proficiency bonus + your Constitution modifier): 1, shadowy tendrils deal 1d12 necrotic damage to each creature of your choice within 30 feet that fails a Constitution save and give you 1d12 temporary hit points; 2, you teleport up to 30 feet, and again as a bonus action on later turns; 3, a spirit appears beside a creature within 30 feet and bursts at the end of the turn, dealing 1d6 force damage to each creature within 5 feet of it that fails a Dexterity save, and again as a bonus action on later turns; 4, a weapon you hold deals force damage and gains light and thrown (20/60), returning to your hand; 5, each creature that hits you with an attack roll takes 1d6 force damage; 6, you and your allies within 10 feet of you gain +1 AC; 7, the ground within 15 feet of you is difficult terrain for your enemies; 8, a bolt of light deals 1d6 radiant damage to a creature within 30 feet and blinds it until the start of your next turn unless it succeeds on a Constitution save, and again as a bonus action on later turns."
             }
           ],
           "6": [
             {
               "n": "Bolstering Magic",
-              "d": "A proficiency-bonus number of times per long rest, touch an ally to grant a bonus d3 on attacks and ability checks for 10 minutes, or restore one expended spell slot of 3rd level or lower."
+              "d": "A proficiency-bonus number of times per long rest, touch a creature and choose: for 10 minutes it adds a d3 to its attack rolls and ability checks, or it rolls a d3 and regains one expended spell slot of that level or lower (a creature can take the slot only once per long rest)."
             }
           ],
           "10": [
@@ -214,7 +214,7 @@
           "14": [
             {
               "n": "Controlled Surge",
-              "d": "Roll twice on the wild magic table and choose which result takes hold."
+              "d": "Whenever you roll on the wild magic table, roll twice and choose either effect; if both dice show the same number, choose any effect on the table."
             }
           ]
         }
@@ -230,29 +230,29 @@
           "3": [
             {
               "n": "Giant's Power",
-              "d": "Learn Giant and the druidcraft cantrip."
+              "d": "You learn to speak, read and write Giant, or another language if you already know it, and you learn your choice of the druidcraft or thaumaturgy cantrip, cast with Wisdom."
             },
             {
-              "n": "Elemental Cleaver",
-              "d": "While raging, one weapon deals your chosen elemental damage instead of its own type and gains the thrown property with a 20/60 range, returning to your hand each throw."
+              "n": "Giant's Havoc",
+              "d": "While raging you gain Crushing Throw (a thrown weapon attack that hits using Strength adds your Rage damage bonus) and Giant Stature (your reach grows by 5 feet, and if you are smaller than Large you become Large, with what you carry, if there is room)."
             }
           ],
           "6": [
             {
-              "n": "Mighty Impel",
-              "d": "As a bonus action while raging, move a Large or smaller creature within 10 feet up to 30 feet through the air; an unwilling one gets a Strength save."
+              "n": "Elemental Cleaver",
+              "d": "When you enter your rage, infuse one weapon you hold with acid, cold, fire, lightning or thunder until the rage ends: its damage becomes that type, it deals an extra 1d6 damage of it, and it gains the thrown property (20/60), returning to your hand after a throw. Its benefits do not work for anyone else, and a bonus action changes the element."
             }
           ],
           "10": [
             {
-              "n": "Demiurgic Colossus",
-              "d": "While raging you grow to Large, your reach grows by 5 feet, Elemental Cleaver's throw range doubles and its damage grows by 1d10."
+              "n": "Mighty Impel",
+              "d": "As a bonus action while raging, choose a Medium or smaller creature within your reach and move it to an unoccupied space you can see within 30 feet of you; an unwilling creature avoids this with a Strength save (DC 8 + your proficiency bonus + your Strength modifier). A creature left in the air falls and lands prone."
             }
           ],
           "14": [
             {
-              "n": "Elemental Fury",
-              "d": "Once per turn while raging, add your rage damage to an Elemental Cleaver hit again, or force a Constitution save on a creature within 10 feet for 3d8 of your element."
+              "n": "Demiurgic Colossus",
+              "d": "When you rage, your reach grows by 10 feet, you can become Large or Huge (your choice) if there is room, Mighty Impel can move Large or smaller creatures, and Elemental Cleaver's extra damage becomes 2d6."
             }
           ]
         }
@@ -302,17 +302,17 @@
           "3": [
             {
               "n": "Mantle of Inspiration",
-              "d": "A bonus action spends a Bardic Inspiration to give allies within 60 feet temporary hit points and an immediate reaction-free move."
+              "d": "As a bonus action, spend one Bardic Inspiration: a number of creatures you can see within 60 feet equal to your Charisma modifier (minimum one) each gain 5 temporary hit points (8 at 5th level, 11 at 10th, 14 at 15th) and can use a reaction to move up to their speed without provoking opportunity attacks."
             },
             {
               "n": "Enthralling Performance",
-              "d": "After a minute of performance, charm up to a proficiency-bonus number of humanoids that fail a Wisdom save; once per short or long rest."
+              "d": "After performing for at least a minute, choose a number of humanoids within 60 feet who watched and listened to all of it equal to your Charisma modifier (minimum one); each makes a Wisdom save against your spell save DC or is charmed by you for an hour, idolizing you and hindering anyone who opposes you. Once per short or long rest."
             }
           ],
           "6": [
             {
               "n": "Mantle of Majesty",
-              "d": "Cast command as a bonus action for a minute without a slot, with listeners charmed against retaliating; once per long rest."
+              "d": "As a bonus action you cast command without a spell slot and take on an unearthly majesty for a minute (concentration). On each of your turns while it lasts you can cast command again as a bonus action without a slot, and a creature charmed by you automatically fails its save against it. Once per long rest."
             }
           ],
           "14": [
@@ -414,6 +414,10 @@
             {
               "n": "Unfailing Inspiration",
               "d": "An inspiration die that fails to change the outcome is not spent."
+            },
+            {
+              "n": "Universal Speech",
+              "d": "As an action, choose a number of creatures within 60 feet equal to your Charisma modifier (minimum one): for an hour they understand you, whatever language you speak. Once per long rest, or by expending a spell slot."
             }
           ],
           "14": [
@@ -435,7 +439,7 @@
           "3": [
             {
               "n": "Mote of Potential",
-              "d": "Your Bardic Inspiration also produces a mote whose burst helps the holder: extra damage on an attack, temporary hit points on a check, or an ally bonus on a save."
+              "d": "Whenever you give a creature a Bardic Inspiration die, a mote orbits it, and when it spends the die the mote adds: on an ability check, it rolls the die twice and uses either roll; on an attack roll, the mote bursts and each creature of your choice within 5 feet of the target makes a Constitution save against your spell save DC or takes thunder damage equal to the die's roll; on a saving throw, it gains temporary hit points equal to the die's roll + your Charisma modifier (minimum 1)."
             },
             {
               "n": "Performance of Creation",
@@ -445,13 +449,13 @@
           "6": [
             {
               "n": "Animating Performance",
-              "d": "Animate a Large or smaller object as a dancing companion that acts on your turn and can make a thunderous Strength attack; once per long rest or with a spell slot."
+              "d": "As an action, animate a Large or smaller nonmagical item within 30 feet as a Dancing Item for an hour. It acts on your initiative right after you, takes the Dodge action unless you command it with a bonus action, has AC 16 and 10 + five times your bard level hit points, attacks with Force-Empowered Slam (your spell attack modifier, reach 5 feet, 1d10 + your proficiency bonus force damage), and its Irrepressible Dance raises or lowers by 10 feet the speed of a creature that starts its turn within 10 feet of it. Once per long rest, or by expending a spell slot of 3rd level or higher."
             }
           ],
           "14": [
             {
               "n": "Creative Crescendo",
-              "d": "Performance of Creation makes several items at once and drops the cost limit on all but the largest."
+              "d": "When you use Performance of Creation you can make a number of items equal to your Charisma modifier (minimum two): one may be the largest size the feature allows and the rest must be Small or Tiny, and no item is limited by gold value."
             }
           ]
         }
@@ -481,14 +485,19 @@
           "6": [
             {
               "n": "Spirit Session",
-              "d": "An hour-long seance with allies lets you learn one divination or necromancy spell of a level up to the ritual's length and cast it until your next long rest."
+              "d": "During a short or long rest you hold an hour-long ritual with up to your proficiency bonus in willing creatures (you included). At its end you learn one divination or necromancy spell from any class's list, of a level you can cast and no higher than the number of creatures who took part; it counts as a bard spell, doesn't count against your spells known, and stays until you start a long rest. Once per long rest."
             }
           ],
           "14": [
             {
               "n": "Mystical Connection",
-              "d": "Reroll an unwanted Tales from Beyond result, and roll for it without spending a die once per short rest."
+              "d": "When you roll on the Spirit Tales table, roll the die twice and choose which effect to bestow; if both dice show the same number, pick any effect on the table."
             }
+          ]
+        },
+        "spells": {
+          "3": [
+            "Guidance"
           ]
         }
       }
@@ -529,7 +538,7 @@
           "17": [
             {
               "n": "Visions of the Past",
-              "d": "A minute of concentration reveals an object's or a place's recent history."
+              "d": "You spend at least a minute in meditation, concentrating as on a spell, for up to a number of minutes equal to your Wisdom score. Holding an object, you see its previous owner, how they gained and lost it and the latest significant event involving them, and each further minute reaches one owner earlier, as far back as your Wisdom score in days. Or you see significant events of the past in your surroundings (up to a 50-foot cube), one per minute, going back that many days. Once per short or long rest."
             }
           ]
         },
@@ -582,8 +591,8 @@
           ],
           "6": [
             {
-              "n": "Improved Warding Flare",
-              "d": "Warding Flare also protects an ally you can see within 30 feet."
+              "n": "Improved Flare",
+              "d": "Warding Flare can also protect a creature other than you that you can see within 30 feet when it is attacked."
             }
           ],
           "8": [
@@ -601,6 +610,7 @@
         },
         "spells": {
           "1": [
+            "Light",
             "Burning Hands",
             "Faerie Fire"
           ],
@@ -837,7 +847,7 @@
           "2": [
             {
               "n": "Channel Divinity: Guided Strike",
-              "d": "Add +10 to one attack roll, before or after seeing the result."
+              "d": "When you make an attack roll, spend Channel Divinity for a +10 bonus to it, after seeing the roll but before the DM says whether it hits."
             }
           ],
           "6": [
@@ -921,7 +931,7 @@
           "17": [
             {
               "n": "Improved Reaper",
-              "d": "Cast a necromancy spell of 1st to 5th level that targets one creature at two creatures within 5 feet, at the cost of 1d8 of your own hit points per spell level."
+              "d": "When you cast a necromancy spell of 1st through 5th level that targets only one creature, it can target two creatures within 5 feet of each other; if the spell consumes its material components, you provide them for each target."
             }
           ]
         },
@@ -1035,7 +1045,7 @@
           "2": [
             {
               "n": "Channel Divinity: Path to the Grave",
-              "d": "Curse a creature so the next attack against it has advantage and doubles its damage vulnerability for that hit."
+              "d": "As an action, spend Channel Divinity to curse a creature within 30 feet until the end of your next turn: the next time you or an ally hits it with an attack, it has vulnerability to all of that attack's damage, and the curse ends."
             }
           ],
           "6": [
@@ -1053,7 +1063,7 @@
           "17": [
             {
               "n": "Keeper of Souls",
-              "d": "Once per turn, when an enemy within 60 feet dies, an ally you can see regains hit points equal to its Hit Dice."
+              "d": "When an enemy you can see dies within 60 feet of you, you or one creature of your choice within 60 feet regains hit points equal to the enemy's number of Hit Dice. You can't use it while incapacitated, and once you do, not again until the start of your next turn."
             }
           ]
         },
@@ -1101,7 +1111,7 @@
           "2": [
             {
               "n": "Channel Divinity: Order's Demand",
-              "d": "Creatures of your choice within 30 feet are charmed for a minute on a failed Wisdom save, and you may drop or push one of them 30 feet."
+              "d": "As an action, spend Channel Divinity: each creature of your choice within 30 feet that can see or hear you makes a Wisdom save or is charmed by you until the end of your next turn or until it takes damage, and you can make any of them drop what they are holding."
             }
           ],
           "6": [
@@ -1161,7 +1171,7 @@
             },
             {
               "n": "Emboldening Bond",
-              "d": "Bond a proficiency-bonus number of creatures for 10 minutes; while near each other they may add a d4 to an attack, check or save, once per turn."
+              "d": "As an action, choose a number of willing creatures within 30 feet equal to your proficiency bonus (you can be one): for 10 minutes, or until you use it again, a bonded creature within 30 feet of another can add a d4 to an attack roll, ability check or saving throw it makes, once per turn. A proficiency-bonus number of times per long rest."
             }
           ],
           "2": [
@@ -1173,7 +1183,7 @@
           "6": [
             {
               "n": "Protective Bond",
-              "d": "A bonded creature may use a reaction to teleport to another and take its damage instead."
+              "d": "When a creature bonded by your Emboldening Bond is about to take damage, another bonded creature within 30 feet of it can use a reaction to teleport to an unoccupied space within 5 feet of it and take all of that damage instead."
             }
           ],
           "8": [
@@ -1185,7 +1195,7 @@
           "17": [
             {
               "n": "Expansive Bond",
-              "d": "Emboldening Bond's range grows to 60 feet and Protective Bond halves the damage taken."
+              "d": "Emboldening Bond and Protective Bond now work across 60 feet, and a creature that takes damage for another through Protective Bond has resistance to it."
             }
           ]
         },
@@ -1299,7 +1309,7 @@
           "2": [
             {
               "n": "Channel Divinity: Arcane Abjuration",
-              "d": "Turn one celestial, elemental, fey or fiend within 30 feet on a failed Wisdom save, banishing weaker ones outright at higher levels."
+              "d": "As an action, spend Channel Divinity: one celestial, elemental, fey or fiend within 30 feet that can see or hear you makes a Wisdom save or is turned for a minute or until it takes damage. From 5th level, a creature that fails, isn't on its plane of origin and has a challenge rating at or below a limit (1/2 at 5th level, 1 at 8th, 2 at 11th, 3 at 14th, 4 at 17th) is banished for a minute instead, as the banishment spell without concentration."
             }
           ],
           "6": [
@@ -1317,7 +1327,7 @@
           "17": [
             {
               "n": "Arcane Mastery",
-              "d": "Add four wizard spells of 6th, 7th, 8th and 9th level to your cleric spell list."
+              "d": "Choose one wizard spell each of 6th, 7th, 8th and 9th level; each becomes one of your domain spells, always prepared and counted as a cleric spell for you."
             }
           ]
         },
@@ -1395,25 +1405,25 @@
           "2": [
             {
               "n": "Balm of the Summer Court",
-              "d": "A pool of d6s equal to your druid level, spendable as a bonus action to heal a creature within 120 feet and give it temporary hit points; refills on a long rest."
+              "d": "You have a pool of d6s equal to your druid level, refilled on a long rest. As a bonus action, spend up to half your druid level of them to heal a creature you can see within 120 feet by the total rolled; it also gains 1 temporary hit point per die spent."
             }
           ],
           "6": [
             {
               "n": "Hearth of Moonlight and Shadow",
-              "d": "A 30-foot camp during a rest that grants concealment, silence, and a bonus to Perception and Stealth for everyone inside."
+              "d": "During a short or long rest you can touch a point to raise an invisible 30-foot-radius sphere around it until the rest ends or you leave it, blocked by total cover. Inside, you and your allies gain +5 to Dexterity (Stealth) and Wisdom (Perception) checks, and light from open flames inside can't be seen from outside."
             }
           ],
           "10": [
             {
               "n": "Hidden Paths",
-              "d": "A bonus action teleports you 60 feet, or a creature you touch 30 feet, a Wisdom-modifier number of times per long rest."
+              "d": "As a bonus action you teleport up to 60 feet to an unoccupied space you can see, or as an action you teleport a willing creature you touch up to 30 feet; a number of times equal to your Wisdom modifier (minimum once) per long rest."
             }
           ],
           "14": [
             {
               "n": "Walker in Dreams",
-              "d": "After a short rest, cast dream, scrying or teleportation circle without a slot, the circle keyed to a place you have seen."
+              "d": "When you finish a short rest you can cast dream (as the messenger), scrying or teleportation circle without a spell slot or material components; the circle opens to the last place you finished a long rest on this plane, and fails without being spent if there is none. Once per long rest."
             }
           ]
         }
@@ -1433,13 +1443,13 @@
             },
             {
               "n": "Spirit Totem",
-              "d": "A bonus action calls a 30-foot spirit aura for a minute, once per short or long rest: Bear grants temporary hit points and Strength advantage, Hawk grants attack advantage as a reaction and Perception advantage, Unicorn grants attack advantage against creatures in it and boosts your healing."
+              "d": "As a bonus action, call a spirit to a point within 60 feet for a minute (once per short or long rest), with a 30-foot aura you can move 60 feet as a bonus action. Bear: each creature of your choice in the aura when it appears gains 5 + your druid level temporary hit points, and you and your allies have advantage on Strength checks and saves in it. Hawk: when a creature makes an attack roll against a target in the aura, a reaction gives it advantage, and you and your allies have advantage on Perception checks in it. Unicorn: you and your allies have advantage on checks to detect creatures in the aura, and when you cast a spell with a slot that restores hit points, each creature of your choice in the aura regains hit points equal to your druid level."
             }
           ],
           "6": [
             {
               "n": "Mighty Summoner",
-              "d": "Creatures you conjure gain 2 extra hit points per Hit Die and their attacks count as magical."
+              "d": "Beasts and fey you conjure or create with a spell gain 2 extra hit points per Hit Die, and their natural weapons are magical for overcoming resistance and immunity to nonmagical attacks."
             }
           ],
           "10": [
@@ -1451,7 +1461,7 @@
           "14": [
             {
               "n": "Faithful Summons",
-              "d": "When you drop to 0 hit points, four dire wolves appear and defend you for an hour; recharges on a long rest."
+              "d": "When you are reduced to 0 hit points or incapacitated against your will, you gain the effects of conjure animals cast with a 9th-level slot: four beasts of your choice, each challenge rating 2 or lower, appear within 20 feet, protect you and attack your foes for an hour without concentration, or until you dismiss them. Once per long rest."
             }
           ]
         }
@@ -1467,7 +1477,7 @@
           "2": [
             {
               "n": "Halo of Spores",
-              "d": "A reaction deals 1d4 necrotic damage to a creature within 10 feet on a failed Constitution save, scaling with druid level."
+              "d": "When a creature you can see moves into a space within 10 feet of you or starts its turn there, a reaction deals it 1d4 necrotic damage unless it succeeds on a Constitution save against your spell save DC (1d6 at 6th level, 1d8 at 10th, 1d10 at 14th)."
             },
             {
               "n": "Symbiotic Entity",
@@ -1483,7 +1493,7 @@
           "10": [
             {
               "n": "Spreading Spores",
-              "d": "Hurl your spores into a 10-foot cube within 30 feet, damaging creatures that start their turn there instead of using Halo of Spores."
+              "d": "While Symbiotic Entity is active, a bonus action hurls spores into a 10-foot cube within 30 feet for a minute, until you use it again or until the entity ends. A creature that moves into the cube or starts its turn there makes a Constitution save against your spell save DC or takes your Halo of Spores damage, at most once per turn, and you can't use Halo of Spores' reaction while the cube lasts."
             }
           ],
           "14": [
@@ -1577,7 +1587,7 @@
           "10": [
             {
               "n": "Cauterizing Flames",
-              "d": "When a creature dies near you or the spirit, a flame springs up that either heals or burns the next creature to move through it for 2d10 + your Wisdom modifier."
+              "d": "When a Small or larger creature dies within 30 feet of you or your wildfire spirit, a spectral flame burns in its space for a minute. When a creature you can see enters that space, a reaction puts the flame out to restore 2d10 + your Wisdom modifier hit points to it or deal it that much fire damage; a proficiency-bonus number of times per long rest."
             }
           ],
           "14": [
@@ -1593,12 +1603,12 @@
             "Cure Wounds"
           ],
           "3": [
-            "Blur",
+            "Flaming Sphere",
             "Scorching Ray"
           ],
           "5": [
-            "Revivify",
-            "Fireball"
+            "Plant Growth",
+            "Revivify"
           ],
           "7": [
             "Aura of Life",
@@ -1623,7 +1633,7 @@
           "3": [
             {
               "n": "Combat Superiority",
-              "d": "Four superiority dice of d8, refilling on a short or long rest, spent on maneuvers with a save DC of 8 + proficiency + Strength or Dexterity. The dice grow to five at 7th level and six at 15th, and to d10 at 10th level and d12 at 18th."
+              "d": "Four superiority dice of d8 (five at 7th level, six at 15th), regained on a short or long rest, spent on maneuvers whose save DC is 8 + your proficiency bonus + your Strength or Dexterity modifier."
             },
             {
               "n": "Maneuvers",
@@ -1638,6 +1648,12 @@
             {
               "n": "Know Your Enemy",
               "d": "A minute of observation reveals whether a creature beats you in two chosen traits such as Strength, Dexterity, Constitution, AC, current hit points, class levels or fighter levels."
+            }
+          ],
+          "10": [
+            {
+              "n": "Improved Combat Superiority",
+              "d": "Your superiority dice become d10s, and d12s at 18th level."
             }
           ],
           "15": [
@@ -1705,7 +1721,7 @@
             },
             {
               "n": "Arcane Shot",
-              "d": "Two Arcane Shot options known, used twice per short or long rest on an arrow hit: Banishing, Beguiling, Bursting, Enfeebling, Grasping, Piercing, Seeking or Shadow. More options are learned at 7th, 10th, 15th and 18th level."
+              "d": "Once per turn when you fire an arrow from a shortbow or longbow as part of the Attack action, you can apply one Arcane Shot option you know, deciding when the arrow hits unless the option makes no attack roll. You know two options (Banishing, Beguiling, Bursting, Enfeebling, Grasping, Piercing, Seeking, Shadow) and learn another at 7th, 10th, 15th and 18th level; you have two uses, regained on a short or long rest, and the save DC is 8 + your proficiency bonus + your Intelligence modifier. Beguiling, Bursting, Enfeebling, Grasping and Shadow deal 2d6 damage, Piercing and Seeking 1d6 and Banishing none; at 18th level these become 4d6, 2d6 and 2d6 force."
             }
           ],
           "7": [
@@ -1744,7 +1760,7 @@
             },
             {
               "n": "Unwavering Mark",
-              "d": "A creature you hit in melee is marked until your next turn: it has disadvantage attacking anyone else, and on your next turn you can make a bonus attack against it that deals extra damage on a hit and gives it disadvantage on its next attack. Usable a Strength-modifier number of times per long rest."
+              "d": "When you hit a creature with a melee weapon attack you can mark it until the end of your next turn. While it is within 5 feet of you, it has disadvantage on attack rolls that don't target you, and if it deals damage to anyone but you, on your next turn you can make a bonus-action melee weapon attack against it with advantage that deals extra damage equal to half your fighter level on a hit; that attack a number of times equal to your Strength modifier (minimum once) per long rest."
             }
           ],
           "7": [
@@ -1756,13 +1772,13 @@
           "10": [
             {
               "n": "Hold the Line",
-              "d": "A reaction makes an opportunity attack against a creature that moves 5 feet or more while in your reach, stopping it dead."
+              "d": "Creatures provoke an opportunity attack from you when they move 5 feet or more while within your reach, and a creature you hit with an opportunity attack has its speed reduced to 0 until the end of the current turn."
             }
           ],
           "15": [
             {
               "n": "Ferocious Charger",
-              "d": "Once per turn, a hit after moving 10 feet in a straight line knocks a Large or smaller creature prone on a failed Strength save."
+              "d": "Once on each of your turns, when you move at least 10 feet in a straight line right before attacking a creature and hit it, it makes a Strength save (DC 8 + your proficiency bonus + your Strength modifier) or is knocked prone."
             }
           ],
           "18": [
@@ -1811,7 +1827,7 @@
           "18": [
             {
               "n": "Strength before Death",
-              "d": "Once per long rest, a reaction on taking damage lets you act immediately before the damage is applied."
+              "d": "When damage reduces you to 0 hit points, a reaction delays your falling unconscious and gives you an extra turn at once; during it, damage at 0 hit points still causes death save failures, and you fall unconscious when it ends if you are still at 0. Once per long rest."
             }
           ]
         }
@@ -1826,7 +1842,7 @@
           "3": [
             {
               "n": "Manifest Echo",
-              "d": "A bonus action summons a magical echo of yourself within 15 feet with 1 hit point and your AC; you may attack from its space, swap places with it, and move it 30 feet as a bonus action."
+              "d": "As a bonus action you manifest a gray echo of yourself in an unoccupied space within 15 feet, lasting until it is destroyed, you dismiss it, you manifest another or you are incapacitated. It has AC 14 + your proficiency bonus, 1 hit point and immunity to all conditions, uses your saving throw bonuses, and is destroyed if it ends your turn more than 30 feet from you. On your turn you can command it to move up to 30 feet without an action, swap places with it as a bonus action for 15 feet of your movement, and make any attack of the Attack action from its space; when a creature you can see within 5 feet of it moves at least 5 feet away from it, a reaction makes an opportunity attack as if you stood there."
             },
             {
               "n": "Unleash Incarnation",
@@ -1870,7 +1886,7 @@
           "3": [
             {
               "n": "Psionic Power (Psi Warrior)",
-              "d": "A pool of Psionic Energy dice, twice your proficiency bonus per long rest, starting at d6 and growing with fighter level; one die returns on a short rest."
+              "d": "You have Psionic Energy dice equal to twice your proficiency bonus (d6s, d8s from 5th level, d10s from 11th, d12s from 17th), all regained on a long rest; as a bonus action you can regain one spent die, once per short or long rest."
             },
             {
               "n": "Protective Field",
@@ -1976,7 +1992,7 @@
           "7": [
             {
               "n": "Royal Envoy",
-              "d": "Proficiency and expertise in Persuasion, plus one extra language."
+              "d": "You gain proficiency in Persuasion, or if you already have it, in your choice of Animal Handling, Insight, Intimidation or Performance; and your proficiency bonus is doubled for any Persuasion check you make."
             }
           ],
           "10": [
@@ -1988,7 +2004,7 @@
           "15": [
             {
               "n": "Bulwark",
-              "d": "Indomitable also lets one ally within 60 feet reroll a failed ability check."
+              "d": "When you use Indomitable to reroll an Intelligence, Wisdom or Charisma saving throw and aren't incapacitated, you can choose one ally within 60 feet that also failed its save against the same effect; if it can see or hear you, it rerolls the save and must use the new roll."
             }
           ]
         }
@@ -2114,7 +2130,7 @@
           "3": [
             {
               "n": "Path of the Kensei",
-              "d": "Two kensei weapons count as monk weapons, one ranged kensei weapon adds +2 AC as a bonus action, and an unarmed strike as a bonus action follows a kensei attack."
+              "d": "Choose two kensei weapons, one melee and one ranged, from simple or martial weapons without the heavy or special property (the longbow allowed), and one more at 6th, 11th and 17th level; they count as monk weapons, and you are proficient with them and with calligrapher's or painter's supplies. Agile Parry: when you make an unarmed strike as part of the Attack action while holding a kensei melee weapon, you gain +2 AC until the start of your next turn."
             },
             {
               "n": "Kensei's Shot",
@@ -2186,7 +2202,7 @@
           "3": [
             {
               "n": "Touch of Death",
-              "d": "When a creature within 5 feet drops to 0 hit points, gain temporary hit points equal to your Wisdom modifier plus your monk level."
+              "d": "When you reduce a creature within 5 feet of you to 0 hit points, you gain temporary hit points equal to your Wisdom modifier + your monk level (minimum 1)."
             }
           ],
           "6": [
@@ -2262,19 +2278,19 @@
           "3": [
             {
               "n": "Arms of the Astral Self",
-              "d": "Spend 1 ki as a bonus action to summon spectral arms for 10 minutes: they use Wisdom for unarmed attacks, deal your martial arts die in force damage, add 5 feet of reach, and can shove creatures within 10 feet."
+              "d": "As a bonus action, spend 1 ki to summon spectral arms for 10 minutes; when they appear, each creature of your choice you can see within 10 feet makes a Dexterity save or takes force damage equal to two rolls of your martial arts die. While they last you can use Wisdom for Strength checks and saves, your unarmed strikes reach 5 feet farther, and those strikes can use Wisdom for attack and damage rolls and deal force damage."
             }
           ],
           "6": [
             {
               "n": "Visage of the Astral Self",
-              "d": "Spend 1 ki for a spirit visage granting darkvision, advantage on Insight and Intimidation, and an Astral Sight that pierces darkness."
+              "d": "As a bonus action, spend 1 ki to summon a spectral visage for 10 minutes: Astral Sight (you see normally in darkness, magical or not, to 120 feet), Wisdom of the Spirit (advantage on Insight and Intimidation checks) and Word of the Spirit (you speak to only one creature within 60 feet, or project your voice up to 600 feet)."
             }
           ],
           "11": [
             {
               "n": "Body of the Astral Self",
-              "d": "With both arms and visage active, gain a Deflect Energy reaction and add 1d10 to a damage roll once per turn."
+              "d": "While both your arms and visage are summoned: Deflect Energy (a reaction reduces acid, cold, fire, force, lightning or thunder damage you take by 1d10 + your Wisdom modifier) and Empowered Arms (once on each of your turns, when you hit with the arms, add one roll of your martial arts die to the damage)."
             }
           ],
           "17": [
@@ -2297,17 +2313,17 @@
           "3": [
             {
               "n": "Draconic Disciple",
-              "d": "You know Draconic, can shift your unarmed damage to acid, cold, fire, lightning or poison, and can add a d4 to a Charisma check once per short rest."
+              "d": "Draconic Presence: when you fail a Charisma (Intimidation or Persuasion) check, a reaction rerolls it, and once this turns a failure into a success you can't do so again until a long rest. Draconic Strike: your unarmed strikes can deal acid, cold, fire, lightning or poison damage instead of bludgeoning. Tongue of Dragons: you learn Draconic, or another language if you know it."
             },
             {
               "n": "Breath of the Dragon",
-              "d": "Replace one Attack-action attack with a 20-foot cone or 30-foot line dealing two rolls of your martial arts die in damage, a proficiency-bonus number of times per long rest, or for 2 ki when none are left."
+              "d": "When you take the Attack action you can replace one attack with a 20-foot cone or a 30-foot line 5 feet wide of acid, cold, fire, lightning or poison: each creature in it makes a Dexterity save against your ki save DC or takes two rolls of your martial arts die (three from 11th level), half on a success. A proficiency-bonus number of times per long rest; with none left, 2 ki buys another use."
             }
           ],
           "6": [
             {
               "n": "Wings Unfurled",
-              "d": "While airborne from a jump or effect, gain a flying speed equal to your walking speed, a proficiency-bonus number of times per long rest."
+              "d": "When you use Step of the Wind, spectral wings give you a flying speed equal to your walking speed until the end of the turn; a proficiency-bonus number of times per long rest."
             }
           ],
           "11": [
@@ -2319,7 +2335,7 @@
           "17": [
             {
               "n": "Ascendant Aspect",
-              "d": "Aspect of the Wyrm reaches 30 feet, grants blindsight, and once per turn lets you deal 3d10 damage to up to three creatures in it as a reaction."
+              "d": "Augment Breath: spending 1 ki when you use Breath of the Dragon makes it a 60-foot cone or a 90-foot line 5 feet wide that deals four rolls of your martial arts die. Blindsight: you can perceive your surroundings without sight to 10 feet. Explosive Fury: when you activate Aspect of the Wyrm, each creature of your choice in its aura makes a Dexterity save against your ki save DC or takes 3d10 damage of a type you choose for Draconic Strike."
             }
           ]
         }
@@ -2421,7 +2437,7 @@
           "20": [
             {
               "n": "Avenging Angel",
-              "d": "For an hour, gain a 60-foot flying speed and a 30-foot aura that frightens enemies who fail a Wisdom save, giving you advantage against them."
+              "d": "As an action you sprout wings for an hour (once per long rest): a flying speed of 60 feet and a 30-foot aura of menace. The first time an enemy enters the aura or starts its turn there during a battle, it makes a Wisdom save or is frightened of you for a minute or until it takes damage, and attack rolls against a creature frightened this way have advantage."
             }
           ]
         },
@@ -2541,7 +2557,7 @@
           "20": [
             {
               "n": "Emissary of Redemption",
-              "d": "Resistance to all damage from other creatures, and attackers take radiant damage equal to half of what they dealt you, until you attack or harm someone."
+              "d": "You have resistance to all damage dealt by other creatures, and a creature that hits you with an attack takes radiant damage equal to half the damage you take from it. If you attack a creature, cast a spell on it or damage it other than through this feature, neither benefit works against that creature until you finish a long rest."
             }
           ]
         },
@@ -2601,7 +2617,7 @@
           "20": [
             {
               "n": "Living Legend",
-              "d": "For a minute: advantage on Charisma checks, a missed attack can be rerolled once per turn, and failed saves can be turned into successes once per turn."
+              "d": "As a bonus action, for a minute you have advantage on Charisma checks, once on each of your turns a weapon attack that misses can hit instead, and when you fail a saving throw a reaction rerolls it and you must use the new roll. Once per long rest, or by expending a 5th-level spell slot."
             }
           ]
         },
@@ -2655,7 +2671,7 @@
           "15": [
             {
               "n": "Vigilant Rebuke",
-              "d": "A reaction deals 2d8 + Charisma force damage to a creature whose spell or effect you just saved against."
+              "d": "Whenever you or a creature you can see within 30 feet succeeds on an Intelligence, Wisdom or Charisma saving throw, a reaction deals 2d8 + your Charisma modifier force damage to the creature that forced the save."
             }
           ],
           "20": [
@@ -2759,7 +2775,7 @@
           "3": [
             {
               "n": "Channel Divinity: Control Undead",
-              "d": "One undead of CR at or below your level within 30 feet obeys you for 24 hours on a failed Charisma save."
+              "d": "As an action, spend Channel Divinity: one undead you can see within 30 feet makes a Wisdom save or obeys your commands for 24 hours or until you use this again. An undead whose challenge rating is equal to or greater than your paladin level is immune."
             },
             {
               "n": "Channel Divinity: Dreadful Aspect",
@@ -2769,7 +2785,7 @@
           "7": [
             {
               "n": "Aura of Hate",
-              "d": "You, fiends and undead within 10 feet add your Charisma modifier to melee weapon damage; 30 feet at 18th level."
+              "d": "You, fiends and undead within 10 feet add your Charisma modifier (at least +1) to melee weapon damage; 30 feet at 18th level."
             }
           ],
           "15": [
@@ -2781,7 +2797,7 @@
           "20": [
             {
               "n": "Dread Lord",
-              "d": "For a minute: a 30-foot aura of magical darkness that deals 4d10 psychic damage to enemies who start their turn in it, gives attackers disadvantage against you, and lets you make a spectral 4d10 psychic attack as a bonus action."
+              "d": "As an action, for a minute (once per long rest), you wrap yourself in a 30-foot aura of gloom that turns bright light in it dim. Each enemy frightened of you that starts its turn in the aura takes 4d10 psychic damage, creatures that rely on sight have disadvantage on attack rolls against you, and as a bonus action you can make a melee spell attack with the shadows against a creature in the aura, dealing 3d10 + your Charisma modifier necrotic damage."
             }
           ]
         },
@@ -2822,13 +2838,13 @@
           "3": [
             {
               "n": "Ranger's Companion",
-              "d": "A beast of CR 1/4 or lower obeys your commands, adds your proficiency bonus to its rolls and AC, uses your hit points formula and takes the Dodge action unless you command otherwise."
+              "d": "Choose a beast no larger than Medium with a challenge rating of 1/4 or lower as your companion. Add your proficiency bonus to its AC, attack and damage rolls, and the saves and skills it is proficient in; its hit point maximum is its normal maximum or four times your ranger level, whichever is higher. It acts on your initiative: you command its movement freely, and your action commands it to Attack, Dash, Disengage or Help; without a command it takes the Dodge action."
             }
           ],
           "7": [
             {
               "n": "Exceptional Training",
-              "d": "A bonus action lets the companion Dash, Disengage, Dodge or Help, and its attacks count as magical."
+              "d": "On a turn your companion doesn't attack, a bonus action can command it to Dash, Disengage or Help, and its attacks are magical for overcoming resistance and immunity to nonmagical attacks."
             }
           ],
           "11": [
@@ -2878,7 +2894,7 @@
           "15": [
             {
               "n": "Shadowy Dodge",
-              "d": "A reaction imposes disadvantage on an attack against you that would otherwise hit."
+              "d": "Whenever a creature makes an attack roll against you without advantage, you can use your reaction to give it disadvantage, deciding before you know whether it hits."
             }
           ]
         },
@@ -3003,7 +3019,7 @@
             "Magic Circle"
           ],
           "13": [
-            "Dimension Door"
+            "Banishment"
           ],
           "17": [
             "Hold Monster"
@@ -3041,7 +3057,7 @@
           "11": [
             {
               "n": "Fey Reinforcements",
-              "d": "Summon fey is always prepared and can be cast once per long rest without a slot, with the summon able to turn invisible."
+              "d": "You learn summon fey, which doesn't count against your spells known and needs no material component; you can cast it once without a spell slot per long rest, and whenever you start casting it you can make it need no concentration, in which case it lasts a minute."
             }
           ],
           "15": [
@@ -3060,6 +3076,9 @@
           ],
           "9": [
             "Dispel Magic"
+          ],
+          "11": [
+            "Summon Fey"
           ],
           "13": [
             "Dimension Door"
@@ -3096,7 +3115,7 @@
           "11": [
             {
               "n": "Mighty Swarm",
-              "d": "Gathered Swarm knocks moved targets prone, gives you half cover when it moves you, and adds 1d6 to its damage."
+              "d": "Gathered Swarm's damage becomes 1d8, a creature that fails its save against being moved by the swarm can also be knocked prone, and when the swarm moves you, you have half cover until the start of your next turn."
             }
           ],
           "15": [
@@ -3108,6 +3127,7 @@
         },
         "spells": {
           "3": [
+            "Mage Hand",
             "Faerie Fire"
           ],
           "5": [
@@ -3135,30 +3155,35 @@
           "3": [
             {
               "n": "Draconic Gift",
-              "d": "You know thaumaturgy and can speak Draconic."
+              "d": "You know thaumaturgy and learn Draconic, or another language if you already speak it."
             },
             {
               "n": "Drake Companion",
-              "d": "Summon a Small drake once per long rest or with a spell slot; it acts on your turn, adds your proficiency bonus to its rolls, and has an elemental breath."
+              "d": "As an action, summon your drake in an unoccupied space within 30 feet, lasting until it drops to 0 hit points, you summon it again or you die; once per long rest, or by expending a spell slot of 1st level or higher. Choose its Draconic Essence when you summon it (acid, cold, fire, lightning or poison): it is immune to that damage. It has 5 + five times your ranger level hit points, a Bite (1d6 + your proficiency bonus piercing) and an Infused Strikes reaction (when another creature within 30 feet of it that it can see hits with a weapon attack, that attack deals an extra 1d6 damage of its essence type). It acts on your initiative and takes the Dodge action unless you command it with a bonus action."
             }
           ],
           "7": [
             {
               "n": "Bond of Fang and Scale",
-              "d": "While the drake is out, you gain resistance to its damage type, the drake gains a fly speed, and your attacks count as magical with extra elemental damage."
+              "d": "Your drake grows to Medium, grows wings (a flying speed equal to its walking speed) and can carry you as a mount; its Bite deals an extra 1d6 damage of its essence type, and you have resistance to that damage type."
             }
           ],
           "11": [
             {
               "n": "Drake's Breath",
-              "d": "Once per long rest, the drake exhales a 30-foot cone dealing 8d6 of its element, halved on a Dexterity save."
+              "d": "As an action, you or your drake exhales a 30-foot cone of acid, cold, fire, lightning or poison (your choice): each creature in it makes a Dexterity save against your spell save DC or takes 8d6 damage (10d6 from 15th level), half on a success. Once per long rest, or by expending a spell slot of 3rd level or higher."
             }
           ],
           "15": [
             {
               "n": "Perfected Bond",
-              "d": "The drake becomes Large and rideable, gains extra hit points, and adds your proficiency bonus in damage to its attacks."
+              "d": "Your drake grows to Large and its Bite's extra damage becomes 2d6. Reflexive Resistance: when you or your drake takes damage while you are within 30 feet of each other, a reaction gives the one hurt resistance to that damage, a proficiency-bonus number of times per long rest."
             }
+          ]
+        },
+        "spells": {
+          "3": [
+            "Thaumaturgy"
           ]
         }
       }
@@ -3233,7 +3258,7 @@
           "17": [
             {
               "n": "Spell Thief",
-              "d": "A reaction steals a spell cast at you on a failed save by the caster, denying them the spell for 8 hours and letting you cast it once; recharges on a long rest."
+              "d": "Right after a creature casts a spell that targets you or includes you in its area, a reaction makes it save with its spellcasting ability modifier against your spell save DC. On a failure the spell has no effect on you, and if it is of 1st level or higher and of a level you can cast, you steal it: for 8 hours you know it and can cast it with your spell slots, and the creature can't cast it. Once per long rest."
             }
           ]
         }
@@ -3323,7 +3348,7 @@
           "3": [
             {
               "n": "Ear for Deceit",
-              "d": "Treat any Insight roll of 7 or lower as an 8."
+              "d": "When you make a Wisdom (Insight) check to tell whether a creature is lying, treat a d20 roll of 7 or lower as an 8."
             },
             {
               "n": "Eye for Detail",
@@ -3411,7 +3436,7 @@
           "9": [
             {
               "n": "Tokens of the Departed",
-              "d": "A soul trinket forms when a creature dies near you: it grants advantage on death and Constitution saves, resistance to poison, and can be spent to power Wails from the Grave or question the dead."
+              "d": "When a creature you can see dies within 30 feet of you, a reaction forms a Tiny soul trinket in your free hand (you can hold up to your proficiency bonus of them). While you carry one you have advantage on death saving throws and Constitution saving throws. When you deal Sneak Attack damage you can destroy one to use Wails from the Grave without spending a use, and as an action you can destroy one to ask its spirit a question."
             }
           ],
           "13": [
@@ -3423,7 +3448,7 @@
           "17": [
             {
               "n": "Death's Friend",
-              "d": "Wails from the Grave triggers alongside every sneak attack at full strength, and a soul trinket forms at the end of each long rest."
+              "d": "When you use Wails from the Grave, you can deal its necrotic damage to the first creature as well as the second, and at the end of a long rest a soul trinket appears in your hand if you have none."
             }
           ]
         }
@@ -3439,7 +3464,7 @@
           "3": [
             {
               "n": "Psionic Power (Soulknife)",
-              "d": "A pool of Psionic Energy dice, twice your proficiency bonus per long rest, starting at d6 and growing with rogue level; one returns on a short rest."
+              "d": "You have Psionic Energy dice equal to twice your proficiency bonus (d6s, d8s from 5th level, d10s from 11th, d12s from 17th), all regained on a long rest; as a bonus action you can regain one spent die, once per short or long rest."
             },
             {
               "n": "Psi-Bolstered Knack",
@@ -3451,7 +3476,7 @@
             },
             {
               "n": "Psychic Blades",
-              "d": "Manifest a thrown or melee psychic blade as part of an attack, dealing 1d6 psychic plus ability modifier, with a bonus-action second blade at 1d4; the dice grow with rogue level."
+              "d": "When you take the Attack action you can manifest a psychic blade in a free hand and attack with it: a simple melee weapon with finesse and thrown (60/120) that deals 1d6 psychic damage plus your ability modifier and vanishes after the attack. After attacking with it, a bonus action can manifest a second blade in your other hand for 1d4 psychic damage plus your ability modifier. The blades keep these dice at every level."
             }
           ],
           "9": [
@@ -3526,7 +3551,7 @@
           "1": [
             {
               "n": "Divine Magic",
-              "d": "Add the cleric spell list to your sorcerer spell choices, plus one affinity spell matching your divine bent."
+              "d": "You can learn cleric spells as sorcerer spells, and you choose an affinity for your divine power that teaches you one more sorcerer spell, which doesn't count against your spells known: cure wounds (good), inflict wounds (evil), bless (law), bane (chaos) or protection from evil and good (neutrality). If you replace that spell later, it must become a cleric spell."
             },
             {
               "n": "Favored by the Gods",
@@ -3551,6 +3576,39 @@
               "d": "Once per long rest, a bonus action when you have fewer than half your hit points left restores hit points equal to half your maximum."
             }
           ]
+        },
+        "spellLists": [
+          "cleric"
+        ],
+        "choiceSpells": {
+          "feature": "Divine Magic",
+          "options": {
+            "Good": {
+              "1": [
+                "Cure Wounds"
+              ]
+            },
+            "Evil": {
+              "1": [
+                "Inflict Wounds"
+              ]
+            },
+            "Law": {
+              "1": [
+                "Bless"
+              ]
+            },
+            "Chaos": {
+              "1": [
+                "Bane"
+              ]
+            },
+            "Neutrality": {
+              "1": [
+                "Protection from Evil and Good"
+              ]
+            }
+          }
         }
       },
       {
@@ -3565,11 +3623,11 @@
           "1": [
             {
               "n": "Eyes of the Dark",
-              "d": "Darkvision to 120 feet, and darkness can be cast for 2 sorcery points and seen through."
+              "d": "You have darkvision out to 120 feet. From 3rd level you know darkness, which doesn't count against your spells known; you can cast it with 2 sorcery points as well as a slot, and when you do you can see through that darkness."
             },
             {
               "n": "Strength of the Grave",
-              "d": "A Charisma save against 5 + the damage leaves you at 1 hit point instead of 0; once per long rest."
+              "d": "When damage reduces you to 0 hit points, you can make a Charisma save (DC 5 + the damage taken) to drop to 1 hit point instead. It fails against radiant damage or a critical hit, and after a success you can't use it again until a long rest."
             }
           ],
           "6": [
@@ -3589,6 +3647,11 @@
               "n": "Umbral Form",
               "d": "Spend 6 sorcery points to become shadow for a minute: resistance to all but force and radiant damage, and the ability to move through creatures and objects."
             }
+          ]
+        },
+        "spells": {
+          "3": [
+            "Darkness"
           ]
         }
       },
@@ -3615,13 +3678,13 @@
             {
               "n": "Heart of the Storm",
               "d": "Resistance to lightning and thunder damage, and casting a spell of those types deals half your sorcerer level in damage to creatures within 10 feet."
-            }
-          ],
-          "14": [
+            },
             {
               "n": "Storm Guide",
               "d": "Stop rain around you or steer the wind's direction as a bonus action."
-            },
+            }
+          ],
+          "14": [
             {
               "n": "Storm's Fury",
               "d": "A reaction deals your sorcerer level in lightning damage to a melee attacker and pushes it 20 feet on a failed Strength save."
@@ -3667,13 +3730,13 @@
           "14": [
             {
               "n": "Revelation in Flesh",
-              "d": "Spend 1 or more sorcery points for a minute of aberrant change: see invisible things, swim and breathe water, fly, or squeeze through tiny gaps."
+              "d": "As a bonus action, spend 1 or more sorcery points to transform for 10 minutes, choosing one benefit per point: you see any invisible creature within 60 feet that isn't behind total cover; you gain a flying speed equal to your walking speed and can hover; you gain a swimming speed of twice your walking speed and breathe water; or you can squeeze through a space as narrow as an inch and spend 5 feet of movement to escape nonmagical restraints or a grapple."
             }
           ],
           "18": [
             {
               "n": "Warping Implosion",
-              "d": "Once per long rest, teleport 120 feet and pull creatures toward your old space for 3d10 force damage."
+              "d": "As an action, teleport up to 120 feet to an unoccupied space you can see; each creature within 30 feet of the space you left makes a Strength save against your spell save DC, taking 3d10 force damage and being pulled toward that space on a failure, or half damage on a success. Once per long rest, or by spending 5 sorcery points."
             }
           ]
         },
@@ -3773,30 +3836,62 @@
           "1": [
             {
               "n": "Lunar Embodiment",
-              "d": "A rotating set of moon spells always known, and healing or damaging sorcerer spells you cast can shift to radiant or cold."
+              "d": "You learn the spells of all three moon phases, one of each phase at sorcerer levels 1, 3, 5, 7 and 9, and they don't count against your spells known: Full Moon (shield, lesser restoration, dispel magic, death ward, Rary's telepathic bond), New Moon (ray of sickness, blindness/deafness, vampiric touch, confusion, hold monster) and Crescent Moon (color spray, alter self, phantom steed, hallucinatory terrain, mislead). After each long rest you choose a phase; until your next long rest you can cast its 1st-level spell once without a spell slot."
             },
             {
               "n": "Moon Fire",
-              "d": "A bonus action changes your lunar phase: Full grants a radiant aura, New grants concealment, Crescent grants extra reach and movement."
+              "d": "You learn sacred flame, which doesn't count against your cantrips known; when you cast it you can target one creature or two creatures within 5 feet of each other."
             }
           ],
           "6": [
             {
               "n": "Lunar Boons",
-              "d": "Your current phase empowers a matching school of spells, and a sorcery point can shift the phase mid-fight."
+              "d": "When you use Metamagic on a spell of your current phase's schools (Full Moon: abjuration and divination; New Moon: enchantment and necromancy; Crescent Moon: illusion and transmutation), it costs 1 sorcery point less (minimum 0), a proficiency-bonus number of times per long rest."
+            },
+            {
+              "n": "Waxing and Waning",
+              "d": "As a bonus action you can spend 1 sorcery point to change your current phase, and you can cast the 1st-level spell of each phase once without a spell slot, regaining those castings on a long rest."
             }
           ],
           "14": [
             {
-              "n": "Waxing and Waning",
-              "d": "Spend sorcery points to shift phase as a free action and add your Charisma modifier to a lunar spell's damage or healing once per turn."
+              "n": "Lunar Empowerment",
+              "d": "Your current phase empowers you. Full Moon: a bonus action sheds bright light in 10 feet and dim light 10 feet beyond (or douses it), and you and creatures of your choice in that bright light have advantage on Intelligence (Investigation) and Wisdom (Perception) checks. New Moon: advantage on Dexterity (Stealth) checks, and attack rolls against you have disadvantage while you are entirely in darkness. Crescent Moon: you resist necrotic and radiant damage."
             }
           ],
           "18": [
             {
               "n": "Lunar Phenomenon",
-              "d": "Once per long rest or for 5 sorcery points, unleash the full power of your phase in a 30-foot burst that heals allies, blinds enemies or hastens you depending on the moon."
+              "d": "As a bonus action, once per long rest or for 5 sorcery points, you release your phase's power. Full Moon: each creature of your choice within 30 feet makes a Constitution save or is blinded until the end of its next turn, and one creature of your choice there regains 3d8 hit points. New Moon: each creature of your choice within 30 feet makes a Dexterity save or takes 3d10 necrotic damage and has speed 0 until the end of its next turn, and you are invisible until the end of your next turn or until you attack or cast a spell. Crescent Moon: you teleport up to 60 feet with one willing creature within 5 feet of you, and each of you resists all damage until the start of your next turn."
             }
+          ]
+        },
+        "spells": {
+          "1": [
+            "Sacred Flame",
+            "Shield",
+            "Ray of Sickness",
+            "Color Spray"
+          ],
+          "3": [
+            "Lesser Restoration",
+            "Blindness/Deafness",
+            "Alter Self"
+          ],
+          "5": [
+            "Dispel Magic",
+            "Vampiric Touch",
+            "Phantom Steed"
+          ],
+          "7": [
+            "Death Ward",
+            "Confusion",
+            "Hallucinatory Terrain"
+          ],
+          "9": [
+            "Rary's Telepathic Bond",
+            "Hold Monster",
+            "Mislead"
           ]
         }
       }
@@ -3826,17 +3921,17 @@
           "10": [
             {
               "n": "Beguiling Defenses",
-              "d": "Immunity to being charmed, and a reaction turns a charm attempt back on the caster for 1 minute and 3d10 psychic damage per turn."
+              "d": "You can't be charmed, and when another creature tries to charm you, a reaction makes it save on Wisdom against your spell save DC or be charmed by you for a minute or until it takes damage."
             }
           ],
           "14": [
             {
               "n": "Dark Delirium",
-              "d": "Wrap a creature within 60 feet in illusion for a minute: charmed or frightened, unable to perceive anything else, and removable to the Feywild until the effect ends."
+              "d": "As an action, a creature you can see within 60 feet makes a Wisdom save against your spell save DC or is charmed or frightened by you (your choice) for a minute or until your concentration breaks or it takes damage; it believes it is lost in a misty realm and can see and hear only itself, you and the illusion. Once per short or long rest."
             }
           ]
         },
-        "spells": {
+        "expanded": {
           "1": [
             "Faerie Fire",
             "Sleep"
@@ -3871,7 +3966,7 @@
           "1": [
             {
               "n": "Awakened Mind",
-              "d": "Speak telepathically to any creature within 30 feet that shares a language with you."
+              "d": "You can speak telepathically to any creature you can see within 30 feet; it must understand at least one language, but it needn't share one with you."
             }
           ],
           "6": [
@@ -3893,7 +3988,7 @@
             }
           ]
         },
-        "spells": {
+        "expanded": {
           "1": [
             "Dissonant Whispers",
             "Tasha's Hideous Laughter"
@@ -3931,19 +4026,19 @@
             },
             {
               "n": "Healing Light",
-              "d": "A pool of d6s equal to 1 + your warlock level, spendable as a bonus action to heal a creature within 60 feet; refills on a long rest."
+              "d": "A pool of d6s equal to 1 + your warlock level, refilled on a long rest. As a bonus action, spend up to your Charisma modifier (minimum one) of them to heal a creature you can see within 60 feet by the total rolled."
             }
           ],
           "6": [
             {
               "n": "Radiant Soul",
-              "d": "Resistance to radiant damage, and once per turn add your Charisma modifier to a radiant or fire spell's damage."
+              "d": "You have resistance to radiant damage. When you cast a spell that deals radiant or fire damage, add your Charisma modifier to one radiant or fire damage roll of that spell against one of its targets."
             }
           ],
           "10": [
             {
               "n": "Celestial Resilience",
-              "d": "Temporary hit points after every rest, for you and up to five allies, equal to your warlock level plus your Charisma modifier."
+              "d": "Whenever you finish a short or long rest, you gain temporary hit points equal to your warlock level + your Charisma modifier, and up to five creatures of your choice you can see each gain half your warlock level + your Charisma modifier."
             }
           ],
           "14": [
@@ -3953,7 +4048,7 @@
             }
           ]
         },
-        "spells": {
+        "expanded": {
           "1": [
             "Cure Wounds",
             "Guiding Bolt"
@@ -3974,6 +4069,12 @@
             "Flame Strike",
             "Greater Restoration"
           ]
+        },
+        "spells": {
+          "1": [
+            "Light",
+            "Sacred Flame"
+          ]
         }
       },
       {
@@ -3987,33 +4088,33 @@
           "1": [
             {
               "n": "Hexblade's Curse",
-              "d": "A bonus action curses a creature for a minute: bonus damage equal to your proficiency bonus, critical hits on a 19 or 20, and hit points back when it dies; recharges on a short or long rest."
+              "d": "As a bonus action, curse a creature you can see within 30 feet for a minute, or until it or you die or you are incapacitated: you add your proficiency bonus to damage rolls against it, your attack rolls against it score a critical hit on a 19 or 20, and when it dies you regain hit points equal to your warlock level + your Charisma modifier (minimum 1). Once per short or long rest."
             },
             {
               "n": "Hex Warrior",
-              "d": "Proficiency with medium armor, shields and martial weapons, and one weapon each day uses Charisma for attack and damage."
+              "d": "You gain proficiency with medium armor, shields and martial weapons. At the end of a long rest you can touch a weapon you are proficient with that lacks the two-handed property: you use Charisma instead of Strength or Dexterity for its attack and damage rolls until you use this again. With Pact of the Blade, this also holds for every pact weapon you conjure."
             }
           ],
           "6": [
             {
               "n": "Accursed Specter",
-              "d": "A humanoid you kill rises as a specter under your command until your next long rest; recharges on a long rest."
+              "d": "When you slay a humanoid, its spirit rises as a specter under your command in an unoccupied space near the corpse: it has temporary hit points equal to half your warlock level, adds your Charisma modifier (minimum +0) to its attack rolls, and leaves at the end of your next long rest. Once per long rest."
             }
           ],
           "10": [
             {
               "n": "Armor of Hexes",
-              "d": "An attack from your cursed target misses on a coin-flip d6 roll even when it would hit."
+              "d": "When the target of your Hexblade's Curse hits you with an attack roll, a reaction rolls a d6: on a 4 or higher the attack misses, whatever its roll."
             }
           ],
           "14": [
             {
               "n": "Master of Hexes",
-              "d": "When your cursed target dies, move the curse to a new creature without spending a rest."
+              "d": "When the creature cursed by your Hexblade's Curse dies, you can move the curse to another creature you can see within 30 feet of it, if you aren't incapacitated; you don't regain hit points from the first creature's death when you do."
             }
           ]
         },
-        "spells": {
+        "expanded": {
           "1": [
             "Shield",
             "Wrathful Smite"
@@ -4046,8 +4147,8 @@
         "levels": {
           "1": [
             {
-              "n": "Tentacle of the Deep",
-              "d": "A bonus action summons a spectral tentacle for a minute that attacks for 1d8 cold damage and halves a target's speed; a proficiency-bonus number of times per long rest."
+              "n": "Tentacle of the Deeps",
+              "d": "As a bonus action, a proficiency-bonus number of times per long rest, create a 10-foot spectral tentacle at a point you can see within 60 feet for a minute. When it appears, and as a bonus action on later turns, it can strike a creature within 10 feet of it with a melee spell attack for 1d8 cold damage (2d8 from 10th level), and the target's speed drops by 10 feet until the start of your next turn; you can move it up to 30 feet when you make that attack."
             },
             {
               "n": "Gift of the Sea",
@@ -4057,7 +4158,7 @@
           "6": [
             {
               "n": "Oceanic Soul",
-              "d": "Immunity to cold damage, full immersion comfort, and the ability to speak with any creature underwater."
+              "d": "You resist cold damage, and while you are fully submerged, any creature also fully submerged can understand your speech and you can understand its."
             },
             {
               "n": "Guardian Coil",
@@ -4067,7 +4168,7 @@
           "10": [
             {
               "n": "Grasping Tentacles",
-              "d": "You always have evard's black tentacles prepared, gain temporary hit points when you cast it, and keep concentration through damage more easily."
+              "d": "You learn Evard's black tentacles, a warlock spell for you that doesn't count against your spells known, and can cast it once per long rest without a spell slot. Casting it gives you temporary hit points equal to your warlock level, and damage can't break your concentration on it."
             }
           ],
           "14": [
@@ -4077,7 +4178,7 @@
             }
           ]
         },
-        "spells": {
+        "expanded": {
           "1": [
             "Create or Destroy Water",
             "Thunderwave"
@@ -4096,7 +4197,12 @@
           ],
           "9": [
             "Cone of Cold",
-            "Commune with Nature"
+            "Bigby's Hand"
+          ]
+        },
+        "spells": {
+          "10": [
+            "Evard's Black Tentacles"
           ]
         }
       },
@@ -4111,49 +4217,118 @@
           "1": [
             {
               "n": "Genie's Vessel",
-              "d": "A vessel tied to your patron: once per long rest, Bottled Respite lets you retreat inside it for 10 minutes, and Genie's Wrath adds your proficiency bonus in your patron's damage type to one hit per turn."
+              "d": "Your patron's kind (Dao, Djinni, Efreeti or Marid) sets your Genie's Wrath damage type and part of your expanded spells. Your vessel is a Tiny object (AC equal to your spell save DC, hit points equal to your warlock level + your proficiency bonus) and your spellcasting focus. Bottled Respite: as an action, vanish into it for up to twice your proficiency bonus in hours, leaving early as a bonus action; once per long rest. Genie's Wrath: once on each of your turns, a hit with an attack roll deals extra damage of your patron's type equal to your proficiency bonus (bludgeoning for a dao, thunder for a djinni, fire for an efreeti, cold for a marid)."
             }
           ],
           "6": [
             {
               "n": "Elemental Gift",
-              "d": "Resistance to your patron's damage type, and a bonus action grants a 30-foot flying speed for 10 minutes, a proficiency-bonus number of times per long rest."
+              "d": "You have resistance to your patron's damage type, and as a bonus action you gain a 30-foot flying speed (hovering) for 10 minutes, a proficiency-bonus number of times per long rest."
             }
           ],
           "10": [
             {
               "n": "Sanctuary Vessel",
-              "d": "Bottled Respite takes up to five companions with you, and everyone who finishes a short rest inside gains temporary hit points."
+              "d": "When you enter your vessel through Bottled Respite, up to five willing creatures within 30 feet can come in with you. Anyone who stays inside at least 10 minutes gains the benefit of a short rest, and anyone who spends Hit Dice in it adds your proficiency bonus to the hit points each die restores."
             }
           ],
           "14": [
             {
               "n": "Limited Wish",
-              "d": "Once per 1d4 long rests, replicate any spell of 6th level or lower without components."
+              "d": "As an action, you produce the effect of one spell of 6th level or lower, from any class's list, with a casting time of one action, ignoring its requirements and costly components. You can use it again only after 1d4 long rests."
             }
           ]
         },
-        "spells": {
+        "expanded": {
           "1": [
-            "Detect Evil and Good",
-            "Protection from Evil and Good"
+            "Detect Evil and Good"
           ],
           "3": [
-            "Phantasmal Force",
-            "Gust of Wind"
+            "Phantasmal Force"
           ],
           "5": [
-            "Create Food and Water",
-            "Phantom Steed"
+            "Create Food and Water"
           ],
           "7": [
-            "Arcane Eye",
-            "Fire Shield"
+            "Phantasmal Killer"
           ],
           "9": [
-            "Creation",
-            "Seeming"
+            "Creation"
           ]
+        },
+        "choiceSpells": {
+          "feature": "Genie's Vessel",
+          "expanded": true,
+          "options": {
+            "Dao": {
+              "1": [
+                "Sanctuary"
+              ],
+              "3": [
+                "Spike Growth"
+              ],
+              "5": [
+                "Meld into Stone"
+              ],
+              "7": [
+                "Stone Shape"
+              ],
+              "9": [
+                "Wall of Stone"
+              ]
+            },
+            "Djinni": {
+              "1": [
+                "Thunderwave"
+              ],
+              "3": [
+                "Gust of Wind"
+              ],
+              "5": [
+                "Wind Wall"
+              ],
+              "7": [
+                "Greater Invisibility"
+              ],
+              "9": [
+                "Seeming"
+              ]
+            },
+            "Efreeti": {
+              "1": [
+                "Burning Hands"
+              ],
+              "3": [
+                "Scorching Ray"
+              ],
+              "5": [
+                "Fireball"
+              ],
+              "7": [
+                "Fire Shield"
+              ],
+              "9": [
+                "Flame Strike"
+              ]
+            },
+            "Marid": {
+              "1": [
+                "Fog Cloud"
+              ],
+              "3": [
+                "Blur"
+              ],
+              "5": [
+                "Sleet Storm"
+              ],
+              "7": [
+                "Control Water"
+              ],
+              "9": [
+                "Cone of Cold"
+              ]
+            }
+          }
         }
       },
       {
@@ -4167,32 +4342,32 @@
           "1": [
             {
               "n": "Form of Dread",
-              "d": "A bonus action for a minute grants temporary hit points of 1d10 + warlock level, immunity to fear, and the power to frighten one creature you hit each turn; a proficiency-bonus number of times per long rest."
+              "d": "As a bonus action, transform for a minute, a proficiency-bonus number of times per long rest: you gain 1d10 + your warlock level temporary hit points and immunity to being frightened, and once on each of your turns, when you hit a creature with an attack roll, you can make it save on Wisdom against your spell save DC or be frightened of you until the end of your next turn."
             }
           ],
           "6": [
             {
               "n": "Grave Touched",
-              "d": "You need no food, drink or air, and once per turn a damaging attack can deal necrotic damage instead, with a bonus die while in Form of Dread."
+              "d": "You no longer need to eat, drink or breathe. Once on each of your turns, when you hit a creature with an attack roll and roll damage, you can make that damage necrotic, and while in Form of Dread you roll one additional damage die."
             }
           ],
           "10": [
             {
               "n": "Necrotic Husk",
-              "d": "Immunity to necrotic damage, and once per long rest dropping to 0 hit points instead leaves you at 1 and blasts nearby creatures for necrotic damage equal to your warlock level."
+              "d": "You have resistance to necrotic damage, and immunity to it while in Form of Dread. When you are reduced to 0 hit points, a reaction drops you to 1 hit point instead, and each creature of your choice within 30 feet takes 2d10 + your warlock level necrotic damage; you then gain a level of exhaustion. You can use the reaction again only after 1d4 long rests."
             }
           ],
           "14": [
             {
               "n": "Spirit Projection",
-              "d": "For an hour, project your spirit: resistance to most damage, the ability to move through solid matter, and necrotic and psychic spell damage that heals you; once per long rest or with a 5th-level slot."
+              "d": "As an action, once per long rest, project your spirit from your body for up to an hour (concentration) while the body lies unconscious. Your spirit carries copies of your gear; you resist bludgeoning, piercing and slashing damage; your conjuration and necromancy spells need no verbal or somatic components, nor material ones without a cost; you can fly at your walking speed and hover, passing through creatures and objects as difficult terrain (1d10 force damage if you end a turn inside one); and while in Form of Dread, once on each of your turns when you deal necrotic damage, you regain hit points equal to half of it."
             }
           ]
         },
-        "spells": {
+        "expanded": {
           "1": [
-            "False Life",
-            "Ray of Sickness"
+            "Bane",
+            "False Life"
           ],
           "3": [
             "Blindness/Deafness",
@@ -4223,7 +4398,7 @@
           "1": [
             {
               "n": "Among the Dead",
-              "d": "You know spare the dying, undead have disadvantage attacking you unless you attack them, and you have advantage on saves against disease."
+              "d": "You learn spare the dying. An undead that targets you directly with an attack or a harmful spell must first make a Wisdom save against your spell save DC or choose another target or lose the attack or spell; this doesn't protect you from area effects, and an undead that succeeds, or that you target with an attack or harmful spell, is immune for 24 hours. You have advantage on saving throws against disease."
             }
           ],
           "6": [
@@ -4235,7 +4410,7 @@
           "10": [
             {
               "n": "Undying Nature",
-              "d": "You barely need to breathe, eat or sleep, you no longer age, and you cannot be aged magically."
+              "d": "You can hold your breath indefinitely and need no food, water or sleep (you still rest to recover from exhaustion and benefit from short and long rests), and you age at a tenth of the normal rate, immune to magical aging."
             }
           ],
           "14": [
@@ -4245,7 +4420,7 @@
             }
           ]
         },
-        "spells": {
+        "expanded": {
           "1": [
             "False Life",
             "Ray of Sickness"
@@ -4265,6 +4440,11 @@
           "9": [
             "Contagion",
             "Legend Lore"
+          ]
+        },
+        "spells": {
+          "1": [
+            "Spare the Dying"
           ]
         }
       }
@@ -4370,13 +4550,13 @@
           "6": [
             {
               "n": "Expert Divination",
-              "d": "Casting a divination spell of 2nd level or higher returns one expended slot of lower level."
+              "d": "When you cast a divination spell of 2nd level or higher with a spell slot, you regain one expended slot of a lower level than that spell, and no higher than 5th."
             }
           ],
           "10": [
             {
               "n": "The Third Eye",
-              "d": "After a rest, gain darkvision, ethereal sight, greater comprehension or see invisibility until your next rest."
+              "d": "As an action, once per short or long rest, gain one of these until you are incapacitated or take a short or long rest: darkvision out to 60 feet, sight of the Ethereal Plane to 60 feet, the ability to read any language, or sight of invisible creatures and objects within 10 feet."
             }
           ],
           "14": [
@@ -4403,13 +4583,13 @@
             },
             {
               "n": "Hypnotic Gaze",
-              "d": "An action charms and incapacitates a creature within 5 feet until the end of your next turn, extendable each turn; recharges on a short or long rest."
+              "d": "As an action, choose a creature you can see within 5 feet: if it can see or hear you, it makes a Wisdom save against your spell save DC or is charmed by you until the end of your next turn, with speed 0 and incapacitated, and later actions extend it. It ends if you move more than 5 feet away, if it can't see or hear you, or if it takes damage. Once you use it on a creature, whatever the result, you can't use it on that creature again until you finish a long rest."
             }
           ],
           "6": [
             {
               "n": "Instinctive Charm",
-              "d": "A reaction redirects an attack aimed at you onto another creature within the attacker's reach on a failed Wisdom save; recharges on a short or long rest."
+              "d": "When a creature you can see within 30 feet makes an attack roll against you, a reaction makes it save on Wisdom against your spell save DC or target the creature closest to it (other than you or itself) instead, deciding before you know whether the attack hits. If it succeeds, you can't use this on it again until you finish a long rest; it fails against creatures immune to being charmed."
             }
           ],
           "10": [
@@ -4447,8 +4627,8 @@
           ],
           "6": [
             {
-              "n": "Malleable Illusion",
-              "d": "An action reshapes an illusion you are concentrating on while it lasts."
+              "n": "Malleable Illusions",
+              "d": "When you cast an illusion spell with a duration of a minute or longer, you can use your action to change the nature of that illusion, within the spell's normal limits, as long as you can see it."
             }
           ],
           "10": [
@@ -4462,6 +4642,11 @@
               "n": "Illusory Reality",
               "d": "A bonus action makes one object in your illusion real for a minute."
             }
+          ]
+        },
+        "spells": {
+          "2": [
+            "Minor Illusion"
           ]
         }
       },
@@ -4499,7 +4684,7 @@
           "14": [
             {
               "n": "Command Undead",
-              "d": "An action takes control of an undead creature on a failed Charisma save, with intelligent undead getting a fresh save each time they take damage."
+              "d": "As an action, an undead you can see within 60 feet makes a Charisma save against your spell save DC (with advantage if its Intelligence is 8 or higher) or becomes friendly and obeys your commands until you use this again. An undead with an Intelligence of 12 or higher that failed repeats the save at the end of every hour, breaking free on a success."
             }
           ]
         }
@@ -4532,7 +4717,7 @@
           "10": [
             {
               "n": "Shapechanger",
-              "d": "You always have polymorph prepared and can cast it on yourself as a beast of CR 1 or lower without a slot, once per short or long rest."
+              "d": "You add polymorph to your spellbook if it isn't there, and you can cast it without a spell slot, targeting only yourself and becoming a beast of challenge rating 1 or lower; once per short or long rest, though you can still cast it normally with a slot."
             }
           ],
           "14": [
@@ -4565,7 +4750,7 @@
           "6": [
             {
               "n": "Power Surge",
-              "d": "Store surges from dispelled or countered spells, up to your Intelligence modifier, and spend one to add half your wizard level to a damaging spell's damage."
+              "d": "You can store a number of power surges up to your Intelligence modifier (minimum one). After a long rest you have one, you gain one whenever you end a spell with dispel magic or counterspell, and you gain one at the end of a short rest if you have none. Once per turn when you deal damage to a creature or object with a wizard spell, you can spend one to deal extra force damage equal to half your wizard level."
             }
           ],
           "10": [
@@ -4616,7 +4801,7 @@
           "14": [
             {
               "n": "Song of Victory",
-              "d": "Add your Intelligence modifier to melee weapon damage while bladesinging."
+              "d": "Add your Intelligence modifier (at least +1) to melee weapon damage while bladesinging."
             }
           ]
         }
@@ -4633,7 +4818,7 @@
           "2": [
             {
               "n": "Chronal Shift",
-              "d": "A reaction forces a creature within 30 feet to reroll an attack, check or save, twice per long rest."
+              "d": "After you or a creature you can see within 30 feet makes an attack roll, ability check or saving throw, a reaction forces a reroll once you see whether it succeeded, and the second roll stands. Twice per long rest."
             },
             {
               "n": "Temporal Awareness",
@@ -4643,7 +4828,7 @@
           "6": [
             {
               "n": "Momentary Stasis",
-              "d": "A Large or smaller creature within 60 feet is frozen in time until the end of your next turn on a failed Constitution save; a proficiency-bonus number of times per long rest."
+              "d": "As an action, a Large or smaller creature you can see within 60 feet makes a Constitution save against your spell save DC or is incapacitated with speed 0 until the end of your next turn or until it takes damage; a number of times equal to your Intelligence modifier (minimum once) per long rest."
             }
           ],
           "10": [
@@ -4684,13 +4869,13 @@
           "10": [
             {
               "n": "Violent Attraction",
-              "d": "A reaction adds 1d10 to a falling or weapon damage roll within 60 feet, a proficiency-bonus number of times per long rest."
+              "d": "When a creature you can see within 60 feet hits with a weapon attack, a reaction adds 1d10 to its damage; or when a creature within 60 feet takes falling damage, a reaction adds 2d10. A number of times equal to your Intelligence modifier (minimum once) per long rest."
             }
           ],
           "14": [
             {
               "n": "Event Horizon",
-              "d": "A 30-foot field of crushing gravity for a minute that deals 2d10 force damage and halts movement on a failed Strength save; once per long rest or with a 4th-level slot."
+              "d": "As an action, for a minute (concentration) you emanate a 30-foot field: each hostile creature that starts its turn in it makes a Strength save against your spell save DC, taking 2d10 force damage and having speed 0 until the start of its next turn on a failure, or half damage on a success, after which every foot it moves in the field costs 2 extra feet. Once per long rest, or by expending a spell slot of 3rd level or higher."
             }
           ]
         }
@@ -4711,25 +4896,25 @@
             },
             {
               "n": "Awakened Spellbook",
-              "d": "Your book gains a mind: it lets you change a spell's damage type, cast one ritual per long rest without preparing it, and replace lost pages."
+              "d": "Your spellbook gains a mind and becomes your spellcasting focus. When you cast a wizard spell with a slot you can change its damage type to one found in another spell in your book of the slot's level; once per long rest you can cast a ritual spell from the book at its normal casting time rather than adding 10 minutes; and over a short rest your quill can turn a blank book into a new home for its mind."
             }
           ],
           "6": [
             {
               "n": "Manifest Mind",
-              "d": "A bonus action projects your book's spirit up to 300 feet, letting you cast spells from its position and shed light; free once per long rest, otherwise a slot."
+              "d": "As a bonus action, manifest your spellbook's mind as a Tiny spectral object within 60 feet that sheds dim light in 10 feet, sees in darkness to 60 feet and moves up to 30 feet when you use a bonus action; it ends if it is ever more than 300 feet from you. While it is manifested you can cast a wizard spell from its space a number of times per long rest equal to your proficiency bonus. Manifesting it is free once per long rest, or costs a spell slot of any level."
             }
           ],
           "10": [
             {
               "n": "Master Scrivener",
-              "d": "After a long rest, create a spell scroll of a 1st or 2nd-level spell from your book, cast at maximum effect."
+              "d": "After a long rest you can create a magic scroll of a 1st- or 2nd-level wizard spell from your book with a casting time of an action; it is cast as if one level higher, and it vanishes once cast or when you finish a long rest."
             }
           ],
           "14": [
             {
               "n": "One with the Word",
-              "d": "Once per long rest, avoid death by destroying your book's magic, then rebuild it over days of study."
+              "d": "While your spellbook is on your person you have advantage on Intelligence (Arcana) checks. If you take damage while the book's mind is manifested, a reaction dismisses it to prevent all of that damage; then roll 3d6, and spells in your book with a combined level at least that total vanish from it until you finish 1d6 long rests (if there aren't enough, you drop to 0 hit points). Once per long rest."
             }
           ]
         }
@@ -4750,19 +4935,19 @@
             },
             {
               "n": "Experimental Elixir",
-              "d": "After a long rest you brew an elixir with a random effect: healing, swiftness, resilience, boldness, flight or transformation. You can brew more by spending spell slots, and the number rises with level."
+              "d": "After a long rest you brew one elixir in an empty flask (two from 6th level, three from 15th), its effect rolled on a d6: healing (2d4 + your Intelligence modifier hit points), swiftness (walking speed 10 feet higher for an hour), resilience (+1 AC for 10 minutes), boldness (a d4 added to attack rolls and saving throws for a minute), flight (a 10-foot flying speed for 10 minutes) or transformation (alter self for 10 minutes). As an action you can expend a spell slot of 1st level or higher to brew one more, choosing its effect. An elixir lasts until it is drunk or you finish a long rest."
             }
           ],
           "5": [
             {
               "n": "Alchemical Savant",
-              "d": "Add your Intelligence modifier to one damage or healing roll of any spell you cast through your alchemical tools."
+              "d": "When you cast a spell with alchemist's supplies as your spellcasting focus, add your Intelligence modifier (minimum +1) to one roll of the spell that restores hit points or deals acid, fire, necrotic or poison damage."
             }
           ],
           "9": [
             {
               "n": "Restorative Reagents",
-              "d": "You can cast lesser restoration without a slot a proficiency-bonus number of times per long rest, and your elixirs also grant temporary hit points."
+              "d": "A creature that drinks one of your experimental elixirs also gains 2d6 + your Intelligence modifier temporary hit points (minimum 1). With alchemist's supplies as your focus you can cast lesser restoration without a spell slot or preparing it, a number of times equal to your Intelligence modifier (minimum once) per long rest."
             }
           ],
           "15": [
@@ -4813,7 +4998,7 @@
             },
             {
               "n": "Armor Model",
-              "d": "Choose Guardian, whose thunder gauntlets punish enemies who ignore you and whose Defensive Field grants temporary hit points, or Infiltrator, whose lightning launcher fires at range and whose powered steps add speed and stealth."
+              "d": "Choose Guardian or Infiltrator, and change it on a short or long rest; you use Intelligence for the attack and damage rolls of the armor's weapon. Guardian: thunder gauntlets (a 1d8 thunder melee weapon; a creature hit has disadvantage on attacks against anyone but you until the start of your next turn) and Defensive Field (a bonus action gives you temporary hit points equal to your artificer level, a proficiency-bonus number of times per long rest). Infiltrator: a lightning launcher (a 1d6 lightning ranged weapon, 90/300 feet, that once on each of your turns deals an extra 1d6 lightning damage to a creature it strikes), Powered Steps (walking speed 5 feet higher) and Dampening Field (advantage on Stealth checks)."
             }
           ],
           "5": [
@@ -4825,13 +5010,13 @@
           "9": [
             {
               "n": "Armor Modifications",
-              "d": "Your armor counts as four separate items for infusions: its armor, its weapon, and its helmet and boots."
+              "d": "Your Arcane Armor counts as separate items for your infusions (the armor, the boots, the helmet and the special weapon), and you can infuse two more items at once, provided both are parts of the armor."
             }
           ],
           "15": [
             {
               "n": "Perfected Armor",
-              "d": "Guardian armor pulls in enemies within 30 feet and knocks them prone; Infiltrator armor makes a struck target glow, granting attackers advantage and dealing extra force damage."
+              "d": "Guardian: when a Huge or smaller creature you can see ends its turn within 30 feet of you, a reaction makes it save on Strength against your spell save DC or be pulled up to 25 feet toward you into an unoccupied space, and if it ends within 5 feet of you, you can make a melee weapon attack against it as part of the reaction; a proficiency-bonus number of times per long rest. Infiltrator: a creature your lightning launcher damages glows until the start of your next turn, has disadvantage on attack rolls against you, and the next attack roll against it has advantage and deals an extra 1d6 lightning damage if it hits."
             }
           ]
         },
@@ -4872,7 +5057,7 @@
             },
             {
               "n": "Eldritch Cannon",
-              "d": "An action creates a Tiny or Small cannon, and a bonus action activates it: a flamethrower cone, a force ballista that pushes, or a protector that hands out temporary hit points. Once per long rest, or by spending a spell slot."
+              "d": "As an action you create a Small or Tiny cannon (AC 18, hit points five times your artificer level) in an unoccupied space within 5 feet that lasts an hour; once per long rest, or by expending a spell slot of 1st level or higher. A bonus action activates it if it is within 60 feet: Flamethrower (a 15-foot cone, 2d8 fire damage, half on a successful Dexterity save), Force Ballista (a ranged spell attack at a creature within 120 feet for 2d8 force damage that pushes it 5 feet) or Protector (it and each creature of your choice within 10 feet of it gain 1d8 + your Intelligence modifier temporary hit points)."
             }
           ],
           "5": [
@@ -4936,7 +5121,7 @@
             },
             {
               "n": "Steel Defender",
-              "d": "A construct companion that acts on your turn, attacks with a force-empowered bite, and can use its reaction to impose disadvantage on an attack against a nearby ally."
+              "d": "You build a steel defender that fights beside you and acts on your initiative right after you, taking the Dodge action unless you spend a bonus action to command it. It has AC 15 and 2 + your Intelligence modifier + five times your artificer level hit points, attacks with Force-Empowered Rend (a melee attack using your spell attack modifier for 1d8 + your proficiency bonus force damage), and its Deflect Attack reaction gives disadvantage to one attack against a creature other than itself within 5 feet of it."
             }
           ],
           "5": [
@@ -4948,7 +5133,7 @@
           "9": [
             {
               "n": "Arcane Jolt",
-              "d": "Once per turn, a hit from your magic weapon or your defender deals an extra 2d6 force damage, or heals a creature within 30 feet for 2d6."
+              "d": "When your magic weapon or your steel defender hits a target, once per turn you can deal it an extra 2d6 force damage or restore 2d6 hit points to a creature or object you can see within 30 feet of it, a number of times equal to your Intelligence modifier (minimum once) per long rest."
             }
           ],
           "15": [

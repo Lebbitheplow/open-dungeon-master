@@ -48,6 +48,7 @@ import { effectOutcome } from "@/lib/dm/effect-tools";
 import { hasTrait } from "@/lib/dm/monster-abilities";
 import { enfeebledBlow, spellRetort } from "@/lib/dm/spell-retort";
 import { holdsFeature } from "@/lib/srd/feature-names";
+import { activeAuthored } from "@/lib/srd/authored-effects";
 
 // Opportunity attacks: walking out of an enemy's reach is not free. Before
 // this, a player could stroll away from a troll with no consequence at all,
@@ -238,6 +239,9 @@ export function resolveOpportunityAttacks(
     // Escape the Horde (a Hunter ranger's Defensive Tactics): opportunity
     // attacks against them are made at disadvantage.
     const escapes = holdsFeature(sheet, "Escape the Horde");
+    // Totem Spirit (Eagle): opportunity attacks against the raging barbarian
+    // are made at disadvantage.
+    const eagle = activeAuthored(sheet, "oa_disadv").length > 0;
     // An active effect on its attack and damage rolls (set_effect).
     const attackEffect = effectOutcome(campaign.id, { kind: "enemy", id: enemy.id }, "attack");
     const damageEffect = effectOutcome(campaign.id, { kind: "enemy", id: enemy.id }, "damage").bonus;
@@ -245,6 +249,7 @@ export function resolveOpportunityAttacks(
       ...context.sources,
       ...light.sources,
       ...(escapes ? ["disadvantage" as const] : []),
+      ...(eagle ? ["disadvantage" as const] : []),
       ...(attackEffect.advantage ? ["advantage" as const] : []),
       ...(attackEffect.disadvantage ? ["disadvantage" as const] : []),
     ]);

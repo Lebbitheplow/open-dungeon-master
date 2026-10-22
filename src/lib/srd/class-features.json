@@ -293,9 +293,7 @@
           "levels": {
             "2": [
               "Bonus Cantrip",
-              "Natural Recovery"
-            ],
-            "3": [
+              "Natural Recovery",
               "Circle Spells"
             ],
             "6": [
@@ -307,6 +305,155 @@
             "14": [
               "Nature's Sanctuary"
             ]
+          },
+          "choiceSpells": {
+            "feature": "Circle Spells",
+            "options": {
+              "Arctic": {
+                "3": [
+                  "Hold Person",
+                  "Spike Growth"
+                ],
+                "5": [
+                  "Sleet Storm",
+                  "Slow"
+                ],
+                "7": [
+                  "Freedom of Movement",
+                  "Ice Storm"
+                ],
+                "9": [
+                  "Commune with Nature",
+                  "Cone of Cold"
+                ]
+              },
+              "Coast": {
+                "3": [
+                  "Mirror Image",
+                  "Misty Step"
+                ],
+                "5": [
+                  "Water Breathing",
+                  "Water Walk"
+                ],
+                "7": [
+                  "Control Water",
+                  "Freedom of Movement"
+                ],
+                "9": [
+                  "Conjure Elemental",
+                  "Scrying"
+                ]
+              },
+              "Desert": {
+                "3": [
+                  "Blur",
+                  "Silence"
+                ],
+                "5": [
+                  "Create Food and Water",
+                  "Protection from Energy"
+                ],
+                "7": [
+                  "Blight",
+                  "Hallucinatory Terrain"
+                ],
+                "9": [
+                  "Insect Plague",
+                  "Wall of Stone"
+                ]
+              },
+              "Forest": {
+                "3": [
+                  "Barkskin",
+                  "Spider Climb"
+                ],
+                "5": [
+                  "Call Lightning",
+                  "Plant Growth"
+                ],
+                "7": [
+                  "Divination",
+                  "Freedom of Movement"
+                ],
+                "9": [
+                  "Commune with Nature",
+                  "Tree Stride"
+                ]
+              },
+              "Grassland": {
+                "3": [
+                  "Invisibility",
+                  "Pass without Trace"
+                ],
+                "5": [
+                  "Daylight",
+                  "Haste"
+                ],
+                "7": [
+                  "Divination",
+                  "Freedom of Movement"
+                ],
+                "9": [
+                  "Dream",
+                  "Insect Plague"
+                ]
+              },
+              "Mountain": {
+                "3": [
+                  "Spider Climb",
+                  "Spike Growth"
+                ],
+                "5": [
+                  "Lightning Bolt",
+                  "Meld into Stone"
+                ],
+                "7": [
+                  "Stone Shape",
+                  "Stoneskin"
+                ],
+                "9": [
+                  "Passwall",
+                  "Wall of Stone"
+                ]
+              },
+              "Swamp": {
+                "3": [
+                  "Acid Arrow",
+                  "Darkness"
+                ],
+                "5": [
+                  "Water Walk",
+                  "Stinking Cloud"
+                ],
+                "7": [
+                  "Freedom of Movement",
+                  "Locate Creature"
+                ],
+                "9": [
+                  "Insect Plague",
+                  "Scrying"
+                ]
+              },
+              "Underdark": {
+                "3": [
+                  "Spider Climb",
+                  "Web"
+                ],
+                "5": [
+                  "Gaseous Form",
+                  "Stinking Cloud"
+                ],
+                "7": [
+                  "Greater Invisibility",
+                  "Stone Shape"
+                ],
+                "9": [
+                  "Cloudkill",
+                  "Insect Plague"
+                ]
+              }
+            }
           }
         }
       ]
@@ -736,6 +883,28 @@
             ],
             "14": [
               "Hurl Through Hell"
+            ]
+          },
+          "expanded": {
+            "1": [
+              "Burning Hands",
+              "Command"
+            ],
+            "3": [
+              "Blindness/Deafness",
+              "Scorching Ray"
+            ],
+            "5": [
+              "Fireball",
+              "Stinking Cloud"
+            ],
+            "7": [
+              "Fire Shield",
+              "Wall of Fire"
+            ],
+            "9": [
+              "Flame Strike",
+              "Hallow"
             ]
           }
         }

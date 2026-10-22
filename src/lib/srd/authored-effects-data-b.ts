@@ -12,6 +12,19 @@ export const AUTHORED_DATA_A2: Record<string, AuthoredEntry> = {
     subclass: "Circle of the Moon",
     counter: "wild_shape",
   },
+  // The Circle of the Land's terrain, chosen when the druid joins it: its
+  // circle spells are the chosen land's (class-features.json choiceSpells).
+  "druid::Circle Spells": {
+    subclass: "Circle of the Land",
+    spends: [
+      {
+        name: "Circle Land",
+        aliases: ["Circle Spells", "Land"],
+        fight: "out",
+        does: { kind: "choose", options: ["Arctic", "Coast", "Desert", "Forest", "Grassland", "Mountain", "Swamp", "Underdark"] },
+      },
+    ],
+  },
   "druid::Halo of Spores": {
     subclass: "Circle of Spores",
     reactions: [
@@ -184,6 +197,21 @@ export const AUTHORED_DATA_A2: Record<string, AuthoredEntry> = {
   "fighter::Legion of One": {
     subclass: "Echo Knight",
     effects: [{ kind: "init_refill", resource: "sub_unleash_incarnation" }],
+  },
+  // Every Psionic Energy die returns on a long rest; once per short or long
+  // rest a bonus action regains one (Tasha's).
+  "fighter::Psionic Power (Psi Warrior)": {
+    subclass: "Psi Warrior",
+    counter: "sub_psionic_energy",
+    spends: [
+      {
+        name: "Psionic Recovery",
+        aliases: ["Regain Psionic Energy"],
+        pool: { id: "sub_psionic_recovery" },
+        action: "bonus",
+        does: { kind: "restore", pool: "sub_psionic_energy", amount: 1 },
+      },
+    ],
   },
   "fighter::Protective Field": {
     subclass: "Psi Warrior",

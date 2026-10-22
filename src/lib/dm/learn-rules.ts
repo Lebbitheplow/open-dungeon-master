@@ -13,11 +13,11 @@ import type { SubclassExtras } from "@/lib/srd/subclass-tables";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { subclassSpellsFor } from "@/lib/srd/features";
 import type { SpellFacts } from "@/lib/srd/spell-facts";
-import { cantripCapOf, casterListOf, casterViewsOf, maxSpellLevelOf, type CasterView } from "@/lib/srd/spell-prep";
+import { cantripCapOf, casterListOf, casterViewsOf, maxSpellLevelOf, type CasterView, onWiderList } from "@/lib/srd/spell-prep";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
 
-type Learner = Pick<CharacterSheet, "name" | "class" | "level" | "subclass" | "classes" | "abilities" | "spellcasting">;
+type Learner = Pick<CharacterSheet, "name" | "class" | "level" | "subclass" | "classes" | "abilities" | "spellcasting"> & { features?: CharacterSheet["features"] };
 
 // The caster views whose class list carries the spell: the class's own list,
 // or the spells its subclass adds to it (a patron's expanded list).
@@ -29,7 +29,8 @@ export function viewsWithSpell(sheet: Learner, facts: SpellFacts, extras?: Subcl
       facts.classes.length === 0 ||
       facts.classes.includes(textKey(view.classId)) ||
       facts.classes.includes(textKey(casterListOf(view))) ||
-      subclassSpellsFor(view.classId, view.subclass, view.level, extras).some((name) => textKey(name) === textKey(facts.name)),
+      subclassSpellsFor(view.classId, view.subclass, view.level, extras, view.features).some((name) => textKey(name) === textKey(facts.name)) ||
+      onWiderList(view, facts),
   );
 }
 

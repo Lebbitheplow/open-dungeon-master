@@ -102,7 +102,7 @@ export function spellHeldProblem(
   if (lists.some((entry) => hasName([...(entry.cantrips ?? []), ...entry.known, ...entry.prepared], names))) {
     return null;
   }
-  if (views.some((view) => hasName(subclassSpellsFor(view.classId, view.subclass, view.level, options.extras), names))) {
+  if (views.some((view) => hasName(subclassSpellsFor(view.classId, view.subclass, view.level, options.extras, view.features), names))) {
     return null;
   }
   const ready = [...new Set(lists.flatMap((entry) => [...(entry.cantrips ?? []), ...entry.known, ...entry.prepared]))];
@@ -138,7 +138,7 @@ function ritualHolderProblem(
 ): ToolError | null | undefined {
   const ritualViews = views.filter((view) => RITUAL_CASTERS.has(view.classId.trim().toLowerCase()));
   const holds = (view: (typeof views)[number]) =>
-    hasName([...view.known, ...view.prepared, ...subclassSpellsFor(view.classId, view.subclass, view.level, extras)], names) ||
+    hasName([...view.known, ...view.prepared, ...subclassSpellsFor(view.classId, view.subclass, view.level, extras, view.features)], names) ||
     (view.style === "spellbook" && hasName(spellbookOf(view), names));
   if (ritualViews.some(holds)) {
     return null;

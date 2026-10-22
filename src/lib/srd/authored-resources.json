@@ -40,7 +40,21 @@
    "ability": null,
    "proficiency": 2,
    "recharge": "long",
-   "guidance": "The shared pool behind every psionic feature of this subclass. Name the use in variant: Telekinetic Movement and Psychic Whispers take an action, Psychic Teleportation a bonus action; Psionic Strike and Psi-Bolstered Knack ride a hit or a check already made; Protective Field is a reaction (use_reaction). One die returns on a short rest; the rest on a long rest. The die size grows with level: d6, then d8 at 5th, d10 at 11th and d12 at 17th."
+   "guidance": "The shared pool behind every psionic feature of this subclass. Name the use in variant: Telekinetic Movement and Psychic Whispers take an action, Psychic Teleportation a bonus action; Psionic Strike and Psi-Bolstered Knack ride a hit or a check already made; Protective Field is a reaction (use_reaction). Every die returns on a long rest; once per short or long rest a bonus action regains one spent die (use_resource 'Psionic Recovery'). The die size grows with level: d6, then d8 at 5th, d10 at 11th and d12 at 17th."
+  },
+  {
+   "id": "sub_psionic_recovery",
+   "displayName": "Psionic Recovery",
+   "match": [
+    "psionic power (psi warrior)",
+    "psionic power (soulknife)"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "short",
+   "action": "bonus",
+   "passive": true,
+   "guidance": "A bonus action that regains one spent Psionic Energy die, once per short or long rest. Spend it with use_resource 'Psionic Recovery'; the server returns the die."
   },
   {
    "id": "sub_fighting_spirit",
@@ -57,7 +71,20 @@
     "kind": "buff",
     "condition": "fighting spirit",
     "rounds": 1,
-    "tempHp": "5"
+    "tempHp": [
+     [
+      3,
+      "5"
+     ],
+     [
+      10,
+      "10"
+     ],
+     [
+      15,
+      "15"
+     ]
+    ]
    }
   },
   {
@@ -169,6 +196,7 @@
    "displayName": "Warding Flare",
    "match": [
     "warding flare",
+    "improved flare",
     "improved warding flare"
    ],
    "uses": 1,
@@ -215,7 +243,7 @@
    "ability": "wis",
    "recharge": "long",
    "action": "action",
-   "guidance": "An action sensing undead within 60 feet, through walls but not a foot of stone or thin metal."
+   "guidance": "An action sensing undead within 60 feet that aren't behind total cover, and where they are."
   },
   {
    "id": "sub_sentinel_at_deaths_door",
@@ -236,10 +264,33 @@
     "eyes of night"
    ],
    "uses": 1,
-   "ability": "wis",
    "recharge": "long",
    "action": "action",
-   "guidance": "Share the cleric's 300-foot darkvision with willing creatures within 10 feet for an hour."
+   "guidance": "Share the cleric's 300-foot darkvision for an hour with willing creatures within 10 feet, as many as their Wisdom modifier (minimum one). Once per long rest, or again by expending a spell slot of any level."
+  },
+  {
+   "id": "sub_visions_of_the_past",
+   "displayName": "Visions of the Past",
+   "match": [
+    "visions of the past"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "short",
+   "guidance": "At least a minute of meditation (concentration, up to the cleric's Wisdom score in minutes) reading an object's owners or a place's past events, as far back as the Wisdom score in days."
+  },
+  {
+   "id": "sub_emboldening_bond",
+   "displayName": "Emboldening Bond",
+   "match": [
+    "emboldening bond"
+   ],
+   "uses": 2,
+   "ability": null,
+   "proficiency": 1,
+   "recharge": "long",
+   "action": "action",
+   "guidance": "An action bonding up to the cleric's proficiency bonus of willing creatures within 30 feet for 10 minutes: once a turn each can add a d4 to an attack, check or save while within 30 feet of another bonded creature (60 feet from 17th level)."
   },
   {
    "id": "sub_steps_of_night",
@@ -276,11 +327,13 @@
    "byLevel": true,
    "recharge": "long",
    "action": "bonus",
-   "guidance": "A pool of d6s equal to the druid's level. Spend any number as a bonus action to heal a creature within 120 feet that many d6, plus 1 temporary hit point per die.",
+   "guidance": "A pool of d6s equal to the druid's level. As a bonus action spend up to half the druid's level of them on one creature within 120 feet: it regains the total rolled and 1 temporary hit point per die.",
    "fx": {
     "kind": "heal_dice_pool",
-    "die": "d6"
-   }
+    "die": "d6",
+    "tempPerDie": 1
+   },
+   "perUse": "half_level"
   },
   {
    "id": "sub_hidden_paths",
@@ -341,7 +394,7 @@
    "uses": 1,
    "ability": null,
    "recharge": "long",
-   "guidance": "Triggers on its own when the druid drops to 0 hit points: four dire wolves appear and defend them for an hour."
+   "guidance": "Triggers when the druid drops to 0 hit points or is incapacitated against their will: as conjure animals with a 9th-level slot, four beasts of the druid's choice (each challenge rating 2 or lower) appear within 20 feet, guard them and attack their foes for an hour without concentration."
   },
   {
    "id": "sub_fungal_infestation",
@@ -403,8 +456,8 @@
    ],
    "uses": 1,
    "ability": null,
-   "recharge": "short",
-   "guidance": "A free casting of dream, scrying or teleportation circle after a short rest, without a slot."
+   "recharge": "long",
+   "guidance": "After a short rest: dream (the druid as messenger), scrying or teleportation circle without a slot or material components; the circle opens to the last place the druid finished a long rest on this plane. Once per long rest."
   },
   {
    "id": "sub_enthralling_performance",
@@ -415,7 +468,7 @@
    "uses": 1,
    "ability": null,
    "recharge": "short",
-   "guidance": "After a minute of performance, up to a proficiency-bonus number of humanoids within 60 feet are charmed for an hour on a failed Wisdom save.",
+   "guidance": "After a minute of performance, up to the bard's Charisma modifier (minimum one) of humanoids within 60 feet who watched it all are charmed for an hour on a failed Wisdom save.",
    "fx": {
     "kind": "enemy_save",
     "save": "wis",
@@ -432,7 +485,7 @@
    "ability": null,
    "recharge": "long",
    "action": "bonus",
-   "guidance": "A bonus action for a minute of majesty (concentration): each turn the bard may cast command as a bonus action with no slot (the cast tools charge it that way while the mantle holds), and a creature charmed by the bard cannot attack them.",
+   "guidance": "A bonus action for a minute of majesty (concentration): each turn the bard may cast command as a bonus action with no slot (the cast tools charge it that way while the mantle holds), and a creature charmed by the bard automatically fails its save against that command.",
    "fx": {
     "kind": "buff",
     "condition": "mantle of majesty",
@@ -509,6 +562,18 @@
    "guidance": "A reaction copying a successful Bardic Inspiration die onto another creature within 60 feet, without spending an inspiration use."
   },
   {
+   "id": "sub_universal_speech",
+   "displayName": "Universal Speech",
+   "match": [
+    "universal speech"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "action": "action",
+   "guidance": "An action: up to the bard's Charisma modifier (minimum one) of creatures within 60 feet understand the bard for an hour. A spell slot buys another use."
+  },
+  {
    "id": "sub_performance_of_creation",
    "displayName": "Performance of Creation",
    "match": [
@@ -530,7 +595,7 @@
    "ability": null,
    "recharge": "long",
    "action": "action",
-   "guidance": "An action animating a Large or smaller object as a dancing item that acts on the bard's turn. A spell slot buys extra uses."
+   "guidance": "An action animating a Large or smaller nonmagical item within 30 feet as a Dancing Item for an hour: AC 16, 10 + five times the bard level hit points, a Force-Empowered Slam of 1d10 + proficiency force with the bard's spell attack. Once per long rest; a spell slot of 3rd level or higher buys another use."
   },
   {
    "id": "sub_spirit_session",
@@ -541,7 +606,7 @@
    "uses": 1,
    "ability": null,
    "recharge": "long",
-   "guidance": "An hour-long seance granting one divination or necromancy spell, castable until the next long rest."
+   "guidance": "An hour-long ritual during a rest with up to the bard's proficiency bonus in willing creatures: the bard learns one divination or necromancy spell from any list, of a level they can cast and no higher than the number of participants, until they start a long rest."
   },
   {
    "id": "sub_zealous_presence",
@@ -577,7 +642,7 @@
    "proficiency": 1,
    "recharge": "long",
    "action": "action",
-   "guidance": "An action sensing spells and magic items within 60 feet, through most barriers."
+   "guidance": "An action sensing spells and magic items within 60 feet that aren't behind total cover, and the school of each spell."
   },
   {
    "id": "sub_bolstering_magic",
@@ -590,7 +655,7 @@
    "proficiency": 1,
    "recharge": "long",
    "action": "action",
-   "guidance": "Touch an ally to grant a bonus d3 on attacks and ability checks for 10 minutes, or restore one expended spell slot of 3rd level or lower."
+   "guidance": "Touch a creature: for 10 minutes it adds a d3 to attack rolls and ability checks, or it rolls a d3 and regains one expended spell slot of that level or lower (each creature takes the slot only once per long rest)."
   },
   {
    "id": "sub_infectious_fury",
@@ -618,7 +683,7 @@
    "uses": 1,
    "recharge": "long",
    "action": "none",
-   "guidance": "Part of entering a rage, with no action of its own: up to five allies each add a d6 to the damage of one hit per turn, and the barbarian gains 5 temporary hit points per ally who accepts.",
+   "guidance": "Part of entering a rage, with no action of its own: up to the barbarian's Constitution modifier (minimum one) of willing creatures within 30 feet each add a d6 to the damage of one hit on each of their turns until the rage ends, and the barbarian gains 5 temporary hit points per creature that accepts.",
    "proficiency": 1,
    "ability": null
   },
@@ -632,7 +697,7 @@
    "ability": null,
    "recharge": "short",
    "action": "bonus",
-   "guidance": "A bonus action cursing a creature for 1 minute: bonus damage equal to the warlock's proficiency bonus, critical hits on a 19 or 20 against it, and hit points back when it dies."
+   "guidance": "A bonus action cursing a creature within 30 feet for 1 minute (use_resource with targetEnemyId): the warlock adds their proficiency bonus to damage against it and scores a critical hit against it on a 19 or 20, and regains warlock level + Charisma modifier hit points when it dies. The server applies the damage, the critical range and the healing."
   },
   {
    "id": "sub_fey_presence",
@@ -669,6 +734,23 @@
    }
   },
   {
+   "id": "sub_dark_delirium",
+   "displayName": "Dark Delirium",
+   "match": [
+    "dark delirium"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "short",
+   "action": "action",
+   "guidance": "An action: a creature within 60 feet is charmed or frightened (the warlock's choice) for a minute on a failed Wisdom save, lost in an illusory misty realm; it ends if the warlock's concentration breaks or the creature takes damage.",
+   "fx": {
+    "kind": "enemy_save",
+    "save": "wis",
+    "condition": "charmed"
+   }
+  },
+  {
    "id": "sub_entropic_ward",
    "displayName": "Entropic Ward",
    "match": [
@@ -696,7 +778,8 @@
    "fx": {
     "kind": "heal_dice_pool",
     "die": "d6"
-   }
+   },
+   "perUse": "cha"
   },
   {
    "id": "sub_searing_vengeance",
@@ -722,8 +805,9 @@
   },
   {
    "id": "sub_tentacle_of_the_deep",
-   "displayName": "Tentacle of the Deep",
+   "displayName": "Tentacle of the Deeps",
    "match": [
+    "tentacle of the deeps",
     "tentacle of the deep"
    ],
    "uses": 2,
@@ -731,12 +815,23 @@
    "proficiency": 1,
    "recharge": "long",
    "action": "bonus",
-   "guidance": "A bonus action summoning a spectral tentacle for 1 minute: a 10-foot reach attack for 1d8 cold damage that also halves the target's speed.",
+   "guidance": "A bonus action summoning a 10-foot spectral tentacle for 1 minute: a melee spell attack against a creature within 10 feet of it for 1d8 cold damage (2d8 from 10th level), and the target's speed drops by 10 feet until the start of the warlock's next turn.",
    "fx": {
     "kind": "buff",
     "condition": "tentacle of the deep",
     "rounds": 10
    }
+  },
+  {
+   "id": "sub_grasping_tentacles",
+   "displayName": "Grasping Tentacles",
+   "match": [
+    "grasping tentacles"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "Evard's black tentacles once without a spell slot; casting it gives temporary hit points equal to the warlock level and damage can't break the concentration on it."
   },
   {
    "id": "sub_fathomless_plunge",
@@ -791,7 +886,12 @@
    "ability": null,
    "recharge": "long",
    "action": "action",
-   "guidance": "An hour of spirit form: resistance to most damage, movement through solid matter, and necrotic and psychic spell damage that heals the warlock."
+   "guidance": "An action projecting the warlock's spirit for up to an hour (concentration): resistance to bludgeoning, piercing and slashing damage, a flying speed equal to the walking speed, movement through creatures and objects, and in Form of Dread, once a turn, hit points back equal to half the necrotic damage they deal.",
+   "fx": {
+    "kind": "buff",
+    "condition": "spirit projection",
+    "rounds": 600
+   }
   },
   {
    "id": "sub_defy_death",
@@ -835,7 +935,7 @@
    "ability": null,
    "recharge": "long",
    "action": "action",
-   "guidance": "Retreat inside the vessel for up to 10 minutes; from 10th level up to five companions come too and gain temporary hit points on a short rest inside."
+   "guidance": "Bottled Respite: as an action the warlock vanishes into the vessel for up to twice their proficiency bonus in hours, leaving early as a bonus action. From 10th level up to five willing creatures within 30 feet come too; staying 10 minutes gives them a short rest's benefits, and Hit Dice spent inside add the warlock's proficiency bonus."
   },
   {
    "id": "sub_limited_wish",
@@ -847,7 +947,8 @@
    "ability": null,
    "recharge": "long",
    "action": "action",
-   "guidance": "Replicate any spell of 6th level or lower without components. In the fiction this needs several days to recharge, so grant it sparingly."
+   "guidance": "The effect of one spell of 6th level or lower with a casting time of one action, from any class's list, ignoring requirements and costly components. It returns only after 1d4 long rests; the server keeps the count.",
+   "recovers": "1d4"
   },
   {
    "id": "sub_tides_of_chaos",
@@ -897,7 +998,7 @@
    "uses": 1,
    "ability": null,
    "recharge": "long",
-   "guidance": "A Charisma save against 5 + the damage leaves the sorcerer at 1 hit point instead of 0."
+   "guidance": "When damage drops the sorcerer to 0 hit points: a Charisma save (DC 5 + the damage) leaves them at 1 instead. It does not work against radiant damage or a critical hit, and only a success spends the use."
   },
   {
    "id": "sub_restore_balance",
@@ -968,7 +1069,41 @@
    "ability": null,
    "recharge": "long",
    "action": "bonus",
-   "guidance": "A 30-foot burst matching the current moon phase: healing, blinding radiance or a burst of speed."
+   "guidance": "A bonus action releasing the current phase: Full Moon blinds creatures of the sorcerer's choice within 30 feet on a failed Constitution save and heals one of them 3d8; New Moon deals 3d10 necrotic and speed 0 on a failed Dexterity save and turns the sorcerer invisible; Crescent Moon teleports them and one willing creature 60 feet with resistance to all damage until their next turn. Again for 5 sorcery points."
+  },
+  {
+   "id": "sub_lunar_free_cast",
+   "displayName": "Lunar Embodiment free spell",
+   "match": [
+    "lunar embodiment"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "The current phase's 1st-level spell, cast once without a spell slot until the next long rest."
+  },
+  {
+   "id": "sub_lunar_boons",
+   "displayName": "Lunar Boons",
+   "match": [
+    "lunar boons"
+   ],
+   "uses": 3,
+   "ability": null,
+   "proficiency": 1,
+   "recharge": "long",
+   "guidance": "Metamagic on a spell of the current phase's schools costs 1 sorcery point less (minimum 0)."
+  },
+  {
+   "id": "sub_waxing_and_waning",
+   "displayName": "Waxing and Waning castings",
+   "match": [
+    "waxing and waning"
+   ],
+   "uses": 3,
+   "ability": null,
+   "recharge": "long",
+   "guidance": "One 1st-level spell of each phase cast once without a spell slot; changing the phase costs 1 sorcery point and a bonus action."
   },
   {
    "id": "sub_portent",
@@ -1005,30 +1140,6 @@
    "guidance": "A reaction interposing an illusory duplicate so an attack that would hit misses instead."
   },
   {
-   "id": "sub_instinctive_charm",
-   "displayName": "Instinctive Charm",
-   "match": [
-    "instinctive charm"
-   ],
-   "uses": 1,
-   "ability": null,
-   "recharge": "short",
-   "action": "reaction",
-   "guidance": "A reaction redirecting an attack aimed at the wizard onto another creature within the attacker's reach, on a failed Wisdom save."
-  },
-  {
-   "id": "sub_hypnotic_gaze",
-   "displayName": "Hypnotic Gaze",
-   "match": [
-    "hypnotic gaze"
-   ],
-   "uses": 1,
-   "ability": null,
-   "recharge": "short",
-   "action": "action",
-   "guidance": "An action charming and incapacitating a creature within 5 feet until the end of the wizard's next turn, extendable each turn as an action."
-  },
-  {
    "id": "sub_benign_transposition",
    "displayName": "Benign Transposition",
    "match": [
@@ -1056,6 +1167,29 @@
    "guidance": "A free self-polymorph into a beast of challenge rating 1 or lower, without a spell slot."
   },
   {
+   "id": "sub_third_eye",
+   "displayName": "The Third Eye",
+   "match": [
+    "the third eye"
+   ],
+   "uses": 1,
+   "ability": null,
+   "recharge": "short",
+   "action": "action",
+   "guidance": "An action granting one until the wizard is incapacitated or rests: darkvision 60 feet, ethereal sight 60 feet, reading any language, or seeing invisible creatures and objects within 10 feet."
+  },
+  {
+   "id": "sub_power_surge",
+   "displayName": "Power Surges",
+   "match": [
+    "power surge"
+   ],
+   "uses": 1,
+   "ability": "int",
+   "recharge": "long",
+   "guidance": "Once per turn when a wizard spell damages a creature or object: extra force damage equal to half the wizard level. The wizard starts each day with one surge, gains one by ending a spell with dispel magic or counterspell, and one after a short rest with none; they hold up to their Intelligence modifier."
+  },
+  {
    "id": "sub_bladesong",
    "displayName": "Bladesong",
    "match": [
@@ -1064,7 +1198,7 @@
    "uses": 2,
    "ability": null,
    "proficiency": 1,
-   "recharge": "short",
+   "recharge": "long",
    "action": "bonus",
    "guidance": "A bonus action for 1 minute: add the Intelligence modifier to AC, 10 feet of speed, advantage on Acrobatics, and a bonus on concentration saves. It ends if the wizard wears medium or heavy armor or a shield, or is incapacitated.",
    "fx": {
@@ -1083,7 +1217,7 @@
    "ability": null,
    "recharge": "long",
    "action": "reaction",
-   "guidance": "A reaction forcing a creature within 30 feet to reroll an attack, check or save, before or after the result is known."
+   "guidance": "A reaction forcing a creature within 30 feet to reroll an attack, check or save after the wizard sees whether it succeeded; the second roll stands."
   },
   {
    "id": "sub_momentary_stasis",
@@ -1092,11 +1226,10 @@
     "momentary stasis"
    ],
    "uses": 2,
-   "ability": null,
-   "proficiency": 1,
+   "ability": "int",
    "recharge": "long",
    "action": "action",
-   "guidance": "A Large or smaller creature within 60 feet is incapacitated and frozen in time until the end of the wizard's next turn on a failed Constitution save.",
+   "guidance": "A Large or smaller creature within 60 feet is incapacitated with speed 0 until the end of the wizard's next turn, or until it takes damage, on a failed Constitution save.",
    "fx": {
     "kind": "enemy_save",
     "save": "con",
@@ -1121,11 +1254,10 @@
     "violent attraction"
    ],
    "uses": 2,
-   "ability": null,
-   "proficiency": 1,
+   "ability": "int",
    "recharge": "long",
    "action": "reaction",
-   "guidance": "A reaction adding 1d10 to a weapon damage roll or 2d10 per 10 feet to falling damage within 60 feet."
+   "guidance": "A reaction adding 1d10 to a weapon attack's damage by a creature within 60 feet, or 2d10 to a creature's falling damage."
   },
   {
    "id": "sub_event_horizon",
@@ -1137,7 +1269,7 @@
    "ability": null,
    "recharge": "long",
    "action": "action",
-   "guidance": "A minute of crushing gravity in a 30-foot radius: 2d10 force damage and no movement on a failed Strength save. A 4th-level slot buys extra uses.",
+   "guidance": "A minute (concentration) of crushing gravity in 30 feet: a hostile creature starting its turn there takes 2d10 force and has speed 0 on a failed Strength save, half damage and costly movement on a success. A spell slot of 3rd level or higher buys extra uses.",
    "fx": {
     "kind": "aoe",
     "dice": "2d10",
@@ -1154,12 +1286,24 @@
    "ability": null,
    "recharge": "long",
    "action": "bonus",
-   "guidance": "A bonus action projecting the spellbook's spirit up to 300 feet, letting the wizard cast from its position. A spell slot buys extra uses.",
+   "guidance": "A bonus action manifesting the spellbook's mind within 60 feet (it ends beyond 300 feet), so the wizard can cast from its space. Free once per long rest; a spell slot of any level buys another manifestation.",
    "fx": {
     "kind": "buff",
     "condition": "manifest mind",
     "rounds": 600
    }
+  },
+  {
+   "id": "sub_manifest_mind_casts",
+   "displayName": "Manifest Mind casting",
+   "match": [
+    "manifest mind"
+   ],
+   "uses": 2,
+   "ability": null,
+   "proficiency": 1,
+   "recharge": "long",
+   "guidance": "A wizard spell cast from the manifested mind's space: a proficiency-bonus number a day. Spend one with use_resource 'Manifest Mind casting' as the spell is cast."
   },
   {
    "id": "sub_master_scrivener",
@@ -1170,7 +1314,8 @@
    "uses": 1,
    "ability": null,
    "recharge": "long",
-   "guidance": "After a long rest, create a spell scroll of a 1st or 2nd-level spell from the book, cast at maximum effect."
+   "action": "none",
+   "guidance": "After a long rest, a scroll of a 1st- or 2nd-level wizard spell from the book with a casting time of an action; it is cast as one level higher and vanishes once cast or at the next long rest."
   },
   {
    "id": "sub_one_with_the_word",
@@ -1291,7 +1436,7 @@
    "uses": 1,
    "ability": null,
    "recharge": "long",
-   "guidance": "A free casting of summon fey without a spell slot; the summoned fey can turn invisible."
+   "guidance": "A free casting of summon fey without a spell slot or material component, once per long rest; it can be cast without concentration, lasting a minute."
   },
   {
    "id": "sub_drake_companion",
@@ -1303,7 +1448,7 @@
    "ability": null,
    "recharge": "long",
    "action": "action",
-   "guidance": "Summon the bonded drake for an hour. It acts on the ranger's turn, adds their proficiency bonus to its rolls, and can be resummoned with a spell slot."
+   "guidance": "Summon the drake for as long as it lasts: it acts on the ranger's initiative, has 5 + five times the ranger level hit points, bites for 1d6 + proficiency piercing, and is immune to its chosen essence. A spell slot of 1st level or higher buys another summoning."
   },
   {
    "id": "sub_drakes_breath",
@@ -1315,12 +1460,34 @@
    "ability": null,
    "recharge": "long",
    "action": "action",
-   "guidance": "The drake exhales a 30-foot cone for 8d6 of its damage type, halved on a Dexterity save. A 3rd-level slot buys extra uses.",
+   "guidance": "The ranger or the drake exhales a 30-foot cone of acid, cold, fire, lightning or poison: 8d6 (10d6 from 15th level), halved on a Dexterity save. A spell slot of 3rd level or higher buys extra uses.",
    "fx": {
     "kind": "aoe",
-    "dice": "8d6",
+    "dice": [
+     [
+      11,
+      "8d6"
+     ],
+     [
+      15,
+      "10d6"
+     ]
+    ],
     "save": "dex"
    }
+  },
+  {
+   "id": "sub_reflexive_resistance",
+   "displayName": "Reflexive Resistance",
+   "match": [
+    "perfected bond"
+   ],
+   "uses": 2,
+   "ability": null,
+   "proficiency": 1,
+   "recharge": "long",
+   "action": "reaction",
+   "guidance": "A reaction when the ranger or their drake takes damage within 30 feet of each other: the one hurt resists that damage. The server gives back the resisted half (use_reaction 'Reflexive Resistance')."
   },
   {
    "id": "sub_wails_from_the_grave",
@@ -1360,7 +1527,7 @@
    "fx": {
     "kind": "buff",
     "condition": "invisible",
-    "rounds": 100
+    "rounds": 600
    }
   },
   {
@@ -1389,7 +1556,7 @@
    "ability": null,
    "recharge": "long",
    "action": "reaction",
-   "guidance": "A reaction stealing a spell cast at the rogue on a failed save by the caster, denying it to them for 8 hours and letting the rogue cast it once."
+   "guidance": "A reaction after a spell targets the rogue or catches them: the caster saves with its spellcasting ability against the rogue's spell save DC, and on a failure the spell has no effect on them, and if they can cast its level the rogue knows it for 8 hours and the caster cannot cast it."
   },
   {
    "id": "sub_unerring_eye",
@@ -1439,10 +1606,27 @@
    "uses": 2,
    "ability": null,
    "recharge": "long",
-   "guidance": "Replace one Attack-action attack with a 20-foot cone or 30-foot line dealing the martial arts die in the monk's chosen damage type, halved on a Dexterity save. With no use left, 2 ki buys another (the server spends them).",
+   "guidance": "Replace one Attack-action attack with a 20-foot cone or 30-foot line of the monk's chosen damage type: two rolls of the martial arts die (three from 11th level), halved on a Dexterity save. With no use left, 2 ki buys another (the server spends them).",
    "fx": {
     "kind": "aoe",
-    "dice": "2d6",
+    "dice": [
+     [
+      1,
+      "2d4"
+     ],
+     [
+      5,
+      "2d6"
+     ],
+     [
+      11,
+      "3d8"
+     ],
+     [
+      17,
+      "3d10"
+     ]
+    ],
     "save": "dex"
    },
    "proficiency": 1,
@@ -1461,7 +1645,12 @@
    "ability": null,
    "proficiency": 1,
    "recharge": "long",
-   "guidance": "While airborne, gain a flying speed equal to the walking speed for that turn."
+   "guidance": "When the monk uses Step of the Wind: a flying speed equal to the walking speed until the end of the turn.",
+   "fx": {
+    "kind": "buff",
+    "condition": "flying",
+    "rounds": 1
+   }
   },
   {
    "id": "sub_aspect_of_the_wyrm",
@@ -1658,7 +1847,7 @@
      3
     ],
     [
-     9,
+     6,
      2
     ],
     [
@@ -1667,7 +1856,7 @@
     ]
    ],
    "recharge": "long",
-   "guidance": "Elixirs brewed on a long rest, each with a random effect: healing, swiftness, resilience, boldness, flight or transformation. Extra elixirs can be brewed by spending a spell slot."
+   "guidance": "Elixirs brewed on a long rest (one, two from 6th level, three from 15th), each rolled on a d6: healing (2d4 + Intelligence), swiftness (+10 feet of speed for an hour), resilience (+1 AC for 10 minutes), boldness (a d4 on attacks and saves for a minute), flight (a 10-foot flying speed for 10 minutes) or transformation (alter self). A spell slot brews another of a chosen effect. From 9th level a drinker also gains 2d6 + Intelligence temporary hit points."
   },
   {
    "id": "art_eldritch_cannon",
@@ -1711,7 +1900,7 @@
    "uses": 1,
    "ability": "int",
    "recharge": "long",
-   "guidance": "Once per turn, a magic-weapon or Steel Defender hit deals an extra 2d6 force damage, or heals a creature within 30 feet 2d6. Rises to 4d6 at 15th level."
+   "guidance": "Once per turn, a magic-weapon or Steel Defender hit deals an extra 2d6 force damage, or heals a creature within 30 feet of the target 2d6. Rises to 4d6 at 15th level."
   },
   {
    "id": "art_restorative_reagents",
@@ -1720,10 +1909,9 @@
     "restorative reagents"
    ],
    "uses": 2,
-   "ability": null,
-   "proficiency": 1,
+   "ability": "int",
    "recharge": "long",
-   "guidance": "Free castings of lesser restoration without a spell slot."
+   "guidance": "Free castings of lesser restoration without a spell slot, with alchemist's supplies as the focus."
   },
   {
    "id": "sub_starry_form",
@@ -1851,7 +2039,7 @@
    "ability": null,
    "recharge": "long",
    "action": "bonus",
-   "guidance": "A bonus action: advantage on Charisma checks for a minute (the server applies it); the reroll of a miss and the turned save are narrated."
+   "guidance": "A bonus action: for a minute, advantage on Charisma checks (the server applies it), once on each turn a missed weapon attack can hit instead, and a failed save can be rerolled with the reaction. A 5th-level spell slot buys another use."
   },
   {
    "id": "sub_mortal_bulwark",
@@ -1887,7 +2075,7 @@
    "ability": null,
    "recharge": "long",
    "action": "action",
-   "guidance": "An action: for a minute, attacks against the oathbreaker are at disadvantage, enemies starting a turn within 30 feet take 4d10 psychic, and a bonus-action spectral strike deals 4d10 psychic (pc_attack weapon \"Dread Lord's Shadows\"). The server applies all of it."
+   "guidance": "An action: for a minute, a 30-foot aura of gloom; each enemy frightened of the oathbreaker that starts its turn in it takes 4d10 psychic, sight-reliant attackers have disadvantage against them, and a bonus action makes a melee spell attack with the shadows for 3d10 + Charisma necrotic (pc_attack weapon \"Dread Lord's Shadows\"). The server applies all of it."
   },
   {
    "id": "sub_wind_soul",
@@ -1912,7 +2100,7 @@
    "proficiency": 1,
    "recharge": "long",
    "action": "bonus",
-   "guidance": "A bonus action: a 30-foot flying speed for 10 minutes (use_resource 'Elemental Flight'). The resistance is chosen once with use_resource 'Elemental Gift' and the patron's type as the variant."
+   "guidance": "A bonus action: a 30-foot flying speed for 10 minutes (use_resource 'Elemental Flight'). The resistance is to the patron's damage type, chosen with Genie's Vessel (use_resource 'Genie's Vessel' with the patron's kind as the variant)."
   },
   {
    "id": "sub_defensive_field",
@@ -1938,7 +2126,7 @@
    "proficiency": 1,
    "recharge": "long",
    "action": "reaction",
-   "guidance": "A reaction in Guardian armor: a Large or smaller creature within 30 feet makes a Strength save or is pulled in and knocked prone. The server rolls it (use_reaction 'Perfected Armor')."
+   "guidance": "A reaction in Guardian armor when a Huge or smaller creature ends its turn within 30 feet: it saves on Strength or is pulled up to 25 feet toward the armorer, who may then attack it if it lands within 5 feet. The server rolls the save (use_reaction 'Perfected Armor')."
   },
   {
    "id": "sub_arcane_ward",

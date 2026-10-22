@@ -1,6 +1,13 @@
 "use client";
 
-import { classFeaturesFor, isThievesTools, subclassCastingProfileFor, THIEVES_TOOLS } from "@/lib/srd/features";
+import {
+  classFeaturesFor,
+  isThievesTools,
+  subclassCastingProfileFor,
+  THIEVES_TOOLS,
+  subclassExpandedSpellsFor,
+  subclassSpellListsFor,
+} from "@/lib/srd/features";
 import * as Dialog from "@radix-ui/react-dialog";
 import { ChevronDown, Dices, Loader2, Search, Sparkles, X } from "lucide-react";
 import { useId, useMemo, useState } from "react";
@@ -47,8 +54,8 @@ import {
   subclassSpellsFor,
 } from "@/lib/srd/features";
 import {
-  FIGHTING_STYLES,
   chosenFightingStyles,
+  fightingStyleChoices,
   fightingStyleFeatureName,
   fightingStyleSlots,
   type FightingStyleId,
@@ -64,12 +71,12 @@ import {
   thirdCasterPickRefusal,
 } from "./level-up-preview";
 import { SpellBook, type SpellTile } from "@/components/sheet/SpellBook";
-import { useSpellPool } from "@/components/sheet/useSpellPool";
+import { useWiderSpellPool } from "@/components/sheet/useSpellPool";
 import AsiFeatEditor from "@/app/characters/builder/AsiFeatEditor";
 import { useFeatDescs } from "@/app/characters/builder/useFeatDescs";
 import { authoredFeatDesc, featAbilityIncrease } from "@/lib/srd/feat-effects";
 import { featGrantSpec, featOwed, type FeatChoices, type FeatPicks } from "@/lib/srd/feat-grants";
-import { subclassGrants } from "@/lib/srd/subclass-training";
+import { grantsForHeldTraining, subclassGrants } from "@/lib/srd/subclass-training";
 import FeatChoicesFields from "@/app/characters/builder/FeatChoicesFields";
 import { useArchetypes, useWorldPack } from "@/app/characters/builder/useBuilderOptions";
 import type { AsiChoice, CharacterSheet } from "@/lib/schemas/sheet";
@@ -312,13 +319,13 @@ export function LevelUpDialog({
   // Fighting styles: the class grants the slot, the player picks which one,
   // and the pick is stored as a "choice"-sourced feature the regrant keeps.
   // Independent of the subclass, so it can be resolved before one is chosen.
-  const styleSlots = fightingStyleSlots(
-    populateFeaturesForClasses(sheet.features, nextClasses, sheet.race),
-  );
+  // A Swords bard's slot allows only some styles (fightingStyleChoices).
+  const featuresAfter = populateFeaturesForClasses(sheet.features, nextClasses, sheet.race);
+  const styleSlots = fightingStyleSlots(featuresAfter);
   const currentStyles = chosenFightingStyles(sheet.features);
   const stylesToPick = Math.max(0, styleSlots - currentStyles.length);
   const needsStyle = stylesToPick > 0;
-  const styleOptions = FIGHTING_STYLES.filter(
+  const styleOptions = fightingStyleChoices(featuresAfter).filter(
     (style) => !currentStyles.some((name) => textKey(name) === textKey(style.name)),
   );
 
@@ -419,8 +426,10 @@ export function LevelUpDialog({
     () => new Set(subclassGrants(classList).map((grant) => `${grant.classId}|${textKey(grant.name)}`)),
     [classList],
   );
-  const freshTraining = subclassGrants(classesAfter).filter(
-    (grant) => !trainingBefore.has(`${grant.classId}|${textKey(grant.name)}`),
+  // A skill or language already held becomes a pick (Royal Envoy).
+  const freshTraining = grantsForHeldTraining(
+    subclassGrants(classesAfter).filter((grant) => !trainingBefore.has(`${grant.classId}|${textKey(grant.name)}`)),
+    sheet.proficiencies,
   );
   const trainingOpen = freshTraining.some((grant) =>
     featOwed(grant.name, grant.spec, featChoice(featChoices, grant.name)),
@@ -459,10 +468,20 @@ export function LevelUpDialog({
   // The class's whole list up to what it can now cast (the old search
   // stopped at sixty rows, cantrips first, which could leave a wizard with
   // nothing but cantrips to look at).
-  const { pool: spellPool, loading: poolLoading } = useSpellPool(
+  // What the subclass adds to the list: a warlock patron's expanded spells
+  // (a genie's kind's by the sheet's choice), a Divine Soul's cleric list.
+  const spellWider = useMemo(
+    () => ({
+      spells: subclassExpandedSpellsFor(classChoice, effectiveSubclass, classLevelAfter, undefined, sheet.features),
+      lists: subclassSpellListsFor(classChoice, effectiveSubclass),
+    }),
+    [classChoice, effectiveSubclass, classLevelAfter, sheet.features],
+  );
+  const { pool: spellPool, loading: poolLoading } = useWiderSpellPool(
     caster.list,
     maxCastable ?? 0,
     step === "spells",
+    spellWider,
   );
 
   // A wizard learns into the spellbook: two spells a level (a whole starting
@@ -524,11 +543,11 @@ export function LevelUpDialog({
   const grantedFree = useMemo(
     () =>
       new Set(
-        subclassSpellsFor(classChoice, effectiveSubclass, classLevelAfter).map((name) =>
+        subclassSpellsFor(classChoice, effectiveSubclass, classLevelAfter, undefined, sheet.features).map((name) =>
           textKey(name),
         ),
       ),
-    [classChoice, effectiveSubclass, classLevelAfter],
+    [classChoice, effectiveSubclass, classLevelAfter, sheet.features],
   );
   const heldSpells = [...new Set([...knownList, ...pendingList].map((name) => textKey(name)))].filter(
     (name) => !grantedFree.has(name),

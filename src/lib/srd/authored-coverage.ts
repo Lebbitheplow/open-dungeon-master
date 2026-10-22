@@ -1,9 +1,10 @@
 // How the authored subclass layer stands: every feature in
 // src/lib/srd/subclasses.json sorted into typed (an engine applies it),
-// counter (a limited-use pool the sheet tracks), narrated (roleplay, or a
-// mechanic another engine must hold first, with the reason written down),
-// plain (no mechanical wording), or uncovered (mechanical wording and none of
-// the above). The coverage guard (scripts/test-feature-coverage.mjs) holds
+// counter (a limited-use pool the sheet tracks), trained (proficiencies or
+// languages the sheet keeps, src/lib/srd/subclass-training.ts), narrated
+// (roleplay, or a mechanic another engine must hold first, with the reason
+// written down), plain (no mechanical wording), or uncovered (mechanical
+// wording and none of the above). The coverage guard (scripts/test-feature-coverage.mjs) holds
 // `uncovered` at empty, so a new authored feature with a number in its text
 // cannot land without a hook or a written reason.
 //
@@ -11,14 +12,24 @@
 // module reads feature-effects and class-resources back.
 
 import subclassesJson from "@/lib/srd/subclasses.json";
+import classFeaturesJson from "@/lib/srd/class-features.json";
 import { AUTHORED_TABLE, authoredRows } from "@/lib/srd/authored-effects";
 import { populateResources } from "@/lib/srd/class-resources";
 import { effectsFor } from "@/lib/srd/feature-effects";
+import { trainingFromText, trainingTableKeys } from "@/lib/srd/subclass-training";
+import { optionLabelsOpenedBy } from "@/lib/srd/options";
+import { isThirdCasterFeature } from "@/lib/srd/third-caster";
 
-// The words that make a rules line mechanical: the audit's own pattern
-// (/tmp/odm-enf2/authored.mjs), so the counts compare with its 166.
-export const MECHANICAL =
+// The words that make a rules line mechanical. Issue 474's audit found
+// features that state damage, initiative, senses or a cantrip passing as
+// plain under the first audit's narrower pattern, so these words count too.
+// The first audit's own pattern (/tmp/odm-enf2/authored.mjs), which the
+// narrated ceiling of scripts/test-feature-coverage.mjs was counted under.
+export const MECHANICAL_FIRST =
   /advantage|disadvantage|\+\d|resistan|immun|\d+d\d+|bonus action|reaction|temporary hit points|regain|speed|saving throw|AC\b|armor class|critical|extra attack|attack twice/i;
+
+export const MECHANICAL =
+  /advantage|disadvantage|\+\d|resistan|immun|\d+d\d+|\bd\d+\b|bonus action|reaction|temporary hit points|hit points?|regain|speed|saving throw|\bsave\b|AC\b|armor class|critical|extra attack|attack twice|damage|initiative|darkvision|blindsight|modifier|spell slot|teleport|\bfly|flying|prone|charmed|frightened|incapacitat|stunned|cantrip|proficien|per (?:short|long) rest|once per|times per/i;
 
 type Raw = { classes: Record<string, Array<{ name: string; levels: Record<string, Array<{ n: string; d: string }>> }>> };
 
@@ -26,7 +37,8 @@ export type AuthoredCoverage = {
   total: number;
   typed: string[];
   counter: string[];
-  narrated: Array<{ key: string; reason: string }>;
+  trained: string[];
+  narrated: Array<{ key: string; reason: string; text: string }>;
   plain: string[];
   uncovered: string[];
   // Table keys no feature in subclasses.json answers to.
@@ -34,9 +46,10 @@ export type AuthoredCoverage = {
 };
 
 export function authoredCoverage(): AuthoredCoverage {
-  const out: AuthoredCoverage = { total: 0, typed: [], counter: [], narrated: [], plain: [], uncovered: [], stale: [] };
+  const out: AuthoredCoverage = { total: 0, typed: [], counter: [], trained: [], narrated: [], plain: [], uncovered: [], stale: [] };
   const seen = new Set<string>();
   const mods = { str: 2, dex: 2, con: 2, int: 3, wis: 3, cha: 3 };
+  const trainingKeys = new Set(trainingTableKeys());
   for (const [classId, entries] of Object.entries((subclassesJson as Raw).classes)) {
     for (const entry of entries) {
       for (const [levelKey, features] of Object.entries(entry.levels)) {
@@ -45,9 +58,13 @@ export function authoredCoverage(): AuthoredCoverage {
           const key = `${classId}::${feature.n}`;
           seen.add(key.toLowerCase());
           const authored = AUTHORED_TABLE[key];
+          // A hook here, an engine outside the layer (heldBy), the spell
+          // engine's third-caster casting, or a pick-list the feature opens.
           const typedHere =
-            Boolean(authored?.effects?.length || authored?.spends?.length || authored?.reactions?.length) ||
-            effectsFor({ class: classId, features: [{ name: feature.n, classId }] }).length > 0;
+            Boolean(authored?.effects?.length || authored?.spends?.length || authored?.reactions?.length || authored?.heldBy) ||
+            effectsFor({ class: classId, features: [{ name: feature.n, classId }] }).length > 0 ||
+            isThirdCasterFeature(feature.n) ||
+            optionLabelsOpenedBy(classId, feature.n).length > 0;
           if (typedHere) {
             out.typed.push(key);
             continue;
@@ -60,7 +77,11 @@ export function authoredCoverage(): AuthoredCoverage {
             continue;
           }
           if (authored?.narrated) {
-            out.narrated.push({ key, reason: authored.narrated });
+            out.narrated.push({ key, reason: authored.narrated, text: feature.d });
+            continue;
+          }
+          if (trainingKeys.has(`${classId}|${entry.name}|${feature.n}`.toLowerCase()) || trainingFromText(feature.n, feature.d)) {
+            out.trained.push(key);
             continue;
           }
           if (MECHANICAL.test(feature.d)) {
@@ -69,6 +90,15 @@ export function authoredCoverage(): AuthoredCoverage {
             out.plain.push(key);
           }
         }
+      }
+    }
+  }
+  // The SRD subclasses' features (class-features.json) may carry a hook too
+  // (the Land druid's terrain); they are named, not counted.
+  for (const [classId, table] of Object.entries((classFeaturesJson as unknown as { classes: Record<string, { subclasses: Array<{ levels: Record<string, string[]> }> }> }).classes)) {
+    for (const subclass of table.subclasses) {
+      for (const name of Object.values(subclass.levels).flat()) {
+        seen.add(`${classId}::${name}`.toLowerCase());
       }
     }
   }
@@ -133,6 +163,20 @@ export const AUTHORED_READERS: Record<string, { file: string; call: string }> = 
   arcane_ward: { file: "src/lib/dm/pc-damage.ts", call: "absorbByWard(" },
   summon_temp_hp: { file: "src/lib/dm/summon-cast.ts", call: "authoredSummonTempHp(" },
   defender_upgrade: { file: "src/lib/dm/summon-defender.ts", call: "defenderUpgrade(" },
+  // Issue 474's (Among the Dead, the eagle totem, Hex Warrior).
+  ward_vs: { file: "src/lib/dm/enemy-attack.ts", call: "authoredWardSave(" },
+  oa_disadv: { file: "src/lib/dm/opportunity.ts", call: 'activeAuthored(sheet, "oa_disadv")' },
+  weapon_ability: { file: "src/lib/dm/pc-attack-profile.ts", call: "hexWarriorSwing(" },
+  // Its Appendix B (features no engine read).
+  darkvision: { file: "src/lib/dm/attack-light.ts", call: "authoredDarkvisionFeet(" },
+  damage_ability: { file: "src/lib/dm/pc-attack-damage.ts", call: "authoredDamageAbility(" },
+  init_prof: { file: "src/lib/srd/feature-effects.ts", call: "authoredFeatureDefs(" },
+  check_floor: { file: "src/lib/dm/rolls.ts", call: "authoredCheckFloor(" },
+  grim_harvest: { file: "src/lib/dm/authored-hooks.ts", call: 'activeAuthored(killer, "grim_harvest")' },
+  slot_refund: { file: "src/lib/dm/cast-guard.ts", call: "authoredSlotRefund(" },
+  summon_hp_per_hd: { file: "src/lib/dm/summon-cast.ts", call: "authoredSummonHitPoints(" },
+  pet_magical: { file: "src/lib/dm/pet-tools.ts", call: 'activeAuthored(sheet, "pet_magical")' },
+  indomitable_ally: { file: "src/lib/dm/feature-spends.ts", call: 'activeAuthored(sheet, "indomitable_ally")' },
   spend: { file: "src/lib/dm/mutations.ts", call: "authoredFeatureSpend(" },
   reaction: { file: "src/lib/dm/reaction-tools.ts", call: "authoredReaction(" },
 };

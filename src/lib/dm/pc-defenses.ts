@@ -36,7 +36,7 @@ export function pcResistances(input: {
   class?: string;
   level?: number;
   wildShape?: WildShapeView;
-}, options?: { magical?: boolean; spell?: boolean }): string {
+}, options?: { magical?: boolean; spell?: boolean; except?: string[] }): string {
   // A Polymorph's beast has none of the character's lineage, features or
   // gear; the effects laid on the creature still hold (shape-rules.ts).
   const sheet = formSees(input);
@@ -80,8 +80,11 @@ export function pcResistances(input: {
   if (srdRaceId(sheet.race) === "tiefling" || holdsFeature(sheet, "hellish resistance")) {
     out.push("fire");
   }
-  // Fiendish Resilience: the type chosen at the last rest, in the name.
-  out.push(...chosenResistances(sheet));
+  // Fiendish Resilience: the type chosen at the last rest, in the name. A
+  // magical weapon goes through it (a spell does not: SRD 5.1).
+  if (!(options?.magical && !options?.spell)) {
+    out.push(...chosenResistances(sheet));
+  }
   // Effect conditions (blade ward, stoneskin) grant theirs for a duration.
   // A magical blow goes through the nonmagical-only ones (Stoneskin).
   out.push(...conditionResistances(sheet.conditions ?? [], options));

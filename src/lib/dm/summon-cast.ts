@@ -8,6 +8,7 @@
 // callback, so it must not be imported by mutations.ts.
 
 import { randomUUID } from "node:crypto";
+import { authoredSummonHitPoints } from "@/lib/srd/authored-effects-more";
 import type { Campaign } from "@/lib/db/campaigns";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { computeSheetDerived, spellAttackFor } from "@/lib/srd";
@@ -124,6 +125,9 @@ export function castSummon(
   // makes arrives with 30 temporary hit points.
   const durableHp = authoredSummonTempHp(fresh, spell.school);
   const durable = durableHp > 0;
+  // Mighty Summoner (Circle of the Shepherd 6): a beast or fey arrives with
+  // 2 more hit points per Hit Die.
+  const mighty = authoredSummonHitPoints(fresh, form);
   const record = summonRecord(form, {
     spell: castAs,
     casterId: caster.id,
@@ -145,6 +149,7 @@ export function castSummon(
     overrides: {
       ...(spell.minInt ? { int: spell.minInt } : {}),
       ...(spell.speed ? { speed: spell.speed } : {}),
+      ...(mighty ? { hp: form.hp + mighty.hp } : {}),
     },
   });
   const attacks = form.attacks.length

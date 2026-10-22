@@ -219,3 +219,26 @@ export function useSpellPool(
   const pool = loaded?.key === key ? loaded.pool : (cache.get(key) ?? null);
   return { pool: pool ?? [], loading: enabled && Boolean(classSlug) && pool === null };
 }
+
+// The class's pool widened by what its subclass adds (src/lib/srd/spell-prep.ts
+// widerListOf): another class's list (a Divine Soul's cleric spells) and named
+// spells (a warlock patron's expanded list), up to the same spell level.
+export function useWiderSpellPool(
+  classSlug: string,
+  maxLevel: number,
+  enabled: boolean,
+  wider: { spells: string[]; lists: string[] },
+): { pool: PoolSpell[]; loading: boolean } {
+  const own = useSpellPool(classSlug, maxLevel, enabled);
+  // One borrowed list is the most any subclass adds.
+  const borrowed = useSpellPool(wider.lists[0] ?? "", maxLevel, enabled && wider.lists.length > 0);
+  const lookedUp = useSpellLookups(enabled ? wider.spells : []);
+  const named = wider.spells.flatMap((name): PoolSpell[] => {
+    const level = spellLevelOf(name) ?? lookedUp.get(textKey(name))?.level ?? null;
+    return level !== null && level <= maxLevel ? [{ name, level }] : [];
+  });
+  const pool = uniqueByName([...own.pool, ...borrowed.pool, ...named]).sort(
+    (a, b) => a.level - b.level || compareNames(a.name, b.name),
+  );
+  return { pool, loading: own.loading || borrowed.loading };
+}

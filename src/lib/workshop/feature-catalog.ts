@@ -72,7 +72,8 @@ export function engineRunsFeature(classId: string, name: string): string | null 
   if (tag) {
     return tag;
   }
-  if (heldAuthored(sheet).length) {
+  // A narrated row is the DM's to hold, so only a row with a hook counts.
+  if (heldAuthored(sheet).some(({ entry }) => entry.effects?.length || entry.spends?.length || entry.reactions?.length || entry.counter || entry.heldBy)) {
     return "[server]";
   }
   return effectsFor({ class: classId, features: [{ name }] }).length ? "[server]" : null;

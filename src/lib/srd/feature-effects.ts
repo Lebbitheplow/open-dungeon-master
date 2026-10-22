@@ -71,11 +71,12 @@ export type FeatureEffect =
   // Flat passive Perception / Investigation bonus (Observant feat: +5).
   | { kind: "passive_bonus"; amount: number }
   // Walking speed bonus; `gate` names the equipment that switches it off
-  // (Fast Movement: heavy armor; Unarmored Movement: any armor or shield).
+  // (Fast Movement: heavy armor; Unarmored Movement: any armor or shield), or
+  // the rage it needs (Totem Spirit: Elk, raging and not in heavy armor).
   | {
       kind: "speed_bonus";
       amount: (level: number) => number;
-      gate?: "heavy_armor" | "armor_or_shield";
+      gate?: "heavy_armor" | "armor_or_shield" | "raging";
     }
   // Half the proficiency bonus (rounded down) on ability checks that do not
   // already use it, initiative included. Jack of All Trades covers every
@@ -99,6 +100,8 @@ export type FeatureEffect =
   | { kind: "magical_attacks" }
   // Initiative bonus equal to an ability modifier (Dread Ambusher: WIS).
   | { kind: "initiative_ability"; ability: "str" | "dex" | "con" | "int" | "wis" | "cha" }
+  // Initiative bonus equal to the proficiency bonus (Aura of the Sentinel).
+  | { kind: "initiative_proficiency" }
   // An ability modifier added to a named attack-roll spell's damage
   // (Agonizing Blast: +CHA per Eldritch Blast beam).
   | {
@@ -479,11 +482,12 @@ export function parseFeatureEffects(desc: string): FeatureEffect[] {
   }
   // Always-on resistances: "you gain/have resistance to poison damage" or a
   // leading "Resistance to psychic damage, and ...", with no trigger words
-  // in the clause (a rage-gated or spent resistance stays narrative).
+  // in the clause (a rage-gated or spent resistance stays narrative, and
+  // one to nonmagical damage only is the authored layer's `nonmagical`).
   const sentence =
     /[^.]*\byou (?:gain|have|grant(?:s)? you)? ?resistance to[^.,]*/i.exec(desc)?.[0] ??
     /^Resistance to[^.,]*/i.exec(desc)?.[0];
-  if (sentence && !/while|when |until|spend|reaction|rage|minute|hour|bonus action/i.test(sentence)) {
+  if (sentence && !/while|when |until|spend|reaction|rage|minute|hour|bonus action|nonmagical/i.test(sentence)) {
     const types = DAMAGE_TYPE_WORDS.filter((word) =>
       new RegExp(`\\b${word}\\b`, "i").test(sentence),
     );
@@ -759,7 +763,7 @@ export type CombatRiders = {
   // `source` is the table entry granting the bonus: one feature's tiers
   // replace each other, different features (Unarmored Movement and Mobile)
   // add up.
-  speedBonuses: Array<{ amount: number; gate: "heavy_armor" | "armor_or_shield" | null; source?: object }>;
+  speedBonuses: Array<{ amount: number; gate: "heavy_armor" | "armor_or_shield" | "raging" | null; source?: object }>;
   // Extra damage dice on landed attacks (Divine Strike, Improved Divine
   // Smite), resolved to this level's dice.
   damageRiders: Array<{
@@ -915,11 +919,34 @@ export function combatRiders(sheet: {
 
 // How many fighting styles the character has earned but not yet chosen.
 // "Fighting Style" and "Additional Fighting Style" each grant one.
+// The features that open a fighting style pick, and the styles each allows:
+// a class's own slot opens every style, the College of Swords' Fighting
+// Style (Blade) only Dueling or Two-Weapon Fighting.
+const STYLE_SLOTS = new Map<string, FightingStyleId[] | null>([
+  [textKey("Fighting Style"), null],
+  [textKey("Additional Fighting Style"), null],
+  [textKey("Fighting Style (Blade)"), ["dueling", "two_weapon_fighting"]],
+]);
+
 export function fightingStyleSlots(features: Array<{ name: string }>): number {
-  return features.filter((feature) => {
-    const name = textKey(feature.name);
-    return name === "fighting style" || name === "additional fighting style";
-  }).length;
+  return features.filter((feature) => STYLE_SLOTS.has(textKey(feature.name))).length;
+}
+
+// The styles the character's slots let them pick from.
+export function fightingStyleChoices(features: Array<{ name: string }>): typeof FIGHTING_STYLES {
+  const allowed = new Set<FightingStyleId>();
+  for (const feature of features) {
+    const key = textKey(feature.name);
+    if (!STYLE_SLOTS.has(key)) {
+      continue;
+    }
+    const only = STYLE_SLOTS.get(key);
+    if (!only) {
+      return FIGHTING_STYLES;
+    }
+    only.forEach((id) => allowed.add(id));
+  }
+  return FIGHTING_STYLES.filter((style) => allowed.has(style.id));
 }
 
 export function chosenFightingStyles(features: Array<{ name: string }>): string[] {
@@ -998,6 +1025,9 @@ export function defenseRiders(
         break;
       case "initiative_ability":
         riders.initiativeBonus += Math.max(0, abilityMods?.[effect.ability] ?? 0);
+        break;
+      case "initiative_proficiency":
+        riders.initiativeBonus += 2 + Math.floor((clampLevel(sheet.level) - 1) / 4);
         break;
       case "save_bonus":
         riders.saveBonus += Math.max(effect.min, abilityMods?.[effect.ability] ?? 0);

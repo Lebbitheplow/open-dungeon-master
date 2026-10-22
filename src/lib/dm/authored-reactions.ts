@@ -50,15 +50,25 @@ type Found = { reaction: AuthoredReaction; held: HeldAuthored; holder: Character
 function findReaction(ctx: Ctx): Found | null | ToolError {
   const asked = textKey(ctx.args.feature ?? "");
   const split = (name: string) => (asked === textKey(name) || asked.startsWith(`${textKey(name)} `) ? asked.slice(textKey(name).length).trim() : null);
+  // A feature with one reaction per state (Raging Storm: the desert's, the
+  // sea's) answers with the one whose gate holds now.
+  let first: Found | null = null;
   for (const held of heldAuthored(ctx.sheet)) {
     for (const reaction of held.entry.reactions ?? []) {
       for (const name of [reaction.name, ...(reaction.aliases ?? [])]) {
         const variant = split(name);
         if (variant !== null && (reaction.usedBy ?? "holder") === "holder") {
-          return { reaction, held, holder: ctx.sheet, variant };
+          const found = { reaction, held, holder: ctx.sheet, variant };
+          if (gateHolds(reaction.gate, ctx.sheet, held)) {
+            return found;
+          }
+          first ??= found;
         }
       }
     }
+  }
+  if (first) {
+    return first;
   }
   const named = authoredReactionNamed((ctx.args.feature ?? "").replace(/\s*\(.*$/, ""));
   if (!named) {
@@ -228,7 +238,17 @@ function resolve(ctx: Ctx, found: Found): ToolResult | ToolError {
       }
       const corrected = hit.record.swings.map((entry, at) => (at === hit.index ? { ...entry, raw: Math.max(0, entry.raw - reduction) } : entry));
       const settled = settle(ctx, hit.record, corrected, label);
-      return { ...(rolled ? { rolled } : {}), applied: `${reaction.name} takes ${reduction} off the ${hit.record.attack} hit on ${target.name}: ${settled.given} hit points come back. HP ${settled.hp}.` };
+      // Vengeful Ancestors: what Spirit Shield prevented strikes the attacker.
+      const reflected: Record<string, unknown> = {};
+      const prevented = Math.min(reduction, swing.raw);
+      if (does.reflect && prevented > 0 && encounter && holder.features.some((feature) => textKey(feature.name) === textKey(does.reflect!.feature))) {
+        const attacker = hit.record.attacker.kind === "enemy" ? enemyTarget(ctx, hit.record.attacker.id) : null;
+        if (attacker) {
+          Object.assign(reflected, { [does.reflect.feature]: applyEnemyDamage(ctx.campaign, ctx.turn, encounter, attacker, prevented, ctx.sheets, ctx.sheetsById, does.reflect.type, { magical: true }) });
+          publishEncounter(ctx.campaign.id);
+        }
+      }
+      return { ...(rolled ? { rolled } : {}), applied: `${reaction.name} takes ${reduction} off the ${hit.record.attack} hit on ${target.name}: ${settled.given} hit points come back. HP ${settled.hp}.`, ...reflected };
     }
     case "ac_vs_hit": {
       let bonus: number;
@@ -264,6 +284,10 @@ function resolve(ctx: Ctx, found: Found): ToolResult | ToolError {
       const swing = hit.record.swings[hit.index];
       if (swing.natural === null) {
         return { error: `${reaction.name} answers an attack roll, and this hit had none on record. Nothing was spent.`, refused: "rules" };
+      }
+      // Shadowy Dodge: only against an attack roll made without advantage.
+      if (does.notVsAdvantage && swing.advantage === "advantage") {
+        return { error: `${reaction.name} answers an attack roll made without advantage, and this one had advantage. Nothing was spent.`, refused: "rules" };
       }
       const kept =
         swing.advantage === "disadvantage"
@@ -313,17 +337,19 @@ function resolve(ctx: Ctx, found: Found): ToolResult | ToolError {
       }
       const raw = record.swings.filter((swing) => swing.hit).reduce((sum, swing) => sum + swing.raw, 0);
       // "split": the ally keeps half the blow; "halved": the holder takes
-      // half and the ally none; otherwise the holder takes it all.
-      const kept = does.share === "split" ? Math.ceil(raw / 2) : 0;
-      const corrected = does.share === "split"
+      // half and the ally none, as does a holder who resists it from
+      // `resistFrom` (Expansive Bond); otherwise the holder takes it all.
+      const share_ = does.share ?? (does.resistFrom && held.level >= does.resistFrom ? "halved" : undefined);
+      const kept = share_ === "split" ? Math.ceil(raw / 2) : 0;
+      const corrected = share_ === "split"
         ? record.swings.map((swing) => (swing.hit ? { ...swing, raw: Math.ceil(swing.raw / 2) } : swing))
         : record.swings.map((swing) => ({ ...swing, hit: false, raw: 0 }));
       const settled = settle(ctx, record, corrected, label);
-      const share = does.share ? Math.floor(raw / 2) : raw;
+      const share = share_ ? Math.floor(raw / 2) : raw;
       // The damage lands on the paladin as it was dealt: nothing reduces it.
       const taken = applyPcDamage(ctx.campaign, ctx.turn.id, getSheetById(ctx.sheet.id) ?? ctx.sheet, { amount: share, reason: `${reaction.name} for ${ally.name}` });
       return {
-        applied: does.share === "split"
+        applied: share_ === "split"
           ? `${ctx.sheet.name} takes ${share} of the ${raw} damage and ${ally.name} keeps ${kept}: ${settled.given} hit points come back to ${ally.name}.`
           : `${ctx.sheet.name} takes ${share === raw ? `the ${raw} damage` : `half of the ${raw} damage (${share})`} meant for ${ally.name}, whose ${settled.given} hit points come back.`,
         taken,
@@ -446,6 +472,26 @@ function resolve(ctx: Ctx, found: Found): ToolResult | ToolError {
     case "redirect": {
       const hit = lastHitOn(ctx, ctx.sheet, label);
       if ("error" in hit) return hit;
+      // Instinctive Charm: the attacker saves first, and keeps its target on
+      // a success.
+      if (does.save && encounter) {
+        const attacker = hit.record.attacker.kind === "enemy" ? enemyTarget(ctx, hit.record.attacker.id) : null;
+        if (!attacker) {
+          return { error: `${reaction.name} answers a creature's attack on ${ctx.sheet.name}; this one had no attacker in the fight on record. Nothing was spent.`, refused: "rules" };
+        }
+        if (does.rangeFt && !withinFeet(encounter.id, ctx.sheet.id, attacker.id, does.rangeFt)) {
+          return { error: `${attacker.displayName} is beyond ${does.rangeFt} feet of ${ctx.sheet.name}. Nothing was spent.`, refused: "rules" };
+        }
+        const dc = saveDc(holder, does.save.dcAbility);
+        const save = rollEnemySave(ctx.campaign.id, attacker, does.save.ability, dc, {
+          magical: true,
+          resist: bindsWorthResisting(["charmed"]),
+          record: { turn: ctx.turn, detail: `${attacker.displayName}: ${does.save.ability.toUpperCase()} save against ${reaction.name}` },
+        });
+        if (save.success) {
+          return { applied: `${attacker.displayName} resists (${does.save.ability.toUpperCase()} ${save.total} vs DC ${dc}) and keeps its target; ${reaction.name} cannot sway it again until ${ctx.sheet.name}'s long rest.` };
+        }
+      }
       const enemy = enemyTarget(ctx, null);
       if (!enemy || !encounter) {
         return { error: `${reaction.name} turns the attack onto the creature beside ${ctx.sheet.name}: pass its targetEnemyId. Nothing was spent.`, retry: true };
@@ -470,6 +516,24 @@ function resolve(ctx: Ctx, found: Found): ToolResult | ToolError {
         publishPersisted(ctx.campaign.id, "sheet_updated", { sheet: updated });
       }
       return { applied: `The attack misses by the wizard's word: ${settled.given} hit points come back to ${target.name}. ${ctx.sheet.name} gains ${does.exhaustion} level of exhaustion.` };
+    }
+    case "chance_miss": {
+      const hit = lastHitOn(ctx, ctx.sheet, label);
+      if ("error" in hit) return hit;
+      // Armor of Hexes: only against the creature the warlock cursed.
+      if (does.vsMark) {
+        const mark = ctx.sheet.conditions.find((entry) => lower(entry).startsWith(does.vsMark!));
+        const quarry = mark ? (ctx.sheet.conditionMeta as ConditionMetaMap)[mark]?.quarry : undefined;
+        if (!mark || hit.record.attacker.id !== quarry) {
+          return { error: `${reaction.name} answers the creature under ${ctx.sheet.name}'s ${does.vsMark}, and this hit came from another. Nothing was spent.`, refused: "rules" };
+        }
+      }
+      const die = rollCard(ctx.campaign, ctx.turn, ctx.sheet.id, "custom", `${ctx.sheet.name}: ${reaction.name}`, does.die, null).total;
+      if (die < does.min) {
+        return { rolled: die, applied: `${does.die}: ${die}, under ${does.min}; the hit still lands.` };
+      }
+      const settled = settle(ctx, hit.record, hit.record.swings.map((entry, at) => (at === hit.index ? { ...entry, hit: false, raw: 0 } : entry)), label);
+      return { rolled: die, applied: `${does.die}: ${die}, the attack misses whatever it rolled: ${settled.given} hit points come back. HP ${settled.hp}.` };
     }
     // Skirmisher's move, Tipsy Sway (src/lib/dm/authored-reactions-more.ts).
     case "move":

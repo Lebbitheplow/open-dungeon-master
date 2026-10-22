@@ -51,6 +51,7 @@ import { storeBudget } from "@/lib/dm/turn-budget";
 import { untilTurnEnd } from "@/lib/dm/turn-end";
 import { rollAgainst } from "@/lib/roll-labels";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { markCritRange } from "@/lib/dm/attack-marks";
 
 // The roll the attack makes and the damage it carries, built once the
 // attack is paid for and shared by both dice paths.
@@ -125,8 +126,9 @@ export function rollPcAttack(plan: AttackPlan, strike: Strike): Record<string, u
 
   const judged = adjudicateHit(hitOutcome.total, hitOutcome.crit, plan.effectiveAc, {
     natural: hitOutcome.natural,
-    // Improved and Superior Critical are written for weapon attacks.
-    critRange: plan.weaponAttack ? riders.critRange : 20,
+    // Improved and Superior Critical are written for weapon attacks; a mark
+    // (Hexblade's Curse) for every attack on its creature.
+    critRange: Math.min(plan.weaponAttack ? riders.critRange : 20, markCritRange(plan.marks.applies)),
   });
   // Parry: the creature's reaction lifts its AC against a melee hit it sees (enemy-reactions.ts).
   const parry = judged.hit && !judged.crit
