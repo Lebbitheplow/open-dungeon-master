@@ -126,9 +126,9 @@ await test("With the ammunition variant on, the prompt never tells the model tha
   assert.match(off, /Never track ammunition|Ammunition is never tracked/);
 });
 
-await test("Where a shop is open, the prompt sends buying and selling to buy_item and sell_item, which price from the shelf.", () => {
+await test("Where a shop is open, the prompt sends buying and selling to purchase, which trades from the shop's shelf at its prices (issue #471).", () => {
   const rule = systemText().split("\n").find((line) => line.startsWith("- One roll per uncertain action")) ?? "";
-  assert.match(rule, /buy_item[^.]*sell_item/);
+  assert.match(rule, /ONE purchase call \(at a shop in SHOPS HERE the shop trades from its shelf at its own prices/);
 });
 
 await test("request_roll's expression never suggests rolling an NPC attack.", () => {
@@ -139,8 +139,8 @@ await test("GAME STATE never names damage_enemy as a way a blow changes an enemy
   assert.doesNotMatch(systemText(), /only damage_enemy and enemy_attack change them/);
 });
 
-await test("The set_enemy_condition rule says a character's grapple, shove or spell applies its condition through its own tool.", () => {
-  const rule = systemText().split("\n").find((line) => line.includes("call set_enemy_condition BEFORE")) ?? "";
+await test("The enemy condition rule (set_condition with an enemyId) says a character's grapple, shove or spell applies its condition through its own tool.", () => {
+  const rule = systemText().split("\n").find((line) => line.includes("call set_condition with its enemyId BEFORE")) ?? "";
   assert.match(rule, /take_action/);
   assert.match(rule, /cast_at_enemy/);
 });
@@ -361,19 +361,20 @@ await test("The gear rules match the gear engine: damage_object remembers damage
   assert.match(text, /the server refuses a scroll the reader cannot read \(and the scroll is kept\) and rolls the check for one above their level/);
   assert.match(text, /a player at the table chooses and rolls their own hit dice from their sheet/);
   assert.match(text, /Attuning to a magic item takes a short rest/);
-  assert.doesNotMatch(text, /every purchase, sale, or trade goes through ONE purchase call/);
+  // One purchase call is every trade now, at a shop or not (issue #471).
+  assert.match(text, /every purchase, sale, or trade goes through ONE purchase call/);
 });
 
-await test("The monster rules match the monster engine: damage_enemy needs a hazard source, cast_at_player reads the block, enemy_attack resolves its rider, and ambushes are rolled.", () => {
+await test("The monster rules match the monster engine: apply_damage on an enemy needs a hazard source, cast_at_player reads the block, enemy_attack resolves its rider, and ambushes are rolled.", () => {
   const text = systemText();
   const rule = ruleLine(text, "- Enemy HP and AC in GAME STATE");
-  assert.match(rule, /with source 'hazard' or 'environment': the server refuses it for anything else/);
-  const sources = offeredTool("damage_enemy").parameters.properties.source.enum;
+  assert.match(rule, /source 'hazard' or 'environment': the server refuses it for anything else/);
+  const sources = offeredTool("apply_damage").parameters.properties.source.enum;
   for (const source of ["hazard", "environment"]) {
-    assert.ok(sources.includes(source), `damage_enemy does not take source ${source}`);
+    assert.ok(sources.includes(source), `apply_damage does not take source ${source}`);
   }
   assert.match(text, /an enemy that falls takes it with fallFeet instead of an amount/);
-  assert.ok(offeredTool("damage_enemy").parameters.properties.fallFeet, "damage_enemy takes no fallFeet");
+  assert.ok(offeredTool("apply_damage").parameters.properties.fallFeet, "apply_damage takes no fallFeet");
   assert.match(text, /Pass casterEnemyId with the ability or spell by the name its block uses/);
   assert.match(text, /a Recharge ability is refused until it recharges/);
   assert.match(text, /on a hit it also resolves the rider the attack prints/);
@@ -381,7 +382,8 @@ await test("The monster rules match the monster engine: damage_enemy needs a haz
   assert.ok(offeredTool("start_encounter").parameters.properties.ambush, "start_encounter takes no ambush");
   assert.match(text, /pass disengage when an enemy Disengages before it walks/);
   assert.ok(offeredTool("move_token").parameters.properties.disengage, "move_token takes no disengage");
-  assert.match(text, /A teleport \(Misty Step, a portal\) is teleport_token with spell and casterId/);
+  assert.match(text, /A teleport \(Misty Step, a portal\) is move_token with teleport true and spell and casterId/);
+  assert.ok(offeredTool("move_token").parameters.properties.teleport, "move_token takes no teleport");
   assert.match(text, /take the turns of the enemies its result lists as enemiesToAct/);
   assert.match(text, /An enemy acts only on its own turn: off it, it only reacts \(opportunity attacks are automatic\) or takes a legendary action/);
 });
@@ -419,7 +421,7 @@ await test("update_sheet from the AI never pins the armor class; AC stays derive
   assert.equal(world.sheet(kara.id).ac, derived);
 });
 
-await test("update_sheet from the AI writes no hit points, XP, gold or conditions: those move through heal, apply_damage, award_xp, modify_gold and the condition tools.", async () => {
+await test("update_sheet from the AI writes no hit points, XP, gold or conditions: those move through heal, apply_damage, party_award, modify_gold and the condition tools.", async () => {
   world.patch(kara.id, { currentHp: 10, conditions: [] });
   for (const fields of [{ currentHp: 30 }, { maxHp: 60 }, { xp: 6500 }, { gold: 500 }, { conditions: ["poisoned"] }, { tempHp: 5 }]) {
     const before = JSON.stringify(world.sheet(kara.id));

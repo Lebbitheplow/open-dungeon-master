@@ -256,5 +256,5 @@ export function renderShopsForPrompt(shops: Array<Shop & { keeperName: string }>
       .join("; ");
     return `- ${shop.name}${shop.keeperName ? ` (kept by ${shop.keeperName})` : ""}, ${shop.kind}${shop.buys ? ", buys at half" : ", does not buy"}: ${shelf || "bare shelves"}`;
   });
-  return `SHOPS HERE (prices are the server's; buy_item and sell_item move the coin and the goods, haggle moves the price one step):\n${lines.join("\n")}`;
+  return `SHOPS HERE (prices are the server's; purchase moves the coin and the goods at this shelf's prices, haggle moves the price one step):\n${lines.join("\n")}`;
 }

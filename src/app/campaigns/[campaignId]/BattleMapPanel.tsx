@@ -737,7 +737,7 @@ export function BattleMapPanel({
         setTeleporting(null);
         setHudTokenId(null);
         if (token) {
-          void invoke("teleport_token", { tokenName: token.name, x, y });
+          void invoke("move_token", { tokenName: token.name, x, y, teleport: true });
         }
         return;
       }
@@ -916,8 +916,10 @@ export function BattleMapPanel({
       }
       const isEnemy = promptToken.kind === "enemy";
       const ref = isEnemy ? { enemyId: promptToken.refId } : { characterId: promptToken.refId };
+      // One action for a character or an enemy alike (issue #471): the ref
+      // says which.
       if (prompt.kind === "condition") {
-        void invoke(isEnemy ? "set_enemy_condition" : "set_condition", { ...ref, condition: value });
+        void invoke("set_condition", { ...ref, condition: value });
       } else {
         const amount = Number.parseInt(value, 10);
         if (!Number.isFinite(amount) || amount < 1) {
@@ -925,7 +927,7 @@ export function BattleMapPanel({
           return;
         }
         if (prompt.kind === "damage") {
-          void invoke(isEnemy ? "damage_enemy" : "apply_damage", { ...ref, amount });
+          void invoke("apply_damage", { ...ref, amount });
         } else {
           void invoke("heal", { ...ref, amount });
         }

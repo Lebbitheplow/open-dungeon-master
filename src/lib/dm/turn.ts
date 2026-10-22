@@ -209,7 +209,9 @@ import { handleRequestRoll } from "@/lib/dm/invoke-roll";
 import { restTools } from "@/lib/dm/rest-tools";
 import { checkTools, CHECK_TOOL_NAMES } from "@/lib/dm/check-tools";
 import { hazardTools, HAZARD_TOOL_NAMES } from "@/lib/dm/hazard-tools";
-import { splitDamageTool, SPLIT_DAMAGE_TOOL_NAMES } from "@/lib/dm/split-damage";
+import { SPLIT_DAMAGE_TOOL_NAMES } from "@/lib/dm/split-damage";
+import { routeToolCall } from "@/lib/dm/tool-merge";
+import { acceptsCall, offeredAs } from "@/lib/dm/tool-merge-logic";
 import { petTools, PET_TOOL_NAMES } from "@/lib/dm/pet-tools";
 import { socialTools, SOCIAL_TOOL_NAMES, handleSetNpc, npcRosterForPrompt } from "@/lib/dm/social-tools";
 import { worldForPrompt } from "@/lib/dm/world-prompt";
@@ -338,6 +340,7 @@ const OUTCOME_TOOLS = new Set([
   "cast_buff",
   "heal",
   "apply_damage",
+  "damage_pet",
   "use_item",
   "use_resource",
   "stabilize",
@@ -979,6 +982,24 @@ async function advance(context: TurnContext, turn: DmTurn) {
   }
 }
 
+// The trimmed set leaves the sheet's tools out, but for the merged tools
+// that took over a sibling it always offered (issue #471): damage and
+// conditions on an enemy in a fight, a pet's damage, a shop's trade out of
+// one. Each is offered where that sibling was.
+function keptWhenTrimmed(name: string, inEncounter: boolean): boolean {
+  switch (name) {
+    case "apply_damage":
+      return true;
+    case "set_condition":
+    case "clear_condition":
+      return inEncounter;
+    case "purchase":
+      return !inEncounter;
+    default:
+      return false;
+  }
+}
+
 // The tools one DM model call is offered. Rebuilt on every call in the loop:
 // the moment start_encounter succeeds mid-turn, the combat tools must appear
 // on the very next call. Encounter tools ignore DM_LEAN_TOOLS; they are the
@@ -1004,7 +1025,6 @@ export function dmTurnTools(
     ...(campaign.storyArc ? [completeBeatTool] : []),
     ...checkTools,
     ...hazardTools,
-    ...(inEncounter ? [splitDamageTool] : []),
     ...petTools,
     ...socialTools,
     ...(inEncounter ? [] : relationshipTools(campaign)),
@@ -1046,7 +1066,7 @@ export function dmTurnTools(
     castBuffTool,
     ...(inEncounter ? [] : restTools),
     ...companionTools(campaign),
-    ...(leanTools ? [] : mutationTools),
+    ...(leanTools ? mutationTools.filter((tool) => keptWhenTrimmed(tool.function.name, inEncounter)) : mutationTools),
     ...(imageEnabled ? [generateImageTool] : []),
     ];
 }
@@ -1158,9 +1178,10 @@ function compactToolsThatFit(
     const spare = new Set(COMBAT_SPARE_TOOLS);
     variants.push((variants.at(-1) as ToolDefLike[]).filter((tool) => !spare.has(tool.function.name)));
   }
+  // A retired name the turn called stands for the tool that took its place.
   const called = turn.conversation.flatMap((message) =>
     message.role === "assistant" && Array.isArray(message.tool_calls)
-      ? message.tool_calls.map((call) => (call as { function?: { name?: string } }).function?.name ?? "")
+      ? message.tool_calls.map((call) => offeredAs((call as { function?: { name?: string } }).function?.name ?? ""))
       : [],
   );
   const wanted = new Set([
@@ -1222,7 +1243,8 @@ function handleMoreTools(campaign: Campaign, turn: DmTurn, imageEnabled: boolean
     }
   }
   if (tool) {
-    const found = all.find((entry) => entry.function.name === tool);
+    // A retired name reads the instructions of the tool that took its place.
+    const found = all.find((entry) => entry.function.name === offeredAs(tool));
     result.help = found ? toolHelp(found) : `There is no action called "${tool}".`;
   }
   return result;
@@ -1239,8 +1261,11 @@ export function dmTurnToolCatalogue(campaign: Campaign, imageEnabled: boolean, l
   ];
 }
 
+// Whether a set of tools takes a call by this name: one it offers, or a
+// retired name whose merged tool it offers (issue #471), which a stored turn
+// or an agent program may still send.
 function offersTool(tools: unknown[], name: string): boolean {
-  return tools.some((tool) => (tool as { function?: { name?: string } })?.function?.name === name);
+  return acceptsCall((wanted) => tools.some((tool) => (tool as { function?: { name?: string } })?.function?.name === wanted), name);
 }
 
 const squashed = (text: string) => text.replace(/\s+/g, " ").trim();
@@ -2139,9 +2164,15 @@ async function resolveModelCall(
   toolCall: { id?: string; name: string; rawArguments: string },
 ): Promise<ToolResult> {
   const { campaign, sheets, sheetsById, realDiceUserIds } = context;
-  const { name } = toolCall;
   // "false" sent as a string is false (src/lib/dm/arg-coerce.ts).
-  const rawArguments = strictBooleanArgs(toolCall.rawArguments);
+  // A merged tool reaches the handler its arguments name, and a retired
+  // name the one it always reached (src/lib/dm/tool-merge.ts): the caps,
+  // gates and offers below are that handler's own.
+  const routed = routeToolCall(campaign, toolCall.name, strictBooleanArgs(toolCall.rawArguments));
+  if ("refusal" in routed) {
+    return routed.refusal;
+  }
+  const { name, rawArguments } = routed;
   // The model's damage, healing and binding conditions are the server's to
   // roll (src/lib/dm/ai-gate.ts). The encounter and mutation calls and
   // request_roll below run their handlers directly, so they are held to it

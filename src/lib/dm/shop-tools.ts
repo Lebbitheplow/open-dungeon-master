@@ -46,16 +46,23 @@ import { MINUTES_PER_DAY } from "@/lib/dm/calendar";
 import { publishEphemeral, publishPersisted, publishWithSeq } from "@/lib/events";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { addCopper, formatCopper } from "@/lib/srd/currency";
-import { waypointProperty } from "@/lib/dm/waypoint-logic";
 import { noneNamed, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { alreadyInPack, notCarried } from "@/lib/dm/item-logic";
 import { isTableGearName } from "@/lib/db/homebrew";
 import { containsPhrase, textKey } from "@/lib/language/text-logic";
+import { lineNamed } from "@/lib/srd/item-row";
+import type { EngineCall, ToolArgs } from "@/lib/dm/tool-merge-logic";
 
 // The shop tools (docs/vtt-parity-implementation-plan.md 11.1). The server
 // prices everything: the model names the item, the shelf says what it
 // costs, the purse says whether it can be had. Every purchase and sale
 // writes the same audit row purchase does, so the ledger reads as one.
+//
+// The model buys and sells through purchase alone (issue #471): a purchase
+// where a shop stands that trades the item reaches buy_item or sell_item
+// below (tradeCall), so a trade at a shop never skips its shelf. Both stay
+// engine actions under their own names, for the Market and for callers that
+// still send them.
 
 type ToolDef = {
   type: "function";
@@ -80,42 +87,6 @@ export const shopTools: ToolDef[] = [
           keeper: { type: "string" },
         },
         required: ["name", "kind"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "buy_item",
-      description: "Buy from a shop in GAME STATE. The server takes the asking price from the shelf and refuses what the purse cannot cover or the shelf does not hold.",
-      parameters: {
-        type: "object",
-        properties: {
-          ...waypointProperty,
-          characterId: { type: "string" },
-          shop: { type: "string" },
-          item: { type: "string" },
-          qty: { type: "integer", minimum: 1, maximum: 99 },
-        },
-        required: ["characterId", "shop", "item"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "sell_item",
-      description: "Sell carried goods to a shop. The keeper pays half list price, from the content pack when the item is known there; name a price in copper only for something the pack does not know.",
-      parameters: {
-        type: "object",
-        properties: {
-          characterId: { type: "string" },
-          shop: { type: "string" },
-          item: { type: "string" },
-          qty: { type: "integer", minimum: 1, maximum: 99 },
-          priceCp: { type: "integer", minimum: 1, maximum: 10000000, description: "Only for an item the pack has no price for. Copper each, at most 10,000,000 (100,000 gp)." },
-        },
-        required: ["characterId", "shop", "item"],
       },
     },
   },
@@ -373,7 +344,7 @@ function ledger(campaign: Campaign, sheet: CharacterSheet, kind: string, delta: 
 export function handleBuyItem(campaign: Campaign, rawArguments: string): ToolResult {
   const args = parse(buySchema, rawArguments);
   if (!args) {
-    return { error: "Invalid arguments: buy_item needs characterId, shop and item.", retry: true };
+    return { error: "Invalid arguments: a purchase at a shop needs characterId, shop and item.", retry: true };
   }
   const sheet = resolveSheet(campaign, args.characterId);
   if (!sheet) {
@@ -421,7 +392,7 @@ const sellSchema = buySchema.extend({ priceCp: z.coerce.number().int().min(1).ma
 export function handleSellItem(campaign: Campaign, rawArguments: string): ToolResult {
   const args = parse(sellSchema, rawArguments);
   if (!args) {
-    return { error: "Invalid arguments: sell_item needs characterId, shop and item, and a priceCp of at most 10000000 (100,000 gp) when one is given.", retry: true };
+    return { error: "Invalid arguments: a sale at a shop needs characterId, shop and item, and a price of at most 100,000 gp each when one is given.", retry: true };
   }
   const sheet = resolveSheet(campaign, args.characterId);
   if (!sheet) {
@@ -446,7 +417,7 @@ export function handleSellItem(campaign: Campaign, rawArguments: string): ToolRe
   const magic = magicValueOf(line);
   if (magic && !SHELF_RARITIES[shop.size].includes(magic.rarity)) {
     const where = SHELF_RARITIES.city.includes(magic.rarity) ? "changes hands only in a city" : "is bought by no shop, only by the wealthiest nobles";
-    return { error: `${shop.name} does not buy ${carried}: a ${magic.rarity} magic item ${where}. A buyer the story provides is settled with purchase. Nothing was sold.`, refused: "rules" };
+    return { error: `${shop.name} does not buy ${carried}: a ${magic.rarity} magic item ${where}. A buyer the story provides is settled with purchase, no shop named. Nothing was sold.`, refused: "rules" };
   }
   // Gems, jewelry, art and trade goods keep their full value (SRD 5.1,
   // Selling Treasure), priced by the worth they were given; a name is never
@@ -456,7 +427,7 @@ export function handleSellItem(campaign: Campaign, rawArguments: string): ToolRe
   if (each === null) {
     // `unpriced`: the Market has no price to send, so it hands the sale to
     // whoever runs the story to name one (MarketPanel.tsx).
-    return { error: `The pack has no price for "${carried}"; pass priceCp for what the keeper pays each.`, retry: true, unpriced: true };
+    return { error: `The pack has no price for "${carried}"; send price, the gold the keeper pays for each.`, retry: true, unpriced: true };
   }
   const total = each * removal.removed;
   const paid = addCopper({ gold: sheet.gold, copper: sheet.copper }, total);
@@ -524,4 +495,54 @@ export function shopsBlock(campaign: Campaign): string {
     return { ...fresh, keeperName: fresh.keeperNpcId ? getNpcById(fresh.keeperNpcId)?.name ?? "" : "" };
   });
   return renderShopsForPrompt(shops);
+}
+
+// The handler a purchase reaches (src/lib/dm/tool-merge.ts). A shop named in
+// the call trades whatever it is asked, and refuses what it does not stock
+// or buy as it always has. With none named, a shop standing where the party
+// is trades the item when it stocks it (a purchase) or would buy it (a
+// sale): one that already shelves it first, then the general store, then
+// any other. Anything else changes hands at list price, outside a shop.
+export function tradeCall(campaign: Campaign, args: ToolArgs): EngineCall {
+  const action = args.action === "buy" || args.action === "sell" ? args.action : null;
+  const item = String(args.item ?? args.name ?? "").trim();
+  const named = typeof args.shop === "string" ? args.shop.trim() : "";
+  const listPrice = { name: "purchase", args: Object.fromEntries(Object.entries(args).filter(([key]) => key !== "shop" && key !== "priceCp")) };
+  if (!action || !item) {
+    return listPrice;
+  }
+  const atShop = (shop: string, shelfName: string = item): EngineCall => {
+    const common = { characterId: args.characterId, shop, item: shelfName, ...(args.qty !== undefined ? { qty: args.qty } : {}) };
+    if (action === "buy") {
+      return { name: "buy_item", args: { ...common, ...(args.waypoint !== undefined ? { waypoint: args.waypoint } : {}) } };
+    }
+    const priceCp = args.priceCp ?? (Number.isFinite(Number(args.price)) && Number(args.price) > 0 ? Math.round(Number(args.price) * 100) : undefined);
+    return { name: "sell_item", args: { ...common, ...(priceCp !== undefined ? { priceCp } : {}) } };
+  };
+  if (named) {
+    return atShop(named);
+  }
+  const location = getCurrentLocation(campaign.id);
+  const here = location ? listShopsAt(campaign.id, location.id, location.name) : [];
+  if (!here.length) {
+    return listPrice;
+  }
+  const srdName = typeof args.srdName === "string" ? args.srdName.trim() : "";
+  const shelved = (shop: Shop) => findStockLine(shop.stock, item) ?? (srdName ? findStockLine(shop.stock, srdName) : null);
+  if (action === "buy") {
+    for (const shop of here) {
+      const line = shelved(shop);
+      if (line) {
+        return atShop(shop.name, line.itemName);
+      }
+    }
+    return listPrice;
+  }
+  // A shop buys the magic it would sell, and no rarer (handleSellItem).
+  const sheet = typeof args.characterId === "string" ? resolveSheet(campaign, args.characterId) : null;
+  const carried = sheet ? sheet.equipment[lineNamed(sheet.equipment, item)] : undefined;
+  const magic = carried ? magicValueOf(carried) : null;
+  const buyers = here.filter((shop) => shop.buys && (!magic || SHELF_RARITIES[shop.size].includes(magic.rarity)));
+  const buyer = buyers.find((shop) => shelved(shop)) ?? buyers.find((shop) => shop.kind === "general") ?? buyers[0];
+  return buyer ? atShop(buyer.name) : listPrice;
 }

@@ -30,8 +30,8 @@ import { subclassNamed } from "@/lib/srd/subclass-name";
 // Pets live on the owner's sheet (schemas/sheet.ts petSchema), so they need
 // no user row and travel with the character. summon_pet validates the
 // source feature and loads the stat block; pet_attack resolves a natural
-// attack against an enemy with real dice; damage_pet routes an enemy's hit
-// into the pet's own pool (a familiar at 0 HP vanishes, a companion drops).
+// attack against an enemy with real dice; damage_pet (apply_damage with a
+// petName, issue #471) routes an enemy's hit into the pet's own pool (a familiar at 0 HP vanishes, a companion drops).
 
 type ToolDef = {
   type: "function";
@@ -80,25 +80,6 @@ export const petTools: ToolDef[] = [
           reason: { type: "string" },
         },
         required: ["characterId", "targetEnemyId"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "damage_pet",
-      description:
-        "Deal an enemy's or hazard's damage to a character's pet: the damage lands on the pet's own hit points, never the owner's. A familiar dropping to 0 HP vanishes (it can be resummoned with 10 gp and an hour's ritual); other pets fall unconscious at 0.",
-      parameters: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          characterId: { type: "string", description: "The owner: exact characterId from GAME STATE." },
-          petName: { type: "string", description: "Which pet, when they have several." },
-          amount: { type: "integer", minimum: 0, maximum: 300 },
-          reason: { type: "string" },
-        },
-        required: ["characterId", "amount"],
       },
     },
   },
@@ -512,7 +493,7 @@ export function handleDamagePet(
   try {
     args = damagePetSchema.parse(JSON.parse(rawArguments || "{}"));
   } catch {
-    return { error: "Invalid arguments: damage_pet needs characterId and amount.", retry: true };
+    return { error: "Invalid arguments: apply_damage on a pet needs the owner's characterId and an amount.", retry: true };
   }
   const stale = resolveSheetRef(args.characterId, sheets, sheetsById);
   const sheet = stale ? (getSheetById(stale.id) ?? stale) : null;

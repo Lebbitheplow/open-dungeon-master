@@ -189,7 +189,7 @@ export function enemyEscape(
   const holder = held.source ? getSheetById(held.source) : null;
   if (!holder) {
     return {
-      error: `${enemy.displayName}'s grapple names no grappler the server can find; end it with set_enemy_condition instead of a contest.`,
+      error: `${enemy.displayName}'s grapple names no grappler the server can find; end it with clear_condition and its enemyId instead of a contest.`,
       retry: true,
     };
   }

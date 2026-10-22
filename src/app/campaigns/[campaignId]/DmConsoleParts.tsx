@@ -20,7 +20,8 @@ export function adjudicationGlyph(name: string, fallback: string): string {
   if (name.includes("rest")) return "rest-short";
   if (name.includes("death")) return "rest-death-save";
   if (name.includes("level")) return "rest-level-up";
-  if (name.includes("xp")) return "rest-xp";
+  // Award XP is party_award since award_xp folded into it (issue #471).
+  if (name.includes("xp") || name === "party_award") return "rest-xp";
   if (name.includes("inspiration")) return "rest-inspiration";
   if (name.includes("exhaustion")) return "rest-exhaustion";
   if (name.includes("heal") || name.includes("damage") || name.includes("hp")) return "rest-hp";
@@ -33,7 +34,7 @@ export function adjudicationGlyph(name: string, fallback: string): string {
   if (name.includes("spell") || name.includes("cast")) return "rest-spell-slot";
   if (name.includes("check") || name.includes("roll") || name.includes("save")) return "die-d20";
   if (name.includes("loot") || name.includes("item") || name.includes("treasure")) return "tab-loot";
-  if (name.includes("shop") || name.includes("merchant")) return "tab-shop";
+  if (name.includes("shop") || name.includes("merchant") || name === "purchase") return "tab-shop";
   if (name.includes("handout") || name.includes("image")) return "tab-handout";
   if (name.includes("ambience") || name.includes("music") || name.includes("sound")) return "tab-ambience";
   if (name.includes("npc")) return "system-cast";

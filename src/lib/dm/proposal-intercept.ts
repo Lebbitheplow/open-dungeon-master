@@ -22,7 +22,25 @@ import {
   type OfferLine,
 } from "@/lib/dm/proposal-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import type { ToolResult } from "@/lib/dm/tool-errors";
+import type { ToolError, ToolResult } from "@/lib/dm/tool-errors";
+import { listPriceCp, saleValueCp } from "@/lib/dm/trade-value";
+import { lineNamed } from "@/lib/srd/item-row";
+
+// What a purchase offered for approval will charge or pay each, in gold, as
+// purchase-math.ts settles it on approval: the list price to buy, the sale
+// value to sell, and the call's price only for a thing nothing prices. The
+// offer's line showed the call's own price, which the engine ignores for
+// anything the book lists (issue #471).
+function quotedPurchase(args: OfferArgs, sheet: CharacterSheet): OfferArgs | ToolError {
+  const name = String(args.item ?? args.name ?? "").trim();
+  const sold = args.action === "sell" ? sheet.equipment[lineNamed(sheet.equipment, name)] : undefined;
+  const item = sold ?? { name, srdName: typeof (args as { srdName?: unknown }).srdName === "string" ? String((args as { srdName?: unknown }).srdName) : undefined };
+  const listCp = listPriceCp(item);
+  if (listCp === null) {
+    return args.price === undefined ? { error: `Nothing prices "${name}": send price, the gold one is worth. No offer was made.`, retry: true } : args;
+  }
+  return { ...args, price: (args.action === "sell" ? saleValueCp(item, listCp) : listCp) / 100 };
+}
 
 // Interception for the inventoryApprovals and vitalsApprovals game
 // settings: a DM inventory, gold, damage, healing or condition mutation
@@ -79,13 +97,8 @@ export function maybeProposeItemChange(
   if (toolName === "modify_gold" && !Number(args.delta ?? 0)) {
     return { error: "modify_gold needs a nonzero delta.", retry: true };
   }
-  if (
-    toolName === "purchase" &&
-    (!String(args.item ?? args.name ?? "").trim() ||
-      args.price === undefined ||
-      (args.action !== "buy" && args.action !== "sell"))
-  ) {
-    return { error: "purchase needs item, price, and action buy|sell.", retry: true };
+  if (toolName === "purchase" && (!String(args.item ?? args.name ?? "").trim() || (args.action !== "buy" && args.action !== "sell"))) {
+    return { error: "purchase needs item and action buy|sell.", retry: true };
   }
 
   if (toolName === "apply_damage" && !(Number(args.amount ?? 0) >= 1)) {
@@ -104,6 +117,11 @@ export function maybeProposeItemChange(
   if (cannot) {
     return cannot;
   }
+  // A purchase's line names the price the engine will charge.
+  const quoted = toolName === "purchase" ? quotedPurchase(args, sheet!) : args;
+  if ("error" in quoted) {
+    return quoted;
+  }
   // The same offer again, while the first waits or just after it was
   // accepted, is the same loot twice.
   const repeated = duplicateOfferProblem(
@@ -117,7 +135,7 @@ export function maybeProposeItemChange(
     return repeated;
   }
 
-  const summary = proposalSummary(toolName, args, sheet!.name);
+  const summary = proposalSummary(toolName, quoted, sheet!.name);
   const proposal = insertItemProposal({
     campaignId: campaign.id,
     turnId,
