@@ -13,13 +13,15 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (file) => readFileSync(path.join(root, file), "utf8");
 
-const wiki = read("src/app/workshop/world/WikiView.tsx");
+// The wiki's list is drawn by EntryList (#479: only the rows in view of a
+// big world).
+const list = read("src/app/workshop/world/EntryList.tsx");
 const css = read("src/app/globals.css");
 
 // The list is still a capped, scrolling flex column (the shape that shrinks).
-assert.match(wiki, /className="flex max-h-\[60vh\] flex-col gap-0\.5 overflow-y-auto pr-1" role="listbox" aria-label="Entries"/);
+assert.match(list, /className="flex max-h-\[60vh\] flex-col[^"]*overflow-y-auto[^"]*"\s+role="listbox"\s+aria-label="Entries"/);
 // Each row is a pressable option that refuses to shrink.
-const row = wiki.match(/role="option"[\s\S]*?className=\{cn\("([^"]+)"/);
+const row = list.match(/role="option"[\s\S]*?className=\{cn\(\s*"([^"]+)"/);
 assert.ok(row, "the entry row's class list");
 assert.match(row[1], /\bmotion-press\b/, "the row presses (overflow hidden)");
 assert.match(row[1], /\bshrink-0\b/, "the row keeps its height");
