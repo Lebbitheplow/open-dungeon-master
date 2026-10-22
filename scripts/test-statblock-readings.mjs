@@ -29,6 +29,10 @@ const { isShapechanger } = await import("../src/lib/dm/enemy-polymorph-logic.ts"
 const { alternativeBlow } = await import("../src/lib/dm/enemy-profile.ts");
 const { checkMonsterDraft } = await import("../src/lib/bestiary/monster-draft.ts");
 const { getContentDb } = await import("../src/lib/content/db.ts");
+const { parseSaveEffect } = await import("../src/lib/dm/save-effect.ts");
+const { hasTrait, ENGINE_TRAIT_NAMES } = await import("../src/lib/dm/monster-abilities.ts");
+const { sunlightBurn, sunlightTurnStart } = await import("../src/lib/dm/sunlight-turn.ts");
+const { getDatabase } = await import("../src/lib/db/core.ts");
 
 const block = (row, cr = 1) => parseMonster(row, cr);
 const hit = (stats, amount, type, options) => damageAdjust(amount, type, stats.resist, stats.immune, stats.vulnerable, options).amount;
@@ -252,6 +256,30 @@ await test("A lair's printed options are read from a lair trait or from the lore
   assert.deepEqual(checkMonsterDraft({ name: "Sea copy", ...sea }).draft.stats.lairOptions, sea.lairOptions);
 });
 
+await test("A hit's save is read sentence by sentence: a failure's condition in the next sentence rides the hit, a swallow's acid later on is no save damage, and \"takes half the damage\" is half on a success.", () => {
+  const sting = attack("Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 5 (1d6 + 2) piercing damage, and the target must make a DC 12 Constitution saving throw. On a failure, the target is poisoned for 1 minute.");
+  assert.equal(sting.onHit?.save, "con", JSON.stringify(sting));
+  assert.equal(sting.onHit?.dc, 12);
+  assert.equal(sting.onHit?.condition, "poisoned");
+  assert.equal(sting.onHit?.rounds, 10);
+  const bite = attack("Melee Weapon Attack: +7 to hit, reach 5 ft., one target. Hit: 10 (2d6 + 3) piercing damage, and the target must succeed on a DC 14 Dexterity saving throw or be swallowed. A swallowed creature is blinded and restrained, and it takes 10 (3d6) acid damage at the start of each of the creature's turns.");
+  assert.equal(bite.onHit?.save, "dex", JSON.stringify(bite));
+  assert.equal(bite.onHit?.damage, undefined, "the swallow's acid was read as the save's damage");
+  assert.equal(parseSaveEffect("The target must make a DC 13 Dexterity saving throw, taking 14 (4d6) fire damage on a failure. On a success, the target takes half the damage.").halfOnSave, true);
+});
+
+await test("The trait names the engine runs are read in the books' other spellings: Magic Weapon in the singular, Keen Scent, Sunlight Weakness and Hypersensitivity, any element's Absorption.", () => {
+  assert.equal(hasTrait({ traits: ["Magic Weapon. The golem's weapon attacks are magical."] }, "magicWeapons"), true);
+  assert.equal(hasTrait({ traits: ["Sunlight Weakness. While in sunlight, the vampire has disadvantage on attack rolls and saving throws."] }, "sunlightSensitivity"), true);
+  assert.equal(hasTrait({ traits: ["Sunlight Weakness. While in sunlight, the vampire has disadvantage on attack rolls and saving throws."] }, "sunlightWeakness"), true);
+  assert.equal(hasTrait({ traits: ["Sunlight Hypersensitivity. The vampire takes 20 radiant damage when it starts its turn in sunlight."] }, "sunlightWeakness"), false);
+  for (const name of ["Magic Weapon", "Keen Scent", "Sunlight Weakness", "Sunlight Hypersensitivity", "Necrotic Absorption", "Radiant Absorption"]) {
+    assert.match(name, ENGINE_TRAIT_NAMES, name);
+  }
+  assert.equal(sunlightBurn({ traits: ["Sunlight Hypersensitivity. The vampire takes 20 radiant damage when it starts its turn in sunlight. While in sunlight, it has disadvantage on attack rolls and ability checks."] }), 20);
+  assert.equal(sunlightBurn({ traits: ["Sunlight Sensitivity. While in sunlight, the kobold has disadvantage on attack rolls."] }), null);
+});
+
 // ---- in a fight ----
 
 const tank = world.addHero({ name: "Tank", class: "fighter", level: 5, abilities: { str: 16 }, proficiencies: TRAINED, maxHp: 300, ac: 10, acOverride: true });
@@ -327,6 +355,84 @@ await test("A creature resistant to a condition saves against it with advantage 
   const flame = await mk.forced([1, 8, 8], () => world.invoke("cast_at_enemy", { characterId: priest.id, targetEnemyId: archmage.id, spell: "Sacred Flame", saveAbility: "dex" }));
   assert.equal(flame.ok, true, flame.error);
   assert.equal(before - world.enemies()[0].currentHp, 8, "16 radiant from a spell, halved");
+});
+
+const SPITTER = {
+  name: "Spitter", size: "Medium", type: "Monstrosity", armor_class: 12, hit_points: 60, cr: 2, document__slug: "blackflag", slug: "spitter",
+  actions: [{ name: "Claw", desc: "Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 5 (1d6+2) slashing damage." }],
+  bonus_actions: [{ name: "Venom Spit", desc: "The spitter spits venom at one creature it can see within 30 feet of it. The target must make a DC 12 Constitution saving throw, taking 7 (2d6) poison damage on a failed save, or half as much damage on a successful one." }],
+};
+
+await test("A bonus action's ability is the creature's bonus action: it leaves the action to swing, and a second in the round is refused.", async () => {
+  const spitter = await stage(SPITTER);
+  const spit = await mk.forced([1, 3, 3], () => world.invoke("cast_at_player", { characterId: tank.id, casterEnemyId: spitter.id, ability: "Venom Spit", saveAbility: "con", dc: 12 }));
+  assert.equal(spit.ok, true, spit.error);
+  const again = await world.invoke("cast_at_player", { characterId: tank.id, casterEnemyId: spitter.id, ability: "Venom Spit", saveAbility: "con", dc: 12 });
+  assert.equal(again.ok, false, "a second bonus action in one round");
+  assert.match(again.error, /bonus action/);
+  const claw = await mk.forced([15, 3], () => world.invoke("enemy_attack", { enemyId: spitter.id, targetCharacterId: tank.id }));
+  assert.equal(claw.ok, true, claw.error);
+});
+
+const VAMPIRE = {
+  name: "Night Lord", size: "Medium", type: "Undead", armor_class: 15, hit_points: 90, cr: 5, wisdom: 10, document__slug: "blackflag", slug: "night-lord",
+  special_abilities: [
+    { name: "Sunlight Weakness", desc: "While in sunlight, the night lord has disadvantage on attack rolls and saving throws." },
+    { name: "Sunlight Hypersensitivity", desc: "The night lord takes 20 radiant damage when it starts its turn in sunlight." },
+  ],
+  actions: [{ name: "Claw", desc: "Melee Weapon Attack: +6 to hit, reach 5 ft., one target. Hit: 8 (2d4+3) slashing damage." }],
+};
+
+async function underNoonSun(run) {
+  const { getClock, setClock } = await import("../src/lib/db/clock.ts");
+  const { breakDown } = await import("../src/lib/dm/calendar.ts");
+  getDatabase().prepare("UPDATE battle_maps SET outdoors = 1, ambient = 'bright' WHERE id = ?").run(kit.map().id);
+  const clock = getClock(world.campaignId);
+  let instant = clock.instant;
+  while (breakDown(clock.calendar, instant).hour !== 12) {
+    instant += 60;
+  }
+  setClock(world.campaignId, { ...clock, instant, weather: null });
+  try {
+    return await run();
+  } finally {
+    setClock(world.campaignId, clock);
+    getDatabase().prepare("UPDATE battle_maps SET outdoors = 0 WHERE id = ?").run(kit.map().id);
+  }
+}
+
+await test("Sunlight Weakness puts a creature's saves at disadvantage in the noon sun, and Sunlight Hypersensitivity burns it as its turn starts there.", async () => {
+  const lord = await stage(VAMPIRE);
+  await underNoonSun(async () => {
+    // Two d20s, the lower kept: the 19 would have saved.
+    const save = await mk.forced([19, 3], () => mk.ai(mk.aiTurn(), "set_enemy_condition", { enemyId: lord.id, condition: "frightened", saveAbility: "wis", saveDc: 12 }));
+    assert.equal(save.unused, 0, "the save was rolled without disadvantage");
+    assert.match(JSON.stringify(save.result), /fails the WIS save 3 vs DC 12/);
+    const lines = sunlightTurnStart(world.campaign(), world.encounter(), world.enemies()[0]);
+    assert.match(lines.join(" "), /takes 20 radiant damage/);
+    assert.equal(world.enemies()[0].currentHp, 70);
+  });
+  const shade = sunlightTurnStart(world.campaign(), world.encounter(), world.enemies()[0]);
+  assert.deepEqual(shade, [], "it burned out of the sun");
+});
+
+const DRAGON_LAIR = {
+  name: "Lair Drake", size: "Large", type: "Dragon", armor_class: 17, hit_points: 120, cr: 8,
+  special_abilities: [{ name: "Lair Actions", desc: "On initiative count 20 (losing initiative ties), the drake takes a lair action:\n- Stalactites fall from the ceiling.\n- A cloud of smoke fills a 20-foot-radius sphere." }],
+  actions: [{ name: "Bite", desc: "Melee Weapon Attack: +7 to hit, reach 10 ft., one target. Hit: 15 (2d10+4) piercing damage." }],
+};
+
+await test("A block's printed lair options are offered once the fight is in a lair, and a fight outside one is never made one by them.", async () => {
+  await stage(DRAGON_LAIR);
+  const outside = await world.invoke("lair_action", { action: "1" });
+  assert.equal(outside.ok, false);
+  assert.match(outside.error, /not in a lair/);
+  const encounter = world.encounter();
+  const legendary = { ...(encounter.legendary ?? {}), lair: true, lairDue: encounter.round };
+  getDatabase().prepare("UPDATE encounters SET legendary_json = ? WHERE id = ?").run(JSON.stringify(legendary), encounter.id);
+  const inside = await world.invoke("lair_action", { action: "2" });
+  assert.equal(inside.ok, true, inside.error);
+  assert.match(inside.result.note, /cloud of smoke/);
 });
 
 // ---- the whole pack ----

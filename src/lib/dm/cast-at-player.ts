@@ -6,7 +6,7 @@ import { castToNoEffect, spellWardOn } from "@/lib/dm/cast-reach";
 import type { Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter, recordEncounterTarget, setEnemyConcentration } from "@/lib/db/encounters";
 import { markReactionUsed } from "@/lib/dm/turn-budget";
-import { getSheetById } from "@/lib/db/sheets";
+import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { isValidExpression } from "@/lib/dice";
 import { spellFactsFor, spellMechanicsFor } from "@/lib/content";
@@ -14,7 +14,7 @@ import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import type { SaveAbility } from "@/lib/bestiary/statblock";
 import { planSpellFx } from "@/lib/battlemap/fx-plan";
 import { clearSpellConditionsByName, concentrationRoundsFor } from "@/lib/dm/concentration";
-import { durationArgsFor } from "@/lib/dm/condition-logic";
+import { durationArgsFor, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { normalizeAbility } from "@/lib/dm/arg-coerce";
 import { resolveEnemyRef } from "@/lib/dm/enemy-damage";
 import { prepareEnemyUse, type EnemyUse } from "@/lib/dm/enemy-casting";
@@ -134,7 +134,7 @@ export function layEnemyCondition(
       spellEffect: { source: use.enemy.id, untilLongRest: true },
     });
   }
-  return applyDmMutation(
+  const applied = applyDmMutation(
     campaign,
     turn.id,
     "set_condition",
@@ -149,6 +149,60 @@ export function layEnemyCondition(
     sheets,
     sheetsById,
   ).result;
+  // "Falls unconscious for 10 minutes or until it takes damage": the first
+  // damage ends it (src/lib/dm/spell-effects.ts reads the flag). The sleep
+  // when the use lays one ("poisoned and unconscious ... wakes if it takes
+  // damage"), else its condition. Marked on the instance this enemy laid,
+  // after the condition went on the ordinary way, so a sleep that is not
+  // magic stays one Fey Ancestry does not turn.
+  const laid = [use?.condition, ...(use?.also ?? [])];
+  const wakes = condition === "unconscious" || (condition === use?.condition && !laid.includes("unconscious"));
+  if (use?.endsOnDamage && wakes && !("error" in applied)) {
+    const now = getSheetById(sheet.id);
+    const meta = { ...((now?.conditionMeta ?? {}) as ConditionMetaMap) };
+    const key = Object.keys(meta).find((name) => name.toLowerCase() === condition.toLowerCase());
+    if (now && key) {
+      const entry = meta[key];
+      meta[key] = entry.source === use.enemy.id || !entry.others?.length
+        ? { ...entry, endsOnDamage: true }
+        : { ...entry, others: entry.others.map((other) => (other.source === use.enemy.id ? { ...other, endsOnDamage: true } : other)) };
+      patchSheet(sheet.id, { conditionMeta: meta });
+    }
+  }
+  return applied;
+}
+
+// The rest of what a failed save of an enemy's ability lays, after its first
+// condition (src/lib/dm/save-effect.ts): the conditions listed with it
+// ("blinded and deafened"), and the one a failure by a margin adds ("If the
+// saving throw fails by 5 or more, the target is also frightened"). `total`
+// is the save rolled, null for one failed without a roll, which no margin
+// is read from. Returns the conditions that landed.
+export function layFailedSaveExtras(
+  campaign: Campaign,
+  turn: DmTurn,
+  sheet: CharacterSheet,
+  use: EnemyUse,
+  save: { ability: SaveAbility; dc: number; total: number | null },
+  timing: { rounds?: number; saveEnds: boolean },
+  reason: string,
+  sheets: CharacterSheet[],
+  sheetsById: Map<string, CharacterSheet>,
+): string[] {
+  const margin = use.failBy && save.total !== null && save.dc - save.total >= use.failBy.margin ? [use.failBy.condition] : [];
+  const landed: string[] = [];
+  for (const name of [...(use.also ?? []), ...margin]) {
+    const standing = getSheetById(sheet.id);
+    if (!standing || standing.currentHp <= 0) {
+      break;
+    }
+    const condition = canonicalCondition(name);
+    const applied = layEnemyCondition(campaign, turn, standing, use, condition, save, timing, reason, sheets, sheetsById);
+    if (!("error" in applied)) {
+      landed.push(condition);
+    }
+  }
+  return landed;
 }
 
 export function handleCastAtPlayer(
@@ -388,15 +442,28 @@ export function handleCastAtPlayer(
       sheets,
       sheetsById,
     );
+    const extras = use?.fromBlock ? layFailedSaveExtras(campaign, turn, sheet, use, { ability, dc, total: save.total }, { rounds, saveEnds }, source, sheets, sheetsById) : [];
     if (!("error" in applied)) {
-      base.conditionApplied = [condition, ...(Array.isArray(applied.alsoApplied) ? applied.alsoApplied : [])].join(", ");
+      base.conditionApplied = [condition, ...(Array.isArray(applied.alsoApplied) ? applied.alsoApplied : []), ...extras].join(", ");
       base.duration = rounds
         ? `${rounds} round${rounds === 1 ? "" : "s"}${saveEnds ? `, or until a successful ${ability.toUpperCase()} save (DC ${dc}) at the end of one of their turns` : ""}`
         : `until they succeed on a ${ability.toUpperCase()} save (DC ${dc}) at the end of one of their turns`;
     }
   }
+  // A failure by a margin with no first condition (a breath that also
+  // frightens on a failure by 5): only the margin's condition.
+  if (!conditionName && !saved && use?.fromBlock && use.failBy) {
+    const extras = layFailedSaveExtras(campaign, turn, sheet, use, { ability, dc, total: save.total }, { rounds, saveEnds }, source, sheets, sheetsById);
+    if (extras.length) {
+      base.conditionApplied = extras.join(", ");
+    }
+  }
   if (saved && conditionName) {
     base.note = `${sheet.name} shakes it off: no ${conditionName}.`;
+  }
+  // The second save the same use forces (src/lib/dm/ability-entries.ts).
+  if (use?.followUp) {
+    base.next = `${use.name} also forces a second save on the creatures its text names: resolve it with cast_at_player or aoe_damage, casterEnemyId ${use.enemy.id} and ability "${use.followUp}".`;
   }
   // A concentration spell cast by a named enemy is tracked even when the
   // save succeeded (Hold Person holds nobody yet the hag still concentrates).

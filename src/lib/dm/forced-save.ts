@@ -325,6 +325,8 @@ export function rollEnemySave(
   const authored = authoredEnemySave(campaignId, enemy, { magical: options.magical });
   const resistsMagic = options.magical === true && hasTrait(enemy.stats, "magicResistance");
   const against = conditionSaveLean(enemy.stats, options.against);
+  // Sunlight Weakness: its saves are at disadvantage in sunlight.
+  const sunWeak = hasTrait(enemy.stats, "sunlightWeakness") && inDirectSunlight(campaignId);
   const worn = enemyExhaustion(enemy.conditions) >= 3;
   const advantage = mergeAdvantage([
     ...(worn ? ["disadvantage" as const] : []),
@@ -333,6 +335,7 @@ export function rollEnemySave(
     ...(effect.disadvantage ? ["disadvantage" as const] : []),
     ...(resistsMagic ? ["advantage" as const] : []),
     ...against,
+    ...(sunWeak ? ["disadvantage" as const] : []),
     ...(options.advantage ? ["advantage" as const] : []),
     ...(options.disadvantage ? ["disadvantage" as const] : []),
     ...riders.advantageSources,

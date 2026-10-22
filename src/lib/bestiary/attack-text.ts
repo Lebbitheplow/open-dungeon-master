@@ -337,21 +337,30 @@ function readOnHit(hit: string, effectOnly: boolean): OnHitRider | null {
   const rider: OnHitRider = {};
   const dcAt = hit.search(SAVE_DC);
   if (dcAt >= 0) {
-    // The sentence with the save in it decides the effect; what follows it
-    // ("if the poison reduces the target to 0 ...") is a different rule.
+    // The save's damage is its own sentence's, or an "On a failure, ..."
+    // sentence's right after it (A5e, and Tome of Beasts 3's spelled-out
+    // brackets): later sentences tell of other rules (a swallowed creature's
+    // acid each turn, "if the poison reduces the target to 0 ..."). What a
+    // failure lays may be said in the sentences after it ("On a failure, it
+    // is knocked prone"); the save reader keeps what belongs to the failed
+    // save (src/lib/dm/save-effect.ts).
     const rest = hit.slice(dcAt);
-    const stop = rest.search(/\.\s+[A-Z]/);
-    const sentence = stop >= 0 ? rest.slice(0, stop + 1) : rest;
-    const effect = parseSaveEffect(sentence);
+    const sentences = rest.split(/(?<=\.)\s+(?=[A-Z])/);
+    const own = parseSaveEffect(sentences[0]);
+    const failure = sentences[1] && /^on a fail(?:ure|ed save)\b/i.test(sentences[1]) ? parseSaveEffect(`${sentences[0]} ${sentences[1]}`) : own;
+    const struck = own.damage ? own : failure;
+    const followed = parseSaveEffect(rest);
+    const laid = own.condition ? own : failure.condition ? failure : followed.condition ? followed : own;
     Object.assign(rider, {
-      ...(effect.save ? { save: effect.save } : {}),
-      ...(effect.dc ? { dc: effect.dc } : {}),
-      ...(effect.condition ? { condition: effect.condition } : {}),
-      ...(effect.damage ? { damage: effect.damage, damageType: effect.damageType } : {}),
-      ...(effect.halfOnSave ? { halfOnSave: true } : {}),
-      ...(effect.rounds ? { rounds: effect.rounds } : {}),
-      ...(effect.untilLongRest ? { untilLongRest: true } : {}),
-      ...(effect.lasting ? { lasting: true } : {}),
+      ...(own.save ? { save: own.save } : {}),
+      ...(own.dc ? { dc: own.dc } : {}),
+      ...(laid.condition ? { condition: laid.condition } : {}),
+      ...(struck.damage ? { damage: struck.damage, damageType: struck.damageType } : {}),
+      // "On a success, it takes half the damage" comes after the failure's.
+      ...(struck.halfOnSave || (struck.damage && followed.halfOnSave) ? { halfOnSave: true } : {}),
+      ...(laid.rounds ? { rounds: laid.rounds } : {}),
+      ...(laid.untilLongRest ? { untilLongRest: true } : {}),
+      ...(laid.lasting ? { lasting: true } : {}),
     });
     if (/repeat the saving throw/i.test(rest)) {
       rider.repeatSave = true;
