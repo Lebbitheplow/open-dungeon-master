@@ -8,10 +8,11 @@ export type { JoinPreview };
 import { createSheetSchema, type CreateSheetInput } from "@/lib/schemas/sheet";
 import type { Pregen } from "@/lib/starter/pregens";
 
-// The two ways a hero that already exists takes a seat, each written once:
-// the join itself (POST /sheet, POST /sheet/pregen) and the confirm sheet a
-// player reads before it (POST /sheet/preview, backlog F6) both come here,
-// so what the sheet promises is what the join does.
+// The ways a hero takes a seat, each written once: the join itself (POST
+// /sheet, POST /sheet/pregen) and the confirm sheet a player reads before it (POST /sheet/preview, backlog F6) both come here,
+// so what the sheet promises is what the join does. A hero the builder just
+// made (the hero chooser's "Help me build") is previewed here too, by the
+// table door its join (POST or PUT /sheet with a sheet) goes through.
 
 export type PregenAdmitted =
   | { ok: true; built: CreateSheetInput; sheet: CreateSheetInput; rolledHp?: number[]; settle: () => void }
@@ -69,4 +70,12 @@ export function previewPregenJoin(pregen: Pregen, campaign: Campaign, userId: st
   const admitted = admitPregen(pregen, campaign, userId);
   const built = createSheetSchema.parse(pregen.sheet);
   return preview(built.name, built, 1, campaign.startingLevel, admitted);
+}
+
+// A character the builder made for this table, not stored yet: the table
+// door judges it at the table's level, as its join will.
+export function previewBuiltJoin(sheet: CreateSheetInput, campaign: Campaign, userId: string): JoinPreview {
+  const level = Math.max(1, Math.min(20, campaign.startingLevel));
+  const admitted = admitSheet({ door: "table", level, sheet, userId, campaign });
+  return preview(sheet.name, sheet, level, level, admitted);
 }
