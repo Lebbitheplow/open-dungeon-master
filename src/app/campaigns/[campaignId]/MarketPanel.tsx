@@ -11,7 +11,7 @@ import { useEffect, useRef, useState } from "react";
 import { appConfirm } from "@/components/ui/ConfirmDialog";
 import { cn } from "@/lib/cn";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import { formatCopper } from "@/lib/srd/currency";
+import { formatCopper, formatPrice } from "@/lib/srd/currency";
 import { KitButton, LoadFailed, panelField, PanelLoading, SettingToggle } from "./PanelKit";
 import { MarketShopEditor, type Named } from "./MarketShopEditor";
 import type { StockLine } from "@/lib/dm/shop-logic";
@@ -367,7 +367,7 @@ export function MarketPanel({
                     as="li"
                     key={line.itemName}
                     label={line.itemName}
-                    items={mySheet ? [{ id: "buy", label: `Buy for ${formatCopper(line.askingCp)}`, glyph: coinGlyph(line.askingCp), disabled: cannotBuy, onSelect: () => void counter(shop, "buy", line.itemName) }] : []}
+                    items={mySheet ? [{ id: "buy", label: `Buy for ${formatPrice(line.askingCp)}`, glyph: coinGlyph(line.askingCp), disabled: cannotBuy, onSelect: () => void counter(shop, "buy", line.itemName) }] : []}
                     className="flex flex-col justify-between rounded-lg border border-stone-700/60 bg-stone-900/50 p-2 transition-transform duration-[var(--dur-quick,150ms)] hover:-translate-y-0.5 hover:border-amber-500/40"
                   >
                     <span className="flex min-w-0 items-center gap-1.5 text-xs text-stone-200" title={line.note || line.itemName}>
@@ -377,7 +377,7 @@ export function MarketPanel({
                     <span className="mt-1.5 flex flex-wrap items-center justify-between gap-1">
                       <span className="pk-chip max-w-full whitespace-normal text-amber-200">
                         <GameIcon icon={{ kind: "glyph", key: coinGlyph(line.askingCp) }} size="size-4" />
-                        {formatCopper(line.askingCp)}
+                        {formatPrice(line.askingCp)}
                       </span>
                       <span className="text-[11px] tabular-nums text-stone-500">x{line.qty}</span>
                     </span>

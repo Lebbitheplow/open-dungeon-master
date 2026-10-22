@@ -79,6 +79,21 @@ export function formatCopper(total: number): string {
   return rows.map((row) => `${row.count} ${row.denomination}`).join(" ");
 }
 
+// A price as a price list writes it, in gold, with silver and copper only
+// for what is left under a gold piece: "55 gp", "1 gp 5 sp", "2 sp 2 cp".
+// Platinum belongs to the coins in a purse (formatCopper), not to prices:
+// "5 pp 5 gp" for a 55 gp item made every Market tile a sum.
+export function formatPrice(total: number): string {
+  const value = Math.max(0, Math.round(total));
+  const parts = [
+    [Math.floor(value / COPPER_PER_GOLD), "gp"],
+    [Math.floor((value % COPPER_PER_GOLD) / DENOMINATION_COPPER.sp), "sp"],
+    [value % DENOMINATION_COPPER.sp, "cp"],
+  ] as const;
+  const written = parts.filter(([count]) => count > 0).map(([count, code]) => `${count} ${code}`);
+  return written.length ? written.join(" ") : "0 gp";
+}
+
 export function formatPurse(purse: Purse): string {
   return formatCopper(purseCopper(purse));
 }
