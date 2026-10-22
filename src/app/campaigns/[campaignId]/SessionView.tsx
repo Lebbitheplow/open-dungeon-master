@@ -1089,7 +1089,9 @@ export function SessionView({
                             // The engine's count, the one the Hand reads
                             // (src/lib/battlemap/hand-table.ts): a spent reaction
                             // lives in reactionsUsed, not the turn budget.
-                            actingSheet && !actingSheet.isCompanion && state.encounter
+                            // A companion only on its own turn, when this
+                            // player commands it (player-characters.ts).
+                            actingSheet && (!actingSheet.isCompanion || actingSheet.id === turnSheet?.id) && state.encounter
                               ? turnHudBudget(
                                   turnFromEncounter(state.encounter, actingSheet, {
                                     myTurn: state.encounter.turn?.ownerId === actingSheet.id,

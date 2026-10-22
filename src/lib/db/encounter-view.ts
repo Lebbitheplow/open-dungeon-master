@@ -1,7 +1,8 @@
 import { legendaryProfile } from "@/lib/dm/legendary-logic";
 import { enemyActionsView, type PublicEnemyActions } from "@/lib/dm/enemy-actions-view";
 import { enemyActedThisRound, isSurprised } from "@/lib/dm/can-act";
-import { isCompanionUserId } from "@/lib/db/users";
+import { getCampaignById } from "@/lib/db/campaigns";
+import { dmPlaysTurn } from "@/lib/dm/companion-command";
 import { freshLastHit, type LastHit } from "@/lib/dm/last-hit";
 import { conditionNote, conditionNoteLine, namesLookup } from "@/lib/battlemap/condition-notes";
 import { healthState, type HealthState } from "@/lib/bestiary/health";
@@ -364,9 +365,11 @@ function dmTurnView(encounter: Encounter, enemies: EncounterEnemy[]) {
     names.has(id) ? [{ id, name: names.get(id) as string, acted: enemyActedThisRound(encounter, id) }] : [],
   );
   const current = encounter.order[encounter.turnIndex];
+  const campaign = getCampaignById(encounter.campaignId);
   return {
     ...(due.length ? { enemiesDue: due } : {}),
-    ...(current?.kind === "pc" && isCompanionUserId(current.userId)
+    // A companion turn for the DM to play; one a player commands is theirs.
+    ...(current?.kind === "pc" && campaign && dmPlaysTurn(campaign, current)
       ? { companionTurn: { id: current.characterId, name: current.name } }
       : {}),
   };

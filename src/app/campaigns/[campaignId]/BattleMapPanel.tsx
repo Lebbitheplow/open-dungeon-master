@@ -883,6 +883,8 @@ export function BattleMapPanel({
   // A walk this turn that can still be taken back (the move route keeps it).
   const undoFeet = myTurn && !canDirect && view.board === "fight" ? view.undoMove?.feet ?? null : null;
   const mySheet = myToken ? sheetsById.get(myToken.refId) : undefined;
+  // The turn is a companion's this player commands (src/lib/dm/companion-command.ts).
+  const commanding = myTurn && Boolean(mySheet?.isCompanion);
   const hudActions: HudAction[] = useMemo(() => {
     if (!hudToken) {
       return [];
@@ -1160,6 +1162,7 @@ export function BattleMapPanel({
         <TurnHud
           actorName={view.currentTurnName}
           mine={myTurn}
+          commanded={commanding}
           budget={turnBudget}
           speedLeftFeet={myTurn ? view.budgetLeft * TILE_FEET : null}
           ac={mySheet?.ac ?? null}
@@ -1169,7 +1172,7 @@ export function BattleMapPanel({
         />
       ) : null}
       {!scene && bannerKey ? (
-        <TurnBanner key={bannerKey} text={myTurn ? "Your turn" : view.currentTurnName} mine={myTurn} />
+        <TurnBanner key={bannerKey} text={commanding ? `${view.currentTurnName}: your orders` : myTurn ? "Your turn" : view.currentTurnName} mine={myTurn} />
       ) : null}
       {fieldRoll ? <FieldDie label={fieldRoll.label} /> : null}
       <BoardMoveNotes notes={moveNotes.notes} />
@@ -1196,7 +1199,7 @@ export function BattleMapPanel({
           the frame, so the buttons can ask how tall the board is and lie in
           a row along the bottom when a column would not fit (board.css). */}
       <span className="sr-only" aria-live="polite">
-        {!scene && view.currentTurnName ? (myTurn ? "Your turn." : `${view.currentTurnName}'s turn.`) : ""}
+        {!scene && view.currentTurnName ? (commanding ? `${view.currentTurnName}'s turn: your orders.` : myTurn ? "Your turn." : `${view.currentTurnName}'s turn.`) : ""}
       </span>
       <div className="board-corner">
       {myTurn && !scene && !targeting ? (

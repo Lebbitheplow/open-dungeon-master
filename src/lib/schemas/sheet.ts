@@ -726,6 +726,10 @@ export type CharacterSheet = {
   // with the party until dismissed; 'guest' is a scene-scoped ally.
   isCompanion: boolean;
   companionKind: "party" | "guest" | null;
+  // The player who takes an AI companion's turns in a fight; null or absent:
+  // the DM plays them (src/lib/dm/companion-command.ts). Out of fights the
+  // DM always does.
+  commandedBy?: string | null;
   // Personality/voice brief the DM roleplays the companion from.
   personality: string;
   // The cards its player keeps in the visible Hand, in order (issue 231,

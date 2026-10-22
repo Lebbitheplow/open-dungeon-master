@@ -91,6 +91,7 @@ import { handlePcAttack, PC_ATTACK_PARKED, pcAttackTool } from "@/lib/dm/pc-atta
 import { endTurnAsked } from "@/lib/dm/pc-attack-approach";
 import { handleEnemyAttack } from "@/lib/dm/enemy-attack";
 import { isCompanionUserId } from "@/lib/db/users";
+import { dmPlaysTurn, turnUserId } from "@/lib/dm/companion-command";
 import { wakeDm } from "@/lib/dm/wake";
 import { resolveSheetRef, unknownSheetRef } from "@/lib/dm/rolls";
 import {
@@ -489,10 +490,12 @@ export function setInitiativeFloor(campaign: Campaign | null, encounter: Encount
   if (!current || current.kind !== "pc") {
     return;
   }
+  // A companion a player commands puts its turn in that player's hands
+  // (src/lib/dm/companion-command.ts).
   const floor: InitiativeFloor = {
     mode: "initiative",
     encounterId: encounter.id,
-    userIds: [current.userId],
+    userIds: [turnUserId(campaign, current)],
     currentName: current.name,
     round: encounter.round,
   };
@@ -514,10 +517,11 @@ export function initiativeFloorFor(campaignId: string): InitiativeFloor | null {
   if (!current || current.kind !== "pc") {
     return null;
   }
+  const campaign = getCampaignById(campaignId);
   return {
     mode: "initiative",
     encounterId: encounter.id,
-    userIds: [current.userId],
+    userIds: [campaign ? turnUserId(campaign, current) : current.userId],
     currentName: current.name,
     round: encounter.round,
   };
@@ -1661,8 +1665,8 @@ function advanceAfterNarration(campaign: Campaign, turn?: DmTurn) {
   if (!resolved && !stuck) {
     // AI companion turn the model never adjudicated: the server takes the
     // basic action (like skipped enemies), so combat cannot wedge on a
-    // combatant no human controls.
-    if (turn && isCompanionUserId(current.userId)) {
+    // combatant no human controls. One a player commands waits for them.
+    if (turn && dmPlaysTurn(campaign, current)) {
       companionAutoAct(campaign, turn, encounter, current.characterId);
     } else {
       return;
@@ -1736,7 +1740,7 @@ function wakeForNextTurn(campaign: Campaign): boolean {
     if (stuck && idledOut(campaign, encounter)) {
       return false;
     }
-  } else if (!isCompanionUserId(next.userId)) {
+  } else if (!dmPlaysTurn(campaign, next)) {
     return false;
   }
   wake(campaign, encounter);
@@ -1956,7 +1960,7 @@ export function endOwnTurn(campaignId: string, userId: string): boolean {
     return false;
   }
   const current = encounter.order[encounter.turnIndex];
-  if (!current || current.kind !== "pc" || current.userId !== userId) {
+  if (!current || current.kind !== "pc" || turnUserId(campaign, current) !== userId) {
     return false;
   }
   // The enemies before this turn have not had theirs yet: a second pass
@@ -1983,7 +1987,8 @@ export function endOwnTurn(campaignId: string, userId: string): boolean {
 export function endTurnRefusal(campaignId: string, userId: string): string {
   const encounter = getActiveEncounter(campaignId);
   const current = encounter?.orderReady ? encounter.order[encounter.turnIndex] : undefined;
-  if (encounter && current?.kind === "pc" && current.userId === userId) {
+  const campaign = getCampaignById(campaignId);
+  if (encounter && campaign && current?.kind === "pc" && turnUserId(campaign, current) === userId) {
     const waiting = enemiesOwedTurn(encounter).map((enemy) => enemy.displayName);
     if (waiting.length) {
       const one = waiting.length === 1;

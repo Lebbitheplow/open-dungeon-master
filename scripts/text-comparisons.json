@@ -858,7 +858,7 @@
     "lib/db/core.ts#COLLATE NOCASE": [["human",3,"UNIQUE constraints on usernames, location and map names; lookups key in code first (a table rebuild to change); UNIQUE constraints on usernames, location and map names; lookups key in code first (a table rebuild to change); UNIQUE constraints on usernames, location and map names; lookups key in code first (a table rebuild to change)"]],
     "lib/db/core.ts#LIKE": [["key",1,"JSON sheets"]],
     "lib/db/core.ts#re-word": [["key",3,"SQL column names, types, DDL, provider ids and NODE_ENV values"]],
-    "lib/db/core.ts#str-eq": [["key",4,"SQL column names, types, DDL, provider ids and NODE_ENV values"]],
+    "lib/db/core.ts#str-eq": [["key",4,"SQL column names, types, DDL, provider ids and NODE_ENV values"],["key",3,"the stored dmMode values and seat user ids (companion command backfill)"]],
     "lib/db/core.ts#str-includes": [["key",3,"SQL column names, types, DDL, provider ids and NODE_ENV values"]],
     "lib/db/core.ts#str-list": [["key",28,"SQL column names, types, DDL, provider ids and NODE_ENV values"]],
     "lib/db/core.ts#toLowerCase": [["key",1,"class slug"]],
