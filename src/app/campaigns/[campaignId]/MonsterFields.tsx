@@ -195,9 +195,11 @@ export function AttackEditor({
 // or "Details" when it carries nothing yet.
 function attackExtras(attack: MonsterDraft["stats"]["attacks"][number]): string {
   const bits = [
-    attack.range ? `${attack.range.normal}/${attack.range.long} ft` : attack.reach && attack.reach > 5 ? `reach ${attack.reach}` : "",
+    attack.bonusAction ? "bonus action" : "",
+    attack.range ? `${attack.range.normal}/${attack.range.long} ft` : attack.reach === 0 || (attack.reach && attack.reach > 5) ? `reach ${attack.reach}` : "",
     attack.riders?.length ? `+${attack.riders.map((rider) => rider.type).join(", ")}` : "",
     attack.onHit?.condition ?? (attack.onHit?.damage ? "on hit" : ""),
+    attack.alternatives?.some((entry) => entry.when === "bloodied") ? "weaker when bloodied" : "",
   ].filter(Boolean);
   return bits.length ? bits.join(" · ") : "Details";
 }
