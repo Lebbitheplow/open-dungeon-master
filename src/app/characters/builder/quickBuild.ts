@@ -29,13 +29,14 @@ import { expertiseAllowed, expertiseSlotsFor, subclassLevelFor, subclassNamesFor
 import { optionFeatureName } from "@/lib/srd/options";
 import { racialFeatCount } from "@/lib/srd/race-id";
 import { DRACONIC_ANCESTRIES, findDraconicAncestry, repeatedGrants, takesDraconicAncestry } from "@/lib/srd/racial-grants";
-import { checklistSpell, checklistSpellsOn, spellLevelOf } from "@/lib/srd/spell-lists";
+import { checklistSpellsOn, spellLevelOf } from "@/lib/srd/spell-lists";
 import { classRoles, type ClassRole } from "@/lib/srd/class-roles";
 import { spellClassFor } from "@/lib/classes";
 import { abilityPriority, poolSlotsFor, standardFor } from "./classAbilities";
 import { rollHeroName } from "./heroNames";
 import { EASY_CLASSES, PLAYSTYLES, fillClassSkills, type PlaystyleId } from "./playstyles";
 import { TARGET_WORDS } from "./owed";
+import { spellOnSavedList } from "./spellSupply";
 import { bonusLanguageCount, srdClass, type BlockerTarget } from "./submit";
 import type { BuilderDerived } from "./useBuilderDerived";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
@@ -627,7 +628,13 @@ function asiWords(choice: AsiChoice): string {
   return choice.feat;
 }
 
-function fillSpells(ctx: FillContext): { patch: Partial<BuilderDraftFields>; words: string } | null {
+// What a fill picks for the spell step, from the spells the save takes. The
+// step's own "Fill with the suggested spells" button runs it too.
+export function fillSpells(
+  ctx: Pick<FillContext, "derived" | "klass" | "spellPool"> & {
+    fields: Pick<BuilderDraftFields, "cantrips" | "spells" | "bookPrepared">;
+  },
+): { patch: Partial<BuilderDraftFields>; words: string } | null {
   const { fields, derived } = ctx;
   const free = new Set(
     [...derived.racialCantrips, ...derived.featSpells.cantrips, ...derived.subclassSpells].map((name) => textKey(name)),
@@ -650,11 +657,7 @@ function fillSpells(ctx: FillContext): { patch: Partial<BuilderDraftFields>; wor
     // A starter the server's list does not carry for this class would be
     // refused at the save, so only the ones on it.
     const onList = (name: string) =>
-      third || !derived.spellSearchClass
-        ? true
-        : ctx.spellPool?.length
-          ? has(ctx.spellPool.map((spell) => spell.name), name)
-          : (checklistSpell(name)?.classes ?? []).includes(derived.spellSearchClass);
+      spellOnSavedList(name, { third, spellClass: derived.spellSearchClass, spellPool: ctx.spellPool });
     return [...new Set([...names.filter(onList), ...fromList])].filter((name) => !free.has(textKey(name)));
   };
   const words: string[] = [];

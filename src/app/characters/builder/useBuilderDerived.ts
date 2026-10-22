@@ -45,6 +45,7 @@ import { featSpellGrants, featSpellNames } from "@/lib/srd/feat-spells";
 import { expandBackgroundGear } from "@/lib/srd/gear-choices";
 import { splitToolGrants, type ToolChoice } from "@/lib/srd/tool-choices";
 import { builderHitPoints } from "./builderHp";
+import { bundledSpellSupply } from "./spellSupply";
 import { buildReceipt, settleQty, weaponLineFor, withAddedQty } from "./receiptMath";
 import { combatRiders, fightingStyleFeatureName } from "@/lib/srd/feature-effects";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
@@ -756,6 +757,21 @@ export function useBuilderDerived({
     const book = new Set(spells.map((spellName) => textKey(spellName)));
     return bookPrepared.filter((spellName) => book.has(textKey(spellName)));
   }, [spellStyle, chosenSpells, spells, bookPrepared]);
+  // How many spells the bundled list can give this caster (spellSupply.ts):
+  // the spell step's gate asks for no more than exist. A third caster is
+  // held to its schools instead, and its list is the wizard's.
+  const spellSupply = useMemo(
+    () =>
+      casts && !casting.third
+        ? bundledSpellSupply({
+            spellClass: spellSearchClass,
+            maxSpellLevel,
+            wider: spellWider,
+            free: [...racialCantrips, ...featSpells.cantrips, ...featSpells.spells, ...subclassSpells],
+          })
+        : null,
+    [casts, casting.third, spellSearchClass, maxSpellLevel, spellWider, racialCantrips, featSpells, subclassSpells],
+  );
 
   return {
     effectiveLevel,
@@ -806,6 +822,7 @@ export function useBuilderDerived({
     chosenPrepared,
     spellStyle,
     spellbookAdvice,
+    spellSupply,
     maxSpellLevel,
   };
 }
