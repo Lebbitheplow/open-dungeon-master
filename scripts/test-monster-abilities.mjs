@@ -20,7 +20,7 @@ const kit = await combatKit(world);
 const mk = await monsterKit(world, kit);
 const { parseSaveEffect, parseAbilityText, abilityFromLine, parseSpellcasting, parseRegeneration } = await import("../src/lib/dm/monster-abilities.ts");
 const { abilitiesOfEntries } = await import("../src/lib/dm/ability-entries.ts");
-const { legendaryProfile, parseLegendaryLine } = await import("../src/lib/dm/legendary-logic.ts");
+const { legendaryProfile, parseLegendaryLine, lairResolution } = await import("../src/lib/dm/legendary-logic.ts");
 const { correctedMonsterData } = await import("../src/lib/bestiary/pack-corrections.ts");
 const { refillLegendaryForTurn } = await import("../src/lib/dm/legendary-tools.ts");
 
@@ -159,6 +159,8 @@ await test("A5e's count printed as the first option is the count and no option; 
   const zmey = mk.parse({ name: "Zmey", special_abilities: [{ name: "Multiheaded", desc: "The zmey normally has four heads." }], legendary_desc: "The zmey can take 1 legendary action per head.", legendary_actions: [{ name: "Bite", desc: "The zmey makes a bite attack." }] });
   assert.equal(legendaryProfile(zmey).actionsPerRound, 4);
   assert.deepEqual([parseLegendaryLine("Tentacle Sweep (2). Spins in place.").cost, parseLegendaryLine("Move (2 actions). Moves half its speed.").cost], [2, 2]);
+  // A lair option's failure is named for the DM to lay.
+  assert.match(lairResolution("The ground shakes; each creature makes a DC 15 Dex save or falls prone."), /dc 15, saveAbility "dex".*A failure lays prone/);
 });
 
 await test("Legendary actions printed run together are read apart (Creature Codex lord zombie, pack-corrections.ts).", () => {

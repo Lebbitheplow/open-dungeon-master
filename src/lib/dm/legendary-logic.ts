@@ -2,6 +2,7 @@ import { groupTraits } from "@/lib/bestiary/block-sections";
 import { legendaryCountIn } from "@/lib/dm/ability-entries";
 import type { EnemyStats } from "@/lib/bestiary/statblock";
 import { normalizeAbilityLedgers, type AbilityLedger } from "@/lib/dm/monster-abilities";
+import { ABILITY_WORDS, parseSaveEffect } from "@/lib/dm/save-effect";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
 import { isNamed } from "@/lib/srd/feature-names";
@@ -307,7 +308,9 @@ export function pickLairOption(options: string[], wanted: string): string | null
 
 // How a printed lair option resolves through the engine: a save the server
 // rolls for each creature it reaches (aoe_damage), with the DC, the ability
-// and the dice the line prints. Null for an option with no save.
+// and the dice the line prints, and the condition a failure lays as the save
+// reader finds it (src/lib/dm/save-effect.ts). Null for an option with no
+// save.
 export function lairResolution(line: string): string | null {
   const save = /DC\s*(\d+)\s+(str|dex|con|int|wis|cha)[a-z]*\s+sav(?:e|ing throw)/i.exec(line);
   if (!save) {
@@ -315,7 +318,14 @@ export function lairResolution(line: string): string | null {
   }
   const damage = /(\d+d\d+(?:\s*[+-]\s*\d+)?)\)?\s+([a-z]+)\s+damage/i.exec(line);
   const ability = save[2].slice(0, 3).toLowerCase();
+  const word = Object.keys(ABILITY_WORDS).find((name) => ABILITY_WORDS[name] === ability) ?? "";
+  const effect = parseSaveEffect(line.replace(save[0], `DC ${save[1]} ${word} saving throw`));
+  const laid = effect.condition ? [effect.condition, ...(effect.also ?? [])].join(" and ") : "";
   return `Resolve it now with aoe_damage: dc ${save[1]}, saveAbility "${ability}"${
     damage ? `, damage "${damage[1].replace(/\s+/g, "")}", type "${damage[2].toLowerCase()}"` : ""
-  }, and the enemyIds and characterIds of the creatures it reaches; the server rolls every save. Lay what a failure brings as the line says.`;
+  }, and the enemyIds and characterIds of the creatures it reaches; the server rolls every save. ${
+    laid
+      ? `A failure lays ${laid}${effect.rounds ? ` for ${effect.rounds} round${effect.rounds === 1 ? "" : "s"}` : ""}: set it on each creature that failed (set_condition, set_enemy_condition).`
+      : "Lay what a failure brings as the line says."
+  }`;
 }
