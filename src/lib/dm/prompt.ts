@@ -615,8 +615,12 @@ export function describeSheet(
         ? ` Natural attacks (use pc_attack): ${shape.attacks.map(attackSummary).join(", ")}${(shape.attacksPerTurn ?? 1) > 1 ? ` (${shape.attacksPerTurn} per Attack action)` : ""}.`
         : " The form has no attack, and their own weapons merged into it."
       : "";
+    // A form that is no beast says what it is, and what it shrugs off
+    // (True Polymorph's fire elemental); the server applies both.
+    const kind = shape.type && shape.type !== "beast" ? ` (${shape.type})` : "";
+    const defenses = [shape.resist ? `resists ${shape.resist}` : "", shape.immune ? `immune to ${shape.immune}` : "", shape.vulnerable ? `vulnerable to ${shape.vulnerable}` : ""].filter(Boolean).join("; ");
     lines.push(
-      `  ${label} a ${shape.form}: ${shape.beastHp}/${shape.beastMaxHp} beast HP, AC ${shape.beastAc}${shape.speed !== undefined ? `, speed ${shape.speed} ft` : ""}.${stats}${attacks} Damage hits the beast pool first and their own hit points above are untouched until the form breaks. They fight with the beast's natural weapons and cannot cast spells${shape.kind === "polymorph" ? " or speak" : ""}.`,
+      `  ${label} a ${shape.form}${kind}: ${shape.beastHp}/${shape.beastMaxHp} beast HP, AC ${shape.beastAc}${shape.speed !== undefined ? `, speed ${shape.speed} ft` : ""}.${stats}${defenses ? ` The form ${defenses}.` : ""}${attacks} Damage hits the beast pool first and their own hit points above are untouched until the form breaks. They fight with the beast's natural weapons and cannot cast spells${shape.kind === "polymorph" ? " or speak" : ""}.`,
     );
   }
   if ((sheet.exhaustion ?? 0) > 0) {

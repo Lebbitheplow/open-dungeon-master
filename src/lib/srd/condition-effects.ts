@@ -97,7 +97,7 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
     id: "polymorphed",
     match: ["polymorphed", "polymorph"],
     summary:
-      "Polymorph: transformed into a beast; the form's stat block replaces their own (the server tracks it as a transformation), they cannot speak or cast, and damage past the form's hit points reverts them.",
+      "Polymorph: transformed into another creature (a beast, but for True Polymorph and Shapechange); the form's stat block replaces their own (the server tracks it as a transformation), they cannot speak or cast unless the form can, and damage past the form's hit points reverts them.",
   },
   {
     id: "slowed",

@@ -408,7 +408,10 @@ export function computeSheetDerived(
   // A Polymorph's beast is its own creature: none of the character's
   // proficiencies, features, feats or gear (form-sees.ts).
   sheet = formSees(sheet);
-  const pb = proficiencyBonus(sheet.level);
+  // A creature Polymorph, Animal Shapes or True Polymorph made has the
+  // proficiency bonus its challenge rating carries, not the character's.
+  const shape = sheet.wildShape;
+  const pb = shape?.kind === "polymorph" && !shape.keepsTraining && shape.cr !== undefined ? proficiencyBonus(Math.max(1, shape.cr)) : proficiencyBonus(sheet.level);
   // Ability-setting magic items raise the scores every other number reads.
   const withItems = sheet.equipment
     ? effectiveAbilities(sheet.abilities, sheet.equipment, sheet)

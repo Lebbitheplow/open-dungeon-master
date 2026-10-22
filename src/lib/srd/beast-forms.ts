@@ -1,9 +1,10 @@
-// SRD beast stat blocks for the transformation engine: every beast of the
-// SRD 5.1 (src/lib/srd/srd-creatures.ts), the forms druids take with Wild
-// Shape and the targets of Polymorph, True Polymorph, Shapechange and
-// Animal Shapes. Before this table the model invented every number
-// (formHp/formAc were free integers) and the form had no abilities, speed,
-// or attacks at all.
+// SRD stat blocks for the transformation engine: every creature of the
+// SRD 5.1 (src/lib/srd/srd-creatures.ts) as a form a character or a
+// creature can take. The beasts are the forms druids take with Wild Shape
+// and the targets of Polymorph and Animal Shapes; True Polymorph and
+// Shapechange may give any creature (src/lib/srd/shape-rules.ts says which).
+// Before this table the model invented every number (formHp/formAc were
+// free integers) and the form had no abilities, speed, or attacks at all.
 //
 // Data derived from the SRD 5.1, (c) Wizards of the Coast LLC, CC-BY-4.0.
 // See docs/LICENSES.md.
@@ -17,6 +18,8 @@ export type BeastAttack = CreatureAttack;
 
 export type BeastForm = {
   name: string;
+  // Its creature type ("beast", "elemental", "dragon").
+  type: string;
   cr: number;
   ac: number;
   hp: number;
@@ -30,6 +33,13 @@ export type BeastForm = {
   // Full ability scores. Wild Shape swaps only STR/DEX/CON onto the druid;
   // Polymorph replaces all six.
   abilities: SrdCreature["abilities"];
+  // The saving throws its block lists as proficient, and the damage and
+  // conditions it shrugs off, in the words damageAdjust reads.
+  saves?: SrdCreature["saves"];
+  resist?: string;
+  immune?: string;
+  vulnerable?: string;
+  conditionImmune?: string;
   // Its natural attacks; none at all for a frog or a sea horse, which then
   // cannot attack in the form.
   attacks: BeastAttack[];
@@ -45,6 +55,7 @@ export type BeastForm = {
 function beastForm(creature: SrdCreature): BeastForm {
   return {
     name: creature.name,
+    type: creature.type,
     cr: creature.cr,
     ac: creature.ac,
     hp: creature.hp,
@@ -54,6 +65,11 @@ function beastForm(creature: SrdCreature): BeastForm {
     ...(creature.speeds.swim ? { swim: true } : {}),
     size: creature.size,
     abilities: creature.abilities,
+    ...(creature.saves?.length ? { saves: creature.saves } : {}),
+    ...(creature.resist ? { resist: creature.resist } : {}),
+    ...(creature.immune ? { immune: creature.immune } : {}),
+    ...(creature.vulnerable ? { vulnerable: creature.vulnerable } : {}),
+    ...(creature.conditionImmune ? { conditionImmune: creature.conditionImmune } : {}),
     attacks: creature.attacks,
     ...(creature.attacksPerTurn ? { attacksPerTurn: creature.attacksPerTurn } : {}),
     ...(creature.routines ? { routines: creature.routines } : {}),
@@ -63,21 +79,31 @@ function beastForm(creature: SrdCreature): BeastForm {
   };
 }
 
-export const BEAST_FORMS: BeastForm[] = SRD_CREATURES.filter((creature) => creature.type === "beast").map(beastForm);
+// Every creature as a form (True Polymorph, Shapechange), and the beasts
+// alone (Wild Shape, Polymorph, Animal Shapes).
+export const SHAPE_FORMS: BeastForm[] = SRD_CREATURES.map(beastForm);
+export const BEAST_FORMS: BeastForm[] = SHAPE_FORMS.filter((form) => form.type === "beast");
 
 export function findBeastForm(term: string): BeastForm | null {
   return findNamed(BEAST_FORMS, term, (form) => [form.name]);
 }
 
-// The forms whose name holds a word a refused name was, for the refusal.
-export function beastFormsHolding(term: string): BeastForm[] {
-  return namesHolding(BEAST_FORMS, term, (form) => [form.name]);
+// Any creature's form by name, beast or not.
+export function findShapeForm(term: string): BeastForm | null {
+  return findNamed(SHAPE_FORMS, term, (form) => [form.name]);
 }
 
-// The record a sheet keeps while it wears the form: the beast's hit points,
+// The forms whose name holds a word a refused name was, for the refusal.
+export function beastFormsHolding(term: string, forms: BeastForm[] = BEAST_FORMS): BeastForm[] {
+  return namesHolding(forms, term, (form) => [form.name]);
+}
+
+// The record a sheet keeps while it wears the form: the form's hit points,
 // Armor Class, speed, its natural attacks (an empty list for a form with
 // none, so the character's own weapons stay out of reach) and its
-// Multiattack. `abilities` are the scores the spell or feature gives it.
+// Multiattack, and what the creature is: its type, challenge rating, saving
+// throws and defenses (a fire elemental's immunity to fire). `abilities`
+// are the scores the spell or feature gives it.
 export function wildShapeRecord(
   form: BeastForm,
   shape: { kind: "wildshape" | "polymorph"; abilities: NonNullable<WildShape>["abilities"]; keepsTraining?: boolean },
@@ -93,6 +119,13 @@ export function wildShapeRecord(
     speed: form.speed,
     attacks: form.attacks.slice(0, 4).map((attack) => ({ ...attack })),
     ...((form.attacksPerTurn ?? 1) > 1 ? { attacksPerTurn: form.attacksPerTurn } : {}),
+    type: form.type,
+    cr: form.cr,
+    ...(form.saves?.length ? { saves: form.saves } : {}),
+    ...(form.resist ? { resist: form.resist } : {}),
+    ...(form.immune ? { immune: form.immune } : {}),
+    ...(form.vulnerable ? { vulnerable: form.vulnerable } : {}),
+    ...(form.conditionImmune ? { conditionImmune: form.conditionImmune } : {}),
   };
 }
 

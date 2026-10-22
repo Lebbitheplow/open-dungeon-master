@@ -552,8 +552,10 @@ export type SheetResources = z.infer<typeof resourcesSchema>;
 export const wildShapeSchema = z
   .object({
     form: z.string().trim().min(1).max(60),
-    beastHp: z.number().int().min(0).max(300),
-    beastMaxHp: z.number().int().min(1).max(300),
+    // A True Polymorph or a Shapechange may give an ancient dragon's
+    // hundreds of hit points.
+    beastHp: z.number().int().min(0).max(700),
+    beastMaxHp: z.number().int().min(1).max(700),
     beastAc: z.number().int().min(1).max(30),
     // "wildshape" keeps the character's mental stats; "polymorph" replaces
     // every score the form carries. Missing = "wildshape".
@@ -583,6 +585,17 @@ export const wildShapeSchema = z
     attacks: z.array(summonAttackSchema).max(4).optional(),
     // The form's Multiattack: attacks one Attack action holds.
     attacksPerTurn: z.number().int().min(1).max(4).optional(),
+    // What the creature is: its type ("elemental"), challenge rating, the
+    // saving throws its block lists, and the damage and conditions it
+    // shrugs off. Rows stored before these fields lack them and read as a
+    // beast with none.
+    type: z.string().trim().max(30).optional(),
+    cr: z.number().min(0).max(30).optional(),
+    saves: z.array(z.enum(["str", "dex", "con", "int", "wis", "cha"])).max(6).optional(),
+    resist: z.string().trim().max(200).optional(),
+    immune: z.string().trim().max(200).optional(),
+    vulnerable: z.string().trim().max(120).optional(),
+    conditionImmune: z.string().trim().max(200).optional(),
   })
   .nullable();
 export type WildShape = z.infer<typeof wildShapeSchema>;
