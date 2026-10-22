@@ -358,7 +358,7 @@ export const SYSTEM_TOURS: Record<string, TourStep[]> = {
     {
       id: "save",
       title: "Keep it",
-      body: "Saves the piece. A finding marked as an error blocks saving until it is fixed. An item can then be given a World entry; one a World entry links to is copied into a campaign that brings that world in, and the workshop's bundle can carry your whole shelf.",
+      body: "Saves the piece. A finding marked as an error blocks saving until it is fixed. The editor then says where it is offered: for your own characters, and at every table you run. An item can then be given a World entry; one a World entry links to is copied into a campaign that brings that world in, and the workshop's bundle can carry your whole shelf.",
       anchors: ["homebrew-save"],
       prepare: "open-homebrew-editor",
       lazy: true,

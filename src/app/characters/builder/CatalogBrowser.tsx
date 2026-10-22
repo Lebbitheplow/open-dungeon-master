@@ -96,6 +96,8 @@ export default function CatalogBrowser({
   const [loaded, setLoaded] = useState<Record<string, Loaded>>({});
   const [loading, setLoading] = useState<string[]>([]);
   const [unavailable, setUnavailable] = useState(false);
+  // Sections whose last browse failed, until one gets through.
+  const [failedKeys, setFailedKeys] = useState<string[]>([]);
   const [filter, setFilter] = useState("");
   // The table the browse is for (src/lib/content-scope.tsx).
   const campaignId = useContentCampaign();
@@ -117,6 +119,7 @@ export default function CatalogBrowser({
       }
       fetched.current.add(section.key);
       setLoading((current) => [...current, section.key]);
+      setFailedKeys((current) => current.filter((key) => key !== section.key));
       const rows: PickerEntry[] = [];
       let truncated = false;
       try {
@@ -126,8 +129,9 @@ export default function CatalogBrowser({
           );
           const response = await fetch(`/api/content/${kind}?${params}`);
           if (!response.ok) {
-            setUnavailable(true);
-            break;
+            // Refused, which is not a missing pack: said so, and asked again
+            // the next time the section opens.
+            throw new Error(String(response.status));
           }
           const body = (await response.json()) as {
             results?: PickerEntry[];
@@ -155,6 +159,7 @@ export default function CatalogBrowser({
         // A failed browse leaves the search box, which is the same catalog by
         // another door; forgetting the attempt lets a retry through.
         fetched.current.delete(section.key);
+        setFailedKeys((current) => [...new Set([...current, section.key])]);
       } finally {
         setLoading((current) => current.filter((key) => key !== section.key));
       }
@@ -309,10 +314,12 @@ export default function CatalogBrowser({
                       <p className="px-1 pb-1 text-[11px] text-stone-500">{section.note}</p>
                     ) : null}
                     {!isLoading && !rows.length ? (
-                      <p className="px-1 py-1 text-[11px] text-stone-500">
-                        {unavailable
-                          ? "The content pack is not installed on this server, so there is nothing to list. Whoever runs it can install it with: node scripts/import-open5e.mjs"
-                          : "Nothing here."}
+                      <p className="px-1 py-1 text-[11px] text-stone-500" role={failedKeys.includes(section.key) ? "alert" : undefined}>
+                        {failedKeys.includes(section.key)
+                          ? "Could not reach the server to list these. Close and open this section to try again."
+                          : unavailable
+                            ? "The content pack is not installed on this server, so there is nothing to list. Whoever runs it can install it with: node scripts/import-open5e.mjs"
+                            : "Nothing here."}
                       </p>
                     ) : null}
                     <ul className="max-h-72 overflow-y-auto">

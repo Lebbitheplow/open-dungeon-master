@@ -37,6 +37,7 @@ import { admitUpload, type UploadRefusal } from "@/lib/upload-budget";
 import { recordMediaFile } from "@/lib/media-access";
 import { decodeBundleAddonView, landAddonView } from "@/lib/db/map-addon-view-bundle";
 import { writeMapAddonView } from "@/lib/db/map-addon-view";
+import { landLabels } from "@/lib/db/workshop-bundle-refs";
 import type { MapAddonView } from "@/lib/addons/map-view";
 
 export { exportWorkshopBundle } from "@/lib/db/workshop-bundle-export";
@@ -257,6 +258,7 @@ function writeBundleRows(
     return id ?? null;
   };
 
+  const tableIds: string[] = [];
   db.transaction(() => {
     bundle.lore.forEach((entry, index) => {
       ids.lore.push(crypto.randomUUID());
@@ -394,6 +396,9 @@ function writeBundleRows(
       );
       keyed("npcs", id, npc.ref);
       ids.npcs.push(id);
+      // A faction lists its members by the names the bundle wrote; a member
+      // numbered here is still the one it names.
+      if (!npcIdByName.has(textKey(npc.name))) npcIdByName.set(textKey(npc.name), id);
       npcIdByName.set(textKey(name), id);
       copied += 1;
     }
@@ -463,11 +468,13 @@ function writeBundleRows(
     }
 
     for (const table of bundle.tables) {
+      const tableId = crypto.randomUUID();
+      tableIds.push(tableId);
       db.prepare(
         `INSERT INTO roll_tables (id, campaign_id, name, entries_json, no_replacement, created_by_user_id, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
-        crypto.randomUUID(),
+        tableId,
         workshop.id,
         table.name,
         JSON.stringify(table.entries),
@@ -522,6 +529,8 @@ function writeBundleRows(
     if (bundle.overworld && insertBundleOverworld(workshop.id, bundle.overworld, ids.locations, regionBackdrop, now)) {
       copied += 1;
     }
+    // Map pins open the rows they named, as those rows are here.
+    droppedLinks += landLabels(workshop.id, ids.maps, { lore: ids.lore, npc: ids.npcs, table: tableIds });
   })();
 
   // A chapter whose shared rows found their workshop draws on it from now

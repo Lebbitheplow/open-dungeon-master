@@ -78,6 +78,12 @@ export default function CharactersPage() {
   const [cloningId, setCloningId] = useState("");
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState("");
+  // What a file's Homebrew did on arrival (src/lib/db/character-file.ts):
+  // copied onto this shelf, the same as one already here, or kept beside
+  // one of the same name.
+  const [importShelf, setImportShelf] = useState("");
+  // A portrait, copy or delete that did not go through.
+  const [actionError, setActionError] = useState("");
   // A file older than a rule that asks for a pick comes in without it; the
   // library says what is still to choose and where (issue #430).
   const [importOwed, setImportOwed] = useState<{ id: string; name: string; owed: string[] } | null>(null);
@@ -142,6 +148,9 @@ export default function CharactersPage() {
           if (data?.characters) {
             receive(data.characters);
           }
+        })
+        .catch(() => {
+          // The next tick asks again.
         });
     }, 2500);
     return () => clearTimeout(id);
@@ -176,20 +185,23 @@ export default function CharactersPage() {
   }
 
   async function setPortrait(id: string, url: string) {
+    setActionError("");
     const response = await fetch(`/api/characters/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ portrait: { url } }),
-    });
-    if (response.ok) {
-      setCharacters((current) =>
-        current.map((character) =>
-          character.id === id
-            ? { ...character, sheet: { ...character.sheet, portrait: { url } } }
-            : character,
-        ),
-      );
+    }).catch(() => null);
+    if (!response?.ok) {
+      setActionError("The portrait was not saved. Check the connection and try again.");
+      return;
     }
+    setCharacters((current) =>
+      current.map((character) =>
+        character.id === id
+          ? { ...character, sheet: { ...character.sheet, portrait: { url } } }
+          : character,
+      ),
+    );
   }
 
   // A second copy under a numbered name, sheet and portrait verbatim. The
@@ -197,9 +209,12 @@ export default function CharactersPage() {
   // "Duplicate and edit" opens the copy in the build editor (issue 229).
   async function duplicate(id: string, edit = false) {
     setCloningId(id);
+    setActionError("");
     try {
-      const response = await fetch(`/api/characters/${id}/clone`, { method: "POST" });
-      if (!response.ok) {
+      const response = await fetch(`/api/characters/${id}/clone`, { method: "POST" }).catch(() => null);
+      if (!response?.ok) {
+        const data = (await response?.json().catch(() => null)) as { error?: string } | null;
+        setActionError(data?.error ?? "No copy was made. Check the connection and try again.");
         return;
       }
       const data = await response.json().catch(() => ({}));
@@ -223,6 +238,7 @@ export default function CharactersPage() {
     setImporting(true);
     setImportError("");
     setImportOwed(null);
+    setImportShelf("");
     try {
       let parsed: unknown;
       try {
@@ -246,6 +262,7 @@ export default function CharactersPage() {
         if (Array.isArray(data.owed) && data.owed.length) {
           setImportOwed({ id: data.character.id, name: data.character.name, owed: data.owed });
         }
+        setImportShelf(importShelfNote(data.character.name, data.homebrew));
       }
     } catch {
       setImportError("Import failed.");
@@ -261,10 +278,14 @@ export default function CharactersPage() {
     if (!await appConfirm(`Delete ${name} from your library? This cannot be undone.`)) {
       return;
     }
-    const response = await fetch(`/api/characters/${id}`, { method: "DELETE" });
-    if (response.ok) {
-      setCharacters((current) => current.filter((character) => character.id !== id));
+    setActionError("");
+    const response = await fetch(`/api/characters/${id}`, { method: "DELETE" }).catch(() => null);
+    if (!response?.ok) {
+      const data = (await response?.json().catch(() => null)) as { error?: string } | null;
+      setActionError(data?.error ?? `${name} was not deleted. Check the connection and try again.`);
+      return;
     }
+    setCharacters((current) => current.filter((character) => character.id !== id));
   }
 
   if (!authed) {
@@ -323,9 +344,14 @@ export default function CharactersPage() {
           </Link>
         </div>
       </header>
-      {importError ? (
+      {importError || actionError ? (
         <p role="alert" className="motion-shake mb-4 rounded-lg border border-red-500/30 bg-red-950/30 px-3 py-2 text-sm text-red-300">
-          {importError}
+          {importError || actionError}
+        </p>
+      ) : null}
+      {importShelf ? (
+        <p role="status" className="reveal mb-4 rounded-lg border border-stone-700/60 bg-stone-950/40 px-3 py-2 text-sm text-stone-300">
+          {importShelf}
         </p>
       ) : null}
       {importOwed ? (
@@ -533,4 +559,17 @@ function CharacterCard({
       />
     </ContextMenu>
   );
+}
+
+// What a character file's Homebrew did on arrival, in one line.
+function importShelfNote(name: string, shelf: { copied?: number; reused?: string[]; renamed?: string[] } | undefined): string {
+  if (!shelf) {
+    return "";
+  }
+  const lines = [
+    shelf.copied ? `${name}'s Homebrew came with the file and is on your shelf now (${shelf.copied} entr${shelf.copied === 1 ? "y" : "ies"}).` : "",
+    shelf.reused?.length ? `Already on your shelf, the same: ${shelf.reused.join(", ")}.` : "",
+    ...(shelf.renamed ?? []),
+  ];
+  return lines.filter(Boolean).join(" ");
 }

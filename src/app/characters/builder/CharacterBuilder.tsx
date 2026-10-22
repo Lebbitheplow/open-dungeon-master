@@ -41,7 +41,8 @@ import {
 } from "./submit";
 import { clearBuilderDraft, readBuilderDraft, writeBuilderDraft, type BuilderDraft } from "./builderDraft";
 import { builderActions, useBuilderDerived } from "./useBuilderDerived";
-import { useArchetypes, useBuilderOptions, useWorldPack } from "./useBuilderOptions";
+import { useArchetypeOptions, useBuilderOptions, useWorldPack, type OptionListKind } from "./useBuilderOptions";
+import { TableScopeNote } from "./TableScopeNote";
 import { listWords, unofferedPicks } from "./unoffered";
 import { findRace, useBuilderState, type DroppedNotice } from "./useBuilderState";
 import { useFeatDescs, useFeatTexts } from "./useFeatDescs";
@@ -227,6 +228,7 @@ function CharacterBuilderForm({
     backgrounds: rawBackgrounds,
     packInstalled,
     loaded,
+    status: optionStatus,
   } = useBuilderOptions(initial?.race);
   const pack = useWorldPack(worldPackId);
   // Display overlay only. applyIdReskins rewrites `name`, never `id`, so
@@ -253,7 +255,13 @@ function CharacterBuilderForm({
   const race = findRace(races, state.raceId);
   const klass = classes.find((entry) => entry.id === state.classId);
   const background = backgrounds.find((entry) => entry.id === state.backgroundId);
-  const archetypes = useArchetypes(klass?.id ?? "");
+  const subclassOptions = useArchetypeOptions(klass?.id ?? "");
+  const archetypes = subclassOptions.archetypes;
+  // Why a list is short: the asker's own Homebrew a table leaves out, or a
+  // list the server did not send (workshop import audit F06).
+  const scopeNote = (noun: string, kind: OptionListKind) => (
+    <TableScopeNote noun={noun} unadmitted={optionStatus.unadmitted[kind]} failed={optionStatus.failed.includes(kind)} onRetry={optionStatus.retry} />
+  );
 
   const table = useTableRules(campaignId, klass?.id);
   // The text of every feat picked, for what each grants (issue #125); a
@@ -531,6 +539,7 @@ function CharacterBuilderForm({
             }
             backgroundGroups={pickers.backgroundGroups}
             background={background}
+            backgroundNote={scopeNote("backgrounds", "backgrounds")}
           />
         </>
       ),
@@ -552,6 +561,7 @@ function CharacterBuilderForm({
             background={background}
             races={races}
             raceGroups={pickers.raceGroups}
+            listNote={scopeNote("species", "races")}
           />
         </>
       ),
@@ -579,6 +589,8 @@ function CharacterBuilderForm({
             offersSubclass={pickers.offersSubclass}
             subclassLockedAt={pickers.subclassLockedAt}
             chosenArchetype={pickers.chosenArchetype}
+            classNote={scopeNote("classes", "classes")}
+            subclassNote={<TableScopeNote noun="subclasses" unadmitted={subclassOptions.unadmitted} failed={subclassOptions.failed} onRetry={subclassOptions.retry} />}
             playstyle={initial ? undefined : { value: playstyle, onChange: setPlaystyle }}
             onPickForMe={fill.running ? undefined : (target) => startFill({ only: [target] })}
           />

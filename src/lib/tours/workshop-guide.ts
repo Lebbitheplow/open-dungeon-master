@@ -190,13 +190,15 @@ export const WORKSHOP_GUIDES: ToolGuide[] = [
       "Start from something in the books: search the content pack and copy a row in.",
       "Change what you like. Skills, languages, conditions and damage types are dropdowns you can also type into.",
       "Read the findings under the description; an error blocks saving.",
-      "Keep it. The character builder and the engine read it like the books' own.",
+      "Keep it. The character builder and the engine read it like the books' own; the editor then says where it is offered.",
       "Give an item a World entry from its editor, to tie it to your setting.",
     ],
-    atTable: "The character builder, shops and inventories offer it beside the books' own, and the engine reads it the same way.",
+    atTable: "The character builder, shops and inventories offer it beside the books' own, for your own characters and at every table you run as its owner, DM or assistant DM; the engine reads it the same way. At someone else's table it counts once that table's owner or DM keeps a copy, from a Workshop bundle with your Homebrew in it. Bring in prep does not copy Homebrew: it is yours already.",
     tips: [
       "An item a World entry links to is copied into a campaign that brings that world in, and the workshop's bundle can carry your whole shelf or only what the workshop uses.",
       "A class of your own is a class to every engine: the builder offers it under From Homebrew, and its subclasses are made under it here.",
+      "A subclass is offered under its class from the level that class picks a subclass (level 3 for a fighter), and at that level-up.",
+      "Rename freely: the characters, entries and tables that use the old name follow the new one.",
       "A spell's damage, save and damage type are read out of its description, the way the SRD's are.",
       "Everything is checked against the ruleset as you type.",
     ],
@@ -249,6 +251,7 @@ export const WORKSHOP_GUIDES: ToolGuide[] = [
     atTable: "A campaign that brings the rules in plays by them: the engine honours the variants, and the narrator reads the house rules that apply.",
     tips: [
       "Applying a ruleset copies it; editing it later never reaches back.",
+      "A ruleset carries rules, not Homebrew: your Homebrew already counts at every table you run.",
     ],
   },
   {
@@ -283,7 +286,8 @@ export const WORKSHOP_GUIDES: ToolGuide[] = [
     atTable: "Another server imports the bundle as a workshop of its own, which its campaigns then bring in.",
     tips: [
       "Pictures travel with the bundle within the size caps; nothing from any campaign does.",
-      "Hand-built monsters and homebrew travel in the bundle. Whoever imports it keeps their own entry of the same name, and a different one arrives beside theirs under the bundle's name.",
+      "Hand-built monsters and homebrew travel in the bundle. Whoever imports it keeps their own entry of the same name, and a different one arrives beside theirs under the bundle's name, with the bundle's pregens, tables and shelves pointed at it.",
+      "Only what this workshop uses follows everything it names: its tables, shelves and pregens, a subclass's later spells, a class's subclasses, an item's spells.",
       "Compile a world pack lists what a pack leaves out that the bundle carries.",
     ],
   },

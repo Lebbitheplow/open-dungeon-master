@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { GameTerm } from "@/components/ui/GameTerm";
 import { InfoButton, InfoDialog } from "@/components/ui/InfoDialog";
 import { describeFeature, describeSkill } from "@/lib/help";
@@ -47,6 +47,8 @@ export function CallingStep({
   chosenArchetype,
   playstyle,
   onPickForMe,
+  classNote = null,
+  subclassNote = null,
 }: {
   state: BuilderState;
   derived: BuilderDerived;
@@ -67,6 +69,10 @@ export function CallingStep({
   // "Pick for me" on the subclass (quickBuild.ts), offered once the level
   // asks for one.
   onPickForMe?: (target: "subclass") => void;
+  // Why the class or subclass list may be short (TableScopeNote): the
+  // asker's own Homebrew the table leaves out, or a list that did not load.
+  classNote?: ReactNode;
+  subclassNote?: ReactNode;
 }) {
   const { subclass } = state;
   const { effectiveLevel, grantedFeatures } = derived;
@@ -250,6 +256,7 @@ export function CallingStep({
             facets={classFacets}
             compact
           />
+          {classNote}
           {/* The same write-up the dropdown's info button opened: the pack's
               blurb, the catalog blurb or the content pack's entry. */}
           <InfoDialog
@@ -314,6 +321,7 @@ export function CallingStep({
                 </>
               )}
             </span>
+            {subclassNote}
             {/* What the subclass trains the character in (issue 251): its
                 armor and weapons said outright, and its picks asked for here,
                 as a feat's are. */}
@@ -336,8 +344,9 @@ export function CallingStep({
             <p className="rounded-lg border border-dashed border-stone-700/70 bg-stone-950/40 px-3 py-2 text-xs text-stone-400">
               A {klass.name.toLowerCase()} chooses a <GameTerm id="subclass">subclass</GameTerm> at level{" "}
               {subclassLockedAt}; there is nothing to pick at level {effectiveLevel}. The choice comes with
-              that level-up.
+              that level-up, and subclasses made in the Workshop wait for that level too.
             </p>
+            {subclassNote}
           </Field>
         ) : null}
       </StepPanel>

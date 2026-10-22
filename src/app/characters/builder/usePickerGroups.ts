@@ -410,7 +410,7 @@ export function usePickerGroups({
     const workshopArchetypes = packOnlyArchetypes.filter((entry) => entry.workshop);
     if (workshopArchetypes.length) {
       groups.push({
-        label: "From the workshop",
+        label: "From Homebrew",
         options: workshopArchetypes.map((entry) => ({
           id: entry.name,
           name: entry.name,

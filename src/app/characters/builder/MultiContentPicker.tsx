@@ -34,7 +34,7 @@ export default function MultiContentPicker({
   onAdd: (entries: MultiPick[]) => void;
   renderMeta?: (entry: PickerEntry) => string;
 }) {
-  const { query, setQuery, results, setResults, open, setOpen, loading, unavailable, unadmitted } =
+  const { query, setQuery, results, setResults, open, setOpen, loading, unavailable, failed, unadmitted } =
     useContentSearch(kind, extraParams);
   const [pending, setPending] = useState<MultiPick[]>([]);
   const container = useRef<HTMLDivElement>(null);
@@ -160,14 +160,18 @@ export default function MultiContentPicker({
               </button>
             </li>
           ) : null}
-          {unavailable ? (
+          {failed ? (
+            <li role="alert" className="px-3 py-1.5 text-xs text-amber-300/90">
+              Could not reach the server to search; type again to retry, or add entries by name.
+            </li>
+          ) : unavailable ? (
             <li className="px-3 py-1.5 text-xs text-stone-500">
               Content pack not installed; add entries by name instead.
             </li>
           ) : null}
           {unadmitted.length ? (
             <li className="px-3 py-1.5 text-[11px] text-stone-500">
-              Your own {unadmitted.join(", ")} {unadmitted.length === 1 ? "is" : "are"} not offered at this table: whoever runs it keeps a copy to admit one.
+              Your own {unadmitted.join(", ")} {unadmitted.length === 1 ? "is" : "are"} not offered at this table: whoever runs it (the owner, the DM or the assistant DM) keeps a copy to admit one.
             </li>
           ) : null}
         </ul>

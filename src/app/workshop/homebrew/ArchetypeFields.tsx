@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { subclassLevelFor } from "@/lib/srd/features";
 import { Check, Plus, Search, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
@@ -167,7 +168,7 @@ export function ArchetypeFields({
   data: Data;
   set: (patch: Data) => void;
   // The author's own classes (homebrew kind "class"), which a subclass can sit under.
-  workshopClasses?: Array<{ id: string; name: string }>;
+  workshopClasses?: Array<{ id: string; name: string; subclassLevel?: number }>;
 }) {
   const classId = String(data.classSlug ?? "fighter");
   const levels = (data.levels ?? {}) as Record<string, FeatureRow[]>;
@@ -209,7 +210,7 @@ export function ArchetypeFields({
         options={[...CLASS_IDS.map((value) => ({ value: value as string, label: capital(value) })), ...workshopClasses.map((klass) => ({ value: klass.id, label: klass.name }))]}
         onChange={(classSlug) => set({ classSlug })}
         className="w-56"
-        hint="The builder offers it under this class."
+        hint={`The builder offers it under ${classLabel} from level ${ownClass?.subclassLevel ?? subclassLevelFor(classId) ?? 3}, the level the class picks its subclass, and at that level-up.`}
       />
       {mayCast ? (
         <SelectField

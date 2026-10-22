@@ -56,7 +56,7 @@ export function OptionFields({
   kind: Exclude<EditorKind, "item" | "spell" | "hazard" | "class">;
   data: Data;
   onChange: (next: Data) => void;
-  workshopClasses?: Array<{ id: string; name: string }>;
+  workshopClasses?: Array<{ id: string; name: string; subclassLevel?: number }>;
 }) {
   const set = (patch: Data) => onChange({ ...data, ...patch });
   switch (kind) {

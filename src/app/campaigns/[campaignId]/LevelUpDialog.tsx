@@ -78,7 +78,8 @@ import { authoredFeatDesc, featAbilityIncrease } from "@/lib/srd/feat-effects";
 import { featGrantSpec, featOwed, type FeatChoices, type FeatPicks } from "@/lib/srd/feat-grants";
 import { grantsForHeldTraining, subclassGrants } from "@/lib/srd/subclass-training";
 import FeatChoicesFields from "@/app/characters/builder/FeatChoicesFields";
-import { useArchetypes, useWorldPack } from "@/app/characters/builder/useBuilderOptions";
+import { useArchetypeOptions, useWorldPack } from "@/app/characters/builder/useBuilderOptions";
+import { TableScopeNote } from "@/app/characters/builder/TableScopeNote";
 import type { AsiChoice, CharacterSheet } from "@/lib/schemas/sheet";
 import { textKey } from "@/lib/language/text-logic";
 import { featChoice, withFeatChoice } from "@/lib/schemas/sheet";
@@ -343,8 +344,8 @@ export function LevelUpDialog({
   // Fetched for the class levelled either way: a workshop or pack subclass
   // the sheet already holds has its features in these rows, and the preview
   // below grants them from here (src/lib/srd/features.ts browser extras).
-  const fetchedArchetypes = useArchetypes(entrySubclass.trim() || needsSubclass ? classChoice : "");
-  const archetypes = needsSubclass ? fetchedArchetypes : [];
+  const subclassList = useArchetypeOptions(entrySubclass.trim() || needsSubclass ? classChoice : "");
+  const archetypes = needsSubclass ? subclassList.archetypes : [];
   // The subclasses with real feature tables come first; content-pack
   // archetypes are prose only and fill in behind them.
   const subclassOptions = [...builtInSubclasses];
@@ -1265,6 +1266,10 @@ export function LevelUpDialog({
                               (entry) => textKey(entry) === textKey(name),
                             ) ? (
                               <span className="text-xs text-stone-500">full features</span>
+                            ) : archetype?.workshop ? (
+                              // A workshop subclass is granted feature by
+                              // feature as its author wrote it.
+                              <span className="text-xs text-stone-500">Homebrew, its features as written</span>
                             ) : (
                               <span className="text-xs text-stone-600">description only</span>
                             )}
@@ -1286,6 +1291,7 @@ export function LevelUpDialog({
                       </p>
                     ) : null}
                   </div>
+                  <TableScopeNote noun="subclasses" unadmitted={subclassList.unadmitted} failed={subclassList.failed} onRetry={subclassList.retry} />
                 </>
               ) : null}
 
