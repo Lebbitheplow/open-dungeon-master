@@ -43,7 +43,7 @@ export const AUTHORED_CONDITION_ROWS: ConditionEffectRow[] = [
       weaponOnly: true,
     }),
   ),
-  { id: "agile_parry", match: ["agile parry"], summary: "Agile Parry: +2 AC until the monk's next turn.", acBonus: 2 },
+  { id: "agile_parry", match: ["agile parry"], summary: "Agile Parry: +2 AC until the start of the monk's next turn, while they hold the kensei weapon.", acBonus: 2 },
   // Blade Flourish's defensive flourish: the Bardic Inspiration die rolled,
   // as AC until the bard's next turn.
   ...Array.from({ length: 12 }, (_, index): ConditionEffectRow => ({
@@ -66,7 +66,7 @@ export const AUTHORED_CONDITION_ROWS: ConditionEffectRow[] = [
   summaryOnly(
     "visage_of_the_astral_self",
     "visage of the astral self",
-    "Visage of the Astral Self: darkvision to 120 feet and advantage on Insight and Intimidation checks for 10 minutes.",
+    "Visage of the Astral Self: sight through magical and nonmagical darkness to 120 feet, advantage on Insight and Intimidation checks, and a voice the monk can aim at one creature within 60 feet or carry 600 feet, for 10 minutes.",
   ),
   {
     id: "shadow_step",
@@ -189,13 +189,19 @@ export const AUTHORED_CONDITION_ROWS: ConditionEffectRow[] = [
   {
     id: "raging_storm_tundra",
     match: ["raging storm (tundra)"],
-    summary: "Raging Storm (Tundra): speed halved until the barbarian's next turn.",
-    speedMultiplier: 0.5,
+    summary: "Raging Storm (Tundra): speed 0 until the start of the barbarian's next turn.",
+    speedMultiplier: 0,
   },
   summaryOnly("storm_aura", "storm aura", "Storm Aura: the raging Storm Herald's 10-foot aura (desert, sea or tundra)."),
   summaryOnly("fanatical_focus_spent", "fanatical focus spent", "Fanatical Focus is spent until this rage ends."),
   summaryOnly("elder_champion", "elder champion", "Elder Champion: 10 hit points at the start of each turn, and enemies within 10 feet save at disadvantage against the paladin."),
-  summaryOnly("avenging_angel", "avenging angel", "Avenging Angel: a 60-foot flying speed, and advantage on attacks against creatures the aura frightened."),
+  summaryOnly("avenging_angel", "avenging angel", "Avenging Angel: a 60-foot flying speed for an hour, and a 30-foot aura of menace that frightens enemies who fail a Wisdom save."),
+  {
+    id: "menaced_by_an_avenging_angel",
+    match: ["menaced by an avenging angel"],
+    summary: "Avenging Angel's menace: frightened of the paladin, and every attack roll against this creature has advantage, for a minute or until it takes damage.",
+    attacksAgainstAdvantage: true,
+  },
   {
     id: "invincible_conqueror",
     match: ["invincible conqueror"],
@@ -205,7 +211,7 @@ export const AUTHORED_CONDITION_ROWS: ConditionEffectRow[] = [
   {
     id: "living_legend",
     match: ["living legend"],
-    summary: "Living Legend: advantage on Charisma checks for a minute; the reroll and the turned save are narrated.",
+    summary: "Living Legend: advantage on Charisma checks for a minute, once on each turn a missed weapon attack can hit instead (the DM rules the hit), and a reaction rerolls a failed save (use_resource 'Living Legend Reroll').",
     advantageOn: [{ kind: "check", ability: "cha" }],
   },
   summaryOnly("mortal_bulwark", "mortal bulwark", "Mortal Bulwark: truesight 120 feet and advantage on attacks against aberrations, celestials, elementals, fey and fiends."),
@@ -221,13 +227,13 @@ export const AUTHORED_CONDITION_ROWS: ConditionEffectRow[] = [
     id: "dread_lord",
     match: ["dread lord"],
     summary:
-      "Dread Lord: attack rolls against the oathbreaker are at disadvantage, enemies starting a turn within 30 feet take 4d10 psychic, and a bonus-action spectral strike (pc_attack weapon \"Dread Lord's Shadows\") deals 4d10 psychic.",
+      "Dread Lord: a 30-foot aura of gloom; attack rolls against the oathbreaker by creatures that rely on sight are at disadvantage, enemies frightened of them that start a turn in it take 4d10 psychic, and a bonus-action melee spell attack with the shadows (pc_attack weapon \"Dread Lord's Shadows\") deals 3d10 + Charisma necrotic.",
     attacksAgainstDisadvantage: true,
     grantedAttack: {
       name: "Dread Lord's Shadows",
-      diceByLevel: [[1, "4d10"]],
-      type: "psychic",
-      abilityToDamage: false,
+      diceByLevel: [[1, "3d10"]],
+      type: "necrotic",
+      abilityToDamage: true,
       ranged: false,
       bonusAction: true,
     },
@@ -276,8 +282,13 @@ export const AUTHORED_CONDITION_ROWS: ConditionEffectRow[] = [
   summaryOnly("ashen_hymn", "ashen hymn", "Ashen Hymn: enemies within 10 feet have disadvantage on their first save against fear each turn, for a minute."),
   summaryOnly("candlelight_vigil", "candlelight vigil", "Candlelight Vigil: allies within 10 feet add 1d4 to saves against the supernatural, for a minute."),
   summaryOnly("head_of_steam", "head of steam", "Head of Steam: the next Piston Strike this turn deals +2d6 instead."),
-  summaryOnly("mantle_of_majesty", "mantle of majesty", "Mantle of Majesty: command is cast as a bonus action with no slot each turn for the minute, and a creature the bard charmed cannot attack them."),
-  summaryOnly("soul_trinket", "soul trinket", "A soul trinket: advantage on Constitution saves and resistance to poison while it is held."),
+  summaryOnly("mantle_of_majesty", "mantle of majesty", "Mantle of Majesty: command is cast as a bonus action with no slot each turn for the minute, and a creature the bard charmed fails its save against it."),
+  {
+    id: "soul_trinket",
+    match: ["soul trinket"],
+    summary: "A soul trinket: advantage on Constitution saves and death saving throws while it is held.",
+    deathSaveAdvantage: true,
+  },
   {
     id: "adjusted_density_lighter",
     match: ["adjusted density (lighter)"],
@@ -299,6 +310,39 @@ export const AUTHORED_CONDITION_ROWS: ConditionEffectRow[] = [
     ],
   },
   summaryOnly("emissary_lapsed", "emissary lapsed", "Emissary of Redemption is set aside until a long rest: the paladin attacked or harmed a creature."),
+  summaryOnly("spurned_by_redemption", "spurned by redemption", "The Redemption paladin attacked this creature: their Emissary of Redemption holds nothing against it until their long rest."),
+  summaryOnly("withstood_among_the_dead", "withstood among the dead", "This undead made its save against the Undying warlock's Among the Dead and may attack them for 24 hours."),
+  summaryOnly("pulled_by_perfected_armor", "pulled by perfected armor", "Perfected Armor: pulled up to 25 feet toward the Guardian armorer (move_token forced); if it lands within 5 feet, they may attack it as part of the reaction."),
+  {
+    id: "hearth_of_moonlight_and_shadow",
+    match: ["hearth of moonlight and shadow"],
+    summary: "Hearth of Moonlight and Shadow: +5 to Stealth and Perception checks inside the 30-foot sphere while the rest lasts; open flames inside cannot be seen from outside.",
+    skillBonuses: [
+      { skill: "stealth", bonus: 5 },
+      { skill: "perception", bonus: 5 },
+    ],
+  },
+  summaryOnly("hour_of_reaping", "hour of reaping", "Hour of Reaping: the Long Death monk's dread this turn; each creature within 30 feet that failed the Wisdom save is frightened of them until the end of the monk's next turn."),
+  // Revelation in Flesh: one benefit per sorcery point spent (the fly and
+  // swim speeds are the authored move effects gated on these).
+  summaryOnly("revelation_in_flesh_fly", "revelation in flesh (fly)", "Revelation in Flesh: a flying speed equal to the walking speed, and the sorcerer can hover."),
+  summaryOnly("revelation_in_flesh_swim", "revelation in flesh (swim)", "Revelation in Flesh: a swimming speed of twice the walking speed, and the sorcerer breathes water."),
+  summaryOnly("revelation_in_flesh_see", "revelation in flesh (see)", "Revelation in Flesh: the sorcerer sees any invisible creature within 60 feet that is not behind total cover."),
+  summaryOnly("revelation_in_flesh_squeeze", "revelation in flesh (squeeze)", "Revelation in Flesh: the sorcerer moves through a space an inch wide and spends 5 feet of movement to escape nonmagical restraints or a grapple."),
+  summaryOnly("emboldening_bond", "emboldening bond", "Emboldening Bond: once a turn, within 30 feet of another bonded creature (60 from the cleric's 17th level), add a d4 to an attack roll, ability check or saving throw (roll it as a bonus die)."),
+  // Hexblade's Curse: the warlock's condition names the cursed creature in
+  // its meta (quarry): +proficiency damage on every hit against it, and a
+  // critical hit on 19-20 (src/lib/dm/attack-marks.ts).
+  ...[2, 3, 4, 5, 6].map(
+    (bonus): ConditionEffectRow => ({
+      id: `hexblades_curse_${bonus}`,
+      match: [`hexblade's curse (+${bonus})`],
+      summary: `Hexblade's Curse: +${bonus} damage and a critical hit on 19-20 against the cursed creature; hit points back when it dies.`,
+      onHitDice: { dice: String(bonus), type: "" },
+      marksTarget: true,
+      critRangeVsMarked: 19,
+    }),
+  ),
   summaryOnly("insightful_fighting", "insightful fighting", "Insightful Fighting: the rogue may Sneak Attack this creature without advantage for a minute."),
   // The final round's hooks (src/lib/srd/authored-effects-more.ts).
   summaryOnly("wildfire_spirit", "wildfire spirit", "The wildfire spirit is out: the druid's fire and healing spells gain 1d8 (Enhanced Bond)."),

@@ -20,8 +20,8 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { ALL_CLASSES, SRD_SKILLS, XP_THRESHOLDS, findClass, levelForXp } from "@/lib/srd";
 import { asiOwed } from "@/lib/srd/asi-ledger";
 import {
-  FIGHTING_STYLES,
   chosenFightingStyles,
+  fightingStyleChoices,
   fightingStyleFeatureName,
   fightingStyleSlots,
 } from "@/lib/srd/feature-effects";
@@ -39,7 +39,7 @@ import {
   spellbookAllowance,
   spellbookOf,
 } from "@/lib/srd/spell-prep";
-import { subclassGrants } from "@/lib/srd/subclass-training";
+import { grantsForHeldTraining, subclassGrants } from "@/lib/srd/subclass-training";
 import type { SubclassExtras } from "@/lib/srd/subclass-tables";
 import { textKey } from "@/lib/language/text-logic";
 
@@ -230,12 +230,13 @@ export function levelUpOptions(sheet: CharacterSheet, context: LevelUpOptionsCon
   // then invocations, maneuvers, metamagic and the rest (src/lib/srd/options.ts).
   const featurePicks: NonNullable<LevelUpOptions["choices"]["featurePicks"]> = [];
   const styles = chosenFightingStyles(sheet.features);
-  const styleSlots = fightingStyleSlots(populateFeaturesForClasses(sheet.features, classesAfter, sheet.race));
+  const featuresAfter = populateFeaturesForClasses(sheet.features, classesAfter, sheet.race);
+  const styleSlots = fightingStyleSlots(featuresAfter);
   if (styleSlots > styles.length) {
     featurePicks.push({
       label: "Fighting Style",
       count: styleSlots - styles.length,
-      options: FIGHTING_STYLES.filter((style) => !styles.some((name) => textKey(name) === textKey(style.name))).map((style) =>
+      options: fightingStyleChoices(featuresAfter).filter((style) => !styles.some((name) => textKey(name) === textKey(style.name))).map((style) =>
         fightingStyleFeatureName(style.id),
       ),
     });
@@ -277,8 +278,10 @@ export function levelUpOptions(sheet: CharacterSheet, context: LevelUpOptionsCon
   // the weighed subclass's own (a Lore bard's three skills). Picks are keyed
   // in featChoices by the grant's name.
   const trainedBefore = new Set(subclassGrants(classList, context.subclassExtras).map((grant) => `${grant.classId}|${textKey(grant.name)}`));
-  const training = subclassGrants(classesAfter, context.subclassExtras)
-    .filter((grant) => !trainedBefore.has(`${grant.classId}|${textKey(grant.name)}`))
+  const training = grantsForHeldTraining(
+    subclassGrants(classesAfter, context.subclassExtras).filter((grant) => !trainedBefore.has(`${grant.classId}|${textKey(grant.name)}`)),
+    sheet.proficiencies,
+  )
     .flatMap((grant) => {
       const picks = featPicksOwed(grant.name, grant.spec, undefined);
       return picks ? [{ name: grant.name, picks }] : [];

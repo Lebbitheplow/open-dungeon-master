@@ -29,13 +29,17 @@ import { weatherObscurementTiles } from "@/lib/srd/weather";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { lightsWithZones, zoneHidesFrom } from "@/lib/dm/zone-rules";
 import { conditionTruesightFeet } from "@/lib/srd/condition-effect-queries";
+import { authoredDarkvisionFeet } from "@/lib/srd/authored-effects-more";
 
 export function characterSenses(sheet: Pick<CharacterSheet, "features" | "race"> & { conditions?: string[] }): Senses {
   const texts = [...sheet.features.map((feature) => feature.name), sheet.race];
   const senses = sensesFromText(texts);
   // True Seeing's truesight, in squares (condition-effects-last.ts).
   const seeing = Math.floor(conditionTruesightFeet(sheet.conditions ?? []) / 5);
-  return { ...senses, darkvision: Math.max(senses.darkvision, darkvisionTilesFromText(texts)), truesight: Math.max(senses.truesight, seeing) };
+  const named = Math.max(senses.darkvision, darkvisionTilesFromText(texts));
+  // A subclass's darkvision (Umbral Sight, Eyes of the Dark, Eyes of Night).
+  const authored = Math.floor(authoredDarkvisionFeet(sheet, named * 5) / 5);
+  return { ...senses, darkvision: Math.max(named, authored), truesight: Math.max(senses.truesight, seeing) };
 }
 
 export function enemySenses(enemy: Pick<EncounterEnemy, "stats">): Senses {

@@ -13,10 +13,10 @@ import type { SubclassExtras } from "@/lib/srd/subclass-tables";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { subclassSpellsFor } from "@/lib/srd/features";
 import type { SpellFacts } from "@/lib/srd/spell-facts";
-import { cantripCapOf, casterListOf, casterViewsOf, maxSpellLevelOf, type CasterView } from "@/lib/srd/spell-prep";
+import { cantripCapOf, casterListOf, casterViewsOf, maxSpellLevelOf, type CasterView, onWiderList } from "@/lib/srd/spell-prep";
 import type { ToolError } from "@/lib/dm/tool-errors";
 
-type Learner = Pick<CharacterSheet, "name" | "class" | "level" | "subclass" | "classes" | "abilities" | "spellcasting">;
+type Learner = Pick<CharacterSheet, "name" | "class" | "level" | "subclass" | "classes" | "abilities" | "spellcasting"> & { features?: CharacterSheet["features"] };
 
 const lower = (name: string) => name.trim().toLowerCase();
 
@@ -30,7 +30,8 @@ export function viewsWithSpell(sheet: Learner, facts: SpellFacts, extras?: Subcl
       facts.classes.length === 0 ||
       facts.classes.includes(lower(view.classId)) ||
       facts.classes.includes(lower(casterListOf(view))) ||
-      subclassSpellsFor(view.classId, view.subclass, view.level, extras).some((name) => lower(name) === lower(facts.name)),
+      subclassSpellsFor(view.classId, view.subclass, view.level, extras, view.features).some((name) => lower(name) === lower(facts.name)) ||
+      onWiderList(view, facts),
   );
 }
 

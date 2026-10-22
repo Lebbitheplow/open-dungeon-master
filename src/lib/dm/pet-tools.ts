@@ -12,6 +12,7 @@ import { findBeastForm } from "@/lib/srd/beast-forms";
 import { findNamed, textKey } from "@/lib/language/text-logic";
 import { creatureSpellings } from "@/lib/srd/name-forms";
 import { applyEnemyDamage, publishEncounter, resolveEnemyRef } from "@/lib/dm/enemy-damage";
+import { activeAuthored } from "@/lib/srd/authored-effects";
 import { enemyAcWithEffects } from "@/lib/dm/ac-effects";
 import { petAttackCost } from "@/lib/dm/pet-attack-cost";
 import { resolveSheetRef } from "@/lib/dm/rolls";
@@ -481,6 +482,9 @@ export function handlePetAttack(
     source: "digital",
   });
   turn.rollIds.push(damageRoll.id);
+  // Exceptional Training (Beast Master 7): the companion's attacks count as
+  // magical against resistance.
+  const magical = activeAuthored(sheet, "pet_magical").some(({ effect }) => effect.pets.includes(pet.kind));
   const applied = applyEnemyDamage(
     campaign,
     turn,
@@ -490,6 +494,7 @@ export function handlePetAttack(
     sheets,
     sheetsById,
     attack.type,
+    magical ? { magical: true } : undefined,
   );
   publishEncounter(campaign.id);
   return {

@@ -66,6 +66,9 @@ export type PcDamageInput = {
   // meets the creature's defenses on its own, after the ward (enemy-hit.ts
   // blowByType). `amount` is their total.
   parts?: Array<{ amount: number; type: string }>;
+  // Features whose resistance does not hold against this blow (Emissary of
+  // Redemption against a creature the paladin attacked).
+  exceptFeatures?: string[];
   reason?: string;
 };
 
@@ -134,7 +137,7 @@ export function applyPcDamage(
   // Immunities from features (Purity of Body: poison) take all of it.
   // An ally's aura adds its own (Aura of Warding, Shielding Storm): authored-saves.ts.
   // A summoned creature keeps its stat block's (summon-rules.ts).
-  const resisted = [pcResistances(sheet, { magical: input.magical === true, spell: input.spell === true }), ...authoredAuraResistances(campaign.id, sheet, { spell: input.spell === true }), summonResistances(sheet), immersedResistance(campaign.id, sheet.id)].filter(Boolean).join(", ");
+  const resisted = [pcResistances(sheet, { magical: input.magical === true, spell: input.spell === true, except: input.exceptFeatures }), ...authoredAuraResistances(campaign.id, sheet, { spell: input.spell === true }), summonResistances(sheet), immersedResistance(campaign.id, sheet.id)].filter(Boolean).join(", ");
   // Inside Silence, thunder does nothing (zone-rules.ts).
   const immune = `${summonImmunities(sheet)}${pcImmunities(sheet)}${silencedImmunity(campaign.id, sheet.id)}`;
   const vulnerable = summonVulnerabilities(sheet);

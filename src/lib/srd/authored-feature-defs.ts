@@ -14,8 +14,9 @@ import { textKey } from "@/lib/language/text-logic";
 export function authoredFeatureDefs(): Array<{
   match: string[];
   effects: Array<
-    | { kind: "speed_bonus"; amount: (level: number) => number }
+    | { kind: "speed_bonus"; amount: (level: number) => number; gate?: "raging" }
     | { kind: "initiative_ability"; ability: Ability }
+    | { kind: "initiative_proficiency" }
     | {
         kind: "weapon_damage_rider";
         dice: (level: number) => string;
@@ -34,9 +35,11 @@ export function authoredFeatureDefs(): Array<{
       const guidance = `${row.feature}: ${effect.note ?? "the server applies it."}`;
       if (effect.kind === "speed") {
         const amount = effect.amount;
-        out.push({ match: [term], effects: [{ kind: "speed_bonus", amount: () => amount }], guidance });
+        out.push({ match: [term], effects: [{ kind: "speed_bonus", amount: () => amount, ...(effect.gate?.raging ? { gate: "raging" as const } : {}) }], guidance });
       } else if (effect.kind === "init_ability") {
         out.push({ match: [term], effects: [{ kind: "initiative_ability", ability: effect.ability }], guidance });
+      } else if (effect.kind === "init_prof") {
+        out.push({ match: [term], effects: [{ kind: "initiative_proficiency" }], guidance });
       } else if (effect.kind === "rider") {
         const dice = effect.dice;
         out.push({

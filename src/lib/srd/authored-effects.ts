@@ -26,6 +26,7 @@ import { AUTHORED_DATA_A } from "@/lib/srd/authored-effects-data";
 import { AUTHORED_DATA_A2 } from "@/lib/srd/authored-effects-data-b";
 import { AUTHORED_DATA_B } from "@/lib/srd/authored-effects-data2";
 import { AUTHORED_DATA_B2 } from "@/lib/srd/authored-effects-data3";
+import { AUTHORED_DATA_C } from "@/lib/srd/authored-effects-data4";
 import { GENRE_AUTHORED } from "@/lib/srd/authored-effects-genre";
 import type {
   Ability,
@@ -48,6 +49,7 @@ export const AUTHORED_TABLE: Record<string, AuthoredEntry> = {
   ...AUTHORED_DATA_A2,
   ...AUTHORED_DATA_B,
   ...AUTHORED_DATA_B2,
+  ...AUTHORED_DATA_C,
 };
 
 const lower = (value: string | undefined | null) => (value ?? "").trim().toLowerCase();
@@ -203,6 +205,9 @@ export function gateHolds(gate: Gate | undefined, sheet: AuthoredSheet, held: He
   if (gate.choice && textKey(held.choice ?? "") !== textKey(gate.choice)) {
     return false;
   }
+  if (gate.level && held.level < gate.level) {
+    return false;
+  }
   if (gate.choiceOf) {
     const other = heldAuthored(sheet).find((entry) => textKey(entry.feature) === textKey(gate.choiceOf!.feature));
     if (!other || textKey(other.choice ?? "") !== textKey(gate.choiceOf.value)) {
@@ -258,9 +263,14 @@ export function activeAuthored<K extends AuthoredEffectKind>(
 
 // ---- defenses ----
 
-export function authoredResistances(sheet: AuthoredSheet, options: { magical?: boolean; spell?: boolean } = {}): string[] {
+// `except`: features set aside for this blow (Emissary of Redemption against
+// a creature the paladin attacked).
+export function authoredResistances(sheet: AuthoredSheet, options: { magical?: boolean; spell?: boolean; except?: string[] } = {}): string[] {
   const out: string[] = [];
-  for (const { effect } of activeAuthored(sheet, "resist")) {
+  for (const { effect, held } of activeAuthored(sheet, "resist")) {
+    if (options.except?.includes(held.feature)) {
+      continue;
+    }
     if (effect.spells && !options.spell) {
       continue;
     }

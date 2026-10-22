@@ -12,7 +12,7 @@
 //            (Unyielding Spirit), save_bonus + ac while concentrating
 //            (Durable Magic), save_swap (Elegant Courtier), speed (Superior
 //            Mobility), init_adv (Ambush Master), init_ability (Rakish
-//            Audacity), attacked_disadv (Among the Dead), attack_adv and
+//            Audacity), ward_vs (Among the Dead), attack_adv and
 //            auto_crit (Assassinate), rider (Gathered Swarm), mark (Ancestral
 //            Protectors), init_refill (Relentless), kill_temp_hp (Touch of
 //            Death), turn_heal (Protective Spirit), rest_temp_hp (Celestial
@@ -97,7 +97,7 @@ await test("Soul of the Forge: resistance to fire damage, and +1 AC while wearin
   assert.equal(hp(forge), 55);
 });
 
-await test("Saint of Forge and Fire and Oceanic Soul: immunity to fire and to cold damage.", async () => {
+await test("Saint of Forge and Fire: immunity to fire damage; Oceanic Soul: resistance to cold damage.", async () => {
   const saint = hero({ class: "cleric", subclass: "Forge Domain", level: 17 });
   const deep = hero({ class: "warlock", subclass: "The Fathomless", level: 6 });
   fresh(saint.id, { currentHp: 60 });
@@ -105,7 +105,7 @@ await test("Saint of Forge and Fire and Oceanic Soul: immunity to fire and to co
   await world.invoke("apply_damage", { characterId: saint.id, amount: 12, type: "fire" });
   await world.invoke("apply_damage", { characterId: deep.id, amount: 12, type: "cold" });
   assert.equal(hp(saint), 60);
-  assert.equal(hp(deep), 60);
+  assert.equal(hp(deep), 54, "Oceanic Soul resists cold (issue 474), it is not immune");
 });
 
 const spore = hero({ class: "druid", subclass: "Circle of Spores", level: 14 });
@@ -190,15 +190,20 @@ await test("Ambush Master gives advantage on initiative; Rakish Audacity adds Ch
 
 // ---- passive: attacks ----
 
-await test("Among the Dead: an undead creature attacks the warlock at disadvantage.", async () => {
+await test("Among the Dead: an undead creature saves before it attacks the warlock, and loses the attack on a failure.", async () => {
   const undying = hero({ class: "warlock", subclass: "The Undying", level: 1 });
   const [enemy] = await stage(undying);
   kit.setEnemy(enemy.id, { stats: { type: "undead" } });
   world.patch(undying.id, { ac: 12, acOverride: true });
-  await enemyHits(enemy, undying, [15, 12, 3]);
-  const roll = rollBy("attack", undying.id, enemy);
-  assert.equal(roll.advantage, "disadvantage");
-  assert.equal(d20Faces(roll).length, 2);
+  const before = hp(undying);
+  const lost = await enemyHits(enemy, undying, [2, 19, 6]);
+  assert.match(lost.note ?? "", /attack is lost/);
+  assert.equal(hp(undying), before);
+  // A save made is good for 24 hours: the next swing goes ahead, unsaved.
+  await enemyHits(enemy, undying, [19, 15, 6]);
+  assert.equal(rollBy("attack", undying.id, enemy).advantage, "none");
+  await enemyHits(enemy, undying, [15, 6]);
+  assert.deepEqual(d20Faces(rollBy("attack", undying.id, enemy)), [15], "no save the second time");
 });
 
 const assassin = hero({ class: "rogue", subclass: "Assassin", level: 3, abilities: { dex: 16 }, equipment: [{ name: "Shortsword", qty: 1 }] });

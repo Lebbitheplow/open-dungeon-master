@@ -475,7 +475,7 @@ const reaper = hero({
   spellcasting: { ability: "wis", slots: slotsOf(FULL_CASTER_SLOTS[16]), prepared: ["Blindness/Deafness"], known: [], cantrips: [] },
 });
 
-await test("Improved Reaper: a necromancy spell of 1st to 5th level that targets one creature strikes a second creature within 5 feet of the first with the same slot, at 1d8 of the cleric's hit points per spell level.", async () => {
+await test("Improved Reaper: a necromancy spell of 1st to 5th level that targets one creature strikes a second creature within 5 feet of the first with the same slot, at no cost in hit points.", async () => {
   const [first, second] = await stage(reaper, { enemies: 2 });
   kit.place(second.id, 6, 6);
   const slotsBefore = world.sheet(reaper.id).spellcasting.slots["2"].used;
@@ -490,7 +490,7 @@ await test("Improved Reaper: a necromancy spell of 1st to 5th level that targets
   assert.ok(kit.enemy(first.id).conditions.includes("blinded"));
   assert.ok(kit.enemy(second.id).conditions.includes("blinded"), "the second creature is struck too");
   assert.equal(world.sheet(reaper.id).spellcasting.slots["2"].used, slotsBefore + 1, "one slot for both");
-  assert.ok(world.sheet(reaper.id).currentHp < hpBefore, "the cleric pays in hit points");
+  assert.equal(world.sheet(reaper.id).currentHp, hpBefore, "Improved Reaper costs no hit points (issue 474)");
 });
 
 const creation = hero({ class: "bard", subclass: "College of Creation", level: 3, abilities: { cha: 16 } });

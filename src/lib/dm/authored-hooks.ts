@@ -21,6 +21,7 @@
 // hit points, concentration, death, the token), so this module never imports
 // enemy-damage.ts, which reaches it.
 
+import { textKey } from "@/lib/language/text-logic";
 import { UNWAVERING_STRIKE } from "@/lib/dm/feature-bonus-attacks";
 import { untilTurnEnd } from "@/lib/dm/turn-end";
 import type { Campaign } from "@/lib/db/campaigns";
@@ -41,7 +42,7 @@ import type { Advantage } from "@/lib/dice";
 import { publishPersisted } from "@/lib/events";
 import { computeSheetDerived } from "@/lib/srd";
 import { activeAuthored, resolveFormula } from "@/lib/srd/authored-effects";
-import { effectiveMaxHp, type ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { effectiveMaxHp, isIncapacitated, removeConditions, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { hurtEnemy } from "@/lib/dm/spell-aura";
 import { withinFeet } from "@/lib/dm/authored-saves";
 import { naturalWeaponOnHit } from "@/lib/dm/authored-attacks";
@@ -98,17 +99,51 @@ function heal(campaign: Campaign, sheet: CharacterSheet, amount: number): number
 // anyone but the marker at disadvantage.
 const GUARD_MARKS = ["ancestral protectors", "unwavering mark", "thunder gauntlets"];
 
+// Emissary of Redemption is set aside, until the paladin's long rest, against
+// a creature they attacked or harmed: that creature carries this mark, its
+// source the paladin.
+export const SPURNED_REDEMPTION = "spurned by redemption";
+
+// The features a creature's attack on this character goes through: the
+// paladin attacked it, so Emissary of Redemption holds nothing against it.
+export function featuresSetAside(attacker: EncounterEnemy, target: CharacterSheet): string[] {
+  const mark = attacker.conditions.find((entry) => lower(entry) === SPURNED_REDEMPTION);
+  return mark && metaOf(attacker, mark)?.source === target.id ? ["Emissary of Redemption"] : [];
+}
+
+// An undead that must first save against Among the Dead: the creature has
+// not already withstood this warlock's in the last 24 hours.
+export const WARD_WITHSTOOD = "withstood among the dead";
+
 export function authoredIncomingAttack(input: {
   campaignId: string;
   encounterId: string;
   attacker: EncounterEnemy;
   target: CharacterSheet;
-}): { sources: Advantage[]; notes: string[]; noCrit: string | null; halve: string | null } {
+}): {
+  sources: Advantage[];
+  notes: string[];
+  noCrit: string | null;
+  halve: string | null;
+  // Features that do not hold against this attacker (featuresSetAside).
+  spurned: string[];
+  // A save the attacker makes before it may attack the target at all.
+  ward: { feature: string; save: string; dc: number } | null;
+} {
   const { attacker, target } = input;
   const sources: Advantage[] = [];
   const notes: string[] = [];
   let halve: string | null = null;
+  let ward: { feature: string; save: string; dc: number } | null = null;
   const type = lower(attacker.stats.type);
+  for (const { effect, held } of activeAuthored(target, "ward_vs")) {
+    const withstood = attacker.conditions.find((entry) => lower(entry) === WARD_WITHSTOOD);
+    if (effect.types.some((kind) => type.includes(kind)) && !(withstood && metaOf(attacker, withstood)?.source === target.id)) {
+      const derived = computeSheetDerived(target);
+      const dc = derived.spellSaveDc ?? 8 + derived.proficiencyBonus + Math.max(derived.abilityMods.int, derived.abilityMods.wis, derived.abilityMods.cha);
+      ward = { feature: held.feature, save: effect.save, dc };
+    }
+  }
   for (const { effect, held } of activeAuthored(target, "attacked_disadv")) {
     if (effect.from.some((kind) => type.includes(kind))) {
       sources.push("disadvantage");
@@ -140,14 +175,18 @@ export function authoredIncomingAttack(input: {
     }
   }
   const crit = activeAuthored(target, "crit_immune")[0];
-  return { sources, notes, noCrit: crit ? crit.held.feature : null, halve };
+  const spurned = featuresSetAside(attacker, target);
+  if (spurned.length) {
+    notes.push(`${spurned.join(", ")}: set aside against ${attacker.displayName}, whom ${target.name} attacked`);
+  }
+  return { sources, notes, noCrit: crit ? crit.held.feature : null, halve, spurned, ward };
 }
 
 // After an enemy's attack has dealt `dealt` to the character: the damage the
 // character's features send back.
 export function authoredAfterHit(
   campaign: Campaign,
-  input: { encounter: Encounter; attacker: EncounterEnemy; target: CharacterSheet; dealt: number },
+  input: { encounter: Encounter; attacker: EncounterEnemy; target: CharacterSheet; dealt: number; ranged?: boolean },
 ): string[] {
   const lines: string[] = [];
   if (input.dealt <= 0) {
@@ -173,10 +212,14 @@ export function authoredAfterHit(
       lines.push(`Unwavering Mark: ${input.attacker.displayName} struck someone other than ${cavalier.name}, who may make a bonus-action melee attack against it on their next turn, with advantage and +half their fighter level damage (pc_attack bonusAttack "feature").`);
     }
   }
+  const spurned = featuresSetAside(input.attacker, target);
   for (const { effect, held } of activeAuthored(target, "retaliate")) {
     const live = getEnemy(input.attacker.id);
     if (!live || live.status !== "alive") {
       break;
+    }
+    if (spurned.includes(held.feature) || (effect.melee && input.ranged)) {
+      continue;
     }
     const amount =
       effect.formula === "half_dealt"
@@ -263,14 +306,16 @@ export function authoredOnHit(
   const encounter = getActiveEncounter(campaign.id) ?? input.encounter;
   // Form of the Beast's bite (src/lib/dm/authored-attacks.ts).
   lines.push(...naturalWeaponOnHit(campaign, encounter, sheet, input.weaponName));
-  // Emissary of Redemption holds only while the paladin harms nobody.
-  if (activeAuthored(sheet, "resist").some(({ held }) => held.feature === "Emissary of Redemption")) {
-    patchSheet(sheet.id, {
-      conditions: [...sheet.conditions, "emissary lapsed"],
-      conditionMeta: { ...sheet.conditionMeta, "emissary lapsed": { rounds: 14400 } },
-    });
-    publishSheet(campaign, sheet.id);
-    lines.push("Emissary of Redemption: attacking sets its resistance and radiance aside until a long rest.");
+  // Emissary of Redemption: attacking a creature sets the feature aside
+  // against that creature alone, until the paladin's long rest.
+  const struck = getEnemy(input.enemy.id);
+  if (struck && activeAuthored(sheet, "resist").some(({ held }) => held.feature === "Emissary of Redemption") && !featuresSetAside(struck, sheet).length) {
+    const kept = struck.conditions.filter((entry) => lower(entry) !== SPURNED_REDEMPTION);
+    patchEnemyConditions(struck.id, [...kept, SPURNED_REDEMPTION], {
+      ...(struck.conditionMeta as ConditionMetaMap),
+      [SPURNED_REDEMPTION]: { source: sheet.id, rounds: 14400 },
+    } as typeof struck.conditionMeta);
+    lines.push(`Emissary of Redemption: ${sheet.name} attacked ${struck.displayName}, so neither its resistance nor its radiance holds against that creature until a long rest.`);
   }
   const enemy = getEnemy(input.enemy.id);
   if (enemy && enemy.status === "alive") {
@@ -344,7 +389,11 @@ function markEnemy(encounter: Encounter, sheet: CharacterSheet, target: Encounte
   return lines;
 }
 
-// Keeper of Souls works once a turn: the turn it last worked, per holder.
+// Grim Harvest works once a turn: the turn it last worked, per holder.
+const HARVEST_USED = new Map<string, string>();
+
+// Keeper of Souls works once until the start of the cleric's next turn: the
+// round it last worked, per holder.
 const KEEPER_USED = new Map<string, string>();
 
 // A creature dropped to 0: Touch of Death for a monk within 5 feet (the
@@ -355,8 +404,27 @@ export function authoredOnKill(
   enemy: EncounterEnemy,
   killerId: string | null,
   killerMelee = false,
+  // The spell that killed it (Grim Harvest).
+  spell?: { level: number; school?: string | null },
 ): string[] {
   const lines: string[] = [];
+  // Grim Harvest: a spell of 1st level or higher heals its caster twice its
+  // level (three times for necromancy), once a turn, unless the creature was
+  // a construct or undead.
+  const killer = killerId ? getSheetById(killerId) : null;
+  const creature = lower(enemy.stats.type);
+  if (killer && spell && spell.level >= 1 && !/construct|undead/.test(creature)) {
+    const harvest = activeAuthored(killer, "grim_harvest")[0];
+    const stamp = `${encounter.id}:${turnKey(encounter)}`;
+    if (harvest && HARVEST_USED.get(killer.id) !== stamp) {
+      const amount = spell.level * (lower(spell.school) === "necromancy" ? 3 : 2);
+      const given = heal(campaign, killer, amount);
+      HARVEST_USED.set(killer.id, stamp);
+      if (given > 0) {
+        lines.push(`${harvest.held.feature}: ${killer.name} regains ${given} hit points from the life the spell took.`);
+      }
+    }
+  }
   const board = getBattleMapForEncounter(encounter.id) !== null;
   // The fallen creature's token is already gone from the board, so its place
   // is read from the one who felled it: within 5 feet is the killer's own
@@ -365,7 +433,7 @@ export function authoredOnKill(
     feet <= 5
       ? holder.id === killerId && killerMelee
       : !board || !killerId || holder.id === killerId || withinFeet(encounter.id, holder.id, killerId, feet);
-  const stamp = `${encounter.id}:${turnKey(encounter)}`;
+  const stamp = `${encounter.id}:${encounter.round}`;
   for (const holder of fielded(campaign.id)) {
     for (const { effect, held } of activeAuthored(holder, "kill_temp_hp")) {
       if (!near(holder, 5)) {
@@ -377,7 +445,7 @@ export function authoredOnKill(
       }
     }
     for (const { effect, held } of activeAuthored(holder, "death_heal")) {
-      if (!near(holder, effect.rangeFt) || KEEPER_USED.get(holder.id) === stamp) {
+      if (!near(holder, effect.rangeFt) || KEEPER_USED.get(holder.id) === stamp || isIncapacitated(holder.conditions)) {
         continue;
       }
       const party = fielded(campaign.id).filter((ally) => !board || withinFeet(encounter.id, holder.id, ally.id, effect.rangeFt));
@@ -390,6 +458,23 @@ export function authoredOnKill(
         KEEPER_USED.set(holder.id, stamp);
         lines.push(`${held.feature}: ${hurt.name} regains ${given} hit points from the fallen creature's life.`);
       }
+    }
+  }
+  // Hexblade's Curse: the cursed creature died, and the warlock regains
+  // warlock level + Charisma modifier hit points (minimum 1); the curse ends.
+  for (const holder of fielded(campaign.id)) {
+    for (const condition of holder.conditions.filter((entry) => textKey(entry).startsWith(textKey("hexblade's curse")))) {
+      const meta = (holder.conditionMeta as ConditionMetaMap)[condition];
+      if (meta?.quarry !== enemy.id) {
+        continue;
+      }
+      const level = Math.max(1, (holder.classes ?? []).find((entry) => lower(entry.id) === "warlock")?.level ?? holder.level);
+      const given = heal(campaign, holder, Math.max(1, level + modsOf(holder).cha));
+      const fresh = getSheetById(holder.id) ?? holder;
+      const cleared = removeConditions(fresh.conditions, fresh.conditionMeta as ConditionMetaMap, [condition]);
+      patchSheet(holder.id, { conditions: cleared.conditions, conditionMeta: cleared.meta });
+      publishSheet(campaign, holder.id);
+      lines.push(`Hexblade's Curse: ${enemy.displayName} dies cursed, and ${holder.name} regains ${given} hit points.`);
     }
   }
   return lines;

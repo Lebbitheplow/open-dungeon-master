@@ -1,6 +1,6 @@
 import type { Ability } from "@/lib/schemas/sheet";
 import { classFeaturesFor, expertiseSlotsFor, racialTraitsFor, subclassLevelFor } from "@/lib/srd/features";
-import { fightingStyleSlots, type FightingStyleId } from "@/lib/srd/feature-effects";
+import { fightingStyleChoices, fightingStyleSlots, type FightingStyleId } from "@/lib/srd/feature-effects";
 import { findOptionByFeatureName, optionSlotsFor } from "@/lib/srd/options";
 import { innateCantripsFor } from "@/lib/srd/racial-grants";
 import { spellLevelOf } from "@/lib/srd/spell-lists";
@@ -243,7 +243,10 @@ export function reconcilePicks(
   note("expertise", "expertise", picks.expertisePicks, expertisePicks);
 
   const features = klass ? classFeaturesFor(klass.id, subclass, level) : [];
-  const stylePicks = unique(picks.stylePicks).slice(0, fightingStyleSlots(features));
+  // Only the styles the slots allow (a Swords bard: Dueling or Two-Weapon
+  // Fighting); a pick may name the style rather than its id.
+  const allowedStyles = new Set(fightingStyleChoices(features).flatMap((style) => [style.id, textKey(style.name)]));
+  const stylePicks = unique(picks.stylePicks.filter((pick) => allowedStyles.has(pick) || allowedStyles.has(textKey(pick)))).slice(0, fightingStyleSlots(features));
   note("fighting style", "styles", picks.stylePicks, stylePicks);
 
   const perKind = new Map<string, number>();

@@ -1,7 +1,7 @@
 import { easeOrdeal } from "@/lib/dm/ordeal";
 import { effectiveMaxHp, pruneMeta, removeConditionInstances, removeConditions } from "@/lib/dm/condition-logic";
 import type { RollResult } from "@/lib/dice";
-import { RAGING } from "@/lib/srd/class-resources";
+import { RAGING, recoveringPrefix, resourceDef } from "@/lib/srd/class-resources";
 import { TENDED } from "@/lib/dm/stabilize";
 import { refillResources } from "@/lib/srd/resource-refills";
 import { findClass, spellSlotsFor } from "@/lib/srd";
@@ -166,26 +166,30 @@ export function longRestPatch(
     patch.conditions = eased;
     patch.conditionMeta = pruneMeta(eased, patch.conditionMeta ?? sheet.conditionMeta);
   }
-  // A use that comes back after several long rests (Necrotic Husk: 1d4,
-  // src/lib/dm/reaction-counters.ts): its marker counts the nights, and the
-  // counter stays spent until the last of them.
-  const waiting = (patch.conditions ?? sheet.conditions).find((name) => name.toLowerCase().startsWith(HUSK_RECOVERING));
-  if (waiting) {
+  // A use that comes back after several long rests (Necrotic Husk and
+  // Limited Wish: 1d4, src/lib/dm/reaction-counters.ts and resource-tools.ts):
+  // its marker counts the nights, and the counter stays spent until the last
+  // of them.
+  for (const waiting of (patch.conditions ?? sheet.conditions).filter((name) => RECOVERING.test(name))) {
     const nights = Number(/\((\d+)\)/.exec(waiting)?.[1] ?? "1");
+    const prefix = waiting.replace(/\s*\(\d+\)\s*$/, "").toLowerCase();
     const rest = (patch.conditions ?? sheet.conditions).filter((name) => name !== waiting);
-    patch.conditions = nights > 1 ? [...rest, `${HUSK_RECOVERING} (${nights - 1})`] : rest;
+    patch.conditions = nights > 1 ? [...rest, `${prefix} (${nights - 1})`] : rest;
     patch.conditionMeta = pruneMeta(patch.conditions, patch.conditionMeta ?? sheet.conditionMeta);
-    const husk = sheet.resources?.[NECROTIC_HUSK];
-    if (nights > 1 && husk && patch.resources?.[NECROTIC_HUSK]) {
-      patch.resources = { ...patch.resources, [NECROTIC_HUSK]: { ...husk } };
+    const id = Object.keys(sheet.resources ?? {}).find((key) => {
+      const def = resourceDef(key);
+      return def ? recoveringPrefix(def.displayName) === prefix : false;
+    });
+    const held = id ? sheet.resources?.[id] : undefined;
+    if (id && nights > 1 && held && patch.resources?.[id]) {
+      patch.resources = { ...patch.resources, [id]: { ...held } };
     }
   }
   return patch;
 }
 
-// Necrotic Husk's counter and the marker its long wait leaves.
-const NECROTIC_HUSK = "sub_necrotic_husk";
-const HUSK_RECOVERING = "necrotic husk recovering";
+// A counter waiting out its long rests: "necrotic husk recovering (2)".
+const RECOVERING = / recovering \(\d+\)\s*$/i;
 
 // Whether this character's spell slots come back on a SHORT rest. Warlock
 // Pact Magic does; every other caster waits for the night. Missing this is

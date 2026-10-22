@@ -545,7 +545,7 @@ export function fillRound(ctx: FillContext): FillRound {
   if (derived.styleSlots > fields.stylePicks.length && wants("styles")) {
     const ranged = abilityPriority(klass)[0] === "dex";
     const order: FightingStyleId[] = [ranged ? "archery" : "defense", ranged ? "defense" : "dueling", "dueling", "protection"];
-    const ids = FIGHTING_STYLES.map((style) => style.id);
+    const ids = derived.styleChoices.map((style) => style.id);
     const candidates = [...new Set([...order, ...ids])].filter((id) => ids.includes(id) && !fields.stylePicks.includes(id));
     const add = candidates.slice(0, derived.styleSlots - fields.stylePicks.length);
     if (add.length) {

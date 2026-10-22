@@ -645,11 +645,11 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
   },
   {
     id: "tentacle_of_the_deep",
-    match: ["tentacle of the deep"],
+    match: ["tentacle of the deep", "tentacle of the deeps"],
     summary:
-      "Tentacle of the Deep: a bonus-action spectral tentacle strike (pc_attack, weapon 'Tentacle of the Deep', 1d8 cold); a hit also halves the target's speed until its next turn.",
+      "Tentacle of the Deeps: a bonus-action spectral tentacle strike (pc_attack, weapon 'Tentacle of the Deeps', 1d8 cold, 2d8 from 10th level); a hit also lowers the target's speed by 10 feet until the start of the warlock's next turn.",
     grantedAttack: {
-      name: "Tentacle of the Deep",
+      name: "Tentacle of the Deeps",
       diceByLevel: [
         [1, "1d8"],
         [10, "2d8"],
@@ -665,7 +665,8 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
     id: "form_of_dread",
     match: ["form of dread"],
     summary:
-      "Form of Dread: immune to being frightened, and once per turn a creature they hit must pass a WIS save or be frightened until their next turn (resolve via cast_at_enemy).",
+      "Form of Dread: immune to being frightened, and once per turn a creature they hit must pass a WIS save or be frightened until the end of their next turn (resolve via cast_at_enemy).",
+    conditionImmunities: ["frightened"],
   },
   {
     id: "spirit_totem_bear",
@@ -683,7 +684,7 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
     id: "spirit_totem_unicorn",
     match: ["spirit totem: unicorn", "spirit totem (unicorn)"],
     summary:
-      "Spirit Totem (Unicorn): allies have advantage on checks to detect creatures in the aura, and the druid's healing spells also heal aura allies for the spell's level.",
+      "Spirit Totem (Unicorn): the druid and allies have advantage on checks to detect creatures in the aura, and when the druid restores hit points with a spell slot, each creature of their choice in the aura also regains hit points equal to their druid level.",
   },
   {
     id: "trance_of_order",
@@ -897,9 +898,11 @@ export function conditionRollRiders(
         used = true;
       }
     }
-    if (kind === "check" && row.skillBonus && skill && skill.trim().toLowerCase() === row.skillBonus.skill) {
-      riders.diceSuffix += `+${row.skillBonus.bonus}`;
-      riders.notes.push(`${condition}: +${row.skillBonus.bonus} to ${row.skillBonus.skill}`);
+    for (const bonus of [...(row.skillBonus ? [row.skillBonus] : []), ...(row.skillBonuses ?? [])]) {
+      if (kind === "check" && skill && skill.trim().toLowerCase() === bonus.skill) {
+        riders.diceSuffix += `+${bonus.bonus}`;
+        riders.notes.push(`${condition}: +${bonus.bonus} to ${bonus.skill}`);
+      }
     }
     if (kind === "check" && row.checkDie) {
       riders.diceSuffix += `+${row.checkDie}`;

@@ -1,7 +1,7 @@
 "use client";
 
 import type { Genre } from "@/lib/schemas/game-settings";
-import { expertiseAllowed } from "@/lib/srd/features";
+import { expertiseAllowed, subclassExpandedSpellsFor, subclassSpellListsFor } from "@/lib/srd/features";
 import { useMemo } from "react";
 import { starterSpellsFor } from "@/lib/help";
 import type { Ability, AbilityScores, AsiChoice, EquipmentItem } from "@/lib/schemas/sheet";
@@ -20,7 +20,7 @@ import {
 } from "@/lib/srd/starting-wealth";
 import { suggestArmor } from "@/lib/srd/armor";
 import { classFeaturesFor, subclassSpellsFor } from "@/lib/srd/features";
-import { fightingStyleSlots } from "@/lib/srd/feature-effects";
+import { fightingStyleChoices, fightingStyleSlots } from "@/lib/srd/feature-effects";
 import { openOptionSlots, optionFeatureName, type OptionSlot } from "@/lib/srd/options";
 import { spellStyleFor, spellbookAllowance, type SpellStyle } from "@/lib/srd/spell-prep";
 import {
@@ -40,7 +40,7 @@ import { builderCasting, builderSpellAdvice } from "./casting";
 import { grantedSkillSources } from "./reconcile";
 import { authoredFeatDesc } from "@/lib/srd/feat-effects";
 import { applyFeatGrants, featGrantSpec, type FeatGrantSpec } from "@/lib/srd/feat-grants";
-import { applySubclassTraining, subclassGrants } from "@/lib/srd/subclass-training";
+import { applySubclassTraining, grantsForHeldTraining, subclassGrants } from "@/lib/srd/subclass-training";
 import { featSpellGrants, featSpellNames } from "@/lib/srd/feat-spells";
 import { expandBackgroundGear } from "@/lib/srd/gear-choices";
 import { splitToolGrants, type ToolChoice } from "@/lib/srd/tool-choices";
@@ -312,9 +312,17 @@ export function useBuilderDerived({
   // What the chosen subclass trains the character in by this level (issue
   // 251), each grant shaped as a feat's so the class step asks for its picks
   // with the feat pickers (src/lib/srd/subclass-training.ts).
+  // A skill or language the character already has becomes a pick (Royal
+  // Envoy's Persuasion, Draconic Disciple's Draconic).
   const subclassTraining = useMemo(
-    () => (klass && subclass ? subclassGrants([{ id: klass.id, level: effectiveLevel, subclass }]) : []),
-    [klass, subclass, effectiveLevel],
+    () =>
+      klass && subclass
+        ? grantsForHeldTraining(subclassGrants([{ id: klass.id, level: effectiveLevel, subclass }]), {
+            skills: proficientSkills,
+            languages: [...(race?.languages ?? []), ...(background?.knownLanguages ?? []), ...bonusLanguages.filter(Boolean), ...(klass.languages ?? [])],
+          })
+        : [],
+    [klass, subclass, effectiveLevel, proficientSkills, race, background, bonusLanguages],
   );
   const training = useMemo(() => {
     const skills = proficientSkills;
@@ -615,6 +623,8 @@ export function useBuilderDerived({
   // Fighting styles the class has earned by this level. Stored on the sheet
   // as "choice"-sourced features so the level-up regrant preserves them.
   const styleSlots = useMemo(() => fightingStyleSlots(grantedFeatures), [grantedFeatures]);
+  // The styles those slots allow (a Swords bard: Dueling or Two-Weapon Fighting).
+  const styleChoices = useMemo(() => fightingStyleChoices(grantedFeatures), [grantedFeatures]);
 
   // Invocations, maneuvers, metamagic, pact boons, infusions, runes and
   // elemental disciplines: the pick-lists that used to be feature names with
@@ -643,6 +653,15 @@ export function useBuilderDerived({
   const casting = useMemo(() => builderCasting(klass, subclass, effectiveLevel), [klass, subclass, effectiveLevel]);
   const spellSearchClass = casting.list;
   const maxSpellLevel = casting.maxSpellLevel;
+  // What the subclass adds to that list: a warlock patron's expanded spells,
+  // a Divine Soul's cleric list (src/lib/srd/spell-prep.ts widerListOf).
+  const spellWider = useMemo(
+    () =>
+      klass && casting.casts
+        ? { spells: subclassExpandedSpellsFor(klass.id, subclass, effectiveLevel), lists: subclassSpellListsFor(klass.id, subclass) }
+        : { spells: [], lists: [] },
+    [klass, subclass, effectiveLevel, casting.casts],
+  );
   // A class that casts, and has something to cast at this level. A level 1
   // paladin or ranger has a spellcasting ability and no spells, no cantrips
   // and no slots: showing them a spell step with a level 0 search and an
@@ -770,8 +789,10 @@ export function useBuilderDerived({
     ac,
     grantedFeatures,
     styleSlots,
+    styleChoices,
     optionSlots,
     spellSearchClass,
+    spellWider,
     casts,
     spellAdvice,
     cantripAdvice,

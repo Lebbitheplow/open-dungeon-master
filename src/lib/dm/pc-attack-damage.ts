@@ -32,6 +32,7 @@ import { conditionStrikesMagical } from "@/lib/srd/condition-effect-queries";
 import { effectsFor, type CombatRiders } from "@/lib/srd/feature-effects";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { textKey } from "@/lib/language/text-logic";
+import { authoredDamageAbility } from "@/lib/srd/authored-effects-more";
 
 export type FeatureRider = CombatRiders["damageRiders"][number];
 
@@ -61,6 +62,16 @@ export function foldDamageRiders(input: {
       ...profile,
       damageExpression: `${profile.damageExpression}+${rageBonus}`,
     };
+  }
+
+  // An ability modifier a feature adds to weapon damage (Aura of Hate,
+  // Song of Victory: src/lib/srd/authored-effects-more.ts).
+  const abilityRiders =
+    kind === "weapon" || kind === "natural"
+      ? authoredDamageAbility(sheet, { melee: !profile.ranged }, Object.fromEntries(Object.entries(sheet.abilities).map(([key, score]) => [key, Math.floor((score - 10) / 2)])))
+      : [];
+  for (const rider of abilityRiders) {
+    profile = { ...profile, damageExpression: `${profile.damageExpression}+${rider.amount}`, riderNotes: [...profile.riderNotes, `${rider.feature}: +${rider.amount} damage`] };
   }
 
   // Effect conditions riding the attacker's hits (Divine Favor's +1d4

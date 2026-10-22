@@ -23,7 +23,7 @@ import {
 } from "@/lib/dm/attack-logic";
 import { handsRuling, otherHandArmed, thrownAtRange } from "@/lib/dm/attack-rules";
 import { martialArtsApplies } from "@/lib/dm/pc-attack-options";
-import { shillelaghSwing } from "@/lib/dm/attack-features";
+import { shillelaghSwing, hexWarriorSwing } from "@/lib/dm/attack-features";
 import { combatRiders, type CombatRiders } from "@/lib/srd/feature-effects";
 import { grantedAttackDice, grantedAttackFor } from "@/lib/srd/granted-attacks";
 import { authoredNaturalWeapon, authoredReachBonus, naturalWeaponGated } from "@/lib/srd/authored-effects-more";
@@ -310,9 +310,11 @@ export function buildAttackProfile(
     // Shillelagh: a club or quarterstaff swings with the spellcasting
     // ability and a d8, and is magical (src/lib/dm/attack-features.ts).
     const shillelagh = shillelaghSwing(sheet, resolved, derived);
+    // Hex Warrior: the bound weapon swings with Charisma (attack-features.ts).
+    const hexed = shillelagh ? null : hexWarriorSwing(sheet, resolved, derived);
     const material = weaponMaterial(sheet.equipment.find((item) => item.name === resolved.displayName));
     const swing = (twoHanded: boolean) => ({
-      ...weaponAttackProfile(shillelagh?.derived ?? derived, sheet.proficiencies.weapons, shillelagh?.resolved ?? resolved, {
+      ...weaponAttackProfile(shillelagh?.derived ?? hexed?.derived ?? derived, sheet.proficiencies.weapons, shillelagh?.resolved ?? resolved, {
         riders,
         martialArts: martialArtsApplies(sheet),
         brawler: brawlerUnarmed(sheet),
@@ -344,6 +346,9 @@ export function buildAttackProfile(
     }
     if (shillelagh) {
       profile = { ...profile, magicWeapon: true, riderNotes: [...profile.riderNotes, shillelagh.note] };
+    }
+    if (hexed) {
+      profile = { ...profile, riderNotes: [...profile.riderNotes, hexed.note] };
     }
     kind = "weapon";
     special = lance ? "lance" : resolved.srd?.name === SPECIAL_WEAPONS.net ? "net" : null;

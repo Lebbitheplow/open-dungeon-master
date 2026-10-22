@@ -2,8 +2,17 @@
 // (the shape of an entry: authored-effects-data.ts).
 
 import type { AuthoredEntry } from "@/lib/srd/authored-effects-types";
+import { SRD_WEAPONS } from "@/lib/srd/weapons";
 
 const ELEMENTS = ["acid", "cold", "fire", "lightning", "thunder"];
+const LUNAR_PHASES = ["Full Moon", "New Moon", "Crescent Moon"];
+// A genie patron's kind and its damage type (Tasha's, The Genie).
+const GENIE_KINDS: Array<[string, string]> = [["dao", "bludgeoning"], ["djinni", "thunder"], ["efreeti", "fire"], ["marid", "cold"]];
+// A Hex Warrior's weapon: one the warlock is proficient with that lacks the
+// two-handed property, chosen at the end of a long rest.
+const HEX_WEAPONS = SRD_WEAPONS.filter(
+  (weapon) => (weapon.category === "simple" || weapon.category === "martial") && !(weapon.properties ?? []).some((property) => /two-handed/i.test(property)),
+).map((weapon) => weapon.name);
 
 export const AUTHORED_DATA_B2: Record<string, AuthoredEntry> = {
   // ---- rogue ----
@@ -84,12 +93,24 @@ export const AUTHORED_DATA_B2: Record<string, AuthoredEntry> = {
     subclass: "Scout",
     effects: [{ kind: "bonus_attack", after: "attack", note: "A second Sneak Attack on another creature is the DM's to allow." }],
   },
+  // A soul trinket held: advantage on Constitution saves and on death saves
+  // (the "soul trinket" condition row), no resistance.
   "rogue::Tokens of the Departed": {
     subclass: "Phantom",
     reactions: [{ name: "Tokens of the Departed", does: { kind: "gain_condition", condition: "soul trinket", rounds: 14400 } }],
-    effects: [
-      { kind: "save_adv", ability: "con", gate: { condition: "soul trinket" } },
-      { kind: "resist", types: ["poison"], gate: { condition: "soul trinket" } },
+    effects: [{ kind: "save_adv", ability: "con", gate: { condition: "soul trinket" } }],
+  },
+  "rogue::Psionic Power (Soulknife)": {
+    subclass: "Soulknife",
+    counter: "sub_psionic_energy",
+    spends: [
+      {
+        name: "Psionic Recovery",
+        aliases: ["Regain Psionic Energy"],
+        pool: { id: "sub_psionic_recovery" },
+        action: "bonus",
+        does: { kind: "restore", pool: "sub_psionic_energy", amount: 1 },
+      },
     ],
   },
   "rogue::Psychic Blades": {
@@ -115,6 +136,12 @@ export const AUTHORED_DATA_B2: Record<string, AuthoredEntry> = {
   },
 
   // ---- sorcerer ----
+  // The Divine Soul's affinity teaches one more spell, free (subclasses.json
+  // choiceSpells); the cleric list is theirs to learn from (spellLists).
+  "sorcerer::Divine Magic": {
+    subclass: "Divine Soul",
+    spends: [{ name: "Divine Affinity", aliases: ["Divine Magic"], fight: "out", does: { kind: "choose", options: ["Good", "Evil", "Law", "Chaos", "Neutrality"] } }],
+  },
   "sorcerer::Bend Luck": {
     subclass: "Wild Magic",
     reactions: [{ name: "Bend Luck", usedBy: "holder", pool: { id: "sorcery_points", amount: 2 }, does: { kind: "attack_penalty", die: "1d4" } }],
@@ -198,10 +225,31 @@ export const AUTHORED_DATA_B2: Record<string, AuthoredEntry> = {
     subclass: "Aberrant Mind",
     narrated: "A telepathic link is conversation: nothing on a sheet changes.",
   },
+  // Lunar Sorcery (Dragonlance): the phase is chosen after each long rest
+  // ("Lunar Embodiment (Crescent Moon)"), and Lunar Empowerment reads it.
+  "sorcerer::Lunar Embodiment": {
+    subclass: "Lunar Sorcery",
+    counter: "sub_lunar_free_cast",
+    spends: [{ name: "Lunar Phase", aliases: ["Moon Phase"], fight: "out", does: { kind: "choose", options: LUNAR_PHASES } }],
+  },
+  // Sacred flame at one creature or two within 5 feet of each other
+  // (cast_at_enemy secondTargetEnemyId, src/lib/dm/authored-reaper.ts).
   "sorcerer::Moon Fire": {
     subclass: "Lunar Sorcery",
-    narrated:
-      "The phases name light, concealment and reach without numbers; the DM narrates the phase until the text states them.",
+    effects: [{ kind: "twin_spell", school: "evocation", minLevel: 0, maxLevel: 0, spells: ["sacred flame"] }],
+  },
+  "sorcerer::Lunar Empowerment": {
+    subclass: "Lunar Sorcery",
+    effects: [
+      {
+        kind: "check_adv",
+        skills: ["investigation", "perception"],
+        gate: { choiceOf: { feature: "Lunar Embodiment", value: "full moon" } },
+        note: "Only within the bright light the sorcerer sheds; the DM keeps to that.",
+      },
+      { kind: "check_adv", skills: ["stealth"], gate: { choiceOf: { feature: "Lunar Embodiment", value: "new moon" } }, note: "Attack rolls against them in total darkness are at disadvantage; the DM keeps to that." },
+      { kind: "resist", types: ["necrotic", "radiant"], gate: { choiceOf: { feature: "Lunar Embodiment", value: "crescent moon" } } },
+    ],
   },
 
   // ---- warlock ----
@@ -228,7 +276,7 @@ export const AUTHORED_DATA_B2: Record<string, AuthoredEntry> = {
   },
   "warlock::Oceanic Soul": {
     subclass: "The Fathomless",
-    effects: [{ kind: "immune_damage", types: ["cold"] }],
+    effects: [{ kind: "resist", types: ["cold"], note: "Understanding fully submerged creatures, and they you, is narrated." }],
   },
   "warlock::Guardian Coil": {
     subclass: "The Fathomless",
@@ -244,11 +292,26 @@ export const AUTHORED_DATA_B2: Record<string, AuthoredEntry> = {
     subclass: "The Fathomless",
     effects: [{ kind: "concentration_guard", spell: "black tentacles", tempHp: "level" }],
   },
+  // The patron's kind ("Genie's Vessel (Efreeti)") sets Genie's Wrath, the
+  // Elemental Gift resistance and the kind's expanded spells
+  // (subclasses.json choiceSpells).
+  "warlock::Genie's Vessel": {
+    subclass: "The Genie",
+    spends: [{ name: "Genie Kind", aliases: ["Patron Kind", "Genie's Kind"], fight: "out", does: { kind: "choose", options: ["Dao", "Djinni", "Efreeti", "Marid"] } }],
+    effects: GENIE_KINDS.map(([kind, type]) => ({
+      kind: "rider" as const,
+      dice: "prof",
+      type,
+      when: "weapon" as const,
+      oncePerTurn: true,
+      gate: { choice: kind },
+      note: "Genie's Wrath rides any attack roll that hits, a spell attack too; the DM adds it to a spell's.",
+    })),
+  },
   "warlock::Elemental Gift": {
     subclass: "The Genie",
     counter: "sub_elemental_gift",
     spends: [
-      { name: "Elemental Gift", fight: "out", does: { kind: "choose", options: ["Bludgeoning", "Thunder", "Fire", "Cold"] } },
       {
         name: "Elemental Flight",
         aliases: ["Elemental Gift flight"],
@@ -258,18 +321,79 @@ export const AUTHORED_DATA_B2: Record<string, AuthoredEntry> = {
       },
     ],
     effects: [
-      { kind: "resist", types: ["bludgeoning"], gate: { choice: "bludgeoning" } },
-      { kind: "resist", types: ["thunder"], gate: { choice: "thunder" } },
-      { kind: "resist", types: ["fire"], gate: { choice: "fire" } },
-      { kind: "resist", types: ["cold"], gate: { choice: "cold" } },
+      ...GENIE_KINDS.map(([kind, type]) => ({ kind: "resist" as const, types: [type], gate: { choiceOf: { feature: "Genie's Vessel", value: kind } } })),
+      // Sheets that chose the type on Elemental Gift itself, before the kind
+      // was a choice of Genie's Vessel.
+      ...GENIE_KINDS.map(([, type]) => ({ kind: "resist" as const, types: [type], gate: { choice: type } })),
       { kind: "move", fly: 30, gate: { condition: "flying" } },
     ],
   },
+  // An undead that attacks the warlock first saves on Wisdom against their
+  // spell save DC or loses the attack (src/lib/dm/authored-hooks.ts).
   "warlock::Among the Dead": {
     subclass: "The Undying",
     effects: [
-      { kind: "attacked_disadv", from: ["undead"], note: "Lost against an undead the warlock attacks; the DM keeps to that." },
+      { kind: "ward_vs", types: ["undead"], save: "wis", note: "Area effects get through, and an undead that saved or that the warlock attacked is immune for 24 hours; the DM keeps to that." },
       { kind: "save_adv", against: ["disease"] },
+    ],
+  },
+  "warlock::Radiant Soul": {
+    subclass: "The Celestial",
+    effects: [{ kind: "spell_rider", dice: "cha", damageTypes: ["radiant", "fire"], note: "One radiant or fire damage roll of the spell, against one of its targets." }],
+  },
+  // Hexblade's Curse: the warlock's condition marks the cursed creature
+  // (its meta's quarry): +proficiency damage and a critical hit on 19-20
+  // against it, and hit points back when it dies (src/lib/dm/authored-hooks.ts).
+  "warlock::Hexblade's Curse": {
+    subclass: "The Hexblade",
+    counter: "sub_hexblades_curse",
+    spends: [
+      {
+        name: "Hexblade's Curse",
+        pool: { id: "sub_hexblades_curse" },
+        action: "bonus",
+        does: {
+          kind: "buff",
+          quarry: true,
+          condition: [[1, "hexblade's curse (+2)"], [5, "hexblade's curse (+3)"], [9, "hexblade's curse (+4)"], [13, "hexblade's curse (+5)"], [17, "hexblade's curse (+6)"]],
+          rounds: 10,
+        },
+      },
+    ],
+  },
+  "warlock::Hex Warrior": {
+    subclass: "The Hexblade",
+    spends: [{ name: "Hex Warrior Weapon", aliases: ["Hex Warrior"], fight: "out", does: { kind: "choose", options: HEX_WEAPONS } }],
+    effects: [{ kind: "weapon_ability", ability: "cha", note: "With Pact of the Blade, every pact weapon too; the DM names it as the hex weapon." }],
+  },
+  "warlock::Armor of Hexes": {
+    subclass: "The Hexblade",
+    reactions: [{ name: "Armor of Hexes", does: { kind: "chance_miss", die: "1d6", min: 4, vsMark: "hexblade's curse" } }],
+  },
+  "warlock::Master of Hexes": {
+    subclass: "The Hexblade",
+    spends: [
+      {
+        name: "Master of Hexes",
+        action: "none",
+        does: {
+          kind: "buff",
+          quarry: true,
+          condition: [[1, "hexblade's curse (+2)"], [5, "hexblade's curse (+3)"], [9, "hexblade's curse (+4)"], [13, "hexblade's curse (+5)"], [17, "hexblade's curse (+6)"]],
+          rounds: 10,
+        },
+      },
+    ],
+  },
+  "warlock::Necrotic Husk": {
+    subclass: "The Undead",
+    effects: [{ kind: "immune_damage", types: ["necrotic"], gate: { condition: "form of dread" } }],
+  },
+  "warlock::Spirit Projection": {
+    subclass: "The Undead",
+    effects: [
+      { kind: "resist", types: ["bludgeoning", "piercing", "slashing"], gate: { condition: "spirit projection" } },
+      { kind: "move", fly: "walk", gate: { condition: "spirit projection" }, note: "Passing through creatures and objects, the healing in Form of Dread and the spells without components are the DM's to apply." },
     ],
   },
 
@@ -294,6 +418,30 @@ export const AUTHORED_DATA_B2: Record<string, AuthoredEntry> = {
   "wizard::Durable Summons": {
     subclass: "School of Conjuration",
     effects: [{ kind: "summon_temp_hp", amount: 30, school: "conjuration" }],
+  },
+  // No use limit: each creature only once until the wizard's long rest, which
+  // the DM keeps to.
+  "wizard::Hypnotic Gaze": {
+    subclass: "School of Enchantment",
+    spends: [
+      {
+        name: "Hypnotic Gaze",
+        action: "action",
+        does: {
+          kind: "save_effect",
+          save: "wis",
+          dcAbility: "spell",
+          condition: "charmed",
+          rounds: 1,
+          rangeFt: 5,
+          onFail: "is also incapacitated with speed 0 until the end of the wizard's next turn; the wizard's action extends it",
+        },
+      },
+    ],
+  },
+  "wizard::Instinctive Charm": {
+    subclass: "School of Enchantment",
+    reactions: [{ name: "Instinctive Charm", does: { kind: "redirect", save: { ability: "wis", dcAbility: "spell" }, rangeFt: 30 } }],
   },
   "wizard::Illusory Reality": {
     subclass: "School of Illusion",
@@ -384,7 +532,7 @@ export const AUTHORED_DATA_B2: Record<string, AuthoredEntry> = {
         name: "Perfected Armor",
         gate: { choiceOf: { feature: "Armor Model", value: "guardian" } },
         pool: { id: "sub_perfected_armor" },
-        does: { kind: "save_condition", save: "str", dcAbility: "spell", condition: "prone" },
+        does: { kind: "save_condition", save: "str", dcAbility: "spell", condition: "pulled by perfected armor" },
       },
     ],
     effects: [

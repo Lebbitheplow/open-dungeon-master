@@ -20,10 +20,9 @@
 // Then each is put on a real sheet at every level, since a table that reads
 // well can still be granted wrongly.
 //
-// ODM's rule, pinned below: a warlock patron's spells arrive on the sheet
-// for free like a domain's (docs/rules-coverage.md, "Subclass spell lists
-// (domain, circle, oath, patron)"). The SRD only adds them to the list a
-// warlock chooses from.
+// A warlock patron's spells are an expanded list: they join the spells the
+// warlock may learn and are not granted (SRD 5.1's Fiend; issue 474). A
+// domain's, circle's or oath's arrive on the sheet.
 import assert from "node:assert/strict";
 import { heroInput, openWorld } from "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
@@ -42,7 +41,7 @@ const world = await openWorld();
 
 const { createSheet } = await import("../src/lib/db/sheets.ts");
 const { findClass } = await import("../src/lib/srd/index.ts");
-const { classFeaturesFor, subclassNamesFor, subclassSpellsFor } = await import("../src/lib/srd/features.ts");
+const { classFeaturesFor, subclassExpandedSpellsFor, subclassNamesFor, subclassSpellsFor } = await import("../src/lib/srd/features.ts");
 const { spellLevelOf } = await import("../src/lib/srd/spell-lists.ts");
 const { sheetFeatureSchema, patchSheetSchema } = await import("../src/lib/schemas/sheet.ts");
 const classFeaturesJson = (
@@ -234,7 +233,11 @@ await test("every spell a subclass hands out is real and castable on the day it 
 await test("a class with no spellcasting is handed no subclass spells", () => {
   for (const { classId, entry } of authored) {
     if (SRD_CLASSES[classId].caster === "none") {
+      // A cantrip such a subclass teaches is the feature's (Shadow Arts,
+      // Giant's Power), as a non-caster's racial cantrip is.
       assert.equal(entry.spells, undefined, `${entry.name} (${classId}) has a spell list`);
+      assert.equal(entry.choiceSpells, undefined, `${entry.name} (${classId}) has choice spells`);
+      assert.equal(entry.expanded, undefined, `${entry.name} (${classId}) has an expanded list`);
     }
   }
 });
@@ -297,15 +300,12 @@ await test("a subclass of another class grants nothing", () => {
   }
 });
 
-await test("ODM's rule: a patron's spells arrive on the sheet for free", () => {
-  // SRD 5.1 adds a patron's expanded spells to the list a warlock picks
-  // from. ODM grants them outright, as it does a cleric's domain spells
-  // (docs/rules-coverage.md, Class resources, "Subclass spell lists").
-  const granted = subclassSpellsFor("warlock", "The Archfey", 1);
-  assert.ok(granted.length >= 2, "The Archfey hands out no spells at 1st level");
-  // The SRD's own patron has no such list in ODM, so a Fiend warlock gets
-  // nothing the SRD would not give.
-  assert.deepEqual(subclassSpellsFor("warlock", "The Fiend", 20), []);
+await test("A patron's expanded spells join the list a warlock learns from; they are not granted", () => {
+  // SRD 5.1 adds the Fiend's expanded spells to the warlock spell list "for
+  // you", and each is still learned as a spell known (issue 474).
+  assert.deepEqual(subclassSpellsFor("warlock", "The Archfey", 20), []);
+  assert.ok(subclassExpandedSpellsFor("warlock", "The Archfey", 1).length >= 2, "The Archfey's list is empty at 1st level");
+  assert.ok(subclassExpandedSpellsFor("warlock", "The Fiend", 1).includes("Burning Hands"), "the Fiend's own list");
 });
 
 // ---- findings ----

@@ -91,6 +91,9 @@ export type ConditionEffectRow = {
   // A flat bonus to the holder's checks with one skill (Pass without Trace:
   // +10 Stealth).
   skillBonus?: { skill: string; bonus: number };
+  // Several skills at once (Hearth of Moonlight and Shadow: +5 Stealth and
+  // Perception).
+  skillBonuses?: Array<{ skill: string; bonus: number }>;
   // Movement changes (longstrider +10, haste x2, slow x0.5).
   speedBonus?: number;
   speedMultiplier?: number;
@@ -118,6 +121,9 @@ export type ConditionEffectRow = {
   // onHitDice rides hits on one creature only, the one the caster marked
   // (Hunter's Mark, Hex): conditionMeta.quarry holds its enemyId.
   marksTarget?: boolean;
+  // With marksTarget: the holder's attack rolls against the marked creature
+  // score a critical hit on this natural roll or higher (Hexblade's Curse 19).
+  critRangeVsMarked?: number;
   // Held by the TARGET: the next attack roll against it spends it (Guiding
   // Bolt's advantage).
   consumedAgainst?: boolean;

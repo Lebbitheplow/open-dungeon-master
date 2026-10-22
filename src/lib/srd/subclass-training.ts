@@ -51,6 +51,8 @@ export type SubclassGrant = {
   level: number;
   spec: FeatGrantSpec;
   saves?: SaveGrant;
+  skillOtherwise?: { skill: string; from: string[] };
+  languageOtherwise?: string;
 };
 
 type TableEntry = {
@@ -72,6 +74,12 @@ type TableEntry = {
   any?: number;
   anyKinds?: Array<"skills" | "languages" | "tools">;
   saves?: SaveGrant;
+  // A skill granted unless already held some other way, in which case one
+  // of `from` is picked instead (Royal Envoy's Persuasion).
+  skillOtherwise?: { skill: string; from: string[] };
+  // A language granted unless already spoken, in which case one other
+  // language is picked instead (Draconic Disciple's Draconic).
+  languageOtherwise?: string;
 };
 
 const BLANK: FeatGrantSpec = {
@@ -162,8 +170,19 @@ const TABLE: Record<string, TableEntry> = {
   },
   "fighter|samurai|elegant courtier": { saves: { save: "wis", otherwise: ["int", "cha"] } },
   "fighter|rune knight|bonus proficiencies (rune knight)": { tools: ["smith's tools"], languages: ["Giant"] },
-  "fighter|banneret|royal envoy": { skills: ["persuasion"], expertise: ["persuasion"], pickLanguages: 1 },
+  // Persuasion, its proficiency bonus doubled; one already proficient picks
+  // Animal Handling, Insight, Intimidation or Performance instead
+  // (skillOtherwise, read with the sheet's training in applySubclassTraining).
+  "fighter|banneret|royal envoy": {
+    skills: ["persuasion"],
+    expertise: ["persuasion"],
+    skillOtherwise: { skill: "persuasion", from: ["animal_handling", "insight", "intimidation", "performance"] },
+  },
   "barbarian|path of the giant|giant's power": { languages: ["Giant"] },
+  "druid|circle of the shepherd|speech of the woods": { languages: ["Sylvan"] },
+  "sorcerer|storm sorcery|wind speaker": { languages: ["Primordial"] },
+  "monk|way of the ascendant dragon|draconic disciple": { languages: ["Draconic"], languageOtherwise: "Draconic" },
+  "ranger|drakewarden|draconic gift": { languages: ["Draconic"], languageOtherwise: "Draconic" },
   "monk|way of the drunken master|bonus proficiencies (drunken master)": { skills: ["performance"], tools: ["brewer's supplies"] },
   "monk|way of mercy|implements of mercy": { skills: ["insight", "medicine"], tools: ["herbalism kit"] },
   "monk|way of the kensei|path of the kensei": {
@@ -172,6 +191,11 @@ const TABLE: Record<string, TableEntry> = {
     pickTools: 1,
     toolsFrom: ["calligrapher's supplies", "painter's supplies"],
   },
+  // One more kensei weapon at 6th, 11th and 17th level, with the feature
+  // the monk gains at that level.
+  "monk|way of the kensei|one with the blade": { pickWeapons: 1, weaponsFrom: KENSEI_WEAPONS },
+  "monk|way of the kensei|sharpen the blade": { pickWeapons: 1, weaponsFrom: KENSEI_WEAPONS },
+  "monk|way of the kensei|unerring accuracy": { pickWeapons: 1, weaponsFrom: KENSEI_WEAPONS },
   "ranger|gloom stalker|iron mind": { saves: { save: "wis", otherwise: ["int", "cha"] } },
   "ranger|fey wanderer|otherworldly glamour": { pickSkills: 1, skillsFrom: ["deception", "performance", "persuasion"] },
   "rogue|assassin|bonus proficiencies (assassin)": { tools: ["disguise kit", "poisoner's kit"] },
@@ -283,7 +307,16 @@ export function subclassGrants(classes: ClassEntryLike[], extras?: SubclassExtra
       const authored = TABLE[key(entry.id, subclass, name)];
       const level = feature.level ?? entry.level;
       if (authored) {
-        grants.push({ name, classId: entry.id, subclass, level, spec: specOf(authored), ...(authored.saves ? { saves: authored.saves } : {}) });
+        grants.push({
+          name,
+          classId: entry.id,
+          subclass,
+          level,
+          spec: specOf(authored),
+          ...(authored.saves ? { saves: authored.saves } : {}),
+          ...(authored.skillOtherwise ? { skillOtherwise: authored.skillOtherwise } : {}),
+          ...(authored.languageOtherwise ? { languageOtherwise: authored.languageOtherwise } : {}),
+        });
         continue;
       }
       const text = subclassFeatureDescription(entry.id, subclass, name, extras) ?? "";
@@ -294,6 +327,40 @@ export function subclassGrants(classes: ClassEntryLike[], extras?: SubclassExtra
     }
   }
   return grants;
+}
+
+// The grants as they fall on a character already trained some other way
+// (class, background, race, feats): a skill a grant would give again becomes
+// a pick from its list instead (Royal Envoy's Persuasion), and a language
+// already spoken a pick of another (Draconic Disciple). Callers pass the
+// training from before the subclass's, so a grant never finds its own; the
+// grant it returns has settled, so a second pass changes nothing.
+export function grantsForHeldTraining(
+  grants: SubclassGrant[],
+  held: { skills: string[]; languages?: string[] },
+): SubclassGrant[] {
+  const skills = new Set(held.skills.map(textKey));
+  const languages = new Set((held.languages ?? []).map(textKey));
+  return grants.map((grant) => {
+    const { skillOtherwise: other, languageOtherwise: tongue, ...rest } = grant;
+    let spec = grant.spec;
+    if (other && skills.has(textKey(other.skill))) {
+      spec = {
+        ...spec,
+        fixedSkills: spec.fixedSkills.filter((skill) => textKey(skill) !== textKey(other.skill)),
+        skills: spec.skills + 1,
+        skillsFrom: [...new Set([...spec.skillsFrom, ...other.from])],
+      };
+    }
+    if (tongue && languages.has(textKey(tongue))) {
+      spec = {
+        ...spec,
+        fixedLanguages: spec.fixedLanguages.filter((language) => textKey(language) !== textKey(tongue)),
+        languages: spec.languages + 1,
+      };
+    }
+    return spec === grant.spec ? grant : { ...rest, spec };
+  });
 }
 
 const ABILITY_KEYS: Ability[] = ["str", "dex", "con", "int", "wis", "cha"];
@@ -339,9 +406,10 @@ export function applySubclassTraining(input: {
   if (!input.grants.length) {
     return { proficiencies: input.proficiencies, problems: [] };
   }
+  const grants = grantsForHeldTraining(input.grants, input.proficiencies);
   const applied = applyFeatGrants({
     proficiencies: input.proficiencies,
-    feats: input.grants.map((grant) => ({ name: grant.name, desc: "", spec: grant.spec })),
+    feats: grants.map((grant) => ({ name: grant.name, desc: "", spec: grant.spec })),
     choices: input.choices,
     strict: input.strict,
     picksMayWait: input.picksMayWait,

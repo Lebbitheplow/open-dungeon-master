@@ -33,8 +33,8 @@ export type ResourceEffect =
   // (Lay on Hands).
   | { kind: "heal_pool" }
   // Each spent use is one die of healing to the target (Balm of the Summer
-  // Court: a pool of d6s).
-  | { kind: "heal_dice_pool"; die: string }
+  // Court: a pool of d6s), and `tempPerDie` temporary hit points per die.
+  | { kind: "heal_dice_pool"; die: string; tempPerDie?: number }
   // Heals the target for a rolled expression (Healing Light-likes).
   | { kind: "heal_target"; dice: (level: number, abilityMods: Record<string, number>) => string }
   // Grants the spender (or a target) temporary hit points; 5e temp HP never
@@ -81,13 +81,17 @@ export type ResourceEffect =
 
 // The JSON form of an effect, carried on resource rows in resources.json /
 // authored-resources.json. Dice formulas are strings with `level`, `prof`,
-// and ability-mod tokens ("1d8+level", "2d6+wis") resolved at spend time.
+// and ability-mod tokens ("1d8+level", "2d6+wis") resolved at spend time, or
+// a ladder of [class level, formula] steps where the last one reached wins
+// (Drake's Breath: 8d6, then 10d6 from 15th level).
+export type DiceFormula = string | Array<[number, string]>;
+
 export type ResourceFx =
-  | { kind: "heal_self"; dice: string }
+  | { kind: "heal_self"; dice: DiceFormula }
   | { kind: "heal_pool" }
-  | { kind: "heal_dice_pool"; die: string }
-  | { kind: "heal_target"; dice: string }
-  | { kind: "temp_hp"; dice: string }
+  | { kind: "heal_dice_pool"; die: string; tempPerDie?: number }
+  | { kind: "heal_target"; dice: DiceFormula }
+  | { kind: "temp_hp"; dice: DiceFormula }
   | { kind: "condition"; condition: string; rounds: number }
   | {
       kind: "buff";
@@ -95,21 +99,29 @@ export type ResourceFx =
       rounds: number;
       target?: "self" | "ally";
       variants?: string[];
-      tempHp?: string;
+      tempHp?: DiceFormula;
     }
   | { kind: "inspire"; die: string }
-  | { kind: "aoe"; dice: string; save: SaveAbilityId }
-  | { kind: "enemy_save"; save: SaveAbilityId; condition?: string; dice?: string }
+  | { kind: "aoe"; dice: DiceFormula; save: SaveAbilityId }
+  | { kind: "enemy_save"; save: SaveAbilityId; condition?: string; dice?: DiceFormula }
   | { kind: "teleport"; feet: number };
 
 // "1d8+level" at level 5 -> "1d8+5"; "2d6+wis" with WIS +3 -> "2d6+3".
 // Negative modifiers fold into the sign so the dice grammar stays valid.
 export function resolveDiceFormula(
-  formula: string,
+  formula: DiceFormula,
   level: number,
   abilityMods: Record<string, number>,
 ): string {
-  return formula
+  let text = typeof formula === "string" ? formula : (formula[0]?.[1] ?? "0");
+  if (Array.isArray(formula)) {
+    for (const [atLevel, value] of formula) {
+      if (level >= atLevel) {
+        text = value;
+      }
+    }
+  }
+  return text
     // A number of dice equal to the proficiency bonus ("profd4": Healing
     // Hands, MotM).
     .replace(/\bprofd(\d+)\b/g, (_, die) => `${proficiencyBonus(level)}d${die}`)
@@ -138,7 +150,7 @@ export function effectFromFx(fx: ResourceFx | undefined): ResourceEffect {
     case "heal_pool":
       return { kind: "heal_pool" };
     case "heal_dice_pool":
-      return { kind: "heal_dice_pool", die: fx.die };
+      return { kind: "heal_dice_pool", die: fx.die, ...(fx.tempPerDie ? { tempPerDie: fx.tempPerDie } : {}) };
     case "heal_target":
       return {
         kind: "heal_target",
@@ -237,6 +249,13 @@ export type ResourceDef = {
   // Only while the holder has fewer than half their hit points (Unearthly
   // Recovery).
   requires?: "below_half";
+  // The most one use may spend: half the class level (Balm of the Summer
+  // Court's dice) or the Charisma modifier, at least one (Healing Light's).
+  perUse?: "half_level" | "cha";
+  // Spent, it comes back only after this many long rests, rolled (Limited
+  // Wish, Necrotic Husk: 1d4); a marker on the sheet counts them down
+  // (src/lib/dm/rest-logic.ts).
+  recovers?: string;
   // One line of SRD truth handed back to the model in the tool result, so a
   // spend never leaves it guessing what the feature does.
   guidance: string;
@@ -651,6 +670,8 @@ type SubclassResourceRow = {
   action?: ResourceAction;
   fallbackPool?: { id: string; amount: number };
   requires?: "below_half";
+  perUse?: "half_level" | "cha";
+  recovers?: string;
 };
 
 function proficiencyBonus(level: number): number {
@@ -688,6 +709,8 @@ const SUBCLASS_RESOURCE_DEFS: ResourceDef[] = (
   ...(row.action ? { action: row.action } : {}),
   ...(row.fallbackPool ? { fallbackPool: row.fallbackPool } : {}),
   ...(row.requires ? { requires: row.requires } : {}),
+  ...(row.perUse ? { perUse: row.perUse } : {}),
+  ...(row.recovers ? { recovers: row.recovers } : {}),
 }));
 
 // The spells a race casts once a day by nature (a tiefling's hellish rebuke
@@ -720,6 +743,12 @@ export const RESOURCE_DEFS: ResourceDef[] = [
   ...INNATE_RESOURCE_DEFS,
   ...COMBAT_RESOURCE_DEFS,
 ];
+
+// The marker a counter that returns after several long rests leaves on the
+// sheet while it waits: "limited wish recovering (3)".
+export function recoveringPrefix(displayName: string): string {
+  return `${displayName.trim().toLowerCase()} recovering`;
+}
 
 export type ResourceState = { max: number; used: number };
 export type ResourceMap = Record<string, ResourceState>;

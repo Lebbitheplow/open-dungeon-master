@@ -49,7 +49,7 @@ import { builderFeatJudge, FeatJudgeContext, unmetFeatMessage } from "./featPrer
 import { racialFeatCount } from "@/lib/srd/race-id";
 import { usePickerGroups } from "./usePickerGroups";
 import type { PickerGroup } from "./OptionPicker";
-import { useSpellPool } from "@/components/sheet/useSpellPool";
+import { useWiderSpellPool } from "@/components/sheet/useSpellPool";
 import { QuickBuildQuiz, type QuizVoice } from "./QuickBuildQuiz";
 import { QuickBuildReadback } from "./QuickBuildReadback";
 import { useQuickFill, type FillRequest } from "./useQuickFill";
@@ -349,7 +349,7 @@ function CharacterBuilderForm({
   };
   // The spell step's own list for this class, so a fill picks what the
   // step would offer (shared with it: one fetch).
-  const { pool: spellPool } = useSpellPool(derived.spellSearchClass, derived.maxSpellLevel, derived.casts);
+  const { pool: spellPool } = useWiderSpellPool(derived.spellSearchClass, derived.maxSpellLevel, derived.casts, derived.spellWider);
   // "Help me build" open, with the job already picked on the first step.
   const [quiz, setQuiz] = useState<{ role: PlaystyleId | null } | null>(null);
   const fill = useQuickFill({

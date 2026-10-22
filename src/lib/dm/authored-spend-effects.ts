@@ -26,6 +26,7 @@ import type { CharacterSheet, FullPatchSheetInput } from "@/lib/schemas/sheet";
 import { rollCard, sheetAttacker } from "@/lib/dm/roll-card";
 import { rollAgainst } from "@/lib/roll-labels";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 // A spend's damage on one enemy, as the holder's dice card.
 const damageDice = (ctx: SpendContext, enemy: EncounterEnemy, dice: string) =>
@@ -171,6 +172,12 @@ export function resolveSpendEffect(ctx: SpendContext, does: SpendDoes): Resoluti
     case "buff": {
       const condition = conditionName(ctx, does);
       const lines: string[] = [];
+      // Aimed at a creature with no fight on: it is not on the board, so the
+      // use is paid and the DM narrates it on the creature named (Hexblade's
+      // Curse laid at a parley).
+      if ((does.target === "enemy" || does.quarry) && !getActiveEncounter(campaign.id)) {
+        return { result: { applied: [`${ctx.spend.name}: ${condition}, on the creature the story names. There is no fight, so no creature on the board carries it.`] } };
+      }
       const tempHp = does.tempHp ? Math.max(0, Number(rollCard(ctx.campaign, ctx.turn, sheet.id, "custom", `${ctx.spend.name}: temporary hit points`, formula(ctx, does.tempHp), null).total)) : 0;
       if (does.target === "enemy") {
         const enemy = targetEnemy(ctx);
@@ -345,8 +352,20 @@ export function resolveSpendEffect(ctx: SpendContext, does: SpendDoes): Resoluti
     }
     case "storm_aura":
       return stormAura(ctx);
+    case "restore": {
+      const state = sheet.resources[does.pool];
+      if (!state) {
+        return { error: `${sheet.name} has no ${does.pool.replace(/^sub_/, "").replace(/_/g, " ")} to restore. Nothing was spent.`, refused: "rules" };
+      }
+      if (state.used <= 0) {
+        return { error: `${sheet.name}'s ${does.pool.replace(/^sub_/, "").replace(/_/g, " ")} is full; ${ctx.spend.name} has nothing to bring back. Nothing was spent.`, refused: "rules" };
+      }
+      const back = Math.min(does.amount, state.used);
+      const resources = { ...sheet.resources, [does.pool]: { max: state.max, used: state.used - back } };
+      return { patch: { resources }, result: { restored: `${back} ${does.pool.replace(/^sub_/, "").replace(/_/g, " ")} back (${state.max - state.used + back}/${state.max}).` } };
+    }
     case "flames": {
-      const wanted = lower(ctx.args.variant);
+      const wanted = does.healOnly ? "heal" : lower(ctx.args.variant);
       if (/heal/.test(wanted)) {
         const rolled = rollCard(ctx.campaign, ctx.turn, sheet.id, "custom", `${ctx.spend.name}: healing`, formula(ctx, does.formula), null).total;
         const ally = ctx.args.targetCharacterId ? getSheetById(ctx.args.targetCharacterId) : sheet;
@@ -429,6 +448,9 @@ function burst(ctx: SpendContext, spec: NonNullable<Extract<SpendDoes, { kind: "
       enemyCondition(ctx, enemy, spec.condition, spec.rounds ? { rounds: spec.rounds } : {});
       lines.push(`${enemy.displayName} is ${spec.condition}.`);
     }
+    if (spec.mark) {
+      enemyCondition(ctx, getEnemy(enemy.id) ?? enemy, spec.mark, spec.rounds ? { rounds: spec.rounds } : {});
+    }
   }
   return lines;
 }
@@ -450,9 +472,10 @@ function hasBoard(encounter: Encounter): boolean {
 
 // Storm Aura: the barbarian's environment, chosen by the variant.
 function stormAura(ctx: SpendContext): Resolution {
-  const kind = (["desert", "sea", "tundra"] as const).find((entry) => lower(ctx.args.variant).includes(entry));
+  const chosen = lower(ctx.held.choice);
+  const kind = (["desert", "sea", "tundra"] as const).find((entry) => lower(ctx.args.variant).includes(entry) || (!ctx.args.variant && chosen === entry));
   if (!kind) {
-    return { error: "Storm Aura takes the environment as the variant: desert, sea or tundra, the one chosen when the barbarian took Storm Aura (on their sheet). Nothing was spent.", retry: true };
+    return { error: "Storm Aura takes the environment as the variant: desert, sea or tundra, the one chosen when the barbarian took Storm Aura (use_resource 'Storm Environment' sets it on the sheet). Nothing was spent.", retry: true };
   }
   const encounter = getActiveEncounter(ctx.campaign.id);
   const amount = formula(ctx, STORM_AURA[kind]);
@@ -481,6 +504,17 @@ function stormAura(ctx: SpendContext): Resolution {
     }
     return { patch, result: { aura: condition, desert: lines.length ? lines : "no creature stands in the aura on the board" } };
   }
+  // Raging Storm (14th): each activation of the tundra makes one creature
+  // in the aura save on Strength or have speed 0 until the barbarian's next
+  // turn.
+  const frozen: Record<string, unknown> = {};
+  if (ctx.args.targetEnemyId && ctx.sheet.features.some((feature) => textKey(feature.name) === "raging storm")) {
+    const resolved = resolveSpendEffect(ctx, { kind: "save_effect", save: "str", dcAbility: "con", condition: "raging storm (tundra)", rounds: 1, rangeFt: 10 });
+    if ("error" in resolved) {
+      return resolved;
+    }
+    Object.assign(frozen, { ragingStorm: resolved.result });
+  }
   const given: string[] = [];
   for (const ally of alliesInReach(ctx, 10, false)) {
     if (Number(amount) > ally.tempHp) {
@@ -491,5 +525,5 @@ function stormAura(ctx: SpendContext): Resolution {
       given.push(ally.name);
     }
   }
-  return { patch, result: { aura: condition, tundra: `${amount} temporary hit points to ${given.join(", ") || "nobody new"}` } };
+  return { patch, result: { aura: condition, tundra: `${amount} temporary hit points to ${given.join(", ") || "nobody new"}`, ...frozen } };
 }

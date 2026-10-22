@@ -3,7 +3,7 @@
 import { Star } from "lucide-react";
 import { useState, useSyncExternalStore } from "react";
 import { SpellBook, type SpellTile } from "@/components/sheet/SpellBook";
-import { useSpellLookups, useSpellPool } from "@/components/sheet/useSpellPool";
+import { useSpellLookups, useWiderSpellPool } from "@/components/sheet/useSpellPool";
 import { GameTerm } from "@/components/ui/GameTerm";
 import { cn } from "@/lib/cn";
 import { spellLevelOf } from "@/lib/srd/spell-lists";
@@ -125,6 +125,7 @@ function SpellsSection({
     racialCantrips,
     featSpells,
     spellSearchClass,
+    spellWider,
     spellStyle,
     spellbookAdvice,
   } = derived;
@@ -143,7 +144,8 @@ function SpellsSection({
   // See SpellBook: the chosen tab is announced after mount so the travelling
   // pill never lands on server-rendered markup before hydration.
   const mounted = useSyncExternalStore(noSubscribe, () => true, () => false);
-  const { pool, loading } = useSpellPool(spellSearchClass, maxSpellLevel);
+  // A patron's expanded spells and a Divine Soul's cleric list join it.
+  const { pool, loading } = useWiderSpellPool(spellSearchClass, maxSpellLevel, true, spellWider);
   // A chosen spell the class list lacks (an edited sheet, a pack spell)
   // still finds its level.
   const lookups = useSpellLookups([...cantrips, ...spells]);

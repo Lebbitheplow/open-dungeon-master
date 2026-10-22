@@ -8,7 +8,7 @@ import { readiedHolder } from "@/lib/dm/readied-release";
 import { martialAdvantageDice, surpriseAttackDice } from "@/lib/dm/monster-traits";
 import { tilesBetween } from "@/lib/dm/attack-spatial";
 import { incapacitatedBy } from "@/lib/dm/condition-logic";
-import { listEnemies } from "@/lib/db/encounters";
+import { listEnemies, patchEnemyConditions, type EncounterEnemy } from "@/lib/db/encounters";
 import { mirrorImageDecoy, sanctuaryRefusal } from "@/lib/dm/spell-defenses";
 import { enfeebledBlow, spellRetort, spendEnemyRiders } from "@/lib/dm/spell-retort";
 import { z } from "zod";
@@ -45,7 +45,9 @@ import { publishFx, tokenPosition } from "@/lib/dm/fx";
 import { hasTrait } from "@/lib/dm/monster-abilities";
 import { enemySwingOdds, hasFeatureNamed } from "@/lib/dm/enemy-swing-odds";
 import { openLastHit } from "@/lib/dm/last-hit";
-import { authoredAfterHit } from "@/lib/dm/authored-hooks";
+import { authoredAfterHit, authoredIncomingAttack, WARD_WITHSTOOD } from "@/lib/dm/authored-hooks";
+import { rollEnemySave } from "@/lib/dm/forced-save";
+import type { ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { releaseGrapplesOutOfReach } from "@/lib/dm/grapple";
 import { sanctuaryWard } from "@/lib/dm/enemy-conditions";
 import { naturesSanctuaryRefusal } from "@/lib/dm/srd-defenses";
@@ -237,6 +239,15 @@ export function handleEnemyAttack(
     spendEnemyAction(live, enemy.id);
   }
   saveEncounter(live);
+  // Among the Dead: an undead saves before it may attack this warlock, and on
+  // a failure the attack is lost (src/lib/dm/authored-hooks.ts).
+  const warded = authoredWardSave(campaign, turn, standing, target);
+  if (warded.lost) {
+    return { ok: true, attack: planned[0].name, target: target.name, swings: [], hit: false, note: warded.lost };
+  }
+  if (warded.note) {
+    notes.push(warded.note);
+  }
   const hitLog = openLastHit(campaign.id, target.id);
 
   // The routine executes in this ONE call, each swing its own to-hit and
@@ -412,6 +423,8 @@ export function handleEnemyAttack(
       ...(hasTrait(standing.stats, "magicWeapons") ? { magical: true } : {}),
       // Crits against a dying target count double death-save failures.
       ...(crit ? { crit: true } : {}),
+      // Emissary of Redemption holds nothing against a creature the paladin attacked.
+      ...(authored.spurned.length ? { exceptFeatures: authored.spurned } : {}),
       reason: `${enemy.displayName}'s ${attack.name}`,
     });
     totalDamage += dealt;
@@ -480,7 +493,7 @@ export function handleEnemyAttack(
     type: (closing?.attack ?? planned[0]).type,
     ranged: closing?.ranged ?? false,
   });
-  notes.push(...authoredAfterHit(campaign, { encounter, attacker: standing, target, dealt: totalDamage }));
+  notes.push(...authoredAfterHit(campaign, { encounter, attacker: standing, target, dealt: totalDamage, ranged: (lastSwing as { ranged: boolean } | null)?.ranged ?? false }));
 
   const names = [...new Set(planned.map((attack) => attack.name))];
   return {
@@ -532,4 +545,32 @@ function traitDice(
     dice.push(surprise);
   }
   return { dice, martial };
+}
+
+// Among the Dead (the Undying warlock): an undead that targets the warlock
+// with an attack first saves on Wisdom against their spell save DC. On a
+// failure the attack is lost; on a success the creature is immune for 24
+// hours.
+function authoredWardSave(
+  campaign: Campaign,
+  turn: DmTurn,
+  attacker: EncounterEnemy,
+  target: CharacterSheet,
+): { lost: string | null; note: string | null } {
+  const ward = authoredIncomingAttack({ campaignId: campaign.id, encounterId: "", attacker, target }).ward;
+  if (!ward) {
+    return { lost: null, note: null };
+  }
+  const save = rollEnemySave(campaign.id, attacker, ward.save as "wis", ward.dc, {
+    magical: true,
+    record: { turn, detail: `${attacker.displayName}: ${ward.save.toUpperCase()} save against ${ward.feature}` },
+  });
+  if (!save.success) {
+    return { lost: `${ward.feature}: ${attacker.displayName} fails its ${ward.save.toUpperCase()} save (DC ${ward.dc}) and cannot bring itself to attack ${target.name}; the attack is lost.`, note: null };
+  }
+  patchEnemyConditions(attacker.id, [...attacker.conditions.filter((entry) => textKey(entry) !== textKey(WARD_WITHSTOOD)), WARD_WITHSTOOD], {
+    ...(attacker.conditionMeta as ConditionMetaMap),
+    [WARD_WITHSTOOD]: { source: target.id, rounds: 14400 },
+  } as typeof attacker.conditionMeta);
+  return { lost: null, note: `${ward.feature}: ${attacker.displayName} makes its ${ward.save.toUpperCase()} save (DC ${ward.dc}) and is immune to it for 24 hours.` };
 }

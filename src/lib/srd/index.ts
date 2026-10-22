@@ -311,6 +311,10 @@ export function speedFor(
     if (entry.gate === "armor_or_shield" && (worn || breakdown.shieldName)) {
       continue;
     }
+    // Raging, and not in heavy armor (Totem Spirit: Elk).
+    if (entry.gate === "raging" && (!(source.conditions ?? []).some((name) => name.trim().toLowerCase() === "raging") || worn?.category === "heavy")) {
+      continue;
+    }
     bySource.set(entry.source, Math.max(bySource.get(entry.source) ?? 0, entry.amount));
   }
   // A feat whose name a class feature shares is read from sheet.feats alone

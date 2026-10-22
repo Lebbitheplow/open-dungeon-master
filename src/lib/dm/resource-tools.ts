@@ -16,7 +16,7 @@ import {
   wildShapeForms,
   wildShapeHours,
 } from "@/lib/srd/beast-forms";
-import { isUnlimited, matchResource, RAGING, resourceLevel, type ResourceDef } from "@/lib/srd/class-resources";
+import { isUnlimited, matchResource, RAGING, recoveringPrefix, resourceLevel, type ResourceDef } from "@/lib/srd/class-resources";
 import { effectiveMaxHp, incapacitatedBy, wearsHeavyArmor } from "@/lib/dm/condition-logic";
 import { classLevelFor, classListFor } from "@/lib/srd/multiclass";
 import { conditionEffectsFor } from "@/lib/srd/condition-effects";
@@ -255,6 +255,17 @@ export function payForUse(
   };
 }
 
+// The marker a spend leaves when its use returns only after a rolled number
+// of long rests: "<name> recovering (n)", counted down by each long rest.
+function recoveryMarker(campaign: Campaign, sheet: CharacterSheet, def: ResourceDef): { conditions: string[]; note: string } {
+  const rests = Math.max(1, rollHealing(campaign, sheet, `${def.displayName}: long rests until it returns`, def.recovers ?? "1"));
+  const prefix = recoveringPrefix(def.displayName);
+  return {
+    conditions: [...sheet.conditions.filter((entry) => !entry.toLowerCase().startsWith(prefix)), `${prefix} (${rests})`],
+    note: `${def.displayName} comes back after ${rests} long rest${rests === 1 ? "" : "s"}.`,
+  };
+}
+
 export function computeUseResource(
   campaign: Campaign,
   sheet: CharacterSheet,
@@ -363,6 +374,20 @@ export function computeUseResource(
       refused: "rules",
     };
   }
+  // A pool a single use may only dip into (Balm of the Summer Court: half the
+  // druid level of dice; Healing Light: the Charisma modifier).
+  if (def.perUse) {
+    const cap =
+      def.perUse === "half_level"
+        ? Math.max(1, Math.floor(resourceLevel(def, sheet) / 2))
+        : Math.max(1, computeSheetDerived(sheet).abilityMods.cha);
+    if (amount > cap) {
+      return {
+        error: `${def.displayName} spends at most ${cap} at a time for ${sheet.name} (${def.perUse === "half_level" ? "half their level" : "their Charisma modifier"}); ${amount} is more. Nothing was spent.`,
+        retry: true,
+      };
+    }
+  }
   const left = state.max - state.used;
   const payment = payForUse(sheet, def, state, amount);
   if ("error" in payment) {
@@ -376,10 +401,14 @@ export function computeUseResource(
     : unlimited
       ? sheet.resources
       : { ...sheet.resources, [def.id]: { max: state.max, used: state.used + amount } };
+  // A use that returns only after several long rests (Limited Wish): the
+  // marker the rest counts down (src/lib/dm/rest-logic.ts).
+  const recovering = def.recovers && !paid && !unlimited ? recoveryMarker(campaign, sheet, def) : null;
   const outcome: Outcome = {
-    patch: { resources: spent },
+    patch: { resources: spent, ...(recovering ? { conditions: recovering.conditions } : {}) },
     result: {
       ok: true,
+      ...(recovering ? { returns: recovering.note } : {}),
       resource: def.displayName,
       spent: paid ? `${paid.amount} ${paid.id.replace(/_/g, " ")} (no use was left)` : amount,
       left: unlimited ? "unlimited" : paid ? `0/${state.max}` : `${left - amount}/${state.max}`,
@@ -418,6 +447,17 @@ export function computeUseResource(
       outcome.healTarget = { characterId: target.id, amount: Math.max(1, total) };
       outcome.result.healingRolled = total;
       outcome.result.healed = `${total} HP to ${target.name}`;
+      // Balm of the Summer Court: a temporary hit point for each die, kept
+      // only when it beats what the creature already has.
+      const temp = (def.effect.tempPerDie ?? 0) * amount;
+      if (temp > target.tempHp) {
+        if (target.id === sheet.id) {
+          outcome.patch.tempHp = temp;
+        } else {
+          outcome.patchTarget = { characterId: target.id, patch: { tempHp: temp } };
+        }
+        outcome.result.tempHp = `${temp} temporary hit points to ${target.name}`;
+      }
       return outcome;
     }
     case "heal_target": {

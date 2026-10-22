@@ -70,6 +70,7 @@ import { antimagicProblem, silenceProblem } from "@/lib/dm/zone-rules";
 import { placeSpellZone } from "@/lib/dm/zone-cast";
 import { spellSaveDcFor } from "@/lib/srd";
 import { castTempHp } from "@/lib/dm/authored-spells";
+import { authoredSlotRefund } from "@/lib/srd/authored-effects-more";
 import { takeItemCast } from "@/lib/srd/item-cast-credit";
 import { castFromItem } from "@/lib/dm/item-casts";
 import { summonSlotProblem } from "@/lib/srd/summon-spells";
@@ -454,6 +455,17 @@ export function castSpell(
   }
   if (freeCast) {
     patch.resources = spendSignature(sheet.resources, freeCast);
+  }
+  // Expert Divination (School of Divination 6): a divination spell of 2nd
+  // level or higher cast with a slot gives back one spent slot of a lower
+  // level, 5th at most.
+  const refund =
+    slot.kind !== "none" && patch.spellcasting ? authoredSlotRefund(sheet, { school: spellSchoolFor(spell, authors), slotLevel }, patch.spellcasting.slots) : null;
+  if (refund && patch.spellcasting) {
+    const slots = patch.spellcasting.slots;
+    const row = slots[String(refund.level)];
+    patch.spellcasting = { ...patch.spellcasting, slots: { ...slots, [String(refund.level)]: { ...row, used: row.used - 1 } } };
+    result.slotRefund = `${refund.feature}: a spent level ${refund.level} slot comes back.`;
   }
   if (Object.keys(patch).length) {
     patchSheet(sheet.id, patch);

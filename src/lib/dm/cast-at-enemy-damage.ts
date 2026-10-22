@@ -105,7 +105,7 @@ export function landSpellDamage(input: {
       base.darkOnesBlessing = blessing;
     }
     // Touch of Death, Keeper of Souls on the kill (authored-hooks.ts).
-    const onKill = applied.dead && encounter ? authoredOnKill(campaign, encounter, enemy, sheet.id) : [];
+    const onKill = applied.dead && encounter ? authoredOnKill(campaign, encounter, enemy, sheet.id, false, { level: spellLevel, school: spellSchoolFor(spell, authors) }) : [];
     if (onKill.length) {
       base.subclassFeatures = onKill;
     }

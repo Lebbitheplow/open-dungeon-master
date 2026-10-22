@@ -36,6 +36,7 @@ import {
 } from "@/lib/dm/attack-onhit";
 import { storeBudget } from "@/lib/dm/turn-budget";
 import { rollAgainst } from "@/lib/roll-labels";
+import { markCritRange } from "@/lib/dm/attack-marks";
 
 // The parked roll's share of what rides the attack (src/lib/dm/pc-attack-plan.ts).
 function parkedExtras(plan: AttackPlan): Pick<ParkedAttack, "extras"> | null {
@@ -86,7 +87,9 @@ export function parkPcAttack(plan: AttackPlan, strike: Strike, toolCallId: strin
     critDamageExpression: critDamageExpression(profile.damageExpression, critExtraDice, strike.critOptions),
     damageType: profile.damageType,
     ...(context.autoCrit ? { autoCrit: true } : {}),
-    ...(riders.critRange < 20 && plan.weaponAttack ? { critRange: riders.critRange } : {}),
+    ...(Math.min(plan.weaponAttack ? riders.critRange : 20, markCritRange(plan.marks.applies)) < 20
+      ? { critRange: Math.min(plan.weaponAttack ? riders.critRange : 20, markCritRange(plan.marks.applies)) }
+      : {}),
     ...(strike.rerollBelow ? { rerollBelow: strike.rerollBelow } : {}),
     ...(strike.hasOnHit ? { onHit: strike.onHitSpends } : {}),
     ...(plan.options.nonlethal ? { nonlethal: true } : {}),

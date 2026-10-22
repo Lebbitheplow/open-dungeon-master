@@ -131,7 +131,7 @@
 
     { "k": "discipline", "n": "Breath of Winter", "d": "Spend 6 ki to cast cone of cold.", "req": "level 17" },
     { "k": "discipline", "n": "Clench of the North Wind", "d": "Spend 3 ki to cast hold person.", "req": "level 6" },
-    { "k": "discipline", "n": "Elemental Attunement", "d": "A minor elemental trick: snuff or light a flame, chill or warm an object, or shape a Medium mass of earth, fire, water or mist for a moment." },
+    { "k": "discipline", "n": "Elemental Attunement", "d": "As an action within 30 feet: a harmless sensory effect of an element, light or snuff a candle, torch or small campfire, chill or warm up to a pound of nonliving material for up to an hour, or shape earth, fire, water or mist that fits in a 1-foot cube into a crude form for a minute." },
     { "k": "discipline", "n": "Eternal Mountain Defense", "d": "Spend 5 ki to cast stoneskin on yourself.", "req": "level 17" },
     { "k": "discipline", "n": "Fangs of the Fire Snake", "d": "Spend 1 ki when you take the Attack action to add 10 feet of reach and fire damage to your unarmed strikes." },
     { "k": "discipline", "n": "Fist of Four Thunders", "d": "Spend 2 ki to cast thunderwave." },

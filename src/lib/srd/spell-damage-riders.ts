@@ -110,7 +110,7 @@ export function spellDamageRiders(
   }
   // The subclass features that add a die to the spell's damage.
   const mods = Object.fromEntries(Object.entries(sheet.abilities).map(([key, score]) => [key, mod(score)]));
-  const authored = authoredSpellDice(sheet, { damageType: spell.damageType }, mods);
+  const authored = authoredSpellDice(sheet, { damageType: spell.damageType, level: spell.level }, mods);
   riders.dice.push(...authored.dice);
   riders.notes.push(...authored.notes);
   return riders;

@@ -258,7 +258,7 @@ test("Intimidating Presence is an action card aimed at an enemy with the barbari
 
 test("the sheet's feature choices come from the authored layer, and a renamed feature reads as chosen", () => {
   const open = featureChoices(sheet({ class: "barbarian", level: 3, features: [feature("Totem Spirit")] }));
-  assert.deepEqual(open, [{ feature: "Totem Spirit", spend: "Totem Spirit", options: ["Bear", "Eagle", "Wolf"], chosen: null }]);
+  assert.deepEqual(open, [{ feature: "Totem Spirit", spend: "Totem Spirit", options: ["Bear", "Eagle", "Elk", "Tiger", "Wolf"], chosen: null }]);
   const chosen = featureChoices(sheet({ class: "barbarian", level: 3, features: [feature("Totem Spirit (Bear)")] }));
   assert.equal(chosen[0].chosen, "bear");
 });
