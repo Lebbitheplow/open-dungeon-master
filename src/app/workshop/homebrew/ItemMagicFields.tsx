@@ -4,7 +4,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { ContentPick } from "@/components/ui/ContentPick";
-import { CREATURE_TYPES } from "@/lib/bestiary/statblock";
+import { CREATURE_TYPES } from "@/lib/bestiary/creature-type";
 import { CLASS_WORDS, SKILL_IDS } from "@/lib/homebrew/item-magic-schema";
 import { CheckField, NumberField, SelectField, TextField, ToggleChips } from "@/app/workshop/homebrew/fields";
 import { DAMAGE_TYPES } from "@/app/workshop/homebrew/types";

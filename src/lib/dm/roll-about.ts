@@ -8,7 +8,7 @@
 // No I/O, so the console's forms, the tool schemas and the test scripts read
 // the same lists.
 
-import { normalizeCreatureType, type CreatureType } from "@/lib/bestiary/statblock";
+import { normalizeCreatureType, type CreatureType } from "@/lib/bestiary/creature-type";
 import { CONDITION_VALUES, DAMAGE_TYPE_VALUES } from "@/lib/dm/catalog-vocab";
 
 // The circumstances a check can be about, each read by the features named.

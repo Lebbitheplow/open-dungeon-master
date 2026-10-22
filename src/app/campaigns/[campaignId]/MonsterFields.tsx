@@ -14,7 +14,7 @@ import {
   type MonsterReadout,
 } from "@/lib/bestiary/monster-draft";
 import { CONDITIONS, DAMAGE_TYPES } from "@/lib/bestiary/kit";
-import { CREATURE_TYPES, creatureTypeOf } from "@/lib/bestiary/statblock";
+import { CREATURE_TYPES, creatureTypeOf } from "@/lib/bestiary/creature-type";
 import { SpeedPicker, TermPicker } from "@/app/campaigns/[campaignId]/MonsterKitFields";
 import { crLabel, type CrPart } from "@/lib/bestiary/derive-cr";
 import { Reveal } from "@/components/ui/Reveal";

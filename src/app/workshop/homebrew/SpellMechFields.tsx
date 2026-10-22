@@ -2,7 +2,7 @@
 
 import { SectionHead } from "@/components/ui/SectionHead";
 import { CONDITIONS } from "@/lib/bestiary/kit";
-import { CREATURE_TYPES } from "@/lib/bestiary/statblock";
+import { CREATURE_TYPES } from "@/lib/bestiary/creature-type";
 import { CheckField, NumberField, SelectField, TextField, ToggleChips } from "@/app/workshop/homebrew/fields";
 import { DAMAGE_TYPES } from "@/app/workshop/homebrew/types";
 import { CONDITION_BLURBS, glossaryFor } from "@/lib/help/terms";

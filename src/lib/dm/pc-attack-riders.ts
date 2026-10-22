@@ -16,7 +16,7 @@ import type { ManeuverPick } from "@/lib/dm/pc-attack-plan";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { publishPersisted } from "@/lib/events";
 import { isIncapacitated, removeConditions, type ConditionMeta } from "@/lib/dm/condition-logic";
-import { sizeRank } from "@/lib/bestiary/statblock";
+import { sizeRank } from "@/lib/bestiary/enemy-numbers";
 import { publishEncounter } from "@/lib/dm/enemy-damage";
 import { applyDmMutation } from "@/lib/dm/mutations";
 import { GRAPPLING_STRIKE, MANEUVERED, maneuverDieFor, maneuverUse, offSwingRefusal, type ManeuverUse } from "@/lib/dm/maneuver-rules";
