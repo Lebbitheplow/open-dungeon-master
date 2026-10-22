@@ -359,6 +359,7 @@
     "app/workshop/[workshopId]/SystemView.tsx#fallback": [["authoring",1,"workshop authoring (pickers, drafts, copied rows); every site read, none reads a carried item's row"]],
     "app/workshop/[workshopId]/TargetPartyBar.tsx#number": [["authoring",2,"workshop authoring"]],
     "app/workshop/[workshopId]/WorkshopHeader.tsx#whole-single": [["authoring",1,"workshop authoring; every site read"]],
+    "app/workshop/bestiary/AttackDetails.tsx#partial": [["key",1,"an attack's stored type list (\"piercing/fire\"), the first the hit's own"]],
     "app/workshop/bestiary/BlockActionFields.tsx#first": [["authoring",2,"workshop authoring (pickers, drafts, copied rows)"]],
     "app/workshop/bestiary/BlockActionFields.tsx#number": [["authoring",2,"workshop authoring"]],
     "app/workshop/bestiary/BorrowParts.tsx#partial": [["authoring",1,"workshop authoring (pickers, drafts, copied rows); every site read, none reads a carried item's row"]],
