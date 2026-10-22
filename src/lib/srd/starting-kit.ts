@@ -27,10 +27,8 @@ export type { ClassKit, KitItem, KitOption, KitSlot } from "@/lib/srd/starting-k
 // order, the item named for it.
 export type KitChoices = { options: number[]; picks: string[] };
 
-const lower = (value: string) => value.trim().toLowerCase();
-
 export function classKitFor(classId: string): ClassKit | null {
-  const id = lower(classId).replace(/-/g, "_");
+  const id = textKey(classId).replace(/ /g, "_");
   return CLASS_KITS[id] ?? GENRE_KITS[id] ?? null;
 }
 
@@ -82,11 +80,11 @@ function domainOf(subclass: string | undefined, list: string[]): boolean {
 // proficient)" option it lacks the training for.
 export function optionAllowed(option: KitOption, who: KitTraining): boolean {
   if (option.requires === "heavy-armor") {
-    return who.armor.some((term) => lower(term).includes("heavy")) || domainOf(who.subclass, HEAVY_DOMAINS);
+    return who.armor.some((term) => textKey(term).includes("heavy")) || domainOf(who.subclass, HEAVY_DOMAINS);
   }
   if (option.requires === "warhammer") {
     return (
-      who.weapons.some((term) => /martial|warhammer/.test(lower(term))) ||
+      who.weapons.some((term) => /martial|warhammer/.test(textKey(term))) ||
       domainOf(who.subclass, MARTIAL_DOMAINS)
     );
   }
@@ -256,6 +254,6 @@ export function removedAfterKitChange(
   if (line < 0) {
     return removed;
   }
-  const restored = new Set([...kitLineNames(kit, before, line), ...kitLineNames(kit, after, line)].map(lower));
-  return removed.filter((name) => !restored.has(lower(name)));
+  const restored = new Set([...kitLineNames(kit, before, line), ...kitLineNames(kit, after, line)].map(textKey));
+  return removed.filter((name) => !restored.has(textKey(name)));
 }

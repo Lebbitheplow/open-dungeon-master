@@ -183,6 +183,43 @@ await test("An enemy that takes a dropped weapon holds it until it falls; then i
   assert.ok(row(fighter, "Longsword"));
 });
 
+await test("What an enemy lets fall is asked what it is, as grant_item asks, at every table; picked up, it is the row its srdName names", async () => {
+  const { dispatchAdjudication } = await import("../src/lib/dm/invoke-dispatch.ts");
+  const { createDmTurn } = await import("../src/lib/db/dm-turns.ts");
+  const { listSheets } = await import("../src/lib/db/sheets.ts");
+  const { matchWeapon } = await import("../src/lib/srd/weapons.ts");
+  const ai = (args) => {
+    const sheets = listSheets(world.campaignId);
+    return dispatchAdjudication("handle_item", JSON.stringify(args), {
+      campaign: world.campaign(), turn: createDmTurn(world.campaignId, []), sheets, sheetsById: new Map(sheets.map((sheet) => [sheet.id, sheet])), realDiceUserIds: new Set(),
+    });
+  };
+  for (const name of ["Scimitarra", "Cimeterre", "Cimitarra", "Krummsäbel", "Curved blade"]) {
+    await freshFight();
+    const [enemy] = world.enemies();
+    kit.place(enemy.id, 3, 2);
+    const asked = await ai({ enemyId: enemy.id, action: "drop", item: name });
+    assert.equal(asked.retry, true, `${name}: dropped without asking what it is`);
+    assert.match(asked.error, /srdName/);
+    assert.equal(listDroppedItems(world.campaignId).length, 0);
+    const dropped = await ai({ enemyId: enemy.id, action: "drop", item: name, srdName: "Scimitar" });
+    assert.equal(dropped.ok, true, dropped.error);
+    assert.equal(listDroppedItems(world.campaignId)[0].item.srdName, "Scimitar");
+    const taken = await handle({ action: "pick_up", item: name });
+    assert.equal(taken.ok, true, taken.error);
+    assert.equal(matchWeapon(row(fighter, name))?.name, "Scimitar", name);
+  }
+  // handle_item names no spell: a scroll that falls is granted as grant_item grants one.
+  for (const name of ["Pergamena", "Parchemin", "Pergamino", "Schriftrolle", "Scroll"]) {
+    await freshFight();
+    const [enemy] = world.enemies();
+    const asked = await ai({ enemyId: enemy.id, action: "drop", item: name, srdName: "Spell Scroll" });
+    assert.equal(asked.retry, true, `${name}: a scroll dropped with no spell`);
+    assert.match(asked.error, /grant it with grant_item, naming the spell/);
+    assert.equal(listDroppedItems(world.campaignId).length, 0);
+  }
+});
+
 await test("A gear card is free to send with the action spent: the tool charges what the move costs, and a drop costs nothing", async () => {
   await freshFight();
   await handle({ action: "equip", item: "Shield" });

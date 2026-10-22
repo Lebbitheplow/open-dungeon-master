@@ -95,7 +95,7 @@ export function setConcentration(
 
 // The line a cast's result carries for the concentration it ended.
 export function droppedLine(displaced: string, spell: string): string {
-  return displaced.trim().toLowerCase() === spell.trim().toLowerCase()
+  return textKey(displaced) === textKey(spell)
     ? `The earlier casting of ${spell} ended when it was cast again; its effects are gone.`
     : `${displaced} ended when ${spell} was cast; its effects are gone.`;
 }

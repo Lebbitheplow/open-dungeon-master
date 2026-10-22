@@ -116,22 +116,40 @@ await test("an unknown name is kept as a custom condition and carries no SRD mec
   assert.equal(kit.d20s(swing.dice), 1);
 });
 
-if (world.hasPack) {
-  // The near misses a model writes, and the SRD name each one means.
-  const SYNONYMS = {
-    poison: "poisoned", blind: "blinded", frighten: "frightened", charm: "charmed",
-    deaf: "deafened", grapple: "grappled", restrain: "restrained", stun: "stunned",
-    "Poisoned by the dart": "poisoned", "paralyzed (hold person)": "paralyzed",
-  };
-  for (const [written, stored] of Object.entries(SYNONYMS)) {
-    await test(`"${written}" is stored as ${stored}`, async () => {
-      kit.reset(hero.id);
-      const out = await set({ condition: written });
-      assert.equal(out.ok, true, out.error);
-      assert.deepEqual(held(), [stored]);
-    });
-  }
+// A condition is its whole name, in any case, or the name with a bracket
+// note.
+const WHOLE = { POISONED: "poisoned", "Blinded": "blinded", "paralyzed (hold person)": "paralyzed", "Frightened (dragon)": "frightened" };
+for (const [written, stored] of Object.entries(WHOLE)) {
+  await test(`"${written}" is stored as ${stored}`, async () => {
+    kit.reset(hero.id);
+    const out = await set({ condition: written });
+    assert.equal(out.ok, true, out.error);
+    assert.deepEqual(held(), [stored]);
+  });
 }
+
+// A word that only begins an SRD name is no condition of it: it is kept as
+// the story condition it says it is, and the result says so, so the model
+// resends the one it meant (the tool's description names the SRD's).
+for (const written of ["poison", "blind", "frighten", "stun"]) {
+  await test(`"${written}" is a story condition, never guessed to be an SRD one`, async () => {
+    kit.reset(hero.id);
+    const out = await set({ condition: written });
+    assert.equal(out.ok, true, out.error);
+    assert.deepEqual(held(), [written]);
+    assert.match(JSON.stringify(out), /is kept as a story condition: no rule the server knows applies to it\./);
+  });
+}
+
+await test("a condition with its source written into the name is refused: the source has its own field", async () => {
+  kit.reset(hero.id);
+  for (const written of ["Poisoned by the dart", "frightened of the dragon"]) {
+    const out = await set({ condition: written });
+    assert.equal(out.retry, true, JSON.stringify(out));
+    assert.match(out.error, /is no condition's name\. If it is the condition, send condition "(poisoned|frightened)" and who caused it in sourceEnemyId or sourceCharacterId/);
+  }
+  assert.deepEqual(held(), []);
+});
 
 await test("several conditions sit side by side and clear one at a time", async () => {
   kit.reset(hero.id);
@@ -269,7 +287,7 @@ await test("an enemy's timed condition and its save run on the same clock", asyn
   kit.resetEnemy(goblin.id);
   const timed = await enemySet(goblin.id, { condition: "Blinded", rounds: 1 });
   assert.equal(timed.ok, true, timed.error);
-  const saved = await enemySet(goblin.id, { condition: "restrain", saveAbility: "str", saveDc: 30 });
+  const saved = await enemySet(goblin.id, { condition: "Restrained", saveAbility: "str", saveDc: 30 });
   assert.equal(saved.ok, true, saved.error);
   if (world.hasPack) {
     assert.deepEqual(kit.enemy(goblin.id).conditions, ["blinded", "restrained"]);
@@ -392,12 +410,16 @@ await test("A condition the engine reports as applied is on the sheet, with its 
   kit.reset(hero.id);
 });
 
-await test("Exhaustion is one track of six levels, whatever word the caller used for it.", async () => {
+await test("Exhaustion is one track of six levels, set by its name; another word is no level of it.", async () => {
   kit.reset(hero.id);
-  const out = await set({ condition: "exhausted" });
+  const out = await set({ condition: "Exhaustion" });
   assert.equal(out.ok, true, out.error);
   const level = world.sheet(hero.id).exhaustion;
-  assert.equal(level, 1, `'exhausted' left the exhaustion level at ${level}`);
+  assert.equal(level, 1, `'Exhaustion' left the exhaustion level at ${level}`);
+  kit.reset(hero.id);
+  const word = await set({ condition: "exhausted" });
+  assert.equal(world.sheet(hero.id).exhaustion, 0, "'exhausted' raised the exhaustion track");
+  assert.match(JSON.stringify(word), /story condition/);
 });
 kit.reset(hero.id);
 

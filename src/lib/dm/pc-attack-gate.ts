@@ -9,7 +9,7 @@ import type { Campaign } from "@/lib/db/campaigns";
 import type { Encounter, EncounterEnemy } from "@/lib/db/encounters";
 import { actingCombatantId, canAct } from "@/lib/dm/can-act";
 import type { ConditionMetaMap } from "@/lib/dm/condition-logic";
-import { resolveEnemyRef } from "@/lib/dm/enemy-damage";
+import { resolveEnemyRef, unknownEnemyRef } from "@/lib/dm/enemy-damage";
 import { READIED_WORDS, RELEASE_TOOLS, readiedHeld } from "@/lib/dm/readied-kinds";
 import type { PcAttackArgs } from "@/lib/dm/pc-attack";
 import { inspirationProblem, strokeOfLuckProblem } from "@/lib/dm/attack-features";
@@ -81,7 +81,7 @@ export function gatePcAttack(input: {
   }
   const enemy = resolveEnemyRef(encounter.id, args.targetEnemyId);
   if (!enemy) {
-    return { refused: { error: "Unknown targetEnemyId; use one from GAME STATE.", retry: true } };
+    return { refused: unknownEnemyRef(encounter.id, "targetEnemyId", args.targetEnemyId) };
   }
   if (enemy.status !== "alive") {
     return { refused: { error: `${enemy.displayName} is already ${enemy.status}. Ask the player which living enemy in GAME STATE to target instead.`, retry: true } };

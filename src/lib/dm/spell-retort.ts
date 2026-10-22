@@ -23,6 +23,8 @@ import { rollEnemySave } from "@/lib/dm/forced-save";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { rollCard, sheetAttacker } from "@/lib/dm/roll-card";
 import { rollAgainst } from "@/lib/roll-labels";
+import { isConditionNamed, nameChoice } from "@/lib/srd/feature-names";
+import { textKey } from "@/lib/language/text-logic";
 
 // The riders of the attacker's next swing, with what this one spent taken
 // off the creature (the spent condition leaves its row).
@@ -96,11 +98,11 @@ export function spellRetort(
     return null;
   }
   const lines: string[] = [];
-  const shield = target.conditions.find((entry) => entry.toLowerCase().startsWith("fire shield"));
+  const shield = target.conditions.find((entry) => isConditionNamed(entry, "fire shield"));
   if (shield && withinFive) {
     // The warm shield resists cold and burns; the chill shield resists fire
     // and freezes.
-    const type = /\(fire\)/i.test(shield) ? "cold" : "fire";
+    const type = textKey(nameChoice(shield) ?? "") === "fire" ? "cold" : "fire";
     const live = getEnemy(attacker.id);
     if (live?.status === "alive") {
       // The shield's bearer deals it.

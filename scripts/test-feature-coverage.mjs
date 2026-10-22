@@ -88,6 +88,7 @@ const ACKNOWLEDGED = new Set([
 // entry cannot outlive the code that enforces it.
 const ENFORCED_ELSEWHERE = new Map([
   ["Aura of Courage", "src/lib/srd/trait-rules.ts"],
+  ["Wild Shape Improvement", "src/lib/srd/beast-forms.ts"],
   ["Aura of Devotion", "src/lib/srd/trait-rules.ts"],
   ["Mindless Rage", "src/lib/srd/trait-rules.ts"],
   ["Purity of Body", "src/lib/srd/trait-rules.ts"],

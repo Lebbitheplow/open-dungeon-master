@@ -35,7 +35,7 @@ import { publishFx, tokenPosition } from "@/lib/dm/fx";
 import { dismissGuestCompanions } from "@/lib/dm/companion-tools";
 import { followCombatAmbience } from "@/lib/dm/ambience-tools";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import type { ToolResult } from "@/lib/dm/tool-errors";
+import { unknownRef, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
 
 // The single server-side path for damage landing on an enemy. Used by the
@@ -67,6 +67,13 @@ export function resolveEnemyRef(encounterId: string, ref: string): EncounterEnem
   );
 }
 
+// The refusal of an enemy ref resolveEnemyRef found nothing for, listing the
+// enemies still standing in the fight.
+export function unknownEnemyRef(encounterId: string, field: string, ref: string | undefined, tail = ""): ToolError {
+  const living = listEnemies(encounterId).filter((enemy) => enemy.status === "alive");
+  return unknownRef(field, ref, living.map((enemy) => ({ id: enemy.id, name: enemy.displayName })), tail);
+}
+
 export function finishEncounter(
   campaign: Campaign,
   turn: DmTurn,
@@ -95,8 +102,8 @@ export function finishEncounter(
   // (PHB). Only ever non-empty when the `ammunition` variant rule is on, so
   // a table that never asked for it pays nothing here.
   const ammoRecovered: Record<string, number> = {};
-  for (const [key, spent] of Object.entries(encounter.ammoSpent)) {
-    const back = recoveredAmmo(spent);
+  for (const [key, entry] of Object.entries(encounter.ammoSpent)) {
+    const back = recoveredAmmo(typeof entry === "object" ? entry.spent : entry);
     if (back <= 0) {
       continue;
     }
@@ -108,10 +115,12 @@ export function finishEncounter(
       continue;
     }
     const index = owner.equipment.findIndex((item) => item.name === itemName);
+    // A spent-out quiver comes back as the line it was (an Italian "Frecce"
+    // listed as Arrows stays arrows).
     const equipment =
       index >= 0
         ? withAmmoCount(owner.equipment, index, ammoCount(owner.equipment[index]) + back)
-        : [...owner.equipment, { name: itemName, qty: back }];
+        : withAmmoCount([...owner.equipment, typeof entry === "object" ? entry.line : { name: itemName, qty: back }], owner.equipment.length, back);
     patchSheet(sheetId, { equipment });
     ammoRecovered[`${owner.name}: ${itemName}`] = back;
   }

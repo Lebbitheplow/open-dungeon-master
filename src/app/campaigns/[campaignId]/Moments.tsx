@@ -7,8 +7,9 @@ import { GameIcon } from "@/components/ui/GameIcon";
 import type { AuditEntry, CampaignLocation } from "@/app/campaigns/[campaignId]/useCampaignStream";
 import { effectiveMaxHp } from "@/lib/dm/condition-logic";
 import { prefersReducedMotion, useLowEffects } from "@/lib/effects-mode";
-import type { CharacterSheet } from "@/lib/schemas/sheet";
-import { magicItemNamed } from "@/lib/srd/magic-items";
+import type { CharacterSheet, EquipmentItem } from "@/lib/schemas/sheet";
+import { magicItemBonus } from "@/lib/srd/item-row";
+import { matchMagicItem } from "@/lib/srd/magic-items";
 import { Face, useEscapeToSkip } from "@/app/campaigns/[campaignId]/moment-parts";
 
 // The table's set pieces (docs/visual-overhaul-plan.md 8c.6): the level-up
@@ -142,14 +143,16 @@ export function RestMoment({ auditLog, sheets }: { auditLog: AuditEntry[]; sheet
 
 const LOOT_MS = 3600;
 
-type Gain = { name: string; qty: number };
+// The line that grew, by its own name, and by how much.
+type Gain = { name: string; qty: number; item: EquipmentItem };
 
-// How grand the reveal is. The engine keeps no rarity, so the name decides:
-// a +2 or +3 is epic, any other known magic item or a +1 is rare, and the
-// rest is honest gear.
-function lootTier(name: string): "common" | "rare" | "epic" {
-  if (/\+[23]\b/.test(name)) return "epic";
-  if (/\+1\b/.test(name) || magicItemNamed(name) !== null) return "rare";
+// How grand the reveal is. The engine keeps no rarity, so the item decides:
+// a +2 or +3 is epic, any other magic item its row names or a +1 is rare,
+// and the rest is honest gear.
+function lootTier(item: EquipmentItem): "common" | "rare" | "epic" {
+  const bonus = magicItemBonus(item.name);
+  if (bonus >= 2) return "epic";
+  if (bonus === 1 || matchMagicItem(item) !== null) return "rare";
   return "common";
 }
 
@@ -177,7 +180,7 @@ export function LootMoment({ sheet }: { sheet: CharacterSheet | null | undefined
       const gains: Gain[] = [];
       for (const [name, qty] of pack) {
         const before = known.pack.get(name) ?? 0;
-        if (qty > before) gains.push({ name, qty: qty - before });
+        if (qty > before) gains.push({ name, qty: qty - before, item: sheet.equipment.find((line) => line.name === name)! });
       }
       if (gains.length) setQueue((waiting) => [...waiting, ...gains].slice(0, 6));
     }
@@ -196,7 +199,7 @@ export function LootMoment({ sheet }: { sheet: CharacterSheet | null | undefined
   if (!current) {
     return null;
   }
-  const tier = lootTier(current.name);
+  const tier = lootTier(current.item);
   return (
     <div className="moment-loot" role="status" data-tier={tier} onClick={() => setQueue((waiting) => waiting.slice(1))}>
       <div key={current.name} className="moment-loot-card">

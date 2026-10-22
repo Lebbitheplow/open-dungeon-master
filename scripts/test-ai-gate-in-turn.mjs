@@ -72,6 +72,8 @@ await test("A paralysis with no save is refused; with one, the server rolls it a
   const conditions = () => world.sheet(kara.id).conditions.map((entry) => entry.toLowerCase());
   const bare = await turnWith(call("set_condition", { characterId: kara.id, condition: "paralyzed", reason: "the ghoul's touch" }));
   assert.match(bare.error ?? "", /cannot be made paralyzed by narration alone/);
+  // A numb arm is no paralysis: the refusal names the story route too.
+  assert.match(bare.error ?? "", /An effect on one limb, or on the story alone, is a story condition: send it named without the word "paralyzed"\./);
   assert.ok(!conditions().includes("paralyzed"), "a paralysis landed with no save");
 
   world.dice(2);

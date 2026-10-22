@@ -15,6 +15,7 @@ import { ABILITIES } from "@/lib/schemas/sheet";
 import { formatModifier, SRD_SKILLS } from "@/lib/srd";
 import { wearingIsExplicit } from "@/lib/srd/armor";
 import { oneOfKind, wornButIdle } from "@/lib/srd/wear-slots";
+import { rowName, srdNameWithBonus } from "@/lib/srd/item-row";
 
 // The pieces of the character sheet (docs/visual-overhaul-plan.md 8b.5), one
 // implementation drawn by both the session's sheet dialog and the character
@@ -328,7 +329,9 @@ export function EquipmentChips({
           ]
             .filter(Boolean)
             .join(", ") || undefined,
-        reference: { kind: "items", slug: contentSlug(item.name), name: item.name },
+        // The card is the row's (src/lib/srd/item-row.ts), with the bonus the
+        // item's own name declares.
+        reference: { kind: "items", slug: contentSlug(rowName(item)), name: srdNameWithBonus(item) },
       }))}
     />
   );

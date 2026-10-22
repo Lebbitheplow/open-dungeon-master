@@ -15,8 +15,10 @@
 //
 // A reaction that answers a hit on someone else is judged as the reactor is
 // now: the "as before" reading is only for a hit on the reactor themselves.
-// Pure: no imports beyond types, so every tool and the tests read one table.
+// Pure: no imports beyond types and the name helpers, so every tool and the
+// tests read one table.
 import type { ReactionDoes } from "@/lib/srd/authored-effects-types";
+import { isNamed } from "@/lib/srd/feature-names";
 
 export type ReactionTiming = "answers" | "at_zero" | "after";
 
@@ -56,14 +58,13 @@ const ANSWERS = [
   "ice pick",
 ];
 
-const normal = (name: string) => name.trim().toLowerCase().replace(/[’`]/g, "'");
-
+// By the reaction's whole name (src/lib/srd/feature-names.ts): Shield of
+// Faith is no Shield.
 export function reactionTimingOf(name: string): ReactionTiming {
-  const key = normal(name);
-  if (AT_ZERO.some((entry) => key === entry || key.startsWith(`${entry} `))) {
+  if (isNamed(name, ...AT_ZERO)) {
     return "at_zero";
   }
-  if (ANSWERS.some((entry) => key === entry || key.startsWith(`${entry} `) || key.startsWith(`${entry}:`))) {
+  if (isNamed(name, ...ANSWERS)) {
     return "answers";
   }
   return "after";

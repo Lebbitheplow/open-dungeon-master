@@ -260,8 +260,6 @@ export type AuthoredSpell = {
 
 const AUTHORED = (authoredSpellsJson as unknown as { spells: AuthoredSpell[] }).spells;
 
-const normalize = (name: string) => name.trim().toLowerCase().replace(/\s+/g, " ");
-
 const AUTHORED_BY_NAME = new Map(AUTHORED.map((row) => [textKey(row.name), row] as const));
 
 export function authoredSpell(name: string): AuthoredSpell | null {
@@ -330,7 +328,7 @@ export function bundledSpellFacts(name: string): SpellFacts | null {
     .split(",")
     .map((entry) => entry.trim().toLowerCase())
     .filter(Boolean);
-  const aliases = (listed?.a ?? []).map(normalize);
+  const aliases = (listed?.a ?? []).map(textKey);
   if (authored) {
     return {
       ...factsFromRow({

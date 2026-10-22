@@ -169,7 +169,7 @@ export type AbilityHolder = {
 };
 
 // The block's ability by name: the parsed specials first, then the trait
-// lines. Matched on the name without its tags, whole or as a prefix.
+// lines. Matched on the whole name without its tags.
 export function findMonsterAbility(stats: AbilityHolder, wanted: string): MonsterAbility | null {
   const key = abilityKey(wanted);
   if (!key) {
@@ -179,11 +179,7 @@ export function findMonsterAbility(stats: AbilityHolder, wanted: string): Monste
     ...(stats.specials ?? []),
     ...(stats.traits ?? []).map(abilityFromLine).filter((entry): entry is MonsterAbility => entry !== null),
   ];
-  return (
-    candidates.find((entry) => abilityKey(entry.name) === key) ??
-    candidates.find((entry) => abilityKey(entry.name).startsWith(key) || key.startsWith(abilityKey(entry.name))) ??
-    null
-  );
+  return candidates.find((entry) => abilityKey(entry.name) === key) ?? null;
 }
 
 // The names a block's abilities go by, for a refusal that says what it has.

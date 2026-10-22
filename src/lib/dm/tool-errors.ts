@@ -22,6 +22,7 @@
 // scripts/test-check-order.mjs holds every family to it.
 
 import type { ZodError } from "zod";
+import { textKey } from "../language/text-logic.ts";
 
 export type ToolError = { error: string; retry: true } | { error: string; refused: "rules" | "limit" };
 
@@ -44,4 +45,44 @@ export function toolError(refusal: ToolError): ToolError {
 export function invalidArguments(needs: string, error: ZodError): ToolError {
   const fields = error.issues.map((issue) => `${issue.path.join(".") || "arguments"}: ${issue.message}`);
   return { error: `${needs} (${fields.join("; ")})`, retry: true };
+}
+
+// A name that is no record's whole name, refused with the records there are
+// (`subject` reads up to the name: 'The goblin has no attack called'), so the
+// model resends one of them or asks the player, and the server never takes
+// the nearest one in its place.
+export function noneNamed(subject: string, name: string, options: readonly string[]): ToolError {
+  const listed = [...new Set(options)];
+  return {
+    error: `${subject} "${name}". ${listed.length ? `Use one of: ${listed.join(", ")}.` : "There is none to use."}`,
+    retry: true,
+  };
+}
+
+// An id that is no enemy of the fight or no character of the party, refused
+// with the ones there are by name and id: a bare "use one from GAME STATE"
+// sent the model back to search for it, or to give the attack up.
+export function unknownRef(field: string, ref: string | undefined, records: readonly { id: string; name: string }[], tail = ""): ToolError {
+  const refused = noneNamed(`Unknown ${field}`, ref ?? "", records.map((record) => `${record.name} (${record.id})`));
+  return tail ? { ...refused, error: `${refused.error} ${tail}` } : refused;
+}
+
+// The records whose name holds the word a refused name was, for its
+// refusal: "spider" is no Giant Spider, but the refusal names it.
+export function holdingHint(name: string, holding: readonly string[]): string {
+  return holding.length ? ` Named with "${name.trim()}": ${[...new Set(holding)].join(", ")}.` : "";
+}
+
+// The option a call names whole in its variant, or the refusal listing them:
+// never the first, nor the one whose name the text holds. `owner` is whose
+// options they are ("Raging Storm").
+export function namedOption(owner: string, variant: string | undefined, options: readonly string[]): string | ToolError {
+  const wanted = textKey(variant ?? "");
+  const found = options.find((option) => textKey(option) === wanted);
+  if (found !== undefined) {
+    return found;
+  }
+  return wanted
+    ? noneNamed(`${owner} has no option called`, (variant ?? "").trim(), options)
+    : { error: `${owner} needs a variant: ${options.join(" or ")}. Ask the player which, unless they named one. Nothing was spent.`, retry: true };
 }

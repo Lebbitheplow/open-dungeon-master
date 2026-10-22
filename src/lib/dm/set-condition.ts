@@ -14,6 +14,7 @@ import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
 import { insertSheetAudit } from "@/lib/db/sheet-audit";
 import { insertCharacterEvent } from "@/lib/db/character-events";
 import { listConditions } from "@/lib/content";
+import { CONDITIONS } from "@/lib/bestiary/kit";
 import { publishPersisted } from "@/lib/events";
 import { planConditionFx } from "@/lib/battlemap/fx-plan";
 import { publishFx, tokenPosition } from "@/lib/dm/fx";
@@ -36,28 +37,57 @@ import { awardInspirationCounter, heldInspiration } from "@/lib/dm/roll-riders";
 import { featureConditionImmunities, sourcedConditionImmunity } from "@/lib/srd/trait-rules";
 import { conditionGrantedImmunity } from "@/lib/srd/condition-effect-queries";
 import type { CharacterSheet, FullPatchSheetInput } from "@/lib/schemas/sheet";
-import type { ToolResult } from "@/lib/dm/tool-errors";
+import type { ToolError, ToolResult } from "@/lib/dm/tool-errors";
+import { containsPhrase } from "@/lib/language/text-logic";
+import { isConditionNamed } from "@/lib/srd/feature-names";
+import { conditionEffectsFor } from "@/lib/srd/condition-effects";
 
 // A sheet holds this many conditions at once (the stored list's own cap).
 export const MAX_CONDITIONS = 15;
 
-// Conditions are stored lowercase. The model's wording drifts ("poison",
-// "Poisoned by the dart"), so set and clear both map through the SRD names;
-// unmatched strings stay as-is because custom story conditions are legal.
+// The SRD's conditions, and the content's own when the pack is there.
+function knownConditions(): string[] {
+  return [...new Set([...CONDITIONS, ...listConditions({ limit: 50 }).map((entry) => entry.name.toLowerCase())])];
+}
+
+// Conditions are stored lowercase. A name is an SRD condition when it is one
+// whole, or one with a bracket note ("Frightened (dragon)"), by
+// src/lib/srd/feature-names.ts; any other name stays as written, because
+// custom story conditions are legal (conditionNameRefusal turns away the
+// one that only holds a condition among other words).
 export function canonicalCondition(raw: string): string {
   const cleaned = raw.trim().toLowerCase().slice(0, 40);
-  if (!cleaned) {
-    return cleaned;
+  return knownConditions().find((name) => isConditionNamed(cleaned, name)) ?? cleaned;
+}
+
+// A condition no rule knows is the table's own story condition: legal, and
+// said so, so that a misspelt SRD name ("poison") is resent, not kept. The
+// SRD's names are in the tool's description: listed here again, they drew a
+// second call for the SRD condition beside a story one in live runs.
+function storyConditionNote(condition: string): { note?: string } {
+  const known = knownConditions();
+  if (known.includes(condition) || conditionEffectsFor(condition)) {
+    return {};
   }
-  const known = listConditions({ limit: 50 }).map((entry) => entry.name.toLowerCase());
-  if (known.includes(cleaned)) {
-    return cleaned;
+  return { note: `"${condition}" is kept as a story condition: no rule the server knows applies to it.` };
+}
+
+// "frightened of the dragon" is no condition, and no story condition either:
+// the condition is "frightened" and its source has a field of its own. A
+// story condition that holds a condition's word ("paralyzed arm") may be
+// meant as one, and is renamed rather than made the condition.
+export function conditionNameRefusal(raw: string): ToolError | null {
+  const known = knownConditions();
+  if (known.some((name) => isConditionNamed(raw, name))) {
+    return null;
   }
-  const prefix = known.find((name) => name.startsWith(cleaned) || cleaned.startsWith(name));
-  if (prefix) {
-    return prefix;
-  }
-  return known.find((name) => cleaned.includes(name)) ?? cleaned;
+  const held = known.filter((name) => containsPhrase(raw, name));
+  return held.length
+    ? {
+        error: `"${raw.trim()}" is no condition's name. If it is the condition, send condition "${held.join('" or "')}" and who caused it in sourceEnemyId or sourceCharacterId; if it is a story condition no rule applies to, send it again named without the word "${held.join('" or "')}".`,
+        retry: true,
+      }
+    : null;
 }
 
 function audit(
@@ -273,7 +303,8 @@ export function handleSetCondition(
     return awardInspiration(campaign, turnId, sheet, reason);
   }
   // Exhaustion is a leveled track, not a stackable condition: each set
-  // raises it one level (6 = death), whatever word the caller used for it.
+  // raises a character one level (6 = death), "exhaustion" or "exhaustion
+  // N" alike; set_enemy_condition, whose call carries the level, sets it.
   if (namesExhaustion(raw)) {
     return raiseExhaustion(campaign, turnId, sheet, reason);
   }
@@ -281,8 +312,9 @@ export function handleSetCondition(
   if (!normalized) {
     return { error: "set_condition needs a condition name.", retry: true };
   }
-  if (normalized.startsWith("exhaustion")) {
-    return raiseExhaustion(campaign, turnId, sheet, reason);
+  const misnamed = conditionNameRefusal(raw);
+  if (misnamed) {
+    return misnamed;
   }
   if (sheet.deathSaves?.dead) {
     return { error: `${sheet.name} is dead and takes no new conditions.`, retry: true };
@@ -392,6 +424,7 @@ export function handleSetCondition(
   return {
     ok: true,
     condition: normalized,
+    ...storyConditionNote(normalized),
     ...(rounds ? { duration: `${describeConditionDuration(rounds)}, expires automatically` } : {}),
     ...(saveEnds
       ? {

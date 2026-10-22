@@ -22,10 +22,11 @@ import { exhaustionPatch } from "@/lib/dm/vitals-logic";
 import { afflictionConditionsFor } from "@/lib/dm/afflictions";
 import type { CharacterSheet, FullPatchSheetInput } from "@/lib/schemas/sheet";
 import type { ToolResult } from "@/lib/dm/tool-errors";
+import { isConditionNamed } from "@/lib/srd/feature-names";
 
 type Cast = (args: Record<string, unknown>) => ToolResult;
 
-const isCurse = (name: string) => name.trim().toLowerCase().startsWith("cursed");
+const isCurse = (name: string) => isConditionNamed(name, "cursed");
 
 // What the spell would end on this sheet: the conditions, and whether a
 // level of exhaustion goes. Empty when there is nothing it can end.

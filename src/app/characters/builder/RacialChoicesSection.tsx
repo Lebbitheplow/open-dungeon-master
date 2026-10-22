@@ -19,6 +19,7 @@ import { judgeEntry, useFeatJudge } from "./featPrereqs";
 import { racialFeatCount } from "@/lib/srd/race-id";
 import { DRACONIC_ANCESTRIES, takesDraconicAncestry } from "@/lib/srd/racial-grants";
 import { Chip } from "./steps/shared";
+import { featChoice } from "@/lib/schemas/sheet";
 
 const ABILITY_NAMES: Record<Ability, string> = {
   str: "Strength",
@@ -312,7 +313,7 @@ export function RacialChoicesSection({
                   feat={feat}
                   desc={featDescOf?.(feat)}
                   spec={featSpecOf(feat)}
-                  picks={featChoices?.[feat.trim().toLowerCase()]}
+                  picks={featChoice(featChoices, feat)}
                   known={known}
                   onChange={(picks) => onFeatPicks(feat, picks)}
                 />

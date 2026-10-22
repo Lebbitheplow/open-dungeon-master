@@ -6,7 +6,7 @@ import { describeExtras, formatRoster } from "@/lib/dm/encounter-template-logic"
 import { applyTemplateExtras, applyTemplateMap } from "@/lib/dm/template-apply";
 import type { ToolDef } from "@/lib/dm/encounter-tool-defs";
 import type { ToolResult } from "@/lib/dm/tool-errors";
-import { textKey } from "@/lib/language/text-logic";
+import { findNamed } from "@/lib/language/text-logic";
 
 // The prepared fights, offered to the AI storyteller (#154).
 //
@@ -103,16 +103,7 @@ export function preparedFightsBlock(campaign: Campaign): string {
 }
 
 function findTemplate(campaignId: string, name: string): EncounterTemplate | null {
-  const wanted = textKey(name);
-  if (!wanted) {
-    return null;
-  }
-  const ready = readyTemplates(campaignId);
-  return (
-    ready.find((template) => textKey(template.name) === wanted) ??
-    ready.find((template) => textKey(template.name).includes(wanted) || wanted.includes(textKey(template.name))) ??
-    null
-  );
+  return findNamed(readyTemplates(campaignId), name, (template) => [template.name]);
 }
 
 // Starts the named fight through `start` (start_encounter as the

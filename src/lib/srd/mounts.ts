@@ -119,7 +119,6 @@ export function mountProfile(ref: string): MountProfile | null {
   return (
     MOUNTS.find((mount) => mount.slug === needle) ??
     MOUNTS.find((mount) => textKey(mount.name) === textKey(ref)) ??
-    MOUNTS.find((mount) => textKey(mount.name).includes(textKey(ref))) ??
     null
   );
 }
@@ -173,7 +172,7 @@ export function checkMount(input: {
   }
   const profile = mountProfile(input.ref);
   if (!profile) {
-    return { error: `No mount called "${input.ref}". Describe one instead and the DM can write it in.`, retry: true };
+    return { error: `No mount called "${input.ref}"; the mounts are ${MOUNTS.map((mount) => mount.name).join(", ")}. A listed one is sent in mount by that name whatever the table calls it; an animal no list has is sent in customName with its speed and size.`, retry: true };
   }
   if (!canCarry(profile.size, riderSize)) {
     return {
@@ -249,7 +248,6 @@ export function vehicleProfile(ref: string): VehicleProfile | null {
   return (
     VEHICLES.find((vehicle) => vehicle.slug === needle) ??
     VEHICLES.find((vehicle) => textKey(vehicle.name) === textKey(ref)) ??
-    VEHICLES.find((vehicle) => textKey(vehicle.name).includes(textKey(ref))) ??
     null
   );
 }

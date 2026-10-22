@@ -27,7 +27,8 @@ export function setEnemyExhaustion(
 ): Record<string, unknown> {
   const next = Math.min(6, Math.max(1, level ?? enemyExhaustion(enemy.conditions) + 1));
   const condition = `exhaustion ${next}`;
-  const conditions = [...enemy.conditions.filter((entry) => !/^exhaustion\b/i.test(entry.trim())), condition];
+  // The level it replaces, as enemyExhaustion reads it.
+  const conditions = [...enemy.conditions.filter((entry) => !/^exhaustion(?:\s+\d)?$/i.test(entry.trim())), condition];
   patchEnemyConditions(enemy.id, conditions, pruneMeta(conditions, enemy.conditionMeta));
   const out: Record<string, unknown> = {
     ok: true,

@@ -204,29 +204,17 @@ export const POISONS: Poison[] = [
   { id: "wyvern_poison", name: "Wyvern Poison", type: "injury", priceGp: 1200, dc: 15, damage: "7d6", halfOnSave: true, summary: "DC 15 CON: 7d6 poison, half on a success." },
 ];
 
-// The ways a poison's row is written, onto the row: its name, and its name
-// without the words a vial's label adds ("Essence Ether" for Essence of
-// Ether), generated from the English names. What a table writes is compared
-// as written, whole or holding a row's spelling ("Vial of Serpent Venom",
-// "a dose of Malice").
-const POISON_SPELLINGS = POISONS.map((poison) => {
-  const key = textKey(poison.name);
-  const bare = key
-    .split(" ")
-    .filter((word) => !["vial", "dose", "of"].includes(word))
-    .join(" ");
-  return { poison, spellings: [...new Set([key, bare])] };
-});
+// A poison is found by its whole name, a note in brackets aside ("Oil of
+// Taggit (vial)"): "a dose of Malice" names its row in srdName, at every
+// table alike.
+const POISON_KEYS = new Map(POISONS.map((poison) => [textKey(poison.name), poison]));
 
 export function findPoison(text: string): Poison | null {
   const key = textKey(text.replace(/\(.*\)/g, " "));
   if (!key) {
     return null;
   }
-  const found =
-    POISON_SPELLINGS.find((entry) => entry.spellings.includes(key)) ??
-    POISON_SPELLINGS.find((entry) => entry.spellings.some((spelling) => key.includes(spelling)));
-  return found?.poison ?? null;
+  return POISON_KEYS.get(key) ?? null;
 }
 
 // Sight rot's penalty to ability checks that rely on sight (and to attack

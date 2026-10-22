@@ -7,33 +7,30 @@
 import { activeConditionEffects } from "@/lib/srd/condition-effects";
 import type { GrantedAttack } from "@/lib/srd/condition-effect-types";
 import { textKey } from "@/lib/language/text-logic";
+import { isConditionNamed } from "@/lib/srd/feature-names";
 
-// Attack options the holder's conditions grant, resolved for pc_attack:
-// the named term matches loosely so "starry form" or "archer" finds it.
+// Attack options the holder's conditions grant, resolved for pc_attack: a
+// term names one by the attack's whole name or its condition's ("Starry
+// Form: Archer", "starry form (archer)"); the form's option alone
+// ("archer") is no name of it, and pc_attack's refusal lists the conditions
+// that grant one.
 export function grantedAttackFor(
   conditions: string[],
-  term: string,
+  ...terms: string[]
 ): { attack: GrantedAttack; condition: string } | null {
-  const wanted = textKey(term);
-  if (!wanted) {
-    return null;
-  }
+  const wanted = terms.filter((term) => textKey(term));
   for (const { row, condition } of activeConditionEffects(conditions)) {
     const attack = row.grantedAttack;
-    if (!attack) {
-      continue;
-    }
-    const name = textKey(attack.name);
-    if (
-      name === wanted ||
-      name.includes(wanted) ||
-      wanted.includes(name) ||
-      textKey(condition).includes(wanted)
-    ) {
+    if (attack && wanted.some((term) => textKey(attack.name) === textKey(term) || isConditionNamed(condition, term))) {
       return { attack, condition };
     }
   }
   return null;
+}
+
+// The conditions held that grant an attack, as written, for a refusal's list.
+export function grantedAttackConditions(conditions: string[]): string[] {
+  return activeConditionEffects(conditions).flatMap(({ row, condition }) => (row.grantedAttack ? [condition] : []));
 }
 
 // The granted attack's damage dice at a character level, and from the slot

@@ -8,7 +8,8 @@ import { NumberStepper } from "@/components/ui/NumberStepper";
 import { Select } from "@/components/ui/Select";
 import { cn } from "@/lib/cn";
 import { MARKUP_STEPS, costToCopper, type StockLine } from "@/lib/dm/shop-logic";
-import { formatCopper, parseCoins } from "@/lib/srd/currency";
+import { formatCopper, parseCoins, unreadCoins } from "@/lib/srd/currency";
+import { withoutBonus } from "@/lib/srd/item-row";
 import { KitButton, panelField, SettingToggle } from "./PanelKit";
 import { textKey } from "@/lib/language/text-logic";
 
@@ -17,7 +18,9 @@ import { textKey } from "@/lib/language/text-logic";
 // one a person can type or pick: the place and keeper from the campaign's
 // own lists, a shelf line from the content pack's catalog at the catalog's
 // price or written by hand at any price, a markup from the haggle ladder.
-// What it saves is the shelf now and the shelf a restock refills to.
+// What it saves is the shelf now and the shelf a restock refills to. A line
+// picked from the catalog keeps the row it is (srdName) when it is renamed
+// into the table's language, so what is bought is still that row.
 
 export type EditableShop = {
   id: string;
@@ -51,7 +54,7 @@ const MARKUP_OPTIONS = MARKUP_STEPS.map((step) => ({ value: String(step), label:
 // last good one and says so.
 function CoinField({ value, onChange, label }: { value: number; onChange: (cp: number) => void; label: string }) {
   const [draft, setDraft] = useState<string | null>(null);
-  const [bad, setBad] = useState(false);
+  const [bad, setBad] = useState<string | null>(null);
   const commit = () => {
     if (draft === null) {
       return;
@@ -59,9 +62,9 @@ function CoinField({ value, onChange, label }: { value: number; onChange: (cp: n
     const parsed = parseCoins(draft);
     if (parsed && parsed > 0) {
       onChange(parsed);
-      setBad(false);
+      setBad(null);
     } else {
-      setBad(true);
+      setBad(parsed === null ? unreadCoins(draft) : "Write a price like 15 gp, 2 sp or 5 cp.");
     }
     setDraft(null);
   };
@@ -76,8 +79,8 @@ function CoinField({ value, onChange, label }: { value: number; onChange: (cp: n
         }
       }}
       aria-label={label}
-      aria-invalid={bad || undefined}
-      title={bad ? "Write a price like 15 gp, 2 sp or 5 cp." : undefined}
+      aria-invalid={bad !== null || undefined}
+      title={bad ?? undefined}
       className={cn(panelField, "w-[7.5rem] tabular-nums", bad && "motion-shake border-red-500/60")}
     />
   );
@@ -108,7 +111,7 @@ export function MarketShopEditor({
     restockDays: shop.restockDays,
     markup: String(MARKUP_STEPS.reduce((best, step) => (Math.abs(step - shop.markup) < Math.abs(best - shop.markup) ? step : best), 1)),
   });
-  const [lines, setLines] = useState<StockLine[]>(shop.stock.map(({ itemName, qty, priceCp, note }) => ({ itemName, qty, priceCp, note })));
+  const [lines, setLines] = useState<StockLine[]>(shop.stock.map(({ itemName, qty, priceCp, note, srdName }) => ({ itemName, qty, priceCp, note, ...(srdName ? { srdName } : {}) })));
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
 
@@ -220,6 +223,20 @@ export function MarketShopEditor({
             <KitButton tone="iconDanger" always aria-label={`Take ${line.itemName || "this line"} off the shelf`} onClick={() => setLines((current) => current.filter((_, at) => at !== index))}>
               <X className="size-3.5" />
             </KitButton>
+            {line.srdName && textKey(line.srdName) !== textKey(withoutBonus(line.itemName)) ? (
+              <span className="flex basis-full items-center gap-1 text-[11px] text-stone-400">
+                <span className="rounded border border-stone-700/80 px-1.5 py-0.5">Listed as {line.srdName}</span>
+                <KitButton
+                  tone="iconDanger"
+                  always
+                  aria-label={`Sell ${line.itemName || "this line"} as no listed item`}
+                  title="Sell it as no listed item: nothing the catalog says about it applies"
+                  onClick={() => setLine(index, { srdName: undefined })}
+                >
+                  <X className="size-3.5" />
+                </KitButton>
+              </span>
+            ) : null}
             <input
               value={line.note}
               onChange={(event) => setLine(index, { note: event.target.value })}
@@ -245,6 +262,7 @@ export function MarketShopEditor({
                 qty: 1,
                 priceCp: entry.price?.copper ?? costToCopper(entry.cost ?? "") ?? 100,
                 note: "",
+                ...(entry.srdName ? { srdName: entry.srdName } : {}),
               })
             }
           />

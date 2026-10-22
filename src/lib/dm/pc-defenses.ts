@@ -11,7 +11,8 @@ import { authoredResistances } from "@/lib/srd/authored-effects";
 import { magicItemRiders } from "@/lib/srd/magic-items";
 import { DAMAGE_TYPES, PHYSICAL_TYPES, rageApplies, resistsAllDamage } from "@/lib/dm/damage-logic";
 import { formSees } from "@/lib/srd/shape-rules";
-import { textKey } from "@/lib/language/text-logic";
+import { holdsFeature } from "@/lib/srd/feature-names";
+import { isDwarf, srdRaceId } from "@/lib/srd/race-id";
 
 // Damage types a character's features make them immune to (Purity of Body:
 // poison), as a keyword string damageAdjust can match against.
@@ -40,7 +41,6 @@ export function pcResistances(input: {
   // gear; the effects laid on the creature still hold (shape-rules.ts).
   const sheet = formSees(input);
   const out: string[] = [];
-  const race = textKey(sheet.race);
   // The authored subclass features' resistances (Soul of the Forge, a
   // raging bear totem, Spell Resistance against a spell's damage).
   out.push(...authoredResistances(sheet, options));
@@ -71,16 +71,13 @@ export function pcResistances(input: {
   if (resistsAllDamage(sheet.conditions)) {
     out.push(...DAMAGE_TYPES);
   }
-  const featureNames = sheet.features.map((feature) => textKey(feature.name));
-  const hasFeature = (fragment: string) =>
-    featureNames.some((name) => name.includes(fragment));
-  if (race.includes("dwarf") || hasFeature("dwarven resilience")) {
+  if (isDwarf(sheet.race) || holdsFeature(sheet, "dwarven resilience")) {
     out.push("poison");
   }
-  if (race.includes("stout") || hasFeature("stout resilience")) {
+  if (srdRaceId(sheet.race) === "stout_halfling" || holdsFeature(sheet, "stout resilience")) {
     out.push("poison");
   }
-  if (race.includes("tiefling") || hasFeature("hellish resistance")) {
+  if (srdRaceId(sheet.race) === "tiefling" || holdsFeature(sheet, "hellish resistance")) {
     out.push("fire");
   }
   // Fiendish Resilience: the type chosen at the last rest, in the name.

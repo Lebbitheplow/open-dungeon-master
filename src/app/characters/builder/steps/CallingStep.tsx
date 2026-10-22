@@ -24,6 +24,7 @@ import { PlaystylePicker } from "../PlaystylePicker";
 import { EASY_CLASSES, fillClassSkills, type PlaystyleId } from "../playstyles";
 import FeatChoicesFields, { knownTraining } from "../FeatChoicesFields";
 import { Field, PickForMe, PickPill, StepPanel, inputClass } from "./shared";
+import { featChoice } from "@/lib/schemas/sheet";
 
 // Step 3: the class (painted cards in the picker's groups and order, the
 // setting's callings first and badged, each with its emblem and a ? that
@@ -321,7 +322,7 @@ export function CallingStep({
                 key={grant.name}
                 feat={grant.name}
                 spec={grant.spec}
-                picks={state.featChoices[grant.name.trim().toLowerCase()]}
+                picks={featChoice(state.featChoices, grant.name)}
                 known={knownTraining(derived)}
                 onChange={(picks) => state.setFeatPicks(grant.name, picks)}
                 source="subclass"

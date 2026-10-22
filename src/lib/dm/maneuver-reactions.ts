@@ -40,18 +40,17 @@ import { rollCard } from "@/lib/dm/roll-card";
 import { reactionMove } from "@/lib/dm/authored-reactions-more";
 import { noHit, settle, spendReaction, type Ctx } from "@/lib/dm/reaction-tools";
 import { toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
-import { textKey } from "@/lib/language/text-logic";
-
-const lower = (value: string) => value.trim().toLowerCase();
+import { isConditionNamed, isNamed } from "@/lib/srd/feature-names";
 
 // Whether the sheet knows this maneuver ("Maneuver: Parry").
 function knows(sheet: CharacterSheet, name: string): boolean {
-  return sheet.features.some((feature) => /^maneuver:/i.test(feature.name) && textKey(feature.name).includes(name));
+  return sheet.features.some((feature) => /^maneuver:/i.test(feature.name) && isNamed(feature.name, name));
 }
 
-// The sheet's own mark, by its leading name ("grappling strike (1d8)").
+// The sheet's own mark, by its name with or without its die ("grappling
+// strike (1d8)").
 function markOf(sheet: CharacterSheet, name: string): string | null {
-  return sheet.conditions.find((entry) => lower(entry) === name || lower(entry).startsWith(`${name} (`)) ?? null;
+  return sheet.conditions.find((entry) => isConditionNamed(entry, name)) ?? null;
 }
 
 function clearMarks(campaign: Campaign, sheetId: string, names: string[]) {
@@ -59,7 +58,7 @@ function clearMarks(campaign: Campaign, sheetId: string, names: string[]) {
   if (!sheet) {
     return;
   }
-  const gone = sheet.conditions.filter((entry) => names.some((name) => lower(entry) === name || lower(entry).startsWith(`${name} (`)));
+  const gone = sheet.conditions.filter((entry) => names.some((name) => isConditionNamed(entry, name)));
   if (!gone.length) {
     return;
   }
@@ -93,17 +92,17 @@ function payDie(
 // ---- use_reaction ----
 
 export function maneuverReaction(ctx: Ctx): Record<string, unknown> | null {
-  const name = lower(ctx.args.feature).replace(/^maneuver:\s*/, "").replace(/[’`]/g, "'");
-  if (name === "maneuvering attack") {
+  const name = ctx.args.feature;
+  if (isNamed(name, "Maneuvering Attack")) {
     return maneuveredMove(ctx);
   }
-  if (/commander'?s strike/.test(name)) {
+  if (isNamed(name, "Commander's Strike")) {
     return commandedAttack(ctx);
   }
   if (maneuverUse(name) !== "reaction") {
     return null;
   }
-  const which = ["parry", "riposte", "brace"].find((entry) => name.includes(entry));
+  const which = ["parry", "riposte", "brace"].find((entry) => isNamed(name, entry));
   if (!which || !knows(ctx.sheet, which)) {
     return null;
   }

@@ -12,6 +12,7 @@ import { replyJsonObject } from "../reply-json-logic.ts";
 import type { Speaker } from "./speech.ts";
 import { QUOTE, quotedText, speakerMatchers } from "./speech-prose.ts";
 import { textKey, words } from "../language/text-logic.ts";
+import type { TableLanguage } from "../schemas/game-settings-options.ts";
 
 export const CLAIM_KINDS = ["hit", "miss", "dies", "downed", "amount", "cast", "fight_start", "roll_ask", "aside", "speaker", "turn_over"] as const;
 export type ClaimKind = (typeof CLAIM_KINDS)[number];
@@ -149,15 +150,15 @@ const KIND_LINES: Record<ClaimKind, string> = {
     '{"kind":"speaker","ref":SPEAKER_REF,"quote":Q}: the one claim about quoted dialogue, saying only who speaks a line of it; quote is copied from inside that line\'s quotation marks. Only when the words around the line tie it to one listed person: a tag that names them or one of their other names, the person the narration is about just before or after it, or a word like "she" that points back to them. Leave the line out when its tag names nobody listed ("a guard calls", "you say"), when it answers the line before with no tag of its own, or when you would be guessing: a line left out stays the narrator\'s, and a line given to the wrong person is a mistake. One claim per quoted line.',
 };
 
-// The plain English ways a player ends their turn, read beside the reader's
-// turn_over claim on their words (dm/claims.ts readTurnEndInWords): gpt-oss-20b
-// as the reader found "then I end my turn" in one reading and missed it in
-// the next. A miss here costs what a table in any other language pays: the
-// reader's reading alone.
-const ENDS_TURN_IN_ENGLISH = /\b(?:end(?:s|ing)?|finish(?:es|ing)?) (?:my|the|his|her|their) turn\b|\bthat'?s (?:it for )?my turn\b|\bmy turn is (?:over|done)\b/i;
+// The plain English ways a player ends their turn, read only at an English
+// table, beside the reader's turn_over claim on their words (dm/claims.ts
+// readTurnEndInWords): gpt-oss-20b as the reader found "then I end my turn"
+// in one reading and missed it in the next. A miss here costs what a table in
+// any other language pays: the reader's reading alone.
+const ENGLISH_ENDS_TURN = /\b(?:end(?:s|ing)?|finish(?:es|ing)?) (?:my|the|his|her|their) turn\b|\bthat'?s (?:it for )?my turn\b|\bmy turn is (?:over|done)\b/i;
 
-export function endsTurnInEnglish(text: string): boolean {
-  return ENDS_TURN_IN_ENGLISH.test(text);
+export function englishEndsTurn(text: string): boolean {
+  return ENGLISH_ENDS_TURN.test(text);
 }
 
 // The reader's instructions. Every claim kind about the game is listed so the
@@ -451,34 +452,37 @@ export function withoutSentences(text: string, quotes: readonly string[]): strin
 // its own input format echoed back ("Bram | attempt to ask the merchant..."),
 // a table note copied out, and sentences about tool calls and corrections
 // ("I will correct this by calling the necessary tool to resolve the attack
-// properly"). English phrasings only; the reader's asides cover every
-// language. A sentence holding a quotation is speech and is never taken.
-const META_SENTENCE =
+// properly"). The phrasings are English, read only at an English table; the
+// reader's asides cover every language. A sentence holding a quotation is
+// speech and is never taken.
+const ENGLISH_META_SENTENCE =
   /\btool[ -]?calls?\b|\b(?:the|this|a) tool'?s? (?:output|result)s?\b|\bcalling the (?:necessary |right |appropriate |correct )?tools?\b|\bnarrate the results?\b|\bunwarranted assumption\b|\bmy (?:previous|last|earlier) (?:response|reply|narration|message)\b/i;
 const ECHOED_LINE = /^[ \t]*(?:\[[^\]\n]{1,80}\|\s*attempt\][^\n]*|[^\n|[\]]{1,60}\s\|\s*attempt\b[^\n]*|\[Table note\][^\n]*)$/gim;
 // The game state copied into the story by a small model (Qwen3.5 9B): the
-// turn order recited as a numbered list under its own heading, and the board
-// squares it reads, "(7,13)". The board shows both; the prose never needs
-// them.
-const ORDER_BLOCK = /^[ \t]*\**[ \t]*(?:current[ \t]+)?(?:initiative(?:[ \t]+order)?|turn[ \t]+order)[ \t]*(?::\**|\**[ \t]*:)[^\n]*(?:\n[ \t]*\d+\.[^\n]*)*/gim;
+// turn order recited as a numbered list under its English heading (read only
+// at an English table), and the board squares it reads, "(7,13)", at every
+// table. The board shows both; the prose never needs them.
+const ENGLISH_ORDER_BLOCK = /^[ \t]*\**[ \t]*(?:current[ \t]+)?(?:initiative(?:[ \t]+order)?|turn[ \t]+order)[ \t]*(?::\**|\**[ \t]*:)[^\n]*(?:\n[ \t]*\d+\.[^\n]*)*/gim;
 const GRID_SQUARE = /\(\s*\d{1,3}\s*,\s*\d{1,3}\s*\)/;
 
-export function metaQuotes(text: string): string[] {
+export function metaQuotes(text: string, language: TableLanguage): string[] {
   const quotes = [...text.matchAll(ECHOED_LINE)].map((match) => match[0].trim());
   for (const match of text.matchAll(/[^.!?\n]+[.!?]*/g)) {
-    if ((META_SENTENCE.test(match[0]) || GRID_SQUARE.test(match[0])) && !/["\u201c\u201d\u00ab\u00bb]/.test(match[0])) {
+    if (((language === "english" && ENGLISH_META_SENTENCE.test(match[0])) || GRID_SQUARE.test(match[0])) && !/["\u201c\u201d\u00ab\u00bb]/.test(match[0])) {
       quotes.push(match[0].trim());
     }
   }
   return quotes.filter(Boolean);
 }
 
-export function withoutAsides(text: string, claims: readonly NarrationClaim[]): string {
-  // A recited turn order goes whole, heading and list: cut sentence by
-  // sentence, its "3." would match the wrong line.
-  const unlisted = text.replace(ORDER_BLOCK, "").replace(/\n{3,}/g, "\n\n").trim();
+export function withoutAsides(text: string, claims: readonly NarrationClaim[], language: TableLanguage): string {
+  // A recited turn order under its English heading goes whole, heading and
+  // list, at an English table only (cut sentence by sentence, its "3." would
+  // match the wrong line); at any table the reader's asides and the board
+  // squares quoted still go.
+  const unlisted = language === "english" ? text.replace(ENGLISH_ORDER_BLOCK, "").replace(/\n{3,}/g, "\n\n").trim() : text.trim();
   const source = unlisted === text.trim() ? text : unlisted;
-  const quotes = [...claims.flatMap((claim) => (claim.kind === "aside" ? [claim.quote] : [])), ...metaQuotes(source)];
+  const quotes = [...claims.flatMap((claim) => (claim.kind === "aside" ? [claim.quote] : [])), ...metaQuotes(source, language)];
   if (!quotes.length) {
     return words(source).length ? source : "";
   }

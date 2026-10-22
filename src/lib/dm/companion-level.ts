@@ -47,8 +47,6 @@ import { textKey } from "@/lib/language/text-logic";
 // database. Must not import turn.ts, loop.ts, encounter-tools.ts,
 // enemy-damage.ts or mutations.ts, for the reason companion-tools.ts gives.
 
-const lower = (value: string) => value.trim().toLowerCase();
-
 function emptyView(classId: string, ability: CasterView["ability"], level: number): CasterView {
   return {
     classId,
@@ -202,11 +200,11 @@ function levelOnce(campaign: Campaign, sheet: CharacterSheet): CharacterSheet | 
   // or hands out always-prepared spells, does so for a companion too.
   const extras = subclassExtrasFor(tableAuthors(campaign.id));
   const casting = castingClassesOf(after, classGrantsFor, extras, sheet.spellcasting).find(
-    (entry) => lower(entry.entry.id) === lower(leading.id),
+    (entry) => textKey(entry.entry.id) === textKey(leading.id),
   );
   if (casting) {
     const held = casterViewsOf(sheet, extras).find(
-      (view) => !sheet.spellcasting?.casters?.length || lower(view.classId) === lower(leading.id),
+      (view) => !sheet.spellcasting?.casters?.length || textKey(view.classId) === textKey(leading.id),
     );
     picks = companionSpellPicks({
       before: held

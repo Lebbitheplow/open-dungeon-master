@@ -27,6 +27,7 @@ import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3-multiple-ciphers";
 import { ADDED, DROPPED, REPLACED } from "./lib/magic-item-corrections.mjs";
 import { categoryBase, DAILY_POWERS, GEAR_RIDERS } from "./lib/magic-item-riders.mjs";
+import { nameBase } from "./lib/name-base.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const contentDb = join(root, "data", "content", "open5e.sqlite");
@@ -284,15 +285,18 @@ const keyOf = (name) => name.trim().toLowerCase();
 // base item its category names, the SRD's riders (scripts/lib/
 // magic-item-riders.mjs), a +N any magic weapon or armor states in the
 // standard words, and charges. Only the SRD's own rows take a base from the
-// category, which is the one the SRD wrote; another document's weapon is read
-// from its name, as before.
+// category, which is the one the SRD wrote; another document's, whose
+// category names none ("weapon", "armor"), is read from its name
+// (scripts/lib/name-base.mjs).
 function gearOf(row, desc, match) {
   const out = {};
   const category = row.category || "";
   const srd = row.document_slug === "wotc-srd";
-  const base = srd ? categoryBase(category) : null;
+  const kind = /^weapon/i.test(category) ? "weapon" : /^armor/i.test(category) ? "armor" : null;
+  const named = !srd && kind ? nameBase(row.name, kind) : null;
+  const base = srd ? categoryBase(category) : named ? { kind, name: named } : null;
   if (base) {
-    out.base = { kind: base.kind, name: base.name };
+    out.base = { kind: base.kind, name: base.name, ...(base.any ? { any: base.any } : {}) };
   }
   const authored = srd ? GEAR_RIDERS[match] : undefined;
   const bonus = gearBonus(desc, category);

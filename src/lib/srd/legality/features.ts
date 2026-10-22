@@ -23,7 +23,8 @@ import {
 } from "@/lib/srd/feature-effects";
 import { classFeaturesFor, subclassNamesFor } from "@/lib/srd/features";
 import { findOptionByFeatureName } from "@/lib/srd/options";
-import { ABILITY_NAMES, lower, type FeatFacts } from "@/lib/srd/legality/types";
+import { ABILITY_NAMES, type FeatFacts } from "@/lib/srd/legality/types";
+import { textKey } from "@/lib/language/text-logic";
 
 let tableNames: Set<string> | null = null;
 
@@ -36,13 +37,13 @@ function grantedNames(): Set<string> {
   for (const klass of ALL_CLASSES) {
     for (const subclass of ["", ...subclassNamesFor(klass.id)]) {
       for (const feature of classFeaturesFor(klass.id, subclass, 20)) {
-        names.add(lower(feature.name));
+        names.add(textKey(feature.name));
       }
     }
   }
   for (const race of SRD_RACES) {
     for (const trait of race.traits) {
-      names.add(lower(trait));
+      names.add(textKey(trait));
     }
   }
   tableNames = names;
@@ -59,7 +60,7 @@ let plainRiders: string | null = null;
 // counter, moves a combat or defense number, or is a name the class and race
 // tables grant. A name that does none of these is a line of text.
 export function isMechanicalFeature(name: string): boolean {
-  const key = lower(name);
+  const key = textKey(name);
   if (!key) {
     return false;
   }
@@ -87,7 +88,7 @@ export function isChoiceFeature(name: string): boolean {
   const [style] = chosenFightingStyles([{ name }]);
   return (
     style !== undefined &&
-    FIGHTING_STYLES.some((entry) => lower(entry.name) === lower(style))
+    FIGHTING_STYLES.some((entry) => textKey(entry.name) === textKey(style))
   );
 }
 
@@ -115,10 +116,10 @@ export type FeatureVerdict = { problems: string[]; features: SheetFeature[] };
 export function judgeFeatures(input: FeatureInput): FeatureVerdict {
   const problems: string[] = [];
   const features: SheetFeature[] = [];
-  const held = new Map(input.held.map((feature) => [lower(feature.name), feature]));
-  const derived = new Set(input.derived.map(lower));
+  const held = new Map(input.held.map((feature) => [textKey(feature.name), feature]));
+  const derived = new Set(input.derived.map(textKey));
   for (const feature of input.sent) {
-    const key = lower(feature.name);
+    const key = textKey(feature.name);
     if (feature.source === "choice") {
       if (isChoiceFeature(feature.name)) {
         features.push({ name: feature.name, source: "choice" });
@@ -163,13 +164,13 @@ export function judgeFeatures(input: FeatureInput): FeatureVerdict {
   }
   const granted = (input.backgroundFeature ?? "").slice(0, 80);
   // Not beside a stored copy of the same feature under a shorter name.
-  const stem = lower(granted.replace(/\s*\([^)]*\)\s*$/, ""));
+  const stem = textKey(granted.replace(/\s*\([^)]*\)\s*$/, ""));
   if (
     granted &&
     !features.some(
       (feature) =>
         feature.source === "background" &&
-        (lower(feature.name) === lower(granted) || lower(feature.name) === stem),
+        (textKey(feature.name) === textKey(granted) || textKey(feature.name) === stem),
     )
   ) {
     features.push({ name: granted, source: "background" });
@@ -343,7 +344,7 @@ function requirementCheck(requirement: string, who: FeatCandidate, waiting: Feat
   if (skills.length) {
     return who.skills === undefined
       ? unchecked()
-      : held(skills.some((skill) => who.skills!.some((entry) => lower(entry) === skill)), waiting.skills, "your skill picks");
+      : held(skills.some((skill) => who.skills!.some((entry) => textKey(entry) === textKey(skill))), waiting.skills, "your skill picks");
   }
   if (/\btype of vehicle\b|\bvehicles?\b/.test(wanted)) {
     return who.tools === undefined
@@ -352,7 +353,7 @@ function requirementCheck(requirement: string, who: FeatCandidate, waiting: Feat
   }
   const weapon = /^(?:one |a )?(martial|simple|ranged|melee)(?: (ranged|melee))? weapons?$/.exec(wanted);
   if (weapon && who.weapons !== undefined) {
-    const owned = who.weapons.map(lower);
+    const owned = who.weapons.map(textKey);
     const names = weapon[1] === "martial" ? MARTIAL_WEAPONS : weapon[1] === "ranged" || weapon[2] === "ranged" ? RANGED_WEAPONS : [];
     const broad = weapon[1] === "simple" ? ["simple", "martial"] : weapon[1] === "martial" ? ["martial"] : ["simple", "martial"];
     return held(
@@ -397,19 +398,19 @@ export type FeatVerdict = { problems: string[]; feats: string[]; slotsUsed: numb
 
 export function judgeFeats(input: FeatInput): FeatVerdict {
   const problems: string[] = [];
-  const held = new Set(input.held.map(lower));
+  const held = new Set(input.held.map(textKey));
   const seen = new Set<string>();
   const feats: string[] = [];
   for (const name of [...input.recorded, ...input.sent]) {
-    const key = lower(name);
+    const key = textKey(name);
     if (!key || seen.has(key)) {
       continue;
     }
     seen.add(key);
     feats.push(name);
   }
-  const recorded = new Set(input.recorded.map(lower));
-  const extra = feats.filter((name) => !recorded.has(lower(name)) && !held.has(lower(name)));
+  const recorded = new Set(input.recorded.map(textKey));
+  const extra = feats.filter((name) => !recorded.has(textKey(name)) && !held.has(textKey(name)));
   const room = input.racialFeats + input.unrecordedSlots;
   if (extra.length > room) {
     problems.push(
@@ -419,7 +420,7 @@ export function judgeFeats(input: FeatInput): FeatVerdict {
     );
   }
   for (const name of feats) {
-    if (held.has(lower(name))) {
+    if (held.has(textKey(name))) {
       continue;
     }
     const facts = input.featOf(name);

@@ -139,7 +139,7 @@ export async function runRenarrate(input: {
   // sentences the reader quotes, and a take that was only the model's plan
   // is no take at all.
   if (narration) {
-    narration = withoutAsides(narration, await readAsides(campaign, listSheets(campaign.id), turn, narration));
+    narration = withoutAsides(narration, await readAsides(campaign, listSheets(campaign.id), turn, narration), campaign.gameSettings.tableLanguage);
   }
   if (!narration) {
     return { error: "The DM returned nothing; try again.", status: 502 };

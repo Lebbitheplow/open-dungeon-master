@@ -118,6 +118,7 @@ export const worldTools: ToolDef[] = [
           section: { type: "integer", minimum: 1, description: "A Wall of Ice's section, numbered from the end it was laid from." },
           characterId: { type: "string", description: "The character striking it with a weapon: exact characterId from GAME STATE." },
           weapon: { type: "string", description: "The weapon they strike with, from their equipment." },
+          improvised: { type: "boolean", description: "The weapon is an object they picked up that is no weapon on their sheet: it strikes as an improvised weapon." },
           damageType: { type: "string", description: "Damage type, for damage you pass yourself." },
           material: { type: "string", enum: MATERIALS, description: "What the object is made of." },
           size: { type: "string", enum: SIZES, description: "Its size class." },

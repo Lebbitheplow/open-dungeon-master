@@ -12,7 +12,7 @@
 import type { CheckAbout, SaveAgainstValue } from "@/lib/dm/roll-about";
 import type { CreatureType } from "@/lib/bestiary/statblock";
 import { textKey } from "@/lib/language/text-logic";
-import { pluralForms } from "@/lib/srd/name-forms";
+import { sameRulesKey } from "@/lib/srd/name-forms";
 
 export type RollKey = {
   roll: "check" | "save";
@@ -82,7 +82,7 @@ function keyGaps(key: RollKey, roll: KeyedRoll): RollGap[] | null {
   if (key.creatures) {
     if (creature === undefined) {
       gaps.push({ field: "creature", values: [...key.creatures] });
-    } else if (!key.creatures.some((type) => pluralForms(type).includes(textKey(creature)))) {
+    } else if (!key.creatures.some((type) => sameRulesKey(type, textKey(creature)))) {
       return null;
     }
   }

@@ -47,6 +47,7 @@ import { blowByType, resolveOnHit, scaledParts } from "@/lib/dm/enemy-hit";
 import { effectOutcome } from "@/lib/dm/effect-tools";
 import { hasTrait } from "@/lib/dm/monster-abilities";
 import { enfeebledBlow, spellRetort } from "@/lib/dm/spell-retort";
+import { holdsFeature } from "@/lib/srd/feature-names";
 
 // Opportunity attacks: walking out of an enemy's reach is not free. Before
 // this, a player could stroll away from a troll with no consequence at all,
@@ -236,7 +237,7 @@ export function resolveOpportunityAttacks(
     const light = lightOnAttack(sight, { attacker: enemy.displayName, target: sheet.name });
     // Escape the Horde (a Hunter ranger's Defensive Tactics): opportunity
     // attacks against them are made at disadvantage.
-    const escapes = sheet.features.some((feature) => /escape the horde/i.test(feature.name));
+    const escapes = holdsFeature(sheet, "Escape the Horde");
     // An active effect on its attack and damage rolls (set_effect).
     const attackEffect = effectOutcome(campaign.id, { kind: "enemy", id: enemy.id }, "attack");
     const damageEffect = effectOutcome(campaign.id, { kind: "enemy", id: enemy.id }, "damage").bonus;

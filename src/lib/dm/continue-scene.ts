@@ -121,7 +121,7 @@ export async function runContinueScene(input: {
   // call (src/lib/dm/turn.ts); a continuation that was only the model's plan
   // adds nothing.
   if (continuation) {
-    continuation = withoutAsides(continuation, await readAsides(campaign, listSheets(campaign.id), turn, continuation));
+    continuation = withoutAsides(continuation, await readAsides(campaign, listSheets(campaign.id), turn, continuation), campaign.gameSettings.tableLanguage);
   }
   if (!continuation) {
     return { error: "The DM returned nothing; try again.", status: 502 };

@@ -2,9 +2,9 @@
 // (SRD 5.1). Pure: src/lib/dm/summon-cast.ts asks summonPlan before anything
 // is spent, and spawns what it answers.
 
-import { findSummonForm, summonFormsOf, type SummonForm } from "@/lib/srd/summon-forms";
+import { findSummonForm, summonFormsHolding, summonFormsOf, type SummonForm } from "@/lib/srd/summon-forms";
 import { formatCr, formList } from "@/lib/srd/beast-forms";
-import type { ToolError } from "@/lib/dm/tool-errors";
+import { holdingHint, type ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
 
 const HOUR = 600;
@@ -213,13 +213,11 @@ export function summonPlan(
 ): SummonPlan | ToolError {
   const above = Math.max(0, slotLevel - spell.level);
   const named = formName.trim();
-  // A spell with a fixed list reads the caller's word against that list
-  // first, so "spider" is Giant Insect's Giant Spider.
-  const fromList = named ? spell.forms?.map((name) => findSummonForm(name)).find((form) => form && textKey(form.name).includes(textKey(named))) : undefined;
-  const form = fromList ?? (named ? findSummonForm(named) : spell.forms?.length === 1 ? findSummonForm(spell.forms[0]) : null);
+  const form = named ? findSummonForm(named) : spell.forms?.length === 1 ? findSummonForm(spell.forms[0]) : null;
   if (!form) {
     const asked = named ? `${spell.name} has no stat block here for "${named}"; it calls` : `${spell.name} needs the creature in variant`;
-    return { error: `${asked}: ${callable(spell, slotLevel)}. Ask the player which, unless they named one. Nothing was spent.`, retry: true };
+    const hint = named ? holdingHint(named, summonFormsHolding(named)) : "";
+    return { error: `${asked}: ${callable(spell, slotLevel)}.${hint} Ask the player which, unless they named one. Nothing was spent.`, retry: true };
   }
   if (spell.forms && !spell.forms.includes(form.name)) {
     return { error: `${spell.name} makes ${spell.forms.join(", ")}, not a ${form.name}. Nothing was spent.`, retry: true };

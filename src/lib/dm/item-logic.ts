@@ -2,11 +2,11 @@ import type { EquipmentItem } from "@/lib/schemas/sheet";
 import { matchArmor } from "@/lib/srd/armor";
 import { matchWeapon } from "@/lib/srd/weapons";
 import type { ToolError } from "@/lib/dm/tool-errors";
-import { textKey } from "@/lib/language/text-logic";
-import { hasItemTag, itemRow, itemTags, listedRow, type TaggedItem } from "@/lib/srd/item-tags";
+import { hasItemTag, itemRow, itemTags, type TaggedItem } from "@/lib/srd/item-tags";
 import { magicItemNamed } from "@/lib/srd/magic-items";
-import { itemNames, lineNamed, magicItemBonus, srdNameWithBonus } from "@/lib/srd/item-row";
+import { lineNamed, linesNamed, magicItemBonus } from "@/lib/srd/item-row";
 import type { ItemTag } from "@/lib/schemas/item-tags";
+import { compositeGearNamed } from "@/lib/srd/magic-gear";
 
 // Pure consumable knowledge for the use_item tool: healing potion tiers,
 // generic consumable detection, and ammunition lookup. Database-free so
@@ -27,56 +27,19 @@ export function consumableEffect(item: TaggedItem): ConsumableEffect {
   return { kind: "healing", expression: itemRow(item)?.potion?.heals ?? "2d4+2" };
 }
 
-// Containment either way, the loose rule both lookups below share.
-function looselyNames(name: string, wanted: string): boolean {
-  const key = textKey(name);
-  return key.includes(wanted) || wanted.includes(key);
-}
-
-// Token fallback so "healing potion" still finds "Potion of Healing".
-function namesEveryWord(name: string, wanted: string): boolean {
-  const key = textKey(name);
-  const tokens = wanted.split(" ").filter((token) => token.length > 2);
-  return tokens.length > 0 && tokens.every((token) => key.includes(token));
-}
-
-// Finds a carried item by fuzzy name: the line the name picks out
-// (src/lib/srd/item-row.ts lineNamed), else the loose rules over its own
-// and its srdName alike, so "healing potion" finds the "Pozione di
-// guarigione" the DM named Potion of Healing.
+// The carried item a tool's name picks out (src/lib/srd/item-row.ts
+// lineNamed): "Potion of Healing" finds the "Pozione di guarigione" the DM
+// named by it, and "healing potion" finds neither.
 export function findCarriedItem(equipment: EquipmentItem[], term: string): EquipmentItem | null {
-  const wanted = textKey(term);
-  if (!wanted) {
-    return null;
-  }
-  return (
-    equipment[lineNamed(equipment, term)] ??
-    equipment.find((item) => itemNames(item).some((name) => looselyNames(name, wanted))) ??
-    equipment.find((item) => itemNames(item).some((name) => namesEveryWord(name, wanted))) ??
-    null
-  );
+  return equipment[lineNamed(equipment, term)] ?? null;
 }
 
-// Every carried item a use_item name could mean: the items by that very
-// name, else those whose srdNameWithBonus it is, else every item the fuzzy
-// rules above would take. More than one means the name is ambiguous
-// (src/lib/dm/item-use.ts refuses to spend a charged item on a guess).
+// Every carried item a use_item name picks out. More than one means the
+// name is ambiguous (src/lib/dm/item-use.ts refuses to spend a charged item
+// on a guess): two lines answer to "Potion of Healing" when both are one
+// under names of their own.
 export function carriedItemsMatching(equipment: EquipmentItem[], term: string): EquipmentItem[] {
-  const wanted = textKey(term);
-  if (!wanted) {
-    return [];
-  }
-  const own = equipment.filter((item) => textKey(item.name) === wanted);
-  if (own.length) {
-    return own;
-  }
-  const listed = equipment.filter((item) => textKey(srdNameWithBonus(item)) === wanted);
-  if (listed.length) {
-    return listed;
-  }
-  return equipment.filter((item) =>
-    itemNames(item).some((name) => looselyNames(name, wanted) || namesEveryWord(name, wanted)),
-  );
+  return linesNamed(equipment, term);
 }
 
 // Why use_item would not use this item up, or null when it is a
@@ -111,6 +74,15 @@ export function itemUseProblem(item: TaggedItem): ToolError | null {
   return null;
 }
 
+// What a tool that puts an item in a pack tells the model, as a hit says it
+// applied its damage: a model that grants it again leaves two, and one told
+// only of the coin hands the item over or trades something in besides.
+export function alreadyInPack(who: string, paid: boolean): string {
+  return paid
+    ? `The trade is done: the server put it in ${who}'s pack and took the coin, and nothing else changed hands. Do NOT call grant_item, modify_gold or handle_item for this trade.`
+    : `The server already put it in ${who}'s pack. Do NOT call grant_item for it.`;
+}
+
 // An item a character does not carry. A name the table's rules know (isTableGearName)
 // is the game saying no; a name nobody knows is the call's to fix, from what
 // they do carry.
@@ -126,10 +98,13 @@ export function notCarried(who: string, carried: string[], name: string, known: 
 }
 
 // The row a tool names an item by (srdName), as the lists spell it, or why
-// it cannot. Only a name a list holds is taken (src/lib/srd/item-tags.ts
-// listedRow, or a magic item's own name): a name no list holds, or one a
-// finder would only guess at ("Sword" is no Greatsword, "Weapon" no
-// weapon), is asked again rather than stored to mean something else. A
+// it cannot. Only a whole name a list or table holds is taken (the row
+// src/lib/srd/item-tags.ts itemRow finds, a magic item's own name, or a
+// magic weapon or armor with its base as src/lib/srd/magic-gear.ts composes
+// them), so a weapon goes by its table's name too ("Light Crossbow" as well
+// as the book's "Crossbow, light", the setting gear's "Revolver"): a name no
+// list holds ("Sword" is no Greatsword, "Weapon" no weapon) is asked again
+// rather than stored to mean something else. A
 // bonus is asked for in the item's name, the one place the engines read it
 // (src/lib/srd/item-row.ts magicItemBonus): the row stored for "Longsword
 // +1" would be the Longsword, and the +1 lost. A row the lists name with a
@@ -144,10 +119,9 @@ export function srdNameFor(srdName: string | undefined, what: string): { srdName
   if (bonus) {
     return { error: `${what}: srdName "${listed}" carries a bonus, which belongs in name. Keep "+${bonus}" in name and send srdName as the item without it ("Longsword" for a +1 longsword). Nothing changed.`, retry: true };
   }
-  const row = magicItemNamed(listed)?.name ?? listedRow(listed)?.name;
+  const row = compositeGearNamed(listed)?.name ?? magicItemNamed(listed)?.name ?? itemRow({ name: listed })?.name;
   if (!row) {
-    const nearest = itemRow({ name: listed })?.name;
-    return { error: `${what}: no SRD or pack item is called "${listed}"${nearest ? ` (the nearest is "${nearest}")` : ""}. Send srdName exactly as the item lists name it in English, or leave it out and name what it is in tags. Nothing changed.`, retry: true };
+    return { error: `${what}: no SRD or pack item is called "${listed}". Send srdName exactly as the item lists name it in English, or leave it out and name what it is in tags. Nothing changed.`, retry: true };
   }
   if (magicItemBonus(row)) {
     return { error: `${what}: srdName "${listed}" is the lists' "${row}", a family of +1 to +3 items rather than one item. Send srdName as the item it is ("Longsword" for a +1 longsword) with the bonus in name, or leave it out and name what it is in tags. Nothing changed.`, retry: true };

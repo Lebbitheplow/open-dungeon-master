@@ -22,11 +22,13 @@ import { classLevelOf, holdsFeature } from "@/lib/srd/trait-rules";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
+import { nameChoice } from "@/lib/srd/feature-names";
+import { favoredEnemies } from "@/lib/srd/check-traits";
+import { sameRulesKey } from "@/lib/srd/name-forms";
 
 type Sheet = Pick<CharacterSheet, "name" | "class" | "level" | "classes" | "features" | "feats" | "conditions" | "resources" | "spellcasting">;
 
-const lower = (value: string) => value.trim().toLowerCase();
-const holds = (sheet: Sheet, condition: string) => sheet.conditions.some((entry) => lower(entry) === condition);
+const holds = (sheet: Sheet, condition: string) => sheet.conditions.some((entry) => textKey(entry) === condition);
 
 // ---- Inspiration ----
 
@@ -48,7 +50,7 @@ export function hasFeralSenses(sheet: Sheet): boolean {
 // roll anything.
 export function seenTargetConditions(sheet: Sheet, conditions: string[]): string[] {
   return hasFeralSenses(sheet)
-    ? conditions.filter((entry) => !["invisible", "hidden"].includes(lower(entry)))
+    ? conditions.filter((entry) => !["invisible", "hidden"].includes(textKey(entry)))
     : conditions;
 }
 
@@ -56,29 +58,15 @@ export function seenTargetConditions(sheet: Sheet, conditions: string[]): string
 
 export const FOE_SLAYER = "foe-slayer";
 
-// The creature types (and, for humanoids, the races) a ranger's Favored
-// Enemy names: a feature written "Favored Enemy: undead, fiends" or
-// "Favored Enemy (orcs)". None recorded, none favored.
-export function favoredEnemyTypes(sheet: Sheet): string[] {
-  const out: string[] = [];
-  for (const feature of sheet.features) {
-    const match = /^favored enemy(?: improvement)?\s*[:(]\s*([^)]*)\)?$/i.exec(feature.name.trim());
-    if (match) {
-      out.push(
-        ...match[1]
-          .split(/,|\band\b/)
-          .map((entry) => textKey(entry).replace(/s$/, ""))
-          .filter(Boolean),
-      );
-    }
-  }
-  return out;
-}
-
-export function isFavoredEnemy(sheet: Sheet, enemy: Pick<EncounterEnemy, "displayName" | "stats">): boolean {
-  const type = textKey(String(enemy.stats.type ?? ""));
-  const name = textKey(enemy.displayName);
-  return favoredEnemyTypes(sheet).some((favored) => type.includes(favored) || name.includes(favored));
+// The enemy is favored (src/lib/srd/check-traits.ts favoredEnemies) by its
+// creature type ("fiend (demon)" is a fiend), a subtype ("humanoid
+// (goblinoid, orc)" is an orc) or its row ("goblin"), each whole, in the
+// singular or the plural ("monstrosities", "elves"): no name it merely
+// holds ("Forcemage" is no orc).
+export function isFavoredEnemy(sheet: Sheet, enemy: Pick<EncounterEnemy, "slug" | "stats">): boolean {
+  const type = String(enemy.stats.type ?? "");
+  const kinds = [textKey(enemy.slug), textKey(type.replace(/\s*\([^()]*\)\s*$/, "")), ...(nameChoice(type) ?? "").split(",").map(textKey)].filter(Boolean);
+  return favoredEnemies(sheet).some((favored) => kinds.some((kind) => sameRulesKey(kind, favored)));
 }
 
 // The bonus Foe Slayer can add to this attack, or 0: a ranger 20 (or the
@@ -86,7 +74,7 @@ export function isFavoredEnemy(sheet: Sheet, enemy: Pick<EncounterEnemy, "displa
 export function foeSlayerBonus(
   sheet: Sheet,
   derived: Pick<SheetDerived, "abilityMods">,
-  enemy: Pick<EncounterEnemy, "displayName" | "stats">,
+  enemy: Pick<EncounterEnemy, "slug" | "stats">,
   oncePerTurn: string[] | null,
 ): number {
   if (!oncePerTurn || oncePerTurn.includes(FOE_SLAYER)) {
@@ -148,7 +136,7 @@ export function shillelaghSwing(
   derived: SheetDerived,
 ): { resolved: ResolvedWeapon; derived: SheetDerived; note: string } | null {
   const srd = resolved.srd;
-  if (!srd || !SHILLELAGH_WEAPONS.has(lower(srd.name)) || !holds(sheet, SHILLELAGH) || !sheet.spellcasting) {
+  if (!srd || !SHILLELAGH_WEAPONS.has(textKey(srd.name)) || !holds(sheet, SHILLELAGH) || !sheet.spellcasting) {
     return null;
   }
   const casting = derived.abilityMods[sheet.spellcasting.ability];

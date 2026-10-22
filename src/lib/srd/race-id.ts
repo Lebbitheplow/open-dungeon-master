@@ -81,6 +81,14 @@ export function speciesHoldsTrait(rules: SpeciesRules | null, name: string): boo
   });
 }
 
+// The bundled dwarves under every spelling of their ids, and a race written
+// "Dwarf": never a species whose id only holds the word (Tome of Heroes'
+// Dwarf Chassis answers by its own rules).
+const DWARVES = new Set(["dwarf", "hill_dwarf", "mountain_dwarf"]);
+export function isDwarf(raceId: string): boolean {
+  return DWARVES.has(srdRaceId(raceId));
+}
+
 // Dwarven Toughness: +1 hit point per level, under every Hill Dwarf id and
 // for any species that carries the trait.
 export function hpBonusPerLevel(raceId: string, rules?: SpeciesRules | null): number {

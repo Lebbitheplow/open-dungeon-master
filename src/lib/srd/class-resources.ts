@@ -13,7 +13,8 @@ import { freeCastOf, freeCastResourceId, freeCastSpellOf, isFreeCastResource } f
 import { LATE_RESOURCE_DEFS } from "@/lib/srd/class-resources-late";
 import { UNLIMITED_USES } from "@/lib/srd/resource-limits";
 import { tableFeat } from "@/lib/srd/feat-effects";
-import { containsPhrase, textKey } from "@/lib/language/text-logic";
+import { textKey } from "@/lib/language/text-logic";
+import { choiceIn, familyOf, isNamed } from "@/lib/srd/feature-names";
 
 export { isUnlimited, UNLIMITED_USES } from "@/lib/srd/resource-limits";
 
@@ -767,25 +768,22 @@ function freeCastDef(id: string): ResourceDef {
 // "Hexblade's Curse" is also written "Hexblades Curse".
 const unquoted = (text: string) => text.replace(/['‘’ʼ´`]/g, "");
 
-// Fuzzy find by id or display/feature name ("rage", "Ki", "sorcery
-// points"...); used by the use_resource tool with model-supplied names.
+// A resource by its id, its display name or a feature name it is spent
+// under, whole, in the formats ODM writes (src/lib/srd/feature-names.ts):
+// "rage", "Ki Points", "Bardic Inspiration (d8)", and a "Family: Choice"
+// spent from its family's pool ("Channel Divinity: Turn Undead"); used by
+// the use_resource tool with model-supplied names. A word of a name is none:
+// "channel" is no Channel Divinity, Persistent Rage no Rage, and the tool
+// lists the sheet's own.
 export function matchResource(term: string): ResourceDef | null {
   const wanted = textKey(term);
   if (!wanted) {
     return null;
   }
-  // A fragment counts as whole words, so "ki" matches "Ki" and "Ki Points"
-  // but never "Skill Versatility" (the half-elf trait that a bare substring
-  // test turns into a monk).
-  const asked = unquoted(term);
-  return (
-    RESOURCE_DEFS.find((def) => textKey(def.id) === wanted) ??
-    RESOURCE_DEFS.find((def) => textKey(def.displayName) === wanted) ??
-    RESOURCE_DEFS.find((def) =>
-      def.match.some((name) => containsPhrase(asked, unquoted(name)) || containsPhrase(unquoted(name), asked)),
-    ) ??
-    null
-  );
+  const named = (written: string) =>
+    RESOURCE_DEFS.find((def) => isNamed(written, def.displayName)) ??
+    RESOURCE_DEFS.find((def) => def.match.some((name) => isNamed(unquoted(written), unquoted(name))));
+  return RESOURCE_DEFS.find((def) => textKey(def.id) === wanted) ?? named(term) ?? named(familyOf(term)) ?? null;
 }
 
 // The level a resource counter scales by, and the class it came from.
@@ -826,8 +824,9 @@ function resourceLevelFor(
 const withoutUses = (name: string) => name.replace(/\s*\((?:\d+|[a-z]+) uses?\)\s*$/i, "");
 
 // Whether a feature on a sheet is the one this counter belongs to: the name
-// matches (exactly for the defs that ask for it, as whole words otherwise),
-// and the class that granted the feature is one the counter was written for.
+// matches (exactly for the defs that ask for it, else whole after a
+// "Prefix:" or with a bracket note, src/lib/srd/feature-names.ts), and the
+// class that granted the feature is one the counter was written for.
 // A feature that names no class (story grants, sheets written before the
 // class was kept) is matched on its name alone.
 function featureHolds(def: ResourceDef, feature: { name: string; classId?: string }): boolean {
@@ -845,7 +844,8 @@ function featureHolds(def: ResourceDef, feature: { name: string; classId?: strin
     if (def.upgrades?.some((upgrade) => textKey(upgrade.match) === name)) {
       return true;
     }
-    return !def.exact && containsPhrase(unquoted(feature.name), unquoted(fragment));
+    // "Channel Divinity: Turn Undead" is spent from Channel Divinity.
+    return !def.exact && (isNamed(unquoted(feature.name), unquoted(fragment)) || choiceIn(feature.name, fragment) !== null);
   });
 }
 

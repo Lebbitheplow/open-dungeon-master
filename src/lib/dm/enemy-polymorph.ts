@@ -21,7 +21,7 @@ import { getActiveEncounter, getEnemy, type EncounterEnemy } from "@/lib/db/enco
 import { restoreOwnForm, writeEnemyForm } from "@/lib/db/enemy-form";
 import { spellFactsFor } from "@/lib/content";
 import { spellSaveDcFor, type CastingSheet } from "@/lib/srd";
-import { BEAST_FORMS, findBeastForm, formatCr, formList } from "@/lib/srd/beast-forms";
+import { BEAST_FORMS, beastFormsHolding, findBeastForm, formatCr, formList } from "@/lib/srd/beast-forms";
 import { conditionUntargetable } from "@/lib/srd/condition-effect-queries";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { rollEnemySave } from "@/lib/dm/forced-save";
@@ -33,7 +33,7 @@ import { layOnEnemy } from "@/lib/dm/spell-riders";
 import { spellConditionMeta } from "@/lib/dm/spell-effects";
 import { publishEncounter } from "@/lib/dm/enemy-damage";
 import { beastEnemyStats, enemyCr, enemyShapeNoEffect, enemyShapeProblem, enemyShapeSpellFor } from "@/lib/dm/enemy-polymorph-logic";
-import type { ToolResult } from "@/lib/dm/tool-errors";
+import { holdingHint, type ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
 
 export { enemyShapeSpellFor };
@@ -78,8 +78,9 @@ export function castShapeAtEnemy(
   const form = findBeastForm(input.variant ?? "");
   if (!form) {
     const asked = input.variant?.trim() ? `The beast-form table holds no "${input.variant.trim()}"` : `${rule.spell} needs the beast in variant`;
+    const hint = input.variant?.trim() ? holdingHint(input.variant, beastFormsHolding(input.variant).map((form) => form.name)) : "";
     return {
-      error: `${asked}; ${enemy.displayName} (CR ${formatCr(enemyCr(enemy))}) can become: ${formList(BEAST_FORMS.filter((entry) => entry.cr <= enemyCr(enemy)))}. Ask the caster's player which, unless they named one. Nothing was spent.`,
+      error: `${asked}; ${enemy.displayName} (CR ${formatCr(enemyCr(enemy))}) can become: ${formList(BEAST_FORMS.filter((entry) => entry.cr <= enemyCr(enemy)))}.${hint} Ask the caster's player which, unless they named one. Nothing was spent.`,
       retry: true,
     };
   }

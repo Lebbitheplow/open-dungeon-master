@@ -38,8 +38,8 @@ const { receiverSlug } = await import("../src/lib/agents/receiver-config.ts");
 const { attachmentDisposition } = await import("../src/lib/serve-file.ts");
 const { exportFilename } = await import("../src/lib/export/story-document.ts");
 const { bundledGearRows } = await import("../src/lib/workshop/bundled-gear-rows.ts");
-const { plannedSwings } = await import("../src/lib/dm/enemy-profile.ts");
-const { nameTerms, stopWordsFor } = await import("../src/lib/language/language.ts");
+const { attackNamed } = await import("../src/lib/dm/enemy-profile.ts");
+const { stopWordsFor } = await import("../src/lib/language/language.ts");
 const { bundledRaceRows } = await import("../src/lib/workshop/catalog-mechanics.ts");
 
 let passed = 0;
@@ -113,8 +113,9 @@ test("a name keys the same however a model marks it, as spells, tools and gear a
   assert.ok(toolProficiencyBonus(rogue, "Thieves’ tools (lockpicks)", 2));
   // A creature or a form by the name a model writes.
   const spider = { name: "Giant Spider" };
-  assert.equal(findNamed([spider, { name: "Spider" }], ["giant_spider"], (entry) => [entry.name]), spider);
-  assert.equal(findNamed([spider], nameTerms("a Giant-Spider", "english"), (entry) => [entry.name]), spider);
+  assert.equal(findNamed([spider, { name: "Spider" }], "giant_spider", (entry) => [entry.name]), spider);
+  assert.equal(findNamed([spider], "Giant-Spider", (entry) => [entry.name]), spider);
+  assert.equal(findNamed([spider], "a Giant-Spider", (entry) => [entry.name]), null);
   // A possessive or an elision shares its word with the bare one.
   assert.equal(factSimilarity("Marla's sword gleams", "the sword of Marla gleams"), 1);
 });
@@ -199,7 +200,7 @@ test("names found in text people write, across case and form", () => {
     assert.deepEqual(detectWitnesses(`… ${decomposed(name.toUpperCase())} watched.`, roster), [name]);
   }
   const faction = { id: "f1", campaignId: "c", name: "Gilde der Äbte", blurb: "", goal: "" };
-  assert.deepEqual(factionsNamedBy("Die GILDE DER ÄBTE schweigt.", [faction]).map((entry) => entry.name), ["Gilde der Äbte"]);
+  assert.deepEqual(factionsNamedBy("Die GILDE DER ÄBTE schweigt.", [faction], "german").map((entry) => entry.name), ["Gilde der Äbte"]);
   const equipment = [{ name: "Épée de Feu" }, { name: "Щит" }];
   assert.equal(findCarriedItem(equipment, decomposed("épée de feu"))?.name, "Épée de Feu");
   assert.equal(findCarriedItem(equipment, "щит")?.name, "Щит");
@@ -208,7 +209,9 @@ test("names found in text people write, across case and form", () => {
 });
 
 test("the words a person types are searched by Unicode words, not ASCII runs", () => {
-  assert.equal(pickLairOption(["Il soffitto crolla sui nemici.", "La nebbia avvolge la città."], "nebbia città"), "La nebbia avvolge la città.");
+  assert.equal(pickLairOption(["Il soffitto crolla sui nemici.", "La nebbia avvolge la città."], "LA NEBBIA AVVOLGE LA CITTÀ"), "La nebbia avvolge la città.");
+  assert.equal(pickLairOption(["Il soffitto crolla sui nemici.", "La nebbia avvolge la città."], "2"), "La nebbia avvolge la città.");
+  assert.equal(pickLairOption(["Il soffitto crolla sui nemici.", "La nebbia avvolge la città."], "nebbia città"), null);
   const lines = [{ speaker: "dm", content: "Олег ушёл в лес." }, { speaker: "dm", content: "Nothing here." }];
   const found = transcriptPassages(lines, "куда ушёл Олег", stopWordsFor("russian"));
   assert.equal(found.length, 1);
@@ -228,7 +231,8 @@ test("a key never loses what a match needs: tags stripped before keying, stop wo
   // The model names an attack with its recharge tag; the parenthetical goes
   // from the request as written, before the key drops its brackets.
   const attacks = [{ name: "Claw" }, { name: "Fire Breath" }];
-  assert.equal(plannedSwings({ attacks }, attacks, "FIRE BREATH (Recharge 5–6)", { single: true })[0].name, "Fire Breath");
+  assert.equal(attackNamed(attacks, "FIRE BREATH (Recharge 5–6)").name, "Fire Breath");
+  assert.equal(attackNamed(attacks, "Breath"), null);
   // An elision in a stop list matches no word token; keyed it would stop "d".
   assert.ok(stopWordsFor("irish").has("d'"));
   assert.ok(!stopWordsFor("irish").has("d"));
@@ -247,14 +251,14 @@ test("the workshop pickers' searches fold case, spacing and form like every othe
 test("speech is tied to a speaker whose name the prose writes decomposed or in another case", () => {
   const speaker = { kind: "npc", id: "n1", name: "Élodie Marsh" };
   for (const prose of [`${decomposed("Élodie")} says: "Hello."`, `ÉLODIE says: "Hello."`]) {
-    const segments = attributeSpeech(prose, [speaker], { pronouns: true });
+    const segments = attributeSpeech(prose, [speaker], { englishPronouns: true });
     const spoken = segments.find((segment) => segment.kind === "speech");
     assert.equal(spoken?.speaker.id, "n1", prose);
     // The prose keeps the name as it was written, in its own form.
     assert.ok(segments.some((segment) => segment.kind === "prose" && segment.text.includes(prose.split(" ")[0])), prose);
   }
   const russian = { kind: "npc", id: "n2", name: "Олег" };
-  const said = attributeSpeech("Олег говорит: «Привет.»", [russian], { pronouns: false });
+  const said = attributeSpeech("Олег говорит: «Привет.»", [russian], { englishPronouns: false });
   assert.equal(said.find((segment) => segment.kind === "speech")?.speaker.id, "n2");
 });
 

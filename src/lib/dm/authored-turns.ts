@@ -16,8 +16,7 @@ import { withinFeet } from "@/lib/dm/authored-saves";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { rollCard, sheetAttacker } from "@/lib/dm/roll-card";
 import { rollAgainst } from "@/lib/roll-labels";
-
-const lower = (value: string | undefined | null) => (value ?? "").trim().toLowerCase();
+import { textKey } from "@/lib/language/text-logic";
 
 function fielded(campaignId: string): CharacterSheet[] {
   return listSheets(campaignId)
@@ -106,7 +105,7 @@ export function authoredTurnStart(campaign: Campaign, encounter: Encounter, comb
           continue;
         }
         if (effect.frightenedOnly) {
-          const scared = live.conditions.find((entry) => lower(entry) === "frightened");
+          const scared = live.conditions.find((entry) => textKey(entry) === "frightened");
           if (!scared || (live.conditionMeta as ConditionMetaMap)[scared]?.source !== holder.id) {
             continue;
           }

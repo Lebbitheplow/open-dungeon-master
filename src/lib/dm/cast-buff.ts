@@ -16,12 +16,12 @@ import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { publishPersisted } from "@/lib/events";
 import { findSpellByName, spellEngineName, spellFactsFor, spellMechanicsFor } from "@/lib/content";
-import { findBeastForm, formatCr, formList } from "@/lib/srd/beast-forms";
+import { beastFormsHolding, findBeastForm, formatCr, formList } from "@/lib/srd/beast-forms";
 import { shapedAbilities, shapeForms, shapeProblem, shapeRuleFor } from "@/lib/srd/shape-rules";
 import { conditionEffectsFor } from "@/lib/srd/condition-effects";
 import { applyDmMutation, castBarred } from "@/lib/dm/mutations";
-import { resolveEnemyRef } from "@/lib/dm/enemy-damage";
-import { resolveSheetRef } from "@/lib/dm/rolls";
+import { resolveEnemyRef, unknownEnemyRef } from "@/lib/dm/enemy-damage";
+import { resolveSheetRef, unknownSheetRef } from "@/lib/dm/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { lifetimeAtSlot } from "@/lib/dm/spell-effects";
@@ -37,7 +37,9 @@ import { summonSpellFor } from "@/lib/srd/summon-spells";
 import { castSummon } from "@/lib/dm/summon-cast";
 import { castFindFamiliar, isFindFamiliar } from "@/lib/dm/familiar-cast";
 import { castShapeAtEnemy, enemyShapeSpellFor } from "@/lib/dm/enemy-polymorph";
-import type { ToolResult } from "@/lib/dm/tool-errors";
+import { holdingHint, noneNamed, type ToolResult } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
+import { nameChoice } from "@/lib/srd/feature-names";
 import { castsSpells } from "@/lib/srd";
 
 // Temporary hit points a chosen variant grants on top of its condition.
@@ -80,7 +82,7 @@ export function handleCastBuff(
   const staleSheet = resolveSheetRef(args.characterId, sheets, sheetsById);
   const sheet = staleSheet ? (getSheetById(staleSheet.id) ?? staleSheet) : null;
   if (!sheet) {
-    return { error: "Unknown characterId; use one from GAME STATE.", retry: true };
+    return unknownSheetRef("characterId", args.characterId, sheets);
   }
   // A reaction spell is asked by the cast guard's reaction gate instead,
   // which judges one answering the hit that dropped the caster as they stood
@@ -147,7 +149,9 @@ export function handleCastBuff(
     const encounter = getActiveEncounter(campaign.id);
     const enemy = encounter ? resolveEnemyRef(encounter.id, args.targetEnemyId) : null;
     if (!enemy) {
-      return { error: "Unknown targetEnemyId; use one from GAME STATE. Nothing was spent.", retry: true };
+      return encounter
+        ? unknownEnemyRef(encounter.id, "targetEnemyId", args.targetEnemyId, "Nothing was spent.")
+        : { error: "No fight is running: targetEnemyId names an enemy of a fight. Nothing was spent.", retry: true };
     }
     return castShapeAtEnemy(
       campaign,
@@ -185,13 +189,21 @@ export function handleCastBuff(
   }
   const plannedSlot = resolvedMech.spellLevel >= 1 ? Math.max(resolvedMech.spellLevel, args.level ?? 0) : null;
 
-  // The condition applied: the spell's own, a declared variant, or the one
-  // the slot buys (Magic Weapon +2 from a 4th level slot).
-  const wantedVariant = (args.variant ?? "").trim().toLowerCase();
-  let condition =
-    wantedVariant && buff.variants?.some((entry) => entry.toLowerCase().includes(wantedVariant))
-      ? buff.variants.find((entry) => entry.toLowerCase().includes(wantedVariant))!
-      : buff.condition;
+  // The condition applied: the spell's own, or the variant named whole or by
+  // what its brackets hold ("fire" for "protection from energy (fire)"),
+  // which a spell with variants needs; the slot may then buy a stronger one
+  // (Magic Weapon +2 from a 4th level slot).
+  let condition = buff.condition;
+  if (buff.variants?.length) {
+    const wanted = textKey(args.variant ?? "");
+    const picked = buff.variants.find((entry) => [entry, nameChoice(entry) ?? ""].some((spelling) => textKey(spelling) === wanted));
+    if (!picked) {
+      return wanted
+        ? noneNamed(`${resolvedMech.name} has no variant called`, (args.variant ?? "").trim(), buff.variants)
+        : { error: `${resolvedMech.name} needs its variant: ${buff.variants.join(", ")}. Ask the player which, unless they named one. Nothing was spent.`, retry: true };
+    }
+    condition = picked;
+  }
 
   // Polymorph: the variant names the beast form and the server applies its
   // whole stat block as a transformation (the wildShape machinery: beast HP
@@ -204,7 +216,9 @@ export function handleCastBuff(
       ? resolveEnemyRef(encounterNow.id, args.targetEnemyId)
       : null;
   if (MARKS.has(buff.condition) && args.targetEnemyId && !quarry) {
-    return { error: "Unknown targetEnemyId for the mark; use one from GAME STATE. Nothing was spent.", retry: true };
+    return encounterNow
+      ? unknownEnemyRef(encounterNow.id, "targetEnemyId", args.targetEnemyId, "Nothing was spent.")
+      : { error: "No fight is running: a mark's targetEnemyId names an enemy of a fight. Nothing was spent.", retry: true };
   }
 
   // Resolve the recipients: self-only spells ignore stray targets.
@@ -246,8 +260,9 @@ export function handleCastBuff(
   const shapeRule = shapeRuleFor(engine);
   if (condition === "polymorphed" && !polymorphForm) {
     const asked = args.variant?.trim() ? `The beast-form table holds no "${args.variant.trim()}"` : `${resolvedMech.name} needs the beast in variant`;
+    const hint = args.variant?.trim() ? holdingHint(args.variant, beastFormsHolding(args.variant).map((form) => form.name)) : "";
     return {
-      error: `${asked}; ${targetSheets[0].name} can become: ${formList(shapeForms(shapeRule, targetSheets[0], sheet.level))}. Ask the player which, unless they named one. Nothing was spent.`,
+      error: `${asked}; ${targetSheets[0].name} can become: ${formList(shapeForms(shapeRule, targetSheets[0], sheet.level))}.${hint} Ask the player which, unless they named one. Nothing was spent.`,
       retry: true,
     };
   }

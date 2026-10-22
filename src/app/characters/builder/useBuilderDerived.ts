@@ -189,7 +189,7 @@ export function useBuilderDerived({
   // pack's as fetched (useFeatDescs). What its grants and its ability
   // point are read from.
   const featDescOf = useMemo(
-    () => (name: string) => featDescs?.[name.trim().toLowerCase()] ?? authoredFeatDesc(name) ?? "",
+    () => (name: string) => featDescs?.[textKey(name)] ?? authoredFeatDesc(name) ?? "",
     [featDescs],
   );
   // The scores the server will STORE, with those points in, and the saving

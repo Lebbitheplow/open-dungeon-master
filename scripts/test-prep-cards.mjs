@@ -148,7 +148,7 @@ test("read_card opens a card by beat number, event id and title", () => {
   const byEvent = handleReadCard(fresh, JSON.stringify({ ref: event.id }));
   assert.match(byEvent.text, /lamp oil/);
   assert.match(byEvent.standing, /^planned event \[ev\d+\] \(pending\)/);
-  const byTitle = handleReadCard(fresh, JSON.stringify({ ref: "lighthouse bargain" }));
+  const byTitle = handleReadCard(fresh, JSON.stringify({ ref: "the LIGHTHOUSE bargain" }));
   assert.equal(byTitle.title, "The lighthouse bargain");
   assert.match(handleReadCard(fresh, JSON.stringify({ ref: "ev999" })).error, /No prep card answers/);
   assert.match(handleReadCard(fresh, "{}").error, /Say which card/);

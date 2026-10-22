@@ -2,7 +2,7 @@ import { normalizeLegendaryState, type LegendaryState } from "@/lib/dm/legendary
 import type { EncounterSummary } from "@/lib/dm/encounter-summary";
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import type { EnemyStats } from "@/lib/bestiary/statblock";
-import type { ConditionMetaMap } from "@/lib/schemas/sheet";
+import type { ConditionMetaMap, EquipmentItem } from "@/lib/schemas/sheet";
 import type { TurnBudget } from "@/lib/dm/action-budget";
 import { normalizeIntents, type EncounterIntents } from "@/lib/db/encounter-intents";
 import { restoreOwnForm } from "@/lib/db/enemy-form";
@@ -80,7 +80,9 @@ export type Encounter = {
   reactionsUsed: string[];
   // Ammunition spent in this fight, keyed "<characterId>|<inventory line>".
   // Empty unless the `ammunition` variant rule is on (src/lib/srd/ammunition.ts).
-  ammoSpent: Record<string, number>;
+  // A line whose last one was spent keeps itself beside its count, so what
+  // is recovered comes back as that line, its row and tags with it.
+  ammoSpent: Record<string, number | { spent: number; line: EquipmentItem }>;
   // Who attacked whom this round (attacker ref id to target ref ids), so
   // every client draws the same hairlines. Only meaningful while `round`
   // matches the encounter's; written by recordEncounterTarget.
@@ -230,7 +232,7 @@ function mapEncounter(row: EncounterRow): Encounter {
     turnBudget: parseJson<TurnBudget | null>(row.turn_budget_json, null),
     surprisedIds: parseJson<string[]>(row.surprised_ids_json, []),
     reactionsUsed: parseJson<string[]>(row.reactions_used_json, []),
-    ammoSpent: parseJson<Record<string, number>>(row.ammo_spent_json, {}),
+    ammoSpent: parseJson<Encounter["ammoSpent"]>(row.ammo_spent_json, {}),
     targets: normalizeTargets(parseJson<unknown>(row.targets_json ?? "{}", {})),
     intents: normalizeIntents(parseJson<unknown>(row.intents_json ?? "{}", {})),
     legendary: normalizeLegendaryState(parseJson<unknown>(row.legendary_json ?? "{}", {})),

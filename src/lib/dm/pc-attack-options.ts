@@ -20,6 +20,7 @@ import { featureBonusAttack, type FeatureBonusAttack } from "@/lib/dm/feature-bo
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
+import { holdsFeature } from "@/lib/srd/feature-names";
 
 export const BONUS_ATTACKS = ["martial arts", "frenzy", "feature"] as const;
 export type AnyBonusAttack = (typeof BONUS_ATTACKS)[number];
@@ -276,7 +277,7 @@ function hordeBreakerProblem(input: {
 }
 
 export function hasHordeBreaker(sheet: Pick<CharacterSheet, "features">): boolean {
-  return sheet.features.some((feature) => /horde breaker/i.test(feature.name));
+  return holdsFeature(sheet, "Horde Breaker");
 }
 
 // What a charged Horde Breaker spends: its once-per-turn key.

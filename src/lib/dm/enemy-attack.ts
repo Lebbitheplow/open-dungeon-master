@@ -35,12 +35,12 @@ import { spellAttackHold } from "@/lib/dm/spell-planes";
 import { reachThroughProblem } from "@/lib/dm/zone-rules";
 import { critDamageExpression } from "@/lib/dm/encounter-logic";
 import { wornArmorTurnsCrits } from "@/lib/srd/armor";
-import { resolveEnemyRef } from "@/lib/dm/enemy-damage";
+import { resolveEnemyRef, unknownEnemyRef } from "@/lib/dm/enemy-damage";
 import { approachTarget, spendEnemyAction, standUpIfProne } from "@/lib/dm/enemy-approach";
 import { blowByType, resolveOnHit, scaledParts } from "@/lib/dm/enemy-hit";
 import { applyPcDamage } from "@/lib/dm/pc-damage";
 import { effectOutcome } from "@/lib/dm/effect-tools";
-import { charmedBy, enemyAttackProfile, plannedSwings, swingMode, type EnemyAttackProfile } from "@/lib/dm/enemy-profile";
+import { attackNamed, charmedBy, enemyAttackProfile, plannedSwings, swingMode, type EnemyAttackProfile } from "@/lib/dm/enemy-profile";
 import { publishFx, tokenPosition } from "@/lib/dm/fx";
 import { hasTrait } from "@/lib/dm/monster-abilities";
 import { enemySwingOdds, hasFeatureNamed } from "@/lib/dm/enemy-swing-odds";
@@ -53,9 +53,10 @@ import { conditionRollRiders, conditionTurnShape } from "@/lib/srd/condition-eff
 import { isImmersed, underwaterSwing } from "@/lib/dm/underwater";
 import { swimsFrom } from "@/lib/battlemap/types";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import { invalidArguments, toolError, type ToolResult } from "@/lib/dm/tool-errors";
+import { invalidArguments, noneNamed, toolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
 import { ADVANTAGE_SOURCES } from "@/lib/dm/pc-attack-options";
+import { unknownSheetRef } from "@/lib/dm/rolls";
 
 const attackArgsSchema = z.object({
   enemyId: z.string(),
@@ -115,7 +116,7 @@ export function handleEnemyAttack(
   const args = parsed.data;
   const found = resolveEnemyRef(encounter.id, args.enemyId);
   if (!found) {
-    return { error: "Unknown enemyId; use one from GAME STATE.", retry: true };
+    return unknownEnemyRef(encounter.id, "enemyId", args.enemyId);
   }
   // One guard for the enemy side (src/lib/dm/can-act.ts): the dead, the
   // incapacitated and the surprised do nothing, and an action is one a round.
@@ -130,7 +131,7 @@ export function handleEnemyAttack(
     );
   const target = staleTarget ? getSheetById(staleTarget.id) : null;
   if (!target) {
-    return { error: "Unknown targetCharacterId; use one from GAME STATE.", retry: true };
+    return unknownSheetRef("targetCharacterId", args.targetCharacterId, sheets);
   }
   // SRD 5.1, Charmed: a charmed creature cannot attack its charmer.
   if (charmedBy(found.conditions, found.conditionMeta, target.id)) {
@@ -161,7 +162,14 @@ export function handleEnemyAttack(
   }
   // Slow: no more than one attack on its turn, Multiattack or not (SRD 5.1).
   const single = takeLegendaryStrike(campaign.id, found.id) || conditionTurnShape(found.conditions).slowed;
-  const planned = plannedSwings(found.stats, attacks, args.attack, { single });
+  const asked = args.attack ? attackNamed(attacks, args.attack) : null;
+  if (args.attack && !asked) {
+    return noneNamed(`${found.displayName} has no attack called`, args.attack, attacks.map((attack) => attack.name));
+  }
+  if (single && !asked && attacks.length > 1) {
+    return { error: `${found.displayName} makes one attack this turn: name it in attack (${attacks.map((attack) => attack.name).join(", ")}).`, retry: true };
+  }
+  const planned = plannedSwings(found.stats, attacks, asked, { single });
   const profiles = planned.map((attack) => enemyAttackProfile(attack, found.stats.traits ?? []));
   // Antilife Shell: no melee reaches through it (zone-rules.ts).
   const shell = leadProfile(profiles).melee ? reachThroughProblem(encounter.id, found.id, target.id, found.stats.type, found.displayName) : null;

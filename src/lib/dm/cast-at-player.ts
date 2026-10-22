@@ -24,7 +24,7 @@ import type { RollAttacker } from "@/lib/db/rolls";
 import { rollAgainst } from "@/lib/roll-labels";
 import { publishFx, tokenPosition } from "@/lib/dm/fx";
 import { applyDmMutation, canonicalCondition } from "@/lib/dm/mutations";
-import { resolveSheetRef } from "@/lib/dm/rolls";
+import { resolveSheetRef, unknownSheetRef } from "@/lib/dm/rolls";
 import { saveDamageTaken } from "@/lib/srd/trait-rules";
 import { handleSetCondition } from "@/lib/dm/set-condition";
 import { spellConditionMeta } from "@/lib/dm/spell-effects";
@@ -170,7 +170,7 @@ export function handleCastAtPlayer(
   const staleSheet = resolveSheetRef(args.characterId, sheets, sheetsById);
   const sheet = staleSheet ? (getSheetById(staleSheet.id) ?? staleSheet) : null;
   if (!sheet) {
-    return { error: "Unknown characterId; use one from GAME STATE.", retry: true };
+    return unknownSheetRef("characterId", args.characterId, sheets);
   }
   if (sheet.deathSaves?.dead) {
     return { error: `${sheet.name} is DEAD; nothing can affect them. The enemy may target someone else or take another action.`, retry: true };

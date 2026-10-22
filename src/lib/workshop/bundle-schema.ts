@@ -317,6 +317,7 @@ const stockLineSchema = z.object({
   qty: z.number().int().min(0).max(999),
   priceCp: z.number().int().min(1).max(100_000_000),
   note: z.string().max(120).default(""),
+  srdName: z.string().trim().max(80).optional(),
 });
 
 // A Market shop (#171): its place and keeper as indexes into `locations`

@@ -28,6 +28,7 @@ import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { publishPersisted } from "@/lib/events";
 import { computeSheetDerived } from "@/lib/srd";
 import { classLevelFor } from "@/lib/srd/multiclass";
+import { isConditionNamed } from "@/lib/srd/feature-names";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { rollCard } from "@/lib/dm/roll-card";
 import { freshLastHit, type LastHit, type SwingRecord } from "@/lib/dm/last-hit";
@@ -215,7 +216,7 @@ export function planCounterReaction(input: Input): Plan | ToolError | null {
           const marker = `${HUSK_RECOVERING} (${rests})`;
           patchSheet(sheet.id, {
             ...(tired ?? {}),
-            conditions: [...after.conditions.filter((entry) => !entry.toLowerCase().startsWith(HUSK_RECOVERING)), marker],
+            conditions: [...after.conditions.filter((entry) => !isConditionNamed(entry, HUSK_RECOVERING)), marker],
           });
           publishSheet(campaign, sheet.id);
           const burst = huskBurst(campaign, input, level);

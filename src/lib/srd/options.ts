@@ -16,6 +16,7 @@ import optionsJson from "@/lib/srd/options.json";
 import subclassesJson from "@/lib/srd/subclasses.json";
 import { subclassNamed } from "@/lib/srd/subclass-name";
 import { textKey } from "@/lib/language/text-logic";
+import { choiceIn } from "@/lib/srd/feature-names";
 
 export type OptionKind =
   | "invocation"
@@ -52,14 +53,9 @@ export function optionFeatureName(kind: OptionKind, name: string): string {
   return `${KINDS[kind].prefix}${name}`;
 }
 
-const normalize = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
-
 // The picks of one kind already on a sheet, as bare option names.
 export function chosenOptions(features: Array<{ name: string }>, kind: OptionKind): string[] {
-  const prefix = normalize(KINDS[kind].prefix);
-  return features
-    .filter((feature) => normalize(feature.name).startsWith(prefix))
-    .map((feature) => feature.name.slice(KINDS[kind].prefix.length).trim());
+  return features.flatMap((feature) => choiceIn(feature.name, KINDS[kind].prefix) ?? []);
 }
 
 // Whether a bare name is an option of any kind ("Riposte", "Agonizing Blast").
@@ -71,12 +67,10 @@ export function isOptionName(name: string): boolean {
 // Any option pick on a sheet, whatever its kind. Used by the help layer so
 // "Invocation: Agonizing Blast" can explain itself.
 export function findOptionByFeatureName(featureName: string): OptionDef | null {
-  const name = normalize(featureName);
   for (const [kind, meta] of Object.entries(KINDS) as Array<[OptionKind, KindMeta]>) {
-    const prefix = normalize(meta.prefix);
-    if (name.startsWith(prefix)) {
-      const bare = textKey(featureName.slice(meta.prefix.length));
-      return OPTIONS.find((option) => option.k === kind && textKey(option.n) === bare) ?? null;
+    const choice = choiceIn(featureName, meta.prefix);
+    if (choice) {
+      return OPTIONS.find((option) => option.k === kind && textKey(option.n) === textKey(choice)) ?? null;
     }
   }
   return null;
@@ -206,9 +200,9 @@ export function optionSlotsFor(
   const grant = GRANTS.find(
     (entry) =>
       entry.kind === kind &&
-      ((entry.classId === normalize(classId) && (!entry.subclass || subclassMatches(subclass, entry.subclass))) ||
+      ((entry.classId === textKey(classId) && (!entry.subclass || subclassMatches(subclass, entry.subclass))) ||
         (Boolean(entry.opens?.some((name) => heldKeys.has(textKey(name)))) &&
-          (!entry.opensInClass || entry.classId === normalize(classId)))),
+          (!entry.opensInClass || entry.classId === textKey(classId)))),
   );
   if (!grant) {
     return 0;
@@ -225,7 +219,7 @@ export function optionLabelsOpenedBy(classId: string, name: string): string[] {
   return GRANTS.filter(
     (grant) =>
       Boolean(grant.opens?.some((opening) => textKey(opening) === key)) &&
-      (!grant.opensInClass || grant.classId === normalize(classId)),
+      (!grant.opensInClass || grant.classId === textKey(classId)),
   ).map((grant) => KINDS[grant.kind].label);
 }
 
@@ -253,7 +247,7 @@ export function openOptionSlots(input: {
   // This class's own features: a feature another class granted opens no
   // picks here.
   const ownFeatures = input.features.filter(
-    (feature) => !(feature as { classId?: string }).classId || normalize((feature as { classId?: string }).classId ?? "") === normalize(input.classId),
+    (feature) => !(feature as { classId?: string }).classId || textKey((feature as { classId?: string }).classId ?? "") === textKey(input.classId),
   );
   for (const kind of Object.keys(KINDS) as OptionKind[]) {
     const total = optionSlotsFor(input.classId, input.subclass, input.level, kind, ownFeatures) + featOptionSlots(input.feats, kind);

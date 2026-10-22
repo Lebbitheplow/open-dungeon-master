@@ -40,8 +40,8 @@ import { poisonAt } from "@/lib/srd/table-hazards";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { hasItemTag } from "@/lib/srd/item-tags";
-
-const lower = (value: string) => value.trim().toLowerCase();
+import { rowName, type RowItem } from "@/lib/srd/item-row";
+import { textKey } from "@/lib/language/text-logic";
 
 function publishRoll(campaignId: string, roll: ReturnType<typeof insertRoll>) {
   publishWithSeq(campaignId, allocateSeq(campaignId), "roll_result", { roll, source: "digital" });
@@ -99,18 +99,20 @@ export const POISON_COAT = "poisoned weapon";
 // What a vial coats a blade with: basic poison (DC 10, 1d4, no half), or an
 // injury poison from the SRD list (Drow Poison, Serpent Venom, Purple Worm
 // Poison, Wyvern Poison: src/lib/srd/afflictions.ts) or the table's workshop
-// (src/lib/srd/table-hazards.ts). Null for anything else.
-function coatOf(itemName: string, campaignId?: string): { name: string; dc: number; damage?: string; halfOnSave?: boolean; conditions?: string[]; minutes?: number; unconsciousIfFailBy?: number } | null {
+// (src/lib/srd/table-hazards.ts), by the row the vial is (src/lib/srd/
+// item-row.ts). Null for anything else.
+function coatOf(item: RowItem, campaignId?: string): { name: string; dc: number; damage?: string; halfOnSave?: boolean; conditions?: string[]; minutes?: number; unconsciousIfFailBy?: number } | null {
+  const row = rowName(item);
   // The SRD's basic poison, by its row (src/lib/srd/adventuring-gear.ts).
-  if (catalogName(itemName) === "Poison, Basic (vial)") {
+  if (catalogName(row) === "Poison, Basic (vial)") {
     return { name: "basic poison", dc: 10, damage: "1d4" };
   }
-  const poison = poisonAt(itemName, campaignId);
+  const poison = poisonAt(row, campaignId);
   return poison && poison.type === "injury" ? poison : null;
 }
 
-export function isBasicPoison(itemName: string, campaignId?: string): boolean {
-  return coatOf(itemName, campaignId) !== null;
+export function isBasicPoison(item: RowItem, campaignId?: string): boolean {
+  return coatOf(item, campaignId) !== null;
 }
 
 function slashesOrPierces(damage: string): boolean {
@@ -118,8 +120,8 @@ function slashesOrPierces(damage: string): boolean {
 }
 
 // Why the vial cannot be used, before it is spent: nothing to coat.
-export function poisonCoatRefusal(sheet: CharacterSheet, itemName: string): ToolError | null {
-  if (!isBasicPoison(itemName, sheet.campaignId)) {
+export function poisonCoatRefusal(sheet: CharacterSheet, item: RowItem): ToolError | null {
+  if (!isBasicPoison(item, sheet.campaignId)) {
     return null;
   }
   const coatable = sheet.equipment.some((item) => {
@@ -133,14 +135,14 @@ export function poisonCoatRefusal(sheet: CharacterSheet, itemName: string): Tool
 
 // The vial just used: the coat goes on, for a minute (ten rounds). Which
 // poison it is rides in the coat's source.
-export function coatWithPoison(campaign: Campaign, user: CharacterSheet, itemName: string): Record<string, unknown> | null {
-  const coat = coatOf(itemName, campaign.id);
+export function coatWithPoison(campaign: Campaign, user: CharacterSheet, item: RowItem): Record<string, unknown> | null {
+  const coat = coatOf(item, campaign.id);
   if (!coat) {
     return null;
   }
   const fresh = getSheetById(user.id) ?? user;
   const meta: ConditionMetaMap = { ...(fresh.conditionMeta as ConditionMetaMap), [POISON_COAT]: { rounds: 10, source: coat.name.toLowerCase() } };
-  const conditions = fresh.conditions.some((entry) => lower(entry) === POISON_COAT) ? fresh.conditions : [...fresh.conditions, POISON_COAT];
+  const conditions = fresh.conditions.some((entry) => textKey(entry) === POISON_COAT) ? fresh.conditions : [...fresh.conditions, POISON_COAT];
   const updated = patchSheet(fresh.id, { conditions, conditionMeta: meta });
   if (updated) {
     publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
@@ -158,7 +160,7 @@ export function carriesPoison(sheet: CharacterSheet, weaponAttack: boolean, dama
   return (
     weaponAttack &&
     slashesOrPierces(damageType) &&
-    sheet.conditions.some((entry) => lower(entry) === POISON_COAT)
+    sheet.conditions.some((entry) => textKey(entry) === POISON_COAT)
   );
 }
 
@@ -169,7 +171,7 @@ export function poisonOnHit(campaign: Campaign, sheetId: string, enemyId: string
   if (!sheet) {
     return null;
   }
-  const coat = coatOf(String((sheet.conditionMeta as ConditionMetaMap)[POISON_COAT]?.source ?? "basic poison"), campaign.id) ?? coatOf("basic poison");
+  const coat = coatOf({ name: String((sheet.conditionMeta as ConditionMetaMap)[POISON_COAT]?.source ?? "basic poison") }, campaign.id) ?? coatOf({ name: "basic poison" });
   const cleared = removeConditions(sheet.conditions, sheet.conditionMeta, [POISON_COAT]);
   const updated = patchSheet(sheet.id, { conditions: cleared.conditions, conditionMeta: cleared.meta });
   if (updated) {

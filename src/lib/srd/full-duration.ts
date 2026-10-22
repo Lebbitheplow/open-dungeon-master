@@ -9,6 +9,8 @@
 // no wall for it.) Read by src/lib/dm/concentration-clock.ts as the clock runs
 // out, keyed by the spell or the published spell a workshop copy runs as.
 
+import { textKey } from "@/lib/language/text-logic";
+
 export type FullDurationRule = {
   // What every creature the casting still holds becomes, for good; absent,
   // its conditions simply stay, no longer bound to the spell.
@@ -21,5 +23,5 @@ const FULL_DURATION: Record<string, FullDurationRule> = {
 };
 
 export function fullDurationRule(spell: string): FullDurationRule | null {
-  return FULL_DURATION[spell.trim().toLowerCase()] ?? null;
+  return FULL_DURATION[textKey(spell)] ?? null;
 }

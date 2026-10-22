@@ -34,6 +34,7 @@ import { conditionNote, conditionNoteLine } from "@/lib/battlemap/condition-note
 import { matchWeapon } from "@/lib/srd/weapons";
 import { checkRidersOf } from "@/lib/srd/item-check-riders";
 import type { ItemTag } from "@/lib/schemas/item-tags";
+import { magicItemBonus } from "@/lib/srd/item-row";
 
 // ---- hit points ----
 
@@ -260,7 +261,7 @@ export function wearableGear(equipment: EquipmentItem[]): EquipmentItem[] {
   return equipment.filter(
     (item) =>
       matchArmor(item) !== null ||
-      /\+[123]\b/.test(item.name) ||
+      magicItemBonus(item.name) > 0 ||
       matchMagicItem(item) !== null ||
       Boolean(item.gear?.magic) ||
       wearSlotOf(item) !== null,

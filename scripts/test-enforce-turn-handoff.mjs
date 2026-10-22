@@ -26,6 +26,7 @@ const kit = await combatKit(world);
 const model = await fakeModel();
 model.pointAt(world);
 const ai = await aiEngine(world);
+const { updateGameSettings } = await import("../src/lib/db/campaigns.ts");
 
 const hero = (name) =>
   world.addHero({
@@ -154,6 +155,29 @@ await test("The player's own words end the turn once the DM ruled on what they d
   );
   assert.equal(wordsRead(), true, "the player's words were never read");
   assert.equal(current(), kara.id, "the player ended the turn in Spanish and it stayed open");
+});
+
+await test("The English phrases are read at an English table only: at every other table the player's words, English ones included, are the reader's to read", async () => {
+  const wordReads = () => model.readerRequests.filter((request) => String(request.messages?.[1]?.content ?? "").includes("Player's words:")).length;
+  const swing = (goblin) => [
+    reply({ calls: [call("pc_attack", { characterId: avery.id, targetEnemyId: goblin.id, weapon: "Longsword" })] }),
+    reply({ text: "The goblin is too far off for Avery's blade to reach. What does Avery do?" }),
+  ];
+  for (const language of ["italian", "french", "spanish", "german"]) {
+    updateGameSettings(world.campaignId, { tableLanguage: language });
+    // The reader reads no end in them: the turn stays open.
+    const goblin = await stage();
+    kit.place(goblin.id, 15, 5);
+    await playerTurn(`I close in on the goblin and attack it, then I end my turn (${language}, first).`, swing(goblin), [[], []]);
+    assert.equal(wordReads(), 1, `${language}: the words were not sent to the reader`);
+    assert.equal(current(), avery.id, `${language}: the English phrase ended the turn without the reader`);
+    // The reader reads the end: the turn ends.
+    const again = await stage();
+    kit.place(again.id, 15, 5);
+    await playerTurn(`I close in on the goblin and attack it, then I end my turn (${language}, second).`, swing(again), [[], [{ kind: "turn_over", quote: "then I end my turn" }]]);
+    assert.equal(current(), kara.id, `${language}: the reader read the end and the turn stayed open`);
+  }
+  updateGameSettings(world.campaignId, { tableLanguage: "english" });
 });
 
 await test("The player's words end nothing when the DM only asked them a question", async () => {

@@ -23,7 +23,8 @@ import { spendAction } from "@/lib/dm/action-budget";
 import { attacksAllowedFor, budgetFor, prepareReaction, storeBudget } from "@/lib/dm/turn-budget";
 import { resolveSpendEffect, type SpendContext } from "@/lib/dm/authored-spend-effects";
 import type { CharacterSheet, FullPatchSheetInput } from "@/lib/schemas/sheet";
-import { toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
+import { namedOption, toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 export type AuthoredSpendArgs = {
   amount?: number;
@@ -31,8 +32,6 @@ export type AuthoredSpendArgs = {
   targetCharacterId?: string;
   targetEnemyId?: string;
 };
-
-const lower = (value: string | undefined | null) => (value ?? "").trim().toLowerCase();
 
 function audit(campaign: Campaign, turnId: string, sheet: CharacterSheet, delta: Record<string, unknown>, reason: string, patch: Record<string, unknown>) {
   const entry = insertSheetAudit({
@@ -116,12 +115,8 @@ function pickVariant(does: SpendDoes, variant: string | undefined, spend: Author
   if (does.kind !== "variants") {
     return { does, action: spend.action };
   }
-  const wanted = lower(variant);
-  const key = Object.keys(does.options).find((option) => wanted.includes(option));
-  if (!key) {
-    return { error: `${spend.name} needs a variant: ${Object.keys(does.options).join(" or ")}. Ask the player which, unless they named one. Nothing was spent.`, retry: true };
-  }
-  return does.options[key];
+  const key = namedOption(spend.name, variant, Object.keys(does.options));
+  return typeof key === "string" ? does.options[key] : key;
 }
 
 // A use_resource call this module resolves, or null for the other paths.
@@ -151,7 +146,7 @@ export function authoredFeatureSpend(
   if (spend.fight === "out" && inFight) {
     return { error: `${spend.name} is chosen outside a fight, when a rest ends, not in the middle of one.`, refused: "rules" };
   }
-  if (spend.oncePer && sheet.conditions.some((entry) => lower(entry) === spend.oncePer!.marker)) {
+  if (spend.oncePer && sheet.conditions.some((entry) => textKey(entry) === textKey(spend.oncePer!.marker))) {
     return { error: `${spend.name} has been used already (${spend.oncePer.marker}). Nothing was spent.`, refused: "rules" };
   }
   const picked = pickVariant(spend.does, args.variant, spend);
@@ -181,7 +176,7 @@ export function authoredFeatureSpend(
       };
     }
   }
-  const onceKey = spend.oncePerTurn ? (spend.onceKey ?? `authored:${lower(spend.name)}`) : null;
+  const onceKey = spend.oncePerTurn ? (spend.onceKey ?? `authored:${textKey(spend.name)}`) : null;
   const charge = prepareCost(campaign, sheet, picked.action, spend.name, onceKey);
   if ("error" in charge) {
     return charge;

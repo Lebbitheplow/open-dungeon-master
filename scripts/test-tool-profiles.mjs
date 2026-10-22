@@ -92,10 +92,10 @@ await test("the table's state and the players' words open groups without being a
   assert.ok(offered({ shopOpen: true }).has("buy_item"), "a shop at hand");
   assert.ok(offered({ mounts: true }).has("mount_up"), "a horse at hand");
   assert.ok(offered({ caster: true }).has("cast_buff"), "a caster at the table");
-  assert.ok(offered({ playerText: "I want to buy a longsword and sell these pelts." }).has("haggle"));
-  assert.ok(offered({ playerText: "We travel north along the road for two days." }).has("travel"));
-  assert.ok(offered({ playerText: "I try to jump the chasm." }).has("apply_hazard"));
-  assert.ok(!offered({ playerText: "I ask the innkeeper about the missing girl." }).has("travel"), "ordinary talk opens nothing");
+  assert.ok(offered({ englishPlayerText: "I want to buy a longsword and sell these pelts." }).has("haggle"));
+  assert.ok(offered({ englishPlayerText: "We travel north along the road for two days." }).has("travel"));
+  assert.ok(offered({ englishPlayerText: "I try to jump the chasm." }).has("apply_hazard"));
+  assert.ok(!offered({ englishPlayerText: "I ask the innkeeper about the missing girl." }).has("travel"), "ordinary talk opens nothing");
   assert.deepEqual([...profiles.autoGroups({ inEncounter: true, legendary: true })], ["legendary"]);
 });
 
@@ -240,8 +240,8 @@ const { startDmTurn, dmTurnTuning, dmTurnTools } = await import("../src/lib/dm/t
 const { forgetContextWindows } = await import("../src/lib/model-client.ts");
 
 const lead = createUser(`lead${randomBytes(3).toString("hex")}`, "x", { isAdmin: true });
-function table(line, model = "fake") {
-  const campaign = createCampaign(lead.id, { title: "Compact", description: "A road.", theme: "a road", maxPlayers: 2, startingLevel: 1, difficulty: "normal", gameSettings: { ttsEnabled: false } });
+function table(line, model = "fake", tableLanguage = "english") {
+  const campaign = createCampaign(lead.id, { title: "Compact", description: "A road.", theme: "a road", maxPlayers: 2, startingLevel: 1, difficulty: "normal", gameSettings: { ttsEnabled: false, tableLanguage } });
   updateStorySettings(campaign.id, { textProvider: "custom", customBaseUrl: baseUrl, customModel: model, imageGenerationEnabled: false, autoImages: false });
   setCampaignStatus(campaign.id, "active");
   const sheet = createSheet(campaign.id, lead.id, 1, createSheetSchema.parse({
@@ -345,6 +345,17 @@ await test("the players' words open the group the move needs on the first call",
   assert.ok(first.tools.some((tool) => tool.function.name === "buy_item"), "the shop group rides from the start");
   const turn = getDmTurn(getLatestDmTurnId(campaign.id));
   assert.deepEqual(turn.contextTrace.profile.intent, ["shop"]);
+});
+
+await test("the English words that open a group are read at an English table only: at every other table, English words included, a group is a more_tools call away", async () => {
+  for (const language of ["italian", "french", "spanish", "german"]) {
+    const campaign = table("I want to buy a sturdy rope and sell my old boots.", "fake", language);
+    script = [{ content: "The trader eyes your boots. What will you offer?" }];
+    requests.length = 0;
+    await startDmTurn(campaign.id);
+    const turn = getDmTurn(getLatestDmTurnId(campaign.id));
+    assert.deepEqual(turn.contextTrace.profile.intent, [], language);
+  }
 });
 
 // The window a lone first call of this table needs, by the same estimate the

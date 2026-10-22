@@ -16,7 +16,7 @@ import type { DmTurn } from "@/lib/db/dm-turns";
 import { getClock, setClock } from "@/lib/db/clock";
 import { insertRoll, type RollAttacker } from "@/lib/db/rolls";
 import { rollAgainst, rollOn } from "@/lib/roll-labels";
-import { getSheetById } from "@/lib/db/sheets";
+import { getSheetById, listSheets } from "@/lib/db/sheets";
 import { isValidExpression, rollExpression, type RollResult } from "@/lib/dice";
 import { publishWithSeq } from "@/lib/events";
 import { critDamageExpression } from "@/lib/dm/encounter-logic";
@@ -25,6 +25,7 @@ import { objectProfile, type ObjectMaterial, type ObjectSize } from "@/lib/srd/o
 import { breakWallSection, sectionHit, wallSectionFor } from "@/lib/dm/zone-walls";
 import { toolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
+import { unknownSheetRef } from "@/lib/dm/rolls";
 
 export const OBJECT_MATERIALS: ObjectMaterial[] = [
   "cloth", "paper", "rope", "crystal", "glass", "ice", "wood", "bone", "stone", "iron", "steel", "mithral", "adamantine",
@@ -42,6 +43,7 @@ const objectSchema = z.object({
   damageType: z.string().max(30).optional(),
   characterId: z.string().max(80).optional(),
   weapon: z.string().max(80).optional(),
+  improvised: z.coerce.boolean().optional(),
   ac: z.coerce.number().int().min(1).max(30).optional(),
   hp: z.coerce.number().int().min(1).max(1000).optional(),
   // SRD 5.1 (Objects): a big object's damage threshold. A blow below it is
@@ -103,12 +105,12 @@ export function damageObject(
   const notes: string[] = [];
   const sheet = args.characterId ? getSheetById(args.characterId) : null;
   if (args.characterId && (!sheet || (campaign && sheet.campaignId !== campaign.id))) {
-    return { error: "Unknown characterId; use one from GAME STATE.", retry: true };
+    return campaign ? unknownSheetRef("characterId", args.characterId, listSheets(campaign.id)) : { error: "Unknown characterId; use one from GAME STATE.", retry: true };
   }
   if (sheet && campaign) {
     // The character's own attack, from their sheet: the roll has to beat the
     // object's AC before any damage lands.
-    const built = buildAttackProfile(campaign.id, sheet, { weapon: args.weapon });
+    const built = buildAttackProfile(campaign.id, sheet, { weapon: args.weapon, improvised: args.improvised });
     if ("error" in built) {
       return toolError(built);
     }

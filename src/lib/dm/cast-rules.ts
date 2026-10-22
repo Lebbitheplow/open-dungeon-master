@@ -11,7 +11,7 @@
 
 import type { SubclassExtras } from "@/lib/srd/subclass-tables";
 import { castsWithHandsFull } from "@/lib/srd/feat-combat";
-import { featTwinOf } from "@/lib/srd/feat-effects";
+import { holdsFeat } from "@/lib/srd/feat-effects";
 import type { CharacterSheet, EquipmentItem } from "@/lib/schemas/sheet";
 import { acBreakdownFor } from "@/lib/srd";
 import { subclassSpellsFor } from "@/lib/srd/features";
@@ -24,6 +24,7 @@ import { masteredSpell, pactLevelFor } from "@/lib/dm/cast-slot-choice";
 import { toolError, type ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
 import { hasItemTag } from "@/lib/srd/item-tags";
+import { holdsFeature, isConditionNamed } from "@/lib/srd/feature-names";
 
 export type CastRefusal = ToolError;
 
@@ -46,19 +47,14 @@ type Caster = Pick<
   | "copper"
 >;
 
-function namesOf(spell: string, facts: SpellFacts | null): Set<string> {
+// A spell's names, compared whole: as written, the content's name and its
+// aliases.
+export function namesOf(spell: string, facts: SpellFacts | null): Set<string> {
   return new Set([spell, facts?.name ?? "", ...(facts?.aliases ?? [])].map(textKey).filter(Boolean));
 }
 
-const hasName = (list: string[] | undefined, names: Set<string>) =>
+export const hasName = (list: string[] | undefined, names: Set<string>) =>
   (list ?? []).some((entry) => names.has(textKey(entry)));
-
-// A content pack twin of the feat (Level Up's Rite Master is Ritual
-// Caster) counts as the feat (src/lib/srd/feat-effects.ts).
-const hasFeat = (sheet: Pick<Caster, "feats" | "features"> & { campaignId?: string }, feat: string) =>
-  [...(sheet.feats ?? []), ...(sheet.features ?? []).map((feature) => feature.name)].some(
-    (entry) => textKey(entry).includes(feat) || featTwinOf(entry, sheet.campaignId).includes(feat),
-  );
 
 // ---- who holds the spell ----
 
@@ -70,8 +66,8 @@ export function canCastRituals(sheet: Caster): boolean {
   const classIds = sheet.classes?.length ? sheet.classes.map((entry) => entry.id) : [sheet.class];
   return (
     classIds.some((id) => RITUAL_CASTERS.has(id.trim().toLowerCase())) ||
-    hasFeat(sheet, "ritual caster") ||
-    hasFeat(sheet, "book of ancient secrets")
+    holdsFeat(sheet, "ritual caster") ||
+    holdsFeat(sheet, "book of ancient secrets")
   );
 }
 
@@ -147,7 +143,7 @@ function ritualHolderProblem(
   if (ritualViews.some(holds)) {
     return null;
   }
-  const book = hasFeat(sheet, "ritual caster") || hasFeat(sheet, "book of ancient secrets");
+  const book = holdsFeat(sheet, "ritual caster") || holdsFeat(sheet, "book of ancient secrets");
   if (book && hasName(sheet.spellcasting?.spellbook, names)) {
     return null;
   }
@@ -171,7 +167,7 @@ export function casterStateProblem(sheet: Caster): ToolError | null {
     const polymorphed = sheet.wildShape.kind === "polymorph";
     const beastSpells =
       !polymorphed &&
-      sheet.features.some((feature) => textKey(feature.name).includes("beast spells"));
+      holdsFeature(sheet, "Beast Spells");
     if (!beastSpells) {
       return { error: polymorphed
         ? `${sheet.name} is polymorphed into a ${sheet.wildShape.form} and cannot cast spells; the form has no capacity for it. The spell waits until the transformation ends.`
@@ -444,7 +440,7 @@ export function bonusCastOf(
   if (!facts || facts.castingTime !== "action") {
     return null;
   }
-  const holding = (name: string) => sheet.conditions.some((entry) => entry.trim().toLowerCase().startsWith(name));
+  const holding = (name: string) => sheet.conditions.some((entry) => isConditionNamed(entry, name));
   const engine = (facts.runsAs ?? facts.name).trim();
   if (holding(MANTLE_OF_MAJESTY) && /^command$/i.test(engine)) {
     return { feature: "Mantle of Majesty", mode: "always" };

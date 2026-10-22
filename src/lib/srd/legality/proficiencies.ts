@@ -24,6 +24,7 @@ import {
   type ClassGrants,
   type RaceGrants,
 } from "@/lib/srd/legality/types";
+import { textKey } from "@/lib/language/text-logic";
 
 export type ProficiencyInput = {
   sent: Proficiencies;
@@ -76,8 +77,8 @@ function placePicks(picks: string[], slots: Slot[]): boolean {
 // its field (src/lib/schemas/sheet.ts), so what a player sends back may be
 // the fitted copy of a workshop or content pack grant; it is still that
 // grant, not a language or tool they chose.
-const languageKey = (name: string) => lower(fitName(name, LANGUAGE_NAME_MAX));
-const toolKey = (name: string) => lower(fitName(name, TOOL_NAME_MAX));
+const languageKey = (name: string) => textKey(fitName(name, LANGUAGE_NAME_MAX));
+const toolKey = (name: string) => textKey(fitName(name, TOOL_NAME_MAX));
 
 function plural(count: number, word: string) {
   return `${count} ${word}${count === 1 ? "" : "s"}`;
@@ -107,7 +108,7 @@ export function judgeProficiencies(input: ProficiencyInput): ProficiencyVerdict 
   ]);
   const toolChoice = race.toolChoice;
   const racialTool =
-    toolChoice && toolChoice.from.some((tool) => lower(tool) === lower(input.racialTool))
+    toolChoice && toolChoice.from.some((tool) => textKey(tool) === textKey(input.racialTool))
       ? input.racialTool
       : "";
   if (input.racialTool && !racialTool) {
@@ -159,7 +160,7 @@ export function judgeProficiencies(input: ProficiencyInput): ProficiencyVerdict 
   // fresh pick does: a soldier's dice set is the "one gaming set", and the
   // grant's words are not written back beside it (nor kept, where an earlier
   // edit did write them).
-  const heldAnswers = (held?.tools ?? []).some((tool) => granted.choices.some((choice) => choice.from.includes(lower(tool))));
+  const heldAnswers = (held?.tools ?? []).some((tool) => granted.choices.some((choice) => choice.from.some((option) => textKey(option) === textKey(tool))));
   // In the grants' own order; the named picks take the place of the words.
   // Each is written as the sheet holds it.
   const answered = (tool: string) => !((chosenTools.length || heldAnswers) && grantWords(tool));

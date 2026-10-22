@@ -48,8 +48,7 @@ import { naturalWeaponOnHit } from "@/lib/dm/authored-attacks";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { rollCard, sheetAttacker } from "@/lib/dm/roll-card";
 import { rollAgainst } from "@/lib/roll-labels";
-
-const lower = (value: string | undefined | null) => (value ?? "").trim().toLowerCase();
+import { textKey } from "@/lib/language/text-logic";
 
 function fielded(campaignId: string): CharacterSheet[] {
   return listSheets(campaignId)
@@ -108,7 +107,7 @@ export function authoredIncomingAttack(input: {
   const sources: Advantage[] = [];
   const notes: string[] = [];
   let halve: string | null = null;
-  const type = lower(attacker.stats.type);
+  const type = textKey(attacker.stats.type ?? "");
   for (const { effect, held } of activeAuthored(target, "attacked_disadv")) {
     if (effect.from.some((kind) => type.includes(kind))) {
       sources.push("disadvantage");
@@ -116,7 +115,7 @@ export function authoredIncomingAttack(input: {
     }
   }
   for (const name of GUARD_MARKS) {
-    const condition = attacker.conditions.find((entry) => lower(entry) === name);
+    const condition = attacker.conditions.find((entry) => textKey(entry) === name);
     const meta = condition ? metaOf(attacker, condition) : undefined;
     if (condition && meta?.source && meta.source !== target.id) {
       sources.push("disadvantage");
@@ -157,12 +156,12 @@ export function authoredAfterHit(
   // Unwavering Mark: a marked creature that damages anyone else opens its
   // marker's bonus attack against it on their next turn
   // (src/lib/dm/feature-bonus-attacks.ts).
-  const mark = input.attacker.conditions.find((entry) => lower(entry) === "unwavering mark");
+  const mark = input.attacker.conditions.find((entry) => textKey(entry) === "unwavering mark");
   const marker = mark ? metaOf(input.attacker, mark)?.source : undefined;
   if (marker && marker !== target.id) {
     const cavalier = getSheetById(marker);
     if (cavalier && !cavalier.deathSaves?.dead) {
-      const held = cavalier.conditions.filter((entry) => lower(entry) !== UNWAVERING_STRIKE);
+      const held = cavalier.conditions.filter((entry) => textKey(entry) !== UNWAVERING_STRIKE);
       const updated = patchSheet(cavalier.id, {
         conditions: [...held, UNWAVERING_STRIKE],
         conditionMeta: { ...cavalier.conditionMeta, [UNWAVERING_STRIKE]: untilTurnEnd(cavalier.id, { source: input.attacker.id }) },
@@ -202,7 +201,7 @@ export function authoredAttackSituation(input: {
   const sources: Advantage[] = [];
   const notes: string[] = [];
   let autoCrit: string | null = null;
-  const type = lower(enemy.stats.type);
+  const type = textKey(enemy.stats.type ?? "");
   for (const { effect, held } of activeAuthored(sheet, "attack_adv")) {
     let applies = false;
     if (effect.vs === "not_acted") {
@@ -213,10 +212,10 @@ export function authoredAttackSituation(input: {
         encounter.round <= 1 &&
         (encounter.surprisedIds.includes(enemy.id) || (at >= 0 && at > encounter.turnIndex));
     } else if (effect.vs === "frightened_by_self") {
-      const condition = enemy.conditions.find((entry) => lower(entry) === "frightened");
+      const condition = enemy.conditions.find((entry) => textKey(entry) === "frightened");
       applies = Boolean(condition && metaOf(enemy, condition)?.source === sheet.id);
     } else if (effect.vs === "distracted") {
-      const condition = enemy.conditions.find((entry) => lower(entry) === "distracted");
+      const condition = enemy.conditions.find((entry) => textKey(entry) === "distracted");
       applies = Boolean(condition && metaOf(enemy, condition)?.source === sheet.id);
     } else if (effect.vs === "types") {
       applies = (effect.types ?? []).some((kind) => type.includes(kind));
@@ -275,7 +274,7 @@ export function authoredOnHit(
   const enemy = getEnemy(input.enemy.id);
   if (enemy && enemy.status === "alive") {
     // Order's Wrath: another's hit calls down the cleric's curse.
-    const cursed = enemy.conditions.find((entry) => lower(entry) === "order's wrath");
+    const cursed = enemy.conditions.find((entry) => textKey(entry) === textKey("Order's Wrath"));
     const curse = cursed ? (metaOf(enemy, cursed) as { source?: string; dice?: string; type?: string } | undefined) : undefined;
     if (cursed && curse?.source && curse.source !== sheet.id) {
       const cleared = enemy.conditions.filter((entry) => entry !== cursed);
@@ -316,7 +315,7 @@ function markEnemy(encounter: Encounter, sheet: CharacterSheet, target: Encounte
       const already = listEnemies(encounter.id).some((other) =>
         other.conditions.some((entry) => {
           const meta = metaOf(other, entry) as { source?: string; stamp?: string } | undefined;
-          return lower(entry) === effect.condition && meta?.source === sheet.id && meta.stamp === stamp;
+          return textKey(entry) === textKey(effect.condition) && meta?.source === sheet.id && meta.stamp === stamp;
         }),
       );
       if (already) {
@@ -327,7 +326,7 @@ function markEnemy(encounter: Encounter, sheet: CharacterSheet, target: Encounte
     if (!fresh || fresh.status !== "alive") {
       break;
     }
-    const kept = fresh.conditions.filter((entry) => lower(entry) !== effect.condition);
+    const kept = fresh.conditions.filter((entry) => textKey(entry) !== textKey(effect.condition));
     const meta = {
       ...(fresh.conditionMeta as ConditionMetaMap),
       [effect.condition]: {
@@ -399,7 +398,7 @@ export function authoredOnKill(
 // (d4 Tiny to d20 Gargantuan) plus its CON modifier, per die.
 export function hitDiceOf(enemy: EncounterEnemy): number {
   const die: Record<string, number> = { tiny: 2.5, small: 3.5, medium: 4.5, large: 5.5, huge: 6.5, gargantuan: 10.5 };
-  const size = lower(enemy.stats.size ?? "medium");
+  const size = textKey(enemy.stats.size ?? "medium");
   const con = Math.floor(((enemy.stats.abilities?.con ?? 10) - 10) / 2);
   const each = Math.max(1, (die[size] ?? 4.5) + con);
   return Math.max(1, Math.round(enemy.maxHp / each));
@@ -415,7 +414,7 @@ export function authoredSneakEdge(encounterId: string, sheetId: string, enemyId:
   if (!sheet || !enemy) {
     return null;
   }
-  const read = enemy.conditions.find((entry) => lower(entry) === "insightful fighting");
+  const read = enemy.conditions.find((entry) => textKey(entry) === "insightful fighting");
   if (read && metaOf(enemy, read)?.source === sheetId) {
     return "Insightful Fighting";
   }

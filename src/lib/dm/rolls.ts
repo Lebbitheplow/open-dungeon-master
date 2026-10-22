@@ -28,7 +28,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { StreamedToolCall } from "@/lib/model-client";
 import { senseCheckFailure } from "@/lib/srd/sense-checks";
 import { sightRotPenalty } from "@/lib/srd/afflictions";
-import type { ToolError } from "@/lib/dm/tool-errors";
+import { unknownRef, type ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
 
 export { rollArgsSchema, rollDcFor, type RollArgs } from "@/lib/dm/roll-args";
@@ -696,4 +696,10 @@ export function resolveSheetRef(
     sheets.find((entry) => textKey(entry.name) === textKey(trimmed)) ??
     null
   );
+}
+
+// The refusal of a character ref resolveSheetRef found nothing for, listing
+// the party.
+export function unknownSheetRef(field: string, ref: string | undefined, sheets: readonly CharacterSheet[], tail = ""): ToolError {
+  return unknownRef(field, ref, sheets.map((sheet) => ({ id: sheet.id, name: sheet.name })), tail);
 }

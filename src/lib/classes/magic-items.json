@@ -11,7 +11,8 @@
       "effects": [],
       "base": {
         "kind": "armor",
-        "name": "Chain Mail"
+        "name": "Chain Mail",
+        "any": "medium or heavy"
       },
       "armor": {
         "critProof": true
@@ -116,6 +117,10 @@
       ],
       "requiresAttunement": false,
       "effects": [],
+      "base": {
+        "kind": "armor",
+        "name": "Chain Mail"
+      },
       "armor": {
         "bonus": 1
       }
@@ -156,6 +161,10 @@
       ],
       "requiresAttunement": true,
       "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Mace"
+      },
       "weapon": {
         "bonus": 1
       }
@@ -178,7 +187,8 @@
       ],
       "base": {
         "kind": "armor",
-        "name": "Leather"
+        "name": "Leather",
+        "any": "light"
       }
     },
     {
@@ -199,7 +209,8 @@
       ],
       "base": {
         "kind": "armor",
-        "name": "Leather"
+        "name": "Leather",
+        "any": "light"
       }
     },
     {
@@ -236,7 +247,8 @@
       ],
       "base": {
         "kind": "armor",
-        "name": "Leather"
+        "name": "Leather",
+        "any": "light"
       }
     },
     {
@@ -257,7 +269,8 @@
       ],
       "base": {
         "kind": "armor",
-        "name": "Leather"
+        "name": "Leather",
+        "any": "light"
       }
     },
     {
@@ -305,7 +318,8 @@
       ],
       "base": {
         "kind": "armor",
-        "name": "Leather"
+        "name": "Leather",
+        "any": "light"
       }
     },
     {
@@ -326,7 +340,8 @@
       ],
       "base": {
         "kind": "armor",
-        "name": "Leather"
+        "name": "Leather",
+        "any": "light"
       }
     },
     {
@@ -347,7 +362,8 @@
       ],
       "base": {
         "kind": "armor",
-        "name": "Leather"
+        "name": "Leather",
+        "any": "light"
       }
     },
     {
@@ -368,7 +384,8 @@
       ],
       "base": {
         "kind": "armor",
-        "name": "Leather"
+        "name": "Leather",
+        "any": "light"
       }
     },
     {
@@ -389,7 +406,8 @@
       ],
       "base": {
         "kind": "armor",
-        "name": "Leather"
+        "name": "Leather",
+        "any": "light"
       }
     },
     {
@@ -403,7 +421,8 @@
       "effects": [],
       "base": {
         "kind": "armor",
-        "name": "Leather"
+        "name": "Leather",
+        "any": "light"
       },
       "armor": {}
     },
@@ -437,7 +456,8 @@
       ],
       "base": {
         "kind": "armor",
-        "name": "Leather"
+        "name": "Leather",
+        "any": "light"
       }
     },
     {
@@ -545,6 +565,19 @@
       "effects": [],
       "weapon": {
         "bonus": 1
+      }
+    },
+    {
+      "name": "Badger Hide",
+      "match": "badger hide",
+      "slugs": [
+        "badger-hide"
+      ],
+      "requiresAttunement": false,
+      "effects": [],
+      "base": {
+        "kind": "armor",
+        "name": "Hide"
       }
     },
     {
@@ -681,7 +714,8 @@
       "effects": [],
       "base": {
         "kind": "weapon",
-        "name": "Battleaxe"
+        "name": "Battleaxe",
+        "any": "any axe"
       },
       "weapon": {
         "bonus": 1
@@ -712,6 +746,19 @@
       "effects": [],
       "charges": {
         "max": 6
+      }
+    },
+    {
+      "name": "Black and White Daggers",
+      "match": "black and white daggers",
+      "slugs": [
+        "black-and-white-daggers"
+      ],
+      "requiresAttunement": true,
+      "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Dagger"
       }
     },
     {
@@ -765,6 +812,32 @@
       }
     },
     {
+      "name": "Blood-Soaked Hide",
+      "match": "blood-soaked hide",
+      "slugs": [
+        "blood-soaked-hide"
+      ],
+      "requiresAttunement": false,
+      "effects": [],
+      "base": {
+        "kind": "armor",
+        "name": "Hide"
+      }
+    },
+    {
+      "name": "Blooddrinker Spear",
+      "match": "blooddrinker spear",
+      "slugs": [
+        "blooddrinker-spear"
+      ],
+      "requiresAttunement": true,
+      "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Spear"
+      }
+    },
+    {
       "name": "Bloodfuel Weapon",
       "match": "bloodfuel weapon",
       "slugs": [
@@ -811,6 +884,32 @@
       "base": {
         "kind": "armor",
         "name": "Scale Mail"
+      }
+    },
+    {
+      "name": "Bone Whip",
+      "match": "bone whip",
+      "slugs": [
+        "bone-whip"
+      ],
+      "requiresAttunement": true,
+      "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Whip"
+      }
+    },
+    {
+      "name": "Bonebreaker Mace",
+      "match": "bonebreaker mace",
+      "slugs": [
+        "bonebreaker-mace"
+      ],
+      "requiresAttunement": true,
+      "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Mace"
       }
     },
     {
@@ -942,6 +1041,10 @@
       ],
       "requiresAttunement": true,
       "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Lance"
+      },
       "charges": {
         "max": 3,
         "regain": "1d3"
@@ -1080,6 +1183,10 @@
       ],
       "requiresAttunement": false,
       "effects": [],
+      "base": {
+        "kind": "armor",
+        "name": "Breastplate"
+      },
       "armor": {
         "bonus": 1
       }
@@ -1273,6 +1380,19 @@
       }
     },
     {
+      "name": "Clockwork Mace of Divinity",
+      "match": "clockwork mace of divinity",
+      "slugs": [
+        "clockwork-mace-of-divinity"
+      ],
+      "requiresAttunement": true,
+      "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Mace"
+      }
+    },
+    {
       "name": "Clockwork Pendant",
       "match": "clockwork pendant",
       "slugs": [
@@ -1298,6 +1418,19 @@
       }
     },
     {
+      "name": "Commander's Plate",
+      "match": "commander's plate",
+      "slugs": [
+        "commanders-plate"
+      ],
+      "requiresAttunement": false,
+      "effects": [],
+      "base": {
+        "kind": "armor",
+        "name": "Plate"
+      }
+    },
+    {
       "name": "Commander's Visage",
       "match": "commander's visage",
       "slugs": [
@@ -1317,6 +1450,10 @@
       ],
       "requiresAttunement": false,
       "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Dagger"
+      },
       "weapon": {
         "bonus": 1
       }
@@ -1402,6 +1539,19 @@
       ]
     },
     {
+      "name": "Crusader's Shield",
+      "match": "crusader's shield",
+      "slugs": [
+        "crusaders-shield"
+      ],
+      "requiresAttunement": false,
+      "effects": [],
+      "base": {
+        "kind": "armor",
+        "name": "Shield"
+      }
+    },
+    {
       "name": "Crystal Staff",
       "match": "crystal staff",
       "slugs": [
@@ -1450,6 +1600,10 @@
       ],
       "requiresAttunement": false,
       "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Dagger"
+      },
       "weapon": {
         "bonus": 1
       }
@@ -1500,7 +1654,8 @@
       "effects": [],
       "base": {
         "kind": "weapon",
-        "name": "Longsword"
+        "name": "Longsword",
+        "any": "any sword"
       },
       "weapon": {}
     },
@@ -1555,7 +1710,8 @@
       "effects": [],
       "base": {
         "kind": "weapon",
-        "name": "Longsword"
+        "name": "Longsword",
+        "any": "any sword"
       },
       "weapon": {
         "bonus": 3
@@ -1597,6 +1753,19 @@
       "charges": {
         "max": 6,
         "lastChargeD20": true
+      }
+    },
+    {
+      "name": "Dimensional Net",
+      "match": "dimensional net",
+      "slugs": [
+        "dimensional-net"
+      ],
+      "requiresAttunement": true,
+      "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Net"
       }
     },
     {
@@ -1668,7 +1837,8 @@
       "effects": [],
       "base": {
         "kind": "weapon",
-        "name": "Longsword"
+        "name": "Longsword",
+        "any": "any sword"
       },
       "weapon": {
         "bonus": 1,
@@ -1691,6 +1861,10 @@
       ],
       "requiresAttunement": true,
       "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Lance"
+      },
       "weapon": {
         "bonus": 3
       }
@@ -1961,7 +2135,8 @@
       "effects": [],
       "base": {
         "kind": "weapon",
-        "name": "Longsword"
+        "name": "Longsword",
+        "any": "any sword"
       },
       "weapon": {
         "extra": [
@@ -1998,6 +2173,19 @@
         ]
       },
       "effects": []
+    },
+    {
+      "name": "Flicker Dagger",
+      "match": "flicker dagger",
+      "slugs": [
+        "flicker-dagger-a5e"
+      ],
+      "requiresAttunement": true,
+      "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Dagger"
+      }
     },
     {
       "name": "Focusing Eye",
@@ -2062,7 +2250,8 @@
       ],
       "base": {
         "kind": "weapon",
-        "name": "Longsword"
+        "name": "Longsword",
+        "any": "any sword"
       },
       "weapon": {
         "extra": [
@@ -2081,6 +2270,10 @@
       ],
       "requiresAttunement": false,
       "effects": [],
+      "base": {
+        "kind": "armor",
+        "name": "Plate"
+      },
       "armor": {
         "bonus": 2
       }
@@ -2116,6 +2309,19 @@
       "charges": {
         "max": 3,
         "regain": "all"
+      }
+    },
+    {
+      "name": "Gale Javelin",
+      "match": "gale javelin",
+      "slugs": [
+        "gale-javelin"
+      ],
+      "requiresAttunement": false,
+      "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Javelin"
       }
     },
     {
@@ -2172,7 +2378,8 @@
       "effects": [],
       "base": {
         "kind": "weapon",
-        "name": "Longsword"
+        "name": "Longsword",
+        "any": "any axe or sword"
       },
       "weapon": {
         "bonus": 1,
@@ -2201,6 +2408,19 @@
         ]
       },
       "effects": []
+    },
+    {
+      "name": "Glamoured Padded Leather",
+      "match": "glamoured padded leather",
+      "slugs": [
+        "glamoured-padded-leather-a5e"
+      ],
+      "requiresAttunement": false,
+      "effects": [],
+      "base": {
+        "kind": "armor",
+        "name": "Leather"
+      }
     },
     {
       "name": "Glamoured Studded Leather",
@@ -2244,6 +2464,19 @@
       }
     },
     {
+      "name": "Glory’s Glaive",
+      "match": "glory’s glaive",
+      "slugs": [
+        "glorys-glaive-a5e"
+      ],
+      "requiresAttunement": false,
+      "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Glaive"
+      }
+    },
+    {
       "name": "Gloves of the Walking Shade",
       "match": "gloves of the walking shade",
       "slugs": [
@@ -2258,6 +2491,19 @@
           ]
         }
       ]
+    },
+    {
+      "name": "Gnawing Spear",
+      "match": "gnawing spear",
+      "slugs": [
+        "gnawing-spear"
+      ],
+      "requiresAttunement": true,
+      "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Spear"
+      }
     },
     {
       "name": "Goblin Mask",
@@ -2279,6 +2525,10 @@
       ],
       "requiresAttunement": false,
       "effects": [],
+      "base": {
+        "kind": "armor",
+        "name": "Shield"
+      },
       "charges": {
         "max": 3,
         "regain": "1d3"
@@ -2322,6 +2572,19 @@
       }
     },
     {
+      "name": "Golden Chain Shirt",
+      "match": "golden chain shirt",
+      "slugs": [
+        "golden-chain-shirt-a5e"
+      ],
+      "requiresAttunement": true,
+      "effects": [],
+      "base": {
+        "kind": "armor",
+        "name": "Chain Shirt"
+      }
+    },
+    {
       "name": "Gorgon Scale",
       "match": "gorgon scale",
       "slugs": [
@@ -2341,6 +2604,10 @@
       ],
       "requiresAttunement": false,
       "effects": [],
+      "base": {
+        "kind": "armor",
+        "name": "Shield"
+      },
       "armor": {
         "bonus": 1
       }
@@ -2385,6 +2652,19 @@
           ]
         }
       ]
+    },
+    {
+      "name": "Green Scale Shield",
+      "match": "green scale shield",
+      "slugs": [
+        "green-scale-shield-a5e"
+      ],
+      "requiresAttunement": false,
+      "effects": [],
+      "base": {
+        "kind": "armor",
+        "name": "Shield"
+      }
     },
     {
       "name": "Gremlin's Paw",
@@ -2540,6 +2820,19 @@
       }
     },
     {
+      "name": "Heartbreak's Dagger",
+      "match": "heartbreak's dagger",
+      "slugs": [
+        "heartbreaks-dagger-a5e"
+      ],
+      "requiresAttunement": false,
+      "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Dagger"
+      }
+    },
+    {
       "name": "Helm of Brilliance",
       "match": "helm of brilliance",
       "slugs": [
@@ -2603,7 +2896,8 @@
       "effects": [],
       "base": {
         "kind": "weapon",
-        "name": "Longsword"
+        "name": "Longsword",
+        "any": "any sword"
       },
       "weapon": {
         "bonus": 3,
@@ -2677,6 +2971,10 @@
       ],
       "requiresAttunement": true,
       "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Club"
+      },
       "charges": {
         "max": 3,
         "regain": "1d3"
@@ -2729,6 +3027,10 @@
       ],
       "requiresAttunement": false,
       "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Mace"
+      },
       "charges": {
         "max": 4
       }
@@ -2780,6 +3082,10 @@
       ],
       "requiresAttunement": false,
       "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Javelin"
+      },
       "weapon": {
         "bonus": 1
       }
@@ -2919,7 +3225,8 @@
       ],
       "base": {
         "kind": "weapon",
-        "name": "Longsword"
+        "name": "Longsword",
+        "any": "any sword"
       },
       "weapon": {
         "bonus": 1
@@ -3135,6 +3442,32 @@
       ]
     },
     {
+      "name": "Meteoric Plate",
+      "match": "meteoric plate",
+      "slugs": [
+        "meteoric-plate"
+      ],
+      "requiresAttunement": true,
+      "effects": [],
+      "base": {
+        "kind": "armor",
+        "name": "Plate"
+      }
+    },
+    {
+      "name": "Midir's Trident",
+      "match": "midir's trident",
+      "slugs": [
+        "midirs-trident-a5e"
+      ],
+      "requiresAttunement": true,
+      "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Trident"
+      }
+    },
+    {
       "name": "Mindblade",
       "match": "mindblade",
       "slugs": [
@@ -3173,6 +3506,10 @@
           ]
         }
       ],
+      "base": {
+        "kind": "armor",
+        "name": "Shield"
+      },
       "charges": {
         "max": 3
       }
@@ -3187,7 +3524,8 @@
       "effects": [],
       "base": {
         "kind": "armor",
-        "name": "Chain Mail"
+        "name": "Chain Mail",
+        "any": "medium or heavy"
       },
       "armor": {
         "noStrength": true,
@@ -3298,7 +3636,8 @@
       "effects": [],
       "base": {
         "kind": "weapon",
-        "name": "Longsword"
+        "name": "Longsword",
+        "any": "any sword"
       },
       "weapon": {
         "bonus": 2
@@ -3389,7 +3728,24 @@
             "necrotic"
           ]
         }
-      ]
+      ],
+      "base": {
+        "kind": "armor",
+        "name": "Plate"
+      }
+    },
+    {
+      "name": "Osseous Warhammer",
+      "match": "osseous warhammer",
+      "slugs": [
+        "osseous-warhammer-a5e"
+      ],
+      "requiresAttunement": false,
+      "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Warhammer"
+      }
     },
     {
       "name": "Pearl of Power",
@@ -3415,6 +3771,19 @@
       "effects": [],
       "charges": {
         "max": 3
+      }
+    },
+    {
+      "name": "Pestilent Spear",
+      "match": "pestilent spear",
+      "slugs": [
+        "pestilent-spear"
+      ],
+      "requiresAttunement": false,
+      "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Spear"
       }
     },
     {
@@ -4229,6 +4598,10 @@
       ],
       "requiresAttunement": false,
       "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Club"
+      },
       "weapon": {
         "bonus": 1
       }
@@ -4309,6 +4682,10 @@
       ],
       "requiresAttunement": true,
       "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Lance"
+      },
       "weapon": {
         "bonus": 1
       }
@@ -4352,6 +4729,10 @@
       ],
       "requiresAttunement": true,
       "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Scimitar"
+      },
       "weapon": {
         "bonus": 1
       }
@@ -4401,6 +4782,10 @@
       ],
       "requiresAttunement": true,
       "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Whip"
+      },
       "weapon": {
         "bonus": 1
       },
@@ -4520,6 +4905,10 @@
       ],
       "requiresAttunement": false,
       "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Flail"
+      },
       "charges": {
         "max": 5,
         "regain": "1d4+1"
@@ -4533,6 +4922,10 @@
       ],
       "requiresAttunement": false,
       "effects": [],
+      "base": {
+        "kind": "armor",
+        "name": "Shield"
+      },
       "armor": {
         "bonus": 1
       }
@@ -4561,8 +4954,25 @@
       ],
       "requiresAttunement": false,
       "effects": [],
+      "base": {
+        "kind": "armor",
+        "name": "Shield"
+      },
       "armor": {
         "bonus": 1
+      }
+    },
+    {
+      "name": "Shield of the Fallen",
+      "match": "shield of the fallen",
+      "slugs": [
+        "shield-of-the-fallen"
+      ],
+      "requiresAttunement": false,
+      "effects": [],
+      "base": {
+        "kind": "armor",
+        "name": "Shield"
       }
     },
     {
@@ -4586,6 +4996,10 @@
       ],
       "requiresAttunement": true,
       "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Sickle"
+      },
       "weapon": {
         "bonus": 1
       }
@@ -4675,6 +5089,10 @@
       ],
       "requiresAttunement": false,
       "effects": [],
+      "base": {
+        "kind": "armor",
+        "name": "Plate"
+      },
       "armor": {
         "bonus": 3
       }
@@ -4727,6 +5145,10 @@
       ],
       "requiresAttunement": true,
       "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Spear"
+      },
       "weapon": {
         "bonus": 2
       }
@@ -4739,6 +5161,10 @@
       ],
       "requiresAttunement": true,
       "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Spear"
+      },
       "charges": {
         "max": 3
       }
@@ -4751,6 +5177,10 @@
       ],
       "requiresAttunement": true,
       "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Spear"
+      },
       "weapon": {
         "bonus": 1
       }
@@ -4793,6 +5223,19 @@
       "charges": {
         "max": 10,
         "regain": "1d6+4"
+      }
+    },
+    {
+      "name": "Spinal Whip",
+      "match": "spinal whip",
+      "slugs": [
+        "spinal-whip-a5e"
+      ],
+      "requiresAttunement": false,
+      "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Whip"
       }
     },
     {
@@ -5507,6 +5950,19 @@
       }
     },
     {
+      "name": "Steadfast Splint",
+      "match": "steadfast splint",
+      "slugs": [
+        "steadfast-splint"
+      ],
+      "requiresAttunement": true,
+      "effects": [],
+      "base": {
+        "kind": "armor",
+        "name": "Splint"
+      }
+    },
+    {
       "name": "Stinger",
       "match": "stinger",
       "slugs": [
@@ -5702,7 +6158,8 @@
       "effects": [],
       "base": {
         "kind": "weapon",
-        "name": "Longsword"
+        "name": "Longsword",
+        "any": "any sword"
       },
       "weapon": {
         "critExtra": [
@@ -5728,7 +6185,8 @@
       "effects": [],
       "base": {
         "kind": "weapon",
-        "name": "Longsword"
+        "name": "Longsword",
+        "any": "any sword that deals slashing damage"
       },
       "weapon": {
         "critExtra": [
@@ -5774,7 +6232,8 @@
       "effects": [],
       "base": {
         "kind": "weapon",
-        "name": "Longsword"
+        "name": "Longsword",
+        "any": "any sword"
       },
       "weapon": {}
     },
@@ -5838,6 +6297,10 @@
       ],
       "requiresAttunement": true,
       "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Whip"
+      },
       "weapon": {
         "bonus": 1
       }
@@ -5862,6 +6325,10 @@
       ],
       "requiresAttunement": true,
       "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Flail"
+      },
       "weapon": {
         "bonus": 1
       }
@@ -5960,6 +6427,19 @@
       }
     },
     {
+      "name": "Tracking Dart",
+      "match": "tracking dart",
+      "slugs": [
+        "tracking-dart"
+      ],
+      "requiresAttunement": false,
+      "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Dart"
+      }
+    },
+    {
       "name": "Transforming Wand",
       "match": "transforming wand",
       "slugs": [
@@ -6005,6 +6485,19 @@
       }
     },
     {
+      "name": "Trident of the Vortex",
+      "match": "trident of the vortex",
+      "slugs": [
+        "trident-of-the-vortex"
+      ],
+      "requiresAttunement": true,
+      "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Trident"
+      }
+    },
+    {
       "name": "Trident of the Yearning Tide",
       "match": "trident of the yearning tide",
       "slugs": [
@@ -6012,6 +6505,10 @@
       ],
       "requiresAttunement": true,
       "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Trident"
+      },
       "charges": {
         "max": 3,
         "regain": "1d3"
@@ -6037,6 +6534,10 @@
       ],
       "requiresAttunement": false,
       "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Whip"
+      },
       "charges": {
         "max": 3,
         "regain": "all"
@@ -6083,6 +6584,32 @@
       ],
       "charges": {
         "max": 20
+      }
+    },
+    {
+      "name": "Undine Plate",
+      "match": "undine plate",
+      "slugs": [
+        "undine-plate"
+      ],
+      "requiresAttunement": false,
+      "effects": [],
+      "base": {
+        "kind": "armor",
+        "name": "Plate"
+      }
+    },
+    {
+      "name": "Unquiet Dagger",
+      "match": "unquiet dagger",
+      "slugs": [
+        "unquiet-dagger"
+      ],
+      "requiresAttunement": true,
+      "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Dagger"
       }
     },
     {
@@ -6133,7 +6660,8 @@
       "effects": [],
       "base": {
         "kind": "weapon",
-        "name": "Longsword"
+        "name": "Longsword",
+        "any": "any"
       },
       "weapon": {
         "critExtra": [
@@ -6208,7 +6736,8 @@
       "effects": [],
       "base": {
         "kind": "weapon",
-        "name": "Longsword"
+        "name": "Longsword",
+        "any": "any sword that deals slashing damage"
       },
       "weapon": {
         "bonus": 3
@@ -6764,6 +7293,19 @@
       }
     },
     {
+      "name": "Wave Chain Mail",
+      "match": "wave chain mail",
+      "slugs": [
+        "wave-chain-mail"
+      ],
+      "requiresAttunement": false,
+      "effects": [],
+      "base": {
+        "kind": "armor",
+        "name": "Chain Mail"
+      }
+    },
+    {
       "name": "Waystone",
       "match": "waystone",
       "slugs": [
@@ -6785,7 +7327,8 @@
       "effects": [],
       "base": {
         "kind": "weapon",
-        "name": "Longsword"
+        "name": "Longsword",
+        "any": "any"
       },
       "weapon": {}
     },
@@ -6810,8 +7353,25 @@
       ],
       "requiresAttunement": true,
       "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Whip"
+      },
       "weapon": {
         "bonus": 1
+      }
+    },
+    {
+      "name": "Whip of the Blue Wyrm",
+      "match": "whip of the blue wyrm",
+      "slugs": [
+        "whip-of-the-blue-wyrm"
+      ],
+      "requiresAttunement": true,
+      "effects": [],
+      "base": {
+        "kind": "weapon",
+        "name": "Whip"
       }
     },
     {
@@ -6822,6 +7382,10 @@
       ],
       "requiresAttunement": false,
       "effects": [],
+      "base": {
+        "kind": "armor",
+        "name": "Hide"
+      },
       "armor": {
         "bonus": 2
       }
@@ -6944,6 +7508,10 @@
       ],
       "requiresAttunement": false,
       "effects": [],
+      "base": {
+        "kind": "armor",
+        "name": "Shield"
+      },
       "armor": {
         "bonus": 2
       }

@@ -105,10 +105,13 @@ await test("the caller cannot hand an enemy better numbers", async () => {
   const out = await strike(enemy, mage, [5, 3], { toHit: 20, damage: "10d10", attack: "Club" });
   assert.equal(out.result.swings[0].rolled, 5 + 4);
   assert.equal(out.result.hit, false);
-  // A made-up attack name falls back to the block's first attack.
+  // A made-up attack name is refused with the block's attacks, never the
+  // first one rolled in its place.
+  const hp = world.sheet(mage.id).currentHp;
   const invented = await strike(enemy, mage, [15, 3], { attack: "Disintegration Ray" });
-  assert.equal(invented.result.attack, "Club");
-  assert.equal(invented.result.totalDamage, 3 + 2);
+  assert.equal(invented.out.retry, true, JSON.stringify(invented));
+  assert.match(invented.out.error, /"Disintegration Ray".*Club/);
+  assert.equal(world.sheet(mage.id).currentHp, hp);
 });
 
 await test("a natural 20 from an enemy is a critical hit, a natural 1 a miss", async () => {

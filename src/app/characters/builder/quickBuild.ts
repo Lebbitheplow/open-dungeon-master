@@ -19,7 +19,7 @@
 // improvements and spell ranking (src/lib/srd/companion-build.ts).
 import { ALL_SKILLS, STANDARD_LANGUAGES } from "@/lib/content/mechanics";
 import { textKey } from "@/lib/language/text-logic";
-import type { Ability, AsiChoice } from "@/lib/schemas/sheet";
+import { featChoice, withFeatChoice, type Ability, type AsiChoice } from "@/lib/schemas/sheet";
 import { SRD_SKILLS } from "@/lib/srd";
 import { companionImprovements, preferredSpellOrder } from "@/lib/srd/companion-build";
 import { authoredFeatDesc } from "@/lib/srd/feat-effects";
@@ -526,14 +526,13 @@ export function fillRound(ctx: FillContext): FillRound {
   }
   // What the subclass's training leaves open (a Lore bard's three skills).
   if (fields.subclass && wants("subclass")) {
-    const featChoices: FeatChoices = { ...fields.featChoices };
+    let featChoices: FeatChoices = fields.featChoices;
     const held = { skills: proficient, languages, tools };
     const added: string[] = [];
     for (const grant of derived.subclassTraining ?? []) {
-      const key = grant.name.trim().toLowerCase();
-      const picks = fillFeatPicks(grant.spec, featChoices[key], ctx, held);
+      const picks = fillFeatPicks(grant.spec, featChoice(featChoices, grant.name), ctx, held);
       if (picks) {
-        featChoices[key] = picks;
+        featChoices = withFeatChoice(featChoices, grant.name, picks);
         added.push(grant.name);
       }
     }

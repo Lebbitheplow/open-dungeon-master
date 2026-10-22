@@ -13,6 +13,7 @@ import { gearDefOfRow } from "@/lib/srd/magic-gear";
 import { matchMagicItem, type MagicItemEffect } from "@/lib/srd/magic-items";
 import type { EquipmentItem } from "@/lib/schemas/sheet";
 import { textKey } from "@/lib/language/text-logic";
+import { magicItemBonus, rowName } from "@/lib/srd/item-row";
 
 function effectWords(effect: MagicItemEffect): string {
   switch (effect.kind) {
@@ -53,9 +54,8 @@ export function magicItemLine(item: EquipmentItem, equipment: readonly Equipment
   // are the ones magic-items.ts reads off the same line.
   const def = gearDefOfRow(item);
   const worn = item.gear?.magic ? { effects: item.gear.magic.effects, requiresAttunement: item.gear.magic.requiresAttunement } : matchMagicItem(item);
-  const bonusByName = /(?:^|[\s,(])\+([123])(?![0-9])/.exec(item.name);
-  if (!def && !worn && !bonusByName) {
-    const sentence = packSentence(item.name);
+  if (!def && !worn && !magicItemBonus(item.name)) {
+    const sentence = packSentence(rowName(item));
     return sentence ? `${item.name}: ${sentence} (narrated)` : null;
   }
   const parts: string[] = [];

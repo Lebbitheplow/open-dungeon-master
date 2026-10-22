@@ -49,13 +49,12 @@ import type {
 } from "@/lib/srd/legality/types";
 import { textKey } from "@/lib/language/text-logic";
 
-const lower = (value: string) => value.trim().toLowerCase();
 const AUTHORED_FEATS = (authoredFeatsJson as { feats: FeatFacts[] }).feats;
 
 // ---- classes, races, backgrounds ----
 
 export function classGrantsFor(classId: string): ClassGrants | null {
-  const id = lower(classId);
+  const id = textKey(classId);
   // The bundled row first: it is the one the engines' own tables are keyed
   // by, and the pack's copy of an SRD class says the same in prose.
   const bundled = srdClassOptions().find((option) => option.id === id);
@@ -63,7 +62,7 @@ export function classGrantsFor(classId: string): ClassGrants | null {
     return bundled;
   }
   const rows = listClasses({ limit: 200 }) as ContentRow[];
-  return packClassOptions(rows).find((option) => lower(option.id) === id) ?? null;
+  return packClassOptions(rows).find((option) => textKey(option.id) === id) ?? null;
 }
 
 // Every row a race id may mean, the likeliest first. A sheet built from the
@@ -124,7 +123,7 @@ export function backgroundGrantsFor(
   const options = mergedBackgroundOptions(rows);
   return (
     options.find((option) => option.id === id) ??
-    options.find((option) => lower(option.id).replace(/-/g, "_") === lower(id).replace(/-/g, "_")) ??
+    options.find((option) => textKey(option.id) === textKey(id)) ??
     null
   );
 }
@@ -188,8 +187,8 @@ export function spellFactsFor(name: string, authors?: Authors): SpellFacts | nul
     return {
       name: published?.name ?? listed!.name,
       level: published?.level ?? listed!.level,
-      classes: [...new Set([...(published?.classes ?? []), ...(listed?.classes ?? [])].map(lower))],
-      school: published?.school ? lower(published.school) : bundledSpellSchool(published?.name ?? listed!.name),
+      classes: [...new Set([...(published?.classes ?? []), ...(listed?.classes ?? [])].map(textKey))],
+      school: published?.school ? textKey(published.school) : bundledSpellSchool(published?.name ?? listed!.name),
       ...(published ? { ritual: published.ritual } : {}),
     };
   }
@@ -200,7 +199,7 @@ export function spellFactsFor(name: string, authors?: Authors): SpellFacts | nul
     (entry) => entry.source === "homebrew" && spellNameMatches(entry, wanted),
   );
   return brewed
-    ? { name: brewed.name, level: brewed.level, classes: brewed.classes.map(lower), school: brewed.school ? lower(brewed.school) : null, ritual: brewed.ritual }
+    ? { name: brewed.name, level: brewed.level, classes: brewed.classes.map(textKey), school: brewed.school ? textKey(brewed.school) : null, ritual: brewed.ritual }
     : null;
 }
 

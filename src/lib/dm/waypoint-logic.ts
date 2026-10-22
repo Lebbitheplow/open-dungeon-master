@@ -121,7 +121,7 @@ export const waypointProperty = {
   waypoint: {
     type: "integer",
     minimum: 1,
-    description: "The number of the [NOW] checklist step this call accomplishes, if it accomplishes one.",
+    description: "The [NOW] checklist step number this call accomplishes, if any.",
   },
 };
 

@@ -12,6 +12,7 @@ import { climbsFreely } from "@/lib/srd/feat-combat";
 import { footprintIndexes, type Footprint } from "@/lib/battlemap/footprint";
 import { moveTraitsFrom, tileIndex, type BattleToken, type MoveTraits } from "@/lib/battlemap/types";
 import { sizeForRace } from "@/lib/srd";
+import { holdsFeature } from "@/lib/srd/feature-names";
 
 const SIZES = ["tiny", "small", "medium", "large", "huge", "gargantuan"];
 
@@ -59,7 +60,7 @@ export function passableTiles(input: {
 
 // Halfling Nimbleness on a sheet.
 export function hasHalflingNimbleness(features: Array<{ name: string }> = []): boolean {
-  return features.some((feature) => /^halfling nimbleness\b/i.test(feature.name.trim()));
+  return holdsFeature({ features }, "Halfling Nimbleness");
 }
 
 // A character's walking traits on the board, with whose space they may pass

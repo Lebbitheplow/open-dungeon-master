@@ -17,6 +17,7 @@
 // spends instead of a slot. Pure.
 import type { Ability } from "@/lib/schemas/sheet";
 import { textKey } from "@/lib/language/text-logic";
+import { featChoice } from "@/lib/schemas/sheet";
 
 // The scores a spell is cast with.
 export type CastingAbility = "int" | "wis" | "cha";
@@ -76,13 +77,11 @@ const SCHOOLS = ["abjuration", "conjuration", "divination", "enchantment", "evoc
 // for bard, sorcerer, or warlock; Wisdom for cleric or druid; Intelligence
 // for wizard").
 export function listAbility(list: string): CastingAbility {
-  const name = lower(list);
+  const name = textKey(list);
   if (["cleric", "druid", "ranger"].includes(name)) return "wis";
   if (["wizard", "artificer"].includes(name)) return "int";
   return "cha";
 }
-
-const lower = (value: string) => value.trim().toLowerCase().replace(/[‘’]/g, "'");
 
 const namesIn = (clause: string, from: string[]) => from.filter((name) => new RegExp(`\\b${name}\\b`).test(clause));
 
@@ -100,7 +99,7 @@ export function featSpellsAnything(spec: FeatSpellSpec): boolean {
 export function featSpellSpec(desc: string): FeatSpellSpec {
   // Markdown and bracketed asides out (Tome of Heroes' "*treeheal* (see
   // the Magic and Spells chapter)").
-  const text = lower(desc ?? "").replace(/\([^)]*\)/g, " ").replace(/[*_]/g, "").replace(/\s+/g, " ").trim();
+  const text = (desc ?? "").toLowerCase().replace(/[‘’]/g, "'").replace(/\([^)]*\)/g, " ").replace(/[*_]/g, "").replace(/\s+/g, " ").trim();
   if (!text) {
     return EMPTY;
   }
@@ -281,14 +280,14 @@ export function featSpellGrants(input: FeatSpellInput): FeatSpellVerdict {
     if (!featSpellsAnything(spec)) {
       continue;
     }
-    const picks = input.choices[lower(feat.name)] ?? input.choices[feat.name] ?? {};
+    const picks = featChoice(input.choices, feat.name) ?? {};
     if (input.strict) {
       const owed = featSpellsOwed(feat.name, spec, picks);
       if (owed) {
         (input.picksMayWait ? owedPicks : problems).push(owed);
       }
     }
-    const list = spec.listChoice ? lower(picks.list ?? "") || null : null;
+    const list = spec.listChoice ? textKey(picks.list ?? "") || null : null;
     if (input.strict && list && spec.lists.length && !spec.lists.includes(list)) {
       problems.push(`${feat.name}'s spells come from the ${spec.lists.join(", ")} list; "${picks.list}" is not one of them.`);
     }
@@ -305,7 +304,7 @@ export function featSpellGrants(input: FeatSpellInput): FeatSpellVerdict {
       if (known.level !== level) {
         problems.push(`${known.name} is a ${known.level === 0 ? "cantrip" : `level ${known.level} spell`}; ${feat.name}'s ${kind} is ${level === 0 ? "a cantrip" : `a ${ordinal(level)}-level spell`}.`);
       }
-      if (allowedLists.length && !known.classes.some((entry) => allowedLists.includes(lower(entry)))) {
+      if (allowedLists.length && !known.classes.some((entry) => allowedLists.includes(textKey(entry)))) {
         problems.push(`${known.name} is not on the ${allowedLists.join(" or ")} list, which is where ${feat.name}'s ${kind} comes from.`);
       }
       return known;
@@ -317,8 +316,8 @@ export function featSpellGrants(input: FeatSpellInput): FeatSpellVerdict {
     const picked = (picks.spells ?? []).map((name) => name.trim()).filter(Boolean).slice(0, spec.spells);
     for (const name of picked) {
       const known = check(name, spec.spellLevel, spec.ritualBook ? "ritual spell" : "spell");
-      if (input.strict && known && spec.schools.length && known.school && !spec.schools.includes(lower(known.school))) {
-        problems.push(`${known.name} is a ${lower(known.school)} spell; ${feat.name}'s spell is picked from ${spec.schools.join(" or ")}.`);
+      if (input.strict && known && spec.schools.length && known.school && !spec.schools.includes(textKey(known.school))) {
+        problems.push(`${known.name} is a ${textKey(known.school)} spell; ${feat.name}'s spell is picked from ${spec.schools.join(" or ")}.`);
       }
       if (input.strict && known && spec.ritualBook && known.ritual === false) {
         problems.push(`${known.name} has no ritual tag; ${feat.name}'s book holds rituals only.`);
@@ -368,7 +367,7 @@ export function freeCastOf(featureName: string): { spell: string; feat: string }
   return match ? { spell: match[1], feat: match[2] } : null;
 }
 
-const slug = (name: string) => lower(name).replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+const slug = (name: string) => textKey(name).replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
 
 export function freeCastResourceId(spell: string): string {
   return `free_cast_${slug(spell)}`;

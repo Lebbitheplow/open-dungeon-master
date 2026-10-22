@@ -173,6 +173,24 @@ await test("Flurry of Blows: two bonus-action unarmed strikes after the Attack a
   assert.equal(kit.enemy(enemy.id).currentHp, hp);
 });
 
+await test("A Flurry of Blows strike sent as Martial Arts' or a feature's bonus attack is one of the flurry's strikes, not a second bonus action.", async () => {
+  for (const bonusAttack of ["martial arts", "feature"]) {
+    const enemy = await stage(monk);
+    assert.equal((await swing(monk, enemy, { weapon: "unarmed strike" })).ok, true);
+    assert.equal((await swing(monk, enemy, { weapon: "unarmed strike" })).ok, true);
+    assert.equal((await world.invoke("use_resource", { characterId: monk.id, resource: "Ki", variant: "flurry of blows" })).ok, true);
+    const one = await swing(monk, enemy, { weapon: "unarmed strike", bonusAttack });
+    assert.equal(one.ok, true, one.error);
+    assert.equal(budget().flurryStrikes, 1, bonusAttack);
+    const two = await swing(monk, enemy, { weapon: "unarmed strike", bonusAttack });
+    assert.equal(two.ok, true, two.error);
+    assert.equal(budget().flurryStrikes, 0, bonusAttack);
+    assert.equal((await swing(monk, enemy, { weapon: "unarmed strike", bonusAttack })).ok, false, "a third strike");
+    assert.equal(world.sheet(monk.id).resources.ki.used, 1);
+    world.patch(monk.id, { resources: { ...world.sheet(monk.id).resources, ki: { ...world.sheet(monk.id).resources.ki, used: 0 } } });
+  }
+});
+
 await test("Flurry of Blows needs the Attack action taken first.", async () => {
   await stage(monk);
   const out = await world.invoke("use_resource", { characterId: monk.id, resource: "Ki", variant: "flurry of blows" });

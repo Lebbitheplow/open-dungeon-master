@@ -243,15 +243,19 @@ export function grantItemMath(
 //
 // Returns null when nothing on the sheet matches, so the caller can say so
 // rather than silently doing nothing.
+// The unidentified line reveal_item names, by the description it carries as
+// its name, or -1. The tool's gate (ai-gate.ts) reads the same line.
+export function unrevealedLine(equipment: readonly EquipmentRow[], name: string): number {
+  return equipment.findIndex((item) => textKey(item.name) === textKey(name) && !isIdentified(item));
+}
+
 export function revealItemMath(
   equipment: EquipmentRow[],
   name: string,
   revealedName?: string,
   facts: ItemFacts = {},
 ): { equipment: EquipmentRow[]; from: string; to: string } | null {
-  const index = equipment.findIndex(
-    (item) => textKey(item.name) === textKey(name) && !isIdentified(item),
-  );
+  const index = unrevealedLine(equipment, name);
   if (index < 0) {
     return null;
   }
@@ -260,8 +264,13 @@ export function revealItemMath(
   const next = [...equipment];
   // The flag is dropped rather than set to true: absent already means known,
   // and one representation for "identified" is one fewer thing to disagree.
+  // Renamed, the line is what its new name or the row sent with it says: a
+  // row it carried while it was a description is no longer read.
   const rest = { ...next[index] };
   delete rest.identified;
+  if (to !== from) {
+    delete rest.srdName;
+  }
   next[index] = { ...rest, name: to, ...itemFacts(facts) };
   return { equipment: next, from, to };
 }

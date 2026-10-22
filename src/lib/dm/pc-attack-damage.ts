@@ -31,7 +31,8 @@ import { conditionOnHitDice } from "@/lib/srd/condition-effects";
 import { conditionStrikesMagical } from "@/lib/srd/condition-effect-queries";
 import { effectsFor, type CombatRiders } from "@/lib/srd/feature-effects";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import { textKey } from "@/lib/language/text-logic";
+import { holdsFeature, isNamed } from "@/lib/srd/feature-names";
+import { subclassNamed } from "@/lib/srd/subclass-name";
 
 export type FeatureRider = CombatRiders["damageRiders"][number];
 
@@ -148,7 +149,7 @@ function hunterRiders(
   sheet: CharacterSheet,
   enemy: Pick<EncounterEnemy, "currentHp" | "maxHp"> | undefined,
 ): FeatureRider[] {
-  const slayer = sheet.features.some((feature) => /colossus slayer/i.test(feature.name));
+  const slayer = holdsFeature(sheet, "Colossus Slayer");
   if (!slayer || !enemy || enemy.currentHp >= enemy.maxHp) {
     return [];
   }
@@ -161,7 +162,7 @@ function hunterRiders(
 // is in its text, and "of the weapon's type" (War) or a choice of three
 // (Nature) rides as the weapon's own.
 function riderType(sheet: CharacterSheet, rider: FeatureRider): string {
-  if (rider.type || !/^divine strike/i.test(rider.feature.trim())) {
+  if (rider.type || !isNamed(rider.feature, "divine strike")) {
     return rider.type;
   }
   const domains = [
@@ -169,7 +170,7 @@ function riderType(sheet: CharacterSheet, rider: FeatureRider): string {
     ...(sheet.classes ?? []).map((entry) => ({ id: entry.id, subclass: entry.subclass })),
   ].filter((entry) => entry.id.toLowerCase() === "cleric" && entry.subclass);
   for (const { subclass } of domains) {
-    if (/^life\b|life domain/i.test(subclass.trim())) {
+    if (subclassNamed(subclass, "Life Domain")) {
       return "radiant";
     }
     const text = subclassFeatureDescription("cleric", subclass, "Divine Strike") ?? "";
@@ -362,11 +363,10 @@ function magicalStrikeApplies(plan: Pick<AttackPlan, "kind" | "profile" | "rider
   return effectsFor(plan.sheet)
     .filter(({ effect }) => effect.kind === "magical_attacks")
     .some(({ feature }) => {
-      const name = textKey(feature);
-      if (name.startsWith("ki empowered strikes")) {
+      if (isNamed(feature, "Ki-Empowered Strikes")) {
         return plan.profile.unarmed === true;
       }
-      if (name.startsWith("primal strike")) {
+      if (isNamed(feature, "Primal Strike")) {
         return plan.kind === "natural";
       }
       return true;

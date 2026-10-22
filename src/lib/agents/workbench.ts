@@ -343,7 +343,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
       },
       featChoices: {
         type: "object",
-        description: "The picks a feat taken now or a subclass's training leaves open, keyed by its lowercased name: { languages, skills, expertise, weapons, tools, armor, cantrips, spells, damageType } as the refusal or choices.training names them.",
+        description: "The picks a feat taken now or a subclass's training leaves open, keyed by its name: { languages, skills, expertise, weapons, tools, armor, cantrips, spells, damageType } as the refusal or choices.training names them.",
       },
       subclass: { type: "string", description: "One of choices.subclass.options." },
       expertise: { type: "array", items: { type: "string" }, maxItems: 6, description: "Skills from choices.expertise.options." },

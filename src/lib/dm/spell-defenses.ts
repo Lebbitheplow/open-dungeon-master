@@ -22,6 +22,7 @@ import { rollEnemySave } from "@/lib/dm/forced-save";
 import { removeConditions, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { tranquilityDc } from "@/lib/dm/srd-defenses";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { isConditionNamed } from "@/lib/srd/feature-names";
 
 // Why the enemy cannot attack this character now, or null.
 export function sanctuaryRefusal(campaignId: string, enemy: EncounterEnemy, targetId: string): ToolError | null {
@@ -45,7 +46,7 @@ export function sanctuaryRefusal(campaignId: string, enemy: EncounterEnemy, targ
 // to the target as usual, or what happened to a duplicate.
 export function mirrorImageDecoy(campaignId: string, targetId: string, attackTotal: number): string | null {
   const target = getSheetById(targetId);
-  const held = target?.conditions.find((entry) => /^mirror images?\b/i.test(entry.trim()));
+  const held = target?.conditions.find((entry) => isConditionNamed(entry, "mirror image", "mirror images"));
   if (!target || !held) {
     return null;
   }

@@ -89,45 +89,43 @@ export function swingMode(
 
 const attackKey = (name: string) => textKey(name.replace(/\([^)]*\)/g, ""));
 
-function findAttack(attacks: EnemyAttack[], wanted: string): EnemyAttack | null {
+// The attack a name is, whole, with or without a tag in brackets ("Fire
+// Breath (Recharge 5-6)"). Null for any other name: never the attack whose
+// name holds it, nor the first.
+export function attackNamed(attacks: EnemyAttack[], wanted: string): EnemyAttack | null {
   const key = textKey(wanted);
   if (!key) {
     return null;
   }
-  return (
-    attacks.find((attack) => textKey(attack.name) === key) ??
-    attacks.find((attack) => attackKey(attack.name) === attackKey(wanted)) ??
-    attacks.find((attack) => textKey(attack.name).includes(key)) ??
-    attacks.find((attack) => attackKey(wanted).includes(attackKey(attack.name))) ??
-    null
-  );
+  return attacks.find((attack) => textKey(attack.name) === key || attackKey(attack.name) === attackKey(wanted)) ?? null;
 }
 
 // A step that follows only a hit (the grick's beak) is marked on the swing,
 // and enemy-attack.ts skips it after a miss.
 function expand(routine: RoutineStep[], attacks: EnemyAttack[]): EnemyAttack[] {
   return routine.flatMap((step) => {
-    const found = findAttack(attacks, step.attack);
+    const found = attackNamed(attacks, step.attack);
     const attack = found && step.ifHit ? { ...found, onlyIfHit: true } : found;
     return attack ? new Array<EnemyAttack>(Math.max(1, Math.min(10, step.count))).fill(attack) : [];
   });
 }
 
-// The attacks one enemy_attack call makes, in order. A block with a
+// The attacks one enemy_attack call makes, in order, for the attack asked
+// for (attackNamed: the caller refuses a name it is not). A block with a
 // routine walks the routine that holds the attack asked for (the first when
 // none is asked for); an attack no routine names is one swing of it, as a
 // legendary action's attack is. A block with only a count repeats the
-// attack asked for (or its first) that many times.
+// attack asked for (or its first) that many times. A single swing is the
+// one asked for, which the caller requires of a block with several.
 export function plannedSwings(
   stats: Pick<EnemyStats, "attacks" | "attacksPerTurn" | "routines">,
   attacks: EnemyAttack[],
-  requested: string | undefined,
+  asked: EnemyAttack | null,
   options: { single?: boolean } = {},
 ): EnemyAttack[] {
   if (!attacks.length) {
     return [];
   }
-  const asked = requested ? findAttack(attacks, requested) : null;
   if (options.single) {
     return [asked ?? attacks[0]];
   }

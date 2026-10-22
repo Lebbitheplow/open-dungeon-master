@@ -12,6 +12,7 @@
 
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
+import { rowName, type RowItem } from "@/lib/srd/item-row";
 
 export type ItemSpell = {
   spell: string;
@@ -112,16 +113,18 @@ export function itemSpellsOf(itemName: string): ItemSpell[] {
 }
 
 // The spells a carried row casts: a workshop item's own list when it carries
-// one (src/lib/homebrew/item-data.ts), else the table's by name.
-export function itemSpellsOfRow(item: { name: string; gear?: unknown }): ItemSpell[] {
+// one (src/lib/homebrew/item-data.ts), else the table's by its row
+// (src/lib/srd/item-row.ts), so a "Bacchetta dei dardi" listed as a Wand of
+// Magic Missiles casts them.
+export function itemSpellsOfRow(item: RowItem & { gear?: unknown }): ItemSpell[] {
   const own = (item.gear as { spells?: ItemSpell[] } | undefined)?.spells;
-  return Array.isArray(own) && own.length ? own : itemSpellsOf(item.name);
+  return Array.isArray(own) && own.length ? own : itemSpellsOf(rowName(item));
 }
 
 // What casting `spell` from this item costs for `charges` spent (the fewest
 // it takes when none are named), or an error sentence.
 export function itemSpellCast(
-  item: string | { name: string; gear?: unknown },
+  item: string | (RowItem & { gear?: unknown }),
   spell: string,
   charges: number | undefined,
 ): { spell: string; charges: number; level: number; dc?: number } | ToolError {

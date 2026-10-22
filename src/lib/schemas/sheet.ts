@@ -5,6 +5,7 @@ import type { SheetSummon } from "@/lib/schemas/summon";
 import { ABILITIES } from "@/lib/schemas/abilities";
 import { GENDERS, storedGender, type Gender } from "@/lib/gender";
 import { conditionMetaSchema, ROUND_CEILING, type ConditionMetaMap } from "@/lib/schemas/condition-meta";
+import { textKey } from "@/lib/language/text-logic";
 
 export { ABILITIES, type Ability } from "@/lib/schemas/abilities";
 export type { ConditionMetaMap } from "@/lib/schemas/condition-meta";
@@ -132,7 +133,23 @@ const featPicksSchema = z.object({
   // Elemental Adept's damage type (src/lib/srd/feat-combat.ts).
   damageType: z.string().trim().max(20).optional(),
 });
-export const featChoicesSchema = z.record(z.string().trim().min(1).max(80), featPicksSchema);
+// A feat's (or a subclass grant's) picks in a feat-choice map, by its
+// name's textKey (src/lib/srd/feat-grants.ts): "Magic Initiate (Wizard)"
+// written with a curly quote or another spacing is one feat. A map sent or
+// stored under other keys (the earlier lower case) is re-keyed where it
+// arrives: featChoicesSchema, and the builder's draft.
+export function featChoice<T>(choices: Record<string, T> | null | undefined, name: string): T | undefined {
+  return choices?.[textKey(name)];
+}
+
+export function withFeatChoice<T>(choices: Record<string, T>, name: string, picks: T): Record<string, T> {
+  return { ...choices, [textKey(name)]: picks };
+}
+
+export function keyedFeatChoices<T>(choices: Record<string, T> | undefined): Record<string, T> {
+  return Object.fromEntries(Object.entries(choices ?? {}).map(([name, picks]) => [textKey(name), picks]));
+}
+export const featChoicesSchema = z.record(z.string().trim().min(1).max(80), featPicksSchema).transform(keyedFeatChoices);
 
 export const proficienciesSchema = z.object({
   saves: z.array(z.enum(ABILITIES)).max(6),

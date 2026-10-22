@@ -15,13 +15,12 @@
 //
 // Must not import encounter-tools, map-tools or mutations (they reach here).
 
-import { campaignLanguage, type Campaign } from "@/lib/db/campaigns";
+import type { Campaign } from "@/lib/db/campaigns";
 import { getBattleMapForEncounter } from "@/lib/db/battle-maps";
 import { getActiveBoard } from "@/lib/db/encounters";
 import type { SpellZone } from "@/lib/battlemap/zones";
 import { zoneKey, zoneOwnKey, zoneRowFor } from "@/lib/battlemap/zones-spells";
 import { sectionCells, sectionOf, wallNamed } from "@/lib/battlemap/zones-walls";
-import { nameTerms } from "@/lib/language/language";
 import { liveZones, publishZones, saveZones } from "@/lib/dm/zone-store";
 import type { ToolError } from "@/lib/dm/tool-errors";
 
@@ -41,7 +40,7 @@ export function wallSectionFor(campaignId: string, name: string, section: number
   const encounter = getActiveBoard(campaignId);
   const map = encounter ? getBattleMapForEncounter(encounter.id) : null;
   const standingWalls = map ? liveZones(map, encounter).filter((zone) => zoneRowFor(zone)?.sections) : [];
-  const named = wallNamed(nameTerms(name, campaignLanguage(campaignId)), standingWalls);
+  const named = wallNamed(name, standingWalls);
   if (!named) {
     return null;
   }

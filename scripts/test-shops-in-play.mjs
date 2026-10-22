@@ -45,7 +45,7 @@ function test(name, fn) {
 }
 
 const NAMES = ["request_roll", "move_party", "grant_item", "open_shop", "buy_item", "sell_item", "haggle", "travel"];
-const offersShop = (playerText) => profiles.compactToolNames(NAMES, { inEncounter: false, playerText }, []).has("open_shop");
+const offersShop = (playerText) => profiles.compactToolNames(NAMES, { inEncounter: false, englishPlayerText: playerText }, []).has("open_shop");
 
 test("the words for a place that sells offer the shop tools", () => {
   for (const words of [

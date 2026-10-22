@@ -97,7 +97,7 @@ export function prepareUseItem(
   // weapon as one (src/lib/srd/feat-combat.ts).
   const name = carried?.name ?? itemName;
   const drinking = drinksAsBonusAction(sheet) && Boolean(carried && hasItemTag(carried, "potion"));
-  const asBonus = drinking || (coatsAsBonusAction(sheet) && isBasicPoison(name, sheet.campaignId));
+  const asBonus = drinking || (coatsAsBonusAction(sheet) && isBasicPoison(carried ?? { name }, sheet.campaignId));
   const price = asBonus
     ? spendAction(budget, "bonus", `${drinking ? "Rapid Drinker" : "Poisoner"} (${USE_AN_OBJECT})`, sheet.name)
     : spendAction(budget, "action", USE_AN_OBJECT, sheet.name);

@@ -39,6 +39,7 @@ import { chooseFiendishResilience, stillnessOfMind } from "@/lib/dm/feature-hook
 export { applyInitiativeRefills } from "@/lib/dm/feature-hooks";
 import type { CharacterSheet, FullPatchSheetInput } from "@/lib/schemas/sheet";
 import type { ToolError, ToolResult } from "@/lib/dm/tool-errors";
+import { familyOf, isConditionNamed, isNamed } from "@/lib/srd/feature-names";
 
 type Ability = "str" | "dex" | "con" | "int" | "wis" | "cha";
 
@@ -116,27 +117,28 @@ export function featureVariantSpend(
   targetId: string | undefined,
   reason: string,
 ): ToolResult | null {
-  if (/^fiendish resilience\b/i.test(resourceName.trim())) {
+  if (isNamed(familyOf(resourceName), "Fiendish Resilience")) {
     return chooseFiendishResilience(campaign, turnId, sheet, variant, reason);
   }
-  if (/^stillness of mind\b/i.test(resourceName.trim())) {
+  if (isNamed(resourceName, "Stillness of Mind")) {
     return stillnessOfMind(campaign, turnId, sheet, reason);
   }
   const def = matchResource(resourceName);
-  const wanted = (variant ?? "").trim().toLowerCase();
+  // The option the variant names whole (src/lib/srd/feature-names.ts).
+  const wanted = variant ?? "";
   if (def?.id === "channel_divinity") {
-    if (/turn the unholy/.test(wanted)) {
+    if (isNamed(wanted, "turn the unholy")) {
       return spend(campaign, turnId, sheet, def.id, "action", reason, () =>
         turnUndead(campaign, turnId, sheet, { types: /undead|fiend/i, destroy: false, name: "Turn the Unholy" }),
       );
     }
-    if (/turn|destroy undead/.test(wanted)) {
+    if (isNamed(wanted, "turn undead", "destroy undead")) {
       return spend(campaign, turnId, sheet, def.id, "action", reason, () => turnUndead(campaign, turnId, sheet));
     }
-    if (/sacred weapon/.test(wanted)) {
+    if (isNamed(wanted, "sacred weapon")) {
       return spend(campaign, turnId, sheet, def.id, "action", reason, () => sacredWeapon(sheet));
     }
-    if (/preserve life/.test(wanted)) {
+    if (isNamed(wanted, "preserve life")) {
       return spend(campaign, turnId, sheet, def.id, "action", reason, () =>
         preserveLife(campaign, turnId, sheet, targetId, reason),
       );
@@ -144,14 +146,14 @@ export function featureVariantSpend(
     return null;
   }
   // Rally and Commander's Strike (src/lib/dm/maneuver-uses.ts), known only.
-  const maneuver = def?.id === "sub_superiority_dice" ? (/\brally\b/.test(wanted) ? "rally" : /commander'?s strike/.test(wanted.replace(/[’`]/g, "'")) ? "commander's strike" : null) : null;
+  const maneuver = def?.id === "sub_superiority_dice" ? (isNamed(wanted, "rally") ? "rally" : isNamed(wanted, "commander's strike", "commanders strike") ? "commander's strike" : null) : null;
   if (maneuver && !knowsManeuver(sheet, maneuver)) {
     return { error: `${sheet.name} does not know the ${maneuver === "rally" ? "Rally" : "Commander's Strike"} maneuver. Nothing was spent.`, refused: "rules" };
   }
-  if (def?.id === "sub_superiority_dice" && /\brally\b/.test(wanted)) {
+  if (def?.id === "sub_superiority_dice" && maneuver === "rally") {
     return spend(campaign, turnId, sheet, def.id, "bonus", reason, () => rally(campaign, turnId, sheet, targetId));
   }
-  if (def?.id === "sub_superiority_dice" && /commander'?s strike/.test(wanted.replace(/[’`]/g, "'"))) {
+  if (def?.id === "sub_superiority_dice" && maneuver === "commander's strike") {
     return spend(campaign, turnId, sheet, def.id, (fresh) => commandersStrikeCharge(campaign, fresh, targetId), reason, () =>
       commandersStrike(campaign, sheet, targetId),
     );
@@ -162,14 +164,14 @@ export function featureVariantSpend(
   if (def?.id === "indomitable") {
     return spend(campaign, turnId, sheet, def.id, "none", reason, () => indomitable(campaign, sheet));
   }
-  if (def?.id === "ki" && /diamond soul/.test(wanted)) {
+  if (def?.id === "ki" && isNamed(wanted, "diamond soul")) {
     // Diamond Soul (monk 14): 1 ki rerolls a failed save, as Indomitable does.
     if (!holdsFeature(sheet, "diamond soul")) {
       return { error: `${sheet.name} does not have Diamond Soul.`, refused: "rules" };
     }
     return spend(campaign, turnId, sheet, def.id, "none", reason, () => indomitable(campaign, sheet));
   }
-  if (def?.id === "ki" && /empty body/.test(wanted)) {
+  if (def?.id === "ki" && isNamed(wanted, "empty body")) {
     // Empty Body (monk 18): 4 ki, an action, invisible for a minute and
     // resistant to all damage but force.
     if (!holdsFeature(sheet, "empty body")) {
@@ -347,7 +349,7 @@ function emptyBody(sheet: CharacterSheet): Resolution {
 function sacredWeapon(sheet: CharacterSheet): Resolution {
   const bonus = Math.max(1, computeSheetDerived(sheet).abilityMods.cha);
   const condition = `sacred weapon (+${bonus})`;
-  const held = sheet.conditions.filter((entry) => !/^sacred weapon/i.test(entry));
+  const held = sheet.conditions.filter((entry) => !isConditionNamed(entry, "sacred weapon"));
   return {
     patch: {
       conditions: [...held, condition],

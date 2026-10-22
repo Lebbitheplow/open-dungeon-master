@@ -8,7 +8,7 @@ import { canEnemyAct } from "@/lib/dm/can-act";
 import { spendEnemyAction } from "@/lib/dm/enemy-approach";
 import { castingHold } from "@/lib/dm/spell-planes";
 import { antimagicProblem } from "@/lib/dm/zone-rules";
-import { resolveEnemyRef } from "@/lib/dm/enemy-damage";
+import { resolveEnemyRef, unknownEnemyRef } from "@/lib/dm/enemy-damage";
 import { charmedBy } from "@/lib/dm/enemy-profile";
 import {
   abilityKey,
@@ -106,7 +106,7 @@ export function prepareEnemyUse(campaign: Campaign, input: Input): EnemyUse | To
   }
   const enemy = resolveEnemyRef(encounter.id, input.casterEnemyId);
   if (!enemy) {
-    return { error: "Unknown casterEnemyId; use one from GAME STATE.", retry: true };
+    return unknownEnemyRef(encounter.id, "casterEnemyId", input.casterEnemyId);
   }
   for (const targetId of input.targetIds) {
     if (charmedBy(enemy.conditions, enemy.conditionMeta, targetId)) {

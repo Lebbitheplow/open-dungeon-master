@@ -55,9 +55,8 @@ function baseName(name: string): string {
 }
 
 // An entry written for this exact feature name. Checked before the resource
-// and effect tables, whose matching is deliberately fuzzy: "Wild Shape
-// Improvement" contains "Wild Shape" and would otherwise be explained as the
-// base feature rather than as the upgrade it is.
+// and effect tables, which read a bracket note away: "Indomitable (2 uses)"
+// there is Indomitable, here it is the use count the note gives.
 function exactSrdText(classId: string, name: string): string | null {
   const byClass = SRD_FEATURE_BY_CLASS[classId.trim().toLowerCase()];
   return byClass?.[name] ?? SRD_FEATURE_TEXT[name] ?? null;

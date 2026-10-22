@@ -213,10 +213,11 @@ test("the attack profile picks a snapshotted homebrew weapon over the SRD table"
   const weapon = normalizeWeapon({ category: "martial", kind: "melee", damage: "2d4 slashing", properties: ["finesse"] }, "Dagger of Thorns");
   assert.ok("data" in weapon);
   const equipment = [{ name: "Dagger of Thorns", qty: 1, gear: { weapon: weapon.data } }];
-  // Named: "dagger" fuzzy-matches the carried item, whose own block wins
-  // over the SRD dagger the name resembles.
-  const named = resolveAttackWeapon(equipment, ["martial"], "dagger");
+  // Named: the carried item's own block wins over the SRD dagger its name
+  // resembles, and a word of its name is no carried weapon.
+  const named = resolveAttackWeapon(equipment, ["martial"], "dagger of thorns");
   assert.equal(named.srd.damage, "2d4 slashing");
+  assert.equal(resolveAttackWeapon(equipment, ["martial"], "dagger").carried, false);
   // Unnamed: the best carried weapon is the homebrew one.
   const best = resolveAttackWeapon(equipment, ["martial"], undefined);
   assert.equal(best.displayName, "Dagger of Thorns");

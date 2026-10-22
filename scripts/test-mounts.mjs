@@ -26,7 +26,7 @@ function test(name, fn) {
   passed += 1;
 }
 
-test("a mount is findable by slug, by name, and loosely", () => {
+test("a mount is found by its slug or its whole name", () => {
   assert.equal(mountProfile("warhorse").slug, "warhorse");
   assert.equal(mountProfile("Riding horse").slug, "riding-horse");
   assert.equal(mountProfile("griffon").speed, 80);
@@ -62,7 +62,8 @@ test("a small rider can take a pony", () => {
 test("an unknown mount is refused with a way forward", () => {
   const refused = checkMount({ ref: "manticore", riderSize: "medium" });
   assert.ok("error" in refused);
-  assert.match(refused.error, /Describe one/);
+  assert.match(refused.error, /an animal no list has is sent in customName/);
+  assert.match(refused.error, /the mounts are Riding horse, Warhorse/);
 });
 
 test("a custom beast is taken on trust except for the size rule", () => {

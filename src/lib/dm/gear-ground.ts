@@ -4,7 +4,7 @@
 // The dispatcher and the hands are src/lib/dm/gear-tool.ts.
 import type { Campaign } from "@/lib/db/campaigns";
 import type { DmTurn } from "@/lib/db/dm-turns";
-import { getEnemy, type Encounter } from "@/lib/db/encounters";
+import { getActiveEncounter, getEnemy, type Encounter } from "@/lib/db/encounters";
 import { getTokenByRef } from "@/lib/db/battle-maps";
 import { getCurrentLocation } from "@/lib/db/locations";
 import { getSheetById } from "@/lib/db/sheets";
@@ -21,8 +21,10 @@ import { tokenFootprint } from "@/lib/dm/board-reach";
 import type { TurnBudget } from "@/lib/dm/action-budget";
 import { hasFastHands } from "@/lib/dm/bonus-routes";
 import { canAct } from "@/lib/dm/can-act";
-import { resolveEnemyRef } from "@/lib/dm/enemy-damage";
+import { resolveEnemyRef, unknownEnemyRef } from "@/lib/dm/enemy-damage";
 import { gearKindOf, holdIfFree, inHand, spendInteraction } from "@/lib/dm/gear-hands";
+import { lineNamed, linesNamed } from "@/lib/srd/item-row";
+import type { ItemTag } from "@/lib/schemas/item-tags";
 import { ownBudget, refuse, retry, saveEquipment } from "@/lib/dm/gear-store";
 import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
 import { addRowMath, handedOverRow, removeItemMath } from "@/lib/dm/mutation-math";
@@ -116,14 +118,16 @@ function reachable(campaignId: string, encounter: Encounter | null, refId: strin
   return out;
 }
 
+// The dropped thing a ref means: its id, else the lines its whole name
+// picks out the way a carried line is found (src/lib/srd/item-row.ts
+// linesNamed), the nearest of them first.
 function findGround(candidates: Array<{ item: DroppedItem; apart: number | null }>, ref: string) {
   const byId = candidates.find((entry) => entry.item.id === ref);
   if (byId) {
     return byId;
   }
-  const wanted = textKey(ref);
-  const named = candidates.filter((entry) => textKey(entry.item.item.name) === wanted || textKey(entry.item.item.name).includes(wanted));
-  return named.sort((a, b) => (a.apart ?? 0) - (b.apart ?? 0))[0] ?? null;
+  const named = new Set(linesNamed(candidates.map((entry) => entry.item.item), ref));
+  return candidates.filter((entry) => named.has(entry.item.item)).sort((a, b) => (a.apart ?? 0) - (b.apart ?? 0))[0] ?? null;
 }
 
 export function pickUp(
@@ -183,6 +187,21 @@ export function pickUp(
 
 // ---- an enemy's hands ----
 
+// The thing an enemy picked up earlier, by the names a carried line answers
+// to (lineNamed).
+function heldItemOf(campaignId: string, enemyId: string, itemName: string): DroppedItem | null {
+  const held = listDroppedItems(campaignId).filter((entry) => entry.heldByEnemy === enemyId);
+  return held[lineNamed(held.map((entry) => entry.item), itemName)] ?? null;
+}
+
+// Whether an enemy's drop is a thing it picked up earlier, which falls as it
+// was; anything else is new to the table (src/lib/dm/ai-gate.ts asks what).
+export function enemyHoldsItem(campaignId: string, ref: string, itemName: string): boolean {
+  const encounter = getActiveEncounter(campaignId);
+  const enemy = encounter ? resolveEnemyRef(encounter.id, ref) : null;
+  return Boolean(enemy && heldItemOf(campaignId, enemy.id, itemName));
+}
+
 export function enemyHandles(
   campaign: Campaign,
   encounter: Encounter | null,
@@ -190,21 +209,25 @@ export function enemyHandles(
   action: "equip" | "unequip" | "drop" | "pick_up" | "hand",
   itemName: string,
   qty: number,
+  // What a thing it lets fall is, when it held nothing by that name
+  // (src/lib/dm/gear-tool.ts).
+  facts: { srdName?: string; tags?: ItemTag[] } = {},
 ): ToolResult {
   if (!encounter) {
     return refuse("An enemy handles items in a fight; there is no fight running.");
   }
   const enemy = resolveEnemyRef(encounter.id, ref);
-  if (!enemy || enemy.status !== "alive") {
-    return retry("Unknown or fallen enemyId; use a living enemy from GAME STATE.");
+  if (!enemy) {
+    return unknownEnemyRef(encounter.id, "enemyId", ref);
+  }
+  if (enemy.status !== "alive") {
+    return retry(`${enemy.displayName} is ${enemy.status}: only a living enemy handles items.`);
   }
   const { map, token } = standing(campaign.id, enemy.id);
   if (action === "drop") {
     // What it held, now on the ground: a blade knocked from its grip, a key
     // it let fall. Something it picked up earlier falls as it was.
-    const held = listDroppedItems(campaign.id).find(
-      (entry) => entry.heldByEnemy === enemy.id && textKey(entry.item.name) === textKey(itemName),
-    );
+    const held = heldItemOf(campaign.id, enemy.id, itemName);
     if (held) {
       moveDroppedItem(held.id, { mapId: map && token ? map.id : null, x: token?.x ?? null, y: token?.y ?? null, heldByEnemy: null });
     } else {
@@ -214,7 +237,7 @@ export function enemyHandles(
         x: token?.x ?? null,
         y: token?.y ?? null,
         place: placeName(campaign.id),
-        item: { name: itemName.slice(0, 80), qty },
+        item: { name: itemName.slice(0, 80), qty, ...facts },
         droppedBy: enemy.displayName,
       });
     }
@@ -224,9 +247,11 @@ export function enemyHandles(
   if (action !== "pick_up") {
     return retry("An enemy may drop or pick_up; its own gear is its stat block.");
   }
-  const found = findGround(reachable(campaign.id, encounter, enemy.id), itemName);
+  const candidates = reachable(campaign.id, encounter, enemy.id);
+  const found = findGround(candidates, itemName);
   if (!found || found.apart === null) {
-    return retry(`Nothing called "${itemName}" lies on the board near ${enemy.displayName}.`);
+    const lying = candidates.filter((entry) => entry.apart !== null).map((entry) => entry.item.item.name);
+    return retry(`Nothing called "${itemName}" lies on the board near ${enemy.displayName}.${lying.length ? ` On the board: ${lying.join(", ")}.` : ""}`);
   }
   if (found.apart > 1) {
     return refuse(`${found.item.item.name} lies ${found.apart * 5} ft from ${enemy.displayName}; it must be within 5 ft to take it.`);

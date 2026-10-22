@@ -13,7 +13,8 @@ import { repairedWeight } from "@/lib/content/item-weights";
 import { dedupeName } from "@/lib/workshop/import";
 import { normalizeCampaignKind, type CampaignKind } from "@/lib/workshop/kind";
 import type { CampaignStatus } from "@/lib/campaign-types";
-import type { CharacterSheet, CreateSheetInput, SheetAttachment } from "@/lib/schemas/sheet";
+import { keyedFeatChoices, type CharacterSheet, type CreateSheetInput, type SheetAttachment } from "@/lib/schemas/sheet";
+import { rowName } from "@/lib/srd/item-row";
 
 // The per-user character library (table library_characters). Campaign play
 // COPIES a library character into character_sheets (copy-on-instantiate);
@@ -78,6 +79,12 @@ function withSplitCantrips(sheet: CreateSheetInput): CreateSheetInput {
     : sheet;
 }
 
+// A feat-choice map stored under its earlier keys ("magic initiate
+// (wizard)") is read under the textKey ones featChoice looks up.
+function withKeyedFeatChoices(sheet: CreateSheetInput): CreateSheetInput {
+  return sheet.featChoices ? { ...sheet, featChoices: keyedFeatChoices(sheet.featChoices) } : sheet;
+}
+
 function withStoredGender(sheet: CreateSheetInput): CreateSheetInput {
   return { ...sheet, gender: storedGender(sheet.gender) };
 }
@@ -90,7 +97,7 @@ function withRepairedWeights(sheet: CreateSheetInput): CreateSheetInput {
   }
   let changed = false;
   const equipment = sheet.equipment.map((item) => {
-    const weight = repairedWeight(item.name, item.weight);
+    const weight = repairedWeight(rowName(item), item.weight);
     if (weight === item.weight) {
       return item;
     }
@@ -114,7 +121,7 @@ function mapCharacter(row: LibraryRow): LibraryCharacter {
     background: row.background,
     level: row.level,
     xp: row.xp,
-    sheet: withRepairedWeights(withStoredGender(withSplitCantrips(parseJson(row.sheet_json, {} as CreateSheetInput)))),
+    sheet: withRepairedWeights(withKeyedFeatChoices(withStoredGender(withSplitCantrips(parseJson(row.sheet_json, {} as CreateSheetInput))))),
     workshopId: row.workshop_id ?? "",
     createdAt: row.created_at,
     updatedAt: row.updated_at,

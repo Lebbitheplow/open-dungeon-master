@@ -79,15 +79,17 @@ export const ADDED = [
       [`Ring of Resistance (${title(type)})`],
     ),
   ),
-  // Light armor, as the pack's Armor of Resistance row says; a sheet row
-  // that names its suit ("Chain Mail of Fire Resistance") wears that one.
+  // Leather unless a sheet row names its suit ("Chain Mail of Fire
+  // Resistance"), from the family of the pack's Armor of Resistance row
+  // (src/lib/srd/magic-gear.ts reads it as the SRD's "light, medium, or
+  // heavy").
   ...DAMAGE_TYPES.map((type) => ({
     ...attuned(
       `Armor of ${title(type)} Resistance`,
       [{ kind: "resistance", types: [type] }],
       [`Armor of Resistance (${title(type)})`],
     ),
-    base: { kind: "armor", name: "Leather" },
+    base: { kind: "armor", name: "Leather", any: "light" },
   })),
   ...[
     ["Black", "acid"],

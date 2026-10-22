@@ -20,6 +20,7 @@ import authoredFeatsJson from "@/lib/srd/authored-feats.json";
 import { authoredFeatureDefs } from "@/lib/srd/authored-feature-defs";
 import { tableFeat } from "@/lib/srd/feat-effects";
 import { textKey } from "@/lib/language/text-logic";
+import { choiceIn, isNamed } from "@/lib/srd/feature-names";
 
 export type FightingStyleId =
   | "archery"
@@ -601,10 +602,6 @@ const AUTHORED_PARSED = new Map<string, { effects: FeatureEffect[]; guidance: st
   }
 }
 
-function normalize(name: string) {
-  return name.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
 // The names of every class and subclass feature ODM knows: a content pack
 // feat that shares one (Level Up's Skirmisher and the Scout ranger's) is
 // not read through this table, which reads features and feats alike.
@@ -677,7 +674,7 @@ export function effectsFor(input: {
   // The table, for its workshop feats (feat-effects.ts tableFeat).
   campaignId?: string | null;
 }): Array<{ def: FeatureDef; effect: FeatureEffect; feature: string; featureClassId?: string }> {
-  const wantedClass = normalize(input.class);
+  const wantedClass = textKey(input.class);
   const out: Array<{
     def: FeatureDef;
     effect: FeatureEffect;
@@ -926,10 +923,7 @@ export function fightingStyleSlots(features: Array<{ name: string }>): number {
 }
 
 export function chosenFightingStyles(features: Array<{ name: string }>): string[] {
-  const prefix = normalize(FIGHTING_STYLE_PREFIX);
-  return features
-    .filter((feature) => normalize(feature.name).startsWith(prefix))
-    .map((feature) => feature.name.slice(FIGHTING_STYLE_PREFIX.length).trim());
+  return features.flatMap((feature) => choiceIn(feature.name, FIGHTING_STYLE_PREFIX) ?? []);
 }
 
 
@@ -1047,35 +1041,20 @@ export function halfProficiencyCovers(
 // Halfling Lucky: a natural 1 on an attack roll, ability check, or saving
 // throw is rerolled once and the new face must be used. Detected from the
 // racial trait ("Lucky (reroll nat 1 on d20)") the builder grants, kept
-// distinct from the "Lucky" feat (luck points, different mechanic) by
-// requiring the reroll wording or a race-sourced trait on a halfling.
+// distinct from the "Lucky" feat (luck points, different mechanic) by its
+// race source.
 export function hasHalflingLuck(sheet: {
-  race?: string;
   features?: Array<{ name: string; source?: string }>;
 }): boolean {
-  const isHalfling = textKey(sheet.race ?? "").includes("halfling");
-  return (sheet.features ?? []).some((feature) => {
-    const name = textKey(feature.name);
-    if (name.includes("reroll nat 1")) {
-      return true;
-    }
-    return isHalfling && feature.source === "race" && name.includes("lucky");
-  });
+  return (sheet.features ?? []).some((feature) => feature.source === "race" && isNamed(feature.name, "Lucky"));
 }
 
 // Brave (Halfling racial trait): advantage on saving throws against being
-// frightened. Detected from the trait ("Brave (adv. vs frightened)") the
-// builder grants, keyed off the fear wording or a race-sourced "Brave".
+// frightened: the trait the builder grants ("Brave (adv. vs frightened)").
 export function hasBrave(sheet: {
   features?: Array<{ name: string; source?: string }>;
 }): boolean {
-  return (sheet.features ?? []).some((feature) => {
-    const name = textKey(feature.name);
-    if (!name.includes("brave")) {
-      return false;
-    }
-    return feature.source === "race" || name.includes("frighten");
-  });
+  return (sheet.features ?? []).some((feature) => isNamed(feature.name, "Brave"));
 }
 
 // Elven Accuracy (feat): with advantage on an attack roll using Dexterity,
@@ -1087,6 +1066,6 @@ export function hasElvenAccuracy(sheet: {
   feats?: string[];
 }): boolean {
   return [...(sheet.features ?? []).map((feature) => feature.name), ...(sheet.feats ?? [])].some(
-    (name) => textKey(name).includes("elven accuracy"),
+    (name) => isNamed(name, "Elven Accuracy"),
   );
 }

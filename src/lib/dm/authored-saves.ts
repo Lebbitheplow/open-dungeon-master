@@ -28,8 +28,8 @@ import type { Advantage } from "@/lib/dice";
 import { activeAuthored, hasCondition } from "@/lib/srd/authored-effects";
 import { removeConditions, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-
-const lower = (value: string | undefined | null) => (value ?? "").trim().toLowerCase();
+import { textKey } from "@/lib/language/text-logic";
+import { isConditionNamed } from "@/lib/srd/feature-names";
 
 // The character whose turn it is, when the pointer rests on one.
 export function actingSheetId(encounter: Encounter | null): string | null {
@@ -57,7 +57,7 @@ export function withinFeet(encounterId: string, fromRef: string, toRef: string, 
 }
 
 function sourcedMark(enemy: EncounterEnemy, name: string): { condition: string; source: string | undefined } | null {
-  const condition = enemy.conditions.find((entry) => lower(entry) === name);
+  const condition = enemy.conditions.find((entry) => textKey(entry) === name);
   if (!condition) {
     return null;
   }
@@ -182,9 +182,9 @@ export function authoredAuraResistances(campaignId: string, sheet: CharacterShee
         continue;
       }
       if (effect.typeFrom && holder.id !== sheet.id) {
-        const aura = holder.conditions.find((entry) => lower(entry).startsWith(effect.typeFrom!.condition));
-        const kind = aura ? /\(([^)]+)\)/.exec(aura)?.[1]?.toLowerCase() : undefined;
-        const type = kind ? effect.typeFrom.map[kind] : undefined;
+        const aura = holder.conditions.find((entry) => isConditionNamed(entry, effect.typeFrom!.condition));
+        const kind = aura ? /\(([^)]+)\)/.exec(aura)?.[1] : undefined;
+        const type = kind ? effect.typeFrom.map[textKey(kind)] : undefined;
         if (type) {
           out.push(type);
         }

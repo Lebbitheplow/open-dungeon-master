@@ -22,6 +22,7 @@ const { test, finish } = suite("test-import-older-files");
 const { openCreation } = await import("./lib/enforce-creation.mjs");
 const { openBuilder, standardScores } = await import("./lib/enforce-builder.mjs");
 const { subclassGrants } = await import("../src/lib/srd/subclass-training.ts");
+const { textKey } = await import("../src/lib/language/text-logic.ts");
 const creation = await openCreation();
 const { world } = creation;
 const builder = await openBuilder();
@@ -132,7 +133,7 @@ await test("A file made today imports with nothing owed", async () => {
 await test("A Lore bard from before subclasses asked for their skills comes in owing them", async () => {
   const grant = subclassGrants([{ id: "bard", subclass: "College of Lore", level: 3 }]).find((entry) => entry.spec.skills > 0);
   assert.ok(grant, "the Lore bard's skill grant");
-  const key = grant.name.trim().toLowerCase();
+  const key = textKey(grant.name);
   const made = builder.build({
     name: "Corwen",
     race: "human",

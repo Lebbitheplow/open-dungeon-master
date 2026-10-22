@@ -42,11 +42,11 @@ import {
   writeAfflictions,
 } from "@/lib/dm/between-io";
 import type { CharacterSheet, FullPatchSheetInput } from "@/lib/schemas/sheet";
+import { textKey } from "@/lib/language/text-logic";
 
 const MINUTES_PER_DAY = 1440;
-const lower = (text: string) => text.trim().toLowerCase();
 const holds = (sheet: Pick<CharacterSheet, "conditions">, name: string) =>
-  sheet.conditions.some((entry) => lower(entry) === lower(name));
+  sheet.conditions.some((entry) => textKey(entry) === textKey(name));
 
 // ---- conditions ----
 
@@ -601,6 +601,6 @@ export function afflictionConditionsFor(
         : word === "indefinite madness"
           ? madnessConditions("indefinite")
           : [];
-  const wanted = new Set(names.map(lower));
-  return sheet.conditions.filter((entry) => wanted.has(lower(entry)));
+  const wanted = new Set(names.map(textKey));
+  return sheet.conditions.filter((entry) => wanted.has(textKey(entry)));
 }

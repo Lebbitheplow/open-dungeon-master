@@ -286,7 +286,7 @@ function endTurnRage(
   if (!sheet || !ragingAs) {
     return;
   }
-  if (sheet.features.some((feature) => textKey(feature.name).includes("persistent rage"))) {
+  if (holdsFeature(sheet, "Persistent Rage")) {
     return;
   }
   const meta = sheet.conditionMeta as ConditionMetaMap;

@@ -18,7 +18,7 @@ import { searchItems } from "@/lib/content";
 import { magicItemNamed } from "@/lib/srd/magic-items";
 import { bonusItemValue, magicItemValueCp, pricedRarity, type PricedRarity } from "@/lib/srd/magic-item-value";
 import { magicItemBonus, rowName, srdNameWithBonus, withoutBonus, type RowItem } from "@/lib/srd/item-row";
-import { COPPER_PER_GOLD, parseCoins } from "@/lib/srd/currency";
+import { COPPER_PER_GOLD, packCostCopper } from "@/lib/srd/currency";
 import { textKey } from "@/lib/language/text-logic";
 import { hasItemTag, type TaggedItem } from "@/lib/srd/item-tags";
 import type { ItemTag } from "@/lib/schemas/item-tags";
@@ -102,7 +102,7 @@ export function packListCp(name: string): number | null {
   const named = packItemsNamed(name);
   const rows = named.length ? named : packItemsNamed(withoutNote(name));
   const known = rows.find((item) => item.kind !== "magic_item" && Boolean(item.cost)) ?? rows[0];
-  const copper = known?.cost ? parseCoins(known.cost.replace(/,/g, "")) : null;
+  const copper = known?.cost ? packCostCopper(known.cost) : null;
   return copper && copper > 0 ? copper : null;
 }
 

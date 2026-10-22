@@ -11,6 +11,7 @@ import { rollExtrasFor, spendRollCarriers } from "@/lib/dm/forced-save";
 import { resolveRollExpression, type RollArgs } from "@/lib/dm/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { dmRoll } from "@/lib/dm/roll-card";
+import { holdsFeat } from "@/lib/srd/feat-effects";
 
 // What happens as a fight opens (SRD 5.1, Combat Step by Step): who is
 // surprised, decided by the hiders' Stealth against each opponent's passive
@@ -19,7 +20,7 @@ import { dmRoll } from "@/lib/dm/roll-card";
 // encounter-tools (the initiative totals go back through a callback).
 
 const hasAlert = (sheet: CharacterSheet) =>
-  (sheet.feats ?? []).some((feat) => /^alert\b/i.test(feat.trim()));
+  holdsFeat(sheet, "Alert");
 
 // A creature's Stealth: its block's skill, else its Dexterity.
 function enemyStealth(enemy: EncounterEnemy): number {

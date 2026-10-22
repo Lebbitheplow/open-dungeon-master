@@ -14,7 +14,7 @@ import {
   featAbilityIncrease,
   featSaveProficiency,
 } from "@/lib/srd/feat-effects";
-import { lower } from "@/lib/srd/legality/types";
+import { textKey } from "@/lib/language/text-logic";
 
 // The feat's text rides with the pick, for a content pack's feat whose
 // increase is read from it (src/lib/srd/feat-effects.ts).
@@ -43,12 +43,12 @@ export function halfFeatPicks(sheet: FeatHolder, racialFeats: number, descOf?: F
     if (choice.mode !== "feat") {
       continue;
     }
-    recorded.add(lower(choice.feat));
+    recorded.add(textKey(choice.feat));
     if (featAbilityIncrease(choice.feat, text(choice.feat))) {
       picks.push({ feat: choice.feat, ability: resolved(choice.feat, choice.ability ?? null, text(choice.feat)), desc: text(choice.feat) });
     }
   }
-  const racial = (sheet.feats ?? []).filter((feat) => !recorded.has(lower(feat))).slice(0, racialFeats);
+  const racial = (sheet.feats ?? []).filter((feat) => !recorded.has(textKey(feat))).slice(0, racialFeats);
   for (const feat of racial) {
     if (featAbilityIncrease(feat, text(feat))) {
       picks.push({ feat, ability: resolved(feat, sheet.racialChoices?.featAbility || null, text(feat)), desc: text(feat) });

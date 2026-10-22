@@ -27,6 +27,7 @@ import { defensiveDuelistBonus, hasMageSlayer, hasSentinel } from "@/lib/srd/fea
 import { listSheets } from "@/lib/db/sheets";
 import type { ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
+import { isNamed } from "@/lib/srd/feature-names";
 
 export function defensiveDuelist(ctx: Ctx): ToolResult {
   const { campaign, sheet } = ctx;
@@ -164,7 +165,7 @@ export function lucky(ctx: Ctx): ToolResult {
   const { campaign, sheet } = ctx;
   const fresh = getSheetById(sheet.id) ?? sheet;
   if (luckPointsLeft(fresh.resources) === 0) {
-    return { error: `${sheet.name} has no luck point to spend${sheet.feats.some((feat) => /lucky|fortunate/i.test(feat)) ? " (they come back with a long rest)" : ": Lucky is not among their feats"}. Nothing was spent.`, refused: "rules" };
+    return { error: `${sheet.name} has no luck point to spend${sheet.feats.some((feat) => isNamed(feat, "lucky", "fortunate")) ? " (they come back with a long rest)" : ": Lucky is not among their feats"}. Nothing was spent.`, refused: "rules" };
   }
   const record = freshLastHit(campaign.id, sheet.id);
   if (!record || record.source !== "attack" || record.attacker.kind !== "enemy") {

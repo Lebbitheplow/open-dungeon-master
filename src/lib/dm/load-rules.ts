@@ -21,6 +21,7 @@ import { sizeForRace } from "@/lib/srd";
 import { magicItemRiders, type Wearer } from "@/lib/srd/magic-items";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { rowName } from "@/lib/srd/item-row";
 
 type Carrier = Pick<CharacterSheet, "name" | "abilities" | "race" | "gold"> & Partial<Wearer>;
 
@@ -30,7 +31,7 @@ export function weighed(equipment: CarriedItem[]): CarriedItem[] {
     if (typeof item.weight === "number" && item.weight > 0) {
       return item;
     }
-    const weight = itemWeightByName(item.name);
+    const weight = itemWeightByName(rowName(item));
     return weight === null ? item : { ...item, weight };
   });
 }

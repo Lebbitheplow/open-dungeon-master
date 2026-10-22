@@ -44,6 +44,7 @@ import { spellFactsFor } from "@/lib/content";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { checkAttackSpell } from "@/lib/dm/pc-attack-spell";
 import { attacksAllowedFor, budgetFor } from "@/lib/dm/turn-budget";
+import { textKey } from "@/lib/language/text-logic";
 import { acBreakdownFor } from "@/lib/srd";
 import { foeSlayerBonus } from "@/lib/dm/attack-features";
 import { carriesPoison, type OpenHandChoice } from "@/lib/dm/attack-onhit";
@@ -163,7 +164,16 @@ export function planPcAttack(input: {
   // into reach (pc_attack's approach, src/lib/dm/pc-attack-approach.ts).
   skipReach?: boolean;
 }): AttackPlan | { refused: ToolError } {
-  const { campaign, turn, encounter, sheet, args, sheets, sheetsById } = input;
+  const { campaign, turn, encounter, sheet, sheets, sheetsById } = input;
+  // A Flurry of Blows strike is a bonus-action unarmed strike the ki already
+  // paid for (src/lib/dm/bonus-actions.ts): one sent as Martial Arts' or a
+  // feature's bonus attack while the flurry has strikes left is one of
+  // them, not a second bonus action.
+  const flurryLeft = budgetFor(encounter, sheet.id, attacksAllowedFor(sheet))?.flurryStrikes ?? 0;
+  const args =
+    flurryLeft > 0 && (input.args.bonusAttack === "martial arts" || input.args.bonusAttack === "feature") && textKey(input.args.weapon ?? "") === "unarmed strike"
+      ? { ...input.args, bonusAttack: undefined }
+      : input.args;
 
   // ---- refusals: everything that can stop this attack, before any spend ----
 

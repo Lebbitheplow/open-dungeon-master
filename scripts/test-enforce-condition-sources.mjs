@@ -57,7 +57,7 @@ await test("F08: Draconic Presence ends the spell its sorcerer held", async () =
   const blur = await world.invoke("cast_buff", { characterId: sorc.id, spell: "Blur" });
   assert.equal(blur.ok, true, blur.error);
   world.dice(1);
-  const presence = await world.invoke("use_resource", { characterId: sorc.id, resource: "Draconic Presence" });
+  const presence = await world.invoke("use_resource", { characterId: sorc.id, resource: "Draconic Presence", variant: "fear" });
   world.clearDice();
   assert.equal(presence.ok, true, presence.error);
   assert.equal(world.sheet(sorc.id).concentratingOn, "Draconic Presence");

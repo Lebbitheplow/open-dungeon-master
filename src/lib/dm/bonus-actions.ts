@@ -33,9 +33,11 @@ import { chosenOptions } from "@/lib/srd/options";
 
 // The pure half (which feature routes what to the bonus action) lives in
 // bonus-routes.ts, so the Hand can ask it too.
-import { holdsFeature as holds, kiLeft, usesLeft } from "@/lib/dm/bonus-routes";
+import { kiLeft, usesLeft } from "@/lib/dm/bonus-routes";
+import { holdsFeature as holds } from "@/lib/srd/trait-rules";
 import { toolError, type ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
+import { isNamed, nameChoice } from "@/lib/srd/feature-names";
 export { bonusRouteFor, noBonusRoute, type BonusRoute, type MoveAction } from "@/lib/dm/bonus-routes";
 
 // The resources patch that spends `points` ki, or an error when the
@@ -77,20 +79,23 @@ export function counterSpend(
 
 export type KiTechnique = "flurry" | "patient defense" | "step of the wind";
 
-// Which technique a use_resource variant names, or null for a plain spend.
+// Which technique a use_resource variant names, by the key the tool lists,
+// or null for a plain spend: Shadow Step is no Step of the Wind.
 export function kiTechnique(variant: string | undefined): KiTechnique | null {
-  const text = (variant ?? "").toLowerCase();
-  if (/flurry/.test(text)) {
+  const written = variant ?? "";
+  if (isNamed(written, "flurry of blows")) {
     return "flurry";
   }
-  if (/patient|defen[cs]e|dodge/.test(text)) {
+  if (isNamed(written, "patient defense")) {
     return "patient defense";
   }
-  if (/step|wind|dash|disengage/.test(text)) {
+  if (isNamed(written, ...STEP_OF_THE_WIND)) {
     return "step of the wind";
   }
   return null;
 }
+
+const STEP_OF_THE_WIND = ["step of the wind", "step of the wind dash"];
 
 // A ki technique, checked and charged: the bonus action, the point of ki
 // and the effect. The turn budget is stored here, since nothing after the
@@ -135,7 +140,7 @@ export function spendKiTechnique(
     };
   }
   let flags: { dashed?: boolean; disengaged?: boolean; flurryStrikes?: number } = {};
-  const dash = technique === "step of the wind" && /dash/i.test(variant ?? "");
+  const dash = technique === "step of the wind" && (isNamed(variant ?? "", "step of the wind dash") || textKey(nameChoice(variant ?? "") ?? "") === "dash");
   if (technique === "flurry") {
     // Intoxicated Frenzy (Drunken Master 17) raises it to five.
     flags = { flurryStrikes: authoredFlurryStrikes(sheet) ?? 2 };

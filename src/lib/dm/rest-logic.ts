@@ -8,6 +8,7 @@ import { findClass, spellSlotsFor } from "@/lib/srd";
 import { isMulticlass, slotTableFor } from "@/lib/srd/multiclass";
 import { settlePreparation } from "@/lib/srd/spell-prep";
 import { attunementProblem } from "@/lib/srd/magic-items";
+import { isConditionNamed } from "@/lib/srd/feature-names";
 import type { CharacterSheet, FullPatchSheetInput, HitDicePool } from "@/lib/schemas/sheet";
 
 // Pure 5e rest math, database-free so scripts/test-rest-logic.mjs can
@@ -169,7 +170,7 @@ export function longRestPatch(
   // A use that comes back after several long rests (Necrotic Husk: 1d4,
   // src/lib/dm/reaction-counters.ts): its marker counts the nights, and the
   // counter stays spent until the last of them.
-  const waiting = (patch.conditions ?? sheet.conditions).find((name) => name.toLowerCase().startsWith(HUSK_RECOVERING));
+  const waiting = (patch.conditions ?? sheet.conditions).find((name) => isConditionNamed(name, HUSK_RECOVERING));
   if (waiting) {
     const nights = Number(/\((\d+)\)/.exec(waiting)?.[1] ?? "1");
     const rest = (patch.conditions ?? sheet.conditions).filter((name) => name !== waiting);

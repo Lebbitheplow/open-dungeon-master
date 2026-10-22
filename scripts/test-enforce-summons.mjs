@@ -138,7 +138,7 @@ await test("A summoned wolf attacks with its bite's own numbers: +4 to hit and 2
 
 await test("A summoned creature with Multiattack makes that many attacks with its Attack action (a giant scorpion: three).", async () => {
   const { world, sheets: [druid], enemies: [goblin] } = await board([DRUID(["Giant Insect"], 7)], { 0: { x: 3, y: 4 }, e0: { x: 10, y: 4 } });
-  const cast = await world.invoke("cast_buff", { characterId: druid.id, spell: "Giant Insect", level: 4, variant: "scorpion" });
+  const cast = await world.invoke("cast_buff", { characterId: druid.id, spell: "Giant Insect", level: 4, variant: "giant scorpion" });
   assert.equal(cast.ok, true, cast.error);
   const [scorpion] = summonsOf(world, "Giant Insect");
   place(world, scorpion.id, 9, 4);
@@ -212,7 +212,7 @@ await test("Animate Dead raises one undead from a 3rd level slot and three from 
 
 await test("Giant Insect makes three giant spiders (or ten centipedes, five wasps, one scorpion).", async () => {
   const { world, sheets: [druid] } = await board([DRUID(["Giant Insect"], 7)], [{ x: 3, y: 4 }]);
-  const cast = await world.invoke("cast_buff", { characterId: druid.id, spell: "Giant Insect", level: 4, variant: "spider" });
+  const cast = await world.invoke("cast_buff", { characterId: druid.id, spell: "Giant Insect", level: 4, variant: "giant spider" });
   assert.equal(cast.ok, true, cast.error);
   const spiders = summonsOf(world, "Giant Insect");
   assert.equal(spiders.length, 3);
@@ -233,7 +233,7 @@ await test("Find Steed makes one steed with an Intelligence of 6; casting it aga
 
 await test("Animate Objects animates ten Tiny objects (20 hit points, AC 18, a slam at +8 for 1d4+4) or five Medium ones.", async () => {
   const { world, sheets: [wizard] } = await board([WIZARD(["Animate Objects"])], [{ x: 3, y: 4 }]);
-  const cast = await world.invoke("cast_buff", { characterId: wizard.id, spell: "Animate Objects", level: 5, variant: "tiny" });
+  const cast = await world.invoke("cast_buff", { characterId: wizard.id, spell: "Animate Objects", level: 5, variant: "Animated Object (Tiny)" });
   assert.equal(cast.ok, true, cast.error);
   const objects = summonsOf(world, "Animate Objects");
   assert.equal(objects.length, 10);
@@ -253,7 +253,7 @@ await test("A summoned creature keeps its stat block's damage immunities (a fire
 
 await test("Conjured creatures stay while the spell lasts: the end of a fight does not send them away, the end of the duration does.", async () => {
   const { world, sheets: [druid] } = await board([DRUID(["Giant Insect"], 7)], [{ x: 3, y: 4 }]);
-  await world.invoke("cast_buff", { characterId: druid.id, spell: "Giant Insect", level: 4, variant: "wasp" });
+  await world.invoke("cast_buff", { characterId: druid.id, spell: "Giant Insect", level: 4, variant: "giant wasp" });
   assert.equal(summonsOf(world, "Giant Insect").length, 5);
   await world.invoke("end_encounter", { outcome: "victory" });
   assert.equal(summonsOf(world, "Giant Insect").length, 5, "still here after the fight");

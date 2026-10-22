@@ -70,11 +70,12 @@ import { judgeProficiencies } from "@/lib/srd/legality/proficiencies";
 import { applySubclassTraining, autoSubclassPicks, subclassFixedTraining, subclassGrants } from "@/lib/srd/subclass-training";
 import { castingClassesOf, judgeSpellcasting } from "@/lib/srd/legality/spells";
 import {
-  lower,
   type ClassGrants,
   type LegalityContext,
   type Legalized,
 } from "@/lib/srd/legality/types";
+import { textKey } from "@/lib/language/text-logic";
+import { featChoice } from "@/lib/schemas/sheet";
 
 export type { LegalityContext, Legalized } from "@/lib/srd/legality/types";
 
@@ -117,7 +118,7 @@ function classListOf(
   if (!keeps || sent.length < 2) {
     return single;
   }
-  const ids = new Set(sent.map((entry) => lower(entry.id)));
+  const ids = new Set(sent.map((entry) => textKey(entry.id)));
   if (ids.size !== sent.length) {
     problems.push("A character holds each class once; the class list names one twice.");
     return single;
@@ -126,7 +127,7 @@ function classListOf(
     problems.push(`A character has at most ${MULTICLASS_CAP} classes here; that list has ${sent.length}.`);
     return single;
   }
-  if (lower(sent[0].id) !== lower(input.class)) {
+  if (textKey(sent[0].id) !== textKey(input.class)) {
     problems.push(`The first class on the list (${sent[0].id}) must be the character's class (${input.class}).`);
     return single;
   }
@@ -145,7 +146,7 @@ function classListOf(
     }
     if (context.door === "library") {
       // An edit keeps the split the character earned and adds nothing to it.
-      const earned = baseline.find((held) => lower(held.id) === lower(entry.id));
+      const earned = baseline.find((held) => textKey(held.id) === textKey(entry.id));
       if (!earned || (entry !== sent[0] && entry.level > earned.level)) {
         problems.push(
           `A second class is taken at a level-up in play; ${entry.id} ${entry.level} is more than this character earned there.`,
@@ -339,9 +340,9 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
   // is trusted, and a companion the engine drafts may go without.
   if (race.feats > 0 && (policy.made || policy.edit) && context.door !== "engine") {
     const recordedFeats = new Set(
-      recorded.flatMap((choice) => (choice.mode === "feat" ? [lower(choice.feat)] : [])),
+      recorded.flatMap((choice) => (choice.mode === "feat" ? [textKey(choice.feat)] : [])),
     );
-    const racial = feats.feats.filter((name) => !recordedFeats.has(lower(name)));
+    const racial = feats.feats.filter((name) => !recordedFeats.has(textKey(name)));
     if (racial.length < race.feats) {
       problems.push(
         `A ${race.name} starts with ${race.feats === 1 ? "a feat" : `${race.feats} feats`} of their choice; pick ${race.feats === 1 ? "one" : "them"} from the feat list.`,
@@ -534,7 +535,7 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
   // misty step and its pick, Magic Initiate's cantrips, Ritual Caster's
   // book. They are written into the spell lists below, on top of the
   // class's counts, and each free cast becomes a feature the counters read.
-  const raisedByFeat = (feat: string) => halfFeats.find((pick) => lower(pick.feat) === lower(feat))?.ability ?? null;
+  const raisedByFeat = (feat: string) => halfFeats.find((pick) => textKey(pick.feat) === textKey(feat))?.ability ?? null;
   const taught = featSpellGrants({
     feats: feats.feats.map((name) => ({ name, desc: context.featOf(name)?.desc ?? "" })),
     choices: input.featChoices ?? {},
@@ -550,7 +551,7 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
   // Elemental Adept's type is kept the same way ("Elemental Adept: fire").
   const elementPicks = feats.feats.flatMap((name) => {
     const spec = featGrantSpec(context.featOf(name)?.desc ?? "");
-    const picked = lower(input.featChoices?.[lower(name)]?.damageType ?? "");
+    const picked = textKey(featChoice(input.featChoices, name)?.damageType ?? "");
     return spec.damageTypes.length && spec.damageTypes.includes(picked) ? [elementalAdeptFeatureName(picked)] : [];
   });
   const freeCasts = [...freeCastFeatures(taught.grants), ...elementPicks];
@@ -578,7 +579,7 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
   problems.push(...spells.problems);
   if (racialCantrip && !casts && policy.judgesPicks) {
     const spell = context.spellOf(racialCantrip.name);
-    if (!spell || spell.level !== 0 || !spell.classes.map(lower).includes(lower(racialCantrip.list))) {
+    if (!spell || spell.level !== 0 || !spell.classes.map(textKey).includes(textKey(racialCantrip.list))) {
       problems.push(
         `${racialCantrip.name} is not a ${racialCantrip.list} cantrip, which is what the ${race.name}'s cantrip must be.`,
       );
@@ -785,8 +786,8 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
 const featDerived = (name: string) => Boolean(freeCastOf(name) || elementalAdeptFeatureOf(name));
 
 function withFreeCasts(features: SheetFeature[], freeCasts: string[]): SheetFeature[] {
-  const wanted = new Set(freeCasts.map(lower));
-  const kept = features.filter((feature) => !featDerived(feature.name) || wanted.has(lower(feature.name)));
-  const held = new Set(kept.map((feature) => lower(feature.name)));
-  return [...kept, ...freeCasts.filter((name) => !held.has(lower(name))).map((name) => ({ name: name.slice(0, 80), source: "story" as const }))];
+  const wanted = new Set(freeCasts.map(textKey));
+  const kept = features.filter((feature) => !featDerived(feature.name) || wanted.has(textKey(feature.name)));
+  const held = new Set(kept.map((feature) => textKey(feature.name)));
+  return [...kept, ...freeCasts.filter((name) => !held.has(textKey(name))).map((name) => ({ name: name.slice(0, 80), source: "story" as const }))];
 }

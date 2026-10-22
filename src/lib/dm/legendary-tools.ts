@@ -2,7 +2,7 @@ import { z } from "zod";
 import { dmRoll } from "@/lib/dm/roll-card";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter, listEnemies, orderEntryId, saveEncounter, turnKey, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
-import { resolveEnemyRef } from "@/lib/dm/enemy-damage";
+import { resolveEnemyRef, unknownEnemyRef } from "@/lib/dm/enemy-damage";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
@@ -31,7 +31,7 @@ import {
   type LegendaryPool,
 } from "@/lib/dm/legendary-logic";
 import { toolError, type ToolResult } from "@/lib/dm/tool-errors";
-import { textKey } from "@/lib/language/text-logic";
+import { containsPhrase, textKey } from "@/lib/language/text-logic";
 
 // Legendary actions, lair actions and legendary resistance as tools
 // (docs/vtt-parity-implementation-plan.md 4.1). Imports point downward
@@ -84,7 +84,7 @@ export const legendaryTools: ToolDef[] = [
       parameters: {
         type: "object",
         additionalProperties: false,
-        properties: { action: { type: "string", description: "Which printed lair option (its words or its number), or a line for a lair with none printed." } },
+        properties: { action: { type: "string", description: "Which printed lair option (its number in the list, or the whole line), or a line for a lair with none printed." } },
         required: ["action"],
       },
     },
@@ -181,7 +181,7 @@ export function handleLegendaryAction(campaign: Campaign, rawArguments: string):
   }
   const enemy = resolveEnemyRef(encounter.id, args.enemyId);
   if (!enemy) {
-    return { error: "Unknown enemyId; use one from GAME STATE.", retry: true };
+    return unknownEnemyRef(encounter.id, "enemyId", args.enemyId);
   }
   if (enemy.status !== "alive") {
     return { error: `${enemy.displayName} is ${enemy.status}.`, retry: true };
@@ -222,11 +222,18 @@ export function handleLegendaryAction(campaign: Campaign, rawArguments: string):
   }
   encounter.legendary.pools[enemy.id] = outcome.pool;
   encounter.legendary.opportunities = { key, ids: [...taken, enemy.id] };
-  const wanted = textKey(outcome.action.name);
-  // "Tail Attack", or "uses its Paralyzing Touch": the line names an attack.
-  const attack = enemy.stats.attacks.find((entry) => {
+  // The attack the action buys, by the attack's whole name: the action is
+  // named for it ("Bite", "Tail Attack"), or its line makes or uses it
+  // ("makes one tail attack", "uses its Paralyzing Touch"), the longest name
+  // first, so "its tail spike" is the Tail Spike and not the Tail.
+  const named = textKey(outcome.action.name);
+  const attack = [...enemy.stats.attacks].sort((a, b) => b.name.length - a.name.length).find((entry) => {
     const name = textKey(entry.name.replace(/\([^)]*\)/g, ""));
-    return name === wanted || wanted.includes(name) || name.includes(wanted) || textKey(outcome.action.text).includes(`its ${name}`);
+    return (
+      named === name ||
+      named === `${name} attack` ||
+      [`${name} attack`, `${name} attacks`, `its ${name}`, `makes one ${name}`].some((phrase) => containsPhrase(outcome.action.text, phrase))
+    );
   });
   // A line with its own numbers (Wing Attack's DC 22 save) resolves through
   // aoe_damage or cast_at_player naming it; "casts a cantrip" through a
@@ -279,7 +286,7 @@ export function handleLegendaryResist(campaign: Campaign, rawArguments: string):
   }
   const enemy = resolveEnemyRef(encounter.id, args.enemyId);
   if (!enemy) {
-    return { error: "Unknown enemyId; use one from GAME STATE.", retry: true };
+    return unknownEnemyRef(encounter.id, "enemyId", args.enemyId);
   }
   const pool = encounter.legendary.pools[enemy.id];
   if (!pool) {
@@ -372,7 +379,7 @@ export function handleLairAction(campaign: Campaign, turn: DmTurn | null, rawArg
   const options = legendaryLairLines(enemies);
   const picked = options.length ? pickLairOption(options, args.action) : args.action;
   if (!picked) {
-    return { error: `The lair's options are printed in its block; name one of them (or its number): ${options.map((line, at) => `${at + 1}. ${line}`).join(" ")}`, retry: true };
+    return { error: `The lair's options are printed in its block; send one's number (or its whole line): ${options.map((line, at) => `${at + 1}. ${line}`).join(" ")}`, retry: true };
   }
   const noRepeat = enemies.some((enemy) => (enemy.stats.traits ?? []).some((line) => /same (?:lair )?(?:effect|action) two rounds in a row/i.test(line)));
   if (options.length > 1 && noRepeat && encounter.legendary.lairLast === picked && encounter.legendary.lairUsedRound === due - 1) {

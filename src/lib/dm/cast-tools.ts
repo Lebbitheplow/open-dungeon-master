@@ -182,7 +182,7 @@ export const castBuffTool: ToolDef = {
         variant: {
           type: "string",
           description:
-            "For spells with a choice: Enlarge/Reduce, Protection from Energy's damage type, Enhance Ability's effect, Fire Shield's warm or chill, Polymorph's beast, a summoning spell's creature (Conjure Animals 'wolf', Animate Dead 'skeleton', Giant Insect 'spider', Find Steed 'warhorse', Animate Objects 'tiny').",
+            "For spells with a choice: Enlarge/Reduce, Protection from Energy's damage type, Enhance Ability's effect, Fire Shield's warm or chill, Polymorph's beast, a summoning spell's creature (Conjure Animals 'wolf', Animate Dead 'skeleton' or 'reassert control', Giant Insect 'spider', Find Steed 'warhorse', Animate Objects 'tiny').",
         },
         count: {
           type: "integer",

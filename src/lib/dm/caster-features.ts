@@ -21,11 +21,7 @@ import type { SpellFacts } from "@/lib/srd/spell-facts";
 import { rollCard } from "@/lib/dm/roll-card";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
-
-type Featured = Pick<CharacterSheet, "features">;
-
-const holds = (sheet: Featured, name: string) =>
-  sheet.features.some((feature) => textKey(feature.name).startsWith(name));
+import { holdsFeature } from "@/lib/srd/feature-names";
 
 // ---- Sculpt Spells ----
 
@@ -38,7 +34,7 @@ export function sculptedIds(
   caught: string[],
   named: string[] | undefined,
 ): string[] {
-  if (!holds(caster, "sculpt spells") || (school ?? "").toLowerCase() !== "evocation") {
+  if (!holdsFeature(caster, "sculpt spells") || (school ?? "").toLowerCase() !== "evocation") {
     return [];
   }
   const wanted = (named ?? caught).filter((id) => caught.includes(id) && id !== caster.id);
@@ -49,7 +45,7 @@ export function sculptedIds(
 
 // Whether this casting may be overchanneled, or why not.
 export function overchannelProblem(caster: CharacterSheet, facts: SpellFacts | null, dealsDamage: boolean): ToolError | null {
-  if (!holds(caster, "overchannel")) {
+  if (!holdsFeature(caster, "overchannel")) {
     return { error: `${caster.name} does not have Overchannel (School of Evocation, 14th level). Ask the player whether to cast it without Overchannel.`, retry: true };
   }
   if (!facts || facts.level < 1 || facts.level > 5) {

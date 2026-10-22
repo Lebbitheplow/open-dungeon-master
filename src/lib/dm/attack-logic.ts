@@ -5,7 +5,7 @@ import {
   weaponNamed,
   type SrdWeapon,
 } from "@/lib/srd/weapons";
-import { itemNames, lineNamed, magicItemBonus } from "@/lib/srd/item-row";
+import { lineNamed, magicItemBonus, withoutBonus } from "@/lib/srd/item-row";
 import { wearingIsExplicit } from "@/lib/srd/armor";
 import {
   gearProfileParts,
@@ -113,36 +113,37 @@ export function weaponOf(item: EquipmentItem | undefined): SrdWeapon | null {
   return weapon && typeof weapon.damage === "string" ? weapon : null;
 }
 
-function itemMatchesTerm(itemName: string, term: string): boolean {
-  const item = textKey(itemName);
-  const wanted = textKey(term);
-  return Boolean(item && wanted && (item.includes(wanted) || wanted.includes(item)));
-}
-
-// Which weapon the character attacks with. A named weapon fuzzy-matches
-// their carried equipment and the SRD table, and "unarmed strike" is the
-// rules' own; no name picks the best proficient carried weapon; nothing
-// usable falls back to an unarmed strike.
+// Which weapon the character attacks with. A named weapon is the carried
+// line that name picks out (src/lib/srd/item-row.ts lineNamed), and
+// "unarmed strike" is the rules' own; no name picks the best proficient
+// carried weapon; nothing usable falls back to an unarmed strike. A name
+// that is no carried line is "carried: false" unless the attack says it is
+// an improvised object, and a weapon of the table is never improvised.
 // `shieldOnArm`: a two-handed weapon cannot be used with a shield on the arm
 // (attack-rules.ts handsRuling), so the unnamed pick prefers one that can.
 export function resolveAttackWeapon(
   equipment: EquipmentItem[],
   weaponProfs: string[],
   weaponArg: string | undefined,
-  options: { shieldOnArm?: boolean } = {},
+  options: { shieldOnArm?: boolean; improvised?: boolean } = {},
 ): ResolvedWeapon {
   const arg = (weaponArg ?? "").trim();
   if (arg) {
     if (textKey(arg) === "unarmed strike") {
       return { displayName: "Unarmed strike", srd: null, unarmed: true, carried: true };
     }
-    // The exact name wins over a name that merely contains it, so a
-    // "Longsword" asked for beside a "Longsword +1" is the plain one. The
-    // line the name picks out comes first (src/lib/srd/item-row.ts
-    // lineNamed): "Longsword" swings the "Spada lunga" the DM named by it.
+    // Sent with a bonus its weapon lacks ("+3 Longsword" of a plain one),
+    // the attack is the weapon carried, at that weapon's own bonus; sent as
+    // the table's weapon by another spelling it answers to ("long sword"),
+    // the line whose row it is, when only one line is, or one is called by
+    // the row's own name.
+    const named = weaponNamed(arg);
+    const ofWeapon = named ? equipment.filter((item) => matchWeapon(item) === named) : [];
     const carriedItem =
       equipment[lineNamed(equipment, arg)] ??
-      equipment.find((item) => itemNames(item).some((name) => itemMatchesTerm(name, arg)));
+      equipment[lineNamed(equipment, withoutBonus(arg))] ??
+      (named ? equipment[lineNamed(equipment, named.name)] : undefined) ??
+      (new Set(ofWeapon.map((item) => textKey(item.name))).size === 1 ? ofWeapon[0] : undefined);
     // A carried homebrew weapon carries its own block (src/lib/homebrew/
     // gear.ts) and wins over a name that happens to resemble an SRD one. A
     // carried magic weapon swings as its base weapon (src/lib/dm/
@@ -151,7 +152,7 @@ export function resolveAttackWeapon(
     const srd =
       (magic?.gear ? magic.srd : null) ??
       weaponOf(carriedItem) ??
-      weaponNamed(arg) ??
+      named ??
       (carriedItem ? matchWeapon(carriedItem) : null);
     return {
       displayName: carriedItem?.name ?? srd?.name ?? arg,
@@ -159,8 +160,8 @@ export function resolveAttackWeapon(
       unarmed: false,
       // A name that is a weapon on the table and on nobody's back is not
       // theirs to swing. A name that is no weapon at all is whatever they
-      // picked up: improvised.
-      carried: Boolean(carriedItem) || (srd === null && !isMagicWeaponName(arg)),
+      // picked up, when the attack says so.
+      carried: Boolean(carriedItem) || (options.improvised === true && srd === null && !isMagicWeaponName(arg)),
       ...(magic?.gear ? { gear: magic.gear } : {}),
     };
   }

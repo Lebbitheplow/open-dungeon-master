@@ -74,6 +74,7 @@ import FeatChoicesFields from "@/app/characters/builder/FeatChoicesFields";
 import { useArchetypes, useWorldPack } from "@/app/characters/builder/useBuilderOptions";
 import type { AsiChoice, CharacterSheet } from "@/lib/schemas/sheet";
 import { textKey } from "@/lib/language/text-logic";
+import { featChoice, withFeatChoice } from "@/lib/schemas/sheet";
 
 
 // Guided level-up, one level at a time. The dialog gathers the CHOICES the
@@ -132,7 +133,7 @@ export function LevelUpDialog({
   const [featChoices, setFeatChoices] = useState<FeatChoices>({});
   const featsPicked = asiChoices.flatMap((choice) => (choice?.mode === "feat" ? [choice.feat] : []));
   const featDescs = useFeatDescs(featsPicked);
-  const featDescOf = (name: string) => featDescs[name.trim().toLowerCase()] ?? authoredFeatDesc(name) ?? "";
+  const featDescOf = (name: string) => featDescs[textKey(name)] ?? authoredFeatDesc(name) ?? "";
   const featSpecOf = (name: string) => featGrantSpec(featDescOf(name));
   // A half-feat with a choice of score raises the first it offers when the
   // player left the choice (a content pack feat's text arrives after the
@@ -145,15 +146,15 @@ export function LevelUpDialog({
     return from.length > 1 ? { ...choice, ability: from[0] } : choice;
   };
   const setFeatPicks = (feat: string, picks: FeatPicks) =>
-    setFeatChoices((current) => ({ ...current, [feat.trim().toLowerCase()]: picks }));
+    setFeatChoices((current) => withFeatChoice(current, feat, picks));
   // The feats' picks, and those of a subclass grant arriving now (both are
   // keyed by name in featChoices).
   const picksSentFor = (names: string[]) => Object.fromEntries(
     names
-      .map((feat) => [feat.trim().toLowerCase(), featChoices[feat.trim().toLowerCase()]] as const)
+      .map((feat) => [feat, featChoice(featChoices, feat)] as const)
       .filter((entry): entry is readonly [string, FeatPicks] => Boolean(entry[1])),
   );
-  const featPicksOpen = featsPicked.some((feat) => featOwed(feat, featSpecOf(feat), featChoices[feat.trim().toLowerCase()]));
+  const featPicksOpen = featsPicked.some((feat) => featOwed(feat, featSpecOf(feat), featChoice(featChoices, feat)));
   const [subclassChoice, setSubclassChoice] = useState("");
   const [expertisePicks, setExpertisePicks] = useState<string[]>([]);
   const [spellPicks, setSpellPicks] = useState<string[]>([]);
@@ -415,14 +416,14 @@ export function LevelUpDialog({
   // fixed grants are said; the picks are asked for, and the server refuses
   // the level without them.
   const trainingBefore = useMemo(
-    () => new Set(subclassGrants(classList).map((grant) => `${grant.classId}|${grant.name.toLowerCase()}`)),
+    () => new Set(subclassGrants(classList).map((grant) => `${grant.classId}|${textKey(grant.name)}`)),
     [classList],
   );
   const freshTraining = subclassGrants(classesAfter).filter(
-    (grant) => !trainingBefore.has(`${grant.classId}|${grant.name.toLowerCase()}`),
+    (grant) => !trainingBefore.has(`${grant.classId}|${textKey(grant.name)}`),
   );
   const trainingOpen = freshTraining.some((grant) =>
-    featOwed(grant.name, grant.spec, featChoices[grant.name.trim().toLowerCase()]),
+    featOwed(grant.name, grant.spec, featChoice(featChoices, grant.name)),
   );
   const steps = [
     ...(needsClassStep ? ["class"] : []),
@@ -1277,7 +1278,7 @@ export function LevelUpDialog({
                       key={grant.name}
                       feat={grant.name}
                       spec={grant.spec}
-                      picks={featChoices[grant.name.trim().toLowerCase()]}
+                      picks={featChoice(featChoices, grant.name)}
                       known={{
                         languages: sheet.proficiencies.languages,
                         skills: sheet.proficiencies.skills,

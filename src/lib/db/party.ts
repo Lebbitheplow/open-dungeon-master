@@ -1,6 +1,7 @@
 import { getDatabase, parseJson } from "@/lib/db/core";
 import { repairedWeight } from "@/lib/content/item-weights";
 import { normalizeParty, type PartyState } from "@/lib/dm/party-logic";
+import { rowName } from "@/lib/srd/item-row";
 
 // Reading and writing the party record.
 //
@@ -30,7 +31,7 @@ function withRepairedWeights(party: PartyState): PartyState {
     return party;
   }
   const inventory = party.inventory.map((item) => {
-    const weight = repairedWeight(item.name, item.weight);
+    const weight = repairedWeight(rowName(item), item.weight);
     if (weight === item.weight) {
       return item;
     }

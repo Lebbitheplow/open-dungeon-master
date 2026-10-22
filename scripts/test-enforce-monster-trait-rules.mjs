@@ -155,7 +155,7 @@ await test("Animate Dead: when control runs out the undead turns hostile; a cast
   assert.equal(made.ok, true, made.error);
   const skeleton = world.sheets().find((sheet) => sheet.summon?.spell === "Animate Dead");
   assert.ok(skeleton, "no skeleton");
-  const renewed = await world.invoke("cast_buff", { characterId: mage.id, spell: "Animate Dead", level: 3, variant: "reassert" });
+  const renewed = await world.invoke("cast_buff", { characterId: mage.id, spell: "Animate Dead", level: 3, variant: "reassert control" });
   assert.equal(renewed.ok, true, renewed.error);
   assert.deepEqual(renewed.result.reasserted, [skeleton.name]);
   // The hold runs out in a fight: the skeleton stands and turns on the party.

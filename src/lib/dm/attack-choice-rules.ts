@@ -7,6 +7,7 @@
 import { classLevelOf, holdsFeature } from "@/lib/srd/trait-rules";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { subclassNamed } from "@/lib/srd/subclass-name";
 
 // ---- Open Hand Technique ----
 
@@ -27,7 +28,7 @@ export const OPEN_HAND_NOT_FLURRY: ToolError = {
 export function hasOpenHandTechnique(sheet: CharacterSheet): boolean {
   return (
     holdsFeature(sheet, "open hand technique") ||
-    (classLevelOf(sheet, "monk") >= 3 && /open hand/i.test(sheet.subclass ?? ""))
+    (classLevelOf(sheet, "monk") >= 3 && subclassNamed(sheet.subclass ?? "", "Way of the Open Hand"))
   );
 }
 
@@ -40,7 +41,7 @@ export function hurlProblem(sheet: CharacterSheet, asked: boolean | undefined): 
   if (!asked) {
     return null;
   }
-  if (!holdsFeature(sheet, "hurl through hell") && !(classLevelOf(sheet, "warlock") >= 14 && /fiend/i.test(sheet.subclass ?? ""))) {
+  if (!holdsFeature(sheet, "hurl through hell") && !(classLevelOf(sheet, "warlock") >= 14 && subclassNamed(sheet.subclass ?? "", "The Fiend"))) {
     return { error: `${sheet.name} does not have Hurl Through Hell (The Fiend's 14th level feature); attack without hurlThroughHell.`, retry: true };
   }
   const state = sheet.resources?.[HURL_THROUGH_HELL];

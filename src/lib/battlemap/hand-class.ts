@@ -35,6 +35,7 @@ import {
   type HandTurn,
 } from "@/lib/battlemap/hand-core";
 import { textKey } from "@/lib/language/text-logic";
+import { subclassNamed } from "@/lib/srd/subclass-name";
 
 const holds = (sheet: CharacterSheet, name: string) =>
   sheet.features.some((feature) => [feature.name, feature.name.replace(/\s*\(.*$/, "")].some((held) => textKey(held) === name));
@@ -107,7 +108,7 @@ export function attackOptionsFor(
   }
   // Hurl Through Hell (Fiend 14): the hit creature is gone until the end of
   // your next turn, then 10d10 psychic unless it is a fiend.
-  if (holdsFeature(sheet, "hurl through hell") || (classLevelOf(sheet, "warlock") >= 14 && /fiend/i.test(sheet.subclass ?? ""))) {
+  if (holdsFeature(sheet, "hurl through hell") || (classLevelOf(sheet, "warlock") >= 14 && subclassNamed(sheet.subclass ?? "", "The Fiend"))) {
     options.push({
       id: "hurlThroughHell",
       label: "Hurl Through Hell",
@@ -293,7 +294,7 @@ export function bonusStrikeCards(
     own.push({ feature: "Unwavering Mark", weapon: melee ?? null, rules: "Against your marked creature that struck someone else: a melee attack with advantage and +half your fighter level damage." });
   }
   if (holds(sheet, "hungry jaws")) {
-    const bite = racialNaturalWeapon(sheet.features, ["bite"]);
+    const bite = racialNaturalWeapon(sheet.features, "bite");
     if (bite) own.push({ feature: "Hungry Jaws", weapon: { name: bite.srd.name, srd: bite.srd } as Carried, rules: "A bite as a bonus action; on a hit you gain your Constitution modifier in temporary hit points." });
   }
   if (holds(sheet, "pistol and blade")) {

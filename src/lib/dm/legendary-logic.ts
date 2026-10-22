@@ -3,6 +3,7 @@ import type { EnemyStats } from "@/lib/bestiary/statblock";
 import { normalizeAbilityLedgers, type AbilityLedger } from "@/lib/dm/monster-abilities";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
+import { isNamed } from "@/lib/srd/feature-names";
 
 // Legendary and lair actions and legendary resistance (docs/vtt-parity-
 // implementation-plan.md 4.1): what a stat block says a creature may do
@@ -212,10 +213,9 @@ export function spendLegendaryAction(
   profile: LegendaryProfile,
   actionName: string,
 ): SpendOutcome {
-  const wanted = textKey(actionName);
-  const action =
-    profile.actions.find((entry) => textKey(entry.name) === wanted) ??
-    profile.actions.find((entry) => textKey(entry.name).startsWith(wanted) || wanted.startsWith(textKey(entry.name)));
+  // By its whole name; a cost note sent with it is read aside ("Wing Attack
+  // (Costs 2 Actions)").
+  const action = profile.actions.find((entry) => isNamed(actionName, entry.name));
   if (!action) {
     return { ok: false, error: `No legendary action called "${actionName}". It has: ${profile.actions.map((entry) => entry.name).join(", ")}.`, retry: true };
   }
@@ -283,28 +283,15 @@ export function lairCountPassed(order: Array<{ initiative?: number | null }>, fr
   return null;
 }
 
-// The printed lair option a DM names: its number in the list, or the line
-// whose words it carries. Null when none fits.
+// The printed lair option a DM names: its number in the list, or the whole
+// line. Null when none is, never the line that shares a word with it.
 export function pickLairOption(options: string[], wanted: string): string | null {
   const text = textKey(wanted);
-  const numbered = /^#?(\d{1,2})$/.exec(text);
+  const numbered = /^(\d{1,2})$/.exec(text);
   if (numbered) {
     return options[Number(numbered[1]) - 1] ?? null;
   }
-  const words = (line: string) => new Set(textKey(line).split(" ").filter((word) => word.length >= 4));
-  const asked = words(text);
-  let best: { line: string; shared: number } | null = null;
-  for (const line of options) {
-    const lower = textKey(line);
-    if (lower.includes(text) || text.includes(lower.slice(0, 40))) {
-      return line;
-    }
-    const shared = [...words(line)].filter((word) => asked.has(word)).length;
-    if (shared >= 2 && (!best || shared > best.shared)) {
-      best = { line, shared };
-    }
-  }
-  return best?.line ?? null;
+  return options.find((line) => textKey(line) === text) ?? null;
 }
 
 // How a printed lair option resolves through the engine: a save the server

@@ -16,12 +16,14 @@ import { backgroundFeatureFor } from "@/lib/backgrounds";
 import { registerSpeciesReader } from "@/lib/srd/race-id";
 import { featsAsRun } from "@/lib/srd/feat-effects";
 import { serverSpeciesRules } from "@/lib/characters/species-rules";
-import type {
-  CharacterSheet,
-  CreateSheetInput,
-  FullPatchSheetInput,
+import {
+  keyedFeatChoices,
+  type CharacterSheet,
+  type CreateSheetInput,
+  type FullPatchSheetInput,
 } from "@/lib/schemas/sheet";
 import { textKey } from "@/lib/language/text-logic";
+import { rowName } from "@/lib/srd/item-row";
 
 type FeatChoices = NonNullable<CreateSheetInput["featChoices"]>;
 
@@ -179,10 +181,11 @@ function handLayoutOf(json: string | null | undefined): { handLayout?: HandLayou
 }
 
 // The picks the sheet's feats and subclass grants were made with, when it
-// records any (issue #430).
+// records any (issue #430), under the keys featChoice reads: a map stored
+// under the earlier lower-case keys is re-keyed here.
 function featChoicesOf(json: string | null | undefined): { featChoices?: FeatChoices } {
   const choices = json ? parseJson<FeatChoices | null>(json, null) : null;
-  return choices && typeof choices === "object" && Object.keys(choices).length ? { featChoices: choices } : {};
+  return choices && typeof choices === "object" && Object.keys(choices).length ? { featChoices: keyedFeatChoices(choices) } : {};
 }
 
 const featChoicesJson = (choices: FeatChoices | undefined): string | null =>
@@ -284,13 +287,13 @@ function withBackgroundFeature(
 // number is left as it is.
 function withItemWeights(equipment: CharacterSheet["equipment"]): CharacterSheet["equipment"] {
   return equipment.map((item) => {
-    const stored = repairedWeight(item.name, item.weight);
+    const stored = repairedWeight(rowName(item), item.weight);
     if (typeof stored === "number") {
       return stored === item.weight ? item : { ...item, weight: stored };
     }
     const line = { ...item };
     delete line.weight;
-    const weight = itemWeightByName(item.name);
+    const weight = itemWeightByName(rowName(item));
     return weight === null ? (item.weight === undefined ? item : line) : { ...line, weight };
   });
 }

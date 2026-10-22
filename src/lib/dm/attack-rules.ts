@@ -5,7 +5,7 @@
 // scripts/test-attack-rules.mjs walks the branches.
 
 import { footprintDistance, footprintSide, type Footprint } from "@/lib/battlemap/footprint";
-import { featTwinOf } from "@/lib/srd/feat-effects";
+import { holdsFeat } from "@/lib/srd/feat-effects";
 
 import type { TurnBudget } from "@/lib/dm/action-budget";
 import type { AttackProfile } from "@/lib/dm/attack-logic";
@@ -20,8 +20,7 @@ type XY = { x: number; y: number };
 
 // A content pack twin (Level Up's Dual-Wielding Expert) counts as the feat,
 // and so does a table's workshop feat that runs as it.
-const hasFeat = (feats: string[] | undefined, name: string, campaignId?: string) =>
-  (feats ?? []).some((feat) => featTwinOf(feat, campaignId).startsWith(name));
+const hasFeat = (feats: string[] | undefined, name: string, campaignId?: string) => holdsFeat({ feats, campaignId }, name);
 
 const isLightMelee = (profile: Pick<AttackProfile, "properties" | "ranged">) =>
   !profile.ranged && (profile.properties ?? []).includes("light");
@@ -156,6 +155,8 @@ export function offHandProblem(input: {
 // refuses. Read from what the sheet marks as equipped: a second one-handed
 // melee weapon in hand beside the one being swung (or a pair of the same).
 // A pack that marks nothing as equipped says nothing about the other hand.
+// `weapon` is the swung line's own name as resolveAttackWeapon gives it
+// (displayName), so the line is the one stored under that very string.
 export function otherHandArmed(input: {
   equipment: Carried[];
   weapon: string;
@@ -164,7 +165,6 @@ export function otherHandArmed(input: {
   if (input.shieldName) {
     return false;
   }
-  const wielded = textKey(input.weapon);
   return input.equipment.some((item) => {
     if (item.equipped !== true) {
       return false;
@@ -173,7 +173,7 @@ export function otherHandArmed(input: {
     if (!weapon || weapon.kind !== "melee" || (weapon.properties ?? []).includes("two-handed")) {
       return false;
     }
-    const same = textKey(item.name) === wielded;
+    const same = item.name === input.weapon;
     return !same || (item.qty ?? 1) > 1;
   });
 }

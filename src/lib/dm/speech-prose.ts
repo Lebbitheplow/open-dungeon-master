@@ -83,8 +83,9 @@ export type Reading = {
   matchers: Matcher[];
   // commonWords over the recent story and this passage.
   common: ReadonlySet<string>;
-  // English only: follow "she" and "he" back to the person they mean.
-  pronouns: boolean;
+  // At an English table only: follow "she" and "he" back to the person
+  // they mean.
+  englishPronouns: boolean;
 };
 
 // Whether nothing but punctuation stands before a word in its sentence.
@@ -133,26 +134,26 @@ export function nameAt(text: string, reading: Reading, atStart: boolean): Found 
   return null;
 }
 
-// Words that carry on about someone already named: "She smiles", "His
-// voice drops". "It" is left out: "It is cold" is about nobody.
-const PRONOUN = /^(she|he|they|her|his|their|hers|him|them)\b/i;
+// English words that carry on about someone already named: "She smiles",
+// "His voice drops". "It" is left out: "It is cold" is about nobody.
+const ENGLISH_PRONOUN = /^(she|he|they|her|his|their|hers|him|them)\b/i;
 // What a stretch about one person calls them: "she" or "he" where a
 // clause opens ("She sighs, and he shrugs" is two people), and the "her"
 // and "his" that are theirs. "Him" after a verb is somebody else.
-const OWN = /(?:^|[,;:]\s+|\b(?:and|but|then|while)\s+)(she|he)\b|\b(her|hers|herself|his|himself)\b/gi;
+const ENGLISH_OWN = /(?:^|[,;:]\s+|\b(?:and|but|then|while)\s+)(she|he)\b|\b(her|hers|herself|his|himself)\b/gi;
 
-// The pronoun a stretch of prose opens with, when the table reads pronouns.
-export function pronounAt(text: string, reading: Reading): RegExpExecArray | null {
-  return reading.pronouns ? PRONOUN.exec(text) : null;
+// The English pronoun a stretch of prose opens with, at an English table.
+export function englishPronounAt(text: string, reading: Reading): RegExpExecArray | null {
+  return reading.englishPronouns ? ENGLISH_PRONOUN.exec(text) : null;
 }
 
-function pronounCounts(text: string, reading: Reading): { f: number; m: number } {
+function englishPronounCounts(text: string, reading: Reading): { f: number; m: number } {
   let f = 0;
   let m = 0;
-  if (!reading.pronouns) {
+  if (!reading.englishPronouns) {
     return { f, m };
   }
-  for (const match of text.matchAll(OWN)) {
+  for (const match of text.matchAll(ENGLISH_OWN)) {
     if (/^(?:she|her|hers|herself)$/i.test(match[1] ?? match[2])) {
       f += 1;
     } else {
@@ -164,13 +165,13 @@ function pronounCounts(text: string, reading: Reading): { f: number; m: number }
 
 // What a stretch of prose about one person calls them, when it is clear.
 export function genderOf(text: string, reading: Reading): GenderMark {
-  const { f, m } = pronounCounts(text, reading);
+  const { f, m } = englishPronounCounts(text, reading);
   return f > 0 && f >= 2 * m ? "f" : m > 0 && m >= 2 * f ? "m" : "";
 }
 
 // Every way a stretch calls the people it is about.
 export function gendersIn(text: string, reading: Reading): GenderMark[] {
-  const { f, m } = pronounCounts(text, reading);
+  const { f, m } = englishPronounCounts(text, reading);
   return [...(f ? ["f" as const] : []), ...(m ? ["m" as const] : [])];
 }
 
@@ -224,7 +225,7 @@ export function subjectOf(sentence: string, reading: Reading, atStart = true): S
     if (found) {
       return { kind: "name", speaker: found.speaker, text: body, end: found.end };
     }
-    const pronoun = pronounAt(body, reading);
+    const pronoun = englishPronounAt(body, reading);
     return pronoun ? { kind: "pronoun", text: body, end: pronoun[0].length } : null;
   };
   const direct = at(text, atStart);

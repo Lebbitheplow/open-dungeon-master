@@ -19,6 +19,9 @@ import {
   searchSpells,
   type ItemEntry,
 } from "@/lib/content";
+import { textKey } from "@/lib/language/text-logic";
+import { srdNameFor } from "@/lib/dm/item-logic";
+import { withoutBonus } from "@/lib/srd/item-row";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -66,8 +69,8 @@ export async function GET(
   const fromBook = url.searchParams.get("book") === "1";
   // The bundled rows a search has no SRD row of the same name for.
   const notFiled = <T extends { name: string }>(found: unknown[], bundled: T[]): T[] => {
-    const filed = new Set((found as Array<{ name: string; documentSlug?: string }>).filter((row) => row.documentSlug === "wotc-srd").map((row) => row.name.trim().toLowerCase()));
-    return bundled.filter((row) => !filed.has(row.name.trim().toLowerCase()));
+    const filed = new Set((found as Array<{ name: string; documentSlug?: string }>).filter((row) => row.documentSlug === "wotc-srd").map((row) => textKey(row.name)));
+    return bundled.filter((row) => !filed.has(textKey(row.name)));
   };
 
   let results: unknown[];
@@ -97,13 +100,22 @@ export async function GET(
       const itemKind = url.searchParams.get("kind") ?? undefined;
       // The price rides with the row, worked out by the same catalog the
       // sheet route will charge by, so the builder's purse and the server
-      // agree even where the pack files a name twice (issue #136).
+      // agree even where the pack files a name twice (issue #136). So does
+      // the row a shelf line picked from it names (srdName), as the shop
+      // routes will take it: the name without the bonus it declares, when
+      // that is one row ("Shield +1" is a Shield; "Weapon +1" is a family).
       results = searchItems({
         ...base,
         ...(itemKind && ITEM_KINDS.has(itemKind)
           ? { kind: itemKind as ItemEntry["kind"] }
           : {}),
-      }).map((entry) => (entry.source === "open5e" ? { ...entry, price: catalogPrices(entry.name) } : entry));
+      }).map((entry) => {
+        if (entry.source !== "open5e") {
+          return entry;
+        }
+        const listed = srdNameFor(withoutBonus(entry.name), "items");
+        return { ...entry, price: catalogPrices(entry.name), ...("srdName" in listed && listed.srdName ? { srdName: listed.srdName } : {}) };
+      });
       // No pack: the bundled book's magic items and its weapons, armour and
       // adventuring gear, whole, for the workshop to copy.
       if ((!packInstalled || fromBook) && mechanics) {

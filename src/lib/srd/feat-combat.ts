@@ -4,12 +4,14 @@
 // Delver were words on the sheet and nothing more). Pure: the attack and
 // cast engines ask these and apply the answers.
 import { featTwinOf, holdsFeat } from "@/lib/srd/feat-effects";
-import { SRD_WEAPONS } from "@/lib/srd/weapons";
 import { armorOfRow, isWorn, type WornItem } from "@/lib/srd/armor";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
 import { keyFits, type RollKey } from "@/lib/srd/roll-keys";
 import type { CheckAbout, SaveAgainstValue } from "@/lib/dm/roll-about";
+import { magicWeaponOfRow } from "@/lib/dm/gear-attack";
+import type { EquipmentItem } from "@/lib/schemas/sheet";
+import { featChoice } from "@/lib/schemas/sheet";
 
 type FeatHolder = { feats?: string[]; features?: Array<{ name: string }> };
 type ChoiceHolder = FeatHolder & { featChoices?: Record<string, { damageType?: string } | undefined> | null };
@@ -479,7 +481,7 @@ export function elementalAdeptType(sheet: ChoiceHolder): string | null {
       return element;
     }
   }
-  const picked = (sheet.featChoices?.["elemental adept"]?.damageType ?? "").trim().toLowerCase();
+  const picked = (featChoice(sheet.featChoices ?? undefined, "Elemental Adept")?.damageType ?? "").trim().toLowerCase();
   return ELEMENTAL_ADEPT_TYPES.includes(picked) ? picked : null;
 }
 
@@ -524,21 +526,19 @@ export function dungeonDelverNotices(sheet: FeatHolder, about: "traps_and_secret
 
 // Defensive Duelist: wielding a finesse weapon the character is proficient
 // with, the reaction adds the proficiency bonus to AC against one melee
-// attack that hit. Null when the feat or the weapon is missing.
+// attack that hit. Null when the feat or the weapon is missing. The weapon is
+// the one the row swings as (src/lib/dm/gear-attack.ts), as pc_attack reads
+// it: a "Spada lunga" listed as a Rapier is a rapier.
 export function defensiveDuelistBonus(
-  sheet: FeatHolder & { equipment?: Array<{ name: string; equipped?: boolean }>; proficiencies?: { weapons: string[] } },
+  sheet: FeatHolder & { equipment?: EquipmentItem[]; proficiencies?: { weapons: string[] } },
   proficiencyBonus: number,
 ): number | null {
   if (!holdsFeat(sheet, "Defensive Duelist")) {
     return null;
   }
-  const wielded = (sheet.equipment ?? []).some((item) => {
-    if (item.equipped !== true) {
-      return false;
-    }
-    const weapon = SRD_WEAPONS.find((entry) => textKey(item.name).includes(textKey(entry.name)));
-    return Boolean(weapon?.properties?.includes("finesse"));
-  });
+  const wielded = (sheet.equipment ?? []).some(
+    (item) => item.equipped === true && Boolean(magicWeaponOfRow(item).srd?.properties?.includes("finesse")),
+  );
   return wielded ? proficiencyBonus : null;
 }
 

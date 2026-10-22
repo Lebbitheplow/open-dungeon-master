@@ -12,13 +12,14 @@ import { advanceClock, setTravelPace } from "@/lib/db/clock";
 import { getActiveEncounter } from "@/lib/db/encounters";
 import { getSheetById } from "@/lib/db/sheets";
 import { describeDuration, describeInstant } from "@/lib/dm/calendar";
-import { resolveSheetRef } from "@/lib/dm/rolls";
+import { resolveSheetRef, unknownSheetRef } from "@/lib/dm/rolls";
 import { liftLimits, weighed } from "@/lib/dm/load-rules";
 import { encumbranceFor } from "@/lib/srd/encumbrance";
 import { sizeForRace } from "@/lib/srd";
 import { LIFESTYLES } from "@/lib/dm/between-state";
 import { tableNote, writeLifestyle } from "@/lib/dm/between-io";
 import { LIFESTYLE_COST_CP, downtimeProblem, spendDowntime, type DowntimeEntry } from "@/lib/dm/lifestyle";
+import { srdNameFor } from "@/lib/dm/item-logic";
 import { infectDisease, infectWorkshopDisease, inflictMadness } from "@/lib/dm/afflictions";
 import { diseaseAt, hazardNamesAt, poisonAt } from "@/lib/srd/table-hazards";
 import { applyPoison } from "@/lib/dm/affliction-poisons";
@@ -41,6 +42,7 @@ const activityProperties = {
   characterId: { type: "string", description: "Exact characterId from GAME STATE." },
   activity: { type: "string", enum: [...ACTIVITIES], description: "What they spend the days on." },
   item: { type: "string", description: "Crafting: the nonmagical item being made (its market value sets the work: 5 gp a day per crafter, materials half the value, paid at the start)." },
+  srdName: { type: "string", description: "Crafting, when item is in the table's language: its SRD or pack name in English ('Longsword')." },
   tool: { type: "string", description: "Crafting: the artisan's tools used; the crafter and every helper must be proficient with them." },
   helperIds: { type: "array", items: { type: "string" }, description: "Crafting: other characters proficient with the tools working on the same item; each adds 5 gp a day." },
   subject: { type: "string", description: "Training: the language or tool being learned (250 days at 1 gp a day)." },
@@ -160,7 +162,7 @@ function handleLift(args: z.infer<typeof liftSchema>, sheets: CharacterSheet[], 
   const stale = resolveSheetRef(args.characterId, sheets, sheetsById);
   const sheet = stale ? (getSheetById(stale.id) ?? stale) : null;
   if (!sheet) {
-    return { error: "Unknown characterId; use one from GAME STATE.", retry: true };
+    return unknownSheetRef("characterId", args.characterId, sheets);
   }
   const how = args.how ?? "lift";
   const limits = liftLimits(sheet);
@@ -205,6 +207,7 @@ const entrySchema = z.object({
   characterId: z.string(),
   activity: z.enum(ACTIVITIES),
   item: z.string().max(80).optional(),
+  srdName: z.string().max(80).optional(),
   tool: z.string().max(60).optional(),
   helperIds: z.array(z.string()).max(6).optional(),
   subject: z.string().max(60).optional(),
@@ -298,9 +301,13 @@ export function handleExploreCall(
       const stale = resolveSheetRef(entry.characterId, sheets, sheetsById);
       const sheet = stale ? (getSheetById(stale.id) ?? stale) : null;
       if (!sheet) {
-        return { error: `Unknown characterId ${entry.characterId}; use one from GAME STATE. No time passed.`, retry: true };
+        return unknownSheetRef("characterId", entry.characterId, sheets, "No time passed.");
       }
-      const fixed = { ...entry, characterId: sheet.id };
+      const listed = srdNameFor(entry.srdName, "downtime");
+      if ("error" in listed) {
+        return { ...listed, error: `${listed.error} No time passed.` };
+      }
+      const fixed = { ...entry, srdName: listed.srdName, characterId: sheet.id };
       const problem = downtimeProblem(campaign, sheet, fixed);
       if (problem) {
         return { ...problem, error: `${problem.error} No time passed.` };
@@ -325,7 +332,7 @@ export function handleExploreCall(
     const stale = resolveSheetRef(args.characterId, sheets, sheetsById);
     const sheet = stale ? (getSheetById(stale.id) ?? stale) : null;
     if (!sheet) {
-      return { error: "Unknown characterId; use one from GAME STATE.", retry: true };
+      return unknownSheetRef("characterId", args.characterId, sheets);
     }
     if (sheet.deathSaves?.dead) {
       return { error: `${sheet.name} is dead; nothing more takes hold.`, retry: true };

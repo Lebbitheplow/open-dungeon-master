@@ -8,7 +8,8 @@
 //
 // A grant that leaves a choice (which three languages, which skill, which
 // four weapons) is picked where the feat is picked and stored on the sheet
-// as featChoices, keyed by the feat's name. The server applies the grants
+// as featChoices, keyed by the textKey of the feat's name
+// (src/lib/schemas/sheet.ts featChoice). The server applies the grants
 // when the sheet is made, edited or levelled (src/lib/srd/sheet-legality.ts,
 // src/lib/srd/level-up.ts); the builder applies them to its preview. The
 // reading of the text is src/lib/srd/feat-grant-text.ts. Pure.
@@ -17,6 +18,7 @@ import { ALL_SKILLS } from "@/lib/content/mechanics";
 import { featSpellsOwed, type CastingAbility } from "@/lib/srd/feat-spells";
 import { featGrantSpec, featGrantsAnything, lowerText as lower, type FeatGrantSpec, type PickKind } from "@/lib/srd/feat-grant-text";
 import { SRD_WEAPONS } from "@/lib/srd/weapons";
+import { featChoice } from "@/lib/schemas/sheet";
 
 export { featGrantSpec, featGrantsAnything, KNOWN_TOOLS, type FeatGrantSpec, type PickKind } from "@/lib/srd/feat-grant-text";
 
@@ -139,7 +141,7 @@ export function applyFeatGrants(input: FeatGrantInput): FeatGrantVerdict {
     if (!featGrantsAnything(spec) && !spec.damageTypes.length) {
       continue;
     }
-    const picks = input.choices[lower(feat.name)] ?? input.choices[feat.name] ?? {};
+    const picks = featChoice(input.choices, feat.name) ?? {};
     for (const piece of spec.armor) {
       // A second class's grant reads "light armor" where a class's reads
       // "light"; either means the training is held.

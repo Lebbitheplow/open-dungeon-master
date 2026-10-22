@@ -34,10 +34,12 @@ import type { ToolResult } from "@/lib/dm/tool-errors";
 import { listedAgainst } from "@/lib/dm/roll-about";
 import { heldSaveTraits } from "@/lib/srd/trait-rules";
 import { unnamedRollKeys } from "@/lib/srd/roll-keys";
-import { hasItemTag, itemRow } from "@/lib/srd/item-tags";
+import { HEALING_POTIONS, hasItemTag, itemRow } from "@/lib/srd/item-tags";
 import { listedItemTags } from "@/lib/schemas/item-tags";
 import { sentItemTags } from "@/lib/dm/item-logic";
 import { isTableGearName } from "@/lib/db/homebrew";
+import { unrevealedLine } from "@/lib/dm/mutation-math";
+import { enemyHoldsItem } from "@/lib/dm/gear-ground";
 
 export type GateContext = {
   campaign: Campaign;
@@ -91,6 +93,13 @@ export function gateAiCall(name: string, rawArguments: string, ctx: GateContext)
     case "grant_item":
     case "reveal_item":
       return itemFacts(ctx, name, args, rawArguments);
+    case "purchase":
+      return args.action === "buy" ? itemFacts(ctx, name, { ...args, name: args.item }, rawArguments) : { args: rawArguments };
+    // What an enemy lets fall reaches a sheet when it is picked up.
+    case "handle_item":
+      return args.enemyId && args.action === "drop" && !enemyHoldsItem(ctx.campaign.id, String(args.enemyId), String(args.item ?? ""))
+        ? itemFacts(ctx, name, { ...args, name: args.item }, rawArguments)
+        : { args: rawArguments };
     case "pc_attack":
     case "enemy_attack":
     case "request_roll":
@@ -114,23 +123,41 @@ function itemFacts(ctx: GateContext, name: string, args: Record<string, unknown>
     return { args: rawArguments };
   }
   // A revealed item keeps the tags it was granted with.
-  const carried = name === "reveal_item" ? ctx.sheetsById.get(String(args.characterId ?? ""))?.equipment.find((item) => item.name === described) : undefined;
+  const equipment = name === "reveal_item" ? (ctx.sheetsById.get(String(args.characterId ?? ""))?.equipment ?? []) : [];
+  const carried = equipment[unrevealedLine(equipment, described)];
   const srdName = typeof args.srdName === "string" && args.srdName.trim() ? args.srdName.trim() : undefined;
   const spell = typeof args.spell === "string" ? args.spell : undefined;
   const tags = sentItemTags({ name: itemName, srdName }, Array.isArray(args.tags) ? listedItemTags(args.tags) : undefined, spell) ?? carried?.tags;
   const item = { name: itemName, ...(srdName ? { srdName } : {}), ...(tags ? { tags } : {}) };
+  // purchase takes no tags or spell, and handle_item no spell: what they
+  // cannot say, grant_item does (and modify_gold pays for it).
+  const grants = name === "grant_item" || name === "reveal_item";
+  const viaGrant = name === "purchase" ? "grant_item and paid for with modify_gold" : "grant_item";
   if (!tags && !srdName && !itemRow(item) && !isTableGearName(ctx.campaign.id, itemName)) {
+    const loot = name === "purchase" ? `; loot no list has is granted with ${viaGrant}, tags naming what it is` : ", or, for loot no list has, tags naming what it is (tags [] when none fits)";
+    const scroll = grants ? "; a spell scroll names its spell in spell" : `; a spell scroll is granted with ${viaGrant}, its spell in spell`;
     return {
       result: {
-        error: `${name}: send it again with srdName, the SRD or pack item "${itemName}" is by its English name, or, for loot no list has, tags naming what it is (tags [] when none fits); a spell scroll names its spell in spell. No item the game knows has that name. Nothing changed yet.`,
+        error: `${name}: send it again with srdName, the SRD or pack item "${itemName}" is by its English name${loot}${scroll}. No item the game knows has that name. Nothing changed yet.`,
+        retry: true,
+      },
+    };
+  }
+  // A healing potion heals by its kind, which only its row says: no tag
+  // names a tier.
+  if (hasItemTag(item, "healing_potion") && !itemRow(item)?.potion) {
+    return {
+      result: {
+        error: `${name}: send it again with srdName naming the potion's kind (${HEALING_POTIONS.join(", ")}): its kind sets what it heals. Nothing changed yet.`,
         retry: true,
       },
     };
   }
   if (hasItemTag(item, "scroll") && !spell?.trim()) {
+    const how = grants ? "send it again with" : `grant it with ${viaGrant}, naming`;
     return {
       result: {
-        error: `${name}: send it again with the spell "${itemName}" holds in spell, as the spell lists name it; a scroll the party cannot read yet is granted unidentified. Nothing changed yet.`,
+        error: `${name}: ${how} the spell "${itemName}" holds in spell, as the spell lists name it; a scroll the party cannot read yet is granted unidentified. Nothing changed yet.`,
         retry: true,
       },
     };

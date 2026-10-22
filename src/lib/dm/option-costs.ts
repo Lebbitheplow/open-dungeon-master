@@ -12,10 +12,11 @@
 // Destructive Wrath and Touch of Death ride a roll the cleric or paladin is
 // already making; Artisan's Blessing is an hour-long ritual.
 //
-// Pure: no imports beyond types.
+// Pure: no imports beyond types and the name compares.
 import type { ResourceAction } from "@/lib/srd/class-resources";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
+import { isNamed } from "@/lib/srd/feature-names";
 
 type Cost = ResourceAction | "ritual" | "use_reaction" | "on_swing";
 
@@ -99,18 +100,15 @@ const TABLES: Record<string, Array<[string, Cost]>> = {
   sub_superiority_dice: SUPERIORITY,
 };
 
-const plain = (text: string) => text.trim().toLowerCase().replace(/[’`]/g, "'");
-
-// The option a call names, by its words (the variant, or the resource name
-// "Channel Divinity: Vow of Enmity"), and what it costs.
+// The option a call names by its whole name (the variant, or the resource
+// name "Channel Divinity: Vow of Enmity"), and what it costs.
 export function optionCost(
   defId: string | undefined,
-  named: string,
+  named: readonly string[],
   inFight: boolean,
 ): { option: string; cost: ResourceAction } | { refused: ToolError } | null {
   const table = defId ? TABLES[defId] : undefined;
-  const text = textKey(named);
-  const found = table?.find(([option]) => text.includes(textKey(option)));
+  const found = table?.find(([option]) => named.some((name) => isNamed(name, option)));
   if (!found) {
     return null;
   }
@@ -133,7 +131,7 @@ export function optionCost(
 export type HeldOption = { name: string; cost: ResourceAction | "ritual" };
 
 const costOf = (table: Array<[string, Cost]>, name: string): ResourceAction | "ritual" => {
-  const cost = table.find(([option]) => textKey(name).includes(textKey(option)))?.[1] ?? "action";
+  const cost = table.find(([option]) => isNamed(name, option))?.[1] ?? "action";
   return cost === "use_reaction" ? "reaction" : cost === "on_swing" ? "none" : cost;
 };
 
@@ -145,8 +143,8 @@ export function channelOptions(sheet: OptionSheet): HeldOption[] {
   const named = sheet.features
     .map((feature) => /^channel divinity:\s*(.+)$/i.exec(feature.name.trim())?.[1]?.trim())
     .filter((name): name is string => Boolean(name));
-  const cleric = plain(sheet.class ?? "") === "cleric" || (sheet.classes ?? []).some((entry) => plain(entry.id) === "cleric");
-  const all = cleric && !named.some((name) => textKey(name).includes("turn undead")) ? ["Turn Undead", ...named] : named;
+  const cleric = textKey(sheet.class ?? "") === "cleric" || (sheet.classes ?? []).some((entry) => textKey(entry.id) === "cleric");
+  const all = cleric && !named.some((name) => isNamed(name, "Turn Undead")) ? ["Turn Undead", ...named] : named;
   return [...new Set(all)].map((name) => ({ name, cost: costOf(CHANNEL_DIVINITY, name) }));
 }
 
@@ -154,7 +152,7 @@ export function channelOptions(sheet: OptionSheet): HeldOption[] {
 export function psionicOptions(sheet: OptionSheet): HeldOption[] {
   const out: HeldOption[] = [];
   for (const feature of sheet.features) {
-    const found = PSIONIC_ENERGY.find(([option]) => textKey(feature.name) === textKey(option) || textKey(feature.name).startsWith(`${textKey(option)} `));
+    const found = PSIONIC_ENERGY.find(([option]) => isNamed(feature.name, option));
     if (found && !out.some((entry) => textKey(entry.name) === textKey(found[0]))) {
       out.push({ name: feature.name.trim(), cost: costOf(PSIONIC_ENERGY, found[0]) });
     }

@@ -88,6 +88,9 @@ export type Legalized = {
   owed?: string[];
 };
 
+// Skills, tools and expertise as a sheet stores them: lower case, otherwise
+// as written. Compared only in that stored form, as ODM's own skill keys
+// (ALL_SKILLS); a name a table writes compares by textKey.
 export const lower = (value: string) => value.trim().toLowerCase();
 
 export function uniqueBy<T>(list: T[], keyOf: (entry: T) => string): T[] {

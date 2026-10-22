@@ -90,7 +90,6 @@ type SheetLike = Pick<CharacterSheet, "class" | "level" | "subclass" | "classes"
   spellcasting: CharacterSheet["spellcasting"];
 };
 
-const lower = (name: string) => name.trim().toLowerCase();
 const has = (list: string[], name: string) => list.some((entry) => textKey(entry) === textKey(name));
 const without = (list: string[], name: string) => list.filter((entry) => textKey(entry) !== textKey(name));
 
@@ -140,7 +139,7 @@ export function casterViewsOf(sheet: SheetLike, extras?: SubclassExtras): Caster
   }
   if (casting.casters?.length) {
     return casting.casters.map((caster) => {
-      const entry = (sheet.classes ?? []).find((row) => lower(row.id) === lower(caster.classId));
+      const entry = (sheet.classes ?? []).find((row) => textKey(row.id) === textKey(caster.classId));
       return viewOf(caster, caster.classId, caster.ability, entry?.level ?? sheet.level, entry?.subclass ?? "", extras);
     });
   }
@@ -155,7 +154,7 @@ export function withCasterViews(
 ): NonNullable<CharacterSheet["spellcasting"]> {
   if (casting.casters?.length) {
     const casters = casting.casters.map((caster) => {
-      const view = views.find((entry) => lower(entry.classId) === lower(caster.classId));
+      const view = views.find((entry) => textKey(entry.classId) === textKey(caster.classId));
       return view ? writeLists(caster, view) : caster;
     });
     const union = (pick: (view: CasterView) => string[]) => dedupeNames(views.flatMap(pick));

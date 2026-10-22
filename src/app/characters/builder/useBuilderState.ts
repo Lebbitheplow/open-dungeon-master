@@ -27,6 +27,8 @@ import type { AbilityMethod, AbilityState } from "./AbilityEditor";
 import type { PoolEntry, PoolSlots } from "./abilityDice";
 import { reconcilePicks, type BuilderPicks, type DroppedPick } from "./reconcile";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
+import { keyedFeatChoices, withFeatChoice } from "@/lib/schemas/sheet";
+import { textKey } from "@/lib/language/text-logic";
 
 // `priceCp` is the listed price of one, in copper, as the catalog row it was
 // picked from gave it; it is what the purse is charged, and the server
@@ -200,17 +202,13 @@ export function useBuilderState({
     return (initial.feats ?? []).filter((feat) => !asiFeats.has(feat));
   });
   // The picks a feat leaves open (Linguist's three languages, Skill Expert's
-  // skill and expertise), keyed by the feat's name in lower case
-  // (src/lib/srd/feat-grants.ts). Kept for every feat ever picked here, so
+  // skill and expertise), keyed by featChoice (src/lib/srd/feat-grants.ts),
+  // a stored draft's map re-keyed so. Kept for every feat ever picked here, so
   // a feat dropped and taken again finds its picks; the payload sends only
   // the feats on the sheet.
-  const [featChoices, setFeatChoices] = useState<FeatChoices>(() =>
-    Object.fromEntries(
-      Object.entries(initial?.featChoices ?? {}).map(([feat, picks]) => [feat.trim().toLowerCase(), picks]),
-    ),
-  );
+  const [featChoices, setFeatChoices] = useState<FeatChoices>(() => keyedFeatChoices(initial?.featChoices));
   function setFeatPicks(feat: string, picks: FeatPicks) {
-    setFeatChoices((current) => ({ ...current, [feat.trim().toLowerCase()]: picks }));
+    setFeatChoices((current) => withFeatChoice(current, feat, picks));
   }
   // One slot per ASI threshold the effective level has earned; kept full
   // length so lowering and re-raising the level restores earlier picks.
@@ -387,8 +385,8 @@ export function useBuilderState({
     ...(initial?.feats ?? []),
     ...(initial?.asiChoices ?? []).flatMap((choice) => (choice.mode === "feat" ? [choice.feat] : [])),
   ];
-  const storedFeatDescOf = (feat: string) => initialFeatDescs?.[feat.trim().toLowerCase()] ?? authoredFeatDesc(feat) ?? "";
-  const storedFeatsKnown = storedFeats.every((feat) => authoredFeatDesc(feat) || initialFeatDescs?.[feat.trim().toLowerCase()] !== undefined);
+  const storedFeatDescOf = (feat: string) => initialFeatDescs?.[textKey(feat)] ?? authoredFeatDesc(feat) ?? "";
+  const storedFeatsKnown = storedFeats.every((feat) => authoredFeatDesc(feat) || initialFeatDescs?.[textKey(feat)] !== undefined);
   useEffect(() => {
     if (!races.length || !classes.length || !backgrounds.length || !storedFeatsKnown) {
       return;
@@ -587,7 +585,7 @@ export function useBuilderState({
     removedAutoNames: setRemovedAutoNames,
     kitChoices: setKitChoices,
     feats: setFeats,
-    featChoices: setFeatChoices,
+    featChoices: (value) => setFeatChoices(keyedFeatChoices(value)),
     asiChoices: setAsiChoices,
     bonusLanguages: setBonusLanguages,
     racialAsi: setRacialAsi,

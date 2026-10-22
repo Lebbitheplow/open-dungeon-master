@@ -32,12 +32,11 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { enemyAttacker, rollCard } from "@/lib/dm/roll-card";
 import { rollAgainst } from "@/lib/roll-labels";
 import type { ToolResult } from "@/lib/dm/tool-errors";
+import { textKey } from "@/lib/language/text-logic";
 
 // The mark a character's opportunity attack that hit leaves until their next
 // turn: what Relentless Avenger's move answers.
 export const OA_HIT = "struck as it fled";
-
-const lower = (value: string | undefined | null) => (value ?? "").trim().toLowerCase();
 
 // Written by the opportunity attack (opportunity-strike.ts) when it hits and
 // the attacker holds a reaction that answers it.
@@ -47,7 +46,7 @@ export function markOpportunityHit(campaign: Campaign, stale: CharacterSheet) {
   if (!answers) {
     return;
   }
-  const kept = sheet.conditions.filter((entry) => lower(entry) !== OA_HIT);
+  const kept = sheet.conditions.filter((entry) => textKey(entry) !== OA_HIT);
   const updated = patchSheet(sheet.id, {
     conditions: [...kept, OA_HIT],
     conditionMeta: { ...(sheet.conditionMeta as ConditionMetaMap), [OA_HIT]: { untilTurnOf: sheet.id } },
@@ -101,7 +100,7 @@ export function reactionMove(ctx: Ctx, name: string, trigger: "enemy_adjacent" |
     return { error: `${name} needs the square to move to: pass x and y on the board. Nothing was spent.`, retry: true };
   }
   if (trigger === "oa_hit") {
-    if (!ctx.sheet.conditions.some((entry) => lower(entry) === OA_HIT)) {
+    if (!ctx.sheet.conditions.some((entry) => textKey(entry) === OA_HIT)) {
       return { error: `${name} moves ${ctx.sheet.name} right after their opportunity attack hits, and none has hit since their turn. Nothing was spent.`, refused: "rules" };
     }
   } else if (trigger === "enemy_adjacent") {
@@ -132,7 +131,7 @@ export function reactionMove(ctx: Ctx, name: string, trigger: "enemy_adjacent" |
   moveToken(token.id, x, y, token.movedThisRound);
   if (trigger === "oa_hit") {
     const now = getSheetById(ctx.sheet.id) ?? ctx.sheet;
-    const cleared = removeConditions(now.conditions, now.conditionMeta, now.conditions.filter((entry) => lower(entry) === OA_HIT));
+    const cleared = removeConditions(now.conditions, now.conditionMeta, now.conditions.filter((entry) => textKey(entry) === OA_HIT));
     const updated = patchSheet(now.id, { conditions: cleared.conditions, conditionMeta: cleared.meta });
     if (updated) {
       publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
@@ -148,7 +147,7 @@ export function reactionMove(ctx: Ctx, name: string, trigger: "enemy_adjacent" |
 function redirectMiss(ctx: Ctx, name: string, rangeFt: number): ToolResult {
   const { campaign, encounter } = ctx;
   const record = freshLastHit(campaign.id, ctx.sheet.id);
-  const label = lower(name);
+  const label = textKey(name);
   const missed = record && record.source === "attack" && !record.ranged && !record.answered.includes(label)
     ? record.swings.findIndex((swing) => !swing.hit && !(swing.ranged ?? false))
     : -1;
@@ -163,7 +162,7 @@ function redirectMiss(ctx: Ctx, name: string, rangeFt: number): ToolResult {
     return { error: `${target.displayName} is not within ${rangeFt} feet of ${ctx.sheet.name}. Nothing was spent.`, refused: "rules" };
   }
   const attacker = getEnemy(record.attacker.id);
-  const attack = (attacker?.stats.attacks ?? []).find((entry) => lower(entry.name) === lower(record.attack)) ?? attacker?.stats.attacks?.[0];
+  const attack = (attacker?.stats.attacks ?? []).find((entry) => textKey(entry.name) === textKey(record.attack));
   if (!attack?.damage) {
     return { error: `The server has no damage on record for ${record.attacker.name}'s ${record.attack}. Nothing was spent.`, refused: "rules" };
   }

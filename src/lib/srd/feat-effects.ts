@@ -9,6 +9,7 @@
 import authoredFeatsJson from "@/lib/srd/authored-feats.json";
 import type { Ability } from "@/lib/schemas/sheet";
 import { textKey } from "@/lib/language/text-logic";
+import { isNamed } from "@/lib/srd/feature-names";
 
 const ABILITIES: Ability[] = ["str", "dex", "con", "int", "wis", "cha"];
 const ABILITY_WORDS: Record<string, Ability> = {
@@ -169,17 +170,16 @@ export function featTwinOf(name: string, campaignId?: string | null): string {
 }
 
 // A sheet holds a feat when it is in sheet.feats, or (for sheets written by
-// the DM's tools) among its features by the same name, or holds its twin or
-// a workshop feat of its table that runs as it.
+// the DM's tools) among its features by the same name, as a feature's name
+// is read (src/lib/srd/feature-names.ts isNamed: "Lucky (Halfling)" is
+// Lucky), or holds its twin or a workshop feat of its table that runs as it.
 export function holdsFeat(
   sheet: { feats?: string[]; features?: Array<{ name: string }>; campaignId?: string },
   name: string,
 ): boolean {
   const wanted = textKey(name);
-  return (
-    (sheet.feats ?? []).some((feat) => featTwinOf(feat, sheet.campaignId) === wanted) ||
-    (sheet.features ?? []).some((feature) => featTwinOf(feature.name, sheet.campaignId) === wanted)
-  );
+  const held = (entry: string) => isNamed(entry, name) || featTwinOf(entry, sheet.campaignId) === wanted;
+  return (sheet.feats ?? []).some(held) || (sheet.features ?? []).some((feature) => held(feature.name));
 }
 
 // The text of one of ODM's own feats, for the grants read from it

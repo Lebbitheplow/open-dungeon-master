@@ -10,7 +10,7 @@ register("./lib/register-alias.mjs", import.meta.url);
 const speech = await import("../src/lib/dm/speech.ts");
 const { normalizeSpeaker, speakersIn, spokenLine } = speech;
 // An English table: the pronouns are read (src/lib/dm/speech-prose.ts).
-const attributeSpeech = (text, speakers, options = {}) => speech.attributeSpeech(text, speakers, { pronouns: true, ...options });
+const attributeSpeech = (text, speakers, options = {}) => speech.attributeSpeech(text, speakers, { englishPronouns: true, ...options });
 
 let passed = 0;
 function test(name, fn) {
@@ -178,7 +178,7 @@ test("Say quotes a player's words once, and never turns their action into speech
 // the action after it. Pronouns are English's alone.
 const other = (text, table) =>
   speech
-    .attributeSpeech(text, table, { pronouns: false })
+    .attributeSpeech(text, table, { englishPronouns: false })
     .filter((segment) => segment.kind === "speech")
     .map((segment) => `${segment.speaker.name}: ${segment.text.slice(0, 12)}`);
 

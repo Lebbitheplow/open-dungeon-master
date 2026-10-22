@@ -7,6 +7,7 @@ import { allSpellNames, spellLevelOf } from "@/lib/srd/spell-lists";
 import { notReadyReason } from "@/lib/srd/spell-prep";
 import {
   allocateSeq,
+  campaignLanguage,
   getCampaignById,
   getCampaignSummaryState,
   getFloor,
@@ -84,6 +85,7 @@ import {
   rollAsksFromClaims,
   salvageTextualToolCalls,
   salvageXmlToolCalls,
+  unknownSheetRef,
 } from "@/lib/dm/rolls";
 import { fakeRollMarkerRegex, stripToolText } from "@/lib/dm/tool-text";
 import {
@@ -639,12 +641,16 @@ async function openTurn(
   let profileTrace: NonNullable<ContextTrace["profile"]> = { name: tuning.toolProfile };
   let ruleContext: RuleContext | null = null;
   if (tuning.toolProfile === "compact") {
-    const playerText = history
-      .slice(-6)
-      .filter((message) => message.authorType === "player")
-      .map((message) => message.content)
-      .join("\n");
-    const intent = [...autoGroups({ inEncounter: false, playerText })];
+    // Read for English words only at an English table (ENGLISH_INTENT).
+    const englishPlayerText =
+      campaign.gameSettings.tableLanguage === "english"
+        ? history
+            .slice(-6)
+            .filter((message) => message.authorType === "player")
+            .map((message) => message.content)
+            .join("\n")
+        : "";
+    const intent = [...autoGroups({ inEncounter: false, englishPlayerText })];
     const signals = profileSignals(campaign, context.sheets, Boolean(encounterNow));
     const offered = compactTurnTools(campaign, Boolean(encounterNow), campaign.settings.imageGenerationEnabled && campaign.settings.autoImages, signals, intent).offered;
     const groups = Object.keys(TOOL_GROUPS).filter((group) => TOOL_GROUPS[group as ToolGroupId].tools.some((name) => offered.has(name)));
@@ -1547,6 +1553,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     const narration = withoutAsides(
       prose,
       read ? claims : finalCall && prose ? await readAsides(campaign, sheets, turn, prose) : [],
+      campaign.gameSettings.tableLanguage,
     );
     // Nothing of the story left: the reply was only the model's plan. Beside
     // tool calls nothing of it is kept, and the turn owes the narration of
@@ -2348,7 +2355,7 @@ async function narrateAfterToolLeak(context: TurnContext, turn: DmTurn) {
   // Read for the narrator's asides like the final call: a reply that was
   // only a plan keeps nothing, and finalize writes the empty-turn line
   // rather than the plan. There is no second rescue.
-  const narration = prose ? withoutAsides(prose, await readAsides(campaign, sheets, turn, prose)) : "";
+  const narration = prose ? withoutAsides(prose, await readAsides(campaign, sheets, turn, prose), campaign.gameSettings.tableLanguage) : "";
   if (narration) {
     turn.narrationParts.push(narration);
   }
@@ -2502,13 +2509,10 @@ export function handleRecordEvent(
   } catch {
     return { error: "Invalid arguments.", retry: true };
   }
-  const sheet = resolveSheetRef(
-    typeof args.characterId === "string" ? args.characterId : undefined,
-    sheets,
-    sheetsById,
-  );
+  const ref = typeof args.characterId === "string" ? args.characterId : undefined;
+  const sheet = resolveSheetRef(ref, sheets, sheetsById);
   if (!sheet) {
-    return { error: "Unknown characterId; use one from GAME STATE.", retry: true };
+    return unknownSheetRef("characterId", ref, sheets);
   }
   // A kind off the list is "story", never an error: a milestone is always
   // worth recording under some kind. Its words are not read for one.
@@ -2801,7 +2805,7 @@ function finalize(context: TurnContext, turn: DmTurn, failed: string, spoken: re
   // says each sentence once (src/lib/dm/narration-tidy-logic.ts).
   const combatants = fightNames(campaignId);
   const narrationParts = withoutRepeatedSentences(
-    turn.narrationParts.map((part) => withoutToolTalk(withoutCombatBookkeeping(part, combatants))),
+    turn.narrationParts.map((part) => withoutToolTalk(withoutCombatBookkeeping(part, combatants, campaignLanguage(campaignId)))),
   );
   let content = narrationParts.join("\n\n").trim();
   if (!content) {
