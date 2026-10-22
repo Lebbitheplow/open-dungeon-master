@@ -1,5 +1,7 @@
 {
   "rejected": {
+    "feature-grasping-tentacles": "t",
+    "feature-emboldening-bond": "t",
     "glyph-ui-duplicate": "b",
     "condition-petrified": "t",
     "family-class-muckraker": "t",
