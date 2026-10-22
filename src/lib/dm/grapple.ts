@@ -196,20 +196,24 @@ export function enemyEscape(
   spendEnemyAction(encounter, enemy.id);
   saveEncounter(encounter);
   const theirs = rollEnemyContest(campaign, turn, enemy, "either", `${enemy.displayName}: escape the grapple`);
-  const hold = rollCharacterCheck(campaign, holder, { skill: "athletics" }, `${holder.name}: Athletics to hold the grapple`);
-  if (hold.rollId) {
+  // A natural grapple prints its escape DC (a beast-shaped druid's
+  // crocodile bite, a summoned constrictor's coils): the escape is a check
+  // against it, not a contest.
+  const hold = held.escapeDc ? null : rollCharacterCheck(campaign, holder, { skill: "athletics" }, `${holder.name}: Athletics to hold the grapple`);
+  if (hold?.rollId) {
     turn.rollIds.push(hold.rollId);
   }
-  const escaped = theirs > hold.total;
+  const escaped = hold ? theirs > hold.total : theirs >= (held.escapeDc ?? 0);
   if (escaped) {
-    const cleared = removeConditions(enemy.conditions, enemy.conditionMeta, [held.name]);
+    // The restraint the same hold brought ends with it.
+    const cleared = withoutGrapple(enemy.conditions, enemy.conditionMeta, held);
     patchEnemyConditions(enemy.id, cleared.conditions, cleared.meta);
     publishEncounter(campaign.id);
   }
   return {
     ok: true,
     action: "escape",
-    contest: `${theirs} vs ${hold.total}`,
+    ...(hold ? { contest: `${theirs} vs ${hold.total}` } : { check: `${theirs} vs escape DC ${held.escapeDc}` }),
     success: escaped,
     note: escaped
       ? `${enemy.displayName} breaks free of ${holder.name}'s grapple; it used its action to do it.`
@@ -217,11 +221,17 @@ export function enemyEscape(
   };
 }
 
-// The grappler's reach in tiles: 1 for a character, a stat block's longest
-// melee reach for an enemy (an otyugh's tentacle holds from 10 feet).
-function reachOf(enemy: EncounterEnemy | null): number {
+// The grappler's reach in tiles: a stat block's longest melee reach for an
+// enemy (an otyugh's tentacle holds from 10 feet), and for a character the
+// natural attacks of the form they wear or the creature they are (a giant
+// octopus's tentacles hold from 15 feet, a giant constrictor snake from 10),
+// 1 otherwise.
+function reachOf(enemy: EncounterEnemy | null, holderId: string): number {
   if (!enemy) {
-    return 1;
+    const sheet = getSheetById(holderId);
+    const natural = sheet?.wildShape?.attacks ?? sheet?.summon?.attacks ?? [];
+    const reaches = natural.filter((attack) => !attack.range || attack.thrown).map((attack) => Math.floor((attack.reach ?? 5) / 5));
+    return Math.max(1, ...reaches);
   }
   const reaches = enemy.stats.attacks
     .map((attack) => enemyAttackProfile(attack, enemy.stats.traits ?? []))
@@ -255,8 +265,8 @@ export function releaseGrapplesOutOfReach(campaign: Campaign): string[] {
       continue;
     }
     const gap = apart(enemy.id, held.source);
-    if (gap !== null && gap > reachOf(enemies.find((entry) => entry.id === held.source) ?? null)) {
-      const cleared = removeConditions(enemy.conditions, enemy.conditionMeta, [held.name]);
+    if (gap !== null && gap > reachOf(enemies.find((entry) => entry.id === held.source) ?? null, held.source)) {
+      const cleared = withoutGrapple(enemy.conditions, enemy.conditionMeta, held);
       patchEnemyConditions(enemy.id, cleared.conditions, cleared.meta);
       released.push(enemy.displayName);
     }
@@ -267,7 +277,7 @@ export function releaseGrapplesOutOfReach(campaign: Campaign): string[] {
       continue;
     }
     const gap = apart(sheet.id, held.source);
-    if (gap !== null && gap > reachOf(enemies.find((entry) => entry.id === held.source) ?? null)) {
+    if (gap !== null && gap > reachOf(enemies.find((entry) => entry.id === held.source) ?? null, held.source)) {
       const cleared = withoutGrapple(sheet.conditions, sheet.conditionMeta as ConditionMetaMap, held);
       const updated = patchSheet(sheet.id, { conditions: cleared.conditions, conditionMeta: cleared.meta });
       if (updated) {

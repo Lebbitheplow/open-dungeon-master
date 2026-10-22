@@ -19,6 +19,7 @@ const {
   vehicleProfile,
   vehicleTravel,
 } = await import("../src/lib/srd/mounts.ts");
+const { SRD_CREATURES } = await import("../src/lib/srd/srd-creatures.ts");
 
 let passed = 0;
 function test(name, fn) {
@@ -38,6 +39,25 @@ test("every listed mount has a speed and a size", () => {
     assert.ok(mount.speed > 0, `${mount.slug} needs a speed`);
     assert.ok(mount.size, `${mount.slug} needs a size`);
   }
+});
+
+test("every mount is its SRD 5.1 stat block: the mule and the elephant are there, and each speed, size and load is the block's", () => {
+  // Carrying capacity: Strength x 15, doubled for a Large creature and
+  // quadrupled for a Huge one; Beast of Burden counts the mule as Large.
+  const factor = { Medium: 1, Large: 2, Huge: 4 };
+  for (const slug of ["mule", "elephant"]) {
+    assert.ok(mountProfile(slug), `no ${slug}`);
+  }
+  for (const mount of MOUNTS) {
+    const block = SRD_CREATURES.find((creature) => creature.name.toLowerCase() === mount.name.toLowerCase());
+    assert.ok(block, `${mount.name} has no SRD stat block`);
+    assert.equal(mount.size, block.size.toLowerCase(), mount.name);
+    // A flying mount is ridden in the air (the griffon's 80 feet).
+    assert.equal(mount.speed, block.speeds.fly ?? block.speeds.walk, mount.name);
+    const burden = block.traits.some((trait) => /^Beast of Burden:/.test(trait));
+    assert.equal(mount.carry, block.abilities.str * 15 * (burden ? factor.Large : factor[block.size]), mount.name);
+  }
+  assert.deepEqual([mountProfile("mule").carry, mountProfile("elephant").carry], [420, 1320]);
 });
 
 test("PHB p.198: a mount must be one size larger than its rider", () => {

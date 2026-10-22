@@ -1,42 +1,102 @@
-// The shapes a familiar can take (Find Familiar, SRD 5.1), and the four
-// Pact of the Chain adds. Pure data, database-free, so the DM console's
-// cast_buff picker (src/lib/dm/catalog-combat.ts) can offer the same forms
-// summon_pet and cast_buff accept (src/lib/dm/pet-tools.ts buildPet).
+// The shapes a familiar can take (Find Familiar, SRD 5.1) and the four
+// Pact of the Chain adds, each with its form's stat block from the SRD
+// creature table (src/lib/srd/srd-creatures.ts). summon_pet and cast_buff
+// accept these forms (src/lib/dm/pet-tools.ts buildPet); the DM console's
+// picker in the browser reads their names alone (srd-creature-names.json).
 
+import { findNamed, namesHolding } from "@/lib/language/text-logic";
 import type { SheetPet } from "@/lib/schemas/sheet";
+import { CHAIN_FORM_NAMES, FAMILIAR_FORM_NAMES, SRD_CREATURES, senseWords, traitName, type SrdCreature } from "@/lib/srd/srd-creatures";
 
-// The classic familiar shapes, small enough to author inline. All are
-// speed/senses flavor with 1 HP; a familiar cannot attack (Pact of the
-// Chain lifts that with its special forms).
-export type FamiliarForm = Pick<SheetPet, "form" | "hp" | "maxHp" | "ac" | "speed" | "notes"> & {
-  attacks?: SheetPet["attacks"];
+export type FamiliarForm = Pick<SheetPet, "form" | "hp" | "maxHp" | "ac" | "speed" | "notes" | "attacks"> & {
+  // The other names the spell gives the form ("toad" for the frog).
+  aliases: string[];
   chainOnly?: boolean;
 };
 
+// The form's movement, senses and traits by name, short enough for the pet
+// record's notes with the familiar's own rules after them.
+function familiarNotes(creature: SrdCreature): string {
+  const modes = (["fly", "swim", "climb", "burrow"] as const)
+    .filter((mode) => creature.speeds[mode])
+    .map((mode) => `${mode} ${creature.speeds[mode]} ft.`);
+  const parts = [modes.join(", "), senseWords(creature.senses), creature.immune ? `immune to ${creature.immune}` : ""].filter(Boolean);
+  const names = creature.traits.map(traitName);
+  let notes = [...parts, names.join(", ")].filter(Boolean).join("; ");
+  while (notes.length > 150 && names.length) {
+    names.pop();
+    notes = [...parts, names.join(", ")].filter(Boolean).join("; ");
+  }
+  return notes ? `${notes.charAt(0).toUpperCase()}${notes.slice(1)}.` : "";
+}
+
+function familiarForm(creature: SrdCreature, aliases: string[], chainOnly: boolean): FamiliarForm {
+  return {
+    form: creature.name,
+    hp: creature.hp,
+    maxHp: creature.hp,
+    ac: creature.ac,
+    speed: creature.speeds.walk,
+    notes: familiarNotes(creature),
+    // A familiar cannot attack (Find Familiar); Pact of the Chain's forms
+    // fight with their stat blocks' attacks.
+    attacks: chainOnly ? creature.attacks.slice(0, 3).map((attack) => ({ ...attack })) : [],
+    aliases,
+    ...(chainOnly ? { chainOnly: true } : {}),
+  };
+}
+
+const creatureNamed = (name: string): SrdCreature => {
+  const creature = findNamed(SRD_CREATURES, name, (entry) => [entry.name]);
+  if (!creature) {
+    throw new Error(`The SRD creature table has no ${name} for Find Familiar.`);
+  }
+  return creature;
+};
+
 export const FAMILIAR_FORMS: FamiliarForm[] = [
-  { form: "Owl", hp: 1, maxHp: 1, ac: 11, speed: 5, notes: "60 ft fly; Flyby (no opportunity attacks when it flies out of reach); superb night vision." },
-  { form: "Raven", hp: 1, maxHp: 1, ac: 12, speed: 10, notes: "50 ft fly; Mimicry (imitates simple sounds)." },
-  { form: "Cat", hp: 2, maxHp: 2, ac: 12, speed: 40, notes: "30 ft climb; Keen Smell." },
-  { form: "Bat", hp: 1, maxHp: 1, ac: 12, speed: 5, notes: "30 ft fly; blindsight 60 ft (echolocation)." },
-  { form: "Rat", hp: 1, maxHp: 1, ac: 10, speed: 20, notes: "Keen Smell." },
-  { form: "Spider", hp: 1, maxHp: 1, ac: 12, speed: 20, notes: "20 ft climb; Spider Climb; Web Sense." },
-  { form: "Weasel", hp: 1, maxHp: 1, ac: 13, speed: 30, notes: "Keen Hearing and Smell." },
-  { form: "Hawk", hp: 1, maxHp: 1, ac: 13, speed: 10, notes: "60 ft fly; Keen Sight." },
-  { form: "Frog", hp: 1, maxHp: 1, ac: 11, speed: 20, notes: "20 ft swim; standing leap." },
-  { form: "Snake", hp: 2, maxHp: 2, ac: 13, speed: 30, notes: "30 ft swim; blindsight 10 ft." },
-  // Pact of the Chain special forms: real combatants with an attack.
-  { form: "Imp", hp: 10, maxHp: 10, ac: 13, speed: 20, chainOnly: true, notes: "40 ft fly; invisibility at will; devil's sight.", attacks: [{ name: "Sting", toHit: 5, damage: "1d4+3+3d6", type: "piercing (poison rides the sting)" }] },
-  { form: "Quasit", hp: 7, maxHp: 7, ac: 13, speed: 40, chainOnly: true, notes: "Invisibility and Scare at will; shapechanger.", attacks: [{ name: "Claws", toHit: 4, damage: "1d4+3", type: "slashing plus poison" }] },
-  { form: "Pseudodragon", hp: 7, maxHp: 7, ac: 13, speed: 15, chainOnly: true, notes: "60 ft fly; blindsight 10 ft; Sting (poison, save or sleep).", attacks: [{ name: "Bite", toHit: 4, damage: "1d4+2", type: "piercing" }, { name: "Sting", toHit: 4, damage: "1d4+2", type: "piercing plus poison save" }] },
-  { form: "Sprite", hp: 2, maxHp: 2, ac: 15, speed: 10, chainOnly: true, notes: "40 ft fly; Invisibility; Shortbow (poison, save or sleep).", attacks: [{ name: "Longsword", toHit: 2, damage: "1", type: "slashing" }, { name: "Shortbow", toHit: 6, damage: "1", type: "piercing plus sleep-poison save" }] },
+  ...FAMILIAR_FORM_NAMES.map((entry) => familiarForm(creatureNamed(entry.name), entry.aliases ?? [], false)),
+  ...CHAIN_FORM_NAMES.map((name) => familiarForm(creatureNamed(name), [], true)),
 ];
 
-// Every form's name, the Pact of the Chain forms included.
+// The form a caller names, by its whole name or another the spell gives it.
+export function findFamiliarForm(term: string): FamiliarForm | null {
+  return findNamed(FAMILIAR_FORMS, term, (entry) => [entry.form, ...entry.aliases]);
+}
+
+// The forms whose name holds a word a refused name was, for the refusal.
+export function familiarFormsHolding(term: string): string[] {
+  return namesHolding(FAMILIAR_FORMS, term, (entry) => [entry.form, ...entry.aliases]).map((entry) => entry.form);
+}
+
 // The forms a caster can be offered: Pact of the Chain's four with it.
 export function familiarOffer(chain: boolean): string {
   return FAMILIAR_FORMS.filter((entry) => chain || !entry.chainOnly).map((entry) => entry.form.toLowerCase()).join(", ");
 }
 
+// A pet as the table now builds it: Pact of the Chain's forms stored before
+// the creature table carry the attacks this server once invented (the imp's
+// sting as one "1d4+3+3d6" roll, its poison no save), so a familiar whose
+// form the table knows fights with the table's attacks, and one that cannot
+// attack keeps none. Read on every load (src/lib/db/sheets.ts), so a sheet
+// saved before the fix is right the first time it is read.
+export function repairedPets(pets: SheetPet[]): SheetPet[] {
+  let changed = false;
+  const out = pets.map((pet) => {
+    if (pet.kind !== "familiar") {
+      return pet;
+    }
+    const form = findFamiliarForm(pet.form);
+    if (!form || JSON.stringify(pet.attacks ?? []) === JSON.stringify(form.attacks)) {
+      return pet;
+    }
+    changed = true;
+    return { ...pet, attacks: form.attacks.map((attack) => ({ ...attack })) };
+  });
+  return changed ? out : pets;
+}
+
+// Every form's name, the Pact of the Chain forms included.
 export function familiarFormNames(): string[] {
   return FAMILIAR_FORMS.map((entry) => entry.form);
 }

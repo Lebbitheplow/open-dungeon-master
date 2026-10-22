@@ -325,8 +325,10 @@ await test("out of a fight: a missing ritual name and a missing form are asked f
   expect(asked, "retry", /needs the beast being assumed in form; at druid level 2 Fern can take: .*Wolf \(CR 1\/4\)/);
   assert.doesNotMatch(asked.error, /Brown Bear|Giant Eagle/, "a form above the druid's caps was offered");
   expect(await ai(world, "use_resource", { characterId: druid.id, resource: "Wild Shape", form: "brown bear" }), "retry", /CR 1\/4 or lower: .*Wolf \(CR 1\/4\).*Offer a form within the limit/);
-  // A beast of its own the table lacks asks for its stat block; it never becomes the Elk inside its name.
-  expect(await ai(world, "use_resource", { characterId: druid.id, resource: "Wild Shape", form: "giant elk" }), "retry", /"giant elk" is not in the beast-form table/);
+  // A beast of its own the table lacks asks for its stat block; it never becomes the Hamster inside its name.
+  expect(await ai(world, "use_resource", { characterId: druid.id, resource: "Wild Shape", form: "giant hamster" }), "retry", /"giant hamster" is not in the beast-form table/);
+  // A giant elk is a form of its own (CR 2), never the Elk inside its name.
+  expect(await ai(world, "use_resource", { characterId: druid.id, resource: "Wild Shape", form: "giant elk" }), "retry", /Giant Elk is CR 2; at level 2 Fern can Wild Shape into beasts of CR 1\/4 or lower/);
   // A fight-only tool with no fight.
   expect(await ai(world, "aoe_damage", { saveAbility: "dex", dc: 12, damage: "2d6", characterIds: [kara.id] }), "retry", /No active encounter/);
   // The DM's own bookkeeping with nothing to act on.

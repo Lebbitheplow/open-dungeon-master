@@ -134,7 +134,7 @@ export const castAtEnemyTool: ToolDef = {
         },
         variant: {
           type: "string",
-          description: "Polymorph and True Polymorph only: the beast the enemy becomes ('brown bear', 'wolf', 'giant spider').",
+          description: "Polymorph and True Polymorph only: the form the enemy becomes, a beast for Polymorph ('brown bear', 'giant spider'), any creature for True Polymorph ('ogre').",
         },
         reason: { type: "string", description: "Short in-fiction cause." },
         ...ZONE_ARGS,
@@ -177,12 +177,12 @@ export const castBuffTool: ToolDef = {
         targetEnemyId: {
           type: "string",
           description:
-            "Hunter's Mark and Hex: the marked creature (the extra die rides only against it). Dispel Magic: the enemy whose spells end. Polymorph and True Polymorph: the enemy to turn into the beast in variant. Any other spell refuses it. Exact enemyId from GAME STATE.",
+            "Hunter's Mark and Hex: the marked creature (the extra die rides only against it). Dispel Magic: the enemy whose spells end. Polymorph and True Polymorph: the enemy to turn into the form in variant. Any other spell refuses it. Exact enemyId from GAME STATE.",
         },
         variant: {
           type: "string",
           description:
-            "For spells with a choice: Enlarge/Reduce, Protection from Energy's damage type, Enhance Ability's effect, Fire Shield's warm or chill, Polymorph's beast, a summoning spell's creature (Conjure Animals 'wolf', Animate Dead 'skeleton' or 'reassert control', Giant Insect 'spider', Find Steed 'warhorse', Animate Objects 'tiny').",
+            "For spells with a choice: Enlarge/Reduce, Protection from Energy's damage type, Enhance Ability's effect, Fire Shield's warm or chill, Polymorph's or Animal Shapes' beast, True Polymorph's or Shapechange's creature, a summoning spell's creature (Conjure Animals 'wolf', Animate Dead 'skeleton' or 'reassert control', Giant Insect 'spider', Find Steed 'warhorse' or 'fey warhorse', Animate Objects 'tiny').",
         },
         count: {
           type: "integer",

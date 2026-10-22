@@ -43,6 +43,7 @@ import { heldHelp } from "@/lib/dm/help-logic";
 import { authoredAttackSituation } from "@/lib/dm/authored-hooks";
 import { hasFeralSenses, seenTargetConditions } from "@/lib/dm/attack-features";
 import { textKey } from "@/lib/language/text-logic";
+import { sheetCreatureType } from "@/lib/dm/summon-rules";
 
 // An unspent Bardic Inspiration die: the size rides in the condition name,
 // "bardic inspiration (d8)", as use_resource writes it.
@@ -128,6 +129,9 @@ export function attackSituation(input: {
     melee: !atRange,
     adjacent: geometry.withinFiveFeet,
     requested: input.requested ?? "none",
+    // What the attacker is, for a ward against some kinds (Protection from
+    // Evil and Good on the target turns a fiend steed's hoof aside).
+    attackerType: sheetCreatureType(sheet),
   });
   // Light on a mapped fight: who can see whom (src/lib/dm/attack-light.ts).
   const sight = attackSight({

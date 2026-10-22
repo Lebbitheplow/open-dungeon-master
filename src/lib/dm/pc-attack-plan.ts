@@ -189,6 +189,11 @@ export function planPcAttack(input: {
   if ("error" in built) {
     return { refused: built };
   }
+  // Hooves and stomps that strike "one prone creature" (an elk's, an
+  // elephant's): a standing target is out of their reach.
+  if (built.profile.proneTargetsOnly && !enemy.conditions.includes("prone")) {
+    return { refused: { error: `${built.profile.weapon} strikes only a prone creature, and ${enemy.displayName} is not prone. Nothing was rolled.`, refused: "rules" } };
+  }
   const { riders, kind, grantedBonusAction } = built;
 
   // An attack-roll spell is a cast: the guard's dry run (src/lib/dm/pc-attack-spell.ts).

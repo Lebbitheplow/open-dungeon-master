@@ -9,16 +9,23 @@ import { d20Expression, rollExpression } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { proficiencyBonus } from "@/lib/srd";
 import { beastFormsHolding, findBeastForm } from "@/lib/srd/beast-forms";
-import { findNamed, namesHolding, textKey } from "@/lib/language/text-logic";
+import { textKey } from "@/lib/language/text-logic";
 import { isNamed } from "@/lib/srd/feature-names";
-import { applyEnemyDamage, publishEncounter, resolveEnemyRef } from "@/lib/dm/enemy-damage";
+import { publishEncounter, resolveEnemyRef } from "@/lib/dm/enemy-damage";
 import { activeAuthored } from "@/lib/srd/authored-effects";
 import { enemyAcWithEffects } from "@/lib/dm/ac-effects";
 import { petAttackCost } from "@/lib/dm/pet-attack-cost";
 import { resolveSheetRef, unknownSheetRef } from "@/lib/dm/rolls";
 import type { CharacterSheet, SheetPet } from "@/lib/schemas/sheet";
 import { allSpellNames } from "@/lib/srd/spell-lists";
-import { FAMILIAR_FORMS, familiarOffer } from "@/lib/srd/familiar-forms";
+import { familiarFormsHolding, familiarOffer, findFamiliarForm } from "@/lib/srd/familiar-forms";
+import { attackDamage, attackSummary } from "@/lib/srd/creature-attacks";
+import { traitLine } from "@/lib/srd/srd-creatures";
+import { sizeRank } from "@/lib/bestiary/statblock";
+import { critDamageExpression } from "@/lib/dm/encounter-logic";
+import { naturalAttackProfile, pickNaturalAttack } from "@/lib/dm/natural-attack";
+import { landNaturalOnHit } from "@/lib/dm/natural-onhit";
+import { landBlow } from "@/lib/dm/pc-attack-damage";
 import { holdingHint, noneNamed, toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { subclassNamed } from "@/lib/srd/subclass-name";
 
@@ -46,7 +53,7 @@ export const petTools: ToolDef[] = [
     function: {
       name: "summon_pet",
       description:
-        "Summon or bond the creature a feature grants a character: Find Familiar (kind=familiar, form=owl/cat/raven/bat/rat/spider/weasel/hawk/frog/snake, or imp/quasit/pseudodragon/sprite with Pact of the Chain), a Beast Master ranger's companion (kind=beast_companion, any beast of CR 1/4 or lower), a Drakewarden's drake (kind=drake), or a story-granted pet (kind=other, with the stats). The server validates the feature, loads the stat block, and attaches the pet to their sheet. Call it BEFORE narrating the summon.",
+        "Summon or bond the creature a feature grants a character: Find Familiar (kind=familiar, form=bat/cat/crab/frog/hawk/lizard/octopus/owl/poisonous snake/quipper/rat/raven/sea horse/spider/weasel, or imp/quasit/pseudodragon/sprite with Pact of the Chain), a Beast Master ranger's companion (kind=beast_companion, a Medium or smaller beast of CR 1/4 or lower), a Drakewarden's drake (kind=drake), or a story-granted pet (kind=other, with the stats). The server validates the feature, loads the stat block, and attaches the pet to their sheet. Call it BEFORE narrating the summon.",
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -216,12 +223,12 @@ export function buildPet(
         refused: "rules",
       };
     }
-    const form = findNamed(FAMILIAR_FORMS, args.form, (entry) => [entry.form]);
+    const form = findFamiliarForm(args.form);
     if (!form) {
       const offer = familiarOffer(hasPactOfTheChain(sheet));
       return {
         error: args.form.trim()
-          ? `Unknown familiar form "${args.form.trim()}". The forms there are: ${offer}.${holdingHint(args.form, namesHolding(FAMILIAR_FORMS, args.form, (entry) => [entry.form]).map((entry) => entry.form))} Ask the player which, unless they named one.`
+          ? `Unknown familiar form "${args.form.trim()}". The forms there are: ${offer}.${holdingHint(args.form, familiarFormsHolding(args.form))} Ask the player which, unless they named one.`
           : `A familiar needs its form: ${offer}. Ask the player which, unless they named one.`,
         retry: true,
       };
@@ -240,7 +247,7 @@ export function buildPet(
       maxHp: form.maxHp,
       ac: form.ac,
       speed: form.speed,
-      attacks: form.attacks ?? [],
+      attacks: form.attacks,
       notes: `${form.notes} A familiar acts on its own but cannot attack${form.chainOnly ? "" : " (Pact of the Chain forms can)"}; the owner can see through its senses as an action.`,
     };
   }
@@ -251,10 +258,13 @@ export function buildPet(
         refused: "rules",
       };
     }
+    // PHB Beast Master: a beast no larger than Medium, of challenge rating
+    // 1/4 or lower.
     const beast = findBeastForm(args.form);
-    if (!beast || beast.cr > 0.25) {
+    const fits = (entry: { cr: number; size: string }) => entry.cr <= 0.25 && sizeRank(entry.size) <= sizeRank("Medium");
+    if (!beast || !fits(beast)) {
       return {
-        error: `A ranger's companion must be a beast of CR 1/4 or lower (wolf, panther, boar, elk...).${beast ? "" : holdingHint(args.form, beastFormsHolding(args.form).filter((entry) => entry.cr <= 0.25).map((entry) => entry.name))}`,
+        error: `A ranger's companion must be a Medium or smaller beast of CR 1/4 or lower (wolf, panther, boar, mastiff...)${beast ? `; a ${beast.name} is ${beast.size}, CR ${beast.cr}` : ""}.${beast ? "" : holdingHint(args.form, beastFormsHolding(args.form).filter(fits).map((entry) => entry.name))}`,
         retry: true,
       };
     }
@@ -268,13 +278,14 @@ export function buildPet(
       maxHp: Math.max(beast.hp, level * 4),
       ac: beast.ac + pb,
       speed: beast.speed,
-      attacks: beast.attacks.map((attack) => ({
-        name: attack.name,
+      attacks: beast.attacks.slice(0, 3).map((attack) => ({
+        ...attack,
         toHit: attack.toHit + pb,
         damage: `${attack.damage}+${pb}`,
-        type: attack.type,
       })),
-      notes: `${beast.traits ?? ""} Commanding an attack costs the ranger's action; it otherwise defends itself.`.trim(),
+      // The pet record keeps 300 characters of notes: the beast's traits as
+      // fit, then the command rule.
+      notes: `${traitLine(beast.traitLines, 200)} Commanding an attack costs the ranger's action; it otherwise defends itself.`.trim(),
     };
   }
   if (args.kind === "drake") {
@@ -345,9 +356,7 @@ export function handleSummonPet(
     pet: `${built.name} (${built.form}): ${built.hp} HP, AC ${built.ac}, speed ${built.speed} ft`,
     ...(built.attacks.length
       ? {
-          attacks: built.attacks
-            .map((attack) => `${attack.name} +${attack.toHit} (${attack.damage} ${attack.type})`)
-            .join(", "),
+          attacks: built.attacks.map(attackSummary).join(", "),
         }
       : { attacks: "none: this creature cannot attack" }),
     ...(built.notes ? { notes: built.notes } : {}),
@@ -399,14 +408,15 @@ export function handlePetAttack(
   if ("error" in charge) {
     return toolError(charge);
   }
-  const attack = args.attack
-    ? pet.attacks.find((entry) => textKey(entry.name) === textKey(args.attack ?? ""))
-    : pet.attacks.length === 1 ? pet.attacks[0] : undefined;
+  const attack = pickNaturalAttack(pet.attacks, args.attack);
   if (!attack) {
     const names = pet.attacks.map((entry) => entry.name);
     return args.attack
       ? noneNamed(`${pet.name} has no attack called`, args.attack, names)
       : { error: `${pet.name} has several attacks; name one: ${names.join(", ")}.`, retry: true };
+  }
+  if (attack.proneTargetsOnly && !enemy.conditions.includes("prone")) {
+    return { error: `${pet.name}'s ${attack.name} strikes only a prone creature, and ${enemy.displayName} is not prone. Nothing was spent.`, refused: "rules" };
   }
 
   const hitOutcome = rollExpression(d20Expression(attack.toHit));
@@ -441,7 +451,13 @@ export function handlePetAttack(
       economy,
     };
   }
-  const damageOutcome = rollExpression(crit ? `${attack.damage}+${attack.damage}` : attack.damage);
+  // The hit's dice and any rider dice of another type; a critical doubles
+  // the dice, never the flat bonus (SRD 5.1).
+  const { expression } = attackDamage(attack);
+  const variant = campaign.gameSettings.variantRules;
+  const damageOutcome = rollExpression(
+    crit ? critDamageExpression(expression, 0, { powerfulCritical: variant.powerfulCritical, multiplyNumeric: variant.criticalDamageMods }) : expression,
+  );
   const damageRoll = insertRoll({
     campaignId: campaign.id,
     characterId: sheet.id,
@@ -459,18 +475,36 @@ export function handlePetAttack(
   // Exceptional Training (Beast Master 7): the companion's attacks count as
   // magical against resistance.
   const magical = activeAuthored(sheet, "pet_magical").some(({ effect }) => effect.pets.includes(pet.kind));
-  const applied = applyEnemyDamage(
+  // Each damage type of the blow meets the creature's resistances on its own
+  // (a flying snake's bite: 1 piercing and 3d4 poison).
+  const profile = naturalAttackProfile(attack, { weapon: `${pet.name} ${attack.name}`, note: `${pet.name}'s own attack` });
+  const applied = landBlow({
     campaign,
     turn,
     encounter,
     enemy,
-    damageOutcome.total,
     sheets,
     sheetsById,
-    attack.type,
-    magical ? { magical: true } : undefined,
-  );
+    profile,
+    typedRiders: profile.gearTyped ?? [],
+    damageOutcome,
+    dealt: Math.max(0, damageOutcome.total),
+    crit,
+    critExtraDice: 0,
+    magical,
+  });
   publishEncounter(campaign.id);
+  // What the hit carries besides its damage: an imp's poison, a quasit's.
+  const onHit = attack.onHit && !applied.dead
+    ? landNaturalOnHit(campaign, {
+        turn,
+        attacker: { kind: "pet", sheetId: sheet.id, name: pet.name },
+        holderId: null,
+        attack: `${pet.name}'s ${attack.name}`,
+        enemyId: enemy.id,
+        onHit: attack.onHit,
+      })
+    : [];
   return {
     ok: true,
     attack: `${pet.name}: ${attack.name}`,
@@ -479,6 +513,7 @@ export function handlePetAttack(
     hit: true,
     ...(crit ? { crit: true } : {}),
     ...applied,
+    ...(onHit.length ? { onHit } : {}),
     economy,
   };
 }

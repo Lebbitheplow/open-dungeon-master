@@ -37,6 +37,17 @@ const BEASTS = [
   ["Giant Eagle", 1, 26, 13, true, false],
   ["Giant Octopus", 1, 52, 11, false, true],
   ["Giant Constrictor Snake", 2, 60, 12, false, true],
+  // Forms the table lacked before it held every SRD beast (issue 480).
+  ["Frog", 0, 1, 11, false, true],
+  ["Camel", 1 / 8, 15, 9, false, false],
+  ["Flying Snake", 1 / 8, 5, 14, true, true],
+  ["Giant Badger", 1 / 4, 13, 10, false, false],
+  ["Lion", 1, 26, 12, false, false],
+  ["Giant Elk", 2, 42, 14, false, false],
+  ["Polar Bear", 2, 42, 12, false, true],
+  ["Killer Whale", 3, 90, 12, false, true],
+  ["Elephant", 4, 76, 12, false, false],
+  ["Giant Crocodile", 5, 85, 14, false, true],
   ["Mammoth", 6, 126, 13, false, false],
   ["Giant Ape", 7, 157, 12, false, false],
   ["Tyrannosaurus Rex", 8, 136, 13, false, false],
@@ -195,7 +206,7 @@ await test("a shape needs a beast named, and costs nothing when refused", async 
     await refusedUnchanged(world, druid.id, () => shape(druid.id, form), `form ${JSON.stringify(form)}`);
   }
   // A beast outside the table with no stat block given is refused too.
-  await refusedUnchanged(world, druid.id, () => shape(druid.id, "giant badger"));
+  await refusedUnchanged(world, druid.id, () => shape(druid.id, "giant hamster"));
 });
 
 await test("a druid in beast form casts nothing, and the slot is not spent", async () => {
@@ -218,7 +229,7 @@ await test("A druid's beast form is limited by challenge rating and movement at 
   await refusedUnchanged(world, druid.id, () =>
     shape(druid.id, "ancient red dragon", { formHp: 300, formAc: 22 }),
   );
-  // A real CR 5 beast the table does not list, with its real numbers.
+  // A real CR 5 beast, its numbers sent along as well.
   await refusedUnchanged(world, druid.id, () =>
     shape(druid.id, "giant crocodile", { formHp: 85, formAc: 14 }),
   );
@@ -248,7 +259,7 @@ await test("While shaped the druid has the beast's hit points, so healing receiv
 await test("a beast the table does not list is taken on its stated challenge rating, inside the same caps", async () => {
   const druid = world.addHero({ class: "druid", level: 4, maxHp: 30 });
   // No challenge rating, no form.
-  await refusedUnchanged(world, druid.id, () => shape(druid.id, "badger", { formHp: 3, formAc: 10 }));
+  await refusedUnchanged(world, druid.id, () => shape(druid.id, "hamster", { formHp: 3, formAc: 10 }));
   // A flier before druid 8 and numbers no CR 1/4 beast has are refused.
   await refusedUnchanged(world, druid.id, () =>
     shape(druid.id, "blood hawk", { formHp: 7, formAc: 12, formCr: 0.125, formFlies: true }),
@@ -259,13 +270,13 @@ await test("a beast the table does not list is taken on its stated challenge rat
   await refusedUnchanged(world, druid.id, () =>
     shape(druid.id, "armored thing", { formHp: 20, formAc: 19, formCr: 0.25 }),
   );
-  // A real CR 0 beast with its real numbers.
-  const out = await shape(druid.id, "badger", { formHp: 3, formAc: 10, formCr: 0 });
+  // A CR 0 beast of another book, with its numbers.
+  const out = await shape(druid.id, "hamster", { formHp: 3, formAc: 10, formCr: 0 });
   assert.equal(out.ok, true, out.error);
   const held = world.sheet(druid.id);
   assert.deepEqual(
     [held.wildShape.form, held.wildShape.beastHp, held.wildShape.beastAc],
-    ["badger", 3, 10],
+    ["hamster", 3, 10],
   );
   assert.equal(held.resources.wild_shape.used, 1);
 });

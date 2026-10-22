@@ -7,6 +7,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { ADVENTURE_BEGINS_NOTE, LEAD_NOTE_PREFIX, OPENING_SCENE_CUE, type CampaignMember } from "@/lib/campaign-types";
 import { heldRollUserIds } from "@/lib/dice/held-rolls";
 import { computeSheetDerived, findClass, findSkill, formatModifier, sizeForRace, speedFor, SRD_SKILLS } from "@/lib/srd";
+import { attackSummary } from "@/lib/srd/creature-attacks";
 import { encumbranceFor } from "@/lib/srd/encumbrance";
 import { wearingIsExplicit } from "@/lib/srd/armor";
 import { classFeatureDescription, findCustomClass } from "@/lib/classes";
@@ -607,13 +608,19 @@ export function describeSheet(
           .map(([ability, score]) => `${ability.toUpperCase()} ${score}`)
           .join("/")}.`
       : "";
-    const attacks = shape.attacks?.length
-      ? ` Natural attacks (use pc_attack): ${shape.attacks
-          .map((attack) => `${attack.name} +${attack.toHit} (${attack.damage} ${attack.type})`)
-          .join(", ")}.`
+    // Every attack with its reach, its rider dice and what its hit carries;
+    // a form whose block has none (a frog) says so.
+    const attacks = shape.attacks
+      ? shape.attacks.length
+        ? ` Natural attacks (use pc_attack): ${shape.attacks.map(attackSummary).join(", ")}${(shape.attacksPerTurn ?? 1) > 1 ? ` (${shape.attacksPerTurn} per Attack action)` : ""}.`
+        : " The form has no attack, and their own weapons merged into it."
       : "";
+    // A form that is no beast says what it is, and what it shrugs off
+    // (True Polymorph's fire elemental); the server applies both.
+    const kind = shape.type && shape.type !== "beast" ? ` (${shape.type})` : "";
+    const defenses = [shape.resist ? `resists ${shape.resist}` : "", shape.immune ? `immune to ${shape.immune}` : "", shape.vulnerable ? `vulnerable to ${shape.vulnerable}` : ""].filter(Boolean).join("; ");
     lines.push(
-      `  ${label} a ${shape.form}: ${shape.beastHp}/${shape.beastMaxHp} beast HP, AC ${shape.beastAc}${shape.speed !== undefined ? `, speed ${shape.speed} ft` : ""}.${stats}${attacks} Damage hits the beast pool first and their own hit points above are untouched until the form breaks. They fight with the beast's natural weapons and cannot cast spells${shape.kind === "polymorph" ? " or speak" : ""}.`,
+      `  ${label} a ${shape.form}${kind}: ${shape.beastHp}/${shape.beastMaxHp} beast HP, AC ${shape.beastAc}${shape.speed !== undefined ? `, speed ${shape.speed} ft` : ""}.${stats}${defenses ? ` The form ${defenses}.` : ""}${attacks} Damage hits the beast pool first and their own hit points above are untouched until the form breaks. They fight with the beast's natural weapons and cannot cast spells${shape.kind === "polymorph" ? " or speak" : ""}.`,
     );
   }
   if ((sheet.exhaustion ?? 0) > 0) {

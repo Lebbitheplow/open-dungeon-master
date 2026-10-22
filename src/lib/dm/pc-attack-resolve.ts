@@ -48,6 +48,7 @@ import {
   spendFeatureUse,
 } from "@/lib/dm/attack-onhit";
 import { storeBudget } from "@/lib/dm/turn-budget";
+import { landNaturalOnHit } from "@/lib/dm/natural-onhit";
 import { untilTurnEnd } from "@/lib/dm/turn-end";
 import { rollAgainst } from "@/lib/roll-labels";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -431,6 +432,21 @@ export function hitExtras(plan: AttackPlan, dead: boolean, over: boolean): Recor
   }
   if (over || dead) {
     return out;
+  }
+  // A creature's natural attack: the save, poison, condition or grapple its
+  // stat block's hit carries (src/lib/dm/natural-onhit.ts).
+  if (plan.profile.creatureOnHit) {
+    const lines = landNaturalOnHit(campaign, {
+      turn: plan.turn,
+      attacker: { kind: "sheet", sheetId: sheet.id, name: sheet.name },
+      holderId: sheet.id,
+      attack: plan.profile.weapon,
+      enemyId: enemy.id,
+      onHit: plan.profile.creatureOnHit,
+    });
+    if (lines.length) {
+      out.onHit = lines;
+    }
   }
   if (extras.openHand) {
     out.openHand = openHandOnHit(campaign, sheet.id, enemy.id, extras.openHand.choice, extras.openHand.dc);

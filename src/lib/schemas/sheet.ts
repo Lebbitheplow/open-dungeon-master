@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { homebrewGearSchema } from "@/lib/schemas/homebrew";
 import { ITEM_TAGS } from "@/lib/schemas/item-tags";
-import type { SheetSummon } from "@/lib/schemas/summon";
+import { summonAttackSchema, type SheetSummon } from "@/lib/schemas/summon";
 import { ABILITIES } from "@/lib/schemas/abilities";
 import { GENDERS, storedGender, type Gender } from "@/lib/gender";
 import { conditionMetaSchema, ROUND_CEILING, type ConditionMetaMap } from "@/lib/schemas/condition-meta";
@@ -552,8 +552,10 @@ export type SheetResources = z.infer<typeof resourcesSchema>;
 export const wildShapeSchema = z
   .object({
     form: z.string().trim().min(1).max(60),
-    beastHp: z.number().int().min(0).max(300),
-    beastMaxHp: z.number().int().min(1).max(300),
+    // A True Polymorph or a Shapechange may give an ancient dragon's
+    // hundreds of hit points.
+    beastHp: z.number().int().min(0).max(700),
+    beastMaxHp: z.number().int().min(1).max(700),
     beastAc: z.number().int().min(1).max(30),
     // "wildshape" keeps the character's mental stats; "polymorph" replaces
     // every score the form carries. Missing = "wildshape".
@@ -576,19 +578,24 @@ export const wildShapeSchema = z
       .optional(),
     // The form's walking speed in feet.
     speed: z.number().int().min(0).max(120).optional(),
-    // Natural attacks with statblock numbers; pc_attack uses these while
-    // transformed instead of the sheet's weapons.
-    attacks: z
-      .array(
-        z.object({
-          name: z.string().trim().min(1).max(40),
-          toHit: z.number().int().min(-5).max(20),
-          damage: z.string().trim().min(1).max(30),
-          type: z.string().trim().max(20),
-        }),
-      )
-      .max(4)
-      .optional(),
+    // Natural attacks with statblock numbers, riders and reach included;
+    // pc_attack uses these while transformed instead of the sheet's weapons.
+    // An empty list is a form with no attack at all (a frog), which leaves
+    // the character nothing to attack with.
+    attacks: z.array(summonAttackSchema).max(4).optional(),
+    // The form's Multiattack: attacks one Attack action holds.
+    attacksPerTurn: z.number().int().min(1).max(4).optional(),
+    // What the creature is: its type ("elemental"), challenge rating, the
+    // saving throws its block lists, and the damage and conditions it
+    // shrugs off. Rows stored before these fields lack them and read as a
+    // beast with none.
+    type: z.string().trim().max(30).optional(),
+    cr: z.number().min(0).max(30).optional(),
+    saves: z.array(z.enum(["str", "dex", "con", "int", "wis", "cha"])).max(6).optional(),
+    resist: z.string().trim().max(200).optional(),
+    immune: z.string().trim().max(200).optional(),
+    vulnerable: z.string().trim().max(120).optional(),
+    conditionImmune: z.string().trim().max(200).optional(),
   })
   .nullable();
 export type WildShape = z.infer<typeof wildShapeSchema>;
@@ -607,17 +614,8 @@ export const petSchema = z.object({
   maxHp: z.number().int().min(1).max(300),
   ac: z.number().int().min(1).max(30),
   speed: z.number().int().min(0).max(120),
-  attacks: z
-    .array(
-      z.object({
-        name: z.string().trim().min(1).max(40),
-        toHit: z.number().int().min(-5).max(20),
-        damage: z.string().trim().min(1).max(30),
-        type: z.string().trim().max(20),
-      }),
-    )
-    .max(3)
-    .default([]),
+  // Its natural attacks with their riders (src/lib/srd/creature-attacks.ts).
+  attacks: z.array(summonAttackSchema).max(3).default([]),
   // One line of senses/traits for the DM to narrate.
   notes: z.string().trim().max(300).default(""),
 });
