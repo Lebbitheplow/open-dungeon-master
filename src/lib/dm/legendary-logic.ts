@@ -1,4 +1,5 @@
 import { groupTraits } from "@/lib/bestiary/block-sections";
+import { legendaryCountIn } from "@/lib/dm/ability-entries";
 import type { EnemyStats } from "@/lib/bestiary/statblock";
 import { normalizeAbilityLedgers, type AbilityLedger } from "@/lib/dm/monster-abilities";
 import type { ToolError } from "@/lib/dm/tool-errors";
@@ -156,38 +157,48 @@ export function normalizeLegendaryState(raw: unknown): LegendaryState {
   };
 }
 
-const COST = /\(costs?\s+(\d)\s+actions?\)/i;
-const NAME_SPLIT = /^([^.:(]{2,60}?)(?:\s*\(costs?[^)]*\))?\s*[.:]\s*([\s\S]*)$/i;
+// A cost however the book prints it: "(Costs 2 Actions)", "(Costs 2 Actions;
+// Humanoid Form Only)", "(Costs 2 Actions, Recharge 5-6)", Tome of Beasts'
+// "(2 actions)" and Tome of Beasts 3's bare "(2)".
+const COST = /\((?:[^)]*?\bcosts?\s+(\d)\s+actions?\b[^)]*|(\d)(?:\s+actions?\b[^)]*)?)\)/i;
+const NAME_SPLIT = /^([^.:(]{2,60}?)((?:\s*\([^)]*\))*)\s*[.:]+\s*([\s\S]*)$/i;
 
 // One tagged line ("Legendary action: Wing Attack (Costs 2 Actions). The
-// dragon beats...") as a row with its cost.
+// dragon beats...") as a row with its cost, read from the name's tags.
 export function parseLegendaryLine(text: string): LegendaryAction {
-  const costMatch = COST.exec(text);
-  const cost = costMatch ? Math.max(1, Math.min(3, Number(costMatch[1]))) : 1;
   const split = NAME_SPLIT.exec(text.trim());
+  const costMatch = COST.exec(split ? split[2] : text);
+  const cost = costMatch ? Math.max(1, Math.min(3, Number(costMatch[1] ?? costMatch[2]))) : 1;
   if (split) {
-    return { name: split[1].trim(), cost, text: split[2].trim() };
+    return { name: split[1].trim(), cost, text: split[3].trim() };
   }
   return { name: text.trim().slice(0, 60), cost, text: "" };
 }
 
 // The profile a stat block implies: legendary lines become actions, a
 // "Legendary Resistance (3/Day)" trait becomes the counter, lair lines
-// become lair actions. A block with none of them has no profile.
+// become lair actions. A block with none of them has no profile. A legendary
+// line that only states the count (A5e prints "The dragon can take 3
+// legendary actions" as the first option) gives the count and is no action.
 export function legendaryProfile(stats: Pick<EnemyStats, "traits">): LegendaryProfile | null {
   const groups = groupTraits(stats.traits ?? []);
-  const actions = (groups.find((group) => group.section === "legendary")?.lines ?? []).map(parseLegendaryLine);
+  const legendaryLines = groups.find((group) => group.section === "legendary")?.lines ?? [];
+  const counted = legendaryLines.map((line) => legendaryCountIn(parseLegendaryLine(line).name)).find((count) => count !== null) ?? null;
+  const actions = legendaryLines.map(parseLegendaryLine).filter((action) => legendaryCountIn(action.name) === null);
   const lairActions = groups.find((group) => group.section === "lair")?.lines ?? [];
   let resistances = 0;
-  let actionsPerRound = 3;
+  let actionsPerRound = counted ?? 3;
   for (const line of stats.traits ?? []) {
     const resist = /legendary resistance\s*\((\d)\s*\/\s*day\)/i.exec(line);
     if (resist) {
       resistances = Number(resist[1]);
     }
-    const perRound = /can take (\d) legendary actions/i.exec(line);
-    if (perRound) {
-      actionsPerRound = Number(perRound[1]);
+    // The count statblock.ts writes when the block's differs from three
+    // ("Legendary actions: The creature can take 1 legendary actions a
+    // round."), or a line a person wrote that says it.
+    const perRound = legendaryCountIn(line);
+    if (perRound !== null) {
+      actionsPerRound = perRound;
     }
   }
   if (!actions.length && !resistances && !lairActions.length) {

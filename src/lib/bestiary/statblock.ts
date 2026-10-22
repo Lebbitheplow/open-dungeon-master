@@ -16,13 +16,16 @@ import {
 import { parseAttack } from "@/lib/bestiary/attack-parse";
 import {
   ENGINE_TRAIT_NAMES,
-  parseAbilityText,
+  mergeSpellcasting,
   parseRegeneration,
   parseSpellcasting,
+  spellOfAction,
   type MonsterAbility,
   type MonsterSpellcasting,
   type Regeneration,
 } from "@/lib/dm/monster-abilities";
+import { abilitiesOfEntries, legendaryCountOf } from "@/lib/dm/ability-entries";
+import { REGENERATION_NAME } from "@/lib/dm/regeneration-text";
 
 // Compacts a raw Open5e monster blob into the snapshot an encounter stores
 // per enemy (stat_json). Snapshotting at spawn means a live fight never
@@ -94,6 +97,10 @@ export type EnemyStats = {
   // DC and dice, its recharge), read from the full printed text so the
   // trimmed trait lines never lose them (src/lib/dm/monster-abilities.ts).
   specials?: MonsterAbility[];
+  // Attacks printed only as legendary actions (A5e's ankheg queen's "Acid
+  // Glob"), which a legendary action buys and enemy_attack rolls; never one
+  // of the turn's own swings. Absent on rows written before it.
+  legendaryAttacks?: EnemyAttack[];
   // Spell save DC, attack bonus, slots and the spell list, from a
   // Spellcasting or Innate Spellcasting trait.
   spellcasting?: MonsterSpellcasting;
@@ -362,26 +369,42 @@ export function parseMonster(raw: Record<string, unknown>, crFromRow: number): E
     ...sectionLines(data.legendary_actions, "Legendary action"),
   ];
   // The number of legendary actions, when the block gives other than the
-  // usual three (legendary-logic.ts reads it back).
-  const perRound = /can take (\d) legendary actions/i.exec(asString(data.legendary_desc));
-  if (perRound && Number(perRound[1]) !== 3) {
-    traits.push(`Legendary actions: The creature can take ${perRound[1]} legendary actions a round.`);
+  // usual three (legendary-logic.ts reads it back): from its description,
+  // A5e's first option, or a zmey's heads (src/lib/dm/ability-entries.ts).
+  const legendaryEntries = Array.isArray(data.legendary_actions) ? (data.legendary_actions as RawAction[]) : [];
+  const perRound = legendaryCountOf(asString(data.legendary_desc), legendaryEntries, specials);
+  if (perRound !== null && perRound !== 3) {
+    traits.push(`Legendary actions: The creature can take ${perRound} legendary actions a round.`);
   }
 
   // The numbers of every action and special that has some, from the full
   // text; and the spellcasting a block prints.
+  // An entry of several options is one ability per option, sharing its
+  // limit, and a second save is one of its own (src/lib/dm/ability-entries.ts).
   const specialsWithNumbers = [
-    ...nonAttackActions,
-    ...specials,
-    ...(Array.isArray(data.legendary_actions) ? (data.legendary_actions as RawAction[]) : []),
+    ...abilitiesOfEntries(nonAttackActions),
+    ...abilitiesOfEntries(specials),
+    ...abilitiesOfEntries(legendaryEntries, { legendary: true }),
   ]
-    .map((entry) => parseAbilityText(asString(entry.name), asString(entry.desc)))
     // Legendary Resistance is the pool legendary-logic.ts keeps, not an act.
-    .filter((entry): entry is MonsterAbility => entry !== null && !/^legendary resistance/i.test(entry.name));
-  const castingEntry = specials.find((entry) => /spellcasting/i.test(asString(entry.name)));
-  const spellcasting = castingEntry ? parseSpellcasting(asString(castingEntry.desc)) : null;
-  const regenerating = specials.find((entry) => /^regeneration\b/i.test(asString(entry.name)));
-  const regeneration = regenerating ? parseRegeneration(asString(regenerating.desc)) : null;
+    .filter((entry): entry is MonsterAbility => !/^legendary resistance/i.test(entry.name));
+  const legendaryAttacks = legendaryEntries.map((entry) => parseAttack(entry)).filter((attack): attack is EnemyAttack => attack !== null);
+  // Every Spellcasting entry, wherever the book filed it (Black Flag and
+  // Tome of Beasts 2023 print it as an action), as one; and A5e's spells
+  // printed as actions ("Hold Monster (5th-Level; V, S, Concentration)").
+  const castingParts = [...specials, ...actions]
+    .filter((entry) => /spellcasting/i.test(asString(entry.name)))
+    .map((entry) => parseSpellcasting(asString(entry.desc), asString(entry.name)))
+    .filter((part): part is MonsterSpellcasting => part !== null);
+  const spellActions = [...actions, ...(Array.isArray(data.reactions) ? (data.reactions as RawAction[]) : [])]
+    .map((entry) => spellOfAction(asString(entry.name)))
+    .filter((spell): spell is NonNullable<typeof spell> => spell !== null);
+  const spellcasting = mergeSpellcasting(spellActions.length ? [...castingParts, { slots: {}, spells: spellActions }] : castingParts);
+  const regeneration =
+    specials
+      .filter((entry) => REGENERATION_NAME.test(asString(entry.name)))
+      .map((entry) => parseRegeneration(asString(entry.desc)))
+      .find((entry): entry is Regeneration => entry !== null) ?? null;
 
   const printed = printedBlockOf(data, actions, specials);
 
@@ -430,6 +453,7 @@ export function parseMonster(raw: Record<string, unknown>, crFromRow: number): E
     attacksPerTurn,
     ...(routines ? { routines } : {}),
     ...(specialsWithNumbers.length ? { specials: specialsWithNumbers } : {}),
+    ...(legendaryAttacks.length ? { legendaryAttacks } : {}),
     ...(spellcasting ? { spellcasting } : {}),
     ...(regeneration ? { regeneration } : {}),
     ...(asString(data.size) ? { size: asString(data.size) } : {}),

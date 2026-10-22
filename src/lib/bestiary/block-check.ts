@@ -270,6 +270,36 @@ export function checkSpecials(raw: unknown): Checked<MonsterAbility[]> {
     if (source.magical === true) {
       ability.magical = true;
     }
+    // What a pack block's reading adds (src/lib/dm/save-effect.ts,
+    // ability-entries.ts), kept when a block is borrowed or copied.
+    const words = (value: unknown, max: number) => (typeof value === "string" ? text(value, max) : "");
+    const group = words(source.group, BLOCK_LIMITS.specialName);
+    if (group) {
+      ability.group = group;
+    }
+    const partOf = words(source.partOf, BLOCK_LIMITS.specialName);
+    if (partOf) {
+      ability.partOf = partOf;
+    }
+    if (source.oncePer === "turn" || source.oncePer === "round") {
+      ability.oncePer = source.oncePer;
+    }
+    if (source.rechargeSpecial === true) {
+      ability.rechargeSpecial = true;
+    }
+    if (source.endsOnDamage === true) {
+      ability.endsOnDamage = true;
+    }
+    const also = Array.isArray(source.also) ? source.also.map((name) => words(name, BLOCK_LIMITS.conditionName).toLowerCase()).filter(Boolean).slice(0, 4) : [];
+    if (also.length) {
+      ability.also = also;
+    }
+    const failBy = (source.failBy ?? null) as Raw | null;
+    const margin = failBy ? clamp(failBy.margin, 1, 20) : null;
+    const failCondition = failBy ? words(failBy.condition, BLOCK_LIMITS.conditionName).toLowerCase() : "";
+    if (margin !== null && failCondition) {
+      ability.failBy = { margin, condition: failCondition };
+    }
     out.push(ability);
   }
   return { value: out };
@@ -346,7 +376,14 @@ export function checkRegeneration(raw: unknown): Regeneration | null {
         BLOCK_LIMITS.stoppedBy,
       )
     : [];
-  return { amount, stoppedBy, ...(source.diesOnlyAtTurnStart === true ? { diesOnlyAtTurnStart: true } : {}) };
+  const onlyIf = text(source.onlyIf, 160);
+  return {
+    amount,
+    stoppedBy,
+    ...(source.diesOnlyAtTurnStart === true ? { diesOnlyAtTurnStart: true } : {}),
+    ...(source.whileBloodied === true ? { whileBloodied: true } : {}),
+    ...(onlyIf ? { onlyIf } : {}),
+  };
 }
 
 // ---- the multiattack routine ----

@@ -7,6 +7,7 @@
 
 import { parseAttack } from "@/lib/bestiary/attack-parse";
 import { ENGINE_TRAIT_NAMES, parseAbilityText } from "@/lib/dm/monster-abilities";
+import { legendaryCountIn } from "@/lib/dm/ability-entries";
 import { textKey } from "@/lib/language/text-logic";
 
 type RawAction = { name?: unknown; desc?: unknown; attack_bonus?: unknown; damage_dice?: unknown; damage_bonus?: unknown };
@@ -61,7 +62,13 @@ export function printedBlockOf(data: Record<string, unknown>, actions: RawAction
       .filter((row): row is PrintedAbility => row !== null)
       .slice(0, PRINTED_LIMITS.entries);
   const reactions = Array.isArray(data.reactions) ? (data.reactions as RawAction[]) : [];
-  const legendary = Array.isArray(data.legendary_actions) ? (data.legendary_actions as RawAction[]) : [];
+  // A5e prints the count as the first legendary option ("The dragon can
+  // take 3 legendary actions"): it is the block's legendary description, not
+  // an option (src/lib/dm/ability-entries.ts).
+  const allLegendary = Array.isArray(data.legendary_actions) ? (data.legendary_actions as RawAction[]) : [];
+  const counting = allLegendary.find((raw) => legendaryCountIn(asString(raw.name)) !== null);
+  const legendary = allLegendary.filter((raw) => raw !== counting);
+  const legendaryDesc = asString(data.legendary_desc).trim() || (counting ? `${asString(counting.name).trim()}. ${asString(counting.desc).trim()}` : "");
   const block: PrintedBlock = {
     traits: list(specials, (raw) => ENGINE_TRAIT_NAMES.test(asString(raw.name)) || /^regeneration\b/i.test(asString(raw.name)) || numbers(raw)),
     actions: list(actions, (raw) => parseAttack(raw) !== null || /multiattack/i.test(asString(raw.name)) || numbers(raw)),
@@ -70,7 +77,7 @@ export function printedBlockOf(data: Record<string, unknown>, actions: RawAction
     reactions: list(reactions, (raw) => /^parry\b/i.test(asString(raw.name))),
     // legendary_action offers each line (src/lib/dm/legendary-logic.ts).
     legendary: list(legendary, () => true),
-    ...(asString(data.legendary_desc).trim() ? { legendaryDesc: asString(data.legendary_desc).trim().slice(0, PRINTED_LIMITS.desc) } : {}),
+    ...(legendaryDesc ? { legendaryDesc: legendaryDesc.slice(0, PRINTED_LIMITS.desc) } : {}),
   };
   return block.traits.length || block.actions.length || block.reactions.length || block.legendary.length ? block : null;
 }
