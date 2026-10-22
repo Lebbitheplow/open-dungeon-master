@@ -42,6 +42,7 @@ export default {
     const uploaded = await api.post(`${base}/api/upload`, { data: { dataUrl: pngDataUrl(400, 200), name: "flats.png", type: "image/png" } });
     check(uploaded.ok(), `a 2:1 picture uploaded (${uploaded.status()})`);
     const art = (await uploaded.json()).url;
+    const worldRoute = new RegExp(`/api/campaigns/${ids.quietId}/world(\\?|$)`);
     const before = (await (await api.get(`${campaign}/world`)).json()).doc;
     const mapId = `m_${stamp}`;
     const seeded = await api.patch(`${campaign}/world`, {
@@ -91,7 +92,8 @@ export default {
       // A refused save keeps what was typed.
       const name = `Waystone ${stamp}`;
       let refuse = true;
-      await page.route(`**/api/campaigns/${ids.quietId}/world`, (request) =>
+      // The world route, asked for its lean answer (?lean=1) or not.
+      await page.route(worldRoute, (request) =>
         refuse && request.request().method() === "PATCH" ? request.fulfill({ status: 400, contentType: "application/json", body: JSON.stringify({ error: "Refused for the test." }) }) : request.continue(),
       );
       const nameBox = card.getByLabel("Name", { exact: true });
@@ -105,7 +107,7 @@ export default {
       refuse = false;
       await t.tap(notSaved.getByRole("button", { name: "Try again" }));
       await eventually(async () => (await mapPins()).some((pin) => pin.name === name), { label: "Try again saved the name" });
-      await page.unroute(`**/api/campaigns/${ids.quietId}/world`);
+      await page.unroute(worldRoute);
 
       // A region by numbers.
       await t.tap(card.getByRole("button", { name: "Close" }));
@@ -168,7 +170,7 @@ export default {
         return atlas?.frame?.surface === 2 && atlas.regions.length === 1 && doc.pins.filter((pin) => pin.mapId === mapId).length === 2;
       }, { label: "the map back with its frame, region and pins" });
     } finally {
-      await page.unroute(`**/api/campaigns/${ids.quietId}/world`).catch(() => {});
+      await page.unroute(worldRoute).catch(() => {});
       await api.patch(`${campaign}/world`, { data: { maps: before.maps, pins: before.pins } });
     }
   },
