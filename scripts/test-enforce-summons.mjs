@@ -424,7 +424,7 @@ await test("Each summoned creature's stat block matches the content pack's SRD b
     const data = entry.data;
     assert.deepEqual(
       [form.ac, form.hp, form.cr, form.abilities.str, form.abilities.dex, form.abilities.con, form.abilities.int, form.abilities.wis, form.abilities.cha],
-      [CORRECTIONS[form.name]?.ac ?? stats.ac, stats.maxHp, data.cr, data.strength, data.dexterity, data.constitution, data.intelligence, data.wisdom, data.charisma],
+      [CORRECTIONS[form.name]?.ac ?? stats.ac, CORRECTIONS[form.name]?.hp ?? stats.maxHp, CORRECTIONS[form.name]?.cr ?? data.cr, data.strength, data.dexterity, data.constitution, data.intelligence, data.wisdom, data.charisma],
       form.name,
     );
     compared += 1;

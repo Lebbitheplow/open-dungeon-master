@@ -1,7 +1,8 @@
 // The SRD 5.1 creatures the spells and features that call a creature or
-// become one draw from: every beast (Wild Shape, Polymorph, Conjure
-// Animals), Find Familiar's forms and Pact of the Chain's, and every
-// creature a conjuring or necromancy spell may call. Generated from the
+// become one draw from: every creature of the SRD but the swarms, so every
+// beast (Wild Shape, Polymorph, Conjure Animals), every form True Polymorph
+// and Shapechange may give, Find Familiar's forms and Pact of the Chain's,
+// and every creature a conjuring or necromancy spell may call. Generated from the
 // content pack's SRD rows by scripts/generate-srd-creatures.mjs and
 // committed, so a server with no pack reads the same blocks;
 // scripts/test-srd-creatures.mjs holds each to the SRD 5.1 text.
@@ -15,7 +16,7 @@
 import data from "@/lib/srd/srd-creatures.json";
 import type { CreatureAbility, CreatureAttack } from "@/lib/srd/creature-attacks";
 
-export type CreatureSize = "Tiny" | "Small" | "Medium" | "Large" | "Huge";
+export type CreatureSize = "Tiny" | "Small" | "Medium" | "Large" | "Huge" | "Gargantuan";
 
 export type CreatureSpeeds = { walk: number; fly?: number; swim?: number; climb?: number; burrow?: number };
 
@@ -86,8 +87,13 @@ export function traitLine(traits: string[], max = 400): string {
   return parts.join(" ");
 }
 
-// "Keen Smell" of "Keen Smell: The bear has advantage...".
+// "Keen Smell" of "Keen Smell: The bear has advantage...", and "Reaction:
+// Parry" of "Reaction: Parry. The knight adds...".
 export function traitName(trait: string): string {
+  const section = /^((?:Reaction|Legendary action): [^.]+)\./.exec(trait);
+  if (section) {
+    return section[1];
+  }
   const colon = trait.indexOf(":");
   return colon > 0 ? trait.slice(0, colon) : trait;
 }

@@ -57,8 +57,11 @@ function sentences(text) {
     .filter(Boolean);
 }
 
+// The attack line's head. The SRD text slips now and then ("reach 10 ft.
+// one target" with no comma, "reach 5 ft. and range 20/60 ft.", "ranged
+// 150/600 ft."), and the header reads those too.
 const HEADER =
-  /^(Melee or Ranged|Melee|Ranged) (Weapon|Spell) Attack: ([+-]\d+) to hit(?: \([^)]*\))?, (?:reach (\d+) ft\.(?: or range (\d+)\/(\d+) ft\.)?|range (\d+)\/(\d+) ft\.), ([^.]*?)\. Hit: (.*)$/;
+  /^(Melee or Ranged|Melee|Ranged) (Weapon|Spell) Attack: ([+-]\d+) to hit(?: \([^)]*\))?, (?:reach (\d+) ft\.,?(?: (?:or|and) range (\d+)\/(\d+) ft\.,?)?|ranged? (\d+)\/(\d+) ft\.,?) ([^.]*?)\. Hit: (.*)$/;
 
 const DAMAGE = String.raw`(?:(\d+) \(([^)]+)\)|(\d+)) (\w+) damage`;
 
@@ -71,7 +74,7 @@ export function parseAttack(name, desc) {
     return null;
   }
   const [, kind, , bonus, reach, thrownRange, thrownLong, range, longRange, target, hitText] = header;
-  const attack = { name: plain(name), toHit: Number(bonus) };
+  const attack = { name: plain(name).replace(/\.$/, ""), toHit: Number(bonus) };
   const hit = hitText.trim();
   const base = new RegExp(`^${DAMAGE}`).exec(hit);
   attack.damage = base ? amountOf(base[1] ?? base[3], base[2]) : "0";
@@ -131,19 +134,22 @@ function readOnHit(hit, damageWords) {
 // field, or when the fields hold its rule and the clause itself went to the
 // manual notes for the rest; false when no field holds it.
 function readClause(sentence, onHit, manual) {
-  const save = /^(?:if the target is a creature(?: other than (?:an? )?([a-z ]+?))?, it|the target|it) must (?:make|make on|succeed on) a DC (\d+) (\w+) saving throw(.*)$/i.exec(sentence);
+  const save = /^(?:if the target is (?:a creature(?: other than (?:an? )?([a-z ]+?))?|an? (Tiny|Small|Medium|Large|Huge) or smaller creature), it|the target|it) must (?:make|make on|succeed on) a DC (\d+) (\w+) saving throw(.*)$/i.exec(sentence);
   if (save) {
     const read = {};
-    if (!readSaveOutcome(save[4].trim(), read)) {
+    if (!readSaveOutcome(save[5].trim(), read)) {
       return false;
     }
-    Object.assign(onHit, { save: ABILITY[save[3].toLowerCase()], dc: Number(save[2]) }, read);
+    Object.assign(onHit, { save: ABILITY[save[4].toLowerCase()], dc: Number(save[3]) }, read);
     if (save[1]) {
       onHit.exempt = save[1].split(/ or /).map((word) => word.trim().toLowerCase());
     }
+    if (save[2]) {
+      onHit.maxSize = save[2];
+    }
     return true;
   }
-  const grapple = /^(?:the target is|if the target is a creature, it is|if the target is an? (Tiny|Small|Medium|Large|Huge) or smaller creature, it is) grappled \(escape DC (\d+)\)$/i.exec(sentence);
+  const grapple = /^(?:the (?:target|creature) is|if the target is a creature, it is|if the target is an? (Tiny|Small|Medium|Large|Huge) or smaller creature, it is) grappled \(escape DC (\d+)\)$/i.exec(sentence);
   if (grapple) {
     onHit.condition = "grappled";
     onHit.escapeDc = Number(grapple[2]);
@@ -152,7 +158,7 @@ function readClause(sentence, onHit, manual) {
     }
     return true;
   }
-  const restrained = /^until this grapple ends, the (?:target|creature) is restrained(,.*)?$/i.exec(sentence);
+  const restrained = /^until (?:this|the) grapple ends, the (?:target|creature) is restrained((?:,| and ).*)?$/i.exec(sentence);
   if (restrained && onHit.condition === "grappled") {
     onHit.alsoCondition = "restrained";
     if (restrained[1]) {
@@ -275,16 +281,23 @@ export function attacksPerTurn(desc) {
   return Math.max(1, counts.reduce((sum, count) => sum + count, 0));
 }
 
-// "40 ft., climb 30 ft." or "0 ft., fly 90 ft. (hover)".
+// Speeds in one order, so two readings compare whole.
+function ordered(speeds) {
+  return Object.fromEntries(["walk", "fly", "swim", "climb", "burrow"].filter((mode) => speeds[mode] !== undefined).map((mode) => [mode, speeds[mode]]));
+}
+
+// "40 ft., climb 30 ft." or "0 ft., fly 90 ft. (hover)". A shapechanger's
+// other forms in brackets ("30 ft. (40 ft., climb 30 ft. in bear or hybrid
+// form)") are its true form's speed only.
 export function parseSpeedText(text) {
   const speeds = { walk: 0 };
-  for (const part of plain(text).split(/,\s*/)) {
+  for (const part of plain(text).replace(/\s*\((?!hover)[^)]*\)/gi, "").split(/,\s*/)) {
     const match = /^(?:(fly|swim|climb|burrow) )?(\d+) ft\.?(?: \(hover\))?$/i.exec(part.trim());
     if (match) {
       speeds[match[1] ? match[1].toLowerCase() : "walk"] = Number(match[2]);
     }
   }
-  return speeds;
+  return ordered(speeds);
 }
 
 // The pack row's speed object in the same shape: no hover flag, walking 0
@@ -296,7 +309,14 @@ export function packSpeeds(speed) {
       speeds[mode] = Number(speed[mode]);
     }
   }
-  return speeds;
+  return ordered(speeds);
+}
+
+// The SRD writes the same rule two ways: "nonmagical attacks not made with
+// silvered weapons" and "nonmagical attacks that aren't silvered". One is
+// kept, so a damage line reads the same whichever conversion it came from.
+export function defenseWords(text) {
+  return plain(text).replace(/not made with (silvered|adamantine) weapons/gi, "that aren't $1");
 }
 
 // The special senses a Senses line names, in feet, passive Perception left out.
@@ -308,13 +328,14 @@ export function parseSenses(text) {
   return senses;
 }
 
-// Named paragraphs ("***Keen Smell***. The bear has...") in order, each
-// its own paragraph only: a page's closing lore is no part of its last
-// action.
+// Named paragraphs ("***Keen Smell***. The bear has...", or in bold alone,
+// "**Petrifying Gaze**.") in order, each its own paragraph only: a page's
+// closing lore ("**Gladiators** battle for...") has no stop after its bold
+// words and is no part of its last action.
 function namedParagraphs(md) {
   const out = [];
   for (const paragraph of md.split(/\n\s*\n/)) {
-    const match = /^\*\*\*([^*]+?)\.?\*\*\*\.?\s*([\s\S]*)$/.exec(paragraph.trim());
+    const match = /^\*{2,3}([^*]+?)(?:\.\*{2,3}|\*{2,3}\.)\s*([\s\S]*)$/.exec(paragraph.trim());
     if (match) {
       out.push({ name: plain(match[1]).replace(/\.$/, ""), desc: plain(match[2]) });
     }
@@ -323,11 +344,13 @@ function namedParagraphs(md) {
 }
 
 // One SRD 5.1 rulebook monster page read whole. `variant` names a sidebar
-// whose actions replace the page's own (the diseased giant rat's bite).
-export function parseRulebookPage(source, variant) {
+// whose actions replace the page's own (the diseased giant rat's bite);
+// `from` names the block's own heading on a page that holds more than it
+// (the half-dragon template's sample veteran).
+export function parseRulebookPage(source, { variant, from } = {}) {
   // A quoted sidebar (a variant rule) is no part of the block unless asked
   // for; "**Sense**s" is one of the conversion's slips.
-  const lines = String(source).split("\n");
+  const lines = String(from ? source.slice(source.indexOf(from)) : source).split("\n");
   const md = lines
     .filter((entry) => !entry.startsWith(">"))
     .join("\n")
@@ -336,24 +359,35 @@ export function parseRulebookPage(source, variant) {
     .filter((entry) => entry.startsWith(">"))
     .map((entry) => entry.replace(/^> ?/, ""))
     .join("\n");
+  // A label as a pattern: "Damage Resistance" and "Damage Resistances"
+  // both appear.
   const field = (label) => {
     const match = new RegExp(String.raw`\*\*${label}\*\*\s*([^\n]+)`).exec(md);
     return match ? plain(match[1]) : "";
   };
-  const meta = /^\*([^*]+)\*/m.exec(md);
-  const sizeType = plain(meta?.[1] ?? "").replace(/\s*\([^)]*\)/g, "").split(",")[0];
+  // The size and type line, in italics, or bare where the italics slipped.
+  const meta = /^\*([^*]+)\*/m.exec(md)?.[1] ?? /^((?:Tiny|Small|Medium|Large|Huge|Gargantuan) [^\n]+)$/m.exec(md)?.[1] ?? "";
+  const sizeType = plain(meta).replace(/\s*\([^)]*\)/g, "").split(",")[0];
   const sizeMatch = /^(Tiny|Small|Medium|Large|Huge|Gargantuan) (.*)$/.exec(sizeType.trim());
   const score = String.raw`\s*(\d+) \([+-]?\d+\)\s*\|`;
   const scores = new RegExp(String.raw`\|${score.repeat(6)}`).exec(md);
   const sidebar = variant ? (quoted.split(`**${variant}**`)[1] ?? "") : "";
-  const [traitPart, ...actionParts] = md.split(/^#{1,6}\s*Actions\s*$/m);
-  const actionText = actionParts.join("\n").split(/^#{1,6}\s*(?:Reactions|Legendary Actions)\s*$/m)[0];
-  let actions = namedParagraphs(actionText);
+  const sections = md.split(/^#{1,6}\s*(?:Reactions|Legendary Actions)\s*$/m)[0];
+  const [traitPart, ...actionParts] = sections.split(/^#{1,6}\s*Actions\s*$/m);
+  let traits = namedParagraphs(traitPart.split(/\*\*Challenge\*\*[^\n]*\n/)[1] ?? "");
+  let actions = namedParagraphs(actionParts.join("\n"));
+  // A page whose Actions heading slipped: the actions start at its
+  // Multiattack or its first attack line.
+  const firstAction = actionParts.length ? -1 : traits.findIndex((entry) => entry.name === "Multiattack" || parseAttack(entry.name, entry.desc));
+  if (firstAction >= 0) {
+    actions = traits.slice(firstAction);
+    traits = traits.slice(0, firstAction);
+  }
   if (sidebar) {
     const replaced = namedParagraphs(sidebar);
     actions = actions.map((action) => replaced.find((entry) => entry.name === action.name) ?? action);
   }
-  const saves = field("Saving Throws");
+  const saves = field("Saving Throws?");
   return {
     size: sizeMatch?.[1] ?? "",
     type: (sizeMatch?.[2] ?? "").toLowerCase(),
@@ -364,13 +398,13 @@ export function parseRulebookPage(source, variant) {
       ? { str: Number(scores[1]), dex: Number(scores[2]), con: Number(scores[3]), int: Number(scores[4]), wis: Number(scores[5]), cha: Number(scores[6]) }
       : null,
     saves: saves ? [...saves.matchAll(/\b(Str|Dex|Con|Int|Wis|Cha)\b/g)].map((match) => match[1].toLowerCase()) : [],
-    resist: field("Damage Resistances"),
-    immune: field("Damage Immunities"),
-    vulnerable: field("Damage Vulnerabilities"),
-    conditionImmune: field("Condition Immunities"),
+    resist: defenseWords(field("Damage Resistances?")),
+    immune: defenseWords(field("Damage Immunit(?:y|ies)")),
+    vulnerable: defenseWords(field("Damage Vulnerabilit(?:y|ies)")),
+    conditionImmune: field("Condition Immunit(?:y|ies)"),
     senses: parseSenses(field("Senses")),
     cr: parseCr(/^([\d/]+)/.exec(field("Challenge"))?.[1] ?? "0"),
-    traits: namedParagraphs(traitPart.split(/\*\*Challenge\*\*[^\n]*\n/)[1] ?? ""),
+    traits,
     actions,
   };
 }

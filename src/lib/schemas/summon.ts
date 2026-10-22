@@ -30,7 +30,8 @@ export const creatureOnHitSchema = z.object({
 });
 
 export const summonAttackSchema = z.object({
-  name: z.string().trim().min(1).max(40),
+  // "Hand Crossbow (Humanoid or Hybrid Form Only)" is the longest the SRD gives.
+  name: z.string().trim().min(1).max(60),
   toHit: z.number().int().min(-5).max(30),
   // A dice expression the dice engine accepts ("2d4+2"): the hit's own type.
   damage: z.string().trim().min(1).max(40),
@@ -43,7 +44,7 @@ export const summonAttackSchema = z.object({
     .optional(),
   // Melee reach in feet (5 when absent), or a ranged attack's normal and long
   // range in feet; a thrown one has both.
-  reach: z.number().int().min(5).max(30).optional(),
+  reach: z.number().int().min(5).max(60).optional(),
   range: z.number().int().min(5).max(600).optional(),
   longRange: z.number().int().min(5).max(1200).optional(),
   thrown: z.boolean().optional(),

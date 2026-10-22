@@ -24,8 +24,8 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3-multiple-ciphers";
-import { CHAIN_FORMS, CORRECTIONS, FAMILIARS, inRoster, RULEBOOK_PAGE, sidebarEntry, TRAITS_FROM } from "./lib/srd-creature-overlay.mjs";
-import { attacksPerTurn, packSpeeds, parseAttack, parseRoutines, parseRulebookPage, parseSenses, plain } from "./lib/srd-creature-text.mjs";
+import { CHAIN_FORMS, CORRECTIONS, FAMILIARS, inRoster, PACK_KEEPS, RULEBOOK_PAGE, sidebarEntry, TRAITS_FROM } from "./lib/srd-creature-overlay.mjs";
+import { attacksPerTurn, defenseWords, packSpeeds, parseAttack, parseRoutines, parseRulebookPage, parseSenses, plain } from "./lib/srd-creature-text.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const contentDb = process.env.CONTENT_DB_PATH || join(root, "data", "content", "open5e.sqlite");
@@ -45,6 +45,10 @@ const LIMITED = /\((?:recharge|\d+\/day)/i;
 const attackName = (name) => name.replace(/\s*\(Bite in Beast Form\)$/i, "");
 
 const line = (entry) => `${plain(entry.name)}: ${plain(entry.desc)}`;
+
+// A reaction or a legendary action, as the bestiary writes one
+// (src/lib/bestiary/statblock.ts): "Reaction: Parry. The knight adds...".
+const sectionLine = (label) => (entry) => `${label}: ${plain(entry.name)}. ${plain(entry.desc)}`;
 
 // The block a pack row gives, before the overlay's corrections.
 function fromPack(row, data) {
@@ -83,14 +87,18 @@ function fromPack(row, data) {
     },
     saves: SAVE_FIELDS.filter((field) => data[`${field}_save`] !== null && data[`${field}_save`] !== undefined).map((field) => field.slice(0, 3)),
     senses: parseSenses(data.senses),
-    resist: plain(data.damage_resistances),
-    immune: plain(data.damage_immunities),
-    vulnerable: plain(data.damage_vulnerabilities),
+    resist: defenseWords(data.damage_resistances),
+    immune: defenseWords(data.damage_immunities),
+    vulnerable: defenseWords(data.damage_vulnerabilities),
     conditionImmune: plain(data.condition_immunities),
     attacks,
     multiattack,
     specials: specials.map(line),
-    actionLines,
+    actionLines: [
+      ...actionLines,
+      ...(data.reactions ?? []).map(sectionLine("Reaction")),
+      ...(data.legendary_actions ?? []).map(sectionLine("Legendary action")),
+    ],
   };
 }
 
@@ -104,6 +112,14 @@ function corrected(block, correction, stale) {
           stale.push(`${block.name}: no attack "${from}" to rename`);
         }
         out.attacks = out.attacks.map((attack) => (attack.name === from ? { ...attack, name: to } : attack));
+      }
+    } else if (field === "attackFields") {
+      for (const [named, fields] of Object.entries(value)) {
+        const found = out.attacks.find((attack) => attack.name === named);
+        if (!found || Object.entries(fields).every(([key, wanted]) => found[key] === wanted)) {
+          stale.push(`${block.name}: attack "${named}" already has ${JSON.stringify(fields)}`);
+        }
+        out.attacks = out.attacks.map((attack) => (attack.name === named ? { ...attack, ...fields } : attack));
       }
     } else if (field === "traitNames") {
       for (const [from, to] of Object.entries(value)) {
@@ -131,13 +147,22 @@ function attackNumbers(attack) {
   return JSON.stringify({ ...rest, name: attackName(rest.name), ...(onHit ? { onHit: rule } : {}) });
 }
 
-// Where the block and the SRD 5.1 page disagree, field by field.
-function differences(block, page) {
+// Where the block and the SRD 5.1 page disagree, field by field. A field
+// the overlay leaves to the pack (PACK_KEEPS) must still disagree, or the
+// keep is stale.
+function differences(block, page, keeps = {}) {
   const found = [];
+  const kept = new Set();
   const same = (field, ours, theirs) => {
-    if (JSON.stringify(ours) !== JSON.stringify(theirs)) {
-      found.push(`${field}: pack ${JSON.stringify(ours)}, SRD ${JSON.stringify(theirs)}`);
+    const key = field.split(" ")[0];
+    if (JSON.stringify(ours) === JSON.stringify(theirs)) {
+      return;
     }
+    if (keeps[key]) {
+      kept.add(key);
+      return;
+    }
+    found.push(`${field}: pack ${JSON.stringify(ours)}, SRD ${JSON.stringify(theirs)}`);
   };
   for (const field of ["size", "type", "cr", "ac", "hp", "speeds", "abilities", "saves", "senses"]) {
     same(field, block[field], page[field]);
@@ -154,6 +179,11 @@ function differences(block, page) {
     block.specials.map((entry) => entry.slice(0, entry.indexOf(":"))),
     page.traits.filter((trait) => !sidebarEntry(trait.name)).map((trait) => trait.name),
   );
+  for (const key of Object.keys(keeps)) {
+    if (!kept.has(key)) {
+      found.push(`${key}: the pack and the SRD text agree now; strike the keep`);
+    }
+  }
   return found;
 }
 
@@ -212,7 +242,7 @@ function collect() {
       problems.push(`${row.name}: no SRD 5.1 rulebook page "${where.title}"`);
       continue;
     }
-    for (const found of differences(block, parseRulebookPage(page.md, where.variant))) {
+    for (const found of differences(block, parseRulebookPage(page.md, where), PACK_KEEPS[row.name])) {
       problems.push(`${row.name}: ${found}`);
     }
     creatures.push(finished(block));
@@ -222,7 +252,7 @@ function collect() {
       problems.push(`${name}: a familiar form with no block`);
     }
   }
-  for (const name of Object.keys(CORRECTIONS)) {
+  for (const name of [...Object.keys(CORRECTIONS), ...Object.keys(PACK_KEEPS)]) {
     if (!creatures.some((creature) => creature.name === name)) {
       stale.push(`${name}: a correction for a creature the table does not hold`);
     }

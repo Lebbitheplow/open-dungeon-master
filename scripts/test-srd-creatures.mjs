@@ -15,7 +15,7 @@ register("./lib/register-alias.mjs", import.meta.url);
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const { attacksPerTurn, packSpeeds, parseAttack, parseRulebookPage, parseSenses, plain } = await import("./lib/srd-creature-text.mjs");
-const { CHAIN_FORMS, CORRECTIONS, FAMILIARS, RULEBOOK_PAGE, sidebarEntry } = await import("./lib/srd-creature-overlay.mjs");
+const { CHAIN_FORMS, CORRECTIONS, FAMILIARS, PACK_KEEPS, RULEBOOK_PAGE, sidebarEntry } = await import("./lib/srd-creature-overlay.mjs");
 const { SRD_CREATURES } = await import("../src/lib/srd/srd-creatures.ts");
 const { SUMMON_FORMS, findSummonForm } = await import("../src/lib/srd/summon-forms.ts");
 const { SUMMON_SPELLS, summonPlan } = await import("../src/lib/srd/summon-spells.ts");
@@ -46,7 +46,7 @@ const numbers = (attack) => {
 const pageOf = (name) => {
   const where = RULEBOOK_PAGE[name] ?? { title: name };
   const page = pages.get(where.title);
-  return page ? parseRulebookPage(page.md, where.variant) : null;
+  return page ? parseRulebookPage(page.md, where) : null;
 };
 
 test("every block is a whole stat block the engines can roll", () => {
@@ -55,15 +55,19 @@ test("every block is a whole stat block the engines can roll", () => {
     assert.ok(!seen.has(creature.name), `duplicate ${creature.name}`);
     seen.add(creature.name);
     assert.ok(creature.hp >= 1 && creature.ac >= 5 && creature.cr >= 0, creature.name);
-    assert.ok(["Tiny", "Small", "Medium", "Large", "Huge"].includes(creature.size), creature.name);
-    // A pet keeps at most three attacks, a summon or a beast form four, in
-    // the schemas every stored sheet is read back through.
-    assert.ok(creature.attacks.length <= 3, `${creature.name} has ${creature.attacks.length} attacks`);
+    assert.ok(["Tiny", "Small", "Medium", "Large", "Huge", "Gargantuan"].includes(creature.size), creature.name);
+    // A summon or a form keeps at most four attacks, a pet (a familiar, or a
+    // companion beast of CR 1/4 or lower) three, in the schemas every stored
+    // sheet is read back through.
+    const pet = FAMILIAR_FORMS.some((form) => form.form === creature.name) || (creature.type === "beast" && creature.cr <= 0.25);
+    assert.ok(creature.attacks.length <= (pet ? 3 : 4), `${creature.name} has ${creature.attacks.length} attacks`);
     for (const attack of creature.attacks) {
       const stored = summonAttackSchema.safeParse(attack);
       assert.ok(stored.success, `${creature.name} ${attack.name}: ${stored.error?.message}`);
       assert.ok(isValidExpression(attack.damage), `${creature.name} ${attack.name}`);
-      assert.ok(attack.type, `${creature.name} ${attack.name} has no damage type`);
+      // A hit that only lays its effect (a roper's tendril grapples, a
+      // guardian naga's spit forces the save) deals no damage of its own.
+      assert.ok(attack.type || (attack.damage === "0" && attack.onHit), `${creature.name} ${attack.name} has no damage type`);
       for (const rider of attack.riders ?? []) {
         assert.ok(isValidExpression(rider.dice), `${creature.name} ${attack.name} rider`);
       }
@@ -110,7 +114,10 @@ test("every block holds the numbers the SRD 5.1 prints, with no content pack", (
         .sort(),
       attacksPerTurn: multiattack ? attacksPerTurn(multiattack.desc) : 1,
     };
-    for (const field of Object.keys(ours)) {
+    // A field the overlay leaves to the pack row, where the SRD text in the
+    // repository slipped (srd-creature-overlay.mjs PACK_KEEPS).
+    const kept = PACK_KEEPS[creature.name] ?? {};
+    for (const field of Object.keys(ours).filter((key) => !kept[key])) {
       if (JSON.stringify(ours[field]) !== JSON.stringify(theirs[field])) {
         problems.push(`${creature.name} ${field}: table ${JSON.stringify(ours[field])}, SRD ${JSON.stringify(theirs[field])}`);
       }
@@ -120,18 +127,17 @@ test("every block holds the numbers the SRD 5.1 prints, with no content pack", (
 });
 
 test("the table holds every creature the SRD 5.1 lets these spells call or become", () => {
-  // Read off the rulebook's pages, not the pack: every beast but the swarms
-  // (and the diseased giant rat, a variant of the giant rat's page), every
-  // fey and elemental of CR 9 or lower, every celestial of CR 5 or lower.
-  const wanted = [...pages.values()]
-    .map((page) => ({ title: page.title, block: parseRulebookPage(page.md) }))
-    .filter(({ block }) =>
-      block.type === "beast" ? true : block.type === "fey" || block.type === "elemental" ? block.cr <= 9 : block.type === "celestial" ? block.cr <= 5 : false,
-    )
-    .map(({ title }) => title);
-  const missing = wanted.filter((name) => !SRD_CREATURES.some((creature) => creature.name === name));
+  // Read off the rulebook's pages, not the pack: every creature but the
+  // swarms, as True Polymorph and Shapechange may give any of them, under
+  // the page the overlay checks it against (the drow is "Elf, Drow").
+  const titles = new Set(SRD_CREATURES.map((creature) => (RULEBOOK_PAGE[creature.name] ?? { title: creature.name }).title));
+  const missing = [...pages.values()]
+    .filter((page) => parseRulebookPage(page.md).type && !/^swarm\b/i.test(page.title))
+    .map((page) => page.title)
+    .filter((title) => !titles.has(title));
   assert.deepEqual(missing, []);
   assert.equal(SRD_CREATURES.filter((creature) => creature.type === "beast").length, 87);
+  assert.ok(SRD_CREATURES.length >= 300, `${SRD_CREATURES.length} creatures`);
   // No creature of another book: Mud and Smoke Mephits are not in SRD 5.1.
   for (const name of ["Mud Mephit", "Smoke Mephit"]) {
     assert.equal(findSummonForm(name), null, name);
@@ -198,8 +204,8 @@ test("with the content pack: the committed table is what the generator writes, a
       [creature.ac, creature.hp, creature.cr, creature.speeds, creature.senses ?? {}, creature.abilities],
       [
         fix.ac ?? data.armor_class,
-        data.hit_points,
-        row.cr,
+        fix.hp ?? data.hit_points,
+        fix.cr ?? row.cr,
         fix.speeds ?? packSpeeds(data.speed),
         fix.senses ?? parseSenses(data.senses),
         { str: data.strength, dex: data.dexterity, con: data.constitution, int: data.intelligence, wis: data.wisdom, cha: data.charisma },
@@ -209,7 +215,8 @@ test("with the content pack: the committed table is what the generator writes, a
     const theirs = (data.actions ?? [])
       .filter((action) => !sidebarEntry(action.name) && action.name !== "Multiattack" && !LIMITED.test(action.name))
       .map((action) => parseAttack(fix.attackNames?.[action.name] ?? action.name, action.desc))
-      .filter(Boolean);
+      .filter(Boolean)
+      .map((attack) => ({ ...attack, ...(fix.attackFields?.[attack.name] ?? {}) }));
     assert.deepEqual(creature.attacks.map(numbers).sort(), theirs.map(numbers).sort(), `${creature.name} attacks`);
   }
 });

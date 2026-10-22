@@ -6,38 +6,18 @@
 // The generator stops on any disagreement this file does not settle, and on
 // a correction the pack no longer needs, so every entry here stays true.
 
-// The undead Animate Dead and Create Undead make, by name (SRD 5.1).
-const MADE_UNDEAD = ["Skeleton", "Zombie", "Ghoul", "Ghast", "Wight", "Mummy"];
-
 // Pact of the Chain's four special forms (SRD 5.1, Eldritch Invocations).
 export const CHAIN_FORMS = ["Imp", "Pseudodragon", "Quasit", "Sprite"];
 
-// The creatures a spell or feature may call or become, read off the spells
-// (SRD 5.1):
-//   - every beast: Wild Shape, Polymorph, True Polymorph, Shapechange and
-//     Animal Shapes take a beast's form, Conjure Animals and Conjure Fey
-//     call one, Find Familiar, Find Steed and Giant Insect name some. A
-//     swarm is "a swarm of Tiny beasts", a crowd and not one beast, so no
-//     spell that names a beast gives one;
-//   - fey: Conjure Woodland Beings (CR 2 or lower) and Conjure Fey (CR 6,
-//     one higher for each slot level above 6th, so 9 at most);
-//   - elementals: Conjure Minor Elementals (CR 2) and Conjure Elemental
-//     (CR 5, one higher for each slot level above 5th: 9 at most);
-//   - celestials: Conjure Celestial (CR 4, 5 from a 9th level slot);
-//   - the undead the two necromancy spells make, and Pact of the Chain's
-//     forms (a fiend, a dragon and a fey among them).
+// Every creature of the SRD 5.1 but the swarms. The spells read their own
+// share of it: Wild Shape, Polymorph and Animal Shapes a beast, True
+// Polymorph any creature, Shapechange any but a construct or an undead, the
+// conjuring spells a kind and a challenge rating, Find Familiar, Find Steed,
+// Giant Insect, Animate Dead and Create Undead the creatures they name. A
+// swarm is "a swarm of Tiny beasts", a crowd and not one creature, so no
+// spell gives one or makes one.
 export function inRoster(row, data) {
-  const type = String(row.type).toLowerCase();
-  if (type === "beast") {
-    return !/swarm/i.test(String(data.subtype ?? ""));
-  }
-  if (type === "fey" || type === "elemental") {
-    return row.cr <= 9;
-  }
-  if (type === "celestial") {
-    return row.cr <= 5;
-  }
-  return MADE_UNDEAD.includes(row.name) || CHAIN_FORMS.includes(row.name);
+  return !/swarm/i.test(String(data.subtype ?? ""));
 }
 
 // Find Familiar's forms (SRD 5.1: "bat, cat, crab, frog (toad), hawk,
@@ -67,6 +47,12 @@ export const FAMILIARS = [
 // page's, and the sidebar whose action replaces the page's own.
 export const RULEBOOK_PAGE = {
   "Giant Rat (Diseased)": { title: "Giant Rat", variant: "Variant: Diseased Giant Rats" },
+  "Animated Armor": { title: "Animated Armor (Animated Object)" },
+  "Flying Sword": { title: "Flying Sword (Animated Object)" },
+  "Rug of Smothering": { title: "Rug of Smothering (Animated Object)" },
+  Drow: { title: "Elf, Drow" },
+  "Deep Gnome (Svirfneblin)": { title: "Gnome, Deep" },
+  "Half-Red Dragon Veteran": { title: "Half-Dragon Template", from: "Half-Red Dragon Veteran" },
 };
 
 // A variant whose row lacks what the SRD gives it: the diseased giant rat
@@ -97,19 +83,66 @@ export const CORRECTIONS = {
     immune: "poison",
     conditionImmune: "exhaustion, poisoned",
   },
-  // The same rule in the row's words; the SRD's are kept.
-  Gargoyle: { resist: "bludgeoning, piercing, and slashing from nonmagical attacks that aren't adamantine" },
-  Xorn: { resist: "piercing and slashing from nonmagical attacks that aren't adamantine" },
-  Imp: { resist: "cold; bludgeoning, piercing, and slashing from nonmagical attacks not made with silvered weapons" },
+  // The same rule in the row's own shorthand; the SRD's words are kept.
+  Imp: { resist: "cold; bludgeoning, piercing, and slashing from nonmagical attacks that aren't silvered" },
   // Claws (Bite in Beast Form); the row says Claw.
   Quasit: { attackNames: { "Claw (Bite in Beast Form)": "Claws (Bite in Beast Form)" } },
   // Turning Defiance; the row says Turn Defiance.
   Ghast: { traitNames: { "Turn Defiance": "Turning Defiance" } },
+  // Speed 40 ft., burrow 30 ft., fly 80 ft.; the row has burrow 40.
+  "Adult Brass Dragon": { speeds: { walk: 40, fly: 80, burrow: 30 } },
+  // Speed 40 ft., burrow 20 ft., fly 80 ft.; the row has burrow 40.
+  "Young Blue Dragon": { speeds: { walk: 40, fly: 80, burrow: 20 } },
+  // Archmage: damage from spells and, from its stoneskin, nonmagical
+  // weapons; the row's "non magical" splits the word the damage rules read.
+  Archmage: { resist: "damage from spells; nonmagical bludgeoning, piercing, and slashing (from stoneskin)" },
+  // Sneak Attack, as the SRD names it; the row says Sneak Attack (1/Turn).
+  Assassin: { traitNames: { "Sneak Attack (1/Turn)": "Sneak Attack" } },
+  // Armor Class 15 (natural armor); the row has 12.
+  Basilisk: { ac: 15 },
+  // Challenge 8 (3,900 XP) and Saving Throws Con +7, Wis +4, Cha +5; the row
+  // has the Monster Manual's 11 and no saves.
+  "Chain Devil": { cr: 8, saves: ["con", "wis", "cha"] },
+  // Hit Points 33 (6d8 + 6); the row has 22.
+  "Cult Fanatic": { hp: 33 },
+  // Claw; the row says Claws.
+  Hezrou: { attackNames: { Claws: "Claw" } },
+  // Hit Points 148 (17d10+55); the row has the Monster Manual's 178.
+  "Horned Devil": { hp: 148 },
+  // Damage Immunities cold, fire, poison; the row drops cold.
+  "Ice Devil": { immune: "cold, fire, poison" },
+  // +17 to hit (Strength 30 and a proficiency bonus of 7); the row has +7.
+  Kraken: { attackFields: { Bite: { toHit: 17 }, Tentacle: { toHit: 17 } } },
+  // Damage Vulnerabilities fire; the row has bludgeoning.
+  "Mummy Lord": { vulnerable: "fire" },
+  // Speed 30 ft.; the row has 25.
+  Priest: { speeds: { walk: 30 } },
+};
+
+// Where the SRD text in the repository is the one that slipped and the
+// pack's row is right: the line contradicts the block's own scores, which
+// the row agrees with. Each names the field the comparison leaves to the
+// row, and why.
+export const PACK_KEEPS = {
+  // Dagger "4 (1d4 + 1)", but its Dexterity is 14 and its +5 to hit counts
+  // the +2; the row has 1d4 + 2.
+  Mage: { attacks: "the dagger's damage counts its Dexterity modifier" },
+  // Harpoon "11 (2d6+3)", but its Strength is 18 and its +6 to hit counts
+  // the +4; the row has 2d6 + 4.
+  Merrow: { attacks: "the harpoon's damage counts its Strength modifier" },
+  // Dagger "5 (1d4 + 2)", but its Dexterity is 16 and its +5 to hit counts
+  // the +3; the row has 1d4 + 3.
+  "Bandit Captain": { attacks: "the dagger's damage counts its Dexterity modifier" },
+  // The text gives the guardian naga the spirit naga's saving throws and the
+  // spirit naga none; the row's saves are each block's own (Intelligence 16
+  // and a proficiency bonus of 4 make the guardian naga's +7).
+  "Guardian Naga": { saves: "the text lists the spirit naga's saves" },
+  "Spirit Naga": { saves: "the text drops the saving throws line" },
 };
 
 // A trait or action the SRD prints beside a block rather than in it: a
 // variant rule, or what a coven of three shares. Neither is the creature a
 // spell calls.
 export function sidebarEntry(name) {
-  return /^variant:|coven/i.test(String(name).trim());
+  return /^variant:|coven|^night hag items$/i.test(String(name).trim());
 }

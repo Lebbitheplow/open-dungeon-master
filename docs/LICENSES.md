@@ -25,8 +25,10 @@ Creative Commons Attribution 4.0 International License.
 ### The creature table
 
 `src/lib/srd/srd-creatures.json` holds the SRD 5.1 stat blocks the shape and
-summoning spells read (every beast, Find Familiar's and Pact of the Chain's
-forms, and the creatures the conjuring and necromancy spells call). It is
+summoning spells read: every creature of the SRD but the swarms, as True
+Polymorph and Shapechange may give any of them, with the beasts Wild Shape
+and Polymorph take, Find Familiar's and Pact of the Chain's forms, and the
+creatures the conjuring and necromancy spells call. It is
 written by `scripts/generate-srd-creatures.mjs` from the content pack's copy
 of the SRD 5.1 monsters (document `wotc-srd`) and checked against the SRD's
 own text in the rulebook below; where the two differ the SRD's text is kept.
