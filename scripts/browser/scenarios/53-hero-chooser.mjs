@@ -68,6 +68,8 @@ export default {
       }),
     );
     check(order.every((at) => at >= 0) && order[0] < order[1] && order[1] < order[2], `Help me build sits between the ready-made heroes and Build new (${order})`);
+    await chooser.locator('[data-chooser-section="help"]').scrollIntoViewIfNeeded();
+    await t.shot("help-me-build-door");
     await t.tap(chooser.locator('[data-chooser-section="help"]'));
     const quiz = page.locator(`${root}[data-quick-quiz]`).locator("visible=true").first();
     await eventually(async () => (await quiz.count()) && /Question 1 of 4/.test(await quiz.innerText()), { timeoutMs: 30_000, label: "the quiz on its first question" });
