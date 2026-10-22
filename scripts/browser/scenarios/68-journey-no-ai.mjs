@@ -255,7 +255,8 @@ export default {
       await eventually(async () => (await params()).get("system") === "bestiary", { timeoutMs: 20_000, label: "the Bestiary" });
       const monsterName = page.getByPlaceholder("Bone Tyrant").locator("visible=true").first();
       await eventually(() => monsterName.isVisible(), { timeoutMs: 20_000, label: "the Bestiary's builder" });
-      await eventually(async () => (await asked()) >= 2, { label: "Create's two asks of the Bestiary" });
+      await eventually(() => pastRetry(), { label: "past Create's retry" });
+      check((await asked()) === 1, `Create asked the Bestiary ${await asked()} times, though the Bestiary answered the first`);
       await monsterName.fill(creatureName);
       await page.getByRole("button", { name: "Start from the baseline" }).click();
       const give = page.locator('[data-testid="give-world-entry"]').locator("visible=true").first();

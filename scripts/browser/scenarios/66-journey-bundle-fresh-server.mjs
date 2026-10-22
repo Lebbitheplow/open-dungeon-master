@@ -224,7 +224,15 @@ async function freshServer(dir, setupCode) {
   } finally {
     delete process.env.ODM_SETUP_CODE;
   }
-  const server = await pending;
+  let server;
+  try {
+    server = await pending;
+  } catch (error) {
+    // The links go before anything removes the folder, so nothing ever
+    // walks into the build.
+    for (const at of links.reverse()) fs.unlinkSync(at);
+    throw error;
+  }
   return {
     ...server,
     dir,
@@ -350,7 +358,14 @@ export default {
 
       // ---- a fresh server ----
       const setupCode = "JRNY-FRSH-SRVR-2026";
-      fresh = await freshServer(path.join(outDir, `fresh-server-${viewport}-${stamp}`), setupCode);
+      // Once, on a busy machine, a cold fresh server said it was ready and
+      // then left its first request unanswered for the harness's 90 s. One
+      // more start, in a folder of its own, tells a slow machine from a
+      // server that cannot start, and says so in the run's output.
+      fresh = await freshServer(path.join(outDir, `fresh-server-${viewport}-${stamp}`), setupCode).catch((error) => {
+        console.log(`      the fresh server did not answer (${error.message}); starting it once more`);
+        return freshServer(path.join(outDir, `fresh-server-${viewport}-${stamp}-again`), setupCode);
+      });
       const freshContext = await newContext(browser, viewport, { app: false });
       fresh.context = freshContext;
       const claimed = await freshContext.request.post(`${fresh.base}/api/auth/register`, { data: { username: "fresh_admin", password: "Fresh-2026-pass", setupCode } });
