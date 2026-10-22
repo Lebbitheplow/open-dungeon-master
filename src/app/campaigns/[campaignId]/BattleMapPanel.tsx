@@ -253,6 +253,15 @@ export function BattleMapPanel({
   // A walk, a long jump, or a walk dragging the creature held, the squares
   // the move still reaches, and the arc of a jump just made (BoardMoveModes.tsx).
   const { moveMode, setMoveMode, gridView, leap, moveBody, landed } = useBoardMoveModes(view);
+  // A tap on a square only aims the walk: the ruler holds the path and its
+  // cost, and a second tap on the same square makes it. A stray click while
+  // the camera is being moved is then not a step taken. The aim belongs to
+  // the board, the square the figure stands on and the move mode, so a
+  // change to any of them simply makes it stale.
+  const [pendingMove, setPendingMove] = useState<{ key: string; x: number; y: number } | null>(null);
+  const mover = view.tokens.find((token) => token.id === view.myTokenId);
+  const pendingKey = `${view.mapId}:${mover?.x},${mover?.y}:${moveMode}`;
+  const livePending = view.reachable.length > 0 && pendingMove?.key === pendingKey ? pendingMove : null;
 
   // DM tools.
   const [tool, setTool] = useState<BoardTool>("handle");
@@ -464,15 +473,18 @@ export function BattleMapPanel({
     // Whoever is being measured: the piece the DM picked up, or the player's
     // own character. Not while a spell's area is being aimed.
     const fromId = held ?? view.myTokenId;
-    if (!hover || !fromId || aimingArea) {
+    // An aimed walk holds the ruler where it was aimed, whatever the pointer
+    // does next; on a phone, with no hover, it is the only ruler there is.
+    const to = livePending ?? hover;
+    if (!to || !fromId || aimingArea) {
       return null;
     }
     // The DM spends no budget, so nothing they measure is ever too far.
     if (held === null && moveMode === "jump" && view.moves) {
-      return jumpRulerFor(view, fromId, hover, view.moves.jumpFeet);
+      return jumpRulerFor(view, fromId, to, view.moves.jumpFeet);
     }
-    return rulerFor(view, fromId, hover, held === null, held === null && moveMode === "drag" ? view.moves?.drag?.factor ?? 1 : 1);
-  }, [hover, held, view, aimingArea, moveMode]);
+    return rulerFor(view, fromId, to, held === null, held === null && moveMode === "drag" ? view.moves?.drag?.factor ?? 1 : 1);
+  }, [hover, livePending, held, view, aimingArea, moveMode]);
 
   // Who may be aimed at while a target is being chosen, nearest first, with
   // the distance the table would count (a diagonal is one square).
@@ -661,6 +673,8 @@ export function BattleMapPanel({
     if (canDirect) {
       void board({ do: "place", tokenId: drag.tokenId, x, y });
     } else {
+      // Carrying the figure there is deliberate: the drop is the move.
+      setPendingMove(null);
       void moveTo(x, y);
     }
   }
@@ -675,6 +689,7 @@ export function BattleMapPanel({
         setTokenGhost(null);
         setTargeting(null);
         setAimHoverId(null);
+        setPendingMove(null);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -811,7 +826,13 @@ export function BattleMapPanel({
       return;
     }
     if (canMove) {
-      void moveTo(x, y);
+      // The first tap aims, the second on the same square walks.
+      if (livePending && livePending.x === x && livePending.y === y) {
+        setPendingMove(null);
+        void moveTo(x, y);
+      } else {
+        setPendingMove({ key: pendingKey, x, y });
+      }
     }
   }
 
@@ -999,6 +1020,9 @@ export function BattleMapPanel({
             }
           }}
           everyTileClickable={everyTileClickable}
+          // A player's walk asks its own second tap (handleTile); the DM's
+          // pieces and an aimed area keep the grid's touch preview.
+          tapPreview={canDirect || areaAim.active}
           overlay={overlay}
           fx={fx}
           onFxPlayed={onFxPlayed}
@@ -1256,6 +1280,7 @@ export function BattleMapPanel({
           drawing,
           targeting: Boolean(targeting),
           canMove,
+          moveAimed: Boolean(livePending),
           scene,
           budgetLeft: view.budgetLeft,
           hasToken: Boolean(view.myTokenId),
