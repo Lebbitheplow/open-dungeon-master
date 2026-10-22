@@ -19,7 +19,7 @@ export default {
       const edit = visible(page, root, /^\s*Edit build\s*$/);
       return (await edit.count()) ? edit.first() : null;
     }, { label: "the Edit build button" }));
-    await page.locator(`${root}input[aria-label="Name"]`).locator("visible=true").first().waitFor({ state: "visible", timeout: 30_000 });
+    await page.locator(`${root}[data-finish-summary]`).locator("visible=true").first().waitFor({ state: "visible", timeout: 30_000 });
 
     const goTo = async (label) => {
       const diamond = page.locator(`${root}button[aria-label$=": ${label}"]`).locator("visible=true").first();

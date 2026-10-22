@@ -41,7 +41,12 @@ export default {
       const edit = visible(page, root, /^\s*Edit build\s*$/);
       return (await edit.count()) ? edit.first() : null;
     }, { label: "the Edit build button" }));
-    const name = page.locator(`${root}input[aria-label="Name"]`).locator("visible=true").first();
+    // The editor opens on its summary (backlog F3); the name row goes to
+    // the first step.
+    const nameRow = page.locator(`${root}section[data-active] [data-summary-edit="identity"]`).locator("visible=true");
+    await eventually(() => nameRow.count(), { timeoutMs: 30_000, label: "the summary's name row" });
+    await t.tap(nameRow.first());
+    const name = page.locator(`${root}section[data-active] input[aria-label="Name"]`).locator("visible=true").first();
     await name.waitFor({ state: "visible", timeout: 30_000 });
     // The stored name, as an earlier viewport may have renamed it.
     const stored = await name.inputValue();

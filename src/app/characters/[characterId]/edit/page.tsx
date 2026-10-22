@@ -165,9 +165,9 @@ function EditCharacterInner({ characterId }: { characterId: string }) {
         </div>
         {nextLevel ? (
           <p className="reveal mt-3 rounded-lg border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-xs text-amber-100">
-            The build opens at level {nextLevel}. Hit points come with the level; anything it lets{" "}
-            {character.name} choose (an ability score improvement, a subclass, new spells) is asked for on its own
-            step, and that step holds Continue until it is picked. Save changes appears once nothing is owed.
+            The build opens at level {nextLevel}, on its summary. Hit points come with the level; anything it lets{" "}
+            {character.name} choose (an ability score improvement, a subclass, new spells) is listed there as still
+            to choose, with a Fix that goes to it. Save changes takes the build once nothing is owed.
           </p>
         ) : null}
         {copyOf ? (
