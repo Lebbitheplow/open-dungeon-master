@@ -289,7 +289,7 @@ export function stunningStrikeSave(
     return `Stunning Strike: ${barred} The ki is spent.`;
   }
   // A stun is what a legendary creature keeps its resistances for.
-  const save = rollEnemySave(campaign.id, fresh, "con", dc, { resist: true });
+  const save = rollEnemySave(campaign.id, fresh, "con", dc, { resist: true, against: "stunned" });
   if (save.success) {
     return `Stunning Strike: ${fresh.displayName} holds (CON save ${save.total ?? "failed outright"} vs DC ${dc}${save.legendaryResistance ? ", Legendary Resistance" : ""}); no stun.`;
   }

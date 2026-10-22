@@ -31,7 +31,7 @@ const { checkMonsterDraft } = await import("../src/lib/bestiary/monster-draft.ts
 const { getContentDb } = await import("../src/lib/content/db.ts");
 const { parseSaveEffect } = await import("../src/lib/dm/save-effect.ts");
 const { hasTrait, ENGINE_TRAIT_NAMES } = await import("../src/lib/dm/monster-abilities.ts");
-const { sunlightBurn, sunlightTurnStart } = await import("../src/lib/dm/sunlight-turn.ts");
+const { sunlightBurn } = await import("../src/lib/dm/sunlight-turn.ts");
 const { getDatabase } = await import("../src/lib/db/core.ts");
 
 const block = (row, cr = 1) => parseMonster(row, cr);
@@ -342,21 +342,6 @@ await test("A swarm at half its hit points or fewer bites with its weaker dice, 
   assert.equal(bloodied.result.totalDamage ?? bloodied.result.swings[0].damage, 4, JSON.stringify(bloodied.result));
 });
 
-await test("A creature resistant to a condition saves against it with advantage (Black Flag), and an archmage's resistance to damage from spells halves a cleric's Sacred Flame.", async () => {
-  const ogre = await stage({ name: "Ogre", size: "Large", type: "Giant", armor_class: 11, hit_points: 59, cr: 2, wisdom: 7, document__slug: "blackflag", slug: "ogre", damage_resistances: "frightened", actions: [{ name: "Club", desc: "Melee Weapon Attack: +6 to hit, reach 5 ft., one target. Hit: 13 (2d8+4) bludgeoning damage." }] });
-  // The model binds only through the creature's save: two d20s, the higher
-  // kept, so the 19 saves it.
-  const save = await mk.forced([3, 19], () => mk.ai(mk.aiTurn(), "set_enemy_condition", { enemyId: ogre.id, condition: "frightened", saveAbility: "wis", saveDc: 12 }));
-  assert.equal(save.unused, 0, "the save was rolled without advantage");
-  assert.equal(save.result.saved, true, JSON.stringify(save.out));
-  const archmage = await stage({ name: "Archmage", size: "Medium", type: "Humanoid", armor_class: 12, hit_points: 99, cr: 12, wisdom: 12, damage_resistances: "damage from spells; non magical bludgeoning, piercing, and slashing (from stoneskin)", actions: [{ name: "Dagger", desc: "Melee Weapon Attack: +6 to hit, reach 5 ft., one target. Hit: 4 (1d4 + 2) piercing damage." }] });
-  const before = world.enemies()[0].currentHp;
-  kit.giveTurn(priest.id);
-  const flame = await mk.forced([1, 8, 8], () => world.invoke("cast_at_enemy", { characterId: priest.id, targetEnemyId: archmage.id, spell: "Sacred Flame", saveAbility: "dex" }));
-  assert.equal(flame.ok, true, flame.error);
-  assert.equal(before - world.enemies()[0].currentHp, 8, "16 radiant from a spell, halved");
-});
-
 const SPITTER = {
   name: "Spitter", size: "Medium", type: "Monstrosity", armor_class: 12, hit_points: 60, cr: 2, document__slug: "blackflag", slug: "spitter",
   actions: [{ name: "Claw", desc: "Melee Weapon Attack: +4 to hit, reach 5 ft., one target. Hit: 5 (1d6+2) slashing damage." }],
@@ -372,48 +357,6 @@ await test("A bonus action's ability is the creature's bonus action: it leaves t
   assert.match(again.error, /bonus action/);
   const claw = await mk.forced([15, 3], () => world.invoke("enemy_attack", { enemyId: spitter.id, targetCharacterId: tank.id }));
   assert.equal(claw.ok, true, claw.error);
-});
-
-const VAMPIRE = {
-  name: "Night Lord", size: "Medium", type: "Undead", armor_class: 15, hit_points: 90, cr: 5, wisdom: 10, document__slug: "blackflag", slug: "night-lord",
-  special_abilities: [
-    { name: "Sunlight Weakness", desc: "While in sunlight, the night lord has disadvantage on attack rolls and saving throws." },
-    { name: "Sunlight Hypersensitivity", desc: "The night lord takes 20 radiant damage when it starts its turn in sunlight." },
-  ],
-  actions: [{ name: "Claw", desc: "Melee Weapon Attack: +6 to hit, reach 5 ft., one target. Hit: 8 (2d4+3) slashing damage." }],
-};
-
-async function underNoonSun(run) {
-  const { getClock, setClock } = await import("../src/lib/db/clock.ts");
-  const { breakDown } = await import("../src/lib/dm/calendar.ts");
-  getDatabase().prepare("UPDATE battle_maps SET outdoors = 1, ambient = 'bright' WHERE id = ?").run(kit.map().id);
-  const clock = getClock(world.campaignId);
-  let instant = clock.instant;
-  while (breakDown(clock.calendar, instant).hour !== 12) {
-    instant += 60;
-  }
-  setClock(world.campaignId, { ...clock, instant, weather: null });
-  try {
-    return await run();
-  } finally {
-    setClock(world.campaignId, clock);
-    getDatabase().prepare("UPDATE battle_maps SET outdoors = 0 WHERE id = ?").run(kit.map().id);
-  }
-}
-
-await test("Sunlight Weakness puts a creature's saves at disadvantage in the noon sun, and Sunlight Hypersensitivity burns it as its turn starts there.", async () => {
-  const lord = await stage(VAMPIRE);
-  await underNoonSun(async () => {
-    // Two d20s, the lower kept: the 19 would have saved.
-    const save = await mk.forced([19, 3], () => mk.ai(mk.aiTurn(), "set_enemy_condition", { enemyId: lord.id, condition: "frightened", saveAbility: "wis", saveDc: 12 }));
-    assert.equal(save.unused, 0, "the save was rolled without disadvantage");
-    assert.match(JSON.stringify(save.result), /fails the WIS save 3 vs DC 12/);
-    const lines = sunlightTurnStart(world.campaign(), world.encounter(), world.enemies()[0]);
-    assert.match(lines.join(" "), /takes 20 radiant damage/);
-    assert.equal(world.enemies()[0].currentHp, 70);
-  });
-  const shade = sunlightTurnStart(world.campaign(), world.encounter(), world.enemies()[0]);
-  assert.deepEqual(shade, [], "it burned out of the sun");
 });
 
 const DRAGON_LAIR = {

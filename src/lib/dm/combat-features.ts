@@ -183,7 +183,7 @@ function intimidatingPresence(campaign: Campaign, stale: CharacterSheet, targetE
   }
   const derived = computeSheetDerived(sheet);
   const dc = 8 + derived.proficiencyBonus + derived.abilityMods.cha;
-  const save = rollEnemySave(campaign.id, enemy, "wis", dc, { resist: true });
+  const save = rollEnemySave(campaign.id, enemy, "wis", dc, { resist: true, against: "frightened" });
   price.commit();
   const rolled = save.autoFailed ? "automatic" : String(save.total);
   if (save.success) {

@@ -80,6 +80,7 @@ function saveAtTurnEnd(campaign: Campaign, enemy: EncounterEnemy, meta: Conditio
   const save = rollEnemySave(campaign.id, enemy, ability, dc, {
     magical: true,
     resist: true,
+    against: held,
     record: { detail: `${enemy.displayName}: ${ability.toUpperCase()} save against ${resolved.name}` },
   });
   const release = () => {

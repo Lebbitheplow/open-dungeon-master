@@ -442,6 +442,7 @@ function resolve(ctx: Ctx, found: Found): ToolResult | ToolError {
       const save = rollEnemySave(ctx.campaign.id, enemy, does.save, dc, {
         magical: true,
         resist: bindsWorthResisting([condition]),
+        against: condition,
         record: { turn: ctx.turn, detail: `${enemy.displayName}: ${does.save.toUpperCase()} save against ${reaction.name}` },
       });
       if (save.success) {
@@ -487,6 +488,7 @@ function resolve(ctx: Ctx, found: Found): ToolResult | ToolError {
         const save = rollEnemySave(ctx.campaign.id, attacker, does.save.ability, dc, {
           magical: true,
           resist: bindsWorthResisting(["charmed"]),
+          against: "charmed",
           record: { turn: ctx.turn, detail: `${attacker.displayName}: ${does.save.ability.toUpperCase()} save against ${reaction.name}` },
         });
         if (save.success) {

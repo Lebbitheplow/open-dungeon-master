@@ -182,7 +182,7 @@ export function poisonOnHit(campaign: Campaign, sheetId: string, enemyId: string
     return "The poison's coat is spent on the blow.";
   }
   const label = coat.name.charAt(0).toUpperCase() + coat.name.slice(1);
-  const save = rollEnemySave(campaign.id, enemy, "con", coat.dc);
+  const save = rollEnemySave(campaign.id, enemy, "con", coat.dc, { against: coat.conditions });
   if (save.success && !(coat.damage && coat.halfOnSave)) {
     return `${label}: ${enemy.displayName} holds (CON save ${save.total} vs DC ${coat.dc}); the coat is spent.`;
   }

@@ -78,7 +78,7 @@ export function quakeShake(campaign: Campaign, map: BattleMap, zone: SpellZone, 
           continue;
         }
         if (!prone(enemy.conditions)) {
-          const save = rollEnemySave(campaign.id, enemy, "dex", dc, { magical: true, record: { turn, detail: `${enemy.displayName}: DEX save against ${zone.spell}` } });
+          const save = rollEnemySave(campaign.id, enemy, "dex", dc, { magical: true, against: "prone", record: { turn, detail: `${enemy.displayName}: DEX save against ${zone.spell}` } });
           if (!save.success && laySpellConditionsOnEnemy(enemy.id, ["prone"], {}).length) {
             lines.push(`${enemy.displayName} is knocked prone by ${zone.spell}.`);
           }

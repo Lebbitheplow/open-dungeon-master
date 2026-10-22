@@ -36,7 +36,7 @@ export function rollEffectSaves(
       if (!enemy) {
         continue;
       }
-      const save = rollEnemySave(campaign.id, enemy, ability, effect.saveDc, { record: { detail: `${enemy.displayName}: ${ability.toUpperCase()} save to end ${effect.name}` } });
+      const save = rollEnemySave(campaign.id, enemy, ability, effect.saveDc, { against: effect.name, record: { detail: `${enemy.displayName}: ${ability.toUpperCase()} save to end ${effect.name}` } });
       who = enemy.displayName;
       success = save.success;
       shown = save.total === null ? "an automatic failure" : String(save.total);

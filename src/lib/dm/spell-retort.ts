@@ -121,6 +121,7 @@ export function spellRetort(
       const save = rollEnemySave(campaign.id, live, "con", dc, {
         magical: true,
         resist: true,
+        against: "blinded",
         record: { turn, detail: `${live.displayName}: CON save against Holy Aura` },
       });
       if (!save.success && !live.conditions.includes("blinded")) {
