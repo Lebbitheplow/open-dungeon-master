@@ -96,4 +96,30 @@ test("story pets take model-supplied stats and require them", () => {
   assert.match(missing.error, /needs hp and ac/);
 });
 
+// Every pet the tables can build is one the sheet's own schema keeps: an
+// imp's sting once carried the type "piercing (poison rides the sting)",
+// past the schema's 20 characters, and a sheet holding it could not be
+// restored by undo.
+const { petSchema } = await import("../src/lib/schemas/sheet.ts");
+const { FAMILIAR_FORMS } = await import("../src/lib/srd/familiar-forms.ts");
+const { BEAST_FORMS } = await import("../src/lib/srd/beast-forms.ts");
+test("every familiar form and every companion beast builds a pet the sheet schema accepts", () => {
+  const warlock = sheet({
+    class: "warlock",
+    spellcasting: { ability: "cha", slots: {}, prepared: [], known: [] },
+    features: [{ name: "Pact of the Chain", source: "choice" }],
+  });
+  const ranger = sheet({ class: "ranger", subclass: "Beast Master", level: 20 });
+  const built = [
+    ...FAMILIAR_FORMS.map((form) => buildPet(warlock, { kind: "familiar", form: form.form })),
+    ...BEAST_FORMS.map((beast) => buildPet(ranger, { kind: "beast_companion", form: beast.name })).filter((pet) => !("error" in pet)),
+  ];
+  assert.ok(built.length > FAMILIAR_FORMS.length + 20, `${built.length} pets built`);
+  for (const pet of built) {
+    assert.ok(!("error" in pet), pet.error);
+    const parsed = petSchema.safeParse(pet);
+    assert.ok(parsed.success, `${pet.form}: ${parsed.error?.message}`);
+  }
+});
+
 console.log(`test-pet-logic: ${passed} passed`);

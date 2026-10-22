@@ -21,6 +21,7 @@ const { SUMMON_FORMS, findSummonForm } = await import("../src/lib/srd/summon-for
 const { SUMMON_SPELLS, summonPlan } = await import("../src/lib/srd/summon-spells.ts");
 const { FAMILIAR_FORMS, findFamiliarForm } = await import("../src/lib/srd/familiar-forms.ts");
 const { isValidExpression } = await import("../src/lib/dice.ts");
+const { summonAttackSchema } = await import("../src/lib/schemas/summon.ts");
 const names = JSON.parse(readFileSync(join(root, "src/lib/srd/srd-creature-names.json"), "utf8"));
 const book = JSON.parse(readFileSync(join(root, "src/lib/rulebook/srd-5.1.json"), "utf8"));
 const pages = new Map(book.pages.filter((page) => page.kind === "monster").map((page) => [page.title, page]));
@@ -55,7 +56,12 @@ test("every block is a whole stat block the engines can roll", () => {
     seen.add(creature.name);
     assert.ok(creature.hp >= 1 && creature.ac >= 5 && creature.cr >= 0, creature.name);
     assert.ok(["Tiny", "Small", "Medium", "Large", "Huge"].includes(creature.size), creature.name);
+    // A pet keeps at most three attacks, a summon or a beast form four, in
+    // the schemas every stored sheet is read back through.
+    assert.ok(creature.attacks.length <= 3, `${creature.name} has ${creature.attacks.length} attacks`);
     for (const attack of creature.attacks) {
+      const stored = summonAttackSchema.safeParse(attack);
+      assert.ok(stored.success, `${creature.name} ${attack.name}: ${stored.error?.message}`);
       assert.ok(isValidExpression(attack.damage), `${creature.name} ${attack.name}`);
       assert.ok(attack.type, `${creature.name} ${attack.name} has no damage type`);
       for (const rider of attack.riders ?? []) {

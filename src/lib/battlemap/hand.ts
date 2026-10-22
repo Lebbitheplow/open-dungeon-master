@@ -131,7 +131,8 @@ function attackCards(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders
             intent: { card: "attack", weapon: attack.name },
           },
           standing,
-          attackGate(turn, allowed, sheet),
+          // The form's Multiattack, as the server counts it (turn-budget.ts).
+          attackGate(turn, Math.max(allowed, sheet.wildShape.attacksPerTurn ?? 1), sheet),
         ),
       );
     }

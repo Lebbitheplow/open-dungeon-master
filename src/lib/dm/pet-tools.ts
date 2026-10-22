@@ -20,6 +20,7 @@ import type { CharacterSheet, SheetPet } from "@/lib/schemas/sheet";
 import { allSpellNames } from "@/lib/srd/spell-lists";
 import { familiarFormsHolding, familiarOffer, findFamiliarForm } from "@/lib/srd/familiar-forms";
 import { attackDamage, attackSummary } from "@/lib/srd/creature-attacks";
+import { traitLine } from "@/lib/srd/srd-creatures";
 import { sizeRank } from "@/lib/bestiary/statblock";
 import { critDamageExpression } from "@/lib/dm/encounter-logic";
 import { naturalAttackProfile, pickNaturalAttack } from "@/lib/dm/natural-attack";
@@ -301,7 +302,9 @@ export function buildPet(
         toHit: attack.toHit + pb,
         damage: `${attack.damage}+${pb}`,
       })),
-      notes: `${beast.traits ?? ""} Commanding an attack costs the ranger's action; it otherwise defends itself.`.trim(),
+      // The pet record keeps 300 characters of notes: the beast's traits as
+      // fit, then the command rule.
+      notes: `${traitLine(beast.traitLines, 200)} Commanding an attack costs the ranger's action; it otherwise defends itself.`.trim(),
     };
   }
   if (args.kind === "drake") {
