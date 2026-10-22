@@ -22,6 +22,7 @@
 // enemy-damage.ts, which reaches it.
 
 import { textKey } from "@/lib/language/text-logic";
+import { isConditionNamed } from "@/lib/srd/feature-names";
 import { UNWAVERING_STRIKE } from "@/lib/dm/feature-bonus-attacks";
 import { untilTurnEnd } from "@/lib/dm/turn-end";
 import type { Campaign } from "@/lib/db/campaigns";
@@ -461,7 +462,7 @@ export function authoredOnKill(
   // Hexblade's Curse: the cursed creature died, and the warlock regains
   // warlock level + Charisma modifier hit points (minimum 1); the curse ends.
   for (const holder of fielded(campaign.id)) {
-    for (const condition of holder.conditions.filter((entry) => textKey(entry).startsWith(textKey("hexblade's curse")))) {
+    for (const condition of holder.conditions.filter((entry) => isConditionNamed(entry, "hexblade's curse"))) {
       const meta = (holder.conditionMeta as ConditionMetaMap)[condition];
       if (meta?.quarry !== enemy.id) {
         continue;

@@ -514,7 +514,8 @@ export function populateFeaturesForClasses(
       (held) =>
         held.source === "class" &&
         (!held.classId || !feature.classId || held.classId === feature.classId) &&
-        held.name.trim().toLowerCase().startsWith(`${feature.name.trim().toLowerCase()} (`) &&
+        held.name.replace(/\s*\([^()]*\)\s*$/, "") !== held.name &&
+        textKey(held.name.replace(/\s*\([^()]*\)\s*$/, "")) === textKey(feature.name) &&
         !tableNames.has(textKey(held.name)),
     );
     if (chosen) {

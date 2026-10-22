@@ -41,6 +41,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { noneNamed, toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { spentSlotRefusal } from "@/lib/dm/cast-rules";
 import { textKey } from "@/lib/language/text-logic";
+import { isConditionNamed } from "@/lib/srd/feature-names";
 
 type Found = { reaction: AuthoredReaction; held: HeldAuthored; holder: CharacterSheet; variant: string };
 
@@ -522,7 +523,7 @@ function resolve(ctx: Ctx, found: Found): ToolResult | ToolError {
       if ("error" in hit) return hit;
       // Armor of Hexes: only against the creature the warlock cursed.
       if (does.vsMark) {
-        const mark = ctx.sheet.conditions.find((entry) => lower(entry).startsWith(does.vsMark!));
+        const mark = ctx.sheet.conditions.find((entry) => isConditionNamed(entry, does.vsMark!));
         const quarry = mark ? (ctx.sheet.conditionMeta as ConditionMetaMap)[mark]?.quarry : undefined;
         if (!mark || hit.record.attacker.id !== quarry) {
           return { error: `${reaction.name} answers the creature under ${ctx.sheet.name}'s ${does.vsMark}, and this hit came from another. Nothing was spent.`, refused: "rules" };

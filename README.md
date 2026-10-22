@@ -130,7 +130,7 @@ and companions, following a secret story arc it regenerates as the campaign move
 <td width="50%" valign="top" align="center">
 <img src="public/sidebar-icons/story.webp" width="56"><br>
 <b>Workshop prep space</b><br>
-<sub>Author maps in a graphical terrain editor, bosses with derived CR, NPCs, encounters, roll tables, lore and storyboards outside any campaign, then import them into new campaigns; workshops, campaigns, characters and individual assets all clone.</sub>
+<sub>Author maps in a graphical terrain editor, bosses with derived CR, NPCs, encounters, classes and subclasses of your own, roll tables, lore and storyboards outside any campaign, then import them into new campaigns; workshops, campaigns, characters and individual assets all clone.</sub>
 </td>
 </tr>
 </table>

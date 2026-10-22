@@ -184,7 +184,7 @@ export const WORKSHOP_GUIDES: ToolGuide[] = [
   {
     id: "homebrew",
     title: "Homebrew",
-    purpose: "Items, spells, feats, backgrounds, species and subclasses of your own.",
+    purpose: "Items, spells, feats, backgrounds, species, classes, subclasses and hazards of your own.",
     steps: [
       "Pick the kind at the top, then press New.",
       "Start from something in the books: search the content pack and copy a row in.",
@@ -196,6 +196,7 @@ export const WORKSHOP_GUIDES: ToolGuide[] = [
     atTable: "The character builder, shops and inventories offer it beside the books' own, and the engine reads it the same way.",
     tips: [
       "An item a World entry links to is copied into a campaign that brings that world in, and the workshop's bundle can carry your whole shelf or only what the workshop uses.",
+      "A class of your own is a class to every engine: the builder offers it under From Homebrew, and its subclasses are made under it here.",
       "A spell's damage, save and damage type are read out of its description, the way the SRD's are.",
       "Everything is checked against the ruleset as you type.",
     ],

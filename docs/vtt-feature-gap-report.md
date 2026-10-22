@@ -222,7 +222,7 @@ the AI GMs' rules engines.
 | Party as an actor with shared inventory (dnd5e group, FGU party sheet) | Party entity with purse and pack | Have |
 | Vehicles and mounts | Mount engine; no vehicle actor | Partial |
 | Compendium browser with filters | `/reference` browse, compare, calculators, Ask | Have, ahead: grounded Ask with checked citations |
-| Homebrew editors for every kind (DDB, Shard) | Items, spells, feats, backgrounds, species, subclasses, monsters | Have |
+| Homebrew editors for every kind (DDB, Shard) | Items, spells, feats, backgrounds, species, classes, subclasses, monsters | Have |
 | Monster builder with CR calculation (Tetra-Cube, Kassoon) | Derived CR by the DMG procedure, tested against the SRD | Have, ahead |
 | Class and subclass builder from scratch (DDB, Shard, Let's Role) | Subclass editor; no new base class | Partial; world packs reskin classes |
 | Merchant NPC sheets, shops, buying and selling (Item Piles, Loot Sheet, Kanka inventory, Chronica shops) | No shop or trade tool; gold and items move by DM mutation | Missing, build: a `shop` scene tracker with a stock list and prices, using the item pack's costs |

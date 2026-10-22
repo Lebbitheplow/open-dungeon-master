@@ -29,7 +29,7 @@ import { optionsOfKind } from "@/lib/srd/options";
 import type { CharacterSheet, FullPatchSheetInput } from "@/lib/schemas/sheet";
 import { holdsMote } from "@/lib/srd/authored-effects-more";
 import { holdingHint, noneNamed, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
-import { nameChoice } from "@/lib/srd/feature-names";
+import { isConditionNamed, nameChoice } from "@/lib/srd/feature-names";
 import { isTableGearName } from "@/lib/db/homebrew";
 import { spentSlotRefusal } from "@/lib/dm/cast-rules";
 import { subclassNamed } from "@/lib/srd/subclass-name";
@@ -264,7 +264,7 @@ function recoveryMarker(campaign: Campaign, sheet: CharacterSheet, def: Resource
   const rests = Math.max(1, rollHealing(campaign, sheet, `${def.displayName}: long rests until it returns`, def.recovers ?? "1"));
   const prefix = recoveringPrefix(def.displayName);
   return {
-    conditions: [...sheet.conditions.filter((entry) => !entry.toLowerCase().startsWith(prefix)), `${prefix} (${rests})`],
+    conditions: [...sheet.conditions.filter((entry) => !isConditionNamed(entry, prefix)), `${prefix} (${rests})`],
     note: `${def.displayName} comes back after ${rests} long rest${rests === 1 ? "" : "s"}.`,
   };
 }

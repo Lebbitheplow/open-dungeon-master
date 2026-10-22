@@ -332,7 +332,7 @@ export const SYSTEM_TOURS: Record<string, TourStep[]> = {
     {
       id: "kinds",
       title: "What kind",
-      body: "Items, spells, feats, backgrounds, species and subclasses. Each kind writes the fields the character builder and the engine already read.",
+      body: "Items, spells, feats, backgrounds, species, classes, subclasses and hazards. Each kind writes the fields the character builder and the engine already read.",
       anchors: ["homebrew-kinds"],
     },
     {
