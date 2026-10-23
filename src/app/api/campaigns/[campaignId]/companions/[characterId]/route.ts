@@ -1,11 +1,15 @@
+import { z } from "zod";
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
 import { allocateSeq } from "@/lib/db/campaigns";
+import { activePublicEncounter } from "@/lib/db/encounter-view";
+import { getActiveEncounter } from "@/lib/db/encounters";
 import { insertCampaignMessage } from "@/lib/db/messages";
-import { listSheets } from "@/lib/db/sheets";
+import { getSheetById, listSheets, setCompanionCommander } from "@/lib/db/sheets";
+import { commandable, commandingPlayers } from "@/lib/dm/companion-command";
 import { handleDismissCompanion } from "@/lib/dm/companion-tools";
-import { settleTurn, turnHolder } from "@/lib/dm/encounter-tools";
+import { setInitiativeFloor, settleTurn, turnHolder } from "@/lib/dm/encounter-tools";
 import { requestDmTurn } from "@/lib/dm/loop";
-import { publishWithSeq } from "@/lib/events";
+import { publishPersisted, publishWithSeq } from "@/lib/events";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -44,4 +48,49 @@ export async function DELETE(
   publishWithSeq(campaignId, seq, "message_added", { message });
   requestDmTurn(campaignId);
   return Response.json({ ok: true });
+}
+
+const commandSchema = z.object({ commandedBy: z.string().trim().min(1).max(120).nullable() });
+
+// Who takes this companion's turns in a fight (src/lib/dm/companion-command.ts):
+// a player at the table, or null for the DM. Whoever runs the story decides,
+// as they recruit and dismiss. Out of fights the DM plays the companion
+// whatever this says. Changed on the companion's own turn, the floor follows
+// at once, and a turn handed back to the DM is played.
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ campaignId: string; characterId: string }> },
+) {
+  const { campaignId, characterId } = await params;
+  const context = await requireStoryAuthority(campaignId);
+  if (isErrorResponse(context)) {
+    return context;
+  }
+  const parsed = commandSchema.safeParse(await request.json().catch(() => ({})));
+  if (!parsed.success) {
+    return Response.json({ error: "Say who commands them in fights: a player, or nobody for the DM." }, { status: 400 });
+  }
+  const sheet = getSheetById(characterId);
+  if (!sheet || sheet.campaignId !== campaignId || !commandable(sheet)) {
+    return Response.json({ error: "That is not a companion at this table." }, { status: 404 });
+  }
+  const commander = parsed.data.commandedBy;
+  if (commander && !commandingPlayers(context.campaign).includes(commander)) {
+    return Response.json({ error: "Only a player at the table can command a companion." }, { status: 400 });
+  }
+  const updated = setCompanionCommander(sheet.id, commander);
+  if (!updated) {
+    return Response.json({ error: "Could not change who commands them." }, { status: 500 });
+  }
+  publishPersisted(campaignId, "sheet_updated", { sheet: updated });
+  const encounter = getActiveEncounter(campaignId);
+  const current = encounter?.orderReady ? encounter.order[encounter.turnIndex] : undefined;
+  if (encounter && current?.kind === "pc" && current.characterId === sheet.id) {
+    setInitiativeFloor(context.campaign, encounter);
+    publishPersisted(campaignId, "encounter_updated", { encounter: activePublicEncounter(campaignId) });
+    if (!commander) {
+      requestDmTurn(campaignId);
+    }
+  }
+  return Response.json({ sheet: updated });
 }

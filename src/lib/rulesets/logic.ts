@@ -26,10 +26,11 @@ export type Ruleset = {
   description: string;
   variantRules: VariantRules;
   houseRulesText: string;
-  // Which of the user's homebrew entries this ruleset says belong at the
-  // table. Homebrew is already visible in every picker regardless; this is
-  // the ruleset's claim about which of it is CANON here, which is what lets
-  // a prepared monster referencing an entry outside the list be flagged.
+  // Kept for rulesets saved while the library offered a list of "Homebrew
+  // this ruleset ships". Nothing reads it: an author's whole shelf counts at
+  // every table they run (src/lib/content/scope.ts), so the list admitted and
+  // installed nothing, and the library no longer offers it (workshop import
+  // audit F08). The API still accepts it, so an older client is not refused.
   homebrewIds: string[];
   createdAt: string;
   updatedAt: string;

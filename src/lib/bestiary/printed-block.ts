@@ -7,6 +7,7 @@
 
 import { parseAttack } from "@/lib/bestiary/attack-parse";
 import { ENGINE_TRAIT_NAMES, parseAbilityText } from "@/lib/dm/monster-abilities";
+import { legendaryCountIn } from "@/lib/dm/ability-entries";
 import { textKey } from "@/lib/language/text-logic";
 
 type RawAction = { name?: unknown; desc?: unknown; attack_bonus?: unknown; damage_dice?: unknown; damage_bonus?: unknown };
@@ -25,6 +26,9 @@ export type PrintedSource = { name: string; document?: string; rulebook?: string
 export type PrintedBlock = {
   traits: PrintedAbility[];
   actions: PrintedAbility[];
+  // The Bonus Actions some books print (Black Flag, A5e, the 2023 and third
+  // Tomes of Beasts). Absent on blocks without them and on old rows.
+  bonus?: PrintedAbility[];
   reactions: PrintedAbility[];
   legendary: PrintedAbility[];
   // "The dragon can take 3 legendary actions..."
@@ -48,7 +52,7 @@ function sourceOf(raw: unknown): PrintedSource | null {
 
 // The source's whole block, each entry with its engine status (see
 // PrintedAbility). Null for a row that prints nothing beyond its numbers.
-export function printedBlockOf(data: Record<string, unknown>, actions: RawAction[], specials: RawAction[]): PrintedBlock | null {
+export function printedBlockOf(data: Record<string, unknown>, actions: RawAction[], specials: RawAction[], bonusActions: RawAction[] = []): PrintedBlock | null {
   const entry = (raw: RawAction, engine: PrintedAbility["engine"]): PrintedAbility | null => {
     const name = asString(raw.name).trim().slice(0, PRINTED_LIMITS.name);
     const desc = asString(raw.desc).replace(/\s+/g, " ").trim().slice(0, PRINTED_LIMITS.desc);
@@ -61,18 +65,26 @@ export function printedBlockOf(data: Record<string, unknown>, actions: RawAction
       .filter((row): row is PrintedAbility => row !== null)
       .slice(0, PRINTED_LIMITS.entries);
   const reactions = Array.isArray(data.reactions) ? (data.reactions as RawAction[]) : [];
-  const legendary = Array.isArray(data.legendary_actions) ? (data.legendary_actions as RawAction[]) : [];
+  // A5e prints the count as the first legendary option ("The dragon can
+  // take 3 legendary actions"): it is the block's legendary description, not
+  // an option (src/lib/dm/ability-entries.ts).
+  const allLegendary = Array.isArray(data.legendary_actions) ? (data.legendary_actions as RawAction[]) : [];
+  const counting = allLegendary.find((raw) => legendaryCountIn(asString(raw.name)) !== null);
+  const legendary = allLegendary.filter((raw) => raw !== counting);
+  const legendaryDesc = asString(data.legendary_desc).trim() || (counting ? `${asString(counting.name).trim()}. ${asString(counting.desc).trim()}` : "");
+  const bonus = list(bonusActions, (raw) => parseAttack(raw) !== null || numbers(raw));
   const block: PrintedBlock = {
-    traits: list(specials, (raw) => ENGINE_TRAIT_NAMES.test(asString(raw.name)) || /^regeneration\b/i.test(asString(raw.name)) || numbers(raw)),
+    traits: list(specials, (raw) => ENGINE_TRAIT_NAMES.test(asString(raw.name)) || numbers(raw)),
     actions: list(actions, (raw) => parseAttack(raw) !== null || /multiattack/i.test(asString(raw.name)) || numbers(raw)),
+    ...(bonus.length ? { bonus } : {}),
     // A Parry adds to AC (src/lib/dm/enemy-reactions.ts); other reactions
     // are the DM's.
     reactions: list(reactions, (raw) => /^parry\b/i.test(asString(raw.name))),
     // legendary_action offers each line (src/lib/dm/legendary-logic.ts).
     legendary: list(legendary, () => true),
-    ...(asString(data.legendary_desc).trim() ? { legendaryDesc: asString(data.legendary_desc).trim().slice(0, PRINTED_LIMITS.desc) } : {}),
+    ...(legendaryDesc ? { legendaryDesc: legendaryDesc.slice(0, PRINTED_LIMITS.desc) } : {}),
   };
-  return block.traits.length || block.actions.length || block.reactions.length || block.legendary.length ? block : null;
+  return block.traits.length || block.actions.length || block.bonus?.length || block.reactions.length || block.legendary.length ? block : null;
 }
 
 // A printed block as it arrives from a client or an old row, kept to its
@@ -93,15 +105,17 @@ export function normalizePrintedBlock(raw: unknown): PrintedBlock | null {
       .filter((row): row is PrintedAbility => row !== null)
       .slice(0, PRINTED_LIMITS.entries);
   const from = sourceOf(source.source);
+  const bonus = list(source.bonus);
   const block: PrintedBlock = {
     traits: list(source.traits),
     actions: list(source.actions),
+    ...(bonus.length ? { bonus } : {}),
     reactions: list(source.reactions),
     legendary: list(source.legendary),
     ...(text(source.legendaryDesc, PRINTED_LIMITS.desc) ? { legendaryDesc: text(source.legendaryDesc, PRINTED_LIMITS.desc) } : {}),
     ...(from ? { source: from } : {}),
   };
-  return block.traits.length || block.actions.length || block.reactions.length || block.legendary.length ? block : null;
+  return block.traits.length || block.actions.length || block.bonus?.length || block.reactions.length || block.legendary.length ? block : null;
 }
 
 // The printed abilities the compact lines leave out (the cap on traits, a
@@ -114,5 +128,5 @@ export function unrunPrintedAbilities(stats: { traits?: string[]; printed?: Prin
   }
   const carried = (stats.traits ?? []).filter((line) => !line.endsWith("...")).map(textKey);
   const named = (ability: PrintedAbility) => carried.some((line) => line.includes(textKey(ability.name)));
-  return [...printed.traits, ...printed.actions, ...printed.reactions].filter((ability) => ability.engine === "text" && !named(ability));
+  return [...printed.traits, ...printed.actions, ...(printed.bonus ?? []), ...printed.reactions].filter((ability) => ability.engine === "text" && !named(ability));
 }

@@ -5,7 +5,7 @@
 import { z } from "zod";
 import { normalizeAbility } from "@/lib/dm/arg-coerce";
 import { dcForDifficulty, normalizeDifficulty } from "@/lib/srd/dc";
-import { CREATURE_TYPES } from "@/lib/bestiary/statblock";
+import { CREATURE_TYPES } from "@/lib/bestiary/creature-type";
 import { CHECK_ABOUT, CHECK_SENSES, NATURAL_TERRAINS, NONE, SAVE_AGAINST } from "@/lib/dm/roll-about";
 import { ADVANTAGE_SOURCES } from "@/lib/dm/pc-attack-options";
 

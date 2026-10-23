@@ -241,6 +241,15 @@ export function conditionImmunity(
   if (held) {
     return `${held.because} makes them immune`;
   }
+  // The stat block they wear or are: True Polymorph's fire elemental cannot
+  // be grappled, a summoned zombie cannot be poisoned.
+  const block = [
+    { line: sheet.wildShape?.conditionImmune, what: `their ${sheet.wildShape?.form} form` },
+    { line: sheet.summon?.conditionImmune, what: `the ${sheet.summon?.form}'s stat block` },
+  ].find((entry) => (entry.line ?? "").toLowerCase().split(/,\s*/).includes(wanted));
+  if (block) {
+    return `${block.what} makes them immune`;
+  }
   if (wanted === "unconscious" && own.magicalSleep && magical) {
     return `${own.magicalSleep}: magic cannot put them to sleep`;
   }

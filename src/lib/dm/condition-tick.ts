@@ -367,6 +367,7 @@ function tickEnemyConditions(campaign: Campaign, encounter: Encounter, by: numbe
           // A creature with Legendary Resistance spends one to end what binds
           // it, as it would against the first save (src/lib/dm/legendary-tools.ts).
           resist: true,
+          against: due.name,
           // On the record like every roll, for the DM's eyes (enemy saves are
           // rolled silently at the table).
           record: { detail: `${enemy.displayName}: ${due.ability.toUpperCase()} save to end ${due.name}` },

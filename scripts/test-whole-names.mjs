@@ -268,7 +268,8 @@ await test("purchase carries srdName, described past the tool's first sentence; 
   assert.match(purchase.function.description, /srdName is the SRD or pack item it is, by its English name \('Longsword'\), sent with the first call/);
   const compact = compactTool(purchase);
   assert.deepEqual(Object.keys(compact.function.parameters.properties), Object.keys(purchase.function.parameters.properties));
-  assert.equal(compact.function.description, "Resolve a character buying or selling an item outside a shop, in one audited step.");
+  // At a shop or not since buy_item and sell_item folded into it (issue #471).
+  assert.equal(compact.function.description, "Resolve a character buying or selling an item in one audited step.");
   world.patch(hero.id, { gold: 500 });
   for (const item of ["Portafortuna", "Porte-bonheur", "Amuleto de la suerte", "Glücksbringer", "Lucky charm"]) {
     const asked = await ai("purchase", { characterId: hero.id, item, price: 1, action: "buy", reason: "the market" }, hero);

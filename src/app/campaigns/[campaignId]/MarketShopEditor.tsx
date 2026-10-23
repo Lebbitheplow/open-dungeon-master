@@ -8,7 +8,7 @@ import { NumberStepper } from "@/components/ui/NumberStepper";
 import { Select } from "@/components/ui/Select";
 import { cn } from "@/lib/cn";
 import { MARKUP_STEPS, costToCopper, type StockLine } from "@/lib/dm/shop-logic";
-import { formatCopper, parseCoins, unreadCoins } from "@/lib/srd/currency";
+import { formatPrice, parseCoins, unreadCoins } from "@/lib/srd/currency";
 import { withoutBonus } from "@/lib/srd/item-row";
 import { KitButton, panelField, SettingToggle } from "./PanelKit";
 import { textKey } from "@/lib/language/text-logic";
@@ -70,7 +70,7 @@ function CoinField({ value, onChange, label }: { value: number; onChange: (cp: n
   };
   return (
     <input
-      value={draft ?? formatCopper(value)}
+      value={draft ?? formatPrice(value)}
       onChange={(event) => setDraft(event.target.value)}
       onBlur={commit}
       onKeyDown={(event) => {

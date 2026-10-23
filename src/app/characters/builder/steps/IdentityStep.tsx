@@ -1,7 +1,7 @@
 "use client";
 
 import { Dices } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { UnofficialPackNotice } from "@/components/UnofficialPackNotice";
 import { GameTerm } from "@/components/ui/GameTerm";
 import { InfoButton } from "@/components/ui/InfoDialog";
@@ -51,6 +51,7 @@ export function IdentityStep({
   playstyle,
   backgroundGroups,
   background,
+  backgroundNote = null,
 }: {
   state: BuilderState;
   pack: WorldPack | null;
@@ -62,6 +63,8 @@ export function IdentityStep({
   playstyle?: IdentityPlaystyle;
   backgroundGroups: PickerGroup[];
   background: BackgroundOption | undefined;
+  // Why the list may be short (TableScopeNote).
+  backgroundNote?: ReactNode;
 }) {
   // The install command is for whoever runs the server. A player can do
   // nothing with it, and a first-timer read it as something being broken.
@@ -220,6 +223,7 @@ export function IdentityStep({
               className={inputClass}
               onChange={state.changeBackground}
             />
+            {backgroundNote}
             {playstyle?.value && playstyle.backgrounds.length ? (
               // The playstyle's backgrounds, one tap each; the list above
               // keeps every other.

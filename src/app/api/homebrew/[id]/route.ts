@@ -1,5 +1,6 @@
 import { currentUser, unauthorized } from "@/lib/auth";
-import { archiveHomebrew, deleteHomebrew, getHomebrew, restoreHomebrew, updateHomebrew } from "@/lib/db/homebrew";
+import { archiveHomebrew, deleteHomebrew, getHomebrew, restoreHomebrew } from "@/lib/db/homebrew";
+import { updateHomebrewCarried } from "@/lib/db/homebrew-rename";
 import { serverPublishedNameProblem } from "@/lib/homebrew/published-names-server";
 import { normalizeHomebrewData } from "@/lib/homebrew/gear";
 import { patchHomebrewSchema } from "@/lib/schemas/homebrew";
@@ -59,14 +60,17 @@ export async function PATCH(
     }
     data = normalized.data;
   }
-  const entry = updateHomebrew(user.id, id, { name: parsed.data.name, data });
+  // A new name is carried to the sheets, entries and tables that held the
+  // old one (src/lib/db/homebrew-rename.ts), so a renamed subclass keeps its
+  // characters; `carried` says how many.
+  const updated = updateHomebrewCarried(user.id, id, { name: parsed.data.name, data });
   forgetSpeciesRules(`homebrew:${id}`);
   forgetTableFeats();
   forgetTableHazards();
-  if (!entry) {
+  if (!updated) {
     return Response.json({ error: "Not found." }, { status: 404 });
   }
-  return Response.json({ entry });
+  return Response.json({ entry: updated.entry, carried: updated.carried });
 }
 
 // Forgets an entry: it is archived (src/lib/db/homebrew.ts archiveHomebrew),

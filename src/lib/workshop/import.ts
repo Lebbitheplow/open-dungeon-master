@@ -100,6 +100,9 @@ export type PlanInput = {
   // How many battle maps and encounters the World's places link to, so
   // leaving those kinds out says the links stay behind with them.
   worldBound?: { maps: number; encounters: number };
+  // Roll-table rows that name an NPC, a lore entry or a table that will not
+  // be at the target (src/lib/db/content-import-refs.ts tableRowsLeftBehind).
+  tableRowsLeft?: number;
 };
 
 export function planImport(input: PlanInput): ImportPlan {
@@ -312,14 +315,23 @@ export function planImport(input: PlanInput): ImportPlan {
     const names = [...new Set(input.foreignItems)];
     notes.push({
       kind: "world",
-      message: `${names.length} hand-built item${names.length === 1 ? "" : "s"} (${names.join(", ")}) ${names.length === 1 ? "is" : "are"} copied into this table's Homebrew, so the World entries that link to ${names.length === 1 ? "it" : "them"} keep their links.`,
+      message: `${names.length} hand-built item${names.length === 1 ? "" : "s"} (${names.join(", ")}) ${names.length === 1 ? "is" : "are"} copied into this table's Homebrew, so the World entries, shops and roll tables that name ${names.length === 1 ? "it" : "them"} keep ${names.length === 1 ? "it" : "them"}.`,
+    });
+  }
+  // A roll-table row that is an NPC, a lore entry or another table that is
+  // not coming along names this table's own of that name, or nothing.
+  if (selected.has("tables") && input.tableRowsLeft) {
+    const left = input.tableRowsLeft;
+    warnings.push({
+      kind: "tables",
+      message: `${left} roll-table row${left === 1 ? " names" : "s name"} an NPC, lore entry or table that is not coming along. ${left === 1 ? "It names" : "They name"} this campaign's own of that name, or nothing; tick ${left === 1 ? "its" : "their"} kind to bring ${left === 1 ? "it" : "them"}.`,
     });
   }
   if (input.foreignMonsters?.length) {
     const names = [...new Set(input.foreignMonsters)];
     notes.push({
       kind: selected.has("encounters") ? "encounters" : "npcs",
-      message: `${names.length} hand-built monster${names.length === 1 ? "" : "s"} (${names.join(", ")}) ${names.length === 1 ? "is" : "are"} copied into this table's bestiary, so the NPCs and fights that name ${names.length === 1 ? "it" : "them"} fight here as they did there.`,
+      message: `${names.length} hand-built monster${names.length === 1 ? "" : "s"} (${names.join(", ")}) ${names.length === 1 ? "is" : "are"} copied into this table's bestiary, so the NPCs, fights and roll tables that name ${names.length === 1 ? "it" : "them"} fight here as they did there.`,
     });
   }
 

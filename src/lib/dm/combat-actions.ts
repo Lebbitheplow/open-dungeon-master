@@ -10,7 +10,7 @@ import { getActiveEncounter, listEnemies, patchEnemyConditions } from "@/lib/db/
 import { getSheetById } from "@/lib/db/sheets";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { sizeForRace } from "@/lib/srd";
-import { sizeRank, watchfulPassivePerception } from "@/lib/bestiary/statblock";
+import { sizeRank, watchfulPassivePerception } from "@/lib/bestiary/enemy-numbers";
 import type { TurnBudget } from "@/lib/dm/action-budget";
 import { addSheetCondition, rollEnemyContest } from "@/lib/dm/action-common";
 import { handsBusy } from "@/lib/dm/cast-rules";

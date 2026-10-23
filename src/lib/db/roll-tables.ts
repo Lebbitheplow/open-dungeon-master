@@ -1,6 +1,7 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
-import { byName } from "@/lib/language/text-logic";
+import { byName, textKey } from "@/lib/language/text-logic";
 import type { RollTableEntry } from "@/lib/dm/roll-table-logic";
+import { dedupeName } from "@/lib/workshop/import";
 
 // DM-authored random tables. Owned by the campaign, written by whoever holds
 // the DM seat, and never shown to players (the ROLL is public if the DM says
@@ -60,6 +61,22 @@ export function getRollTable(tableId: string): RollTable | null {
   return row ? mapTable(row) : null;
 }
 
+// A row that says "@table: Gems", and the DM rolling "Gems", find the table
+// by name, the first of that name. So every table in a campaign keeps a name
+// of its own: a new one whose name is taken is numbered, "Gems (2)", the way
+// an import numbers what it brings, and a rename onto a taken name is refused
+// (the roll-tables route).
+function tableNames(campaignId: string, exceptId = ""): Set<string> {
+  const rows = getDatabase()
+    .prepare(`SELECT name FROM roll_tables WHERE campaign_id = ? AND id <> ?`)
+    .all(campaignId, exceptId) as Array<{ name: string }>;
+  return new Set(rows.map((row) => textKey(row.name)));
+}
+
+export function tableNameTaken(campaignId: string, name: string, exceptId = ""): boolean {
+  return tableNames(campaignId, exceptId).has(textKey(name));
+}
+
 export function insertRollTable(input: {
   campaignId: string;
   name: string;
@@ -81,7 +98,7 @@ export function insertRollTable(input: {
     .run(
       id,
       input.campaignId,
-      input.name,
+      dedupeName(input.name, tableNames(input.campaignId)),
       JSON.stringify(input.entries),
       input.noReplacement ? 1 : 0,
       input.createdByUserId,
@@ -105,12 +122,12 @@ export function updateRollTable(
   const rewritten =
     patch.entries !== undefined && JSON.stringify(patch.entries) !== JSON.stringify(table.entries);
   const drawn = rewritten || patch.resetDrawn ? [] : table.drawn;
-  getDatabase()
-    .prepare(
+  const db = getDatabase();
+  db.transaction(() => {
+    db.prepare(
       `UPDATE roll_tables SET name = ?, entries_json = ?, drawn_json = ?, no_replacement = ?, updated_at = ?
        WHERE id = ?`,
-    )
-    .run(
+    ).run(
       patch.name ?? table.name,
       JSON.stringify(patch.entries ?? table.entries),
       JSON.stringify(drawn),
@@ -118,7 +135,35 @@ export function updateRollTable(
       nowIso(),
       tableId,
     );
+    // The rows that rolled on this table by its old name roll on it by the
+    // new one, unless another table still answers to the old name.
+    if (patch.name !== undefined && patch.name !== table.name && !tableNameTaken(table.campaignId, table.name, tableId)) {
+      carryTableRefs(table.campaignId, table.name, patch.name);
+    }
+  })();
   return getRollTable(tableId);
+}
+
+function carryTableRefs(campaignId: string, from: string, to: string) {
+  const db = getDatabase();
+  const wanted = textKey(from);
+  const rows = db.prepare(`SELECT id, entries_json FROM roll_tables WHERE campaign_id = ?`).all(campaignId) as Array<{
+    id: string;
+    entries_json: string;
+  }>;
+  for (const row of rows) {
+    let changed = false;
+    const entries = parseJson<RollTableEntry[]>(row.entries_json, []).map((entry) => {
+      if (entry.ref?.kind !== "table" || textKey(entry.ref.name) !== wanted) {
+        return entry;
+      }
+      changed = true;
+      return { ...entry, text: to, ref: { ...entry.ref, name: to } };
+    });
+    if (changed) {
+      db.prepare(`UPDATE roll_tables SET entries_json = ? WHERE id = ?`).run(JSON.stringify(entries), row.id);
+    }
+  }
 }
 
 export function markDrawn(tableId: string, result: number): RollTable | null {

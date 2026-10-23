@@ -24,7 +24,7 @@ const mk = await monsterKit(world, kit);
 const { getContentDb } = await import("../src/lib/content/db.ts");
 const { parseMonster, parseMultiattackCount } = await import("../src/lib/bestiary/statblock.ts");
 const { COUNT_WORD, multiattackAlternatives, multiattackItems, multiattackParts, multiattackSentences, parseRoutines } =
-  await import("../src/lib/bestiary/attack-text.ts");
+  await import("../src/lib/bestiary/multiattack-text.ts");
 const { plannedSwings } = await import("../src/lib/dm/enemy-profile.ts");
 const { parseAttack } = await import("../src/lib/bestiary/attack-parse.ts");
 const { correctedMonsterData } = await import("../src/lib/bestiary/pack-corrections.ts");
@@ -149,7 +149,22 @@ await test("A Multiattack's alternatives are routines of their own; one way to s
   assert.deepEqual(readAs("Three Pitchfork attacks or it makes one Pitchfork attack then uses Grab and Throw.", ["Pitchfork"]).count, 3);
   assert.deepEqual(readAs("The bearfolk makes two attacks with its battleaxe and one with its bite.", ["Battleaxe", "Bite"]), { routines: ["Battleaxe x2 + Bite x1"], count: 3 });
   assert.deepEqual(readAs("The kraken makes three tentacle attacks, each of which it can replace with one use of Fling.", ["Bite", "Tentacle"]), { routines: ["Tentacle x3"], count: 3 });
-  assert.deepEqual(readAs("The dragon uses Grasp of Shadows then attacks once with its bite and twice with its claws.", ["Bite", "Claw"]), { routines: null, count: null });
+  // A5e says it with "attacks" as the verb (issue 473).
+  assert.deepEqual(readAs("The dragon uses Grasp of Shadows then attacks once with its bite and twice with its claws.", ["Bite", "Claw"]), { routines: ["Bite x1 + Claw x2"], count: 3 });
+  assert.deepEqual(readAs("The dragon attacks with its bite and twice with its claws. In place of its bite  it can use Acid Spit.", ["Bite", "Claws"]), { routines: ["Bite x1 + Claws x2"], count: 3 });
+  assert.deepEqual(readAs("The aboleth attacks three times with its tentacle.", ["Tentacle"]), { routines: ["Tentacle x3"], count: 3 });
+  assert.deepEqual(readAs("The phase monster attacks with its horns and its claws.", ["Horns", "Claws"]), { routines: ["Horns x1 + Claws x1"], count: 2 });
+  assert.deepEqual(readAs("The unicorn attacks once with its hooves and once with its horn.", ["Hooves", "Horn"]), { routines: ["Hooves x1 + Horn x1"], count: 2 });
+  assert.equal(readAs("The band attacks twice.", ["Slam"]).count, 2);
+  // "makes two attacks with its claws": the noun is left alone.
+  assert.deepEqual(readAs("The lamassu makes two attacks with its claws.", ["Claws"]), { routines: ["Claws x2"], count: 2 });
+  // Tome of Beasts 3 names the attacks with no noun and often no verb.
+  assert.deepEqual(readAs("One Bite and two Kicks or three Spit Worms.", ["Bite", "Kick", "Spit Worm"]), { routines: ["Bite x1 + Kick x2", "Spit Worm x3"], count: 3 });
+  assert.deepEqual(readAs("Uses its Frightful Presence then one Bite and two Claws.", ["Bite", "Claw"]), { routines: ["Bite x1 + Claw x2"], count: 3 });
+  assert.deepEqual(readAs("Horrific Gaze. Then one Bite and two Tail Slaps.", ["Bite", "Tail Slap"]), { routines: ["Bite x1 + Tail Slap x2"], count: 3 });
+  assert.deepEqual(readAs("Three Claws.", ["Claw"]), { routines: ["Claw x3"], count: 3 });
+  // A name that already says "attacks" keeps it.
+  assert.deepEqual(readAs("The dwarf makes two Heavy Pick attacks.", ["Heavy Pick"]), { routines: ["Heavy Pick x2"], count: 2 });
 });
 
 // Why a Multiattack reads as no routine: the first group that names no

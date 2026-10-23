@@ -12,7 +12,7 @@
 // artifact for tooling, and a render path that can 404 because a JSON fetch
 // lost a race is worse than a table of thirty constants.
 
-import { normalizeCreatureType } from "@/lib/bestiary/statblock";
+import { normalizeCreatureType } from "@/lib/bestiary/creature-type";
 
 const BASE = "/assets/placeholders";
 

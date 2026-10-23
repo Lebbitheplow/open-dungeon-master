@@ -4,7 +4,7 @@ import { rowIcon } from "@/app/workshop/kit";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { X } from "lucide-react";
 import { ContentPick } from "@/components/ui/ContentPick";
-import { normalizeCreatureType } from "@/lib/bestiary/statblock";
+import { normalizeCreatureType } from "@/lib/bestiary/creature-type";
 import { cn } from "@/lib/cn";
 import { MonsterTile, ui } from "@/lib/ui";
 import { packArtKey } from "@/lib/worlds/art";

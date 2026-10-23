@@ -2,7 +2,10 @@
 // purchase, use_resource). Kept apart from the handlers in resource-tools.ts:
 // mutations.ts spreads this list while it loads, and the handlers' imports
 // reach back to mutations.ts through the clock, so the list must not wait on
-// them.
+// them. purchase is every trade (issue #471): a shop's sale reaches the shop
+// (src/lib/dm/shop-tools.ts tradeCall).
+
+import { waypointProperty } from "@/lib/dm/waypoint-logic";
 
 export type ToolDef = {
   type: "function";
@@ -48,28 +51,33 @@ export const resourceTools: ToolDef[] = [
     function: {
       name: "purchase",
       description:
-        "Resolve a character buying or selling an item outside a shop, in one audited step. Buying a thing the table names in its own words ('Spada lunga'): srdName is the SRD or pack item it is, by its English name ('Longsword'), sent with the first call as grant_item sends it; omit it when item already is that English name. Loot no list has, or a spell scroll, is granted with grant_item (its tags, its spell) and paid for with modify_gold.",
+        "Resolve a character buying or selling an item in one audited step. A shop standing here that stocks the item (or buys it) trades it from its own shelf at its own prices; anywhere else the list price is paid, and a seller gets half. Buying a thing the table names in its own words ('Spada lunga'): srdName is the SRD or pack item it is, by its English name ('Longsword'), sent with the first call as grant_item sends it; omit it when item already is that English name. Loot no list has, or a spell scroll, is granted with grant_item (its tags, its spell) and paid for with modify_gold.",
       parameters: {
         type: "object",
         additionalProperties: false,
         properties: {
+          ...waypointProperty,
           characterId: { type: "string", description: "Exact characterId from GAME STATE." },
+          action: { type: "string", enum: ["buy", "sell"] },
           item: { type: "string", description: "Item name, without its worth: price carries that." },
+          qty: { type: "integer", minimum: 1, maximum: 99 },
+          shop: {
+            type: "string",
+            description: "A shop in SHOPS HERE the party picks; left out, one here that stocks (or buys) it.",
+          },
           // Described in the description of purchase itself, since the 16K
           // compact profile, which cuts every description to its first
           // sentence, carries purchase in its core with no room for one more.
           srdName: { type: "string" },
           price: {
-            type: "integer",
+            type: "number",
             minimum: 0,
             maximum: 100000,
-            description: "Gold per unit, used only for an item the table has no list price for.",
+            description: "Gold each, for a thing no shelf or list prices.",
           },
-          qty: { type: "integer", minimum: 1, maximum: 99 },
-          action: { type: "string", enum: ["buy", "sell"] },
           reason: { type: "string", description: "Short in-fiction cause." },
         },
-        required: ["characterId", "item", "price", "action"],
+        required: ["characterId", "action", "item"],
       },
     },
   },

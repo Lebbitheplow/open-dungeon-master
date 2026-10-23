@@ -54,6 +54,7 @@ export function AddonBoardView({
   faceFor,
   looks,
   intents = null,
+  moveAim = null,
   fx = NO_FX,
   ping = null,
   camera = null,
@@ -74,6 +75,8 @@ export function AddonBoardView({
   // Who each token is (a monster's type, a character's class), by ref id.
   looks?: Map<string, BoardLook>;
   intents?: TokenIntent[] | null;
+  // The square a first tap aimed the walk at (BattleMapPanel.tsx).
+  moveAim?: { x: number; y: number } | null;
   fx?: FxEvent[];
   ping?: MapPing | null;
   camera?: CameraEvent | null;
@@ -142,12 +145,13 @@ export function AddonBoardView({
           appearance,
           looks,
           intents,
+          moveAim,
           assetsUrl,
           viewOptions: { fields: boardView.options, values: viewOptions },
         }),
       });
     }
-  }, [readyAt, view, canDirect, genre, appearance, boardView.addonId, boardView.options, boardView.sessionLayout, looks, intents, assetsUrl, viewOptions]);
+  }, [readyAt, view, canDirect, genre, appearance, boardView.addonId, boardView.options, boardView.sessionLayout, looks, intents, moveAim, assetsUrl, viewOptions]);
 
   // The moments, each sent once: effects by id, a ping and a camera move by
   // when they happened. A frame that loads late hears only what follows.

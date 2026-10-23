@@ -16,8 +16,10 @@ import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { publishPersisted } from "@/lib/events";
 import { findSpellByName, spellEngineName, spellFactsFor, spellMechanicsFor } from "@/lib/content";
-import { beastFormsHolding, findBeastForm, formatCr, formList } from "@/lib/srd/beast-forms";
-import { shapedAbilities, shapeForms, shapeProblem, shapeRuleFor } from "@/lib/srd/shape-rules";
+import { beastFormsHolding, findShapeForm, formatCr, wildShapeRecord } from "@/lib/srd/beast-forms";
+import { attackSummary } from "@/lib/srd/creature-attacks";
+import { speedWords } from "@/lib/srd/srd-creatures";
+import { findFormFor, formDefenses, formsOf, shapedAbilities, shapedForm, shapeOffer, shapeProblem, shapeRuleFor } from "@/lib/srd/shape-rules";
 import { conditionEffectsFor } from "@/lib/srd/condition-effects";
 import { applyDmMutation, castBarred } from "@/lib/dm/mutations";
 import { resolveEnemyRef, unknownEnemyRef } from "@/lib/dm/enemy-damage";
@@ -205,10 +207,15 @@ export function handleCastBuff(
     condition = picked;
   }
 
-  // Polymorph: the variant names the beast form and the server applies its
-  // whole stat block as a transformation (the wildShape machinery: beast HP
-  // pool, stat override, natural attacks). Resolved before the slot spends.
-  const polymorphForm = condition === "polymorphed" ? findBeastForm(args.variant ?? "") : null;
+  // Polymorph, Animal Shapes, True Polymorph and Shapechange: the variant
+  // names the form and the server applies its whole stat block as a
+  // transformation (the wildShape machinery: the form's HP pool, stat
+  // override, natural attacks, defenses). Resolved before the slot spends.
+  // A beast spell named another creature finds it all the same, so the
+  // refusal below can say it is no beast.
+  const shapeRule = shapeRuleFor(engine);
+  const namedForm = condition === "polymorphed" ? (findFormFor(shapeRule, args.variant ?? "") ?? findShapeForm(args.variant ?? "")) : null;
+  const polymorphForm = namedForm ? shapedForm(shapeRule, namedForm) : null;
   // A marking spell names its quarry among the enemies.
   const encounterNow = getActiveEncounter(campaign.id);
   const quarry =
@@ -254,15 +261,16 @@ export function handleCastBuff(
       retry: true,
     };
   }
-  // 5e: the new form's CR may not exceed the target's level (Polymorph), 4
-  // and Large (Animal Shapes), or the caster's level (Shapechange):
-  // src/lib/srd/shape-rules.ts.
-  const shapeRule = shapeRuleFor(engine);
+  // 5e: the new form's CR may not exceed the target's level (Polymorph,
+  // True Polymorph), 4 and Large (Animal Shapes), or the caster's level
+  // (Shapechange), and a beast spell gives a beast: src/lib/srd/shape-rules.ts.
   if (condition === "polymorphed" && !polymorphForm) {
-    const asked = args.variant?.trim() ? `The beast-form table holds no "${args.variant.trim()}"` : `${resolvedMech.name} needs the beast in variant`;
-    const hint = args.variant?.trim() ? holdingHint(args.variant, beastFormsHolding(args.variant).map((form) => form.name)) : "";
+    const asked = args.variant?.trim()
+      ? `The ${shapeRule.anyCreature ? "form" : "beast-form"} table holds no "${args.variant.trim()}"`
+      : `${resolvedMech.name} needs the ${shapeRule.anyCreature ? "form" : "beast"} in variant`;
+    const hint = args.variant?.trim() ? holdingHint(args.variant, beastFormsHolding(args.variant, formsOf(shapeRule)).map((form) => form.name)) : "";
     return {
-      error: `${asked}; ${targetSheets[0].name} can become: ${formList(shapeForms(shapeRule, targetSheets[0], sheet.level))}.${hint} Ask the player which, unless they named one. Nothing was spent.`,
+      error: `${asked}; ${targetSheets[0].name} can become: ${shapeOffer(shapeRule, targetSheets[0], sheet.level)}.${hint} Ask the player which, unless they named one. Nothing was spent.`,
       retry: true,
     };
   }
@@ -270,7 +278,7 @@ export function handleCastBuff(
     for (const target of targetSheets) {
       const problem = shapeProblem(shapeRule, polymorphForm, target, sheet.level);
       if (problem) {
-        return { ...problem, error: `${problem.error.replace(`CR ${polymorphForm.cr}`, `CR ${formatCr(polymorphForm.cr)}`)} Within it: ${formList(shapeForms(shapeRule, target, sheet.level))}. Nothing was spent.` };
+        return { ...problem, error: `${problem.error.replace(`CR ${polymorphForm.cr}`, `CR ${formatCr(polymorphForm.cr)}`)} Within it: ${shapeOffer(shapeRule, target, sheet.level)}. Nothing was spent.` };
       }
     }
   }
@@ -378,17 +386,11 @@ export function handleCastBuff(
       // (a polymorphed mind is the beast's), speed, and natural attacks.
       // Damage past the pool reverts the form (mutations.ts apply_damage).
       const shaped = patchSheet(target.id, {
-        wildShape: {
-          form: polymorphForm.name,
-          beastHp: polymorphForm.hp,
-          beastMaxHp: polymorphForm.hp,
-          beastAc: polymorphForm.ac,
+        wildShape: wildShapeRecord(polymorphForm, {
           kind: "polymorph",
-          ...(shapeRule.keepsTraining ? { keepsTraining: true } : {}),
+          keepsTraining: shapeRule.keepsTraining,
           abilities: shapedAbilities(shapeRule, polymorphForm, fresh.abilities),
-          speed: polymorphForm.speed,
-          attacks: polymorphForm.attacks,
-        },
+        }),
       });
       if (shaped) {
         publishPersisted(campaign.id, "sheet_updated", { sheet: shaped });
@@ -451,11 +453,11 @@ export function handleCastBuff(
     ...(maxHpGain ? { hitPoints: `+${maxHpGain} to the maximum and current hit points of each` } : {}),
     ...(polymorphForm
       ? {
-          form: `${polymorphForm.name}: ${polymorphForm.hp} HP, AC ${polymorphForm.ac}, speed ${polymorphForm.speed} ft`,
-          formAttacks: polymorphForm.attacks
-            .map((attack) => `${attack.name} +${attack.toHit} (${attack.damage} ${attack.type})`)
-            .join(", "),
+          form: `${polymorphForm.name} (${polymorphForm.type}, CR ${formatCr(polymorphForm.cr)}): ${polymorphForm.hp} HP, AC ${polymorphForm.ac}, speed ${speedWords(polymorphForm.speeds)}`,
+          formAttacks: polymorphForm.attacks.length ? polymorphForm.attacks.map(attackSummary).join(", ") : "none: this form has no attack",
+          ...(formDefenses(polymorphForm) ? { formDefenses: formDefenses(polymorphForm) } : {}),
           ...(polymorphForm.traits ? { formTraits: polymorphForm.traits } : {}),
+          ...(shapeRule.seenOnly ? { seen: shapeRule.seenOnly } : {}),
         }
       : {}),
     duration:

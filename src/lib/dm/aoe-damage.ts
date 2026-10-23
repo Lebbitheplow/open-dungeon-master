@@ -19,7 +19,7 @@ import { publishWithSeq } from "@/lib/events";
 import type { SaveAbility } from "@/lib/bestiary/statblock";
 import { trackEnemyConcentration } from "@/lib/dm/cast-tools";
 import { prepareEnemyUse, type EnemyUse } from "@/lib/dm/enemy-casting";
-import { layEnemyCondition } from "@/lib/dm/cast-at-player";
+import { layEnemyCondition, layFailedSaveExtras } from "@/lib/dm/cast-at-player";
 import { charmedBy } from "@/lib/dm/enemy-profile";
 import { planAoeSpell, type AoeSpellPlan } from "@/lib/dm/aoe-spell";
 import { freeRepeatOf, markRepeatStruck, repeatStrikesProblem } from "@/lib/dm/area-casting";
@@ -421,6 +421,7 @@ export function handleAoeDamage(
           // A legendary creature spends a resistance on an area's binding
           // condition, as it would on one cast at it alone (legendary-logic.ts).
           resist: Boolean(plan?.conditions.length) && bindsWorthResisting(plan?.conditions ?? [], Boolean(plan?.mech?.condition?.endsWith)),
+          against: plan?.conditions ?? (enemyUse?.condition ? [enemyUse.condition] : []),
           ...(plan ? spellSaveOptions(plan.mech, enemy) : {}),
           ...(plan ? { record: { turn, detail: `${enemy.displayName}: ${ability.toUpperCase()} save against ${plan.spell}` } } : {}),
         });
@@ -461,7 +462,7 @@ export function handleAoeDamage(
         sheets,
         sheetsById,
         part.type,
-        plan ? { magical: true, ...(elementalAdeptApplies(plan.caster, part.type) ? { ignoreResistance: true } : {}) } : undefined,
+        plan ? { magical: true, spell: true, ...(elementalAdeptApplies(plan.caster, part.type) ? { ignoreResistance: true } : {}) } : undefined,
       );
       if (applied.damageNote) {
         row.note = [row.note, applied.damageNote].filter(Boolean).join(" ");
@@ -562,27 +563,29 @@ export function handleAoeDamage(
   // An enemy ability's condition (Frightful Presence, Wing Attack's prone)
   // lands on each character who failed, tied to the creature so it ends
   // with it; a repeatable save re-rolls each round.
-  if (enemyUse?.condition) {
+  // The conditions listed with it and one a failure by a margin adds land
+  // the same way (cast-at-player.ts layFailedSaveExtras).
+  if (enemyUse?.condition || enemyUse?.failBy) {
     for (const sheet of pcTargets) {
       const row = results.find((entry) => entry.target === sheet.name);
       const standing = getSheetById(sheet.id);
       if (!row || row.success || !standing || standing.currentHp <= 0) {
         continue;
       }
-      const applied = layEnemyCondition(
-        campaign,
-        turn,
-        sheet,
-        enemyUse,
-        enemyUse.condition,
-        { ability, dc: saveDc },
-        { rounds: enemyUse.rounds, saveEnds: Boolean(enemyUse.saveEnds) },
-        `${enemyUse.enemy.displayName}'s ${enemyUse.name}`,
-        sheets,
-        sheetsById,
-      );
-      if (!("error" in applied)) {
-        row.conditionApplied = [enemyUse.condition, ...(Array.isArray(applied.alsoApplied) ? applied.alsoApplied : [])].join(", ");
+      const reason = `${enemyUse.enemy.displayName}'s ${enemyUse.name}`;
+      const timing = { rounds: enemyUse.rounds, saveEnds: Boolean(enemyUse.saveEnds) };
+      const applied = enemyUse.condition
+        ? layEnemyCondition(campaign, turn, sheet, enemyUse, enemyUse.condition, { ability, dc: saveDc }, timing, reason, sheets, sheetsById)
+        : null;
+      const extras = enemyUse.fromBlock
+        ? layFailedSaveExtras(campaign, turn, sheet, enemyUse, { ability, dc: saveDc, total: typeof row.save === "number" ? row.save : null }, timing, reason, sheets, sheetsById)
+        : [];
+      const landed = [
+        ...(applied && !("error" in applied) && enemyUse.condition ? [enemyUse.condition, ...(Array.isArray(applied.alsoApplied) ? applied.alsoApplied : [])] : []),
+        ...extras,
+      ];
+      if (landed.length) {
+        row.conditionApplied = landed.join(", ");
       }
     }
   }
@@ -616,6 +619,10 @@ export function handleAoeDamage(
     ...(area ? { area } : {}),
     ...(beyondReach.length ? { outOfReach: `${beyondReach.join(", ")} ${beyondReach.length === 1 ? "is" : "are"} off the Material Plane; the spell does not touch them.` } : {}),
     ...(shielded.length ? { noEffect: shielded.join(" ") } : {}),
+    // The second save the same use forces (src/lib/dm/ability-entries.ts).
+    ...(enemyUse?.followUp
+      ? { next: `${enemyUse.name} also forces a second save on the creatures its text names: resolve it with aoe_damage or cast_at_player, casterEnemyId ${enemyUse.enemy.id} and ability "${enemyUse.followUp}".` }
+      : {}),
     ...encounterOver,
   };
 }

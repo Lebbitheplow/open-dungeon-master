@@ -190,10 +190,14 @@ export function coverPromptBlock(cover: DmCover | null): string {
 // only to keep the model from wandering into the party's half of the catalog.
 export const MONSTER_ACTIONS = [
   "enemy_attack",
-  "set_enemy_condition",
+  "set_condition",
   "enemy_flees",
   "hold",
 ] as const;
+
+// The word a delegate answered with before set_condition took an enemy as
+// well as a character (issue #471), read as the same action.
+const RETIRED_MONSTER_ACTIONS: Record<string, MonsterAction> = { set_enemy_condition: "set_condition" };
 export type MonsterAction = (typeof MONSTER_ACTIONS)[number];
 
 export type MonsterDecision = {
@@ -221,7 +225,8 @@ export function parseMonsterDecision(raw: string): MonsterDecision | null {
   } catch {
     return null;
   }
-  const action = String(parsed.action ?? "").trim() as MonsterAction;
+  const said = String(parsed.action ?? "").trim();
+  const action = (RETIRED_MONSTER_ACTIONS[said] ?? said) as MonsterAction;
   if (!MONSTER_ACTIONS.includes(action)) {
     return null;
   }
@@ -250,14 +255,15 @@ export function monsterAdjudication(
   if (!decision.targetCharacterId) {
     return null;
   }
-  if (decision.action === "set_enemy_condition") {
-    // A monster imposing a condition on a player is not what this
-    // adjudication does; it puts one on an ENEMY. The only honest reading of
-    // the model picking it is a self-buff or a debuff it landed on a fellow
-    // monster, and without a condition named there is nothing to apply.
+  if (decision.action === "set_condition") {
+    // A monster imposing a condition on a player is not what this action
+    // does here; it puts one on an ENEMY (set_condition with its enemyId).
+    // The only honest reading of the model picking it is a self-buff or a
+    // debuff it landed on a fellow monster, and without a condition named
+    // there is nothing to apply.
     return decision.condition
       ? {
-          name: "set_enemy_condition",
+          name: "set_condition",
           args: {
             enemyId,
             condition: decision.condition,

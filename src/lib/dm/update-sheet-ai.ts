@@ -18,8 +18,8 @@ import type { ToolError } from "@/lib/dm/tool-errors";
 // Each field the model may not write, and where that change really comes
 // from, in the words the refusal gives it.
 const ENGINE_OWNED: Record<string, string> = {
-  level: "a level comes from the player's own level-up once award_xp makes one available",
-  xp: "experience moves through award_xp",
+  level: "a level comes from the player's own level-up once party_award makes one available",
+  xp: "experience moves through party_award",
   maxHp: "a hit point maximum comes from the level-up and the rules that change it",
   currentHp: "hit points move through heal and apply_damage",
   tempHp: "temporary hit points come from heal with temp:true",

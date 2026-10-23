@@ -14,6 +14,7 @@ import {
   type WeaponGear,
 } from "@/lib/dm/gear-attack";
 import type { TypedRider } from "@/lib/dm/damage-parts";
+import type { CreatureOnHit } from "@/lib/srd/creature-attacks";
 import type { GearDice } from "@/lib/srd/magic-gear";
 import type { CombatRiders } from "@/lib/srd/feature-effects";
 import { rageDamageBonus } from "@/lib/srd/class-resources";
@@ -104,6 +105,11 @@ export type AttackProfile = {
   gearDice?: GearDice[];
   gearCritDice?: GearDice[];
   gearBonusVs?: { types: string[]; bonus: number };
+  // A creature's natural attack (a beast form, a summoned creature): what
+  // its hit does besides the damage (src/lib/dm/natural-onhit.ts), and the
+  // "one prone creature" its hooves and stomps strike only.
+  creatureOnHit?: CreatureOnHit;
+  proneTargetsOnly?: boolean;
 };
 
 // The weapon block a homebrew item snapshotted onto its equipment line, if

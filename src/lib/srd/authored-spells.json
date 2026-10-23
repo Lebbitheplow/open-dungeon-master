@@ -102,7 +102,7 @@
       "higher_level": "The melee attack deals extra fire damage when you reach 5th level (1d8), 11th level (2d8), and 17th level (3d8), and the fire that leaps to the second creature increases by the same amount.",
       "mech": {
         "resolution": "attack",
-        "note": "A melee WEAPON attack via pc_attack. On a hit, a second creature within 5 feet takes fire damage equal to the spellcasting modifier (apply with damage_enemy)."
+        "note": "A melee WEAPON attack via pc_attack. On a hit, a second creature within 5 feet takes fire damage equal to the spellcasting modifier (apply_damage on it)."
       }
     },
     {

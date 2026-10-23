@@ -107,7 +107,7 @@ export function spellRetort(
     if (live?.status === "alive") {
       // The shield's bearer deals it.
       const rolled = rollCard(campaign, turn, target.id, "damage", rollAgainst("Fire Shield", live.displayName), "2d8", sheetAttacker(target)).total;
-      const applied = applyEnemyDamage(campaign, turn, encounter, live, rolled, sheets, sheetsById, type, { magical: true });
+      const applied = applyEnemyDamage(campaign, turn, encounter, live, rolled, sheets, sheetsById, type, { magical: true, spell: true });
       lines.push(`${target.name}'s Fire Shield sears ${live.displayName} for ${applied.damageApplied ?? rolled} ${type} damage.`);
     }
   }
@@ -121,6 +121,7 @@ export function spellRetort(
       const save = rollEnemySave(campaign.id, live, "con", dc, {
         magical: true,
         resist: true,
+        against: "blinded",
         record: { turn, detail: `${live.displayName}: CON save against Holy Aura` },
       });
       if (!save.success && !live.conditions.includes("blinded")) {
@@ -169,6 +170,6 @@ export function curseBurn(
   }
   const caster = getSheetById(casterId);
   const rolled = rollCard(campaign, turn, caster?.id ?? null, "damage", rollAgainst("Bestow Curse", enemy.displayName), rider.dice, caster ? sheetAttacker(caster) : null).total;
-  applyEnemyDamage(campaign, turn, encounter, enemy, rolled, sheets, sheetsById, rider.type, { magical: true });
+  applyEnemyDamage(campaign, turn, encounter, enemy, rolled, sheets, sheetsById, rider.type, { magical: true, spell: true });
   return `Bestow Curse: ${rolled} necrotic more to ${enemy.displayName}.`;
 }

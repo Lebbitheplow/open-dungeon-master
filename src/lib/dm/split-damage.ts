@@ -10,7 +10,9 @@
 //
 // The multiplier is the only thing this adds. Everything else goes through
 // the paths that already exist, so resistances, immunities, temp hit points,
-// death saves and concentration all resolve exactly as they always do.
+// death saves and concentration all resolve exactly as they always do. The
+// model and the console reach it through apply_damage with targets (issue
+// #471); split_damage stays its name in the engine.
 import { z } from "zod";
 import { getActiveEncounter } from "@/lib/db/encounters";
 import { applyDmMutation } from "@/lib/dm/mutations";
@@ -42,45 +44,6 @@ const splitSchema = z.object({
   reason: z.string().optional(),
 });
 
-export const splitDamageTool = {
-  type: "function",
-  function: {
-    name: "split_damage",
-    description:
-      "Apply ONE damage total to several creatures at once, each at their own share of it: full, half, double, or none. Use it when the same blow lands differently on different targets for a reason no saving throw covers (cover, a revealed immunity, someone diving clear). The server halves and doubles, then applies each share through the ordinary damage rules, so resistances, temporary hit points and death saves all still resolve themselves. For an area effect with a save, use aoe_damage.",
-    parameters: {
-      type: "object",
-      additionalProperties: false,
-      properties: {
-        amount: {
-          type: "integer",
-          minimum: 1,
-          maximum: 500,
-          description: "The damage the server rolled this turn, before any share is taken of it.",
-        },
-        dice: { type: "string", description: "Dice the server rolls for the total ('8d6'). Instead of amount." },
-        type: { type: "string", description: "Damage type (slashing, fire)." },
-        targets: {
-          type: "array",
-          minItems: 1,
-          items: {
-            type: "object",
-            additionalProperties: false,
-            properties: {
-              enemyId: { type: "string" },
-              characterId: { type: "string" },
-              share: { type: "string", enum: ["none", "half", "full", "double"] },
-            },
-          },
-          description: "One entry per creature: its id, and how much of the total it takes.",
-        },
-        reason: { type: "string" },
-      },
-      required: ["targets"],
-    },
-  },
-} as const;
-
 export function handleSplitDamage(
   campaign: Campaign,
   turn: DmTurn,
@@ -92,7 +55,7 @@ export function handleSplitDamage(
   try {
     args = splitSchema.parse(JSON.parse(rawArguments || "{}"));
   } catch {
-    return { error: "split_damage needs an amount and at least one target.", retry: true };
+    return { error: "apply_damage with targets needs an amount (or dice) and at least one target.", retry: true };
   }
 
   const encounter = getActiveEncounter(campaign.id);

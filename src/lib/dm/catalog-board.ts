@@ -46,18 +46,6 @@ export const BOARD_ADJUDICATIONS: CatalogEntry[] = [
     ],
   },
   {
-    name: "damage_pet",
-    label: "Damage a pet",
-    category: "combat",
-    summary: "Applies damage to a companion creature.",
-    fields: [
-      { name: "characterId", label: "Owner", kind: "character", required: true },
-      { name: "petName", label: "Pet", kind: "text", help: "Empty when they have only one." },
-      { name: "amount", label: "Damage", kind: "number", required: true, min: 1, max: 200 },
-      REASON,
-    ],
-  },
-  {
     name: "dismiss_pet",
     label: "Dismiss a pet",
     category: "combat",
@@ -73,8 +61,7 @@ export const BOARD_ADJUDICATIONS: CatalogEntry[] = [
     name: "move_token",
     label: "Move a token",
     category: "combat",
-    summary: "Moves a combatant on the map; walls, occupancy and speed still apply.",
-    needsEncounter: true,
+    summary: "Walks, pushes or teleports a combatant on the map; walls, occupancy and speed still apply to a walk.",
     fields: [
       {
         name: "tokenName",
@@ -82,7 +69,7 @@ export const BOARD_ADJUDICATIONS: CatalogEntry[] = [
         kind: "combatant",
         required: true,
         other: { label: "A piece by name", placeholder: "Goblin 2" },
-        help: "An enemy, or a character being pushed or carried.",
+        help: "An enemy, a character being pushed or carried, or anyone teleported (a piece you placed too).",
       },
       { name: "x", label: "Column", kind: "number", required: true },
       { name: "y", label: "Row", kind: "number", required: true },
@@ -104,25 +91,8 @@ export const BOARD_ADJUDICATIONS: CatalogEntry[] = [
         kind: "boolean",
         help: "An enemy hauls the character it grapples along at half speed; the grapple holds.",
       },
-      REASON,
-    ],
-  },
-  {
-    name: "teleport_token",
-    label: "Teleport a token",
-    category: "combat",
-    summary: "Puts a combatant on a tile without a path: Misty Step, a portal, a trap door.",
-    fields: [
-      {
-        name: "tokenName",
-        label: "Who",
-        kind: "combatant",
-        required: true,
-        other: { label: "A piece by name", placeholder: "the statue" },
-        help: "A character, an enemy, or a piece you placed.",
-      },
-      { name: "x", label: "Column", kind: "number", required: true },
-      { name: "y", label: "Row", kind: "number", required: true },
+      // Teleport a token's fields (issue #471): no path, no movement spent.
+      { name: "teleport", label: "Teleports there", kind: "boolean", help: "No path and no movement: Misty Step, a portal, a trap door." },
       { name: "spell", label: "Spell or ability", kind: "text", placeholder: "Misty Step", help: "With a caster below: the server casts it and refuses a jump past its range." },
       { name: "casterId", label: "Cast by character", kind: "character", help: "Spends their slot and the casting time." },
       { name: "casterEnemyId", label: "Or used by enemy", kind: "enemy" },

@@ -116,7 +116,7 @@ export function castPrismaticSpray(input: PrismaticCast): Array<Record<string, u
       if (type) {
         const rolled = rayDamage(input, caster.id, color, enemy.displayName);
         const amount = save.success ? Math.floor(rolled / 2) : rolled;
-        const applied = applyEnemyDamage(campaign, turn, encounter, now, amount, input.sheets, input.sheetsById, type, { magical: true });
+        const applied = applyEnemyDamage(campaign, turn, encounter, now, amount, input.sheets, input.sheetsById, type, { magical: true, spell: true });
         notes.push(`${color}: ${amount} ${type}`);
         row.health = applied.health;
         if (applied.dead) {

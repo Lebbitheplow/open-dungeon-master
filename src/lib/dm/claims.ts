@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import type { Campaign } from "@/lib/db/campaigns";
+import { getCampaignById, type Campaign } from "@/lib/db/campaigns";
+import { aiPlaysSheet } from "@/lib/dm/companion-command";
 import { getActiveEncounter, listEnemies, orderEntryId } from "@/lib/db/encounters";
 import { budgetApplies } from "@/lib/dm/action-budget";
 import { listNpcs } from "@/lib/db/npcs";
@@ -95,7 +96,8 @@ export function liveStateFor(campaignId: string): LiveState | null {
 // ended it. The default local models wrote "It is now Bram's turn" and left
 // the pointer where it was, so Bram's player was refused and the next words
 // went to the same character (the skirmish smoke, 2026-10-20). A companion's
-// turn is the model's to play whole. Null when no such turn waits.
+// turn is the model's to play whole, unless a player commands it. Null when
+// no such turn waits.
 export function turnOverFor(campaignId: string, turn: Pick<DmTurn, "resolvedCharacterIds">): string | null {
   const encounter = getActiveEncounter(campaignId);
   if (!encounter || !encounter.orderReady || encounter.kind === "scene") {
@@ -106,7 +108,7 @@ export function turnOverFor(campaignId: string, turn: Pick<DmTurn, "resolvedChar
     return null;
   }
   const sheet = getSheetById(current.characterId);
-  return sheet && !sheet.isCompanion && declaredThisTurn(campaignId, sheet.id) ? sheet.id : null;
+  return sheet && !aiPlaysSheet(getCampaignById(campaignId), sheet) && declaredThisTurn(campaignId, sheet.id) ? sheet.id : null;
 }
 
 // Whether this DM turn ruled on something the character did: a call that

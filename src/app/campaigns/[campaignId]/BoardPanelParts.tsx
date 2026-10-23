@@ -26,6 +26,7 @@ const BOARD_KEYS: Array<{ keys: string[]; does: string }> = [
   { keys: ["+", "−"], does: "Zoom in and out" },
   { keys: ["0"], does: "Fit the whole board" },
   { keys: ["Esc"], does: "Cancel an aim or a drag" },
+  { keys: ["Ctrl", "Z"], does: "Take back your last move" },
   { keys: ["Scroll"], does: "Zoom at the pointer" },
   { keys: ["Drag"], does: "Move the view" },
 ];
@@ -250,6 +251,8 @@ export function boardHintText(input: {
   drawing: boolean;
   targeting: boolean;
   canMove: boolean;
+  // A first tap aimed the walk; the second makes it.
+  moveAimed: boolean;
   scene: boolean;
   budgetLeft: number;
   hasToken: boolean;
@@ -277,10 +280,12 @@ export function boardHintText(input: {
         ? "Drag to draw. The table sees it; erase it when the plan changes."
       : targeting
         ? "Tap the enemy."
+        : canMove && input.moveAimed
+          ? "Tap the same tile again to move there. Tap another to change course, or press Esc."
         : canMove
           ? scene
-            ? "Tap anywhere you can walk. Nothing is being counted out here."
-            : `Tap a highlighted tile to move (${input.budgetLeft * TILE_FEET} ft left this turn). Tap your figure for actions.`
+            ? "Tap anywhere you can walk, then tap it again to go. Nothing is being counted out here."
+            : `Tap a highlighted tile to see the path, then again to move (${input.budgetLeft * TILE_FEET} ft left this turn). Tap your figure for actions.`
           : input.hasToken
             ? "You can move on your turn. The shroud shows what your character cannot see."
             : "You have no token on this field.";

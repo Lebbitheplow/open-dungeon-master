@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, UserRound } from "lucide-react";
+import { Plus, Sparkles, UserRound } from "lucide-react";
 import { useEffect, useState } from "react";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { SectionHead } from "@/components/ui/SectionHead";
@@ -37,8 +37,10 @@ function titleCase(value: string) {
 // One screen for every hero a seat can take (backlog F5), in this order: the
 // player's own heroes, the pregens an adventure brought (a workshop's, which
 // land in its importer's library: src/lib/db/workshop-bundle-parts.ts), the
-// ready-made starters (src/lib/starter/pregens.ts), then Build new. Every
-// pick opens the confirm sheet (JoinConfirmDialog.tsx) before it seats.
+// ready-made starters (src/lib/starter/pregens.ts), Help me build (the
+// quick-build quiz, backlog F1), then Build new. Every pick, and every hero
+// the quiz builds, opens the confirm sheet (JoinConfirmDialog.tsx) before it
+// seats.
 export function HeroChooser({
   campaignId,
   flow,
@@ -48,6 +50,7 @@ export function HeroChooser({
   genre,
   worldPackId,
   onBuildNew,
+  onHelpMeBuild,
   onSeated,
 }: {
   campaignId: string;
@@ -62,6 +65,8 @@ export function HeroChooser({
   genre?: Genre;
   worldPackId?: string;
   onBuildNew: () => void;
+  // Opens the builder on the quick-build quiz, at this table's level.
+  onHelpMeBuild: () => void;
   onSeated: () => void;
 }) {
   const [workshops, setWorkshops] = useState<Record<string, string>>({});
@@ -177,8 +182,20 @@ export function HeroChooser({
           ready-made door only seats a first hero, so it is not offered. */}
       {flow === "join" ? <PregenPicker campaignId={campaignId} heading="Ready-made heroes" onSeated={onSeated} /> : null}
 
-      {/* Backlog F1 slot: "Help me build", the quick-build quiz, goes here,
-          between the ready-made heroes and Build new. Not built yet. */}
+      {/* A few questions, then a hero built at this table's level; it comes
+          back here through the same confirm sheet (backlog F1). */}
+      <button
+        type="button"
+        onClick={onHelpMeBuild}
+        className={cn(ui.cardHover, "flex w-full items-center gap-3 p-4 text-left")}
+        data-chooser-section="help"
+      >
+        <IconChip icon={Sparkles} size="size-8" iconSize="size-4" />
+        <span className="min-w-0">
+          <span className="block font-display tracking-wide text-stone-100">Help me build</span>
+          <span className="block text-sm text-stone-400">Answer a few questions and get a hero suggested for you.</span>
+        </span>
+      </button>
 
       <button
         type="button"

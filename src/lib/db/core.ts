@@ -1554,6 +1554,10 @@ function ensureSchema(db: SqliteDatabase) {
   // ac_override lands keeps its hand-typed armor class, so nobody logs in to
   // find their character suddenly wearing different numbers.
   const sheetsNeedAcOverride = !sheetColumns.some((column) => column.name === "ac_override");
+  // And for companion command: the party companions already at a one-player
+  // table the AI runs start under that player's orders in fights, as new ones
+  // do (src/lib/dm/companion-command.ts defaultCommander).
+  const sheetsNeedCommanders = !sheetColumns.some((column) => column.name === "commanded_by");
 
   addColumns("homebrew_entries", [
     // Set when the author forgets an entry (src/lib/db/homebrew.ts
@@ -1636,6 +1640,10 @@ function ensureSchema(db: SqliteDatabase) {
     // exactly right for every existing character: they had no small change
     // because there was nowhere to put it.
     ["copper", `INTEGER NOT NULL DEFAULT 0`],
+    // The player who takes this AI companion's turns in a fight; NULL = the
+    // DM plays them. Out of fights the DM always does
+    // (src/lib/dm/companion-command.ts).
+    ["commanded_by", `TEXT`],
   ]);
 
   if (sheetsNeedAcOverride) {
@@ -1647,6 +1655,10 @@ function ensureSchema(db: SqliteDatabase) {
 
   if (sheetsNeedFeatureBackfill) {
     backfillSheetFeatures(db);
+  }
+
+  if (sheetsNeedCommanders) {
+    backfillCompanionCommanders(db);
   }
 
   addColumns("campaign_messages", [
@@ -2693,6 +2705,48 @@ export function repairWorkshopDmSeats(db: SqliteDatabase): number {
     repaired += 1;
   }
   return repaired;
+}
+
+// The rule of src/lib/dm/companion-command.ts defaultCommander, read from the
+// rows: a party companion (not a summon) at a table where the AI tells the
+// story and exactly one player holds a party slot follows that player.
+function backfillCompanionCommanders(db: SqliteDatabase) {
+  const companions = db
+    .prepare(
+      `SELECT id, campaign_id FROM character_sheets
+       WHERE is_companion = 1 AND companion_kind = 'party' AND summon_json IS NULL`,
+    )
+    .all() as Array<{ id: string; campaign_id: string }>;
+  const campaignRow = db.prepare(
+    `SELECT human_dm_user_id, assistant_dm_user_id, game_settings_json FROM campaigns WHERE id = ?`,
+  );
+  const members = db.prepare(`SELECT user_id FROM campaign_members WHERE campaign_id = ?`);
+  const update = db.prepare(`UPDATE character_sheets SET commanded_by = ? WHERE id = ?`);
+  for (const companion of companions) {
+    const campaign = campaignRow.get(companion.campaign_id) as
+      | { human_dm_user_id: string | null; assistant_dm_user_id: string | null; game_settings_json: string }
+      | undefined;
+    if (!campaign) {
+      continue;
+    }
+    let dmMode = "ai";
+    try {
+      dmMode = (JSON.parse(campaign.game_settings_json) as { dmMode?: string }).dmMode ?? "ai";
+    } catch {
+      // An unreadable settings blob reads as the default storyteller.
+    }
+    // src/lib/dm/viewer.ts hasHumanDm: a person narrates, so they play the companions.
+    if ((dmMode === "human" || dmMode === "assisted") && campaign.human_dm_user_id) {
+      continue;
+    }
+    const dmSeats = dmMode === "ai" ? [] : [campaign.human_dm_user_id, campaign.assistant_dm_user_id];
+    const players = (members.all(companion.campaign_id) as Array<{ user_id: string }>)
+      .map((row) => row.user_id)
+      .filter((id) => !dmSeats.includes(id));
+    if (players.length === 1) {
+      update.run(players[0], companion.id);
+    }
+  }
 }
 
 function backfillSheetPortraits(db: SqliteDatabase) {

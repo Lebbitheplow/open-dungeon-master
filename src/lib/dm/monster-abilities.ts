@@ -1,6 +1,7 @@
-import type { SaveAbility } from "@/lib/bestiary/statblock";
 import type { ToolError } from "@/lib/dm/tool-errors";
-import { splitWords, textKey } from "@/lib/language/text-logic";
+import { textKey } from "@/lib/language/text-logic";
+import { REGENERATION_NAME } from "@/lib/dm/regeneration-text";
+import { parseSaveEffect, type SaveEffect } from "@/lib/dm/save-effect";
 
 // A monster's special actions as numbers the engine runs (SRD 5.1,
 // Monsters): the save, DC and dice an ability prints, whether it recharges
@@ -9,59 +10,59 @@ import { splitWords, textKey } from "@/lib/language/text-logic";
 // stored block through it, and the per-fight ledger of what has been spent
 // lives on the encounter's legendary state (legendary-logic.ts), which the
 // functions here take and return. No database, no dice: the callers roll.
+// The save clause is read in save-effect.ts, spellcasting in
+// monster-spellcasting.ts and Regeneration in regeneration-text.ts; their
+// readers are exported from here too, where the engine has always found them.
 
-const ABILITY_WORDS: Record<string, SaveAbility> = {
-  strength: "str",
-  dexterity: "dex",
-  constitution: "con",
-  intelligence: "int",
-  wisdom: "wis",
-  charisma: "cha",
-};
+export { CONDITION_WORDS, SAVE_DC, conditionName, parseSaveEffect, type SaveEffect } from "@/lib/dm/save-effect";
+export {
+  findMonsterSpell,
+  mergeSpellcasting,
+  parseSpellcasting,
+  spellOfAction,
+  type MonsterSpell,
+  type MonsterSpellcasting,
+} from "@/lib/dm/monster-spellcasting";
+export { parseRegeneration, REGENERATION_STOPPED, regenerationOf, type Regeneration } from "@/lib/dm/regeneration-text";
 
-const DAMAGE_WORDS = [
-  "acid", "bludgeoning", "cold", "fire", "force", "lightning", "necrotic",
-  "piercing", "poison", "psychic", "radiant", "slashing", "thunder",
-];
-
-export const CONDITION_WORDS = [
-  "blinded", "charmed", "deafened", "frightened", "grappled", "incapacitated",
-  "paralyzed", "petrified", "poisoned", "restrained", "stunned", "unconscious",
-];
-
-export type MonsterAbility = {
+export type MonsterAbility = SaveEffect & {
   // The name without its tags: "Fire Breath", not "Fire Breath (Recharge 5-6)".
   name: string;
   // The lowest d6 face that brings it back: 5 for "Recharge 5-6".
   recharge?: number;
-  // Uses a day. A fight is shorter than a day, so this is uses a fight.
+  // Uses a day. A fight is shorter than a day, so this is uses a fight; with
+  // perRest, uses a rest ("Springspike Shield (5/rest)").
   perDay?: number;
   // "Recharges after a Short or Long Rest": once a fight.
   perRest?: boolean;
+  // "(Recharge Special)": the block says what brings it back (a meal, a
+  // charge of magic), which the server does not track, so it is once a fight.
+  rechargeSpecial?: boolean;
+  // "Sneak Attack (1/Turn)", "Ruthless (1/Round)".
+  oncePer?: "turn" | "round";
+  // The limit it shares with the other abilities of the same group: a
+  // dragon's "Breath Weapons (Recharge 5-6)" prints two breaths, and using
+  // either spends the one recharge. Absent on an ability with its own limit.
+  group?: string;
   // What a legendary action costs, when the line is one.
   legendaryCost?: number;
-  save?: SaveAbility;
-  dc?: number;
-  damage?: string;
-  damageType?: string;
-  halfOnSave?: boolean;
-  condition?: string;
-  // "for 1 minute" is 10 rounds; "until the end of its next turn" is 1;
-  // "for 1 hour" 600, "for 24 hours" a day's 14400.
-  rounds?: number;
-  // "until the target finishes a long rest" (a succubus's kiss).
-  untilLongRest?: boolean;
-  // "until it is removed by the lesser restoration spell", "until freed by
-  // greater restoration": no count and no repeat save; a cure ends it.
-  lasting?: boolean;
-  // The target repeats the save each round to end the condition.
-  repeatSave?: boolean;
-  // The ability says it is magic ("against this magic"), which Magic
-  // Resistance answers.
-  magical?: boolean;
+  // Printed among the block's Bonus Actions: the creature's bonus action,
+  // beside its action, once a round (src/lib/dm/enemy-casting.ts).
+  bonusAction?: boolean;
+  // A second save the same use forces ("Each creature in that area must also
+  // succeed on a DC 18 Wisdom saving throw or ..."): the ability it is read
+  // as, run on the same turn its parent was (src/lib/dm/enemy-casting.ts).
+  partOf?: string;
 };
 
-const TAGS = /\s*\((?:recharge[^)]*|\d+\s*\/\s*day[^)]*|costs?\s+\d\s+actions?|recharges after[^)]*)\)\s*/gi;
+// The tags a name carries for its limits and costs, which are not part of
+// what the ability is called: "(Recharge 5-6)", "(Recharges: Short/Long
+// Rest)", "(1/Day, While Bloodied)", "(Costs 2 Actions; Roc Form Only)",
+// "(1/Turn)", "(Dust Form Only; Recharge 5-6)", Tome of Beasts 3's cost "(2)" and
+// Tome of Beasts' "(2 actions)",
+// and A5e's spell levels, "(5th-Level; V, S, Concentration)".
+const TAGS =
+  /\s*\((?:[^()]*?\b(?:recharges?|costs?\s+\d\s+actions?|\d+\s*\/\s*(?:day|rest|turn|round|week|hour)|\d+\s+minutes?\s*\/\s*day|\d(?:st|nd|rd|th)-level|cantrip)\b[^()]*|\d(?:\s+actions?\b[^()]*)?)(?:\)|$)\s*/gi;
 
 // "Fire Breath (Recharge 5-6)" -> "fire breath": the name two lines are
 // matched on.
@@ -69,93 +70,66 @@ export function abilityKey(name: string): string {
   return textKey(name.replace(TAGS, " "));
 }
 
-function compactDice(raw: string): string {
-  return raw.replace(/\s+/g, "");
+// The key a limit is kept under in the ledger: the group's when the ability
+// shares one, else its own.
+export function limitKey(ability: Pick<MonsterAbility, "name" | "group">): string {
+  return abilityKey(ability.group ?? ability.name);
 }
 
-// "DC 13 Constitution saving throw": an ability's and an attack's rider.
-export const SAVE_DC = /DC\s*(\d{1,2})\s+(strength|dexterity|constitution|intelligence|wisdom|charisma)\s+saving throw/i;
-
-// A condition word as a line prints it, as the engine names it.
-export function conditionName(word: string): string {
-  const name = textKey(word);
-  return name === "knocked prone" ? "prone" : name;
-}
-
-// The rider or effect clause of a line: DC, save, damage, condition and how
-// long it lasts. Shared by abilities and by attacks' "Hit:" riders.
-export function parseSaveEffect(text: string): Omit<MonsterAbility, "name" | "recharge" | "perDay" | "perRest" | "legendaryCost"> {
-  const out: Omit<MonsterAbility, "name"> = {};
-  const save = SAVE_DC.exec(text);
-  if (save) {
-    out.dc = Number(save[1]);
-    out.save = ABILITY_WORDS[save[2].toLowerCase()];
+// The limits a name's tags print. `legendary`: the line is a legendary
+// action, whose bare "(2)" is its cost (Tome of Beasts 3).
+function limitsOf(rawName: string, desc: string, legendary: boolean): Partial<MonsterAbility> {
+  const out: Partial<MonsterAbility> = {};
+  const recharge = /recharges?\s*:?\s*(\d)(?:\s*[-–]\s*6)?\b/i.exec(rawName);
+  if (recharge) {
+    out.recharge = Math.min(6, Math.max(2, Number(recharge[1])));
+  } else if (/recharge special/i.test(rawName)) {
+    // "While the hydra has five or more heads, this action has a recharge of 6."
+    const printed = /has a recharge of (\d)/i.exec(desc);
+    if (printed) {
+      out.recharge = Math.min(6, Math.max(2, Number(printed[1])));
+    } else {
+      out.rechargeSpecial = true;
+    }
   }
-  const dice = [
-    ...text.matchAll(
-      new RegExp(`\\d+\\s*\\((\\d{1,3}d\\d{1,3}(?:\\s*[+-]\\s*\\d+)?)\\)\\s+(${DAMAGE_WORDS.join("|")})\\s+damage`, "gi"),
-    ),
-  ];
-  if (dice.length) {
-    out.damage = dice.map((match) => compactDice(match[1])).join("+");
-    out.damageType = dice[0][2].toLowerCase();
+  const perDay = /(\d+)\s*\/\s*(?:day|week|hour)\b/i.exec(rawName);
+  if (perDay) {
+    out.perDay = Number(perDay[1]);
   }
-  if (/half as much damage on a successful/i.test(text)) {
-    out.halfOnSave = true;
+  const perRest = /(\d+)\s*\/\s*rest\b/i.exec(rawName);
+  if (perRest) {
+    out.perRest = true;
+    if (Number(perRest[1]) > 1) {
+      out.perDay = Number(perRest[1]);
+    }
   }
-  const condition = new RegExp(
-    `(?:or|and)\\s+(?:be\\s+|become\\s+|is\\s+)?(knocked prone|${CONDITION_WORDS.join("|")})`,
-    "i",
-  ).exec(text);
-  if (condition) {
-    out.condition = conditionName(condition[1]);
+  // "Recharges after a Short or Long Rest", "(Recharge: Short/Long Rest)",
+  // "Recharges on a Short or Long Rest", "recharges after 10 minutes" (longer
+  // than a fight), "(1 minute/day)": once a fight.
+  if (/recharges?\s*(?:after|on|:)\s*(?:a |the )?(?:(?:short|long)(?:\s*(?:or|\/)\s*(?:short|long))?\s+rest|\d+\s+(?:minutes?|hours?))|\d+\s+minutes?\s*\/\s*day/i.test(rawName)) {
+    out.perRest = true;
   }
-  const span = /for (\d{1,3}) (round|minute|hour|day)s?\b/i.exec(text);
-  if (/until the end of (?:its|the [a-z' ]+?'s|your) next turn/i.test(text)) {
-    out.rounds = 1;
-  } else if (span) {
-    const count = Number(span[1]);
-    const unit = span[2].toLowerCase();
-    out.rounds = unit === "round" ? count : unit === "minute" ? count * 10 : unit === "hour" ? count * 600 : count * 14400;
-  } else if (/until (?:it|the target|the creature)(?:'s)? (?:finishes|completes) a long rest/i.test(text)) {
-    out.untilLongRest = true;
-  } else if (/until (?:it is |the (?:target|creature) is )?(?:removed|cured|freed|ended)\b/i.test(text)) {
-    out.lasting = true;
+  const once = /\b1\s*\/\s*(turn|round)\b/i.exec(rawName);
+  if (once) {
+    out.oncePer = once[1].toLowerCase() as "turn" | "round";
   }
-  if (/repeat the saving throw/i.test(text)) {
-    out.repeatSave = true;
-  }
-  if (/against this magic|magically/i.test(text)) {
-    out.magical = true;
+  const cost = /costs?\s+(\d)\s+actions?/i.exec(rawName) ?? /\((\d)\s+actions?\b/i.exec(rawName) ?? (legendary ? /\((\d)\)/.exec(rawName) : null);
+  if (cost) {
+    out.legendaryCost = Number(cost[1]);
   }
   return out;
 }
 
 // One action, special or legendary line of a block as an ability. Null when
 // the line prints nothing the engine can run (no save, no dice, no limit).
-export function parseAbilityText(rawName: string, desc: string): MonsterAbility | null {
+export function parseAbilityText(rawName: string, desc: string, options: { legendary?: boolean } = {}): MonsterAbility | null {
   const name = rawName.replace(TAGS, " ").replace(/\s+/g, " ").trim();
   if (!name) {
     return null;
   }
-  const ability: MonsterAbility = { name, ...parseSaveEffect(desc) };
-  const recharge = /recharge\s+(\d)(?:\s*[-\u2013]\s*6)?/i.exec(rawName);
-  if (recharge) {
-    ability.recharge = Math.min(6, Math.max(2, Number(recharge[1])));
-  }
-  const perDay = /(\d+)\s*\/\s*day/i.exec(rawName);
-  if (perDay) {
-    ability.perDay = Number(perDay[1]);
-  }
-  if (/recharges after a (?:short or )?long rest/i.test(rawName)) {
-    ability.perRest = true;
-  }
-  const cost = /costs?\s+(\d)\s+actions?/i.exec(rawName);
-  if (cost) {
-    ability.legendaryCost = Number(cost[1]);
-  }
+  const ability: MonsterAbility = { name, ...parseSaveEffect(desc), ...limitsOf(rawName, desc, Boolean(options.legendary)) };
   const runs =
-    ability.save || ability.damage || ability.recharge || ability.perDay || ability.perRest;
+    ability.save || ability.damage || ability.recharge || ability.perDay || ability.perRest || ability.rechargeSpecial || ability.oncePer;
   return runs ? ability : null;
 }
 
@@ -163,12 +137,13 @@ export function parseAbilityText(rawName: string, desc: string): MonsterAbility 
 // "Legendary action: Wing Attack (Costs 2 Actions). The dragon ...") as an
 // ability, for blocks written by hand or snapshotted before `specials`.
 export function abilityFromLine(line: string): MonsterAbility | null {
+  const legendary = /^legendary(?: action)?\s*[:.-]/i.test(line);
   const text = line.replace(/^(?:legendary|lair|bonus|reaction|action)(?: action)?\s*[:.-]\s*/i, "");
   const split = /^([^.:]{2,80}?)\s*[.:]\s+([\s\S]*)$/.exec(text.trim());
   if (!split) {
     return null;
   }
-  return parseAbilityText(split[1], split[2]);
+  return parseAbilityText(split[1], split[2], { legendary });
 }
 
 export type AbilityHolder = {
@@ -199,88 +174,6 @@ export function abilityNames(stats: AbilityHolder): string[] {
   return [...new Set(names)];
 }
 
-// ---- spellcasting ----
-
-export type MonsterSpell = {
-  name: string;
-  // 0 for a cantrip; null for an innate spell whose level the block does not
-  // print (the spell's own level applies).
-  level: number | null;
-  // Innate uses a day; absent for at will and for slot spells.
-  perDay?: number;
-};
-
-export type MonsterSpellcasting = {
-  dc?: number;
-  attack?: number;
-  ability?: SaveAbility;
-  casterLevel?: number;
-  // Slots by spell level ("1" -> 4).
-  slots: Record<string, number>;
-  spells: MonsterSpell[];
-};
-
-const titleCase = (name: string) =>
-  splitWords(name)
-    .map((part, index) => (index % 2 ? part.split("-").map((piece) => piece.charAt(0).toUpperCase() + piece.slice(1)).join("-") : part))
-    .join("")
-    .replace(/\b(Of|The|And|From|To)\b/g, (word) => word.toLowerCase());
-
-function spellNames(list: string): string[] {
-  return list
-    .replace(/\*/g, "")
-    .split(",")
-    .map((entry) => entry.replace(/\([^)]*\)/g, "").replace(/\s+/g, " ").trim())
-    .filter((entry) => entry && entry.length <= 40)
-    .map(titleCase);
-}
-
-// "Spellcasting" and "Innate Spellcasting" traits as the numbers they print.
-export function parseSpellcasting(desc: string): MonsterSpellcasting | null {
-  const text = desc.replace(/\r/g, "");
-  const dc = /spell save DC\s*(\d{1,2})/i.exec(text);
-  const attack = /([+-]\d{1,2}) to hit with spell attacks/i.exec(text);
-  const level = /(\d{1,2})(?:st|nd|rd|th)-level spellcaster/i.exec(text);
-  const ability = /spellcasting ability is (strength|dexterity|constitution|intelligence|wisdom|charisma)/i.exec(text);
-  const header =
-    /(cantrips\s*\(at will\)|(\d)(?:st|nd|rd|th)\s+level\s*\((\d+)\s+slots?\)|at will|(\d+)\s*\/\s*day(?:\s+each)?)\s*:/gi;
-  const heads = [...text.matchAll(header)];
-  const slots: Record<string, number> = {};
-  const spells: MonsterSpell[] = [];
-  heads.forEach((head, index) => {
-    const start = (head.index ?? 0) + head[0].length;
-    const end = index + 1 < heads.length ? (heads[index + 1].index ?? text.length) : text.length;
-    const names = spellNames(text.slice(start, end).split("\n")[0]);
-    const tag = head[1].toLowerCase();
-    if (tag.startsWith("cantrips")) {
-      spells.push(...names.map((name) => ({ name, level: 0 })));
-    } else if (head[2]) {
-      slots[head[2]] = Number(head[3]);
-      spells.push(...names.map((name) => ({ name, level: Number(head[2]) })));
-    } else if (head[4]) {
-      spells.push(...names.map((name) => ({ name, level: null, perDay: Number(head[4]) })));
-    } else {
-      spells.push(...names.map((name) => ({ name, level: null })));
-    }
-  });
-  if (!spells.length && !dc) {
-    return null;
-  }
-  return {
-    ...(dc ? { dc: Number(dc[1]) } : {}),
-    ...(attack ? { attack: Number(attack[1]) } : {}),
-    ...(ability ? { ability: ABILITY_WORDS[ability[1].toLowerCase()] } : {}),
-    ...(level ? { casterLevel: Number(level[1]) } : {}),
-    slots,
-    spells,
-  };
-}
-
-export function findMonsterSpell(casting: MonsterSpellcasting | undefined, wanted: string): MonsterSpell | null {
-  const key = textKey(wanted);
-  return casting?.spells.find((spell) => textKey(spell.name) === key) ?? null;
-}
-
 // ---- the per-fight ledger ----
 
 // What one enemy has spent this fight: recharge abilities waiting on their
@@ -292,7 +185,14 @@ export type AbilityLedger = {
   // What a legendary action bought and the next ability call spends: an
   // ability's key, or "cantrip" (legendary-tools.ts).
   bought?: string[];
+  // When an ability was last used, by its key: the turn ("<round>:<whose
+  // turn>", src/lib/db/encounters.ts turnKey) for a once-a-turn ability and
+  // the one a second save rides on, "round <n>" for a once-a-round one.
+  stamps?: Record<string, string>;
 };
+
+// The moment of a fight an ability is used in: the turn's key and the round.
+export type AbilityMoment = { turn: string; round: number };
 
 export function normalizeAbilityLedgers(raw: unknown): Record<string, AbilityLedger> {
   const out: Record<string, AbilityLedger> = {};
@@ -313,37 +213,65 @@ export function normalizeAbilityLedgers(raw: unknown): Record<string, AbilityLed
     const bought = strings(record.bought);
     const uses = numbers(record.uses);
     const slots = numbers(record.slots);
+    const stamps = Object.fromEntries(
+      Object.entries(record.stamps && typeof record.stamps === "object" ? (record.stamps as Record<string, unknown>) : {}).filter(
+        (pair): pair is [string, string] => typeof pair[1] === "string",
+      ),
+    );
     out[id] = {
       ...(spent.length ? { spent } : {}),
       ...(bought.length ? { bought } : {}),
       ...(Object.keys(uses).length ? { uses } : {}),
       ...(Object.keys(slots).length ? { slots } : {}),
+      ...(Object.keys(stamps).length ? { stamps } : {}),
     };
   }
   return out;
 }
 
-// Why an ability cannot be used now, or null when it can.
-export function abilityRefusal(creature: string, ability: MonsterAbility, ledger: AbilityLedger | undefined): ToolError | null {
-  const key = abilityKey(ability.name);
-  if (ability.recharge && ledger?.spent?.includes(key)) {
-    return { error: `${creature}'s ${ability.name} has not recharged: it comes back on a ${ability.recharge === 6 ? "6" : `${ability.recharge} or higher`} on the d6 rolled at the start of its turn. Pick another action.`, retry: true };
+const stampOf = (ability: Pick<MonsterAbility, "oncePer">, now: AbilityMoment) => (ability.oncePer === "round" ? `round ${now.round}` : now.turn);
+
+// Why an ability cannot be used now, or null when it can. `now` is the
+// fight's moment, for an ability limited to once a turn or a round and for a
+// second save, which rides on its parent's turn; without it those go
+// unchecked, as before.
+export function abilityRefusal(creature: string, ability: MonsterAbility, ledger: AbilityLedger | undefined, now?: AbilityMoment): ToolError | null {
+  const key = limitKey(ability);
+  const label = ability.group ? `${ability.group} (${ability.name})` : ability.name;
+  if (ability.partOf && now && ledger?.stamps?.[abilityKey(ability.partOf)] !== now.turn) {
+    return { error: `${ability.name} is the second save of ${creature}'s ${ability.partOf}: it comes with that use, on the same turn. Use ${ability.partOf} first.`, retry: true };
   }
-  const limit = ability.perDay ?? (ability.perRest ? 1 : 0);
+  if (ability.recharge && ledger?.spent?.includes(key)) {
+    return { error: `${creature}'s ${label} has not recharged: it comes back on a ${ability.recharge === 6 ? "6" : `${ability.recharge} or higher`} on the d6 rolled at the start of its turn. Pick another action.`, retry: true };
+  }
+  const limit = ability.perDay ?? (ability.perRest || ability.rechargeSpecial ? 1 : 0);
   if (limit && (ledger?.uses?.[key] ?? 0) >= limit) {
-    return { error: `${creature} has used ${ability.name} ${limit === 1 ? "already" : `all ${limit} times`} and cannot use it again today. Pick another action.`, retry: true };
+    const until = ability.rechargeSpecial
+      ? "this fight: its block says what brings it back, and the server holds it to one use"
+      : ability.perRest
+        ? "until it rests"
+        : "today";
+    return { error: `${creature} has used ${label} ${limit === 1 ? "already" : `all ${limit} times`} and cannot use it again ${until}. Pick another action.`, retry: true };
+  }
+  if (ability.oncePer && now && ledger?.stamps?.[key] === stampOf(ability, now)) {
+    return { error: `${creature} has used ${label} this ${ability.oncePer} already: it is once a ${ability.oncePer}. Pick another action.`, retry: true };
   }
   return null;
 }
 
-export function spendAbility(ability: MonsterAbility, ledger: AbilityLedger | undefined): AbilityLedger {
-  const key = abilityKey(ability.name);
+export function spendAbility(ability: MonsterAbility, ledger: AbilityLedger | undefined, now?: AbilityMoment): AbilityLedger {
+  const key = limitKey(ability);
   const next: AbilityLedger = { ...(ledger ?? {}) };
   if (ability.recharge) {
     next.spent = [...new Set([...(next.spent ?? []), key])];
   }
-  if (ability.perDay || ability.perRest) {
+  if (ability.perDay || ability.perRest || ability.rechargeSpecial) {
     next.uses = { ...(next.uses ?? {}), [key]: (next.uses?.[key] ?? 0) + 1 };
+  }
+  if (now) {
+    // The turn it was used, for a once-a-turn limit and for the second save
+    // that rides on it.
+    next.stamps = { ...(next.stamps ?? {}), [abilityKey(ability.name)]: now.turn, ...(ability.oncePer ? { [key]: stampOf(ability, now) } : {}) };
   }
   return next;
 }
@@ -362,16 +290,17 @@ export function rollRecharges(
   const lines: string[] = [];
   const spent: string[] = [];
   for (const key of ledger.spent) {
-    const ability = abilities.find((entry) => abilityKey(entry.name) === key);
+    const ability = abilities.find((entry) => limitKey(entry) === key);
     if (!ability?.recharge) {
       continue;
     }
+    const name = ability.group ?? ability.name;
     const face = roll();
     if (face >= ability.recharge) {
-      lines.push(`${creature}'s ${ability.name} recharges (d6: ${face}).`);
+      lines.push(`${creature}'s ${name} recharges (d6: ${face}).`);
     } else {
       spent.push(key);
-      lines.push(`${creature}'s ${ability.name} does not recharge (d6: ${face}).`);
+      lines.push(`${creature}'s ${name} does not recharge (d6: ${face}).`);
     }
   }
   const next = { ...ledger };
@@ -385,7 +314,7 @@ export function rollRecharges(
 
 // The slot a spell of `level` is cast from: the lowest one left at or above
 // it. Null when none is left.
-export function slotFor(casting: MonsterSpellcasting, ledger: AbilityLedger | undefined, level: number): number | null {
+export function slotFor(casting: { slots: Record<string, number> }, ledger: AbilityLedger | undefined, level: number): number | null {
   const levels = Object.keys(casting.slots)
     .map(Number)
     .filter((slot) => slot >= level)
@@ -408,7 +337,7 @@ export function spendSpellUse(ledger: AbilityLedger | undefined, spell: string):
   return { ...(ledger ?? {}), uses: { ...(ledger?.uses ?? {}), [key]: (ledger?.uses?.[key] ?? 0) + 1 } };
 }
 
-export function spellUsesLeft(ledger: AbilityLedger | undefined, spell: MonsterSpell): number {
+export function spellUsesLeft(ledger: AbilityLedger | undefined, spell: { name: string; perDay?: number }): number {
   if (!spell.perDay) {
     return Number.POSITIVE_INFINITY;
   }
@@ -442,50 +371,21 @@ export function enemyHpCap(enemy: { maxHp: number; conditions: string[] }): numb
   return enemyExhaustion(enemy.conditions) >= 4 ? Math.floor(enemy.maxHp / 2) : enemy.maxHp;
 }
 
-// ---- Regeneration ----
-
-// `diesOnlyAtTurnStart`: "The troll dies only if it starts its turn with 0
-// hit points and doesn't regenerate" (src/lib/dm/regeneration.ts).
-export type Regeneration = { amount: number; stoppedBy: string[]; diesOnlyAtTurnStart?: boolean };
-
-// The condition a creature carries from the damage that stops its
-// Regeneration until the start of its next turn.
-export const REGENERATION_STOPPED = "regeneration stopped";
-
-// "The troll regains 10 hit points at the start of its turn. If the troll
-// takes acid or fire damage, this trait doesn't function at the start of
-// the troll's next turn."
-export function parseRegeneration(text: string): Regeneration | null {
-  const amount = /regains (\d{1,3}) hit points at the start of its turn/i.exec(text);
-  if (!amount) {
-    return null;
-  }
-  const stop = /takes ([a-z ,]+?) damage(?: or damage from [^,.]+)?,? this trait doesn't function/i.exec(text);
-  const stoppedBy = stop ? DAMAGE_WORDS.filter((word) => new RegExp(`\\b${word}\\b`, "i").test(stop[1])) : [];
-  const diesOnlyAtTurnStart = /dies only if it starts its turn with 0 hit points/i.test(text);
-  return { amount: Number(amount[1]), stoppedBy, ...(diesOnlyAtTurnStart ? { diesOnlyAtTurnStart: true } : {}) };
-}
-
-// The block's Regeneration: parsed with the block, or read from its trait
-// line for a block written by hand.
-export function regenerationOf(stats: { regeneration?: Regeneration; traits?: string[] }): Regeneration | null {
-  if (stats.regeneration) {
-    return stats.regeneration;
-  }
-  const line = (stats.traits ?? []).find((entry) => /^regeneration\b/i.test(entry.trim()));
-  return line ? parseRegeneration(line) : null;
-}
-
 // ---- traits the engine reads ----
 
 const TRAIT_FLAGS = {
   magicResistance: /^magic resistance\b/i,
   packTactics: /^pack tactics\b/i,
   nimbleEscape: /^nimble escape\b/i,
-  sunlightSensitivity: /^sunlight sensitivity\b/i,
+  // Sunlight Weakness and Hypersensitivity (Black Flag, A5e, the Tomes of
+  // Beasts) put its attacks at disadvantage in sunlight as Sensitivity does.
+  sunlightSensitivity: /^sunlight (?:sensitivity|weakness|hypersensitivity)\b/i,
+  // Weakness puts its saves at disadvantage there too.
+  sunlightWeakness: /^sunlight weakness\b/i,
   undeadFortitude: /^undead fortitude\b/i,
-  regeneration: /^regeneration\b/i,
-  magicWeapons: /^magic weapons\b/i,
+  regeneration: REGENERATION_NAME,
+  // Tome of Beasts prints it in the singular ("Magic Weapon").
+  magicWeapons: /^magic weapons?\b/i,
 } as const;
 
 export type TraitFlag = keyof typeof TRAIT_FLAGS;
@@ -498,4 +398,4 @@ export function hasTrait(stats: { traits?: string[] } | undefined, flag: TraitFl
 
 // Trait names statblock.ts keeps whatever the cap on trait lines, because
 // the engine reads them.
-export const ENGINE_TRAIT_NAMES = /^(magic resistance|pack tactics|nimble escape|sunlight sensitivity|undead fortitude|regeneration|magic weapons|legendary resistance|spellcasting|innate spellcasting|keen (?:sight|hearing|smell|senses)|(?:acid|cold|fire|lightning|thunder) absorption|immutable form|limited magic immunity|martial advantage|surprise attack)\b/i;
+export const ENGINE_TRAIT_NAMES = /^(magic resistance|pack tactics|nimble escape|sunlight (?:sensitivity|weakness|hypersensitivity)|undead fortitude|(?:[a-z'-]+ )?regeneration|magic weapons?|legendary resistance|spellcasting|innate spellcasting|keen (?:sight|hearing|smell|senses|scent)|(?:acid|cold|fire|force|lightning|necrotic|poison|psychic|radiant|thunder) absorption|immutable form|limited magic immunity|martial advantage|surprise attack|turn(?:ing)? (?:resistance|defiance|immunity|vulnerability)|turning(?=:))\b/i;

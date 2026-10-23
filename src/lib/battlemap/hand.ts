@@ -108,28 +108,31 @@ function attackCards(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders
     compose: false,
   };
 
-  // A beast form swings with its statblock, not with the sheet's gear.
-  if (sheet.wildShape?.attacks?.length) {
+  // A beast form swings with its statblock, not with the sheet's gear; a
+  // form whose block has no attack (a frog) leaves no attack card at all.
+  if (sheet.wildShape?.attacks) {
     for (const attack of sheet.wildShape.attacks) {
+      const ranged = Boolean(attack.range) && !attack.thrown;
       cards.push(
         gated(
           {
             ...base,
             id: `attack:${textKey(attack.name)}`,
             name: attack.name,
-            range: "5 ft",
-            dice: `${attack.damage} ${attack.type}`.trim(),
+            range: attack.range ? `${ranged ? "" : `${attack.reach ?? 5} ft / `}${attack.range}/${attack.longRange ?? attack.range} ft` : `${attack.reach ?? 5} ft`,
+            dice: `${attack.damage} ${attack.type}${(attack.riders ?? []).map((rider) => ` + ${rider.dice} ${rider.type}`).join("")}`.trim(),
             roll: `${signed(attack.toHit)} to hit`,
             rules: `${sheet.wildShape.form} form.`,
             icon: { kind: "action", key: "attack" },
             toHit: attack.toHit,
             damage: attack.damage,
             damageType: attack.type,
-            melee: true,
+            melee: !ranged,
             intent: { card: "attack", weapon: attack.name },
           },
           standing,
-          attackGate(turn, allowed, sheet),
+          // The form's Multiattack, as the server counts it (turn-budget.ts).
+          attackGate(turn, Math.max(allowed, sheet.wildShape.attacksPerTurn ?? 1), sheet),
         ),
       );
     }

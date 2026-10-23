@@ -37,7 +37,7 @@ export function ContentPick({
   className?: string;
   extraParams?: Record<string, string>;
 }) {
-  const { query, setQuery, results, open, setOpen, loading, unavailable } = useContentSearch(
+  const { query, setQuery, results, open, setOpen, loading, unavailable, failed } = useContentSearch(
     kind,
     extraParams ?? {},
   );
@@ -53,7 +53,10 @@ export function ContentPick({
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, [setOpen]);
 
-  if (unavailable) return null;
+  // No content pack: there is no catalog to pick from, and the field beside
+  // this takes the name typed. A failed request is not that: the box stays,
+  // says so, and a new letter asks again.
+  if (unavailable && !failed) return null;
 
   return (
     <div ref={container} className={className}>
@@ -71,7 +74,11 @@ export function ContentPick({
           <Loader2 className="absolute right-2 top-1/2 size-3.5 -translate-y-1/2 animate-spin text-stone-500" />
         ) : null}
       </div>
-      {open && !results.length && query.trim() && !loading ? (
+      {failed ? (
+        <p role="alert" className="reveal mt-1 rounded-lg border border-amber-900/50 bg-amber-950/20 px-3 py-1.5 text-[11px] text-amber-200/80">
+          Could not reach the server to search. Type again to retry.
+        </p>
+      ) : open && !results.length && query.trim() && !loading ? (
         <p className="reveal mt-1 rounded-lg border border-stone-800 bg-stone-950/60 px-3 py-1.5 text-[11px] text-stone-500">
           Nothing matched &quot;{query.trim()}&quot;. Try fewer letters.
         </p>

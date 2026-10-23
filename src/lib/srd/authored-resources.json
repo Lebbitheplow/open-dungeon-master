@@ -1734,7 +1734,7 @@
    "ability": null,
    "recharge": "long",
    "action": "bonus",
-   "guidance": "A bonus action from 3rd level for a minute of transformation (MotM): pass variant heavenly wings (a flying speed equal to the walking speed), inner radiance (bright light; each creature within 10 feet takes radiant damage equal to the proficiency bonus at the end of each of the aasimar's turns) or necrotic shroud (creatures within 10 feet make a Charisma save or are frightened until the end of the aasimar's next turn). Once on each turn, one target of the aasimar's attack or spell takes extra damage equal to the proficiency bonus: radiant, or necrotic for the shroud (damage_enemy).",
+   "guidance": "A bonus action from 3rd level for a minute of transformation (MotM): pass variant heavenly wings (a flying speed equal to the walking speed), inner radiance (bright light; each creature within 10 feet takes radiant damage equal to the proficiency bonus at the end of each of the aasimar's turns) or necrotic shroud (creatures within 10 feet make a Charisma save or are frightened until the end of the aasimar's next turn). Once on each turn, one target of the aasimar's attack or spell takes extra damage equal to the proficiency bonus: radiant, or necrotic for the shroud (apply_damage).",
    "fx": {
     "kind": "buff",
     "condition": "celestial revelation: heavenly wings",

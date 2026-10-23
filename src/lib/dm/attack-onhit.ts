@@ -182,7 +182,7 @@ export function poisonOnHit(campaign: Campaign, sheetId: string, enemyId: string
     return "The poison's coat is spent on the blow.";
   }
   const label = coat.name.charAt(0).toUpperCase() + coat.name.slice(1);
-  const save = rollEnemySave(campaign.id, enemy, "con", coat.dc);
+  const save = rollEnemySave(campaign.id, enemy, "con", coat.dc, { against: coat.conditions });
   if (save.success && !(coat.damage && coat.halfOnSave)) {
     return `${label}: ${enemy.displayName} holds (CON save ${save.total} vs DC ${coat.dc}); the coat is spent.`;
   }
@@ -250,7 +250,7 @@ export function openHandOnHit(
     return `Open Hand Technique: ${enemy.displayName} cannot take reactions until the end of the monk's next turn.`;
   }
   const ability = choice === "prone" ? "dex" : "str";
-  const save = rollEnemySave(campaign.id, enemy, ability, dc);
+  const save = rollEnemySave(campaign.id, enemy, ability, dc, { against: choice === "prone" ? "prone" : [] });
   const rolled = save.autoFailed ? "automatic" : String(save.total);
   if (save.success) {
     return `Open Hand Technique: ${enemy.displayName} holds (${ability.toUpperCase()} save ${rolled} vs DC ${dc}).`;

@@ -32,6 +32,7 @@ import { suite } from "./lib/enforce-harness.mjs";
 const { test, finish } = suite("test-enforce-tool-args");
 const { MUTATION_TOOL_NAMES, mutationTools } = await import("../src/lib/dm/mutations.ts");
 const { adjudication } = await import("../src/lib/dm/invoke-catalog.ts");
+const { isRetiredTool } = await import("../src/lib/dm/tool-merge-logic.ts");
 const { ENCOUNTER_TOOL_NAMES } = await import("../src/lib/dm/encounter-tools.ts");
 const { dispatchAdjudication } = await import("../src/lib/dm/invoke-dispatch.ts");
 const { createDmTurn } = await import("../src/lib/db/dm-turns.ts");
@@ -378,7 +379,9 @@ await test(
 
 await test("a console form sends the arguments its tool takes, under the names the handler reads", async () => {
   const drift = [];
-  for (const name of MUTATION_TOOL_NAMES.filter((tool) => tool !== "update_sheet")) {
+  // A retired name (issue #471) has no definition or form of its own: its
+  // calls are the merged tool's.
+  for (const name of MUTATION_TOOL_NAMES.filter((tool) => tool !== "update_sheet" && !isRetiredTool(tool))) {
     const parameters = mutationTools.find((tool) => tool.function.name === name).function.parameters;
     const fields = adjudication(name).fields.map((field) => field.name);
     const unread = fields.filter((field) => !(field in parameters.properties));

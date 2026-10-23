@@ -6,6 +6,7 @@ import { InfoButton } from "@/components/ui/InfoDialog";
 import { LengthNote } from "@/components/ui/LengthNote";
 import { SegmentedControl } from "@/components/ui/SegmentedControl";
 import { cn } from "@/lib/cn";
+import { prefersStillMotion } from "@/lib/effects-mode";
 import { contentSlug } from "@/lib/help";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
 import { formatModifier, proficiencyBonus } from "@/lib/srd";
@@ -18,15 +19,18 @@ import type { BackgroundOption, ClassOption, RaceOption } from "../useBuilderOpt
 import type { TableRulesState } from "../useTableRules";
 import type { BuilderDerived } from "../useBuilderDerived";
 import type { BuilderState } from "../useBuilderState";
+import type { BlockerTarget } from "../submit";
+import type { SummaryRow, SummaryRowKey } from "../summary";
 import { hpExplainerInput } from "./AbilitiesStep";
 import { Chip, Field, StepPanel, inputClass } from "./shared";
+import { SummaryPanel } from "./SummaryPanel";
 
 // The sheet schema's own limit on a backstory (src/lib/schemas/sheet.ts).
 const BACKSTORY_MAX = 2000;
 
 export type BuilderRole = "pc" | "companion";
 
-// Step 6: the hero at a glance with a way back to each choice, the numbers
+// Step 6: the summary (an edit opens on it, a new build ends on it), the numbers
 // the sheet will open with, who plays them (library only), their alignment, the portrait, how they
 // look, their story and extra feats. The save button is
 // the wizard footer.
@@ -43,6 +47,8 @@ export function FinishStep({
   onUploadPortrait,
   error,
   onEdit,
+  summary,
+  onFix,
   alignmentGroups,
   alignmentInfo,
   role,
@@ -62,6 +68,10 @@ export function FinishStep({
   error: string;
   // Back to the step that holds a choice ("identity", "calling"...).
   onEdit?: (step: FinishEditStep) => void;
+  // The summary's rows (summary.ts) and its Fix, which goes to the step and
+  // the field that takes a pick still owed.
+  summary: SummaryRow[];
+  onFix: (target: BlockerTarget) => void;
   alignmentGroups: PickerGroup[];
   alignmentInfo: string;
   // Offered by the library page only, and only when the link that opened
@@ -74,6 +84,7 @@ export function FinishStep({
   const appearanceId = useId();
   const alignmentId = useId();
   const backstoryId = useId();
+  const touchesId = useId();
   const { preview, acInfo, ac, effectiveLevel } = derived;
   const keptSaved = Boolean(initial?.portrait && portrait?.url === initial.portrait.url);
   const hp = hpExplainerInput(derived, klass);
@@ -106,33 +117,23 @@ export function FinishStep({
   // step, issue #124). What is left here is what the character already
   // holds from play, shown so an edit does not lose it unseen.
   const racialFeat = race ? racialFeatCount(race.id) > 0 : false;
-  // The playable character leads: who they are with a way back to each
-  // choice, then the numbers the sheet opens with. Portrait, looks and
-  // story are the finishing touches beneath.
-  const edits: Array<{ step: FinishEditStep; label: string; value: string }> = [
-    { step: "identity", label: "Name and background", value: [state.name.trim() || "Unnamed", background?.name].filter(Boolean).join(" · ") },
-    { step: "ancestry", label: "Ancestry", value: race?.name ?? "Not chosen" },
-    { step: "calling", label: "Class", value: klass ? `${klass.name}${state.subclass ? ` (${state.subclass})` : ""}, level ${effectiveLevel}` : "Not chosen" },
-    { step: "abilities", label: "Ability scores", value: preview ? "Set" : "Not set" },
-    { step: "spells-gear", label: derived.casts ? "Spells and gear" : "Gear", value: derived.casts ? "Chosen" : "Packed" },
-  ];
+  // The finishing touches are on this step: their row's Edit comes down
+  // to them and puts focus on the alignment picker.
+  function editRow(key: SummaryRowKey) {
+    if (key !== "finish") {
+      onEdit?.(key);
+      return;
+    }
+    const touches = document.getElementById(touchesId);
+    touches?.scrollIntoView({ block: "start", behavior: prefersStillMotion() ? "auto" : "smooth" });
+    touches?.querySelector<HTMLElement>("button[aria-haspopup], textarea")?.focus({ preventScroll: true });
+  }
   return (
     <div className="space-y-4">
-      <StepPanel title="Your hero" ornate className="border-amber-500/30">
-        <ul className="divide-y divide-stone-800/70 text-sm" data-finish-summary>
-          {edits.map((entry) => (
-            <li key={entry.step} className="flex items-center gap-3 py-1.5">
-              <span className="w-32 shrink-0 text-xs text-stone-500">{entry.label}</span>
-              <span className="min-w-0 flex-1 truncate text-stone-200">{entry.value}</span>
-              {onEdit ? (
-                <button type="button" onClick={() => onEdit(entry.step)} className={cn(ui.btnSmall, "shrink-0 px-2 py-0.5 text-xs")}>
-                  Edit
-                </button>
-              ) : null}
-            </li>
-          ))}
-        </ul>
-      </StepPanel>
+      {/* The playable character leads: each step's picks with a way back to
+          it and anything still owed, then the numbers the sheet opens with.
+          Portrait, looks and story are the finishing touches beneath. */}
+      <SummaryPanel rows={summary} onEdit={editRow} onFix={onFix} />
 
       {preview && race ? (
         <StepPanel title="Derived stats" ornate className="border-amber-500/30">
@@ -199,6 +200,7 @@ export function FinishStep({
         </StepPanel>
       ) : null}
 
+      <div id={touchesId} className="scroll-mt-2 space-y-4">
       <StepPanel
         title={
           <span className="inline-flex items-center gap-1">
@@ -291,6 +293,7 @@ export function FinishStep({
         />
         <LengthNote id={`${backstoryId}-length`} length={state.backstory.length} max={BACKSTORY_MAX} from={0.75} />
       </StepPanel>
+      </div>
 
       {!racialFeat && state.feats.length ? (
         <StepPanel

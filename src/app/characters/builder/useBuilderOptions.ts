@@ -2,7 +2,7 @@
 
 import { registerBrowserSubclassExtras, subclassLevelFor } from "@/lib/srd/features";
 import { extraSubclassOf } from "@/lib/srd/subclass-tables";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { scopeQuery, useContentCampaign } from "@/lib/content-scope";
 import { packRaceOptions } from "@/lib/content/race-options";
 import { registerBrowserSpecies } from "@/lib/srd/race-id";
@@ -52,6 +52,16 @@ export type ArchetypeOption = { id: string; name: string; desc: string; workshop
 // At a table (src/lib/content-scope.tsx) the table's workshop species and
 // backgrounds come with them. Without the content pack those still arrive,
 // beside the bundled SRD options; `packInstalled` says which it was.
+// What a table leaves out of an option list, or could not load: the asker's
+// own entries the table does not admit (src/lib/content/scope.ts), and the
+// lists whose request failed, which stand on the bundled options meanwhile.
+export type OptionListKind = "races" | "classes" | "backgrounds";
+export type OptionStatus = { unadmitted: Record<OptionListKind, string[]>; failed: OptionListKind[]; retry: () => void };
+
+const NO_UNADMITTED: Record<OptionListKind, string[]> = { races: [], classes: [], backgrounds: [] };
+
+// Each list is asked for on its own: one that fails falls back to the
+// bundled options alone, and says so, without taking the others with it.
 export function useBuilderOptions(keepRaceId?: string) {
   const campaignId = useContentCampaign();
   const [races, setRaces] = useState<RaceOption[]>(srdRaceOptions);
@@ -62,75 +72,81 @@ export function useBuilderOptions(keepRaceId?: string) {
   // then the bundled lists stand in, and a stored pick missing from them
   // proves nothing.
   const [loaded, setLoaded] = useState(false);
+  const [unadmitted, setUnadmitted] = useState<Record<OptionListKind, string[]>>(NO_UNADMITTED);
+  const [failed, setFailed] = useState<OptionListKind[]>([]);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    async function load() {
-      try {
-        const [racesResponse, classesResponse, backgroundsResponse] = await Promise.all([
-          fetch(`/api/content/races?limit=200${scopeQuery(campaignId, "&")}`),
-          fetch(`/api/content/classes?limit=100${scopeQuery(campaignId, "&")}`),
-          fetch(`/api/content/backgrounds?limit=200${scopeQuery(campaignId, "&")}`),
-        ]);
-        if (!racesResponse.ok || !classesResponse.ok || !backgroundsResponse.ok) {
-          return;
-        }
-        const [racesData, classesData, backgroundsData] = await Promise.all([
-          racesResponse.json(),
-          classesResponse.json(),
-          backgroundsResponse.json(),
-        ]);
-        if (cancelled) {
-          return;
-        }
-        const installed = racesData.packInstalled !== false;
-        setPackInstalled(installed);
-        const raceRows = (racesData.results ?? []) as ContentRow[];
-        if (raceRows.length) {
-          const packed = packRaceOptions(raceRows, keepRaceId ? [keepRaceId] : []);
-          // No pack: the rows are the table's workshop species, offered
-          // beside the bundled SRD races rather than in their place.
-          const options = installed
-            ? packed
-            : [...srdRaceOptions().filter((option) => !packed.some((entry) => entry.id === option.id)), ...packed];
-          // Size, Dwarven Toughness and the rest read a pack or workshop
-          // species by id, here as on the server.
-          registerBrowserSpecies(
-            Object.fromEntries(options.map((option) => [option.id, { size: option.size, heavyArmorSpeed: option.heavyArmorSpeed, traitNames: option.traitNames }])),
-          );
-          setRaces(options);
-        }
-        const classRows = (classesData.results ?? []) as ContentRow[];
-        // The table's workshop classes, read by the builder's engines as on
-        // the server (src/lib/classes/workshop-registry.ts), and offered with
-        // or without a content pack.
-        registerWorkshopClasses(workshopClassesOf(classRows));
-        if (classRows.length && installed) {
-          setClasses(packClassOptions(classRows));
-        } else if (classRows.length) {
-          setClasses([...srdClassOptions(), ...packClassOptions(classRows).filter((option) => isWorkshopClassId(option.id))]);
-        }
-        const backgroundRows = (backgroundsData.results ?? []) as ContentRow[];
-        if (backgroundRows.length) {
-          setBackgrounds(mergedBackgroundOptions(backgroundRows));
-        }
-      } catch {
-        // SRD fallback already in state.
-      } finally {
-        if (!cancelled) {
-          setLoaded(true);
-        }
+    async function list(kind: OptionListKind, limit: number): Promise<{ results?: ContentRow[]; packInstalled?: boolean; unadmitted?: string[] }> {
+      const response = await fetch(`/api/content/${kind}?limit=${limit}${scopeQuery(campaignId, "&")}`);
+      if (!response.ok) {
+        throw new Error(String(response.status));
       }
+      return response.json();
     }
-    load();
+    async function load() {
+      const [racesAnswer, classesAnswer, backgroundsAnswer] = await Promise.allSettled([list("races", 200), list("classes", 100), list("backgrounds", 200)]);
+      if (cancelled) {
+        return;
+      }
+      setFailed((["races", "classes", "backgrounds"] as const).filter((_, index) => [racesAnswer, classesAnswer, backgroundsAnswer][index].status === "rejected"));
+      const value = <T,>(answer: PromiseSettledResult<T>) => (answer.status === "fulfilled" ? answer.value : null);
+      const racesData = value(racesAnswer);
+      const classesData = value(classesAnswer);
+      const backgroundsData = value(backgroundsAnswer);
+      setUnadmitted({
+        races: Array.isArray(racesData?.unadmitted) ? racesData.unadmitted : [],
+        classes: Array.isArray(classesData?.unadmitted) ? classesData.unadmitted : [],
+        backgrounds: Array.isArray(backgroundsData?.unadmitted) ? backgroundsData.unadmitted : [],
+      });
+      // Whether the pack is installed, from whichever list answered.
+      const installed = [racesData, classesData, backgroundsData].find((data) => data)?.packInstalled !== false;
+      setPackInstalled(installed);
+      const raceRows = (racesData?.results ?? []) as ContentRow[];
+      if (raceRows.length) {
+        const packed = packRaceOptions(raceRows, keepRaceId ? [keepRaceId] : []);
+        // No pack: the rows are the table's workshop species, offered
+        // beside the bundled SRD races rather than in their place.
+        const options = installed
+          ? packed
+          : [...srdRaceOptions().filter((option) => !packed.some((entry) => entry.id === option.id)), ...packed];
+        // Size, Dwarven Toughness and the rest read a pack or workshop
+        // species by id, here as on the server.
+        registerBrowserSpecies(
+          Object.fromEntries(options.map((option) => [option.id, { size: option.size, heavyArmorSpeed: option.heavyArmorSpeed, traitNames: option.traitNames }])),
+        );
+        setRaces(options);
+      }
+      const classRows = (classesData?.results ?? []) as ContentRow[];
+      // The table's workshop classes, read by the builder's engines as on
+      // the server (src/lib/classes/workshop-registry.ts), and offered with
+      // or without a content pack.
+      registerWorkshopClasses(workshopClassesOf(classRows));
+      if (classRows.length && installed) {
+        setClasses(packClassOptions(classRows));
+      } else if (classRows.length) {
+        setClasses([...srdClassOptions(), ...packClassOptions(classRows).filter((option) => isWorkshopClassId(option.id))]);
+      }
+      const backgroundRows = (backgroundsData?.results ?? []) as ContentRow[];
+      if (backgroundRows.length) {
+        setBackgrounds(mergedBackgroundOptions(backgroundRows));
+      }
+      setLoaded(true);
+    }
+    load().catch(() => {
+      // Building the options themselves failed: the bundled ones stand.
+      if (!cancelled) setLoaded(true);
+    });
     return () => {
       cancelled = true;
     };
-  }, [keepRaceId, campaignId]);
+  }, [keepRaceId, campaignId, attempt]);
 
+  const retry = useCallback(() => setAttempt((value) => value + 1), []);
   return useMemo(
-    () => ({ races, classes, backgrounds, packInstalled, loaded }),
-    [races, classes, backgrounds, packInstalled, loaded],
+    () => ({ races, classes, backgrounds, packInstalled, loaded, status: { unadmitted, failed, retry } as OptionStatus }),
+    [races, classes, backgrounds, packInstalled, loaded, unadmitted, failed, retry],
   );
 }
 
@@ -164,13 +180,22 @@ export function useWorldPack(packId?: string): WorldPack | null {
   return pack;
 }
 
-export function useArchetypes(classId: string) {
+// A class's subclasses for the builder and the level-up dialog, with what the
+// table leaves out (the asker's own subclasses of this class it does not
+// admit) and whether the request failed, so the picker can say why a
+// subclass is missing rather than leaving the list short.
+export function useArchetypeOptions(classId: string): { archetypes: ArchetypeOption[]; unadmitted: string[]; failed: boolean; retry: () => void } {
   const campaignId = useContentCampaign();
   const [archetypes, setArchetypes] = useState<ArchetypeOption[]>([]);
+  const [unadmitted, setUnadmitted] = useState<string[]>([]);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [prevClassId, setPrevClassId] = useState(classId);
   if (prevClassId !== classId) {
     setPrevClassId(classId);
     setArchetypes([]);
+    setUnadmitted([]);
+    setFailed(false);
   }
   useEffect(() => {
     let cancelled = false;
@@ -178,51 +203,63 @@ export function useArchetypes(classId: string) {
       return;
     }
     fetch(`/api/content/archetypes?class=${encodeURIComponent(classId)}&limit=100${scopeQuery(campaignId, "&")}`)
-      .then((response) => (response.ok ? response.json() : null))
+      .then((response) => (response.ok ? response.json() : Promise.reject(new Error(String(response.status)))))
       .then((data) => {
-        if (!cancelled && data?.results) {
-          const rows = data.results as ContentRow[];
-          // A workshop or pack subclass's features, for the grants the
-          // builder previews (src/lib/srd/subclass-tables.ts).
-          registerBrowserSubclassExtras(
-            classId,
-            rows
-              .map((row) =>
-                extraSubclassOf(
-                  { name: row.name, source: String((row as { source?: string }).source ?? "open5e"), data: (row.data ?? {}) as Record<string, unknown> },
-                  subclassLevelFor(classId) ?? 3,
-                ),
-              )
-              .filter((table): table is NonNullable<typeof table> => table !== null),
-          );
-          setArchetypes(
-            rows.map((row) => {
-              const workshop = String((row as { source?: string }).source ?? "") === "homebrew";
-              const table = workshop
-                ? extraSubclassOf({ name: row.name, source: "homebrew", data: (row.data ?? {}) as Record<string, unknown> })
-                : null;
-              return {
-                id: row.slug,
-                name: row.name,
-                desc: String(row.data?.desc ?? ""),
-                ...(workshop ? { workshop: true } : {}),
-                ...(table
-                  ? {
-                      features: Object.entries(table.levels)
-                        .sort(([a], [b]) => Number(a) - Number(b))
-                        .map(([level, features]) => `Level ${level}: ${features.map((feature) => feature.n).join(", ")}`)
-                        .join(". "),
-                    }
-                  : {}),
-              };
-            }),
-          );
+        if (cancelled) {
+          return;
         }
+        setFailed(false);
+        setUnadmitted(Array.isArray(data?.unadmitted) ? data.unadmitted : []);
+        const rows = (data?.results ?? []) as ContentRow[];
+        // A workshop or pack subclass's features, for the grants the
+        // builder previews (src/lib/srd/subclass-tables.ts).
+        registerBrowserSubclassExtras(
+          classId,
+          rows
+            .map((row) =>
+              extraSubclassOf(
+                { name: row.name, source: String((row as { source?: string }).source ?? "open5e"), data: (row.data ?? {}) as Record<string, unknown> },
+                subclassLevelFor(classId) ?? 3,
+              ),
+            )
+            .filter((table): table is NonNullable<typeof table> => table !== null),
+        );
+        setArchetypes(
+          rows.map((row) => {
+            const workshop = String((row as { source?: string }).source ?? "") === "homebrew";
+            const table = workshop
+              ? extraSubclassOf({ name: row.name, source: "homebrew", data: (row.data ?? {}) as Record<string, unknown> })
+              : null;
+            return {
+              id: row.slug,
+              name: row.name,
+              desc: String(row.data?.desc ?? ""),
+              ...(workshop ? { workshop: true } : {}),
+              ...(table
+                ? {
+                    features: Object.entries(table.levels)
+                      .sort(([a], [b]) => Number(a) - Number(b))
+                      .map(([level, features]) => `Level ${level}: ${features.map((feature) => feature.n).join(", ")}`)
+                      .join(". "),
+                  }
+                : {}),
+            };
+          }),
+        );
       })
-      .catch(() => undefined);
+      .catch(() => {
+        // The built-in subclasses still offer; the picker says the rest
+        // could not be read.
+        if (!cancelled) setFailed(true);
+      });
     return () => {
       cancelled = true;
     };
-  }, [classId, campaignId]);
-  return archetypes;
+  }, [classId, campaignId, attempt]);
+  const retry = useCallback(() => setAttempt((value) => value + 1), []);
+  return { archetypes, unadmitted, failed, retry };
+}
+
+export function useArchetypes(classId: string) {
+  return useArchetypeOptions(classId).archetypes;
 }

@@ -1,4 +1,4 @@
-import { unrunPrintedAbilities } from "@/lib/bestiary/statblock";
+import { unrunPrintedAbilities } from "@/lib/bestiary/printed-block";
 import type { EnemyStats, SaveAbility } from "@/lib/bestiary/statblock";
 
 // A stat block's sections, and the lines the block prints that the attack

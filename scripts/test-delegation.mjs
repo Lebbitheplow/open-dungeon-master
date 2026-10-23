@@ -256,7 +256,7 @@ test("fleeing needs no target and carries the reason", () => {
 
 test("a condition with nothing named is refused rather than half-applied", () => {
   const base = {
-    action: "set_enemy_condition",
+    action: "set_condition",
     targetCharacterId: "c1",
     attack: "",
     condition: "",
@@ -264,8 +264,15 @@ test("a condition with nothing named is refused rather than half-applied", () =>
   };
   assert.equal(monsterAdjudication("e1", base), null);
   const call = monsterAdjudication("e1", { ...base, condition: "frightened" });
-  assert.equal(call.name, "set_enemy_condition");
+  assert.equal(call.name, "set_condition");
+  assert.equal(call.args.enemyId, "e1", "on the enemy, set_condition's other target");
   assert.equal(call.args.condition, "frightened");
+});
+
+test("a delegate that answers with the retired set_enemy_condition is read as set_condition (issue #471)", () => {
+  const decision = parseMonsterDecision('{"action":"set_enemy_condition","targetCharacterId":"c1","condition":"prone","why":"tripped"}');
+  assert.equal(decision.action, "set_condition");
+  assert.equal(monsterAdjudication("e1", decision).name, "set_condition");
 });
 
 console.log(`delegation: ${passed} tests passed`);

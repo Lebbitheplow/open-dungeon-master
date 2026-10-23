@@ -427,7 +427,30 @@ export async function axeViolations(page, selector) {
     if (!result.passes.length) {
       return [{ id: "nothing-checked", impact: "critical", help: "axe checked no rule here", nodes: [scope] }];
     }
+    // Under forced colors Chromium draws text in the forced colour but reports
+    // its -webkit-text-fill-color as the author's, which axe reads: a gold
+    // button's dark text, measured against the black behind it, though the
+    // page shows the forced white. A contrast failure stands only if the
+    // colour actually drawn fails as well.
+    const forced = window.matchMedia("(forced-colors: active)").matches;
+    const channels = (value) => (String(value).match(/[\d.]+/g) ?? []).slice(0, 3).map(Number);
+    const hexChannels = (hex) => [1, 3, 5].map((at) => parseInt(String(hex).slice(at, at + 2), 16));
+    const luminance = ([r, g, b]) =>
+      [r, g, b].map((v) => v / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)).reduce((sum, v, at) => sum + v * [0.2126, 0.7152, 0.0722][at], 0);
+    const drawnPasses = (node) => {
+      const data = node.any?.[0]?.data;
+      const el = document.querySelector(node.target.join(" "));
+      if (!forced || !el || !data?.bgColor) return false;
+      const fg = luminance(channels(getComputedStyle(el).color));
+      const bg = luminance(hexChannels(data.bgColor));
+      const ratio = (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05);
+      return ratio >= Number.parseFloat(data.expectedContrastRatio ?? "4.5");
+    };
+    for (const violation of result.violations.filter((entry) => entry.id === "color-contrast")) {
+      violation.nodes = violation.nodes.filter((node) => !drawnPasses(node));
+    }
     return result.violations
+      .filter((violation) => violation.nodes.length)
       .filter((violation) => violation.impact === "serious" || violation.impact === "critical")
       .map((violation) => ({
         id: violation.id,

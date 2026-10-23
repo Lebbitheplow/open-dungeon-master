@@ -295,7 +295,7 @@ export function DmSharePanel({ campaignId }: { campaignId: string }) {
           ) : null}
           {shelf.missing.length ? (
             <p className="text-amber-300">
-              Named by its Cast or fights but found nowhere, here or in the books: {shelf.missing.join(", ")}. The importer&apos;s table will not find them either.
+              Named by its Cast, fights, roll tables, shops or Homebrew but found nowhere, here or in the books: {shelf.missing.join(", ")}. The importer&apos;s table will not find them either.
             </p>
           ) : null}
         </div>

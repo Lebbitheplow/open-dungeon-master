@@ -5,7 +5,7 @@
 import { findSummonForm, summonFormsHolding, summonFormsOf, type SummonForm } from "@/lib/srd/summon-forms";
 import { formatCr, formList } from "@/lib/srd/beast-forms";
 import { holdingHint, type ToolError } from "@/lib/dm/tool-errors";
-import { textKey } from "@/lib/language/text-logic";
+import { textKey, words } from "@/lib/language/text-logic";
 
 const HOUR = 600;
 const DAY = 14400;
@@ -56,6 +56,9 @@ export type SummonSpell = {
   single?: boolean;
   // Find Steed: an Intelligence below 6 becomes 6.
   minInt?: number;
+  // Find Steed: the kind of creature it is instead of its own, the caster's
+  // choice ("a fey warhorse"), the first when none is named.
+  kinds?: string[];
   // Phantom Steed's speed.
   speed?: number;
   // Faithful Hound: it acts at the start of its caster's turn (its entry
@@ -127,8 +130,9 @@ export const SUMMON_SPELLS: SummonSpell[] = [
   {
     name: "Find Steed", school: "conjuration", level: 2, concentration: false, rounds: null,
     forms: ["Warhorse", "Pony", "Camel", "Elk", "Mastiff"], base: 1, single: true, minInt: 6,
+    kinds: ["celestial", "fey", "fiend"],
     initiative: "caster",
-    note: "A celestial, fey or fiend steed with the chosen form's statistics (Intelligence at least 6), until dismissed or dropped to 0 hit points; one at a time.",
+    note: "A celestial, fey or fiend steed (the caster's choice: 'fey warhorse'; celestial when none is named) with the chosen form's statistics (Intelligence at least 6), until dismissed or dropped to 0 hit points; one at a time.",
   },
   {
     name: "Phantom Steed", school: "illusion", level: 3, concentration: false, rounds: HOUR, forms: ["Riding Horse"], base: 1,
@@ -180,6 +184,21 @@ export function summonSpellFor(spell: string): SummonSpell | null {
 
 export type SummonPlan = { form: SummonForm; count: number; spell: SummonSpell };
 
+// The kind a spell lets its caster choose, read off the name asked for
+// ("fey warhorse", "elk (fiend)"), and the name with it taken out; the
+// spell's first kind when none is named.
+function chosenKind(spell: SummonSpell, named: string): { kind: string | null; rest: string } {
+  const kinds = spell.kinds;
+  if (!kinds) {
+    return { kind: null, rest: named };
+  }
+  const said = words(named);
+  return {
+    kind: kinds.find((kind) => said.some((word) => textKey(word) === kind)) ?? kinds[0],
+    rest: said.filter((word) => !kinds.includes(textKey(word))).join(" "),
+  };
+}
+
 // The highest challenge rating a casting from `slotLevel` calls, for a spell
 // that calls by challenge rating.
 function crCeiling(spell: SummonSpell, slotLevel: number): number | null {
@@ -212,13 +231,16 @@ export function summonPlan(
   wanted?: number,
 ): SummonPlan | ToolError {
   const above = Math.max(0, slotLevel - spell.level);
-  const named = formName.trim();
-  const form = named ? findSummonForm(named) : spell.forms?.length === 1 ? findSummonForm(spell.forms[0]) : null;
-  if (!form) {
+  const { kind, rest: named } = chosenKind(spell, formName.trim());
+  const found = named ? findSummonForm(named) : spell.forms?.length === 1 ? findSummonForm(spell.forms[0]) : null;
+  if (!found) {
     const asked = named ? `${spell.name} has no stat block here for "${named}"; it calls` : `${spell.name} needs the creature in variant`;
     const hint = named ? holdingHint(named, summonFormsHolding(named)) : "";
-    return { error: `${asked}: ${callable(spell, slotLevel)}.${hint} Ask the player which, unless they named one. Nothing was spent.`, retry: true };
+    const kinds = spell.kinds ? ` as a ${spell.kinds.join(", a ")} (named with it: "${spell.kinds[1]} ${(spell.forms?.[0] ?? "").toLowerCase()}"; ${spell.kinds[0]} when none is named)` : "";
+    return { error: `${asked}: ${callable(spell, slotLevel)}${kinds}.${hint} Ask the player which, unless they named one. Nothing was spent.`, retry: true };
   }
+  // Find Steed's steed has the form's statistics, but is the kind chosen.
+  const form = kind ? { ...found, type: kind } : found;
   if (spell.forms && !spell.forms.includes(form.name)) {
     return { error: `${spell.name} makes ${spell.forms.join(", ")}, not a ${form.name}. Nothing was spent.`, retry: true };
   }

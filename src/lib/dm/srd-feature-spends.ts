@@ -203,7 +203,7 @@ function draconicPresence(campaign: Campaign, turnId: string, sheet: CharacterSh
   const dc = computeSheetDerived(sheet).spellSaveDc ?? 13;
   const lines: string[] = [];
   for (const enemy of targets) {
-    const save = rollEnemySave(campaign.id, enemy, "wis", dc, { magical: true, resist: true, record: { detail: `${enemy.displayName}: WIS save against Draconic Presence` } });
+    const save = rollEnemySave(campaign.id, enemy, "wis", dc, { magical: true, resist: true, against: condition, record: { detail: `${enemy.displayName}: WIS save against Draconic Presence` } });
     const immune = String(enemy.stats.conditionImmune ?? "").toLowerCase().includes(condition);
     if (save.success || immune) {
       lines.push(`${enemy.displayName} ${immune ? `cannot be ${condition}` : `resists (WIS ${save.total} vs DC ${dc})`}.`);

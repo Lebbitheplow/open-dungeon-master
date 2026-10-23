@@ -555,7 +555,7 @@ export async function maybeCloseChapter(
   // Milestone XP: surviving a chapter advances everyone a little, so
   // roleplay-heavy campaigns level without the model remembering award_xp.
   // Idempotent because a chapter closes exactly once. A person in the seat
-  // awards XP themselves (the console's award_xp): this backstop for a model
+  // awards XP themselves (the console's Award XP): this backstop for a model
   // that forgets is not theirs, and a human table's chapter can close at the
   // message cap with nobody having earned anything.
   const closingCampaign = getCampaignById(campaignId);
