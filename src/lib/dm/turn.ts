@@ -148,6 +148,8 @@ import { listChapters } from "@/lib/db/chapters";
 import { listDmPrepNotes, listPublicCampaignNotes } from "@/lib/db/notes";
 import { listActiveFacts } from "@/lib/db/facts";
 import { consumePendingSparks, tickWorldState } from "@/lib/dm/world-tick";
+import { advanceDirectorNotes, advanceWindowOpen, tickAdvances } from "@/lib/dm/advance-tick";
+import { bumpAiTurns } from "@/lib/db/advances";
 import { buildDirectorBlock } from "@/lib/dm/director-logic";
 import { takeDirectorArm } from "@/lib/db/director-arms";
 import { listPins } from "@/lib/db/pins";
@@ -220,7 +222,9 @@ import {
   relationshipTools,
   RELATIONSHIP_TOOL_NAMES,
   relationshipRosterForPrompt,
+  romanceEnabled,
 } from "@/lib/dm/relationship-tools";
+import { openToAdvanceNames } from "@/lib/dm/advance-logic";
 import { PARTY_TOOL_NAMES, partyTools } from "@/lib/dm/party-tools";
 import { SCENE_TOOL_NAMES, sceneTools } from "@/lib/dm/scene-tools";
 import { AMBIENCE_TOOL_NAMES, ambienceTools, followSceneAmbience } from "@/lib/dm/ambience-tools";
@@ -610,7 +614,8 @@ async function openTurn(
   // correct: retry-turn.ts replays that stored conversation, so the directive
   // is still in the prompt it re-runs, neither lost nor applied twice.
   const directorArm = oocOnly ? null : takeDirectorArm(campaignId);
-  const directorBlock = buildDirectorBlock(directorArm);
+  // A Romance cue armed before romance went off is dropped (issue 501).
+  const directorBlock = buildDirectorBlock(directorArm, campaign.gameSettings);
   if (directorArm) {
     // Clear the armed badge for every client now that the steer is spent.
     publishPersisted(campaignId, "director_armed", {
@@ -781,9 +786,11 @@ async function openTurn(
         pinned: fact.pinned,
         knownBy: fact.knownBy,
       })),
-      directorNotes: oocOnly ? [] : consumePendingSparks(campaignId).map((spark) => spark.text),
+      // The world's sparks, and an NPC ready to make a move (issue 501),
+      // which is said while its window is open and only to the DM.
+      directorNotes: oocOnly ? [] : [...consumePendingSparks(campaignId).map((spark) => spark.text), ...advanceDirectorNotes(campaign)],
       directorBlock,
-      npcs: npcRosterForPrompt(campaignId).map((npc) => ({ ...npc, world: world.npcNotes.get(npc.name) })),
+      npcs: npcRosterForPrompt(campaignId, { romance: romanceEnabled(campaign) }).map((npc) => ({ ...npc, world: world.npcNotes.get(npc.name) })),
       relationships:
         campaign.gameSettings.relationships === "off"
           ? []
@@ -1128,6 +1135,9 @@ export function profileSignals(campaign: Campaign, sheets: readonly CharacterShe
       ? listEnemies(encounter.id).some((enemy) => enemy.stats.traits.some((trait) => /\b(legendary|lair) actions?\b/i.test(trait)))
       : false,
     caster: sheets.some(casts),
+    // An NPC is ready to make a romantic move (issue 501): its tool is
+    // offered while the window is open.
+    advanceReady: !inEncounter && advanceWindowOpen(campaign),
   };
 }
 
@@ -1233,7 +1243,7 @@ function handleMoreTools(campaign: Campaign, turn: DmTurn, imageEnabled: boolean
       groupGuidance(group, tracksAmmunition(campaign)),
       group === "companions" && companions !== "off" ? companionRules(campaign, companions) : "",
       group === "relationships" && campaign.gameSettings.relationships !== "off"
-        ? relationshipRules(campaign.gameSettings.romance !== "off")
+        ? relationshipRules(campaign.gameSettings.romance !== "off", openToAdvanceNames(campaign, listSheets(campaign.id)))
         : "",
     ]
       .filter(Boolean)
@@ -2146,6 +2156,9 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     // The world-simulation heartbeat: pure dice, sparks land in the NEXT
     // turn's prompt, so background clocks never trigger model calls.
     tickWorldState(campaignId);
+    // NPC advances (issue 501) count AI turns whether or not world
+    // simulation is on, and roll beside the world tick, not inside it.
+    tickAdvances(context.campaign, bumpAiTurns(campaignId), turn.narrationParts.join("\n\n"));
   }
 }
 

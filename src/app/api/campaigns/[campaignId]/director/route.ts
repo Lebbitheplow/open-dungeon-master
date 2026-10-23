@@ -12,6 +12,7 @@ import {
   isOneShotEventId,
   MAX_ABSOLUTE_COMMAND_LENGTH,
   ONE_SHOT_EVENT_IDS,
+  romanceCueAllowed,
 } from "@/lib/dm/director-logic";
 import { publishPersisted } from "@/lib/events";
 
@@ -100,6 +101,11 @@ export async function POST(
   // zod's enum widens back to string on the parsed output, so narrow through
   // the same guard the prompt builder uses rather than casting.
   const oneShot = isOneShotEventId(parsed.data.oneShot) ? parsed.data.oneShot : null;
+  // The Romance cue only where romance is played and the safety tools allow
+  // it (issue 501).
+  if (oneShot === "romance" && !romanceCueAllowed(context.campaign.gameSettings)) {
+    return Response.json({ error: "Romance is off at this table, so there is no Romance cue." }, { status: 409 });
+  }
   setDirectorArm({
     campaignId,
     oneShot,

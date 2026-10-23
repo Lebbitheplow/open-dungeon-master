@@ -4,7 +4,7 @@ import { getCampaignById, type Campaign } from "@/lib/db/campaigns";
 import { aiPlaysSheet } from "@/lib/dm/companion-command";
 import { getActiveEncounter, listEnemies, orderEntryId } from "@/lib/db/encounters";
 import { budgetApplies } from "@/lib/dm/action-budget";
-import { listNpcs } from "@/lib/db/npcs";
+import { listCastNpcs } from "@/lib/db/npcs";
 import { getSheetById } from "@/lib/db/sheets";
 import { declaredThisTurn, wordsThisTurn } from "@/lib/dm/player-word";
 import type { DmTurn } from "@/lib/db/dm-turns";
@@ -192,7 +192,8 @@ export function speakerRoster(
   registering: readonly string[] = [],
 ): Map<string, Speaker> {
   const roster = new Map<string, Speaker>();
-  const npcs = listNpcs(campaignId).filter((npc) => !npc.archived);
+  // A companion's own row stands behind its sheet, which speaks for them.
+  const npcs = listCastNpcs(campaignId).filter((npc) => !npc.archived);
   for (const npc of npcs) {
     roster.set(npc.id, { kind: "npc", id: npc.id, name: npc.name, aliases: npc.aliases, gender: npc.gender });
   }

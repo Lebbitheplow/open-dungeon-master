@@ -1,5 +1,5 @@
 import { activePublicEncounter } from "@/lib/db/encounter-view";
-import { listNpcs, setNpcVoice } from "@/lib/db/npcs";
+import { listCastNpcs, setNpcVoice } from "@/lib/db/npcs";
 import { listSheets } from "@/lib/db/sheets";
 import { listCampaignVoices, setCampaignVoice } from "@/lib/db/voices";
 import { publishCast } from "@/lib/dm/cast";
@@ -56,7 +56,8 @@ export function voiceRoster(campaignId: string): RosterEntry[] {
       voice: saved.get(key)?.voice ?? null,
     });
   }
-  for (const npc of listNpcs(campaignId)) {
+  // A companion's own row is voiced through their sheet, above.
+  for (const npc of listCastNpcs(campaignId)) {
     if (npc.archived) {
       continue;
     }

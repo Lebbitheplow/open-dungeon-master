@@ -38,6 +38,8 @@ import { legalCompanionSheet } from "@/lib/dm/companion-level";
 import { queueCompanionPortrait } from "@/lib/portrait";
 import { settingClassIds } from "@/lib/classes";
 import { TOLD_GENDER_HELP, TOLD_GENDERS, toldGender } from "@/lib/gender";
+import { attractionFromTold, TOLD_ATTRACTION } from "@/lib/attraction";
+import { companionNpcFor } from "@/lib/db/companion-npcs";
 import { presetFor, packFor } from "@/lib/worlds/preset";
 import { packIds } from "@/lib/worlds/reskin-logic";
 import {
@@ -161,6 +163,11 @@ export function companionTools(campaign: Campaign): ToolDef[] {
             },
             class: { type: "string", description: classDescription },
             gender: { type: "string", enum: [...TOLD_GENDERS], description: TOLD_GENDER_HELP },
+            drawnTo: {
+              type: "array",
+              items: { type: "string", enum: TOLD_ATTRACTION },
+              description: "Who they could fall for, if the story has shown it.",
+            },
             level: {
               type: "integer",
               minimum: 1,
@@ -209,6 +216,7 @@ const addArgsSchema = z.object({
   ancestry: z.string().trim().max(40).optional(),
   class: z.string().trim().min(1).max(60),
   gender: z.enum(TOLD_GENDERS),
+  drawnTo: z.array(z.string().max(40)).max(6).optional(),
   level: z.number().int().min(1).max(20).optional(),
   personality: z.string().trim().min(1).max(500),
   kind: z.enum(["party", "guest"]).default("guest"),
@@ -361,6 +369,7 @@ export function handleAddCompanion(
     background: "",
     alignment: "",
     gender: toldGender(args.gender) ?? "",
+    attraction: attractionFromTold(args.drawnTo) ?? { genders: [], note: "" },
     abilities,
     // A figure to start from; the legality check derives the real one by
     // the table's hit point method, and the armor engine the armor class.
@@ -431,6 +440,11 @@ export function finalizeNewCompanion(
   // A companion the party once travelled with can be written back in; every
   // standing with them picks up exactly where it stopped.
   rejoinRelationshipsWithSubject(campaign.id, sheet.name, sheet.id);
+  // A lasting companion has a person behind the sheet: personality axes a
+  // deed weighs against, and who they are drawn to (#503 Phase 0.1).
+  if (kind === "party") {
+    companionNpcFor(sheet);
+  }
   insertCharacterEvent({
     libraryCharacterId: null,
     campaignCharacterId: sheet.id,

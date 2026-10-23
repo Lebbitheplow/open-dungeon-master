@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { isErrorResponse, steersStory, requireMember } from "@/lib/campaign-api";
 import { allocateSeq } from "@/lib/db/campaigns";
-import { getItemProposal, resolveItemProposal, type ItemProposal } from "@/lib/db/item-proposals";
+import { getItemProposal, recordProposalOutcome as resolveOutcome, resolveItemProposal, type ItemProposal } from "@/lib/db/item-proposals";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { getSheetById, listSheets } from "@/lib/db/sheets";
 import { applyTrade } from "@/lib/dm/trade";
@@ -18,6 +18,9 @@ import {
   type OfferResolution,
 } from "@/lib/dm/proposal-logic";
 import { publicItemProposal } from "@/lib/dm/proposal-intercept";
+import { ADVANCE_TOOL } from "@/lib/dm/advance-logic";
+import { advancesAllowed } from "@/lib/dm/advance-tick";
+import { announceAdvanceSettled, canResolveAdvance, settleNpcAdvance } from "@/lib/dm/npc-advance";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import type { SystemGlyph } from "@/lib/system-glyphs";
 
@@ -80,6 +83,32 @@ export async function POST(
     return Response.json({ error: "The offer was already resolved." }, { status: 400 });
   }
   const actorIsOwner = proposal.userId === context.user.id;
+  // An NPC's romantic advance (issue 501) is the player's to answer and no
+  // one else's: the lead may only withdraw it.
+  if (proposal.toolName === ADVANCE_TOOL) {
+    if (!canResolveAdvance(action, actorIsOwner, steersStory(context))) {
+      return Response.json(
+        { error: action === "cancel" ? "Only the lead can withdraw an advance." : "Only that character's player can answer this." },
+        { status: 403 },
+      );
+    }
+    // A yes needs a table that still plays romance (the lead may have
+    // switched it off since): the advance is withdrawn instead.
+    const romanceOff = action === "approve" && !advancesAllowed(context.campaign);
+    const status = romanceOff ? "cancelled" : action === "approve" ? "approved" : action === "decline" ? "declined" : "cancelled";
+    const resolved = resolveItemProposal(proposalId, status);
+    if (!resolved) {
+      return Response.json({ error: "The offer was already resolved." }, { status: 400 });
+    }
+    const outcome = settleNpcAdvance(context.campaign, resolved, status);
+    const settled = outcome ? (resolveOutcome(resolved, outcome) ?? resolved) : resolved;
+    publishPersisted(campaignId, "item_proposal_resolved", { proposal: publicItemProposal(settled) });
+    announceAdvanceSettled(campaignId, settled, status);
+    if (romanceOff) {
+      return Response.json({ error: "Romance is off at this table now, so the advance was withdrawn." }, { status: 409 });
+    }
+    return Response.json({ proposal: publicItemProposal(settled) });
+  }
   const isTrade = proposal.toolName === "trade";
   // Whose offer it is to answer: the counterparty of a trade, else the
   // character it is made to.

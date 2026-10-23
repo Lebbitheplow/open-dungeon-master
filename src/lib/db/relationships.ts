@@ -37,6 +37,11 @@ export type Relationship = {
   beats: BeatCounts;
   apartChapters: number;
   lastShiftTurn: string;
+  // NPC advances (src/lib/dm/advance-logic.ts), in the campaign's AI turns:
+  // the turn an open window closes and the turn before which the pair does
+  // not roll again. 0 = none.
+  advanceReadyUntil: number;
+  advanceCooldownUntil: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -57,6 +62,8 @@ type RelationshipRow = {
   beats_json: string;
   apart_chapters: number;
   last_shift_turn: string;
+  advance_ready_until?: number | null;
+  advance_cooldown_until?: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -78,6 +85,8 @@ function mapRelationship(row: RelationshipRow): Relationship {
     beats: parseBeatCounts(row.beats_json),
     apartChapters: row.apart_chapters,
     lastShiftTurn: row.last_shift_turn,
+    advanceReadyUntil: row.advance_ready_until ?? 0,
+    advanceCooldownUntil: row.advance_cooldown_until ?? 0,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -191,6 +200,8 @@ export function patchRelationship(
       | "subjectId"
       | "subjectKind"
       | "characterName"
+      | "advanceReadyUntil"
+      | "advanceCooldownUntil"
     >
   >,
 ): Relationship | null {
@@ -203,7 +214,8 @@ export function patchRelationship(
       `UPDATE relationships
        SET approval = ?, romance = ?, status = ?, flags_json = ?, memories_json = ?,
            beats_json = ?, apart_chapters = ?, last_shift_turn = ?, subject_id = ?,
-           subject_kind = ?, character_name = ?, updated_at = ?
+           subject_kind = ?, character_name = ?, advance_ready_until = ?,
+           advance_cooldown_until = ?, updated_at = ?
        WHERE id = ?`,
     )
     .run(
@@ -218,6 +230,8 @@ export function patchRelationship(
       patch.subjectId ?? current.subjectId,
       patch.subjectKind ?? current.subjectKind,
       patch.characterName ?? current.characterName,
+      Math.max(0, Math.round(patch.advanceReadyUntil ?? current.advanceReadyUntil)),
+      Math.max(0, Math.round(patch.advanceCooldownUntil ?? current.advanceCooldownUntil)),
       nowIso(),
       id,
     );

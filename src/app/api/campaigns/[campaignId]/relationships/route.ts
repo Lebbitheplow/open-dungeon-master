@@ -1,6 +1,7 @@
 import { isErrorResponse, steersStory, requireMember } from "@/lib/campaign-api";
 import { listRelationships } from "@/lib/db/relationships";
 import { friendshipTier, TIER_LABEL } from "@/lib/dm/relationship-logic";
+import { advancesAllowed } from "@/lib/dm/advance-tick";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,6 +29,10 @@ export async function GET(
   return Response.json({
     enabled: true,
     romanceEnabled: context.campaign.gameSettings.romance !== "off",
+    // Whether NPC advances can happen here (romance on, and the safety
+    // tools do not rule them out), so the Bonds tab shows its opt-in only
+    // where it can matter (issue 501).
+    advances: advancesAllowed(context.campaign),
     relationships: listRelationships(campaignId).map((relationship) => {
       const tier = friendshipTier(relationship.approval);
       return {

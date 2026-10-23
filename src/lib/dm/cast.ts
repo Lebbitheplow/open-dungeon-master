@@ -1,4 +1,4 @@
-import { listNpcs } from "@/lib/db/npcs";
+import { listCastNpcs } from "@/lib/db/npcs";
 import { publishEphemeral } from "@/lib/events";
 
 // The cast as every seat may see it (docs/vtt-parity-implementation-plan.md
@@ -11,7 +11,8 @@ import { publishEphemeral } from "@/lib/events";
 export type CastMember = { id: string; name: string; portraitUrl: string; hasVoice: boolean; aliases?: string[] };
 
 export function publicCast(campaignId: string): CastMember[] {
-  return listNpcs(campaignId)
+  // A companion in the party shows as a party member, not as cast.
+  return listCastNpcs(campaignId)
     .filter((npc) => !npc.archived)
     .map((npc) => ({ id: npc.id, name: npc.name, portraitUrl: npc.portraitUrl, hasVoice: npc.voice !== null, aliases: npc.aliases }));
 }

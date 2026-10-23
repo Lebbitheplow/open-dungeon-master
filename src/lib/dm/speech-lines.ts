@@ -8,7 +8,7 @@
 
 import type { Campaign } from "@/lib/db/campaigns";
 import { listRecentMessages } from "@/lib/db/messages";
-import { getNpcByName } from "@/lib/db/npcs";
+import { getNpcByName, standsBehindLiveCompanion } from "@/lib/db/npcs";
 import { listSheets } from "@/lib/db/sheets";
 import { guardOutcomes } from "@/lib/dm/engine-boundary";
 import { liveStateFor, readClaims, speakerRoster } from "@/lib/dm/claims";
@@ -74,7 +74,9 @@ export function modelTextLines(campaign: Pick<Campaign, "id" | "gameSettings">, 
     if (speaker.kind !== "npc" || speaker.id) {
       return { line, speaker: storedSpeaker(speaker) };
     }
-    const npc = getNpcByName(campaign.id, speaker.name);
+    // A companion in the party speaks as their sheet, never as their row.
+    const found = getNpcByName(campaign.id, speaker.name);
+    const npc = found && !standsBehindLiveCompanion(found) ? found : null;
     if (npc) {
       return { line, speaker: { kind: "npc", id: npc.id, name: npc.name } };
     }

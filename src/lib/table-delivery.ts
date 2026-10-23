@@ -29,7 +29,7 @@ import { redactRoll, rollAccessFor, type RollView } from "@/lib/dm/viewer";
 import { audienceOf, type SeatRight } from "@/lib/event-audience";
 
 type Payload = Record<string, unknown>;
-type SheetLike = { id: string; userId: string; notes?: string };
+type SheetLike = { id: string; userId: string; notes?: string; openToAdvances?: boolean };
 type RollLike = RollView & { id?: string; total?: number | null };
 
 function asPayload(payload: unknown): Payload | null {
@@ -176,7 +176,11 @@ export function payloadForViewer(
       return stored;
     }
     const whole = sheetOf(type, original) ?? getSheetById(sheet.id);
-    return whole?.notes ? { ...(stored as Payload), sheet: { ...sheet, notes: whole.notes } } : stored;
+    // The notes and the advances opt-in (issue 501) are the two fields the
+    // table's copy blanks; the owner and a DM seat get them back.
+    return whole?.notes || whole?.openToAdvances
+      ? { ...(stored as Payload), sheet: { ...sheet, notes: whole.notes ?? "", openToAdvances: Boolean(whole.openToAdvances) } }
+      : stored;
   }
 
   // The figure rides only live: an effect is ephemeral and never replayed.

@@ -9,7 +9,7 @@ import { listActiveFacts } from "@/lib/db/facts";
 import { renderWitnessNote } from "@/lib/dm/witness-logic";
 import {
   getNpcByName,
-  listNpcs,
+  listCastNpcs,
   nearestNpcName,
   patchNpcAgency,
   setNpcAttitude,
@@ -17,6 +17,8 @@ import {
   type Attitude,
   type Npc,
 } from "@/lib/db/npcs";
+import { companionNpcFor } from "@/lib/db/companion-npcs";
+import { attractionFromTold, attractionWords, TOLD_ATTRACTION } from "@/lib/attraction";
 import { agencyFragment, derivePersonality, driftPersonality, nearestNpcHint } from "@/lib/dm/npc-logic";
 import { ensureRelationship, patchRelationship } from "@/lib/db/relationships";
 import {
@@ -89,6 +91,11 @@ export const socialTools: ToolDef[] = [
             type: "string",
             enum: [...TOLD_GENDERS],
             description: `${TOLD_GENDER_HELP} Give it when you register someone new; leave it out on later calls.`,
+          },
+          drawnTo: {
+            type: "array",
+            items: { type: "string", enum: TOLD_ATTRACTION },
+            description: "Who they could fall for, once the story shows it. Set once and kept, so it never changes between characters.",
           },
           goal: {
             type: "string",
@@ -215,6 +222,7 @@ const setNpcSchema = z.object({
   trait: z.string().max(300).optional(),
   location: z.string().max(120).optional(),
   gender: z.enum(TOLD_GENDERS).optional(),
+  drawnTo: z.array(z.string().max(40)).max(6).optional(),
   goal: z.string().max(300).optional(),
   ambition: z.string().max(300).optional(),
 });
@@ -238,6 +246,8 @@ export function handleSetNpc(campaign: Campaign, rawArguments: string): ToolResu
       trait: args.trait,
       location: args.location,
       gender: toldGender(args.gender),
+      // Written once (upsertNpc): the first answer is who they are.
+      attraction: attractionFromTold(args.drawnTo),
     }),
     { goal: args.goal, ambition: args.ambition },
   );
@@ -337,7 +347,10 @@ export function handleSocialCheck(
   if (!sheet) {
     return unknownSheetRef("characterId", args.characterId, sheets);
   }
-  const npc = getNpcByName(campaign.id, args.npc);
+  // A lasting companion is reached through the row behind their sheet
+  // (#503 Phase 0.1), so a companion can be talked round like anyone else.
+  const companion = sheets.find((entry) => entry.isCompanion && textKey(entry.name) === textKey(args.npc));
+  const npc = (companion ? companionNpcFor(companion) : null) ?? getNpcByName(campaign.id, args.npc);
   if (!npc) {
     return {
       error: `No tracked NPC named "${args.npc}".${nearestNpcHint(nearestNpcName(campaign.id, args.npc))} Register them with set_npc or npc_reaction first.`,
@@ -371,9 +384,9 @@ export function handleSocialCheck(
     campaignId: campaign.id,
     characterId: sheet.id,
     characterName: sheet.name,
-    subjectKind: "npc",
+    subjectKind: npc.companionSheetId ? "companion" : "npc",
     subjectName: npc.name,
-    subjectId: npc.id,
+    subjectId: companion?.id ?? npc.id,
   });
   const standingModifier = approvalRollModifier(relationship.approval);
   const rolled = rollExpression(
@@ -468,7 +481,8 @@ function buildSocialNote(
 // toward the party, and a bounded agency fragment (personality leans, goals,
 // pressure). How they feel about individual characters is the approval meter
 // and renders in its own section.
-export function npcRosterForPrompt(campaignId: string): Array<{
+// `romance`: who they are drawn to rides only at a romance table.
+export function npcRosterForPrompt(campaignId: string, options: { romance?: boolean } = {}): Array<{
   name: string;
   attitude: Attitude;
   trait: string;
@@ -477,6 +491,7 @@ export function npcRosterForPrompt(campaignId: string): Array<{
   aliases: string[];
   witnessNote: string;
   statBlock: string;
+  identity: string;
 }> {
   // Facts are read once for the whole roster; witness notes are per-NPC.
   const facts = listActiveFacts(campaignId).map((fact) => ({
@@ -486,8 +501,9 @@ export function npcRosterForPrompt(campaignId: string): Array<{
     witnessedBy: fact.witnessedBy,
   }));
   // Archived NPCs stay out of the prompt until someone names them again
-  // (src/lib/dm/npc-archive-logic.ts). They are never deleted.
-  return listNpcs(campaignId)
+  // (src/lib/dm/npc-archive-logic.ts). They are never deleted. A companion
+  // in the party is in the Party block, not here.
+  return listCastNpcs(campaignId)
     .filter((npc) => !npc.archived)
     .map((npc) => ({
     name: npc.name,
@@ -502,7 +518,15 @@ export function npcRosterForPrompt(campaignId: string): Array<{
     witnessNote: renderWitnessNote(npc.name, facts),
     // The stat block they fight with (start_encounter takes their name).
     statBlock: npc.statBlock,
+    // Their gender, and at a romance table who they are drawn to (issue
+    // 501), so romance follows who people are. Blank says nothing.
+    identity: npcIdentity(npc, options.romance ?? false),
   }));
+}
+
+function npcIdentity(npc: Npc, romance: boolean): string {
+  const drawn = romance ? attractionWords(npc.attraction) : "";
+  return [npc.gender, drawn ? `drawn to ${drawn}` : ""].filter(Boolean).join(", ");
 }
 
 const ATTITUDE_LADDER = ["hostile", "indifferent", "friendly"] as const;

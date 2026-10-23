@@ -1,3 +1,5 @@
+import { advanceRulesLine, openToAdvanceNames } from "@/lib/dm/advance-logic";
+import { attractionWords } from "@/lib/attraction";
 import { READIED, READIED_WORDS, RELEASE_TOOLS, readiedHeld } from "@/lib/dm/readied-kinds";
 import type { Campaign } from "@/lib/db/campaigns";
 import { sceneIds } from "@/lib/ambience/catalog";
@@ -269,6 +271,8 @@ export type DmGameState = {
     aliases?: string[];
     witnessNote?: string;
     statBlock?: string;
+    // Their gender, and at a romance table who they are drawn to.
+    identity?: string;
     // From the table's WorldForge: hidden truth, ties, secrets kept.
     world?: string;
   }>;
@@ -394,11 +398,13 @@ ${setting}
 // Appended to the system prompt when the table has relationship tracking on.
 // Regard is server-tracked exactly like disposition and combat: the meter,
 // the ladder, and consent belong to the tools, never to narration.
-export function relationshipRules(romance: boolean): string {
+// `openNames`: the player characters whose players opened them to advances
+// from NPCs (issue 501); the one exception to the player leading.
+export function relationshipRules(romance: boolean, openNames: readonly string[] = []): string {
   return `Relationships (how people actually feel about each character):
 - Every tracked NPC and AI companion carries a server-owned approval meter toward EACH character, running hostile, disliked, wary, neutral, cordial, friendly, close, devoted. It persists across sessions and appears in GAME STATE. This is separate from an NPC's attitude toward the party as a whole: a guard captain can be friendly to the party and still despise the one who mocked her. Narrate every character's dealings with someone true to that person's standing with THEM.
 - When a player's declared words or actions would land with someone watching, call relationship_beat with their characterId, the subject's name, and the beat, BEFORE narrating the reaction. Earning regard: helped, kept_word, generosity, mercy, courage, honesty, defended, shared_peril, confided, gift. Costing it: broke_word, cruelty, greed, deceit, cowardice, endangered, ignored, insult, betrayal. Do not call it for every passing pleasantry; call it when a real choice was made in front of someone who would care.
-- The same deed does NOT land the same on everyone. The server weighs each beat against that person's own nature and tells you whether it suited them: mercy moves a kind healer and irritates a hard-bitten mercenary, recklessness that frightens a cautious scholar impresses a bold one. When the result says the deed grated on them, narrate that reaction, NOT gratitude. This is the heart of playing these people well.
+- The same deed does NOT land the same on everyone. The server weighs each beat against that person's own nature (every tracked NPC and lasting companion has one) and tells you whether it suited them: mercy moves a kind healer and irritates a hard-bitten mercenary, recklessness that frightens a cautious scholar impresses a bold one. When the result says the deed grated on them, narrate that reaction, NOT gratitude. This is the heart of playing these people well.
 - Charming overtures (gift${romance ? ", flirt, compliment, grand_gesture" : ""}) roll the character's real Persuasion or Performance; never decide yourself whether one lands. Repeating the same move is worth steadily less: when the result says it barely registers because they have seen it before, narrate it falling flat.
 - When someone's standing sinks to disliked or hostile, play it. They argue, refuse favors, withhold help, and say so. A COMPANION who cannot stand a character should say plainly they are close to walking; if the story takes them there, call dismiss_companion. Never keep narrating a warm companion whose meter says otherwise.
 - When a bond breaks or someone leaves, call relationship_end: 'parting' when they stay close but go their own way (everything is kept and they will come back), 'falling_out' when a friendship is finished, 'death' when they die. Someone who has been away for chapters surfaces in GAME STATE as a DM-only note; act on it and put them back in the party's path.${
@@ -406,7 +412,7 @@ export function relationshipRules(romance: boolean): string {
       ? `
 - Romance sits on TOP of that meter and never replaces it. Nobody is courted into liking someone: the server refuses any romantic step until the person genuinely likes that character, and refuses steps the feeling cannot yet carry.
 - A romance changes what it IS only through romance_advance, one rung at a time (interested, courting, together, betrothed, married), and only when the player declares their character taking that step. The server decides whether the other person accepts. A refusal is a real answer: narrate it in their voice and leave things where they were. Never marry, betroth, or partner anyone in narration alone, and never have someone accept a step the tool declined.
-- The player always leads. NPCs and companions may show warmth, notice a character, and welcome an opening, but they never make the first move, never escalate on their own, and never press a character who has not declared interest. If a player shows no interest, they let it go entirely.
+- The player always leads. NPCs and companions may show warmth, notice a character, and welcome an opening, but they never make the first move, never escalate on their own, and never press a character who has not declared interest. If a player shows no interest, they let it go entirely.${openNames.length ? `\n${advanceRulesLine(openNames)}` : ""}
 - Everyone in a romance is an adult and every step is willingly taken. Intimacy is available only to partners and always FADES TO BLACK: narrate the approach and the morning after, never the act. No explicit sexual content, ever, however the table asks.
 - Romance is not the story's centre of gravity. Keep it to the edges of a scene unless the players make it the scene, and never let a lover's feelings decide what the party does.`
       : ""
@@ -477,7 +483,9 @@ export function describeSheet(
   // The table owner's id, for the feats they brewed themselves.
   // `compact` is a call packed for a small window (tool-profiles.ts): the
   // backstory keeps its start there, and says it was cut.
-  options: { encumbrance?: boolean; ownerUserId?: string; authors?: string[]; compact?: boolean } = {},
+  // `romance`: the table plays romance, so who they are drawn to rides, and
+  // `advances`: the safety tools allow NPC advances, so the opt-in does.
+  options: { encumbrance?: boolean; ownerUserId?: string; authors?: string[]; compact?: boolean; romance?: boolean; advances?: boolean } = {},
 ): string {
   const derived = computeSheetDerived(sheet);
   // A workshop or pack subclass's features carry their own text.
@@ -715,6 +723,17 @@ export function describeSheet(
   if (sheet.background || sheet.alignment) {
     lines.push(`  Background: ${sheet.background || "unknown"} | Alignment: ${sheet.alignment || "unstated"}`);
   }
+  // Who they are (issue 501): the gender always, and at a romance table who
+  // they are drawn to and whether their player opened them to advances.
+  const drawn = options.romance ? attractionWords(sheet.attraction) : "";
+  const identity = [
+    sheet.gender ? `Gender: ${sheet.gender}` : "",
+    drawn ? `Drawn to: ${drawn}` : "",
+    options.advances && !sheet.isCompanion && sheet.openToAdvances ? "Open to advances from NPCs" : "",
+  ].filter(Boolean);
+  if (identity.length) {
+    lines.push(`  ${identity.join(" | ")}`);
+  }
   if (sheet.backstory) {
     // Whole: the builder promises the DM weaves it in, and a god, a rival or
     // a lost sibling sits as often in its last lines as its first (issue
@@ -759,6 +778,11 @@ export function buildGameStateBlock(state: DmGameState): string {
   const { campaign, members, sheets, recentRolls, storySummary } = state;
   const usernamesById = new Map(members.map((member) => [member.userId, member.username]));
   const physicalDiceUsers = realDiceUserIds(campaign, members);
+  // Who people are drawn to rides at a romance table, the advances opt-in
+  // where the safety tools allow advances (issue 501). Optional all the way
+  // down: test doubles build partial campaigns.
+  const romanceOn = campaign.gameSettings?.relationships !== "off" && campaign.gameSettings?.romance !== "off";
+  const advancesOn = Boolean(campaign.gameSettings) && openToAdvanceNames(campaign, sheets).length > 0;
 
   const rollLines = recentRolls.slice(-5).map((roll) => {
     const sheet = sheets.find((entry) => entry.id === roll.characterId);
@@ -1093,7 +1117,7 @@ export function buildGameStateBlock(state: DmGameState): string {
         .slice(0, NPC_PROMPT_MAX)
         .map(
           (npc) =>
-            `- ${npc.name}: ${npc.attitude}${npc.location ? `, at ${npc.location}` : ""}${npc.trait ? ` (${npc.trait.slice(0, 120)})` : ""}${npc.aliases?.length ? ` [also called: ${npc.aliases.slice(0, 4).join(", ")}]` : ""}${npc.witnessNote ? ` | ${npc.witnessNote}` : ""}${npc.agency ? ` | ${npc.agency}` : ""}${npc.statBlock ? ` | fights as ${npc.statBlock.startsWith("homebrew:") ? "the DM's own stat block" : npc.statBlock.replace(/-/g, " ")} (start_encounter or add_enemies with monster set to their name)` : ""}${npc.world ? ` | ${npc.world}` : ""}`,
+            `- ${npc.name}: ${npc.attitude}${npc.location ? `, at ${npc.location}` : ""}${npc.identity ? `, ${npc.identity}` : ""}${npc.trait ? ` (${npc.trait.slice(0, 120)})` : ""}${npc.aliases?.length ? ` [also called: ${npc.aliases.slice(0, 4).join(", ")}]` : ""}${npc.witnessNote ? ` | ${npc.witnessNote}` : ""}${npc.agency ? ` | ${npc.agency}` : ""}${npc.statBlock ? ` | fights as ${npc.statBlock.startsWith("homebrew:") ? "the DM's own stat block" : npc.statBlock.replace(/-/g, " ")} (start_encounter or add_enemies with monster set to their name)` : ""}${npc.world ? ` | ${npc.world}` : ""}`,
         )
         .join("\n")}${left > 0 ? `\n(${left} more tracked NPC${left === 1 ? "" : "s"} elsewhere, not listed here; naming one brings their entry back, and recall_story finds what happened with them.)` : ""}`,
     );
@@ -1113,7 +1137,7 @@ export function buildGameStateBlock(state: DmGameState): string {
   }
   if (state.relationships?.length) {
     sections.push(
-      `Standing, per character (server-authoritative; it moves ONLY through relationship_beat, social_check, and romance_advance, and persists across sessions even while the person is away). Play each of these people true to how they feel about that specific character:\n${state.relationships
+      `Standing, per character (server-authoritative; it moves ONLY through relationship_beat, social_check, romance_advance, and relationship_end, and persists across sessions even while the person is away). Play each of these people true to how they feel about that specific character:\n${state.relationships
         .map((relationship) => `- ${relationship}`)
         .join("\n")}`,
     );
@@ -1172,7 +1196,14 @@ export function buildGameStateBlock(state: DmGameState): string {
             : usernamesById.get(sheet.userId) ?? "unknown",
           !sheet.isCompanion && physicalDiceUsers.has(sheet.userId),
           // Optional all the way down: test doubles build partial campaigns.
-          { encumbrance: state.campaign.gameSettings?.variantRules?.encumbrance ?? false, ownerUserId: state.campaign.ownerUserId, authors: spellAuthorsFor(state.campaign), compact: Boolean(state.ruleContext) },
+          {
+            encumbrance: state.campaign.gameSettings?.variantRules?.encumbrance ?? false,
+            ownerUserId: state.campaign.ownerUserId,
+            authors: spellAuthorsFor(state.campaign),
+            compact: Boolean(state.ruleContext),
+            romance: romanceOn,
+            advances: advancesOn,
+          },
         );
         const events = state.recentEventsByCharacter?.get(sheet.id);
         const between = state.betweenBySheet?.get(sheet.id);
@@ -1646,7 +1677,7 @@ export function buildDmMessages(
     (!compactRules || compactRules.groups.has("relationships") || (state.relationships?.length ?? 0) > 0)
   ) {
     settingsRules.push(
-      relationshipRules(state.campaign.gameSettings.romance !== "off"),
+      relationshipRules(state.campaign.gameSettings.romance !== "off", openToAdvanceNames(state.campaign, state.sheets)),
     );
   }
   const dmSystem = buildDmSystem(state.campaign, settingsRules, state.ruleContext ?? null);

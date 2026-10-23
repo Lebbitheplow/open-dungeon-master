@@ -48,6 +48,16 @@ export const GENDER_FIELD = {
   options: TOLD_GENDERS.map((gender) => ({ value: gender, label: gender })),
 } as const;
 
+// Who an NPC or companion could fall for (issue 501), the words the DM's
+// tools take; written once and kept.
+export const DRAWN_TO_FIELD = {
+  name: "drawnTo",
+  label: "Drawn to",
+  kind: "list",
+  placeholder: "women, men, nonbinary people",
+  help: "Who they could fall for, once the story shows it. Set once and kept.",
+} as const;
+
 export const WORLD_ADJUDICATIONS: CatalogEntry[] = [
   {
     name: "move_party",
@@ -389,6 +399,7 @@ export const SOCIAL_ADJUDICATIONS: CatalogEntry[] = [
       { name: "trait", label: "Trait", kind: "text" },
       { name: "location", label: "Found at", kind: "text" },
       GENDER_FIELD,
+      DRAWN_TO_FIELD,
       { name: "goal", label: "Wants", kind: "text" },
       { name: "ambition", label: "Long game", kind: "text" },
     ],
@@ -467,6 +478,16 @@ export const SOCIAL_ADJUDICATIONS: CatalogEntry[] = [
           { value: "married", label: "Married" },
         ],
         help: "The next step only; the server refuses a skipped one.",
+      },
+      {
+        name: "initiator",
+        label: "Who moves",
+        kind: "select",
+        options: [
+          { value: "player", label: "The player's character" },
+          { value: "npc", label: "The NPC (their first move)" },
+        ],
+        help: "An NPC's first move is an offer only that character's player answers, toward a character open to advances.",
       },
       NOTE,
     ],

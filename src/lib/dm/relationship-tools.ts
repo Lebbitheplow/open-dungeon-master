@@ -1,20 +1,13 @@
 import { z } from "zod";
 import { dmRoll } from "@/lib/dm/roll-card";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
-import { getSheetById } from "@/lib/db/sheets";
 import { insertRoll } from "@/lib/db/rolls";
-import { insertCharacterEvent } from "@/lib/db/character-events";
-import { insertFact } from "@/lib/db/facts";
-import { getNpcByName, nearestNpcName, setNpcAttitude, type Npc } from "@/lib/db/npcs";
 import {
-  ensureRelationship,
   getRelationship,
   listRelationships,
   patchRelationship,
   type Relationship,
-  type RelationshipSubjectKind,
 } from "@/lib/db/relationships";
-import { derivePersonality, nearestNpcHint } from "@/lib/dm/npc-logic";
 import {
   addFlag,
   addMemory,
@@ -32,23 +25,33 @@ import {
   REFUSAL_COST,
   relationshipFragment,
   RELATIONSHIP_BEAT_NAMES,
-  romanceIndex,
   ROMANCE_LABEL,
   ROMANCE_THRESHOLD,
   TIER_LABEL,
-  type Personality,
+  romanceIndex,
   type RelationshipBeat,
-  type RomanceStage,
 } from "@/lib/dm/relationship-logic";
+import {
+  defaultMilestoneText,
+  openLedger,
+  publishRelationshipsUpdated,
+  recordMilestone,
+  recordRelationshipEvent,
+  resolveActor,
+  resolveSubject,
+} from "@/lib/dm/relationship-subject";
+import { handleNpcAdvance } from "@/lib/dm/npc-advance";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { rollExpression } from "@/lib/dice";
-import { publishEphemeral, publishPersisted, publishWithSeq } from "@/lib/events";
-import { resolveRollExpression, resolveSheetRef, unknownSheetRef } from "@/lib/dm/rolls";
+import { publishWithSeq } from "@/lib/events";
+import { resolveRollExpression, unknownSheetRef } from "@/lib/dm/rolls";
 import { rollExtrasFor, spendRollCarriers } from "@/lib/dm/forced-save";
 import type { RollArgs } from "@/lib/dm/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import { toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
+import { toolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
+
+export { publishRelationshipsUpdated };
 
 // The relationship engine: how each character actually stands with each NPC
 // and AI companion, on one server-owned meter running from open hostility to
@@ -153,22 +156,27 @@ export function relationshipTools(campaign: Campaign): ToolDef[] {
       function: {
         name: "romance_advance",
         description:
-          "Take a romance one step further: interested (a quiet, unspoken pull), courting (declared out loud), together (partners), betrothed (a proposal), married (wed). Call it BEFORE narrating how it goes. After the checks the romance rules describe, the server decides whether they accept, rolling when it is genuinely uncertain. One step per exchange.",
+          "Take a romance one step further: interested (a quiet, unspoken pull), courting (declared out loud), together (partners), betrothed (a proposal), married (wed). Call it BEFORE narrating how it goes. After the checks the romance rules describe, the server decides whether they accept, rolling when it is genuinely uncertain. One step per exchange. With initiator npc it is the NPC's own first move toward a character open to advances, allowed only when a director note says they are ready: the character's player answers it.",
         parameters: {
           type: "object",
           additionalProperties: false,
           properties: {
-            characterId: { type: "string", description: "The character taking the step: exact characterId from GAME STATE." },
+            characterId: { type: "string", description: "The player character in it: exact characterId from GAME STATE." },
             subject: { type: "string", description: "Exact name of the NPC or companion." },
             to: {
               type: "string",
               enum: ["interested", "courting", "together", "betrothed", "married"],
-              description: "The next rung only; the server refuses a skipped step.",
+              description: "The next rung only; the server refuses a skipped step. An NPC's move is always courting.",
+            },
+            initiator: {
+              type: "string",
+              enum: ["player", "npc"],
+              description: "Who makes the move: player (the default) or npc (their first move, when a director note says they are ready).",
             },
             note: {
               type: "string",
               description:
-                "One short line describing the moment, kept in the relationship's memory ('proposed on the bridge at Highmoor').",
+                "One short line describing the moment, kept in the relationship's memory ('proposed on the bridge at Highmoor'); with initiator npc, their own words to the character.",
             },
           },
           required: ["characterId", "subject", "to"],
@@ -177,105 +185,6 @@ export function relationshipTools(campaign: Campaign): ToolDef[] {
     });
   }
   return tools;
-}
-
-// ---- shared resolution ----
-
-type Subject = {
-  kind: RelationshipSubjectKind;
-  name: string;
-  id: string;
-  personality: Personality;
-  hostile: boolean;
-  npc: Npc | null;
-};
-
-function resolveSubject(
-  campaign: Campaign,
-  rawName: string,
-  sheets: CharacterSheet[],
-): Subject | ToolError {
-  const needle = textKey(rawName);
-  const sheet = sheets.find((candidate) => textKey(candidate.name) === needle);
-  if (sheet && !sheet.isCompanion) {
-    return {
-      error: `${sheet.name} is a player's character. How two player characters feel about each other belongs to those two players and is not metered here; play the scene.`,
-      retry: true,
-    };
-  }
-  if (sheet?.isCompanion) {
-    return {
-      kind: "companion",
-      name: sheet.name,
-      id: sheet.id,
-      // Companions have a personality brief rather than axes; nothing to
-      // weigh a deed against, so every deed lands at face value.
-      personality: null,
-      hostile: false,
-      npc: null,
-    };
-  }
-  const npc = getNpcByName(campaign.id, rawName);
-  if (!npc) {
-    return {
-      error: `No tracked NPC or companion named "${rawName}".${nearestNpcHint(nearestNpcName(campaign.id, rawName))} Register them with set_npc (or npc_reaction), or add_companion, before recording how they take things.`,
-      retry: true,
-    };
-  }
-  return {
-    kind: "npc",
-    name: npc.name,
-    id: npc.id,
-    personality: npc.agency.personality ?? derivePersonality(npc.name, npc.attitude, npc.trait),
-    hostile: npc.attitude === "hostile",
-    npc,
-  };
-}
-
-function resolveActor(
-  args: { characterId: string },
-  sheets: CharacterSheet[],
-  sheetsById: Map<string, CharacterSheet>,
-): CharacterSheet | null {
-  const stale = resolveSheetRef(args.characterId, sheets, sheetsById);
-  return stale ? getSheetById(stale.id) ?? stale : null;
-}
-
-function openLedger(
-  campaign: Campaign,
-  sheet: CharacterSheet,
-  subject: Subject,
-): Relationship {
-  return (
-    getRelationship(campaign.id, sheet.id, subject.name) ??
-    ensureRelationship({
-      campaignId: campaign.id,
-      characterId: sheet.id,
-      characterName: sheet.name,
-      subjectKind: subject.kind,
-      subjectName: subject.name,
-      subjectId: subject.id,
-    })
-  );
-}
-
-// Milestones land in the character's own story log, which is where the table
-// already reads its history, and follow the character into their library
-// entry. The panel refetches on the contentless ephemeral.
-function recordRelationshipEvent(campaign: Campaign, sheet: CharacterSheet, summary: string) {
-  const event = insertCharacterEvent({
-    libraryCharacterId: sheet.libraryCharacterId,
-    campaignCharacterId: sheet.id,
-    campaignId: campaign.id,
-    seq: allocateSeq(campaign.id),
-    kind: "relationship",
-    summary: summary.slice(0, 300),
-  });
-  publishPersisted(campaign.id, "character_event", { event, characterName: sheet.name });
-}
-
-export function publishRelationshipsUpdated(campaignId: string) {
-  publishEphemeral(campaignId, "relationships_updated", {});
 }
 
 // ---- relationship_beat ----
@@ -469,7 +378,9 @@ function buildBeatNote(
 const advanceSchema = z.object({
   characterId: z.string(),
   subject: z.string().min(1).max(80),
-  to: z.enum(["interested", "courting", "together", "betrothed", "married"]),
+  // An NPC's move names no rung of its own: it is always the step to courting.
+  to: z.enum(["interested", "courting", "together", "betrothed", "married"]).optional(),
+  initiator: z.enum(["player", "npc"]).default("player"),
   note: z.string().max(200).optional(),
 });
 
@@ -493,6 +404,17 @@ export function handleRomanceAdvance(
       retry: true,
     };
   }
+  // The NPC's own first move (issue 501): an offer the player answers.
+  if (args.initiator === "npc") {
+    return handleNpcAdvance(campaign, turn, args, sheets, sheetsById);
+  }
+  if (!args.to) {
+    return {
+      error: "Invalid arguments: romance_advance needs to (interested, courting, together, betrothed, or married).",
+      retry: true,
+    };
+  }
+  const to = args.to;
   const sheet = resolveActor(args, sheets, sheetsById);
   if (!sheet) {
     return unknownSheetRef("characterId", args.characterId, sheets);
@@ -518,7 +440,7 @@ export function handleRomanceAdvance(
   }
   const verdict = canAdvanceRomance(
     relationship.romance,
-    args.to,
+    to,
     relationship.approval,
     relationship.status,
   );
@@ -536,7 +458,7 @@ export function handleRomanceAdvance(
   const warmth = subject.personality?.warmth ?? 0;
   const consent = consentCheck(
     relationship.approval,
-    args.to,
+    to,
     warmth,
     // The NPC's own mind: the DM sees the die, the table the answer.
     dmRoll(campaign.id, null, "custom", `${subject.name}: whether they agree`, "1d20").total,
@@ -548,7 +470,7 @@ export function handleRomanceAdvance(
       lastShiftTurn: turn.id,
       memories: addMemory(relationship.memories, {
         kind: "refused",
-        text: `${subject.name} was not ready when ${sheet.name} asked for ${args.to}`,
+        text: `${subject.name} was not ready when ${sheet.name} asked for ${to}`,
         at: new Date().toISOString(),
       }),
     });
@@ -558,29 +480,29 @@ export function handleRomanceAdvance(
       accepted: false,
       character: sheet.name,
       subject: subject.name,
-      requested: args.to,
+      requested: to,
       romance: relationship.romance,
       approval,
-      note: `${subject.name} does not take the step: they care, but not enough for ${args.to} yet. Narrate the gentle refusal in their own voice and leave things where they were. Do not narrate them agreeing anyway, and do not ask again this scene.`,
+      note: `${subject.name} does not take the step: they care, but not enough for ${to} yet. Narrate the gentle refusal in their own voice and leave things where they were. Do not narrate them agreeing anyway, and do not ask again this scene.`,
     };
   }
 
   const updated =
     patchRelationship(relationship.id, {
-      romance: args.to,
+      romance: to,
       lastShiftTurn: turn.id,
       // Reaching a rung settles the meter at its floor when the feeling ran
       // ahead of the number, so the new stage never sits below its bar.
-      approval: Math.max(relationship.approval, ROMANCE_THRESHOLD[args.to]),
-      flags: addFlag(relationship.flags, args.to),
+      approval: Math.max(relationship.approval, ROMANCE_THRESHOLD[to]),
+      flags: addFlag(relationship.flags, to),
       memories: addMemory(relationship.memories, {
-        kind: args.to,
-        text: args.note?.trim() || defaultMilestoneText(sheet.name, subject.name, args.to),
+        kind: to,
+        text: args.note?.trim() || defaultMilestoneText(sheet.name, subject.name, to),
         at: new Date().toISOString(),
       }),
     }) ?? relationship;
 
-  recordMilestone(campaign, sheet, subject, args.to, args.note);
+  recordMilestone(campaign, sheet, subject, to, args.note);
   publishRelationshipsUpdated(campaign.id);
 
   return {
@@ -591,59 +513,8 @@ export function handleRomanceAdvance(
     subject: subject.name,
     romance: updated.romance,
     approval: updated.approval,
-    note: `${subject.name} says yes. ${sheet.name} and ${subject.name} are now ${ROMANCE_LABEL[args.to]}. Narrate the moment from ${subject.name}'s own voice and feelings.${args.to === "married" || args.to === "betrothed" ? " The whole table knows; it is on the campaign record now." : ""}`,
+    note: `${subject.name} says yes. ${sheet.name} and ${subject.name} are now ${ROMANCE_LABEL[to]}. Narrate the moment from ${subject.name}'s own voice and feelings.${to === "married" || to === "betrothed" ? " The whole table knows; it is on the campaign record now." : ""}`,
   };
-}
-
-function defaultMilestoneText(character: string, subject: string, stage: RomanceStage): string {
-  switch (stage) {
-    case "interested":
-      return `${character} and ${subject} felt something unspoken pass between them`;
-    case "courting":
-      return `${character} and ${subject} began openly courting`;
-    case "together":
-      return `${character} and ${subject} became partners`;
-    case "betrothed":
-      return `${character} and ${subject} were betrothed`;
-    case "married":
-      return `${character} and ${subject} were married`;
-    default:
-      return `${character} and ${subject} grew closer`;
-  }
-}
-
-// The lasting rungs belong to the campaign's own record, not just the
-// relationship row: a marriage is world state every later prompt should see.
-function recordMilestone(
-  campaign: Campaign,
-  sheet: CharacterSheet,
-  subject: Subject,
-  stage: RomanceStage,
-  note?: string,
-) {
-  const summary = note?.trim()
-    ? `${defaultMilestoneText(sheet.name, subject.name, stage)}: ${note.trim()}`
-    : defaultMilestoneText(sheet.name, subject.name, stage);
-  recordRelationshipEvent(campaign, sheet, summary);
-  if (romanceIndex(stage) >= romanceIndex("betrothed")) {
-    insertFact({
-      campaignId: campaign.id,
-      category: "party",
-      subject: `${sheet.name} and ${subject.name}`,
-      fact: `${summary}.`,
-      knownBy: "party",
-      // Vows are not the kind of fact a later chapter quietly supersedes.
-      pinned: true,
-      source: "manual",
-    });
-  }
-  // Someone who has taken a real step with a character is not indifferent to
-  // the party any more.
-  if (subject.npc && romanceIndex(stage) >= romanceIndex("courting")) {
-    if (subject.npc.attitude !== "friendly") {
-      setNpcAttitude(subject.npc.id, "friendly", "");
-    }
-  }
 }
 
 // ---- relationship_end ----

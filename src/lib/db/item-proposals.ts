@@ -3,6 +3,8 @@ import { getDatabase, nowIso } from "@/lib/db/core";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { getSheetById } from "@/lib/db/sheets";
 import { OFFER_NOTE_PREFIX, proposalExpired, resolutionNote, type ProposalStatus } from "@/lib/dm/proposal-logic";
+import { ADVANCE_TOOL, advanceResolutionNote } from "@/lib/dm/advance-logic";
+import { advanceArgs, settleAdvanceRelationship } from "@/lib/db/advances";
 import { publishWithSeq } from "@/lib/events";
 
 // DM-proposed inventory/gold changes awaiting the owning player's answer
@@ -140,17 +142,24 @@ export function listOpenItemProposals(campaignId: string): ItemProposal[] {
 
 // An offer that lapsed unanswered is told to the table like any other
 // settlement (issue 239), so the DM reads that it is closed rather than
-// forgetting it was ever made. Once, on the read that expires it.
-function announceLapsed(proposal: ItemProposal) {
+// forgetting it was ever made. Once, on the read that expires it. An NPC's
+// advance that lapsed is "no answer" (issue 501): the moment passes, with no
+// sting, and the pair cools down before the next one.
+export function announceLapsed(proposal: ItemProposal) {
   const characterName =
     getSheetById(proposal.toolName === "trade" ? proposal.toCharacterId : proposal.characterId)?.name ?? "the character";
+  let note = resolutionNote({ status: "expired", summary: proposal.summary, characterName });
+  if (proposal.toolName === ADVANCE_TOOL) {
+    settleAdvanceRelationship(proposal, "expired", characterName);
+    note = advanceResolutionNote("expired", advanceArgs(proposal)?.subject ?? "The suitor", characterName);
+  }
   const seq = allocateSeq(proposal.campaignId);
   const message = insertCampaignMessage({
     campaignId: proposal.campaignId,
     seq,
     authorType: "system",
     glyph: "cue-bell",
-    content: `${OFFER_NOTE_PREFIX}${resolutionNote({ status: "expired", summary: proposal.summary, characterName })}`,
+    content: `${OFFER_NOTE_PREFIX}${note}`,
   });
   publishWithSeq(proposal.campaignId, seq, "message_added", { message });
 }
@@ -184,4 +193,12 @@ export function resolveItemProposal(
     return null;
   }
   return getItemProposal(proposalId);
+}
+
+// What settling a resolved offer left, recorded after the fact (an NPC's
+// advance settles its relationship once the row is closed, so a second
+// answer can never take the step twice).
+export function recordProposalOutcome(proposal: ItemProposal, outcome: string): ItemProposal | null {
+  getDatabase().prepare(`UPDATE item_proposals SET outcome = ? WHERE id = ?`).run(outcome.slice(0, 300), proposal.id);
+  return getItemProposal(proposal.id);
 }

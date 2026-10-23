@@ -64,6 +64,20 @@ export function publicItemProposal(proposal: ItemProposal) {
     toCharacterId: proposal.toCharacterId,
     // A trade carries its offer so the bar can lay out both sides.
     ...(proposal.toolName === "trade" ? { offer: normalizeTradeOffer(parseOfferArgs(proposal.argsJson)) } : {}),
+    // An NPC's advance (issue 501) carries who makes it and their face, so
+    // the card shows the person and not only the words.
+    ...(proposal.toolName === "romance_advance" ? { advance: advanceCard(proposal.argsJson) } : {}),
+  };
+}
+
+function advanceCard(argsJson: string) {
+  const args = parseOfferArgs(argsJson) as Record<string, unknown>;
+  const look = args.look && typeof args.look === "object" ? (args.look as Record<string, unknown>) : {};
+  const text = (value: unknown) => (typeof value === "string" ? value : "");
+  return {
+    suitor: text(args.subject),
+    portraitUrl: text(args.portraitUrl),
+    look: { gender: text(look.gender), race: text(look.race), class: text(look.class), role: text(look.role) },
   };
 }
 

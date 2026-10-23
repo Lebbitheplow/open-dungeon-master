@@ -1644,6 +1644,13 @@ function ensureSchema(db: SqliteDatabase) {
     // DM plays them. Out of fights the DM always does
     // (src/lib/dm/companion-command.ts).
     ["commanded_by", `TEXT`],
+    // Who the character is drawn to (src/lib/attraction.ts, issue 501):
+    // {genders, note}, '' = unspecified. Identity, set in the builder.
+    ["attraction_json", `TEXT NOT NULL DEFAULT ''`],
+    // 1 = the owner opened this character to romantic advances from NPCs
+    // at this table (issue 501). Consent is per table, so it never syncs to
+    // the library, and only the owner and a DM seat ever read it.
+    ["open_to_advances", `INTEGER NOT NULL DEFAULT 0`],
   ]);
 
   if (sheetsNeedAcOverride) {
@@ -2176,6 +2183,29 @@ function ensureSchema(db: SqliteDatabase) {
     // One of the builder's genders or '' (src/lib/gender.ts): what the voice
     // cast and the speech reader's pronouns read, never their prose.
     ["gender", `TEXT NOT NULL DEFAULT ''`],
+    // Who they are drawn to (src/lib/attraction.ts, issue 501): {genders,
+    // note}, '' = undecided. The DM's set_npc writes it once.
+    ["attraction_json", `TEXT NOT NULL DEFAULT ''`],
+    // The lasting AI companion this row is the person behind (#503 Phase
+    // 0.1): their personality axes, kept when the sheet is dismissed so a
+    // deed still weighs by who they are. '' for every ordinary NPC.
+    ["companion_sheet_id", `TEXT NOT NULL DEFAULT ''`],
+  ]);
+
+  addColumns("relationships", [
+    // NPC advances (src/lib/dm/advance-logic.ts, issue 501), counted in the
+    // campaign's AI turns (campaigns.ai_turns): the turn an open window
+    // closes, and the turn before which this pair does not roll again.
+    // 0 = none.
+    ["advance_ready_until", `INTEGER NOT NULL DEFAULT 0`],
+    ["advance_cooldown_until", `INTEGER NOT NULL DEFAULT 0`],
+  ]);
+
+  addColumns("campaigns", [
+    // AI turns finished at this table, the clock NPC advances count in
+    // (issue 501). Bumped after every successful AI turn, whatever the
+    // world-simulation setting says.
+    ["ai_turns", `INTEGER NOT NULL DEFAULT 0`],
   ]);
 
   addColumns("library_characters", [
