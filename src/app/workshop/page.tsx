@@ -50,6 +50,8 @@ export default function WorkshopListPage() {
   const [busy, setBusy] = useState(false);
   const [cloningId, setCloningId] = useState("");
   const [error, setError] = useState("");
+  // A copy or a delete that did not go through, said over the list.
+  const [listError, setListError] = useState("");
   const [helpOpen, setHelpOpen] = useState(false);
   const [touring, setTouring] = useState(false);
 
@@ -102,6 +104,8 @@ export default function WorkshopListPage() {
         return;
       }
       navigateTo(`/workshop/${data.workshop.id}`);
+    } catch {
+      setError("Could not reach the server. Nothing was created; try again.");
     } finally {
       setBusy(false);
     }
@@ -112,9 +116,12 @@ export default function WorkshopListPage() {
   // the same region without risking the first.
   async function clone(workshop: WorkshopSummary) {
     setCloningId(workshop.id);
+    setListError("");
     try {
-      const response = await fetch(`/api/campaigns/${workshop.id}/clone`, { method: "POST" });
-      if (!response.ok) {
+      const response = await fetch(`/api/campaigns/${workshop.id}/clone`, { method: "POST" }).catch(() => null);
+      if (!response?.ok) {
+        const data = (await response?.json().catch(() => null)) as { error?: string } | null;
+        setListError(data?.error ?? `${workshop.title} was not copied. Check the connection and try again.`);
         return;
       }
       const listed = await fetch("/api/workshops").catch(() => null);
@@ -135,10 +142,14 @@ export default function WorkshopListPage() {
     ) {
       return;
     }
-    const response = await fetch(`/api/workshops/${workshop.id}`, { method: "DELETE" });
-    if (response.ok) {
-      setWorkshops((current) => current.filter((entry) => entry.id !== workshop.id));
+    setListError("");
+    const response = await fetch(`/api/workshops/${workshop.id}`, { method: "DELETE" }).catch(() => null);
+    if (!response?.ok) {
+      const data = (await response?.json().catch(() => null)) as { error?: string } | null;
+      setListError(data?.error ?? `${workshop.title} was not deleted. Check the connection and try again.`);
+      return;
     }
+    setWorkshops((current) => current.filter((entry) => entry.id !== workshop.id));
   }
 
   return (
@@ -242,6 +253,11 @@ export default function WorkshopListPage() {
         )}
       </section>
 
+      {listError ? (
+        <p role="alert" className="motion-shake mb-3 text-sm text-red-400">
+          {listError}
+        </p>
+      ) : null}
       {loading ? (
         <PageSkeleton kind="shelf" className="px-0 py-2" />
       ) : workshops.length ? (

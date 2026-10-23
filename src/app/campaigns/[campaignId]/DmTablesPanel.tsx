@@ -191,44 +191,6 @@ export function DmTablesPanel({
     }
   }
 
-  // Forget every result dealt so far, so the deck is whole again.
-  async function reset(table: RollTable) {
-    setBusy(table.id);
-    setError("");
-    try {
-      const response = await fetch(`/api/campaigns/${campaignId}/dm/roll-tables/${table.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reset: true }),
-      });
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        setError(data.error || "Could not reset that.");
-        return;
-      }
-      setResult(null);
-      await load();
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function remove(table: RollTable) {
-    setBusy(table.id);
-    try {
-      await fetch(`/api/campaigns/${campaignId}/dm/roll-tables/${table.id}`, {
-        method: "DELETE",
-      });
-      // A save after this would otherwise PATCH a table that is gone.
-      if (editingId === table.id) {
-        open(null);
-      }
-      await load();
-    } finally {
-      setBusy("");
-    }
-  }
-
   // Same create route the save button uses, with the rows written back to
   // the text shorthand it takes.
   async function duplicate(table: RollTable) {
@@ -280,6 +242,39 @@ export function DmTablesPanel({
       setPrompt("");
     }
     setEditorOpen(true);
+  }
+
+  // Reset and delete: one request about a saved table, its refusal said.
+  async function ask(table: RollTable, init: RequestInit, failure: string, after: () => void) {
+    setBusy(table.id);
+    setError("");
+    try {
+      const response = await fetch(`/api/campaigns/${campaignId}/dm/roll-tables/${table.id}`, init);
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        setError(data.error || failure);
+        return;
+      }
+      after();
+      await load();
+    } catch {
+      setError("Could not reach the server.");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  // Forget every result dealt so far, so the deck is whole again.
+  function reset(table: RollTable) {
+    const init = { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reset: true }) };
+    return ask(table, init, "Could not reset that.", () => setResult(null));
+  }
+
+  // A save after a delete would otherwise PATCH a table that is gone.
+  function remove(table: RollTable) {
+    return ask(table, { method: "DELETE" }, "Could not delete that.", () => {
+      if (editingId === table.id) open(null);
+    });
   }
 
   const draftEntries = parseRollTable(text);
@@ -370,7 +365,7 @@ export function DmTablesPanel({
         that table too; @monster: wolf, @item: Potion of Healing, @npc: Marla name what they are.
         The picker above writes those rows for you.
       </p>
-      {error ? <p className="motion-shake mt-1 text-xs text-red-400">{error}</p> : null}
+      {error ? <p role="alert" className="motion-shake mt-1 text-xs text-red-400">{error}</p> : null}
       <button
         type="button"
         onClick={save}
@@ -403,7 +398,7 @@ export function DmTablesPanel({
         {/* A roll or a copy that fails happens in the rows, not the sheet,
             so its message has to show out here as well. */}
         {error && !editorOpen ? (
-          <p className="motion-shake text-xs text-red-400 lg:col-span-2">{error}</p>
+          <p role="alert" className="motion-shake text-xs text-red-400 lg:col-span-2">{error}</p>
         ) : null}
         <Sheet
           open={editorOpen}

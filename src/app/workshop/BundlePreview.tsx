@@ -53,9 +53,12 @@ export function kindsOf(preview: BundlePreviewData): string[] {
 function droppedLinks(preview: BundlePreviewData, kinds: string[]): string[] {
   return (preview.dependencies ?? [])
     .filter((dependency) => kinds.includes(dependency.from) && !kinds.includes(dependency.to))
-    .map(
-      (dependency) =>
-        `${dependency.count} link${dependency.count === 1 ? "" : "s"} from ${BUNDLE_KIND_LABELS[dependency.from] ?? dependency.from} to ${BUNDLE_KIND_LABELS[dependency.to] ?? dependency.to} ${dependency.count === 1 ? "is" : "are"} dropped while those stay behind.`,
+    .map((dependency) =>
+      // A name leans on a monster or a Homebrew entry: left behind, it names
+      // the importer's own of that name, or nothing (workshop/bundle.ts).
+      dependency.to === "monsters" || dependency.to === "homebrew"
+        ? `${BUNDLE_KIND_LABELS[dependency.from] ?? dependency.from}: ${dependency.count} name ${BUNDLE_KIND_LABELS[dependency.to] ?? dependency.to} from this bundle. Left behind, they name your own of that name, or nothing.`
+        : `${dependency.count} link${dependency.count === 1 ? "" : "s"} from ${BUNDLE_KIND_LABELS[dependency.from] ?? dependency.from} to ${BUNDLE_KIND_LABELS[dependency.to] ?? dependency.to} ${dependency.count === 1 ? "is" : "are"} dropped while those stay behind.`,
     );
 }
 

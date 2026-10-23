@@ -38,7 +38,7 @@ export default function ContentPicker({
   // be picked.
   judge?: (entry: PickerEntry) => { blocked: boolean; note: string } | null;
 }) {
-  const { query, setQuery, results: found, setResults, open, setOpen, loading, unavailable, unadmitted } =
+  const { query, setQuery, results: found, setResults, open, setOpen, loading, unavailable, failed, unadmitted } =
     useContentSearch(kind, extraParams);
   const results = hide ? found.filter((entry) => !hide(entry)) : found;
   const container = useRef<HTMLDivElement>(null);
@@ -75,7 +75,12 @@ export default function ContentPicker({
           <Loader2 className="absolute right-3 top-2.5 size-4 animate-spin text-stone-500" />
         ) : null}
       </div>
-      {unavailable ? (
+      {failed ? (
+        // A refused request or a dropped connection is not a missing pack.
+        <p role="alert" className="mt-1 rounded-lg border border-amber-900/50 bg-amber-950/20 px-3 py-2 text-xs text-amber-200/80">
+          Could not reach the server to search. Type again to retry.
+        </p>
+      ) : unavailable ? (
         <p className="mt-1 rounded-lg border border-amber-900/50 bg-amber-950/20 px-3 py-2 text-xs text-amber-200/80">
           The content pack is not installed on this server, so there is nothing to search or
           browse. Whoever runs it can install it with: node scripts/import-open5e.mjs
@@ -87,8 +92,8 @@ export default function ContentPicker({
       ) : null}
       {unadmitted.length ? (
         <p className="mt-1 text-[11px] text-stone-500">
-          Your own {unadmitted.join(", ")} {unadmitted.length === 1 ? "is" : "are"} not offered at this table: whoever runs it keeps a copy in their
-          workshop to admit one.
+          Your own {unadmitted.join(", ")} {unadmitted.length === 1 ? "is" : "are"} not offered at this table: whoever runs it (the owner, the
+          DM or the assistant DM) keeps a copy in their workshop to admit one.
         </p>
       ) : null}
       {open && results.length ? (

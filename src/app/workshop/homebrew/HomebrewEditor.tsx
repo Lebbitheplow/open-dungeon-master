@@ -17,6 +17,8 @@ import { SpellFields } from "@/app/workshop/homebrew/SpellFields";
 import { draftFindings, draftFromCatalog, type HomebrewDraft } from "@/app/workshop/homebrew/draft";
 import { KIND_SINGULAR } from "@/app/workshop/homebrew/types";
 import { HazardFields } from "@/app/workshop/homebrew/HazardFields";
+import { homebrewAvailability } from "@/lib/homebrew/availability";
+import { subclassLevelFor } from "@/lib/srd/features";
 import { CopySource } from "@/app/workshop/homebrew/CopySource";
 import dynamic from "next/dynamic";
 
@@ -57,6 +59,7 @@ export function HomebrewEditor({
   savedName,
   busy,
   error,
+  notice = "",
   variantRules,
   onDraft,
   onSave,
@@ -70,13 +73,15 @@ export function HomebrewEditor({
   savedName?: string;
   busy: boolean;
   error: string;
+  // What the last save did besides saving (a rename carried everywhere).
+  notice?: string;
   variantRules: Partial<VariantRules>;
   onDraft: (draft: HomebrewDraft) => void;
   onSave: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
   // The author's own classes, for a subclass to sit under.
-  workshopClasses?: Array<{ id: string; name: string }>;
+  workshopClasses?: Array<{ id: string; name: string; subclassLevel?: number }>;
 }) {
   const findings = draftFindings(draft, variantRules, isNew ? undefined : savedName);
   const refused = findings.some((finding) => finding.level === "error");
@@ -157,7 +162,15 @@ export function HomebrewEditor({
       ) : null}
       {reading ? <RulebookDialog open onOpenChange={(open) => !open && setReading(null)} startAt={reading} /> : null}
 
-      {error ? <p className="motion-shake text-xs text-red-400">{error}</p> : null}
+      {error ? <p role="alert" className="motion-shake text-xs text-red-400">{error}</p> : null}
+      {notice ? <p role="status" className="live-in text-xs text-emerald-400">{notice}</p> : null}
+      {!isNew ? (
+        // Where it is offered, said once it is kept (workshop import audit F06).
+        <p className="flex items-start gap-1.5 text-xs text-stone-400" data-testid="homebrew-availability">
+          <Info className="mt-0.5 size-3.5 shrink-0 text-sky-300/70" aria-hidden="true" />
+          <span>{homebrewAvailability(draft.kind, archetypeParent(draft, workshopClasses))}</span>
+        </p>
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <button
@@ -193,4 +206,13 @@ export function HomebrewEditor({
       </div>
     </div>
   );
+}
+
+// A subclass's class, by name, and the level it picks its subclass at.
+function archetypeParent(draft: HomebrewDraft, workshopClasses: Array<{ id: string; name: string; subclassLevel?: number }>): { name: string; subclassLevel: number | null } | undefined {
+  if (draft.kind !== "archetype") return undefined;
+  const classId = String(draft.data.classSlug ?? "");
+  const own = workshopClasses.find((klass) => klass.id === classId);
+  if (own) return { name: own.name, subclassLevel: own.subclassLevel ?? null };
+  return classId ? { name: classId.charAt(0).toUpperCase() + classId.slice(1), subclassLevel: subclassLevelFor(classId) ?? null } : undefined;
 }

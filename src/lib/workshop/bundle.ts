@@ -12,6 +12,8 @@ import {
 } from "@/lib/workshop/bundle-schema";
 import { isWorldForgeExport, readWorldForge, type WorldImport } from "@/lib/worldforge/format";
 import { unpackMedia } from "./bundle-media.ts";
+import { sheetRefNames } from "@/lib/homebrew/sheet-refs";
+import { textKey } from "@/lib/language/text-logic";
 
 export * from "@/lib/workshop/bundle-schema";
 
@@ -166,6 +168,47 @@ export function bundleDependencies(bundle: WorkshopBundle): BundleDependency[] {
   for (const shop of bundle.shops) {
     add("shops", "locations", shop.location, bundle.locations);
     add("shops", "npcs", shop.keeper, bundle.npcs);
+  }
+  // What leans on the bundle's monsters and Homebrew by NAME: a pregen's
+  // subclass, spells, feats, items, species, background or class, a Cast
+  // member's stat block, a roster row, a roll-table row and a shelf line. Left
+  // behind, each would name the importer's own entry of that name, or none.
+  const monsterNames = new Set(bundle.monsters.map((monster) => textKey(monster.name)));
+  const brewed = new Set(bundle.homebrew.map((entry) => `${entry.kind}:${textKey(entry.name)}`));
+  const named = (from: string, to: "monsters" | "homebrew", hit: boolean) => {
+    if (hit) tally.set(`${from}>${to}`, (tally.get(`${from}>${to}`) ?? 0) + 1);
+  };
+  const portable = (ref: unknown) => {
+    const match = typeof ref === "string" ? /^homebrew:@(\w+):(.+)$/.exec(ref) : null;
+    return match ? brewed.has(`${match[1]}:${textKey(match[2])}`) : false;
+  };
+  for (const pregen of bundle.pregens) {
+    const names = sheetRefNames(pregen.sheet);
+    const record = pregen.sheet as unknown as Record<string, unknown>;
+    const classes = Array.isArray(record.classes) ? (record.classes as Array<{ id?: unknown }>).map((entry) => entry.id) : [];
+    const equipment = Array.isArray(record.equipment) ? (record.equipment as Array<{ slug?: unknown }>).map((item) => item.slug) : [];
+    named(
+      "pregens",
+      "homebrew",
+      [record.race, record.background, record.class, ...classes, ...equipment].some(portable) ||
+        names.archetype.some((entry) => brewed.has(`archetype:${textKey(entry.name)}`)) ||
+        names.spell.some((name) => brewed.has(`spell:${textKey(name)}`)) ||
+        names.feat.some((name) => brewed.has(`feat:${textKey(name)}`)) ||
+        names.item.some((name) => brewed.has(`item:${textKey(name)}`)),
+    );
+  }
+  for (const npc of bundle.npcs) named("npcs", "monsters", monsterNames.has(textKey(npc.statBlock ?? "")));
+  for (const encounter of bundle.encounters) {
+    const roster = (encounter.enemies as unknown[]).map((row) => (typeof row === "string" ? row : String((row as { monster?: unknown } | null)?.monster ?? "")));
+    named("encounters", "monsters", roster.some((name) => monsterNames.has(textKey(name))));
+  }
+  for (const table of bundle.tables) {
+    const refs = (table.entries as Array<{ ref?: { kind?: unknown; name?: unknown } }>).map((entry) => entry?.ref).filter((ref) => typeof ref?.name === "string");
+    named("tables", "monsters", refs.some((ref) => ref?.kind === "monster" && monsterNames.has(textKey(String(ref.name)))));
+    named("tables", "homebrew", refs.some((ref) => ref?.kind === "item" && brewed.has(`item:${textKey(String(ref?.name))}`)));
+  }
+  for (const shop of bundle.shops) {
+    named("shops", "homebrew", [...shop.stock, ...(shop.preparedStock ?? [])].some((line) => brewed.has(`item:${textKey(line.itemName)}`)));
   }
   return [...tally.entries()].map(([key, count]) => {
     const [from, to] = key.split(">");

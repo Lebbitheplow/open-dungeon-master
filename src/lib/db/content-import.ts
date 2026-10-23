@@ -27,7 +27,8 @@ import {
 } from "@/lib/db/content-copy";
 import { getCommonWorkshop } from "@/lib/db/workshop-common";
 import { getWorldDoc, hasWorldDoc } from "@/lib/db/world-forge";
-import { boundRefsOf, bringItems, bringMonsters, foreignItems, foreignMonsters, monsterRefsOf } from "@/lib/db/import-monsters";
+import { arrivingShelf, bringItems, bringMonsters } from "@/lib/db/import-monsters";
+import { importRowsOf, remapImportedRefs, tableRowsLeftBehind } from "@/lib/db/content-import-refs";
 import { parseRef } from "@/lib/worldforge/model";
 import { copyWorldDoc } from "@/lib/db/world-forge-io";
 import { normalizeStock } from "@/lib/db/shops";
@@ -300,6 +301,8 @@ export function planContentImport(
   const common = source && source.kind === "workshop" ? getCommonWorkshop(source) : null;
   const commonHere = common ? alreadyHereBy(copiesFrom(campaignId, common.id)) : {};
   const arc = target?.storyArc ?? null;
+  const travelling = importRowsOf(sourceId, chosen);
+  const alreadyHere = alreadyHereBy(copiesFrom(campaignId, sourceId));
   return planImport({
     selection,
     source: readImportSource(sourceId),
@@ -307,7 +310,7 @@ export function planContentImport(
     targetHasHouseRules: Boolean(getHouseRulesText(campaignId).trim()),
     targetArc: arc ? { beats: arc.beats.map((beat) => beat.text), acts: arc.acts, ...arcRoom(arc) } : null,
     arcMode: options.arcMode,
-    alreadyHere: alreadyHereBy(copiesFrom(campaignId, sourceId)),
+    alreadyHere,
     again: options.again,
     commonHere,
     board: hasBoard ? boardFactsFor(source, compileBoard(listBeats(sourceId)), common) : null,
@@ -315,13 +318,14 @@ export function planContentImport(
     worldFacts: chosen.includes("world") ? worldFactsOf(sourceId) : undefined,
     // The hand-built monsters the travelling NPCs and fights name that this
     // table's authors do not have, copied in on import (src/lib/db/import-monsters.ts).
-    foreignMonsters: foreignMonsters(sourceId, campaignId, [
-      ...monsterRefsOf(sourceId, { npcs: chosen.includes("npcs"), encounters: chosen.includes("encounters") }),
-      // And the ones a World entry links to (WF-17), when the world travels.
-      ...(chosen.includes("world") ? boundRefsOf(sourceId, "monster") : []),
-    ]).map((monster) => monster.entry.name),
-    foreignItems: chosen.includes("world") ? foreignItems(sourceId, campaignId, boundRefsOf(sourceId, "item")).map((item) => item.entry.name) : undefined,
+    // The hand-built monsters and items the travelling rows name that this
+    // table's authors do not have, copied in on import (import-monsters.ts).
+    ...arrivingShelf(sourceId, campaignId, { world: chosen.includes("world"), npcs: chosen.includes("npcs"), encounters: chosen.includes("encounters") }, travelling),
     worldBound: chosen.includes("world") ? placeBoundCounts(sourceId) : undefined,
+    // Roll-table rows whose NPC, lore entry or table will not be here.
+    tableRowsLeft: chosen.includes("tables")
+      ? tableRowsLeftBehind(sourceId, (kind, id) => chosen.includes(kind) || Boolean(alreadyHere[kind]?.includes(id)))
+      : 0,
   });
 }
 
@@ -360,6 +364,11 @@ export type ImportOutcome = {
   // Homebrew, and the owner's identical ones reused (WF-17).
   itemsBrought?: string[];
   itemsReused?: string[];
+  // Homebrew spells those monsters and items cast, copied in with them.
+  spellsBrought?: string[];
+  // Roll-table rows whose table, NPC or lore entry stayed behind, and what
+  // each names here now (src/lib/db/content-import-refs.ts).
+  referenceNotes?: string[];
 };
 
 // Copies the planned rows. One transaction, so a constraint the planner
@@ -514,18 +523,6 @@ export function runContentImport(input: {
 
   // ---- after the transaction ----
 
-  let beatsAdded = 0;
-  if (storyboard) {
-    const columns = writeStoryboardColumns(getCampaignById(campaignId) ?? campaign, storyboard, now, {
-      resolver,
-      fights,
-      arcMode: input.arcMode ?? "leave",
-      title: source.title,
-      sourceId,
-    });
-    counts.copied += columns.written;
-    beatsAdded = columns.beatsAdded;
-  }
   if (selected.has("houseRules")) {
     const incoming = getHouseRulesText(sourceId);
     if (incoming.trim()) {
@@ -569,10 +566,30 @@ export function runContentImport(input: {
   // First, the hand-built monsters the copied rows need, brought into this
   // table's bestiary when its authors do not have them (WF-07).
   const ids = (kind: string) => [...idMap].filter(([key]) => key.startsWith(`${kind}:`)).map(([, id]) => id);
+  // The copies' names for each other, as the copies are called here (F04).
+  const refs = remapImportedRefs({ sourceId, campaignId, idMap });
+  counts.unbound += refs.unbound;
   const travelled = selected.has("world") && hasWorldDoc(sourceId);
-  const monsters = bringMonsters(sourceId, campaignId, { npcs: ids("npcs"), encounters: ids("encounters") }, travelled);
-  // The items a World entry links to travel the same way (WF-17).
-  const items = travelled ? bringItems(sourceId, campaignId) : { brought: [], reused: [] };
+  const monsters = bringMonsters(sourceId, campaignId, { npcs: ids("npcs"), encounters: ids("encounters"), tables: ids("tables"), maps: ids("maps") }, travelled);
+  // The items a World entry links to travel the same way (WF-17), and the
+  // ones the copied shops stock and roll-table rows name.
+  const items = bringItems(sourceId, campaignId, { shops: ids("shops"), tables: ids("tables") }, travelled);
+  const spellsBrought = [...new Set([...monsters.spells, ...items.spells])];
+  // The storyboard's arc last: a fight step names its foes as the roster
+  // reads once the monsters it names have been brought, or the step would
+  // carry an id or an old name the foes end_encounter reports never match.
+  let beatsAdded = 0;
+  if (storyboard) {
+    const columns = writeStoryboardColumns(getCampaignById(campaignId) ?? campaign, storyboard, now, {
+      resolver,
+      fights,
+      arcMode: input.arcMode ?? "leave",
+      title: source.title,
+      sourceId,
+    });
+    counts.copied += columns.written;
+    beatsAdded = columns.beatsAdded;
+  }
   const unresolved = unresolvedMonsters(campaignId);
   return {
     plan,
@@ -587,6 +604,8 @@ export function runContentImport(input: {
     ...(monsters.reused.length ? { monstersReused: monsters.reused } : {}),
     ...(items.brought.length ? { itemsBrought: items.brought } : {}),
     ...(items.reused.length ? { itemsReused: items.reused } : {}),
+    ...(spellsBrought.length ? { spellsBrought } : {}),
+    ...(refs.notes.length ? { referenceNotes: refs.notes } : {}),
   };
 }
 

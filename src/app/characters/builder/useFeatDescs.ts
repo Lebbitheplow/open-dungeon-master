@@ -54,7 +54,9 @@ export function useFeatTexts(names: string[]): { descs: Record<string, string>; 
       // closed, is dropped.
       const stale = () => !live.current.mounted || live.current.campaignId !== campaignId;
       fetch(`/api/content/feats/${encodeURIComponent(contentSlug(name))}${scopeQuery(campaignId)}`)
-        .then((response) => (response.ok ? response.json() : null))
+        // An unknown feat (404) is an answer; any other refusal is not, and
+        // is neither remembered nor taken to mean the table has no such feat.
+        .then((response) => (response.ok ? response.json() : response.status === 404 ? null : Promise.reject(new Error(String(response.status)))))
         .then((body: { entry?: { source?: string; data?: Record<string, unknown> } } | null) => {
           if (stale()) {
             return;
@@ -83,9 +85,8 @@ export function useFeatTexts(names: string[]): { descs: Record<string, string>; 
           setPrerequisites((current) => ({ ...current, [textKey(name)]: text.prerequisite }));
         })
         .catch(() => {
-          if (!stale()) {
-            setFetched((current) => ({ ...current, [textKey(name)]: "" }));
-          }
+          // Unreachable now: nothing is remembered, so the next change of
+          // the feats asks again.
         })
         .finally(() => inFlight.current.delete(flight));
     }

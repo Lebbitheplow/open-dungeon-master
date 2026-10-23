@@ -120,9 +120,12 @@ function lookUp(name: string, campaignId: string | null): Promise<void> {
     try {
       const params = new URLSearchParams(scopedParams({ q: name, limit: "10" }, campaignId));
       const response = await fetch(`/api/content/spells?${params}`);
-      const body = response.ok
-        ? ((await response.json()) as { results?: Array<PoolSpell & { slug: string }> })
-        : {};
+      if (!response.ok) {
+        // Refused is not "no such spell": nothing is remembered, and the
+        // next render asks again.
+        return;
+      }
+      const body = (await response.json()) as { results?: Array<PoolSpell & { slug: string }> };
       const row = (body.results ?? []).find((entry) => textKey(entry.name) === wantedName);
       lookups.set(
         key,
@@ -167,6 +170,10 @@ export function useSpellPool(
     void (async () => {
       const rows: PoolSpell[] = [];
       let fallback = false;
+      // A refused page or a dropped connection: the bundled list stands in,
+      // but is not remembered, so the next time the pool is asked for the
+      // server is asked again. A missing pack is remembered as it is.
+      let failed = false;
       try {
         for (let offset = 0; offset < 2000; offset += PAGE) {
           const params = new URLSearchParams(
@@ -175,6 +182,7 @@ export function useSpellPool(
           const response = await fetch(`/api/content/spells?${params}`);
           if (!response.ok) {
             fallback = true;
+            failed = true;
             break;
           }
           const body = (await response.json()) as {
@@ -202,11 +210,12 @@ export function useSpellPool(
         }
       } catch {
         fallback = true;
+        failed = true;
       }
       const pool = uniqueByName(
         fallback ? [...rows, ...checklistPool(classSlug, maxLevel)] : rows,
       );
-      cache.set(key, pool);
+      if (!failed) cache.set(key, pool);
       if (!cancelled) {
         setLoaded({ key, pool });
       }

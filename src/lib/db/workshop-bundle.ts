@@ -37,6 +37,8 @@ import { admitUpload, type UploadRefusal } from "@/lib/upload-budget";
 import { recordMediaFile } from "@/lib/media-access";
 import { decodeBundleAddonView, landAddonView } from "@/lib/db/map-addon-view-bundle";
 import { writeMapAddonView } from "@/lib/db/map-addon-view";
+import { landLabels } from "@/lib/db/workshop-bundle-refs";
+import { dedupeName } from "@/lib/workshop/import";
 import type { MapAddonView } from "@/lib/addons/map-view";
 
 export { exportWorkshopBundle } from "@/lib/db/workshop-bundle-export";
@@ -257,6 +259,7 @@ function writeBundleRows(
     return id ?? null;
   };
 
+  const tableIds: string[] = [];
   db.transaction(() => {
     bundle.lore.forEach((entry, index) => {
       ids.lore.push(crypto.randomUUID());
@@ -394,6 +397,9 @@ function writeBundleRows(
       );
       keyed("npcs", id, npc.ref);
       ids.npcs.push(id);
+      // A faction lists its members by the names the bundle wrote; a member
+      // numbered here is still the one it names.
+      if (!npcIdByName.has(textKey(npc.name))) npcIdByName.set(textKey(npc.name), id);
       npcIdByName.set(textKey(name), id);
       copied += 1;
     }
@@ -435,9 +441,12 @@ function writeBundleRows(
         { ...encounter.map, mapId: idAt(ids.maps, encounter.map.map) },
         { themes: MAP_THEMES, ambients: AMBIENTS, scenes: sceneIds() },
       );
-      const slots = (encounter.enemies as Array<{ monster?: unknown; count?: unknown }>)
-        .filter((row) => typeof row?.monster === "string" && row.monster)
-        .reduce((sum, row) => sum + Math.min(99, Math.max(1, Math.round(Number(row.count) || 1))), 0);
+      // A roster row written as a bare name is one monster, as the roster
+      // reads it (workshop-bundle-shelf.ts rosterMonsters); counted, so its
+      // placements and overrides are not cut off on arrival.
+      const slots = (encounter.enemies as Array<string | { monster?: unknown; count?: unknown }>)
+        .filter((row) => (typeof row === "string" ? Boolean(row.trim()) : typeof row?.monster === "string" && row.monster))
+        .reduce((sum, row) => sum + (typeof row === "string" ? 1 : Math.min(99, Math.max(1, Math.round(Number(row.count) || 1)))), 0);
       const id = crypto.randomUUID();
       db.prepare(
         `INSERT INTO encounter_templates
@@ -462,14 +471,20 @@ function writeBundleRows(
       copied += 1;
     }
 
+    // Two tables of one name in a bundle (made before a campaign's tables had
+    // to differ) land numbered after the first, which keeps the name: the
+    // first is the one a "@table:" row rolled at the source.
+    const tablesTaken = new Set<string>();
     for (const table of bundle.tables) {
+      const tableId = crypto.randomUUID();
+      tableIds.push(tableId);
       db.prepare(
         `INSERT INTO roll_tables (id, campaign_id, name, entries_json, no_replacement, created_by_user_id, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
-        crypto.randomUUID(),
+        tableId,
         workshop.id,
-        table.name,
+        dedupeName(table.name, tablesTaken),
         JSON.stringify(table.entries),
         table.noReplacement ? 1 : 0,
         userId,
@@ -522,6 +537,8 @@ function writeBundleRows(
     if (bundle.overworld && insertBundleOverworld(workshop.id, bundle.overworld, ids.locations, regionBackdrop, now)) {
       copied += 1;
     }
+    // Map pins open the rows they named, as those rows are here.
+    droppedLinks += landLabels(workshop.id, ids.maps, { lore: ids.lore, npc: ids.npcs, table: tableIds });
   })();
 
   // A chapter whose shared rows found their workshop draws on it from now

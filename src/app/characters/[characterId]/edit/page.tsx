@@ -112,11 +112,14 @@ function EditCharacterInner({ characterId }: { characterId: string }) {
       return;
     }
     setDiscarding(true);
+    setError("");
     try {
-      const response = await fetch(`/api/characters/${characterId}`, { method: "DELETE" });
-      if (response.ok) {
-        navigateTo(copyOf ? `/characters/${copyOf}` : "/characters");
+      const response = await fetch(`/api/characters/${characterId}`, { method: "DELETE" }).catch(() => null);
+      if (!response?.ok) {
+        setError(`${character.name} was not deleted. Check the connection and try again.`);
+        return;
       }
+      navigateTo(copyOf ? `/characters/${copyOf}` : "/characters");
     } finally {
       setDiscarding(false);
     }

@@ -31,6 +31,7 @@ import {
 import { isWorkshop, normalizeTargetParty } from "@/lib/workshop/kind";
 import { portableClassRef, portableSheet, portableStatBlock, shelfForBundle, type ShelfReport } from "@/lib/db/workshop-bundle-shelf";
 import { exportMapAddonView } from "@/lib/db/map-addon-view-bundle";
+import { portableLabels, portableRoster, stringsIn } from "@/lib/db/workshop-bundle-refs";
 
 // Reading a workshop out to a bundle. Split from src/lib/db/workshop-bundle.ts
 // (the import half, which re-exports this) to keep both under the project's
@@ -284,22 +285,51 @@ export function exportWorkshopBundle(
   const ownIds = (rows: Array<Row & { home?: string }>) => rows.map((row) => (row.home === undefined || row.home === workshopId ? str(row.id) : ""));
 
   // What the World entries link to travels with them (src/lib/worldforge/model.ts Binding).
-  const bound = hasWorldDoc(workshopId) ? Object.values(getWorldDoc(workshopId).entries).flatMap((entry) => entry.bindings) : [];
+  const worldDoc = hasWorldDoc(workshopId) ? getWorldDoc(workshopId) : null;
+  const bound = worldDoc ? Object.values(worldDoc.entries).flatMap((entry) => entry.bindings) : [];
   const boundHomebrew = (kind: Binding["kind"]) =>
     bound.filter((binding) => binding.kind === kind && binding.ref.startsWith("homebrew:") && !binding.ref.startsWith("homebrew:@")).map((binding) => binding.ref.slice("homebrew:".length));
+  const tableRows = allRows(`SELECT id, name, entries_json, no_replacement FROM roll_tables WHERE campaign_id = ?`, workshopId).sort(rowsByName);
+  const tableEntries = tableRows.map((row) => parseJson<unknown[]>(str(row.entries_json, "[]"), []));
+  const shopRows = allRows(`SELECT * FROM shops WHERE campaign_id = ?`, workshopId).sort(rowsByName);
+  const mapLabels = mapRows.map((row) => parseJson<unknown[]>(str(row.labels_json, "[]"), []));
   const shelf = shelfForBundle({
     ownerUserId: campaign.ownerUserId,
     setting: campaign.gameSettings,
     scope: manifest.shelf,
-    statBlocks: [...npcRows.map((row) => portableStatBlock(str(row.stat_block))), ...boundHomebrew("monster").map((id) => `homebrew:${id}`)],
+    statBlocks: [
+      ...npcRows.map((row) => portableStatBlock(str(row.stat_block))),
+      ...boundHomebrew("monster").map((id) => `homebrew:${id}`),
+      // A map pin that opens a monster names one the workshop uses.
+      ...mapLabels.flat().flatMap((label) => {
+        const ref = (label as { ref?: { kind?: unknown; id?: unknown } } | null)?.ref;
+        return ref?.kind === "monster" && typeof ref.id === "string" ? [ref.id] : [];
+      }),
+    ],
     boundIds: boundHomebrew("item"),
     rosters: encounterRows.map((row) => parseJson<unknown[]>(str(row.enemies_json, "[]"), [])),
     sheets: pregenRows.map((row) => row.sheet),
+    // A roll-table row that is a monster or an item, and what the shops sell.
+    tableRefs: tableEntries.flat().flatMap((entry) => {
+      const ref = (entry as { ref?: { kind?: unknown; name?: unknown } } | null)?.ref;
+      return typeof ref?.kind === "string" && typeof ref.name === "string" ? [{ kind: ref.kind, name: ref.name }] : [];
+    }),
+    stock: shopRows.flatMap((row) => [
+      ...normalizeStock(parseJson<unknown>(str(row.stock_json, "[]"), [])),
+      ...normalizeStock(parseJson<unknown>(str(row.prepared_stock_json) || "[]", [])),
+    ]).map((line) => line.itemName),
+    // Every word the workshop's prep says, wherever it is written.
     texts: [
       ...beats.map((row) => `${str(row.title)}\n${str(row.body)}`),
-      ...encounterRows.map((row) => `${str(row.notes)}\n${str(row.battlefield)}`),
+      ...encounterRows.map((row) => `${str(row.notes)}\n${str(row.battlefield)}\n${stringsIn(parseJson<unknown>(str(row.extras_json, "{}"), {})).join("\n")}`),
       ...locationRows.map((row) => str(row.layout_description)),
       ...loreRows.map((row) => str(row.body)),
+      ...npcRows.map((row) => [str(row.trait), str(row.role), ...stringsIn(parseJson<unknown>(str(row.personality_json), str(row.personality_json))), ...stringsIn(parseJson<unknown>(str(row.goals_json), str(row.goals_json)))].join("\n")),
+      ...factionRows.map((row) => `${str(row.blurb)}\n${str(row.goal)}`),
+      ...mapRows.map((row) => str(row.notes)),
+      ...allRows(`SELECT notes FROM overworld_maps WHERE campaign_id = ?`, workshopId).map((row) => str(row.notes)),
+      getHouseRulesText(workshopId),
+      ...(worldDoc ? Object.values(worldDoc.entries).map((entry) => stringsIn({ ...entry, bindings: [] }).join("\n")) : []),
     ],
   });
   const shelfById = new Map(listHomebrew(campaign.ownerUserId).map((entry) => [entry.id, entry]));
@@ -371,7 +401,9 @@ export function exportWorkshopBundle(
       const number = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? Math.round(value) : null);
       return {
         name: str(row.name),
-        enemies: parseJson<unknown[]>(str(row.enemies_json, "[]"), []),
+        // One of the author's own monsters by its name, as a Cast member's
+        // stat block travels (workshop-bundle-refs.ts).
+        enemies: portableRoster(parseJson<unknown[]>(str(row.enemies_json, "[]"), [])),
         battlefield: str(row.battlefield),
         notes: str(row.notes),
         map: {
@@ -388,15 +420,12 @@ export function exportWorkshopBundle(
         shared: row.home !== workshopId,
       };
     }),
-    tables: allRows(
-      `SELECT name, entries_json, no_replacement FROM roll_tables WHERE campaign_id = ?`,
-      workshopId,
-    ).sort(rowsByName).map((row) => ({
+    tables: tableRows.map((row, index) => ({
       name: str(row.name),
-      entries: parseJson<unknown[]>(str(row.entries_json, "[]"), []),
+      entries: tableEntries[index],
       noReplacement: Number(row.no_replacement) === 1,
     })),
-    maps: mapRows.map((row) => {
+    maps: mapRows.map((row, mapIndexAt) => {
       const backdrop = loadImage(row.backdrop_path, budget);
       return {
         name: str(row.name),
@@ -417,7 +446,8 @@ export function exportWorkshopBundle(
           : {},
         skin: { ...normalizeMapSkin(parseJson<unknown>(str(row.skin_json, "{}"), {})) },
         outdoors: row.outdoors === null || row.outdoors === undefined ? null : Number(row.outdoors) === 1,
-        labels: parseJson<unknown[]>(str(row.labels_json, "[]"), []),
+        // A pin opens the row at its place in this bundle (workshop-bundle-refs.ts).
+        labels: portableLabels(mapLabels[mapIndexAt], { lore: indexOf(loreRows), npc: npcIndex, table: indexOf(tableRows) }),
         props: parseJson<unknown[]>(str(row.props_json, "[]"), []),
         doors: parseJson<Record<string, unknown>>(str(row.doors_json, "{}"), {}),
         zones: parseJson<unknown[]>(str(row.zones_json, "[]"), []),
@@ -457,7 +487,7 @@ export function exportWorkshopBundle(
     // The world pack draft travels whole, art and all; it is the one thing
     // in a workshop that was built to be handed on.
     // The Market (#171), the place and keeper as indexes like a card's picks.
-    shops: allRows(`SELECT * FROM shops WHERE campaign_id = ?`, workshopId).sort(rowsByName).map((row) => {
+    shops: shopRows.map((row) => {
       const prepared = str(row.prepared_stock_json);
       return {
         name: str(row.name),
