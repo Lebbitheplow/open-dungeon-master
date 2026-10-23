@@ -1637,6 +1637,7 @@
     "lib/placeholders.ts#fallback": [["key",1,"scene kinds, a documented default plate"]],
     "lib/placeholders.ts#keyed": [["key",10,"ids, refs, slugs, tool names, field names, env names, event kinds, UI keys, caches, door and map keys; a sheet's conditionMeta by the condition key it was written under; the usage route's gear map by the sheet's own stored item names (src/: every site read)"]],
     "lib/placeholders.ts#normalizer": [["key",6,"slugs, hosts, file names, ids, env values, display text, throttle keys, model ids (src/: every site read)"]],
+    "lib/placeholders.ts#partial": [["key",1,"the homebrew slug prefix"]],
     "lib/player-characters.ts#fallback": [["key",1,"the selected sheet id, else the player's first sheet (a UI default)"]],
     "lib/player-characters.ts#first": [["key",1,"UI keys, ids, refs, view choices and documented defaults (a palette, a tile, a peer volume, the first sheet)"]],
     "lib/portal.ts#partial": [["key",4,"route paths"],["pattern",1,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"]],
