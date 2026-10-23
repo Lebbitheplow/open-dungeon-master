@@ -1,4 +1,5 @@
-import { createHomebrew, deleteHomebrew, getHomebrew, listHomebrew, updateHomebrew, type HomebrewEntry, archiveHomebrew } from "@/lib/db/homebrew";
+import { createHomebrew, deleteHomebrew, getHomebrew, listHomebrew, type HomebrewEntry, archiveHomebrew } from "@/lib/db/homebrew";
+import { updateHomebrewCarried, type RenameCarried } from "@/lib/db/homebrew-rename";
 import {
   draftFromData,
   draftToData,
@@ -68,21 +69,23 @@ export function createHomebrewMonster(
   );
 }
 
+// A new name is carried to the NPCs, fights and roll tables of the author's
+// tables that named the monster by its old one (src/lib/db/homebrew-rename.ts).
 export function updateHomebrewMonster(
   userId: string,
   id: string,
   draft: MonsterDraft,
   desc: string,
-): HomebrewMonster | null {
+): (HomebrewMonster & { carried: RenameCarried }) | null {
   const existing = getHomebrew(userId, id);
   if (!existing || existing.kind !== "monster") {
     return null;
   }
-  const updated = updateHomebrew(userId, id, {
+  const updated = updateHomebrewCarried(userId, id, {
     name: draft.name,
     data: draftToData(draft, desc),
   });
-  return updated ? hydrate(updated) : null;
+  return updated ? { ...hydrate(updated.entry), carried: updated.carried } : null;
 }
 
 // Forgetting a monster archives it (src/lib/db/homebrew.ts archiveHomebrew):

@@ -1,7 +1,7 @@
 "use client";
 
 import { repeatedGrants } from "@/lib/srd/racial-grants";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { InfoButton } from "@/components/ui/InfoDialog";
 import { Select } from "@/components/ui/Select";
 import { STANDARD_LANGUAGES } from "@/lib/content/mechanics";
@@ -56,6 +56,7 @@ export function AncestryStep({
   background,
   races,
   raceGroups,
+  listNote = null,
 }: {
   state: BuilderState;
   derived: BuilderDerived;
@@ -63,6 +64,8 @@ export function AncestryStep({
   background: BackgroundOption | undefined;
   races: Array<Reskinned<RaceOption>>;
   raceGroups: PickerGroup[];
+  // Why the list may be short (TableScopeNote).
+  listNote?: ReactNode;
 }) {
   // The race's bonus languages plus the background's (an acolyte or a sage
   // learns two more), which used to be loaded and never asked for.
@@ -163,6 +166,7 @@ export function AncestryStep({
           noun="lineage"
           facets={facets}
         />
+        {listNote}
         <LineageCarousel
           slides={slides}
           index={detailIndex !== null && detailIndex >= 0 ? detailIndex : null}

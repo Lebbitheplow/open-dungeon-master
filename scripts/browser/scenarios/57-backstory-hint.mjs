@@ -9,10 +9,8 @@ export default {
     const { page, root, ids } = t;
 
     await t.open(`/characters/${ids.library}/edit`);
-    await page.locator(`${root}input[aria-label="Name"]`).locator("visible=true").first().waitFor({ state: "visible", timeout: 30_000 });
-    const diamonds = page.locator(`${root}button[aria-label^="Go to step"]`).locator("visible=true");
-    await eventually(() => diamonds.count(), { label: "the step diamonds" });
-    await t.tap(diamonds.last());
+    await page.locator(`${root}[data-finish-summary]`).locator("visible=true").first().waitFor({ state: "visible", timeout: 30_000 });
+    // An edit opens on the summary (backlog F3), the step the backstory is on.
     const backstory = page.locator(`${root}textarea[aria-label="Backstory"]`).locator("visible=true").first();
     await eventually(() => backstory.count(), { label: "the Backstory field on the last step" });
     await backstory.scrollIntoViewIfNeeded();

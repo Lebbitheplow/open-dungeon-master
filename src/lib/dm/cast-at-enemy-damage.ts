@@ -86,6 +86,7 @@ export function landSpellDamage(input: {
   if (damageDealt > 0) {
     const applied = applyEnemyDamage(campaign, turn, encounter, enemy, damageDealt, sheets, sheetsById, floored === null ? damageType : undefined, {
       magical: true,
+      spell: true,
       ...(adept ? { ignoreResistance: true } : {}),
     });
     if (adept) {

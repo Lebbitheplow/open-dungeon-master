@@ -4,7 +4,7 @@ import { insertRoll } from "@/lib/db/rolls";
 import { getSheetById } from "@/lib/db/sheets";
 import { d20Expression, rollExpression } from "@/lib/dice";
 import { publishWithSeq } from "@/lib/events";
-import { watchfulPassivePerception } from "@/lib/bestiary/statblock";
+import { watchfulPassivePerception } from "@/lib/bestiary/enemy-numbers";
 import { passiveScore } from "@/lib/dm/check-tools";
 import { applyInitiativeRefills } from "@/lib/dm/feature-spends";
 import { rollExtrasFor, spendRollCarriers } from "@/lib/dm/forced-save";

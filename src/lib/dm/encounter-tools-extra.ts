@@ -69,77 +69,9 @@ const enemyFleesTool: ToolDef = {
   },
 };
 
-const setEnemyConditionTool: ToolDef = {
-  type: "function",
-  function: {
-    name: "set_enemy_condition",
-    description:
-      "Apply a condition to an enemy (prone, poisoned, stunned, restrained, frightened, grappled, ...). Call it BEFORE narrating the effect taking hold, exactly as with characters. The server refuses conditions the enemy is immune to.",
-    parameters: {
-      type: "object",
-      additionalProperties: false,
-      properties: {
-        enemyId: { type: "string", description: "Exact enemyId from GAME STATE." },
-        condition: { type: "string" },
-        rounds: {
-          type: "integer",
-          minimum: 1,
-          maximum: 100,
-          description: "Rounds until the condition ends on its own.",
-        },
-        saveAbility: {
-          type: "string",
-          enum: ["str", "dex", "con", "int", "wis", "cha"],
-          description: "Save-ends: ability the enemy re-saves at the end of each round.",
-        },
-        saveDc: { type: "integer", minimum: 1, maximum: 30, description: "Save-ends DC." },
-        sourceCharacterId: {
-          type: "string",
-          description:
-            "The character that caused it, when the condition is tied to one (the grappler, the charmer, the source of the fear): exact characterId from GAME STATE.",
-        },
-        sourceEnemyId: {
-          type: "string",
-          description: "The enemy that caused it, when it was another enemy: exact enemyId from GAME STATE.",
-        },
-        level: {
-          type: "integer",
-          minimum: 1,
-          maximum: 6,
-          description:
-            "Exhaustion only: the level it now has. The server applies it: 2 halves speed, 3 disadvantage on attacks and saves, 4 halves hit points, 5 speed 0, 6 dead.",
-        },
-        reason: { type: "string", description: "Short in-fiction cause." },
-      },
-      required: ["enemyId", "condition"],
-    },
-  },
-};
-
-const clearEnemyConditionTool: ToolDef = {
-  type: "function",
-  function: {
-    name: "clear_enemy_condition",
-    description:
-      "Remove a condition from an enemy the moment the fiction ends it (it stands up, shakes off the fear, breaks the grapple). Use the condition name shown in GAME STATE.",
-    parameters: {
-      type: "object",
-      additionalProperties: false,
-      properties: {
-        enemyId: { type: "string", description: "Exact enemyId from GAME STATE." },
-        condition: { type: "string" },
-        reason: { type: "string", description: "Short in-fiction cause." },
-      },
-      required: ["enemyId", "condition"],
-    },
-  },
-};
-
 export const extraEncounterTools: ToolDef[] = [
   addEnemiesTool,
   enemyFleesTool,
-  setEnemyConditionTool,
-  clearEnemyConditionTool,
   aoeDamageTool,
   ...legendaryTools,
   declareIntentTool,
@@ -268,6 +200,7 @@ function handleEnemyCondition(
       }
       const save = rollEnemySave(campaign.id, enemy, args.saveAbility, args.saveDc, {
         resist: true,
+        against: wanted,
         record: { turn: ctx.turn, detail: `${enemy.displayName}: ${args.saveAbility.toUpperCase()} save against being ${wanted}` },
       });
       initialSave = `${args.saveAbility.toUpperCase()} save ${save.total ?? "failed outright"} vs DC ${args.saveDc}`;

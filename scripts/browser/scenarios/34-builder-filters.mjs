@@ -9,8 +9,8 @@ export default {
   async run(t) {
     const { page, root, ids } = t;
     await t.open(`/characters/${ids.library}/edit`);
-    await page.locator(`${root}input[aria-label="Name"]`).locator("visible=true").first().waitFor({ state: "visible", timeout: 30_000 });
-    const diamond = page.locator(`${root}button[aria-label^="Go to step 3:"]`).locator("visible=true");
+    // An edit opens on the summary (backlog F3): the Class diamond is behind it.
+    const diamond = page.locator(`${root}button[aria-label^="Back to step 3:"]`).locator("visible=true");
     await eventually(async () => (await diamond.count()) && diamond.first().isEnabled(), { timeoutMs: 15_000, label: "the Class diamond" });
     await t.tap(diamond.first());
     await sleep(800);

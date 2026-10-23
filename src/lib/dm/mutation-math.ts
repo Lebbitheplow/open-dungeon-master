@@ -43,7 +43,7 @@ export function sheetBuffViolation(
     return { error: `A character gains at most one level at a time, and a level-up is applied through the player's own choices in the app. ${sheet.name} stays at level ${sheet.level}.`, retry: true };
   }
   if (typeof xpTargetLevel === "number" && xpTargetLevel > sheet.level + 1) {
-    return { error: `Experience is earned through play with award_xp, not set by hand; ${sheet.name}'s XP is unchanged.`, retry: true };
+    return { error: `Experience is earned through play with party_award, not set by hand; ${sheet.name}'s XP is unchanged.`, retry: true };
   }
   if (typeof patch.maxHp === "number" && patch.maxHp > sheet.maxHp + 12 * Math.max(1, sheet.level)) {
     return { error: `${sheet.name}'s maximum HP cannot jump that far from a single change; larger gains come from leveling up in the app.`, retry: true };

@@ -11,12 +11,13 @@ import type { Campaign } from "@/lib/db/campaigns";
 import type { PendingAttack } from "@/lib/db/dm-turns";
 import { getActiveEncounter, getEnemy, patchEnemyConditions, type EncounterEnemy } from "@/lib/db/encounters";
 import { rollEnemySave } from "@/lib/dm/forced-save";
+import type { CreatureOnHit } from "@/lib/srd/creature-attacks";
 import { resourceLeft } from "@/lib/dm/attack-rules";
 import type { ManeuverPick } from "@/lib/dm/pc-attack-plan";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { publishPersisted } from "@/lib/events";
 import { isIncapacitated, removeConditions, type ConditionMeta } from "@/lib/dm/condition-logic";
-import { sizeRank } from "@/lib/bestiary/statblock";
+import { sizeRank } from "@/lib/bestiary/enemy-numbers";
 import { publishEncounter } from "@/lib/dm/enemy-damage";
 import { applyDmMutation } from "@/lib/dm/mutations";
 import { GRAPPLING_STRIKE, MANEUVERED, maneuverDieFor, maneuverUse, offSwingRefusal, type ManeuverUse } from "@/lib/dm/maneuver-rules";
@@ -133,6 +134,8 @@ export type ParkedAttack = PendingAttack & {
     hurl?: boolean;
     poison?: boolean;
     tempHp?: { amount: number; feature: string };
+    // A creature's natural attack's rider (src/lib/dm/natural-onhit.ts).
+    creature?: CreatureOnHit;
   };
 };
 
@@ -289,7 +292,7 @@ export function stunningStrikeSave(
     return `Stunning Strike: ${barred} The ki is spent.`;
   }
   // A stun is what a legendary creature keeps its resistances for.
-  const save = rollEnemySave(campaign.id, fresh, "con", dc, { resist: true });
+  const save = rollEnemySave(campaign.id, fresh, "con", dc, { resist: true, against: "stunned" });
   if (save.success) {
     return `Stunning Strike: ${fresh.displayName} holds (CON save ${save.total ?? "failed outright"} vs DC ${dc}${save.legendaryResistance ? ", Legendary Resistance" : ""}); no stun.`;
   }

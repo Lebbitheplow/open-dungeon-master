@@ -31,7 +31,7 @@ import { capacityProblem } from "@/lib/dm/load-rules";
 import {
   addCopper,
   COPPER_PER_GOLD,
-  formatCopper,
+  formatPrice,
   formatPurse,
   fromCopper,
   parseCoins,
@@ -85,6 +85,7 @@ import {
   rollHealing,
 } from "@/lib/dm/resource-tools";
 import { resourceTools } from "@/lib/dm/resource-tool-defs";
+import { applyDamageTool, clearConditionTool, setConditionTool } from "@/lib/dm/merged-tool-defs";
 import { searchSpells, spellFactsFor, spellNameMatches } from "@/lib/content";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { suggestedSpellCount } from "@/lib/content/mechanics";
@@ -188,16 +189,7 @@ function tool(name: string, description: string, extra: Record<string, unknown>,
 }
 
 export const mutationTools: ToolDef[] = [
-  tool("apply_damage", "Deal damage to a character. Temp HP absorbs first; HP floors at 0.", {
-    amount: { type: "integer", minimum: 1, maximum: 200, description: "A damage total the server rolled this turn (request_roll kind=damage)." },
-    dice: { type: "string", description: "Dice the server rolls for the damage ('2d6'). Instead of amount." },
-    type: { type: "string", description: "Damage type (slashing, fire)." },
-    magical: {
-      type: "boolean",
-      description:
-        "True when the damage comes from a spell or a magic weapon, so resistance to nonmagical attacks does not apply.",
-    },
-  }, []),
+  applyDamageTool,
   tool("heal", "Restore a character's hit points, capped at their max. For a HEALING SPELL, pass spell, casterId and level instead of amount: the server casts it (the caster must have the spell; the slot and the action are spent), rolls the spell's real dice, adds the caster's ability modifier, and shows the dice card.", {
     amount: { type: "integer", minimum: 1, maximum: 200, description: "Hit points the server rolled this turn, for healing that is not a spell." },
     dice: { type: "string", description: "Dice the server rolls for healing that is not a spell ('2d4+2'). Instead of amount." },
@@ -236,26 +228,9 @@ export const mutationTools: ToolDef[] = [
   {
     type: "function",
     function: {
-      name: "award_xp",
-      description: "Award XP to characters for overcoming challenges.",
-      parameters: {
-        type: "object",
-        additionalProperties: false,
-        properties: {
-          characterIds: { type: "array", items: { type: "string" }, minItems: 1 },
-          amount: { type: "integer", minimum: 1, maximum: 10000 },
-          reason: { type: "string" },
-        },
-        required: ["characterIds", "amount"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
       name: "party_award",
       description:
-        "Hand the whole party the spoils of one moment in a single call (XP each, a purse, one item), instead of a run of award_xp and modify_gold calls after a fight or a hoard; the server does the arithmetic and the split.",
+        "Award XP for overcoming a challenge, to one character or the party. Spoils of the same moment ride the same call (a purse split evenly, one item to the finder); the server does the arithmetic and reports who can level up.",
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -266,9 +241,9 @@ export const mutationTools: ToolDef[] = [
             type: "integer",
             minimum: -100000,
             maximum: 100000,
-            description: "Total gold, split evenly; the remainder goes to the first share.",
+            description: "Gold in all, split evenly; the remainder to the first.",
           },
-          name: { type: "string", description: "One item, to the first character listed (the one who found it)." },
+          name: { type: "string", description: "One item, to the first listed (who found it)." },
           qty: { type: "integer", minimum: 1, maximum: 99 },
           reason: { type: "string" },
         },
@@ -305,55 +280,8 @@ export const mutationTools: ToolDef[] = [
     spell: ITEM_SPELL_PROPERTY,
   }, ["name"]),
   ...resourceTools,
-  tool("set_condition", "Apply a condition. Use the exact 5e name when one fits: blinded, charmed, deafened, frightened, grappled, incapacitated, invisible, paralyzed, petrified, poisoned, prone, restrained, stunned, unconscious, exhaustion. Custom names are allowed for story effects. Always give a duration when the fiction has one, because only timed conditions ever expire on their own: rounds for combat-scale effects, minutes, hours or days for longer ones (a poison, a curse, a potion), or saveAbility + saveDc for save-ends effects the server re-rolls. In combat the countdown runs by round; outside it the in-world clock runs it down as the party travels, rests, or passes time.", {
-    condition: { type: "string" },
-    rounds: {
-      type: "integer",
-      minimum: 1,
-      maximum: 100,
-      description: "Rounds until the condition ends on its own.",
-    },
-    minutes: {
-      type: "integer",
-      minimum: 1,
-      maximum: 1440,
-      description: "In-world minutes until the condition ends (10 rounds per minute).",
-    },
-    hours: {
-      type: "integer",
-      minimum: 1,
-      maximum: 24,
-      description: "In-world hours until the condition ends.",
-    },
-    days: {
-      type: "integer",
-      minimum: 1,
-      maximum: 365,
-      description: "In-world days until the condition ends (Geas's thirty, Contagion's seven).",
-    },
-    saveAbility: {
-      type: "string",
-      enum: ["str", "dex", "con", "int", "wis", "cha"],
-      description: "Save-ends: ability re-saved at the end of each round.",
-    },
-    saveDc: { type: "integer", minimum: 1, maximum: 30, description: "Save-ends DC." },
-    magical: {
-      type: "boolean",
-      description: "The condition comes from magic (a creature's magical sleep, an enchanted trap): traits that resist magic apply, such as Fey Ancestry against being put to sleep.",
-    },
-    sourceEnemyId: {
-      type: "string",
-      description:
-        "The enemy that caused it, when the condition is tied to one (the charmer, the grappler, the source of the fear): exact enemyId from GAME STATE.",
-    },
-    sourceCharacterId: {
-      type: "string",
-      description: "The character that caused it, when it was one of the party: exact characterId from GAME STATE.",
-    },
-  }, ["condition"]),
-  tool("clear_condition", "Remove a condition from a character the moment the fiction ends it (cured, dispelled, rested, shaken off). Use the condition name shown in GAME STATE.", {
-    condition: { type: "string" },
-  }, ["condition"]),
+  setConditionTool,
+  clearConditionTool,
   tool("use_spell_slot", "Cast a spell that no other tool resolves (a utility spell, a summoning, a ritual): the server checks the caster holds the spell and can cast it now, spends the slot of the spell's level (or the higher one named), its casting time from the turn and any costly material, and tracks concentration: a new concentration spell ends the previous one and its effects. A spell that leaves an area on the battle map with nobody caught in it yet (Fog Cloud, Darkness, Silence, Spike Growth, Web, Moonbeam, Daylight, a Wall of Stone, Force, Ice, Fire or Thorns, Guardian of Faith) is laid there (atX); the server applies the area from then on (movement, sight, Silence, the saves and damage of creatures entering it or starting or ending a turn in it) and removes it when the concentration or the duration ends.", {
     level: { type: "integer", minimum: 1, maximum: 9 },
     spell: { type: "string", description: "Exact name of the spell being cast, from the character's spell list." },
@@ -384,7 +312,7 @@ export const mutationTools: ToolDef[] = [
   ),
   tool(
     "update_sheet",
-    "Set who a character is in the story, including a feat or an ability score a curse changed; never a level, hit points, XP, AC, gold or conditions (heal, apply_damage, award_xp, modify_gold, set_condition and set_effect move those). Include ONLY the fields that change.",
+    "Set who a character is in the story, including a feat or an ability score a curse changed; never a level, hit points, XP, AC, gold or conditions (heal, apply_damage, party_award, modify_gold, set_condition and set_effect move those). Include ONLY the fields that change.",
     {
       name: { type: "string" },
       race: { type: "string" },
@@ -501,7 +429,8 @@ const argsSchema = z.object({
   targetCharacterId: z.string().optional(),
   // use_resource: the creature a feature is aimed at (Intimidating Presence).
   targetEnemyId: z.string().optional(),
-  price: z.coerce.number().int().min(0).max(100000).optional(),
+  // purchase: gold each, for a thing no list prices (half a gold piece is 0.5).
+  price: z.coerce.number().min(0).max(100000).optional(),
   resource: z.string().optional(),
   // use_resource, Wild Shape: the beast form's stat block.
   form: z.string().optional(),
@@ -651,6 +580,9 @@ export function applyDmMutation(
       return { result: bounds };
     }
     const awarded: string[] = [];
+    // What the experience reported (who can level up, who was skipped as
+    // dead), passed on: the call is the party's award_xp too.
+    let experience: Record<string, unknown> = {};
     const xp = args.amount ?? 0;
     if (xp > 0) {
       const outcome = applyDmMutation(
@@ -664,6 +596,10 @@ export function applyDmMutation(
       if ("error" in outcome.result) {
         return outcome;
       }
+      const { ok: _ok, awarded: _xp, ...reported } = outcome.result;
+      void _ok;
+      void _xp;
+      experience = reported;
       awarded.push(`${xp} XP each`);
     }
     const gold = args.delta ?? 0;
@@ -705,13 +641,13 @@ export function applyDmMutation(
     if (!awarded.length) {
       return { result: { error: "party_award needs XP, gold or an item to hand out.", retry: true } };
     }
-    return { result: { ok: true, awarded: awarded.join("; ") } };
+    return { result: { ok: true, awarded: awarded.join("; "), ...experience } };
   }
 
   if (toolName === "award_xp") {
     const amount = args.amount ?? 0;
     if (amount < 1) {
-      return { result: { error: "award_xp needs a positive amount.", retry: true } };
+      return { result: { error: "Experience needs a positive amount.", retry: true } };
     }
     // Ceiling so a whispered or in-chat "give me a million XP" cannot vault a
     // character up the track in one call; realistic events award far less, and
@@ -999,7 +935,7 @@ export function applyDmMutation(
           ok: true,
           gold: change.purse.gold,
           purse: formatPurse(change.purse),
-          ...(change.short ? { short: formatCopper(change.short) } : {}),
+          ...(change.short ? { short: formatPrice(change.short) } : {}),
         },
       };
     }
@@ -1188,8 +1124,8 @@ export function applyDmMutation(
     case "purchase": {
       const itemName = (args.item ?? args.name ?? "").trim();
       const action = args.action === "sell" ? "sell" : args.action === "buy" ? "buy" : null;
-      if (!itemName || args.price === undefined || !action) {
-        return { result: { error: "purchase needs item, price, and action buy|sell.", retry: true } };
+      if (!itemName || !action) {
+        return { result: { error: "purchase needs item and action buy|sell.", retry: true } };
       }
       const badQty = quantityProblem(args.qty, "purchase");
       if (badQty) {
@@ -1223,7 +1159,7 @@ export function applyDmMutation(
         turnId,
         sheet,
         "purchase",
-        { item: itemName, price: args.price, qty: args.qty ?? 1, action },
+        { item: itemName, ...(args.price !== undefined ? { price: args.price } : {}), qty: args.qty ?? 1, action },
         reason,
         outcome.patch,
       );

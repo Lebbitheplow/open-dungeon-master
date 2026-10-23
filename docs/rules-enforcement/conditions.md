@@ -87,7 +87,8 @@ cost first because the generated terrain can be rough ground. No test POSTs a ch
   for restrained, disadvantage on ability checks for poisoned and frightened.
 - Charmed, deafened and the sight half of blinded carry NO mechanics. Nothing stores who charmed or
   frightened a creature, or who holds a grapple.
-- Enemy stat-block condition immunities are honoured by `set_enemy_condition`, `cast_at_enemy`
+- Enemy stat-block condition immunities are honoured by `set_condition` on an enemy (the
+  `set_enemy_condition` handler), `cast_at_enemy`
   (refused before the slot is spent) and grapple/shove. Characters have no condition immunities.
 - `canonicalCondition` maps near misses to SRD names using the content pack's condition list; with no
   pack only exact names (any case) resolve. Unknown names are legal custom conditions with no mechanics.
@@ -125,8 +126,9 @@ Deliberate deviations (documented in code or docs, pinned by `test()`):
   resistance or vulnerability.
 - Order: flat modifiers and critical dice, then resistance, then temporary hit points, then hit points.
   Multiple sources of one resistance halve once.
-- `apply_damage`, `heal` and `damage_enemy` take 1 to 200 a call. `apply_damage` and `heal` clamp a larger
-  number; `damage_enemy` refuses it.
+- `apply_damage` and `heal` take 1 to 200 a call on a character, and clamp a larger number; `apply_damage`
+  on an enemy (the `damage_enemy` handler) refuses it. One total split across several targets (`targets`)
+  takes up to 500.
 - Documented in `test-condition-logic.mjs` but in no doc: resisted damage never drops below 1.
 
 ### Temporary hit points and healing

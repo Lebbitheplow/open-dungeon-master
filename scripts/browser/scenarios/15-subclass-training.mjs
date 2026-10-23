@@ -17,7 +17,12 @@ export default {
       const edit = visible(page, root, /^\s*Edit build\s*$/);
       return (await edit.count()) ? edit.first() : null;
     }, { label: "the Edit build button" }));
-    await page.locator(`${root}input[aria-label="Name"]`).locator("visible=true").first().waitFor({ state: "visible", timeout: 30_000 });
+    // The editor opens on its summary (backlog F3); the Class row goes to
+    // the Class step, and the walk goes on from there.
+    const classRow = page.locator(`${root}section[data-active] [data-summary-edit="calling"]`).locator("visible=true");
+    await eventually(() => classRow.count(), { timeoutMs: 30_000, label: "the summary's Class row" });
+    await t.tap(classRow.first());
+    await sleep(500);
 
     // Walk the stored build to Save, reading every step for the domain's
     // training on the way.

@@ -112,11 +112,14 @@ function EditCharacterInner({ characterId }: { characterId: string }) {
       return;
     }
     setDiscarding(true);
+    setError("");
     try {
-      const response = await fetch(`/api/characters/${characterId}`, { method: "DELETE" });
-      if (response.ok) {
-        navigateTo(copyOf ? `/characters/${copyOf}` : "/characters");
+      const response = await fetch(`/api/characters/${characterId}`, { method: "DELETE" }).catch(() => null);
+      if (!response?.ok) {
+        setError(`${character.name} was not deleted. Check the connection and try again.`);
+        return;
       }
+      navigateTo(copyOf ? `/characters/${copyOf}` : "/characters");
     } finally {
       setDiscarding(false);
     }
@@ -165,9 +168,9 @@ function EditCharacterInner({ characterId }: { characterId: string }) {
         </div>
         {nextLevel ? (
           <p className="reveal mt-3 rounded-lg border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-xs text-amber-100">
-            The build opens at level {nextLevel}. Hit points come with the level; anything it lets{" "}
-            {character.name} choose (an ability score improvement, a subclass, new spells) is asked for on its own
-            step, and that step holds Continue until it is picked. Save changes appears once nothing is owed.
+            The build opens at level {nextLevel}, on its summary. Hit points come with the level; anything it lets{" "}
+            {character.name} choose (an ability score improvement, a subclass, new spells) is listed there as still
+            to choose, with a Fix that goes to it. Save changes takes the build once nothing is owed.
           </p>
         ) : null}
         {copyOf ? (
@@ -195,6 +198,10 @@ function EditCharacterInner({ characterId }: { characterId: string }) {
         ) : null}
       </header>
       <CharacterBuilder
+        // The builder takes its level once, as it mounts: a move between the
+        // edit and its level-up (?levelUp=1) is the same page, so it starts
+        // afresh at the level asked for.
+        key={nextLevel ?? "stored"}
         initial={character.sheet}
         initialLevel={character.level}
         startLevel={nextLevel ?? undefined}

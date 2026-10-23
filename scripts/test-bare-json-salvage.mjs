@@ -88,8 +88,11 @@ const catalogue = dmTurnToolCatalogue(getCampaignById(probe.id), false, false);
   const either = salvageJsonToolCalls('The bandit circles. {"characterId":"c1","amount":5}', catalogue);
   assert.equal(either.text, "The bandit circles.");
   assert.equal(either.calls.length, 0);
+  // A teleport is move_token's since teleport_token folded into it (issue
+  // #471), so a token and a square name one tool now.
   const move = salvageJsonToolCalls('The bandit circles. {"tokenName":"Bandit 1","x":5,"y":8}', catalogue);
-  assert.equal(move.calls.length, 0, "move_token and teleport_token both take tokenName, x and y");
+  assert.deepEqual(move.calls.map((call) => call.name), ["move_token"]);
+  assert.equal(move.text, "The bandit circles.");
   const named = salvageJsonToolCalls('{"name":"move_token","arguments":"{\\"tokenName\\":\\"Avery\\",\\"x\\":2,\\"y\\":3}"}', catalogue);
   assert.deepEqual(named.calls.map((call) => call.name), ["move_token"]);
   assert.deepEqual(JSON.parse(named.calls[0].rawArguments), { tokenName: "Avery", x: 2, y: 3 });

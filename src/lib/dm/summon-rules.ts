@@ -6,24 +6,18 @@
 import type { AttackProfile } from "@/lib/dm/attack-logic";
 import type { EnemyStats } from "@/lib/bestiary/statblock";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import type { SheetSummon, SummonAttack } from "@/lib/schemas/summon";
+import type { SheetSummon } from "@/lib/schemas/summon";
 import type { SummonForm } from "@/lib/srd/summon-forms";
 import { noneNamed, type ToolError } from "@/lib/dm/tool-errors";
-import { textKey } from "@/lib/language/text-logic";
+import { naturalAttackProfile, pickNaturalAttack } from "@/lib/dm/natural-attack";
+import { attackSummary, enemyAttackOf } from "@/lib/srd/creature-attacks";
 
 export const SUMMONED = "summoned";
 
-const TILE = 5;
-
-// The attack the call names by its whole name, or the only one there is.
-function pickAttack(summon: SheetSummon, weapon: string | undefined): SummonAttack | undefined {
-  const wanted = textKey(weapon ?? "");
-  return wanted ? summon.attacks.find((attack) => textKey(attack.name) === wanted) : summon.attacks.length === 1 ? summon.attacks[0] : undefined;
-}
-
 // The attack a summoned creature makes with pc_attack: the stat block's own
-// to-hit and dice, its reach or range, and any rider dice of another type
-// kept apart so each meets its own resistance.
+// to-hit and dice, its reach or range, any rider dice of another type kept
+// apart so each meets its own resistance, and what its hit carries
+// (src/lib/dm/natural-attack.ts).
 export function summonAttackProfile(
   sheet: Pick<CharacterSheet, "name" | "summon">,
   weapon: string | undefined,
@@ -35,35 +29,18 @@ export function summonAttackProfile(
   if (!summon.attacks.length) {
     return { error: `${sheet.name} (${summon.form}) has no attack; it cannot fight.`, refused: "rules" };
   }
-  const attack = pickAttack(summon, weapon);
+  const attack = pickNaturalAttack(summon.attacks, weapon);
   if (!attack) {
     const names = summon.attacks.map((entry) => entry.name);
     return weapon?.trim()
       ? noneNamed(`${sheet.name} (${summon.form}) has no attack called`, weapon.trim(), names)
       : { error: `${sheet.name} (${summon.form}) has several attacks; name one in weapon: ${names.join(", ")}.`, retry: true };
   }
-  const ranged = Boolean(attack.range);
-  const riders = attack.riders ?? [];
-  return {
+  return naturalAttackProfile(attack, {
     weapon: `${summon.form} ${attack.name}`,
-    toHit: attack.toHit,
-    damageExpression: [attack.damage, ...riders.map((rider) => rider.dice)].join("+"),
-    damageType: attack.type,
-    ranged,
-    thrown: false,
-    reachTiles: Math.max(1, Math.floor((attack.reach ?? TILE) / TILE)),
-    rangeTiles: ranged ? Math.max(1, Math.floor((attack.range ?? TILE) / TILE)) : 1,
-    ...(ranged && attack.longRange ? { longRangeTiles: Math.floor(attack.longRange / TILE) } : {}),
-    proficient: true,
-    improvised: false,
-    ability: "str",
-    magicBonus: 0,
-    twoHanded: false,
-    sneakEligible: false,
-    heavy: false,
-    riderNotes: [`${summon.form}'s own attack (summoned by ${summon.spell})`],
-    ...(riders.length ? { gearTyped: riders.map((rider) => ({ dice: rider.dice, type: rider.type })) } : {}),
-  };
+    note: `${summon.form}'s own attack (summoned by ${summon.spell})`,
+    magical: /\bMagic Weapons\b/i.test(summon.traits),
+  });
 }
 
 // The attacks one Attack action holds for a summoned creature: its
@@ -86,6 +63,17 @@ export function summonImmunities(sheet: Pick<CharacterSheet, "summon">): string 
 
 export function summonVulnerabilities(sheet: Pick<CharacterSheet, "summon">): string {
   return sheet.summon?.vulnerable ?? "";
+}
+
+// What kind of creature a sheet is, for the rules that ask (Protection from
+// Evil and Good, Antilife Shell, a spell that touches only some): the form
+// it wears (a druid's bear is a beast), a summoned creature's record (Find
+// Steed's celestial, fey or fiend), or a humanoid.
+export function sheetCreatureType(sheet: Pick<CharacterSheet, "summon" | "wildShape">): string {
+  if (sheet.wildShape) {
+    return sheet.wildShape.type || "beast";
+  }
+  return sheet.summon?.creatureType || "humanoid";
 }
 
 // The record a stat block becomes when a spell makes it.
@@ -140,15 +128,8 @@ export function enemyStatsFromSummon(
     dexMod: saveMods.dex,
     saveMods,
     speed: `${sheet.speed} ft.`,
-    attacks: summon.attacks.map((attack) => ({
-      name: attack.name,
-      toHit: attack.toHit,
-      damage: [attack.damage, ...(attack.riders ?? []).map((rider) => rider.dice)].join("+"),
-      type: [attack.type, ...(attack.riders ?? []).map((rider) => rider.type)].join("/"),
-      mode: attack.range ? "ranged" : "melee",
-      ...(attack.range ? { range: { normal: attack.range, long: attack.longRange ?? attack.range * 4 } } : { reach: attack.reach ?? TILE }),
-      ...(attack.riders?.length ? { riders: attack.riders.map((rider) => ({ dice: rider.dice, type: rider.type })) } : {}),
-    })),
+    // Its attacks with their riders, which the enemy's own engine lands.
+    attacks: summon.attacks.map(enemyAttackOf),
     traits: summon.traits ? [summon.traits] : [],
     resist: summon.resist,
     immune: summon.immune,
@@ -170,11 +151,7 @@ export function summonStateLine(sheet: Pick<CharacterSheet, "name" | "summon">):
   if (!summon) {
     return null;
   }
-  const attacks = summon.attacks.length
-    ? summon.attacks
-        .map((attack) => `${attack.name} +${attack.toHit} (${attack.damage} ${attack.type}${(attack.riders ?? []).map((rider) => ` + ${rider.dice} ${rider.type}`).join("")})`)
-        .join(", ")
-    : "no attacks";
+  const attacks = summon.attacks.length ? summon.attacks.map(attackSummary).join(", ") : "no attacks";
   const ends = summon.concentration
     ? `ends with ${summon.casterName || "its caster"}'s concentration`
     : "ends with its duration";

@@ -1,6 +1,7 @@
 "use client";
 
 import { playingSheet, turnFromEncounter, turnHudBudget } from "@/lib/battlemap/hand-table";
+import { initiativeCharacter } from "@/lib/player-characters";
 import { BookMarked, BookOpen, Flag, Heart, History, ListChecks, ScrollText, ShoppingBag, Users } from "lucide-react";
 import { Suspense, useMemo, useState, type ReactNode } from "react";
 import type { CampaignMessage } from "@/lib/db/messages";
@@ -501,7 +502,9 @@ export function SidePanelRouter({
     );
   }
   if (tab === "battle" && battleMap) {
-    const playing = playingSheet(sheets, meUserId, activeSheetId);
+    // The turn's character when it is this player's (their own, or a
+    // companion they command), else the one being played.
+    const playing = initiativeCharacter(sheets, meUserId, encounter?.acting?.id) ?? playingSheet(sheets, meUserId, activeSheetId);
     return (
       // board-dock: the side panel and the phone hold the board in a fixed
       // window too, so its header and footer stay on screen (issue 87).
@@ -524,7 +527,7 @@ export function SidePanelRouter({
           // count is the main board's (SessionView.tsx): drawn from the
           // turn's start, before anything is spent, with a spent reaction
           // from reactionsUsed and an action Haste or Action Surge leave.
-          playing && !playing.isCompanion && encounter
+          playing && encounter
             ? turnHudBudget(turnFromEncounter(encounter, playing, { myTurn: encounter.turn?.ownerId === playing.id }))
             : null
         }

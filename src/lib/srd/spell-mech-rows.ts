@@ -37,7 +37,7 @@ export const SRD_EFFECT_ROWS: Record<string, SpellMech> = {
     area: true,
     areaFeet: 20,
     noDamage: true,
-    note: "Restrained until it breaks free: an action and a Strength check against the caster's DC (clear_enemy_condition on a success). Fire burns the web: 2d4 fire to a creature starting its turn in the burning strands.",
+    note: "Restrained until it breaks free: an action and a Strength check against the caster's DC (clear_condition on a success). Fire burns the web: 2d4 fire to a creature starting its turn in the burning strands.",
   },
   entangle: {
     resolution: "save",
@@ -218,7 +218,7 @@ export const SRD_EFFECT_ROWS: Record<string, SpellMech> = {
       rounds: TEN_MINUTES,
       variants: ["fire shield (cold)", "fire shield (fire)"],
     },
-    note: "The warm shield resists cold, the chill shield fire (pass variant). A creature within 5 feet that hits with a melee attack takes 2d8 of the other type (damage_enemy).",
+    note: "The warm shield resists cold, the chill shield fire (pass variant). A creature within 5 feet that hits with a melee attack takes 2d8 of the other type (apply_damage).",
   },
   "branding smite": {
     resolution: "buff",
@@ -237,7 +237,7 @@ export const SRD_EFFECT_ROWS: Record<string, SpellMech> = {
   },
   "spike growth": {
     resolution: "utility",
-    note: "Difficult terrain; a creature takes 2d4 piercing for every 5 feet it moves through the area (damage_enemy).",
+    note: "Difficult terrain; a creature takes 2d4 piercing for every 5 feet it moves through the area (apply_damage).",
   },
 
   // ---- repeats while concentrating ----

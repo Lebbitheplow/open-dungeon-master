@@ -116,3 +116,23 @@ export function preparedFormula(ability: "int" | "wis" | "cha", mod: number, lis
   const sum = `${ABILITY_NAMES[ability]} modifier (${formatModifier(mod)}) + ${levelWords}`;
   return mod + levelPart < 1 ? `${sum}, and never fewer than 1` : sum;
 }
+
+// The slots the sheet is saved with, {level: {max, used}}: the preview, the
+// build math table and the save all read this one (submit.ts), so the slots
+// shown are the slots stored.
+export function builderSpellSlots(
+  klass: CastingClass | undefined | null,
+  subclass: string | undefined | null,
+  level: number,
+): Record<string, { max: number; used: number }> {
+  if (!klass) {
+    return {};
+  }
+  const casting = builderCasting(klass, subclass, level);
+  return Object.fromEntries(
+    Object.entries(spellSlotsFor(klass.id, level, subclass, casting.profile)).map(([slotLevel, max]) => [
+      slotLevel,
+      { max, used: 0 },
+    ]),
+  );
+}

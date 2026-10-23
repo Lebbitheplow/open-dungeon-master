@@ -82,20 +82,25 @@ export function ContentImportPicker({
   const [sources, setSources] = useState<ImportSourceSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [plan, setPlan] = useState<ImportPlan | null>(null);
+  // The preview could not be had: the button waits for one rather than
+  // importing blind past collisions and overwrites it would have named.
+  const [planFailed, setPlanFailed] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState("");
+  const [note, setNote] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+  // The list of sources could not be read, which is not "nothing to copy".
+  const [sourcesFailed, setSourcesFailed] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     fetch("/api/import-sources")
-      .then((response) => (response.ok ? response.json() : null))
+      .then((response) => (response.ok ? response.json() : Promise.reject(new Error(String(response.status)))))
       .then((data) => {
         if (!cancelled && data) {
           setSources(data.sources ?? []);
         }
       })
       .catch(() => {
-        // No sources is a valid state; the section explains itself.
+        if (!cancelled) setSourcesFailed(true);
       })
       .finally(() => {
         if (!cancelled) {
@@ -136,7 +141,10 @@ export function ContentImportPicker({
   // effect linter, which is what it is. Same shape as DmMapStudioPanel.
   const refreshPlan = useCallback(() => {
     if (!campaignId || !selection.sourceId || !selection.select.length) {
-      return Promise.resolve().then(() => setPlan(null));
+      return Promise.resolve().then(() => {
+        setPlan(null);
+        setPlanFailed(false);
+      });
     }
     const params = new URLSearchParams({
       sourceId: selection.sourceId,
@@ -151,9 +159,14 @@ export function ContentImportPicker({
     }
     return fetch(`/api/campaigns/${campaignId}/import?${params}`)
       .then((response) => (response.ok ? response.json() : null))
-      .then((data) => setPlan(data?.plan ?? null))
+      .then((data) => {
+        setPlan(data?.plan ?? null);
+        setPlanFailed(!data?.plan);
+      })
       .catch(() => {
-        // transient; the next change reloads
+        // The next change, or the retry under the choices, asks again.
+        setPlan(null);
+        setPlanFailed(true);
       });
   }, [campaignId, selection.sourceId, selection.select, selection.again, selection.arc]);
 
@@ -190,53 +203,19 @@ export function ContentImportPicker({
       return;
     }
     setBusy(true);
-    setNote("");
+    setNote(null);
     try {
-      const response = await fetch(`/api/campaigns/${campaignId}/import`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...selection, exclude: exclusionsOf(selection) }),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setNote(data.error || "Could not import.");
+      const outcome = await postContentImport(campaignId, selection);
+      if (!outcome.ok) {
+        setNote({ tone: "error", text: outcome.error });
         return;
       }
-      setNote(
-        [
-          `Brought ${data.copied} item${data.copied === 1 ? "" : "s"} across.`,
-          data.kept ? `Kept ${data.kept} already here.` : "",
-          data.beatsAdded ? `${data.beatsAdded} beat${data.beatsAdded === 1 ? "" : "s"} joined the arc.` : "",
-          // Names this table's Cast or fights use that nothing here answers
-          // to (a monster on another author's shelf), and links both worlds
-          // changed (src/lib/db/content-import.ts).
-          Array.isArray(data.unresolved) && data.unresolved.length
-            ? `No monster here answers to ${data.unresolved.join(", ")}: add them to your bestiary, or point those NPCs and fights at another.`
-            : "",
-          Array.isArray(data.worldConflicts) && data.worldConflicts.length ? data.worldConflicts.join(" ") : "",
-          // Hand-built monsters this table's authors did not have, copied in
-          // so the NPCs and fights that name them still fight (WF-07).
-          Array.isArray(data.monstersBrought) && data.monstersBrought.length
-            ? `Copied into this table's bestiary: ${data.monstersBrought.join(", ")}.`
-            : "",
-          Array.isArray(data.monstersReused) && data.monstersReused.length
-            ? `Already in this table's bestiary: ${data.monstersReused.join(", ")}.`
-            : "",
-          Array.isArray(data.itemsBrought) && data.itemsBrought.length
-            ? `Copied into this table's Homebrew: ${data.itemsBrought.join(", ")}.`
-            : "",
-          Array.isArray(data.itemsReused) && data.itemsReused.length
-            ? `Already in this table's Homebrew: ${data.itemsReused.join(", ")}.`
-            : "",
-        ]
-          .filter(Boolean)
-          .join(" "),
-      );
+      setNote({ tone: "ok", text: outcome.note });
       // Clearing the ticks re-runs the plan effect, which clears the plan.
       // Refetching here as well raced it with the old ticks and left the
       // last import's warnings and notes on screen.
       onChange({ ...selection, select: [] });
-      onImported?.(data.copied ?? 0);
+      onImported?.(outcome.copied);
     } finally {
       setBusy(false);
     }
@@ -244,6 +223,18 @@ export function ContentImportPicker({
 
   if (loading) {
     return <Loader2 className="size-4 animate-spin text-stone-500" />;
+  }
+
+  if (sourcesFailed) {
+    return (
+      <p role="alert" className="flex items-start gap-1.5 text-xs text-amber-300/90">
+        <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+        <span>
+          Could not load what you can copy from. Check the connection and open this again; nothing has been
+          brought in.
+        </span>
+      </p>
+    );
   }
 
   if (!offered.length) {
@@ -381,18 +372,35 @@ export function ContentImportPicker({
               </ul>
             ) : null}
 
+            {campaignId && planFailed ? (
+              <p role="alert" className="flex flex-wrap items-center gap-1.5 text-xs text-amber-300/90">
+                <AlertTriangle className="size-3.5 shrink-0" />
+                <span>Could not check what this would bring in or replace here.</span>
+                <button type="button" onClick={() => void refreshPlan()} className={`${ui.btnSmall} min-h-10`}>
+                  Check again
+                </button>
+              </p>
+            ) : null}
+
             {campaignId ? (
               <div className="reveal flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={importNow}
-                  disabled={busy || !selection.select.length || Boolean(plan?.empty)}
+                  disabled={busy || !selection.select.length || Boolean(plan?.empty) || planFailed}
                   className={ui.btnSmall}
                 >
                   {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Hammer className="size-3.5" />}
                   Bring it in
                 </button>
-                {note ? <span className="live-in text-xs text-emerald-400">{note}</span> : null}
+                {note ? (
+                  <span
+                    role={note.tone === "error" ? "alert" : "status"}
+                    className={note.tone === "error" ? "motion-shake text-xs text-red-400" : "live-in text-xs text-emerald-400"}
+                  >
+                    {note.text}
+                  </span>
+                ) : null}
               </div>
             ) : (
               <p className="text-xs text-stone-500">
@@ -404,7 +412,10 @@ export function ContentImportPicker({
         ) : (
           <p className="text-xs text-stone-500">
             {chosen.kind === "workshop"
-              ? "That workshop is still empty. Build something in it first."
+              ? // Homebrew and pregens are not campaign prep: a workshop holding
+                // only those is not empty, and saying so sent people looking for
+                // a copy step that does not exist (workshop import audit F06).
+                "That workshop has no campaign prep to copy: places, cast, maps, fights, lore, tables, shops, the storyboard, WorldForge or house rules. Its Homebrew needs no copy, since it already counts at every table you run, and its pregens join from your character library."
               : "That campaign has no prep to copy yet."}
           </p>
         )
@@ -413,17 +424,65 @@ export function ContentImportPicker({
   );
 }
 
-// Posts the chosen import after a campaign row exists. Mirrors
-// submitWorldSetup in src/app/WorldSetupFields.tsx, which is the same
-// pattern for the same reason: the campaign has to exist before anything can
-// be written into it.
-export async function submitContentImport(campaignId: string, selection: ImportSelection) {
-  if (!selection.sourceId || !selection.select.length) {
-    return;
+export type ImportOutcome = { ok: true; copied: number; note: string } | { ok: false; error: string };
+
+// What an import brought, in one line for the person who asked for it.
+function importNote(data: Record<string, unknown>): string {
+  const copied = Number(data.copied) || 0;
+  const names = (value: unknown) => (Array.isArray(value) ? value.map(String) : []);
+  const unresolved = names(data.unresolved);
+  const lines = [
+    `Brought ${copied} item${copied === 1 ? "" : "s"} across.`,
+    data.kept ? `Kept ${String(data.kept)} already here.` : "",
+    data.beatsAdded ? `${String(data.beatsAdded)} beat${data.beatsAdded === 1 ? "" : "s"} joined the arc.` : "",
+    // Names this table's Cast or fights use that nothing here answers to (a
+    // monster on another author's shelf), and links both worlds changed
+    // (src/lib/db/content-import.ts).
+    unresolved.length
+      ? `No monster here answers to ${unresolved.join(", ")}: add them to your bestiary, or point those NPCs and fights at another.`
+      : "",
+    names(data.worldConflicts).join(" "),
+    // Roll-table rows whose table, NPC or lore entry stayed behind and that
+    // now name this campaign's own of that name, or nothing.
+    names(data.referenceNotes).join(" "),
+    // Hand-built monsters and items this table's authors did not have,
+    // copied in so what names them still works (WF-07, WF-17).
+    names(data.monstersBrought).length ? `Copied into this table's bestiary: ${names(data.monstersBrought).join(", ")}.` : "",
+    names(data.monstersReused).length ? `Already in this table's bestiary: ${names(data.monstersReused).join(", ")}.` : "",
+    names(data.itemsBrought).length ? `Copied into this table's Homebrew: ${names(data.itemsBrought).join(", ")}.` : "",
+    names(data.itemsReused).length ? `Already in this table's Homebrew: ${names(data.itemsReused).join(", ")}.` : "",
+  ];
+  return lines.filter(Boolean).join(" ");
+}
+
+// One import, answered: what it brought, or why it brought nothing. A
+// refusal and a dropped connection are both failures the caller must show.
+export async function postContentImport(campaignId: string, selection: ImportSelection): Promise<ImportOutcome> {
+  try {
+    const response = await fetch(`/api/campaigns/${campaignId}/import`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...selection, exclude: exclusionsOf(selection) }),
+    });
+    const data = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+    if (!response.ok) {
+      return { ok: false, error: typeof data.error === "string" && data.error ? data.error : "The import was refused." };
+    }
+    return { ok: true, copied: Number(data.copied) || 0, note: importNote(data) };
+  } catch {
+    return { ok: false, error: "Could not reach the server." };
   }
-  await fetch(`/api/campaigns/${campaignId}/import`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...selection, exclude: exclusionsOf(selection) }),
-  }).catch(() => undefined);
+}
+
+// Posts the chosen import after a campaign row exists, the same pattern as
+// submitWorldSetup in src/app/WorldSetupFields.tsx for the same reason: the
+// campaign has to exist before anything can be written into it. Null when
+// nothing was chosen; otherwise the outcome, which the creator shows, since
+// a campaign that was made without the prep it was meant to start from is
+// not a finished campaign.
+export async function submitContentImport(campaignId: string, selection: ImportSelection): Promise<ImportOutcome | null> {
+  if (!selection.sourceId || !selection.select.length) {
+    return null;
+  }
+  return postContentImport(campaignId, selection);
 }

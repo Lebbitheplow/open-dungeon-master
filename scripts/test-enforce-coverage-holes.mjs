@@ -181,8 +181,8 @@ await test("Polymorph at a creature with no beast named, or one the table does n
   assert.equal(unnamed.retry, true, JSON.stringify(unnamed).slice(0, 300));
   assert.match(unnamed.error, new RegExp(`Polymorph needs the beast in variant; ${dummy.displayName} \\(CR 2\\) can become: .*Wolf \\(CR 1\\/4\\).*Brown Bear \\(CR 1\\).*Ask the caster's player which`));
   assert.doesNotMatch(unnamed.error, /Giant Ape|Tyrannosaurus/, "a beast above the creature's challenge rating was offered");
-  const elk = await polymorph("giant elk", 1);
-  assert.match(elk.error, /The beast-form table holds no "giant elk"; .* can become: /);
+  const hamster = await polymorph("giant hamster", 1);
+  assert.match(hamster.error, /The beast-form table holds no "giant hamster"; .* can become: /);
   assert.equal(castingState(world.sheet(wizard.id)), before, "a question spent something");
 });
 

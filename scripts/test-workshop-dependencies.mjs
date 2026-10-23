@@ -280,7 +280,7 @@ test("routes become moments, and they rejoin where the routes meet (#157)", () =
   assert.match(bribe.trigger, /if they pay/);
   assert.match(bribe.trigger, /Storm the warehouse/);
   const trapdoor = arc.events.find((event) => event.name === "Down the trapdoor");
-  assert.match(trapdoor.detail, /Fight: 3 bandit/);
+  assert.match(trapdoor.detail, /Fight: 3 Bandit/);
 });
 
 test("hooks reach the quest log the table and the storyteller read; secrets reach the storyteller", () => {

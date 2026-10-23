@@ -70,7 +70,6 @@ import {
   moveTokenTool,
   publishBattleMapUpdate,
   setMovementTool,
-  teleportTokenTool,
 } from "@/lib/dm/map-tools";
 import {
   applyEnemyDamage,
@@ -91,6 +90,7 @@ import { handlePcAttack, PC_ATTACK_PARKED, pcAttackTool } from "@/lib/dm/pc-atta
 import { endTurnAsked } from "@/lib/dm/pc-attack-approach";
 import { handleEnemyAttack } from "@/lib/dm/enemy-attack";
 import { isCompanionUserId } from "@/lib/db/users";
+import { dmPlaysTurn, turnUserId } from "@/lib/dm/companion-command";
 import { wakeDm } from "@/lib/dm/wake";
 import { resolveSheetRef, unknownSheetRef } from "@/lib/dm/rolls";
 import {
@@ -109,7 +109,7 @@ import { isIncapacitated } from "@/lib/dm/condition-logic";
 import { endTurnSaves, startTurnConditions, tickEncounterConditions } from "@/lib/dm/condition-tick";
 import { endTurns } from "@/lib/dm/turn-end";
 import { turnStartEffects } from "@/lib/dm/turn-start-effects";
-import { damageEnemyTool, endEncounterTool, endTurnTool, enemyAttackTool, startEncounterTool, type ToolDef } from "@/lib/dm/encounter-tool-defs";
+import { endEncounterTool, endTurnTool, enemyAttackTool, startEncounterTool, type ToolDef } from "@/lib/dm/encounter-tool-defs";
 import { RUN_PREPARED_ENCOUNTER, runPreparedEncounter } from "@/lib/dm/prepared-encounter-tool";
 import { rollDeathSave } from "@/lib/dm/death";
 import { getBattleMapForEncounter, getTokenByRef, resetRoundBudgets, resetTurnBudgets } from "@/lib/db/battle-maps";
@@ -162,10 +162,8 @@ export function encounterTools(hasActiveEncounter: boolean): ToolDef[] {
         pcAttackTool,
         castAtEnemyTool,
         castAtPlayerTool,
-        damageEnemyTool,
         enemyAttackTool,
         moveTokenTool,
-        teleportTokenTool,
         setMovementTool,
         endTurnTool,
         endEncounterTool,
@@ -267,7 +265,7 @@ function handleStartEncounter(
   if (getActiveEncounter(campaign.id)) {
     return {
       error:
-        "An encounter is already active. Use damage_enemy and enemy_attack, or end_encounter first.",
+        "An encounter is already active. Use apply_damage and enemy_attack, or end_encounter first.",
       retry: true,
     };
   }
@@ -489,10 +487,12 @@ export function setInitiativeFloor(campaign: Campaign | null, encounter: Encount
   if (!current || current.kind !== "pc") {
     return;
   }
+  // A companion a player commands puts its turn in that player's hands
+  // (src/lib/dm/companion-command.ts).
   const floor: InitiativeFloor = {
     mode: "initiative",
     encounterId: encounter.id,
-    userIds: [current.userId],
+    userIds: [turnUserId(campaign, current)],
     currentName: current.name,
     round: encounter.round,
   };
@@ -514,10 +514,11 @@ export function initiativeFloorFor(campaignId: string): InitiativeFloor | null {
   if (!current || current.kind !== "pc") {
     return null;
   }
+  const campaign = getCampaignById(campaignId);
   return {
     mode: "initiative",
     encounterId: encounter.id,
-    userIds: [current.userId],
+    userIds: [campaign ? turnUserId(campaign, current) : current.userId],
     currentName: current.name,
     round: encounter.round,
   };
@@ -797,10 +798,10 @@ function handleDamageEnemy(
   try {
     args = damageArgsSchema.parse(JSON.parse(rawArguments || "{}"));
   } catch {
-    return { error: "Invalid arguments: damage_enemy needs enemyId and amount.", retry: true };
+    return { error: "Invalid arguments: apply_damage on an enemy needs enemyId and amount.", retry: true };
   }
   if (args.amount === undefined && args.fallFeet === undefined) {
-    return { error: "damage_enemy needs the amount, or fallFeet for a fall.", retry: true };
+    return { error: "apply_damage on an enemy needs the amount, or fallFeet for a fall.", retry: true };
   }
   const enemy = resolveEnemyRef(encounter.id, args.enemyId);
   if (!enemy) {
@@ -822,8 +823,8 @@ function handleDamageEnemy(
     return {
       error:
         args.source === "ally"
-          ? "An ally's blow is an attack: recruit the ally with add_companion (kind guest) and resolve it with pc_attack. damage_enemy takes only harm from a hazard or the environment."
-          : "damage_enemy takes only harm no creature's attack deals: send source 'hazard' or 'environment' with the reason. A character's attack is pc_attack; a spell is cast_at_enemy or aoe_damage.",
+          ? "An ally's blow is an attack: recruit the ally with add_companion (kind guest) and resolve it with pc_attack. apply_damage on an enemy takes only harm from a hazard or the environment."
+          : "apply_damage on an enemy takes only harm no creature's attack deals: send source 'hazard' or 'environment' with the reason. A character's attack is pc_attack; a spell is cast_at_enemy or aoe_damage.",
       retry: true,
     };
   }
@@ -1661,8 +1662,8 @@ function advanceAfterNarration(campaign: Campaign, turn?: DmTurn) {
   if (!resolved && !stuck) {
     // AI companion turn the model never adjudicated: the server takes the
     // basic action (like skipped enemies), so combat cannot wedge on a
-    // combatant no human controls.
-    if (turn && isCompanionUserId(current.userId)) {
+    // combatant no human controls. One a player commands waits for them.
+    if (turn && dmPlaysTurn(campaign, current)) {
       companionAutoAct(campaign, turn, encounter, current.characterId);
     } else {
       return;
@@ -1736,7 +1737,7 @@ function wakeForNextTurn(campaign: Campaign): boolean {
     if (stuck && idledOut(campaign, encounter)) {
       return false;
     }
-  } else if (!isCompanionUserId(next.userId)) {
+  } else if (!dmPlaysTurn(campaign, next)) {
     return false;
   }
   wake(campaign, encounter);
@@ -1956,7 +1957,7 @@ export function endOwnTurn(campaignId: string, userId: string): boolean {
     return false;
   }
   const current = encounter.order[encounter.turnIndex];
-  if (!current || current.kind !== "pc" || current.userId !== userId) {
+  if (!current || current.kind !== "pc" || turnUserId(campaign, current) !== userId) {
     return false;
   }
   // The enemies before this turn have not had theirs yet: a second pass
@@ -1983,7 +1984,8 @@ export function endOwnTurn(campaignId: string, userId: string): boolean {
 export function endTurnRefusal(campaignId: string, userId: string): string {
   const encounter = getActiveEncounter(campaignId);
   const current = encounter?.orderReady ? encounter.order[encounter.turnIndex] : undefined;
-  if (encounter && current?.kind === "pc" && current.userId === userId) {
+  const campaign = getCampaignById(campaignId);
+  if (encounter && campaign && current?.kind === "pc" && turnUserId(campaign, current) === userId) {
     const waiting = enemiesOwedTurn(encounter).map((enemy) => enemy.displayName);
     if (waiting.length) {
       const one = waiting.length === 1;

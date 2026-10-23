@@ -25,7 +25,7 @@ import { diseaseAt, hazardNamesAt, poisonAt } from "@/lib/srd/table-hazards";
 import { applyPoison } from "@/lib/dm/affliction-poisons";
 import { DISEASES, MADNESS_KINDS, POISONS, findDisease } from "@/lib/srd/afflictions";
 import { textKey } from "@/lib/language/text-logic";
-import { formatCopper } from "@/lib/srd/currency";
+import { formatPrice } from "@/lib/srd/currency";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolResult } from "@/lib/dm/tool-errors";
 
@@ -277,7 +277,7 @@ export function handleExploreCall(
       characters: targets.map((sheet) => sheet.name),
       note: args.lifestyle === "none"
         ? `${names} live off their supplies; no lifestyle is charged.`
-        : `${names} live ${args.lifestyle}: ${formatCopper(LIFESTYLE_COST_CP[args.lifestyle])} a day, charged at each dawn that passes in town and for each day of downtime.`,
+        : `${names} live ${args.lifestyle}: ${formatPrice(LIFESTYLE_COST_CP[args.lifestyle])} a day, charged at each dawn that passes in town and for each day of downtime.`,
     };
   }
   if (name === "downtime") {

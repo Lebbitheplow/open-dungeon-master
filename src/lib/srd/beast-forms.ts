@@ -1,173 +1,132 @@
-// SRD beast stat blocks for the transformation engine: the forms druids
-// actually take with Wild Shape and the classic Polymorph targets. Before
-// this table the model invented every number (formHp/formAc were free
-// integers) and the form had no abilities, speed, or attacks at all.
+// SRD stat blocks for the transformation engine: every creature of the
+// SRD 5.1 (src/lib/srd/srd-creatures.ts) as a form a character or a
+// creature can take. The beasts are the forms druids take with Wild Shape
+// and the targets of Polymorph and Animal Shapes; True Polymorph and
+// Shapechange may give any creature (src/lib/srd/shape-rules.ts says which).
+// Before this table the model invented every number (formHp/formAc were
+// free integers) and the form had no abilities, speed, or attacks at all.
 //
-// Pure data like weapons.ts/armor.ts so scripts/test-beast-forms.mjs can
-// import it directly. Data derived from the SRD 5.1, (c) Wizards of the
-// Coast LLC, CC-BY-4.0. See docs/LICENSES.md.
+// Data derived from the SRD 5.1, (c) Wizards of the Coast LLC, CC-BY-4.0.
+// See docs/LICENSES.md.
 
 import { compareNames, findNamed, namesHolding } from "@/lib/language/text-logic";
+import type { CreatureAttack } from "@/lib/srd/creature-attacks";
+import { SRD_CREATURES, traitLine, type CreatureSize, type CreatureSpeeds, type SrdCreature } from "@/lib/srd/srd-creatures";
+import type { WildShape } from "@/lib/schemas/sheet";
 
-export type BeastAttack = {
-  name: string;
-  toHit: number;
-  // A dice expression the dice engine accepts ("2d4+2").
-  damage: string;
-  type: string;
-};
+export type BeastAttack = CreatureAttack;
 
 export type BeastForm = {
   name: string;
+  // Its creature type ("beast", "elemental", "dragon").
+  type: string;
   cr: number;
   ac: number;
   hp: number;
-  // Walking speed in feet; fly/swim mark the movement modes that gate
-  // which druid levels may take the form.
+  // Walking speed in feet, every movement mode, and whether the form flies
+  // or swims, which gates the druid levels that may take it.
   speed: number;
+  speeds: CreatureSpeeds;
   fly?: boolean;
   swim?: boolean;
-  size: "Tiny" | "Small" | "Medium" | "Large" | "Huge";
+  size: CreatureSize;
   // Full ability scores. Wild Shape swaps only STR/DEX/CON onto the druid;
   // Polymorph replaces all six.
-  abilities: { str: number; dex: number; con: number; int: number; wis: number; cha: number };
+  abilities: SrdCreature["abilities"];
+  // The saving throws its block lists as proficient, and the damage and
+  // conditions it shrugs off, in the words damageAdjust reads.
+  saves?: SrdCreature["saves"];
+  resist?: string;
+  immune?: string;
+  vulnerable?: string;
+  conditionImmune?: string;
+  // Its natural attacks; none at all for a frog or a sea horse, which then
+  // cannot attack in the form.
   attacks: BeastAttack[];
   // Attacks per turn (Multiattack); 1 when absent.
   attacksPerTurn?: number;
-  // One line of the form's special senses/traits for the DM to narrate.
+  routines?: SrdCreature["routines"];
+  senses?: SrdCreature["senses"];
+  // Its traits as the block prints them, and as one line for the DM.
+  traitLines: string[];
   traits?: string;
 };
 
-export const BEAST_FORMS: BeastForm[] = [
-  {
-    name: "Wolf", cr: 0.25, ac: 13, hp: 11, speed: 40, size: "Medium",
-    abilities: { str: 12, dex: 15, con: 12, int: 3, wis: 12, cha: 6 },
-    attacks: [{ name: "Bite", toHit: 4, damage: "2d4+2", type: "piercing" }],
-    traits: "Keen Hearing and Smell; Pack Tactics (advantage when an ally is adjacent to the target). A bitten Medium-or-smaller target saves STR DC 11 or falls prone.",
-  },
-  {
-    name: "Dire Wolf", cr: 1, ac: 14, hp: 37, speed: 50, size: "Large",
-    abilities: { str: 17, dex: 15, con: 15, int: 3, wis: 12, cha: 7 },
-    attacks: [{ name: "Bite", toHit: 5, damage: "2d6+3", type: "piercing" }],
-    traits: "Keen Hearing and Smell; Pack Tactics. A bitten target saves STR DC 13 or falls prone.",
-  },
-  {
-    name: "Black Bear", cr: 0.5, ac: 11, hp: 19, speed: 40, size: "Medium",
-    abilities: { str: 15, dex: 10, con: 14, int: 2, wis: 12, cha: 7 },
-    attacks: [
-      { name: "Bite", toHit: 3, damage: "1d6+2", type: "piercing" },
-      { name: "Claws", toHit: 3, damage: "2d4+2", type: "slashing" },
-    ],
-    attacksPerTurn: 2,
-    traits: "Keen Smell; 30 ft climb.",
-  },
-  {
-    name: "Brown Bear", cr: 1, ac: 11, hp: 34, speed: 40, size: "Large",
-    abilities: { str: 19, dex: 10, con: 16, int: 2, wis: 13, cha: 7 },
-    attacks: [
-      { name: "Bite", toHit: 5, damage: "1d8+4", type: "piercing" },
-      { name: "Claws", toHit: 5, damage: "2d6+4", type: "slashing" },
-    ],
-    attacksPerTurn: 2,
-    traits: "Keen Smell; 30 ft climb.",
-  },
-  {
-    name: "Panther", cr: 0.25, ac: 12, hp: 13, speed: 50, size: "Medium",
-    abilities: { str: 14, dex: 15, con: 10, int: 3, wis: 14, cha: 7 },
-    attacks: [
-      { name: "Bite", toHit: 4, damage: "1d6+2", type: "piercing" },
-      { name: "Claw", toHit: 4, damage: "1d4+2", type: "slashing" },
-    ],
-    traits: "Keen Smell; 40 ft climb; Pounce (a 20 ft charge before a claw hit knocks prone on a failed STR DC 12 save, then a bonus-action bite).",
-  },
-  {
-    name: "Boar", cr: 0.25, ac: 11, hp: 11, speed: 40, size: "Medium",
-    abilities: { str: 13, dex: 11, con: 12, int: 2, wis: 9, cha: 5 },
-    attacks: [{ name: "Tusk", toHit: 3, damage: "1d6+1", type: "slashing" }],
-    traits: "Charge (+1d6 after 20 ft straight); Relentless (once per rest, drops to 1 HP instead of 0).",
-  },
-  {
-    name: "Elk", cr: 0.25, ac: 10, hp: 13, speed: 50, size: "Large",
-    abilities: { str: 16, dex: 10, con: 12, int: 2, wis: 10, cha: 6 },
-    attacks: [{ name: "Ram", toHit: 5, damage: "1d6+3", type: "bludgeoning" }],
-    traits: "Charge (+2d6 and a prone save after 20 ft straight).",
-  },
-  {
-    name: "Ape", cr: 0.5, ac: 12, hp: 19, speed: 30, size: "Medium",
-    abilities: { str: 16, dex: 14, con: 14, int: 6, wis: 12, cha: 7 },
-    attacks: [{ name: "Fist", toHit: 5, damage: "1d6+3", type: "bludgeoning" }],
-    attacksPerTurn: 2,
-    traits: "30 ft climb; can throw rocks (+5, 1d6+3, range 25/50).",
-  },
-  {
-    name: "Crocodile", cr: 0.5, ac: 12, hp: 19, speed: 20, swim: true, size: "Large",
-    abilities: { str: 15, dex: 10, con: 13, int: 2, wis: 10, cha: 5 },
-    attacks: [{ name: "Bite", toHit: 4, damage: "1d10+2", type: "piercing" }],
-    traits: "30 ft swim; Hold Breath 15 minutes; the bite grapples (escape DC 12).",
-  },
-  {
-    name: "Giant Spider", cr: 1, ac: 14, hp: 26, speed: 30, size: "Large",
-    abilities: { str: 14, dex: 16, con: 12, int: 2, wis: 11, cha: 4 },
-    attacks: [{ name: "Bite", toHit: 5, damage: "1d8+3", type: "piercing" }],
-    traits: "30 ft climb, Spider Climb, Web Sense; the bite adds 2d8 poison (CON DC 11 halves) and can paralyze at 0 HP; Web (recharge 5-6) restrains at range.",
-  },
-  {
-    name: "Giant Eagle", cr: 1, ac: 13, hp: 26, speed: 10, fly: true, size: "Large",
-    abilities: { str: 16, dex: 17, con: 13, int: 8, wis: 14, cha: 10 },
-    attacks: [
-      { name: "Beak", toHit: 5, damage: "1d6+3", type: "piercing" },
-      { name: "Talons", toHit: 5, damage: "2d6+3", type: "slashing" },
-    ],
-    attacksPerTurn: 2,
-    traits: "80 ft fly; Keen Sight (advantage on sight Perception).",
-  },
-  {
-    name: "Giant Octopus", cr: 1, ac: 11, hp: 52, speed: 10, swim: true, size: "Large",
-    abilities: { str: 17, dex: 13, con: 13, int: 4, wis: 10, cha: 4 },
-    attacks: [{ name: "Tentacles", toHit: 5, damage: "2d6+3", type: "bludgeoning" }],
-    traits: "60 ft swim; Hold Breath out of water; the tentacles grapple and restrain (escape DC 16); ink cloud to flee.",
-  },
-  {
-    name: "Giant Constrictor Snake", cr: 2, ac: 12, hp: 60, speed: 30, swim: true, size: "Huge",
-    abilities: { str: 19, dex: 14, con: 12, int: 1, wis: 10, cha: 3 },
-    attacks: [
-      { name: "Bite", toHit: 6, damage: "2d6+4", type: "piercing" },
-      { name: "Constrict", toHit: 6, damage: "2d8+4", type: "bludgeoning" },
-    ],
-    traits: "30 ft swim; Constrict grapples and restrains (escape DC 16).",
-  },
-  {
-    name: "Mammoth", cr: 6, ac: 13, hp: 126, speed: 40, size: "Huge",
-    abilities: { str: 24, dex: 9, con: 21, int: 3, wis: 11, cha: 6 },
-    attacks: [{ name: "Gore", toHit: 10, damage: "4d8+7", type: "piercing" }],
-    traits: "Trampling Charge (a gore after 20 ft straight knocks prone on a failed STR DC 18 save, then a bonus-action stomp for 4d10+7).",
-  },
-  {
-    name: "Giant Ape", cr: 7, ac: 12, hp: 157, speed: 40, size: "Huge",
-    abilities: { str: 23, dex: 14, con: 18, int: 7, wis: 12, cha: 7 },
-    attacks: [{ name: "Fist", toHit: 9, damage: "3d10+6", type: "bludgeoning" }],
-    attacksPerTurn: 2,
-    traits: "40 ft climb; can throw rocks (+9, 7d6+6, range 50/100).",
-  },
-  {
-    name: "Tyrannosaurus Rex", cr: 8, ac: 13, hp: 136, speed: 50, size: "Huge",
-    abilities: { str: 25, dex: 10, con: 19, int: 2, wis: 12, cha: 9 },
-    attacks: [
-      { name: "Bite", toHit: 10, damage: "4d12+7", type: "piercing" },
-      { name: "Tail", toHit: 10, damage: "3d8+7", type: "bludgeoning" },
-    ],
-    attacksPerTurn: 2,
-    traits: "The bite grapples a Medium-or-smaller target (escape DC 17); Multiattack cannot aim both at the same target.",
-  },
-];
+function beastForm(creature: SrdCreature): BeastForm {
+  return {
+    name: creature.name,
+    type: creature.type,
+    cr: creature.cr,
+    ac: creature.ac,
+    hp: creature.hp,
+    speed: creature.speeds.walk,
+    speeds: creature.speeds,
+    ...(creature.speeds.fly ? { fly: true } : {}),
+    ...(creature.speeds.swim ? { swim: true } : {}),
+    size: creature.size,
+    abilities: creature.abilities,
+    ...(creature.saves?.length ? { saves: creature.saves } : {}),
+    ...(creature.resist ? { resist: creature.resist } : {}),
+    ...(creature.immune ? { immune: creature.immune } : {}),
+    ...(creature.vulnerable ? { vulnerable: creature.vulnerable } : {}),
+    ...(creature.conditionImmune ? { conditionImmune: creature.conditionImmune } : {}),
+    attacks: creature.attacks,
+    ...(creature.attacksPerTurn ? { attacksPerTurn: creature.attacksPerTurn } : {}),
+    ...(creature.routines ? { routines: creature.routines } : {}),
+    ...(creature.senses ? { senses: creature.senses } : {}),
+    traitLines: creature.traits,
+    ...(creature.traits.length ? { traits: traitLine(creature.traits, 600) } : {}),
+  };
+}
+
+// Every creature as a form (True Polymorph, Shapechange), and the beasts
+// alone (Wild Shape, Polymorph, Animal Shapes).
+export const SHAPE_FORMS: BeastForm[] = SRD_CREATURES.map(beastForm);
+export const BEAST_FORMS: BeastForm[] = SHAPE_FORMS.filter((form) => form.type === "beast");
 
 export function findBeastForm(term: string): BeastForm | null {
   return findNamed(BEAST_FORMS, term, (form) => [form.name]);
 }
 
+// Any creature's form by name, beast or not.
+export function findShapeForm(term: string): BeastForm | null {
+  return findNamed(SHAPE_FORMS, term, (form) => [form.name]);
+}
+
 // The forms whose name holds a word a refused name was, for the refusal.
-export function beastFormsHolding(term: string): BeastForm[] {
-  return namesHolding(BEAST_FORMS, term, (form) => [form.name]);
+export function beastFormsHolding(term: string, forms: BeastForm[] = BEAST_FORMS): BeastForm[] {
+  return namesHolding(forms, term, (form) => [form.name]);
+}
+
+// The record a sheet keeps while it wears the form: the form's hit points,
+// Armor Class, speed, its natural attacks (an empty list for a form with
+// none, so the character's own weapons stay out of reach) and its
+// Multiattack, and what the creature is: its type, challenge rating, saving
+// throws and defenses (a fire elemental's immunity to fire). `abilities`
+// are the scores the spell or feature gives it.
+export function wildShapeRecord(
+  form: BeastForm,
+  shape: { kind: "wildshape" | "polymorph"; abilities: NonNullable<WildShape>["abilities"]; keepsTraining?: boolean },
+): NonNullable<WildShape> {
+  return {
+    form: form.name,
+    beastHp: form.hp,
+    beastMaxHp: form.hp,
+    beastAc: form.ac,
+    kind: shape.kind,
+    ...(shape.keepsTraining ? { keepsTraining: true } : {}),
+    abilities: shape.abilities,
+    speed: form.speed,
+    attacks: form.attacks.slice(0, 4).map((attack) => ({ ...attack })),
+    ...((form.attacksPerTurn ?? 1) > 1 ? { attacksPerTurn: form.attacksPerTurn } : {}),
+    type: form.type,
+    cr: form.cr,
+    ...(form.saves?.length ? { saves: form.saves } : {}),
+    ...(form.resist ? { resist: form.resist } : {}),
+    ...(form.immune ? { immune: form.immune } : {}),
+    ...(form.vulnerable ? { vulnerable: form.vulnerable } : {}),
+    ...(form.conditionImmune ? { conditionImmune: form.conditionImmune } : {}),
+  };
 }
 
 // Creatures as a question or a refusal names them, the lowest challenge

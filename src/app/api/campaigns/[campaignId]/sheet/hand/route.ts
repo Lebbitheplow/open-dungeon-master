@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isErrorResponse, requireMember } from "@/lib/campaign-api";
 import { ownSheetFor } from "@/lib/character-seat";
+import { commandedSheet } from "@/lib/dm/companion-command";
 import { setHandLayout } from "@/lib/db/sheets";
 import { HAND_SEATS, normalizeHandLayout } from "@/lib/battlemap/hand-layout";
 import { publishPersisted } from "@/lib/events";
@@ -42,9 +43,12 @@ export async function PUT(
       { status: 400 },
     );
   }
-  // Only the player's own characters: another player's hand, or an ally the
-  // DM plays, is not theirs to arrange.
-  const sheet = ownSheetFor(campaignId, context.user.id, parsed.data.characterId);
+  // Only the player's own characters and the companions they command in
+  // fights: another player's hand, or an ally the DM plays, is not theirs to
+  // arrange.
+  const sheet =
+    ownSheetFor(campaignId, context.user.id, parsed.data.characterId) ??
+    commandedSheet(context.campaign, context.user.id, parsed.data.characterId);
   if (!sheet) {
     return Response.json({ error: "That is not one of your characters." }, { status: 404 });
   }

@@ -214,7 +214,8 @@ await test("strictBooleanArgs turns the words true and false into booleans, leav
   assert.equal(strictBooleanArgs("[]"), "[]");
   const fs = await import("node:fs");
   const turn = fs.readFileSync(new URL("../src/lib/dm/turn.ts", import.meta.url), "utf8");
-  assert.match(turn, /const rawArguments = strictBooleanArgs\(toolCall\.rawArguments\)/);
+  // The turn loop coerces the call before it routes it (issue #471).
+  assert.match(turn, /routeToolCall\(campaign, toolCall\.name, strictBooleanArgs\(toolCall\.rawArguments\)\)/);
 });
 
 await test("A spell read from a scroll is cast with the scroll's save DC (13 for a 1st-level spell), not the reader's own, and a second cast of it spends a slot as usual", async () => {

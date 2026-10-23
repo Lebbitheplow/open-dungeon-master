@@ -3,6 +3,7 @@ import type { OptionField } from "@/lib/addons/manifest";
 import type { FxEvent } from "@/lib/battlemap/fx-plan";
 import type { TokenIntent } from "@/lib/battlemap/intent";
 import type { PlayerMapView } from "@/lib/battlemap/view-types";
+import type { Gender } from "@/lib/gender";
 
 // The board view contract: what the table page posts into an addon's
 // sandboxed frame, and what it accepts back (docs/addons/extension-points.md,
@@ -49,7 +50,7 @@ export type BoardSnapshotToken = {
   // stat block and challenge rating, or a character's lineage and class.
   // Null when it is neither (a prop, a bystander the DM put down by hand).
   creature: { type: string; slug: string; cr: number } | null;
-  character: { race: string; class: string } | null;
+  character: { race: string; class: string; gender?: Gender } | null;
   // Auras around it, by reach in feet and what they do.
   auras: Array<{ radiusFeet: number; tone: string }>;
 };
@@ -84,6 +85,9 @@ export type BoardSnapshot = {
   board: "fight" | "scene";
   myTokenId: string | null;
   reachable: number[];
+  // The square a first tap aimed this viewer's walk at, or null: a second
+  // tap there makes the walk (the flat board holds its ruler on it).
+  moveAim: { x: number; y: number } | null;
   // Whether the map has a picture under it; ask for it as the file "backdrop".
   hasBackdrop: boolean;
   // What this addon's own generator left on the map, or null.
@@ -133,6 +137,7 @@ export function boardSnapshot(
     appearance: BoardSnapshot["appearance"];
     looks?: Map<string, BoardLook>;
     intents?: TokenIntent[] | null;
+    moveAim?: { x: number; y: number } | null;
     assetsUrl?: string;
     // The view's option fields and what this device chose for them.
     viewOptions?: { fields: OptionField[]; values: unknown };
@@ -178,6 +183,7 @@ export function boardSnapshot(
     board: view.board,
     myTokenId: view.myTokenId,
     reachable: view.reachable,
+    moveAim: options.moveAim ?? null,
     hasBackdrop: Boolean(view.backdrop),
     view: own ? { data: own.data, files: own.files.map(({ name, type, bytes }) => ({ name, type, bytes })) } : null,
     assetsUrl: options.assetsUrl ?? `/api/addons/${addonId}/assets/`,

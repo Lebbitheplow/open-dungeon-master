@@ -9,6 +9,7 @@ import {
   MapPin,
   Pencil,
   Swords,
+  Undo2,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -99,6 +100,10 @@ const PING_MS = 2600;
 
 const NO_FX: FxEvent[] = [];
 const NOOP = () => {};
+// The turn's own buttons in the board's corner: End turn, and Undo move beside
+// it. A finger's height on a narrow board, the old size where there is room.
+const TURN_BUTTON =
+  "motion-press min-h-10 rounded-lg border border-[rgba(107,99,148,0.5)] bg-[rgba(13,11,28,0.9)] px-3 py-1.5 text-[#e9e6f4] shadow-elev-1 hover:border-[rgba(212,171,58,0.6)] hover:text-[#f9ecc8] disabled:opacity-50 @md:min-h-0";
 
 type Prompt = {
   kind: "damage" | "heal" | "condition";
@@ -223,7 +228,7 @@ export function BattleMapPanel({
   // the view drew each figure, so the plate and the action ring sit on it.
   const looks = useMemo(() => {
     const byRef = new Map<string, BoardLook>();
-    for (const sheet of sheets) byRef.set(sheet.id, { character: { race: sheet.race, class: sheet.class } });
+    for (const sheet of sheets) byRef.set(sheet.id, { character: { race: sheet.race, class: sheet.class, gender: sheet.gender } });
     for (const enemy of encounter?.enemies ?? []) byRef.set(enemy.id, { creature: { type: enemy.type, slug: enemy.slug ?? "", cr: enemy.cr } });
     return byRef;
   }, [sheets, encounter?.enemies]);
@@ -253,6 +258,17 @@ export function BattleMapPanel({
   // A walk, a long jump, or a walk dragging the creature held, the squares
   // the move still reaches, and the arc of a jump just made (BoardMoveModes.tsx).
   const { moveMode, setMoveMode, gridView, leap, moveBody, landed } = useBoardMoveModes(view);
+  // A tap on a square only aims the walk: the ruler holds the path and its
+  // cost, and a second tap on the same square makes it. A stray click while
+  // the camera is being moved is then not a step taken. The aim belongs to
+  // the board, the square the figure stands on and the move mode, so a
+  // change to any of them simply makes it stale.
+  const [pendingMove, setPendingMove] = useState<{ key: string; x: number; y: number } | null>(null);
+  const mover = view.tokens.find((token) => token.id === view.myTokenId);
+  const pendingKey = `${view.mapId}:${mover?.x},${mover?.y}:${moveMode}`;
+  const livePending = view.reachable.length > 0 && pendingMove?.key === pendingKey ? pendingMove : null;
+  // The aim as an addon's board view is told it, so it can mark the square.
+  const moveAim = useMemo(() => (livePending ? { x: livePending.x, y: livePending.y } : null), [livePending]);
 
   // DM tools.
   const [tool, setTool] = useState<BoardTool>("handle");
@@ -400,6 +416,18 @@ export function BattleMapPanel({
     await refreshBattleMap();
   }
 
+  // Takes back the last walk (src/lib/battlemap/move-undo.ts): the figure
+  // goes back and the movement returns, while nothing else has happened.
+  async function undoMove() {
+    const done = await post("/battle-map/undo", {});
+    if (done) {
+      setHover(null);
+      const feet = (done.undone as { feet?: unknown } | undefined)?.feet;
+      moveNotes.push([{ text: typeof feet === "number" ? `Back where you stood: ${feet} feet of movement returned.` : "Back where you stood.", tone: "move" }]);
+    }
+    await refreshBattleMap();
+  }
+
   async function sendPing(x: number, y: number) {
     setPointing(false);
     await post("/battle-map/ping", { x, y, focus: canFocusPing });
@@ -464,15 +492,18 @@ export function BattleMapPanel({
     // Whoever is being measured: the piece the DM picked up, or the player's
     // own character. Not while a spell's area is being aimed.
     const fromId = held ?? view.myTokenId;
-    if (!hover || !fromId || aimingArea) {
+    // An aimed walk holds the ruler where it was aimed, whatever the pointer
+    // does next; on a phone, with no hover, it is the only ruler there is.
+    const to = livePending ?? hover;
+    if (!to || !fromId || aimingArea) {
       return null;
     }
     // The DM spends no budget, so nothing they measure is ever too far.
     if (held === null && moveMode === "jump" && view.moves) {
-      return jumpRulerFor(view, fromId, hover, view.moves.jumpFeet);
+      return jumpRulerFor(view, fromId, to, view.moves.jumpFeet);
     }
-    return rulerFor(view, fromId, hover, held === null, held === null && moveMode === "drag" ? view.moves?.drag?.factor ?? 1 : 1);
-  }, [hover, held, view, aimingArea, moveMode]);
+    return rulerFor(view, fromId, to, held === null, held === null && moveMode === "drag" ? view.moves?.drag?.factor ?? 1 : 1);
+  }, [hover, livePending, held, view, aimingArea, moveMode]);
 
   // Who may be aimed at while a target is being chosen, nearest first, with
   // the distance the table would count (a diagonal is one square).
@@ -661,6 +692,8 @@ export function BattleMapPanel({
     if (canDirect) {
       void board({ do: "place", tokenId: drag.tokenId, x, y });
     } else {
+      // Carrying the figure there is deliberate: the drop is the move.
+      setPendingMove(null);
       void moveTo(x, y);
     }
   }
@@ -675,6 +708,7 @@ export function BattleMapPanel({
         setTokenGhost(null);
         setTargeting(null);
         setAimHoverId(null);
+        setPendingMove(null);
       }
     };
     window.addEventListener("keydown", onKey);
@@ -737,7 +771,7 @@ export function BattleMapPanel({
         setTeleporting(null);
         setHudTokenId(null);
         if (token) {
-          void invoke("teleport_token", { tokenName: token.name, x, y });
+          void invoke("move_token", { tokenName: token.name, x, y, teleport: true });
         }
         return;
       }
@@ -811,7 +845,13 @@ export function BattleMapPanel({
       return;
     }
     if (canMove) {
-      void moveTo(x, y);
+      // The first tap aims, the second on the same square walks.
+      if (livePending && livePending.x === x && livePending.y === y) {
+        setPendingMove(null);
+        void moveTo(x, y);
+      } else {
+        setPendingMove({ key: pendingKey, x, y });
+      }
     }
   }
 
@@ -863,7 +903,11 @@ export function BattleMapPanel({
   const hudToken = hudTokenId ? tokensById.get(hudTokenId) : undefined;
   const plateToken = plateTokenId ? tokensById.get(plateTokenId) : undefined;
   const myTurn = Boolean(view.turn && view.myTokenId && view.turn.tokenId === view.myTokenId);
+  // A walk this turn that can still be taken back (the move route keeps it).
+  const undoFeet = myTurn && !canDirect && view.board === "fight" ? view.undoMove?.feet ?? null : null;
   const mySheet = myToken ? sheetsById.get(myToken.refId) : undefined;
+  // The turn is a companion's this player commands (src/lib/dm/companion-command.ts).
+  const commanding = myTurn && Boolean(mySheet?.isCompanion);
   const hudActions: HudAction[] = useMemo(() => {
     if (!hudToken) {
       return [];
@@ -916,8 +960,10 @@ export function BattleMapPanel({
       }
       const isEnemy = promptToken.kind === "enemy";
       const ref = isEnemy ? { enemyId: promptToken.refId } : { characterId: promptToken.refId };
+      // One action for a character or an enemy alike (issue #471): the ref
+      // says which.
       if (prompt.kind === "condition") {
-        void invoke(isEnemy ? "set_enemy_condition" : "set_condition", { ...ref, condition: value });
+        void invoke("set_condition", { ...ref, condition: value });
       } else {
         const amount = Number.parseInt(value, 10);
         if (!Number.isFinite(amount) || amount < 1) {
@@ -925,7 +971,7 @@ export function BattleMapPanel({
           return;
         }
         if (prompt.kind === "damage") {
-          void invoke(isEnemy ? "damage_enemy" : "apply_damage", { ...ref, amount });
+          void invoke("apply_damage", { ...ref, amount });
         } else {
           void invoke("heal", { ...ref, amount });
         }
@@ -954,6 +1000,11 @@ export function BattleMapPanel({
       data-addon-viewport={addonViewport ? "" : undefined}
       {...(addonViewport ? {} : cam.frameProps)}
       onKeyDown={(event) => {
+        if (undoFeet !== null && (event.ctrlKey || event.metaKey) && !event.shiftKey && (event.key === "z" || event.key === "Z")) {
+          event.preventDefault();
+          void undoMove();
+          return;
+        }
         if (!addonViewport) { cam.frameProps.onKeyDown(event); return; }
         if (event.target !== event.currentTarget || cam.locked || event.ctrlKey || event.metaKey || event.altKey) return;
         const action = ({ "+": "zoom-in", "=": "zoom-in", "-": "zoom-out", "0": "fit", ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down" } as Record<string, CameraControl>)[event.key];
@@ -999,6 +1050,9 @@ export function BattleMapPanel({
             }
           }}
           everyTileClickable={everyTileClickable}
+          // A player's walk asks its own second tap (handleTile); the DM's
+          // pieces and an aimed area keep the grid's touch preview.
+          tapPreview={canDirect || areaAim.active}
           overlay={overlay}
           fx={fx}
           onFxPlayed={onFxPlayed}
@@ -1029,6 +1083,7 @@ export function BattleMapPanel({
               }}
               looks={looks}
               intents={intents}
+              moveAim={moveAim}
               fx={fx}
               ping={ping}
               camera={addonViewport && canDirect ? null : camera}
@@ -1136,6 +1191,7 @@ export function BattleMapPanel({
         <TurnHud
           actorName={view.currentTurnName}
           mine={myTurn}
+          commanded={commanding}
           budget={turnBudget}
           speedLeftFeet={myTurn ? view.budgetLeft * TILE_FEET : null}
           ac={mySheet?.ac ?? null}
@@ -1145,7 +1201,7 @@ export function BattleMapPanel({
         />
       ) : null}
       {!scene && bannerKey ? (
-        <TurnBanner key={bannerKey} text={myTurn ? "Your turn" : view.currentTurnName} mine={myTurn} />
+        <TurnBanner key={bannerKey} text={commanding ? `${view.currentTurnName}: your orders` : myTurn ? "Your turn" : view.currentTurnName} mine={myTurn} />
       ) : null}
       {fieldRoll ? <FieldDie label={fieldRoll.label} /> : null}
       <BoardMoveNotes notes={moveNotes.notes} />
@@ -1172,18 +1228,35 @@ export function BattleMapPanel({
           the frame, so the buttons can ask how tall the board is and lie in
           a row along the bottom when a column would not fit (board.css). */}
       <span className="sr-only" aria-live="polite">
-        {!scene && view.currentTurnName ? (myTurn ? "Your turn." : `${view.currentTurnName}'s turn.`) : ""}
+        {!scene && view.currentTurnName ? (commanding ? `${view.currentTurnName}'s turn: your orders.` : myTurn ? "Your turn." : `${view.currentTurnName}'s turn.`) : ""}
       </span>
       <div className="board-corner">
       {myTurn && !scene && !targeting ? (
-        <button
-          type="button"
-          onClick={() => void endTurn()}
-          disabled={endingTurn}
-          className="board-endturn motion-press absolute bottom-2 right-11 z-10 rounded-lg border border-[rgba(107,99,148,0.5)] bg-[rgba(13,11,28,0.9)] px-3 py-1.5 text-[#e9e6f4] shadow-elev-1 hover:border-[rgba(212,171,58,0.6)] hover:text-[#f9ecc8] disabled:opacity-50"
-        >
-          <span className="block font-display text-[10px] font-semibold uppercase tracking-[0.16em]">End turn</span>
-        </button>
+        <div className="board-endturn absolute bottom-2 right-11 z-10 flex items-center gap-1.5">
+          {/* Beside End turn, as a tactics game offers the step back before
+              the unit acts: only while the last walk can be taken back. */}
+          {undoFeet !== null ? (
+            <button
+              type="button"
+              onClick={() => void undoMove()}
+              disabled={busy}
+              aria-label={`Undo move, ${undoFeet} feet`}
+              title={`Take back your last move and its ${undoFeet} feet (Ctrl+Z)`}
+              className={cn(TURN_BUTTON, "motion-pop inline-flex items-center gap-1.5")}
+            >
+              <Undo2 className="size-3.5" aria-hidden="true" />
+              <span className="block font-display text-[10px] font-semibold uppercase tracking-[0.16em]">Undo move</span>
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => void endTurn()}
+            disabled={endingTurn}
+            className={TURN_BUTTON}
+          >
+            <span className="block font-display text-[10px] font-semibold uppercase tracking-[0.16em]">End turn</span>
+          </button>
+        </div>
       ) : null}
       {/* Camera controls: corner buttons for everyone, the DM's pull and
           lock, and the escape hatch when a lock has held too long. */}
@@ -1256,6 +1329,7 @@ export function BattleMapPanel({
           drawing,
           targeting: Boolean(targeting),
           canMove,
+          moveAimed: Boolean(livePending),
           scene,
           budgetLeft: view.budgetLeft,
           hasToken: Boolean(view.myTokenId),

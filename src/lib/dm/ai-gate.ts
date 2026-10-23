@@ -53,7 +53,7 @@ export type GateOutcome = { args: string } | { result: ToolResult };
 
 const SAVE_ABILITIES = new Set(["str", "dex", "con", "int", "wis", "cha"]);
 
-const NUMBER_TOOLS = new Set(["apply_damage", "heal", "damage_enemy", "split_damage"]);
+const NUMBER_TOOLS = new Set(["apply_damage", "heal", "damage_enemy", "split_damage", "damage_pet"]);
 
 export function gateAiCall(name: string, rawArguments: string, ctx: GateContext): GateOutcome {
   let args: Record<string, unknown>;
@@ -86,6 +86,11 @@ export function gateAiCall(name: string, rawArguments: string, ctx: GateContext)
       return args.fallFeet !== undefined ? { args: rawArguments } : number(ctx, args, "damage", String(args.enemyId ?? ""));
     case "split_damage":
       return number(ctx, args, "damage", "");
+    // A pet's damage is rolled like any other, now that apply_damage takes a
+    // pet beside a character and an enemy (issue #471): it used to take the
+    // model's number as sent.
+    case "damage_pet":
+      return number(ctx, args, "damage", String(args.characterId ?? ""));
     case "set_condition":
       return bind(ctx, args);
     case "clear_condition":

@@ -85,6 +85,11 @@ export function parseAttack(action: RawAttackRow): EnemyAttack | null {
     if (!damage || (!matchesPrinted(damage, text.printedAverage) && matchesPrinted(blow, text.printedAverage))) {
       damage = blow;
     }
+  } else if (text.baseDice && !damage) {
+    // A rider no damage type names ("plus 2 (1d4) Charisma damage") leaves no
+    // printed average to check against; the dice the line prints for the hit
+    // and its typed riders are still the blow, and the rest is the DM's.
+    damage = [text.baseDice, ...text.riders.map((rider) => rider.dice)].join("+");
   }
   // An attack whose hit only grapples or restrains (a roper's tendril) is
   // still an attack: no damage, its rider does the work. So is one whose
@@ -107,9 +112,11 @@ export function parseAttack(action: RawAttackRow): EnemyAttack | null {
     type: text.types.join("/") || "untyped",
     ...(text.mode ? { mode: text.mode } : {}),
     ...(text.spellAttack ? { spellAttack: true } : {}),
-    ...(text.reach ? { reach: text.reach } : {}),
+    ...(text.magical ? { magical: true } : {}),
+    ...(text.reach !== undefined ? { reach: text.reach } : {}),
     ...(text.range ? { range: text.range } : {}),
     ...(text.riders.length ? { riders: text.riders } : {}),
     ...(text.onHit ? { onHit: text.onHit } : {}),
+    ...(text.alternatives?.length ? { alternatives: text.alternatives } : {}),
   };
 }

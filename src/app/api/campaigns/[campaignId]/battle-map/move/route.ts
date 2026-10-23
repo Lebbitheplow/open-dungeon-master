@@ -11,7 +11,8 @@ import {
   listTokens,
   moveToken,
 } from "@/lib/db/battle-maps";
-import { buildPlayerMapView, footprintLookup, occupiedTiles, pcMoveBudget } from "@/lib/battlemap/view";
+import { buildPlayerMapView, footprintLookup, occupiedTiles, pcMoveBudget, type PlayerMapView } from "@/lib/battlemap/view";
+import { boardState, forgetMoves, keepMove, sightedIds, stepFeet, type MoveStep } from "@/lib/battlemap/move-undo";
 import { findPath, reachableTiles, speedToTiles } from "@/lib/battlemap/movement";
 import { pcMoveTraits } from "@/lib/battlemap/passage";
 import { tileIndex } from "@/lib/battlemap/types";
@@ -165,6 +166,26 @@ export async function POST(
     !scene && budgetApplies(encounter.turnBudget, sheet.id, encounter.round)
       ? encounter.turnBudget
       : null;
+  // What the mover sees before the walk, and whether the walk can be taken
+  // back afterwards (src/lib/battlemap/move-undo.ts): only a fight's own
+  // walk on its own turn is kept, and only when nothing answered it.
+  const undoable = !scene && !readied;
+  const sightedBefore = undoable ? sightedIds(buildPlayerMapView(campaignId, user.id)) : null;
+  const settle = (view: PlayerMapView | null, lasting: boolean, step: Omit<MoveStep, "sheetId" | "tokenId" | "state">) => {
+    if (!undoable) {
+      return;
+    }
+    const live = getActiveBoard(campaignId);
+    const revealed = sightedBefore !== null && [...sightedIds(view)].some((id) => !sightedBefore.has(id));
+    if (lasting || revealed || !live || live.id !== encounter.id) {
+      forgetMoves(encounter.id);
+      return;
+    }
+    keepMove(encounter.id, { ...step, sheetId: sheet.id, tokenId: token.id, state: boardState(live, map.id, sheet.id) });
+    if (view) {
+      view.undoMove = { feet: step.feet };
+    }
+  };
   // Frightened: a jump may not carry them closer to what they fear either.
   const feared = scene ? null : fearSourceAt(map.id, sheet.conditions, sheet.conditionMeta as Record<string, { source?: string }>);
   if (parsed.data.jump && campaign) {
@@ -179,8 +200,14 @@ export async function POST(
     if ("error" in leap) {
       return Response.json({ error: leap.error }, { status: leap.status });
     }
+    const leapt = buildPlayerMapView(campaignId, user.id, { enemyNumbers: capsFor(context).enemyNumbers });
+    settle(
+      leapt,
+      leap.lasting || leap.opportunity.notes.length > 0 || leap.zoneEffects.length > 0 || Boolean(leap.opportunity.downedAt),
+      { from: { x: token.x, y: token.y }, movedBefore: token.movedThisRound, carried: [], stood: null, feet: leap.jump.feet },
+    );
     return Response.json({
-      view: buildPlayerMapView(campaignId, user.id, { enemyNumbers: capsFor(context).enemyNumbers }),
+      view: leapt,
       jump: leap.jump,
       ...(leap.opportunity.notes.length ? { opportunityAttacks: leap.opportunity.notes } : {}),
       ...(leap.zoneEffects.length ? { zoneEffects: leap.zoneEffects } : {}),
@@ -308,10 +335,8 @@ export async function POST(
   for (const entry of carried) {
     moveToken(entry.token.id, entry.at.x, entry.at.y, entry.token.movedThisRound);
   }
-  if (campaign) {
-    // Walking away from a grapple ends it (src/lib/dm/grapple.ts).
-    releaseGrapplesOutOfReach(campaign);
-  }
+  // Walking away from a grapple ends it (src/lib/dm/grapple.ts).
+  const letGo = campaign ? releaseGrapplesOutOfReach(campaign) : [];
   if (stands) {
     const stood = removeConditions(sheet.conditions, sheet.conditionMeta, ["prone"]);
     const updated = patchSheet(sheet.id, {
@@ -349,8 +374,16 @@ export async function POST(
   }
 
   // Fresh self view in the response saves the mover a follow-up fetch.
+  const view = buildPlayerMapView(campaignId, user.id, { enemyNumbers: capsFor(context).enemyNumbers });
+  settle(view, opportunity.notes.length > 0 || zoneEffects.length > 0 || letGo.length > 0 || Boolean(opportunity.downedAt), {
+    from,
+    movedBefore: token.movedThisRound,
+    carried: carried.map((entry) => ({ tokenId: entry.token.id, from: { x: entry.token.x, y: entry.token.y }, movedThisRound: entry.token.movedThisRound })),
+    stood: stands ? { conditions: sheet.conditions, conditionMeta: sheet.conditionMeta } : null,
+    feet: stepFeet(spend),
+  });
   return Response.json({
-    view: buildPlayerMapView(campaignId, user.id, { enemyNumbers: capsFor(context).enemyNumbers }),
+    view,
     ...(released ? { released: true } : {}),
     ...(opportunity.notes.length ? { opportunityAttacks: opportunity.notes } : {}),
     ...(zoneEffects.length ? { zoneEffects } : {}),

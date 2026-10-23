@@ -54,6 +54,37 @@ export function livePublicUrl(
   return mine.has(host) ? clean : "";
 }
 
+// The origin a browser reaches this server on, for an address the server
+// hands to someone who has to come back to it: Discord's sign-in redirect,
+// an agent's MCP address, a poll link. Behind a reverse proxy the request's
+// own URL is the internal address (127.0.0.1:3005), so the order is the saved
+// public URL while it can be true, then APP_PUBLIC_URL, then the proxy's
+// X-Forwarded-Host and -Proto, then the request's own origin. A saved private
+// address this machine no longer holds (a desktop app's Wi-Fi address, a
+// copied data folder) is passed over, as the invite links already pass it
+// over: Discord refuses a redirect it was never told about.
+export function requestPublicOrigin(input: {
+  savedPublicUrl: string | null | undefined;
+  envPublicUrl: string | null | undefined;
+  interfaces: Record<string, InterfaceAddress[] | undefined>;
+  forwardedHost: string | null | undefined;
+  forwardedProto: string | null | undefined;
+  requestUrl: string;
+}): string {
+  const configured =
+    livePublicUrl(input.savedPublicUrl, input.interfaces) ||
+    (input.envPublicUrl ?? "").trim().replace(/\/+$/, "");
+  if (configured) {
+    return configured;
+  }
+  const forwardedHost = input.forwardedHost?.split(",")[0]?.trim();
+  if (forwardedHost) {
+    const proto = input.forwardedProto?.split(",")[0]?.trim() || "https";
+    return `${proto}://${forwardedHost}`;
+  }
+  return new URL(input.requestUrl).origin;
+}
+
 export function lanOrigins(
   interfaces: Record<string, InterfaceAddress[] | undefined>,
   protocol: string,

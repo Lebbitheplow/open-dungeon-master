@@ -14,7 +14,7 @@ import {
   type MonsterReadout,
 } from "@/lib/bestiary/monster-draft";
 import { CONDITIONS, DAMAGE_TYPES } from "@/lib/bestiary/kit";
-import { CREATURE_TYPES, creatureTypeOf } from "@/lib/bestiary/statblock";
+import { CREATURE_TYPES, creatureTypeOf } from "@/lib/bestiary/creature-type";
 import { SpeedPicker, TermPicker } from "@/app/campaigns/[campaignId]/MonsterKitFields";
 import { crLabel, type CrPart } from "@/lib/bestiary/derive-cr";
 import { Reveal } from "@/components/ui/Reveal";
@@ -195,9 +195,11 @@ export function AttackEditor({
 // or "Details" when it carries nothing yet.
 function attackExtras(attack: MonsterDraft["stats"]["attacks"][number]): string {
   const bits = [
-    attack.range ? `${attack.range.normal}/${attack.range.long} ft` : attack.reach && attack.reach > 5 ? `reach ${attack.reach}` : "",
+    attack.bonusAction ? "bonus action" : "",
+    attack.range ? `${attack.range.normal}/${attack.range.long} ft` : attack.reach === 0 || (attack.reach && attack.reach > 5) ? `reach ${attack.reach}` : "",
     attack.riders?.length ? `+${attack.riders.map((rider) => rider.type).join(", ")}` : "",
     attack.onHit?.condition ?? (attack.onHit?.damage ? "on hit" : ""),
+    attack.alternatives?.some((entry) => entry.when === "bloodied") ? "weaker when bloodied" : "",
   ].filter(Boolean);
   return bits.length ? bits.join(" · ") : "Details";
 }
@@ -285,18 +287,23 @@ export function SizeAndDefences({
           enforces. Anything else still goes in by hand, because a monster
           immune to "being seen" is a fine monster and no chip list of ours
           will hold every answer. */}
+      {/* Black Flag's resistance and vulnerability to a condition (advantage
+          or disadvantage on the save) show only on a block that has them: a
+          copy keeps them editable, and no other book prints them. */}
       {(
         [
           ["resist", "Resistant to", DAMAGE_TYPES],
           ["immune", "Immune to", DAMAGE_TYPES],
           ["vulnerable", "Vulnerable to", DAMAGE_TYPES],
           ["conditionImmune", "Condition immunities", CONDITIONS],
+          ...(draft.stats.conditionResist ? [["conditionResist", "Resistant to conditions (advantage on the save)", CONDITIONS] as const] : []),
+          ...(draft.stats.conditionVulnerable ? [["conditionVulnerable", "Vulnerable to conditions (disadvantage on the save)", CONDITIONS] as const] : []),
         ] as const
       ).map(([field, label, known]) => (
         <TermPicker
           key={field}
           label={label}
-          value={draft.stats[field]}
+          value={draft.stats[field] ?? ""}
           known={known}
           onChange={(value) => set({ [field]: value })}
           glossary={glossaryFor(
