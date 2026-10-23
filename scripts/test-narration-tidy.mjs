@@ -3,7 +3,15 @@
 // The inputs are what Qwen3.6-35B at Q2 wrote on an AMD BC-250 on the full
 // rules, word for word.
 import assert from "node:assert/strict";
-import { repeatsNarration, withoutCombatBookkeeping, withoutRepeatedSentences, withoutToolTalk } from "../src/lib/dm/narration-tidy-logic.ts";
+import {
+  closingQuestion,
+  closingVarietyNote,
+  repeatedClosing,
+  repeatsNarration,
+  withoutCombatBookkeeping,
+  withoutRepeatedSentences,
+  withoutToolTalk,
+} from "../src/lib/dm/narration-tidy-logic.ts";
 
 let passed = 0;
 const check = (name, fn) => {
@@ -107,6 +115,23 @@ check("a sentence naming a DM tool is the model thinking aloud and goes; tool na
   assert.equal(withoutToolTalk(leaked), "Bram presses forward through the mud. So we interpret: he intends to close in. The goblin snarls.");
   const story = "You travel north for a day, then heal at the shrine before you lift the gate.";
   assert.equal(withoutToolTalk(story), story);
+});
+
+check("the same closing question two replies running is found, word for word only", () => {
+  // Five replies running ended this way at a table on 2026-10-23.
+  const replies = [
+    "Millbrook comes into view. The cows low in distress. A figure stands near the well. Elder Wren. What does Kara do?",
+    'Elder Wren turns. "You came," he says. What does Kara do?',
+  ];
+  assert.equal(closingQuestion(replies[1]), "What does Kara do?");
+  assert.equal(closingQuestion("The door creaks open."), null, "no question, no closing question");
+  assert.equal(closingQuestion('"Who goes there?"'), '"Who goes there?"', "a quoted question counts");
+  assert.equal(repeatedClosing(replies), "What does Kara do?");
+  assert.equal(repeatedClosing([...replies, "The stag charges the cow. The ground shakes. What does Kara do?"], 3), "What does Kara do?");
+  assert.equal(repeatedClosing([replies[0], "Wren leans on his staff. Where will you go first?"]), null, "two different questions");
+  assert.equal(repeatedClosing([replies[0], "The stag bursts from the trees."]), null, "the newest ends on the moment");
+  assert.equal(repeatedClosing([replies[1]]), null, "one reply is no pattern");
+  assert.match(closingVarietyNote("What does Kara do?"), /"What does Kara do\?"/);
 });
 
 console.log(`narration tidy: ${passed} checks passed`);

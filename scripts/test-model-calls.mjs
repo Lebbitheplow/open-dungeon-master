@@ -503,6 +503,62 @@ const lastCalls = (n) =>
   console.log("ok: the window probe carries the key the chat call would, and only to the server's own backend");
 }
 
+// ---- 10. a helper call on a template that thinks by effort asks for "low" -----------
+// gpt-oss's template reads reasoning_effort and has no thinking switch, so a
+// utility call's `thinking: false` reached it as enable_thinking and it
+// reasoned at "medium" anyway (the claims reader wrote 4,011 tokens on
+// 2026-10-23). The template is read off /props; a turn's calls never carry
+// the field, and a template with the switch never gets it.
+{
+  const bodies = [];
+  const templates = { effort: "{%- if reasoning_effort is defined %}Reasoning: {{ reasoning_effort }}{%- endif %}", switch: "{%- if enable_thinking is defined and enable_thinking is false %}<think></think>{%- endif %}" };
+  const fake = http.createServer((req, res) => {
+    const chunks = [];
+    req.on("data", (chunk) => chunks.push(chunk));
+    req.on("end", () => {
+      const kind = req.url.includes("/effort/") ? "effort" : "switch";
+      if (req.url.includes("/props")) {
+        res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ n_ctx: 65_536, chat_template: templates[kind] }));
+        return;
+      }
+      if (req.url.endsWith("/chat/completions")) {
+        bodies.push({ kind, ...JSON.parse(Buffer.concat(chunks).toString("utf8")) });
+        res.writeHead(200, { "Content-Type": "application/json" }).end(
+          JSON.stringify({ choices: [{ index: 0, finish_reason: "stop", message: { role: "assistant", content: "{}" } }], usage: { prompt_tokens: 9, completion_tokens: 2 } }),
+        );
+        return;
+      }
+      res.writeHead(404).end();
+    });
+  });
+  await new Promise((resolve) => fake.listen(0, "127.0.0.1", resolve));
+  const at = (kind) => `http://127.0.0.1:${fake.address().port}/${kind}/v1`;
+  forgetContextWindows();
+  delete process.env.OPENAI_COMPAT_CONTEXT;
+  const read = [{ role: "system", content: "Read the passage." }, { role: "user", content: "The goblin falls." }];
+
+  await requestUtilityMessage(settings({ utilityModel: "reader", utilityBaseUrl: at("effort") }), read, { meta: { task: "claims" }, thinking: false });
+  assert.equal(bodies.at(-1).reasoning_effort, "low", "the effort template's helper call was not asked for low");
+  await requestUtilityMessage(settings({ utilityModel: "reader", utilityBaseUrl: at("effort") }), read, { meta: { task: "claims" }, thinking: true });
+  assert.equal(bodies.at(-1).reasoning_effort, undefined, "a helper call that wants thinking keeps the default");
+  await requestUtilityMessage(settings({ utilityModel: "reader", utilityBaseUrl: at("switch") }), read, { meta: { task: "claims" }, thinking: false });
+  assert.equal(bodies.at(-1).reasoning_effort, undefined, "a template with the switch was sent an effort");
+  assert.equal(bodies.at(-1).chat_template_kwargs?.enable_thinking, false);
+  // A turn's call on the effort template: never, whatever it asks.
+  await probeCustomContextWindow(at("effort"), "", "narrator");
+  await requestDmMessage(settings({ customBaseUrl: at("effort"), customModel: "narrator" }), read, { meta: { task: "turn" }, thinking: false });
+  assert.equal(bodies.at(-1).model, "narrator");
+  assert.equal(bodies.at(-1).reasoning_effort, undefined, "a turn's call was sent an effort");
+  // A helper named alone runs on the storyteller's server.
+  await requestUtilityMessage(settings({ customBaseUrl: at("effort"), customModel: "narrator", utilityModel: "reader", utilityBaseUrl: "" }), read, { meta: { task: "claims" }, thinking: false });
+  assert.equal(bodies.at(-1).kind, "effort");
+  assert.equal(bodies.at(-1).model, "reader", "a helper with no address of its own did not reach the storyteller's server");
+  assert.equal(bodies.at(-1).reasoning_effort, "low");
+  fake.close();
+  forgetContextWindows();
+  console.log("ok: a helper call on an effort template asks for low; a turn's call and a switch template never do");
+}
+
 server.close();
 removeTempDir(dir);
 console.log("model-calls: all passed");

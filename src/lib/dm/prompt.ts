@@ -37,6 +37,7 @@ import type { LoreTrace } from "@/lib/dm/world-lore-logic";
 import { renderWorldArcsForPrompt } from "@/lib/dm/world-arc-logic";
 import { renderFactsForPrompt, type FactLike } from "@/lib/dm/fact-logic";
 import { MOMENT_INSTRUCTION, splitAtMoment, THIS_MOMENT_HEADING, THIS_TURN_HEADING } from "@/lib/prompt-boundary";
+import { closingVarietyNote, repeatedClosing } from "@/lib/dm/narration-tidy-logic";
 import { companionMode } from "@/lib/dm/companion-tools";
 import { commanderOf } from "@/lib/dm/companion-command";
 import { breakDown, describeInstant, isDark, normalizeClock } from "@/lib/dm/calendar";
@@ -1587,6 +1588,54 @@ export const updateLocationTool = {
 // (src/lib/dm/context-budget.ts), and the result is recorded on
 // state.contextTrace so the Context panel can show what the DM was actually
 // sent and what got cut.
+// What a turn's rules are made of: the DM's rules with this table's settings
+// rules, and the fight's own while one runs.
+type TurnRuleState = Pick<DmGameState, "campaign" | "members" | "sheets" | "relationships" | "ruleContext" | "encounter">;
+
+function turnRuleParts(state: TurnRuleState): { dmSystem: string; fightRules: string } {
+  const physicalDiceUsers = realDiceUserIds(state.campaign, state.members);
+  const anyPhysicalDice = state.sheets.some((sheet) => physicalDiceUsers.has(sheet.userId));
+  const settingsRules: string[] = [];
+  if (anyPhysicalDice) {
+    settingsRules.push(REAL_DICE_RULE);
+  }
+  // A compact call carries the companion and relationship rules only when
+  // they bear on the table now (a companion at the table, bonds on record,
+  // the group opened); more_tools hands them over with their tools otherwise
+  // (src/lib/dm/turn.ts handleMoreTools).
+  const compactRules = state.ruleContext ?? null;
+  const mode = companionMode(state.campaign);
+  if (mode !== "off" && (!compactRules || compactRules.groups.has("companions") || state.sheets.some((sheet) => sheet.isCompanion))) {
+    settingsRules.push(companionRules(state.campaign, mode));
+  }
+  if (
+    state.campaign.gameSettings.relationships !== "off" &&
+    (!compactRules || compactRules.groups.has("relationships") || (state.relationships?.length ?? 0) > 0)
+  ) {
+    settingsRules.push(
+      relationshipRules(state.campaign.gameSettings.romance !== "off"),
+    );
+  }
+  const dmSystem = buildDmSystem(state.campaign, settingsRules, state.ruleContext ?? null);
+  const fightRules = state.encounter ? encounterRulesText(tracksAmmunition(state.campaign), state.ruleContext ?? null) : "";
+  return { dmSystem, fightRules };
+}
+
+function rulesAhead(dmSystem: string, turnAt: number, fightRules: string): string {
+  return [dmSystem.slice(0, turnAt).trimEnd(), fightRules].filter(Boolean).join("\n\n");
+}
+
+// A turn's first message when its state rides after the rules
+// (stateAfterRules), built the way buildDmMessages builds it: a server that
+// caches the prompt's start keeps everything up to the next message from one
+// turn to the next, and src/lib/dm/turn-warmup.ts sends it ahead when it
+// changes. Null when the rules have no turn heading to split at.
+export function turnRulesMessage(state: TurnRuleState): string | null {
+  const { dmSystem, fightRules } = turnRuleParts(state);
+  const turnAt = dmSystem.indexOf(THIS_TURN_HEADING);
+  return turnAt >= 0 ? rulesAhead(dmSystem, turnAt, fightRules) : null;
+}
+
 export function buildDmMessages(
   state: DmGameState,
   history: CampaignMessage[],
@@ -1626,31 +1675,7 @@ export function buildDmMessages(
   });
   const uncovered = cutCoveredHistory(rendered, state.summaryCoveredSeq ?? null);
 
-  const physicalDiceUsers = realDiceUserIds(state.campaign, state.members);
-  const anyPhysicalDice = state.sheets.some((sheet) => physicalDiceUsers.has(sheet.userId));
-  const settingsRules: string[] = [];
-  if (anyPhysicalDice) {
-    settingsRules.push(REAL_DICE_RULE);
-  }
-  // A compact call carries the companion and relationship rules only when
-  // they bear on the table now (a companion at the table, bonds on record,
-  // the group opened); more_tools hands them over with their tools otherwise
-  // (src/lib/dm/turn.ts handleMoreTools).
-  const compactRules = state.ruleContext ?? null;
-  const mode = companionMode(state.campaign);
-  if (mode !== "off" && (!compactRules || compactRules.groups.has("companions") || state.sheets.some((sheet) => sheet.isCompanion))) {
-    settingsRules.push(companionRules(state.campaign, mode));
-  }
-  if (
-    state.campaign.gameSettings.relationships !== "off" &&
-    (!compactRules || compactRules.groups.has("relationships") || (state.relationships?.length ?? 0) > 0)
-  ) {
-    settingsRules.push(
-      relationshipRules(state.campaign.gameSettings.romance !== "off"),
-    );
-  }
-  const dmSystem = buildDmSystem(state.campaign, settingsRules, state.ruleContext ?? null);
-  const fightRules = state.encounter ? encounterRulesText(tracksAmmunition(state.campaign), state.ruleContext ?? null) : "";
+  const { dmSystem, fightRules } = turnRuleParts(state);
   const whisperRules = state.pendingPlayerWhispers?.length ? PLAYER_WHISPER_RULES : "";
   const gameStateBlock = buildGameStateBlock(state);
   const systemParts = [dmSystem, fightRules, whisperRules, gameStateBlock].filter(Boolean);
@@ -1815,7 +1840,7 @@ export function buildDmMessages(
   let rules = systemParts.join("\n\n");
   let table = "";
   if (turnAt >= 0) {
-    rules = [dmSystem.slice(0, turnAt).trimEnd(), fightRules].filter(Boolean).join("\n\n");
+    rules = rulesAhead(dmSystem, turnAt, fightRules);
     table = [dmSystem.slice(turnAt), whisperRules, gameStateBlock].filter(Boolean).join("\n\n");
   }
   let moment = "";
@@ -1825,6 +1850,10 @@ export function buildDmMessages(
     else rules = split.standing;
     moment = split.moment;
   }
+  // The replies that end on the same line every time, said to the model
+  // with the moment, after the transcript (src/lib/dm/narration-tidy-logic.ts).
+  const sameClosing = repeatedClosing(history.filter((message) => message.authorType === "dm").map((message) => message.content));
+  const variety = sameClosing ? closingVarietyNote(sameClosing) : "";
   const historyStart = table ? 2 : 1;
   const messages: ChatMessage[] = [
     { role: "system", content: rules },
@@ -1832,7 +1861,11 @@ export function buildDmMessages(
     ...historyMessages,
     // The state, then the instruction to take the turn, so the newest player
     // line is still what the model resolves (src/lib/prompt-boundary.ts).
-    ...(moment ? [{ role: "user" as const, content: `${moment}\n\n${MOMENT_INSTRUCTION}` }] : []),
+    ...(moment
+      ? [{ role: "user" as const, content: [moment, variety, MOMENT_INSTRUCTION].filter(Boolean).join("\n\n") }]
+      : variety
+        ? [{ role: "user" as const, content: variety }]
+        : []),
     // Last, after the newest player line, so the model reads it closest to
     // the point of generation. Omitted entirely when nothing is armed.
     ...(state.directorBlock

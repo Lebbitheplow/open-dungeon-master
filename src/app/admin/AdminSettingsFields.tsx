@@ -65,6 +65,8 @@ export type EnvDefaults = {
   customBaseUrl: string;
   customModel: string;
   localTextModel: string;
+  textProvider?: string;
+  utilityProvider?: string;
   hasCustomApiKey: boolean;
   comfyUrl: string;
   fluxWorkerUrl: string;

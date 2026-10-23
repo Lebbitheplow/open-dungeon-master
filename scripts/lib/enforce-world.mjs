@@ -52,6 +52,10 @@ globalThis.__odmEmbedderPromise = Promise.resolve((texts) =>
 // audio on a machine that runs one. A provider set in the environment, or
 // saved in the admin settings by a suite, still wins.
 process.env.TTS_PROVIDER ??= "off";
+// Nor the next turn's prompt sent ahead after a fight starts or ends
+// (src/lib/dm/turn-warmup.ts): a scripted model answers in request order,
+// and the warm-up would take the reply written for the next turn.
+process.env.DM_TURN_WARMUP ??= "0";
 // Nor a storyteller dialled by accident (issue 414): with nothing named, a
 // campaign copies the shipped default backend, the llama-server address
 // 127.0.0.1:8001, so a suite that queued a DM turn without a fake model of

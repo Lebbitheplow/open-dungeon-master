@@ -75,7 +75,10 @@ export async function POST(request: Request) {
           ]
         : [
           [config.text.customBaseUrl || serverEnv("OPENAI_COMPAT_BASE_URL"), config.text.customApiKey || serverEnv("OPENAI_COMPAT_API_KEY")],
-          [config.text.utilityBaseUrl || serverEnv("UTILITY_TEXT_BASE_URL"), config.text.utilityApiKey],
+          // The utility server's key may live in the environment, like the
+          // story's (UTILITY_TEXT_API_KEY): without it a keyed llama-server
+          // listed nothing to pick.
+          [config.text.utilityBaseUrl || serverEnv("UTILITY_TEXT_BASE_URL"), config.text.utilityApiKey || serverEnv("UTILITY_TEXT_API_KEY")],
         ];
   const key =
     saved.map(([savedBaseUrl, savedKey]) => keyForListing({ typed: apiKey, savedKey, savedBaseUrl, baseUrl: target })).find(Boolean) ?? "";

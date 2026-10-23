@@ -249,6 +249,9 @@ const CLASSIFIED = {
   // the reply as data (a stat block's fields, say), often for a workshop
   // import that has no table yet.
   "src/lib/addons/sampling.ts": { prose: 0, machine: 1 },
+  // The next turn's rules sent ahead (src/lib/dm/turn-warmup.ts): its reply
+  // is thrown away, and the rules are the turn's own, directive included.
+  "src/lib/dm/turn-warmup.ts": { prose: 0, machine: 1 },
   // The routers themselves.
   "src/lib/dm/model.ts": { prose: 0, machine: 0, router: true },
 };

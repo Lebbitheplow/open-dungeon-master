@@ -5,6 +5,7 @@ import {
   requestLocalMessage,
   storyContextTokens,
   storyWindowAssumed,
+  utilityEndpoint,
   utilityModelContextTokens,
   utilityWindowAssumed,
   type ChatMessage,
@@ -115,6 +116,13 @@ function storyRoute(settings: StorySettings): Route {
   };
 }
 
+// The key the story route's calls are counted under (the inference gate,
+// src/lib/dm/inference-gate.ts): background work on the same narrator reads
+// it to give way to a turn.
+export function storyRouteKey(settings: StorySettings): string {
+  return storyRoute(settings).key;
+}
+
 // The utility model's own route, or null when the table has none and its
 // utility work runs on the story route.
 async function utilityRoute(settings: StorySettings): Promise<Route | null> {
@@ -139,16 +147,18 @@ async function utilityRoute(settings: StorySettings): Promise<Route | null> {
     return { provider: "local", backendRole: "utility", model, baseUrl: "", apiKey: "", windowTokens: localContextTokens(model), windowAssumed: false, key: `local|${model}` };
   }
   // Sized to the utility model's own window; a fallback to the story model
-  // is fitted again to that one.
+  // is fitted again to that one. With no address of its own it is on the
+  // storyteller's server (utilityEndpoint).
+  const { baseUrl, apiKey } = utilityEndpoint(settings);
   return {
     provider: "custom",
     backendRole: "utility",
     model,
-    baseUrl: settings.utilityBaseUrl,
-    apiKey: settings.utilityApiKey,
+    baseUrl,
+    apiKey,
     windowTokens: await utilityModelContextTokens(settings),
     windowAssumed: utilityWindowAssumed(settings),
-    key: `custom|${(settings.utilityBaseUrl || "").trim()}|${model}`,
+    key: `custom|${baseUrl}|${model}`,
   };
 }
 
@@ -318,8 +328,17 @@ async function attempt(
   const background = asked ?? scope?.background ?? false;
   void _min;
   void _fit;
+  // A utility job that wants no thinking thinks as little as the model
+  // allows (model-client's reasoningEffort), on its own route or the
+  // story's. A turn's calls never do: see that option.
+  const leastThought = ledgerRole === "utility" && options.thinking === false ? { reasoningEffort: "low" as const } : {};
   const call = () =>
-    send(route, sent, { ...transport, onDelta, ...(sizing && !sizing.windowAssumed ? { maxOutputTokens: sizing.outputTokens } : {}) });
+    send(route, sent, {
+      ...transport,
+      ...leastThought,
+      onDelta,
+      ...(sizing && !sizing.windowAssumed ? { maxOutputTokens: sizing.outputTokens } : {}),
+    });
   let waited = 0;
   if (background) {
     waited = await waitForInteractive(route.key);

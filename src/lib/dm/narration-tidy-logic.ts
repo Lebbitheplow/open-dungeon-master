@@ -83,6 +83,35 @@ export function repeatsNarration(text: string, previous: string): boolean {
   return now.filter((key) => before.has(key)).length / now.length >= 0.6;
 }
 
+// The question a narration ends on: its last sentence, when that asks one.
+export function closingQuestion(text: string): string | null {
+  const last = (text.trim().match(SENTENCE) ?? []).map((piece) => piece.trim()).filter(Boolean).at(-1);
+  return last && /\?["'”’)\]]*$/.test(last) ? last : null;
+}
+
+// The line the newest narrations all ended on, word for word, when at least
+// `runs` in a row did: a table heard "What does <hero> do?" at the end of
+// five replies running (2026-10-23), and read it as the DM stuck in a loop.
+export function repeatedClosing(narrations: readonly string[], runs = 2): string | null {
+  const recent = narrations.slice(-runs);
+  if (recent.length < runs) {
+    return null;
+  }
+  const endings = recent.map(closingQuestion);
+  const first = endings[0];
+  if (!first) {
+    return null;
+  }
+  const key = textKey(first);
+  return endings.every((ending) => ending !== null && textKey(ending) === key) ? first : null;
+}
+
+// Read after the transcript, with the moment, so the cached prompt ahead of
+// it is untouched.
+export function closingVarietyNote(line: string): string {
+  return `[Variety] Your last replies all ended on the same line ("${line}"). End this one another way: on what someone says or does, a sound, or the choice in front of the party, without that line.`;
+}
+
 export const REPEATED_NARRATION_PROMPT =
   "[System] That reply repeats your previous narration almost word for word. The player has acted again, and this is a new moment. Resolve what they just did with the tools (in a fight: the attack, move or spell they declared, on their turn), then narrate only what is new.";
 

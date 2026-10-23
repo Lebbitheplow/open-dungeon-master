@@ -79,6 +79,10 @@ function envDefaults() {
     customBaseUrl: serverEnv("OPENAI_COMPAT_BASE_URL"),
     customModel: serverEnv("OPENAI_COMPAT_MODEL"),
     localTextModel: serverEnv("LOCAL_TEXT_MODEL"),
+    // What a blank provider means here, so the form shows the Ollama model
+    // field only where Ollama is what runs.
+    textProvider: serverEnv("DEFAULT_TEXT_PROVIDER"),
+    utilityProvider: serverEnv("UTILITY_TEXT_PROVIDER"),
     hasCustomApiKey: serverEnv("OPENAI_COMPAT_API_KEY") !== "" || serverEnv("OPENROUTER_API_KEY") !== "",
     comfyUrl: serverEnv("COMFYUI_URL", "http://127.0.0.1:8188"),
     fluxWorkerUrl: serverEnv("FLUX_WORKER_URL", "http://127.0.0.1:7869"),

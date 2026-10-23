@@ -30,9 +30,11 @@ const SECRET_KEPT = "\u0000keep";
 // The text settings typed in place.
 type TextField = "customBaseUrl" | "customModel" | "utilityBaseUrl" | "utilityModel" | "artStyleMap" | "artStyleScene";
 
+// In the order the pickers offer them: llama.cpp (or another
+// OpenAI-compatible server) is the one ODM sets up and recommends.
 const PROVIDER_LABELS: Record<TextProvider, string> = {
-  local: "Local (Ollama)",
-  custom: "Custom backend",
+  custom: "llama.cpp or compatible server",
+  local: "Ollama",
   none: "No AI storyteller",
   harness: "The server's agent",
 };
@@ -418,7 +420,7 @@ export function StoryAiPanel({
               <Select
                 value={settings.utilityProvider}
                 onChange={(utilityProvider) => patch({ utilityProvider })}
-                options={(["local", "custom"] as TextProvider[]).map((provider) => ({ value: provider, label: PROVIDER_LABELS[provider] }))}
+                options={(["custom", "local"] as TextProvider[]).map((provider) => ({ value: provider, label: PROVIDER_LABELS[provider] }))}
                 label="Utility model provider"
                 size="sm"
               />
@@ -434,7 +436,7 @@ export function StoryAiPanel({
               />
             </div>
             {settings.utilityModel ? (
-              <ModelNote role="utility" baseUrl={settings.utilityProvider === "custom" ? settings.utilityBaseUrl : ""} model={settings.utilityModel} />
+              <ModelNote role="utility" baseUrl={settings.utilityProvider === "custom" ? settings.utilityBaseUrl || settings.customBaseUrl : ""} model={settings.utilityModel} />
             ) : null}
             {settings.utilityProvider === "custom" && settings.utilityModel && !serverManaged ? (
               <div className="reveal flex flex-wrap items-center gap-2">
@@ -446,7 +448,7 @@ export function StoryAiPanel({
                   }
                   onBlur={() => commitText("utilityBaseUrl")}
                   onKeyDown={blurOnEnter}
-                  placeholder="http://127.0.0.1:8080/v1"
+                  placeholder="Blank: the storyteller's server"
                   className={inputClass}
                 />
                 <input
