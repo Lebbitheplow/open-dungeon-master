@@ -12,6 +12,7 @@ import { absoluteYear, fieldLines, formatLifespan, formatYear, lifespan, lifespa
 import { folderPath } from "@/lib/worldforge/tree";
 import type { WorldEntity } from "@/lib/db/world-forge";
 import type { WorldApi, WorldState } from "./useWorld";
+import { ImportKept } from "./ImportKept";
 import { EntityEditor } from "./EntityEditor";
 import { BoundRecords } from "./BoundRecords";
 import { PlaceBattleMaps, type OpenPrep } from "./PlaceBattleMaps";
@@ -227,6 +228,8 @@ export function EntityPage({
       </header>
 
       <PaintPanel entity={entity} paint={paint} canPaint={canPaint} />
+
+      <ImportKept kept={entity.kept ?? []} onChoose={(key, choice) => api.settleKept(entity.ref, key, choice)} />
 
       {facts.length ? (
         <div className="flex flex-wrap gap-1.5" aria-label="At the table">

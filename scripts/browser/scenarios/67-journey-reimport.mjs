@@ -10,10 +10,14 @@
 //   - the campaign's own edits stand: its article and its notes;
 //   - the conflict (both sides changed the article) is reported where the
 //     author reads it: the import's note names the entry and the field;
-//   - the author can review and reverse it: what the UI offers after the
-//     import is looked for (the note after a reload, the entry's page and
-//     form, a way to take the import's article). What is missing is said
-//     as a KNOWN BUG line and does not fail the journey.
+//   - the author can review and reverse it: the entry's page says the
+//     campaign's article was kept and shows the import's, with "Use the
+//     import's version" and "Keep mine"; the entry form offers the import's
+//     version too. Using it puts the import's article on the page, and
+//     "Restore mine" puts the campaign's back (src/lib/worldforge/
+//     import-kept.ts). What Bring in prep's note still does not say (after
+//     a reload, or on a further import) is said as a KNOWN BUG line and
+//     does not fail the journey.
 //
 // The single steps are proven elsewhere: the import picker in
 // 43-world-use-in-campaign and 27-setup-prep-and-end, the campaign's World
@@ -227,24 +231,32 @@ export default {
       }, { timeoutMs: 20_000, label: "the entry's page with the campaign's article and the source's hidden truth" });
       await t.shot("entry-after");
 
-      // Review and reverse: what the UI offers once the note is gone.
-      const pageText = await entryPage.innerText();
-      const mentionsImport = /import/i.test(pageText) && /kept your|the import's/i.test(pageText);
-      knownBug(
-        mentionsImport,
-        `KNOWN BUG: after a reimport ${name}'s World entry says nothing of the kept article; the conflict is said only in Bring in prep's note (src/lib/db/world-forge-io.ts copyWorldDoc returns conflicts but keeps no record of them)`,
-      );
+      // Review and reverse: the entry says what the reimport kept, and shows
+      // the import's version with the two ways out.
+      const kept = entryPage.locator('[data-testid="import-kept"]');
+      await eventually(() => kept.isVisible(), { timeoutMs: 15_000, label: "the entry's note of what the reimport kept" });
+      const keptText = await kept.innerText();
+      check(/Article/.test(keptText) && /this campaign's version was kept/.test(keptText) && /the import's version differs/.test(keptText), `the entry says its article was kept over the import's: ${JSON.stringify(keptText.slice(0, 240))}`);
+      check(keptText.includes(words.theirsArticle), "the entry shows the import's article");
+      check((await kept.getByRole("button", { name: /^Use the import's version/ }).count()) === 1 && (await kept.getByRole("button", { name: /^Keep mine/ }).count()) === 1, "the entry offers Use the import's version and Keep mine");
       await t.tap(tablePanel.locator('[data-tour="world-edit"]').first());
       const tableForm = tablePanel.locator("form").filter({ has: page.locator("input[required]") }).first();
       await eventually(() => tableForm.isVisible(), { timeoutMs: 15_000, label: "the entry form again" });
-      const formText = await tableForm.innerText();
-      const offersTheirs = (await tableForm.getByRole("button", { name: /theirs|import's|the import/i }).count()) > 0 || formText.includes(words.theirsArticle);
-      knownBug(
-        offersTheirs,
-        `KNOWN BUG: the entry form offers no way to read or take the import's article after a reimport kept the campaign's (no "Use theirs" as for an author's clash in 35-entry-conflict; src/app/workshop/world/EntityEditor.tsx)`,
-      );
+      const formKept = tableForm.locator('[data-testid="entry-import-kept"]');
+      check((await formKept.getByRole("button", { name: /^Use the import's version/ }).count()) === 1, "the entry form offers the import's version");
+      check((await formKept.innerText()).includes(words.theirsArticle), "the entry form shows the import's article");
       await t.shot("form-after");
       await t.tap(tableForm.getByRole("button", { name: "Cancel" }));
+      await eventually(() => kept.isVisible(), { timeoutMs: 15_000, label: "the entry's page again" });
+      // Use the import's version, then Restore mine.
+      await t.tap(kept.getByRole("button", { name: /^Use the import's version/ }));
+      await eventually(async () => (await entryAtTable())?.entry?.article === words.theirsArticle, { timeoutMs: 15_000, label: "the import's article taken" });
+      await eventually(async () => /the import's version is in use/.test(await kept.innerText().catch(() => "")), { timeoutMs: 15_000, label: "the entry saying the import's version is in use" });
+      check((await kept.innerText()).includes(words.oursArticle), "the campaign's article is kept beside it to restore");
+      await t.shot("import-taken");
+      await t.tap(kept.getByRole("button", { name: /^Restore mine/ }));
+      await eventually(async () => (await entryAtTable())?.entry?.article === words.oursArticle, { timeoutMs: 15_000, label: "the campaign's article restored" });
+      await eventually(async () => /this campaign's version was kept/.test(await kept.innerText().catch(() => "")), { timeoutMs: 15_000, label: "the choice offered again" });
       await t.reload();
       await openPanelTab(t, "settings");
       const prepAfter = page.locator(`${root}[data-setup-prep]`).locator("visible=true").first();
@@ -262,6 +274,7 @@ export default {
       );
       const last = await entryAtTable();
       check(last.entry.article === words.oursArticle && last.entry.hiddenTruth === words.theirsTruth, "a further import changes nothing");
+      check(last.kept?.some((item) => item.key === "article" && item.theirs === words.theirsArticle && !item.taken), `the entry still holds the import's article for the author: ${JSON.stringify(last.kept)}`);
     } finally {
       // Both are this run's own; taken off so the lead's lists stay as the
       // seed left them. Deleting, not ending: an ended campaign writes its

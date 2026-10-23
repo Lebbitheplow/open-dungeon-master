@@ -151,6 +151,14 @@ workshop's cast, places, maps and fights after the chapter's own, marked
 - **Kept by default.** Rows an earlier import brought from the same source
   are kept as the campaign has them, edits included. `Bring second copies`
   numbers them instead. The preview counts both.
+- **World entries.** An entry brought in again takes each value nobody
+  changed here, and keeps each value the campaign changed. Where the source
+  changed the same value too, the campaign's version stays, and the entry's
+  page says so and shows the import's version, with "Use the import's
+  version" and "Keep mine". Using it keeps the campaign's version, which
+  "Restore mine" puts back. A later import that agrees with the campaign
+  clears the notice. Only the DM sees it. A WorldForge file brought in
+  again works the same way (`src/lib/worldforge/import-kept.ts`).
 - **Boards.** A second import of the same board does not repeat its lore,
   fights, notes or quests.
 - **Shops.** A shop an earlier import brought keeps its played shelf, its

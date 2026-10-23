@@ -29,6 +29,7 @@ import {
   valueWords,
   type ImportSlice,
 } from "@/lib/worldforge/import-merge";
+import { keptAfter } from "@/lib/worldforge/import-kept";
 import { mergeImportedLinks } from "@/lib/db/world-link-merge";
 import { recordMediaFile } from "@/lib/media-access";
 import { textKey } from "@/lib/language/text-logic";
@@ -293,7 +294,9 @@ export function applyWorldImport(campaignId: string, account: UploadAccount, par
           const prior = origins[key]?.from === from ? origins[key] : undefined;
           const merged = mergeValues(prior, recordValues(byRef.get(ref)!), theirs);
           take = merged.take;
-          origins[key] = { from, at: merged.at };
+          // What both sides changed is kept as this campaign has it, with
+          // the file's version beside it for the author (import-kept.ts).
+          origins[key] = { from, at: merged.at, ...keptAfter(prior, merged, theirs) };
           merged.pending.forEach((item) => pending.push({ origin: key, ...item }));
           for (const words of new Set(merged.clashes.map((key) => valueWords(key, fieldName(doc))))) conflicts.push(`${record.name}: kept your ${words} over the file's.`);
         } else {
@@ -531,9 +534,12 @@ export function copyWorldDoc(
       continue;
     }
     const prior = origins[key]?.from === from ? origins[key] : undefined;
-    const merged = mergeValues(prior, overlayValues(own), overlayValues(entry));
+    const theirs = overlayValues(entry);
+    const merged = mergeValues(prior, overlayValues(own), theirs);
     target.entries[ref] = { ...applyOverlay(own, merged.take), wfId: own.wfId || entry.wfId };
-    origins[key] = { from, at: merged.at };
+    // What both sides changed is kept as this campaign has it, with the
+    // import's version beside it for the author (import-kept.ts).
+    origins[key] = { from, at: merged.at, ...keptAfter(prior, merged, theirs) };
     merged.pending.forEach((item) => pending.push({ origin: key, ...item }));
     for (const words of new Set(merged.clashes.map((key) => valueWords(key, fieldName(target))))) conflicts.push(`${names.get(ref) ?? "An entry"}: kept your ${words} over the import's.`);
   }

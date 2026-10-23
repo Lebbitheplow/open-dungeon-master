@@ -2270,6 +2270,8 @@
     "lib/worldforge/format.ts#str-eq": [["key",2,"data URL format, shelves, visibility and stub status"]],
     "lib/worldforge/format.ts#str-list": [["key",1,"data URL format, shelves, visibility and stub status"]],
     "lib/worldforge/format.ts#toLowerCase": [["key",1,"WorldForge ids and keys, data URL format, story ids"],["table-language",2,"meaning reader: shelf and lore category read from English words in the names an author gives WorldForge types"]],
+    "lib/worldforge/import-kept.ts#str-case": [["key",5,"the value keys an import compares, which are ids"]],
+    "lib/worldforge/import-kept.ts#str-eq": [["key",3,"the value keys an import compares, which are ids"]],
     "lib/worldforge/import-merge.ts#str-key": [["key",1,"import slices and field labels"]],
     "lib/worldforge/import-merge.ts#str-list": [["key",2,"import slices, and the fields a campaign keeps as its own"]],
     "lib/worldforge/outline.ts#str-key": [["key",1,"fields of the outline reply format ODM's prompt asks for"]],

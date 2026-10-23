@@ -213,7 +213,15 @@ export type Pin = { id: string; mapId: string; x: number; y: number; name: strin
 // Where an imported row or entry came from ("<source>|<slice>|<id there>")
 // and how each of its values read: "<source reading>.<local reading>" as of
 // the import that last settled it (src/lib/worldforge/import-merge.ts).
-export type Origin = { from: string; at: Record<string, string> };
+//
+// `kept`, on an entry's origin only: each value a reimport found changed on
+// both sides and left as this campaign has it, with the import's version
+// beside it, until the author chooses (src/lib/worldforge/import-kept.ts).
+// `taken` once the author took the import's version, with `mine`, the
+// version it replaced, so it can be restored. The DM's alone: the document
+// is read only by the world routes, which answer story authority.
+export type KeptValue = { theirs: unknown; mine?: unknown; taken?: true };
+export type Origin = { from: string; at: Record<string, string>; kept?: Record<string, KeptValue> };
 
 export type WorldDoc = {
   version: 1;
@@ -573,9 +581,26 @@ export function readOrigins(value: unknown): Record<string, Origin> {
     for (const [name, reading] of Object.entries(rec(raw.at)).slice(0, 80)) {
       if (typeof reading === "string" && reading.length <= 40 && name.length <= 100) at[name] = reading;
     }
-    origins[key] = { from, at };
+    const kept = readKept(raw.kept);
+    origins[key] = kept ? { from, at, kept } : { from, at };
   }
   return origins;
+}
+
+// A kept value is JSON a reimport wrote: an article, a list, a year. One
+// that would not fit an article's own cap, with room for its quoting, is
+// dropped rather than cut, so what the author takes is the import's whole.
+const KEPT_MAX = 40;
+const KEPT_CHARS = LIMITS.article + 2_000;
+const fits = (value: unknown) => value === undefined || (JSON.stringify(value) ?? "").length <= KEPT_CHARS;
+function readKept(value: unknown): Record<string, KeptValue> | undefined {
+  const kept: Record<string, KeptValue> = {};
+  for (const [name, item] of Object.entries(rec(value)).slice(0, KEPT_MAX)) {
+    const raw = rec(item);
+    if (name.length > 100 || !("theirs" in raw) || !fits(raw.theirs) || !fits(raw.mine)) continue;
+    kept[name] = raw.taken === true ? { theirs: raw.theirs, mine: raw.mine, taken: true } : { theirs: raw.theirs };
+  }
+  return Object.keys(kept).length ? kept : undefined;
 }
 
 export function readDoc(value: unknown): WorldDoc {
