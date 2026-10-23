@@ -13,7 +13,12 @@ export default {
     const { page, root, ids } = t;
     const found = [];
     await t.open(`/characters/${ids.library}/edit`);
-    const name = page.locator(`${root}input[aria-label="Name"]`).locator("visible=true").first();
+    // The edit opens on its summary (backlog F3); the name row goes to the
+    // first step, where the name and the level are.
+    const nameRow = page.locator(`${root}section[data-active] [data-summary-edit="identity"]`).locator("visible=true");
+    await eventually(() => nameRow.count(), { timeoutMs: 30_000, label: "the summary's name row" });
+    await t.tap(nameRow.first());
+    const name = page.locator(`${root}section[data-active] input[aria-label="Name"]`).locator("visible=true").first();
     await name.waitFor({ state: "visible", timeout: 30_000 });
 
     const panel = page.locator(`${root}[data-build-math]`).first();
