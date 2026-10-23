@@ -1035,3 +1035,10 @@ html[data-theme="light"] .roll-tier-5 { color: #6d28d9; text-shadow: none; }
     outline-offset: 2px;
   }
 }
+
+/* The build math table (F10) stands beside the steps on a desktop: the page
+   that holds the builder widens for it, whichever page that is. The panel
+   itself folds under the steps wherever the builder stays narrow. */
+@media (min-width: 64rem) {
+  main:has([data-build-math]) { max-width: 76rem; }
+}

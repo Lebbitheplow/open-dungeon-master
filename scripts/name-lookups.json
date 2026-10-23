@@ -247,6 +247,7 @@
     "app/characters/builder/AbilityEditor.tsx#partial": [["key",1,"UI copy"]],
     "app/characters/builder/AbilityExplainers.tsx#fallback": [["identity",1,"builder picks, kit lines, spells, tools and skills by whole name or id; ids, steps and defaults"]],
     "app/characters/builder/AsiFeatEditor.tsx#bypass": [["key",3,"a picked catalog entry's name (English rows)"]],
+    "app/characters/builder/BuildMathPanel.tsx#keyed": [["key",1,"the build math table's own row keys (a row id and its number), read to tell a moved number from the first table; no record is looked up by a name"]],
     "app/characters/builder/CatalogBrowser.tsx#bypass": [["key",3,"a catalog row's selection by its name"],["search",1,"the catalog's filter box"]],
     "app/characters/builder/CatalogBrowser.tsx#keyed": [["key",5,"ids, refs, slugs, tool names, field names, env names, event kinds, UI keys, caches, door and map keys; a sheet's conditionMeta by the condition key it was written under; the usage route's gear map by the sheet's own stored item names (src/: every site read)"]],
     "app/characters/builder/CatalogBrowser.tsx#partial": [["search",2,"the catalog's filter box"],["key",2,"a catalog row's selection by its name"],["identity",1,"builder picks, kit lines, spells, tools and skills by whole name or id; ids, steps and defaults"]],

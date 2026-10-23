@@ -36,7 +36,7 @@ import {
 } from "@/lib/srd/starting-kit";
 import { suggestWeapons } from "@/lib/srd/weapons";
 import { abilityGains } from "./abilityGains";
-import { builderCasting, builderSpellAdvice } from "./casting";
+import { builderCasting, builderSpellAdvice, builderSpellSlots } from "./casting";
 import { grantedSkillSources } from "./reconcile";
 import { authoredFeatDesc } from "@/lib/srd/feat-effects";
 import { applyFeatGrants, featGrantSpec, type FeatGrantSpec } from "@/lib/srd/feat-grants";
@@ -387,6 +387,10 @@ export function useBuilderDerived({
     });
   }, [shownAbilities, klass, subclass, effectiveLevel, race, state.feats, activeAsiChoices, rules?.hpMethod, hpOverride, storedHp]);
 
+  // The slots the save stores (casting.ts), so the preview and the build
+  // math table show them rather than an empty book.
+  const spellSlots = useMemo(() => builderSpellSlots(klass, subclass, effectiveLevel), [klass, subclass, effectiveLevel]);
+
   const preview = useMemo(() => {
     if (!shownAbilities || !race || !klass || !background || !hp) {
       return null;
@@ -410,13 +414,13 @@ export function useBuilderDerived({
       ],
       proficiencies: { ...trained, saves },
       spellcasting: castingAbility
-        ? { ability: castingAbility, slots: {}, prepared: [], known: [], cantrips: [] }
+        ? { ability: castingAbility, slots: spellSlots, prepared: [], known: [], cantrips: [] }
         : null,
     });
     // Hit points are the server's to derive; `hp` is the same arithmetic,
     // shown, and the explainer reads it too.
     return { proficiencies: trained, derived, maxHp: hp.maxHp, hpMethod: hp.method, hpRange: hp.range, hpKept: hp.kept };
-  }, [shownAbilities, halfFeats, race, klass, subclass, background, training, effectiveLevel, hp, state.feats, activeAsiChoices]);
+  }, [shownAbilities, halfFeats, race, klass, subclass, background, training, effectiveLevel, hp, state.feats, activeAsiChoices, spellSlots]);
 
   // The class's starting equipment rides along automatically (removable
   // chips): the book's list with the either-or choices the player made on
@@ -794,6 +798,7 @@ export function useBuilderDerived({
     training,
     preview,
     hp,
+    spellSlots,
     equipmentSuggestions,
     classKit,
     kitChoices,

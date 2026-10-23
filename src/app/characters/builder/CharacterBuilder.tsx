@@ -41,6 +41,7 @@ import {
 } from "./submit";
 import { clearBuilderDraft, readBuilderDraft, writeBuilderDraft, type BuilderDraft } from "./builderDraft";
 import { builderActions, useBuilderDerived } from "./useBuilderDerived";
+import { BuildMathPanel } from "./BuildMathPanel";
 import { useArchetypeOptions, useBuilderOptions, useWorldPack, type OptionListKind } from "./useBuilderOptions";
 import { TableScopeNote } from "./TableScopeNote";
 import { listWords, unofferedPicks } from "./unoffered";
@@ -755,7 +756,11 @@ function CharacterBuilderForm({
         />
       ) : (
       <FeatJudgeContext.Provider value={featJudge}>
+      {/* The build math table (F10): beside the steps where the builder is wide, under them where it is not. */}
+      <div className="@container flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col gap-3 @4xl:flex-row @4xl:gap-5">
       <Wizard
+        className="min-w-0 flex-1"
         step={step}
         onStepChange={setStep}
         title={state.name.trim() || "New character"}
@@ -792,6 +797,9 @@ function CharacterBuilderForm({
           )
         }
       />
+      <BuildMathPanel derived={derived} scores={state.scores} klass={klass} atTable={Boolean(table.rules)} />
+      </div>
+      </div>
       </FeatJudgeContext.Provider>
       )}
       {cropping ? (
