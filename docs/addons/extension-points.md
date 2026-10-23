@@ -416,7 +416,7 @@ table hides its own over a board view.
   tokens: [{
     id, kind: "pc" | "enemy" | "npc" | "prop", name, x, y, size, mine, down, hidden, elevation, health, conditions, stamp,
     creature,       // a monster's { type: "undead", slug: "ghoul", cr: 1 }, or null
-    character,      // a character's { race: "elf", class: "wizard" }, or null
+    character,      // a character's { race: "elf", class: "wizard", gender?: "Female" | "Male" | "Nonbinary" | "" }, or null
     auras,          // [{ radiusFeet, tone: "ward" | "harm" | "bless" | "neutral" }]
   }],
   lights: [{ x, y, radius }],
@@ -447,7 +447,13 @@ Older addons may ignore these additions; missing audio preferences should mean
 silence. These fields grant no session, file or gameplay authority.
 
 `creature` and `character` are for a view that draws figures by kind: a
-skeleton model for `undead`, a sprite by `slug`, a robe for a `wizard`. A
+skeleton model for `undead`, a sprite by `slug`, a robe for a `wizard`.
+`character.gender` is optional: `Female`, `Male`, `Nonbinary`, or `""` when
+unspecified. Older hosts omit it. It comes from the character sheet already
+available to this viewer; ordinary encounter monsters have no gender field.
+Use a default model when it is missing or unspecified; do not infer it from a
+name or portrait. No hidden figures or additional character-sheet fields are
+included. A
 zone's `look` says how the flat board draws it (`wall` a band, `cloud` a soft
 fill, `ground`, `light`, `dark`, `ward` a tint with an edge) and `hot` is a
 wall of fire's burning side.
