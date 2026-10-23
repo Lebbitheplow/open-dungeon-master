@@ -198,6 +198,10 @@ function EditCharacterInner({ characterId }: { characterId: string }) {
         ) : null}
       </header>
       <CharacterBuilder
+        // The builder takes its level once, as it mounts: a move between the
+        // edit and its level-up (?levelUp=1) is the same page, so it starts
+        // afresh at the level asked for.
+        key={nextLevel ?? "stored"}
         initial={character.sheet}
         initialLevel={character.level}
         startLevel={nextLevel ?? undefined}
