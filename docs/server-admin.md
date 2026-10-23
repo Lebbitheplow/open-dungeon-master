@@ -46,7 +46,9 @@ Log in as an admin and open `/admin` (linked from the account menu):
    `DISCORD_CLIENT_SECRET` in `.env.server`).
 4. Behind a reverse proxy: set the **Public URL** in the admin panel's Server section
    (or `APP_PUBLIC_URL` in `.env.server`) to the address players use, e.g.
-   `https://your.domain`.
+   `https://your.domain`. A saved Public URL that is a private address this machine
+   no longer holds (one a desktop app left behind, or one from a copied data folder)
+   is skipped, and `APP_PUBLIC_URL` or the proxy's forwarded host is used instead.
 
 The "Sign in with Discord" button appears automatically once both are set. Existing
 users can link Discord to their account from Settings.
