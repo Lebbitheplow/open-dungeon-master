@@ -132,6 +132,16 @@ await test("a compacted tool keeps its name, kinds, enums and what is required; 
   assert.deepEqual(profiles.readMoreToolsCall("not json"), { group: null, tool: null });
 });
 
+await test("a coins field names the coin codes in its first sentence, so the compact cut keeps them", async () => {
+  const { mutationTools } = await import("../src/lib/dm/mutations.ts");
+  const { partyTools } = await import("../src/lib/dm/party-tools.ts");
+  const tools = [mutationTools.find((tool) => tool.function.name === "modify_gold"), partyTools.find((tool) => tool.function.name === "party_stash")];
+  for (const tool of tools) {
+    const coins = profiles.compactTool(tool).function.parameters.properties.coins.description;
+    for (const code of ["pp", "gp", "ep", "sp", "cp"]) assert.match(coins, new RegExp(`\\b${code}\\b`), `${tool.function.name}.coins keeps ${code}: ${coins}`);
+  }
+});
+
 await test("the full rules are every line, word for word; a compact table's carry only what it needs", () => {
   const empty = { inEncounter: false, groups: new Set(), caster: false, features: false, classFeatures: false, featSpells: false, dying: false, arc: false, recall: false, map: false, legendary: false };
   assert.equal(rules.dmSystemText(false), rules.DM_SYSTEM);

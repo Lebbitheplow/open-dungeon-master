@@ -57,7 +57,7 @@ export const partyTools: ToolDef[] = [
           characterId: { type: "string", description: "Whose hands it comes from or goes to: exact characterId from GAME STATE." },
           name: { type: "string", description: "Item name, for stow and take." },
           qty: { type: "integer", minimum: 1, maximum: 999 },
-          coins: { type: "string", description: "Money in denominations ('3 gp 4 sp')." },
+          coins: { type: "string", description: "Coins by code pp, gp, ep, sp, cp, like '3 gp 4 sp'." },
           amount: { type: "integer", minimum: 0, description: "Money in whole gold, if coins is not used." },
           reason: { type: "string", description: "Short in-fiction cause." },
         },

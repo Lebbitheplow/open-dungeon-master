@@ -255,7 +255,7 @@ export const mutationTools: ToolDef[] = [
   },
   tool("modify_gold", "Add or remove money (negative delta = spend/lose). Floors at 0.", {
     delta: { type: "integer", minimum: -100000, maximum: 100000 },
-    coins: { type: "string", description: "For anything under a gold piece, or a price quoted in another coin: the amount in the coins' codes pp, gp, ep, sp and cp ('340 sp', '2 pp 5 sp'), whatever the table's language. Overrides delta's size; delta's sign still says gain or spend (-1 to spend it, 1 to gain it)." },
+    coins: { type: "string", description: "Coins by code pp, gp, ep, sp, cp, like '3 gp 4 sp'. For anything under a gold piece, or a price quoted in another coin, whatever the table's language ('340 sp', '2 pp 5 sp'). Overrides delta's size; delta's sign still says gain or spend (-1 to spend it, 1 to gain it)." },
     additional: { type: "boolean", description: "Only when a player just accepted this same amount and this is truly another, separate sum from a different source." },
   }, ["delta"]),
   tool("grant_item", "Give a character an item (loot, purchase, gift), only one the fiction actually put in their hands.", {
