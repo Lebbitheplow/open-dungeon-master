@@ -9,9 +9,23 @@ export function selectedCharacter(sheets: CharacterSheet[], userId: string, sele
   return own.find((sheet) => sheet.id === selectedId) ?? own[0] ?? null;
 }
 
+// The AI companions this player commands in fights (sheet.commandedBy,
+// src/lib/dm/companion-command.ts): theirs to act as on the companion's own
+// turn and only then. The DM plays them out of fights.
+export function commandedCharacters(sheets: CharacterSheet[], userId: string): CharacterSheet[] {
+  return userId ? sheets.filter((sheet) => sheet.isCompanion && !sheet.summon && sheet.commandedBy === userId) : [];
+}
+
 // Viewing another sheet does not hand that character the initiative turn.
+// The turn's character is one of the player's own, or a companion they
+// command.
 export function initiativeCharacter(sheets: CharacterSheet[], userId: string, characterId?: string | null): CharacterSheet | null {
-  return ownedCharacters(sheets, userId).find((sheet) => sheet.id === characterId) ?? null;
+  if (!characterId) return null;
+  return (
+    ownedCharacters(sheets, userId).find((sheet) => sheet.id === characterId) ??
+    commandedCharacters(sheets, userId).find((sheet) => sheet.id === characterId) ??
+    null
+  );
 }
 
 export function resolveActionCharacter({ sheets, userId, selectedId, characterId, initiativeId, reaction = false, multiCharacter = "off" }: {
@@ -27,6 +41,12 @@ export function resolveActionCharacter({ sheets, userId, selectedId, characterId
   const expected = initiativeCharacter(sheets, userId, initiativeId);
   const sheet = characterId ? initiativeCharacter(sheets, userId, characterId) : (!reaction && expected) || selected;
   if (!sheet) return { error: "That is not one of your characters.", status: 404 };
+  // A companion takes orders on its own turn in a fight, never between turns.
+  if (sheet.isCompanion) {
+    return !reaction && initiativeId === sheet.id
+      ? { sheet }
+      : { error: `${sheet.name} follows your orders on their own turn in a fight; the DM plays them otherwise.`, status: 409 };
+  }
   if (multiCharacter !== "all_active" && sheet.id !== selected?.id) {
     return { error: "Select that character before acting as them.", status: 409 };
   }

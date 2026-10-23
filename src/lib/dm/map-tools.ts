@@ -29,6 +29,7 @@ import { coverBetween, hasLineOfSight } from "@/lib/battlemap/los";
 import { footprintLookup, occupiedTiles } from "@/lib/battlemap/view";
 import { footprintForSize } from "@/lib/battlemap/footprint";
 import { openSquaresBeside } from "@/lib/dm/companion-approach";
+import { aiPlaysSheet } from "@/lib/dm/companion-command";
 import { nearestSquares, tilesApart } from "@/lib/dm/board-reach";
 
 import {
@@ -470,12 +471,13 @@ export function handleMoveToken(
   if (resolved.kind === "pc" && !args.forced) {
     // An AI companion walks on its own turn as a player walks from the
     // board: its speed, standing from prone, fear, opportunity attacks. So
-    // does a character whose player just typed the move on their own turn.
+    // does a character whose player just typed the move on their own turn,
+    // and a companion a player commands, once they have given the order.
     const walker = resolveSheetRef(args.tokenName, sheets, sheetsById);
     const fresh = walker ? (getSheetById(walker.id) ?? walker) : null;
     const current = encounter.orderReady ? encounter.order[encounter.turnIndex] : undefined;
     const declared = fresh && turn.actor === "ai" && declaredThisTurn(campaign.id, fresh.id);
-    if (fresh && (fresh.isCompanion || declared) && current?.kind === "pc" && current.characterId === fresh.id) {
+    if (fresh && (aiPlaysSheet(campaign, fresh) || declared) && current?.kind === "pc" && current.characterId === fresh.id) {
       return walkCharacter(campaign, encounter, map, fresh, resolved.token, { x: args.x, y: args.y }, { drag: args.drag });
     }
     // The move a character readied releases off their turn, by whoever runs
@@ -484,9 +486,11 @@ export function handleMoveToken(
       return walkCharacter(campaign, encounter, map, fresh, resolved.token, { x: args.x, y: args.y }, { drag: args.drag });
     }
     return {
-      error: fresh?.isCompanion
+      error: fresh?.isCompanion && aiPlaysSheet(campaign, fresh)
         ? `${resolved.token.name} walks on their own turn only; pass forced:true when something pushes, drags, or carries them.`
-        : `${resolved.token.name} is a player character; players move their own tokens, and move_token walks one only on their own turn, for the move their player just declared. Pass forced:true only when something pushes, drags, or carries them.`,
+        : fresh?.isCompanion
+          ? `${resolved.token.name} follows their player's orders in fights; move_token walks them on their own turn only, for the move that player just declared. Pass forced:true only when something pushes, drags, or carries them.`
+          : `${resolved.token.name} is a player character; players move their own tokens, and move_token walks one only on their own turn, for the move their player just declared. Pass forced:true only when something pushes, drags, or carries them.`,
       retry: true,
     };
   }

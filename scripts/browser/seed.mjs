@@ -258,6 +258,27 @@ messages.insertCampaignMessage({
   content: "The ford is quiet. Across the water a lantern swings on the ferryman's hut, and the rope bridge creaks in the wind.",
 });
 
+// A table one person plays with an AI storyteller and a party companion who
+// takes their orders in fights (src/lib/dm/companion-command.ts): the "In
+// fights" picker on the companion's Party card.
+const COMMAND_TITLE = "Command Table";
+const commandTable = campaigns.createCampaign(world.owner.id, {
+  title: COMMAND_TITLE,
+  description: "A long road, one traveller and a friend who came along.",
+  theme: "high-fantasy",
+  maxPlayers: 6,
+  startingLevel: 3,
+  difficulty: "normal",
+  gameSettings: { ttsEnabled: false },
+});
+campaigns.setCampaignStatus(commandTable.id, "active");
+sheets.createSheet(commandTable.id, world.owner.id, 3, heroInput({ name: "Kell Brand", class: "fighter", level: 3 }));
+const { createCompanionUser } = await import("../../src/lib/db/users.ts");
+const pipBot = createCompanionUser("Pip Thistle");
+const pip = sheets.createSheet(commandTable.id, pipBot.id, 3, heroInput({ name: "Pip Thistle", class: "rogue", level: 3 }));
+sheets.markSheetAsCompanion(pip.id, "party", "Quick, cheerful, and never far from a joke.");
+sheets.setCompanionCommander(pip.id, world.owner.id);
+
 // The seeded turn below, so lore-trace can tell its trace from one a later
 // scenario's turn on the quiet table left.
 let quietLoreTurnId = "";
@@ -663,9 +684,12 @@ const ids = {
   wardrobe,
   directed,
   levelTableId: levelTable.id,
+  commandTableId: commandTable.id,
+  pip: pip.id,
   // Every campaign a scenario opens, by id, for the app's home tiles.
   titles: {
     [levelTable.id]: "Level Table",
+    [commandTable.id]: COMMAND_TITLE,
     [world.campaignId]: TITLE,
     [lobby.id]: LOBBY_TITLE,
     [quiet.id]: QUIET_TITLE,
