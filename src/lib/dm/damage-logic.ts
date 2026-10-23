@@ -35,31 +35,55 @@ function damageTypeOf(raw: string | undefined): string {
 
 // Whether a stat block line covers this type. Lines read "fire; cold" or
 // "bludgeoning, piercing, and slashing from nonmagical attacks": the type
-// has to appear as a whole word, and a clause about nonmagical attacks does
-// not cover a magical one. Only the three weapon types are ever conditional
-// on that, so "fire, slashing from nonmagical attacks" still covers fire.
+// has to appear as a whole word, and a clause about nonmagical (or Tome of
+// Beasts' "nonmagic") attacks does not cover a magical one. Only the three
+// weapon types are ever conditional on that, so "fire, slashing from
+// nonmagical attacks" still covers fire.
 // A clause "from nonmagical attacks that aren't silvered" (a werewolf) is
 // also passed by a silvered weapon, and "that aren't adamantine" (a golem)
 // by an adamantine one (SRD 5.1, Silvered Weapons).
-function lineCovers(line: string, type: string, magical: boolean, material: WeaponMaterial = {}): boolean {
+// The other way round, a clause can hold only for a blow that is magical,
+// silvered or from a spell: a rakshasa's "piercing from magic weapons wielded
+// by good creatures", "piercing damage from magical attacks", "radiant;
+// silvered weapons", an archmage's "damage from spells" (which covers every
+// type).
+function lineCovers(line: string, type: string, magical: boolean, material: WeaponMaterial = {}, blow: BlowSource = {}): boolean {
   return line
     .toLowerCase()
     .split(";")
     .some((clause) => {
-      if (!wholeWord(clause, type)) {
+      if (/\bdamage from spells\b/.test(clause)) {
+        return blow.spell === true;
+      }
+      if (!type || !wholeWord(clause, type)) {
         return false;
       }
-      const conditional = clause.includes("nonmagical") && PHYSICAL_TYPES.includes(type);
-      const passed =
-        magical ||
-        (material.silvered === true && clause.includes("silver")) ||
-        (material.adamantine === true && clause.includes("adamantine"));
-      return !(conditional && passed);
+      if (!PHYSICAL_TYPES.includes(type)) {
+        return true;
+      }
+      if (/\bnon-?magic(?:al)?\b/.test(clause)) {
+        const passed =
+          magical ||
+          (material.silvered === true && clause.includes("silver")) ||
+          (material.adamantine === true && clause.includes("adamantine"));
+        return !passed;
+      }
+      if (/\bmagic(?:al)? (?:weapons?|attacks?)\b/.test(clause)) {
+        return magical && (!/wielded by good\b/.test(clause) || blow.goodWielder === true);
+      }
+      if (/\bsilvered weapons?\b/.test(clause) && !/\b(?:not|aren't|non-?)\s*(?:made with\s+)?silver/.test(clause)) {
+        return material.silvered === true;
+      }
+      return true;
     });
 }
 
 // What a weapon is made of, for the resistances that name it.
 export type WeaponMaterial = { silvered?: boolean; adamantine?: boolean };
+
+// Where a blow comes from, for the clauses that name it: a spell, or a
+// weapon in the hands of a good creature.
+export type BlowSource = { spell?: boolean; goodWielder?: boolean };
 
 // A wielded item's material, by what it is (src/lib/srd/item-tags.ts).
 export function weaponMaterial(item: TaggedItem | undefined): WeaponMaterial {
@@ -85,21 +109,27 @@ export function damageAdjust(
     magical?: boolean;
     // Resistance to every type, whatever the lines say (petrified).
     resistAll?: boolean;
-  } & WeaponMaterial,
+  } & WeaponMaterial & BlowSource,
 ): { amount: number; note: string | null } {
   const wanted = damageTypeOf(type);
   const magical = options?.magical === true;
   const material: WeaponMaterial = { silvered: options?.silvered, adamantine: options?.adamantine };
+  const blow: BlowSource = { spell: options?.spell, goodWielder: options?.goodWielder };
+  // Untyped damage meets only what covers every type (petrified, a spell's).
   if (!wanted) {
-    return options?.resistAll
-      ? { amount: Math.floor(amount / 2), note: "resistant to all damage: halved" }
-      : { amount, note: null };
+    if (options?.resistAll) {
+      return { amount: Math.floor(amount / 2), note: "resistant to all damage: halved" };
+    }
+    if (lineCovers(resist, "", magical, material, blow)) {
+      return { amount: Math.floor(amount / 2), note: "resistant to damage from spells: halved" };
+    }
+    return { amount, note: null };
   }
-  if (lineCovers(immune, wanted, magical, material)) {
+  if (lineCovers(immune, wanted, magical, material, blow)) {
     return { amount: 0, note: `immune to ${wanted} damage: no damage` };
   }
-  const resisted = options?.resistAll === true || lineCovers(resist, wanted, magical, material);
-  const vulnerableTo = lineCovers(vulnerable, wanted, magical, material);
+  const resisted = options?.resistAll === true || lineCovers(resist, wanted, magical, material, blow);
+  const vulnerableTo = lineCovers(vulnerable, wanted, magical, material, blow);
   if (resisted && vulnerableTo) {
     return {
       amount: Math.floor(amount / 2) * 2,

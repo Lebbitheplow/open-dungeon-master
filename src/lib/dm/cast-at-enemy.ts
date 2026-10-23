@@ -394,6 +394,7 @@ export function handleCastAtEnemy(
     const save = rollEnemySave(campaign.id, enemy, ability, dc, {
       magical: true,
       resist,
+      against: conditions,
       ...spellSaveOptions(mech, enemy),
       record: { turn, detail: `${enemy.displayName}: ${ability.toUpperCase()} save against ${spellName}` },
     });

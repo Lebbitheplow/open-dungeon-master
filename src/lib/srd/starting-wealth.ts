@@ -12,7 +12,7 @@
 // Nothing magical and nothing without a listed price can be bought at
 // creation: such things are found or granted in play.
 import { gearPriceCopper } from "@/lib/srd/adventuring-gear";
-import { packCostCopper } from "@/lib/srd/currency";
+import { formatPrice, packCostCopper } from "@/lib/srd/currency";
 import { magicItemNamed } from "@/lib/srd/magic-items";
 import { textKey } from "@/lib/language/text-logic";
 import { magicItemBonus } from "@/lib/srd/item-row";
@@ -163,10 +163,6 @@ export type GearVerdict = {
   spentCopper: number;
 };
 
-const gp = (copper: number) => {
-  const gold = copper / 100;
-  return `${Number.isInteger(gold) ? gold : gold.toFixed(2)} gp`;
-};
 
 // Holds a new character's pack to what its coin could buy. `freeKit` is the
 // gear that costs nothing (the class's and the background's, under
@@ -216,7 +212,7 @@ export function judgeStartingGear(input: {
   }
   if (!problems.length && spentCopper > input.coinCopper) {
     problems.push(
-      `That gear costs ${gp(spentCopper)} beyond the starting kit and the character has ${gp(input.coinCopper)} to spend; remove ${gp(spentCopper - input.coinCopper)} of it.`,
+      `That gear costs ${formatPrice(spentCopper)} beyond the starting kit and the character has ${formatPrice(input.coinCopper)} to spend; remove ${formatPrice(spentCopper - input.coinCopper)} of it.`,
     );
   }
   return { problems, spentCopper };

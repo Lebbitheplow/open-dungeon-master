@@ -79,12 +79,13 @@ export function surpriseAttackDice(stats: Traits): string | null {
 // The names the engine resolves itself, by trait name at the start of a
 // line. Anything else on the block is the DM's to apply by hand.
 const ENGINE_READS = [
-  /^magic resistance\b/i, /^pack tactics\b/i, /^nimble escape\b/i, /^sunlight sensitivity\b/i,
-  /^undead fortitude\b/i, /^regeneration\b/i, /^magic weapons\b/i, /^legendary resistance\b/i,
-  /^spellcasting\b/i, /^innate spellcasting\b/i, /^keen (?:sight|hearing|smell|senses)/i,
+  /^magic resistance\b/i, /^pack tactics\b/i, /^nimble escape\b/i, /^sunlight (?:sensitivity|weakness|hypersensitivity)\b/i,
+  /^undead fortitude\b/i, /^(?:[a-z'-]+ )?regeneration\b/i, /^magic weapons?\b/i, /^legendary resistance\b/i,
+  /^spellcasting\b/i, /^innate spellcasting\b/i, /^keen (?:sight|hearing|smell|senses|scent)/i,
   /^(?:acid|cold|fire|force|lightning|necrotic|poison|psychic|radiant|thunder) absorption\b/i,
   /^immutable form\b/i, /^limited magic immunity\b/i, /^martial advantage\b/i, /^surprise attack\b/i,
   /^shapechanger\b/i, /^reaction:\s*parry\b/i, /^legendary action/i, /^lair action/i,
+  /^turn(?:ing)? (?:resistance|defiance|immunity|vulnerability)\b/i, /^turning:/i,
   /^(?:the \w+ can take \d+ legendary actions)/i, /^multiattack\b/i,
 ];
 

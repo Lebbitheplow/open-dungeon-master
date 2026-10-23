@@ -50,7 +50,7 @@ const ALL = [
   "request_roll", "request_player_input", "move_party", "update_location", "record_event", "search_lore", "send_whisper",
   "group_check", "check_notice", "set_npc", "npc_reaction", "social_check", "heal", "use_resource", "use_item", "use_spell_slot",
   "cast_buff", "grant_item", "modify_gold", "purchase", "set_condition", "clear_condition", "take_rest", "start_encounter",
-  "travel", "pass_time", "roll_treasure", "open_shop", "buy_item", "sell_item", "haggle", "mount_up", "dismount", "downtime",
+  "travel", "pass_time", "roll_treasure", "open_shop", "haggle", "mount_up", "dismount", "downtime",
   "apply_hazard", "learn_spell", "update_sheet", "some_new_tool",
 ];
 
@@ -89,7 +89,10 @@ await test("a compact call offers the core for the moment, and more_tools names 
 
 await test("the table's state and the players' words open groups without being asked", () => {
   const offered = (signals) => profiles.compactToolNames(ALL, { inEncounter: false, ...signals }, []);
-  assert.ok(offered({ shopOpen: true }).has("buy_item"), "a shop at hand");
+  assert.ok(offered({ shopOpen: true }).has("haggle"), "a shop at hand");
+  // Buying and selling is purchase, in the exploring core whether or not a
+  // shop is open (issue #471).
+  assert.ok(offered({}).has("purchase"));
   assert.ok(offered({ mounts: true }).has("mount_up"), "a horse at hand");
   assert.ok(offered({ caster: true }).has("cast_buff"), "a caster at the table");
   assert.ok(offered({ englishPlayerText: "I want to buy a longsword and sell these pelts." }).has("haggle"));
@@ -342,7 +345,8 @@ await test("the players' words open the group the move needs on the first call",
   requests.length = 0;
   await startDmTurn(campaign.id);
   const first = requests.find((body) => Array.isArray(body.tools));
-  assert.ok(first.tools.some((tool) => tool.function.name === "buy_item"), "the shop group rides from the start");
+  assert.ok(first.tools.some((tool) => tool.function.name === "haggle"), "the shop group rides from the start");
+  assert.ok(first.tools.some((tool) => tool.function.name === "purchase"), "and the trade itself is in the exploring core");
   const turn = getDmTurn(getLatestDmTurnId(campaign.id));
   assert.deepEqual(turn.contextTrace.profile.intent, ["shop"]);
 });

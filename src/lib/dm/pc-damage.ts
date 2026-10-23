@@ -137,10 +137,17 @@ export function applyPcDamage(
   // Immunities from features (Purity of Body: poison) take all of it.
   // An ally's aura adds its own (Aura of Warding, Shielding Storm): authored-saves.ts.
   // A summoned creature keeps its stat block's (summon-rules.ts).
-  const resisted = [pcResistances(sheet, { magical: input.magical === true, spell: input.spell === true, except: input.exceptFeatures }), ...authoredAuraResistances(campaign.id, sheet, { spell: input.spell === true }), summonResistances(sheet), immersedResistance(campaign.id, sheet.id)].filter(Boolean).join(", ");
+  // A character in another creature's form keeps that block's too (a fire
+  // elemental is immune to fire: beast-forms.ts wildShapeRecord), each its
+  // own clause so a "from nonmagical attacks" binds only its own types.
+  const shape = sheet.wildShape;
+  const resisted = [
+    [pcResistances(sheet, { magical: input.magical === true, spell: input.spell === true, except: input.exceptFeatures }), ...authoredAuraResistances(campaign.id, sheet, { spell: input.spell === true }), summonResistances(sheet), immersedResistance(campaign.id, sheet.id)].filter(Boolean).join(", "),
+    shape?.resist ?? "",
+  ].filter(Boolean).join("; ");
   // Inside Silence, thunder does nothing (zone-rules.ts).
-  const immune = `${summonImmunities(sheet)}${pcImmunities(sheet)}${silencedImmunity(campaign.id, sheet.id)}`;
-  const vulnerable = summonVulnerabilities(sheet);
+  const immune = `${summonImmunities(sheet)}${pcImmunities(sheet)}${silencedImmunity(campaign.id, sheet.id)}${shape?.immune ? `; ${shape.immune}` : ""}`;
+  const vulnerable = [summonVulnerabilities(sheet), shape?.vulnerable ?? ""].filter(Boolean).join("; ");
   // A blow of several types: each part meets resistance, immunity and
   // vulnerability on its own, then the hit lands once.
   const met = input.parts?.length

@@ -7,6 +7,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { ADVENTURE_BEGINS_NOTE, LEAD_NOTE_PREFIX, OPENING_SCENE_CUE, type CampaignMember } from "@/lib/campaign-types";
 import { heldRollUserIds } from "@/lib/dice/held-rolls";
 import { computeSheetDerived, findClass, findSkill, formatModifier, sizeForRace, speedFor, SRD_SKILLS } from "@/lib/srd";
+import { attackSummary } from "@/lib/srd/creature-attacks";
 import { encumbranceFor } from "@/lib/srd/encumbrance";
 import { wearingIsExplicit } from "@/lib/srd/armor";
 import { classFeatureDescription, findCustomClass } from "@/lib/classes";
@@ -37,6 +38,7 @@ import { renderWorldArcsForPrompt } from "@/lib/dm/world-arc-logic";
 import { renderFactsForPrompt, type FactLike } from "@/lib/dm/fact-logic";
 import { MOMENT_INSTRUCTION, splitAtMoment, THIS_MOMENT_HEADING, THIS_TURN_HEADING } from "@/lib/prompt-boundary";
 import { companionMode } from "@/lib/dm/companion-tools";
+import { commanderOf } from "@/lib/dm/companion-command";
 import { breakDown, describeInstant, isDark, normalizeClock } from "@/lib/dm/calendar";
 import { describeWeather } from "@/lib/srd/weather";
 import { describeParty, normalizeParty } from "@/lib/dm/party-logic";
@@ -83,7 +85,7 @@ import { waypointProperty } from "@/lib/dm/waypoint-logic";
 import { languageDirective } from "@/lib/dm/table-language-logic";
 import { OFFER_NOTE_PREFIX, renderOffersBlock, type OfferLine } from "@/lib/dm/proposal-logic";
 import { ENEMY_TURNS_CUE } from "@/lib/dm/enemies-due";
-import { CREATURE_TYPES } from "@/lib/bestiary/statblock";
+import { CREATURE_TYPES } from "@/lib/bestiary/creature-type";
 import { CHECK_KEY_PROPERTIES, NONE, SAVE_AGAINST } from "@/lib/dm/roll-about";
 import { stopWordsFor } from "@/lib/language/language";
 import { textKey } from "@/lib/language/text-logic";
@@ -184,7 +186,7 @@ export type DmEncounterState = {
     ac: number;
     status: string;
     conditions: string[];
-    attacks: Array<{ name: string; toHit: number; damage: string; type: string }>;
+    attacks: Array<{ name: string; toHit: number; damage: string; type: string; bonusAction?: boolean }>;
     traits: string[];
     resist: string;
     immune: string;
@@ -380,9 +382,10 @@ export function companionRules(campaign: Campaign, mode: "full" | "guests"): str
 ${setting}
 - A friendly NPC who joins one fight (a guard who takes your side, a stranger who draws a blade with the party) is a 'guest': add_companion them so the server tracks their HP, initiative, and attacks, and let them go afterwards. When a fight ends, every guest is dismissed AUTOMATICALLY and a table note says so; narrate their goodbye, and add_companion them again if the story keeps them around.
 - An ally who will fight or be targeted MUST go through add_companion BEFORE you narrate them joining, exactly like add_enemies for the other side; an ally who never went through add_companion has no sheet and cannot fight, be attacked, or be healed. Ordinary background NPCs (shopkeepers, quest-givers) are NOT companions; only use add_companion for someone who will act alongside the party.
-- A character's OWN bound creature (a familiar from Find Familiar, a Beast Master's companion, a Drakewarden's drake, a story pet) is a pet on their sheet, not a companion: a caster's Find Familiar is cast with cast_buff (the form in variant; the server pays the casting and binds the pet), and the others come with summon_pet (the server validates the granting feature and refuses characters who lack it), attack with pet_attack on the owner's own turn (it costs what the bond says: a Beast Master's companion the owner's action, a drake the bonus action, a Pact of the Chain familiar one attack of the Attack action; ordinary familiars cannot attack, and a downed owner commands nothing), route enemy damage at it with damage_pet (its own hit points, never the owner's; a familiar at 0 HP vanishes), and end the bond with dismiss_pet. Pets listed in GAME STATE are real; a pet not listed there does not exist.
+- A character's OWN bound creature (a familiar from Find Familiar, a Beast Master's companion, a Drakewarden's drake, a story pet) is a pet on their sheet, not a companion: a caster's Find Familiar is cast with cast_buff (the form in variant; the server pays the casting and binds the pet), and the others come with summon_pet (the server validates the granting feature and refuses characters who lack it), attack with pet_attack on the owner's own turn (it costs what the bond says: a Beast Master's companion the owner's action, a drake the bonus action, a Pact of the Chain familiar one attack of the Attack action; ordinary familiars cannot attack, and a downed owner commands nothing), route enemy damage at it with apply_damage and its petName (its own hit points, never the owner's; a familiar at 0 HP vanishes), and end the bond with dismiss_pet. Pets listed in GAME STATE are real; a pet not listed there does not exist.
 - You play companions fully. Speak their dialogue inline in your narration with a voice matching their personality brief. They are supporting cast: they advise, banter, and fight, but never make the party's decisions, never outshine the players, and never speak for a player character.
 - In combat, on a companion's initiative turn, act for them: move_token with no forced if they need to reposition (it spends their speed and draws opportunity attacks like any walk), then pc_attack or cast_at_enemy with their characterId (or another tool that fits), then end_turn for them if no attack fits. If you do nothing on their turn, the server makes a basic attack for them automatically.
+- A companion GAME STATE says a player commands in fights is the exception: on its turn that player gives its orders, and you resolve them from the player's message exactly as you resolve a player character's, never moving or attacking for it on your own. Its voice and choices out of fights stay yours.
 - All sheet rules apply to companions: their tools, spells, slots, and resources work exactly like a player character's, through the same tool calls.
 - Never call request_player_input for a companion and never send_whisper to one; no human is behind them.
 - When a companion dies, narrate it, record_event the death, and then dismiss_companion once the story moves on.`;
@@ -451,6 +454,17 @@ function spellListLabel(lists: {
     bookOnly.length ? `in spellbook, not prepared (NOT castable): ${bookOnly.join(", ")}` : "",
   ].filter(Boolean);
   return parts.join("; ") || "none";
+}
+
+// What GAME STATE adds of a companion a player commands in fights
+// (src/lib/dm/companion-command.ts): whose orders its turns follow.
+function companionCommandNote(campaign: Campaign, sheet: CharacterSheet, usernames: Map<string, string>): string {
+  const commander = commanderOf(campaign, sheet);
+  if (!commander) {
+    return "";
+  }
+  const name = usernames.get(commander) ?? "their player";
+  return `; in fights ${name} commands them: on their turn wait for ${name}'s orders and resolve them as a player's`;
 }
 
 export function describeSheet(
@@ -607,13 +621,19 @@ export function describeSheet(
           .map(([ability, score]) => `${ability.toUpperCase()} ${score}`)
           .join("/")}.`
       : "";
-    const attacks = shape.attacks?.length
-      ? ` Natural attacks (use pc_attack): ${shape.attacks
-          .map((attack) => `${attack.name} +${attack.toHit} (${attack.damage} ${attack.type})`)
-          .join(", ")}.`
+    // Every attack with its reach, its rider dice and what its hit carries;
+    // a form whose block has none (a frog) says so.
+    const attacks = shape.attacks
+      ? shape.attacks.length
+        ? ` Natural attacks (use pc_attack): ${shape.attacks.map(attackSummary).join(", ")}${(shape.attacksPerTurn ?? 1) > 1 ? ` (${shape.attacksPerTurn} per Attack action)` : ""}.`
+        : " The form has no attack, and their own weapons merged into it."
       : "";
+    // A form that is no beast says what it is, and what it shrugs off
+    // (True Polymorph's fire elemental); the server applies both.
+    const kind = shape.type && shape.type !== "beast" ? ` (${shape.type})` : "";
+    const defenses = [shape.resist ? `resists ${shape.resist}` : "", shape.immune ? `immune to ${shape.immune}` : "", shape.vulnerable ? `vulnerable to ${shape.vulnerable}` : ""].filter(Boolean).join("; ");
     lines.push(
-      `  ${label} a ${shape.form}: ${shape.beastHp}/${shape.beastMaxHp} beast HP, AC ${shape.beastAc}${shape.speed !== undefined ? `, speed ${shape.speed} ft` : ""}.${stats}${attacks} Damage hits the beast pool first and their own hit points above are untouched until the form breaks. They fight with the beast's natural weapons and cannot cast spells${shape.kind === "polymorph" ? " or speak" : ""}.`,
+      `  ${label} a ${shape.form}${kind}: ${shape.beastHp}/${shape.beastMaxHp} beast HP, AC ${shape.beastAc}${shape.speed !== undefined ? `, speed ${shape.speed} ft` : ""}.${stats}${defenses ? ` The form ${defenses}.` : ""}${attacks} Damage hits the beast pool first and their own hit points above are untouched until the form breaks. They fight with the beast's natural weapons and cannot cast spells${shape.kind === "polymorph" ? " or speak" : ""}.`,
     );
   }
   if ((sheet.exhaustion ?? 0) > 0) {
@@ -942,7 +962,7 @@ export function buildGameStateBlock(state: DmGameState): string {
       );
     }
     lines.push(
-      "Enemies (DM-SECRET numbers, never revealed to players; HP and AC are server-authoritative and change only through tool results: pc_attack and the spell tools for the party's blows, enemy_attack for theirs, damage_enemy only for harm that is neither an attack nor a spell):",
+      "Enemies (DM-SECRET numbers, never revealed to players; HP and AC are server-authoritative and change only through tool results: pc_attack and the spell tools for the party's blows, enemy_attack for theirs, apply_damage only for harm that is neither an attack nor a spell):",
     );
     for (const enemy of encounter.enemies) {
       if (enemy.status !== "alive") {
@@ -956,13 +976,14 @@ export function buildGameStateBlock(state: DmGameState): string {
       const parts = state.ruleContext?.brief
         ? [
             `- ${enemy.name} [enemyId=${enemy.enemyId}] ${healthState(current, max)}`,
-            ...(enemy.attacks.length ? [`attacks: ${enemy.attacks.map((attack) => attack.name).join(", ")}`] : []),
+            ...(enemy.attacks.length ? [`attacks: ${enemy.attacks.map((attack) => `${attack.name}${attack.bonusAction ? " (bonus action)" : ""}`).join(", ")}`] : []),
             ...enemy.traits,
           ]
         : [
             `- ${enemy.name} [enemyId=${enemy.enemyId}] HP ${enemy.hp} AC ${enemy.ac}`,
             ...enemy.attacks.map(
-              (attack) => `${attack.name} +${attack.toHit} (${attack.damage} ${attack.type})`,
+              // A bonus action's attack is made beside the action's, by name.
+              (attack) => `${attack.name} +${attack.toHit} (${attack.damage} ${attack.type})${attack.bonusAction ? " [bonus action]" : ""}`,
             ),
             ...enemy.traits,
           ];
@@ -1147,7 +1168,7 @@ export function buildGameStateBlock(state: DmGameState): string {
         const base = describeSheet(
           sheet,
           sheet.isCompanion
-            ? `nobody: AI companion under your control (${sheet.companionKind === "guest" ? "scene-scoped guest ally" : "party member"}; personality: ${sheet.personality || "plain and steady"})`
+            ? `nobody: AI companion under your control (${sheet.companionKind === "guest" ? "scene-scoped guest ally" : "party member"}; personality: ${sheet.personality || "plain and steady"})${companionCommandNote(state.campaign, sheet, usernamesById)}`
             : usernamesById.get(sheet.userId) ?? "unknown",
           !sheet.isCompanion && physicalDiceUsers.has(sheet.userId),
           // Optional all the way down: test doubles build partial campaigns.
@@ -1310,7 +1331,7 @@ export const requestRollTool = {
         targetEnemyId: {
           type: "string",
           description:
-            "damage only, in combat, from someone with no sheet (an NPC ally who was never recruited): the enemy this damage strikes, exact enemyId from GAME STATE. The server applies the rolled total to that enemy automatically and reports its new state; never follow up with damage_enemy. A party character's damage goes through pc_attack or the spell tools, and the server refuses it here.",
+            "damage only, in combat, from someone with no sheet (an NPC ally who was never recruited): the enemy this damage strikes, exact enemyId from GAME STATE. The server applies the rolled total to that enemy automatically and reports its new state; never follow up with apply_damage. A party character's damage goes through pc_attack or the spell tools, and the server refuses it here.",
         },
         reason: {
           type: "string",

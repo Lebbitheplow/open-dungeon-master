@@ -23,6 +23,7 @@ import { CharacterNotesDialog } from "@/app/campaigns/[campaignId]/CharacterNote
 import { CharacterSheetDialog } from "@/app/campaigns/[campaignId]/CharacterSheetDialog";
 import { TradeDialog } from "@/app/campaigns/[campaignId]/TradeDialog";
 import { CompanionBuilderDialog } from "@/app/campaigns/[campaignId]/CompanionBuilderDialog";
+import { CompanionCommand } from "@/app/campaigns/[campaignId]/CompanionCommand";
 import { DiceSourcesButton } from "@/app/campaigns/[campaignId]/DiceSourcesDialog";
 import { DiceLookButton } from "@/components/DiceLookEditor";
 import { LeadEditDialog } from "@/app/campaigns/[campaignId]/LeadEditDialog";
@@ -862,6 +863,17 @@ export function PartyPanel({
               >
                 <Sparkles className="size-3.5" /> Level up to {levelUpLevel}
               </KitButton>
+            ) : null}
+
+            {campaignId && sheet.isCompanion && !sheet.summon ? (
+              <CompanionCommand
+                campaignId={campaignId}
+                sheet={sheet}
+                sheets={sheets}
+                members={members}
+                meUserId={meUserId}
+                canChoose={steersStory}
+              />
             ) : null}
 
             {campaignId && steersStory && !sheet.isCompanion && sheet.libraryRole === "companion" ? (

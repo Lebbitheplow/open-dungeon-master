@@ -23,6 +23,7 @@ import {
   type FullPatchSheetInput,
 } from "@/lib/schemas/sheet";
 import { textKey } from "@/lib/language/text-logic";
+import { repairedPets } from "@/lib/srd/familiar-forms";
 import { rowName } from "@/lib/srd/item-row";
 
 type FeatChoices = NonNullable<CreateSheetInput["featChoices"]>;
@@ -78,6 +79,7 @@ type SheetRow = {
   backstory: string | null;
   is_companion: number | null;
   companion_kind: string | null;
+  commanded_by?: string | null;
   personality: string | null;
   hand_layout_json?: string | null;
   feat_choices_json?: string | null;
@@ -151,7 +153,9 @@ function mapSheet(row: SheetRow): CharacterSheet {
     conditionMeta: parseJson<CharacterSheet["conditionMeta"]>(row.condition_meta_json, {}),
     resources: parseJson<CharacterSheet["resources"]>(row.resources_json, {}),
     wildShape: parseJson<CharacterSheet["wildShape"]>(row.wild_shape_json, null),
-    pets: parseJson<CharacterSheet["pets"]>(row.pets_json, []),
+    // A familiar stored with an attack the creature table has since put
+    // right takes the table's (src/lib/srd/familiar-forms.ts).
+    pets: repairedPets(parseJson<CharacterSheet["pets"]>(row.pets_json, [])),
     summon: parseJson<CharacterSheet["summon"]>(row.summon_json ?? null, null),
     exhaustion: row.exhaustion ?? 0,
     deathSaves: parseJson<CharacterSheet["deathSaves"]>(row.death_saves_json, null),
@@ -165,6 +169,7 @@ function mapSheet(row: SheetRow): CharacterSheet {
       row.companion_kind === "party" || row.companion_kind === "guest"
         ? row.companion_kind
         : null,
+    commandedBy: row.commanded_by ?? null,
     personality: row.personality ?? "",
     ...handLayoutOf(row.hand_layout_json),
     ...featChoicesOf(row.feat_choices_json),
@@ -208,7 +213,7 @@ const SHEET_COLUMNS = `
   classes_json, hit_dice_pools_json,
   proficiencies_json, equipment_json, gold, copper, feats_json, features_json,
   spellcasting_json, conditions_json, condition_meta_json, resources_json, wild_shape_json, pets_json, summon_json, exhaustion, death_saves_json, concentrating_on, concentration_rounds,
-  portrait_json, notes, backstory, is_companion, companion_kind, personality, hand_layout_json, feat_choices_json, created_at, updated_at
+  portrait_json, notes, backstory, is_companion, companion_kind, commanded_by, personality, hand_layout_json, feat_choices_json, created_at, updated_at
 `;
 
 // Flags a freshly created sheet as an AI companion. Kept out of the main
@@ -223,6 +228,16 @@ export function markSheetAsCompanion(
       `UPDATE character_sheets SET is_companion = 1, companion_kind = ?, personality = ? WHERE id = ?`,
     )
     .run(kind, personality, sheetId);
+  return getSheetById(sheetId);
+}
+
+// Who takes an AI companion's turns in a fight: a player's id, or null for
+// the DM (src/lib/dm/companion-command.ts). Kept out of patchSheet like the
+// companion mark: no sheet edit can hand a companion to somebody.
+export function setCompanionCommander(sheetId: string, userId: string | null): CharacterSheet | null {
+  getDatabase()
+    .prepare(`UPDATE character_sheets SET commanded_by = ?, updated_at = ? WHERE id = ? AND is_companion = 1`)
+    .run(userId, nowIso(), sheetId);
   return getSheetById(sheetId);
 }
 

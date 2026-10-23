@@ -11,7 +11,9 @@ import {
   getSheetById,
   getSheetForUser,
   listSheetsForUser,
+  setCompanionCommander,
 } from "@/lib/db/sheets";
+import { defaultCommander } from "@/lib/dm/companion-command";
 import { createCompanionUser } from "@/lib/db/users";
 import { lastingCompanionProblem } from "@/lib/dm/companion-tools";
 import { publishEphemeral, publishPersisted, publishWithSeq } from "@/lib/events";
@@ -84,7 +86,10 @@ export async function POST(
   // row changes hands.
   const wasRunning = getSheetForUser(campaignId, formerOwnerId)?.id === sheet.id;
   const bot = createCompanionUser(sheet.name);
-  const adopted = adoptSheetAsCompanion(sheet.id, bot.id, sheet.personality || sheet.backstory || "");
+  // Like every party companion, it follows the one player of a table the AI
+  // runs in fights (src/lib/dm/companion-command.ts).
+  const handed = adoptSheetAsCompanion(sheet.id, bot.id, sheet.personality || sheet.backstory || "");
+  const adopted = handed ? setCompanionCommander(handed.id, defaultCommander(campaign, "party")) ?? handed : null;
   if (!adopted) {
     return Response.json({ error: "Could not hand the character to the DM." }, { status: 500 });
   }

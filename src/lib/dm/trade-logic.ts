@@ -1,6 +1,6 @@
 import { addRowMath, handedOverRow, removeItemMath } from "@/lib/dm/mutation-math";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import { addCopper, formatCopper, purseCopper } from "@/lib/srd/currency";
+import { addCopper, formatCopper, formatPrice, purseCopper } from "@/lib/srd/currency";
 
 // Player-to-player trade (docs/vtt-parity-implementation-plan.md 11.2),
 // the pure half: what an offer is, what it reads as, and the two patches
@@ -55,7 +55,7 @@ export function normalizeTradeOffer(raw: unknown): TradeOffer | null {
 function describeSide(lines: TradeLine[], cp: number): string {
   const parts = lines.map((line) => (line.qty > 1 ? `${line.name} x${line.qty}` : line.name));
   if (cp > 0) {
-    parts.push(formatCopper(cp));
+    parts.push(formatPrice(cp));
   }
   return parts.length ? parts.join(", ") : "nothing";
 }

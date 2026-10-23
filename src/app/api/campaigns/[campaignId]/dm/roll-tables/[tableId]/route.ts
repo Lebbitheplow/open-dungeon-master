@@ -3,6 +3,7 @@ import { isErrorResponse, requireDm } from "@/lib/campaign-api";
 import {
   deleteRollTable,
   getRollTable,
+  tableNameTaken,
   updateRollTable,
 } from "@/lib/db/roll-tables";
 import {
@@ -40,6 +41,14 @@ export async function PATCH(
   const parsed = patchSchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {
     return Response.json({ error: "Invalid edit." }, { status: 400 });
+  }
+  if (parsed.data.name && tableNameTaken(campaignId, parsed.data.name, tableId)) {
+    return Response.json(
+      {
+        error: `Another table here is already called ${parsed.data.name}. Give this one a name of its own, so a row that says "@table: ${parsed.data.name}" knows which to roll.`,
+      },
+      { status: 409 },
+    );
   }
   const entries =
     parsed.data.text === undefined

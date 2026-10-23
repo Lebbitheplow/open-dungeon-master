@@ -18,6 +18,7 @@ import type { MonsterDraft } from "@/lib/bestiary/monster-draft";
 const SECTIONS: Array<{ key: keyof Omit<PrintedBlock, "legendaryDesc" | "source">; title: string }> = [
   { key: "traits", title: "Traits" },
   { key: "actions", title: "Actions" },
+  { key: "bonus", title: "Bonus actions" },
   { key: "reactions", title: "Reactions" },
   { key: "legendary", title: "Legendary actions" },
 ];
@@ -48,8 +49,10 @@ export function PrintedBlockView({ draft }: { draft: MonsterDraft }) {
   if (!printed) {
     return null;
   }
-  const total = SECTIONS.reduce((sum, section) => sum + printed[section.key].length, 0);
-  const unrun = SECTIONS.reduce((sum, section) => sum + printed[section.key].filter((ability) => ability.engine === "text").length, 0);
+  // Bonus actions are absent on blocks that print none.
+  const entries = (key: (typeof SECTIONS)[number]["key"]) => printed[key] ?? [];
+  const total = SECTIONS.reduce((sum, section) => sum + entries(section.key).length, 0);
+  const unrun = SECTIONS.reduce((sum, section) => sum + entries(section.key).filter((ability) => ability.engine === "text").length, 0);
   return (
     <div className="panel rounded-lg text-xs" data-testid="printed-block">
       <button
@@ -79,12 +82,12 @@ export function PrintedBlockView({ draft }: { draft: MonsterDraft }) {
       ) : null}
       {open ? (
         <div className="reveal space-y-3 border-t border-stone-800 px-3 py-2">
-          {SECTIONS.filter((section) => printed[section.key].length).map((section) => (
+          {SECTIONS.filter((section) => entries(section.key).length).map((section) => (
             <section key={section.key} className="space-y-1.5">
               <h4 className="text-[11px] uppercase tracking-wider text-stone-500">{section.title}</h4>
               {section.key === "legendary" && printed.legendaryDesc ? <p className="text-stone-400">{printed.legendaryDesc}</p> : null}
               <ul className="stagger space-y-2">
-                {printed[section.key].map((ability) => (
+                {entries(section.key).map((ability) => (
                   <AbilityRow key={`${section.key}:${ability.name}`} ability={ability} />
                 ))}
               </ul>

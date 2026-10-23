@@ -44,7 +44,7 @@ function test(name, fn) {
   passed += 1;
 }
 
-const NAMES = ["request_roll", "move_party", "grant_item", "open_shop", "buy_item", "sell_item", "haggle", "travel"];
+const NAMES = ["request_roll", "move_party", "grant_item", "purchase", "open_shop", "haggle", "travel"];
 const offersShop = (playerText) => profiles.compactToolNames(NAMES, { inEncounter: false, englishPlayerText: playerText }, []).has("open_shop");
 
 test("the words for a place that sells offer the shop tools", () => {
@@ -91,7 +91,9 @@ test("the rules open the shop before its wares and keep prices out of prose", ()
   assert.match(rules.DM_SYSTEM, rule, "the full rules carry it");
   const context = { inEncounter: false, groups: new Set(), caster: false, features: false, classFeatures: false, featSpells: false, dying: false, arc: false, recall: false, map: false, legendary: false };
   assert.match(rules.dmSystemText(false, context), rule, "a compact call carries it, shop group open or not");
-  assert.match(rules.DM_SYSTEM, /buy_item, sell_item and haggle trade at a shop in GAME STATE/, "trading at a listed shop still goes through its tools");
+  // One purchase call trades at a listed shop, from its shelf at its prices
+  // (issue #471).
+  assert.match(rules.DM_SYSTEM, /every purchase, sale, or trade goes through ONE purchase call \(at a shop in SHOPS HERE the shop trades from its shelf at its own prices/, "trading at a listed shop goes through purchase");
   // The short rules a small model plays on (PR #463) say it too: the model
   // that lists a smith's wares in prose is the small one.
   assert.match(rules.dmSystemText(false, { ...context, brief: true }), /call open_shop before you describe its wares, and never price them in prose/, "the short rules carry it");

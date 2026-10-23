@@ -141,6 +141,6 @@ export const LATE_RESOURCE_DEFS: ResourceDef[] = [
     recharge: "long",
     effect: { kind: "narrative" },
     guidance:
-      "After a hit, the creature vanishes through the lower planes until the end of the warlock's next turn and, unless it is a fiend, takes 10d10 psychic damage when it returns. Resolve the damage with damage_enemy (type psychic); no save is allowed.",
+      "After a hit, the creature vanishes through the lower planes until the end of the warlock's next turn and, unless it is a fiend, takes 10d10 psychic damage when it returns. Resolve the damage with apply_damage on the creature (type psychic); no save is allowed.",
   },
 ];

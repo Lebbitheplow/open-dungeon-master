@@ -48,6 +48,7 @@ import { lightsWithZones, sightTerrainFor, withZoneSteps } from "@/lib/dm/zone-r
 import { viewZones } from "@/lib/dm/zone-view";
 import { standUpTiles } from "@/lib/srd/authored-effects-more";
 import { addSilenceChips, viewerMoves } from "@/lib/battlemap/view-moves";
+import { undoableMove, undoOffer } from "@/lib/battlemap/move-undo";
 import type { AuraTone, PlayerMapView } from "@/lib/battlemap/view-types";
 import { holdsFeature } from "@/lib/srd/feature-names";
 
@@ -484,6 +485,8 @@ export function buildPlayerMapView(
         enemyNumbers: fullVision || options.enemyNumbers === true,
       })
     : [];
+  // The viewer's last walk, while it can still be taken back.
+  const undoMove = !fullVision && sheet && myToken && encounter.kind !== "scene" ? undoOffer(undoableMove(encounter, map.id, sheet.id)) : undefined;
 
   return {
     mapId: map.id,
@@ -508,6 +511,7 @@ export function buildPlayerMapView(
     reachableCost,
     ...(moves ? { moves } : {}),
     budgetLeft,
+    ...(undoMove ? { undoMove } : {}),
     myTokenId: myToken?.id ?? null,
     round: encounter.round,
     currentTurnName: currentEntry?.name ?? "",

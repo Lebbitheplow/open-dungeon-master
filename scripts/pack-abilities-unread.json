@@ -1,0 +1,35 @@
+{
+  "saves": {
+    "tob/young-void-dragon Falling damage in the area increases to 1d10 per 10 feet fallen": "a sentence of Gravitic Breath printed as an entry of its own; read as part of that breath, which lays the restrained"
+  },
+  "breaths": {
+    "tob3/drake-shepherd": "the breaths' names run into their text with no stop (\"Calming Breath Breathes a cloud\"); the DM runs them from the printed block"
+  },
+  "spellcasting": {
+    "menagerie/khalkos-a5e": "the row prints the heading and no spells (\"can innately cast the following spells, requiring no components:\")",
+    "menagerie/revilock-a5e": "the row prints the heading and no spells",
+    "tob/einherjar": "the row prints the heading and no spells",
+    "tob/kalke": "\"Detect Spellcasting\" senses spells; it casts none",
+    "tob-2023/whiteape-tob1-2023": "\"Spellcasting Animosity\" reacts to spells; it casts none"
+  },
+  "spells": {
+    "Blindness": "A5e's spell action \"Blindness (2nd-Level; V)\" names blindness/deafness by its first half",
+    "Burning Gust of Wind": "an A5e variant of gust of wind, its own spell",
+    "Charm": "a Black Flag spell of its own name, which the pack does not carry",
+    "Charm Animal": "a Tome of Beasts spell the pack does not carry",
+    "Destroy Food and Water": "a Tome of Beasts variant printed \"as create food and water, but...\"",
+    "Dominate": "a Black Flag spell of its own name, which the pack does not carry",
+    "Endure Elements": "a Tome of Beasts spell the pack does not carry",
+    "Enlarge": "A5e's spell action \"Enlarge (2nd-Level; V, S, Concentration)\" names enlarge/reduce by its first half",
+    "Ethereal Jaunt": "a Tome of Beasts spell the pack does not carry",
+    "Flare": "a Tome of Beasts spell the pack does not carry",
+    "Greater Hold": "a Black Flag spell of its own name, which the pack does not carry",
+    "Hold": "a Black Flag spell of its own name, which the pack does not carry",
+    "Hold Animal": "a Tome of Beasts spell the pack does not carry",
+    "Locate Person": "an A5e spell the pack does not carry",
+    "Produce Spark": "a Tome of Beasts variant printed \"as the cantrip produce flame, but...\"",
+    "Restoration": "a Black Flag spell of its own name, which the pack does not carry",
+    "Spawn of Arbeyach": "the row runs its next trait (\"Scent Communication. Spawn of Arbeyach can...\") into its spell list",
+    "Venomous Fireball": "an A5e variant of fireball, its own spell"
+  }
+}

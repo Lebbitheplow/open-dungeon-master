@@ -88,43 +88,6 @@ export const startEncounterTool: ToolDef = {
   },
 };
 
-export const damageEnemyTool: ToolDef = {
-  type: "function",
-  function: {
-    name: "damage_enemy",
-    description:
-      "Deal damage to an enemy from a hazard or the environment (a falling chandelier, burning oil, a collapsing floor): never from an attack or a spell. For a character's or companion's blow, use pc_attack; for a spell, cast_at_enemy or aoe_damage; an ally who fights is recruited with add_companion and attacks with pc_attack. The enemy dies only when the result says dead: true.",
-    parameters: {
-      type: "object",
-      additionalProperties: false,
-      properties: {
-        enemyId: { type: "string", description: "Exact enemyId from GAME STATE." },
-        amount: { type: "integer", minimum: 1, maximum: 200, description: "A damage total the server rolled this turn; omit it for a fall (fallFeet) or dice." },
-        dice: { type: "string", description: "Dice the server rolls for the damage ('4d10'). Instead of amount." },
-        fallFeet: {
-          type: "integer",
-          minimum: 1,
-          maximum: 1000,
-          description: "A fall, instead of amount: how far the creature falls. The server rolls 1d6 bludgeoning per 10 feet (at most 20d6) and lays it prone.",
-        },
-        type: { type: "string", description: "Damage type (slashing, fire)." },
-        magical: {
-          type: "boolean",
-          description:
-            "True when the hazard is magical, so resistance to nonmagical attacks does not apply.",
-        },
-        source: {
-          type: "string",
-          enum: ["hazard", "environment"],
-          description: "What deals it: 'hazard' (a trap, a falling object) or 'environment' (fire, lava, acid); anything else is refused.",
-        },
-        reason: { type: "string", description: "Short in-fiction cause." },
-      },
-      required: ["enemyId"],
-    },
-  },
-};
-
 export const enemyAttackTool: ToolDef = {
   type: "function",
   function: {

@@ -7,10 +7,20 @@ import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { refusalText } from "@/app/characters/builder/refusal";
 import type { JoinPreview } from "@/lib/characters/join-changes";
+import type { CreateSheetInput } from "@/lib/schemas/sheet";
 
 // A hero about to take a seat: one from the player's library (their own, or
-// a pregen an adventure brought) or a ready-made starter.
-export type JoinHero = { kind: "library" | "pregen"; id: string; name: string };
+// a pregen an adventure brought), a ready-made starter, or one the builder
+// just made for this table ("Help me build"), not stored until it seats.
+export type JoinHero =
+  | { kind: "library" | "pregen"; id: string; name: string }
+  | { kind: "built"; id: string; name: string; sheet: CreateSheetInput };
+
+// What the preview and the join are asked about this hero.
+function previewBody(hero: JoinHero, flow: "join" | "replace") {
+  if (hero.kind === "built") return { sheet: hero.sheet, flow };
+  return hero.kind === "library" ? { libraryCharacterId: hero.id, flow } : { pregenId: hero.id, flow };
+}
 
 type Preview = JoinPreview & { alreadyHere: boolean };
 
@@ -58,9 +68,7 @@ export function JoinConfirmDialog({
     fetch(`/api/campaigns/${campaignId}/sheet/preview`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(
-        hero.kind === "library" ? { libraryCharacterId: hero.id, flow } : { pregenId: hero.id, flow },
-      ),
+      body: JSON.stringify(previewBody(hero, flow)),
     })
       .then(async (response) => {
         const data = await response.json().catch(() => ({}));
@@ -89,11 +97,12 @@ export function JoinConfirmDialog({
     setError("");
     try {
       const response =
-        hero.kind === "library"
+        hero.kind !== "pregen"
           ? await fetch(`/api/campaigns/${campaignId}/sheet`, {
               method: flow === "join" ? "POST" : "PUT",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ libraryCharacterId: hero.id }),
+              // A built hero is stored as it seats, in the library too.
+              body: JSON.stringify(hero.kind === "built" ? hero.sheet : { libraryCharacterId: hero.id }),
             })
           : await fetch(`/api/campaigns/${campaignId}/sheet/pregen`, {
               method: "POST",
@@ -152,7 +161,9 @@ export function JoinConfirmDialog({
                 </ul>
               )}
               {preview.rollsHp ? (
-                <p className="text-xs text-stone-400">This table rolls hit points, so they are rolled again when {name} takes the seat.</p>
+                <p className="text-xs text-stone-400">
+                  This table rolls hit points, so they are rolled {hero?.kind === "built" ? "" : "again "}when {name} takes the seat.
+                </p>
               ) : null}
             </section>
 

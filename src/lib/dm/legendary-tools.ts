@@ -120,15 +120,21 @@ export function refillLegendaryForTurn(encounter: Encounter, enemy: EncounterEne
   // (the condition enemy-damage.ts sets, which ends as this turn starts;
   // `enemy` is read from before that, so it still shows).
   const regeneration = regenerationOf(enemy.stats);
-  if (regeneration && enemy.currentHp > 0) {
+  // A5e's Bloodied Regeneration works only at half its hit points or fewer.
+  const bloodied = !regeneration?.whileBloodied || enemy.currentHp <= Math.floor(enemy.maxHp / 2);
+  if (regeneration && enemy.currentHp > 0 && bloodied) {
     // Chill Touch: a creature it struck cannot regain hit points.
     if (enemy.conditions.includes(REGENERATION_STOPPED) || enemy.conditions.includes("chill touch")) {
       lines.push(`${enemy.displayName} does not regenerate this turn.`);
     } else if (enemy.currentHp < enemyHpCap(enemy)) {
-      // Never past the maximum, which exhaustion 4 halves.
+      // Never past the maximum, which exhaustion 4 halves. What the block
+      // asks that the server cannot see ("isn't in sunlight or running
+      // water") is the DM's to hold it to.
       const healed = Math.min(enemyHpCap(enemy), enemy.currentHp + regeneration.amount);
       patchEnemyHp(enemy.id, healed, "alive");
-      lines.push(`${enemy.displayName} regenerates ${healed - enemy.currentHp} hit points.`);
+      lines.push(
+        `${enemy.displayName} regenerates ${healed - enemy.currentHp} hit points.${regeneration.onlyIf ? ` Its Regeneration works only if ${regeneration.onlyIf}: if it does not, take them back with apply_damage.` : ""}`,
+      );
     }
   }
   const ledger = encounter.legendary.abilities?.[enemy.id];
@@ -227,7 +233,7 @@ export function handleLegendaryAction(campaign: Campaign, rawArguments: string):
   // ("makes one tail attack", "uses its Paralyzing Touch"), the longest name
   // first, so "its tail spike" is the Tail Spike and not the Tail.
   const named = textKey(outcome.action.name);
-  const attack = [...enemy.stats.attacks].sort((a, b) => b.name.length - a.name.length).find((entry) => {
+  const attack = [...enemy.stats.attacks, ...(enemy.stats.legendaryAttacks ?? [])].sort((a, b) => b.name.length - a.name.length).find((entry) => {
     const name = textKey(entry.name.replace(/\([^)]*\)/g, ""));
     return (
       named === name ||
@@ -410,5 +416,7 @@ export function handleLairAction(campaign: Campaign, turn: DmTurn | null, rawArg
 }
 
 function legendaryLairLines(enemies: EncounterEnemy[]): string[] {
-  return enemies.flatMap((enemy) => legendaryProfile(enemy.stats)?.lairActions ?? []);
+  // A book's printed lair options (Tome of Beasts' dragons) are offered in a
+  // fight the DM started in the lair; they never make one a lair fight.
+  return enemies.flatMap((enemy) => [...(legendaryProfile(enemy.stats)?.lairActions ?? []), ...(enemy.stats.lairOptions ?? [])]);
 }

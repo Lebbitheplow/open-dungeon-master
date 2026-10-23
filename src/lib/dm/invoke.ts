@@ -32,6 +32,8 @@ import { MUTATION_CAP_PER_TURN, MUTATION_CAP_REFUSAL, MUTATION_TOOL_NAMES } from
 import { parseRoster } from "@/lib/dm/encounter-template-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { toolError, type ToolResult } from "@/lib/dm/tool-errors";
+import { routeCall } from "@/lib/dm/tool-merge";
+import { mergedCall } from "@/lib/dm/tool-merge-logic";
 
 export type Actor =
   | { kind: "ai"; turnId: string }
@@ -72,8 +74,9 @@ function toList(value: unknown): string[] {
 }
 
 // "enemy:goblin-1 half" / "character:<id> double" / "goblin-2" -> what
-// split_damage expects. A line with no share takes the full total, which is
-// the common case and the one worth typing least for.
+// apply_damage's targets are (split_damage's, which they reach). A line with
+// no share takes the full total, which is the common case and the one worth
+// typing least for.
 function toDamageTargets(
   value: unknown,
 ): Array<{ enemyId?: string; characterId?: string; share: string }> {
@@ -163,7 +166,7 @@ export function normalizeArgs(
       out.enemies = parseRoster(value);
       continue;
     }
-    if (key === "targets" && entry.name === "split_damage") {
+    if (key === "targets" && entry.name === "apply_damage") {
       out.targets = toDamageTargets(value);
       continue;
     }
@@ -234,14 +237,24 @@ export async function invokeEngine(
   actor: Actor,
   call: Adjudication,
 ): Promise<InvokeOutcome> {
-  const entry = adjudication(call.name);
+  // A retired name (issue #471) is the form that took its place, with the
+  // old form's fields mapped: an app whose console was compiled from older
+  // pages, an agent program and a delegated monster still send them.
+  const merged = mergedCall(call.name, call.args ?? {});
+  const entry = adjudication(merged.name);
   if (!entry) {
     return { ok: false, error: `Unknown action "${call.name}".` };
   }
-  const args = normalizeArgs(entry, call.args ?? {});
+  const args = normalizeArgs(entry, merged.args);
   const complaint = checkArgs(entry, args);
   if (complaint) {
     return { ok: false, error: complaint };
+  }
+  // The handler the form's fields name (src/lib/dm/tool-merge.ts): its own
+  // rails and rules below.
+  const engine = routeCall(campaign, entry.name, args);
+  if ("error" in engine) {
+    return { ok: false, ...toolError(engine) };
   }
 
   const turn =
@@ -254,9 +267,9 @@ export async function invokeEngine(
   const counted =
     actor.kind !== "ai"
       ? null
-      : ENCOUNTER_TOOL_NAMES.includes(entry.name)
+      : ENCOUNTER_TOOL_NAMES.includes(engine.name)
         ? ("encounterCount" as const)
-        : (MUTATION_TOOL_NAMES as readonly string[]).includes(entry.name)
+        : (MUTATION_TOOL_NAMES as readonly string[]).includes(engine.name)
           ? ("mutationCount" as const)
           : null;
   if (counted === "encounterCount" && turn.encounterCount >= ENCOUNTER_CAP_PER_TURN) {
@@ -272,7 +285,7 @@ export async function invokeEngine(
   let result: ToolResult;
   const holder = turnHolder(campaign.id);
   try {
-    result = await dispatchAdjudication(entry.name, JSON.stringify(args), {
+    result = await dispatchAdjudication(engine.name, JSON.stringify(engine.args), {
       campaign,
       turn,
       sheets,

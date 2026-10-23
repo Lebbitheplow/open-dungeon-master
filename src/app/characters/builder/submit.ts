@@ -1,7 +1,7 @@
 import { backgroundFeatureFor } from "@/lib/backgrounds";
 import { adaptSheetToLevel } from "@/lib/characters/adapt";
 import type { Ability, AsiChoice, CreateSheetInput, Spellcasting } from "@/lib/schemas/sheet";
-import { SRD_CLASSES, spellSlotsFor } from "@/lib/srd";
+import { SRD_CLASSES } from "@/lib/srd";
 import { expertiseAllowed, expertiseSlotsFor, racialTraitsFor, subclassLevelFor, subclassSpellsFor } from "@/lib/srd/features";
 import { fightingStyleFeatureName } from "@/lib/srd/feature-effects";
 import { featAbilityIncrease } from "@/lib/srd/feat-effects";
@@ -16,7 +16,7 @@ import {
 } from "@/lib/srd/point-buy";
 import { findDraconicAncestry, innateCantripsFor, repeatedGrants, takesDraconicAncestry } from "@/lib/srd/racial-grants";
 import { reconcilePicks } from "./reconcile";
-import { builderCasting } from "./casting";
+import { builderCasting, builderSpellSlots } from "./casting";
 import { unmetFeatMessage, type FeatJudge } from "./featPrereqs";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
 import type { BuilderDerived } from "./useBuilderDerived";
@@ -280,21 +280,26 @@ export function spellsBlocks(
     return [];
   }
   const owed: StepBlock[] = [];
-  const cantripsLeft = (derived.cantripAdvice ?? 0) - derived.chosenCantrips.length;
+  // A pick the bundled list cannot supply is not asked for (spellSupply.ts):
+  // the server holds a caster to at most its count, never to at least it.
+  const supply = derived.spellSupply ?? null;
+  const cantripsLeft = Math.min(derived.cantripAdvice ?? 0, supply?.cantrips ?? Infinity) - derived.chosenCantrips.length;
+  const cantripsOver = derived.chosenCantrips.length - (derived.cantripAdvice ?? 0);
   if (cantripsLeft > 0) {
     owed.push(block("spells", `Pick ${cantripsLeft} more ${cantripsLeft === 1 ? "simple spell" : "simple spells"} you can cast at will (${cantripsLeft === 1 ? "cantrip" : "cantrips"}).`));
   }
-  if (derived.cantripAdvice !== null && cantripsLeft < 0) {
-    owed.push(block("spells", `Remove ${-cantripsLeft} ${cantripsLeft === -1 ? "cantrip" : "cantrips"}: a ${klass.name.toLowerCase()} knows ${derived.cantripAdvice ?? 0} at this level.`));
+  if (derived.cantripAdvice !== null && cantripsOver > 0) {
+    owed.push(block("spells", `Remove ${cantripsOver} ${cantripsOver === 1 ? "cantrip" : "cantrips"}: a ${klass.name.toLowerCase()} knows ${derived.cantripAdvice ?? 0} at this level.`));
   }
   if (derived.spellbookAdvice !== null) {
     // A wizard fills the book first, then prepares from it.
-    const bookLeft = derived.spellbookAdvice - derived.chosenSpells.length;
+    const bookLeft = Math.min(derived.spellbookAdvice, supply?.spells ?? Infinity) - derived.chosenSpells.length;
     if (bookLeft > 0) {
       owed.push(block("spells", `Write ${bookLeft} more ${bookLeft === 1 ? "spell" : "spells"} in your spellbook.`));
     }
-    if (bookLeft < 0) {
-      owed.push(block("spells", `Remove ${-bookLeft} ${bookLeft === -1 ? "spell" : "spells"} from your spellbook: a level ${derived.effectiveLevel} wizard starts with ${derived.spellbookAdvice}.`));
+    const bookOver = derived.chosenSpells.length - derived.spellbookAdvice;
+    if (bookOver > 0) {
+      owed.push(block("spells", `Remove ${bookOver} ${bookOver === 1 ? "spell" : "spells"} from your spellbook: a level ${derived.effectiveLevel} wizard starts with ${derived.spellbookAdvice}.`));
     }
   }
   if (derived.spellAdvice) {
@@ -302,8 +307,9 @@ export function spellsBlocks(
     const target =
       derived.spellbookAdvice !== null
         ? Math.min(derived.spellAdvice.count, derived.chosenSpells.length)
-        : derived.spellAdvice.count;
+        : Math.min(derived.spellAdvice.count, supply?.spells ?? Infinity);
     const spellsLeft = target - derived.chosenPrepared.length;
+    const spellsOver = derived.chosenPrepared.length - derived.spellAdvice.count;
     if (spellsLeft > 0) {
       owed.push(block(
         "spells",
@@ -312,8 +318,8 @@ export function spellsBlocks(
           : `Pick ${spellsLeft} more ${spellsLeft === 1 ? "spell" : "spells"} (${derived.spellAdvice.label}).`,
       ));
     }
-    if (spellsLeft < 0) {
-      owed.push(block("spells", `Remove ${-spellsLeft} ${spellsLeft === -1 ? "spell" : "spells"}: the limit is ${derived.spellAdvice.count} ${derived.spellAdvice.label}.`));
+    if (spellsOver > 0) {
+      owed.push(block("spells", `Remove ${spellsOver} ${spellsOver === 1 ? "spell" : "spells"}: the limit is ${derived.spellAdvice.count} ${derived.spellAdvice.label}.`));
     }
   }
   return owed;
@@ -486,12 +492,7 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
   // How the class casts at this level: an Eldritch Knight or Arcane
   // Trickster with Intelligence and a third caster's slots (./casting.ts).
   const casting = builderCasting(klass, state.subclass, effectiveLevel);
-  const slots = Object.fromEntries(
-    Object.entries(spellSlotsFor(klass.id, effectiveLevel, state.subclass, casting.profile)).map(([slotLevel, max]) => [
-      slotLevel,
-      { max, used: 0 },
-    ]),
-  );
+  const slots = builderSpellSlots(klass, state.subclass, effectiveLevel);
   const isKnownCaster = derived.spellStyle === "known";
   const isWizard = derived.spellStyle === "spellbook";
   // The picks were checked against every change as it was made; checked

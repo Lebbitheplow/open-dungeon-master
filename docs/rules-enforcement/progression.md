@@ -15,7 +15,7 @@ Two engine bugs were found in scaling that is otherwise correct: Brutal Critical
 
 ## Ruleset as implemented
 
-- Levelling is by experience only. There is no milestone setting in `gameSettingsSchema`. XP arrives by `award_xp`, `party_award`, the fight-end award in `enemy-damage.ts`, and a chapter-close award (`chapter-close.ts awardChapterMilestoneXp`, a tenth of the gap between rows, clamped 25 to 1000).
+- Levelling is by experience only. There is no milestone setting in `gameSettingsSchema`. XP arrives by `party_award` (experience alone runs the `award_xp` handler), the fight-end award in `enemy-damage.ts`, and a chapter-close award (`chapter-close.ts awardChapterMilestoneXp`, a tenth of the gap between rows, clamped 25 to 1000).
 - The XP table `XP_THRESHOLDS` (srd/index.ts:540) is the SRD's, row for row.
 - An award never raises a level. It publishes `level_up_available`; the client opens the dialog when `levelForXp(xp) > level` (SessionView.tsx:299). The player takes all earned levels in one dialog.
 - ODM's own ceiling: one award is at most 20000 XP (mutations.ts, MAX_XP_PER_AWARD).

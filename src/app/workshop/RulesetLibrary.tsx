@@ -8,11 +8,9 @@ import { appConfirm } from "@/components/ui/ConfirmDialog";
 import { useCallback, useEffect, useState } from "react";
 import { ListHead, useListHead } from "@/app/workshop/ListHead";
 import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
-import { GameIcon } from "@/components/ui/GameIcon";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { Select } from "@/components/ui/Select";
-import { FieldLabel, GlyphPlate, RowMenu, chip, chipOn, chipRow } from "@/app/workshop/kit";
-import { KIND_GLYPHS } from "@/app/workshop/homebrew/HomebrewIcon";
+import { FieldLabel, GlyphPlate, RowMenu } from "@/app/workshop/kit";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import {
@@ -24,7 +22,6 @@ import {
 
 const readRuleset = (ruleset: Ruleset) => ({ name: ruleset.name });
 
-type HomebrewRow = { id: string; name: string; kind: string };
 
 // The ruleset library, and applying one to a table.
 //
@@ -90,10 +87,8 @@ export function RulesetLibrary({
   const [busy, setBusy] = useState("");
   const [saveName, setSaveName] = useState("");
   const [saving, setSaving] = useState(false);
-  const [note, setNote] = useState("");
-  // The DM's homebrew, so a ruleset can say which of it is canon at a table
-  // that runs it. Read once, the first time a ruleset is opened.
-  const [homebrew, setHomebrew] = useState<HomebrewRow[] | null>(null);
+  const [note, setNote] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
+  const [previewFailed, setPreviewFailed] = useState(false);
 
   const load = useCallback(
     () =>
@@ -112,7 +107,8 @@ export function RulesetLibrary({
   }, [load]);
 
   // Opening a ruleset asks the server what applying it WOULD do, rather than
-  // computing it here from a stale copy of the campaign's settings.
+  // computing it here from a stale copy of the campaign's settings. A
+  // preview that could not be had is said so, never shown as no change.
   async function open(ruleset: Ruleset) {
     if (openId === ruleset.id) {
       setOpenId(null);
@@ -120,63 +116,42 @@ export function RulesetLibrary({
     }
     setOpenId(ruleset.id);
     setChanges([]);
-    const response = await fetch(
-      `/api/rulesets/${ruleset.id}?preview=${encodeURIComponent(campaignId)}`,
-    );
-    if (response.ok) {
+    setPreviewFailed(false);
+    const response = await fetch(`/api/rulesets/${ruleset.id}?preview=${encodeURIComponent(campaignId)}`).catch(() => null);
+    if (response?.ok) {
       const data = await response.json();
       setChanges(data.changes ?? []);
+    } else {
+      setPreviewFailed(true);
     }
   }
 
-  useEffect(() => {
-    if (openId === null || homebrew !== null) {
-      return;
-    }
-    fetch("/api/homebrew")
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data: { entries?: HomebrewRow[] } | null) => setHomebrew(data?.entries ?? []))
-      .catch(() => setHomebrew([]));
-  }, [openId, homebrew]);
-
-  // Ticks a homebrew entry into or out of the ruleset's canon list. Saved
-  // straight away: the list is the ruleset, not a draft of it.
-  async function toggleHomebrew(ruleset: Ruleset, id: string) {
-    const next = ruleset.homebrewIds.includes(id)
-      ? ruleset.homebrewIds.filter((entry) => entry !== id)
-      : [...ruleset.homebrewIds, id];
-    setRulesets((current) =>
-      current.map((entry) => (entry.id === ruleset.id ? { ...entry, homebrewIds: next } : entry)),
-    );
-    const response = await fetch(`/api/rulesets/${ruleset.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ homebrewIds: next }),
-    });
-    if (!response.ok) {
-      await load();
-    }
-  }
+  // The server's words for a refusal, or the connection's.
+  const refused = async (response: Response | null, fallback: string) =>
+    ((await response?.json().catch(() => null)) as { error?: string } | null)?.error ?? fallback;
 
   async function apply(ruleset: Ruleset) {
     setBusy(ruleset.id);
-    setNote("");
+    setNote(null);
     try {
       const response = await fetch(`/api/rulesets/${ruleset.id}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ campaignId, houseRules: mode }),
-      });
-      if (response.ok) {
-        const data = await response.json();
-        setNote(
-          data.changes?.length
-            ? `Applied ${ruleset.name}: ${data.changes.length} change${data.changes.length === 1 ? "" : "s"}.`
-            : `${ruleset.name} was already what this table runs.`,
-        );
-        setOpenId(null);
-        onApplied?.();
+      }).catch(() => null);
+      if (!response?.ok) {
+        setNote({ tone: "error", text: await refused(response, `${ruleset.name} was not applied. Check the connection and try again.`) });
+        return;
       }
+      const data = await response.json();
+      setNote({
+        tone: "ok",
+        text: data.changes?.length
+          ? `Applied ${ruleset.name}: ${data.changes.length} change${data.changes.length === 1 ? "" : "s"}.`
+          : `${ruleset.name} was already what this table runs.`,
+      });
+      setOpenId(null);
+      onApplied?.();
     } finally {
       setBusy("");
     }
@@ -187,17 +162,20 @@ export function RulesetLibrary({
       return;
     }
     setSaving(true);
+    setNote(null);
     try {
       const response = await fetch("/api/rulesets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: saveName.trim(), captureFrom: campaignId }),
-      });
-      if (response.ok) {
-        setSaveName("");
-        setNote("Saved these rules to your library.");
-        await load();
+      }).catch(() => null);
+      if (!response?.ok) {
+        setNote({ tone: "error", text: await refused(response, "These rules were not saved. Check the connection and try again.") });
+        return;
       }
+      setSaveName("");
+      setNote({ tone: "ok", text: "Saved these rules to your library." });
+      await load();
     } finally {
       setSaving(false);
     }
@@ -207,10 +185,13 @@ export function RulesetLibrary({
     if (!await appConfirm(`Delete the "${ruleset.name}" ruleset? Tables already using it keep it.`)) {
       return;
     }
-    const response = await fetch(`/api/rulesets/${ruleset.id}`, { method: "DELETE" });
-    if (response.ok) {
-      setRulesets((current) => current.filter((entry) => entry.id !== ruleset.id));
+    setNote(null);
+    const response = await fetch(`/api/rulesets/${ruleset.id}`, { method: "DELETE" }).catch(() => null);
+    if (!response?.ok) {
+      setNote({ tone: "error", text: await refused(response, `${ruleset.name} was not deleted. Check the connection and try again.`) });
+      return;
     }
+    setRulesets((current) => current.filter((entry) => entry.id !== ruleset.id));
   }
 
   return (
@@ -267,40 +248,25 @@ export function RulesetLibrary({
                   ) : null}
                   <div>
                     <FieldLabel className="mb-1 block">Applying here would</FieldLabel>
-                    <ChangeList changes={changes} />
-                  </div>
-                  <div data-tour="rules-homebrew">
-                    <SectionHead title="Homebrew this ruleset ships" glyph="system-homebrew" level="h4" />
-                    {homebrew === null ? (
-                      <Loader2 className="size-3.5 animate-spin text-stone-500" />
-                    ) : homebrew.length ? (
-                      <ul className={cn("stagger", chipRow)}>
-                        {homebrew.map((entry) => {
-                          const on = ruleset.homebrewIds.includes(entry.id);
-                          return (
-                            <li key={entry.id}>
-                              <button
-                                type="button"
-                                aria-pressed={on}
-                                onClick={() => void toggleHomebrew(ruleset, entry.id)}
-                                className={cn(ui.btnSmall, chip, "normal-case", on && chipOn)}
-                              >
-                                <GameIcon icon={{ kind: "glyph", key: KIND_GLYPHS[entry.kind as keyof typeof KIND_GLYPHS] ?? "system-homebrew" }} size="size-4" />
-                                {entry.name}
-                                <span className="ml-1 text-stone-500">{entry.kind}</span>
-                              </button>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    ) : (
-                      <p className="text-xs text-stone-500">
-                        Nothing homebrewed yet. Entries made in the Homebrew tool appear here.
+                    {previewFailed ? (
+                      <p role="alert" className="text-xs text-amber-300/90">
+                        Could not check what applying it here would change. Close and open it again to retry.
                       </p>
+                    ) : (
+                      <ChangeList changes={changes} />
                     )}
-                    <p className="mt-1 text-[11px] text-stone-500">
-                      Ticked entries are canon wherever this ruleset is applied; prepared monsters
-                      that lean on anything else get flagged.
+                  </div>
+                  {/* Homebrew is not part of a ruleset: an author's whole shelf
+                      already counts at every table they run, whatever it plays
+                      (src/lib/content/scope.ts), so a list of "the Homebrew this
+                      ruleset ships" admitted nothing and installed nothing
+                      (workshop import audit F08). Said here, where the ticks were. */}
+                  <div data-tour="rules-homebrew">
+                    <SectionHead title="Homebrew" glyph="system-homebrew" level="h4" />
+                    <p className="text-xs text-stone-400">
+                      A ruleset carries variant rules and house rules, not Homebrew. Everything on your Homebrew shelf already
+                      counts at every table you run as its owner, DM or assistant DM, whichever ruleset it plays. To give
+                      Homebrew to another DM or server, put it in a Workshop bundle.
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -374,7 +340,11 @@ export function RulesetLibrary({
           Save
         </button>
       </div>
-      {note ? <p className="live-in mt-2 text-xs text-emerald-400">{note}</p> : null}
+      {note ? (
+        <p role={note.tone === "error" ? "alert" : "status"} className={cn("mt-2 text-xs", note.tone === "error" ? "motion-shake text-red-400" : "live-in text-emerald-400")}>
+          {note.text}
+        </p>
+      ) : null}
     </section>
   );
 }

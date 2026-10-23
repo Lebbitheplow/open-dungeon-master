@@ -1,5 +1,5 @@
-// The builder's diamonds jump ahead: a stored build opens with Save changes
-// on its first step, and a diamond ahead whose gates all pass can be tapped,
+// The builder's diamonds jump ahead: a stored build opens on its summary
+// (backlog F3), and back on its first step Save changes is still there, and a diamond ahead whose gates all pass can be tapped,
 // so fixing one pick never means pressing Continue through every step
 // between. The library edit is a native screen in the app too.
 import { check, eventually, sleep } from "../lib.mjs";
@@ -13,7 +13,10 @@ export default {
   async run(t) {
     const { page, root, ids } = t;
     await t.open(`/characters/${ids.library}/edit`);
-    const name = page.locator(`${root}input[aria-label="Name"]`).locator("visible=true").first();
+    const first = page.locator(`${root}button[aria-label^="Back to step 1"]`).locator("visible=true");
+    await eventually(() => first.count(), { timeoutMs: 30_000, label: "the first diamond from the summary" });
+    await t.tap(first.first());
+    const name = page.locator(`${root}section[data-active] input[aria-label="Name"]`).locator("visible=true").first();
     await name.waitFor({ state: "visible", timeout: 30_000 });
 
     // A stored build owes nothing, so Save sits beside Continue on step 1.

@@ -209,7 +209,11 @@ export default {
       // first, as a player would.
       if (condition !== conditions[0]) await t.open("/characters");
       await t.open(`/characters/${ids.library}/edit`);
-      await page.locator(`${root}input[aria-label="Name"]`).locator("visible=true").first().waitFor({ state: "visible", timeout: 30_000 });
+      // An edit opens on the summary (backlog F3); the walk starts at step 1.
+      const first = page.locator(`${root}button[aria-label^="Back to step 1"]`).locator("visible=true");
+      await eventually(() => first.count(), { timeoutMs: 30_000, label: "the first diamond from the summary" });
+      await t.tap(first.first());
+      await page.locator(`${root}section[data-active] input[aria-label="Name"]`).locator("visible=true").first().waitFor({ state: "visible", timeout: 30_000 });
       for (let step = 1; step <= 6; step += 1) {
         const where = `${condition.label}, step ${step}`;
         if (step > 1) {

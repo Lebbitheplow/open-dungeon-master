@@ -1,6 +1,7 @@
 // "Level up" on a library character opens its build one level up: the title
 // says the level it reaches, and Save changes waits while the new level owes
 // a pick (a level 3 fighter reaching 4 owes an ability score improvement).
+// The build opens on its summary (backlog F3), which names the pick owed.
 // The library pages are native screens in the app too.
 import { check, eventually } from "../lib.mjs";
 
@@ -20,7 +21,7 @@ export default {
     // textContent, not innerText: the button is set in capitals by CSS.
     const target = Number(/level up to (\d+)/i.exec((await level.textContent()) ?? "")?.[1]);
     await t.tap(level);
-    await page.locator(`${root}input[aria-label="Name"]`).locator("visible=true").first().waitFor({ state: "visible", timeout: 30_000 });
+    await page.locator(`${root}[data-finish-summary]`).locator("visible=true").first().waitFor({ state: "visible", timeout: 30_000 });
     await eventually(async () => {
       const text = (await page.locator(`${root}h1, ${root}h2`).allInnerTexts()).join(" ");
       return new RegExp(`reaches level ${target}`, "i").test(text);
@@ -31,7 +32,10 @@ export default {
     // Level 4 brings an ability score improvement, so nothing is saved until
     // it is picked.
     if (target === 4) {
-      check((await visible(page, root, /^Save changes$/).count()) === 0, "Save changes waits for the new improvement");
+      const save = visible(page, root, /^Save changes$/);
+      check((await save.count()) > 0 && (await save.first().getAttribute("aria-disabled")) === "true", "Save changes waits for the new improvement");
+      const owed = page.locator(`${root}section[data-active] [data-summary-row="abilities"][data-owed]`).locator("visible=true");
+      check((await owed.count()) > 0, "the summary's Abilities row names the improvement owed");
     }
   },
 };

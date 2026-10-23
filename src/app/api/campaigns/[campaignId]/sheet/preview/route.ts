@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { capsFor, isErrorResponse, requireMember } from "@/lib/campaign-api";
-import { previewLibraryJoin, previewPregenJoin, type JoinPreview } from "@/lib/characters/seat-preview";
+import { previewBuiltJoin, previewLibraryJoin, previewPregenJoin, type JoinPreview } from "@/lib/characters/seat-preview";
 import { companionRoleRefusal, getCharacterForUser } from "@/lib/db/characters";
 import { getSheetForUser, listSheetsForUser } from "@/lib/db/sheets";
+import { createSheetSchema } from "@/lib/schemas/sheet";
 import { pregenById } from "@/lib/starter/pregens";
 
 export const runtime = "nodejs";
@@ -12,11 +13,14 @@ const previewSchema = z
   .object({
     libraryCharacterId: z.string().min(1).max(80).optional(),
     pregenId: z.string().trim().min(1).max(40).optional(),
+    // A character the builder just made for this table ("Help me build" on
+    // the hero chooser), judged as POST or PUT /sheet would judge it.
+    sheet: createSheetSchema.optional(),
     // join = a first seat (POST /sheet); replace = a lobby switch (PUT
     // /sheet), which gives up the current character first.
     flow: z.enum(["join", "replace"]).default("join"),
   })
-  .refine((body) => Boolean(body.libraryCharacterId) !== Boolean(body.pregenId), {
+  .refine((body) => [body.libraryCharacterId, body.pregenId, body.sheet].filter(Boolean).length === 1, {
     message: "Pick one hero.",
   });
 
@@ -41,7 +45,7 @@ export async function POST(
   if (!parsed.success) {
     return Response.json({ error: parsed.error.issues[0]?.message || "Pick a hero." }, { status: 400 });
   }
-  const { libraryCharacterId, pregenId, flow } = parsed.data;
+  const { libraryCharacterId, pregenId, sheet, flow } = parsed.data;
 
   let preview: JoinPreview;
   let alreadyHere = false;
@@ -59,6 +63,8 @@ export async function POST(
     alreadyHere = listSheetsForUser(campaignId, context.user.id).some(
       (sheet) => sheet.libraryCharacterId === character.id && !sheet.isCompanion,
     );
+  } else if (sheet) {
+    preview = previewBuiltJoin(sheet, context.campaign, context.user.id);
   } else {
     const pregen = pregenById(pregenId ?? "");
     if (!pregen) {

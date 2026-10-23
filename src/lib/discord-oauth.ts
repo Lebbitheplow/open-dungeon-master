@@ -1,4 +1,7 @@
+import os from "node:os";
 import { configValue, getGlobalConfig } from "@/lib/app-config";
+import { requestPublicOrigin } from "@/lib/server-address";
+import { serverEnv } from "@/lib/server-env";
 
 export const OAUTH_COOKIE = "odm_oauth";
 
@@ -14,25 +17,18 @@ export function discordCredentials(): { clientId: string; clientSecret: string }
   return { clientId, clientSecret };
 }
 
-// The origin browsers actually reach the app on. Behind a reverse proxy the
-// request URL is the internal address (127.0.0.1:3005), which would make the
-// OAuth redirect_uri mismatch what's registered with Discord. Resolution:
-// admin panel Public URL > APP_PUBLIC_URL env var > X-Forwarded-Proto/Host
-// headers > request origin.
+// The origin browsers actually reach the app on, which Discord's redirect_uri
+// and the agent addresses are built from. The order, and why a stale saved
+// Wi-Fi address is passed over, live in requestPublicOrigin.
 export function publicOrigin(request: Request): string {
-  const configured = configValue(getGlobalConfig().publicUrl, "APP_PUBLIC_URL")
-    .trim()
-    .replace(/\/+$/, "");
-  if (configured) {
-    return configured;
-  }
-  const forwardedHost = request.headers.get("x-forwarded-host")?.split(",")[0]?.trim();
-  if (forwardedHost) {
-    const proto =
-      request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() || "https";
-    return `${proto}://${forwardedHost}`;
-  }
-  return new URL(request.url).origin;
+  return requestPublicOrigin({
+    savedPublicUrl: getGlobalConfig().publicUrl,
+    envPublicUrl: serverEnv("APP_PUBLIC_URL"),
+    interfaces: os.networkInterfaces(),
+    forwardedHost: request.headers.get("x-forwarded-host"),
+    forwardedProto: request.headers.get("x-forwarded-proto"),
+    requestUrl: request.url,
+  });
 }
 
 export function discordRedirectUri(request: Request): string {

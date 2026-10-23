@@ -8,7 +8,7 @@
 
 import { footprintFits, footprintTiles, type Footprint } from "@/lib/battlemap/footprint";
 import { blocksMoveFor, chebyshev, tileAt, tileIndex, type BattleToken, type XY } from "@/lib/battlemap/types";
-import { sizeRank } from "@/lib/bestiary/statblock";
+import { sizeRank } from "@/lib/bestiary/enemy-numbers";
 import type { ConditionMetaMap } from "@/lib/dm/condition-logic";
 
 export type Held = { refId: string; name: string; size?: string };

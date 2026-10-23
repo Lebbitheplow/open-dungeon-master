@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { rollCard } from "@/lib/dm/roll-card";
 import { allocateSeq, campaignSeats, countPartySlots, type Campaign } from "@/lib/db/campaigns";
-import { createSheet, listSheets, markSheetAsCompanion } from "@/lib/db/sheets";
+import { createSheet, listSheets, markSheetAsCompanion, setCompanionCommander } from "@/lib/db/sheets";
+import { defaultCommander } from "@/lib/dm/companion-command";
 import { createCompanionUser, deleteCompanionUser } from "@/lib/db/users";
 import {
   partRelationshipsWithSubject,
@@ -422,7 +423,10 @@ export function finalizeNewCompanion(
 ): { sheet: CharacterSheet; hadEncounter: boolean } {
   const botUser = createCompanionUser(input.name);
   const created = createSheet(campaign.id, botUser.id, level, input);
-  const sheet = markSheetAsCompanion(created.id, kind, personality) ?? created;
+  const marked = markSheetAsCompanion(created.id, kind, personality) ?? created;
+  // At a one-player table the AI runs, a party companion follows that player
+  // in fights (src/lib/dm/companion-command.ts).
+  const sheet = setCompanionCommander(marked.id, defaultCommander(campaign, kind)) ?? marked;
   publishPersisted(campaign.id, "sheet_updated", { sheet });
   // A companion the party once travelled with can be written back in; every
   // standing with them picks up exactly where it stopped.

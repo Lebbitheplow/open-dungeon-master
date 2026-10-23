@@ -416,7 +416,7 @@ table hides its own over a board view.
   tokens: [{
     id, kind: "pc" | "enemy" | "npc" | "prop", name, x, y, size, mine, down, hidden, elevation, health, conditions, stamp,
     creature,       // a monster's { type: "undead", slug: "ghoul", cr: 1 }, or null
-    character,      // a character's { race: "elf", class: "wizard" }, or null
+    character,      // a character's { race: "elf", class: "wizard", gender?: "Female" | "Male" | "Nonbinary" | "" }, or null
     auras,          // [{ radiusFeet, tone: "ward" | "harm" | "bless" | "neutral" }]
   }],
   lights: [{ x, y, radius }],
@@ -425,6 +425,7 @@ table hides its own over a board view.
   board,            // "fight" or "scene"
   myTokenId,
   reachable,        // squares this viewer's figure can reach this turn
+  moveAim,          // { x, y } a first tap aimed this viewer's walk at, or null
   zones,            // spell areas: [{ id, spell, caster, tone, look, cells, hot, label, untilRound }]
   labels,           // [{ x, y, text, dmOnly }] pinned to squares
   marks,            // what people drew: [{ id, kind: "stroke" | "arrow" | "rect" | "ellipse", tone, points: [{ x, y }] }]
@@ -447,10 +448,22 @@ Older addons may ignore these additions; missing audio preferences should mean
 silence. These fields grant no session, file or gameplay authority.
 
 `creature` and `character` are for a view that draws figures by kind: a
-skeleton model for `undead`, a sprite by `slug`, a robe for a `wizard`. A
+skeleton model for `undead`, a sprite by `slug`, a robe for a `wizard`.
+`character.gender` is optional: `Female`, `Male`, `Nonbinary`, or `""` when
+unspecified. Older hosts omit it. It comes from the character sheet already
+available to this viewer; ordinary encounter monsters have no gender field.
+Use a default model when it is missing or unspecified; do not infer it from a
+name or portrait. No hidden figures or additional character-sheet fields are
+included. A
 zone's `look` says how the flat board draws it (`wall` a band, `cloud` a soft
 fill, `ground`, `light`, `dark`, `ward` a tint with an edge) and `hot` is a
 wall of fire's burning side.
+
+A player's walk takes two taps. The first `tile` on a reachable square only
+aims it, and `moveAim` names that square until the walk is made, aimed
+elsewhere or dropped with Esc; the second `tile` on the same square makes the
+walk. Mark the aimed square, as the flat board holds its ruler there. Older
+hosts omit `moveAim`, and their first tap walks.
 
 Square `i` is at `x = i % width`, `y = floor(i / width)`. The snapshot is the
 projection the server made for this viewer: a hidden enemy is absent from a

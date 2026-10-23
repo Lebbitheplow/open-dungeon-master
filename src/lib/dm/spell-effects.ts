@@ -191,6 +191,7 @@ export function spellEffectsOnEnemyDamage(enemyId: string): string[] {
       magical: true,
       resist: true,
       advantage,
+      against: name,
       record: { detail: `${enemy.displayName}: ${ability.toUpperCase()} save against ${entry.spell ?? name} (hurt)` },
     });
     lines.push(

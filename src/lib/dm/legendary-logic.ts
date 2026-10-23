@@ -1,6 +1,8 @@
 import { groupTraits } from "@/lib/bestiary/block-sections";
+import { legendaryCountIn } from "@/lib/dm/ability-entries";
 import type { EnemyStats } from "@/lib/bestiary/statblock";
 import { normalizeAbilityLedgers, type AbilityLedger } from "@/lib/dm/monster-abilities";
+import { ABILITY_WORDS, parseSaveEffect } from "@/lib/dm/save-effect";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
 import { isNamed } from "@/lib/srd/feature-names";
@@ -156,38 +158,48 @@ export function normalizeLegendaryState(raw: unknown): LegendaryState {
   };
 }
 
-const COST = /\(costs?\s+(\d)\s+actions?\)/i;
-const NAME_SPLIT = /^([^.:(]{2,60}?)(?:\s*\(costs?[^)]*\))?\s*[.:]\s*([\s\S]*)$/i;
+// A cost however the book prints it: "(Costs 2 Actions)", "(Costs 2 Actions;
+// Humanoid Form Only)", "(Costs 2 Actions, Recharge 5-6)", Tome of Beasts'
+// "(2 actions)" and Tome of Beasts 3's bare "(2)".
+const COST = /\((?:[^)]*?\bcosts?\s+(\d)\s+actions?\b[^)]*|(\d)(?:\s+actions?\b[^)]*)?)\)/i;
+const NAME_SPLIT = /^([^.:(]{2,60}?)((?:\s*\([^)]*\))*)\s*[.:]+\s*([\s\S]*)$/i;
 
 // One tagged line ("Legendary action: Wing Attack (Costs 2 Actions). The
-// dragon beats...") as a row with its cost.
+// dragon beats...") as a row with its cost, read from the name's tags.
 export function parseLegendaryLine(text: string): LegendaryAction {
-  const costMatch = COST.exec(text);
-  const cost = costMatch ? Math.max(1, Math.min(3, Number(costMatch[1]))) : 1;
   const split = NAME_SPLIT.exec(text.trim());
+  const costMatch = COST.exec(split ? split[2] : text);
+  const cost = costMatch ? Math.max(1, Math.min(3, Number(costMatch[1] ?? costMatch[2]))) : 1;
   if (split) {
-    return { name: split[1].trim(), cost, text: split[2].trim() };
+    return { name: split[1].trim(), cost, text: split[3].trim() };
   }
   return { name: text.trim().slice(0, 60), cost, text: "" };
 }
 
 // The profile a stat block implies: legendary lines become actions, a
 // "Legendary Resistance (3/Day)" trait becomes the counter, lair lines
-// become lair actions. A block with none of them has no profile.
+// become lair actions. A block with none of them has no profile. A legendary
+// line that only states the count (A5e prints "The dragon can take 3
+// legendary actions" as the first option) gives the count and is no action.
 export function legendaryProfile(stats: Pick<EnemyStats, "traits">): LegendaryProfile | null {
   const groups = groupTraits(stats.traits ?? []);
-  const actions = (groups.find((group) => group.section === "legendary")?.lines ?? []).map(parseLegendaryLine);
+  const legendaryLines = groups.find((group) => group.section === "legendary")?.lines ?? [];
+  const counted = legendaryLines.map((line) => legendaryCountIn(parseLegendaryLine(line).name)).find((count) => count !== null) ?? null;
+  const actions = legendaryLines.map(parseLegendaryLine).filter((action) => legendaryCountIn(action.name) === null);
   const lairActions = groups.find((group) => group.section === "lair")?.lines ?? [];
   let resistances = 0;
-  let actionsPerRound = 3;
+  let actionsPerRound = counted ?? 3;
   for (const line of stats.traits ?? []) {
     const resist = /legendary resistance\s*\((\d)\s*\/\s*day\)/i.exec(line);
     if (resist) {
       resistances = Number(resist[1]);
     }
-    const perRound = /can take (\d) legendary actions/i.exec(line);
-    if (perRound) {
-      actionsPerRound = Number(perRound[1]);
+    // The count statblock.ts writes when the block's differs from three
+    // ("Legendary actions: The creature can take 1 legendary actions a
+    // round."), or a line a person wrote that says it.
+    const perRound = legendaryCountIn(line);
+    if (perRound !== null) {
+      actionsPerRound = perRound;
     }
   }
   if (!actions.length && !resistances && !lairActions.length) {
@@ -296,7 +308,9 @@ export function pickLairOption(options: string[], wanted: string): string | null
 
 // How a printed lair option resolves through the engine: a save the server
 // rolls for each creature it reaches (aoe_damage), with the DC, the ability
-// and the dice the line prints. Null for an option with no save.
+// and the dice the line prints, and the condition a failure lays as the save
+// reader finds it (src/lib/dm/save-effect.ts). Null for an option with no
+// save.
 export function lairResolution(line: string): string | null {
   const save = /DC\s*(\d+)\s+(str|dex|con|int|wis|cha)[a-z]*\s+sav(?:e|ing throw)/i.exec(line);
   if (!save) {
@@ -304,7 +318,14 @@ export function lairResolution(line: string): string | null {
   }
   const damage = /(\d+d\d+(?:\s*[+-]\s*\d+)?)\)?\s+([a-z]+)\s+damage/i.exec(line);
   const ability = save[2].slice(0, 3).toLowerCase();
+  const word = Object.keys(ABILITY_WORDS).find((name) => ABILITY_WORDS[name] === ability) ?? "";
+  const effect = parseSaveEffect(line.replace(save[0], `DC ${save[1]} ${word} saving throw`));
+  const laid = effect.condition ? [effect.condition, ...(effect.also ?? [])].join(" and ") : "";
   return `Resolve it now with aoe_damage: dc ${save[1]}, saveAbility "${ability}"${
     damage ? `, damage "${damage[1].replace(/\s+/g, "")}", type "${damage[2].toLowerCase()}"` : ""
-  }, and the enemyIds and characterIds of the creatures it reaches; the server rolls every save. Lay what a failure brings as the line says.`;
+  }, and the enemyIds and characterIds of the creatures it reaches; the server rolls every save. ${
+    laid
+      ? `A failure lays ${laid}${effect.rounds ? ` for ${effect.rounds} round${effect.rounds === 1 ? "" : "s"}` : ""}: set it on each creature that failed (set_condition, set_enemy_condition).`
+      : "Lay what a failure brings as the line says."
+  }`;
 }

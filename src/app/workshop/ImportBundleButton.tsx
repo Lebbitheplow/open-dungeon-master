@@ -43,6 +43,9 @@ export function ImportBundleButton({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+    }).catch(() => {
+      // The browser's own words ("Failed to fetch") say nothing to anybody.
+      throw new Error("Could not reach the server. Nothing was imported; try again.");
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {

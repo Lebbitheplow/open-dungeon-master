@@ -83,6 +83,7 @@ export const BattleMapGrid = memo(
     onTileHover,
     onTokenClick,
     everyTileClickable = false,
+    tapPreview = true,
     overlay,
     fx = NO_FX,
     onFxPlayed = NOOP,
@@ -110,6 +111,9 @@ export const BattleMapGrid = memo(
     // is the whole clickable surface. A DM placing a token needs the rest of
     // the board too, which is what this turns on.
     everyTileClickable?: boolean;
+    // Off when the parent asks for its own second tap, as a player's walk
+    // does for every pointer, so a phone is not asked for two of them.
+    tapPreview?: boolean;
     overlay?: MapOverlay;
     // Effects the server planned and this board has yet to play; the grid
     // reports each one back once it has (src/lib/battlemap/fx-plan.ts).
@@ -331,7 +335,7 @@ export const BattleMapGrid = memo(
       // First tap previews, second commits; see the refs above. Browsers
       // fire compatibility mouse events on a tap, but not reliably, so the
       // hover handler is called here rather than trusted to have run.
-      if (pointerTypeRef.current === "touch" && hoverRef.current) {
+      if (pointerTypeRef.current === "touch" && hoverRef.current && tapPreview) {
         const previewed = touchPreviewRef.current;
         if (!previewed || previewed.x !== x || previewed.y !== y) {
           touchPreviewRef.current = { x, y };
@@ -705,6 +709,7 @@ export const BattleMapGrid = memo(
     prev.overlay === next.overlay &&
     prev.fx === next.fx &&
     prev.everyTileClickable === next.everyTileClickable &&
+    prev.tapPreview === next.tapPreview &&
     (prev.onLabelClick === undefined) === (next.onLabelClick === undefined) &&
     // Only presence matters; the handlers themselves are read through refs.
     (prev.onTileClick === undefined) === (next.onTileClick === undefined) &&

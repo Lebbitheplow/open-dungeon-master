@@ -1,6 +1,7 @@
 import { ROUND_CEILING } from "@/lib/schemas/condition-meta";
 import { isValidExpression } from "@/lib/dice";
-import type { OnHitRider, RoutineStep, TypedDice } from "@/lib/bestiary/attack-text";
+import type { OnHitRider, TypedDice } from "@/lib/bestiary/attack-text";
+import type { RoutineStep } from "@/lib/bestiary/multiattack-text";
 import type { EnemyAttack, SaveAbility } from "@/lib/bestiary/statblock";
 import type {
   MonsterAbility,
@@ -174,12 +175,20 @@ export function checkAttackExtras(raw: Raw, attack: string): Checked<Partial<Ene
   if (mode) {
     out.mode = mode;
   }
+  // A bonus action's attack stays one when a block is copied.
+  if (raw.bonusAction === true) {
+    out.bonusAction = true;
+  }
   if (raw.spellAttack === true) {
     out.spellAttack = true;
   }
-  const reach = clamp(raw.reach, 5, 60);
+  if (raw.magical === true) {
+    out.magical = true;
+  }
+  // A swarm's reach of 0 (a creature in its space) is kept.
+  const reach = clamp(raw.reach, 0, 60);
   if (reach !== null) {
-    out.reach = Math.max(5, Math.round(reach / 5) * 5);
+    out.reach = Math.round(reach / 5) * 5;
   }
   const range = (raw.range ?? null) as Raw | null;
   if (range && typeof range === "object") {
@@ -201,6 +210,23 @@ export function checkAttackExtras(raw: Raw, attack: string): Checked<Partial<Ene
   }
   if (onHit.value) {
     out.onHit = onHit.value;
+  }
+  const alternatives: NonNullable<EnemyAttack["alternatives"]> = [];
+  for (const entry of Array.isArray(raw.alternatives) ? raw.alternatives.slice(0, 4) : []) {
+    const source = (entry ?? {}) as Raw;
+    const rolled = dice(source.damage);
+    const when = source.when === "bloodied" || source.when === "ranged" ? source.when : null;
+    if (!rolled || !when) {
+      return { error: `${attack}: an alternative blow needs dice the table can roll and when it applies (bloodied or ranged).`, retry: true };
+    }
+    const riders = checkRiders(source.riders, attack);
+    if ("error" in riders) {
+      return riders;
+    }
+    alternatives.push({ when, damage: rolled, type: text(source.type, BLOCK_LIMITS.damageType).toLowerCase() || "untyped", ...(riders.value.length ? { riders: riders.value } : {}) });
+  }
+  if (alternatives.length) {
+    out.alternatives = alternatives;
   }
   return { value: out };
 }
@@ -269,6 +295,39 @@ export function checkSpecials(raw: unknown): Checked<MonsterAbility[]> {
     }
     if (source.magical === true) {
       ability.magical = true;
+    }
+    if (source.bonusAction === true) {
+      ability.bonusAction = true;
+    }
+    // What a pack block's reading adds (src/lib/dm/save-effect.ts,
+    // ability-entries.ts), kept when a block is borrowed or copied.
+    const words = (value: unknown, max: number) => (typeof value === "string" ? text(value, max) : "");
+    const group = words(source.group, BLOCK_LIMITS.specialName);
+    if (group) {
+      ability.group = group;
+    }
+    const partOf = words(source.partOf, BLOCK_LIMITS.specialName);
+    if (partOf) {
+      ability.partOf = partOf;
+    }
+    if (source.oncePer === "turn" || source.oncePer === "round") {
+      ability.oncePer = source.oncePer;
+    }
+    if (source.rechargeSpecial === true) {
+      ability.rechargeSpecial = true;
+    }
+    if (source.endsOnDamage === true) {
+      ability.endsOnDamage = true;
+    }
+    const also = Array.isArray(source.also) ? source.also.map((name) => words(name, BLOCK_LIMITS.conditionName).toLowerCase()).filter(Boolean).slice(0, 4) : [];
+    if (also.length) {
+      ability.also = also;
+    }
+    const failBy = (source.failBy ?? null) as Raw | null;
+    const margin = failBy ? clamp(failBy.margin, 1, 20) : null;
+    const failCondition = failBy ? words(failBy.condition, BLOCK_LIMITS.conditionName).toLowerCase() : "";
+    if (margin !== null && failCondition) {
+      ability.failBy = { margin, condition: failCondition };
     }
     out.push(ability);
   }
@@ -346,7 +405,14 @@ export function checkRegeneration(raw: unknown): Regeneration | null {
         BLOCK_LIMITS.stoppedBy,
       )
     : [];
-  return { amount, stoppedBy, ...(source.diesOnlyAtTurnStart === true ? { diesOnlyAtTurnStart: true } : {}) };
+  const onlyIf = text(source.onlyIf, 160);
+  return {
+    amount,
+    stoppedBy,
+    ...(source.diesOnlyAtTurnStart === true ? { diesOnlyAtTurnStart: true } : {}),
+    ...(source.whileBloodied === true ? { whileBloodied: true } : {}),
+    ...(onlyIf ? { onlyIf } : {}),
+  };
 }
 
 // ---- the multiattack routine ----

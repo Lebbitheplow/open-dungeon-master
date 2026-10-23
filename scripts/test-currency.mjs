@@ -1,6 +1,7 @@
 // Money in more than one denomination: what a purse is worth, how it reads,
 // and what a person typing "340 sp" gets.
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
@@ -11,6 +12,7 @@ const {
   COPPER_PER_GOLD,
   DENOMINATION_COPPER,
   formatCopper,
+  formatPrice,
   formatPurse,
   fromCopper,
   packCostCopper,
@@ -25,6 +27,32 @@ function test(name, fn) {
   fn();
   passed += 1;
 }
+
+test("a price reads in gold, with silver and copper only for the remainder", () => {
+  assert.equal(formatPrice(5500), "55 gp");
+  assert.equal(formatPrice(150), "1 gp 5 sp");
+  assert.equal(formatPrice(105), "1 gp 5 cp");
+  assert.equal(formatPrice(22), "2 sp 2 cp");
+  assert.equal(formatPrice(150000), "1500 gp");
+  assert.equal(formatPrice(1234), "12 gp 3 sp 4 cp");
+  assert.equal(formatPrice(7), "7 cp");
+  assert.equal(formatPrice(0), "0 gp");
+  // Coins in a purse still count out in platinum.
+  assert.equal(formatCopper(5500), "5 pp 5 gp");
+  // And a price written out reads back as the same price.
+  for (const copper of [5500, 150, 105, 22, 1234, 7]) assert.equal(parseCoins(formatPrice(copper)), copper);
+});
+
+test("the Market shows prices in gold and the purse in its coins", () => {
+  // Windows CI checks the files out with CRLF line endings.
+  const read = (file) => fs.readFileSync(new URL(`../${file}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
+  const panel = read("src/app/campaigns/[campaignId]/MarketPanel.tsx");
+  assert.match(panel, /label: `Buy for \$\{formatPrice\(line\.askingCp\)\}`/);
+  assert.match(panel, /\{formatPrice\(line\.askingCp\)\}/);
+  assert.match(panel, /coin-purse" \}\} size="size-5" \/> \{formatCopper\(purse\)\}/);
+  assert.doesNotMatch(panel, /formatCopper\(line\./, "a price still counts out in platinum");
+  assert.match(read("src/app/campaigns/[campaignId]/MarketShopEditor.tsx"), /value=\{draft \?\? formatPrice\(value\)\}/);
+});
 
 test("the denominations are the PHB's", () => {
   assert.equal(DENOMINATION_COPPER.cp, 1);

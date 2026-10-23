@@ -108,9 +108,9 @@ await test("Conjure Animals refuses, before the slot, a beast above challenge ra
   assert.equal(unnamed.ok, false);
   assert.match(unnamed.error, /needs the creature in variant: .*Wolf \(CR 1\/4\).*Brown Bear \(CR 1\).*Ask the player which/);
   assert.doesNotMatch(unnamed.error, /Giant Ape|Skeleton/);
-  const elk = await world.invoke("cast_buff", { characterId: druid.id, spell: "Conjure Animals", level: 3, variant: "giant elk" });
-  assert.equal(elk.ok, false);
-  assert.match(elk.error, /no stat block here for "giant elk"; it calls: .*Wolf/);
+  const hamster = await world.invoke("cast_buff", { characterId: druid.id, spell: "Conjure Animals", level: 3, variant: "giant hamster" });
+  assert.equal(hamster.ok, false);
+  assert.match(hamster.error, /no stat block here for "giant hamster"; it calls: .*Wolf.*Giant Elk \(CR 2\)/);
   assert.equal(slotsLeft(world, druid.id, 3), 2, "no slot spent");
   assert.equal(summonsOf(world).length, 0);
 });
@@ -410,6 +410,9 @@ await test("Each summoned creature's stat block matches the content pack's SRD b
   const { SUMMON_FORMS } = await import("../src/lib/srd/summon-forms.ts");
   const content = await import("../src/lib/content/index.ts");
   const { parseMonster } = await import("../src/lib/bestiary/statblock.ts");
+  // Where the pack's row says otherwise than the SRD 5.1 text, the table
+  // keeps the SRD's number (scripts/lib/srd-creature-overlay.mjs).
+  const { CORRECTIONS } = await import("./lib/srd-creature-overlay.mjs");
   let compared = 0;
   for (const form of SUMMON_FORMS) {
     const slug = form.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
@@ -421,12 +424,12 @@ await test("Each summoned creature's stat block matches the content pack's SRD b
     const data = entry.data;
     assert.deepEqual(
       [form.ac, form.hp, form.cr, form.abilities.str, form.abilities.dex, form.abilities.con, form.abilities.int, form.abilities.wis, form.abilities.cha],
-      [stats.ac, stats.maxHp, data.cr, data.strength, data.dexterity, data.constitution, data.intelligence, data.wisdom, data.charisma],
+      [CORRECTIONS[form.name]?.ac ?? stats.ac, CORRECTIONS[form.name]?.hp ?? stats.maxHp, CORRECTIONS[form.name]?.cr ?? data.cr, data.strength, data.dexterity, data.constitution, data.intelligence, data.wisdom, data.charisma],
       form.name,
     );
     compared += 1;
   }
-  assert.ok(compared >= 30, `only ${compared} blocks compared`);
+  assert.ok(compared >= 110, `only ${compared} blocks compared`);
 });
 
 closeTables();

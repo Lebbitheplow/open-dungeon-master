@@ -20,6 +20,8 @@ import type { BackgroundOption, ClassOption } from "../useBuilderOptions";
 import type { TableRulesState } from "../useTableRules";
 import type { BuilderActions, BuilderDerived } from "../useBuilderDerived";
 import type { BuilderState } from "../useBuilderState";
+import { fillSpells } from "../quickBuild";
+import { spellOnSavedList, spellShortageLines, spellSupplyOf } from "../spellSupply";
 import { StepPanel, inputClass } from "./shared";
 import { textKey } from "@/lib/language/text-logic";
 
@@ -173,9 +175,13 @@ function SpellsSection({
       level: state.level,
       spells: [...spells.filter((entry) => !isGranted(entry)), name].map(schoolOf),
     });
-  const suggested = new Set(
-    [...(starters?.cantrips ?? []), ...(starters?.spells ?? [])].map((entry) => textKey(entry.n)),
-  );
+  // Only the starters the save takes for this class: the bundled list puts
+  // none of the artificer's suggested cantrips on its list, and a star on
+  // one led to a refusal at the save.
+  const listRule = { third: klass.casterType === "none", spellClass: spellSearchClass, spellPool: loading ? undefined : pool };
+  const starterCantrips = (starters?.cantrips ?? []).filter((entry) => spellOnSavedList(entry.n, listRule));
+  const starterSpells = (starters?.spells ?? []).filter((entry) => spellOnSavedList(entry.n, listRule));
+  const suggested = new Set([...starterCantrips, ...starterSpells].map((entry) => textKey(entry.n)));
 
   function toggleCantrip(name: string) {
     if (has(cantrips, name)) {
@@ -237,35 +243,18 @@ function SpellsSection({
     }
   }
 
-  // Fills whatever room is left with the suggested picks, in order. A
-  // wizard's suggestions go in the book and are prepared as far as they fit.
+  // Fills whatever room is left the way the quick build does (quickBuild.ts
+  // fillSpells): the suggested picks the save takes first, then the class
+  // list's best. A wizard's go in the book and are prepared as far as they
+  // fit.
   function addSuggested() {
-    if (!starters) {
-      return;
-    }
-    const cantripRoom = cantripCap === null ? Infinity : cantripCap - chosenCantrips.length;
-    const newCantrips = starters.cantrips
-      .map((entry) => entry.n)
-      .filter((name) => !has(cantrips, name) && !isRacial(name))
-      .slice(0, Math.max(0, cantripRoom));
-    const cap = wizard ? bookCap : spellCap;
-    const spellRoom = cap === null ? Infinity : cap - chosenSpells.length;
-    const newSpells = starters.spells
-      .map((entry) => entry.n)
-      .filter((name) => !has(spells, name) && !isGranted(name))
-      .slice(0, Math.max(0, spellRoom));
     setLimitNote("");
-    setCantrips((current) => [...current, ...newCantrips]);
-    setSpells((current) => [...current, ...newSpells]);
-    if (wizard) {
-      const book = [...spells, ...newSpells];
-      const prepareRoom = spellCap === null ? Infinity : spellCap - chosenPrepared.length;
-      setBookPrepared((current) => [
-        ...current,
-        ...book.filter((name) => !has(current, name)).slice(0, Math.max(0, prepareRoom)),
-      ]);
-    }
+    const fill = fillSpells({ fields: { cantrips, spells, bookPrepared }, derived, klass, spellPool: listRule.spellPool });
+    if (fill?.patch.cantrips) setCantrips(fill.patch.cantrips);
+    if (fill?.patch.spells) setSpells(fill.patch.spells);
+    if (fill?.patch.bookPrepared) setBookPrepared(fill.patch.bookPrepared);
   }
+
 
   // What a tile that is not chosen says when it cannot be chosen now, so a
   // full list reads as full before anyone taps (issue 66: taps past the cap
@@ -301,8 +290,8 @@ function SpellsSection({
     ...racialCantrips,
     ...featSpells.cantrips,
     ...featSpells.spells,
-    ...(starters?.cantrips ?? []).map((entry) => entry.n),
-    ...(starters?.spells ?? []).map((entry) => entry.n),
+    ...starterCantrips.map((entry) => entry.n),
+    ...starterSpells.map((entry) => entry.n),
   ].filter((name, index, all) => all.findIndex((other) => textKey(other) === textKey(name)) === index);
   const tiles: SpellTile[] = names.flatMap((name): SpellTile[] => {
     const row = poolByName.get(textKey(name)) ?? lookups.get(textKey(name));
@@ -359,6 +348,19 @@ function SpellsSection({
   ];
 
   const className = klass.name.toLowerCase();
+  // Fewer spells on the list than the class may take: said, and not held
+  // against the save (submit.ts spellsBlocks).
+  const shortage =
+    loading || listRule.third
+      ? []
+      : spellShortageLines({
+          className,
+          supply: spellSupplyOf(pool, maxSpellLevel, [...racialCantrips, ...featSpells.cantrips, ...featSpells.spells, ...subclassSpells]),
+          cantripCap,
+          listCap: wizard ? bookCap : spellCap,
+          listVerb: wizard ? "write in your spellbook" : spellStyle === "known" ? "know" : "prepare",
+          maxSpellLevel,
+        });
   return (
     <StepPanel
       title="Spells"
@@ -421,6 +423,13 @@ function SpellsSection({
             Fill with the suggested spells
           </button>
         </p>
+      ) : null}
+      {shortage.length ? (
+        <div data-spell-shortage className="mb-2 space-y-1 rounded-lg border border-amber-500/30 bg-amber-400/5 px-3 py-2 text-xs text-amber-100">
+          {shortage.map((line) => (
+            <p key={line}>{line}</p>
+          ))}
+        </div>
       ) : null}
       <SpellBook
         tiles={tiles}

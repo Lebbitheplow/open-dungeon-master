@@ -94,8 +94,18 @@
   display: flex;
   align-items: center;
   margin: 0;
-  padding: 0;
+  /* The list's own indent only: a named stepper's bottom padding is the row
+     its step names hang in (DiamondStepper.tsx), and a plain "padding: 0"
+     here outranked it, so the names sat on the step heading below. */
+  padding-inline-start: 0;
   list-style: none;
+}
+/* Six names need about 22rem side by side. Narrower than that (a phone with
+   its text enlarged) they would run together, so only the current step's
+   name is printed; every diamond's own label still says its name. */
+.diamond-stepper[data-named] { container-type: inline-size; }
+@container (width < 22rem) {
+  .diamond-step:not([data-state="current"]) [data-diamond-name] { visibility: hidden; }
 }
 .diamond-step {
   display: flex;
@@ -1034,4 +1044,11 @@ html[data-theme="light"] .roll-tier-5 { color: #6d28d9; text-shadow: none; }
     outline: 3px solid rgba(251, 191, 36, 0.8);
     outline-offset: 2px;
   }
+}
+
+/* The build math table (F10) stands beside the steps on a desktop: the page
+   that holds the builder widens for it, whichever page that is. The panel
+   itself folds under the steps wherever the builder stays narrow. */
+@media (min-width: 64rem) {
+  main:has([data-build-math]) { max-width: 76rem; }
 }

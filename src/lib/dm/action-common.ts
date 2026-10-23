@@ -12,7 +12,7 @@ import type { DmTurn } from "@/lib/db/dm-turns";
 import { d20Expression, rollExpression } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { abilityMod } from "@/lib/srd";
-import { saveModFor } from "@/lib/bestiary/statblock";
+import { saveModFor } from "@/lib/bestiary/enemy-numbers";
 import { mergeAdvantage, rollDerivation } from "@/lib/dm/condition-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 

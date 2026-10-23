@@ -13,6 +13,7 @@ import { holyNimbusTurnStart } from "@/lib/dm/combat-features";
 import { refillLegendaryForTurn } from "@/lib/dm/legendary-tools";
 import { landTheFlightless } from "@/lib/dm/map-tools";
 import { regenerationTurnStart } from "@/lib/dm/regeneration-turn";
+import { sunlightTurnStart } from "@/lib/dm/sunlight-turn";
 import { beginTurns, endTurns } from "@/lib/dm/turn-end";
 
 export function turnStartEffects(
@@ -46,6 +47,8 @@ export function turnStartEffects(
     if (enemy?.status === "alive") {
       // A troll down at 0 rises or dies as its turn starts (regeneration-turn.ts).
       turnStartLines.push(...regenerationTurnStart(campaign, encounter, enemy));
+      // A vampire in sunlight burns (sunlight-turn.ts).
+      turnStartLines.push(...sunlightTurnStart(campaign, encounter, enemy));
       turnStartLines.push(...refillLegendaryForTurn(encounter, enemy));
     }
   }

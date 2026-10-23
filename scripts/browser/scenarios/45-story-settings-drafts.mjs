@@ -6,7 +6,7 @@
 // someone is typing into keeps their words while the other field, or the
 // same one, changes elsewhere, and those words are what its commit saves.
 // The rule itself is scripts/test-setting-drafts.mjs.
-import { check, eventually, openPanelTab, sleep } from "../lib.mjs";
+import { check, eventually, newContext, openPanelTab, signIn, sleep } from "../lib.mjs";
 
 const FIELDS = ["imageGenerationEnabled", "imageBackend", "artStyle", "artStyleMap", "artStyleScene"];
 
@@ -14,7 +14,7 @@ export default {
   name: "story-settings-drafts",
   viewports: ["desktop"],
   async run(t) {
-    const { page, base, ids, api, root } = t;
+    const { page, base, ids, api } = t;
     const route = `${base}/api/campaigns/${ids.campaignId}/story-settings`;
     const saved = async () => (await (await api.get(route)).json()).settings;
     const save = async (update, what) => check((await api.patch(route, { data: update })).ok(), `${what} saved elsewhere`);
@@ -22,12 +22,16 @@ export default {
     const restore = Object.fromEntries(FIELDS.map((field) => [field, before[field]]));
     await save({ imageGenerationEnabled: true, imageBackend: "comfyui", artStyle: "setting", artStyleMap: "", artStyleScene: "" }, "a table that paints in the setting's own look");
 
-    // Window A, and window B beside it, each on the Story AI panel.
-    const other = await page.context().newPage();
-    const b = { ...t, page: other };
+    // Window A, and window B beside it, each on the Story AI panel. Window B
+    // is the website's page: beside the app's screens it is a browser of its
+    // own, signed in as the same lead, with no app around its page.
+    const otherContext = t.app ? await newContext(page.context().browser(), t.viewport, { app: false }) : null;
+    if (otherContext) await signIn(otherContext, base, ids.lead, ids.password);
+    const other = await (otherContext ?? page.context()).newPage();
+    const b = { ...t, page: other, app: false, root: "", tap: (locator) => locator.click() };
     const panelOf = async (w) => {
       await openPanelTab(w, "settings");
-      const panel = w.page.locator(`${root}#ss-ai`).locator("visible=true").first();
+      const panel = w.page.locator(`${w.root}#ss-ai`).locator("visible=true").first();
       await eventually(() => panel.getByRole("button", { name: "Art style" }).count(), { timeoutMs: 30_000, label: "the Art style choice" });
       await panel.scrollIntoViewIfNeeded();
       return panel;
@@ -112,6 +116,7 @@ export default {
       check((await reloaded.locator('input[aria-label="Scene style"]').inputValue()) === "watercolour", "the scene text after a reload");
     } finally {
       await other.close().catch(() => {});
+      await otherContext?.close().catch(() => {});
       await api.patch(route, { data: restore });
     }
   },

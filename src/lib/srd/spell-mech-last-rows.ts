@@ -72,7 +72,14 @@ export const SRD_LAST_ROWS: Record<string, SpellMech> = {
   shapechange: {
     resolution: "buff",
     buff: { condition: "polymorphed", target: "self", rounds: HOUR },
-    note: "The caster takes a beast form (variant) of CR up to their level, keeping their Intelligence, Wisdom and Charisma. A form that is not a beast is the DM's to run.",
+    note: "The caster takes the form (variant) of any creature of CR up to their level that is not a construct or an undead and that they have seen, without its Spellcasting or legendary actions, keeping their Intelligence, Wisdom, Charisma and proficiencies.",
+  },
+  // A creature into another creature; at an enemy it is cast_at_enemy or
+  // cast_buff with targetEnemyId (src/lib/dm/enemy-polymorph.ts).
+  "true polymorph": {
+    resolution: "buff",
+    buff: { condition: "polymorphed", target: "ally", rounds: HOUR },
+    note: "The target becomes any creature (variant) of CR up to its level, its whole stat block, mind included. Concentration; held the full hour, it lasts until dispelled.",
   },
 
   // Saves whose failure takes a creature out of the fight, or out of its

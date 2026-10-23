@@ -258,6 +258,27 @@ messages.insertCampaignMessage({
   content: "The ford is quiet. Across the water a lantern swings on the ferryman's hut, and the rope bridge creaks in the wind.",
 });
 
+// A table one person plays with an AI storyteller and a party companion who
+// takes their orders in fights (src/lib/dm/companion-command.ts): the "In
+// fights" picker on the companion's Party card.
+const COMMAND_TITLE = "Command Table";
+const commandTable = campaigns.createCampaign(world.owner.id, {
+  title: COMMAND_TITLE,
+  description: "A long road, one traveller and a friend who came along.",
+  theme: "high-fantasy",
+  maxPlayers: 6,
+  startingLevel: 3,
+  difficulty: "normal",
+  gameSettings: { ttsEnabled: false },
+});
+campaigns.setCampaignStatus(commandTable.id, "active");
+sheets.createSheet(commandTable.id, world.owner.id, 3, heroInput({ name: "Kell Brand", class: "fighter", level: 3 }));
+const { createCompanionUser } = await import("../../src/lib/db/users.ts");
+const pipBot = createCompanionUser("Pip Thistle");
+const pip = sheets.createSheet(commandTable.id, pipBot.id, 3, heroInput({ name: "Pip Thistle", class: "rogue", level: 3 }));
+sheets.markSheetAsCompanion(pip.id, "party", "Quick, cheerful, and never far from a joke.");
+sheets.setCompanionCommander(pip.id, world.owner.id);
+
 // The seeded turn below, so lore-trace can tell its trace from one a later
 // scenario's turn on the quiet table left.
 let quietLoreTurnId = "";
@@ -581,6 +602,48 @@ messages.insertCampaignMessage({
 // The lead runs the server too, for the admin settings (issue 255).
 setUserAdmin(world.owner.id, true);
 
+// A table a person runs, with a goblin on its board, per viewport (issue
+// #471): the DM's token menu sets a condition, deals damage and teleports
+// through the one tool each of those intents has.
+const directed = {};
+{
+  const { invokeEngine } = await import("../../src/lib/dm/invoke.ts");
+  const maps = await import("../../src/lib/db/battle-maps.ts");
+  const encounterRows = await import("../../src/lib/db/encounters.ts");
+  for (const viewport of ["desktop", "phone"]) {
+    const table = campaigns.createCampaign(world.owner.id, {
+      title: `Directed Table (${viewport})`,
+      description: "A table whose storyteller is a person at the table.",
+      theme: "high-fantasy",
+      maxPlayers: 6,
+      startingLevel: 3,
+      difficulty: "normal",
+      gameSettings: { ttsEnabled: false, dmMode: "human" },
+    });
+    campaigns.setCampaignStatus(table.id, "active");
+    campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+    sheets.createSheet(table.id, player.id, 3, heroInput({ name: "Ilse Marr", class: "fighter", level: 3 }));
+    const started = await invokeEngine(campaigns.getCampaignById(table.id), { kind: "human", userId: world.owner.id }, {
+      name: "start_encounter",
+      args: { enemies: [{ monster: "goblin", count: 1 }] },
+    });
+    if (!started.ok) {
+      throw new Error(`the directed table's fight did not start: ${started.error}`);
+    }
+    // An open field, the goblin and the hero apart from each other.
+    const encounter = encounterRows.getActiveEncounter(table.id);
+    const board = maps.getBattleMapForEncounter(encounter.id);
+    maps.setBattleMapTerrain(board.id, ".".repeat(board.width * board.height));
+    getDatabase().prepare("UPDATE battle_maps SET doors_json = '{}' WHERE id = ?").run(board.id);
+    const [goblin] = encounterRows.listEnemies(encounter.id);
+    // Clear of the initiative strip along the board's top edge.
+    for (const [token, x] of maps.listTokens(board.id).map((entry) => [entry, entry.refId === goblin.id ? 6 : 2])) {
+      maps.moveToken(token.id, x, 6, 0);
+    }
+    directed[viewport] = { id: table.id, goblin: goblin.id };
+  }
+}
+
 const ids = {
   lead: world.owner.username,
   player: player.username,
@@ -619,10 +682,14 @@ const ids = {
   closing,
   stopTables,
   wardrobe,
+  directed,
   levelTableId: levelTable.id,
+  commandTableId: commandTable.id,
+  pip: pip.id,
   // Every campaign a scenario opens, by id, for the app's home tiles.
   titles: {
     [levelTable.id]: "Level Table",
+    [commandTable.id]: COMMAND_TITLE,
     [world.campaignId]: TITLE,
     [lobby.id]: LOBBY_TITLE,
     [quiet.id]: QUIET_TITLE,
@@ -633,6 +700,7 @@ const ids = {
     ...Object.fromEntries(Object.entries(closing).map(([viewport, id]) => [id, `Closing Table (${viewport})`])),
     ...Object.fromEntries(Object.entries(stopTables).map(([viewport, id]) => [id, `Stop Table (${viewport})`])),
     ...Object.fromEntries(Object.entries(wardrobe).map(([viewport, id]) => [id, `Wardrobe (${viewport})`])),
+    ...Object.fromEntries(Object.entries(directed).map(([viewport, table]) => [table.id, `Directed Table (${viewport})`])),
   },
   systemLine,
   oocQuestion,
