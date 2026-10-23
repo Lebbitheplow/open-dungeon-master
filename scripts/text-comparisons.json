@@ -1494,6 +1494,7 @@
     "lib/dm/prismatic.ts#str-eq": [["key",4,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/prismatic.ts#str-includes": [["key",2,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/prompt-rules.ts#str-case": [["key",3,"rule needs (tool group ids)"]],
+    "lib/dm/prompt-rules.ts#str-list": [["key",1,"rule needs (tool group ids)"]],
     "lib/dm/prompt.ts#[a-z]": [["display",1,"an SRD feat name title-cased"]],
     "lib/dm/prompt.ts#\\b": [["display",1,"an SRD feat name title-cased"]],
     "lib/dm/prompt.ts#re-word": [["key",1,"the server's own dice marker, [roll:<id>] (engine vocabulary)"]],

@@ -686,7 +686,7 @@ async function openTurn(
         : "";
     const intent = [...autoGroups({ inEncounter: false, englishPlayerText })];
     const signals = profileSignals(campaign, context.sheets, Boolean(encounterNow));
-    const offered = compactTurnTools(campaign, Boolean(encounterNow), campaign.settings.imageGenerationEnabled && campaign.settings.autoImages, signals, intent).offered;
+    const { offered, closed } = compactTurnTools(campaign, Boolean(encounterNow), campaign.settings.imageGenerationEnabled && campaign.settings.autoImages, signals, intent);
     const groups = Object.keys(TOOL_GROUPS).filter((group) => TOOL_GROUPS[group as ToolGroupId].tools.some((name) => offered.has(name)));
     profileTrace = { name: "compact", intent, groups, opened: [] };
     ruleContext = ruleContextFor({
@@ -697,6 +697,7 @@ async function openTurn(
       recall: isStageEnabled(stages, "recall"),
       map: Boolean(encounterNow?.map),
       legendary: Boolean(signals.legendary),
+      moreTools: closed.length > 0,
       brief: tuning.briefRules,
     });
   } else if (tuning.briefRules) {
@@ -710,6 +711,7 @@ async function openTurn(
       recall: isStageEnabled(stages, "recall"),
       map: Boolean(encounterNow?.map),
       legendary: true,
+      moreTools: false,
       brief: true,
     });
   }
@@ -1200,7 +1202,7 @@ export function compactTurnTools(
   imageEnabled: boolean,
   signals: ProfileSignals,
   opened: Iterable<ToolGroupId>,
-): { tools: unknown[]; offered: Set<string> } {
+): { tools: unknown[]; offered: Set<string>; closed: ToolGroupId[] } {
   const full = dmTurnTools(campaign, inEncounter, imageEnabled, false) as ToolDefLike[];
   const names = full.map((tool) => tool.function.name);
   const offered = compactToolNames(names, signals, opened);
@@ -1208,6 +1210,7 @@ export function compactTurnTools(
   return {
     tools: [...full.filter((tool) => offered.has(tool.function.name)).map(compactTool), ...(closed.length ? [moreToolsTool(closed)] : [])],
     offered,
+    closed,
   };
 }
 
