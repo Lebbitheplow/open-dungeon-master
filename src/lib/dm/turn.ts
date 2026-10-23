@@ -2021,7 +2021,23 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
           tool_calls: echoedToolCalls,
         });
         answerRanAbove(!spotlightSet && fightOwnsFloor(campaignId), true);
+        // Saved before the call that narrates it, as the branches above are:
+        // the calls already ran, and a restart during that call must leave a
+        // turn whose Retry sees them, not one that runs them again.
+        saveDmTurn(turn);
         continue;
+      }
+      // The turn ends on this reply, but its calls already ran (a whisper
+      // sent, an event recorded, a note left) and the closing steps below
+      // still wait on the model: the whisper backstop, the guard's reads, the
+      // turn ended in words. Recorded now, a restart or a stall there leaves
+      // a turn whose Retry is shown what was done rather than asking for it
+      // again. The reply's words stay out: they are the narration the turn
+      // closes on, which a retry writes afresh (rewindHaltedCall).
+      if (toolCalls.length) {
+        turn.conversation.push({ role: "assistant", ...carried, content: "", tool_calls: echoedToolCalls });
+        answerRanAbove(fightOwnsFloor(campaignId), false);
+        saveDmTurn(turn);
       }
       break;
     }
