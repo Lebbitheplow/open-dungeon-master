@@ -112,28 +112,28 @@ export const checkTools: ToolDef[] = [
             type: "string",
             enum: ["perception", "insight", "investigation"],
             description:
-              "Which passive score decides it: perception (traps, ambushers, sounds), insight (a lie, a hidden motive), investigation (a concealed mechanism or clue). Default 'perception'.",
+              "Which passive score decides it: perception, insight or investigation. Default: 'perception'. Perception: traps, ambushers, sounds; insight: a lie, a hidden motive; investigation: a concealed mechanism or clue.",
           },
           by: {
             type: "string",
             enum: ["sight", "hearing"],
             description:
-              "Perception only: whether the thing is seen or heard. Default 'sight'. Off the battle map the server applies the light of the place (dim light -5, and in darkness a character with no darkvision and no lit torch or lantern sees nothing) and a fast travel pace -5; a sound ignores the light.",
+              "Perception only: whether the thing is seen or heard. Default: 'sight'. Off the battle map the server applies the light of the place (dim light -5, and in darkness a character with no darkvision and no lit torch or lantern sees nothing) and a fast travel pace -5; a sound ignores the light.",
           },
           light: {
             type: "string",
             enum: ["bright", "dim", "dark"],
             description:
-              "Off the battle map, the light where the party is, when you know it: a lamplit hall is bright, a moonlit glade dim, an unlit crypt dark. Omit it and the server reads the current location: an underground place is dark, a building lit, the open air follows the hour of the day.",
+              "Off the battle map, the light where the party is (bright, dim, dark), when you know it. A lamplit hall is bright, a moonlit glade dim, an unlit crypt dark. Omit it and the server reads the current location: underground is dark, a building lit, the open air follows the hour.",
           },
           againstEnemyId: {
             type: "string",
             description:
-              "A creature of the running fight hiding (or lying, for insight), exact enemyId from GAME STATE: the server rolls its own Stealth (or Deception) check from its stat block as the DC. Out of a fight, use againstMonster.",
+              "A creature of the running fight hiding (or lying, for insight): exact enemyId from GAME STATE. The server rolls its own Stealth (or Deception) check from its stat block as the DC. Out of a fight, use againstMonster.",
           },
           againstMonster: {
             type: "string",
-            description: "Out of a fight: the stat block of the creature that hides or lies (a goblin, a bandit, a spy), or for insight a tracked NPC's exact name; the server rolls its Stealth or Deception as the DC.",
+            description: "Out of a fight, who hides or lies: a bestiary creature, or for insight a tracked NPC's exact name. It holds SRD creatures and NPC stat blocks (a goblin, a bandit, a spy); for insight an AI companion's exact name works too. The server rolls its Stealth or Deception as the DC.",
           },
           difficulty: {
             type: "string",
@@ -144,7 +144,7 @@ export const checkTools: ToolDef[] = [
           about: {
             type: "string",
             enum: ["traps_and_secret_doors", NONE],
-            description: "Perception or investigation: the hidden thing is a trap or a secret door (Dungeon Delver notices it more easily), or 'none'; asked for when a character tested holds Dungeon Delver.",
+            description: "Perception or investigation: 'traps_and_secret_doors' for a trap or a secret door, or 'none'. A character tested with Dungeon Delver notices those more easily; the server asks for it when they are tested.",
           },
           characterIds: {
             type: "array",

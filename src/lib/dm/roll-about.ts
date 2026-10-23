@@ -62,12 +62,12 @@ export const CHECK_KEY_PROPERTIES = {
     type: "string",
     enum: [...CHECK_ABOUT, NONE],
     description:
-      "A check: the circumstance it is about, or 'none': the server applies the features keyed to it (Favored Enemy and Stalker on tracking, Stonecunning, Artificer's Lore on devices, Stone Camouflage on rocky terrain, Actor on a disguise, and the feats' riders).",
+      "The circumstance a check is about, or 'none': the server applies the features keyed to it. They are Favored Enemy and Stalker on tracking, Stonecunning, Artificer's Lore on devices, Stone Camouflage on rocky terrain, Actor on a disguise, and the feats' riders.",
   },
   creature: {
     type: "string",
     description:
-      "A check about a creature: its type or humanoid race by the rules name, singular ('undead', 'orc', 'giant'), or 'none', for Favored Enemy and Giant Foe.",
+      "A check about a creature: its singular rules type or humanoid race ('undead', 'orc'), or 'none'. Favored Enemy and Giant Foe read it ('giant', 'fey').",
   },
   terrain: {
     type: "string",

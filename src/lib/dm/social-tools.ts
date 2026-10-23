@@ -71,7 +71,7 @@ export const socialTools: ToolDef[] = [
     function: {
       name: "set_npc",
       description:
-        "Register or update a named NPC the party is dealing with, so the server tracks who they are and how they feel about the party across the whole campaign; call it again when the story itself (not a check) changes how they feel.",
+        "Register or update a named NPC the party is dealing with, so the server tracks who they are and how they feel about the party. Call it again when the story itself (not a check) changes how they feel.",
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -81,7 +81,7 @@ export const socialTools: ToolDef[] = [
           attitude: {
             type: "string",
             enum: [...ATTITUDE_ENUM],
-            description: "How they currently feel about the party. Default 'indifferent'.",
+            description: "How they currently feel about the party. Default: 'indifferent'.",
           },
           trait: {
             type: "string",
@@ -91,12 +91,12 @@ export const socialTools: ToolDef[] = [
           gender: {
             type: "string",
             enum: [...TOLD_GENDERS],
-            description: `${TOLD_GENDER_HELP} Give it when you register someone new; leave it out on later calls.`,
+            description: `${TOLD_GENDER_HELP} Give it when you register someone new; omit it on later calls.`,
           },
           drawnTo: {
             type: "array",
             items: { type: "string", enum: TOLD_ATTRACTION },
-            description: "Who they could fall for, once the story shows it. Set once and kept, so it never changes between characters.",
+            description: "Who they could fall for, once the story shows it. The server keeps the first value it is given, so it never changes between characters.",
           },
           goal: {
             type: "string",

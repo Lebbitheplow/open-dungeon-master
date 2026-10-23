@@ -71,7 +71,7 @@ export const actionTools: ToolDef[] = [
     function: {
       name: "take_action",
       description:
-        "Resolve a character taking one of the standard 5e actions that is not an attack or a spell: Dodge, Dash, Disengage, Hide, Help, Grapple, Shove, Ready, Search, Use an Object, or Escape (a grapple). The server spends the action from their turn, rolls any check or contest the action calls for through the same resolver as request_roll, and applies the real effect (Dodge makes attacks against them roll at disadvantage, a won Grapple applies grappled, a won Shove knocks prone or pushes, a won Escape ends the grapple). Grapple and Shove each take the place of ONE attack of the Attack action, so a character with Extra Attack can grapple and still swing. Ready commits to ONE action for the character's reaction until their next turn: an attack unless `readied` names another (a move up to their speed, Help, Use an Object, the use of an item, stabilizing, a class feature, or any action here), or a spell with `spell`. When you judge the trigger has come, release it off their turn with that action's own tool (pc_attack, move_token, take_action, use_item, stabilize, use_resource): the server spends the reaction and refuses any other action. While a character holds a readied action, enemy_attack does not walk an enemy that is out of reach: move it with move_token first. Hide is for a fight; out of one, use request_roll for Stealth. Call it BEFORE narrating the action; narrate exactly what it reports.",
+        "Resolve a character taking one of the standard 5e actions that is not an attack or a spell: Dodge, Dash, Disengage, Hide, Help, Grapple, Shove, Ready, Search, Use an Object, or Escape (a grapple). The server spends the action from their turn, rolls any check or contest the action calls for through the same resolver as request_roll, and applies the real effect (Dodge makes attacks against them roll at disadvantage, a won Grapple applies grappled, a won Shove knocks prone or pushes, a won Escape ends the grapple). Grapple and Shove each take the place of ONE attack of the Attack action, so a character with Extra Attack can grapple and still swing. Ready commits to ONE action for the character's reaction until their next turn, named in `readied` (or a spell in `spell`). When you judge the trigger has come, release it off their turn with that action's own tool (pc_attack for an attack): the server spends the reaction and refuses any other action. While a character holds a readied action, enemy_attack does not walk an enemy that is out of reach: move it with move_token first. Hide is for a fight; out of one, use request_roll for Stealth. Call it BEFORE narrating the action; narrate exactly what it reports.",
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -81,12 +81,12 @@ export const actionTools: ToolDef[] = [
           bonus: {
             type: "boolean",
             description:
-              "Take the action as a bonus action: Dash, Disengage or Hide with Cunning Action (with the action already spent, Cunning Action is used by itself); Dash with Expeditious Retreat running (the casting's own Dash too, on the turn it is cast); Use an Object with a Thief's Fast Hands; Dash, Disengage or Dodge with a monk's ki (Step of the Wind, Patient Defense; the server spends 1 ki).",
+              "Take it as a bonus action: Cunning Action, Fast Hands, Expeditious Retreat or a monk's ki. Cunning Action: Dash, Disengage or Hide (with the action already spent, it is used by itself); Expeditious Retreat: Dash (the casting's own Dash too, on the turn it is cast); Fast Hands: Use an Object; monk's ki: Dash, Disengage or Dodge (Step of the Wind, Patient Defense; the server spends 1 ki).",
           },
           targetEnemyId: {
             type: "string",
             description:
-              "Grapple and Shove: the enemy seized or pushed. Help: the enemy the ally's attack is helped against (within 5 ft of the helper); omit to help an ability check. Exact enemyId from GAME STATE.",
+              "Grapple, Shove or Help: the enemy acted against, exact enemyId from GAME STATE. Grapple and Shove: the enemy seized or pushed; Help: the enemy the ally's attack is helped against (within 5 feet of the helper), omitted to help an ability check.",
           },
           targetCharacterId: {
             type: "string",
@@ -95,17 +95,17 @@ export const actionTools: ToolDef[] = [
           shove: {
             type: "string",
             enum: ["prone", "push"],
-            description: "Shove only: knock the target prone (default) or push it 5 feet back.",
+            description: "Shove only: knock the target prone (the default) or push it 5 feet back.",
           },
           trigger: {
             type: "string",
-            description: "Ready only, and needed for it: what the readied action waits for (when the ogre comes through the door).",
+            description: "Ready only, and required for it: what the action waits for ('the ogre comes through the door').",
           },
           readied: {
             type: "string",
             enum: [...READIABLE],
             description:
-              "Ready only: the action the trigger releases. attack (the default), move (up to their speed, released with move_token to the square), dodge, dash, disengage, hide, help, grapple, shove, search, use_object, escape (each released with take_action), item (use_item), stabilize (stabilize), feature (a class feature that takes an action). For a spell pass `spell` instead.",
+              "Ready only: the action the trigger releases, attack (the default) or another. The others are move (up to their speed, released with move_token to the square), dodge, dash, disengage, hide, help, grapple, shove, search, use_object, escape (each released with take_action), item (use_item), stabilize (stabilize) or feature (a class feature that takes an action). For a spell pass `spell` instead.",
           },
           skill: {
             type: "string",
@@ -171,7 +171,7 @@ export const actionTools: ToolDef[] = [
             type: "integer",
             minimum: 1,
             maximum: 9,
-            description: "A reaction SPELL (Shield, Counterspell, Hellish Rebuke) cast from a higher slot, or Song of Defense's slot. Omit for the spell's own level; the server spends the slot.",
+            description: "Slot level of a reaction spell cast higher, or Song of Defense's; omit for the spell's own level. Reaction SPELLS: Shield, Counterspell, Hellish Rebuke. The server spends the slot.",
           },
           x: { type: "integer", minimum: 0, description: "Skirmisher, Relentless Avenger only: the column of the square the character moves to." },
           y: { type: "integer", minimum: 0, description: "Skirmisher, Relentless Avenger only: the row of the square the character moves to." },

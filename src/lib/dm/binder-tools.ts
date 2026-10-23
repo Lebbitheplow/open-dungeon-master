@@ -60,7 +60,7 @@ export const binderTools: ToolDef[] = [
           questId: { type: "string", description: "The quest to change; omit to add one." },
           title: { type: "string", description: "What the quest is called." },
           objectives: { type: "array", items: { type: "string" }, description: "The steps, one line each. Replaces the list." },
-          status: { type: "string", enum: ["active", "done", "failed"], description: "Default 'active'." },
+          status: { type: "string", enum: ["active", "done", "failed"], description: "Default: 'active'." },
         },
         required: [],
       },
@@ -77,7 +77,7 @@ export const binderTools: ToolDef[] = [
         properties: {
           questId: { type: "string" },
           objectiveId: { type: "string" },
-          done: { type: "boolean", description: "Default true." },
+          done: { type: "boolean", description: "Default: true." },
         },
         required: ["questId", "objectiveId"],
       },

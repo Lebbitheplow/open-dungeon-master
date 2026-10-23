@@ -77,12 +77,12 @@ export const pcAttackTool: ToolDef = {
         approach: {
           type: "boolean",
           description:
-            "True when the player said their character moves to the target first (closes in, charges, rushes it) and the target is out of melee reach: the server walks them to the nearest open square beside it out of their movement, drawing any opportunity attacks, then attacks. Too far to reach this turn, they close in as far as they can and nothing is attacked.",
+            "True when the player said their character moves to the target first and it is out of melee reach. Closing in, charging and rushing it all count. The server walks them to the nearest open square beside it out of their movement, drawing any opportunity attacks, then attacks. Too far to reach this turn, they close in as far as they can and nothing is attacked.",
         },
         endTurn: {
           type: "boolean",
           description:
-            "True when the player said their turn ends after this attack (\"...then I end my turn\"): the server ends it once the attack resolves, as end_turn does, and the result names who acts next. Only on the last attack they declared; never call end_turn for it as well.",
+            "True when the player ends their turn after this attack: the server ends it; never call end_turn too. A player says \"...then I end my turn\". It ends once the attack resolves, as end_turn does, and the result names who acts next. Send it only on the last attack they declared.",
         },
         spell: {
           type: "string",
@@ -114,7 +114,7 @@ export const pcAttackTool: ToolDef = {
           type: "string",
           enum: ["martial arts", "frenzy", "feature"],
           description:
-            "A bonus-action attack a feature grants: 'martial arts' (a monk's unarmed strike after taking the Attack action with an unarmed strike or monk weapon; send weapon 'unarmed strike'), 'frenzy' (a raging Berserker's melee weapon attack), or 'feature' (a subclass's bonus weapon attack: Battle Magic or War Magic after casting with the action, Sudden Strike or Curving Shot after attacking, Telekinetic Master while concentrating on telekinesis; or a feat's: Great Weapon Master after a melee crit or kill, Polearm Master's butt-end strike after an Attack action with a polearm (1d4 bludgeoning), Crossbow Expert's hand crossbow shot after an Attack action with a one-handed weapon, Charger's melee attack after a Dash; the server checks the feature and the turn). The server spends the bonus action.",
+            "A feature's bonus attack: 'martial arts' (weapon 'unarmed strike'), 'frenzy' or 'feature'. The server spends the bonus action. Martial arts is a monk's unarmed strike after taking the Attack action with an unarmed strike or monk weapon; frenzy is a raging Berserker's melee weapon attack; feature is a subclass's bonus weapon attack (Battle Magic or War Magic after casting with the action, Sudden Strike or Curving Shot after attacking, Telekinetic Master while concentrating on telekinesis) or a feat's (Great Weapon Master after a melee crit or kill, Polearm Master's butt-end strike after an Attack action with a polearm (1d4 bludgeoning), Crossbow Expert's hand crossbow shot after an Attack action with a one-handed weapon, Charger's melee attack after a Dash). The server checks the feature and the turn.",
         },
         stunningStrike: {
           type: "boolean",
@@ -129,17 +129,17 @@ export const pcAttackTool: ToolDef = {
         stunShot: {
           type: "boolean",
           description:
-            "Stunning Sniper (a Tome of Heroes feat): on a ranged weapon critical hit, stun the target until the start of the shooter's next turn instead of doubling the damage. The player's choice before the roll; the server checks the feat.",
+            "Stunning Sniper (Tome of Heroes feat): stun on a ranged critical hit instead of doubling the damage. The target is stunned until the start of the shooter's next turn. The player's choice before the roll; the server checks the feat.",
         },
         charged: {
           type: "boolean",
           description:
-            "Charger's bonus-action attack after a Dash (bonusAttack 'feature'): true when they moved at least 10 feet in a straight line at the target first, which adds 5 damage.",
+            "Charger's attack: true when they moved 10+ feet straight at the target first, for +5 damage. It goes with the bonus-action attack after a Dash (bonusAttack 'feature').",
         },
         powerAttack: {
           type: "boolean",
           description:
-            "The accuracy-for-damage trade: Great Weapon Master (a heavy melee weapon) or Sharpshooter (a ranged weapon) take -5 on this attack roll for +10 damage; Level Up's Powerful Attacker rolls a heavy weapon attack at disadvantage for +10; Deadeye drops the proficiency bonus from a ranged attack roll for twice it on the damage. The player's choice before the roll; the server checks the feat and the weapon.",
+            "The accuracy-for-damage trade: -5 to hit for +10 damage (Great Weapon Master, Sharpshooter). Great Weapon Master: a heavy melee weapon; Sharpshooter: a ranged weapon. Level Up's Powerful Attacker rolls a heavy weapon attack at disadvantage for +10; Deadeye drops the proficiency bonus from a ranged attack roll for twice it on the damage. The player's choice before the roll; the server checks the feat and the weapon.",
         },
         reckless: {
           type: "boolean",
@@ -149,12 +149,12 @@ export const pcAttackTool: ToolDef = {
         nonlethal: {
           type: "boolean",
           description:
-            "A melee attack meant to knock out: a creature it drops to 0 hit points falls unconscious instead of dying and is out of the fight.",
+            "A melee attack meant to knock out: a creature it drops to 0 HP falls unconscious, not dying. That creature is out of the fight.",
         },
         hordeBreaker: {
           type: "boolean",
           description:
-            "Hunter ranger with Horde Breaker: once a turn, an extra weapon attack on a different creature within 5 feet of one they already attacked this turn. It uses no attack of their action.",
+            "Horde Breaker: once a turn, an extra weapon attack on another creature within 5 feet of the first. It is a Hunter ranger's feature, and the extra attack uses none of their action's attacks.",
         },
         useInspiration: {
           type: "boolean",
@@ -184,17 +184,17 @@ export const pcAttackTool: ToolDef = {
         whirlwind: {
           type: "boolean",
           description:
-            "Hunter ranger with Whirlwind Attack: the action makes one melee weapon attack against each creature within 5 feet; call pc_attack once per creature with whirlwind true. The first spends the whole action.",
+            "Whirlwind Attack: call pc_attack once per creature within 5 feet, each with whirlwind true. It is a Hunter ranger's feature: each call is one melee weapon attack, and the first spends the whole action.",
         },
         volley: {
           type: "boolean",
           description:
-            "Hunter ranger with Volley: the action makes one ranged weapon attack against each creature within 10 feet of the first target; call pc_attack once per creature with volley true. The first spends the whole action.",
+            "Volley: call pc_attack once per creature within 10 feet of the first target, each with volley true. It is a Hunter ranger's feature: each call is one ranged weapon attack, and the first spends the whole action.",
         },
         improvised: {
           type: "boolean",
           description:
-            "An object picked up that is no weapon on their sheet (a chair, a bottle), swung as an improvised weapon.",
+            "True when weapon names an object that is no weapon on their sheet (a chair, a bottle). It strikes as an improvised weapon.",
         },
         twoHanded: {
           type: "boolean",
@@ -223,7 +223,7 @@ export const pcAttackTool: ToolDef = {
         maneuver: {
           type: "string",
           description:
-            "Battle Master maneuver riding this weapon attack ('Trip Attack', 'Precision Attack', 'Menacing Attack'). The server spends a Superiority Die, adds it to the damage (Precision: to the attack roll), and rolls the target's save against the maneuver's rider. Feinting Attack (a creature within 5 feet, advantage) and Quick Toss (a thrown weapon) take the bonus action; Grappling Strike saves the die for the grapple that may follow as a bonus action; Maneuvering Attack lets an ally move with its reaction. Parry, Riposte, Brace, Rally and Commander's Strike are not named here.",
+            "A Battle Master maneuver riding this weapon attack, by name ('Trip Attack', 'Precision Attack'). Also 'Menacing Attack'. The server spends a Superiority Die, adds it to the damage (Precision: to the attack roll), and rolls the target's save against the maneuver's rider. Feinting Attack (a creature within 5 feet, advantage) and Quick Toss (a thrown weapon) take the bonus action; Grappling Strike saves the die for the grapple that may follow as a bonus action; Maneuvering Attack lets an ally move with its reaction. Parry, Riposte, Brace, Rally and Commander's Strike are not named here.",
         },
       },
       required: ["characterId", "targetEnemyId"],

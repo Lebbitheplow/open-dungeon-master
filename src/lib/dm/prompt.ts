@@ -1403,7 +1403,7 @@ export const requestRollTool = {
         damageType: {
           type: "string",
           description:
-            "damage only: the damage type (fire, slashing, poison...), so the target's resistances, immunities and vulnerabilities apply.",
+            "damage only: the damage type (fire, slashing, poison...), for resistances and immunities. Vulnerabilities apply too.",
         },
         advantage: {
           type: "string",
@@ -1425,7 +1425,7 @@ export const requestRollTool = {
         targetEnemyId: {
           type: "string",
           description:
-            "damage only, in combat, from someone with no sheet (an NPC ally who was never recruited): the enemy this damage strikes, exact enemyId from GAME STATE. The server applies the rolled total to that enemy automatically and reports its new state; never follow up with apply_damage. A party character's damage goes through pc_attack or the spell tools, and the server refuses it here.",
+            "damage only, in combat, from someone with no sheet: the enemy struck, exact enemyId from GAME STATE. Someone with no sheet is an NPC ally who was never recruited. The server applies the rolled total to that enemy automatically and reports its new state; never follow up with apply_damage. A party character's damage goes through pc_attack or the spell tools, and the server refuses it here.",
         },
         reason: {
           type: "string",
@@ -1436,7 +1436,7 @@ export const requestRollTool = {
           type: "string",
           enum: [...SAVE_AGAINST, NONE],
           description:
-            "saving_throw only: what the save resists: a condition (frightened, charmed, poisoned), a damage type (fire, poison), disease, dismount for being thrown from a mount, or 'none'. The server applies Brave, Fey Ancestry, Dwarven and Stout Resilience, Countercharm and the subclass traits from it.",
+            "saving_throw only: what the save resists (a condition, a damage type, disease, dismount) or 'none'. Such as frightened, charmed, poisoned; fire, poison; dismount for being thrown from a mount. The server applies Brave, Fey Ancestry, Dwarven and Stout Resilience, Countercharm and the subclass traits from it.",
         },
         magical: {
           type: "boolean",
@@ -1450,7 +1450,7 @@ export const requestRollTool = {
         tool: {
           type: "string",
           description:
-            "ability_check with a tool only: the tool's name as the sheet lists it (\"thieves' tools\" to pick a lock or disarm a trap, \"herbalism kit\"). A character proficient in it adds their proficiency bonus; the server does it, so never add it to an expression yourself.",
+            "ability_check with a tool only: the tool's name as the sheet lists it (\"thieves' tools\"). Also \"herbalism kit\"; thieves' tools pick a lock or disarm a trap. A character proficient in it adds their proficiency bonus; the server does it, so never add it to an expression yourself.",
         },
         useInspiration: {
           type: "boolean",
@@ -1465,17 +1465,17 @@ export const requestRollTool = {
         againstEnemyId: {
           type: "string",
           description:
-            "A contest (SRD 5.1): the enemy of the running fight that opposes this skill or ability check. The server rolls that creature's own check from its stat block (Insight against a lie, Perception against Stealth, Athletics against Athletics) and the character must beat it; a tie leaves things as they were. Send no dc or difficulty with it.",
+            "A contest in a fight: the enemy opposing this skill or ability check, exact enemyId from GAME STATE. The server rolls that creature's own check from its stat block, as SRD 5.1 contests do (Insight against a lie, Perception against Stealth, Athletics against Athletics) and the character must beat it; a tie leaves things as they were. Send no dc or difficulty with it.",
         },
         againstMonster: {
           type: "string",
           description:
-            "Out of a fight: the stat block, by name, of the creature that opposes the check (a guard, a spy, a goblin); the server rolls its check the same way.",
+            "Out of a fight: the stat block, by name, of the creature that opposes the check (a guard, a goblin). The server rolls that creature's own check from its stat block, as for againstEnemyId.",
         },
         contestSkill: {
           type: "string",
           description:
-            "The creature's skill in the contest, when the usual pairing is not the one wanted (it rolls Athletics to hold a door shut against a shove).",
+            "The creature's skill in the contest ('athletics'), when the usual pairing is not the one wanted. Such as Athletics to hold a door shut against a shove.",
         },
       },
       required: ["kind"],

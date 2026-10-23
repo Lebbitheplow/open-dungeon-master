@@ -147,21 +147,21 @@ const characterProperty = {
 const ITEM_SRD_NAME_PROPERTY = {
   type: "string",
   description:
-    "The SRD or pack item this is, by its English name ('Elixir of Health', 'Potion of Healing', 'Longsword'), when name is the table's own ('Elisir di salute'): the server reads what it does from that item. A magic weapon or armor built on a chosen base is named with it as the SRD writes it ('Flame Tongue Scimitar', 'Vicious Rapier', 'Mithral Half Plate', 'Chain Mail of Fire Resistance'). Omit when name already is that English name, for loot no list has, and while it is unidentified.",
+    "English SRD or pack name ('Potion of Healing') when name is the table's own; omit for invented loot. E.g. 'Longsword' for name 'Spada lunga': the server reads what it does from that item. A magic weapon or armor built on a chosen base is named with it as the SRD writes it ('Flame Tongue Scimitar', 'Vicious Rapier', 'Mithral Half Plate', 'Chain Mail of Fire Resistance'). Also omit when name already is that English name, and while it is unidentified.",
 };
 
 const ITEM_TAGS_PROPERTY = {
   type: "array",
   items: { type: "string", enum: [...ITEM_TAGS] },
   description:
-    "What the item is, beyond what its SRD or pack item says: the server reads these for potions, scrolls, rations and water, light, foci, ammunition, silvered or adamantine weapons, and treasure. For loot no list has (loot you invent), all of what it is, [] when none fits. For an SRD or pack item, only what the item adds to its row: a silvered longsword is srdName 'Longsword' with tags ['silvered']; omit them otherwise. Omit while it is unidentified.",
+    "What the item is beyond its SRD or pack row; all of it for invented loot, [] when none fits. The server reads these for potions, scrolls, rations and water, light, foci, ammunition, silvered or adamantine weapons, and treasure. For an SRD or pack item, only what it adds to its row: a silvered longsword is srdName 'Longsword' with tags ['silvered']; omit them otherwise. Omit while it is unidentified.",
 };
 
 // The spell a spell scroll holds (src/lib/dm/consumables.ts).
 const ITEM_SPELL_PROPERTY = {
   type: "string",
   description:
-    "A spell scroll only (tags with scroll): the spell it holds, by the spell's name as the spell lists give it ('Fireball'), whatever the scroll is called. Reading it casts that spell. Omit while it is unidentified.",
+    "A spell scroll only (tags with scroll): the spell it holds, as the spell lists name it ('Fireball'). Use the spell's name whatever the scroll is called. Reading it casts that spell. Omit while it is unidentified.",
 };
 
 // What one is worth, for a thing the content pack does not price
@@ -171,7 +171,7 @@ const ITEM_WORTH_PROPERTY = {
   minimum: 0.01,
   maximum: 100000,
   description:
-    "What one is worth in gold pieces, for a thing no SRD or pack row prices: a gem (10 to 5,000 gp), an art object (25 to 7,500 gp), a trade good, loot you invent. The server prices its sale by it (full for treasure, half for anything else) and a spell's costly material by it. Write the name without its worth. Omit for an SRD item, and while it is unidentified.",
+    "Gold pieces one is worth, for a thing no SRD or pack row prices: a gem, a trade good, invented loot. A gem is 10 to 5,000 gp, an art object 25 to 7,500 gp. The server prices its sale by it (full for treasure, half for anything else) and a spell's costly material by it. Write the name without its worth. Omit for an SRD item, and while it is unidentified.",
 };
 
 function tool(name: string, description: string, extra: Record<string, unknown>, required: string[]): ToolDef {
@@ -192,7 +192,7 @@ function tool(name: string, description: string, extra: Record<string, unknown>,
 
 export const mutationTools: ToolDef[] = [
   applyDamageTool,
-  tool("heal", "Restore a character's hit points, capped at their max. For a HEALING SPELL, pass spell, casterId and level instead of amount: the server casts it (the caster must have the spell; the slot and the action are spent), rolls the spell's real dice, adds the caster's ability modifier, and shows the dice card.", {
+  tool("heal", "Restore a character's HP, capped at their max: amount or dice for plain healing, or spell, casterId and level for a HEALING SPELL. For a spell the server casts it (the caster must have the spell; the slot and the action are spent), rolls the spell's real dice, adds the caster's ability modifier, and shows the dice card.", {
     amount: { type: "integer", minimum: 1, maximum: 200, description: "Hit points the server rolled this turn, for healing that is not a spell." },
     dice: { type: "string", description: "Dice the server rolls for healing that is not a spell ('2d4+2'). Instead of amount." },
     spell: {
@@ -211,18 +211,18 @@ export const mutationTools: ToolDef[] = [
     },
     temp: {
       type: "boolean",
-      description: "True for TEMPORARY hit points instead of healing (they do not stack; the higher value wins).",
+      description: "True for TEMPORARY HP instead of healing (they do not stack; the higher value wins).",
     },
   }, []),
   tool(
     "stabilize",
-    "Stabilize a DYING character at 0 HP without healing. It takes the healer's action: with method 'check' the server rolls their DC 10 Wisdom (Medicine) check; 'kit' (one of the ten uses of the healer's kit they carry) and 'spell' (Spare the Dying) need no check. On a battle map the healer must be within 5 feet. A stable character stops making death saves, stays unconscious at 0 HP, and regains 1 hit point after 1d4 hours.",
+    "Stabilize a DYING character at 0 HP without healing. It takes the healer's action: with method 'check' the server rolls their DC 10 Wisdom (Medicine) check; 'kit' (one of the ten uses of the healer's kit they carry) and 'spell' (Spare the Dying) need no check. On a battle map the healer must be within 5 feet. A stable character stops making death saves, stays unconscious at 0 HP, and regains 1 HP after 1d4 hours.",
     {
       healerId: { type: "string", description: "Whoever tends them: exact characterId from GAME STATE." },
       method: {
         type: "string",
         enum: [...STABILIZE_METHODS],
-        description: "Default 'check'.",
+        description: "Default: 'check'.",
       },
     },
     ["healerId"],
@@ -237,7 +237,7 @@ export const mutationTools: ToolDef[] = [
         type: "object",
         additionalProperties: false,
         properties: {
-          characterIds: { type: "array", items: { type: "string" }, minItems: 1 },
+          characterIds: { type: "array", items: { type: "string" }, minItems: 1, description: "Who shares the award: exact characterIds from GAME STATE." },
           amount: { type: "integer", minimum: 1, maximum: 20000, description: "XP for EACH character." },
           delta: {
             type: "integer",
@@ -253,17 +253,22 @@ export const mutationTools: ToolDef[] = [
       },
     },
   },
-  tool("modify_gold", "Add or remove money (negative delta = spend/lose). Floors at 0.", {
-    delta: { type: "integer", minimum: -100000, maximum: 100000 },
-    coins: { type: "string", description: "Coins by code pp, gp, ep, sp, cp, like '3 gp 4 sp'. For anything under a gold piece, or a price quoted in another coin, whatever the table's language ('340 sp', '2 pp 5 sp'). Overrides delta's size; delta's sign still says gain or spend (-1 to spend it, 1 to gain it)." },
-    additional: { type: "boolean", description: "Only when a player just accepted this same amount and this is truly another, separate sum from a different source." },
+  tool("modify_gold", "Add or remove a character's money, as delta in gold or as coins; the purse floors at 0.", {
+    delta: {
+      type: "integer",
+      minimum: -100000,
+      maximum: 100000,
+      description: "Whole gold pieces: positive to gain, negative to spend or lose. coins overrides its size.",
+    },
+    coins: { type: "string", description: "Money in the coins' codes pp, gp, ep, sp and cp ('3 gp 4 sp'), whatever the table's language. Also '340 sp' or '2 pp 5 sp'. For anything under a gold piece or priced in another coin; whole coins only. It overrides delta's size; delta's sign still says gain or spend (-1 to spend it, 1 to gain it)." },
+    additional: { type: "boolean", description: "Only when a player just accepted this same amount and this is another sum from a different source." },
   }, ["delta"]),
   tool("grant_item", "Give a character an item (loot, purchase, gift), only one the fiction actually put in their hands.", {
     ...waypointProperty,
-    unidentified: { type: "boolean", description: "True when the party cannot tell what it is yet: then name is the description they would use ('an ornate silver ring'), never the true name, and reveal_item names it later." },
+    unidentified: { type: "boolean", description: "True when the party cannot tell what it is yet; name is then their description, not the true name. E.g. 'an ornate silver ring'; reveal_item names it later." },
     name: { type: "string" },
     qty: { type: "integer", minimum: 1, maximum: 99 },
-    additional: { type: "boolean", description: "Only when a player just accepted this same item and this is truly another one from a different source." },
+    additional: { type: "boolean", description: "Only when a player just accepted this same item and this is another one from a different source." },
     srdName: ITEM_SRD_NAME_PROPERTY,
     tags: ITEM_TAGS_PROPERTY,
     worth: ITEM_WORTH_PROPERTY,
@@ -284,7 +289,7 @@ export const mutationTools: ToolDef[] = [
   ...resourceTools,
   setConditionTool,
   clearConditionTool,
-  tool("use_spell_slot", "Cast a spell that no other tool resolves (a utility spell, a summoning, a ritual): the server checks the caster holds the spell and can cast it now, spends the slot of the spell's level (or the higher one named), its casting time from the turn and any costly material, and tracks concentration: a new concentration spell ends the previous one and its effects. A spell that leaves an area on the battle map with nobody caught in it yet (Fog Cloud, Darkness, Silence, Spike Growth, Web, Moonbeam, Daylight, a Wall of Stone, Force, Ice, Fire or Thorns, Guardian of Faith) is laid there (atX); the server applies the area from then on (movement, sight, Silence, the saves and damage of creatures entering it or starting or ending a turn in it) and removes it when the concentration or the duration ends.", {
+  tool("use_spell_slot", "Cast a spell that no other tool resolves (a utility spell, a summoning, a ritual): the server spends the slot and tracks concentration. It checks the caster holds the spell and can cast it now, and spends the slot of the spell's level (or the higher one named), its casting time from the turn and any costly material; a new concentration spell ends the previous one and its effects. A spell that leaves an area on the battle map with nobody caught in it yet (Fog Cloud, Darkness, Silence, Spike Growth, Web, Moonbeam, Daylight, a Wall of Stone, Force, Ice, Fire or Thorns, Guardian of Faith) is laid there (atX); the server applies the area from then on (movement, sight, Silence, the saves and damage of creatures entering it or starting or ending a turn in it) and removes it when the concentration or the duration ends.", {
     level: { type: "integer", minimum: 1, maximum: 9 },
     spell: { type: "string", description: "Exact name of the spell being cast, from the character's spell list." },
     ritual: {
@@ -299,7 +304,7 @@ export const mutationTools: ToolDef[] = [
       type: "integer",
       minimum: 1,
       maximum: 100,
-      description: "For a material priced per creature affected (Astral Projection), per corpse (Create Undead) or per Hit Die of the target (Imprisonment): how many.",
+      description: "How many, for a material priced per creature, corpse or Hit Die of the target. Astral Projection, Create Undead and Imprisonment price it this way.",
     },
     ...ZONE_ARGS,
   }, ["level", "spell"]),
@@ -314,7 +319,7 @@ export const mutationTools: ToolDef[] = [
   ),
   tool(
     "update_sheet",
-    "Set who a character is in the story, including a feat or an ability score a curse changed; never a level, hit points, XP, AC, gold or conditions (heal, apply_damage, party_award, modify_gold, set_condition and set_effect move those). Include ONLY the fields that change.",
+    "Set who a character is in the story (a feat, a curse's ability score); never a level, HP, XP, AC, gold or conditions: heal, apply_damage, party_award, modify_gold and set_condition move those. A modifier to one of them for a while goes through set_effect. Include ONLY the fields that change.",
     {
       name: { type: "string" },
       race: { type: "string" },

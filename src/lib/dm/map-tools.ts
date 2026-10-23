@@ -383,12 +383,12 @@ export const moveTokenTool: ToolDef = {
         disengage: {
           type: "boolean",
           description:
-            "An enemy Disengages before it walks, so leaving reach draws no opportunity attack: a bonus action for a creature with Nimble Escape (once a round), its action for anyone else.",
+            "An enemy Disengages before it walks, so leaving reach draws no opportunity attack. A bonus action for a creature with Nimble Escape (once a round), its action for anyone else.",
         },
         drag: {
           type: "boolean",
           description:
-            "An enemy drags the character it grapples along: its speed is halved (unless the character is two sizes smaller) and the server sets the character down beside it, so the grapple holds. Without drag, walking out of reach lets go.",
+            "An enemy drags the character it grapples, keeping the grapple; without drag, leaving reach lets go. Its speed is halved unless the character is two sizes smaller, and the server sets the character down beside it.",
         },
         teleport: { type: "boolean", description: "No walking and no movement spent." },
         spell: { type: "string", description: "A teleport's spell or ability (Misty Step)." },

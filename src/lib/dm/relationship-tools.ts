@@ -138,13 +138,13 @@ export function relationshipTools(campaign: Campaign, inEncounter = false): Tool
             description: "One short line on what actually happened, for the relationship's memory.",
           },
           witnesses: { type: "array", items: { type: "string" }, description: "Deeds only: everyone else tracked who saw it, by exact name." },
-          severity: { type: "string", enum: [...DEED_SEVERITIES], description: "Deeds only. Default serious." },
-          faction: { type: "string", description: "Deeds only: the faction whose people it was done to or for." },
+          severity: { type: "string", enum: [...DEED_SEVERITIES], description: "Deeds only: how grave it was, where minor counts half and atrocity double. Default: serious. The server counts a mercy sent as an atrocity as serious." },
+          faction: { type: "string", description: "Deeds only: the faction whose people it was done to or for, by the name a companion's loyalty uses. The server matches it against the faction loyalty of each companion who saw it." },
           demand: {
             type: "string",
             description: "Deeds only: what a companion at a warning demands if this brings an ultimatum, in their words.",
           },
-          deadlineHours: { type: "integer", minimum: 1, maximum: MAX_DEADLINE_HOURS, description: "Deeds only: hours the demand gives (24)." },
+          deadlineHours: { type: "integer", minimum: 1, maximum: MAX_DEADLINE_HOURS, description: "Deeds only: how many hours the demand gives. Default: 24." },
         },
         required: ["characterId", "subject", "beat"],
       },
@@ -168,7 +168,7 @@ export function relationshipTools(campaign: Campaign, inEncounter = false): Tool
       function: {
         name: "relationship_end",
         description:
-          "Record a relationship changing for good, for a reason the relationship rules give ('parting' is also the ally who stays behind while the party travels on), or 'breakup' or 'betrayal' when a romance ends badly. Every reason but 'parting' closes the book. Call it BEFORE narrating the goodbye.",
+          "Record a relationship changing for good, for a reason the relationship rules give, or 'breakup' or 'betrayal' when a romance ends badly; every reason but 'parting' closes the book. A 'parting' is also for the ally who stays behind while the party travels on. Call it BEFORE narrating the goodbye.",
         parameters: {
           type: "object",
           additionalProperties: false,
@@ -179,7 +179,7 @@ export function relationshipTools(campaign: Campaign, inEncounter = false): Tool
             by: {
               type: "string",
               enum: ["character", "npc"],
-              description: "betrayal only: who betrayed whom. character (the default): the character betrayed them, and it costs their regard. npc: they betrayed the character; their regard stays what it truly was, and an act they kept up comes out.",
+              description: "Only when reason is betrayal: character if the character was the betrayer, npc if the NPC was. Default: character, which costs their regard; with npc their regard stays what it truly was, and an act they kept up comes out.",
             },
             note: { type: "string", description: "One short line for the record." },
           },
@@ -194,7 +194,7 @@ export function relationshipTools(campaign: Campaign, inEncounter = false): Tool
       function: {
         name: "romance_advance",
         description:
-          "Take a romance one step further: interested (a quiet, unspoken pull), courting (declared out loud), together (partners), betrothed (a proposal), married (wed). Call it BEFORE narrating how it goes. After the checks the romance rules describe, the server decides whether they accept, rolling when it is genuinely uncertain. One step per exchange. With initiator npc it is the NPC's own first move toward a character open to advances, allowed only when a director note says they are ready: the character's player answers it.",
+          "Take a romance one step further: interested (a quiet, unspoken pull), courting (declared out loud), together (partners), betrothed (a proposal), married (wed). Call it BEFORE narrating how it goes. After the checks the romance rules describe, the server decides whether they accept, rolling when it is genuinely uncertain. One step per exchange. An NPC's move (initiator npc) goes only toward a character open to advances, and the character's player answers it.",
         parameters: {
           type: "object",
           additionalProperties: false,
@@ -204,17 +204,17 @@ export function relationshipTools(campaign: Campaign, inEncounter = false): Tool
             to: {
               type: "string",
               enum: ["interested", "courting", "together", "betrothed", "married"],
-              description: "The next rung only; the server refuses a skipped step. An NPC's move is always courting.",
+              description: "The next rung only, and courting for an NPC's move; the server refuses a skipped step.",
             },
             initiator: {
               type: "string",
               enum: ["player", "npc"],
-              description: "Who makes the move: player (the default) or npc (their first move, when a director note says they are ready).",
+              description: "Who makes the move: player, or npc for an NPC's first move once a director note says they are ready. Default: player.",
             },
             note: {
               type: "string",
               description:
-                "One short line describing the moment, kept in the relationship's memory ('proposed on the bridge at Highmoor'); with initiator npc, their own words to the character.",
+                "One short line for the relationship's memory, or with initiator npc their words to the character. For a player's step it describes the moment, such as 'proposed on the bridge at Highmoor'.",
             },
           },
           required: ["characterId", "subject", "to"],

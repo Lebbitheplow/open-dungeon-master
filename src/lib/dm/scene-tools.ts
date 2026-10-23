@@ -67,13 +67,13 @@ export const sceneTools: ToolDef[] = [
         type: "object",
         additionalProperties: false,
         properties: {
-          characterId: { type: "string" },
+          characterId: { type: "string", description: "Exact characterId from GAME STATE." },
           skill: { type: "string", description: "Skill name ('persuasion')." },
           ability: { type: "string", enum: ["str", "dex", "con", "int", "wis", "cha"] },
           difficulty: {
             type: "string",
             enum: [...DIFFICULTY_TIERS],
-            description: "Or send an exact dc.",
+            description: "How hard this attempt is; the server sets the DC. Or send an exact dc.",
           },
           dc: { type: "integer", minimum: 1, maximum: 30 },
           approach: { type: "string", description: "What they tried, in a few words." },

@@ -54,7 +54,7 @@ export const petTools: ToolDef[] = [
     function: {
       name: "summon_pet",
       description:
-        "Summon or bond the creature a feature grants a character: Find Familiar (kind=familiar, form=bat/cat/crab/frog/hawk/lizard/octopus/owl/poisonous snake/quipper/rat/raven/sea horse/spider/weasel, or imp/quasit/pseudodragon/sprite with Pact of the Chain), a Beast Master ranger's companion (kind=beast_companion, a Medium or smaller beast of CR 1/4 or lower), a Drakewarden's drake (kind=drake), or a story-granted pet (kind=other, with the stats). The server validates the feature, loads the stat block, and attaches the pet to their sheet. Call it BEFORE narrating the summon.",
+        "Summon or bond a creature a feature grants a character: kind familiar (Find Familiar), beast_companion (Beast Master), drake (Drakewarden) or other (a story pet, with hp and ac). A Find Familiar form is bat, cat, crab, frog, hawk, lizard, octopus, owl, poisonous snake, quipper, rat, raven, sea horse, spider or weasel, or imp, quasit, pseudodragon or sprite with Pact of the Chain. A Beast Master companion is a Medium or smaller beast of CR 1/4 or lower. The server validates the feature, loads the stat block, and attaches the pet to their sheet. Call it BEFORE narrating the summon.",
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -76,7 +76,7 @@ export const petTools: ToolDef[] = [
     function: {
       name: "pet_attack",
       description:
-        "Resolve a character's pet attacking an enemy: the server checks the pet may attack at all (plain familiars cannot; Pact of the Chain forms, companions and drakes can), rolls to-hit against the enemy's real AC and damage with the pet's real numbers, and applies the result. In a fight it happens on the owner's own turn, while the owner can act, and the server charges it: a Beast Master companion costs the ranger's action, a drake the bonus action, a Pact of the Chain familiar one of the warlock's attacks of the Attack action (once a turn), a story pet the owner's action. A refusal spends nothing.",
+        "Resolve a character's pet attacking an enemy; in a fight it happens on the owner's own turn, and the server rolls and applies it with the pet's real numbers. The server checks the pet may attack at all (plain familiars cannot; Pact of the Chain forms, companions and drakes can) and rolls to-hit against the enemy's real AC. In a fight the owner must be able to act, and the server charges the attack: a Beast Master companion costs the ranger's action, a drake the bonus action, a Pact of the Chain familiar one of the warlock's attacks of the Attack action (once a turn), a story pet the owner's action. A refusal spends nothing.",
       parameters: {
         type: "object",
         additionalProperties: false,

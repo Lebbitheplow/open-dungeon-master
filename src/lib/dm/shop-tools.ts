@@ -103,14 +103,14 @@ export const shopTools: ToolDef[] = [
     function: {
       name: "haggle",
       description:
-        "A haggling check at a shop: success lowers prices a step, failure leaves them where they were, and failing the DC by 5 or more raises them a step. The server rolls it against the settlement's DC (city 12, town 13, village 15, hamlet 17) with Persuasion, or with skill intimidation (a bad failure raises prices two steps) or deception (a keeper falls for it once: one Deception try per shop). The result and the used try belong to the haggler and the characters in present, the others at the counter now; anyone else pays the shop's normal price and keeps their own try. One try per character per shop until it restocks. Narrate the outcome the reply gives.",
+        "A haggling check at a shop: success lowers prices a step, failure leaves them where they were, and failing the DC by 5 or more raises them a step. The server rolls it against the settlement's DC (city 12, town 13, village 15, hamlet 17) with Persuasion, or with skill intimidation (a bad failure raises prices two steps) or deception (a keeper falls for it once: one Deception try per shop). The result and the used try belong to the haggler and the characters in present; anyone else pays the shop's normal price and keeps their own try. One try per character per shop until it restocks. Narrate the outcome the reply gives.",
       parameters: {
         type: "object",
         properties: {
-          characterId: { type: "string" },
-          shop: { type: "string" },
+          characterId: { type: "string", description: "The character haggling: exact characterId from GAME STATE." },
+          shop: { type: "string", description: "The shop in SHOPS HERE, by name or id." },
           skill: { type: "string", enum: ["persuasion", "intimidation", "deception"] },
-          present: { type: "array", items: { type: "string" }, description: "Others at the counter now, who share the result." },
+          present: { type: "array", items: { type: "string" }, description: "Others at the counter now, who share the result: exact characterIds from GAME STATE." },
         },
         required: ["characterId", "shop"],
       },

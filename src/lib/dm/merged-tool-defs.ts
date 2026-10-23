@@ -38,12 +38,12 @@ export const applyDamageTool: ToolDef = {
             type: "object",
             additionalProperties: false,
             properties: {
-              enemyId: { type: "string" },
-              characterId: { type: "string" },
+              enemyId: { type: "string", description: "An enemy: exact enemyId from GAME STATE." },
+              characterId: { type: "string", description: "Or a character: exact characterId from GAME STATE." },
               share: { type: "string", enum: ["none", "half", "full", "double"] },
             },
           },
-          description: "Several from ONE total, each at its share, for a reason no save covers (cover, an immunity, diving clear). Instead of characterId or enemyId.",
+          description: "Several targets from ONE total, each at its share, for a reason no save covers. Such as cover, an immunity, diving clear. Instead of characterId or enemyId.",
         },
         amount: { type: "integer", minimum: 1, maximum: 500, description: "A damage total the server rolled this turn (request_roll kind=damage)." },
         dice: { type: "string", description: "Dice the server rolls instead ('2d6')." },
@@ -61,7 +61,7 @@ export const applyDamageTool: ToolDef = {
         source: {
           type: "string",
           enum: ["hazard", "environment"],
-          description: "On an enemy: a hazard (a trap, a falling object) or the environment (fire, lava, acid); nothing else.",
+          description: "Required on an enemy: 'hazard' (a trap, a falling object) or 'environment' (fire, lava, acid). Nothing else.",
         },
         reason: { type: "string", description: "Short in-fiction cause." },
       },
@@ -75,7 +75,7 @@ export const setConditionTool: ToolDef = {
   function: {
     name: "set_condition",
     description:
-      "Apply a condition to a character or an enemy. Use the exact 5e name when one fits: blinded, charmed, deafened, frightened, grappled, incapacitated, invisible, paralyzed, petrified, poisoned, prone, restrained, stunned, unconscious, exhaustion. Custom names are allowed for story effects. Always give a duration when the fiction has one, because only timed conditions ever expire on their own: rounds for combat-scale effects, minutes, hours or days for longer ones (a poison, a curse, a potion), or saveAbility + saveDc for save-ends effects the server re-rolls. In combat the countdown runs by round; outside it the in-world clock runs it down as the party travels, rests, or passes time.",
+      "Apply a condition to a character or an enemy by its exact 5e name when one fits; always give a duration the fiction has, since only timed conditions expire on their own. The 5e names are blinded, charmed, deafened, frightened, grappled, incapacitated, invisible, paralyzed, petrified, poisoned, prone, restrained, stunned, unconscious and exhaustion. Custom names are allowed for story effects. A duration is rounds for combat-scale effects, minutes, hours or days for longer ones (a poison, a curse, a potion), or saveAbility + saveDc for save-ends effects the server re-rolls. In combat the countdown runs by round; outside it the in-world clock runs it down as the party travels, rests, or passes time.",
     parameters: {
       type: "object",
       additionalProperties: false,
@@ -116,12 +116,12 @@ export const setConditionTool: ToolDef = {
         saveDc: { type: "integer", minimum: 1, maximum: 30, description: "Save-ends DC." },
         magical: {
           type: "boolean",
-          description: "The condition comes from magic (a creature's magical sleep, an enchanted trap): traits that resist magic apply, such as Fey Ancestry against being put to sleep.",
+          description: "True when the condition comes from magic, so traits that resist magic apply (Fey Ancestry vs sleep). E.g. a creature's magical sleep, an enchanted trap.",
         },
         sourceEnemyId: {
           type: "string",
           description:
-            "The enemy that caused it, when the condition is tied to one (the charmer, the grappler, the source of the fear): exact enemyId from GAME STATE.",
+            "The enemy that caused it, when the condition is tied to one: exact enemyId from GAME STATE. E.g. the charmer, the grappler, the source of the fear.",
         },
         sourceCharacterId: {
           type: "string",

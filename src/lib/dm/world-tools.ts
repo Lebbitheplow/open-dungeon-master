@@ -74,7 +74,7 @@ const WATER_PROPERTY = {
   type: "string",
   enum: ["plenty", "half", "none"],
   description:
-    "Only when the table plays the supplies variant and water is scarce (a desert, a siege): half is a DC 15 Constitution save each day against a level of exhaustion, none a level each day whatever they carry. It holds until you send plenty.",
+    "Only for the supplies variant when water is scarce (a desert, a siege): half or none. With half, each day is a DC 15 CON save against a level of exhaustion; with none, each day costs a level whatever they carry. It holds until you send plenty.",
 };
 
 export const worldTools: ToolDef[] = [
@@ -88,7 +88,7 @@ export const worldTools: ToolDef[] = [
         type: "object",
         additionalProperties: false,
         properties: {
-          cr: { type: "number", description: "The challenge rating of what they overcame (or the toughest enemy's), which the treasure is scaled to." },
+          cr: { type: "number", description: "The challenge rating of what they overcame (or the toughest enemy's), which scales the treasure." },
           characterIds: {
             type: "array",
             items: { type: "string" },
@@ -110,16 +110,16 @@ export const worldTools: ToolDef[] = [
     function: {
       name: "damage_object",
       description:
-        "Resolve an attempt to break an inanimate object (a door, a chest, a rope, a window) against the DMG object table. Give its name, material and size (or an explicit ac and hp). Each call is one blow. Objects are immune to poison and psychic damage. A Wall of Ice is struck a section at a time: name it 'Wall of Ice' and give the section (10-foot sections from the end it was laid from): the server uses its AC 12 and 30 hit points, doubles fire, and when it breaks opens its squares and lays the frigid air.",
+        "Resolve one blow at an inanimate object (a door, a chest, a rope, a window) against the DMG object table: give its name, material and size, or an explicit ac and hp. Each call is one blow. Objects are immune to poison and psychic damage. A Wall of Ice is struck a section at a time: name it 'Wall of Ice' and give the section, 10 feet each. The server uses a section's AC 12 and 30 HP, doubles fire, and when it breaks opens its squares and lays the frigid air.",
       parameters: {
         type: "object",
         additionalProperties: false,
         properties: {
-          name: { type: "string", description: "What the object is ('the oak door'). The server keeps its damage between blows." },
+          name: { type: "string", description: "What the object is ('the oak door'), or 'Wall of Ice' with its section. The server keeps its damage between blows." },
           section: { type: "integer", minimum: 1, description: "A Wall of Ice's section, numbered from the end it was laid from." },
           characterId: { type: "string", description: "The character striking it with a weapon: exact characterId from GAME STATE." },
           weapon: { type: "string", description: "The weapon they strike with, from their equipment." },
-          improvised: { type: "boolean", description: "The weapon is an object they picked up that is no weapon on their sheet: it strikes as an improvised weapon." },
+          improvised: { type: "boolean", description: "True when weapon names an object that is no weapon on their sheet (a chair, a bottle). It strikes as an improvised weapon." },
           damageType: { type: "string", description: "Damage type, for damage you pass yourself." },
           material: { type: "string", enum: MATERIALS, description: "What the object is made of." },
           size: { type: "string", enum: SIZES, description: "Its size class." },
@@ -147,17 +147,17 @@ export const worldTools: ToolDef[] = [
           hours: { type: "integer", description: "Hours travelled that day. Give this or miles." },
           miles: {
             type: "number",
-            description: "Miles to cover instead of hours: the server works out the hours the pace, the ground and the weather need (one day's leg, 24 hours at most).",
+            description: "Miles to cover instead of hours, one day's leg of 24 hours at most. The server works out the hours the pace, the ground and the weather need.",
           },
           terrain: {
             type: "string",
             enum: ["normal", "difficult"],
-            description: "Difficult terrain (dense forest, deep swamp, steep mountains, ice) halves the distance covered. Default 'normal'.",
+            description: "Difficult terrain (dense forest, deep swamp, steep mountains, ice) halves the distance covered. Default: 'normal'.",
           },
           pace: {
             type: "string",
             enum: ["fast", "normal", "slow"],
-            description: "Travel pace. Default 'normal'.",
+            description: "Travel pace. Default: 'normal'.",
           },
           characterIds: {
             type: "array",
@@ -185,7 +185,7 @@ export const worldTools: ToolDef[] = [
           unit: {
             type: "string",
             enum: ["minutes", "hours", "days", "weeks"],
-            description: "Unit of the amount. Default 'hours'.",
+            description: "Unit of the amount. Default: 'hours'.",
           },
           water: WATER_PROPERTY,
           reason: { type: "string", description: "Short note on what filled the time." },
@@ -199,7 +199,7 @@ export const worldTools: ToolDef[] = [
     function: {
       name: "set_weather",
       description:
-        "Change the weather over the table when the story calls for it (a storm rolls in, the fog lifts). The server rolls weather on its own at each dawn and on long journeys; call this only to overrule it. Rain and fog cut what anyone sees and give disadvantage on Perception by sight; a gale gives disadvantage on ranged attacks past 30 ft; frigid or hot air is a hazard on a long march; the board's light follows the sky outdoors.",
+        "Change the weather over the table when the story calls for it (a storm rolls in, the fog lifts). The server rolls weather on its own at each dawn and on long journeys; call this only to overrule it. Rain and fog cut what anyone sees and give disadvantage on Perception by sight; a gale gives disadvantage on ranged attacks past 30 feet; frigid or hot air is a hazard on a long march; the board's light follows the sky outdoors.",
       parameters: {
         type: "object",
         additionalProperties: false,
