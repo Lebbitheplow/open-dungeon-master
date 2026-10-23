@@ -23,6 +23,7 @@ import {
   type FullPatchSheetInput,
 } from "@/lib/schemas/sheet";
 import { textKey } from "@/lib/language/text-logic";
+import { repairedPets } from "@/lib/srd/familiar-forms";
 import { rowName } from "@/lib/srd/item-row";
 
 type FeatChoices = NonNullable<CreateSheetInput["featChoices"]>;
@@ -151,7 +152,9 @@ function mapSheet(row: SheetRow): CharacterSheet {
     conditionMeta: parseJson<CharacterSheet["conditionMeta"]>(row.condition_meta_json, {}),
     resources: parseJson<CharacterSheet["resources"]>(row.resources_json, {}),
     wildShape: parseJson<CharacterSheet["wildShape"]>(row.wild_shape_json, null),
-    pets: parseJson<CharacterSheet["pets"]>(row.pets_json, []),
+    // A familiar stored with an attack the creature table has since put
+    // right takes the table's (src/lib/srd/familiar-forms.ts).
+    pets: repairedPets(parseJson<CharacterSheet["pets"]>(row.pets_json, [])),
     summon: parseJson<CharacterSheet["summon"]>(row.summon_json ?? null, null),
     exhaustion: row.exhaustion ?? 0,
     deathSaves: parseJson<CharacterSheet["deathSaves"]>(row.death_saves_json, null),

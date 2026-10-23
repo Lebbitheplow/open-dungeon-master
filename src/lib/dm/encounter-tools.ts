@@ -70,7 +70,6 @@ import {
   moveTokenTool,
   publishBattleMapUpdate,
   setMovementTool,
-  teleportTokenTool,
 } from "@/lib/dm/map-tools";
 import {
   applyEnemyDamage,
@@ -109,7 +108,7 @@ import { isIncapacitated } from "@/lib/dm/condition-logic";
 import { endTurnSaves, startTurnConditions, tickEncounterConditions } from "@/lib/dm/condition-tick";
 import { endTurns } from "@/lib/dm/turn-end";
 import { turnStartEffects } from "@/lib/dm/turn-start-effects";
-import { damageEnemyTool, endEncounterTool, endTurnTool, enemyAttackTool, startEncounterTool, type ToolDef } from "@/lib/dm/encounter-tool-defs";
+import { endEncounterTool, endTurnTool, enemyAttackTool, startEncounterTool, type ToolDef } from "@/lib/dm/encounter-tool-defs";
 import { RUN_PREPARED_ENCOUNTER, runPreparedEncounter } from "@/lib/dm/prepared-encounter-tool";
 import { rollDeathSave } from "@/lib/dm/death";
 import { getBattleMapForEncounter, getTokenByRef, resetRoundBudgets, resetTurnBudgets } from "@/lib/db/battle-maps";
@@ -162,10 +161,8 @@ export function encounterTools(hasActiveEncounter: boolean): ToolDef[] {
         pcAttackTool,
         castAtEnemyTool,
         castAtPlayerTool,
-        damageEnemyTool,
         enemyAttackTool,
         moveTokenTool,
-        teleportTokenTool,
         setMovementTool,
         endTurnTool,
         endEncounterTool,
@@ -267,7 +264,7 @@ function handleStartEncounter(
   if (getActiveEncounter(campaign.id)) {
     return {
       error:
-        "An encounter is already active. Use damage_enemy and enemy_attack, or end_encounter first.",
+        "An encounter is already active. Use apply_damage and enemy_attack, or end_encounter first.",
       retry: true,
     };
   }
@@ -797,10 +794,10 @@ function handleDamageEnemy(
   try {
     args = damageArgsSchema.parse(JSON.parse(rawArguments || "{}"));
   } catch {
-    return { error: "Invalid arguments: damage_enemy needs enemyId and amount.", retry: true };
+    return { error: "Invalid arguments: apply_damage on an enemy needs enemyId and amount.", retry: true };
   }
   if (args.amount === undefined && args.fallFeet === undefined) {
-    return { error: "damage_enemy needs the amount, or fallFeet for a fall.", retry: true };
+    return { error: "apply_damage on an enemy needs the amount, or fallFeet for a fall.", retry: true };
   }
   const enemy = resolveEnemyRef(encounter.id, args.enemyId);
   if (!enemy) {
@@ -822,8 +819,8 @@ function handleDamageEnemy(
     return {
       error:
         args.source === "ally"
-          ? "An ally's blow is an attack: recruit the ally with add_companion (kind guest) and resolve it with pc_attack. damage_enemy takes only harm from a hazard or the environment."
-          : "damage_enemy takes only harm no creature's attack deals: send source 'hazard' or 'environment' with the reason. A character's attack is pc_attack; a spell is cast_at_enemy or aoe_damage.",
+          ? "An ally's blow is an attack: recruit the ally with add_companion (kind guest) and resolve it with pc_attack. apply_damage on an enemy takes only harm from a hazard or the environment."
+          : "apply_damage on an enemy takes only harm no creature's attack deals: send source 'hazard' or 'environment' with the reason. A character's attack is pc_attack; a spell is cast_at_enemy or aoe_damage.",
       retry: true,
     };
   }

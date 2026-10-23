@@ -152,7 +152,7 @@ function strike(
     }
     const immune = trigger.immuneSucceeds && new RegExp(`\\b${trigger.immuneSucceeds}\\b`, "i").test(enemy.stats.immune ?? "");
     const save = trigger.save && !immune && !held
-      ? rollEnemySave(campaign.id, enemy, trigger.save, dc, { magical: true, resist: Boolean(trigger.condition) && bindsWorthResisting([trigger.condition ?? ""]), record: { detail: `${enemy.displayName}: ${trigger.save.toUpperCase()} save against ${zone.spell}` } })
+      ? rollEnemySave(campaign.id, enemy, trigger.save, dc, { magical: true, resist: Boolean(trigger.condition) && bindsWorthResisting([trigger.condition ?? ""]), against: trigger.condition ?? [], record: { detail: `${enemy.displayName}: ${trigger.save.toUpperCase()} save against ${zone.spell}` } })
       : null;
     const failed = !held && (trigger.save ? !immune && !save?.success : true);
     if (trigger.save && !held) {

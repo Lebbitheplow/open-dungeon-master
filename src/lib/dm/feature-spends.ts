@@ -31,6 +31,7 @@ import { rollFeatureSave } from "@/lib/dm/contest-roll";
 import { healDeathHook } from "@/lib/dm/death";
 import { applyEnemyDamage, publishEncounter } from "@/lib/dm/enemy-damage";
 import { rollEnemySave } from "@/lib/dm/forced-save";
+import { turnDefence } from "@/lib/dm/turn-defiance";
 import { prepareResourceCharge, type ResourceCharge } from "@/lib/dm/resource-turn";
 import { commandersStrike, commandersStrikeCharge, knowsManeuver, rally } from "@/lib/dm/maneuver-uses";
 import type { ResourceAction } from "@/lib/srd/class-resources";
@@ -280,11 +281,19 @@ function turnUndead(
   const sheets = listSheets(campaign.id);
   const byId = new Map(sheets.map((entry) => [entry.id, entry]));
   const outcomes: string[] = [];
+  const fielded = listEnemies(encounter.id);
   for (const enemy of undead) {
+    // Its block's own answer to turning, and an ally's Turn Defiance.
+    const defence = turnDefence(encounter.id, enemy, fielded);
+    if (defence.immune) {
+      outcomes.push(`${enemy.displayName} cannot be turned (${defence.immune}).`);
+      continue;
+    }
     // Turned: a legendary creature spends a resistance to stand its ground.
-    const save = rollEnemySave(campaign.id, enemy, "wis", dc, { resist: true });
+    const save = rollEnemySave(campaign.id, enemy, "wis", dc, { resist: true, advantage: Boolean(defence.advantage), disadvantage: Boolean(defence.disadvantage) });
+    const lean = [defence.advantage ? `advantage from ${defence.advantage}` : "", defence.disadvantage ? `disadvantage from ${defence.disadvantage}` : ""].filter(Boolean).join(", ");
     if (save.success) {
-      outcomes.push(`${enemy.displayName} resists (WIS ${save.total ?? "failed outright"} vs DC ${dc})${save.legendaryResistance ? " with Legendary Resistance" : ""}.`);
+      outcomes.push(`${enemy.displayName} resists (WIS ${save.total ?? "failed outright"} vs DC ${dc}${lean ? `, ${lean}` : ""})${save.legendaryResistance ? " with Legendary Resistance" : ""}.`);
       continue;
     }
     const cr = Number(enemy.stats.cr ?? enemy.cr ?? 99);

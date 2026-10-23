@@ -35,6 +35,7 @@ import {
   spendFeatureUse,
 } from "@/lib/dm/attack-onhit";
 import { storeBudget } from "@/lib/dm/turn-budget";
+import { landNaturalOnHit } from "@/lib/dm/natural-onhit";
 import { rollAgainst } from "@/lib/roll-labels";
 import { markCritRange } from "@/lib/dm/attack-marks";
 
@@ -48,6 +49,7 @@ function parkedExtras(plan: AttackPlan): Pick<ParkedAttack, "extras"> | null {
     ...(extras.hurl ? { hurl: true } : {}),
     ...(extras.poison ? { poison: true } : {}),
     ...(extras.tempHp ? { tempHp: extras.tempHp } : {}),
+    ...(plan.profile.creatureOnHit ? { creature: plan.profile.creatureOnHit } : {}),
   };
   return Object.keys(kept).length ? { extras: kept } : null;
 }
@@ -256,6 +258,17 @@ export function resolvePendingPcAttack(pending: PendingRoll, roll: StoredRoll): 
   }
   if (extras?.hurl && sheet && spendFeatureUse(campaign, sheet.id, HURL_THROUGH_HELL, "Hurl Through Hell")) {
     spentNotes.push(hurlThroughHell(campaign, sheet.id, enemy.id));
+  }
+  // A creature's natural attack: its save, poison, condition or grapple.
+  if (extras?.creature && sheet) {
+    spentNotes.push(...landNaturalOnHit(campaign, {
+      turn,
+      attacker: { kind: "sheet", sheetId: sheet.id, name: sheet.name },
+      holderId: sheet.id,
+      attack: context.weapon,
+      enemyId: enemy.id,
+      onHit: extras.creature,
+    }));
   }
   const expression = crit ? critDamage : damage;
   // A smite the hit paid for rides as radiant, as on the digital path.

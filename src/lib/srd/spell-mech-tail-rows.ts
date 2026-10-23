@@ -168,7 +168,7 @@ export const SRD_TAIL_ROWS: Record<string, SpellMech> = {
     noDamage: true,
     repeat: "free",
     riders: { concentrationSave: "con" },
-    note: "Each creature on the ground saves or falls prone, and a concentrating one makes a CON save or loses it. Fissures and collapsing buildings are narrated (their 5d6 through damage_enemy with source environment).",
+    note: "Each creature on the ground saves or falls prone, and a concentrating one makes a CON save or loses it. Fissures and collapsing buildings are narrated (their 5d6 through apply_damage with source environment).",
   },
   blight: {
     resolution: "save",

@@ -218,7 +218,7 @@ export function handlePartyStash(
 }
 
 // Handing out what the party banked. Not an adjudication: the DM decides when
-// a session's experience is divided, and the AI has award_xp for everything
+// a session's experience is divided, and the AI has party_award for everything
 // it should be doing on its own.
 export function payOutBankedXp(
   campaign: Campaign,

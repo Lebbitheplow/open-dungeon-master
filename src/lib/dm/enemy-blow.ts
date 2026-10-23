@@ -124,7 +124,7 @@ export function autoApplyDamageRoll(
   const enemy = resolveEnemyRef(encounter.id, targetEnemyRef);
   if (!enemy || enemy.status !== "alive") {
     return {
-      warning: `targetEnemyId "${targetEnemyRef}" matched no living enemy; the damage was NOT applied. Call damage_enemy with an exact enemyId from GAME STATE.`,
+      warning: `targetEnemyId "${targetEnemyRef}" matched no living enemy; the damage was NOT applied. Call apply_damage with an exact enemyId from GAME STATE.`,
     };
   }
   const result = landRoll(roll.id, enemy.id, () =>
@@ -132,8 +132,8 @@ export function autoApplyDamageRoll(
   );
   if (!("error" in result)) {
     result.note = result.dead
-      ? `${enemy.displayName} is slain; the server already applied this damage. Do NOT call damage_enemy for this hit.`
-      : `The server already applied this damage to ${enemy.displayName}. Do NOT call damage_enemy for this hit.`;
+      ? `${enemy.displayName} is slain; the server already applied this damage. Do NOT call apply_damage for this hit.`
+      : `The server already applied this damage to ${enemy.displayName}. Do NOT call apply_damage for this hit.`;
   }
   return result;
 }
@@ -188,6 +188,6 @@ export function applyPendingDamageRoll(pending: PendingRoll, roll: StoredRoll): 
   if (applied.encounterOver) {
     parts.push(`The encounter ended: ${String(applied.outcome)}. XP was awarded automatically.`);
   }
-  parts.push("Do NOT call damage_enemy for this hit; narrate from this state.");
+  parts.push("Do NOT call apply_damage for this hit; narrate from this state.");
   return parts.join(" ");
 }

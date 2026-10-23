@@ -1,8 +1,8 @@
-// Polymorph (and True Polymorph's creature into a beast) cast at a hostile
+// Polymorph (a beast) and True Polymorph (any creature) cast at a hostile
 // creature (SRD 5.1). The creature makes a WIS save against the caster's DC
 // through rollEnemySave, so Magic Resistance, its conditions and lasting
 // effects count, and a legendary creature may spend a Legendary Resistance.
-// On a failure its game statistics become the beast's (the form table in
+// On a failure its game statistics become the form's (the form table in
 // src/lib/srd/beast-forms.ts, the one the character side reads), keeping its
 // alignment, and it takes the beast's hit points. The own block rides on the
 // row (EnemyStats.polymorphedFrom) and comes back exactly when the spell ends:
@@ -21,7 +21,9 @@ import { getActiveEncounter, getEnemy, type EncounterEnemy } from "@/lib/db/enco
 import { restoreOwnForm, writeEnemyForm } from "@/lib/db/enemy-form";
 import { spellFactsFor } from "@/lib/content";
 import { spellSaveDcFor, type CastingSheet } from "@/lib/srd";
-import { BEAST_FORMS, beastFormsHolding, findBeastForm, formatCr, formList } from "@/lib/srd/beast-forms";
+import { beastFormsHolding, findBeastForm, findShapeForm, formatCr } from "@/lib/srd/beast-forms";
+import { attackSummary } from "@/lib/srd/creature-attacks";
+import { speedWords } from "@/lib/srd/srd-creatures";
 import { conditionUntargetable } from "@/lib/srd/condition-effect-queries";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { rollEnemySave } from "@/lib/dm/forced-save";
@@ -32,7 +34,7 @@ import { castToNoEffect, spellReachProblem, spellWardOn } from "@/lib/dm/cast-re
 import { layOnEnemy } from "@/lib/dm/spell-riders";
 import { spellConditionMeta } from "@/lib/dm/spell-effects";
 import { publishEncounter } from "@/lib/dm/enemy-damage";
-import { beastEnemyStats, enemyCr, enemyShapeNoEffect, enemyShapeProblem, enemyShapeSpellFor } from "@/lib/dm/enemy-polymorph-logic";
+import { beastEnemyStats, enemyCr, enemyShapeForms, enemyShapeNoEffect, enemyShapeOffer, enemyShapeProblem, enemyShapeSpellFor } from "@/lib/dm/enemy-polymorph-logic";
 import { holdingHint, type ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
 
@@ -45,7 +47,7 @@ export type EnemyShapeCast = {
   // The published spell a table's workshop copy runs as (its rule); the
   // copy is cast, saved against and held under `spell`.
   runsAs?: string;
-  // The beast, by name ("brown bear").
+  // The form, by name ("brown bear"; for True Polymorph any creature, "ogre").
   variant?: string;
   level?: number;
   reason?: string;
@@ -62,7 +64,7 @@ export function castShapeAtEnemy(
 ): ToolResult {
   const rule = enemyShapeSpellFor(input.runsAs ?? input.spell);
   if (!rule) {
-    return { error: `${input.spell} cannot turn a creature into a beast; only Polymorph and True Polymorph do.`, retry: true };
+    return { error: `${input.spell} cannot turn a creature into another; only Polymorph and True Polymorph do.`, retry: true };
   }
   // The name the casting goes by: a workshop copy's own, the rule's otherwise.
   const named = input.runsAs && textKey(input.runsAs) !== textKey(input.spell) ? input.spell : rule.spell;
@@ -75,12 +77,16 @@ export function castShapeAtEnemy(
   if (enemy.status !== "alive") {
     return { error: `${enemy.displayName} is already ${enemy.status}. Ask the player which living enemy in GAME STATE to target instead. Nothing was spent.`, retry: true };
   }
-  const form = findBeastForm(input.variant ?? "");
+  // A beast spell named another creature finds it all the same, so the
+  // refusal can say it is no beast.
+  const form = (rule.anyCreature ? null : findBeastForm(input.variant ?? "")) ?? findShapeForm(input.variant ?? "");
   if (!form) {
-    const asked = input.variant?.trim() ? `The beast-form table holds no "${input.variant.trim()}"` : `${rule.spell} needs the beast in variant`;
-    const hint = input.variant?.trim() ? holdingHint(input.variant, beastFormsHolding(input.variant).map((form) => form.name)) : "";
+    const asked = input.variant?.trim()
+      ? `The ${rule.anyCreature ? "form" : "beast-form"} table holds no "${input.variant.trim()}"`
+      : `${rule.spell} needs the ${rule.anyCreature ? "form" : "beast"} in variant`;
+    const hint = input.variant?.trim() ? holdingHint(input.variant, beastFormsHolding(input.variant, enemyShapeForms(rule)).map((form) => form.name)) : "";
     return {
-      error: `${asked}; ${enemy.displayName} (CR ${formatCr(enemyCr(enemy))}) can become: ${formList(BEAST_FORMS.filter((entry) => entry.cr <= enemyCr(enemy)))}.${hint} Ask the caster's player which, unless they named one. Nothing was spent.`,
+      error: `${asked}; ${enemy.displayName} (CR ${formatCr(enemyCr(enemy))}) can become: ${enemyShapeOffer(rule, enemyCr(enemy))}.${hint} Ask the caster's player which, unless they named one. Nothing was spent.`,
       retry: true,
     };
   }
@@ -186,9 +192,9 @@ export function castShapeAtEnemy(
     ok: true,
     ...base,
     conditionApplied: POLYMORPHED,
-    form: `${form.name} (CR ${formatCr(form.cr)}): ${form.hp} HP, AC ${form.ac}, speed ${form.speed} ft`,
-    formAttacks: form.attacks.map((attack) => `${attack.name} +${attack.toHit} (${attack.damage} ${attack.type})`).join(", "),
+    form: `${form.name} (CR ${formatCr(form.cr)}): ${form.hp} HP, AC ${form.ac}, speed ${speedWords(form.speeds)}`,
+    formAttacks: form.attacks.length ? form.attacks.map(attackSummary).join(", ") : "none: the form has no attack",
     duration: rule.rounds ? "1 hour, or until the caster's concentration ends" : "until the caster's concentration ends; held the full hour, until dispelled",
-    note: `${live.displayName} becomes a ${form.name}: the beast's statistics replace its own (it keeps its alignment and personality), it cannot speak or cast spells, and it fights with the beast's attacks through enemy_attack. When the beast drops to 0 hit points or the spell ends, its own form returns with the hit points it had, the excess damage carrying over. Narrate exactly this.`,
+    note: `${live.displayName} becomes a ${form.name}: the form's statistics replace its own (it keeps its alignment and personality), it cannot speak or cast spells unless the form can, and it fights with the form's attacks through enemy_attack. When the form drops to 0 hit points or the spell ends, its own form returns with the hit points it had, the excess damage carrying over. Narrate exactly this.`,
   };
 }

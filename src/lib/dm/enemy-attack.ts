@@ -30,7 +30,7 @@ import type { EnemyAttack } from "@/lib/bestiary/statblock";
 import { planAttackFx } from "@/lib/battlemap/fx-plan";
 import { acWithEffects } from "@/lib/dm/ac-effects";
 import { coverFor } from "@/lib/dm/attack-spatial";
-import { canEnemyAct, markEnemyActed } from "@/lib/dm/can-act";
+import { canEnemyAct, enemyActedThisRound, enemyBonusThisRound, markEnemyActed, markEnemyBonus } from "@/lib/dm/can-act";
 import { spellAttackHold } from "@/lib/dm/spell-planes";
 import { reachThroughProblem } from "@/lib/dm/zone-rules";
 import { critDamageExpression } from "@/lib/dm/encounter-logic";
@@ -40,7 +40,7 @@ import { approachTarget, spendEnemyAction, standUpIfProne } from "@/lib/dm/enemy
 import { blowByType, resolveOnHit, scaledParts } from "@/lib/dm/enemy-hit";
 import { applyPcDamage } from "@/lib/dm/pc-damage";
 import { effectOutcome } from "@/lib/dm/effect-tools";
-import { attackNamed, charmedBy, enemyAttackProfile, plannedSwings, swingMode, type EnemyAttackProfile } from "@/lib/dm/enemy-profile";
+import { alternativeBlow, attackNamed, charmedBy, enemyAttackProfile, plannedSwings, swingMode, type EnemyAttackProfile } from "@/lib/dm/enemy-profile";
 import { publishFx, tokenPosition } from "@/lib/dm/fx";
 import { hasTrait } from "@/lib/dm/monster-abilities";
 import { enemySwingOdds, hasFeatureNamed } from "@/lib/dm/enemy-swing-odds";
@@ -120,11 +120,18 @@ export function handleEnemyAttack(
   if (!found) {
     return unknownEnemyRef(encounter.id, "enemyId", args.enemyId);
   }
+  // An attack the block prints among its Bonus Actions is the creature's
+  // bonus action: one swing, beside its action, once a round.
+  const bonus = Boolean(args.attack && attackNamed(found.stats.attacks, args.attack)?.bonusAction);
   // One guard for the enemy side (src/lib/dm/can-act.ts): the dead, the
   // incapacitated and the surprised do nothing, and an action is one a round.
-  const allowed = canEnemyAct({ enemy: found, encounter, kind: "action" });
+  const allowed = canEnemyAct({ enemy: found, encounter, kind: bonus ? "bonus" : "action" });
   if (!allowed.ok) {
     return toolError(allowed);
+  }
+  // Slow: an action or a bonus action on its turn, not both (SRD 5.1).
+  if (conditionTurnShape(found.conditions).slowed && (bonus ? enemyActedThisRound(encounter, found.id) : enemyBonusThisRound(encounter, found.id))) {
+    return { error: `${found.displayName} is slowed: it takes an action or a bonus action this turn, not both, and it has taken its ${bonus ? "action" : "bonus action"}.`, retry: true };
   }
   const staleTarget =
     sheetsById.get(args.targetCharacterId.trim()) ??
@@ -158,20 +165,32 @@ export function handleEnemyAttack(
   if (natures) {
     return natures;
   }
-  const attacks = found.stats.attacks.length ? found.stats.attacks : synthesizeStats(found.cr).attacks;
+  // A legendary action that bought an attack printed only among the legendary
+  // actions (an ankheg queen's Acid Glob) may swing it, and only then.
+  const owed = (encounter.legendary.strikes ?? []).includes(found.id);
+  const attacks = [
+    ...(found.stats.attacks.length ? found.stats.attacks : synthesizeStats(found.cr).attacks),
+    ...(owed ? (found.stats.legendaryAttacks ?? []) : []),
+  ];
   if (!attacks.length) {
     return { error: `${found.displayName} has no usable attacks; narrate a different action.`, retry: true };
   }
-  // Slow: no more than one attack on its turn, Multiattack or not (SRD 5.1).
-  const single = takeLegendaryStrike(campaign.id, found.id) || conditionTurnShape(found.conditions).slowed;
   const asked = args.attack ? attackNamed(attacks, args.attack) : null;
   if (args.attack && !asked) {
     return noneNamed(`${found.displayName} has no attack called`, args.attack, attacks.map((attack) => attack.name));
   }
-  if (single && !asked && attacks.length > 1) {
-    return { error: `${found.displayName} makes one attack this turn: name it in attack (${attacks.map((attack) => attack.name).join(", ")}).`, retry: true };
+  // The action's attacks: a bonus action's is never one of its swings.
+  const actionAttacks = attacks.filter((attack) => !attack.bonusAction);
+  if (!asked && !actionAttacks.length) {
+    return { error: `${found.displayName}'s attacks are bonus actions: name one in attack (${attacks.map((attack) => attack.name).join(", ")}).`, retry: true };
   }
-  const planned = plannedSwings(found.stats, attacks, asked, { single });
+  // Slow: no more than one attack on its turn, Multiattack or not (SRD 5.1).
+  // A bonus action's attack is one swing, and spends no legendary strike.
+  const single = bonus || takeLegendaryStrike(campaign.id, found.id) || conditionTurnShape(found.conditions).slowed;
+  if (single && !asked && actionAttacks.length > 1) {
+    return { error: `${found.displayName} makes one attack this turn: name it in attack (${actionAttacks.map((attack) => attack.name).join(", ")}).`, retry: true };
+  }
+  const planned = plannedSwings(found.stats, bonus ? attacks : actionAttacks, asked, { single });
   const profiles = planned.map((attack) => enemyAttackProfile(attack, found.stats.traits ?? []));
   // Antilife Shell: no melee reaches through it (zone-rules.ts).
   const shell = leadProfile(profiles).melee ? reachThroughProblem(encounter.id, found.id, target.id, found.stats.type, found.displayName) : null;
@@ -240,8 +259,11 @@ export function handleEnemyAttack(
   // The action is spent by taking it, hit or miss. Read fresh: the walk up
   // to the target may have spent a character's reaction on this same row.
   const live = getActiveEncounter(campaign.id) ?? encounter;
-  // An attack a legendary action bought is not a turn of the creature's.
-  if (single) {
+  // An attack a legendary action bought is not a turn of the creature's,
+  // and a bonus action's is its bonus action.
+  if (bonus) {
+    markEnemyBonus(live, enemy.id);
+  } else if (single) {
     markEnemyActed(live, enemy.id);
   } else {
     spendEnemyAction(live, enemy.id);
@@ -272,7 +294,8 @@ export function handleEnemyAttack(
   // after a miss.
   let previousHit = false;
   const attackerSubmerged = isImmersed(campaign.id, enemy.id);
-  planned.forEach((attack: EnemyAttack, index) => {
+  planned.forEach((plannedAttack: EnemyAttack, index) => {
+    let attack = plannedAttack;
     if (dropped) {
       return;
     }
@@ -287,6 +310,9 @@ export function handleEnemyAttack(
       return;
     }
     const ranged = mode.ranged;
+    // What the block deals instead at half its hit points or at range (a
+    // swarm's weaker bite, a spear thrown), from here on the swing's blow.
+    attack = alternativeBlow(plannedAttack, { ranged, bloodied: standing.currentHp <= standing.maxHp / 2 });
     // Under the water (underwater.ts): a shot past normal range misses, and
     // weapons not made for the water swing at disadvantage.
     const underwater = attackerSubmerged
@@ -427,8 +453,9 @@ export function handleEnemyAttack(
       amount: Math.min(dealt, 200),
       ...(blow.type ? { type: blow.type } : {}),
       ...(blow.parts ? { parts: scaledParts(blow.parts, dealt) } : {}),
-      // Magic Weapons: its weapon attacks are magical.
-      ...(hasTrait(standing.stats, "magicWeapons") ? { magical: true } : {}),
+      // Magic Weapons: its weapon attacks are magical; so is a spell attack,
+      // and a blow the block prints as magical ("magical bludgeoning").
+      ...(hasTrait(standing.stats, "magicWeapons") || attack.spellAttack || attack.magical ? { magical: true } : {}),
       // Crits against a dying target count double death-save failures.
       ...(crit ? { crit: true } : {}),
       // Emissary of Redemption holds nothing against a creature the paladin attacked.

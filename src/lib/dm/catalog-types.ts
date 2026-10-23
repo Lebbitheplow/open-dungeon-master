@@ -39,8 +39,8 @@ export const CATEGORY_LABELS: Record<AdjudicationCategory, string> = {
 // - "enemies": several live enemies, sent as an id list.
 // - "combatant": one character or enemy on the board, sent as its id, for
 //   the map tools that take a token by name or id.
-// - "shares": split_damage's rows, one creature and its share each, sent as
-//   the handler's own [{ enemyId | characterId, share }].
+// - "shares": apply_damage's targets, one creature and its share each, sent
+//   as the handler's own [{ enemyId | characterId, share }].
 // - "hitDice": take_rest's per-character hit dice, sent as the handler's
 //   own [{ characterId, dice }].
 // - "list": several words typed in one box (a companion's spells), sent as
@@ -66,9 +66,9 @@ export type CatalogField = {
   label: string;
   kind: FieldKind;
   required?: boolean;
-  // Required unless this other field is filled (damage, or the dice the
-  // server rolls for it).
-  requiredUnless?: string;
+  // Required unless one of these other fields is filled (damage, or the
+  // dice the server rolls for it; a character, or an enemy instead).
+  requiredUnless?: string | string[];
   options?: Array<{ value: string; label: string }>;
   min?: number;
   max?: number;
@@ -165,8 +165,9 @@ export function checkArgs(
     if (field.required && missing) {
       return `${entry.label} needs ${field.label.toLowerCase()}.`;
     }
-    const other = field.requiredUnless ? args[field.requiredUnless] : undefined;
-    if (field.requiredUnless && missing && (other === undefined || other === null || (typeof other === "string" && other.trim() === ""))) {
+    const others = field.requiredUnless === undefined ? [] : [field.requiredUnless].flat();
+    const empty = (other: unknown) => other === undefined || other === null || (typeof other === "string" && other.trim() === "") || (Array.isArray(other) && other.length === 0);
+    if (others.length && missing && others.every((other) => empty(args[other]))) {
       return `${entry.label} needs ${field.label.toLowerCase()}.`;
     }
     if (missing) {

@@ -3,7 +3,7 @@
 // Split from catalog-world.ts, whose story entries it leads.
 
 import type { CatalogEntry } from "@/lib/dm/catalog-types";
-import { CREATURE_TYPES } from "@/lib/bestiary/statblock";
+import { CREATURE_TYPES } from "@/lib/bestiary/creature-type";
 import {
   ABILITY_OPTIONS as ABILITIES,
   DIFFICULTY_OPTIONS,

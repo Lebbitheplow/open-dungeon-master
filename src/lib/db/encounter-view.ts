@@ -5,7 +5,7 @@ import { isCompanionUserId } from "@/lib/db/users";
 import { freshLastHit, type LastHit } from "@/lib/dm/last-hit";
 import { conditionNote, conditionNoteLine, namesLookup } from "@/lib/battlemap/condition-notes";
 import { healthState, type HealthState } from "@/lib/bestiary/health";
-import { creatureTypeOf } from "@/lib/bestiary/statblock";
+import { creatureTypeOf } from "@/lib/bestiary/creature-type";
 import { isRegeneratingDown } from "@/lib/dm/regeneration";
 import { REGENERATION_STOPPED } from "@/lib/dm/monster-abilities";
 import { getBattleMapForEncounter, listHiddenRefIds } from "@/lib/db/battle-maps";

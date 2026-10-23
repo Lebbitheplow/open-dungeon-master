@@ -97,7 +97,7 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
     id: "polymorphed",
     match: ["polymorphed", "polymorph"],
     summary:
-      "Polymorph: transformed into a beast; the form's stat block replaces their own (the server tracks it as a transformation), they cannot speak or cast, and damage past the form's hit points reverts them.",
+      "Polymorph: transformed into another creature (a beast, but for True Polymorph and Shapechange); the form's stat block replaces their own (the server tracks it as a transformation), they cannot speak or cast unless the form can, and damage past the form's hit points reverts them.",
   },
   {
     id: "slowed",
@@ -318,7 +318,7 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
     id: "armor_of_agathys",
     match: ["armor of agathys"],
     summary:
-      "Armor of Agathys: while its temporary hit points last, a creature that hits them with a melee attack takes 5 cold damage per slot level (apply with damage_enemy).",
+      "Armor of Agathys: while its temporary hit points last, a creature that hits them with a melee attack takes 5 cold damage per slot level (apply_damage on the attacker).",
   },
   {
     id: "gift_of_alacrity",
@@ -451,7 +451,7 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
     id: "blazing_stride",
     match: ["blazing stride", "ashardalon's stride", "ashardalons stride"],
     summary:
-      "Blazing Stride: +20 feet of speed, no opportunity attacks against them, and creatures they pass within 5 feet of take 1d6 fire damage (once each per turn; apply with damage_enemy).",
+      "Blazing Stride: +20 feet of speed, no opportunity attacks against them, and creatures they pass within 5 feet of take 1d6 fire damage (once each per turn; apply_damage on each).",
     speedBonus: 20,
   },
   {
@@ -486,7 +486,7 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
     id: "shadow_of_moil",
     match: ["shadow of moil"],
     summary:
-      "Shadow of Moil: resistance to radiant damage, attacks against them are at disadvantage, and a melee hit against them costs the attacker 2d8 necrotic (apply with damage_enemy).",
+      "Shadow of Moil: resistance to radiant damage, attacks against them are at disadvantage, and a melee hit against them costs the attacker 2d8 necrotic (apply_damage on the attacker).",
     resistances: ["radiant"],
     attacksAgainstDisadvantage: true,
   },

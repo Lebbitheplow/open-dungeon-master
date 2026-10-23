@@ -22,6 +22,19 @@ This work includes material taken from the System Reference Document 5.1
 ("SRD 5.1") by Wizards of the Coast LLC. The SRD 5.1 is licensed under the
 Creative Commons Attribution 4.0 International License.
 
+### The creature table
+
+`src/lib/srd/srd-creatures.json` holds the SRD 5.1 stat blocks the shape and
+summoning spells read: every creature of the SRD but the swarms, as True
+Polymorph and Shapechange may give any of them, with the beasts Wild Shape
+and Polymorph take, Find Familiar's and Pact of the Chain's forms, and the
+creatures the conjuring and necromancy spells call. It is
+written by `scripts/generate-srd-creatures.mjs` from the content pack's copy
+of the SRD 5.1 monsters (document `wotc-srd`) and checked against the SRD's
+own text in the rulebook below; where the two differ the SRD's text is kept.
+The data is the SRD's, under the same CC-BY-4.0 terms and attribution as
+above.
+
 ### The rulebook
 
 `src/lib/rulebook/srd-5.1.json` is the full text of the SRD 5.1 (every rules

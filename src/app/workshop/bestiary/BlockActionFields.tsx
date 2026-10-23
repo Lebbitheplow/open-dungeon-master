@@ -12,7 +12,7 @@ import { CONDITIONS, DAMAGE_TYPES } from "@/lib/bestiary/kit";
 import { BLOCK_LIMITS, SAVE_ABILITY_IDS } from "@/lib/bestiary/block-check";
 import type { MonsterDraft } from "@/lib/bestiary/monster-draft";
 import type { MonsterAbility } from "@/lib/dm/monster-abilities";
-import type { RoutineStep } from "@/lib/bestiary/attack-text";
+import type { RoutineStep } from "@/lib/bestiary/multiattack-text";
 import { Field, FieldLabel, OptionalStepper, addChip, chip, chipOn, chipRow, rowIcon } from "@/app/workshop/kit";
 
 // The actions with numbers the engine runs (src/lib/dm/enemy-casting.ts,

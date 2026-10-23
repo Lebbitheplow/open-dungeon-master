@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 //
 // Not adjudications, and deliberately not in the catalog. These are the same
 // kind of thing as the board and the map studio: DM bookkeeping the AI has no
-// business reaching for, since it already has award_xp and move_party for
+// business reaching for, since it already has party_award and move_party for
 // everything it should be doing on its own.
 
 const partySchema = z.discriminatedUnion("do", [

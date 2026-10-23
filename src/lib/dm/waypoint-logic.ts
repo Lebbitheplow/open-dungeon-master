@@ -53,6 +53,10 @@ export function signalFromToolCall(
       return text("npc") ? { kind: "npc", names: [text("npc")] } : null;
     case "grant_item":
       return text("name") ? { kind: "item", names: [text("name")] } : null;
+    // A purchase is an item gained only when it buys (issue #471: buy_item,
+    // a purchase at a shop, is still sent by older callers).
+    case "purchase":
+      return args.action === "buy" && text("item") ? { kind: "item", names: [text("item")] } : null;
     case "buy_item":
       return text("item") ? { kind: "item", names: [text("item")] } : null;
     case "tick_objective":
@@ -110,6 +114,7 @@ const TOOL_WAYPOINT_KIND: Record<string, WaypointKind> = {
   npc_reaction: "npc",
   social_check: "npc",
   grant_item: "item",
+  purchase: "item",
   buy_item: "item",
   end_encounter: "fight",
 };

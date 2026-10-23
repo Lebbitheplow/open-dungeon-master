@@ -23,6 +23,7 @@
 // tool handling, and there is no second copy of the rules to drift.
 
 import { agentSpeedEligibility } from "@/lib/speed-tier";
+import { acceptsCall } from "@/lib/dm/tool-merge-logic";
 import { randomBytes, createHash } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
@@ -239,7 +240,9 @@ export class BridgeSession {
     if (this.narrateOnly) {
       return Promise.resolve({ text: this.refuseToNarrate(), isError: true });
     }
-    if (!this.allowed.has(name)) {
+    // A retired name (issue #471) runs while the tool that took its place is
+    // offered: a program that learned the old names still plays.
+    if (!acceptsCall((offered) => this.allowed.has(offered), name)) {
       return Promise.resolve({
         text: `${name} is not available at this point in the game. Use another tool or narrate.`,
         isError: true,
