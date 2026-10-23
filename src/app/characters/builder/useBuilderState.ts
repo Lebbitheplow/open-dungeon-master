@@ -29,6 +29,7 @@ import { reconcilePicks, type BuilderPicks, type DroppedPick } from "./reconcile
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
 import { keyedFeatChoices, withFeatChoice } from "@/lib/schemas/sheet";
 import { textKey } from "@/lib/language/text-logic";
+import { revisedSpecies } from "@/lib/srd/race-id";
 
 // `priceCp` is the listed price of one, in copper, as the catalog row it was
 // picked from gave it; it is what the purse is charged, and the server
@@ -694,6 +695,10 @@ export function useBuilderState({
     asiRecorded,
     asiReachedLevel,
     primalChampionHeld: initialHoldsPrimalChampion(initial, initialLevel),
+    // A stored character made as a 2024 species (src/lib/content/edition.ts).
+    revisedSpecies: initial
+      ? revisedSpecies(initial.race, (initial.features ?? []).filter((feature) => feature.source === "race").map((feature) => feature.name))
+      : null,
     storedHp,
     name, setName,
     alignment, setAlignment,

@@ -343,7 +343,7 @@ implementation, and the suites treat each layer differently.
 | Bundled data, `src/lib/srd/` | The twelve SRD classes, nine SRD races, the SRD spell slot and XP tables, weapons and armor | Compared with literal SRD 5.1 tables written into the tests |
 | Content outside SRD 5.1, 2014 rules | Artificer, seven subraces, twelve PHB backgrounds, 105 authored subclasses, 52 authored feats | Checked for structure and for the 2014 rules they claim |
 | ODM's own content | 36 genre classes, 36 setting backgrounds, the generated resource counters | Checked against ODM's own documented rules |
-| The content pack, `data/content/open5e.sqlite` | Open5e v1, third party sources, and an SRD 5.2 (2024) backfill | 2014 rules only. A 2024 row that changes a 2014 mechanic is a gap |
+| The content pack, `data/content/open5e.sqlite` | Open5e v1, Open5e v2's 2014 documents, and ODM's authored layer; no 2024 document (`src/lib/content/edition.ts`) | 2014 rules only. `scripts/test-enforce-edition.mjs` holds that no 2024 row is served |
 | Variant rules | Seven toggles and the rest pace, in game settings | Must be inert when off and do what they say when on |
 
 Documented deviations from SRD 5.1 are pinned as ODM's rule, with a comment
@@ -355,9 +355,13 @@ naming the difference. The ones the audit met:
 - Unknown and homebrew spells take the caller's dice.
 - Metamagic shaping and most reaction effects are narrated.
 
-2024 rules that reached the 2014 engine, each recorded as a gap: the 2024 Orc
-and Goliath species, 16 feats from the 2024 SRD (the only "Alert" carries 2024
-text while the engine applies the 2014 bonus), 2024 archetypes and 20 spells.
+The 2024 rules that once reached the 2014 engine through the pack (the 2024
+Orc and Goliath, 16 feats with the only "Alert", 2024 archetypes, 20 spells,
+and the SRD 5.2 magic item prices) are gone since issue #502: the importer
+leaves every 2024 document out, the 2014 Orc and the 2014 spells are
+authored in ODM's own words, and magic items are priced by the 2014 rarity
+values. A stored character that names a 2024 species or spell still loads,
+and the builder or the cast check asks for a 2014 one in its place.
 
 ## How the suites work
 

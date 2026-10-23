@@ -206,7 +206,8 @@ export function judgeProficiencies(input: ProficiencyInput): ProficiencyVerdict 
     });
   }
   if (race.skillChoice) {
-    slots.push({ label: race.name, count: race.skillChoice.count, from: null });
+    const from = race.skillChoice.from ?? [];
+    slots.push({ label: race.name, count: race.skillChoice.count, from: from.length ? new Set(from.map(lower)) : null });
   }
   // The same skill from the background and the race: the player chooses
   // another in its place (SRD 5.1, Backgrounds).

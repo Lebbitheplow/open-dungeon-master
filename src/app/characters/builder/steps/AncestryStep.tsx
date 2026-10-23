@@ -143,6 +143,13 @@ export function AncestryStep({
             : "Tap a card to choose a lineage, or its ? to read what it hands you first."
         }
       >
+        {state.revisedSpecies ? (
+          <p role="note" className="mb-3 rounded border border-amber-700/40 bg-amber-950/30 p-2 text-xs text-amber-100">
+            This character was made with the 2024 rules&rsquo; {race?.name ?? state.revisedSpecies}. This server plays the 2014
+            rules, so they now have the 2014 {race?.name ?? state.revisedSpecies}&rsquo;s traits, and their ability scores stay
+            as they were. Save to keep it, or choose another lineage.
+          </p>
+        ) : null}
         {race?.note ? (
           <span className="mb-3 flex items-start gap-1 text-xs text-stone-500">
             <span className="line-clamp-2 grow">

@@ -3142,6 +3142,209 @@
       "mech": {
         "resolution": "utility"
       }
+    },
+    {
+      "name": "Aura of Life",
+      "level": 4,
+      "school": "abjuration",
+      "classes": [
+        "cleric",
+        "paladin"
+      ],
+      "casting_time": "1 action",
+      "range": "Self (30-foot radius)",
+      "components": "V",
+      "duration": "Concentration, up to 10 minutes",
+      "concentration": true,
+      "desc": "A 30-foot radius of sheltering life force surrounds you and moves with you until the spell ends. Each creature in it that is not hostile to you, yourself included, has resistance to necrotic damage and cannot have its hit point maximum reduced. Such a creature that is alive and begins its turn in the aura at 0 hit points regains 1 hit point.",
+      "mech": {
+        "resolution": "buff",
+        "buff": {
+          "condition": "aura of life",
+          "target": "allies",
+          "rounds": 100
+        }
+      }
+    },
+    {
+      "name": "Dissonant Whispers",
+      "level": 1,
+      "school": "enchantment",
+      "classes": [
+        "bard"
+      ],
+      "casting_time": "1 action",
+      "range": "60 feet",
+      "components": "V",
+      "duration": "Instantaneous",
+      "desc": "You murmur a jarring strain that only one creature of your choice within range can hear. It must make a Wisdom saving throw, taking 3d6 psychic damage on a failed save, or half as much damage on a successful one. On a failure it must also spend its reaction, if it has one, to move as far as its speed allows away from you, by a route that avoids obvious danger such as fire or a pit. A deafened creature succeeds on the save automatically.",
+      "higher_level": "When you cast this spell using a spell slot of 2nd level or higher, the damage increases by 1d6 for each slot level above 1st."
+    },
+    {
+      "name": "Dragon's Breath",
+      "level": 2,
+      "school": "transmutation",
+      "classes": [
+        "sorcerer",
+        "wizard"
+      ],
+      "casting_time": "1 bonus action",
+      "range": "Touch",
+      "components": "V, S, M (a hot pepper)",
+      "duration": "Concentration, up to 1 minute",
+      "concentration": true,
+      "desc": "A willing creature you touch gains a dragon's breath. Pick acid, cold, fire, lightning or poison. Until the spell ends, the creature can use its action to exhale a 15-foot cone of that energy; each creature in the cone must make a Dexterity saving throw, taking 3d6 damage of the chosen type on a failed save, or half as much damage on a successful one.",
+      "higher_level": "When you cast this spell using a spell slot of 3rd level or higher, the damage increases by 1d6 for each slot level above 2nd.",
+      "mech": {
+        "resolution": "buff",
+        "buff": {
+          "condition": "dragon's breath",
+          "target": "ally",
+          "rounds": 10
+        }
+      }
+    },
+    {
+      "name": "Ensnaring Strike",
+      "level": 1,
+      "school": "conjuration",
+      "classes": [
+        "ranger"
+      ],
+      "casting_time": "1 bonus action",
+      "range": "Self",
+      "components": "V",
+      "duration": "Concentration, up to 1 minute",
+      "concentration": true,
+      "desc": "The next time a weapon attack of yours hits a creature before the spell ends, thorned vines burst from the wound and grasp it. The target must succeed on a Strength saving throw or be restrained by the vines until the spell ends; a Large or larger creature has advantage on the save, and on a success the vines wither away. While restrained this way it takes 1d6 piercing damage at the start of each of its turns. The target, or a creature that can reach it, can use an action to make a Strength check against your spell save DC, tearing the vines away on a success.",
+      "higher_level": "When you cast this spell using a spell slot of 2nd level or higher, the damage increases by 1d6 for each slot level above 1st.",
+      "mech": {
+        "resolution": "buff",
+        "buff": {
+          "condition": "ensnaring strike",
+          "target": "self",
+          "rounds": 10
+        }
+      }
+    },
+    {
+      "name": "Ice Knife",
+      "level": 1,
+      "school": "conjuration",
+      "classes": [
+        "druid",
+        "sorcerer",
+        "wizard"
+      ],
+      "casting_time": "1 action",
+      "range": "60 feet",
+      "components": "S, M (a drop of water or a piece of ice)",
+      "duration": "Instantaneous",
+      "desc": "You fling a sliver of ice at one creature within range. Make a ranged spell attack against it; on a hit it takes 1d10 piercing damage. Hit or miss, the sliver then bursts: the target and each creature within 5 feet of it must succeed on a Dexterity saving throw or take 2d6 cold damage.",
+      "higher_level": "When you cast this spell using a spell slot of 2nd level or higher, the cold damage increases by 1d6 for each slot level above 1st."
+    },
+    {
+      "name": "Mind Spike",
+      "level": 2,
+      "school": "divination",
+      "classes": [
+        "sorcerer",
+        "warlock",
+        "wizard"
+      ],
+      "casting_time": "1 action",
+      "range": "60 feet",
+      "components": "S",
+      "duration": "Concentration, up to 1 hour",
+      "concentration": true,
+      "desc": "You drive a shard of thought into the mind of one creature you can see within range. It must make a Wisdom saving throw, taking 3d8 psychic damage on a failed save, or half as much damage on a successful one. On a failure you also know where it is for as long as the spell lasts and you share a plane with it: it cannot hide from you, and being invisible gives it no benefit against you.",
+      "higher_level": "When you cast this spell using a spell slot of 3rd level or higher, the damage increases by 1d8 for each slot level above 2nd."
+    },
+    {
+      "name": "Phantasmal Force",
+      "level": 2,
+      "school": "illusion",
+      "classes": [
+        "bard",
+        "sorcerer",
+        "wizard"
+      ],
+      "casting_time": "1 action",
+      "range": "60 feet",
+      "components": "V, S, M (a bit of fleece)",
+      "duration": "Concentration, up to 1 minute",
+      "concentration": true,
+      "desc": "You plant an illusion in the mind of a creature you can see within range, which must make an Intelligence saving throw. On a failure you shape a phantasm of your choosing, an object, a creature or some other visible thing no larger than a 10-foot cube, that only the target perceives. The target believes in it and explains away anything that does not fit; it can spend its action on an Intelligence (Investigation) check against your spell save DC to see the illusion for what it is. While it believes, a phantasm that could plausibly hurt it, such as a beast or a blaze, deals it 1d6 psychic damage on each of your turns that it spends in the phantasm's space or within 5 feet of it, and the target perceives that damage as whatever kind the illusion suggests."
+    },
+    {
+      "name": "Searing Smite",
+      "level": 1,
+      "school": "evocation",
+      "classes": [
+        "paladin"
+      ],
+      "casting_time": "1 bonus action",
+      "range": "Self",
+      "components": "V",
+      "duration": "Concentration, up to 1 minute",
+      "concentration": true,
+      "desc": "The next time you hit a creature with a melee weapon attack while this spell is active, your weapon blazes white-hot: the attack deals an extra 1d6 fire damage and sets the target alight. At the start of each of its turns until the spell ends, the burning target makes a Constitution saving throw, taking 1d6 fire damage on a failure and ending the spell on a success. The spell also ends if the target or a creature within 5 feet of it spends an action to put out the flames, or if something else douses them.",
+      "higher_level": "When you cast this spell using a spell slot of 2nd level or higher, the extra damage on the hit increases by 1d6 for each slot level above 1st.",
+      "mech": {
+        "resolution": "buff",
+        "buff": {
+          "condition": "searing smite",
+          "target": "self",
+          "rounds": 10
+        }
+      }
+    },
+    {
+      "name": "Tsunami",
+      "level": 8,
+      "school": "conjuration",
+      "classes": [
+        "druid"
+      ],
+      "casting_time": "1 minute",
+      "range": "Sight",
+      "components": "V, S",
+      "duration": "Concentration, up to 6 rounds",
+      "concentration": true,
+      "desc": "A wall of water up to 300 feet long, 300 feet high and 50 feet thick rises at a point you choose within range and lasts for the duration. Each creature in its area when it appears must make a Strength saving throw, taking 6d10 bludgeoning damage on a failed save, or half as much damage on a successful one. At the start of each of your turns afterward the wall, with everything caught in it, rolls 50 feet away from you; any Huge or smaller creature inside it, or whose space it enters, must succeed on a Strength saving throw or take 5d10 bludgeoning damage, no more than once a round. At the end of each such turn the wall loses 50 feet of height and that later damage drops by 1d10, and the spell ends when the wall reaches 0 feet. A creature caught inside moves only by swimming, and only after a successful Strength (Athletics) check against your spell save DC; one that leaves the wall falls to the ground."
+    },
+    {
+      "name": "Vitriolic Sphere",
+      "level": 4,
+      "school": "evocation",
+      "classes": [
+        "sorcerer",
+        "wizard"
+      ],
+      "casting_time": "1 action",
+      "range": "150 feet",
+      "components": "V, S, M (a drop of giant slug bile)",
+      "duration": "Instantaneous",
+      "desc": "A foot-wide globe of green acid streaks to a point you choose within range and bursts in a 20-foot-radius sphere. Each creature there must make a Dexterity saving throw. On a failed save it takes 10d4 acid damage, and another 5d4 acid damage at the end of its next turn. On a successful save it takes half the first damage and none at the end of its next turn.",
+      "higher_level": "When you cast this spell using a spell slot of 5th level or higher, the first damage increases by 2d4 for each slot level above 4th."
+    },
+    {
+      "name": "Power Word Heal",
+      "level": 9,
+      "school": "evocation",
+      "classes": [
+        "bard",
+        "cleric"
+      ],
+      "casting_time": "1 action",
+      "range": "Touch",
+      "components": "V, S",
+      "duration": "Instantaneous",
+      "desc": "A word of healing floods the creature you touch, restoring all of its hit points. If it is charmed, frightened, paralyzed or stunned, that condition ends, and if it is prone it can use its reaction to stand up. Undead and constructs are unaffected.",
+      "mech": {
+        "resolution": "heal",
+        "note": "The target regains every hit point it is missing (heal by the difference to its maximum) and loses charmed, frightened, paralyzed and stunned; undead and constructs are unaffected."
+      }
     }
   ],
   "_note_dedupe": "Entries whose names already exist upstream are skipped at import time, so this file only carries what no open source provides. If an upstream document later adds one of these, prune it here."

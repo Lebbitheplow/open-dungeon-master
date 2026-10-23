@@ -5,6 +5,7 @@ import { getContentDb } from "@/lib/content/db";
 import { legacyPackWeightLb, packWeightLb } from "@/lib/content/weight";
 import { textKey } from "@/lib/language/text-logic";
 import { pluralForms } from "@/lib/srd/name-forms";
+import { PLAYED_DOCUMENTS_SQL } from "@/lib/content/edition";
 
 type Mistake = { wrong: number; right: number };
 
@@ -44,7 +45,7 @@ function buildIndexes(): void {
     const rows = db
       .prepare(
         `SELECT name, weight, json_extract(data_json, '$.weight') AS source, json_extract(data_json, '$.weight_unit') AS unit
-         FROM items WHERE kind != 'magic_item'`,
+         FROM items WHERE kind != 'magic_item' AND ${PLAYED_DOCUMENTS_SQL}`,
       )
       .all() as Array<{ name: string; weight: number; source: unknown; unit: unknown }>;
     for (const row of rows) {

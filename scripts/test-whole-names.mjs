@@ -375,14 +375,14 @@ await test("a magic item named at the table is priced by the rarity of the row s
     return;
   }
   for (const [name, srdName, paidCp] of [
-    ["Mantello di protezione", "Cloak of Protection", 40000],
-    ["Cape de protection", "Cloak of Protection", 40000],
-    ["Capa de protección", "Cloak of Protection", 40000],
-    ["Schutzumhang", "Cloak of Protection", 40000],
-    ["Cloak of Protection", undefined, 40000],
-    ["Spada lunga +1", "Longsword", 41500],
-    ["Épée longue +1", "Longsword", 41500],
-    ["Longsword +1", undefined, 41500],
+    ["Mantello di protezione", "Cloak of Protection", 50000],
+    ["Cape de protection", "Cloak of Protection", 50000],
+    ["Capa de protección", "Cloak of Protection", 50000],
+    ["Schutzumhang", "Cloak of Protection", 50000],
+    ["Cloak of Protection", undefined, 50000],
+    ["Spada lunga +1", "Longsword", 50000],
+    ["Épée longue +1", "Longsword", 50000],
+    ["Longsword +1", undefined, 50000],
   ]) {
     world.patch(hero.id, { gold: 1000, copper: 0 });
     const bought = await ai("purchase", { characterId: hero.id, action: "buy", item: name, ...(srdName ? { srdName } : {}), price: 1, qty: 1, reason: "the market" }, hero);

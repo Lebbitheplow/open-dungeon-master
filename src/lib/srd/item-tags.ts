@@ -11,7 +11,7 @@
 //
 // Pure, so the sheet, the engines and the test scripts read the same tags.
 
-import { catalogName } from "@/lib/srd/adventuring-gear";
+import { catalogName, matchGear } from "@/lib/srd/adventuring-gear";
 import { rowArmor } from "@/lib/srd/armor";
 import { matchMagicItem } from "@/lib/srd/magic-items";
 import { rowWeapon } from "@/lib/srd/weapons";
@@ -102,6 +102,14 @@ export function itemRow(item: Pick<TaggedItem, "name" | "slug" | "srdName">): It
   const found = rowNamed(spelled) ?? rowNamed(name);
   if (found) {
     return found;
+  }
+  // The pack may file a catalog item under another of its spellings: SRD
+  // 5.1's oil is the pack's "Lamp oil (flask)".
+  for (const alias of matchGear(name)?.aliases ?? []) {
+    const aliased = rowNamed(alias);
+    if (aliased) {
+      return aliased;
+    }
   }
   const named = rowWeapon(item)?.name ?? rowArmor(item)?.name ?? findPoison(name)?.name;
   return named ? (rowNamed(named) ?? { name: named, tags: [] }) : null;

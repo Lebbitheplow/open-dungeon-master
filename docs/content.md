@@ -35,9 +35,18 @@ sees in a picker.
 
 1. **Open5e v1** (the original import) is authoritative. Existing character
    sheets reference these slugs, so they are never rewritten.
-2. **Open5e v2 backfill** adds the sources v1 never covered: SRD 5.2
-   (`srd-2024`), Black Flag, Gate Pass Gazette, Spells That Don't Suck. Its
-   class rows also carry level-tagged features, unlike v1's prose blobs.
+2. **Open5e v2 backfill** adds the sources v1 never covered: Black Flag,
+   Gate Pass Gazette, Spells That Don't Suck. Its class rows also carry
+   level-tagged features, unlike v1's prose blobs. The documents Open5e
+   files under the 2024 rules (game system `5e-2024`: `srd-2024`,
+   `open5e-2024`) are left out of every table, because ODM plays the 2014
+   rules (SRD 5.1) and nothing else (`src/lib/content/edition.ts`). The
+   import stops when Open5e lists a 2024 document that file does not name,
+   and checks that no 2024 row is left before it writes the pack. The SRD
+   5.1 goods v1 lacks (the seven equipment packs, ammunition bundles, mounts
+   and tack) are then added from the bundled tables in
+   `src/lib/srd/adventuring-gear.ts`, priced and weighed as SRD 5.1 prints
+   them.
 3. **The authored layer** (`odm-expanded`) supplies what no open dataset has
    at all: the widely played subclasses, spells, feats and lineages. Source
    files are `src/lib/srd/subclasses.json`, `src/lib/srd/authored-*.json`
@@ -50,6 +59,14 @@ sees in a picker.
    an authored entry collide with an open document, the open row wins and the
    authored one should be pruned, which is how "Arcane Hand" ended up served
    from the CC-BY SRD instead of from us.
+
+The pack records the importer's revision in its SQLite `user_version`
+header (`PACK_REVISION` in `src/lib/content/edition.ts`; 1 is the first
+pack with no 2024 rows). `scripts/fetch-content-pack.mjs` and `npm run setup`
+replace a pack below it, and a server that opens one says so in its log
+and on the licenses page. Raise the revision whenever a pack an older
+importer built would serve the wrong rules, and attach the rebuilt pack to
+the release.
 
 `scripts/test-content-completeness.mjs` asserts the whole expected catalog
 resolves. When a player reports something missing, add its name to that

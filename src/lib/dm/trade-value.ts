@@ -8,7 +8,8 @@
 // were coin." Trade goods, likewise, are "as good as cash".
 //
 // The list price comes from the content pack. The pack prices no magic item,
-// so one is worth its rarity's value (SRD 5.2, src/lib/srd/magic-item-value.ts).
+// so one is worth its rarity's value under the 2014 rules
+// (src/lib/srd/magic-item-value.ts).
 // Anything the table does not price carries the worth the tool that gave it
 // set, in gold pieces (`worth`: grant_item, reveal_item, a purchase at the
 // model's price). A name is never read for a price: "Ruby (1000 gp)" is only
@@ -16,13 +17,14 @@
 
 import { searchItems } from "@/lib/content";
 import { magicItemNamed } from "@/lib/srd/magic-items";
-import { bonusItemValue, magicItemValueCp, pricedRarity, type PricedRarity } from "@/lib/srd/magic-item-value";
+import { bonusItemValue, easilySold, magicItemValue, type PricedRarity } from "@/lib/srd/magic-item-value";
 import { magicItemBonus, rowName, srdNameWithBonus, withoutBonus, type RowItem } from "@/lib/srd/item-row";
 import { COPPER_PER_GOLD, packCostCopper } from "@/lib/srd/currency";
 import { textKey } from "@/lib/language/text-logic";
 import { hasItemTag, type TaggedItem } from "@/lib/srd/item-tags";
 import type { ItemTag } from "@/lib/schemas/item-tags";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { gearPriceCopper } from "@/lib/srd/adventuring-gear";
 
 export type TradedItem = TaggedItem & { worth?: number };
 
@@ -103,14 +105,16 @@ export function packListCp(name: string): number | null {
   const rows = named.length ? named : packItemsNamed(withoutNote(name));
   const known = rows.find((item) => item.kind !== "magic_item" && Boolean(item.cost)) ?? rows[0];
   const copper = known?.cost ? packCostCopper(known.cost) : null;
-  return copper && copper > 0 ? copper : null;
+  // A row the pack prices at nothing (its 2014 "Acid" next to "Acid (vial)")
+  // takes the SRD 5.1 table's price for the same thing.
+  return copper && copper > 0 ? copper : gearPriceCopper(name);
 }
 
 // The value of the pack's magic item of exactly this name, by its whole name
 // or the name before a trailing note, with the rarity that sets it. Null for
 // a name the pack has no magic item of, and for one no rarity prices (an
 // artifact, a rarity that varies). The first row a rarity prices answers: the
-// SRD's Belt of Giant Strength varies, the pack's other edition calls it rare.
+// SRD's Belt of Giant Strength varies, the pack's Level Up (a5e) copy calls it rare.
 // A weapon or armor the pack prices, with a bonus in its name ("Longsword
 // +1", "+2 Plate"), is priced by that bonus.
 export function packMagicValue(name: string): { cp: number; rarity: PricedRarity } | null {
@@ -118,22 +122,35 @@ export function packMagicValue(name: string): { cp: number; rarity: PricedRarity
   if (bonused) {
     return bonused;
   }
-  const magic = (bare: string) => packItemsNamed(bare).filter((item) => item.kind === "magic_item");
-  const whole = magic(name);
-  const baseCostCp = (base: string) => packListCp(base) ?? packListCp(`${base} armor`);
-  for (const row of whole.length ? whole : magic(withoutNote(name))) {
-    const cp = magicItemValueCp(row, baseCostCp);
-    const rarity = pricedRarity(row.rarity);
-    if (cp !== null && rarity) {
-      return { cp, rarity };
+  for (const row of packMagicRows(name)) {
+    const value = magicItemValue(row);
+    if (value) {
+      return value;
     }
   }
-  return null;
+  // A scroll the pack files once, as "Spell Scroll", is priced by the spell
+  // its own name carries ("Spell Scroll (Fireball)").
+  return magicItemValue({ name, rarity: "", category: "scroll" });
+}
+
+// The pack's magic items of exactly this name, or of the name before a
+// trailing note ("Spell Scroll (Fireball)" is the pack's Spell Scroll).
+function packMagicRows(name: string): ReturnType<typeof searchItems> {
+  const magic = (bare: string) => packItemsNamed(bare).filter((item) => item.kind === "magic_item");
+  const whole = magic(name);
+  return whole.length ? whole : magic(withoutNote(name));
+}
+
+// Whether a shop buys this magic item back (SRD 5.1, Selling Treasure): a
+// potion or a scroll, by the category of the pack row its srdName names, so
+// a "Pozione di guarigione" sells as its Potion of Healing does.
+export function soldToShops(item: TradedItem): boolean {
+  return packMagicRows(srdNameWithBonus(item)).some(easilySold);
 }
 
 // A weapon, armor or shield the pack prices, with the bonus its name
 // declares, at SRD 5.1's rarity for that bonus. Read before the pack's own
-// rows: its other edition files a "Shield +2" as very rare, where the SRD
+// rows: its Level Up (a5e) copy files a "Shield +2" as very rare, where the SRD
 // the rules follow makes it rare.
 function bonusValue(name: string): { cp: number; rarity: PricedRarity } | null {
   const bonus = magicItemBonus(name);
@@ -143,7 +160,7 @@ function bonusValue(name: string): { cp: number; rarity: PricedRarity } | null {
   }
   const row = packItemsNamed(base).find((item) => (item.kind === "weapon" || item.kind === "armor") && packListCp(item.name) !== null);
   const kind = row?.kind === "weapon" ? "weapon" : row?.category === "shield" ? "shield" : "armor";
-  return row ? bonusItemValue(kind, bonus, packListCp(row.name) ?? 0) : null;
+  return row ? bonusItemValue(kind, bonus) : null;
 }
 
 // The magic item value the table holds for a thing, or null when it is no
@@ -175,7 +192,7 @@ export function worthProblem(item: RowItem, worth: number | undefined, what: str
     return null;
   }
   return {
-    error: `${what}: "${item.name}" has a price the rules set (the content pack's list price, or a magic item's value by its rarity), which is its worth; leave worth out. Nothing changed.`,
+    error: `${what}: "${item.name}" has a price the rules set (the content pack's list price, or a magic item's value by its rarity under the 2014 rules), which is its worth; leave worth out. Nothing changed.`,
     retry: true,
   };
 }

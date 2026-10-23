@@ -143,7 +143,7 @@ How to reproduce any finding: run its file; the gap's body is the reproduction, 
 | data-subclass-spells-on-class-lists | spell-data | Domain and patron grants folded into parent class lists (Stoneskin for every cleric) | Filter in the importer |
 | data-material-unnamed | spell-data | Water Walk has M and no material | Fix the row |
 | data-school-outside-the-eight | spell-data | a5e Haste has school "transformation" | Normalize on import |
-| data-2024-rows-unstructured | spell-data | srd-2024 rows keep Open5e v2 shape; the only rows for Hex and Chromatic Orb | Normalize on import |
+| data-2024-rows-unstructured | spell-data | fixed (#502): no srd-2024 row is imported; Hex and Chromatic Orb are authored 2014 rows | none |
 | data-table-mismatches | spell-data | Haste, Hex, Chromatic Orb differ from the book (same two causes) | as above |
 | mech-wall-of-fire-no-dice | spell-mechanics | no dice derived | author a row |
 | mech-utility-spells-deal-damage | spell-mechanics | Dimension Door, Teleport, Wish resolve as automatic damage from their mishap clause | require the damage to be the spell's effect, or author rows |

@@ -27,7 +27,8 @@ export type RaceMechanics = {
   // either-or sentence ("Your Strength or Dexterity score increases by 1"),
   // a pick `from` those two.
   skills?: string[];
-  skillChoice?: { count: number };
+  // `from` names the skills it picks among; unset, any skill.
+  skillChoice?: { count: number; from?: string[] };
   asiChoice?: { count: number; amount: number; from?: Ability[] };
   cantripChoice?: { list: string; count: number };
   tools?: string[];
@@ -423,9 +424,10 @@ function structuredGrants(data: Record<string, unknown>): StructuredGrants {
   if (skills?.length) {
     out.skills = skills;
   }
-  const skillChoice = data.skillChoice as { count?: unknown } | undefined;
+  const skillChoice = data.skillChoice as { count?: unknown; from?: unknown } | undefined;
   if (skillChoice && Number(skillChoice.count) > 0) {
-    out.skillChoice = { count: Number(skillChoice.count) };
+    const from = stringList(skillChoice.from)?.filter((skill) => (ALL_SKILLS as readonly string[]).includes(skill));
+    out.skillChoice = { count: Number(skillChoice.count), ...(from?.length ? { from } : {}) };
   }
   const asiChoice = data.asiChoice as { count?: unknown; amount?: unknown; from?: unknown } | undefined;
   if (asiChoice && Number(asiChoice.count) > 0) {

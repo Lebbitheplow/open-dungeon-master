@@ -79,7 +79,7 @@ await test("the pack's own costs keep their English notation: a decimal point an
     return;
   }
   const costs = getContentDb().prepare("SELECT cost FROM items WHERE cost IS NOT NULL AND cost != ''").all().map((row) => row.cost);
-  assert.ok(costs.length > 400, `${costs.length} pack costs`);
+  assert.ok(costs.length > 250, `${costs.length} pack costs`);
   for (const cost of costs) {
     const copper = packCostCopper(cost);
     assert.ok(Number.isInteger(copper) && copper >= 0, `${cost}: ${copper}`);

@@ -8,6 +8,7 @@ import { characterPlaceholder, normalizeGender, raceFamily } from "@/lib/placeho
 import type { Ability } from "@/lib/schemas/sheet";
 import { canonicalRaceId, srdRaceFor } from "@/lib/content/race-options";
 import { textKey } from "@/lib/language/text-logic";
+import { SRD_SKILLS } from "@/lib/srd";
 
 const BASE = "/assets/placeholders";
 
@@ -19,7 +20,7 @@ export type LineageEntry = {
   asi: Partial<Record<Ability, number>>;
   asiChoice?: { count: number; amount: number };
   bonusLanguages?: number;
-  skillChoice?: { count: number };
+  skillChoice?: { count: number; from?: string[] };
   cantripChoice?: { list: string; count: number };
   toolChoice?: { count: number; from: string[] };
 };
@@ -243,10 +244,11 @@ export function parseTrait(line: string, entry: LineageEntry): ParsedTrait {
     };
   }
   if (/skill/i.test(text) && entry.skillChoice) {
-    const { count } = entry.skillChoice;
+    const { count, from } = entry.skillChoice;
+    const among = from?.length ? ` from ${from.map((id) => SRD_SKILLS.find((skill) => skill.id === id)?.name ?? id).join(", ")}` : "";
     return {
       head: text,
-      body: `${countWord(count)} ${count === 1 ? "skill" : "skills"} of your choice, asked for on this step.`,
+      body: `${countWord(count)} ${count === 1 ? "skill" : "skills"} of your choice${among}, asked for on this step.`,
     };
   }
   if (/tool/i.test(text) && entry.toolChoice) {

@@ -170,6 +170,62 @@ export const SRD_GEAR: SrdGear[] = [
   { name: "Viol", costCp: gp(30), weightLb: 1 },
 ];
 
+// The goods SRD 5.1 prices outside those tables: its Equipment Packs (each
+// weighing what it holds, from PACKS), the ammunition bundles its Adventuring
+// Gear table sells, and the Mounts and Other Animals and Tack, Harness, and
+// Drawn Vehicles tables. The content pack carried them
+// only as 2024 rows, which the importer now leaves out, so it builds their
+// rows from this list (scripts/import-open5e.mjs); with no pack, the
+// builder's purse and a shop price them from here. `category` is the pack's
+// own word, which a shop's skip list reads. Barding (four times an armor's
+// price) and stabling (a service) are not goods to stock.
+export type SrdGoods = SrdGear & { category: "equipment pack" | "ammunition" | "mount" | "adventuring gear" };
+
+const PACK_PRICES_GP: Record<keyof typeof PACKS, number> = {
+  burglar: 16, diplomat: 39, dungeoneer: 12, entertainer: 40, explorer: 10, priest: 19, scholar: 40,
+};
+
+function packWeight(items: readonly KitItem[]): number {
+  const total = items.reduce((sum, item) => sum + item.qty * (gearWeightOf(item.name) ?? 0), 0);
+  return Math.round(total * 100) / 100;
+}
+
+// SRD_GEAR's own weight for a pack's line, read before the full index exists.
+function gearWeightOf(name: string): number | null {
+  const key = gearKey(name);
+  return SRD_GEAR.find((gear) => gearKey(gear.name) === key)?.weightLb ?? null;
+}
+
+const packName = (id: string) => `${id[0].toUpperCase()}${id.slice(1)}'s Pack`;
+
+export const SRD_GOODS: SrdGoods[] = [
+  ...Object.entries(PACKS).map(([id, items]) => ({
+    name: packName(id),
+    costCp: gp(PACK_PRICES_GP[id as keyof typeof PACKS]),
+    weightLb: packWeight(items),
+    category: "equipment pack" as const,
+  })),
+  { name: "Arrows (20)", costCp: gp(1), weightLb: 1, category: "ammunition" },
+  { name: "Blowgun Needles (50)", costCp: gp(1), weightLb: 1, category: "ammunition" },
+  { name: "Crossbow Bolts (20)", costCp: gp(1), weightLb: 1.5, category: "ammunition" },
+  { name: "Sling Bullets (20)", costCp: 4, weightLb: 1.5, category: "ammunition" },
+  { name: "Camel", costCp: gp(50), weightLb: null, category: "mount" },
+  { name: "Donkey or Mule", costCp: gp(8), weightLb: null, category: "mount", aliases: ["donkey", "mule"] },
+  { name: "Elephant", costCp: gp(200), weightLb: null, category: "mount" },
+  { name: "Horse, Draft", costCp: gp(50), weightLb: null, category: "mount", aliases: ["horse (draft)"] },
+  { name: "Horse, Riding", costCp: gp(75), weightLb: null, category: "mount", aliases: ["horse (riding)"] },
+  { name: "Mastiff", costCp: gp(25), weightLb: null, category: "mount" },
+  { name: "Pony", costCp: gp(30), weightLb: null, category: "mount" },
+  { name: "Warhorse", costCp: gp(400), weightLb: null, category: "mount" },
+  { name: "Bit and Bridle", costCp: gp(2), weightLb: 1, category: "adventuring gear" },
+  { name: "Feed (per day)", costCp: 5, weightLb: 10, category: "adventuring gear", aliases: ["animal feed"] },
+  { name: "Saddle, Exotic", costCp: gp(60), weightLb: 40, category: "adventuring gear", aliases: ["saddle (exotic)"] },
+  { name: "Saddle, Military", costCp: gp(20), weightLb: 30, category: "adventuring gear", aliases: ["saddle (military)"] },
+  { name: "Saddle, Pack", costCp: gp(5), weightLb: 15, category: "adventuring gear", aliases: ["saddle (pack)"] },
+  { name: "Saddle, Riding", costCp: gp(10), weightLb: 25, category: "adventuring gear", aliases: ["saddle (riding)"] },
+  { name: "Saddlebags", costCp: gp(4), weightLb: 8, category: "adventuring gear" },
+];
+
 // "Rope, Hempen (50 feet)" -> "rope hempen 50 feet": apostrophes and case go.
 export function gearKey(text: string): string {
   return textKey(text.replace(/['‘’ʼ´]/g, ""));
@@ -179,7 +235,7 @@ export function gearKey(text: string): string {
 // inverted form, the name without its bracket, the aliases, and the English
 // plurals of each ("torches", "rations"), the names before any plural so no
 // plural shadows another row's name.
-const byKey = spellingIndex(SRD_GEAR, (gear) => {
+const byKey = spellingIndex<SrdGear>([...SRD_GEAR, ...SRD_GOODS], (gear) => {
   // "Clothes, Common" is also "common clothes"; "Rope, Hempen (50 feet)"
   // also "hempen rope"; the bracket alone falls away too.
   const bare = gear.name.replace(/\s*\([^)]*\)\s*$/, "");

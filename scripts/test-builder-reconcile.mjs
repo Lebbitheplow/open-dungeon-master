@@ -56,6 +56,15 @@ test("a class skill the new background grants outright is dropped, and named", (
   assert.deepEqual(dropped, ["class skill: stealth"]);
 });
 
+test("an Orc keeps only the racial skills Primal Intuition names, and the other is asked for again", () => {
+  const before = { ...empty, chosenSkills: ["athletics", "perception"], racialSkills: ["arcana", "medicine"] };
+  const { picks, dropped } = reconcilePicks(before, {
+    race: race("orc"), klass: klass("fighter"), background: background("acolyte"), level: 1,
+  });
+  assert.deepEqual(picks.racialSkills.filter(Boolean), ["medicine"]);
+  assert.deepEqual(dropped, ["racial skill: arcana"]);
+});
+
 test("every dropped pick names the block it is made on again, so a notice can go there (issue #124)", () => {
   // A human acolyte fighter with three languages and two class skills
   // becomes a hill dwarf: Dwarvish is now spoken and the third slot is gone.

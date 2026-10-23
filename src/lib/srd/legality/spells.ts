@@ -36,6 +36,7 @@ import {
 } from "@/lib/srd/third-caster";
 import { type ClassGrants, type SpellFacts } from "@/lib/srd/legality/types";
 import { textKey } from "@/lib/language/text-logic";
+import { revisedOnlySpellProblem } from "@/lib/content/edition";
 
 type Casting = NonNullable<Spellcasting>;
 type CastingAbility = Casting["ability"];
@@ -126,6 +127,13 @@ export function spellNameProblems(view: CasterView, list: string, rules: NameRul
   const top = maxSpellLevelOf(view);
   const judge = (name: string, asCantrip: boolean) => {
     const key = textKey(name);
+    // A 2024-only spell a sheet held from before they were taken out is
+    // asked for again on this edit, held or not (src/lib/content/edition.ts).
+    const revised = revisedOnlySpellProblem(name, asCantrip ? "cantrip" : "spell");
+    if (revised) {
+      problems.push(revised);
+      return;
+    }
     if (rules.held.has(key) || granted.has(key)) {
       return;
     }

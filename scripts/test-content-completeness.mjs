@@ -219,8 +219,12 @@ if (!existsSync(packPath)) {
 } else {
   const { default: Database } = await import("better-sqlite3-multiple-ciphers");
   const db = new Database(packPath, { readonly: true, fileMustExist: true });
+  // A 2024 row never answers for a name (src/lib/content/edition.ts): it once
+  // stood in for Savage Attacker, Goliath and ten 2014 spells while the
+  // pickers left it out, so the checks below passed with those missing.
+  const PLAYED = "document_slug NOT IN ('srd-2024', 'open5e-2024')";
   const has = (table, name) =>
-    db.prepare(`SELECT COUNT(*) AS count FROM ${table} WHERE name = ? COLLATE NOCASE`).get(name)
+    db.prepare(`SELECT COUNT(*) AS count FROM ${table} WHERE name = ? COLLATE NOCASE AND ${PLAYED}`).get(name)
       .count > 0;
 
   test("every spell in the manifest is in the content pack", () => {
@@ -236,7 +240,7 @@ if (!existsSync(packPath)) {
         (name) =>
           db
             .prepare(
-              "SELECT COUNT(*) AS count FROM spells WHERE name = ? COLLATE NOCASE OR aliases_csv LIKE ?",
+              `SELECT COUNT(*) AS count FROM spells WHERE (name = ? COLLATE NOCASE OR aliases_csv LIKE ?) AND ${PLAYED}`,
             )
             .get(name, `%${name.toLowerCase()}%`).count > 0,
       );
@@ -263,7 +267,7 @@ if (!existsSync(packPath)) {
             const found =
               db
                 .prepare(
-                  "SELECT COUNT(*) AS count FROM spells WHERE name = ? COLLATE NOCASE OR aliases_csv LIKE ?",
+                  `SELECT COUNT(*) AS count FROM spells WHERE (name = ? COLLATE NOCASE OR aliases_csv LIKE ?) AND ${PLAYED}`,
                 )
                 .get(spell, `%${spell.toLowerCase()}%`).count > 0;
             if (!found) {

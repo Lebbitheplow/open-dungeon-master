@@ -48,6 +48,15 @@ chapters, drops each page's repeated title, and corrects the few conversion
 slips listed in the script's `ERRATA`. The rulebook shows the attribution on
 its contents page and ends with the SRD's legal notice as its last page.
 
+### The SRD 5.1 goods in the content pack
+
+The seven equipment packs, ammunition bundles, mounts and tack the Open5e v1
+import lacks are added to the content pack by `scripts/import-open5e.mjs`
+under document `srd-2014`: their names, prices and weights from the bundled
+tables in `src/lib/srd/adventuring-gear.ts`, their descriptions from the
+rulebook above. They are SRD 5.1 material under the same CC-BY-4.0 terms and
+attribution. No SRD 5.2 (2024) material is in the pack.
+
 ## Ambience and music
 
 `src/lib/ambience/catalog.ts` names the cues the app can play. The files in

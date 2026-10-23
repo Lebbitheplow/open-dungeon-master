@@ -2,7 +2,7 @@ import Link from "next/link";
 import { PIXEL_ICONS } from "@/lib/ui";
 import { PageSection, PageShell } from "@/components/PageShell";
 import { listDocuments } from "@/lib/content";
-import { contentPackInstalled } from "@/lib/content/db";
+import { contentPackInstalled, contentPackStale } from "@/lib/content/db";
 import { listWorldPackSummaries } from "@/lib/worlds";
 import { installedTracks } from "@/lib/ambience/library";
 import { cueById } from "@/lib/ambience/catalog";
@@ -18,6 +18,7 @@ export const metadata = {
 export default function LicensesPage() {
   const documents = listDocuments();
   const installed = contentPackInstalled();
+  const stale = contentPackStale();
   const worldPacks = listWorldPackSummaries();
   const ambience = installedTracks();
 
@@ -59,6 +60,12 @@ export default function LicensesPage() {
             The Open5e content pack is not installed on this server. Run
             <span className="font-mono"> node scripts/import-open5e.mjs</span> to download
             it; until then the app uses only the bundled SRD 5.1 data.
+          </p>
+        ) : null}
+        {stale ? (
+          <p className="reveal rounded border border-stone-700 bg-stone-900 p-3 text-stone-400">
+            This server&rsquo;s content pack was built by an older release. Run
+            <span className="font-mono"> npm run setup</span> to replace it with the one this release plays.
           </p>
         ) : null}
       </PageSection>

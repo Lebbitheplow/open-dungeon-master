@@ -142,15 +142,16 @@ export function addStock(stock: StockLine[], itemName: string, qty: number, pric
   return [...stock, { itemName: itemName.slice(0, 80), qty, priceCp: Math.max(1, Math.round(priceCp)), note: "", ...(srdName ? { srdName } : {}) }];
 }
 
-// The magic a shelf of this size carries (SRD 5.2, Magic Item Rarity):
-// common items are often sold in towns and cities, uncommon and rare ones
-// usually only in cities, and nothing rarer is for sale. A curiosity shop
-// the DM puts in a village still keeps its commons.
+// The magic a shelf stocks by chance, whatever the settlement's size (SRD
+// 5.1, Selling Treasure: "aside from a few common magic items, you won't
+// normally come across magic items or spells to purchase"). Anything rarer
+// reaches a shelf only when the DM puts it there (a prepared shelf in the
+// workshop's Market, or open_shop's stock), at its rarity's value.
 export const SHELF_RARITIES: Record<ShopSize, readonly string[]> = {
   hamlet: ["common"],
   village: ["common"],
   town: ["common"],
-  city: ["common", "uncommon", "rare"],
+  city: ["common"],
 };
 
 // How much of a shelf each rarity takes, by weight, so a city's curiosity

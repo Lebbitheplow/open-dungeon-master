@@ -35,6 +35,7 @@ import {
   spendFeatureUse,
 } from "@/lib/dm/attack-onhit";
 import { storeBudget } from "@/lib/dm/turn-budget";
+import { SAVAGE_ATTACKER_USED, savageAttackerApplies } from "@/lib/srd/feat-combat";
 import { landNaturalOnHit } from "@/lib/dm/natural-onhit";
 import { rollAgainst } from "@/lib/roll-labels";
 import { markCritRange } from "@/lib/dm/attack-marks";
@@ -68,6 +69,18 @@ function claimParkedFoeSlayer(campaignId: string): boolean {
 
 // Physical dice: park the to-hit roll for the player; the submit route
 // adjudicates it and, on a hit, parks the damage roll too.
+// Savage Attacker on a physical roll: the player rolls the weapon's dice
+// twice and enters the better total, so the once-a-turn mark is spent here.
+function claimSavageAttacker(plan: AttackPlan): boolean {
+  const { budget, encounter, sheet, profile } = plan;
+  if (!budget || !savageAttackerApplies(sheet, { weaponAttack: plan.weaponAttack, melee: !profile.ranged && !plan.atRange }, budget.oncePerTurn)) {
+    return false;
+  }
+  budget.oncePerTurn.push(SAVAGE_ATTACKER_USED);
+  storeBudget(encounter, budget);
+  return true;
+}
+
 export function parkPcAttack(plan: AttackPlan, strike: Strike, toolCallId: string | null) {
   const { campaign, turn, sheet, enemy, profile, riders, context } = plan;
   const { critExtraDice } = strike;
@@ -93,6 +106,7 @@ export function parkPcAttack(plan: AttackPlan, strike: Strike, toolCallId: strin
       ? { critRange: Math.min(plan.weaponAttack ? riders.critRange : 20, markCritRange(plan.marks.applies)) }
       : {}),
     ...(strike.rerollBelow ? { rerollBelow: strike.rerollBelow } : {}),
+    ...(claimSavageAttacker(plan) ? { savageAttacker: true } : {}),
     ...(strike.hasOnHit ? { onHit: strike.onHitSpends } : {}),
     ...(plan.options.nonlethal ? { nonlethal: true } : {}),
     ...(plan.hitSpent.length ? { hitSpent: plan.hitSpent } : {}),
@@ -311,5 +325,5 @@ export function resolvePendingPcAttack(pending: PendingRoll, roll: StoredRoll): 
     context.rerollBelow
       ? `, rerolling any die of ${context.rerollBelow} or less once for Great Weapon Fighting`
       : ""
-  }; the server will apply it to ${enemy.displayName} automatically.`;
+  }${context.savageAttacker ? ", rolling the weapon's dice a second time and keeping the better total (Savage Attacker)" : ""}; the server will apply it to ${enemy.displayName} automatically.`;
 }

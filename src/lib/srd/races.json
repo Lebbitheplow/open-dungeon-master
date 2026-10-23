@@ -798,6 +798,38 @@
       "skillChoice": {
         "count": 2
       }
+    },
+    {
+      "id": "orc",
+      "name": "Orc",
+      "speed": 30,
+      "size": "Medium",
+      "asi": {
+        "str": 2,
+        "con": 1
+      },
+      "traits": [
+        "Darkvision 60 ft",
+        "Aggressive (bonus action: move up to your speed toward a hostile creature you can see)",
+        "Powerful Build (count as one size larger for carrying)",
+        "Primal Intuition (two skills from Animal Handling, Insight, Intimidation, Medicine, Nature, Perception, Survival)"
+      ],
+      "languages": [
+        "Common",
+        "Orc"
+      ],
+      "skillChoice": {
+        "count": 2,
+        "from": [
+          "animal_handling",
+          "insight",
+          "intimidation",
+          "medicine",
+          "nature",
+          "perception",
+          "survival"
+        ]
+      }
     }
   ],
   "_license_authored": "The lineages below the SRD nine are original content for Open Dungeon Master: their trait lines are written from scratch to state the mechanics. No publisher's descriptive text is reproduced."

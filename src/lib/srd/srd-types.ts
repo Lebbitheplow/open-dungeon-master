@@ -43,7 +43,8 @@ export type SrdRace = {
   // Structured grants behind the trait prose, so the builder can put them on
   // the sheet instead of leaving them as flavor text.
   skills?: string[];
-  skillChoice?: { count: number };
+  // The skills it picks among (the Orc's Primal Intuition); unset, any skill.
+  skillChoice?: { count: number; from?: string[] };
   cantripChoice?: { list: string; count: number };
   tools?: string[];
   toolChoice?: { count: number; from: string[] };

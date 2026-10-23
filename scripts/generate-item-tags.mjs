@@ -33,8 +33,8 @@ const db = new Database(contentDb, { readonly: true });
 // SRD's row.
 const rows = db
   .prepare(
-    `SELECT name, slug, kind, category, data_json, document_slug IN ('wotc-srd', 'srd-2014', 'srd-2024') AS srd FROM items
-     ORDER BY CASE WHEN document_slug IN ('wotc-srd', 'srd-2014', 'srd-2024') THEN 0 ELSE 1 END, name, slug`,
+    `SELECT name, slug, kind, category, data_json, document_slug IN ('wotc-srd', 'srd-2014') AS srd FROM items
+     ORDER BY CASE WHEN document_slug IN ('wotc-srd', 'srd-2014') THEN 0 ELSE 1 END, name, slug`,
   )
   .all();
 db.close();

@@ -433,7 +433,8 @@ export function fillRound(ctx: FillContext): FillRound {
     }
   }
   if (race.skillChoice && wants("racialSkills")) {
-    const { next, added } = fillSlots(fields.racialSkills, race.skillChoice.count, skillOrder(ctx, proficient));
+    const from = race.skillChoice.from?.length ? race.skillChoice.from : ALL_SKILLS;
+    const { next, added } = fillSlots(fields.racialSkills, race.skillChoice.count, skillOrder(ctx, proficient, from));
     if (added.length) {
       patch.racialSkills = next;
       added.forEach((skill) => proficient.add(skill));

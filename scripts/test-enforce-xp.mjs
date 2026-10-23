@@ -182,8 +182,8 @@ async function recruit(table, classId) {
   return joined.result.characterId;
 }
 
-// What a companion's sheet must satisfy at a level. No subclass: the engine
-// never picks one for a companion (see the pinned rule below).
+// What a companion's sheet must satisfy at a level, its class's SRD
+// subclass included from the level the class takes one (the rule below).
 function companionProblems(classId, sheet, level) {
   const table = SRD_CLASSES[classId];
   const problems = [];
@@ -196,7 +196,7 @@ function companionProblems(classId, sheet, level) {
   expect("proficiency bonus", computeSheetDerived(sheet).proficiencyBonus, PROFICIENCY_BY_LEVEL[level - 1]);
   expect("hit dice", `${sheet.hitDice.total}${sheet.hitDice.die}`, `${level}d${table.hitDie}`);
   expect("hit points", sheet.maxHp, averageHp(table.hitDie, abilityMod(sheet.abilities.con), level));
-  const expected = expectedFeatureNames(classId, level, false);
+  const expected = expectedFeatureNames(classId, level, true);
   const held = sheet.features.filter((feature) => feature.source === "class").map((feature) => cleanName(feature.name));
   for (const name of held) {
     if (!expected.has(name)) {
@@ -268,16 +268,20 @@ await test("a companion's level-up returns nothing spent, and takes several leve
   assert.equal(after.maxHp - after.currentHp, before.maxHp - before.currentHp);
 });
 
-await test("ODM's rule: a companion's level-up picks no subclass", async () => {
-  // autoLevelCompanion's header: "a plain headless level-up (average HP,
-  // refreshed features and slots; subclass choices stay as they are)". The
-  // SRD has every fighter choose an archetype at 3rd level.
+await test("A companion takes its class's SRD subclass at the level the class chooses one: a fighter is a Champion from 3rd level (SRD 5.1; issue #502)", async () => {
+  // Every fighter chooses an archetype at 3rd level. A companion nobody gave
+  // one takes the SRD's, so it is never a 5th level fighter with no
+  // archetype's features (src/lib/dm/companion-level.ts companionSubclass).
   const table = await openWorld();
   table.addHero({ class: "fighter", level: 1, maxHp: 12 });
   const id = await recruit(table, "fighter");
+  await table.invoke("award_xp", { characterIds: [id], amount: XP_BY_LEVEL[1], reason: "x" });
+  assert.equal(table.sheet(id).level, 2);
+  assert.equal(table.sheet(id).subclass, "", "no archetype before 3rd level");
   await table.invoke("award_xp", { characterIds: [id], amount: XP_BY_LEVEL[4], reason: "x" });
   assert.equal(table.sheet(id).level, 5);
-  assert.equal(table.sheet(id).subclass, "");
+  assert.equal(table.sheet(id).subclass, "Champion");
+  assert.ok(table.sheet(id).features.some((feature) => /improved critical/i.test(feature.name)), "the Champion's feature is on the sheet");
 });
 
 // ---- findings ----
