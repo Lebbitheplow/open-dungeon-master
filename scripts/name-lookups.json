@@ -253,7 +253,7 @@
     "app/characters/builder/CatalogBrowser.tsx#partial": [["search",2,"the catalog's filter box"],["key",2,"a catalog row's selection by its name"],["identity",1,"builder picks, kit lines, spells, tools and skills by whole name or id; ids, steps and defaults"]],
     "app/characters/builder/CatalogBrowser.tsx#whole": [["identity",2,"builder picks, kit lines, spells, tools and skills by whole name or id; ids, steps and defaults"],["key",7,"UI section keys"]],
     "app/characters/builder/CharacterBuilder.tsx#fallback": [["identity",1,"builder picks, kit lines, spells, tools and skills by whole name or id; ids, steps and defaults"]],
-    "app/characters/builder/CharacterBuilder.tsx#whole": [["key",1,"builder step keys"],["identity",2,"builder picks, kit lines, spells, tools and skills by whole name or id; ids, steps and defaults"]],
+    "app/characters/builder/CharacterBuilder.tsx#whole": [["identity",2,"builder picks, kit lines, spells, tools and skills by whole name or id; ids, steps and defaults"]],
     "app/characters/builder/EquipmentSection.tsx#bypass": [["key",5,"builder gear picked from the catalog, keyed by its row name"]],
     "app/characters/builder/EquipmentSection.tsx#partial": [["identity",1,"builder picks, kit lines, spells, tools and skills by whole name or id; ids, steps and defaults"],["key",1,"builder gear picked from the catalog, keyed by its row name"]],
     "app/characters/builder/FeatChoicesFields.tsx#bypass": [["key",1,"a picked spell's row name"]],
