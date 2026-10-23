@@ -267,6 +267,8 @@ export function BattleMapPanel({
   const mover = view.tokens.find((token) => token.id === view.myTokenId);
   const pendingKey = `${view.mapId}:${mover?.x},${mover?.y}:${moveMode}`;
   const livePending = view.reachable.length > 0 && pendingMove?.key === pendingKey ? pendingMove : null;
+  // The aim as an addon's board view is told it, so it can mark the square.
+  const moveAim = useMemo(() => (livePending ? { x: livePending.x, y: livePending.y } : null), [livePending]);
 
   // DM tools.
   const [tool, setTool] = useState<BoardTool>("handle");
@@ -1081,6 +1083,7 @@ export function BattleMapPanel({
               }}
               looks={looks}
               intents={intents}
+              moveAim={moveAim}
               fx={fx}
               ping={ping}
               camera={addonViewport && canDirect ? null : camera}

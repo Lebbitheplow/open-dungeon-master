@@ -197,6 +197,8 @@
           for (const zone of zonesAt.get(index) ?? []) diamond(x, y, 0, ZONE_TONES[zone.tone] ?? ZONE_TONES.neutral);
           if (reachable.has(index)) diamond(x, y, 0, "rgb(240 200 90 / 0.18)");
           if (hoverKey === `${x},${y}`) diamond(x, y, 0, "rgb(255 255 255 / 0.18)");
+          // A walk takes two taps: the first aims it, so mark that square.
+          if (snapshot.moveAim?.x === x && snapshot.moveAim?.y === y) diamond(x, y, 0, "rgb(240 200 90 / 0.45)");
         }
         for (const token of tokensAt.get(index) ?? []) drawToken(token);
       }

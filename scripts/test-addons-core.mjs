@@ -502,6 +502,15 @@ await test("character gender is optional and only travels with projected figures
   assert.equal(boardSnapshot(view, "hello-dungeon", { canDirect: false, appearance, looks }).tokens[0].character.gender, undefined);
 });
 
+await test("a walk's first tap is named to the view as its aim, and nothing else is", () => {
+  const appearance = { theme: "night", reducedMotion: false };
+  assert.equal(boardSnapshot(view, "hello-dungeon", { canDirect: false, appearance }).moveAim, null);
+  const aimed = boardSnapshot(view, "hello-dungeon", { canDirect: false, appearance, moveAim: { x: 2, y: 1 } });
+  assert.deepEqual(aimed.moveAim, { x: 2, y: 1 });
+  const board = readFileSync(new URL("../src/app/campaigns/[campaignId]/BattleMapPanel.tsx", import.meta.url), "utf8");
+  assert.match(board, /moveAim=\{moveAim\}/, "the table does not tell the view its aim");
+});
+
 await test("a snapshot carries the flat board's layers, only about figures this viewer sees", () => {
   const appearance = { theme: "night", reducedMotion: false };
   const fuller = {

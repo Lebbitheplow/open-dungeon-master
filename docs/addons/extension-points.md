@@ -425,6 +425,7 @@ table hides its own over a board view.
   board,            // "fight" or "scene"
   myTokenId,
   reachable,        // squares this viewer's figure can reach this turn
+  moveAim,          // { x, y } a first tap aimed this viewer's walk at, or null
   zones,            // spell areas: [{ id, spell, caster, tone, look, cells, hot, label, untilRound }]
   labels,           // [{ x, y, text, dmOnly }] pinned to squares
   marks,            // what people drew: [{ id, kind: "stroke" | "arrow" | "rect" | "ellipse", tone, points: [{ x, y }] }]
@@ -457,6 +458,12 @@ included. A
 zone's `look` says how the flat board draws it (`wall` a band, `cloud` a soft
 fill, `ground`, `light`, `dark`, `ward` a tint with an edge) and `hot` is a
 wall of fire's burning side.
+
+A player's walk takes two taps. The first `tile` on a reachable square only
+aims it, and `moveAim` names that square until the walk is made, aimed
+elsewhere or dropped with Esc; the second `tile` on the same square makes the
+walk. Mark the aimed square, as the flat board holds its ruler there. Older
+hosts omit `moveAim`, and their first tap walks.
 
 Square `i` is at `x = i % width`, `y = floor(i / width)`. The snapshot is the
 projection the server made for this viewer: a hidden enemy is absent from a
