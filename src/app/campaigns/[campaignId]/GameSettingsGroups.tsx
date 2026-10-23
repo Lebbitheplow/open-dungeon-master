@@ -522,7 +522,7 @@ export function BondsGroup({ settings, patch }: Base) {
         </SettingToggle>
       </Tooltip>
       {settings.relationships !== "off" ? (
-        <Tooltip content="The romance ladder on top of the bond meter: interested, courting, together, betrothed, married. Nobody can be romanced who does not already like the character, players always make the first move, and intimate scenes always fade to black.">
+        <Tooltip content="The romance ladder on top of the bond meter: interested, courting, together, betrothed, married. Nobody can be romanced who does not already like the character, nobody is courted who did not ask to be, and intimate scenes always fade to black.">
           <SettingToggle on={settings.romance !== "off"} onToggle={() => patch({ romance: settings.romance === "off" ? "on" : "off" })}>
             Romance {settings.romance !== "off" ? "on" : "off"}
           </SettingToggle>

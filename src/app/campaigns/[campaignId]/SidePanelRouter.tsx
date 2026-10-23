@@ -381,7 +381,7 @@ export function SidePanelRouter({
         <div key={partySection} className="motion-tab">
           {partySection === "bonds" ? (
             <Suspense fallback={<PanelLoading />}>
-              <BondsPanel campaignId={campaignId} refreshKey={relationshipsVersion} />
+              <BondsPanel campaignId={campaignId} refreshKey={relationshipsVersion} sheets={sheets} meUserId={meUserId} />
             </Suspense>
           ) : partySection === "factions" ? (
             <Suspense fallback={<PanelLoading />}>
@@ -483,6 +483,12 @@ export function SidePanelRouter({
                 }
                 onOpenSettings={onOpenTab ? () => onOpenTab("settings") : undefined}
                 humanDmTable={humanDmTable}
+                romanceNotes={
+                  humanDmTable &&
+                  adjudicates &&
+                  campaign?.gameSettings?.relationships !== "off" &&
+                  campaign?.gameSettings?.romance !== "off"
+                }
                 companionGenre={campaign?.gameSettings?.genre}
                 companionWorldPack={campaign?.gameSettings?.worldPack}
                 companionLevel={(() => {

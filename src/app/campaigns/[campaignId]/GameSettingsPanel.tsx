@@ -52,7 +52,7 @@ export const BONDS_INFO = [
 
 export const ROMANCE_INFO = [
   "The romance ladder on top of the bond meter: interested, courting, together, betrothed, married.",
-  "Nobody can be romanced who does not already like the character, players always make the first move, and intimate scenes always fade to black.",
+  "Nobody can be romanced who does not already like the character, nobody is courted who did not ask to be, and intimate scenes always fade to black.",
   "Requires Bonds to be on.",
 ].join("\n\n");
 

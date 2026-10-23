@@ -514,3 +514,40 @@ html[data-effects="low"] .dictate-dot { animation: none; }
   .dictate-mic-live::after, .dictate-dot { animation: none !important; }
   .dictate-mic-live::before { transition: none !important; }
 }
+
+/* ------------------------------------------------------------------------
+   An NPC's romantic advance (issue 501, AdvanceOfferCard.tsx): the card
+   enters with a 220ms fade and a 6px rise and settles with a 160ms
+   collapse; on a yes the Bonds row's romance rung fills over 400ms (BondsPanel
+   .romance-rung). All on one easing. Reduced motion keeps the fades and
+   drops the movement. Nothing here runs from a model's words: only from the
+   server's offer and its settling.
+   ------------------------------------------------------------------------ */
+@keyframes advance-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes advance-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes advance-settle {
+  from { grid-template-rows: 1fr; opacity: 1; }
+  to { grid-template-rows: 0fr; opacity: 0; }
+}
+@keyframes advance-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@layer components {
+  .advance-shell { display: grid; grid-template-rows: 1fr; }
+  .advance-shell > * { min-height: 0; }
+  .advance-card { animation: advance-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+  .advance-shell[data-leaving] { animation: advance-settle 160ms cubic-bezier(0.2, 0.8, 0.2, 1) both; overflow: hidden; pointer-events: none; }
+  .romance-rung-fill { transition: width 400ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .advance-card { animation: advance-fade-in 220ms linear backwards; }
+  .advance-shell[data-leaving] { animation: advance-fade-out 160ms linear both; }
+  .romance-rung-fill { transition: opacity 400ms linear; }
+}

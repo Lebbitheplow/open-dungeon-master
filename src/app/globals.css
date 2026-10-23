@@ -279,6 +279,19 @@
   --color-amber-200: #47350c;
   --color-amber-100: #352808;
   --color-amber-50: #241a05;
+  /* Romance's rose (issue 501: the advance card, Drawn to, the Bonds rung)
+     turns the same way: deep wine ink and pale tints on cream. */
+  --color-rose-950: #fdf0f2;
+  --color-rose-900: #fbdfe4;
+  --color-rose-800: #f5c2cc;
+  --color-rose-700: #e8919f;
+  --color-rose-600: #d0566d;
+  --color-rose-500: #be3555;
+  --color-rose-400: #a3243f;
+  --color-rose-300: #8a1a33;
+  --color-rose-200: #73142a;
+  --color-rose-100: #5c0f21;
+  --color-rose-50: #470b19;
   --shadow-elev-1: 0 1px 2px rgba(60, 40, 10, 0.12), 0 2px 8px rgba(60, 40, 10, 0.08);
   --shadow-elev-2: 0 2px 6px rgba(60, 40, 10, 0.14), 0 12px 32px rgba(60, 40, 10, 0.12);
   --shadow-glow-gold: 0 0 20px rgba(166, 132, 42, 0.18);

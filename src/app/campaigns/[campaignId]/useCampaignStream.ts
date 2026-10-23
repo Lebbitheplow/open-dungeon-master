@@ -123,6 +123,8 @@ export type ItemProposal = {
   // A trade's other side and its offer (11.2).
   toCharacterId?: string;
   offer?: { toCharacterId: string; give: Array<{ name: string; qty: number }>; giveCp: number; want: Array<{ name: string; qty: number }>; wantCp: number } | null;
+  // An NPC's romantic advance (issue 501): who makes it, and their face.
+  advance?: { suitor: string; portraitUrl: string; look: { gender: string; race: string; class: string; role: string } };
 };
 
 // A disputed ruling (src/lib/dm/dispute-logic.ts), open or under vote.

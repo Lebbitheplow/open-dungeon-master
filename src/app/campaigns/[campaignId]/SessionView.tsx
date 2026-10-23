@@ -1,5 +1,6 @@
 "use client";
 
+import { romanceCueAllowed } from "@/lib/dm/director-logic";
 import { initiativeCharacter, selectedCharacter } from "@/lib/player-characters";
 import { useThemePrefs } from "@/lib/theme-mode";
 import { LevelUpMoment, LootMoment, MomentVeil, RestMoment, TravelBanner } from "@/app/campaigns/[campaignId]/Moments";
@@ -1179,6 +1180,7 @@ export function SessionView({
                   <Composer
                     campaignId={campaign.id}
                     trackAmmo={campaign.gameSettings?.variantRules?.ammunition ?? false}
+                    romanceCue={romanceCueAllowed(campaign.gameSettings)}
                     edges={state.battleMap?.edges}
                     drops={state.battleMap?.drops}
                     mounts={state.battleMap?.mounts}

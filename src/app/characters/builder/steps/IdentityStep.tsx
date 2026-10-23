@@ -19,13 +19,15 @@ import type { BuilderState } from "../useBuilderState";
 import { splitToolGrants } from "@/lib/srd/tool-choices";
 import { Field, StepPanel, inputClass } from "./shared";
 import { GENDERS, type Gender } from "@/lib/gender";
+import { AttractionPicker, CHARACTER_ATTRACTION_HINT } from "@/components/AttractionPicker";
 
 // How many tools a background's open grant leaves to the player, in words.
 const COUNT_WORDS: Record<number, string> = { 1: "one", 2: "two", 3: "three" };
 
 // Step 1: for a new character, how they want to play (the class step opens
 // on the same answer), then the name, gender (the cards' art follows it),
-// level and background. Alignment changes no number, and who plays them
+// who they are drawn to (identity, beside the gender; issue 501), level and
+// background. Alignment changes no number, and who plays them
 // changes nothing on the sheet; both wait for the Finish step. The setting notices live here too, so the first thing a player
 // sees under a world pack is whose names they are about to choose from.
 export type IdentityPlaystyle = {
@@ -180,6 +182,7 @@ export function IdentityStep({
               options={[{ value: "", label: "Unspecified" }, ...GENDERS.map((value) => ({ value, label: value }))]}
             />
           </Field>
+          <AttractionPicker value={state.attraction} onChange={state.setAttraction} hint={CHARACTER_ATTRACTION_HINT} />
           <Field label="Level">
             {fixedLevel ? (
               <span className="block rounded-lg border border-stone-700/70 bg-stone-950/60 px-3 py-2 text-sm text-stone-400">
