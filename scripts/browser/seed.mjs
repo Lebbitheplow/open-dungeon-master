@@ -644,6 +644,79 @@ const directed = {};
   }
 }
 
+// NPC advances (issue 501): one table per viewport (the scenario answers
+// the advance) where the lead's Kael is open to advances from NPCs and
+// Mira's advance waits on his answer, for the offer card, the Bonds switch
+// and the romance rung.
+const COURTING_TITLE = "Courting Table";
+const ADVANCE_LINE = "Walk with me along the river tonight?";
+const courtingSheets = await import("../../src/lib/db/sheets.ts");
+const courtingNpcs = await import("../../src/lib/db/npcs.ts");
+const courtingBonds = await import("../../src/lib/db/relationships.ts");
+const courting = {};
+for (const viewport of ["desktop", "phone"]) {
+  const table = campaigns.createCampaign(world.owner.id, {
+    title: `${COURTING_TITLE} (${viewport})`,
+    description: "A ferry crossing at dusk, and someone who has been waiting to say something.",
+    theme: "high-fantasy",
+    maxPlayers: 6,
+    startingLevel: 3,
+    difficulty: "normal",
+    gameSettings: {},
+  });
+  campaigns.setCampaignStatus(table.id, "active");
+  const kael = courtingSheets.createSheet(
+    table.id,
+    world.owner.id,
+    3,
+    heroInput({ name: "Kael Ashvale", class: "bard", level: 3, gender: "Male", attraction: { genders: ["Female"], note: "" }, abilities: { cha: 16 } }),
+  );
+  courtingSheets.setOpenToAdvances(kael.id, true);
+  const mira = courtingNpcs.upsertNpc({
+    campaignId: table.id,
+    name: "Mira Vell",
+    attitude: "friendly",
+    trait: "A ferrywoman with a quick laugh",
+    location: "the ford",
+    gender: "Female",
+    attraction: { genders: ["Male"], note: "" },
+  });
+  const bond = courtingBonds.ensureRelationship({
+    campaignId: table.id,
+    characterId: kael.id,
+    characterName: kael.name,
+    subjectKind: "npc",
+    subjectName: mira.name,
+    subjectId: mira.id,
+  });
+  courtingBonds.patchRelationship(bond.id, {
+    approval: 62,
+    memories: [{ kind: "helped", text: "Kael mended her ferry rope in the rain", at: new Date().toISOString() }],
+  });
+  const advance = itemProposals.insertItemProposal({
+    campaignId: table.id,
+    turnId: null,
+    characterId: kael.id,
+    userId: world.owner.id,
+    toolName: "romance_advance",
+    argsJson: JSON.stringify({
+      relationshipId: bond.id,
+      subject: mira.name,
+      subjectKind: "npc",
+      subjectId: mira.id,
+      to: "courting",
+      note: ADVANCE_LINE,
+      madeAtTurn: 0,
+      portraitUrl: "",
+      look: { gender: "Female", role: "" },
+    }),
+    summary: `${mira.name} asks to court ${kael.name}`,
+    reason: ADVANCE_LINE,
+    seq: campaigns.allocateSeq(table.id),
+  });
+  courting[viewport] = { id: table.id, kael: kael.id, advanceSummary: advance.summary, advanceLine: ADVANCE_LINE };
+}
+
 const ids = {
   lead: world.owner.username,
   player: player.username,
@@ -685,11 +758,13 @@ const ids = {
   directed,
   levelTableId: levelTable.id,
   commandTableId: commandTable.id,
+  courting,
   pip: pip.id,
   // Every campaign a scenario opens, by id, for the app's home tiles.
   titles: {
     [levelTable.id]: "Level Table",
     [commandTable.id]: COMMAND_TITLE,
+    ...Object.fromEntries(Object.entries(courting).map(([viewport, table]) => [table.id, `${COURTING_TITLE} (${viewport})`])),
     [world.campaignId]: TITLE,
     [lobby.id]: LOBBY_TITLE,
     [quiet.id]: QUIET_TITLE,
