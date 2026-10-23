@@ -14,11 +14,11 @@
 // linked stat block, with its 77 hit points, armour class 17, its Tidal
 // Lash in the DM's hand of cards and its construct type, in the fight's
 // list as well as behind it; the player at the table sees the same foe and
-// none of its numbers. Its face is checked too, and is a KNOWN BUG,
-// reported with this journey: the plate is looked up by the monster's whole
-// name before its type, so this construct wears the rulebook bandit's plate.
-// The check passes on that plate or on the construct's, and fails on any
-// other.
+// none of its numbers. Its face is its own type's, the construct plate, in
+// the fight's list and everywhere else on the table: a stat block somebody
+// wrote is drawn by its type, never by a plate its name happens to match
+// (src/lib/placeholders.ts). This journey found it wearing the rulebook
+// bandit's plate.
 //
 // The single steps are earlier scenarios': world-bindings (40) and
 // create-chooser (41) make and link a stat block and add it to a fight,
@@ -237,16 +237,8 @@ export default {
       await t.shot("combatant");
       const faces = await page.locator(`${root}img[src*="/monster/"]`).evaluateAll((images) => [...new Set(images.map((image) => image.getAttribute("src")))]);
       const face = (await line.locator("img").first().getAttribute("src")) ?? "";
-      if (/\/monster\/construct\.webp/.test(face)) {
-        check(!faces.some((src) => /\/monster\/(bandit|humanoid)\.webp/.test(src)), `nowhere on the table does it wear the bandit's or a humanoid's plate: ${JSON.stringify(faces)}`);
-      } else {
-        // KNOWN BUG (reported with this journey): the Bestiary says a block's
-        // Type is its picture until it has a portrait, but the plate is
-        // looked up by the monster's whole name first, so a homebrew
-        // construct called "Bandit" wears the rulebook bandit's plate.
-        check(/\/monster\/bandit\.webp/.test(face), `KNOWN BUG: a homebrew construct named ${CREATURE} wears the family plate its name finds, not its own type's: ${face} (all: ${JSON.stringify(faces)})`);
-        console.log(`      KNOWN BUG: ${CREATURE}, a construct, wears ${face} in the fight`);
-      }
+      check(/\/monster\/construct\.webp$/.test(face), `the construct wears its own type's plate in the fight: ${face} (all: ${JSON.stringify(faces)})`);
+      check(!faces.some((src) => /\/monster\/(bandit|humanoid)\.webp/.test(src)), `nowhere on the table does it wear the bandit's or a humanoid's plate: ${JSON.stringify(faces)}`);
 
       // The player at the same table sees the foe, never its numbers.
       const told = await view(player);
