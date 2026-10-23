@@ -552,11 +552,41 @@ export function copyWorldDoc(
   const rows = mergeSlices(target, moved, mapped, source, LATER_SLICES);
   settle(target, [...firstRows.pending, ...rows.pending], (origin, value) => rowValue(target, origin, value));
   saveWorldDoc(targetId, target);
+  // What this source's earlier imports kept and the author has not settled
+  // yet is said again beside this import's own clashes, in the same words,
+  // so a note missed once is not lost (import-kept.ts).
+  const standing = standingKept(target, names, source);
   return {
     count: entries + merged.added + merged.updated + mapped.events.length + mapped.secrets.length,
-    conflicts: [...conflicts, ...merged.conflicts, ...firstRows.conflicts, ...rows.conflicts],
+    conflicts: [...new Set([...conflicts, ...standing]), ...merged.conflicts, ...firstRows.conflicts, ...rows.conflicts],
     unbound,
   };
+}
+
+// Each value a reimport kept as this campaign has it and the author has not
+// settled (src/lib/worldforge/import-kept.ts), as the import's note words a
+// clash: "Ferryman Osk: kept your article over the import's." Only those an
+// import of `source` kept, when it is given. Gone once the author takes the
+// import's version or keeps theirs.
+function standingKept(doc: WorldDoc, names: Map<string, string>, source?: string): string[] {
+  const lines: string[] = [];
+  for (const [key, origin] of Object.entries(doc.origins ?? {})) {
+    if (!origin.kept || !key.startsWith("entries/") || (source !== undefined && !origin.from.startsWith(`${source}|`))) continue;
+    const name = names.get(key.slice("entries/".length));
+    if (!name) continue;
+    for (const [value, kept] of Object.entries(origin.kept)) {
+      if (!kept.taken) lines.push(`${name}: kept your ${valueWords(value, fieldName(doc))} over the import's.`);
+    }
+  }
+  return [...new Set(lines)];
+}
+
+// The same for the whole campaign, for Bring in prep to say after a reload.
+// The DM's: the import route answers it to story authority alone.
+export function keptNotes(campaignId: string): string[] {
+  const doc = getWorldDoc(campaignId);
+  if (!Object.values(doc.origins ?? {}).some((origin) => origin.kept)) return [];
+  return standingKept(doc, new Map(worldEntities(campaignId, doc).map((entity) => [entity.ref, entity.name])));
 }
 
 // What the DM ticked in a forge preview (src/lib/worldforge/forge.ts),

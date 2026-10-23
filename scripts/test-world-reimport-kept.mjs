@@ -11,7 +11,7 @@ import { openWorld } from "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
 
 const { test, finish } = suite("test-world-reimport-kept");
-const { importWorldForge } = await import("../src/lib/db/world-forge-io.ts");
+const { importWorldForge, keptNotes } = await import("../src/lib/db/world-forge-io.ts");
 const { worldView, createWorldEntity, updateWorldEntity, getWorldDoc } = await import("../src/lib/db/world-forge.ts");
 const { runContentImport } = await import("../src/lib/db/content-import.ts");
 const { createWorkshop } = await import("../src/lib/db/workshops.ts");
@@ -22,6 +22,15 @@ const stranger = world.addUser("stranger");
 const shop = (title) => createWorkshop(owner.id, { title }).id;
 const named = (campaignId, name) => worldView(campaignId).entities.find((entity) => entity.name === name);
 const keptRoute = await world.route("campaigns/[campaignId]/world/entities/[ref]/kept");
+const importRoute = await world.route("campaigns/[campaignId]/import");
+const player = world.addUser("player");
+world.addHero({ user: player });
+
+async function standingFor(campaignId, as = owner) {
+  world.signIn({ id: as.id });
+  const response = await importRoute.GET(new Request("http://local/?kept=1"), { params: Promise.resolve({ campaignId }) });
+  return { status: response.status, body: await response.json() };
+}
 
 async function choose(campaignId, ref, key, choice, as = owner) {
   world.signIn({ id: as.id });
@@ -34,11 +43,10 @@ async function choose(campaignId, ref, key, choice, as = owner) {
 
 // A workshop's Captain Rell, brought into a campaign; the campaign changes
 // his article, then the workshop changes it too and brings him in again.
-function clashed(title) {
+function clashed(title, campaign = shop(`${title} campaign`)) {
   const source = shop(`${title} source`);
   const made = createWorldEntity(source, { typeId: "t_character", name: "Captain Rell", article: "Rell keeps the lighthouse.", hiddenTruth: "He lit the false light." });
   assert.ok(made.entity, made.error);
-  const campaign = shop(`${title} campaign`);
   const copy = () => {
     const outcome = runContentImport({ sourceId: source, campaignId: campaign, selection: ["npcs", "locations", "lore", "world"], houseRulesMode: "replace" });
     assert.ok(!("error" in outcome), outcome.error);
@@ -49,9 +57,11 @@ function clashed(title) {
   assert.deepEqual(here.kept, [], "a first import has nothing to keep");
   updateWorldEntity(campaign, here.ref, { article: "Rell keeps the lighthouse and owes the party." });
   updateWorldEntity(source, made.entity.ref, { article: "Rell keeps the lighthouse and drinks.", hiddenTruth: "He sold the lamp oil." });
-  copy();
-  return { source, campaign, sourceRef: made.entity.ref, ref: here.ref, copy };
+  const outcome = copy();
+  return { source, campaign, sourceRef: made.entity.ref, ref: here.ref, copy, outcome };
 }
+
+const RELL = "Captain Rell: kept your article over the import's.";
 
 await test("A reimport that keeps the campaign's article records the import's version on the entry, and nothing for what it took.", () => {
   const { campaign } = clashed("Recorded");
@@ -159,6 +169,35 @@ await test("A WorldForge file brought in again records what it kept the same way
   const after = named(id, "Ivo Brannock");
   assert.equal(after.entry.notes, "Mine: ask about the sluice.");
   assert.deepEqual(after.kept.map((item) => [item.key, item.theirs]), [["notes", "The file's own notes."]]);
+});
+
+await test("Bring in prep's note reads the stored record: said again by a later import and after a reload, until the author settles it.", async () => {
+  const { campaign, ref, copy, outcome } = clashed("Note");
+  assert.deepEqual(outcome.worldConflicts, [RELL], "the clashing import says it once");
+  assert.deepEqual(copy().worldConflicts, [RELL], "a later import of the same source says it again while it stands");
+  assert.deepEqual(keptNotes(campaign), [RELL], "and it is there to read without an import");
+  const read = await standingFor(campaign);
+  assert.equal(read.status, 200, JSON.stringify(read.body));
+  assert.deepEqual(read.body.kept, [RELL]);
+  // Taken: no longer said. Restored: said again. Kept: gone for good.
+  // (An import while the import's version is in use agrees with it, and
+  // clears the record: the "agrees" check above.)
+  await choose(campaign, ref, "article", "use");
+  assert.deepEqual(keptNotes(campaign), []);
+  await choose(campaign, ref, "article", "restore");
+  assert.deepEqual(keptNotes(campaign), [RELL]);
+  await choose(campaign, ref, "article", "dismiss");
+  assert.deepEqual(keptNotes(campaign), []);
+  assert.equal(copy().worldConflicts, undefined, "an import after Keep mine is quiet");
+  assert.deepEqual((await standingFor(campaign)).body.kept, []);
+});
+
+await test("Only the person steering the story reads what earlier imports kept: a seated player is refused.", async () => {
+  clashed("At the table", world.campaignId);
+  assert.deepEqual((await standingFor(world.campaignId)).body.kept, [RELL]);
+  const asked = await standingFor(world.campaignId, player);
+  assert.equal(asked.status, 403, JSON.stringify(asked.body));
+  assert.equal(asked.body.kept, undefined);
 });
 
 world.close();

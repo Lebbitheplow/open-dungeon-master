@@ -15,9 +15,9 @@
 //     import's version" and "Keep mine"; the entry form offers the import's
 //     version too. Using it puts the import's article on the page, and
 //     "Restore mine" puts the campaign's back (src/lib/worldforge/
-//     import-kept.ts). What Bring in prep's note still does not say (after
-//     a reload, or on a further import) is said as a KNOWN BUG line and
-//     does not fail the journey.
+//     import-kept.ts). Bring in prep still says the article was kept after
+//     a reload, and a further import of the same workshop says it again,
+//     both read from the entry's own record of it.
 //
 // The single steps are proven elsewhere: the import picker in
 // 43-world-use-in-campaign and 27-setup-prep-and-end, the campaign's World
@@ -53,15 +53,6 @@ async function tabTo(page, test, label, max = 60) {
     if (test(await focused(page))) return;
   }
   throw new Error(`Tab never reached ${label} (last: ${JSON.stringify(await focused(page))})`);
-}
-
-// A product gap this journey found and reports rather than fixes: said in
-// the run's output once per run, never failing the journey.
-const said = new Set();
-function knownBug(holds, message) {
-  if (holds || said.has(message)) return;
-  said.add(message);
-  console.log(message);
 }
 
 // Bring in prep from the Settings tab: the workshop, then Bring it in.
@@ -261,17 +252,15 @@ export default {
       await openPanelTab(t, "settings");
       const prepAfter = page.locator(`${root}[data-setup-prep]`).locator("visible=true").first();
       await eventually(() => prepAfter.count(), { timeoutMs: 20_000, label: "Bring in prep after a reload" });
-      knownBug(
-        (await prepAfter.innerText()).includes("kept your article"),
-        "KNOWN BUG: Bring in prep forgets the reimport's conflict on reload; the note was the only place it was said (src/app/workshop/ContentImportPicker.tsx importNow keeps it in component state)",
-      );
-      // A further reimport does not say it again: it is reported once per
-      // change at the source (import-merge.ts mergeValues).
+      // After a reload, Bring in prep still says what was kept, read from
+      // the entry's record rather than the last import's answer.
+      const standing = prepAfter.locator('[data-testid="import-kept-standing"]');
+      await eventually(() => standing.count(), { timeoutMs: 15_000, label: "Bring in prep saying what was kept, after a reload" });
+      const standingText = await standing.innerText();
+      check(standingText.includes(`${name}: kept your article over the import's.`), `Bring in prep names the kept article after a reload: ${JSON.stringify(standingText.slice(0, 240))}`);
+      // A further import of the same workshop says it again while it stands.
       const third = await bringIn(t, workshopTitle);
-      knownBug(
-        third.note.includes("kept your article"),
-        "KNOWN BUG: a third import of the same workshop no longer mentions the kept article, so a missed note is not offered again (src/lib/worldforge/import-merge.ts mergeValues records the clash as settled)",
-      );
+      check(third.note.includes(`${name}: kept your article over the import's.`), `a further import says the article is still kept: ${JSON.stringify(third.note)}`);
       const last = await entryAtTable();
       check(last.entry.article === words.oursArticle && last.entry.hiddenTruth === words.theirsTruth, "a further import changes nothing");
       check(last.kept?.some((item) => item.key === "article" && item.theirs === words.theirsArticle && !item.taken), `the entry still holds the import's article for the author: ${JSON.stringify(last.kept)}`);
