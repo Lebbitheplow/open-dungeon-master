@@ -29,8 +29,26 @@ export default {
         return `${mine.x},${mine.y}`;
       }, ids.campaignId);
     const start = await where();
-    const square = lit().first();
-    const to = `${await square.getAttribute("data-tile-x")},${await square.getAttribute("data-tile-y")}`;
+    // A lit square on screen: the camera crops the map to its frame, and in
+    // the app's narrower board the first lit squares can lie outside it,
+    // under the panel's header, where no one can tap them.
+    const inView = async () => {
+      const count = await lit().count();
+      for (let index = 0; index < count; index += 1) {
+        const candidate = lit().nth(index);
+        const box = await candidate.boundingBox();
+        if (!box) continue;
+        const onTop = await candidate.evaluate(
+          (node, [x, y]) => document.elementFromPoint(x, y) === node,
+          [box.x + box.width / 2, box.y + box.height / 2],
+        );
+        if (onTop) return `${await candidate.getAttribute("data-tile-x")},${await candidate.getAttribute("data-tile-y")}`;
+      }
+      return null;
+    };
+    const to = await eventually(inView, { timeoutMs: 10_000, label: "a lit square in view" });
+    const [toX, toY] = to.split(",");
+    const square = board().locator(`rect[data-tile-x="${toX}"][data-tile-y="${toY}"]`).first();
     const hint = () => page.getByText(AIMED).locator("visible=true").count();
 
     // One tap aims and moves nothing; Escape drops the aim.
