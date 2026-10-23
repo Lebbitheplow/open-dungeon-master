@@ -76,7 +76,7 @@ async function typeInto(page, field, text) {
   await page.keyboard.type(text);
 }
 
-const { formatCopper } = await import("../../../src/lib/srd/currency.ts");
+const { formatPrice } = await import("../../../src/lib/srd/currency.ts");
 
 export default {
   name: "journey-artifact-to-shop",
@@ -192,7 +192,7 @@ export default {
       const lineItem = page.getByRole("textbox", { name: "Line 1 item" });
       await eventually(async () => (await lineItem.inputValue().catch(() => "")) === ARTIFACT, { label: "the item on line 1" });
       const linePrice = await page.getByRole("textbox", { name: "Line 1 price" }).inputValue();
-      check(linePrice === formatCopper(PRICE_CP), `at the item's own cost (${linePrice})`);
+      check(linePrice === formatPrice(PRICE_CP), `at the item's own cost (${linePrice})`);
       await t.shot("shelf");
       await t.tap(page.getByRole("button", { name: "Save the shop" }));
       const shelf = async (request, id) => ((await (await request.get(`${base}/api/campaigns/${id}/shops`)).json()).shops ?? []);
@@ -270,7 +270,7 @@ export default {
       const theirShelf = (await shelf(player, campaignId)).find((entry) => entry.name === SHOP);
       const line = theirShelf?.stock.find((entry) => entry.itemName === ARTIFACT);
       check(line?.priceCp === PRICE_CP, `the shelf lists it at its cost, ${PRICE} (${line?.priceCp} cp)`);
-      check((await ware.innerText()).includes(formatCopper(line.askingCp)), `and the player reads the asking price, ${formatCopper(line.askingCp)} (${await ware.innerText()})`);
+      check((await ware.innerText()).includes(formatPrice(line.askingCp)), `and the player reads the asking price, ${formatPrice(line.askingCp)} (${await ware.innerText()})`);
       await playerPage.screenshot({ path: t.shotPath("player-shop") }).catch(() => {});
       await seen.tap(ware.getByRole("button", { name: "Buy" }));
       const carried = async () => ((await (await player.get(`${base}/api/campaigns/${campaignId}/sheet`)).json()).sheet?.equipment ?? []).find((row) => row.name === ARTIFACT);
