@@ -292,6 +292,19 @@
   --color-rose-200: #73142a;
   --color-rose-100: #5c0f21;
   --color-rose-50: #470b19;
+  /* Emerald (the Bonds tiers Close and Devoted, success and healing text)
+     turns too, or its pale ink sits on cream unread. */
+  --color-emerald-950: #ecf8f1;
+  --color-emerald-900: #d6f0e1;
+  --color-emerald-800: #b3e2c7;
+  --color-emerald-700: #7cc9a0;
+  --color-emerald-600: #3fa673;
+  --color-emerald-500: #23885a;
+  --color-emerald-400: #1a7049;
+  --color-emerald-300: #145a3b;
+  --color-emerald-200: #0f4a30;
+  --color-emerald-100: #0b3a26;
+  --color-emerald-50: #072b1c;
   --shadow-elev-1: 0 1px 2px rgba(60, 40, 10, 0.12), 0 2px 8px rgba(60, 40, 10, 0.08);
   --shadow-elev-2: 0 2px 6px rgba(60, 40, 10, 0.14), 0 12px 32px rgba(60, 40, 10, 0.12);
   --shadow-glow-gold: 0 0 20px rgba(166, 132, 42, 0.18);
@@ -1379,6 +1392,12 @@ html[data-theme="light"] .skeleton-block {
 .kit-switch[aria-checked="true"]:active .kit-switch-knob { transform: translate(1.05rem, -50%); }
 html[data-theme="light"] .kit-switch { background: linear-gradient(180deg, #d9ccae, #e9dfc6); border-color: rgba(120, 96, 52, 0.4); }
 html[data-theme="light"] .kit-switch .kit-switch-knob { background: #a59877; }
+/* By day an "on" switch keeps its gold, or it reads the same as "off". */
+html[data-theme="light"] .kit-switch[aria-checked="true"] { background: linear-gradient(180deg, #a87a1c, #d1a640); border-color: rgba(111, 80, 15, 0.75); }
+html[data-theme="light"] .kit-switch[aria-checked="true"] .kit-switch-knob {
+  background: radial-gradient(circle at 35% 30%, #fffdf6, #f6e7bd 55%, #c99a33 100%);
+  border-color: #6f500f;
+}
 @media (prefers-reduced-motion: reduce) {
   .kit-switch-knob { transition: none; }
 }
