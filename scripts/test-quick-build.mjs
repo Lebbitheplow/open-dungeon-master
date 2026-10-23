@@ -8,7 +8,7 @@
 // does between renders, and the finished sheet goes through the real
 // library route.
 import assert from "node:assert/strict";
-import "./lib/enforce-world.mjs";
+import { hasPack } from "./lib/enforce-world.mjs";
 import { openCreation, PORTRAIT } from "./lib/enforce-creation.mjs";
 import { openBuilder } from "./lib/enforce-builder.mjs";
 
@@ -186,6 +186,27 @@ await test("a level 3 artificer takes the three spells there are, is told why, a
   const count = built.derived.spellAdvice.count;
   assert.ok(count > 3, `a level 3 artificer prepares ${count}`);
   assert.equal(built.derived.spellSupply.spells, 3);
+  if (hasPack) {
+    // The content pack's artificer list is long enough: the fill takes the
+    // whole count from it, every pick on the list the step offers, and the
+    // step (which counts that list) says nothing is missing.
+    const { spellSupplyOf } = await import("../src/app/characters/builder/spellSupply.ts");
+    const pool = await spellPool("artificer", built.derived.maxSpellLevel);
+    const onList = new Set(pool.map((spell) => spell.name));
+    assert.equal(fields.spells.length, count);
+    assert.deepEqual(fields.spells.filter((name) => !onList.has(name)), []);
+    const shown = spellShortageLines({
+      className: "artificer",
+      supply: spellSupplyOf(pool, built.derived.maxSpellLevel, []),
+      cantripCap: built.derived.cantripAdvice,
+      listCap: count,
+      listVerb: "prepare",
+      maxSpellLevel: built.derived.maxSpellLevel,
+    });
+    assert.deepEqual(shown, []);
+    await saves(fields, "artificer at 3, with the pack");
+    return;
+  }
   assert.deepEqual([...fields.spells].sort(), ["Absorb Elements", "Caustic Brew", "Snare"]);
   const lines = spellShortageLines({
     className: "artificer",
