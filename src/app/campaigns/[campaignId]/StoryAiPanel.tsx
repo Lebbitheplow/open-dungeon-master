@@ -343,6 +343,7 @@ export function StoryAiPanel({
                 <div className="flex flex-wrap items-center gap-2">
                   <span className={labelClass}>Model</span>
                   <input
+                    aria-label="Model"
                     value={drafts.customModel}
                     onChange={(event) =>
                       setDraft("customModel", event.target.value)
@@ -365,6 +366,7 @@ export function StoryAiPanel({
                 <div className="flex flex-wrap items-center gap-2">
                   <span className={labelClass}>Base URL</span>
                   <input
+                    aria-label="Base URL"
                     value={drafts.customBaseUrl}
                     onChange={(event) =>
                       setDraft("customBaseUrl", event.target.value)
@@ -378,6 +380,7 @@ export function StoryAiPanel({
                 <div className="flex flex-wrap items-center gap-2">
                   <span className={labelClass}>Model</span>
                   <input
+                    aria-label="Model"
                     value={drafts.customModel}
                     onChange={(event) =>
                       setDraft("customModel", event.target.value)
@@ -392,6 +395,7 @@ export function StoryAiPanel({
                   <span className={labelClass}>API key</span>
                   <input
                     type="password"
+                    aria-label="API key"
                     value={drafts.customApiKey === SECRET_KEPT ? "" : drafts.customApiKey}
                     onChange={(event) =>
                       setKeys((prev) => ({ ...prev, customApiKey: event.target.value }))
@@ -425,6 +429,7 @@ export function StoryAiPanel({
                 size="sm"
               />
               <input
+                aria-label="Utility model"
                 value={drafts.utilityModel}
                 onChange={(event) =>
                   setDraft("utilityModel", event.target.value)
@@ -442,6 +447,7 @@ export function StoryAiPanel({
               <div className="reveal flex flex-wrap items-center gap-2">
                 <span className={labelClass}>Utility URL</span>
                 <input
+                  aria-label="Utility URL"
                   value={drafts.utilityBaseUrl}
                   onChange={(event) =>
                     setDraft("utilityBaseUrl", event.target.value)
@@ -453,6 +459,7 @@ export function StoryAiPanel({
                 />
                 <input
                   type="password"
+                  aria-label="Utility API key"
                   value={drafts.utilityApiKey === SECRET_KEPT ? "" : drafts.utilityApiKey}
                   onChange={(event) =>
                     setKeys((prev) => ({ ...prev, utilityApiKey: event.target.value }))
