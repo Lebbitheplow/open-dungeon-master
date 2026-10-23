@@ -7,14 +7,15 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { suite } from "./lib/enforce-harness.mjs";
-import { LEGAL_FIGHTER, openCreation } from "./lib/enforce-creation.mjs";
+import { LEGAL_FIGHTER, PORTRAIT, openCreation } from "./lib/enforce-creation.mjs";
 
 const { test, finish } = suite("test-seat-confirm");
 const campaigns = await import("../src/lib/db/campaigns.ts");
 const { joinChanges } = await import("../src/lib/characters/join-changes.ts");
 const { chooserSections } = await import("../src/app/campaigns/[campaignId]/hero-chooser.ts");
 const { owedChoices } = await import("../src/lib/srd/owed-choices.ts");
-const read = (file) => fs.readFileSync(new URL(`../${file}`, import.meta.url), "utf8");
+// Windows CI checks the files out with CRLF line endings.
+const read = (file) => fs.readFileSync(new URL(`../${file}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
 
 // ---- the words, pure ----
 
@@ -77,13 +78,34 @@ await test("the join page opens on the chooser, and every pick goes through the 
   assert.match(page, /<HeroChooser/);
   assert.doesNotMatch(page, /pickFromLibrary/, "a library hero is seated in one tap again");
   const chooser = read("src/app/campaigns/[campaignId]/HeroChooser.tsx");
-  const order = ["data-chooser-section=\"library\"", "data-chooser-section=\"pregens\"", "<PregenPicker", "Backlog F1 slot", "data-chooser-section=\"build\""];
+  const order = ["data-chooser-section=\"library\"", "data-chooser-section=\"pregens\"", "<PregenPicker", "data-chooser-section=\"help\"", "data-chooser-section=\"build\""];
   const at = order.map((marker) => chooser.indexOf(marker));
   assert.ok(at.every((index) => index >= 0), `missing: ${order.filter((_, i) => at[i] < 0).join(", ")}`);
   assert.deepEqual([...at].sort((a, b) => a - b), at, "the chooser's sections are out of order");
   const picker = read("src/app/campaigns/[campaignId]/PregenPicker.tsx");
   assert.match(picker, /<JoinConfirmDialog/);
   assert.doesNotMatch(picker, /sheet\/pregen/, "the picker seats a hero without the confirm sheet");
+});
+
+await test("Help me build opens the quiz at the table's level, and its hero goes through the confirm sheet", () => {
+  const chooser = read("src/app/campaigns/[campaignId]/HeroChooser.tsx");
+  assert.match(chooser, /onClick=\{onHelpMeBuild\}[\s\S]*Help me build/);
+  const page = read("src/app/campaigns/[campaignId]/character/page.tsx");
+  // The chooser's door opens the builder on its own quiz (no second engine).
+  assert.match(page, /onHelpMeBuild=\{\(\) => \{\s*setHelped\(true\);\s*setMode\("create"\);/);
+  assert.match(page, /openQuiz=\{helped\}/);
+  assert.match(page, /fixedLevel=\{level\}/, "the builder is not held to the table's level");
+  assert.doesNotMatch(page, /QuickBuildQuiz|suggestBuilds/, "the page forks the quiz instead of opening the builder's");
+  // What the quiz builds is held for the confirm sheet, not posted straight.
+  const submit = page.slice(page.indexOf("function submitNew"), page.indexOf("if (level === null)"));
+  assert.match(submit, /if \(helped && flow !== "edit"\) \{\s*setBuilt\(\{ kind: "built"[^}]*sheet: result\.sheet \}\);\s*return;/);
+  assert.match(page, /<JoinConfirmDialog[\s\S]*hero=\{built\}[\s\S]*onSeated=\{seated\}/);
+  const builder = read("src/app/characters/builder/CharacterBuilder.tsx");
+  assert.match(builder, /useState<\{ role: PlaystyleId \| null \} \| null>\(openQuiz \? \{ role: null \} : null\)/);
+  // The sheet previews it and seats it through the table's own door.
+  const dialog = read("src/app/campaigns/[campaignId]/JoinConfirmDialog.tsx");
+  assert.match(dialog, /hero\.kind === "built"\) return \{ sheet: hero\.sheet, flow \}/);
+  assert.match(dialog, /JSON\.stringify\(hero\.kind === "built" \? hero\.sheet : \{ libraryCharacterId: hero\.id \}\)/);
 });
 
 // ---- the preview route against the join ----
@@ -161,6 +183,36 @@ await test("the door rules show before the seat is offered: a second hero, a swi
   const late = await previewAs(table, { libraryCharacterId: second.id, flow: "replace" });
   assert.equal(late.json.preview.ok, false);
   assert.match(late.json.preview.problems[0], /only be changed in the lobby/);
+  table.world.close();
+});
+
+await test("a hero the quiz built is previewed by the table's door, stored by nothing, then seated as previewed", async () => {
+  const table = await openCreation({ campaign: { startingLevel: 1 } });
+  const sheet = { ...LEGAL_FIGHTER, portrait: PORTRAIT };
+  const libraryBefore = table.characters.listCharactersForUser(table.player.id).length;
+  const { status, json } = await previewAs(table, { sheet });
+  assert.equal(status, 200, JSON.stringify(json));
+  assert.equal(json.preview.ok, true, json.preview.problems.join(" | "));
+  assert.equal(json.preview.name, sheet.name);
+  assert.equal(json.preview.toLevel, 1);
+  assert.equal(json.preview.alreadyHere, false);
+  assert.equal(table.sheets.getSheetForUser(table.campaignId, table.player.id), null, "the preview seated the hero");
+  assert.equal(table.characters.listCharactersForUser(table.player.id).length, libraryBefore, "the preview stored the hero");
+
+  // Take the seat: the same sheet through POST /sheet, the builder's own door.
+  const joined = await table.call(table.sheetRoute, "POST", sheet, { campaignId: table.campaignId });
+  assert.equal(joined.status, 201, JSON.stringify(joined.json));
+  assert.equal(table.sheets.getSheetForUser(table.campaignId, table.player.id)?.name, sheet.name);
+
+  // A sheet the table's rules refuse is refused on the confirm sheet first.
+  const broken = await previewAs(table, { sheet: { ...sheet, abilities: { ...sheet.abilities, str: 30 } }, flow: "replace" });
+  assert.equal(broken.status, 200, JSON.stringify(broken.json));
+  assert.equal(broken.json.preview.ok, false);
+  assert.ok(broken.json.preview.problems.length > 0);
+
+  // One hero at a time.
+  const both = await previewAs(table, { sheet, pregenId: "kara" });
+  assert.equal(both.status, 400);
   table.world.close();
 });
 

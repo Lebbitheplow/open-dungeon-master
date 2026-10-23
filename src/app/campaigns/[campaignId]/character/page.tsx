@@ -16,6 +16,7 @@ import { refusalText } from "@/app/characters/builder/refusal";
 import { builderDraftKey, clearBuilderDraft } from "@/app/characters/builder/builderDraft";
 import { PregenPicker } from "@/app/campaigns/[campaignId]/PregenPicker";
 import { HeroChooser, type ChooserCharacter } from "@/app/campaigns/[campaignId]/HeroChooser";
+import { JoinConfirmDialog, type JoinHero } from "@/app/campaigns/[campaignId]/JoinConfirmDialog";
 
 // A hero in the player's library, as the chooser lists it.
 type LibraryCharacter = ChooserCharacter;
@@ -23,7 +24,9 @@ type LibraryCharacter = ChooserCharacter;
 // Join a campaign with a character: pick one on the hero chooser (your
 // library adapted to the campaign's starting level, an adventure's pregens,
 // the ready-made heroes), confirmed before it seats, or build a new one
-// (also saved to your library). ?mode=edit reopens the builder prefilled with the current
+// (also saved to your library). "Help me build" opens the builder on its
+// quiz, and the hero it makes is confirmed on the same sheet before it
+// seats. ?mode=edit reopens the builder prefilled with the current
 // character; ?mode=replace swaps it for another (both lobby-only, both
 // clearing the ready flag; an edit keeps the existing portrait unless the
 // builder's regenerate control cleared it).
@@ -54,6 +57,10 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
   const [error, setError] = useState("");
   // The ready-made heroes, opened from above the builder.
   const [quick, setQuick] = useState(false);
+  // The builder was opened by "Help me build": what it makes goes through
+  // the confirm sheet (backlog F1 and F6), held here until it seats.
+  const [helped, setHelped] = useState(false);
+  const [built, setBuilt] = useState<JoinHero | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -131,6 +138,10 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
   }
 
   function submitNew(result: BuilderResult) {
+    if (helped && flow !== "edit") {
+      setBuilt({ kind: "built", id: String(Date.now()), name: result.sheet.name, sheet: result.sheet });
+      return;
+    }
     if (flow === "edit" && editCharacter) {
       send({ editLibraryCharacterId: editCharacter.id, sheet: result.sheet }, "PUT");
       return;
@@ -194,7 +205,14 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
             genre={genre}
             worldPackId={worldPackId}
             currentLibraryId={currentLibraryId}
-            onBuildNew={() => setMode("create")}
+            onBuildNew={() => {
+              setHelped(false);
+              setMode("create");
+            }}
+            onHelpMeBuild={() => {
+              setHelped(true);
+              setMode("create");
+            }}
             onSeated={seated}
           />
         </>
@@ -243,6 +261,14 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
             error={error}
             draftKey={flow === "edit" ? undefined : builderDraftKey("table", campaignId)}
             onCancel={() => navigateTo(`/campaigns/${campaignId}`)}
+            openQuiz={helped}
+          />
+          <JoinConfirmDialog
+            campaignId={campaignId}
+            hero={built}
+            flow={flow === "replace" ? "replace" : "join"}
+            onClose={() => setBuilt(null)}
+            onSeated={seated}
           />
         </>
       )}

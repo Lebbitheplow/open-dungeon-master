@@ -171,6 +171,7 @@ function CharacterBuilderForm({
   draftKey,
   onCancel,
   quizVoice = "player",
+  openQuiz = false,
   className,
 }: {
   // The table the character is made for: its hit point method and starting
@@ -216,6 +217,8 @@ function CharacterBuilderForm({
   // Whose job the first step's question and "Help me build" ask about: a
   // player's own hero, or (the DM's quick companion) what the party needs.
   quizVoice?: QuizVoice;
+  // Open on "Help me build" (the hero chooser's door to it, backlog F1).
+  openQuiz?: boolean;
   className?: string;
 }) {
   // creator.css stills its loops under <html data-effects="low">, which only
@@ -359,7 +362,7 @@ function CharacterBuilderForm({
   // step would offer (shared with it: one fetch).
   const { pool: spellPool } = useWiderSpellPool(derived.spellSearchClass, derived.maxSpellLevel, derived.casts, derived.spellWider);
   // "Help me build" open, with the job already picked on the first step.
-  const [quiz, setQuiz] = useState<{ role: PlaystyleId | null } | null>(null);
+  const [quiz, setQuiz] = useState<{ role: PlaystyleId | null } | null>(openQuiz ? { role: null } : null);
   const fill = useQuickFill({
     state,
     derived,

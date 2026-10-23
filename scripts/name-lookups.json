@@ -306,6 +306,8 @@
     "app/characters/builder/steps/FinishStep.tsx#partial": [["pattern",1,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"],["parse",1,"error lines"]],
     "app/characters/builder/steps/IdentityStep.tsx#number": [["key",1,"digits a regex already captured, ids, headers, stored and form numbers (number inputs), dice parts, the pack's English text (\"1,000 feet\", a purse); src/: every site read"]],
     "app/characters/builder/steps/IdentityStep.tsx#partial": [["key",1,"UI copy"]],
+    "app/characters/builder/spellSupply.ts#partial": [["identity",2,"builder picks, kit lines, spells, tools and skills by whole name or id; ids, steps and defaults"]],
+    "app/characters/builder/spellSupply.ts#whole": [["identity",1,"builder picks, kit lines, spells, tools and skills by whole name or id; ids, steps and defaults"]],
     "app/characters/builder/steps/SpellsGearStep.tsx#keyed": [["key",1,"ids, refs, slugs, tool names, field names, env names, event kinds, UI keys, caches, door and map keys; a sheet's conditionMeta by the condition key it was written under; the usage route's gear map by the sheet's own stored item names (src/: every site read)"]],
     "app/characters/builder/steps/SpellsGearStep.tsx#partial": [["identity",3,"builder picks, kit lines, spells, tools and skills by whole name or id; ids, steps and defaults"]],
     "app/characters/builder/steps/SpellsGearStep.tsx#whole": [["identity",6,"builder picks, kit lines, spells, tools and skills by whole name or id; ids, steps and defaults"]],
