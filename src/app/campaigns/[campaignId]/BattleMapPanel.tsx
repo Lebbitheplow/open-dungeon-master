@@ -228,7 +228,7 @@ export function BattleMapPanel({
   // the view drew each figure, so the plate and the action ring sit on it.
   const looks = useMemo(() => {
     const byRef = new Map<string, BoardLook>();
-    for (const sheet of sheets) byRef.set(sheet.id, { character: { race: sheet.race, class: sheet.class } });
+    for (const sheet of sheets) byRef.set(sheet.id, { character: { race: sheet.race, class: sheet.class, gender: sheet.gender } });
     for (const enemy of encounter?.enemies ?? []) byRef.set(enemy.id, { creature: { type: enemy.type, slug: enemy.slug ?? "", cr: enemy.cr } });
     return byRef;
   }, [sheets, encounter?.enemies]);
