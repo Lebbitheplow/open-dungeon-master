@@ -25,7 +25,9 @@ import { conditionJumpMultiplier } from "@/lib/srd/condition-effect-queries";
 
 export type JumpOutcome =
   | { error: string; status: number }
-  | { ok: true; jump: { feet: number; highJumpFeet: number; landed: string }; opportunity: OpportunityOutcome; zoneEffects: string[] };
+  // `lasting`: the leap rolled a check or let a grapple go, so it cannot be
+  // taken back (src/lib/battlemap/move-undo.ts).
+  | { ok: true; jump: { feet: number; highJumpFeet: number; landed: string }; opportunity: OpportunityOutcome; zoneEffects: string[]; lasting: boolean };
 
 export function jumpMove(input: {
   campaign: Campaign;
@@ -67,7 +69,7 @@ export function jumpMove(input: {
   }
   const from = { x: token.x, y: token.y };
   moveToken(token.id, to.x, to.y, scene ? 0 : token.movedThisRound + plan.cost);
-  releaseGrapplesOutOfReach(campaign);
+  const letGo = releaseGrapplesOutOfReach(campaign);
   let landed = "on their feet";
   if (plan.landsInDifficult) {
     const check = rollCharacterCheck(campaign, sheet, { skill: "acrobatics" }, `${sheet.name}: Acrobatics to land the jump (DC 10)`);
@@ -97,5 +99,6 @@ export function jumpMove(input: {
     jump: { feet: plan.feet, highJumpFeet: highJumpFeet(strength, runningStart) * leap, landed },
     opportunity,
     zoneEffects,
+    lasting: plan.landsInDifficult || letGo.length > 0,
   };
 }

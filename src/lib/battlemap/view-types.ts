@@ -75,6 +75,10 @@ export type PlayerMapView = {
     drag: { factor: 1 | 2; names: string[] } | null;
   };
   budgetLeft: number;
+  // The viewer's last walk this turn while it can still be taken back
+  // (src/lib/battlemap/move-undo.ts): how far it went. Absent otherwise, and
+  // from an older server.
+  undoMove?: { feet: number };
   myTokenId: string | null;
   round: number;
   currentTurnName: string;

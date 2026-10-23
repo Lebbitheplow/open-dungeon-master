@@ -9,6 +9,7 @@ import {
   MapPin,
   Pencil,
   Swords,
+  Undo2,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -99,6 +100,10 @@ const PING_MS = 2600;
 
 const NO_FX: FxEvent[] = [];
 const NOOP = () => {};
+// The turn's own buttons in the board's corner: End turn, and Undo move beside
+// it. A finger's height on a narrow board, the old size where there is room.
+const TURN_BUTTON =
+  "motion-press min-h-10 rounded-lg border border-[rgba(107,99,148,0.5)] bg-[rgba(13,11,28,0.9)] px-3 py-1.5 text-[#e9e6f4] shadow-elev-1 hover:border-[rgba(212,171,58,0.6)] hover:text-[#f9ecc8] disabled:opacity-50 @md:min-h-0";
 
 type Prompt = {
   kind: "damage" | "heal" | "condition";
@@ -396,6 +401,18 @@ export function BattleMapPanel({
       landed(start ? { x: start.x, y: start.y } : null, { x, y });
       // What the walk met: opportunity attacks, a spell area's spikes or hold.
       moveNotes.push(moveNotesFrom(moved));
+    }
+    await refreshBattleMap();
+  }
+
+  // Takes back the last walk (src/lib/battlemap/move-undo.ts): the figure
+  // goes back and the movement returns, while nothing else has happened.
+  async function undoMove() {
+    const done = await post("/battle-map/undo", {});
+    if (done) {
+      setHover(null);
+      const feet = (done.undone as { feet?: unknown } | undefined)?.feet;
+      moveNotes.push([{ text: typeof feet === "number" ? `Back where you stood: ${feet} feet of movement returned.` : "Back where you stood.", tone: "move" }]);
     }
     await refreshBattleMap();
   }
@@ -863,6 +880,8 @@ export function BattleMapPanel({
   const hudToken = hudTokenId ? tokensById.get(hudTokenId) : undefined;
   const plateToken = plateTokenId ? tokensById.get(plateTokenId) : undefined;
   const myTurn = Boolean(view.turn && view.myTokenId && view.turn.tokenId === view.myTokenId);
+  // A walk this turn that can still be taken back (the move route keeps it).
+  const undoFeet = myTurn && !canDirect && view.board === "fight" ? view.undoMove?.feet ?? null : null;
   const mySheet = myToken ? sheetsById.get(myToken.refId) : undefined;
   const hudActions: HudAction[] = useMemo(() => {
     if (!hudToken) {
@@ -956,6 +975,11 @@ export function BattleMapPanel({
       data-addon-viewport={addonViewport ? "" : undefined}
       {...(addonViewport ? {} : cam.frameProps)}
       onKeyDown={(event) => {
+        if (undoFeet !== null && (event.ctrlKey || event.metaKey) && !event.shiftKey && (event.key === "z" || event.key === "Z")) {
+          event.preventDefault();
+          void undoMove();
+          return;
+        }
         if (!addonViewport) { cam.frameProps.onKeyDown(event); return; }
         if (event.target !== event.currentTarget || cam.locked || event.ctrlKey || event.metaKey || event.altKey) return;
         const action = ({ "+": "zoom-in", "=": "zoom-in", "-": "zoom-out", "0": "fit", ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDown: "down" } as Record<string, CameraControl>)[event.key];
@@ -1178,14 +1202,31 @@ export function BattleMapPanel({
       </span>
       <div className="board-corner">
       {myTurn && !scene && !targeting ? (
-        <button
-          type="button"
-          onClick={() => void endTurn()}
-          disabled={endingTurn}
-          className="board-endturn motion-press absolute bottom-2 right-11 z-10 rounded-lg border border-[rgba(107,99,148,0.5)] bg-[rgba(13,11,28,0.9)] px-3 py-1.5 text-[#e9e6f4] shadow-elev-1 hover:border-[rgba(212,171,58,0.6)] hover:text-[#f9ecc8] disabled:opacity-50"
-        >
-          <span className="block font-display text-[10px] font-semibold uppercase tracking-[0.16em]">End turn</span>
-        </button>
+        <div className="board-endturn absolute bottom-2 right-11 z-10 flex items-center gap-1.5">
+          {/* Beside End turn, as a tactics game offers the step back before
+              the unit acts: only while the last walk can be taken back. */}
+          {undoFeet !== null ? (
+            <button
+              type="button"
+              onClick={() => void undoMove()}
+              disabled={busy}
+              aria-label={`Undo move, ${undoFeet} feet`}
+              title={`Take back your last move and its ${undoFeet} feet (Ctrl+Z)`}
+              className={cn(TURN_BUTTON, "motion-pop inline-flex items-center gap-1.5")}
+            >
+              <Undo2 className="size-3.5" aria-hidden="true" />
+              <span className="block font-display text-[10px] font-semibold uppercase tracking-[0.16em]">Undo move</span>
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => void endTurn()}
+            disabled={endingTurn}
+            className={TURN_BUTTON}
+          >
+            <span className="block font-display text-[10px] font-semibold uppercase tracking-[0.16em]">End turn</span>
+          </button>
+        </div>
       ) : null}
       {/* Camera controls: corner buttons for everyone, the DM's pull and
           lock, and the escape hatch when a lock has held too long. */}
