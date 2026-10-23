@@ -45,7 +45,7 @@ import { magicItemValueCp, pricedRarity } from "@/lib/srd/magic-item-value";
 import { MINUTES_PER_DAY } from "@/lib/dm/calendar";
 import { publishEphemeral, publishPersisted, publishWithSeq } from "@/lib/events";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import { addCopper, formatCopper } from "@/lib/srd/currency";
+import { addCopper, formatCopper, formatPrice } from "@/lib/srd/currency";
 import { noneNamed, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { alreadyInPack, notCarried } from "@/lib/dm/item-logic";
 import { isTableGearName } from "@/lib/db/homebrew";
@@ -319,7 +319,7 @@ export function handleOpenShop(campaign: Campaign, rawArguments: string, random:
 }
 
 function shelfLines(shop: Shop): string[] {
-  return shop.stock.slice(0, 12).map((line) => `${line.itemName} x${line.qty} at ${formatCopper(askingPriceCp(line.priceCp, shop.markup))}`);
+  return shop.stock.slice(0, 12).map((line) => `${line.itemName} x${line.qty} at ${formatPrice(askingPriceCp(line.priceCp, shop.markup))}`);
 }
 
 const buySchema = z.object({
@@ -365,7 +365,7 @@ export function handleBuyItem(campaign: Campaign, rawArguments: string): ToolRes
   const total = each * args.qty;
   const purse = { gold: sheet.gold, copper: sheet.copper };
   if (purse.gold * 100 + purse.copper < total) {
-    return { error: `${line.itemName} x${args.qty} costs ${formatCopper(total)}; ${sheet.name} carries ${formatCopper(purse.gold * 100 + purse.copper)}. They cannot afford it.`, refused: "rules" };
+    return { error: `${line.itemName} x${args.qty} costs ${formatPrice(total)}; ${sheet.name} carries ${formatCopper(purse.gold * 100 + purse.copper)}. They cannot afford it.`, refused: "rules" };
   }
   const paid = addCopper(purse, -total);
   const items = grantItemMath(sheet.equipment, line.itemName, args.qty, line.srdName ? { srdName: line.srdName } : {});
@@ -377,11 +377,11 @@ export function handleBuyItem(campaign: Campaign, rawArguments: string): ToolRes
   const patch = { gold: paid.purse.gold, copper: paid.purse.copper, equipment: items.equipment };
   patchSheet(sheet.id, patch);
   updateShop(shop.id, { stock: takeStock(shop.stock, line.itemName, args.qty) ?? shop.stock });
-  ledger(campaign, sheet, "purchase", { item: line.itemName, qty: args.qty, action: "buy", priceCp: each, shop: shop.name }, `Bought at ${shop.name}`, patch, `Bought ${line.itemName}${args.qty > 1 ? ` x${args.qty}` : ""} for ${formatCopper(total)} at ${shop.name}.`);
+  ledger(campaign, sheet, "purchase", { item: line.itemName, qty: args.qty, action: "buy", priceCp: each, shop: shop.name }, `Bought at ${shop.name}`, patch, `Bought ${line.itemName}${args.qty > 1 ? ` x${args.qty}` : ""} for ${formatPrice(total)} at ${shop.name}.`);
   publishSheet(campaign, sheet.id);
   publishShops(campaign.id);
   publishEphemeral(campaign.id, "coins", { characterId: sheet.id, direction: "out", amountCp: total, at: Date.now() });
-  return { ok: true, bought: line.itemName, qty: args.qty, paid: formatCopper(total), purse: formatCopper(paid.purse.gold * 100 + paid.purse.copper), note: alreadyInPack(sheet.name, true) };
+  return { ok: true, bought: line.itemName, qty: args.qty, paid: formatPrice(total), purse: formatCopper(paid.purse.gold * 100 + paid.purse.copper), note: alreadyInPack(sheet.name, true) };
 }
 
 // A price the table cannot check is still held to the ceiling purchase keeps
@@ -434,11 +434,11 @@ export function handleSellItem(campaign: Campaign, rawArguments: string): ToolRe
   const patch = { gold: paid.purse.gold, copper: paid.purse.copper, equipment: removal.equipment };
   patchSheet(sheet.id, patch);
   updateShop(shop.id, { stock: addStock(shop.stock, carried, removal.removed, listCp ?? each * 2, line.srdName) });
-  ledger(campaign, sheet, "purchase", { item: carried, qty: removal.removed, action: "sell", priceCp: each, shop: shop.name }, `Sold at ${shop.name}`, patch, `Sold ${carried}${removal.removed > 1 ? ` x${removal.removed}` : ""} for ${formatCopper(total)} at ${shop.name}.`);
+  ledger(campaign, sheet, "purchase", { item: carried, qty: removal.removed, action: "sell", priceCp: each, shop: shop.name }, `Sold at ${shop.name}`, patch, `Sold ${carried}${removal.removed > 1 ? ` x${removal.removed}` : ""} for ${formatPrice(total)} at ${shop.name}.`);
   publishSheet(campaign, sheet.id);
   publishShops(campaign.id);
   publishEphemeral(campaign.id, "coins", { characterId: sheet.id, direction: "in", amountCp: total, at: Date.now() });
-  return { ok: true, sold: carried, qty: removal.removed, received: formatCopper(total), purse: formatCopper(paid.purse.gold * 100 + paid.purse.copper) };
+  return { ok: true, sold: carried, qty: removal.removed, received: formatPrice(total), purse: formatCopper(paid.purse.gold * 100 + paid.purse.copper) };
 }
 
 const haggleSchema = z.object({ characterId: z.string().trim().min(1), shop: z.string().trim().min(1) });

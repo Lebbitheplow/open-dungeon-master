@@ -5,7 +5,7 @@
 import { grantItemMath, removeItemMath } from "@/lib/dm/mutation-math";
 import type { Outcome } from "@/lib/dm/resource-tools";
 import { keepsFullValue, listPriceCp, saleValueCp } from "@/lib/dm/trade-value";
-import { addCopper, formatCopper, purseCopper } from "@/lib/srd/currency";
+import { addCopper, formatCopper, formatPrice, purseCopper } from "@/lib/srd/currency";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { alreadyInPack, notCarried } from "@/lib/dm/item-logic";
@@ -42,7 +42,7 @@ export function computePurchase(
     const totalCp = eachCp * args.qty;
     if (purseCopper(purse) < totalCp) {
       return {
-        error: `${sheet.name} has ${formatCopper(purseCopper(purse))}; ${args.qty > 1 ? `${args.qty}x ` : ""}${args.item} costs ${formatCopper(totalCp)}. They cannot afford it.`,
+        error: `${sheet.name} has ${formatCopper(purseCopper(purse))}; ${args.qty > 1 ? `${args.qty}x ` : ""}${args.item} costs ${formatPrice(totalCp)}. They cannot afford it.`,
         refused: "rules",
       };
     }
@@ -54,12 +54,12 @@ export function computePurchase(
         ok: true,
         bought: args.item,
         qty: args.qty,
-        paid: formatCopper(totalCp),
+        paid: formatPrice(totalCp),
         priced,
         gold: paid.gold,
         note: alreadyInPack(sheet.name, true),
       },
-      event: `Bought ${args.item}${args.qty > 1 ? ` x${args.qty}` : ""} for ${formatCopper(totalCp)}.`,
+      event: `Bought ${args.item}${args.qty > 1 ? ` x${args.qty}` : ""} for ${formatPrice(totalCp)}.`,
     };
   }
   const removal = removeItemMath(sheet.equipment, args.item, args.qty);
@@ -81,7 +81,7 @@ export function computePurchase(
       ok: true,
       sold: removal.item.name,
       qty: removal.removed,
-      received: formatCopper(totalCp),
+      received: formatPrice(totalCp),
       priced,
       gold: received.gold,
     },

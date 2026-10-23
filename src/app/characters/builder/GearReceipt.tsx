@@ -4,6 +4,7 @@ import { Minus, Plus, X } from "lucide-react";
 import { useState } from "react";
 import { InfoButton } from "@/components/ui/InfoDialog";
 import { contentSlug } from "@/lib/help";
+import { formatPrice } from "@/lib/srd/currency";
 import { formatCoin, MAX_QTY, stepDown, type Receipt, type ReceiptRow } from "./receiptMath";
 
 export type ReceiptView = Receipt & { setQty: (name: string, qty: number) => void };
@@ -137,7 +138,7 @@ export default function GearReceipt({ receipt }: { receipt: ReceiptView }) {
                 <td className="px-2 py-1.5 text-right font-mono text-stone-300">
                   <div className="flex items-start justify-end gap-1">
                     <span>
-                      {row.bought && row.unitCopper !== null && !row.refused ? formatCoin(row.costCopper) : row.bought ? "—" : "free"}
+                      {row.bought && row.unitCopper !== null && !row.refused ? formatPrice(row.costCopper) : row.bought ? "—" : "free"}
                     </span>
                     <button
                       type="button"
@@ -149,7 +150,7 @@ export default function GearReceipt({ receipt }: { receipt: ReceiptView }) {
                     </button>
                   </div>
                   {row.bought > 1 && row.unitCopper !== null && !row.refused ? (
-                    <p className="text-[10px] text-stone-500">{formatCoin(row.unitCopper)} each</p>
+                    <p className="text-[10px] text-stone-500">{formatPrice(row.unitCopper)} each</p>
                   ) : null}
                 </td>
               </tr>
@@ -169,7 +170,7 @@ export default function GearReceipt({ receipt }: { receipt: ReceiptView }) {
               Spent
             </th>
             <td className="hidden sm:table-cell" />
-            <td className="px-2 text-right">{formatCoin(receipt.spentCopper)}</td>
+            <td className="px-2 text-right">{formatPrice(receipt.spentCopper)}</td>
           </tr>
           <tr>
             <th scope="row" colSpan={2} className="px-2 pb-1.5 text-left font-sans font-normal text-stone-400">

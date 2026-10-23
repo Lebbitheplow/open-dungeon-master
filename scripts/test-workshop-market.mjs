@@ -51,7 +51,7 @@ const { createSheet } = await import("../src/lib/db/sheets.ts");
 const { createSheetSchema } = await import("../src/lib/schemas/sheet.ts");
 const { MINUTES_PER_DAY } = await import("../src/lib/dm/calendar.ts");
 const { askingPriceCp } = await import("../src/lib/dm/shop-logic.ts");
-const { formatCopper } = await import("../src/lib/srd/currency.ts");
+const { formatPrice } = await import("../src/lib/srd/currency.ts");
 
 const route = (name) => import(new URL(`../src/app/api/${name}/route.ts`, import.meta.url).href);
 const campaignsRoute = await route("campaigns");
@@ -288,7 +288,7 @@ upsertCurrentLocation({ campaignId, name: "The Harbour" });
 await test("the storyteller sees the prepared shelf at the place, keeper named, prices as authored", async () => {
   const block = shopsBlock(getCampaignById(campaignId));
   assert.match(block, /Venn's Lanterns \(kept by Marla Venn\)/);
-  assert.ok(block.includes(`Example Lantern x1 at ${formatCopper(askingPriceCp(123, 1.25))}`), block);
+  assert.ok(block.includes(`Example Lantern x1 at ${formatPrice(askingPriceCp(123, 1.25))}`), block);
   assert.deepEqual(getShop(tableShop.id).stock, [LANTERN, ROPE], "building the prompt rerolled the prepared shelf");
 });
 

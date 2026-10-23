@@ -1,4 +1,4 @@
-import { COPPER_PER_GOLD, formatCopper, packCostCopper } from "@/lib/srd/currency";
+import { COPPER_PER_GOLD, formatPrice, packCostCopper } from "@/lib/srd/currency";
 import { compareNames, textKey } from "@/lib/language/text-logic";
 import { lineNamed } from "@/lib/srd/item-row";
 
@@ -252,7 +252,7 @@ export function renderShopsForPrompt(shops: Array<Shop & { keeperName: string }>
   const lines = shops.slice(0, 4).map((shop) => {
     const shelf = shop.stock
       .slice(0, 12)
-      .map((line) => `${line.itemName} x${line.qty} at ${formatCopper(askingPriceCp(line.priceCp, shop.markup))}`)
+      .map((line) => `${line.itemName} x${line.qty} at ${formatPrice(askingPriceCp(line.priceCp, shop.markup))}`)
       .join("; ");
     return `- ${shop.name}${shop.keeperName ? ` (kept by ${shop.keeperName})` : ""}, ${shop.kind}${shop.buys ? ", buys at half" : ", does not buy"}: ${shelf || "bare shelves"}`;
   });

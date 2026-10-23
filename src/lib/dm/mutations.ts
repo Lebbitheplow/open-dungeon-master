@@ -31,7 +31,7 @@ import { capacityProblem } from "@/lib/dm/load-rules";
 import {
   addCopper,
   COPPER_PER_GOLD,
-  formatCopper,
+  formatPrice,
   formatPurse,
   fromCopper,
   parseCoins,
@@ -935,7 +935,7 @@ export function applyDmMutation(
           ok: true,
           gold: change.purse.gold,
           purse: formatPurse(change.purse),
-          ...(change.short ? { short: formatCopper(change.short) } : {}),
+          ...(change.short ? { short: formatPrice(change.short) } : {}),
         },
       };
     }

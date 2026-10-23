@@ -24,7 +24,7 @@
 
 import type { Campaign } from "@/lib/db/campaigns";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
-import { addCopper, formatCopper } from "@/lib/srd/currency";
+import { addCopper, formatCopper, formatPrice } from "@/lib/srd/currency";
 import type { DowntimeProgress, Lifestyle } from "@/lib/dm/between-state";
 import { LIFESTYLES } from "@/lib/dm/between-state";
 import {
@@ -89,11 +89,11 @@ export function chargeLifestyle(
     .find((lifestyle) => daily(lifestyle) * days <= purse) ?? "wretched";
   const paidCp = daily(affordable) * days;
   pay(campaign.id, sheet, paidCp);
-  const covered = coveredCp > 0 ? ` (their work covers ${formatCopper(coveredCp)} a day)` : "";
+  const covered = coveredCp > 0 ? ` (their work covers ${formatPrice(coveredCp)} a day)` : "";
   const line =
     affordable === chosen
-      ? `${sheet.name} lives ${chosen} for ${days} day${days === 1 ? "" : "s"}: ${formatCopper(paidCp)}${covered}.`
-      : `${sheet.name} cannot keep up a ${chosen} lifestyle and lives ${affordable} for ${days} day${days === 1 ? "" : "s"}: ${formatCopper(paidCp)}${covered}.`;
+      ? `${sheet.name} lives ${chosen} for ${days} day${days === 1 ? "" : "s"}: ${formatPrice(paidCp)}${covered}.`
+      : `${sheet.name} cannot keep up a ${chosen} lifestyle and lives ${affordable} for ${days} day${days === 1 ? "" : "s"}: ${formatPrice(paidCp)}${covered}.`;
   return { paidCp, lived: affordable, line };
 }
 
@@ -152,7 +152,7 @@ export function downtimeProblem(campaign: Campaign, sheet: CharacterSheet, entry
     const starting = !progress || textKey(progress.item) !== textKey(entry.item);
     const materials = Math.floor((packListCp(rowName(made)) ?? 0) / 2);
     if (starting && purseOf(sheet) < materials) {
-      return { error: `${sheet.name} needs ${formatCopper(materials)} of raw materials (half the market value) to start crafting ${entry.item}, and has ${formatCopper(purseOf(sheet))}.`, refused: "rules" };
+      return { error: `${sheet.name} needs ${formatPrice(materials)} of raw materials (half the market value) to start crafting ${entry.item}, and has ${formatCopper(purseOf(sheet))}.`, refused: "rules" };
     }
   }
   if (entry.activity === "training") {
@@ -213,7 +213,7 @@ export function spendDowntime(campaign: Campaign, turnId: string, entry: Downtim
       }
       const materials = Math.floor(valueCp / 2);
       pay(campaign.id, getSheetById(sheet.id) ?? sheet, materials);
-      lines.push(`${sheet.name} buys ${formatCopper(materials)} of raw materials for ${item}.`);
+      lines.push(`${sheet.name} buys ${formatPrice(materials)} of raw materials for ${item}.`);
       crafting = { item, ...(srdName ? { srdName } : {}), valueCp, progressCp: 0, tool: entry.tool.trim() };
     }
     const crafters = 1 + (entry.helperIds ?? []).length;
@@ -226,7 +226,7 @@ export function spendDowntime(campaign: Campaign, turnId: string, entry: Downtim
       lines.push(`${sheet.name} finishes crafting ${crafting.item}. ${alreadyInPack(sheet.name, false)}`);
     } else {
       progress.crafting = { ...crafting, progressCp };
-      lines.push(`${sheet.name} crafts ${crafting.item}: ${formatCopper(progressCp)} of ${formatCopper(crafting.valueCp)} done (5 gp a day per crafter).`);
+      lines.push(`${sheet.name} crafts ${crafting.item}: ${formatPrice(progressCp)} of ${formatPrice(crafting.valueCp)} done (5 gp a day per crafter).`);
     }
   }
   if (entry.activity === "training" && entry.subject) {
@@ -300,8 +300,8 @@ export function lifestyleLine(campaignId: string, sheetId: string): string | nul
   const lifestyle = lifestyleOf(campaignId, sheetId);
   const progress = downtimeOf(campaignId, sheetId);
   const parts = [
-    ...(lifestyle ? [`lifestyle ${lifestyle} (${formatCopper(LIFESTYLE_COST_CP[lifestyle])} a day, paid at each dawn in town)`] : []),
-    ...(progress.crafting ? [`crafting ${progress.crafting.item} ${formatCopper(progress.crafting.progressCp)} of ${formatCopper(progress.crafting.valueCp)}`] : []),
+    ...(lifestyle ? [`lifestyle ${lifestyle} (${formatPrice(LIFESTYLE_COST_CP[lifestyle])} a day, paid at each dawn in town)`] : []),
+    ...(progress.crafting ? [`crafting ${progress.crafting.item} ${formatPrice(progress.crafting.progressCp)} of ${formatPrice(progress.crafting.valueCp)}`] : []),
     ...(progress.training ? [`training ${progress.training.subject} ${progress.training.days}/250 days`] : []),
     ...(progress.research ? [`researching ${progress.research.topic} (${progress.research.days} days)`] : []),
     ...(progress.recuperating ? [`recuperating ${progress.recuperating.days}/3 days`] : []),
