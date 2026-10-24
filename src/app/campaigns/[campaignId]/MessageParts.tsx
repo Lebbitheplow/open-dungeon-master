@@ -1,6 +1,6 @@
 "use client";
 
-import { Copy, EyeOff, Flag, Scale } from "lucide-react";
+import { Copy, EyeOff, Flag, Scale, VenetianMask } from "lucide-react";
 import { useId } from "react";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { ContextMenu } from "@/components/ui/ContextMenu";
@@ -19,6 +19,7 @@ import {
   type MessageAction,
 } from "@/app/campaigns/[campaignId]/MessageActions";
 import type { SystemGlyph } from "@/lib/system-glyphs";
+import { PACT_REVEAL_PREFIX } from "@/lib/dm/pact-logic";
 import { kitButtonClass } from "@/app/campaigns/[campaignId]/PanelKit";
 
 // The transcript's smaller voices: the table's own notices and what the
@@ -76,6 +77,19 @@ export function SystemMessage({ content, glyph }: { content: string; glyph?: Sys
       <div data-tone="ember" className="panel session-banner-card rounded-xl border-ember-500/40">
         <SectionHead title="Party Lead" glyph="tab-lead" level="h4" className="mb-1" />
         <p className="text-sm text-amber-100/90">{content.slice(LEAD_NOTE_PREFIX.length)}</p>
+      </div>
+    );
+  }
+  // A pact or a secret action come out (issue 503): the server's word, drawn
+  // as a card that unmasks itself (motion-app.css .pact-reveal).
+  if (content.startsWith(PACT_REVEAL_PREFIX)) {
+    return (
+      <div className="pact-reveal panel rounded-xl border-violet-500/45 px-3 py-2" data-pact-reveal="">
+        <p className="eyebrow flex items-center gap-1.5 text-[10px] text-violet-300">
+          <VenetianMask className="size-3.5" aria-hidden="true" />
+          Revealed
+        </p>
+        <p className="mt-0.5 text-sm leading-snug text-violet-50">{content.slice(PACT_REVEAL_PREFIX.length)}</p>
       </div>
     );
   }

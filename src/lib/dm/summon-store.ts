@@ -4,15 +4,15 @@
 // the spell's duration, a token beside its maker and an initiative entry.
 // This module spawns them, sends them away (0 hit points, the end of the
 // spell, the end of its duration) and turns Conjure Elemental's elemental on
-// the party when concentration breaks.
+// the party when concentration breaks: the same sheet, moved to the foes'
+// side (issue 503).
 //
 // Database-level only: concentration.ts and pc-damage.ts call into it, so it
 // must not import mutations.ts, enemy-damage.ts, map-tools.ts or
 // companion-tools.ts (each of them reaches those two).
 
-import { dmRoll, rollCard } from "@/lib/dm/roll-card";
+import { rollCard } from "@/lib/dm/roll-card";
 import type { Campaign } from "@/lib/db/campaigns";
-import { getDatabase } from "@/lib/db/core";
 import {
   createSheet,
   getSheetById,
@@ -22,16 +22,9 @@ import {
   setSheetSummon,
 } from "@/lib/db/sheets";
 import { createCompanionUser, deleteCompanionUser } from "@/lib/db/users";
-import {
-  getActiveEncounter,
-  insertEnemy,
-  listEnemies,
-  saveEncounter,
-  type OrderEntry,
-} from "@/lib/db/encounters";
+import { getActiveEncounter, saveEncounter, type OrderEntry } from "@/lib/db/encounters";
 import {
   getBattleMapForEncounter,
-  getTokenByRef,
   insertToken,
   listTokens,
   removeTokenByRef,
@@ -45,8 +38,10 @@ import { d20Expression } from "@/lib/dice";
 import { createSheetSchema, type CharacterSheet } from "@/lib/schemas/sheet";
 import type { SheetSummon } from "@/lib/schemas/summon";
 import type { SummonForm } from "@/lib/srd/summon-forms";
-import { enemyStatsFromSummon, SUMMONED } from "@/lib/dm/summon-rules";
+import { SUMMONED } from "@/lib/dm/summon-rules";
 import { textKey } from "@/lib/language/text-logic";
+import { moveToSide } from "@/lib/dm/combat-sides";
+import type { ConditionMetaMap } from "@/lib/dm/condition-logic";
 
 const mod = (score: number) => Math.floor((score - 10) / 2);
 
@@ -263,46 +258,36 @@ export function removeSummon(
 }
 
 // A conjured creature that turns on the party when its maker's concentration
-// breaks (Conjure Elemental, Conjure Fey): an enemy with its stat block and
-// hit points as they stand, where it stood, at its place in the order.
+// breaks (Conjure Elemental, Conjure Fey), or whose maker's hold runs out
+// (Animate Dead): the same sheet fights on, on the foes' side
+// (src/lib/dm/combat-sides.ts), with its stat block, its wounds, its place
+// in the order and its token. It is unbound from its maker: no spell of the
+// maker's ends it, and its "summoned" clock no longer names the spell (an
+// uncontrolled elemental "disappears 1 hour after you summoned it"; an
+// undead whose control ran out stays). The DM plays it. Null with no fight
+// running: there is no side to join, and the caller sends it away.
 function turnHostile(campaign: Campaign, sheet: CharacterSheet): string | null {
   const encounter = getActiveEncounter(campaign.id);
   if (!encounter || !sheet.summon) {
     return null;
   }
-  const stats = enemyStatsFromSummon(sheet);
-  const entryAt = encounter.order.findIndex((entry) => entry.kind === "pc" && entry.characterId === sheet.id);
-  // Now a foe: its roll is the DM's, as an enemy's initiative is.
-  const initiative = entryAt >= 0 ? encounter.order[entryAt].initiative : dmRoll(campaign.id, null, "initiative", `${sheet.summon.form}: initiative`, d20Expression(stats.dexMod)).total;
-  const taken = new Set(listEnemies(encounter.id).map((enemy) => enemy.displayName));
-  const displayName = taken.has(sheet.summon.form) ? `${sheet.summon.form} (unbound)` : sheet.summon.form;
-  const enemy = insertEnemy({
-    encounterId: encounter.id,
-    campaignId: campaign.id,
-    slug: `summon:${sheet.summon.form.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
-    displayName,
-    initiative,
-    stats,
-  });
-  const map = getBattleMapForEncounter(encounter.id);
-  const token = map ? getTokenByRef(map.id, sheet.id) : null;
-  // It keeps its place in the order, now on the other side.
-  removeSummon(campaign, sheet, entryAt >= 0 ? { kind: "enemy", enemyId: enemy.id, name: enemy.displayName, initiative } : undefined);
-  const live = getActiveEncounter(campaign.id);
-  if (live && live.orderReady && entryAt < 0) {
-    live.order.push({ kind: "enemy", enemyId: enemy.id, name: enemy.displayName, initiative });
-    saveEncounter(live);
+  const moved = moveToSide(campaign, sheet.id, "foe", { quiet: true });
+  if ("error" in moved) {
+    return null;
   }
-  if (map && token) {
-    insertToken({ mapId: map.id, campaignId: campaign.id, kind: "enemy", refId: enemy.id, name: enemy.displayName, x: token.x, y: token.y });
-    publishEphemeral(campaign.id, "battle_map_updated", {});
+  setSheetSummon(sheet.id, { ...sheet.summon, unbound: true });
+  const fresh = getSheetById(sheet.id) ?? sheet;
+  const meta = fresh.conditionMeta as ConditionMetaMap;
+  const clock = meta[SUMMONED];
+  if (clock) {
+    const kept = { ...clock, source: fresh.id };
+    delete kept.spell;
+    const updated = patchSheet(fresh.id, { conditionMeta: { ...meta, [SUMMONED]: kept } });
+    if (updated) {
+      publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
+    }
   }
-  // Its wounds come with it.
-  if (sheet.currentHp < sheet.maxHp) {
-    getDatabase().prepare("UPDATE encounter_enemies SET current_hp = ? WHERE id = ?").run(Math.max(1, sheet.currentHp), enemy.id);
-  }
-  publishEncounterState(campaign.id);
-  return enemy.displayName;
+  return sheet.name;
 }
 
 // The creatures `spell` made (by `casterId` when given): gone when the
@@ -314,7 +299,7 @@ export function endSpellSummons(campaign: Campaign, spell: string, casterId?: st
   for (const stale of listSheets(campaign.id)) {
     const sheet = getSheetById(stale.id) ?? stale;
     const summon = sheet.summon;
-    if (!summon || textKey(summon.spell) !== wanted || (casterId && summon.casterId !== casterId)) {
+    if (!summon || summon.unbound || textKey(summon.spell) !== wanted || (casterId && summon.casterId !== casterId)) {
       continue;
     }
     if (summon.hostileOnBreak && summon.concentration) {
@@ -341,6 +326,15 @@ export function sweepSummons(campaign: Campaign): string[] {
   for (const stale of sheets) {
     const sheet = getSheetById(stale.id) ?? stale;
     if (!sheet.summon || sheet.conditions.some((name) => name.toLowerCase() === SUMMONED)) {
+      continue;
+    }
+    // Unbound, its own time run out: an elemental goes; an undead whose
+    // control already ran out stays for good.
+    if (sheet.summon.unbound) {
+      if (!sheet.summon.controlExpires) {
+        removeSummon(campaign, sheet);
+        lines.push(`${sheet.name} fades as ${sheet.summon.spell} runs its course.`);
+      }
       continue;
     }
     // Animate Dead, Create Undead: the control ends, not the creature.
@@ -382,6 +376,22 @@ export function summonAfterDamage(campaign: Campaign, sheet: CharacterSheet, dro
   const fragile = sheet.summon.spell === "Phantom Steed" && taken > 0;
   if (!dropped && !fragile) {
     return null;
+  }
+  // One fighting against the party disappears from the board, and its sheet
+  // waits, dead, for the fight's end, which counts it beaten (its XP) and
+  // sends it away with the other guests.
+  if (sheet.summon.unbound && getActiveEncounter(campaign.id)) {
+    const gone = patchSheet(sheet.id, { currentHp: 0, deathSaves: { successes: 0, failures: 3, stable: false, dead: true } });
+    if (gone) {
+      publishPersisted(campaign.id, "sheet_updated", { sheet: gone });
+    }
+    const encounter = getActiveEncounter(campaign.id);
+    const map = encounter ? getBattleMapForEncounter(encounter.id) : null;
+    if (map) {
+      removeTokenByRef(map.id, sheet.id);
+      publishEphemeral(campaign.id, "battle_map_updated", {});
+    }
+    return `${sheet.name} drops to 0 hit points and disappears.`;
   }
   removeSummon(campaign, sheet);
   return fragile && !dropped

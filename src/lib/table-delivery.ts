@@ -20,16 +20,20 @@
 //   client used to strip it on arrival, which left the number on every
 //   device;
 //   the DM's cover is sent to everyone without the brief handed to the AI;
-//   the seats that hold the story's secrets are sent it whole.
+//   the seats that hold the story's secrets are sent it whole;
+//   an owner-only offer (a pact's approach, issue 503) is stored as its id
+//   alone and sent whole to its own player and the storyteller, and to
+//   nobody else, not even as an empty card.
 import { campaignSeats, capsFor, getCampaignById, type Campaign } from "@/lib/db/campaigns";
 import { getRoll } from "@/lib/db/rolls";
 import { getSheetById, listSheetsForUser } from "@/lib/db/sheets";
 import { mayReadNotes, publicSheet } from "@/lib/dm/sheet-view";
 import { redactRoll, rollAccessFor, type RollView } from "@/lib/dm/viewer";
 import { audienceOf, type SeatRight } from "@/lib/event-audience";
+import { offerVisibleTo, publicItemProposal, readProposal } from "@/lib/dm/proposal-view";
 
 type Payload = Record<string, unknown>;
-type SheetLike = { id: string; userId: string; notes?: string };
+type SheetLike = { id: string; userId: string; notes?: string; openToAdvances?: boolean; openToPacts?: boolean };
 type RollLike = RollView & { id?: string; total?: number | null };
 
 function asPayload(payload: unknown): Payload | null {
@@ -72,19 +76,37 @@ function coverBriefOf(type: string, payload: unknown): string | null {
   return cover && typeof cover.brief === "string" && cover.brief ? cover.brief : null;
 }
 
+// An owner-only offer's event (issue 503): the offer's id, or null.
+function ownerOnlyOfferOf(type: string, payload: unknown): { id: string; userId?: string } | null {
+  if (type !== "item_proposal_added" && type !== "item_proposal_resolved") {
+    return null;
+  }
+  const proposal = asPayload(asPayload(payload)?.proposal);
+  return proposal && proposal.ownerOnly === true && typeof proposal.id === "string"
+    ? { id: proposal.id, ...(typeof proposal.userId === "string" ? { userId: proposal.userId } : {}) }
+    : null;
+}
+
 // True for an event no seat is sent unless it may read it.
 export function isSeatOnly(type: string, payload: unknown): boolean {
   const audience = audienceOf(type);
   if (!audience || audience.kind === "dm") {
     return true;
   }
+  if (ownerOnlyOfferOf(type, payload)) {
+    return true;
+  }
   const roll = rollOf(type, payload);
-  return roll !== null && (roll.visibility === "dm" || roll.visibility === "self");
+  return roll !== null && (roll.visibility === "dm" || roll.visibility === "self" || roll.visibility === "secret");
 }
 
 // The payload as the whole table may hold it, which is what the log stores
 // and what the fast path sends every seat.
 export function tablePayload(type: string, payload: unknown): unknown {
+  const offer = ownerOnlyOfferOf(type, payload);
+  if (offer) {
+    return { proposal: { id: offer.id, ownerOnly: true } };
+  }
   const sheet = sheetOf(type, payload);
   if (sheet) {
     return { ...(payload as Payload), sheet: publicSheet(sheet) };
@@ -155,6 +177,20 @@ export function payloadForViewer(
     return stored;
   }
 
+  const offer = ownerOnlyOfferOf(type, stored);
+  if (offer) {
+    const campaign = viewer?.campaign();
+    // Live, the offer is still on the published payload; on replay it is
+    // read back as it stands now.
+    const live = ownerOnlyOfferOf(type, original) ? (original as Payload) : null;
+    const whole = live ? null : readProposal(offer.id);
+    const owner = live ? ownerOnlyOfferOf(type, original)?.userId : whole?.userId;
+    if (!viewer || !campaign || !owner || !offerVisibleTo({ ownerOnly: true, userId: owner }, viewer.userId, capsFor(campaign, viewer.userId))) {
+      return null;
+    }
+    return live ?? (whole ? { proposal: publicItemProposal(whole) } : null);
+  }
+
   const roll = rollOf(type, stored);
   if (roll && isSeatOnly(type, stored)) {
     const campaign = viewer?.campaign();
@@ -176,7 +212,15 @@ export function payloadForViewer(
       return stored;
     }
     const whole = sheetOf(type, original) ?? getSheetById(sheet.id);
-    return whole?.notes ? { ...(stored as Payload), sheet: { ...sheet, notes: whole.notes } } : stored;
+    // The notes, the advances opt-in (issue 501) and the pacts opt-in (issue
+    // 503) are the fields the table's copy blanks; the owner and a DM seat
+    // get them back.
+    return whole?.notes || whole?.openToAdvances || whole?.openToPacts
+      ? {
+          ...(stored as Payload),
+          sheet: { ...sheet, notes: whole.notes ?? "", openToAdvances: Boolean(whole.openToAdvances), openToPacts: Boolean(whole.openToPacts) },
+        }
+      : stored;
   }
 
   // The figure rides only live: an effect is ephemeral and never replayed.

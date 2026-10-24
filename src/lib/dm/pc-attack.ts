@@ -1,7 +1,8 @@
+import { getFoe } from "@/lib/dm/sheet-foe";
 import { spendFeatureUse } from "@/lib/dm/attack-onhit";
 import { z } from "zod";
 import type { Campaign } from "@/lib/db/campaigns";
-import { getActiveEncounter, getEnemy, patchEnemyConditions, saveEncounter } from "@/lib/db/encounters";
+import { getActiveEncounter, patchEnemyConditions, saveEncounter } from "@/lib/db/encounters";
 import { endInvisibilityOnCast, writeMarks } from "@/lib/dm/attack-marks";
 import { sanctuaryEndedByAttack } from "@/lib/dm/spell-defenses";
 import { publishEncounter } from "@/lib/dm/enemy-damage";
@@ -61,7 +62,7 @@ export const pcAttackTool: ToolDef = {
   function: {
     name: "pc_attack",
     description:
-      "Resolve a player character's attack on an enemy. The server derives their attack bonus and damage from their sheet, rolls to-hit against the enemy's real AC, applies damage on a hit, and reports the outcome for you to narrate. Call it for EVERY weapon attack and attack-roll spell a player makes; never adjudicate a player's attack yourself. Off their own turn a character attacks only with a readied attack or spell, or Giant Killer's reaction against a Large or larger creature within 5 feet that just attacked them; the server checks which and spends the reaction.",
+      "Resolve a character's attack on a foe. The server derives their attack bonus and damage from their sheet, rolls to-hit against the target's real AC, applies damage on a hit, and reports the outcome for you to narrate. Call it for EVERY weapon attack and attack-roll spell a player makes; never adjudicate a player's attack yourself. Off their own turn a character attacks only with a readied attack or spell, or Giant Killer's reaction against a Large or larger creature within 5 feet that just attacked them; the server checks which and spends the reaction.",
     parameters: {
       type: "object",
       additionalProperties: false,
@@ -293,6 +294,9 @@ export function handlePcAttack(
   sheetsById: Map<string, CharacterSheet>,
   realDiceUserIds: Set<string>,
   toolCallId: string | null,
+  // The engine's own attacks (Confusion's random target): `anySide` lets the
+  // target be an ally (pc-attack-gate.ts).
+  engine: { anySide?: boolean } = {},
 ): ToolResult {
   const encounter = getActiveEncounter(campaign.id);
   if (!encounter) {
@@ -322,9 +326,9 @@ export function handlePcAttack(
   // attacks spent, a feature they lack) refuses it where they stand. The
   // attack is then planned from where it is made.
   if (args.approach) {
-    const dry = planPcAttack({ campaign, turn, encounter, sheet, args, sheets, sheetsById });
+    const dry = planPcAttack({ campaign, turn, encounter, sheet, args, sheets, sheetsById, anySide: engine.anySide });
     if ("refused" in dry) {
-      const beside = planPcAttack({ campaign, turn, encounter, sheet, args, sheets, sheetsById, skipReach: true });
+      const beside = planPcAttack({ campaign, turn, encounter, sheet, args, sheets, sheetsById, skipReach: true, anySide: engine.anySide });
       if ("refused" in beside) {
         return beside.refused;
       }
@@ -335,11 +339,11 @@ export function handlePcAttack(
       if ("refused" in approach) {
         return approach.refused;
       }
-      const attack = attackFrom(campaign, turn, sheet, args, sheets, sheetsById, realDiceUserIds, toolCallId);
+      const attack = attackFrom(campaign, turn, sheet, args, sheets, sheetsById, realDiceUserIds, toolCallId, engine);
       return attack[PC_ATTACK_PARKED] ? attack : withApproach(attack, approach.walked);
     }
   }
-  return attackFrom(campaign, turn, sheet, args, sheets, sheetsById, realDiceUserIds, toolCallId);
+  return attackFrom(campaign, turn, sheet, args, sheets, sheetsById, realDiceUserIds, toolCallId, engine);
 }
 
 function attackFrom(
@@ -351,6 +355,7 @@ function attackFrom(
   sheetsById: Map<string, CharacterSheet>,
   realDiceUserIds: Set<string>,
   toolCallId: string | null,
+  engine: { anySide?: boolean } = {},
 ): ToolResult {
   // The walk may have changed the fight: read it again.
   const encounter = getActiveEncounter(campaign.id);
@@ -360,7 +365,7 @@ function attackFrom(
   // ---- refusals: everything that can stop this attack, before any spend ----
   // Asked in one place, in order, by planPcAttack (src/lib/dm/pc-attack-plan.ts).
 
-  const plan = planPcAttack({ campaign, turn, encounter, sheet: getSheetById(sheet.id) ?? sheet, args, sheets, sheetsById });
+  const plan = planPcAttack({ campaign, turn, encounter, sheet: getSheetById(sheet.id) ?? sheet, args, sheets, sheetsById, anySide: engine.anySide });
   if ("refused" in plan) {
     return plan.refused;
   }
@@ -545,7 +550,7 @@ function spendPcAttack(plan: AttackPlan): ToolError | null {
   writeMarks(campaign.id, sheet.id, plan.marks.assign);
   // The target's one-shot conditions this roll uses up (Guiding Bolt).
   if (plan.targetSpent.length) {
-    const target = getEnemy(plan.enemy.id);
+    const target = getFoe(plan.enemy.id);
     if (target) {
       const cleared = removeConditions(target.conditions, target.conditionMeta, plan.targetSpent);
       patchEnemyConditions(target.id, cleared.conditions, cleared.meta);

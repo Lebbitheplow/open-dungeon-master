@@ -4,6 +4,7 @@ import { ITEM_TAGS } from "@/lib/schemas/item-tags";
 import { summonAttackSchema, type SheetSummon } from "@/lib/schemas/summon";
 import { ABILITIES } from "@/lib/schemas/abilities";
 import { GENDERS, storedGender, type Gender } from "@/lib/gender";
+import { ATTRACTION_NOTE_MAX, normalizeAttraction, type Attraction } from "@/lib/attraction";
 import { conditionMetaSchema, ROUND_CEILING, type ConditionMetaMap } from "@/lib/schemas/condition-meta";
 import { textKey } from "@/lib/language/text-logic";
 
@@ -362,6 +363,13 @@ export type AsiChoice = z.infer<typeof asiChoiceSchema>;
 
 // Payload for creating a sheet. HP/AC arrive explicit (the creation UI
 // suggests derived values, the player can adjust before saving).
+// Who a character is drawn to (src/lib/attraction.ts, issue 501). Blank is
+// unspecified, and nothing changes for a character left blank.
+export const attractionSchema = z.object({
+  genders: z.array(z.enum(GENDERS)).max(GENDERS.length).default([]),
+  note: z.string().trim().max(ATTRACTION_NOTE_MAX).default(""),
+});
+
 export const createSheetSchema = z.object({
   name: z.string().trim().min(1).max(60),
   race: z.string().trim().min(1).max(60),
@@ -370,6 +378,9 @@ export const createSheetSchema = z.object({
   background: z.string().trim().max(60).default(""),
   alignment: z.string().trim().max(30).default(""),
   gender: z.enum(["", ...GENDERS]).default(""),
+  // Optional rather than defaulted: a sheet written before the field (a
+  // pregen, a library blob, a file) simply has none, which is blank.
+  attraction: attractionSchema.optional(),
   // Free-text physical description; feeds the auto-generated portrait.
   appearance: z.string().trim().max(500).default(""),
   abilities: abilityScoresSchema,
@@ -460,9 +471,16 @@ export type CreateSheetInput = z.infer<typeof createSheetSchema>;
 
 // A sheet read back from a file or a stored bundle: a gender written as free
 // text before the field was fixed reads as unspecified rather than refusing
-// the whole sheet.
+// the whole sheet, and so does an attraction it cannot read.
 export const storedSheetSchema = z.preprocess(
-  (raw) => (raw && typeof raw === "object" ? { ...raw, gender: storedGender((raw as { gender?: unknown }).gender) } : raw),
+  (raw) =>
+    raw && typeof raw === "object"
+      ? {
+          ...raw,
+          gender: storedGender((raw as { gender?: unknown }).gender),
+          attraction: normalizeAttraction((raw as { attraction?: unknown }).attraction),
+        }
+      : raw,
   createSheetSchema,
 );
 
@@ -672,6 +690,16 @@ export type CharacterSheet = {
   // The builder's choice, or "" (src/lib/gender.ts): read by the portrait
   // prompt, the placeholder face, the voice cast and the speech reader.
   gender: Gender;
+  // Who they are drawn to (src/lib/attraction.ts); blank = unspecified.
+  // Optional only for test doubles: every stored sheet reads one.
+  attraction?: Attraction;
+  // The owner opened this character to advances from NPCs at this table
+  // (issue 501). Blanked like the notes for anyone but the owner and a DM
+  // seat (src/lib/dm/sheet-view.ts).
+  openToAdvances?: boolean;
+  // The owner said a pact may approach this character at this table (issue
+  // 503 Phase 7, "Pacts may approach me"). Blanked like the advances opt-in.
+  openToPacts?: boolean;
   level: number;
   xp: number;
   abilities: AbilityScores;

@@ -1,6 +1,7 @@
 import { getDatabase, nowIso } from "@/lib/db/core";
 import { allocateSeq, getCampaignById } from "@/lib/db/campaigns";
 import { insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
+import { deleteCompanionUser, isCompanionUserId } from "@/lib/db/users";
 import {
   capturePreRollbackSnapshot,
   deleteBoundarySnapshotsAfter,
@@ -63,10 +64,12 @@ export function computeRollbackScope(
       )
       .get(campaignId) as { n: number }
   ).n;
+  // An owner-only offer (a pact's approach, issue 503) is not the table's to
+  // count: the rewind's warning would tell the lead one exists.
   const pendingProposals = (
     db
       .prepare(
-        `SELECT COUNT(*) AS n FROM item_proposals WHERE campaign_id = ? AND status = 'pending'`,
+        `SELECT COUNT(*) AS n FROM item_proposals WHERE campaign_id = ? AND status = 'pending' AND owner_only = 0`,
       )
       .get(campaignId) as { n: number }
   ).n;
@@ -156,6 +159,14 @@ function rollbackNow(
      WHERE campaign_id = ? AND status IN ('running','awaiting_rolls')`,
   ).run(nowIso(), campaignId);
 
+  // The bot users behind the companions at the table now: one recruited
+  // after the boundary loses its sheet to the restore, and its user goes too.
+  const botsBefore = (
+    db.prepare(`SELECT user_id FROM character_sheets WHERE campaign_id = ?`).all(campaignId) as Array<{ user_id: string }>
+  )
+    .map((row) => row.user_id)
+    .filter(isCompanionUserId);
+
   db.transaction(() => {
     // A pin names a message and a beat sits at a seq: both belong to the
     // messages deleted below, and a pin left behind named a line nobody
@@ -207,6 +218,12 @@ function rollbackNow(
        WHERE campaign_id = ? AND chapter_index = ?`,
     ).run(nowIso(), campaignId, targetChapterIndex);
     restoreSnapshot(campaignId, snapshot.payload);
+    const owns = db.prepare(`SELECT 1 FROM character_sheets WHERE user_id = ? LIMIT 1`);
+    for (const userId of botsBefore) {
+      if (!owns.get(userId)) {
+        deleteCompanionUser(userId);
+      }
+    }
   })();
 
   deleteBoundarySnapshotsAfter(campaignId, targetChapterIndex);

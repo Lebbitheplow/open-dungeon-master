@@ -1,27 +1,18 @@
 import { z } from "zod";
 import { dmRoll } from "@/lib/dm/roll-card";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
-import { getSheetById } from "@/lib/db/sheets";
 import { insertRoll } from "@/lib/db/rolls";
-import { insertCharacterEvent } from "@/lib/db/character-events";
-import { insertFact } from "@/lib/db/facts";
-import { getNpcByName, nearestNpcName, setNpcAttitude, type Npc } from "@/lib/db/npcs";
 import {
-  ensureRelationship,
   getRelationship,
   listRelationships,
   patchRelationship,
   type Relationship,
-  type RelationshipSubjectKind,
 } from "@/lib/db/relationships";
-import { derivePersonality, nearestNpcHint } from "@/lib/dm/npc-logic";
 import {
   addFlag,
   addMemory,
   applyApproval,
-  beatAlignment,
   beatDc,
-  beatDelta,
   beatOutcome,
   beatSpec,
   canAdvanceRomance,
@@ -32,23 +23,40 @@ import {
   REFUSAL_COST,
   relationshipFragment,
   RELATIONSHIP_BEAT_NAMES,
-  romanceIndex,
   ROMANCE_LABEL,
   ROMANCE_THRESHOLD,
   TIER_LABEL,
-  type Personality,
+  romanceIndex,
   type RelationshipBeat,
-  type RomanceStage,
+  type SouredLeaving,
 } from "@/lib/dm/relationship-logic";
+import {
+  defaultMilestoneText,
+  openLedger,
+  publishRelationshipsUpdated,
+  recordMilestone,
+  recordRelationshipEvent,
+  resolveActor,
+  resolveSubject,
+} from "@/lib/dm/relationship-subject";
+import { handleNpcAdvance } from "@/lib/dm/npc-advance";
+import { conscienceNotes, landBeat, settleUnrecordedDeeds, type DeedOptions, type Landing } from "@/lib/dm/beat-landing";
+import { DEED_KINDS, DEED_SEVERITIES, deedSeverity, isDeedKind, valueLabel } from "@/lib/dm/companion-values-logic";
+import { MAX_DEADLINE_HOURS } from "@/lib/dm/conscience-logic";
+import { getActiveEncounter } from "@/lib/db/encounters";
+import { actNote, outwardApproval } from "@/lib/dm/scheme-logic";
+import { revealAct, runningAct, schemesPossible, schemeTool } from "@/lib/dm/scheme-tools";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { rollExpression } from "@/lib/dice";
-import { publishEphemeral, publishPersisted, publishWithSeq } from "@/lib/events";
-import { resolveRollExpression, resolveSheetRef, unknownSheetRef } from "@/lib/dm/rolls";
+import { publishWithSeq } from "@/lib/events";
+import { resolveRollExpression, unknownSheetRef } from "@/lib/dm/rolls";
 import { rollExtrasFor, spendRollCarriers } from "@/lib/dm/forced-save";
 import type { RollArgs } from "@/lib/dm/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import { toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
+import { toolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
+
+export { publishRelationshipsUpdated };
 
 // The relationship engine: how each character actually stands with each NPC
 // and AI companion, on one server-owned meter running from open hostility to
@@ -73,6 +81,8 @@ export const RELATIONSHIP_TOOL_NAMES = [
   "relationship_beat",
   "romance_advance",
   "relationship_end",
+  // An NPC's act toward a character (issue 501, src/lib/dm/scheme-tools.ts).
+  "relationship_scheme",
 ] as const;
 
 const END_REASONS = ["falling_out", "parting", "breakup", "betrayal", "death"] as const;
@@ -85,48 +95,74 @@ export function romanceEnabled(campaign: Campaign): boolean {
   return relationshipsEnabled(campaign) && campaign.gameSettings.romance !== "off";
 }
 
-export function relationshipTools(campaign: Campaign): ToolDef[] {
+// `inEncounter`: a fight offers relationship_beat for deeds alone (issue
+// 503): most executions happen mid-fight, and the rest waits for it to end.
+export function relationshipTools(campaign: Campaign, inEncounter = false): ToolDef[] {
   if (!relationshipsEnabled(campaign)) {
     return [];
   }
-  const romance = romanceEnabled(campaign);
-  const beats = romance
-    ? RELATIONSHIP_BEAT_NAMES
-    : RELATIONSHIP_BEAT_NAMES.filter((beat) => beatSpec(beat)?.track !== "romantic");
-  const tools: ToolDef[] = [
-    {
-      type: "function",
-      function: {
-        name: "relationship_beat",
-        description:
-          "Record one moment that changed how a tracked NPC or AI companion feels about a character, moving the server's approval meter for that pair, when the relationship rules call for it. Charming overtures roll that character's real Persuasion or Performance; deeds simply count. The subject must already exist: set_npc or npc_reaction for an NPC, add_companion for a companion. Call it BEFORE narrating their reaction; narrate exactly what it reports.",
-        parameters: {
-          type: "object",
-          additionalProperties: false,
-          properties: {
-            characterId: { type: "string", description: "The character whose conduct this is: exact characterId from GAME STATE." },
-            subject: {
-              type: "string",
-              description: "Exact name of the tracked NPC or AI companion who witnessed it.",
-            },
-            beat: {
-              type: "string",
-              enum: [...beats],
-              description:
-                "What happened (which beats earn regard and which cost it: the relationship rules)." +
+  const romance = romanceEnabled(campaign) && !inEncounter;
+  const beats = inEncounter
+    ? [...DEED_KINDS]
+    : romance
+      ? RELATIONSHIP_BEAT_NAMES
+      : RELATIONSHIP_BEAT_NAMES.filter((beat) => beatSpec(beat)?.track !== "romantic");
+  const beatTool: ToolDef = {
+    type: "function",
+    function: {
+      name: "relationship_beat",
+      description: inEncounter
+        ? "Mid-fight, record a deed a tracked NPC or AI companion saw (a prisoner executed, a foe spared). Call it BEFORE narrating their reaction."
+        : "Record one moment that changed how a tracked NPC or AI companion feels about a character, moving the server's approval meter for that pair, when the relationship rules call for it. Charming overtures roll that character's real Persuasion or Performance; deeds simply count. The subject must already exist: set_npc or npc_reaction for an NPC, add_companion for a companion. Call it BEFORE narrating their reaction; narrate exactly what it reports.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          characterId: { type: "string", description: "The character whose conduct this is: exact characterId from GAME STATE." },
+          subject: {
+            type: "string",
+            description: "Exact name of the tracked NPC or AI companion who witnessed it.",
+          },
+          beat: {
+            type: "string",
+            enum: [...beats],
+            description: inEncounter
+              ? "The deed."
+              : "What happened (which beats earn regard and which cost it: the relationship rules)." +
                 (romance
                   ? " Romantic: flirt (how a courtship opens), compliment, grand_gesture, intimacy (partners only; always narrate as a fade to black)."
                   : ""),
-            },
-            note: {
-              type: "string",
-              description: "One short line on what actually happened, for the relationship's memory.",
-            },
           },
-          required: ["characterId", "subject", "beat"],
+          note: {
+            type: "string",
+            description: "One short line on what actually happened, for the relationship's memory.",
+          },
+          witnesses: { type: "array", items: { type: "string" }, description: "Deeds only: everyone else tracked who saw it, by exact name." },
+          severity: { type: "string", enum: [...DEED_SEVERITIES], description: "Deeds only. Default serious." },
+          faction: { type: "string", description: "Deeds only: the faction whose people it was done to or for." },
+          demand: {
+            type: "string",
+            description: "Deeds only: what a companion at a warning demands if this brings an ultimatum, in their words.",
+          },
+          deadlineHours: { type: "integer", minimum: 1, maximum: MAX_DEADLINE_HOURS, description: "Deeds only: hours the demand gives (24)." },
         },
+        required: ["characterId", "subject", "beat"],
       },
     },
+  };
+  // Mid-fight the leanest set that records a deed: who saw it and how
+  // grave; a demand set there takes its default.
+  if (inEncounter) {
+    const properties = beatTool.function.parameters.properties as Record<string, unknown>;
+    delete properties.faction;
+    delete properties.demand;
+    delete properties.deadlineHours;
+  }
+  if (inEncounter) {
+    return [beatTool];
+  }
+  const tools: ToolDef[] = [
+    beatTool,
     {
       type: "function",
       function: {
@@ -140,6 +176,11 @@ export function relationshipTools(campaign: Campaign): ToolDef[] {
             characterId: { type: "string", description: "The character on this side of it: exact characterId from GAME STATE." },
             subject: { type: "string", description: "Exact name of the NPC or companion." },
             reason: { type: "string", enum: [...END_REASONS], description: "How it ends." },
+            by: {
+              type: "string",
+              enum: ["character", "npc"],
+              description: "betrayal only: who betrayed whom. character (the default): the character betrayed them, and it costs their regard. npc: they betrayed the character; their regard stays what it truly was, and an act they kept up comes out.",
+            },
             note: { type: "string", description: "One short line for the record." },
           },
           required: ["characterId", "subject", "reason"],
@@ -153,129 +194,40 @@ export function relationshipTools(campaign: Campaign): ToolDef[] {
       function: {
         name: "romance_advance",
         description:
-          "Take a romance one step further: interested (a quiet, unspoken pull), courting (declared out loud), together (partners), betrothed (a proposal), married (wed). Call it BEFORE narrating how it goes. After the checks the romance rules describe, the server decides whether they accept, rolling when it is genuinely uncertain. One step per exchange.",
+          "Take a romance one step further: interested (a quiet, unspoken pull), courting (declared out loud), together (partners), betrothed (a proposal), married (wed). Call it BEFORE narrating how it goes. After the checks the romance rules describe, the server decides whether they accept, rolling when it is genuinely uncertain. One step per exchange. With initiator npc it is the NPC's own first move toward a character open to advances, allowed only when a director note says they are ready: the character's player answers it.",
         parameters: {
           type: "object",
           additionalProperties: false,
           properties: {
-            characterId: { type: "string", description: "The character taking the step: exact characterId from GAME STATE." },
+            characterId: { type: "string", description: "The player character in it: exact characterId from GAME STATE." },
             subject: { type: "string", description: "Exact name of the NPC or companion." },
             to: {
               type: "string",
               enum: ["interested", "courting", "together", "betrothed", "married"],
-              description: "The next rung only; the server refuses a skipped step.",
+              description: "The next rung only; the server refuses a skipped step. An NPC's move is always courting.",
+            },
+            initiator: {
+              type: "string",
+              enum: ["player", "npc"],
+              description: "Who makes the move: player (the default) or npc (their first move, when a director note says they are ready).",
             },
             note: {
               type: "string",
               description:
-                "One short line describing the moment, kept in the relationship's memory ('proposed on the bridge at Highmoor').",
+                "One short line describing the moment, kept in the relationship's memory ('proposed on the bridge at Highmoor'); with initiator npc, their own words to the character.",
             },
           },
           required: ["characterId", "subject", "to"],
         },
       },
     });
+    // An NPC's act (issue 501): offered only where a character is open to
+    // advances, the only kind of character an act may be aimed at.
+    if (schemesPossible(campaign)) {
+      tools.splice(2, 0, schemeTool);
+    }
   }
   return tools;
-}
-
-// ---- shared resolution ----
-
-type Subject = {
-  kind: RelationshipSubjectKind;
-  name: string;
-  id: string;
-  personality: Personality;
-  hostile: boolean;
-  npc: Npc | null;
-};
-
-function resolveSubject(
-  campaign: Campaign,
-  rawName: string,
-  sheets: CharacterSheet[],
-): Subject | ToolError {
-  const needle = textKey(rawName);
-  const sheet = sheets.find((candidate) => textKey(candidate.name) === needle);
-  if (sheet && !sheet.isCompanion) {
-    return {
-      error: `${sheet.name} is a player's character. How two player characters feel about each other belongs to those two players and is not metered here; play the scene.`,
-      retry: true,
-    };
-  }
-  if (sheet?.isCompanion) {
-    return {
-      kind: "companion",
-      name: sheet.name,
-      id: sheet.id,
-      // Companions have a personality brief rather than axes; nothing to
-      // weigh a deed against, so every deed lands at face value.
-      personality: null,
-      hostile: false,
-      npc: null,
-    };
-  }
-  const npc = getNpcByName(campaign.id, rawName);
-  if (!npc) {
-    return {
-      error: `No tracked NPC or companion named "${rawName}".${nearestNpcHint(nearestNpcName(campaign.id, rawName))} Register them with set_npc (or npc_reaction), or add_companion, before recording how they take things.`,
-      retry: true,
-    };
-  }
-  return {
-    kind: "npc",
-    name: npc.name,
-    id: npc.id,
-    personality: npc.agency.personality ?? derivePersonality(npc.name, npc.attitude, npc.trait),
-    hostile: npc.attitude === "hostile",
-    npc,
-  };
-}
-
-function resolveActor(
-  args: { characterId: string },
-  sheets: CharacterSheet[],
-  sheetsById: Map<string, CharacterSheet>,
-): CharacterSheet | null {
-  const stale = resolveSheetRef(args.characterId, sheets, sheetsById);
-  return stale ? getSheetById(stale.id) ?? stale : null;
-}
-
-function openLedger(
-  campaign: Campaign,
-  sheet: CharacterSheet,
-  subject: Subject,
-): Relationship {
-  return (
-    getRelationship(campaign.id, sheet.id, subject.name) ??
-    ensureRelationship({
-      campaignId: campaign.id,
-      characterId: sheet.id,
-      characterName: sheet.name,
-      subjectKind: subject.kind,
-      subjectName: subject.name,
-      subjectId: subject.id,
-    })
-  );
-}
-
-// Milestones land in the character's own story log, which is where the table
-// already reads its history, and follow the character into their library
-// entry. The panel refetches on the contentless ephemeral.
-function recordRelationshipEvent(campaign: Campaign, sheet: CharacterSheet, summary: string) {
-  const event = insertCharacterEvent({
-    libraryCharacterId: sheet.libraryCharacterId,
-    campaignCharacterId: sheet.id,
-    campaignId: campaign.id,
-    seq: allocateSeq(campaign.id),
-    kind: "relationship",
-    summary: summary.slice(0, 300),
-  });
-  publishPersisted(campaign.id, "character_event", { event, characterName: sheet.name });
-}
-
-export function publishRelationshipsUpdated(campaignId: string) {
-  publishEphemeral(campaignId, "relationships_updated", {});
 }
 
 // ---- relationship_beat ----
@@ -285,6 +237,11 @@ const beatSchema = z.object({
   subject: z.string().min(1).max(80),
   beat: z.string().min(1).max(40),
   note: z.string().max(200).optional(),
+  witnesses: z.array(z.string().trim().min(1).max(80)).max(8).optional(),
+  severity: z.enum(DEED_SEVERITIES).optional(),
+  faction: z.string().trim().max(80).optional(),
+  demand: z.string().trim().max(160).optional(),
+  deadlineHours: z.number().int().min(1).max(MAX_DEADLINE_HOURS).optional(),
 });
 
 export function handleRelationshipBeat(
@@ -315,6 +272,13 @@ export function handleRelationshipBeat(
   }
   if (spec.track === "romantic" && !romanceEnabled(campaign)) {
     return { error: "Romance is switched off for this campaign; only social beats apply.", retry: true };
+  }
+  const deedKind = isDeedKind(args.beat);
+  if (!deedKind && getActiveEncounter(campaign.id)) {
+    return {
+      error: `Mid-fight only deeds are recorded (${DEED_KINDS.join(", ")}); ${args.beat} waits until the fight is over.`,
+      retry: true,
+    };
   }
   const sheet = resolveActor(args, sheets, sheetsById);
   if (!sheet) {
@@ -359,7 +323,9 @@ export function handleRelationshipBeat(
       return "error" in resolved ? resolved : { error: `${sheet.name} cannot make that check.`, refused: "rules" };
     }
     spendRollCarriers(campaign.id, sheet.id, resolved.spendInspiration);
-    dc = beatDc(relationship.approval);
+    // An NPC keeping up an act takes a charm as the warmth they show would
+    // (src/lib/dm/scheme-logic.ts): every outward rule reads the act.
+    dc = beatDc(outwardApproval(relationship));
     const rolled = rollExpression(resolved.expression);
     rollTotal = rolled.total;
     const roll = insertRoll({
@@ -379,42 +345,38 @@ export function handleRelationshipBeat(
     outcome = beatOutcome(rolled.total, dc);
   }
 
-  const alignment = beatAlignment(spec, subject.personality);
-  const delta = beatDelta(args.beat as RelationshipBeat, outcome, {
-    approval: relationship.approval,
-    repeats: relationship.beats[args.beat] ?? 0,
-    personality: subject.personality,
-    hostile: subject.hostile,
-  });
-  const approval = applyApproval(relationship.approval, delta);
-  const romance = demoteRomance(relationship.romance, approval);
-  // The beats worth remembering are the ones that changed something.
-  const memorable =
-    args.beat === "intimacy" || args.beat === "betrayal" || Math.abs(delta) >= 7;
-  const updated =
-    patchRelationship(relationship.id, {
-      approval,
-      romance,
-      beats: { ...relationship.beats, [args.beat]: (relationship.beats[args.beat] ?? 0) + 1 },
-      ...(args.beat === "intimacy" ? { flags: addFlag(relationship.flags, "intimacy") } : {}),
-      ...(memorable && args.note?.trim()
-        ? {
-            memories: addMemory(relationship.memories, {
-              kind: args.beat,
-              text: args.note.trim(),
-              at: new Date().toISOString(),
-            }),
-          }
-        : {}),
-    }) ?? relationship;
+  // A deed counts with everyone it names as a witness, each weighed by who
+  // they are (src/lib/dm/beat-landing.ts); any other beat with its subject.
+  const deed: DeedOptions | null = deedKind
+    ? {
+        severity: deedSeverity(args.beat, args.severity),
+        faction: args.faction ?? "",
+        demand: args.demand ?? "",
+        hours: args.deadlineHours,
+      }
+    : null;
+  const beat = args.beat as RelationshipBeat;
+  const landing = landBeat(campaign, turn, sheet, subject, relationship, beat, outcome, args.note, deed);
+  const others = deedKind ? landWitnesses(campaign, turn, sheet, subject, args.witnesses ?? [], sheets, beat, args.note, deed!) : null;
+  if (deedKind) {
+    settleUnrecordedDeeds(campaign.id, sheet);
+  }
   publishRelationshipsUpdated(campaign.id);
 
+  const { updated, delta, alignment } = landing;
   const tier = friendshipTier(updated.approval);
+  const notes = [
+    buildBeatNote(sheet.name, subject.name, spec.label, delta, alignment, updated, outcome),
+    ...(others?.landed.map((other) => `${other.subject.name} saw it too: ${TIER_LABEL[friendshipTier(other.updated.approval)]} toward ${sheet.name} now.`) ?? []),
+    ...conscienceNotes([landing, ...(others?.landed ?? [])]),
+    ...(others?.unknown.length ? [`Not tracked, so they keep no memory of it: ${others.unknown.join(", ")}. Register someone who matters with set_npc first.`] : []),
+  ];
   return {
     ok: true,
     character: sheet.name,
     subject: subject.name,
     beat: args.beat,
+    ...(deed ? { severity: deed.severity } : {}),
     ...(spec.skill ? { skill: spec.skill, roll: rollTotal, dc, outcome } : {}),
     approvalChange: delta,
     approval: updated.approval,
@@ -422,12 +384,86 @@ export function handleRelationshipBeat(
     ...(alignment !== 0
       ? { suitsThem: alignment > 0 ? "yes" : "no", alignment }
       : {}),
+    ...valuesResult(landing),
+    ...(landing.conscience ? { conscience: `${landing.conscience.from} -> ${landing.conscience.to}` } : {}),
+    ...(landing.departure?.departed ? { departed: landing.departure.how } : landing.departure?.turned ? { turned: landing.departure.how } : {}),
     ...(updated.romance !== "none" ? { romance: updated.romance } : {}),
-    ...(romance !== relationship.romance
-      ? { romanceSlipped: `${relationship.romance} -> ${romance}` }
+    ...(updated.romance !== relationship.romance
+      ? { romanceSlipped: `${relationship.romance} -> ${updated.romance}` }
       : {}),
-    note: buildBeatNote(sheet.name, subject.name, spec.label, delta, alignment, updated, outcome),
+    ...(others?.landed.length
+      ? {
+          witnesses: others.landed.map((other) => ({
+            subject: other.subject.name,
+            approvalChange: other.delta,
+            standing: friendshipTier(other.updated.approval),
+            ...valuesResult(other),
+            ...(other.conscience ? { conscience: `${other.conscience.from} -> ${other.conscience.to}` } : {}),
+            ...(other.departure?.departed ? { departed: other.departure.how } : other.departure?.turned ? { turned: other.departure.how } : {}),
+          })),
+        }
+      : {}),
+    note: notes.join(" "),
+    ...actResult(subject.name, sheet.name, updated),
   };
+}
+
+// What a companion's values made of it, for the result: which they saw
+// honoured and which broken.
+function valuesResult(landing: Landing): Record<string, string[]> {
+  if (!landing.values || (!landing.values.honoured.length && !landing.values.broken.length)) {
+    return {};
+  }
+  return {
+    ...(landing.values.honoured.length ? { honours: landing.values.honoured.map(valueLabel) } : {}),
+    ...(landing.values.broken.length ? { breaks: landing.values.broken.map(valueLabel) } : {}),
+  };
+}
+
+// A deed's other witnesses, each landed on in turn. A name nobody tracks is
+// listed back rather than failing the deed, which has already happened.
+function landWitnesses(
+  campaign: Campaign,
+  turn: DmTurn,
+  sheet: CharacterSheet,
+  subject: { name: string },
+  names: readonly string[],
+  sheets: CharacterSheet[],
+  beat: RelationshipBeat,
+  note: string | undefined,
+  deed: DeedOptions,
+): { landed: Landing[]; unknown: string[] } {
+  const seen = new Set([textKey(sheet.name), textKey(subject.name)]);
+  const landed: Landing[] = [];
+  const unknown: string[] = [];
+  for (const name of names) {
+    if (seen.has(textKey(name))) {
+      continue;
+    }
+    seen.add(textKey(name));
+    const witness = resolveSubject(campaign, name, sheets);
+    if ("error" in witness) {
+      // Another player's character keeps their own counsel; anyone else is
+      // simply not tracked.
+      if (!sheets.some((candidate) => !candidate.isCompanion && textKey(candidate.name) === textKey(name))) {
+        unknown.push(name);
+      }
+      continue;
+    }
+    const ledger = openLedger(campaign, sheet, witness);
+    if (ledger.status === "ended") {
+      continue;
+    }
+    landed.push(landBeat(campaign, turn, sheet, witness, ledger, beat, null, note, deed));
+  }
+  return { landed, unknown };
+}
+
+// While an NPC keeps up an act, a tool result says so plainly beside the
+// true meter it reports: the AI plays the act, and must know it is one.
+function actResult(subjectName: string, characterName: string, relationship: Relationship): { act?: string } {
+  const act = runningAct(relationship);
+  return act ? { act: actNote(subjectName, characterName, act) } : {};
 }
 
 function buildBeatNote(
@@ -469,7 +505,9 @@ function buildBeatNote(
 const advanceSchema = z.object({
   characterId: z.string(),
   subject: z.string().min(1).max(80),
-  to: z.enum(["interested", "courting", "together", "betrothed", "married"]),
+  // An NPC's move names no rung of its own: it is always the step to courting.
+  to: z.enum(["interested", "courting", "together", "betrothed", "married"]).optional(),
+  initiator: z.enum(["player", "npc"]).default("player"),
   note: z.string().max(200).optional(),
 });
 
@@ -493,6 +531,17 @@ export function handleRomanceAdvance(
       retry: true,
     };
   }
+  // The NPC's own first move (issue 501): an offer the player answers.
+  if (args.initiator === "npc") {
+    return handleNpcAdvance(campaign, turn, args, sheets, sheetsById);
+  }
+  if (!args.to) {
+    return {
+      error: "Invalid arguments: romance_advance needs to (interested, courting, together, betrothed, or married).",
+      retry: true,
+    };
+  }
+  const to = args.to;
   const sheet = resolveActor(args, sheets, sheetsById);
   if (!sheet) {
     return unknownSheetRef("characterId", args.characterId, sheets);
@@ -516,10 +565,13 @@ export function handleRomanceAdvance(
       retry: true,
     };
   }
+  // An act is played to the letter: the step reads the warmth shown.
+  const shown = outwardApproval(relationship);
+  const act = runningAct(relationship);
   const verdict = canAdvanceRomance(
     relationship.romance,
-    args.to,
-    relationship.approval,
+    to,
+    shown,
     relationship.status,
   );
   if (!verdict.ok) {
@@ -530,13 +582,14 @@ export function handleRomanceAdvance(
       standing: friendshipTier(relationship.approval),
       romance: relationship.romance,
       ...(next ? { nextStepNeedsApproval: ROMANCE_THRESHOLD[next] } : {}),
+      ...actResult(subject.name, sheet.name, relationship),
     };
   }
 
   const warmth = subject.personality?.warmth ?? 0;
   const consent = consentCheck(
-    relationship.approval,
-    args.to,
+    shown,
+    to,
     warmth,
     // The NPC's own mind: the DM sees the die, the table the answer.
     dmRoll(campaign.id, null, "custom", `${subject.name}: whether they agree`, "1d20").total,
@@ -548,7 +601,7 @@ export function handleRomanceAdvance(
       lastShiftTurn: turn.id,
       memories: addMemory(relationship.memories, {
         kind: "refused",
-        text: `${subject.name} was not ready when ${sheet.name} asked for ${args.to}`,
+        text: `${subject.name} was not ready when ${sheet.name} asked for ${to}`,
         at: new Date().toISOString(),
       }),
     });
@@ -558,29 +611,32 @@ export function handleRomanceAdvance(
       accepted: false,
       character: sheet.name,
       subject: subject.name,
-      requested: args.to,
+      requested: to,
       romance: relationship.romance,
       approval,
-      note: `${subject.name} does not take the step: they care, but not enough for ${args.to} yet. Narrate the gentle refusal in their own voice and leave things where they were. Do not narrate them agreeing anyway, and do not ask again this scene.`,
+      note: `${subject.name} does not take the step: they care, but not enough for ${to} yet. Narrate the gentle refusal in their own voice and leave things where they were. Do not narrate them agreeing anyway, and do not ask again this scene.`,
     };
   }
 
   const updated =
     patchRelationship(relationship.id, {
-      romance: args.to,
+      romance: to,
       lastShiftTurn: turn.id,
       // Reaching a rung settles the meter at its floor when the feeling ran
-      // ahead of the number, so the new stage never sits below its bar.
-      approval: Math.max(relationship.approval, ROMANCE_THRESHOLD[args.to]),
-      flags: addFlag(relationship.flags, args.to),
+      // ahead of the number, so the new stage never sits below its bar. An
+      // act settles the warmth it shows, never what they truly feel.
+      ...(act
+        ? { pretense: { ...act, shown: Math.max(act.shown, ROMANCE_THRESHOLD[to]) } }
+        : { approval: Math.max(relationship.approval, ROMANCE_THRESHOLD[to]) }),
+      flags: addFlag(relationship.flags, to),
       memories: addMemory(relationship.memories, {
-        kind: args.to,
-        text: args.note?.trim() || defaultMilestoneText(sheet.name, subject.name, args.to),
+        kind: to,
+        text: args.note?.trim() || defaultMilestoneText(sheet.name, subject.name, to),
         at: new Date().toISOString(),
       }),
     }) ?? relationship;
 
-  recordMilestone(campaign, sheet, subject, args.to, args.note);
+  recordMilestone(campaign, sheet, subject, to, args.note);
   publishRelationshipsUpdated(campaign.id);
 
   return {
@@ -591,59 +647,9 @@ export function handleRomanceAdvance(
     subject: subject.name,
     romance: updated.romance,
     approval: updated.approval,
-    note: `${subject.name} says yes. ${sheet.name} and ${subject.name} are now ${ROMANCE_LABEL[args.to]}. Narrate the moment from ${subject.name}'s own voice and feelings.${args.to === "married" || args.to === "betrothed" ? " The whole table knows; it is on the campaign record now." : ""}`,
+    note: `${subject.name} says yes. ${sheet.name} and ${subject.name} are now ${ROMANCE_LABEL[to]}. Narrate the moment from ${subject.name}'s own voice and feelings.${to === "married" || to === "betrothed" ? " The whole table knows; it is on the campaign record now." : ""}`,
+    ...actResult(subject.name, sheet.name, updated),
   };
-}
-
-function defaultMilestoneText(character: string, subject: string, stage: RomanceStage): string {
-  switch (stage) {
-    case "interested":
-      return `${character} and ${subject} felt something unspoken pass between them`;
-    case "courting":
-      return `${character} and ${subject} began openly courting`;
-    case "together":
-      return `${character} and ${subject} became partners`;
-    case "betrothed":
-      return `${character} and ${subject} were betrothed`;
-    case "married":
-      return `${character} and ${subject} were married`;
-    default:
-      return `${character} and ${subject} grew closer`;
-  }
-}
-
-// The lasting rungs belong to the campaign's own record, not just the
-// relationship row: a marriage is world state every later prompt should see.
-function recordMilestone(
-  campaign: Campaign,
-  sheet: CharacterSheet,
-  subject: Subject,
-  stage: RomanceStage,
-  note?: string,
-) {
-  const summary = note?.trim()
-    ? `${defaultMilestoneText(sheet.name, subject.name, stage)}: ${note.trim()}`
-    : defaultMilestoneText(sheet.name, subject.name, stage);
-  recordRelationshipEvent(campaign, sheet, summary);
-  if (romanceIndex(stage) >= romanceIndex("betrothed")) {
-    insertFact({
-      campaignId: campaign.id,
-      category: "party",
-      subject: `${sheet.name} and ${subject.name}`,
-      fact: `${summary}.`,
-      knownBy: "party",
-      // Vows are not the kind of fact a later chapter quietly supersedes.
-      pinned: true,
-      source: "manual",
-    });
-  }
-  // Someone who has taken a real step with a character is not indifferent to
-  // the party any more.
-  if (subject.npc && romanceIndex(stage) >= romanceIndex("courting")) {
-    if (subject.npc.attitude !== "friendly") {
-      setNpcAttitude(subject.npc.id, "friendly", "");
-    }
-  }
 }
 
 // ---- relationship_end ----
@@ -652,6 +658,9 @@ const endSchema = z.object({
   characterId: z.string(),
   subject: z.string().min(1).max(80),
   reason: z.enum(END_REASONS),
+  // betrayal only: who betrayed whom (issue 501). Today's betrayal is the
+  // character's, which costs the NPC's regard; one by the NPC does not.
+  by: z.enum(["character", "npc"]).optional(),
   note: z.string().max(200).optional(),
 });
 
@@ -682,16 +691,24 @@ export function handleRelationshipEnd(
   if ("error" in subject) {
     return subject;
   }
-  const relationship = getRelationship(campaign.id, sheet.id, subject.name);
-  if (!relationship) {
+  const found = getRelationship(campaign.id, sheet.id, subject.name);
+  if (!found) {
     return { error: `No tracked relationship between ${sheet.name} and ${args.subject}.`, retry: true };
   }
+  if (args.by === "npc" && args.reason !== "betrayal") {
+    return { error: `by npc is for a betrayal only: ${subject.name} betraying ${sheet.name}. Leave by out for ${args.reason}.`, retry: true };
+  }
+  // The NPC betrayed the character: an act they kept up comes out first, to
+  // the whole table, and their regard stays what it truly was.
+  const byNpc = args.by === "npc";
+  const relationship = byNpc && runningAct(found) ? revealAct(campaign, sheet, found) : found;
 
   // A parting leaves everything intact: they are still what they were, just
   // out of reach, and the chapter pass will pull them back into the story.
   const parting = args.reason === "parting";
-  const cost =
-    args.reason === "betrayal" ? -30 : args.reason === "falling_out" ? -20 : args.reason === "breakup" ? -12 : 0;
+  const cost = byNpc
+    ? 0
+    : args.reason === "betrayal" ? -30 : args.reason === "falling_out" ? -20 : args.reason === "breakup" ? -12 : 0;
   const approval = parting ? relationship.approval : applyApproval(relationship.approval, cost);
   const updated =
     patchRelationship(relationship.id, {
@@ -701,7 +718,7 @@ export function handleRelationshipEnd(
       apartChapters: 0,
       memories: addMemory(relationship.memories, {
         kind: args.reason,
-        text: args.note?.trim() || endText(sheet.name, subject.name, args.reason),
+        text: args.note?.trim() || endText(sheet.name, subject.name, args.reason, byNpc),
         at: new Date().toISOString(),
       }),
     }) ?? relationship;
@@ -709,7 +726,7 @@ export function handleRelationshipEnd(
   recordRelationshipEvent(
     campaign,
     sheet,
-    args.note?.trim() || endText(sheet.name, subject.name, args.reason),
+    args.note?.trim() || endText(sheet.name, subject.name, args.reason, byNpc),
   );
   publishRelationshipsUpdated(campaign.id);
 
@@ -721,13 +738,20 @@ export function handleRelationshipEnd(
     status: updated.status,
     approval: updated.approval,
     standing: friendshipTier(updated.approval),
+    ...(byNpc ? { by: "npc" } : {}),
     note: parting
       ? `${sheet.name} and ${subject.name} are parted, not finished: what they are to each other stands, and ${subject.name} will feel the distance as chapters pass. Narrate the farewell.`
-      : `${sheet.name} and ${subject.name} are over (${args.reason}). Narrate it, and treat it as done: ${subject.name} does not simply come back around.`,
+      : byNpc
+        ? `${subject.name} betrayed ${sheet.name}, and they are over. ${subject.name}'s regard stays what it truly was${relationship.pretense?.revealed ? ", and the whole table now sees it: the warmth was an act" : ""}. Narrate it, and treat it as done.`
+        : `${sheet.name} and ${subject.name} are over (${args.reason}). Narrate it, and treat it as done: ${subject.name} does not simply come back around.`,
+    ...actResult(subject.name, sheet.name, updated),
   };
 }
 
-function endText(character: string, subject: string, reason: (typeof END_REASONS)[number]): string {
+function endText(character: string, subject: string, reason: (typeof END_REASONS)[number], byNpc = false): string {
+  if (byNpc) {
+    return `${subject} betrayed ${character}`;
+  }
   switch (reason) {
     case "falling_out":
       return `${character} and ${subject} fell out for good`;
@@ -746,14 +770,24 @@ function endText(character: string, subject: string, reason: (typeof END_REASONS
 
 // The GAME STATE block's relationship lines: active and parted bonds that
 // have actually moved (an untouched neutral meter says nothing worth the
-// tokens). Bounded so a large cast cannot crowd the block out.
-export function relationshipRosterForPrompt(campaignId: string): string[] {
+// tokens). Bounded so a large cast cannot crowd the block out. The AI reads
+// the true meter (an act is named in the storyteller's section,
+// src/lib/dm/scheme-tools.ts); a prompt whose answer goes to the table
+// (`storyteller: false`) reads the warmth an act shows instead.
+// `leaving`: who removes a soured companion at this table (its companion
+// conscience, src/lib/dm/conscience.ts souredLeaving).
+export function relationshipRosterForPrompt(
+  campaignId: string,
+  options: { storyteller?: boolean; leaving?: SouredLeaving } = {},
+): string[] {
+  const storyteller = options.storyteller !== false;
   return listRelationships(campaignId)
+    .map((relationship) => (storyteller ? relationship : { ...relationship, approval: outwardApproval(relationship) }))
     .filter(
       (relationship) =>
         relationship.status !== "ended" &&
         (relationship.approval !== 0 || relationship.romance !== "none"),
     )
     .slice(0, 14)
-    .map((relationship) => relationshipFragment(relationship));
+    .map((relationship) => relationshipFragment(relationship, options.leaving));
 }

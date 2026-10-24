@@ -1,3 +1,5 @@
+import { closeAdvancesToward } from "@/lib/dm/npc-advance";
+import { companionNpcFor } from "@/lib/db/companion-npcs";
 import { z } from "zod";
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
 import { allocateSeq, setMemberActiveCharacter } from "@/lib/db/campaigns";
@@ -12,6 +14,7 @@ import {
   getSheetForUser,
   listSheetsForUser,
   setCompanionCommander,
+  setOpenToAdvances,
 } from "@/lib/db/sheets";
 import { defaultCommander } from "@/lib/dm/companion-command";
 import { createCompanionUser } from "@/lib/db/users";
@@ -93,6 +96,12 @@ export async function POST(
   if (!adopted) {
     return Response.json({ error: "Could not hand the character to the DM." }, { status: 500 });
   }
+  // The person behind the companion's sheet (#503 Phase 0.1). A character
+  // the DM now plays answers no advance any more: their opt-in goes with
+  // the player who made it.
+  companionNpcFor(adopted);
+  setOpenToAdvances(adopted.id, false);
+  closeAdvancesToward(campaign, adopted);
 
   // The player runs the next of their characters, or none; their client
   // hears which, as it does after a switch.

@@ -1,4 +1,6 @@
 import { healerKitUse } from "@/lib/dm/stabilize";
+import { conductGate } from "@/lib/dm/party-conduct";
+import { shadowExperience } from "@/lib/db/companion-departures";
 import { subclassExtrasForTable } from "@/lib/db/subclass-extras";
 import { foldFieldValue } from "@/lib/dm/update-sheet-args";
 import { aiSheetFieldRefusal } from "@/lib/dm/update-sheet-ai";
@@ -545,6 +547,12 @@ export function applyDmMutation(
   }
   const args = parsed.data;
   const reason = (args.reason ?? "").slice(0, 200);
+  // A companion's slot or potion for someone it is wary of (issue 503,
+  // src/lib/dm/party-conduct.ts).
+  const conduct = toolName === "heal" || toolName === "use_item" ? conductGate(campaign, toolName, rawArguments) : null;
+  if (conduct) {
+    return { result: conduct };
+  }
 
   // Resolve by id or name, then RE-FETCH from the database: earlier
   // mutations in this same turn may have already changed the sheet.
@@ -680,6 +688,11 @@ export function applyDmMutation(
     }
     const levelUps: string[] = [];
     const companionLevelUps: string[] = [];
+    // A companion who left the party keeps pace with it while away (issue
+    // 503 shadow levelling): the party's award is counted on their record.
+    if (targets.some((sheet) => !sheet.isCompanion)) {
+      shadowExperience(campaign.id, amount);
+    }
     for (const sheet of targets) {
       const newXp = sheet.xp + amount;
       patchSheet(sheet.id, { xp: newXp });

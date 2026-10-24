@@ -6,6 +6,7 @@
 // opportunity attack is the server's own on a battle map; off the map it is
 // resolved here as one attack with the reaction.
 
+import { resolveTargetFoe } from "@/lib/dm/sheet-foe";
 import { getBattleMapForEncounter } from "@/lib/db/battle-maps";
 import { getActiveEncounter, saveEncounter, type EncounterEnemy } from "@/lib/db/encounters";
 import { spellEngineName, spellFactsFor } from "@/lib/content";
@@ -14,7 +15,6 @@ import { tilesBetween } from "@/lib/dm/attack-spatial";
 import { enemyActedThisRound } from "@/lib/dm/can-act";
 import { spendEnemyAction } from "@/lib/dm/enemy-approach";
 import { rollCharacterCheck } from "@/lib/dm/contest-roll";
-import { resolveEnemyRef } from "@/lib/dm/enemy-damage";
 import { findMonsterSpell, slotFor, spellUsesLeft, spendSlot, spendSpellUse, type AbilityLedger } from "@/lib/dm/monster-abilities";
 import { boughtByLegendary } from "@/lib/dm/enemy-casting";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
@@ -22,7 +22,7 @@ import { addSheetCondition } from "@/lib/dm/action-common";
 import { acWithEffects } from "@/lib/dm/ac-effects";
 import { handleCastAtEnemy } from "@/lib/dm/cast-tools";
 import { pcResistances, removeConditions } from "@/lib/dm/condition-logic";
-import { freshLastHit } from "@/lib/dm/last-hit";
+import { attackerFoeId, freshLastHit } from "@/lib/dm/last-hit";
 // For the reaction spells' slot spend; mutations never imports back.
 import { applyDmMutation } from "@/lib/dm/mutations";
 import { READIED } from "@/lib/dm/object-actions";
@@ -82,7 +82,7 @@ export function reactionSpell(ctx: Ctx, spellName: string): ToolResult {
   if (name === "hellish rebuke") {
     const record = freshLastHit(campaign.id, sheet.id);
     const attackerId =
-      ctx.args.targetEnemyId ?? (record?.attacker.kind === "enemy" ? (record.attacker.id ?? undefined) : undefined);
+      ctx.args.targetEnemyId ?? attackerFoeId(record) ?? undefined;
     if (!attackerId) {
       return { error: "Hellish Rebuke answers the creature that damaged the caster: pass its targetEnemyId. Nothing was spent.", retry: true };
     }
@@ -277,7 +277,7 @@ type Counter = {
 // caster who can see it, and 60 ft.
 function checkCounterspell(ctx: Ctx): Counter | ToolError {
   const { encounter, args, sheet } = ctx;
-  const enemy = encounter && args.targetEnemyId ? resolveEnemyRef(encounter.id, args.targetEnemyId) : null;
+  const enemy = encounter && args.targetEnemyId ? resolveTargetFoe(encounter.campaignId, encounter, args.targetEnemyId) : null;
   if (!encounter || !enemy || enemy.status !== "alive") {
     return { error: "Counterspell answers a creature casting a spell: pass its targetEnemyId and the spell. Nothing was spent.", retry: true };
   }

@@ -23,7 +23,7 @@
 // which are one-sided, and which point at somebody who does not exist.
 //
 // Pure by design: no DB and no I/O, so scripts/test-npc-forge.mjs drives it
-// directly. Its imports, npc-logic.ts and gender.ts, are themselves pure;
+// directly. Its imports, npc-logic.ts, gender.ts and attraction.ts, are pure;
 // the impure rim is src/lib/db/npcs.ts.
 
 import {
@@ -34,6 +34,7 @@ import {
   type NpcRelation,
 } from "@/lib/dm/npc-logic";
 import { storedGender, type Gender } from "@/lib/gender";
+import { normalizeAttraction, type Attraction } from "@/lib/attraction";
 import { textKey } from "@/lib/language/text-logic";
 
 export const ATTITUDES = ["hostile", "indifferent", "friendly"] as const;
@@ -250,6 +251,9 @@ export type NpcDraft = {
   role: string;
   // src/lib/gender.ts; "" for unspecified.
   gender: Gender;
+  // Who they are drawn to (src/lib/attraction.ts); blank or absent =
+  // undecided. Optional so drafts made by code (a settlement) need not say.
+  attraction?: Attraction;
   personality: NpcPersonality | null;
   goals: NpcGoals;
   relations: NpcRelation[];
@@ -270,6 +274,7 @@ export function blankDraft(): NpcDraft {
     location: "",
     role: "",
     gender: "",
+    attraction: { genders: [], note: "" },
     personality: null,
     goals: {},
     relations: [],
@@ -291,6 +296,7 @@ export function draftFrom(npc: {
   // Optional so rows stored before the column existed still open.
   role?: string;
   gender?: Gender;
+  attraction?: Attraction;
   voice?: NpcVoice | null;
   factionId?: string;
   statBlock?: string;
@@ -309,6 +315,7 @@ export function draftFrom(npc: {
     location: npc.location,
     role: npc.role ?? "",
     gender: npc.gender ?? "",
+    attraction: normalizeAttraction(npc.attraction),
     personality: npc.agency.personality ? { ...npc.agency.personality } : null,
     goals: structuredClone(npc.agency.goals),
     relations: npc.agency.relations.map((relation) => ({ ...relation })),
@@ -402,6 +409,7 @@ export function normalizeNpcDraft(input: unknown): DraftOutcome {
       location: String(raw.location ?? "").trim().slice(0, 120),
       role: String(raw.role ?? "").trim().slice(0, 40),
       gender: storedGender(raw.gender),
+      attraction: normalizeAttraction(raw.attraction),
       personality: normalizePersonality(raw.personality),
       goals,
       relations,

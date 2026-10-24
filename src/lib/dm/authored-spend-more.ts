@@ -9,6 +9,7 @@
 //   - The reroll of the last failed save (Fanatical Focus, as Indomitable
 //     does): a success lifts what that failure laid on them.
 
+import { resolveTargetFoe } from "@/lib/dm/sheet-foe";
 import { getActiveEncounter, getEnemy, patchEnemyConditions } from "@/lib/db/encounters";
 import { listRecentRolls } from "@/lib/db/rolls";
 import { getSheetById } from "@/lib/db/sheets";
@@ -17,7 +18,7 @@ import { swarmKnocksProne } from "@/lib/srd/authored-effects-more";
 import type { Ability, SpendDoes } from "@/lib/srd/authored-effects-types";
 import { removeConditions, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { rollFeatureSave } from "@/lib/dm/contest-roll";
-import { publishEncounter, resolveEnemyRef } from "@/lib/dm/enemy-damage";
+import { publishEncounter } from "@/lib/dm/enemy-damage";
 import { rollEnemySave } from "@/lib/dm/forced-save";
 import { pushTokenAway } from "@/lib/dm/map-tools";
 import type { SpendContext } from "@/lib/dm/authored-spend-effects";
@@ -35,7 +36,7 @@ export function swarmPush(ctx: SpendContext, does: Extract<SpendDoes, { kind: "s
   // this round.
   const pairs = encounter.targets?.round === encounter.round ? encounter.targets.pairs[ctx.sheet.id] : undefined;
   const ref = ctx.args.targetEnemyId ?? pairs?.[pairs.length - 1];
-  const enemy = ref ? resolveEnemyRef(encounter.id, ref) : null;
+  const enemy = ref ? resolveTargetFoe(encounter.campaignId, encounter, ref) : null;
   if (!enemy || enemy.status !== "alive") {
     return { error: `${ctx.spend.name} moves the creature ${ctx.sheet.name} just hit: pass its targetEnemyId. Nothing was spent.`, retry: true };
   }

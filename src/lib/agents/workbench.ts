@@ -30,6 +30,7 @@ import {
 import { finishWebhookWrite, playerSignalsEnabled, releaseWebhookWrite, reserveWebhookWrite } from "@/lib/agents/webhooks";
 import { isWebhookTool, WEBHOOK_GUARD_PROPS, webhookToolCall, webhookTools } from "@/lib/agents/webhook-tools";
 import { ASK_SCOPES, ASK_VISIBILITIES, QUESTION_MAX_CHARS } from "@/lib/dm/ask-logic";
+import { APPROACH_CHOICES, SECRET_KINDS, SECRET_SKILLS } from "@/lib/dm/pact-logic";
 
 const ID = /^[A-Za-z0-9_-]{1,64}$/;
 
@@ -218,6 +219,15 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
     path: (a) => `/api/campaigns/${seg(a.campaignId)}/facts${a.secrets === true ? "?secrets=1" : ""}`,
   },
   {
+    name: "odm_get_pact",
+    scope: "read",
+    description: "Read the pact your character is in, if any: who is in it, who leads, what it plans and when, and your own secret actions. Only yours: nobody else's secret actions, and nothing at all for a character in no pact.",
+    properties: campaignIdProp,
+    required: ["campaignId"],
+    method: "GET",
+    path: (a) => `/api/campaigns/${seg(a.campaignId)}/pact`,
+  },
+  {
     name: "odm_list_characters",
     scope: "read",
     description: "List the characters in your library.",
@@ -288,6 +298,42 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
     method: "POST",
     path: (a) => `/api/campaigns/${seg(a.campaignId)}/whispers`,
     body: (a) => pick(a, ["message"]),
+  },
+  {
+    name: "odm_answer_offer",
+    scope: "play",
+    description:
+      "Answer an offer made to your character (odm_get_campaign lists them under itemProposals): approve or decline an item, gold or vitals offer, or an NPC's advance. A pact's approach (ownerOnly, with choices) reaches you alone and nobody else ever sees it: approve with choice join, play_along (pretend to join and watch them), report (tell the party) or refuse.",
+    properties: {
+      ...campaignIdProp,
+      ...WEBHOOK_GUARD_PROPS,
+      proposalId: { type: "string", description: "The offer's id from itemProposals." },
+      action: { type: "string", enum: ["approve", "decline"] },
+      choice: { type: "string", enum: [...APPROACH_CHOICES], description: "A pact's approach only: your answer, sent with approve." },
+    },
+    required: ["campaignId", "proposalId", "action"],
+    method: "POST",
+    path: (a) => `/api/campaigns/${seg(a.campaignId)}/item-proposals/${seg(a.proposalId)}`,
+    body: (a) => pick(a, ["action", "choice"]),
+  },
+  {
+    name: "odm_secret_action",
+    scope: "play",
+    description:
+      "Act in secret as a member of a pact your character is in (odm_get_pact). The table does not see it; the server rolls it where only you and whoever runs the story see, and it comes out when the pact moves or someone catches it. kind: steal (targetId and item; the item leaves its owner's pack now), scheme (something harmless, in text), harm (needs a table set to Turn) or attack (another player's character, when the pact moves in a fight; needs Turn). Refused during a fight, except attack.",
+    properties: {
+      ...campaignIdProp,
+      ...WEBHOOK_GUARD_PROPS,
+      kind: { type: "string", enum: [...SECRET_KINDS] },
+      text: { type: "string", maxLength: 300, description: "What your character does, in a few words." },
+      skill: { type: "string", enum: [...SECRET_SKILLS], description: "scheme or harm: what it is rolled with (theft is always Sleight of Hand)." },
+      targetId: { type: "string", description: "steal or attack: the other character's sheet id." },
+      item: { type: "string", maxLength: 120, description: "steal: the item's name on that character's sheet." },
+    },
+    required: ["campaignId", "kind"],
+    method: "POST",
+    path: (a) => `/api/campaigns/${seg(a.campaignId)}/actions`,
+    body: (a) => ({ secret: pick(a, ["kind", "text", "skill", "targetId", "item"]) }),
   },
   {
     name: "odm_answer_roll",
@@ -604,7 +650,7 @@ export async function workbenchCall(grant: ConnectionGrant, name: string, args: 
   }
   const body = tool.body?.(args);
   let guarded = false;
-  if (["odm_take_action", "odm_answer_roll", "odm_end_turn", "odm_pass", "odm_level_up"].includes(name) && (args.subscriptionId !== undefined || args.opportunityId !== undefined)) {
+  if (["odm_take_action", "odm_answer_roll", "odm_end_turn", "odm_pass", "odm_level_up", "odm_answer_offer", "odm_secret_action"].includes(name) && (args.subscriptionId !== undefined || args.opportunityId !== undefined)) {
     try {
       if (typeof args.subscriptionId !== "string" || typeof args.opportunityId !== "string" || !campaignId) throw new Error("Supply both subscriptionId and opportunityId.");
       const cached = reserveWebhookWrite(grant, { subscriptionId: args.subscriptionId, opportunityId: args.opportunityId,

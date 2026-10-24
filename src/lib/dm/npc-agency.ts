@@ -1,5 +1,6 @@
 import { campaignLanguage } from "@/lib/db/campaigns";
 import { listNpcs, patchNpcAgency, setNpcArchived, type Npc } from "@/lib/db/npcs";
+import { listRelationships } from "@/lib/db/relationships";
 import { shouldArchive } from "@/lib/dm/npc-archive-logic";
 import { recordExtractedFacts } from "@/lib/db/facts";
 import { publishEphemeral } from "@/lib/events";
@@ -10,6 +11,8 @@ import {
   tickPressure,
 } from "@/lib/dm/npc-logic";
 import { detectGoalCollisions } from "@/lib/dm/npc-goal-logic";
+import { avengingRound } from "@/lib/dm/companion-revenge";
+import { agendaRounds } from "@/lib/dm/companion-agenda";
 import type { FactCandidate } from "@/lib/dm/fact-logic";
 import { textKey } from "@/lib/language/text-logic";
 
@@ -31,6 +34,21 @@ export function advanceNpcAgency(
     return;
   }
   const transcript = textKey(chapterTranscript);
+  // Standing and romance live on the relationships table; the old per-NPC
+  // bonds column is superseded and no longer written, so the archive guard
+  // reads the table (issue 501's side finding: a romanced NPC was rostered
+  // out because the guard only asked bonds_json).
+  const standing = new Map<string, { relationship: boolean; romance: boolean }>();
+  for (const relationship of listRelationships(campaignId)) {
+    if (relationship.status === "ended") {
+      continue;
+    }
+    const key = textKey(relationship.subjectName);
+    const entry = standing.get(key) ?? { relationship: false, romance: false };
+    entry.relationship ||= relationship.approval !== 0;
+    entry.romance ||= relationship.romance !== "none";
+    standing.set(key, entry);
+  }
   const facts: FactCandidate[] = [];
   const holders: Array<{ npc: Npc; goalText: string }> = [];
 
@@ -47,6 +65,9 @@ export function advanceNpcAgency(
         npc.agency.personality,
         rollExpression("1d20").total,
       );
+      // A companion who left to gather help against the party (issue 503):
+      // each round leaves a rumour, and the last one cues their return.
+      facts.push(...avengingRound(campaignId, npc, { completed: result.completed, goal: result.goal }));
       if (result.completed) {
         facts.push({
           category: "npc",
@@ -60,9 +81,13 @@ export function advanceNpcAgency(
     }
 
     patchNpcAgency(npc.id, { pressure, goals });
+    // A companion's hidden employer's order comes on the same dice (issue
+    // 503 Phase 8, src/lib/dm/companion-agenda.ts).
+    agendaRounds(campaignId, npc, rounds);
     // Roster hygiene, decided from the counters just ticked. Protections
     // live in npc-archive-logic.ts; an NPC with standing, a romance or an
     // unfinished goal is never rostered out mid-thread.
+    const held = standing.get(textKey(npc.name));
     const decision = shouldArchive({
       id: npc.id,
       name: npc.name,
@@ -70,8 +95,9 @@ export function advanceNpcAgency(
       ignored: pressure.ignored,
       engaged: pressure.engaged,
       archived: npc.archived,
-      hasBond: npc.agency.bonds.length > 0,
+      hasBond: npc.agency.bonds.length > 0 || Boolean(held?.relationship),
       hasRelationship: npc.agency.relations.length > 0,
+      hasRomance: Boolean(held?.romance),
       hasPendingGoal: Boolean(goals.session),
     });
     if (decision.archive) {

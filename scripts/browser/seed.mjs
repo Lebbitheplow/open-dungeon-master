@@ -748,6 +748,548 @@ sheets.createSheet(curioTable.id, world.owner.id, 3, heroInput({ name: "Hale Bri
   }
 }
 
+// NPC advances (issue 501): one table per viewport (the scenario answers
+// the advance) where the lead's Kael is open to advances from NPCs and
+// Mira's advance waits on his answer, for the offer card, the Bonds switch
+// and the romance rung.
+const COURTING_TITLE = "Courting Table";
+const ADVANCE_LINE = "Walk with me along the river tonight?";
+const courtingSheets = await import("../../src/lib/db/sheets.ts");
+const courtingNpcs = await import("../../src/lib/db/npcs.ts");
+const courtingBonds = await import("../../src/lib/db/relationships.ts");
+const courting = {};
+for (const viewport of ["desktop", "phone"]) {
+  const table = campaigns.createCampaign(world.owner.id, {
+    title: `${COURTING_TITLE} (${viewport})`,
+    description: "A ferry crossing at dusk, and someone who has been waiting to say something.",
+    theme: "high-fantasy",
+    maxPlayers: 6,
+    startingLevel: 3,
+    difficulty: "normal",
+    gameSettings: {},
+  });
+  campaigns.setCampaignStatus(table.id, "active");
+  const kael = courtingSheets.createSheet(
+    table.id,
+    world.owner.id,
+    3,
+    heroInput({ name: "Kael Ashvale", class: "bard", level: 3, gender: "Male", attraction: { genders: ["Female"], note: "" }, abilities: { cha: 16 } }),
+  );
+  courtingSheets.setOpenToAdvances(kael.id, true);
+  const mira = courtingNpcs.upsertNpc({
+    campaignId: table.id,
+    name: "Mira Vell",
+    attitude: "friendly",
+    trait: "A ferrywoman with a quick laugh",
+    location: "the ford",
+    gender: "Female",
+    attraction: { genders: ["Male"], note: "" },
+  });
+  const bond = courtingBonds.ensureRelationship({
+    campaignId: table.id,
+    characterId: kael.id,
+    characterName: kael.name,
+    subjectKind: "npc",
+    subjectName: mira.name,
+    subjectId: mira.id,
+  });
+  courtingBonds.patchRelationship(bond.id, {
+    approval: 62,
+    memories: [{ kind: "helped", text: "Kael mended her ferry rope in the rain", at: new Date().toISOString() }],
+  });
+  const advance = itemProposals.insertItemProposal({
+    campaignId: table.id,
+    turnId: null,
+    characterId: kael.id,
+    userId: world.owner.id,
+    toolName: "romance_advance",
+    argsJson: JSON.stringify({
+      relationshipId: bond.id,
+      subject: mira.name,
+      subjectKind: "npc",
+      subjectId: mira.id,
+      to: "courting",
+      note: ADVANCE_LINE,
+      madeAtTurn: 0,
+      portraitUrl: "",
+      look: { gender: "Female", role: "" },
+    }),
+    summary: `${mira.name} asks to court ${kael.name}`,
+    reason: ADVANCE_LINE,
+    seq: campaigns.allocateSeq(table.id),
+  });
+  courting[viewport] = { id: table.id, kael: kael.id, advanceSummary: advance.summary, advanceLine: ADVANCE_LINE };
+}
+
+// Companion conscience (issue 503): one table per viewport (the scenario
+// moves the ladder), run by the lead as its DM so the scenario records deeds
+// through the console the way a DM does. The player's Kael travels with
+// Seren Vale, a lawful good paladin of even temper, already uneasy after a
+// cruelty she saw.
+const CONSCIENCE_TITLE = "Conscience Table";
+const conscience = {};
+{
+  const { invokeEngine } = await import("../../src/lib/dm/invoke.ts");
+  const { companionNpcFor } = await import("../../src/lib/db/companion-npcs.ts");
+  const { patchNpcAgency } = await import("../../src/lib/db/npcs.ts");
+  for (const viewport of ["desktop", "phone"]) {
+    const table = campaigns.createCampaign(world.owner.id, {
+      title: `${CONSCIENCE_TITLE} (${viewport})`,
+      description: "A paladin who walks with the party, for now.",
+      theme: "high-fantasy",
+      maxPlayers: 6,
+      startingLevel: 3,
+      difficulty: "normal",
+      gameSettings: { ttsEnabled: false, dmMode: "human" },
+    });
+    campaigns.setCampaignStatus(table.id, "active");
+    campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+    const kael = sheets.createSheet(table.id, player.id, 3, heroInput({ name: "Kael Ashvale", class: "rogue", level: 3 }));
+    const bot = createCompanionUser("Seren Vale");
+    const seren = sheets.createSheet(table.id, bot.id, 3, heroInput({ name: "Seren Vale", class: "paladin", alignment: "LG", level: 3 }));
+    sheets.markSheetAsCompanion(seren.id, "party", "Stern, devout, slow to anger and slower to forgive.");
+    const row = companionNpcFor(sheets.getSheetById(seren.id));
+    patchNpcAgency(row.id, { personality: { drive: 0, diligence: 0, boldness: 0, warmth: 0, empathy: 0, composure: 0 } });
+    const cruelty = await invokeEngine(campaigns.getCampaignById(table.id), { kind: "human", userId: world.owner.id }, {
+      name: "relationship_beat",
+      args: { characterId: kael.id, subject: seren.name, beat: "cruelty", note: "Kael kicked a beggar out of the road." },
+    });
+    if (!cruelty.ok) {
+      throw new Error(`the conscience table's first deed was refused: ${cruelty.error}`);
+    }
+    conscience[viewport] = { id: table.id, kael: kael.id, seren: seren.name };
+  }
+}
+
+// Scheming NPCs (issue 501): one table per viewport that the seed's player
+// runs as its storyteller, where the lead plays Kael, open to advances, and
+// Senna keeps up an act toward him (the ferry ledger), already played up to
+// a warmth she does not feel. The scenario reads
+// the act on Kael's Bonds row, sees it turn to the truth when an Insight
+// from the storyteller's console beats Senna's Deception, reads the act on
+// the storyteller's own Bonds tab, and sees a betrayal unmask her. Senna is
+// a poor liar by nature, so an Insight beats her soon.
+const MASKED_TITLE = "Masked Table";
+const maskedNpcs = await import("../../src/lib/db/npcs.ts");
+const maskedBonds = await import("../../src/lib/db/relationships.ts");
+const { invokeEngine: maskedInvoke } = await import("../../src/lib/dm/invoke.ts");
+const masked = {};
+for (const viewport of ["desktop", "phone"]) {
+  const table = campaigns.createCampaign(player.id, {
+    title: `${MASKED_TITLE} (${viewport})`,
+    description: "A river crossing, a friendly ferrywoman, and a ledger someone wants.",
+    theme: "high-fantasy",
+    maxPlayers: 6,
+    startingLevel: 3,
+    difficulty: "normal",
+    gameSettings: { ttsEnabled: false, dmMode: "human" },
+  });
+  campaigns.joinByInviteCode(world.owner.id, campaigns.getCampaignById(table.id).inviteCode);
+  campaigns.setCampaignStatus(table.id, "active");
+  const kael = sheets.createSheet(
+    table.id,
+    world.owner.id,
+    3,
+    heroInput({ name: "Kael Ashvale", class: "bard", level: 3, gender: "Male", abilities: { wis: 18 } }),
+  );
+  sheets.setOpenToAdvances(kael.id, true);
+  const senna = maskedNpcs.upsertNpc({
+    campaignId: table.id,
+    name: "Senna Vale",
+    attitude: "friendly",
+    trait: "A ferrywoman who laughs a little too easily",
+    location: "the ford",
+    gender: "Female",
+    attraction: { genders: ["Male"], note: "" },
+  });
+  maskedNpcs.patchNpcAgency(senna.id, { personality: { drive: -3, diligence: 0, boldness: 0, warmth: 2, empathy: 3, composure: -3 } });
+  const bond = maskedBonds.ensureRelationship({
+    campaignId: table.id,
+    characterId: kael.id,
+    characterName: kael.name,
+    subjectKind: "npc",
+    subjectName: senna.name,
+    subjectId: senna.id,
+  });
+  maskedBonds.patchRelationship(bond.id, {
+    approval: -30,
+    memories: [{ kind: "helped", text: "Kael carried her nets up from the water", at: new Date().toISOString() }],
+  });
+  const started = await maskedInvoke(campaigns.getCampaignById(table.id), { kind: "human", userId: player.id }, {
+    name: "relationship_scheme",
+    args: { action: "start", characterId: kael.id, subject: senna.name, motive: "the ferry ledger" },
+  });
+  if (!started.ok) {
+    throw new Error(`the masked table's act did not start: ${started.error}`);
+  }
+  // An act starts where she truly stands; this one has been played up over
+  // earlier scenes to a warmth she does not feel.
+  const acting = maskedBonds.getRelationshipById(bond.id);
+  maskedBonds.patchRelationship(bond.id, { pretense: { ...acting.pretense, shown: 40 } });
+  masked[viewport] = { id: table.id, kael: kael.id };
+}
+
+// Companions leaving (issue 503 Phases 2 and 3): one table per viewport (the
+// scenario walks a companion out), run by the lead as its DM. The player's
+// Kael travels with Seren Vale, a timid paladin who walks out at a red-line
+// atrocity; Tam Hollis, a timid fighter, already walked out earlier, so the
+// Gone list stands before the scenario moves anyone.
+const GONE_TITLE = "Gone Table";
+const gone = {};
+{
+  const { invokeEngine } = await import("../../src/lib/dm/invoke.ts");
+  const { companionNpcFor } = await import("../../src/lib/db/companion-npcs.ts");
+  const { patchNpcAgency } = await import("../../src/lib/db/npcs.ts");
+  for (const viewport of ["desktop", "phone"]) {
+    const table = campaigns.createCampaign(world.owner.id, {
+      title: `${GONE_TITLE} (${viewport})`,
+      description: "A party that has lost one companion and is about to lose another.",
+      theme: "high-fantasy",
+      maxPlayers: 6,
+      startingLevel: 3,
+      difficulty: "normal",
+      gameSettings: { ttsEnabled: false, dmMode: "human", companions: "full" },
+    });
+    campaigns.setCampaignStatus(table.id, "active");
+    campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+    const kael = sheets.createSheet(table.id, player.id, 3, heroInput({ name: "Kael Ashvale", class: "rogue", level: 3 }));
+    const companion = (name, klass, alignment) => {
+      const bot = createCompanionUser(name);
+      const sheet = sheets.createSheet(table.id, bot.id, 3, heroInput({ name, class: klass, alignment, level: 3 }));
+      sheets.markSheetAsCompanion(sheet.id, "party", "Quiet, and quick to take fright.");
+      const row = companionNpcFor(sheets.getSheetById(sheet.id));
+      patchNpcAgency(row.id, { personality: { drive: 0, diligence: 0, boldness: -2, warmth: 0, empathy: 0, composure: 0 } });
+      return sheet;
+    };
+    const tam = companion("Tam Hollis", "fighter", "LG");
+    const seren = companion("Seren Vale", "paladin", "LG");
+    const left = await invokeEngine(campaigns.getCampaignById(table.id), { kind: "human", userId: world.owner.id }, {
+      name: "relationship_beat",
+      args: { characterId: kael.id, subject: tam.name, beat: "slaving", severity: "atrocity", note: "Kael sold the captives to the slaver's barge." },
+    });
+    if (!left.ok || left.result.departed !== "Walked out on the party") {
+      throw new Error(`the gone table's first departure did not happen: ${left.error ?? JSON.stringify(left.result)}`);
+    }
+    gone[viewport] = { id: table.id, kael: kael.id, seren: seren.id, serenName: seren.name };
+  }
+}
+
+// Combat sides (issue 503): per viewport, a table a person runs where two of
+// the player's casters each hold an elemental by Conjure Elemental, in a
+// fight with a goblin. The scenario ends one concentration and then the
+// other (the second under reduced motion), and each elemental's token
+// re-rims from the party's colour to the foes'.
+const TURNCOAT_TITLE = "Turncoat Table";
+const turncoat = {};
+const dominate = {};
+{
+  const { invokeEngine } = await import("../../src/lib/dm/invoke.ts");
+  const maps = await import("../../src/lib/db/battle-maps.ts");
+  const encounterRows = await import("../../src/lib/db/encounters.ts");
+  // SRD 5.1 slots of a 9th level full caster: 4, 3, 3, 3 and one 5th.
+  const slots = Object.fromEntries([4, 3, 3, 3, 1].map((max, index) => [String(index + 1), { max, used: 0 }]));
+  const conjurer = (name, cls, ability) =>
+    heroInput({
+      name,
+      class: cls,
+      level: 9,
+      maxHp: 60,
+      abilities: { [ability]: 18, con: 14, dex: 12 },
+      equipment: [{ name: "Component pouch", qty: 1 }],
+      spellcasting: { ability, slots, known: [], prepared: ["Conjure Elemental"], cantrips: [] },
+    });
+  for (const viewport of ["desktop", "phone"]) {
+    const table = campaigns.createCampaign(world.owner.id, {
+      title: `${TURNCOAT_TITLE} (${viewport})`,
+      description: "Two conjurers, two bound elementals, and a binding that will not hold.",
+      theme: "high-fantasy",
+      maxPlayers: 6,
+      startingLevel: 9,
+      difficulty: "normal",
+      gameSettings: { ttsEnabled: false, dmMode: "human" },
+    });
+    campaigns.setCampaignStatus(table.id, "active");
+    campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+    const dm = { kind: "human", userId: world.owner.id };
+    const casters = [
+      [sheets.createSheet(table.id, player.id, 9, conjurer("Ione Vass", "wizard", "int")), "fire elemental"],
+      [sheets.createSheet(table.id, player.id, 9, conjurer("Oswin Reed", "druid", "wis")), "earth elemental"],
+    ];
+    // Conjure Elemental takes a minute to cast, so out of the fight.
+    for (const [caster, variant] of casters) {
+      const cast = await invokeEngine(campaigns.getCampaignById(table.id), dm, {
+        name: "cast_buff",
+        args: { characterId: caster.id, spell: "Conjure Elemental", level: 5, variant },
+      });
+      if (!cast.ok) {
+        throw new Error(`the turncoat table's ${variant} was not conjured: ${cast.error}`);
+      }
+    }
+    const started = await invokeEngine(campaigns.getCampaignById(table.id), dm, {
+      name: "start_encounter",
+      args: { enemies: [{ monster: "goblin", count: 1 }] },
+    });
+    if (!started.ok) {
+      throw new Error(`the turncoat table's fight did not start: ${started.error}`);
+    }
+    const encounter = encounterRows.getActiveEncounter(table.id);
+    const board = maps.getBattleMapForEncounter(encounter.id);
+    maps.setBattleMapTerrain(board.id, ".".repeat(board.width * board.height));
+    getDatabase().prepare("UPDATE battle_maps SET doors_json = '{}' WHERE id = ?").run(board.id);
+    const elementals = casters.map(([caster, variant]) => {
+      const summoned = sheets.listSheets(table.id).find((sheet) => sheet.summon?.casterId === caster.id);
+      if (!summoned) {
+        throw new Error(`the turncoat table's ${variant} has no sheet`);
+      }
+      return summoned;
+    });
+    // The two elementals side by side in the board's middle, each caster
+    // beside theirs and the goblin below, where a zoomed-in camera still
+    // sees them.
+    const cx = Math.floor(board.width / 2);
+    const cy = Math.floor(board.height / 2);
+    const spots = new Map([
+      [casters[0][0].id, [cx - 3, cy]],
+      [elementals[0].id, [cx - 1, cy]],
+      [elementals[1].id, [cx + 1, cy]],
+      [casters[1][0].id, [cx + 3, cy]],
+    ]);
+    for (const token of maps.listTokens(board.id)) {
+      const [x, y] = spots.get(token.refId) ?? [cx, cy + 3];
+      maps.moveToken(token.id, x, y, 0);
+    }
+    for (const elemental of elementals) {
+      if (!maps.getTokenByRef(board.id, elemental.id)) {
+        throw new Error(`the turncoat table's ${elemental.name} is not on the board`);
+      }
+    }
+    turncoat[viewport] = {
+      id: table.id,
+      casters: casters.map(([caster]) => caster.id),
+      elementals: elementals.map((elemental) => ({ id: elemental.id, name: elemental.name })),
+    };
+  }
+
+  // Dominate, seeded straight onto the rows (no save dice). At the Dominate
+  // Table, which the lead runs, the player's Sela holds an ogre by Dominate
+  // Monster (it fights for the party) and an enemy mage holds the player's
+  // Bran by Dominate Person (he fights against it). At the Held Table, which
+  // the player runs, a mage holds the lead's own Tamsin.
+  const fightOn = async (table, dmUserId, enemies) => {
+    const started = await invokeEngine(campaigns.getCampaignById(table.id), { kind: "human", userId: dmUserId }, { name: "start_encounter", args: { enemies } });
+    if (!started.ok) {
+      throw new Error(`the ${table.title}'s fight did not start: ${started.error}`);
+    }
+    const encounter = encounterRows.getActiveEncounter(table.id);
+    const board = maps.getBattleMapForEncounter(encounter.id);
+    maps.setBattleMapTerrain(board.id, ".".repeat(board.width * board.height));
+    getDatabase().prepare("UPDATE battle_maps SET doors_json = '{}' WHERE id = ?").run(board.id);
+    // One row across the board's middle, two squares apart.
+    const tokens = maps.listTokens(board.id);
+    const [cx, cy] = [Math.floor(board.width / 2), Math.floor(board.height / 2)];
+    tokens.forEach((token, index) => maps.moveToken(token.id, cx - (tokens.length - 1) + index * 2, cy, 0));
+    const place = (refId, dx) => maps.moveToken(maps.getTokenByRef(board.id, refId).id, cx + dx, cy, 0);
+    return { rows: encounterRows.listEnemies(encounter.id), place };
+  };
+  const enemyNamed = (rows, slug) => rows.find((enemy) => enemy.slug === slug) ?? (() => { throw new Error(`no ${slug} in the fight`); })();
+  const charmBy = (spell, source) => ({ conditions: ["charmed"], conditionMeta: { charmed: { spell, source } } });
+  for (const viewport of ["desktop", "phone"]) {
+    const table = campaigns.createCampaign(world.owner.id, {
+      title: `Dominate Table (${viewport})`,
+      description: "An ogre that answers to the wrong voice, and a friend who no longer answers to his own.",
+      theme: "high-fantasy",
+      maxPlayers: 6,
+      startingLevel: 9,
+      difficulty: "normal",
+      gameSettings: { ttsEnabled: false, dmMode: "human" },
+    });
+    campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+    campaigns.setCampaignStatus(table.id, "active");
+    const sela = sheets.createSheet(table.id, player.id, 9, heroInput({ name: "Sela Morrow", class: "wizard", level: 9, maxHp: 50 }));
+    const bran = sheets.createSheet(table.id, player.id, 9, heroInput({ name: "Bran Holt", class: "fighter", level: 9, maxHp: 80 }));
+    const { rows, place } = await fightOn(table, world.owner.id, [{ monster: "ogre", count: 1 }, { monster: "mage", count: 1 }]);
+    const [ogre, mage] = [enemyNamed(rows, "ogre"), enemyNamed(rows, "mage")];
+    // The ogre in the board's middle, where a phone's camera sees it.
+    [[sela.id, -4], [ogre.id, -1], [bran.id, 2], [mage.id, 4]].forEach(([refId, dx]) => place(refId, dx));
+    const ogreCharm = charmBy("Dominate Monster", sela.id);
+    encounterRows.patchEnemyConditions(ogre.id, ogreCharm.conditions, ogreCharm.conditionMeta);
+    sheets.patchSheet(bran.id, charmBy("Dominate Person", mage.id));
+    const held = campaigns.createCampaign(player.id, {
+      title: `Held Table (${viewport})`,
+      description: "A mage's voice in Tamsin's head.",
+      theme: "high-fantasy",
+      maxPlayers: 6,
+      startingLevel: 9,
+      difficulty: "normal",
+      gameSettings: { ttsEnabled: false, dmMode: "human" },
+    });
+    campaigns.joinByInviteCode(world.owner.id, campaigns.getCampaignById(held.id).inviteCode);
+    campaigns.setCampaignStatus(held.id, "active");
+    const tamsin = sheets.createSheet(held.id, world.owner.id, 9, heroInput({ name: "Tamsin Vale", class: "fighter", level: 9, maxHp: 80 }));
+    sheets.createSheet(held.id, world.owner.id, 9, heroInput({ name: "Corra Wynd", class: "cleric", level: 9, maxHp: 60 }));
+    const { rows: heldRows } = await fightOn(held, player.id, [{ monster: "mage", count: 1 }]);
+    sheets.patchSheet(tamsin.id, charmBy("Dominate Person", enemyNamed(heldRows, "mage").id));
+    dominate[viewport] = {
+      id: table.id,
+      ogre: { id: ogre.id, name: ogre.displayName },
+      mage: { id: mage.id, name: mage.displayName },
+      sela: { id: sela.id, name: sela.name },
+      bran: { id: bran.id, name: bran.name },
+      heldId: held.id,
+      tamsin: { id: tamsin.id, name: tamsin.name },
+    };
+  }
+}
+
+// A companion inside the party (issue 503 Phases 4 and 6): per viewport, a
+// table the lead runs at Turn, where the player's Kael travels with Varn
+// Hale, a mercenary cleric who holds the innocent as a red line and is wary
+// of Kael. The scenario has Varn refuse Kael a spell, ask his share as a
+// fight starts, and then turn on the party where he stands.
+const CONDUCT_TITLE = "Conduct Table";
+const conduct = {};
+{
+  const { companionNpcFor } = await import("../../src/lib/db/companion-npcs.ts");
+  const { patchNpcAgency } = await import("../../src/lib/db/npcs.ts");
+  const { setCompanionValues } = await import("../../src/lib/db/companion-conscience.ts");
+  const bonds = await import("../../src/lib/db/relationships.ts");
+  for (const viewport of ["desktop", "phone"]) {
+    const table = campaigns.createCampaign(world.owner.id, {
+      title: `${CONDUCT_TITLE} (${viewport})`,
+      description: "A sellsword priest who does nothing for free.",
+      theme: "high-fantasy",
+      maxPlayers: 6,
+      startingLevel: 3,
+      difficulty: "normal",
+      gameSettings: { ttsEnabled: false, dmMode: "human", companions: "full", companionConscience: "turn" },
+    });
+    campaigns.setCampaignStatus(table.id, "active");
+    campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+    const kael = sheets.createSheet(table.id, player.id, 3, heroInput({ name: "Kael Ashvale", class: "rogue", level: 3 }));
+    const bot = createCompanionUser("Varn Hale");
+    const varn = sheets.createSheet(
+      table.id,
+      bot.id,
+      3,
+      heroInput({
+        name: "Varn Hale",
+        class: "cleric",
+        level: 3,
+        abilities: { wis: 16, con: 14 },
+        spellcasting: { ability: "wis", slots: { 1: { max: 4, used: 0 }, 2: { max: 2, used: 0 } }, known: [], prepared: ["Cure Wounds"], cantrips: [] },
+      }),
+    );
+    sheets.markSheetAsCompanion(varn.id, "party", "Counts every coin, and every slight.");
+    const row = companionNpcFor(sheets.getSheetById(varn.id));
+    patchNpcAgency(row.id, { personality: { drive: 0, diligence: 0, boldness: 3, warmth: 0, empathy: 0, composure: -1 } });
+    setCompanionValues(row.id, [
+      { value: "mercenary", strength: "cares", faction: "" },
+      { value: "protects_innocent", strength: "red_line", faction: "" },
+    ]);
+    const bond = bonds.ensureRelationship({ campaignId: table.id, characterId: kael.id, characterName: kael.name, subjectKind: "companion", subjectName: varn.name });
+    bonds.patchRelationship(bond.id, { approval: -20 });
+    const fighterBot = createCompanionUser("Brannoc Rusk");
+    const brannoc = sheets.createSheet(table.id, fighterBot.id, 3, heroInput({ name: "Brannoc Rusk", class: "fighter", level: 3 }));
+    sheets.markSheetAsCompanion(brannoc.id, "party", "Quick to anger, slow to think.");
+    const rash = companionNpcFor(sheets.getSheetById(brannoc.id));
+    patchNpcAgency(rash.id, { personality: { drive: 0, diligence: 0, boldness: 3, warmth: 0, empathy: 0, composure: -1 } });
+    setCompanionValues(rash.id, [{ value: "protects_innocent", strength: "red_line", faction: "" }]);
+    conduct[viewport] = { id: table.id, kael: kael.id, kaelName: kael.name, varn: varn.id, varnName: varn.name, brannoc: brannoc.id, brannocName: brannoc.name };
+  }
+}
+
+// Pacts (issue 503 Phases 5 and 7): per viewport, four tables where the
+// lead and the seed's player each play a character beside Seren Vale, a
+// lasting companion. "Consent": nobody has said yes to pacts yet, for the
+// Bonds switch. "Offer": the lead's Kael said yes and Seren's approach waits
+// on his answer alone, for the owner-only card. "Secret": Kael already
+// joined Seren's pact, and the player's Brin has eyes too dull to catch a
+// quiet scheme, for a secret action and its confirmation. "Reveal": a table
+// the lead runs as its DM, where the player's Brin joined Seren's pact and
+// holds a secret, and Seren is at her breaking point, so the next long rest
+// sets the pact off and the transcript draws the reveal.
+const pactTables = { consent: {}, offer: {}, secret: {}, reveal: {} };
+{
+  const { companionNpcFor } = await import("../../src/lib/db/companion-npcs.ts");
+  const { patchNpcAgency } = await import("../../src/lib/db/npcs.ts");
+  const { saveConscience } = await import("../../src/lib/db/companion-conscience.ts");
+  const { CONTENT } = await import("../../src/lib/dm/conscience-logic.ts");
+  const pactsDb = await import("../../src/lib/db/pacts.ts");
+  const { replan } = await import("../../src/lib/dm/pacts.ts");
+  const { approachSummary, approachWords } = await import("../../src/lib/dm/pact-logic.ts");
+  const { declareSecretAction } = await import("../../src/lib/dm/pact-players.ts");
+  const pactTable = (kind, viewport, humanDm) => {
+    const table = campaigns.createCampaign(world.owner.id, {
+      title: `Pact ${kind} (${viewport})`,
+      description: "A paladin who has seen too much, and a party that may not survive her doubts.",
+      theme: "high-fantasy",
+      maxPlayers: 6,
+      startingLevel: 3,
+      difficulty: "normal",
+      gameSettings: { ttsEnabled: false, companions: "full", ...(humanDm ? { dmMode: "human" } : {}) },
+    });
+    campaigns.setCampaignStatus(table.id, "active");
+    campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+    const bot = createCompanionUser("Seren Vale");
+    const seren = sheets.createSheet(table.id, bot.id, 3, heroInput({ name: "Seren Vale", class: "paladin", alignment: "LG", gender: "Female", level: 3 }));
+    sheets.markSheetAsCompanion(seren.id, "party", "Stern, devout, and losing faith in the people she walks with.");
+    const row = companionNpcFor(sheets.getSheetById(seren.id));
+    patchNpcAgency(row.id, { personality: { drive: 0, diligence: 0, boldness: 0, warmth: 0, empathy: 0, composure: 0 } });
+    saveConscience(row.id, { ...CONTENT, held: 1, shown: 1 });
+    return { table, seren, row };
+  };
+  const formed = (table, seren, row, members) => {
+    const pact = pactsDb.insertPact({ campaignId: table.id, leaderNpcId: row.id, members: [{ kind: "companion", npcId: row.id, name: seren.name, sheetId: seren.id }, ...members], plan: "leave", tactic: null, trigger: "night_watch", createdAt: 0 });
+    return pactsDb.savePact(replan(campaigns.getCampaignById(table.id), pact));
+  };
+  for (const viewport of ["desktop", "phone"]) {
+    {
+      const { table } = pactTable("Consent", viewport, false);
+      const kael = sheets.createSheet(table.id, world.owner.id, 3, heroInput({ name: "Kael Ashvale", class: "rogue", level: 3, gender: "Male" }));
+      sheets.createSheet(table.id, player.id, 3, heroInput({ name: "Brin Hale", class: "fighter", level: 3, gender: "Female" }));
+      pactTables.consent[viewport] = { id: table.id, kael: kael.id };
+    }
+    {
+      const { table, seren, row } = pactTable("Offer", viewport, false);
+      const kael = sheets.createSheet(table.id, world.owner.id, 3, heroInput({ name: "Kael Ashvale", class: "rogue", level: 3, gender: "Male" }));
+      sheets.createSheet(table.id, player.id, 3, heroInput({ name: "Brin Hale", class: "fighter", level: 3, gender: "Female" }));
+      sheets.setOpenToPacts(kael.id, true);
+      const pact = pactsDb.savePact({ ...formed(table, seren, row, []), approached: [kael.id] });
+      const offer = itemProposals.insertItemProposal({
+        campaignId: table.id,
+        turnId: null,
+        characterId: kael.id,
+        userId: world.owner.id,
+        toolName: "pact_approach",
+        argsJson: JSON.stringify({ pactId: pact.id, recruiter: seren.name, portraitUrl: "", look: { gender: "Female", race: "human", class: "paladin" } }),
+        summary: approachSummary(kael.name),
+        reason: approachWords(seren.name, pact),
+        seq: campaigns.allocateSeq(table.id),
+        ownerOnly: true,
+      });
+      pactTables.offer[viewport] = { id: table.id, kael: kael.id, offerId: offer.id, summary: offer.summary };
+    }
+    {
+      const { table, seren, row } = pactTable("Secret", viewport, false);
+      const kael = sheets.createSheet(table.id, world.owner.id, 3, heroInput({ name: "Kael Ashvale", class: "rogue", level: 3, gender: "Male", abilities: { dex: 20 } }));
+      sheets.createSheet(table.id, player.id, 3, heroInput({ name: "Brin Hale", class: "fighter", level: 3, gender: "Female", abilities: { wis: 1 } }));
+      formed(table, seren, row, [{ kind: "player", characterId: kael.id, name: kael.name, userId: world.owner.id, stance: "joined" }]);
+      pactTables.secret[viewport] = { id: table.id, kael: kael.id };
+    }
+    {
+      const { table, seren, row } = pactTable("Reveal", viewport, true);
+      const brin = sheets.createSheet(table.id, player.id, 3, heroInput({ name: "Brin Hale", class: "rogue", level: 3, gender: "Female", abilities: { dex: 20 } }));
+      formed(table, seren, row, [{ kind: "player", characterId: brin.id, name: brin.name, userId: player.id, stance: "joined" }]);
+      const secret = declareSecretAction(campaigns.getCampaignById(table.id), sheets.getSheetById(brin.id), { kind: "scheme", text: "cut the horses loose before dawn", skill: "stealth" });
+      if ("error" in secret || secret.caught) {
+        throw new Error(`the reveal table's secret action did not hold: ${JSON.stringify(secret)}`);
+      }
+      saveConscience(row.id, { ...CONTENT, held: 4, shown: 4 });
+      pactTables.reveal[viewport] = { id: table.id, brin: brin.id, secret: "cut the horses loose before dawn" };
+    }
+  }
+}
+
 const ids = {
   revised: ysolde.id,
   orc: grask.id,
@@ -793,11 +1335,26 @@ const ids = {
   directed,
   levelTableId: levelTable.id,
   commandTableId: commandTable.id,
+  courting,
+  conscience,
+  masked,
+  turncoat,
+  gone,
+  dominate,
+  conduct,
+  pacts: pactTables,
   pip: pip.id,
   // Every campaign a scenario opens, by id, for the app's home tiles.
   titles: {
     [levelTable.id]: "Level Table",
     [commandTable.id]: COMMAND_TITLE,
+    ...Object.fromEntries(Object.entries(courting).map(([viewport, table]) => [table.id, `${COURTING_TITLE} (${viewport})`])),
+    ...Object.fromEntries(Object.entries(conscience).map(([viewport, table]) => [table.id, `${CONSCIENCE_TITLE} (${viewport})`])),
+    ...Object.fromEntries(Object.entries(masked).map(([viewport, table]) => [table.id, `${MASKED_TITLE} (${viewport})`])),
+    ...Object.fromEntries(Object.entries(turncoat).map(([viewport, table]) => [table.id, `${TURNCOAT_TITLE} (${viewport})`])),
+    ...Object.fromEntries(Object.entries(gone).map(([viewport, table]) => [table.id, `${GONE_TITLE} (${viewport})`])),
+    ...Object.fromEntries(Object.entries(conduct).map(([viewport, table]) => [table.id, `${CONDUCT_TITLE} (${viewport})`])),
+    ...Object.fromEntries(Object.entries(pactTables).flatMap(([kind, tables]) => Object.entries(tables).map(([viewport, table]) => [table.id, `Pact ${kind.charAt(0).toUpperCase()}${kind.slice(1)} (${viewport})`]))),
     [world.campaignId]: TITLE,
     [lobby.id]: LOBBY_TITLE,
     [quiet.id]: QUIET_TITLE,
@@ -809,6 +1366,7 @@ const ids = {
     ...Object.fromEntries(Object.entries(stopTables).map(([viewport, id]) => [id, `Stop Table (${viewport})`])),
     ...Object.fromEntries(Object.entries(wardrobe).map(([viewport, id]) => [id, `Wardrobe (${viewport})`])),
     ...Object.fromEntries(Object.entries(directed).map(([viewport, table]) => [table.id, `Directed Table (${viewport})`])),
+    ...Object.fromEntries(Object.entries(dominate).flatMap(([viewport, table]) => [[table.id, `Dominate Table (${viewport})`], [table.heldId, `Held Table (${viewport})`]])),
   },
   systemLine,
   oocQuestion,

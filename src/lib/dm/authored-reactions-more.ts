@@ -11,9 +11,11 @@
 // gate and pays the pool; a free reaction (Relentless Avenger) is resolved
 // before use_reaction asks whether the reaction is spent.
 
+import { tokenSides } from "@/lib/dm/combatant";
+import { resolveTargetFoe } from "@/lib/dm/sheet-foe";
 import type { Campaign } from "@/lib/db/campaigns";
 import { getBattleMapForEncounter, getTokenByRef, listTokens, moveToken } from "@/lib/db/battle-maps";
-import { getEnemy, listEnemies } from "@/lib/db/encounters";
+import { getActiveEncounter, getEnemy, listEnemies } from "@/lib/db/encounters";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { publishPersisted } from "@/lib/events";
 import { footprintLookup, occupiedTiles, pcMoveBudget } from "@/lib/battlemap/view";
@@ -22,9 +24,9 @@ import { pcMoveTraits } from "@/lib/battlemap/passage";
 import { tileIndex } from "@/lib/battlemap/types";
 import { heldAuthored, heldReaction, type AuthoredReaction, type HeldAuthored } from "@/lib/srd/authored-effects";
 import { removeConditions, type ConditionMetaMap } from "@/lib/dm/condition-logic";
-import { applyEnemyDamage, publishEncounter, resolveEnemyRef } from "@/lib/dm/enemy-damage";
+import { applyEnemyDamage, publishEncounter } from "@/lib/dm/enemy-damage";
 import { releaseGrapplesOutOfReach } from "@/lib/dm/grapple";
-import { freshLastHit, writeLastHit } from "@/lib/dm/last-hit";
+import { attackerFoeId, freshLastHit, writeLastHit } from "@/lib/dm/last-hit";
 import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
 import { noHit, type Ctx } from "@/lib/dm/reaction-tools";
 import { withinFeet } from "@/lib/dm/authored-saves";
@@ -121,6 +123,7 @@ export function reactionMove(ctx: Ctx, name: string, trigger: "enemy_adjacent" |
     sheet: ctx.sheet,
     footprintOf,
     enemySize: (refId) => enemiesById.get(refId)?.stats.size,
+    sideOf: tokenSides(getActiveEncounter(ctx.campaign.id)),
   });
   const reach = reachableTiles(map.terrain, map.width, map.height, occupiedTiles(map, tokens, token, footprintOf), token, half, 1, token.movement === "fly", traits);
   if (!reach.has(tileIndex(map.width, x, y))) {
@@ -151,10 +154,10 @@ function redirectMiss(ctx: Ctx, name: string, rangeFt: number): ToolResult {
   const missed = record && record.source === "attack" && !record.ranged && !record.answered.includes(label)
     ? record.swings.findIndex((swing) => !swing.hit && !(swing.ranged ?? false))
     : -1;
-  if (!record || missed < 0 || record.attacker.kind !== "enemy" || !record.attacker.id) {
+  if (!record || missed < 0 || attackerFoeId(record) === null || !record.attacker.id) {
     return noHit(ctx.sheet.name, name, "a melee attack that missed them");
   }
-  const target = encounter && ctx.args.targetEnemyId ? resolveEnemyRef(encounter.id, ctx.args.targetEnemyId) : null;
+  const target = encounter && ctx.args.targetEnemyId ? resolveTargetFoe(encounter.campaignId, encounter, ctx.args.targetEnemyId) : null;
   if (!encounter || !target || target.status !== "alive" || target.id === record.attacker.id) {
     return { error: `${name} turns the miss onto another creature within ${rangeFt} feet of ${ctx.sheet.name}, not the attacker: pass its targetEnemyId. Nothing was spent.`, retry: true };
   }

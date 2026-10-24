@@ -604,6 +604,12 @@ const OMITTED_ON_PURPOSE = {
   pc_attack: ["advantageSource", "approach", "endTurn"],
   enemy_attack: ["advantageSource"],
   request_roll: ["advantageSource"],
+  // What a companion holds to is set by the class and alignment the form
+  // does offer; the model alone may replace it, as a list of objects no form
+  // field takes (issue 503). A hidden employer is a storyteller secret the
+  // model sets, and a person running the table writes it in the story's
+  // own notes rather than in a console form.
+  add_companion: ["values", "agenda"],
 };
 
 function formOmissions(entry) {

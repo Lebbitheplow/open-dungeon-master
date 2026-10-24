@@ -11,6 +11,8 @@ import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter, getEnemy, listEnemies, patchEnemyConditions } from "@/lib/db/encounters";
 import { activePublicEncounter } from "@/lib/db/encounter-view";
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
+import { dominatedByFoe } from "@/lib/dm/companion-command";
+import { announceDominated } from "@/lib/dm/combat-sides";
 import { insertSheetAudit } from "@/lib/db/sheet-audit";
 import { insertCharacterEvent } from "@/lib/db/character-events";
 import { listConditions } from "@/lib/content";
@@ -403,6 +405,10 @@ export function handleSetCondition(
     conditionMeta: nextMeta,
   });
   publishSheet(campaign, sheet.id);
+  // A Dominate spell from the other side takes the character: the DM plays
+  // it until the charm ends, and the table is told (combat-sides.ts).
+  const held = getSheetById(sheet.id);
+  const dominated = held && dominatedByFoe(campaign.id, held) ? announceDominated(campaign, sheet.name) : null;
   {
     const pos = tokenPosition(campaign.id, sheet.id);
     if (pos) {
@@ -441,5 +447,6 @@ export function handleSetCondition(
         }
       : {}),
     ...lost,
+    ...(dominated ? { dominated } : {}),
   };
 }

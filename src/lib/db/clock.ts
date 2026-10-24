@@ -10,7 +10,8 @@ import { fireCalendarEvents } from "@/lib/dm/calendar-fire";
 import { tickClockConditions } from "@/lib/dm/condition-tick";
 import { getDatabase, parseJson } from "@/lib/db/core";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
-import { publishPersisted } from "@/lib/events";
+import { publishEphemeral, publishPersisted } from "@/lib/events";
+import { conscienceClockTick } from "@/lib/dm/conscience";
 import {
   advance,
   clampInstant,
@@ -110,6 +111,10 @@ export function advanceClock(
   // its midnight (src/lib/dm/afflictions.ts, affliction-poisons.ts).
   afflictionClockTick(campaignId, moved.instant);
   poisonClockTick(campaignId, moved.instant);
+  // A companion's ultimatum whose deadline it passed (issue 503).
+  if (conscienceClockTick(campaignId)) {
+    publishEphemeral(campaignId, "relationships_updated", {});
+  }
   return { clock: getClock(campaignId), minutes: moved.minutes };
 }
 

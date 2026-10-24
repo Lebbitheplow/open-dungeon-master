@@ -2,15 +2,13 @@ import { settleDroppedOnFightEnd } from "@/lib/db/dropped-items";
 import { getFloor, setFloor, type Campaign } from "@/lib/db/campaigns";
 import { silencedImmunity } from "@/lib/dm/zone-rules";
 import { burnWebUnder } from "@/lib/dm/zone-cast";
-import { endEncounter, getEnemy, listEnemies, patchEnemyHp, setEnemyConcentration, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
+import { endEncounter, getActiveEncounter, getEnemy, listEnemies, patchEnemyHp, setEnemyConcentration, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
 import { activePublicEncounter } from "@/lib/db/encounter-view";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import type { DmTurn } from "@/lib/db/dm-turns";
-import { listRollsSince } from "@/lib/db/rolls";
-import { listAuditSince } from "@/lib/db/sheet-audit";
-import { patchEnemyConditions, setEncounterSummary } from "@/lib/db/encounters";
+import { patchEnemyConditions } from "@/lib/db/encounters";
 import { restoreOwnForm } from "@/lib/db/enemy-form";
-import { computeEncounterSummary, describeEncounterSummary } from "@/lib/dm/encounter-summary";
+import { recordEncounterSummary } from "@/lib/dm/encounter-summary-store";
 import { getBattleMapForEncounter, removeTokenByRef } from "@/lib/db/battle-maps";
 import { publishPersisted } from "@/lib/events";
 import { healthState } from "@/lib/bestiary/health";
@@ -21,7 +19,7 @@ import { enemyDamageMath } from "@/lib/dm/encounter-logic";
 import { damageAdjust, resistsAllDamage } from "@/lib/dm/condition-logic";
 import { resistLineFor } from "@/lib/dm/underwater";
 import { authoredIgnoresResistance } from "@/lib/dm/authored-saves";
-import { isDefeated, isKnockedOut, knockedOutConditions } from "@/lib/dm/knockout";
+import { isKnockedOut, knockedOutConditions } from "@/lib/dm/knockout";
 import { endConditionsHeldBy } from "@/lib/dm/enemy-conditions";
 import { enemyHpCap, hasTrait, REGENERATION_STOPPED, regenerationOf } from "@/lib/dm/monster-abilities";
 import { absorbs } from "@/lib/dm/monster-traits";
@@ -33,10 +31,15 @@ import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
 import { planDeathFx } from "@/lib/battlemap/fx-plan";
 import { publishFx, tokenPosition } from "@/lib/dm/fx";
 import { dismissGuestCompanions } from "@/lib/dm/companion-tools";
+import { turncoatsAfterTheFight } from "@/lib/dm/departure";
 import { followCombatAmbience } from "@/lib/dm/ambience-tools";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { unknownRef, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
+import { isSheetFoe } from "@/lib/dm/combat-sides-logic";
+import { sheetSide, standingOn } from "@/lib/dm/combatant";
+import { applySheetFoeDamage, type SheetFoeBlow } from "@/lib/dm/sheet-foe-damage";
+import { fallenFoeSheetsXp } from "@/lib/dm/sheet-foe";
 
 // The single server-side path for damage landing on an enemy. Used by the
 // damage_enemy tool AND by damage rolls carrying targetEnemyId, which the
@@ -125,12 +128,16 @@ export function finishEncounter(
     ammoRecovered[`${owner.name}: ${itemName}`] = back;
   }
 
-  const totalXp = enemies.reduce((sum, enemy) => sum + enemy.xp, 0);
+  // What the fight was worth: every enemy row (a creature the party turned
+  // with a Dominate spell was overcome all the same), and every character
+  // who fell fighting on the foes' side (sheet-foe.ts).
+  const totalXp = enemies.reduce((sum, enemy) => sum + enemy.xp, 0) + fallenFoeSheetsXp(campaign.id, encounter);
   const share =
     outcome === "victory" ? 1 : outcome === "enemies_fled" || outcome === "truce" ? 0.5 : 0;
   // The dead take no share: what the fight was worth is split among those
-  // who lived through it.
-  const earners = sheets.filter((sheet) => !(getSheetById(sheet.id) ?? sheet).deathSaves?.dead);
+  // who lived through it. Only the party's side earns it: a character who
+  // fought against the party has no share in beating itself.
+  const earners = sheets.filter((sheet) => !(getSheetById(sheet.id) ?? sheet).deathSaves?.dead && sheetSide(encounter, sheet.id) === "party");
   const xpEach = earners.length ? Math.floor((totalXp * share) / earners.length) : 0;
   let xpResult: Record<string, unknown> = {};
   if (xpEach > 0) {
@@ -153,38 +160,9 @@ export function finishEncounter(
     setFloor(campaign.id, { mode: "open" });
     publishPersisted(campaign.id, "floor_changed", { floor: { mode: "open" } });
   }
-  // After the fight (docs/vtt-parity-implementation-plan.md 4.2): the
-  // card the table sees and the line the chapter keeps. Never blocks the
-  // end of a fight.
-  try {
-    const endedAt = new Date().toISOString();
-    const summary = computeEncounterSummary({
-      outcome,
-      rounds: encounter.round,
-      startedAt: encounter.createdAt,
-      endedAt,
-      enemies,
-      sheets,
-      rolls: listRollsSince(campaign.id, encounter.createdAt).map((roll) => ({
-        characterId: roll.characterId,
-        attacker: roll.attacker,
-        kind: roll.kind,
-        total: roll.total,
-        applied: roll.applied,
-        targetEnemyId: roll.targetEnemyId,
-        crit: roll.breakdown?.crit ?? null,
-      })),
-      audits: listAuditSince(campaign.id, encounter.createdAt).map((entry) => ({
-        characterId: entry.characterId,
-        kind: entry.kind,
-        delta: entry.delta,
-      })),
-    });
-    setEncounterSummary(encounter.id, summary, describeEncounterSummary(summary));
-    publishPersisted(campaign.id, "encounter_summary", { encounterId: encounter.id, summary });
-  } catch (error) {
-    console.error("[encounter] summary failed", error);
-  }
+  // After the fight: the card the table sees and the line the chapter keeps
+  // (encounter-summary-store.ts).
+  recordEncounterSummary(campaign.id, encounter, outcome, enemies, sheets);
   publishPersisted(campaign.id, "encounter_updated", { encounter: null });
   // The fight is over, so the fight music is. Every way an encounter can
   // end comes through here, which is why the hook is here and not in the
@@ -196,6 +174,9 @@ export function finishEncounter(
   // Guest allies joined for this fight, so the fight ending writes them out;
   // lasting party companions stay. XP above already counted them in.
   const guestsGone = dismissGuestCompanions(campaign, "the fight ended");
+  // A lasting companion that fought against the party leaves, fell, or lies
+  // at the party's mercy (issue 503, src/lib/dm/turncoat.ts).
+  const turncoats = turncoatsAfterTheFight(campaign, encounter);
 
   return {
     encounterOver: true,
@@ -209,6 +190,7 @@ export function finishEncounter(
           guestsDismissed: `${guestsGone.join(", ")} left with the scene; narrate the parting.`,
         }
       : {}),
+    ...(turncoats.length ? { turncoats: turncoats.join(" ") } : {}),
     ...(xpEach > 0 ? { xpAwarded: `${xpEach} XP each` } : {}),
     ...(typeof xpResult.levelUpAvailable !== "undefined"
       ? { levelUpAvailable: xpResult.levelUpAvailable }
@@ -216,7 +198,10 @@ export function finishEncounter(
   };
 }
 
-// Ends the encounter with victory XP once no living enemies remain.
+// Ends the encounter with victory XP once nobody on the foes' side is left
+// in the fight: every enemy row there dead, fled or knocked out (a creature
+// the party dominates fights for it and does not hold the fight open), and
+// every character who turned on the party at 0 hit points (combatant.ts).
 export function autoEndOnVictory(
   campaign: Campaign,
   turn: DmTurn,
@@ -224,12 +209,33 @@ export function autoEndOnVictory(
   sheets: CharacterSheet[],
   sheetsById: Map<string, CharacterSheet>,
 ): Record<string, unknown> {
-  const enemies = listEnemies(encounter.id);
-  // A creature knocked out is out of the fight (src/lib/dm/knockout.ts).
-  if (enemies.some((enemy) => !isDefeated(enemy))) {
+  // Read fresh: the side exceptions are written apart from the encounter.
+  const live = getActiveEncounter(campaign.id);
+  const current = live && live.id === encounter.id ? live : encounter;
+  if (standingOn(campaign.id, current, "foe").length) {
     return {};
   }
-  return finishEncounter(campaign, turn, encounter, "victory", sheets, sheetsById);
+  return finishEncounter(campaign, turn, current, "victory", sheets, sheetsById);
+}
+
+// A blow on a character seen as a foe (sheet-foe-damage.ts), and the end of
+// the fight when it was the last on the foes' side to fall. pc_attack's
+// typed blow comes here with its parts (pc-attack-damage.ts landBlow).
+export function applySheetFoeBlow(
+  campaign: Campaign,
+  turn: DmTurn,
+  encounter: Encounter,
+  view: EncounterEnemy,
+  blow: SheetFoeBlow,
+  sheets: CharacterSheet[],
+  sheetsById: Map<string, CharacterSheet>,
+  holdVictory = false,
+): Record<string, unknown> {
+  const landed = applySheetFoeDamage(campaign, turn, view, blow);
+  if ((landed.down || landed.dead) && !holdVictory) {
+    Object.assign(landed, autoEndOnVictory(campaign, turn, encounter, sheets, sheetsById));
+  }
+  return landed;
 }
 
 // Applies damage to a living enemy: resistance/immunity/vulnerability math
@@ -277,6 +283,14 @@ export function applyEnemyDamage(
     concentrationDisadvantage?: boolean;
   },
 ): ToolResult {
+  // A character fighting on the other side, seen as a foe (sheet-foe.ts):
+  // the blow lands as harm lands on a character (sheet-foe-damage.ts), and
+  // a fall may end the fight as a foe's does.
+  if (isSheetFoe(enemy)) {
+    const { magical, spell, crit, nonlethal, death, holdVictory } = options ?? {};
+    const blow = { amount, type: damageType ?? undefined, magical, spell, crit, nonlethal, death };
+    return applySheetFoeBlow(campaign, turn, encounter, enemy, blow, sheets, sheetsById, holdVictory === true);
+  }
   // Inescapable Destruction: the acting Death cleric's necrotic ignores resistance (authored-saves.ts).
   const ignores = (damageType && authoredIgnoresResistance(campaign.id, damageType)) || (options?.ignoreResistance && damageType ? (options.ignoreResistanceBy ?? "Elemental Adept") : null);
   // Lightning, Fire or Acid Absorption (the golems): the damage heals it

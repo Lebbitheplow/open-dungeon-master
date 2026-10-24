@@ -220,6 +220,15 @@ test("an ability on one target is cast_at_player; on several it is one aoe_damag
   assert.equal(monsterSentence("Drake", breath, ["Kael", "Lys", "Bran"]), "Drake uses Fire Breath on Kael, Lys and Bran.");
 });
 
+test("a creature on the other side (issue 503): its row takes the bite by id, and an area splits sheets from rows", () => {
+  const cards = deriveMonsterHand(drake);
+  const rows = new Set(["e2"]);
+  assert.deepEqual(monsterInvoke(cards[0], ["e2"], "none", rows).args, { enemyId: "e1", targetCharacterId: "e2", attack: "Bite" });
+  assert.deepEqual(monsterInvoke(cards[3], ["s1", "e2"], "none", rows).args, {
+    casterEnemyId: "e1", ability: "Fire Breath", characterIds: ["s1"], enemyIds: ["e2"], saveAbility: "dex", dc: 12, damage: "4d6", halfOnSave: true, type: "fire",
+  });
+});
+
 test("Flee is enemy_flees and needs no target", () => {
   const cards = deriveMonsterHand(drake);
   assert.deepEqual(monsterInvoke(cards[5], []), { name: "enemy_flees", args: { enemyId: "e1", reason: "Breaks off and runs." } });

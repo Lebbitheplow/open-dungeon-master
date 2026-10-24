@@ -23,6 +23,7 @@ import {
   handleSummonPet,
 } from "@/lib/dm/pet-tools";
 import { handleRecallStory } from "@/lib/dm/recall";
+import { handleRelationshipScheme } from "@/lib/dm/scheme-tools";
 import {
   handleRelationshipBeat,
   handleRelationshipEnd,
@@ -66,6 +67,7 @@ import { handleRequestRoll } from "@/lib/dm/invoke-roll";
 import { handleSplitDamage } from "@/lib/dm/split-damage";
 import { strictBooleanArgs } from "@/lib/dm/arg-coerce";
 import { gateAiCall } from "@/lib/dm/ai-gate";
+import { conductGate } from "@/lib/dm/party-conduct";
 import { characterCallUnasked } from "@/lib/dm/player-word";
 import { EXPLORE_TOOL_NAMES, handleExploreCall } from "@/lib/dm/explore-tools";
 import type { Campaign } from "@/lib/db/campaigns";
@@ -133,7 +135,7 @@ export async function dispatchAdjudication(
       );
     case "cast_buff": {
       const unasked = characterCallUnasked(campaign.id, turn, rawArguments, "characterId");
-      return unasked ? unasked : handleCastBuff(campaign, turn, rawArguments, sheets, sheetsById);
+      return unasked ?? conductGate(campaign, name, rawArguments) ?? handleCastBuff(campaign, turn, rawArguments, sheets, sheetsById);
     }
     case "take_rest":
       return handleTakeRest(campaign, turn.id, rawArguments, sheets, sheetsById);
@@ -167,6 +169,8 @@ export async function dispatchAdjudication(
       return handleRomanceAdvance(campaign, turn, rawArguments, sheets, sheetsById);
     case "relationship_end":
       return handleRelationshipEnd(campaign, rawArguments, sheets, sheetsById);
+    case "relationship_scheme":
+      return handleRelationshipScheme(campaign, rawArguments, sheets, sheetsById);
     case "roll_treasure":
       return handleRollTreasure(campaign, turn, rawArguments, sheets, sheetsById);
     case "travel":

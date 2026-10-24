@@ -11,6 +11,7 @@ import { MODE_GLYPHS } from "@/app/campaigns/[campaignId]/sessionGlyphs";
 import { useLingeringEncounter } from "@/app/campaigns/[campaignId]/useLingeringEncounter";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { FloorBanners } from "@/app/campaigns/[campaignId]/FloorBanners";
+import { SideNotice } from "@/app/campaigns/[campaignId]/SideBadge";
 import { TableWaitBanner } from "@/app/campaigns/[campaignId]/TableWaitBanner";
 import { Hand as CombatHand } from "@/app/campaigns/[campaignId]/Hand";
 import { MonsterHand } from "@/app/campaigns/[campaignId]/MonsterHand";
@@ -88,6 +89,7 @@ function ComposerInner({
   onXCard,
   composerRef,
   trackAmmo,
+  romanceCue = true,
   edges,
   drops,
   mounts,
@@ -141,6 +143,8 @@ function ComposerInner({
   composerRef: RefObject<HTMLTextAreaElement | null>;
   // The ammunition variant rule, for the Hand's ranged cards.
   trackAmmo?: boolean;
+  // The Director's Romance cue is offered (issue 501).
+  romanceCue?: boolean;
   // The board's cover and flanking from this character to each enemy, for
   // the Hand's hit preview (src/lib/battlemap/view-tactics.ts).
   edges?: Record<string, TargetEdge>;
@@ -193,6 +197,7 @@ function ComposerInner({
           meUserId={meUserId}
           onRelease={onReleaseFloor}
         />
+        <SideNotice encounter={encounter ?? null} sheets={sheets} meUserId={meUserId} />
         {floor.mode === "open" && dmStatus === "idle" ? (
           <TableWaitBanner
             campaignId={campaignId}
@@ -306,7 +311,7 @@ function ComposerInner({
         ) : null}
         {kind === "lead" && steersStory ? (
           <div className="reveal mb-2 flex flex-wrap items-center gap-1.5">
-            <DirectorPresets campaignId={campaignId} />
+            <DirectorPresets campaignId={campaignId} romance={romanceCue} />
             <Tooltip
               content={
                 leadPrivate

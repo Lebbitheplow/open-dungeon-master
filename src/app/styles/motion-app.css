@@ -514,3 +514,137 @@ html[data-effects="low"] .dictate-dot { animation: none; }
   .dictate-mic-live::after, .dictate-dot { animation: none !important; }
   .dictate-mic-live::before { transition: none !important; }
 }
+
+/* ------------------------------------------------------------------------
+   An NPC's romantic advance (issue 501, AdvanceOfferCard.tsx): the card
+   enters with a 220ms fade and a 6px rise and settles with a 160ms
+   collapse; on a yes the Bonds row's romance rung fills over 400ms (BondsPanel
+   .romance-rung). All on one easing. Reduced motion keeps the fades and
+   drops the movement. Nothing here runs from a model's words: only from the
+   server's offer and its settling.
+   ------------------------------------------------------------------------ */
+@keyframes advance-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes advance-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes advance-settle {
+  from { grid-template-rows: 1fr; opacity: 1; }
+  to { grid-template-rows: 0fr; opacity: 0; }
+}
+@keyframes advance-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@layer components {
+  .advance-shell { display: grid; grid-template-rows: 1fr; }
+  .advance-shell > * { min-height: 0; }
+  .advance-card { animation: advance-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+  .advance-shell[data-leaving] { animation: advance-settle 160ms cubic-bezier(0.2, 0.8, 0.2, 1) both; overflow: hidden; pointer-events: none; }
+  .romance-rung-fill { transition: width 400ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+  /* A companion's conscience (issue 503): the marker slides one rung when
+     the server moves it, and takes the new rung's colour as it goes. */
+  .conscience-marker { transition: transform 360ms cubic-bezier(0.2, 0.8, 0.2, 1), background-color 360ms linear; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .advance-card { animation: advance-fade-in 220ms linear backwards; }
+  .advance-shell[data-leaving] { animation: advance-fade-out 160ms linear both; }
+  .romance-rung-fill { transition: opacity 400ms linear; }
+  .conscience-marker { transition: background-color 360ms linear; }
+}
+
+/* ------------------------------------------------------------------------
+   Pacts (issue 503 Phase 7). A pact's approach is an owner-only offer card
+   (PactOfferCard.tsx) on the advance card's motion above. When a pact or a
+   secret action comes out, the transcript's reveal card (MessageParts.tsx
+   .pact-reveal) unmasks itself: a 480ms lift from a blur with the violet
+   rim brightening and settling. A secret action's confirmation to its own
+   player (PactPanel.tsx .secret-confirm) fades up over 220ms. Only from the
+   server's word. Reduced motion keeps the colour and the words and drops
+   the movement and the blur.
+   ------------------------------------------------------------------------ */
+@keyframes pact-unmask {
+  0% { opacity: 0; filter: blur(6px); transform: translateY(4px) scale(0.985); box-shadow: 0 0 0 0 rgb(167 139 250 / 0); }
+  55% { opacity: 1; filter: blur(0); transform: translateY(0) scale(1); box-shadow: 0 0 0 3px rgb(167 139 250 / 0.35); }
+  100% { opacity: 1; filter: none; transform: none; box-shadow: 0 0 0 0 rgb(167 139 250 / 0); }
+}
+@keyframes pact-unmask-fade {
+  from { opacity: 0.3; }
+  to { opacity: 1; }
+}
+@keyframes secret-confirm-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: none; }
+}
+@layer components {
+  .pact-reveal { animation: pact-unmask 480ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+  .secret-confirm { animation: secret-confirm-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pact-reveal { animation: pact-unmask-fade 480ms linear backwards; }
+  .secret-confirm { animation: pact-unmask-fade 220ms linear backwards; }
+}
+
+/* ------------------------------------------------------------------------
+   An NPC's act seen through or unmasked (issue 501, BondsPanel.tsx): the
+   row's standing turns to the truth with a 520ms flip and drop, its number
+   counting from the act's warmth to the truth, and the "Seen through" or
+   "Unmasked" chip rises in over 360ms. On one easing, and only when the
+   server's answer changes the row (an Insight that beat the act, the
+   reveal), never from a model's words. Reduced motion keeps the new colour
+   and words and drops the movement.
+   ------------------------------------------------------------------------ */
+@keyframes bond-unmask {
+  0% { opacity: 0.25; transform: perspective(240px) rotateX(80deg) translateY(-4px); }
+  60% { opacity: 1; transform: perspective(240px) rotateX(-8deg) translateY(1px); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes bond-unmask-fade {
+  from { opacity: 0.25; }
+  to { opacity: 1; }
+}
+@keyframes bond-chip-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@layer components {
+  .bond-truth { transition: background-color 520ms cubic-bezier(0.2, 0.8, 0.2, 1), border-color 520ms cubic-bezier(0.2, 0.8, 0.2, 1), color 520ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+  .bond-truth[data-unmasking] { animation: bond-unmask 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  .bond-unmask-chip { animation: bond-chip-in 360ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bond-truth[data-unmasking] { animation: bond-unmask-fade 360ms linear both; }
+  .bond-unmask-chip { animation: bond-unmask-fade 360ms linear backwards; }
+}
+
+/* ------------------------------------------------------------------------
+   A companion leaving the party (issue 503, PartyGone.tsx): the card it had
+   dims over 600ms (fading and greying as it sinks a little), then files
+   under Gone, whose new row rises in. Only when the server's departure
+   arrives (sheet_deleted's `departed`), never from narration. Reduced motion
+   keeps the dimming colour and the words and drops the movement.
+   ------------------------------------------------------------------------ */
+@keyframes party-card-depart {
+  from { opacity: 1; filter: grayscale(0); transform: none; }
+  to { opacity: 0.45; filter: grayscale(0.85); transform: translateY(6px) scale(0.98); }
+}
+@keyframes party-card-depart-fade {
+  from { opacity: 1; filter: grayscale(0); }
+  to { opacity: 0.45; filter: grayscale(0.85); }
+}
+@keyframes party-gone-arrive {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+@layer components {
+  .party-card-departing { animation: party-card-depart 600ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards; pointer-events: none; }
+  .party-gone-row { background: rgba(120, 113, 108, 0.08); }
+  .party-gone-arrive { animation: party-gone-arrive 360ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .party-card-departing { animation: party-card-depart-fade 600ms linear forwards; }
+  .party-gone-arrive { animation: none; }
+}

@@ -14,6 +14,7 @@
 //     the map is resolved here as one attack with the reaction.
 // Split from action-tools.ts, which re-exports the handler.
 
+import { resolveTargetFoe } from "@/lib/dm/sheet-foe";
 import { defensiveDuelist, lucky, mageSlayer, reservesRecovery, sentinel } from "@/lib/dm/feat-reactions";
 import { z } from "zod";
 import type { Campaign } from "@/lib/db/campaigns";
@@ -27,17 +28,18 @@ import { acBreakdownFor, computeSheetDerived } from "@/lib/srd";
 import { martialArtsDie } from "@/lib/srd/feature-effects";
 import { enemyAcWithEffects } from "@/lib/dm/ac-effects";
 import { kiSpend } from "@/lib/dm/bonus-actions";
-import { applyEnemyDamage, publishEncounter, resolveEnemyRef } from "@/lib/dm/enemy-damage";
+import { applyEnemyDamage, publishEncounter } from "@/lib/dm/enemy-damage";
 import { classLevelFor } from "@/lib/srd/multiclass";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { spellEngineName, spellFactsFor } from "@/lib/content";
 import { addSheetCondition, rollCard } from "@/lib/dm/action-common";
 import { tilesBetween } from "@/lib/dm/attack-spatial";
 import { reactionRefusal } from "@/lib/dm/reaction-gate";
+import { devotedGuard } from "@/lib/dm/devoted-guard";
 import { reactionTimingOf, timingOfDoes, type ReactionTiming } from "@/lib/dm/reaction-kinds";
 import { authoredReactionNamed, heldReaction } from "@/lib/srd/authored-effects";
 import { removeConditions } from "@/lib/dm/condition-logic";
-import { freshLastHit, rerollAttacker, type LastHit, type SwingRecord } from "@/lib/dm/last-hit";
+import { attackerFoeId, freshLastHit, rerollAttacker, type LastHit, type SwingRecord } from "@/lib/dm/last-hit";
 import type { RollAttacker } from "@/lib/db/rolls";
 import { rollAgainst } from "@/lib/roll-labels";
 import { opportunity, reactionSpell } from "@/lib/dm/reaction-spells";
@@ -190,7 +192,7 @@ function deflectMissiles(ctx: Ctx): ToolResult {
 // hit and damage, the Martial Arts die.
 function throwBack(ctx: Ctx, record: LastHit, monkLevel: number): Record<string, unknown> {
   const { sheet, campaign, encounter } = ctx;
-  const enemy = encounter && ctx.args.targetEnemyId ? resolveEnemyRef(encounter.id, ctx.args.targetEnemyId) : null;
+  const enemy = encounter && ctx.args.targetEnemyId ? resolveTargetFoe(encounter.campaignId, encounter, ctx.args.targetEnemyId) : null;
   if (!encounter || !enemy || enemy.status !== "alive") {
     return { error: "The missile can be thrown back at a living enemy from GAME STATE; it was caught and kept." };
   }
@@ -240,7 +242,7 @@ function cuttingWords(ctx: Ctx): ToolResult {
   const target = allyOf(ctx) ?? sheet;
   const record = freshLastHit(campaign.id, target.id);
   const index =
-    record && record.source === "attack" && record.attacker.kind === "enemy" && !record.answered.includes("cutting words")
+    record && record.source === "attack" && attackerFoeId(record) !== null && !record.answered.includes("cutting words")
       ? record.swings.map((swing) => swing.hit).lastIndexOf(true)
       : -1;
   if (!record || index < 0) {
@@ -457,6 +459,11 @@ export function handleUseReaction(
     };
   }
   const ctx: Ctx = { campaign, turn, sheet, args, sheets, sheetsById, encounter };
+  // A devoted companion's Take the Blow (src/lib/dm/devoted-guard.ts).
+  const guarded = devotedGuard(ctx);
+  if (guarded) {
+    return guarded;
+  }
 
   if (isNamed(feature, "opportunity attack", "attack of opportunity")) {
     return opportunity(ctx);

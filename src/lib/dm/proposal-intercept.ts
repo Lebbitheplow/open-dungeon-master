@@ -1,4 +1,3 @@
-import { normalizeTradeOffer } from "@/lib/dm/trade-logic";
 import type { Campaign } from "@/lib/db/campaigns";
 import { allocateSeq } from "@/lib/db/campaigns";
 import {
@@ -12,7 +11,6 @@ import {
   duplicateOfferProblem,
   offerLineStatus,
   offerPrecheck,
-  parseOfferArgs,
   proposalSummary,
   SETTLED_OFFERS_MAX,
   SETTLED_OFFERS_WINDOW_MS,
@@ -48,24 +46,9 @@ function quotedPurchase(args: OfferArgs, sheet: CharacterSheet): OfferArgs | Too
 // answers, instead of applying immediately. Returns null when the normal
 // auto-apply path should run.
 
-// Inventory is party-visible, so the full proposal may ride the persisted
-// stream (unlike notes/whispers).
-export function publicItemProposal(proposal: ItemProposal) {
-  return {
-    id: proposal.id,
-    characterId: proposal.characterId,
-    userId: proposal.userId,
-    toolName: proposal.toolName,
-    summary: proposal.summary,
-    reason: proposal.reason,
-    status: proposal.status,
-    outcome: proposal.outcome,
-    createdAt: proposal.createdAt,
-    toCharacterId: proposal.toCharacterId,
-    // A trade carries its offer so the bar can lay out both sides.
-    ...(proposal.toolName === "trade" ? { offer: normalizeTradeOffer(parseOfferArgs(proposal.argsJson)) } : {}),
-  };
-}
+// The offer as a seat receives it (src/lib/dm/proposal-view.ts).
+export { publicItemProposal } from "@/lib/dm/proposal-view";
+import { publicItemProposal } from "@/lib/dm/proposal-view";
 
 export function maybeProposeItemChange(
   campaign: Campaign,
@@ -169,8 +152,10 @@ export function offerLinesForPrompt(
   nowMs = Date.now(),
 ): OfferLine[] {
   const nameOf = (proposal: ItemProposal) => sheetsById.get(proposal.characterId)?.name ?? "a character";
+  // An owner-only offer (a pact's approach, issue 503) is the storyteller's
+  // and its player's: it rides the storyteller's section, never this list.
   const open = listOpenItemProposals(campaignId)
-    .filter((proposal) => proposal.toolName !== "trade")
+    .filter((proposal) => proposal.toolName !== "trade" && !proposal.ownerOnly)
     .map((proposal) => ({
       summary: proposal.summary,
       characterName: nameOf(proposal),
@@ -180,7 +165,7 @@ export function offerLinesForPrompt(
     }));
   const settled = listRecentItemProposals(campaignId, SETTLED_OFFERS_MAX * 2)
     .filter((proposal) => {
-      if (proposal.toolName === "trade") return false;
+      if (proposal.toolName === "trade" || proposal.ownerOnly) return false;
       const at = Date.parse(proposal.resolvedAt ?? "");
       return !Number.isNaN(at) && nowMs - at <= SETTLED_OFFERS_WINDOW_MS;
     })

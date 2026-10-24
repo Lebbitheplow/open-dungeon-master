@@ -13,7 +13,7 @@ register("./lib/register-alias.mjs", import.meta.url);
 
 const { test, finish } = suite("test-table-settings-groups");
 
-const { tableGroups, tableGroupSummary, groupMatches, alliesShown, ROW_GROUP } = await import(
+const { tableGroups, tableGroupSummary, groupMatches, alliesShown, conscienceShown, ROW_GROUP } = await import(
   "../src/app/campaigns/[campaignId]/table-settings-groups.ts"
 );
 const { normalizeGameSettings } = await import("../src/lib/schemas/game-settings.ts");
@@ -101,6 +101,7 @@ await test("no control was lost in the regrouping", () => {
     "multiclassingEnabled", "midGameJoinOpen", "holdSubmissions", "hpMethod", "startingWealth", "abilityRerollBelow",
     "beatReminder", "stages", "worldSimulation", "inventoryApprovals", "vitalsApprovals", "safety", "gm",
     "narrationGuard", "voice", "relationships", "romance", "companions", "maxCompanions", "maxGuests", "dmAssist",
+    "companionConscience",
   ];
   for (const key of keys) {
     assert.match(now, new RegExp(`patch\\(\\{[^}]*\\b${key}\\b`), `${key} is still patched from the panel`);
@@ -108,6 +109,26 @@ await test("no control was lost in the regrouping", () => {
   for (const label of ["Transcription", "Proximity", "Whisper/shout", "Walls muffle", "Downed go deaf", "Living world", "Outcome check", "Theatre inserts"]) {
     assert.ok(now.includes(label), label);
   }
+});
+
+await test("Companion conscience shows only with bonds on and a lasting companion possible, and says so on the closed face", () => {
+  const on = normalizeGameSettings({});
+  assert.equal(on.companionConscience, "leave", "Leave is the default");
+  assert.equal(conscienceShown(on, true), true);
+  assert.equal(conscienceShown(on, false), false, "no lasting companion can travel with this party");
+  assert.equal(conscienceShown(normalizeGameSettings({ relationships: "off" }), true), false, "bonds off");
+  assert.match(tableGroupSummary("bonds", on, { ...context, lastingCompanions: true }), /companions may leave/);
+  assert.doesNotMatch(tableGroupSummary("bonds", on, context), /companions/);
+  assert.match(tableGroupSummary("bonds", normalizeGameSettings({ companionConscience: "turn" }), { ...context, lastingCompanions: true }), /companions may turn/);
+  const groups = fs.readFileSync(new URL("../src/app/campaigns/[campaignId]/GameSettingsGroups.tsx", import.meta.url), "utf8");
+  assert.match(groups, /data-settings-row="conscience"/);
+  assert.match(groups, /label="Companion conscience"/, "the picker is named for screen readers");
+  assert.match(groups, /InfoButton label="What does Companion conscience do\?"/, "an info button explains it");
+  const find = (query) =>
+    tableGroups(on)
+      .filter((group) => groupMatches(group, tableGroupSummary(group.id, on, context), query))
+      .map((group) => group.id);
+  assert.ok(find("conscience").includes("bonds"));
 });
 
 await test("the phone bar keeps five tabs and lists the rest under More", () => {

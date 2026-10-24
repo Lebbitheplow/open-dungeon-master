@@ -42,6 +42,7 @@ export const COPY_OVERRIDES: Record<string, readonly string[]> = {
   ],
   npcs: [
     "id", "campaign_id", "name", "last_shift_turn", "bonds_json", "arc_cast_id", "faction_id",
+    "companion_sheet_id", "conscience_json", "companion_snapshot_json", "departure_json", "conduct_json", "agenda_json",
     "created_at", "updated_at",
   ],
   factions: ["id", "campaign_id", "created_at", "updated_at"],
@@ -268,6 +269,17 @@ function copyNpcRow(context: CopyContext, row: Row, name: string): string {
     name,
     // When they last shifted is the source table's clock.
     last_shift_turn: "",
+    // A companion's sheet is the source table's play (issue 501), and so
+    // are where its conscience stands and the sheet it left with (issue
+    // 503). What it holds to is who it is, and travels.
+    companion_sheet_id: "",
+    conscience_json: "",
+    companion_snapshot_json: "",
+    departure_json: "",
+    // What it refused and the share it wants (Phase 4), and a hidden
+    // employer (Phase 8): the source table's play and its secret.
+    conduct_json: "",
+    agenda_json: "",
     // Bonds are keyed by character id, and those characters do not exist
     // at the target; the arc cast link goes for the same reason. Relations
     // are keyed by NAME (src/lib/dm/npc-logic.ts), so a cast imported

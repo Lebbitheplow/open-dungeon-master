@@ -20,6 +20,9 @@ export const SNAPSHOT_TABLES = [
   "entity_attributes",
   "npcs",
   "relationships",
+  // A pact (issue 503) forms, takes in members and goes off in play; a
+  // rewind past it undoes it whole (src/lib/db/pacts.ts).
+  "pacts",
   "locations",
   "world_facts",
   "encounters",

@@ -14,7 +14,7 @@ import {
   type Contradiction,
   type ResolvedOutcomes,
 } from "@/lib/dm/engine-boundary";
-import { claimKindsFor, withoutSentences, type ClaimKind, type PartRead } from "@/lib/dm/claims-logic";
+import { claimKindsFor, withoutSentences, type ClaimKind, type NarrationClaim, type PartRead } from "@/lib/dm/claims-logic";
 import { hasQuotedLine, type SpokenLine } from "@/lib/dm/speech";
 import { guardGate, liveStateFor, readClaims, turnOverFor } from "@/lib/dm/claims";
 
@@ -64,7 +64,7 @@ async function readNarration(
   sheets: readonly CharacterSheet[],
   parts: readonly string[],
   partReads: ReadonlyMap<string, PartRead>,
-): Promise<{ contradictions: Contradiction[]; lines: SpokenLine[]; handedOn: string | null }> {
+): Promise<{ contradictions: Contradiction[]; lines: SpokenLine[]; handedOn: string | null; deeds: DeedClaim[] }> {
   const outcomes = guardOutcomes(turn.conversation, liveStateFor(campaign.id), campaign.gameSettings.tableLanguage);
   const kinds = guardKinds(campaign, outcomes, sheets);
   const waiting = turnOverFor(campaign.id, turn);
@@ -89,17 +89,24 @@ async function readNarration(
   const claims = [...known, ...read];
   return {
     contradictions: ruleClaims(
-      claims.filter((claim) => kinds.includes(claim.kind)),
+      claims.filter((claim) => kinds.includes(claim.kind) && claim.kind !== "deed"),
       outcomes,
     ),
     lines: claims.flatMap((claim) => (claim.kind === "speaker" ? [{ line: claim.line, speaker: claim.speaker }] : [])),
     handedOn: waiting && claims.some((claim) => claim.kind === "turn_over") ? waiting : null,
+    // A deed is no contradiction: the turn notes the ones nothing recorded
+    // (src/lib/dm/deed-claims.ts).
+    deeds: claims.flatMap((claim) => (claim.kind === "deed" ? [claim] : [])),
   };
 }
 
 // What the guard leaves the turn: who speaks the narration's lines, and the
 // player's character whose turn the narration that stands hands on.
-export type GuardedNarration = { spoken: SpokenLine[]; handedOn: string | null };
+// And the deeds it shows a party character commit (issue 503), which the
+// turn holds against the relationship_beat calls it made.
+export type GuardedNarration = { spoken: SpokenLine[]; handedOn: string | null; deeds: DeedClaim[] };
+
+type DeedClaim = Extract<NarrationClaim, { kind: "deed" }>;
 
 // When the rewrite cannot be used, the sentences that contradict the results
 // are cut from what the table reads instead: a hit written on a miss, a blow
@@ -133,15 +140,15 @@ export async function enforceEngineBoundary(
 ): Promise<GuardedNarration> {
   const narration = turn.narrationParts.join("\n\n").trim();
   if (!narration) {
-    return { spoken: [], handedOn: null };
+    return { spoken: [], handedOn: null, deeds: [] };
   }
   // A line crossed is refused the same way a hit written on a miss is
   // (docs/vtt-parity-implementation-plan.md 9.1), whether or not the
   // outcome check is on: safety is not a setting.
   const lines = campaign.gameSettings.safety?.lines ?? [];
   const crossed = lineViolations(narration, lines, campaign.gameSettings.tableLanguage);
-  const { contradictions, lines: spoken, handedOn } = await readNarration(campaign, turn, sheets, turn.narrationParts, partReads);
-  const kept = { spoken, handedOn };
+  const { contradictions, lines: spoken, handedOn, deeds } = await readNarration(campaign, turn, sheets, turn.narrationParts, partReads);
+  const kept = { spoken, handedOn, deeds };
   if (!contradictions.length && !crossed.length) {
     return kept;
   }
@@ -215,8 +222,8 @@ export async function enforceEngineBoundary(
       paragraphs.slice(0, -1).join("\n\n"),
       paragraphs[paragraphs.length - 1],
     );
-    return { spoken: respoken, handedOn: rehanded };
+    return { spoken: respoken, handedOn: rehanded, deeds };
   }
   turn.narrationParts.push(corrected);
-  return { spoken: respoken, handedOn: rehanded };
+  return { spoken: respoken, handedOn: rehanded, deeds };
 }

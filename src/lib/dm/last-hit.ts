@@ -76,7 +76,9 @@ export type LastHit = {
   encounterId: string | null;
   // The turn it landed in (turnKey), "" out of a fight.
   turn: string;
-  attacker: { kind: "enemy" | "hazard"; id: string | null; name: string };
+  // Who made it: an enemy, a character fighting on the other side (a
+  // turncoat's pc_attack, issue 503), or a hazard, which is nobody.
+  attacker: { kind: "enemy" | "sheet" | "hazard"; id: string | null; name: string };
   attack: string;
   type: string;
   ranged: boolean;
@@ -95,9 +97,18 @@ export type LastHit = {
 // Who rolls the recorded attack again (Protection and its kin): the enemy
 // that made it; a hazard is nobody.
 export function rerollAttacker(record: LastHit): RollAttacker | null {
-  return record.attacker.kind === "enemy" && record.attacker.id
-    ? { kind: "enemy", id: record.attacker.id, name: record.attacker.name }
+  const id = attackerFoeId(record);
+  return id && (record.attacker.kind === "enemy" || record.attacker.kind === "sheet")
+    ? { kind: record.attacker.kind, id, name: record.attacker.name }
     : null;
+}
+
+// The creature that made the recorded attack, by combatant id (an enemy row
+// or a character's sheet), for the reactions that answer it; null for a
+// hazard. Read it through resolveTargetFoe (sheet-foe.ts).
+export function attackerFoeId(record: Pick<LastHit, "attacker"> | null | undefined): string | null {
+  const attacker = record?.attacker;
+  return attacker && (attacker.kind === "enemy" || attacker.kind === "sheet") && attacker.id ? attacker.id : null;
 }
 
 const db = getDatabase;

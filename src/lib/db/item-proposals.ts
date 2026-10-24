@@ -3,7 +3,12 @@ import { getDatabase, nowIso } from "@/lib/db/core";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { getSheetById } from "@/lib/db/sheets";
 import { OFFER_NOTE_PREFIX, proposalExpired, resolutionNote, type ProposalStatus } from "@/lib/dm/proposal-logic";
+import { ADVANCE_TOOL, advanceResolutionNote } from "@/lib/dm/advance-logic";
+import { advanceArgs, settleAdvanceRelationship } from "@/lib/db/advances";
 import { publishWithSeq } from "@/lib/events";
+import { mapProposalRow as mapProposal, type ProposalRow } from "@/lib/dm/proposal-view";
+import { APPROACH_TOOL } from "@/lib/dm/pact-logic";
+import { approachLapsed } from "@/lib/db/pacts";
 
 // DM-proposed inventory/gold changes awaiting the owning player's answer
 // (game setting inventoryApprovals). args_json keeps the original tool
@@ -29,45 +34,10 @@ export type ItemProposal = {
   // How settling it went (issue 239): what applying it left on the sheet,
   // or "failed: <why>" when approval could not apply (status declined).
   outcome: string;
+  // Only its own player reads and answers it (issue 503, a pact's approach):
+  // never sent to the rest of the table, never told to it when it settles.
+  ownerOnly: boolean;
 };
-
-type ProposalRow = {
-  id: string;
-  campaign_id: string;
-  turn_id: string | null;
-  character_id: string;
-  user_id: string;
-  tool_name: string;
-  args_json: string;
-  summary: string;
-  reason: string;
-  status: ProposalStatus;
-  seq: number;
-  created_at: string;
-  resolved_at: string | null;
-  to_character_id: string | null;
-  outcome: string | null;
-};
-
-function mapProposal(row: ProposalRow): ItemProposal {
-  return {
-    toCharacterId: row.to_character_id ?? "",
-    outcome: row.outcome ?? "",
-    id: row.id,
-    campaignId: row.campaign_id,
-    turnId: row.turn_id,
-    characterId: row.character_id,
-    userId: row.user_id,
-    toolName: row.tool_name,
-    argsJson: row.args_json,
-    summary: row.summary,
-    reason: row.reason,
-    status: row.status,
-    seq: row.seq,
-    createdAt: row.created_at,
-    resolvedAt: row.resolved_at,
-  };
-}
 
 export function insertItemProposal(input: {
   campaignId: string;
@@ -80,14 +50,15 @@ export function insertItemProposal(input: {
   reason: string;
   seq: number;
   toCharacterId?: string;
+  ownerOnly?: boolean;
 }): ItemProposal {
   const id = crypto.randomUUID();
   getDatabase()
     .prepare(
       `INSERT INTO item_proposals (
          id, campaign_id, turn_id, character_id, user_id, tool_name,
-         args_json, summary, reason, status, seq, created_at, to_character_id
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)`,
+         args_json, summary, reason, status, seq, created_at, to_character_id, owner_only
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)`,
     )
     .run(
       id,
@@ -102,6 +73,7 @@ export function insertItemProposal(input: {
       input.seq,
       nowIso(),
       input.toCharacterId ?? "",
+      input.ownerOnly ? 1 : 0,
     );
   return getItemProposal(id)!;
 }
@@ -140,17 +112,32 @@ export function listOpenItemProposals(campaignId: string): ItemProposal[] {
 
 // An offer that lapsed unanswered is told to the table like any other
 // settlement (issue 239), so the DM reads that it is closed rather than
-// forgetting it was ever made. Once, on the read that expires it.
-function announceLapsed(proposal: ItemProposal) {
+// forgetting it was ever made. Once, on the read that expires it. An NPC's
+// advance that lapsed is "no answer" (issue 501): the moment passes, with no
+// sting, and the pair cools down before the next one.
+export function announceLapsed(proposal: ItemProposal) {
+  // An offer only its player could read lapses as quietly as it came: a
+  // pact's approach left unanswered is a refusal nobody else hears of.
+  if (proposal.ownerOnly) {
+    if (proposal.toolName === APPROACH_TOOL) {
+      approachLapsed(proposal.argsJson, getSheetById(proposal.characterId)?.name ?? "");
+    }
+    return;
+  }
   const characterName =
     getSheetById(proposal.toolName === "trade" ? proposal.toCharacterId : proposal.characterId)?.name ?? "the character";
+  let note = resolutionNote({ status: "expired", summary: proposal.summary, characterName });
+  if (proposal.toolName === ADVANCE_TOOL) {
+    settleAdvanceRelationship(proposal, "expired", characterName);
+    note = advanceResolutionNote("expired", advanceArgs(proposal)?.subject ?? "The suitor", characterName);
+  }
   const seq = allocateSeq(proposal.campaignId);
   const message = insertCampaignMessage({
     campaignId: proposal.campaignId,
     seq,
     authorType: "system",
     glyph: "cue-bell",
-    content: `${OFFER_NOTE_PREFIX}${resolutionNote({ status: "expired", summary: proposal.summary, characterName })}`,
+    content: `${OFFER_NOTE_PREFIX}${note}`,
   });
   publishWithSeq(proposal.campaignId, seq, "message_added", { message });
 }
@@ -184,4 +171,12 @@ export function resolveItemProposal(
     return null;
   }
   return getItemProposal(proposalId);
+}
+
+// What settling a resolved offer left, recorded after the fact (an NPC's
+// advance settles its relationship once the row is closed, so a second
+// answer can never take the step twice).
+export function recordProposalOutcome(proposal: ItemProposal, outcome: string): ItemProposal | null {
+  getDatabase().prepare(`UPDATE item_proposals SET outcome = ? WHERE id = ?`).run(outcome.slice(0, 300), proposal.id);
+  return getItemProposal(proposal.id);
 }

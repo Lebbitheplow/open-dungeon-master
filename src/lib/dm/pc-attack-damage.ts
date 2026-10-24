@@ -6,6 +6,7 @@
 // pc-attack.ts, which decides and rolls the attack these dice belong to.
 // Nothing here refuses the attack.
 
+import { getFoe } from "@/lib/dm/sheet-foe";
 import { poisonerIgnoresResistance } from "@/lib/srd/feat-combat";
 import type { Advantage, RollResult } from "@/lib/dice";
 import { claimOncePerTurn, type TurnBudget } from "@/lib/dm/action-budget";
@@ -19,9 +20,9 @@ import { DAMAGE_TYPES } from "@/lib/dm/condition-logic";
 import { subclassFeatureDescription } from "@/lib/srd/features";
 import { authoredSneakEdge } from "@/lib/dm/authored-hooks";
 import { authoredSneakBonus } from "@/lib/srd/authored-effects-more";
-import { getEnemy } from "@/lib/db/encounters";
 import { getSheetById } from "@/lib/db/sheets";
-import { applyEnemyDamage } from "@/lib/dm/enemy-damage";
+import { applyEnemyDamage, applySheetFoeBlow } from "@/lib/dm/enemy-damage";
+import { isSheetFoe } from "@/lib/dm/combat-sides-logic";
 import { allyAdjacentToEnemy } from "@/lib/dm/map-tools";
 import { storeBudget } from "@/lib/dm/turn-budget";
 import type { AttackPlan } from "@/lib/dm/pc-attack-plan";
@@ -234,7 +235,7 @@ export function withSneakAttack(input: {
 
 function sneakBonusAgainst(sheetId: string, enemyId: string): { dice: number; feature: string } | null {
   const sheet = getSheetById(sheetId);
-  const enemy = getEnemy(enemyId);
+  const enemy = getFoe(enemyId);
   if (!sheet || !enemy) {
     return null;
   }
@@ -485,6 +486,18 @@ export function landBlow(input: {
   let applied: Record<string, unknown>;
   if (dealt <= 0) {
     applied = unharmed;
+  } else if (isSheetFoe(enemy)) {
+    // A character on the other side (sheet-foe.ts): the blow lands whole,
+    // each type meeting the character's own defenses (pc-damage.ts).
+    const typed = parts.length >= 2 ? parts.map((part) => ({ amount: part.amount, type: part.type || profile.damageType })) : undefined;
+    applied = applySheetFoeBlow(campaign, turn, encounter, enemy, {
+      amount: typed ? typed.reduce((sum, part) => sum + part.amount, 0) : dealt,
+      ...(typed ? { parts: typed } : { type: profile.damageType }),
+      ...(magical ? { magical: true } : {}),
+      ...(input.blow?.spell ? { spell: true } : {}),
+      ...(crit ? { crit: true } : {}),
+      ...(nonlethal ? { nonlethal: true } : {}),
+    }, sheets, sheetsById, holdVictory);
   } else if (parts.length < 2) {
     applied = applyEnemyDamage(
       campaign,

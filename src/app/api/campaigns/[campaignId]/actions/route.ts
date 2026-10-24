@@ -15,7 +15,8 @@ import {
   type Floor,
 } from "@/lib/db/campaigns";
 import { countMessages, insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
-import { getSheetForUser, listSheets } from "@/lib/db/sheets";
+import { getSheetById, getSheetForUser, listSheets } from "@/lib/db/sheets";
+import { dominatedRefusal } from "@/lib/dm/companion-command";
 import { floorAfterRelease } from "@/lib/dm/encounter-tools";
 import { requestDmTurn } from "@/lib/dm/loop";
 import { settleTableWait, waitsForTable } from "@/lib/dm/table-wait";
@@ -36,6 +37,7 @@ import { confirmsSwap, swapQuestion } from "@/lib/dm/concentration-confirm-logic
 import { tableAuthors } from "@/lib/db/homebrew";
 import { tableBreakOn } from "@/lib/dm/table-break";
 import { breakRefusal } from "@/lib/dm/table-break-logic";
+import { isSecretActionBody, secretActionResponse } from "@/lib/dm/secret-action-request";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -83,6 +85,10 @@ export async function POST(
   }
 
   const raw = await request.json().catch(() => ({}));
+  // A secret action (issue 503 Phase 7) is held by the server, never posted.
+  if (isSecretActionBody(raw)) {
+    return secretActionResponse(campaign, user.id, selected, raw);
+  }
   const parsed = actionSchema.safeParse(raw);
   if (!parsed.success) {
     return Response.json({ error: "Invalid action." }, { status: 400 });
@@ -102,6 +108,15 @@ export async function POST(
   const tableBreak = kind === "ooc" ? null : tableBreakOn(campaignId);
   if (tableBreak) {
     return Response.json({ error: breakRefusal(tableBreak), tableBreak }, { status: 409 });
+  }
+  // A character dominated by the other side is the DM's to play until the
+  // charm ends (src/lib/dm/companion-command.ts): its player hears why,
+  // whoever's turn it is. Table talk is free.
+  const named = parsed.data.characterId ? getSheetById(parsed.data.characterId) : null;
+  const acting = named && named.campaignId === campaignId && named.userId === user.id ? named : selected;
+  const held = kind === "ooc" ? null : dominatedRefusal(campaignId, acting);
+  if (held) {
+    return Response.json({ error: held, dominated: true }, { status: 409 });
   }
   const intent = kind === "do" ? parseMessageIntent(parsed.data.intent) : null;
   // Floor control: during a spotlight only the named players may act (ooc is

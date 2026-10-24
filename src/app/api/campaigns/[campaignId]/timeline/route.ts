@@ -1,4 +1,4 @@
-import { isErrorResponse, requireMember, steersStory } from "@/lib/campaign-api";
+import { isErrorResponse, requireMember, seesStorytellerSecrets, steersStory } from "@/lib/campaign-api";
 import { latestSeq } from "@/lib/db/campaigns";
 import { listChapters } from "@/lib/db/chapters";
 import { listFactsVisibleTo } from "@/lib/db/facts";
@@ -45,7 +45,7 @@ export async function GET(
     {
       chapters,
       acts,
-      facts: listFactsVisibleTo(campaignId, owned, dm),
+      facts: listFactsVisibleTo(campaignId, owned, dm, seesStorytellerSecrets(context)),
       sessions: listScheduledSessions(campaignId),
       arcs: dm ? (campaign.storyArc?.worldArcs ?? []) : [],
       events: listCalendarEvents(campaignId, dm).map((event) => ({

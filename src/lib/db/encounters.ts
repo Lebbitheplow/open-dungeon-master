@@ -6,6 +6,10 @@ import type { ConditionMetaMap, EquipmentItem } from "@/lib/schemas/sheet";
 import type { TurnBudget } from "@/lib/dm/action-budget";
 import { normalizeIntents, type EncounterIntents } from "@/lib/db/encounter-intents";
 import { restoreOwnForm } from "@/lib/db/enemy-form";
+import { normalizeSides, type SideExceptions } from "@/lib/dm/combat-sides-logic";
+import { getSheetById, patchSheet } from "@/lib/db/sheets";
+import { noteDominationShift } from "@/lib/db/side-watch";
+import { publishPersisted } from "@/lib/events";
 
 // Server-authoritative combat state. Enemy HP lives here and changes ONLY
 // through the encounter tools; the AI DM narrates from tool results, never
@@ -91,6 +95,12 @@ export type Encounter = {
   // declared intent). Only meaningful while `round` matches the encounter's;
   // written by recordEncounterIntent (src/lib/dm/intent.ts reads it).
   intents: EncounterIntents;
+  // The combatants fighting on the side their kind does not (a companion
+  // turned on the party, a summon gone wild): combatant id to side. Written
+  // only by setEncounterSides (src/lib/dm/combat-sides.ts moves people);
+  // saveEncounter leaves it alone. Read sides through src/lib/dm/combatant.ts,
+  // which also knows a domination's.
+  sides: SideExceptions;
   // Legendary action and resistance pools per enemy, and whether this
   // fight is in a lair (src/lib/dm/legendary-logic.ts).
   legendary: LegendaryState;
@@ -144,6 +154,7 @@ type EncounterRow = {
   ammo_spent_json: string | null;
   targets_json: string | null;
   intents_json: string | null;
+  sides_json?: string | null;
   outcome: string;
   summary: string;
   legendary_json: string | null;
@@ -235,6 +246,7 @@ function mapEncounter(row: EncounterRow): Encounter {
     ammoSpent: parseJson<Encounter["ammoSpent"]>(row.ammo_spent_json, {}),
     targets: normalizeTargets(parseJson<unknown>(row.targets_json ?? "{}", {})),
     intents: normalizeIntents(parseJson<unknown>(row.intents_json ?? "{}", {})),
+    sides: normalizeSides(parseJson<unknown>(row.sides_json ?? "{}", {})),
     legendary: normalizeLegendaryState(parseJson<unknown>(row.legendary_json ?? "{}", {})),
     outcome: row.outcome,
     summary: row.summary,
@@ -386,6 +398,15 @@ export function saveEncounter(encounter: Encounter) {
     );
 }
 
+// The one writer of an encounter's side exceptions (combat-sides-logic.ts).
+// Kept apart from saveEncounter, as the target lines are, so a handler that
+// read the encounter before a side changed cannot write the old sides back.
+export function setEncounterSides(encounterId: string, sides: SideExceptions) {
+  getDatabase()
+    .prepare(`UPDATE encounters SET sides_json = ?, updated_at = ? WHERE id = ?`)
+    .run(JSON.stringify(sides), nowIso(), encounterId);
+}
+
 export function setEncounterSummary(encounterId: string, summary: EncounterSummary, line: string) {
   getDatabase()
     .prepare(`UPDATE encounters SET summary_json = ?, summary = ?, updated_at = ? WHERE id = ?`)
@@ -405,6 +426,9 @@ export function insertEnemy(input: {
   displayName: string;
   initiative: number;
   stats: EnemyStats;
+  // Hit points it arrives with when below its maximum (a companion come back
+  // worn, src/lib/dm/companion-return.ts); absent, it arrives whole.
+  currentHp?: number;
 }): EncounterEnemy {
   const id = crypto.randomUUID();
   const now = nowIso();
@@ -422,7 +446,7 @@ export function insertEnemy(input: {
       input.slug,
       input.displayName.slice(0, 80),
       input.stats.maxHp,
-      input.stats.maxHp,
+      input.currentHp === undefined ? input.stats.maxHp : Math.max(1, Math.min(input.stats.maxHp, Math.round(input.currentHp))),
       input.stats.ac,
       input.initiative,
       input.stats.cr,
@@ -511,11 +535,32 @@ export function patchEnemyHp(
   return getEnemy(enemyId);
 }
 
+// A character fighting against the party is struck, cursed and made to
+// save through a foe view whose id is the sheet's (src/lib/dm/sheet-foe.ts),
+// so a condition or a concentration those paths write by that id is the
+// sheet's: it lands there, and the table hears of it as any sheet change.
+// Whether `id` is no enemy row but a character's sheet.
+function sheetBehind(id: string): boolean {
+  return !getDatabase().prepare(`SELECT 1 FROM encounter_enemies WHERE id = ?`).get(id) && getSheetById(id) !== null;
+}
+
+function patchSheetAsFoe(id: string, patch: Parameters<typeof patchSheet>[1]) {
+  const updated = patchSheet(id, patch);
+  if (updated) {
+    publishPersisted(updated.campaignId, "sheet_updated", { sheet: updated });
+  }
+}
+
 export function patchEnemyConditions(
   enemyId: string,
   conditions: string[],
   conditionMeta?: ConditionMetaMap,
 ): EncounterEnemy | null {
+  if (sheetBehind(enemyId)) {
+    patchSheetAsFoe(enemyId, { conditions, ...(conditionMeta !== undefined ? { conditionMeta } : {}) });
+    return null;
+  }
+  const before = getEnemy(enemyId);
   if (conditionMeta !== undefined) {
     getDatabase()
       .prepare(
@@ -530,6 +575,8 @@ export function patchEnemyConditions(
   // A Polymorph ends with its condition whichever way that goes (the
   // caster's concentration, its hour, Dispel Magic): the own block returns.
   const after = getEnemy(enemyId);
+  // A Dominate starting or ending moves the creature's side (side-watch.ts).
+  noteDominationShift(after?.campaignId ?? before?.campaignId ?? "", before, after);
   const own = after?.stats.polymorphedFrom;
   if (!own || after.conditions.some((name) => name.toLowerCase() === "polymorphed")) {
     return after;

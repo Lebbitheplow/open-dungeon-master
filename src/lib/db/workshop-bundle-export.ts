@@ -16,6 +16,7 @@ import { normalizeStock } from "@/lib/db/shops";
 import { clampMarkup } from "@/lib/dm/shop-logic";
 import { storedSheetSchema } from "@/lib/schemas/sheet";
 import { storedGender } from "@/lib/gender";
+import { normalizeAttraction } from "@/lib/attraction";
 import { isUploadedImagePath } from "@/lib/uploads";
 import { normalizeMapSkin } from "@/lib/battlemap/skins";
 import { normalizeRoutes } from "@/lib/workshop/board";
@@ -137,10 +138,18 @@ export const BUNDLE_COLUMNS: Record<string, { carried: string[]; left: Record<st
     left: { ...IDENTITY, visited: "play", is_current: "play", map_image_json: "a legacy column nothing reads" },
   },
   npcs: {
-    carried: ["name", "attitude", "trait", "location", "role", "gender", "aliases_json", "personality_json", "goals_json", "relations_json", "portrait_url", "voice_json", "faction_id", "stat_block"],
+    carried: ["name", "attitude", "trait", "location", "role", "gender", "attraction_json", "aliases_json", "personality_json", "goals_json", "relations_json", "portrait_url", "voice_json", "faction_id", "stat_block"],
     left: {
       ...IDENTITY,
       last_shift_turn: "the source table's clock",
+      companion_sheet_id: "a companion's sheet is the source table's play",
+      values_json: "a companion's convictions, seeded again from its class when one joins a party",
+      conscience_json: "a companion's conscience is the source table's play",
+      companion_snapshot_json: "the sheet a companion left with is the source table's play",
+      departure_json: "how a companion left, and its return, are the source table's play",
+      conduct_json: "what a companion refused and the share it wants are the source table's play",
+      agenda_json: "a companion's hidden employer is the source table's secret",
+      pact_tried_at: "when a companion last tried to recruit is the source table's play",
       bonds_json: "keyed by characters a bundle does not carry",
       pressure_json: "the agency model's running pressure, rebuilt in play",
       arc_cast_id: "the source campaign's arc",
@@ -374,6 +383,7 @@ export function exportWorkshopBundle(
       location: str(row.location),
       role: str(row.role),
       gender: storedGender(row.gender),
+      attraction: normalizeAttraction(str(row.attraction_json)),
       aliases: parseJson<string[]>(str(row.aliases_json, "[]"), []),
       personality: str(row.personality_json),
       goals: str(row.goals_json),

@@ -3,15 +3,17 @@
 // block. Split from action-tools.ts so the grapple, object and reaction
 // modules can use them without importing the take_action handler.
 
+import { isSheetFoe } from "@/lib/dm/combat-sides-logic";
+import { rollCharacterCheck } from "@/lib/dm/contest-roll";
 import { enemyExhaustion } from "@/lib/dm/monster-abilities";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import type { EncounterEnemy } from "@/lib/db/encounters";
 import { insertRoll } from "@/lib/db/rolls";
-import { patchSheet } from "@/lib/db/sheets";
+import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { d20Expression, rollExpression } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
-import { abilityMod } from "@/lib/srd";
+import { abilityMod, computeSheetDerived } from "@/lib/srd";
 import { saveModFor } from "@/lib/bestiary/enemy-numbers";
 import { mergeAdvantage, rollDerivation } from "@/lib/dm/condition-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -73,6 +75,18 @@ export function rollEnemyContest(
   which: "either" | "athletics",
   detail: string,
 ): number {
+  // A character fighting on the other side, seen as a foe (sheet-foe.ts),
+  // makes the check as the character it is: its better skill, its riders.
+  const asSheet = isSheetFoe(enemy) ? getSheetById(enemy.id) : null;
+  if (asSheet) {
+    const skills = computeSheetDerived(asSheet).skills;
+    const skill = which === "either" && (skills.acrobatics ?? 0) > (skills.athletics ?? 0) ? "acrobatics" : "athletics";
+    const checked = rollCharacterCheck(campaign, asSheet, { skill }, detail);
+    if (checked.rollId) {
+      turn.rollIds.push(checked.rollId);
+    }
+    return checked.autoFailed ? 0 : checked.total;
+  }
   const worn = enemyExhaustion(enemy.conditions) >= 1;
   const advantage = mergeAdvantage([...rollDerivation(enemy.conditions, "skill_check", "str").sources, ...(worn ? ["disadvantage" as const] : [])]);
   const outcome = rollExpression(d20Expression(contestModifier(enemy.stats, which), advantage));

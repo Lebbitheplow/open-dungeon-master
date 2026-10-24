@@ -20,8 +20,21 @@ export const FACT_CATEGORIES = [
 export type FactCategory = (typeof FACT_CATEGORIES)[number];
 
 // Who may read a fact outside the DM prompt: the whole party, the DM prompt
-// only, or an explicit list of campaign character ids.
-export type FactKnownBy = "party" | "dm" | string[];
+// only, or an explicit list of campaign character ids. "storyteller" is a DM
+// secret kept even from the lead who steers an AI table: the storyteller
+// tier (src/lib/dm/viewer.ts), for what exists to be kept from the
+// characters (#503's stored intents and pacts).
+export type FactKnownBy = "party" | "dm" | "storyteller" | string[];
+
+// The storyteller's own secret (src/lib/dm/viewer.ts): never the lead's.
+export function isStorytellerFact(knownBy: unknown): knownBy is "storyteller" {
+  return knownBy === "storyteller";
+}
+
+// A fact kept out of the players' views: a DM secret, or the storyteller's.
+export function isSecretFact(knownBy: unknown): boolean {
+  return knownBy === "dm" || isStorytellerFact(knownBy);
+}
 
 export type FactCandidate = {
   category: FactCategory;
@@ -160,7 +173,7 @@ export function renderFactsForPrompt(facts: FactLike[]): {
       perCategory.set(fact.category, used + 1);
       budget -= line.length;
     }
-    if (fact.knownBy === "dm") {
+    if (isSecretFact(fact.knownBy)) {
       dmLines.push(line);
     } else {
       partyLines.push(line);
@@ -178,7 +191,7 @@ export function renderFactsForPrompt(facts: FactLike[]): {
 
 // Serialization helpers for the known_by column.
 export function parseKnownBy(raw: string): FactKnownBy {
-  if (raw === "party" || raw === "dm") {
+  if (raw === "party" || raw === "dm" || raw === "storyteller") {
     return raw;
   }
   if (raw.startsWith("[")) {
@@ -200,17 +213,23 @@ export function serializeKnownBy(knownBy: FactKnownBy): string {
 
 // Whether a member (with the given owned character ids) may read a fact.
 // DM-only facts are spoilers (off-screen developments); they stay out of
-// every player view unless the lead explicitly asks for secrets.
+// every player view unless the lead explicitly asks for secrets. A
+// storyteller secret needs the storyteller tier on top (viewer.ts
+// storytellerSees): never the lead's, at any table.
 export function factVisibleTo(
   knownBy: FactKnownBy,
   ownedCharacterIds: string[],
   includeDmSecrets: boolean,
+  includeStorytellerSecrets = false,
 ): boolean {
   if (knownBy === "party") {
     return true;
   }
   if (knownBy === "dm") {
     return includeDmSecrets;
+  }
+  if (isStorytellerFact(knownBy)) {
+    return includeDmSecrets && includeStorytellerSecrets;
   }
   return knownBy.some((id) => ownedCharacterIds.includes(id));
 }

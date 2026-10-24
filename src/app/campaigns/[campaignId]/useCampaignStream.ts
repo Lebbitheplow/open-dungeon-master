@@ -38,6 +38,7 @@ import type { CameraEvent, HandoutShown, SceneState, TitleCard } from "@/lib/sce
 import type { MapPing } from "@/lib/dm/board-logic";
 import { capsForRole, type ViewerCaps } from "@/lib/dm/viewer";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { DEPARTING_KEPT_MS, type DepartingSheet } from "@/app/campaigns/[campaignId]/departing";
 import type { DmJobView } from "@/lib/dm/job-stage-logic";
 import type { VoiceRosterEntry } from "@/lib/voice/types";
 import { navigateTo } from "@/lib/navigation";
@@ -123,6 +124,14 @@ export type ItemProposal = {
   // A trade's other side and its offer (11.2).
   toCharacterId?: string;
   offer?: { toCharacterId: string; give: Array<{ name: string; qty: number }>; giveCp: number; want: Array<{ name: string; qty: number }>; wantCp: number } | null;
+  // An NPC's romantic advance (issue 501): who makes it, and their face.
+  advance?: { suitor: string; portraitUrl: string; look: { gender: string; race: string; class: string; role: string } };
+  // Only its own player is sent it and answers it (issue 503: a pact's
+  // approach); the apps notify on it.
+  ownerOnly?: boolean;
+  // A pact's approach: the answers it offers, and who makes it.
+  choices?: Array<{ id: string; label: string; hint: string }>;
+  from?: { name: string; portraitUrl: string; look: { gender: string; race: string; class: string } };
 };
 
 // A disputed ruling (src/lib/dm/dispute-logic.ts), open or under vote.
@@ -211,6 +220,10 @@ export type CampaignState = {
   // Bumped by the contentless relationships_updated ephemeral; the Bonds
   // panel fetches its own tier-scoped view when this changes.
   relationshipsVersion: number;
+  // Lasting companions whose sheet just went with sheet_deleted's
+  // `departed` (issue 503): the Party panel dims each card and moves it to
+  // its Gone list (PartyGone.tsx). Kept briefly, never persisted.
+  departingSheets: DepartingSheet[];
   // Bumped on quests_updated so the quest log refetches.
   questsVersion: number;
   // Bumped on factions_updated so the Factions panel refetches.
@@ -365,6 +378,7 @@ const initialState: CampaignState = {
   asksLoaded: false,
   facts: [],
   relationshipsVersion: 0,
+  departingSheets: [],
   factionsVersion: 0,
   worldVersion: 0,
   loreVersion: 0,
@@ -550,7 +564,9 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
           return next;
         }
         case "roll_result":
-          next.rolls = [...state.rolls.slice(-30), payload.roll as StoredRoll];
+          // A hidden roll revealed (issue 503) arrives again under its own id:
+          // it replaces the copy its player had, rather than doubling it.
+          next.rolls = [...state.rolls.filter((entry) => entry.id !== (payload.roll as StoredRoll).id).slice(-30), payload.roll as StoredRoll];
           next.latestRoll = {
             roll: payload.roll as StoredRoll,
             source: String(payload.source ?? "digital"),
@@ -825,9 +841,21 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
           );
           return next;
         }
-        case "sheet_deleted":
+        case "sheet_deleted": {
           next.sheets = state.sheets.filter((entry) => entry.id !== payload.sheetId);
+          // A lasting companion leaving (issue 503): the card it had is kept
+          // a moment for the Party panel to dim and file under Gone.
+          const departed = payload.departed as { how?: unknown } | undefined;
+          const leaving = departed ? state.sheets.find((entry) => entry.id === payload.sheetId) : undefined;
+          if (leaving) {
+            const now = Date.now();
+            next.departingSheets = [
+              ...state.departingSheets.filter((entry) => now - entry.at < DEPARTING_KEPT_MS && entry.sheet.id !== leaving.id),
+              { sheet: leaving, how: typeof departed?.how === "string" ? departed.how : "", at: now },
+            ];
+          }
           return next;
+        }
         case "chapter_closed": {
           const closed = payload.chapter as Chapter | undefined;
           const opened = payload.opened as Chapter | undefined;

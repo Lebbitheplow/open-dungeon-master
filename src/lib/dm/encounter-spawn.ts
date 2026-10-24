@@ -25,6 +25,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { dmRoll } from "@/lib/dm/roll-card";
 import type { ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
+import { fieldSheetFoes, sheetFoesByName, type SheetFoe, type SheetFoeEntry } from "@/lib/dm/sheet-foes";
 
 // Enemy spawning shared by start_encounter and the mid-combat add_enemies
 // tool, so reinforcements and summons are real server-tracked combatants
@@ -43,6 +44,11 @@ export type ResolvedEnemyRequest = {
   slug: string;
   name: string;
   stats: ReturnType<typeof synthesizeStats>;
+  // A character who fights as its own sheet on the foes' side (issue 503:
+  // a companion come back against the party, or one that turned on it): no
+  // enemy row is made for it; `stats` is what the fight is budgeted on
+  // (src/lib/dm/sheet-foes.ts).
+  sheetFoe?: SheetFoe;
 };
 
 // Resolves every requested enemy before anything is created. Returns the
@@ -64,9 +70,19 @@ export function resolveEnemyRequests(
   const resolved: ResolvedEnemyRequest[] = [];
   const authorList = Array.isArray(authors) ? authors : authors ? [authors] : [];
   const cast = campaignId ? listNpcs(campaignId).filter((npc) => npc.statBlock) : [];
+  // A companion who left the party and comes back against it, or one that
+  // turned on it, fights as themselves: once, whatever the count.
+  const sheetFoes = campaignId ? sheetFoesByName(campaignId) : new Map<string, SheetFoeEntry>();
   for (const request of requests) {
     const count = request.count ?? 1;
     const wanted = textKey(request.monster);
+    const foe = sheetFoes.get(wanted);
+    if (foe) {
+      if (!resolved.some((entry) => entry.sheetFoe && textKey(entry.name) === wanted)) {
+        resolved.push({ slug: "sheet", name: foe.name, stats: foe.stats, sheetFoe: foe.foe });
+      }
+      continue;
+    }
     const npc = cast.find((entry) => textKey(entry.name) === wanted || entry.aliases.some((alias) => textKey(alias) === wanted));
     const match = npc
       ? (() => {
@@ -188,6 +204,10 @@ export function handleAddEnemies(
     };
   }
 
+  // Characters named here fight as their own sheets (sheet-foes.ts): fielded
+  // below, once the enemy rows are in.
+  const rows = outcome.resolved.filter((entry) => !entry.sheetFoe);
+  const foes = outcome.resolved.flatMap((entry) => (entry.sheetFoe ? [entry.sheetFoe] : []));
   const existing = listEnemies(encounter.id);
   const alive = existing.filter((enemy) => enemy.status === "alive");
   if (alive.length + outcome.resolved.length > 8) {
@@ -212,7 +232,7 @@ export function handleAddEnemies(
   // that there are more of them: in the tracker, in the order, on the board.
   const { names, renames } = nameArrivals(
     existing.map((enemy) => enemy.displayName),
-    outcome.resolved.map((entry) => entry.name),
+    rows.map((entry) => entry.name),
   );
   const renamed = renames.map(({ index, name }) => ({ enemy: existing[index], name }));
   for (const { enemy, name } of renamed) {
@@ -223,7 +243,7 @@ export function handleAddEnemies(
       }
     }
   }
-  const inserted = outcome.resolved.map((entry, index) =>
+  const inserted = rows.map((entry, index) =>
     insertEnemy({
       encounterId: encounter.id,
       campaignId: campaign.id,
@@ -285,16 +305,20 @@ export function handleAddEnemies(
     });
     publishBattleMapUpdate(campaign.id);
   }
+  const fielded = foes.length ? fieldSheetFoes(campaign, foes) : [];
   publishEncounter(campaign.id);
 
   return {
     ok: true,
-    added: inserted.map((enemy) => ({
-      enemyId: enemy.id,
-      name: enemy.displayName,
-      ac: enemy.ac,
-      hp: `${enemy.currentHp}/${enemy.maxHp}`,
-    })),
+    added: [
+      ...inserted.map((enemy) => ({
+        enemyId: enemy.id,
+        name: enemy.displayName,
+        ac: enemy.ac,
+        hp: `${enemy.currentHp}/${enemy.maxHp}`,
+      })),
+      ...fielded.map((sheet) => ({ characterId: sheet.id, name: sheet.name, ac: sheet.ac, hp: `${sheet.currentHp}/${sheet.maxHp}`, side: "foe" })),
+    ],
     // Told, so the next call and the next passage use the name on the board.
     ...(renamed.length
       ? { renamed: renamed.map(({ enemy, name }) => ({ enemyId: enemy.id, was: enemy.displayName, name })) }

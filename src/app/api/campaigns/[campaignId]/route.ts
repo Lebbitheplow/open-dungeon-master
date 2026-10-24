@@ -25,6 +25,7 @@ import { listNotesVisibleTo } from "@/lib/db/notes";
 import { listOpenPendingRolls, publicPendingRoll } from "@/lib/db/dm-turns";
 import { listDmBeats } from "@/lib/db/dm-beats";
 import { listOpenItemProposals } from "@/lib/db/item-proposals";
+import { offerVisibleTo } from "@/lib/dm/proposal-view";
 import { listOpenDisputes, publicDispute } from "@/lib/db/disputes";
 import { publicItemProposal } from "@/lib/dm/proposal-intercept";
 import { listLocations } from "@/lib/db/locations";
@@ -156,7 +157,11 @@ export async function GET(
     notes: listNotesVisibleTo(campaignId, user.id, caps.steersStory),
     characterEvents: listRecentCampaignEvents(campaignId, 30),
     encounter: activePublicEncounter(campaignId, { enemyNumbers: caps.enemyNumbers }),
-    itemProposals: listOpenItemProposals(campaignId).map(publicItemProposal),
+    // An owner-only offer (a pact's approach, issue 503) only to its player
+    // and the storyteller.
+    itemProposals: listOpenItemProposals(campaignId)
+      .filter((proposal) => offerVisibleTo(proposal, user.id, caps))
+      .map(publicItemProposal),
     disputes: listOpenDisputes(campaignId).map(publicDispute),
     // Story the DM has written down. A DM tool, so only the DM seat is
     // served the list; the text itself is public either way, because a beat

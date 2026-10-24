@@ -62,6 +62,26 @@ export const COMPANION_LABELS: Record<CompanionSetting, string> = {
   off: "Off",
 };
 
+// How far a lasting companion's conscience may go (issue 503): the most it
+// does when the party's deeds break what it holds to. One preset, Leave by
+// default; it lives in the campaign's Bonds settings, never the creator.
+export const CONSCIENCE_SETTINGS = ["off", "talk", "leave", "turn"] as const;
+export type ConscienceSetting = (typeof CONSCIENCE_SETTINGS)[number];
+
+export const CONSCIENCE_LABELS: Record<ConscienceSetting, string> = {
+  off: "Off",
+  talk: "Talk",
+  leave: "Leave",
+  turn: "Turn",
+};
+
+export const CONSCIENCE_HINTS: Record<ConscienceSetting, string> = {
+  off: "Companions judge by standing alone: no values, no warnings, nobody leaves over a deed.",
+  talk: "Companions object, warn and set ultimatums, and stay whatever happens.",
+  leave: "Pushed past their breaking point, a companion walks out, slips away or reports the party.",
+  turn: "As Leave, and a companion past their breaking point may turn on the party in a fight.",
+};
+
 // How hit points are counted after 1st level (1st is always the hit die's
 // highest face plus the Constitution modifier): the die's fixed value, a die
 // the SERVER rolls, or its highest face. src/lib/srd/hit-points.ts.

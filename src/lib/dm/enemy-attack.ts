@@ -2,13 +2,20 @@
 // enemy's real stat block against the target's real Armor Class. Split from
 // encounter-tools.ts, which dispatches to it and whose auto-act fallback
 // calls it for the enemies a turn skipped. Must not import encounter-tools.
+//
+// The target is any combatant (src/lib/dm/combatant.ts): a character goes
+// the character path below, with all a sheet's defences; an enemy fighting
+// on the other side (a creature the party dominates) is struck stat block
+// against stat block (src/lib/dm/enemy-strike.ts).
+
+import { hostileTo, resolveCombatant } from "@/lib/dm/combatant";
+import { enemyStrikesEnemy } from "@/lib/dm/enemy-strike";
+import { lashOutTarget } from "@/lib/dm/confusion";
 
 import { weaponNamed } from "@/lib/srd/weapons";
 import { readiedHolder } from "@/lib/dm/readied-release";
-import { martialAdvantageDice, surpriseAttackDice } from "@/lib/dm/monster-traits";
-import { tilesBetween } from "@/lib/dm/attack-spatial";
-import { incapacitatedBy } from "@/lib/dm/condition-logic";
-import { listEnemies, patchEnemyConditions, type EncounterEnemy } from "@/lib/db/encounters";
+import { hitTraitDice } from "@/lib/dm/side-allies";
+import { patchEnemyConditions, type EncounterEnemy } from "@/lib/db/encounters";
 import { mirrorImageDecoy, sanctuaryRefusal } from "@/lib/dm/spell-defenses";
 import { enfeebledBlow, spellRetort, spendEnemyRiders } from "@/lib/dm/spell-retort";
 import { z } from "zod";
@@ -100,6 +107,9 @@ export function handleEnemyAttack(
   rawArguments: string,
   sheets: CharacterSheet[],
   sheetsById: Map<string, CharacterSheet>,
+  // The engine's own attacks (Confusion's random creature): `anySide` lets
+  // the target be on the attacker's own side.
+  engine: { anySide?: boolean } = {},
 ): ToolResult {
   const encounter = getActiveEncounter(campaign.id);
   if (!encounter) {
@@ -133,12 +143,48 @@ export function handleEnemyAttack(
   if (conditionTurnShape(found.conditions).slowed && (bonus ? enemyActedThisRound(encounter, found.id) : enemyBonusThisRound(encounter, found.id))) {
     return { error: `${found.displayName} is slowed: it takes an action or a bonus action this turn, not both, and it has taken its ${bonus ? "action" : "bonus action"}.`, retry: true };
   }
-  const staleTarget =
-    sheetsById.get(args.targetCharacterId.trim()) ??
-    sheets.find(
-      (sheet) => textKey(sheet.name) === textKey(args.targetCharacterId),
-    );
-  const target = staleTarget ? getSheetById(staleTarget.id) : null;
+  // The target is any combatant (src/lib/dm/combatant.ts): a character on
+  // either side, or an enemy fighting on the other one (a creature the party
+  // dominates, a summon gone wild).
+  const aimed =
+    resolveCombatant(campaign.id, encounter, args.targetCharacterId) ??
+    (() => {
+      const named = sheets.find((sheet) => textKey(sheet.name) === textKey(args.targetCharacterId));
+      return named ? resolveCombatant(campaign.id, encounter, named.id) : null;
+    })();
+  if (!aimed) {
+    return unknownSheetRef("targetCharacterId", args.targetCharacterId, sheets);
+  }
+  if (aimed.id === found.id) {
+    return { error: `${found.displayName} cannot attack itself. Name the creature it attacks.`, retry: true };
+  }
+  // Confusion's lash-out (confusion.ts): one melee attack on the creature
+  // its d10 picked, and no other, whichever side it is on.
+  const lash = lashOutTarget(found, encounter.round);
+  if (lash && aimed.id !== lash) {
+    const picked = resolveCombatant(campaign.id, encounter, lash);
+    return { error: `${found.displayName} is confused: this turn's attack is on ${picked?.name ?? "the creature Confusion picked"}, picked at random, and no other.`, refused: "rules" };
+  }
+  if (!engine.anySide && !lash && !hostileTo(encounter, { kind: "enemy", id: found.id }, { kind: aimed.kind, id: aimed.id })) {
+    return {
+      error: `${aimed.name} fights on ${found.displayName}'s side: enemy_attack does not strike an ally. Pick a creature on the other side.`,
+      refused: "rules",
+    };
+  }
+  if (aimed.kind === "enemy") {
+    if (charmedBy(found.conditions, found.conditionMeta, aimed.id)) {
+      return { error: `${found.displayName} is charmed by ${aimed.name} and cannot attack it.`, retry: true };
+    }
+    return enemyStrikesEnemy(campaign, turn, found, aimed.enemy, {
+      ...(args.attack ? { attack: args.attack } : {}),
+      ...(args.advantage ? { advantage: args.advantage } : {}),
+      single: bonus || Boolean(lash) || conditionTurnShape(found.conditions).slowed,
+      bonus,
+      sheets,
+      sheetsById,
+    });
+  }
+  const target = getSheetById(aimed.id);
   if (!target) {
     return unknownSheetRef("targetCharacterId", args.targetCharacterId, sheets);
   }
@@ -186,7 +232,8 @@ export function handleEnemyAttack(
   }
   // Slow: no more than one attack on its turn, Multiattack or not (SRD 5.1).
   // A bonus action's attack is one swing, and spends no legendary strike.
-  const single = bonus || takeLegendaryStrike(campaign.id, found.id) || conditionTurnShape(found.conditions).slowed;
+  // Confusion's lash-out is one melee attack, not the routine.
+  const single = bonus || Boolean(lash) || takeLegendaryStrike(campaign.id, found.id) || conditionTurnShape(found.conditions).slowed;
   if (single && !asked && actionAttacks.length > 1) {
     return { error: `${found.displayName} makes one attack this turn: name it in attack (${actionAttacks.map((attack) => attack.name).join(", ")}).`, retry: true };
   }
@@ -410,7 +457,7 @@ export function handleEnemyAttack(
 
     // Martial Advantage and Surprise Attack add their dice to the blow
     // (src/lib/dm/monster-traits.ts), doubled on a critical hit like the rest.
-    const bonus = traitDice(encounter, standing, target.id, attack, martialSpent);
+    const bonus = hitTraitDice(encounter, standing, target.id, attack, martialSpent);
     if (bonus.martial) {
       martialSpent = true;
     }
@@ -546,40 +593,6 @@ export function handleEnemyAttack(
     ...(targetHp ? { targetHp } : {}),
     ...(dropped ? { dropped: true, note: `${target.name} falls to 0 HP.` } : {}),
   };
-}
-
-// The dice a trait adds to a hit: Martial Advantage (a weapon hit on a
-// creature within 5 feet of one of its allies that isn't incapacitated, once
-// a turn) and Surprise Attack (a hit on a creature it surprised, in the
-// first round).
-function traitDice(
-  encounter: { id: string; round: number; surprisedIds: string[] },
-  enemy: { id: string; stats: { traits?: string[] } },
-  targetId: string,
-  attack: { spellAttack?: boolean },
-  martialSpent: boolean,
-): { dice: string[]; martial: boolean } {
-  const dice: string[] = [];
-  let martial = false;
-  const martialDice = martialAdvantageDice(enemy.stats);
-  if (martialDice && !martialSpent && !attack.spellAttack) {
-    const ally = listEnemies(encounter.id).some(
-      (other) =>
-        other.id !== enemy.id &&
-        other.status === "alive" &&
-        !incapacitatedBy(other.conditions) &&
-        (tilesBetween(encounter.id, other.id, targetId) ?? Infinity) <= 1,
-    );
-    if (ally) {
-      dice.push(martialDice);
-      martial = true;
-    }
-  }
-  const surprise = surpriseAttackDice(enemy.stats);
-  if (surprise && encounter.round === 1 && encounter.surprisedIds.includes(targetId)) {
-    dice.push(surprise);
-  }
-  return { dice, martial };
 }
 
 // Among the Dead (the Undying warlock): an undead that targets the warlock

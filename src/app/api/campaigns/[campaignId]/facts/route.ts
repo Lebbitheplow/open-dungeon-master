@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { isErrorResponse, steersStory, requireMember } from "@/lib/campaign-api";
+import { isErrorResponse, seesStorytellerSecrets, steersStory, requireMember } from "@/lib/campaign-api";
 import {
   getFactById,
   insertFact,
@@ -38,10 +38,13 @@ export async function GET(
   const secrets =
     new URL(request.url).searchParams.get("secrets") === "1" && steersStory(context);
   return Response.json({
+    // The storyteller's own secrets stay out even of ?secrets=1 for the lead
+    // who steers an AI table (src/lib/dm/viewer.ts, storyteller secrets).
     facts: listFactsVisibleTo(
       campaignId,
       ownedCharacterIds(campaignId, context.user.id),
       secrets,
+      seesStorytellerSecrets(context),
     ),
     lead: steersStory(context),
   });
@@ -124,6 +127,7 @@ export async function PATCH(
     campaignId,
     ownedCharacterIds(campaignId, context.user.id),
     steersStory(context),
+    seesStorytellerSecrets(context),
   ).some((fact) => fact.id === factId);
   if (!visible) {
     return Response.json({ error: "Fact not found." }, { status: 404 });

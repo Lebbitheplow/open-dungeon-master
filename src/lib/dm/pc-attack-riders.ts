@@ -3,13 +3,14 @@
 // conditions a rider can leave on the target. Split from pc-attack.ts, which
 // decides the attack these belong to.
 
+import { getFoe } from "@/lib/dm/sheet-foe";
 import { CURVING_SHOT } from "@/lib/srd/authored-economy";
 import { settleEnemyIncapacitation } from "@/lib/dm/enemy-incapacitation";
 import { storeBudget } from "@/lib/dm/turn-budget";
 import { untilTurnEnd } from "@/lib/dm/turn-end";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { PendingAttack } from "@/lib/db/dm-turns";
-import { getActiveEncounter, getEnemy, patchEnemyConditions, type EncounterEnemy } from "@/lib/db/encounters";
+import { getActiveEncounter, patchEnemyConditions, type EncounterEnemy } from "@/lib/db/encounters";
 import { rollEnemySave } from "@/lib/dm/forced-save";
 import type { CreatureOnHit } from "@/lib/srd/creature-attacks";
 import { resourceLeft } from "@/lib/dm/attack-rules";
@@ -283,7 +284,7 @@ export function stunningStrikeSave(
   monkId: string,
   dc: number,
 ): string {
-  const fresh = getEnemy(enemyId);
+  const fresh = getFoe(enemyId);
   if (!fresh || fresh.encounterId !== encounterId || fresh.status !== "alive") {
     return "Stunning Strike: the target is already down.";
   }

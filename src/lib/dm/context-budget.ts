@@ -1,5 +1,6 @@
 import type { ArcTrace } from "./arc-relevance.ts";
 import type { LoreTrace } from "./world-lore-logic.ts";
+import { withoutStorytellerSecrets, type StorytellerSecret, type ViewerCaps } from "./viewer.ts";
 // Pure logic for the DM prompt's context budget.
 //
 // What this replaces: a single HISTORY_CHAR_BUDGET that trimmed history by
@@ -105,6 +106,9 @@ export type BlockTrace = {
   // Why it was dropped, or why it was always going to be kept.
   reason: string;
   position: number;
+  // A storyteller secret (src/lib/dm/viewer.ts): the row and its tokens are
+  // left out for every viewer but the storyteller (traceForViewer).
+  secret?: StorytellerSecret;
 };
 
 export type ContextTrace = {
@@ -148,6 +152,19 @@ export type ContextTrace = {
   // tool results come back, and this is where that shows.
   calls?: CallTrace[];
 };
+
+// The trace as one viewer may read it. A block tagged a storyteller secret
+// goes, and its tokens come off the prompt's total, so neither the rows nor
+// the sum say it was there: the Context tab is the lead's at an AI table, and
+// the lead plays a character the secret is kept from.
+export function traceForViewer(trace: ContextTrace, caps: Pick<ViewerCaps, "storytellerSecrets">): ContextTrace {
+  const blocks = withoutStorytellerSecrets(trace.blocks, caps);
+  if (blocks.length === trace.blocks.length) {
+    return trace;
+  }
+  const hidden = trace.blocks.filter((block) => !blocks.includes(block)).reduce((sum, block) => sum + block.tokens, 0);
+  return { ...trace, blocks, promptTokens: Math.max(0, trace.promptTokens - hidden) };
+}
 
 export type CallTrace = {
   index: number;

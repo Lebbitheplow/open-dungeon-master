@@ -22,7 +22,9 @@ import { speedWords } from "@/lib/srd/srd-creatures";
 import { findFormFor, formDefenses, formsOf, shapedAbilities, shapedForm, shapeOffer, shapeProblem, shapeRuleFor } from "@/lib/srd/shape-rules";
 import { conditionEffectsFor } from "@/lib/srd/condition-effects";
 import { applyDmMutation, castBarred } from "@/lib/dm/mutations";
-import { resolveEnemyRef, unknownEnemyRef } from "@/lib/dm/enemy-damage";
+import { resolveTargetFoe } from "@/lib/dm/sheet-foe";
+import { unknownCombatantRef } from "@/lib/dm/combatant";
+import { isSheetFoe } from "@/lib/dm/combat-sides-logic";
 import { resolveSheetRef, unknownSheetRef } from "@/lib/dm/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
@@ -39,6 +41,8 @@ import { summonSpellFor } from "@/lib/srd/summon-spells";
 import { castSummon } from "@/lib/dm/summon-cast";
 import { castFindFamiliar, isFindFamiliar } from "@/lib/dm/familiar-cast";
 import { castShapeAtEnemy, enemyShapeSpellFor } from "@/lib/dm/enemy-polymorph";
+import { allyRowRefusal, allyRowsOf, layBuffOnRows } from "@/lib/dm/cast-buff-allies";
+import { unwillingResist } from "@/lib/dm/hostile-buffs";
 import { holdingHint, noneNamed, type ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
 import { nameChoice } from "@/lib/srd/feature-names";
@@ -57,8 +61,7 @@ const castBuffSchema = z.object({
   spell: z.string().max(80),
   level: z.coerce.number().int().min(1).max(9).optional(),
   targetCharacterIds: z.array(z.string()).max(6).optional(),
-  // Hunter's Mark and Hex: the creature marked. Dispel Magic, Polymorph and
-  // True Polymorph: the enemy. Any other buff refuses one.
+  // A mark's quarry, Dispel Magic's or a shape spell's target, or an ally creature.
   targetEnemyId: z.string().max(80).optional(),
   variant: z.string().max(40).optional(),
   // Dispel Magic: the spell to end on the target, when it holds several.
@@ -131,7 +134,9 @@ export function handleCastBuff(
   }
   if (resolvedMech.mech.dispel) {
     const encounter = getActiveEncounter(campaign.id);
-    const enemy = args.targetEnemyId && encounter ? resolveEnemyRef(encounter.id, args.targetEnemyId) : null;
+    // Any combatant (src/lib/dm/combatant.ts): an enemy, or a character
+    // fighting on the other side, whose spells are a sheet's.
+    const enemy = args.targetEnemyId && encounter ? resolveTargetFoe(campaign.id, encounter, args.targetEnemyId) : null;
     const ally = args.targetCharacterIds?.[0] ? resolveSheetRef(args.targetCharacterIds[0], sheets, sheetsById) : null;
     if (!enemy && !ally) {
       return { error: `${resolvedMech.name} needs a target: targetEnemyId or one targetCharacterIds entry.`, retry: true };
@@ -140,7 +145,7 @@ export function handleCastBuff(
       caster: sheet,
       spell: resolvedMech.name,
       level: args.level,
-      target: enemy ? { kind: "enemy", id: enemy.id } : { kind: "sheet", id: ally!.id },
+      target: enemy ? { kind: isSheetFoe(enemy) ? "sheet" : "enemy", id: enemy.id } : { kind: "sheet", id: ally!.id },
       endSpell: args.endSpell,
       reason: args.reason,
     });
@@ -149,13 +154,17 @@ export function handleCastBuff(
   // the beast's block in place of its own (src/lib/dm/enemy-polymorph.ts).
   if (args.targetEnemyId && enemyShapeSpellFor(engine)) {
     const encounter = getActiveEncounter(campaign.id);
-    const enemy = encounter ? resolveEnemyRef(encounter.id, args.targetEnemyId) : null;
+    const enemy = encounter ? resolveTargetFoe(campaign.id, encounter, args.targetEnemyId) : null;
     if (!enemy) {
       return encounter
-        ? unknownEnemyRef(encounter.id, "targetEnemyId", args.targetEnemyId, "Nothing was spent.")
+        ? unknownCombatantRef(campaign.id, encounter, "targetEnemyId", args.targetEnemyId, "Nothing was spent.")
         : { error: "No fight is running: targetEnemyId names an enemy of a fight. Nothing was spent.", retry: true };
     }
-    return castShapeAtEnemy(
+    // A character's shape is its sheet's beast form: the path below, with the
+    // save an unwilling creature makes (hostile-buffs.ts).
+    if (isSheetFoe(enemy)) {
+      args = { ...args, targetCharacterIds: [enemy.id], targetEnemyId: undefined };
+    } else return castShapeAtEnemy(
       campaign,
       turn,
       { caster: sheet, enemy, spell: resolvedMech.name, runsAs: engine, variant: args.variant, level: args.level, reason: args.reason, authors },
@@ -166,9 +175,13 @@ export function handleCastBuff(
   if (redirect) {
     return redirect;
   }
-  // Only a mark (Hunter's Mark, Hex) names an enemy here. Any other buff
-  // given one would land on the caster instead, so it is refused unspent.
-  if (args.targetEnemyId && !MARKS.has(resolvedMech.mech.buff?.condition ?? "")) {
+  // Only a mark (Hunter's Mark, Hex) names an enemy here, or a creature on
+  // the caster's side (cast-buff-allies.ts); any other buff given an enemy
+  // would land on the caster instead, so it is refused unspent.
+  const marking = MARKS.has(resolvedMech.mech.buff?.condition ?? "");
+  const allies = allyRowsOf(campaign.id, sheet.id, marking ? [] : [...(args.targetCharacterIds ?? []), ...(args.targetEnemyId ? [args.targetEnemyId] : [])]);
+  const sheetRefs = (marking ? (args.targetCharacterIds ?? []) : allies.rest).filter((ref) => ref !== args.targetEnemyId);
+  if (args.targetEnemyId && !marking && allies.rest.includes(args.targetEnemyId)) {
     return {
       error: `${resolvedMech.name} cannot be cast on an enemy through cast_buff; name the caster or allies in targetCharacterIds, or cast a spell that targets enemies with cast_at_enemy. Nothing was spent.`,
       retry: true,
@@ -220,27 +233,31 @@ export function handleCastBuff(
   const encounterNow = getActiveEncounter(campaign.id);
   const quarry =
     MARKS.has(buff.condition) && args.targetEnemyId && encounterNow
-      ? resolveEnemyRef(encounterNow.id, args.targetEnemyId)
+      ? resolveTargetFoe(campaign.id, encounterNow, args.targetEnemyId)
       : null;
   if (MARKS.has(buff.condition) && args.targetEnemyId && !quarry) {
     return encounterNow
-      ? unknownEnemyRef(encounterNow.id, "targetEnemyId", args.targetEnemyId, "Nothing was spent.")
+      ? unknownCombatantRef(campaign.id, encounterNow, "targetEnemyId", args.targetEnemyId, "Nothing was spent.")
       : { error: "No fight is running: a mark's targetEnemyId names an enemy of a fight. Nothing was spent.", retry: true };
   }
 
+  // What reaches a character through the sheet has no place on a row.
+  const rowRefusal = allyRowRefusal(resolvedMech.name, allies.rows, { sheetOnly: Boolean(polymorphForm || buff.maxHp || buff.tempHp || resolvedMech.mech.maxHpDice) });
+  if (rowRefusal) return rowRefusal;
   // Resolve the recipients: self-only spells ignore stray targets.
   const targetSheets: CharacterSheet[] = [];
-  if (buff.target === "self" || !args.targetCharacterIds?.length) {
+  const targetRows = buff.target === "self" ? [] : allies.rows;
+  if (buff.target === "self" || (!sheetRefs.length && !targetRows.length)) {
     targetSheets.push(sheet);
   } else {
-    for (const ref of args.targetCharacterIds) {
+    for (const ref of sheetRefs) {
       const found = resolveSheetRef(ref, sheets, sheetsById);
       const fresh = found ? (getSheetById(found.id) ?? found) : null;
       if (fresh && !fresh.deathSaves?.dead && !targetSheets.some((entry) => entry.id === fresh.id)) {
         targetSheets.push(fresh);
       }
     }
-    if (!targetSheets.length) {
+    if (!targetSheets.length && !targetRows.length) {
       targetSheets.push(sheet);
     }
   }
@@ -255,9 +272,9 @@ export function handleCastBuff(
       })
     : null;
   const most = buff.target === "self" ? 1 : (shares ?? (buff.target === "ally" ? 1 : 6));
-  if (targetSheets.length > most) {
+  if (targetSheets.length + targetRows.length > most) {
     return {
-      error: `${resolvedMech.name} from a level ${plannedSlot ?? resolvedMech.spellLevel} slot affects at most ${most} creature${most === 1 ? "" : "s"}; ${targetSheets.length} were named. Name ${most} or fewer, or cast it from a higher slot. Ask the player which. Nothing was spent.`,
+      error: `${resolvedMech.name} from a level ${plannedSlot ?? resolvedMech.spellLevel} slot affects at most ${most} creature${most === 1 ? "" : "s"}; ${targetSheets.length + targetRows.length} were named. Name ${most} or fewer, or cast it from a higher slot. Ask the player which. Nothing was spent.`,
       retry: true,
     };
   }
@@ -289,7 +306,7 @@ export function handleCastBuff(
   // targeted all the same, and the spell does nothing to them.
   const warded = new Map<string, string>();
   if (encounterNow) {
-    for (const target of targetSheets) {
+    for (const target of [...targetSheets, ...targetRows.map((row) => ({ id: row.id, name: row.displayName }))]) {
       const near = { encounterId: encounterNow.id, casterId: sheet.id, targetId: target.id, targetName: target.name, facts };
       const reach = spellReachProblem({ ...near, casterName: sheet.name });
       if (reach) {
@@ -323,6 +340,8 @@ export function handleCastBuff(
   if ("error" in cast) {
     return cast;
   }
+  // A target fighting against the caster saves as an unwilling creature.
+  for (const [id, line] of unwillingResist(campaign, turn, sheet, { name: resolvedMech.name, engine }, targetSheets)) warded.set(id, line);
   const slotLevel = typeof cast.slotLevel === "number" ? cast.slotLevel : null;
   const above = Math.max(0, (slotLevel ?? resolvedMech.spellLevel) - resolvedMech.spellLevel);
   if (buff.bySlot?.length) {
@@ -434,6 +453,7 @@ export function handleCastBuff(
     // is no longer dying (death.ts healDeathHook, as healing settles it).
     healDeathHook(campaign, turn.id, fresh);
   }
+  applied.push(...layBuffOnRows(campaign, targetRows.filter((row) => !warded.has(row.id)), condition, spellMeta, rounds));
   const noEffect = [...warded.values()].join(" ");
   if (!applied.length && noEffect) {
     return { ok: true, spell: resolvedMech.name, targets: [], ...(cast.slot ? { slot: cast.slot } : {}), ...castToNoEffect(noEffect) };

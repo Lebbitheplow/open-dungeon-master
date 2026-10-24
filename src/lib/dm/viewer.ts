@@ -59,6 +59,11 @@ export type ViewerCaps = {
   // Story authority: floor control, lead directions, arc edits, force-ending
   // an encounter. Follows secretStory for the same reason.
   steersStory: boolean;
+  // The tier above secretStory: what the storyteller keeps even from the
+  // lead who steers an AI table (an NPC's act and its motive, who is open to
+  // advances). The AI and a person running the table hold it; no player
+  // does, the lead included. See "storyteller secrets" below.
+  storytellerSecrets: boolean;
   // May post DM narration into the transcript.
   narrates: boolean;
   // May invoke engine adjudications directly (Phase 2's console).
@@ -107,6 +112,7 @@ const PLAYER_CAPS = {
   enemyNumbers: false,
   fullMap: false,
   steersStory: false,
+  storytellerSecrets: false,
   narrates: false,
   adjudicates: false,
   needsCharacter: true,
@@ -121,6 +127,7 @@ export function capsForRole(role: ViewerRole, mode: DmMode): ViewerCaps {
       enemyNumbers: true,
       fullMap: true,
       steersStory: true,
+      storytellerSecrets: true,
       narrates: true,
       adjudicates: true,
       needsCharacter: false,
@@ -134,6 +141,7 @@ export function capsForRole(role: ViewerRole, mode: DmMode): ViewerCaps {
       enemyNumbers: true,
       fullMap: true,
       steersStory: true,
+      storytellerSecrets: true,
       narrates: true,
       adjudicates: true,
       needsCharacter: false,
@@ -144,11 +152,49 @@ export function capsForRole(role: ViewerRole, mode: DmMode): ViewerCaps {
     // The lead steers the AI, so in an AI campaign they hold the story's
     // secrets exactly as they do today. Once a person is running the game the
     // lead is a player again: the secrets are the DM's, and "Direct" (a note
-    // aimed at the AI) has nothing to aim at.
+    // aimed at the AI) has nothing to aim at. Either way the lead plays a
+    // character, so the storyteller's own secrets are never theirs.
     const steers = mode === "ai";
     return { ...PLAYER_CAPS, role, secretStory: steers, steersStory: steers };
   }
   return { ...PLAYER_CAPS, role };
+}
+
+// ---- storyteller secrets ----
+//
+// One visibility tier above the lead's (issue 501, #503 Phase 0.2). At an AI
+// table the lead holds the story's secrets (secretStory) because the lead
+// steers the AI; but the lead also plays a character, and some secrets exist
+// precisely to be kept from the characters: an NPC who only pretends to care
+// for one of them, who opened their character to advances, and (#503) a
+// companion's stored intent or a pact. Those are tagged STORYTELLER_SECRET
+// and only a viewer with storytellerSecrets reads them: the AI, and a person
+// running the table (at a table a person runs, that person IS the
+// storyteller and sees it all).
+//
+// Everything that tags a secret uses this one tag, and every projection that
+// strips one asks storytellerSees or withoutStorytellerSecrets, so a new
+// kind of secret needs a tag, not a new rule:
+//   - a fact: knownBy "storyteller" (src/lib/dm/fact-logic.ts factVisibleTo);
+//   - a prompt section: a context-trace block with secret "storyteller"
+//     (src/lib/dm/context-budget.ts traceForViewer), whose text the prompt
+//     leaves out of an out-of-character answer to the table
+//     (src/lib/dm/prompt.ts, DmGameState.withholdStorytellerSecrets);
+//   - a relationship's act: src/lib/dm/scheme-logic.ts bondTruthFor.
+export const STORYTELLER_SECRET = "storyteller" as const;
+export type StorytellerSecret = typeof STORYTELLER_SECRET;
+
+export function storytellerSees(caps: Pick<ViewerCaps, "storytellerSecrets">): boolean {
+  return caps.storytellerSecrets === true;
+}
+
+// The items this viewer may read: those tagged a storyteller secret go,
+// unless the viewer is the storyteller.
+export function withoutStorytellerSecrets<T extends { secret?: StorytellerSecret | null }>(
+  items: readonly T[],
+  caps: Pick<ViewerCaps, "storytellerSecrets">,
+): T[] {
+  return storytellerSees(caps) ? [...items] : items.filter((item) => item.secret !== STORYTELLER_SECRET);
 }
 
 export function viewerCaps(seats: CampaignSeats, userId: string): ViewerCaps {
@@ -210,7 +256,7 @@ export function lobbyBlocker(seats: DmSeats, lobby: LobbySeat[]): string {
 // see the number. Redacting rather than withholding is deliberate, because a
 // roll that simply vanished would read as a bug.
 export type RollView = {
-  visibility: "public" | "dm" | "blind" | "self";
+  visibility: "public" | "dm" | "blind" | "self" | "secret";
   characterId: string | null;
 };
 
@@ -218,12 +264,19 @@ export type RollAccess = "full" | "redacted" | "hidden";
 
 export function rollAccessFor(
   roll: RollView,
-  caps: Pick<ViewerCaps, "adjudicates" | "steersStory">,
+  caps: Pick<ViewerCaps, "adjudicates" | "steersStory"> & Partial<Pick<ViewerCaps, "storytellerSecrets">>,
   // The sheets this viewer owns; a "self" roll is theirs to see.
   ownedCharacterIds: string[] = [],
 ): RollAccess {
   if (roll.visibility === "public") {
     return "full";
+  }
+  // A storyteller secret (a pact's recruiting, a player's secret action):
+  // the storyteller and the player whose character it is for, and nobody
+  // else, the lead who steers an AI table included. Not even redacted: that
+  // a roll happened at all would give it away.
+  if (roll.visibility === "secret") {
+    return caps.storytellerSecrets === true || (roll.characterId !== null && ownedCharacterIds.includes(roll.characterId)) ? "full" : "hidden";
   }
   // Whoever is adjudicating rolled it, or asked for it: they see everything.
   if (caps.adjudicates || caps.steersStory) {

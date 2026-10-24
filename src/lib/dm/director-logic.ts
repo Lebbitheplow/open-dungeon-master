@@ -5,7 +5,9 @@
 // prompt splices in.
 //
 // Everything here is dependency-free so scripts/test-director.mjs can import
-// it directly.
+// it directly (advance-logic.ts is pure too).
+
+import { romanceSafetyBlock, type SafetyLike } from "./advance-logic.ts";
 
 export type OneShotEventId =
   | "combat"
@@ -86,7 +88,7 @@ const ONE_SHOT_DIRECTIVES: Record<
     label: "Romance",
     blurb: "Chemistry with a complication.",
     directive:
-      "Introduce a charged romantic beat: someone whose interest in a party member carries a complication, whether rank, rivalry, a secret, or bad timing. Strongly prefer an NPC already established in the story over inventing a stranger. Chemistry plus obstacle; never instant devotion, and never decide how a player character feels in return.",
+      "Introduce a charged romantic beat: someone whose interest in a party member carries a complication, whether rank, rivalry, a secret, or bad timing. Strongly prefer an NPC already established in the story over inventing a stranger. Aim any open move only at a character GAME STATE lists as open to advances from NPCs; toward anyone else, show the interest only (a look, a kindness, a remark someone overhears) and leave it to the player whether to answer it. Chemistry plus obstacle; never instant devotion, and never decide how a player character feels in return.",
   },
   mystery: {
     label: "Mystery",
@@ -114,6 +116,22 @@ export function oneShotBlurb(id: OneShotEventId): string {
 
 export function oneShotLabel(id: OneShotEventId): string {
   return ONE_SHOT_DIRECTIVES[id].label;
+}
+
+// The Romance cue is offered only at a table that plays romance and whose
+// safety tools do not rule it out (issue 501): the cue tells the DM to give
+// someone romantic interest, which a table with romance off never asked for.
+export type CueSettings = { relationships?: string; romance?: string; safety?: SafetyLike };
+
+export function romanceCueAllowed(settings: CueSettings | null | undefined): boolean {
+  if (!settings) {
+    return false;
+  }
+  return settings.relationships !== "off" && settings.romance !== "off" && !romanceSafetyBlock(settings.safety);
+}
+
+export function availableOneShots(settings: CueSettings | null | undefined): OneShotEventId[] {
+  return ONE_SHOT_EVENT_IDS.filter((id) => id !== "romance" || romanceCueAllowed(settings));
 }
 
 export function isOneShotEventId(value: unknown): value is OneShotEventId {
@@ -155,7 +173,9 @@ export type DirectorArm = {
 // with it. Both are "this turn only" steers, and two competing directives in
 // the same payload produce a turn that half-serves each. The lead's explicit
 // words win over the canned event.
-export function buildDirectorBlock(arm: DirectorArm | null): string {
+// `settings`, when given, drops a cue the table no longer allows (a Romance
+// cue armed before romance was switched off).
+export function buildDirectorBlock(arm: DirectorArm | null, settings?: CueSettings | null): string {
   if (!arm) {
     return "";
   }
@@ -164,6 +184,9 @@ export function buildDirectorBlock(arm: DirectorArm | null): string {
     return absolute;
   }
   if (arm.oneShot && isOneShotEventId(arm.oneShot)) {
+    if (settings !== undefined && arm.oneShot === "romance" && !romanceCueAllowed(settings)) {
+      return "";
+    }
     return buildOneShotDirective(arm.oneShot);
   }
   return "";

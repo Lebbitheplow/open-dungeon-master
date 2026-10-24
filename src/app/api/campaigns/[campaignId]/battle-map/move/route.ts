@@ -1,4 +1,5 @@
 import { readiedReleaseFor } from "@/lib/dm/readied-release";
+import { tokenSides } from "@/lib/dm/combatant";
 import { z } from "zod";
 import { actingSheetFor } from "@/lib/character-seat";
 import { capsFor, isErrorResponse, requireMember } from "@/lib/campaign-api";
@@ -22,6 +23,7 @@ import { planDoorFx } from "@/lib/battlemap/fx-plan";
 import { getCampaignById } from "@/lib/db/campaigns";
 import { budgetApplies } from "@/lib/dm/action-budget";
 import { resolveOpportunityAttacks } from "@/lib/dm/opportunity";
+import { riskyOrderGate } from "@/lib/dm/party-conduct";
 import { canAct } from "@/lib/dm/can-act";
 import { removeConditions } from "@/lib/dm/condition-logic";
 import { awayFromFear, fearSourceAt } from "@/lib/dm/enemy-approach";
@@ -227,6 +229,7 @@ export async function POST(
     sheet,
     footprintOf: footprintLookup(enemiesById),
     enemySize: (refId) => enemiesById.get(refId)?.stats.size,
+    sideOf: tokenSides(encounter),
   }), map, "pc", sheet.id);
   const reach = reachableTiles(
     map.terrain,
@@ -298,6 +301,12 @@ export async function POST(
   // Dragging the creature they grapple (src/lib/dm/drag.ts): every square
   // costs double unless it is two sizes smaller, and it is set down beside
   // them where they stop, so the grapple holds.
+  // A companion wary of its commander will not walk out of a foe's reach
+  // on their word (issue 503, src/lib/dm/party-conduct.ts).
+  const refusedOrder = campaign && path && !readied ? riskyOrderGate(campaign, sheet, user.id, [from, ...path], turnState?.disengaged ?? false) : null;
+  if (refusedOrder) {
+    return Response.json({ error: refusedOrder }, { status: 409 });
+  }
   let spend = cost;
   let carried: Array<{ token: (typeof tokens)[number]; at: { x: number; y: number } }> = [];
   if (parsed.data.drag && !scene) {
