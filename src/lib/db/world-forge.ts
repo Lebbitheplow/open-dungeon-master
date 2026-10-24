@@ -32,6 +32,8 @@ import {
 } from "@/lib/worldforge/model";
 import { playAdapters, playLink, type PlayAdapter, type PlayField } from "@/lib/worldforge/play-fields";
 import { editableOf, mergeAgainst, type Editable, type EntryConflict } from "@/lib/worldforge/entry-merge";
+import { keptAfterWrite, keptList, patchFor, type KeptImport } from "@/lib/worldforge/import-kept";
+import { originKey } from "@/lib/worldforge/import-merge";
 import { entriesBoundTo, resolveBinding, type BoundRecord } from "@/lib/db/world-bindings";
 import { byName, textKey } from "@/lib/language/text-logic";
 
@@ -64,6 +66,11 @@ export type WorldEntity = {
   // links that speak to them (src/lib/worldforge/play-fields.ts). Empty for
   // every other shelf, and for a Cast member no such link starts at.
   inPlay: PlayAdapter[];
+  // What a reimport kept as this campaign has it, with the import's version
+  // beside it (src/lib/worldforge/import-kept.ts). The DM's, like the hidden
+  // truth: only the world routes send an entity, and they answer story
+  // authority. Empty for an entry no reimport clashed on.
+  kept: KeptImport[];
 };
 
 // ---- the document ----
@@ -128,7 +135,7 @@ export function worldEntities(campaignId: string, doc: WorldDoc = getWorldDoc(ca
   const entry = (ref: string) => doc.entries[ref] ?? readEntry({});
   const factionNames = new Map(listFactions(campaignId).map((faction) => [faction.id, faction.name]));
   const places = listLocations(campaignId);
-  const out: Array<Omit<WorldEntity, "bound" | "inPlay">> = [];
+  const out: Array<Omit<WorldEntity, "bound" | "inPlay" | "kept">> = [];
   // What play holds for each Cast member, as records where it can.
   const held = new Map<string, Record<PlayField, { ref: string; name: string } | null>>();
   for (const npc of listNpcs(campaignId)) {
@@ -182,6 +189,7 @@ export function worldEntities(campaignId: string, doc: WorldDoc = getWorldDoc(ca
       ...entity,
       bound: entity.entry.bindings.map((binding) => resolveBinding(campaignId, binding)),
       inPlay: entity.shelf === "npc" ? playAdapters({ links: linksFrom.get(entity.ref) ?? [] }, entity.ref, held.get(entity.ref)!, names) : [],
+      kept: keptList(doc, entity, doc.origins?.[originKey("entries", entity.ref)]),
     }))
     .sort(byName);
 }
@@ -496,12 +504,48 @@ export function updateWorldEntity(campaignId: string, ref: string, input: Entity
   }
   const refused = unusableLink(campaignId, shelf, doc.entries[ref], patch);
   if (refused) return refused;
+  // An entry a reimport kept values on: what it held before the write, to
+  // say afterwards whether the author took the import's version or went
+  // back to their own (src/lib/worldforge/import-kept.ts).
+  const origin = doc.origins?.[originKey("entries", ref)];
+  const before = origin?.kept ? worldEntities(campaignId, doc).find((entry) => entry.ref === ref) : undefined;
   const lore = patch.typeId ? doc.types.find((type) => type.id === patch.typeId && type.shelf === "lore") : undefined;
   const failed = writeRecord(campaignId, ref, patch, lore);
   if (failed) return failed;
   doc.entries[ref] = nextEntry(doc, ref, patch);
+  const after = before ? worldEntities(campaignId, doc).find((entry) => entry.ref === ref) : undefined;
+  if (origin?.kept && before && after) {
+    const kept = keptAfterWrite(origin.kept, before, after);
+    if (Object.keys(kept).length) origin.kept = kept;
+    else delete origin.kept;
+  }
   saveWorldDoc(campaignId, doc);
   return entityOf(campaignId, doc, ref);
+}
+
+// The author's choice on a value a reimport kept (import-kept.ts): "use"
+// writes the import's version, keeping the one it replaced; "restore"
+// writes that one back; "dismiss" ("Keep mine", or "Keep the import's"
+// once taken) clears the record and changes nothing else. Writes go
+// through updateWorldEntity, so the record follows what the entry holds.
+export type KeptChoice = "use" | "restore" | "dismiss";
+
+export function settleKept(campaignId: string, ref: string, key: string, choice: KeptChoice): EntityResult {
+  const doc = getWorldDoc(campaignId);
+  const origin = doc.origins?.[originKey("entries", ref)];
+  const kept = origin?.kept?.[key];
+  const entity = kept ? worldEntities(campaignId, doc).find((entry) => entry.ref === ref) : undefined;
+  if (!origin?.kept || !kept || !entity) return { error: "Nothing from an import is kept beside that.", status: 404 };
+  if (choice === "dismiss") {
+    delete origin.kept[key];
+    if (!Object.keys(origin.kept).length) delete origin.kept;
+    saveWorldDoc(campaignId, doc);
+    return entityOf(campaignId, doc, ref);
+  }
+  if (choice === "use" ? kept.taken : !kept.taken) {
+    return { error: choice === "use" ? "The import's version is already in use." : "Your version is already in use.", status: 409 };
+  }
+  return updateWorldEntity(campaignId, ref, patchFor(entity, key, choice === "use" ? kept.theirs : kept.mine) as EntityPatch);
 }
 
 // Deletes the record itself (the Cast member, the place, the faction, the

@@ -257,6 +257,19 @@ export function useWorld(campaignId: string) {
     [base, send],
   );
 
+  // The author's choice on a value a reimport kept, the import's version
+  // beside it (world/entities/[ref]/kept, src/lib/worldforge/import-kept.ts).
+  // Resolves to the entry as it is now, or null with the reason in `error`.
+  const settleKept = useCallback(
+    async (ref: string, key: string, choice: "use" | "restore" | "dismiss") => {
+      const payload = await send(`${base}/entities/${encodeURIComponent(ref)}/kept`, { method: "POST", body: JSON.stringify({ key, choice }) });
+      const entity = payload?.entity as WorldEntity | undefined;
+      if (entity) placeEntity(entity);
+      return entity ?? null;
+    },
+    [base, send],
+  );
+
   // The Atlas's own steps (world/atlas, src/lib/db/atlas-edit.ts): delete
   // with an undo token, restore by it, and a map's frame. Each answers with
   // its review, or with what it did; a delete or restore carries the world.
@@ -283,7 +296,7 @@ export function useWorld(campaignId: string) {
     [base, send, refresh],
   );
 
-  return { campaignId, world, loaded, loadError, error, saving, refresh, patch, create, update, remove, importFile, ai, reveal, readRegion, region, makeForPlace, atlasStep, party, clearError: () => setError("") };
+  return { campaignId, world, loaded, loadError, error, saving, refresh, patch, create, update, remove, importFile, ai, reveal, readRegion, region, makeForPlace, settleKept, atlasStep, party, clearError: () => setError("") };
 }
 
 export type WorldApi = ReturnType<typeof useWorld>;

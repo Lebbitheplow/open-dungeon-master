@@ -2,6 +2,7 @@ import { z } from "zod";
 import { isErrorResponse, requireMember, steersStory } from "@/lib/campaign-api";
 import { getImportSourceForUser } from "@/lib/db/import-sources";
 import { planContentImport, runContentImport } from "@/lib/db/content-import";
+import { keptNotes } from "@/lib/db/world-forge-io";
 import { IMPORT_KINDS } from "@/lib/workshop/import";
 import { publishEphemeral } from "@/lib/events";
 
@@ -18,6 +19,11 @@ export const dynamic = "force-dynamic";
 // before anything is copied. POST does the same planning again server-side
 // and then executes it, because a plan the client hands back is a plan a
 // client could have edited.
+//
+// GET ?kept=1 answers `kept`: what earlier imports kept as this campaign has
+// it and the author has not settled yet (src/lib/worldforge/import-kept.ts),
+// in the import note's words, so Bring in prep can say it after a reload.
+// Story authority only: it names World entries players may not read.
 //
 // Prep keeps arriving after session one: the lobby offers this, and so does
 // the table's Setup tab once play has begun. An ended campaign takes nothing
@@ -51,6 +57,12 @@ export async function GET(
     return context;
   }
   const url = new URL(request.url);
+  if (url.searchParams.get("kept") === "1") {
+    if (!steersStory(context)) {
+      return Response.json({ error: "Only the person steering the story reads this." }, { status: 403 });
+    }
+    return Response.json({ kept: keptNotes(campaignId) });
+  }
   const parsed = previewSchema.safeParse({
     sourceId: url.searchParams.get("sourceId") ?? "",
     select: url.searchParams.getAll("select"),

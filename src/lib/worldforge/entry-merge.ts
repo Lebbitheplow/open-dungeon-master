@@ -77,7 +77,7 @@ export function changesSince(base: Editable, draft: Editable): { patch: Partial<
   return { patch, base: sent };
 }
 
-const LABELS: Record<EditableKey, string> = {
+export const EDITABLE_LABELS: Record<EditableKey, string> = {
   name: "Name",
   tagline: "One line",
   text: "Text",
@@ -127,7 +127,7 @@ export function mergeAgainst(
       continue;
     }
     const now = current[key];
-    if (!same(now, base[key]) && !same(now, patch[key])) conflicts.push({ key, label: LABELS[key], theirs: now });
+    if (!same(now, base[key]) && !same(now, patch[key])) conflicts.push({ key, label: EDITABLE_LABELS[key], theirs: now });
   }
   return conflicts.length ? { conflicts } : { patch: out };
 }

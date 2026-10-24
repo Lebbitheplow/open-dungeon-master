@@ -29,6 +29,7 @@ import {
   valueWords,
   type ImportSlice,
 } from "@/lib/worldforge/import-merge";
+import { keptAfter } from "@/lib/worldforge/import-kept";
 import { mergeImportedLinks } from "@/lib/db/world-link-merge";
 import { recordMediaFile } from "@/lib/media-access";
 import { textKey } from "@/lib/language/text-logic";
@@ -293,7 +294,9 @@ export function applyWorldImport(campaignId: string, account: UploadAccount, par
           const prior = origins[key]?.from === from ? origins[key] : undefined;
           const merged = mergeValues(prior, recordValues(byRef.get(ref)!), theirs);
           take = merged.take;
-          origins[key] = { from, at: merged.at };
+          // What both sides changed is kept as this campaign has it, with
+          // the file's version beside it for the author (import-kept.ts).
+          origins[key] = { from, at: merged.at, ...keptAfter(prior, merged, theirs) };
           merged.pending.forEach((item) => pending.push({ origin: key, ...item }));
           for (const words of new Set(merged.clashes.map((key) => valueWords(key, fieldName(doc))))) conflicts.push(`${record.name}: kept your ${words} over the file's.`);
         } else {
@@ -531,9 +534,12 @@ export function copyWorldDoc(
       continue;
     }
     const prior = origins[key]?.from === from ? origins[key] : undefined;
-    const merged = mergeValues(prior, overlayValues(own), overlayValues(entry));
+    const theirs = overlayValues(entry);
+    const merged = mergeValues(prior, overlayValues(own), theirs);
     target.entries[ref] = { ...applyOverlay(own, merged.take), wfId: own.wfId || entry.wfId };
-    origins[key] = { from, at: merged.at };
+    // What both sides changed is kept as this campaign has it, with the
+    // import's version beside it for the author (import-kept.ts).
+    origins[key] = { from, at: merged.at, ...keptAfter(prior, merged, theirs) };
     merged.pending.forEach((item) => pending.push({ origin: key, ...item }));
     for (const words of new Set(merged.clashes.map((key) => valueWords(key, fieldName(target))))) conflicts.push(`${names.get(ref) ?? "An entry"}: kept your ${words} over the import's.`);
   }
@@ -546,11 +552,41 @@ export function copyWorldDoc(
   const rows = mergeSlices(target, moved, mapped, source, LATER_SLICES);
   settle(target, [...firstRows.pending, ...rows.pending], (origin, value) => rowValue(target, origin, value));
   saveWorldDoc(targetId, target);
+  // What this source's earlier imports kept and the author has not settled
+  // yet is said again beside this import's own clashes, in the same words,
+  // so a note missed once is not lost (import-kept.ts).
+  const standing = standingKept(target, names, source);
   return {
     count: entries + merged.added + merged.updated + mapped.events.length + mapped.secrets.length,
-    conflicts: [...conflicts, ...merged.conflicts, ...firstRows.conflicts, ...rows.conflicts],
+    conflicts: [...new Set([...conflicts, ...standing]), ...merged.conflicts, ...firstRows.conflicts, ...rows.conflicts],
     unbound,
   };
+}
+
+// Each value a reimport kept as this campaign has it and the author has not
+// settled (src/lib/worldforge/import-kept.ts), as the import's note words a
+// clash: "Ferryman Osk: kept your article over the import's." Only those an
+// import of `source` kept, when it is given. Gone once the author takes the
+// import's version or keeps theirs.
+function standingKept(doc: WorldDoc, names: Map<string, string>, source?: string): string[] {
+  const lines: string[] = [];
+  for (const [key, origin] of Object.entries(doc.origins ?? {})) {
+    if (!origin.kept || !key.startsWith("entries/") || (source !== undefined && !origin.from.startsWith(`${source}|`))) continue;
+    const name = names.get(key.slice("entries/".length));
+    if (!name) continue;
+    for (const [value, kept] of Object.entries(origin.kept)) {
+      if (!kept.taken) lines.push(`${name}: kept your ${valueWords(value, fieldName(doc))} over the import's.`);
+    }
+  }
+  return [...new Set(lines)];
+}
+
+// The same for the whole campaign, for Bring in prep to say after a reload.
+// The DM's: the import route answers it to story authority alone.
+export function keptNotes(campaignId: string): string[] {
+  const doc = getWorldDoc(campaignId);
+  if (!Object.values(doc.origins ?? {}).some((origin) => origin.kept)) return [];
+  return standingKept(doc, new Map(worldEntities(campaignId, doc).map((entity) => [entity.ref, entity.name])));
 }
 
 // What the DM ticked in a forge preview (src/lib/worldforge/forge.ts),

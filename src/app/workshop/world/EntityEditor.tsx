@@ -15,6 +15,7 @@ import { ROW_TEXT, olderText } from "@/lib/worldforge/account";
 import { useUnsavedDraft } from "@/app/workshop/unsaved";
 import type { EntryInput, UpdateOutcome } from "./useWorld";
 import { typeOf } from "./world-ui";
+import { KeptValueText } from "./ImportKept";
 
 // Editing one entry: what its own record holds (name, its line or its text,
 // aliases, tags, picture) and what WorldForge adds (type, folder, canon, the
@@ -150,22 +151,39 @@ export function EntityEditor({
     setRebased(true);
   }
 
-  // Takes the other author's value for one clashing field.
-  function takeTheirs(conflict: EntryConflict) {
-    if (conflict.key.startsWith("fields.")) {
-      const id = conflict.key.slice("fields.".length);
+  // Puts another version of one field into the draft: the other author's
+  // in a clash, or the import's for a value a reimport kept.
+  function fill(key: string, theirs: unknown) {
+    if (key.startsWith("fields.")) {
+      const id = key.slice("fields.".length);
       setDraft((current) => {
         const fields = { ...current.fields };
-        if (conflict.theirs === undefined) delete fields[id];
-        else fields[id] = conflict.theirs as FieldValue;
+        if (theirs === undefined || theirs === null || theirs === "") delete fields[id];
+        else fields[id] = theirs as FieldValue;
         return { ...current, fields };
       });
     } else {
-      const key = conflict.key as keyof Editable;
-      const value = key === "aliases" || key === "tags" ? listText((conflict.theirs as string[]) ?? []) : conflict.theirs;
-      setDraft((current) => ({ ...current, [key]: value }));
+      const field = key as keyof Editable;
+      const value = field === "aliases" || field === "tags" ? listText((theirs as string[]) ?? []) : theirs;
+      setDraft((current) => ({ ...current, [field]: value }));
     }
+  }
+
+  // Takes the other author's value for one clashing field.
+  function takeTheirs(conflict: EntryConflict) {
+    fill(conflict.key, conflict.theirs);
     setConflicts((current) => current.filter((entry) => entry.key !== conflict.key));
+  }
+
+  // A value a reimport kept as this campaign has it (src/lib/worldforge/
+  // import-kept.ts): "Use the import's version" puts it in the draft, and
+  // saving takes it; the entry keeps this campaign's version, which its
+  // page offers back.
+  const [filled, setFilled] = useState<string[]>([]);
+  const kept = (entity.kept ?? []).filter((item) => !item.taken && !filled.includes(item.key));
+  function takeImported(key: string, theirs: unknown) {
+    fill(key, theirs);
+    setFilled((current) => [...current, key]);
   }
 
   return (
@@ -192,6 +210,28 @@ export function EntityEditor({
             ))}
           </ul>
           <p className="text-xs text-amber-200/80">Save keeps yours for any field you leave as it is.</p>
+        </div>
+      ) : null}
+      {kept.length || filled.length ? (
+        <div className="flex flex-col gap-2 rounded-lg border border-amber-700/50 bg-amber-950/30 p-3 text-sm text-amber-100" data-testid="entry-import-kept">
+          {kept.length ? (
+            <ul className="flex flex-col gap-2">
+              {kept.map((item) => (
+                <li key={item.key} className="flex flex-col gap-1.5">
+                  <span>
+                    <strong>{item.label}</strong>: this campaign&apos;s version was kept when it was brought in again; the import&apos;s version differs:
+                  </span>
+                  <KeptValueText value={item.theirs} />
+                  <span>
+                    <KitButton tone="small" onClick={() => takeImported(item.key, item.theirs)} aria-label={`Use the import's version of the ${item.label}`}>
+                      Use the import&apos;s version
+                    </KitButton>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {filled.length ? <p className="text-xs text-amber-200/80">The import&apos;s version is in the form. Save to use it; this campaign&apos;s version stays on the entry&apos;s page, ready to restore.</p> : null}
         </div>
       ) : null}
       <div className="grid gap-3 @lg:grid-cols-2">

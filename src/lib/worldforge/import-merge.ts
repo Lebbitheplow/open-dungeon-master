@@ -107,23 +107,27 @@ export function decide(baseline: string | undefined, local: string, theirs: stri
 }
 
 // One record's values merged. `take` holds the source values to write;
-// `clashes` the keys both sides changed. Each taken key is left `pending`:
-// its local reading is known only once the caller has written it.
+// `clashes` the keys both sides changed; `agreed` the keys both sides now
+// read alike. Each taken key is left `pending`: its local reading is known
+// only once the caller has written it.
 export function mergeValues(
   prior: Origin | undefined,
   local: Record<string, unknown>,
   theirs: Record<string, unknown>,
-): { take: Record<string, unknown>; clashes: string[]; at: Record<string, string>; pending: Array<{ key: string; source: string }> } {
+): { take: Record<string, unknown>; clashes: string[]; agreed: string[]; at: Record<string, string>; pending: Array<{ key: string; source: string }> } {
   const take: Record<string, unknown> = {};
   const clashes: string[] = [];
+  const agreed: string[] = [];
   const at: Record<string, string> = { ...(prior?.at ?? {}) };
   const pending: Array<{ key: string; source: string }> = [];
   for (const key of new Set([...Object.keys(local), ...Object.keys(theirs)])) {
     const l = hashOf(local[key]);
     const t = hashOf(theirs[key]);
     const verdict = decide(prior?.at[key], l, t);
-    if (verdict === "same") at[key] = `${t}.${l}`;
-    else if (verdict === "take") {
+    if (verdict === "same") {
+      at[key] = `${t}.${l}`;
+      agreed.push(key);
+    } else if (verdict === "take") {
       take[key] = theirs[key];
       pending.push({ key, source: t });
     } else if (verdict === "clash") {
@@ -133,7 +137,7 @@ export function mergeValues(
       at[key] = `${t}.${prior?.at[key]?.split(".")[1] ?? ""}`;
     }
   }
-  return { take, clashes, at, pending };
+  return { take, clashes, agreed, at, pending };
 }
 
 // What an import brought as first readings: source and local alike.
