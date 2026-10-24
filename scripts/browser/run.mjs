@@ -138,6 +138,11 @@ try {
         results.push({ tag, ok: false, ms: Date.now() - t0, error: String(error?.message ?? error) });
         console.log(`FAIL  ${tag}: ${String(error?.message ?? error).split("\n")[0]}`);
       } finally {
+        // A route handler still waiting on its route.fetch when the page
+        // closes rejects with "socket hang up", outside any scenario's await,
+        // and that ended the whole run after workshop-tours had passed.
+        await page.unrouteAll({ behavior: "ignoreErrors" }).catch(() => {});
+        await context.unrouteAll({ behavior: "ignoreErrors" }).catch(() => {});
         await apiContext.close().catch(() => {});
         await context.close().catch(() => {});
       }
