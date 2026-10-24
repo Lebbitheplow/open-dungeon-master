@@ -37,7 +37,8 @@ test("a choice inside brackets, and a 'with' that rides on every alternative", (
 });
 
 test("a line the catalog cannot fill on every side stays as written", () => {
-  // No donkey, mule or bridle in the SRD gear table; the line is kept whole.
+  // SRD 5.1 sells the donkey and the mule as one row, so this is no choice;
+  // the line is kept whole.
   assert.equal(labels("A donkey or mule with bit and bridle"), null);
   assert.equal(labels("A set of cold-weather or warm-weather clothes"), null);
   // A bracketed detail of one item is not a choice.

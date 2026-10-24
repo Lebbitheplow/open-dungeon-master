@@ -23,6 +23,7 @@ import { XP_BY_LEVEL } from "./lib/enforce-srd-progression.mjs";
 
 const { test, finish } = suite("test-enforce-companion-sheets");
 const { spellListProblems, spellbookAllowance } = await import("../src/lib/srd/spell-prep.ts");
+const { subclassSpellsFor } = await import("../src/lib/srd/features.ts");
 const { checklistSpell } = await import("../src/lib/srd/spell-lists.ts");
 const { deriveAc } = await import("../src/lib/srd/index.ts");
 const build = await import("../src/lib/srd/companion-build.ts");
@@ -71,6 +72,9 @@ async function raiseTo(world, id, level) {
 function listProblems(sheet, list) {
   const problems = spellListProblems(sheet, { bookAllowance: true });
   const casting = sheet.spellcasting;
+  // A subclass's always-prepared spells (a paladin's oath spells) are the
+  // class's own for this character, on its list or not.
+  const granted = new Set(subclassSpellsFor(sheet.class, sheet.subclass ?? "", sheet.level));
   for (const name of casting.cantrips ?? []) {
     const spell = checklistSpell(name);
     if (!spell || spell.level !== 0 || !spell.classes.includes(list)) {
@@ -79,6 +83,9 @@ function listProblems(sheet, list) {
   }
   for (const name of [...casting.known, ...casting.prepared, ...(casting.spellbook ?? [])]) {
     const spell = checklistSpell(name);
+    if (granted.has(name)) {
+      continue;
+    }
     if (!spell || spell.level < 1 || !spell.classes.includes(list)) {
       problems.push(`${name} is not a ${list} spell`);
     }
@@ -273,10 +280,16 @@ await test("a companion recruited as a caster of 5th level holds a whole legal l
   const sheet = world.sheet(id);
   assert.deepEqual(listProblems(sheet, "cleric"), []);
   // Wisdom 15 + 1, raised by the improvement of 4th level: 18, so +4, and
-  // five levels: nine prepared.
+  // five levels: nine prepared, beside the Life Domain's six, which a cleric
+  // always has prepared and which count against nothing (SRD 5.1).
   assert.equal(sheet.abilities.wis, 18);
-  assert.equal(sheet.spellcasting.prepared.length, 9);
-  const levels = new Set(sheet.spellcasting.prepared.map((name) => checklistSpell(name).level));
+  assert.equal(sheet.subclass, "Life Domain");
+  const domain = new Set(subclassSpellsFor("cleric", "Life Domain", 5));
+  assert.equal(domain.size, 6);
+  const chosen = sheet.spellcasting.prepared.filter((name) => !domain.has(name));
+  assert.equal(chosen.length, 9);
+  assert.ok([...domain].every((name) => sheet.spellcasting.prepared.includes(name)), "a domain spell is missing");
+  const levels = new Set(chosen.map((name) => checklistSpell(name).level));
   assert.deepEqual([...levels].sort(), [1, 2, 3]);
   assert.equal(sheet.spellcasting.cantrips.length, 4);
 });

@@ -28,6 +28,7 @@ import { textKey } from "@/lib/language/text-logic";
 import { rowName, type RowItem } from "@/lib/srd/item-row";
 import { compositeGearNamed } from "@/lib/srd/magic-gear";
 import { isNamed } from "@/lib/srd/feature-names";
+import { alignmentIs } from "@/lib/srd/alignment";
 
 // The minimal item shape the magic-item engine reads: a name and its worn
 // state. The full EquipmentItem satisfies this. `gear.magic` is a homebrew
@@ -174,7 +175,7 @@ export function mayAttune(def: Pick<MagicItemDef, "attunedBy">, wearer: Wearer):
   if (rule.spellcaster && !device && !isSpellcaster(wearer)) {
     return false;
   }
-  if (rule.alignment && !textKey(wearer.alignment ?? "").includes(rule.alignment)) {
+  if (rule.alignment && !alignmentIs(wearer.alignment, rule.alignment)) {
     return false;
   }
   if (rule.race && !device && !textKey(wearer.race ?? "").includes(rule.race)) {

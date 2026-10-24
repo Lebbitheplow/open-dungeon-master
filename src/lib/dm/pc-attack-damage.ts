@@ -34,6 +34,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { holdsFeature, isNamed } from "@/lib/srd/feature-names";
 import { subclassNamed } from "@/lib/srd/subclass-name";
 import { authoredDamageAbility } from "@/lib/srd/authored-effects-more";
+import { alignmentIs } from "@/lib/srd/alignment";
 
 export type FeatureRider = CombatRiders["damageRiders"][number];
 
@@ -428,16 +429,14 @@ export function applyHitDamage(input: {
   });
 }
 
-const GOOD_ALIGNMENTS = ["LG", "NG", "CG"];
-
 // A spell attack is a spell's damage; a weapon in a good character's hands
 // meets the defences that name the wielder (a rakshasa's vulnerability).
 export function blowSource(plan: Pick<AttackPlan, "kind" | "sheet">): BlowSource {
   if (plan.kind === "spell") {
     return { spell: true };
   }
-  // The builder stores the alignment as its code (LG, NG, CG...).
-  return GOOD_ALIGNMENTS.includes((plan.sheet.alignment ?? "").trim().toUpperCase()) ? { goodWielder: true } : {};
+  // The builder stores the code (LG, NG, CG), a DM the words.
+  return alignmentIs(plan.sheet.alignment, "good") ? { goodWielder: true } : {};
 }
 
 // One blow landing on an enemy, per damage type: the shared end of

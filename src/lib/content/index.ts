@@ -5,7 +5,7 @@ import { workshopClassId } from "@/lib/homebrew/class-data";
 import { normalizeSpellMech } from "@/lib/homebrew/gear";
 import type { HomebrewKind } from "@/lib/schemas/homebrew";
 import { servedSpellRows } from "@/lib/content/spell-overrides";
-import { EDITION_2024_DOCUMENTS } from "@/lib/content/edition";
+import { EDITION_2024_DOCUMENTS, PLAYED_DOCUMENTS_SQL } from "@/lib/content/edition";
 import { backgroundMechanics } from "@/lib/content/mechanics";
 import { authoredFeatBySlug, withAuthoredFeats } from "@/lib/content/authored-feats";
 import {
@@ -89,7 +89,10 @@ function clampLimit(limit?: number) {
 // One page of the pack rows a person's search finds, as slugs in the
 // table's name order. SQLite's LIKE folds case for ASCII only ("épée" never
 // found "Épée de feu"), so every other condition stays in SQL and the names
-// are matched here; the caller then reads just the page's rows whole.
+// are matched here; the caller then reads just the page's rows whole. No
+// search serves a row of a 2024 document (src/lib/content/edition.ts), which
+// a pack built before the importer left them out still holds. Conditions are
+// rules text read by name and keep every row.
 function foundSlugs(
   db: SqliteDatabase,
   table: string,
@@ -98,7 +101,8 @@ function foundSlugs(
 ): string[] {
   const needle = textKey(options.q ?? "");
   const offset = options.offset ?? 0;
-  const filter = where.clauses.length ? ` WHERE ${where.clauses.join(" AND ")}` : "";
+  const clauses = table === "conditions" ? where.clauses : [PLAYED_DOCUMENTS_SQL, ...where.clauses];
+  const filter = clauses.length ? ` WHERE ${clauses.join(" AND ")}` : "";
   const rows = db
     .prepare(`SELECT slug, name FROM ${table}${filter} ORDER BY name, slug`)
     .all(...where.params) as Array<{ slug: string; name: string }>;
@@ -402,13 +406,6 @@ function searchSimpleTable(
   }
   const clauses: string[] = [];
   const params: unknown[] = [];
-  // The rules rows a 2014 character is offered leave the 2024 documents out
-  // (src/lib/content/edition.ts). Conditions are rules text read by name and
-  // keep every row.
-  if (table !== "conditions" && EDITION_2024_DOCUMENTS.size) {
-    clauses.push(`document_slug NOT IN (${[...EDITION_2024_DOCUMENTS].map(() => "?").join(", ")})`);
-    params.push(...EDITION_2024_DOCUMENTS);
-  }
   if (options.extraWhere) {
     clauses.push(options.extraWhere);
     params.push(...(options.extraParams ?? []));
@@ -436,14 +433,12 @@ export function searchFeats(options: SearchOptions = {}): ContentEntry[] {
   const served = searchSimpleTable("feats", options);
   // Every name the pack serves for this search, on any page, so ODM's own
   // feats fill only what the pack lacks (src/lib/content/authored-feats.ts).
-  const editions = [...EDITION_2024_DOCUMENTS];
-  const notIn = editions.length ? ` WHERE document_slug NOT IN (${editions.map(() => "?").join(", ")})` : "";
   const needle = textKey(options.q ?? "");
   const packRows = options.offset
     ? []
     : (getContentDb()
-        ?.prepare(`SELECT name FROM feats${notIn}`)
-        .all(...editions) as Array<{ name: string }> | undefined) ?? [];
+        ?.prepare(`SELECT name FROM feats WHERE ${PLAYED_DOCUMENTS_SQL}`)
+        .all() as Array<{ name: string }> | undefined) ?? [];
   const packNames = packRows.map((row) => row.name).filter((name) => textKey(name).includes(needle));
   return [
     ...homebrewEntries(options, "feat", options.q),
@@ -592,12 +587,33 @@ export function listDocuments(): ContentDocument[] {
     return [];
   }
   const rows = db
-    .prepare(`SELECT slug, title, license, author, url FROM documents ORDER BY title`)
+    .prepare(`SELECT slug, title, license, author, url FROM documents WHERE slug NOT IN (${[...EDITION_2024_DOCUMENTS].map((slug) => `'${slug}'`).join(", ")}) ORDER BY title`)
     .all() as ContentDocument[];
   return rows;
 }
 
+type DetailRow = { slug: string; name: string; document_slug: string; data_json: string };
+
+function detailEntry(row: DetailRow): ContentEntry {
+  return {
+    slug: row.slug,
+    name: row.name,
+    source: "open5e",
+    documentSlug: row.document_slug,
+    document: documentTitle(row.document_slug),
+    data: parseData(row.data_json),
+  };
+}
+
+// The order a name's rows are preferred in when one has to stand for it.
+const DOCUMENT_ORDER = `CASE document_slug WHEN 'wotc-srd' THEN 0 WHEN 'srd-2014' THEN 1 WHEN 'odm-expanded' THEN 2 ELSE 3 END`;
+
 // Detail lookup by slug across a kind; homebrew slugs are "homebrew:<id>".
+// It serves what the searches serve: a spell's one row a name, corrected as
+// the pickers show it (servedSpellRows), and never a 2024 row. A slug that
+// names a 2024 row (a stored "srd-2024_spell-scroll", a pack built before
+// the importer left them out) answers with the 2014 row of the same name,
+// or not at all.
 export function getEntryDetail(
   kind: "spells" | "feats" | "conditions" | "backgrounds" | "races" | "classes" | "archetypes" | "items" | "monsters",
   slug: string,
@@ -608,9 +624,13 @@ export function getEntryDetail(
   }
   const row = db
     ?.prepare(`SELECT slug, name, document_slug, data_json FROM ${kind} WHERE slug = ?`)
-    .get(slug) as { slug: string; name: string; document_slug: string; data_json: string } | undefined;
+    .get(slug) as DetailRow | undefined;
+  if (kind === "spells") {
+    const served = allPackSpells();
+    return served.find((entry) => entry.slug === slug) ?? (row ? served.find((entry) => spellNameMatches(entry, row.name)) ?? null : null);
+  }
   // A feat ODM wrote answers for its name where the pack has none, or has
-  // only the 2024 row a 2014 character is never offered (Alert).
+  // only a 2024 row.
   if (kind === "feats" && (!row || EDITION_2024_DOCUMENTS.has(row.document_slug))) {
     const authored = authoredFeatBySlug(slug);
     if (authored) {
@@ -620,14 +640,28 @@ export function getEntryDetail(
   if (!row) {
     return null;
   }
-  return {
-    slug: row.slug,
-    name: row.name,
-    source: "open5e",
-    documentSlug: row.document_slug,
-    document: documentTitle(row.document_slug),
-    data: parseData(row.data_json),
-  };
+  if (EDITION_2024_DOCUMENTS.has(row.document_slug)) {
+    const twin = db
+      ?.prepare(`SELECT slug, name, document_slug, data_json FROM ${kind} WHERE name = ? AND ${PLAYED_DOCUMENTS_SQL} ORDER BY ${DOCUMENT_ORDER}, slug LIMIT 1`)
+      .get(row.name) as DetailRow | undefined;
+    return twin ? detailEntry(twin) : null;
+  }
+  return detailEntry(row);
+}
+
+// Where a row comes from, in words a person can weigh: the SRD 5.1, ODM's
+// own wording, the table's homebrew, or the third-party book by its title.
+export function documentLabel(entry: Pick<ContentEntry, "source" | "documentSlug">, kind: string): string {
+  if (entry.source === "homebrew") {
+    return "your homebrew";
+  }
+  if (entry.documentSlug === "wotc-srd" || entry.documentSlug === "srd-2014") {
+    return `SRD 5.1 ${kind}`;
+  }
+  if (entry.documentSlug === "odm-expanded") {
+    return `ODM ${kind}, written in ODM's own words`;
+  }
+  return `${kind} from ${documentTitle(entry.documentSlug)}`;
 }
 
 // The dice a named spell actually rolls for this caster, derived from the

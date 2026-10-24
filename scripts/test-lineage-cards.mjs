@@ -111,8 +111,8 @@ function hillDwarfLike() {
   return SRD_RACES.find((race) => race.id === "hill_dwarf");
 }
 
-test("all 31 bundled races parse to a body or a locked row, no exceptions", () => {
-  assert.equal(SRD_RACES.length, 31);
+test("all 32 bundled races parse to a body or a locked row, no exceptions", () => {
+  assert.equal(SRD_RACES.length, 32);
   for (const race of SRD_RACES) {
     const lines = traitLines(race);
     assert.ok(lines.length > 0, `${race.id} has trait lines`);

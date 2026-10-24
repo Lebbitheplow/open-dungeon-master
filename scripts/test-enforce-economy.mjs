@@ -90,10 +90,11 @@ if (world.hasPack) {
     assert.deepEqual(world.sheet(trader.id).equipment, []);
   });
 
-  // SRD 5.2, Magic Item Rarity: common 100 gp, uncommon 400 gp, rare 4,000 gp,
-  // very rare 40,000 gp, legendary 200,000 gp; a consumable is half.
-  await test("A magic item outside a shop is worth its rarity's value, whatever price the model names: a Cloak of Protection (uncommon) costs 400 gp and sells for 200 gp.", async () => {
-    carry([], 500);
+  // The 2014 rules this engine plays (src/lib/srd/magic-item-value.ts):
+  // common 100 gp, uncommon 500 gp, rare 5,000 gp, very rare 50,000 gp, a
+  // consumable half, a legendary item never for sale.
+  await test("A magic item outside a shop is worth its rarity's value under the 2014 rules, whatever price the model names: a Cloak of Protection (uncommon) costs 500 gp and sells for 250 gp.", async () => {
+    carry([], 600);
     const bought = await world.invoke("purchase", { characterId: trader.id, item: "Cloak of Protection", price: 5, qty: 1, action: "buy" });
     assert.equal(bought.ok, true, bought.error);
     assert.equal(purse(), 10000);
@@ -101,7 +102,7 @@ if (world.hasPack) {
     carry([{ name: "Cloak of Protection", qty: 1 }]);
     const sold = await world.invoke("purchase", { characterId: trader.id, item: "Cloak of Protection", price: 5000, qty: 1, action: "sell" });
     assert.equal(sold.ok, true, sold.error);
-    assert.equal(purse(), 20000);
+    assert.equal(purse(), 25000);
   });
 
   await test("A magic item given or revealed takes its rarity's value, not a worth the model names: a gifted Potion of Climbing sells for half its 50 gp.", async () => {
@@ -123,14 +124,21 @@ if (world.hasPack) {
   await test("An artifact has no price the rules set, so the worth given is its worth.", async () => {
     assert.equal(tv.listPriceCp({ name: "Orb of Dragonkind" }), null);
     assert.equal(tv.listPriceCp({ name: "Orb of Dragonkind", worth: 50000 }), 5000000);
-    assert.equal(tv.listPriceCp({ name: "Ring of Regeneration" }), 4000000);
+    assert.equal(tv.listPriceCp({ name: "Ring of Regeneration" }), 5000000, "very rare: 50,000 gp");
   });
 
-  await test("A +1, +2 or +3 weapon, armor or shield is worth its bonus's rarity and the item it is: a Longsword +1 is 415 gp, +1 plate 5,500 gp.", async () => {
-    assert.equal(tv.listPriceCp({ name: "Longsword +1" }), 41500, "uncommon 400 gp and the longsword's 15 gp");
-    assert.equal(tv.listPriceCp({ name: "Spada lunga +1", srdName: "Longsword" }), 41500, "the same sword named in the table's language");
-    assert.equal(tv.listPriceCp({ name: "+1 Plate" }), 550000, "SRD 5.2's own example: rare 4,000 gp and plate's 1,500 gp");
-    assert.equal(tv.listPriceCp({ name: "Shield +2" }), 401000, "a +2 shield is rare");
+  await test("A spell scroll is priced by its spell's level (SRD 5.1, Spell Scroll), as a consumable: a Spell Scroll (Fireball) is uncommon, 250 gp; a bare Spell Scroll has no price.", async () => {
+    assert.equal(tv.listPriceCp({ name: "Spell Scroll (Fireball)" }), 25000);
+    assert.equal(tv.listPriceCp({ name: "Spell Scroll (1st level)" }), 5000, "a 1st-level scroll is common");
+    assert.equal(tv.listPriceCp({ name: "Spell Scroll" }), null);
+  });
+
+  await test("A +1, +2 or +3 weapon, armor or shield is worth its bonus's rarity alone: a Longsword +1 is 500 gp, +1 plate 5,000 gp, +3 plate never for sale.", async () => {
+    assert.equal(tv.listPriceCp({ name: "Longsword +1" }), 50000, "uncommon");
+    assert.equal(tv.listPriceCp({ name: "Spada lunga +1", srdName: "Longsword" }), 50000, "the same sword named in the table's language");
+    assert.equal(tv.listPriceCp({ name: "+1 Plate" }), 500000, "rare");
+    assert.equal(tv.listPriceCp({ name: "+3 Plate" }), null, "legendary armor has no price");
+    assert.equal(tv.listPriceCp({ name: "Shield +2" }), 500000, "a +2 shield is rare");
     assert.equal(tv.listPriceCp({ name: "Longsword" }), 1500, "a plain longsword keeps its list price");
     carry([]);
     const granted = await world.invoke("grant_item", { characterId: trader.id, name: "Longsword +1", worth: 2000, reason: "a knight's bequest" });

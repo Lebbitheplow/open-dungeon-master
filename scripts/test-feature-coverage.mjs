@@ -393,6 +393,10 @@ test("every racial trait is enforced, a resource, or acknowledged", () => {
     "Shapechanger (alter your appearance as an action, no action economy cost to revert)",
     "Sentry's Rest (6 hours of inactive alertness in place of sleep)",
     "Nimble Escape (Disengage or Hide as a bonus action)",
+    // The 2014-family Orc (issue #502): its skills are picked at creation,
+    // and its bonus-action dash is narrated like Nimble Escape.
+    "Primal Intuition (two skills from Animal Handling, Insight, Intimidation, Medicine, Nature, Perception, Survival)",
+    "Aggressive (bonus action: move up to your speed toward a hostile creature you can see)",
     // The SRD subrace variants added 2026-07. Armor/weapon training and
     // skill/feat choices are applied to the sheet at creation; darkvision
     // feeds the light engine by name; the resistances parse by name too.

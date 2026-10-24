@@ -48,6 +48,7 @@ import type {
   SpellFacts,
 } from "@/lib/srd/legality/types";
 import { textKey } from "@/lib/language/text-logic";
+import { PLAYED_DOCUMENTS_SQL } from "@/lib/content/edition";
 
 const AUTHORED_FEATS = (authoredFeatsJson as { feats: FeatFacts[] }).feats;
 
@@ -148,7 +149,7 @@ function packPrices(): Map<string, ItemPrice> {
   const index = new Map<string, ItemPrice>();
   const db = getContentDb();
   if (db) {
-    const rows = db.prepare(`SELECT name, kind, cost FROM items`).all() as Array<{
+    const rows = db.prepare(`SELECT name, kind, cost FROM items WHERE ${PLAYED_DOCUMENTS_SQL}`).all() as Array<{
       name: string;
       kind: string;
       cost: string | null;

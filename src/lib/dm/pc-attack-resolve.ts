@@ -8,13 +8,13 @@ import type { Campaign } from "@/lib/db/campaigns";
 import type { TurnBudget } from "@/lib/dm/action-budget";
 import { publishEncounter } from "@/lib/dm/enemy-damage";
 import { pushTokenAway } from "@/lib/dm/map-tools";
-import { BRUTAL_ATTACK_USED, brawlerUnarmed, brutalAttackApplies, CRUSHER_USED, damageTypeFeat, GREAT_WEAPON_MASTER_READY, PIERCER_USED, SLASHER_USED, TAVERN_GRAPPLE_READY, type DamageTypeFeat } from "@/lib/srd/feat-combat";
+import { BRUTAL_ATTACK_USED, brawlerUnarmed, brutalAttackApplies, CRUSHER_USED, damageTypeFeat, GREAT_WEAPON_MASTER_READY, PIERCER_USED, SAVAGE_ATTACKER_USED, savageAttackerApplies, SLASHER_USED, TAVERN_GRAPPLE_READY, type DamageTypeFeat } from "@/lib/srd/feat-combat";
 import { holdsFeat } from "@/lib/srd/feat-effects";
 import { tryParry } from "@/lib/dm/enemy-reactions";
 import { allocateSeq } from "@/lib/db/campaigns";
 import { getEnemy, patchEnemyConditions, recordEncounterTarget, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
 import { insertRoll, landRoll, type StoredRoll } from "@/lib/db/rolls";
-import { d20Expression, rollExpression } from "@/lib/dice";
+import { d20Expression, rollExpression, type DiceTerm } from "@/lib/dice";
 import { publishWithSeq } from "@/lib/events";
 import { planAttackFx, type RollVisibility } from "@/lib/battlemap/fx-plan";
 import { attacksLeft } from "@/lib/dm/action-budget";
@@ -273,6 +273,27 @@ export function rollPcAttack(plan: AttackPlan, strike: Strike): Record<string, u
     damageOutcome = kept;
     budget.oncePerTurn.push(BRUTAL_ATTACK_USED);
     storeBudget(encounter, budget);
+  }
+  // Savage Attacker: once a turn, the weapon's own dice are rolled again and
+  // the better total kept; the riders' dice stand as rolled.
+  if (budget && savageAttackerApplies(sheet, { weaponAttack: plan.weaponAttack, melee: !profile.ranged && !plan.atRange }, budget.oncePerTurn)) {
+    const weapon = damageOutcome.terms.find((term): term is DiceTerm => term.kind === "dice");
+    const kept = weapon ? weapon.dice.filter((die) => die.kept) : [];
+    if (weapon && kept.length) {
+      const first = kept.reduce((sum, die) => sum + die.value, 0);
+      const again = rollExpression(`${kept.length}d${kept[0].sides}`, undefined, { rerollBelow: strike.rerollBelow });
+      const fresh = again.terms.find((term): term is DiceTerm => term.kind === "dice");
+      context.notes.push(`Savage Attacker: the weapon's dice rolled twice (${first} and ${again.total}), the better kept`);
+      if (fresh && again.total > first) {
+        kept.forEach((die, index) => {
+          die.value = fresh.dice[index]?.value ?? die.value;
+        });
+        weapon.subtotal += again.total - first;
+        damageOutcome = { ...damageOutcome, total: damageOutcome.total - first + again.total };
+      }
+      budget.oncePerTurn.push(SAVAGE_ATTACKER_USED);
+      storeBudget(encounter, budget);
+    }
   }
   // Piercer: once a turn, one of the piercing damage dice is rerolled.
   if (typeFeat === "Piercer" && budget && !budget.oncePerTurn.includes(PIERCER_USED)) {

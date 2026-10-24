@@ -1,5 +1,5 @@
 import { openDatabase, type SqliteDatabase } from "@/lib/db/driver";
-import { EDITION_2024_DOCUMENTS } from "@/lib/content/edition";
+import { EDITION_2024_DOCUMENTS, PACK_REVISION } from "@/lib/content/edition";
 import { packFeatText } from "@/lib/srd/feat-text";
 import { registerFeatRules } from "@/lib/srd/feature-effects";
 import { existsSync } from "node:fs";
@@ -13,6 +13,7 @@ import path from "node:path";
 
 declare global {
   var __odmContentDb: SqliteDatabase | null | undefined;
+  var __odmContentRevision: number | undefined;
 }
 
 const contentDbPath =
@@ -28,8 +29,32 @@ export function getContentDb(): SqliteDatabase | null {
   }
   const db = openDatabase(contentDbPath, { readonly: true, fileMustExist: true });
   globalThis.__odmContentDb = db;
+  globalThis.__odmContentRevision = packRevisionOf(db);
+  if (globalThis.__odmContentRevision < PACK_REVISION) {
+    // Read in full anyway: every reader leaves the 2024 rows out
+    // (src/lib/content/edition.ts), but the 2014 rows such a pack lacks
+    // (the SRD's equipment packs and mounts) stay missing until it goes.
+    console.warn(
+      `[content] The content pack at ${contentDbPath} is revision ${globalThis.__odmContentRevision}; this server needs ${PACK_REVISION}. Run npm run setup, or node scripts/fetch-content-pack.mjs, to replace it.`,
+    );
+  }
   registerPackFeats(db);
   return db;
+}
+
+function packRevisionOf(db: SqliteDatabase): number {
+  try {
+    const rows = db.pragma("user_version") as Array<{ user_version?: unknown }>;
+    return Number(rows?.[0]?.user_version) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+// Whether the open pack was built by an importer older than this code
+// needs (src/lib/content/edition.ts PACK_REVISION). False with no pack.
+export function contentPackStale(): boolean {
+  return getContentDb() !== null && (globalThis.__odmContentRevision ?? 0) < PACK_REVISION;
 }
 
 // The pack's 2014 feats reach the engines the way ODM's own do (issue

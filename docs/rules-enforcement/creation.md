@@ -229,9 +229,9 @@ because A means the server would not catch it either.
 | edition-2024-species | medium | see "2024 content" above. Test uses an inline copy of the pack's Orc row, so it runs without the pack |
 | edition-2024-feat-text | low (pack) | 16 srd-2024 feats offered; Alert's text and mechanics disagree |
 
-Fix strategy: drop `srd-2024` from the species and feat backfill (or tag rows with their
-game system and filter them out of the 2014 builder), and remove `srd-2024` from
-`BUNDLED_DOCUMENTS` in `race-options.ts:34`.
+Fixed by issue #502: the importer leaves every `5e-2024` document out of the pack
+(`src/lib/content/edition.ts`), the 2014 Orc is a bundled race, and a stored 2024
+species reads as the 2014 one with a note in the builder.
 
 ## What is enforced today (tests)
 

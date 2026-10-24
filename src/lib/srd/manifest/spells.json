@@ -2,7 +2,7 @@
  "_note": "The checklist of every official 5e spell, by book. Names and metadata only, no rules text: this is a list of facts, not expression. scripts/test-content-completeness.mjs asserts every entry here resolves in the content pack, so a spell that is absent fails the build by name instead of waiting for a player to report it. When a player names a spell that is not here, add it here first.",
  "_shape": "spells[] = { n: name, b: book, l: level, s: school, c: classes csv, a: [other names the same spell is printed under], missing: true while it still needs authoring }. Books: phb, xge, tce, ftd, scc, egw, bomt, ai.",
  "_counts": {
-  "total": 517,
+  "total": 510,
   "missing": 0
  },
  "spells": [
@@ -321,13 +321,6 @@
    "l": 2,
    "s": "divination",
    "c": "druid,ranger"
-  },
-  {
-   "n": "Befuddlement",
-   "b": "srd2024",
-   "l": 8,
-   "s": "enchantment",
-   "c": "bard,druid,warlock,wizard"
   },
   {
    "n": "Bestow Curse",
@@ -1179,13 +1172,6 @@
    "d": "self"
   },
   {
-   "n": "Divine Smite",
-   "b": "srd2024",
-   "l": 1,
-   "s": "evocation",
-   "c": "paladin"
-  },
-  {
    "n": "Divine Word",
    "b": "phb",
    "l": 7,
@@ -1340,13 +1326,6 @@
    "l": 3,
    "s": "transmutation",
    "c": "artificer,druid,paladin,ranger"
-  },
-  {
-   "n": "Elementalism",
-   "b": "srd2024",
-   "l": 0,
-   "s": "transmutation",
-   "c": "druid,sorcerer,wizard"
   },
   {
    "n": "Enemies Abound",
@@ -3122,9 +3101,9 @@
   },
   {
    "n": "Power Word Heal",
-   "b": "srd2024",
+   "b": "phb",
    "l": 9,
-   "s": "enchantment",
+   "s": "evocation",
    "c": "bard,cleric"
   },
   {
@@ -3640,13 +3619,6 @@
    "d": "touch"
   },
   {
-   "n": "Shining Smite",
-   "b": "srd2024",
-   "l": 2,
-   "s": "transmutation",
-   "c": "paladin"
-  },
-  {
    "n": "Shocking Grasp",
    "b": "phb",
    "l": 0,
@@ -3763,13 +3735,6 @@
    "c": "sorcerer,wizard"
   },
   {
-   "n": "Sorcerous Burst",
-   "b": "srd2024",
-   "l": 0,
-   "s": "evocation",
-   "c": "sorcerer"
-  },
-  {
    "n": "Soul Cage",
    "b": "xge",
    "l": 6,
@@ -3873,13 +3838,6 @@
    "l": 4,
    "s": "evocation",
    "c": "paladin"
-  },
-  {
-   "n": "Starry Wisp",
-   "b": "srd2024",
-   "l": 0,
-   "s": "evocation",
-   "c": "bard,druid"
   },
   {
    "n": "Steel Wind Strike",
@@ -3987,13 +3945,6 @@
    "l": 5,
    "s": "conjuration",
    "c": "druid,sorcerer,wizard"
-  },
-  {
-   "n": "Summon Dragon",
-   "b": "srd2024",
-   "l": 5,
-   "s": "conjuration",
-   "c": "wizard"
   },
   {
    "n": "Summon Elemental",

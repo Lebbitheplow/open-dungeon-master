@@ -26,6 +26,12 @@ import type { AbilityScores } from "@/lib/schemas/sheet";
 import type { SpellFacts } from "@/lib/srd/legality/types";
 import { thirdCasterOutside, thirdCasterSchoolProblem } from "@/lib/srd/third-caster";
 import { textKey } from "@/lib/language/text-logic";
+import { revisedOnlySpellProblem } from "@/lib/content/edition";
+
+// A name no list carries: a 2024-only spell says so, anything else is unknown.
+function unknownSpell(name: string, list: string): string {
+  return revisedOnlySpellProblem(name) ?? `${name} is not a spell this server knows; pick one from the ${list} spell list.`;
+}
 
 const has = (list: string[], name: string) => list.some((entry) => textKey(entry) === textKey(name));
 const added = (after: string[], before: string[]) =>
@@ -100,7 +106,7 @@ export function levelUpSpells(input: SpellLevelUp): SpellLevelUpResult {
       }
       const spell = input.spellOf(name);
       if (!spell) {
-        return { error: `${name} is not a spell this server knows; pick one from the ${input.list} spell list.` };
+        return { error: unknownSpell(name, input.list) };
       }
       if (spell.level === 0) {
         after.cantrips.push(spell.name);
@@ -179,7 +185,7 @@ export function levelUpSpells(input: SpellLevelUp): SpellLevelUpResult {
   for (const name of newCantrips) {
     const spell = input.spellOf(name);
     if (!spell) {
-      return { error: `${name} is not a spell this server knows; pick one from the ${input.list} spell list.` };
+      return { error: unknownSpell(name, input.list) };
     }
     if (spell.level !== 0) {
       return { error: `${spell.name} is a level ${spell.level} spell, not a cantrip; it cannot sit on the cantrip list.` };
@@ -191,7 +197,7 @@ export function levelUpSpells(input: SpellLevelUp): SpellLevelUpResult {
   for (const name of newSpells) {
     const spell = input.spellOf(name);
     if (!spell) {
-      return { error: `${name} is not a spell this server knows; pick one from the ${input.list} spell list.` };
+      return { error: unknownSpell(name, input.list) };
     }
     if (spell.level === 0) {
       return { error: `${spell.name} is a cantrip; it belongs on the cantrip list, not among the spells.` };

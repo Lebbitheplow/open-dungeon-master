@@ -252,12 +252,14 @@ test("a priced pack row the bundled table never priced is bought at the pack's p
 
 test("a name the pack files as both a magic item and priced gear is offered as the gear row, the one the server prices (#136 review)", async () => {
   const { uniqueByName } = await import("../src/app/characters/builder/pickerRows.ts");
-  const magic = { slug: "spell-scroll", name: "Spell Scroll", source: "open5e", kind: "magic_item", cost: "" };
-  const gear = { slug: "srd-2024_spell-scroll", name: "Spell Scroll", source: "open5e", kind: "gear", cost: "30 gp" };
+  // A potion of healing is both: a magic item, and 50 gp on SRD 5.1's
+  // Adventuring Gear table.
+  const magic = { slug: "potion-of-healing", name: "Potion of Healing", source: "open5e", kind: "magic_item", cost: "" };
+  const gear = { slug: "srd_potion-of-healing", name: "Potion of Healing", source: "open5e", kind: "gear", cost: "50 gp" };
   const other = { slug: "rope", name: "Rope, Hempen (50 feet)", source: "open5e", kind: "gear", cost: "1 gp" };
   // Whichever order the pack answers in, the gear row is the one kept, in the name's first position.
-  assert.deepEqual(uniqueByName([magic, other, gear]).map((row) => row.slug), ["srd-2024_spell-scroll", "rope"]);
-  assert.deepEqual(uniqueByName([gear, magic, other]).map((row) => row.slug), ["srd-2024_spell-scroll", "rope"]);
+  assert.deepEqual(uniqueByName([magic, other, gear]).map((row) => row.slug), ["srd_potion-of-healing", "rope"]);
+  assert.deepEqual(uniqueByName([gear, magic, other]).map((row) => row.slug), ["srd_potion-of-healing", "rope"]);
   // Two rows of the same kind: the first wins, as before.
   assert.deepEqual(uniqueByName([{ ...magic, slug: "a" }, { ...magic, slug: "b" }]).map((row) => row.slug), ["a"]);
   assert.deepEqual(uniqueByName([{ ...gear, slug: "a" }, { ...gear, slug: "b" }]).map((row) => row.slug), ["a"]);

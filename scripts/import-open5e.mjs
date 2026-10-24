@@ -6,6 +6,7 @@
 
 import Database from "better-sqlite3-multiple-ciphers";
 import { mkdirSync, existsSync, readFileSync, writeFileSync, rmSync } from "node:fs";
+import { register } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -30,6 +31,16 @@ import {
   slugify,
   weightProblem,
 } from "./lib/open5e-normalize.mjs";
+
+register("./lib/register-alias.mjs", import.meta.url);
+
+// ODM plays the 2014 rules only (src/lib/content/edition.ts): no row of a
+// 2024 document enters the pack, and the SRD 5.1 goods the pack carried only
+// as 2024 rows are built from the bundled tables instead.
+const { EDITION_2024_DOCUMENTS, EDITION_2024_GAMESYSTEM, PACK_REVISION } = await import(
+  "../src/lib/content/edition.ts"
+);
+const { SRD_GEAR, SRD_GOODS, matchGear, gearKey } = await import("../src/lib/srd/adventuring-gear.ts");
 
 const API = "https://api.open5e.com";
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -153,7 +164,39 @@ function createSchema(db) {
   `);
 }
 
+// Rows of a document this engine plays: none from the 2024 rules. Applied
+// before any name is deduped, so a 2024 reprint never takes a name ODM's own
+// 2014 row needs (it once kept Alert, Hex and Goliath out of the pack).
+function playedRows(table, rows) {
+  return rows.filter(
+    (row) => row && !EDITION_2024_DOCUMENTS.has(String((table === "documents" ? row.slug : row.document_slug) ?? "")),
+  );
+}
+
+// The v2 game system a document is written for ("5e-2014", "5e-2024").
+function gameSystemOf(raw) {
+  const system = raw.gamesystem;
+  if (system && typeof system === "object") {
+    return String(system.key ?? "");
+  }
+  return String(system ?? "").replace(/\/+$/, "").split("/").pop() ?? "";
+}
+
+// Every document Open5e marks as 2024 must be one edition.ts names, so a new
+// 2024 book on Open5e stops the import instead of slipping into the pack.
+function checkEditionBoundary(v2Documents) {
+  const revised = v2Documents.filter((raw) => gameSystemOf(raw) === EDITION_2024_GAMESYSTEM).map((raw) => String(raw.key));
+  const unnamed = revised.filter((key) => !EDITION_2024_DOCUMENTS.has(key));
+  if (unnamed.length) {
+    throw new Error(
+      `Open5e lists 2024 documents src/lib/content/edition.ts does not name: ${unnamed.join(", ")}. Add them to EDITION_2024_DOCUMENTS.`,
+    );
+  }
+  console.log(`  2024 documents left out: ${revised.join(", ") || "none listed"}`);
+}
+
 function insertRows(db, table, columns, rows) {
+  rows = playedRows(table, rows);
   const placeholders = columns.map(() => "?").join(", ");
   const statement = db.prepare(
     `INSERT OR REPLACE INTO ${table} (${columns.join(", ")}, data_json) VALUES (${placeholders}, ?)`,
@@ -179,7 +222,7 @@ function insertNewRows(db, table, columns, rows) {
   const takenSlugs = new Set(existing.map((row) => row.slug));
   const takenNames = new Set(existing.map((row) => row.name.trim().toLowerCase()));
   const resolved = [];
-  for (const row of rows) {
+  for (const row of playedRows(table, rows)) {
     if (!row || !row.name) {
       continue;
     }
@@ -200,6 +243,95 @@ function insertNewRows(db, table, columns, rows) {
   }
   insertRows(db, table, columns, resolved);
   return resolved.length;
+}
+
+// The SRD 5.1 goods no row in the pack names: its equipment packs, mounts
+// and tack (the pack had them only as 2024 rows), and any priced piece of
+// gear Open5e's 2014 document leaves out. Each lands as a row of that
+// document, "System Reference Document 5.1", with the book's own text where
+// the book has one (src/lib/rulebook/srd-5.1.json), so pickers, shops,
+// prices and weights find them as they find any 2014 row.
+const SRD_DOC = "srd-2014";
+
+function bookParagraphs() {
+  const book = JSON.parse(readFileSync(path.join(root, "src", "lib", "rulebook", "srd-5.1.json"), "utf8"));
+  const text = ["adventuring-gear", "mounts-and-vehicles"]
+    .map((id) => book.pages.find((page) => page.id === id)?.md ?? "")
+    .join("\n\n");
+  // "***Explorer's Pack (10 gp)***. Includes ..." and "***Saddles***. ...":
+  // the bold name, without its price, to the paragraph after it.
+  const byName = new Map();
+  for (const match of text.matchAll(/\*\*\*([^*]+)\*\*\*\.\s*([^\n]+)/g)) {
+    byName.set(gearKey(match[1].replace(/\s*\([^)]*\)\s*$/, "")), match[2].trim());
+  }
+  // Mounts print as a table: "| Camel | 50 gp | 50 ft. | 480 lb. |".
+  for (const match of text.matchAll(/^\|\s*([^|]+?)\s*\|\s*[\d,]+ [cgs]p\s*\|\s*([\d,]+ ft\.)\s*\|\s*([\d,]+ lb\.)\s*\|/gm)) {
+    byName.set(gearKey(match[1]), `Speed ${match[2]} Base carrying capacity ${match[3]}`);
+  }
+  return byName;
+}
+
+function goodsCategory(goods) {
+  if (goods.category) {
+    return goods.category;
+  }
+  if (/focus|holy symbol/i.test(goods.name)) {
+    return "spellcasting focus";
+  }
+  return /poison/i.test(goods.name) ? "poison" : "adventuring gear";
+}
+
+function insertSrdGoods(db, columns) {
+  const held = new Set();
+  for (const { name } of db.prepare("SELECT name FROM items").all()) {
+    held.add(gearKey(name));
+    const known = matchGear(name);
+    if (known) {
+      held.add(gearKey(known.name));
+    }
+  }
+  const book = bookParagraphs();
+  const descOf = (name) => {
+    const bare = name.replace(/\s*\([^)]*\)\s*$/, "");
+    const inverted = /^([^,]+),\s*(.+)$/.exec(bare);
+    const keys = [bare, ...(inverted ? [`${inverted[1]}, ${inverted[2]}`, `${inverted[2]} ${inverted[1]}`, inverted[1] === "Saddle" ? "Saddles" : ""] : [])];
+    for (const key of keys) {
+      const found = key && book.get(gearKey(key));
+      if (found) {
+        return found;
+      }
+    }
+    return "";
+  };
+  const rows = [...SRD_GOODS, ...SRD_GEAR.filter((gear) => gear.costCp !== null)]
+    .filter((goods) => !held.has(gearKey(goods.name)))
+    .map((goods) => {
+      const gold = goods.costCp / 100;
+      const category = goodsCategory(goods);
+      return {
+        slug: `srd_${slugify(goods.name)}`,
+        name: goods.name,
+        document_slug: SRD_DOC,
+        kind: "gear",
+        rarity: "",
+        cost: `${gold} gp`,
+        category,
+        weight: goods.weightLb ?? 0,
+        data: {
+          key: `srd_${slugify(goods.name)}`,
+          name: goods.name,
+          desc: descOf(goods.name),
+          category: { name: category.replace(/\b\w/g, (letter) => letter.toUpperCase()), key: slugify(category) },
+          cost: gold.toFixed(2),
+          weight: (goods.weightLb ?? 0).toFixed(3),
+          weight_unit: "lb",
+          document: { key: SRD_DOC, name: "System Reference Document 5.1", display_name: "5e 2014 Rules" },
+          // Built by ODM from the SRD 5.1 tables, not fetched from Open5e.
+          odm_backfill: true,
+        },
+      };
+    });
+  return insertNewRows(db, "items", columns, rows);
 }
 
 const AUTHORED_DOC = "odm-expanded";
@@ -397,6 +529,9 @@ async function main() {
   db.pragma("journal_mode = OFF");
   createSchema(db);
 
+  console.log("edition boundary...");
+  checkEditionBoundary(await fetchAllPages("/v2/documents/"));
+
   console.log("spells...");
   insertRows(
     db,
@@ -564,11 +699,28 @@ async function main() {
     (await fetchAllPages("/v2/documents/")).map(normalizeDocumentV2),
   );
 
+  console.log("\nSRD 5.1 goods the open sources leave out...");
+  console.log(`  items +${insertSrdGoods(db, itemColumns)}`);
+
   // The authored layer: our own subclass, spell, feat and race entries for
   // the options no open dataset carries. Written in our own words; see
   // src/lib/srd/subclasses.json and data/content/authored/.
   console.log("\nauthored content...");
   insertAuthoredContent(db);
+
+  const leaked = ["spells", "feats", "conditions", "backgrounds", "races", "classes", "archetypes", "items", "monsters"]
+    .map((table) => {
+      const editions = [...EDITION_2024_DOCUMENTS];
+      const { count } = db
+        .prepare(`SELECT COUNT(*) AS count FROM ${table} WHERE document_slug IN (${editions.map(() => "?").join(", ")})`)
+        .get(...editions);
+      return count ? `${table}: ${count}` : "";
+    })
+    .filter(Boolean);
+  if (leaked.length) {
+    throw new Error(`2024 rows reached the pack (${leaked.join(", ")})`);
+  }
+  db.pragma(`user_version = ${PACK_REVISION}`);
 
   console.log("\nImport complete:");
   for (const table of [

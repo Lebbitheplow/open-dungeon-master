@@ -189,7 +189,7 @@ export function RacialChoicesSection({
                   placeholder="Choose a skill..."
                   options={[
                     { value: "", label: "Choose a skill..." },
-                    ...ALL_SKILLS.filter(
+                    ...(race.skillChoice?.from?.length ? race.skillChoice.from : ALL_SKILLS).filter(
                       (skill) => skills[index] === skill || (!skills.includes(skill) && !grantedSkills.includes(skill)),
                     ).map((skill) => ({ value: skill as string, label: skillName(skill) })),
                   ]}

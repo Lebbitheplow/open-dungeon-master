@@ -79,6 +79,8 @@ import { wardOnCast } from "@/lib/dm/arcane-ward";
 import { casterCost } from "@/lib/dm/spell-self";
 import { toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
+import { holdsFeature } from "@/lib/srd/feature-names";
+import { revisedOnlySpell, revisedOnlySpellProblem } from "@/lib/content/edition";
 import { isConditionNamed } from "@/lib/srd/feature-names";
 
 // Which tool the cast came through. It decides two things only: whether a
@@ -252,8 +254,16 @@ export function castSpell(
   hooks: CastHooks,
 ): CastResult {
   const spell = input.spell.trim();
-  if (!spell) {
+  // Divine Smite is a paladin's feature under the 2014 rules, not a spell: a
+  // slot spent naming it is the nameless slot the feature burns.
+  if (!spell || (revisedOnlySpell(spell) === "Divine Smite" && holdsFeature(sheet, "Divine Smite"))) {
     return namelessSlot(sheet, input, hooks);
+  }
+  // A spell only the 2024 rules print, still on a sheet from before they
+  // were taken out, is not cast here (src/lib/content/edition.ts).
+  const revised = revisedOnlySpellProblem(spell);
+  if (revised) {
+    return { error: `${revised} Nothing was spent.`, refused: "rules" };
   }
   const via = input.via ?? "slot";
   const authors = spellAuthorsFor(campaign);

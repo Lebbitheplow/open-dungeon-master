@@ -147,8 +147,11 @@ export function ancestryBlocks(
   if (race.asiChoice && racialAsi.filter(Boolean).length < race.asiChoice.count) {
     owed.push(block("racialAsi", `Pick which abilities your ${race.name} heritage makes stronger (ability score increase).`));
   }
+  const racialFrom = race.skillChoice?.from ?? [];
   if (race.skillChoice && racialSkills.filter(Boolean).length < race.skillChoice.count) {
     owed.push(block("racialSkills", `Pick the skills your ${race.name} heritage trained (skill proficiencies).`));
+  } else if (racialFrom.length && racialSkills.some((skill) => skill && !racialFrom.includes(skill))) {
+    owed.push(block("racialSkills", `Your ${race.name} heritage trains only some skills: pick its skill proficiencies from its list.`));
   }
   if (race.toolChoice && !racialTool) {
     owed.push(block("racialTool", `Pick a tool your ${race.name} knows how to use (tool proficiency).`));

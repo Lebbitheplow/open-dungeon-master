@@ -259,6 +259,12 @@
       "term": "Subclass",
       "short": "A specialization within your class, chosen at level 1, 2 or 3 depending on the class.",
       "long": "Two fighters can play completely differently based on this one choice: a Battle Master spends dice on tactical maneuvers, an Eldritch Knight casts wizard spells. It is the biggest single decision about how your character plays."
+    },
+    {
+      "id": "magic_item_prices",
+      "term": "Magic item prices",
+      "short": "What a magic item costs under the 2014 rules this server plays.",
+      "long": "The rules give few magic items a price, so the server uses the top of each rarity’s value in the 2014 rules: common 100 gp, uncommon 500 gp, rare 5,000 gp, very rare 50,000 gp. A potion, a scroll or anything else used up once is worth half. Legendary items and artifacts are never for sale. A shop stocks only common magic items unless the DM puts something rarer on its shelf, and buys back only potions and scrolls, at half their value; anything else needs a wealthy buyer the story provides."
     }
   ]
 }

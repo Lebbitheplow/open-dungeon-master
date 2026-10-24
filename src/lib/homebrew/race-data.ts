@@ -1,5 +1,5 @@
 import { clamp, text, type Raw } from "@/lib/homebrew/coerce";
-import { raceSizeOf } from "@/lib/content/mechanics";
+import { ALL_SKILLS, raceSizeOf } from "@/lib/content/mechanics";
 
 // A workshop species in the fields the builder and the creation check read
 // a race by (src/lib/content/mechanics.ts raceMechanics): its scores, speed,
@@ -71,8 +71,10 @@ export function normalizeRaceData(source: Raw, data: Raw & { desc: string }): Ra
   }
   const skills = words(source.skills, 6, 30)?.map((skill) => skill.toLowerCase().replace(/\s+/g, "_"));
   if (skills) data.skills = skills;
-  const skillChoice = clamp((source.skillChoice as Raw | undefined)?.count, 0, 4, 0);
-  if (skillChoice) data.skillChoice = { count: skillChoice };
+  const skillChoice = (source.skillChoice ?? null) as Raw | null;
+  const skillCount = clamp(skillChoice?.count, 0, 4, 0);
+  const skillFrom = words(skillChoice?.from, 18, 30)?.filter((skill) => (ALL_SKILLS as readonly string[]).includes(skill));
+  if (skillCount) data.skillChoice = { count: skillCount, ...(skillFrom?.length ? { from: skillFrom } : {}) };
   const tools = words(source.tools, 6);
   if (tools) data.tools = tools;
   const toolChoice = (source.toolChoice ?? null) as Raw | null;

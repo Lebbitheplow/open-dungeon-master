@@ -233,6 +233,14 @@ export function brutalAttackApplies(sheet: FeatHolder, attack: { weaponAttack: b
   return holdsFeat(sheet, "Brutal Attack") && attack.weaponAttack && attack.melee && oncePerTurn !== null && !oncePerTurn.includes(BRUTAL_ATTACK_USED);
 }
 
+// Savage Attacker (2014 rules): once a turn, a melee weapon attack's own
+// damage dice, not a rider's, are rolled a second time and the better total
+// kept. Its own mark, so a character holding Brutal Attack too spends each.
+export const SAVAGE_ATTACKER_USED = "savage attacker:used";
+export function savageAttackerApplies(sheet: FeatHolder, attack: { weaponAttack: boolean; melee: boolean }, oncePerTurn: string[] | null): boolean {
+  return holdsFeat(sheet, "Savage Attacker") && attack.weaponAttack && attack.melee && oncePerTurn !== null && !oncePerTurn.includes(SAVAGE_ATTACKER_USED);
+}
+
 // Stunning Sniper (Tome of Heroes): a ranged weapon critical hit may stun
 // the target until the start of the shooter's next turn instead of doubling
 // the damage; the shooter says so before the roll (stunShot).

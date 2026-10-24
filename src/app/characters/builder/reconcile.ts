@@ -186,8 +186,11 @@ export function reconcilePicks(
   note("class skill", "classSkills", picks.chosenSkills, chosenSkills);
 
   const classPicked = new Set(chosenSkills.map(textKey));
+  // A race that names its skills (the Orc's Primal Intuition) keeps only
+  // picks from them.
+  const racialPool = race?.skillChoice?.from?.length ? new Set(race.skillChoice.from.map(textKey)) : null;
   const racialSkills = race?.skillChoice
-    ? slotted(picks.racialSkills, race.skillChoice.count, (skill) => !granted.has(textKey(skill)) && !classPicked.has(textKey(skill)) && !backgroundPicked.has(textKey(skill)))
+    ? slotted(picks.racialSkills, race.skillChoice.count, (skill) => !granted.has(textKey(skill)) && !classPicked.has(textKey(skill)) && !backgroundPicked.has(textKey(skill)) && (!racialPool || racialPool.has(textKey(skill))))
     : [];
   note("racial skill", "racialSkills", picks.racialSkills, racialSkills);
 

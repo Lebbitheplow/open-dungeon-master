@@ -421,6 +421,14 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
     consumedBy: "hit",
   },
   {
+    id: "ensnaring_strike",
+    match: ["ensnaring strike"],
+    summary:
+      "Ensnaring Strike: the next weapon hit forces a STR save (advantage for a Large or larger target) or the target is restrained by thorned vines, taking 1d6 piercing at the start of each of its turns until a STR check against the spell save DC tears it free; the charge is spent by the hit.",
+    weaponOnly: true,
+    consumedBy: "hit",
+  },
+  {
     id: "blinding_smite",
     match: ["blinding smite"],
     summary:
@@ -453,6 +461,19 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
     summary:
       "Blazing Stride: +20 feet of speed, no opportunity attacks against them, and creatures they pass within 5 feet of take 1d6 fire damage (once each per turn; apply_damage on each).",
     speedBonus: 20,
+  },
+  {
+    id: "aura_of_life",
+    match: ["aura of life"],
+    summary:
+      "Aura of Life: resistance to necrotic damage, a hit point maximum that cannot be reduced, and 1 hit point regained at the start of a turn begun at 0 hit points.",
+    resistances: ["necrotic"],
+  },
+  {
+    id: "dragons_breath",
+    match: ["dragon's breath"],
+    summary:
+      "Dragon's Breath: an action exhales a 15-foot cone of the chosen energy, 3d6 (plus 1d6 a slot level above 2nd) with a DEX save for half, resolved with aoe_damage.",
   },
   {
     id: "aura_of_purity",

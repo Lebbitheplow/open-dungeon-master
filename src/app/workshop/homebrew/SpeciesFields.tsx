@@ -143,6 +143,12 @@ function Training({ data, set }: Props) {
   const armor = list(data.armor);
   const weapons = list(data.weapons);
   const cantrip = sub(data.cantripChoice);
+  const skillChoice = sub(data.skillChoice);
+  const skillFrom = list(skillChoice.from);
+  const putSkillChoice = (patch: Data) => {
+    const next = { count: num(skillChoice.count), from: skillFrom, ...patch };
+    set({ skillChoice: next.count ? { count: next.count, ...(list(next.from).length ? { from: next.from } : {}) } : undefined });
+  };
   const summary = [
     skills.length ? skills.join(", ").replace(/_/g, " ") : "",
     num(sub(data.skillChoice).count) ? `${num(sub(data.skillChoice).count)} skills of choice` : "",
@@ -164,11 +170,17 @@ function Training({ data, set }: Props) {
       </div>
       <NumberField
         label="Skills of the player's choice"
-        value={num(sub(data.skillChoice).count)}
+        value={num(skillChoice.count)}
         min={0}
         max={4}
-        onChange={(count) => set({ skillChoice: count ? { count } : undefined })}
+        onChange={(count) => putSkillChoice({ count })}
       />
+      {num(skillChoice.count) ? (
+        <div className="live-in col-span-2 space-y-1 sm:col-span-4">
+          <span className="text-[11px] text-stone-400">Picked from (none ticked: any skill)</span>
+          <ToggleChips options={SKILL_IDS} labels={SKILL_LABELS} selected={skillFrom} onChange={(from) => putSkillChoice({ from })} />
+        </div>
+      ) : null}
       <div className="col-span-2 space-y-1 sm:col-span-4">
         <span className="text-[11px] text-stone-400">Tools it is proficient with</span>
         <ChipList items={tools} onChange={(next) => set({ tools: next.length ? next : undefined })} options={TOOLS} prompt="Add a tool" max={6} />

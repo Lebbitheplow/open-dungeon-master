@@ -644,7 +644,115 @@ const directed = {};
   }
 }
 
+// Issue #502, one ruleset: a wizard saved as the 2024 Goliath with the
+// 2024-only Elementalism among her cantrips (her sheet says it is not cast
+// here; her builder says she now has the 2014 Goliath's traits), an Orc
+// whose Primal Intuition picks from its seven skills, and an apothecary,
+// whose shelf names how magic is priced.
+const REVISED_NAME = "Ysolde Marrow";
+const ysolde = createCharacter(world.owner.id, 3, {
+  name: REVISED_NAME,
+  race: "srd-2024-goliath",
+  class: "wizard",
+  subclass: "",
+  background: "sage",
+  alignment: "N",
+  abilities: { str: 14, dex: 12, con: 14, int: 15, wis: 10, cha: 8 },
+  maxHp: 20,
+  ac: 11,
+  acOverride: false,
+  speed: 30,
+  hitDice: { die: "d6", total: 3, spent: 0 },
+  proficiencies: {
+    saves: ["int", "wis"],
+    skills: ["arcana", "history", "athletics", "investigation"],
+    expertise: [],
+    languages: ["Common", "Giant", "Draconic", "Elvish"],
+    tools: [],
+    armor: [],
+    weapons: ["daggers", "darts", "slings", "quarterstaffs", "light crossbows"],
+  },
+  equipment: [{ name: "Quarterstaff", qty: 1, equipped: true }],
+  gold: 10,
+  copper: 0,
+  feats: [],
+  features: [],
+  asiChoices: [],
+  spellcasting: {
+    ability: "int",
+    slots: { 1: { max: 4, used: 0 }, 2: { max: 2, used: 0 } },
+    prepared: ["Shield", "Magic Missile", "Mage Armor", "Misty Step"],
+    known: [],
+    cantrips: ["Elementalism", "Fire Bolt", "Light"],
+    spellbook: ["Shield", "Magic Missile", "Mage Armor", "Sleep", "Misty Step", "Detect Magic", "Find Familiar", "Hold Person"],
+  },
+  portrait: null,
+  notes: "",
+  backstory: "",
+});
+const ORC_NAME = "Grask Ironjaw";
+const grask = createCharacter(world.owner.id, 1, {
+  name: ORC_NAME,
+  race: "orc",
+  class: "fighter",
+  subclass: "",
+  background: "soldier",
+  alignment: "CN",
+  abilities: { str: 17, dex: 12, con: 15, int: 8, wis: 13, cha: 10 },
+  maxHp: 12,
+  ac: 16,
+  acOverride: false,
+  speed: 30,
+  hitDice: { die: "d10", total: 1, spent: 0 },
+  proficiencies: {
+    saves: ["str", "con"],
+    skills: ["athletics", "intimidation", "acrobatics", "perception", "survival", "medicine"],
+    expertise: [],
+    languages: ["Common", "Orc"],
+    tools: ["dice set", "vehicles (land)"],
+    armor: ["light", "medium", "heavy", "shields"],
+    weapons: ["simple", "martial"],
+  },
+  equipment: [{ name: "Chain mail", qty: 1, equipped: true }],
+  gold: 10,
+  copper: 0,
+  feats: [],
+  features: [],
+  asiChoices: [],
+  spellcasting: null,
+  // Primal Intuition's two, as the builder stores them.
+  racialChoices: { skills: ["survival", "medicine"] },
+  portrait: null,
+  notes: "",
+  backstory: "",
+});
+const CURIO_SHOP = "Mother Ilse's Remedies";
+const curioTable = campaigns.createCampaign(world.owner.id, {
+  title: "Curio Table",
+  description: "An apothecary's shop on a wet street.",
+  theme: "high-fantasy",
+  maxPlayers: 4,
+  startingLevel: 3,
+  difficulty: "normal",
+  gameSettings: { ttsEnabled: false },
+});
+campaigns.setCampaignStatus(curioTable.id, "active");
+sheets.createSheet(curioTable.id, world.owner.id, 3, heroInput({ name: "Hale Brisk", class: "fighter", level: 3 }));
+{
+  const { upsertCurrentLocation } = await import("../../src/lib/db/locations.ts");
+  const { handleOpenShop } = await import("../../src/lib/dm/shop-tools.ts");
+  upsertCurrentLocation({ campaignId: curioTable.id, name: "Wetmarket" });
+  const opened = handleOpenShop(campaigns.getCampaignById(curioTable.id), JSON.stringify({ name: CURIO_SHOP, kind: "apothecary", size: "town" }));
+  if (!opened.ok) {
+    throw new Error(`could not open ${CURIO_SHOP}: ${JSON.stringify(opened)}`);
+  }
+}
+
 const ids = {
+  revised: ysolde.id,
+  orc: grask.id,
+  curioTableId: curioTable.id,
+  curioShop: CURIO_SHOP,
   lead: world.owner.username,
   player: player.username,
   walker: tourAccounts[0].username,

@@ -211,7 +211,11 @@ export function gearAlternatives(line: string): GearAlternative[] | null {
       entry.items = [{ name: entry.options[0], qty: 1 }];
     }
   }
-  return alternatives;
+  // "A donkey or mule with bit and bridle": SRD 5.1 sells the donkey and the
+  // mule as one row, so both sides are the same goods and there is nothing
+  // to choose; the line reads whole.
+  const kits = new Set(alternatives.map((entry) => (entry.options ? `?${entry.label}` : entry.items.map((item) => `${textKey(item.name)} ${item.qty}`).sort().join("|"))));
+  return kits.size > 1 ? alternatives : null;
 }
 
 // A "tool of your choice" line as a kind choice, for when no training can

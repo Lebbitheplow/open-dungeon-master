@@ -1,4 +1,5 @@
 import {
+  documentLabel,
   listConditions,
   searchFeats,
   searchItems,
@@ -52,10 +53,12 @@ const MAX_TERMS = 6;
 // list (src/lib/language/language.ts).
 const DESK_STOP_WORDS = stopWordsFor("english");
 
+// The origin names the row's own book (src/lib/content/index.ts
+// documentLabel), so a Level Up spell is never cited as the SRD's.
 function entrySource(
   kind: DeskSource["kind"],
   entry: ContentEntry,
-  origin: string,
+  noun: string,
 ): DeskSource | null {
   const text = describeContentEntry(entry.data);
   if (!text) {
@@ -66,7 +69,7 @@ function entrySource(
     ref: `${kind}:${entry.slug}`,
     name: entry.name,
     text: `${entry.name}. ${text}`,
-    origin: entry.source === "homebrew" ? "your homebrew" : origin,
+    origin: documentLabel(entry, noun),
   };
 }
 
@@ -97,22 +100,22 @@ function gatherSources(userId: string, question: string): DeskSource[] {
   // offered rather than searched: "am I prone if I am grappled" names
   // neither condition the way the table spells it.
   for (const entry of listConditions({ userId })) {
-    add(entrySource("condition", entry, "SRD condition"));
+    add(entrySource("condition", entry, "condition"));
   }
 
   for (const term of deskTerms(question, DESK_STOP_WORDS).slice(0, MAX_TERMS)) {
     const options = { q: term, userId, limit: PER_KIND };
     for (const entry of searchSpells(options)) {
-      add(entrySource("spell", entry, "SRD spell"));
+      add(entrySource("spell", entry, "spell"));
     }
     for (const entry of searchMonsters(options)) {
-      add(entrySource("monster", entry, "SRD monster"));
+      add(entrySource("monster", entry, "monster"));
     }
     for (const entry of searchItems(options)) {
-      add(entrySource("item", entry, "SRD item"));
+      add(entrySource("item", entry, "item"));
     }
     for (const entry of searchFeats(options)) {
-      add(entrySource("feat", entry, "SRD feat"));
+      add(entrySource("feat", entry, "feat"));
     }
   }
 

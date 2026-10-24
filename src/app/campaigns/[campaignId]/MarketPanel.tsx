@@ -16,6 +16,7 @@ import { KitButton, LoadFailed, panelField, PanelLoading, SettingToggle } from "
 import { MarketShopEditor, type Named } from "./MarketShopEditor";
 import type { StockLine } from "@/lib/dm/shop-logic";
 import type { MarketRequest } from "@/lib/dm/table-tabs";
+import { GameTerm } from "@/components/ui/GameTerm";
 
 // The market (docs/vtt-parity-implementation-plan.md 11.1): the shops at
 // the party's place, stock as tiles with a price chip in coin, a Buy on
@@ -337,6 +338,15 @@ export function MarketPanel({
                   {shop.keeperName ? `, kept by ${shop.keeperName}` : ""}
                   {steersStory && shop.locationName ? ` at ${shop.locationName}` : ""}
                   {shop.markup !== 1 ? ` (prices ${shop.markup > 1 ? "+" : ""}${Math.round((shop.markup - 1) * 100)}%)` : ""}
+                  {shop.kind === "curiosities" || shop.kind === "apothecary" ? (
+                    <>
+                      {" · "}
+                      {/* A finger-sized target (40px) that keeps the line's height. */}
+                      <GameTerm id="magic_item_prices" className="-my-3.5 inline-block py-3.5">
+                        How magic is priced
+                      </GameTerm>
+                    </>
+                  ) : null}
                 </p>
               </div>
               {canHaggle ? (

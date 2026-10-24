@@ -11,7 +11,7 @@ import { insertSheetAudit } from "@/lib/db/sheet-audit";
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
 import { findShopNear, getShop, insertShop, listShops, listShopsAt, updateShop } from "@/lib/db/shops";
 import { searchItems } from "@/lib/content";
-import { SRD_GEAR } from "@/lib/srd/adventuring-gear";
+import { SRD_GEAR, SRD_GOODS } from "@/lib/srd/adventuring-gear";
 import { SRD_ARMOR } from "@/lib/srd/armor";
 import { bundledPriceCopper } from "@/lib/srd/starting-wealth";
 import { SRD_WEAPONS } from "@/lib/srd/weapons";
@@ -19,12 +19,11 @@ import { rollExpression } from "@/lib/dice";
 import { grantItemMath, removeItemMath } from "@/lib/dm/mutation-math";
 import { resolveRollExpression, resolveSheetRef, type RollArgs, unknownSheetRef } from "@/lib/dm/rolls";
 import { rollExtrasFor, spendRollCarriers } from "@/lib/dm/forced-save";
-import { keepsFullValue, listPriceCp, magicValueOf } from "@/lib/dm/trade-value";
+import { keepsFullValue, listPriceCp, magicValueOf, soldToShops } from "@/lib/dm/trade-value";
 import { capacityProblem } from "@/lib/dm/load-rules";
 import {
   addStock,
   askingPriceCp,
-  costToCopper,
   findStockLine,
   haggleDc,
   haggleStep,
@@ -35,13 +34,12 @@ import {
   refillStock,
   renderShopsForPrompt,
   restockDue,
-  SHELF_RARITIES,
   SIZE_MARKUP,
   stockFromPool,
   takeStock,
   type Shop,
 } from "@/lib/dm/shop-logic";
-import { magicItemValueCp, pricedRarity } from "@/lib/srd/magic-item-value";
+import { magicItemValue } from "@/lib/srd/magic-item-value";
 import { MINUTES_PER_DAY } from "@/lib/dm/calendar";
 import { publishEphemeral, publishPersisted, publishWithSeq } from "@/lib/events";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -160,18 +158,18 @@ function publishSheet(campaign: Campaign, sheetId: string) {
 // pack files some items under two documents, and a shelf with two "Barrel"
 // lines sells one of them and strands the other. The first item each of the
 // kind's staples names is marked, and always goes on the shelf. The pack
-// prices no magic item, so each is priced by its rarity and carries that
-// rarity for the shelf's size to choose by; a curiosity shop opened bare.
+// prices no magic item, so each is priced by its rarity under the 2014 rules
+// (src/lib/srd/magic-item-value.ts) and carries that rarity for the shelf to
+// choose by: commons only (SHELF_RARITIES).
 export function stockPool(kind: string): Array<{ name: string; cost: string; staple?: boolean; rarity?: string }> {
   const spec = KIND_POOL[normalizeShopKind(kind)];
   const pool: Array<{ name: string; cost: string; staple?: boolean; rarity?: string }> = [];
   const seen = new Set<string>();
   const stapled = new Set<string>();
-  const baseCost = spec.kinds.includes("magic_item") ? baseCostLookup() : null;
   for (const itemKind of spec.kinds) {
     for (const item of packItemsOfKind(itemKind)) {
-      const magic = baseCost && item.kind === "magic_item" ? magicItemValueCp(item, baseCost) : undefined;
-      const cost = magic === undefined ? item.cost : magic === null ? "" : `${magic} cp`;
+      const magic = item.kind === "magic_item" ? magicItemValue(item) : undefined;
+      const cost = magic === undefined ? item.cost : magic === null ? "" : `${magic.cp} cp`;
       if (!cost || (spec.match && !spec.match.test(item.name)) || spec.skip?.includes(item.category) || seen.has(textKey(item.name))) {
         continue;
       }
@@ -181,7 +179,7 @@ export function stockPool(kind: string): Array<{ name: string; cost: string; sta
       if (first) {
         stapled.add(textKey(staple));
       }
-      const rarity = magic ? pricedRarity(item.rarity) : null;
+      const rarity = magic ? magic.rarity : null;
       pool.push({ name: item.name, cost, ...(first ? { staple: true } : {}), ...(rarity ? { rarity } : {}) });
     }
   }
@@ -189,8 +187,9 @@ export function stockPool(kind: string): Array<{ name: string; cost: string; sta
 }
 
 // With no content pack installed (or none with this kind's goods), the
-// bundled SRD 5.1 tables the builder prices from: weapons, armor and
-// adventuring gear at list price. The setting's firearms and genre armor
+// bundled SRD 5.1 tables the builder prices from: weapons, armor,
+// adventuring gear, packs and tack at list price, and mounts where the
+// kind's skip list does not leave them out. The setting's firearms and genre armor
 // and every magic item stay off the shelf, as they do at creation
 // (src/lib/srd/starting-wealth.ts), so a curiosities shop stays bare.
 // The weapon table prints the SRD's own rows first; the setting's firearms,
@@ -203,23 +202,13 @@ function bundledPool(spec: (typeof KIND_POOL)[keyof typeof KIND_POOL]): Array<{ 
     ...(spec.kinds.includes("weapon") ? SRD_TABLE_WEAPONS.map((weapon) => ({ name: weapon.name, cp: bundledPriceCopper(weapon.name) })) : []),
     ...(spec.kinds.includes("armor") ? SRD_ARMOR.filter((armor) => !armor.genres).map((armor) => ({ name: armor.name, cp: bundledPriceCopper(armor.name) })) : []),
     ...(spec.kinds.includes("gear") ? SRD_GEAR.map((gear) => ({ name: gear.name, cp: gear.costCp })) : []),
+    ...(spec.kinds.includes("gear")
+      ? SRD_GOODS.filter((goods) => !spec.skip?.includes(goods.category)).map((goods) => ({ name: goods.name, cp: goods.costCp }))
+      : []),
   ];
   return rows
     .filter((row): row is { name: string; cp: number } => row.cp !== null && row.cp > 0 && (!spec.match || spec.match.test(row.name)))
     .map((row) => ({ name: row.name, cost: `${row.cp} cp` }));
-}
-
-// The pack's weapons and armor priced by name, for a magic item made from
-// one: "plate" finds Plate, "chain shirt" Chain Shirt.
-function baseCostLookup(): (base: string) => number | null {
-  const prices = new Map<string, number>();
-  for (const item of [...packItemsOfKind("weapon"), ...packItemsOfKind("armor")]) {
-    const cp = costToCopper(item.cost);
-    if (cp !== null && !prices.has(textKey(item.name))) {
-      prices.set(textKey(item.name), cp);
-    }
-  }
-  return (base) => prices.get(textKey(base)) ?? prices.get(textKey(`${base} armor`)) ?? null;
 }
 
 // Every pack item of one kind. The search hands back at most 200 rows a call,
@@ -411,13 +400,13 @@ export function handleSellItem(campaign: Campaign, rawArguments: string): ToolRe
   }
   const line = removal.item;
   const carried = line.name;
-  // A shop buys the magic it would sell (SRD 5.2, Magic Item Rarity). Anything
-  // rarer finds a buyer among "the wealthiest nobles" (SRD 5.1, Selling
-  // Treasure), whom the story provides and purchase settles.
+  // SRD 5.1, Selling Treasure: "Finding someone to buy a potion or a scroll
+  // isn't too hard, but other items are out of the realm of most but the
+  // wealthiest nobles." A shop buys potions and scrolls; any other magic item
+  // needs a buyer the story provides, settled with purchase and no shop.
   const magic = magicValueOf(line);
-  if (magic && !SHELF_RARITIES[shop.size].includes(magic.rarity)) {
-    const where = SHELF_RARITIES.city.includes(magic.rarity) ? "changes hands only in a city" : "is bought by no shop, only by the wealthiest nobles";
-    return { error: `${shop.name} does not buy ${carried}: a ${magic.rarity} magic item ${where}. A buyer the story provides is settled with purchase, no shop named. Nothing was sold.`, refused: "rules" };
+  if (magic && !soldToShops(line)) {
+    return { error: `${shop.name} does not buy ${carried}: no shop buys a magic item other than a potion or a scroll, only one of the wealthiest nobles. A buyer the story provides is settled with purchase, no shop named. Nothing was sold.`, refused: "rules" };
   }
   // Gems, jewelry, art and trade goods keep their full value (SRD 5.1,
   // Selling Treasure), priced by the worth they were given; a name is never
@@ -538,11 +527,11 @@ export function tradeCall(campaign: Campaign, args: ToolArgs): EngineCall {
     }
     return listPrice;
   }
-  // A shop buys the magic it would sell, and no rarer (handleSellItem).
+  // A shop buys a potion or a scroll and no other magic item (handleSellItem).
   const sheet = typeof args.characterId === "string" ? resolveSheet(campaign, args.characterId) : null;
   const carried = sheet ? sheet.equipment[lineNamed(sheet.equipment, item)] : undefined;
   const magic = carried ? magicValueOf(carried) : null;
-  const buyers = here.filter((shop) => shop.buys && (!magic || SHELF_RARITIES[shop.size].includes(magic.rarity)));
+  const buyers = here.filter((shop) => shop.buys && (!magic || (carried !== undefined && soldToShops(carried))));
   const buyer = buyers.find((shop) => shelved(shop)) ?? buyers.find((shop) => shop.kind === "general") ?? buyers[0];
   return buyer ? atShop(buyer.name) : listPrice;
 }

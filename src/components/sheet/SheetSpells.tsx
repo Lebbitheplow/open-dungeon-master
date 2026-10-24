@@ -18,6 +18,7 @@ import {
 import { SpellBook, type SpellTile } from "./SpellBook";
 import { useSpellLookups, useSpellPool, type PoolSpell } from "./useSpellPool";
 import { textKey } from "@/lib/language/text-logic";
+import { revisedOnlySpellProblem } from "@/lib/content/edition";
 
 // A character's spells as a spell book, one per caster class. The owner of a
 // prepared caster can change what is prepared right here: unpreparing takes
@@ -123,6 +124,16 @@ function CasterBook({
       ? { ...tile, blocked: "Prepared list full" }
       : tile,
   );
+  // A 2024-only spell an older sheet still lists: it is not cast here, and
+  // the character's next edit asks for a 2014 one in its place.
+  const revised = [
+    ...new Set(
+      [
+        ...view.cantrips.map((name) => revisedOnlySpellProblem(name, "cantrip")),
+        ...[...heldSpells(view), ...view.pending, ...spellbookOf(view)].map((name) => revisedOnlySpellProblem(name)),
+      ].filter((problem): problem is string => problem !== null),
+    ),
+  ];
   const counters = [
     ...(view.cantrips.length ? [{ label: "Cantrips", value: view.cantrips.length }] : []),
     view.style === "known"
@@ -210,6 +221,11 @@ function CasterBook({
             ) : view.style === "known" && editable ? (
               <p className="mt-2 text-[11px] text-stone-500">
                 You know these spells and always have them ready. You can swap one when you level up.
+              </p>
+            ) : null}
+            {revised.length ? (
+              <p role="note" className="mt-2 text-[11px] text-amber-200/90">
+                {revised.join(" ")} The character&apos;s next edit asks for it.
               </p>
             ) : null}
             {message ? (

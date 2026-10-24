@@ -11,6 +11,8 @@ import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
+import { PACK_REVISION } from "../src/lib/content/edition.ts";
+import { packRevision } from "./lib/pack-revision.mjs";
 
 const root = path.resolve(import.meta.dirname, "..");
 const args = new Set(process.argv.slice(2));
@@ -76,10 +78,17 @@ step(2, total, "The database key");
 step(3, total, "The content pack (spells, feats, items, monsters)");
 {
   const pack = process.env.CONTENT_DB_PATH || path.join(root, "data", "content", "open5e.sqlite");
-  if (fs.existsSync(pack)) {
+  const held = packRevision(pack);
+  if (held !== null && held >= PACK_REVISION) {
     note("Already built. Kept as it is (node scripts/import-open5e.mjs --refresh rebuilds it).");
-  } else if (!run("import-open5e.mjs")) {
-    warnings.push("The content pack did not build (no network?). The app runs on the smaller built-in SRD set until you run: node scripts/import-open5e.mjs");
+  } else {
+    if (held !== null) {
+      // An older pack serves rules this release no longer plays.
+      note(`Built by an older release (revision ${held}); rebuilding it for this one.`);
+    }
+    if (!run("import-open5e.mjs")) {
+      warnings.push("The content pack did not build (no network?). The app runs on the smaller built-in SRD set until you run: node scripts/import-open5e.mjs");
+    }
   }
 }
 

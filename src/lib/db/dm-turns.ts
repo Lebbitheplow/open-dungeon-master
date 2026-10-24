@@ -268,6 +268,9 @@ export type PendingAttack = {
   critRange?: number;
   // Great Weapon Fighting: reroll damage dice at or below this value.
   rerollBelow?: number;
+  // Savage Attacker: the player rolls the weapon's dice twice and keeps the
+  // better total (its once-a-turn mark was spent when the roll was parked).
+  savageAttacker?: boolean;
   // What the damage stage needs to resolve the blow the way the digital
   // path does (src/lib/dm/damage-parts.ts): whether it counts as magical
   // against "nonmagical attacks" resistance, the dice that ride it under a

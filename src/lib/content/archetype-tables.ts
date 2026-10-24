@@ -1,6 +1,7 @@
 import { getContentDb } from "@/lib/content/db";
 import { subclassLevelFor } from "@/lib/srd/features";
 import { extraSubclassOf, type SubclassExtras } from "@/lib/srd/subclass-tables";
+import { PLAYED_DOCUMENTS_SQL } from "@/lib/content/edition";
 
 // The content pack's archetypes as subclass tables (src/lib/srd/
 // subclass-tables.ts), read once: the prose ones (Tome of Heroes, the
@@ -17,7 +18,7 @@ export function packSubclassExtras(): SubclassExtras {
   const db = getContentDb();
   const out: SubclassExtras = {};
   if (db) {
-    const rows = db.prepare("SELECT name, class_slug, data_json FROM archetypes").all() as Array<{
+    const rows = db.prepare(`SELECT name, class_slug, data_json FROM archetypes WHERE ${PLAYED_DOCUMENTS_SQL}`).all() as Array<{
       name: string;
       class_slug: string;
       data_json: string;
