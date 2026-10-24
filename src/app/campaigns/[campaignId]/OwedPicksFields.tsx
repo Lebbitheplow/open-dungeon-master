@@ -36,9 +36,11 @@ export const EMPTY_DRAFT: PicksDraft = { subclasses: {}, asiChoices: [], featCho
 
 const skillName = (id: string) => findSkill(id)?.name ?? id.replace(/_/g, " ");
 
+// The pressable itself is the whole chip, a finger-sized target with a focus
+// ring of its own; a skill's ⓘ sits beside it, never inside it.
 const chip = (picked: boolean) =>
   cn(
-    "inline-flex min-h-11 items-center gap-1 rounded-full border px-3 text-sm",
+    "inline-flex min-h-11 items-center rounded-full border px-4 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70",
     picked ? "border-amber-600 bg-stone-900 text-amber-100" : "border-stone-700 hover:border-amber-800 hover:bg-stone-900",
   );
 
@@ -135,7 +137,7 @@ export function OwedPicksFields({
                     type="button"
                     aria-pressed={picked}
                     onClick={() => onChange({ ...draft, subclasses: { ...draft.subclasses, [entry.classId]: picked ? "" : option } })}
-                    className="min-h-11 grow py-2 text-left"
+                    className="min-h-11 grow rounded py-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/70"
                   >
                     {option}
                   </button>
@@ -172,8 +174,8 @@ export function OwedPicksFields({
             {owed.skills.options.map((id) => {
               const picked = draft.skills.includes(id);
               return (
-                <span key={id} className={chip(picked)}>
-                  <button type="button" aria-pressed={picked} onClick={() => onChange({ ...draft, skills: toggle(draft.skills, id, owed.skills.count) })}>
+                <span key={id} className="inline-flex items-center">
+                  <button type="button" aria-pressed={picked} className={chip(picked)} onClick={() => onChange({ ...draft, skills: toggle(draft.skills, id, owed.skills.count) })}>
                     {skillName(id)}
                   </button>
                   <InfoButton label={skillName(id)} text={describeSkill(id) ?? undefined} />
@@ -212,11 +214,15 @@ export function OwedPicksFields({
             {[...new Set([...owed.expertise.options, ...draft.skills.filter((id) => skillsHeld.includes(id))])].map((id) => {
               const picked = draft.expertise.includes(id);
               return (
-                <span key={id} className={chip(picked)}>
-                  <button type="button" aria-pressed={picked} onClick={() => onChange({ ...draft, expertise: toggle(draft.expertise, id, owed.expertise.count) })}>
-                    {skillName(id)}
-                  </button>
-                </span>
+                <button
+                  key={id}
+                  type="button"
+                  aria-pressed={picked}
+                  className={chip(picked)}
+                  onClick={() => onChange({ ...draft, expertise: toggle(draft.expertise, id, owed.expertise.count) })}
+                >
+                  {skillName(id)}
+                </button>
               );
             })}
           </div>

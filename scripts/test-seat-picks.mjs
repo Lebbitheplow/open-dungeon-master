@@ -7,6 +7,7 @@
 // and hold them to the level-up's rules. Anything left unpicked stays owed,
 // as before (scripts/test-pregen-join-level.mjs).
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { suite } from "./lib/enforce-harness.mjs";
 import { openCreation, LEGAL_FIGHTER } from "./lib/enforce-creation.mjs";
 
@@ -201,6 +202,20 @@ await test("applySeatPicks pays back the hit points of a raised Constitution and
   // Strength raises no hit points.
   const strength = applySeatPicks(seated, 4, { asiChoices: [{ mode: "plus2", ability: "str" }] }, context);
   assert.equal(strength.sheet.maxHp, 30);
+});
+
+await test("each owed-choice chip is itself the finger-sized target, with a focus ring of its own.", () => {
+  const source = readFileSync(new URL("../src/app/campaigns/[campaignId]/OwedPicksFields.tsx", import.meta.url), "utf8");
+  const chip = source.match(/const chip = \(picked: boolean\) =>[\s\S]*?\);/)?.[0] ?? "";
+  assert.match(chip, /min-h-11/, "the chip is shorter than 40px");
+  assert.match(chip, /focus-visible:ring/, "the chip has no focus ring");
+  // The size is on what is pressed, never only on a wrapper around it: the
+  // skill and expertise chips are buttons, and the subclass rows' buttons
+  // carry the same height and ring.
+  assert.doesNotMatch(source, /<span[^>]*className=\{chip\(/, "a chip's size sits on a wrapper around its button");
+  const chipped = [...source.matchAll(/<button\b(?:(?!<\/button>)[\s\S])*?className=\{chip\(picked\)\}/g)];
+  assert.equal(chipped.length, 2, `${chipped.length} chip buttons, not the skill and expertise ones`);
+  assert.match(source, /className="min-h-11 grow[^"]*focus-visible:ring/, "the subclass button has no focus ring");
 });
 
 await test("the pickers read the owed choices off the seated sheet; a sheet that owes nothing offers none.", () => {
