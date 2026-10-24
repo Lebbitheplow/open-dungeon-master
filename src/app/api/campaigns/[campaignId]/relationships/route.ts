@@ -6,6 +6,8 @@ import { bondTruthFor } from "@/lib/dm/scheme-logic";
 import { advancesAllowed } from "@/lib/dm/advance-tick";
 import { conscienceViews } from "@/lib/dm/conscience";
 import { heldIntents } from "@/lib/dm/departure";
+import { conductViews } from "@/lib/dm/party-conduct";
+import { heldAgendas } from "@/lib/dm/companion-agenda";
 import { textKey } from "@/lib/language/text-logic";
 
 export const runtime = "nodejs";
@@ -40,11 +42,15 @@ export async function GET(
   // Each lasting companion's conscience rung and any ultimatum (issue 503):
   // shown to every seat, since the companion says them aloud.
   const conscience = conscienceViews(context.campaign);
+  // What each refused today and the share it wants (Phase 4): said aloud too.
+  const conduct = conductViews(context.campaign);
   const storyteller = seesStorytellerSecrets(context);
   // A companion's plan to leave (issue 503) is a storyteller secret: only a
   // person running the table reads it here; at an AI table nobody does, the
   // lead included (the AI has it in its own prompt).
   const plans = storyteller ? heldIntents(context.campaign) : new Map<string, string>();
+  // So is a hidden employer (Phase 8).
+  const agendas = storyteller ? heldAgendas(context.campaign) : new Map<string, string>();
   const sheets = listSheets(campaignId);
   const viewer = {
     storyteller,
@@ -89,7 +95,16 @@ export async function GET(
               },
             }
           : {}),
-        ...(ladder ? { conscience: { ...ladder, ...(plans.has(textKey(relationship.subjectName)) ? { plan: plans.get(textKey(relationship.subjectName)) } : {}) } } : {}),
+        ...(ladder
+          ? {
+              conscience: {
+                ...ladder,
+                ...conduct.get(textKey(relationship.subjectName)),
+                ...(plans.has(textKey(relationship.subjectName)) ? { plan: plans.get(textKey(relationship.subjectName)) } : {}),
+                ...(agendas.has(textKey(relationship.subjectName)) ? { agenda: agendas.get(textKey(relationship.subjectName)) } : {}),
+              },
+            }
+          : {}),
       };
     }),
   });

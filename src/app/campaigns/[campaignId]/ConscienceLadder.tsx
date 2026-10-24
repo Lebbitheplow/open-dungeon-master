@@ -6,10 +6,11 @@ import { CONSCIENCE_RUNGS, RUNG_LABEL, type ConscienceRung } from "@/lib/dm/cons
 // A lasting companion's conscience on its Bonds row (issue 503): the five
 // rungs from content to the breaking point, with a marker that slides one
 // rung (360 ms) when the server moves it, and the ultimatum it set, with the
-// time left on the campaign's clock. Every move comes from a server outcome
-// (a deed recorded, standing changed, a deadline passed), never from the
-// narration. Reduced motion keeps the colour and the words and drops the
-// slide (motion-app.css).
+// time left on the campaign's clock; and what it does inside the party (the
+// share a mercenary wants, what it refused today). Every move comes from a
+// server outcome (a deed recorded, standing changed, a deadline passed, a
+// refusal), never from the narration. Reduced motion keeps the colour and
+// the words and drops the slide and the reveal (motion-app.css).
 
 export type ConscienceView = {
   rung: ConscienceRung;
@@ -17,6 +18,12 @@ export type ConscienceView = {
   // What they mean to do at their breaking point (issue 503 Phase 2): a
   // storyteller secret, sent only to a person running the table.
   plan?: string;
+  // Inside the party (Phase 4): the share a mercenary still wants before it
+  // fights, and what it refused today. Said aloud, so every seat reads them.
+  demand?: string;
+  refused?: string;
+  // A hidden employer (Phase 8): a storyteller secret, like the plan.
+  agenda?: string;
 };
 
 // Calm to grave, in the palettes the day theme turns too (globals.css).
@@ -68,9 +75,24 @@ export function ConscienceLadder({ name, conscience }: { name: string; conscienc
           </span>
         </p>
       ) : null}
+      {conscience.demand ? (
+        <p key={`demand-${conscience.demand}`} className="reveal mt-1 text-xs leading-5 text-stone-300" data-share-demand>
+          <span className="font-medium text-amber-300">Wants their share:</span> {conscience.demand}
+        </p>
+      ) : null}
+      {conscience.refused ? (
+        <p key={`refused-${conscience.refused}`} className="reveal mt-1 text-xs leading-5 text-stone-300" data-refused>
+          <span className="font-medium text-rose-300">Refused:</span> {conscience.refused}
+        </p>
+      ) : null}
       {conscience.plan ? (
         <p className="reveal mt-1 text-xs leading-5 text-stone-300" data-conscience-plan>
           <span className="font-medium text-violet-300">Their plan, yours alone:</span> {name} {conscience.plan}.
+        </p>
+      ) : null}
+      {conscience.agenda ? (
+        <p className="reveal mt-1 text-xs leading-5 text-stone-300" data-conscience-agenda>
+          <span className="font-medium text-violet-300">Their secret, yours alone:</span> {name} {conscience.agenda}.
         </p>
       ) : null}
     </div>

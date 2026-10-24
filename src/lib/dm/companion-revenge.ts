@@ -4,7 +4,6 @@ import { deleteCalendarEvent, insertCalendarEvent } from "@/lib/db/calendar-even
 import { companionValues } from "@/lib/db/companion-conscience";
 import { companionDeparture, listDepartures, saveDeparture } from "@/lib/db/companion-departures";
 import { deleteEncounterTemplate, insertEncounterTemplate, listEncounterTemplates } from "@/lib/db/encounter-templates";
-import { getActiveEncounter, listEnemies } from "@/lib/db/encounters";
 import { getNpcById, type Npc } from "@/lib/db/npcs";
 import { listRelationships } from "@/lib/db/relationships";
 import { listSheets } from "@/lib/db/sheets";
@@ -40,9 +39,9 @@ import { textKey } from "@/lib/language/text-logic";
 // is those two. A companion whose standing has climbed back since comes to
 // parley instead, and the cue follows its standing until it arrives.
 //
-// The return fight's companion is built by companion-return.ts
-// returningCombatant, the one function Phase 6 swaps for its own sheet on
-// the enemy side.
+// The return fight's companion is rated by companion-return.ts
+// returningCombatant and fights as its own sheet on the foes' side, fielded
+// by fieldReturning when the fight starts (src/lib/dm/sheet-foes.ts).
 
 // How far from the moment the cue is set the calendar puts the return.
 const RETURN_AFTER_MINUTES = 24 * 60;
@@ -160,8 +159,8 @@ function cueWords(name: string, gone: Pick<Gone, "cued" | "standoff" | "wornBy">
     return {
       title: gone.wornBy ? `${name} returns, alone and worn` : `${name} returns with help`,
       body: gone.wornBy
-        ? `${name}, who left the party, comes for them alone and worn: ${gone.wornBy}. Narrate the wear as the reason they come at less than their best. When the party is next exposed (on the road, at camp, somewhere ${name} would know to wait), start the prepared fight "${returnName(name)}" with run_prepared_encounter. ${name} fights as themselves.`
-        : `${name}, who left the party, has gathered help and comes for them: when the party is next exposed (on the road, at camp, somewhere ${name} would know to wait), start the prepared fight "${returnName(name)}" with run_prepared_encounter. ${name} fights as themselves.`,
+        ? `${name}, who left the party, comes for them alone and worn: ${gone.wornBy}. Narrate the wear as the reason they come at less than their best. When the party is next exposed (on the road, at camp, somewhere ${name} would know to wait), start the prepared fight "${returnName(name)}" with run_prepared_encounter. ${name} fights as their own sheet on the foes' side; you play them.`
+        : `${name}, who left the party, has gathered help and comes for them: when the party is next exposed (on the road, at camp, somewhere ${name} would know to wait), start the prepared fight "${returnName(name)}" with run_prepared_encounter. ${name} fights as their own sheet on the foes' side; you play them.`,
     };
   }
   if (gone.standoff) {
@@ -225,26 +224,17 @@ function uncue(campaign: Campaign, npcId: string, departure: Departure) {
   saveDeparture(npcId, { ...departure, gone: { ...gone, cued: null, standoff: false, wear: null, wornBy: "", templateId: "", eventId: "" } });
 }
 
-// Each turn (src/lib/dm/turn.ts) and after a console call: a cued fight
-// that has begun is marked run and its prepared fight cleared; a cue whose
+// Each turn (src/lib/dm/turn.ts) and after a console call: a cue whose
 // standing has turned (climbed back to a parley, or sunk to a fight) is cued
 // again; a return fight a rewind left behind with nobody waiting for it
-// goes.
+// goes. A fight that has begun marked itself run as it fielded the companion
+// (companion-return.ts fieldReturning).
 export function settleReturns(campaign: Campaign) {
   const departures = listDepartures(campaign.id);
-  const encounter = getActiveEncounter(campaign.id);
-  const fighting = new Set(encounter ? listEnemies(encounter.id).map((enemy) => enemy.slug) : []);
   const kept = new Set<string>();
   for (const entry of departures) {
     const gone = entry.departure.gone;
     if (!gone?.cued || gone.returned) {
-      continue;
-    }
-    if (gone.cued === "fight" && fighting.has(`companion:${entry.npcId}`)) {
-      if (gone.templateId) {
-        deleteEncounterTemplate(gone.templateId);
-      }
-      saveDeparture(entry.npcId, { ...entry.departure, gone: { ...gone, returned: true, templateId: "" } });
       continue;
     }
     // A standoff is a fight the table could not stage: it is cued again only

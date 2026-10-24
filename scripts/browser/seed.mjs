@@ -1141,6 +1141,63 @@ const dominate = {};
   }
 }
 
+// A companion inside the party (issue 503 Phases 4 and 6): per viewport, a
+// table the lead runs at Turn, where the player's Kael travels with Varn
+// Hale, a mercenary cleric who holds the innocent as a red line and is wary
+// of Kael. The scenario has Varn refuse Kael a spell, ask his share as a
+// fight starts, and then turn on the party where he stands.
+const CONDUCT_TITLE = "Conduct Table";
+const conduct = {};
+{
+  const { companionNpcFor } = await import("../../src/lib/db/companion-npcs.ts");
+  const { patchNpcAgency } = await import("../../src/lib/db/npcs.ts");
+  const { setCompanionValues } = await import("../../src/lib/db/companion-conscience.ts");
+  const bonds = await import("../../src/lib/db/relationships.ts");
+  for (const viewport of ["desktop", "phone"]) {
+    const table = campaigns.createCampaign(world.owner.id, {
+      title: `${CONDUCT_TITLE} (${viewport})`,
+      description: "A sellsword priest who does nothing for free.",
+      theme: "high-fantasy",
+      maxPlayers: 6,
+      startingLevel: 3,
+      difficulty: "normal",
+      gameSettings: { ttsEnabled: false, dmMode: "human", companions: "full", companionConscience: "turn" },
+    });
+    campaigns.setCampaignStatus(table.id, "active");
+    campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+    const kael = sheets.createSheet(table.id, player.id, 3, heroInput({ name: "Kael Ashvale", class: "rogue", level: 3 }));
+    const bot = createCompanionUser("Varn Hale");
+    const varn = sheets.createSheet(
+      table.id,
+      bot.id,
+      3,
+      heroInput({
+        name: "Varn Hale",
+        class: "cleric",
+        level: 3,
+        abilities: { wis: 16, con: 14 },
+        spellcasting: { ability: "wis", slots: { 1: { max: 4, used: 0 }, 2: { max: 2, used: 0 } }, known: [], prepared: ["Cure Wounds"], cantrips: [] },
+      }),
+    );
+    sheets.markSheetAsCompanion(varn.id, "party", "Counts every coin, and every slight.");
+    const row = companionNpcFor(sheets.getSheetById(varn.id));
+    patchNpcAgency(row.id, { personality: { drive: 0, diligence: 0, boldness: 3, warmth: 0, empathy: 0, composure: -1 } });
+    setCompanionValues(row.id, [
+      { value: "mercenary", strength: "cares", faction: "" },
+      { value: "protects_innocent", strength: "red_line", faction: "" },
+    ]);
+    const bond = bonds.ensureRelationship({ campaignId: table.id, characterId: kael.id, characterName: kael.name, subjectKind: "companion", subjectName: varn.name });
+    bonds.patchRelationship(bond.id, { approval: -20 });
+    const fighterBot = createCompanionUser("Brannoc Rusk");
+    const brannoc = sheets.createSheet(table.id, fighterBot.id, 3, heroInput({ name: "Brannoc Rusk", class: "fighter", level: 3 }));
+    sheets.markSheetAsCompanion(brannoc.id, "party", "Quick to anger, slow to think.");
+    const rash = companionNpcFor(sheets.getSheetById(brannoc.id));
+    patchNpcAgency(rash.id, { personality: { drive: 0, diligence: 0, boldness: 3, warmth: 0, empathy: 0, composure: -1 } });
+    setCompanionValues(rash.id, [{ value: "protects_innocent", strength: "red_line", faction: "" }]);
+    conduct[viewport] = { id: table.id, kael: kael.id, kaelName: kael.name, varn: varn.id, varnName: varn.name, brannoc: brannoc.id, brannocName: brannoc.name };
+  }
+}
+
 const ids = {
   revised: ysolde.id,
   orc: grask.id,
@@ -1192,6 +1249,7 @@ const ids = {
   turncoat,
   gone,
   dominate,
+  conduct,
   pip: pip.id,
   // Every campaign a scenario opens, by id, for the app's home tiles.
   titles: {
@@ -1202,6 +1260,7 @@ const ids = {
     ...Object.fromEntries(Object.entries(masked).map(([viewport, table]) => [table.id, `${MASKED_TITLE} (${viewport})`])),
     ...Object.fromEntries(Object.entries(turncoat).map(([viewport, table]) => [table.id, `${TURNCOAT_TITLE} (${viewport})`])),
     ...Object.fromEntries(Object.entries(gone).map(([viewport, table]) => [table.id, `${GONE_TITLE} (${viewport})`])),
+    ...Object.fromEntries(Object.entries(conduct).map(([viewport, table]) => [table.id, `${CONDUCT_TITLE} (${viewport})`])),
     [world.campaignId]: TITLE,
     [lobby.id]: LOBBY_TITLE,
     [quiet.id]: QUIET_TITLE,

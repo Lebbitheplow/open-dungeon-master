@@ -3,6 +3,7 @@ import { departedLinesForPrompt, settleReturns } from "@/lib/dm/companion-reveng
 import { conscienceBlockForPrompt } from "@/lib/dm/conscience";
 import { departureNote, departureOpenings, settleDepartures } from "@/lib/dm/departure";
 import { settleTurn, turnHolder } from "@/lib/dm/encounter-tools";
+import { turncoatLinesForPrompt } from "@/lib/dm/turncoat";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // Where the leaving and the return meet the turn machinery (issue 503
@@ -26,10 +27,10 @@ export function settleCompanionLeaving(campaign: Campaign): string[] {
 // (conscience.ts), who has left and what they are about, and what the
 // server just had them do.
 export function companionMomentBlock(campaign: Campaign, sheets: readonly CharacterSheet[], justNow: readonly string[]): string {
-  const gone = departedLinesForPrompt(campaign);
+  const gone = [...departedLinesForPrompt(campaign), ...turncoatLinesForPrompt(campaign.id)];
   return [
     conscienceBlockForPrompt(campaign, sheets),
-    gone.length ? `Companions who left the party (server-tracked):\n${gone.join("\n")}` : "",
+    gone.length ? `Companions who left the party or turned on it (server-tracked):\n${gone.join("\n")}` : "",
     justNow.length ? `Just now, by the server (narrate it as it happened): ${justNow.join(" ")}` : "",
   ]
     .filter(Boolean)

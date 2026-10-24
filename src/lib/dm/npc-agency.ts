@@ -12,6 +12,7 @@ import {
 } from "@/lib/dm/npc-logic";
 import { detectGoalCollisions } from "@/lib/dm/npc-goal-logic";
 import { avengingRound } from "@/lib/dm/companion-revenge";
+import { agendaRounds } from "@/lib/dm/companion-agenda";
 import type { FactCandidate } from "@/lib/dm/fact-logic";
 import { textKey } from "@/lib/language/text-logic";
 
@@ -80,6 +81,9 @@ export function advanceNpcAgency(
     }
 
     patchNpcAgency(npc.id, { pressure, goals });
+    // A companion's hidden employer's order comes on the same dice (issue
+    // 503 Phase 8, src/lib/dm/companion-agenda.ts).
+    agendaRounds(campaignId, npc, rounds);
     // Roster hygiene, decided from the counters just ticked. Protections
     // live in npc-archive-logic.ts; an NPC with standing, a romance or an
     // unfinished goal is never rostered out mid-thread.

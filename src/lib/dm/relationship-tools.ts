@@ -386,7 +386,7 @@ export function handleRelationshipBeat(
       : {}),
     ...valuesResult(landing),
     ...(landing.conscience ? { conscience: `${landing.conscience.from} -> ${landing.conscience.to}` } : {}),
-    ...(landing.departure?.departed ? { departed: landing.departure.how } : {}),
+    ...(landing.departure?.departed ? { departed: landing.departure.how } : landing.departure?.turned ? { turned: landing.departure.how } : {}),
     ...(updated.romance !== "none" ? { romance: updated.romance } : {}),
     ...(updated.romance !== relationship.romance
       ? { romanceSlipped: `${relationship.romance} -> ${updated.romance}` }
@@ -399,7 +399,7 @@ export function handleRelationshipBeat(
             standing: friendshipTier(other.updated.approval),
             ...valuesResult(other),
             ...(other.conscience ? { conscience: `${other.conscience.from} -> ${other.conscience.to}` } : {}),
-            ...(other.departure?.departed ? { departed: other.departure.how } : {}),
+            ...(other.departure?.departed ? { departed: other.departure.how } : other.departure?.turned ? { turned: other.departure.how } : {}),
           })),
         }
       : {}),

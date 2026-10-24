@@ -16,9 +16,10 @@
 //   - report: dutiful with a faction to answer to, it leaves and tells them,
 //     and the party's standing there falls.
 // The table's setting caps it: Leave never fights (confront walks out
-// loudly, bide and strike slips away); Turn allows all five. Until turncoat
-// combat exists (Phase 6), a companion that turns leaves as a foe and comes
-// back with help rather than fighting on the spot.
+// loudly, bide and strike slips away); Turn allows all five. One that turns
+// fights the party where it stands, its own sheet on the foes' side
+// (src/lib/dm/turncoat.ts); only when no fight can be staged does it leave as
+// a foe and come back with help.
 //
 // Pure, with relative imports only, so scripts/test-departure.mjs loads it
 // directly.
@@ -214,6 +215,14 @@ export function departureHow(response: DepartureResponse, where: DepartureWhere,
   }
 }
 
+// What the table is told as a companion turns on the party where it stands.
+export function turnHow(response: DepartureResponse, where: DepartureWhere): string {
+  if (response === "bide_strike") {
+    return where === "night" ? "Turned on the party in the night" : "Turned on the party at its weakest";
+  }
+  return "Turned on the party";
+}
+
 // What the DM is told the plan is, in the storyteller's section, so it can
 // foreshadow it without ever saying it.
 export const INTENT_WORDS: Record<IntentResponse, string> = {
@@ -258,7 +267,12 @@ export type Gone = {
   returned: boolean;
 };
 
-export type Departure = { intent: DepartureIntent | null; gone: Gone | null };
+// A companion that turned on the party where it stood (Phase 6, a Turn
+// table): on the foes' side of the fight until it is over, its own sheet
+// still at the table (src/lib/dm/turncoat.ts).
+export type Turned = { response: DepartureResponse; at: number };
+
+export type Departure = { intent: DepartureIntent | null; gone: Gone | null; turned?: Turned | null };
 
 export const NO_DEPARTURE: Departure = { intent: null, gone: null };
 
@@ -270,7 +284,7 @@ export function parseDeparture(raw: string): Departure {
     return NO_DEPARTURE;
   }
   try {
-    const parsed = JSON.parse(raw) as { intent?: Partial<DepartureIntent> | null; gone?: Partial<Gone> | null };
+    const parsed = JSON.parse(raw) as { intent?: Partial<DepartureIntent> | null; gone?: Partial<Gone> | null; turned?: Partial<Turned> | null };
     const intent =
       parsed.intent && (parsed.intent.response === "slip_away" || parsed.intent.response === "bide_strike")
         ? { response: parsed.intent.response, at: Math.max(0, num(parsed.intent.at)), cause: str(parsed.intent.cause, 160) }
@@ -297,7 +311,11 @@ export function parseDeparture(raw: string): Departure {
             returned: source.returned === true,
           }
         : null;
-    return { intent, gone };
+    const turned =
+      parsed.turned && (DEPARTURE_RESPONSES as readonly string[]).includes(String(parsed.turned.response))
+        ? { response: parsed.turned.response as DepartureResponse, at: Math.max(0, num(parsed.turned.at)) }
+        : null;
+    return turned ? { intent, gone, turned } : { intent, gone };
   } catch {
     return NO_DEPARTURE;
   }

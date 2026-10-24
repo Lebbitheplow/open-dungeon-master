@@ -2,6 +2,7 @@ import { allocateSeq, getCampaignById, listMembers, type Campaign } from "@/lib/
 import { deleteCalendarEvent, insertCalendarEvent } from "@/lib/db/calendar-events";
 import { companionConscience, companionValues, saveConscience } from "@/lib/db/companion-conscience";
 import { companionNpcFor, lastingCompanion } from "@/lib/db/companion-npcs";
+import { companionDeparture } from "@/lib/db/companion-departures";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { listRelationships } from "@/lib/db/relationships";
 import { listSheets, setCompanionCommander } from "@/lib/db/sheets";
@@ -26,7 +27,7 @@ import {
 } from "@/lib/dm/conscience-logic";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { textKey } from "@/lib/language/text-logic";
-import type { SouredLeaving } from "@/lib/dm/relationship-logic";
+import { friendshipTier, type SouredLeaving } from "@/lib/dm/relationship-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // A lasting companion's conscience (issue 503 Phase 1), the rim around
@@ -62,9 +63,15 @@ export function souredLeaving(campaign: Pick<Campaign, "gameSettings">): SouredL
   return setting === "off" ? "dm" : setting === "talk" ? "stays" : "server";
 }
 
-// The companions a conscience applies to: lasting ones in the party.
+// The companions a conscience applies to: lasting ones in the party. One set
+// against it (turned on it, or fielded for its return: src/lib/dm/
+// turncoat.ts) is past its conscience.
 export function consciousCompanions(sheets: readonly CharacterSheet[]): CharacterSheet[] {
-  return sheets.filter((sheet) => lastingCompanion(sheet));
+  return sheets.filter((sheet) => {
+    const npc = lastingCompanion(sheet) ? companionNpcFor(sheet) : null;
+    const departure = npc ? companionDeparture(npc.id) : null;
+    return Boolean(npc) && !departure?.turned && !departure?.gone;
+  });
 }
 
 // The worst any player character's standing is with them, among the
@@ -77,6 +84,15 @@ export function worstApproval(campaignId: string, companionName: string, sheets:
     .filter((relationship) => relationship.status === "active" && party.has(relationship.characterId) && textKey(relationship.subjectName) === key)
     .map((relationship) => relationship.approval);
   return approvals.length ? Math.min(...approvals) : null;
+}
+
+// The characters at the table this companion is devoted to.
+function devotedFriends(campaignId: string, companionName: string, sheets: readonly CharacterSheet[]): string[] {
+  const names = new Map(sheets.filter((sheet) => !sheet.isCompanion).map((sheet) => [sheet.id, sheet.name]));
+  const key = textKey(companionName);
+  return listRelationships(campaignId)
+    .filter((entry) => entry.status === "active" && names.has(entry.characterId) && textKey(entry.subjectName) === key && friendshipTier(entry.approval) === "devoted")
+    .map((entry) => names.get(entry.characterId)!);
 }
 
 export type ConscienceMove = {
@@ -256,6 +272,11 @@ export function conscienceBlockForPrompt(campaign: Campaign, sheets: readonly Ch
       parts.push(
         `their demand: "${conscience.ultimatum.condition}", by ${formatDate(campaign.clock.calendar, conscience.ultimatum.due)} (${durationLabel(minutesLeft(conscience.ultimatum, now))} left)`,
       );
+    }
+    // Issue 503 Phase 4: a devoted companion's reaction (devoted-guard.ts).
+    const devoted = devotedFriends(campaign.id, companion.name, sheets);
+    if (devoted.length) {
+      parts.push(`devoted to ${devoted.join(", ")}: may take a blow meant for them once a fight (use_reaction "Take the Blow", targetCharacterId)`);
     }
     return [parts.join("; ")];
   });

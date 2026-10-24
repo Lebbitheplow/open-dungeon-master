@@ -516,16 +516,22 @@ export function PartyPanel({
         const publicNoteCount = notes.filter(
           (note) => note.characterId === sheet.id && note.visibility === "public",
         ).length;
+        // A companion that turned on the party, or came back against it,
+        // fights on the foes' side of this fight (issue 503): its card says
+        // so in the foes' colour, from the server's sides.
+        const against = encounter?.sides?.[sheet.id] === "foe";
         return (
           <div
             key={sheet.id}
             data-party-card={sheet.id}
+            data-against={against ? "" : undefined}
             data-dragging={order.drag?.id === sheet.id ? "" : undefined}
             data-drop={order.drag?.over?.id === sheet.id ? order.drag.over.side : undefined}
             data-moved={order.moved === sheet.id ? "" : undefined}
             className={cn(
-              "party-card panel rounded-xl p-3 transition-shadow duration-200",
+              "party-card panel rounded-xl p-3 transition-[box-shadow,border-color] duration-300",
               mine && "ornate border-amber-600/40",
+              against && "border-rose-500/60 ring-1 ring-rose-500/50",
               spotlightUserIds.includes(sheet.userId) &&
                 "border-amber-500/70 ring-1 ring-amber-500/60 shadow-glow-gold-strong",
             )}

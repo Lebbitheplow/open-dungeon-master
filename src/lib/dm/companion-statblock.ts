@@ -4,7 +4,6 @@ import { spellDamageFor } from "@/lib/content";
 import { resolveAttackWeapon, weaponAttackProfile } from "@/lib/dm/attack-logic";
 import { stepCr, supportHandicap, type Vitals } from "@/lib/dm/departure-logic";
 import { PACT, type SlotPool, type Wear } from "@/lib/dm/return-wear-logic";
-import type { MonsterSpell, MonsterSpellcasting } from "@/lib/dm/monster-spellcasting";
 import { computeSheetDerived } from "@/lib/srd";
 import { xpForCr } from "@/lib/srd/encounter-math";
 import { combatRiders } from "@/lib/srd/feature-effects";
@@ -12,19 +11,17 @@ import { averageOf } from "@/lib/srd/odds";
 import { spellLevelOf } from "@/lib/srd/spell-lists";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
-// A character sheet read as a stat block (issue 503 Phases 2 and 3): the
-// sheet-to-EnemyStats adapter the plan names. Two readers:
-//   - the odds (src/lib/dm/departure.ts): how hard a fight against this
-//     companion would be for the party, so its rating runs through the
-//     DMG's procedure (src/lib/bestiary/derive-cr.ts) like any homebrew
-//     boss, plus a round of its best damaging spell (what derive-cr's
-//     uncountedDamage says a caster's rating misses) and the issue's support
-//     handicap for healers and an aura;
-//   - the return (src/lib/dm/companion-return.ts returningCombatant): until a
-//     sheet can fight on the enemy side (Phase 6), a companion who comes
-//     back against the party fights as this block: its AC and hit points,
-//     its best weapon swung as many times as its Attack action allows, its
-//     spells as a monster's spellcasting, its features named as traits.
+// A character sheet rated as a foe (issue 503 Phases 2 and 3): the
+// sheet-to-EnemyStats adapter the plan names, read by the DMG's procedure
+// (src/lib/bestiary/derive-cr.ts) like any homebrew boss, plus a round of its
+// best damaging spell (what derive-cr's uncountedDamage says a caster's
+// rating misses) and the issue's support handicap for healers and an aura.
+// Two readers, both for a rating and never to fight as:
+//   - the odds (src/lib/dm/departure-opening.ts): how hard a fight against
+//     this companion would be for the party;
+//   - the return (src/lib/dm/companion-return.ts): what a departed
+//     companion's fight is budgeted on. It fights as its own sheet on the
+//     foes' side (Phase 6); the wear below is the one that sheet arrives with.
 //
 // No writes. Reads the content pack only through spellDamageFor, which falls
 // back to the baked SRD answers when there is none.
@@ -113,34 +110,6 @@ function bestAttack(sheet: SheetForStats): { attack: EnemyAttack; sneak: number 
   };
 }
 
-// `open`: the slots it has left, as a worn return arrives with them;
-// otherwise all of them.
-function spellcastingOf(sheet: SheetForStats, open = false): MonsterSpellcasting | undefined {
-  const casting = sheet.spellcasting;
-  if (!casting) {
-    return undefined;
-  }
-  const derived = computeSheetDerived(sheet);
-  const slots: Record<string, number> = Object.fromEntries(
-    Object.entries(casting.slots)
-      .map(([level, slot]): [string, number] => [level, open ? slot.max - slot.used : slot.max])
-      .filter(([, count]) => count > 0),
-  );
-  const pact = casting.pact ? (open ? casting.pact.max - casting.pact.used : casting.pact.max) : 0;
-  if (casting.pact && pact > 0) {
-    slots[String(casting.pact.level)] = (slots[String(casting.pact.level)] ?? 0) + pact;
-  }
-  const spells: MonsterSpell[] = spellNames(sheet).map((name) => ({ name, level: spellLevelOf(name) }));
-  return {
-    ...(derived.spellSaveDc !== null ? { dc: derived.spellSaveDc } : {}),
-    ...(derived.spellAttack !== null ? { attack: derived.spellAttack } : {}),
-    ability: casting.ability,
-    casterLevel: sheet.level,
-    slots,
-    spells,
-  };
-}
-
 export type SheetRating = { cr: number; xp: number; spellRound: number; handicap: number };
 
 // The slots a sheet has open, for a wear to spend (return-wear-logic.ts):
@@ -160,8 +129,8 @@ export function slotPools(sheet: Pick<SheetForStats, "spellcasting">): SlotPool[
 }
 
 // A sheet worn as a wear says (issue 503 Phase 3): its current hit points
-// lowered, its slots marked spent. The same on the stat block a returning
-// companion fights as now and on the real sheet Phase 6 will field.
+// lowered, its slots marked spent. The rating reads it, and the returning
+// companion's own sheet arrives with it.
 export function applyWear<T extends SheetForStats>(sheet: T, wear: Wear): T {
   const casting = sheet.spellcasting;
   const slots = casting
@@ -186,8 +155,8 @@ export function applyWear<T extends SheetForStats>(sheet: T, wear: Wear): T {
 
 // The sheet as a stat block, rated: `open` reads the spell slots it has
 // left (the odds, now) rather than all of them (a foe who has rested), and
-// `asItStands` also rates it at the hit points it has rather than its
-// maximum, and lists only the slots it has left (a worn return).
+// `asItStands` also rates it at the hit points and slots it has left (a worn
+// return).
 export function sheetStatBlock(
   sheet: SheetForStats,
   options: { open?: boolean; asItStands?: boolean } = {},
@@ -195,7 +164,6 @@ export function sheetStatBlock(
   const derived = computeSheetDerived(sheet);
   const { attack, sneak } = bestAttack(sheet);
   const standing = options.asItStands === true;
-  const casting = spellcastingOf(sheet, standing);
   const stats: EnemyStats = {
     ac: sheet.ac,
     maxHp: sheet.maxHp,
@@ -204,10 +172,7 @@ export function sheetStatBlock(
     speed: `${sheet.speed ?? 30} ft.`,
     attacks: [attack],
     attacksPerTurn: 1 + combatRiders({ class: sheet.class, level: sheet.level, features: sheet.features, classes: sheet.classes }).extraAttacks,
-    traits: [
-      `${sheet.name}: a level ${sheet.level} ${sheet.class}${sheet.subclass ? ` (${sheet.subclass})` : ""}, fighting as they did beside the party.`,
-      ...sheet.features.slice(0, 6).map((feature) => `${feature.name}.`),
-    ],
+    traits: sheet.features.slice(0, 6).map((feature) => `${feature.name}.`),
     resist: "",
     immune: "",
     vulnerable: "",
@@ -219,7 +184,6 @@ export function sheetStatBlock(
     type: "humanoid",
     size: "Medium",
     ...(sheet.alignment ? { alignment: sheet.alignment } : {}),
-    ...(casting ? { spellcasting: casting, spells: casting.spells.map((spell) => spell.name) } : {}),
   };
   const spellRound = bestSpellRound(sheet, options.open === true || standing);
   const rated = standing ? { ...stats, maxHp: Math.max(1, sheet.currentHp ?? sheet.maxHp) } : stats;

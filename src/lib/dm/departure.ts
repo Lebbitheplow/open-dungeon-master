@@ -2,7 +2,7 @@ import { allocateSeq, getCampaignById, type Campaign } from "@/lib/db/campaigns"
 import { companionConscience, companionValues } from "@/lib/db/companion-conscience";
 import { companionDeparture, saveDeparture } from "@/lib/db/companion-departures";
 import { companionNpcFor } from "@/lib/db/companion-npcs";
-import { getActiveEncounter } from "@/lib/db/encounters";
+import { getActiveEncounter, type Encounter } from "@/lib/db/encounters";
 import { findFactionByName, listFactions } from "@/lib/db/factions";
 import type { Faction } from "@/lib/dm/faction-logic";
 import { insertCampaignMessage } from "@/lib/db/messages";
@@ -27,6 +27,7 @@ import {
   type OpeningHook,
 } from "@/lib/dm/departure-logic";
 import { handleAdjustReputation } from "@/lib/dm/faction-tools";
+import { settleTurncoat, turncoatsAfterFight, turncoatsAtTable, turnOnTheSpot, type Leave } from "@/lib/dm/turncoat";
 import { publishEphemeral, publishWithSeq } from "@/lib/events";
 import { textKey } from "@/lib/language/text-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -59,7 +60,14 @@ export type DepartureOutcome = {
   reportedTo?: string;
   standing?: string;
   avenging?: boolean;
+  // Turned on the party where it stood (src/lib/dm/turncoat.ts): on the
+  // foes' side of a fight, `fight` the line of one the server started; or,
+  // after it, at 0 hit points at the party's mercy.
+  turned?: boolean;
+  fight?: string;
+  mercy?: boolean;
 };
+
 
 function clockNow(campaign: Campaign): number {
   return (getCampaignById(campaign.id) ?? campaign).clock.instant;
@@ -107,6 +115,9 @@ export function settleBreakingPoint(
   campaign: Campaign,
   companion: CharacterSheet,
   sheets: readonly CharacterSheet[] = listSheets(campaign.id),
+  // Who one that reports tells, when something other than what it holds to
+  // decides it (a hidden employer, companion-agenda.ts).
+  reportTo: Faction | null = null,
 ): DepartureOutcome | null {
   const setting = leaves(campaign);
   const npc = setting ? companionNpcFor(companion) : null;
@@ -121,11 +132,14 @@ export function settleBreakingPoint(
     }
     return null;
   }
-  if (departure.intent || departure.gone) {
+  if (departure.intent || departure.gone || departure.turned) {
     return null;
   }
-  const values = companionValues(npc.id);
-  const faction = reportFaction(campaign.id, values);
+  // One who answers to whom it reports is loyal to it.
+  const values: CompanionValue[] = reportTo
+    ? [...companionValues(npc.id), { value: "faction_loyalty", strength: "red_line", faction: reportTo.name }]
+    : companionValues(npc.id);
+  const faction = reportTo ?? reportFaction(campaign.id, values);
   const response = chooseResponse({
     personality: npc.agency.personality,
     values,
@@ -148,9 +162,33 @@ export function settleDepartures(campaign: Campaign): DepartureOutcome[] {
     return [];
   }
   const sheets = listSheets(campaign.id);
-  return consciousCompanions(sheets)
-    .map((companion) => settleBreakingPoint(campaign, companion, sheets))
-    .filter((outcome): outcome is DepartureOutcome => Boolean(outcome?.departed));
+  // One set against the party with no fight running: dead, on its feet, or
+  // still at the party's mercy (turncoat.ts).
+  const settled: DepartureOutcome[] = [];
+  const leave: Leave = (sheet, response, how, avenging) => {
+    settled.push(departNow(campaign, sheet, response, "fight", null, { how, avenging, hostile: true, leave: true }));
+  };
+  for (const sheet of turncoatsAtTable(campaign.id)) {
+    settleTurncoat(campaign, sheet, "turn", leave);
+  }
+  return [
+    ...settled,
+    ...consciousCompanions(sheets)
+      .map((companion) => settleBreakingPoint(campaign, companion, sheets))
+      .filter((outcome): outcome is DepartureOutcome => Boolean(outcome?.departed || outcome?.turned)),
+  ];
+}
+
+// The fight just ended (enemy-damage.ts finishEncounter): each lasting
+// companion that ended it against the party, settled (turncoat.ts). Returns
+// what the DM is told.
+export function turncoatsAfterTheFight(campaign: Campaign, encounter: Pick<Encounter, "id" | "sides" | "order">): string[] {
+  const notes: string[] = [];
+  const leave: Leave = (sheet, response, how, avenging) => {
+    notes.push(departureNote(departNow(campaign, sheet, response, "fight", null, { how, avenging, hostile: true, leave: true })));
+  };
+  const mercy = turncoatsAfterFight(campaign, encounter, leave);
+  return [...notes, ...mercy.map(departureNote)].filter(Boolean);
 }
 
 // The companion goes, now: the table told how, a report made where it
@@ -158,21 +196,30 @@ export function settleDepartures(campaign: Campaign): DepartureOutcome[] {
 // departCompanion), and, when it left hating the party or set against it,
 // the goal it goes to work on (src/lib/dm/companion-revenge.ts).
 //
-// Phase 6 plugs in here: a companion that turns (confront, or bide and
-// strike at its opening) will fight the party on the spot, its own sheet on
-// the enemy side (resolveCombatant()). Until then it leaves as a foe, and
-// its return is the fight (companion-return.ts returningCombatant).
+// A companion that turns (confront, or bide and strike at its opening)
+// fights the party where it stands, its own sheet on the foes' side
+// (turncoat.ts turnOnTheSpot); only when no fight can be staged does it
+// leave as a foe, its return the fight. `options` are for a companion
+// leaving after a fight against the party (`leave`): what the table saw,
+// and whether it goes to gather help.
 export function departNow(
   campaign: Campaign,
   companion: CharacterSheet,
   response: DepartureResponse,
   where: DepartureWhere,
   faction: Faction | null,
+  options: { how?: string; avenging?: boolean; hostile?: boolean; leave?: boolean } = {},
 ): DepartureOutcome {
+  if (!options.leave && turnsOnParty(response)) {
+    const turned = turnOnTheSpot(campaign, companion, response, where);
+    if (turned) {
+      return turned;
+    }
+  }
   const npc = companionNpcFor(companion);
   const worst = worstApproval(campaign.id, companion.name, listSheets(campaign.id));
-  const how = departureHow(response, where, faction?.name ?? "");
-  const hostile = turnsOnParty(response);
+  const how = options.how ?? departureHow(response, where, faction?.name ?? "");
+  const hostile = options.hostile ?? turnsOnParty(response);
   let standing = "";
   if (response === "report" && faction) {
     const reported = handleAdjustReputation(
@@ -181,7 +228,7 @@ export function departNow(
     );
     standing = "standing" in reported ? String(reported.standing) : "";
   }
-  const avenging = hostile || worst === null || worst < PARLEY_FROM;
+  const avenging = options.avenging ?? (hostile || worst === null || worst < PARLEY_FROM);
   if (npc) {
     saveDeparture(npc.id, {
       intent: null,
@@ -206,11 +253,15 @@ export function departNow(
     });
   }
   departCompanion(campaign, companion, how, how);
-  if (npc && avenging) {
+  if (npc) {
     const fresh = getNpcById(npc.id) ?? npc;
-    patchNpcAgency(npc.id, {
-      goals: { ...fresh.agency.goals, session: { text: avengeGoal(companion.name), progress: 0, target: avengeTarget(fresh.agency.personality) } },
-    });
+    const { session, ...rest } = fresh.agency.goals;
+    const avengingNow = session?.text === avengeGoal(companion.name);
+    if (avenging || avengingNow) {
+      patchNpcAgency(npc.id, {
+        goals: avenging ? { ...rest, session: { text: avengeGoal(companion.name), progress: 0, target: avengeTarget(fresh.agency.personality) } } : rest,
+      });
+    }
   }
   if (npc && hostile) {
     setNpcAttitude(npc.id, "hostile", "");
@@ -238,13 +289,22 @@ export function departureOpenings(campaign: Campaign, hook: OpeningHook): Depart
     return [];
   }
   const sheets = listSheets(campaign.id);
+  const outcomes: DepartureOutcome[] = [];
+  // One beaten and set against the party goes in the night (turncoat.ts).
+  if (hook === "long_rest") {
+    const leave: Leave = (sheet, response, how, avenging) => {
+      outcomes.push(departNow(campaign, sheet, response, "night", null, { how, avenging, hostile: true, leave: true }));
+    };
+    for (const sheet of turncoatsAtTable(campaign.id)) {
+      settleTurncoat(campaign, sheet, "long_rest", leave);
+    }
+  }
   let holders = consciousCompanions(sheets).filter((sheet) => sheet.currentHp > 0 && !sheet.deathSaves?.dead);
   if (hook === "own_turn") {
     const encounter = getActiveEncounter(campaign.id);
     const current = encounter?.orderReady ? encounter.order[encounter.turnIndex] : undefined;
     holders = current?.kind === "pc" ? holders.filter((sheet) => sheet.id === current.characterId) : [];
   }
-  const outcomes: DepartureOutcome[] = [];
   for (const companion of holders) {
     const response = intentOpensNow(campaign, companion, sheets);
     if (response) {
@@ -259,6 +319,12 @@ export function departureOpenings(campaign: Campaign, hook: OpeningHook): Depart
 // For a tool result or the moment part of GAME STATE: what happened, never
 // a plan (an outcome that did not depart says nothing).
 export function departureNote(outcome: DepartureOutcome): string {
+  if (outcome.mercy) {
+    return `${outcome.companion} lies beaten at 0 hit points, at the party's mercy, still set against it (the server keeps their sheet). The party decides: finish them, bind them or leave them; once back on their feet, or at the next long rest, they go.`;
+  }
+  if (outcome.turned) {
+    return `${outcome.companion} ${lowerFirst(outcome.how)}: the server has put them on the foes' side ${outcome.fight ? "of a fight it started, them alone against the party" : "of this fight"}, as their own sheet. Nobody commands them now; you play them. Narrate it in their own voice.${outcome.fight ? ` ${outcome.fight}` : ""}`;
+  }
   if (!outcome.departed) {
     return "";
   }

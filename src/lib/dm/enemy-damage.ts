@@ -31,6 +31,7 @@ import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
 import { planDeathFx } from "@/lib/battlemap/fx-plan";
 import { publishFx, tokenPosition } from "@/lib/dm/fx";
 import { dismissGuestCompanions } from "@/lib/dm/companion-tools";
+import { turncoatsAfterTheFight } from "@/lib/dm/departure";
 import { followCombatAmbience } from "@/lib/dm/ambience-tools";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { unknownRef, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
@@ -173,6 +174,9 @@ export function finishEncounter(
   // Guest allies joined for this fight, so the fight ending writes them out;
   // lasting party companions stay. XP above already counted them in.
   const guestsGone = dismissGuestCompanions(campaign, "the fight ended");
+  // A lasting companion that fought against the party leaves, fell, or lies
+  // at the party's mercy (issue 503, src/lib/dm/turncoat.ts).
+  const turncoats = turncoatsAfterTheFight(campaign, encounter);
 
   return {
     encounterOver: true,
@@ -186,6 +190,7 @@ export function finishEncounter(
           guestsDismissed: `${guestsGone.join(", ")} left with the scene; narrate the parting.`,
         }
       : {}),
+    ...(turncoats.length ? { turncoats: turncoats.join(" ") } : {}),
     ...(xpEach > 0 ? { xpAwarded: `${xpEach} XP each` } : {}),
     ...(typeof xpResult.levelUpAvailable !== "undefined"
       ? { levelUpAvailable: xpResult.levelUpAvailable }
