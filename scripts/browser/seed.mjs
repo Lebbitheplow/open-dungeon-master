@@ -966,6 +966,98 @@ const turncoat = {};
   }
 }
 
+// Pacts (issue 503 Phases 5 and 7): per viewport, four tables where the
+// lead and the seed's player each play a character beside Seren Vale, a
+// lasting companion. "Consent": nobody has said yes to pacts yet, for the
+// Bonds switch. "Offer": the lead's Kael said yes and Seren's approach waits
+// on his answer alone, for the owner-only card. "Secret": Kael already
+// joined Seren's pact, and the player's Brin has eyes too dull to catch a
+// quiet scheme, for a secret action and its confirmation. "Reveal": a table
+// the lead runs as its DM, where the player's Brin joined Seren's pact and
+// holds a secret, and Seren is at her breaking point, so the next long rest
+// sets the pact off and the transcript draws the reveal.
+const pactTables = { consent: {}, offer: {}, secret: {}, reveal: {} };
+{
+  const { companionNpcFor } = await import("../../src/lib/db/companion-npcs.ts");
+  const { patchNpcAgency } = await import("../../src/lib/db/npcs.ts");
+  const { saveConscience } = await import("../../src/lib/db/companion-conscience.ts");
+  const { CONTENT } = await import("../../src/lib/dm/conscience-logic.ts");
+  const pactsDb = await import("../../src/lib/db/pacts.ts");
+  const { replan } = await import("../../src/lib/dm/pacts.ts");
+  const { approachSummary, approachWords } = await import("../../src/lib/dm/pact-logic.ts");
+  const { declareSecretAction } = await import("../../src/lib/dm/pact-players.ts");
+  const pactTable = (kind, viewport, humanDm) => {
+    const table = campaigns.createCampaign(world.owner.id, {
+      title: `Pact ${kind} (${viewport})`,
+      description: "A paladin who has seen too much, and a party that may not survive her doubts.",
+      theme: "high-fantasy",
+      maxPlayers: 6,
+      startingLevel: 3,
+      difficulty: "normal",
+      gameSettings: { ttsEnabled: false, companions: "full", ...(humanDm ? { dmMode: "human" } : {}) },
+    });
+    campaigns.setCampaignStatus(table.id, "active");
+    campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+    const bot = createCompanionUser("Seren Vale");
+    const seren = sheets.createSheet(table.id, bot.id, 3, heroInput({ name: "Seren Vale", class: "paladin", alignment: "LG", gender: "Female", level: 3 }));
+    sheets.markSheetAsCompanion(seren.id, "party", "Stern, devout, and losing faith in the people she walks with.");
+    const row = companionNpcFor(sheets.getSheetById(seren.id));
+    patchNpcAgency(row.id, { personality: { drive: 0, diligence: 0, boldness: 0, warmth: 0, empathy: 0, composure: 0 } });
+    saveConscience(row.id, { ...CONTENT, held: 1, shown: 1 });
+    return { table, seren, row };
+  };
+  const formed = (table, seren, row, members) => {
+    const pact = pactsDb.insertPact({ campaignId: table.id, leaderNpcId: row.id, members: [{ kind: "companion", npcId: row.id, name: seren.name, sheetId: seren.id }, ...members], plan: "leave", tactic: null, trigger: "night_watch", createdAt: 0 });
+    return pactsDb.savePact(replan(campaigns.getCampaignById(table.id), pact));
+  };
+  for (const viewport of ["desktop", "phone"]) {
+    {
+      const { table } = pactTable("Consent", viewport, false);
+      const kael = sheets.createSheet(table.id, world.owner.id, 3, heroInput({ name: "Kael Ashvale", class: "rogue", level: 3, gender: "Male" }));
+      sheets.createSheet(table.id, player.id, 3, heroInput({ name: "Brin Hale", class: "fighter", level: 3, gender: "Female" }));
+      pactTables.consent[viewport] = { id: table.id, kael: kael.id };
+    }
+    {
+      const { table, seren, row } = pactTable("Offer", viewport, false);
+      const kael = sheets.createSheet(table.id, world.owner.id, 3, heroInput({ name: "Kael Ashvale", class: "rogue", level: 3, gender: "Male" }));
+      sheets.createSheet(table.id, player.id, 3, heroInput({ name: "Brin Hale", class: "fighter", level: 3, gender: "Female" }));
+      sheets.setOpenToPacts(kael.id, true);
+      const pact = pactsDb.savePact({ ...formed(table, seren, row, []), approached: [kael.id] });
+      const offer = itemProposals.insertItemProposal({
+        campaignId: table.id,
+        turnId: null,
+        characterId: kael.id,
+        userId: world.owner.id,
+        toolName: "pact_approach",
+        argsJson: JSON.stringify({ pactId: pact.id, recruiter: seren.name, portraitUrl: "", look: { gender: "Female", race: "human", class: "paladin" } }),
+        summary: approachSummary(kael.name),
+        reason: approachWords(seren.name, pact),
+        seq: campaigns.allocateSeq(table.id),
+        ownerOnly: true,
+      });
+      pactTables.offer[viewport] = { id: table.id, kael: kael.id, offerId: offer.id, summary: offer.summary };
+    }
+    {
+      const { table, seren, row } = pactTable("Secret", viewport, false);
+      const kael = sheets.createSheet(table.id, world.owner.id, 3, heroInput({ name: "Kael Ashvale", class: "rogue", level: 3, gender: "Male", abilities: { dex: 20 } }));
+      sheets.createSheet(table.id, player.id, 3, heroInput({ name: "Brin Hale", class: "fighter", level: 3, gender: "Female", abilities: { wis: 1 } }));
+      formed(table, seren, row, [{ kind: "player", characterId: kael.id, name: kael.name, userId: world.owner.id, stance: "joined" }]);
+      pactTables.secret[viewport] = { id: table.id, kael: kael.id };
+    }
+    {
+      const { table, seren, row } = pactTable("Reveal", viewport, true);
+      const brin = sheets.createSheet(table.id, player.id, 3, heroInput({ name: "Brin Hale", class: "rogue", level: 3, gender: "Female", abilities: { dex: 20 } }));
+      formed(table, seren, row, [{ kind: "player", characterId: brin.id, name: brin.name, userId: player.id, stance: "joined" }]);
+      const secret = declareSecretAction(campaigns.getCampaignById(table.id), sheets.getSheetById(brin.id), { kind: "scheme", text: "cut the horses loose before dawn", skill: "stealth" });
+      if ("error" in secret || secret.caught) {
+        throw new Error(`the reveal table's secret action did not hold: ${JSON.stringify(secret)}`);
+      }
+      saveConscience(row.id, { ...CONTENT, held: 4, shown: 4 });
+      pactTables.reveal[viewport] = { id: table.id, brin: brin.id, secret: "cut the horses loose before dawn" };
+    }
+  }
+}
+
 const ids = {
   lead: world.owner.username,
   player: player.username,
@@ -1012,6 +1104,7 @@ const ids = {
   masked,
   turncoat,
   gone,
+  pacts: pactTables,
   pip: pip.id,
   // Every campaign a scenario opens, by id, for the app's home tiles.
   titles: {
@@ -1022,6 +1115,7 @@ const ids = {
     ...Object.fromEntries(Object.entries(masked).map(([viewport, table]) => [table.id, `${MASKED_TITLE} (${viewport})`])),
     ...Object.fromEntries(Object.entries(turncoat).map(([viewport, table]) => [table.id, `${TURNCOAT_TITLE} (${viewport})`])),
     ...Object.fromEntries(Object.entries(gone).map(([viewport, table]) => [table.id, `${GONE_TITLE} (${viewport})`])),
+    ...Object.fromEntries(Object.entries(pactTables).flatMap(([kind, tables]) => Object.entries(tables).map(([viewport, table]) => [table.id, `Pact ${kind.charAt(0).toUpperCase()}${kind.slice(1)} (${viewport})`]))),
     [world.campaignId]: TITLE,
     [lobby.id]: LOBBY_TITLE,
     [quiet.id]: QUIET_TITLE,

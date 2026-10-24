@@ -181,6 +181,42 @@ await test("the lead of an AI table reads a pact nowhere: Bonds, ?secrets=1, fac
   assert.doesNotMatch(trace.text, /A pact:/);
 });
 
+await test("nor does a lore check the lead runs hand the checker the pact", async () => {
+  const { fakeModel, reply, settleQueue } = await import("./lib/enforce-narrator.mjs");
+  const model = await fakeModel();
+  try {
+    const t = await table();
+    model.pointAt(t.world);
+    t.rung("Seren", 1);
+    await longRest(t.world, [20, 20, 20]);
+    assert.equal(t.pacts().length, 1);
+    const factsDb = await import("../src/lib/db/facts.ts");
+    factsDb.insertFact({ campaignId: t.world.campaignId, category: "npc", subject: "Seren", fact: "Seren was raised by a temple of the dawn.", knownBy: "dm", pinned: true, source: "manual" });
+    for (const category of ["wrong_fact", "out_of_character"]) {
+      const narration = messages.insertCampaignMessage({
+        campaignId: t.world.campaignId,
+        seq: campaigns.allocateSeq(t.world.campaignId),
+        authorType: "dm",
+        content: "Seren and Thorne keep their own watch tonight.",
+      });
+      model.script([reply({ text: JSON.stringify({ verdict: "consistent", explanation: "Fine.", citations: [], rewrite: null }) })]);
+      t.world.signIn(t.world.owner);
+      const route = await t.world.route("campaigns/[campaignId]/lore-check");
+      const response = await route.POST(
+        new Request("http://test/", { method: "POST", body: JSON.stringify({ messageId: narration.id, category, ...(category === "wrong_fact" ? {} : { npcName: "Seren" }) }) }),
+        { params: Promise.resolve({ campaignId: t.world.campaignId }) },
+      );
+      await settleQueue(t.world.campaignId);
+      assert.equal(response.status, 200, `${category}: ${JSON.stringify(await response.clone().json())}`);
+      const evidence = model.requests.at(-1).messages.map((message) => String(message.content ?? "")).join("\n");
+      assert.match(evidence, /temple of the dawn/, `${category}: the lead's own DM secrets are there`);
+      assert.doesNotMatch(evidence, PACT, `${category}: the pact is not the checker's to quote`);
+    }
+  } finally {
+    model.close();
+  }
+});
+
 await test("at a table a person runs, that person reads the pact and its dice", async () => {
   const world = await openWorld({ gameSettings: { dmMode: "human", companions: "full" } });
   const lead = world.addUser("lead");
