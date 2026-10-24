@@ -293,7 +293,8 @@ export type DmGameState = {
   // section, kept on storytellerBlock, and costed as its own context-trace
   // row tagged STORYTELLER_SECRET (src/lib/dm/viewer.ts), which the Context
   // tab leaves out for the lead. #503's stored intents (src/lib/dm/departure.ts
-  // intentLinesForPrompt) are here; its pacts will be.
+  // intentLinesForPrompt) and pacts (src/lib/dm/pacts.ts pactLinesForPrompt)
+  // are here.
   storytellerLines?: string[];
   storytellerBlock?: string;
   // A prompt whose answer goes to the whole table (an out-of-character

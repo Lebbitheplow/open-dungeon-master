@@ -12,19 +12,21 @@
 // Pure by design: no "@/" value imports and no I/O.
 import { isDmSeat, type DmSeats } from "./viewer";
 
-type SheetLike = { id: string; userId: string; notes?: string; openToAdvances?: boolean };
+type SheetLike = { id: string; userId: string; notes?: string; openToAdvances?: boolean; openToPacts?: boolean };
 
 // The notes are blanked rather than removed: a client reads `sheet.notes` as
 // a string, and a sheet stored or sent before this rule has the same shape.
 // The opt-in reads as off, which is what everyone else assumes anyway.
 export function publicSheet<T extends SheetLike>(sheet: T): T {
-  if (!sheet.notes && !sheet.openToAdvances) {
+  if (!sheet.notes && !sheet.openToAdvances && !sheet.openToPacts) {
     return sheet;
   }
   return {
     ...sheet,
     ...(sheet.notes ? { notes: "" } : {}),
     ...(sheet.openToAdvances ? { openToAdvances: false } : {}),
+    // So is whether a pact may approach them (issue 503 Phase 7).
+    ...(sheet.openToPacts ? { openToPacts: false } : {}),
   };
 }
 

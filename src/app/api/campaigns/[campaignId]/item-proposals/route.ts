@@ -1,8 +1,9 @@
 import { isErrorResponse, requireMember } from "@/lib/campaign-api";
-import { allocateSeq } from "@/lib/db/campaigns";
+import { allocateSeq, capsFor } from "@/lib/db/campaigns";
 import { insertItemProposal, listOpenItemProposals } from "@/lib/db/item-proposals";
 import { getSheetById, getSheetForUser } from "@/lib/db/sheets";
 import { publicItemProposal } from "@/lib/dm/proposal-intercept";
+import { offerVisibleTo } from "@/lib/dm/proposal-view";
 import { computeTrade, normalizeTradeOffer, tradeSummary } from "@/lib/dm/trade-logic";
 import { publishPersisted } from "@/lib/events";
 
@@ -10,7 +11,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // Open DM item/gold offers (inventoryApprovals). Inventory is party
-// knowledge, so every member sees the pending offers.
+// knowledge, so every member sees the pending offers, except one that is
+// owner-only (a pact's approach, issue 503): its player and the storyteller.
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ campaignId: string }> },
@@ -20,8 +22,11 @@ export async function GET(
   if (isErrorResponse(context)) {
     return context;
   }
+  const caps = capsFor(context.campaign, context.user.id);
   return Response.json({
-    proposals: listOpenItemProposals(campaignId).map(publicItemProposal),
+    proposals: listOpenItemProposals(campaignId)
+      .filter((proposal) => offerVisibleTo(proposal, context.user.id, caps))
+      .map(publicItemProposal),
   });
 }
 

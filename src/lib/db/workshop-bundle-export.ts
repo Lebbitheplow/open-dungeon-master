@@ -149,6 +149,7 @@ export const BUNDLE_COLUMNS: Record<string, { carried: string[]; left: Record<st
       departure_json: "how a companion left, and its return, are the source table's play",
       conduct_json: "what a companion refused and the share it wants are the source table's play",
       agenda_json: "a companion's hidden employer is the source table's secret",
+      pact_tried_at: "when a companion last tried to recruit is the source table's play",
       bonds_json: "keyed by characters a bundle does not carry",
       pressure_json: "the agency model's running pressure, rebuilt in play",
       arc_cast_id: "the source campaign's arc",

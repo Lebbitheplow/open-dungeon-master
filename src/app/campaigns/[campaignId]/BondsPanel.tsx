@@ -4,10 +4,11 @@ import { EmptyState } from "@/components/EmptyState";
 import { Heart, HeartCrack, VenetianMask } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { GameIcon } from "@/components/ui/GameIcon";
-import { InfoButton } from "@/components/ui/InfoDialog";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { cn } from "@/lib/cn";
-import { PanelError, PanelLoading, SettingToggle } from "./PanelKit";
+import { PanelLoading } from "./PanelKit";
+import { ADVANCES_CONSENT, ConsentSwitch, PACTS_CONSENT } from "./ConsentSwitch";
+import { OwnPacts } from "./PactPanel";
 import { ConscienceLadder, type ConscienceView } from "./ConscienceLadder";
 import { ROMANCE_STAGES, type FriendshipTier, type RomanceStage } from "@/lib/dm/relationship-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -18,9 +19,11 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 // without turning the campaign into approval farming.
 //
 // The player's own characters also carry "Open to advances from NPCs"
-// (issue 501): the one place a player says an NPC may make the first move.
-// Theirs alone, shown only where advances can happen, and never shown to
-// anyone else.
+// (issue 501): the one place a player says an NPC may make the first move;
+// and "Pacts may approach me" (issue 503), the one place a player says a
+// pact may ask them to join it (ConsentSwitch.tsx). Theirs alone, shown
+// only where each can happen, and never shown to anyone else. A player in a
+// pact reads it, and acts in secret for it, at the top (PactPanel.tsx).
 //
 // A lasting companion's row also carries its conscience (issue 503): the
 // ladder from content to the breaking point and any ultimatum, which every
@@ -251,59 +254,6 @@ function ActLine({ bond, act }: { bond: RelationshipView; act: NonNullable<Relat
   );
 }
 
-// The player's own switch for one of their characters.
-function AdvancesSwitch({ campaignId, sheet }: { campaignId: string; sheet: CharacterSheet }) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  // Shown at once while it saves, until the sheet the stream sends back
-  // moves off the value it was pressed from.
-  const stored = Boolean(sheet.openToAdvances);
-  const [pending, setPending] = useState<{ value: boolean; from: boolean } | null>(null);
-  const open = pending && pending.from === stored ? pending.value : stored;
-
-  // Never disabled while it saves: a disabled switch drops the keyboard's
-  // focus. A second press while the first saves simply sends its own
-  // answer, and the sheet the stream sends back settles it.
-  async function toggle() {
-    const next = !open;
-    setBusy(true);
-    setError("");
-    setPending({ value: next, from: stored });
-    try {
-      const response = await fetch(`/api/campaigns/${campaignId}/sheet/romance`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ characterId: sheet.id, open: next }),
-      });
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        setError(String(data.error ?? "Could not save that."));
-        setPending(null);
-      }
-    } catch {
-      setError("Could not reach the server.");
-      setPending(null);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="mb-1.5" data-advances-switch={sheet.id}>
-      <span className="flex flex-wrap items-center gap-1">
-        <SettingToggle on={open} onToggle={() => void toggle()} aria-busy={busy || undefined} label={`Open to advances from NPCs, for ${sheet.name}`}>
-          Open to advances from NPCs
-        </SettingToggle>
-        <InfoButton
-          label="Open to advances from NPCs"
-          text={`NPCs who already like ${sheet.name} may make the first move. You always answer, and switching this off stops it at once. Only you see this setting.`}
-        />
-      </span>
-      {error ? <PanelError>{error}</PanelError> : null}
-    </div>
-  );
-}
-
 export function BondsPanel({
   campaignId,
   refreshKey,
@@ -319,6 +269,7 @@ export function BondsPanel({
   const [bonds, setBonds] = useState<RelationshipView[]>([]);
   const [enabled, setEnabled] = useState(true);
   const [advances, setAdvances] = useState(false);
+  const [pacts, setPacts] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
@@ -330,6 +281,7 @@ export function BondsPanel({
       const data = await response.json();
       setEnabled(data.enabled !== false);
       setAdvances(data.advances === true);
+      setPacts(data.pacts === true);
       setBonds(Array.isArray(data.relationships) ? data.relationships : []);
     } finally {
       setLoading(false);
@@ -351,7 +303,7 @@ export function BondsPanel({
     );
   }
   // The player's own characters, never a companion: no player answers for one.
-  const mine = advances ? sheets.filter((sheet) => sheet.userId === meUserId && !sheet.isCompanion && !sheet.summon) : [];
+  const mine = advances || pacts ? sheets.filter((sheet) => sheet.userId === meUserId && !sheet.isCompanion && !sheet.summon) : [];
   if (!bonds.length && !mine.length) {
     return (
       <EmptyState size="sm" art="board" title="Nobody has an opinion yet. How NPCs and companions feel about each character builds as you deal with them, and shows up here." />
@@ -371,12 +323,14 @@ export function BondsPanel({
 
   return (
     <div className="stagger space-y-3">
+      {pacts ? <OwnPacts campaignId={campaignId} refreshKey={refreshKey} sheets={sheets} meUserId={meUserId} /> : null}
       {[...byCharacter.entries()].map(([characterId, group]) => {
         const own = mine.find((sheet) => sheet.id === characterId);
         return (
           <section key={characterId}>
             <SectionHead title={group.name} glyph="tab-bonds" aside={group.bonds.length} />
-            {own ? <AdvancesSwitch campaignId={campaignId} sheet={own} /> : null}
+            {own && advances ? <ConsentSwitch campaignId={campaignId} sheet={own} consent={ADVANCES_CONSENT} /> : null}
+            {own && pacts ? <ConsentSwitch campaignId={campaignId} sheet={own} consent={PACTS_CONSENT} /> : null}
             {group.bonds.length ? (
               <ul className="stagger space-y-1">
                 {group.bonds.map((bond) => (

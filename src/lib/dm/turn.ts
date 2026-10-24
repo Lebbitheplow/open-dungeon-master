@@ -125,6 +125,7 @@ import { souredLeaving } from "@/lib/dm/conscience";
 import { companionMomentBlock, settleCompanionLeaving } from "@/lib/dm/departure-turn";
 import { intentLinesForPrompt } from "@/lib/dm/departure";
 import { agendaLinesForPrompt } from "@/lib/dm/companion-agenda";
+import { pactLinesForPrompt } from "@/lib/dm/pacts";
 import { returnDirectorNotes } from "@/lib/dm/companion-revenge";
 import { noteUnrecordedDeeds } from "@/lib/dm/deed-claims";
 import {
@@ -739,7 +740,9 @@ async function openTurn(
         context.sheets.map((sheet) => sheet.level),
         10,
       ),
-      recentRolls: listRecentRolls(campaignId, 5),
+      // A storyteller-secret roll (a pact's, issue 503) stays out of the
+      // part of the prompt the lead of an AI table reads in the Context tab.
+      recentRolls: listRecentRolls(campaignId, 8).filter((roll) => roll.visibility !== "secret").slice(-5),
       storySummary: summary,
       // The newest message the summaries cover, by the compaction watermark's
       // own offset semantics. A watermark past the transcript (a hand-edited
@@ -822,7 +825,12 @@ async function openTurn(
       // and a companion's plan to leave (issue 503).
       storytellerLines: oocOnly
         ? []
-        : [...storytellerLinesForPrompt(campaign, context.sheets, advanceDirectorNotes(campaign)), ...intentLinesForPrompt(campaign, context.sheets), ...agendaLinesForPrompt(context.sheets)],
+        : [
+            ...storytellerLinesForPrompt(campaign, context.sheets, advanceDirectorNotes(campaign)),
+            ...intentLinesForPrompt(campaign, context.sheets),
+            ...agendaLinesForPrompt(context.sheets),
+            ...pactLinesForPrompt(campaign, context.sheets),
+          ],
       withholdStorytellerSecrets: oocOnly,
       directorBlock,
       npcs: npcRosterForPrompt(campaignId, { romance: romanceEnabled(campaign) }).map((npc) => ({ ...npc, world: world.npcNotes.get(npc.name) })),

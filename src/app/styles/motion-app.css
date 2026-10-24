@@ -557,6 +557,38 @@ html[data-effects="low"] .dictate-dot { animation: none; }
 }
 
 /* ------------------------------------------------------------------------
+   Pacts (issue 503 Phase 7). A pact's approach is an owner-only offer card
+   (PactOfferCard.tsx) on the advance card's motion above. When a pact or a
+   secret action comes out, the transcript's reveal card (MessageParts.tsx
+   .pact-reveal) unmasks itself: a 480ms lift from a blur with the violet
+   rim brightening and settling. A secret action's confirmation to its own
+   player (PactPanel.tsx .secret-confirm) fades up over 220ms. Only from the
+   server's word. Reduced motion keeps the colour and the words and drops
+   the movement and the blur.
+   ------------------------------------------------------------------------ */
+@keyframes pact-unmask {
+  0% { opacity: 0; filter: blur(6px); transform: translateY(4px) scale(0.985); box-shadow: 0 0 0 0 rgb(167 139 250 / 0); }
+  55% { opacity: 1; filter: blur(0); transform: translateY(0) scale(1); box-shadow: 0 0 0 3px rgb(167 139 250 / 0.35); }
+  100% { opacity: 1; filter: none; transform: none; box-shadow: 0 0 0 0 rgb(167 139 250 / 0); }
+}
+@keyframes pact-unmask-fade {
+  from { opacity: 0.3; }
+  to { opacity: 1; }
+}
+@keyframes secret-confirm-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: none; }
+}
+@layer components {
+  .pact-reveal { animation: pact-unmask 480ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+  .secret-confirm { animation: secret-confirm-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pact-reveal { animation: pact-unmask-fade 480ms linear backwards; }
+  .secret-confirm { animation: pact-unmask-fade 220ms linear backwards; }
+}
+
+/* ------------------------------------------------------------------------
    An NPC's act seen through or unmasked (issue 501, BondsPanel.tsx): the
    row's standing turns to the truth with a 520ms flip and drop, its number
    counting from the act's warmth to the truth, and the "Seen through" or

@@ -1,5 +1,6 @@
 import type { CampaignKind } from "@/lib/workshop/kind";
 import { OFFER_NOTE_PREFIX } from "@/lib/dm/proposal-logic";
+import { PACT_REVEAL_PREFIX } from "@/lib/dm/pact-logic";
 import { isNarration } from "@/lib/dm/ooc-question";
 
 export type SessionUser = {
@@ -142,7 +143,7 @@ export const JOIN_NOTE_PREFIX = "[New adventurer] ";
 // a settled offer) come off; the lead's direction keeps its prefix because
 // the transcript draws that one as a card of its own.
 export function systemNoteWords(content: string): string {
-  for (const prefix of [JOIN_NOTE_PREFIX, OFFER_NOTE_PREFIX]) {
+  for (const prefix of [JOIN_NOTE_PREFIX, OFFER_NOTE_PREFIX, PACT_REVEAL_PREFIX]) {
     if (content.startsWith(prefix)) {
       return content.slice(prefix.length);
     }

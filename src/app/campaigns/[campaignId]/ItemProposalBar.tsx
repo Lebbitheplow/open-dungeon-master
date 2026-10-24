@@ -8,13 +8,15 @@ import { KitButton, PanelError } from "./PanelKit";
 import type { ItemProposal } from "@/app/campaigns/[campaignId]/useCampaignStream";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { AdvanceOffers } from "./AdvanceOfferCard";
+import { PactOffers } from "./PactOfferCard";
 
 // Pending DM offers: item and gold changes (inventoryApprovals) and damage,
 // healing and conditions (vitalsApprovals). The owning player gets
 // Accept/Decline, everyone else sees a passive chip, the lead may withdraw.
 // Driven by item_proposal_added/item_proposal_resolved on the stream. An
 // NPC's romantic advance (issue 501) is its own card, answered by the
-// character's player alone (AdvanceOfferCard.tsx).
+// character's player alone (AdvanceOfferCard.tsx), and so is a pact's
+// approach (issue 503), which nobody else is even sent (PactOfferCard.tsx).
 const VITALS_TOOLS = new Set(["apply_damage", "heal", "set_condition", "clear_condition"]);
 export function ItemProposalBar({
   campaignId,
@@ -32,7 +34,8 @@ export function ItemProposalBar({
   const [busyId, setBusyId] = useState("");
   const [error, setError] = useState("");
   const advances = proposals.filter((proposal) => proposal.toolName === "romance_advance");
-  const offers = proposals.filter((proposal) => proposal.toolName !== "romance_advance");
+  const pacts = proposals.filter((proposal) => proposal.toolName === "pact_approach");
+  const offers = proposals.filter((proposal) => proposal.toolName !== "romance_advance" && proposal.toolName !== "pact_approach");
 
   async function resolve(proposalId: string, action: "approve" | "decline" | "cancel") {
     setBusyId(proposalId);
@@ -62,6 +65,14 @@ export function ItemProposalBar({
         <AdvanceOffers
           campaignId={campaignId}
           proposals={advances}
+          sheets={sheets}
+          meUserId={meUserId}
+          steersStory={steersStory}
+          onError={setError}
+        />
+        <PactOffers
+          campaignId={campaignId}
+          proposals={pacts}
           sheets={sheets}
           meUserId={meUserId}
           steersStory={steersStory}

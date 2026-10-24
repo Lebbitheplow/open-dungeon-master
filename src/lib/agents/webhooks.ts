@@ -6,6 +6,7 @@ import { getSheetForUser } from "@/lib/db/sheets";
 import { listOpenPendingRolls } from "@/lib/db/dm-turns";
 import { getActiveEncounter, turnKey } from "@/lib/db/encounters";
 import { getLatestDmMessage } from "@/lib/db/messages";
+import { listOpenItemProposals } from "@/lib/db/item-proposals";
 import { getDmStatus } from "@/lib/dm/status";
 import { dmQueuePaused } from "@/lib/dm/queue";
 import { levelForXp } from "@/lib/srd";
@@ -30,7 +31,7 @@ export type PlayerWebhookEvent = {
   version: 1; eventId: string; subscriptionId: string; campaignId: string;
   playerId: string; characterId: string; opportunityId: string;
   type: PlayerOpportunity["type"] | "campaign_paused" | "campaign_resumed" | "campaign_ended";
-  seq: number; occurredAt: string; pendingRollId?: string; phase?: "act" | "finish"; level?: number;
+  seq: number; occurredAt: string; pendingRollId?: string; phase?: "act" | "finish"; level?: number; proposalId?: string;
   // A plain-language summary with the IDs a guarded write needs. Hosted
   // receivers that pass on only a text field (a Claude Code routine reads
   // just `text`) still tell their agent what woke it.
@@ -287,6 +288,7 @@ export function pollLinkAnswer(token: string, now = Date.now()): PollAnswer {
     opportunityId: o.opportunityId, type: o.type,
     ...(o.phase ? { phase: o.phase } : {}), ...(o.pendingRollId ? { pendingRollId: o.pendingRollId } : {}),
     ...(o.level ? { level: o.level } : {}),
+    ...(o.proposalId ? { proposalId: o.proposalId } : {}),
   }));
   const fingerprint = createHash("sha256")
     .update(JSON.stringify([state.lifecycle, opportunities.map((o) => o.opportunityId)]))
@@ -348,6 +350,10 @@ export function reserveWebhookWrite(grant: ConnectionGrant, input: { subscriptio
       (input.tool === "odm_take_action" && opportunity.phase === "finish") ||
       (input.tool === "odm_end_turn" && opportunity.type !== "turn_started") ||
       (input.tool === "odm_pass" && opportunity.type !== "response_requested") ||
+      // An offer is answered with odm_answer_offer and nothing else; a
+      // whisper is answered privately (a whisper back, or a secret action).
+      ((input.tool === "odm_answer_offer") !== (opportunity.type === "offer_received")) ||
+      (opportunity.type === "whisper_received" && input.tool !== "odm_whisper_dm" && input.tool !== "odm_secret_action") ||
       // A level is taken only with odm_level_up, and odm_level_up takes
       // nothing but a level: never a way to act at the table out of turn.
       ((input.tool === "odm_level_up") !== (opportunity.type === "level_up_available"))) {
@@ -439,6 +445,12 @@ function stateFor(sub: Subscription, grant: ConnectionGrant) {
     } : null,
     narration, lastPlayerSeq: Math.max(last.seq ?? 0, passed.seq ?? 0),
     level: sheet?.id === sub.character_id && !sheet.isCompanion ? { current: sheet.level, earned: Math.min(20, levelForXp(sheet.xp)) } : null,
+    offers: listOpenItemProposals(campaign.id)
+      .filter((offer) => (offer.toolName === "trade" ? offer.toCharacterId === sub.character_id : offer.characterId === sub.character_id && offer.userId === grant.userId))
+      .map((offer) => offer.id),
+    unreadWhisperId:
+      (db.prepare(`SELECT id FROM dm_whispers WHERE campaign_id = ? AND user_id = ? AND read = 0 AND direction = 'to_player' ORDER BY created_at DESC, id DESC LIMIT 1`)
+        .get(campaign.id, grant.userId) as { id: string } | undefined)?.id ?? null,
   });
   // A pause or hold re-invites a table decision it interrupted. A level is
   // the same decision before and after one, so it keeps its ID.
@@ -446,7 +458,7 @@ function stateFor(sub: Subscription, grant: ConnectionGrant) {
     lifecycle: campaign.status === "ended" ? "ended" : campaign.status !== "active" || paused ? "paused" : "active" };
 }
 
-function enqueue(sub: Subscription, grant: ConnectionGrant, opportunity: { type: PlayerWebhookEvent["type"]; opportunityId: string; pendingRollId?: string; phase?: "act" | "finish"; level?: number }, now: number) {
+function enqueue(sub: Subscription, grant: ConnectionGrant, opportunity: { type: PlayerWebhookEvent["type"]; opportunityId: string; pendingRollId?: string; phase?: "act" | "finish"; level?: number; proposalId?: string }, now: number) {
   // Every tick offers every open opportunity again. Only a new or cancelled
   // one is written, so skip building its text (a campaign and sheet read).
   const queued = getDatabase().prepare(`SELECT state FROM player_webhook_deliveries WHERE subscription_id = ? AND opportunity_id = ?`)
@@ -476,6 +488,8 @@ function eventText(sub: Subscription, grant: ConnectionGrant, event: Omit<Player
     : event.type === "turn_started" ? (event.phase === "finish" ? `your combat turn in ${at} is ready to end.` : `it is your turn in combat in ${at}.`)
     : event.type === "response_requested" ? `the table in ${at} may want your response.`
     : event.type === "level_up_available" ? `your experience in ${at} has earned level ${event.level}. Answer any roll or turn first, then read odm_level_up_options and take it with odm_level_up.`
+    : event.type === "offer_received" ? `an offer in ${at} waits on your answer alone. Read it in odm_get_campaign (itemProposals, id ${event.proposalId}) and answer it with odm_answer_offer.`
+    : event.type === "whisper_received" ? `the Dungeon Master whispered to you in ${at}. Read it with odm_get_whispers.`
     : event.type === "campaign_paused" ? `${at} is paused.`
     : event.type === "campaign_resumed" ? `${at} has resumed.`
     : `${at} has ended.`;

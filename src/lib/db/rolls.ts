@@ -15,7 +15,12 @@ export type RollKind =
 // made and stays the default; the rest exist for a human DM who wants a
 // screen (src/lib/dm/viewer.ts decides who sees what).
 export const ROLL_VISIBILITIES = ["public", "dm", "blind", "self"] as const;
-export type RollVisibility = (typeof ROLL_VISIBILITIES)[number];
+// "secret" is the server's own, never chosen at the table: a roll that is a
+// storyteller secret (issue 503: a pact's recruiting, a player's secret
+// action), read by the storyteller and by the player whose character it is
+// for, never by the lead of an AI table (src/lib/dm/viewer.ts rollAccessFor).
+// revealRoll turns it public when the secret comes out.
+export type RollVisibility = (typeof ROLL_VISIBILITIES)[number] | "secret";
 
 // Who made an attack or damage roll, named as they were when it was rolled.
 // A character's bound creature has no id of its own (it lives on its owner's
@@ -209,7 +214,7 @@ export function listRecentRolls(campaignId: string, limit = 20): StoredRoll[] {
 // the dice were thrown (src/lib/dm/viewer.ts explains why).
 export function listRollsVisibleTo(
   campaignId: string,
-  caps: Pick<ViewerCaps, "adjudicates" | "steersStory">,
+  caps: Pick<ViewerCaps, "adjudicates" | "steersStory"> & Partial<Pick<ViewerCaps, "storytellerSecrets">>,
   ownedCharacterIds: string[],
   limit = 20,
 ): Array<StoredRoll | ReturnType<typeof redactRoll<StoredRoll>>> {
@@ -222,4 +227,11 @@ export function listRollsVisibleTo(
     out.push(access === "full" ? roll : redactRoll(roll));
   }
   return out;
+}
+
+// A hidden roll comes out (issue 503: a pact's plan goes, or a secret action
+// is caught): it turns public, and the caller publishes it to the table.
+export function revealRollRow(rollId: string): StoredRoll | null {
+  getDatabase().prepare(`UPDATE rolls SET visibility = 'public' WHERE id = ?`).run(rollId);
+  return getRoll(rollId);
 }

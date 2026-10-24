@@ -20,22 +20,10 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 // a frame to spare).
 const SETTLE_MS = 180;
 
-export function AdvanceOffers({
-  campaignId,
-  proposals,
-  sheets,
-  meUserId,
-  steersStory,
-  onError,
-}: {
-  campaignId: string;
-  proposals: ItemProposal[];
-  sheets: CharacterSheet[];
-  meUserId: string;
-  steersStory: boolean;
-  onError: (message: string) => void;
-}) {
-  // A card that just left the list stays a beat to collapse.
+// The owner-only offer cards (this one and a pact's approach,
+// PactOfferCard.tsx) share their motion: a card that just left the list
+// stays a beat to play its collapse.
+export function useSettlingCards(proposals: ItemProposal[]): Array<{ proposal: ItemProposal; left: boolean }> {
   const [leaving, setLeaving] = useState<ItemProposal[]>([]);
   const previous = useRef<ItemProposal[]>(proposals);
   useEffect(() => {
@@ -51,8 +39,25 @@ export function AdvanceOffers({
     }, SETTLE_MS);
     return () => window.clearTimeout(timer);
   }, [proposals]);
+  return [...proposals.map((proposal) => ({ proposal, left: false })), ...leaving.map((proposal) => ({ proposal, left: true }))];
+}
 
-  const shown = [...proposals.map((proposal) => ({ proposal, left: false })), ...leaving.map((proposal) => ({ proposal, left: true }))];
+export function AdvanceOffers({
+  campaignId,
+  proposals,
+  sheets,
+  meUserId,
+  steersStory,
+  onError,
+}: {
+  campaignId: string;
+  proposals: ItemProposal[];
+  sheets: CharacterSheet[];
+  meUserId: string;
+  steersStory: boolean;
+  onError: (message: string) => void;
+}) {
+  const shown = useSettlingCards(proposals);
   if (!shown.length) {
     return null;
   }
@@ -123,6 +128,7 @@ function AdvanceOfferCard({
       <section
         aria-label={`${suitor} makes a romantic advance toward ${characterName}`}
         data-advance-card={proposal.id}
+        data-offer-card={proposal.id}
         className={cn(
           "advance-card panel rounded-xl px-3 py-2.5 text-xs",
           mine ? "ornate border-rose-400/45" : "border-rose-900/40",
