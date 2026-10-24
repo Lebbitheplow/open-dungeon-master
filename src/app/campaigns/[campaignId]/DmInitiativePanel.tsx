@@ -9,7 +9,7 @@ import { cn } from "@/lib/cn";
 import { ENTRY_NAME_MAX, MAX_INITIATIVE, MIN_INITIATIVE } from "@/lib/dm/initiative-edit";
 import type { PublicEncounter } from "@/lib/db/encounter-view";
 import { TokenFace, type FaceLookup } from "@/app/campaigns/[campaignId]/BoardChrome";
-import { offSide, sideWords } from "@/app/campaigns/[campaignId]/SideBadge";
+import { offSide, SideBadge, sideWords } from "@/app/campaigns/[campaignId]/SideBadge";
 
 // The DM's hands on the turn order: reorder it, insert a slot for somebody
 // the engine has no stat block for, delay, remove, hand the turn to a
@@ -257,11 +257,6 @@ export function DmInitiativePanel({
                 {entry.name}
                 <span className="ml-1.5 text-[10px] text-stone-600">
                   {KIND_LABELS[entry.kind] ?? entry.kind}
-                  {side ? (
-                    <span key={side} data-side-badge={side} className={cn("side-badge inline-block", side === "foe" ? "text-red-300" : "text-stone-300")}>
-                      {` · ${sideWords(side)}`}
-                    </span>
-                  ) : null}
                   {entry.hidden ? " · hidden" : ""}
                   {entry.reflex ? (
                     <span className="motion-pop ml-1 text-amber-300" title={extraTurnTag(entry)?.title}>
@@ -314,6 +309,13 @@ export function DmInitiativePanel({
               >
                 <Trash2 className="size-3.5" />
               </button>
+              {/* A line of its own under the name, so a narrow panel never
+                  cuts the words off. */}
+              {side ? (
+                <span className="basis-full pl-14">
+                  <SideBadge side={side} />
+                </span>
+              ) : null}
             </li>
           );
         })}
