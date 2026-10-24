@@ -46,6 +46,7 @@ import { suggestEnemies } from "@/lib/bestiary";
 import { enemyRequestSchema, resolveEnemyRequests } from "@/lib/dm/encounter-spawn";
 import { fieldSheetFoes, sheetFoeIds, turnedFoes } from "@/lib/dm/sheet-foes";
 import { askShares, conductGate } from "@/lib/dm/party-conduct";
+import { registerFightStarter } from "@/lib/dm/turncoat";
 import { hasHumanDm } from "@/lib/dm/viewer";
 import { decideAmbush, rollOpeningInitiative } from "@/lib/dm/encounter-open";
 import { heldRollUserIds } from "@/lib/dice/held-rolls";
@@ -460,6 +461,7 @@ export function startFightAgainst(campaign: Campaign, name: string, summary: str
   const actor = hasHumanDm(campaignSeats(campaign)) ? "human_dm" : "ai";
   return handleStartEncounter(campaign, JSON.stringify({ enemies: [{ monster: name }], summary }), listSheets(campaign.id), actor);
 }
+registerFightStarter(startFightAgainst);
 
 // ---- initiative collection ----
 

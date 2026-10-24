@@ -6,7 +6,7 @@ import { insertCampaignMessage } from "@/lib/db/messages";
 import { setNpcAttitude } from "@/lib/db/npcs";
 import { getSheetById, listSheets, setCompanionCommander } from "@/lib/db/sheets";
 import { moveToSide, sheetsAgainstParty } from "@/lib/dm/combat-sides";
-import { startFightAgainst } from "@/lib/dm/encounter-tools";
+import type { ToolResult } from "@/lib/dm/tool-errors";
 import { handTurnToDm } from "@/lib/dm/initiative-floor";
 import { departureHow, turnHow, type DepartureResponse, type DepartureWhere } from "@/lib/dm/departure-logic";
 import { publishEphemeral, publishPersisted, publishWithSeq } from "@/lib/events";
@@ -30,6 +30,16 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 // (src/lib/dm/companion-return.ts fieldReturning).
 //
 // The rim departure.ts calls; the leaving itself is departure.ts departNow.
+// Must not import encounter-tools.ts (enemy-damage.ts reaches this through
+// departure.ts, and encounter-tools sits above it): the fight a turn starts
+// comes through the starter encounter-tools registers.
+
+type FightStarter = (campaign: Campaign, name: string, summary: string) => ToolResult;
+let fightStarter: FightStarter | null = null;
+
+export function registerFightStarter(start: FightStarter) {
+  fightStarter = start;
+}
 
 export type TurnOutcome = {
   companion: string;
@@ -70,8 +80,8 @@ export function turnOnTheSpot(campaign: Campaign, companion: CharacterSheet, res
   } else {
     // A fight of its own: the companion alone against the party, by its own
     // choice, so the table's ceiling does not refuse it.
-    const started = startFightAgainst(campaign, companion.name, `${companion.name} turns on the party`);
-    if ("error" in started) {
+    const started = fightStarter ? fightStarter(campaign, companion.name, `${companion.name} turns on the party`) : null;
+    if (!started || "error" in started) {
       saveDeparture(npc.id, before);
       return null;
     }
