@@ -305,6 +305,19 @@
   --color-emerald-200: #0f4a30;
   --color-emerald-100: #0b3a26;
   --color-emerald-50: #072b1c;
+  /* Violet (an NPC's act on the Bonds tab, issue 501, and the DM's
+     secrets in the facts list) turns too: deep ink on cream. */
+  --color-violet-950: #f4f0fd;
+  --color-violet-900: #e9e1fb;
+  --color-violet-800: #d6c8f6;
+  --color-violet-700: #b49deb;
+  --color-violet-600: #8b66d6;
+  --color-violet-500: #6f45c2;
+  --color-violet-400: #5a32a8;
+  --color-violet-300: #4a268f;
+  --color-violet-200: #3c1e76;
+  --color-violet-100: #2f175d;
+  --color-violet-50: #221045;
   --shadow-elev-1: 0 1px 2px rgba(60, 40, 10, 0.12), 0 2px 8px rgba(60, 40, 10, 0.08);
   --shadow-elev-2: 0 2px 6px rgba(60, 40, 10, 0.14), 0 12px 32px rgba(60, 40, 10, 0.12);
   --shadow-glow-gold: 0 0 20px rgba(166, 132, 42, 0.18);

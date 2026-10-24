@@ -551,3 +551,35 @@ html[data-effects="low"] .dictate-dot { animation: none; }
   .advance-shell[data-leaving] { animation: advance-fade-out 160ms linear both; }
   .romance-rung-fill { transition: opacity 400ms linear; }
 }
+
+/* ------------------------------------------------------------------------
+   An NPC's act seen through or unmasked (issue 501, BondsPanel.tsx): the
+   row's standing turns to the truth with a 520ms flip and drop, its number
+   counting from the act's warmth to the truth, and the "Seen through" or
+   "Unmasked" chip rises in over 360ms. On one easing, and only when the
+   server's answer changes the row (an Insight that beat the act, the
+   reveal), never from a model's words. Reduced motion keeps the new colour
+   and words and drops the movement.
+   ------------------------------------------------------------------------ */
+@keyframes bond-unmask {
+  0% { opacity: 0.25; transform: perspective(240px) rotateX(80deg) translateY(-4px); }
+  60% { opacity: 1; transform: perspective(240px) rotateX(-8deg) translateY(1px); }
+  100% { opacity: 1; transform: none; }
+}
+@keyframes bond-unmask-fade {
+  from { opacity: 0.25; }
+  to { opacity: 1; }
+}
+@keyframes bond-chip-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@layer components {
+  .bond-truth { transition: background-color 520ms cubic-bezier(0.2, 0.8, 0.2, 1), border-color 520ms cubic-bezier(0.2, 0.8, 0.2, 1), color 520ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+  .bond-truth[data-unmasking] { animation: bond-unmask 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  .bond-unmask-chip { animation: bond-chip-in 360ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bond-truth[data-unmasking] { animation: bond-unmask-fade 360ms linear both; }
+  .bond-unmask-chip { animation: bond-unmask-fade 360ms linear backwards; }
+}
