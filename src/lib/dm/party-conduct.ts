@@ -186,6 +186,10 @@ export function conductGate(campaign: Campaign, name: string, rawArguments: stri
   } catch {
     return null;
   }
+  // Arguments that are not an object are the tool's own to refuse.
+  if (!args || typeof args !== "object" || Array.isArray(args)) {
+    return null;
+  }
   switch (name) {
     case "pc_attack":
     case "cast_at_enemy":

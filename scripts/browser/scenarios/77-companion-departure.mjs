@@ -88,7 +88,7 @@ export default {
     await eventually(async () => (await goneList.locator(`[data-gone-entry="Seren Vale"]`).count()) > 0, { label: "Seren under Gone" });
     await eventually(async () => (await ghost.count()) === 0, { label: "the dimmed card filed away" });
     const departs = await page.evaluate(() => window.__departs);
-    const dim = departs.find((entry) => entry.name === "party-card-depart");
+    const dim = departs.find((entry) => entry.name.replace(/^odm-game-/, "") === "party-card-depart");
     check(Boolean(dim), `the card dimmed (${JSON.stringify(departs)})`);
     check(/0\.6s/.test(dim.duration), `over 600 ms (${dim.duration})`);
     const seren = goneList.locator(`[data-gone-entry="Seren Vale"]`);
@@ -112,8 +112,8 @@ export default {
     const reduced = await page.evaluate(() => {
       const probe = document.createElement("div");
       probe.className = "party-card-departing";
-      document.body.appendChild(probe);
-      const name = getComputedStyle(probe).animationName;
+      (document.querySelector(".game-root") ?? document.body).appendChild(probe);
+      const name = getComputedStyle(probe).animationName.replace(/^odm-game-/, "");
       probe.remove();
       return name;
     });

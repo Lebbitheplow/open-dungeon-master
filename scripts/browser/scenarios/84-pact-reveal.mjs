@@ -60,7 +60,7 @@ export default {
     check(words.includes(table.secret), "and Brin's secret");
     await sleep(600);
     const reveals = await page.evaluate(() => window.__reveals);
-    const unmask = reveals.find((entry) => entry.name === "pact-unmask");
+    const unmask = reveals.find((entry) => entry.name.replace(/^odm-game-/, "") === "pact-unmask");
     check(Boolean(unmask), `the card unmasked itself (${JSON.stringify(reveals)})`);
     check(/0\.48s/.test(unmask.duration), `over 480 ms (${unmask.duration})`);
     await axeClean(page, `${root}[data-pact-reveal]`, "the reveal at night");
@@ -84,8 +84,8 @@ export default {
     const reduced = await page.evaluate(() => {
       const probe = document.createElement("div");
       probe.className = "pact-reveal";
-      document.body.appendChild(probe);
-      const name = getComputedStyle(probe).animationName;
+      (document.querySelector(".game-root") ?? document.body).appendChild(probe);
+      const name = getComputedStyle(probe).animationName.replace(/^odm-game-/, "");
       probe.remove();
       return name;
     });

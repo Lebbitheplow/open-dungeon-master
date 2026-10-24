@@ -85,8 +85,8 @@ const scenario = {
     await sleep(500);
     await t.shot("share");
     const reveals = await page.evaluate(() => window.__reveals);
-    check(reveals.some((entry) => entry.what === "data-refused" && entry.name === "fade-up"), `the refusal revealed (${JSON.stringify(reveals)})`);
-    check(reveals.some((entry) => entry.what === "data-share-demand" && entry.name === "fade-up"), `the share revealed (${JSON.stringify(reveals)})`);
+    check(reveals.some((entry) => entry.what === "data-refused" && entry.name.replace(/^odm-game-/, "") === "fade-up"), `the refusal revealed (${JSON.stringify(reveals)})`);
+    check(reveals.some((entry) => entry.what === "data-share-demand" && entry.name.replace(/^odm-game-/, "") === "fade-up"), `the share revealed (${JSON.stringify(reveals)})`);
 
     // ---- he turns where he stands ----
     const turned = await call("relationship_beat", {
@@ -113,7 +113,7 @@ const scenario = {
     await card.scrollIntoViewIfNeeded();
     await sleep(500);
     const pops = await page.evaluate(() => window.__reveals);
-    check(pops.some((entry) => entry.what === "data-side-badge" && entry.name === "side-badge-in"), `the badge came in (${JSON.stringify(pops)})`);
+    check(pops.some((entry) => entry.what === "data-side-badge" && entry.name.replace(/^odm-game-/, "") === "side-badge-in"), `the badge came in (${JSON.stringify(pops)})`);
     await axeClean(page, `${root}[data-party-card="${table.brannoc}"]`, "Brannoc's card at night");
     await t.shot("against");
     await inTheme(page, "light");
