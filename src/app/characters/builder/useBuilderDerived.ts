@@ -1,8 +1,6 @@
-"use client";
-
 import type { Genre } from "@/lib/schemas/game-settings";
 import { expertiseAllowed, subclassExpandedSpellsFor, subclassSpellListsFor } from "@/lib/srd/features";
-import { useMemo } from "react";
+import { useMemo as useReactMemo, type DependencyList } from "react";
 import { starterSpellsFor } from "@/lib/help";
 import type { Ability, AbilityScores, AsiChoice, EquipmentItem } from "@/lib/schemas/sheet";
 import { acBreakdownFor, computeSheetDerived } from "@/lib/srd";
@@ -51,6 +49,16 @@ import { combatRiders, fightingStyleFeatureName } from "@/lib/srd/feature-effect
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
 import type { BuilderState, EquipmentItem as BuilderItem } from "./useBuilderState";
 import { textKey } from "@/lib/language/text-logic";
+
+// The derivation memoises each value with React's useMemo while the wizard
+// renders. Not marked "use client", so the server can run the same body
+// once, outside any render, through deriveBuilder below: the AI DM's
+// drafted pregens (src/lib/characters/pregen-drafts.ts) are built by the
+// quick-build engine against exactly the numbers the wizard would show.
+let memoize: <T>(compute: () => T, deps: DependencyList) => T = useReactMemo;
+function useMemo<T>(compute: () => T, deps: DependencyList): T {
+  return memoize(compute, deps);
+}
 
 // Everything the builder computes from its fields: final abilities, the sheet
 // preview, the auto loadout and AC, spell counts and the class option slots.
@@ -833,6 +841,20 @@ export function useBuilderDerived({
 }
 
 export type BuilderDerived = ReturnType<typeof useBuilderDerived>;
+
+// useBuilderDerived run once outside a render, each memo simply computed:
+// what scripts/lib/enforce-builder.mjs does for the test suites, without
+// reaching into React. Synchronous, so no render can interleave.
+export function deriveBuilder(input: Parameters<typeof useBuilderDerived>[0]): BuilderDerived {
+  const before = memoize;
+  memoize = (compute) => compute();
+  try {
+    // eslint-disable-next-line react-hooks/rules-of-hooks -- no hook state is read: every memo is computed in place
+    return useBuilderDerived(input);
+  } finally {
+    memoize = before;
+  }
+}
 
 // Action helpers that close over the state setters. Plain functions rather
 // than hooks so the steps can call them from any handler.
