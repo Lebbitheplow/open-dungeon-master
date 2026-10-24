@@ -46,6 +46,11 @@ export default {
     check(response.ok(), `the console's long rest was refused (${response.status()}): ${body.error ?? ""}`);
     check(/The pact made its move/.test((body.result?.companionsLeft ?? []).join(" ")), `the rest set the pact off: ${JSON.stringify(body.result?.companionsLeft ?? [])}`);
 
+    // The long rest's dawn card covers the table a moment; the player
+    // returns to it as anyone would.
+    await sleep(400);
+    await page.keyboard.press("Escape");
+    await sleep(600);
     const card = page.locator(`${root}[data-pact-reveal]`).locator("visible=true").last();
     await eventually(() => card.count(), { timeoutMs: 20_000, label: "the reveal card" });
     await card.scrollIntoViewIfNeeded();
@@ -72,7 +77,7 @@ export default {
 
     // Brin's hidden roll is public now.
     const rolls = await (await api.get(`${base}/api/campaigns/${table.id}/rolls`)).json();
-    check((rolls.rolls ?? []).some((roll) => /Brin Hale: Stealth, in secret/.test(roll.detail) && roll.visibility === "public" && typeof roll.total === "number"), "Brin's secret roll turned public");
+    check((rolls.rolls ?? []).some((roll) => roll.characterId === table.brin && /Stealth, in secret/.test(roll.detail) && roll.visibility === "public" && typeof roll.total === "number"), "Brin's secret roll turned public");
 
     // Reduced motion: the card keeps its colour and words, without moving.
     await page.emulateMedia({ reducedMotion: "reduce" });

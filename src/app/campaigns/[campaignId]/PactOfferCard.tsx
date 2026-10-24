@@ -127,8 +127,7 @@ function PactOfferCard({
             {choices.map((choice, index) => (
               <KitButton
                 key={choice.id}
-                tone={choice.id === "join" ? "primary" : "small"}
-                className="h-auto min-h-10 w-full flex-col items-start gap-0 px-3 py-1.5 text-left"
+                className={cn("h-auto min-h-10 w-full flex-col items-start gap-0 whitespace-normal px-3 py-1.5 text-left", choice.id === "join" && "border-violet-400/60 text-violet-50")}
                 onClick={() => void answer(choice.id)}
                 disabled={Boolean(busy) || leaving}
                 busy={busy === choice.id}

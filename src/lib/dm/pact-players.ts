@@ -153,7 +153,8 @@ export function declareSecretAction(campaign: Campaign, sheet: CharacterSheet, i
     return { error: `${target!.name} carries nothing called "${input.item ?? ""}".`, status: 400 };
   }
   const skill = secretSkillFor(input.kind, input.skill);
-  const roll = secretRoll(campaign.id, null, sheet.id, "skill_check", `${sheet.name}: ${SKILL_WORD[skill]}, in secret`, d20Expression(skillMod(sheet, skill)));
+  // The roll card names its character already; the detail says what it was.
+  const roll = secretRoll(campaign.id, null, sheet.id, "skill_check", `${SKILL_WORD[skill]}, in secret`, d20Expression(skillMod(sheet, skill)));
   // The one robbed watches their own pack; anything else, the best of the
   // party's eyes (or, for a lie, its best sense of one).
   const sense = watchSenseFor(skill);
