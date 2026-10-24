@@ -367,6 +367,7 @@ export function DmBestiaryPanel({
                   cr={monster.draft.stats.cr}
                   genre={genre}
                   seed={monster.draft.name}
+                  slug={monster.slug}
                   name={monster.draft.name}
                   size="size-9"
                 />

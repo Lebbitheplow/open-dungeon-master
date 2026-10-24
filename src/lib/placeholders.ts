@@ -885,24 +885,36 @@ export type MonsterLook = {
   name?: string | null;
 };
 
+// A stat block somebody wrote (a homebrew or Workshop monster, slug
+// "homebrew:<id>"). Its name is the author's to choose and says nothing
+// about what it looks like: a construct called "Bandit" is not the
+// rulebook bandit. The Bestiary tells its author the creature type is the
+// picture until it has a portrait, so its type decides.
+function ownStatBlock(slug: string | null | undefined): boolean {
+  return typeof slug === "string" && slug.startsWith("homebrew:");
+}
+
 // Order: the genre's own enemy token (in that genre only), then the
 // creature's own family plate, then the genre's boss plate at
 // CR 11 and up, then the genre's plate for the type, then the type. A
-// picture somebody supplied for this monster in particular (a world pack's
-// art) beats all of these, and is applied by the caller (MonsterTile's
-// `art`), since it is not a plate.
+// monster fighting with its own stat block skips the first two, which are
+// found by name (ownStatBlock). A picture somebody supplied for this
+// monster in particular (a world pack's art) beats all of these, and is
+// applied by the caller (MonsterTile's `art`), since it is not a plate.
 export function monsterPlaceholder(
   type: string | null | undefined,
   options: MonsterLook = {},
 ): string {
   const slug = genreSlug(options.genre);
-  const token = genreEnemyPlate(slug, options.slug, options.name);
-  if (token) {
-    return `${BASE}/monster/${token}.webp`;
-  }
-  const family = familyPlate(slug, options.slug, options.name);
-  if (family) {
-    return `${BASE}/monster/${family}.webp`;
+  if (!ownStatBlock(options.slug)) {
+    const token = genreEnemyPlate(slug, options.slug, options.name);
+    if (token) {
+      return `${BASE}/monster/${token}.webp`;
+    }
+    const family = familyPlate(slug, options.slug, options.name);
+    if (family) {
+      return `${BASE}/monster/${family}.webp`;
+    }
   }
   if (typeof options.cr === "number" && options.cr >= BOSS_CR_FLOOR && BOSS_GENRES.has(slug)) {
     return `${BASE}/monster/${slug}-boss.webp`;
