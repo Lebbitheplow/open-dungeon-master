@@ -6,7 +6,7 @@ import { getSheetForUser, listSheetsForUser } from "@/lib/db/sheets";
 import { createSheetSchema } from "@/lib/schemas/sheet";
 import { pregenById } from "@/lib/starter/pregens";
 import { seatPicksSchema } from "@/lib/characters/seat-picks";
-import { claimRefusal, offeredPregenFor } from "@/lib/db/pregen-offers";
+import { claimRefusal, offeredPregenFor, pregenSeatRefusal } from "@/lib/db/pregen-offers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -70,6 +70,14 @@ export async function POST(
     alreadyHere = listSheetsForUser(campaignId, context.user.id).some(
       (sheet) => sheet.libraryCharacterId === character.id && !sheet.isCompanion,
     );
+    // A copy of a DM's offered pregen does not sit where another sheet plays
+    // that pregen (src/lib/db/pregen-offers.ts), as the join will say. A lobby
+    // switch gives up the current sheet first, which holds nothing then.
+    const replacing = flow === "replace" ? (getSheetForUser(campaignId, context.user.id)?.id ?? "") : "";
+    const held = alreadyHere ? null : pregenSeatRefusal(campaignId, character, context.user.id, replacing);
+    if (held) {
+      preview = { ...preview, ok: false, problems: [held, ...preview.problems] };
+    }
   } else if (sheet) {
     preview = previewBuiltJoin(sheet, context.campaign, context.user.id);
   } else if (offeredPregenId) {

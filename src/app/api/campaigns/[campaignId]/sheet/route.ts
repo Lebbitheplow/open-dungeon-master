@@ -13,6 +13,7 @@ import { admitLibraryForSeat } from "@/lib/characters/seat-preview";
 import { hasSeatPicks, seatPicksSchema, type SeatPicks } from "@/lib/characters/seat-picks";
 import { announceMidGameJoin } from "@/lib/characters/mid-game-join";
 import { listMembers, setMemberReady } from "@/lib/db/campaigns";
+import { pregenSeatRefusal, recordPregenSeat } from "@/lib/db/pregen-offers";
 import {
   companionRoleRefusal,
   createCharacter,
@@ -169,6 +170,13 @@ export async function POST(
     if (!reused && getSheetForUser(campaignId, context.user.id) && context.campaign.gameSettings.multiCharacter === "off") {
       return Response.json({ error: "You already have a character in this campaign." }, { status: 409 });
     }
+    // One player per pregen per table (src/lib/db/pregen-offers.ts): a copy of
+    // a DM's offered pregen does not sit where another sheet plays it.
+    const library = reused ? null : getCharacterForUser(context.user.id, fromLibrary.data.libraryCharacterId);
+    const held = library ? pregenSeatRefusal(campaignId, library, context.user.id) : null;
+    if (held) {
+      return Response.json({ error: held }, { status: 409 });
+    }
     const result = instantiateIntoCampaign(
       fromLibrary.data.libraryCharacterId,
       campaignId,
@@ -178,6 +186,9 @@ export async function POST(
     );
     if ("error" in result) {
       return Response.json(result, { status: 400 });
+    }
+    if (library) {
+      recordPregenSeat(campaignId, library, context.user.id, result.id);
     }
     seatAddedSheet(context.campaign, context.user.id, result.id);
     publishPersisted(campaignId, "sheet_updated", { sheet: result });
@@ -289,6 +300,12 @@ export async function PUT(
         return refusal(judged.problems);
       }
     }
+    // A pregen someone else holds here is refused before the old sheet goes
+    // too (src/lib/db/pregen-offers.ts); the sheet given up holds nothing.
+    const held = pregenSeatRefusal(campaignId, character, context.user.id, existing.id);
+    if (held) {
+      return Response.json({ error: held }, { status: 409 });
+    }
     deleteSheetForUser(campaignId, context.user.id);
     const result = instantiateIntoCampaign(
       character.id,
@@ -306,6 +323,7 @@ export async function PUT(
       });
       return Response.json({ error: result.error }, { status: 400 });
     }
+    recordPregenSeat(campaignId, character, context.user.id, result.id);
     queueLibraryPortrait(character);
     publishReplacement(context, existing, result);
     return Response.json({ sheet: result });
@@ -330,6 +348,21 @@ export async function PUT(
     if (character.role === "companion") {
       return Response.json({ error: companionRoleRefusal(character) }, { status: 400 });
     }
+    // The copy this edit replaces is the one made from the character it
+    // edited. At a table where the player fields several, the seat may be on
+    // another of their sheets, and replacing THAT one lost it and left two
+    // copies of the edited one. A copy with no library link (an older host's
+    // sheet) falls back to the seated one, as before.
+    const replaced =
+      listSheetsForUser(campaignId, context.user.id).find(
+        (sheet) => sheet.libraryCharacterId === character.id && !sheet.isCompanion,
+      ) ?? existing;
+    // The edited sheet takes a new id; a pregen it plays stays this player's
+    // (src/lib/db/pregen-offers.ts), and one someone else holds is refused.
+    const held = pregenSeatRefusal(campaignId, character, context.user.id, replaced.id);
+    if (held) {
+      return Response.json({ error: held }, { status: 409 });
+    }
     const edited = admitSheet({
       door: "library",
       level: context.campaign.startingLevel,
@@ -343,15 +376,6 @@ export async function PUT(
     }
     edit.data.sheet = edited.sheet;
     edited.settle();
-    // The copy this edit replaces is the one made from the character it
-    // edited. At a table where the player fields several, the seat may be on
-    // another of their sheets, and replacing THAT one lost it and left two
-    // copies of the edited one. A copy with no library link (an older host's
-    // sheet) falls back to the seated one, as before.
-    const replaced =
-      listSheetsForUser(campaignId, context.user.id).find(
-        (sheet) => sheet.libraryCharacterId === character.id && !sheet.isCompanion,
-      ) ?? existing;
     if (character.level !== context.campaign.startingLevel) {
       deleteSheetById(campaignId, context.user.id, replaced.id);
       const sheet = createSheet(
@@ -361,6 +385,7 @@ export async function PUT(
         edit.data.sheet,
         character.id,
       );
+      recordPregenSeat(campaignId, character, context.user.id, sheet.id);
       // A portrait cleared to be redrawn is drawn from the edited sheet.
       if (!edit.data.sheet.portrait) {
         queueLibraryPortrait({ ...character, sheet: edit.data.sheet });
@@ -391,6 +416,7 @@ export async function PUT(
       });
       return Response.json({ error: result.error }, { status: 400 });
     }
+    recordPregenSeat(campaignId, updated, context.user.id, result.id);
     queueLibraryPortrait(updated);
     publishReplacement(context, replaced, result);
     return Response.json({ sheet: result });

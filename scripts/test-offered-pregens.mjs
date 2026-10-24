@@ -19,8 +19,8 @@ const { owedChoices } = await import("../src/lib/srd/owed-choices.ts");
 
 // A table whose DM wrote a workshop with one pregen in it, a level 1
 // fighter, and a second player beside the first.
-async function openTable({ link = true, level = 4 } = {}) {
-  const table = await openCreation({ campaign: { startingLevel: level } });
+async function openTable({ link = true, level = 4, gameSettings } = {}) {
+  const table = await openCreation({ campaign: { startingLevel: level }, ...(gameSettings ? { gameSettings } : {}) });
   const { world, campaignId } = table;
   const dm = world.owner;
   const workshop = createWorkshop(dm.id, { title: "The Sunken Keep" });
@@ -143,6 +143,83 @@ await test("a player previews the pregen at the table's level and takes the seat
   assert.equal((await table.list(table.second))[0].taken, null);
   const now = await table.take(table.second);
   assert.equal(now.status, 201, JSON.stringify(now.json));
+  table.world.close();
+});
+
+await test("a lobby edit stores the copy's sheet under a new id, and the pregen stays the player's.", async () => {
+  const table = await openTable();
+  await table.offer(true);
+  assert.equal((await table.take(table.player)).status, 201);
+  const seated = table.sheets.getSheetForUser(table.campaignId, table.player.id);
+  const copy = table.characters.getCharacter(seated.libraryCharacterId);
+  assert.equal(copy.pregenOriginId, table.pregen.id, "the copy does not name its pregen");
+
+  const sheetRoute = await table.world.route("campaigns/[campaignId]/sheet");
+  const edited = await table.as(table.player, sheetRoute, "PUT", { editLibraryCharacterId: copy.id, sheet: copy.sheet });
+  assert.equal(edited.status, 200, JSON.stringify(edited.json));
+  const after = table.sheets.getSheetForUser(table.campaignId, table.player.id);
+  assert.notEqual(after.id, seated.id, "the edit kept the sheet id, so this test proves nothing");
+  assert.equal(after.libraryCharacterId, copy.id);
+  assert.equal((await table.list(table.second))[0].taken, "other", "the edit freed the pregen");
+  assert.equal((await table.take(table.second)).status, 409);
+  assert.equal(table.sheets.getSheetForUser(table.campaignId, table.second.id), null);
+  table.world.close();
+});
+
+await test("one Thessaly per table: the copy seated again holds the pregen, and no copy or duplicate sits where another player holds it.", async () => {
+  const table = await openTable();
+  await table.offer(true);
+  const sheetRoute = await table.world.route("campaigns/[campaignId]/sheet");
+  const cloneRoute = await table.world.route("characters/[characterId]/clone");
+  const seatCopy = (user, id, method = "POST") => table.as(user, sheetRoute, method, { libraryCharacterId: id });
+  const giveUp = (user) => table.as(user, sheetRoute, "DELETE");
+
+  assert.equal((await table.take(table.player)).status, 201);
+  const copyId = table.sheets.getSheetForUser(table.campaignId, table.player.id).libraryCharacterId;
+  // Given up in the lobby, the pregen is free; the copy seated again holds it again.
+  assert.equal((await giveUp(table.player)).status, 200);
+  assert.equal((await table.list(table.second))[0].taken, null);
+  assert.equal((await seatCopy(table.player, copyId)).status, 201);
+  assert.equal((await table.list(table.second))[0].taken, "other", "the copy seated again did not hold the pregen");
+  assert.equal((await table.take(table.second)).status, 409);
+
+  // Now the second player holds it: the first player's copy is refused, at
+  // the join, the preview and a lobby switch alike, and so is a duplicate.
+  assert.equal((await giveUp(table.player)).status, 200);
+  assert.equal((await table.take(table.second)).status, 201);
+  const refused = await seatCopy(table.player, copyId);
+  assert.equal(refused.status, 409, JSON.stringify(refused.json));
+  assert.match(refused.json.error, /another player already plays at this table/);
+  assert.equal(table.sheets.getSheetForUser(table.campaignId, table.player.id), null, "the refused copy was seated");
+  const preview = await table.as(table.player, table.route.preview, "POST", { libraryCharacterId: copyId });
+  assert.equal(preview.json.preview.ok, false);
+  assert.ok(preview.json.preview.problems.some((line) => /another player already plays/.test(line)), preview.json.preview.problems.join("; "));
+
+  const duplicated = await table.as(table.player, cloneRoute, "POST", undefined, { characterId: copyId });
+  assert.equal(duplicated.status, 201, JSON.stringify(duplicated.json));
+  assert.equal(duplicated.json.character.pregenOriginId, table.pregen.id, "the duplicate forgot its pregen");
+  assert.equal((await seatCopy(table.player, duplicated.json.character.id)).status, 409);
+
+  const own = table.characters.createCharacter(table.player.id, 1, { ...LEGAL_FIGHTER, name: "Own Hero" });
+  assert.equal((await seatCopy(table.player, own.id)).status, 201);
+  const switched = await seatCopy(table.player, copyId, "PUT");
+  assert.equal(switched.status, 409, JSON.stringify(switched.json));
+  assert.equal(table.sheets.getSheetForUser(table.campaignId, table.player.id).libraryCharacterId, own.id, "the refused switch cost the player their hero");
+  table.world.close();
+});
+
+await test("a player does not field two copies of one pregen at a table that allows several heroes.", async () => {
+  const table = await openTable({ gameSettings: { multiCharacter: "one_active" } });
+  await table.offer(true);
+  assert.equal((await table.take(table.player)).status, 201);
+  const copyId = table.sheets.getSheetForUser(table.campaignId, table.player.id).libraryCharacterId;
+  const duplicate = table.characters.duplicateCharacter(table.player.id, copyId);
+  const sheetRoute = await table.world.route("campaigns/[campaignId]/sheet");
+  const refused = await table.as(table.player, sheetRoute, "POST", { libraryCharacterId: duplicate.id });
+  assert.equal(refused.status, 409, JSON.stringify(refused.json));
+  assert.match(refused.json.error, /You already play/);
+  // The copy itself is picked again, not refused.
+  assert.equal((await table.as(table.player, sheetRoute, "POST", { libraryCharacterId: copyId })).status, 201);
   table.world.close();
 });
 

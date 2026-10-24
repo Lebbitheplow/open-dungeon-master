@@ -2285,6 +2285,11 @@ function ensureSchema(db: SqliteDatabase) {
     // its workshop (src/lib/db/pregen-offers.ts). 0 keeps it the owner's
     // alone, which is every pregen filed before the toggle existed.
     ["offered_to_table", `INTEGER NOT NULL DEFAULT 0`],
+    // The DM's pregen this character is a player's copy of (taken from the
+    // hero chooser's offered pregens, or a duplicate of such a copy), or ''
+    // for every other character. It keeps one player per pregen per table
+    // however the copy is seated again (src/lib/db/pregen-offers.ts).
+    ["pregen_origin_id", `TEXT NOT NULL DEFAULT ''`],
   ]);
 
   // The romance meter was generalized into the relationship meter: one
@@ -2586,15 +2591,12 @@ function ensureSchema(db: SqliteDatabase) {
       PRIMARY KEY (user_id, kind, scope)
     );
 
-    -- The last attack against each character, for the reactions that answer
-    -- it (src/lib/dm/last-hit.ts). No foreign keys: deleteCampaign clears a
-    -- table's rows by hand. That module used to make the table on first use,
-    -- with this same definition, so a database that has it already is
-    -- unchanged.
     -- A DM's offered pregen taken by one player at one table
     -- (src/lib/db/pregen-offers.ts): one claim per pregen per campaign. The
-    -- seat it made is sheet_id; a claim whose sheet is gone (the player gave
-    -- the seat up in the lobby) frees the pregen again.
+    -- pregen is held while a sheet here plays it or a copy of it (a library
+    -- character whose pregen_origin_id names it), whatever that sheet's id
+    -- has become; sheet_id is the seat the claim last made, which still
+    -- counts when the player has since deleted the copy from their library.
     CREATE TABLE IF NOT EXISTS pregen_claims (
       campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
       character_id TEXT NOT NULL REFERENCES library_characters(id) ON DELETE CASCADE,
@@ -2604,6 +2606,11 @@ function ensureSchema(db: SqliteDatabase) {
       PRIMARY KEY (campaign_id, character_id)
     );
 
+    -- The last attack against each character, for the reactions that answer
+    -- it (src/lib/dm/last-hit.ts). No foreign keys: deleteCampaign clears a
+    -- table's rows by hand. That module used to make the table on first use,
+    -- with this same definition, so a database that has it already is
+    -- unchanged.
     CREATE TABLE IF NOT EXISTS last_hits (
       campaign_id TEXT NOT NULL,
       character_id TEXT NOT NULL,

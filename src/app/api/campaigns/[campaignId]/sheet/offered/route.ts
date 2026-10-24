@@ -5,7 +5,7 @@ import { seatPicksSchema } from "@/lib/characters/seat-picks";
 import { admitLibraryForSeat } from "@/lib/characters/seat-preview";
 import { announceMidGameJoin } from "@/lib/characters/mid-game-join";
 import { seatAddedSheet } from "@/lib/character-seat";
-import { createCharacter } from "@/lib/db/characters";
+import { createCharacter, setPregenOrigin } from "@/lib/db/characters";
 import { claimPregen, claimRefusal, offeredPregenFor } from "@/lib/db/pregen-offers";
 import { createSheet, getSheetForUser } from "@/lib/db/sheets";
 import { publishPersisted } from "@/lib/events";
@@ -67,6 +67,9 @@ export async function POST(
     return refusal(admitted.problems);
   }
   const libraryCharacter = createCharacter(context.user.id, level, admitted.sheet);
+  // The copy is the pregen's wherever it goes: seated again, edited in the
+  // lobby or duplicated, it still holds this pregen at this table.
+  setPregenOrigin(libraryCharacter.id, offer.character.id);
   const sheet = createSheet(campaignId, context.user.id, level, admitted.sheet, libraryCharacter.id);
   admitted.settle?.();
   claimPregen(campaignId, offer.character.id, context.user.id, sheet.id);

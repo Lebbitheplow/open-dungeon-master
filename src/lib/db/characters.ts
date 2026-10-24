@@ -53,6 +53,9 @@ export type LibraryCharacter = {
   // A pregen the DM offers to the players of a table made from its
   // workshop (src/lib/db/pregen-offers.ts). False for every other character.
   offered: boolean;
+  // The DM's pregen this is a player's copy of (src/lib/db/pregen-offers.ts),
+  // or "" for every other character. A duplicate of a copy keeps it.
+  pregenOriginId: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -71,6 +74,7 @@ type LibraryRow = {
   sheet_json: string;
   workshop_id: string | null;
   offered_to_table?: number | null;
+  pregen_origin_id?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -128,6 +132,7 @@ function mapCharacter(row: LibraryRow): LibraryCharacter {
     sheet: withRepairedWeights(withKeyedFeatChoices(withStoredGender(withSplitCantrips(parseJson(row.sheet_json, {} as CreateSheetInput))))),
     workshopId: row.workshop_id ?? "",
     offered: Boolean(row.workshop_id) && row.offered_to_table === 1,
+    pregenOriginId: row.pregen_origin_id ?? "",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -267,6 +272,17 @@ export function setPregenOffered(
   getDatabase()
     .prepare(`UPDATE library_characters SET offered_to_table = ?, updated_at = ? WHERE id = ?`)
     .run(offered ? 1 : 0, nowIso(), characterId);
+  return getCharacter(characterId);
+}
+
+// Marks a player's library character as their copy of a DM's offered pregen
+// (POST /sheet/offered), so the pregen stays theirs at that table however the
+// copy is seated again (src/lib/db/pregen-offers.ts). Not a field any form
+// writes: only the server, as it makes the copy.
+export function setPregenOrigin(characterId: string, pregenId: string): LibraryCharacter | null {
+  getDatabase()
+    .prepare(`UPDATE library_characters SET pregen_origin_id = ? WHERE id = ?`)
+    .run(pregenId, characterId);
   return getCharacter(characterId);
 }
 
@@ -618,6 +634,10 @@ export function listAssignmentsForCharacter(
 // The portrait travels as a path, like a prepared map's backdrop: it points
 // at a file in public/uploads that both copies can read, and duplicating the
 // image would cost megabytes to show the same face.
+//
+// A duplicate of a player's copy of a DM's offered pregen is that pregen too
+// (pregen_origin_id), so it cannot sit at a table where someone else holds
+// the pregen, or beside the copy it was made from (src/lib/db/pregen-offers.ts).
 export function duplicateCharacter(userId: string, id: string): LibraryCharacter | null {
   const source = getCharacterForUser(userId, id);
   if (!source) {
@@ -634,9 +654,9 @@ export function duplicateCharacter(userId: string, id: string): LibraryCharacter
     .prepare(
       `INSERT INTO library_characters (
          id, user_id, name, role, race, class, subclass, background, level, xp,
-         sheet_json, created_at, updated_at
+         sheet_json, pregen_origin_id, created_at, updated_at
        )
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       copyId,
@@ -650,6 +670,7 @@ export function duplicateCharacter(userId: string, id: string): LibraryCharacter
       source.level,
       source.xp,
       JSON.stringify({ ...source.sheet, name }),
+      source.pregenOriginId,
       now,
       now,
     );
