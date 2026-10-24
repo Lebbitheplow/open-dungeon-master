@@ -30,6 +30,7 @@ import {
   type Subject,
 } from "@/lib/dm/relationship-subject";
 import { hasHumanDm } from "@/lib/dm/viewer";
+import { actRunning, outwardApproval } from "@/lib/dm/scheme-logic";
 import { unknownSheetRef } from "@/lib/dm/rolls";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import type { DmTurn } from "@/lib/db/dm-turns";
@@ -72,7 +73,9 @@ export function suitorFrom(
   return {
     ...who,
     status: relationship.status,
-    approval: relationship.approval,
+    // A schemer's first move is the same move an honest suitor makes: the
+    // rules read the warmth the act shows (src/lib/dm/scheme-logic.ts).
+    approval: outwardApproval(relationship),
     romance: relationship.romance,
     committedElsewhere: others.some((entry) => entry.status !== "ended" && romanceIndex(entry.romance) >= romanceIndex("together")),
     pendingAdvance:
@@ -230,9 +233,14 @@ export function settleNpcAdvance(
     patchRelationship(relationship.id, { advanceReadyUntil: 0 });
     return `${sheet.name} and ${args.subject} are already past this step.`;
   }
+  const act = actRunning(relationship.pretense) ? relationship.pretense : null;
   patchRelationship(relationship.id, {
     romance: ADVANCE_TARGET,
-    approval: Math.max(relationship.approval, ROMANCE_THRESHOLD[ADVANCE_TARGET]),
+    // A yes settles the meter at the rung's floor; to an act, the warmth it
+    // shows, never what the schemer truly feels.
+    ...(act
+      ? { pretense: { ...act, shown: Math.max(act.shown, ROMANCE_THRESHOLD[ADVANCE_TARGET]) } }
+      : { approval: Math.max(relationship.approval, ROMANCE_THRESHOLD[ADVANCE_TARGET]) }),
     flags: addFlag(relationship.flags, ADVANCE_TARGET),
     advanceReadyUntil: 0,
     memories: addMemory(relationship.memories, {

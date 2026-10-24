@@ -140,7 +140,7 @@ export const TOOL_GROUPS: Record<ToolGroupId, { summary: string; tools: readonly
   // A pet's damage is apply_damage's (issue #471), which a table with pets
   // is offered with this group.
   pets: { summary: "familiars, pets and animal companions", tools: ["summon_pet", "pet_attack", "dismiss_pet", "apply_damage"] },
-  relationships: { summary: "bonds, romance and their endings", tools: ["relationship_beat", "romance_advance", "relationship_end"] },
+  relationships: { summary: "bonds, romance and their endings", tools: ["relationship_beat", "romance_advance", "relationship_end", "relationship_scheme"] },
   picture: { summary: "a picture of the scene", tools: ["generate_image"] },
 };
 

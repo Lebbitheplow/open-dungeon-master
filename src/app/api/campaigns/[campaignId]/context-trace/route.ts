@@ -1,5 +1,6 @@
-import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
+import { capsFor, isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
 import { getLatestDmTurnId, getDmTurn } from "@/lib/db/dm-turns";
+import { traceForViewer } from "@/lib/dm/context-budget";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,7 +11,10 @@ export const dynamic = "force-dynamic";
 // from the assembled prompt, which carries DM-only facts that are deliberate
 // spoilers (knownBy scoping in src/lib/db/facts.ts) and the secret story arc.
 // Even reporting a block's token count reveals whether a spoiler block
-// existed, so the whole route stays behind the lead gate.
+// existed, so the whole route stays behind the lead gate. For the same
+// reason the storyteller's own section (an NPC's act, who is open to
+// advances) is cut out of it, row and tokens, for the lead who steers an AI
+// table: they play a character it is kept from (src/lib/dm/viewer.ts).
 
 export async function GET(
   _request: Request,
@@ -29,5 +33,5 @@ export async function GET(
   if (!turn || !turn.contextTrace) {
     return Response.json({ trace: null, turnId: turnId ?? null });
   }
-  return Response.json({ trace: turn.contextTrace, turnId: turn.id, at: turn.updatedAt });
+  return Response.json({ trace: traceForViewer(turn.contextTrace, capsFor(context)), turnId: turn.id, at: turn.updatedAt });
 }

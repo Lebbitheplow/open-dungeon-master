@@ -2,6 +2,7 @@ import { withLanguage } from "@/lib/dm/table-language-logic";
 import { campaignLanguage, getCampaignById, getCampaignSummaryState } from "@/lib/db/campaigns";
 import { listChapters } from "@/lib/db/chapters";
 import { listActiveFacts } from "@/lib/db/facts";
+import { isStorytellerFact } from "@/lib/dm/fact-logic";
 import { getCampaignMessage } from "@/lib/db/messages";
 import { getNpcByName, listNpcs } from "@/lib/db/npcs";
 import { arcTextTimeoutMs, utilityContextTokens } from "@/lib/model-client";
@@ -51,7 +52,9 @@ async function assembleEvidence(request: LoreCheckRequest, chapterBudget: number
   const { campaignId, selection } = request;
   const evidence: string[] = [];
 
-  const facts = listActiveFacts(campaignId);
+  // The storyteller's own secrets never reach a check any member can run
+  // and read the citations of (src/lib/dm/viewer.ts, storyteller secrets).
+  const facts = listActiveFacts(campaignId).filter((fact) => !isStorytellerFact(fact.knownBy));
   const factLines = facts
     .slice(0, 40)
     .map(

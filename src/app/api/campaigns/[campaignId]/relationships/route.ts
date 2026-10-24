@@ -1,6 +1,8 @@
-import { isErrorResponse, steersStory, requireMember } from "@/lib/campaign-api";
+import { isErrorResponse, seesStorytellerSecrets, steersStory, requireMember } from "@/lib/campaign-api";
 import { listRelationships } from "@/lib/db/relationships";
+import { listSheets } from "@/lib/db/sheets";
 import { friendshipTier, TIER_LABEL } from "@/lib/dm/relationship-logic";
+import { bondTruthFor } from "@/lib/dm/scheme-logic";
 import { advancesAllowed } from "@/lib/dm/advance-tick";
 
 export const runtime = "nodejs";
@@ -12,6 +14,12 @@ export const dynamic = "force-dynamic";
 // roleplay into arithmetic. The party lead, who already sees DM-only facts
 // and the audit log, gets the number too. Content never rides SSE; clients
 // refetch on the contentless relationships_updated ephemeral.
+//
+// An NPC's act (issue 501, src/lib/dm/scheme-logic.ts) is a storyteller
+// secret: every player, the lead included, reads the warmth it shows, until
+// one of their own characters sees through it (an Insight that beat it,
+// whispered to them alone) or the truth comes out to everyone. Only whoever
+// runs the story reads the truth, the motive and who has seen through it.
 
 export async function GET(
   _request: Request,
@@ -26,6 +34,13 @@ export async function GET(
   if (context.campaign.gameSettings.relationships === "off") {
     return Response.json({ enabled: false, relationships: [] });
   }
+  const storyteller = seesStorytellerSecrets(context);
+  const sheets = listSheets(campaignId);
+  const viewer = {
+    storyteller,
+    ownedCharacterIds: sheets.filter((sheet) => sheet.userId === context.user.id).map((sheet) => sheet.id),
+  };
+  const names = new Map(sheets.map((sheet) => [sheet.id, sheet.name]));
   return Response.json({
     enabled: true,
     romanceEnabled: context.campaign.gameSettings.romance !== "off",
@@ -34,7 +49,8 @@ export async function GET(
     // where it can matter (issue 501).
     advances: advancesAllowed(context.campaign),
     relationships: listRelationships(campaignId).map((relationship) => {
-      const tier = friendshipTier(relationship.approval);
+      const truth = bondTruthFor(viewer, relationship);
+      const tier = friendshipTier(truth.approval);
       return {
         id: relationship.id,
         characterId: relationship.characterId,
@@ -48,7 +64,20 @@ export async function GET(
         apartChapters: relationship.apartChapters,
         // The three most recent remembered beats read as a short history.
         history: relationship.memories.slice(-3).map((memory) => memory.text),
-        ...(lead ? { approval: relationship.approval } : {}),
+        ...(lead ? { approval: truth.approval } : {}),
+        ...(truth.seenThrough ? { seenThrough: true } : {}),
+        ...(truth.unmasked ? { unmasked: true } : {}),
+        ...(truth.act
+          ? {
+              act: {
+                motive: truth.act.motive,
+                shown: truth.act.shown,
+                shownTier: truth.act.shownTier,
+                seenThroughBy: truth.act.seenThroughBy.map((id) => names.get(id) ?? "").filter(Boolean),
+                revealed: truth.act.revealed,
+              },
+            }
+          : {}),
       };
     }),
   });

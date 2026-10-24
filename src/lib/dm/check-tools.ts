@@ -33,6 +33,7 @@ import { obscuredFor, silencedImmunity } from "@/lib/dm/zone-rules";
 import { senseCheckFailure } from "@/lib/srd/sense-checks";
 import { sightRotPenalty } from "@/lib/srd/afflictions";
 import type { ToolError, ToolResult } from "@/lib/dm/tool-errors";
+import { npcDeceiver, seeThroughActs } from "@/lib/dm/scheme-tools";
 
 // Two exploration-pillar tools that were pure narration before: a group skill
 // check resolved by the 5e "half the group succeeds" rule, and a passive
@@ -132,7 +133,7 @@ export const checkTools: ToolDef[] = [
           },
           againstMonster: {
             type: "string",
-            description: "Out of a fight: the stat block of the creature that hides or lies (a goblin, a bandit, a spy); the server rolls its Stealth or Deception as the DC.",
+            description: "Out of a fight: the stat block of the creature that hides or lies (a goblin, a bandit, a spy), or for insight a tracked NPC's exact name; the server rolls its Stealth or Deception as the DC.",
           },
           difficulty: {
             type: "string",
@@ -413,7 +414,14 @@ export function handleCheckNotice(
   // A creature that hides or lies sets the DC with its own roll (SRD 5.1,
   // Contests; src/lib/dm/roll-gates.ts); a tie goes to the one noticing.
   let contest: ReturnType<typeof rollContest> | null = null;
-  if (args.againstEnemyId || args.againstMonster) {
+  // A tracked NPC's lie or act (issue 501), named where a stat block would
+  // be: their Deception sets the DC, from their stat block or their nature
+  // (src/lib/dm/scheme-tools.ts). No parameter of its own, so the compact
+  // core costs nothing more.
+  const deceiver = sense === "insight" && args.againstMonster && !args.againstEnemyId ? npcDeceiver(campaign, args.againstMonster, sheets) : null;
+  if (deceiver) {
+    contest = rollContest(campaign, null, deceiver, { skill: sense, hiding: true, contestSkill: "deception" });
+  } else if (args.againstEnemyId || args.againstMonster) {
     const opponent = contestOpponent(campaign, { enemyId: args.againstEnemyId, monster: args.againstMonster });
     if ("error" in opponent) {
       return opponent;
@@ -459,6 +467,7 @@ export function handleCheckNotice(
       })
     : null;
   const noticedBy: string[] = [];
+  const noticers: CharacterSheet[] = [];
   const missedBy: string[] = [];
   const shifts: string[] = [];
   for (const sheet of targets) {
@@ -511,11 +520,14 @@ export function handleCheckNotice(
     const passive = passiveScore(campaign, fresh, sense) + weather.passiveMod + sight.shift - (veiled ? 5 : 0) + delver;
     if (passive >= dc.dc) {
       noticedBy.push(sheet.name);
+      noticers.push(fresh);
     } else {
       missedBy.push(sheet.name);
     }
   }
   const anyNoticed = noticedBy.length > 0;
+  // Whoever beat an NPC's act sees through it, and only their player is told.
+  const seenThrough = deceiver && noticers.length ? seeThroughActs(campaign, turn, deceiver.name, noticers) : [];
   return {
     ok: true,
     sense,
@@ -527,7 +539,10 @@ export function handleCheckNotice(
     ...(weather.note ? { weather: weather.note } : {}),
     ...(contest ? { contest: `${contest.name} rolled ${contest.skill} ${contest.total}: that is the DC.` } : {}),
     ...(shifts.length ? { applied: shifts } : {}),
-    note: anyNoticed
+    ...(seenThrough.length ? { seenThrough } : {}),
+    note: seenThrough.length
+      ? `${seenThrough.join(" ")} Tell no one else: play the act on as before, and let those players decide what to do with it.`
+      : anyNoticed
       ? `${noticedBy.join(", ")} notice${noticedBy.length === 1 ? "s" : ""} it (passive ${sense} vs DC ${dc.dc}); ${missedBy.length ? `${missedBy.join(", ")} do not` : "everyone catches it"}. Reveal it only to those who noticed.`
       : `No one notices it: every passive ${sense} is under DC ${dc.dc}. Keep it hidden; do not describe it.`,
   };

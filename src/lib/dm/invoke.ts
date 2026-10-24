@@ -121,6 +121,7 @@ const FIELD_ALIASES: Record<string, Record<string, string>> = {
   relationship_beat: { npc: "subject" },
   romance_advance: { npc: "subject" },
   relationship_end: { npc: "subject" },
+  relationship_scheme: { npc: "subject" },
   // The handler answers to a companion's name as well as their id.
   dismiss_companion: { name: "characterId" },
 };

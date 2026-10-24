@@ -3,6 +3,8 @@
 // party's track is player-visible facts and the quest log; the DM's adds the
 // secret facts and where the world's arcs stand.
 
+import { isStorytellerFact } from "./fact-logic.ts";
+
 export type RecapFact = { subject: string; fact: string; knownBy: unknown };
 export type RecapQuest = { title: string; source: string; objectives: Array<{ text: string; done: boolean }> };
 export type RecapArc = { name: string; rung: number; rungs: string[]; status: string };
@@ -13,12 +15,15 @@ function dmOnly(knownBy: unknown): boolean {
   return knownBy === "dm";
 }
 
+// The storyteller's own secrets (src/lib/dm/viewer.ts) never ride a recap:
+// the DM's track is read by the lead who steers an AI table.
+
 export function recapMaterial(
   input: { facts: RecapFact[]; quests: RecapQuest[]; arcs: RecapArc[] },
   dmView: boolean,
 ): RecapMaterial {
   const facts = input.facts
-    .filter((fact) => dmView || !dmOnly(fact.knownBy))
+    .filter((fact) => !isStorytellerFact(fact.knownBy) && (dmView || !dmOnly(fact.knownBy)))
     .slice(-12)
     .map((fact) => `${fact.subject ? `${fact.subject}: ` : ""}${fact.fact}${dmView && dmOnly(fact.knownBy) ? " (the party does not know this)" : ""}`);
   const quests = input.quests

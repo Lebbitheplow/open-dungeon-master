@@ -149,6 +149,8 @@ import { listDmPrepNotes, listPublicCampaignNotes } from "@/lib/db/notes";
 import { listActiveFacts } from "@/lib/db/facts";
 import { consumePendingSparks, tickWorldState } from "@/lib/dm/world-tick";
 import { advanceDirectorNotes, advanceWindowOpen, tickAdvances } from "@/lib/dm/advance-tick";
+import { storytellerLinesForPrompt } from "@/lib/dm/scheme-tools";
+import { isStorytellerFact } from "@/lib/dm/fact-logic";
 import { bumpAiTurns } from "@/lib/db/advances";
 import { buildDirectorBlock } from "@/lib/dm/director-logic";
 import { takeDirectorArm } from "@/lib/db/director-arms";
@@ -779,22 +781,28 @@ async function openTurn(
       })),
       dmPrepNotes: listDmPrepNotes(campaignId, 8).map((note) => ({ title: note.title, body: note.body })),
       groundItems: describeGround(campaignId),
-      facts: listActiveFacts(campaignId).map((fact) => ({
-        category: fact.category,
-        subject: fact.subject,
-        fact: fact.fact,
-        pinned: fact.pinned,
-        knownBy: fact.knownBy,
-      })),
-      // The world's sparks, and an NPC ready to make a move (issue 501),
-      // which is said while its window is open and only to the DM.
-      directorNotes: oocOnly ? [] : [...consumePendingSparks(campaignId).map((spark) => spark.text), ...advanceDirectorNotes(campaign)],
+      // An out-of-character answer goes to the whole table, so its prompt
+      // carries none of the storyteller's own secrets (src/lib/dm/viewer.ts).
+      facts: listActiveFacts(campaignId)
+        .filter((fact) => !oocOnly || !isStorytellerFact(fact.knownBy))
+        .map((fact) => ({
+          category: fact.category,
+          subject: fact.subject,
+          fact: fact.fact,
+          pinned: fact.pinned,
+          knownBy: fact.knownBy,
+        })),
+      directorNotes: oocOnly ? [] : consumePendingSparks(campaignId).map((spark) => spark.text),
+      // The storyteller's section: who is open to advances, an NPC ready to
+      // make a move (issue 501, said while its window is open), an NPC's act.
+      storytellerLines: oocOnly ? [] : storytellerLinesForPrompt(campaign, context.sheets, advanceDirectorNotes(campaign)),
+      withholdStorytellerSecrets: oocOnly,
       directorBlock,
       npcs: npcRosterForPrompt(campaignId, { romance: romanceEnabled(campaign) }).map((npc) => ({ ...npc, world: world.npcNotes.get(npc.name) })),
       relationships:
         campaign.gameSettings.relationships === "off"
           ? []
-          : relationshipRosterForPrompt(campaignId),
+          : relationshipRosterForPrompt(campaignId, { storyteller: !oocOnly }),
       recentWhispers: listRecentWhispersForPrompt(campaignId, 10),
       pendingPlayerWhispers: pendingWhispers.map((whisper) => ({
         from: whisper.characterName,

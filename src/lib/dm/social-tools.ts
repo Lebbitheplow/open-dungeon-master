@@ -28,6 +28,7 @@ import {
   SOCIAL_CHECK_SWING,
   TIER_LABEL,
 } from "@/lib/dm/relationship-logic";
+import { outwardApproval } from "@/lib/dm/scheme-logic";
 import { publishRelationshipsUpdated } from "@/lib/dm/relationship-tools";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { TOLD_GENDER_HELP, TOLD_GENDERS, toldGender } from "@/lib/gender";
@@ -388,7 +389,9 @@ export function handleSocialCheck(
     subjectName: npc.name,
     subjectId: companion?.id ?? npc.id,
   });
-  const standingModifier = approvalRollModifier(relationship.approval);
+  // An NPC keeping up an act is swayed as the warmth they show would be
+  // (src/lib/dm/scheme-logic.ts): the roll's modifier is on the table.
+  const standingModifier = approvalRollModifier(outwardApproval(relationship));
   const rolled = rollExpression(
     standingModifier === 0
       ? resolved.expression
