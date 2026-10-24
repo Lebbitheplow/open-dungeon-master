@@ -16,6 +16,7 @@ import {
   setFloor,
   getFloor,
   combatOwnsFloor,
+  campaignSeats,
   type Campaign,
   type Floor,
   type InitiativeFloor,
@@ -43,6 +44,8 @@ import { computeSheetDerived } from "@/lib/srd";
 import { encounterCeiling, evaluateEncounter } from "@/lib/srd/encounter-math";
 import { suggestEnemies } from "@/lib/bestiary";
 import { enemyRequestSchema, resolveEnemyRequests } from "@/lib/dm/encounter-spawn";
+import { fieldSheetFoes, sheetFoeIds, turnedFoes } from "@/lib/dm/sheet-foes";
+import { hasHumanDm } from "@/lib/dm/viewer";
 import { decideAmbush, rollOpeningInitiative } from "@/lib/dm/encounter-open";
 import { heldRollUserIds } from "@/lib/dice/held-rolls";
 import { healthState } from "@/lib/bestiary/health";
@@ -295,14 +298,26 @@ function handleStartEncounter(
   if (resolved.length > 8) {
     return { error: "Too many enemies; keep encounters to 8 combatants or fewer.", retry: true };
   }
+  // A character named as a foe fights as its own sheet (issue 503,
+  // src/lib/dm/sheet-foes.ts): no enemy row, and not one of the party.
+  const rows = resolved.filter((entry) => !entry.sheetFoe);
+  const named = resolved.flatMap((entry) => (entry.sheetFoe ? [entry.sheetFoe] : []));
+  const namedIds = sheetFoeIds(named);
+  const foes = [...named, ...turnedFoes(campaign.id).filter((foe) => foe.kind === "turned" && !namedIds.has(foe.sheetId))];
+  const turnedIds = sheetFoeIds(foes);
+  sheets = sheets.filter((sheet) => !turnedIds.has(sheet.id));
 
-  // 5e budget check: refuse fights the party cannot plausibly survive.
+  // 5e budget check: refuse fights the party cannot plausibly survive. A
+  // companion that turned on the party chose its fight: only what the DM
+  // adds to it answers to the ceiling.
   const partyLevels = sheets.map((sheet) => sheet.level);
   const evaluation = evaluateEncounter(partyLevels, resolved.map((entry) => entry.stats.cr));
   const ceiling = encounterCeiling(campaign.difficulty, evaluation.thresholds.deadly);
-  if (evaluation.adjustedXp > ceiling) {
+  const staged = resolved.filter((entry) => entry.sheetFoe?.kind !== "turned");
+  const stagedXp = staged.length === resolved.length ? evaluation.adjustedXp : evaluateEncounter(partyLevels, staged.map((entry) => entry.stats.cr)).adjustedXp;
+  if (stagedXp > ceiling) {
     return {
-      error: `Too deadly for this party: adjusted XP ${evaluation.adjustedXp} vs an allowed ceiling of ${ceiling} (difficulty ${campaign.difficulty}). Use fewer or weaker enemies. Good picks for this world: ${suggestionLines(campaign, sheets)}.`,
+      error: `Too deadly for this party: adjusted XP ${stagedXp} vs an allowed ceiling of ${ceiling} (difficulty ${campaign.difficulty}). Use fewer or weaker enemies. Good picks for this world: ${suggestionLines(campaign, sheets)}.`,
       retry: true,
     };
   }
@@ -314,8 +329,8 @@ function handleStartEncounter(
 
   // One run of numbers per kind, whatever the caller numbered itself
   // ("Hunter", "Hunter 1", "Hunter 2" are Hunter 1, 2 and 3: issue 98).
-  const { names } = nameArrivals([], resolved.map((entry) => entry.name));
-  const enemies = resolved.map((entry, index) =>
+  const { names } = nameArrivals([], rows.map((entry) => entry.name));
+  const enemies = rows.map((entry, index) =>
     insertEnemy({
       encounterId: encounter.id,
       campaignId: campaign.id,
@@ -325,8 +340,6 @@ function handleStartEncounter(
       // A record for the DM alone, as an enemy's save is.
       initiative: dmRoll(campaign.id, null, "initiative", `${names[index]}: initiative`, d20Expression(entry.stats.dexMod)).total,
       stats: entry.stats,
-      // A companion come back worn arrives below its maximum (issue 503).
-      ...(entry.currentHp !== undefined ? { currentHp: entry.currentHp } : {}),
     }),
   );
   // Surprise: the ambushed side loses its first turn. Stored as ids the
@@ -353,6 +366,8 @@ function handleStartEncounter(
   saveEncounter(encounter);
   const caughtUnawares = Boolean(args.ambush) || (args.surprised !== undefined && args.surprised !== "none");
   const placed = createBattleMapForEncounter(campaign, encounter, enemies, sheets, args.distanceFeet, args.scene, args.from, caughtUnawares);
+  // The characters named as foes take their side now the board exists.
+  const against = foes.length ? fieldSheetFoes(campaign, foes) : [];
   publishEncounter(campaign.id);
   // The fight's card: the opening line in ember, "Ambush" when the party
   // was caught, with the combat sting (SceneTitle.tsx).
@@ -384,12 +399,12 @@ function handleStartEncounter(
     actor === "ai"
       ? rollOpeningInitiative(
           campaign,
-          sheets,
+          [...sheets, ...against],
           heldRollUserIds(campaign.gameSettings.dicePolicy, listMembers(campaign.id)),
           (characterId, total) => recordInitiativeRoll(campaign.id, characterId, total),
         )
       : null;
-  const asked = opening ? opening.waiting : sheets;
+  const asked = opening ? opening.waiting : [...sheets, ...against];
   const rollList = asked
     .map((sheet) => `${sheet.name} (characterId=${sheet.id})`)
     .join(", ");
@@ -406,6 +421,12 @@ function handleStartEncounter(
       ac: enemy.ac,
       hp: `${enemy.currentHp}/${enemy.maxHp}`,
     })),
+    ...(against.length
+      ? {
+          against: against.map((sheet) => ({ characterId: sheet.id, name: sheet.name, ac: sheet.ac, hp: `${sheet.currentHp}/${sheet.maxHp}` })),
+          againstNote: `${against.map((sheet) => sheet.name).join(" and ")} fight${against.length === 1 ? "s" : ""} the party as their own sheet on the foes' side: you play them, with pc_attack and the cast tools by characterId.`,
+        }
+      : {}),
     difficulty: `${evaluation.verdict} for this party`,
     ...(evaluation.verdict === "deadly" || evaluation.verdict === "beyond_deadly"
       ? { warning: "This fight can kill characters. Telegraph the danger." }
@@ -425,6 +446,15 @@ function handleStartEncounter(
           next: `Now call request_roll with kind=initiative for EACH character: ${rollList}. Combat begins once every initiative is in.`,
         }),
   };
+}
+
+// A companion turning on the party where no fight runs (issue 503,
+// src/lib/dm/turncoat.ts): the same start_encounter, its roster that
+// companion alone, the initiative rolled as the storyteller's own fight rolls
+// it where the AI runs the table.
+export function startFightAgainst(campaign: Campaign, name: string, summary: string): ToolResult {
+  const actor = hasHumanDm(campaignSeats(campaign)) ? "human_dm" : "ai";
+  return handleStartEncounter(campaign, JSON.stringify({ enemies: [{ monster: name }], summary }), listSheets(campaign.id), actor);
 }
 
 // ---- initiative collection ----

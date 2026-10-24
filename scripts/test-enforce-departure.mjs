@@ -7,12 +7,13 @@
 // composed one holds a plan and goes at its opening (the night watch of a
 // long rest, its own turn in a fight, whoever commanded it), a dutiful one
 // reports the party and its standing falls. Turn lets one confront the
-// party (until Phase 6, by leaving as a foe) or bide until the party is
-// weak. Talk and Off never depart anyone. A departure keeps the sheet; one
+// party or bide until the party is weak, and then it turns where it stands:
+// its own sheet on the foes' side, of the fight running or of one the server
+// starts; after the fight it leaves, fell, or lies at the party's mercy. Talk and Off never depart anyone. A departure keeps the sheet; one
 // who left hating the party gathers help on the agency dice, leaving
 // rumours, kept pace with the party's experience, and comes back in a
-// prepared fight budgeted under the table's ceiling, or to parley once its
-// standing has climbed back. A held plan is the storyteller's alone: the
+// prepared fight budgeted under the table's ceiling, fighting as its own
+// sheet on the foes' side, or to parley once its standing has climbed back. A held plan is the storyteller's alone: the
 // lead of an AI table reads it nowhere, a person running a table does.
 import assert from "node:assert/strict";
 import "./lib/enforce-campaign.mjs";
@@ -35,6 +36,7 @@ const { listEncounterTemplates } = await import("../src/lib/db/encounter-templat
 const { departureOpenings, intentLinesForPrompt, settleDepartures } = await import("../src/lib/dm/departure.ts");
 const { returnDirectorNotes } = await import("../src/lib/dm/companion-revenge.ts");
 const { returningCombatant } = await import("../src/lib/dm/companion-return.ts");
+const { sideOf } = await import("../src/lib/dm/combatant.ts");
 const { applyWear, slotPools } = await import("../src/lib/dm/companion-statblock.ts");
 const { advanceNpcAgency } = await import("../src/lib/dm/npc-agency.ts");
 const { deployTemplate, templateDifficulty } = await import("../src/lib/dm/encounter-templates.ts");
@@ -163,30 +165,112 @@ await test("a dutiful companion who respects the law reports the party, and its 
   assert.match(done.result.note, /The party's standing with the City Watch fell/);
 });
 
-await test("at a Turn table a bold, rash companion confronts the party: until Phase 6 she leaves as a foe", async () => {
-  const { world, row, atrocity, departure } = await table({ gameSettings: { companionConscience: "turn" }, axes: { boldness: 3, composure: -1 } });
+await test("at a Turn table a bold, rash companion confronts the party: she turns where she stands, her own sheet on the foes' side of a fight the server starts", async () => {
+  const { world, sheet, row, atrocity, departure, still } = await table({ gameSettings: { companionConscience: "turn" }, axes: { boldness: 3, composure: -1 } });
+  assert.equal(world.sheet(sheet.id).commandedBy, world.owner.id, "the solo player commands her");
   const done = await atrocity();
-  assert.equal(done.result.departed, "Turned on the party and left to raise a force against them");
-  assert.equal(departure().gone.hostile, true);
+  assert.equal(done.ok, true, done.error);
+  assert.equal(done.result.turned, "Turned on the party");
+  assert.equal(done.result.departed, undefined, "she has not left");
+  assert.match(done.result.note, /Seren turned on the party: the server has put them on the foes' side of a fight it started, them alone against the party, as their own sheet\. Nobody commands them now; you play them\./);
+  assert.ok(still(), "her own sheet fights: nothing was deleted or copied");
+  const encounter = world.encounter();
+  assert.ok(encounter, "a fight is running");
+  assert.equal(sideOf(encounter, "sheet", sheet.id), "foe");
+  assert.equal(world.enemies().length, 0, "no stat block stands in for her");
+  assert.equal(world.sheet(sheet.id).commandedBy, null, "her command is revoked");
+  assert.equal(departure().turned.response, "confront");
+  assert.equal(departure().gone, null);
   assert.equal(row().attitude, "hostile");
-  assert.match(row().agency.goals.session.text, /bring down the party Seren left/);
-  void world;
+  assert.match(lastLine(world), /Seren turns against the party\./);
+  assert.ok(!conscienceViews(world.campaign()).has("seren"), "past her conscience: no ladder while she fights them");
 });
 
-await test("biding to strike waits until the party has fallen low, then turns in the night", async () => {
-  const { world, party, row, departure, still } = await table({ gameSettings: { companionConscience: "turn" }, heroes: 3 });
+await test("biding to strike waits until the party has fallen low, then turns in the night: the fight starts at the watch", async () => {
+  const { world, party, sheet, row, departure, still } = await table({ gameSettings: { companionConscience: "turn" }, heroes: 3 });
   departuresDb.saveDeparture(row().id, { intent: { response: "bide_strike", at: 0, cause: "torture by Kael" }, gone: null });
   conscienceDb.saveConscience(row().id, { ...conscienceDb.companionConscience(row().id), held: 4 });
   await world.invoke("take_rest", { kind: "long" });
   assert.ok(still(), "three whole characters: the odds are against her");
+  assert.equal(world.encounter(), null);
   for (const hero of party) {
     world.patch(hero.id, { currentHp: 1 });
   }
   const outcomes = departureOpenings(world.campaign(), "long_rest");
   assert.equal(outcomes.length, 1);
-  assert.equal(outcomes[0].how, "Turned on the party in the night, and left to return with help");
-  assert.equal(departure().gone.response, "bide_strike");
+  assert.equal(outcomes[0].turned, true);
+  assert.equal(outcomes[0].how, "Turned on the party in the night");
+  assert.equal(departure().turned.response, "bide_strike");
+  assert.equal(departure().intent, null, "the plan is spent");
+  assert.ok(still());
+  assert.equal(sideOf(world.encounter(), "sheet", sheet.id), "foe");
+});
+
+await test("in a fight already running, a turn moves her to the foes' side on the spot and the DM plays her turn", async () => {
+  const { world, sheet, row, departure } = await table({ gameSettings: { companionConscience: "turn" }, axes: { boldness: 3, composure: -1 } });
+  world.dice([1, 20, 5]);
+  const opened = await world.invoke("start_encounter", { enemies: [{ monster: "bandit", count: 1 }] });
+  world.clearDice();
+  assert.equal(opened.ok, true, opened.error);
+  assert.equal(sideOf(world.encounter(), "sheet", sheet.id), "party");
+  const encounterId = world.encounter().id;
+  const done = await world.invoke("relationship_beat", { characterId: world.sheets().find((entry) => entry.name === "Kael").id, subject: "Seren", beat: "murder_helpless", severity: "atrocity", note: "Kael cut the bound prisoner's throat." });
+  assert.equal(done.ok, true, done.error);
+  assert.equal(done.result.turned, "Turned on the party");
+  assert.match(done.result.note, /on the foes' side of this fight/);
+  assert.equal(world.encounter().id, encounterId, "the same fight");
+  assert.equal(sideOf(world.encounter(), "sheet", sheet.id), "foe");
+  assert.equal(world.sheet(sheet.id).commandedBy, null);
+  assert.equal(departure().turned.response, "confront");
+  void row;
+});
+
+await test("after the fight a turncoat still standing leaves as a departed companion with her sheet kept, to come back with help", async () => {
+  const { world, sheet, row, atrocity, departure, still } = await table({ gameSettings: { companionConscience: "turn" }, axes: { boldness: 3, composure: -1 } });
+  await atrocity();
+  assert.ok(world.encounter());
+  const ended = await world.invoke("end_encounter", { outcome: "party_fled" });
+  assert.equal(ended.ok, true, ended.error);
+  assert.match(ended.result.turncoats, /Seren turned on the party and left to raise a force against them: the server has taken them out of the party \(their sheet is kept\)/);
   assert.equal(still(), false);
+  assert.ok(conscienceDb.departedSheet(row().id), "the row keeps her sheet");
+  assert.equal(departure().gone.response, "confront");
+  assert.equal(departure().gone.hostile, true);
+  assert.equal(departure().gone.avenging, true);
+  assert.equal(departure().turned ?? null, null);
+  assert.match(row().agency.goals.session.text, /bring down the party Seren left/);
+  void sheet;
+});
+
+await test("a turncoat beaten to 0 lies at the party's mercy after the fight, out of it and dying, and crawls away at the next long rest", async () => {
+  const { world, sheet, row, atrocity, departure, still } = await table({ gameSettings: { companionConscience: "turn" }, axes: { boldness: 3, composure: -1 } });
+  await atrocity();
+  // Struck down: dying, not dead (Phase 6's rule for a sheet on the foes' side).
+  world.patch(sheet.id, { currentHp: 0, deathSaves: { successes: 0, failures: 0, stable: false, dead: false } });
+  const ended = await world.invoke("end_encounter", { outcome: "victory" });
+  assert.equal(ended.ok, true, ended.error);
+  assert.match(ended.result.turncoats, /Seren lies beaten at 0 hit points, at the party's mercy/);
+  assert.ok(still(), "still at the table, at their mercy");
+  assert.equal(departure().turned.response, "confront");
+  assert.deepEqual(settleDepartures(world.campaign()), [], "nothing moves while she lies there");
+  const rest = await world.invoke("take_rest", { kind: "long" });
+  assert.equal(rest.ok, true, rest.error);
+  assert.equal(still(), false, "gone by morning");
+  assert.equal(departure().gone.how, "Crawled away in the night, beaten");
+  assert.equal(departure().gone.avenging, true);
+  void row;
+});
+
+await test("a turncoat killed in the fight fell: off the party, never coming back", async () => {
+  const { world, sheet, row, atrocity, departure, still } = await table({ gameSettings: { companionConscience: "turn" }, axes: { boldness: 3, composure: -1 } });
+  await atrocity();
+  world.patch(sheet.id, { currentHp: 0, deathSaves: { successes: 0, failures: 3, stable: false, dead: true } });
+  const ended = await world.invoke("end_encounter", { outcome: "victory" });
+  assert.equal(ended.ok, true, ended.error);
+  assert.equal(still(), false);
+  assert.equal(departure().gone.how, "Fell fighting the party");
+  assert.equal(departure().gone.avenging, false);
+  assert.equal(row().agency.goals.session, undefined, "no return to gather help for");
 });
 
 await test("a departed companion keeps pace with the party, gathers help with rumours, and returns at shadow level with allies inside the budget", async () => {
@@ -224,14 +308,20 @@ await test("a departed companion keeps pace with the party, gathers help with ru
   const started = await deployTemplate(world.campaign(), world.owner.id, prepared);
   world.clearDice();
   assert.equal(started.ok, true, started.error);
-  const her = world.enemies().find((enemy) => enemy.slug === `companion:${row().id}`);
-  assert.ok(her, "she fights as herself");
-  assert.equal(her.displayName, "Seren");
-  assert.ok(her.stats.traits[0].includes(`level ${leftLevel + 1} paladin`), `at shadow level: ${her.stats.traits[0]}`);
-  assert.ok(her.stats.maxHp > sheet.maxHp, "her hit points grew with her level");
+  assert.ok(!world.enemies().some((enemy) => enemy.displayName === "Seren"), "no stat block stands in for her");
+  const her = world.sheets().find((entry) => entry.name === "Seren");
+  assert.ok(her, "she fights as her own sheet");
+  assert.equal(sideOf(world.encounter(), "sheet", her.id), "foe", "on the foes' side");
+  assert.equal(her.class, "paladin");
+  assert.equal(her.level, leftLevel + 1, "at the level she kept pace to");
+  assert.ok(her.maxHp > sheet.maxHp, "her hit points grew with her level");
   assert.equal(her.currentHp, her.maxHp, "whole: she arrives at her maximum");
+  assert.equal(her.commandedBy, null, "nobody commands her: the DM plays her");
+  assert.ok(world.enemies().length >= 1, "with her allies");
+  assert.ok(world.encounter().order.some((entry) => entry.characterId === her.id) || !world.encounter().orderReady, "in the order");
   assert.equal(departure().gone.returned, true, "the return has run");
   assert.ok(!listEncounterTemplates(world.campaignId).some((entry) => entry.name === "Seren's return"), "and its prepared fight is spent");
+  assert.equal(row().attitude, "hostile");
 });
 
 await test("a companion whose standing has climbed back comes to parley, and rejoins at shadow level as herself", async () => {
@@ -301,11 +391,15 @@ await test("a solo character's equal comes back alone and worn: inside the ceili
   const started = await deployTemplate(world.campaign(), world.owner.id, prepared);
   world.clearDice();
   assert.equal(started.ok, true, started.error);
-  const her = world.enemies().find((enemy) => enemy.slug === `companion:${row().id}`);
-  assert.ok(her, "she fights as herself");
+  const her = world.sheets().find((entry) => entry.name === "Seren");
+  assert.ok(her, "she fights as her own sheet");
+  assert.equal(sideOf(world.encounter(), "sheet", her.id), "foe");
+  assert.equal(world.enemies().length, 0, "alone");
   assert.equal(her.currentHp, worn.currentHp, "she arrives worn");
   assert.equal(her.maxHp, whole.stats.maxHp, "out of her own maximum");
-  assert.equal(her.stats.cr, worn.cr, "the fight was budgeted on her worn rating");
+  const spent = Object.values(gone.wear.slotsSpent).reduce((sum, count) => sum + count, 0);
+  const used = Object.values(her.spellcasting?.slots ?? {}).reduce((sum, slot) => sum + slot.used, 0) + (her.spellcasting?.pact?.used ?? 0);
+  assert.equal(used, spent, "her slots spent as the wear says");
 });
 
 await test("one past the ceiling even worn to the floor comes in a standoff in words", async () => {

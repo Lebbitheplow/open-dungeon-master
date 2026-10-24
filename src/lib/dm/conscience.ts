@@ -2,6 +2,7 @@ import { allocateSeq, getCampaignById, listMembers, type Campaign } from "@/lib/
 import { deleteCalendarEvent, insertCalendarEvent } from "@/lib/db/calendar-events";
 import { companionConscience, companionValues, saveConscience } from "@/lib/db/companion-conscience";
 import { companionNpcFor, lastingCompanion } from "@/lib/db/companion-npcs";
+import { companionDeparture } from "@/lib/db/companion-departures";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { listRelationships } from "@/lib/db/relationships";
 import { listSheets, setCompanionCommander } from "@/lib/db/sheets";
@@ -62,9 +63,15 @@ export function souredLeaving(campaign: Pick<Campaign, "gameSettings">): SouredL
   return setting === "off" ? "dm" : setting === "talk" ? "stays" : "server";
 }
 
-// The companions a conscience applies to: lasting ones in the party.
+// The companions a conscience applies to: lasting ones in the party. One set
+// against it (turned on it, or fielded for its return: src/lib/dm/
+// turncoat.ts) is past its conscience.
 export function consciousCompanions(sheets: readonly CharacterSheet[]): CharacterSheet[] {
-  return sheets.filter((sheet) => lastingCompanion(sheet));
+  return sheets.filter((sheet) => {
+    const npc = lastingCompanion(sheet) ? companionNpcFor(sheet) : null;
+    const departure = npc ? companionDeparture(npc.id) : null;
+    return Boolean(npc) && !departure?.turned && !departure?.gone;
+  });
 }
 
 // The worst any player character's standing is with them, among the

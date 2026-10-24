@@ -19,7 +19,7 @@ export function companionDeparture(npcId: string): Departure {
 }
 
 export function saveDeparture(npcId: string, departure: Departure) {
-  const empty = !departure.intent && !departure.gone;
+  const empty = !departure.intent && !departure.gone && !departure.turned;
   getDatabase()
     .prepare(`UPDATE npcs SET departure_json = ?, updated_at = ? WHERE id = ?`)
     .run(empty ? "" : JSON.stringify(departure), nowIso(), npcId);
