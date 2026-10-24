@@ -10,7 +10,7 @@ import { GameIcon } from "@/components/ui/GameIcon";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { Listed, RowMenu, panelRow } from "@/app/campaigns/[campaignId]/PanelKit";
 import { readLoad, useLoadStatus } from "@/lib/load-state";
-import { formatRoster, TEMPLATE_NAME_MAX } from "@/lib/dm/encounter-template-logic";
+import { formatRoster, rosterSummary, TEMPLATE_NAME_MAX } from "@/lib/dm/encounter-template-logic";
 import { thresholdsForParty } from "@/lib/srd/encounter-math";
 import { targetPartyLevels, type TargetParty } from "@/lib/workshop/kind";
 import { Sheet } from "@/components/ui/Sheet";
@@ -400,7 +400,7 @@ export function DmEncounterPrepPanel({
                         ) : null}
                       </p>
                       <p className="truncate text-xs text-stone-400">
-                        {formatRoster(template.enemies).replace(/\n/g, ", ")}
+                        {rosterSummary(template.enemies, template.readout.names)}
                         {template.battlefield ? ` on ${template.battlefield}` : ""}
                       </p>
                       <DifficultyLine readout={template.readout} />

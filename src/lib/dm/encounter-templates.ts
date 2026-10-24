@@ -2,6 +2,7 @@ import type { Campaign } from "@/lib/db/campaigns";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { partyLevelsFor } from "@/lib/dm/party-budget";
 import { resolveEnemyRequests } from "@/lib/dm/encounter-spawn";
+import { resolveMonster } from "@/lib/bestiary";
 import { encounterCeiling, evaluateEncounter } from "@/lib/srd/encounter-math";
 import { invokeEngine } from "@/lib/dm/invoke";
 import type { EncounterTemplate } from "@/lib/db/encounter-templates";
@@ -23,6 +24,9 @@ export type TemplateReadout = {
   // The first monster reference the bestiary could not resolve, if any.
   unknownMonster: string | null;
   count: number;
+  // A hand-built monster's name by the ref its roster line carries
+  // ("homebrew:<id>", rosterLabel), for the rows that list the roster.
+  names: Record<string, string>;
 };
 
 // The difficulty readout the plan asks for, computed the way the engine
@@ -33,10 +37,20 @@ export function templateDifficulty(
   enemies: TemplateEnemy[],
 ): TemplateReadout {
   const levels = partyLevelsFor(campaign);
+  const authors = spellAuthorsFor(campaign);
+  const names: Record<string, string> = {};
+  for (const row of enemies) {
+    if (row.monster.startsWith("homebrew:")) {
+      const own = resolveMonster(row.monster, campaign.gameSettings, { userIds: authors });
+      if (own) {
+        names[row.monster] = own.baseName;
+      }
+    }
+  }
   const outcome = resolveEnemyRequests(
     campaign.gameSettings,
     enemies.map((row) => ({ monster: row.monster, count: row.count })),
-    spellAuthorsFor(campaign),
+    authors,
     // The table's cast, as start_encounter reads it: an NPC with a stat
     // block, a companion come back against the party (issue 503).
     campaign.id,
@@ -49,6 +63,7 @@ export function templateDifficulty(
       tooDeadly: false,
       unknownMonster: outcome.unknownMonster,
       count: 0,
+      names,
     };
   }
   const evaluation = evaluateEncounter(
@@ -63,6 +78,7 @@ export function templateDifficulty(
     tooDeadly: evaluation.adjustedXp > ceiling,
     unknownMonster: null,
     count: outcome.resolved.length,
+    names,
   };
 }
 

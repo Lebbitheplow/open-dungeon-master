@@ -3,7 +3,7 @@
 import { Plus, Swords } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
-import { formatRoster } from "@/lib/dm/encounter-template-logic";
+import { rosterSummary } from "@/lib/dm/encounter-template-logic";
 import { budgetBarGeometry, type Thresholds } from "@/app/workshop/encounters/budget-bar";
 import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
 import { GameIcon } from "@/components/ui/GameIcon";
@@ -200,7 +200,7 @@ export function EncounterRows({
                     <DifficultyPill readout={encounter.readout} />
                   </div>
                   <p className="mt-1 text-sm text-stone-300">
-                    {formatRoster(encounter.enemies).replace(/\n/g, ", ")}
+                    {rosterSummary(encounter.enemies, encounter.readout.names)}
                   </p>
                   {encounter.battlefield ? (
                     <p className="reveal truncate text-xs text-stone-500">On {encounter.battlefield}</p>

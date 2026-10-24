@@ -183,10 +183,16 @@ export function resolveMonster(
     };
   }
 
+  // A published monster of exactly this name, then the table's own monster
+  // of exactly this name, and only then the search's nearest published one:
+  // a hand-built "Brassbound Tidewarden" is not whatever the search finds first.
   const searched = searchMonsters({ q: trimmed, limit: 5 });
-  const best =
-    searched.find((entry) => textKey(entry.name) === textKey(trimmed)) ??
-    searched.find((entry) => entry.source === "open5e");
+  const exact = searched.find((entry) => textKey(entry.name) === textKey(trimmed));
+  const own = authors.length && !(exact && exact.source === "open5e") ? findTableMonster(authors, trimmed) : null;
+  if (own) {
+    return { slug: own.slug, baseName: own.draft.name, reskinName: null, stats: own.draft.stats };
+  }
+  const best = exact ?? searched.find((entry) => entry.source === "open5e");
   if (best && best.source === "open5e") {
     const cr = typeof best.data.cr === "number" ? best.data.cr : 0;
     return {
@@ -196,10 +202,20 @@ export function resolveMonster(
       stats: parseMonster(best.data, cr),
     };
   }
-
-  const own = authors.length ? findTableMonster(authors, trimmed) : null;
-  if (own) {
-    return { slug: own.slug, baseName: own.draft.name, reskinName: null, stats: own.draft.stats };
-  }
   return null;
+}
+
+// What a roster line names a monster by: its own name when that name finds
+// it again, else its ref. resolveMonster reads a published monster's name
+// before a hand-built one's, so a homebrew construct called "Bandit" written
+// by name would deploy the rulebook bandit.
+export function rosterLabel(
+  ref: string,
+  name: string,
+  setting: SettingRef,
+  options: { userId?: string; userIds?: string[] } = {},
+): string {
+  const exact = resolveMonster(ref, setting, options);
+  const byName = resolveMonster(name, setting, options);
+  return exact && byName && byName.slug === exact.slug ? name : ref;
 }

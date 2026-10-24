@@ -62,6 +62,12 @@ export function formatRoster(rows: TemplateEnemy[]): string {
     .join("\n");
 }
 
+// A roster on one line for a list row, a hand-built monster shown by its
+// name where the line carries its "homebrew:<id>" ref (the readout's names).
+export function rosterSummary(rows: TemplateEnemy[], names: Record<string, string> = {}): string {
+  return formatRoster(rows.map((row) => ({ ...row, monster: names[row.monster] ?? row.monster }))).replace(/\n/g, ", ");
+}
+
 export function rosterSize(rows: TemplateEnemy[]): number {
   return rows.reduce((total, row) => total + row.count, 0);
 }

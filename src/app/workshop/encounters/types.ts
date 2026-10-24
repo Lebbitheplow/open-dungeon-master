@@ -20,6 +20,9 @@ export type TemplateReadout = {
   tooDeadly: boolean;
   unknownMonster: string | null;
   count: number;
+  // A hand-built monster's name by its "homebrew:<id>" ref. Absent from an
+  // older host's answer.
+  names?: Record<string, string>;
 };
 
 export type PreparedEncounter = {

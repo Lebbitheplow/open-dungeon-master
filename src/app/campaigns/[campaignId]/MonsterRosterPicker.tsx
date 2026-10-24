@@ -32,7 +32,7 @@ export function MonsterRosterPicker({
 }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<
-    Array<{ slug: string; name: string; cr: number; type: string; art?: string }>
+    Array<{ slug: string; name: string; cr: number; type: string; art?: string; rosterName?: string }>
   >([]);
   // The table's setting, for the boss plate on high-rating results.
   const [genre, setGenre] = useState("");
@@ -60,6 +60,7 @@ export function MonsterRosterPicker({
               monsters: Array<{
                 draft: { name: string; stats: { cr: number; type?: string } };
                 slug: string;
+                rosterName?: string;
               }>;
               genre?: string;
             } | null,
@@ -79,6 +80,7 @@ export function MonsterRosterPicker({
                 name: monster.draft.name,
                 cr: monster.draft.stats.cr,
                 type: monster.draft.stats.type ?? "",
+                rosterName: monster.rosterName,
               }));
             setResults([...mine, ...payload.found].slice(0, 24));
           },
@@ -118,7 +120,7 @@ export function MonsterRosterPicker({
             <button
               key={entry.slug}
               type="button"
-              onClick={() => onChange(formatRoster(addToRoster(parseRoster(roster), entry.name)))}
+              onClick={() => onChange(formatRoster(addToRoster(parseRoster(roster), entry.rosterName ?? entry.name)))}
               className={cn(chip, "border-stone-700 text-stone-400 hover:text-amber-100")}
             >
               <Plus className="mr-0.5 inline size-2.5" />

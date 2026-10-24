@@ -2,7 +2,8 @@ import { z } from "zod";
 import { isErrorResponse, requireDm } from "@/lib/campaign-api";
 import { documentTitle, getEntryDetail, searchMonsters } from "@/lib/content";
 import { rulebookPageIdFor } from "@/lib/rulebook/catalog-rows";
-import { reskinFor } from "@/lib/bestiary";
+import { reskinFor, rosterLabel } from "@/lib/bestiary";
+import { tableAuthors } from "@/lib/db/homebrew";
 import { normalizeCreatureType, parseMonster } from "@/lib/bestiary/statblock";
 import {
   checkMonsterDraft,
@@ -61,8 +62,15 @@ export async function GET(
       }))
     : [];
 
+  // A search also says what a roster line should call each of the DM's own
+  // monsters (MonsterRosterPicker): the ref when its name would deploy a
+  // published monster of the same name.
+  const authors = { userIds: tableAuthors(campaignId) };
+  const monsters = listHomebrewMonsters(context.user.id).map((monster) =>
+    query.q ? { ...monster, rosterName: rosterLabel(monster.slug, monster.draft.name, context.campaign.gameSettings, authors) } : monster,
+  );
   return Response.json({
-    monsters: listHomebrewMonsters(context.user.id),
+    monsters,
     found,
     // For the thumbnails: a high-rating monster draws this setting's boss
     // plate (src/lib/placeholders.ts).

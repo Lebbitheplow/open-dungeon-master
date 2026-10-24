@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { isErrorResponse, requirePrepAuthority } from "@/lib/campaign-api";
-import { resolveMonster } from "@/lib/bestiary/index";
+import { rosterLabel } from "@/lib/bestiary/index";
 import { getEncounterTemplate, insertEncounterTemplate, updateEncounterTemplate } from "@/lib/db/encounter-templates";
 import { tableAuthors } from "@/lib/db/homebrew";
 import { worldEntities } from "@/lib/db/world-forge";
@@ -47,9 +47,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ cam
   }
   const setting = context.campaign.gameSettings;
   const authors = { userIds: tableAuthors(campaignId) };
-  const exact = resolveMonster(bound.ref, setting, authors);
-  const byName = resolveMonster(bound.name, setting, authors);
-  const label = exact && byName && byName.slug === exact.slug ? bound.name : bound.ref;
+  const label = rosterLabel(bound.ref, bound.name, setting, authors);
 
   if (parsed.data.templateId) {
     const template = getEncounterTemplate(parsed.data.templateId);
