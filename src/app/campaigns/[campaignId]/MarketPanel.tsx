@@ -12,7 +12,7 @@ import { appConfirm } from "@/components/ui/ConfirmDialog";
 import { cn } from "@/lib/cn";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { formatCopper, formatPrice } from "@/lib/srd/currency";
-import { KitButton, LoadFailed, panelField, PanelLoading, SettingToggle } from "./PanelKit";
+import { KitButton, LoadFailed, panelField, PanelLoading, RowMenu, SettingToggle } from "./PanelKit";
 import { MarketShopEditor, type Named } from "./MarketShopEditor";
 import type { StockLine } from "@/lib/dm/shop-logic";
 import type { MarketRequest } from "@/lib/dm/table-tabs";
@@ -136,6 +136,9 @@ export function MarketPanel({
   const headingRef = useRef<HTMLHeadingElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const [spotlight, setSpotlight] = useState("");
+  // Prices are the viewer's own (a haggle they were at the counter for), so
+  // a Play as switch to another of their characters reads the shops again.
+  const viewerId = mySheet?.id ?? "";
 
   useEffect(() => {
     let cancelled = false;
@@ -158,7 +161,7 @@ export function MarketPanel({
     return () => {
       cancelled = true;
     };
-  }, [campaignId, refreshKey, reload, settle, isDm]);
+  }, [campaignId, refreshKey, reload, settle, isDm, viewerId]);
 
   // Deferred a tick, as the hero page's heading is: the panel paints the
   // shops on the render that loads them, after this effect is scheduled.
@@ -331,14 +334,17 @@ export function MarketPanel({
         const canHaggle = Boolean(mySheet && !shop.haggledBy.includes(mySheet.id));
         // A keeper falls for a lie once: after one Deception here, nobody may try another.
         const canDeceive = canHaggle && !shop.haggles.some((deal) => deal.skill === "deception");
+        // The haggle's skills: the menu beside Haggle and the shop's own
+        // right-click or long-press menu offer the same list.
+        const haggleItems: ContextMenuItem[] = canHaggle
+          ? [
+              { id: "haggle", label: "Haggle (Persuasion)", glyph: "skill-persuasion", disabled: Boolean(busy), onSelect: () => void counter(shop, "haggle") },
+              { id: "haggle-intimidation", label: "Haggle by Intimidation (a bad failure: two steps up)", glyph: "skill-intimidation", disabled: Boolean(busy), onSelect: () => void counter(shop, "haggle", "", "intimidation") },
+              ...(canDeceive ? [{ id: "haggle-deception", label: "Haggle by Deception (works once per shop)", glyph: "skill-deception", disabled: Boolean(busy), onSelect: () => void counter(shop, "haggle", "", "deception") }] : []),
+            ]
+          : [];
         const shopItems: ContextMenuItem[] = [
-          ...(canHaggle
-            ? [
-                { id: "haggle", label: "Haggle (Persuasion)", glyph: "skill-persuasion", disabled: Boolean(busy), onSelect: () => void counter(shop, "haggle") },
-                { id: "haggle-intimidation", label: "Haggle by Intimidation (a bad failure: two steps up)", glyph: "skill-intimidation", disabled: Boolean(busy), onSelect: () => void counter(shop, "haggle", "", "intimidation") },
-                ...(canDeceive ? [{ id: "haggle-deception", label: "Haggle by Deception (works once per shop)", glyph: "skill-deception", disabled: Boolean(busy), onSelect: () => void counter(shop, "haggle", "", "deception") }] : []),
-              ]
-            : []),
+          ...haggleItems,
           ...(canPrep ? [{ id: "edit", label: "Edit the shop and its shelf", glyph: "ui-edit", separated: canHaggle, onSelect: () => setEditing(shop.id) }] : []),
           ...(canPrep ? [{ id: "close", label: `Close ${shop.name}`, glyph: "ui-lock", tone: "danger" as const, onSelect: () => void close(shop) }] : []),
         ];
@@ -390,9 +396,19 @@ export function MarketPanel({
                 </p>
               </div>
               {canHaggle ? (
-                <KitButton disabled={Boolean(busy)} busy={busy === `${shop.id}:haggle:`} onClick={() => void counter(shop, "haggle")}>
-                  Haggle
-                </KitButton>
+                <>
+                  <KitButton disabled={Boolean(busy)} busy={busy === `${shop.id}:haggle:`} onClick={() => void counter(shop, "haggle")}>
+                    Haggle
+                  </KitButton>
+                  {/* One tap haggles by Persuasion; this door opens the other
+                      skills, the same list the shop's own menu holds. */}
+                  <RowMenu
+                    items={haggleItems}
+                    label={`Haggle at ${shop.name}`}
+                    trigger={{ label: "Haggle with another skill", icon: <ChevronDown className="size-4" aria-hidden="true" /> }}
+                    className="-ml-1.5"
+                  />
+                </>
               ) : null}
               {canPrep ? (
                 <>
@@ -408,8 +424,8 @@ export function MarketPanel({
             {canHaggle ? (
               <p data-haggle-rules="" className="text-pretty text-[11px] leading-snug text-stone-500">
                 Haggling is a Persuasion check against DC {shop.haggleDc}: win and your prices drop a step, fail and they stay where they were, fail by 5 or
-                more and they rise a step. One try each, and the price you get is yours, not the whole party&apos;s. Intimidation and Deception are on the
-                shop&apos;s menu.
+                more and they rise a step. One try each, and the price you get is yours, not the whole party&apos;s. The menu beside Haggle offers
+                Intimidation and Deception instead.
               </p>
             ) : mySheet && shop.yourHaggle !== null ? (
               <p data-haggle-rules="" className="text-[11px] leading-snug text-stone-500">

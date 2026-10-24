@@ -58,16 +58,28 @@ const menuItem =
   "flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm text-stone-300 outline-none data-[highlighted]:bg-stone-800 data-[highlighted]:text-amber-100 data-[disabled]:cursor-default data-[disabled]:opacity-40";
 
 // The visible door to the menu a row also answers a right-click or a long
-// press with: both take the same item list, so neither can drift.
-export function RowMenu({ items, label, className }: { items: ContextMenuItem[]; label: string; className?: string }) {
+// press with: both take the same item list, so neither can drift. A door
+// that opens one action's other ways (Haggle's other skills) names itself
+// with `trigger` and may wear its own icon.
+export function RowMenu({
+  items,
+  label,
+  className,
+  trigger,
+}: {
+  items: ContextMenuItem[];
+  label: string;
+  className?: string;
+  trigger?: { label: string; icon?: ReactNode };
+}) {
   if (!items.length) {
     return null;
   }
   return (
     <DropdownMenu.Root>
       <DropdownMenu.Trigger asChild>
-        <button type="button" aria-label={`Actions for ${label}`} className={cn(TONE.icon, "pk-always shrink-0", className)}>
-          <MoreVertical className="size-4" aria-hidden="true" />
+        <button type="button" aria-label={trigger?.label ?? `Actions for ${label}`} className={cn(TONE.icon, "pk-always shrink-0", className)}>
+          {trigger?.icon ?? <MoreVertical className="size-4" aria-hidden="true" />}
         </button>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>

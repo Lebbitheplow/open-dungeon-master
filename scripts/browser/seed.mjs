@@ -504,13 +504,17 @@ const marketTable = campaigns.createCampaign(world.owner.id, {
   maxPlayers: 4,
   startingLevel: 3,
   difficulty: "normal",
-  gameSettings: { ttsEnabled: false },
+  // Two characters of the lead's own, so a Play as switch shows the Market
+  // reading the new one's prices (shop-browse).
+  gameSettings: { ttsEnabled: false, multiCharacter: "one_active" },
 });
 campaigns.setCampaignStatus(marketTable.id, "active");
-sheets.createSheet(marketTable.id, world.owner.id, 3, heroInput({ name: "Wren Ashby", class: "fighter", level: 3 }));
+const marketHero = sheets.createSheet(marketTable.id, world.owner.id, 3, heroInput({ name: "Wren Ashby", class: "fighter", level: 3 }));
+const marketSecond = sheets.createSheet(marketTable.id, world.owner.id, 3, heroInput({ name: "Tamsin Ashby", class: "rogue", level: 3 }));
 {
   const { upsertCurrentLocation } = await import("../../src/lib/db/locations.ts");
   const { handleOpenShop } = await import("../../src/lib/dm/shop-tools.ts");
+  const { listShops, updateShop } = await import("../../src/lib/db/shops.ts");
   upsertCurrentLocation({ campaignId: marketTable.id, name: "Oakhollow" });
   messages.insertCampaignMessage({
     campaignId: marketTable.id,
@@ -523,6 +527,11 @@ sheets.createSheet(marketTable.id, world.owner.id, 3, heroInput({ name: "Wren As
   if (!opened.ok) {
     throw new Error(`could not open ${MARKET_SHOP}: ${JSON.stringify(opened)}`);
   }
+  // Tamsin already leaned on Brann and pushed too hard: an Intimidation
+  // that failed badly, two steps up for her alone, a price Wren's one
+  // Persuasion try can never land on.
+  const forge = listShops(marketTable.id).find((entry) => entry.name === MARKET_SHOP);
+  updateShop(forge.id, { haggles: [{ ids: [marketSecond.id], steps: 2, skill: "intimidation" }] });
 }
 
 for (const user of [world.owner, player, ...tourAccounts]) {
@@ -1384,6 +1393,8 @@ const ids = {
   quietId: quiet.id,
   marketTableId: marketTable.id,
   marketShop: MARKET_SHOP,
+  marketHeroId: marketHero.id,
+  marketSecondId: marketSecond.id,
   quietTitle: QUIET_TITLE,
   quietLoreTurnId,
   tourTableId: tourTable.id,
