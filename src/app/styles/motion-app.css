@@ -545,9 +545,13 @@ html[data-effects="low"] .dictate-dot { animation: none; }
   .advance-card { animation: advance-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
   .advance-shell[data-leaving] { animation: advance-settle 160ms cubic-bezier(0.2, 0.8, 0.2, 1) both; overflow: hidden; pointer-events: none; }
   .romance-rung-fill { transition: width 400ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+  /* A companion's conscience (issue 503): the marker slides one rung when
+     the server moves it, and takes the new rung's colour as it goes. */
+  .conscience-marker { transition: transform 360ms cubic-bezier(0.2, 0.8, 0.2, 1), background-color 360ms linear; }
 }
 @media (prefers-reduced-motion: reduce) {
   .advance-card { animation: advance-fade-in 220ms linear backwards; }
   .advance-shell[data-leaving] { animation: advance-fade-out 160ms linear both; }
   .romance-rung-fill { transition: opacity 400ms linear; }
+  .conscience-marker { transition: background-color 360ms linear; }
 }

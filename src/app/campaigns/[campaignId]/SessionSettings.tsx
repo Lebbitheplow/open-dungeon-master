@@ -34,6 +34,7 @@ export function SessionSettings({
   steersStory,
   isDm,
   canEnd = false,
+  lastingCompanions = false,
 }: {
   campaign: {
     id: string;
@@ -54,6 +55,8 @@ export function SessionSettings({
   isDm: boolean;
   // The campaign owner or the DM proper: who the PATCH route lets end it.
   canEnd?: boolean;
+  // A lasting AI companion can travel with this party (issue 503).
+  lastingCompanions?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [prep, setPrep] = useState<ImportSelection>(EMPTY_SELECTION);
@@ -133,6 +136,7 @@ export function SessionSettings({
             settings={campaign.gameSettings}
             steersStory={steersStory}
             solo={campaign.maxPlayers <= 1}
+            lastingCompanions={lastingCompanions}
           />
         </div>
       ) : null}

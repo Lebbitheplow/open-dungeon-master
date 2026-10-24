@@ -40,6 +40,9 @@ export type TableGroupContext = {
   narrationOff: boolean;
   // The server's own rule for rolled stats, in words.
   statsRule: string;
+  // A lasting AI companion can travel with this party (src/lib/schemas/
+  // game-settings.ts resolveCompanionMode is full, or one already does).
+  lastingCompanions?: boolean;
 };
 
 const ORDER: TableGroupId[] = [
@@ -81,6 +84,14 @@ const ALLY_WORDS = { auto: "automatic", full: "party members and guests", guests
 export function alliesShown(settings: GameSettings): boolean {
   return settings.dmMode !== "human" || settings.companions === "off" || settings.companions === "guests";
 }
+
+// Companion conscience (issue 503) shows only where it can matter: bonds on
+// and a lasting companion possible at this table (settings rule 4).
+export function conscienceShown(settings: GameSettings, lastingCompanions: boolean): boolean {
+  return settings.relationships !== "off" && lastingCompanions;
+}
+
+const CONSCIENCE_WORDS = { off: "off", talk: "talk only", leave: "may leave", turn: "may turn" } as const;
 
 function title(id: TableGroupId, settings: GameSettings): string {
   const aiNarrates = settings.dmMode !== "human";
@@ -186,7 +197,9 @@ export function tableGroupSummary(id: TableGroupId, settings: GameSettings, cont
       return off.length ? `Off: ${off.map((stage) => stage.label.toLowerCase()).join(", ")}` : "Everything on, as most tables keep it";
     }
     case "bonds":
-      return bondsSummary(settings);
+      return conscienceShown(settings, context.lastingCompanions ?? false)
+        ? `${bondsSummary(settings)} · companions ${CONSCIENCE_WORDS[settings.companionConscience ?? "leave"]}`
+        : bondsSummary(settings);
     case "players":
       return [
         `joining mid-game ${settings.midGameJoinOpen ? "open" : "closed"}`,
@@ -224,7 +237,7 @@ const KEYWORDS: Record<TableGroupId, string> = {
   safety: "safety x-card lines veils boundaries content tone strictness dc family mature",
   ai: "ai story setup plot outcome check prose narration length short rich verbose style notes voice pacing living world simulation allies companions guests party members assist monsters cover",
   memory: "memory history compaction recall retrieval rules lore chapter summaries stages model advanced",
-  bonds: "bonds relationships standing romance",
+  bonds: "bonds relationships standing romance conscience companions values deeds ultimatum leave turn",
   players: "players permissions mid-game joining invite held responses floor item offers loot gold vitals damage healing approvals confirm",
   console: "dm reminders remind nudge beats record",
   board: "battle board draw drawing enemy intent",

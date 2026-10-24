@@ -8,6 +8,7 @@ import { InfoButton } from "@/components/ui/InfoDialog";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { cn } from "@/lib/cn";
 import { PanelError, PanelLoading, SettingToggle } from "./PanelKit";
+import { ConscienceLadder, type ConscienceView } from "./ConscienceLadder";
 import { ROMANCE_STAGES, type FriendshipTier, type RomanceStage } from "@/lib/dm/relationship-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
@@ -20,6 +21,10 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 // (issue 501): the one place a player says an NPC may make the first move.
 // Theirs alone, shown only where advances can happen, and never shown to
 // anyone else.
+//
+// A lasting companion's row also carries its conscience (issue 503): the
+// ladder from content to the breaking point and any ultimatum, which every
+// seat sees, since the companion says them aloud.
 
 type RelationshipView = {
   id: string;
@@ -34,6 +39,8 @@ type RelationshipView = {
   apartChapters: number;
   history: string[];
   approval?: number;
+  // A lasting companion's conscience rung and any ultimatum (issue 503).
+  conscience?: ConscienceView;
 };
 
 // Warm for regard, cold for its absence; mirrors how the tiers read.
@@ -144,6 +151,7 @@ function BondRow({ bond }: { bond: RelationshipView }) {
         ) : null}
       </div>
       {bond.romance !== "none" ? <RomanceRung stage={bond.romance} ended={bond.status === "ended"} /> : null}
+      {bond.conscience ? <ConscienceLadder name={bond.subjectName} conscience={bond.conscience} /> : null}
       {bond.history.length ? (
         <p className="reveal mt-1 text-xs leading-5 text-stone-400">
           {bond.history[bond.history.length - 1]}

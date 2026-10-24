@@ -693,6 +693,12 @@ export function SidePanelRouter({
           steersStory={steersStory}
           isDm={adjudicates}
           canEnd={canEndCampaign}
+          lastingCompanions={
+            campaign.gameSettings
+              ? resolveCompanionMode(campaign.gameSettings, partySize, humanDmTable) === "full" ||
+                sheets.some((sheet) => sheet.isCompanion && sheet.companionKind !== "guest" && !sheet.summon)
+              : false
+          }
         />
       </Suspense>
     );
