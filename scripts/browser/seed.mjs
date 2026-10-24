@@ -724,6 +724,7 @@ for (const viewport of ["desktop", "phone"]) {
 // re-rims from the party's colour to the foes'.
 const TURNCOAT_TITLE = "Turncoat Table";
 const turncoat = {};
+const dominate = {};
 {
   const { invokeEngine } = await import("../../src/lib/dm/invoke.ts");
   const maps = await import("../../src/lib/db/battle-maps.ts");
@@ -811,6 +812,76 @@ const turncoat = {};
       elementals: elementals.map((elemental) => ({ id: elemental.id, name: elemental.name })),
     };
   }
+
+  // Dominate, seeded straight onto the rows (no save dice). At the Dominate
+  // Table, which the lead runs, the player's Sela holds an ogre by Dominate
+  // Monster (it fights for the party) and an enemy mage holds the player's
+  // Bran by Dominate Person (he fights against it). At the Held Table, which
+  // the player runs, a mage holds the lead's own Tamsin.
+  const fightOn = async (table, dmUserId, enemies) => {
+    const started = await invokeEngine(campaigns.getCampaignById(table.id), { kind: "human", userId: dmUserId }, { name: "start_encounter", args: { enemies } });
+    if (!started.ok) {
+      throw new Error(`the ${table.title}'s fight did not start: ${started.error}`);
+    }
+    const encounter = encounterRows.getActiveEncounter(table.id);
+    const board = maps.getBattleMapForEncounter(encounter.id);
+    maps.setBattleMapTerrain(board.id, ".".repeat(board.width * board.height));
+    getDatabase().prepare("UPDATE battle_maps SET doors_json = '{}' WHERE id = ?").run(board.id);
+    // One row across the board's middle, two squares apart.
+    const tokens = maps.listTokens(board.id);
+    const [cx, cy] = [Math.floor(board.width / 2), Math.floor(board.height / 2)];
+    tokens.forEach((token, index) => maps.moveToken(token.id, cx - (tokens.length - 1) + index * 2, cy, 0));
+    const place = (refId, dx) => maps.moveToken(maps.getTokenByRef(board.id, refId).id, cx + dx, cy, 0);
+    return { rows: encounterRows.listEnemies(encounter.id), place };
+  };
+  const enemyNamed = (rows, slug) => rows.find((enemy) => enemy.slug === slug) ?? (() => { throw new Error(`no ${slug} in the fight`); })();
+  const charmBy = (spell, source) => ({ conditions: ["charmed"], conditionMeta: { charmed: { spell, source } } });
+  for (const viewport of ["desktop", "phone"]) {
+    const table = campaigns.createCampaign(world.owner.id, {
+      title: `Dominate Table (${viewport})`,
+      description: "An ogre that answers to the wrong voice, and a friend who no longer answers to his own.",
+      theme: "high-fantasy",
+      maxPlayers: 6,
+      startingLevel: 9,
+      difficulty: "normal",
+      gameSettings: { ttsEnabled: false, dmMode: "human" },
+    });
+    campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+    campaigns.setCampaignStatus(table.id, "active");
+    const sela = sheets.createSheet(table.id, player.id, 9, heroInput({ name: "Sela Morrow", class: "wizard", level: 9, maxHp: 50 }));
+    const bran = sheets.createSheet(table.id, player.id, 9, heroInput({ name: "Bran Holt", class: "fighter", level: 9, maxHp: 80 }));
+    const { rows, place } = await fightOn(table, world.owner.id, [{ monster: "ogre", count: 1 }, { monster: "mage", count: 1 }]);
+    const [ogre, mage] = [enemyNamed(rows, "ogre"), enemyNamed(rows, "mage")];
+    // The ogre in the board's middle, where a phone's camera sees it.
+    [[sela.id, -4], [ogre.id, -1], [bran.id, 2], [mage.id, 4]].forEach(([refId, dx]) => place(refId, dx));
+    const ogreCharm = charmBy("Dominate Monster", sela.id);
+    encounterRows.patchEnemyConditions(ogre.id, ogreCharm.conditions, ogreCharm.conditionMeta);
+    sheets.patchSheet(bran.id, charmBy("Dominate Person", mage.id));
+    const held = campaigns.createCampaign(player.id, {
+      title: `Held Table (${viewport})`,
+      description: "A mage's voice in Tamsin's head.",
+      theme: "high-fantasy",
+      maxPlayers: 6,
+      startingLevel: 9,
+      difficulty: "normal",
+      gameSettings: { ttsEnabled: false, dmMode: "human" },
+    });
+    campaigns.joinByInviteCode(world.owner.id, campaigns.getCampaignById(held.id).inviteCode);
+    campaigns.setCampaignStatus(held.id, "active");
+    const tamsin = sheets.createSheet(held.id, world.owner.id, 9, heroInput({ name: "Tamsin Vale", class: "fighter", level: 9, maxHp: 80 }));
+    sheets.createSheet(held.id, world.owner.id, 9, heroInput({ name: "Corra Wynd", class: "cleric", level: 9, maxHp: 60 }));
+    const { rows: heldRows } = await fightOn(held, player.id, [{ monster: "mage", count: 1 }]);
+    sheets.patchSheet(tamsin.id, charmBy("Dominate Person", enemyNamed(heldRows, "mage").id));
+    dominate[viewport] = {
+      id: table.id,
+      ogre: { id: ogre.id, name: ogre.displayName },
+      mage: { id: mage.id, name: mage.displayName },
+      sela: { id: sela.id, name: sela.name },
+      bran: { id: bran.id, name: bran.name },
+      heldId: held.id,
+      tamsin: { id: tamsin.id, name: tamsin.name },
+    };
+  }
 }
 
 const ids = {
@@ -856,6 +927,7 @@ const ids = {
   commandTableId: commandTable.id,
   courting,
   turncoat,
+  dominate,
   pip: pip.id,
   // Every campaign a scenario opens, by id, for the app's home tiles.
   titles: {
@@ -874,6 +946,7 @@ const ids = {
     ...Object.fromEntries(Object.entries(wardrobe).map(([viewport, id]) => [id, `Wardrobe (${viewport})`])),
     ...Object.fromEntries(Object.entries(directed).map(([viewport, table]) => [table.id, `Directed Table (${viewport})`])),
     ...Object.fromEntries(Object.entries(turncoat).map(([viewport, table]) => [table.id, `${TURNCOAT_TITLE} (${viewport})`])),
+    ...Object.fromEntries(Object.entries(dominate).flatMap(([viewport, table]) => [[table.id, `Dominate Table (${viewport})`], [table.heldId, `Held Table (${viewport})`]])),
   },
   systemLine,
   oocQuestion,
