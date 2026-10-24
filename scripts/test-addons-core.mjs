@@ -25,7 +25,7 @@ const os = await import("node:os");
 const fsp = await import("node:fs/promises");
 const nodePath = (await import("node:path")).default;
 const { cleanSettings, effectiveSettings, missingRequiredSettings, setupSettingKeys, downloadApplies } = await import("../src/lib/addons/settings.ts");
-const { boardSnapshot, boardFx, readViewMessage, fileForRequest } = await import("../src/lib/addons/board-bridge.ts");
+const { boardSnapshot, boardFx, readViewMessage, fileForRequest, createAnchorStore } = await import("../src/lib/addons/board-bridge.ts");
 const { normalizeMapAddonView } = await import("../src/lib/addons/map-view.ts");
 const { withManifestDefaults } = await import("../src/lib/addons/import-defaults.ts");
 const { sniffImage } = await import("../src/lib/addons/sniff.ts");
@@ -592,6 +592,34 @@ await test("anchors: fractions of the frame, within reason, for a bounded number
   assert.equal(readViewMessage({ odm: 1, type: "anchors", tokens: { "<b>": [0.5, 0.4, 0.6] } }), null);
   const many = Object.fromEntries(Array.from({ length: 301 }, (_, index) => [`t${index}`, [0.1, 0.1, 0.2]]));
   assert.equal(readViewMessage({ odm: 1, type: "anchors", tokens: many }), null);
+});
+
+await test("the anchor store tells its readers only when a figure moved", () => {
+  const store = createAnchorStore();
+  let told = 0;
+  const stop = store.subscribe(() => { told += 1; });
+  store.set({ t1: [0.5, 0.4, 0.6], t2: [0.1, 0.1, 0.2] });
+  assert.equal(told, 1);
+  const kept = store.get("t1");
+  assert.deepEqual(kept, [0.5, 0.4, 0.6]);
+  // The same places in a new report: nobody is told, and t1 keeps its identity.
+  store.set({ t1: [0.5, 0.4, 0.6], t2: [0.1, 0.1, 0.2] });
+  assert.equal(told, 1);
+  assert.equal(store.get("t1"), kept);
+  // One figure moved: readers are told, and the one that stayed keeps its identity.
+  store.set({ t1: [0.5, 0.4, 0.6], t2: [0.3, 0.1, 0.2] });
+  assert.equal(told, 2);
+  assert.equal(store.get("t1"), kept);
+  assert.deepEqual(store.get("t2"), [0.3, 0.1, 0.2]);
+  // A figure gone, or another in its place, is a change too.
+  store.set({ t1: [0.5, 0.4, 0.6] });
+  assert.equal(told, 3);
+  assert.equal(store.get("t2"), undefined);
+  store.set({ t3: [0.5, 0.4, 0.6] });
+  assert.equal(told, 4);
+  stop();
+  store.set({ t3: [0.9, 0.4, 0.6] });
+  assert.equal(told, 4, "an unsubscribed reader hears nothing");
 });
 
 await test("stored view data is normalized: our own paths only", () => {

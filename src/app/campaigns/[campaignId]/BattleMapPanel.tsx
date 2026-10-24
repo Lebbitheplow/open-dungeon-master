@@ -75,9 +75,9 @@ import type { StageToken } from "@/app/campaigns/[campaignId]/BoardStage";
 import type { TokenIntent } from "@/lib/battlemap/intent";
 import { familyIconPath } from "@/lib/icons";
 import { TabletopOrder } from "@/app/campaigns/[campaignId]/CinematicParts";
-import { AddonBoardView, postTo } from "@/app/campaigns/[campaignId]/AddonBoardView";
+import { AddonBoardView, postTo, useAnchor } from "@/app/campaigns/[campaignId]/AddonBoardView";
 import { AddonViewSwitch, boardViewKey, useBoardView, useBoardViewOptions } from "@/app/campaigns/[campaignId]/AddonViewSwitch";
-import type { Anchor, BoardLook, CameraControl, ViewCameraState } from "@/lib/addons/board-bridge";
+import { createAnchorStore, type Anchor, type AnchorStore, type BoardLook, type CameraControl, type ViewCameraState } from "@/lib/addons/board-bridge";
 
 // The tactical battle map tab.
 //
@@ -109,6 +109,14 @@ type Prompt = {
   kind: "damage" | "heal" | "condition";
   tokenId: string;
 };
+
+// The plate and the action ring sit on the figure an addon's view drew. The
+// anchor is read here, not in the panel, so a camera sweep in the view
+// re-renders these and nothing else.
+function Anchored({ store, tokenId, children }: { store: AnchorStore | null; tokenId: string; children: (anchor: Anchor | undefined) => ReactNode }) {
+  const anchor = useAnchor(store, tokenId);
+  return <>{children(anchor)}</>;
+}
 
 export function BattleMapPanel({
   campaignId,
@@ -186,8 +194,6 @@ export function BattleMapPanel({
   // Whether the panel is on screen; the sky's weather rests while it is not.
   visible?: boolean;
 }) {
-  // The board's picture, painted on this device from the terrain it was sent.
-  const painted = usePaintedMap(view, genre);
   // A face for every token: the character's plate by lineage and class (an
   // uploaded portrait overrides it in the grid), a monster's plate by creature
   // type and setting. The DM's ad hoc NPCs and props keep their initial.
@@ -232,10 +238,9 @@ export function BattleMapPanel({
     for (const enemy of encounter?.enemies ?? []) byRef.set(enemy.id, { creature: { type: enemy.type, slug: enemy.slug ?? "", cr: enemy.cr } });
     return byRef;
   }, [sheets, encounter?.enemies]);
-  const [anchors, setAnchors] = useState<Record<string, Anchor>>({});
-  const [enlargedAnchors, setEnlargedAnchors] = useState<Record<string, Anchor>>({});
+  const [anchorStores] = useState(() => ({ inline: createAnchorStore(), enlarged: createAnchorStore() }));
   const addonCameras = useRef(new WeakMap<HTMLIFrameElement, ViewCameraState>());
-  const anchorOf = (tokenId: string, expanded: boolean) => (addonView && !drawActive ? (expanded ? enlargedAnchors : anchors)[tokenId] : undefined);
+  const anchorsOf = (expanded: boolean) => (addonView && !drawActive ? (expanded ? anchorStores.enlarged : anchorStores.inline) : null);
   // A slot the DM added to the order has no token to borrow a face from.
   const faceOfEntry = useCallback(
     (entry: { id: string; kind: string; name: string }) => [
@@ -323,6 +328,12 @@ export function BattleMapPanel({
   const sketchRef = useRef<Array<{ x: number; y: number }> | null>(null);
   const drawActive = canDirect ? tool === "draw" : drawing;
   const addonViewport = Boolean(addonView?.sessionLayout && !drawActive);
+  // An addon's view covers the board: what lies under it is not drawn. The
+  // grid rests hidden (still playing the effects it reports as played) and
+  // no picture is painted for it.
+  const covered = Boolean(addonView) && !drawActive;
+  // The board's picture, painted on this device from the terrain it was sent.
+  const painted = usePaintedMap(view, genre, covered);
 
   const scene = view.board === "scene";
   const canMove = view.reachable.length > 0;
@@ -1021,7 +1032,9 @@ export function BattleMapPanel({
         if (!addonViewport) { cam.frameProps.onPointerCancel(event); onFramePointerCancel(); }
       }}
     >
-      {view.outdoors ? <SkyLayer scene={sky} mode="board" className="rounded-lg" visible={visible} /> : null}
+      {/* The weather rests under a view that fills the frame; around a view
+          the size of the board it still falls in the margins. */}
+      {view.outdoors ? <SkyLayer scene={sky} mode="board" className="rounded-lg" visible={visible && !addonViewport} /> : null}
       <div
         className={cn(!addonViewport && cam.eased && "sky-wash", addonViewport ? "absolute inset-0 isolate" : "relative", drawActive && "touch-none")}
         style={{
@@ -1030,7 +1043,7 @@ export function BattleMapPanel({
           transition: !addonViewport && cam.eased ? "transform var(--dur-scene) var(--ease-drift)" : "none",
         }}
       >
-        <div style={{ display: addonViewport ? "none" : "contents" }}>
+        <div style={{ display: covered ? "none" : "contents" }}>
         <BattleMapGrid
           view={gridView}
           sheets={sheets}
@@ -1060,10 +1073,17 @@ export function BattleMapPanel({
         />
         <JumpArc leap={leap} width={view.width} height={view.height} />
         </div>
+        {/* With the grid hidden, an empty board of the same shape keeps the
+            size it gave the frame. */}
+        {covered && !addonViewport ? (
+          <svg viewBox={`0 0 ${view.width * TILE} ${view.height * TILE}`} className="h-auto w-full rounded-lg border border-stone-800" aria-hidden="true" />
+        ) : null}
         {/* Session renderers own the visible viewport and camera; ordinary
-            board views keep the grid's sizing and camera. Drawing uses the grid. */}
+            board views keep the grid's sizing and camera. Drawing uses the grid.
+            While the enlarged tabletop is open the panel's own view is hidden:
+            a frame that is only covered keeps drawing every frame. */}
         {addonView && !drawActive ? (
-          <div className="absolute inset-0 z-[15] rounded-lg bg-[#0d0b1c]">
+          <div className={cn("absolute inset-0 z-[15] rounded-lg bg-[#0d0b1c]", enlarged && !expanded && "hidden")}>
             <AddonBoardView
               key={boardViewKey(addonView)}
               genre={genre}
@@ -1087,7 +1107,7 @@ export function BattleMapPanel({
               fx={fx}
               ping={ping}
               camera={addonViewport && canDirect ? null : camera}
-              onAnchors={expanded ? setEnlargedAnchors : setAnchors}
+              onAnchors={(expanded ? anchorStores.enlarged : anchorStores.inline).set}
               onCameraState={(state, frame) => addonCameras.current.set(frame, state)}
               viewOptions={viewOptions[boardViewKey(addonView)]}
               onFailure={addonView.sessionLayout ? () => setViewChoice("") : undefined}
@@ -1125,29 +1145,33 @@ export function BattleMapPanel({
           />
         ) : null}
         {hudToken ? (
-          <TokenHud
-            token={hudToken}
-            boardWidth={view.width}
-            boardHeight={view.height}
-            footprint={view.tokenFootprint[hudToken.id] ?? 1}
-            anchor={anchorOf(hudToken.id, expanded)}
-            actions={targeting ? [] : hudActions}
-            hint={
-              targeting
-                ? targeting === "attack"
-                  ? "Tap the enemy you attack"
-                  : "Tap the enemy you cast at"
-                : teleporting === hudToken.id
-                  ? "Tap the tile it appears on"
-                  : undefined
-            }
-            onClose={() => {
-              setHudTokenId(null);
-              setTargeting(null);
-              setAimHoverId(null);
-              setTeleporting(null);
-            }}
-          />
+          <Anchored store={anchorsOf(expanded)} tokenId={hudToken.id}>
+            {(anchor) => (
+              <TokenHud
+                token={hudToken}
+                boardWidth={view.width}
+                boardHeight={view.height}
+                footprint={view.tokenFootprint[hudToken.id] ?? 1}
+                anchor={anchor}
+                actions={targeting ? [] : hudActions}
+                hint={
+                  targeting
+                    ? targeting === "attack"
+                      ? "Tap the enemy you attack"
+                      : "Tap the enemy you cast at"
+                    : teleporting === hudToken.id
+                      ? "Tap the tile it appears on"
+                      : undefined
+                }
+                onClose={() => {
+                  setHudTokenId(null);
+                  setTargeting(null);
+                  setAimHoverId(null);
+                  setTeleporting(null);
+                }}
+              />
+            )}
+          </Anchored>
         ) : null}
         {/* What the enemies mean to do. Only while the board is quiet: an aim
             or an effect in flight already owns the same space. */}
@@ -1163,17 +1187,21 @@ export function BattleMapPanel({
           />
         ) : null}
         {plateToken && !hudToken && !tokenGhost && !drawActive ? (
-          <TokenPlate
-            token={plateToken}
-            boardWidth={view.width}
-            boardHeight={view.height}
-            footprint={view.tokenFootprint[plateToken.id] ?? 1}
-            anchor={anchorOf(plateToken.id, expanded)}
-            face={faceOfToken(plateToken)}
-            health={view.tokenHealth[plateToken.id]}
-            conditions={view.tokenConditions[plateToken.id]}
-            edge={plateToken.kind === "enemy" ? view.edges?.[plateToken.refId] : undefined}
-          />
+          <Anchored store={anchorsOf(expanded)} tokenId={plateToken.id}>
+            {(anchor) => (
+              <TokenPlate
+                token={plateToken}
+                boardWidth={view.width}
+                boardHeight={view.height}
+                footprint={view.tokenFootprint[plateToken.id] ?? 1}
+                anchor={anchor}
+                face={faceOfToken(plateToken)}
+                health={view.tokenHealth[plateToken.id]}
+                conditions={view.tokenConditions[plateToken.id]}
+                edge={plateToken.kind === "enemy" ? view.edges?.[plateToken.refId] : undefined}
+              />
+            )}
+          </Anchored>
         ) : null}
       </div>
       {/* The chrome of the stage (BoardChrome.tsx), fixed to the frame so it

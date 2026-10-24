@@ -336,6 +336,12 @@ Godot single-threaded Web views may ship their `.pck` resource pack beside
 `.wasm`/JavaScript in `ui/`. Packs use `application/octet-stream`; `.wav` UI
 audio uses `audio/wav`. Existing size limits and sandbox policy apply.
 
+Your view may be open twice: in the board panel and on the enlarged tabletop,
+each its own page. While the tabletop is open, the panel's page is hidden
+(`display: none`): the browser all but stops its `requestAnimationFrame`, and
+messages keep arriving, so carry on from the latest snapshot when it shows
+again. The table draws nothing of its own board under your frame.
+
 ### Messages
 
 Every message carries `odm: 1`. The page posts to `window.parent` with target
@@ -396,7 +402,9 @@ middle), and the ring and plate open on it:
 ```
 
 Send it after you draw, and again when the camera or a figure moves (not
-every frame when nothing changed). Without anchors they open where the figure
+every frame when nothing changed). The table reads the newest report once a
+frame and redraws only an open ring or plate, so sending one each frame while
+the camera moves is fine. Without anchors they open where the figure
 stands on the flat grid. The enemies' intent arrows are yours to draw: the
 table hides its own over a board view.
 
