@@ -7,7 +7,9 @@
 // call in here.
 
 import { getBattleMapForEncounter, getTokenByRef, listTokens } from "@/lib/db/battle-maps";
-import { listEnemies, type EncounterEnemy } from "@/lib/db/encounters";
+import { getEncounter, getEnemy, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
+import { otherSide, type CombatSide } from "@/lib/dm/combat-sides-logic";
+import { sideOf } from "@/lib/dm/combatant";
 import { getSheetById } from "@/lib/db/sheets";
 import { coverBetween, hasLineOfSight } from "@/lib/battlemap/los";
 import { footprintTiles } from "@/lib/battlemap/footprint";
@@ -62,6 +64,34 @@ export function wallBetween(encounterId: string, refA: string, refB: string): bo
 }
 
 
+// The side a token's creature fights on while it threatens (alive, able to
+// act and to see), or null for one that does not threaten or is no
+// combatant (an object, a DM's hand-added slot). Sides are the encounter's
+// (src/lib/dm/combatant.ts): a companion turned on the party threatens the
+// party, a creature the party dominates threatens its old allies.
+function threateningSide(encounter: Pick<Encounter, "id" | "sides">, token: { kind: string; refId: string }): CombatSide | null {
+  if (token.kind === "pc") {
+    return characterThreatens(token.refId) ? sideOf(encounter, "sheet", token.refId) : null;
+  }
+  if (token.kind === "enemy") {
+    const enemy = getEnemy(token.refId);
+    return enemy && enemyThreatens(enemy) ? sideOf(encounter, "enemy", enemy.id, enemy) : null;
+  }
+  return null;
+}
+
+function sidesOf(encounterId: string): Pick<Encounter, "id" | "sides"> {
+  return getEncounter(encounterId) ?? { id: encounterId, sides: {} };
+}
+
+// The squares of the creatures on `side` that threaten, but `except`.
+function threatSpots(encounterId: string, mapId: string, side: CombatSide, except: string[]) {
+  const encounter = sidesOf(encounterId);
+  return listTokens(mapId)
+    .filter((token) => !except.includes(token.refId) && threateningSide(encounter, token) === side)
+    .map(spotOf);
+}
+
 // A character shooting with a hostile creature within 5 feet that can see
 // them and can act.
 export function characterShootsInMelee(
@@ -74,16 +104,13 @@ export function characterShootsInMelee(
   if (!map || !attacker || unseen(attackerConditions)) {
     return false;
   }
-  const hostiles = listEnemies(encounterId)
-    .filter(enemyThreatens)
-    .map((enemy) => getTokenByRef(map.id, enemy.id))
-    .filter((token): token is NonNullable<typeof token> => token !== null)
-    .map(spotOf);
-  return hostileWithinFiveFeet(spotOf(attacker), hostiles);
+  const mine = sideOf(sidesOf(encounterId), "sheet", characterId);
+  return hostileWithinFiveFeet(spotOf(attacker), threatSpots(encounterId, map.id, otherSide(mine), [characterId]));
 }
 
 
-// The same for an enemy with a bow and a character at its elbow.
+// The same for an enemy with a bow and a creature of the other side at its
+// elbow.
 export function enemyShootsInMelee(
   encounterId: string,
   enemyId: string,
@@ -94,15 +121,13 @@ export function enemyShootsInMelee(
   if (!map || !attacker || unseen(attackerConditions)) {
     return false;
   }
-  const hostiles = listTokens(map.id).filter(
-    (token) => token.kind === "pc" && characterThreatens(token.refId),
-  );
-  return hostileWithinFiveFeet(spotOf(attacker), hostiles.map(spotOf));
+  const mine = sideOf(sidesOf(encounterId), "enemy", enemyId);
+  return hostileWithinFiveFeet(spotOf(attacker), threatSpots(encounterId, map.id, otherSide(mine), [enemyId]));
 }
 
 
-// The Flanking variant for a character's melee attack: another character
-// who can act stands on the far side of the target.
+// The Flanking variant for a character's melee attack: another creature of
+// their side who can act stands on the far side of the target.
 export function characterFlanks(
   encounterId: string,
   characterId: string,
@@ -114,15 +139,12 @@ export function characterFlanks(
   if (!map || !attacker || !target) {
     return false;
   }
-  const allies = listTokens(map.id).filter(
-    (token) =>
-      token.kind === "pc" && token.refId !== characterId && characterThreatens(token.refId),
-  );
-  return isFlanking(spotOf(attacker), spotOf(target), allies.map(spotOf));
+  const mine = sideOf(sidesOf(encounterId), "sheet", characterId);
+  return isFlanking(spotOf(attacker), spotOf(target), threatSpots(encounterId, map.id, mine, [characterId, enemyId]));
 }
 
 
-// And for an enemy's melee attack on a character.
+// And for an enemy's melee attack on a creature of the other side.
 export function enemyFlanks(encounterId: string, enemyId: string, characterId: string): boolean {
   const map = getBattleMapForEncounter(encounterId);
   const attacker = map ? getTokenByRef(map.id, enemyId) : null;
@@ -130,12 +152,8 @@ export function enemyFlanks(encounterId: string, enemyId: string, characterId: s
   if (!map || !attacker || !target) {
     return false;
   }
-  const allies = listEnemies(encounterId)
-    .filter((enemy) => enemy.id !== enemyId && enemyThreatens(enemy))
-    .map((enemy) => getTokenByRef(map.id, enemy.id))
-    .filter((token): token is NonNullable<typeof token> => token !== null)
-    .map(spotOf);
-  return isFlanking(spotOf(attacker), spotOf(target), allies);
+  const mine = sideOf(sidesOf(encounterId), "enemy", enemyId);
+  return isFlanking(spotOf(attacker), spotOf(target), threatSpots(encounterId, map.id, mine, [enemyId, characterId]));
 }
 
 

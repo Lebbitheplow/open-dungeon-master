@@ -18,6 +18,8 @@
 // clock path must not import enemy-damage.ts, which imports it): the
 // resistances, a concentration save, death and the token all follow here.
 
+import type { CombatSide } from "@/lib/dm/combat-sides-logic";
+import { sideOf } from "@/lib/dm/combatant";
 import { sheetSpellAuthors } from "@/lib/dm/spell-authors";
 import { dmRoll, rollCard, sheetAttacker } from "@/lib/dm/roll-card";
 import type { Campaign } from "@/lib/db/campaigns";
@@ -92,12 +94,17 @@ export function hurtEnemy(campaign: Campaign, encounter: Encounter, enemy: Encou
 }
 
 // Spirit Guardians and its kind, around every caster holding one.
+// The casters whose ring hurts a creature of the other side only: a
+// creature the party dominates is one the cleric designates unaffected, and
+// a companion that turned on the party is no longer (src/lib/dm/combatant.ts).
+function auraCasters(campaign: Campaign, encounter: Encounter, targetSide: CombatSide): CharacterSheet[] {
+  return listSheets(campaign.id)
+    .map((stale) => getSheetById(stale.id) ?? stale)
+    .filter((caster) => caster.currentHp > 0 && !caster.deathSaves?.dead && sideOf(encounter, "sheet", caster.id, caster) !== targetSide);
+}
+
 function auraHits(campaign: Campaign, encounter: Encounter, enemy: EncounterEnemy, lines: string[]) {
-  for (const stale of listSheets(campaign.id)) {
-    const caster = getSheetById(stale.id) ?? stale;
-    if (caster.currentHp <= 0 || caster.deathSaves?.dead) {
-      continue;
-    }
+  for (const caster of auraCasters(campaign, encounter, sideOf(encounter, "enemy", enemy.id, enemy))) {
     const meta = caster.conditionMeta as ConditionMetaMap;
     for (const condition of caster.conditions) {
       const spell = meta[condition]?.spell ?? (condition.toLowerCase() === "spirit guardians" ? "Spirit Guardians" : null);
@@ -129,6 +136,44 @@ function auraHits(campaign: Campaign, encounter: Encounter, enemy: EncounterEnem
       );
       if (amount > 0) {
         lines.push(hurtEnemy(campaign, encounter, live, amount, ring.type, aura.name));
+      }
+    }
+  }
+}
+
+// The same ring around a character of the other side (a companion turned on
+// the party starting its turn beside the party's cleric): the character's
+// own save, and the damage through the character's damage path.
+function characterAuraHits(campaign: Campaign, encounter: Encounter, target: CharacterSheet, lines: string[]) {
+  for (const caster of auraCasters(campaign, encounter, sideOf(encounter, "sheet", target.id, target))) {
+    const meta = caster.conditionMeta as ConditionMetaMap;
+    for (const condition of caster.conditions) {
+      const spell = meta[condition]?.spell ?? (condition.toLowerCase() === "spirit guardians" ? "Spirit Guardians" : null);
+      const aura = spell ? spellMechanicsFor({ spell, userIds: sheetSpellAuthors(caster) }) : null;
+      const apart = aura?.mech.aura ? tilesBetween(encounter.id, caster.id, target.id) : null;
+      if (!aura?.mech.aura || apart === null || apart > Math.floor(aura.mech.aura.radiusFeet / FEET_PER_TILE)) {
+        continue;
+      }
+      const live = getSheetById(target.id);
+      if (!live || live.currentHp <= 0 || live.deathSaves?.dead) {
+        return;
+      }
+      const ring = aura.mech.aura;
+      const dc = spellSaveDcFor(caster, aura.name) ?? 13;
+      const slot = meta[condition]?.slotLevel ?? ring.baseLevel;
+      const dice = ring.perSlotLevel ? addDice(ring.dice, ring.perSlotLevel, Math.max(0, slot - ring.baseLevel)) : ring.dice;
+      const turn = createDmTurn(campaign.id, [], "human_dm");
+      try {
+        const save = rollCharacterSave(campaign, turn, live, ring.save, dc, `${ring.save.toUpperCase()} save against ${aura.name}`, { magical: true });
+        const rolled = rollCard(campaign, turn, live.id, "damage", rollAgainst(aura.name, live.name), dice, sheetAttacker(caster)).total;
+        const amount = save.success ? (ring.halfOnSave ? Math.floor(rolled / 2) : 0) : rolled;
+        lines.push(`${live.name} starts their turn in ${caster.name}'s ${aura.name}: ${ring.save.toUpperCase()} save ${save.success ? "made" : "failed"} (DC ${dc}).`);
+        if (amount > 0) {
+          applyPcDamage(campaign, turn.id, live, { amount, type: ring.type, magical: true, spell: true, reason: aura.name });
+        }
+      } finally {
+        turn.status = "done";
+        saveDmTurn(turn);
       }
     }
   }
@@ -397,7 +442,8 @@ export function spellTurnStart(campaign: Campaign, encounter: Encounter, combata
     }
     const sheet = getSheetById(id);
     if (sheet && !sheet.deathSaves?.dead) {
-      heroism(campaign, sheet);
+      characterAuraHits(campaign, encounter, sheet, lines);
+      heroism(campaign, getSheetById(id) ?? sheet);
       characterTurnStartDamage(campaign, getSheetById(id) ?? sheet, lines);
       regenerate(campaign, getSheetById(id) ?? sheet);
     }

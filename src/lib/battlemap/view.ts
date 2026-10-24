@@ -1,4 +1,5 @@
 import { readiedReleaseFor } from "@/lib/dm/readied-release";
+import { tokenSides } from "@/lib/dm/combatant";
 import { getCampaignById, getFloor } from "@/lib/db/campaigns";
 import { actingSheetFor } from "@/lib/character-seat";
 import { getClock } from "@/lib/db/clock";
@@ -53,6 +54,14 @@ import type { AuraTone, PlayerMapView } from "@/lib/battlemap/view-types";
 import { holdsFeature } from "@/lib/srd/feature-names";
 
 export type { PlayerMapView } from "@/lib/battlemap/view-types";
+
+// A token's side when it is not its kind's: the rim the board draws.
+function offSide(token: { kind: string }, side: string): { side?: "party" | "foe" } {
+  if (token.kind === "pc" && side === "foe") {
+    return { side: "foe" };
+  }
+  return token.kind === "enemy" && side === "party" ? { side: "party" } : {};
+}
 
 // Per-player projection of the battle map. This is the ONLY battlemap
 // module that touches the DB, and the only shape clients ever see: terrain
@@ -280,6 +289,10 @@ export function buildPlayerMapView(
 
   const enemiesById = new Map(listEnemies(encounter.id).map((enemy) => [enemy.id, enemy]));
   const sheetsById = new Map(listSheets(campaignId).map((entry) => [entry.id, entry]));
+  // Sides (src/lib/dm/combatant.ts): who is an ally of this viewer, and the
+  // rim of a creature fighting on the side its kind does not.
+  const sides = tokenSides(encounter);
+  const viewerSide = sheet ? sides({ kind: "pc", refId: sheet.id }) : "party";
   const shownTokens = tokens
     .filter((token) => {
       // The DM hid it, so for everyone but the DM it is not on the board at
@@ -294,6 +307,12 @@ export function buildPlayerMapView(
           return false;
         }
         // Seen, or felt through the ground by tremorsense. The DM sees all.
+        // A creature fighting at the viewer's side is drawn as an ally is.
+        return fullVision || sides(token) === viewerSide || (viewer ? perceivesToken(vision, viewer, token, visible) : false);
+      }
+      // A character fighting against the viewer's side is fog-gated as an
+      // enemy is: the party does not see through a turncoat's eyes.
+      if (token.kind === "pc" && sides(token) !== viewerSide) {
         return fullVision || (viewer ? perceivesToken(vision, viewer, token, visible) : false);
       }
       // Allies are always drawn: the party coordinates aloud at the table.
@@ -317,6 +336,7 @@ export function buildPlayerMapView(
       hidden: token.hidden,
       light: lightRemaining(token, clockInstant),
       stamp: token.stamp ?? "",
+      ...offSide(token, sides(token)),
     }));
 
   // Reachable tiles for click-to-move, only when the player may move now.
@@ -347,7 +367,7 @@ export function buildPlayerMapView(
           1,
           myToken.movement === "fly",
           // The same passage the move route allows (src/lib/battlemap/passage.ts).
-          withZoneSteps(pcMoveTraits({ width: map.width, tokens, mover: myToken, sheet, footprintOf: footprintLookup(enemiesById), enemySize: (refId) => enemiesById.get(refId)?.stats.size }), map, "pc"),
+          withZoneSteps(pcMoveTraits({ width: map.width, tokens, mover: myToken, sheet, footprintOf: footprintLookup(enemiesById), enemySize: (refId) => enemiesById.get(refId)?.stats.size, sideOf: tokenSides(encounter) }), map, "pc"),
         ).entries(),
       ];
       // What the move route will charge for each square, and what the move

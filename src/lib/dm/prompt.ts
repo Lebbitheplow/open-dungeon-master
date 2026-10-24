@@ -195,6 +195,9 @@ export type DmEncounterState = {
     vulnerable: string;
     concentration: string | null;
   }>;
+  // Combatants fighting on the side their kind does not (issue 503): a
+  // character turned against the party, a creature the party dominates.
+  sides?: Array<{ id: string; name: string; kind: "sheet" | "enemy"; side: "party" | "foe" }>;
   // Serialized tactical grid with every token's position; null when the
   // encounter has no battle map.
   map: string | null;
@@ -1027,6 +1030,17 @@ export function buildGameStateBlock(state: DmGameState): string {
         parts.push(`CONCENTRATING on ${enemy.concentration} (damage forces its CON save; a break ends the effect)`);
       }
       lines.push(parts.join(" | "));
+    }
+    if (encounter.sides?.length) {
+      lines.push(
+        `Sides (the server's, from the fight's events; never decide them yourself): ${encounter.sides
+          .map((entry) =>
+            entry.kind === "sheet"
+              ? `${entry.name} [characterId=${entry.id}] fights AGAINST the party: you play their turns from their own sheet (pc_attack, cast_at_enemy at the party), and the party strikes them with pc_attack or cast_at_enemy, targetEnemyId=${entry.id}`
+              : `${entry.name} [enemyId=${entry.id}] fights FOR the party while it is dominated: its enemy_attack targets the foes`,
+          )
+          .join("; ")}.`,
+      );
     }
     if (encounter.map) {
       lines.push(encounter.map);

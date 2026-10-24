@@ -18,7 +18,10 @@ import { tilesBetween, wallBetween } from "@/lib/dm/attack-spatial";
 import { seenClearlyDespiteTraits } from "@/lib/dm/hide-traits";
 import { rollCharacterCheck } from "@/lib/dm/contest-roll";
 import { rollCard } from "@/lib/dm/roll-card";
-import { resolveEnemyRef, publishEncounter } from "@/lib/dm/enemy-damage";
+import { publishEncounter } from "@/lib/dm/enemy-damage";
+import { resolveTargetFoe } from "@/lib/dm/sheet-foe";
+import { hostileTo } from "@/lib/dm/combatant";
+import { isSheetFoe } from "@/lib/dm/combat-sides-logic";
 import { HELP_FOR_A_CHECK, HELPED } from "@/lib/dm/help-logic";
 import { pushTokenAway } from "@/lib/dm/map-tools";
 import { resolveSheetRef } from "@/lib/dm/rolls";
@@ -120,7 +123,7 @@ export function help(
   }
   // Help on an attack is against one creature within 5 feet of the helper
   // (SRD 5.1); the ally's first attack against it has advantage.
-  const foe = args.targetEnemyId && encounter ? resolveEnemyRef(encounter.id, args.targetEnemyId) : null;
+  const foe = args.targetEnemyId && encounter ? resolveTargetFoe(campaign.id, encounter, args.targetEnemyId) : null;
   if (args.targetEnemyId && (!foe || foe.status !== "alive")) {
     return { error: "Help on an attack needs a living targetEnemyId from GAME STATE.", retry: true };
   }
@@ -163,9 +166,14 @@ export function contest(
   if (!encounter) {
     return { error: `${action} needs an active encounter and a target.`, retry: true };
   }
-  const enemy = args.targetEnemyId ? resolveEnemyRef(encounter.id, args.targetEnemyId) : null;
+  // Any combatant (src/lib/dm/combatant.ts): an enemy, or a character
+  // fighting on the other side, who resists as the character it is.
+  const enemy = args.targetEnemyId ? resolveTargetFoe(campaign.id, encounter, args.targetEnemyId) : null;
   if (!enemy || enemy.status !== "alive") {
     return { error: `${action} needs a living targetEnemyId from GAME STATE.`, retry: true };
+  }
+  if (isSheetFoe(enemy) && !hostileTo(encounter, { kind: "sheet", id: sheet.id }, { kind: "sheet", id: enemy.id })) {
+    return { error: `${enemy.displayName} fights on ${sheet.name}'s side: a ${action} here is aimed at a creature of the other side. Nothing was spent.`, refused: "rules" };
   }
   // SRD: the target can be at most one size larger than the attacker.
   if (sizeRank(enemy.stats.size) > sizeRank(sizeForRace(sheet.race)) + 1) {

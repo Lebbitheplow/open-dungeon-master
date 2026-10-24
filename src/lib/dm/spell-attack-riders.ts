@@ -16,8 +16,9 @@
 // A "until the start of" effect is untilTurnOf; a "before the end of" one is
 // untilTurnEndOf, ended as that turn ends (src/lib/dm/turn-end.ts).
 
+import { getFoe } from "@/lib/dm/sheet-foe";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
-import { getEnemy, patchEnemyConditions } from "@/lib/db/encounters";
+import { patchEnemyConditions } from "@/lib/db/encounters";
 import { insertSheetAudit } from "@/lib/db/sheet-audit";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { publishPersisted } from "@/lib/events";
@@ -77,7 +78,7 @@ export function applySpellHitCondition(
   if (!rider.onHit) {
     return null;
   }
-  const enemy = getEnemy(enemyId);
+  const enemy = getFoe(enemyId);
   if (!enemy || enemy.status !== "alive") {
     return null;
   }

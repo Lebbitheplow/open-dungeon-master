@@ -1,3 +1,6 @@
+import { dominationOrderOf, otherSide } from "@/lib/dm/combat-sides-logic";
+import { sheetsOnSide, sideOf, standingOn } from "@/lib/dm/combatant";
+import { sheetFoeView } from "@/lib/dm/sheet-foe";
 import type { SystemGlyph } from "@/lib/system-glyphs";
 import { holdsOn } from "@/lib/dm/vitals-logic";
 import { fieldedSheets } from "@/lib/dm/roster";
@@ -59,7 +62,7 @@ import {
   markEnemyActed,
   oweEnemiesAnAction,
 } from "@/lib/dm/can-act";
-import { acWithEffects } from "@/lib/dm/ac-effects";
+import { acWithEffects, enemyAcWithEffects } from "@/lib/dm/ac-effects";
 import { characterInitiativeExpression } from "@/lib/dm/contest-roll";
 import { followCombatAmbience } from "@/lib/dm/ambience-tools";
 import {
@@ -1508,30 +1511,35 @@ export function autoActSkippedEnemies(
     if (!enemy || !live || !canEnemyAct({ enemy, encounter: live, kind: "action" }).ok) {
       continue;
     }
-    const living = sheets.filter((sheet) => {
-      const fresh = getSheetById(sheet.id);
-      return (fresh?.currentHp ?? 0) > 0;
-    });
-    if (!living.length) {
-      break;
+    // Its foes are whoever stands on the other side from it now
+    // (src/lib/dm/combatant.ts): the party for an enemy, the enemies for a
+    // creature the party dominates, a companion that turned on the party.
+    // A creature told whom to attack (a Dominate spell's order) goes for
+    // that one while it stands.
+    const foes = standingOn(campaign.id, live, otherSide(sideOf(live, "enemy", enemy.id, enemy)));
+    if (!foes.length) {
+      continue;
     }
     const map = getBattleMapForEncounter(encounter.id);
     const attackerToken = map ? getTokenByRef(map.id, enemy.id) : null;
-    const targetId = pickEnemyTarget(
-      attackerToken ? { x: attackerToken.x, y: attackerToken.y } : null,
-      living.map((sheet) => {
-        const token = map ? getTokenByRef(map.id, sheet.id) : null;
-        const conditions = (getSheetById(sheet.id) ?? sheet).conditions.map((entry) => entry.toLowerCase());
-        return {
-          characterId: sheet.id,
-          ac: acWithEffects(campaign.id, sheet),
-          position: token ? { x: token.x, y: token.y } : null,
-          unseen: conditions.includes("hidden") || conditions.includes("invisible"),
-        };
-      }),
-    );
+    const ordered = dominationOrderOf(enemy.conditions, enemy.conditionMeta as Record<string, Record<string, unknown>>);
+    const targetId =
+      (ordered && foes.some((foe) => foe.id === ordered) ? ordered : null) ??
+      pickEnemyTarget(
+        attackerToken ? { x: attackerToken.x, y: attackerToken.y } : null,
+        foes.map((foe) => {
+          const token = map ? getTokenByRef(map.id, foe.id) : null;
+          const conditions = (foe.kind === "sheet" ? foe.sheet.conditions : foe.enemy.conditions).map((entry) => entry.toLowerCase());
+          return {
+            characterId: foe.id,
+            ac: foe.kind === "sheet" ? acWithEffects(campaign.id, foe.sheet) : enemyAcWithEffects(campaign.id, foe.enemy),
+            position: token ? { x: token.x, y: token.y } : null,
+            unseen: conditions.includes("hidden") || conditions.includes("invisible"),
+          };
+        }),
+      );
     if (!targetId) {
-      break;
+      continue;
     }
     const result = handleEnemyAttack(
       campaign,
@@ -1540,7 +1548,7 @@ export function autoActSkippedEnemies(
       sheets,
       sheetsById,
     );
-    const targetName = sheetsById.get(targetId)?.name ?? "a hero";
+    const targetName = foes.find((foe) => foe.id === targetId)?.name ?? sheetsById.get(targetId)?.name ?? "a hero";
     if ("error" in result) {
       // Holding where it stands while a character has an action readied is
       // worth a line; out of reach or otherwise unable passes quietly.
@@ -1559,7 +1567,7 @@ export function autoActSkippedEnemies(
       .join("; ");
     notes.push(
       `${enemy.displayName} attacks ${targetName} with ${String(result.attack)} (${summary}).${
-        result.dropped ? ` ${targetName} falls!` : ""
+        result.dropped || result.dead || result.down ? ` ${targetName} falls!` : ""
       }`,
     );
   }
@@ -1815,9 +1823,11 @@ function tableNote(campaign: Campaign, content: string, glyph: SystemGlyph) {
   publishWithSeq(campaign.id, seq, "message_added", { message });
 }
 
+// Somebody on the foes' side still in the fight: an enemy standing, or a
+// character fighting against the party (src/lib/dm/combatant.ts). A creature
+// the party dominates fights for it and is no foe standing.
 function enemyStanding(encounter: Encounter): boolean {
-  const enemiesById = new Map(listEnemies(encounter.id).map((enemy) => [enemy.id, enemy]));
-  return encounter.order.some((entry) => entry.kind === "enemy" && entryAlive(entry, enemiesById));
+  return standingOn(encounter.campaignId, encounter, "foe").length > 0;
 }
 
 // The moment the party falls, said once; called after every pass and
@@ -1829,15 +1839,18 @@ function enemyStanding(encounter: Encounter): boolean {
 // the table is told and the DM woken once to say it.
 function partyFallen(campaign: Campaign, couldRise: boolean) {
   const encounter = getActiveEncounter(campaign.id);
-  if (!encounter || !encounter.orderReady || !encounter.order.some((entry) => entry.kind === "pc")) {
+  // The party is the characters on its side: a companion fighting against
+  // it is no member whose fall loses the fight (src/lib/dm/combatant.ts).
+  const party = encounter ? sheetsOnSide(campaign.id, encounter, "party") : [];
+  if (!encounter || !encounter.orderReady || !party.length) {
     return;
   }
   if (!enemyStanding(encounter) || partyCanRise(encounter)) {
     return;
   }
-  const allDead = encounter.order.every(
-    (entry) => entry.kind === "enemy" || (entry.kind === "pc" && getSheetById(entry.characterId)?.deathSaves?.dead === true),
-  );
+  // A DM's own combatant in the order (an "npc" slot) may yet raise them:
+  // the ending is the story's then, as below.
+  const allDead = party.every((sheet) => sheet.deathSaves?.dead === true) && !encounter.order.some((entry) => entry.kind === "npc");
   if (allDead) {
     const sheets = listSheets(campaign.id);
     // A turn for the fight's end and its records, closed as soon as it is
@@ -1862,13 +1875,9 @@ function partyFallen(campaign: Campaign, couldRise: boolean) {
 // stable at 0 hit points (standing, or dying with death saves to roll). Only
 // a death track that says so counts as down for good.
 function partyCanRise(encounter: Encounter): boolean {
-  return encounter.order.some((entry) => {
-    if (entry.kind !== "pc") {
-      return false;
-    }
-    const sheet = getSheetById(entry.characterId);
-    return Boolean(sheet && !sheet.deathSaves?.dead && !(sheet.currentHp <= 0 && sheet.deathSaves?.stable));
-  });
+  return sheetsOnSide(encounter.campaignId, encounter, "party").some(
+    (sheet) => !sheet.deathSaves?.dead && !(sheet.currentHp <= 0 && sheet.deathSaves?.stable),
+  );
 }
 
 // The companion analog of autoActSkippedEnemies: nearest living enemy,
@@ -1887,7 +1896,13 @@ function companionAutoAct(
   if (!sheet || sheet.currentHp <= 0 || isIncapacitated(sheet.conditions)) {
     return;
   }
-  const enemies = listEnemies(encounter.id).filter((enemy) => enemy.status === "alive");
+  // The creatures standing on the other side from it: the enemies for a
+  // companion of the party, the party for one that turned on it
+  // (src/lib/dm/combatant.ts).
+  const mySide = sideOf(encounter, "sheet", sheet.id);
+  const enemies = standingOn(campaign.id, encounter, otherSide(mySide)).map((foe) =>
+    foe.kind === "enemy" ? foe.enemy : sheetFoeView(encounter.id, foe.sheet),
+  );
   if (!enemies.length) {
     return;
   }

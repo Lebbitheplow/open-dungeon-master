@@ -2,7 +2,7 @@ import { settleDroppedOnFightEnd } from "@/lib/db/dropped-items";
 import { getFloor, setFloor, type Campaign } from "@/lib/db/campaigns";
 import { silencedImmunity } from "@/lib/dm/zone-rules";
 import { burnWebUnder } from "@/lib/dm/zone-cast";
-import { endEncounter, getEnemy, listEnemies, patchEnemyHp, setEnemyConcentration, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
+import { endEncounter, getActiveEncounter, getEnemy, listEnemies, patchEnemyHp, setEnemyConcentration, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
 import { activePublicEncounter } from "@/lib/db/encounter-view";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import type { DmTurn } from "@/lib/db/dm-turns";
@@ -21,7 +21,7 @@ import { enemyDamageMath } from "@/lib/dm/encounter-logic";
 import { damageAdjust, resistsAllDamage } from "@/lib/dm/condition-logic";
 import { resistLineFor } from "@/lib/dm/underwater";
 import { authoredIgnoresResistance } from "@/lib/dm/authored-saves";
-import { isDefeated, isKnockedOut, knockedOutConditions } from "@/lib/dm/knockout";
+import { isKnockedOut, knockedOutConditions } from "@/lib/dm/knockout";
 import { endConditionsHeldBy } from "@/lib/dm/enemy-conditions";
 import { enemyHpCap, hasTrait, REGENERATION_STOPPED, regenerationOf } from "@/lib/dm/monster-abilities";
 import { absorbs } from "@/lib/dm/monster-traits";
@@ -37,6 +37,10 @@ import { followCombatAmbience } from "@/lib/dm/ambience-tools";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { unknownRef, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
+import { isSheetFoe } from "@/lib/dm/combat-sides-logic";
+import { combatantsOf, sheetSide, standingOn } from "@/lib/dm/combatant";
+import { applySheetFoeDamage, type SheetFoeBlow } from "@/lib/dm/sheet-foe-damage";
+import { sheetEnemyStats } from "@/lib/dm/sheet-foe-stats";
 
 // The single server-side path for damage landing on an enemy. Used by the
 // damage_enemy tool AND by damage rolls carrying targetEnemyId, which the
@@ -125,12 +129,22 @@ export function finishEncounter(
     ammoRecovered[`${owner.name}: ${itemName}`] = back;
   }
 
-  const totalXp = enemies.reduce((sum, enemy) => sum + enemy.xp, 0);
+  // What the fight was worth: every enemy row (a creature the party turned
+  // with a Dominate spell was overcome all the same), and every character
+  // who fought on the foes' side and fell, at the rating its sheet reads as
+  // (sheet-foe-stats.ts). A turncoat still standing when the fight ends was
+  // not beaten and is worth nothing.
+  const fought = combatantsOf(campaign.id, encounter);
+  const fallenFoeSheets = fought.filter((combatant) => combatant.kind === "sheet" && combatant.side === "foe" && combatant.sheet.currentHp <= 0);
+  const totalXp =
+    enemies.reduce((sum, enemy) => sum + enemy.xp, 0) +
+    fallenFoeSheets.reduce((sum, combatant) => sum + (combatant.kind === "sheet" ? sheetFoeXp(combatant.sheet) : 0), 0);
   const share =
     outcome === "victory" ? 1 : outcome === "enemies_fled" || outcome === "truce" ? 0.5 : 0;
   // The dead take no share: what the fight was worth is split among those
-  // who lived through it.
-  const earners = sheets.filter((sheet) => !(getSheetById(sheet.id) ?? sheet).deathSaves?.dead);
+  // who lived through it. Only the party's side earns it: a character who
+  // fought against the party has no share in beating itself.
+  const earners = sheets.filter((sheet) => !(getSheetById(sheet.id) ?? sheet).deathSaves?.dead && sheetSide(encounter, sheet.id) === "party");
   const xpEach = earners.length ? Math.floor((totalXp * share) / earners.length) : 0;
   let xpResult: Record<string, unknown> = {};
   if (xpEach > 0) {
@@ -216,7 +230,10 @@ export function finishEncounter(
   };
 }
 
-// Ends the encounter with victory XP once no living enemies remain.
+// Ends the encounter with victory XP once nobody on the foes' side is left
+// in the fight: every enemy row there dead, fled or knocked out (a creature
+// the party dominates fights for it and does not hold the fight open), and
+// every character who turned on the party at 0 hit points (combatant.ts).
 export function autoEndOnVictory(
   campaign: Campaign,
   turn: DmTurn,
@@ -224,12 +241,43 @@ export function autoEndOnVictory(
   sheets: CharacterSheet[],
   sheetsById: Map<string, CharacterSheet>,
 ): Record<string, unknown> {
-  const enemies = listEnemies(encounter.id);
-  // A creature knocked out is out of the fight (src/lib/dm/knockout.ts).
-  if (enemies.some((enemy) => !isDefeated(enemy))) {
+  // Read fresh: the side exceptions are written apart from the encounter.
+  const live = getActiveEncounter(campaign.id);
+  const current = live && live.id === encounter.id ? live : encounter;
+  if (standingOn(campaign.id, current, "foe").length) {
     return {};
   }
-  return finishEncounter(campaign, turn, encounter, "victory", sheets, sheetsById);
+  return finishEncounter(campaign, turn, current, "victory", sheets, sheetsById);
+}
+
+// A blow on a character seen as a foe (sheet-foe-damage.ts), and the end of
+// the fight when it was the last on the foes' side to fall. pc_attack's
+// typed blow comes here with its parts (pc-attack-damage.ts landBlow).
+export function applySheetFoeBlow(
+  campaign: Campaign,
+  turn: DmTurn,
+  encounter: Encounter,
+  view: EncounterEnemy,
+  blow: SheetFoeBlow,
+  sheets: CharacterSheet[],
+  sheetsById: Map<string, CharacterSheet>,
+  holdVictory = false,
+): Record<string, unknown> {
+  const landed = applySheetFoeDamage(campaign, turn, view, blow);
+  if ((landed.down || landed.dead) && !holdVictory) {
+    Object.assign(landed, autoEndOnVictory(campaign, turn, encounter, sheets, sheetsById));
+  }
+  return landed;
+}
+
+// A fallen character's worth to the party that beat it, from the stat block
+// its sheet reads as (sheet-foe-stats.ts).
+function sheetFoeXp(sheet: CharacterSheet): number {
+  try {
+    return sheetEnemyStats(sheet).xp;
+  } catch {
+    return 0;
+  }
 }
 
 // Applies damage to a living enemy: resistance/immunity/vulnerability math
@@ -277,6 +325,20 @@ export function applyEnemyDamage(
     concentrationDisadvantage?: boolean;
   },
 ): ToolResult {
+  // A character fighting on the other side, seen as a foe (sheet-foe.ts):
+  // the blow lands as harm lands on a character (sheet-foe-damage.ts), and
+  // a fall may end the fight as a foe's does.
+  if (isSheetFoe(enemy)) {
+    return applySheetFoeBlow(campaign, turn, encounter, enemy, {
+      amount,
+      ...(damageType ? { type: damageType } : {}),
+      ...(options?.magical ? { magical: true } : {}),
+      ...(options?.spell ? { spell: true } : {}),
+      ...(options?.crit ? { crit: true } : {}),
+      ...(options?.nonlethal ? { nonlethal: true } : {}),
+      ...(options?.death ? { death: true } : {}),
+    }, sheets, sheetsById, options?.holdVictory === true);
+  }
   // Inescapable Destruction: the acting Death cleric's necrotic ignores resistance (authored-saves.ts).
   const ignores = (damageType && authoredIgnoresResistance(campaign.id, damageType)) || (options?.ignoreResistance && damageType ? (options.ignoreResistanceBy ?? "Elemental Adept") : null);
   // Lightning, Fire or Acid Absorption (the golems): the damage heals it

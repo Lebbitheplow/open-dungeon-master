@@ -5,10 +5,14 @@ import type { Campaign } from "@/lib/db/campaigns";
 import {
   getActiveBoard,
   getActiveEncounter,
+  getEncounter,
+  getEnemy,
   listEnemies,
   type Encounter,
   type EncounterEnemy,
 } from "@/lib/db/encounters";
+import type { CombatSide } from "@/lib/dm/combat-sides-logic";
+import { sideOf } from "@/lib/dm/combatant";
 import {
   createBattleMap,
   getBattleMapForEncounter,
@@ -732,21 +736,33 @@ export function allyAdjacentToEnemy(
   if (!target) {
     return false;
   }
+  // An ally is a creature of the attacker's side (src/lib/dm/combatant.ts):
+  // a companion that turned on the party is no rogue's ally, and a creature
+  // the party dominates is.
+  const encounter = getEncounter(encounterId);
+  const mine = encounter ? sideOf(encounter, "sheet", attackerCharacterId) : "party";
   return listTokens(map.id).some(
     (token) =>
-      token.kind === "pc" &&
       token.refId !== attackerCharacterId &&
+      token.refId !== enemyId &&
       tilesApart(token, target) <= 1 &&
-
-      allyCanThreaten(token.refId),
+      allyCanThreaten(token, encounter, mine),
   );
 }
 
-// An ally standing up: above 0 hit points, alive, and not incapacitated.
-function allyCanThreaten(characterId: string): boolean {
-  const sheet = getSheetById(characterId);
+// An ally standing up: on the attacker's side, above 0 hit points, alive,
+// and not incapacitated.
+function allyCanThreaten(token: { kind: string; refId: string }, encounter: Encounter | null, side: CombatSide): boolean {
+  if (token.kind === "enemy") {
+    const enemy = getEnemy(token.refId);
+    return Boolean(encounter && enemy && enemy.status === "alive" && !isIncapacitated(enemy.conditions) && sideOf(encounter, "enemy", enemy.id, enemy) === side);
+  }
+  if (token.kind !== "pc") {
+    return false;
+  }
+  const sheet = getSheetById(token.refId);
   return Boolean(
-    sheet && sheet.currentHp > 0 && !sheet.deathSaves?.dead && !isIncapacitated(sheet.conditions),
+    sheet && sheet.currentHp > 0 && !sheet.deathSaves?.dead && !isIncapacitated(sheet.conditions) && (!encounter || sideOf(encounter, "sheet", sheet.id, sheet) === side),
   );
 }
 

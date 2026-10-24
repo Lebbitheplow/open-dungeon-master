@@ -10,6 +10,7 @@
 // was. A monster's check uses its stat block: a skill it lists, else the
 // ability's modifier.
 
+import { resolveTargetFoe } from "@/lib/dm/sheet-foe";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { enemyExhaustion } from "@/lib/dm/monster-abilities";
 import type { Campaign } from "@/lib/db/campaigns";
@@ -23,7 +24,7 @@ import { publishWithSeq } from "@/lib/events";
 import { resolveMonster } from "@/lib/bestiary";
 import type { EnemyStats, SaveAbility } from "@/lib/bestiary/statblock";
 import { mergeAdvantage, rollDerivation } from "@/lib/dm/condition-logic";
-import { resolveEnemyRef, unknownEnemyRef } from "@/lib/dm/enemy-damage";
+import { unknownEnemyRef } from "@/lib/dm/enemy-damage";
 import { effectOutcome } from "@/lib/dm/effect-tools";
 import { redactRoll } from "@/lib/dm/viewer";
 import { findSkill } from "@/lib/srd";
@@ -92,7 +93,7 @@ export function contestOpponent(
 ): Opponent | ToolError {
   if (ref.enemyId) {
     const encounter = getActiveEncounter(campaign.id);
-    const enemy: EncounterEnemy | null = encounter ? resolveEnemyRef(encounter.id, ref.enemyId) : null;
+    const enemy: EncounterEnemy | null = encounter ? resolveTargetFoe(encounter.campaignId, encounter, ref.enemyId) : null;
     if (!enemy) {
       return encounter
         ? unknownEnemyRef(encounter.id, "againstEnemyId", ref.enemyId, "Out of a fight, send againstMonster with the creature's name.")

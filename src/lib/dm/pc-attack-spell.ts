@@ -3,8 +3,8 @@
 // cast for real once the attack can no longer be refused. Split from
 // pc-attack.ts, which decides when each half runs.
 
+import { resolveTargetFoe } from "@/lib/dm/sheet-foe";
 import { magicImmunityNote } from "@/lib/dm/monster-traits";
-import { resolveEnemyRef } from "@/lib/dm/enemy-damage";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { getActiveEncounter } from "@/lib/db/encounters";
@@ -61,7 +61,7 @@ export function checkAttackSpell(input: {
   // Limited Magic Immunity (the rakshasa): a spell of its level or lower is
   // cast and has no effect on it (src/lib/dm/monster-traits.ts).
   const live = castsSpell ? getActiveEncounter(campaign.id) : null;
-  const target = live && args.targetEnemyId ? resolveEnemyRef(live.id, args.targetEnemyId) : null;
+  const target = live && args.targetEnemyId ? resolveTargetFoe(campaign.id, live, args.targetEnemyId) : null;
   const noEffect = target ? magicImmunityNote(target, args.spell ?? "the spell", spellSlotLevel ?? 0) : null;
   if (kind === "spell") {
     profile = spellAttackReach(campaign, sheet, args.spell ?? "", profile, spellSlotLevel);

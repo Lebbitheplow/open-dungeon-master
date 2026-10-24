@@ -1,4 +1,5 @@
 import { canAct } from "@/lib/dm/can-act";
+import { handleCastAtEnemy } from "@/lib/dm/cast-at-enemy";
 import { hasDungeonDelver, shieldMasterSaveBonus, spellSaveAdvantageReach } from "@/lib/srd/feat-combat";
 import { tilesBetween } from "@/lib/dm/attack-spatial";
 import { z } from "zod";
@@ -56,6 +57,8 @@ const castAtPlayerSchema = z.object({
   condition: z.string().max(40).optional(),
   rounds: z.coerce.number().int().min(1).max(100).optional(),
   casterEnemyId: z.string().optional(),
+  // A character fighting on the other side, casting from their own sheet.
+  casterCharacterId: z.string().optional(),
   ability: z.string().max(80).optional(),
   spell: z.string().max(80).optional(),
   reason: z.string().optional(),
@@ -225,6 +228,33 @@ export function handleCastAtPlayer(
   const sheet = staleSheet ? (getSheetById(staleSheet.id) ?? staleSheet) : null;
   if (!sheet) {
     return unknownSheetRef("characterId", args.characterId, sheets);
+  }
+  // A character casting at another of the other side (issue 503): the cast
+  // is the caster's, from their sheet, and the target's save and harm are
+  // the target's, which is what cast_at_enemy resolves for a character
+  // fighting the party (src/lib/dm/sheet-foe.ts). One engine for both.
+  if (args.casterCharacterId) {
+    if (!args.spell) {
+      return { error: "casterCharacterId casts a spell: name it in spell.", retry: true };
+    }
+    return handleCastAtEnemy(
+      campaign,
+      turn,
+      JSON.stringify({
+        characterId: args.casterCharacterId,
+        targetEnemyId: sheet.id,
+        spell: args.spell,
+        saveAbility: args.saveAbility,
+        ...(args.damage ? { damage: args.damage } : {}),
+        ...(args.damageType ? { damageType: args.damageType } : {}),
+        ...(args.halfOnSave !== undefined ? { halfOnSave: args.halfOnSave } : {}),
+        ...(args.condition ? { condition: args.condition } : {}),
+        ...(args.rounds ? { rounds: args.rounds } : {}),
+        ...(args.reason ? { reason: args.reason } : {}),
+      }),
+      sheets,
+      sheetsById,
+    );
   }
   if (sheet.deathSaves?.dead) {
     return { error: `${sheet.name} is DEAD; nothing can affect them. The enemy may target someone else or take another action.`, retry: true };

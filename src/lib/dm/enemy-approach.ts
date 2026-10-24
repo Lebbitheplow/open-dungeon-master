@@ -1,5 +1,6 @@
 import type { Campaign } from "@/lib/db/campaigns";
-import { listEnemies, patchEnemyConditions, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
+import { tokenSides } from "@/lib/dm/combatant";
+import { getEncounter, listEnemies, patchEnemyConditions, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
 import { getBattleMapForEncounter, getTokenByRef, listTokens, moveToken, resetTurnBudgets } from "@/lib/db/battle-maps";
 import { findPath, walkPathWithBudget } from "@/lib/battlemap/movement";
 import { hasLineOfSight } from "@/lib/battlemap/los";
@@ -287,7 +288,7 @@ export function enemyMoveTraits(width: number, tokens: BattleToken[], mover: Bat
   return zoneStepsFor({
     swims: swimsFrom(speed),
     climbs: climbsFrom(speed),
-    passable: passableTiles({ width, tokens, mover, footprintOf, sizeOf }),
+    passable: passableTiles({ width, tokens, mover, footprintOf, sizeOf, sideOf: tokenSides(getEncounter(encounterId)) }),
     squeeze: footprintOf(mover) > 1,
   }, encounterId, "enemy", mover.refId);
 }

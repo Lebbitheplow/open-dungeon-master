@@ -1,4 +1,5 @@
 import { getCampaignById } from "@/lib/db/campaigns";
+import { sideOf } from "@/lib/dm/combatant";
 import { getActiveEncounter } from "@/lib/db/encounters";
 import { getBattleMapForEncounter, getTokenByRef } from "@/lib/db/battle-maps";
 import { listSheets } from "@/lib/db/sheets";
@@ -62,13 +63,21 @@ function reaches(
 }
 
 // The paladins who could project an aura onto this target: conscious, alive,
-// fielded, and not the target itself.
+// fielded, not the target itself, and on the target's side of the fight
+// running (src/lib/dm/combatant.ts): a paladin who turned on the party
+// shields the party no longer, and is not shielded by it.
 function donorsFor(campaignId: string, target: Pick<CharacterSheet, "id">): CharacterSheet[] {
   const campaign = getCampaignById(campaignId);
   const sheets = listSheets(campaignId);
   const fielded = campaign ? fieldedSheets(campaign, sheets) : sheets;
+  const encounter = getActiveEncounter(campaignId);
+  const side = encounter ? sideOf(encounter, "sheet", target.id) : null;
   return fielded.filter(
-    (donor) => donor.id !== target.id && donor.currentHp > 0 && !donor.deathSaves?.dead,
+    (donor) =>
+      donor.id !== target.id &&
+      donor.currentHp > 0 &&
+      !donor.deathSaves?.dead &&
+      (!encounter || sideOf(encounter, "sheet", donor.id, donor) === side),
   );
 }
 

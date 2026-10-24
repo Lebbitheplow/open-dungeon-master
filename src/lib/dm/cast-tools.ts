@@ -51,13 +51,18 @@ export const castAtPlayerTool: ToolDef = {
           description:
             "The enemy doing it, when a specific one does: exact enemyId from GAME STATE. With a concentration spell the server tracks the enemy's concentration and breaks it (ending the effect) when the enemy takes damage or dies.",
         },
+        casterCharacterId: {
+          type: "string",
+          description:
+            "Or a character fighting on the other side casting it (a companion turned on the party): exact characterId from GAME STATE, with spell. Their own slot, DC and concentration are spent and read, as cast_at_enemy does for the party.",
+        },
         ability: {
           type: "string",
           description: "With casterEnemyId: the ability's name as its block lists it ('Poison Spit', 'Frightful Presence').",
         },
         spell: {
           type: "string",
-          description: "With casterEnemyId: a spell on the enemy's list ('Hold Person').",
+          description: "With casterEnemyId: a spell on the enemy's list ('Hold Person'). With casterCharacterId: a spell they can cast.",
         },
         reason: { type: "string", description: "Short in-fiction cause." },
       },

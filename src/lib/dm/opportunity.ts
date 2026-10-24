@@ -3,6 +3,10 @@ import { budgetFor } from "@/lib/dm/turn-budget";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { getActiveEncounter, getEnemy, listEnemies, saveEncounter } from "@/lib/db/encounters";
+import { isSheetFoe } from "@/lib/dm/combat-sides-logic";
+import { sideOf } from "@/lib/dm/combatant";
+import { getFoe } from "@/lib/dm/sheet-foe";
+import { enemiesStrikeWalker } from "@/lib/dm/opportunity-sides";
 
 import { getBattleMapForEncounter, getTokenByRef } from "@/lib/db/battle-maps";
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
@@ -172,8 +176,14 @@ export function resolveOpportunityAttacks(
   const notes: string[] = [];
   let downed = false;
   let downedAt: XY | undefined;
+  // Only the other side reacts (src/lib/dm/combatant.ts): an enemy does not
+  // strike a companion that turned to its side, and the party does.
+  const moverSide = sideOf(encounter, "sheet", characterId);
 
   for (const enemy of listEnemies(encounter.id)) {
+    if (sideOf(encounter, "enemy", enemy.id, enemy) === moverSide) {
+      continue;
+    }
     // The reacting side must be able to react (Shocking Grasp and Slow take
     // the reaction away), and to see who is leaving.
     if (
@@ -353,6 +363,18 @@ export function resolveOpportunityAttacks(
   for (const note of notes) {
     tableNote(campaign, note);
   }
+  // The characters of the other side strike too: a party member as a
+  // turncoat walks off, a turncoat as a party member does. They post their
+  // own lines.
+  if (!downed) {
+    const struck = resolvePcOpportunityAttacks(campaign, characterId, from, to, path);
+    notes.push(...struck);
+    const mover = getSheetById(characterId);
+    if (struck.length && mover && mover.currentHp <= 0 && !mover.wildShape) {
+      downed = true;
+      downedAt = steps[steps.length - 1];
+    }
+  }
   return { notes, downed, ...(downedAt ? { downedAt } : {}) };
 }
 
@@ -387,10 +409,14 @@ function meleeWeaponFor(sheet: NonNullable<ReturnType<typeof getSheetById>>) {
   });
 }
 
-// The other side of the same rule: an enemy that walks out of a character's
-// reach eats a melee attack from them. Fires wherever an enemy walks (the
-// DM's move_token and the approach enemy_attack makes), and spends the
-// character's reaction out of the same list the enemy side uses.
+// The other side of the same rule: a creature that walks out of a
+// character's reach eats a melee attack from them. Fires wherever an enemy
+// walks (the DM's move_token and the approach enemy_attack makes), and for a
+// character walking away from characters of the other side (a turncoat and
+// the party, src/lib/dm/combatant.ts); spends the character's reaction out
+// of the same list the enemy side uses. `enemyId` is the walker: an enemy
+// row, or a character seen as a foe (sheet-foe.ts). Enemies of the other
+// side strike an enemy walker as well (opportunity-sides.ts).
 export function resolvePcOpportunityAttacks(
   campaign: Campaign,
   enemyId: string,
@@ -409,11 +435,16 @@ export function resolvePcOpportunityAttacks(
   const steps = [from, ...(path?.length ? path : [to])];
   const notes: string[] = [];
   // The walker's size: an ogre leaves a reach when its last square does.
-  const moverFootprint = footprintForSize(getEnemy(enemyId)?.stats.size);
+  const moverFootprint = footprintForSize(getFoe(enemyId)?.stats.size);
+  const moverKind = getEnemy(enemyId) ? "enemy" : "sheet";
+  const moverSide = sideOf(encounter, moverKind, enemyId);
 
   for (const stale of listSheets(campaign.id)) {
 
     const sheet = getSheetById(stale.id) ?? stale;
+    if (sheet.id === enemyId || sideOf(encounter, "sheet", sheet.id, sheet) === moverSide) {
+      continue;
+    }
     if (
       !canAct({ sheet, encounter, kind: "reaction" }).ok ||
       conditionBlocksReactions(sheet.conditions) ||
@@ -451,8 +482,8 @@ export function resolvePcOpportunityAttacks(
       continue;
     }
 
-    const enemy = listEnemies(encounter.id).find((entry) => entry.id === enemyId);
-    if (!enemy || enemy.status !== "alive") {
+    const enemy = getFoe(enemyId);
+    if (!enemy || enemy.status !== "alive" || (isSheetFoe(enemy) && enemy.currentHp <= 0)) {
       break;
     }
     if (cannotBeSeen(enemy.conditions)) {
@@ -491,6 +522,11 @@ export function resolvePcOpportunityAttacks(
 
   for (const note of notes) {
     tableNote(campaign, note);
+  }
+  // A creature the party dominates walking away from its old allies: they
+  // strike it as it goes (opportunity-sides.ts posts its own lines).
+  if (moverKind === "enemy") {
+    notes.push(...enemiesStrikeWalker(campaign.id, enemyId, steps, moverFootprint, (reactor, reach, reactorFootprint, walker) => leavesReachAt(steps, reactor, reach, reactorFootprint, walker)));
   }
   return notes;
 }

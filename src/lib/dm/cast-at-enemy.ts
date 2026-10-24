@@ -14,7 +14,7 @@ import { placeSpellZone } from "@/lib/dm/zone-cast";
 import { zoneArgsSchema, zonePlacement } from "@/lib/dm/zone-args";
 import { bindsWorthResisting } from "@/lib/dm/legendary-logic";
 import type { Campaign } from "@/lib/db/campaigns";
-import { getActiveEncounter, getEnemy, recordEncounterTarget } from "@/lib/db/encounters";
+import { getActiveEncounter, recordEncounterTarget } from "@/lib/db/encounters";
 import { getSheetById } from "@/lib/db/sheets";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { isValidExpression } from "@/lib/dice";
@@ -27,7 +27,10 @@ import { conditionEffectsFor } from "@/lib/srd/condition-effects";
 import { conditionUntargetable } from "@/lib/srd/condition-effect-queries";
 import type { SaveAbility } from "@/lib/bestiary/statblock";
 import { applyDmMutation, canonicalCondition, castBarred } from "@/lib/dm/mutations";
-import { publishEncounter, resolveEnemyRef, unknownEnemyRef } from "@/lib/dm/enemy-damage";
+import { publishEncounter } from "@/lib/dm/enemy-damage";
+import { getFoe, resolveTargetFoe } from "@/lib/dm/sheet-foe";
+import { hostileTo, unknownCombatantRef } from "@/lib/dm/combatant";
+import { isSheetFoe } from "@/lib/dm/combat-sides-logic";
 import { resolveSheetRef, unknownSheetRef } from "@/lib/dm/rolls";
 import { normalizeAbility } from "@/lib/dm/arg-coerce";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -117,9 +120,15 @@ export function handleCastAtEnemy(
   }
   // Multiclass: the DC follows the class whose list carries the spell.
   const dc = spellSaveDcFor(sheet, args.spell ?? "");
-  const enemy = resolveEnemyRef(encounter.id, args.targetEnemyId);
+  // The target is any combatant (src/lib/dm/combatant.ts): an enemy, or a
+  // character fighting on the other side, who saves and takes the spell as
+  // the character it is (sheet-foe.ts).
+  const enemy = resolveTargetFoe(campaign.id, encounter, args.targetEnemyId);
   if (!enemy) {
-    return unknownEnemyRef(encounter.id, "targetEnemyId", args.targetEnemyId);
+    return unknownCombatantRef(campaign.id, encounter, "targetEnemyId", args.targetEnemyId);
+  }
+  if (isSheetFoe(enemy) && !hostileTo(encounter, { kind: "sheet", id: sheet.id }, { kind: "sheet", id: enemy.id })) {
+    return { error: `${enemy.displayName} fights on ${sheet.name}'s side: cast_at_enemy does not aim at an ally. Nothing was spent.`, refused: "rules" };
   }
   const barred = castBarred(campaign, turn.id, { characterId: sheet.id, spell: args.spell, ...(args.level ? { level: args.level } : {}), via, units: hitDiceOf(enemy) }, sheets, sheetsById);
   if (barred) {
@@ -154,7 +163,7 @@ export function handleCastAtEnemy(
       caster: sheet,
       spell: resolvedMech.name,
       level: args.level,
-      target: { kind: "enemy", id: enemy.id },
+      target: { kind: isSheetFoe(enemy) ? "sheet" : "enemy", id: enemy.id },
       endSpell: args.endSpell,
       reason: args.reason,
     });
@@ -162,6 +171,11 @@ export function handleCastAtEnemy(
   // Polymorph and True Polymorph: the beast in variant (enemy-polymorph.ts).
   // A table's workshop copy turns its target by the spell it runs as.
   if (resolvedMech && enemyShapeSpellFor(resolvedMech.runsAs ?? resolvedMech.name)) {
+    // A character's shape is its sheet's beast form, which this path does
+    // not lay: refused before anything is spent.
+    if (isSheetFoe(enemy)) {
+      return { error: `${resolvedMech.name} on a character is not run by cast_at_enemy: narrate it and set the form with the DM's tools. Nothing was spent.`, refused: "rules" };
+    }
     const spell = resolvedMech.name;
     const spend = (cast: Record<string, unknown>) => applyDmMutation(campaign, turn.id, "use_spell_slot", JSON.stringify(cast), sheets, sheetsById).result;
     return castShapeAtEnemy(campaign, turn, { caster: sheet, enemy, spell, runsAs: resolvedMech.runsAs, variant: args.variant, level: args.level, reason: args.reason, authors }, spend);
@@ -527,7 +541,7 @@ export function handleCastAtEnemy(
     caster: sheet,
     enemy,
     saved: saved || beyondReach,
-    taken: Math.max(0, hpBefore - (getEnemy(enemy.id)?.currentHp ?? hpBefore)),
+    taken: Math.max(0, hpBefore - (getFoe(enemy.id)?.currentHp ?? hpBefore)),
     dc,
     sheets,
     sheetsById,

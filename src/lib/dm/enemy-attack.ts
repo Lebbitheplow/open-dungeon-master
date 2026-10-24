@@ -2,6 +2,14 @@
 // enemy's real stat block against the target's real Armor Class. Split from
 // encounter-tools.ts, which dispatches to it and whose auto-act fallback
 // calls it for the enemies a turn skipped. Must not import encounter-tools.
+//
+// The target is any combatant (src/lib/dm/combatant.ts): a character goes
+// the character path below, with all a sheet's defences; an enemy fighting
+// on the other side (a creature the party dominates) is struck stat block
+// against stat block (src/lib/dm/enemy-strike.ts).
+
+import { hostileTo, resolveCombatant } from "@/lib/dm/combatant";
+import { enemyStrikesEnemy } from "@/lib/dm/enemy-strike";
 
 import { weaponNamed } from "@/lib/srd/weapons";
 import { readiedHolder } from "@/lib/dm/readied-release";
@@ -100,6 +108,9 @@ export function handleEnemyAttack(
   rawArguments: string,
   sheets: CharacterSheet[],
   sheetsById: Map<string, CharacterSheet>,
+  // The engine's own attacks (Confusion's random creature): `anySide` lets
+  // the target be on the attacker's own side.
+  engine: { anySide?: boolean } = {},
 ): ToolResult {
   const encounter = getActiveEncounter(campaign.id);
   if (!encounter) {
@@ -133,12 +144,41 @@ export function handleEnemyAttack(
   if (conditionTurnShape(found.conditions).slowed && (bonus ? enemyActedThisRound(encounter, found.id) : enemyBonusThisRound(encounter, found.id))) {
     return { error: `${found.displayName} is slowed: it takes an action or a bonus action this turn, not both, and it has taken its ${bonus ? "action" : "bonus action"}.`, retry: true };
   }
-  const staleTarget =
-    sheetsById.get(args.targetCharacterId.trim()) ??
-    sheets.find(
-      (sheet) => textKey(sheet.name) === textKey(args.targetCharacterId),
-    );
-  const target = staleTarget ? getSheetById(staleTarget.id) : null;
+  // The target is any combatant (src/lib/dm/combatant.ts): a character on
+  // either side, or an enemy fighting on the other one (a creature the party
+  // dominates, a summon gone wild).
+  const aimed =
+    resolveCombatant(campaign.id, encounter, args.targetCharacterId) ??
+    (() => {
+      const named = sheets.find((sheet) => textKey(sheet.name) === textKey(args.targetCharacterId));
+      return named ? resolveCombatant(campaign.id, encounter, named.id) : null;
+    })();
+  if (!aimed) {
+    return unknownSheetRef("targetCharacterId", args.targetCharacterId, sheets);
+  }
+  if (aimed.id === found.id) {
+    return { error: `${found.displayName} cannot attack itself. Name the creature it attacks.`, retry: true };
+  }
+  if (!engine.anySide && !hostileTo(encounter, { kind: "enemy", id: found.id }, { kind: aimed.kind, id: aimed.id })) {
+    return {
+      error: `${aimed.name} fights on ${found.displayName}'s side: enemy_attack does not strike an ally. Pick a creature on the other side.`,
+      refused: "rules",
+    };
+  }
+  if (aimed.kind === "enemy") {
+    if (charmedBy(found.conditions, found.conditionMeta, aimed.id)) {
+      return { error: `${found.displayName} is charmed by ${aimed.name} and cannot attack it.`, retry: true };
+    }
+    return enemyStrikesEnemy(campaign, turn, found, aimed.enemy, {
+      ...(args.attack ? { attack: args.attack } : {}),
+      ...(args.advantage ? { advantage: args.advantage } : {}),
+      single: bonus || conditionTurnShape(found.conditions).slowed,
+      bonus,
+      sheets,
+      sheetsById,
+    });
+  }
+  const target = getSheetById(aimed.id);
   if (!target) {
     return unknownSheetRef("targetCharacterId", args.targetCharacterId, sheets);
   }

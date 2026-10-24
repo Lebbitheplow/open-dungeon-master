@@ -19,6 +19,8 @@ import { getSheetById } from "@/lib/db/sheets";
 import { isCompanionUserId } from "@/lib/db/users";
 import { hasHumanDm, isDmSeat } from "@/lib/dm/viewer";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { getActiveEncounter } from "@/lib/db/encounters";
+import { sideOf } from "@/lib/dm/combatant";
 
 type CommandFields = Pick<CharacterSheet, "isCompanion" | "commandedBy" | "summon">;
 
@@ -38,8 +40,12 @@ export function commandingPlayers(campaign: Campaign): string[] {
 }
 
 // The player commanding this companion in fights now, or null for the DM. A
-// commander who left the table, or took a DM seat, commands nobody.
-export function commanderOf(campaign: Campaign, sheet: CommandFields): string | null {
+// commander who left the table, or took a DM seat, commands nobody. Nor does
+// anyone command a companion fighting against the party (issue 503,
+// src/lib/dm/combat-sides.ts): the DM plays it for as long as it is on the
+// foes' side, and the command holds again once it comes back. The stored
+// commandedBy is never touched by a move.
+export function commanderOf(campaign: Campaign, sheet: CommandFields & { id?: string }): string | null {
   const userId = sheet.commandedBy;
   if (!userId || !commandable(sheet)) {
     return null;
@@ -47,7 +53,16 @@ export function commanderOf(campaign: Campaign, sheet: CommandFields): string | 
   if (isDmSeat(campaignSeats(campaign), userId) || !isCampaignMember(campaign.id, userId)) {
     return null;
   }
+  if (sheet.id && againstTheParty(campaign.id, sheet.id)) {
+    return null;
+  }
   return userId;
+}
+
+// Whether this sheet fights on the foes' side of the fight running now.
+function againstTheParty(campaignId: string, sheetId: string): boolean {
+  const encounter = getActiveEncounter(campaignId);
+  return Boolean(encounter && sideOf(encounter, "sheet", sheetId) === "foe");
 }
 
 // The person whose move it is while the initiative pointer rests on this

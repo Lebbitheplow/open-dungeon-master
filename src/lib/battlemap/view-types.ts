@@ -55,6 +55,10 @@ export type PlayerMapView = {
     // The painted object a prop or bystander is drawn as, or "" for the
     // plain figure (public/assets/props/manifest.json ids).
     stamp: string;
+    // The side a creature fights on when it is not its kind's (issue 503):
+    // "foe" for a character turned against the party, "party" for a
+    // creature the party dominates. The rim follows it. Absent otherwise.
+    side?: "party" | "foe";
   }>;
   lights: Array<{ x: number; y: number; radius: number }>;
   reachable: number[];

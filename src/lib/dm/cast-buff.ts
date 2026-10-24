@@ -22,7 +22,9 @@ import { speedWords } from "@/lib/srd/srd-creatures";
 import { findFormFor, formDefenses, formsOf, shapedAbilities, shapedForm, shapeOffer, shapeProblem, shapeRuleFor } from "@/lib/srd/shape-rules";
 import { conditionEffectsFor } from "@/lib/srd/condition-effects";
 import { applyDmMutation, castBarred } from "@/lib/dm/mutations";
-import { resolveEnemyRef, unknownEnemyRef } from "@/lib/dm/enemy-damage";
+import { resolveTargetFoe } from "@/lib/dm/sheet-foe";
+import { unknownCombatantRef } from "@/lib/dm/combatant";
+import { isSheetFoe } from "@/lib/dm/combat-sides-logic";
 import { resolveSheetRef, unknownSheetRef } from "@/lib/dm/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
@@ -131,7 +133,9 @@ export function handleCastBuff(
   }
   if (resolvedMech.mech.dispel) {
     const encounter = getActiveEncounter(campaign.id);
-    const enemy = args.targetEnemyId && encounter ? resolveEnemyRef(encounter.id, args.targetEnemyId) : null;
+    // Any combatant (src/lib/dm/combatant.ts): an enemy, or a character
+    // fighting on the other side, whose spells are a sheet's.
+    const enemy = args.targetEnemyId && encounter ? resolveTargetFoe(campaign.id, encounter, args.targetEnemyId) : null;
     const ally = args.targetCharacterIds?.[0] ? resolveSheetRef(args.targetCharacterIds[0], sheets, sheetsById) : null;
     if (!enemy && !ally) {
       return { error: `${resolvedMech.name} needs a target: targetEnemyId or one targetCharacterIds entry.`, retry: true };
@@ -140,7 +144,7 @@ export function handleCastBuff(
       caster: sheet,
       spell: resolvedMech.name,
       level: args.level,
-      target: enemy ? { kind: "enemy", id: enemy.id } : { kind: "sheet", id: ally!.id },
+      target: enemy ? { kind: isSheetFoe(enemy) ? "sheet" : "enemy", id: enemy.id } : { kind: "sheet", id: ally!.id },
       endSpell: args.endSpell,
       reason: args.reason,
     });
@@ -149,11 +153,15 @@ export function handleCastBuff(
   // the beast's block in place of its own (src/lib/dm/enemy-polymorph.ts).
   if (args.targetEnemyId && enemyShapeSpellFor(engine)) {
     const encounter = getActiveEncounter(campaign.id);
-    const enemy = encounter ? resolveEnemyRef(encounter.id, args.targetEnemyId) : null;
+    const enemy = encounter ? resolveTargetFoe(campaign.id, encounter, args.targetEnemyId) : null;
     if (!enemy) {
       return encounter
-        ? unknownEnemyRef(encounter.id, "targetEnemyId", args.targetEnemyId, "Nothing was spent.")
+        ? unknownCombatantRef(campaign.id, encounter, "targetEnemyId", args.targetEnemyId, "Nothing was spent.")
         : { error: "No fight is running: targetEnemyId names an enemy of a fight. Nothing was spent.", retry: true };
+    }
+    // A character's shape is its sheet's beast form, not a block swapped in.
+    if (isSheetFoe(enemy)) {
+      return { error: `${resolvedMech.name} on a character is not cast through targetEnemyId: name them in targetCharacterIds with the form as the variant. Nothing was spent.`, retry: true };
     }
     return castShapeAtEnemy(
       campaign,
@@ -220,11 +228,11 @@ export function handleCastBuff(
   const encounterNow = getActiveEncounter(campaign.id);
   const quarry =
     MARKS.has(buff.condition) && args.targetEnemyId && encounterNow
-      ? resolveEnemyRef(encounterNow.id, args.targetEnemyId)
+      ? resolveTargetFoe(campaign.id, encounterNow, args.targetEnemyId)
       : null;
   if (MARKS.has(buff.condition) && args.targetEnemyId && !quarry) {
     return encounterNow
-      ? unknownEnemyRef(encounterNow.id, "targetEnemyId", args.targetEnemyId, "Nothing was spent.")
+      ? unknownCombatantRef(campaign.id, encounterNow, "targetEnemyId", args.targetEnemyId, "Nothing was spent.")
       : { error: "No fight is running: a mark's targetEnemyId names an enemy of a fight. Nothing was spent.", retry: true };
   }
 

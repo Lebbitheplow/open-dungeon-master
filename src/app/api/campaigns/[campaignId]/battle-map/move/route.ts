@@ -1,4 +1,5 @@
 import { readiedReleaseFor } from "@/lib/dm/readied-release";
+import { tokenSides } from "@/lib/dm/combatant";
 import { z } from "zod";
 import { actingSheetFor } from "@/lib/character-seat";
 import { capsFor, isErrorResponse, requireMember } from "@/lib/campaign-api";
@@ -227,6 +228,7 @@ export async function POST(
     sheet,
     footprintOf: footprintLookup(enemiesById),
     enemySize: (refId) => enemiesById.get(refId)?.stats.size,
+    sideOf: tokenSides(encounter),
   }), map, "pc", sheet.id);
   const reach = reachableTiles(
     map.terrain,

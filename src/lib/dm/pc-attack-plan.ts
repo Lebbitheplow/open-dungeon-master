@@ -163,6 +163,8 @@ export function planPcAttack(input: {
   // A dry run asking whether the attack would stand once its attacker walked
   // into reach (pc_attack's approach, src/lib/dm/pc-attack-approach.ts).
   skipReach?: boolean;
+  // A target the rules chose, on either side (pc-attack-gate.ts).
+  anySide?: boolean;
 }): AttackPlan | { refused: ToolError } {
   const { campaign, turn, encounter, sheet, sheets, sheetsById } = input;
   // A Flurry of Blows strike is a bonus-action unarmed strike the ki already
@@ -179,7 +181,7 @@ export function planPcAttack(input: {
 
   // Whether the attacker may attack now and the target can be attacked at
   // all (src/lib/dm/pc-attack-gate.ts).
-  const gate = gatePcAttack({ campaign, encounter, sheet, args });
+  const gate = gatePcAttack({ campaign, encounter, sheet, args, anySide: input.anySide });
   if ("refused" in gate) {
     return gate;
   }
