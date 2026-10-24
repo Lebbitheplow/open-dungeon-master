@@ -49,8 +49,8 @@ jobs:
       - name: The built server keeps its Windows code
         run: node scripts/check-built-platform.mjs
 
-  # The test files run one at a time (vitest.config.mts), so the runners
-  # share them by file.
+  # Each runner takes a share of the files and runs them a few at a time
+  # (vitest.config.mts), each file in its own process.
   tests:
     name: tests (${{ matrix.shard }}/3)
     runs-on: ubuntu-latest

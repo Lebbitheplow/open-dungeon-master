@@ -1,8 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
-import { BaseSequencer, type TestSpecification } from "vitest/node";
 
-// npm test runs every scripts/test-*.mjs under Vitest, one file at a time.
+// npm test runs every scripts/test-*.mjs under Vitest, several files at once.
 // The scripts are plain Node programs with their own test() helpers, not
 // Vitest suites: a file passes when its top level finishes without throwing,
 // exactly as when each ran in its own node process, so they still run with
@@ -12,14 +11,11 @@ import { BaseSequencer, type TestSpecification } from "vitest/node";
 // A worker is killed when its file is done, so a suite's process "exit"
 // handler never runs here: the global setup and the setup file own the
 // suites' scratch directories instead (scripts/lib/test-temp-root.mjs).
-
-// Files in name order, as npm test always ran them. Vitest's default runs the
-// slowest and last-failed first, which makes two runs' logs hard to compare.
-class ByName extends BaseSequencer {
-  async sort(files: TestSpecification[]) {
-    return [...files].sort((a, b) => (a.moduleId < b.moduleId ? -1 : a.moduleId > b.moduleId ? 1 : 0));
-  }
-}
+// Each file runs in its own worker process with a scratch directory of its
+// own, so files share no module state, working directory or database, and
+// they run in parallel: one at a time took the suite 16 minutes, four
+// workers took 4. `npm test -- --sequence.shuffle` runs them in a random
+// order, to show that none needs another's leftovers.
 
 // passWithNoTests is what lets a script with no Vitest test() in it pass. It
 // would also let a run that found no files at all pass (an include that
@@ -47,8 +43,6 @@ export default defineConfig({
     setupFiles: ["scripts/lib/vitest-file-setup.mjs"],
     passWithNoTests: true,
     reporters: ["default", failAnEmptyRun],
-    fileParallelism: false,
-    sequence: { sequencer: ByName },
     coverage: {
       provider: "v8",
       // Script tests reach src/lib and route handlers but render no UI, so
