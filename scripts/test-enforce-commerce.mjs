@@ -14,11 +14,15 @@
 // invariant under all of it: no sequence of offers, purchases and sales
 // leaves the table holding more coin or more items than it started with.
 import assert from "node:assert/strict";
+// No model or painter behind the companion a haggle test adds.
+import "./lib/enforce-campaign.mjs";
 import { openWorld } from "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
 
 const { test, finish } = suite("test-enforce-commerce");
 const shops = await import("../src/lib/db/shops.ts");
+const npcs = await import("../src/lib/db/npcs.ts");
+const departures = await import("../src/lib/db/companion-departures.ts");
 const proposals = await import("../src/lib/db/item-proposals.ts");
 const { searchItems } = await import("../src/lib/content/index.ts");
 
@@ -306,6 +310,53 @@ await test("at an end of the ladder a haggle says the price is already there, ne
   // Off the ends a step is still a step.
   const plain = openShop(1);
   assert.equal((await haggle(plain, ann, 20)).body.result.prices, "a step lower");
+});
+
+await test("only who can stand at the counter shares a haggle: the dead and a companion turned on the party are refused, and nothing is rolled", async () => {
+  const camp = await openWorld({ gameSettings: { companions: "full" } });
+  const kael = camp.addHero({ name: "Kael", class: "rogue", level: 3, abilities: { cha: 10 } });
+  const brin = camp.addHero({ name: "Brin", class: "fighter", level: 3 });
+  const added = await camp.invoke("add_companion", { name: "Seren", class: "paladin", gender: "Female", alignment: "LG", personality: "Stern and devout.", kind: "party" });
+  assert.equal(added.ok, true, added.error);
+  const seren = camp.sheets().find((entry) => entry.name === "Seren");
+  const stall = shops.insertShop(camp.campaignId, { name: "Crossroads Stall", kind: "general", size: "town", markup: 1, stock: [{ itemName: "Rope", qty: 5, priceCp: LIST.Rope, note: "" }] });
+  const haggleAt = async (args) => {
+    camp.clearDice();
+    camp.diceLog();
+    const out = await camp.invoke("haggle", { shop: stall.id, ...args });
+    return { out, rolled: camp.diceLog().length };
+  };
+
+  // Brin lies dead: named at the counter, the call is sent back to leave
+  // him out; as the haggler, the game says no.
+  camp.patch(brin.id, { deathSaves: { successes: 0, failures: 3, stable: false, dead: true } });
+  const withDead = await haggleAt({ characterId: kael.id, present: [brin.id] });
+  assert.equal(withDead.out.retry, true, JSON.stringify(withDead.out));
+  assert.match(withDead.out.error, /Brin is dead, so not at the counter: send present without them/);
+  assert.equal(withDead.rolled, 0);
+  const byDead = await haggleAt({ characterId: brin.id });
+  assert.equal(byDead.out.refused, "rules", JSON.stringify(byDead.out));
+  assert.match(byDead.out.error, /Brin is dead and cannot haggle/);
+
+  // Seren turned on the party and lies at its mercy: her sheet is kept at
+  // the table (src/lib/dm/turncoat.ts), but she is no one's company at a
+  // counter.
+  const row = npcs.listNpcs(camp.campaignId).find((npc) => npc.name === "Seren");
+  departures.saveDeparture(row.id, { intent: null, gone: null, turned: { response: "confront", at: 0 } });
+  camp.patch(seren.id, { currentHp: 0 });
+  const withTurncoat = await haggleAt({ characterId: kael.id, present: ["Seren"] });
+  assert.equal(withTurncoat.out.retry, true, JSON.stringify(withTurncoat.out));
+  assert.match(withTurncoat.out.error, /Seren has turned against the party, so not at the counter/);
+  assert.equal(withTurncoat.rolled, 0);
+  assert.equal((await haggleAt({ characterId: seren.id })).out.refused, "rules");
+  assert.deepEqual(shops.getShop(stall.id).haggledBy, [], "no try was used by a refused haggle");
+
+  // Left out, Kael haggles alone.
+  camp.dice(20);
+  const alone = await camp.invoke("haggle", { characterId: kael.id, shop: stall.id });
+  camp.clearDice();
+  assert.equal(alone.ok, true, alone.error);
+  assert.deepEqual(shops.getShop(stall.id).haggledBy, [kael.id]);
 });
 
 // ---- trades ----

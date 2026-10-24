@@ -4,6 +4,7 @@ import { allocateSeq } from "@/lib/db/campaigns";
 import { insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
 import { insertCharacterEvent } from "@/lib/db/character-events";
 import { getClock } from "@/lib/db/clock";
+import { getActiveEncounter } from "@/lib/db/encounters";
 import { getCurrentLocation } from "@/lib/db/locations";
 import { getNpcById, getNpcByName } from "@/lib/db/npcs";
 import { insertRoll } from "@/lib/db/rolls";
@@ -19,6 +20,8 @@ import { rollExpression } from "@/lib/dice";
 import { grantItemMath, removeItemMath } from "@/lib/dm/mutation-math";
 import { resolveRollExpression, resolveSheetRef, type RollArgs, unknownSheetRef } from "@/lib/dm/rolls";
 import { rollExtrasFor, spendRollCarriers } from "@/lib/dm/forced-save";
+import { sheetsAgainstParty } from "@/lib/dm/combat-sides";
+import { turncoatsAtTable } from "@/lib/dm/turncoat";
 import { keepsFullValue, listPriceCp, magicValueOf, soldToShops } from "@/lib/dm/trade-value";
 import { capacityProblem } from "@/lib/dm/load-rules";
 import {
@@ -454,6 +457,19 @@ const haggleSchema = z.object({
 
 const SKILL_LABEL = { persuasion: "Persuasion", intimidation: "Intimidation", deception: "Deception" } as const;
 
+// Why a character cannot stand at a counter, or null when they can: the
+// dead, and a companion set against the party (issue 503: turned where it
+// stood, or fielded against it), whose sheet the server keeps while the
+// party decides what becomes of them (src/lib/dm/turncoat.ts).
+function awayFromCounter(campaign: Campaign, sheet: CharacterSheet): string | null {
+  if (sheet.deathSaves?.dead) {
+    return `${sheet.name} is dead`;
+  }
+  const encounter = getActiveEncounter(campaign.id);
+  const against = encounter ? sheetsAgainstParty(encounter) : turncoatsAtTable(campaign.id).map((other) => other.id);
+  return against.includes(sheet.id) ? `${sheet.name} has turned against the party` : null;
+}
+
 // A haggle (Albert's rules, 2026-10-23, after #456): a win lowers the price
 // a step, a failure holds it, a failure by BAD_FAILURE_MARGIN or more raises
 // it (two steps for Intimidation). The new price and the used try belong to
@@ -472,6 +488,10 @@ export function handleHaggle(campaign: Campaign, rawArguments: string): ToolResu
   const sheet = resolveSheet(campaign, args.characterId);
   if (!sheet) {
     return unknownSheetRef("characterId", args.characterId, listSheets(campaign.id));
+  }
+  const away = awayFromCounter(campaign, sheet);
+  if (away) {
+    return { error: `${away} and cannot haggle. Nothing was rolled.`, refused: "rules" };
   }
   const company: CharacterSheet[] = [];
   for (const ref of args.present) {
@@ -492,6 +512,14 @@ export function handleHaggle(campaign: Campaign, rawArguments: string): ToolResu
   }
   if (skill === "deception" && shop.haggles.some((deal) => deal.skill === "deception")) {
     return { error: `${shop.name}'s keeper has been lied to once already and will not fall for it again. Persuasion or intimidation may still be tried.`, refused: "rules" };
+  }
+  // Someone named at the counter who cannot be there is the call's to fix:
+  // the haggle goes ahead without them once they are left out.
+  for (const other of company) {
+    const absent = awayFromCounter(campaign, other);
+    if (absent) {
+      return { error: `${absent}, so not at the counter: send present without them. Nothing was rolled.`, retry: true };
+    }
   }
   // Held carriers and lasting effects ride the haggling check, and the
   // carrier is spent by it.
