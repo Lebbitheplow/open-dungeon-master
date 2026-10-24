@@ -27,6 +27,7 @@ import { applyEnemyDamage } from "@/lib/dm/enemy-damage";
 import { blowByType } from "@/lib/dm/enemy-hit";
 import { opportunityWeapon } from "@/lib/dm/enemy-profile";
 import { critDamageExpression } from "@/lib/dm/encounter-logic";
+import { leavesReachAt } from "@/lib/dm/opportunity-reach-logic";
 import { withOpportunityTurn } from "@/lib/dm/opportunity-strike";
 import { conditionBlocksReactions } from "@/lib/srd/condition-effects";
 
@@ -36,15 +37,8 @@ const unseen = (conditions: string[]) => conditions.some((entry) => ["invisible"
 const blind = (conditions: string[]) => conditions.some((entry) => entry.toLowerCase() === "blinded");
 
 // The enemies of the other side whose reach the walker (an enemy row) leaves
-// strike it; returns the lines it posted. `leaves` is opportunity.ts's reach
-// test (the square it left from, or null).
-export function enemiesStrikeWalker(
-  campaignId: string,
-  walkerId: string,
-  steps: XY[],
-  walkerFootprint: Footprint,
-  leaves: (reactor: XY, reach: number, reactorFootprint: Footprint, moverFootprint: Footprint) => XY | null,
-): string[] {
+// strike it; returns the lines it posted.
+export function enemiesStrikeWalker(campaignId: string, walkerId: string, steps: XY[], walkerFootprint: Footprint): string[] {
   const campaign = getCampaignById(campaignId);
   const encounter = getActiveEncounter(campaignId);
   const map = encounter ? getBattleMapForEncounter(encounter.id) : null;
@@ -69,7 +63,7 @@ export function enemiesStrikeWalker(
     }
     const token = getTokenByRef(map.id, reactor.id);
     const weapon = opportunityWeapon(reactor.stats);
-    if (!token || !weapon || !leaves(token, weapon.reachTiles, footprintForSize(reactor.stats.size), walkerFootprint)) {
+    if (!token || !weapon || !leavesReachAt(steps, token, weapon.reachTiles, footprintForSize(reactor.stats.size), walkerFootprint)) {
       continue;
     }
     encounter.reactionsUsed = [...encounter.reactionsUsed, reactor.id];

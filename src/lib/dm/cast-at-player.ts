@@ -1,12 +1,11 @@
 import { canAct } from "@/lib/dm/can-act";
-import { handleCastAtEnemy } from "@/lib/dm/cast-at-enemy";
+import { castFromFoeSheet } from "@/lib/dm/sheet-foe-cast";
 import { hasDungeonDelver, shieldMasterSaveBonus, spellSaveAdvantageReach } from "@/lib/srd/feat-combat";
 import { tilesBetween } from "@/lib/dm/attack-spatial";
 import { z } from "zod";
 import { castToNoEffect, spellWardOn } from "@/lib/dm/cast-reach";
 import type { Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter, recordEncounterTarget, setEnemyConcentration } from "@/lib/db/encounters";
-import { resolveCombatant } from "@/lib/dm/combatant";
 import { markReactionUsed } from "@/lib/dm/turn-budget";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import type { DmTurn } from "@/lib/db/dm-turns";
@@ -230,34 +229,11 @@ export function handleCastAtPlayer(
   if (!sheet) {
     return unknownSheetRef("characterId", args.characterId, sheets);
   }
-  // A character casting at another of the other side (issue 503), named by
-  // casterEnemyId like any foe: the cast is the caster's, from their sheet,
-  // and the target's save and harm are the target's, which is what
-  // cast_at_enemy resolves for a character fighting the party
-  // (src/lib/dm/sheet-foe.ts). One engine for both.
-  const casterSheet = args.casterEnemyId ? resolveCombatant(campaign.id, getActiveEncounter(campaign.id), args.casterEnemyId) : null;
-  if (casterSheet?.kind === "sheet") {
-    if (!args.spell) {
-      return { error: `${casterSheet.name} is a character: name the spell they cast in spell.`, retry: true };
-    }
-    return handleCastAtEnemy(
-      campaign,
-      turn,
-      JSON.stringify({
-        characterId: casterSheet.id,
-        targetEnemyId: sheet.id,
-        spell: args.spell,
-        saveAbility: args.saveAbility,
-        ...(args.damage ? { damage: args.damage } : {}),
-        ...(args.damageType ? { damageType: args.damageType } : {}),
-        ...(args.halfOnSave !== undefined ? { halfOnSave: args.halfOnSave } : {}),
-        ...(args.condition ? { condition: args.condition } : {}),
-        ...(args.rounds ? { rounds: args.rounds } : {}),
-        ...(args.reason ? { reason: args.reason } : {}),
-      }),
-      sheets,
-      sheetsById,
-    );
+  // casterEnemyId naming a character on the other side: their own cast,
+  // from their sheet (sheet-foe-cast.ts, issue 503).
+  const fromSheet = castFromFoeSheet(campaign, turn, sheet.id, args, sheets, sheetsById);
+  if (fromSheet) {
+    return fromSheet;
   }
   if (sheet.deathSaves?.dead) {
     return { error: `${sheet.name} is DEAD; nothing can affect them. The enemy may target someone else or take another action.`, retry: true };

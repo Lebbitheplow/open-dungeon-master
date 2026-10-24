@@ -7,12 +7,13 @@ import { isSheetFoe } from "@/lib/dm/combat-sides-logic";
 import { sideOf } from "@/lib/dm/combatant";
 import { getFoe } from "@/lib/dm/sheet-foe";
 import { enemiesStrikeWalker } from "@/lib/dm/opportunity-sides";
+import { entersReachAt, leavesReachAt } from "@/lib/dm/opportunity-reach-logic";
 
 import { getBattleMapForEncounter, getTokenByRef } from "@/lib/db/battle-maps";
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
 import { insertRoll } from "@/lib/db/rolls";
 import { rollAgainst } from "@/lib/roll-labels";
-import { footprintDistance, footprintForSize, type Footprint } from "@/lib/battlemap/footprint";
+import { footprintForSize } from "@/lib/battlemap/footprint";
 
 import { d20Expression, rollExpression } from "@/lib/dice";
 import { publishWithSeq } from "@/lib/events";
@@ -89,50 +90,8 @@ export type OpportunityOutcome = {
   downedAt?: XY;
 };
 
-// The square a walker stood on when they left this reach, or null when the
-// walk never leaves it. `steps` is every square of the walk in order, the
-// starting one first.
-// The square a walk enters a reactor's reach at, or null when it never
-// does: Polearm Master's opportunity attack on a creature coming in. Reach
-// is measured between the nearest squares of the two, so an ogre's reach
-// starts at its edge and a walking ogre leaves a reach when its last square
-// does (src/lib/battlemap/footprint.ts).
-export function entersReachAt(
-  steps: XY[],
-  reactor: XY,
-  reach: number,
-  reactorFootprint: Footprint = 1,
-  moverFootprint: Footprint = 1,
-): XY | null {
-  const apart = (step: XY) => footprintDistance(reactor, reactorFootprint, step, moverFootprint);
-  for (let index = 0; index + 1 < steps.length; index += 1) {
-    const here = steps[index];
-    const next = steps[index + 1];
-    if (apart(here) > reach && apart(next) <= reach) {
-      return next;
-    }
-  }
-  return null;
-}
-
-export function leavesReachAt(
-  steps: XY[],
-  reactor: XY,
-  reach: number,
-  reactorFootprint: Footprint = 1,
-  moverFootprint: Footprint = 1,
-): XY | null {
-  const apart = (step: XY) => footprintDistance(reactor, reactorFootprint, step, moverFootprint);
-  for (let index = 0; index + 1 < steps.length; index += 1) {
-    const here = steps[index];
-    const next = steps[index + 1];
-    if (apart(here) <= reach && apart(next) > reach) {
-      return here;
-    }
-  }
-  return null;
-
-}
+// Where a walk enters or leaves a reach (opportunity-reach-logic.ts).
+export { entersReachAt, leavesReachAt };
 
 const lowered = (conditions: string[]) => conditions.map((entry) => entry.toLowerCase());
 const cannotSee = (conditions: string[]) => lowered(conditions).includes("blinded");
@@ -526,7 +485,7 @@ export function resolvePcOpportunityAttacks(
   // A creature the party dominates walking away from its old allies: they
   // strike it as it goes (opportunity-sides.ts posts its own lines).
   if (moverKind === "enemy") {
-    notes.push(...enemiesStrikeWalker(campaign.id, enemyId, steps, moverFootprint, (reactor, reach, reactorFootprint, walker) => leavesReachAt(steps, reactor, reach, reactorFootprint, walker)));
+    notes.push(...enemiesStrikeWalker(campaign.id, enemyId, steps, moverFootprint));
   }
   return notes;
 }

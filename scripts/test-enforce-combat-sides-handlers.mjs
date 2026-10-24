@@ -198,13 +198,16 @@ await test("A creature dominated by a real Dominate Person fights for the party:
   assert.equal(struck.ok, true, struck.error);
   assert.equal(struck.result.hit, true, JSON.stringify(struck.result));
   assert.equal(kit.enemy(goblin.id).currentHp, 40 - 6);
-  // The goblin may strike back: they are on opposite sides now.
+  // The goblin may strike back: they are on opposite sides now. The blow
+  // gives the ogre a new Wisdom save against the spell (SRD 5.1, Dominate
+  // Person): a 1, so the domination holds.
   kit.freshRound();
-  world.dice(15, 3);
+  world.dice(15, 3, 1);
   const back = await world.invoke("enemy_attack", { enemyId: goblin.id, targetCharacterId: ogre.id });
   world.clearDice();
   assert.equal(back.ok, true, back.error);
   assert.equal(kit.enemy(ogre.id).currentHp, 40 - 5);
+  assert.equal(sideOf(world.encounter(), "enemy", ogre.id), "party", "the domination holds through the blow");
   // The goblin falls: no foe stands, and the dominated ogre does not hold
   // the fight open.
   kit.setEnemy(goblin.id, { currentHp: 1 });

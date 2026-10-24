@@ -6,11 +6,9 @@ import { endEncounter, getActiveEncounter, getEnemy, listEnemies, patchEnemyHp, 
 import { activePublicEncounter } from "@/lib/db/encounter-view";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import type { DmTurn } from "@/lib/db/dm-turns";
-import { listRollsSince } from "@/lib/db/rolls";
-import { listAuditSince } from "@/lib/db/sheet-audit";
-import { patchEnemyConditions, setEncounterSummary } from "@/lib/db/encounters";
+import { patchEnemyConditions } from "@/lib/db/encounters";
 import { restoreOwnForm } from "@/lib/db/enemy-form";
-import { computeEncounterSummary, describeEncounterSummary } from "@/lib/dm/encounter-summary";
+import { recordEncounterSummary } from "@/lib/dm/encounter-summary-store";
 import { getBattleMapForEncounter, removeTokenByRef } from "@/lib/db/battle-maps";
 import { publishPersisted } from "@/lib/events";
 import { healthState } from "@/lib/bestiary/health";
@@ -38,9 +36,9 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { unknownRef, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
 import { isSheetFoe } from "@/lib/dm/combat-sides-logic";
-import { combatantsOf, sheetSide, standingOn } from "@/lib/dm/combatant";
+import { sheetSide, standingOn } from "@/lib/dm/combatant";
 import { applySheetFoeDamage, type SheetFoeBlow } from "@/lib/dm/sheet-foe-damage";
-import { sheetEnemyStats } from "@/lib/dm/sheet-foe-stats";
+import { fallenFoeSheetsXp } from "@/lib/dm/sheet-foe";
 
 // The single server-side path for damage landing on an enemy. Used by the
 // damage_enemy tool AND by damage rolls carrying targetEnemyId, which the
@@ -131,14 +129,8 @@ export function finishEncounter(
 
   // What the fight was worth: every enemy row (a creature the party turned
   // with a Dominate spell was overcome all the same), and every character
-  // who fought on the foes' side and fell, at the rating its sheet reads as
-  // (sheet-foe-stats.ts). A turncoat still standing when the fight ends was
-  // not beaten and is worth nothing.
-  const fought = combatantsOf(campaign.id, encounter);
-  const fallenFoeSheets = fought.filter((combatant) => combatant.kind === "sheet" && combatant.side === "foe" && combatant.sheet.currentHp <= 0);
-  const totalXp =
-    enemies.reduce((sum, enemy) => sum + enemy.xp, 0) +
-    fallenFoeSheets.reduce((sum, combatant) => sum + (combatant.kind === "sheet" ? sheetFoeXp(combatant.sheet) : 0), 0);
+  // who fell fighting on the foes' side (sheet-foe.ts).
+  const totalXp = enemies.reduce((sum, enemy) => sum + enemy.xp, 0) + fallenFoeSheetsXp(campaign.id, encounter);
   const share =
     outcome === "victory" ? 1 : outcome === "enemies_fled" || outcome === "truce" ? 0.5 : 0;
   // The dead take no share: what the fight was worth is split among those
@@ -167,38 +159,9 @@ export function finishEncounter(
     setFloor(campaign.id, { mode: "open" });
     publishPersisted(campaign.id, "floor_changed", { floor: { mode: "open" } });
   }
-  // After the fight (docs/vtt-parity-implementation-plan.md 4.2): the
-  // card the table sees and the line the chapter keeps. Never blocks the
-  // end of a fight.
-  try {
-    const endedAt = new Date().toISOString();
-    const summary = computeEncounterSummary({
-      outcome,
-      rounds: encounter.round,
-      startedAt: encounter.createdAt,
-      endedAt,
-      enemies,
-      sheets,
-      rolls: listRollsSince(campaign.id, encounter.createdAt).map((roll) => ({
-        characterId: roll.characterId,
-        attacker: roll.attacker,
-        kind: roll.kind,
-        total: roll.total,
-        applied: roll.applied,
-        targetEnemyId: roll.targetEnemyId,
-        crit: roll.breakdown?.crit ?? null,
-      })),
-      audits: listAuditSince(campaign.id, encounter.createdAt).map((entry) => ({
-        characterId: entry.characterId,
-        kind: entry.kind,
-        delta: entry.delta,
-      })),
-    });
-    setEncounterSummary(encounter.id, summary, describeEncounterSummary(summary));
-    publishPersisted(campaign.id, "encounter_summary", { encounterId: encounter.id, summary });
-  } catch (error) {
-    console.error("[encounter] summary failed", error);
-  }
+  // After the fight: the card the table sees and the line the chapter keeps
+  // (encounter-summary-store.ts).
+  recordEncounterSummary(campaign.id, encounter, outcome, enemies, sheets);
   publishPersisted(campaign.id, "encounter_updated", { encounter: null });
   // The fight is over, so the fight music is. Every way an encounter can
   // end comes through here, which is why the hook is here and not in the
@@ -270,16 +233,6 @@ export function applySheetFoeBlow(
   return landed;
 }
 
-// A fallen character's worth to the party that beat it, from the stat block
-// its sheet reads as (sheet-foe-stats.ts).
-function sheetFoeXp(sheet: CharacterSheet): number {
-  try {
-    return sheetEnemyStats(sheet).xp;
-  } catch {
-    return 0;
-  }
-}
-
 // Applies damage to a living enemy: resistance/immunity/vulnerability math
 // from the stat block, HP patch, live enemy-card update, token removal and
 // auto-victory on a kill. Returns the compact tool result.
@@ -329,15 +282,9 @@ export function applyEnemyDamage(
   // the blow lands as harm lands on a character (sheet-foe-damage.ts), and
   // a fall may end the fight as a foe's does.
   if (isSheetFoe(enemy)) {
-    return applySheetFoeBlow(campaign, turn, encounter, enemy, {
-      amount,
-      ...(damageType ? { type: damageType } : {}),
-      ...(options?.magical ? { magical: true } : {}),
-      ...(options?.spell ? { spell: true } : {}),
-      ...(options?.crit ? { crit: true } : {}),
-      ...(options?.nonlethal ? { nonlethal: true } : {}),
-      ...(options?.death ? { death: true } : {}),
-    }, sheets, sheetsById, options?.holdVictory === true);
+    const { magical, spell, crit, nonlethal, death, holdVictory } = options ?? {};
+    const blow = { amount, type: damageType ?? undefined, magical, spell, crit, nonlethal, death };
+    return applySheetFoeBlow(campaign, turn, encounter, enemy, blow, sheets, sheetsById, holdVictory === true);
   }
   // Inescapable Destruction: the acting Death cleric's necrotic ignores resistance (authored-saves.ts).
   const ignores = (damageType && authoredIgnoresResistance(campaign.id, damageType)) || (options?.ignoreResistance && damageType ? (options.ignoreResistanceBy ?? "Elemental Adept") : null);

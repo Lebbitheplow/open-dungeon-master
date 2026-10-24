@@ -23,7 +23,7 @@ import { enemyAcWithEffects } from "@/lib/dm/ac-effects";
 import { getActiveEncounter, getEnemy, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
 import { getSheetById } from "@/lib/db/sheets";
 import { SHEET_FOE_SLUG } from "@/lib/dm/combat-sides-logic";
-import { resolveCombatant } from "@/lib/dm/combatant";
+import { combatantsOf, resolveCombatant } from "@/lib/dm/combatant";
 import { effectiveMaxHp } from "@/lib/dm/condition-logic";
 import { sheetEnemyStats } from "@/lib/dm/sheet-foe-stats";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -78,4 +78,23 @@ export function resolveTargetFoe(campaignId: string, encounter: Encounter, ref: 
     return null;
   }
   return combatant.kind === "enemy" ? combatant.enemy : sheetFoeView(encounter.id, combatant.sheet);
+}
+
+// What the characters who fell fighting on the foes' side were worth to the
+// party that beat them, each at the rating its sheet reads as
+// (sheet-foe-stats.ts). One still standing when the fight ends was not
+// beaten and is worth nothing (enemy-damage.ts finishEncounter).
+export function fallenFoeSheetsXp(campaignId: string, encounter: Encounter): number {
+  let total = 0;
+  for (const combatant of combatantsOf(campaignId, encounter)) {
+    if (combatant.kind !== "sheet" || combatant.side !== "foe" || combatant.sheet.currentHp > 0) {
+      continue;
+    }
+    try {
+      total += sheetEnemyStats(combatant.sheet).xp;
+    } catch {
+      // A sheet the derivations cannot read is worth nothing.
+    }
+  }
+  return total;
 }
