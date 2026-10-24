@@ -125,6 +125,39 @@ export async function fakeModel() {
     res.end("data: [DONE]\n\n");
   }
 
+  // A call made without streaming (the guard's rewrite, the whisper
+  // backstop) takes one JSON completion, held like a streamed one.
+  function completion(res, entry) {
+    if (entry.held) {
+      entry.held.then(() => completion(res, { ...entry, held: null }));
+      return;
+    }
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(
+      JSON.stringify({
+        choices: [
+          {
+            index: 0,
+            finish_reason: "stop",
+            message: {
+              role: "assistant",
+              content: entry.text,
+              ...(entry.calls.length
+                ? {
+                    tool_calls: entry.calls.map((toolCall) => ({
+                      id: toolCall.id,
+                      type: "function",
+                      function: { name: toolCall.name, arguments: JSON.stringify(toolCall.args) },
+                    })),
+                  }
+                : {}),
+            },
+          },
+        ],
+      }),
+    );
+  }
+
   const server = http.createServer((req, res) => {
     const chunks = [];
     req.on("data", (chunk) => chunks.push(chunk));
@@ -151,32 +184,7 @@ export async function fakeModel() {
         sse(res, entry);
         return;
       }
-      // A call made without streaming (the guard's rewrite) takes one JSON
-      // completion.
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(
-        JSON.stringify({
-          choices: [
-            {
-              index: 0,
-              finish_reason: "stop",
-              message: {
-                role: "assistant",
-                content: entry.text,
-                ...(entry.calls.length
-                  ? {
-                      tool_calls: entry.calls.map((toolCall) => ({
-                        id: toolCall.id,
-                        type: "function",
-                        function: { name: toolCall.name, arguments: JSON.stringify(toolCall.args) },
-                      })),
-                    }
-                  : {}),
-              },
-            },
-          ],
-        }),
-      );
+      completion(res, entry);
     });
   });
   // Node closes an idle keep-alive socket after five seconds; a test that

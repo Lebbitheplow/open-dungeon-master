@@ -8,17 +8,93 @@
 //
 // The scripted fake model (scripts/lib/enforce-narrator.mjs) fails a call
 // with failure(): an HTTP 500 with an OpenAI-style error body.
+//
+// A restart is the other way a turn stops partway: the process goes while a
+// call is out, with no error to unwind through, and the next process halts
+// the turn from what the database kept (src/lib/dm/restart-recovery.ts).
+// The restart here is the in-process one test-real-dice-restart.mjs uses.
 import assert from "node:assert/strict";
 import { openWorld } from "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
-import { call, failure, fakeModel, reply, settleQueue } from "./lib/enforce-narrator.mjs";
+import { call, failure, fakeModel, held, reply, settleQueue } from "./lib/enforce-narrator.mjs";
 
 const { test, finish } = suite("test-turn-failure-retry");
 
 const { listRecentMessages, findMessageForDmTurn } = await import("../src/lib/db/messages.ts");
 const { getDmTurn, getLatestDmTurnId } = await import("../src/lib/db/dm-turns.ts");
+const { insertPlayerWhisper } = await import("../src/lib/db/dm-whispers.ts");
+const { getDatabase } = await import("../src/lib/db/core.ts");
 const { getDmStatus } = await import("../src/lib/dm/status.ts");
 const { DM_HALTED_PREFIX } = await import("../src/lib/campaign-types.ts");
+const { RESTART_HALT } = await import("../src/lib/dm/restart-recovery.ts");
+const { register } = await import("../src/instrumentation.ts");
+const { requestDmTurn } = await import("../src/lib/dm/loop.ts");
+
+// What a restart takes (test-real-dice-restart.mjs): the database handle and
+// the DM's maps on globalThis, with the job that was running. The job's own
+// promise cannot be ended from outside; the test leaves it waiting on a
+// held reply, as a process that is gone never answers, and fences it off at
+// the end with abandon() so nothing it does then reaches the next test.
+const IN_MEMORY = [
+  "__odmDmQueues",
+  "__odmDmDepths",
+  "__odmDmDropped",
+  "__odmDmPauses",
+  "__odmDmRunning",
+  "__odmDmStatus",
+  "__odmTurnRequested",
+  "__odmNarrationSlots",
+  "__odmCompaction",
+  "__odmDmRecovered",
+];
+
+async function restart() {
+  const gone = [...(globalThis.__odmDmRunning?.values() ?? [])];
+  assert.ok(gone.length, "no DM job was running to be taken by the restart");
+  getDatabase().close();
+  globalThis.__localRoleplayDb = undefined;
+  for (const key of IN_MEMORY) {
+    globalThis[key] = undefined;
+  }
+  getDatabase().prepare("SELECT 1").get();
+  process.env.NEXT_RUNTIME = "nodejs";
+  await register();
+  return {
+    abandon: () => {
+      for (const control of gone) {
+        control.abandoned = true;
+        control.controller.abort();
+      }
+    },
+  };
+}
+
+async function until(check, what) {
+  for (let tries = 0; tries < 400; tries += 1) {
+    if (check()) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error(`timed out waiting for ${what}`);
+}
+
+// A player's action, queued the way the actions route queues it, so the
+// turn runs as a DM job the restart can take with it.
+function act(world, sheetId, line) {
+  world.say("player", line, world.sheet(sheetId));
+  requestDmTurn(world.campaignId);
+}
+
+// The assistant message of the retried request that carries a call, and
+// whether a result answers it.
+function shown(model, request, toolCall) {
+  const called = request.messages.some(
+    (message) => message.role === "assistant" && message.tool_calls?.some((entry) => entry.id === toolCall.id),
+  );
+  const answered = model.results(request).some((entry) => entry.id === toolCall.id);
+  return called && answered;
+}
 
 const RETRY_NOTE = /interrupted by an internal error/;
 
@@ -207,6 +283,80 @@ await test("A main call that starts repeating one long passage is stopped with t
   assert.ok(!said[0].content.includes(passage), "the loop reached the narration");
   model.close();
   world.close();
+});
+
+await test("A restart while the turn's closing steps wait on the model keeps the calls its last reply already ran: Retry is shown them, and narrates once.", async () => {
+  const { world, kara, model } = await table();
+  const brom = world.addHero({ name: "Brom", class: "cleric", level: 1 });
+  // Brom's whisper to the DM, which the reply leaves unanswered, so the
+  // closing steps ask the model for an answer (the whisper backstop).
+  insertPlayerWhisper(world.campaignId, world.sheet(brom.id).userId, brom.id, "I pocket the ring while nobody looks.");
+  const whisper = call("send_whisper", { characterIds: [kara.id], message: "The innkeeper's hand shakes as he pours." });
+  const note = call("write_campaign_note", { title: "The innkeeper", body: "Nervous whenever the north road comes up." });
+  const backstop = held(reply({}));
+  model.script([
+    reply({ text: "The innkeeper wipes the same mug for the third time.", calls: [whisper, note] }),
+    backstop.entry,
+  ]);
+  act(world, kara.id, "I ask the innkeeper about the north road.");
+  await until(() => model.served() === 2, "the whisper backstop's call");
+  const turnId = getLatestDmTurnId(world.campaignId);
+
+  const gone = await restart();
+  try {
+    assert.equal(getDmTurn(turnId).status, "failed", "the restart left the turn running");
+    const [notice] = notices(world);
+    assert.ok(notice?.content.endsWith(RESTART_HALT), "the table was not told the restart stopped the turn");
+    assert.equal(notice.dmTurnId, turnId);
+
+    model.script([reply({ text: "The innkeeper sets the mug down at last." })]);
+    const retried = await retry(world, world.owner, turnId);
+    assert.equal(retried.status, 200, JSON.stringify(retried.json));
+    assert.equal(getDmTurn(turnId).status, "done");
+
+    // The whisper went out and the note was left before the restart. The
+    // retried model is shown both with their results, so it has no reason
+    // to send or write them again.
+    const resumed = model.requests[0];
+    assert.match(JSON.stringify(resumed.messages), RETRY_NOTE);
+    assert.ok(shown(model, resumed, whisper), "the retry lost the whisper already sent, so the model would send it again");
+    assert.ok(shown(model, resumed, note), "the retry lost the note already left, so the model would leave it again");
+    // The reply's paragraph never reached the table: the retry writes the
+    // scene once, in its own words, not beside the first attempt's.
+    const said = narrations(world);
+    assert.equal(said.length, 1, `expected one narration, found ${said.length}`);
+    assert.match(said[0].content, /sets the mug down/);
+    assert.doesNotMatch(said[0].content, /third time/, "the first attempt's paragraph was published beside the retry's");
+  } finally {
+    gone.abandon();
+    model.close();
+    world.close();
+  }
+});
+
+await test("A restart while a reply of calls alone waits on its narration keeps those calls: Retry is shown them rather than making them again.", async () => {
+  const { world, kara, model } = await table();
+  const ask = call("request_player_input", { characterIds: [kara.id], prompt: "Kara, the innkeeper waits on your answer." });
+  const narrate = held(reply({ text: "The innkeeper leans in." }));
+  model.script([reply({ calls: [ask] }), narrate.entry]);
+  act(world, kara.id, "I hesitate at the bar.");
+  await until(() => model.served() === 2, "the call that narrates the reply");
+  const turnId = getLatestDmTurnId(world.campaignId);
+
+  const gone = await restart();
+  try {
+    assert.equal(getDmTurn(turnId).status, "failed", "the restart left the turn running");
+    model.script([reply({ text: "The innkeeper leans in and waits for Kara." })]);
+    const retried = await retry(world, world.owner, turnId);
+    assert.equal(retried.status, 200, JSON.stringify(retried.json));
+    assert.equal(getDmTurn(turnId).status, "done");
+    assert.ok(shown(model, model.requests[0], ask), "the retry lost the floor already handed to Kara, so the model would hand it again");
+    assert.equal(narrations(world).length, 1);
+  } finally {
+    gone.abandon();
+    model.close();
+    world.close();
+  }
 });
 
 finish();
