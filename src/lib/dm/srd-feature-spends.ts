@@ -21,6 +21,7 @@
 // generic path; must not import mutations.ts. The action-pricing helpers are
 // combat-features.ts's.
 
+import { resolveTargetFoe } from "@/lib/dm/sheet-foe";
 import type { Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter, listEnemies, patchEnemyConditions, type EncounterEnemy } from "@/lib/db/encounters";
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
@@ -29,7 +30,7 @@ import { computeSheetDerived } from "@/lib/srd";
 import { classLevelOf, holdsFeature } from "@/lib/srd/trait-rules";
 import type { ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { setConcentration } from "@/lib/dm/concentration";
-import { applyEnemyDamage, publishEncounter, resolveEnemyRef } from "@/lib/dm/enemy-damage";
+import { applyEnemyDamage, publishEncounter } from "@/lib/dm/enemy-damage";
 import { rollEnemySave } from "@/lib/dm/forced-save";
 import { hurtEnemy } from "@/lib/dm/spell-aura";
 import { getDmTurn } from "@/lib/db/dm-turns";
@@ -109,7 +110,7 @@ function quiveringPalm(campaign: Campaign, turnId: string, sheet: CharacterSheet
     return { error: `${sheet.name} does not have Quivering Palm (a Way of the Open Hand monk's 17th level feature).`, refused: "rules" };
   }
   const encounter = getActiveEncounter(campaign.id);
-  const enemy = encounter && targetEnemyId ? resolveEnemyRef(encounter.id, targetEnemyId) : null;
+  const enemy = encounter && targetEnemyId ? resolveTargetFoe(encounter.campaignId, encounter, targetEnemyId) : null;
   if (!encounter || !enemy || enemy.status !== "alive") {
     return { error: "Quivering Palm needs targetEnemyId: the living creature the monk struck. Nothing was spent.", retry: true };
   }
@@ -184,7 +185,7 @@ function draconicPresence(campaign: Campaign, turnId: string, sheet: CharacterSh
     return { error: `Draconic Presence takes variant 'fear' or 'charm'${wanted ? `; "${args.variant}" is neither` : ""}. Ask the player which, unless they named one. Nothing was spent.`, retry: true };
   }
   const chosen: EncounterEnemy[] = args.targetEnemyId
-    ? [resolveEnemyRef(encounter.id, args.targetEnemyId)].filter((enemy): enemy is EncounterEnemy => Boolean(enemy))
+    ? [resolveTargetFoe(encounter.campaignId, encounter, args.targetEnemyId)].filter((enemy): enemy is EncounterEnemy => Boolean(enemy))
     : listEnemies(encounter.id).filter((enemy) => {
         const feet = feetBetween(encounter.id, sheet.id, enemy.id);
         return feet === null || feet <= 60;

@@ -18,6 +18,9 @@
 // clock path must not import enemy-damage.ts, which imports it): the
 // resistances, a concentration save, death and the token all follow here.
 
+import { lashOut } from "@/lib/dm/confusion";
+import type { CombatSide } from "@/lib/dm/combat-sides-logic";
+import { sideOf } from "@/lib/dm/combatant";
 import { sheetSpellAuthors } from "@/lib/dm/spell-authors";
 import { dmRoll, rollCard, sheetAttacker } from "@/lib/dm/roll-card";
 import type { Campaign } from "@/lib/db/campaigns";
@@ -92,12 +95,17 @@ export function hurtEnemy(campaign: Campaign, encounter: Encounter, enemy: Encou
 }
 
 // Spirit Guardians and its kind, around every caster holding one.
+// The casters whose ring hurts a creature of the other side only: a
+// creature the party dominates is one the cleric designates unaffected, and
+// a companion that turned on the party is no longer (src/lib/dm/combatant.ts).
+function auraCasters(campaign: Campaign, encounter: Encounter, targetSide: CombatSide): CharacterSheet[] {
+  return listSheets(campaign.id)
+    .map((stale) => getSheetById(stale.id) ?? stale)
+    .filter((caster) => caster.currentHp > 0 && !caster.deathSaves?.dead && sideOf(encounter, "sheet", caster.id, caster) !== targetSide);
+}
+
 function auraHits(campaign: Campaign, encounter: Encounter, enemy: EncounterEnemy, lines: string[]) {
-  for (const stale of listSheets(campaign.id)) {
-    const caster = getSheetById(stale.id) ?? stale;
-    if (caster.currentHp <= 0 || caster.deathSaves?.dead) {
-      continue;
-    }
+  for (const caster of auraCasters(campaign, encounter, sideOf(encounter, "enemy", enemy.id, enemy))) {
     const meta = caster.conditionMeta as ConditionMetaMap;
     for (const condition of caster.conditions) {
       const spell = meta[condition]?.spell ?? (condition.toLowerCase() === "spirit guardians" ? "Spirit Guardians" : null);
@@ -129,6 +137,44 @@ function auraHits(campaign: Campaign, encounter: Encounter, enemy: EncounterEnem
       );
       if (amount > 0) {
         lines.push(hurtEnemy(campaign, encounter, live, amount, ring.type, aura.name));
+      }
+    }
+  }
+}
+
+// The same ring around a character of the other side (a companion turned on
+// the party starting its turn beside the party's cleric): the character's
+// own save, and the damage through the character's damage path.
+function characterAuraHits(campaign: Campaign, encounter: Encounter, target: CharacterSheet, lines: string[]) {
+  for (const caster of auraCasters(campaign, encounter, sideOf(encounter, "sheet", target.id, target))) {
+    const meta = caster.conditionMeta as ConditionMetaMap;
+    for (const condition of caster.conditions) {
+      const spell = meta[condition]?.spell ?? (condition.toLowerCase() === "spirit guardians" ? "Spirit Guardians" : null);
+      const aura = spell ? spellMechanicsFor({ spell, userIds: sheetSpellAuthors(caster) }) : null;
+      const apart = aura?.mech.aura ? tilesBetween(encounter.id, caster.id, target.id) : null;
+      if (!aura?.mech.aura || apart === null || apart > Math.floor(aura.mech.aura.radiusFeet / FEET_PER_TILE)) {
+        continue;
+      }
+      const live = getSheetById(target.id);
+      if (!live || live.currentHp <= 0 || live.deathSaves?.dead) {
+        return;
+      }
+      const ring = aura.mech.aura;
+      const dc = spellSaveDcFor(caster, aura.name) ?? 13;
+      const slot = meta[condition]?.slotLevel ?? ring.baseLevel;
+      const dice = ring.perSlotLevel ? addDice(ring.dice, ring.perSlotLevel, Math.max(0, slot - ring.baseLevel)) : ring.dice;
+      const turn = createDmTurn(campaign.id, [], "human_dm");
+      try {
+        const save = rollCharacterSave(campaign, turn, live, ring.save, dc, `${ring.save.toUpperCase()} save against ${aura.name}`, { magical: true });
+        const rolled = rollCard(campaign, turn, live.id, "damage", rollAgainst(aura.name, live.name), dice, sheetAttacker(caster)).total;
+        const amount = save.success ? (ring.halfOnSave ? Math.floor(rolled / 2) : 0) : rolled;
+        lines.push(`${live.name} starts their turn in ${caster.name}'s ${aura.name}: ${ring.save.toUpperCase()} save ${save.success ? "made" : "failed"} (DC ${dc}).`);
+        if (amount > 0) {
+          applyPcDamage(campaign, turn.id, live, { amount, type: ring.type, magical: true, spell: true, reason: aura.name });
+        }
+      } finally {
+        turn.status = "done";
+        saveDmTurn(turn);
       }
     }
   }
@@ -297,32 +343,41 @@ function heroism(campaign: Campaign, sheet: CharacterSheet) {
 
 // Confusion: at the start of its turn the creature rolls a d10. 1: it moves
 // at random and takes no action; 2 to 6: it neither moves nor acts; 7 or 8:
-// it spends its action attacking a creature in reach at random; 9 or 10: it
-// acts as it chooses. What it may not do is laid down until its turn ends.
-function confusionRoll(enemy: EncounterEnemy, lines: string[]) {
-  const meta = enemy.conditionMeta as ConditionMetaMap;
+// it spends its action attacking a creature in reach at random, which the
+// engine picks with its own die (src/lib/dm/confusion.ts); 9 or 10: it acts
+// as it chooses. What it may not do is laid down until its turn ends. A
+// character rolls the same (its die shown to the table).
+function confusionRoll(campaign: Campaign, encounter: Encounter, who: { kind: "sheet" | "enemy"; id: string; name: string }, lines: string[]) {
+  const holder = who.kind === "enemy" ? getEnemy(who.id) : getSheetById(who.id);
+  const meta = (holder?.conditionMeta ?? {}) as ConditionMetaMap;
   const entry = meta.confused;
-  if (!enemy.conditions.includes("confused") || !entry) {
+  if (!holder || !holder.conditions.includes("confused") || !entry) {
     return;
   }
-  // The creature's own roll: the DM sees the die, the table what it does.
-  const roll = dmRoll(enemy.campaignId, null, "custom", `${enemy.displayName}: Confusion`, "1d10").total;
+  // The creature's own roll: the DM sees an enemy's die, the table a
+  // character's; everyone sees what it does.
+  const roll = who.kind === "enemy"
+    ? dmRoll(campaign.id, null, "custom", `${who.name}: Confusion`, "1d10").total
+    : rollCard(campaign, null, who.id, "custom", `${who.name}: Confusion`, "1d10", null).total;
   const lost = roll === 1 ? "wandering" : roll <= 6 ? "halted" : null;
-  if (lost && !enemy.conditions.includes(lost)) {
+  if (lost && !holder.conditions.includes(lost)) {
     // Until the end of this turn (src/lib/dm/turn-end.ts reads the mark).
-    const next: ConditionMetaMap = { ...meta, [lost]: { spell: entry.spell, source: entry.source, untilTurnEndOf: enemy.id } };
-    patchEnemyConditions(enemy.id, [...enemy.conditions, lost], next);
+    const next: ConditionMetaMap = { ...meta, [lost]: { spell: entry.spell, source: entry.source, untilTurnEndOf: who.id } };
+    if (who.kind === "enemy") {
+      patchEnemyConditions(who.id, [...holder.conditions, lost], next);
+    } else {
+      const updated = patchSheet(who.id, { conditions: [...holder.conditions, lost], conditionMeta: next });
+      if (updated) {
+        publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
+      }
+    }
   }
   lines.push(
-    `${enemy.displayName} is confused and rolls ${roll} on the d10: ${
-      roll === 1
-        ? "it moves in a random direction and takes no action"
-        : roll <= 6
-          ? "it does not move and takes no action"
-          : roll <= 8
-            ? "it uses its action to attack a random creature in reach, or does nothing if none is"
-            : "it acts as it chooses"
-    }.`,
+    roll === 7 || roll === 8
+      ? `${who.name} is confused and rolls ${roll} on the d10. ${lashOut(campaign, encounter, who.kind, who.id, who.name)}`
+      : `${who.name} is confused and rolls ${roll} on the d10: ${
+          roll === 1 ? "it moves in a random direction and takes no action" : roll <= 6 ? "it does not move and takes no action" : "it acts as it chooses"
+        }.`,
   );
 }
 
@@ -387,7 +442,7 @@ export function spellTurnStart(campaign: Campaign, encounter: Encounter, combata
       }
       const after = getEnemy(enemy.id);
       if (after?.status === "alive") {
-        confusionRoll(after, lines);
+        confusionRoll(campaign, encounter, { kind: "enemy", id: after.id, name: after.displayName }, lines);
       }
       const cursed = getEnemy(enemy.id);
       if (cursed?.status === "alive") {
@@ -397,7 +452,12 @@ export function spellTurnStart(campaign: Campaign, encounter: Encounter, combata
     }
     const sheet = getSheetById(id);
     if (sheet && !sheet.deathSaves?.dead) {
-      heroism(campaign, sheet);
+      characterAuraHits(campaign, encounter, sheet, lines);
+      const standing = getSheetById(id);
+      if (standing && standing.currentHp > 0) {
+        confusionRoll(campaign, encounter, { kind: "sheet", id, name: standing.name }, lines);
+      }
+      heroism(campaign, getSheetById(id) ?? sheet);
       characterTurnStartDamage(campaign, getSheetById(id) ?? sheet, lines);
       regenerate(campaign, getSheetById(id) ?? sheet);
     }

@@ -11,10 +11,11 @@
 //     takes 10d10 psychic damage. Its return is a turn-end hook
 //     (src/lib/dm/turn-end.ts).
 
+import { getFoe } from "@/lib/dm/sheet-foe";
 import { catalogName } from "@/lib/srd/adventuring-gear";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { settleEnemyIncapacitation } from "@/lib/dm/enemy-incapacitation";
-import { getActiveEncounter, getEnemy, patchEnemyConditions, type EncounterEnemy } from "@/lib/db/encounters";
+import { getActiveEncounter, patchEnemyConditions, type EncounterEnemy } from "@/lib/db/encounters";
 import { insertRoll } from "@/lib/db/rolls";
 import { rollAgainst } from "@/lib/roll-labels";
 import { insertSheetAudit } from "@/lib/db/sheet-audit";
@@ -177,7 +178,7 @@ export function poisonOnHit(campaign: Campaign, sheetId: string, enemyId: string
   if (updated) {
     publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
   }
-  const enemy = getEnemy(enemyId);
+  const enemy = getFoe(enemyId);
   if (!coat || !enemy || enemy.status !== "alive") {
     return "The poison's coat is spent on the blow.";
   }
@@ -204,7 +205,7 @@ export function poisonOnHit(campaign: Campaign, sheetId: string, enemyId: string
     lines.push(`${label}: ${enemy.displayName} ${save.success ? "saves" : "fails the CON save"} (${save.autoFailed ? "automatic" : save.total} vs DC ${coat.dc}) and takes ${dealt} poison damage.`);
   }
   if (!save.success && coat.conditions?.length) {
-    const fresh = getEnemy(enemyId);
+    const fresh = getFoe(enemyId);
     if (fresh && fresh.status === "alive") {
       const failBy = save.autoFailed ? 99 : coat.dc - (save.total ?? 0);
       const laid = [...coat.conditions, ...(coat.unconsciousIfFailBy && failBy >= coat.unconsciousIfFailBy ? ["unconscious"] : [])];
@@ -235,7 +236,7 @@ export function openHandOnHit(
   choice: OpenHandChoice,
   dc: number,
 ): string {
-  const enemy = getEnemy(enemyId);
+  const enemy = getFoe(enemyId);
   if (!enemy || enemy.status !== "alive") {
     return "Open Hand Technique: the target is already down.";
   }
@@ -284,7 +285,7 @@ export { HURLED, HURL_THROUGH_HELL, hurlProblem };
 // The hit creature is gone through the lower planes: out of reach and out of
 // the fight until the end of the warlock's next turn.
 export function hurlThroughHell(campaign: Campaign, warlockId: string, enemyId: string): string {
-  const enemy = getEnemy(enemyId);
+  const enemy = getFoe(enemyId);
   if (!enemy || enemy.status !== "alive") {
     return "Hurl Through Hell: the target is already down.";
   }

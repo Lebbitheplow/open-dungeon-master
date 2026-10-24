@@ -15,7 +15,8 @@ import {
   type Floor,
 } from "@/lib/db/campaigns";
 import { countMessages, insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
-import { getSheetForUser, listSheets } from "@/lib/db/sheets";
+import { getSheetById, getSheetForUser, listSheets } from "@/lib/db/sheets";
+import { dominatedRefusal } from "@/lib/dm/companion-command";
 import { floorAfterRelease } from "@/lib/dm/encounter-tools";
 import { requestDmTurn } from "@/lib/dm/loop";
 import { settleTableWait, waitsForTable } from "@/lib/dm/table-wait";
@@ -102,6 +103,15 @@ export async function POST(
   const tableBreak = kind === "ooc" ? null : tableBreakOn(campaignId);
   if (tableBreak) {
     return Response.json({ error: breakRefusal(tableBreak), tableBreak }, { status: 409 });
+  }
+  // A character dominated by the other side is the DM's to play until the
+  // charm ends (src/lib/dm/companion-command.ts): its player hears why,
+  // whoever's turn it is. Table talk is free.
+  const named = parsed.data.characterId ? getSheetById(parsed.data.characterId) : null;
+  const acting = named && named.campaignId === campaignId && named.userId === user.id ? named : selected;
+  const held = kind === "ooc" ? null : dominatedRefusal(campaignId, acting);
+  if (held) {
+    return Response.json({ error: held, dominated: true }, { status: 409 });
   }
   const intent = kind === "do" ? parseMessageIntent(parsed.data.intent) : null;
   // Floor control: during a spotlight only the named players may act (ooc is

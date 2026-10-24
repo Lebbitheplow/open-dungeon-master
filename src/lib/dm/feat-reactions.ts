@@ -15,7 +15,7 @@ import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { addSheetCondition } from "@/lib/dm/action-common";
 import { tilesBetween } from "@/lib/dm/attack-spatial";
 import { removeConditions } from "@/lib/dm/condition-logic";
-import { freshLastHit } from "@/lib/dm/last-hit";
+import { attackerFoeId, freshLastHit } from "@/lib/dm/last-hit";
 import { READIED } from "@/lib/dm/object-actions";
 import { handlePcAttack } from "@/lib/dm/pc-attack";
 import { settle, spendReaction, SPENT, type Ctx } from "@/lib/dm/reaction-tools";
@@ -39,7 +39,7 @@ export function defensiveDuelist(ctx: Ctx): ToolResult {
     };
   }
   const record = freshLastHit(campaign.id, sheet.id);
-  if (!record || record.source !== "attack" || record.attacker.kind !== "enemy") {
+  if (!record || record.source !== "attack" || attackerFoeId(record) === null) {
     return { error: `Defensive Duelist answers a melee weapon attack that just hit ${sheet.name}, and the server has no such attack on record. Nothing was spent.`, refused: "rules" };
   }
   if (record.ranged) {
@@ -133,7 +133,7 @@ export function sentinel(ctx: Ctx): ToolResult {
       return false;
     }
     const record = freshLastHit(campaign.id, ally.id);
-    return record?.source === "attack" && record.attacker.kind === "enemy" && record.attacker.id === args.targetEnemyId;
+    return record?.source === "attack" && attackerFoeId(record) !== null && record.attacker.id === args.targetEnemyId;
   });
   if (!struckAlly) {
     return { error: `Sentinel answers an attack on someone other than ${sheet.name}, and the server has no such attack by that creature on record. Nothing was spent.`, refused: "rules" };
@@ -168,7 +168,7 @@ export function lucky(ctx: Ctx): ToolResult {
     return { error: `${sheet.name} has no luck point to spend${sheet.feats.some((feat) => isNamed(feat, "lucky", "fortunate")) ? " (they come back with a long rest)" : ": Lucky is not among their feats"}. Nothing was spent.`, refused: "rules" };
   }
   const record = freshLastHit(campaign.id, sheet.id);
-  if (!record || record.source !== "attack" || record.attacker.kind !== "enemy") {
+  if (!record || record.source !== "attack" || attackerFoeId(record) === null) {
     return { error: `Lucky answers an attack that just hit ${sheet.name}, and the server has no such attack on record. Nothing was spent.`, refused: "rules" };
   }
   if (record.answered.includes("lucky")) {

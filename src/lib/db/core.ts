@@ -1886,6 +1886,12 @@ function ensureSchema(db: SqliteDatabase) {
     // {enemyId: {verb, targetRef, expected}}} (docs/visual-overhaul-plan.md
     // 5.6). Read only while the round matches, so it never needs clearing.
     ["intents_json", `TEXT NOT NULL DEFAULT '{}'`],
+    // Which side each combatant not on its kind's default side fights on, as
+    // {combatantId: "party" | "foe"} (issue 503, src/lib/dm/combat-sides-logic.ts):
+    // a companion turned on the party, a summon whose maker lost it. Written
+    // only by setEncounterSides, never by saveEncounter, so a handler holding
+    // a stale Encounter cannot put a turncoat back.
+    ["sides_json", `TEXT NOT NULL DEFAULT '{}'`],
     // The action economy of whichever combatant is currently acting: action,
     // bonus action, reaction, attacks made, and movement spent. Rebuilt from
     // scratch whenever the initiative pointer moves, so it never needs a

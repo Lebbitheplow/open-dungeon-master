@@ -1,4 +1,6 @@
 import { emptyTurnLine, type EmptyTurnPlayer } from "@/lib/dm/empty-turn";
+import { defaultSide } from "@/lib/dm/combat-sides-logic";
+import { combatantsOf } from "@/lib/dm/combatant";
 import { manualTraits } from "@/lib/dm/monster-traits";
 import { coordinationForPrompt } from "@/lib/dm/coordination";
 import { clipKeepingEnds } from "@/lib/dm/ask-logic";
@@ -451,8 +453,18 @@ function buildEncounterState(campaignId: string, sheets: CharacterSheet[]) {
       vulnerable: enemy.stats.vulnerable,
       concentration: enemy.concentration,
     })),
+    ...sidesForState(encounter),
     map: buildMapText(encounter.id, sheets),
   };
+}
+
+// The combatants fighting on the side their kind does not (issue 503,
+// src/lib/dm/combatant.ts), for the model to play and target by.
+function sidesForState(encounter: Encounter) {
+  const turned = combatantsOf(encounter.campaignId, encounter)
+    .filter((combatant) => combatant.side !== defaultSide(combatant.kind))
+    .map((combatant) => ({ id: combatant.id, name: combatant.name, kind: combatant.kind, side: combatant.side }));
+  return turned.length ? { sides: turned } : {};
 }
 
 // The acting character's movement left this turn, from the budget the

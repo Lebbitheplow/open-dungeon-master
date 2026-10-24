@@ -1,6 +1,7 @@
+import { resolveTargetFoe } from "@/lib/dm/sheet-foe";
 import type { Campaign } from "@/lib/db/campaigns";
 import { getBattleMapForEncounter, getTokenByRef } from "@/lib/db/battle-maps";
-import { listEnemies, type Encounter } from "@/lib/db/encounters";
+import type { Encounter } from "@/lib/db/encounters";
 import { footprintForSize } from "@/lib/battlemap/footprint";
 import { tilesBetween } from "@/lib/dm/attack-spatial";
 import { openSquaresBeside } from "@/lib/dm/companion-approach";
@@ -57,7 +58,8 @@ export function approachForAttack(
   if (current?.kind !== "pc" || current.characterId !== sheet.id) {
     return null;
   }
-  const enemy = listEnemies(encounter.id).find((entry) => entry.id === args.targetEnemyId && entry.status === "alive");
+  const found = resolveTargetFoe(campaign.id, encounter, args.targetEnemyId);
+  const enemy = found && found.status === "alive" ? found : null;
   const map = getBattleMapForEncounter(encounter.id);
   const me = map ? getTokenByRef(map.id, sheet.id) : null;
   const them = map && enemy ? getTokenByRef(map.id, enemy.id) : null;

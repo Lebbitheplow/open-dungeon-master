@@ -1,5 +1,7 @@
 import type { Campaign } from "@/lib/db/campaigns";
-import { listEnemies, patchEnemyConditions, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
+import { tokenSides } from "@/lib/dm/combatant";
+import { allyBeside } from "@/lib/dm/side-allies";
+import { getEncounter, listEnemies, patchEnemyConditions, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
 import { getBattleMapForEncounter, getTokenByRef, listTokens, moveToken, resetTurnBudgets } from "@/lib/db/battle-maps";
 import { findPath, walkPathWithBudget } from "@/lib/battlemap/movement";
 import { hasLineOfSight } from "@/lib/battlemap/los";
@@ -7,12 +9,12 @@ import { bestFiringPosition } from "@/lib/battlemap/tactics";
 import { occupiedTiles } from "@/lib/battlemap/view";
 import { chebyshev, climbsFrom, swimsFrom, type BattleToken, type MoveTraits } from "@/lib/battlemap/types";
 import { footprintDistance, footprintForSize, nearestFootprintTile } from "@/lib/battlemap/footprint";
-import { tilesApart, tokenFootprint } from "@/lib/dm/board-reach";
+import { tokenFootprint } from "@/lib/dm/board-reach";
 
 import { passableTiles } from "@/lib/battlemap/passage";
 import { getSheetById } from "@/lib/db/sheets";
 import { sizeForRace } from "@/lib/srd";
-import { isIncapacitated, removeConditions } from "@/lib/dm/condition-logic";
+import { removeConditions } from "@/lib/dm/condition-logic";
 import { resolvePcOpportunityAttacks } from "@/lib/dm/opportunity";
 import { publishEphemeral } from "@/lib/events";
 import { swingMode, type EnemyAttackProfile } from "@/lib/dm/enemy-profile";
@@ -249,19 +251,8 @@ export function approachTarget(
 // Pack Tactics' condition: another enemy of the target, standing and able to
 // act, within 5 feet of it (SRD 5.1).
 export function enemyAllyNear(encounterId: string, enemyId: string, targetRef: string): boolean {
-  const map = getBattleMapForEncounter(encounterId);
-  const target = map ? getTokenByRef(map.id, targetRef) : null;
-  if (!map || !target) {
-    return false;
-  }
-  return listEnemies(encounterId).some((ally) => {
-    if (ally.id === enemyId || ally.status !== "alive" || isIncapacitated(ally.conditions)) {
-      return false;
-    }
-    const token = getTokenByRef(map.id, ally.id);
-    return Boolean(token && tilesApart(token, target) <= 1);
-  });
-
+  // Its side's, not its kind's (side-allies.ts, issue 503).
+  return allyBeside(encounterId, { kind: "enemy", id: enemyId }, targetRef);
 }
 
 // An enemy's walking traits on the board: a swimming or climbing speed from
@@ -287,7 +278,7 @@ export function enemyMoveTraits(width: number, tokens: BattleToken[], mover: Bat
   return zoneStepsFor({
     swims: swimsFrom(speed),
     climbs: climbsFrom(speed),
-    passable: passableTiles({ width, tokens, mover, footprintOf, sizeOf }),
+    passable: passableTiles({ width, tokens, mover, footprintOf, sizeOf, sideOf: tokenSides(getEncounter(encounterId)) }),
     squeeze: footprintOf(mover) > 1,
   }, encounterId, "enemy", mover.refId);
 }

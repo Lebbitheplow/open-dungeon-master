@@ -200,6 +200,9 @@ export type DmEncounterState = {
     vulnerable: string;
     concentration: string | null;
   }>;
+  // Combatants fighting on the side their kind does not (issue 503): a
+  // character turned against the party, a creature the party dominates.
+  sides?: Array<{ id: string; name: string; kind: "sheet" | "enemy"; side: "party" | "foe" }>;
   // Serialized tactical grid with every token's position; null when the
   // encounter has no battle map.
   map: string | null;
@@ -1065,6 +1068,17 @@ export function buildGameStateBlock(state: DmGameState): string {
         parts.push(`CONCENTRATING on ${enemy.concentration} (damage forces its CON save; a break ends the effect)`);
       }
       lines.push(parts.join(" | "));
+    }
+    if (encounter.sides?.length) {
+      lines.push(
+        `Sides (the server's, from the fight's events; never decide them yourself): ${encounter.sides
+          .map((entry) =>
+            entry.kind === "sheet"
+              ? `${entry.name} [characterId=${entry.id}] fights AGAINST the party: you play their turns from their own sheet (pc_attack, cast_at_enemy at the party, cast_at_player with casterEnemyId=${entry.id}), and the party strikes them with pc_attack or cast_at_enemy, targetEnemyId=${entry.id} (a buff spell such as Polymorph takes their save)`
+              : `${entry.name} [enemyId=${entry.id}] fights FOR the party while it is dominated: its enemy_attack takes a foe's enemyId as targetCharacterId and a foe's takes ${entry.id}, the party's buffs reach it (cast_buff targetCharacterIds), and declare_intent's target is its standing order`,
+          )
+          .join("; ")}.`,
+      );
     }
     if (encounter.map) {
       lines.push(encounter.map);

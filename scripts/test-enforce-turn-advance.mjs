@@ -38,6 +38,7 @@ import { suite } from "./lib/enforce-harness.mjs";
 import { combatKit, DUMMY } from "./lib/enforce-combat.mjs";
 import { call, fakeModel, reply } from "./lib/enforce-narrator.mjs";
 
+const { sideOf } = await import("../src/lib/dm/combatant.ts");
 const { getDatabase } = await import("../src/lib/db/core.ts");
 const { allocateSeq, getFloor, setFloor, setDmMode } = await import("../src/lib/db/campaigns.ts");
 const { insertCampaignMessage, listRecentMessages } = await import("../src/lib/db/messages.ts");
@@ -563,7 +564,7 @@ await test("A summon dropped to 0 hit points on its own turn hands it on", async
   agree(world, kit, "after the wolf");
 });
 
-await test("A summon turned hostile on its own turn hands it on, and its new self acts at its count next round", async () => {
+await test("A summon turned hostile on its own turn keeps its turn and its sheet, now fought on the foes' side (issue 503)", async () => {
   const { world, kit, heroes: [kara] } = await table(["Kara", "Brom"], { goblinFace: 12 });
   const [goblin] = world.enemies();
   const wolf = summonWolf(world, kara, { hostileOnBreak: true, spell: "Conjure Fey" });
@@ -572,11 +573,12 @@ await test("A summon turned hostile on its own turn hands it on, and its new sel
   const before = tools.turnHolder(world.campaignId);
   endSpellSummons(world.campaign(), "Conjure Fey", kara.id);
   tools.settleTurn(world.campaign(), before);
-  const hostile = world.enemies().find((enemy) => enemy.id !== goblin.id);
-  assert.ok(hostile, "the wolf is an enemy now");
-  assert.equal(orderNames(world)[1], hostile.displayName, "in the wolf's place");
-  assert.equal(currentName(world), "Brom");
-  assert.deepEqual(due(world), [goblin.id], "the goblin is due, the hostile wolf is not");
+  assert.ok(world.sheet(wolf.id), "the wolf keeps its sheet");
+  assert.equal(sideOf(world.encounter(), "sheet", wolf.id), "foe", "on the foes' side");
+  assert.equal(world.enemies().length, 1, "no enemy row stands in for it");
+  assert.equal(orderNames(world)[1], wolf.name, "in its own place");
+  assert.equal(currentName(world), wolf.name, "its turn goes on, the DM's to play");
+  assert.equal(world.enemies()[0].id, goblin.id);
   agree(world, kit, "after the wolf turned");
 });
 

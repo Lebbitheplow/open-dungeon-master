@@ -71,6 +71,12 @@ export type ConditionMeta = {
   // The temporary hit points this effect granted, which go when it ends
   // (False Life, Heroism): src/lib/db/sheets.ts patchSheet.
   tempHp?: number;
+  // A Dominate spell's standing order: the combatant its creature was told
+  // to attack (combat-sides-logic.ts dominationOrderOf).
+  order?: string;
+  // Confusion's lash-out: the creature its d10 picked for this round's melee
+  // attack (src/lib/dm/confusion.ts).
+  lashOut?: { target: string; round: number };
   // Further sources of the same condition. SRD 5.1: the effects of the same
   // spell (or the same condition) don't combine, but each keeps its own
   // source and lifetime, so ending one leaves the others holding. Each entry

@@ -870,6 +870,102 @@ const gone = {};
   }
 }
 
+// Combat sides (issue 503): per viewport, a table a person runs where two of
+// the player's casters each hold an elemental by Conjure Elemental, in a
+// fight with a goblin. The scenario ends one concentration and then the
+// other (the second under reduced motion), and each elemental's token
+// re-rims from the party's colour to the foes'.
+const TURNCOAT_TITLE = "Turncoat Table";
+const turncoat = {};
+{
+  const { invokeEngine } = await import("../../src/lib/dm/invoke.ts");
+  const maps = await import("../../src/lib/db/battle-maps.ts");
+  const encounterRows = await import("../../src/lib/db/encounters.ts");
+  // SRD 5.1 slots of a 9th level full caster: 4, 3, 3, 3 and one 5th.
+  const slots = Object.fromEntries([4, 3, 3, 3, 1].map((max, index) => [String(index + 1), { max, used: 0 }]));
+  const conjurer = (name, cls, ability) =>
+    heroInput({
+      name,
+      class: cls,
+      level: 9,
+      maxHp: 60,
+      abilities: { [ability]: 18, con: 14, dex: 12 },
+      equipment: [{ name: "Component pouch", qty: 1 }],
+      spellcasting: { ability, slots, known: [], prepared: ["Conjure Elemental"], cantrips: [] },
+    });
+  for (const viewport of ["desktop", "phone"]) {
+    const table = campaigns.createCampaign(world.owner.id, {
+      title: `${TURNCOAT_TITLE} (${viewport})`,
+      description: "Two conjurers, two bound elementals, and a binding that will not hold.",
+      theme: "high-fantasy",
+      maxPlayers: 6,
+      startingLevel: 9,
+      difficulty: "normal",
+      gameSettings: { ttsEnabled: false, dmMode: "human" },
+    });
+    campaigns.setCampaignStatus(table.id, "active");
+    campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+    const dm = { kind: "human", userId: world.owner.id };
+    const casters = [
+      [sheets.createSheet(table.id, player.id, 9, conjurer("Ione Vass", "wizard", "int")), "fire elemental"],
+      [sheets.createSheet(table.id, player.id, 9, conjurer("Oswin Reed", "druid", "wis")), "earth elemental"],
+    ];
+    // Conjure Elemental takes a minute to cast, so out of the fight.
+    for (const [caster, variant] of casters) {
+      const cast = await invokeEngine(campaigns.getCampaignById(table.id), dm, {
+        name: "cast_buff",
+        args: { characterId: caster.id, spell: "Conjure Elemental", level: 5, variant },
+      });
+      if (!cast.ok) {
+        throw new Error(`the turncoat table's ${variant} was not conjured: ${cast.error}`);
+      }
+    }
+    const started = await invokeEngine(campaigns.getCampaignById(table.id), dm, {
+      name: "start_encounter",
+      args: { enemies: [{ monster: "goblin", count: 1 }] },
+    });
+    if (!started.ok) {
+      throw new Error(`the turncoat table's fight did not start: ${started.error}`);
+    }
+    const encounter = encounterRows.getActiveEncounter(table.id);
+    const board = maps.getBattleMapForEncounter(encounter.id);
+    maps.setBattleMapTerrain(board.id, ".".repeat(board.width * board.height));
+    getDatabase().prepare("UPDATE battle_maps SET doors_json = '{}' WHERE id = ?").run(board.id);
+    const elementals = casters.map(([caster, variant]) => {
+      const summoned = sheets.listSheets(table.id).find((sheet) => sheet.summon?.casterId === caster.id);
+      if (!summoned) {
+        throw new Error(`the turncoat table's ${variant} has no sheet`);
+      }
+      return summoned;
+    });
+    // The two elementals side by side in the board's middle, each caster
+    // beside theirs and the goblin below, where a zoomed-in camera still
+    // sees them.
+    const cx = Math.floor(board.width / 2);
+    const cy = Math.floor(board.height / 2);
+    const spots = new Map([
+      [casters[0][0].id, [cx - 3, cy]],
+      [elementals[0].id, [cx - 1, cy]],
+      [elementals[1].id, [cx + 1, cy]],
+      [casters[1][0].id, [cx + 3, cy]],
+    ]);
+    for (const token of maps.listTokens(board.id)) {
+      const [x, y] = spots.get(token.refId) ?? [cx, cy + 3];
+      maps.moveToken(token.id, x, y, 0);
+    }
+    for (const elemental of elementals) {
+      if (!maps.getTokenByRef(board.id, elemental.id)) {
+        throw new Error(`the turncoat table's ${elemental.name} is not on the board`);
+      }
+    }
+    turncoat[viewport] = {
+      id: table.id,
+      casters: casters.map(([caster]) => caster.id),
+      elementals: elementals.map((elemental) => ({ id: elemental.id, name: elemental.name })),
+    };
+  }
+}
+
 const ids = {
   lead: world.owner.username,
   player: player.username,
@@ -914,6 +1010,7 @@ const ids = {
   courting,
   conscience,
   masked,
+  turncoat,
   gone,
   pip: pip.id,
   // Every campaign a scenario opens, by id, for the app's home tiles.
@@ -923,6 +1020,7 @@ const ids = {
     ...Object.fromEntries(Object.entries(courting).map(([viewport, table]) => [table.id, `${COURTING_TITLE} (${viewport})`])),
     ...Object.fromEntries(Object.entries(conscience).map(([viewport, table]) => [table.id, `${CONSCIENCE_TITLE} (${viewport})`])),
     ...Object.fromEntries(Object.entries(masked).map(([viewport, table]) => [table.id, `${MASKED_TITLE} (${viewport})`])),
+    ...Object.fromEntries(Object.entries(turncoat).map(([viewport, table]) => [table.id, `${TURNCOAT_TITLE} (${viewport})`])),
     ...Object.fromEntries(Object.entries(gone).map(([viewport, table]) => [table.id, `${GONE_TITLE} (${viewport})`])),
     [world.campaignId]: TITLE,
     [lobby.id]: LOBBY_TITLE,

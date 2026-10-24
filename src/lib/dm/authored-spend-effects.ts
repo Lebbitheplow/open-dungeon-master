@@ -2,6 +2,7 @@
 // has checked the gate, the pool and the turn). Each resolver refuses before
 // it writes; the caller then spends the pool and the turn.
 
+import { resolveTargetFoe } from "@/lib/dm/sheet-foe";
 import type { Campaign } from "@/lib/db/campaigns";
 import { getBattleMapForEncounter } from "@/lib/db/battle-maps";
 import type { DmTurn } from "@/lib/db/dm-turns";
@@ -15,7 +16,7 @@ import { STORM_AURA } from "@/lib/srd/authored-effects-data";
 import { effectiveMaxHp, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { rollCharacterCheck } from "@/lib/dm/contest-roll";
 import { healDeathHook } from "@/lib/dm/death";
-import { applyEnemyDamage, publishEncounter, resolveEnemyRef } from "@/lib/dm/enemy-damage";
+import { applyEnemyDamage, publishEncounter } from "@/lib/dm/enemy-damage";
 import { rollEnemySave } from "@/lib/dm/forced-save";
 import { bindsWorthResisting } from "@/lib/dm/legendary-logic";
 import { hurtEnemy } from "@/lib/dm/spell-aura";
@@ -90,7 +91,7 @@ function targetEnemy(ctx: SpendContext): EncounterEnemy | ToolError {
     const pairs = encounter.targets?.round === encounter.round ? encounter.targets.pairs[ctx.sheet.id] : undefined;
     ref = pairs?.[pairs.length - 1];
   }
-  const enemy = ref ? resolveEnemyRef(encounter.id, ref) : null;
+  const enemy = ref ? resolveTargetFoe(encounter.campaignId, encounter, ref) : null;
   if (!enemy || enemy.status !== "alive") {
     return { error: `${ctx.spend.name} needs a living creature: pass targetEnemyId from GAME STATE. Nothing was spent.`, retry: true };
   }
@@ -437,7 +438,7 @@ function burst(ctx: SpendContext, spec: NonNullable<Extract<SpendDoes, { kind: "
   }
   const lines: string[] = [];
   const dc = saveDc(ctx, spec.dcAbility);
-  const enemies = (ctx.args.targetEnemyId ? [resolveEnemyRef(encounter.id, ctx.args.targetEnemyId)] : listEnemiesNear(ctx, encounter, spec.rangeFt)).filter(
+  const enemies = (ctx.args.targetEnemyId ? [resolveTargetFoe(encounter.campaignId, encounter, ctx.args.targetEnemyId)] : listEnemiesNear(ctx, encounter, spec.rangeFt)).filter(
     (enemy): enemy is EncounterEnemy => Boolean(enemy && enemy.status === "alive"),
   );
   for (const enemy of enemies) {
