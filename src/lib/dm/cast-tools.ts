@@ -49,7 +49,7 @@ export const castAtPlayerTool: ToolDef = {
         casterEnemyId: {
           type: "string",
           description:
-            "The enemy doing it, when a specific one does: exact enemyId from GAME STATE (a foe-side characterId casts from their sheet). With a concentration spell the server tracks the enemy's concentration and breaks it (ending the effect) when the enemy takes damage or dies.",
+            "The enemy doing it, when a specific one does: exact enemyId from GAME STATE. With a concentration spell the server tracks the enemy's concentration and breaks it (ending the effect) when the enemy takes damage or dies.",
         },
         ability: {
           type: "string",
@@ -177,7 +177,7 @@ export const castBuffTool: ToolDef = {
         targetEnemyId: {
           type: "string",
           description:
-            "Hunter's Mark and Hex: the marked creature (the extra die rides only against it). Dispel Magic: the enemy whose spells end. Polymorph and True Polymorph: the enemy to turn into the form in variant. Any other spell refuses it. Exact enemyId from GAME STATE.",
+            "Hunter's Mark or Hex: the marked creature. Dispel Magic, Polymorph, True Polymorph: the target (the form in variant). Exact enemyId from GAME STATE.",
         },
         variant: {
           type: "string",

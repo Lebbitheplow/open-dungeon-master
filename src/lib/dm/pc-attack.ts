@@ -62,13 +62,13 @@ export const pcAttackTool: ToolDef = {
   function: {
     name: "pc_attack",
     description:
-      "Resolve a character's attack on a foe: an enemy, or a character fighting on the other side. The server derives their attack bonus and damage from their sheet, rolls to-hit against the enemy's real AC, applies damage on a hit, and reports the outcome for you to narrate. Call it for EVERY weapon attack and attack-roll spell a player makes; never adjudicate a player's attack yourself. Off their own turn a character attacks only with a readied attack or spell, or Giant Killer's reaction against a Large or larger creature within 5 feet that just attacked them; the server checks which and spends the reaction.",
+      "Resolve a character's attack on a foe. The server derives their attack bonus and damage from their sheet, rolls to-hit against the target's real AC, applies damage on a hit, and reports the outcome for you to narrate. Call it for EVERY weapon attack and attack-roll spell a player makes; never adjudicate a player's attack yourself. Off their own turn a character attacks only with a readied attack or spell, or Giant Killer's reaction against a Large or larger creature within 5 feet that just attacked them; the server checks which and spends the reaction.",
     parameters: {
       type: "object",
       additionalProperties: false,
       properties: {
         characterId: { type: "string", description: "Exact characterId from GAME STATE." },
-        targetEnemyId: { type: "string", description: "Exact enemyId from GAME STATE, or a foe-side characterId." },
+        targetEnemyId: { type: "string", description: "Exact enemyId from GAME STATE." },
         weapon: {
           type: "string",
           description:

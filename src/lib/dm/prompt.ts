@@ -1036,8 +1036,8 @@ export function buildGameStateBlock(state: DmGameState): string {
         `Sides (the server's, from the fight's events; never decide them yourself): ${encounter.sides
           .map((entry) =>
             entry.kind === "sheet"
-              ? `${entry.name} [characterId=${entry.id}] fights AGAINST the party: you play their turns from their own sheet (pc_attack, cast_at_enemy at the party), and the party strikes them with pc_attack or cast_at_enemy, targetEnemyId=${entry.id}`
-              : `${entry.name} [enemyId=${entry.id}] fights FOR the party while it is dominated: its enemy_attack targets the foes`,
+              ? `${entry.name} [characterId=${entry.id}] fights AGAINST the party: you play their turns from their own sheet (pc_attack, cast_at_enemy at the party, cast_at_player with casterEnemyId=${entry.id}), and the party strikes them with pc_attack or cast_at_enemy, targetEnemyId=${entry.id} (a buff spell such as Polymorph takes their save)`
+              : `${entry.name} [enemyId=${entry.id}] fights FOR the party while it is dominated: its enemy_attack takes a foe's enemyId as targetCharacterId and a foe's takes ${entry.id}, the party's buffs reach it (cast_buff targetCharacterIds), and declare_intent's target is its standing order`,
           )
           .join("; ")}.`,
       );
