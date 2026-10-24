@@ -242,7 +242,7 @@ export function planImport(input: PlanInput): ImportPlan {
     if (renamedCount) {
       warnings.push({
         kind,
-        message: `${renamedCount} ${IMPORT_KIND_LABELS[kind].toLowerCase()} entr${renamedCount === 1 ? "y" : "ies"} already exist here by name and will be numbered.`,
+        message: `${renamedCount} ${IMPORT_KIND_LABELS[kind].toLowerCase()} entr${renamedCount === 1 ? "y already exists" : "ies already exist"} here by name and will be numbered.`,
       });
     }
     if (keptCount) {

@@ -78,6 +78,7 @@ export function WikiView({
     const type = shelf ? doc.types.find((entry) => entry.shelf === shelf) : undefined;
     if (type) setNewType(type.id);
     setMaking(true);
+    return true;
   });
 
   // The search reads keys built once per world, and only once someone

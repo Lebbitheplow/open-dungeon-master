@@ -61,7 +61,9 @@ export function DmBestiaryPanel({
   const [building, setBuilding] = useState(false);
   // The tour's "unfold the builder" step.
   useTourPrepare((name) => {
-    if (name === "open-monster-build") setBuilding(true);
+    if (name !== "open-monster-build") return;
+    setBuilding(true);
+    return true;
   });
   const [draft, setDraft] = useState<MonsterDraft | null>(null);
   const [desc, setDesc] = useState("");

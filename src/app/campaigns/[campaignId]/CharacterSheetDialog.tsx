@@ -241,7 +241,7 @@ export function CharacterSheetDialog({
                 </p>
               </div>
             </div>
-            <Dialog.Close className="text-stone-500 hover:text-stone-300">
+            <Dialog.Close aria-label="Close" className="text-stone-500 hover:text-stone-300">
               <X className="size-4" />
             </Dialog.Close>
           </div>

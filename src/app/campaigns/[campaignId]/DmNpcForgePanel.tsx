@@ -171,7 +171,9 @@ export function DmNpcForgePanel({
 
   // The tour's "open the editor" step, answered where the editor is a sheet.
   useTourPrepare((name) => {
-    if (name === "open-npc-editor" && rows && !editorOpen) open(null);
+    if (name !== "open-npc-editor") return;
+    if (rows && !editorOpen) open(null);
+    return true;
   });
 
   function open(npc: Npc | null) {

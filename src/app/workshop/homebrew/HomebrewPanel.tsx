@@ -78,11 +78,13 @@ export function HomebrewPanel({
   // ("open-homebrew-editor:spell").
   useTourPrepare((name) => {
     const [asked, askedKind] = name.split(":");
-    if (asked !== "open-homebrew-editor" || editing) return;
+    if (asked !== "open-homebrew-editor") return;
+    if (editing) return true;
     const editorKind = HOMEBREW_EDITOR_KINDS.includes(askedKind as EditorKind) ? (askedKind as EditorKind) : kind;
     setKind(editorKind);
     setError("");
     setEditing({ id: null, draft: blankDraft(editorKind) });
+    return true;
   });
 
   const load = useCallback(
