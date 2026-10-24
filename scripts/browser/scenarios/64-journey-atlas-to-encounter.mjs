@@ -26,6 +26,11 @@
 import zlib from "node:zlib";
 import { check, eventually, openPanelTab, signIn } from "../lib.mjs";
 
+// The picture an <img> draws, as the server stored it: the apps load a
+// host's pictures from its address or as a fetched copy and keep the stored
+// path beside it (the client's runtime, data-odm-src).
+const storedSrc = async (image) => (await image.getAttribute("data-odm-src")) ?? (await image.getAttribute("src"));
+
 // A picture in one strong colour, so the Region's canvas can be read for
 // it: a real PNG, 16:10 like the Atlas's box, so a pin's spot on the box is
 // the same spot on the picture.
@@ -140,7 +145,7 @@ export default {
       await eventually(() => surface.locator("img").count(), { timeoutMs: 20_000, label: "the new map with its picture" });
       const atlas = (await readDoc(shopId)).maps.find((entry) => entry.name === mapName);
       check(atlas && /^\/(api\/)?uploads?\//.test(atlas.image), `the map holds the uploaded picture: ${atlas?.image}`);
-      check((await surface.locator("img").getAttribute("src")) === atlas.image, "the Atlas draws that picture");
+      check((await storedSrc(surface.locator("img"))) === atlas.image, "the Atlas draws that picture");
 
       // ---- a pin without the pointer, standing for the place ----
       await press(page, page.getByRole("radio", { name: /Place a pin/ }).locator("visible=true").first(), "Space");
@@ -251,7 +256,7 @@ export default {
       await t.tap(listed);
       const tableSurface = panel.locator('[data-testid="atlas-surface"]').first();
       await eventually(() => tableSurface.isVisible(), { label: "the map's surface" });
-      check((await tableSurface.locator("img").getAttribute("src")) === atlas.image, "the campaign's Atlas draws the workshop's picture");
+      check((await storedSrc(tableSurface.locator("img"))) === atlas.image, "the campaign's Atlas draws the workshop's picture");
       const tablePinButton = tableSurface.getByRole("button", { name: new RegExp(`${placeName}, moves with its place on the Region`) }).first();
       await eventually(() => tablePinButton.count(), { label: "the pin bound to its place at the campaign" });
       await t.tap(tablePinButton);
