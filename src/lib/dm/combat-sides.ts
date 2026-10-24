@@ -47,6 +47,7 @@ import { publishEphemeral, publishPersisted, publishWithSeq } from "@/lib/events
 import { withSide, type CombatSide } from "@/lib/dm/combat-sides-logic";
 import { combatantsOf, resolveCombatant, sideOf, type Combatant } from "@/lib/dm/combatant";
 import { dmRoll } from "@/lib/dm/roll-card";
+import { onDominationShift } from "@/lib/db/side-watch";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 export type SideMove =
@@ -141,6 +142,14 @@ export function publishSides(campaignId: string) {
   publishPersisted(campaignId, "encounter_updated", { encounter: activePublicEncounter(campaignId) });
   publishEphemeral(campaignId, "battle_map_updated", {});
 }
+
+// A Dominate that starts or ends by any route re-sides its creature on every
+// client (src/lib/db/side-watch.ts), during a fight.
+onDominationShift((campaignId) => {
+  if (getActiveEncounter(campaignId)) {
+    publishSides(campaignId);
+  }
+});
 
 // A sheet not in the order yet is rolled in and put on the board, on the
 // side it joins: at the start of a fight (Phase 3's return) or one arriving
