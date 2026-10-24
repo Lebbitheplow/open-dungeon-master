@@ -825,6 +825,51 @@ for (const viewport of ["desktop", "phone"]) {
   masked[viewport] = { id: table.id, kael: kael.id };
 }
 
+// Companions leaving (issue 503 Phases 2 and 3): one table per viewport (the
+// scenario walks a companion out), run by the lead as its DM. The player's
+// Kael travels with Seren Vale, a timid paladin who walks out at a red-line
+// atrocity; Tam Hollis, a timid fighter, already walked out earlier, so the
+// Gone list stands before the scenario moves anyone.
+const GONE_TITLE = "Gone Table";
+const gone = {};
+{
+  const { invokeEngine } = await import("../../src/lib/dm/invoke.ts");
+  const { companionNpcFor } = await import("../../src/lib/db/companion-npcs.ts");
+  const { patchNpcAgency } = await import("../../src/lib/db/npcs.ts");
+  for (const viewport of ["desktop", "phone"]) {
+    const table = campaigns.createCampaign(world.owner.id, {
+      title: `${GONE_TITLE} (${viewport})`,
+      description: "A party that has lost one companion and is about to lose another.",
+      theme: "high-fantasy",
+      maxPlayers: 6,
+      startingLevel: 3,
+      difficulty: "normal",
+      gameSettings: { ttsEnabled: false, dmMode: "human", companions: "full" },
+    });
+    campaigns.setCampaignStatus(table.id, "active");
+    campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+    const kael = sheets.createSheet(table.id, player.id, 3, heroInput({ name: "Kael Ashvale", class: "rogue", level: 3 }));
+    const companion = (name, klass, alignment) => {
+      const bot = createCompanionUser(name);
+      const sheet = sheets.createSheet(table.id, bot.id, 3, heroInput({ name, class: klass, alignment, level: 3 }));
+      sheets.markSheetAsCompanion(sheet.id, "party", "Quiet, and quick to take fright.");
+      const row = companionNpcFor(sheets.getSheetById(sheet.id));
+      patchNpcAgency(row.id, { personality: { drive: 0, diligence: 0, boldness: -2, warmth: 0, empathy: 0, composure: 0 } });
+      return sheet;
+    };
+    const tam = companion("Tam Hollis", "fighter", "LG");
+    const seren = companion("Seren Vale", "paladin", "LG");
+    const left = await invokeEngine(campaigns.getCampaignById(table.id), { kind: "human", userId: world.owner.id }, {
+      name: "relationship_beat",
+      args: { characterId: kael.id, subject: tam.name, beat: "slaving", severity: "atrocity", note: "Kael sold the captives to the slaver's barge." },
+    });
+    if (!left.ok || left.result.departed !== "Walked out on the party") {
+      throw new Error(`the gone table's first departure did not happen: ${left.error ?? JSON.stringify(left.result)}`);
+    }
+    gone[viewport] = { id: table.id, kael: kael.id, seren: seren.id, serenName: seren.name };
+  }
+}
+
 const ids = {
   lead: world.owner.username,
   player: player.username,
@@ -869,6 +914,7 @@ const ids = {
   courting,
   conscience,
   masked,
+  gone,
   pip: pip.id,
   // Every campaign a scenario opens, by id, for the app's home tiles.
   titles: {
@@ -877,6 +923,7 @@ const ids = {
     ...Object.fromEntries(Object.entries(courting).map(([viewport, table]) => [table.id, `${COURTING_TITLE} (${viewport})`])),
     ...Object.fromEntries(Object.entries(conscience).map(([viewport, table]) => [table.id, `${CONSCIENCE_TITLE} (${viewport})`])),
     ...Object.fromEntries(Object.entries(masked).map(([viewport, table]) => [table.id, `${MASKED_TITLE} (${viewport})`])),
+    ...Object.fromEntries(Object.entries(gone).map(([viewport, table]) => [table.id, `${GONE_TITLE} (${viewport})`])),
     [world.campaignId]: TITLE,
     [lobby.id]: LOBBY_TITLE,
     [quiet.id]: QUIET_TITLE,

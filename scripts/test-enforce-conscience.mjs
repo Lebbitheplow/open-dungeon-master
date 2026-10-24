@@ -86,7 +86,9 @@ await test("a lasting companion holds values from its class and alignment, and t
 });
 
 await test("a red-line atrocity witnessed takes a companion straight to the breaking point", async () => {
-  const { bond, rung, deed } = await table();
+  // At Talk, so she is still there to read: at Leave the server would act on
+  // it at once (test-enforce-departure.mjs).
+  const { bond, rung, deed } = await table({ gameSettings: { companionConscience: "talk" } });
   assert.equal(rung(), "content");
   const done = await deed("murder_helpless", { severity: "atrocity", note: "Kael cut the bound prisoner's throat." });
   assert.equal(done.ok, true, done.error);
@@ -149,19 +151,16 @@ await test("an ultimatum whose deadline passes is the breaking point", async () 
   assert.equal(fact.knownBy, "dm");
 });
 
-await test("Talk and Leave never take a companion out of the party: the server departs nobody yet", async () => {
-  for (const companionConscience of ["talk", "leave"]) {
-    const { world, sheet, rung, deed } = await table({ gameSettings: { companionConscience } });
-    await deed("slaving", { severity: "atrocity" });
-    assert.equal(rung(), "breaking", companionConscience);
-    assert.ok(world.sheet(sheet.id), `${companionConscience}: still in the party`);
-    const block = conscienceBlockForPrompt(world.campaign(), world.sheets());
-    if (companionConscience === "talk") {
-      assert.match(block, /this table keeps its companions, so they stay/);
-    } else {
-      assert.doesNotMatch(block, /keeps its companions/);
-    }
-  }
+await test("Talk keeps a companion at its breaking point; at Leave the server decides what she does (src/lib/dm/departure.ts)", async () => {
+  const talk = await table({ gameSettings: { companionConscience: "talk" } });
+  await talk.deed("slaving", { severity: "atrocity" });
+  assert.equal(talk.rung(), "breaking");
+  assert.ok(talk.world.sheet(talk.sheet.id), "talk: still in the party");
+  assert.match(conscienceBlockForPrompt(talk.world.campaign(), talk.world.sheets()), /this table keeps its companions, so they stay/);
+  const leave = await table({ gameSettings: { companionConscience: "leave" } });
+  const done = await leave.deed("slaving", { severity: "atrocity" });
+  assert.equal(done.result.departed, "Walked out on the party", "an even temper with nothing to stay for walks out");
+  assert.equal(leave.world.sheet(leave.sheet.id), null);
 });
 
 await test("Off: deeds land by personality alone, with no values and no ladder", async () => {
