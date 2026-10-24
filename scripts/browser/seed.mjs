@@ -1391,8 +1391,50 @@ const qualityTurnIds = [];
   campaigns.setCampaignStatus(qualityTable.id, "ended");
 }
 
+// The reason chips (issue #460): a table per viewport whose two passages came
+// from finished AI turns, so editing either is a fix the ledger records and
+// the strip offers a reason for.
+const chipTables = {};
+{
+  const { createDmTurn, saveDmTurn } = await import("../../src/lib/db/dm-turns.ts");
+  for (const viewport of ["desktop", "phone"]) {
+    const table = campaigns.createCampaign(world.owner.id, {
+      title: `Chip Table (${viewport})`,
+      description: "Two passages the narrator wrote, for the reason chips.",
+      theme: "high-fantasy",
+      maxPlayers: 4,
+      startingLevel: 3,
+      difficulty: "normal",
+      gameSettings: { ttsEnabled: false },
+    });
+    campaigns.setCampaignStatus(table.id, "active");
+    sheets.createSheet(table.id, world.owner.id, 3, heroInput({ name: "Odile Marsh", class: "fighter", level: 3 }));
+    const turnIds = [];
+    const messageIds = [];
+    for (const content of [
+      "The toll keeper squints at the cart and names a price twice what the sign says.",
+      "Behind him the gate creaks open a hand's width, and a dog noses through the gap.",
+    ]) {
+      const turn = createDmTurn(table.id, [], "ai");
+      saveDmTurn({ ...turn, status: "done", callIndex: 1 });
+      const message = messages.insertCampaignMessage({
+        campaignId: table.id,
+        seq: campaigns.allocateSeq(table.id),
+        authorType: "dm",
+        speech: [],
+        content,
+        dmTurnId: turn.id,
+      });
+      turnIds.push(turn.id);
+      messageIds.push(message.id);
+    }
+    chipTables[viewport] = { id: table.id, turnIds, messageIds };
+  }
+}
+
 const ids = {
   qualityTurnIds,
+  chipTables,
   offerTableId: offerTable.id,
   offerWorkshopId: offerWorkshop.id,
   offeredPregen: offeredPregen.id,
@@ -1464,6 +1506,7 @@ const ids = {
     ...Object.fromEntries(Object.entries(gone).map(([viewport, table]) => [table.id, `${GONE_TITLE} (${viewport})`])),
     ...Object.fromEntries(Object.entries(conduct).map(([viewport, table]) => [table.id, `${CONDUCT_TITLE} (${viewport})`])),
     ...Object.fromEntries(Object.entries(pactTables).flatMap(([kind, tables]) => Object.entries(tables).map(([viewport, table]) => [table.id, `Pact ${kind.charAt(0).toUpperCase()}${kind.slice(1)} (${viewport})`]))),
+    ...Object.fromEntries(Object.entries(chipTables).map(([viewport, table]) => [table.id, `Chip Table (${viewport})`])),
     [world.campaignId]: TITLE,
     [lobby.id]: LOBBY_TITLE,
     [quiet.id]: QUIET_TITLE,
