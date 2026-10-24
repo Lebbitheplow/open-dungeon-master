@@ -26,11 +26,13 @@ import FeatChoicesFields, { knownTraining } from "../FeatChoicesFields";
 import { Field, PickForMe, PickPill, StepPanel, inputClass } from "./shared";
 import { featChoice } from "@/lib/schemas/sheet";
 
-// Step 3: the class (painted cards in the picker's groups and order, the
-// setting's callings first and badged, each with its emblem and a ? that
-// opens its write-up), its subclass once the level allows one, what the pair
-// grants at this level, and the class skill picks. Expertise, fighting
-// styles and option lists (invocations and the like) follow in ClassChoices.
+// Step 1 (backlog F4: how you want to play comes first): the setting's
+// notices, then the class (the playstyle question and "Help me build" over
+// painted cards in the picker's groups and order, the setting's callings
+// first and badged, each with its emblem and a ? that opens its write-up),
+// the level, its subclass once the level allows one, what the pair grants at
+// this level, and the class skill picks. Expertise, fighting styles and
+// option lists (invocations and the like) follow in ClassChoices.
 export function CallingStep({
   state,
   derived,
@@ -49,6 +51,8 @@ export function CallingStep({
   onPickForMe,
   classNote = null,
   subclassNote = null,
+  notices = null,
+  levelField = null,
 }: {
   state: BuilderState;
   derived: BuilderDerived;
@@ -64,8 +68,22 @@ export function CallingStep({
   // The level the class picks a subclass at, while this level is below it.
   subclassLockedAt: number | null;
   chosenArchetype: ArchetypeOption | null;
-  // The answer given on the first step, so the picker opens on it.
-  playstyle?: { value: PlaystyleId | null; onChange: (style: PlaystyleId | null) => void };
+  // A new character's answer to "how do you want to play", held by the
+  // builder so the background's hints and the quiz follow it. The question
+  // is in its door's words (a player's job, or what the party needs), and
+  // "Help me build" (QuickBuildQuiz.tsx) carries the job picked so far.
+  playstyle?: {
+    value: PlaystyleId | null;
+    onChange: (style: PlaystyleId | null) => void;
+    question?: string;
+    intro?: string;
+    onHelpMeBuild?: (style: PlaystyleId | null) => void;
+  };
+  // The setting's notices (ContentNotices) and the level (LevelField): the
+  // level decides what this step and every later one offers, so it is set
+  // here, under the class.
+  notices?: ReactNode;
+  levelField?: ReactNode;
   // "Pick for me" on the subclass (quickBuild.ts), offered once the level
   // asks for one.
   onPickForMe?: (target: "subclass") => void;
@@ -209,6 +227,7 @@ export function CallingStep({
 
   return (
     <div className="space-y-4">
+      {notices}
       <StepPanel title="Choose a class" ornate anchor="class">
         {/* A plain-language way in, above the full catalog it points into.
             "Easy to learn" there and the setting's star in the grid mean
@@ -224,6 +243,9 @@ export function CallingStep({
           onChoose={state.changeClass}
           style={playstyle?.value}
           onStyle={playstyle?.onChange}
+          question={playstyle?.question}
+          intro={playstyle?.intro}
+          onHelpMeBuild={playstyle?.onHelpMeBuild}
         />
         <Field label="Class" className="mt-4">
           {klass ? (
@@ -285,6 +307,7 @@ export function CallingStep({
             reference={details?.reference}
           />
         </Field>
+        {levelField}
         {offersSubclass ? (
           <Field label="Subclass" className="mt-3" anchor="subclass">
             <OptionPicker

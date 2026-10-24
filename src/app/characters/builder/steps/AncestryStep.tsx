@@ -48,7 +48,8 @@ function languageHelp(race: RaceOption, background: BackgroundOption | undefined
 // offered, in the picker's groups and order, the setting's peoples first and
 // badged), the detail carousel behind each card's "?", then every choice the
 // race leaves to the player: bonus languages, ability bumps, skills, tool,
-// cantrip.
+// cantrip. The background sits beside it (backlog F4), right after the
+// grid, so its languages join the list below.
 export function AncestryStep({
   state,
   derived,
@@ -57,6 +58,7 @@ export function AncestryStep({
   races,
   raceGroups,
   listNote = null,
+  backgroundSection = null,
 }: {
   state: BuilderState;
   derived: BuilderDerived;
@@ -66,6 +68,8 @@ export function AncestryStep({
   raceGroups: PickerGroup[];
   // Why the list may be short (TableScopeNote).
   listNote?: ReactNode;
+  // The background and its open picks (BackgroundPanel, ToolGrantPanels).
+  backgroundSection?: ReactNode;
 }) {
   // The race's bonus languages plus the background's (an acolyte or a sage
   // learns two more), which used to be loaded and never asked for.
@@ -182,6 +186,8 @@ export function AncestryStep({
           onChoose={state.changeRace}
         />
       </StepPanel>
+
+      {backgroundSection}
 
       {race && languageCount > 0 ? (
         <StepPanel
