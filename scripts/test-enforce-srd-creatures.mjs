@@ -197,6 +197,17 @@ await test("Find Familiar takes every form the spell names: crab, lizard, octopu
   }
 });
 
+await test("A story pet has no attacks on record, and pet_attack says so rather than calling it a familiar.", async () => {
+  const { world, sheets: [warlock], enemies: [dummy] } = await board([WARLOCK], { 0: { x: 3, y: 4 }, e0: { x: 4, y: 4 } });
+  const out = await world.invoke("summon_pet", { characterId: warlock.id, kind: "other", form: "clockwork crow", hp: 6, ac: 13 });
+  assert.equal(out.ok, true, out.error);
+  holdTurn(world, warlock.id);
+  const attack = await world.invoke("pet_attack", { characterId: warlock.id, targetEnemyId: dummy.id });
+  assert.equal(attack.ok, false);
+  assert.match(attack.error, /clockwork crow has no attacks on record/);
+  assert.doesNotMatch(attack.error, /familiar/);
+});
+
 async function chainFamiliar(form, stats = {}) {
   const { world, sheets: [warlock], enemies: [dummy] } = await board([WARLOCK], { 0: { x: 3, y: 4 }, e0: { x: 4, y: 4 } }, { stats });
   world.patch(warlock.id, { features: [...world.sheet(warlock.id).features, { name: "Pact of the Chain", source: "class" }] });

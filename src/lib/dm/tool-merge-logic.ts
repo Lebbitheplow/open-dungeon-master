@@ -128,12 +128,12 @@ export function engineCall(name: string, args: ToolArgs): EngineCall | ToolError
       const rounds = enemyRounds(args);
       return {
         name: "set_enemy_condition",
-        args: { ...pick(args, ["enemyId", "condition", "saveAbility", "saveDc", "sourceCharacterId", "sourceEnemyId", "level", "reason"]), ...(rounds ? { rounds } : {}) },
+        args: { ...pick(args, ["enemyId", "condition", "saveAbility", "saveDc", "sourceCharacterId", "sourceEnemyId", "level", "magical", "reason"]), ...(rounds ? { rounds } : {}) },
       };
     }
     case "apply_damage": {
       if (Array.isArray(args.targets) && args.targets.length) {
-        return { name: "split_damage", args: pick(args, [...DAMAGE_KEYS, "targets"]) };
+        return { name: "split_damage", args: pick(args, [...DAMAGE_KEYS, "targets", "magical", "source"]) };
       }
       if (present(args.enemyId)) {
         return present(args.characterId)

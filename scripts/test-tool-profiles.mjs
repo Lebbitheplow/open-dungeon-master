@@ -529,6 +529,21 @@ await test("the combat minimum opens a fight and plays its next turn with the at
   const offered = (dmBodies()[0].tools ?? []).map((tool) => tool.function.name);
   for (const name of COMBAT_TOOLS) assert.ok(offered.includes(name), `${name} offered on the fight's next turn`);
   allFit(windows.MIN_COMBAT_WINDOW);
+
+  // A fight in a lair whose block prints its options: GAME STATE numbers
+  // them, the numbers lair_action takes.
+  const { getActiveEncounter, listEnemies, saveEncounter } = await import("../src/lib/db/encounters.ts");
+  const { getDatabase } = await import("../src/lib/db/core.ts");
+  const fight = getActiveEncounter(campaign.id);
+  saveEncounter({ ...fight, legendary: { ...fight.legendary, lair: true } });
+  const [bandit] = listEnemies(fight.id);
+  getDatabase().prepare("UPDATE encounter_enemies SET stat_json = ? WHERE id = ?").run(JSON.stringify({ ...bandit.stats, lairOptions: ["The ceiling collapses above one creature.", "A pillar of stone erupts from the floor."] }), bandit.id);
+  insertCampaignMessage({ campaignId: campaign.id, seq: allocateSeq(campaign.id), authorType: "player", userId: lead.id, characterId: bram.id, content: "I hold my ground." });
+  script = [{ content: "Dust sifts from the ceiling." }];
+  requests.length = 0;
+  await startDmTurn(campaign.id);
+  const prompt = JSON.stringify(dmBodies()[0].messages);
+  assert.ok(prompt.includes("1. The ceiling collapses above one creature.") && prompt.includes("2. A pillar of stone erupts"), "the lair's options are numbered in GAME STATE");
   process.env.OPENAI_COMPAT_CONTEXT = "16384";
 });
 

@@ -63,8 +63,8 @@ export const petTools: ToolDef[] = [
           kind: { type: "string", enum: ["familiar", "beast_companion", "drake", "other"] },
           form: { type: "string", description: "The creature ('owl', 'wolf', 'drake')." },
           name: { type: "string", description: "The pet's given name. Default: the form." },
-          hp: { type: "integer", minimum: 1, maximum: 300, description: "kind=other only." },
-          ac: { type: "integer", minimum: 1, maximum: 30, description: "kind=other only." },
+          hp: { type: "integer", minimum: 1, maximum: 300, description: "kind=other only, and required for it: the pet's HP." },
+          ac: { type: "integer", minimum: 1, maximum: 30, description: "kind=other only, and required for it: the pet's armor class." },
           reason: { type: "string", description: "Short in-fiction cause." },
         },
         required: ["characterId", "kind", "form"],
@@ -391,7 +391,10 @@ export function handlePetAttack(
   }
   if (!pet.attacks.length) {
     return {
-      error: `${pet.name} is an ordinary familiar and cannot attack (only Pact of the Chain forms fight). It can scout, deliver touch spells, and grant its senses instead.`,
+      error:
+        pet.kind === "familiar"
+          ? `${pet.name} is an ordinary familiar and cannot attack (only Pact of the Chain forms fight). It can scout, deliver touch spells, and grant its senses instead.`
+          : `${pet.name} has no attacks on record, so it cannot attack.`,
       refused: "rules",
     };
   }

@@ -301,6 +301,9 @@ export function handleAddCompanion(
       retry: true,
     };
   }
+  if (args.values?.some((held) => held.value === "faction_loyalty" && !held.faction)) {
+    return { error: "A faction_loyalty value names its faction: send faction with it, or leave that value out. Nothing was added.", retry: true };
+  }
 
   const notes: string[] = [];
   let kind = args.kind;

@@ -187,6 +187,9 @@ export type DmEncounterState = {
   // (src/lib/dm/encounter-tools.ts advancePointer); this adds their ids and
   // what to do.
   enemiesDue?: { before: string; enemies: Array<{ enemyId: string; name: string }> };
+  // A lair fight's printed options, numbered as lair_action takes them
+  // (src/lib/dm/legendary-tools.ts); absent when the lair prints none.
+  lairOptions?: string[];
   enemies: Array<{
     enemyId: string;
     name: string;
@@ -1005,6 +1008,9 @@ export function buildGameStateBlock(state: DmGameState): string {
       }
       if (encounter.movementLeft) {
         lines.push(`Movement left this turn: ${encounter.movementLeft}, counted by the board.`);
+      }
+      if (encounter.lairOptions) {
+        lines.push(`Lair options (lair_action by number): ${encounter.lairOptions.join(" ")}`);
       }
       // Their turns come first: asking the current character's player now
       // would leave them to the backstop.

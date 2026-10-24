@@ -120,7 +120,7 @@ export const TOOL_GROUPS: Record<ToolGroupId, { summary: string; tools: readonly
     tools: ["set_movement", "declare_intent"],
   },
   legendary: { summary: "legendary actions, legendary resistance and lair actions", tools: ["legendary_action", "legendary_resist", "lair_action"] },
-  hazards: { summary: "falls, traps, drowning, suffocation, extreme heat and cold", tools: ["apply_hazard"] },
+  hazards: { summary: "falls, traps, drowning, suffocation, extreme heat and cold", tools: ["apply_hazard", "use_reaction"] },
   world: {
     summary: "treasure hoards, overland travel, passing time, weather, breaking objects, a title card",
     tools: ["roll_treasure", "damage_object", "travel", "pass_time", "set_weather", "show_title"],

@@ -126,6 +126,8 @@ export const socialTools: ToolDef[] = [
           name: { type: "string", description: "The new NPC's name." },
           modifier: {
             type: "integer",
+            minimum: -10,
+            maximum: 10,
             description:
               "A small +/- for the situation (a good first impression, a fearsome reputation). Usually -2 to +2.",
           },

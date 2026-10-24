@@ -587,6 +587,9 @@ export function handleAoeDamage(
       if (landed.length) {
         row.conditionApplied = landed.join(", ");
       }
+      if (applied && "error" in applied) {
+        row.conditionRefused = String(applied.error);
+      }
     }
   }
   // An enemy caster's concentration spell (Web, Cloud of Daggers) is

@@ -67,7 +67,11 @@ export const effectTools: ToolDef[] = [
               required: ["field"],
             },
           },
-          duration: { type: "string", enum: [...EFFECT_DURATIONS] },
+          duration: {
+            type: "string",
+            enum: [...EFFECT_DURATIONS],
+            description: "How it ends; manual (the default) lasts until clear_effect. rounds and minutes count down remaining; encounter ends with the fight.",
+          },
           remaining: { type: "integer", minimum: 1, description: "Rounds or minutes it lasts." },
           saveAbility: { type: "string", enum: ["str", "dex", "con", "int", "wis", "cha"], description: "A save to shake it off, with saveDc: the target rolls it at the end of each of its turns. Outside a fight it rolls once per stretch of time, and a success ends the effect." },
           saveDc: { type: "integer", minimum: 1, maximum: 30 },

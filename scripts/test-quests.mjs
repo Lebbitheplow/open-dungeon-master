@@ -80,6 +80,26 @@ test("tick_objective refuses a stranger's quest and an unknown objective", () =>
   assert.equal(ok.complete, false);
 });
 
+test("the quest tools take a quest by its title and an objective by its text, as the prompt block shows them", () => {
+  insertQuest({ campaignId: campaign.id, title: "Clear the Cellar", objectives: normalizeObjectives(["Find the rats", "Burn the nest"]), visibility: "party" });
+  const ticked = handleTickObjective(live(), JSON.stringify({ questId: "clear the cellar", objectiveId: "Find the rats" }));
+  assert.equal(ticked.ok, true, ticked.error);
+  assert.deepEqual(ticked.quest.objectives.map((objective) => objective.done), [true, false]);
+  insertQuest({ campaignId: campaign.id, title: "Hidden debt", objectives: normalizeObjectives(["Pay it", "Hide it"]), visibility: "dm" });
+  const secret = handleTickObjective(live(), JSON.stringify({ questId: "[DM only] Hidden debt", objectiveId: "Pay it" }));
+  assert.equal(secret.ok, true, secret.error);
+  const before = listQuests(campaign.id).length;
+  const edited = handleSetQuest(live(), JSON.stringify({ questId: "Clear the Cellar", status: "done" }));
+  assert.equal(edited.quest.status, "done");
+  assert.equal(listQuests(campaign.id).length, before, "an edit by title adds no quest");
+  const unknown = handleTickObjective(live(), JSON.stringify({ questId: "Clear the Cellar", objectiveId: "Kill the cat" }));
+  assert.match(unknown.error, /Find the rats/, "the refusal lists the objectives");
+  const other = createCampaign(dm.id, { title: "Elsewhere", description: "", theme: "", maxPlayers: 4, startingLevel: 1, difficulty: "normal" });
+  const stranger = handleTickObjective(getCampaignById(other.id), JSON.stringify({ questId: "Clear the Cellar", objectiveId: "Burn the nest" }));
+  assert.ok("error" in stranger, "another campaign cannot reach it by title");
+  assert.doesNotMatch(stranger.error, /Cellar \(/, "nor sees it listed");
+});
+
 test("a player's log drops the DM's rows and the prompt block shows the ticks", () => {
   const all = listQuests(campaign.id);
   const mine = questsVisibleTo(all, false);

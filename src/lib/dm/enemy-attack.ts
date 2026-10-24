@@ -64,7 +64,7 @@ import { swimsFrom } from "@/lib/battlemap/types";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { invalidArguments, noneNamed, toolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
-import { ADVANTAGE_SOURCES } from "@/lib/dm/pc-attack-options";
+import { ADVANTAGE_SOURCES, claimedAdvantage } from "@/lib/dm/pc-attack-options";
 import { unknownSheetRef } from "@/lib/dm/rolls";
 
 const attackArgsSchema = z.object({
@@ -177,7 +177,8 @@ export function handleEnemyAttack(
     }
     return enemyStrikesEnemy(campaign, turn, found, aimed.enemy, {
       ...(args.attack ? { attack: args.attack } : {}),
-      ...(args.advantage ? { advantage: args.advantage } : {}),
+      // The claim is held to the rule the character path holds (enemy-swing-odds.ts).
+      advantage: claimedAdvantage({ requested: args.advantage, source: args.advantageSource, reason: args.advantageReason, byAi: turn.actor === "ai" }).requested,
       single: bonus || Boolean(lash) || conditionTurnShape(found.conditions).slowed,
       bonus,
       sheets,

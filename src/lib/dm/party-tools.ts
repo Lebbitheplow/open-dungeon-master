@@ -61,7 +61,7 @@ export const partyTools: ToolDef[] = [
           amount: { type: "integer", minimum: 0, description: "Money in whole gold, if coins is not used." },
           reason: { type: "string", description: "Short in-fiction cause." },
         },
-        required: ["do"],
+        required: ["do", "characterId"],
       },
     },
   },

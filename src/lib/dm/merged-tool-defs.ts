@@ -45,7 +45,7 @@ export const applyDamageTool: ToolDef = {
           },
           description: "Several targets from ONE total, each at its share, for a reason no save covers. Such as cover, an immunity, diving clear. Instead of characterId or enemyId.",
         },
-        amount: { type: "integer", minimum: 1, maximum: 500, description: "A damage total the server rolled this turn (request_roll kind=damage)." },
+        amount: { type: "integer", minimum: 1, maximum: 200, description: "A damage total the server rolled this turn (request_roll kind=damage)." },
         dice: { type: "string", description: "Dice the server rolls instead ('2d6')." },
         fallFeet: {
           type: "integer",

@@ -101,9 +101,12 @@ await test("Feather Fall answers a fall (SRD 5.1: a reaction when a creature fal
   const ahead = await world.invoke("cast_buff", { characterId: wizard.id, spell: "Feather Fall", targetCharacterIds: [fighter.id], level: 1 });
   assert.equal(ahead.ok, false);
   assert.match(String(ahead.error), /Feather Fall is cast as a reaction: use_reaction/);
+  const early = await world.invoke("use_reaction", { characterId: wizard.id, feature: "Feather Fall", targetCharacterId: fighter.id, level: 1 });
+  assert.match(String(early.error), /call apply_hazard falling for .* first, then send this use_reaction again/, "sent before the fall, it is told the order");
   const before = world.sheet(fighter.id).currentHp;
   world.dice(6, 6, 6, 6, 6, 6);
-  await world.invoke("apply_hazard", { type: "falling", feet: 60, characterIds: [fighter.id] });
+  const fall = await world.invoke("apply_hazard", { type: "falling", feet: 60, characterIds: [fighter.id] });
+  assert.match(fall.result.note, /Feather Fall or Slow Fall answers it now: use_reaction/, "the fall points a party that can slow it to the reaction");
   world.clearDice();
   const cast = await world.invoke("use_reaction", { characterId: wizard.id, feature: "Feather Fall", targetCharacterId: fighter.id, level: 1 });
   assert.equal(cast.ok, true, cast.error);

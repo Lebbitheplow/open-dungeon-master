@@ -237,7 +237,7 @@ export const mutationTools: ToolDef[] = [
         type: "object",
         additionalProperties: false,
         properties: {
-          characterIds: { type: "array", items: { type: "string" }, minItems: 1, description: "Who shares the award: exact characterIds from GAME STATE." },
+          characterIds: { type: "array", items: { type: "string" }, minItems: 1, description: "Exact characterIds from GAME STATE." },
           amount: { type: "integer", minimum: 1, maximum: 20000, description: "XP for EACH character." },
           delta: {
             type: "integer",
@@ -253,7 +253,7 @@ export const mutationTools: ToolDef[] = [
       },
     },
   },
-  tool("modify_gold", "Add or remove a character's money, as delta in gold or as coins; the purse floors at 0.", {
+  tool("modify_gold", "Add or remove a character's money; the purse floors at 0.", {
     delta: {
       type: "integer",
       minimum: -100000,
@@ -275,7 +275,7 @@ export const mutationTools: ToolDef[] = [
     spell: ITEM_SPELL_PROPERTY,
   }, ["name"]),
   tool("remove_item", "Take an item from a character for good (stolen, destroyed, burned up). Something dropped, set down or knocked away is NOT removed: use handle_item drop, which leaves it where it fell. For consumables being USED, use use_item; for sales, use purchase.", {
-    name: { type: "string" },
+    name: { type: "string", description: "The item as named on the character's sheet." },
     qty: { type: "integer", minimum: 1, maximum: 99 },
   }, ["name"]),
   tool("reveal_item", "Name an item the party has been carrying without knowing what it is. Only for items granted unidentified; an ordinary item needs no revealing.", {
@@ -307,7 +307,7 @@ export const mutationTools: ToolDef[] = [
       description: "How many, for a material priced per creature, corpse or Hit Die of the target. Astral Projection, Create Undead and Imprisonment price it this way.",
     },
     ...ZONE_ARGS,
-  }, ["level", "spell"]),
+  }, ["spell"]),
   tool(
     "learn_spell",
     "Permanently add or remove ONE spell on a character's spell list, only when the story genuinely teaches or strips it: a scroll copied into a spellbook, a mentor's training, a granted boon, a curse. For a wizard the spell is written in the spellbook and can be prepared after a long rest. Players choose their own prepared spells from their sheet; never use this to swap what is prepared. Never use this to let a character cast something in the moment; casting requires the spell to already be on their sheet.",
@@ -328,7 +328,7 @@ export const mutationTools: ToolDef[] = [
       speed: { type: "integer", minimum: 0, maximum: 120 },
       abilities: {
         type: "object",
-        description: "Full ability block: str, dex, con, int, wis, cha (1-30 each).",
+        description: "Full ability block: str, dex, con, int, wis, cha (1-20 each).",
         properties: {
           str: { type: "integer" },
           dex: { type: "integer" },
@@ -593,6 +593,9 @@ export function applyDmMutation(
       return { result: bounds };
     }
     const awarded: string[] = [];
+    // What a share's own call refused (a purse cap, a pack past capacity):
+    // reported, never counted as handed out.
+    const refused: string[] = [];
     // What the experience reported (who can level up, who was skipped as
     // dead), passed on: the call is the party's award_xp too.
     let experience: Record<string, unknown> = {};
@@ -626,7 +629,7 @@ export function applyDmMutation(
         if (!delta) {
           return;
         }
-        applyDmMutation(
+        const outcome = applyDmMutation(
           campaign,
           turnId,
           "modify_gold",
@@ -634,6 +637,9 @@ export function applyDmMutation(
           sheets,
           sheetsById,
         );
+        if ("error" in outcome.result) {
+          refused.push(`${delta} gold to ${entry.name}: ${String(outcome.result.error)}`);
+        }
       });
       awarded.push(`${gold} gold split ${targets.length} ways`);
     }
@@ -641,7 +647,7 @@ export function applyDmMutation(
     if (item) {
       // An item cannot be split; it goes to the first character listed,
       // which is the one who found it.
-      applyDmMutation(
+      const outcome = applyDmMutation(
         campaign,
         turnId,
         "grant_item",
@@ -649,12 +655,16 @@ export function applyDmMutation(
         sheets,
         sheetsById,
       );
-      awarded.push(`${item} to ${targets[0].name}`);
+      if ("error" in outcome.result) {
+        refused.push(`${item} to ${targets[0].name}: ${String(outcome.result.error)}`);
+      } else {
+        awarded.push(`${item} to ${targets[0].name}`);
+      }
     }
     if (!awarded.length) {
-      return { result: { error: "party_award needs XP, gold or an item to hand out.", retry: true } };
+      return { result: refused.length ? { error: `Nothing was awarded: ${refused.join("; ")}`, retry: true } : { error: "party_award needs XP, gold or an item to hand out.", retry: true } };
     }
-    return { result: { ok: true, awarded: awarded.join("; "), ...experience } };
+    return { result: { ok: true, awarded: awarded.join("; "), ...(refused.length ? { refused } : {}), ...experience } };
   }
 
   if (toolName === "award_xp") {
@@ -778,7 +788,11 @@ export function applyDmMutation(
       let healNote: string | null = null;
       const healSpell = (args.spell ?? "").trim();
       if (healSpell) {
-        const caster = (args.casterId ? resolve(args.casterId) : null) ?? sheet;
+        const named = args.casterId ? resolve(args.casterId) : null;
+        if (args.casterId && !named) {
+          return { result: unknownSheetRef("casterId", args.casterId, sheets) };
+        }
+        const caster = named ?? sheet;
         // Everything a healing spell asks is asked before the slot is spent
         // (src/lib/dm/heal-spell.ts): its healing can be derived, the target
         // is in reach, the dead are reached only by a revival spell inside

@@ -116,7 +116,7 @@ export const castAtEnemyTool: ToolDef = {
           minimum: 1,
           maximum: 20,
           description:
-            "Magic Missile only: how many of the casting's darts strike this enemy. The rest can go to other enemies in more calls this turn, with no second slot.",
+            "Magic Missile only: how many of the casting's darts strike this enemy. Default: all of them. The rest can go to other enemies in more calls this turn, with no second slot.",
         },
         endSpell: {
           type: "string",
@@ -172,6 +172,7 @@ export const castBuffTool: ToolDef = {
         targetCharacterIds: {
           type: "array",
           items: { type: "string" },
+          maxItems: 12,
           description: "Who receives the effect: exact characterIds from GAME STATE. Default: the caster.",
         },
         targetEnemyId: {

@@ -68,6 +68,17 @@ await test("A creature resistant to a condition saves against it with advantage 
   assert.equal(before - world.enemies()[0].currentHp, 8, "16 radiant from a spell, halved");
 });
 
+await test("Magic Resistance gives advantage on the save against a condition from magic, and only from magic.", async () => {
+  const block = { name: "Mage Hunter", size: "Medium", type: "Humanoid", armor_class: 12, hit_points: 40, cr: 2, wisdom: 10, special_abilities: [{ name: "Magic Resistance", desc: "The creature has advantage on saving throws against spells and other magical effects." }], actions: CLUB };
+  const [plain] = await stage(block);
+  const mundane = await mk.forced([3, 19], () => mk.ai(mk.aiTurn(), "set_enemy_condition", { enemyId: plain.id, condition: "charmed", saveAbility: "wis", saveDc: 12 }));
+  assert.equal(mundane.unused, 1, "one d20 for a charm that is not magic");
+  const [warded] = await stage(block);
+  const magic = await mk.forced([3, 19], () => mk.ai(mk.aiTurn(), "set_enemy_condition", { enemyId: warded.id, condition: "charmed", saveAbility: "wis", saveDc: 12, magical: true }));
+  assert.equal(magic.unused, 0, "two d20s against magic");
+  assert.equal(magic.result.saved, true, JSON.stringify(magic.out));
+});
+
 await test("Stunning Strike's save is the creature's save against being stunned: a block resistant to it rolls twice and keeps the higher.", async () => {
   const [brute] = await stage({ name: "Brute", size: "Medium", type: "Humanoid", armor_class: 10, hit_points: 80, cr: 2, constitution: 10, document__slug: "blackflag", slug: "brute", damage_resistances: "stunned", actions: CLUB });
   kit.giveTurn(monk.id);

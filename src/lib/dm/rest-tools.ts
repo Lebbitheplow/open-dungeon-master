@@ -66,7 +66,7 @@ export const takeRestTool: ToolDef = {
             type: "object",
             properties: {
               characterId: { type: "string", description: "Exact characterId from GAME STATE." },
-              dice: { type: "integer", minimum: 1, maximum: 20 },
+              dice: { type: "integer", minimum: 1, maximum: 20, description: "How many hit dice they spend." },
             },
             required: ["characterId", "dice"],
           },

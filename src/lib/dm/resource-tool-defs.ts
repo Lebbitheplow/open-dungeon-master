@@ -32,6 +32,7 @@ export const resourceTools: ToolDef[] = [
           charges: {
             type: "integer",
             minimum: 1,
+            maximum: 50,
             description:
               "For an item with charges (a wand, a staff, a once-a-day power): how many this use spends. The server keeps the count and refuses a use the item cannot pay for.",
           },
@@ -100,7 +101,7 @@ export const resourceTools: ToolDef[] = [
           amount: {
             type: "integer",
             minimum: 1,
-            maximum: 50,
+            maximum: 100,
             description: "Uses or points to spend. Default: 1. Lay on Hands spends HP from its pool.",
           },
           targetCharacterId: {

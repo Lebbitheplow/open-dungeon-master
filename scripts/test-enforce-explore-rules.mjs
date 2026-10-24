@@ -299,6 +299,17 @@ await test("The location rule puts move_party in the reply that narrates the arr
   assert.ok(travel.function.description.includes("It moves no one on the map: when the leg ends somewhere the story names, that place is a move_party call."), "travel's description does not send the arrival to move_party");
 });
 
+await test("With the world simulation on, move_party says it peopled an unwritten place, and generate_settlement there is refused as done rather than offered a retry.", async () => {
+  const sim = await openWorld({ gameSettings: { worldSimulation: true } });
+  const arrived = await sim.invoke("move_party", { visionClear: false, name: "Thornhollow" });
+  assert.equal(arrived.ok, true, arrived.error);
+  assert.match(String(arrived.result.note), /peopled Thornhollow: \d+ people and \d+ shops/, arrived.result.note);
+  const again = await sim.invoke("generate_settlement", { size: "town" });
+  assert.equal(again.ok, false);
+  assert.match(String(again.error), /GAME STATE lists them/, again.error);
+  sim.close();
+});
+
 await test("A return through move_party that leaves out the layout keeps the place's recorded layout and routes, routes it passes are added to the known ones, and travel in between moves no one.", async () => {
   const quiet = { visionClear: false };
   const first = await world.invoke("move_party", { ...quiet, name: "The Rusted Flagon", layoutDescription: "A low taproom, the hearth on the north wall, the door east to the street.", connections: ["Market Square", "Back Alley"] });

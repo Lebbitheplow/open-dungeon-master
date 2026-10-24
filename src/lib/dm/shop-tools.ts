@@ -91,8 +91,8 @@ export const shopTools: ToolDef[] = [
         properties: {
           name: { type: "string" },
           kind: { type: "string", enum: ["general", "smith", "apothecary", "outfitter", "curiosities"] },
-          size: { type: "string", enum: ["hamlet", "village", "town", "city"] },
-          keeper: { type: "string" },
+          size: { type: "string", enum: ["hamlet", "village", "town", "city"], description: "Default: village." },
+          keeper: { type: "string", description: "The keeper: an NPC's exact name from GAME STATE. Omit for none." },
         },
         required: ["name", "kind"],
       },
@@ -107,7 +107,7 @@ export const shopTools: ToolDef[] = [
       parameters: {
         type: "object",
         properties: {
-          characterId: { type: "string", description: "The character haggling: exact characterId from GAME STATE." },
+          characterId: { type: "string", description: "Exact characterId from GAME STATE." },
           shop: { type: "string", description: "The shop in SHOPS HERE, by name or id." },
           skill: { type: "string", enum: ["persuasion", "intimidation", "deception"] },
           present: { type: "array", items: { type: "string" }, description: "Others at the counter now, who share the result: exact characterIds from GAME STATE." },
@@ -271,6 +271,8 @@ export function handleOpenShop(campaign: Campaign, rawArguments: string, random:
   const kind = normalizeShopKind(args.kind);
   const instant = getClock(campaign.id).instant;
   const keeper = args.keeper ? getNpcByName(campaign.id, args.keeper) : null;
+  // A keeper no NPC answers to is left off the shop, and the model is told.
+  const unknownKeeper = args.keeper && !keeper ? { keeperUnknown: `${args.keeper} is not a tracked NPC, so the shop has no keeper: register them with set_npc, then open_shop again by this shop's name.` } : {};
   const found = findShopNear(campaign.id, location, args.name);
   // A shop already standing here, or one with no place yet that is not
   // remembered as standing somewhere else.
@@ -293,7 +295,7 @@ export function handleOpenShop(campaign: Campaign, rawArguments: string, random:
     const shop = due ? restockShop(placed, instant, random) : placed;
     publishShops(campaign.id);
     announceShop(campaign.id, shop);
-    return { ok: true, shop: shop.name, reopened: true, restocked: due, lines: shop.stock.length, shelf: shelfLines(shop) };
+    return { ok: true, shop: shop.name, reopened: true, restocked: due, lines: shop.stock.length, shelf: shelfLines(shop), ...unknownKeeper };
   }
   // A name that holds a shop standing here, or that one's name holds
   // ("Marla" for "Bottega di Marla"), is asked again rather than opened as a
@@ -320,7 +322,7 @@ export function handleOpenShop(campaign: Campaign, rawArguments: string, random:
   });
   publishShops(campaign.id);
   announceShop(campaign.id, shop);
-  return { ok: true, shop: shop.name, reopened: false, restocked: false, lines: shop.stock.length, shelf: shelfLines(shop) };
+  return { ok: true, shop: shop.name, reopened: false, restocked: false, lines: shop.stock.length, shelf: shelfLines(shop), ...unknownKeeper };
 }
 
 function shelfLines(shop: Shop): string[] {

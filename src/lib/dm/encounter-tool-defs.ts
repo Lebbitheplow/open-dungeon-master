@@ -17,7 +17,7 @@ export const startEncounterTool: ToolDef = {
   function: {
     name: "start_encounter",
     description:
-      "Begin combat with real, server-tracked enemies.",
+      "Begin combat with real, server-tracked enemies. The server refuses more than 8 combatants, or a fight past the XP ceiling for this party and difficulty.",
     parameters: {
       type: "object",
       additionalProperties: false,
@@ -105,7 +105,7 @@ export const enemyAttackTool: ToolDef = {
         },
         attack: {
           type: "string",
-          description: "Attack name from the enemy's attack list. Default: its first.",
+          description: "Attack name from the enemy's attack list. Default: its Multiattack routine, or its first attack.",
         },
         advantage: {
           type: "string",

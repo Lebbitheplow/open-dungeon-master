@@ -274,7 +274,34 @@ await test("an area effect and the damage tray both go through the stat block", 
   assert.equal(tray.ok, true, tray.error);
   assert.equal(200 - kit.enemy(dummy.id).currentHp, 21);
   assert.equal(100 - world.sheet(tiefling.id).currentHp, 5);
+  // The lines say what landed: 42 halved to 21 by the resistance, and the
+  // tiefling's 10 halved to 5.
+  assert.ok(tray.result.applied.some((line) => / takes 21$/.test(line)), JSON.stringify(tray.result.applied));
+  assert.ok(tray.result.applied.some((line) => /is dealt 10 \(.*resist.*\), now 95\/100 HP$/i.test(line)), JSON.stringify(tray.result.applied));
   assert.equal(world.sheet(human.id).currentHp, 100);
+});
+
+await test("the damage tray carries magic past a nonmagical resistance, and holds the model to a hazard on an enemy", async () => {
+  dress({ resist: NONMAGICAL });
+  const plain = await world.invoke("split_damage", { amount: 20, type: "slashing", targets: [{ enemyId: dummy.id }] });
+  assert.equal(plain.ok, true, plain.error);
+  assert.equal(200 - kit.enemy(dummy.id).currentHp, 10);
+  kit.resetEnemy(dummy.id);
+  const magic = await world.invoke("apply_damage", { amount: 20, type: "slashing", magical: true, targets: [{ enemyId: dummy.id }] });
+  assert.equal(magic.ok, true, magic.error);
+  assert.equal(200 - kit.enemy(dummy.id).currentHp, 20);
+  kit.resetEnemy(dummy.id);
+  // The model's call: an enemy among the targets needs the hazard or the
+  // environment behind it, as damage_enemy asks.
+  const { handleSplitDamage } = await import("../src/lib/dm/split-damage.ts");
+  const call = (args) => handleSplitDamage(world.campaign(), { actor: "ai" }, JSON.stringify(args), world.sheets(), new Map(world.sheets().map((sheet) => [sheet.id, sheet])));
+  const blow = call({ amount: 6, type: "fire", targets: [{ enemyId: dummy.id }] });
+  assert.equal(blow.retry, true);
+  assert.equal(kit.enemy(dummy.id).currentHp, 200);
+  const fire = call({ amount: 6, type: "fire", source: "environment", targets: [{ enemyId: dummy.id }] });
+  assert.equal(fire.ok, true, fire.error);
+  assert.equal(200 - kit.enemy(dummy.id).currentHp, 6);
+  kit.resetEnemy(dummy.id);
 });
 
 await test("evasion: a Dexterity save for half becomes none on a success and half on a failure", async () => {

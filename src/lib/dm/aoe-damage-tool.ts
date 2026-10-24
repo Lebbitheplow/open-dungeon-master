@@ -56,7 +56,7 @@ export const aoeDamageTool: ToolDef = {
         casterId: {
           type: "string",
           description:
-            "The caster, if a player character cast this on their combat turn: exact characterId from GAME STATE. Marks their turn as taken.",
+            "The caster, if a player character cast this on their combat turn: exact characterId from GAME STATE. An AI companion's turn is then taken; a player's still ends with end_turn.",
         },
         casterEnemyId: {
           type: "string",

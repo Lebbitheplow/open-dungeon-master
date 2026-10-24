@@ -403,11 +403,12 @@ const FOLDED_BY_THE_HANDLER = {
 
 // Fields only a person is offered: the handler reads them, and the model's
 // tool definition leaves them out on purpose (who may see a roll or a quest,
-// which handout to take down).
+// which handout to take down, an uploaded picture no prompt names).
 const FOR_A_PERSON_ONLY = {
   request_roll: ["visibility"],
   set_quest: ["visibility"],
   dismiss_handout: ["handoutId"],
+  show_handout: ["imagePath"],
 };
 
 function formDrift(entry) {

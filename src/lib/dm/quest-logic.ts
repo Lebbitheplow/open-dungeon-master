@@ -66,6 +66,8 @@ export function tickObjective(objectives: QuestObjective[], objectiveId: string,
   return objectives.map((objective) => (objective.id === objectiveId ? { ...objective, done } : objective));
 }
 
+export const DM_ONLY_MARK = "[DM only] ";
+
 // The quest block the model reads: active party quests with their ticks,
 // then the DM's own with a mark. Bounded so it never crowds the turn.
 export function renderQuestsForPrompt(quests: Quest[], budget = 1_200): string {
@@ -78,7 +80,7 @@ export function renderQuestsForPrompt(quests: Quest[], budget = 1_200): string {
     const ticks = quest.objectives.length
       ? ` (${quest.objectives.map((objective) => `${objective.done ? "[x]" : "[ ]"} ${objective.text}`).join("; ")})`
       : "";
-    const line = `- ${quest.visibility === "dm" ? "[DM only] " : ""}${quest.title}${ticks}`;
+    const line = `- ${quest.visibility === "dm" ? DM_ONLY_MARK : ""}${quest.title}${ticks}`;
     if (used + line.length > budget) {
       break;
     }

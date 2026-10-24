@@ -415,7 +415,7 @@ export function handleLairAction(campaign: Campaign, turn: DmTurn | null, rawArg
   };
 }
 
-function legendaryLairLines(enemies: EncounterEnemy[]): string[] {
+export function legendaryLairLines(enemies: EncounterEnemy[]): string[] {
   // A book's printed lair options (Tome of Beasts' dragons) are offered in a
   // fight the DM started in the lair; they never make one a lair fight.
   return enemies.flatMap((enemy) => [...(legendaryProfile(enemy.stats)?.lairActions ?? []), ...(enemy.stats.lairOptions ?? [])]);

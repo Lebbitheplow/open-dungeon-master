@@ -10,6 +10,7 @@ import { openFall } from "@/lib/dm/last-hit";
 import { SUFFOCATING } from "@/lib/dm/vitals-logic";
 import { handleCastAtPlayer } from "@/lib/dm/cast-tools";
 import { resolveSheetRef } from "@/lib/dm/rolls";
+import { holdsFeature, isNamed } from "@/lib/srd/feature-names";
 import { getParty } from "@/lib/db/party";
 import { formationView } from "@/lib/dm/formation-logic";
 import { formationPartyIds } from "@/lib/dm/roster";
@@ -85,7 +86,7 @@ export const hazardTools: ToolDef[] = [
             minimum: 1,
             maximum: 48,
             description:
-              "extreme_cold/extreme_heat only: hours of exposure. The server rolls one CON save for each hour (cold DC 10; heat DC 5 rising by 1 an hour, at disadvantage in medium or heavy armor) and applies a level of exhaustion for each failure. Cold weather gear or the matching resistance shrugs it off.",
+              "extreme_cold/extreme_heat only: hours of exposure. The server rolls one CON save for each hour (cold DC 10; heat DC 5 rising by 1 an hour, at disadvantage in medium or heavy armor or heavy clothing) and applies a level of exhaustion for each failure. Cold weather gear or the matching resistance shrugs it off.",
           },
           roundsWithoutAir: {
             type: "integer",
@@ -119,18 +120,18 @@ export const hazardTools: ToolDef[] = [
             enum: ["str", "dex", "con", "int", "wis", "cha"],
             description: "trap and generic only: the save the hazard forces. Default: 'dex'.",
           },
-          dc: { type: "integer", description: "generic only: the save DC." },
+          dc: { type: "integer", description: "generic: the save DC. Default: 13. For extreme_cold or extreme_heat it replaces the hourly DC." },
           damage: {
             type: "string",
             description: "generic only: the damage dice ('3d6').",
           },
           damageType: {
             type: "string",
-            description: "Damage type (bludgeoning, piercing, fire, poison, ...). Resistances apply.",
+            description: "Damage type (bludgeoning, piercing, fire, poison, ...). Resistances apply. Default: piercing, or bludgeoning for falling.",
           },
           halfOnSave: {
             type: "boolean",
-            description: "Whether a successful save halves the damage. Default: true for traps.",
+            description: "Whether a successful save halves the damage. Default: true.",
           },
           condition: {
             type: "string",
@@ -178,6 +179,19 @@ const hazardSchema = z.object({
   trap: z.string().max(80).optional(),
   reason: z.string().optional(),
 });
+
+// Slow Fall and Feather Fall answer a fall that has landed (use_reaction,
+// src/lib/dm/reaction-tools.ts); a turn out of a fight offers use_reaction
+// only to a party holding one.
+export function partyCanSlowAFall(sheets: readonly CharacterSheet[]): boolean {
+  return sheets.some(
+    (sheet) =>
+      holdsFeature(sheet, "slow fall") ||
+      [sheet.spellcasting, ...(sheet.spellcasting?.casters ?? [])].some((caster) =>
+        [...(caster?.known ?? []), ...(caster?.prepared ?? [])].some((name) => isNamed(name, "feather fall")),
+      ),
+  );
+}
 
 export function handleApplyHazard(
   campaign: Campaign,
@@ -286,7 +300,7 @@ function resolveHazard(
       feet: args.feet ?? 0,
       dice,
       results: perTarget,
-      note: `${dice} bludgeoning to each; the server applied it.`,
+      note: `${dice} bludgeoning to each; the server applied it.${partyCanSlowAFall(sheets) ? " A character who declared Feather Fall or Slow Fall answers it now: use_reaction." : ""}`,
     };
   }
 
