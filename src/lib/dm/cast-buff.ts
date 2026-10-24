@@ -42,6 +42,7 @@ import { castSummon } from "@/lib/dm/summon-cast";
 import { castFindFamiliar, isFindFamiliar } from "@/lib/dm/familiar-cast";
 import { castShapeAtEnemy, enemyShapeSpellFor } from "@/lib/dm/enemy-polymorph";
 import { allyRowRefusal, allyRowsOf, layBuffOnRows } from "@/lib/dm/cast-buff-allies";
+import { unwillingResist } from "@/lib/dm/hostile-buffs";
 import { holdingHint, noneNamed, type ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
 import { nameChoice } from "@/lib/srd/feature-names";
@@ -60,8 +61,7 @@ const castBuffSchema = z.object({
   spell: z.string().max(80),
   level: z.coerce.number().int().min(1).max(9).optional(),
   targetCharacterIds: z.array(z.string()).max(6).optional(),
-  // Hunter's Mark and Hex: the creature marked. Dispel Magic, Polymorph and
-  // True Polymorph: the enemy. Any other buff refuses one.
+  // A mark's quarry, Dispel Magic's or a shape spell's target, or an ally creature.
   targetEnemyId: z.string().max(80).optional(),
   variant: z.string().max(40).optional(),
   // Dispel Magic: the spell to end on the target, when it holds several.
@@ -160,11 +160,11 @@ export function handleCastBuff(
         ? unknownCombatantRef(campaign.id, encounter, "targetEnemyId", args.targetEnemyId, "Nothing was spent.")
         : { error: "No fight is running: targetEnemyId names an enemy of a fight. Nothing was spent.", retry: true };
     }
-    // A character's shape is its sheet's beast form, not a block swapped in.
+    // A character's shape is its sheet's beast form: the path below, with the
+    // save an unwilling creature makes (hostile-buffs.ts).
     if (isSheetFoe(enemy)) {
-      return { error: `${resolvedMech.name} on a character is not cast through targetEnemyId: name them in targetCharacterIds with the form as the variant. Nothing was spent.`, retry: true };
-    }
-    return castShapeAtEnemy(
+      args = { ...args, targetCharacterIds: [enemy.id], targetEnemyId: undefined };
+    } else return castShapeAtEnemy(
       campaign,
       turn,
       { caster: sheet, enemy, spell: resolvedMech.name, runsAs: engine, variant: args.variant, level: args.level, reason: args.reason, authors },
@@ -340,6 +340,8 @@ export function handleCastBuff(
   if ("error" in cast) {
     return cast;
   }
+  // A target fighting against the caster saves as an unwilling creature.
+  for (const [id, line] of unwillingResist(campaign, turn, sheet, { name: resolvedMech.name, engine }, targetSheets)) warded.set(id, line);
   const slotLevel = typeof cast.slotLevel === "number" ? cast.slotLevel : null;
   const above = Math.max(0, (slotLevel ?? resolvedMech.spellLevel) - resolvedMech.spellLevel);
   if (buff.bySlot?.length) {

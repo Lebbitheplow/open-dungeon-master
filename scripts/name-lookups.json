@@ -1224,6 +1224,7 @@
     "lib/dm/help-logic.ts#keyed": [["key",1,"ids, refs, slugs, tool names, field names, env names, event kinds, UI keys, caches, door and map keys; a sheet's conditionMeta by the condition key it was written under; the usage route's gear map by the sheet's own stored item names (src/: every site read)"]],
     "lib/dm/hide-traits.ts#whole": [["key",1,"creature sizes"]],
     "lib/dm/hit-dice.ts#number": [["key",2,"digits a regex already captured, ids, headers, stored and form numbers (number inputs), dice parts, the pack's English text (\"1,000 feet\", a purse); src/: every site read"]],
+    "lib/dm/hostile-buffs.ts#keyed": [["identity",1,"SRD, spell, feature, subclass, hazard and magic rows by textKey (or armorKey/gearKey/rowKey/featureKey/priceKey, textKey-based); row tables keyed by the row's own name; the workshop's tables"]],
     "lib/dm/inference-gate.ts#keyed": [["key",3,"ids, refs, slugs, tool names, field names, env names, event kinds, UI keys, caches, door and map keys; a sheet's conditionMeta by the condition key it was written under; the usage route's gear map by the sheet's own stored item names (src/: every site read)"]],
     "lib/dm/initiative.ts#whole-single": [["key",1,"turn keys"]],
     "lib/dm/inline-markdown.ts#partial": [["parse",1,"markdown"]],

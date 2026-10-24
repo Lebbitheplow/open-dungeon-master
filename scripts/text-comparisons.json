@@ -1296,6 +1296,7 @@
     "lib/dm/hide-traits.ts#str-eq": [["key",2,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/hide-traits.ts#str-list": [["key",1,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/hide-traits.ts#toLowerCase": [["key",2,"creature size, condition label"]],
+    "lib/dm/hostile-buffs.ts#toUpperCase": [["display",2,"ability abbreviation shown"]],
     "lib/dm/intent-queue.ts#str-eq": [["key",1,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/intent-tools.ts#str-list": [["key",1,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/intent-tools.ts#toLowerCase": [["key",1,"the charmed condition's label (engine vocabulary)"]],

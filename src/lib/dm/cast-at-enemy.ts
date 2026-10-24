@@ -53,6 +53,7 @@ import { overchannelProblem, payOverchannel } from "@/lib/dm/caster-features";
 import { maximumOf } from "@/lib/dm/heal-spell";
 import { castingHold } from "@/lib/dm/spell-planes";
 import { castShapeAtEnemy, enemyShapeSpellFor } from "@/lib/dm/enemy-polymorph";
+import { handleCastBuff } from "@/lib/dm/cast-buff";
 import type { ToolResult } from "@/lib/dm/tool-errors";
 import { spellHeldProblem } from "@/lib/dm/cast-rules";
 import { conditionNameRefusal } from "@/lib/dm/set-condition";
@@ -168,14 +169,16 @@ export function handleCastAtEnemy(
       reason: args.reason,
     });
   }
+  // A spell the engine casts on characters as a buff (Polymorph, Enlarge/
+  // Reduce), at a character on the other side: its own path on the sheet,
+  // with the save an unwilling creature makes (hostile-buffs.ts).
+  if (resolvedMech?.mech.buff && isSheetFoe(enemy)) {
+    const asBuff = { characterId: sheet.id, spell: args.spell, targetCharacterIds: [enemy.id], variant: args.variant, level: args.level, reason: args.reason };
+    return handleCastBuff(campaign, turn, JSON.stringify(asBuff), sheets, sheetsById);
+  }
   // Polymorph and True Polymorph: the beast in variant (enemy-polymorph.ts).
   // A table's workshop copy turns its target by the spell it runs as.
   if (resolvedMech && enemyShapeSpellFor(resolvedMech.runsAs ?? resolvedMech.name)) {
-    // A character's shape is its sheet's beast form, which this path does
-    // not lay: refused before anything is spent.
-    if (isSheetFoe(enemy)) {
-      return { error: `${resolvedMech.name} on a character is not run by cast_at_enemy: narrate it and set the form with the DM's tools. Nothing was spent.`, refused: "rules" };
-    }
     const spell = resolvedMech.name;
     const spend = (cast: Record<string, unknown>) => applyDmMutation(campaign, turn.id, "use_spell_slot", JSON.stringify(cast), sheets, sheetsById).result;
     return castShapeAtEnemy(campaign, turn, { caster: sheet, enemy, spell, runsAs: resolvedMech.runsAs, variant: args.variant, level: args.level, reason: args.reason, authors }, spend);
