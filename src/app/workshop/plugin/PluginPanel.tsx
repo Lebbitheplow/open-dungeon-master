@@ -57,7 +57,9 @@ export function PluginPanel({
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useTourPrepare((name) => {
-    if (name === "open-plugin-wizard") setWizardOpen(true);
+    if (name !== "open-plugin-wizard") return;
+    setWizardOpen(true);
+    return true;
   });
 
   const load = useCallback(

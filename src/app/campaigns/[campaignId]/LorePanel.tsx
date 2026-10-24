@@ -118,10 +118,14 @@ export function LorePanel({
   }
 
   // The tour's "open the editor" step, answered where the editor is a sheet.
+  // Answered once the list is in (so Create's later ask finds it open, or
+  // closed by the author since, and leaves it so).
   useTourPrepare((name) => {
-    if (name === "open-lore-editor" && rows && steersStory && !adding && editingId === null) {
+    if (name !== "open-lore-editor" || !rows || !steersStory) return;
+    if (!adding && editingId === null) {
       startAdd();
     }
+    return true;
   });
 
   function startEdit(entry: LoreEntryView) {

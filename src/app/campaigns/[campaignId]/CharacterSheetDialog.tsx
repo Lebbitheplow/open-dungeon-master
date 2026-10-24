@@ -241,7 +241,11 @@ export function CharacterSheetDialog({
                 </p>
               </div>
             </div>
-            <Dialog.Close aria-label="Close" className="text-stone-500 hover:text-stone-300">
+            {/* The kit's own close button: a 40px target on phones. */}
+            <Dialog.Close
+              aria-label="Close"
+              className="pk-tap -m-1 flex shrink-0 items-center justify-center rounded-md p-2 text-stone-500 transition-colors hover:bg-stone-800 hover:text-stone-300"
+            >
               <X className="size-4" />
             </Dialog.Close>
           </div>
