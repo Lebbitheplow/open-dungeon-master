@@ -7,6 +7,7 @@ import { advancesAllowed } from "@/lib/dm/advance-tick";
 import { conscienceViews } from "@/lib/dm/conscience";
 import { heldIntents } from "@/lib/dm/departure";
 import { conductViews } from "@/lib/dm/party-conduct";
+import { heldAgendas } from "@/lib/dm/companion-agenda";
 import { textKey } from "@/lib/language/text-logic";
 
 export const runtime = "nodejs";
@@ -48,6 +49,8 @@ export async function GET(
   // person running the table reads it here; at an AI table nobody does, the
   // lead included (the AI has it in its own prompt).
   const plans = storyteller ? heldIntents(context.campaign) : new Map<string, string>();
+  // So is a hidden employer (Phase 8).
+  const agendas = storyteller ? heldAgendas(context.campaign) : new Map<string, string>();
   const sheets = listSheets(campaignId);
   const viewer = {
     storyteller,
@@ -98,6 +101,7 @@ export async function GET(
                 ...ladder,
                 ...conduct.get(textKey(relationship.subjectName)),
                 ...(plans.has(textKey(relationship.subjectName)) ? { plan: plans.get(textKey(relationship.subjectName)) } : {}),
+                ...(agendas.has(textKey(relationship.subjectName)) ? { agenda: agendas.get(textKey(relationship.subjectName)) } : {}),
               },
             }
           : {}),

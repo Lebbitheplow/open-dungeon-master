@@ -124,6 +124,7 @@ import { enforceEngineBoundary } from "@/lib/dm/narration-guard";
 import { souredLeaving } from "@/lib/dm/conscience";
 import { companionMomentBlock, settleCompanionLeaving } from "@/lib/dm/departure-turn";
 import { intentLinesForPrompt } from "@/lib/dm/departure";
+import { agendaLinesForPrompt } from "@/lib/dm/companion-agenda";
 import { returnDirectorNotes } from "@/lib/dm/companion-revenge";
 import { noteUnrecordedDeeds } from "@/lib/dm/deed-claims";
 import {
@@ -821,7 +822,7 @@ async function openTurn(
       // and a companion's plan to leave (issue 503).
       storytellerLines: oocOnly
         ? []
-        : [...storytellerLinesForPrompt(campaign, context.sheets, advanceDirectorNotes(campaign)), ...intentLinesForPrompt(campaign, context.sheets)],
+        : [...storytellerLinesForPrompt(campaign, context.sheets, advanceDirectorNotes(campaign)), ...intentLinesForPrompt(campaign, context.sheets), ...agendaLinesForPrompt(context.sheets)],
       withholdStorytellerSecrets: oocOnly,
       directorBlock,
       npcs: npcRosterForPrompt(campaignId, { romance: romanceEnabled(campaign) }).map((npc) => ({ ...npc, world: world.npcNotes.get(npc.name) })),

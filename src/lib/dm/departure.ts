@@ -115,6 +115,9 @@ export function settleBreakingPoint(
   campaign: Campaign,
   companion: CharacterSheet,
   sheets: readonly CharacterSheet[] = listSheets(campaign.id),
+  // Who one that reports tells, when something other than what it holds to
+  // decides it (a hidden employer, companion-agenda.ts).
+  reportTo: Faction | null = null,
 ): DepartureOutcome | null {
   const setting = leaves(campaign);
   const npc = setting ? companionNpcFor(companion) : null;
@@ -132,8 +135,11 @@ export function settleBreakingPoint(
   if (departure.intent || departure.gone || departure.turned) {
     return null;
   }
-  const values = companionValues(npc.id);
-  const faction = reportFaction(campaign.id, values);
+  // One who answers to whom it reports is loyal to it.
+  const values: CompanionValue[] = reportTo
+    ? [...companionValues(npc.id), { value: "faction_loyalty", strength: "red_line", faction: reportTo.name }]
+    : companionValues(npc.id);
+  const faction = reportTo ?? reportFaction(campaign.id, values);
   const response = chooseResponse({
     personality: npc.agency.personality,
     values,

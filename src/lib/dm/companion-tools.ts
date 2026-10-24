@@ -61,6 +61,7 @@ import { textKey } from "@/lib/language/text-logic";
 import { unknownSheetRef } from "@/lib/dm/rolls";
 import { ALIGNMENT_CODES, VALUES_PARAMETER, valuesArgSchema } from "@/lib/dm/companion-values-logic";
 import { setCompanionValues } from "@/lib/db/companion-conscience";
+import { seedAgenda } from "@/lib/dm/companion-agenda";
 
 // AI companion party members: sheets the DM recruits, plays, and dismisses.
 // A companion is a full character sheet owned by an unloginable bot user,
@@ -211,6 +212,11 @@ function companionToolDefs(campaign: Campaign): ToolDef[] {
               description: "When the story has shown it: with their class, sets what a party member holds to.",
             },
             values: VALUES_PARAMETER,
+            agenda: {
+              type: "object",
+              properties: { employer: { type: "string" }, aim: { type: "string" } },
+              description: "Party only, a secret from every player: who secretly employs them and what they want of the party. The server brings the order in time.",
+            },
           },
           required: ["name", "class", "gender", "personality", "kind"],
         },
@@ -249,6 +255,7 @@ const addArgsSchema = z.object({
   spells: z.array(z.string().trim().min(1).max(60)).max(12).optional(),
   alignment: z.enum(ALIGNMENT_CODES).optional(),
   values: valuesArgSchema.optional(),
+  agenda: z.object({ employer: z.string().trim().max(80).optional(), aim: z.string().trim().max(200).optional() }).optional(),
 });
 
 const dismissArgsSchema = z.object({
@@ -461,6 +468,10 @@ export function handleAddCompanion(
   const row = kind === "party" && args.values ? companionNpcFor(sheet) : null;
   if (row && args.values) {
     setCompanionValues(row.id, args.values);
+  }
+  // A hidden employer, the DM's or the arc's (issue 503 Phase 8).
+  if (kind === "party") {
+    seedAgenda(campaign, sheet, args.agenda);
   }
 
   return {

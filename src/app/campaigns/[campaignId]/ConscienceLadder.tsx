@@ -22,6 +22,8 @@ export type ConscienceView = {
   // fights, and what it refused today. Said aloud, so every seat reads them.
   demand?: string;
   refused?: string;
+  // A hidden employer (Phase 8): a storyteller secret, like the plan.
+  agenda?: string;
 };
 
 // Calm to grave, in the palettes the day theme turns too (globals.css).
@@ -86,6 +88,11 @@ export function ConscienceLadder({ name, conscience }: { name: string; conscienc
       {conscience.plan ? (
         <p className="reveal mt-1 text-xs leading-5 text-stone-300" data-conscience-plan>
           <span className="font-medium text-violet-300">Their plan, yours alone:</span> {name} {conscience.plan}.
+        </p>
+      ) : null}
+      {conscience.agenda ? (
+        <p className="reveal mt-1 text-xs leading-5 text-stone-300" data-conscience-agenda>
+          <span className="font-medium text-violet-300">Their secret, yours alone:</span> {name} {conscience.agenda}.
         </p>
       ) : null}
     </div>
