@@ -1,8 +1,7 @@
 import { withLanguage } from "@/lib/dm/table-language-logic";
 import { campaignLanguage, getCampaignById, getCampaignSummaryState } from "@/lib/db/campaigns";
 import { listChapters } from "@/lib/db/chapters";
-import { listActiveFacts } from "@/lib/db/facts";
-import { isStorytellerFact } from "@/lib/dm/fact-logic";
+import { listFactsVisibleTo } from "@/lib/db/facts";
 import { getCampaignMessage } from "@/lib/db/messages";
 import { getNpcByName, listNpcs } from "@/lib/db/npcs";
 import { arcTextTimeoutMs, utilityContextTokens } from "@/lib/model-client";
@@ -46,15 +45,27 @@ export type LoreCheckRequest = {
   category: LoreCheckCategory;
   // Optional NPC the tone/character complaint is about.
   npcName?: string;
+  // The seat that runs the check. The checker quotes its evidence back in
+  // its citations, so the evidence is only what this seat may read, by the
+  // rules ?secrets=1 follows (src/app/api/campaigns/[campaignId]/facts):
+  // the party's facts and the asker's own characters', the DM's secrets for
+  // whoever steers the story, the storyteller's for the storyteller alone
+  // (src/lib/dm/viewer.ts).
+  viewer: LoreCheckViewer;
+};
+
+export type LoreCheckViewer = {
+  ownedCharacterIds: string[];
+  dmSecrets: boolean;
+  storytellerSecrets: boolean;
 };
 
 async function assembleEvidence(request: LoreCheckRequest, chapterBudget: number): Promise<string[]> {
   const { campaignId, selection } = request;
   const evidence: string[] = [];
 
-  // The storyteller's own secrets never reach a check any member can run
-  // and read the citations of (src/lib/dm/viewer.ts, storyteller secrets).
-  const facts = listActiveFacts(campaignId).filter((fact) => !isStorytellerFact(fact.knownBy));
+  const { viewer } = request;
+  const facts = listFactsVisibleTo(campaignId, viewer.ownedCharacterIds, viewer.dmSecrets, viewer.storytellerSecrets);
   const factLines = facts
     .slice(0, 40)
     .map(
@@ -99,7 +110,9 @@ async function assembleEvidence(request: LoreCheckRequest, chapterBudget: number
     evidence.push(`[summary] Current chapter so far:\n${summary}`);
   }
 
-  // Tone and characterization checks get the NPC's server-tracked state.
+  // Tone and characterization checks get the NPC's server-tracked state:
+  // how they carry themselves for anyone, their goals and leanings (the
+  // DM's side of them) for a seat that reads the DM's secrets.
   if (
     (request.category === "tone_mismatch" || request.category === "out_of_character") &&
     (request.npcName || listNpcs(campaignId).length)
@@ -107,7 +120,7 @@ async function assembleEvidence(request: LoreCheckRequest, chapterBudget: number
     const npc = request.npcName ? getNpcByName(campaignId, request.npcName) : null;
     const roster = npc ? [npc] : listNpcs(campaignId).slice(0, 8);
     const lines = roster.map((entry) => {
-      const fragment = agencyFragment(entry.agency);
+      const fragment = viewer.dmSecrets ? agencyFragment(entry.agency) : "";
       return `[fact:npc-${entry.name}] ${entry.name}: ${entry.attitude}${entry.trait ? `, ${entry.trait}` : ""}${fragment ? ` | ${fragment}` : ""}`;
     });
     if (lines.length) {

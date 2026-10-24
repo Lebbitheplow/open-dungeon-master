@@ -1,5 +1,6 @@
 import { z } from "zod";
-import { isErrorResponse, steersStory, requireMember } from "@/lib/campaign-api";
+import { isErrorResponse, seesStorytellerSecrets, steersStory, requireMember } from "@/lib/campaign-api";
+import { listSheets } from "@/lib/db/sheets";
 import { getCampaignMessage, updateMessageContent } from "@/lib/db/messages";
 import { publishPersisted } from "@/lib/events";
 import { runLoreCheck } from "@/lib/dm/lore-check";
@@ -11,7 +12,9 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // Lore check: any member may run a consistency check on a passage; only the
-// party lead may accept a rewrite, and only on DM-authored messages.
+// party lead may accept a rewrite, and only on DM-authored messages. The
+// checker is handed only the evidence the asker's seat may read, since it
+// quotes it back (src/lib/dm/lore-check.ts LoreCheckRequest.viewer).
 
 const runSchema = z.object({
   action: z.literal("run").default("run"),
@@ -82,6 +85,13 @@ export async function POST(
     selection: parsed.data.selection,
     category: parsed.data.category,
     npcName: parsed.data.npcName,
+    viewer: {
+      ownedCharacterIds: listSheets(campaignId)
+        .filter((sheet) => sheet.userId === context.user.id)
+        .map((sheet) => sheet.id),
+      dmSecrets: steersStory(context),
+      storytellerSecrets: seesStorytellerSecrets(context),
+    },
   });
   if ("error" in result) {
     return Response.json({ error: result.error }, { status: 502 });
