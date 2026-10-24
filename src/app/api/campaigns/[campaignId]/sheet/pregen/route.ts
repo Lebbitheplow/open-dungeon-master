@@ -9,11 +9,14 @@ import { seatAddedSheet } from "@/lib/character-seat";
 import { publishPersisted } from "@/lib/events";
 import { queueLibraryPortrait } from "@/lib/portrait";
 import { pregenById } from "@/lib/starter/pregens";
+import { seatPicksSchema } from "@/lib/characters/seat-picks";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const pickSchema = z.object({ id: z.string().trim().min(1).max(40) });
+// The hero, and the owed choices picked on the confirm sheet
+// (src/lib/characters/seat-picks.ts).
+const pickSchema = z.object({ id: z.string().trim().min(1).max(40), picks: seatPicksSchema.optional() });
 
 // A ready-made hero takes a seat (src/lib/starter/pregens.ts): the same
 // door as a character the builder made, so the sheet is judged by the
@@ -37,13 +40,16 @@ export async function POST(
     return Response.json({ error: "You already have a character in this campaign." }, { status: 409 });
   }
   const parsed = pickSchema.safeParse(await request.json().catch(() => ({})));
+  if (!parsed.success && parsed.error.issues.some((issue) => issue.path[0] === "picks")) {
+    return Response.json({ error: "Those picks could not be read." }, { status: 400 });
+  }
   const pregen = parsed.success ? pregenById(parsed.data.id) : null;
   if (!pregen) {
     return Response.json({ error: "No such hero." }, { status: 404 });
   }
   // The door and the owed improvements are src/lib/characters/seat-preview.ts,
   // shared with the confirm sheet the player reads before this.
-  const admitted = admitPregen(pregen, context.campaign, context.user.id);
+  const admitted = admitPregen(pregen, context.campaign, context.user.id, parsed.success ? parsed.data.picks : null);
   if (!admitted.ok) {
     return refusal(admitted.problems);
   }

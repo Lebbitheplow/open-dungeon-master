@@ -30,12 +30,26 @@ export type ChooserCharacter = {
   sheet?: CreateSheetInput;
 };
 
+// A pregen the table's DM offers its players (GET /api/campaigns/:id/pregens,
+// src/lib/db/pregen-offers.ts), and who holds it here.
+type OfferedPregen = {
+  id: string;
+  name: string;
+  race: string;
+  class: string;
+  subclass: string;
+  level: number;
+  taken: "mine" | "other" | null;
+  takenBy: string | null;
+};
+
 function titleCase(value: string) {
   return value.replace(/[-_]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 // One screen for every hero a seat can take (backlog F5), in this order: the
-// player's own heroes, the pregens an adventure brought (a workshop's, which
+// player's own heroes, the pregens the table's DM offers its players (ticked
+// in the workshop's Party panel; one player each), the pregens an adventure brought (a workshop's, which
 // land in its importer's library: src/lib/db/workshop-bundle-parts.ts), the
 // ready-made starters (src/lib/starter/pregens.ts), Help me build (the
 // quick-build quiz, backlog F1), then Build new. Every pick, and every hero
@@ -85,6 +99,24 @@ export function HeroChooser({
   };
   const [picked, setPicked] = useState<JoinHero | null>(null);
   const sections = chooserSections(characters);
+  const [offered, setOffered] = useState<OfferedPregen[]>([]);
+  // A first seat only, like the ready-made heroes: a lobby switch is to
+  // one of the player's own.
+  useEffect(() => {
+    if (flow !== "join") {
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/campaigns/${campaignId}/pregens`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { pregens?: OfferedPregen[] } | null) => {
+        if (!cancelled) setOffered(data?.pregens ?? []);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [campaignId, flow]);
 
   const wantsWorkshops = sections.pregens.length > 0;
   useEffect(() => {
@@ -165,6 +197,46 @@ export function HeroChooser({
         </div>
       ) : null}
 
+      {offered.length ? (
+        <div className="space-y-3" data-chooser-section="offered">
+          <SectionHead title="Pregens your DM offers" glyph="tab-characters" level="h2" aside={<span className="text-xs text-stone-400">{offered.length}</span>} />
+          <p className="text-xs text-stone-400">Heroes the DM wrote for this adventure. Take one and you play your own copy, at this table&apos;s level. One player each.</p>
+          <ul className="stagger-up grid grid-cols-1 gap-3 sm:grid-cols-2">
+            {offered.map((pregen) => (
+              <li key={pregen.id}>
+                <button
+                  type="button"
+                  disabled={pregen.taken !== null}
+                  onClick={() => setPicked({ kind: "offered", id: pregen.id, name: pregen.name })}
+                  className={cn(ui.cardHover, "w-full p-4 text-left disabled:cursor-not-allowed disabled:opacity-60")}
+                  data-offered-pick={pregen.id}
+                  data-offered-taken={pregen.taken ?? undefined}
+                >
+                  <div className="flex items-center gap-2">
+                    <IconChip icon={UserRound} size="size-8" iconSize="size-4" />
+                    <span className="min-w-0 truncate font-display tracking-wide text-stone-100">{pregen.name}</span>
+                    <GameIcon icon={{ kind: "family", key: `class-${pregen.class.toLowerCase()}` }} size="size-7" className="ml-auto" />
+                  </div>
+                  <p className="mt-1 text-sm text-stone-400">
+                    Level {pregen.level} {titleCase(pregen.race)} {workshopClassName(pregen.class) ?? titleCase(pregen.class)}
+                    {pregen.subclass ? ` (${pregen.subclass})` : ""}
+                  </p>
+                  {pregen.taken === "mine" ? (
+                    <p className="mt-1 text-xs text-amber-200">You play this one here.</p>
+                  ) : pregen.taken === "other" ? (
+                    <p className="mt-1 text-xs text-stone-400">Taken by {pregen.takenBy}.</p>
+                  ) : pregen.level !== level ? (
+                    <p className="reveal mt-1 text-xs text-amber-200">
+                      {pregen.level < level ? `Levelled up to ${level} for this table.` : `Plays at level ${level} here.`}
+                    </p>
+                  ) : null}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       {sections.pregens.length ? (
         <div className="space-y-3" data-chooser-section="pregens">
           <SectionHead title="Pregens from your adventures" glyph="tab-characters" level="h2" aside={<span className="text-xs text-stone-400">{sections.pregens.length}</span>} />
@@ -209,7 +281,8 @@ export function HeroChooser({
       <JoinConfirmDialog
         campaignId={campaignId}
         hero={picked}
-        flow={flow}
+        // A DM's offered pregen takes a first seat only.
+        flow={picked?.kind === "offered" ? "join" : flow}
         onClose={() => setPicked(null)}
         onSeated={onSeated}
       />

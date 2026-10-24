@@ -78,7 +78,7 @@ await test("the join page opens on the chooser, and every pick goes through the 
   assert.match(page, /<HeroChooser/);
   assert.doesNotMatch(page, /pickFromLibrary/, "a library hero is seated in one tap again");
   const chooser = read("src/app/campaigns/[campaignId]/HeroChooser.tsx");
-  const order = ["data-chooser-section=\"library\"", "data-chooser-section=\"pregens\"", "<PregenPicker", "data-chooser-section=\"help\"", "data-chooser-section=\"build\""];
+  const order = ["data-chooser-section=\"library\"", "data-chooser-section=\"offered\"", "data-chooser-section=\"pregens\"", "<PregenPicker", "data-chooser-section=\"help\"", "data-chooser-section=\"build\""];
   const at = order.map((marker) => chooser.indexOf(marker));
   assert.ok(at.every((index) => index >= 0), `missing: ${order.filter((_, i) => at[i] < 0).join(", ")}`);
   assert.deepEqual([...at].sort((a, b) => a - b), at, "the chooser's sections are out of order");
@@ -105,7 +105,13 @@ await test("Help me build opens the quiz at the table's level, and its hero goes
   // The sheet previews it and seats it through the table's own door.
   const dialog = read("src/app/campaigns/[campaignId]/JoinConfirmDialog.tsx");
   assert.match(dialog, /hero\.kind === "built"\) return \{ sheet: hero\.sheet, flow \}/);
-  assert.match(dialog, /JSON\.stringify\(hero\.kind === "built" \? hero\.sheet : \{ libraryCharacterId: hero\.id \}\)/);
+  assert.match(dialog, /body: hero\.kind === "built" \? hero\.sheet : \{ libraryCharacterId: hero\.id, \.\.\.withPicks \}/);
+  // The owed choices are picked on the sheet with the level-up's pickers,
+  // and sent with the join (src/lib/characters/seat-picks.ts).
+  assert.match(dialog, /<OwedPicksFields/);
+  const pickers = read("src/app/campaigns/[campaignId]/OwedPicksFields.tsx");
+  assert.match(pickers, /<AsiFeatEditor/);
+  assert.match(pickers, /<FeatChoicesFields/);
 });
 
 // ---- the preview route against the join ----
