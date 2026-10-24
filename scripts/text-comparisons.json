@@ -315,7 +315,7 @@
     "app/characters/builder/steps/CallingStep.tsx#toUpperCase": [["display",5,"ability abbreviations shown"]],
     "app/characters/builder/steps/ClassChoices.tsx#str-eq": [["key",1,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
     "app/characters/builder/steps/IdentityStep.tsx#str-endsWith": [["key",1,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
-    "app/characters/builder/steps/SpellsGearStep.tsx#str-eq": [["key",1,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
+    "app/characters/builder/steps/SpellsGearStep.tsx#str-eq": [["key",2,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
     "app/characters/builder/steps/SpellsGearStep.tsx#toLowerCase": [["key",2,"class name as a CSS or lookup key"]],
     "app/characters/builder/quickBuild.ts#str-list": [["key",11,"SRD ids: backgrounds, skills, spell lists and feats an answer leans to"]],
     "app/characters/builder/QuickBuildReadback.tsx#toLowerCase": [["display",1,"pick label in a button's spoken name"]],

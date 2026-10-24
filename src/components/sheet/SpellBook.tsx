@@ -10,6 +10,16 @@ import { bundledSpellFacts } from "@/lib/srd/spell-facts";
 import { replayAnimation } from "@/lib/motion/replay";
 import { spellSupportFor, spellSupportWord } from "@/lib/srd/spell-support";
 import { compareNames, textKey } from "@/lib/language/text-logic";
+import {
+  CASTING_TIME_LABELS,
+  NO_SPELL_FILTER,
+  matchesSpellFilter,
+  spellDeskFacts,
+  spellFilterActive,
+  spellFilterOptions,
+  spellFilterWords,
+  type SpellFilter,
+} from "./spellFilters";
 
 // The spell book: one tab per spell level (cantrips first), every spell a
 // tile that says at a glance whether it is ready, waiting for a long rest,
@@ -112,6 +122,8 @@ export function SpellBook({
   notice,
   emptyText = "No spells yet.",
   writingBook = false,
+  filters = false,
+  prompt,
 }: {
   tiles: SpellTile[];
   // Tabs run from cantrips to this level even when a level is still empty,
@@ -133,6 +145,13 @@ export function SpellBook({
   // or takes it out, so a spell in the book reads as pressed. Everywhere
   // else a tap prepares, and only a prepared spell does.
   writingBook?: boolean;
+  // The spell desk's filters (backlog F13): school, ritual, concentration
+  // and casting time, beside the search. The builder offers them; the sheet
+  // keeps its plain search.
+  filters?: boolean;
+  // A question from the picker about the last tap that waits for an answer
+  // (the builder's swap when a list is full), drawn above the tiles.
+  prompt?: ReactNode;
 }) {
   const [filter, setFilter] = useState("");
   // The last text note, kept to hold the note's room after it clears (see
@@ -143,6 +162,18 @@ export function SpellBook({
     setHeldNotice(notice);
   }
   const needle = textKey(filter);
+  const [desk, setDesk] = useState<SpellFilter>(NO_SPELL_FILTER);
+  const factsByName = useMemo(
+    () => (filters ? new Map(tiles.map((tile) => [tile.name, spellDeskFacts(tile)])) : null),
+    [filters, tiles],
+  );
+  const options = useMemo(() => spellFilterOptions(factsByName ? [...factsByName.values()] : []), [factsByName]);
+  const filtering = Boolean(factsByName) && spellFilterActive(desk);
+  // A search or a filter shows every level at once.
+  const narrowed = Boolean(needle) || filtering;
+  const passes = (tile: SpellTile) =>
+    (!needle || textKey(tile.label ?? tile.name).includes(needle)) &&
+    (!filtering || matchesSpellFilter(factsByName?.get(tile.name) ?? spellDeskFacts(tile), desk));
   // The level row says which level is chosen only once mounted. The travelling
   // pill (src/lib/motion/pill.ts) decorates every pill group that has a chosen
   // button as soon as the page loads, and a pill appended to server-rendered
@@ -175,12 +206,8 @@ export function SpellBook({
   const [tab, setTab] = useState<string | null>(null);
   const active = tab && byLevel.has(tab) ? tab : (firstUseful ?? "0");
 
-  const shown = needle
-    ? keys.flatMap((key) =>
-        (byLevel.get(key) ?? []).filter((tile) =>
-          textKey(tile.label ?? tile.name).includes(needle),
-        ),
-      )
+  const shown = narrowed
+    ? keys.flatMap((key) => (byLevel.get(key) ?? []).filter(passes))
     : (byLevel.get(active) ?? []);
   // Chosen first, then what is left to choose, alphabetical inside each.
   // The order is taken when a page of tiles opens (a tab, a search, a new
@@ -189,7 +216,7 @@ export function SpellBook({
   // the front and the list jumping, and the tap looked lost (issue 66).
   const byRank = (a: SpellTile, b: SpellTile) =>
     RANK[a.state] - RANK[b.state] || compareNames(a.label ?? a.name, b.label ?? b.name);
-  const pageKey = `${needle ? `?${needle}` : active}|${shown
+  const pageKey = `${narrowed ? `?${needle}|${JSON.stringify(desk)}` : active}|${shown
     .map((tile) => tile.name)
     .sort()
     .join("|")}`;
@@ -244,7 +271,7 @@ export function SpellBook({
         <div role="group" aria-label="Spell level" data-pill-group className="flex flex-wrap gap-1">
           {keys.map((key) => {
             const count = chosenIn(key);
-            const selected = !needle && key === active;
+            const selected = !narrowed && key === active;
             return (
               <button
                 key={key}
@@ -281,6 +308,72 @@ export function SpellBook({
           className="ml-auto w-36 rounded-md border border-stone-700/70 bg-stone-950 px-2 py-1 text-xs text-stone-200 outline-none focus:border-amber-400/60"
         />
       </div>
+      {factsByName ? (
+        // Native selects and a checkbox, each one tab stop with its own
+        // label; the arrow keys already move inside a select.
+        <div role="group" aria-label="Filter spells" data-spell-filters="" className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-stone-400">
+          {options.schools.length > 1 ? (
+            <label className="flex items-center gap-1">
+              School
+              <select value={desk.school} onChange={(event) => setDesk({ ...desk, school: event.target.value })} className={FILTER_SELECT}>
+                <option value="">Any</option>
+                {options.schools.map((school) => (
+                  <option key={school} value={school}>
+                    {school}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          {options.castingTimes.length > 1 ? (
+            <label className="flex items-center gap-1">
+              Casting time
+              <select
+                value={desk.castingTime}
+                onChange={(event) => setDesk({ ...desk, castingTime: event.target.value as SpellFilter["castingTime"] })}
+                className={FILTER_SELECT}
+              >
+                <option value="">Any</option>
+                {options.castingTimes.map((kind) => (
+                  <option key={kind} value={kind}>
+                    {CASTING_TIME_LABELS[kind]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          {options.anyConcentration ? (
+            <label className="flex items-center gap-1">
+              Concentration
+              <select
+                value={desk.concentration}
+                onChange={(event) => setDesk({ ...desk, concentration: event.target.value as SpellFilter["concentration"] })}
+                className={FILTER_SELECT}
+              >
+                <option value="">Any</option>
+                <option value="yes">Needs it</option>
+                <option value="no">Not needed</option>
+              </select>
+            </label>
+          ) : null}
+          {options.anyRitual ? (
+            <label className="flex items-center gap-1.5">
+              <input
+                type="checkbox"
+                checked={desk.ritual}
+                onChange={(event) => setDesk({ ...desk, ritual: event.target.checked })}
+                className="accent-amber-400"
+              />
+              Rituals only
+            </label>
+          ) : null}
+          {filtering ? (
+            <button type="button" onClick={() => setDesk(NO_SPELL_FILTER)} className="text-sky-300 underline-offset-2 hover:underline">
+              Clear filters
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* The whole note, wrapped as far as it needs: cut to one line, its
           count's working was only in a tooltip that touch and screen
@@ -290,7 +383,11 @@ export function SpellBook({
           full counter shakes with the tile. */}
       <p className="mt-2 mb-1.5 flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
         <span className="eyebrow shrink-0 text-[10px] leading-4 text-stone-500">
-          {needle ? `Matching "${filter.trim()}"` : levelLabel(active)}
+          {needle
+            ? `Matching "${filter.trim()}"${filtering ? `, ${spellFilterWords(desk)}` : ""}`
+            : filtering
+              ? `Matching ${spellFilterWords(desk)}`
+              : levelLabel(active)}
         </span>
         {notice || heldNotice ? (
           <span
@@ -302,6 +399,7 @@ export function SpellBook({
           </span>
         ) : null}
       </p>
+      {prompt}
       {ordered.length ? (
         // Columns follow the room the book is drawn in, not the window: the
         // level-up dialog is narrow on a wide screen, and four columns there
@@ -319,6 +417,7 @@ export function SpellBook({
               <li
                 key={tile.name}
                 className="spell-tile"
+                data-spell={tile.name}
                 data-state={tile.state}
                 data-blocked={tile.blocked ? "true" : undefined}
               >
@@ -377,7 +476,7 @@ export function SpellBook({
         </ul>
         </div>
       ) : (
-        <p className="py-2 text-xs text-stone-500">{needle ? "No spell matches." : emptyText}</p>
+        <p className="py-2 text-xs text-stone-500">{narrowed ? "No spell matches." : emptyText}</p>
       )}
 
       <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-stone-500">
@@ -404,6 +503,9 @@ export function SpellBook({
     </div>
   );
 }
+
+const FILTER_SELECT =
+  "rounded-md border border-stone-700/70 bg-stone-950 px-1.5 py-1 text-xs capitalize text-stone-200 outline-none focus:border-amber-400/60";
 
 // The concentration mark: a ringed C, named for a screen reader.
 function ConcentrationMark() {

@@ -1,7 +1,7 @@
 "use client";
 
 import { Star } from "lucide-react";
-import { useState, useSyncExternalStore } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 import { SpellBook, type SpellTile } from "@/components/sheet/SpellBook";
 import { useSpellLookups, useWiderSpellPool } from "@/components/sheet/useSpellPool";
 import { GameTerm } from "@/components/ui/GameTerm";
@@ -22,6 +22,7 @@ import type { BuilderActions, BuilderDerived } from "../useBuilderDerived";
 import type { BuilderState } from "../useBuilderState";
 import { fillSpells } from "../quickBuild";
 import { spellOnSavedList, spellShortageLines, spellSupplyOf } from "../spellSupply";
+import { capLines, castingNumbers, swapCandidates, swapInList, swapQuestion, type PendingSwap } from "../spellDesk";
 import { StepPanel, inputClass } from "./shared";
 import { textKey } from "@/lib/language/text-logic";
 
@@ -143,6 +144,12 @@ function SpellsSection({
   // A wizard fills the book first, then prepares from it.
   const [phase, setPhase] = useState<"book" | "prepare">("book");
   const [limitNote, setLimitNote] = useState("");
+  // A tap on a spell while its list is full asks which spell it replaces
+  // (backlog F13), instead of refusing it; the tile tapped gets focus back
+  // if the swap is called off.
+  const [swap, setSwap] = useState<PendingSwap | null>(null);
+  const swapFrom = useRef<HTMLElement | null>(null);
+  const deskRef = useRef<HTMLDivElement | null>(null);
   // See SpellBook: the chosen tab is announced after mount so the travelling
   // pill never lands on server-rendered markup before hydration.
   const mounted = useSyncExternalStore(noSubscribe, () => true, () => false);
@@ -167,13 +174,17 @@ function SpellsSection({
     name: spell,
     school: poolByName.get(textKey(spell))?.data?.school ?? bundledSpellSchool(spell),
   });
-  const offSchool = (name: string) =>
+  // `without` is the spell a swap takes out to make room.
+  const offSchool = (name: string, without?: string) =>
     thirdCasterSchoolProblem({
       classId: klass.id,
       subclass: state.subclass,
       profile: subclassCastingProfileFor(klass.id, state.subclass),
       level: state.level,
-      spells: [...spells.filter((entry) => !isGranted(entry)), name].map(schoolOf),
+      spells: [
+        ...spells.filter((entry) => !isGranted(entry) && (without === undefined || textKey(entry) !== textKey(without))),
+        name,
+      ].map(schoolOf),
     });
   // Only the starters the save takes for this class: the bundled list puts
   // none of the artificer's suggested cantrips on its list, and a star on
@@ -183,12 +194,72 @@ function SpellsSection({
   const starterSpells = (starters?.spells ?? []).filter((entry) => spellOnSavedList(entry.n, listRule));
   const suggested = new Set([...starterCantrips, ...starterSpells].map((entry) => textKey(entry.n)));
 
+  // The picks a swap may take out of each list: never one the subclass, the
+  // race or a feat grants, which do not count against the cap.
+  const candidatesFor = (kind: PendingSwap["kind"]) =>
+    kind === "cantrip"
+      ? swapCandidates(cantrips, (entry) => isRacial(entry) || isFeat(entry))
+      : kind === "prepared"
+        ? swapCandidates(bookPrepared, isGranted)
+        : swapCandidates(spells, (entry) => isGranted(entry) || isFeat(entry));
+  // Opens the swap when the full list has a pick of the player's to trade.
+  function offerSwap(kind: PendingSwap["kind"], name: string): boolean {
+    if (!candidatesFor(kind).length) {
+      return false;
+    }
+    swapFrom.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setSwap({ kind, name });
+    // The question is where the player's attention should go next: focus
+    // moves to it, and Cancel or Escape brings it back to the tile.
+    window.setTimeout(() => deskRef.current?.querySelector<HTMLElement>("[data-spell-swap]")?.focus(), 0);
+    return true;
+  }
+  function focusTile(name: string) {
+    window.setTimeout(() => {
+      deskRef.current?.querySelector<HTMLElement>(`li[data-spell="${CSS.escape(name)}"] button`)?.focus();
+    }, 0);
+  }
+  function cancelSwap() {
+    setSwap(null);
+    swapFrom.current?.focus();
+  }
+  // One action: the chosen spell goes out and the tapped one takes its
+  // place, by the same rules a tap would have checked.
+  function doSwap(out: string) {
+    if (!swap) {
+      return;
+    }
+    const into = swap.name;
+    if (swap.kind === "cantrip") {
+      setCantrips((current) => swapInList(current, out, into));
+    } else if (swap.kind === "prepared") {
+      setBookPrepared((current) => swapInList(current, out, into));
+    } else {
+      const school = offSchool(into, out);
+      if (school) {
+        setSwap(null);
+        setLimitNote(school);
+        focusTile(into);
+        return;
+      }
+      setSpells((current) => swapInList(current, out, into));
+      // A spell that leaves the book leaves what is prepared from it.
+      setBookPrepared((current) => current.filter((entry) => textKey(entry) !== textKey(out)));
+    }
+    setSwap(null);
+    setLimitNote(`Swapped ${out} out for ${into}.`);
+    focusTile(into);
+  }
+
   function toggleCantrip(name: string) {
     if (has(cantrips, name)) {
       setCantrips((current) => current.filter((entry) => textKey(entry) !== textKey(name)));
       return;
     }
     if (cantripCap !== null && chosenCantrips.length >= cantripCap) {
+      if (offerSwap("cantrip", name)) {
+        return;
+      }
       setLimitNote(
         `You already know ${cantripCap} ${cantripCap === 1 ? "cantrip" : "cantrips"}. Remove one to choose ${name}.`,
       );
@@ -206,6 +277,9 @@ function SpellsSection({
     // school rule.
     const cap = wizard ? bookCap : spellCap;
     if (cap !== null && chosenSpells.length >= cap) {
+      if (offerSwap("spell", name)) {
+        return;
+      }
       setLimitNote(
         wizard
           ? `Your spellbook starts with ${cap} spells. Remove one to write in ${name}.`
@@ -226,6 +300,9 @@ function SpellsSection({
       return;
     }
     if (spellCap !== null && chosenPrepared.length >= spellCap) {
+      if (offerSwap("prepared", name)) {
+        return;
+      }
       setLimitNote(`You can prepare ${spellCap} spells${limitWhy}. Unprepare one to prepare ${name}.`);
       return;
     }
@@ -234,6 +311,7 @@ function SpellsSection({
 
   function onTile(tile: SpellTile) {
     setLimitNote("");
+    setSwap(null);
     if (tile.level === 0) {
       toggleCantrip(tile.name);
     } else if (wizard && phase === "prepare") {
@@ -249,6 +327,7 @@ function SpellsSection({
   // fit.
   function addSuggested() {
     setLimitNote("");
+    setSwap(null);
     const fill = fillSpells({ fields: { cantrips, spells, bookPrepared }, derived, klass, spellPool: listRule.spellPool });
     if (fill?.patch.cantrips) setCantrips(fill.patch.cantrips);
     if (fill?.patch.spells) setSpells(fill.patch.spells);
@@ -264,7 +343,21 @@ function SpellsSection({
   const listFull = listCap !== null && chosenSpells.length >= listCap;
   const preparedFull = spellCap !== null && chosenPrepared.length >= spellCap;
   const listFullText = wizard ? "Spellbook full" : spellStyle === "known" ? "Known spells full" : "Prepared list full";
+  // A full list with a pick of the player's in it offers a swap instead
+  // (backlog F13): the tile says so and is not dimmed.
+  const canSwap = {
+    cantrip: cantripsFull && candidatesFor("cantrip").length > 0,
+    spell: listFull && candidatesFor("spell").length > 0,
+    prepared: preparedFull && candidatesFor("prepared").length > 0,
+  };
+  const swapsIn = (level: number | null, tileState: SpellTile["state"]) =>
+    tileState === "inBook"
+      ? phase === "prepare" && canSwap.prepared
+      : tileState === "available" && (level === 0 ? canSwap.cantrip : canSwap.spell);
   const blockedFor = (name: string, level: number | null, tileState: SpellTile["state"]) => {
+    if (swapsIn(level, tileState)) {
+      return undefined;
+    }
     if (tileState === "inBook") {
       return phase === "prepare" && preparedFull ? "Prepared list full" : undefined;
     }
@@ -323,7 +416,13 @@ function SpellsSection({
         data: row?.data,
         slug: row?.slug,
         homebrew: row?.source === "homebrew",
-        ...(level === 0 && isRacial(name) ? { note: "From your race" } : isFeat(name) ? { note: "From your feat" } : {}),
+        ...(level === 0 && isRacial(name)
+          ? { note: "From your race" }
+          : isFeat(name)
+            ? { note: "From your feat" }
+            : swapsIn(level, tileState)
+              ? { note: "Full: tap to swap in" }
+              : {}),
         ...(row?.document && row.documentSlug !== "wotc-srd" ? { source: row.document } : {}),
       },
     ];
@@ -344,6 +443,45 @@ function SpellsSection({
             max: spellAdvice.count,
           },
         ]
+      : []),
+  ];
+
+  // The desk's header (backlog F13): the numbers the build math table
+  // shows for casting (buildMath.ts), and each cap said as its working.
+  const numbers = castingNumbers({
+    spellSaveDc: derived.preview?.derived.spellSaveDc,
+    spellAttack: derived.preview?.derived.spellAttack,
+    spellSlots: derived.spellSlots,
+  });
+  const caps = capLines({
+    className: klass.name,
+    level: derived.effectiveLevel,
+    cantripCap,
+    spellbookCap: wizard ? bookCap : null,
+    spellCap: spellAdvice,
+    known: spellStyle === "known",
+  });
+  const listTitle = spellStyle === "known" ? "Known spells" : "Prepared";
+  const named = (list: string[]) => list.map((name) => displayName(pack, "spells", name));
+  const chosenLists = [
+    ...(cantripCap !== null
+      ? [{ id: "cantrips", title: "Cantrips", count: `${chosenCantrips.length}/${cantripCap}`, names: named(chosenCantrips) }]
+      : []),
+    ...(wizard
+      ? [{ id: "book", title: "Spellbook", count: `${chosenSpells.length}/${bookCap ?? "?"}`, names: named(chosenSpells) }]
+      : []),
+    ...(spellAdvice
+      ? [
+          {
+            id: "list",
+            title: listTitle,
+            count: `${wizard ? chosenPrepared.length : chosenSpells.length}/${spellAdvice.count}`,
+            names: named(wizard ? chosenPrepared : chosenSpells),
+          },
+        ]
+      : []),
+    ...(subclassSpells.length
+      ? [{ id: "granted", title: "Always prepared", count: String(subclassSpells.length), names: named(subclassSpells) }]
       : []),
   ];
 
@@ -379,6 +517,12 @@ function SpellsSection({
         </>
       }
     >
+      <div ref={deskRef}>
+      <SpellDeskHeader
+        numbers={numbers}
+        caps={caps}
+        lists={chosenLists}
+      />
       {wizard ? (
         // Two toggle buttons that switch what the list below does (write or
         // prepare), the same pattern as the spell level row in SpellBook.
@@ -397,6 +541,7 @@ function SpellsSection({
               onClick={() => {
                 setPhase(key);
                 setLimitNote("");
+                setSwap(null);
               }}
               className={cn(
                 "rounded-lg border px-3 py-2 text-left text-xs transition-colors",
@@ -438,6 +583,22 @@ function SpellsSection({
         onTile={onTile}
         writingBook={wizard && phase === "book"}
         notice={limitNote || undefined}
+        filters
+        prompt={
+          swap ? (
+            <SwapPrompt
+              question={swapQuestion(
+                swap,
+                swap.kind === "cantrip" ? "Cantrips full" : swap.kind === "prepared" ? "Prepared list full" : listFullText,
+              )}
+              candidates={candidatesFor(swap.kind)}
+              into={swap.name}
+              label={(name) => displayName(pack, "spells", name)}
+              onSwap={doSwap}
+              onCancel={cancelSwap}
+            />
+          ) : null
+        }
         emptyText={
           loading
             ? "Loading the spell list..."
@@ -451,6 +612,136 @@ function SpellsSection({
           ) : null
         }
       />
+      </div>
     </StepPanel>
+  );
+}
+
+// The top of the spell desk (backlog F13): the casting numbers the sheet
+// will carry, each cap with its working, and what is chosen, the book and
+// the prepared list side by side, so neither has to be remembered while
+// the other is open.
+function SpellDeskHeader({
+  numbers,
+  caps,
+  lists,
+}: {
+  numbers: ReturnType<typeof castingNumbers>;
+  caps: ReturnType<typeof capLines>;
+  lists: Array<{ id: string; title: string; count: string; names: string[] }>;
+}) {
+  return (
+    <div data-spell-desk="" className="mb-3 space-y-2 text-xs">
+      {numbers.dc || numbers.attack || numbers.slots.length ? (
+        <dl data-casting-numbers="" className="flex flex-wrap gap-x-4 gap-y-1 rounded-lg border border-stone-800 bg-stone-950/40 px-3 py-2">
+          {numbers.dc ? (
+            <div className="flex gap-1">
+              <dt className="text-stone-400">
+                <GameTerm id="spell_save_dc">Spell save DC</GameTerm>
+              </dt>
+              <dd className="font-mono text-amber-100">{numbers.dc}</dd>
+            </div>
+          ) : null}
+          {numbers.attack ? (
+            <div className="flex gap-1">
+              <dt className="text-stone-400">Spell attack</dt>
+              <dd className="font-mono text-amber-100">{numbers.attack}</dd>
+            </div>
+          ) : null}
+          {numbers.slots.length ? (
+            <div className="flex gap-1">
+              <dt className="text-stone-400">
+                <GameTerm id="spell_slot">Slots</GameTerm>
+              </dt>
+              <dd className="text-amber-100">
+                {numbers.slots.map((slot) => `${slot.label} ${slot.max}`).join(", ")}
+              </dd>
+            </div>
+          ) : null}
+        </dl>
+      ) : null}
+      {caps.length ? (
+        <ul data-spell-caps="" className="space-y-0.5 text-stone-400">
+          {caps.map((cap) => (
+            <li key={cap.id}>
+              <span className="text-stone-300">{cap.label}:</span> {cap.line}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {lists.length ? (
+        <div data-chosen-spells="" className="grid gap-2 sm:grid-cols-2">
+          {lists.map((list) => (
+            <section key={list.id} aria-label={`${list.title}, ${list.count}`} className="rounded-lg border border-stone-800 px-3 py-2">
+              <h4 className="eyebrow text-[11px] text-stone-400">
+                {list.title} <span className="font-mono">{list.count}</span>
+              </h4>
+              {list.names.length ? (
+                <ul className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-stone-200">
+                  {list.names.map((name) => (
+                    <li key={name}>{name}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-1 text-stone-500">None yet.</p>
+              )}
+            </section>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// "Swap it in for which?": one button per pick that can go, a tap on one
+// trades them in one action. Escape or Cancel leaves both lists alone.
+function SwapPrompt({
+  question,
+  candidates,
+  into,
+  label,
+  onSwap,
+  onCancel,
+}: {
+  question: string;
+  candidates: string[];
+  into: string;
+  label: (name: string) => string;
+  onSwap: (out: string) => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div
+      role="group"
+      aria-label={question}
+      tabIndex={-1}
+      data-spell-swap=""
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          onCancel();
+        }
+      }}
+      className="reveal mb-2 rounded-lg border border-sky-500/40 bg-sky-950/20 px-3 py-2 text-xs text-sky-100 outline-none focus-visible:ring-1 focus-visible:ring-sky-300/60"
+    >
+      <p className="mb-1.5">{question}</p>
+      <div className="flex flex-wrap gap-1.5">
+        {candidates.map((name) => (
+          <button
+            key={name}
+            type="button"
+            onClick={() => onSwap(name)}
+            aria-label={`${label(name)}: swap out for ${label(into)}`}
+            className="rounded-md border border-sky-400/40 px-2 py-1 text-sky-100 hover:border-sky-300"
+          >
+            {label(name)}
+          </button>
+        ))}
+        <button type="button" onClick={onCancel} className="px-2 py-1 text-stone-400 underline-offset-2 hover:underline">
+          Cancel
+        </button>
+      </div>
+    </div>
   );
 }
