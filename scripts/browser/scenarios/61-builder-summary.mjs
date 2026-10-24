@@ -88,7 +88,9 @@ export default {
     await eventually(() => focusMatches(page, '[data-summary-edit="calling"]'), { timeoutMs: 5_000, label: "focus back on the Class row" });
 
     // A level up owes a pick: said in words, with a Fix that lands on it.
-    await t.open(`/characters/${ids.library}/edit?levelUp=1`);
+    // The whole build one level up (Level up itself opens the slim sheet,
+    // backlog F7, walked in 33-library-level-up.mjs).
+    await t.open(`/characters/${ids.library}/edit?levelUp=1&whole=1`);
     await eventually(() => summary.count(), { timeoutMs: 30_000, label: "the summary of a level up" });
     const owedRow = page.locator(`${root}section[data-active] [data-summary-row][data-owed]`).locator("visible=true");
     await eventually(() => owedRow.count(), { timeoutMs: 15_000, label: "a row with a pick owed" });

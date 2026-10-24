@@ -12,6 +12,7 @@ import { navigateTo } from "@/lib/navigation";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
 import { PIXEL_ICONS, PixelTile, ui } from "@/lib/ui";
 import CharacterBuilder, { type BuilderResult } from "@/app/characters/builder/CharacterBuilder";
+import LevelUpSheet from "@/app/characters/builder/LevelUpSheet";
 import type { BuilderRole } from "@/app/characters/builder/steps/FinishStep";
 import { refusalText } from "@/app/characters/builder/refusal";
 
@@ -33,8 +34,11 @@ type LibraryCharacter = {
 function EditCharacterInner({ characterId }: { characterId: string }) {
   const search = useSearchParams();
   const copyOf = search.get("copyOf") ?? "";
-  // "Level up" on the character's page: the build opens one level up.
+  // "Level up" on the character's page: the level-up sheet, only what the
+  // next level brings (backlog F7). "Edit the whole build" (?whole=1) opens
+  // the full builder one level up instead.
   const levelUp = search.get("levelUp") === "1";
+  const wholeBuild = search.get("whole") === "1";
   const [character, setCharacter] = useState<LibraryCharacter | null>(null);
   const [sourceName, setSourceName] = useState("");
   const [loading, setLoading] = useState(true);
@@ -77,6 +81,9 @@ function EditCharacterInner({ characterId }: { characterId: string }) {
   // Who plays them is settled once a table holds a copy: that copy came in
   // through the door its role opened (the server holds the same line).
   const roleEditable = tables.length === 0;
+  // The sheet levels a single class; a multiclass split levels at a table,
+  // where the class taking the level is chosen.
+  const slimSheet = Boolean(nextLevel) && !wholeBuild && (character?.sheet.classes ?? []).length <= 1;
 
   async function save(result: BuilderResult) {
     setBusy(true);
@@ -166,7 +173,12 @@ function EditCharacterInner({ characterId }: { characterId: string }) {
             </p>
           </div>
         </div>
-        {nextLevel ? (
+        {nextLevel && slimSheet ? (
+          <p className="reveal mt-3 rounded-lg border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-xs text-amber-100">
+            Only what level {nextLevel} brings is asked here; the rest of {character.name}&apos;s build stays as it is.
+            Edit the whole build opens every step at level {nextLevel}.
+          </p>
+        ) : nextLevel ? (
           <p className="reveal mt-3 rounded-lg border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-xs text-amber-100">
             The build opens at level {nextLevel}, on its summary. Hit points come with the level; anything it lets{" "}
             {character.name} choose (an ability score improvement, a subclass, new spells) is listed there as still
@@ -197,6 +209,18 @@ function EditCharacterInner({ characterId }: { characterId: string }) {
           </p>
         ) : null}
       </header>
+      {slimSheet && nextLevel ? (
+        <LevelUpSheet
+          key={`sheet-${nextLevel}`}
+          initial={character.sheet}
+          initialLevel={character.level}
+          onSubmit={(result) => void save(result)}
+          busy={busy}
+          error={error}
+          wholeBuildHref={`/characters/${characterId}/edit?levelUp=1&whole=1`}
+          cancelHref={`/characters/${characterId}`}
+        />
+      ) : (
       <CharacterBuilder
         // The builder takes its level once, as it mounts: a move between the
         // edit and its level-up (?levelUp=1) is the same page, so it starts
@@ -212,6 +236,7 @@ function EditCharacterInner({ characterId }: { characterId: string }) {
         role={roleEditable ? { value: role, onChange: setRole } : undefined}
         onCancel={() => navigateTo(`/characters/${characterId}`)}
       />
+      )}
     </main>
   );
 }
