@@ -11,6 +11,7 @@ import { MODE_GLYPHS } from "@/app/campaigns/[campaignId]/sessionGlyphs";
 import { useLingeringEncounter } from "@/app/campaigns/[campaignId]/useLingeringEncounter";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { FloorBanners } from "@/app/campaigns/[campaignId]/FloorBanners";
+import { SideNotice } from "@/app/campaigns/[campaignId]/SideBadge";
 import { TableWaitBanner } from "@/app/campaigns/[campaignId]/TableWaitBanner";
 import { Hand as CombatHand } from "@/app/campaigns/[campaignId]/Hand";
 import { MonsterHand } from "@/app/campaigns/[campaignId]/MonsterHand";
@@ -196,6 +197,7 @@ function ComposerInner({
           meUserId={meUserId}
           onRelease={onReleaseFloor}
         />
+        <SideNotice encounter={encounter ?? null} sheets={sheets} meUserId={meUserId} />
         {floor.mode === "open" && dmStatus === "idle" ? (
           <TableWaitBanner
             campaignId={campaignId}

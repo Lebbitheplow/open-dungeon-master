@@ -22,6 +22,7 @@ import { replayAnimation } from "@/lib/motion/replay";
 import { effectiveAcFor } from "@/lib/srd";
 import type { PublicEncounter } from "@/lib/db/encounter-view";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { offSide, SideBadge } from "@/app/campaigns/[campaignId]/SideBadge";
 
 // The DM's hand (issue #108): the monsters' turns as cards, above the
 // message box where the players' Hand sits. The enemies the pointer walked
@@ -58,7 +59,8 @@ function writeCollapsed(on: boolean) {
   window.dispatchEvent(new Event(STORE_EVENT));
 }
 
-type PartyChip = HandAim & { note: string };
+// row: an enemy's row, not a sheet (an attack or an area reaches it).
+type PartyChip = HandAim & { note: string; row?: boolean };
 
 const ADVANTAGE: Array<[MonsterAdvantage, string]> = [
   ["none", "Straight"],
@@ -97,25 +99,21 @@ function MonsterHandInner({
     null;
   const cards = selected ? deriveMonsterHand(selected) : [];
 
-  // The party as targets. Their armour class is known to the DM, so the
-  // preview's odds are real ones; the chip kind "enemy" is the preview's
-  // word for "a target whose AC we know", not a judgement.
+  // The other side as targets (issue 503): the party (and any creature it
+  // dominates) for a foe, the foes (a turncoat among them) for a creature the
+  // party dominates. The DM knows armour class, so the preview's odds are
+  // real; the chip kind "enemy" means "a target whose AC we know".
+  const mySide = selected ? (offSide(encounter, selected.id, "enemy") ?? "foe") : "foe";
   const party = useMemo<PartyChip[]>(
-    () =>
-      sheets
-        .filter((sheet) => !sheet.deathSaves?.dead)
-        .map((sheet) => {
-          const ac = effectiveAcFor(sheet);
-          return {
-            id: sheet.id,
-            name: sheet.name,
-            kind: "enemy" as const,
-            ac,
-            conditions: sheet.conditions,
-            note: `${sheet.currentHp}/${effectiveMaxHp(sheet)} hp · AC ${ac}`,
-          };
-        }),
-    [sheets],
+    () => [
+      ...sheets
+        .filter((sheet) => !sheet.deathSaves?.dead && (offSide(encounter, sheet.id, "pc") ?? "party") !== mySide)
+        .map((sheet) => ({ id: sheet.id, name: sheet.name, kind: "enemy" as const, ac: effectiveAcFor(sheet), conditions: sheet.conditions, note: `${sheet.currentHp}/${effectiveMaxHp(sheet)} hp · AC ${effectiveAcFor(sheet)}` })),
+      ...encounter.enemies
+        .filter((enemy) => enemy.status === "alive" && (offSide(encounter, enemy.id, "enemy") ?? "foe") !== mySide)
+        .map((enemy) => ({ id: enemy.id, name: enemy.name, kind: "enemy" as const, ac: enemy.ac, conditions: enemy.conditions, row: true, note: `${enemy.currentHp !== undefined ? `${enemy.currentHp}/${enemy.maxHp} hp` : enemy.health}${enemy.ac !== undefined ? ` · AC ${enemy.ac}` : ""}` })),
+    ],
+    [sheets, encounter, mySide],
   );
 
   const [pickedId, setPickedId] = useState<string | null>(null);
@@ -130,9 +128,11 @@ function MonsterHandInner({
 
   const picked = cards.find((card) => card.id === pickedId && !card.disabled) ?? null;
   const many = picked ? takesManyTargets(picked) : false;
-  const aimed = party.filter((chip) => targetIds.includes(chip.id));
+  // A save forced on one target is cast_at_player, a character's door.
+  const chips = !picked || picked.intent.card !== "monster" || picked.intent.action === "attack" || many ? party : party.filter((chip) => !chip.row);
+  const aimed = chips.filter((chip) => targetIds.includes(chip.id));
   const aim = aimed[0] ?? null;
-  const defaultAim = aim ?? party[0] ?? null;
+  const defaultAim = aim ?? chips[0] ?? null;
   const conditions = selected?.conditions ?? EMPTY;
   // Cheap enough to work out each render; the compiler memoizes what it can.
   const rows = picked ? previewRows(picked, picked.target === "none" ? null : defaultAim, conditions) : [];
@@ -175,7 +175,7 @@ function MonsterHandInner({
     if (!picked || !selected || sending) {
       return;
     }
-    const call = monsterInvoke(picked, targetIds, advantage);
+    const call = monsterInvoke(picked, aimed.map((chip) => chip.id), advantage, new Set(aimed.filter((chip) => chip.row).map((chip) => chip.id)));
     if (!call) {
       say(many ? "Pick everyone caught in it." : "Pick a target.");
       return;
@@ -329,6 +329,7 @@ function MonsterHandInner({
                     {enemy.ac !== undefined ? ` · AC ${enemy.ac}` : ""}
                     {acted ? " · acted" : ""}
                   </span>
+                  <SideBadge side={offSide(encounter, enemy.id, "enemy")} className="mt-0.5" />
                 </button>
               );
             })}
@@ -381,8 +382,8 @@ function MonsterHandInner({
 
               {needsTarget ? (
                 <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="Targets">
-                  {party.length ? (
-                    party.map((chip, index) => (
+                  {chips.length ? (
+                    chips.map((chip, index) => (
                       <button
                         key={chip.id}
                         type="button"

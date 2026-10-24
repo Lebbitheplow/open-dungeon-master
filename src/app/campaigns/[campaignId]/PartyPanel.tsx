@@ -25,6 +25,7 @@ import { CharacterSheetDialog } from "@/app/campaigns/[campaignId]/CharacterShee
 import { TradeDialog } from "@/app/campaigns/[campaignId]/TradeDialog";
 import { CompanionBuilderDialog } from "@/app/campaigns/[campaignId]/CompanionBuilderDialog";
 import { CompanionCommand } from "@/app/campaigns/[campaignId]/CompanionCommand";
+import { offSide, SideBadge } from "@/app/campaigns/[campaignId]/SideBadge";
 import { DiceSourcesButton } from "@/app/campaigns/[campaignId]/DiceSourcesDialog";
 import { DiceLookButton } from "@/components/DiceLookEditor";
 import { LeadEditDialog } from "@/app/campaigns/[campaignId]/LeadEditDialog";
@@ -551,6 +552,7 @@ export function PartyPanel({
               <span className="min-w-0">
                 <span className="flex items-center gap-1.5 font-medium">
                   <span className="truncate">{sheet.name}</span>
+                  <SideBadge side={offSide(encounter, sheet.id, "pc")} />
                   {lights[sheet.id] ? <LightBar light={lights[sheet.id]} /> : null}
                   {mine && multiCharacter !== "off" && myOwn.length > 1 ? (
                     mySheet?.id === sheet.id ? (
@@ -587,7 +589,7 @@ export function PartyPanel({
                   {sheet.userId === leadUserId ? (
                     <Crown className="size-3.5 shrink-0 text-amber-300" aria-label="Party lead" />
                   ) : null}
-                  {sheet.isCompanion ? (
+                  {sheet.isCompanion && !offSide(encounter, sheet.id, "pc") ? (
                     <Bot
                       className="size-3.5 shrink-0 text-sky-300"
                       aria-label="AI companion"
@@ -874,7 +876,7 @@ export function PartyPanel({
               </KitButton>
             ) : null}
 
-            {campaignId && sheet.isCompanion && !sheet.summon ? (
+            {campaignId && sheet.isCompanion && !sheet.summon && !offSide(encounter, sheet.id, "pc") ? (
               <CompanionCommand
                 campaignId={campaignId}
                 sheet={sheet}
