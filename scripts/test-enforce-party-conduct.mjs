@@ -61,7 +61,7 @@ await test("a companion wary of a character spends no slot on them: heal and cas
   assert.equal(blessed.ok, false);
   assert.match(blessed.error, /will not spend a spell slot on Kael/);
   assert.equal(slots(), 0);
-  assert.match(lastLines(world), /Seren will not spend a spell slot on Kael\./, "the table is told by the server");
+  assert.match(lastLines(world), /Seren refuses a spell for Kael\./, "the table is told by the server");
   const row = await bonds(world);
   assert.equal(row.refused, "a spell for Kael");
 });
@@ -98,7 +98,7 @@ await test("a potion is not spent on a character she is wary of; neutral, she he
 });
 
 await test("a mercenary wary of the party wants its share as the fight starts, neither attacks nor casts until paid, and fights once it is", async () => {
-  const { world, kit, kael, seren, standing } = await table({ companion: { class: "fighter", spells: [], values: [{ value: "mercenary", strength: "cares" }] } });
+  const { world, kit, seren, standing } = await table({ companion: { class: "fighter", spells: [], values: [{ value: "mercenary", strength: "cares" }] } });
   standing(-20);
   world.patch(seren.id, { gold: 5, proficiencies: TRAINED, equipment: [{ name: "Longsword", qty: 1 }] });
   const started = await world.invoke("start_encounter", { enemies: [{ monster: "goblin", count: 1 }] });

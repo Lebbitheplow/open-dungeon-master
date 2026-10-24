@@ -27,6 +27,8 @@ import type { ToolError } from "@/lib/dm/tool-errors";
 import { publishEphemeral, publishWithSeq } from "@/lib/events";
 import { textKey } from "@/lib/language/text-logic";
 import { hasItemTag } from "@/lib/srd/item-tags";
+import { findCarriedItem } from "@/lib/dm/item-logic";
+import { resolveSheetRef } from "@/lib/dm/rolls";
 import { spellLevelOf } from "@/lib/srd/spell-lists";
 import { conditionBlocksReactions } from "@/lib/srd/condition-effects";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -50,26 +52,23 @@ function tableLine(campaign: Campaign, content: string) {
   publishWithSeq(campaign.id, seq, "message_added", { message });
 }
 
-// The companion this ref names, while its conscience runs at this table.
-function conscientious(campaign: Campaign, ref: unknown): { sheet: CharacterSheet; npcId: string } | null {
-  if (typeof ref !== "string" || !ref.trim() || conscienceSetting(campaign) === "off") {
+// The character a call's id or name names (rolls.ts resolveSheetRef).
+function characterNamed(campaignId: string, ref: unknown): CharacterSheet | null {
+  if (typeof ref !== "string") {
     return null;
   }
-  const sheets = listSheets(campaign.id);
-  const sheet = sheets.find((entry) => entry.id === ref) ?? sheets.find((entry) => textKey(entry.name) === textKey(ref));
+  const sheets = listSheets(campaignId);
+  return resolveSheetRef(ref, sheets, new Map(sheets.map((sheet) => [sheet.id, sheet])));
+}
+
+// The companion this ref names, while its conscience runs at this table.
+function conscientious(campaign: Campaign, ref: unknown): { sheet: CharacterSheet; npcId: string } | null {
+  const sheet = conscienceSetting(campaign) === "off" ? null : characterNamed(campaign.id, ref);
   if (!sheet || !consciousCompanions([sheet]).length) {
     return null;
   }
   const npc = companionNpcFor(sheet);
   return npc ? { sheet, npcId: npc.id } : null;
-}
-
-function characterNamed(campaignId: string, ref: unknown): CharacterSheet | null {
-  if (typeof ref !== "string" || !ref.trim()) {
-    return null;
-  }
-  const sheets = listSheets(campaignId);
-  return sheets.find((entry) => entry.id === ref) ?? sheets.find((entry) => textKey(entry.name) === textKey(ref)) ?? null;
 }
 
 // The companion's standing with one character, or null when they have none.
@@ -86,9 +85,9 @@ function dying(sheet: CharacterSheet): boolean {
 }
 
 // Written, told and shown: the refusal the call returns.
-function refuse(campaign: Campaign, npcId: string, what: string, reason: string): ToolError {
+function refuse(campaign: Campaign, npcId: string, companion: string, what: string, reason: string): ToolError {
   saveConduct(npcId, { ...companionConduct(npcId), refused: { what, at: now(campaign) } });
-  tableLine(campaign, `${reason.split(":")[0]}.`);
+  tableLine(campaign, `${companion} refuses ${what}.`);
   publishEphemeral(campaign.id, "relationships_updated", {});
   return { error: reason, refused: "rules" };
 }
@@ -108,7 +107,7 @@ function aidGate(campaign: Campaign, actorRef: unknown, targets: readonly unknow
     const aid = { companion: actor.sheet.name, target: target.name, approval: standingWith(campaign.id, actor.sheet.name, target.id), dying: dying(target), spend: spend! };
     const refused = aidRefusal(aid);
     if (refused) {
-      return refuse(campaign, actor.npcId, aidRefusedWords(aid), refused);
+      return refuse(campaign, actor.npcId, actor.sheet.name, aidRefusedWords(aid), refused);
     }
   }
   return null;
@@ -133,7 +132,7 @@ function shareGate(campaign: Campaign, actorRef: unknown): ToolError | null {
     publishEphemeral(campaign.id, "relationships_updated", {});
     return null;
   }
-  return refuse(campaign, actor.npcId, "to fight unpaid", demandRefusal(actor.sheet.name, demand, actor.sheet.gold));
+  return refuse(campaign, actor.npcId, actor.sheet.name, "to fight unpaid", demandRefusal(actor.sheet.name, demand, actor.sheet.gold));
 }
 
 // A fight has started (start_encounter): each mercenary wary of the party,
@@ -167,13 +166,14 @@ function slotSpell(spell: unknown): boolean {
   return typeof spell === "string" && (spellLevelOf(spell) ?? 0) > 0;
 }
 
+// A potion, by the item the carrier holds (or the SRD row of its name).
 function potionNamed(actorRef: unknown, campaignId: string, item: unknown): boolean {
   if (typeof item !== "string" || !item.trim()) {
     return false;
   }
   const carrier = characterNamed(campaignId, actorRef);
-  const carried = carrier?.equipment.find((entry) => textKey(entry.name) === textKey(item));
-  return hasItemTag(carried ?? { name: item }, "potion") || /potion/i.test(item);
+  const carried = carrier ? findCarriedItem(carrier.equipment, item) : null;
+  return hasItemTag(carried ?? { name: item }, "potion");
 }
 
 // Before a call a lasting companion may be the actor of: its share unpaid
@@ -244,7 +244,7 @@ export function riskyOrderGate(campaign: Campaign, companion: CharacterSheet, co
   const approval = standings.length ? Math.min(...standings) : null;
   const commander = theirs.find((sheet) => standingWith(campaign.id, companion.name, sheet.id) === approval)?.name ?? "their commander";
   const refused = riskyOrderRefusal({ companion: companion.name, commander, approval, provokers: provokers(campaign.id, companion.id, steps) });
-  return refused ? refuse(campaign, actor.npcId, `an order from ${commander}`, refused).error : null;
+  return refused ? refuse(campaign, actor.npcId, companion.name, `an order from ${commander}`, refused).error : null;
 }
 
 // ---- what the Bonds row shows ----
