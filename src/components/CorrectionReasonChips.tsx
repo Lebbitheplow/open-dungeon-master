@@ -41,8 +41,18 @@ export function CorrectionReasonChips({ campaignId }: { campaignId: string }) {
     };
   }, [campaignId]);
 
+  // Said by a polite live region that is always on the page (a region
+  // added with its words is often not read), and never by moving focus:
+  // the strip must not pull anyone off what they were doing.
+  const announcement = !offer ? "" : saved ? "Reason noted." : "Fix saved. You can say why with the chips at the top, or ignore them.";
+  const status = (
+    <p role="status" aria-live="polite" className="sr-only" data-correction-status="">
+      {announcement}
+    </p>
+  );
+
   if (!offer) {
-    return null;
+    return status;
   }
 
   const choose = (reason: CorrectionReason) => {
@@ -62,30 +72,33 @@ export function CorrectionReasonChips({ campaignId }: { campaignId: string }) {
   };
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-16 z-40 flex justify-center px-4" data-correction-chips="">
-      <div role="group" aria-label="Why the fix" className="panel pointer-events-auto flex max-w-xl flex-wrap items-center gap-1.5 rounded-xl px-3 py-2 text-xs text-stone-300 shadow-lg">
-        {saved ? (
-          <span data-correction-saved="">Noted, thank you.</span>
-        ) : (
-          <>
-            <span className="mr-1 text-stone-400">Why the fix? Optional:</span>
-            {CORRECTION_REASONS.map((reason) => (
-              <button
-                key={reason}
-                type="button"
-                data-correction-reason={reason}
-                onClick={() => choose(reason)}
-                className="rounded-full border border-stone-600/60 bg-stone-900/60 px-2.5 py-1 text-stone-200 hover:border-amber-500/50 hover:text-amber-100 motion-press"
-              >
-                {CORRECTION_REASON_LABELS[reason]}
-              </button>
-            ))}
-          </>
-        )}
-        <button type="button" aria-label="Skip" onClick={() => setOffer(null)} className="ml-auto rounded-md p-1 text-stone-500 hover:text-stone-200">
-          <X className="size-3.5" />
-        </button>
+    <>
+      {status}
+      <div className="pointer-events-none fixed inset-x-0 top-16 z-40 flex justify-center px-4" data-correction-chips="">
+        <div role="group" aria-label="Why the fix" className="panel pointer-events-auto flex max-w-xl flex-wrap items-center gap-1.5 rounded-xl px-3 py-2 text-xs text-stone-300 shadow-lg">
+          {saved ? (
+            <span data-correction-saved="">Noted, thank you.</span>
+          ) : (
+            <>
+              <span className="mr-1 text-stone-400">Why the fix? Optional:</span>
+              {CORRECTION_REASONS.map((reason) => (
+                <button
+                  key={reason}
+                  type="button"
+                  data-correction-reason={reason}
+                  onClick={() => choose(reason)}
+                  className="rounded-full border border-stone-600/60 bg-stone-900/60 px-2.5 py-1 text-stone-200 hover:border-amber-500/50 hover:text-amber-100 motion-press"
+                >
+                  {CORRECTION_REASON_LABELS[reason]}
+                </button>
+              ))}
+            </>
+          )}
+          <button type="button" aria-label="Skip" onClick={() => setOffer(null)} className="ml-auto rounded-md p-1 text-stone-500 hover:text-stone-200">
+            <X className="size-3.5" />
+          </button>
+        </div>
       </div>
-    </div>
+    </>
   );
 }
