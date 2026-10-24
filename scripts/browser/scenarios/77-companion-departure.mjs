@@ -79,11 +79,21 @@ export default {
     });
     check(done.departed === "Walked out on the party", `the server walked her out (${done.departed})`);
     const ghost = page.locator(`${root}[data-departing="${table.seren}"]`).locator("visible=true").first();
-    await eventually(() => ghost.count(), { timeoutMs: 10_000, label: "her card dimming" });
-    await ghost.scrollIntoViewIfNeeded().catch(() => {});
-    await sleep(220);
+    // The card dims for DEPART_MS (600 ms, departing.ts): its words are read
+    // the moment it shows, and the picture of it is best effort, since a slow
+    // runner's scroll and screenshot can outlast it.
+    let ghostText = "";
+    await eventually(
+      async () => {
+        if (!(await ghost.count())) return false;
+        ghostText = (await ghost.textContent({ timeout: 500 }).catch(() => "")) ?? "";
+        return true;
+      },
+      { timeoutMs: 10_000, label: "her card dimming" },
+    );
+    await ghost.scrollIntoViewIfNeeded({ timeout: 1_000 }).catch(() => {});
     await t.shot("departing-mid");
-    check(/Walked out on the party/.test((await ghost.textContent()) ?? ""), "the dimming card says how she went");
+    check(/Walked out on the party/.test(ghostText), `the dimming card says how she went: "${ghostText}"`);
     check((await page.locator(`${root}[data-party-card="${table.seren}"]`).count()) === 0, "out of the party's own cards");
     await eventually(async () => (await goneList.locator(`[data-gone-entry="Seren Vale"]`).count()) > 0, { label: "Seren under Gone" });
     await eventually(async () => (await ghost.count()) === 0, { label: "the dimmed card filed away" });
