@@ -717,6 +717,69 @@ for (const viewport of ["desktop", "phone"]) {
   courting[viewport] = { id: table.id, kael: kael.id, advanceSummary: advance.summary, advanceLine: ADVANCE_LINE };
 }
 
+// Scheming NPCs (issue 501): one table per viewport that the seed's player
+// runs as its storyteller, where the lead plays Kael, open to advances, and
+// Senna keeps up an act toward him (the ferry ledger). The scenario reads
+// the act on Kael's Bonds row, sees it turn to the truth when an Insight
+// from the storyteller's console beats Senna's Deception, reads the act on
+// the storyteller's own Bonds tab, and sees a betrayal unmask her. Senna is
+// a poor liar by nature, so an Insight beats her soon.
+const MASKED_TITLE = "Masked Table";
+const maskedNpcs = await import("../../src/lib/db/npcs.ts");
+const maskedBonds = await import("../../src/lib/db/relationships.ts");
+const { invokeEngine: maskedInvoke } = await import("../../src/lib/dm/invoke.ts");
+const masked = {};
+for (const viewport of ["desktop", "phone"]) {
+  const table = campaigns.createCampaign(player.id, {
+    title: `${MASKED_TITLE} (${viewport})`,
+    description: "A river crossing, a friendly ferrywoman, and a ledger someone wants.",
+    theme: "high-fantasy",
+    maxPlayers: 6,
+    startingLevel: 3,
+    difficulty: "normal",
+    gameSettings: { ttsEnabled: false, dmMode: "human" },
+  });
+  campaigns.joinByInviteCode(world.owner.id, campaigns.getCampaignById(table.id).inviteCode);
+  campaigns.setCampaignStatus(table.id, "active");
+  const kael = sheets.createSheet(
+    table.id,
+    world.owner.id,
+    3,
+    heroInput({ name: "Kael Ashvale", class: "bard", level: 3, gender: "Male", abilities: { wis: 18 } }),
+  );
+  sheets.setOpenToAdvances(kael.id, true);
+  const senna = maskedNpcs.upsertNpc({
+    campaignId: table.id,
+    name: "Senna Vale",
+    attitude: "friendly",
+    trait: "A ferrywoman who laughs a little too easily",
+    location: "the ford",
+    gender: "Female",
+    attraction: { genders: ["Male"], note: "" },
+  });
+  maskedNpcs.patchNpcAgency(senna.id, { personality: { drive: -3, diligence: 0, boldness: 0, warmth: 2, empathy: 3, composure: -3 } });
+  const bond = maskedBonds.ensureRelationship({
+    campaignId: table.id,
+    characterId: kael.id,
+    characterName: kael.name,
+    subjectKind: "npc",
+    subjectName: senna.name,
+    subjectId: senna.id,
+  });
+  maskedBonds.patchRelationship(bond.id, {
+    approval: -30,
+    memories: [{ kind: "helped", text: "Kael carried her nets up from the water", at: new Date().toISOString() }],
+  });
+  const started = await maskedInvoke(campaigns.getCampaignById(table.id), { kind: "human", userId: player.id }, {
+    name: "relationship_scheme",
+    args: { action: "start", characterId: kael.id, subject: senna.name, motive: "the ferry ledger" },
+  });
+  if (!started.ok) {
+    throw new Error(`the masked table's act did not start: ${started.error}`);
+  }
+  masked[viewport] = { id: table.id, kael: kael.id };
+}
+
 const ids = {
   lead: world.owner.username,
   player: player.username,
@@ -759,12 +822,14 @@ const ids = {
   levelTableId: levelTable.id,
   commandTableId: commandTable.id,
   courting,
+  masked,
   pip: pip.id,
   // Every campaign a scenario opens, by id, for the app's home tiles.
   titles: {
     [levelTable.id]: "Level Table",
     [commandTable.id]: COMMAND_TITLE,
     ...Object.fromEntries(Object.entries(courting).map(([viewport, table]) => [table.id, `${COURTING_TITLE} (${viewport})`])),
+    ...Object.fromEntries(Object.entries(masked).map(([viewport, table]) => [table.id, `${MASKED_TITLE} (${viewport})`])),
     [world.campaignId]: TITLE,
     [lobby.id]: LOBBY_TITLE,
     [quiet.id]: QUIET_TITLE,
