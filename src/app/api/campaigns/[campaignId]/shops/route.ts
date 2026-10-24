@@ -3,7 +3,8 @@ import { hasPrepAuthority, isErrorResponse, requireMember, requirePrepAuthority,
 import { getCurrentLocation, listLocations } from "@/lib/db/locations";
 import { getNpcById, listNpcs } from "@/lib/db/npcs";
 import { insertShop, listShops, listShopsAt, normalizeStock, shopRefProblem, stockLineSchema } from "@/lib/db/shops";
-import { askingPriceCp, SIZE_MARKUP, type Shop } from "@/lib/dm/shop-logic";
+import { askingPriceCp, dealFor, haggleDc, markupFor, SIZE_MARKUP, type Shop } from "@/lib/dm/shop-logic";
+import { getSheetForUser } from "@/lib/db/sheets";
 import { announceShop, stockPool } from "@/lib/dm/shop-tools";
 import { stockFromPool } from "@/lib/dm/shop-logic";
 import { getClock } from "@/lib/db/clock";
@@ -19,14 +20,19 @@ export const dynamic = "force-dynamic";
 // reads the places and cast a shop can stand at and be kept by.
 
 // The prepared shelf is prep: the people at the counter see what is on the
-// shelf now, not what the keeper restocks to.
-export function shopView(shop: Shop, prep = true) {
+// shelf now, not what the keeper restocks to. Prices are the viewer's own:
+// a haggle they were at the counter for moves them, and only for them.
+export function shopView(shop: Shop, prep = true, viewerId: string | null = null) {
+  const markup = markupFor(shop, viewerId);
   return {
     ...shop,
     preparedStock: prep ? shop.preparedStock : null,
     keeperName: shop.keeperNpcId ? getNpcById(shop.keeperNpcId)?.name ?? "" : "",
     keeperPortrait: shop.keeperNpcId ? getNpcById(shop.keeperNpcId)?.portraitUrl ?? "" : "",
-    stock: shop.stock.map((line) => ({ ...line, askingCp: askingPriceCp(line.priceCp, shop.markup) })),
+    stock: shop.stock.map((line) => ({ ...line, askingCp: askingPriceCp(line.priceCp, markup) })),
+    yourMarkup: markup,
+    yourHaggle: dealFor(shop, viewerId)?.steps ?? null,
+    haggleDc: haggleDc(shop.size),
   };
 }
 
@@ -40,8 +46,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ cam
   const dm = steersStory(context);
   const prep = hasPrepAuthority(context);
   const shops = dm ? listShops(campaignId) : here ? listShopsAt(campaignId, here.id, here.name) : [];
+  const viewerId = getSheetForUser(campaignId, context.user.id)?.id ?? null;
   return Response.json({
-    shops: shops.map((shop) => shopView(shop, prep)),
+    shops: shops.map((shop) => shopView(shop, prep, viewerId)),
     here: here ? { id: here.id, name: here.name } : null,
     places: dm ? listLocations(campaignId).map((location) => ({ id: location.id, name: location.name })) : [],
     // Who may keep a shop: the cast, for the prep holder's editor.

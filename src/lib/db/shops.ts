@@ -3,9 +3,12 @@ import { compareNames, findNamed, textKey } from "@/lib/language/text-logic";
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import {
   clampMarkup,
+  haggledIds,
   MAX_STOCK_PRICE_CP,
+  normalizeHaggles,
   normalizeShopKind,
   normalizeShopSize,
+  type HaggleDeal,
   type Shop,
   type StockLine,
 } from "@/lib/dm/shop-logic";
@@ -84,6 +87,7 @@ export function normalizeStock(raw: unknown): StockLine[] {
 }
 
 function map(row: Row): Shop {
+  const haggles = normalizeHaggles(parseJson<unknown>(row.haggled_json, []));
   return {
     id: row.id,
     campaignId: row.campaign_id,
@@ -99,7 +103,8 @@ function map(row: Row): Shop {
     buys: row.buys === 1,
     restockDays: Math.max(0, Number(row.restock_days) || 0),
     restockedAt: Number(row.restocked_at) || 0,
-    haggledBy: parseJson<string[]>(row.haggled_json, []),
+    haggles,
+    haggledBy: haggledIds(haggles),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -165,8 +170,17 @@ export type ShopInput = {
   buys?: boolean;
   restockDays?: number;
   restockedAt?: number;
+  // The haggles at this shop. haggledBy is the older form: each id a try
+  // used at the shop's own price ([] clears them, as a restock does).
+  haggles?: HaggleDeal[];
   haggledBy?: string[];
 };
+
+// The haggles a patch writes, newest kept when there are too many.
+function hagglesColumn(patch: Partial<ShopInput>, current: Shop): string {
+  const haggles = patch.haggles ?? (patch.haggledBy ? normalizeHaggles(patch.haggledBy) : current.haggles);
+  return JSON.stringify(haggles.slice(-40));
+}
 
 export function insertShop(campaignId: string, input: ShopInput): Shop {
   const id = crypto.randomUUID();
@@ -223,7 +237,7 @@ export function updateShop(shopId: string, patch: ShopInput | Partial<ShopInput>
       (patch.buys ?? current.buys) ? 1 : 0,
       Math.max(0, Math.round(patch.restockDays ?? current.restockDays)),
       Math.max(0, Math.round(patch.restockedAt ?? current.restockedAt)),
-      JSON.stringify((patch.haggledBy ?? current.haggledBy).slice(0, 40)),
+      hagglesColumn(patch, current),
       nowIso(),
       shopId,
     );
