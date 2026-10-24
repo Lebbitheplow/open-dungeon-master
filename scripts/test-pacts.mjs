@@ -201,4 +201,20 @@ test("the storyteller's line names the members, the plan, a spy for what she is,
   assert.match(line, /never say it/);
 });
 
+const { playerOpportunities } = await import("../src/lib/agents/webhook-opportunities.ts");
+
+test("the whisper webhook: an offer only this player answers and an unread whisper wake an agent seat, even while the DM narrates", () => {
+  const base = {
+    active: true, paused: false, busy: true, floor: { mode: "open", userIds: [], respondedUserIds: [] }, floorSeq: 0,
+    userId: "u1", characterId: "c1", rolls: [], turn: null, narration: null, lastPlayerSeq: 0,
+  };
+  assert.deepEqual(playerOpportunities(base), [], "nothing private: nothing while busy");
+  const woken = playerOpportunities({ ...base, offers: ["p1"], unreadWhisperId: "w1" });
+  assert.deepEqual(woken.map((entry) => [entry.type, entry.opportunityId, entry.proposalId]), [
+    ["offer_received", "offer:p1", "p1"],
+    ["whisper_received", "whisper:w1", undefined],
+  ]);
+  assert.deepEqual(playerOpportunities({ ...base, paused: true, offers: ["p1"] }), [], "a paused table wakes nobody");
+});
+
 console.log(`test-pacts: ${passed} passed`);

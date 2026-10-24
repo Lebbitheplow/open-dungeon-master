@@ -1,13 +1,16 @@
 import type { Floor } from "@/lib/db/campaigns";
 
 export type PlayerOpportunity = {
-  type: "turn_started" | "roll_requested" | "response_requested" | "level_up_available";
+  type: "turn_started" | "roll_requested" | "response_requested" | "level_up_available" | "offer_received" | "whisper_received";
   opportunityId: string;
   characterId: string;
   pendingRollId?: string;
   phase?: "act" | "finish";
   // level_up_available: the next level, the one odm_level_up takes.
   level?: number;
+  // offer_received: the offer waiting on this character's answer (an item
+  // offer, an NPC's advance, a pact's private approach), for odm_answer_offer.
+  proposalId?: string;
 };
 
 export type OpportunityState = {
@@ -26,15 +29,32 @@ export type OpportunityState = {
   // The subscribed character's level and the level its experience has
   // earned (levelForXp, at most 20). Null for a companion's sheet.
   level?: { current: number; earned: number } | null;
+  // Offers waiting on this character's own answer (issue 503: a pact's
+  // approach reaches its player alone, an agent seat included), and the
+  // newest whisper from the DM this player has not read.
+  offers?: string[];
+  unreadWhisperId?: string | null;
 };
 
 // IDs name decisions, not notifications: another player's reply, a sheet
 // update or retrying delivery must not invite the same decision twice.
 export function playerOpportunities(s: OpportunityState): PlayerOpportunity[] {
-  if (!s.active || s.paused || s.floor.mode === "hold" || !s.characterId || s.busy) return [];
+  if (!s.active || s.paused || s.floor.mode === "hold" || !s.characterId) return [];
   // An earned level comes after whatever the table asks, and nothing the
   // table does holds it back: another seat's roll, someone else's turn.
-  return [...tableOpportunities(s), ...levelOpportunity(s)];
+  // What is the player's alone (an offer to answer, a whisper to read) asks
+  // nothing of the floor, so the DM narrating does not hold it back either.
+  return [...(s.busy ? [] : [...tableOpportunities(s), ...levelOpportunity(s)]), ...privateOpportunities(s)];
+}
+
+// The whisper webhook (issue 503 Phase 7): a whisper only this player may
+// read, and an offer only this player may answer, wake an agent seat as
+// they would show on its player's screen.
+function privateOpportunities(s: OpportunityState): PlayerOpportunity[] {
+  return [
+    ...(s.offers ?? []).map((id) => ({ type: "offer_received" as const, opportunityId: `offer:${id}`, characterId: s.characterId, proposalId: id })),
+    ...(s.unreadWhisperId ? [{ type: "whisper_received" as const, opportunityId: `whisper:${s.unreadWhisperId}`, characterId: s.characterId }] : []),
+  ];
 }
 
 function tableOpportunities(s: OpportunityState): PlayerOpportunity[] {
