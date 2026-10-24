@@ -4,20 +4,26 @@ import { BookOpen, Check, Hourglass, Lock, Star } from "lucide-react";
 import { useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { InfoButton } from "@/components/ui/InfoDialog";
+import { Select } from "@/components/ui/Select";
 import { cn } from "@/lib/cn";
+import { ui } from "@/lib/ui";
 import { contentSlug, describeContentEntry, spellRowConcentrates, spellSummary } from "@/lib/help";
 import { bundledSpellFacts } from "@/lib/srd/spell-facts";
 import { replayAnimation } from "@/lib/motion/replay";
 import { spellSupportFor, spellSupportWord } from "@/lib/srd/spell-support";
 import { compareNames, textKey } from "@/lib/language/text-logic";
 import {
-  CASTING_TIME_LABELS,
+  ANY_SPELL_FILTER,
   NO_SPELL_FILTER,
+  liveSpellFilter,
   matchesSpellFilter,
+  sameSpellFilter,
   spellDeskFacts,
   spellFilterActive,
   spellFilterOptions,
+  spellFilterPickers,
   spellFilterWords,
+  withSpellFilterPick,
   type SpellFilter,
 } from "./spellFilters";
 
@@ -168,12 +174,19 @@ export function SpellBook({
     [filters, tiles],
   );
   const options = useMemo(() => spellFilterOptions(factsByName ? [...factsByName.values()] : []), [factsByName]);
-  const filtering = Boolean(factsByName) && spellFilterActive(desk);
+  // A value this page no longer offers is dropped as the page changes, so
+  // a filter is never on behind a picker that shows "any" or is not drawn.
+  // Set while rendering, as the held notice above is.
+  const live = liveSpellFilter(desk, options);
+  if (factsByName && !sameSpellFilter(live, desk)) {
+    setDesk(live);
+  }
+  const filtering = Boolean(factsByName) && spellFilterActive(live);
   // A search or a filter shows every level at once.
   const narrowed = Boolean(needle) || filtering;
   const passes = (tile: SpellTile) =>
     (!needle || textKey(tile.label ?? tile.name).includes(needle)) &&
-    (!filtering || matchesSpellFilter(factsByName?.get(tile.name) ?? spellDeskFacts(tile), desk));
+    (!filtering || matchesSpellFilter(factsByName?.get(tile.name) ?? spellDeskFacts(tile), live));
   // The level row says which level is chosen only once mounted. The travelling
   // pill (src/lib/motion/pill.ts) decorates every pill group that has a chosen
   // button as soon as the page loads, and a pill appended to server-rendered
@@ -216,7 +229,7 @@ export function SpellBook({
   // the front and the list jumping, and the tap looked lost (issue 66).
   const byRank = (a: SpellTile, b: SpellTile) =>
     RANK[a.state] - RANK[b.state] || compareNames(a.label ?? a.name, b.label ?? b.name);
-  const pageKey = `${narrowed ? `?${needle}|${JSON.stringify(desk)}` : active}|${shown
+  const pageKey = `${narrowed ? `?${needle}|${JSON.stringify(live)}` : active}|${shown
     .map((tile) => tile.name)
     .sort()
     .join("|")}`;
@@ -309,66 +322,33 @@ export function SpellBook({
         />
       </div>
       {factsByName ? (
-        // Native selects and a checkbox, each one tab stop with its own
-        // label; the arrow keys already move inside a select.
-        <div role="group" aria-label="Filter spells" data-spell-filters="" className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-stone-400">
-          {options.schools.length > 1 ? (
-            <label className="flex items-center gap-1">
-              School
-              <select value={desk.school} onChange={(event) => setDesk({ ...desk, school: event.target.value })} className={FILTER_SELECT}>
-                <option value="">Any</option>
-                {options.schools.map((school) => (
-                  <option key={school} value={school}>
-                    {school}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
-          {options.castingTimes.length > 1 ? (
-            <label className="flex items-center gap-1">
-              Casting time
-              <select
-                value={desk.castingTime}
-                onChange={(event) => setDesk({ ...desk, castingTime: event.target.value as SpellFilter["castingTime"] })}
-                className={FILTER_SELECT}
-              >
-                <option value="">Any</option>
-                {options.castingTimes.map((kind) => (
-                  <option key={kind} value={kind}>
-                    {CASTING_TIME_LABELS[kind]}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : null}
-          {options.anyConcentration ? (
-            <label className="flex items-center gap-1">
-              Concentration
-              <select
-                value={desk.concentration}
-                onChange={(event) => setDesk({ ...desk, concentration: event.target.value as SpellFilter["concentration"] })}
-                className={FILTER_SELECT}
-              >
-                <option value="">Any</option>
-                <option value="yes">Needs it</option>
-                <option value="no">Not needed</option>
-              </select>
-            </label>
-          ) : null}
+        // The kit's pickers, as the builder's class and lineage filters
+        // use (OptionCardGrid.tsx), each named by what it shows, and a
+        // checkbox whose whole label is a finger-sized target on a phone.
+        <div role="group" aria-label="Filter spells" data-spell-filters="" className="mt-2 flex flex-wrap items-center gap-2 text-xs text-stone-400">
+          {spellFilterPickers(options).map((picker) => {
+            const value = live[picker.key] || ANY_SPELL_FILTER;
+            return (
+              // Two to a line on a phone, side by side on a wider screen.
+              <div key={picker.key} className="w-[calc(50%-0.25rem)] min-w-0 sm:w-44">
+                <Select<string>
+                  size="sm"
+                  label={picker.options.find((option) => option.value === value)?.label ?? picker.label}
+                  value={value}
+                  onChange={(next) => setDesk(withSpellFilterPick(live, picker.key, next))}
+                  options={picker.options}
+                />
+              </div>
+            );
+          })}
           {options.anyRitual ? (
-            <label className="flex items-center gap-1.5">
-              <input
-                type="checkbox"
-                checked={desk.ritual}
-                onChange={(event) => setDesk({ ...desk, ritual: event.target.checked })}
-                className="accent-amber-400"
-              />
+            <label className="pk-tap inline-flex cursor-pointer items-center gap-1.5 text-stone-300">
+              <input type="checkbox" checked={live.ritual} onChange={(event) => setDesk({ ...live, ritual: event.target.checked })} />
               Rituals only
             </label>
           ) : null}
           {filtering ? (
-            <button type="button" onClick={() => setDesk(NO_SPELL_FILTER)} className="text-sky-300 underline-offset-2 hover:underline">
+            <button type="button" onClick={() => setDesk(NO_SPELL_FILTER)} className={cn(ui.btnSmall, "pk-tap")}>
               Clear filters
             </button>
           ) : null}
@@ -384,9 +364,9 @@ export function SpellBook({
       <p className="mt-2 mb-1.5 flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
         <span className="eyebrow shrink-0 text-[10px] leading-4 text-stone-500">
           {needle
-            ? `Matching "${filter.trim()}"${filtering ? `, ${spellFilterWords(desk)}` : ""}`
+            ? `Matching "${filter.trim()}"${filtering ? `, ${spellFilterWords(live)}` : ""}`
             : filtering
-              ? `Matching ${spellFilterWords(desk)}`
+              ? `Matching ${spellFilterWords(live)}`
               : levelLabel(active)}
         </span>
         {notice || heldNotice ? (
@@ -503,9 +483,6 @@ export function SpellBook({
     </div>
   );
 }
-
-const FILTER_SELECT =
-  "rounded-md border border-stone-700/70 bg-stone-950 px-1.5 py-1 text-xs capitalize text-stone-200 outline-none focus:border-amber-400/60";
 
 // The concentration mark: a ringed C, named for a screen reader.
 function ConcentrationMark() {

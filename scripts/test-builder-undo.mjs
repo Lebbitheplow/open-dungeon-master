@@ -181,6 +181,11 @@ test("the bar is a plain button named by its words, and takes no focus", () => {
   assert.ok(markup.includes("Put it back"));
   assert.ok(!markup.includes("autofocus") && !markup.includes("autoFocus"));
   assert.ok(!markup.includes('role="alert"'), "the bar interrupts a screen reader");
+  // Finger-sized on a phone, and in colours the day theme turns to ink on
+  // cream (stone and amber; sky stays pale on parchment).
+  assert.ok(/<button type="button"[^>]*class="[^"]*\bpk-tap\b/.test(markup), "Put it back is not finger-sized on a phone");
+  assert.ok(!/sky-/.test(markup), "the bar uses a colour the day theme leaves pale");
+  assert.ok(/data-build-undo=""[^>]*class="[^"]*\btext-amber-100\b/.test(markup), "the bar is not drawn as the builder's other notices");
 });
 
 test("the builder says the undo in a live region it keeps mounted, and ends it when the step changes", () => {

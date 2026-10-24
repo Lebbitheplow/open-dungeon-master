@@ -27,6 +27,24 @@ export function swapCandidates(list: string[], locked: (name: string) => boolean
   return list.filter((entry) => !locked(entry));
 }
 
+// What can go to make room for `into`: the player's own picks (`locked`
+// keeps the granted ones), and only those whose leaving lets `into` in by
+// the rule the list is held to (`problem`: an Eldritch Knight's or Arcane
+// Trickster's two schools, said as the refusal, or null). `ruledOut` says
+// the player had picks to trade and the rule turned every one away, so the
+// step says the rule instead of offering a swap that would be refused.
+export function swapChoices(input: {
+  list: string[];
+  into: string;
+  locked: (name: string) => boolean;
+  problem?: (into: string, out: string) => string | null;
+}): { candidates: string[]; ruledOut: boolean } {
+  const own = swapCandidates(input.list, input.locked);
+  const problem = input.problem;
+  const candidates = problem ? own.filter((out) => problem(input.into, out) === null) : own;
+  return { candidates, ruledOut: own.length > 0 && candidates.length === 0 };
+}
+
 // What the question over the tiles asks.
 export function swapQuestion(swap: PendingSwap, full: string): string {
   return `${full}. Swap ${swap.name} in for:`;

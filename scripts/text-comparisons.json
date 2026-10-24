@@ -524,6 +524,7 @@
     "components/sheet/sheet-state.ts#str-eq": [["key",1,"condition labels (engine vocabulary)"]],
     "components/sheet/sheet-state.ts#str-list": [["key",1,"condition labels (engine vocabulary)"]],
     "components/sheet/sheet-state.ts#toLowerCase": [["key",2,"condition labels (engine vocabulary)"]],
+    "components/sheet/spellFilters.ts#toUpperCase": [["display",1,"a spell school's key shown capitalised"]],
     "components/sheet/useSpellPool.ts#toLowerCase": [["key",3,"class slug"]],
     "components/ui/Book.tsx#str-eq": [["key",2,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
     "components/ui/DateTimePicker.tsx#str-list": [["key",1,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],

@@ -1,9 +1,11 @@
 // The spell desk (backlog F13) on a stored Life Domain cleric with a full
 // prepared list: the step shows the save DC, attack and slots, the prepared
-// cap as its sum, and the prepared list beside the book; the ritual filter
-// keeps only rituals; and a tap on a new spell while the list is full asks
-// which one it replaces (focus moves to the question, Escape calls it off
-// and gives focus back to the tile) and swaps the pair in one action.
+// cap as its sum, and the prepared list beside the book; the filters are the
+// kit's pickers, a school written capitalised; the ritual filter keeps only
+// rituals; and a tap on a new spell while the list is full asks which one it
+// replaces (focus moves to the question, Escape calls it off and gives focus
+// back to the tile) and swaps the pair in one action. On a phone every
+// filter and swap control is at least 40 px tall.
 import { axeViolations, check, eventually, sleep } from "../lib.mjs";
 
 export default {
@@ -32,15 +34,39 @@ export default {
     if (!/Prepared 4\/4/.test(lists) || !lists.includes("Sanctuary")) found.push(`the chosen lists read "${lists}"`);
     if (!/Always prepared/.test(lists)) found.push("the domain's spells are not listed beside the prepared ones");
 
+    // A finger-sized control on a phone (AGENTS.md: 40 px); a mouse on a
+    // desk keeps the compact sizes.
+    const tall = async (locator, what) => {
+      if (t.viewport !== "phone") return;
+      const box = await locator.boundingBox();
+      if (!box || box.height < 40) found.push(`${what} is ${Math.round(box?.height ?? 0)}px tall on a phone, under 40px`);
+    };
+
+    // The filters are the kit's pickers, each saying its choice; a school
+    // reads capitalised, written so rather than by CSS.
+    const filters = page.locator(`${active} [data-spell-filters]`).first();
+    const school = filters.locator('button[aria-label^="School:"]').first();
+    if ((await school.innerText()).trim() !== "School: any") found.push(`the school picker reads "${(await school.innerText()).trim()}"`);
+    await tall(school, "the school picker");
+    await t.tap(school);
+    const evocation = page.getByRole("menuitemradio", { name: "School: Evocation" }).locator("visible=true").first();
+    await eventually(() => evocation.count(), { timeoutMs: 5_000, label: "the school list" }).catch(() =>
+      found.push("the school list has no capitalised Evocation"),
+    );
+    await page.keyboard.press("Escape");
+
     // The ritual filter keeps only rituals, then clears.
-    const ritual = page.locator(`${active} [data-spell-filters] input[type="checkbox"]`).first();
+    const ritual = filters.locator('input[type="checkbox"]').first();
+    await tall(ritual.locator("xpath=ancestor::label[1]"), "the Rituals only label");
     await t.tap(ritual);
     await eventually(async () => !(await tile("Command").count()), { timeoutMs: 5_000, label: "Command filtered out" }).catch(() =>
       found.push("Rituals only kept Command"),
     );
     if (!(await tile("Detect Magic").isVisible())) found.push("Rituals only hid Detect Magic");
     await t.shot("rituals");
-    await t.tap(page.locator(`${active} [data-spell-filters] button`).filter({ hasText: "Clear filters" }).first());
+    const clear = filters.locator("button").filter({ hasText: "Clear filters" }).first();
+    await tall(clear, "Clear filters");
+    await t.tap(clear);
     await eventually(() => tile("Command").isVisible(), { timeoutMs: 5_000, label: "Command back after Clear filters" });
 
     // A full list asks which spell goes.
@@ -54,6 +80,8 @@ export default {
     const question = (await swap.getAttribute("aria-label")) ?? "";
     if (question !== "Prepared list full. Swap Detect Magic in for:") found.push(`the swap asks "${question}"`);
     found.push(...(await axeViolations(page, "[data-spell-swap]")).map((violation) => `swap: ${violation.id} (${violation.impact}) ${violation.help}`));
+    await tall(swap.locator('button[aria-label^="Sanctuary:"]').first(), "a swap choice");
+    await tall(swap.locator("button").filter({ hasText: "Cancel" }).first(), "the swap's Cancel");
     await t.shot("swap");
     await page.keyboard.press("Escape");
     await eventually(async () => (await swap.count()) === 0, { timeoutMs: 5_000, label: "Escape closing the swap" });

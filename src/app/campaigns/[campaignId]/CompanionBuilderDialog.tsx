@@ -4,6 +4,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { Bot, Users, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
+import { escapeIsOwned } from "@/lib/owned-escape";
 import { ui } from "@/lib/ui";
 import CharacterBuilder, {
   type BuilderResult,
@@ -134,6 +135,13 @@ export function CompanionBuilderDialog({
             "fixed inset-0 z-50 h-dvh w-full overflow-y-auto rounded-none border-0 pb-[max(1.25rem,env(safe-area-inset-bottom))]",
             "sm:inset-auto sm:left-1/2 sm:top-1/2 sm:h-auto sm:max-h-[88dvh] sm:w-[min(48rem,94vw)] sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl sm:border",
           )}
+          // An Escape inside a question the builder answers itself (the spell
+          // step's swap) closes that question, not the whole builder.
+          onEscapeKeyDown={(event) => {
+            if (escapeIsOwned(event.target)) {
+              event.preventDefault();
+            }
+          }}
         >
           <div className="mb-3 flex items-center justify-between">
             <Dialog.Title className="flex items-center gap-2 font-display text-lg tracking-wide text-amber-50">
