@@ -1,0 +1,48 @@
+name: Bug report
+description: Something went wrong while you played or ran the server.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for testing. Only **What happened** and **Your setup** are required, so a short report is fine.
+
+        If you run the server, the log helps a lot: **Admin > Server log > Download** saves it, with keys and tokens already cut out. Drag it into the last box below.
+
+        New to testing? [docs/testing.md](https://github.com/Lebbitheplow/open-dungeon-master/blob/main/docs/testing.md) explains how.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, and what you were doing just before. Paste any error message you saw.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: What should have happened instead.
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to make it happen again
+      description: The steps, if you know them. "It happened once" is a useful answer too.
+  - type: textarea
+    id: setup
+    attributes:
+      label: Your setup
+      description: Fill in what you know; "not sure" is fine.
+      value: |
+        - Version (your account menu > About):
+        - Operating system:
+        - Install kind (desktop app, Android app, Docker, from source):
+        - Narrator backend and model (for example Ollama with qwen3, OpenAI with gpt-5, Claude Code):
+        - DM mode (AI Dungeon Master, AI narrates and a person steers, a person runs the game, a person runs it with AI help):
+    validations:
+      required: true
+  - type: textarea
+    id: bundle
+    attributes:
+      label: Logs and screenshots
+      description: Drag the server log, the desktop app's diagnostics summary (Settings > Troubleshooting) or a screenshot here.
+      placeholder: Drag files here.

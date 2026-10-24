@@ -1,0 +1,53 @@
+name: Session report
+description: How a whole session went, from one line to a page.
+body:
+  - type: markdown
+    attributes:
+      value: |
+        An after-action report for a session you played or ran. Only **Your setup** is required; answer the rest as briefly or as fully as you like.
+
+        [docs/testing.md](https://github.com/Lebbitheplow/open-dungeon-master/blob/main/docs/testing.md) explains what makes a session worth reporting.
+  - type: textarea
+    id: setup
+    attributes:
+      label: Your setup
+      description: Fill in what you know; "not sure" is fine.
+      value: |
+        - Version (your account menu > About):
+        - Operating system:
+        - Install kind (desktop app, Android app, Docker, from source):
+        - Narrator backend and model (for example Ollama with qwen3, OpenAI with gpt-5, Claude Code):
+        - DM mode (AI Dungeon Master, AI narrates and a person steers, a person runs the game, a person runs it with AI help):
+        - Players at the table, and on which devices:
+    validations:
+      required: true
+  - type: input
+    id: length
+    attributes:
+      label: How long you played
+      placeholder: For example "2 hours, about 40 turns, one fight"
+  - type: textarea
+    id: went-well
+    attributes:
+      label: What went well
+  - type: textarea
+    id: broke
+    attributes:
+      label: What broke
+      description: Errors, stuck turns, wrong rules, anything that stopped play. One line each is enough.
+  - type: textarea
+    id: corrections
+    attributes:
+      label: Corrections you made to the AI
+      description: Times you had to fix the narrator, reroll a passage, overrule a ruling or remind it of something.
+  - type: textarea
+    id: confusing
+    attributes:
+      label: Anything confusing
+      description: Screens, words or steps you had to stop and think about.
+  - type: textarea
+    id: bundle
+    attributes:
+      label: Logs and screenshots
+      description: Drag the server log, the desktop app's diagnostics summary (Settings > Troubleshooting) or a screenshot here.
+      placeholder: Drag files here.
