@@ -63,10 +63,12 @@ export function computeRollbackScope(
       )
       .get(campaignId) as { n: number }
   ).n;
+  // An owner-only offer (a pact's approach, issue 503) is not the table's to
+  // count: the rewind's warning would tell the lead one exists.
   const pendingProposals = (
     db
       .prepare(
-        `SELECT COUNT(*) AS n FROM item_proposals WHERE campaign_id = ? AND status = 'pending'`,
+        `SELECT COUNT(*) AS n FROM item_proposals WHERE campaign_id = ? AND status = 'pending' AND owner_only = 0`,
       )
       .get(campaignId) as { n: number }
   ).n;
