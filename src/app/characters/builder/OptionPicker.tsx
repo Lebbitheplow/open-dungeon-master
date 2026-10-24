@@ -5,6 +5,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent, type MouseEvent
 import { cn } from "@/lib/cn";
 import { InfoDialog, type ContentRef } from "@/components/ui/InfoDialog";
 import { textKey } from "@/lib/language/text-logic";
+import { OWNS_ESCAPE } from "@/lib/owned-escape";
 
 export type PickerOption = {
   // Value handed to onChange. The subclass picker stores names, not slugs,
@@ -367,7 +368,9 @@ export default function OptionPicker({
   }
 
   return (
-    <div ref={container}>
+    // While the list is open it answers Escape itself, so a dialog around
+    // the builder (the companion builder's) stays open (src/lib/owned-escape.ts).
+    <div ref={container} {...(open ? { [OWNS_ESCAPE]: "" } : {})}>
       <button
         ref={trigger}
         type="button"
