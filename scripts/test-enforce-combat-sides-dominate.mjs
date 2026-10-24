@@ -5,7 +5,9 @@
 //   - the table is told, the floor on its turn is nobody's at the table, the
 //     DM is woken to play it and the AI's turn may spend it unasked;
 //   - its player's moves and End Turn are refused with the reason;
-//   - the charm's end gives it back: its player holds its turn again;
+//   - the charm's end gives it back: its player holds its turn again, and
+//     every client is sent the sides without it (src/lib/db/side-watch.ts),
+//     whichever route ended the charm;
 //   - the other way round, a creature the party dominates is an ally its
 //     casters may buff: Bless lands on its row with the spell's meta, the
 //     caster's lost concentration takes it off, a buff that works through a
@@ -22,6 +24,7 @@ const { endTurnRefusal, initiativeFloorFor } = await import("../src/lib/dm/encou
 const { characterAwaitingPlayer } = await import("../src/lib/dm/player-word.ts");
 const { listRecentMessages } = await import("../src/lib/db/messages.ts");
 const encounters = await import("../src/lib/db/encounters.ts");
+const { latestEventOfType } = await import("../src/lib/events.ts");
 
 const DOMINATOR = {
   spells: ["Dominate Person"],
@@ -62,9 +65,14 @@ await test("An enemy's Dominate Person on a player's character: the table is tol
   assert.match(body.error, /Brin is dominated: the DM plays Brin until the charm ends/);
   assert.equal(body.dominated, true);
 
-  // The charm ends: Brin is the player's again.
+  // The charm ends: Brin is the player's again, on every client too.
+  const before = latestEventOfType(world.campaignId, ["encounter_updated"])?.seq ?? 0;
   const freed = await world.invoke("clear_condition", { characterId: victim.id, condition: "charmed" });
   assert.equal(freed.ok, true, freed.error);
+  await new Promise((resolve) => setImmediate(resolve));
+  const sent = latestEventOfType(world.campaignId, ["encounter_updated"]);
+  assert.ok(sent && sent.seq > before, "the charm's end is sent to every client");
+  assert.equal(sent.payload.encounter.sides?.[victim.id], undefined, "the sides it sends leave Brin with the party");
   assert.equal(sideOf(world.encounter(), "sheet", victim.id), "party");
   assert.equal(command.turnUserId(world.campaign(), entry), victim.userId);
   assert.equal(command.dmPlaysTurn(world.campaign(), entry), false);

@@ -836,6 +836,29 @@ body::before {
 .side-band {
   transition: opacity 300ms var(--ease-snap);
 }
+/* The same change in the panels (SideBadge.tsx): a side chip, a notice or a
+   tracker row's colour comes in over 300 ms when the server moves somebody;
+   reduced motion keeps the colour and the words and drops the movement. */
+@keyframes side-badge-in {
+  0% { opacity: 0; transform: scale(0.85); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.side-badge {
+  animation: side-badge-in 300ms var(--ease-snap) both;
+  transition:
+    background-color 300ms var(--ease-snap),
+    border-color 300ms var(--ease-snap),
+    color 300ms var(--ease-snap),
+    box-shadow 300ms var(--ease-snap);
+}
+@media (prefers-reduced-motion: reduce) {
+  .side-badge {
+    animation: none;
+  }
+}
+[data-effects="low"] .side-badge {
+  animation: none;
+}
 @keyframes side-flip {
   0% { transform: scale(1); opacity: 0.95; }
   100% { transform: scale(1.4); opacity: 0; }

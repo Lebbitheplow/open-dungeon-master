@@ -8,6 +8,7 @@ import { normalizeIntents, type EncounterIntents } from "@/lib/db/encounter-inte
 import { restoreOwnForm } from "@/lib/db/enemy-form";
 import { normalizeSides, type SideExceptions } from "@/lib/dm/combat-sides-logic";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
+import { noteDominationShift } from "@/lib/db/side-watch";
 import { publishPersisted } from "@/lib/events";
 
 // Server-authoritative combat state. Enemy HP lives here and changes ONLY
@@ -559,6 +560,7 @@ export function patchEnemyConditions(
     patchSheetAsFoe(enemyId, { conditions, ...(conditionMeta !== undefined ? { conditionMeta } : {}) });
     return null;
   }
+  const before = getEnemy(enemyId);
   if (conditionMeta !== undefined) {
     getDatabase()
       .prepare(
@@ -573,6 +575,8 @@ export function patchEnemyConditions(
   // A Polymorph ends with its condition whichever way that goes (the
   // caster's concentration, its hour, Dispel Magic): the own block returns.
   const after = getEnemy(enemyId);
+  // A Dominate starting or ending moves the creature's side (side-watch.ts).
+  noteDominationShift(after?.campaignId ?? before?.campaignId ?? "", before, after);
   const own = after?.stats.polymorphedFrom;
   if (!own || after.conditions.some((name) => name.toLowerCase() === "polymorphed")) {
     return after;

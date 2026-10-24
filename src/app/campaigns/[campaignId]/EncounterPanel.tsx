@@ -7,6 +7,7 @@ import { cn } from "@/lib/cn";
 import { MonsterTile } from "@/lib/ui";
 import { HEALTH_COLORS } from "@/lib/bestiary/health";
 import { DmInitiativePanel } from "@/app/campaigns/[campaignId]/DmInitiativePanel";
+import { offSide, SideBadge } from "@/app/campaigns/[campaignId]/SideBadge";
 import { ConditionChip, type FaceLookup } from "@/app/campaigns/[campaignId]/BoardChrome";
 import { familyIconPath } from "@/lib/icons";
 import { characterPlaceholder, monsterPlaceholder, npcPlaceholder } from "@/lib/placeholders";
@@ -306,6 +307,8 @@ export function EncounterPanel({
                   </span>
                 ) : null}
               </div>
+              {/* A creature the party dominates (issue 503, SideBadge.tsx). */}
+              <SideBadge side={offSide(encounter, enemy.id, "enemy")} className="mt-1" />
               {enemy.legendary ? (
                 <div className="mt-1 flex items-center gap-1" title="Legendary actions this round and resistances this fight">
                   {Array.from({ length: enemy.legendary.actionsMax }, (_, index) => (

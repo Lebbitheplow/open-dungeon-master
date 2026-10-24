@@ -10,6 +10,7 @@ import { playingSheet } from "@/lib/battlemap/hand-table";
 
 import { TokenFace, type FaceLookup } from "@/app/campaigns/[campaignId]/BoardChrome";
 import { DmInitiativePanel } from "@/app/campaigns/[campaignId]/DmInitiativePanel";
+import { offSide, SideBadge } from "@/app/campaigns/[campaignId]/SideBadge";
 import type { PublicEncounter } from "@/lib/db/encounter-view";
 
 // Two pieces of BattleMapPanel that carry no state of their own, split out so
@@ -228,6 +229,7 @@ export function BoardOrderDialog({
                 className="size-7 rounded-full border border-stone-700"
               />
               <span className="min-w-0 flex-1 truncate">{entry.name}{entry.reflex ? <sup className="motion-pop ml-0.5 text-[9px] text-amber-300" title={extraTurnTag(entry)?.title}>{extraTurnTag(entry)?.short}</sup> : null}</span>
+              <SideBadge side={offSide(encounter, entry.id, entry.kind)} />
               {index === encounter.turnIndex ? (
                 <span className="text-[10px] uppercase tracking-wide text-amber-300">up now</span>
               ) : null}

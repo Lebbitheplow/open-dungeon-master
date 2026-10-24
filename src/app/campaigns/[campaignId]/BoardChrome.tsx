@@ -8,6 +8,7 @@ import { conditionIconKey } from "@/lib/battlemap/condition-glyphs";
 import { HEALTH_LABEL, HEALTH_RING, type HealthWord } from "@/lib/battlemap/health-words";
 import type { StageToken } from "@/app/campaigns/[campaignId]/BoardStage";
 import type { PublicEncounter } from "@/lib/db/encounter-view";
+import { offSide, SidePlateBand, sidesLine, SideSr } from "@/app/campaigns/[campaignId]/SideBadge";
 import type { TargetEdge } from "@/lib/battlemap/view-tactics";
 
 // The chrome on the board as a stage (docs/visual-overhaul-plan.md 5.1): the
@@ -97,6 +98,7 @@ export function InitiativeRail({
           {encounter.order.map((entry, at) => (
             <li key={`${entry.id}-${at}`} aria-current={at === encounter.turnIndex ? "step" : undefined} title={entry.name}>
               {entry.name}
+              <SideSr side={offSide(encounter, entry.id, entry.kind)} />
             </li>
           ))}
         </ol>
@@ -123,7 +125,7 @@ export function InitiativeRail({
       onClick={onOpen}
       disabled={!onOpen}
       data-tour="battle-initiative"
-      aria-label={`Round ${round}, initiative order. ${order[encounter.turnIndex]?.name ?? ""} is up. Open the order.`}
+      aria-label={`Round ${round}, initiative order. ${order[encounter.turnIndex]?.name ?? ""} is up. ${sidesLine(encounter)}Open the order.`}
       className="absolute left-2 top-2 z-10 flex flex-col items-start gap-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 @md:left-3.5 @md:top-3.5 @md:gap-1.5"
     >
       <span className="board-eyebrow">
@@ -159,6 +161,7 @@ export function InitiativeRail({
               {entry.hidden ? (
                 <EyeOff className="absolute right-0.5 top-0.5 size-2.5 text-amber-300 drop-shadow" aria-hidden="true" />
               ) : null}
+              <SidePlateBand side={offSide(encounter, entry.id, entry.kind)} />
               {current ? (
                 <span className="board-plate-current absolute inset-0 rounded-[6px] border-2 border-[#d4ab3a] @md:rounded-[7px]" />
               ) : null}

@@ -9,6 +9,7 @@ import { cn } from "@/lib/cn";
 import { ENTRY_NAME_MAX, MAX_INITIATIVE, MIN_INITIATIVE } from "@/lib/dm/initiative-edit";
 import type { PublicEncounter } from "@/lib/db/encounter-view";
 import { TokenFace, type FaceLookup } from "@/app/campaigns/[campaignId]/BoardChrome";
+import { offSide, SideBadge, sideWords } from "@/app/campaigns/[campaignId]/SideBadge";
 
 // The DM's hands on the turn order: reorder it, insert a slot for somebody
 // the engine has no stat block for, delay, remove, hand the turn to a
@@ -178,6 +179,23 @@ export function DmInitiativePanel({
             </button>
           </div>
         </div>
+      ) : encounter.companionTurn && offSide(encounter, encounter.companionTurn.id, "pc") === "foe" ? (
+        // A character fighting against the party (a turned summon or
+        // companion, a dominated player's character): the DM plays it as a
+        // foe, and the server's backstop strikes the party for it.
+        <div data-side="foe" className="reveal side-badge flex flex-wrap items-center gap-1.5 rounded-md border border-red-800 bg-red-950/40 px-2 py-1.5">
+          <p className="mr-auto text-xs text-red-100">
+            {encounter.companionTurn.name} fights {sideWords("foe")}: play their turn from the console, or
+          </p>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void send({ op: "companion" })}
+            className="min-h-9 rounded-md border border-red-800 bg-red-950/50 px-3 py-1 text-xs text-red-100 disabled:opacity-40 motion-press"
+          >
+            Play their turn for me
+          </button>
+        </div>
       ) : encounter.companionTurn ? (
         <div className="reveal flex flex-wrap items-center gap-1.5 rounded-md border border-sky-900/60 bg-sky-950/30 px-2 py-1.5">
           <p className="mr-auto text-xs text-sky-100">
@@ -194,98 +212,113 @@ export function DmInitiativePanel({
         </div>
       ) : null}
       <ol className="space-y-1">
-        {encounter.order.map((entry, index) => (
-          <li
-            key={`${entry.id}-${index}`}
-            className={cn(
-              // The turn passes as a glow that moves, not one that blinks.
-              "flex flex-wrap items-center gap-1 rounded-md border px-2 py-1 transition-[color,background-color,border-color,box-shadow] duration-[260ms] ease-settle",
-              index === encounter.turnIndex
-                ? "border-amber-700 bg-amber-950/40 shadow-glow-gold"
-                : "border-stone-800",
-            )}
-          >
-            <span className="w-6 shrink-0 text-right font-mono text-[10px] text-stone-500">
-              {entry.initiative ?? ""}
-            </span>
-            <TokenFace
-              candidates={faceOf?.(entry) ?? []}
-              name={entry.name}
-              enemy={entry.kind === "enemy"}
+        {encounter.order.map((entry, index) => {
+          // A combatant on the side its kind does not fight on wears that
+          // side's colour down the row's edge and says it (SideBadge.tsx).
+          const side = offSide(encounter, entry.id, entry.kind);
+          return (
+            <li
+              key={`${entry.id}-${index}`}
+              data-side={side ?? undefined}
               className={cn(
-                "size-6 rounded-full border",
-                index === encounter.turnIndex ? "border-amber-500" : "border-stone-700",
-                entry.hidden && "opacity-60",
-              )}
-            />
-            <button
-              type="button"
-              disabled={busy || entry.kind !== "pc" || index === encounter.turnIndex}
-              onClick={() => void send({ op: "goto", id: entry.id })}
-              title={entry.kind === "pc" ? "Give them the turn" : "The turn rests on players only"}
-              className={cn(
-                "min-h-9 min-w-0 flex-1 truncate text-left text-xs disabled:cursor-default",
-                index === encounter.turnIndex ? "text-amber-100" : "text-stone-300",
-                entry.kind === "pc" && index !== encounter.turnIndex && "hover:text-amber-200",
+                // The turn passes as a glow that moves, not one that blinks.
+                "flex flex-wrap items-center gap-1 rounded-md border px-2 py-1 transition-[color,background-color,border-color,box-shadow] duration-[260ms] ease-settle",
+                index === encounter.turnIndex
+                  ? "border-amber-700 bg-amber-950/40 shadow-glow-gold"
+                  : "border-stone-800",
+                side === "foe" && "border-l-4 border-l-red-500",
+                side === "party" && "border-l-4 border-l-stone-400",
               )}
             >
-              {entry.name}
-              <span className="ml-1.5 text-[10px] text-stone-600">
-                {KIND_LABELS[entry.kind] ?? entry.kind}
-                {entry.hidden ? " · hidden" : ""}
-                {entry.reflex ? (
-                  <span className="motion-pop ml-1 text-amber-300" title={extraTurnTag(entry)?.title}>
-                    · {entry.extra ? "extra turn" : "2nd turn"}
-                  </span>
-                ) : null}
+              <span className="w-6 shrink-0 text-right font-mono text-[10px] text-stone-500">
+                {entry.initiative ?? ""}
               </span>
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void send({ op: "move", id: entry.id, direction: "up" })}
-              aria-label={`Move ${entry.name} up the order`}
-              title="Up the order"
-              className={ROW_ICON}
-            >
-              <ChevronUp className="size-3.5" />
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void send({ op: "move", id: entry.id, direction: "down" })}
-              aria-label={`Move ${entry.name} down the order`}
-              title="Down the order"
-              className={ROW_ICON}
-            >
-              <ChevronDown className="size-3.5" />
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void send({ op: "delay", id: entry.id })}
-              aria-label={`Delay ${entry.name} to the bottom of the round`}
-              title="Delay to the bottom of the round"
-              className={ROW_ICON}
-            >
-              <Clock className="size-3.5" />
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={async () => {
-                if (await appConfirm(`Take ${entry.name} out of the order? They get no more turns in this fight.`, { actionLabel: "Take out" })) {
-                  void send({ op: "remove", id: entry.id });
-                }
-              }}
-              aria-label={`Take ${entry.name} out of the order`}
-              title="Out of the order"
-              className={cn(ROW_ICON, "hover:text-red-300")}
-            >
-              <Trash2 className="size-3.5" />
-            </button>
-          </li>
-        ))}
+              <TokenFace
+                candidates={faceOf?.(entry) ?? []}
+                name={entry.name}
+                enemy={entry.kind === "enemy"}
+                className={cn(
+                  "size-6 rounded-full border",
+                  index === encounter.turnIndex ? "border-amber-500" : "border-stone-700",
+                  entry.hidden && "opacity-60",
+                )}
+              />
+              <button
+                type="button"
+                disabled={busy || entry.kind !== "pc" || index === encounter.turnIndex}
+                onClick={() => void send({ op: "goto", id: entry.id })}
+                title={entry.kind === "pc" ? "Give them the turn" : "The turn rests on players only"}
+                className={cn(
+                  "min-h-9 min-w-0 flex-1 truncate text-left text-xs disabled:cursor-default",
+                  index === encounter.turnIndex ? "text-amber-100" : "text-stone-300",
+                  entry.kind === "pc" && index !== encounter.turnIndex && "hover:text-amber-200",
+                )}
+              >
+                {entry.name}
+                <span className="ml-1.5 text-[10px] text-stone-600">
+                  {KIND_LABELS[entry.kind] ?? entry.kind}
+                  {entry.hidden ? " · hidden" : ""}
+                  {entry.reflex ? (
+                    <span className="motion-pop ml-1 text-amber-300" title={extraTurnTag(entry)?.title}>
+                      · {entry.extra ? "extra turn" : "2nd turn"}
+                    </span>
+                  ) : null}
+                </span>
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void send({ op: "move", id: entry.id, direction: "up" })}
+                aria-label={`Move ${entry.name} up the order`}
+                title="Up the order"
+                className={ROW_ICON}
+              >
+                <ChevronUp className="size-3.5" />
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void send({ op: "move", id: entry.id, direction: "down" })}
+                aria-label={`Move ${entry.name} down the order`}
+                title="Down the order"
+                className={ROW_ICON}
+              >
+                <ChevronDown className="size-3.5" />
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void send({ op: "delay", id: entry.id })}
+                aria-label={`Delay ${entry.name} to the bottom of the round`}
+                title="Delay to the bottom of the round"
+                className={ROW_ICON}
+              >
+                <Clock className="size-3.5" />
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={async () => {
+                  if (await appConfirm(`Take ${entry.name} out of the order? They get no more turns in this fight.`, { actionLabel: "Take out" })) {
+                    void send({ op: "remove", id: entry.id });
+                  }
+                }}
+                aria-label={`Take ${entry.name} out of the order`}
+                title="Out of the order"
+                className={cn(ROW_ICON, "hover:text-red-300")}
+              >
+                <Trash2 className="size-3.5" />
+              </button>
+              {/* A line of its own under the name, so a narrow panel never
+                  cuts the words off. */}
+              {side ? (
+                <span className="basis-full pl-14">
+                  <SideBadge side={side} />
+                </span>
+              ) : null}
+            </li>
+          );
+        })}
       </ol>
       {adding ? (
         <div className="reveal flex flex-wrap items-center gap-1">

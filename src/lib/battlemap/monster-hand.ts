@@ -188,11 +188,13 @@ export function monsterSentence(enemyName: string, card: HandCard, targetNames: 
 
 // The console call a played card makes: the same adjudication the form
 // would send, so the server's rules are the only rules. Null when the card
-// still needs a target.
+// still needs a target. rows: the targets that are enemy rows (a creature
+// the party dominates strikes its own kind, issue 503).
 export function monsterInvoke(
   card: HandCard,
   targetIds: string[],
   advantage: MonsterAdvantage = "none",
+  rows: ReadonlySet<string> = new Set(),
 ): { name: string; args: Record<string, unknown> } | null {
   const intent = card.intent;
   if (intent.card !== "monster") {
@@ -244,7 +246,8 @@ export function monsterInvoke(
     args: {
       casterEnemyId: intent.enemyId,
       ability: ability.name,
-      characterIds: targetIds,
+      characterIds: targetIds.filter((id) => !rows.has(id)),
+      ...(targetIds.some((id) => rows.has(id)) ? { enemyIds: targetIds.filter((id) => rows.has(id)) } : {}),
       ...numbers,
       ...(ability.damageType ? { type: ability.damageType } : {}),
     },
