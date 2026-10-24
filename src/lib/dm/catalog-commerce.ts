@@ -59,10 +59,17 @@ export const COMMERCE_ADJUDICATIONS: CatalogEntry[] = [
     name: "haggle",
     label: "Haggle",
     category: "social",
-    summary: "A Persuasion check: win and every price drops a step, lose and they rise one. Once per character per shop.",
+    summary: "A haggling check: win and prices drop a step, fail and they hold, fail by 5 or more and they rise a step (two for Intimidation). The result is for the haggler and those at the counter with them. Once per character per shop; Deception works once per shop.",
     fields: [
       { name: "characterId", label: "Character", kind: "character", required: true },
       { name: "shop", label: "Shop", kind: "text", required: true },
+      { name: "skill", label: "Skill", kind: "select", options: [
+          { value: "persuasion", label: "Persuasion" },
+          { value: "intimidation", label: "Intimidation" },
+          { value: "deception", label: "Deception" },
+        ],
+      },
+      { name: "present", label: "Also at the counter", kind: "characters" },
     ],
   },
 ];

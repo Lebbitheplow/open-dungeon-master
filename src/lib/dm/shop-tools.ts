@@ -26,9 +26,13 @@ import {
   askingPriceCp,
   costToCopper,
   findStockLine,
+  BAD_FAILURE_MARGIN,
+  dealFor,
   haggleDc,
-  haggleStep,
+  haggleSteps,
   KIND_POOL,
+  markupFor,
+  normalizeHaggleSkill,
   normalizeShopKind,
   normalizeShopSize,
   offerPriceCp,
@@ -36,7 +40,9 @@ import {
   renderShopsForPrompt,
   restockDue,
   SHELF_RARITIES,
+  shiftMarkup,
   SIZE_MARKUP,
+  stepsInWords,
   stockFromPool,
   takeStock,
   type Shop,
@@ -94,10 +100,16 @@ export const shopTools: ToolDef[] = [
     type: "function",
     function: {
       name: "haggle",
-      description: "A Persuasion check that moves a shop's prices. It is rolled against the settlement's DC. Success drops every price in that shop one step, failure raises them one step. One try per character per shop.",
+      description:
+        "A haggling check at a shop: success lowers prices a step, failure leaves them where they were, and failing the DC by 5 or more raises them a step. The server rolls it against the settlement's DC (city 12, town 13, village 15, hamlet 17) with Persuasion, or with skill intimidation (a bad failure raises prices two steps) or deception (a keeper falls for it once: one Deception try per shop). The result and the used try belong to the haggler and the characters in present, the others at the counter now; anyone else pays the shop's normal price and keeps their own try. One try per character per shop until it restocks. Narrate the outcome the reply gives.",
       parameters: {
         type: "object",
-        properties: { characterId: { type: "string" }, shop: { type: "string" } },
+        properties: {
+          characterId: { type: "string" },
+          shop: { type: "string" },
+          skill: { type: "string", enum: ["persuasion", "intimidation", "deception"], description: "Persuasion when left out." },
+          present: { type: "array", items: { type: "string" }, description: "The other characters at the counter now, who share the result. Leave out anyone elsewhere." },
+        },
         required: ["characterId", "shop"],
       },
     },
@@ -246,7 +258,7 @@ function packItemsOfKind(kind: "weapon" | "armor" | "gear" | "magic_item"): Retu
 export function restockShop(shop: Shop, instant: number, random: () => number = Math.random): Shop {
   const pooled = shop.preparedStock ? [] : stockFromPool(stockPool(shop.kind), shop.size, random);
   const stock = shop.preparedStock ? refillStock(shop.stock, shop.preparedStock) : pooled.length ? pooled : shop.stock;
-  return updateShop(shop.id, { stock, restockedAt: instant, haggledBy: [] }) ?? shop;
+  return updateShop(shop.id, { stock, restockedAt: instant, haggles: [] }) ?? shop;
 }
 
 const openSchema = z.object({
@@ -361,7 +373,9 @@ export function handleBuyItem(campaign: Campaign, rawArguments: string): ToolRes
   if (line.qty < args.qty) {
     return { error: `${shop.name} has only ${line.qty} of ${line.itemName}.`, retry: true };
   }
-  const each = askingPriceCp(line.priceCp, shop.markup);
+  // The buyer's own price: the shop's, moved by a haggle they were at the
+  // counter for.
+  const each = askingPriceCp(line.priceCp, markupFor(shop, sheet.id));
   const total = each * args.qty;
   const purse = { gold: sheet.gold, copper: sheet.copper };
   if (purse.gold * 100 + purse.copper < total) {
@@ -441,28 +455,58 @@ export function handleSellItem(campaign: Campaign, rawArguments: string): ToolRe
   return { ok: true, sold: carried, qty: removal.removed, received: formatPrice(total), purse: formatCopper(paid.purse.gold * 100 + paid.purse.copper) };
 }
 
-const haggleSchema = z.object({ characterId: z.string().trim().min(1), shop: z.string().trim().min(1) });
+const haggleSchema = z.object({
+  characterId: z.string().trim().min(1),
+  shop: z.string().trim().min(1),
+  skill: z.string().trim().max(40).optional(),
+  present: z.array(z.string().trim().min(1).max(80)).max(12).default([]),
+});
 
+const SKILL_LABEL = { persuasion: "Persuasion", intimidation: "Intimidation", deception: "Deception" } as const;
+
+// A haggle (Albert's rules, 2026-10-23, after #456): a win lowers the price
+// a step, a failure holds it, a failure by BAD_FAILURE_MARGIN or more raises
+// it (two steps for Intimidation). The new price and the used try belong to
+// the haggler and the characters the call names as present at the counter;
+// the party keeps no record of who stands where, so nobody else is assumed
+// there. Anyone else pays the shop's own price and keeps their try.
 export function handleHaggle(campaign: Campaign, rawArguments: string): ToolResult {
   const args = parse(haggleSchema, rawArguments);
   if (!args) {
-    return { error: "Invalid arguments: haggle needs characterId and shop.", retry: true };
+    return { error: "Invalid arguments: haggle needs characterId and shop, a skill of persuasion, intimidation or deception, and present as a list of characters.", retry: true };
+  }
+  const skill = args.skill ? normalizeHaggleSkill(args.skill) : "persuasion";
+  if (!skill) {
+    return { error: `A haggle is made with persuasion, intimidation or deception, not "${args.skill}".`, retry: true };
   }
   const sheet = resolveSheet(campaign, args.characterId);
   if (!sheet) {
     return unknownSheetRef("characterId", args.characterId, listSheets(campaign.id));
   }
+  const company: CharacterSheet[] = [];
+  for (const ref of args.present) {
+    const other = resolveSheet(campaign, ref);
+    if (!other) {
+      return unknownSheetRef("present", ref, listSheets(campaign.id));
+    }
+    if (other.id !== sheet.id && !company.some((known) => known.id === other.id)) {
+      company.push(other);
+    }
+  }
   const shop = resolveShop(campaign, args.shop);
   if (!shop) {
     return noShop(campaign, args.shop);
   }
-  if (shop.haggledBy.includes(sheet.id)) {
+  if (dealFor(shop, sheet.id)) {
     return { error: `${sheet.name} already tried their luck with ${shop.name}'s keeper.`, refused: "rules" };
+  }
+  if (skill === "deception" && shop.haggles.some((deal) => deal.skill === "deception")) {
+    return { error: `${shop.name}'s keeper has been lied to once already and will not fall for it again. Persuasion or intimidation may still be tried.`, refused: "rules" };
   }
   // Held carriers and lasting effects ride the haggling check, and the
   // carrier is spent by it.
   const resolved = resolveRollExpression(
-    { kind: "skill_check", skill: "persuasion" } as unknown as RollArgs,
+    { kind: "skill_check", skill } as unknown as RollArgs,
     sheet,
     rollExtrasFor(campaign, sheet, "skill_check"),
   );
@@ -472,13 +516,34 @@ export function handleHaggle(campaign: Campaign, rawArguments: string): ToolResu
   spendRollCarriers(campaign.id, sheet.id, resolved.spendInspiration);
   const dc = haggleDc(shop.size);
   const rolled = rollExpression(resolved.expression);
-  const roll = insertRoll({ campaignId: campaign.id, characterId: sheet.id, requestedBy: "dm", kind: "skill_check", detail: `${sheet.name}: haggling at ${shop.name}`, dc, result: rolled });
+  const roll = insertRoll({ campaignId: campaign.id, characterId: sheet.id, requestedBy: "dm", kind: "skill_check", detail: `${sheet.name}: haggling at ${shop.name} (${SKILL_LABEL[skill]})`, dc, result: rolled });
   publishWithSeq(campaign.id, allocateSeq(campaign.id), "roll_result", { roll, source: "digital" });
-  const success = rolled.total >= dc;
-  const markup = haggleStep(shop.markup, success);
-  updateShop(shop.id, { markup, haggledBy: [...shop.haggledBy, sheet.id] });
+  const steps = haggleSteps(skill, rolled.total, dc);
+  // A companion who already haggled here keeps the price they got.
+  const joining = company.filter((other) => !dealFor(shop, other.id));
+  const kept = company.filter((other) => dealFor(shop, other.id));
+  updateShop(shop.id, { haggles: [...shop.haggles, { ids: [sheet.id, ...joining.map((other) => other.id)], steps, skill }] });
   publishShops(campaign.id);
-  return { ok: true, success, rolled: rolled.total, dc, markup, prices: success ? "a step lower" : "a step higher" };
+  const names = [sheet, ...joining].map((who) => who.name).join(" and ");
+  const outcome =
+    steps < 0
+      ? `${names} talked the keeper down: their prices here are a step lower.`
+      : steps === 0
+        ? `The keeper holds firm: prices stay where they were for ${names}.`
+        : `A bad failure (missed the DC by ${BAD_FAILURE_MARGIN} or more): the keeper raises prices ${steps === 1 ? "a step" : "two steps"} for ${names}.`;
+  return {
+    ok: true,
+    success: steps < 0,
+    skill,
+    rolled: rolled.total,
+    dc,
+    prices: stepsInWords(steps),
+    steps,
+    markup: shiftMarkup(shop.markup, steps),
+    for: [sheet, ...joining].map((who) => who.name),
+    outcome: `${outcome} Anyone else pays the shop's normal price and may still haggle once.`,
+    ...(kept.length ? { keptTheirOwn: kept.map((who) => `${who.name} already haggled here and keeps that price`) } : {}),
+  };
 }
 
 // The prompt's shops block for the party's place, keepers named.
@@ -494,7 +559,8 @@ export function shopsBlock(campaign: Campaign): string {
     const fresh = restockDue(shop, instant, MINUTES_PER_DAY) ? restockShop(shop, instant) : shop;
     return { ...fresh, keeperName: fresh.keeperNpcId ? getNpcById(fresh.keeperNpcId)?.name ?? "" : "" };
   });
-  return renderShopsForPrompt(shops);
+  const names = new Map(listSheets(campaign.id).map((sheet) => [sheet.id, sheet.name]));
+  return renderShopsForPrompt(shops, (id) => names.get(id) ?? "someone no longer here");
 }
 
 // The handler a purchase reaches (src/lib/dm/tool-merge.ts). A shop named in

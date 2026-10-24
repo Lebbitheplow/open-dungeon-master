@@ -15,6 +15,10 @@ const bodySchema = z.object({
   item: z.string().trim().max(80).default(""),
   qty: z.number().int().min(1).max(99).default(1),
   characterId: z.string().trim().max(80).optional(),
+  // A haggle's skill: persuasion, intimidation or deception. From the
+  // Market a character haggles alone: the panel cannot see who else stands
+  // at the counter, which the story says through the DM's haggle.
+  skill: z.enum(["persuasion", "intimidation", "deception"]).default("persuasion"),
 });
 
 export async function POST(request: Request, { params }: { params: Promise<{ campaignId: string; shopId: string }> }) {
@@ -39,7 +43,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ cam
   }
   const raw = JSON.stringify({ characterId, shop: shop.id, item: parsed.data.item, qty: parsed.data.qty });
   const result =
-    parsed.data.action === "buy" ? handleBuyItem(context.campaign, raw) : parsed.data.action === "sell" ? handleSellItem(context.campaign, raw) : handleHaggle(context.campaign, raw);
+    parsed.data.action === "buy"
+      ? handleBuyItem(context.campaign, raw)
+      : parsed.data.action === "sell"
+        ? handleSellItem(context.campaign, raw)
+        : handleHaggle(context.campaign, JSON.stringify({ characterId, shop: shop.id, skill: parsed.data.skill }));
   if ("error" in result) {
     // Something nobody has priced: the keeper names a price, through the DM.
     if (result.unpriced === true) {

@@ -3,8 +3,10 @@
 // ODM's shop rules (docs/rules-coverage.md, "Commerce"): the shelf sets the
 // price (list price times the settlement's markup), the purse and the shelf
 // refuse what they cannot cover, the keeper buys at half list, and a haggle
-// is one Persuasion check per character per shop that moves every price a
-// step. The SRD's own rule is the half-price sale ("Selling Treasure"); the
+// is one check per character per shop (Persuasion, Intimidation or
+// Deception): a win lowers the price a step, a failure holds it, a failure
+// by 5 or more raises it, and the price is for the characters at the
+// counter, not the whole party. The SRD's own rule is the half-price sale ("Selling Treasure"); the
 // rest is ODM's and is pinned as ODM states it.
 //
 // A trade between players is checked against both sheets when offered and
@@ -188,45 +190,100 @@ await test("buying an item back costs more than its sale paid, at every markup",
 
 // A town's haggle is DC 13 (shop-logic.ts haggleDc); CHA 10 and no
 // Persuasion means the d20 is the total.
-async function haggle(shop, who, face) {
+async function haggle(shop, who, face, skill) {
   world.clearDice();
   world.dice(face);
-  const reply = await at(shop, who, { action: "haggle" });
+  const reply = await at(shop, who, { action: "haggle", ...(skill ? { skill } : {}) });
   world.clearDice();
   return reply;
 }
 
-await test("a won haggle drops every price a step, a lost one raises them a step", async () => {
-  let shop = openShop(1);
-  assert.equal((await haggle(shop, ann, 13)).body.result.success, true);
-  assert.equal(shops.getShop(shop.id).markup, 0.9);
-  shop = openShop(1);
-  assert.equal((await haggle(shop, ann, 12)).body.result.success, false);
-  assert.equal(shops.getShop(shop.id).markup, 1.1);
+// What one character is asked for the Rope (list 1 gp) at a shop, as the
+// shops route shows it to that character's player in the Market.
+const listing = await world.route("campaigns/[campaignId]/shops");
+async function ropeAsks(shop, who) {
+  return listing.shopView(shops.getShop(shop.id), false, who.hero.id).stock.find((line) => line.itemName === "Rope").askingCp;
+}
+
+await test("a won haggle drops the haggler's prices a step; the shop's own price and everyone else's stay", async () => {
+  const shop = openShop(1);
+  const won = await haggle(shop, ann, 13);
+  assert.equal(won.body.result.success, true);
+  assert.equal(won.body.result.prices, "a step lower");
+  assert.equal(shops.getShop(shop.id).markup, 1, "the shop-wide markup did not move");
+  assert.equal(await ropeAsks(shop, ann), 90);
+  assert.equal(await ropeAsks(shop, bo), 100, "someone who was not there pays the shop's price");
+  give(ann, { gold: 1 });
+  give(bo, { gold: 1 });
+  assert.equal((await at(shop, ann, { action: "buy", item: "Rope" })).status, 200);
+  assert.equal(copperOf(ann), 10, "Ann paid her haggled 90 cp");
+  assert.equal((await at(shop, bo, { action: "buy", item: "Rope" })).status, 200);
+  assert.equal(copperOf(bo), 0, "Bo paid the shop's 1 gp");
 });
 
-await test("a character haggles once in a shop: a second try is refused and rolls nothing", async () => {
+await test("a failed haggle holds firm; only a failure by 5 or more raises the price, a step", async () => {
+  let shop = openShop(1);
+  const held = await haggle(shop, ann, 9);
+  assert.equal(held.body.result.success, false);
+  assert.equal(held.body.result.prices, "unchanged", "13 - 9 = 4: a failure, not a bad one");
+  assert.equal(await ropeAsks(shop, ann), 100);
+  shop = openShop(1);
+  const bad = await haggle(shop, ann, 8);
+  assert.equal(bad.body.result.prices, "a step higher", "13 - 8 = 5: a bad failure");
+  assert.match(bad.body.result.outcome, /missed the DC by 5 or more/);
+  assert.equal(await ropeAsks(shop, ann), 110);
+  assert.equal(await ropeAsks(shop, bo), 100);
+  assert.equal(shops.getShop(shop.id).markup, 1);
+});
+
+await test("a character haggles once in a shop: a second try is refused and rolls nothing; others still have theirs", async () => {
   const shop = openShop(1);
   await haggle(shop, ann, 20);
   world.diceLog();
   const again = await haggle(shop, ann, 20);
   assert.equal(again.status, 409);
   assert.equal(world.diceLog().length, 0);
-  assert.equal(shops.getShop(shop.id).markup, 0.9);
   assert.deepEqual(shops.getShop(shop.id).haggledBy, [ann.hero.id]);
+  assert.equal((await haggle(shop, bo, 20)).status, 200, "Bo came later and gets a try of his own");
+  assert.deepEqual(shops.getShop(shop.id).haggledBy, [ann.hero.id, bo.hero.id]);
 });
 
-await test("the markup never leaves its ladder, however many characters haggle", async () => {
-  const shop = openShop(0.9);
-  for (const who of [ann, bo, cy]) {
-    await haggle(shop, who, 20);
-  }
-  assert.equal(shops.getShop(shop.id).markup, 0.8);
-  const dear = openShop(1.5);
-  for (const who of [ann, bo, cy]) {
-    await haggle(dear, who, 2);
-  }
-  assert.equal(shops.getShop(dear.id).markup, 2);
+await test("the characters at the counter share the result and the used try; a later arrival does not", async () => {
+  const shop = openShop(1);
+  world.clearDice();
+  world.dice(20);
+  const out = await world.invoke("haggle", { characterId: ann.hero.id, shop: shop.id, present: [bo.hero.id] });
+  world.clearDice();
+  assert.equal(out.ok, true, JSON.stringify(out));
+  assert.equal(await ropeAsks(shop, ann), 90);
+  assert.equal(await ropeAsks(shop, bo), 90, "Bo was there and shares the price");
+  assert.equal(await ropeAsks(shop, cy), 100, "Cy was not, and pays the shop's price");
+  assert.equal((await haggle(shop, bo, 20)).status, 409, "Bo's try was used at the counter");
+  assert.equal((await haggle(shop, cy, 8)).body.result.prices, "a step higher");
+  assert.equal(await ropeAsks(shop, cy), 110);
+  assert.equal(await ropeAsks(shop, ann), 90, "Cy's bad haggle is Cy's alone");
+});
+
+await test("Intimidation's bad failure raises the price two steps; Deception works once per shop", async () => {
+  const shop = openShop(1);
+  assert.equal((await haggle(shop, ann, 8, "intimidation")).body.result.prices, "two steps higher");
+  assert.equal(await ropeAsks(shop, ann), 125);
+  assert.equal((await haggle(shop, bo, 20, "deception")).body.result.success, true);
+  world.diceLog();
+  const lie = await haggle(shop, cy, 20, "deception");
+  assert.equal(lie.status, 409);
+  assert.match(lie.body.error, /lied to once already/);
+  assert.equal(world.diceLog().length, 0);
+  assert.equal((await haggle(shop, cy, 20)).status, 200, "Persuasion is still open to Cy");
+});
+
+await test("a haggled price never leaves the ladder", async () => {
+  const cheap = openShop(0.8);
+  await haggle(cheap, ann, 20);
+  assert.equal(await ropeAsks(cheap, ann), 80);
+  const dear = openShop(2);
+  await haggle(dear, ann, 2);
+  assert.equal(await ropeAsks(dear, ann), 200);
 });
 
 // ---- trades ----

@@ -42,7 +42,29 @@ type ShopView = {
   buys: boolean;
   markup: number;
   haggledBy: string[];
+  haggles: Array<{ ids: string[]; steps: number; skill: HaggleSkill }>;
+  // The viewer's own price at this shop, moved by a haggle they were at
+  // the counter for, and that haggle's step (null: they have not haggled).
+  yourMarkup: number;
+  yourHaggle: number | null;
+  haggleDc: number;
 };
+
+type HaggleSkill = "persuasion" | "intimidation" | "deception";
+
+// A haggle's outcome for the person who made it, in the rules' own words.
+function haggleOutcome(steps: number): string {
+  return steps < 0
+    ? "You talked the keeper down: your prices here are a step lower."
+    : steps === 0
+      ? "The keeper holds firm: your prices stay where they were."
+      : `A bad failure (you missed the DC by 5 or more): your prices here are ${steps === 1 ? "a step" : "two steps"} higher.`;
+}
+
+// Where the viewer's haggle left their prices, for the line under a shop.
+function haggledLine(steps: number): string {
+  return steps < 0 ? "You haggled here: your prices are a step lower." : steps === 0 ? "You haggled here: the keeper held firm." : `You haggled here and pushed too hard: your prices are ${steps === 1 ? "a step" : "two steps"} higher.`;
+}
 
 const KINDS = ["general", "smith", "apothecary", "outfitter", "curiosities"] as const;
 const SIZES = ["hamlet", "village", "town", "city"] as const;
@@ -146,7 +168,7 @@ export function MarketPanel({
     return () => window.clearTimeout(id);
   }, [focus, loadedShops]);
 
-  async function counter(shop: ShopView, action: "buy" | "sell" | "haggle", item = "") {
+  async function counter(shop: ShopView, action: "buy" | "sell" | "haggle", item = "", skill: HaggleSkill = "persuasion") {
     setBusy(`${shop.id}:${action}:${item}`);
     setError("");
     setUnpriced(null);
@@ -154,7 +176,7 @@ export function MarketPanel({
       const response = await fetch(`/api/campaigns/${campaignId}/shops/${shop.id}/trade`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, item, qty: 1, characterId: mySheet?.id }),
+        body: JSON.stringify({ action, item, qty: 1, characterId: mySheet?.id, ...(action === "haggle" ? { skill } : {}) }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok && data.unpriced === true) {
@@ -162,7 +184,7 @@ export function MarketPanel({
       } else if (!response.ok) {
         setError(String(data.error ?? "The keeper shakes their head."));
       } else if (action === "haggle") {
-        setError(data.result?.success ? `Haggled well: prices ${data.result.prices}.` : `The keeper is unmoved: prices ${data.result?.prices ?? "rise"}.`);
+        setError(haggleOutcome(Number(data.result?.steps) || 0));
       }
       setReload((current) => current + 1);
     } finally {
@@ -296,8 +318,16 @@ export function MarketPanel({
       ) : null}
       {shops.map((shop) => {
         const canHaggle = Boolean(mySheet && !shop.haggledBy.includes(mySheet.id));
+        // A keeper falls for a lie once: after one Deception here, nobody may try another.
+        const canDeceive = canHaggle && !shop.haggles.some((deal) => deal.skill === "deception");
         const shopItems: ContextMenuItem[] = [
-          ...(canHaggle ? [{ id: "haggle", label: "Haggle", glyph: "skill-persuasion", disabled: Boolean(busy), onSelect: () => void counter(shop, "haggle") }] : []),
+          ...(canHaggle
+            ? [
+                { id: "haggle", label: "Haggle (Persuasion)", glyph: "skill-persuasion", disabled: Boolean(busy), onSelect: () => void counter(shop, "haggle") },
+                { id: "haggle-intimidation", label: "Haggle by Intimidation (a bad failure: two steps up)", glyph: "skill-intimidation", disabled: Boolean(busy), onSelect: () => void counter(shop, "haggle", "", "intimidation") },
+                ...(canDeceive ? [{ id: "haggle-deception", label: "Haggle by Deception (works once per shop)", glyph: "skill-deception", disabled: Boolean(busy), onSelect: () => void counter(shop, "haggle", "", "deception") }] : []),
+              ]
+            : []),
           ...(canPrep ? [{ id: "edit", label: "Edit the shop and its shelf", glyph: "ui-edit", separated: canHaggle, onSelect: () => setEditing(shop.id) }] : []),
           ...(canPrep ? [{ id: "close", label: `Close ${shop.name}`, glyph: "ui-lock", tone: "danger" as const, onSelect: () => void close(shop) }] : []),
         ];
@@ -336,7 +366,7 @@ export function MarketPanel({
                   {shop.kind}
                   {shop.keeperName ? `, kept by ${shop.keeperName}` : ""}
                   {steersStory && shop.locationName ? ` at ${shop.locationName}` : ""}
-                  {shop.markup !== 1 ? ` (prices ${shop.markup > 1 ? "+" : ""}${Math.round((shop.markup - 1) * 100)}%)` : ""}
+                  {shop.yourMarkup !== 1 ? ` (prices ${shop.yourMarkup > 1 ? "+" : ""}${Math.round((shop.yourMarkup - 1) * 100)}%)` : ""}
                 </p>
               </div>
               {canHaggle ? (
@@ -355,6 +385,17 @@ export function MarketPanel({
                 </>
               ) : null}
             </ContextMenu>
+            {canHaggle ? (
+              <p data-haggle-rules="" className="text-pretty text-[11px] leading-snug text-stone-500">
+                Haggling is a Persuasion check against DC {shop.haggleDc}: win and your prices drop a step, fail and they stay where they were, fail by 5 or
+                more and they rise a step. One try each, and the price you get is yours, not the whole party&apos;s. Intimidation and Deception are on the
+                shop&apos;s menu.
+              </p>
+            ) : mySheet && shop.yourHaggle !== null ? (
+              <p data-haggle-rules="" className="text-[11px] leading-snug text-stone-500">
+                {haggledLine(shop.yourHaggle)}
+              </p>
+            ) : null}
             {/* Columns follow the panel, not the window: the side panel is
                 narrow on the widest screen, and three columns there left
                 no room for a price. */}

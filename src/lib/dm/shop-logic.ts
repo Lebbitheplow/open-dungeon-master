@@ -4,8 +4,8 @@ import { lineNamed } from "@/lib/srd/item-row";
 
 // Shops (docs/vtt-parity-implementation-plan.md 11.1): pure pricing and
 // stocking. Prices come from the content pack's cost strings, marked up by
-// the settlement's size; a haggle moves the markup one step; the keeper
-// buys at half. Stock is a list of lines the DM or a preset writes.
+// the settlement's size; a haggle moves the price for the characters at
+// the counter, and only for them; the keeper buys at half. Stock is a list of lines the DM or a preset writes.
 //
 // A shelf a person wrote by hand is kept apart from the stock it starts
 // (#171): the stock is what is on the shelf now, after the table's
@@ -46,7 +46,10 @@ export type Shop = {
   // The clock instant of the last restock, so the next is due after
   // restockDays of in-world time.
   restockedAt: number;
-  // Characters who already haggled here; one try per visit.
+  // What each haggle here came to, and for whom; one try per character per
+  // visit (a restock is a new visit).
+  haggles: HaggleDeal[];
+  // Every character in those haggles: who has used their try.
   haggledBy: string[];
   createdAt: string;
   updatedAt: string;
@@ -58,6 +61,23 @@ export const MARKUP_STEPS = [0.8, 0.9, 1, 1.1, 1.25, 1.5, 2] as const;
 
 export const SIZE_MARKUP: Record<ShopSize, number> = { hamlet: 1.25, village: 1.1, town: 1, city: 1 };
 export const SIZE_STOCK_LINES: Record<ShopSize, number> = { hamlet: 6, village: 10, town: 16, city: 24 };
+
+// The skills a haggle may be made with. Persuasion is the ordinary one;
+// Intimidation leans on the keeper and Deception lies to them.
+export const HAGGLE_SKILLS = ["persuasion", "intimidation", "deception"] as const;
+export type HaggleSkill = (typeof HAGGLE_SKILLS)[number];
+
+// One haggle's outcome (Albert's rules, 2026-10-23): the characters who were
+// at the counter together, and how many rungs of the ladder their price sits
+// from the shop's own: -1 for a won haggle, 0 when the keeper held firm, +1
+// for a bad failure (+2 for a bad Intimidation). Anyone not named pays the
+// shop's own price and still has their try. Relative, so when the prep
+// holder changes a shop's prices each deal keeps its step from them.
+export type HaggleDeal = { ids: string[]; steps: number; skill: HaggleSkill };
+
+// A failure this far under the DC or more is a bad one, and only a bad one
+// raises the price.
+export const BAD_FAILURE_MARGIN = 5;
 
 export function normalizeShopSize(raw: unknown): ShopSize {
   return (SHOP_SIZES as readonly string[]).includes(String(raw)) ? (raw as ShopSize) : "village";
@@ -85,17 +105,74 @@ function markupRung(markup: number): number {
   return best;
 }
 
-// A won haggle drops the markup a step; a lost one raises it a step, which
-// is why a haggle is a gamble and not a free discount.
-export function haggleStep(markup: number, success: boolean): number {
+// The markup `steps` rungs from this one, never off the ladder. No step at
+// all leaves the markup exactly as it was, on the ladder or not.
+export function shiftMarkup(markup: number, steps: number): number {
+  if (!steps) {
+    return clampMarkup(markup);
+  }
   const rung = markupRung(clampMarkup(markup));
-  const next = success ? Math.max(0, rung - 1) : Math.min(MARKUP_STEPS.length - 1, rung + 1);
-  return MARKUP_STEPS[next];
+  return MARKUP_STEPS[Math.min(MARKUP_STEPS.length - 1, Math.max(0, rung + Math.round(steps)))];
+}
+
+// What a haggle check comes to, in rungs: a win drops the price a step; a
+// failure holds it firm; a failure by BAD_FAILURE_MARGIN or more raises it a
+// step, or two when the keeper was threatened.
+export function haggleSteps(skill: HaggleSkill, total: number, dc: number): number {
+  if (total >= dc) {
+    return -1;
+  }
+  if (dc - total < BAD_FAILURE_MARGIN) {
+    return 0;
+  }
+  return skill === "intimidation" ? 2 : 1;
 }
 
 // The haggle's DC: harder in a small place with fewer buyers to lose.
 export function haggleDc(size: ShopSize): number {
   return size === "hamlet" ? 17 : size === "village" ? 15 : size === "town" ? 13 : 12;
+}
+
+export function normalizeHaggleSkill(raw: unknown): HaggleSkill | null {
+  const key = textKey(String(raw ?? ""));
+  return HAGGLE_SKILLS.find((skill) => skill === key) ?? null;
+}
+
+// The stored haggles. An entry written before these rules is a bare
+// character id: a try used, at the shop's own price.
+export function normalizeHaggles(raw: unknown): HaggleDeal[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  return raw.flatMap((entry): HaggleDeal[] => {
+    if (typeof entry === "string") {
+      return entry ? [{ ids: [entry], steps: 0, skill: "persuasion" }] : [];
+    }
+    const record = (entry ?? {}) as Record<string, unknown>;
+    const ids = Array.isArray(record.ids) ? [...new Set(record.ids.filter((id): id is string => typeof id === "string" && id.length > 0))] : [];
+    const steps = Math.max(-1, Math.min(2, Math.round(Number(record.steps) || 0)));
+    return ids.length ? [{ ids, steps, skill: normalizeHaggleSkill(record.skill) ?? "persuasion" }] : [];
+  });
+}
+
+export function haggledIds(haggles: HaggleDeal[]): string[] {
+  return [...new Set(haggles.flatMap((deal) => deal.ids))];
+}
+
+// The haggle a character was at the counter for at this shop, or null.
+export function dealFor(shop: Pick<Shop, "haggles">, characterId: string | null | undefined): HaggleDeal | null {
+  return characterId ? shop.haggles.find((deal) => deal.ids.includes(characterId)) ?? null : null;
+}
+
+// What this character pays at this shop: the shop's own markup, moved by
+// the haggle they were at the counter for.
+export function markupFor(shop: Pick<Shop, "haggles" | "markup">, characterId?: string | null): number {
+  return shiftMarkup(shop.markup, dealFor(shop, characterId)?.steps ?? 0);
+}
+
+// A haggle's step in words, for the DM's prompt, the tool's reply and the Market.
+export function stepsInWords(steps: number): string {
+  return steps < 0 ? "a step lower" : steps === 0 ? "unchanged" : steps === 1 ? "a step higher" : "two steps higher";
 }
 
 // A pack cost string ("15 gp", "2 sp", "5,000 gp") in copper, or null.
@@ -244,8 +321,9 @@ export function restockDue(shop: Pick<Shop, "restockDays" | "restockedAt">, inst
 }
 
 // The prompt's line per shop at the party's place: name, keeper, and what
-// is on the shelves with the asking price in coin.
-export function renderShopsForPrompt(shops: Array<Shop & { keeperName: string }>): string {
+// is on the shelves with the asking price in coin, then who has haggled
+// there and what it came to, so the DM narrates each buyer's own price.
+export function renderShopsForPrompt(shops: Array<Shop & { keeperName: string }>, nameOf: (characterId: string) => string = (id) => id): string {
   if (!shops.length) {
     return "";
   }
@@ -254,7 +332,8 @@ export function renderShopsForPrompt(shops: Array<Shop & { keeperName: string }>
       .slice(0, 12)
       .map((line) => `${line.itemName} x${line.qty} at ${formatPrice(askingPriceCp(line.priceCp, shop.markup))}`)
       .join("; ");
-    return `- ${shop.name}${shop.keeperName ? ` (kept by ${shop.keeperName})` : ""}, ${shop.kind}${shop.buys ? ", buys at half" : ", does not buy"}: ${shelf || "bare shelves"}`;
+    const haggled = shop.haggles.map((deal) => `${deal.ids.map(nameOf).join(" and ")} ${deal.steps ? `pay prices ${stepsInWords(deal.steps)}` : "pay these prices (the keeper held firm)"}`);
+    return `- ${shop.name}${shop.keeperName ? ` (kept by ${shop.keeperName})` : ""}, ${shop.kind}${shop.buys ? ", buys at half" : ", does not buy"}: ${shelf || "bare shelves"}${haggled.length ? `. Haggled: ${haggled.join("; ")}` : ""}`;
   });
-  return `SHOPS HERE (prices are the server's; purchase moves the coin and the goods at this shelf's prices, haggle moves the price one step):\n${lines.join("\n")}`;
+  return `SHOPS HERE (prices are the server's; purchase moves the coin and the goods at this shelf's prices; a haggle moves them only for the characters it names):\n${lines.join("\n")}`;
 }
