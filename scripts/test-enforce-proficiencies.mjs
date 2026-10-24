@@ -473,14 +473,17 @@ await test("a tool pick that is not among the grant's choices is refused, and th
   assert.deepEqual(stored.sheet.proficiencies.tools, ["lute", "horn", "viol"]);
 });
 
-await test("the builder picks no tool for the player: the class step waits until each open tool grant is answered", () => {
+await test("the builder picks no tool for the player: the ancestry and background step waits until each open tool grant is answered", () => {
   const none = buildClass("bard", { toolPicks: [] });
   assert.deepEqual(none.derived.toolGrants.chosen, [], "a tool was picked for the player");
   assert.equal(none.blocker?.message, "Pick 3 more musical instruments you know how to use (tool proficiency).");
-  // The Calling step's own gate says the same, on the step where it is fixed.
+  // The background's gate says the same, on the step where it is fixed:
+  // tools are asked beside the background, the first step where the
+  // class's grants and the background's are both known (backlog F4).
   const bardRow = builder.classes.find((row) => row.id === "bard");
+  assert.equal(builder.submit.callingBlocker(bardRow, none.state, none.derived), null, "the class step no longer holds the tools");
   assert.equal(
-    builder.submit.callingBlocker(bardRow, none.state, none.derived)?.message,
+    builder.submit.backgroundBlocker(none.state, { id: "acolyte", name: "Acolyte", skills: [] }, none.derived)?.message,
     "Pick 3 more musical instruments you know how to use (tool proficiency).",
   );
   const two = buildClass("bard", { toolPicks: ["viol", "lute"] });
