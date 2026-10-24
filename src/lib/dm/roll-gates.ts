@@ -8,9 +8,15 @@
 // SRD 5.1, Contests: both sides make the check appropriate to their effort
 // and compare totals; the higher wins, and a tie leaves the situation as it
 // was. A monster's check uses its stat block: a skill it lists, else the
-// ability's modifier.
+// ability's modifier. A character fighting on the other side (issue 503)
+// makes the check as the character it is, the roll any check of theirs is
+// (contest-roll.ts rollCharacterCheck: proficiency and expertise, its
+// advantage and conditions, its features and effects).
 
 import { resolveTargetFoe } from "@/lib/dm/sheet-foe";
+import { isSheetFoe } from "@/lib/dm/combat-sides-logic";
+import { rollCharacterCheck } from "@/lib/dm/contest-roll";
+import { getSheetById } from "@/lib/db/sheets";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { enemyExhaustion } from "@/lib/dm/monster-abilities";
 import type { Campaign } from "@/lib/db/campaigns";
@@ -83,7 +89,7 @@ export function creatureCheckMod(stats: EnemyStats, skill: string | null, abilit
   return ability === "dex" ? stats.dexMod ?? 0 : 0;
 }
 
-export type Opponent = { name: string; stats: EnemyStats; conditions: string[]; enemyId?: string };
+export type Opponent = { name: string; stats: EnemyStats; conditions: string[]; enemyId?: string; sheetId?: string };
 
 // The creature a contest names: an enemy of the running fight, or a monster
 // by name from the bestiary when there is no fight to find it in.
@@ -102,7 +108,7 @@ export function contestOpponent(
     if (enemy.status !== "alive") {
       return { error: `${enemy.displayName} is ${enemy.status} and contests nothing.`, retry: true };
     }
-    return { name: enemy.displayName, stats: enemy.stats, conditions: enemy.conditions, enemyId: enemy.id };
+    return { name: enemy.displayName, stats: enemy.stats, conditions: enemy.conditions, enemyId: enemy.id, ...(isSheetFoe(enemy) ? { sheetId: enemy.id } : {}) };
   }
   const monster = resolveMonster(ref.monster ?? "", campaign.gameSettings, { userIds: spellAuthorsFor(campaign) });
   if (!monster) {
@@ -125,6 +131,17 @@ export function rollContest(
   const mine = skillId(input.skill) || null;
   const theirs = skillId(input.contestSkill) || (input.hiding ? "stealth" : mine ? OPPOSED[mine] ?? mine : null);
   const ability = ((theirs ? findSkill(theirs)?.ability : null) ?? input.ability ?? "str") as SaveAbility;
+  const label = theirs ? (findSkill(theirs)?.name ?? theirs) : ability.toUpperCase();
+  const answering = input.hiding ? true : mine ? ANSWERING.has(mine) : false;
+  const asSheet = opponent.sheetId ? getSheetById(opponent.sheetId) : null;
+  if (asSheet) {
+    const checked = rollCharacterCheck(campaign, asSheet, theirs ? { skill: theirs } : { ability }, `${opponent.name}: ${label} (contest)`);
+    if (checked.rollId) {
+      turn?.rollIds.push(checked.rollId);
+    }
+    const total = checked.autoFailed ? 0 : checked.total;
+    return { name: opponent.name, skill: label, total, dc: Math.max(1, answering ? total : total + 1), answering };
+  }
   const derivation = rollDerivation(opponent.conditions, "skill_check", ability);
   // Exhaustion's first level costs every ability check disadvantage, a
   // creature's as a character's (src/lib/dm/monster-abilities.ts).
@@ -140,7 +157,6 @@ export function rollContest(
   const modifier = creatureCheckMod(opponent.stats, theirs, ability) + (effect?.bonus ?? 0);
   const outcome = derivation.autoFail ? null : rollExpression(d20Expression(modifier, advantage));
   const total = outcome?.total ?? 0;
-  const label = theirs ? (findSkill(theirs)?.name ?? theirs) : ability.toUpperCase();
   if (outcome) {
     const roll = insertRoll({
       campaignId: campaign.id,
@@ -155,7 +171,6 @@ export function rollContest(
     turn?.rollIds.push(roll.id);
     publishWithSeq(campaign.id, allocateSeq(campaign.id), "roll_result", { roll: redactRoll(roll), source: "digital" });
   }
-  const answering = input.hiding ? true : mine ? ANSWERING.has(mine) : false;
   return { name: opponent.name, skill: label, total, dc: Math.max(1, answering ? total : total + 1), answering };
 }
 
