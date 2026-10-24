@@ -272,13 +272,25 @@ export default {
       check(line?.priceCp === PRICE_CP, `the shelf lists it at its cost, ${PRICE} (${line?.priceCp} cp)`);
       check((await ware.innerText()).includes(formatPrice(line.askingCp)), `and the player reads the asking price, ${formatPrice(line.askingCp)} (${await ware.innerText()})`);
       await playerPage.screenshot({ path: t.shotPath("player-shop") }).catch(() => {});
+      // Watched from before the purchase: the plate turns over when the page's
+      // own copy of the sheet catches up, which can be after the server's.
+      await playerPage.evaluate(() => {
+        const look = () => {
+          if (document.querySelector(".moment-loot")) window.__lootPlateSeen = true;
+        };
+        look();
+        new MutationObserver(look).observe(document.body, { childList: true, subtree: true });
+      });
       await seen.tap(ware.getByRole("button", { name: "Buy" }));
       const carried = async () => ((await (await player.get(`${base}/api/campaigns/${campaignId}/sheet`)).json()).sheet?.equipment ?? []).find((row) => row.name === ARTIFACT);
       const bought = await eventually(carried, { timeoutMs: 15_000, label: "the item in the player's pack" });
       // The table turns a find over on a plate for a few seconds, and the
       // plate takes Escape while it shows (Moments.tsx): the keyboard waits
-      // for it to go before it closes anything.
+      // for it to go before it closes anything. Waiting only for no plate
+      // passed before the plate had come, and on a slow runner it then took
+      // the Escape meant for the item's card below.
       const plate = playerPage.locator(".moment-loot");
+      await eventually(() => playerPage.evaluate(() => window.__lootPlateSeen === true), { timeoutMs: 20_000, label: "the purchase turned over on a plate" });
       await eventually(async () => (await plate.count()) === 0, { timeoutMs: 15_000, label: "the find's plate gone" });
       // The mechanics are the item's own, read back where the player holds it.
       const effects = bought.gear?.magic?.effects ?? [];
