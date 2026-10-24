@@ -364,13 +364,20 @@ await test("the English words that open a group are read at an English table onl
 
 // The window a lone first call of this table needs, by the same estimate the
 // fit checks use: what a later call of the same turn outgrows.
-async function firstCallTokens(line) {
+// With it, what the call's tool list took: an empty table at 16K carries
+// the compact set when it fits and the essentials when the rules have grown
+// past it, and a test that needs room the tools give back reads which.
+async function firstCall(line) {
   const campaign = table(line);
   script = [{ content: "Quiet fields." }];
   requests.length = 0;
   await startDmTurn(campaign.id);
   const first = requests.find((body) => Array.isArray(body.tools));
-  return requestTokens(first.messages, first.tools);
+  return { need: requestTokens(first.messages, first.tools), tools: requestTokens([], first.tools) };
+}
+
+async function firstCallTokens(line) {
+  return (await firstCall(line)).need;
 }
 
 await test("a follow-up the compact set no longer fits steps down to the essentials and the tools the turn has called", async () => {
@@ -401,13 +408,19 @@ await test("a follow-up the compact set no longer fits steps down to the essenti
 
 await test("a follow-up no tool set fits narrates what the turn did with no tools offered, rather than halting", async () => {
   const line = "I keep watch on the road.";
-  const need = await firstCallTokens(line);
-  process.env.OPENAI_COMPAT_CONTEXT = String(need + 1_024 + 30);
+  const first = await firstCall(line);
+  process.env.OPENAI_COMPAT_CONTEXT = String(first.need + 1_024 + 30);
   const campaign = table(line);
-  // A long passage beside the call: more than the narrow set saves.
+  // A long passage beside the call: more than the narrowest set saves, and
+  // less than the first call's whole tool list, so the call with none fits.
   // Varied, so the repetition guard leaves it be.
   const words = ["wind", "grass", "hill", "cart", "crow", "stone", "river", "lantern", "fence", "orchard", "bell", "smoke", "ridge", "ford", "mill", "hedge", "barrow", "shrine"];
-  const passage = Array.from({ length: 1_600 }, (_, index) => `${words[(index * 7) % words.length]} ${words[(index * 11 + 3) % words.length]} ${index}`).join(", ");
+  const parts = [];
+  while (requestTokens([{ role: "assistant", content: parts.join(", ") }], []) < first.tools - 400) {
+    const index = parts.length;
+    parts.push(`${words[(index * 7) % words.length]} ${words[(index * 11 + 3) % words.length]} ${index}`);
+  }
+  const passage = parts.join(", ");
   script = [{ call: "pass_time", args: { hours: 1 }, content: passage }, { content: "Dusk settles over the watch. What do you do?" }];
   requests.length = 0;
   await startDmTurn(campaign.id);
