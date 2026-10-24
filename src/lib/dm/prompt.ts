@@ -40,6 +40,9 @@ import { renderWorldArcsForPrompt } from "@/lib/dm/world-arc-logic";
 import { renderFactsForPrompt, type FactLike } from "@/lib/dm/fact-logic";
 import { MOMENT_INSTRUCTION, splitAtMoment, THIS_MOMENT_HEADING, THIS_TURN_HEADING } from "@/lib/prompt-boundary";
 import { companionMode } from "@/lib/dm/companion-tools";
+import { conscienceSetting, consciousCompanions } from "@/lib/dm/conscience";
+import { conscienceRules } from "@/lib/dm/conscience-logic";
+import { DEED_KINDS } from "@/lib/dm/companion-values-logic";
 import { commanderOf } from "@/lib/dm/companion-command";
 import { breakDown, describeInstant, isDark, normalizeClock } from "@/lib/dm/calendar";
 import { describeWeather } from "@/lib/srd/weather";
@@ -335,6 +338,10 @@ export type DmGameState = {
   // The newest lines, for which tracked NPCs the roster lists first when it
   // cannot list them all (src/lib/dm/npc-rank-logic.ts).
   npcMomentText?: string;
+  // Each lasting companion's values, conscience rung and any ultimatum
+  // (issue 503, src/lib/dm/conscience.ts), in the moment: rungs move turn
+  // to turn.
+  conscienceBlock?: string;
   // The newest player line, for the arc render's scene cues (issue #301):
   // what the party just said it is doing names the event it is walking
   // toward before the location changes.
@@ -417,6 +424,16 @@ export function relationshipRules(romance: boolean, openNames: readonly string[]
 - Romance is not the story's centre of gravity. Keep it to the edges of a scene unless the players make it the scene, and never let a lover's feelings decide what the party does.`
       : ""
   }`;
+}
+
+// How deeds are recorded and, with a lasting companion along, how its
+// conscience is played (issue 503, src/lib/dm/conscience-logic.ts).
+export function tableConscienceRules(campaign: Campaign, sheets: readonly CharacterSheet[]): string {
+  return `Deeds and conscience:\n${conscienceRules(
+    conscienceSetting(campaign),
+    consciousCompanions(sheets).length > 0,
+    DEED_KINDS,
+  )}`;
 }
 
 // Appended to the system prompt only when a player has sent the DM a
@@ -1159,6 +1176,10 @@ export function buildGameStateBlock(state: DmGameState): string {
   if (state.coordinationBlock) {
     moment.push(state.coordinationBlock);
   }
+  // In the moment too: a companion's rung and ultimatum move turn by turn.
+  if (state.conscienceBlock) {
+    moment.push(state.conscienceBlock);
+  }
   // In the moment, not the cached prefix: offers come and go turn by turn,
   // and a block that changes there would cost the whole prefix its cache.
   const offersBlock = renderOffersBlock(state.offers ?? []);
@@ -1678,6 +1699,7 @@ export function buildDmMessages(
   ) {
     settingsRules.push(
       relationshipRules(state.campaign.gameSettings.romance !== "off", openToAdvanceNames(state.campaign, state.sheets)),
+      tableConscienceRules(state.campaign, state.sheets),
     );
   }
   const dmSystem = buildDmSystem(state.campaign, settingsRules, state.ruleContext ?? null);

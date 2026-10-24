@@ -2552,6 +2552,18 @@ function ensureSchema(db: SqliteDatabase) {
   // What the backend served from its prompt cache and spent reasoning, where
   // it said (src/lib/usage/parse.ts); NULL when it did not.
   addColumns("usage_events", [["cached_input_tokens", `INTEGER`], ["reasoning_tokens", `INTEGER`]]);
+  // A lasting companion's conscience (issue 503 Phase 1), on the row behind
+  // it (src/lib/db/companion-conscience.ts): what it holds to, as
+  // [{value, strength, faction}] (src/lib/dm/companion-values-logic.ts); its
+  // rung on the ladder and any ultimatum (src/lib/dm/conscience-logic.ts);
+  // and, after a dismissal, the sheet it left with (#503 Phase 0.4), so a
+  // return brings back the same person. '' for every ordinary NPC. The row
+  // is snapshotted with npcs, so a rewind puts all three back.
+  addColumns("npcs", [
+    ["values_json", `TEXT NOT NULL DEFAULT ''`],
+    ["conscience_json", `TEXT NOT NULL DEFAULT ''`],
+    ["companion_snapshot_json", `TEXT NOT NULL DEFAULT ''`],
+  ]);
 }
 
 // Widens battle_tokens.kind to accept the DM's own board furniture.

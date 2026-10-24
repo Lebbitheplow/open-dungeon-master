@@ -4,6 +4,7 @@ import { insertCharacterEvent } from "@/lib/db/character-events";
 import { insertFact } from "@/lib/db/facts";
 import { getNpcByName, nearestNpcName, setNpcAttitude, standsBehindLiveCompanion, type Npc } from "@/lib/db/npcs";
 import { companionNpcFor } from "@/lib/db/companion-npcs";
+import { settleConsciences } from "@/lib/dm/conscience";
 import {
   ensureRelationship,
   getRelationship,
@@ -126,7 +127,12 @@ export function recordRelationshipEvent(campaign: Campaign, sheet: CharacterShee
   publishPersisted(campaign.id, "character_event", { event, characterName: sheet.name });
 }
 
+// Every write of standing ends here, so it is also where each lasting
+// companion's conscience is settled against the standing it now has (issue
+// 503, src/lib/dm/conscience.ts): a meter a social check sank to disliked
+// warns as surely as a deed does.
 export function publishRelationshipsUpdated(campaignId: string) {
+  settleConsciences(campaignId);
   publishEphemeral(campaignId, "relationships_updated", {});
 }
 

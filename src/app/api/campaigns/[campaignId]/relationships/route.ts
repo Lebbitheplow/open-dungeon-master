@@ -2,6 +2,8 @@ import { isErrorResponse, steersStory, requireMember } from "@/lib/campaign-api"
 import { listRelationships } from "@/lib/db/relationships";
 import { friendshipTier, TIER_LABEL } from "@/lib/dm/relationship-logic";
 import { advancesAllowed } from "@/lib/dm/advance-tick";
+import { conscienceViews } from "@/lib/dm/conscience";
+import { textKey } from "@/lib/language/text-logic";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,6 +28,9 @@ export async function GET(
   if (context.campaign.gameSettings.relationships === "off") {
     return Response.json({ enabled: false, relationships: [] });
   }
+  // Each lasting companion's conscience rung and any ultimatum (issue 503):
+  // shown to every seat, since the companion says them aloud.
+  const conscience = conscienceViews(context.campaign);
   return Response.json({
     enabled: true,
     romanceEnabled: context.campaign.gameSettings.romance !== "off",
@@ -35,6 +40,7 @@ export async function GET(
     advances: advancesAllowed(context.campaign),
     relationships: listRelationships(campaignId).map((relationship) => {
       const tier = friendshipTier(relationship.approval);
+      const ladder = relationship.subjectKind === "companion" && relationship.status === "active" ? conscience.get(textKey(relationship.subjectName)) : undefined;
       return {
         id: relationship.id,
         characterId: relationship.characterId,
@@ -49,6 +55,7 @@ export async function GET(
         // The three most recent remembered beats read as a short history.
         history: relationship.memories.slice(-3).map((memory) => memory.text),
         ...(lead ? { approval: relationship.approval } : {}),
+        ...(ladder ? { conscience: ladder } : {}),
       };
     }),
   });

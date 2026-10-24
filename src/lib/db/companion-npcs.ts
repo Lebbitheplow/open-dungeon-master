@@ -2,6 +2,8 @@ import { getDatabase, nowIso } from "@/lib/db/core";
 import { getNpcById, listNpcs, type Npc } from "@/lib/db/npcs";
 import { attractionBlank, attractionJson, type Attraction } from "@/lib/attraction";
 import { derivePersonality } from "@/lib/dm/npc-logic";
+import { defaultValues } from "@/lib/dm/companion-values-logic";
+import { departedSheet, saveDepartedSheet, seedCompanionValues, type DepartedSheet } from "@/lib/db/companion-conscience";
 import { textKey } from "@/lib/language/text-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
@@ -17,10 +19,17 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 // Guests are scene-scoped and never get one, and a creature a spell made is
 // not a person. The row is made the first time anything asks, so a companion
 // recruited before this existed gets one too.
+//
+// Issue 503 Phase 1 adds what they hold to: values seeded once from their
+// class and alignment (src/lib/dm/companion-values-logic.ts), kept on the
+// row like the axes; and Phase 0.4 the sheet they left with, written as they
+// are dismissed, so a return brings back the same person.
 
 type CompanionLike = Pick<CharacterSheet, "id" | "campaignId" | "name" | "isCompanion" | "companionKind" | "personality" | "gender"> & {
   attraction?: Attraction;
   summon?: CharacterSheet["summon"];
+  class?: string;
+  alignment?: string;
 };
 
 export function lastingCompanion(sheet: CompanionLike): boolean {
@@ -31,6 +40,14 @@ export function companionNpcFor(sheet: CompanionLike): Npc | null {
   if (!lastingCompanion(sheet)) {
     return null;
   }
+  const npc = linkedRow(sheet);
+  if (npc) {
+    seedCompanionValues(npc.id, defaultValues(sheet.class ?? "", sheet.alignment));
+  }
+  return npc;
+}
+
+function linkedRow(sheet: CompanionLike): Npc | null {
   const db = getDatabase();
   const linked = db
     .prepare(`SELECT id FROM npcs WHERE campaign_id = ? AND companion_sheet_id = ?`)
@@ -88,4 +105,45 @@ export function companionAttraction(sheet: CompanionLike, npc: Npc | null): Attr
     return sheet.attraction ?? null;
   }
   return npc && !attractionBlank(npc.attraction) ? npc.attraction : null;
+}
+
+// Written as a lasting companion is dismissed, before its sheet goes: the
+// sheet as it stood, so a return re-instantiates the same person rather than
+// building a stranger with their name.
+export function rememberDepartingSheet(sheet: CharacterSheet) {
+  const npc = companionNpcFor(sheet);
+  if (!npc) {
+    return;
+  }
+  saveDepartedSheet(npc.id, { level: sheet.level, xp: sheet.xp, sheet: { ...sheet }, at: nowIso() });
+}
+
+// A companion who left and is being written back in: the row behind them,
+// by the name the DM uses, with the sheet they left with. Null for anyone
+// else, and for a companion still in the party.
+export function departedCompanion(campaignId: string, name: string): { npc: Npc; departed: DepartedSheet } | null {
+  const key = textKey(name);
+  const live = new Set(
+    (getDatabase().prepare(`SELECT id FROM character_sheets WHERE campaign_id = ?`).all(campaignId) as Array<{ id: string }>).map(
+      (entry) => entry.id,
+    ),
+  );
+  for (const npc of listNpcs(campaignId)) {
+    if (!npc.companionSheetId || live.has(npc.companionSheetId)) {
+      continue;
+    }
+    // By the name the row is linked by, as companionNpcFor relinks it.
+    if (textKey(npc.name) !== key) {
+      continue;
+    }
+    const departed = departedSheet(npc.id);
+    if (departed) {
+      return { npc, departed };
+    }
+  }
+  return null;
+}
+
+export function forgetDepartedSheet(npcId: string) {
+  saveDepartedSheet(npcId, null);
 }

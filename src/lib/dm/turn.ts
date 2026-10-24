@@ -119,11 +119,14 @@ import { intentAnswered, intentCorrection, intentNeedsTool, type MessageIntent }
 import { handleCompleteBeat } from "@/lib/dm/arc";
 import { tickWaypointsFromCalls } from "@/lib/dm/waypoint-tick";
 import { enforceEngineBoundary } from "@/lib/dm/narration-guard";
+import { conscienceBlockForPrompt } from "@/lib/dm/conscience";
+import { noteUnrecordedDeeds } from "@/lib/dm/deed-claims";
 import {
   buildDmMessages,
   type DmGameState,
   companionRules,
   relationshipRules,
+  tableConscienceRules,
   completeBeatTool,
   movePartyTool,
   recallStoryTool,
@@ -804,6 +807,8 @@ async function openTurn(
       // (issue 239), so an accepted offer is never asked about again.
       offers: offerLinesForPrompt(campaignId, context.sheetsById),
       coordinationBlock: coordinationForPrompt(campaignId),
+      // Each lasting companion's values and conscience (issue 503).
+      conscienceBlock: conscienceBlockForPrompt(campaign, context.sheets),
   };
   const conversation = buildDmMessages(promptState, history);
   if (oocOnly) {
@@ -1034,7 +1039,8 @@ export function dmTurnTools(
     ...hazardTools,
     ...petTools,
     ...socialTools,
-    ...(inEncounter ? [] : relationshipTools(campaign)),
+    // In a fight, deeds alone (issue 503): most executions happen there.
+    ...relationshipTools(campaign, inEncounter),
     ...(inEncounter ? [] : worldTools),
     // Lifting a load, lifestyles, downtime, diseases, madness and poisons
     // (src/lib/dm/explore-tools.ts); downtime refuses itself in a fight.
@@ -1072,7 +1078,7 @@ export function dmTurnTools(
     ...(inEncounter ? [] : preparedEncounterTools(campaign)),
     castBuffTool,
     ...(inEncounter ? [] : restTools),
-    ...companionTools(campaign),
+    ...companionTools(campaign, inEncounter),
     ...(leanTools ? mutationTools.filter((tool) => keptWhenTrimmed(tool.function.name, inEncounter)) : mutationTools),
     ...(imageEnabled ? [generateImageTool] : []),
     ];
@@ -1243,7 +1249,7 @@ function handleMoreTools(campaign: Campaign, turn: DmTurn, imageEnabled: boolean
       groupGuidance(group, tracksAmmunition(campaign)),
       group === "companions" && companions !== "off" ? companionRules(campaign, companions) : "",
       group === "relationships" && campaign.gameSettings.relationships !== "off"
-        ? relationshipRules(campaign.gameSettings.romance !== "off", openToAdvanceNames(campaign, listSheets(campaign.id)))
+        ? `${relationshipRules(campaign.gameSettings.romance !== "off", openToAdvanceNames(campaign, listSheets(campaign.id)))}\n\n${tableConscienceRules(campaign, listSheets(campaign.id))}`
         : "",
     ]
       .filter(Boolean)
@@ -2123,6 +2129,9 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     // disagree. Its reads also say who speaks the narration's lines.
     const guarded = await enforceEngineBoundary(campaign, turn, sheets, partReads);
     spoken = guarded.spoken;
+    // A deed the narration showed that no relationship_beat recorded is
+    // noted for the DM (issue 503, src/lib/dm/deed-claims.ts).
+    noteUnrecordedDeeds(campaign, turn.conversation, guarded.deeds);
     // The narration told the table a player's turn is over ("It is now
     // Bram's turn") and no call ended it: it ends after the narration, as
     // the table was told, and the enemies it passes act then

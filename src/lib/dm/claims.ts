@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import { getCampaignById, type Campaign } from "@/lib/db/campaigns";
 import { aiPlaysSheet } from "@/lib/dm/companion-command";
+import { conscienceOn, consciousCompanions } from "@/lib/dm/conscience";
 import { getActiveEncounter, listEnemies, orderEntryId } from "@/lib/db/encounters";
 import { budgetApplies } from "@/lib/dm/action-budget";
 import { listCastNpcs } from "@/lib/db/npcs";
@@ -166,7 +167,7 @@ export function guardGate(
   campaign: Campaign,
   outcomes: ResolvedOutcomes,
   sheets: readonly CharacterSheet[],
-): Pick<ReaderGate, "guard" | "attacks" | "fight" | "creatures" | "numbers" | "party"> {
+): Pick<ReaderGate, "guard" | "attacks" | "fight" | "creatures" | "numbers" | "party" | "deeds"> {
   return {
     guard: campaign.gameSettings.narrationGuard,
     attacks: outcomes.attacks.size > 0,
@@ -174,6 +175,8 @@ export function guardGate(
     creatures: outcomes.creatures.size > 0,
     numbers: outcomes.numbers.size > 0 || Boolean(outcomes.liveFight),
     party: sheets.length > 0,
+    // Read in the same call as the rest, never one of its own (issue 503).
+    deeds: conscienceOn(campaign) && consciousCompanions(sheets).length > 0,
   };
 }
 

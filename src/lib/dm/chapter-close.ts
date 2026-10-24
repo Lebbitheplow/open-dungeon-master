@@ -72,6 +72,7 @@ import { trackUtilityCall } from "@/lib/dm/call-tracker";
 import { isStageEnabled } from "@/lib/dm/stages";
 import { setDmStatus } from "@/lib/dm/status";
 import { listSheets } from "@/lib/db/sheets";
+import { chapterDeedInstructions } from "@/lib/dm/deed-claims";
 import { milestoneXp } from "@/lib/srd/encounter-math";
 import { XP_THRESHOLDS } from "@/lib/srd";
 import { applyDmMutation } from "@/lib/dm/mutations";
@@ -209,7 +210,13 @@ async function writeChapterSummary(
 ): Promise<{ reply: string; parsed: ReturnType<typeof parseChapterJson> }> {
   const campaignId = campaign.id;
   const language = campaign.gameSettings.tableLanguage;
-  const system = withLanguage(CHAPTER_SYSTEM + (onFile.shown.length ? ` ${CONSOLIDATION_INSTRUCTIONS}` : ""), language);
+  // A table whose outcome check is off reads no turn's prose for deeds, so
+  // the close lists them among its facts (issue 503).
+  const deeds = chapterDeedInstructions(campaign, listSheets(campaignId));
+  const system = withLanguage(
+    CHAPTER_SYSTEM + (onFile.shown.length ? ` ${CONSOLIDATION_INSTRUCTIONS}` : "") + (deeds ? ` ${deeds}` : ""),
+    language,
+  );
   const { summary: runningRaw, coveredCount } = getCampaignSummaryState(campaignId);
   const coveredSeq = coveredCount ? (listMessagesPage(campaignId, coveredCount - 1, 1)[0]?.seq ?? 0) : 0;
   // The running summary covers this chapter's start only when its mark is

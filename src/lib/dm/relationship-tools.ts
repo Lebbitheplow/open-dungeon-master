@@ -12,9 +12,7 @@ import {
   addFlag,
   addMemory,
   applyApproval,
-  beatAlignment,
   beatDc,
-  beatDelta,
   beatOutcome,
   beatSpec,
   canAdvanceRomance,
@@ -41,6 +39,10 @@ import {
   resolveSubject,
 } from "@/lib/dm/relationship-subject";
 import { handleNpcAdvance } from "@/lib/dm/npc-advance";
+import { conscienceNotes, landBeat, settleUnrecordedDeeds, type DeedOptions, type Landing } from "@/lib/dm/beat-landing";
+import { DEED_KINDS, DEED_SEVERITIES, deedSeverity, isDeedKind, valueLabel } from "@/lib/dm/companion-values-logic";
+import { MAX_DEADLINE_HOURS } from "@/lib/dm/conscience-logic";
+import { getActiveEncounter } from "@/lib/db/encounters";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { rollExpression } from "@/lib/dice";
 import { publishWithSeq } from "@/lib/events";
@@ -88,48 +90,74 @@ export function romanceEnabled(campaign: Campaign): boolean {
   return relationshipsEnabled(campaign) && campaign.gameSettings.romance !== "off";
 }
 
-export function relationshipTools(campaign: Campaign): ToolDef[] {
+// `inEncounter`: a fight offers relationship_beat for deeds alone (issue
+// 503): most executions happen mid-fight, and the rest waits for it to end.
+export function relationshipTools(campaign: Campaign, inEncounter = false): ToolDef[] {
   if (!relationshipsEnabled(campaign)) {
     return [];
   }
-  const romance = romanceEnabled(campaign);
-  const beats = romance
-    ? RELATIONSHIP_BEAT_NAMES
-    : RELATIONSHIP_BEAT_NAMES.filter((beat) => beatSpec(beat)?.track !== "romantic");
-  const tools: ToolDef[] = [
-    {
-      type: "function",
-      function: {
-        name: "relationship_beat",
-        description:
-          "Record one moment that changed how a tracked NPC or AI companion feels about a character, moving the server's approval meter for that pair, when the relationship rules call for it. Charming overtures roll that character's real Persuasion or Performance; deeds simply count. The subject must already exist: set_npc or npc_reaction for an NPC, add_companion for a companion. Call it BEFORE narrating their reaction; narrate exactly what it reports.",
-        parameters: {
-          type: "object",
-          additionalProperties: false,
-          properties: {
-            characterId: { type: "string", description: "The character whose conduct this is: exact characterId from GAME STATE." },
-            subject: {
-              type: "string",
-              description: "Exact name of the tracked NPC or AI companion who witnessed it.",
-            },
-            beat: {
-              type: "string",
-              enum: [...beats],
-              description:
-                "What happened (which beats earn regard and which cost it: the relationship rules)." +
+  const romance = romanceEnabled(campaign) && !inEncounter;
+  const beats = inEncounter
+    ? [...DEED_KINDS]
+    : romance
+      ? RELATIONSHIP_BEAT_NAMES
+      : RELATIONSHIP_BEAT_NAMES.filter((beat) => beatSpec(beat)?.track !== "romantic");
+  const beatTool: ToolDef = {
+    type: "function",
+    function: {
+      name: "relationship_beat",
+      description: inEncounter
+        ? "Mid-fight, record a deed a tracked NPC or AI companion saw (a prisoner executed, a foe spared). Call it BEFORE narrating their reaction."
+        : "Record one moment that changed how a tracked NPC or AI companion feels about a character, moving the server's approval meter for that pair, when the relationship rules call for it. Charming overtures roll that character's real Persuasion or Performance; deeds simply count. The subject must already exist: set_npc or npc_reaction for an NPC, add_companion for a companion. Call it BEFORE narrating their reaction; narrate exactly what it reports.",
+      parameters: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          characterId: { type: "string", description: "The character whose conduct this is: exact characterId from GAME STATE." },
+          subject: {
+            type: "string",
+            description: "Exact name of the tracked NPC or AI companion who witnessed it.",
+          },
+          beat: {
+            type: "string",
+            enum: [...beats],
+            description: inEncounter
+              ? "The deed."
+              : "What happened (which beats earn regard and which cost it: the relationship rules)." +
                 (romance
                   ? " Romantic: flirt (how a courtship opens), compliment, grand_gesture, intimacy (partners only; always narrate as a fade to black)."
                   : ""),
-            },
-            note: {
-              type: "string",
-              description: "One short line on what actually happened, for the relationship's memory.",
-            },
           },
-          required: ["characterId", "subject", "beat"],
+          note: {
+            type: "string",
+            description: "One short line on what actually happened, for the relationship's memory.",
+          },
+          witnesses: { type: "array", items: { type: "string" }, description: "Deeds only: everyone else tracked who saw it, by exact name." },
+          severity: { type: "string", enum: [...DEED_SEVERITIES], description: "Deeds only. Default serious." },
+          faction: { type: "string", description: "Deeds only: the faction whose people it was done to or for." },
+          demand: {
+            type: "string",
+            description: "Deeds only: what a companion at a warning demands if this brings an ultimatum, in their words.",
+          },
+          deadlineHours: { type: "integer", minimum: 1, maximum: MAX_DEADLINE_HOURS, description: "Deeds only: hours the demand gives (24)." },
         },
+        required: ["characterId", "subject", "beat"],
       },
     },
+  };
+  // Mid-fight the leanest set that records a deed: who saw it and how
+  // grave; a demand set there takes its default.
+  if (inEncounter) {
+    const properties = beatTool.function.parameters.properties as Record<string, unknown>;
+    delete properties.faction;
+    delete properties.demand;
+    delete properties.deadlineHours;
+  }
+  if (inEncounter) {
+    return [beatTool];
+  }
+  const tools: ToolDef[] = [
+    beatTool,
     {
       type: "function",
       function: {
@@ -194,6 +222,11 @@ const beatSchema = z.object({
   subject: z.string().min(1).max(80),
   beat: z.string().min(1).max(40),
   note: z.string().max(200).optional(),
+  witnesses: z.array(z.string().trim().min(1).max(80)).max(8).optional(),
+  severity: z.enum(DEED_SEVERITIES).optional(),
+  faction: z.string().trim().max(80).optional(),
+  demand: z.string().trim().max(160).optional(),
+  deadlineHours: z.number().int().min(1).max(MAX_DEADLINE_HOURS).optional(),
 });
 
 export function handleRelationshipBeat(
@@ -224,6 +257,13 @@ export function handleRelationshipBeat(
   }
   if (spec.track === "romantic" && !romanceEnabled(campaign)) {
     return { error: "Romance is switched off for this campaign; only social beats apply.", retry: true };
+  }
+  const deedKind = isDeedKind(args.beat);
+  if (!deedKind && getActiveEncounter(campaign.id)) {
+    return {
+      error: `Mid-fight only deeds are recorded (${DEED_KINDS.join(", ")}); ${args.beat} waits until the fight is over.`,
+      retry: true,
+    };
   }
   const sheet = resolveActor(args, sheets, sheetsById);
   if (!sheet) {
@@ -288,42 +328,38 @@ export function handleRelationshipBeat(
     outcome = beatOutcome(rolled.total, dc);
   }
 
-  const alignment = beatAlignment(spec, subject.personality);
-  const delta = beatDelta(args.beat as RelationshipBeat, outcome, {
-    approval: relationship.approval,
-    repeats: relationship.beats[args.beat] ?? 0,
-    personality: subject.personality,
-    hostile: subject.hostile,
-  });
-  const approval = applyApproval(relationship.approval, delta);
-  const romance = demoteRomance(relationship.romance, approval);
-  // The beats worth remembering are the ones that changed something.
-  const memorable =
-    args.beat === "intimacy" || args.beat === "betrayal" || Math.abs(delta) >= 7;
-  const updated =
-    patchRelationship(relationship.id, {
-      approval,
-      romance,
-      beats: { ...relationship.beats, [args.beat]: (relationship.beats[args.beat] ?? 0) + 1 },
-      ...(args.beat === "intimacy" ? { flags: addFlag(relationship.flags, "intimacy") } : {}),
-      ...(memorable && args.note?.trim()
-        ? {
-            memories: addMemory(relationship.memories, {
-              kind: args.beat,
-              text: args.note.trim(),
-              at: new Date().toISOString(),
-            }),
-          }
-        : {}),
-    }) ?? relationship;
+  // A deed counts with everyone it names as a witness, each weighed by who
+  // they are (src/lib/dm/beat-landing.ts); any other beat with its subject.
+  const deed: DeedOptions | null = deedKind
+    ? {
+        severity: deedSeverity(args.beat, args.severity),
+        faction: args.faction ?? "",
+        demand: args.demand ?? "",
+        hours: args.deadlineHours,
+      }
+    : null;
+  const beat = args.beat as RelationshipBeat;
+  const landing = landBeat(campaign, turn, sheet, subject, relationship, beat, outcome, args.note, deed);
+  const others = deedKind ? landWitnesses(campaign, turn, sheet, subject, args.witnesses ?? [], sheets, beat, args.note, deed!) : null;
+  if (deedKind) {
+    settleUnrecordedDeeds(campaign.id, sheet);
+  }
   publishRelationshipsUpdated(campaign.id);
 
+  const { updated, delta, alignment } = landing;
   const tier = friendshipTier(updated.approval);
+  const notes = [
+    buildBeatNote(sheet.name, subject.name, spec.label, delta, alignment, updated, outcome),
+    ...(others?.landed.map((other) => `${other.subject.name} saw it too: ${TIER_LABEL[friendshipTier(other.updated.approval)]} toward ${sheet.name} now.`) ?? []),
+    ...conscienceNotes([landing, ...(others?.landed ?? [])]),
+    ...(others?.unknown.length ? [`Not tracked, so they keep no memory of it: ${others.unknown.join(", ")}. Register someone who matters with set_npc first.`] : []),
+  ];
   return {
     ok: true,
     character: sheet.name,
     subject: subject.name,
     beat: args.beat,
+    ...(deed ? { severity: deed.severity } : {}),
     ...(spec.skill ? { skill: spec.skill, roll: rollTotal, dc, outcome } : {}),
     approvalChange: delta,
     approval: updated.approval,
@@ -331,12 +367,76 @@ export function handleRelationshipBeat(
     ...(alignment !== 0
       ? { suitsThem: alignment > 0 ? "yes" : "no", alignment }
       : {}),
+    ...valuesResult(landing),
+    ...(landing.conscience ? { conscience: `${landing.conscience.from} -> ${landing.conscience.to}` } : {}),
     ...(updated.romance !== "none" ? { romance: updated.romance } : {}),
-    ...(romance !== relationship.romance
-      ? { romanceSlipped: `${relationship.romance} -> ${romance}` }
+    ...(updated.romance !== relationship.romance
+      ? { romanceSlipped: `${relationship.romance} -> ${updated.romance}` }
       : {}),
-    note: buildBeatNote(sheet.name, subject.name, spec.label, delta, alignment, updated, outcome),
+    ...(others?.landed.length
+      ? {
+          witnesses: others.landed.map((other) => ({
+            subject: other.subject.name,
+            approvalChange: other.delta,
+            standing: friendshipTier(other.updated.approval),
+            ...valuesResult(other),
+            ...(other.conscience ? { conscience: `${other.conscience.from} -> ${other.conscience.to}` } : {}),
+          })),
+        }
+      : {}),
+    note: notes.join(" "),
   };
+}
+
+// What a companion's values made of it, for the result: which they saw
+// honoured and which broken.
+function valuesResult(landing: Landing): Record<string, string[]> {
+  if (!landing.values || (!landing.values.honoured.length && !landing.values.broken.length)) {
+    return {};
+  }
+  return {
+    ...(landing.values.honoured.length ? { honours: landing.values.honoured.map(valueLabel) } : {}),
+    ...(landing.values.broken.length ? { breaks: landing.values.broken.map(valueLabel) } : {}),
+  };
+}
+
+// A deed's other witnesses, each landed on in turn. A name nobody tracks is
+// listed back rather than failing the deed, which has already happened.
+function landWitnesses(
+  campaign: Campaign,
+  turn: DmTurn,
+  sheet: CharacterSheet,
+  subject: { name: string },
+  names: readonly string[],
+  sheets: CharacterSheet[],
+  beat: RelationshipBeat,
+  note: string | undefined,
+  deed: DeedOptions,
+): { landed: Landing[]; unknown: string[] } {
+  const seen = new Set([textKey(sheet.name), textKey(subject.name)]);
+  const landed: Landing[] = [];
+  const unknown: string[] = [];
+  for (const name of names) {
+    if (seen.has(textKey(name))) {
+      continue;
+    }
+    seen.add(textKey(name));
+    const witness = resolveSubject(campaign, name, sheets);
+    if ("error" in witness) {
+      // Another player's character keeps their own counsel; anyone else is
+      // simply not tracked.
+      if (!sheets.some((candidate) => !candidate.isCompanion && textKey(candidate.name) === textKey(name))) {
+        unknown.push(name);
+      }
+      continue;
+    }
+    const ledger = openLedger(campaign, sheet, witness);
+    if (ledger.status === "ended") {
+      continue;
+    }
+    landed.push(landBeat(campaign, turn, sheet, witness, ledger, beat, null, note, deed));
+  }
+  return { landed, unknown };
 }
 
 function buildBeatNote(

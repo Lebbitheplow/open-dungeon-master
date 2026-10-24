@@ -180,6 +180,8 @@ export const RELATIONSHIP_BEATS = {
   shared_peril: { base: 5, axis: "boldness", axisSign: 1, track: "social", label: "came through danger with" },
   confided: { base: 5, axis: "empathy", axisSign: 1, track: "social", label: "confided in" },
   gift: { base: 5, axis: "warmth", axisSign: 1, skill: "persuasion", track: "social", label: "gave a gift to" },
+  // Making up for something done: what an ultimatum asks (issue 503).
+  amends: { base: 6, track: "social", label: "made amends to" },
   // Things that cost you.
   broke_word: { base: -9, axis: "diligence", axisSign: -1, track: "social", label: "broke their word to" },
   cruelty: { base: -10, axis: "empathy", axisSign: -1, track: "social", label: "was cruel in front of" },
@@ -191,6 +193,15 @@ export const RELATIONSHIP_BEATS = {
   ignored: { base: -4, track: "social", label: "brushed off" },
   insult: { base: -8, track: "social", label: "wounded the feelings of" },
   betrayal: { base: -25, track: "social", label: "betrayed" },
+  // Deeds a companion's conscience weighs (issue 503,
+  // src/lib/dm/companion-values-logic.ts), recorded with witnesses and a
+  // severity and offered in a fight, where most of them happen.
+  murder_helpless: { base: -15, axis: "empathy", axisSign: -1, track: "social", label: "killed someone helpless in front of" },
+  torture: { base: -12, axis: "empathy", axisSign: -1, track: "social", label: "tortured someone in front of" },
+  theft_from_poor: { base: -8, axis: "warmth", axisSign: -1, track: "social", label: "robbed people with little in front of" },
+  necromancy: { base: -6, track: "social", label: "worked necromancy in front of" },
+  desecration: { base: -6, track: "social", label: "desecrated the dead or the holy in front of" },
+  slaving: { base: -14, axis: "empathy", axisSign: -1, track: "social", label: "dealt in slaves in front of" },
   // Romance. flirt is how the romantic track opens; the rest need it open.
   flirt: { base: 4, skill: "persuasion", track: "romantic", label: "flirted with" },
   compliment: {

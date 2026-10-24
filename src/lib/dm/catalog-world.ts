@@ -2,6 +2,8 @@
 // fight and outside the party's own sheets. Names match the tool names the
 // AI DM is offered exactly.
 import { CHECK_KEY_FORM } from "@/lib/dm/catalog-roll";
+import { DEED_SEVERITIES } from "@/lib/dm/companion-values-logic";
+
 import type { CatalogEntry } from "@/lib/dm/catalog-types";
 import { cueOptions, sceneOptions } from "@/lib/ambience/catalog";
 import { RELATIONSHIP_BEAT_NAMES } from "@/lib/dm/relationship-logic";
@@ -15,6 +17,9 @@ import {
   damageTypeField,
 } from "@/lib/dm/catalog-vocab";
 import { REQUEST_ROLL_ADJUDICATION } from "@/lib/dm/catalog-roll";
+
+// The console form's words for a deed's severity (issue 503).
+const SEVERITY_LABELS: Record<(typeof DEED_SEVERITIES)[number], string> = { minor: "Minor", serious: "Serious", atrocity: "Atrocity" };
 
 const REASON = {
   name: "reason",
@@ -455,6 +460,19 @@ export const SOCIAL_ADJUDICATIONS: CatalogEntry[] = [
         options: RELATIONSHIP_BEAT_NAMES.map((beat) => ({ value: beat, label: beat.replace(/_/g, " ") })),
       },
       NOTE,
+      // A deed's (issue 503): who else saw it and how grave it was, and what
+      // a companion it pushes to an ultimatum demands.
+      { name: "witnesses", label: "Others who saw it", kind: "list", placeholder: "Brother Aldo, Seren", help: "Deeds only: every other tracked NPC or companion who saw it, comma separated." },
+      {
+        name: "severity",
+        label: "How grave",
+        kind: "select",
+        help: "Deeds only. Serious when left unset.",
+        options: DEED_SEVERITIES.map((severity) => ({ value: severity, label: SEVERITY_LABELS[severity] })),
+      },
+      { name: "faction", label: "Done to a faction", kind: "text", help: "Deeds only: the faction whose people it was done to, if any." },
+      { name: "demand", label: "Ultimatum demand", kind: "text", help: "Deeds only: what a companion at a warning demands if this pushes them to an ultimatum." },
+      { name: "deadlineHours", label: "Ultimatum hours", kind: "number", min: 1, max: 168, help: "Deeds only: hours on the clock the demand gives. 24 when left empty." },
     ],
   },
   {

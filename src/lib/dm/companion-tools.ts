@@ -39,7 +39,8 @@ import { queueCompanionPortrait } from "@/lib/portrait";
 import { settingClassIds } from "@/lib/classes";
 import { TOLD_GENDER_HELP, TOLD_GENDERS, toldGender } from "@/lib/gender";
 import { attractionFromTold, TOLD_ATTRACTION } from "@/lib/attraction";
-import { companionNpcFor } from "@/lib/db/companion-npcs";
+import { companionNpcFor, rememberDepartingSheet } from "@/lib/db/companion-npcs";
+import { returningCompanion, settleReturn } from "@/lib/dm/companion-return";
 import { presetFor, packFor } from "@/lib/worlds/preset";
 import { packIds } from "@/lib/worlds/reskin-logic";
 import {
@@ -58,6 +59,8 @@ import {
 import { toolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
 import { unknownSheetRef } from "@/lib/dm/rolls";
+import { ALIGNMENT_CODES, VALUES_PARAMETER, valuesArgSchema } from "@/lib/dm/companion-values-logic";
+import { setCompanionValues } from "@/lib/db/companion-conscience";
 
 // AI companion party members: sheets the DM recruits, plays, and dismisses.
 // A companion is a full character sheet owned by an unloginable bot user,
@@ -124,7 +127,23 @@ export function packClassIds(settings: Campaign["gameSettings"]): string[] {
   return packIds(packFor(settings), "classes").filter((id) => findClass(id));
 }
 
-export function companionTools(campaign: Campaign): ToolDef[] {
+export function companionTools(campaign: Campaign, inEncounter = false): ToolDef[] {
+  const tools = companionToolDefs(campaign);
+  // What a party member holds to is settled out of a fight: an ally who
+  // joins mid-fight takes their class's, and the fight's tool set stays lean.
+  if (inEncounter) {
+    for (const tool of tools) {
+      const properties = tool.function.parameters.properties as Record<string, unknown> | undefined;
+      if (tool.function.name === "add_companion" && properties) {
+        delete properties.alignment;
+        delete properties.values;
+      }
+    }
+  }
+  return tools;
+}
+
+function companionToolDefs(campaign: Campaign): ToolDef[] {
   const mode = companionMode(campaign);
   if (mode === "off") {
     return [];
@@ -185,6 +204,13 @@ export function companionTools(campaign: Campaign): ToolDef[] {
               items: { type: "string" },
               description: "Casters only: the spells they know (level-appropriate).",
             },
+            // What a party member holds to (issue 503).
+            alignment: {
+              type: "string",
+              enum: [...ALIGNMENT_CODES],
+              description: "When the story has shown it: with their class, sets what a party member holds to.",
+            },
+            values: VALUES_PARAMETER,
           },
           required: ["name", "class", "gender", "personality", "kind"],
         },
@@ -221,6 +247,8 @@ const addArgsSchema = z.object({
   personality: z.string().trim().min(1).max(500),
   kind: z.enum(["party", "guest"]).default("guest"),
   spells: z.array(z.string().trim().min(1).max(60)).max(12).optional(),
+  alignment: z.enum(ALIGNMENT_CODES).optional(),
+  values: valuesArgSchema.optional(),
 });
 
 const dismissArgsSchema = z.object({
@@ -229,6 +257,12 @@ const dismissArgsSchema = z.object({
 });
 
 const STANDARD_ARRAY = [15, 14, 13, 12, 10, 8];
+
+// The average level of the real players' characters, or 1 with none.
+function partyAverageLevel(sheets: CharacterSheet[]): number {
+  const levels = sheets.filter((sheet) => !sheet.isCompanion).map((sheet) => sheet.level);
+  return levels.length ? Math.max(1, Math.min(20, Math.round(levels.reduce((sum, level) => sum + level, 0) / levels.length))) : 1;
+}
 function slugify(value: string): string {
   return value.trim().toLowerCase().replace(/[\s-]+/g, "_");
 }
@@ -285,6 +319,24 @@ export function handleAddCompanion(
     };
   }
 
+  // A party companion who left is the same person coming back: the sheet
+  // they left with, at the table's level now (#503 Phase 0.4).
+  if (kind === "party") {
+    const back = returningCompanion(campaign, args.name, args.level ?? partyAverageLevel(sheets));
+    if (back) {
+      const { sheet, hadEncounter } = finalizeNewCompanion(campaign, back.level, back.input, kind, args.personality);
+      settleReturn(back);
+      return {
+        ok: true,
+        characterId: sheet.id,
+        name: sheet.name,
+        returned: true,
+        summary: `${sheet.name} returns: the same ${sheet.class} they were when they left, now level ${sheet.level}. HP ${sheet.maxHp}, AC ${sheet.ac}.`,
+        note: `They are back with the sheet they left with${back.leftAtLevel !== back.level ? `, brought from level ${back.leftAtLevel} to ${back.level}` : ""}, and every bond with them picks up where it stopped. ${hadEncounter ? "They have an initiative slot and a map token. " : ""}Narrate their return in their own voice.`,
+      };
+    }
+  }
+
   const preset = presetFor(campaign.gameSettings);
   const klass = resolveClass(args.class);
   if (!klass) {
@@ -328,11 +380,7 @@ export function handleAddCompanion(
   }
 
   // Level matches the party (average of the real players' characters).
-  const partyLevels = sheets.filter((sheet) => !sheet.isCompanion).map((sheet) => sheet.level);
-  const averageLevel = partyLevels.length
-    ? Math.round(partyLevels.reduce((sum, level) => sum + level, 0) / partyLevels.length)
-    : 1;
-  const level = Math.max(1, Math.min(20, args.level ?? averageLevel));
+  const level = Math.max(1, Math.min(20, args.level ?? partyAverageLevel(sheets)));
 
   // Standard array by class priority, then racial ASI.
   const priority = abilityPriority(klass);
@@ -367,7 +415,8 @@ export function handleAddCompanion(
     race: chosenRace.id,
     class: klass.id,
     background: "",
-    alignment: "",
+    // What they hold to starts from it (src/lib/dm/companion-values-logic.ts).
+    alignment: args.alignment ?? "",
     gender: toldGender(args.gender) ?? "",
     attraction: attractionFromTold(args.drawnTo) ?? { genders: [], note: "" },
     abilities,
@@ -408,6 +457,11 @@ export function handleAddCompanion(
   const input = legal.sheet;
 
   const { sheet, hadEncounter } = finalizeNewCompanion(campaign, level, input, kind, args.personality);
+  // What the DM says they hold to replaces what class and alignment gave.
+  const row = kind === "party" && args.values ? companionNpcFor(sheet) : null;
+  if (row && args.values) {
+    setCompanionValues(row.id, args.values);
+  }
 
   return {
     ok: true,
@@ -590,7 +644,10 @@ function removeCompanion(campaign: Campaign, sheet: CharacterSheet, reason?: str
   });
   // Their sheet goes, but what the party felt for them does not: a bond with
   // a departing companion is parted, not ended, so it comes back whole if
-  // the story brings them back (src/lib/db/relationships.ts).
+  // the story brings them back (src/lib/db/relationships.ts). Nor does who
+  // they were: a lasting companion's sheet is kept on the row behind them
+  // (#503 Phase 0.4), so a return is the same person.
+  rememberDepartingSheet(sheet);
   partRelationshipsWithSubject(campaign.id, sheet.name);
   publishPersisted(campaign.id, "sheet_deleted", { sheetId: sheet.id, userId: sheet.userId });
   // The bot user owns nothing but this sheet; the FK cascade removes it.

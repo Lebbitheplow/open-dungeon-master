@@ -3,6 +3,7 @@
 // offered exactly, because both callers reach the same engine
 // (src/lib/dm/invoke.ts).
 import type { CatalogEntry, CatalogField } from "@/lib/dm/catalog-types";
+import { ALIGNMENT_CODES } from "@/lib/dm/companion-values-logic";
 import { ITEM_TAGS } from "@/lib/schemas/item-tags";
 import { UPDATE_SHEET_FIELDS } from "@/lib/dm/update-sheet-args";
 import { DRACONIC_ANCESTRIES } from "@/lib/srd/racial-grants";
@@ -54,6 +55,20 @@ const ITEM_SPELL_FIELD: CatalogField = {
   placeholder: "Fireball",
   help: "A spell scroll only, tagged scroll: the spell reading it casts, by its name in the spell lists, whatever the scroll is called.",
 };
+
+// The builder's alignment codes, named (usePickerGroups.ts ALIGNMENTS).
+const ALIGNMENT_WORDS: Record<(typeof ALIGNMENT_CODES)[number], string> = {
+  LG: "Lawful good",
+  NG: "Neutral good",
+  CG: "Chaotic good",
+  LN: "Lawful neutral",
+  N: "Neutral",
+  CN: "Chaotic neutral",
+  LE: "Lawful evil",
+  NE: "Neutral evil",
+  CE: "Chaotic evil",
+};
+const ALIGNMENT_OPTIONS = ALIGNMENT_CODES.map((code) => ({ value: code, label: ALIGNMENT_WORDS[code] }));
 
 export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
   // One form for damage no attack resolves, whoever takes it (issue #471):
@@ -586,6 +601,13 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
       ] },
       { name: "personality", label: "Personality", kind: "text", required: true },
       { name: "spells", label: "Spells they know", kind: "list", placeholder: "Cure Wounds, Bless", help: "For a caster, comma separated; the server keeps what their level allows." },
+      {
+        name: "alignment",
+        label: "Alignment",
+        kind: "select",
+        help: "With their class it sets what a party member holds to (issue 503).",
+        options: ALIGNMENT_OPTIONS,
+      },
     ],
   },
   {

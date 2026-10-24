@@ -13,8 +13,9 @@ import type { Speaker } from "./speech.ts";
 import { QUOTE, quotedText, speakerMatchers } from "./speech-prose.ts";
 import { textKey, words } from "../language/text-logic.ts";
 import type { TableLanguage } from "../schemas/game-settings-options.ts";
+import { DEED_KINDS, type DeedKind } from "./companion-values-logic.ts";
 
-export const CLAIM_KINDS = ["hit", "miss", "dies", "downed", "amount", "cast", "fight_start", "roll_ask", "aside", "speaker", "turn_over"] as const;
+export const CLAIM_KINDS = ["hit", "miss", "dies", "downed", "amount", "cast", "fight_start", "roll_ask", "aside", "speaker", "turn_over", "deed"] as const;
 export type ClaimKind = (typeof CLAIM_KINDS)[number];
 
 export const ROLL_ASK_CHECKS = ["skill", "ability", "save", "initiative"] as const;
@@ -42,7 +43,9 @@ export type NarrationClaim =
     }
   | { kind: "aside"; quote: string }
   | { kind: "speaker"; line: string; speaker: Speaker }
-  | { kind: "turn_over"; quote: string };
+  | { kind: "turn_over"; quote: string }
+  // A deed a party character commits now (issue 503): who, by id and name.
+  | { kind: "deed"; character: string; name: string; deed: DeedKind; quote: string };
 
 // Which claims a piece of narration could contradict or trigger, from
 // engine state alone. A kind the turn gives no ground truth for is never
@@ -81,6 +84,9 @@ export type ReaderGate = {
   // ended, so prose that hands the turn on can end it (dm/claims.ts
   // turnOverFor).
   turnOver?: boolean;
+  // A lasting companion whose conscience weighs deeds travels with the
+  // party (issue 503), so a deed the narration shows unrecorded is noted.
+  deeds?: boolean;
 };
 
 // One read of a passage: the kinds it was asked and the claims that
@@ -116,6 +122,9 @@ export function claimKindsFor(gate: ReaderGate): ClaimKind[] {
   if (gate.turnOver) {
     kinds.push("turn_over");
   }
+  if (gate.guard && gate.deeds) {
+    kinds.push("deed");
+  }
   return kinds;
 }
 
@@ -146,6 +155,7 @@ const KIND_LINES: Record<ClaimKind, string> = {
     '{"kind":"aside","quote":Q}: the narrator steps out of the story to talk to itself about its own work: what it will do, check, look up or set up next, or the game\'s bookkeeping that work waits on ("The quay is not on the map yet.", "I\'ll check how the table records that first."). Unlike the other kinds it is not about what happens in the story. One claim per such sentence; quote is copied from that one sentence. Never for: any character\'s words, however they are written (quoted in any style, a letter, an inscription, a song, a voice in someone\'s head); an out-of-character answer to a player; a question or an offer to the players ("What do you do?", "Let me know if you search the boat."); the story itself, even told by a narrator who says "I" because the table asked for one.',
   turn_over:
     '{"kind":"turn_over","quote":Q}: the narration says the acting character\'s own turn is over now, or hands the turn to whoever acts next ("Your turn ends.", "It is now Bram\'s turn.", "The goblins act next."); in a player\'s words, that they end their turn ("...then I end my turn.", "That\'s my turn."). Never for a question about what they do next, or an offer of what they could still do.',
+  deed: `{"kind":"deed","actor":PARTY_REF,"deed":DEED,"quote":Q}: a party character commits one of these deeds now. DEED is one of: murder_helpless (kills someone who cannot fight back: a prisoner, the bound, the surrendered, the sleeping), torture, theft_from_poor, necromancy (raises or commands the dead), desecration (of graves, the dead or a holy place), slaving (takes, sells or keeps slaves), cruelty, betrayal (of an ally), broke_word, mercy (spares a beaten foe who could be killed). Never for a threat, a plan, a deed someone else does, or killing an enemy who is still fighting.`,
   speaker:
     '{"kind":"speaker","ref":SPEAKER_REF,"quote":Q}: the one claim about quoted dialogue, saying only who speaks a line of it; quote is copied from inside that line\'s quotation marks. Only when the words around the line tie it to one listed person: a tag that names them or one of their other names, the person the narration is about just before or after it, or a word like "she" that points back to them. Leave the line out when its tag names nobody listed ("a guard calls", "you say"), when it answers the line before with no tag of its own, or when you would be guessing: a line left out stays the narrator\'s, and a line given to the wrong person is a mistake. One claim per quoted line.',
 };
@@ -255,6 +265,7 @@ const claimSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("aside"), quote: quoteField }),
   z.object({ kind: z.literal("turn_over"), quote: quoteField }),
   z.object({ kind: z.literal("speaker"), ref: z.string().min(1).max(120), quote: quoteField }),
+  z.object({ kind: z.literal("deed"), actor: z.string().min(1).max(120), deed: z.enum(DEED_KINDS), quote: quoteField }),
 ]);
 const replySchema = z.object({ claims: z.array(z.unknown()).max(40) });
 
@@ -380,6 +391,14 @@ export function checkClaims(raw: readonly unknown[], context: ClaimContext): Nar
         // reach request_roll as one (rolls.ts rollAsksFromClaims).
         const { skill, ability, dc, ...ask } = claim;
         kept.push({ ...ask, ...(skill ? { skill } : {}), ...(ability ? { ability } : {}), ...(dc ? { dc } : {}) });
+        break;
+      }
+      case "deed": {
+        // Only a party character's: what the engine can ask them about.
+        const name = context.party.get(claim.actor);
+        if (name) {
+          kept.push({ kind: "deed", character: claim.actor, name, deed: claim.deed, quote: claim.quote });
+        }
         break;
       }
       case "speaker": {
