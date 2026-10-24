@@ -3,6 +3,7 @@
 // type and met by the creature's resistances before applyEnemyDamage lands
 // it. Split from enemy-damage.ts, which re-exports it.
 
+import { resolveTargetFoe } from "@/lib/dm/sheet-foe";
 import { getCampaignById, type Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
 import { listSheets } from "@/lib/db/sheets";
@@ -12,7 +13,7 @@ import { healthState } from "@/lib/bestiary/health";
 import { damageAdjust, resistsAllDamage } from "@/lib/dm/condition-logic";
 import type { WeaponMaterial } from "@/lib/dm/damage-logic";
 import { damageParts, type TypedRider } from "@/lib/dm/damage-parts";
-import { applyEnemyDamage, resolveEnemyRef } from "@/lib/dm/enemy-damage";
+import { applyEnemyDamage } from "@/lib/dm/enemy-damage";
 import { resistLineFor } from "@/lib/dm/underwater";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
@@ -121,7 +122,7 @@ export function autoApplyDamageRoll(
   if (!encounter) {
     return { warning: "No active encounter; this damage was not applied to anyone." };
   }
-  const enemy = resolveEnemyRef(encounter.id, targetEnemyRef);
+  const enemy = resolveTargetFoe(encounter.campaignId, encounter, targetEnemyRef);
   if (!enemy || enemy.status !== "alive") {
     return {
       warning: `targetEnemyId "${targetEnemyRef}" matched no living enemy; the damage was NOT applied. Call apply_damage with an exact enemyId from GAME STATE.`,

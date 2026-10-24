@@ -21,17 +21,21 @@ import {
   CAMPAIGN_LENGTH_LABELS,
   CAMPAIGN_LENGTHS,
   COMPANION_LABELS,
+  CONSCIENCE_HINTS,
+  CONSCIENCE_LABELS,
+  CONSCIENCE_SETTINGS,
   HP_METHODS,
   STARTING_WEALTH,
   TABLE_LANGUAGE_HELP,
   TABLE_LANGUAGE_LABELS,
   TABLE_LANGUAGES,
   type CampaignLengthSetting,
+  type ConscienceSetting,
   type DicePolicy,
   type Genre,
   type TableLanguage,
 } from "@/lib/schemas/game-settings-options";
-import { alliesShown } from "@/app/campaigns/[campaignId]/table-settings-groups";
+import { alliesShown, conscienceShown } from "@/app/campaigns/[campaignId]/table-settings-groups";
 import { NarrationStyleRows } from "@/app/campaigns/[campaignId]/NarrationStyleRows";
 
 // The bodies of the table settings' named groups (table-settings-groups.ts
@@ -512,8 +516,17 @@ export function MemoryGroup({ settings, patch }: Base) {
   );
 }
 
-export function BondsGroup({ settings, patch }: Base) {
+// What Companion conscience does, for its row's info button and the
+// creator-free settings it lives in (issue 503).
+export const CONSCIENCE_INFO = [
+  "Each lasting AI companion holds a few values from its class and alignment, some of them red lines it will not see crossed.",
+  "Deeds the party commits in front of them move a ladder the server keeps: content, uneasy, warning, ultimatum, breaking point. Their Bonds row shows where they stand and any ultimatum they set, with the time left on the campaign's clock. Making amends, or doing what they hold dear, climbs it back.",
+  "Off: companions judge by standing alone. Talk: they object, warn and set ultimatums, and stay whatever happens. Leave (the default): past their breaking point they walk out, slip away or report the party. Turn: as Leave, and they may turn on the party in a fight; a player's command over a companion ends once it warns the party.",
+].join("\n\n");
+
+export function BondsGroup({ settings, patch, lastingCompanions = false }: Base & { lastingCompanions?: boolean }) {
   return (
+    <>
     <div className="flex flex-wrap items-center gap-2">
       <span className="pk-rowlabel">Bonds</span>
       <Tooltip content="How each NPC and AI companion feels about each character, tracked by the server on one meter from hostile through neutral to devoted. Deeds move it, and the same deed lands differently on different people: mercy wins over a kind healer and irritates a hard-bitten mercenary. Standing shows in the Bonds tab and colors how the DM plays them.">
@@ -522,7 +535,7 @@ export function BondsGroup({ settings, patch }: Base) {
         </SettingToggle>
       </Tooltip>
       {settings.relationships !== "off" ? (
-        <Tooltip content="The romance ladder on top of the bond meter: interested, courting, together, betrothed, married. Nobody can be romanced who does not already like the character, players always make the first move, and intimate scenes always fade to black.">
+        <Tooltip content="The romance ladder on top of the bond meter: interested, courting, together, betrothed, married. Nobody can be romanced who does not already like the character, nobody is courted who did not ask to be, and intimate scenes always fade to black.">
           <SettingToggle on={settings.romance !== "off"} onToggle={() => patch({ romance: settings.romance === "off" ? "on" : "off" })}>
             Romance {settings.romance !== "off" ? "on" : "off"}
           </SettingToggle>
@@ -536,6 +549,30 @@ export function BondsGroup({ settings, patch }: Base) {
             : "Standing is tracked per character; romance is off."}
       </span>
     </div>
+    {/* Only where it can matter: bonds on and a lasting companion possible
+        at this table (AGENTS.md settings rule 4). */}
+    {conscienceShown(settings, lastingCompanions) ? (
+      <div data-settings-row="conscience" className="reveal flex flex-wrap items-center gap-2">
+        <span className="pk-rowlabel">Conscience</span>
+        <Tooltip content="How far a lasting AI companion goes when the party's deeds break what it holds to.">
+          <span className="inline-flex min-w-0 max-w-full">
+            <Select<ConscienceSetting>
+              size="sm"
+              label="Companion conscience"
+              value={settings.companionConscience ?? "leave"}
+              onChange={(companionConscience) => patch({ companionConscience })}
+              options={CONSCIENCE_SETTINGS.map((setting) => ({ value: setting, label: CONSCIENCE_LABELS[setting] }))}
+              className={selectClass}
+            />
+          </span>
+        </Tooltip>
+        <InfoButton label="What does Companion conscience do?" text={CONSCIENCE_INFO} />
+        <span key={settings.companionConscience ?? "leave"} className="live-in text-stone-500">
+          {CONSCIENCE_HINTS[settings.companionConscience ?? "leave"]}
+        </span>
+      </div>
+    ) : null}
+    </>
   );
 }
 

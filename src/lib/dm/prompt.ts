@@ -1,3 +1,6 @@
+import { advanceRulesLine, openToAdvanceNames } from "@/lib/dm/advance-logic";
+import { STORYTELLER_SECRET } from "@/lib/dm/viewer";
+import { attractionWords } from "@/lib/attraction";
 import { READIED, READIED_WORDS, RELEASE_TOOLS, readiedHeld } from "@/lib/dm/readied-kinds";
 import type { Campaign } from "@/lib/db/campaigns";
 import { sceneIds } from "@/lib/ambience/catalog";
@@ -38,6 +41,10 @@ import { renderWorldArcsForPrompt } from "@/lib/dm/world-arc-logic";
 import { renderFactsForPrompt, type FactLike } from "@/lib/dm/fact-logic";
 import { MOMENT_INSTRUCTION, splitAtMoment, THIS_MOMENT_HEADING, THIS_TURN_HEADING } from "@/lib/prompt-boundary";
 import { companionMode } from "@/lib/dm/companion-tools";
+import { conscienceSetting, consciousCompanions, souredLeaving } from "@/lib/dm/conscience";
+import type { SouredLeaving } from "@/lib/dm/relationship-logic";
+import { conscienceRules } from "@/lib/dm/conscience-logic";
+import { DEED_KINDS } from "@/lib/dm/companion-values-logic";
 import { commanderOf } from "@/lib/dm/companion-command";
 import { breakDown, describeInstant, isDark, normalizeClock } from "@/lib/dm/calendar";
 import { describeWeather } from "@/lib/srd/weather";
@@ -193,6 +200,9 @@ export type DmEncounterState = {
     vulnerable: string;
     concentration: string | null;
   }>;
+  // Combatants fighting on the side their kind does not (issue 503): a
+  // character turned against the party, a creature the party dominates.
+  sides?: Array<{ id: string; name: string; kind: "sheet" | "enemy"; side: "party" | "foe" }>;
   // Serialized tactical grid with every token's position; null when the
   // encounter has no battle map.
   map: string | null;
@@ -269,12 +279,26 @@ export type DmGameState = {
     aliases?: string[];
     witnessNote?: string;
     statBlock?: string;
+    // Their gender, and at a romance table who they are drawn to.
+    identity?: string;
     // From the table's WorldForge: hidden truth, ties, secrets kept.
     world?: string;
   }>;
   // Server-tracked standing between each character and each NPC/companion,
   // one bounded line each (src/lib/dm/relationship-logic.ts).
   relationships?: string[];
+  // The storyteller's own secrets, one formatted line each: who is open to
+  // advances, an NPC ready to make a move, an NPC's act and its motive
+  // (src/lib/dm/scheme-tools.ts storytellerLinesForPrompt). Rendered as one
+  // section, kept on storytellerBlock, and costed as its own context-trace
+  // row tagged STORYTELLER_SECRET (src/lib/dm/viewer.ts), which the Context
+  // tab leaves out for the lead. #503's stored intents (src/lib/dm/departure.ts
+  // intentLinesForPrompt) are here; its pacts will be.
+  storytellerLines?: string[];
+  storytellerBlock?: string;
+  // A prompt whose answer goes to the whole table (an out-of-character
+  // answer): built without the storyteller's secrets.
+  withholdStorytellerSecrets?: boolean;
   // Private one-way notes the DM already sent via send_whisper, so it
   // remembers its own secrets across turns.
   recentWhispers?: Array<{ to: string; content: string }>;
@@ -331,6 +355,10 @@ export type DmGameState = {
   // The newest lines, for which tracked NPCs the roster lists first when it
   // cannot list them all (src/lib/dm/npc-rank-logic.ts).
   npcMomentText?: string;
+  // Each lasting companion's values, conscience rung and any ultimatum
+  // (issue 503, src/lib/dm/conscience.ts), in the moment: rungs move turn
+  // to turn.
+  conscienceBlock?: string;
   // The newest player line, for the arc render's scene cues (issue #301):
   // what the party just said it is doing names the event it is walking
   // toward before the location changes.
@@ -394,23 +422,43 @@ ${setting}
 // Appended to the system prompt when the table has relationship tracking on.
 // Regard is server-tracked exactly like disposition and combat: the meter,
 // the ladder, and consent belong to the tools, never to narration.
-export function relationshipRules(romance: boolean): string {
+// `openNames`: the player characters whose players opened them to advances
+// from NPCs (issue 501); the one exception to the player leading.
+// `leaving`: who removes a companion who cannot stand the party (issue 503,
+// src/lib/dm/conscience.ts souredLeaving).
+export function relationshipRules(romance: boolean, openNames: readonly string[] = [], leaving: SouredLeaving = "dm"): string {
   return `Relationships (how people actually feel about each character):
 - Every tracked NPC and AI companion carries a server-owned approval meter toward EACH character, running hostile, disliked, wary, neutral, cordial, friendly, close, devoted. It persists across sessions and appears in GAME STATE. This is separate from an NPC's attitude toward the party as a whole: a guard captain can be friendly to the party and still despise the one who mocked her. Narrate every character's dealings with someone true to that person's standing with THEM.
 - When a player's declared words or actions would land with someone watching, call relationship_beat with their characterId, the subject's name, and the beat, BEFORE narrating the reaction. Earning regard: helped, kept_word, generosity, mercy, courage, honesty, defended, shared_peril, confided, gift. Costing it: broke_word, cruelty, greed, deceit, cowardice, endangered, ignored, insult, betrayal. Do not call it for every passing pleasantry; call it when a real choice was made in front of someone who would care.
-- The same deed does NOT land the same on everyone. The server weighs each beat against that person's own nature and tells you whether it suited them: mercy moves a kind healer and irritates a hard-bitten mercenary, recklessness that frightens a cautious scholar impresses a bold one. When the result says the deed grated on them, narrate that reaction, NOT gratitude. This is the heart of playing these people well.
+- The same deed does NOT land the same on everyone. The server weighs each beat against that person's own nature (every tracked NPC and lasting companion has one) and tells you whether it suited them: mercy moves a kind healer and irritates a hard-bitten mercenary, recklessness that frightens a cautious scholar impresses a bold one. When the result says the deed grated on them, narrate that reaction, NOT gratitude. This is the heart of playing these people well.
 - Charming overtures (gift${romance ? ", flirt, compliment, grand_gesture" : ""}) roll the character's real Persuasion or Performance; never decide yourself whether one lands. Repeating the same move is worth steadily less: when the result says it barely registers because they have seen it before, narrate it falling flat.
-- When someone's standing sinks to disliked or hostile, play it. They argue, refuse favors, withhold help, and say so. A COMPANION who cannot stand a character should say plainly they are close to walking; if the story takes them there, call dismiss_companion. Never keep narrating a warm companion whose meter says otherwise.
+- When someone's standing sinks to disliked or hostile, play it. They argue, refuse favors, withhold help, and say so. ${
+    leaving === "dm"
+      ? "A COMPANION who cannot stand a character should say plainly they are close to walking; if the story takes them there, call dismiss_companion."
+      : leaving === "stays"
+        ? "A COMPANION who cannot stand a character says so plainly and stays: this table keeps its companions, so never dismiss_companion one over standing."
+        : "A COMPANION who cannot stand a character says so plainly; whether they leave is the server's, so never dismiss_companion one over standing or deeds."
+  } Never keep narrating a warm companion whose meter says otherwise.
 - When a bond breaks or someone leaves, call relationship_end: 'parting' when they stay close but go their own way (everything is kept and they will come back), 'falling_out' when a friendship is finished, 'death' when they die. Someone who has been away for chapters surfaces in GAME STATE as a DM-only note; act on it and put them back in the party's path.${
     romance
       ? `
 - Romance sits on TOP of that meter and never replaces it. Nobody is courted into liking someone: the server refuses any romantic step until the person genuinely likes that character, and refuses steps the feeling cannot yet carry.
 - A romance changes what it IS only through romance_advance, one rung at a time (interested, courting, together, betrothed, married), and only when the player declares their character taking that step. The server decides whether the other person accepts. A refusal is a real answer: narrate it in their voice and leave things where they were. Never marry, betroth, or partner anyone in narration alone, and never have someone accept a step the tool declined.
-- The player always leads. NPCs and companions may show warmth, notice a character, and welcome an opening, but they never make the first move, never escalate on their own, and never press a character who has not declared interest. If a player shows no interest, they let it go entirely.
+- The player always leads. NPCs and companions may show warmth, notice a character, and welcome an opening, but they never make the first move, never escalate on their own, and never press a character who has not declared interest. If a player shows no interest, they let it go entirely.${openNames.length ? `\n${advanceRulesLine(openNames)}` : ""}
 - Everyone in a romance is an adult and every step is willingly taken. Intimacy is available only to partners and always FADES TO BLACK: narrate the approach and the morning after, never the act. No explicit sexual content, ever, however the table asks.
 - Romance is not the story's centre of gravity. Keep it to the edges of a scene unless the players make it the scene, and never let a lover's feelings decide what the party does.`
       : ""
   }`;
+}
+
+// How deeds are recorded and, with a lasting companion along, how its
+// conscience is played (issue 503, src/lib/dm/conscience-logic.ts).
+export function tableConscienceRules(campaign: Campaign, sheets: readonly CharacterSheet[]): string {
+  return `Deeds and conscience:\n${conscienceRules(
+    conscienceSetting(campaign),
+    consciousCompanions(sheets).length > 0,
+    DEED_KINDS,
+  )}`;
 }
 
 // Appended to the system prompt only when a player has sent the DM a
@@ -477,7 +525,9 @@ export function describeSheet(
   // The table owner's id, for the feats they brewed themselves.
   // `compact` is a call packed for a small window (tool-profiles.ts): the
   // backstory keeps its start there, and says it was cut.
-  options: { encumbrance?: boolean; ownerUserId?: string; authors?: string[]; compact?: boolean } = {},
+  // `romance`: the table plays romance, so who they are drawn to rides, and
+  // `advances`: the safety tools allow NPC advances, so the opt-in does.
+  options: { encumbrance?: boolean; ownerUserId?: string; authors?: string[]; compact?: boolean; romance?: boolean; advances?: boolean } = {},
 ): string {
   const derived = computeSheetDerived(sheet);
   // A workshop or pack subclass's features carry their own text.
@@ -715,6 +765,17 @@ export function describeSheet(
   if (sheet.background || sheet.alignment) {
     lines.push(`  Background: ${sheet.background || "unknown"} | Alignment: ${sheet.alignment || "unstated"}`);
   }
+  // Who they are (issue 501): the gender always, and at a romance table who
+  // they are drawn to and whether their player opened them to advances.
+  const drawn = options.romance ? attractionWords(sheet.attraction) : "";
+  const identity = [
+    sheet.gender ? `Gender: ${sheet.gender}` : "",
+    drawn ? `Drawn to: ${drawn}` : "",
+    options.advances && !sheet.isCompanion && sheet.openToAdvances ? "Open to advances from NPCs" : "",
+  ].filter(Boolean);
+  if (identity.length) {
+    lines.push(`  ${identity.join(" | ")}`);
+  }
   if (sheet.backstory) {
     // Whole: the builder promises the DM weaves it in, and a god, a rival or
     // a lost sibling sits as often in its last lines as its first (issue
@@ -759,6 +820,10 @@ export function buildGameStateBlock(state: DmGameState): string {
   const { campaign, members, sheets, recentRolls, storySummary } = state;
   const usernamesById = new Map(members.map((member) => [member.userId, member.username]));
   const physicalDiceUsers = realDiceUserIds(campaign, members);
+  // Who people are drawn to rides at a romance table (issue 501). Who is
+  // open to advances is a storyteller secret, said in that section. Optional
+  // all the way down: test doubles build partial campaigns.
+  const romanceOn = campaign.gameSettings?.relationships !== "off" && campaign.gameSettings?.romance !== "off";
 
   const rollLines = recentRolls.slice(-5).map((roll) => {
     const sheet = sheets.find((entry) => entry.id === roll.characterId);
@@ -1004,6 +1069,17 @@ export function buildGameStateBlock(state: DmGameState): string {
       }
       lines.push(parts.join(" | "));
     }
+    if (encounter.sides?.length) {
+      lines.push(
+        `Sides (the server's, from the fight's events; never decide them yourself): ${encounter.sides
+          .map((entry) =>
+            entry.kind === "sheet"
+              ? `${entry.name} [characterId=${entry.id}] fights AGAINST the party: you play their turns from their own sheet (pc_attack, cast_at_enemy at the party, cast_at_player with casterEnemyId=${entry.id}), and the party strikes them with pc_attack or cast_at_enemy, targetEnemyId=${entry.id} (a buff spell such as Polymorph takes their save)`
+              : `${entry.name} [enemyId=${entry.id}] fights FOR the party while it is dominated: its enemy_attack takes a foe's enemyId as targetCharacterId and a foe's takes ${entry.id}, the party's buffs reach it (cast_buff targetCharacterIds), and declare_intent's target is its standing order`,
+          )
+          .join("; ")}.`,
+      );
+    }
     if (encounter.map) {
       lines.push(encounter.map);
     }
@@ -1093,7 +1169,7 @@ export function buildGameStateBlock(state: DmGameState): string {
         .slice(0, NPC_PROMPT_MAX)
         .map(
           (npc) =>
-            `- ${npc.name}: ${npc.attitude}${npc.location ? `, at ${npc.location}` : ""}${npc.trait ? ` (${npc.trait.slice(0, 120)})` : ""}${npc.aliases?.length ? ` [also called: ${npc.aliases.slice(0, 4).join(", ")}]` : ""}${npc.witnessNote ? ` | ${npc.witnessNote}` : ""}${npc.agency ? ` | ${npc.agency}` : ""}${npc.statBlock ? ` | fights as ${npc.statBlock.startsWith("homebrew:") ? "the DM's own stat block" : npc.statBlock.replace(/-/g, " ")} (start_encounter or add_enemies with monster set to their name)` : ""}${npc.world ? ` | ${npc.world}` : ""}`,
+            `- ${npc.name}: ${npc.attitude}${npc.location ? `, at ${npc.location}` : ""}${npc.identity ? `, ${npc.identity}` : ""}${npc.trait ? ` (${npc.trait.slice(0, 120)})` : ""}${npc.aliases?.length ? ` [also called: ${npc.aliases.slice(0, 4).join(", ")}]` : ""}${npc.witnessNote ? ` | ${npc.witnessNote}` : ""}${npc.agency ? ` | ${npc.agency}` : ""}${npc.statBlock ? ` | fights as ${npc.statBlock.startsWith("homebrew:") ? "the DM's own stat block" : npc.statBlock.replace(/-/g, " ")} (start_encounter or add_enemies with monster set to their name)` : ""}${npc.world ? ` | ${npc.world}` : ""}`,
         )
         .join("\n")}${left > 0 ? `\n(${left} more tracked NPC${left === 1 ? "" : "s"} elsewhere, not listed here; naming one brings their entry back, and recall_story finds what happened with them.)` : ""}`,
     );
@@ -1113,10 +1189,16 @@ export function buildGameStateBlock(state: DmGameState): string {
   }
   if (state.relationships?.length) {
     sections.push(
-      `Standing, per character (server-authoritative; it moves ONLY through relationship_beat, social_check, and romance_advance, and persists across sessions even while the person is away). Play each of these people true to how they feel about that specific character:\n${state.relationships
+      `Standing, per character (server-authoritative; it moves ONLY through relationship_beat, social_check, romance_advance, and relationship_end, and persists across sessions even while the person is away). Play each of these people true to how they feel about that specific character:\n${state.relationships
         .map((relationship) => `- ${relationship}`)
         .join("\n")}`,
     );
+  }
+  // In the moment, not the cached prefix: an NPC ready to make a move comes
+  // and goes turn by turn, as the director's notes do.
+  if (state.storytellerLines?.length && !state.withholdStorytellerSecrets) {
+    state.storytellerBlock = `Storyteller secrets (yours alone: never said or hinted at the table, in narration, a note or an out-of-character answer, and no player sees them, the party lead included):\n${state.storytellerLines.join("\n")}`;
+    moment.push(state.storytellerBlock);
   }
   if (state.recentWhispers?.length) {
     sections.push(
@@ -1134,6 +1216,10 @@ export function buildGameStateBlock(state: DmGameState): string {
   }
   if (state.coordinationBlock) {
     moment.push(state.coordinationBlock);
+  }
+  // In the moment too: a companion's rung and ultimatum move turn by turn.
+  if (state.conscienceBlock) {
+    moment.push(state.conscienceBlock);
   }
   // In the moment, not the cached prefix: offers come and go turn by turn,
   // and a block that changes there would cost the whole prefix its cache.
@@ -1172,7 +1258,13 @@ export function buildGameStateBlock(state: DmGameState): string {
             : usernamesById.get(sheet.userId) ?? "unknown",
           !sheet.isCompanion && physicalDiceUsers.has(sheet.userId),
           // Optional all the way down: test doubles build partial campaigns.
-          { encumbrance: state.campaign.gameSettings?.variantRules?.encumbrance ?? false, ownerUserId: state.campaign.ownerUserId, authors: spellAuthorsFor(state.campaign), compact: Boolean(state.ruleContext) },
+          {
+            encumbrance: state.campaign.gameSettings?.variantRules?.encumbrance ?? false,
+            ownerUserId: state.campaign.ownerUserId,
+            authors: spellAuthorsFor(state.campaign),
+            compact: Boolean(state.ruleContext),
+            romance: romanceOn,
+          },
         );
         const events = state.recentEventsByCharacter?.get(sheet.id);
         const between = state.betweenBySheet?.get(sheet.id);
@@ -1638,6 +1730,12 @@ export function buildDmMessages(
   // (src/lib/dm/turn.ts handleMoreTools).
   const compactRules = state.ruleContext ?? null;
   const mode = companionMode(state.campaign);
+  // Who is open to advances is a storyteller secret (src/lib/dm/viewer.ts):
+  // the rules name them only in a prompt the storyteller's answer comes
+  // from, and the line is costed with the storyteller's own trace row.
+  const openNames = state.withholdStorytellerSecrets ? [] : openToAdvanceNames(state.campaign, state.sheets);
+  const secretRules = advanceRulesLine(openNames);
+  let rulesCarrySecret = false;
   if (mode !== "off" && (!compactRules || compactRules.groups.has("companions") || state.sheets.some((sheet) => sheet.isCompanion))) {
     settingsRules.push(companionRules(state.campaign, mode));
   }
@@ -1646,8 +1744,10 @@ export function buildDmMessages(
     (!compactRules || compactRules.groups.has("relationships") || (state.relationships?.length ?? 0) > 0)
   ) {
     settingsRules.push(
-      relationshipRules(state.campaign.gameSettings.romance !== "off"),
+      relationshipRules(state.campaign.gameSettings.romance !== "off", openNames, souredLeaving(state.campaign)),
+      tableConscienceRules(state.campaign, state.sheets),
     );
+    rulesCarrySecret = Boolean(secretRules);
   }
   const dmSystem = buildDmSystem(state.campaign, settingsRules, state.ruleContext ?? null);
   const fightRules = state.encounter ? encounterRulesText(tracksAmmunition(state.campaign), state.ruleContext ?? null) : "";
@@ -1685,6 +1785,12 @@ export function buildDmMessages(
   // prompt is the messages with them added on.
   const toolTokens = state.toolTokens ?? 0;
   const safetyTokens = estimateTokens(renderSafetyBlock(normalizeSafety(state.campaign.gameSettings.safety)));
+  // The storyteller's secrets, wherever they sit: carved out of the rows
+  // that hold them into one row of their own, tagged so the Context tab
+  // leaves it out, tokens and all, for the lead (context-budget.ts
+  // traceForViewer). Only when the rules carry the line at all.
+  const secretRulesTokens = rulesCarrySecret ? estimateTokens(secretRules) : 0;
+  const secretStateTokens = state.storytellerBlock ? estimateTokens(state.storytellerBlock) : 0;
   state.contextTrace = {
     ...(state.arcTrace ? { arc: state.arcTrace } : {}),
     ...(state.loreTrace ? { lore: state.loreTrace } : {}),
@@ -1718,9 +1824,9 @@ export function buildDmMessages(
       ...systemParts.map((text, index) => {
         const last = index === systemParts.length - 1;
         const carved = last
-          ? [state.skyLine, state.factionsBlock, state.questsBlock, state.shopsBlock, state.pinsBlock].reduce((sum, part) => sum + (part ? estimateTokens(part) : 0), 0)
+          ? [state.skyLine, state.factionsBlock, state.questsBlock, state.shopsBlock, state.pinsBlock].reduce((sum, part) => sum + (part ? estimateTokens(part) : 0), 0) + secretStateTokens
           : index === 0
-            ? safetyTokens
+            ? safetyTokens + secretRulesTokens
             : 0;
         return {
           id: last ? "game-state" : `rules-${index}`,
@@ -1750,6 +1856,19 @@ export function buildDmMessages(
           reason: kind === "shop" ? "only while a shop is open here" : "inside the game state, under its own floor",
           position: systemParts.length + 1 + index,
         })),
+      ...(secretRulesTokens + secretStateTokens
+        ? [
+            {
+              id: "storyteller",
+              kind: "state" as BlockKind,
+              tokens: secretRulesTokens + secretStateTokens,
+              included: true,
+              reason: "the storyteller's secrets (who is open to advances, an NPC's act, a companion's plan to leave): shown only to whoever runs the story, never to a player or the party lead",
+              position: systemParts.length + 6,
+              secret: STORYTELLER_SECRET,
+            },
+          ]
+        : []),
       // What the table pinned rides whole on every turn, at most PIN_TOKEN_CAP
       // (src/lib/dm/pin-logic.ts): shown on its own so a small window says
       // what it costs there.

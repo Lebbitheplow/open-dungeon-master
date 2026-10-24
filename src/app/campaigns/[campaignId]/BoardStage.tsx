@@ -1,6 +1,6 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useState } from "react";
 import { cn } from "@/lib/cn";
 import { TILE } from "@/app/campaigns/[campaignId]/battleMapCells";
 import {
@@ -251,19 +251,35 @@ export const TokenFigure = memo(function TokenFigure({
   const radius = size / 2 - 3;
   const dead = health === "dead";
   const down = token.down || health === "down";
+  // The side it fights on decides its rim (issue 503): a character turned
+  // against the party wears the foes' colours, a creature the party
+  // dominates the party's. The server says so (view.ts token.side).
+  const rimKind = token.side === "foe" ? "enemy" : token.side === "party" ? "pc" : token.kind;
+  // A side the server just changed: a ring of the new colour pulses out once
+  // (globals.css .side-flip, dropped with reduced motion; the colour itself
+  // changes either way). Counted from what this figure has shown, so a board
+  // opened on a turncoat does not pulse.
+  const side = token.side ?? "";
+  const [shownSide, setShownSide] = useState({ side, flips: 0 });
+  if (shownSide.side !== side) {
+    setShownSide({ side, flips: shownSide.flips + 1 });
+  }
   const ring = down
     ? "#57534e"
     : held || token.mine
       ? "#fbbf24"
-      : RING_BY_KIND[token.kind];
+      : RING_BY_KIND[rimKind];
   const healthColor = health ? HEALTH_RING[health] : null;
   const badges = (conditions ?? []).slice(0, MAX_BADGES);
   const extra = (conditions ?? []).length - badges.length;
   // A flier hovers; the figure whose turn it is stands a little taller.
   const lift = (elevation === "flying" ? -3 : 0) + (isCurrent && !down ? -2 : 0);
+  // A creature on the side its kind does not fight on says so (issue 503).
+  const offSide = token.side === "foe" ? "against the party" : token.side === "party" ? "with the party" : null;
   const title = [
     token.name,
     health ? HEALTH_LABEL[health] ?? health : null,
+    offSide,
     ...(conditions ?? []).map((c) =>
       c.note ? `${c.label} (${c.rounds ? `${c.rounds} rd, ` : ""}${c.note})` : c.rounds ? `${c.label} (${c.rounds})` : c.label,
     ),
@@ -303,7 +319,7 @@ export const TokenFigure = memo(function TokenFigure({
             width={size - 4}
             height={size - 4}
             rx={8}
-            fill={FILL_BY_KIND[token.kind]}
+            fill={FILL_BY_KIND[rimKind]}
             fillOpacity={0.55}
             stroke={ring}
             strokeOpacity={0.5}
@@ -356,12 +372,39 @@ export const TokenFigure = memo(function TokenFigure({
             cx={cx}
             cy={cy}
             r={radius}
-            fill={FILL_BY_KIND[token.kind]}
+            fill={FILL_BY_KIND[rimKind]}
             stroke={ring}
             strokeWidth={token.mine || held ? 2.5 : 1.5}
             strokeDasharray={token.hidden || elevation === "burrowing" ? "3 2" : undefined}
+            className="token-rim"
+            data-side={token.side}
           />
         )}
+        {/* The side band: the health ring covers the rim, so a creature on
+            the side its kind does not fight on wears that side's colour
+            outside it, over a dark halo that keeps it legible on any ground.
+            It fades in, and from party to foe colour, over 300 ms when the
+            server moves the creature (globals.css .side-band). */}
+        {token.kind === "pc" || token.kind === "enemy" ? (
+          <g className="side-band" opacity={offSide ? 1 : 0} pointerEvents="none" data-side-band={token.side ?? ""}>
+            <circle cx={cx} cy={cy} r={radius + 2.5} fill="none" stroke="#0c0a09" strokeOpacity={0.6} strokeWidth={4.5} />
+            <circle cx={cx} cy={cy} r={radius + 2.5} fill="none" stroke={RING_BY_KIND[rimKind]} strokeWidth={2.5} className="side-band-ring" />
+          </g>
+        ) : null}
+        {shownSide.flips > 0 && token.kind !== "prop" ? (
+          <circle
+            key={shownSide.flips}
+            cx={cx}
+            cy={cy}
+            r={radius}
+            fill="none"
+            stroke={RING_BY_KIND[rimKind]}
+            strokeWidth={3}
+            className="side-flip"
+            pointerEvents="none"
+            data-side-flip=""
+          />
+        ) : null}
         {/* The initial is the last resort: it sits under the face, so it shows
             only when no picture loads (docs/visual-overhaul-plan.md 5.1). */}
         {!portrait || !down ? (
@@ -371,7 +414,7 @@ export const TokenFigure = memo(function TokenFigure({
             textAnchor="middle"
             fontSize={13 * Math.min(2, footprint)}
             fontWeight={700}
-            fill={down ? "#a8a29e" : token.kind === "enemy" ? "#fca5a5" : "#e7e5e4"}
+            fill={down ? "#a8a29e" : rimKind === "enemy" ? "#fca5a5" : "#e7e5e4"}
             pointerEvents="none"
           >
             {token.name.charAt(0).toUpperCase()}

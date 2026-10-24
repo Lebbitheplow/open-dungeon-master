@@ -1,4 +1,5 @@
 import { readiedReleaseFor } from "@/lib/dm/readied-release";
+import { tokenSides } from "@/lib/dm/combatant";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import type { Encounter, EncounterEnemy } from "@/lib/db/encounters";
@@ -250,6 +251,7 @@ export function walkCharacter(
       sheet,
       footprintOf,
       enemySize: (refId) => enemiesById.get(refId)?.stats.size,
+      sideOf: tokenSides(getActiveEncounter(campaign.id)),
     }),
     map,
     "pc",

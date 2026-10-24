@@ -18,7 +18,7 @@ import { conditionTurnShape } from "@/lib/srd/condition-effects";
 import { withinFeet } from "@/lib/dm/authored-saves";
 import { handleCastAtEnemy } from "@/lib/dm/cast-at-enemy";
 import { openCastOf, withOpenCast } from "@/lib/dm/cast-rules";
-import { resolveEnemyRef } from "@/lib/dm/enemy-damage";
+import { resolveTargetFoe } from "@/lib/dm/sheet-foe";
 import { resolveSheetRef } from "@/lib/dm/rolls";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { attacksAllowedFor, budgetFor, storeBudget } from "@/lib/dm/turn-budget";
@@ -43,12 +43,11 @@ export function handleReaperCast(
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     return null;
   }
-  const secondRef = typeof parsed.secondTargetEnemyId === "string" ? parsed.secondTargetEnemyId.trim() : "";
-  if (!secondRef) {
+  const { secondTargetEnemyId: named, ...rest } = parsed;
+  const secondTargetEnemyId = typeof named === "string" ? named.trim() : "";
+  if (!secondTargetEnemyId) {
     return null;
   }
-  const { secondTargetEnemyId: _second, ...rest } = parsed;
-  void _second;
   const encounter = getActiveEncounter(campaign.id);
   const stale = resolveSheetRef(String(rest.characterId ?? ""), sheets, sheetsById);
   const sheet = stale ? (getSheetById(stale.id) ?? stale) : null;
@@ -56,8 +55,10 @@ export function handleReaperCast(
   if (!encounter || !sheet) {
     return { error: "A second target is a creature in the fight: cast_at_enemy needs a caster from GAME STATE and an active encounter.", retry: true };
   }
-  const first = resolveEnemyRef(encounter.id, String(rest.targetEnemyId ?? ""));
-  const second = resolveEnemyRef(encounter.id, secondRef);
+  // Either may be any combatant: an enemy, or a character fighting on the
+  // other side (src/lib/dm/combatant.ts).
+  const first = resolveTargetFoe(campaign.id, encounter, String(rest.targetEnemyId ?? ""));
+  const second = resolveTargetFoe(campaign.id, encounter, secondTargetEnemyId);
   if (!first || !second || second.status !== "alive" || second.id === first.id) {
     return { error: "secondTargetEnemyId names a second living creature from GAME STATE, not the first target. Nothing was spent.", retry: true };
   }

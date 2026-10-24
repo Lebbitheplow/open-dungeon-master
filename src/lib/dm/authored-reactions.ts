@@ -11,6 +11,7 @@
 // Before this every one of them fell to use_reaction's last branch: the
 // reaction was spent and the effect was "resolved from its own text".
 
+import { resolveTargetFoe } from "@/lib/dm/sheet-foe";
 import { getEnemy, patchEnemyConditions, type EncounterEnemy } from "@/lib/db/encounters";
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
 import { publishPersisted } from "@/lib/events";
@@ -25,10 +26,10 @@ import {
 } from "@/lib/srd/authored-effects";
 import { addSheetCondition, rollCard } from "@/lib/dm/action-common";
 import { pcResistances, removeConditions, type ConditionMetaMap } from "@/lib/dm/condition-logic";
-import { applyEnemyDamage, publishEncounter, resolveEnemyRef } from "@/lib/dm/enemy-damage";
+import { applyEnemyDamage, publishEncounter } from "@/lib/dm/enemy-damage";
 import { rollEnemySave } from "@/lib/dm/forced-save";
 import { bindsWorthResisting } from "@/lib/dm/legendary-logic";
-import { freshLastHit, rerollAttacker, type LastHit, type SwingRecord } from "@/lib/dm/last-hit";
+import { attackerFoeId, freshLastHit, rerollAttacker, type LastHit, type SwingRecord } from "@/lib/dm/last-hit";
 import { rollAgainst } from "@/lib/roll-labels";
 import { READIED } from "@/lib/dm/object-actions";
 import { applyPcDamage } from "@/lib/dm/pc-damage";
@@ -139,7 +140,7 @@ function enemyTarget(ctx: Ctx, fallbackId: string | null): EncounterEnemy | null
   if (!encounter || !ref) {
     return null;
   }
-  const enemy = resolveEnemyRef(encounter.id, ref);
+  const enemy = resolveTargetFoe(encounter.campaignId, encounter, ref);
   return enemy && enemy.status === "alive" ? enemy : null;
 }
 
@@ -243,7 +244,7 @@ function resolve(ctx: Ctx, found: Found): ToolResult | ToolError {
       const reflected: Record<string, unknown> = {};
       const prevented = Math.min(reduction, swing.raw);
       if (does.reflect && prevented > 0 && encounter && holder.features.some((feature) => textKey(feature.name) === textKey(does.reflect!.feature))) {
-        const attacker = hit.record.attacker.kind === "enemy" ? enemyTarget(ctx, hit.record.attacker.id) : null;
+        const attacker = attackerFoeId(hit.record) !== null ? enemyTarget(ctx, hit.record.attacker.id) : null;
         if (attacker) {
           Object.assign(reflected, { [does.reflect.feature]: applyEnemyDamage(ctx.campaign, ctx.turn, encounter, attacker, prevented, ctx.sheets, ctx.sheetsById, does.reflect.type, { magical: true }) });
           publishEncounter(ctx.campaign.id);
@@ -358,7 +359,7 @@ function resolve(ctx: Ctx, found: Found): ToolResult | ToolError {
     }
     case "strike_back": {
       const record = freshLastHit(ctx.campaign.id, ctx.sheet.id);
-      const enemy = enemyTarget(ctx, record?.attacker.kind === "enemy" ? record.attacker.id : null);
+      const enemy = enemyTarget(ctx, attackerFoeId(record));
       if (!enemy || !encounter) {
         return { error: `${reaction.name} strikes a creature in the fight: pass targetEnemyId. Nothing was spent.`, retry: true };
       }
@@ -426,7 +427,7 @@ function resolve(ctx: Ctx, found: Found): ToolResult | ToolError {
     }
     case "save_condition": {
       const record = freshLastHit(ctx.campaign.id, ctx.sheet.id);
-      const enemy = enemyTarget(ctx, record?.attacker.kind === "enemy" ? record.attacker.id : null);
+      const enemy = enemyTarget(ctx, attackerFoeId(record));
       if (!enemy || !encounter) {
         return { error: `${reaction.name} answers a creature in the fight: pass targetEnemyId. Nothing was spent.`, retry: true };
       }
@@ -477,7 +478,7 @@ function resolve(ctx: Ctx, found: Found): ToolResult | ToolError {
       // Instinctive Charm: the attacker saves first, and keeps its target on
       // a success.
       if (does.save && encounter) {
-        const attacker = hit.record.attacker.kind === "enemy" ? enemyTarget(ctx, hit.record.attacker.id) : null;
+        const attacker = attackerFoeId(hit.record) !== null ? enemyTarget(ctx, hit.record.attacker.id) : null;
         if (!attacker) {
           return { error: `${reaction.name} answers a creature's attack on ${ctx.sheet.name}; this one had no attacker in the fight on record. Nothing was spent.`, refused: "rules" };
         }

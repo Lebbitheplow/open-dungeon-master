@@ -1,6 +1,6 @@
 import { currentUser, unauthorized } from "@/lib/auth";
 import { capsFor as capsForCampaign, getCampaignForUser, type Campaign } from "@/lib/db/campaigns";
-import type { ViewerCaps } from "@/lib/dm/viewer";
+import { storytellerSees, type ViewerCaps } from "@/lib/dm/viewer";
 import type { User } from "@/lib/db/users";
 import { isMemberMuted } from "@/lib/db/moderation";
 import { fillUsageScope, openUsageScope } from "@/lib/usage/scope";
@@ -55,6 +55,12 @@ export function isDm(context: MemberContext): boolean {
 // facts, note approval, pin curation, the digital dice fallback.
 export function steersStory(context: MemberContext): boolean {
   return capsFor(context).steersStory;
+}
+
+// The tier above steersStory (src/lib/dm/viewer.ts, storyteller secrets):
+// what is kept even from the lead who steers an AI table.
+export function seesStorytellerSecrets(context: MemberContext): boolean {
+  return storytellerSees(capsFor(context));
 }
 
 // Membership plus the right to speak. A member the party lead has muted

@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   CAMPAIGN_LENGTHS,
   COMPANION_SETTINGS,
+  CONSCIENCE_SETTINGS,
   DICE_POLICIES,
   DM_MODES,
   GENRES,
@@ -18,6 +19,7 @@ import { parseKeepingValid } from "@/lib/schemas/parse-keeping-valid";
 export {
   GENRES,
   type CampaignLengthSetting,
+  type ConscienceSetting,
   type DicePolicy,
   type DmModeSetting,
   type Genre,
@@ -177,6 +179,13 @@ export const gameSettingsSchema = z.object({
   // courting, together, betrothed, married). Requires relationships to be
   // on. Intimate scenes always fade to black; there is no explicit mode.
   romance: z.enum(["on", "off"]).default("on"),
+  // How far a lasting AI companion's conscience may go when the party's
+  // deeds break what it holds to (issue 503, src/lib/dm/conscience-logic.ts):
+  // off judges by standing alone; talk objects, warns and sets ultimatums
+  // but never leaves; leave lets a companion past its breaking point walk
+  // out; turn lets it turn on the party too. Read only while relationships
+  // are on and a lasting companion travels with the party.
+  companionConscience: z.enum(CONSCIENCE_SETTINGS).default("leave"),
   // When on, DM-initiated item and gold changes to player characters become
   // pending offers the owning player accepts or declines instead of applying
   // immediately (src/lib/dm/proposal-logic.ts). Off preserves auto-apply.

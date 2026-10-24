@@ -25,6 +25,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { dmRoll } from "@/lib/dm/roll-card";
 import type { ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
+import { returningByName, type ReturningCombatant } from "@/lib/dm/companion-return";
 
 // Enemy spawning shared by start_encounter and the mid-combat add_enemies
 // tool, so reinforcements and summons are real server-tracked combatants
@@ -43,6 +44,9 @@ export type ResolvedEnemyRequest = {
   slug: string;
   name: string;
   stats: ReturnType<typeof synthesizeStats>;
+  // Below its maximum when it arrives worn (a companion come back against a
+  // party its whole self would be past the ceiling for).
+  currentHp?: number;
 };
 
 // Resolves every requested enemy before anything is created. Returns the
@@ -64,9 +68,24 @@ export function resolveEnemyRequests(
   const resolved: ResolvedEnemyRequest[] = [];
   const authorList = Array.isArray(authors) ? authors : authors ? [authors] : [];
   const cast = campaignId ? listNpcs(campaignId).filter((npc) => npc.statBlock) : [];
+  // A companion who left the party and comes back against it fights as
+  // themselves (issue 503, src/lib/dm/companion-return.ts returningCombatant).
+  const returning = campaignId ? returningByName(campaignId) : new Map<string, ReturningCombatant>();
   for (const request of requests) {
     const count = request.count ?? 1;
     const wanted = textKey(request.monster);
+    const back = returning.get(wanted);
+    if (back) {
+      for (let index = 0; index < count; index += 1) {
+        resolved.push({
+          slug: back.slug,
+          name: request.name?.trim() || back.name,
+          stats: back.stats,
+          ...(back.currentHp < back.stats.maxHp ? { currentHp: back.currentHp } : {}),
+        });
+      }
+      continue;
+    }
     const npc = cast.find((entry) => textKey(entry.name) === wanted || entry.aliases.some((alias) => textKey(alias) === wanted));
     const match = npc
       ? (() => {
@@ -233,6 +252,7 @@ export function handleAddEnemies(
       // A record for the DM alone, as an enemy's save is.
       initiative: dmRoll(campaign.id, null, "initiative", `${names[index]}: initiative`, d20Expression(entry.stats.dexMod)).total,
       stats: entry.stats,
+      ...(entry.currentHp !== undefined ? { currentHp: entry.currentHp } : {}),
     }),
   );
 

@@ -3,6 +3,7 @@
 // hit, parks the damage roll too. Split from pc-attack.ts, which has
 // already refused or paid for everything the parked roll carries.
 
+import { getFoe, resolveTargetFoe } from "@/lib/dm/sheet-foe";
 import { tryParry } from "@/lib/dm/enemy-reactions";
 import { getCampaignById } from "@/lib/db/campaigns";
 import {
@@ -11,13 +12,12 @@ import {
   publicPendingRoll,
   type PendingRoll,
 } from "@/lib/db/dm-turns";
-import { getActiveEncounter, getEnemy } from "@/lib/db/encounters";
+import { getActiveEncounter } from "@/lib/db/encounters";
 import type { StoredRoll } from "@/lib/db/rolls";
 import { listSheets } from "@/lib/db/sheets";
 import { publishPersisted } from "@/lib/events";
 import { adjudicateHit } from "@/lib/dm/attack-logic";
 import { critDamageExpression } from "@/lib/dm/encounter-logic";
-import { resolveEnemyRef } from "@/lib/dm/enemy-damage";
 import { claimHitRiders, liveTypedRiders, strikesAsMagic } from "@/lib/dm/pc-attack-damage";
 import { budgetApplies } from "@/lib/dm/action-budget";
 import type { AttackPlan } from "@/lib/dm/pc-attack-plan";
@@ -162,7 +162,7 @@ export function resolvePendingPcAttack(pending: PendingRoll, roll: StoredRoll): 
     critRange: context.critRange,
   });
   // Parry: the creature's reaction lifts its AC against a melee hit (enemy-reactions.ts).
-  const parryFoe = fight && context.targetEnemyId ? getEnemy(context.targetEnemyId) : null;
+  const parryFoe = fight && context.targetEnemyId ? getFoe(context.targetEnemyId) : null;
   const parry = judged.hit && !judged.crit && fight && parryFoe && (context as ParkedAttack).melee
     ? tryParry({ encounter: fight, enemy: parryFoe, total: roll.total, natural20: false, ac: context.targetAc, melee: true, attackerUnseen: false })
     : null;
@@ -195,7 +195,7 @@ export function resolvePendingPcAttack(pending: PendingRoll, roll: StoredRoll): 
   // Verify the target still stands before asking for damage dice (the lead
   // may have force-ended the encounter while the roll sat parked).
   const encounter = getActiveEncounter(pending.campaignId);
-  const enemy = encounter ? resolveEnemyRef(encounter.id, context.targetEnemyId) : null;
+  const enemy = encounter ? resolveTargetFoe(pending.campaignId, encounter, context.targetEnemyId) : null;
   if (!enemy || enemy.status !== "alive") {
     return `${context.attacker}'s ${context.weapon} attack rolled ${roll.total} vs AC ${context.targetAc}: HIT, but the target is already gone; narrate around it.`;
   }

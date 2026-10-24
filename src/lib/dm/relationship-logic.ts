@@ -180,6 +180,8 @@ export const RELATIONSHIP_BEATS = {
   shared_peril: { base: 5, axis: "boldness", axisSign: 1, track: "social", label: "came through danger with" },
   confided: { base: 5, axis: "empathy", axisSign: 1, track: "social", label: "confided in" },
   gift: { base: 5, axis: "warmth", axisSign: 1, skill: "persuasion", track: "social", label: "gave a gift to" },
+  // Making up for something done: what an ultimatum asks (issue 503).
+  amends: { base: 6, track: "social", label: "made amends to" },
   // Things that cost you.
   broke_word: { base: -9, axis: "diligence", axisSign: -1, track: "social", label: "broke their word to" },
   cruelty: { base: -10, axis: "empathy", axisSign: -1, track: "social", label: "was cruel in front of" },
@@ -191,6 +193,15 @@ export const RELATIONSHIP_BEATS = {
   ignored: { base: -4, track: "social", label: "brushed off" },
   insult: { base: -8, track: "social", label: "wounded the feelings of" },
   betrayal: { base: -25, track: "social", label: "betrayed" },
+  // Deeds a companion's conscience weighs (issue 503,
+  // src/lib/dm/companion-values-logic.ts), recorded with witnesses and a
+  // severity and offered in a fight, where most of them happen.
+  murder_helpless: { base: -15, axis: "empathy", axisSign: -1, track: "social", label: "killed someone helpless in front of" },
+  torture: { base: -12, axis: "empathy", axisSign: -1, track: "social", label: "tortured someone in front of" },
+  theft_from_poor: { base: -8, axis: "warmth", axisSign: -1, track: "social", label: "robbed people with little in front of" },
+  necromancy: { base: -6, track: "social", label: "worked necromancy in front of" },
+  desecration: { base: -6, track: "social", label: "desecrated the dead or the holy in front of" },
+  slaving: { base: -14, axis: "empathy", axisSign: -1, track: "social", label: "dealt in slaves in front of" },
   // Romance. flirt is how the romantic track opens; the rest need it open.
   flirt: { base: 4, skill: "persuasion", track: "romantic", label: "flirted with" },
   compliment: {
@@ -256,7 +267,7 @@ export function beatAlignment(spec: BeatSpec, personality: Personality): number 
 // well under half the first and the fourth is worth nothing. Counts halve at
 // each chapter close, so a friendship built across a story keeps full weight
 // while a burst of flattery in one scene does not.
-const REPEAT_FACTOR = [1, 0.6, 0.3, 0];
+export const REPEAT_FACTOR = [1, 0.6, 0.3, 0];
 
 export type BeatContext = {
   approval: number;
@@ -563,24 +574,36 @@ export type RelationshipLike = {
 
 // The instruction a soured bond earns in GAME STATE. A companion who cannot
 // stand someone is a story problem the DM should be playing, so it says so
-// outright; the server never removes a party member on its own.
+// outright. Who removes them follows the table's companion conscience
+// (issue 503): with it off the DM may, as the story takes them; at Talk they
+// stay; at Leave and Turn whether they go is the server's
+// (src/lib/dm/departure.ts), never the DM's.
+export type SouredLeaving = "dm" | "stays" | "server";
+
 export function souredNote(
   tier: FriendshipTier,
   subjectKind: "npc" | "companion",
   subjectName: string,
+  leaving: SouredLeaving = "dm",
 ): string | null {
   if (tierIndex(tier) > tierIndex("disliked")) {
     return null;
   }
   if (subjectKind === "companion") {
-    return `${subjectName} travels with people they cannot stand: have them argue, refuse favors, and say plainly they are close to walking. If it comes to that, use dismiss_companion`;
+    const tail =
+      leaving === "stays"
+        ? "this table keeps its companions, so they stay and say so"
+        : leaving === "server"
+          ? "whether they leave is the server's, never dismiss_companion them over it"
+          : "If it comes to that, use dismiss_companion";
+    return `${subjectName} travels with people they cannot stand: have them argue, refuse favors, and say plainly ${leaving === "dm" ? "they are close to walking. " : "how they feel; "}${tail}`;
   }
   return `${subjectName} wants nothing to do with them and will not do them favors`;
 }
 
 // One bounded GAME STATE line per relationship. Capped so a large cast
 // cannot crowd the block out.
-export function relationshipFragment(relationship: RelationshipLike): string {
+export function relationshipFragment(relationship: RelationshipLike, leaving: SouredLeaving = "dm"): string {
   const tier = friendshipTier(relationship.approval);
   const parts = [
     `${relationship.characterName} and ${relationship.subjectName} (${relationship.subjectKind})`,
@@ -600,7 +623,7 @@ export function relationshipFragment(relationship: RelationshipLike): string {
   } else if (relationship.apartChapters >= REAPPEAR_AFTER) {
     parts.push(`not seen for ${relationship.apartChapters} chapters`);
   }
-  const soured = souredNote(tier, relationship.subjectKind, relationship.subjectName);
+  const soured = souredNote(tier, relationship.subjectKind, relationship.subjectName, leaving);
   if (soured) {
     parts.push(soured);
   }

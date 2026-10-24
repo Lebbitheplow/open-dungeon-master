@@ -11,7 +11,7 @@
 import { diehardSaveAdvantage, shieldMasterSaveBonus } from "@/lib/srd/feat-combat";
 import { LUCK_SPEND } from "@/lib/dm/roll-riders";
 import { spendLuckCounter } from "@/lib/srd/class-resources";
-import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
+import { allocateSeq, getCampaignById, type Campaign } from "@/lib/db/campaigns";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import type { EncounterEnemy } from "@/lib/db/encounters";
 import { insertRoll } from "@/lib/db/rolls";
@@ -24,7 +24,8 @@ import { allySaveAura } from "@/lib/dm/aura";
 import { mergeAdvantage, removeConditions, rollDerivation } from "@/lib/dm/condition-logic";
 import { effectOutcome, rollEffectExtras } from "@/lib/dm/effect-tools";
 import { resolveRollExpression, type RollArgs } from "@/lib/dm/rolls";
-import type { SaveAgainst } from "@/lib/dm/roll-about";
+import { listedAgainst, type SaveAgainst } from "@/lib/dm/roll-about";
+import { isSheetFoe } from "@/lib/dm/combat-sides-logic";
 import { INSPIRATION_SPEND, spendInspirationCounter } from "@/lib/dm/roll-riders";
 import { inDirectSunlight } from "@/lib/dm/sunlight";
 import { obscuredFor } from "@/lib/dm/zone-rules";
@@ -309,6 +310,27 @@ export function rollEnemySave(
     against?: string | string[];
   } = {},
 ): ForcedSave {
+  // A character fighting the party, seen as a foe (sheet-foe.ts), saves as
+  // the character it is: proficiency, auras, Bless and its dice card.
+  const asSheet = isSheetFoe(enemy) ? getSheetById(enemy.id) : null;
+  const campaign = asSheet ? getCampaignById(campaignId) : null;
+  if (asSheet && campaign) {
+    const against = listedAgainst((Array.isArray(options.against) ? options.against[0] : options.against)?.trim().toLowerCase());
+    return rollCharacterSave(
+      campaign,
+      options.record?.turn ?? null,
+      asSheet,
+      ability,
+      dc,
+      options.record?.detail ?? `${asSheet.name}: ${ability.toUpperCase()} save`,
+      {
+        ...(against ? { against } : {}),
+        ...(options.magical ? { magical: true } : {}),
+      },
+      null,
+      options.advantage ? { advantage: "advantage", reason: "the effect's own advantage" } : options.disadvantage ? { advantage: "disadvantage", reason: "the effect's own disadvantage" } : null,
+    );
+  }
   const derivation = rollDerivation(enemy.conditions, "saving_throw", ability);
   if (derivation.autoFail) {
     // Legendary Resistance answers a save failed outright as well.

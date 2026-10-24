@@ -19,6 +19,7 @@ import {
 } from "@/lib/npcs/forge";
 import { npcRoleOptions } from "@/lib/placeholders";
 import { GENDERS, type Gender } from "@/lib/gender";
+import { AttractionPicker, NPC_ATTRACTION_HINT } from "@/components/AttractionPicker";
 import {
   GOAL_FIELDS,
   PersonalitySliders,
@@ -126,6 +127,15 @@ export function NpcEditorFields({
           />
           </span>
         </div>
+
+        {/* Who they are drawn to, beside the gender (issue 501): identity,
+            so the DM never writes it by guesswork. */}
+        <AttractionPicker
+          value={draft.attraction ?? { genders: [], note: "" }}
+          onChange={(attraction) => onChange({ ...draft, attraction })}
+          hint={NPC_ATTRACTION_HINT}
+          className="sm:max-w-md"
+        />
 
         <input
           value={draft.location}

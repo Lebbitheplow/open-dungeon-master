@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { resolveTargetFoe } from "@/lib/dm/sheet-foe";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter } from "@/lib/db/encounters";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
@@ -11,7 +12,7 @@ import { proficiencyBonus } from "@/lib/srd";
 import { beastFormsHolding, findBeastForm } from "@/lib/srd/beast-forms";
 import { textKey } from "@/lib/language/text-logic";
 import { isNamed } from "@/lib/srd/feature-names";
-import { publishEncounter, resolveEnemyRef } from "@/lib/dm/enemy-damage";
+import { publishEncounter } from "@/lib/dm/enemy-damage";
 import { activeAuthored } from "@/lib/srd/authored-effects";
 import { enemyAcWithEffects } from "@/lib/dm/ac-effects";
 import { petAttackCost } from "@/lib/dm/pet-attack-cost";
@@ -398,7 +399,7 @@ export function handlePetAttack(
   if (!encounter) {
     return { error: "pet_attack needs an active encounter and a target.", retry: true };
   }
-  const enemy = resolveEnemyRef(encounter.id, args.targetEnemyId);
+  const enemy = resolveTargetFoe(encounter.campaignId, encounter, args.targetEnemyId);
   if (!enemy || enemy.status !== "alive") {
     return { error: "pet_attack needs a living targetEnemyId from GAME STATE.", retry: true };
   }

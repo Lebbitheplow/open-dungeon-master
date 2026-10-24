@@ -604,6 +604,10 @@ const OMITTED_ON_PURPOSE = {
   pc_attack: ["advantageSource", "approach", "endTurn"],
   enemy_attack: ["advantageSource"],
   request_roll: ["advantageSource"],
+  // What a companion holds to is set by the class and alignment the form
+  // does offer; the model alone may replace it, as a list of objects no form
+  // field takes (issue 503).
+  add_companion: ["values"],
 };
 
 function formOmissions(entry) {

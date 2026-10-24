@@ -146,7 +146,9 @@ export function DirectorArmedBanner({
 // advancing the arc. Two of them also tell the DM to decide something
 // privately and keep it hidden, which is why arming never enters the
 // transcript.
-export function DirectorPresets({ campaignId }: { campaignId: string }) {
+// `romance`: the table plays romance and its safety tools allow it; without
+// it the Romance cue is not offered (issue 501).
+export function DirectorPresets({ campaignId, romance = true }: { campaignId: string; romance?: boolean }) {
   const [busy, setBusy] = useState(false);
 
   const arm = useCallback(
@@ -170,7 +172,7 @@ export function DirectorPresets({ campaignId }: { campaignId: string }) {
 
   return (
     <>
-      {ONE_SHOT_EVENT_IDS.map((id) => (
+      {ONE_SHOT_EVENT_IDS.filter((id) => romance || id !== "romance").map((id) => (
         <Tooltip key={id} content={oneShotBlurb(id)}>
           <button
             type="button"

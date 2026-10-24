@@ -13,11 +13,14 @@
 // keep their rolls and audit rows on one, so a short human-DM turn is
 // opened for the swing and closed with it.
 
+import { getFoe } from "@/lib/dm/sheet-foe";
+import { isSheetFoe } from "@/lib/dm/combat-sides-logic";
+import { openLastHit } from "@/lib/dm/last-hit";
 import { hasSentinel } from "@/lib/srd/feat-combat";
 import { tryParry } from "@/lib/dm/enemy-reactions";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { createDmTurn, saveDmTurn, type DmTurn } from "@/lib/db/dm-turns";
-import { getEnemy, patchEnemyConditions, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
+import { patchEnemyConditions, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
 import { insertRoll, markRollApplied } from "@/lib/db/rolls";
 import { rollAgainst } from "@/lib/roll-labels";
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
@@ -82,8 +85,10 @@ export function opportunitySight(input: {
   });
 }
 
-// A character's opportunity attack on an enemy breaking away. Returns the
-// table line.
+// A character's opportunity attack on an enemy breaking away, or on a
+// character of the other side (issue 503). Returns the table line. A swing
+// at a character leaves the record its reactions answer, as an enemy's
+// attack does (last-hit.ts): Shield, Uncanny Dodge, Riposte on a miss.
 export function pcOpportunitySwing(input: {
   campaign: Campaign;
   encounter: Encounter;
@@ -157,6 +162,8 @@ export function pcOpportunitySwing(input: {
   }).profile;
 
   const targetAc = enemyAcWithEffects(campaign.id, enemy);
+  const hitLog = isSheetFoe(enemy) ? openLastHit(campaign.id, enemy.id) : null;
+  const closeLog = () => hitLog?.close({ attacker: { kind: "sheet", id: sheet.id, name: sheet.name }, attack: `${profile.weapon} (opportunity attack)`, type: profile.damageType, ranged: false });
   const hitOutcome = rollExpression(`${d20Expression(profile.toHit, advantage)}${attackRiders.diceSuffix}`);
   const hitRoll = insertRoll({
     campaignId: campaign.id,
@@ -182,7 +189,7 @@ export function pcOpportunitySwing(input: {
     markOpportunityHit(campaign, sheet);
     // Sentinel: the creature's speed is 0 for the rest of its turn.
     if (hasSentinel(sheet)) {
-      const fresh = getEnemy(enemy.id);
+      const fresh = getFoe(enemy.id);
       if (fresh && !fresh.conditions.includes("stopped")) {
         patchEnemyConditions(fresh.id, [...fresh.conditions, "stopped"], { ...fresh.conditionMeta, stopped: { source: sheet.id, untilTurnEndOf: enemy.id } });
         notes.push("Sentinel: its speed is 0 for the rest of the turn");
@@ -190,6 +197,8 @@ export function pcOpportunitySwing(input: {
     }
   }
   if (!adjudicated.hit) {
+    hitLog?.swing(hitOutcome, targetAc, { hit: false, crit: false, raw: 0, advantage, ranged: false });
+    closeLog();
     return {
       note: `${sheet.name} swings at ${enemy.displayName} as it breaks away and misses (${hitOutcome.total} vs AC ${targetAc}${parry ? `; ${parry.note}` : ""}).`,
       dropped: false,
@@ -244,7 +253,9 @@ export function pcOpportunitySwing(input: {
     if (!("error" in applied)) {
       markRollApplied(damageRoll.id, enemy.id);
     }
-    const after = getEnemy(enemy.id);
+    hitLog?.swing(hitOutcome, targetAc, { hit: true, crit, raw: dealt, advantage, type: profile.damageType, ranged: false });
+    closeLog();
+    const after = getFoe(enemy.id);
     const dropped = Boolean(applied.dead) || after?.status === "dead";
     const landed = typeof applied.damageApplied === "number" ? applied.damageApplied : dealt;
     return {
@@ -279,7 +290,7 @@ function spendAttackCarriers(campaign: Campaign, sheet: CharacterSheet, enemy: E
   endInvisibilityOnCast(campaign.id, sheet.id);
   const theirs = conditionsSpentAgainst(enemy.conditions);
   if (theirs.length) {
-    const target = getEnemy(enemy.id);
+    const target = getFoe(enemy.id);
     if (target) {
       const cleared = removeConditions(target.conditions, target.conditionMeta, theirs);
       patchEnemyConditions(target.id, cleared.conditions, cleared.meta);

@@ -11,6 +11,7 @@ import type { FxEvent } from "@/lib/battlemap/fx-plan";
 import type { CameraEvent, SceneState } from "@/lib/scene/state";
 import type { MapLabel } from "@/lib/battlemap/scene";
 import { EncounterPanel } from "@/app/campaigns/[campaignId]/EncounterPanel";
+import type { DepartingSheet } from "@/app/campaigns/[campaignId]/departing";
 import { PartyPanel } from "@/app/campaigns/[campaignId]/PartyPanel";
 import { segmentsOf, speakersIn } from "@/lib/dm/speech";
 import type { CastMember } from "@/lib/dm/cast";
@@ -158,6 +159,9 @@ export type SidePanelRouterProps = {
   // Bumped by the relationships_updated ephemeral; the Bonds panel refetches
   // its own scoped view when it changes.
   relationshipsVersion: number;
+  // Lasting companions whose sheet just went (issue 503): the Party panel's
+  // Gone list.
+  departingSheets?: DepartingSheet[];
   factionsVersion?: number;
   // Bumped when the world changed (world_updated, records_changed), so the
   // World tab reads it again.
@@ -240,6 +244,7 @@ export function SidePanelRouter({
   stageBoard = false,
   tab: rawTab,
   relationshipsVersion,
+  departingSheets = [],
   factionsVersion = 0,
   worldVersion = 0,
   loreVersion = 0,
@@ -381,7 +386,7 @@ export function SidePanelRouter({
         <div key={partySection} className="motion-tab">
           {partySection === "bonds" ? (
             <Suspense fallback={<PanelLoading />}>
-              <BondsPanel campaignId={campaignId} refreshKey={relationshipsVersion} />
+              <BondsPanel campaignId={campaignId} refreshKey={relationshipsVersion} sheets={sheets} meUserId={meUserId} />
             </Suspense>
           ) : partySection === "factions" ? (
             <Suspense fallback={<PanelLoading />}>
@@ -419,6 +424,8 @@ export function SidePanelRouter({
               <PartyPanel
                 sheets={sheets}
                 meUserId={meUserId}
+                departing={departingSheets}
+                goneRefreshKey={relationshipsVersion}
                 party={campaign?.party}
                 arrangesFormation={isLead || adjudicates}
                 partyStory={
@@ -483,6 +490,12 @@ export function SidePanelRouter({
                 }
                 onOpenSettings={onOpenTab ? () => onOpenTab("settings") : undefined}
                 humanDmTable={humanDmTable}
+                romanceNotes={
+                  humanDmTable &&
+                  adjudicates &&
+                  campaign?.gameSettings?.relationships !== "off" &&
+                  campaign?.gameSettings?.romance !== "off"
+                }
                 companionGenre={campaign?.gameSettings?.genre}
                 companionWorldPack={campaign?.gameSettings?.worldPack}
                 companionLevel={(() => {
@@ -687,6 +700,12 @@ export function SidePanelRouter({
           steersStory={steersStory}
           isDm={adjudicates}
           canEnd={canEndCampaign}
+          lastingCompanions={
+            campaign.gameSettings
+              ? resolveCompanionMode(campaign.gameSettings, partySize, humanDmTable) === "full" ||
+                sheets.some((sheet) => sheet.isCompanion && sheet.companionKind !== "guest" && !sheet.summon)
+              : false
+          }
         />
       </Suspense>
     );

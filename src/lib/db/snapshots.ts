@@ -1,4 +1,5 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
+import { restoreCompanionUser } from "@/lib/db/users";
 import {
   CAMPAIGN_SNAPSHOT_COLUMNS,
   SNAPSHOT_TABLES,
@@ -200,6 +201,12 @@ export function restoreSnapshot(campaignId: string, payload: SnapshotPayload) {
     if (snapshotHoldsTable(payload, table)) {
       db.prepare(`DELETE FROM ${table} WHERE campaign_id = ?`).run(campaignId);
     }
+  }
+  // A companion dismissed since the snapshot took the bot user behind its
+  // sheet with it, and users are not snapshotted: the sheet's user comes
+  // back first, or its row would name nobody and the whole rewind fail.
+  for (const sheet of payload.tables.character_sheets ?? []) {
+    restoreCompanionUser(String(sheet.user_id ?? ""), String(sheet.name ?? ""));
   }
   for (const table of SNAPSHOT_TABLES) {
     const rows = payload.tables[table] ?? [];

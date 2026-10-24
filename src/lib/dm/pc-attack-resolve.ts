@@ -4,6 +4,9 @@
 // Split from pc-attack.ts, which has already refused or paid for everything
 // this rolls; nothing here refuses the attack.
 
+import { isSheetFoe } from "@/lib/dm/combat-sides-logic";
+import { openLastHit } from "@/lib/dm/last-hit";
+import { getFoe } from "@/lib/dm/sheet-foe";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { TurnBudget } from "@/lib/dm/action-budget";
 import { publishEncounter } from "@/lib/dm/enemy-damage";
@@ -12,14 +15,13 @@ import { BRUTAL_ATTACK_USED, brawlerUnarmed, brutalAttackApplies, CRUSHER_USED, 
 import { holdsFeat } from "@/lib/srd/feat-effects";
 import { tryParry } from "@/lib/dm/enemy-reactions";
 import { allocateSeq } from "@/lib/db/campaigns";
-import { getEnemy, patchEnemyConditions, recordEncounterTarget, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
+import { patchEnemyConditions, recordEncounterTarget, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
 import { insertRoll, landRoll, type StoredRoll } from "@/lib/db/rolls";
 import { d20Expression, rollExpression, type DiceTerm } from "@/lib/dice";
 import { publishWithSeq } from "@/lib/events";
 import { planAttackFx, type RollVisibility } from "@/lib/battlemap/fx-plan";
 import { attacksLeft } from "@/lib/dm/action-budget";
 import { adjudicateHit } from "@/lib/dm/attack-logic";
-import { resolveEnemyRef } from "@/lib/dm/enemy-damage";
 import { rollEnemySave } from "@/lib/dm/forced-save";
 import { darkOnesBlessing } from "@/lib/dm/feature-hooks";
 import { authoredOnHit } from "@/lib/dm/authored-hooks";
@@ -111,6 +113,12 @@ export function rollPcAttack(plan: AttackPlan, strike: Strike): Record<string, u
   const typedRiders = [...plan.typedRiders];
 
   const spellRider = plan.kind === "spell" ? spellAttackRider(plan.args.spell) : null;
+  // A character struck by another (a turncoat's blow, issue 503) keeps the
+  // record a reaction answers, as an enemy's attack leaves it (last-hit.ts):
+  // Shield, Uncanny Dodge and their kin re-resolve it.
+  const hitLog = isSheetFoe(enemy) ? openLastHit(campaign.id, enemy.id) : null;
+  const closeLog = () =>
+    hitLog?.close({ attacker: { kind: "sheet", id: sheet.id, name: sheet.name }, attack: plan.profile.weapon, type: plan.profile.damageType, ranged: plan.profile.ranged });
   const hitOutcome = rollExpression(strike.toHitExpression);
   const hitRoll = insertRoll({
     campaignId: campaign.id,
@@ -198,6 +206,8 @@ export function rollPcAttack(plan: AttackPlan, strike: Strike): Record<string, u
       : {}),
   };
   if (!hit) {
+    hitLog?.swing(hitOutcome, plan.effectiveAc, { hit: false, crit: false, raw: 0, advantage: plan.advantage, ranged: profile.ranged });
+    closeLog();
     // Acid Arrow: a miss still deals half the damage.
     const grazed = spellRider?.halfOnMiss && hitOutcome.crit !== "nat1" ? missDamage(plan) : null;
     const curving = plan.weaponAttack && profile.ranged ? openCurvingShot(campaign.id, sheet, enemy.id, profile.base) : null;
@@ -340,6 +350,8 @@ export function rollPcAttack(plan: AttackPlan, strike: Strike): Record<string, u
       critExtraDice,
     }),
   );
+  hitLog?.swing(hitOutcome, plan.effectiveAc, { hit: true, crit, raw: dealt, advantage: plan.advantage, type: profile.damageType, ranged: profile.ranged });
+  closeLog();
 
   // Great Weapon Master: a melee weapon crit or kill opens a bonus-action
   // melee attack this turn (pc-attack-options.ts reads the key).
@@ -407,6 +419,8 @@ export function rollPcAttack(plan: AttackPlan, strike: Strike): Record<string, u
     ...applied,
     note: applied.dead
       ? `${enemy.displayName} is slain; the server already applied this damage. Narrate the killing blow.`
+      : applied.down
+        ? `${String(applied.note ?? `${enemy.displayName} falls.`)} The server already applied this damage.`
       : applied.knockedOut
         ? `${enemy.displayName} is knocked out, unconscious at 0 hit points and out of the fight; the server already applied this. Narrate it falling senseless, not dying.`
       : dealt === 0
@@ -507,9 +521,9 @@ function missDamage(plan: AttackPlan): Record<string, unknown> | null {
 // A maneuver's rider save (Trip -> prone, Menacing -> frightened) resolves
 // against the enemy's real stat block once the hit lands.
 function maneuverRiderSave(plan: AttackPlan, maneuver: ManeuverPick): Record<string, unknown> {
-  const { campaign, turn, encounter, enemy, derived } = plan;
+  const { campaign, turn, enemy, derived } = plan;
   const maneuverOutcome: Record<string, unknown> = {};
-  const fresh = resolveEnemyRef(encounter.id, enemy.id);
+  const fresh = getFoe(enemy.id);
   const rider = maneuver.rider;
   if (!rider || !fresh || fresh.status !== "alive") {
     return maneuverOutcome;
@@ -631,7 +645,7 @@ function featHitMarks(input: {
   const { campaign, encounter, sheet, enemy, typeFeat, crit, stunShot, budget } = input;
   const notes: string[] = [];
   const leave = (name: string): boolean => {
-    const fresh = getEnemy(enemy.id);
+    const fresh = getFoe(enemy.id);
     if (!fresh || fresh.status !== "alive" || fresh.conditions.includes(name)) {
       return false;
     }

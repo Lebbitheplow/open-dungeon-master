@@ -140,7 +140,7 @@ export const TOOL_GROUPS: Record<ToolGroupId, { summary: string; tools: readonly
   // A pet's damage is apply_damage's (issue #471), which a table with pets
   // is offered with this group.
   pets: { summary: "familiars, pets and animal companions", tools: ["summon_pet", "pet_attack", "dismiss_pet", "apply_damage"] },
-  relationships: { summary: "bonds, romance and their endings", tools: ["relationship_beat", "romance_advance", "relationship_end"] },
+  relationships: { summary: "bonds, romance and their endings", tools: ["relationship_beat", "romance_advance", "relationship_end", "relationship_scheme"] },
   picture: { summary: "a picture of the scene", tools: ["generate_image"] },
 };
 
@@ -198,6 +198,9 @@ export type ProfileSignals = {
   legendary?: boolean;
   // Someone at the table casts spells.
   caster?: boolean;
+  // An NPC is ready to make a romantic move (issue 501, src/lib/dm/advance-
+  // tick.ts): romance_advance is offered while the window is open.
+  advanceReady?: boolean;
   // The newest player lines at an English table, read for the English words
   // of ENGLISH_INTENT (none at another table), and the tool a card played
   // from the Hand names.
@@ -236,6 +239,7 @@ export function autoGroups(signals: ProfileSignals): Set<ToolGroupId> {
   if (signals.quests) groups.add("binder");
   if (signals.inEncounter && signals.legendary) groups.add("legendary");
   if (signals.caster) groups.add("spells");
+  if (signals.advanceReady) groups.add("relationships");
   const text = signals.englishPlayerText ?? "";
   for (const [group, pattern] of ENGLISH_INTENT) {
     if (pattern.test(text)) groups.add(group);

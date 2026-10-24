@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { conscienceForbidsCommand } from "@/lib/dm/conscience";
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
 import { allocateSeq } from "@/lib/db/campaigns";
 import { activePublicEncounter } from "@/lib/db/encounter-view";
@@ -77,6 +78,14 @@ export async function PATCH(
   const commander = parsed.data.commandedBy;
   if (commander && !commandingPlayers(context.campaign).includes(commander)) {
     return Response.json({ error: "Only a player at the table can command a companion." }, { status: 400 });
+  }
+  // Where companions may turn, one who has warned the party takes nobody's
+  // orders until its conscience climbs back (issue 503).
+  if (commander && conscienceForbidsCommand(context.campaign, sheet)) {
+    return Response.json(
+      { error: `${sheet.name} will not take orders while what the party did stands between them. Their conscience has to climb back first.` },
+      { status: 409 },
+    );
   }
   const updated = setCompanionCommander(sheet.id, commander);
   if (!updated) {

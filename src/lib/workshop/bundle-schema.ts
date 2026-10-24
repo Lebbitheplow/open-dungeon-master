@@ -127,6 +127,9 @@ const npcSchema = z.object({
   role: z.string().trim().max(40).default(""),
   // src/lib/gender.ts; bundles written before the field have none.
   gender: z.enum(["", ...GENDERS]).default(""),
+  // Who they are drawn to (src/lib/attraction.ts); bundles written before
+  // the field have none, and an unreadable one reads as undecided.
+  attraction: z.unknown().optional(),
   aliases: z.array(z.string().trim().max(80)).max(20).default([]),
   personality: z.string().max(4_000).default(""),
   goals: z.string().max(4_000).default(""),

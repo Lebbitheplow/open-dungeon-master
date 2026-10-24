@@ -16,6 +16,7 @@ import {
 } from "@/lib/dm/rest-logic";
 import { resolveSheetRef } from "@/lib/dm/rolls";
 import { tickWorldTimeskip } from "@/lib/dm/world-tick";
+import { departureNote, departureOpenings } from "@/lib/dm/departure";
 import { advanceClock, getClock, openShortRestWindow, recordLongRests, setTravelPace } from "@/lib/db/clock";
 import { getDmTurn } from "@/lib/db/dm-turns";
 import { partyChefDie, partySongOfRestDie, playerChoosesHitDice, spendHitDice } from "@/lib/dm/hit-dice";
@@ -213,6 +214,11 @@ export function handleTakeRest(
     }
   }
 
+  // The night watch of a long rest is a companion's opening (issue 503): one
+  // holding a plan to slip away, or to strike once the party is weak enough,
+  // acts on it as the party settles, read against the party as it lies down.
+  const leaving = args.kind === "long" ? departureOpenings(campaign, "long_rest").map(departureNote).filter(Boolean) : [];
+
   // A rest takes in-world time, and how much depends on the variant: eight
   // hours and one under the standard rules, a night and a week under gritty
   // realism, five minutes and an hour under the heroic option. Those two
@@ -283,6 +289,7 @@ export function handleTakeRest(
       ...(resilience.length ? { restTempHp: resilience } : {}),
       ...(afflictions.length ? { afflictions } : {}),
       ...(living.length ? { lifestyle: living } : {}),
+      ...(leaving.length ? { companionsLeft: leaving } : {}),
       ...(unaffected.length ? { unaffected: unaffected.join("; ") } : {}),
       restedFor,
       ...(nowReads ? { now: nowReads } : {}),

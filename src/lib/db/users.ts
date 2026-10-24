@@ -105,6 +105,20 @@ export function isCompanionUserId(userId: string): boolean {
   return userId.startsWith("comp_");
 }
 
+// The bot user behind a companion's sheet, put back under the id it had: a
+// chapter rewound across a dismissal restores the sheet (src/lib/db/
+// snapshots.ts), and the sheet's user_id must name a user or the restore
+// fails whole. Users are not snapshotted, so this is the one row it needs.
+export function restoreCompanionUser(userId: string, companionName: string) {
+  if (!isCompanionUserId(userId)) {
+    return;
+  }
+  const username = ["companion", asciiSlugOf(companionName).slice(0, 24), userId.slice(5, 13)].filter((part) => part !== "").join("-");
+  getDatabase()
+    .prepare(`INSERT OR IGNORE INTO users (id, username, password_hash, created_at, is_admin) VALUES (?, ?, ?, ?, 0)`)
+    .run(userId, username, NO_PASSWORD_SENTINEL, nowIso());
+}
+
 export function deleteCompanionUser(userId: string) {
   if (!isCompanionUserId(userId)) {
     return;

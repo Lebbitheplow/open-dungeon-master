@@ -88,6 +88,7 @@ function ComposerInner({
   onXCard,
   composerRef,
   trackAmmo,
+  romanceCue = true,
   edges,
   drops,
   mounts,
@@ -141,6 +142,8 @@ function ComposerInner({
   composerRef: RefObject<HTMLTextAreaElement | null>;
   // The ammunition variant rule, for the Hand's ranged cards.
   trackAmmo?: boolean;
+  // The Director's Romance cue is offered (issue 501).
+  romanceCue?: boolean;
   // The board's cover and flanking from this character to each enemy, for
   // the Hand's hit preview (src/lib/battlemap/view-tactics.ts).
   edges?: Record<string, TargetEdge>;
@@ -306,7 +309,7 @@ function ComposerInner({
         ) : null}
         {kind === "lead" && steersStory ? (
           <div className="reveal mb-2 flex flex-wrap items-center gap-1.5">
-            <DirectorPresets campaignId={campaignId} />
+            <DirectorPresets campaignId={campaignId} romance={romanceCue} />
             <Tooltip
               content={
                 leadPrivate

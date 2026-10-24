@@ -12,6 +12,7 @@ import { itemWeightByName, repairedWeight } from "@/lib/content";
 import { homebrewRaceLabel, hydrateHomebrewGear } from "@/lib/db/homebrew";
 import { subclassExtrasForTable } from "@/lib/db/subclass-extras";
 import { storedGender } from "@/lib/gender";
+import { attractionJson, normalizeAttraction } from "@/lib/attraction";
 import { backgroundFeatureFor } from "@/lib/backgrounds";
 import { registerSpeciesReader } from "@/lib/srd/race-id";
 import { featsAsRun } from "@/lib/srd/feat-effects";
@@ -83,6 +84,8 @@ type SheetRow = {
   personality: string | null;
   hand_layout_json?: string | null;
   feat_choices_json?: string | null;
+  attraction_json?: string | null;
+  open_to_advances?: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -119,6 +122,8 @@ function mapSheet(row: SheetRow): CharacterSheet {
     background: row.background,
     alignment: row.alignment,
     gender: storedGender(row.gender),
+    attraction: normalizeAttraction(row.attraction_json ?? ""),
+    openToAdvances: row.open_to_advances === 1,
     level: row.level,
     xp: row.xp,
     abilities: parseJson(row.abilities_json, { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 }),
@@ -213,8 +218,19 @@ const SHEET_COLUMNS = `
   classes_json, hit_dice_pools_json,
   proficiencies_json, equipment_json, gold, copper, feats_json, features_json,
   spellcasting_json, conditions_json, condition_meta_json, resources_json, wild_shape_json, pets_json, summon_json, exhaustion, death_saves_json, concentrating_on, concentration_rounds,
-  portrait_json, notes, backstory, is_companion, companion_kind, commanded_by, personality, hand_layout_json, feat_choices_json, created_at, updated_at
+  portrait_json, notes, backstory, is_companion, companion_kind, commanded_by, personality, hand_layout_json, feat_choices_json,
+  attraction_json, open_to_advances, created_at, updated_at
 `;
+
+// The owner's answer to "Open to advances from NPCs" (issue 501), for this
+// table only. Like the Hand layout it is a preference, not an edit, so
+// nothing else on the sheet moves and updated_at stays.
+export function setOpenToAdvances(sheetId: string, open: boolean): CharacterSheet | null {
+  getDatabase()
+    .prepare(`UPDATE character_sheets SET open_to_advances = ? WHERE id = ?`)
+    .run(open ? 1 : 0, sheetId);
+  return getSheetById(sheetId);
+}
 
 // Flags a freshly created sheet as an AI companion. Kept out of the main
 // INSERT so every existing creation path stays untouched.
@@ -401,9 +417,9 @@ export function createSheet(
         level, xp, abilities_json, max_hp, current_hp, temp_hp, ac, ac_override, speed,
         hit_dice_json, classes_json, hit_dice_pools_json, proficiencies_json, equipment_json, gold, copper, feats_json,
         features_json, resources_json, spellcasting_json, conditions_json, portrait_json,
-        notes, backstory, feat_choices_json, created_at, updated_at
+        notes, backstory, feat_choices_json, attraction_json, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, ?, ?, ?, ?)
     `,
   ).run(
     id,
@@ -451,6 +467,8 @@ export function createSheet(
     // Older library sheet_json blobs predate the field.
     input.backstory ?? "",
     featChoicesJson(input.featChoices),
+    // Older library sheet_json blobs and companion drafts predate the field.
+    attractionJson(input.attraction),
     now,
     now,
   );

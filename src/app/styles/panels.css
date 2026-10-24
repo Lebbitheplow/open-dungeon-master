@@ -159,10 +159,12 @@
     background: rgba(212, 171, 58, 0.07);
   }
 
-  /* The name at the head of a settings row: small caps in the kit's gold. */
+  /* The name at the head of a settings row: small caps in the kit's gold.
+     A column wide, or as wide as a longer name needs ("Conscience"), so a
+     name never runs into the control beside it. */
   .pk-rowlabel {
     flex: none;
-    width: 4.75rem;
+    min-width: 4.75rem;
     font-family: var(--font-display), Georgia, serif;
     font-size: 0.66rem;
     letter-spacing: 0.12em;

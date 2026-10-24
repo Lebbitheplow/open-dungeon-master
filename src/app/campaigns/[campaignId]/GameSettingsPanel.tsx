@@ -16,7 +16,7 @@ import type { GameSettings } from "@/lib/schemas/game-settings";
 import { describeTableReroll } from "@/lib/srd/ability-rerolls";
 import { useServerRerollBelow } from "@/app/characters/builder/useTableRules";
 import { transcribesVoice, useCapabilities } from "@/lib/use-capabilities";
-import { COMPANION_LABELS, CAMPAIGN_LENGTH_LABELS } from "@/lib/schemas/game-settings-options";
+import { COMPANION_LABELS, CAMPAIGN_LENGTH_LABELS, CONSCIENCE_LABELS } from "@/lib/schemas/game-settings-options";
 import {
   AiGroup,
   AtmosphereGroup,
@@ -34,6 +34,7 @@ import {
   WorldGroup,
 } from "@/app/campaigns/[campaignId]/GameSettingsGroups";
 import {
+  conscienceShown,
   groupMatches,
   tableGroupSummary,
   tableGroups,
@@ -52,7 +53,7 @@ export const BONDS_INFO = [
 
 export const ROMANCE_INFO = [
   "The romance ladder on top of the bond meter: interested, courting, together, betrothed, married.",
-  "Nobody can be romanced who does not already like the character, players always make the first move, and intimate scenes always fade to black.",
+  "Nobody can be romanced who does not already like the character, nobody is courted who did not ask to be, and intimate scenes always fade to black.",
   "Requires Bonds to be on.",
 ].join("\n\n");
 
@@ -106,12 +107,16 @@ export function GameSettingsPanel({
   steersStory,
   heading = true,
   solo = false,
+  lastingCompanions = false,
 }: {
   campaignId: string;
   settings: GameSettings;
   steersStory: boolean;
   // A table of one: the controls that wait on other players are left out.
   solo?: boolean;
+  // A lasting AI companion can travel with this party, so its conscience
+  // setting can matter (issue 503).
+  lastingCompanions?: boolean;
   // The lobby names the section itself, so the panel's own title would say
   // "Table settings" twice.
   heading?: boolean;
@@ -311,6 +316,12 @@ export function GameSettingsPanel({
             <GameIcon icon={{ kind: "glyph", key: "system-party" }} size="size-5" />
             AI companions: {COMPANION_LABELS[settings.companions]}
           </span>
+          {conscienceShown(settings, lastingCompanions) ? (
+            <span className="flex items-center gap-1.5" data-conscience-setting>
+              <GameIcon icon={{ kind: "glyph", key: "tab-bonds" }} size="size-5" />
+              Companion conscience: {CONSCIENCE_LABELS[settings.companionConscience ?? "leave"]}
+            </span>
+          ) : null}
         </div>
         {narrating ? <CharacterVoices campaignId={campaignId} settings={settings} steersStory={false} /> : null}
       </section>
@@ -323,6 +334,7 @@ export function GameSettingsPanel({
     voiceName: voiceLabel(voices, settings.ttsVoice),
     narrationOff,
     statsRule: describeTableReroll(settings.abilityRerollBelow, serverRerollBelow).toLowerCase(),
+    lastingCompanions,
   };
   const searching = find.trim().length > 0;
   const visible = tableGroups(settings)
@@ -347,7 +359,7 @@ export function GameSettingsPanel({
       case "memory":
         return <MemoryGroup {...base} />;
       case "bonds":
-        return <BondsGroup {...base} />;
+        return <BondsGroup {...base} lastingCompanions={lastingCompanions} />;
       case "players":
         return <PlayersGroup {...base} solo={solo} />;
       case "console":

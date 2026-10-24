@@ -1,6 +1,7 @@
 "use client";
 
 import type { Gender } from "@/lib/gender";
+import { normalizeAttraction, type Attraction } from "@/lib/attraction";
 import { authoredFeatDesc } from "@/lib/srd/feat-effects";
 import { toolChoiceOf } from "@/lib/srd/tool-choices";
 import { useEffect, useRef, useState } from "react";
@@ -83,6 +84,7 @@ export type BuilderDraftFields = {
   optionPicks: string[];
   backstory: string;
   gender: Gender;
+  attraction: Attraction;
   appearance: string;
   portrait: SheetAttachment | null;
   gold: number;
@@ -269,6 +271,8 @@ export function useBuilderState({
   const [spellWarningAck, setSpellWarningAck] = useState(false);
   const [backstory, setBackstory] = useState(initial?.backstory ?? "");
   const [gender, setGender] = useState<Gender>(initial?.gender ?? "");
+  // Who they are drawn to (issue 501), kept through an edit like the gender.
+  const [attraction, setAttraction] = useState<Attraction>(() => normalizeAttraction(initial?.attraction));
   const [appearance, setAppearance] = useState(initial?.appearance ?? "");
   // An uploaded photo here means the creation routes skip the ComfyUI render
   // entirely (they only queue one when the sheet arrives without a portrait).
@@ -602,6 +606,7 @@ export function useBuilderState({
     optionPicks: setOptionPicks,
     backstory: setBackstory,
     gender: setGender,
+    attraction: setAttraction,
     appearance: setAppearance,
     portrait: setPortrait,
     gold: setGold,
@@ -678,6 +683,7 @@ export function useBuilderState({
     optionPicks,
     backstory,
     gender,
+    attraction,
     appearance,
     portrait,
     gold,
@@ -738,6 +744,7 @@ export function useBuilderState({
     spellWarningAck, setSpellWarningAck,
     backstory, setBackstory,
     gender, setGender,
+    attraction, setAttraction,
     appearance, setAppearance,
     portrait, setPortrait,
     gold, setGold,

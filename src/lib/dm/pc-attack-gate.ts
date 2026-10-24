@@ -1,3 +1,7 @@
+import { lashOutTarget } from "@/lib/dm/confusion";
+import { resolveTargetFoe } from "@/lib/dm/sheet-foe";
+import { hostileTo, unknownCombatantRef } from "@/lib/dm/combatant";
+import { isSheetFoe } from "@/lib/dm/combat-sides-logic";
 // The refusals that come before a player's attack is built: whether the
 // attacker may attack now (their action on their turn, their one reaction
 // off it), whether the target can be attacked at all, and whether the
@@ -9,7 +13,6 @@ import type { Campaign } from "@/lib/db/campaigns";
 import type { Encounter, EncounterEnemy } from "@/lib/db/encounters";
 import { actingCombatantId, canAct } from "@/lib/dm/can-act";
 import type { ConditionMetaMap } from "@/lib/dm/condition-logic";
-import { resolveEnemyRef, unknownEnemyRef } from "@/lib/dm/enemy-damage";
 import { READIED_WORDS, RELEASE_TOOLS, readiedHeld } from "@/lib/dm/readied-kinds";
 import type { PcAttackArgs } from "@/lib/dm/pc-attack";
 import { inspirationProblem, strokeOfLuckProblem } from "@/lib/dm/attack-features";
@@ -25,6 +28,9 @@ export function gatePcAttack(input: {
   encounter: Encounter;
   sheet: CharacterSheet;
   args: PcAttackArgs;
+  // A target the rules chose, whichever side it is on (Confusion's random
+  // creature in reach, spell-turn-start.ts); never the model's to set.
+  anySide?: boolean;
 }): { enemy: EncounterEnemy; giantKiller: boolean } | { refused: ToolError } {
   const { campaign, encounter, sheet, args } = input;
 
@@ -62,7 +68,7 @@ export function gatePcAttack(input: {
     // attack (the server rolls those itself) or a readied action.
     // Giant Killer answers a Large creature's attack the same way
     // (src/lib/dm/reaction-attacks.ts).
-    const target = resolveEnemyRef(encounter.id, args.targetEnemyId);
+    const target = resolveTargetFoe(campaign.id, encounter, args.targetEnemyId);
     giantKiller = Boolean(target && giantKillerOpen(campaign.id, encounter.id, sheet, target));
     // Ready commits to one action: a readied attack (or a readied
     // attack-roll spell) releases here, a readied move or Help does not.
@@ -79,12 +85,35 @@ export function gatePcAttack(input: {
       };
     }
   }
-  const enemy = resolveEnemyRef(encounter.id, args.targetEnemyId);
+  // The target is any combatant (src/lib/dm/combatant.ts): an enemy, or a
+  // character fighting on the other side, seen as a foe (sheet-foe.ts).
+  const enemy = resolveTargetFoe(campaign.id, encounter, args.targetEnemyId);
   if (!enemy) {
-    return { refused: unknownEnemyRef(encounter.id, "targetEnemyId", args.targetEnemyId) };
+    return { refused: unknownCombatantRef(campaign.id, encounter, "targetEnemyId", args.targetEnemyId) };
+  }
+  if (enemy.id === sheet.id) {
+    return { refused: { error: `${sheet.name} cannot attack themselves. Name the creature they attack.`, retry: true } };
+  }
+  // A character on the attacker's own side is an ally: pc_attack does not
+  // strike one by mistake. A character who turns on the party is moved to
+  // the other side by the server (combat-sides.ts), and is a target then.
+  // Confusion's lash-out (confusion.ts): the creature its d10 picked, and no
+  // other, whichever side it is on.
+  const lash = lashOutTarget(sheet, encounter.round);
+  if (lash && enemy.id !== lash) {
+    const picked = resolveTargetFoe(campaign.id, encounter, lash);
+    return { refused: { error: `${sheet.name} is confused: this turn's attack is on ${picked?.displayName ?? "the creature Confusion picked"}, picked at random, and no other.`, refused: "rules" } };
+  }
+  if (isSheetFoe(enemy) && !input.anySide && !lash && !hostileTo(encounter, { kind: "sheet", id: sheet.id }, { kind: "sheet", id: enemy.id })) {
+    return {
+      refused: {
+        error: `${enemy.displayName} fights on ${sheet.name}'s side: pc_attack does not strike an ally. Pick a creature on the other side.`,
+        refused: "rules",
+      },
+    };
   }
   if (enemy.status !== "alive") {
-    return { refused: { error: `${enemy.displayName} is already ${enemy.status}. Ask the player which living enemy in GAME STATE to target instead.`, retry: true } };
+    return { refused: { error: `${enemy.displayName} is already ${enemy.status}. Ask the player which living ${isSheetFoe(enemy) ? "foe" : "enemy"} in GAME STATE to target instead.`, retry: true } };
   }
   // Resilient Sphere: nothing reaches in (condition-effects untargetable).
   const sealed = conditionUntargetable(enemy.conditions);

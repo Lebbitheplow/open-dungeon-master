@@ -2,6 +2,7 @@ import { listRelationships, patchRelationship } from "@/lib/db/relationships";
 import { recordExtractedFacts } from "@/lib/db/facts";
 import { publishEphemeral } from "@/lib/events";
 import { decayBeatCounts, longingNote } from "@/lib/dm/relationship-logic";
+import { outwardApproval } from "@/lib/dm/scheme-logic";
 import type { FactCandidate } from "@/lib/dm/fact-logic";
 import { textKey } from "@/lib/language/text-logic";
 
@@ -37,7 +38,9 @@ export function advanceRelationships(campaignId: string, chapterTranscript: stri
           relationship.subjectName,
           relationship.characterName,
           apartChapters,
-          relationship.approval,
+          // A schemer seeks out their mark as the act would: the nudge
+          // reads like any other, to the lead who reads DM-only facts.
+          outwardApproval(relationship),
           relationship.romance,
         );
     if (note) {

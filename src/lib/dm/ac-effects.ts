@@ -13,6 +13,8 @@ import { applyField } from "@/lib/dm/effects-logic";
 import { effectiveAcFor } from "@/lib/srd";
 import { conditionAcRiders } from "@/lib/srd/condition-effects";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { getSheetById } from "@/lib/db/sheets";
+import { isSheetFoe } from "@/lib/dm/combat-sides-logic";
 
 export function acWithEffects(campaignId: string, sheet: CharacterSheet): number {
   return applyField(
@@ -25,6 +27,12 @@ export function acWithEffects(campaignId: string, sheet: CharacterSheet): number
 // with what its conditions add or take away (its own Shield, Shield of
 // Faith, Haste, a Slow).
 export function enemyAcWithEffects(campaignId: string, enemy: EncounterEnemy): number {
+  // A character fighting the party, seen as a foe (sheet-foe.ts): the AC is
+  // the sheet's own, with what its effects add.
+  const sheet = isSheetFoe(enemy) ? getSheetById(enemy.id) : null;
+  if (sheet) {
+    return acWithEffects(campaignId, sheet);
+  }
   return applyField(
     enemy.ac + conditionAcRiders(enemy.conditions).bonus,
     effectOutcome(campaignId, { kind: "enemy", id: enemy.id }, "ac"),

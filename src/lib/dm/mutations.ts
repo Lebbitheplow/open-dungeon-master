@@ -1,4 +1,5 @@
 import { healerKitUse } from "@/lib/dm/stabilize";
+import { shadowExperience } from "@/lib/db/companion-departures";
 import { subclassExtrasForTable } from "@/lib/db/subclass-extras";
 import { foldFieldValue } from "@/lib/dm/update-sheet-args";
 import { aiSheetFieldRefusal } from "@/lib/dm/update-sheet-ai";
@@ -680,6 +681,11 @@ export function applyDmMutation(
     }
     const levelUps: string[] = [];
     const companionLevelUps: string[] = [];
+    // A companion who left the party keeps pace with it while away (issue
+    // 503 shadow levelling): the party's award is counted on their record.
+    if (targets.some((sheet) => !sheet.isCompanion)) {
+      shadowExperience(campaign.id, amount);
+    }
     for (const sheet of targets) {
       const newXp = sheet.xp + amount;
       patchSheet(sheet.id, { xp: newXp });

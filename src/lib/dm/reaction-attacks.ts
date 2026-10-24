@@ -11,7 +11,7 @@
 import { sizeRank } from "@/lib/bestiary/enemy-numbers";
 import type { EncounterEnemy } from "@/lib/db/encounters";
 import { tilesBetween } from "@/lib/dm/attack-spatial";
-import { freshLastHit, writeLastHit } from "@/lib/dm/last-hit";
+import { attackerFoeId, freshLastHit, writeLastHit } from "@/lib/dm/last-hit";
 import { holdsFeature } from "@/lib/srd/trait-rules";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
@@ -37,7 +37,7 @@ export function giantKillerOpen(
   if (
     !record ||
     record.source !== "attack" ||
-    record.attacker.kind !== "enemy" ||
+    attackerFoeId(record) === null ||
     record.attacker.id !== enemy.id ||
     record.answered.includes(GIANT_KILLER)
   ) {

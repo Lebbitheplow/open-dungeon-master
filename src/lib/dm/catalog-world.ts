@@ -2,6 +2,8 @@
 // fight and outside the party's own sheets. Names match the tool names the
 // AI DM is offered exactly.
 import { CHECK_KEY_FORM } from "@/lib/dm/catalog-roll";
+import { DEED_SEVERITIES } from "@/lib/dm/companion-values-logic";
+
 import type { CatalogEntry } from "@/lib/dm/catalog-types";
 import { cueOptions, sceneOptions } from "@/lib/ambience/catalog";
 import { RELATIONSHIP_BEAT_NAMES } from "@/lib/dm/relationship-logic";
@@ -15,6 +17,9 @@ import {
   damageTypeField,
 } from "@/lib/dm/catalog-vocab";
 import { REQUEST_ROLL_ADJUDICATION } from "@/lib/dm/catalog-roll";
+
+// The console form's words for a deed's severity (issue 503).
+const SEVERITY_LABELS: Record<(typeof DEED_SEVERITIES)[number], string> = { minor: "Minor", serious: "Serious", atrocity: "Atrocity" };
 
 const REASON = {
   name: "reason",
@@ -46,6 +51,16 @@ export const GENDER_FIELD = {
   label: "Gender",
   kind: "select",
   options: TOLD_GENDERS.map((gender) => ({ value: gender, label: gender })),
+} as const;
+
+// Who an NPC or companion could fall for (issue 501), the words the DM's
+// tools take; written once and kept.
+export const DRAWN_TO_FIELD = {
+  name: "drawnTo",
+  label: "Drawn to",
+  kind: "list",
+  placeholder: "women, men, nonbinary people",
+  help: "Who they could fall for, once the story shows it. Set once and kept.",
 } as const;
 
 export const WORLD_ADJUDICATIONS: CatalogEntry[] = [
@@ -355,7 +370,7 @@ export const WORLD_ADJUDICATIONS: CatalogEntry[] = [
         help: "Off the board; left empty, the current location and the hour decide.",
       },
       { name: "againstEnemyId", label: "Hiding (enemy)", kind: "enemy", help: "The server rolls its Stealth (or Deception for Insight) as the DC." },
-      { name: "againstMonster", label: "Hiding (stat block)", kind: "text", placeholder: "goblin", help: "Out of a fight: the creature's stat block by name." },
+      { name: "againstMonster", label: "Hiding or lying (stat block or NPC)", kind: "text", placeholder: "goblin", help: "Out of a fight: the creature's stat block by name, or for Insight a tracked NPC's name. Whoever beats an NPC's act is told privately." },
       { name: "characterIds", label: "Who might notice", kind: "characters" },
       {
         name: "about",
@@ -389,6 +404,7 @@ export const SOCIAL_ADJUDICATIONS: CatalogEntry[] = [
       { name: "trait", label: "Trait", kind: "text" },
       { name: "location", label: "Found at", kind: "text" },
       GENDER_FIELD,
+      DRAWN_TO_FIELD,
       { name: "goal", label: "Wants", kind: "text" },
       { name: "ambition", label: "Long game", kind: "text" },
     ],
@@ -444,6 +460,19 @@ export const SOCIAL_ADJUDICATIONS: CatalogEntry[] = [
         options: RELATIONSHIP_BEAT_NAMES.map((beat) => ({ value: beat, label: beat.replace(/_/g, " ") })),
       },
       NOTE,
+      // A deed's (issue 503): who else saw it and how grave it was, and what
+      // a companion it pushes to an ultimatum demands.
+      { name: "witnesses", label: "Others who saw it", kind: "list", placeholder: "Brother Aldo, Seren", help: "Deeds only: every other tracked NPC or companion who saw it, comma separated." },
+      {
+        name: "severity",
+        label: "How grave",
+        kind: "select",
+        help: "Deeds only. Serious when left unset.",
+        options: DEED_SEVERITIES.map((severity) => ({ value: severity, label: SEVERITY_LABELS[severity] })),
+      },
+      { name: "faction", label: "Done to a faction", kind: "text", help: "Deeds only: the faction whose people it was done to, if any." },
+      { name: "demand", label: "Ultimatum demand", kind: "text", help: "Deeds only: what a companion at a warning demands if this pushes them to an ultimatum." },
+      { name: "deadlineHours", label: "Ultimatum hours", kind: "number", min: 1, max: 168, help: "Deeds only: hours on the clock the demand gives. 24 when left empty." },
     ],
   },
   {
@@ -467,6 +496,16 @@ export const SOCIAL_ADJUDICATIONS: CatalogEntry[] = [
           { value: "married", label: "Married" },
         ],
         help: "The next step only; the server refuses a skipped one.",
+      },
+      {
+        name: "initiator",
+        label: "Who moves",
+        kind: "select",
+        options: [
+          { value: "player", label: "The player's character" },
+          { value: "npc", label: "The NPC (their first move)" },
+        ],
+        help: "An NPC's first move is an offer only that character's player answers, toward a character open to advances.",
       },
       NOTE,
     ],
@@ -493,6 +532,38 @@ export const SOCIAL_ADJUDICATIONS: CatalogEntry[] = [
           { value: "death", label: "Death" },
         ],
       },
+      {
+        name: "by",
+        label: "Who betrayed whom",
+        kind: "select",
+        options: [
+          { value: "character", label: "The character betrayed them" },
+          { value: "npc", label: "The NPC betrayed the character" },
+        ],
+        help: "Betrayal only. An NPC's betrayal costs nothing of their regard, and an act they kept up comes out.",
+      },
+      NOTE,
+    ],
+  },
+  {
+    name: "relationship_scheme",
+    label: "An NPC's act",
+    category: "social",
+    summary: "An NPC only pretends to care for a character open to advances, or the truth comes out.",
+    fields: [
+      {
+        name: "action",
+        label: "What happens",
+        kind: "select",
+        required: true,
+        options: [
+          { value: "start", label: "The act begins" },
+          { value: "reveal", label: "The truth comes out" },
+        ],
+      },
+      { name: "characterId", label: "Aimed at", kind: "character", required: true, help: "A character whose player opened them to advances from NPCs." },
+      { name: "subject", label: "NPC", kind: "text", required: true, help: "Their name as the table tracks it. They must be drawn to the character, and the character to them." },
+      { name: "motive", label: "What they really want", kind: "text", placeholder: "the vault key", help: "To start. Yours alone: no player sees it, the party lead included." },
       NOTE,
     ],
   },

@@ -202,6 +202,10 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
     resolveCompanionMode(campaign.gameSettings, partySize, humanDmTable) === "full" &&
     partyCompanions.length < campaign.gameSettings.maxCompanions;
   const showCompanions = canBuildCompanion || (steersStory && partyCompanions.length > 0);
+  // Whether a lasting companion can travel with this party, so its
+  // conscience setting can matter (issue 503).
+  const lastingCompanions =
+    resolveCompanionMode(campaign.gameSettings, partySize, humanDmTable) === "full" || partyCompanions.length > 0;
   // AI Story Setup meeting the table's prep (issue 249): the one-time pass
   // is still to run at a table the AI narrates, and either an imported
   // Storyboard already wrote the arc (state.prepArc, told only to whoever
@@ -665,6 +669,7 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
               steersStory={steersStory}
               heading={false}
               solo={campaign.maxPlayers <= 1}
+              lastingCompanions={lastingCompanions}
             />
           </div>
         </div>

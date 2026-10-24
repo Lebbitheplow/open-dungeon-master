@@ -1,4 +1,6 @@
 import { emptyTurnLine, type EmptyTurnPlayer } from "@/lib/dm/empty-turn";
+import { defaultSide } from "@/lib/dm/combat-sides-logic";
+import { combatantsOf } from "@/lib/dm/combatant";
 import { manualTraits } from "@/lib/dm/monster-traits";
 import { coordinationForPrompt } from "@/lib/dm/coordination";
 import { clipKeepingEnds } from "@/lib/dm/ask-logic";
@@ -119,11 +121,17 @@ import { intentAnswered, intentCorrection, intentNeedsTool, type MessageIntent }
 import { handleCompleteBeat } from "@/lib/dm/arc";
 import { tickWaypointsFromCalls } from "@/lib/dm/waypoint-tick";
 import { enforceEngineBoundary } from "@/lib/dm/narration-guard";
+import { souredLeaving } from "@/lib/dm/conscience";
+import { companionMomentBlock, settleCompanionLeaving } from "@/lib/dm/departure-turn";
+import { intentLinesForPrompt } from "@/lib/dm/departure";
+import { returnDirectorNotes } from "@/lib/dm/companion-revenge";
+import { noteUnrecordedDeeds } from "@/lib/dm/deed-claims";
 import {
   buildDmMessages,
   type DmGameState,
   companionRules,
   relationshipRules,
+  tableConscienceRules,
   completeBeatTool,
   movePartyTool,
   recallStoryTool,
@@ -148,6 +156,10 @@ import { listChapters } from "@/lib/db/chapters";
 import { listDmPrepNotes, listPublicCampaignNotes } from "@/lib/db/notes";
 import { listActiveFacts } from "@/lib/db/facts";
 import { consumePendingSparks, tickWorldState } from "@/lib/dm/world-tick";
+import { advanceDirectorNotes, advanceWindowOpen, tickAdvances } from "@/lib/dm/advance-tick";
+import { storytellerLinesForPrompt } from "@/lib/dm/scheme-tools";
+import { isStorytellerFact } from "@/lib/dm/fact-logic";
+import { bumpAiTurns } from "@/lib/db/advances";
 import { buildDirectorBlock } from "@/lib/dm/director-logic";
 import { takeDirectorArm } from "@/lib/db/director-arms";
 import { listPins } from "@/lib/db/pins";
@@ -220,7 +232,9 @@ import {
   relationshipTools,
   RELATIONSHIP_TOOL_NAMES,
   relationshipRosterForPrompt,
+  romanceEnabled,
 } from "@/lib/dm/relationship-tools";
+import { openToAdvanceNames } from "@/lib/dm/advance-logic";
 import { PARTY_TOOL_NAMES, partyTools } from "@/lib/dm/party-tools";
 import { SCENE_TOOL_NAMES, sceneTools } from "@/lib/dm/scene-tools";
 import { AMBIENCE_TOOL_NAMES, ambienceTools, followSceneAmbience } from "@/lib/dm/ambience-tools";
@@ -439,8 +453,18 @@ function buildEncounterState(campaignId: string, sheets: CharacterSheet[]) {
       vulnerable: enemy.stats.vulnerable,
       concentration: enemy.concentration,
     })),
+    ...sidesForState(encounter),
     map: buildMapText(encounter.id, sheets),
   };
+}
+
+// The combatants fighting on the side their kind does not (issue 503,
+// src/lib/dm/combatant.ts), for the model to play and target by.
+function sidesForState(encounter: Encounter) {
+  const turned = combatantsOf(encounter.campaignId, encounter)
+    .filter((combatant) => combatant.side !== defaultSide(combatant.kind))
+    .map((combatant) => ({ id: combatant.id, name: combatant.name, kind: combatant.kind, side: combatant.side }));
+  return turned.length ? { sides: turned } : {};
 }
 
 // The acting character's movement left this turn, from the budget the
@@ -571,6 +595,9 @@ async function openTurn(
   const spotlightWaiting = floor.mode === "spotlight" && !floor.userIds.every((id) => floor.respondedUserIds.includes(id));
   const oocOnly = !pendingWhispers.length && oocQuestionPending(history, { heldMoves: spotlightWaiting });
 
+  // A companion's leaving (issue 503): decided and acted on before the
+  // context is read, so the prompt sees the party as it now stands.
+  const leavingNotes = oocOnly ? [] : settleCompanionLeaving(campaign);
   const context = loadContext(campaign);
   // Combat can never wedge on missing initiative: when nothing is pending,
   // stragglers are auto-rolled before the prompt is built.
@@ -610,7 +637,8 @@ async function openTurn(
   // correct: retry-turn.ts replays that stored conversation, so the directive
   // is still in the prompt it re-runs, neither lost nor applied twice.
   const directorArm = oocOnly ? null : takeDirectorArm(campaignId);
-  const directorBlock = buildDirectorBlock(directorArm);
+  // A Romance cue armed before romance went off is dropped (issue 501).
+  const directorBlock = buildDirectorBlock(directorArm, campaign.gameSettings);
   if (directorArm) {
     // Clear the armed badge for every client now that the steer is spent.
     publishPersisted(campaignId, "director_armed", {
@@ -774,20 +802,33 @@ async function openTurn(
       })),
       dmPrepNotes: listDmPrepNotes(campaignId, 8).map((note) => ({ title: note.title, body: note.body })),
       groundItems: describeGround(campaignId),
-      facts: listActiveFacts(campaignId).map((fact) => ({
-        category: fact.category,
-        subject: fact.subject,
-        fact: fact.fact,
-        pinned: fact.pinned,
-        knownBy: fact.knownBy,
-      })),
-      directorNotes: oocOnly ? [] : consumePendingSparks(campaignId).map((spark) => spark.text),
+      // An out-of-character answer goes to the whole table, so its prompt
+      // carries none of the storyteller's own secrets (src/lib/dm/viewer.ts).
+      facts: listActiveFacts(campaignId)
+        .filter((fact) => !oocOnly || !isStorytellerFact(fact.knownBy))
+        .map((fact) => ({
+          category: fact.category,
+          subject: fact.subject,
+          fact: fact.fact,
+          pinned: fact.pinned,
+          knownBy: fact.knownBy,
+        })),
+      // The world's sparks, and a departed companion's return once it is
+      // cued (issue 503).
+      directorNotes: oocOnly ? [] : [...consumePendingSparks(campaignId).map((spark) => spark.text), ...returnDirectorNotes(campaign)],
+      // The storyteller's section: who is open to advances, an NPC ready to
+      // make a move (issue 501, said while its window is open), an NPC's act,
+      // and a companion's plan to leave (issue 503).
+      storytellerLines: oocOnly
+        ? []
+        : [...storytellerLinesForPrompt(campaign, context.sheets, advanceDirectorNotes(campaign)), ...intentLinesForPrompt(campaign, context.sheets)],
+      withholdStorytellerSecrets: oocOnly,
       directorBlock,
-      npcs: npcRosterForPrompt(campaignId).map((npc) => ({ ...npc, world: world.npcNotes.get(npc.name) })),
+      npcs: npcRosterForPrompt(campaignId, { romance: romanceEnabled(campaign) }).map((npc) => ({ ...npc, world: world.npcNotes.get(npc.name) })),
       relationships:
         campaign.gameSettings.relationships === "off"
           ? []
-          : relationshipRosterForPrompt(campaignId),
+          : relationshipRosterForPrompt(campaignId, { storyteller: !oocOnly, leaving: souredLeaving(campaign) }),
       recentWhispers: listRecentWhispersForPrompt(campaignId, 10),
       pendingPlayerWhispers: pendingWhispers.map((whisper) => ({
         from: whisper.characterName,
@@ -797,6 +838,9 @@ async function openTurn(
       // (issue 239), so an accepted offer is never asked about again.
       offers: offerLinesForPrompt(campaignId, context.sheetsById),
       coordinationBlock: coordinationForPrompt(campaignId),
+      // Each lasting companion's values and conscience, who has left and
+      // what the server just had them do (issue 503).
+      conscienceBlock: companionMomentBlock(campaign, context.sheets, leavingNotes),
   };
   const conversation = buildDmMessages(promptState, history);
   if (oocOnly) {
@@ -1027,11 +1071,15 @@ export function dmTurnTools(
     ...hazardTools,
     ...petTools,
     ...socialTools,
-    ...(inEncounter ? [] : relationshipTools(campaign)),
+    // In a fight, deeds alone (issue 503): most executions happen there.
+    ...relationshipTools(campaign, inEncounter),
     ...(inEncounter ? [] : worldTools),
     // Lifting a load, lifestyles, downtime, diseases, madness and poisons
-    // (src/lib/dm/explore-tools.ts); downtime refuses itself in a fight.
-    ...exploreTools,
+    // (src/lib/dm/explore-tools.ts). Downtime refuses itself in a fight, so
+    // a fight is not offered it: its ~1,100 tokens bought nothing there, and
+    // a fight's trimmed set on a 48K window is the one with no room to spare
+    // (scripts/test-prompt-window.mjs).
+    ...(inEncounter ? exploreTools.filter((tool) => tool.function.name !== "downtime") : exploreTools),
     // Handouts and the quest log are read at the table's pace, not mid-round.
     ...(inEncounter ? [] : binderTools),
     ...(inEncounter ? [] : factionTools),
@@ -1065,7 +1113,7 @@ export function dmTurnTools(
     ...(inEncounter ? [] : preparedEncounterTools(campaign)),
     castBuffTool,
     ...(inEncounter ? [] : restTools),
-    ...companionTools(campaign),
+    ...companionTools(campaign, inEncounter),
     ...(leanTools ? mutationTools.filter((tool) => keptWhenTrimmed(tool.function.name, inEncounter)) : mutationTools),
     ...(imageEnabled ? [generateImageTool] : []),
     ];
@@ -1128,6 +1176,9 @@ export function profileSignals(campaign: Campaign, sheets: readonly CharacterShe
       ? listEnemies(encounter.id).some((enemy) => enemy.stats.traits.some((trait) => /\b(legendary|lair) actions?\b/i.test(trait)))
       : false,
     caster: sheets.some(casts),
+    // An NPC is ready to make a romantic move (issue 501): its tool is
+    // offered while the window is open.
+    advanceReady: !inEncounter && advanceWindowOpen(campaign),
   };
 }
 
@@ -1233,7 +1284,7 @@ function handleMoreTools(campaign: Campaign, turn: DmTurn, imageEnabled: boolean
       groupGuidance(group, tracksAmmunition(campaign)),
       group === "companions" && companions !== "off" ? companionRules(campaign, companions) : "",
       group === "relationships" && campaign.gameSettings.relationships !== "off"
-        ? relationshipRules(campaign.gameSettings.romance !== "off")
+        ? `${relationshipRules(campaign.gameSettings.romance !== "off", openToAdvanceNames(campaign, listSheets(campaign.id)), souredLeaving(campaign))}\n\n${tableConscienceRules(campaign, listSheets(campaign.id))}`
         : "",
     ]
       .filter(Boolean)
@@ -2113,6 +2164,9 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     // disagree. Its reads also say who speaks the narration's lines.
     const guarded = await enforceEngineBoundary(campaign, turn, sheets, partReads);
     spoken = guarded.spoken;
+    // A deed the narration showed that no relationship_beat recorded is
+    // noted for the DM (issue 503, src/lib/dm/deed-claims.ts).
+    noteUnrecordedDeeds(campaign, turn.conversation, guarded.deeds);
     // The narration told the table a player's turn is over ("It is now
     // Bram's turn") and no call ended it: it ends after the narration, as
     // the table was told, and the enemies it passes act then
@@ -2146,6 +2200,9 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     // The world-simulation heartbeat: pure dice, sparks land in the NEXT
     // turn's prompt, so background clocks never trigger model calls.
     tickWorldState(campaignId);
+    // NPC advances (issue 501) count AI turns whether or not world
+    // simulation is on, and roll beside the world tick, not inside it.
+    tickAdvances(context.campaign, bumpAiTurns(campaignId), turn.narrationParts.join("\n\n"));
   }
 }
 

@@ -1,3 +1,5 @@
+import { defaultSide, type CombatSide } from "@/lib/dm/combat-sides-logic";
+import { sideOf } from "@/lib/dm/combatant";
 import { legendaryProfile } from "@/lib/dm/legendary-logic";
 import { enemyActionsView, type PublicEnemyActions } from "@/lib/dm/enemy-actions-view";
 import { enemyActedThisRound, isSurprised } from "@/lib/dm/can-act";
@@ -123,6 +125,12 @@ export type PublicEncounter = {
   // reaction is spent on somebody else's turn, so it lives here and not in
   // the turn budget.
   reactionsUsed?: string[];
+  // Every view: the combatants fighting on the side their kind does not (a
+  // companion turned on the party: "foe"; a creature the party dominates:
+  // "party"), by id, so the tracker and the board's token rims follow the
+  // server (src/lib/dm/combatant.ts). Absent when everyone is on their
+  // kind's side; a combatant hidden from this viewer is left out.
+  sides?: Record<string, CombatSide>;
   // The attacks a reaction may still answer (src/lib/dm/last-hit.ts): one
   // per character hit this turn, while the engine would accept a reaction
   // to it. Absent keys mean nothing to answer.
@@ -348,7 +356,33 @@ export function publicEncounter(
     ...(options.lastHits?.length
       ? { lastHits: options.lastHits.map((record) => lastHitView(record, hidden, showNumbers)) }
       : {}),
+    ...sidesView(encounter, enemies, hidden, showNumbers),
   };
+}
+
+// The side exceptions every client draws, a domination's included.
+function sidesView(encounter: Encounter, enemies: EncounterEnemy[], hidden: Set<string>, showNumbers: boolean): { sides?: Record<string, CombatSide> } {
+  const sides: Record<string, CombatSide> = {};
+  const seen = new Set<string>();
+  const note = (kind: "sheet" | "enemy", id: string, holder?: EncounterEnemy) => {
+    if (seen.has(id) || (!showNumbers && hidden.has(id))) {
+      return;
+    }
+    seen.add(id);
+    const side = sideOf(encounter, kind, id, holder);
+    if (side !== defaultSide(kind)) {
+      sides[id] = side;
+    }
+  };
+  for (const entry of encounter.order) {
+    if (entry.kind === "pc") {
+      note("sheet", entry.characterId);
+    }
+  }
+  for (const enemy of enemies) {
+    note("enemy", enemy.id, enemy);
+  }
+  return Object.keys(sides).length ? { sides } : {};
 }
 
 // What the person running the fight is waiting on: the rolls so far while

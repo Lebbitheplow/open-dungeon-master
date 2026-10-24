@@ -1,4 +1,5 @@
 import { canAct } from "@/lib/dm/can-act";
+import { castFromFoeSheet } from "@/lib/dm/sheet-foe-cast";
 import { hasDungeonDelver, shieldMasterSaveBonus, spellSaveAdvantageReach } from "@/lib/srd/feat-combat";
 import { tilesBetween } from "@/lib/dm/attack-spatial";
 import { z } from "zod";
@@ -55,6 +56,8 @@ const castAtPlayerSchema = z.object({
   halfOnSave: z.coerce.boolean().optional(),
   condition: z.string().max(40).optional(),
   rounds: z.coerce.number().int().min(1).max(100).optional(),
+  // An enemy, or a character fighting on the other side (issue 503), who
+  // casts from their own sheet.
   casterEnemyId: z.string().optional(),
   ability: z.string().max(80).optional(),
   spell: z.string().max(80).optional(),
@@ -225,6 +228,12 @@ export function handleCastAtPlayer(
   const sheet = staleSheet ? (getSheetById(staleSheet.id) ?? staleSheet) : null;
   if (!sheet) {
     return unknownSheetRef("characterId", args.characterId, sheets);
+  }
+  // casterEnemyId naming a character on the other side: their own cast,
+  // from their sheet (sheet-foe-cast.ts, issue 503).
+  const fromSheet = castFromFoeSheet(campaign, turn, sheet.id, args, sheets, sheetsById);
+  if (fromSheet) {
+    return fromSheet;
   }
   if (sheet.deathSaves?.dead) {
     return { error: `${sheet.name} is DEAD; nothing can affect them. The enemy may target someone else or take another action.`, retry: true };

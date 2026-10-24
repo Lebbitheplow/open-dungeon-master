@@ -15,7 +15,7 @@
 // same two counters the turn loop keeps are kept on its turn.
 import type { Campaign } from "@/lib/db/campaigns";
 import { createDmTurn, getDmTurn, saveDmTurn, type DmTurn } from "@/lib/db/dm-turns";
-import { listMembers } from "@/lib/db/campaigns";
+import { getCampaignById, listMembers } from "@/lib/db/campaigns";
 import { listSheets } from "@/lib/db/sheets";
 import { heldRollUserIds } from "@/lib/dice/held-rolls";
 import { listOpenPendingRolls } from "@/lib/db/dm-turns";
@@ -33,6 +33,7 @@ import { parseRoster } from "@/lib/dm/encounter-template-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { toolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { routeCall } from "@/lib/dm/tool-merge";
+import { settleCompanionLeaving } from "@/lib/dm/departure-turn";
 import { mergedCall } from "@/lib/dm/tool-merge-logic";
 
 export type Actor =
@@ -121,6 +122,7 @@ const FIELD_ALIASES: Record<string, Record<string, string>> = {
   relationship_beat: { npc: "subject" },
   romance_advance: { npc: "subject" },
   relationship_end: { npc: "subject" },
+  relationship_scheme: { npc: "subject" },
   // The handler answers to a companion's name as well as their id.
   dismiss_companion: { name: "characterId" },
 };
@@ -309,6 +311,14 @@ export async function invokeEngine(
     if (ask) {
       result = { ...result, ...describeInitiativeAsk(campaign.id, ask) };
     }
+  }
+
+  // A companion's leaving the call brought on or opened (issue 503), once
+  // the call's own work is done (a fight's initiative asked and the order
+  // ready): a table a person runs has no AI turn to settle it before.
+  const leaving = settleCompanionLeaving(getCampaignById(campaign.id) ?? campaign);
+  if (leaving.length && typeof result.error !== "string") {
+    result = { ...result, companionsLeft: leaving };
   }
 
   // A person answering a player's private message: the whisper is answered,

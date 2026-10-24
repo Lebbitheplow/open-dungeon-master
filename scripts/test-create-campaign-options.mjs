@@ -54,6 +54,10 @@ const creationSurface = `${payload}\n${worldSetup}\n${rulesPanel}`;
 // DM waits for everyone before it answers is learned once the table plays,
 // has a safe default, and the Players group of GameSettingsPanel owns it as
 // one Pacing picker (AGENTS.md, settings rule 2).
+//
+// `companionConscience` (issue 503) is one more: Leave is a safe default,
+// and it matters only once a lasting companion travels with the party, so
+// the Bonds group of GameSettingsPanel owns it.
 const DELIBERATELY_OMITTED = new Set([
   "stages",
   "beatReminder",
@@ -64,6 +68,7 @@ const DELIBERATELY_OMITTED = new Set([
   "combatPace",
   "waitForTable",
   "waitForTableSeconds",
+  "companionConscience",
 ]);
 
 let passed = 0;

@@ -1,4 +1,8 @@
 import { z } from "zod";
+import { dominatorOf } from "@/lib/dm/combat-sides-logic";
+import { patchEnemyConditions } from "@/lib/db/encounters";
+import type { ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { resolveCombatant } from "@/lib/dm/combatant";
 import type { Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter } from "@/lib/db/encounters";
 import { recordEncounterIntent } from "@/lib/db/encounter-intents";
@@ -27,7 +31,7 @@ export const declareIntentTool: ToolDef = {
   function: {
     name: "declare_intent",
     description:
-      "Telegraph what an enemy is about to do next, so the board shows it over that enemy for the rest of this round (players who cannot see the enemy are not told). Optional flavour: it rolls nothing and binds nothing.",
+      "Telegraph an enemy's next act over it on the board for the round (players who cannot see it are not told). Flavour: it rolls and binds nothing.",
     parameters: {
       type: "object",
       additionalProperties: false,
@@ -39,7 +43,7 @@ export const declareIntentTool: ToolDef = {
           enum: [...INTENT_VERB_KINDS],
           description: "For a verb that is not one of its attacks: what kind of act it is (move for a retreat or a dash), which picks the board's badge.",
         },
-        target: { type: "string", description: "Its mark: exact characterId from GAME STATE, or the character's name. Omit when there is no single mark." },
+        target: { type: "string", description: "Its mark: exact characterId from GAME STATE, or the character's name; omit for no single mark." },
         expected: { type: "number", description: "Expected damage. Omit to use the named attack's average." },
       },
       required: ["actor", "verb"],
@@ -78,8 +82,11 @@ export function handleDeclareIntent(
   if (enemy.status !== "alive") {
     return { error: `${enemy.displayName} is already ${enemy.status}.`, retry: true };
   }
+  // Its mark is any combatant (src/lib/dm/combatant.ts): a character, or a
+  // creature the party has turned to its side.
   const wantsTarget = Boolean(args.target?.trim());
-  const target = wantsTarget ? resolveSheetRef(args.target, sheets, sheetsById) : null;
+  const named = wantsTarget ? resolveSheetRef(args.target, sheets, sheetsById) : null;
+  const target = wantsTarget ? resolveCombatant(campaign.id, encounter, named?.id ?? args.target) : null;
   if (wantsTarget && !target) {
     return unknownSheetRef("target", args.target, sheets, "Or omit target.");
   }
@@ -96,6 +103,12 @@ export function handleDeclareIntent(
     targetRef: target?.id ?? null,
     expected,
   });
+  // A creature a Dominate spell holds is its caster's to command (SRD 5.1:
+  // "a simple and general course of action, such as 'Attack that
+  // creature'"): the mark it is given is its standing order, which the
+  // server's backstop follows on its turn (encounter-tools.ts
+  // autoActSkippedEnemies) until a new one is given or the charm ends.
+  const ordered = target ? commandDominated(enemy, target.id) : false;
   // The intent rides the per-viewer map projection, so the map ping is what
   // makes clients refetch; the encounter event keeps the two in step.
   publishBattleMapUpdate(campaign.id);
@@ -104,6 +117,24 @@ export function handleDeclareIntent(
     ok: true,
     declared: `${enemy.displayName}: ${args.verb}${target ? ` at ${target.name}` : ""}`,
     round: encounter.round,
-    note: "Shown on the board for the rest of this round.",
+    note: ordered
+      ? `Shown on the board, and ${enemy.displayName}'s standing order from the one who dominates it: it attacks ${target?.name} on its turns until told otherwise.`
+      : "Shown on the board for the rest of this round.",
   };
+}
+
+// The order written on the domination's charm, when one holds the creature.
+function commandDominated(enemy: { id: string; conditions: string[]; conditionMeta: ConditionMetaMap }, targetId: string): boolean {
+  if (!dominatorOf(enemy.conditions, enemy.conditionMeta)) {
+    return false;
+  }
+  const charmed = enemy.conditions.find((entry) => entry.trim().toLowerCase() === "charmed");
+  if (!charmed) {
+    return false;
+  }
+  // The order rides the charm's meta (combat-sides-logic.ts dominationOrderOf
+  // reads it), so it ends when the charm does.
+  const meta: ConditionMetaMap = { ...enemy.conditionMeta, [charmed]: { ...enemy.conditionMeta[charmed], order: targetId } };
+  patchEnemyConditions(enemy.id, enemy.conditions, meta);
+  return true;
 }

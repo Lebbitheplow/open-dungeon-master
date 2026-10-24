@@ -748,6 +748,328 @@ sheets.createSheet(curioTable.id, world.owner.id, 3, heroInput({ name: "Hale Bri
   }
 }
 
+// NPC advances (issue 501): one table per viewport (the scenario answers
+// the advance) where the lead's Kael is open to advances from NPCs and
+// Mira's advance waits on his answer, for the offer card, the Bonds switch
+// and the romance rung.
+const COURTING_TITLE = "Courting Table";
+const ADVANCE_LINE = "Walk with me along the river tonight?";
+const courtingSheets = await import("../../src/lib/db/sheets.ts");
+const courtingNpcs = await import("../../src/lib/db/npcs.ts");
+const courtingBonds = await import("../../src/lib/db/relationships.ts");
+const courting = {};
+for (const viewport of ["desktop", "phone"]) {
+  const table = campaigns.createCampaign(world.owner.id, {
+    title: `${COURTING_TITLE} (${viewport})`,
+    description: "A ferry crossing at dusk, and someone who has been waiting to say something.",
+    theme: "high-fantasy",
+    maxPlayers: 6,
+    startingLevel: 3,
+    difficulty: "normal",
+    gameSettings: {},
+  });
+  campaigns.setCampaignStatus(table.id, "active");
+  const kael = courtingSheets.createSheet(
+    table.id,
+    world.owner.id,
+    3,
+    heroInput({ name: "Kael Ashvale", class: "bard", level: 3, gender: "Male", attraction: { genders: ["Female"], note: "" }, abilities: { cha: 16 } }),
+  );
+  courtingSheets.setOpenToAdvances(kael.id, true);
+  const mira = courtingNpcs.upsertNpc({
+    campaignId: table.id,
+    name: "Mira Vell",
+    attitude: "friendly",
+    trait: "A ferrywoman with a quick laugh",
+    location: "the ford",
+    gender: "Female",
+    attraction: { genders: ["Male"], note: "" },
+  });
+  const bond = courtingBonds.ensureRelationship({
+    campaignId: table.id,
+    characterId: kael.id,
+    characterName: kael.name,
+    subjectKind: "npc",
+    subjectName: mira.name,
+    subjectId: mira.id,
+  });
+  courtingBonds.patchRelationship(bond.id, {
+    approval: 62,
+    memories: [{ kind: "helped", text: "Kael mended her ferry rope in the rain", at: new Date().toISOString() }],
+  });
+  const advance = itemProposals.insertItemProposal({
+    campaignId: table.id,
+    turnId: null,
+    characterId: kael.id,
+    userId: world.owner.id,
+    toolName: "romance_advance",
+    argsJson: JSON.stringify({
+      relationshipId: bond.id,
+      subject: mira.name,
+      subjectKind: "npc",
+      subjectId: mira.id,
+      to: "courting",
+      note: ADVANCE_LINE,
+      madeAtTurn: 0,
+      portraitUrl: "",
+      look: { gender: "Female", role: "" },
+    }),
+    summary: `${mira.name} asks to court ${kael.name}`,
+    reason: ADVANCE_LINE,
+    seq: campaigns.allocateSeq(table.id),
+  });
+  courting[viewport] = { id: table.id, kael: kael.id, advanceSummary: advance.summary, advanceLine: ADVANCE_LINE };
+}
+
+// Companion conscience (issue 503): one table per viewport (the scenario
+// moves the ladder), run by the lead as its DM so the scenario records deeds
+// through the console the way a DM does. The player's Kael travels with
+// Seren Vale, a lawful good paladin of even temper, already uneasy after a
+// cruelty she saw.
+const CONSCIENCE_TITLE = "Conscience Table";
+const conscience = {};
+{
+  const { invokeEngine } = await import("../../src/lib/dm/invoke.ts");
+  const { companionNpcFor } = await import("../../src/lib/db/companion-npcs.ts");
+  const { patchNpcAgency } = await import("../../src/lib/db/npcs.ts");
+  for (const viewport of ["desktop", "phone"]) {
+    const table = campaigns.createCampaign(world.owner.id, {
+      title: `${CONSCIENCE_TITLE} (${viewport})`,
+      description: "A paladin who walks with the party, for now.",
+      theme: "high-fantasy",
+      maxPlayers: 6,
+      startingLevel: 3,
+      difficulty: "normal",
+      gameSettings: { ttsEnabled: false, dmMode: "human" },
+    });
+    campaigns.setCampaignStatus(table.id, "active");
+    campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+    const kael = sheets.createSheet(table.id, player.id, 3, heroInput({ name: "Kael Ashvale", class: "rogue", level: 3 }));
+    const bot = createCompanionUser("Seren Vale");
+    const seren = sheets.createSheet(table.id, bot.id, 3, heroInput({ name: "Seren Vale", class: "paladin", alignment: "LG", level: 3 }));
+    sheets.markSheetAsCompanion(seren.id, "party", "Stern, devout, slow to anger and slower to forgive.");
+    const row = companionNpcFor(sheets.getSheetById(seren.id));
+    patchNpcAgency(row.id, { personality: { drive: 0, diligence: 0, boldness: 0, warmth: 0, empathy: 0, composure: 0 } });
+    const cruelty = await invokeEngine(campaigns.getCampaignById(table.id), { kind: "human", userId: world.owner.id }, {
+      name: "relationship_beat",
+      args: { characterId: kael.id, subject: seren.name, beat: "cruelty", note: "Kael kicked a beggar out of the road." },
+    });
+    if (!cruelty.ok) {
+      throw new Error(`the conscience table's first deed was refused: ${cruelty.error}`);
+    }
+    conscience[viewport] = { id: table.id, kael: kael.id, seren: seren.name };
+  }
+}
+
+// Scheming NPCs (issue 501): one table per viewport that the seed's player
+// runs as its storyteller, where the lead plays Kael, open to advances, and
+// Senna keeps up an act toward him (the ferry ledger), already played up to
+// a warmth she does not feel. The scenario reads
+// the act on Kael's Bonds row, sees it turn to the truth when an Insight
+// from the storyteller's console beats Senna's Deception, reads the act on
+// the storyteller's own Bonds tab, and sees a betrayal unmask her. Senna is
+// a poor liar by nature, so an Insight beats her soon.
+const MASKED_TITLE = "Masked Table";
+const maskedNpcs = await import("../../src/lib/db/npcs.ts");
+const maskedBonds = await import("../../src/lib/db/relationships.ts");
+const { invokeEngine: maskedInvoke } = await import("../../src/lib/dm/invoke.ts");
+const masked = {};
+for (const viewport of ["desktop", "phone"]) {
+  const table = campaigns.createCampaign(player.id, {
+    title: `${MASKED_TITLE} (${viewport})`,
+    description: "A river crossing, a friendly ferrywoman, and a ledger someone wants.",
+    theme: "high-fantasy",
+    maxPlayers: 6,
+    startingLevel: 3,
+    difficulty: "normal",
+    gameSettings: { ttsEnabled: false, dmMode: "human" },
+  });
+  campaigns.joinByInviteCode(world.owner.id, campaigns.getCampaignById(table.id).inviteCode);
+  campaigns.setCampaignStatus(table.id, "active");
+  const kael = sheets.createSheet(
+    table.id,
+    world.owner.id,
+    3,
+    heroInput({ name: "Kael Ashvale", class: "bard", level: 3, gender: "Male", abilities: { wis: 18 } }),
+  );
+  sheets.setOpenToAdvances(kael.id, true);
+  const senna = maskedNpcs.upsertNpc({
+    campaignId: table.id,
+    name: "Senna Vale",
+    attitude: "friendly",
+    trait: "A ferrywoman who laughs a little too easily",
+    location: "the ford",
+    gender: "Female",
+    attraction: { genders: ["Male"], note: "" },
+  });
+  maskedNpcs.patchNpcAgency(senna.id, { personality: { drive: -3, diligence: 0, boldness: 0, warmth: 2, empathy: 3, composure: -3 } });
+  const bond = maskedBonds.ensureRelationship({
+    campaignId: table.id,
+    characterId: kael.id,
+    characterName: kael.name,
+    subjectKind: "npc",
+    subjectName: senna.name,
+    subjectId: senna.id,
+  });
+  maskedBonds.patchRelationship(bond.id, {
+    approval: -30,
+    memories: [{ kind: "helped", text: "Kael carried her nets up from the water", at: new Date().toISOString() }],
+  });
+  const started = await maskedInvoke(campaigns.getCampaignById(table.id), { kind: "human", userId: player.id }, {
+    name: "relationship_scheme",
+    args: { action: "start", characterId: kael.id, subject: senna.name, motive: "the ferry ledger" },
+  });
+  if (!started.ok) {
+    throw new Error(`the masked table's act did not start: ${started.error}`);
+  }
+  // An act starts where she truly stands; this one has been played up over
+  // earlier scenes to a warmth she does not feel.
+  const acting = maskedBonds.getRelationshipById(bond.id);
+  maskedBonds.patchRelationship(bond.id, { pretense: { ...acting.pretense, shown: 40 } });
+  masked[viewport] = { id: table.id, kael: kael.id };
+}
+
+// Companions leaving (issue 503 Phases 2 and 3): one table per viewport (the
+// scenario walks a companion out), run by the lead as its DM. The player's
+// Kael travels with Seren Vale, a timid paladin who walks out at a red-line
+// atrocity; Tam Hollis, a timid fighter, already walked out earlier, so the
+// Gone list stands before the scenario moves anyone.
+const GONE_TITLE = "Gone Table";
+const gone = {};
+{
+  const { invokeEngine } = await import("../../src/lib/dm/invoke.ts");
+  const { companionNpcFor } = await import("../../src/lib/db/companion-npcs.ts");
+  const { patchNpcAgency } = await import("../../src/lib/db/npcs.ts");
+  for (const viewport of ["desktop", "phone"]) {
+    const table = campaigns.createCampaign(world.owner.id, {
+      title: `${GONE_TITLE} (${viewport})`,
+      description: "A party that has lost one companion and is about to lose another.",
+      theme: "high-fantasy",
+      maxPlayers: 6,
+      startingLevel: 3,
+      difficulty: "normal",
+      gameSettings: { ttsEnabled: false, dmMode: "human", companions: "full" },
+    });
+    campaigns.setCampaignStatus(table.id, "active");
+    campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+    const kael = sheets.createSheet(table.id, player.id, 3, heroInput({ name: "Kael Ashvale", class: "rogue", level: 3 }));
+    const companion = (name, klass, alignment) => {
+      const bot = createCompanionUser(name);
+      const sheet = sheets.createSheet(table.id, bot.id, 3, heroInput({ name, class: klass, alignment, level: 3 }));
+      sheets.markSheetAsCompanion(sheet.id, "party", "Quiet, and quick to take fright.");
+      const row = companionNpcFor(sheets.getSheetById(sheet.id));
+      patchNpcAgency(row.id, { personality: { drive: 0, diligence: 0, boldness: -2, warmth: 0, empathy: 0, composure: 0 } });
+      return sheet;
+    };
+    const tam = companion("Tam Hollis", "fighter", "LG");
+    const seren = companion("Seren Vale", "paladin", "LG");
+    const left = await invokeEngine(campaigns.getCampaignById(table.id), { kind: "human", userId: world.owner.id }, {
+      name: "relationship_beat",
+      args: { characterId: kael.id, subject: tam.name, beat: "slaving", severity: "atrocity", note: "Kael sold the captives to the slaver's barge." },
+    });
+    if (!left.ok || left.result.departed !== "Walked out on the party") {
+      throw new Error(`the gone table's first departure did not happen: ${left.error ?? JSON.stringify(left.result)}`);
+    }
+    gone[viewport] = { id: table.id, kael: kael.id, seren: seren.id, serenName: seren.name };
+  }
+}
+
+// Combat sides (issue 503): per viewport, a table a person runs where two of
+// the player's casters each hold an elemental by Conjure Elemental, in a
+// fight with a goblin. The scenario ends one concentration and then the
+// other (the second under reduced motion), and each elemental's token
+// re-rims from the party's colour to the foes'.
+const TURNCOAT_TITLE = "Turncoat Table";
+const turncoat = {};
+{
+  const { invokeEngine } = await import("../../src/lib/dm/invoke.ts");
+  const maps = await import("../../src/lib/db/battle-maps.ts");
+  const encounterRows = await import("../../src/lib/db/encounters.ts");
+  // SRD 5.1 slots of a 9th level full caster: 4, 3, 3, 3 and one 5th.
+  const slots = Object.fromEntries([4, 3, 3, 3, 1].map((max, index) => [String(index + 1), { max, used: 0 }]));
+  const conjurer = (name, cls, ability) =>
+    heroInput({
+      name,
+      class: cls,
+      level: 9,
+      maxHp: 60,
+      abilities: { [ability]: 18, con: 14, dex: 12 },
+      equipment: [{ name: "Component pouch", qty: 1 }],
+      spellcasting: { ability, slots, known: [], prepared: ["Conjure Elemental"], cantrips: [] },
+    });
+  for (const viewport of ["desktop", "phone"]) {
+    const table = campaigns.createCampaign(world.owner.id, {
+      title: `${TURNCOAT_TITLE} (${viewport})`,
+      description: "Two conjurers, two bound elementals, and a binding that will not hold.",
+      theme: "high-fantasy",
+      maxPlayers: 6,
+      startingLevel: 9,
+      difficulty: "normal",
+      gameSettings: { ttsEnabled: false, dmMode: "human" },
+    });
+    campaigns.setCampaignStatus(table.id, "active");
+    campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+    const dm = { kind: "human", userId: world.owner.id };
+    const casters = [
+      [sheets.createSheet(table.id, player.id, 9, conjurer("Ione Vass", "wizard", "int")), "fire elemental"],
+      [sheets.createSheet(table.id, player.id, 9, conjurer("Oswin Reed", "druid", "wis")), "earth elemental"],
+    ];
+    // Conjure Elemental takes a minute to cast, so out of the fight.
+    for (const [caster, variant] of casters) {
+      const cast = await invokeEngine(campaigns.getCampaignById(table.id), dm, {
+        name: "cast_buff",
+        args: { characterId: caster.id, spell: "Conjure Elemental", level: 5, variant },
+      });
+      if (!cast.ok) {
+        throw new Error(`the turncoat table's ${variant} was not conjured: ${cast.error}`);
+      }
+    }
+    const started = await invokeEngine(campaigns.getCampaignById(table.id), dm, {
+      name: "start_encounter",
+      args: { enemies: [{ monster: "goblin", count: 1 }] },
+    });
+    if (!started.ok) {
+      throw new Error(`the turncoat table's fight did not start: ${started.error}`);
+    }
+    const encounter = encounterRows.getActiveEncounter(table.id);
+    const board = maps.getBattleMapForEncounter(encounter.id);
+    maps.setBattleMapTerrain(board.id, ".".repeat(board.width * board.height));
+    getDatabase().prepare("UPDATE battle_maps SET doors_json = '{}' WHERE id = ?").run(board.id);
+    const elementals = casters.map(([caster, variant]) => {
+      const summoned = sheets.listSheets(table.id).find((sheet) => sheet.summon?.casterId === caster.id);
+      if (!summoned) {
+        throw new Error(`the turncoat table's ${variant} has no sheet`);
+      }
+      return summoned;
+    });
+    // The two elementals side by side in the board's middle, each caster
+    // beside theirs and the goblin below, where a zoomed-in camera still
+    // sees them.
+    const cx = Math.floor(board.width / 2);
+    const cy = Math.floor(board.height / 2);
+    const spots = new Map([
+      [casters[0][0].id, [cx - 3, cy]],
+      [elementals[0].id, [cx - 1, cy]],
+      [elementals[1].id, [cx + 1, cy]],
+      [casters[1][0].id, [cx + 3, cy]],
+    ]);
+    for (const token of maps.listTokens(board.id)) {
+      const [x, y] = spots.get(token.refId) ?? [cx, cy + 3];
+      maps.moveToken(token.id, x, y, 0);
+    }
+    for (const elemental of elementals) {
+      if (!maps.getTokenByRef(board.id, elemental.id)) {
+        throw new Error(`the turncoat table's ${elemental.name} is not on the board`);
+      }
+    }
+    turncoat[viewport] = {
+      id: table.id,
+      casters: casters.map(([caster]) => caster.id),
+      elementals: elementals.map((elemental) => ({ id: elemental.id, name: elemental.name })),
+    };
+  }
+}
+
 const ids = {
   revised: ysolde.id,
   orc: grask.id,
@@ -793,11 +1115,21 @@ const ids = {
   directed,
   levelTableId: levelTable.id,
   commandTableId: commandTable.id,
+  courting,
+  conscience,
+  masked,
+  turncoat,
+  gone,
   pip: pip.id,
   // Every campaign a scenario opens, by id, for the app's home tiles.
   titles: {
     [levelTable.id]: "Level Table",
     [commandTable.id]: COMMAND_TITLE,
+    ...Object.fromEntries(Object.entries(courting).map(([viewport, table]) => [table.id, `${COURTING_TITLE} (${viewport})`])),
+    ...Object.fromEntries(Object.entries(conscience).map(([viewport, table]) => [table.id, `${CONSCIENCE_TITLE} (${viewport})`])),
+    ...Object.fromEntries(Object.entries(masked).map(([viewport, table]) => [table.id, `${MASKED_TITLE} (${viewport})`])),
+    ...Object.fromEntries(Object.entries(turncoat).map(([viewport, table]) => [table.id, `${TURNCOAT_TITLE} (${viewport})`])),
+    ...Object.fromEntries(Object.entries(gone).map(([viewport, table]) => [table.id, `${GONE_TITLE} (${viewport})`])),
     [world.campaignId]: TITLE,
     [lobby.id]: LOBBY_TITLE,
     [quiet.id]: QUIET_TITLE,

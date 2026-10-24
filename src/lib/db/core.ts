@@ -1644,6 +1644,13 @@ function ensureSchema(db: SqliteDatabase) {
     // DM plays them. Out of fights the DM always does
     // (src/lib/dm/companion-command.ts).
     ["commanded_by", `TEXT`],
+    // Who the character is drawn to (src/lib/attraction.ts, issue 501):
+    // {genders, note}, '' = unspecified. Identity, set in the builder.
+    ["attraction_json", `TEXT NOT NULL DEFAULT ''`],
+    // 1 = the owner opened this character to romantic advances from NPCs
+    // at this table (issue 501). Consent is per table, so it never syncs to
+    // the library, and only the owner and a DM seat ever read it.
+    ["open_to_advances", `INTEGER NOT NULL DEFAULT 0`],
   ]);
 
   if (sheetsNeedAcOverride) {
@@ -1879,6 +1886,12 @@ function ensureSchema(db: SqliteDatabase) {
     // {enemyId: {verb, targetRef, expected}}} (docs/visual-overhaul-plan.md
     // 5.6). Read only while the round matches, so it never needs clearing.
     ["intents_json", `TEXT NOT NULL DEFAULT '{}'`],
+    // Which side each combatant not on its kind's default side fights on, as
+    // {combatantId: "party" | "foe"} (issue 503, src/lib/dm/combat-sides-logic.ts):
+    // a companion turned on the party, a summon whose maker lost it. Written
+    // only by setEncounterSides, never by saveEncounter, so a handler holding
+    // a stale Encounter cannot put a turncoat back.
+    ["sides_json", `TEXT NOT NULL DEFAULT '{}'`],
     // The action economy of whichever combatant is currently acting: action,
     // bonus action, reaction, attacks made, and movement spent. Rebuilt from
     // scratch whenever the initiative pointer moves, so it never needs a
@@ -2176,6 +2189,37 @@ function ensureSchema(db: SqliteDatabase) {
     // One of the builder's genders or '' (src/lib/gender.ts): what the voice
     // cast and the speech reader's pronouns read, never their prose.
     ["gender", `TEXT NOT NULL DEFAULT ''`],
+    // Who they are drawn to (src/lib/attraction.ts, issue 501): {genders,
+    // note}, '' = undecided. The DM's set_npc writes it once.
+    ["attraction_json", `TEXT NOT NULL DEFAULT ''`],
+    // The lasting AI companion this row is the person behind (#503 Phase
+    // 0.1): their personality axes, kept when the sheet is dismissed so a
+    // deed still weighs by who they are. '' for every ordinary NPC.
+    ["companion_sheet_id", `TEXT NOT NULL DEFAULT ''`],
+  ]);
+
+  addColumns("relationships", [
+    // NPC advances (src/lib/dm/advance-logic.ts, issue 501), counted in the
+    // campaign's AI turns (campaigns.ai_turns): the turn an open window
+    // closes, and the turn before which this pair does not roll again.
+    // 0 = none.
+    ["advance_ready_until", `INTEGER NOT NULL DEFAULT 0`],
+    ["advance_cooldown_until", `INTEGER NOT NULL DEFAULT 0`],
+  ]);
+
+  addColumns("relationships", [
+    // An NPC's act toward this character (src/lib/dm/scheme-logic.ts, issue
+    // 501): {motive, shown, started, exposedTo, revealed}, '' = none. A
+    // storyteller secret: only the AI and a person running the table read
+    // the motive and the true meter (src/lib/dm/viewer.ts).
+    ["pretense_json", `TEXT NOT NULL DEFAULT ''`],
+  ]);
+
+  addColumns("campaigns", [
+    // AI turns finished at this table, the clock NPC advances count in
+    // (issue 501). Bumped after every successful AI turn, whatever the
+    // world-simulation setting says.
+    ["ai_turns", `INTEGER NOT NULL DEFAULT 0`],
   ]);
 
   addColumns("library_characters", [
@@ -2522,6 +2566,24 @@ function ensureSchema(db: SqliteDatabase) {
   // What the backend served from its prompt cache and spent reasoning, where
   // it said (src/lib/usage/parse.ts); NULL when it did not.
   addColumns("usage_events", [["cached_input_tokens", `INTEGER`], ["reasoning_tokens", `INTEGER`]]);
+  // A lasting companion's conscience (issue 503 Phase 1), on the row behind
+  // it (src/lib/db/companion-conscience.ts): what it holds to, as
+  // [{value, strength, faction}] (src/lib/dm/companion-values-logic.ts); its
+  // rung on the ladder and any ultimatum (src/lib/dm/conscience-logic.ts);
+  // and, after a dismissal, the sheet it left with (#503 Phase 0.4), so a
+  // return brings back the same person. '' for every ordinary NPC. The row
+  // is snapshotted with npcs, so a rewind puts all three back.
+  addColumns("npcs", [
+    ["values_json", `TEXT NOT NULL DEFAULT ''`],
+    ["conscience_json", `TEXT NOT NULL DEFAULT ''`],
+    ["companion_snapshot_json", `TEXT NOT NULL DEFAULT ''`],
+  ]);
+  // A lasting companion's leaving (issue 503 Phases 2 and 3,
+  // src/lib/db/companion-departures.ts): the plan it holds before it goes (a
+  // storyteller secret), and once gone how it went, the experience the party
+  // earned since, and the return it is gathering help for. '' for everyone
+  // else; snapshotted with the row, so a rewind undoes a departure whole.
+  addColumns("npcs", [["departure_json", `TEXT NOT NULL DEFAULT ''`]]);
 }
 
 // Widens battle_tokens.kind to accept the DM's own board furniture.

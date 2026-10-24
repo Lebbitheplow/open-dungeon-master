@@ -11,6 +11,7 @@ import {
   type RelationshipStatus,
   type RomanceStage,
 } from "@/lib/dm/relationship-logic";
+import { followTrueMeter, parsePretense, serializePretense, type Pretense } from "@/lib/dm/scheme-logic";
 
 // How each character stands with each tracked NPC and AI companion. Keyed by
 // the subject's NAME rather than their row id, because the relationship has
@@ -37,6 +38,14 @@ export type Relationship = {
   beats: BeatCounts;
   apartChapters: number;
   lastShiftTurn: string;
+  // NPC advances (src/lib/dm/advance-logic.ts), in the campaign's AI turns:
+  // the turn an open window closes and the turn before which the pair does
+  // not roll again. 0 = none.
+  advanceReadyUntil: number;
+  advanceCooldownUntil: number;
+  // An NPC's act toward the character (src/lib/dm/scheme-logic.ts): the
+  // motive and the warmth they show. A storyteller secret; null = none.
+  pretense: Pretense | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -57,6 +66,9 @@ type RelationshipRow = {
   beats_json: string;
   apart_chapters: number;
   last_shift_turn: string;
+  advance_ready_until?: number | null;
+  advance_cooldown_until?: number | null;
+  pretense_json?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -78,6 +90,9 @@ function mapRelationship(row: RelationshipRow): Relationship {
     beats: parseBeatCounts(row.beats_json),
     apartChapters: row.apart_chapters,
     lastShiftTurn: row.last_shift_turn,
+    advanceReadyUntil: row.advance_ready_until ?? 0,
+    advanceCooldownUntil: row.advance_cooldown_until ?? 0,
+    pretense: parsePretense(row.pretense_json),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -175,6 +190,9 @@ export function ensureRelationship(input: {
 }
 
 // Writes any subset of the mutable state; untouched pieces keep their column.
+// While an NPC keeps up an act, a change to the true meter moves the warmth
+// they show by as much (scheme-logic.ts followTrueMeter), so the act reacts
+// to a gift or a slight the way the real feeling would.
 export function patchRelationship(
   id: string,
   patch: Partial<
@@ -191,6 +209,9 @@ export function patchRelationship(
       | "subjectId"
       | "subjectKind"
       | "characterName"
+      | "advanceReadyUntil"
+      | "advanceCooldownUntil"
+      | "pretense"
     >
   >,
 ): Relationship | null {
@@ -198,12 +219,19 @@ export function patchRelationship(
   if (!current) {
     return null;
   }
+  const pretense =
+    patch.pretense !== undefined
+      ? patch.pretense
+      : current.pretense && patch.approval !== undefined
+        ? followTrueMeter(current.pretense, current.approval, patch.approval)
+        : current.pretense;
   getDatabase()
     .prepare(
       `UPDATE relationships
        SET approval = ?, romance = ?, status = ?, flags_json = ?, memories_json = ?,
            beats_json = ?, apart_chapters = ?, last_shift_turn = ?, subject_id = ?,
-           subject_kind = ?, character_name = ?, updated_at = ?
+           subject_kind = ?, character_name = ?, advance_ready_until = ?,
+           advance_cooldown_until = ?, pretense_json = ?, updated_at = ?
        WHERE id = ?`,
     )
     .run(
@@ -218,6 +246,9 @@ export function patchRelationship(
       patch.subjectId ?? current.subjectId,
       patch.subjectKind ?? current.subjectKind,
       patch.characterName ?? current.characterName,
+      Math.max(0, Math.round(patch.advanceReadyUntil ?? current.advanceReadyUntil)),
+      Math.max(0, Math.round(patch.advanceCooldownUntil ?? current.advanceCooldownUntil)),
+      serializePretense(pretense),
       nowIso(),
       id,
     );

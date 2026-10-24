@@ -13,7 +13,8 @@
 //   - Life Drain (Wight): a failed CON save lowers the hit point maximum by
 //     the damage taken until a long rest.
 //   - Animate Dead: when its 24 hours of control run out the undead stays and
-//     turns on the party; a casting can reassert control instead.
+//     turns on the party, the same sheet on the foes' side (issue 503); a
+//     casting can reassert control instead.
 //
 // Dice forced; every check reads a stored row.
 import assert from "node:assert/strict";
@@ -25,6 +26,7 @@ const { test, finish } = suite("test-enforce-monster-trait-rules");
 const world = await openWorld();
 const kit = await combatKit(world);
 const { manualTraits } = await import("../src/lib/dm/monster-traits.ts");
+const { sideOf } = await import("../src/lib/dm/combatant.ts");
 
 const tank = world.addHero({ class: "fighter", level: 5, maxHp: 60, abilities: { str: 16, con: 10 }, proficiencies: TRAINED });
 const mage = world.addHero({
@@ -164,7 +166,8 @@ await test("Animate Dead: when control runs out the undead turns hostile; a cast
   world.patch(skeleton.id, { conditions: [], conditionMeta: {} });
   const lines = sweepSummons(world.campaign());
   assert.match(lines.join(" "), /turns on the party/);
-  assert.ok(world.enemies().some((enemy) => /skeleton/i.test(enemy.displayName)), "the skeleton is not a foe");
+  assert.ok(world.sheet(skeleton.id), "the skeleton keeps its sheet");
+  assert.equal(sideOf(world.encounter(), "sheet", skeleton.id), "foe", "the skeleton fights on the foes' side");
 });
 
 world.close();

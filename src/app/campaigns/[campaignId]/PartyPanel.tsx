@@ -1,5 +1,6 @@
 "use client";
 
+import { attractionWords } from "@/lib/attraction";
 import { TravelFormation } from "@/app/campaigns/[campaignId]/TravelFormation";
 import { PartyStory } from "@/app/campaigns/[campaignId]/PartyStory";
 import type { PartyState } from "@/lib/dm/party-logic";
@@ -12,6 +13,8 @@ import { conditionDetail, maxHpView } from "@/components/sheet/sheet-state";
 import type { PublicEncounter } from "@/lib/db/encounter-view";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { SectionHead } from "@/components/ui/SectionHead";
+import { PartyGone } from "@/app/campaigns/[campaignId]/PartyGone";
+import type { DepartingSheet } from "@/app/campaigns/[campaignId]/departing";
 import { KitButton, SettingToggle } from "./PanelKit";
 import { PartyOrderBar, PartyOrderHandle, usePartyOrder } from "./PartyOrder";
 import { useEffect, useId, useState, Suspense, lazy } from "react";
@@ -293,6 +296,8 @@ function SaveToLibraryButton({ campaignId, sheetId }: { campaignId: string; shee
 export function PartyPanel({
   sheets,
   meUserId,
+  departing = [],
+  goneRefreshKey = 0,
   spotlightUserIds = [],
   onlineUserIds = [],
   embedded = false,
@@ -325,9 +330,19 @@ export function PartyPanel({
   party,
   arrangesFormation = false,
   partyStory,
+  romanceNotes = false,
 }: {
   sheets: CharacterSheet[];
   meUserId: string;
+  // Lasting companions whose sheet just went (issue 503), and the key the
+  // Gone list reads itself again on (PartyGone.tsx).
+  departing?: readonly DepartingSheet[];
+  goneRefreshKey?: number;
+  // A person runs this table and it plays romance (issue 501): the DM's
+  // cards say who each character is drawn to and who is open to advances
+  // from NPCs, since no AI turn rolls for one here and the console is
+  // where the DM makes the move.
+  romanceNotes?: boolean;
   // The party record, for the travel formation, and whether this seat
   // arranges it (the party lead, or the DM seat where a person runs it).
   party?: PartyState;
@@ -626,6 +641,8 @@ export function PartyPanel({
               />
             </div>
 
+            {romanceNotes ? <RomanceNote sheet={sheet} /> : null}
+
             {shape ? (
               <div
                 className="mt-2 flex items-center gap-1.5 rounded-md border border-lime-800/60 bg-lime-950/40 px-2 py-1 text-xs text-lime-300"
@@ -906,6 +923,10 @@ export function PartyPanel({
         );
       })}
 
+      {/* Who left the party (issue 503): a departing card dims and files
+          under Gone. */}
+      {campaignId ? <PartyGone campaignId={campaignId} departing={departing} refreshKey={goneRefreshKey} worldPack={worldPack} /> : null}
+
       {campaignId && companionsAvailable && steersStory ? (
         <div className="reveal space-y-1.5">
           {humanDmTable ? null : <RequestCompanionButton campaignId={campaignId} />}
@@ -1017,6 +1038,25 @@ export function PartyPanel({
 
 // A torch burning down: a sliver of ember that shortens as the clock moves,
 // and reddens when the last quarter hour is on it.
+// The DM's line for one card: who they are drawn to, and whether their
+// player opened them to advances. The opt-in reaches only the owner and a
+// DM seat (src/lib/dm/sheet-view.ts), so nothing here shows it to anyone else.
+function RomanceNote({ sheet }: { sheet: CharacterSheet }) {
+  const drawn = attractionWords(sheet.attraction);
+  const open = !sheet.isCompanion && Boolean(sheet.openToAdvances);
+  if (!drawn && !open) {
+    return null;
+  }
+  return (
+    <p className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-stone-400" data-romance-note={sheet.id}>
+      {drawn ? <span>Drawn to {drawn}</span> : null}
+      {open ? (
+        <span className="rounded-full border border-rose-500/40 bg-rose-500/10 px-1.5 text-rose-200">Open to advances</span>
+      ) : null}
+    </p>
+  );
+}
+
 function LightBar({ light }: { light: { remaining: number; total: number } }) {
   const fraction = light.total > 0 ? Math.max(0, Math.min(1, light.remaining / light.total)) : 0;
   const low = light.remaining <= 15;
