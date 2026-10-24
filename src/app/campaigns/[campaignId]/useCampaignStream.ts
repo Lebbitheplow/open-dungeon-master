@@ -126,6 +126,12 @@ export type ItemProposal = {
   offer?: { toCharacterId: string; give: Array<{ name: string; qty: number }>; giveCp: number; want: Array<{ name: string; qty: number }>; wantCp: number } | null;
   // An NPC's romantic advance (issue 501): who makes it, and their face.
   advance?: { suitor: string; portraitUrl: string; look: { gender: string; race: string; class: string; role: string } };
+  // Only its own player is sent it and answers it (issue 503: a pact's
+  // approach); the apps notify on it.
+  ownerOnly?: boolean;
+  // A pact's approach: the answers it offers, and who makes it.
+  choices?: Array<{ id: string; label: string; hint: string }>;
+  from?: { name: string; portraitUrl: string; look: { gender: string; race: string; class: string } };
 };
 
 // A disputed ruling (src/lib/dm/dispute-logic.ts), open or under vote.
@@ -558,7 +564,9 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
           return next;
         }
         case "roll_result":
-          next.rolls = [...state.rolls.slice(-30), payload.roll as StoredRoll];
+          // A hidden roll revealed (issue 503) arrives again under its own id:
+          // it replaces the copy its player had, rather than doubling it.
+          next.rolls = [...state.rolls.filter((entry) => entry.id !== (payload.roll as StoredRoll).id).slice(-30), payload.roll as StoredRoll];
           next.latestRoll = {
             roll: payload.roll as StoredRoll,
             source: String(payload.source ?? "digital"),
