@@ -70,7 +70,7 @@ export function builderSpellAdvice(
   subclass: string | undefined | null,
   level: number,
   abilities: AbilityScores,
-): { label: string; count: number; formula?: string } | null {
+): { label: string; count: number; formula?: string; sum?: PreparedSum } | null {
   if (!casting.casts || !casting.ability) {
     return null;
   }
@@ -103,7 +103,34 @@ export function builderSpellAdvice(
   if (!advice || advice.label !== "spells prepared") {
     return advice;
   }
-  return { ...advice, formula: preparedFormula(casting.ability, mod, casting.list, level) };
+  return {
+    ...advice,
+    formula: preparedFormula(casting.ability, mod, casting.list, level),
+    sum: { ability: casting.ability, mod, level, levelPart: preparedLevelPart(casting.list, level) },
+  };
+}
+
+// The parts of a prepared caster's count: its casting modifier and the
+// level part (the level, or half of it for a half caster).
+export type PreparedSum = { ability: "int" | "wis" | "cha"; mod: number; level: number; levelPart: number };
+
+// The level part, read back from the engine's own count with a modifier
+// too large to hit the floor of one, so the half casters' rounding is
+// never restated here.
+function preparedLevelPart(list: string, level: number): number {
+  return (suggestedSpellCount(list, level, 100)?.count ?? 100) - 100;
+}
+
+const ABILITY_SHORT: Record<PreparedSum["ability"], string> = { int: "INT", wis: "WIS", cha: "CHA" };
+
+// The prepared cap as its sum, the way the spell desk shows it (backlog
+// F13): "Wizard level 3 + INT +3 = 6", "Paladin level 5, halved (2) + CHA
+// +3 = 5". The total is the count the save enforces.
+export function preparedCapLine(className: string, sum: PreparedSum, count: number): string {
+  const levelWords =
+    sum.levelPart === sum.level ? `${className} level ${sum.level}` : `${className} level ${sum.level}, halved (${sum.levelPart})`;
+  const line = `${levelWords} + ${ABILITY_SHORT[sum.ability]} ${formatModifier(sum.mod)} = ${count}`;
+  return sum.mod + sum.levelPart < 1 ? `${line} (never fewer than 1)` : line;
 }
 
 // How a prepared caster's count is worked out, said in the limit note so the
@@ -111,7 +138,7 @@ export function builderSpellAdvice(
 // is read back from the engine's own count with a modifier too large to hit
 // the floor of one, so the half casters' rounding is never restated here.
 export function preparedFormula(ability: "int" | "wis" | "cha", mod: number, list: string, level: number): string {
-  const levelPart = (suggestedSpellCount(list, level, 100)?.count ?? 100) - 100;
+  const levelPart = preparedLevelPart(list, level);
   const levelWords = levelPart === level ? `level (${level})` : `half your level, rounded down (${levelPart})`;
   const sum = `${ABILITY_NAMES[ability]} modifier (${formatModifier(mod)}) + ${levelWords}`;
   return mod + levelPart < 1 ? `${sum}, and never fewer than 1` : sum;
