@@ -157,13 +157,14 @@ export function handleRelationshipScheme(
   if (!motive) {
     return { error: "relationship_scheme start needs a motive: what they really want from the character, in a few words.", retry: true };
   }
-  const relationship = openLedger(campaign, sheet, subject);
+  // The ledger opens only for an act that may begin: a refusal leaves no row.
+  const existing = getRelationship(campaign.id, sheet.id, subject.name);
   const npc = subject.npc ?? getNpcByName(campaign.id, subject.name);
   const problem = schemeStartProblem(
     {
       name: subject.name,
       kind: subject.kind,
-      status: relationship.status,
+      status: existing?.status ?? "active",
       gender: npc?.gender ?? "",
       attraction: npc?.attraction ?? null,
       actToward: actElsewhere(campaign.id, subject.name),
@@ -180,6 +181,7 @@ export function handleRelationshipScheme(
   if (problem) {
     return { error: problem, refused: "rules" };
   }
+  const relationship = existing ?? openLedger(campaign, sheet, subject);
   const pretense = startPretense(motive.slice(0, MOTIVE_MAX), relationship.approval, new Date().toISOString());
   patchRelationship(relationship.id, { pretense });
   publishRelationshipsUpdated(campaign.id);
@@ -195,9 +197,10 @@ export function handleRelationshipScheme(
   };
 }
 
-// The act this NPC keeps up toward anyone, by that character's name.
+// The act this NPC keeps up toward anyone, by that character's name. An
+// act on a bond that ended is over, whether or not it ever came out.
 function actElsewhere(campaignId: string, subjectName: string): string | null {
-  const running = listRelationshipsForSubject(campaignId, subjectName).find((entry) => actRunning(entry.pretense));
+  const running = listRelationshipsForSubject(campaignId, subjectName).find((entry) => entry.status !== "ended" && actRunning(entry.pretense));
   return running ? running.characterName : null;
 }
 
