@@ -405,6 +405,9 @@ export function insertEnemy(input: {
   displayName: string;
   initiative: number;
   stats: EnemyStats;
+  // Hit points it arrives with when below its maximum (a companion come back
+  // worn, src/lib/dm/companion-return.ts); absent, it arrives whole.
+  currentHp?: number;
 }): EncounterEnemy {
   const id = crypto.randomUUID();
   const now = nowIso();
@@ -422,7 +425,7 @@ export function insertEnemy(input: {
       input.slug,
       input.displayName.slice(0, 80),
       input.stats.maxHp,
-      input.stats.maxHp,
+      input.currentHp === undefined ? input.stats.maxHp : Math.max(1, Math.min(input.stats.maxHp, Math.round(input.currentHp))),
       input.stats.ac,
       input.initiative,
       input.stats.cr,

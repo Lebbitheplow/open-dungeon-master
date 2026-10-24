@@ -3,6 +3,7 @@ import { deriveCr } from "@/lib/bestiary/derive-cr";
 import { spellDamageFor } from "@/lib/content";
 import { resolveAttackWeapon, weaponAttackProfile } from "@/lib/dm/attack-logic";
 import { stepCr, supportHandicap, type Vitals } from "@/lib/dm/departure-logic";
+import { PACT, type SlotPool, type Wear } from "@/lib/dm/return-wear-logic";
 import type { MonsterSpell, MonsterSpellcasting } from "@/lib/dm/monster-spellcasting";
 import { computeSheetDerived } from "@/lib/srd";
 import { xpForCr } from "@/lib/srd/encounter-math";
@@ -112,7 +113,9 @@ function bestAttack(sheet: SheetForStats): { attack: EnemyAttack; sneak: number 
   };
 }
 
-function spellcastingOf(sheet: SheetForStats): MonsterSpellcasting | undefined {
+// `open`: the slots it has left, as a worn return arrives with them;
+// otherwise all of them.
+function spellcastingOf(sheet: SheetForStats, open = false): MonsterSpellcasting | undefined {
   const casting = sheet.spellcasting;
   if (!casting) {
     return undefined;
@@ -120,11 +123,12 @@ function spellcastingOf(sheet: SheetForStats): MonsterSpellcasting | undefined {
   const derived = computeSheetDerived(sheet);
   const slots: Record<string, number> = Object.fromEntries(
     Object.entries(casting.slots)
-      .filter(([, slot]) => slot.max > 0)
-      .map(([level, slot]) => [level, slot.max]),
+      .map(([level, slot]): [string, number] => [level, open ? slot.max - slot.used : slot.max])
+      .filter(([, count]) => count > 0),
   );
-  if (casting.pact?.max) {
-    slots[String(casting.pact.level)] = (slots[String(casting.pact.level)] ?? 0) + casting.pact.max;
+  const pact = casting.pact ? (open ? casting.pact.max - casting.pact.used : casting.pact.max) : 0;
+  if (casting.pact && pact > 0) {
+    slots[String(casting.pact.level)] = (slots[String(casting.pact.level)] ?? 0) + pact;
   }
   const spells: MonsterSpell[] = spellNames(sheet).map((name) => ({ name, level: spellLevelOf(name) }));
   return {
@@ -139,12 +143,59 @@ function spellcastingOf(sheet: SheetForStats): MonsterSpellcasting | undefined {
 
 export type SheetRating = { cr: number; xp: number; spellRound: number; handicap: number };
 
+// The slots a sheet has open, for a wear to spend (return-wear-logic.ts):
+// each shared slot level, and a warlock's pact slots under their own key.
+export function slotPools(sheet: Pick<SheetForStats, "spellcasting">): SlotPool[] {
+  const casting = sheet.spellcasting;
+  if (!casting) {
+    return [];
+  }
+  const pools: SlotPool[] = Object.entries(casting.slots)
+    .map(([key, slot]) => ({ key, level: Number(key), count: Math.max(0, slot.max - slot.used) }))
+    .filter((pool) => pool.count > 0);
+  if (casting.pact && casting.pact.max - casting.pact.used > 0) {
+    pools.push({ key: PACT, level: casting.pact.level, count: casting.pact.max - casting.pact.used });
+  }
+  return pools;
+}
+
+// A sheet worn as a wear says (issue 503 Phase 3): its current hit points
+// lowered, its slots marked spent. The same on the stat block a returning
+// companion fights as now and on the real sheet Phase 6 will field.
+export function applyWear<T extends SheetForStats>(sheet: T, wear: Wear): T {
+  const casting = sheet.spellcasting;
+  const slots = casting
+    ? Object.fromEntries(
+        Object.entries(casting.slots).map(([key, slot]) => [key, { ...slot, used: Math.min(slot.max, slot.used + (wear.slotsSpent[key] ?? 0)) }]),
+      )
+    : null;
+  return {
+    ...sheet,
+    currentHp: Math.max(1, (sheet.currentHp ?? sheet.maxHp) - wear.hpLost),
+    ...(casting && slots
+      ? {
+          spellcasting: {
+            ...casting,
+            slots,
+            ...(casting.pact ? { pact: { ...casting.pact, used: Math.min(casting.pact.max, casting.pact.used + (wear.slotsSpent[PACT] ?? 0)) } } : {}),
+          },
+        }
+      : {}),
+  };
+}
+
 // The sheet as a stat block, rated: `open` reads the spell slots it has
-// left (the odds, now) rather than all of them (a foe who has rested).
-export function sheetStatBlock(sheet: SheetForStats, options: { open?: boolean } = {}): { stats: EnemyStats; rating: SheetRating } {
+// left (the odds, now) rather than all of them (a foe who has rested), and
+// `asItStands` also rates it at the hit points it has rather than its
+// maximum, and lists only the slots it has left (a worn return).
+export function sheetStatBlock(
+  sheet: SheetForStats,
+  options: { open?: boolean; asItStands?: boolean } = {},
+): { stats: EnemyStats; rating: SheetRating } {
   const derived = computeSheetDerived(sheet);
   const { attack, sneak } = bestAttack(sheet);
-  const casting = spellcastingOf(sheet);
+  const standing = options.asItStands === true;
+  const casting = spellcastingOf(sheet, standing);
   const stats: EnemyStats = {
     ac: sheet.ac,
     maxHp: sheet.maxHp,
@@ -170,8 +221,9 @@ export function sheetStatBlock(sheet: SheetForStats, options: { open?: boolean }
     ...(sheet.alignment ? { alignment: sheet.alignment } : {}),
     ...(casting ? { spellcasting: casting, spells: casting.spells.map((spell) => spell.name) } : {}),
   };
-  const spellRound = bestSpellRound(sheet, options.open === true);
-  const derivedCr = deriveCr(stats, { extraDamagePerRound: spellRound + sneak });
+  const spellRound = bestSpellRound(sheet, options.open === true || standing);
+  const rated = standing ? { ...stats, maxHp: Math.max(1, sheet.currentHp ?? sheet.maxHp) } : stats;
+  const derivedCr = deriveCr(rated, { extraDamagePerRound: spellRound + sneak });
   const handicap = supportHandicap(classLevels(sheet));
   const cr = stepCr(derivedCr.cr, handicap);
   return { stats: { ...stats, cr, xp: xpForCr(cr) }, rating: { cr, xp: xpForCr(cr), spellRound, handicap } };

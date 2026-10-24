@@ -27,6 +27,7 @@ import { encounterCeiling, evaluateEncounter, type EncounterVerdict, type XpThre
 import type { CampaignDifficulty } from "../campaign-types.ts";
 import type { CompanionValue, CompanionValueId } from "./companion-values-logic.ts";
 import type { NpcPersonality } from "./npc-logic.ts";
+import { parseWear, type Wear } from "./return-wear-logic.ts";
 
 export const DEPARTURE_RESPONSES = ["confront", "walk_out", "slip_away", "bide_strike", "report"] as const;
 export type DepartureResponse = (typeof DEPARTURE_RESPONSES)[number];
@@ -248,6 +249,10 @@ export type Gone = {
   // in words.
   cued: ReturnKind | null;
   standoff: boolean;
+  // How a return that would be past the ceiling whole comes worn
+  // (return-wear-logic.ts), and why, in words for the DM. Null when whole.
+  wear: Wear | null;
+  wornBy: string;
   templateId: string;
   eventId: string;
   returned: boolean;
@@ -285,6 +290,8 @@ export function parseDeparture(raw: string): Departure {
             rumours: Math.max(0, num(source.rumours)),
             cued: source.cued === "fight" || source.cued === "parley" ? source.cued : null,
             standoff: source.standoff === true,
+            wear: parseWear(source.wear),
+            wornBy: str(source.wornBy, 200),
             templateId: str(source.templateId, 80),
             eventId: str(source.eventId, 80),
             returned: source.returned === true,
@@ -327,6 +334,12 @@ export type ReturnPlan = {
   adjustedXp: number;
   verdict: EncounterVerdict;
   ceiling: number;
+  // Past the ceiling whole, it comes alone and worn (return-wear-logic.ts):
+  // the wear that brings it inside, with its rating then. Null when whole.
+  wear: Wear | null;
+  wornCr: number | null;
+  // Past the ceiling even at the wear's floor: no fight can be staged.
+  standoff: boolean;
 };
 
 // The most combatants start_encounter takes.
@@ -336,16 +349,22 @@ const MAX_COMBATANTS = 8;
 // target (hard, or deadly for a companion who hates the party), never past
 // the ceiling the table's difficulty sets on start_encounter. Candidates in
 // preference order; each round adds the first that still fits, until the
-// fight reaches its target or nothing more fits. A companion already past
-// the ceiling alone gets no allies, and its adjustedXp says so: the rim
-// stages no fight then (a solo character against an equal is beyond deadly
-// by the DMG's math).
+// fight reaches its target or nothing more fits.
+//
+// A companion already past the ceiling alone (a solo character against an
+// equal is beyond deadly by the DMG's math) comes alone and worn instead:
+// the gentlest of `wearSteps` whose rating (`rateWorn`, the same derive-cr
+// path as its whole rating) brings the fight inside the target's band under
+// the ceiling (deadly at most for one who hates them, hard otherwise). None
+// does, even at the floor: a standoff.
 export function planReturn(input: {
   partyLevels: readonly number[];
   difficulty: CampaignDifficulty;
   companionCr: number;
   hostile: boolean;
   candidates: readonly AllyChoice[];
+  wearSteps?: readonly Wear[];
+  rateWorn?: (wear: Wear) => number;
 }): ReturnPlan {
   const target = input.hostile ? "deadly" : "hard";
   const levels = [...input.partyLevels];
@@ -353,6 +372,17 @@ export function planReturn(input: {
   const alone = evaluate([input.companionCr]);
   const ceiling = encounterCeiling(input.difficulty, alone.thresholds.deadly);
   const cap = Math.min(ceiling, target === "deadly" ? Math.round(alone.thresholds.deadly * 1.5) : alone.thresholds.deadly - 1);
+  if (alone.adjustedXp > ceiling) {
+    const whole = { allies: [], target, ceiling } as const;
+    for (const wear of input.wearSteps ?? []) {
+      const wornCr = input.rateWorn ? input.rateWorn(wear) : input.companionCr;
+      const worn = evaluate([wornCr]);
+      if (worn.adjustedXp <= cap) {
+        return { ...whole, allies: [], adjustedXp: worn.adjustedXp, verdict: worn.verdict, wear, wornCr, standoff: false };
+      }
+    }
+    return { ...whole, allies: [], adjustedXp: alone.adjustedXp, verdict: alone.verdict, wear: null, wornCr: null, standoff: true };
+  }
   const floor = target === "deadly" ? alone.thresholds.deadly : alone.thresholds.hard;
   const picked: AllyChoice[] = [];
   let current = alone;
@@ -373,7 +403,7 @@ export function planReturn(input: {
       allies.push({ ...ally, count: 1 });
     }
   }
-  return { allies, target, adjustedXp: current.adjustedXp, verdict: current.verdict, ceiling };
+  return { allies, target, adjustedXp: current.adjustedXp, verdict: current.verdict, ceiling, wear: null, wornCr: null, standoff: false };
 }
 
 // A companion whose standing has climbed back above disliked comes to talk,

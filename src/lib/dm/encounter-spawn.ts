@@ -44,6 +44,9 @@ export type ResolvedEnemyRequest = {
   slug: string;
   name: string;
   stats: ReturnType<typeof synthesizeStats>;
+  // Below its maximum when it arrives worn (a companion come back against a
+  // party its whole self would be past the ceiling for).
+  currentHp?: number;
 };
 
 // Resolves every requested enemy before anything is created. Returns the
@@ -74,7 +77,12 @@ export function resolveEnemyRequests(
     const back = returning.get(wanted);
     if (back) {
       for (let index = 0; index < count; index += 1) {
-        resolved.push({ slug: back.slug, name: request.name?.trim() || back.name, stats: back.stats });
+        resolved.push({
+          slug: back.slug,
+          name: request.name?.trim() || back.name,
+          stats: back.stats,
+          ...(back.currentHp < back.stats.maxHp ? { currentHp: back.currentHp } : {}),
+        });
       }
       continue;
     }
@@ -244,6 +252,7 @@ export function handleAddEnemies(
       // A record for the DM alone, as an enemy's save is.
       initiative: dmRoll(campaign.id, null, "initiative", `${names[index]}: initiative`, d20Expression(entry.stats.dexMod)).total,
       stats: entry.stats,
+      ...(entry.currentHp !== undefined ? { currentHp: entry.currentHp } : {}),
     }),
   );
 

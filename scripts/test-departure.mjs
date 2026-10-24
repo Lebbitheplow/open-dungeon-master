@@ -11,6 +11,7 @@ import { register } from "node:module";
 register("./lib/register-alias.mjs", import.meta.url);
 
 const logic = await import("../src/lib/dm/departure-logic.ts");
+const wear = await import("../src/lib/dm/return-wear-logic.ts");
 const { evaluateEncounter, encounterCeiling } = await import("../src/lib/srd/encounter-math.ts");
 
 let passed = 0;
@@ -178,10 +179,12 @@ test("allies are budgeted to hard, or deadly for one who hates the party, and ne
     assert.equal(plan.ceiling, ceiling);
     const alone = evaluateEncounter(levels, [cr]).adjustedXp;
     if (alone > ceiling) {
-      assert.deepEqual(plan.allies, [], "already past the ceiling alone: no allies, and the rim stages no fight");
-      assert.equal(plan.adjustedXp, alone);
+      assert.deepEqual(plan.allies, [], "already past the ceiling alone: no allies");
+      assert.equal(plan.standoff, true, "with no wear to try, no fight can be staged");
+      assert.equal(plan.wear, null);
       continue;
     }
+    assert.equal(plan.wear, null, "inside the ceiling whole: it comes unworn");
     assert.ok(plan.adjustedXp <= ceiling, `${plan.adjustedXp} within ${ceiling}`);
     assert.equal(plan.target, hostile ? "deadly" : "hard");
     const crs = [cr, ...plan.allies.flatMap((ally) => new Array(ally.count).fill(ally.cr))];
@@ -194,6 +197,68 @@ test("allies are budgeted to hard, or deadly for one who hates the party, and ne
   const four = logic.planReturn({ partyLevels: [5, 5, 5, 5], difficulty: "normal", companionCr: 5, hostile: true, candidates: allies });
   assert.ok(["deadly", "hard"].includes(four.verdict), four.verdict);
   assert.ok(four.allies.length > 0, "a companion alone is no match for four: it brings help");
+});
+
+// ---- coming back worn ----
+
+test("a wear takes the highest slot left, then a tenth of the hit points, in turn, and never below half", () => {
+  assert.equal(wear.WORN_HP_FLOOR, 0.5);
+  const steps = wear.wearSteps(40, [{ key: "1", level: 1, count: 2 }, { key: "2", level: 2, count: 1 }]);
+  assert.deepEqual(steps[0], { hpLost: 0, slotsSpent: { 2: 1 } }, "the highest slot goes first");
+  assert.deepEqual(steps[1], { hpLost: 4, slotsSpent: { 2: 1 } });
+  assert.deepEqual(steps[2], { hpLost: 4, slotsSpent: { 2: 1, 1: 1 } });
+  const last = steps.at(-1);
+  assert.equal(last.hpLost, 20, "the floor: half of 40");
+  assert.deepEqual(last.slotsSpent, { 1: 2, 2: 1 }, "every levelled slot spent at the floor");
+  assert.ok(steps.every((step, index) => index === 0 || step.hpLost >= steps[index - 1].hpLost), "each step at least the last");
+  assert.ok(steps.every((step) => step.hpLost <= 20));
+  assert.equal(wear.maxHpLost(41), 20, "half rounds up what stays");
+  const fighter = wear.wearSteps(30, []);
+  assert.deepEqual(fighter.map((step) => step.hpLost), [3, 6, 9, 12, 15], "no slots: hit points alone, to the floor");
+  assert.equal(wear.slotsSpentCount(last), 3);
+  assert.equal(wear.wearWords(40, last), "20 of 40 hit points, 3 spell slots spent");
+});
+
+test("past the ceiling whole, it comes alone and worn: the gentlest wear that fits, deadly at most, hard for one who does not hate them", () => {
+  const steps = wear.wearSteps(40, []);
+  // A rating that falls a row each step: CR 5, 4, 3, 2, 1, 1/2.
+  const rateWorn = (worn) => [5, 4, 3, 2, 1, 0.5][Math.round(worn.hpLost / 4)] ?? 0.5;
+  for (const [difficulty, hostile] of [["normal", true], ["easy", true], ["hard", true], ["normal", false]]) {
+    const plan = logic.planReturn({ partyLevels: [5], difficulty, companionCr: 5, hostile, candidates: allies, wearSteps: steps, rateWorn });
+    const thresholds = evaluateEncounter([5], [5]).thresholds;
+    const ceiling = encounterCeiling(difficulty, thresholds.deadly);
+    assert.ok(evaluateEncounter([5], [5]).adjustedXp > ceiling, "a solo character's equal is past the ceiling whole");
+    assert.equal(plan.standoff, false, difficulty);
+    assert.deepEqual(plan.allies, [], "worn, it comes alone");
+    assert.ok(plan.wear, `${difficulty}: worn`);
+    assert.equal(plan.wornCr, rateWorn(plan.wear));
+    assert.equal(evaluateEncounter([5], [plan.wornCr]).adjustedXp, plan.adjustedXp, "the plan's own number is the engine's");
+    assert.ok(plan.adjustedXp <= ceiling, `${difficulty}: inside the ceiling`);
+    if (hostile) {
+      assert.ok(plan.adjustedXp <= Math.round(thresholds.deadly * 1.5), "deadly at most");
+    } else {
+      assert.ok(plan.adjustedXp < thresholds.deadly, "hard for one who does not hate them");
+    }
+    const gentler = steps[steps.indexOf(plan.wear) - 1];
+    if (gentler) {
+      const cap = hostile ? Math.min(ceiling, Math.round(thresholds.deadly * 1.5)) : thresholds.deadly - 1;
+      assert.ok(evaluateEncounter([5], [rateWorn(gentler)]).adjustedXp > cap, "no gentler wear would have done");
+    }
+  }
+  const tooStrong = logic.planReturn({ partyLevels: [1], difficulty: "easy", companionCr: 5, hostile: true, candidates: allies, wearSteps: steps, rateWorn });
+  assert.equal(tooStrong.standoff, true, "past the ceiling even at the floor: a standoff");
+  assert.equal(tooStrong.wear, null);
+});
+
+test("why they are worn, in words, follows what they hold to; the record keeps the wear", () => {
+  assert.match(wear.wornReason([held("mercenary")], false), /paid for allies/);
+  assert.match(wear.wornReason([held("ruthless")], true), /old wound/);
+  assert.match(wear.wornReason([held("protects_innocent")], true), /hard road .* magic/);
+  assert.deepEqual(wear.parseWear({ hpLost: 7, slotsSpent: { 3: 1, pact: 2, nope: 4 } }), { hpLost: 7, slotsSpent: { 3: 1, pact: 2 } });
+  assert.equal(wear.parseWear({ hpLost: 0, slotsSpent: {} }), null, "an empty wear is no wear");
+  const record = logic.parseDeparture(JSON.stringify({ intent: null, gone: { response: "walk_out", cued: "fight", wear: { hpLost: 9, slotsSpent: { 1: 1 } }, wornBy: "a hard road" } }));
+  assert.deepEqual(record.gone.wear, { hpLost: 9, slotsSpent: { 1: 1 } });
+  assert.equal(record.gone.wornBy, "a hard road");
 });
 
 test("who comes back with them follows what they hold to", () => {

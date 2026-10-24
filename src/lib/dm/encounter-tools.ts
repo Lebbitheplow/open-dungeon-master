@@ -321,6 +321,8 @@ function handleStartEncounter(
       // A record for the DM alone, as an enemy's save is.
       initiative: dmRoll(campaign.id, null, "initiative", `${names[index]}: initiative`, d20Expression(entry.stats.dexMod)).total,
       stats: entry.stats,
+      // A companion come back worn arrives below its maximum (issue 503).
+      ...(entry.currentHp !== undefined ? { currentHp: entry.currentHp } : {}),
     }),
   );
   // Surprise: the ambushed side loses its first turn. Stored as ids the

@@ -34,6 +34,8 @@ const { listActiveFacts } = await import("../src/lib/db/facts.ts");
 const { listEncounterTemplates } = await import("../src/lib/db/encounter-templates.ts");
 const { departureOpenings, intentLinesForPrompt, settleDepartures } = await import("../src/lib/dm/departure.ts");
 const { returnDirectorNotes } = await import("../src/lib/dm/companion-revenge.ts");
+const { returningCombatant } = await import("../src/lib/dm/companion-return.ts");
+const { applyWear, slotPools } = await import("../src/lib/dm/companion-statblock.ts");
 const { advanceNpcAgency } = await import("../src/lib/dm/npc-agency.ts");
 const { deployTemplate, templateDifficulty } = await import("../src/lib/dm/encounter-templates.ts");
 const { conscienceViews } = await import("../src/lib/dm/conscience.ts");
@@ -208,6 +210,8 @@ await test("a departed companion keeps pace with the party, gathers help with ru
   assert.ok(prepared, "a prepared fight");
   assert.equal(prepared.name, "Seren's return");
   assert.equal(prepared.enemies[0].monster, "Seren");
+  assert.equal(gone.wear, null, "four characters: she need not be worn");
+  assert.ok(prepared.enemies.length > 1, "she brings allies");
   const readout = templateDifficulty(world.campaign(), prepared.enemies);
   assert.equal(readout.unknownMonster, null, "she resolves as herself");
   assert.equal(readout.tooDeadly, false, `inside the ceiling (${readout.adjustedXp} of ${readout.ceiling})`);
@@ -225,6 +229,7 @@ await test("a departed companion keeps pace with the party, gathers help with ru
   assert.equal(her.displayName, "Seren");
   assert.ok(her.stats.traits[0].includes(`level ${leftLevel + 1} paladin`), `at shadow level: ${her.stats.traits[0]}`);
   assert.ok(her.stats.maxHp > sheet.maxHp, "her hit points grew with her level");
+  assert.equal(her.currentHp, her.maxHp, "whole: she arrives at her maximum");
   assert.equal(departure().gone.returned, true, "the return has run");
   assert.ok(!listEncounterTemplates(world.campaignId).some((entry) => entry.name === "Seren's return"), "and its prepared fight is spent");
 });
@@ -258,16 +263,78 @@ await test("a companion whose standing has climbed back comes to parley, and rej
   assert.deepEqual(gone.body.gone, [], "off the Gone list");
 });
 
-await test("a solo character against an equal is past the ceiling: one who hates them comes in a standoff, not a fight", async () => {
-  const { world, row, atrocity, departure } = await table({ level: 3, axes: { boldness: -2 } });
-  await atrocity();
+// Lets the agency dice finish a departed companion's goal at once.
+function finishGoal(world, row) {
   const target = row().agency.goals.session.target;
   world.dice(new Array(target).fill(20));
   advanceNpcAgency(world.campaignId, "", { rounds: target, tickPressureCounters: false });
   world.clearDice();
-  assert.equal(departure().gone.cued, "parley");
-  assert.equal(departure().gone.standoff, true);
-  assert.match(returnDirectorNotes(world.campaign()).join(" "), /past what this table's difficulty lets a fight be/);
+}
+
+await test("a solo character's equal comes back alone and worn: inside the ceiling, never below half her hit points, and the DM is told why", async () => {
+  const { world, row, atrocity, departure } = await table({ level: 3, axes: { boldness: -2 } });
+  await atrocity();
+  finishGoal(world, row);
+  const gone = departure().gone;
+  assert.equal(gone.cued, "fight", "a fight, not a standoff");
+  assert.equal(gone.standoff, false);
+  assert.ok(gone.wear, "worn");
+  const whole = returningCombatant(world.campaign(), row().id, "Seren", null);
+  const worn = returningCombatant(world.campaign(), row().id, "Seren");
+  assert.ok(worn.cr < whole.cr, `rated as she stands (CR ${worn.cr} against ${whole.cr} whole)`);
+  assert.ok(worn.currentHp < whole.stats.maxHp && worn.currentHp >= Math.ceil(whole.stats.maxHp / 2), `${worn.currentHp} of ${whole.stats.maxHp}: never below half`);
+  assert.match(gone.wornBy, /hard road/);
+  assert.match(gone.wornBy, new RegExp(`${worn.currentHp} of ${whole.stats.maxHp} hit points`));
+  const prepared = listEncounterTemplates(world.campaignId).find((entry) => entry.id === gone.templateId);
+  assert.deepEqual(prepared.enemies, [{ monster: "Seren", count: 1 }], "alone");
+  assert.match(prepared.notes, /alone and worn/);
+  const readout = templateDifficulty(world.campaign(), prepared.enemies);
+  assert.equal(readout.tooDeadly, false, `inside the ceiling (${readout.adjustedXp} of ${readout.ceiling})`);
+  assert.match(readout.verdict, /^(hard|deadly)/);
+  const cue = returnDirectorNotes(world.campaign()).join(" ");
+  assert.match(cue, /alone and worn: .*hard road/);
+  assert.match(cue, /Narrate the wear/);
+  const event = listCalendarEvents(world.campaignId, true).find((entry) => entry.id === gone.eventId);
+  assert.match(event.title, /alone and worn/);
+  assert.equal(event.visibility, "dm");
+  world.dice(new Array(20).fill(10));
+  const started = await deployTemplate(world.campaign(), world.owner.id, prepared);
+  world.clearDice();
+  assert.equal(started.ok, true, started.error);
+  const her = world.enemies().find((enemy) => enemy.slug === `companion:${row().id}`);
+  assert.ok(her, "she fights as herself");
+  assert.equal(her.currentHp, worn.currentHp, "she arrives worn");
+  assert.equal(her.maxHp, whole.stats.maxHp, "out of her own maximum");
+  assert.equal(her.stats.cr, worn.cr, "the fight was budgeted on her worn rating");
+});
+
+await test("one past the ceiling even worn to the floor comes in a standoff in words", async () => {
+  const { world, row, atrocity, departure } = await table({ gameSettings: {}, level: 1, axes: { boldness: -2 }, companion: { level: 7 } });
+  await atrocity();
+  finishGoal(world, row);
+  const gone = departure().gone;
+  assert.equal(gone.cued, "parley");
+  assert.equal(gone.standoff, true);
+  assert.equal(gone.wear, null);
+  assert.equal(gone.templateId, "", "no fight is prepared");
+  assert.match(returnDirectorNotes(world.campaign()).join(" "), /even worn to half their strength/);
+});
+
+await test("a wear lowers a sheet's own hit points and marks its slots spent, highest first: the rule Phase 6's real sheet keeps", async () => {
+  const sheet = {
+    name: "Ilsa",
+    level: 5,
+    class: "wizard",
+    maxHp: 30,
+    currentHp: 30,
+    spellcasting: { ability: "int", slots: { 1: { max: 4, used: 0 }, 2: { max: 3, used: 0 }, 3: { max: 2, used: 1 } }, prepared: [], known: [], cantrips: [] },
+  };
+  assert.deepEqual(slotPools(sheet).map((pool) => [pool.key, pool.count]), [["1", 4], ["2", 3], ["3", 1]]);
+  const worn = applyWear(sheet, { hpLost: 12, slotsSpent: { 3: 1, 2: 1 } });
+  assert.equal(worn.currentHp, 18);
+  assert.equal(worn.maxHp, 30, "out of its own maximum");
+  assert.deepEqual(worn.spellcasting.slots, { 1: { max: 4, used: 0 }, 2: { max: 3, used: 1 }, 3: { max: 2, used: 2 } });
+  assert.equal(sheet.currentHp, 30, "the sheet given is left as it was");
 });
 
 await test("where companions may turn, a command that ends on her own turn hands that turn to the DM", async () => {

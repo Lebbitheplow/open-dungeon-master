@@ -8,7 +8,8 @@ import { clearDeparture, companionDeparture, listDepartures } from "@/lib/db/com
 import { departedCompanion, forgetDepartedSheet } from "@/lib/db/companion-npcs";
 import { deleteEncounterTemplate } from "@/lib/db/encounter-templates";
 import type { EnemyStats } from "@/lib/bestiary/statblock";
-import { sheetStatBlock } from "@/lib/dm/companion-statblock";
+import { applyWear, sheetStatBlock, slotPools } from "@/lib/dm/companion-statblock";
+import { isWorn, wearSteps, type Wear } from "@/lib/dm/return-wear-logic";
 import type { Gone } from "@/lib/dm/departure-logic";
 import { textKey } from "@/lib/language/text-logic";
 import { levelForXp, XP_THRESHOLDS } from "@/lib/srd";
@@ -86,18 +87,21 @@ export function settleReturn(campaign: Campaign, returning: Returning) {
   forgetDepartedSheet(returning.npcId);
 }
 
-export type ReturningCombatant = { npcId: string; name: string; slug: string; level: number; stats: EnemyStats; cr: number };
+export type ReturningCombatant = {
+  npcId: string;
+  name: string;
+  slug: string;
+  level: number;
+  stats: EnemyStats;
+  cr: number;
+  // The hit points it arrives with: its maximum, or fewer when it comes worn.
+  currentHp: number;
+  wear: Wear | null;
+};
 
-// The fighter a departed companion comes back as (issue 503 Phase 3). The
-// one place it is built, so Phase 6 swaps it here: once a sheet can sit on
-// the enemy side of the initiative order (resolveCombatant()), this
-// re-instantiates their own sheet, at the same shadow level, on that side.
-// Until then they fight as a converted stat block: their kept sheet, taken
-// to the level they shadowed the party to, read by the bestiary's own
-// procedure (src/lib/dm/companion-statblock.ts: AC, hit points, their best
-// weapon and Extra Attack, their spells as a monster's spellcasting, rated
-// by derive-cr with a round of their best spell and the support handicap).
-export function returningCombatant(campaign: Pick<Campaign, "id">, npcId: string, name: string): ReturningCombatant | null {
+// The sheet a departed companion comes back with: the one it left with, at
+// the level it shadowed the party to, rested (whole, every slot back).
+function returningSheet(npcId: string, name: string) {
   const departed = departedSheet(npcId);
   const gone = companionDeparture(npcId).gone;
   if (!departed || !gone) {
@@ -109,9 +113,76 @@ export function returningCombatant(campaign: Pick<Campaign, "id">, npcId: string
   }
   const level = shadowLevel(departed, gone);
   const input = adaptSheetToLevel(parsed.data, departed.level, level);
-  const { stats, rating } = sheetStatBlock({ ...input, name, level, alignment: input.alignment });
+  const casting = input.spellcasting;
+  const rested = {
+    ...input,
+    name,
+    level,
+    alignment: input.alignment,
+    currentHp: input.maxHp,
+    spellcasting: casting
+      ? {
+          ...casting,
+          slots: Object.fromEntries(Object.entries(casting.slots).map(([key, slot]) => [key, { ...slot, used: 0 }])),
+          ...(casting.pact ? { pact: { ...casting.pact, used: 0 } } : {}),
+        }
+      : casting,
+  };
+  return { sheet: rested, gone };
+}
+
+// The fighter a departed companion comes back as (issue 503 Phase 3). The
+// one place it is built, so Phase 6 swaps it here: once a sheet can sit on
+// the enemy side of the initiative order (resolveCombatant()), this
+// re-instantiates their own sheet, at the same shadow level and worn by the
+// same rule (companion-statblock.ts applyWear: its current hit points
+// lowered, its slots marked spent), on that side. Until then they fight as
+// a converted stat block: their kept sheet, taken to the level they
+// shadowed the party to, read by the bestiary's own procedure
+// (src/lib/dm/companion-statblock.ts: AC, hit points, their best weapon and
+// Extra Attack, their spells as a monster's spellcasting, rated by derive-cr
+// with a round of their best spell and the support handicap). Worn, it is
+// rated as it stands (the hit points and slots it has left) and arrives
+// with those hit points. `wear` defaults to the one its return was cued
+// with (src/lib/dm/companion-revenge.ts).
+export function returningCombatant(
+  campaign: Pick<Campaign, "id">,
+  npcId: string,
+  name: string,
+  wear: Wear | null = companionDeparture(npcId).gone?.wear ?? null,
+): ReturningCombatant | null {
+  const back = returningSheet(npcId, name);
+  if (!back) {
+    return null;
+  }
   void campaign;
-  return { npcId, name, slug: `companion:${npcId}`, level, stats, cr: rating.cr };
+  const worn = isWorn(wear) ? applyWear(back.sheet, wear) : back.sheet;
+  const { stats, rating } = sheetStatBlock(worn, { asItStands: isWorn(wear) });
+  return {
+    npcId,
+    name,
+    slug: `companion:${npcId}`,
+    level: back.sheet.level,
+    stats,
+    cr: rating.cr,
+    currentHp: worn.currentHp,
+    wear: isWorn(wear) ? wear : null,
+  };
+}
+
+// What the return planner (departure-logic.ts planReturn) needs to wear a
+// companion whole past the table's ceiling: every wear from the gentlest to
+// the floor, and its rating at each, through the same path.
+export function returnWear(campaign: Pick<Campaign, "id">, npcId: string, name: string): { maxHp: number; steps: Wear[]; rate: (wear: Wear) => number } | null {
+  const back = returningSheet(npcId, name);
+  if (!back) {
+    return null;
+  }
+  return {
+    maxHp: back.sheet.maxHp,
+    steps: wearSteps(back.sheet.maxHp, slotPools(back.sheet)),
+    rate: (wear) => returningCombatant(campaign, npcId, name, wear)?.cr ?? Number.POSITIVE_INFINITY,
+  };
 }
 
 // Every departed companion whose return is cued as a fight and has not run,

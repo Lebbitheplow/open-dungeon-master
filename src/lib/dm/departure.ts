@@ -197,6 +197,8 @@ export function departNow(
         rumours: 0,
         cued: null,
         standoff: false,
+        wear: null,
+        wornBy: "",
         templateId: "",
         eventId: "",
         returned: false,

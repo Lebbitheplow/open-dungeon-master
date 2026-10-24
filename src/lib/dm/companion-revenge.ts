@@ -8,7 +8,8 @@ import { getActiveEncounter, listEnemies } from "@/lib/db/encounters";
 import { getNpcById, type Npc } from "@/lib/db/npcs";
 import { listRelationships } from "@/lib/db/relationships";
 import { listSheets } from "@/lib/db/sheets";
-import { returningCombatant } from "@/lib/dm/companion-return";
+import { returningCombatant, returnWear } from "@/lib/dm/companion-return";
+import { slotsSpentCount, wearWords, wornReason } from "@/lib/dm/return-wear-logic";
 import {
   allyPreferences,
   planReturn,
@@ -112,24 +113,32 @@ function allyCandidates(campaign: Campaign, values: Parameters<typeof allyPrefer
 }
 
 // The prepared fight for a return, or null when there can be none (the
-// sheet no longer passes, or they alone are past the table's ceiling).
+// sheet no longer passes, or it is past the table's ceiling even worn to
+// the floor). Past the ceiling whole, it comes alone and worn
+// (return-wear-logic.ts), and the fight's note and the cue say why.
 function prepareFight(campaign: Campaign, npcId: string, name: string, gone: Gone, standing: number | null) {
-  const combatant = returningCombatant(campaign, npcId, name);
-  if (!combatant) {
+  const combatant = returningCombatant(campaign, npcId, name, null);
+  const wearing = combatant ? returnWear(campaign, npcId, name) : null;
+  if (!combatant || !wearing) {
     return null;
   }
   // Every sheet at the table, as start_encounter budgets a fight.
   const atTable = listSheets(campaign.id).filter((sheet) => !sheet.deathSaves?.dead).map((sheet) => sheet.level);
+  const values = companionValues(npcId);
   const plan = planReturn({
     partyLevels: atTable.length ? atTable : partyLevelsFor(campaign),
     difficulty: campaign.difficulty,
     companionCr: combatant.cr,
     hostile: gone.hostile || (standing !== null && standing < -59),
-    candidates: allyCandidates(campaign, companionValues(npcId), Boolean(gone.reportedTo)),
+    candidates: allyCandidates(campaign, values, Boolean(gone.reportedTo)),
+    wearSteps: wearing.steps,
+    rateWorn: wearing.rate,
   });
-  if (plan.adjustedXp > plan.ceiling) {
+  if (plan.standoff || plan.adjustedXp > plan.ceiling) {
     return null;
   }
+  const wear = plan.wear;
+  const wornBy = wear ? `${wornReason(values, slotsSpentCount(wear) > 0)} (${wearWords(wearing.maxHp, wear)})` : "";
   const allies = plan.allies.map((ally) => `${ally.count > 1 ? `${ally.count} ` : ""}${ally.name}`).join(", ");
   const template = insertEncounterTemplate({
     campaignId: campaign.id,
@@ -137,24 +146,28 @@ function prepareFight(campaign: Campaign, npcId: string, name: string, gone: Gon
     enemies: [{ monster: name, count: 1 }, ...plan.allies.map((ally) => ({ monster: ally.slug, count: ally.count }))],
     battlefield: "",
     map: EMPTY_TEMPLATE_MAP,
-    notes: `${name} comes back for the party${allies ? ` with ${allies}` : ""}, fighting as they did beside them, at level ${combatant.level}. Budgeted ${plan.target} for this party (${plan.verdict.replace(/_/g, " ")}).`,
+    notes: wear
+      ? `${name} comes back for the party alone and worn, at level ${combatant.level}: ${wornBy}. Fighting as they did beside them. Budgeted ${plan.target} for this party (${plan.verdict.replace(/_/g, " ")}).`
+      : `${name} comes back for the party${allies ? ` with ${allies}` : ""}, fighting as they did beside them, at level ${combatant.level}. Budgeted ${plan.target} for this party (${plan.verdict.replace(/_/g, " ")}).`,
     createdByUserId: campaign.ownerUserId,
   });
-  return { template, plan, combatant };
+  return { template, plan, combatant, wear, wornBy };
 }
 
 // What the DM is told a cued return is, on the calendar and each turn.
-function cueWords(name: string, gone: Pick<Gone, "cued" | "standoff">): { title: string; body: string } {
+function cueWords(name: string, gone: Pick<Gone, "cued" | "standoff" | "wornBy">): { title: string; body: string } {
   if (gone.cued === "fight") {
     return {
-      title: `${name} returns with help`,
-      body: `${name}, who left the party, has gathered help and comes for them: when the party is next exposed (on the road, at camp, somewhere ${name} would know to wait), start the prepared fight "${returnName(name)}" with run_prepared_encounter. ${name} fights as themselves.`,
+      title: gone.wornBy ? `${name} returns, alone and worn` : `${name} returns with help`,
+      body: gone.wornBy
+        ? `${name}, who left the party, comes for them alone and worn: ${gone.wornBy}. Narrate the wear as the reason they come at less than their best. When the party is next exposed (on the road, at camp, somewhere ${name} would know to wait), start the prepared fight "${returnName(name)}" with run_prepared_encounter. ${name} fights as themselves.`
+        : `${name}, who left the party, has gathered help and comes for them: when the party is next exposed (on the road, at camp, somewhere ${name} would know to wait), start the prepared fight "${returnName(name)}" with run_prepared_encounter. ${name} fights as themselves.`,
     };
   }
   if (gone.standoff) {
     return {
       title: `${name} confronts the party`,
-      body: `${name}, who left the party hating it, has gathered help and seeks them out, but a fight against ${name} would be past what this table's difficulty lets a fight be: they come to face the party in words (a demand, a threat, a reckoning). They do not rejoin unless the party makes amends.`,
+      body: `${name}, who left the party hating it, seeks them out, but even worn to half their strength a fight against ${name} would be past what this table's difficulty lets a fight be: they come to face the party in words (a demand, a threat, a reckoning). They do not rejoin unless the party makes amends.`,
     };
   }
   return {
@@ -165,7 +178,8 @@ function cueWords(name: string, gone: Pick<Gone, "cued" | "standoff">): { title:
 
 // Cues the return: a fight (prepared, with a DM-only calendar event) or a
 // parley (the calendar event alone), by the standing they hold now. One who
-// hates the party but alone is past the table's ceiling comes in a standoff.
+// hates the party but is past the table's ceiling even worn to the floor
+// comes in a standoff.
 export function cueReturn(campaign: Campaign, npcId: string): ReturnKind | null {
   const npc = getNpcById(npcId);
   const departure = companionDeparture(npcId);
@@ -178,8 +192,10 @@ export function cueReturn(campaign: Campaign, npcId: string): ReturnKind | null 
   const fight = wanted === "fight" ? prepareFight(campaign, npcId, npc.name, gone, standing) : null;
   const kind: ReturnKind = fight ? "fight" : "parley";
   const standoff = wanted === "fight" && !fight;
+  const wear = fight?.wear ?? null;
+  const wornBy = fight?.wornBy ?? "";
   const clock = (getCampaignById(campaign.id) ?? campaign).clock;
-  const words = cueWords(npc.name, { cued: kind, standoff });
+  const words = cueWords(npc.name, { cued: kind, standoff, wornBy });
   const event = insertCalendarEvent({
     campaignId: campaign.id,
     atInstant: clock.instant + RETURN_AFTER_MINUTES,
@@ -189,7 +205,7 @@ export function cueReturn(campaign: Campaign, npcId: string): ReturnKind | null 
   });
   saveDeparture(npcId, {
     ...departure,
-    gone: { ...gone, cued: kind, standoff, templateId: fight?.template.id ?? "", eventId: event.id, returned: false },
+    gone: { ...gone, cued: kind, standoff, wear, wornBy, templateId: fight?.template.id ?? "", eventId: event.id, returned: false },
   });
   publishEphemeral(campaign.id, "calendar_updated", { at: Date.now() });
   return kind;
@@ -206,7 +222,7 @@ function uncue(campaign: Campaign, npcId: string, departure: Departure) {
   if (gone.eventId) {
     deleteCalendarEvent(campaign.id, gone.eventId);
   }
-  saveDeparture(npcId, { ...departure, gone: { ...gone, cued: null, standoff: false, templateId: "", eventId: "" } });
+  saveDeparture(npcId, { ...departure, gone: { ...gone, cued: null, standoff: false, wear: null, wornBy: "", templateId: "", eventId: "" } });
 }
 
 // Each turn (src/lib/dm/turn.ts) and after a console call: a cued fight
@@ -265,7 +281,7 @@ export function departedLinesForPrompt(campaign: Campaign): string[] {
     const goal = getNpcById(entry.npcId)?.agency.goals.session;
     const parts = [`- ${entry.name} (gone: ${gone.how.charAt(0).toLowerCase()}${gone.how.slice(1)})`];
     if (gone.cued) {
-      parts.push(`ready to return (${gone.cued === "fight" ? "with help, to fight" : gone.standoff ? "to face the party in words" : "to talk"}); see the director's notes`);
+      parts.push(`ready to return (${gone.cued === "fight" ? (gone.wornBy ? "alone and worn, to fight" : "with help, to fight") : gone.standoff ? "to face the party in words" : "to talk"}); see the director's notes`);
     } else if (gone.avenging) {
       parts.push(`gathering help against the party${goal ? ` (${goal.progress} of ${goal.target})` : ""}; let a rumour reach the party now and then`);
     }
