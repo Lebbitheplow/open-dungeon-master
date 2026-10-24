@@ -11,6 +11,7 @@ import { SectionHead } from "@/components/ui/SectionHead";
 import { KitButton, LoadFailed, PanelError, panelField, PanelLoading, RowMenu } from "./PanelKit";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
+import { offerCorrectionReason } from "@/lib/correction-offer";
 import { ui } from "@/lib/ui";
 import type { Chapter } from "@/lib/db/chapters";
 import { romanNumeral, type PublicAct, type StoryArc } from "@/lib/dm/arc-logic";
@@ -886,6 +887,9 @@ export function StoryPanel({
       }
       // Success or failure, the confirm dialog is done; the campaign_rewound
       // event reloads the whole view.
+      if (response.ok) {
+        offerCorrectionReason(campaignId, await response.json().catch(() => null));
+      }
       setRewindTarget(null);
     } finally {
       setRewindBusy(false);

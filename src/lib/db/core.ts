@@ -1749,6 +1749,11 @@ function ensureSchema(db: SqliteDatabase) {
     // announceShop), so the chat's Browse wares opens the Market on it.
     // Null on every other message.
     ["shop_id", `TEXT`],
+    // Which take in variants_json a person wrote by editing the narration
+    // (src/app/api/campaigns/[campaignId]/messages/[messageId]/edit): the
+    // narrator's takes stay beside it, so an edit never loses the original
+    // (issue #460). Null when nobody has edited the message.
+    ["edited_take", `INTEGER`],
   ]);
 
   addColumns("dm_turns", [
@@ -2540,6 +2545,28 @@ function ensureSchema(db: SqliteDatabase) {
     );
     CREATE INDEX IF NOT EXISTS idx_model_calls_at ON model_calls(at);
     CREATE INDEX IF NOT EXISTS idx_model_calls_turn ON model_calls(turn_id);
+
+    -- The correction ledger (issue #460, src/lib/db/turn-ledger.ts): one
+    -- row per fix a table made to state an AI turn set, written in the same
+    -- transaction as the fix. turn_id has no foreign key, so a rollback's
+    -- rows outlive the turns it deleted. No story text: the kind of fix, the
+    -- tool, the audit row or message it fixed, who made it, and an optional
+    -- reason chip. Kept like dm_turns, with no pruning.
+    CREATE TABLE IF NOT EXISTS turn_corrections (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      turn_id TEXT,
+      attribution TEXT NOT NULL CHECK (attribution IN ('direct','inferred')),
+      kind TEXT NOT NULL,
+      audit_id TEXT,
+      message_id TEXT,
+      tool TEXT,
+      reason TEXT,
+      user_id TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_turn_corrections_campaign ON turn_corrections(campaign_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_turn_corrections_turn ON turn_corrections(turn_id);
 
     -- Who a stored picture or document was made for (src/lib/media-access.ts):
     -- the account that uploaded or asked for it and the campaign or workshop

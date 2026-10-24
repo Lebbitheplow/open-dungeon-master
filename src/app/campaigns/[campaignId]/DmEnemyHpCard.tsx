@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Loader2, Save } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { offerCorrectionReason } from "@/lib/correction-offer";
 import { ui } from "@/lib/ui";
 import { NumberStepper } from "@/components/ui/NumberStepper";
 import { Select } from "@/components/ui/Select";
@@ -53,6 +54,7 @@ export function DmEnemyHpCard({
         return;
       }
       setDone(`${data.name ?? picked.name} now has ${data.hp ?? value} hit points${data.woke ? " and wakes" : ""}.`);
+      offerCorrectionReason(campaignId, data);
       setHp(null);
     } catch {
       setError("Could not reach the server.");

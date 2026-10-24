@@ -6,6 +6,7 @@ import { appConfirm } from "@/components/ui/ConfirmDialog";
 import { useState } from "react";
 import { NumberStepper } from "@/components/ui/NumberStepper";
 import { cn } from "@/lib/cn";
+import { offerCorrectionReason } from "@/lib/correction-offer";
 import { ENTRY_NAME_MAX, MAX_INITIATIVE, MIN_INITIATIVE } from "@/lib/dm/initiative-edit";
 import type { PublicEncounter } from "@/lib/db/encounter-view";
 import { TokenFace, type FaceLookup } from "@/app/campaigns/[campaignId]/BoardChrome";
@@ -67,6 +68,7 @@ export function DmInitiativePanel({
         setError(data.error ?? "The order would not take that.");
         return false;
       }
+      offerCorrectionReason(campaignId, data);
       return true;
     } catch {
       setError("Could not reach the table.");

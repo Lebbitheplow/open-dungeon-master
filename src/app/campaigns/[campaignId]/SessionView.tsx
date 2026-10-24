@@ -5,6 +5,7 @@ import { initiativeCharacter, selectedCharacter } from "@/lib/player-characters"
 import { useThemePrefs } from "@/lib/theme-mode";
 import { LevelUpMoment, LootMoment, MomentVeil, RestMoment, TravelBanner } from "@/app/campaigns/[campaignId]/Moments";
 import { CoordinationPanel } from "@/app/campaigns/[campaignId]/CoordinationPanel";
+import { CorrectionReasonChips } from "@/components/CorrectionReasonChips";
 import { haptic, useEffectsRoot, useTurnChime } from "@/lib/effects-mode";
 import { levelForXp } from "@/lib/srd";
 import { transcribesVoice, useCapabilities } from "@/lib/use-capabilities";
@@ -1008,6 +1009,7 @@ export function SessionView({
         seed={campaign.id}
         dark={state.scene?.isDark}
       />
+      <CorrectionReasonChips campaignId={campaign.id} />
       <SessionHeader
         title={campaign.title}
         scene={campaign.scene}

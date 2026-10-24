@@ -1,6 +1,7 @@
 import { getDatabase, nowIso } from "@/lib/db/core";
 import { allocateSeq, getCampaignById } from "@/lib/db/campaigns";
 import { insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
+import { recordRollbackCorrections } from "@/lib/db/turn-ledger";
 import { deleteCompanionUser, isCompanionUserId } from "@/lib/db/users";
 import {
   capturePreRollbackSnapshot,
@@ -105,11 +106,17 @@ export function warningsForRollback(scope: RollbackScope): string[] {
 // belongs to the story the rewind undoes, and runs after it instead. Resolves
 // with ok=false when the snapshot vanished or the campaign is gone by the
 // time the job runs.
+// `userId` is who asked for the rewind: the correction ledger (issue #460)
+// keeps one row per AI turn it deletes, written before the delete. Left
+// out, nothing is recorded. `corrections` holds the rows' ids.
+type RollbackResult = { ok: boolean; error?: string; corrections?: string[] };
+
 export async function performRollback(
   campaignId: string,
   targetChapterIndex: number,
-): Promise<{ ok: boolean; error?: string }> {
-  let result: { ok: boolean; error?: string } = {
+  userId?: string,
+): Promise<RollbackResult> {
+  let result: RollbackResult = {
     ok: false,
     error: "The rewind did not run.",
   };
@@ -119,7 +126,7 @@ export async function performRollback(
   // stopped first.
   stopDmJob(campaignId, REWOUND_REASON);
   await enqueueDmJobFirst(campaignId, async () => {
-    result = rollbackNow(campaignId, targetChapterIndex);
+    result = rollbackNow(campaignId, targetChapterIndex, userId);
   });
   // Chapter 1's rewind point is the world before the opening narration was
   // written (captured at the campaign's start, after setup and the arc), so
@@ -138,7 +145,8 @@ export async function performRollback(
 function rollbackNow(
   campaignId: string,
   targetChapterIndex: number,
-): { ok: boolean; error?: string } {
+  byUserId: string | undefined,
+): RollbackResult {
   const campaign = getCampaignById(campaignId);
   const snapshot = getBoundarySnapshot(campaignId, targetChapterIndex);
   if (!campaign || !snapshot) {
@@ -167,7 +175,10 @@ function rollbackNow(
     .map((row) => row.user_id)
     .filter(isCompanionUserId);
 
-  db.transaction(() => {
+  const corrections = db.transaction(() => {
+    // The biggest correction there is, kept before its evidence goes: one
+    // ledger row per AI turn the rewind deletes (issue #460).
+    const recorded = byUserId ? recordRollbackCorrections(campaignId, byUserId, capturedAt) : [];
     // A pin names a message and a beat sits at a seq: both belong to the
     // messages deleted below, and a pin left behind named a line nobody
     // could read. The pins go first, while the messages they name exist.
@@ -224,6 +235,7 @@ function rollbackNow(
         deleteCompanionUser(userId);
       }
     }
+    return recorded;
   })();
 
   deleteBoundarySnapshotsAfter(campaignId, targetChapterIndex);
@@ -245,5 +257,5 @@ function rollbackNow(
     chapterIndex: targetChapterIndex,
     boundarySeq: boundary,
   });
-  return { ok: true };
+  return { ok: true, corrections };
 }
