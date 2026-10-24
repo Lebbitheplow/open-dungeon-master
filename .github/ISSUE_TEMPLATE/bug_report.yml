@@ -7,7 +7,7 @@ body:
       value: |
         Thank you for testing. Only **What happened** and **Your setup** are required, so a short report is fine.
 
-        If you run the server, the log helps a lot: **Admin > Server log > Download** saves it, with keys and tokens already cut out. Drag it into the last box below.
+        If you can, save a report file first: at the table, open **Report a problem** (the table menu on a phone), or go to **Admin > Server log > Report a problem**. The file is saved to your device and never sent anywhere. Drag it into the last box below. Open the file first if you want to see what it holds.
 
         New to testing? [docs/testing.md](https://github.com/Lebbitheplow/open-dungeon-master/blob/main/docs/testing.md) explains how.
   - type: textarea
@@ -31,7 +31,7 @@ body:
     id: setup
     attributes:
       label: Your setup
-      description: Fill in what you know; "not sure" is fine.
+      description: The report file holds most of this. Fill in what you know; "not sure" is fine.
       value: |
         - Version (your account menu > About):
         - Operating system:
@@ -43,6 +43,6 @@ body:
   - type: textarea
     id: bundle
     attributes:
-      label: Logs and screenshots
-      description: Drag the server log, the desktop app's diagnostics summary (Settings > Troubleshooting) or a screenshot here.
-      placeholder: Drag files here.
+      label: Report file and screenshots
+      description: Drag the saved report file (odm-report-....json) here, with any screenshots. GitHub cannot attach the file for you, so this one step is by hand. In an app, paste its diagnostics summary (Settings > Troubleshooting) here too.
+      placeholder: Drag the report file here.

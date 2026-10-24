@@ -1,4 +1,5 @@
 import { format } from "node:util";
+import { redactSecrets, SECRET_NAME } from "@/lib/redact-secrets";
 
 // The server's own console, kept in memory for the admin's Server log
 // (issue #383). Diagnosing a stuck turn, a player who cannot connect or a
@@ -50,8 +51,6 @@ function store(): Store {
   });
 }
 
-const SECRET_NAME = /key|secret|token|password|passwd|credential/i;
-
 // The values of the environment's own secrets, longest first so one that
 // contains another is cut whole.
 function envSecretValues(env: NodeJS.ProcessEnv = process.env): string[] {
@@ -59,33 +58,6 @@ function envSecretValues(env: NodeJS.ProcessEnv = process.env): string[] {
     .filter(([name, value]) => SECRET_NAME.test(name) && typeof value === "string" && value.trim().length >= 8)
     .map(([, value]) => String(value).trim())
     .sort((a, b) => b.length - a.length);
-}
-
-const PATTERNS: Array<[RegExp, string]> = [
-  // Authorization headers, however they were printed.
-  [/\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{8,}/gi, "$1 [redacted]"],
-  // Provider key shapes: OpenAI and OpenRouter's sk-..., and their kin.
-  [/\b(?:sk|rk|pk)-[A-Za-z0-9_-]{12,}/g, "[redacted key]"],
-  // name=value and "name": "value" for anything named like a secret.
-  [
-    /\b([A-Za-z_]*(?:api[_-]?key|apikey|token|secret|password|passwd|authorization|access[_-]?key)[A-Za-z_]*)(["']?\s*[:=]\s*["']?)([^\s"',&;]{4,})/gi,
-    "$1$2[redacted]",
-  ],
-  // Keys carried in a URL's query.
-  [/([?&](?:key|token|api_key|apikey|access_token|sig|signature)=)[^&\s"']+/gi, "$1[redacted]"],
-];
-
-export function redactSecrets(text: string, secrets: readonly string[] = []): string {
-  let out = text;
-  for (const secret of secrets) {
-    if (secret) {
-      out = out.split(secret).join("[redacted]");
-    }
-  }
-  for (const [pattern, replacement] of PATTERNS) {
-    out = out.replace(pattern, replacement);
-  }
-  return out;
 }
 
 const METHODS: Array<["debug" | "log" | "info" | "warn" | "error", ServerLogLevel]> = [
@@ -177,4 +149,13 @@ export function secretValuesIn(value: unknown, name = ""): string[] {
 // The whole kept log as a text file, oldest first.
 export function serverLogText(entries: readonly ServerLogEntry[]): string {
   return entries.map((entry) => `${new Date(entry.at).toISOString()} ${entry.level.toUpperCase().padEnd(5)} ${entry.text}`).join("\n") + "\n";
+}
+
+// Every secret this server knows the value of: the environment's own and the
+// keys saved in the admin panel, longest first. The report bundle
+// (src/lib/report-bundle-server.ts) cuts these out of everything it holds,
+// not only the log lines.
+export function knownSecretValues(config: unknown): string[] {
+  const values = new Set([...envSecretValues(), ...secretValuesIn(config)]);
+  return [...values].sort((a, b) => b.length - a.length);
 }

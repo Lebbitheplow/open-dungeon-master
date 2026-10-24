@@ -6,12 +6,14 @@ body:
       value: |
         An after-action report for a session you played or ran. Only **Your setup** is required; answer the rest as briefly or as fully as you like.
 
+        If you can, save a report file at the end of the session: at the table, open **Report a problem** (the table menu on a phone). The file is saved to your device and never sent anywhere. Drag it into the last box below.
+
         [docs/testing.md](https://github.com/Lebbitheplow/open-dungeon-master/blob/main/docs/testing.md) explains what makes a session worth reporting.
   - type: textarea
     id: setup
     attributes:
       label: Your setup
-      description: Fill in what you know; "not sure" is fine.
+      description: The report file holds most of this. Fill in what you know; "not sure" is fine.
       value: |
         - Version (your account menu > About):
         - Operating system:
@@ -48,6 +50,6 @@ body:
   - type: textarea
     id: bundle
     attributes:
-      label: Logs and screenshots
-      description: Drag the server log, the desktop app's diagnostics summary (Settings > Troubleshooting) or a screenshot here.
-      placeholder: Drag files here.
+      label: Report file and screenshots
+      description: Drag the saved report file (odm-report-....json) here, with any screenshots. GitHub cannot attach the file for you, so this one step is by hand. In an app, paste its diagnostics summary (Settings > Troubleshooting) here too.
+      placeholder: Drag the report file here.

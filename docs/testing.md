@@ -2,7 +2,7 @@
 
 The developers can only try a few setups. Every tester who plays on a different
 computer, model or kind of table finds problems nobody else can. This page explains
-what to test, what to attach, and where to send it.
+what to test, how to save a report file, and where to send it.
 
 ## The setups we need most
 
@@ -25,26 +25,43 @@ what to test, what to attach, and where to send it.
    DM mode.
 2. Play the way you normally would. Try a fight, a skill check, a rest and some
    conversation with characters in the story. You do not need a script.
-3. When something goes wrong, note what you did just before. If you run the server,
-   download its log straight away (below): it keeps only recent lines, and a restart
-   empties it.
+3. When something goes wrong, note what you did just before. Save a report file
+   straight away (below), while the details are still on the server.
 4. At the end, write down what went well, what broke, and every time you had to
    correct the AI.
 
-## What to attach
+## How to save a report file
 
-- **The server log**, if you run the server: **Admin > Server log > Download**. Keys
-  and tokens are already cut out of it.
-- **The apps' diagnostics**, if you play in the desktop or Android app: copy the
-  summary under **Settings > Troubleshooting**.
-- **A screenshot** of anything that looked wrong.
+- **At the table:** use **Report a problem** in the header (on a phone, it is in the
+  table menu).
+- **As the server's admin:** go to **Admin > Server log** and use **Report a problem**.
 
-Check what a file holds before you attach it. Leave out other players' messages and
-anything said to you in private.
+Choose what goes in the file, then save it. The file is saved to your own device and
+is never sent anywhere. You attach it to the issue yourself, so open it first if you
+want to check what it holds.
+
+What the file can hold:
+
+| Part | Who can include it | Ticked at first |
+|---|---|---|
+| Version, operating system, DM mode, narrator backend kind and model | anyone | yes |
+| Recent errors from the game page in this browser | anyone | yes |
+| Turn ids and timings for the last few turns | the party lead or the DM | yes |
+| The last lines of the server log, with keys and tokens removed | the server's admin | yes |
+| A transcript of the last few turns: your own lines and the DM's narration | anyone | no |
+| What the narrator did in those turns (tools it called, how its prompt was spent) | whoever steers the story: the party lead at an AI table, otherwise the DM | no |
+
+The file never holds other players' lines, whispers, passwords or API keys. The
+server checks who you are before it adds each part, whatever the page asks for.
+
+The desktop and Android apps have their own diagnostics under
+**Settings > Troubleshooting**. Copy that summary into the issue as well if you play in
+an app.
 
 ## Which form to use
 
-Open the form that fits on GitHub:
+When the file is saved, the app opens the right form on GitHub for you. You can also
+open one yourself:
 
 - **[Bug report](https://github.com/Lebbitheplow/open-dungeon-master/issues/new?template=bug_report.yml)**
   for one thing that went wrong. Only "What happened" and "Your setup" are required.
@@ -54,6 +71,7 @@ Open the form that fits on GitHub:
 - **[Feature request](https://github.com/Lebbitheplow/open-dungeon-master/issues/new?template=feature_request.yml)**
   for an idea.
 
-Drag your files into the last box of the form.
+GitHub cannot attach a file through a link, so drag the report file into the last box
+of the form. Nothing from the report is put in the link itself.
 
 You can also talk to us on [Discord](https://discord.gg/B2tQFr3TYD).
