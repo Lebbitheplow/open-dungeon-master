@@ -1,11 +1,4 @@
 {
   "note": "Advisories npm audit reports that are accepted for now, each with why and until when. scripts/check-audit.mjs fails on any high or critical advisory not listed here, and on any entry past its expiry, so an exception is looked at again rather than forgotten.",
-  "exceptions": [
-    {
-      "advisory": "GHSA-vfj7-8cjw-p6xm",
-      "package": "braces",
-      "reason": "Reached only through eslint-config-next (@next/eslint-plugin-next > fast-glob > micromatch > braces), a development dependency that runs on this repo's own lint globs, never on input from a player or the network. No patched braces release exists, and npm's suggested fix downgrades eslint-config-next to the Next 14 line.",
-      "expires": "2027-01-31"
-    }
-  ]
+  "exceptions": []
 }
