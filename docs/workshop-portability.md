@@ -156,7 +156,10 @@ workshop's cast, places, maps and fights after the chapter's own, marked
   changed the same value too, the campaign's version stays, and the entry's
   page says so and shows the import's version, with "Use the import's
   version" and "Keep mine". Using it keeps the campaign's version, which
-  "Restore mine" puts back. A later import that agrees with the campaign
+  "Restore mine" puts back. Once used, the import's version counts as the
+  source's own, so the source's next change to it applies. Where the entry
+  cannot hold the import's version whole (a folder or an option no longer
+  here), the page says so. A later import that agrees with the campaign
   clears the notice. Only the DM sees it. A WorldForge file brought in
   again works the same way (`src/lib/worldforge/import-kept.ts`).
 - **Boards.** A second import of the same board does not repeat its lore,

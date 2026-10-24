@@ -32,7 +32,7 @@ import {
 } from "@/lib/worldforge/model";
 import { playAdapters, playLink, type PlayAdapter, type PlayField } from "@/lib/worldforge/play-fields";
 import { editableOf, mergeAgainst, type Editable, type EntryConflict } from "@/lib/worldforge/entry-merge";
-import { keptAfterWrite, keptList, patchFor, type KeptImport } from "@/lib/worldforge/import-kept";
+import { keptAfterWrite, keptList, patchFor, type KeptEntity, type KeptImport } from "@/lib/worldforge/import-kept";
 import { originKey } from "@/lib/worldforge/import-merge";
 import { entriesBoundTo, resolveBinding, type BoundRecord } from "@/lib/db/world-bindings";
 import { byName, textKey } from "@/lib/language/text-logic";
@@ -189,9 +189,32 @@ export function worldEntities(campaignId: string, doc: WorldDoc = getWorldDoc(ca
       ...entity,
       bound: entity.entry.bindings.map((binding) => resolveBinding(campaignId, binding)),
       inPlay: entity.shelf === "npc" ? playAdapters({ links: linksFrom.get(entity.ref) ?? [] }, entity.ref, held.get(entity.ref)!, names) : [],
-      kept: keptList(doc, entity, doc.origins?.[originKey("entries", entity.ref)]),
+      kept: keptList(doc, entity, doc.origins?.[originKey("entries", entity.ref)], (binding) => resolveBinding(campaignId, binding).name || "a record no longer here"),
     }))
     .sort(byName);
+}
+
+// One entry's own values, read from its record alone the way worldEntities
+// gives them: what a value a reimport kept is compared with before and
+// after a write (src/lib/worldforge/import-kept.ts), without reading the
+// whole world for one entry.
+function keptEntity(campaignId: string, doc: WorldDoc, ref: string): KeptEntity | undefined {
+  const parsed = parseRef(ref);
+  const entry = doc.entries[ref] ?? readEntry({});
+  if (parsed?.shelf === "npc") {
+    const npc = getNpcById(parsed.id);
+    return npc?.campaignId === campaignId ? { shelf: "npc", name: npc.name, tagline: npc.trait, text: "", aliases: npc.aliases, tags: entry.tags, entry } : undefined;
+  }
+  if (parsed?.shelf === "location") {
+    const place = getLocation(parsed.id);
+    return place?.campaignId === campaignId ? { shelf: "location", name: place.name, tagline: "", text: place.layoutDescription, aliases: entry.aliases, tags: entry.tags, entry } : undefined;
+  }
+  if (parsed?.shelf === "faction") {
+    const faction = getFaction(parsed.id);
+    return faction?.campaignId === campaignId ? { shelf: "faction", name: faction.name, tagline: faction.blurb, text: "", aliases: entry.aliases, tags: faction.tags, entry } : undefined;
+  }
+  const lore = parsed ? getLoreEntry(parsed.id) : null;
+  return lore?.campaignId === campaignId ? { shelf: "lore", name: lore.title, tagline: "", text: lore.body, aliases: entry.aliases, tags: lore.tags, entry } : undefined;
 }
 
 // The document with whatever points at a deleted record dropped, and the
@@ -500,23 +523,32 @@ export function updateWorldEntity(campaignId: string, ref: string, input: Entity
         entity: now,
       };
     }
-    patch = oneLoreText(shelf, merged.patch as EntityPatch);
+    // The form's own words: a lore entry's article sent alone is the older
+    // article it keeps beside the body (src/lib/worldforge/account.ts),
+    // not a new body.
+    patch = merged.patch as EntityPatch;
   }
-  const refused = unusableLink(campaignId, shelf, doc.entries[ref], patch);
+  return writeEntity(campaignId, doc, ref, patch);
+}
+
+// Writes a patch to one entry. On an entry a reimport kept values on, what
+// it held before and after the write says whether the author took the
+// import's version or went back to their own (src/lib/worldforge/
+// import-kept.ts); `using` is the value "Use the import's version" wrote.
+function writeEntity(campaignId: string, doc: WorldDoc, ref: string, patch: EntityPatch, using?: string): EntityResult {
+  const refused = unusableLink(campaignId, parseRef(ref)?.shelf, doc.entries[ref], patch);
   if (refused) return refused;
-  // An entry a reimport kept values on: what it held before the write, to
-  // say afterwards whether the author took the import's version or went
-  // back to their own (src/lib/worldforge/import-kept.ts).
   const origin = doc.origins?.[originKey("entries", ref)];
-  const before = origin?.kept ? worldEntities(campaignId, doc).find((entry) => entry.ref === ref) : undefined;
+  const before = origin?.kept ? keptEntity(campaignId, doc, ref) : undefined;
   const lore = patch.typeId ? doc.types.find((type) => type.id === patch.typeId && type.shelf === "lore") : undefined;
   const failed = writeRecord(campaignId, ref, patch, lore);
   if (failed) return failed;
   doc.entries[ref] = nextEntry(doc, ref, patch);
-  const after = before ? worldEntities(campaignId, doc).find((entry) => entry.ref === ref) : undefined;
-  if (origin?.kept && before && after) {
-    const kept = keptAfterWrite(origin.kept, before, after);
-    if (Object.keys(kept).length) origin.kept = kept;
+  const after = before ? keptEntity(campaignId, doc, ref) : undefined;
+  if (origin && before && after) {
+    const next = keptAfterWrite(origin, before, after, using);
+    origin.at = next.at;
+    if (next.kept) origin.kept = next.kept;
     else delete origin.kept;
   }
   saveWorldDoc(campaignId, doc);
@@ -527,14 +559,15 @@ export function updateWorldEntity(campaignId: string, ref: string, input: Entity
 // writes the import's version, keeping the one it replaced; "restore"
 // writes that one back; "dismiss" ("Keep mine", or "Keep the import's"
 // once taken) clears the record and changes nothing else. Writes go
-// through updateWorldEntity, so the record follows what the entry holds.
+// through writeEntity, so the record follows what the entry holds; a "use"
+// the entry could not take whole, or at all, is marked so (`landed`).
 export type KeptChoice = "use" | "restore" | "dismiss";
 
 export function settleKept(campaignId: string, ref: string, key: string, choice: KeptChoice): EntityResult {
   const doc = getWorldDoc(campaignId);
   const origin = doc.origins?.[originKey("entries", ref)];
   const kept = origin?.kept?.[key];
-  const entity = kept ? worldEntities(campaignId, doc).find((entry) => entry.ref === ref) : undefined;
+  const entity = kept ? keptEntity(campaignId, doc, ref) : undefined;
   if (!origin?.kept || !kept || !entity) return { error: "Nothing from an import is kept beside that.", status: 404 };
   if (choice === "dismiss") {
     delete origin.kept[key];
@@ -545,7 +578,7 @@ export function settleKept(campaignId: string, ref: string, key: string, choice:
   if (choice === "use" ? kept.taken : !kept.taken) {
     return { error: choice === "use" ? "The import's version is already in use." : "Your version is already in use.", status: 409 };
   }
-  return updateWorldEntity(campaignId, ref, patchFor(entity, key, choice === "use" ? kept.theirs : kept.mine) as EntityPatch);
+  return writeEntity(campaignId, doc, ref, patchFor(entity, key, choice === "use" ? kept.theirs : kept.mine) as EntityPatch, choice === "use" ? key : undefined);
 }
 
 // Deletes the record itself (the Cast member, the place, the faction, the

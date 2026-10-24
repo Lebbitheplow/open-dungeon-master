@@ -12,9 +12,11 @@ import { suite } from "./lib/enforce-harness.mjs";
 
 const { test, finish } = suite("test-world-reimport-kept");
 const { importWorldForge, keptNotes } = await import("../src/lib/db/world-forge-io.ts");
-const { worldView, createWorldEntity, updateWorldEntity, getWorldDoc } = await import("../src/lib/db/world-forge.ts");
+const { worldView, createWorldEntity, updateWorldEntity, getWorldDoc, patchWorldDoc } = await import("../src/lib/db/world-forge.ts");
 const { runContentImport } = await import("../src/lib/db/content-import.ts");
 const { createWorkshop } = await import("../src/lib/db/workshops.ts");
+const { readDoc, LIMITS } = await import("../src/lib/worldforge/model.ts");
+const { standingUnsaid } = await import("../src/lib/workshop/import.ts");
 
 const world = await openWorld();
 const owner = world.owner;
@@ -198,6 +200,146 @@ await test("Only the person steering the story reads what earlier imports kept: 
   const asked = await standingFor(world.campaignId, player);
   assert.equal(asked.status, 403, JSON.stringify(asked.body));
   assert.equal(asked.body.kept, undefined);
+});
+
+const copyInto = (source, campaign, selection = ["npcs", "locations", "lore", "world"]) => {
+  const outcome = runContentImport({ sourceId: source, campaignId: campaign, selection, houseRulesMode: "replace" });
+  assert.ok(!("error" in outcome), outcome.error);
+  return outcome;
+};
+
+await test("A lore entry's article taken from the import stays its article: the body is not overwritten, on the page or through the form.", async () => {
+  const source = shop("Lore source");
+  const campaign = shop("Lore campaign");
+  const loreType = getWorldDoc(source).types.find((type) => type.shelf === "lore").id;
+  const made = ["The Drowned Bell", "The Toll Road"].map((name) => createWorldEntity(source, { typeId: loreType, name, text: `${name}: the body.`, article: `${name}: an older account.` }).entity);
+  copyInto(source, campaign);
+  for (const entity of made) {
+    const here = named(campaign, entity.name);
+    updateWorldEntity(campaign, here.ref, { article: "", text: here.text });
+    updateWorldEntity(source, entity.ref, { article: `${entity.name}: a newer account.`, text: entity.text });
+  }
+  copyInto(source, campaign);
+  const bell = named(campaign, "The Drowned Bell");
+  assert.deepEqual(bell.kept.map((item) => [item.key, item.theirs]), [["article", "The Drowned Bell: a newer account."]]);
+  const used = await choose(campaign, bell.ref, "article", "use");
+  assert.equal(used.status, 200, JSON.stringify(used.body));
+  assert.equal(used.body.entity.text, "The Drowned Bell: the body.", "the page's Use keeps the body");
+  assert.equal(used.body.entity.entry.article, "The Drowned Bell: a newer account.");
+  assert.equal(used.body.entity.kept[0].taken, true);
+  // The form sends the article it took, with the value it opened with.
+  const road = named(campaign, "The Toll Road");
+  const saved = updateWorldEntity(campaign, road.ref, { article: "The Toll Road: a newer account.", base: { article: "" } });
+  assert.ok(saved.entity, saved.error);
+  assert.equal(saved.entity.text, "The Toll Road: the body.", "the form's save keeps the body");
+  assert.equal(saved.entity.entry.article, "The Toll Road: a newer account.");
+  assert.equal(saved.entity.kept[0].taken, true);
+});
+
+await test("Once the import's version is used, the source's next change applies; restored, it is the campaign's own again.", async () => {
+  const taken = clashed("Next change");
+  await choose(taken.campaign, taken.ref, "article", "use");
+  updateWorldEntity(taken.source, taken.sourceRef, { article: "Rell keeps the lighthouse and paints it." });
+  assert.equal(taken.copy().worldConflicts, undefined, "no clash: the campaign held the import's own version");
+  assert.equal(named(taken.campaign, "Captain Rell").entry.article, "Rell keeps the lighthouse and paints it.");
+  assert.deepEqual(named(taken.campaign, "Captain Rell").kept, []);
+
+  // "Keep the import's" settles it the same way.
+  const settled = clashed("Kept theirs");
+  await choose(settled.campaign, settled.ref, "article", "use");
+  await choose(settled.campaign, settled.ref, "article", "dismiss");
+  updateWorldEntity(settled.source, settled.sourceRef, { article: "Rell keeps the lighthouse and paints it." });
+  settled.copy();
+  assert.equal(named(settled.campaign, "Captain Rell").entry.article, "Rell keeps the lighthouse and paints it.");
+
+  // Restored: an unchanged source leaves the choice standing, a new change is a clash again.
+  const restored = clashed("Restored");
+  await choose(restored.campaign, restored.ref, "article", "use");
+  await choose(restored.campaign, restored.ref, "article", "restore");
+  restored.copy();
+  assert.deepEqual(named(restored.campaign, "Captain Rell").kept.map((item) => [item.theirs, item.taken]), [["Rell keeps the lighthouse and drinks.", false]]);
+  updateWorldEntity(restored.source, restored.sourceRef, { article: "Rell keeps the lighthouse and paints it." });
+  assert.deepEqual(restored.copy().worldConflicts, [RELL]);
+  const rell = named(restored.campaign, "Captain Rell");
+  assert.equal(rell.entry.article, "Rell keeps the lighthouse and owes the party.");
+  assert.deepEqual(rell.kept.map((item) => item.theirs), ["Rell keeps the lighthouse and paints it."]);
+});
+
+await test("A value the import cleared is kept as nothing through a save, said after a reload, and using it clears the field.", async () => {
+  const source = shop("Cleared source");
+  const campaign = shop("Cleared campaign");
+  const made = createWorldEntity(source, { typeId: "t_character", name: "Old Tam", fields: { f_species: "Human" } }).entity;
+  copyInto(source, campaign);
+  const here = named(campaign, "Old Tam");
+  updateWorldEntity(campaign, here.ref, { fields: { f_species: "Elf" } });
+  updateWorldEntity(source, made.ref, { fields: {} });
+  copyInto(source, campaign);
+  assert.deepEqual(named(campaign, "Old Tam").kept, [{ key: "fields.f_species", label: "Species", theirs: null, taken: false }]);
+  assert.deepEqual(keptNotes(campaign), ["Old Tam: kept your “Species” field over the import's."]);
+  const used = await choose(campaign, here.ref, "fields.f_species", "use");
+  assert.equal(used.body.entity.entry.fields.f_species, undefined);
+  assert.equal(used.body.entity.kept[0].mine, "Elf");
+});
+
+await test("Use the import's version says what landed: a folder no longer here is taken as far as it can be, or not at all, and folders are named, never ids.", async () => {
+  const source = shop("Folder source");
+  const campaign = shop("Folder campaign");
+  patchWorldDoc(source, { folders: [{ id: "fo_old", name: "Old quarter", parentId: "" }, { id: "fo_new", name: "New quarter", parentId: "" }] });
+  const made = createWorldEntity(source, { typeId: "t_character", name: "Wren", folderId: "fo_old" }).entity;
+  copyInto(source, campaign);
+  const ref = named(campaign, "Wren").ref;
+  patchWorldDoc(campaign, { folders: [...getWorldDoc(campaign).folders, { id: "fo_docks", name: "Docks", parentId: "" }] });
+  updateWorldEntity(campaign, ref, { folderId: "fo_docks" });
+  updateWorldEntity(source, made.ref, { folderId: "fo_new" });
+  copyInto(source, campaign);
+  const clash = named(campaign, "Wren").kept;
+  assert.deepEqual(clash.map((item) => [item.key, item.label, item.shown?.theirs]), [["folderId", "Folder", "“New quarter”"]]);
+
+  // The import's folder is deleted here: Use moves the entry as far as it can.
+  patchWorldDoc(campaign, { folders: getWorldDoc(campaign).folders.filter((folder) => folder.name !== "New quarter") });
+  assert.equal(named(campaign, "Wren").kept[0].shown.theirs, "a folder no longer in this world");
+  const partly = await choose(campaign, ref, "folderId", "use");
+  assert.equal(partly.status, 200, JSON.stringify(partly.body));
+  assert.equal(partly.body.entity.entry.folderId, "");
+  assert.deepEqual(
+    (({ taken, landed, mine, shown }) => ({ taken, landed, mine, shown }))(partly.body.entity.kept[0]),
+    { taken: true, landed: "partly", mine: "fo_docks", shown: { theirs: "a folder no longer in this world", mine: "“Docks”", now: "no folder" } },
+  );
+  const back = await choose(campaign, ref, "folderId", "restore");
+  assert.equal(back.body.entity.entry.folderId, "fo_docks");
+  assert.equal(back.body.entity.kept[0].taken, false);
+  assert.equal(back.body.entity.kept[0].landed, undefined);
+
+  // At the top level already, Use changes nothing and says it could not.
+  updateWorldEntity(campaign, ref, { folderId: "" });
+  const refused = await choose(campaign, ref, "folderId", "use");
+  assert.equal(refused.status, 200, JSON.stringify(refused.body));
+  assert.equal(refused.body.entity.entry.folderId, "");
+  assert.deepEqual([refused.body.entity.kept[0].taken, refused.body.entity.kept[0].landed], [false, "not"]);
+  assert.equal((await choose(campaign, ref, "folderId", "dismiss")).body.entity.kept.length, 0);
+});
+
+await test("Every value one merge can record is read back whole: the form's own values and an entry's type fields, a long article full of quotes included.", () => {
+  const article = `"${"a\"b\n".repeat(4_000)}`.slice(0, LIMITS.article);
+  const own = ["name", "tagline", "text", "article", "aliases", "tags", "typeId", "folderId", "canon", "hiddenTruth", "notes", "bindings"];
+  const kept = Object.fromEntries([
+    ...own.map((key) => [key, { theirs: key === "article" ? article : `${key} there` }]),
+    ...Array.from({ length: 60 }, (_, index) => [`fields.f_${index}`, { theirs: `field ${index}` }]),
+  ]);
+  const doc = readDoc({ origins: { "entries/npc:x": { from: "campaign:a|entries|npc:x", at: {}, kept } } });
+  const read = doc.origins["entries/npc:x"].kept;
+  assert.equal(Object.keys(read).length, own.length + 60);
+  assert.equal(read.article.theirs, article);
+});
+
+await test("Bring in prep says what earlier imports kept beside an import's note, less what that note already says.", () => {
+  const { source, campaign } = clashed("Beside");
+  const without = copyInto(source, campaign, ["npcs", "locations", "lore"]);
+  assert.equal(without.worldConflicts, undefined, "an import without the World does not say it");
+  const note = "Brought 3 items across.";
+  assert.deepEqual(standingUnsaid(keptNotes(campaign), note), [RELL], "so the standing line is said beside its note");
+  assert.deepEqual(standingUnsaid(keptNotes(campaign), `${note} ${RELL}`), [], "and not twice beside a note that says it");
+  assert.deepEqual(standingUnsaid(keptNotes(campaign), undefined), [RELL]);
 });
 
 world.close();

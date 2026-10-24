@@ -244,10 +244,18 @@ export default {
       await eventually(async () => (await entryAtTable())?.entry?.article === words.theirsArticle, { timeoutMs: 15_000, label: "the import's article taken" });
       await eventually(async () => /the import's version is in use/.test(await kept.innerText().catch(() => "")), { timeoutMs: 15_000, label: "the entry saying the import's version is in use" });
       check((await kept.innerText()).includes(words.oursArticle), "the campaign's article is kept beside it to restore");
+      // The button pressed is gone: focus stays in the notice, and the new
+      // state is said politely.
+      const focusInNotice = () => page.evaluate(() => Boolean(document.activeElement?.closest('[data-testid="import-kept"]')));
+      const announced = () => kept.locator('[aria-live="polite"]').textContent().catch(() => "");
+      await eventually(focusInNotice, { timeoutMs: 5_000, label: "focus in the notice after Use the import's version" });
+      check(/Article: the import's version is in use/.test(await announced()), `Use is announced: ${JSON.stringify(await announced())}`);
       await t.shot("import-taken");
       await t.tap(kept.getByRole("button", { name: /^Restore mine/ }));
       await eventually(async () => (await entryAtTable())?.entry?.article === words.oursArticle, { timeoutMs: 15_000, label: "the campaign's article restored" });
       await eventually(async () => /this campaign's version was kept/.test(await kept.innerText().catch(() => "")), { timeoutMs: 15_000, label: "the choice offered again" });
+      await eventually(focusInNotice, { timeoutMs: 5_000, label: "focus in the notice after Restore mine" });
+      check(/Article: this campaign's version is back/.test(await announced()), `Restore mine is announced: ${JSON.stringify(await announced())}`);
       await t.reload();
       await openPanelTab(t, "settings");
       const prepAfter = page.locator(`${root}[data-setup-prep]`).locator("visible=true").first();

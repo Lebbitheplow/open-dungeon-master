@@ -164,7 +164,7 @@ export function EntityEditor({
       });
     } else {
       const field = key as keyof Editable;
-      const value = field === "aliases" || field === "tags" ? listText((theirs as string[]) ?? []) : theirs;
+      const value = field === "aliases" || field === "tags" ? listText((theirs as string[]) ?? []) : (theirs ?? (field === "bindings" ? [] : ""));
       setDraft((current) => ({ ...current, [field]: value }));
     }
   }
@@ -178,12 +178,17 @@ export function EntityEditor({
   // A value a reimport kept as this campaign has it (src/lib/worldforge/
   // import-kept.ts): "Use the import's version" puts it in the draft, and
   // saving takes it; the entry keeps this campaign's version, which its
-  // page offers back.
+  // page offers back. One the entry could not take is not offered.
   const [filled, setFilled] = useState<string[]>([]);
-  const kept = (entity.kept ?? []).filter((item) => !item.taken && !filled.includes(item.key));
-  function takeImported(key: string, theirs: unknown) {
+  const [filledSaid, setFilledSaid] = useState("");
+  const keptRef = useRef<HTMLDivElement>(null);
+  const kept = (entity.kept ?? []).filter((item) => !item.taken && item.landed !== "not" && !filled.includes(item.key));
+  function takeImported(key: string, label: string, theirs: unknown) {
     fill(key, theirs);
     setFilled((current) => [...current, key]);
+    setFilledSaid(`${label}: the import's version is in the form. Save to use it.`);
+    // The button pressed is gone: focus goes to the next one, or the notice.
+    requestAnimationFrame(() => (keptRef.current?.querySelector("button") ?? keptRef.current)?.focus({ preventScroll: true }));
   }
 
   return (
@@ -213,7 +218,15 @@ export function EntityEditor({
         </div>
       ) : null}
       {kept.length || filled.length ? (
-        <div className="flex flex-col gap-2 rounded-lg border border-amber-700/50 bg-amber-950/30 p-3 text-sm text-amber-100" data-testid="entry-import-kept">
+        <div
+          ref={keptRef}
+          tabIndex={-1}
+          className="flex flex-col gap-2 rounded-lg border border-amber-700/50 bg-amber-950/30 p-3 text-sm text-amber-100 outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60"
+          data-testid="entry-import-kept"
+        >
+          <span className="sr-only" aria-live="polite">
+            {filledSaid}
+          </span>
           {kept.length ? (
             <ul className="flex flex-col gap-2">
               {kept.map((item) => (
@@ -221,9 +234,9 @@ export function EntityEditor({
                   <span>
                     <strong>{item.label}</strong>: this campaign&apos;s version was kept when it was brought in again; the import&apos;s version differs:
                   </span>
-                  <KeptValueText value={item.theirs} />
+                  <KeptValueText value={item.theirs} said={item.shown?.theirs} />
                   <span>
-                    <KitButton tone="small" onClick={() => takeImported(item.key, item.theirs)} aria-label={`Use the import's version of the ${item.label}`}>
+                    <KitButton tone="small" onClick={() => takeImported(item.key, item.label, item.theirs)} aria-label={`Use the import's version of the ${item.label}`}>
                       Use the import&apos;s version
                     </KitButton>
                   </span>

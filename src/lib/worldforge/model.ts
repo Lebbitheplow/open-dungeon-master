@@ -218,9 +218,15 @@ export type Pin = { id: string; mapId: string; x: number; y: number; name: strin
 // both sides and left as this campaign has it, with the import's version
 // beside it, until the author chooses (src/lib/worldforge/import-kept.ts).
 // `taken` once the author took the import's version, with `mine`, the
-// version it replaced, so it can be restored. The DM's alone: the document
-// is read only by the world routes, which answer story authority.
-export type KeptValue = { theirs: unknown; mine?: unknown; taken?: true };
+// version it replaced, so it can be restored, and `reading`, the value's
+// reading in `at` as the clash left it, put back with it. `landed` says the
+// import's version did not fit here: "partly" taken as far as the entry
+// could hold it, "not" written at all. The DM's alone: the document is read
+// only by the world routes, which answer story authority.
+export type KeptValue = { theirs: unknown; mine?: unknown; taken?: true; reading?: string; landed?: "partly" | "not" };
+// The entry form's own values a reimport records (import-kept.ts); type
+// fields are recorded too, each as "fields.<id>".
+export const KEPT_KEYS = ["name", "tagline", "text", "article", "aliases", "tags", "typeId", "folderId", "canon", "hiddenTruth", "notes", "bindings"] as const;
 export type Origin = { from: string; at: Record<string, string>; kept?: Record<string, KeptValue> };
 
 export type WorldDoc = {
@@ -407,10 +413,12 @@ function readFieldValue(value: unknown): FieldValue | null {
   return "calendarId" in raw || "yearNum" in raw || "year" in raw ? readYear(raw) : null;
 }
 
+const ENTRY_FIELDS_MAX = 60;
+
 export function readEntry(value: unknown): Entry {
   const raw = rec(value);
   const fields: Record<string, FieldValue> = {};
-  for (const [key, field] of Object.entries(rec(raw.fields)).slice(0, 60)) {
+  for (const [key, field] of Object.entries(rec(raw.fields)).slice(0, ENTRY_FIELDS_MAX)) {
     const id = idOf(key);
     const read = readFieldValue(field);
     if (id && read !== null) fields[id] = read;
@@ -587,18 +595,31 @@ export function readOrigins(value: unknown): Record<string, Origin> {
   return origins;
 }
 
-// A kept value is JSON a reimport wrote: an article, a list, a year. One
-// that would not fit an article's own cap, with room for its quoting, is
-// dropped rather than cut, so what the author takes is the import's whole.
-const KEPT_MAX = 40;
-const KEPT_CHARS = LIMITS.article + 2_000;
-const fits = (value: unknown) => value === undefined || (JSON.stringify(value) ?? "").length <= KEPT_CHARS;
+// A kept value is a value an entry holds, as a reimport wrote it: an
+// article, a list, a year, or null for one the import cleared. Every value
+// an entry can hold fits: a text up to an article's own cap, a list or a
+// year up to that length as JSON. One that would not is dropped rather than
+// cut, so what the author takes is the import's whole. As many as one merge
+// can record: the form's own values, and each type field of either side.
+const KEPT_MAX = KEPT_KEYS.length + 2 * ENTRY_FIELDS_MAX;
+const KEPT_CHARS = LIMITS.article;
+const fits = (value: unknown) =>
+  value === undefined || value === null || (typeof value === "string" ? value.length <= LIMITS.article : (JSON.stringify(value) ?? "").length <= KEPT_CHARS);
 function readKept(value: unknown): Record<string, KeptValue> | undefined {
   const kept: Record<string, KeptValue> = {};
   for (const [name, item] of Object.entries(rec(value)).slice(0, KEPT_MAX)) {
     const raw = rec(item);
     if (name.length > 100 || !("theirs" in raw) || !fits(raw.theirs) || !fits(raw.mine)) continue;
-    kept[name] = raw.taken === true ? { theirs: raw.theirs, mine: raw.mine, taken: true } : { theirs: raw.theirs };
+    const theirs = raw.theirs ?? null;
+    if (raw.taken === true) {
+      kept[name] = {
+        theirs,
+        mine: raw.mine,
+        taken: true,
+        ...(typeof raw.reading === "string" && raw.reading.length <= 40 ? { reading: raw.reading } : {}),
+        ...(raw.landed === "partly" ? { landed: "partly" as const } : {}),
+      };
+    } else kept[name] = raw.landed === "not" ? { theirs, landed: "not" } : { theirs };
   }
   return Object.keys(kept).length ? kept : undefined;
 }

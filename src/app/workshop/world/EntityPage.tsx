@@ -229,7 +229,7 @@ export function EntityPage({
 
       <PaintPanel entity={entity} paint={paint} canPaint={canPaint} />
 
-      <ImportKept kept={entity.kept ?? []} onChoose={(key, choice) => api.settleKept(entity.ref, key, choice)} />
+      <ImportKept key={entity.ref} kept={entity.kept ?? []} onChoose={(key, choice) => api.settleKept(entity.ref, key, choice)} />
 
       {facts.length ? (
         <div className="flex flex-wrap gap-1.5" aria-label="At the table">

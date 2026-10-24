@@ -11,6 +11,7 @@ import {
   WORLD_RECORD_KINDS,
   IMPORT_KIND_LABELS,
   SINGULAR_KINDS,
+  standingUnsaid,
   type ImportKind,
   type ImportPlan,
 } from "@/lib/workshop/import";
@@ -264,13 +265,16 @@ export function ContentImportPicker({
     );
   }
 
+  // Said beside an import's note too, less what the note already says.
+  const unsaid = standingUnsaid(standing, note?.text);
+
   return (
     <div className="space-y-3">
-      {standing.length && !note ? (
+      {unsaid.length ? (
         <p className="flex items-start gap-1.5 text-xs text-amber-300/90" data-testid="import-kept-standing">
           <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
           <span>
-            Kept from an earlier import, until you choose on the entry in the World tab: {standing.join(" ")}
+            Kept from an earlier import, until you choose on the entry in the World tab: {unsaid.join(" ")}
           </span>
         </p>
       ) : null}
