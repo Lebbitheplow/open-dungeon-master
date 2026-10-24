@@ -28,6 +28,7 @@ import {
   TIER_LABEL,
   romanceIndex,
   type RelationshipBeat,
+  type SouredLeaving,
 } from "@/lib/dm/relationship-logic";
 import {
   defaultMilestoneText,
@@ -385,6 +386,7 @@ export function handleRelationshipBeat(
       : {}),
     ...valuesResult(landing),
     ...(landing.conscience ? { conscience: `${landing.conscience.from} -> ${landing.conscience.to}` } : {}),
+    ...(landing.departure?.departed ? { departed: landing.departure.how } : {}),
     ...(updated.romance !== "none" ? { romance: updated.romance } : {}),
     ...(updated.romance !== relationship.romance
       ? { romanceSlipped: `${relationship.romance} -> ${updated.romance}` }
@@ -397,6 +399,7 @@ export function handleRelationshipBeat(
             standing: friendshipTier(other.updated.approval),
             ...valuesResult(other),
             ...(other.conscience ? { conscience: `${other.conscience.from} -> ${other.conscience.to}` } : {}),
+            ...(other.departure?.departed ? { departed: other.departure.how } : {}),
           })),
         }
       : {}),
@@ -771,7 +774,12 @@ function endText(character: string, subject: string, reason: (typeof END_REASONS
 // the true meter (an act is named in the storyteller's section,
 // src/lib/dm/scheme-tools.ts); a prompt whose answer goes to the table
 // (`storyteller: false`) reads the warmth an act shows instead.
-export function relationshipRosterForPrompt(campaignId: string, options: { storyteller?: boolean } = {}): string[] {
+// `leaving`: who removes a soured companion at this table (its companion
+// conscience, src/lib/dm/conscience.ts souredLeaving).
+export function relationshipRosterForPrompt(
+  campaignId: string,
+  options: { storyteller?: boolean; leaving?: SouredLeaving } = {},
+): string[] {
   const storyteller = options.storyteller !== false;
   return listRelationships(campaignId)
     .map((relationship) => (storyteller ? relationship : { ...relationship, approval: outwardApproval(relationship) }))
@@ -781,5 +789,5 @@ export function relationshipRosterForPrompt(campaignId: string, options: { story
         (relationship.approval !== 0 || relationship.romance !== "none"),
     )
     .slice(0, 14)
-    .map((relationship) => relationshipFragment(relationship));
+    .map((relationship) => relationshipFragment(relationship, options.leaving));
 }

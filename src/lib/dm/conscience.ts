@@ -7,6 +7,7 @@ import { listRelationships } from "@/lib/db/relationships";
 import { listSheets, setCompanionCommander } from "@/lib/db/sheets";
 import { formatDate } from "@/lib/dm/calendar";
 import { commanderOf } from "@/lib/dm/companion-command";
+import { handTurnToDm } from "@/lib/dm/initiative-floor";
 import { valueLabel } from "@/lib/dm/companion-values-logic";
 import {
   commandEnds,
@@ -25,6 +26,7 @@ import {
 } from "@/lib/dm/conscience-logic";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { textKey } from "@/lib/language/text-logic";
+import type { SouredLeaving } from "@/lib/dm/relationship-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // A lasting companion's conscience (issue 503 Phase 1), the rim around
@@ -37,7 +39,9 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 // standing through publishRelationshipsUpdated, which settles it.
 //
 // Must not import relationship-subject.ts or relationship-tools.ts (they
-// import this), nor the clock module (it ticks this).
+// import this), nor the clock module (it ticks this), nor the turn machinery
+// (encounter-tools.ts, loop.ts); a turn changes hands through
+// initiative-floor.ts.
 
 export function conscienceSetting(campaign: Pick<Campaign, "gameSettings">): ConscienceSetting {
   if (campaign.gameSettings.relationships === "off") {
@@ -48,6 +52,14 @@ export function conscienceSetting(campaign: Pick<Campaign, "gameSettings">): Con
 
 export function conscienceOn(campaign: Pick<Campaign, "gameSettings">): boolean {
   return conscienceSetting(campaign) !== "off";
+}
+
+// Who removes a companion who cannot stand the party, for the DM's soured
+// line (relationship-logic.ts souredNote): the DM with no conscience at the
+// table, nobody at Talk, the server at Leave and Turn (departure.ts).
+export function souredLeaving(campaign: Pick<Campaign, "gameSettings">): SouredLeaving {
+  const setting = conscienceSetting(campaign);
+  return setting === "off" ? "dm" : setting === "talk" ? "stays" : "server";
 }
 
 // The companions a conscience applies to: lasting ones in the party.
@@ -161,6 +173,9 @@ function endCommand(campaign: Campaign, companion: CharacterSheet): string | nul
     content: `${companion.name} no longer takes ${name}'s orders in a fight: what the party has done stands between them. The DM plays their turns now.`,
   });
   publishWithSeq(campaign.id, seq, "message_added", { message });
+  // On their own turn, that turn is the DM's now, as the companion's card
+  // hands it back (src/lib/dm/initiative-floor.ts).
+  handTurnToDm(campaign, companion.id);
   return name;
 }
 

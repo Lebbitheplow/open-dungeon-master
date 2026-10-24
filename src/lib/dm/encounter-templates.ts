@@ -37,6 +37,9 @@ export function templateDifficulty(
     campaign.gameSettings,
     enemies.map((row) => ({ monster: row.monster, count: row.count })),
     spellAuthorsFor(campaign),
+    // The table's cast, as start_encounter reads it: an NPC with a stat
+    // block, a companion come back against the party (issue 503).
+    campaign.id,
   );
   if ("unknownMonster" in outcome) {
     return {

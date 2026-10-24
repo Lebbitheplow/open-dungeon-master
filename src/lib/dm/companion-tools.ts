@@ -39,7 +39,7 @@ import { queueCompanionPortrait } from "@/lib/portrait";
 import { settingClassIds } from "@/lib/classes";
 import { TOLD_GENDER_HELP, TOLD_GENDERS, toldGender } from "@/lib/gender";
 import { attractionFromTold, TOLD_ATTRACTION } from "@/lib/attraction";
-import { companionNpcFor, rememberDepartingSheet } from "@/lib/db/companion-npcs";
+import { companionNpcFor, lastingCompanion, rememberDepartingSheet } from "@/lib/db/companion-npcs";
 import { returningCompanion, settleReturn } from "@/lib/dm/companion-return";
 import { presetFor, packFor } from "@/lib/worlds/preset";
 import { packIds } from "@/lib/worlds/reskin-logic";
@@ -325,7 +325,7 @@ export function handleAddCompanion(
     const back = returningCompanion(campaign, args.name, args.level ?? partyAverageLevel(sheets));
     if (back) {
       const { sheet, hadEncounter } = finalizeNewCompanion(campaign, back.level, back.input, kind, args.personality);
-      settleReturn(back);
+      settleReturn(campaign, back);
       return {
         ok: true,
         characterId: sheet.id,
@@ -608,9 +608,20 @@ export function handleDismissCompanion(
   };
 }
 
+// A lasting companion leaving by its own conscience (issue 503,
+// src/lib/dm/departure.ts): the same removal as a dismissal, its sheet kept
+// on the row behind it, and `how` (what the table saw, never the plan it
+// held) told with the sheet's going, so the Party panel dims its card and
+// moves it to the Gone list.
+export function departCompanion(campaign: Campaign, sheet: CharacterSheet, reason: string, how: string) {
+  removeCompanion(campaign, sheet, reason, how);
+}
+
 // The whole removal: initiative slot, map token, story event, sheet, and the
 // bot user behind it. Shared by dismiss_companion and the end-of-fight sweep.
-function removeCompanion(campaign: Campaign, sheet: CharacterSheet, reason?: string) {
+// A lasting companion's going is told with `departed` (how they went: their
+// conscience's words, or a plain parting), so the Party panel shows it.
+function removeCompanion(campaign: Campaign, sheet: CharacterSheet, reason?: string, how?: string) {
   // Mid-combat: pull them out of the order and off the map cleanly.
   const encounter = getActiveEncounter(campaign.id);
   if (encounter) {
@@ -649,7 +660,12 @@ function removeCompanion(campaign: Campaign, sheet: CharacterSheet, reason?: str
   // (#503 Phase 0.4), so a return is the same person.
   rememberDepartingSheet(sheet);
   partRelationshipsWithSubject(campaign.id, sheet.name);
-  publishPersisted(campaign.id, "sheet_deleted", { sheetId: sheet.id, userId: sheet.userId });
+  const lasting = lastingCompanion(sheet);
+  publishPersisted(campaign.id, "sheet_deleted", {
+    sheetId: sheet.id,
+    userId: sheet.userId,
+    ...(lasting ? { departed: { name: sheet.name, how: how ?? (sheet.deathSaves?.dead ? "Fell" : "Left the party") } } : {}),
+  });
   // The bot user owns nothing but this sheet; the FK cascade removes it.
   deleteCompanionUser(sheet.userId);
 }

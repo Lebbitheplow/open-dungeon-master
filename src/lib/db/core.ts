@@ -2572,6 +2572,12 @@ function ensureSchema(db: SqliteDatabase) {
     ["conscience_json", `TEXT NOT NULL DEFAULT ''`],
     ["companion_snapshot_json", `TEXT NOT NULL DEFAULT ''`],
   ]);
+  // A lasting companion's leaving (issue 503 Phases 2 and 3,
+  // src/lib/db/companion-departures.ts): the plan it holds before it goes (a
+  // storyteller secret), and once gone how it went, the experience the party
+  // earned since, and the return it is gathering help for. '' for everyone
+  // else; snapshotted with the row, so a rewind undoes a departure whole.
+  addColumns("npcs", [["departure_json", `TEXT NOT NULL DEFAULT ''`]]);
 }
 
 // Widens battle_tokens.kind to accept the DM's own board furniture.

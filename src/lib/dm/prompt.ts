@@ -41,7 +41,8 @@ import { renderWorldArcsForPrompt } from "@/lib/dm/world-arc-logic";
 import { renderFactsForPrompt, type FactLike } from "@/lib/dm/fact-logic";
 import { MOMENT_INSTRUCTION, splitAtMoment, THIS_MOMENT_HEADING, THIS_TURN_HEADING } from "@/lib/prompt-boundary";
 import { companionMode } from "@/lib/dm/companion-tools";
-import { conscienceSetting, consciousCompanions } from "@/lib/dm/conscience";
+import { conscienceSetting, consciousCompanions, souredLeaving } from "@/lib/dm/conscience";
+import type { SouredLeaving } from "@/lib/dm/relationship-logic";
 import { conscienceRules } from "@/lib/dm/conscience-logic";
 import { DEED_KINDS } from "@/lib/dm/companion-values-logic";
 import { commanderOf } from "@/lib/dm/companion-command";
@@ -288,7 +289,8 @@ export type DmGameState = {
   // (src/lib/dm/scheme-tools.ts storytellerLinesForPrompt). Rendered as one
   // section, kept on storytellerBlock, and costed as its own context-trace
   // row tagged STORYTELLER_SECRET (src/lib/dm/viewer.ts), which the Context
-  // tab leaves out for the lead. #503's stored intents and pacts belong here.
+  // tab leaves out for the lead. #503's stored intents (src/lib/dm/departure.ts
+  // intentLinesForPrompt) are here; its pacts will be.
   storytellerLines?: string[];
   storytellerBlock?: string;
   // A prompt whose answer goes to the whole table (an out-of-character
@@ -419,13 +421,21 @@ ${setting}
 // the ladder, and consent belong to the tools, never to narration.
 // `openNames`: the player characters whose players opened them to advances
 // from NPCs (issue 501); the one exception to the player leading.
-export function relationshipRules(romance: boolean, openNames: readonly string[] = []): string {
+// `leaving`: who removes a companion who cannot stand the party (issue 503,
+// src/lib/dm/conscience.ts souredLeaving).
+export function relationshipRules(romance: boolean, openNames: readonly string[] = [], leaving: SouredLeaving = "dm"): string {
   return `Relationships (how people actually feel about each character):
 - Every tracked NPC and AI companion carries a server-owned approval meter toward EACH character, running hostile, disliked, wary, neutral, cordial, friendly, close, devoted. It persists across sessions and appears in GAME STATE. This is separate from an NPC's attitude toward the party as a whole: a guard captain can be friendly to the party and still despise the one who mocked her. Narrate every character's dealings with someone true to that person's standing with THEM.
 - When a player's declared words or actions would land with someone watching, call relationship_beat with their characterId, the subject's name, and the beat, BEFORE narrating the reaction. Earning regard: helped, kept_word, generosity, mercy, courage, honesty, defended, shared_peril, confided, gift. Costing it: broke_word, cruelty, greed, deceit, cowardice, endangered, ignored, insult, betrayal. Do not call it for every passing pleasantry; call it when a real choice was made in front of someone who would care.
 - The same deed does NOT land the same on everyone. The server weighs each beat against that person's own nature (every tracked NPC and lasting companion has one) and tells you whether it suited them: mercy moves a kind healer and irritates a hard-bitten mercenary, recklessness that frightens a cautious scholar impresses a bold one. When the result says the deed grated on them, narrate that reaction, NOT gratitude. This is the heart of playing these people well.
 - Charming overtures (gift${romance ? ", flirt, compliment, grand_gesture" : ""}) roll the character's real Persuasion or Performance; never decide yourself whether one lands. Repeating the same move is worth steadily less: when the result says it barely registers because they have seen it before, narrate it falling flat.
-- When someone's standing sinks to disliked or hostile, play it. They argue, refuse favors, withhold help, and say so. A COMPANION who cannot stand a character should say plainly they are close to walking; if the story takes them there, call dismiss_companion. Never keep narrating a warm companion whose meter says otherwise.
+- When someone's standing sinks to disliked or hostile, play it. They argue, refuse favors, withhold help, and say so. ${
+    leaving === "dm"
+      ? "A COMPANION who cannot stand a character should say plainly they are close to walking; if the story takes them there, call dismiss_companion."
+      : leaving === "stays"
+        ? "A COMPANION who cannot stand a character says so plainly and stays: this table keeps its companions, so never dismiss_companion one over standing."
+        : "A COMPANION who cannot stand a character says so plainly; whether they leave is the server's, so never dismiss_companion one over standing or deeds."
+  } Never keep narrating a warm companion whose meter says otherwise.
 - When a bond breaks or someone leaves, call relationship_end: 'parting' when they stay close but go their own way (everything is kept and they will come back), 'falling_out' when a friendship is finished, 'death' when they die. Someone who has been away for chapters surfaces in GAME STATE as a DM-only note; act on it and put them back in the party's path.${
     romance
       ? `
@@ -1720,7 +1730,7 @@ export function buildDmMessages(
     (!compactRules || compactRules.groups.has("relationships") || (state.relationships?.length ?? 0) > 0)
   ) {
     settingsRules.push(
-      relationshipRules(state.campaign.gameSettings.romance !== "off", openNames),
+      relationshipRules(state.campaign.gameSettings.romance !== "off", openNames, souredLeaving(state.campaign)),
       tableConscienceRules(state.campaign, state.sheets),
     );
     rulesCarrySecret = Boolean(secretRules);
@@ -1839,7 +1849,7 @@ export function buildDmMessages(
               kind: "state" as BlockKind,
               tokens: secretRulesTokens + secretStateTokens,
               included: true,
-              reason: "the storyteller's secrets (who is open to advances, an NPC's act): shown only to whoever runs the story, never to a player or the party lead",
+              reason: "the storyteller's secrets (who is open to advances, an NPC's act, a companion's plan to leave): shown only to whoever runs the story, never to a player or the party lead",
               position: systemParts.length + 6,
               secret: STORYTELLER_SECRET,
             },

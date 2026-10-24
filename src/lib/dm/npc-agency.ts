@@ -11,6 +11,7 @@ import {
   tickPressure,
 } from "@/lib/dm/npc-logic";
 import { detectGoalCollisions } from "@/lib/dm/npc-goal-logic";
+import { avengingRound } from "@/lib/dm/companion-revenge";
 import type { FactCandidate } from "@/lib/dm/fact-logic";
 import { textKey } from "@/lib/language/text-logic";
 
@@ -63,6 +64,9 @@ export function advanceNpcAgency(
         npc.agency.personality,
         rollExpression("1d20").total,
       );
+      // A companion who left to gather help against the party (issue 503):
+      // each round leaves a rumour, and the last one cues their return.
+      facts.push(...avengingRound(campaignId, npc, { completed: result.completed, goal: result.goal }));
       if (result.completed) {
         facts.push({
           category: "npc",

@@ -119,7 +119,10 @@ import { intentAnswered, intentCorrection, intentNeedsTool, type MessageIntent }
 import { handleCompleteBeat } from "@/lib/dm/arc";
 import { tickWaypointsFromCalls } from "@/lib/dm/waypoint-tick";
 import { enforceEngineBoundary } from "@/lib/dm/narration-guard";
-import { conscienceBlockForPrompt } from "@/lib/dm/conscience";
+import { souredLeaving } from "@/lib/dm/conscience";
+import { companionMomentBlock, settleCompanionLeaving } from "@/lib/dm/departure-turn";
+import { intentLinesForPrompt } from "@/lib/dm/departure";
+import { returnDirectorNotes } from "@/lib/dm/companion-revenge";
 import { noteUnrecordedDeeds } from "@/lib/dm/deed-claims";
 import {
   buildDmMessages,
@@ -580,6 +583,9 @@ async function openTurn(
   const spotlightWaiting = floor.mode === "spotlight" && !floor.userIds.every((id) => floor.respondedUserIds.includes(id));
   const oocOnly = !pendingWhispers.length && oocQuestionPending(history, { heldMoves: spotlightWaiting });
 
+  // A companion's leaving (issue 503): decided and acted on before the
+  // context is read, so the prompt sees the party as it now stands.
+  const leavingNotes = oocOnly ? [] : settleCompanionLeaving(campaign);
   const context = loadContext(campaign);
   // Combat can never wedge on missing initiative: when nothing is pending,
   // stragglers are auto-rolled before the prompt is built.
@@ -795,17 +801,22 @@ async function openTurn(
           pinned: fact.pinned,
           knownBy: fact.knownBy,
         })),
-      directorNotes: oocOnly ? [] : consumePendingSparks(campaignId).map((spark) => spark.text),
+      // The world's sparks, and a departed companion's return once it is
+      // cued (issue 503).
+      directorNotes: oocOnly ? [] : [...consumePendingSparks(campaignId).map((spark) => spark.text), ...returnDirectorNotes(campaign)],
       // The storyteller's section: who is open to advances, an NPC ready to
-      // make a move (issue 501, said while its window is open), an NPC's act.
-      storytellerLines: oocOnly ? [] : storytellerLinesForPrompt(campaign, context.sheets, advanceDirectorNotes(campaign)),
+      // make a move (issue 501, said while its window is open), an NPC's act,
+      // and a companion's plan to leave (issue 503).
+      storytellerLines: oocOnly
+        ? []
+        : [...storytellerLinesForPrompt(campaign, context.sheets, advanceDirectorNotes(campaign)), ...intentLinesForPrompt(campaign, context.sheets)],
       withholdStorytellerSecrets: oocOnly,
       directorBlock,
       npcs: npcRosterForPrompt(campaignId, { romance: romanceEnabled(campaign) }).map((npc) => ({ ...npc, world: world.npcNotes.get(npc.name) })),
       relationships:
         campaign.gameSettings.relationships === "off"
           ? []
-          : relationshipRosterForPrompt(campaignId, { storyteller: !oocOnly }),
+          : relationshipRosterForPrompt(campaignId, { storyteller: !oocOnly, leaving: souredLeaving(campaign) }),
       recentWhispers: listRecentWhispersForPrompt(campaignId, 10),
       pendingPlayerWhispers: pendingWhispers.map((whisper) => ({
         from: whisper.characterName,
@@ -815,8 +826,9 @@ async function openTurn(
       // (issue 239), so an accepted offer is never asked about again.
       offers: offerLinesForPrompt(campaignId, context.sheetsById),
       coordinationBlock: coordinationForPrompt(campaignId),
-      // Each lasting companion's values and conscience (issue 503).
-      conscienceBlock: conscienceBlockForPrompt(campaign, context.sheets),
+      // Each lasting companion's values and conscience, who has left and
+      // what the server just had them do (issue 503).
+      conscienceBlock: companionMomentBlock(campaign, context.sheets, leavingNotes),
   };
   const conversation = buildDmMessages(promptState, history);
   if (oocOnly) {
@@ -1257,7 +1269,7 @@ function handleMoreTools(campaign: Campaign, turn: DmTurn, imageEnabled: boolean
       groupGuidance(group, tracksAmmunition(campaign)),
       group === "companions" && companions !== "off" ? companionRules(campaign, companions) : "",
       group === "relationships" && campaign.gameSettings.relationships !== "off"
-        ? `${relationshipRules(campaign.gameSettings.romance !== "off", openToAdvanceNames(campaign, listSheets(campaign.id)))}\n\n${tableConscienceRules(campaign, listSheets(campaign.id))}`
+        ? `${relationshipRules(campaign.gameSettings.romance !== "off", openToAdvanceNames(campaign, listSheets(campaign.id)), souredLeaving(campaign))}\n\n${tableConscienceRules(campaign, listSheets(campaign.id))}`
         : "",
     ]
       .filter(Boolean)

@@ -5,6 +5,7 @@ import { friendshipTier, TIER_LABEL } from "@/lib/dm/relationship-logic";
 import { bondTruthFor } from "@/lib/dm/scheme-logic";
 import { advancesAllowed } from "@/lib/dm/advance-tick";
 import { conscienceViews } from "@/lib/dm/conscience";
+import { heldIntents } from "@/lib/dm/departure";
 import { textKey } from "@/lib/language/text-logic";
 
 export const runtime = "nodejs";
@@ -40,6 +41,10 @@ export async function GET(
   // shown to every seat, since the companion says them aloud.
   const conscience = conscienceViews(context.campaign);
   const storyteller = seesStorytellerSecrets(context);
+  // A companion's plan to leave (issue 503) is a storyteller secret: only a
+  // person running the table reads it here; at an AI table nobody does, the
+  // lead included (the AI has it in its own prompt).
+  const plans = storyteller ? heldIntents(context.campaign) : new Map<string, string>();
   const sheets = listSheets(campaignId);
   const viewer = {
     storyteller,
@@ -84,7 +89,7 @@ export async function GET(
               },
             }
           : {}),
-        ...(ladder ? { conscience: ladder } : {}),
+        ...(ladder ? { conscience: { ...ladder, ...(plans.has(textKey(relationship.subjectName)) ? { plan: plans.get(textKey(relationship.subjectName)) } : {}) } } : {}),
       };
     }),
   });

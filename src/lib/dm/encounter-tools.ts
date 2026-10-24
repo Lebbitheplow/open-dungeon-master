@@ -91,6 +91,7 @@ import { endTurnAsked } from "@/lib/dm/pc-attack-approach";
 import { handleEnemyAttack } from "@/lib/dm/enemy-attack";
 import { isCompanionUserId } from "@/lib/db/users";
 import { dmPlaysTurn, turnUserId } from "@/lib/dm/companion-command";
+import { setInitiativeFloor } from "@/lib/dm/initiative-floor";
 import { wakeDm } from "@/lib/dm/wake";
 import { resolveSheetRef, unknownSheetRef } from "@/lib/dm/rolls";
 import {
@@ -476,32 +477,10 @@ function nextTurn(
 // src/lib/dm/ac-effects.ts; re-exported for the callers that learned it here.
 export { acWithEffects };
 
-// Exported for src/lib/dm/initiative.ts: a DM editing the order moves the
-// pointer without going through advancePointer, and the floor has to follow
-// it or the banner and the permission check disagree about whose turn it is.
-export function setInitiativeFloor(campaign: Campaign | null, encounter: Encounter) {
-  if (!campaign) {
-    return;
-  }
-  const current = encounter.order[encounter.turnIndex];
-  if (!current || current.kind !== "pc") {
-    return;
-  }
-  // A companion a player commands puts its turn in that player's hands
-  // (src/lib/dm/companion-command.ts).
-  const floor: InitiativeFloor = {
-    mode: "initiative",
-    encounterId: encounter.id,
-    userIds: [turnUserId(campaign, current)],
-    currentName: current.name,
-    round: encounter.round,
-  };
-  // A hold (held responses) stays a hold: the pointer moved underneath it,
-  // and the lead's release opens into the new turn rather than the old one.
-  const next: Floor = getFloor(campaign.id).mode === "hold" ? { mode: "hold", next: floor } : floor;
-  setFloor(campaign.id, next);
-  publishPersisted(campaign.id, "floor_changed", { floor: next });
-}
+// Whose move the floor says it is lives in src/lib/dm/initiative-floor.ts
+// (issue 503 hands a companion's turn to the DM from the conscience, which
+// cannot import this file); re-exported for the callers that learned it here.
+export { setInitiativeFloor };
 
 // The floor a running fight would have right now, read from the initiative
 // pointer. Null when no ready fight has a player character at the pointer.

@@ -6,6 +6,7 @@ import { normalizeSubject } from "@/lib/dm/fact-logic";
 import { getSheetById, listSheets } from "@/lib/db/sheets";
 import { patchRelationship, type Relationship } from "@/lib/db/relationships";
 import { conscienceOn, settleCompanion, worstApproval, type ConscienceMove } from "@/lib/dm/conscience";
+import { departureNote, settleBreakingPoint, type DepartureOutcome } from "@/lib/dm/departure";
 import { RUNG_WORD, stepLadder, type LadderStep } from "@/lib/dm/conscience-logic";
 import { deedVerdict, SEVERITY_FACTOR, type DeedSeverity, type DeedVerdict } from "@/lib/dm/companion-values-logic";
 import type { Subject } from "@/lib/dm/relationship-subject";
@@ -47,6 +48,10 @@ export type Landing = {
   alignment: number;
   values: DeedVerdict | null;
   conscience: ConscienceMove | null;
+  // A companion at its breaking point at a Leave or Turn table: what the
+  // server had it do (src/lib/dm/departure.ts). A plan it now holds is a
+  // storyteller secret, and no note names it.
+  departure: DepartureOutcome | null;
 };
 
 // Words for what moved a companion, in the DM's line and an ultimatum's
@@ -131,13 +136,17 @@ export function landBeat(
     }) ?? relationship;
 
   let conscience: ConscienceMove | null = null;
+  let departure: DepartureOutcome | null = null;
   if (companion && subject.npc) {
     const step: LadderStep | null = beat === "amends" ? "honour" : (values?.ladder ?? null);
     const next = stepLadder(companionConscience(subject.npc.id), step, worstBefore, turn.id, causeOf(beat, sheet.name));
     saveConscience(subject.npc.id, next);
     conscience = settleCompanion(campaign, companion, next, deed ? { demand: deed.demand, hours: deed.hours } : {}, listSheets(campaign.id));
+    // At the breaking point the server decides what they do, now (issue 503
+    // Phase 2); climbed back off it, any plan they held is dropped.
+    departure = settleBreakingPoint(campaign, getSheetById(companion.id) ?? companion);
   }
-  return { subject, before: relationship, updated, delta, alignment, values, conscience };
+  return { subject, before: relationship, updated, delta, alignment, values, conscience, departure };
 }
 
 // A deed recorded settles the note the outcome check left when the
@@ -156,7 +165,7 @@ export function unrecordedDeedSubject(name: string): string {
 }
 
 // What the witnesses' landings add to the DM's note: whose conscience moved,
-// an ultimatum to voice, a command that ended.
+// an ultimatum to voice, a command that ended, a companion who left.
 export function conscienceNotes(landings: readonly Landing[]): string[] {
   return landings.flatMap((landing) => {
     const move = landing.conscience;
@@ -178,5 +187,5 @@ export function conscienceNotes(landings: readonly Landing[]): string[] {
       lines.push(`${move.companion} no longer takes ${move.commandEnded}'s orders in a fight; you play their turns now.`);
     }
     return lines;
-  });
+  }).concat(landings.map((landing) => (landing.departure ? departureNote(landing.departure) : "")).filter(Boolean));
 }

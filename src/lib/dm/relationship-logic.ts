@@ -574,24 +574,36 @@ export type RelationshipLike = {
 
 // The instruction a soured bond earns in GAME STATE. A companion who cannot
 // stand someone is a story problem the DM should be playing, so it says so
-// outright; the server never removes a party member on its own.
+// outright. Who removes them follows the table's companion conscience
+// (issue 503): with it off the DM may, as the story takes them; at Talk they
+// stay; at Leave and Turn whether they go is the server's
+// (src/lib/dm/departure.ts), never the DM's.
+export type SouredLeaving = "dm" | "stays" | "server";
+
 export function souredNote(
   tier: FriendshipTier,
   subjectKind: "npc" | "companion",
   subjectName: string,
+  leaving: SouredLeaving = "dm",
 ): string | null {
   if (tierIndex(tier) > tierIndex("disliked")) {
     return null;
   }
   if (subjectKind === "companion") {
-    return `${subjectName} travels with people they cannot stand: have them argue, refuse favors, and say plainly they are close to walking. If it comes to that, use dismiss_companion`;
+    const tail =
+      leaving === "stays"
+        ? "this table keeps its companions, so they stay and say so"
+        : leaving === "server"
+          ? "whether they leave is the server's, never dismiss_companion them over it"
+          : "If it comes to that, use dismiss_companion";
+    return `${subjectName} travels with people they cannot stand: have them argue, refuse favors, and say plainly ${leaving === "dm" ? "they are close to walking. " : "how they feel; "}${tail}`;
   }
   return `${subjectName} wants nothing to do with them and will not do them favors`;
 }
 
 // One bounded GAME STATE line per relationship. Capped so a large cast
 // cannot crowd the block out.
-export function relationshipFragment(relationship: RelationshipLike): string {
+export function relationshipFragment(relationship: RelationshipLike, leaving: SouredLeaving = "dm"): string {
   const tier = friendshipTier(relationship.approval);
   const parts = [
     `${relationship.characterName} and ${relationship.subjectName} (${relationship.subjectKind})`,
@@ -611,7 +623,7 @@ export function relationshipFragment(relationship: RelationshipLike): string {
   } else if (relationship.apartChapters >= REAPPEAR_AFTER) {
     parts.push(`not seen for ${relationship.apartChapters} chapters`);
   }
-  const soured = souredNote(tier, relationship.subjectKind, relationship.subjectName);
+  const soured = souredNote(tier, relationship.subjectKind, relationship.subjectName, leaving);
   if (soured) {
     parts.push(soured);
   }
