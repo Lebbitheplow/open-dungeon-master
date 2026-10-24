@@ -9,6 +9,8 @@ import {
 } from "@/lib/campaign-api";
 import { seatAddedSheet } from "@/lib/character-seat";
 import { admitSheet, refusal } from "@/lib/characters/admit";
+import { admitLibraryForSeat } from "@/lib/characters/seat-preview";
+import { hasSeatPicks, seatPicksSchema, type SeatPicks } from "@/lib/characters/seat-picks";
 import { announceMidGameJoin } from "@/lib/characters/mid-game-join";
 import { listMembers, setMemberReady } from "@/lib/db/campaigns";
 import {
@@ -46,6 +48,28 @@ import { publishPersisted } from "@/lib/events";
 const fromLibrarySchema = z.object({
   libraryCharacterId: z.string().min(1),
 });
+
+// The owed choices a player picked on the confirm sheet (JoinConfirmDialog,
+// src/lib/characters/seat-picks.ts), sent beside the library character.
+function picksOf(raw: unknown): { picks: SeatPicks | null } | { error: Response } {
+  const sent = raw && typeof raw === "object" ? (raw as { picks?: unknown }).picks : undefined;
+  if (sent === undefined || sent === null) {
+    return { picks: null };
+  }
+  const parsed = seatPicksSchema.safeParse(sent);
+  return parsed.success
+    ? { picks: parsed.data }
+    : { error: Response.json({ error: parsed.error.issues[0]?.message || "Those picks could not be read." }, { status: 400 }) };
+}
+
+// The library door with the picks made: the hero is adapted and admitted
+// as ever, then the picks are applied and judged (seat-preview.ts).
+function admitWith(context: MemberContext, picks: SeatPicks | null) {
+  return hasSeatPicks(picks)
+    ? (character: Parameters<typeof admitLibraryForSeat>[0], _campaign: unknown, userId: string, level: number) =>
+        admitLibraryForSeat(character, context.campaign, userId, level, picks)
+    : undefined;
+}
 
 const editSchema = z.object({
   editLibraryCharacterId: z.string().min(1),
@@ -137,6 +161,10 @@ export async function POST(
   // Path 1: pick an existing library character (adapted to campaign level).
   const fromLibrary = fromLibrarySchema.safeParse(raw);
   if (fromLibrary.success) {
+    const picked = picksOf(raw);
+    if ("error" in picked) {
+      return picked.error;
+    }
     const reused = listSheetsForUser(campaignId, context.user.id).some((entry) => entry.libraryCharacterId === fromLibrary.data.libraryCharacterId && !entry.isCompanion);
     if (!reused && getSheetForUser(campaignId, context.user.id) && context.campaign.gameSettings.multiCharacter === "off") {
       return Response.json({ error: "You already have a character in this campaign." }, { status: 409 });
@@ -146,6 +174,7 @@ export async function POST(
       campaignId,
       context.user.id,
       context.campaign.startingLevel,
+      admitWith(context, picked.picks),
     );
     if ("error" in result) {
       return Response.json(result, { status: 400 });
@@ -239,6 +268,10 @@ export async function PUT(
   // along; a render only queues if it has none yet.
   const fromLibrary = fromLibrarySchema.safeParse(raw);
   if (fromLibrary.success) {
+    const picked = picksOf(raw);
+    if ("error" in picked) {
+      return picked.error;
+    }
     const character = getCharacterForUser(context.user.id, fromLibrary.data.libraryCharacterId);
     if (!character) {
       return Response.json({ error: "Character not found in your library." }, { status: 404 });
@@ -248,12 +281,21 @@ export async function PUT(
     if (character.role === "companion") {
       return Response.json({ error: companionRoleRefusal(character) }, { status: 400 });
     }
+    // Picks that are not within the rules are refused before the old sheet
+    // goes too: the switch is judged first, then made.
+    if (hasSeatPicks(picked.picks)) {
+      const judged = admitLibraryForSeat(character, context.campaign, context.user.id, Math.max(1, Math.min(20, context.campaign.startingLevel)), picked.picks);
+      if (!judged.ok) {
+        return refusal(judged.problems);
+      }
+    }
     deleteSheetForUser(campaignId, context.user.id);
     const result = instantiateIntoCampaign(
       character.id,
       campaignId,
       context.user.id,
       context.campaign.startingLevel,
+      admitWith(context, picked.picks),
     );
     if ("error" in result) {
       // The old sheet is already gone; the lobby falls back to its

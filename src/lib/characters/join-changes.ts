@@ -1,6 +1,7 @@
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
 import { owedChoices } from "@/lib/srd/owed-choices";
 import { textKey } from "@/lib/language/text-logic";
+import type { OwedPicks } from "@/lib/characters/seat-picks";
 
 // What taking a seat does to a hero, in words, for the confirm sheet a
 // player reads before joining (backlog F6, JoinConfirmDialog.tsx). It
@@ -30,6 +31,10 @@ export type JoinPreview = JoinChanges & {
   // A table that rolls hit points rolls them when the seat is taken, so the
   // number shown here is one throw, not the one the hero keeps.
   rollsHp: boolean;
+  // What the confirm sheet may pick of the owed choices before the hero
+  // seats (src/lib/characters/seat-picks.ts): read off the hero as it seats
+  // with nothing picked, so the pickers stay put while picks are made.
+  picks?: OwedPicks;
 };
 
 type Sheet = Pick<

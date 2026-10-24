@@ -1290,7 +1290,72 @@ const pactTables = { consent: {}, offer: {}, secret: {}, reveal: {} };
   }
 }
 
+// A table the player runs, made from their workshop, where the lead joins
+// as a player: the workshop's pregens, one ticked "Offer to players" and one
+// not (src/lib/db/pregen-offers.ts), for the hero chooser's offered section
+// and the confirm sheet's owed picks. Level 4, so a level 1 fighter owes its
+// subclass and an improvement there.
+const { createWorkshop } = await import("../../src/lib/db/workshops.ts");
+const { recordOrigin } = await import("../../src/lib/db/content-origins.ts");
+const { setPregenOffered } = await import("../../src/lib/db/characters.ts");
+const OFFER_TITLE = "Offer Table";
+const offerTable = campaigns.createCampaign(player.id, {
+  title: OFFER_TITLE,
+  description: "A table its DM made from a workshop with pregens.",
+  theme: "high-fantasy",
+  maxPlayers: 6,
+  startingLevel: 4,
+  difficulty: "normal",
+  gameSettings: { ttsEnabled: false },
+});
+campaigns.joinByInviteCode(world.owner.id, campaigns.getCampaignById(offerTable.id).inviteCode);
+const offerWorkshop = createWorkshop(player.id, { title: "The Sunken Keep" });
+recordOrigin(offerTable.id, "npcs", "seeded-npc-copy", offerWorkshop.id, "seeded-npc");
+const pregenSheet = (name) => ({
+  name,
+  race: "human",
+  class: "fighter",
+  subclass: "",
+  background: "soldier",
+  alignment: "N",
+  abilities: { str: 16, dex: 15, con: 14, int: 13, wis: 11, cha: 9 },
+  maxHp: 12,
+  ac: 18,
+  acOverride: false,
+  speed: 30,
+  hitDice: { die: "d10", total: 1, spent: 0 },
+  classes: [],
+  hitDicePools: null,
+  proficiencies: {
+    saves: ["str", "con"],
+    skills: ["perception", "survival", "athletics", "intimidation"],
+    expertise: [],
+    languages: ["Common", "Dwarvish"],
+    tools: ["dice set", "vehicles (land)"],
+    armor: ["light", "medium", "heavy", "shields"],
+    weapons: ["simple", "martial"],
+  },
+  equipment: [{ name: "Longsword", qty: 1 }, { name: "Chain Mail", qty: 1 }, { name: "Shield", qty: 1 }],
+  gold: 10,
+  copper: 0,
+  feats: [],
+  features: [{ name: "Fighting Style: Defense", source: "choice" }],
+  asiChoices: [],
+  spellcasting: null,
+  portrait: { url: "/uploads/seeded-pregen.png" },
+  notes: "",
+  backstory: "",
+});
+const offeredPregen = createCharacter(player.id, 1, pregenSheet("Thessaly Brightmoor"), "pc", offerWorkshop.id);
+setPregenOffered(player.id, offeredPregen.id, true);
+const hiddenPregen = createCharacter(player.id, 1, pregenSheet("Unoffered Orrin"), "pc", offerWorkshop.id);
+
 const ids = {
+  offerTableId: offerTable.id,
+  offerWorkshopId: offerWorkshop.id,
+  offeredPregen: offeredPregen.id,
+  offeredPregenName: offeredPregen.name,
+  hiddenPregen: hiddenPregen.id,
   revised: ysolde.id,
   orc: grask.id,
   curioTableId: curioTable.id,
@@ -1362,6 +1427,7 @@ const ids = {
     [prepared.id]: PREP_TITLE,
     [tourTable.id]: TOUR_TITLE,
     [prepSource.id]: PREP_SOURCE_TITLE,
+    [offerTable.id]: OFFER_TITLE,
     ...Object.fromEntries(Object.entries(closing).map(([viewport, id]) => [id, `Closing Table (${viewport})`])),
     ...Object.fromEntries(Object.entries(stopTables).map(([viewport, id]) => [id, `Stop Table (${viewport})`])),
     ...Object.fromEntries(Object.entries(wardrobe).map(([viewport, id]) => [id, `Wardrobe (${viewport})`])),

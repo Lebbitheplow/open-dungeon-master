@@ -32,6 +32,8 @@ type Pregen = {
   subclass: string;
   background: string;
   level: number;
+  // Ticked: players joining a table made from this workshop may take it.
+  offered?: boolean;
 };
 
 type LibraryEntry = Pregen & { workshopId: string };
@@ -97,14 +99,16 @@ export function PartyPanel({
     };
   }, [workshopId, version, settle]);
 
-  async function change(method: "POST" | "DELETE", characterId: string) {
+  // POST files a character, DELETE takes it off, PATCH ticks or unticks
+  // "Offer to players" (src/lib/db/pregen-offers.ts).
+  async function change(method: "POST" | "DELETE" | "PATCH", characterId: string, offered?: boolean) {
     setBusy(true);
     setError("");
     try {
       const response = await fetch(`/api/workshops/${workshopId}/pregens`, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ characterId }),
+        body: JSON.stringify(method === "PATCH" ? { characterId, offered } : { characterId }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -131,6 +135,10 @@ export function PartyPanel({
         Built for {targetParty.size} at level {targetParty.level}; every encounter and odds preview
         budgets against that. The characters below are pregens: sheets ready for anyone who sits
         down without one. They ride along in the bundle.
+      </p>
+      <p className="text-xs text-stone-400">
+        Tick Offer to players and anyone joining a table made from this workshop can take that
+        pregen, as a copy at the table&apos;s level. One player each per table.
       </p>
 
       {loadError && (pregens !== null || loaded) ? <LoadFailed error={loadError} onRetry={() => setVersion((current) => current + 1)} /> : null}
@@ -176,6 +184,21 @@ export function PartyPanel({
                       </span>
                     ) : null}
                   </span>
+                  {/* Option B: the DM ticks which pregens the players of a
+                      table made from this workshop may take. Unticked, a
+                      pregen is the DM's alone. */}
+                  {character.role !== "companion" ? (
+                    <label className="mt-2 flex min-h-11 cursor-pointer items-center gap-2 text-xs text-stone-300" data-pregen-offer={character.id}>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(character.offered)}
+                        disabled={busy}
+                        onChange={(event) => void change("PATCH", character.id, event.target.checked)}
+                        className="size-4 accent-amber-500"
+                      />
+                      Offer to players
+                    </label>
+                  ) : null}
                 </span>
                 <button
                   type="button"

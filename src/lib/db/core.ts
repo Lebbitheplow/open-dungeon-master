@@ -2281,6 +2281,10 @@ function ensureSchema(db: SqliteDatabase) {
     // the upgrade safe, since every row written before this column existed
     // is one.
     ["role", `TEXT NOT NULL DEFAULT 'pc'`],
+    // Whether the DM offers this pregen to the players of a table made from
+    // its workshop (src/lib/db/pregen-offers.ts). 0 keeps it the owner's
+    // alone, which is every pregen filed before the toggle existed.
+    ["offered_to_table", `INTEGER NOT NULL DEFAULT 0`],
   ]);
 
   // The romance meter was generalized into the relationship meter: one
@@ -2587,6 +2591,19 @@ function ensureSchema(db: SqliteDatabase) {
     -- table's rows by hand. That module used to make the table on first use,
     -- with this same definition, so a database that has it already is
     -- unchanged.
+    -- A DM's offered pregen taken by one player at one table
+    -- (src/lib/db/pregen-offers.ts): one claim per pregen per campaign. The
+    -- seat it made is sheet_id; a claim whose sheet is gone (the player gave
+    -- the seat up in the lobby) frees the pregen again.
+    CREATE TABLE IF NOT EXISTS pregen_claims (
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      character_id TEXT NOT NULL REFERENCES library_characters(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      sheet_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (campaign_id, character_id)
+    );
+
     CREATE TABLE IF NOT EXISTS last_hits (
       campaign_id TEXT NOT NULL,
       character_id TEXT NOT NULL,

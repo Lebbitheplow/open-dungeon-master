@@ -5,6 +5,8 @@ import { companionRoleRefusal, getCharacterForUser } from "@/lib/db/characters";
 import { getSheetForUser, listSheetsForUser } from "@/lib/db/sheets";
 import { createSheetSchema } from "@/lib/schemas/sheet";
 import { pregenById } from "@/lib/starter/pregens";
+import { seatPicksSchema } from "@/lib/characters/seat-picks";
+import { claimRefusal, offeredPregenFor } from "@/lib/db/pregen-offers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,14 +15,19 @@ const previewSchema = z
   .object({
     libraryCharacterId: z.string().min(1).max(80).optional(),
     pregenId: z.string().trim().min(1).max(40).optional(),
+    // A pregen the table's DM offers its players (src/lib/db/pregen-offers.ts).
+    offeredPregenId: z.string().trim().min(1).max(80).optional(),
     // A character the builder just made for this table ("Help me build" on
     // the hero chooser), judged as POST or PUT /sheet would judge it.
     sheet: createSheetSchema.optional(),
     // join = a first seat (POST /sheet); replace = a lobby switch (PUT
     // /sheet), which gives up the current character first.
     flow: z.enum(["join", "replace"]).default("join"),
+    // The owed choices picked on the sheet (src/lib/characters/seat-picks.ts),
+    // judged as the join will judge them.
+    picks: seatPicksSchema.optional(),
   })
-  .refine((body) => [body.libraryCharacterId, body.pregenId, body.sheet].filter(Boolean).length === 1, {
+  .refine((body) => [body.libraryCharacterId, body.pregenId, body.offeredPregenId, body.sheet].filter(Boolean).length === 1, {
     message: "Pick one hero.",
   });
 
@@ -45,7 +52,7 @@ export async function POST(
   if (!parsed.success) {
     return Response.json({ error: parsed.error.issues[0]?.message || "Pick a hero." }, { status: 400 });
   }
-  const { libraryCharacterId, pregenId, sheet, flow } = parsed.data;
+  const { libraryCharacterId, pregenId, offeredPregenId, sheet, flow, picks } = parsed.data;
 
   let preview: JoinPreview;
   let alreadyHere = false;
@@ -57,7 +64,7 @@ export async function POST(
     if (character.role === "companion") {
       return Response.json({ error: companionRoleRefusal(character) }, { status: 400 });
     }
-    preview = previewLibraryJoin(character, context.campaign, context.user.id);
+    preview = previewLibraryJoin(character, context.campaign, context.user.id, picks);
     // A hero already at this table is selected again, not copied twice
     // (instantiateIntoCampaign), so a join changes nothing about it.
     alreadyHere = listSheetsForUser(campaignId, context.user.id).some(
@@ -65,12 +72,27 @@ export async function POST(
     );
   } else if (sheet) {
     preview = previewBuiltJoin(sheet, context.campaign, context.user.id);
+  } else if (offeredPregenId) {
+    // Unticked, another table's, or not a pregen at all: no such hero. The
+    // DM's own pregens are in their library already.
+    const offer = offeredPregenFor(campaignId, offeredPregenId);
+    if (!offer || offer.character.userId === context.user.id) {
+      return Response.json({ error: "No such hero." }, { status: 404 });
+    }
+    preview = previewLibraryJoin(offer.character, context.campaign, context.user.id, picks);
+    const refusals = [
+      ...(flow !== "join" ? ["A pregen the DM offers takes a first seat; a lobby switch is to one of your own heroes."] : []),
+      ...[claimRefusal(offer, context.user.id)].filter((line): line is string => Boolean(line)),
+    ];
+    if (refusals.length) {
+      preview = { ...preview, ok: false, problems: [...refusals, ...preview.problems] };
+    }
   } else {
     const pregen = pregenById(pregenId ?? "");
     if (!pregen) {
       return Response.json({ error: "No such hero." }, { status: 404 });
     }
-    preview = previewPregenJoin(pregen, context.campaign, context.user.id);
+    preview = previewPregenJoin(pregen, context.campaign, context.user.id, picks);
   }
 
   // The door rules the join answers with before it reads the sheet, so the
