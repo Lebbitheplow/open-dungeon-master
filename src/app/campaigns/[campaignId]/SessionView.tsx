@@ -978,6 +978,7 @@ export function SessionView({
     onOpenLabel: openLabel,
     refreshBattleMap,
     relationshipsVersion: state.relationshipsVersion,
+    departingSheets: state.departingSheets,
     factionsVersion: state.factionsVersion,
     worldVersion: state.worldVersion,
     loreVersion: state.loreVersion,

@@ -4,6 +4,7 @@ import { attractionBlank, attractionJson, type Attraction } from "@/lib/attracti
 import { derivePersonality } from "@/lib/dm/npc-logic";
 import { defaultValues } from "@/lib/dm/companion-values-logic";
 import { departedSheet, saveDepartedSheet, seedCompanionValues, type DepartedSheet } from "@/lib/db/companion-conscience";
+import { companionDeparture } from "@/lib/db/companion-departures";
 import { textKey } from "@/lib/language/text-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
@@ -146,4 +147,49 @@ export function departedCompanion(campaignId: string, name: string): { npc: Npc;
 
 export function forgetDepartedSheet(npcId: string) {
   saveDepartedSheet(npcId, null);
+}
+
+// The Party panel's Gone list (issue 503): every lasting companion who has
+// left this party and not come back, newest first, with how they went as
+// the table saw it (their conscience's words, or a plain parting). Never a
+// plan one still in the party holds; that is not here at all.
+export type GoneCompanion = {
+  name: string;
+  how: string;
+  // When they went, for ordering.
+  at: string;
+  portraitUrl: string;
+  race: string;
+  class: string;
+  gender: string;
+};
+
+export function goneCompanions(campaignId: string): GoneCompanion[] {
+  const live = new Set(
+    (getDatabase().prepare(`SELECT id FROM character_sheets WHERE campaign_id = ?`).all(campaignId) as Array<{ id: string }>).map(
+      (entry) => entry.id,
+    ),
+  );
+  const gone: GoneCompanion[] = [];
+  for (const npc of listNpcs(campaignId)) {
+    if (!npc.companionSheetId || live.has(npc.companionSheetId)) {
+      continue;
+    }
+    const departed = departedSheet(npc.id);
+    if (!departed) {
+      continue;
+    }
+    const sheet = departed.sheet as { portrait?: { url?: unknown }; race?: unknown; class?: unknown; gender?: unknown; deathSaves?: { dead?: unknown } };
+    const how = companionDeparture(npc.id).gone?.how ?? (sheet.deathSaves?.dead === true ? "Fell" : "Left the party");
+    gone.push({
+      name: npc.name,
+      how,
+      at: departed.at,
+      portraitUrl: typeof sheet.portrait?.url === "string" ? sheet.portrait.url : "",
+      race: typeof sheet.race === "string" ? sheet.race : "",
+      class: typeof sheet.class === "string" ? sheet.class : "",
+      gender: typeof sheet.gender === "string" ? sheet.gender : "",
+    });
+  }
+  return gone.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
 }

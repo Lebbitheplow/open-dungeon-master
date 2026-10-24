@@ -14,6 +14,9 @@ import { CONSCIENCE_RUNGS, RUNG_LABEL, type ConscienceRung } from "@/lib/dm/cons
 export type ConscienceView = {
   rung: ConscienceRung;
   ultimatum: { condition: string; due: string; left: string } | null;
+  // What they mean to do at their breaking point (issue 503 Phase 2): a
+  // storyteller secret, sent only to a person running the table.
+  plan?: string;
 };
 
 // Calm to grave, in the palettes the day theme turns too (globals.css).
@@ -63,6 +66,11 @@ export function ConscienceLadder({ name, conscience }: { name: string; conscienc
             {" "}
             · by {conscience.ultimatum.due} · <span data-countdown>{conscience.ultimatum.left} left</span>
           </span>
+        </p>
+      ) : null}
+      {conscience.plan ? (
+        <p className="reveal mt-1 text-xs leading-5 text-stone-300" data-conscience-plan>
+          <span className="font-medium text-violet-300">Their plan, yours alone:</span> {name} {conscience.plan}.
         </p>
       ) : null}
     </div>

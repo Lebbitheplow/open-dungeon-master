@@ -587,3 +587,32 @@ html[data-effects="low"] .dictate-dot { animation: none; }
   .bond-truth[data-unmasking] { animation: bond-unmask-fade 360ms linear both; }
   .bond-unmask-chip { animation: bond-unmask-fade 360ms linear backwards; }
 }
+
+/* ------------------------------------------------------------------------
+   A companion leaving the party (issue 503, PartyGone.tsx): the card it had
+   dims over 600ms (fading and greying as it sinks a little), then files
+   under Gone, whose new row rises in. Only when the server's departure
+   arrives (sheet_deleted's `departed`), never from narration. Reduced motion
+   keeps the dimming colour and the words and drops the movement.
+   ------------------------------------------------------------------------ */
+@keyframes party-card-depart {
+  from { opacity: 1; filter: grayscale(0); transform: none; }
+  to { opacity: 0.45; filter: grayscale(0.85); transform: translateY(6px) scale(0.98); }
+}
+@keyframes party-card-depart-fade {
+  from { opacity: 1; filter: grayscale(0); }
+  to { opacity: 0.45; filter: grayscale(0.85); }
+}
+@keyframes party-gone-arrive {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+@layer components {
+  .party-card-departing { animation: party-card-depart 600ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards; pointer-events: none; }
+  .party-gone-row { background: rgba(120, 113, 108, 0.08); }
+  .party-gone-arrive { animation: party-gone-arrive 360ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .party-card-departing { animation: party-card-depart-fade 600ms linear forwards; }
+  .party-gone-arrive { animation: none; }
+}

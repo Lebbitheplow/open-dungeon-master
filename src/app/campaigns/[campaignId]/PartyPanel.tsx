@@ -13,6 +13,8 @@ import { conditionDetail, maxHpView } from "@/components/sheet/sheet-state";
 import type { PublicEncounter } from "@/lib/db/encounter-view";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { SectionHead } from "@/components/ui/SectionHead";
+import { PartyGone } from "@/app/campaigns/[campaignId]/PartyGone";
+import type { DepartingSheet } from "@/app/campaigns/[campaignId]/departing";
 import { KitButton, SettingToggle } from "./PanelKit";
 import { PartyOrderBar, PartyOrderHandle, usePartyOrder } from "./PartyOrder";
 import { useEffect, useId, useState, Suspense, lazy } from "react";
@@ -294,6 +296,8 @@ function SaveToLibraryButton({ campaignId, sheetId }: { campaignId: string; shee
 export function PartyPanel({
   sheets,
   meUserId,
+  departing = [],
+  goneRefreshKey = 0,
   spotlightUserIds = [],
   onlineUserIds = [],
   embedded = false,
@@ -330,6 +334,10 @@ export function PartyPanel({
 }: {
   sheets: CharacterSheet[];
   meUserId: string;
+  // Lasting companions whose sheet just went (issue 503), and the key the
+  // Gone list reads itself again on (PartyGone.tsx).
+  departing?: readonly DepartingSheet[];
+  goneRefreshKey?: number;
   // A person runs this table and it plays romance (issue 501): the DM's
   // cards say who each character is drawn to and who is open to advances
   // from NPCs, since no AI turn rolls for one here and the console is
@@ -914,6 +922,10 @@ export function PartyPanel({
           </div>
         );
       })}
+
+      {/* Who left the party (issue 503): a departing card dims and files
+          under Gone. */}
+      {campaignId ? <PartyGone campaignId={campaignId} departing={departing} refreshKey={goneRefreshKey} worldPack={worldPack} /> : null}
 
       {campaignId && companionsAvailable && steersStory ? (
         <div className="reveal space-y-1.5">
