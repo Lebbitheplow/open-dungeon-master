@@ -17,7 +17,8 @@
 // the foes' side is played by the DM: a player's command over it lapses
 // while it is there and holds again when it comes back
 // (companion-command.ts commanderOf). A player's own character keeps its
-// player wherever it fights.
+// player wherever it fights, except while a Dominate spell from the other
+// side holds it (companion-command.ts dominatedByFoe, announceDominated).
 //
 // A move works at the start of a fight as well as in one: a sheet not yet in
 // the initiative order is rolled in (its own initiative, the DM's die) and
@@ -122,6 +123,16 @@ function tableNote(campaign: Campaign, content: string) {
   const seq = allocateSeq(campaign.id);
   const message = insertCampaignMessage({ campaignId: campaign.id, seq, authorType: "system", glyph: "cue-battle", content });
   publishWithSeq(campaign.id, seq, "message_added", { message });
+}
+
+// A Dominate spell from the other side has just taken a character
+// (set-condition.ts): the table, its player among them, is told the DM plays
+// it until the charm ends, and every client re-rims it. Returns the line.
+export function announceDominated(campaign: Campaign, name: string): string {
+  const line = `${name} is dominated: the DM plays ${name} until the charm ends.`;
+  tableNote(campaign, line);
+  publishSides(campaign.id);
+  return line;
 }
 
 // Every client redraws the order and re-rims the token from the server's

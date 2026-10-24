@@ -94,7 +94,7 @@ import { handlePcAttack, PC_ATTACK_PARKED, pcAttackTool } from "@/lib/dm/pc-atta
 import { endTurnAsked } from "@/lib/dm/pc-attack-approach";
 import { handleEnemyAttack } from "@/lib/dm/enemy-attack";
 import { isCompanionUserId } from "@/lib/db/users";
-import { dmPlaysTurn, turnUserId } from "@/lib/dm/companion-command";
+import { dmPlaysTurn, dominatedRefusal, turnUserId } from "@/lib/dm/companion-command";
 import { wakeDm } from "@/lib/dm/wake";
 import { resolveSheetRef, unknownSheetRef } from "@/lib/dm/rolls";
 import {
@@ -2010,6 +2010,12 @@ export function endTurnRefusal(campaignId: string, userId: string): string {
   const encounter = getActiveEncounter(campaignId);
   const current = encounter?.orderReady ? encounter.order[encounter.turnIndex] : undefined;
   const campaign = getCampaignById(campaignId);
+  // A dominated character's turn is the DM's (companion-command.ts).
+  const held = current?.kind === "pc" && current.userId === userId ? getSheetById(current.characterId) : null;
+  const dominated = held ? dominatedRefusal(campaignId, held) : null;
+  if (dominated) {
+    return dominated;
+  }
   if (encounter && campaign && current?.kind === "pc" && turnUserId(campaign, current) === userId) {
     const waiting = enemiesOwedTurn(encounter).map((enemy) => enemy.displayName);
     if (waiting.length) {
