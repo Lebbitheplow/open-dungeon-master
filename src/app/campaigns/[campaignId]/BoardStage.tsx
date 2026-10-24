@@ -274,9 +274,12 @@ export const TokenFigure = memo(function TokenFigure({
   const extra = (conditions ?? []).length - badges.length;
   // A flier hovers; the figure whose turn it is stands a little taller.
   const lift = (elevation === "flying" ? -3 : 0) + (isCurrent && !down ? -2 : 0);
+  // A creature on the side its kind does not fight on says so (issue 503).
+  const offSide = token.side === "foe" ? "against the party" : token.side === "party" ? "with the party" : null;
   const title = [
     token.name,
     health ? HEALTH_LABEL[health] ?? health : null,
+    offSide,
     ...(conditions ?? []).map((c) =>
       c.note ? `${c.label} (${c.rounds ? `${c.rounds} rd, ` : ""}${c.note})` : c.rounds ? `${c.label} (${c.rounds})` : c.label,
     ),
@@ -377,6 +380,17 @@ export const TokenFigure = memo(function TokenFigure({
             data-side={token.side}
           />
         )}
+        {/* The side band: the health ring covers the rim, so a creature on
+            the side its kind does not fight on wears that side's colour
+            outside it, over a dark halo that keeps it legible on any ground.
+            It fades in, and from party to foe colour, over 300 ms when the
+            server moves the creature (globals.css .side-band). */}
+        {token.kind === "pc" || token.kind === "enemy" ? (
+          <g className="side-band" opacity={offSide ? 1 : 0} pointerEvents="none" data-side-band={token.side ?? ""}>
+            <circle cx={cx} cy={cy} r={radius + 2.5} fill="none" stroke="#0c0a09" strokeOpacity={0.6} strokeWidth={4.5} />
+            <circle cx={cx} cy={cy} r={radius + 2.5} fill="none" stroke={RING_BY_KIND[rimKind]} strokeWidth={2.5} className="side-band-ring" />
+          </g>
+        ) : null}
         {shownSide.flips > 0 && token.kind !== "prop" ? (
           <circle
             key={shownSide.flips}
