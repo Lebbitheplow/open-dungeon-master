@@ -47,14 +47,12 @@ export const RECRUIT_DC: Record<FriendshipTier, number> = {
 export const SHARED_VALUE_EASE = 2;
 export const MIN_RECRUIT_DC = 5;
 
-// A recruiter works on the companion it has the best chance with, while that
-// chance is a fair one; past it, a player who said pacts may approach them is
-// the likelier ally.
+// A recruiter works on its best chance while that is a fair one; past it, a
+// player who said pacts may approach them is the likelier ally.
 export const FAIR_RECRUIT_DC = 15;
 
-// How far one recruiting moves the recruited down its own ladder: one rung,
-// never past a warning (an ultimatum is the party's to answer, not a
-// recruiter's to set).
+// One recruiting moves the recruited one rung down, never past a warning (an
+// ultimatum is the party's to answer, not a recruiter's to set).
 export const RECRUIT_STEP_CAP = 2;
 
 const BREAKING_RUNG = 4;
@@ -68,9 +66,8 @@ export function sharedValues(a: readonly CompanionValue[], b: readonly Companion
   ).length;
 }
 
-// A companion's regard for the party as a whole: the mean of its standing
-// with each player character it travels with. Null when it has dealt with
-// none of them yet (read as neutral).
+// A companion's regard for the party: the mean of its standing with each
+// player character. Null when it has dealt with none yet (read as neutral).
 export function partyRegard(approvals: readonly number[]): number | null {
   if (!approvals.length) {
     return null;
@@ -109,8 +106,7 @@ export function recruitStyle(personality: NpcPersonality | null): RecruitStyle {
   return personality && personality.boldness >= 1 && personality.composure <= 0 ? "open" : "secret";
 }
 
-// An open argument is made honestly (Persuasion); a private one with
-// whichever the recruiter is better at.
+// An open argument is honest (Persuasion); a private one uses the better.
 export function recruitSkill(style: RecruitStyle, mods: { persuasion: number; deception: number }): { skill: "persuasion" | "deception"; mod: number } {
   if (style === "open" || mods.persuasion >= mods.deception) {
     return { skill: "persuasion", mod: mods.persuasion };
