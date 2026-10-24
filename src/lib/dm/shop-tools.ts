@@ -105,8 +105,8 @@ export const shopTools: ToolDef[] = [
         properties: {
           characterId: { type: "string" },
           shop: { type: "string" },
-          skill: { type: "string", enum: ["persuasion", "intimidation", "deception"], description: "Persuasion when left out." },
-          present: { type: "array", items: { type: "string" }, description: "The other characters at the counter now, who share the result. Leave out anyone elsewhere." },
+          skill: { type: "string", enum: ["persuasion", "intimidation", "deception"] },
+          present: { type: "array", items: { type: "string" }, description: "Others at the counter now, who share the result." },
         },
         required: ["characterId", "shop"],
       },
