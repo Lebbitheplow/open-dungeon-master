@@ -88,6 +88,9 @@ export function answerApproach(campaign: Campaign, proposal: ItemProposal, choic
   const member = { kind: "player" as const, characterId: sheet.id, name: sheet.name, userId: sheet.userId, stance: choice === "play_along" ? ("spy" as const) : ("joined" as const) };
   const members = [...pact.members.filter((entry) => !(entry.kind === "player" && entry.characterId === sheet.id)), member];
   savePact(replan(campaign, { ...pact, members }));
+  // A contentless ping: each seat reads back only what it may (the joiner,
+  // their own pact on the Bonds tab).
+  publishRelationshipsUpdated(campaign.id);
   return choice === "play_along" ? "playing along" : "joined";
 }
 
