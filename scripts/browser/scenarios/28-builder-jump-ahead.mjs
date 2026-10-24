@@ -16,15 +16,16 @@ export default {
     const first = page.locator(`${root}button[aria-label^="Back to step 1"]`).locator("visible=true");
     await eventually(() => first.count(), { timeoutMs: 30_000, label: "the first diamond from the summary" });
     await t.tap(first.first());
-    const name = page.locator(`${root}section[data-active] input[aria-label="Name"]`).locator("visible=true").first();
-    await name.waitFor({ state: "visible", timeout: 30_000 });
+    // Step 1 is the class (backlog F4: how you want to play comes first).
+    const classes = page.locator(`${root}section[data-active] [data-builder-target="class"]`).locator("visible=true").first();
+    await classes.waitFor({ state: "visible", timeout: 30_000 });
 
     // A stored build owes nothing, so Save sits beside Continue on step 1.
     const save = visible(page, root, /^Save changes$/);
     await eventually(() => save.count(), { timeoutMs: 15_000, label: "Save changes on the first step" });
     await t.shot("save-on-step-1");
 
-    // The fifth diamond (spells and gear) is reachable from the first.
+    // The fifth diamond (the name and story) is reachable from the first.
     const ahead = page.locator(`${root}button[aria-label^="Go to step 5"]`).locator("visible=true");
     await eventually(async () => (await ahead.count()) && ahead.first().isEnabled(), {
       timeoutMs: 15_000,
@@ -35,6 +36,9 @@ export default {
     const current = page.locator(`${root}button[aria-current="step"]`).locator("visible=true");
     const label = await current.first().getAttribute("aria-label");
     check(/^Step 5:/.test(label ?? ""), `the jump lands on step 5 (${label})`);
+    const name = page.locator(`${root}section[data-active] input[aria-label="Name"]`).locator("visible=true").first();
+    await name.waitFor({ state: "visible", timeout: 15_000 });
+    check((await name.inputValue()).trim().length > 0, "the stored name is on the identity step");
     // And straight back by the first diamond.
     await t.tap(page.locator(`${root}button[aria-label^="Back to step 1"]`).locator("visible=true").first());
     await sleep(400);

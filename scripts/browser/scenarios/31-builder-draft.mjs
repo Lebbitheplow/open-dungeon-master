@@ -1,7 +1,8 @@
 // A new character's progress survives a reload: the builder keeps it on the
 // device and offers it back with Resume, on the step it was left, and Start
-// fresh throws it away. The library's new-character page is a native screen
-// in the app too.
+// fresh throws it away. A draft kept under the step order before backlog F4
+// resumes on the step it was left, not on the one now at its place. The
+// library's new-character page is a native screen in the app too.
 import { check, eventually, sleep } from "../lib.mjs";
 
 const visible = (page, root, text) =>
@@ -19,19 +20,18 @@ export default {
   viewports: ["desktop", "phone"],
   async run(t) {
     const { page, root } = t;
-    const hero = `Draft Keeper ${t.viewport}${t.app ? " app" : ""}`;
     await t.open("/characters/new");
     // A draft an earlier viewport left is not this one's.
     const fresh = visible(page, root, /^Start fresh$/);
     if (await fresh.count()) {
       await t.tap(fresh.first());
     }
-    const name = page.locator(`${root}input[aria-label="Name"]`).locator("visible=true").first();
-    await name.waitFor({ state: "visible", timeout: 30_000 });
-    await name.fill(hero);
-    // No background is picked for the player, and the first step owes one.
-    await t.tap(page.locator(`${root}section[data-active] [data-builder-target="background"] button[aria-haspopup="listbox"]`).locator("visible=true").first());
-    await t.tap(page.locator(`${root}[role="option"]`).filter({ hasText: "Soldier" }).locator("visible=true").first());
+    // The class is the first step and needs no name (backlog F4): a
+    // barbarian owes only its two skills, which the step suggests.
+    const barbarian = page.locator(`${root}section[data-active] .creator-card[aria-label^="Barbarian"]`).locator("visible=true").first();
+    await barbarian.waitFor({ state: "visible", timeout: 30_000 });
+    await t.tap(barbarian);
+    await t.tap(page.locator(`${root}section[data-active] [data-suggest-skills]`).locator("visible=true").first());
     await t.tap(visible(page, root, /^Continue/).first());
     await sleep(900);
     // The first lineage card on the Ancestry step.
@@ -45,15 +45,34 @@ export default {
     const resume = visible(page, root, /^Resume$/);
     await eventually(() => resume.count(), { timeoutMs: 15_000, label: "the Resume offer after a reload" });
     const offer = (await page.locator(`${root}[role="status"]`).filter({ hasText: "unfinished character" }).first().innerText()).replace(/\s+/g, " ");
-    check(offer.includes(hero) && /step 2 of 6/.test(offer), `the offer names the hero and its step (${offer})`);
+    check(/step 2 of 6/.test(offer), `the offer says its step (${offer})`);
     await t.shot("offer");
     await t.tap(resume.first());
-    await eventually(async () => (await name.inputValue()) === hero, { timeoutMs: 10_000, label: "the name back" });
-    const current = await page.locator(`${root}button[aria-current="step"]`).locator("visible=true").first().getAttribute("aria-label");
-    check(/^Step 2:/.test(current ?? ""), `resumed on step 2 (${current})`);
+    const current = () => page.locator(`${root}button[aria-current="step"]`).locator("visible=true").first().getAttribute("aria-label");
+    await eventually(async () => /^Step 2:/.test((await current()) ?? ""), { timeoutMs: 10_000, label: "resumed on step 2" });
     const chosen = await page.locator(`${root}section[data-active] .creator-card[aria-pressed="true"]`).first().getAttribute("aria-label");
     check(chosen === lineage, `the lineage picked before the reload is picked again (${chosen}, was ${lineage})`);
     await t.shot("resumed");
+
+    // A draft kept before the new order counted its steps by place, the
+    // class third: it resumes on the class, not on the step now third.
+    await sleep(800);
+    const rewritten = await page.evaluate(() => {
+      const key = "odm:builder-draft:library";
+      const draft = JSON.parse(window.localStorage.getItem(key) ?? "null");
+      if (!draft?.fields) return false;
+      window.localStorage.setItem(key, JSON.stringify({ v: 1, savedAt: Date.now(), step: 2, fields: draft.fields }));
+      return true;
+    });
+    check(rewritten, "a kept draft to rewrite as an old one");
+    await reopen(t);
+    await eventually(() => resume.count(), { timeoutMs: 15_000, label: "the Resume offer for an old draft" });
+    const old = (await page.locator(`${root}[role="status"]`).filter({ hasText: "unfinished character" }).first().innerText()).replace(/\s+/g, " ");
+    check(/step 1 of 6/.test(old), `the old draft's offer names the class step (${old})`);
+    await t.tap(resume.first());
+    await eventually(async () => /^Step 1:/.test((await current()) ?? ""), { timeoutMs: 10_000, label: "the old draft resumed on the class step" });
+    const klass = await page.locator(`${root}section[data-active] .creator-card[aria-pressed="true"]`).first().getAttribute("aria-label");
+    check(/^Barbarian/.test(klass ?? ""), `the class picked before is picked again (${klass})`);
 
     // Start fresh forgets it.
     await reopen(t);
@@ -61,7 +80,7 @@ export default {
     await t.tap(visible(page, root, /^Start fresh$/).first());
     await sleep(300);
     await reopen(t);
-    await name.waitFor({ state: "visible", timeout: 30_000 });
+    await barbarian.waitFor({ state: "visible", timeout: 30_000 });
     await sleep(800);
     check((await visible(page, root, /^Resume$/).count()) === 0, "Start fresh leaves no draft to resume");
   },
