@@ -26,6 +26,7 @@ import { canonicalRaceId } from "@/lib/content/race-options";
 import type { AbilityMethod, AbilityState } from "./AbilityEditor";
 import type { PoolEntry, PoolSlots } from "./abilityDice";
 import { reconcilePicks, type BuilderPicks, type DroppedPick } from "./reconcile";
+import { undoOutcome, type BuildUndo, type UndoBecause } from "./buildUndo";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
 import { keyedFeatChoices, withFeatChoice } from "@/lib/schemas/sheet";
 import { textKey } from "@/lib/language/text-logic";
@@ -291,6 +292,19 @@ export function useBuilderState({
   // notice or the next change replaces it (issue #124: reconcilePicks named
   // them and nothing showed the list).
   const [dropped, setDropped] = useState<DroppedNotice | null>(null);
+  // The fields as they stood before the last class, race, subclass or level
+  // change that set picks aside (backlog F12), until "Put it back", another
+  // pick, or the player leaving the step (CharacterBuilder.tsx) ends it.
+  const [undo, setUndo] = useState<BuildUndo | null>(null);
+  const undoCount = useRef(0);
+  // Kept from an event handler, before the change's own setters run: the
+  // render's fields are the ones the change is about to replace.
+  function keepUndo(because: UndoBecause, from: string, to: string) {
+    undoCount.current += 1;
+    setUndo({ id: undoCount.current, because, from, to, fields: draftFields, dropped, after: null });
+  }
+  const raceName = (id: string) => findRace(races, id)?.name ?? id;
+  const className = (id: string) => classes.find((entry) => entry.id === id)?.name ?? id;
 
   // The picks that depend on an earlier choice, gathered so one call can
   // check them all against the current race, class, background and level
@@ -483,6 +497,9 @@ export function useBuilderState({
     if (id === raceId) {
       return;
     }
+    if (raceId) {
+      keepUndo("race", raceName(raceId), raceName(id));
+    }
     setRaceId(id);
     applyChange(
       "race",
@@ -507,6 +524,9 @@ export function useBuilderState({
   function changeClass(id: string) {
     if (id === classId) {
       return;
+    }
+    if (classId) {
+      keepUndo("class", className(classId), className(id));
     }
     setClassId(id);
     setRemovedAutoNames([]);
@@ -538,11 +558,34 @@ export function useBuilderState({
     applyChange("background", { backgroundId: id }, { ...picks, backgroundSkills: [] });
   }
   function changeSubclass(name: string) {
+    if (subclass && textKey(name) !== textKey(subclass)) {
+      keepUndo("subclass", subclass, name || "no subclass");
+    }
     applyChange("subclass", {}, { ...picks, subclass: name });
   }
+  // A level change keeps every pick that still fits, so only one that sets
+  // some aside (a 3rd-level spell at level 1) is kept to put back.
   function changeLevel(next: number) {
+    const result = reconciled({ level: next }, picks);
+    if (result.drops.length && next !== level) {
+      keepUndo("level", `level ${level}`, `level ${next}`);
+    }
     setLevel(next);
-    applyChange("level", { level: next }, picks);
+    applyReconciled("level", result);
+  }
+  // "Put it back": the old choice and every pick that went with it, set as
+  // they were (no reconcile: they were checked against each other then),
+  // with the notice that was showing before the change.
+  function putBack() {
+    if (!undo) {
+      return;
+    }
+    setFields(undo.fields);
+    setDropped(undo.dropped);
+    setUndo(null);
+  }
+  function clearUndo() {
+    setUndo(null);
   }
   function dismissDropped() {
     setDropped(null);
@@ -620,6 +663,7 @@ export function useBuilderState({
   // draft's.
   function restoreDraft(draft: Partial<BuilderDraftFields>) {
     setFields(draft);
+    setUndo(null);
   }
 
   // What one round of a quick-build fill wrote (quickBuild.ts). The fill
@@ -683,6 +727,17 @@ export function useBuilderState({
     hpOverride,
     acOverride,
   };
+  // The undo ends with the next pick: the change's first render records the
+  // fields it left, and any later difference clears it. Set while
+  // rendering, React's pattern for state that follows other state.
+  if (undo) {
+    const outcome = undoOutcome(undo, JSON.stringify(draftFields));
+    if (outcome === "record") {
+      setUndo({ ...undo, after: JSON.stringify(draftFields) });
+    } else if (outcome === "clear") {
+      setUndo(null);
+    }
+  }
 
   return {
     draftFields,
@@ -740,6 +795,7 @@ export function useBuilderState({
     acOverride, setAcOverride,
     localError, setLocalError,
     dropped, dismissDropped,
+    undo, putBack, clearUndo,
   };
 }
 

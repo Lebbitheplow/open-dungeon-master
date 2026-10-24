@@ -44,6 +44,8 @@ import { builderActions, useBuilderDerived } from "./useBuilderDerived";
 import { BuildMathPanel } from "./BuildMathPanel";
 import { useArchetypeOptions, useBuilderOptions, useWorldPack, type OptionListKind } from "./useBuilderOptions";
 import { TableScopeNote } from "./TableScopeNote";
+import { UndoChangeBar } from "./UndoChangeBar";
+import { putBackMessage, undoMessage } from "./buildUndo";
 import { summaryRows, type SummaryRowKey } from "./summary";
 import { ALIGNMENT_LABELS } from "./usePickerGroups";
 import { listWords, unofferedPicks } from "./unoffered";
@@ -321,6 +323,34 @@ function CharacterBuilderForm({
   if (step === STEP_ORDER.length - 1 && !summarySeen) {
     setSummarySeen(true);
   }
+  // The step a "Put it back" was offered on (backlog F12): leaving it ends
+  // the undo. Followed while rendering, as summarySeen above is.
+  const [undoAt, setUndoAt] = useState<{ id: number; step: number } | null>(null);
+  // What the live region says once the old choice is back. It stays
+  // mounted, so a screen reader hears the bar arrive without focus moving
+  // to it.
+  const [putBackSaid, setPutBackSaid] = useState("");
+  if (state.undo && undoAt?.id !== state.undo.id) {
+    setUndoAt({ id: state.undo.id, step });
+    setPutBackSaid("");
+  } else if (state.undo && undoAt && undoAt.step !== step) {
+    state.clearUndo();
+  }
+  const undoSaid = state.undo ? undoMessage(state.undo) : putBackSaid;
+  function putBack() {
+    if (!state.undo) {
+      return;
+    }
+    setPutBackSaid(putBackMessage(state.undo));
+    state.putBack();
+    // The bar goes with the undo; focus goes to the step's heading rather
+    // than being dropped on the page.
+    window.setTimeout(() => {
+      document
+        .querySelector<HTMLElement>(`[data-builder-root="${rootId}"] section[data-active] .wizard-step-heading`)
+        ?.focus({ preventScroll: true });
+    }, 0);
+  }
   const [cameFrom, setCameFrom] = useState<SummaryRowKey | null>(null);
   const [returnTo, setReturnTo] = useState<{ row: SummaryRowKey } | null>(null);
   function backToSummary(from: string) {
@@ -527,6 +557,12 @@ function CharacterBuilderForm({
   // The summary holds Save on the first pick owed anywhere, and its Show me
   // goes to that pick's step and field, as a row's Fix does.
   const firstOwed = blockers.identity ?? blockers.ancestry ?? blockers.calling ?? blockers.abilities ?? blockers.spells;
+  // "Put it back" on the step the change was made on, first in its content
+  // (backlog F12).
+  const undoBar = (key: string) =>
+    state.undo && undoAt?.id === state.undo.id && STEP_ORDER[undoAt.step] === key ? (
+      <UndoChangeBar undo={state.undo} onPutBack={putBack} />
+    ) : null;
   const owedLine = (blocks: typeof owed.identity) => (
     <OwedLine picks={owedPicks(blocks)} onShow={locate} onFill={fill.running ? undefined : () => startFill()} />
   );
@@ -580,6 +616,7 @@ function CharacterBuilderForm({
       ...gate(blockers.identity),
       content: (
         <>
+          {undoBar("identity")}
           {owedLine(owed.identity)}
           <IdentityStep
             state={state}
@@ -617,6 +654,7 @@ function CharacterBuilderForm({
       continueLabel: race ? `Continue as ${race.name}` : undefined,
       content: (
         <>
+          {undoBar("ancestry")}
           {owedLine(owed.ancestry)}
           <AncestryStep
             state={state}
@@ -638,6 +676,7 @@ function CharacterBuilderForm({
       ...gate(blockers.calling),
       content: (
         <>
+          {undoBar("calling")}
           {owedLine(owed.calling)}
           <CallingStep
             state={state}
@@ -669,6 +708,7 @@ function CharacterBuilderForm({
       ...gate(blockers.abilities),
       content: (
         <>
+          {undoBar("abilities")}
           {owedLine(owed.abilities)}
           <AbilitiesStep
             state={state}
@@ -688,6 +728,7 @@ function CharacterBuilderForm({
       ...gate(blockers.spells),
       content: (
         <>
+          {undoBar("spells-gear")}
           {owedLine(owed.spells)}
           <SpellsGearStep
             state={state}
@@ -772,6 +813,9 @@ function CharacterBuilderForm({
     // A bounded height so each step scrolls on its own and the Continue
     // button stays put; the fallback keeps a usable pane on a short phone.
     <div data-builder-root={rootId} className={cn("flex h-[max(30rem,calc(100dvh-14rem))] flex-col text-sm", className)}>
+      <p role="status" data-build-undo-said="" className="sr-only">
+        {undoSaid}
+      </p>
       {unofferedText ? (
         <p role="alert" className="reveal mb-3 shrink-0 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
           {unofferedText}
