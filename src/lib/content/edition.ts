@@ -7,7 +7,7 @@
 // pack built before that (PACK_REVISION 0) from serving them either.
 //
 // No "@/" imports: the importer loads this file directly.
-import { textKey } from "../language/text-logic";
+import { textKey } from "../language/text-logic.ts";
 
 export const EDITION_2024_DOCUMENTS: ReadonlySet<string> = new Set(["srd-2024", "open5e-2024"]);
 
