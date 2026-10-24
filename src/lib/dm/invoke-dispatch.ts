@@ -23,6 +23,7 @@ import {
   handleSummonPet,
 } from "@/lib/dm/pet-tools";
 import { handleRecallStory } from "@/lib/dm/recall";
+import { handleRelationshipScheme } from "@/lib/dm/scheme-tools";
 import {
   handleRelationshipBeat,
   handleRelationshipEnd,
@@ -167,6 +168,8 @@ export async function dispatchAdjudication(
       return handleRomanceAdvance(campaign, turn, rawArguments, sheets, sheetsById);
     case "relationship_end":
       return handleRelationshipEnd(campaign, rawArguments, sheets, sheetsById);
+    case "relationship_scheme":
+      return handleRelationshipScheme(campaign, rawArguments, sheets, sheetsById);
     case "roll_treasure":
       return handleRollTreasure(campaign, turn, rawArguments, sheets, sheetsById);
     case "travel":

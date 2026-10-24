@@ -370,7 +370,7 @@ export const WORLD_ADJUDICATIONS: CatalogEntry[] = [
         help: "Off the board; left empty, the current location and the hour decide.",
       },
       { name: "againstEnemyId", label: "Hiding (enemy)", kind: "enemy", help: "The server rolls its Stealth (or Deception for Insight) as the DC." },
-      { name: "againstMonster", label: "Hiding (stat block)", kind: "text", placeholder: "goblin", help: "Out of a fight: the creature's stat block by name." },
+      { name: "againstMonster", label: "Hiding or lying (stat block or NPC)", kind: "text", placeholder: "goblin", help: "Out of a fight: the creature's stat block by name, or for Insight a tracked NPC's name. Whoever beats an NPC's act is told privately." },
       { name: "characterIds", label: "Who might notice", kind: "characters" },
       {
         name: "about",
@@ -532,6 +532,38 @@ export const SOCIAL_ADJUDICATIONS: CatalogEntry[] = [
           { value: "death", label: "Death" },
         ],
       },
+      {
+        name: "by",
+        label: "Who betrayed whom",
+        kind: "select",
+        options: [
+          { value: "character", label: "The character betrayed them" },
+          { value: "npc", label: "The NPC betrayed the character" },
+        ],
+        help: "Betrayal only. An NPC's betrayal costs nothing of their regard, and an act they kept up comes out.",
+      },
+      NOTE,
+    ],
+  },
+  {
+    name: "relationship_scheme",
+    label: "An NPC's act",
+    category: "social",
+    summary: "An NPC only pretends to care for a character open to advances, or the truth comes out.",
+    fields: [
+      {
+        name: "action",
+        label: "What happens",
+        kind: "select",
+        required: true,
+        options: [
+          { value: "start", label: "The act begins" },
+          { value: "reveal", label: "The truth comes out" },
+        ],
+      },
+      { name: "characterId", label: "Aimed at", kind: "character", required: true, help: "A character whose player opened them to advances from NPCs." },
+      { name: "subject", label: "NPC", kind: "text", required: true, help: "Their name as the table tracks it. They must be drawn to the character, and the character to them." },
+      { name: "motive", label: "What they really want", kind: "text", placeholder: "the vault key", help: "To start. Yours alone: no player sees it, the party lead included." },
       NOTE,
     ],
   },

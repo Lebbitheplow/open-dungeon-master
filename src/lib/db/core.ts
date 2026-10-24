@@ -2201,6 +2201,14 @@ function ensureSchema(db: SqliteDatabase) {
     ["advance_cooldown_until", `INTEGER NOT NULL DEFAULT 0`],
   ]);
 
+  addColumns("relationships", [
+    // An NPC's act toward this character (src/lib/dm/scheme-logic.ts, issue
+    // 501): {motive, shown, started, exposedTo, revealed}, '' = none. A
+    // storyteller secret: only the AI and a person running the table read
+    // the motive and the true meter (src/lib/dm/viewer.ts).
+    ["pretense_json", `TEXT NOT NULL DEFAULT ''`],
+  ]);
+
   addColumns("campaigns", [
     // AI turns finished at this table, the clock NPC advances count in
     // (issue 501). Bumped after every successful AI turn, whatever the

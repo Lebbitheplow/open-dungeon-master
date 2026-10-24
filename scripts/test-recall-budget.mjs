@@ -230,7 +230,13 @@ await test("an Ask frees its agent session when it is done, so Asks in a row nev
 
 await test("the lore check does the same", async () => {
   const check = () =>
-    runLoreCheck({ campaignId: campaign.id, messageId: lastDm.id, selection: "The Lantern Mill never burned.", category: "contradicts_lore" });
+    runLoreCheck({
+      campaignId: campaign.id,
+      messageId: lastDm.id,
+      selection: "The Lantern Mill never burned.",
+      category: "contradicts_lore",
+      viewer: { ownedCharacterIds: [], dmSecrets: true, storytellerSecrets: false },
+    });
   await atWindow(8_000, async () => {
     globalThis.__odmFakeHarnessLog = [];
     await check();

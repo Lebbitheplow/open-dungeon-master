@@ -9,6 +9,7 @@ import { conscienceOn, settleCompanion, worstApproval, type ConscienceMove } fro
 import { RUNG_WORD, stepLadder, type LadderStep } from "@/lib/dm/conscience-logic";
 import { deedVerdict, SEVERITY_FACTOR, type DeedSeverity, type DeedVerdict } from "@/lib/dm/companion-values-logic";
 import type { Subject } from "@/lib/dm/relationship-subject";
+import { actAfterBeat, actFaceValue, actRunning, outwardApproval } from "@/lib/dm/scheme-logic";
 import {
   addFlag,
   addMemory,
@@ -95,7 +96,7 @@ export function landBeat(
   const spec = beatSpec(beat)!;
   const alignment = beatAlignment(spec, subject.personality);
   const weighed = beatDelta(beat, outcome, {
-    approval: relationship.approval,
+    approval: outwardApproval(relationship),
     repeats: relationship.beats[beat] ?? 0,
     personality: subject.personality,
     hostile: subject.hostile,
@@ -109,14 +110,21 @@ export function landBeat(
   // Where they stood before it: a breach steps down from there.
   const worstBefore = companion ? worstApproval(campaign.id, companion.name, sheets) : null;
   const approval = applyApproval(relationship.approval, delta);
+  // While an NPC keeps up an act (issue 501), a warm beat lands on the
+  // warmth shown at its face value, whatever they truly feel, and a cold one
+  // moves both (src/lib/dm/scheme-logic.ts actAfterBeat); a romance the act
+  // carries holds by that warmth.
+  const running = actRunning(relationship.pretense) ? relationship.pretense : null;
+  const act = running ? actAfterBeat(running, actFaceValue(spec.base, relationship.beats[beat] ?? 0), relationship.approval, approval) : null;
   // The beats worth remembering are the ones that changed something.
   const memorable = beat === "intimacy" || beat === "betrayal" || Math.abs(delta) >= 7;
   const updated =
     patchRelationship(relationship.id, {
       approval,
-      romance: demoteRomance(relationship.romance, approval),
+      romance: demoteRomance(relationship.romance, act ? act.shown : approval),
       beats: { ...relationship.beats, [beat]: (relationship.beats[beat] ?? 0) + 1 },
       ...(beat === "intimacy" ? { flags: addFlag(relationship.flags, "intimacy") } : {}),
+      ...(act ? { pretense: act } : {}),
       ...(memorable && note?.trim()
         ? { memories: addMemory(relationship.memories, { kind: beat, text: note.trim(), at: new Date().toISOString() }) }
         : {}),

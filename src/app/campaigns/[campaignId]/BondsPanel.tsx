@@ -1,8 +1,8 @@
 "use client";
 
 import { EmptyState } from "@/components/EmptyState";
-import { Heart, HeartCrack } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { Heart, HeartCrack, VenetianMask } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { InfoButton } from "@/components/ui/InfoDialog";
 import { SectionHead } from "@/components/ui/SectionHead";
@@ -25,6 +25,11 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 // A lasting companion's row also carries its conscience (issue 503): the
 // ladder from content to the breaking point and any ultimatum, which every
 // seat sees, since the companion says them aloud.
+// An NPC's act (issue 501, src/lib/dm/scheme-logic.ts) reads as the warmth
+// it shows until the server says otherwise: an Insight that beat it, told to
+// that player alone ("Seen through"), or the truth out to everyone
+// ("Unmasked"). Then the row's standing turns to the truth where the player
+// can see it happen. Whoever runs the story reads the act on every row.
 
 type RelationshipView = {
   id: string;
@@ -41,6 +46,12 @@ type RelationshipView = {
   approval?: number;
   // A lasting companion's conscience rung and any ultimatum (issue 503).
   conscience?: ConscienceView;
+  // This viewer's character saw through an NPC's act: the row is the truth.
+  seenThrough?: boolean;
+  // The act came out to everyone.
+  unmasked?: boolean;
+  // The storyteller's own view of an act (never sent to a player).
+  act?: { motive: string; shown: number; shownTier: FriendshipTier; seenThroughBy: string[]; revealed: boolean };
 };
 
 // Warm for regard, cold for its absence; mirrors how the tiers read.
@@ -107,7 +118,51 @@ function RomanceRung({ stage, ended }: { stage: RomanceStage; ended: boolean }) 
   );
 }
 
+// The moment a row turns to the truth: once, when the server's answer
+// changes it while the row is on screen (never on the model's words, and
+// not again on a later look). The number, where the viewer reads one,
+// counts from the act's warmth to the truth; reduced motion shows the truth
+// at once, its colour and words included.
+function useUnmasking(bond: RelationshipView): { unmasking: boolean; shownApproval: number | undefined } {
+  const exposed = Boolean(bond.seenThrough || bond.unmasked);
+  const before = useRef<{ exposed: boolean; approval: number | undefined }>({ exposed, approval: bond.approval });
+  const [unmasking, setUnmasking] = useState(false);
+  const [counted, setCounted] = useState<number | undefined>(undefined);
+  useEffect(() => {
+    const was = before.current;
+    before.current = { exposed, approval: bond.approval };
+    if (!exposed || was.exposed) {
+      return;
+    }
+    setUnmasking(true);
+    const done = window.setTimeout(() => setUnmasking(false), 900);
+    const from = was.approval;
+    const to = bond.approval;
+    let frame = 0;
+    if (from !== undefined && to !== undefined && from !== to && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      const start = performance.now();
+      const step = (now: number) => {
+        const t = Math.min(1, (now - start) / 600);
+        const eased = 1 - Math.pow(1 - t, 3);
+        setCounted(t >= 1 ? undefined : Math.round(from + (to - from) * eased));
+        if (t < 1) {
+          frame = window.requestAnimationFrame(step);
+        }
+      };
+      frame = window.requestAnimationFrame(step);
+    }
+    return () => {
+      window.clearTimeout(done);
+      window.cancelAnimationFrame(frame);
+      setUnmasking(false);
+      setCounted(undefined);
+    };
+  }, [exposed, bond.approval]);
+  return { unmasking, shownApproval: counted ?? bond.approval };
+}
+
 function BondRow({ bond }: { bond: RelationshipView }) {
+  const { unmasking, shownApproval } = useUnmasking(bond);
   return (
     <li className="panel rounded-lg px-2.5 py-2" data-bond-row={bond.subjectName}>
       <div className="flex items-center gap-2">
@@ -128,13 +183,14 @@ function BondRow({ bond }: { bond: RelationshipView }) {
         </span>
         <span
           className={cn(
-            "shrink-0 rounded-full border px-2 py-0.5 text-[11px]",
+            "bond-truth shrink-0 rounded-full border px-2 py-0.5 text-[11px]",
             TIER_STYLES[bond.tier],
           )}
+          data-unmasking={unmasking || undefined}
           title={bond.tierLabel}
         >
           {TIER_WORD[bond.tier]}
-          {bond.approval === undefined ? "" : ` ${bond.approval > 0 ? "+" : ""}${bond.approval}`}
+          {shownApproval === undefined ? "" : ` ${shownApproval > 0 ? "+" : ""}${shownApproval}`}
         </span>
         {bond.romance !== "none" ? (
           <span
@@ -152,12 +208,46 @@ function BondRow({ bond }: { bond: RelationshipView }) {
       </div>
       {bond.romance !== "none" ? <RomanceRung stage={bond.romance} ended={bond.status === "ended"} /> : null}
       {bond.conscience ? <ConscienceLadder name={bond.subjectName} conscience={bond.conscience} /> : null}
+      {bond.seenThrough || bond.unmasked ? (
+        <p
+          className="bond-unmask-chip mt-1.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs leading-5 text-violet-300"
+          data-bond-unmasked={bond.unmasked ? "all" : "you"}
+        >
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-violet-800/60 bg-violet-950/30 px-2 py-0.5 text-[11px] text-violet-200">
+            <VenetianMask className="size-3" aria-hidden />
+            {bond.unmasked ? "Unmasked" : "Seen through"}
+          </span>
+          <span>
+            {bond.unmasked
+              ? `The truth came out: ${bond.subjectName}'s warmth was an act.`
+              : `Only you know: ${bond.subjectName}'s warmth toward ${bond.characterName} is an act. This is where they really stand.`}
+          </span>
+        </p>
+      ) : null}
+      {bond.act ? <ActLine bond={bond} act={bond.act} /> : null}
       {bond.history.length ? (
         <p className="reveal mt-1 text-xs leading-5 text-stone-400">
           {bond.history[bond.history.length - 1]}
         </p>
       ) : null}
     </li>
+  );
+}
+
+// What whoever runs the story reads on a row with an act: the warmth the
+// table sees, the motive, and who has seen through it. Visible text, not a
+// tooltip, so it reads the same by touch and to a screen reader.
+function ActLine({ bond, act }: { bond: RelationshipView; act: NonNullable<RelationshipView["act"]> }) {
+  return (
+    <p className="mt-1 flex items-start gap-1.5 text-xs leading-5 text-violet-300" data-bond-act={bond.subjectName}>
+      <VenetianMask className="mt-0.5 size-3 shrink-0" aria-hidden />
+      <span>
+        {act.revealed ? "Was an act" : `An act: the table sees ${TIER_WORD[act.shownTier]} ${act.shown > 0 ? "+" : ""}${act.shown}`}
+        {act.motive ? `. Wants ${act.motive}` : ""}
+        {act.seenThroughBy.length && !act.revealed ? `. Seen through by ${act.seenThroughBy.join(", ")}` : ""}.
+        <span className="sr-only"> Only you see this.</span>
+      </span>
+    </p>
   );
 }
 

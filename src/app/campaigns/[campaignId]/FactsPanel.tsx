@@ -7,7 +7,7 @@ import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { cn } from "@/lib/cn";
 import type { WorldFact } from "@/lib/db/facts";
-import { FACT_CATEGORIES, type FactCategory } from "@/lib/dm/fact-logic";
+import { FACT_CATEGORIES, isSecretFact, isStorytellerFact, type FactCategory } from "@/lib/dm/fact-logic";
 import { KitButton, PanelError, RowMenu, panelField, panelRow } from "./PanelKit";
 import { DictateField } from "@/components/DictateField";
 import { appendDictation } from "@/lib/dictation";
@@ -128,8 +128,8 @@ function FactCard({
             {fact.fact}
           </p>
           <div className="mt-1 flex min-h-6 items-center gap-2 text-[11px] text-stone-500">
-            <span className={fact.knownBy === "dm" ? "text-violet-300" : undefined}>
-              {fact.knownBy === "dm" ? "DM secret" : CATEGORY_LABELS[fact.category]}
+            <span className={isSecretFact(fact.knownBy) ? "text-violet-300" : undefined}>
+              {isStorytellerFact(fact.knownBy) ? "Storyteller secret" : isSecretFact(fact.knownBy) ? "DM secret" : CATEGORY_LABELS[fact.category]}
             </span>
             {steersStory ? (
               <span className="ml-auto flex shrink-0 items-center gap-0.5">
@@ -265,7 +265,7 @@ export function FactsPanel({
       if (response.ok) {
         const data = await response.json();
         setSecrets(
-          ((data.facts ?? []) as WorldFact[]).filter((fact) => fact.knownBy === "dm"),
+          ((data.facts ?? []) as WorldFact[]).filter((fact) => isSecretFact(fact.knownBy)),
         );
       }
     } catch {

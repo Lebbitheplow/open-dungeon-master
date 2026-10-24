@@ -1,4 +1,5 @@
 import { advanceRulesLine, openToAdvanceNames } from "@/lib/dm/advance-logic";
+import { STORYTELLER_SECRET } from "@/lib/dm/viewer";
 import { attractionWords } from "@/lib/attraction";
 import { READIED, READIED_WORDS, RELEASE_TOOLS, readiedHeld } from "@/lib/dm/readied-kinds";
 import type { Campaign } from "@/lib/db/campaigns";
@@ -282,6 +283,17 @@ export type DmGameState = {
   // Server-tracked standing between each character and each NPC/companion,
   // one bounded line each (src/lib/dm/relationship-logic.ts).
   relationships?: string[];
+  // The storyteller's own secrets, one formatted line each: who is open to
+  // advances, an NPC ready to make a move, an NPC's act and its motive
+  // (src/lib/dm/scheme-tools.ts storytellerLinesForPrompt). Rendered as one
+  // section, kept on storytellerBlock, and costed as its own context-trace
+  // row tagged STORYTELLER_SECRET (src/lib/dm/viewer.ts), which the Context
+  // tab leaves out for the lead. #503's stored intents and pacts belong here.
+  storytellerLines?: string[];
+  storytellerBlock?: string;
+  // A prompt whose answer goes to the whole table (an out-of-character
+  // answer): built without the storyteller's secrets.
+  withholdStorytellerSecrets?: boolean;
   // Private one-way notes the DM already sent via send_whisper, so it
   // remembers its own secrets across turns.
   recentWhispers?: Array<{ to: string; content: string }>;
@@ -795,11 +807,10 @@ export function buildGameStateBlock(state: DmGameState): string {
   const { campaign, members, sheets, recentRolls, storySummary } = state;
   const usernamesById = new Map(members.map((member) => [member.userId, member.username]));
   const physicalDiceUsers = realDiceUserIds(campaign, members);
-  // Who people are drawn to rides at a romance table, the advances opt-in
-  // where the safety tools allow advances (issue 501). Optional all the way
-  // down: test doubles build partial campaigns.
+  // Who people are drawn to rides at a romance table (issue 501). Who is
+  // open to advances is a storyteller secret, said in that section. Optional
+  // all the way down: test doubles build partial campaigns.
   const romanceOn = campaign.gameSettings?.relationships !== "off" && campaign.gameSettings?.romance !== "off";
-  const advancesOn = Boolean(campaign.gameSettings) && openToAdvanceNames(campaign, sheets).length > 0;
 
   const rollLines = recentRolls.slice(-5).map((roll) => {
     const sheet = sheets.find((entry) => entry.id === roll.characterId);
@@ -1159,6 +1170,12 @@ export function buildGameStateBlock(state: DmGameState): string {
         .join("\n")}`,
     );
   }
+  // In the moment, not the cached prefix: an NPC ready to make a move comes
+  // and goes turn by turn, as the director's notes do.
+  if (state.storytellerLines?.length && !state.withholdStorytellerSecrets) {
+    state.storytellerBlock = `Storyteller secrets (yours alone: never said or hinted at the table, in narration, a note or an out-of-character answer, and no player sees them, the party lead included):\n${state.storytellerLines.join("\n")}`;
+    moment.push(state.storytellerBlock);
+  }
   if (state.recentWhispers?.length) {
     sections.push(
       `Private whispers you already sent (secret; only the named players saw them; never reveal, quote, or hint at them in shared narration):\n${state.recentWhispers
@@ -1223,7 +1240,6 @@ export function buildGameStateBlock(state: DmGameState): string {
             authors: spellAuthorsFor(state.campaign),
             compact: Boolean(state.ruleContext),
             romance: romanceOn,
-            advances: advancesOn,
           },
         );
         const events = state.recentEventsByCharacter?.get(sheet.id);
@@ -1690,6 +1706,12 @@ export function buildDmMessages(
   // (src/lib/dm/turn.ts handleMoreTools).
   const compactRules = state.ruleContext ?? null;
   const mode = companionMode(state.campaign);
+  // Who is open to advances is a storyteller secret (src/lib/dm/viewer.ts):
+  // the rules name them only in a prompt the storyteller's answer comes
+  // from, and the line is costed with the storyteller's own trace row.
+  const openNames = state.withholdStorytellerSecrets ? [] : openToAdvanceNames(state.campaign, state.sheets);
+  const secretRules = advanceRulesLine(openNames);
+  let rulesCarrySecret = false;
   if (mode !== "off" && (!compactRules || compactRules.groups.has("companions") || state.sheets.some((sheet) => sheet.isCompanion))) {
     settingsRules.push(companionRules(state.campaign, mode));
   }
@@ -1698,9 +1720,10 @@ export function buildDmMessages(
     (!compactRules || compactRules.groups.has("relationships") || (state.relationships?.length ?? 0) > 0)
   ) {
     settingsRules.push(
-      relationshipRules(state.campaign.gameSettings.romance !== "off", openToAdvanceNames(state.campaign, state.sheets)),
+      relationshipRules(state.campaign.gameSettings.romance !== "off", openNames),
       tableConscienceRules(state.campaign, state.sheets),
     );
+    rulesCarrySecret = Boolean(secretRules);
   }
   const dmSystem = buildDmSystem(state.campaign, settingsRules, state.ruleContext ?? null);
   const fightRules = state.encounter ? encounterRulesText(tracksAmmunition(state.campaign), state.ruleContext ?? null) : "";
@@ -1738,6 +1761,12 @@ export function buildDmMessages(
   // prompt is the messages with them added on.
   const toolTokens = state.toolTokens ?? 0;
   const safetyTokens = estimateTokens(renderSafetyBlock(normalizeSafety(state.campaign.gameSettings.safety)));
+  // The storyteller's secrets, wherever they sit: carved out of the rows
+  // that hold them into one row of their own, tagged so the Context tab
+  // leaves it out, tokens and all, for the lead (context-budget.ts
+  // traceForViewer). Only when the rules carry the line at all.
+  const secretRulesTokens = rulesCarrySecret ? estimateTokens(secretRules) : 0;
+  const secretStateTokens = state.storytellerBlock ? estimateTokens(state.storytellerBlock) : 0;
   state.contextTrace = {
     ...(state.arcTrace ? { arc: state.arcTrace } : {}),
     ...(state.loreTrace ? { lore: state.loreTrace } : {}),
@@ -1771,9 +1800,9 @@ export function buildDmMessages(
       ...systemParts.map((text, index) => {
         const last = index === systemParts.length - 1;
         const carved = last
-          ? [state.skyLine, state.factionsBlock, state.questsBlock, state.shopsBlock, state.pinsBlock].reduce((sum, part) => sum + (part ? estimateTokens(part) : 0), 0)
+          ? [state.skyLine, state.factionsBlock, state.questsBlock, state.shopsBlock, state.pinsBlock].reduce((sum, part) => sum + (part ? estimateTokens(part) : 0), 0) + secretStateTokens
           : index === 0
-            ? safetyTokens
+            ? safetyTokens + secretRulesTokens
             : 0;
         return {
           id: last ? "game-state" : `rules-${index}`,
@@ -1803,6 +1832,19 @@ export function buildDmMessages(
           reason: kind === "shop" ? "only while a shop is open here" : "inside the game state, under its own floor",
           position: systemParts.length + 1 + index,
         })),
+      ...(secretRulesTokens + secretStateTokens
+        ? [
+            {
+              id: "storyteller",
+              kind: "state" as BlockKind,
+              tokens: secretRulesTokens + secretStateTokens,
+              included: true,
+              reason: "the storyteller's secrets (who is open to advances, an NPC's act): shown only to whoever runs the story, never to a player or the party lead",
+              position: systemParts.length + 6,
+              secret: STORYTELLER_SECRET,
+            },
+          ]
+        : []),
       // What the table pinned rides whole on every turn, at most PIN_TOKEN_CAP
       // (src/lib/dm/pin-logic.ts): shown on its own so a small window says
       // what it costs there.

@@ -123,14 +123,16 @@ export function retireFacts(campaignId: string, ids: string[]): number {
 }
 
 // Facts a member may see, per known_by scoping. DM secrets only surface
-// when the lead explicitly requests them.
+// when the lead explicitly requests them; the storyteller's own only for the
+// storyteller tier (src/lib/dm/viewer.ts), never for the lead.
 export function listFactsVisibleTo(
   campaignId: string,
   ownedCharacterIds: string[],
   includeDmSecrets: boolean,
+  includeStorytellerSecrets = false,
 ): WorldFact[] {
   return listActiveFacts(campaignId).filter((fact) =>
-    factVisibleTo(fact.knownBy, ownedCharacterIds, includeDmSecrets),
+    factVisibleTo(fact.knownBy, ownedCharacterIds, includeDmSecrets, includeStorytellerSecrets),
   );
 }
 
