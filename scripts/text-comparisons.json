@@ -1661,7 +1661,7 @@
     "lib/dm/turn.ts#\\b": [["table-language",2,"meaning reader: a stat block's legendary and lair lines read for whether a foe has them (pack rows, and a workshop monster's trait lines; follow-up H)"]],
     "lib/dm/turn.ts#re-word": [["table-language",1,"meaning reader: a stat block's legendary and lair lines read for whether a foe has them (pack rows, and a workshop monster's trait lines; follow-up H)"]],
     "lib/dm/turn.ts#str-case": [["key",1,"tool names"]],
-    "lib/dm/turn.ts#str-eq": [["key",2,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
+    "lib/dm/turn.ts#str-eq": [["key",2,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"],["key",1,"a tool by its own name: downtime, which refuses itself in a fight, is left out of a fight's set"]],
     "lib/dm/turn.ts#str-list": [["key",1,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/turn.ts#toLowerCase": [["display",1,"stage name in a log line"]],
     "lib/dm/turn.ts#toUpperCase": [["display",1,"ability abbreviation shown"]],

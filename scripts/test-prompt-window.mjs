@@ -26,11 +26,6 @@ process.env.SQLITE_DB_PATH = path.join(dir, "test.sqlite");
 process.env.DB_ENCRYPTION_KEY = randomBytes(32).toString("hex");
 const WINDOW = 48_000;
 process.env.OPENAI_COMPAT_CONTEXT = String(WINDOW);
-// The trimmed tool set, pinned: what is checked here is the packing. This
-// window sat just under the trimmed set's room, so a set that grew by a few
-// hundred tokens (issue 503 offers deeds mid-fight) swapped in the compact
-// profile, whose own packing other suites check (src/lib/dm/model-tuning-logic.ts).
-process.env.DM_TOOL_PROFILE = "lean";
 
 register("./lib/register-alias.mjs", import.meta.url);
 

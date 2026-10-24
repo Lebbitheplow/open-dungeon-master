@@ -1063,8 +1063,11 @@ export function dmTurnTools(
     ...relationshipTools(campaign, inEncounter),
     ...(inEncounter ? [] : worldTools),
     // Lifting a load, lifestyles, downtime, diseases, madness and poisons
-    // (src/lib/dm/explore-tools.ts); downtime refuses itself in a fight.
-    ...exploreTools,
+    // (src/lib/dm/explore-tools.ts). Downtime refuses itself in a fight, so
+    // a fight is not offered it: its ~1,100 tokens bought nothing there, and
+    // a fight's trimmed set on a 48K window is the one with no room to spare
+    // (scripts/test-prompt-window.mjs).
+    ...(inEncounter ? exploreTools.filter((tool) => tool.function.name !== "downtime") : exploreTools),
     // Handouts and the quest log are read at the table's pace, not mid-round.
     ...(inEncounter ? [] : binderTools),
     ...(inEncounter ? [] : factionTools),
