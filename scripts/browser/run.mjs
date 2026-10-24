@@ -14,6 +14,7 @@
 //   node scripts/browser/run.mjs --app ../open-dungeon-master-client/mobile/www
 //   node scripts/browser/run.mjs --base http://127.0.0.1:3005 --ids /tmp/x/ids.json
 //   node scripts/browser/run.mjs --viewports desktop,phone --keep
+//   node scripts/browser/run.mjs --shard 2/6      (CI: every 6th scenario from the 2nd)
 //
 // Needs a Chromium: `npx playwright-core install chromium` once, or
 // ODM_BROWSER=<path to a Chrome>. Writes screenshots of every failure and
@@ -36,8 +37,20 @@ const { values: args } = parseArgs({
     viewports: { type: "string", default: "" },
     keep: { type: "boolean", default: false },
     out: { type: "string", default: "" },
+    shard: { type: "string", default: "" },
   },
 });
+
+// --shard i/n runs every nth scenario from the ith, with all its viewports,
+// so n CI jobs share the suite, each on its own seed and server.
+let shard = null;
+if (args.shard) {
+  const match = /^(\d+)\/(\d+)$/.exec(args.shard);
+  shard = match ? { index: Number(match[1]), count: Number(match[2]) } : null;
+  if (!shard || shard.index < 1 || shard.index > shard.count) {
+    throw new Error(`--shard takes i/n with 1 <= i <= n, as 2/6 (got ${args.shard})`);
+  }
+}
 
 const tree = path.resolve(import.meta.dirname, "../..");
 const outDir = args.out || fs.mkdtempSync(path.join(os.tmpdir(), "odm-browser-"));
@@ -101,6 +114,10 @@ for (const file of fs.readdirSync(scenarioDir).filter((name) => name.endsWith(".
   if (scenario.onlyWhenNamed && !wanted?.includes(scenario.name)) continue;
   if (app && scenario.app === false) continue;
   scenarios.push(scenario);
+}
+if (shard) {
+  const all = scenarios.splice(0);
+  scenarios.push(...all.filter((_, position) => position % shard.count === shard.index - 1));
 }
 const viewportFilter = args.viewports ? args.viewports.split(",") : null;
 
