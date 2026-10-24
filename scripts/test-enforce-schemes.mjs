@@ -26,7 +26,7 @@ const sheetsDb = await import("../src/lib/db/sheets.ts");
 const { buildDmMessages, buildGameStateBlock } = await import("../src/lib/dm/prompt.ts");
 const { storytellerLinesForPrompt } = await import("../src/lib/dm/scheme-tools.ts");
 const { relationshipRosterForPrompt } = await import("../src/lib/dm/relationship-tools.ts");
-const { friendshipTier } = await import("../src/lib/dm/relationship-logic.ts");
+const { friendshipTier, TIER_LABEL } = await import("../src/lib/dm/relationship-logic.ts");
 
 const MOTIVE = "the key to the river vault";
 
@@ -104,19 +104,67 @@ await test("an act is refused toward a character not open to advances, or one th
   assert.match(noMotive.error, /needs a motive/);
 });
 
-await test("the act begins: the AI is told the truth and that it is an act", async () => {
+await test("a start alone changes nothing anyone at the table sees, and the AI is told the truth and that it is an act", async () => {
   liking(kael, "Mira", -12);
+  const before = {};
+  for (const [who, user] of [["lead", world.owner], ["kael", kaelUser], ["nysa", nysaUser]]) {
+    before[who] = await bonds(world, user);
+  }
   const started = await world.invoke("relationship_scheme", { action: "start", characterId: kael.id, subject: "Mira", motive: MOTIVE });
   assert.equal(started.ok, true, started.error);
   assert.equal(started.result.approval, -12, "the truth");
-  assert.equal(started.result.shown, 55, "the act");
-  assert.match(started.result.note, /The act is on/);
+  assert.equal(started.result.shown, -12, "the act starts where she truly stands");
+  assert.match(started.result.note, /nobody at the table sees anything change/);
+  assert.match(started.result.note, /relationship_beat/, "the DM is told to build it with warm beats");
   const act = pair(kael, "Mira").pretense;
   assert.equal(act.motive, MOTIVE);
-  assert.equal(act.shown, 55);
+  assert.equal(act.shown, -12);
+  for (const [who, user] of [["lead", world.owner], ["kael", kaelUser], ["nysa", nysaUser]]) {
+    assert.deepEqual(await bonds(world, user), before[who], `${who}: the Bonds tab reads exactly as before`);
+  }
   const twice = await world.invoke("relationship_scheme", { action: "start", characterId: kael.id, subject: "Mira", motive: "a second one" });
   assert.equal(twice.ok, false, "one act at a time");
 });
+
+await test("a warm beat lands on the act at its face value, an act always lands, and the truth moves by her nature", async () => {
+  const helped = await world.invoke("relationship_beat", { characterId: kael.id, subject: "Mira", beat: "helped" });
+  assert.equal(helped.ok, true, helped.error);
+  let now = pair(kael, "Mira");
+  assert.equal(now.pretense.shown, -12 + 6, "helped is worth its face value of 6 to the act");
+  assert.equal(now.approval, -12 + helped.result.approvalChange, "the truth moves as her nature takes it");
+  assert.equal(helped.result.approval, now.approval, "the tool result reports the truth");
+  assert.match(helped.result.act, /Mira's warmth toward Kael is an act: the table sees /);
+  // A flirt that falls flat costs an honest NPC a point; an act lands.
+  world.clearDice();
+  world.dice(1);
+  const flirt = await world.invoke("relationship_beat", { characterId: kael.id, subject: "Mira", beat: "flirt" });
+  world.clearDice();
+  assert.equal(flirt.ok, true, flirt.error);
+  assert.equal(flirt.result.outcome, "miss");
+  const afterFlirt = pair(kael, "Mira");
+  assert.equal(afterFlirt.approval, now.approval - 1, "the miss costs the truth its point");
+  assert.equal(afterFlirt.pretense.shown, now.pretense.shown + 4, "the act lands at the flirt's face value");
+  // The same move again is worth less to the act, as to anyone.
+  const again = await world.invoke("relationship_beat", { characterId: kael.id, subject: "Mira", beat: "helped" });
+  assert.equal(again.ok, true, again.error);
+  assert.equal(pair(kael, "Mira").pretense.shown, afterFlirt.pretense.shown + 4, "a second helped is worth 6 x 0.6");
+  now = pair(kael, "Mira");
+  const row = bondOf(await bonds(world, nysaUser), kael.id, "Mira");
+  assert.equal(row.tier, friendshipTier(now.pretense.shown), "the table reads the warmth the act shows");
+});
+
+await test("a cold beat moves the act and the truth alike", async () => {
+  const before = pair(kael, "Mira");
+  const insult = await world.invoke("relationship_beat", { characterId: kael.id, subject: "Mira", beat: "insult" });
+  assert.equal(insult.ok, true, insult.error);
+  const after = pair(kael, "Mira");
+  assert.ok(insult.result.approvalChange < 0);
+  assert.equal(after.approval - before.approval, insult.result.approvalChange);
+  assert.equal(after.pretense.shown - before.pretense.shown, insult.result.approvalChange, "the act takes the slight as she does");
+});
+
+// The act played up over scenes to a warmth she does not feel.
+relationships.patchRelationship(pair(kael, "Mira").id, { pretense: { ...pair(kael, "Mira").pretense, shown: 58 } });
 
 await test("every player reads the warmth the act shows, the lead of the AI table included, and none reads the motive", async () => {
   for (const [who, user] of [["the lead", world.owner], ["Kael's player", kaelUser], ["Nysa's player", nysaUser]]) {
@@ -128,27 +176,21 @@ await test("every player reads the warmth the act shows, the lead of the AI tabl
     assert.doesNotMatch(JSON.stringify(rows), /river vault/, `${who}: no motive anywhere`);
   }
   const lead = bondOf(await bonds(world, world.owner), kael.id, "Mira");
-  assert.equal(lead.approval, 55, "the lead's number is the act's");
+  assert.equal(lead.approval, 58, "the lead's number is the act's");
 });
 
-await test("the AI's game state keeps the truth, and the act and its motive ride the storyteller's section", async () => {
+await test("the AI's game state keeps the truth, and the act, its motive and how to build it ride the storyteller's section", async () => {
+  const truth = pair(kael, "Mira").approval;
   const state = promptState(world);
   const block = buildGameStateBlock(state);
-  assert.match(block, /Kael and Mira \(npc\) \| wary of them \(-12\)/, "the true standing");
+  assert.ok(block.includes(`Kael and Mira (npc) | ${TIER_LABEL[friendshipTier(truth)]} (${truth > 0 ? "+" : ""}${truth})`), "the true standing");
   assert.match(block, /Storyteller secrets/);
-  assert.match(block, /Mira's warmth toward Kael is an ACT: the table sees friendly \(\+55\)/);
+  assert.match(block, /Mira's warmth toward Kael is an ACT: the table sees friendly \(\+58\)/);
   assert.match(block, new RegExp(MOTIVE));
+  assert.match(block, /An act starts where they truly stand/);
+  assert.match(block, /every warm beat lands on the warmth the table sees at its face value/);
   assert.match(block, /Open to advances from NPCs \(each player's private choice; never mention it at the table\): Kael\./);
   assert.doesNotMatch(block, /Gender: Male \| Open to advances/, "the opt-in left the party lines for the section");
-});
-
-await test("a tool result reports the true meter and says plainly that the warmth is an act", async () => {
-  const beat = await world.invoke("relationship_beat", { characterId: kael.id, subject: "Mira", beat: "helped" });
-  assert.equal(beat.ok, true, beat.error);
-  assert.ok(beat.result.approval < 0, `the truth: ${beat.result.approval}`);
-  assert.match(beat.result.act, /Mira's warmth toward Kael is an act: the table sees /);
-  const now = pair(kael, "Mira");
-  assert.equal(now.pretense.shown - now.approval, 55 - -12, "the act moved with the true meter");
 });
 
 await test("the lead cannot read the motive or the true meter through ?secrets=1 or the Context tab", async () => {
@@ -263,7 +305,9 @@ await test("relationship_scheme reveal shows everyone the truth without ending t
   relationships.patchRelationship(pair(bram, "Corin").id, { status: "active" });
   const started = await world.invoke("relationship_scheme", { action: "start", characterId: bram.id, subject: "Corin", motive: "Bram's signet" });
   assert.equal(started.ok, true, started.error);
-  assert.equal(bondOf(await bonds(world, world.owner), bram.id, "Corin").tier, "friendly", "the act, to the lead who plays Bram");
+  assert.equal(bondOf(await bonds(world, world.owner), bram.id, "Corin").tier, "disliked", "a start shows nothing new");
+  relationships.patchRelationship(pair(bram, "Corin").id, { pretense: { ...pair(bram, "Corin").pretense, shown: 40 } });
+  assert.equal(bondOf(await bonds(world, world.owner), bram.id, "Corin").tier, "friendly", "the act played up, to the lead who plays Bram");
   const revealed = await world.invoke("relationship_scheme", { action: "reveal", characterId: bram.id, subject: "Corin", note: "Corin's letters to the guild turned up" });
   assert.equal(revealed.ok, true, revealed.error);
   const row = bondOf(await bonds(world, nysaUser), bram.id, "Corin");
@@ -284,10 +328,11 @@ await test("at a table a person runs, that person reads the act, its motive and 
   liking(hero, "Senna", 5, table);
   const started = await table.invoke("relationship_scheme", { action: "start", characterId: hero.id, subject: "Senna", motive: "Lio's map" });
   assert.equal(started.ok, true, started.error);
+  relationships.patchRelationship(pair(hero, "Senna", table).id, { pretense: { ...pair(hero, "Senna", table).pretense, shown: 45 } });
   const dmRow = bondOf(await bonds(table, table.owner), hero.id, "Senna");
   assert.equal(dmRow.approval, 5, "the true meter");
   assert.equal(dmRow.act.motive, "Lio's map");
-  assert.equal(dmRow.act.shown, 55);
+  assert.equal(dmRow.act.shown, 45);
   const playerRow = bondOf(await bonds(table, player), hero.id, "Senna");
   assert.equal(playerRow.act, undefined);
   assert.equal(playerRow.tier, "friendly");

@@ -28,15 +28,16 @@ function test(name, fn) {
 
 // ---- the act ----
 
-test("an act shows at least enough warmth to court, and keeps the motive short and tidy", () => {
+test("an act starts where they truly stand, so a start alone shows nothing new, and keeps the motive short and tidy", () => {
   const act = scheme.startPretense(`  the   vault ${"key ".repeat(60)}`, -20, "2026-10-23T00:00:00.000Z");
-  assert.equal(act.shown, scheme.ACT_FLOOR);
-  assert.equal(scheme.ACT_FLOOR, 55, "courting's floor, so a schemer can make the same first move");
+  assert.equal(act.shown, -20, "no jump: the warmth has to be played");
+  assert.equal(scheme.outwardApproval({ approval: -20, pretense: act }), -20);
   assert.ok(act.motive.startsWith("the vault key"), "inner space folded");
   assert.equal(act.motive.length, scheme.MOTIVE_MAX);
   assert.deepEqual(act.exposedTo, []);
   assert.equal(act.revealed, false);
-  assert.equal(scheme.startPretense("a ring", 72, "").shown, 72, "already warm: the act shows what is there");
+  assert.equal(scheme.startPretense("a ring", 72, "").shown, 72);
+  assert.equal(scheme.startPretense("a ring", 400, "").shown, 100, "clamped to the meter");
 });
 
 test("an act reads back from its column, and anything else reads as none", () => {
@@ -52,8 +53,11 @@ test("an act reads back from its column, and anything else reads as none", () =>
   assert.equal(odd.revealed, false, "only true reveals");
 });
 
+// An act played up to courting's warmth over a few scenes.
+const played = (truth) => ({ ...scheme.startPretense("the vault key", truth, ""), shown: 55 });
+
 test("every outward rule reads the act while it runs, and the truth once it is out", () => {
-  const act = scheme.startPretense("the vault key", -10, "");
+  const act = played(-10);
   assert.equal(scheme.outwardApproval({ approval: -10, pretense: act }), 55);
   assert.equal(scheme.outwardApproval({ approval: -10, pretense: null }), -10);
   assert.equal(scheme.outwardApproval({ approval: -10, pretense: scheme.revealPretense(act) }), -10);
@@ -62,13 +66,33 @@ test("every outward rule reads the act while it runs, and the truth once it is o
   assert.equal(scheme.actRunning(null), false);
 });
 
-test("the act moves as the true meter does, so a gift or a slight lands on both", () => {
-  const act = scheme.startPretense("the vault key", -10, "");
+test("outside a beat, the act moves as the true meter does, so a slight lands on both", () => {
+  const act = played(-10);
   assert.equal(scheme.followTrueMeter(act, -10, -2).shown, 63, "a gift shows");
   assert.equal(scheme.followTrueMeter(act, -10, -40).shown, 25, "and a slight");
   assert.equal(scheme.followTrueMeter({ ...act, shown: 95 }, -10, 10).shown, 100, "clamped");
   const out = scheme.revealPretense(act);
   assert.equal(scheme.followTrueMeter(out, -10, 20), out, "an act that came out moves no more");
+});
+
+test("a warm beat is worth its face value to an act, less each repeat as with anyone; a cold beat nothing", () => {
+  assert.equal(scheme.actFaceValue(6, 0), 6);
+  assert.equal(scheme.actFaceValue(6, 1), 4, "6 x 0.6");
+  assert.equal(scheme.actFaceValue(6, 2), 2, "6 x 0.3");
+  assert.equal(scheme.actFaceValue(6, 3), 0, "the fourth identical move is worth nothing");
+  assert.equal(scheme.actFaceValue(6, 9), 0);
+  assert.equal(scheme.actFaceValue(-8, 0), 0, "a cold beat is the truth's to move");
+});
+
+test("a warm beat lands on the act at face value whatever they truly feel; a cold one moves both", () => {
+  const act = scheme.startPretense("the vault key", -20, "");
+  const warmed = scheme.actAfterBeat(act, 6, -20, -23);
+  assert.equal(warmed.shown, -14, "the act lands though the deed grated on her (-3 to the truth)");
+  const chilled = scheme.actAfterBeat(warmed, 0, -23, -31);
+  assert.equal(chilled.shown, -22, "a slight lands on both alike");
+  assert.equal(scheme.actAfterBeat({ ...act, shown: 98 }, 9, 0, 9).shown, 100, "clamped");
+  const out = scheme.revealPretense(act);
+  assert.equal(scheme.actAfterBeat(out, 6, -20, -14), out, "an act that came out is not built any more");
 });
 
 test("seeing through an act adds each character once; a reveal is for everyone", () => {
@@ -125,7 +149,7 @@ test("an NPC with no stat block lies as well as their nature lets them, the same
 // ---- who sees what ----
 
 test("players read the act, the lead included; the one who saw through it reads the truth; the storyteller reads it all", () => {
-  const act = scheme.exposeTo(scheme.startPretense("the vault key", -10, ""), ["nysa-sheet"]);
+  const act = scheme.exposeTo(played(-10), ["nysa-sheet"]);
   const bond = { approval: -10, pretense: act };
   const lead = scheme.bondTruthFor({ storyteller: false, ownedCharacterIds: ["bram-sheet"] }, bond);
   assert.equal(lead.approval, 55);
@@ -147,8 +171,8 @@ test("players read the act, the lead included; the one who saw through it reads 
   assert.deepEqual(scheme.bondTruthFor({ storyteller: false, ownedCharacterIds: [] }, { approval: 12, pretense: null }), { approval: 12, seenThrough: false, unmasked: false, act: null });
 });
 
-test("the DM is told plainly that it is an act, what the table sees, and who saw through it", () => {
-  const act = scheme.startPretense("the vault key", -10, "");
+test("the DM is told plainly that it is an act, what the table sees, who saw through it, and how to build it", () => {
+  const act = played(-10);
   const line = scheme.actLine("Mira", "Kael", act, ["Nysa"]);
   assert.match(line, /Mira's warmth toward Kael is an ACT: the table sees friendly \(\+55\)/);
   assert.match(line, /Motive: the vault key\./);
@@ -156,6 +180,8 @@ test("the DM is told plainly that it is an act, what the table sees, and who saw
   assert.match(scheme.actNote("Mira", "Kael", act), /is an act: the table sees friendly \(\+55\)\. Play that/);
   assert.match(scheme.SCHEME_RULES, /check_notice with sense insight and againstMonster set to the schemer.s name/);
   assert.match(scheme.SCHEME_RULES, /relationship_end with reason betrayal and by npc/);
+  assert.match(scheme.SCHEME_RULES, /An act starts where they truly stand, and the table sees nothing change until you play it/);
+  assert.match(scheme.SCHEME_RULES, /every warm beat lands on the warmth the table sees at its face value/);
   assert.equal(scheme.seenThroughWhisper("Kael", "Mira", "Kael"), "Kael sees through Mira: the warmth Mira shows Kael is an act. Only you know.");
   assert.match(scheme.seenThroughWhisper("Nysa", "Mira", "Kael"), /the warmth Mira shows Kael is an act/);
 });

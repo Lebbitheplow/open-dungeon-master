@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { Campaign } from "@/lib/db/campaigns";
+import { campaignSeats, type Campaign } from "@/lib/db/campaigns";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { getNpcByName } from "@/lib/db/npcs";
 import { getSheetById, listSheets } from "@/lib/db/sheets";
@@ -69,7 +69,7 @@ export const schemeTool: ToolDef = {
   function: {
     name: SCHEME_TOOL,
     description:
-      "An NPC who only pretends to care for a character, for a motive of their own (a honey trap), or the moment that act comes out. start: the act begins; the table sees the warmth they show, you keep their true standing and the motive, and nobody at the table is told. Only toward a character open to advances from NPCs, by an NPC drawn to them. reveal: the truth comes out to everyone. A betrayal that ends the bond is relationship_end with reason betrayal and by npc instead.",
+      "An NPC who only pretends to care for a character, for a motive of their own (a honey trap), or the moment that act comes out. start: the act begins where they truly stand, and nobody at the table sees anything change; build the warmth with relationship_beat, each warm beat landing at its face value on the warmth the table sees, while you keep their true standing and the motive. Only toward a character open to advances from NPCs, by an NPC drawn to them. reveal: the truth comes out to everyone. A betrayal that ends the bond is relationship_end with reason betrayal and by npc instead.",
     parameters: {
       type: "object",
       additionalProperties: false,
@@ -184,7 +184,11 @@ export function handleRelationshipScheme(
   const relationship = existing ?? openLedger(campaign, sheet, subject);
   const pretense = startPretense(motive.slice(0, MOTIVE_MAX), relationship.approval, new Date().toISOString());
   patchRelationship(relationship.id, { pretense });
-  publishRelationshipsUpdated(campaign.id);
+  // Nothing anyone at the table sees has changed; only a person running it
+  // has a Bonds tab that reads the act, so only they are told to look.
+  if (campaignSeats(campaign).dmMode !== "ai") {
+    publishRelationshipsUpdated(campaign.id);
+  }
   return {
     ok: true,
     character: sheet.name,
@@ -192,8 +196,7 @@ export function handleRelationshipScheme(
     approval: relationship.approval,
     standing: friendshipTier(relationship.approval),
     shown: pretense.shown,
-    shownStanding: friendshipTier(pretense.shown),
-    note: `The act is on. The table now sees ${subject.name} ${TIER_LABEL[friendshipTier(pretense.shown)]} toward ${sheet.name}; ${subject.name}'s true standing (${TIER_LABEL[friendshipTier(relationship.approval)]}) and the motive are yours alone. Play the warmth in this reply and every one after; never call it an act aloud, in narration, a note or out of character. Someone may see through it with check_notice sense insight, againstMonster ${subject.name}.`,
+    note: `The act is on, and it starts where ${subject.name} truly stands (${TIER_LABEL[friendshipTier(relationship.approval)]}): nobody at the table sees anything change. Build the warmth as a real bond is built, giving ${sheet.name} chances to earn it and recording each with relationship_beat; every warm beat lands at its face value on the warmth the table sees, whatever ${subject.name} truly feels. The motive and the truth are yours alone: never call it an act aloud, in narration, a note or out of character. Someone may see through it with check_notice sense insight, againstMonster ${subject.name}.`,
   };
 }
 

@@ -6,12 +6,17 @@
 //
 // The shape of it. The act lives on the relationship row as a pretense: the
 // motive, the approval the NPC SHOWS, when it began, who has seen through
-// it, and whether it came out. Every outward rule reads the shown value (the
-// romance ladder, the first move, a charm's DC, the standing a social check
-// leans on), so an act is mechanically indistinguishable from the real thing;
-// the true meter keeps moving underneath, because the AI has to play it. Who
-// may see what is the storyteller tier (src/lib/dm/viewer.ts): the motive and
-// the true value are the storyteller's alone, never the party lead's.
+// it, and whether it came out. It starts where they truly stand, so starting
+// one changes nothing anyone at the table sees; the warmth has to be played,
+// beat by beat, as a genuine bond is built. While it runs a warm beat lands
+// on the warmth shown at its face value (an act always lands), the true
+// meter moving as their nature takes it, and a cold beat moves both alike.
+// Every outward rule reads the shown value (the romance ladder, the first
+// move, a charm's DC, the standing a social check leans on), so an act is
+// mechanically indistinguishable from the real thing; the true meter keeps
+// moving underneath, because the AI has to play it. Who may see what is the
+// storyteller tier (src/lib/dm/viewer.ts): the motive and the true value are
+// the storyteller's alone, never the party lead's.
 //
 // Only a character whose player opened them to advances can be the mark, and
 // only by someone they are drawn to, both ways: the same consent and fit an
@@ -19,7 +24,7 @@
 // honey trap possible at all, and what keeps it from reaching a player who
 // never asked to be courted.
 
-import { APPROVAL_MAX, APPROVAL_MIN, friendshipTier, ROMANCE_THRESHOLD, TIER_LABEL, type FriendshipTier } from "./relationship-logic.ts";
+import { APPROVAL_MAX, APPROVAL_MIN, friendshipTier, REPEAT_FACTOR, TIER_LABEL, type FriendshipTier } from "./relationship-logic.ts";
 import { attractionFits, type Attraction } from "../attraction.ts";
 import type { Gender } from "../gender.ts";
 
@@ -41,9 +46,6 @@ export type Pretense = {
 };
 
 export const MOTIVE_MAX = 160;
-// The warmth an act shows at least: enough to court, so a schemer can make
-// the same first move an honest suitor makes.
-export const ACT_FLOOR = ROMANCE_THRESHOLD.courting;
 
 const clampApproval = (value: number) => Math.max(APPROVAL_MIN, Math.min(APPROVAL_MAX, Math.round(value)));
 
@@ -83,10 +85,12 @@ export function outwardApproval(relationship: { approval: number; pretense?: Pre
   return actRunning(relationship.pretense) ? relationship.pretense.shown : relationship.approval;
 }
 
+// An act begins where they truly stand: nothing the table sees changes until
+// it is played.
 export function startPretense(motive: string, trueApproval: number, at: string): Pretense {
   return {
     motive: motive.trim().replace(/\s+/g, " ").slice(0, MOTIVE_MAX),
-    shown: Math.max(clampApproval(trueApproval), ACT_FLOOR),
+    shown: clampApproval(trueApproval),
     started: at,
     exposedTo: [],
     revealed: false,
@@ -100,6 +104,32 @@ export function followTrueMeter(pretense: Pretense, before: number, after: numbe
     return pretense;
   }
   return { ...pretense, shown: clampApproval(pretense.shown + (after - before)) };
+}
+
+// What a warm beat is worth to an act: its clean landing before anyone's
+// nature or a missed roll weighs on it. Repeating the same move still pays
+// less each time, as it does with anyone: an act that kept climbing on the
+// fourth identical gift would be its own tell. A cold beat is worth nothing
+// here; it moves the act as it moves the truth.
+export function actFaceValue(base: number, repeats: number): number {
+  if (base <= 0) {
+    return 0;
+  }
+  const factor = REPEAT_FACTOR[Math.min(Math.max(repeats, 0), REPEAT_FACTOR.length - 1)];
+  return Math.max(0, Math.round(base * factor));
+}
+
+// The act after one relationship_beat that moved the true meter from
+// `before` to `after`: a warm beat lands on the warmth shown at its face
+// value, whatever they truly feel; a cold one moves both alike.
+export function actAfterBeat(pretense: Pretense, faceValue: number, before: number, after: number): Pretense {
+  if (!actRunning(pretense)) {
+    return pretense;
+  }
+  if (faceValue > 0) {
+    return { ...pretense, shown: clampApproval(pretense.shown + faceValue) };
+  }
+  return followTrueMeter(pretense, before, after);
 }
 
 export function exposeTo(pretense: Pretense, characterIds: readonly string[]): Pretense {
@@ -250,6 +280,7 @@ export function actLine(subjectName: string, characterName: string, pretense: Pr
 // The rules for playing an act, said only while one runs.
 export const SCHEME_RULES = [
   "Acts (storyteller secrets: never say aloud, in narration, a note or out of character, that an act is an act, or what it is for):",
+  "- An act starts where they truly stand, and the table sees nothing change until you play it. Build it as a real bond is built: give the character chances to earn warmth (a favour asked of them, a confidence, a flirt) and record each with relationship_beat. While an act runs, every warm beat lands on the warmth the table sees at its face value, whatever they truly feel, and the true standing moves as their nature takes it; a cold beat moves both. A first move (romance_advance with initiator npc) waits, as anyone's does, for the warmth shown to reach courting.",
   "- Play the warmth the table sees, in every word and deed, and let the motive show only in what the schemer does off-screen or asks for.",
   "- A character may see through it: check_notice with sense insight and againstMonster set to the schemer's name. The server rolls the schemer's Deception and tells whoever beats it, privately.",
   "- The truth comes out to everyone through relationship_scheme with action reveal; a betrayal that ends the bond is relationship_end with reason betrayal and by npc.",

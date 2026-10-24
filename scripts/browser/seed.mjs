@@ -719,7 +719,8 @@ for (const viewport of ["desktop", "phone"]) {
 
 // Scheming NPCs (issue 501): one table per viewport that the seed's player
 // runs as its storyteller, where the lead plays Kael, open to advances, and
-// Senna keeps up an act toward him (the ferry ledger). The scenario reads
+// Senna keeps up an act toward him (the ferry ledger), already played up to
+// a warmth she does not feel. The scenario reads
 // the act on Kael's Bonds row, sees it turn to the truth when an Insight
 // from the storyteller's console beats Senna's Deception, reads the act on
 // the storyteller's own Bonds tab, and sees a betrayal unmask her. Senna is
@@ -777,6 +778,10 @@ for (const viewport of ["desktop", "phone"]) {
   if (!started.ok) {
     throw new Error(`the masked table's act did not start: ${started.error}`);
   }
+  // An act starts where she truly stands; this one has been played up over
+  // earlier scenes to a warmth she does not feel.
+  const acting = maskedBonds.getRelationshipById(bond.id);
+  maskedBonds.patchRelationship(bond.id, { pretense: { ...acting.pretense, shown: 40 } });
   masked[viewport] = { id: table.id, kael: kael.id };
 }
 

@@ -41,7 +41,7 @@ import {
   resolveSubject,
 } from "@/lib/dm/relationship-subject";
 import { handleNpcAdvance } from "@/lib/dm/npc-advance";
-import { actNote, outwardApproval } from "@/lib/dm/scheme-logic";
+import { actAfterBeat, actFaceValue, actNote, outwardApproval } from "@/lib/dm/scheme-logic";
 import { revealAct, runningAct, schemesPossible, schemeTool } from "@/lib/dm/scheme-tools";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { rollExpression } from "@/lib/dice";
@@ -312,9 +312,15 @@ export function handleRelationshipBeat(
     hostile: subject.hostile,
   });
   const approval = applyApproval(relationship.approval, delta);
-  // A romance an act carries holds by the act's warmth, which moves with
-  // the true meter (src/lib/db/relationships.ts patchRelationship).
-  const romance = demoteRomance(relationship.romance, runningAct(relationship) ? applyApproval(outwardApproval(relationship), delta) : approval);
+  // While an NPC keeps up an act, a warm beat lands on the warmth shown at
+  // its face value, whatever they truly feel, and a cold one moves both
+  // (src/lib/dm/scheme-logic.ts actAfterBeat); a romance the act carries
+  // holds by that warmth.
+  const running = runningAct(relationship);
+  const act = running
+    ? actAfterBeat(running, actFaceValue(spec.base, relationship.beats[args.beat] ?? 0), relationship.approval, approval)
+    : null;
+  const romance = demoteRomance(relationship.romance, act ? act.shown : approval);
   // The beats worth remembering are the ones that changed something.
   const memorable =
     args.beat === "intimacy" || args.beat === "betrayal" || Math.abs(delta) >= 7;
@@ -324,6 +330,7 @@ export function handleRelationshipBeat(
       romance,
       beats: { ...relationship.beats, [args.beat]: (relationship.beats[args.beat] ?? 0) + 1 },
       ...(args.beat === "intimacy" ? { flags: addFlag(relationship.flags, "intimacy") } : {}),
+      ...(act ? { pretense: act } : {}),
       ...(memorable && args.note?.trim()
         ? {
             memories: addMemory(relationship.memories, {

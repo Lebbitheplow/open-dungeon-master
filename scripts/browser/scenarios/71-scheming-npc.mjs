@@ -110,7 +110,7 @@ export default {
       const act = dmPage.locator(`[data-bond-act="Senna Vale"]`).locator("visible=true").first();
       await eventually(() => act.count(), { timeoutMs: 20_000, label: "the act on the storyteller's Bonds row" });
       const told = await act.innerText();
-      check(/An act: the table sees Friendly/.test(told), `the storyteller reads the act: ${told}`);
+      check(/An act: the table sees Friendly \+40/.test(told), `the storyteller reads the act: ${told}`);
       check(/Wants the ferry ledger/.test(told), "and the motive");
       check(/Seen through by Kael Ashvale/.test(told), "and who saw through it");
       await axeClean(dmPage, `[data-bond-row="Senna Vale"]`, "the storyteller's row at night");

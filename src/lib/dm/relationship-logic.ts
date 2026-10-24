@@ -256,7 +256,7 @@ export function beatAlignment(spec: BeatSpec, personality: Personality): number 
 // well under half the first and the fourth is worth nothing. Counts halve at
 // each chapter close, so a friendship built across a story keeps full weight
 // while a burst of flattery in one scene does not.
-const REPEAT_FACTOR = [1, 0.6, 0.3, 0];
+export const REPEAT_FACTOR = [1, 0.6, 0.3, 0];
 
 export type BeatContext = {
   approval: number;
