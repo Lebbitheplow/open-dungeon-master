@@ -70,6 +70,11 @@ export const ADDON_PERMISSIONS = {
     detail: "Starts programs installed here, such as Blender or Python, to do its work.",
     enforced: false,
   },
+  threads: {
+    label: "Use several threads in its board view",
+    detail: "Its board view may share memory between threads and use the precise timers that come with that, as threaded 3D engines need. Only where the browser can isolate the table page.",
+    enforced: true,
+  },
 } as const;
 
 export type AddonPermission = keyof typeof ADDON_PERMISSIONS;

@@ -18,7 +18,11 @@ import { check, eventually, sleep } from "../lib.mjs";
 async function installFixture(page) {
   await page.route("**/api/addons", (route) => route.fulfill({ json: {
     supported: true, workshopImporters: [], mapGenerators: [],
-    boardViews: [{ addonId: "covered-fixture", addonName: "Fixture", addonVersion: "1.0.0", id: "table", title: "Fixture table", description: "", needsViewData: false, options: [], url: "/api/addons/covered-fixture/ui/index.html" }],
+    boardViews: [
+      { addonId: "covered-fixture", addonName: "Fixture", addonVersion: "1.0.0", id: "table", title: "Fixture table", description: "", needsViewData: false, options: [], url: "/api/addons/covered-fixture/ui/index.html" },
+      // Its addon's threads permission was accepted (86-board-view-threads proves what that gives).
+      { addonId: "covered-fixture", addonName: "Fixture", addonVersion: "1.0.0", id: "deep", title: "Fixture threads", description: "", needsViewData: false, options: [], url: "/api/addons/covered-fixture/ui/index.html", threads: true },
+    ],
   } }));
   await page.route("**/api/addons/covered-fixture/ui/**", (route) => {
     const script = new URL(route.request().url()).pathname.endsWith("board.js");
@@ -99,6 +103,10 @@ export default {
     const view = await (await inline.elementHandle()).contentFrame();
     await eventually(() => view.evaluate(() => Boolean(window.__snapshot)), { label: "the view's first snapshot" });
 
+    check(
+      await inline.evaluate((node) => node.hasAttribute("credentialless") && node.getAttribute("sandbox") === "allow-scripts" && node.getAttribute("allow") === ""),
+      "the frame is sandboxed and credentialless, and without the threads permission it is allowed no isolation",
+    );
     check(!(await grid.isVisible()), "under a board view the flat grid is not drawn");
     check((await grid.count()) === 1, "it stays mounted, so the effects it reports as played still are");
     check(!(await board.locator("canvas[data-painted-map]").isVisible()), "nor is the painted picture shown under the view");
@@ -159,6 +167,12 @@ export default {
     check((await inline.count()) === 0, "the view steps aside while drawing");
     await t.tap(pencil);
     await eventually(async () => (await inline.count()) === 1 && !(await grid.isVisible()), { label: "the view covering the grid again" });
+
+    // A view whose addon was given threads: its frame may be isolated.
+    await t.tap(page.getByRole("radio", { name: "Fixture threads", exact: true }));
+    await eventually(() => inline.evaluate((node) => node.getAttribute("allow") === "cross-origin-isolated" && node.hasAttribute("credentialless")).catch(() => false), {
+      label: "the threads view's frame allowed isolation",
+    });
 
     // The flat board again: the grid draws and fills the same frame.
     await t.tap(page.getByRole("radio", { name: "Board", exact: true }));

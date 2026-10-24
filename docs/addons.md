@@ -76,6 +76,7 @@ once:
 | Use this server's storyteller model (`ai.text`) | The addon can ask the model you configured for text. Each request is counted under Usage like any other call | Yes: refused unless accepted |
 | Reach the internet (`network`) | It downloads or calls web services on its own | No: a statement of what it does |
 | Run other programs (`programs`) | It starts programs installed here, such as Blender or Python | No: a statement of what it does |
+| Use several threads in its board view (`threads`) | Its board view may share memory between threads and use the precise timers that come with that, as threaded 3D engines need. While an addon that is on has it, the server's pages are cross-origin isolated | Yes: its view runs on one thread unless accepted. Firefox does not hold that line per addon: on a server where one addon has it, every board view there can share memory |
 
 An update that asks for a permission you have not accepted switches the addon
 to **Waiting for your yes** until you accept again.

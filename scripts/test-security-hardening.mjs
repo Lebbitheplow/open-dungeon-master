@@ -258,6 +258,28 @@ await test("the three login folders are sent to that route by path, never by an 
   }
 });
 
+await test("pages are cross-origin isolated only while an addon that is on has the threads permission", async () => {
+  const { proxy } = await import("../src/proxy.ts");
+  const { NextRequest } = await import("next/server");
+  const { setAddonState, forgetAddonState } = await import("../src/lib/addons/store.ts");
+  const policyOf = (pathname) => {
+    const headers = proxy(new NextRequest(`http://test${pathname}`)).headers;
+    return [headers.get("Cross-Origin-Opener-Policy"), headers.get("Cross-Origin-Embedder-Policy")];
+  };
+  // A page, the PDF the lore panel frames, the home page.
+  const paths = ["/campaigns/abc", "/uploads/lore.pdf", "/"];
+  for (const pathname of paths) assert.deepEqual(policyOf(pathname), [null, null], `${pathname}: a server without such an addon is as before`);
+  setAddonState("deep-view", { enabled: true, granted: ["threads"] });
+  try {
+    // credentialless, not require-corp: a picture from another host still loads, without its cookies.
+    for (const pathname of paths) assert.deepEqual(policyOf(pathname), ["same-origin", "credentialless"], pathname);
+    setAddonState("deep-view", { enabled: false });
+    assert.deepEqual(policyOf("/campaigns/abc"), [null, null], "switched off, the pages are as before");
+  } finally {
+    forgetAddonState("deep-view");
+  }
+});
+
 if (process.platform !== "win32") {
   await test("a link inside the folder that points outside it is not followed", async () => {
     const outside = path.join(process.cwd(), "outside.png");

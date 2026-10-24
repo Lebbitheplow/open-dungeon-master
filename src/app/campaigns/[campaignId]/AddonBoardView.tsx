@@ -35,6 +35,16 @@ import { useThemePrefs } from "@/lib/theme-mode";
 // taps the built-in grid makes, into the same handlers, so a move, a target
 // or a ping from a 3D view goes through exactly the checks a click on the
 // flat board does.
+//
+// The page is cross-origin isolated (next.config.ts), and the frame is
+// credentialless: it has no cookies or storage of its own to lose, and it
+// loads under the isolated page even from a server older than these headers
+// (the desktop app draws the table from its own page for any server). An
+// addon whose threads permission the admin accepted gets the isolation in
+// its frame too: shared memory between its threads and precise timers.
+
+// Typed apart: React knows the credentialless attribute, its types do not yet.
+const CREDENTIALLESS = { credentialless: true } as Record<string, boolean>;
 
 // The frame's origin is opaque ("null"), so "*" is the only target that
 // reaches it; the message only ever goes to this frame's own window.
@@ -278,8 +288,9 @@ export function AddonBoardView({
         src={src}
         title={`${boardView.title} board view, from ${boardView.addonName}`}
         sandbox="allow-scripts"
+        {...CREDENTIALLESS}
         referrerPolicy="no-referrer"
-        allow=""
+        allow={boardView.threads ? "cross-origin-isolated" : ""}
         className="block h-full w-full rounded-lg border-0 bg-transparent"
       />
       {problem ? (

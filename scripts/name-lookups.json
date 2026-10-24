@@ -2231,6 +2231,8 @@
     "lib/dm/companion-level.ts#partial": [["identity",1,"spells the subclass grants, textKey on both sides"]],
     "lib/dm/companion-level.ts#first": [["key",1,"the class's one SRD subclass"]],
     "lib/srd/magic-item-value.ts#number": [["parse",1,"a spell scroll's level digit in the pack's name"]],
-    "lib/srd/magic-item-value.ts#keyed": [["key",1,"the content pack's potion and scroll categories"]]
+    "lib/srd/magic-item-value.ts#keyed": [["key",1,"the content pack's potion and scroll categories"]],
+    "proxy.ts#partial": [["key",1,"request paths under the data roots"]],
+    "proxy.ts#whole": [["key",1,"request paths against the data roots"]]
   }
 }

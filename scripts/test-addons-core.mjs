@@ -82,6 +82,7 @@ await test("ids, paths and empty addons are refused", () => {
   const viewOutsideUi = { ...example.contributes, boardViews: [{ id: "x", title: "X", entry: "board.html" }] };
   assert.equal(bad({ contributes: viewOutsideUi }), false);
   assert.equal(bad({ permissions: ["root"] }), false);
+  assert.equal(bad({ permissions: ["threads"] }), true, "threads is a permission a board view may ask for");
   assert.equal(bad({ version: "one" }), false);
 });
 
@@ -657,6 +658,8 @@ await test("Godot resources are isolated, typed and size-limited like other addo
       assert.match(response.headers.get("Content-Security-Policy"), /sandbox allow-scripts/);
       assert.ok(!response.headers.get("Content-Security-Policy").includes("allow-same-origin"));
       assert.equal(response.headers.get("Access-Control-Allow-Origin"), "*");
+      // Framed by the cross-origin isolated table in a browser without credentialless frames.
+      assert.equal(response.headers.get("Cross-Origin-Embedder-Policy"), "credentialless");
       await response.arrayBuffer();
       assert.equal((await serveAddonFile(root, [name], 1)).status, 404);
     }

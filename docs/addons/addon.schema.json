@@ -225,7 +225,8 @@
         "enum": [
           "ai.text",
           "network",
-          "programs"
+          "programs",
+          "threads"
         ]
       }
     },
