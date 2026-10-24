@@ -8,12 +8,17 @@
 // the model remembered to pass.
 //
 // A named object keeps the damage it has taken on the campaign clock
-// (`objects`), so a second blow on "the oak door" adds to the first.
+// (`objects`), so a second blow on "the oak door" adds to the first, and so
+// does what the first call naming it decided it is (its AC, hit points and
+// damage threshold): a later call that leaves the material out does not
+// turn the iron gate into the default wooden one. A broken object stays
+// broken, so a blow at its splinters breaks nothing a second time.
 
 import { z } from "zod";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { getClock, setClock } from "@/lib/db/clock";
+import type { ObjectRecord } from "@/lib/dm/march-state";
 import { insertRoll, type RollAttacker } from "@/lib/db/rolls";
 import { rollAgainst, rollOn } from "@/lib/roll-labels";
 import { getSheetById, listSheets } from "@/lib/db/sheets";
@@ -60,19 +65,22 @@ function publishRoll(campaign: Campaign, turn: DmTurn | null, characterId: strin
   turn?.rollIds.push(roll.id);
 }
 
-// Damage a named object has already taken.
-export function objectDamageTaken(campaignId: string, name: string): number {
-  return getClock(campaignId).objects?.[keyOf(name)] ?? 0;
+// What the clock keeps of a named object, or null for one never named.
+function objectRecord(campaignId: string, name: string): ObjectRecord | null {
+  return getClock(campaignId).objects?.[keyOf(name)] ?? null;
 }
 
-function recordObjectDamage(campaignId: string, name: string, taken: number, broken: boolean) {
+// Damage a named object has already taken.
+export function objectDamageTaken(campaignId: string, name: string): number {
+  return objectRecord(campaignId, name)?.taken ?? 0;
+}
+
+function recordObject(campaignId: string, name: string, record: ObjectRecord) {
   const current = getClock(campaignId);
   const objects = { ...(current.objects ?? {}) };
-  if (broken) {
-    delete objects[keyOf(name)];
-  } else {
-    objects[keyOf(name)] = taken;
-  }
+  // Written last, so the 40 kept are the ones most lately struck.
+  delete objects[keyOf(name)];
+  objects[keyOf(name)] = record;
   const kept = Object.entries(objects).slice(-40);
   setClock(campaignId, { ...current, objects: Object.fromEntries(kept) });
 }
@@ -95,10 +103,30 @@ export function damageObject(
   }
   // Each section keeps its own damage between blows.
   const kept = section ? `${section.zoneId} ${section.section}` : args.name;
+  const record = campaign && kept ? objectRecord(campaign.id, kept) : null;
   const profile = objectProfile(args.material ?? "wood", args.size ?? "medium", args.fragile);
-  const ac = section?.ac ?? args.ac ?? profile.ac;
-  const hp = section?.hp ?? args.hp ?? profile.hp;
-  const already = campaign && kept ? objectDamageTaken(campaign.id, kept) : 0;
+  // A section's numbers are its wall's; an object already named keeps the
+  // numbers its first call decided; only a new one reads this call's.
+  const ac = section?.ac ?? record?.ac ?? args.ac ?? profile.ac;
+  const hp = section?.hp ?? record?.hp ?? args.hp ?? profile.hp;
+  const threshold = record ? record.threshold : args.threshold;
+  const already = record?.taken ?? 0;
+  const restated =
+    record && !section && ((args.ac !== undefined && args.ac !== ac) || (args.hp !== undefined && args.hp !== hp) || args.material !== undefined || args.size !== undefined)
+      ? `kept as it was first described: AC ${ac}, ${hp} HP${threshold ? `, damage threshold ${threshold}` : ""}`
+      : null;
+  if (record?.broken) {
+    return {
+      ok: true,
+      ac,
+      hp,
+      damage: 0,
+      broken: true,
+      damageTaken: hp,
+      hpLeft: 0,
+      note: `${args.name ?? "That object"} is already broken; there is nothing left to break. Narrate what is left of it.`,
+    };
+  }
 
   let dealt: number | null = null;
   let type = (args.damageType ?? "").trim().toLowerCase();
@@ -120,6 +148,9 @@ export function damageObject(
     const natural = attack.natural ?? 0;
     const hit = natural !== 1 && (natural === 20 || attack.total >= ac);
     if (!hit) {
+      if (campaign && kept && !record) {
+        recordObject(campaign.id, kept, { taken: 0, ac, hp, ...(threshold ? { threshold } : {}) });
+      }
       return {
         ok: true,
         ac,
@@ -154,14 +185,19 @@ export function damageObject(
     dealt = 0;
   }
   dealt = section && dealt ? sectionHit(section, dealt, type, notes) : dealt;
-  if (dealt !== null && args.threshold && dealt > 0 && dealt < args.threshold) {
-    notes.push(`${dealt} is under its damage threshold of ${args.threshold}: superficial, nothing comes off`);
+  if (dealt !== null && threshold && dealt > 0 && dealt < threshold) {
+    notes.push(`${dealt} is under its damage threshold of ${threshold}: superficial, nothing comes off`);
     dealt = 0;
+  }
+  if (restated) {
+    notes.push(restated);
   }
   const taken = already + (dealt ?? 0);
   const broken = dealt !== null && taken >= hp;
-  if (campaign && kept && dealt !== null) {
-    recordObjectDamage(campaign.id, kept, taken, broken);
+  // Named once is decided: a call that only asks what the object is still
+  // fixes its numbers for the blows after it.
+  if (campaign && kept && (dealt !== null || !record)) {
+    recordObject(campaign.id, kept, { taken: broken ? hp : taken, ac, hp, ...(threshold ? { threshold } : {}), ...(broken ? { broken: true } : {}) });
   }
   if (campaign && section && broken) {
     notes.push(breakWallSection(campaign, section));

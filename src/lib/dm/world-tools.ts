@@ -115,7 +115,7 @@ export const worldTools: ToolDef[] = [
         type: "object",
         additionalProperties: false,
         properties: {
-          name: { type: "string", description: "What the object is ('the oak door'), or 'Wall of Ice' with its section. The server keeps its damage between blows." },
+          name: { type: "string", description: "What the object is ('the oak door'), or 'Wall of Ice' with its section. The server keeps its damage, and what the first call said it is made of, between blows." },
           section: { type: "integer", minimum: 1, description: "A Wall of Ice's section, numbered from the end it was laid from." },
           characterId: { type: "string", description: "The character striking it with a weapon: exact characterId from GAME STATE." },
           weapon: { type: "string", description: "The weapon they strike with, from their equipment." },

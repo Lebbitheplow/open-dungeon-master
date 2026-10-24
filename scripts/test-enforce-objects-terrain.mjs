@@ -46,6 +46,43 @@ await test("an object takes no poison or psychic damage", async () => {
   assert.equal(blow.result.broken, false);
 });
 
+await test("An object's numbers are decided once: an iron gate described on the first blow is still iron, large and thresholded when the next blow names none of it.", async () => {
+  let blow = await world.invoke("damage_object", { name: "the portcullis", material: "iron", size: "large", threshold: 10, damage: "12" });
+  assert.equal(blow.ok, true, blow.error);
+  assert.equal(blow.result.ac, 19);
+  assert.equal(blow.result.hp, 27);
+  assert.equal(blow.result.damageTaken, 12);
+  // The second call says nothing of what it is: a medium wooden thing with
+  // no threshold is what a bare call would have read it as.
+  blow = await world.invoke("damage_object", { name: "the portcullis", damage: "8" });
+  assert.equal(blow.result.ac, 19, "still iron");
+  assert.equal(blow.result.hp, 27, "still large");
+  assert.equal(blow.result.damage, 0, "8 is under its threshold of 10");
+  assert.equal(blow.result.damageTaken, 12);
+  blow = await world.invoke("damage_object", { name: "the portcullis", material: "wood", damage: "15" });
+  assert.equal(blow.result.ac, 19, "a later call cannot make it another thing");
+  assert.equal(blow.result.broken, true, "12 and 15 take its 27");
+});
+
+await test("A broken object stays broken: the next blow finds nothing left to break and rolls nothing.", async () => {
+  const brute = world.addHero({
+    class: "fighter", level: 1, abilities: { str: 16 },
+    proficiencies: { saves: [], skills: [], expertise: [], languages: ["Common"], tools: [], armor: [], weapons: ["simple", "martial"] },
+    equipment: [{ name: "Greataxe", qty: 1 }],
+  });
+  let blow = await smash({ name: "the crate", size: "small", damage: "9" });
+  assert.equal(blow.result.broken, true);
+  blow = await smash({ name: "the crate", size: "small", damage: "9" });
+  assert.equal(blow.ok, true, blow.error);
+  assert.equal(blow.result.damage, 0);
+  assert.equal(blow.result.broken, true);
+  assert.match(blow.result.note, /already broken/);
+  world.dice(15, 6);
+  blow = await smash({ name: "the crate", characterId: brute.id, weapon: "Greataxe" });
+  assert.equal(world.clearDice(), 2, "no attack is rolled at a broken object");
+  assert.match(blow.result.note, /already broken/);
+});
+
 await test("A creature with a swimming speed crosses water at its normal cost; one without pays double.", () => {
   const terrain = "~".repeat(8);
   const walk = reachableTiles(terrain, 8, 1, new Set(), { x: 0, y: 0 }, 6, 1, false);
