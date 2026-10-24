@@ -29,6 +29,7 @@ export default {
     await t.tap(warning.locator("[data-story-setup-keep]"));
     await eventually(() => page.locator(`${root}[data-story-setup-warning]`).count().then((count) => count === 0), { label: "the warning gone on Keep it on" });
     await t.open(`/campaigns/${ids.preparedId}`);
+    // Time is the check: a warning the visit brought back would show within this while.
     await sleep(1_500);
     check((await page.locator(`${root}[data-story-setup-warning]`).count()) === 0, "a kept warning stays away on the next visit");
     const kept = await (await api.get(`${base}/api/campaigns/${ids.preparedId}`)).json();

@@ -5,7 +5,7 @@
 // every move, and the server never hears of it. A phone keeps its bottom
 // bar whatever a wide window arranged.
 import { readFileSync } from "node:fs";
-import { check, eventually, sleep, openPanelTab, newContext, signIn } from "../lib.mjs";
+import { check, eventually, sleep, openPanelTab, newContext, signIn, untilStill, hydrated, upTo } from "../lib.mjs";
 
 const KEY = "odm:table-layout:player";
 
@@ -31,7 +31,7 @@ async function dismissTour(page) {
   await eventually(() => tour.count(), { timeoutMs: 4_000 }).catch(() => 0);
   for (let attempt = 0; attempt < 3 && (await tour.count()); attempt += 1) {
     await page.keyboard.press("Escape");
-    await sleep(250);
+    await upTo(async () => (await tour.count()) === 0, 250);
   }
 }
 
@@ -43,9 +43,10 @@ async function drag(page, from, dx, dy, steps = 8) {
   await page.mouse.move(x, y);
   await page.mouse.down();
   await page.mouse.move(x + dx, y + dy, { steps });
+  // The drop is read from where the pointer rests, a frame after the last move.
   await sleep(120);
   await page.mouse.up();
-  await sleep(300);
+  await untilStill(page);
 }
 
 export default {
@@ -114,6 +115,7 @@ export default {
         window.localStorage.setItem(key, JSON.stringify(layout));
         window.dispatchEvent(new StorageEvent("storage", { key }));
       }, KEY);
+      // Time is the check: a phone that took the arrangement would redraw within this while.
       await sleep(800);
       check(!(await menuButton.isVisible().catch(() => false)), "a phone has no layout menu");
       check((await row.getAttribute("data-tlay")) === null, "a phone's row is never rearranged");
@@ -190,10 +192,8 @@ export default {
     const arrange = page.locator(`${root}.tlay-arrange`).first();
     for (const name of ["Notes", "Story"]) {
       await t.tap(arrange.locator("button").filter({ hasText: new RegExp(`^\\s*${name}\\s*$`) }).first());
-      await sleep(400);
+      await eventually(() => slot(`tab:${name.toLowerCase()}`).isVisible(), { label: `${name} in a pane of its own` });
     }
-    await eventually(() => slot("tab:notes").isVisible(), { label: "Notes in a pane of its own" });
-    await eventually(() => slot("tab:story").isVisible(), { label: "Story in a pane of its own" });
     check(
       (await page.locator(`${root}.cine-rail [data-tour="tab-notes"]`).count()) === 0,
       "a tab with a pane leaves the side panel's rail",
@@ -217,8 +217,7 @@ export default {
     await page.mouse.move(grip.x + 30, grip.y + grip.height / 2);
     await page.mouse.down();
     await page.mouse.move(rowBox.x + rowBox.width - 6, rowBox.y + rowBox.height / 2, { steps: 10 });
-    await sleep(200);
-    check((await page.locator(`${root}.tlay-drop`).count()) === 1, "the place it would land shows while it is dragged");
+    await eventually(async () => (await page.locator(`${root}.tlay-drop`).count()) === 1, { label: "the place it would land, shown while it is dragged" });
     await page.mouse.up();
     await eventually(async () => {
       const saved = await readLayout(page);
@@ -233,16 +232,14 @@ export default {
     await drag(page, page.locator(`${root}button[aria-label="Move Story"]`).first(), 2000, 2000, 10);
     const size = page.viewportSize();
     await page.setViewportSize({ width: 1100, height: 700 });
-    await sleep(700);
     const inside = async () => {
       const rowNow = await boxOf(row);
       const story = await boxOf(slot("tab:story"));
       return story.x >= rowNow.x - 1 && story.y >= rowNow.y - 1 && story.x + story.width <= rowNow.x + rowNow.width + 1 && story.y + story.height <= rowNow.y + rowNow.height + 1;
     };
-    check(await inside(), "a floating pane stays inside the row when the window shrinks");
+    await eventually(inside, { label: "a floating pane kept inside the row when the window shrinks" });
     check((await boxOf(table)).width >= 355, "the table keeps its floor in a small window");
     await page.setViewportSize(size);
-    await sleep(500);
     await t.tap(page.locator(`${root}button[aria-label="Dock Story"]`).first());
     await eventually(() => slot("tab:story").getAttribute("data-floating").then((value) => value === null), { label: "Story docked again" });
 
@@ -273,7 +270,7 @@ export default {
       await rereadLayouts(page);
     } else {
       await page.reload({ waitUntil: "networkidle" });
-      await sleep(1_500);
+      await hydrated(page);
     }
     await eventually(() => slot("tab:notes").isVisible(), { timeoutMs: 30_000, label: "Notes' pane after the reload" });
     check(JSON.stringify(await readLayout(page)) === JSON.stringify(saved), "the saved arrangement reads back as itself");
@@ -297,13 +294,12 @@ export default {
     // ---- lock, then reset ----
     await t.tap(menuButton.first());
     await t.tap(page.getByRole("menuitemcheckbox", { name: /lock layout/i }).first());
-    await sleep(400);
+    await eventually(async () => (await page.locator(`${root}.cine-row [role="separator"]`).count()) === 0, { label: "the lines gone once locked" });
     check((await page.locator(`${root}.cine-row [role="separator"]`).count()) === 0, "a locked arrangement has no lines to drag");
     check((await page.locator(`${root}button[aria-label="Move Notes"], ${root}button[aria-label="Hide Story"]`).count()) === 0, "nor anything that moves or hides a pane");
     await t.tap(menuButton.first());
     check((await page.getByRole("menuitem", { name: /arrange the table/i }).count()) === 0, "locked, the menu offers no arranging");
     await t.tap(page.getByRole("menuitemcheckbox", { name: /lock layout/i }).first());
-    await sleep(300);
     await t.tap(menuButton.first());
     await t.tap(page.getByRole("menuitem", { name: /reset layout/i }).first());
     await eventually(async () => (await row.getAttribute("data-tlay")) === null, { label: "Reset bringing back the flex row" });

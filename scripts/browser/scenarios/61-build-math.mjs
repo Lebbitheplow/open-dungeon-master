@@ -79,6 +79,7 @@ export default {
     const hpAfter = (await panel.locator('tr[data-row="hp"] td').first().textContent())?.trim();
     if (hpAfter === hpBefore) found.push(`hit points stayed ${hpBefore} at level 5`);
     if (!/^Hit points \d+, was \d+\. \d+ more numbers changed\.$/.test(said)) found.push(`said "${said}"`);
+    // Time is the check: a second line would follow the burst within this while.
     await sleep(2_000);
     if (((await status.textContent())?.trim() ?? "") !== said) found.push("a second line followed the burst");
 

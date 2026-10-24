@@ -8,7 +8,7 @@
 // ring of the new colour pulses out. Under reduced motion Oswin's earth
 // elemental turns the same way: the colours still change, the ring does not
 // move. Night and day, desktop and phone, the website and the app's screens.
-import { check, eventually, openPanelTab, sleep } from "../lib.mjs";
+import { check, eventually, openPanelTab, untilStill } from "../lib.mjs";
 
 // BoardStage.tsx RING_BY_KIND: a character's rim and an enemy's.
 const PARTY_RIM = "#78716c";
@@ -76,8 +76,8 @@ export default {
     const zoomIn = board.getByRole("button", { name: "Zoom in", exact: true }).first();
     for (let step = 0; step < 4 && (await zoomIn.count()); step += 1) {
       await t.tap(zoomIn);
-      await sleep(350);
     }
+    await untilStill(page);
     const view = await frame.boundingBox();
     for (const name of [fire, earth]) {
       const seen = await figureOf(name).boundingBox();
@@ -106,12 +106,12 @@ export default {
     check(ring.name === "side-flip" && ring.duration === "0.3s" && ring.stroke === FOE_RIM, `a red ring pulses out over 300 ms (${JSON.stringify(ring)})`);
     check((await rimOf(earth).getAttribute("stroke")) === PARTY_RIM, "the earth elemental still stands with the party");
     check((await tokenSide(elementals[0].id)) === "foe", "the server has the fire elemental with the foes");
-    await sleep(600);
+    await untilStill(page);
     await shoot("fire-turned");
     // Legible by day too: the same board under the day theme.
     const theme = await page.evaluate(() => document.documentElement.dataset.theme ?? "");
     await page.evaluate(() => (document.documentElement.dataset.theme = "light"));
-    await sleep(600);
+    await untilStill(page);
     await shoot("fire-turned-day");
     await page.evaluate((mode) => (document.documentElement.dataset.theme = mode), theme);
 
@@ -131,7 +131,7 @@ export default {
       moving: node.getAnimations().length,
     }));
     check(still.name === "none" && still.opacity === "0" && still.moving === 0, `no ring moves under reduced motion (${JSON.stringify(still)})`);
-    await sleep(400);
+    await untilStill(page);
     await shoot("earth-turned-reduced");
     await page.emulateMedia({ reducedMotion: null });
   },

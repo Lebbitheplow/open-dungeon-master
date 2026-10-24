@@ -3,7 +3,7 @@
 // her builder says she now has the 2014 Goliath's traits. An Orc's Primal
 // Intuition offers only its seven skills. An apothecary's shelf names how
 // magic is priced, and the term opens on the 2014 values.
-import { check, eventually } from "../lib.mjs";
+import { check, eventually, untilStill } from "../lib.mjs";
 
 const PRIMAL_INTUITION = ["Animal Handling", "Insight", "Intimidation", "Medicine", "Nature", "Perception", "Survival"];
 
@@ -38,7 +38,7 @@ export default {
     await eventually(() => spellNote.count(), { timeoutMs: 30_000, label: "the sheet's note on Elementalism" });
     check(/pick a 2014 cantrip in its place/.test((await spellNote.first().textContent()) ?? ""), "the note asks for a 2014 cantrip");
     await spellNote.first().scrollIntoViewIfNeeded();
-    await page.waitForTimeout(900);
+    await untilStill(page);
     await t.shot("sheet-spell-note");
 
     // The builder: the 2024 Goliath is read as the 2014 one, and says so.
@@ -87,7 +87,7 @@ export default {
     const explained = page.locator("[role=dialog], [role=tooltip], [data-radix-popper-content-wrapper]").filter({ hasText: "uncommon 500 gp" }).locator("visible=true");
     await eventually(() => explained.count(), { label: "the term's explanation" });
     check(/Legendary items and artifacts are never for sale/.test((await explained.first().textContent()) ?? ""), "it says legendary items are never for sale");
-    await page.waitForTimeout(900);
+    await untilStill(page);
     await t.shot("magic-prices");
     await page.keyboard.press("Escape");
 
@@ -118,7 +118,7 @@ export default {
     await t.tap(insight);
     await eventually(async () => (await insight.getAttribute("aria-pressed")) === "true", { label: "insight ticked" });
     await pickedFrom.scrollIntoViewIfNeeded();
-    await page.waitForTimeout(600);
+    await untilStill(page);
     await t.shot("species-skill-list");
   },
 };

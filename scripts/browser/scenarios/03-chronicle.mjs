@@ -44,11 +44,11 @@ export default {
     // The reader scrolls back: the scroll stays, the button rises, and a
     // new line does not yank them down.
     await log.evaluate((el) => { el.scrollTop = 0; });
-    await sleep(400);
     const latest = page.locator(`${root}.cine-chronicle-latest`).locator("visible=true").first();
     await eventually(() => latest.getAttribute("data-shown").then((value) => value !== null), { label: "the Latest button once the reader scrolled up" });
     await post("Second table talk line, while the reader is reading back.");
     await eventually(async () => (await text()).includes("Second table talk line"), { label: "the second line arriving" });
+    // Time is the check: a yank down would come within this while.
     await sleep(600);
     const after = await metrics();
     check(after.top < 200, `a reader who scrolled up stays there (scrollTop ${after.top})`);

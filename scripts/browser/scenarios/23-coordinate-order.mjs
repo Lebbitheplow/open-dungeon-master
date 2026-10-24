@@ -6,7 +6,7 @@
 // holds Resolve now until they confirm; a reload keeps the order; and the
 // resolution posts the lines step by step with a note naming the order.
 import { request } from "playwright-core";
-import { check, eventually, sleep } from "../lib.mjs";
+import { check, eventually, untilStill, upTo } from "../lib.mjs";
 
 export default {
   name: "coordinate-order",
@@ -65,19 +65,19 @@ export default {
           // target has seen it; a person drags again, and so does this.
           for (let attempt = 0; attempt < 3; attempt += 1) {
             await item(ids.corin).dragTo(editor.locator('[data-sequence-step="1"]'));
-            await sleep(400);
+            await upTo(async () => (await stepOf(editor, ids.corin).catch(() => "")) === "1", 400);
             if ((await stepOf(editor, ids.corin).catch(() => "")) === "1") break;
           }
         }
         await eventually(async () => (await stepOf(editor, ids.corin)) === "1", { label: "Corin dropped into step 1" });
-        await sleep(700);
+        await untilStill(page);
         await t.shot("together");
         await t.tap(item(ids.corin).locator("[data-sequence-split]"));
         await eventually(async () => (await stepOf(editor, ids.corin)) === "2", { label: "Corin on a step of his own" });
       }
       await t.tap(item(ids.corin).locator("[data-sequence-earlier]"));
       await eventually(async () => (await stepOf(editor, ids.corin)) === "1" && (await stepOf(editor, ids.ama)) === "2", { label: "Corin moved first" });
-      await sleep(700);
+      await untilStill(page);
       await t.shot("lead-order");
       await t.tap(opener.locator("[data-coordinate-start]"));
 
@@ -101,7 +101,7 @@ export default {
       await eventually(() => panel.count(), { timeoutMs: 20_000, label: "the plan after a reload" });
       check((await planStep(ids.corin)) === "1" && (await planStep(ids.ama)) === "2", "the order is the same after a reload");
       await panel.scrollIntoViewIfNeeded();
-      await sleep(700);
+      await untilStill(page);
       await t.shot("ordered-plan");
 
       // Ama is Ready; then the lead puts her alongside Corin, which is the
@@ -155,7 +155,7 @@ export default {
       const amaAt = fresh.findIndex((message) => message.characterId === ids.ama);
       check(corinAt >= 0 && amaAt > corinAt, `Corin's step posted before Ama's (${fresh.map((message) => message.content).join(" | ")})`);
       check(fresh.some((message) => /The party acts in order: 1\. Corin Vale; 2\. Sister Ama\./.test(message.content)), "the note names the order");
-      await sleep(500);
+      await untilStill(page);
       await t.shot("resolved");
     } finally {
       await coordinate(api, { action: "cancel" }).catch(() => {});

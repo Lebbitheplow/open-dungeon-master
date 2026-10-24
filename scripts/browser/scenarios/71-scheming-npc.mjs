@@ -7,7 +7,7 @@
 // storyteller's own Bonds tab reads the act, the motive and who saw through
 // it. A betrayal by Senna unmasks her for everyone. Checked by axe in the
 // night and day themes.
-import { axeViolations, check, eventually, openPanelTab, seeAllTours, settle, signIn, sleep } from "../lib.mjs";
+import { axeViolations, check, eventually, openPanelTab, seeAllTours, settle, signIn, untilStill, hydrated } from "../lib.mjs";
 
 async function axeClean(page, selector, where) {
   const found = await axeViolations(page, selector);
@@ -16,7 +16,7 @@ async function axeClean(page, selector, where) {
 
 async function inTheme(page, theme) {
   await page.evaluate((value) => (document.documentElement.dataset.theme = value), theme);
-  await sleep(300);
+  await untilStill(page);
 }
 
 async function openBonds(h) {
@@ -93,7 +93,7 @@ export default {
       const motion = await page.evaluate(() => window.__unmasking);
       check(motion.length > 0, "the row turned while on screen");
       check(motion.every((name) => name === (reduced ? "bond-unmask-fade" : "bond-unmask")), `the turn ${reduced ? "fades under reduced motion" : "flips"}: ${motion.join(", ")}`);
-      await sleep(1_000);
+      await untilStill(page);
       await axeClean(page, `${root}[data-bond-row="Senna Vale"]`, "the seen-through row at night");
       await t.shot("seen-through");
       await inTheme(page, "light");
@@ -104,7 +104,7 @@ export default {
       // The storyteller reads the act on their own Bonds tab.
       const dmPage = await storyteller.newPage();
       await dmPage.goto(`${base}/campaigns/${table.id}`, { waitUntil: "networkidle", timeout: 120_000 });
-      await sleep(1_500);
+      await hydrated(dmPage);
       await settle(dmPage);
       await openBonds({ page: dmPage, root: "", tap: (locator) => locator.click() });
       const act = dmPage.locator(`[data-bond-act="Senna Vale"]`).locator("visible=true").first();
@@ -127,7 +127,7 @@ export default {
       const outText = await row.innerText();
       check(/Unmasked/.test(outText) && /ended/.test(outText), `the row reads unmasked and ended: ${outText}`);
       check(!/ledger/i.test(outText), "the motive stays the storyteller's");
-      await sleep(600);
+      await untilStill(page);
       await axeClean(page, `${root}[data-bond-row="Senna Vale"]`, "the unmasked row");
       await t.shot("unmasked");
     } finally {

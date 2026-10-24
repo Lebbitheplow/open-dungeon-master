@@ -6,7 +6,7 @@
 // see; the confirmation comes back to him alone, in a status line that fades
 // up, and the action is listed as held. Nothing reaches the transcript.
 // Clean under axe by night and by day.
-import { axeViolations, check, eventually, openPanelTab, sleep } from "../lib.mjs";
+import { axeViolations, check, eventually, openPanelTab, sleep, untilStill } from "../lib.mjs";
 
 async function axeClean(page, selector, where) {
   const found = await axeViolations(page, selector);
@@ -15,7 +15,7 @@ async function axeClean(page, selector, where) {
 
 async function inTheme(page, theme) {
   await page.evaluate((value) => (document.documentElement.dataset.theme = value), theme);
-  await sleep(300);
+  await untilStill(page);
 }
 
 export default {
@@ -62,6 +62,7 @@ export default {
     check(/secret-confirm-in|pact-unmask-fade/.test(anim), `the confirmation fades up (${anim})`);
     await eventually(async () => (await own.locator('[data-own-secret="held"]').count()) > 0, { label: "the action listed as held" });
     await t.shot("pact-secret-done");
+    // Time is the check: a line the secret let through would reach the transcript within this while.
     await sleep(500);
     check((await page.locator(`${root}[data-message-id]`).count()) === before, "nothing reached the transcript");
   },

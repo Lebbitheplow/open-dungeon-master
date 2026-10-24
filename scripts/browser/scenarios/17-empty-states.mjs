@@ -3,7 +3,7 @@
 // (its creation is published to the table), and the workshop shelf with
 // nothing on it shows its empty state alone; neither page shows
 // "(loadError ?" as text, the way both did before #258.
-import { check, eventually, sleep } from "../lib.mjs";
+import { check, eventually } from "../lib.mjs";
 
 const LEAK = /\(loadError \?|: loaded \?|: null\)/;
 
@@ -14,7 +14,6 @@ export default {
     const { page, root, ids } = t;
     await t.open(`/campaigns/${ids.quietId}`);
     await eventually(() => page.locator(`${root}.cine-stage`).count(), { timeoutMs: 30_000, label: "the quiet table's stage" });
-    await sleep(1_500);
     const storyTab = page.locator(`${root}[data-tour="tab-story"]`).locator("visible=true").first();
     await eventually(() => storyTab.count(), { timeoutMs: 30_000, label: "the Story tab" });
     await t.tap(storyTab);

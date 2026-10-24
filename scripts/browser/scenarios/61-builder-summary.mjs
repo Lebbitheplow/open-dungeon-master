@@ -3,13 +3,10 @@
 // summary" comes back with focus on that row. A pick still owed is said in
 // words with a Fix that lands on its field. A new build ends on the same
 // summary, with its save button there. Nothing here is saved.
-import { check, eventually, sleep } from "../lib.mjs";
+import { check, eventually, untilStill, currentStep, upTo } from "../lib.mjs";
 
 const visible = (page, root, text) =>
   page.locator(`${root}button`).filter({ hasText: text }).locator("visible=true");
-
-const currentStep = async (page, root) =>
-  (await page.locator(`${root}button[aria-current="step"]`).locator("visible=true").first().getAttribute("aria-label")) ?? "";
 
 async function onStep(page, root, number, label) {
   await eventually(async () => new RegExp(`^Step ${number}:`).test(await currentStep(page, root)), {
@@ -67,7 +64,7 @@ export default {
     check(t.viewport !== "desktop" || plain.shown === 6, `every step name is printed on a desktop (${plain.shown})`);
     check(plain.gap >= 8, `the step heading starts below the step names (${plain.gap}px clear)`);
     await page.evaluate(() => (document.documentElement.style.fontSize = "150%"));
-    await sleep(300);
+    await untilStill(page);
     const enlarged = await clearance();
     await t.shot("summary-enlarged");
     await page.evaluate(() => (document.documentElement.style.fontSize = ""));
@@ -131,12 +128,11 @@ export default {
         async () => {
           if (new RegExp(`^Step ${step + 1}:`).test(await currentStep(page, root))) return true;
           if (await next.isEnabled()) await t.tap(next);
-          await sleep(800);
+          await upTo(async () => new RegExp(`^Step ${step + 1}:`).test(await currentStep(page, root)), 800);
           return new RegExp(`^Step ${step + 1}:`).test(await currentStep(page, root));
         },
         { timeoutMs: 20_000, label: `Continue from step ${step}` },
       );
-      await sleep(300);
     }
     await eventually(() => summary.count(), { timeoutMs: 10_000, label: "the summary at the end of a new build" });
     check(/Every step is complete/.test(await page.locator(`${root}section[data-active]`).first().innerText()), "the filled build owes nothing");

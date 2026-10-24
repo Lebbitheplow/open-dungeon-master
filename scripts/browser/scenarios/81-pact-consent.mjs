@@ -5,7 +5,7 @@
 // to do the asking). A real switch named for the character, a finger's size
 // on a phone, worked by keyboard with a visible focus ring, clean under axe
 // by night and by day.
-import { axeViolations, check, eventually, openPanelTab, sleep } from "../lib.mjs";
+import { axeViolations, check, eventually, openPanelTab, untilStill } from "../lib.mjs";
 
 async function axeClean(page, selector, where) {
   const found = await axeViolations(page, selector);
@@ -14,7 +14,7 @@ async function axeClean(page, selector, where) {
 
 async function inTheme(page, theme) {
   await page.evaluate((value) => (document.documentElement.dataset.theme = value), theme);
-  await sleep(300);
+  await untilStill(page);
 }
 
 export default {

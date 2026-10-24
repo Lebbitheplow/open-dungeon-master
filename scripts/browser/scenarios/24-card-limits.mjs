@@ -5,7 +5,7 @@
 //
 // On a workshop of this run's own (the lead owns none in the seed), through
 // the hub's Storyboard card and the board's own card sheet.
-import { check, eventually, settle, sleep } from "../lib.mjs";
+import { check, eventually, settle } from "../lib.mjs";
 
 const OVER = `${"The road runs on. ".repeat(222)}and the part that would be lost`;
 
@@ -22,7 +22,6 @@ export default {
     const storyboardCard = page.locator(`${root}[data-tour="hub-systems"] button`, { hasText: /Storyboard/ }).locator("visible=true").first();
     await eventually(() => storyboardCard.count(), { timeoutMs: 30_000, label: "the hub's Storyboard card" });
     await t.tap(storyboardCard);
-    await sleep(800);
     // The system's guided tour greets a first visit; its overlay eats clicks.
     await settle(page);
 

@@ -4,7 +4,7 @@
 // put back from the search and from "Browse every feat", the race's feat on
 // the Ancestry step and the improvement's on Ability scores, and the
 // edit saves. A feat she never held is still refused while she falls short.
-import { check, eventually, sleep } from "../lib.mjs";
+import { check, eventually } from "../lib.mjs";
 
 const visible = (page, root, text) =>
   page.locator(`${root}a, ${root}button`).filter({ hasText: text }).locator("visible=true");
@@ -85,7 +85,6 @@ export default {
     const save = visible(page, root, /^Save changes$/);
     await eventually(async () => (await save.count()) > 0 && (await save.first().isEnabled()), { label: "Save changes" });
     await t.tap(save.first());
-    await sleep(500);
     await eventually(async () => {
       const response = await api.get(`${base}/api/characters/${ids.heldFeats}`);
       const sheet = (await response.json()).character?.sheet;

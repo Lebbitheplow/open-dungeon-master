@@ -74,6 +74,7 @@ export default {
       await scene.focus();
       await map.focus();
       await map.blur();
+      // Time is the check: a save the blur set off would be sent within this while.
       await sleep(1_500);
       check(sentByA.length === 0, `window A sent nothing for fields nobody typed into (sent ${sentByA.join(" | ")})`);
       let now = await saved();
@@ -95,6 +96,7 @@ export default {
       // The same field changed in both: the words typed and committed last win.
       await scene.fill("watercolour");
       await save({ artStyleScene: "pencil" }, "the scene");
+      // Time is the check: the other window's save would reach this field within this while.
       await sleep(1_500);
       check((await scene.inputValue()) === "watercolour", "words being typed are not replaced under the typist");
       await scene.press("Enter");

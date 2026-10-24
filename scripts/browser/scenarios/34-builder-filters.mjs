@@ -1,7 +1,7 @@
 // The class grid's filters: Role set to Tank leaves only classes whose card
 // says Tank (the chosen class excepted), says how many of how many are
 // shown, and Clear filters brings the whole grid back.
-import { check, eventually, sleep } from "../lib.mjs";
+import { check, eventually, currentStep } from "../lib.mjs";
 
 export default {
   name: "builder-filters",
@@ -13,15 +13,15 @@ export default {
     const diamond = page.locator(`${root}button[aria-label^="Back to step 3:"]`).locator("visible=true");
     await eventually(async () => (await diamond.count()) && diamond.first().isEnabled(), { timeoutMs: 15_000, label: "the Class diamond" });
     await t.tap(diamond.first());
-    await sleep(800);
-
     const cards = page.locator(`${root}section[data-active] .creator-card`);
+    await eventually(async () => /^Step 3:/.test(await currentStep(page, root)) && (await cards.count()) > 0, { label: "the Class step's cards" });
+
     const before = await cards.count();
     await t.tap(page.locator(`${root}section[data-active] button[aria-label="Role"]`).locator("visible=true").first());
     const tank = page.getByRole("menuitemradio").filter({ hasText: "Role: Tank" });
     await eventually(() => tank.count(), { timeoutMs: 10_000, label: "the Role menu" });
     await tank.first().click();
-    await sleep(500);
+    await eventually(async () => (await cards.count()) !== before, { label: "the Tank filter applied" });
 
     // The unfiltered grid folds to its first dozen cards, so the narrowing
     // is read from the bar's own count, not from the folded grid.
@@ -40,7 +40,6 @@ export default {
     await t.shot("tanks");
 
     await t.tap(page.locator(`${root}section[data-active] button`).filter({ hasText: /^Clear filters$/ }).first());
-    await sleep(500);
-    check((await cards.count()) === before, "Clear filters brings the grid back");
+    await eventually(async () => (await cards.count()) === before, { label: "Clear filters bringing the grid back" });
   },
 };

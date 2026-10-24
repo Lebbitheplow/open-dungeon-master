@@ -9,6 +9,8 @@
 import { check, enterApp, eventually, newContext, signIn, sleep } from "../lib.mjs";
 
 const TOUR = '[role="dialog"][aria-label="Guided tour"]';
+// The step the tour shows, or null once it has closed.
+const tourStep = (page) => page.locator(TOUR).evaluateAll((cards) => cards[0]?.getAttribute("data-tour-step") ?? null);
 
 // Watches a page for the tour: the table opens it about 1.2 s after it has
 // laid itself out, the workshop about 0.9 s.
@@ -66,8 +68,9 @@ export default {
       await second.goto(`${base}/workshop`, load);
       check(await tourOpens(second, 20_000), "the shelf's tour is still unfinished");
       for (let step = 0; step < 24 && (await second.locator(TOUR).count()); step += 1) {
+        const was = await tourStep(second);
         await second.locator(`${TOUR} button`).filter({ hasText: /^(Next|Done)$/ }).first().click();
-        await sleep(350);
+        await eventually(async () => (await tourStep(second)) !== was, { label: "the shelf's tour moving on" });
       }
       check((await second.locator(TOUR).count()) === 0, "Done closes the shelf's tour");
       await eventually(async () => (await finished(one, base))["workshop-shelf"]?.how === "done", { label: "the account records Done" });
@@ -121,19 +124,26 @@ export default {
         await phone.evaluate((to) => window.odmShell.navigation.push(to), `/workshop/${workshopId}`);
         check(await tourOpens(phone, 20_000), "the workshop's hub tour opens in the app");
         const route = await phone.evaluate(() => window.odmShell.navigation.location());
-        const taken = await phone.evaluate(() => {
-          const escape = new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true });
-          (document.activeElement instanceof HTMLElement ? document.activeElement : document.body).dispatchEvent(escape);
-          return escape.defaultPrevented;
-        });
+        // The tour listens for keys from an effect, which the app's Preact runs
+        // a frame after the card paints: an Escape in that frame is sent again.
+        const taken = await eventually(
+          () =>
+            phone.evaluate(() => {
+              const escape = new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true });
+              (document.activeElement instanceof HTMLElement ? document.activeElement : document.body).dispatchEvent(escape);
+              return escape.defaultPrevented;
+            }),
+          { timeoutMs: 2_000, every: 50 },
+        ).then(() => true, () => false);
         check(taken, "the tour takes the shell's Escape, so the back gesture stops there");
         await eventually(async () => (await phone.locator(TOUR).count()) === 0, { label: "the shell's Escape ends the tour" });
+        // Time is the check: a back gesture the tour let through would move the page within this while.
         await sleep(600);
         const after = await phone.evaluate(() => window.odmShell.navigation.location());
         check(JSON.stringify(after) === JSON.stringify(route), `the page stays where it was (${JSON.stringify(route)} then ${JSON.stringify(after)})`);
         await eventually(async () => (await finished(one, base))["workshop-hub"]?.how === "ended", { label: "the account records the tour the Escape ended" });
         await phone.evaluate(() => window.odmShell.navigation.push("/"));
-        await sleep(2_000);
+        await eventually(async () => (await phone.evaluate(() => window.odmShell.navigation.location()))?.pathname === "/", { label: "the app's home" });
         await phone.evaluate((to) => window.odmShell.navigation.push(to), `/workshop/${workshopId}`);
         check(!(await tourOpens(phone)), "the ended hub tour does not open again");
       }

@@ -10,7 +10,7 @@
 //     come in stays on the review, says what failed with a way into the
 //     campaign as it is, and Try again sends only the import: one campaign
 //     is made, not two.
-import { check, eventually, sleep } from "../lib.mjs";
+import { check, eventually, untilStill } from "../lib.mjs";
 
 export default {
   name: "prep-import-failure",
@@ -60,7 +60,7 @@ export default {
       await eventually(() => refused.count(), { timeoutMs: 15_000, label: "the refusal, as an error" });
       const colour = await refused.evaluate((node) => getComputedStyle(node).color);
       check(!/rgb\(52, 211, 153\)/.test(colour), `the refusal is not drawn in the success green (${colour})`);
-      await sleep(600);
+      await untilStill(page);
       await t.shot("picker-refused");
       await page.unroute(new RegExp(`/api/campaigns/${tableId}/import$`));
 
@@ -99,7 +99,7 @@ export default {
       const open = followUp.getByRole("button", { name: /Open the campaign as it is/ });
       const openSize = await open.boundingBox();
       check(openSize && openSize.height >= 40, `Open the campaign as it is is a 40px target (${openSize?.height}px)`);
-      await sleep(900);
+      await untilStill(page);
       await t.shot("creator-follow-up");
 
       // Try again sends only the import, which now goes through.

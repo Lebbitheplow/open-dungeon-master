@@ -3,7 +3,7 @@
 // copy, says so, and can throw it away. In the app the edit page is one of
 // the native screens (client src/renderer/game/index.tsx ROUTES), so the
 // same walk proves the route is there.
-import { check, eventually, sleep } from "../lib.mjs";
+import { check, eventually, currentStep } from "../lib.mjs";
 
 // Everything on screen: the app's game root, or the page's body.
 const screenText = async (page, root) =>
@@ -25,8 +25,9 @@ async function walkToSave(t) {
     const ready = await eventually(() => next.first().isEnabled(), { timeoutMs: 10_000, label: "Continue" }).catch(() => false);
     if (!ready) await t.shot(`step-${step + 1}`);
     check(ready, `step ${step + 1} of the stored build is complete`);
+    const was = await currentStep(page, root);
     await t.tap(next.first());
-    await sleep(500);
+    await eventually(async () => (await currentStep(page, root)) !== was, { label: `step ${step + 2} of the build editor` });
   }
   throw new Error("the build editor never reached Save changes");
 }
@@ -75,7 +76,6 @@ export default {
     );
     if (await menu.count()) {
       await t.tap(menu.first());
-      await sleep(400);
     }
     // The item's hint follows its label in the same button.
     const duplicate = visible(page, root, /^\s*Duplicate and edit/);
