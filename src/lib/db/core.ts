@@ -2290,6 +2290,11 @@ function ensureSchema(db: SqliteDatabase) {
     // for every other character. It keeps one player per pregen per table
     // however the copy is seated again (src/lib/db/pregen-offers.ts).
     ["pregen_origin_id", `TEXT NOT NULL DEFAULT ''`],
+    // A pregen the AI DM drafted for its workshop
+    // (src/app/api/workshops/[workshopId]/pregens/draft), until the DM
+    // edits it: the roster marks it "Drafted by the AI DM". 0 for every
+    // other character, and for a draft once edited.
+    ["ai_drafted", `INTEGER NOT NULL DEFAULT 0`],
   ]);
 
   // The romance meter was generalized into the relationship meter: one

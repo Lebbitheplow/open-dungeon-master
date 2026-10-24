@@ -69,12 +69,14 @@ export const WORKSHOP_GUIDES: ToolGuide[] = [
     steps: [
       "Set the size and level in the bar at the top of the workshop and Save.",
       "Pick a character from your library and Add it, or Build a new one.",
+      "Or choose how many and press Draft pregens: the AI DM proposes a party for this adventure and the builder's rules make each sheet at level 1. Drafts are not offered to players until you tick them.",
       "Take one off with the cross; it stays in your library.",
     ],
     atTable: "The pregens are sheets ready for anyone who sits down without a character.",
     tips: [
       "A pregen whose level differs from the stand-in party is flagged on its card.",
       "Pregens ride along inside the bundle when you share the workshop.",
+      "A drafted pregen is marked Drafted by the AI DM until you edit it. Without a text model, Draft pregens is off and says why.",
     ],
   },
   {

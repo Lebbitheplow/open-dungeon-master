@@ -22,6 +22,8 @@ import type { GroupId, StepKey } from "@/app/create-campaign/groups";
 import { useCampaignDefaults } from "@/app/create-campaign/useCampaignDefaults";
 import { withCapabilities, type ServerCapabilities } from "@/app/create-campaign/capabilities";
 import { campaignPayload } from "@/app/create-campaign/payload";
+import { DraftPregensOffer, type PregenDraftChoice } from "@/app/create-campaign/DraftPregensOffer";
+import { requestDraft } from "@/app/workshop/party/DraftPregens";
 
 const STEP_KEYS: readonly StepKey[] = ["essentials", "experience", "review"];
 
@@ -75,7 +77,10 @@ export function CreateCampaignDialog({
   // The campaign is made but part of what was chosen for it did not land
   // (workshop import audit F03): which campaign, what is left to send, and
   // what to tell the person. Until it clears, the button sends only that.
-  const [followUp, setFollowUp] = useState<{ campaignId: string; left: WorldSetupLeft; importDone: boolean; problems: string[] } | null>(null);
+  const [followUp, setFollowUp] = useState<{ campaignId: string; left: WorldSetupLeft; importDone: boolean; pregensDone: boolean; problems: string[] } | null>(null);
+  // AI-drafted pregens for a workshop brought in with none, when the review's
+  // offer is ticked (DraftPregensOffer): drafted once the table is made.
+  const [pregenDraft, setPregenDraft] = useState<PregenDraftChoice>(null);
   const [wasOpen, setWasOpen] = useState(open);
   if (open !== wasOpen) {
     setWasOpen(open);
@@ -83,6 +88,7 @@ export function CreateCampaignDialog({
       setStep(0);
       setFromReview(false);
       setFollowUp(null);
+      setPregenDraft(null);
     }
   }
   const [packs, setPacks] = useState<WorldPackSummary[]>([]);
@@ -332,6 +338,7 @@ export function CreateCampaignDialog({
       let campaignId = followUp?.campaignId ?? null;
       let left: WorldSetupLeft = followUp?.left ?? { houseRules: latest.current.houseRules, loreDrafts: latest.current.loreDrafts };
       let importDone = followUp?.importDone ?? false;
+      let pregensDone = followUp?.pregensDone ?? false;
       if (!campaignId) {
         const response = await fetch("/api/campaigns", {
           method: "POST",
@@ -361,8 +368,18 @@ export function CreateCampaignDialog({
           problems.push(`${prep?.title ?? "The prep you chose"} did not come in: ${imported.error}`);
         }
       }
+      // The pregens go after the prep, at the table's starting level, and
+      // only when the prep came in: they are the workshop's, offered to this
+      // table once the DM ticks them there.
+      if (!pregensDone && importDone && pregenDraft) {
+        const drafted = await requestDraft(pregenDraft.workshopId, { count: pregenDraft.count, campaignId });
+        pregensDone = drafted.ok;
+        if (!drafted.ok) {
+          problems.push(`The pregens were not drafted: ${drafted.error}`);
+        }
+      }
       if (problems.length) {
-        setFollowUp({ campaignId, left, importDone, problems });
+        setFollowUp({ campaignId, left, importDone, pregensDone, problems });
         return;
       }
       setFollowUp(null);
@@ -466,6 +483,15 @@ export function CreateCampaignDialog({
           }
           onEdit={editFrom}
           defaultsPanel={<DefaultsPanel actions={defaultsActions} />}
+          pregenOffer={
+            <DraftPregensOffer
+              sourceId={draft.contentImport.sourceId}
+              prepTitle={prep?.title ?? "This workshop"}
+              startingLevel={draft.startingLevel}
+              choice={pregenDraft}
+              onChoice={setPregenDraft}
+            />
+          }
         />
       ),
       canContinue: !busy && !(solo && storyKnownMissing),
