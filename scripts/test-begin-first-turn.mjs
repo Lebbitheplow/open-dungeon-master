@@ -15,7 +15,7 @@
 import assert from "node:assert/strict";
 import { openWorld } from "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
-import { fakeModel, reply, settleQueue } from "./lib/enforce-narrator.mjs";
+import { fakeModel, held, reply, settleQueue } from "./lib/enforce-narrator.mjs";
 import { standInStoryteller } from "./lib/stand-in-storyteller.mjs";
 
 // An AI-run table through the routes needs a storyteller set up (the routes
@@ -31,7 +31,8 @@ const { test, finish } = suite("test-begin-first-turn");
 process.env.TTS_PROVIDER = "off";
 
 const campaigns = await import("../src/lib/db/campaigns.ts");
-const { listRecentMessages } = await import("../src/lib/db/messages.ts");
+const { insertCampaignMessage, listRecentMessages } = await import("../src/lib/db/messages.ts");
+const { requestDmTurn } = await import("../src/lib/dm/loop.ts");
 const { getBoundarySnapshot } = await import("../src/lib/db/snapshots.ts");
 const { getDmStatus } = await import("../src/lib/dm/status.ts");
 const { dmQueueDepth } = await import("../src/lib/dm/queue.ts");
@@ -201,6 +202,82 @@ await test("Quick Start: the starter route, a ready-made hero, Begin, and the op
   assert.match(JSON.stringify(model.requests[firstTurn].messages), /The sexton's ledger is found/, "the opening turn did not read the arc");
   // The premise has them arrive at dusk, and the opening turn is told so.
   assert.match(JSON.stringify(model.requests[firstTurn].messages), /Date and time: Midweek, Greening 1, year 1 \(18:00\), evening/);
+  model.close();
+  world.close();
+});
+
+// A table begun the whole way, its opening narrated: setup, the arc, then
+// the opening turn's own words.
+async function begun() {
+  const world = await openWorld({ status: "lobby", gameSettings: { ttsEnabled: false, aiStorySetup: true } });
+  world.addHero({ name: "Kara", class: "fighter", level: 1 });
+  const model = await fakeModel();
+  model.pointAt(world);
+  model.script([reply({ text: SETUP }), reply({ text: ARC })]);
+  assert.equal((await ready(world, world.owner)).status, 200);
+  assert.equal((await begin(world, world.owner)).status, 200);
+  await settleQueue(world.campaignId);
+  assert.equal(transcript(world.campaignId).dm.length, 1, "the table never got its opening");
+  return { world, model };
+}
+
+const rewindToChapterOne = (world) =>
+  send(world, world.owner, "campaigns/[campaignId]/chapters/rollback", "POST", { chapterIndex: 1, confirm: true });
+
+await test("A rewind to chapter 1 takes the opening with it, and the DM tells the opening again on its own.", async () => {
+  const { world, model } = await begun();
+  model.script([]);
+  const rewound = await rewindToChapterOne(world);
+  assert.equal(rewound.status, 200, JSON.stringify(rewound.json));
+  await settleQueue(world.campaignId);
+
+  const all = listRecentMessages(world.campaignId, 50);
+  const note = all.find((message) => /The story rewinds to the start of Chapter 1/.test(message.content));
+  assert.ok(note, "no rewind note");
+  const dm = all.filter((message) => message.authorType === "dm");
+  // Found on 2026-10-23: the table read the note and then sat silent for 25
+  // minutes, the opening gone and nothing asking for another.
+  assert.equal(dm.length, 1, `expected one new opening narration, found ${dm.length}`);
+  assert.ok(dm[0].seq > note.seq, "the narration is not the new opening");
+  const turn = model.requests.find(isTurnRequest);
+  assert.ok(turn, "no turn reached the model after the rewind");
+  assert.match(JSON.stringify(turn.messages), /The party is assembled and the adventure begins\. Introduce the opening scene/, "the new turn was not asked for the opening scene");
+  assert.equal(getDmStatus(world.campaignId), "idle");
+  model.close();
+  world.close();
+});
+
+await test("A rewind goes ahead of the work queued behind the turn it stops, and that work runs after it.", async () => {
+  const { world, model } = await begun();
+  const ARC_AGAIN = ARC.replace("The sexton's ledger is found", "The bell-rope is found cut");
+  const slow = held(reply({ text: "The council falls quiet as" }));
+  model.script([slow.entry, reply({ text: ARC_AGAIN })]);
+  // A player speaks; the DM's answer is still being written.
+  const seq = campaigns.allocateSeq(world.campaignId);
+  insertCampaignMessage({ campaignId: world.campaignId, seq, authorType: "player", userId: world.owner.id, content: "I ask the council what they need." });
+  requestDmTurn(world.campaignId);
+  while (!model.requests.some(isTurnRequest)) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  // The lead asks for a new story plan (queued behind the turn), then rewinds.
+  assert.equal((await send(world, world.owner, "campaigns/[campaignId]/arc", "POST", {})).status, 202);
+  const rewound = await rewindToChapterOne(world);
+  assert.equal(rewound.status, 200, JSON.stringify(rewound.json));
+  slow.release();
+  await settleQueue(world.campaignId);
+
+  // The rewind restores the arc of chapter 1's rewind point. Behind the
+  // queue it ran after the new plan and put the old one back; first, it
+  // runs before, and the plan the lead asked for is the one that stands.
+  const arc = JSON.stringify(world.campaign().storyArc);
+  assert.match(arc, /The bell-rope is found cut/, "the new plan was undone by the rewind behind it");
+  const arcAt = model.requests.findIndex((body) => ARC_PROMPT.test(systemPrompt(body)));
+  const openingAt = model.requests.findIndex((body, index) => index > arcAt && isTurnRequest(body));
+  assert.ok(arcAt > 0 && openingAt > arcAt, "the opening was not told after the new plan");
+  assert.match(JSON.stringify(model.requests[openingAt].messages), /The bell-rope is found cut/, "the new opening did not read the new plan");
+  const dm = transcript(world.campaignId).dm;
+  assert.equal(dm.length, 1, `expected the one new opening, found ${dm.length}`);
+  assert.doesNotMatch(dm[0].content, /The council falls quiet as/, "the stopped turn's words survived the rewind");
   model.close();
   world.close();
 });

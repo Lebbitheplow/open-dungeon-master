@@ -1,6 +1,6 @@
 import { getDatabase, nowIso } from "@/lib/db/core";
 import { allocateSeq, getCampaignById } from "@/lib/db/campaigns";
-import { insertCampaignMessage } from "@/lib/db/messages";
+import { insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
 import {
   capturePreRollbackSnapshot,
   deleteBoundarySnapshotsAfter,
@@ -9,7 +9,8 @@ import {
 } from "@/lib/db/snapshots";
 import { rollbackWarnings, type RollbackScope } from "@/lib/dm/rollback-logic";
 import { resetChapterMemory } from "@/lib/dm/chapter-close";
-import { enqueueDmJob, stopDmJob } from "@/lib/dm/queue";
+import { requestDmTurn } from "@/lib/dm/loop";
+import { enqueueDmJobFirst, stopDmJob } from "@/lib/dm/queue";
 import { REWOUND_REASON } from "@/lib/dm/job-stage-logic";
 import { setDmStatus } from "@/lib/dm/status";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
@@ -97,8 +98,10 @@ export function warningsForRollback(scope: RollbackScope): string[] {
 }
 
 // Runs the rewind on the campaign's DM queue so it can never interleave
-// with a narration turn. Resolves with ok=false when the snapshot vanished
-// or the campaign is gone by the time the job runs.
+// with a narration turn, ahead of whatever else is queued there: that work
+// belongs to the story the rewind undoes, and runs after it instead. Resolves
+// with ok=false when the snapshot vanished or the campaign is gone by the
+// time the job runs.
 export async function performRollback(
   campaignId: string,
   targetChapterIndex: number,
@@ -112,9 +115,20 @@ export async function performRollback(
   // stuck would hold the rewind behind it forever (issue #383), so it is
   // stopped first.
   stopDmJob(campaignId, REWOUND_REASON);
-  await enqueueDmJob(campaignId, async () => {
+  await enqueueDmJobFirst(campaignId, async () => {
     result = rollbackNow(campaignId, targetChapterIndex);
   });
+  // Chapter 1's rewind point is the world before the opening narration was
+  // written (captured at the campaign's start, after setup and the arc), so
+  // the rewind takes the opening with it. Nothing else would ask for a new
+  // one: the table read "The story rewinds" and then sat silent until
+  // someone spoke (a 25-minute wait on 2026-10-23). The DM tells the opening
+  // again, as the campaign's start does; requestDmTurn leaves a table with a
+  // person in the DM seat to them. A rewind point that already holds a
+  // narration waits for the players as any other chapter's does.
+  if (result.ok && targetChapterIndex === 1 && !listRecentMessages(campaignId, 50).some((message) => message.authorType === "dm")) {
+    requestDmTurn(campaignId);
+  }
   return result;
 }
 

@@ -1,5 +1,6 @@
 // Per-campaign job serializer: at most one DM narration runs per campaign at
-// a time, and jobs run in arrival order. Lives on globalThis so dev-mode HMR
+// a time, and jobs run in arrival order (a rewind excepted: it goes first,
+// see enqueueDmJobFirst). Lives on globalThis so dev-mode HMR
 // cannot fork the queue. llama-server runs with --parallel 1, so global
 // concurrency stays low naturally (jobs from different campaigns queue at the
 // model server).
@@ -31,6 +32,8 @@ declare global {
   var __odmDmDropped: Set<string> | undefined;
   var __odmDmDepths: Map<string, number> | undefined;
   var __odmDmRunning: Map<string, DmJobControl> | undefined;
+  var __odmDmRunningDone: Map<string, Promise<void>> | undefined;
+  var __odmDmFirst: Map<string, Promise<void>> | undefined;
   var __odmDmWatchdog: { timer: ReturnType<typeof setInterval> | null; checkMs: number; graceMs: number; scale: number } | undefined;
 }
 
@@ -48,6 +51,17 @@ function running() {
 
 function watchdog() {
   return (globalThis.__odmDmWatchdog ??= { timer: null, checkMs: 5_000, graceMs: 15_000, scale: 1 });
+}
+
+// When the job a campaign runs now has settled, whichever way it ends.
+function runningDone() {
+  return (globalThis.__odmDmRunningDone ??= new Map<string, Promise<void>>());
+}
+
+// Jobs that go ahead of everything queued (enqueueDmJobFirst), the newest
+// last: the queued jobs wait for them at the gate.
+function firsts() {
+  return (globalThis.__odmDmFirst ??= new Map<string, Promise<void>>());
 }
 
 // A paused campaign (docs/vtt-parity-implementation-plan.md 9.1, the
@@ -104,9 +118,20 @@ export function dmQueuePausedFor(campaignId: string, reason: string): boolean {
   return pauses().get(campaignId)?.reasons.includes(reason) ?? false;
 }
 
+function pauseGate(campaignId: string): Promise<void> {
+  const pause = pauses().get(campaignId);
+  return pause ? pause.promise.then(() => pauseGate(campaignId)) : Promise.resolve();
+}
+
+// A queued job starts once the campaign is not paused and nothing put ahead
+// of the queue is still waiting to run or running.
 function gate(campaignId: string): Promise<void> {
   const pause = pauses().get(campaignId);
-  return pause ? pause.promise.then(() => gate(campaignId)) : Promise.resolve();
+  if (pause) {
+    return pause.promise.then(() => gate(campaignId));
+  }
+  const first = firsts().get(campaignId);
+  return first ? first.then(() => gate(campaignId)) : Promise.resolve();
 }
 
 // Campaigns deleted while jobs were still waiting: those jobs are skipped
@@ -153,20 +178,23 @@ export function enqueueDmJob(campaignId: string, job: () => Promise<void>, optio
   // to this campaign in the usage ledger (src/lib/usage/scope.ts).
   const scoped = bindUsageScope(job, { campaignId });
   depths().set(campaignId, dmQueueDepth(campaignId) + 1);
+  const kind = options.kind ?? "work";
+  // The check and the start are one synchronous step: a job put first while
+  // this one waited between two promise callbacks is seen, never overtaken.
+  const startWhenClear = (): Promise<void> | undefined => {
+    if (pauses().get(campaignId) || firsts().get(campaignId)) {
+      return gate(campaignId).then(startWhenClear);
+    }
+    return dropped().has(campaignId) ? undefined : runJob(campaignId, scoped, kind);
+  };
   const next = tail
     .then(() => gate(campaignId))
-    .then(() => (dropped().has(campaignId) ? undefined : runJob(campaignId, scoped, options.kind ?? "work")))
+    .then(startWhenClear)
     .catch((error) => {
       console.error(`[dm] job failed for campaign ${campaignId}:`, error);
     })
     .finally(() => {
-      const left = dmQueueDepth(campaignId) - 1;
-      if (left > 0) {
-        depths().set(campaignId, left);
-      } else {
-        depths().delete(campaignId);
-        settleStatus(campaignId);
-      }
+      leaveQueue(campaignId);
       // The last job out takes the campaign's entry with it, so the map does
       // not keep a settled promise for every table that ever had a turn.
       if (queues().get(campaignId) === next) {
@@ -176,6 +204,54 @@ export function enqueueDmJob(campaignId: string, job: () => Promise<void>, optio
     });
   queues().set(campaignId, next);
   return next;
+}
+
+// Runs ahead of every job still waiting: as soon as the job running now has
+// settled (finished, stopped or abandoned), before anything queued earlier.
+// A rewind goes this way (src/lib/dm/rollback.ts). Behind the queue it waited
+// for work it was about to undo: on 2026-10-23 a table's rewind sat 100
+// seconds behind a story plan queued after the turn it stopped. What was
+// queued still runs, after it, against the story as it then stands. Two jobs
+// put first keep their order, and a pause holds them like any other.
+export function enqueueDmJobFirst(campaignId: string, job: () => Promise<void>, options: DmJobOptions = {}) {
+  const earlier = firsts().get(campaignId) ?? Promise.resolve();
+  const scoped = bindUsageScope(job, { campaignId });
+  depths().set(campaignId, dmQueueDepth(campaignId) + 1);
+  const kind = options.kind ?? "work";
+  const startWhenFree = (): Promise<void> | undefined => {
+    const busy = running().get(campaignId);
+    if (busy && !busy.settled) {
+      return (runningDone().get(campaignId) ?? Promise.resolve()).then(startWhenFree);
+    }
+    if (pauses().get(campaignId)) {
+      return pauseGate(campaignId).then(startWhenFree);
+    }
+    return dropped().has(campaignId) ? undefined : runJob(campaignId, scoped, kind);
+  };
+  const next: Promise<void> = earlier
+    .then(startWhenFree)
+    .catch((error) => {
+      console.error(`[dm] job failed for campaign ${campaignId}:`, error);
+    })
+    .finally(() => {
+      if (firsts().get(campaignId) === next) {
+        firsts().delete(campaignId);
+      }
+      leaveQueue(campaignId);
+    });
+  firsts().set(campaignId, next);
+  return next;
+}
+
+// One job fewer for the campaign; the last one out sets the status line right.
+function leaveQueue(campaignId: string) {
+  const left = dmQueueDepth(campaignId) - 1;
+  if (left > 0) {
+    depths().set(campaignId, left);
+  } else {
+    depths().delete(campaignId);
+    settleStatus(campaignId);
+  }
 }
 
 // Runs one job under its control. The race is what lets the queue move past
@@ -188,6 +264,11 @@ async function runJob(campaignId: string, job: () => Promise<void>, kind: DmJobK
   });
   releases.set(control, release);
   running().set(campaignId, control);
+  let done: () => void = () => {};
+  const settled = new Promise<void>((resolve) => {
+    done = resolve;
+  });
+  runningDone().set(campaignId, settled);
   publishJob(campaignId);
   ensureWatchdog();
   try {
@@ -199,6 +280,10 @@ async function runJob(campaignId: string, job: () => Promise<void>, kind: DmJobK
       running().delete(campaignId);
       publishJob(campaignId);
     }
+    if (runningDone().get(campaignId) === settled) {
+      runningDone().delete(campaignId);
+    }
+    done();
   }
 }
 

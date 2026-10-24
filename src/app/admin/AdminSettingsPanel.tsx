@@ -151,6 +151,12 @@ export function AdminSettingsPanel() {
   if (!config || !env) {
     return <PageSkeleton kind="flat" className="px-0 py-2" />;
   }
+  // The utility model runs on Ollama when that is picked, here or by the
+  // environment, or when it is left to follow a storyteller on Ollama;
+  // otherwise on an OpenAI-compatible server, the story's own when no
+  // address is typed (src/lib/runtime-defaults.ts, src/lib/model-client.ts).
+  const storyOnOllama = (config.text.provider || env.textProvider) === "local";
+  const utilityOnOllama = (config.text.utilityProvider || env.utilityProvider || (storyOnOllama ? "local" : "custom")) === "local";
 
   function discard() {
     if (!savedConfig) return;
@@ -464,15 +470,17 @@ export function AdminSettingsPanel() {
             onChange={(provider) => setConfig({ ...config, text: { ...config.text, provider } })}
             options={[
               { value: "" as const, label: "Auto (env or built-in)" },
-              { value: "custom" as const, label: "OpenAI-compatible server" },
-              ...(phoneWorld ? [] : [{ value: "local" as const, label: "Ollama (native)" }]),
+              { value: "custom" as const, label: "llama.cpp or another OpenAI-compatible server" },
+              ...(phoneWorld ? [] : [{ value: "local" as const, label: "Ollama" }]),
               ...(phoneWorld ? [] : [{ value: "harness" as const, label: "The agent program (below)" }]),
               { value: "none" as const, label: "No AI storyteller" },
             ]}
           />
-          {phoneWorld ? null : (
+          {/* Only where Ollama is what runs: picked here, or what a blank
+              provider means in the environment. */}
+          {phoneWorld || (config.text.provider || env.textProvider) !== "local" ? null : (
             <ModelChoiceField
-              label="Local model (Ollama native)"
+              label="Ollama model"
               hint="What this machine's Ollama has pulled; any tag it serves can be typed."
               role="story"
               provider="local"
@@ -570,17 +578,25 @@ export function AdminSettingsPanel() {
             value={config.text.utilityProvider}
             onChange={(utilityProvider) => setConfig({ ...config, text: { ...config.text, utilityProvider } })}
             options={[
-              { value: "" as const, label: "Auto (Ollama)" },
-              ...(phoneWorld ? [] : [{ value: "local" as const, label: "Ollama (native)" }]),
-              { value: "custom" as const, label: "OpenAI-compatible server" },
+              {
+                value: "" as const,
+                label:
+                  env.utilityProvider === "local"
+                    ? "Auto (Ollama, from UTILITY_TEXT_PROVIDER)"
+                    : storyOnOllama
+                      ? "Auto (the story's server, Ollama)"
+                      : "Auto (the story's server)",
+              },
+              { value: "custom" as const, label: "llama.cpp or another OpenAI-compatible server" },
+              ...(phoneWorld ? [] : [{ value: "local" as const, label: "Ollama" }]),
             ]}
           />
           <ModelChoiceField
             label="Model name"
             hint="Anything in the 4B-8B class is plenty."
             role="utility"
-            provider={config.text.utilityProvider === "custom" ? "custom" : "local"}
-            baseUrl={config.text.utilityProvider === "custom" ? config.text.utilityBaseUrl : ""}
+            provider={utilityOnOllama ? "local" : "custom"}
+            baseUrl={utilityOnOllama ? "" : config.text.utilityBaseUrl || config.text.customBaseUrl || env.customBaseUrl}
             apiKey={utilityApiKey === SECRET_KEPT ? "" : utilityApiKey}
             value={config.text.utilityModel}
             onChange={(utilityModel) => setConfig({ ...config, text: { ...config.text, utilityModel } })}
@@ -588,7 +604,7 @@ export function AdminSettingsPanel() {
           />
           <Field
             label="Backend base URL"
-            hint="Only for an OpenAI-compatible utility server. Blank uses the Ollama endpoint."
+            hint="For a llama.cpp or other OpenAI-compatible helper on another machine. Blank uses the story's server."
           >
             <input
               className={ui.input}
@@ -599,7 +615,7 @@ export function AdminSettingsPanel() {
                   text: { ...config.text, utilityBaseUrl: event.target.value },
                 })
               }
-              placeholder="http://127.0.0.1:8001/v1"
+              placeholder={config.text.customBaseUrl || env.customBaseUrl || "http://127.0.0.1:8001/v1"}
             />
           </Field>
           <SecretField
@@ -609,13 +625,13 @@ export function AdminSettingsPanel() {
             onChange={setUtilityApiKey}
             hint="Most local servers need none."
           />
-          {config.text.utilityProvider === "custom" && config.text.utilityModel.trim() ? (
+          {!utilityOnOllama && config.text.utilityModel.trim() ? (
             <SpeedField
               label="Processing speed"
               value={config.text.utilitySpeed}
               onChange={(utilitySpeed) => setConfig({ ...config, text: { ...config.text, utilitySpeed } })}
               eligibility={apiSpeedEligibility({
-                endpointKind: describeEndpoint(config.text.utilityBaseUrl).kind,
+                endpointKind: describeEndpoint(config.text.utilityBaseUrl || config.text.customBaseUrl || env.customBaseUrl || "").kind,
                 model: config.text.utilityModel,
               })}
               note={speedNotes.utility}

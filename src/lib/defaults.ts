@@ -19,11 +19,11 @@ export const DEFAULT_STORY_SETTINGS: StorySettings = {
   customApiKey: "",
   // OFF by default: a second model is a hardware luxury, so the shipped
   // default keeps everything on the story model. Set utilityModel in the
-  // campaign's model settings to split the mechanical work off. On the Ollama
-  // side "Gemma4:e4b-it-qat" (~3 GB resident) pairs well with a llama-server
-  // story model, since the two processes hold their weights independently and
-  // neither evicts the other's prompt cache.
-  utilityProvider: "local",
+  // campaign's model settings to split the mechanical work off. Named alone,
+  // it runs on the storyteller's own llama.cpp (or other OpenAI-compatible)
+  // server; an address of its own puts it on another machine, and Ollama is
+  // there for a table that runs one.
+  utilityProvider: "custom",
   utilityModel: "",
   utilityBaseUrl: "",
   utilityApiKey: "",

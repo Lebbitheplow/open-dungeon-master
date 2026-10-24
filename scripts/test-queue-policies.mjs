@@ -8,7 +8,7 @@ import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { dmQueueDepth, dropDmQueue, enqueueDmJob, pauseDmQueue } = await import("../src/lib/dm/queue.ts");
+const { dmQueueDepth, dropDmQueue, enqueueDmJob, enqueueDmJobFirst, pauseDmQueue, resumeDmQueue } = await import("../src/lib/dm/queue.ts");
 const { enqueueMediaJob, mediaQueueStats } = await import("../src/lib/media-queue.ts");
 const { embed, embedLoadRetryDelay, isPermanentEmbedLoadFailure } = await import("../src/lib/embeddings.ts");
 
@@ -70,6 +70,115 @@ await test("turns waiting on a deleted campaign are skipped, even behind a pause
     later = true;
   });
   assert.equal(later, true);
+});
+
+// A blocker job the test lets go of, and the order jobs ran in.
+function blockedQueue(campaignId) {
+  const ran = [];
+  let release;
+  const held = new Promise((resolve) => {
+    release = resolve;
+  });
+  const running = enqueueDmJob(campaignId, async () => {
+    ran.push("running");
+    await held;
+  });
+  return { ran, release, running };
+}
+
+await test("a job put first runs right after the running one, ahead of the queue", async () => {
+  const { ran, release, running } = blockedQueue("c-first");
+  const queued = enqueueDmJob("c-first", async () => {
+    ran.push("queued");
+  });
+  await tick();
+  const first = enqueueDmJobFirst("c-first", async () => {
+    ran.push("first");
+  });
+  assert.equal(dmQueueDepth("c-first"), 3);
+  await tick();
+  assert.deepEqual(ran, ["running"], "nothing overtakes the running job");
+  release();
+  await Promise.all([running, queued, first]);
+  await tick();
+  assert.deepEqual(ran, ["running", "first", "queued"]);
+  assert.equal(dmQueueDepth("c-first"), 0);
+  assert.equal(globalThis.__odmDmFirst.has("c-first"), false);
+});
+
+await test("a job put first on an idle campaign runs at once, and later jobs wait for it", async () => {
+  const ran = [];
+  let release;
+  const held = new Promise((resolve) => {
+    release = resolve;
+  });
+  const first = enqueueDmJobFirst("c-idle", async () => {
+    ran.push("first");
+    await held;
+  });
+  const later = enqueueDmJob("c-idle", async () => {
+    ran.push("later");
+  });
+  await tick();
+  await tick();
+  assert.deepEqual(ran, ["first"], "the queued job waits for the one put first");
+  release();
+  await Promise.all([first, later]);
+  assert.deepEqual(ran, ["first", "later"]);
+});
+
+await test("two jobs put first keep their order, and both go before the queue", async () => {
+  const { ran, release, running } = blockedQueue("c-two");
+  const queued = enqueueDmJob("c-two", async () => {
+    ran.push("queued");
+  });
+  await tick();
+  const a = enqueueDmJobFirst("c-two", async () => {
+    ran.push("a");
+  });
+  const b = enqueueDmJobFirst("c-two", async () => {
+    ran.push("b");
+  });
+  release();
+  await Promise.all([running, queued, a, b]);
+  assert.deepEqual(ran, ["running", "a", "b", "queued"]);
+});
+
+await test("a pause holds a job put first until it lifts", async () => {
+  pauseDmQueue("c-paused-first", "x-card");
+  let ran = false;
+  const first = enqueueDmJobFirst("c-paused-first", async () => {
+    ran = true;
+  });
+  await tick();
+  await tick();
+  assert.equal(ran, false);
+  resumeDmQueue("c-paused-first", "x-card");
+  await first;
+  assert.equal(ran, true);
+});
+
+await test("a job put first while a queued one is between its gate and its start never runs beside it", async () => {
+  const { ran, release, running } = blockedQueue("c-race");
+  let inside = 0;
+  let overlapped = false;
+  const track = (name) => async () => {
+    inside += 1;
+    if (inside > 1) overlapped = true;
+    ran.push(name);
+    await tick();
+    inside -= 1;
+  };
+  const queued = enqueueDmJob("c-race", track("queued"));
+  release();
+  // Put first from inside a promise callback, the way an async route lands
+  // between two of the queue's own callbacks.
+  const first = running.then(() => enqueueDmJobFirst("c-race", track("first")));
+  await Promise.all([running, queued, first]);
+  await first.then((job) => job);
+  await tick();
+  assert.equal(overlapped, false, "never two jobs at once");
+  assert.equal(ran.filter((name) => name !== "running").length, 2);
 });
 
 await test("a picture asked for again while still waiting renders once, for both callers", async () => {

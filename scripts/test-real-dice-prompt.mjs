@@ -152,4 +152,23 @@ test("human ownership and selection distinguish siblings from AI companions", ()
   state.sheets = [makeSheet({ id: "a1", name: "A1" }), makeSheet({ id: "bot", userId: "bot-user", name: "Guide", isCompanion: true })];
   assert.equal(buildGameStateBlock(state).includes("Players running several characters"), false);
 });
+test("replies that keep ending on the same question get a variety note after the transcript, never in the cached prompt", () => {
+  const state = { ...makeState(), momentAfterHistory: true, stateAfterRules: true };
+  const line = (seq, authorType, content) => ({ id: `m${seq}`, seq, authorType, content, characterId: authorType === "player" ? "sheet-1" : null });
+  const history = [
+    line(1, "dm", "Millbrook comes into view, its cows lowing in the mud. What does Testa do?"),
+    line(2, "player", "I approach the elder."),
+    line(3, "dm", 'Elder Wren turns. "You came," he says. What does Testa do?'),
+    line(4, "player", '"Where would we go?"'),
+  ];
+  const messages = buildDmMessages(state, history);
+  const last = messages.at(-1);
+  assert.equal(last.role, "user");
+  assert.match(last.content, /\[Variety\] Your last replies all ended on the same line \("What does Testa do\?"\)/);
+  assert.equal(messages[0].content.includes("[Variety]"), false, "the note changed the cached system message");
+  assert.equal(messages.filter((message) => message.content.includes("[Variety]")).length, 1);
+  // One reply ending another way, and the note goes.
+  history[2] = line(3, "dm", 'Elder Wren turns. "You came," he says, and leans on his staff.');
+  assert.equal(buildDmMessages(state, history).some((message) => message.content.includes("[Variety]")), false);
+});
 console.log(`test-real-dice-prompt: ${passed} tests passed.`);

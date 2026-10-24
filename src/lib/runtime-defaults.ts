@@ -35,14 +35,17 @@ export function configuredDefaultStorySettings(): StorySettings {
     ? requestedLocalModel
     : DEFAULT_STORY_SETTINGS.localTextModel;
 
-  // Optional utility model: admin panel > env > off. An unset provider
-  // defaults to "local", since the common setup is a small Ollama model
-  // beside a llama-server story model.
+  // Optional utility model: admin panel > env > off. An unset provider is
+  // the storyteller's own server: Ollama beside an Ollama storyteller,
+  // otherwise an OpenAI-compatible server, the storyteller's when no address
+  // is set (utilityEndpoint in src/lib/model-client.ts).
   const requestedUtilityProvider =
     cfg.text.utilityProvider || clean(serverEnv("UTILITY_TEXT_PROVIDER"));
   const utilityProvider = isTextProvider(requestedUtilityProvider)
     ? requestedUtilityProvider
-    : DEFAULT_STORY_SETTINGS.utilityProvider;
+    : textProvider === "local"
+      ? "local"
+      : DEFAULT_STORY_SETTINGS.utilityProvider;
 
   // Image backend for new campaigns: admin panel > env > ComfyUI.
   const requestedImageBackend =

@@ -147,6 +147,128 @@ await test("A figure a table note already carries is not sent back: the server d
   assert.ok(dm.content.includes("8 damage"));
 });
 
+// A fight begun mid-turn changes nothing the call after it needs when a
+// player is up and no enemy is due: it narrates the opening and stops. A new
+// tool list there made the server read the whole prompt again (93 seconds on
+// 2026-10-23); enemies who win initiative still get enemy_attack at once.
+await test("A fight begun mid-turn with the player up keeps the turn's tool list for the narration after it; enemies who act first get the fight's tools.", async () => {
+  await kit.endFight();
+  const names = (request) => (request.tools ?? []).map((tool) => tool.function?.name);
+  const start = () => call("start_encounter", { enemies: [{ monster: "goblin", name: "Rafter Goblin" }] });
+  // The goblin's initiative rolls at spawn, then Alden's: Alden goes first.
+  world.dice(1, 20);
+  model.script([reply({ calls: [start()] }), reply({ text: "A goblin drops from the rafters, blade out." })]);
+  await model.turn(world, "I step into the barn.", alden.id, alden.userId);
+  world.clearDice();
+  assert.equal(world.enemies().length, 1, "no fight started");
+  assert.deepEqual(names(model.requests[1]), names(model.requests[0]), "the narration after the start was sent another tool list");
+  await kit.endFight();
+
+  // The goblin is quicker: the call after the start plays it.
+  world.dice(20, 1);
+  model.script([reply({ calls: [start()] }), reply({ text: "The goblin is on Alden before he can draw." })]);
+  await model.turn(world, "I step into the barn.", alden.id, alden.userId);
+  world.clearDice();
+  assert.ok(!names(model.requests[0]).includes("enemy_attack"), "the turn began in a fight");
+  assert.ok(names(model.requests[1]).includes("enemy_attack"), "an enemy who acts first was not offered enemy_attack");
+  await kit.endFight();
+});
+
+// The turn after a fight begins starts with the fight's rules and tools, a
+// first message the narrator has not read: it is sent ahead as the turn
+// ends (src/lib/dm/turn-warmup.ts), and the next turn starts with exactly it.
+await test("After a turn that starts a fight, the next turn's first message and tools are sent ahead, once, and the next turn starts with exactly them.", async () => {
+  await kit.endFight();
+  process.env.DM_TURN_WARMUP = "1";
+  try {
+    world.dice(1, 20);
+    model.script([
+      reply({ calls: [call("start_encounter", { enemies: [{ monster: "goblin", name: "Hayloft Goblin" }] })] }),
+      reply({ text: "A goblin bursts out of the hay, snarling." }),
+    ]);
+    await model.turn(world, "I step into the barn.", alden.id, alden.userId);
+    world.clearDice();
+    const until = Date.now() + 10_000;
+    while ((model.requests.length < 3 || globalThis.__odmTurnWarmups?.size) && Date.now() < until) {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    assert.equal(model.requests.length, 3, "no warm-up, or more than one");
+    const warm = model.requests[2];
+    assert.ok(warm.max_tokens <= 16, `the warm-up asked for ${warm.max_tokens} tokens; it needs none`);
+    assert.equal(warm.messages.length, 2);
+    assert.notEqual(warm.messages[0].content, model.requests[0].messages[0].content, "the warm-up re-sent what the narrator already held");
+    assert.ok(warm.tools.some((tool) => tool.function.name === "enemy_attack"), "the warm-up was not the fight's tool list");
+
+    model.script([reply({ text: "Alden keeps the goblin at sword's length." })]);
+    await model.turn(world, "I hold my ground.", alden.id, alden.userId);
+    assert.equal(model.requests[0].messages[0].content, warm.messages[0].content, "the next turn's first message is not the one sent ahead");
+    assert.deepEqual(model.requests[0].tools, warm.tools, "the next turn's tools are not the ones sent ahead");
+    // Nothing changed this turn: nothing more is sent ahead.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(model.requests.length, 1, "a warm-up went out with nothing to read ahead");
+  } finally {
+    process.env.DM_TURN_WARMUP = "0";
+    await kit.endFight();
+  }
+});
+
+// A warm-up never holds play up: any table's turn on the same narrator stops
+// it at once (two long prompts do not fit a two-slot server's one cache), and
+// a turn whose first message turned out different stops it too.
+await test("A warm-up gives way to any turn on the same narrator, and a turn with another first message stops it.", async () => {
+  const http = await import("node:http");
+  const campaigns = await import("../src/lib/db/campaigns.ts");
+  const { asInteractive } = await import("../src/lib/dm/inference-gate.ts");
+  const { storyRouteKey } = await import("../src/lib/dm/model.ts");
+  const { settleTurnWarmup, warmNextTurn } = await import("../src/lib/dm/turn-warmup.ts");
+  // A narrator that reads forever: each request stays open until the client lets go.
+  const hung = [];
+  const server = http.createServer((req, res) => {
+    if (!req.url.endsWith("/chat/completions")) {
+      res.writeHead(404).end();
+      return;
+    }
+    const entry = { closed: false };
+    hung.push(entry);
+    res.on("close", () => {
+      entry.closed = true;
+    });
+  });
+  await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const before = world.campaign().settings;
+  campaigns.updateStorySettings(world.campaignId, { customBaseUrl: `http://127.0.0.1:${server.address().port}/v1` });
+  const waitFor = async (check, what) => {
+    const until = Date.now() + 5_000;
+    while (!check()) {
+      if (Date.now() > until) throw new Error(`timed out waiting for ${what}`);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+  };
+  const tool = (name) => ({ type: "function", function: { name, description: name, parameters: { type: "object", properties: {} } } });
+  process.env.DM_TURN_WARMUP = "1";
+  try {
+    warmNextTurn(world.campaignId, { tools: [tool("look")], thinking: true, wordsDecide: false });
+    await waitFor(() => hung.length === 1, "the warm-up to reach the narrator");
+    // Another table's turn calls the same narrator.
+    await asInteractive(storyRouteKey(world.campaign().settings), () => new Promise((resolve) => setTimeout(resolve, 400)));
+    await waitFor(() => hung[0].closed && !globalThis.__odmTurnWarmups.size, "the warm-up to give way");
+
+    warmNextTurn(world.campaignId, { tools: [tool("listen")], thinking: true, wordsDecide: false });
+    await waitFor(() => hung.length === 2, "the second warm-up to reach the narrator");
+    await settleTurnWarmup(world.campaignId, "a first message the warm-up is not reading");
+    await waitFor(() => hung[1].closed && !globalThis.__odmTurnWarmups.size, "the turn to stop a warm-up of another first message");
+
+    // A compact or short-rules table sends nothing ahead.
+    warmNextTurn(world.campaignId, { tools: [tool("smell")], thinking: true, wordsDecide: true });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(hung.length, 2, "a table whose tools follow the players' words was warmed");
+  } finally {
+    process.env.DM_TURN_WARMUP = "0";
+    campaigns.updateStorySettings(world.campaignId, { customBaseUrl: before.customBaseUrl });
+    server.close();
+  }
+});
+
 // ---- where the fight opens ----
 
 // A party of three against three, at a console (nothing plays the enemies

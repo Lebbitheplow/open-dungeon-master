@@ -30,6 +30,7 @@ import {
   OPENAI_CONTEXT_TOKENS,
   paramsFromModelName,
   readContextWindow,
+  readReasoningKnob,
   readModelParams,
 } from "@/lib/dm/context-probe-logic";
 import { serverEnv } from "@/lib/server-env";
@@ -152,6 +153,15 @@ export type ChatRequestOptions = {
   // the whole 4,096-token reply of the campaign's setup call thinking and
   // wrote no JSON.
   thinking?: boolean;
+  // A helper call that wants as little thinking as the model allows. A model
+  // whose template reads reasoning_effort and has no thinking switch
+  // (gpt-oss) is sent "low": `thinking: false` alone reaches it as
+  // enable_thinking, which it ignores, and the claims reader on gpt-oss-20b
+  // wrote up to 4,011 tokens (52 seconds) to answer a short form while the
+  // table waited (2026-10-23). Never set on a turn's calls: the effort is
+  // written into the prompt's first message, so changing it between the
+  // calls of one turn would make the server read the whole prompt again.
+  reasoningEffort?: "low";
   // The most reasoning this call may stream, in characters, before it is cut
   // and the same call asked again without thinking. Unset, no limit: the
   // server's own budget (llama-server --reasoning-budget) applies. Ollama has
@@ -335,12 +345,28 @@ export function storyWindowAssumed(settings: {
   return !hostedContextWindow(settings.customBaseUrl ?? "", settings.customModel ?? "");
 }
 
+// Where a table's utility model on an OpenAI-compatible server is reached:
+// its own address, or with none typed the storyteller's server and key, so
+// a helper model on the same llama.cpp server needs only its name.
+export function utilityEndpoint(settings: {
+  customBaseUrl?: string;
+  customApiKey?: string;
+  utilityBaseUrl: string;
+  utilityApiKey: string;
+}): { baseUrl: string; apiKey: string } {
+  const own = settings.utilityBaseUrl.trim();
+  return own
+    ? { baseUrl: own, apiKey: settings.utilityApiKey }
+    : { baseUrl: (settings.customBaseUrl ?? "").trim(), apiKey: settings.customApiKey ?? "" };
+}
+
 // The same for a table's own utility model on a custom endpoint.
-export function utilityWindowAssumed(settings: { utilityProvider: string; utilityModel: string; utilityBaseUrl: string }): boolean {
-  if (settings.utilityProvider === "local" || endpointKind(settings.utilityBaseUrl) === "openai") {
+export function utilityWindowAssumed(settings: { utilityProvider: string; utilityModel: string; utilityBaseUrl: string; customBaseUrl?: string }): boolean {
+  const { baseUrl } = utilityEndpoint({ ...settings, utilityApiKey: "" });
+  if (settings.utilityProvider === "local" || endpointKind(baseUrl) === "openai") {
     return false;
   }
-  return !probedContextWindows.get(contextCacheKey(settings.utilityBaseUrl, settings.utilityModel.trim()))?.window;
+  return !probedContextWindows.get(contextCacheKey(baseUrl, settings.utilityModel.trim()))?.window;
 }
 
 function openAiWindow(baseUrl: string, model: string): number {
@@ -375,6 +401,7 @@ export function learnContextWindow(baseUrl: string, model: string, window: numbe
 // Every window learned so far is dropped; the admin's text settings changed.
 export function forgetContextWindows(): void {
   probedContextWindows.clear();
+  reasoningKnobs.clear();
 }
 
 // What a backend's refusal says of its window, when the request was too big
@@ -391,6 +418,10 @@ export function contextOverflowWindow(text: string): number | null {
     /context (?:window|length) of (\d+)/i.exec(text);
   return named ? Number.parseInt(named[1], 10) : 0;
 }
+
+// How each probed model's template is told to think less (readReasoningKnob),
+// keyed like the windows above.
+const reasoningKnobs = new Map<string, "effort" | "switch" | null>();
 
 // What a backend taught us about a model, keyed like the windows above and
 // kept for the process: the route its tools run on when its 400 named one
@@ -447,8 +478,10 @@ export async function probeCustomContextWindow(
         return cached?.window || null;
       }
       const body = await readBody(response, MAX_BACKEND_ERROR_BYTES);
-      const window = (body.complete ? readContextWindow(JSON.parse(body.text)) : null) ?? 0;
+      const props = body.complete ? JSON.parse(body.text) : null;
+      const window = readContextWindow(props) ?? 0;
       probedContextWindows.set(cacheKey, { window, at: Date.now() });
+      reasoningKnobs.set(cacheKey, readReasoningKnob(props));
       return window || null;
     } catch {
       // Unreachable, not llama.cpp, or too slow. The miss is remembered for
@@ -556,15 +589,18 @@ export async function utilityModelContextTokens(settings: {
   utilityModel: string;
   utilityBaseUrl: string;
   utilityApiKey: string;
+  customBaseUrl?: string;
+  customApiKey?: string;
 }): Promise<number> {
   const model = settings.utilityModel.trim();
   if (settings.utilityProvider === "local") {
     return localContextTokens(model);
   }
-  if (endpointKind(settings.utilityBaseUrl) === "openai") {
-    return openAiWindow(settings.utilityBaseUrl, model);
+  const { baseUrl, apiKey } = utilityEndpoint(settings);
+  if (endpointKind(baseUrl) === "openai") {
+    return openAiWindow(baseUrl, model);
   }
-  const probed = await probeCustomContextWindow(settings.utilityBaseUrl, settings.utilityApiKey, model);
+  const probed = await probeCustomContextWindow(baseUrl, apiKey, model);
   return probed ? Math.max(2_048, probed) : DEFAULT_CUSTOM_CONTEXT_TOKENS;
 }
 
@@ -887,6 +923,15 @@ function resolveCustomKey(
   return { isGlobalBackend, isUtilityBackend, resolvedKey };
 }
 
+// The key a request to this address goes out with when none is typed, the
+// way a turn's own call resolves it (above): the admin pages' probe and
+// model listing use it too, so they never try one host's key on another and
+// find the utility server's key set in the environment.
+export function backendKeyFor(baseUrl: string, typedKey = ""): string {
+  const trimmedBase = baseUrl.trim();
+  return resolveCustomKey(trimmedBase, typedKey, customChatEndpoint(trimmedBase)).resolvedKey;
+}
+
 // Whether a request to this backend would carry a key to a public host:
 // the shared-host policy (src/lib/shared-host.ts) reads it before the call.
 // A keyed server on this machine or the LAN is the host's own; a keyed
@@ -1095,6 +1140,16 @@ async function requestCustomMessageNow(
       if (route === "chat-no-reasoning") {
         requestPayload.reasoning_effort = "none";
       }
+    }
+    // A helper call on a template that thinks by effort, not by a switch
+    // (readReasoningKnob): "low" is the least it does.
+    if (
+      options.reasoningEffort &&
+      caps.allowTemplateKwargs &&
+      requestPayload.reasoning_effort === undefined &&
+      reasoningKnobs.get(routeKey) === "effort"
+    ) {
+      requestPayload.reasoning_effort = options.reasoningEffort;
     }
   }
 

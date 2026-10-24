@@ -27,7 +27,22 @@ export function buildPropsUrl(baseUrl: string, model: string): string {
 export type PropsShape = {
   n_ctx?: unknown;
   default_generation_settings?: { n_ctx?: unknown } | null;
+  chat_template?: unknown;
 };
+
+// How the model's chat template is told to think less, from the template
+// llama-server reports on /props: "effort" for one that reads
+// reasoning_effort and has no thinking switch (gpt-oss's Harmony template,
+// which ignores enable_thinking and reasons at "medium" whatever it is
+// sent), "switch" for one with enable_thinking (Qwen, Gemma), null when it
+// says neither or the server sent no template.
+export function readReasoningKnob(props: PropsShape | null | undefined): "effort" | "switch" | null {
+  const template = props && typeof props.chat_template === "string" ? props.chat_template : "";
+  if (template.includes("enable_thinking")) {
+    return "switch";
+  }
+  return template.includes("reasoning_effort") ? "effort" : null;
+}
 
 // Newer llama.cpp exposes n_ctx at the top level; older builds and the router
 // nest it under default_generation_settings. Zero means "the server did not

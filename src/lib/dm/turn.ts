@@ -114,7 +114,8 @@ import type { ToolResult } from "@/lib/dm/tool-errors";
 import { dispatchAdjudication } from "@/lib/dm/invoke-dispatch";
 import { gateAiCall } from "@/lib/dm/ai-gate";
 import { characterAwaitingPlayer } from "@/lib/dm/player-word";
-import { enemiesOwedTurn, personRunsTable } from "@/lib/dm/enemies-due";
+import { enemiesDue, enemiesOwedTurn, personRunsTable } from "@/lib/dm/enemies-due";
+import { noteTurnHead, settleTurnWarmup, turnHeadKey, warmNextTurn } from "@/lib/dm/turn-warmup";
 import { intentAnswered, intentCorrection, intentNeedsTool, type MessageIntent } from "@/lib/dm/intent-logic";
 import { handleCompleteBeat } from "@/lib/dm/arc";
 import { tickWaypointsFromCalls } from "@/lib/dm/waypoint-tick";
@@ -1159,6 +1160,28 @@ export function compactTurnTools(
 // (model.ts fitsStoryWindow), so a group opened on a small window is offered
 // rather than refused for room. fits is false when not even the narrowest
 // set leaves the reply its room.
+// A fight begun in this turn, with a player's own character up and no enemy
+// owed an action: the call that follows narrates the opening and stops, and
+// nothing in it needs the fight's tools. It keeps the list the turn's calls
+// were sent instead, because the tools ride in the prompt's first message
+// and llama.cpp reuses a cache only up to where a message starts (Qwen's
+// hybrid layers, gpt-oss's sliding window): a new list there made the
+// server read the whole prompt again, 48K tokens and 93 seconds on
+// 2026-10-23, about two minutes on a BC-250. Enemies due (who act first, or
+// in the round the party lost) and an AI companion up need enemy_attack and
+// pc_attack, so those get the fight's list. The next turn starts with the
+// fight's rules and tools either way.
+function keepsToolsThroughFightStart(encounter: Encounter, sheets: readonly CharacterSheet[]): boolean {
+  if (enemiesDue(encounter).length) {
+    return false;
+  }
+  if (!encounter.orderReady) {
+    return true;
+  }
+  const up = encounter.order[encounter.turnIndex];
+  return up?.kind === "pc" && !sheets.find((sheet) => sheet.id === up.characterId)?.isCompanion;
+}
+
 function compactToolsThatFit(
   campaign: Campaign,
   turn: DmTurn,
@@ -1336,6 +1359,9 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
   // Whether the last call, sent with toolChoice "none", came back with tool
   // calls anyway (see narrateAfterToolLeak).
   let finalCallLeaked = false;
+  // The tool list this turn's calls were last sent, and whether it was the
+  // list for no fight (keepsToolsThroughFightStart).
+  let sentTools = null as { tools: unknown[]; noFight: boolean } | null;
   // The card the player played, when their action came from the Hand as an
   // attack or a cast, and whether the one corrective call for it was spent.
   const card = cardPlayed(context);
@@ -1372,11 +1398,19 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     // A stopped turn makes no further call: it unwinds into its halted
     // notice (advance) with whatever it already applied kept.
     assertJobLive();
-    // Rebuilt each iteration (see dmTurnTools).
-    const inEncounter = Boolean(getActiveEncounter(campaignId));
-    const fitted = compact
-      ? compactToolsThatFit(campaign, turn, inEncounter, imageEnabled, sheets)
-      : { tools: dmTurnTools(campaign, inEncounter, imageEnabled, leanTools), fits: true };
+    // Rebuilt each iteration (see dmTurnTools), save the one case
+    // keepsToolsThroughFightStart covers.
+    const encounterNow = getActiveEncounter(campaignId);
+    const inEncounter = Boolean(encounterNow);
+    const keptTools: unknown[] | null =
+      !compact && sentTools?.noFight && encounterNow && keepsToolsThroughFightStart(encounterNow, sheets)
+        ? sentTools.tools
+        : null;
+    const fitted: { tools: unknown[]; fits: boolean } = keptTools
+      ? { tools: keptTools, fits: true }
+      : compact
+        ? compactToolsThatFit(campaign, turn, inEncounter, imageEnabled, sheets)
+        : { tools: dmTurnTools(campaign, inEncounter, imageEnabled, leanTools), fits: true };
     // When the turn has already acted and not even the narrowest compact set
     // leaves the reply its room, the call narrates what those tools did with
     // none offered, as the last permitted call does, rather than halting the
@@ -1385,6 +1419,9 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     const toolsClosed = !fitted.fits && turn.callIndex > 0;
     const finalCall = turn.callIndex === MAX_MODEL_CALLS - 1 || toolsClosed;
     const tools = toolsClosed ? [] : fitted.tools;
+    if (!toolsClosed) {
+      sentTools = { tools, noFight: keptTools ? true : !inEncounter };
+    }
     const callTask = toolsClosed ? "turn_without_tools" : "turn";
     if (toolsClosed) {
       console.warn(`[dm-turn] call ${turn.callIndex}: no compact tool set leaves the reply room in this window; this call narrates without tools.`);
@@ -1397,6 +1434,15 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       narrationShown(campaignId, turn.id);
       publishEphemeral(campaignId, "dm_delta", { text });
     });
+    // The narrator may be reading this turn's first message ahead
+    // (src/lib/dm/turn-warmup.ts): the same one is waited for, another is
+    // stopped. Either way it is the one the narrator holds after this call.
+    const firstMessage = turn.conversation[0];
+    if (firstMessage?.role === "system" && typeof firstMessage.content === "string") {
+      const head = turnHeadKey(campaign.settings, firstMessage.content, tools);
+      await settleTurnWarmup(campaignId, head);
+      noteTurnHead(campaignId, head);
+    }
     const reply = await requestDmMessage(campaign.settings, turn.conversation, {
       tools,
       harness: {
@@ -2937,4 +2983,15 @@ function finalize(context: TurnContext, turn: DmTurn, failed: string, spoken: re
 
   turn.status = "done";
   saveDmTurn(turn);
+  // A fight begun or ended, or a companion who joined, changes the next
+  // turn's first message: the narrator reads it now, while the table reads.
+  const after = getCampaignById(campaignId);
+  if (after) {
+    const tuning = dmTurnTuning(after);
+    warmNextTurn(campaignId, {
+      tools: dmTurnTools(after, Boolean(getActiveEncounter(campaignId)), after.settings.imageGenerationEnabled && after.settings.autoImages, tuning.leanTools),
+      thinking: tuning.thinking,
+      wordsDecide: tuning.toolProfile === "compact" || tuning.briefRules,
+    });
+  }
 }
