@@ -81,6 +81,11 @@ export const summonSchema = z.object({
   // Animate Dead, Create Undead: when the duration (the caster's control)
   // runs out, the creature stays and turns hostile rather than vanishing.
   controlExpires: z.boolean().optional(),
+  // Its maker lost it (issue 503): it fights on the foes' side
+  // (src/lib/dm/combat-sides.ts), no spell of its maker's ends it, and it
+  // lasts what is left of its own time, or for good once an Animate Dead's
+  // control has run out.
+  unbound: z.boolean().optional(),
   // Every creature of one casting shares this id (one group initiative).
   castId: z.string().trim().max(40).default(""),
 });

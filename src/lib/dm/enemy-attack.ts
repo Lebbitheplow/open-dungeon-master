@@ -10,6 +10,7 @@
 
 import { hostileTo, resolveCombatant } from "@/lib/dm/combatant";
 import { enemyStrikesEnemy } from "@/lib/dm/enemy-strike";
+import { lashOutTarget } from "@/lib/dm/confusion";
 
 import { weaponNamed } from "@/lib/srd/weapons";
 import { readiedHolder } from "@/lib/dm/readied-release";
@@ -159,7 +160,14 @@ export function handleEnemyAttack(
   if (aimed.id === found.id) {
     return { error: `${found.displayName} cannot attack itself. Name the creature it attacks.`, retry: true };
   }
-  if (!engine.anySide && !hostileTo(encounter, { kind: "enemy", id: found.id }, { kind: aimed.kind, id: aimed.id })) {
+  // Confusion's lash-out (confusion.ts): one melee attack on the creature
+  // its d10 picked, and no other, whichever side it is on.
+  const lash = lashOutTarget(found, encounter.round);
+  if (lash && aimed.id !== lash) {
+    const picked = resolveCombatant(campaign.id, encounter, lash);
+    return { error: `${found.displayName} is confused: this turn's attack is on ${picked?.name ?? "the creature Confusion picked"}, picked at random, and no other.`, refused: "rules" };
+  }
+  if (!engine.anySide && !lash && !hostileTo(encounter, { kind: "enemy", id: found.id }, { kind: aimed.kind, id: aimed.id })) {
     return {
       error: `${aimed.name} fights on ${found.displayName}'s side: enemy_attack does not strike an ally. Pick a creature on the other side.`,
       refused: "rules",
@@ -172,7 +180,7 @@ export function handleEnemyAttack(
     return enemyStrikesEnemy(campaign, turn, found, aimed.enemy, {
       ...(args.attack ? { attack: args.attack } : {}),
       ...(args.advantage ? { advantage: args.advantage } : {}),
-      single: bonus || conditionTurnShape(found.conditions).slowed,
+      single: bonus || Boolean(lash) || conditionTurnShape(found.conditions).slowed,
       bonus,
       sheets,
       sheetsById,
@@ -226,7 +234,8 @@ export function handleEnemyAttack(
   }
   // Slow: no more than one attack on its turn, Multiattack or not (SRD 5.1).
   // A bonus action's attack is one swing, and spends no legendary strike.
-  const single = bonus || takeLegendaryStrike(campaign.id, found.id) || conditionTurnShape(found.conditions).slowed;
+  // Confusion's lash-out is one melee attack, not the routine.
+  const single = bonus || Boolean(lash) || takeLegendaryStrike(campaign.id, found.id) || conditionTurnShape(found.conditions).slowed;
   if (single && !asked && actionAttacks.length > 1) {
     return { error: `${found.displayName} makes one attack this turn: name it in attack (${actionAttacks.map((attack) => attack.name).join(", ")}).`, retry: true };
   }

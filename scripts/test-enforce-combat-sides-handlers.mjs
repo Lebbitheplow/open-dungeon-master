@@ -4,8 +4,8 @@
 //
 //   - cast_at_enemy at a companion turned on the party rolls the character's
 //     own save and lands the spell on its sheet;
-//   - cast_at_player with a sheet caster: the turncoat's spell at a party
-//     member, from its own slot;
+//   - cast_at_player with a sheet caster (casterEnemyId names it): the
+//     turncoat's spell at a party member, from its own slot;
 //   - grapple a turncoat: its own Athletics or Acrobatics resists;
 //   - opportunity attacks both ways between a turncoat and the party;
 //   - a creature the party dominates (a real Dominate Person) fights for
@@ -99,7 +99,7 @@ await test("cast_at_enemy refuses a character on the caster's own side", async (
   assert.equal(world.sheet(turncoat.id).currentHp, 30);
 });
 
-await test("cast_at_player with a sheet caster: the turncoat's spell at a party member, from its own slot and DC", async () => {
+await test("cast_at_player with a sheet caster named by casterEnemyId: the turncoat's spell at a party member, from its own slot and DC", async () => {
   const { turncoat } = await stage(1, {
     class: "cleric",
     spellcasting: { ability: "wis", slots: { 1: { max: 2, used: 0 } }, known: [], prepared: [], cantrips: ["Sacred Flame"] },
@@ -110,7 +110,7 @@ await test("cast_at_player with a sheet caster: the turncoat's spell at a party 
   kit.place(turncoat.id, 3, 3);
   kit.giveTurn(turncoat.id);
   world.dice(2, 5);
-  const out = await world.invoke("cast_at_player", { characterId: hero.id, casterCharacterId: turncoat.id, spell: "Sacred Flame", saveAbility: "dex", dc: 1 });
+  const out = await world.invoke("cast_at_player", { characterId: hero.id, casterEnemyId: turncoat.id, spell: "Sacred Flame", saveAbility: "dex", dc: 1 });
   world.clearDice();
   assert.equal(out.ok, true, out.error);
   assert.equal(world.sheet(hero.id).currentHp, 40 - 5);

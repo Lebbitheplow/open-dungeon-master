@@ -6,6 +6,7 @@ import { z } from "zod";
 import { castToNoEffect, spellWardOn } from "@/lib/dm/cast-reach";
 import type { Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter, recordEncounterTarget, setEnemyConcentration } from "@/lib/db/encounters";
+import { resolveCombatant } from "@/lib/dm/combatant";
 import { markReactionUsed } from "@/lib/dm/turn-budget";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import type { DmTurn } from "@/lib/db/dm-turns";
@@ -56,9 +57,9 @@ const castAtPlayerSchema = z.object({
   halfOnSave: z.coerce.boolean().optional(),
   condition: z.string().max(40).optional(),
   rounds: z.coerce.number().int().min(1).max(100).optional(),
+  // An enemy, or a character fighting on the other side (issue 503), who
+  // casts from their own sheet.
   casterEnemyId: z.string().optional(),
-  // A character fighting on the other side, casting from their own sheet.
-  casterCharacterId: z.string().optional(),
   ability: z.string().max(80).optional(),
   spell: z.string().max(80).optional(),
   reason: z.string().optional(),
@@ -229,19 +230,21 @@ export function handleCastAtPlayer(
   if (!sheet) {
     return unknownSheetRef("characterId", args.characterId, sheets);
   }
-  // A character casting at another of the other side (issue 503): the cast
-  // is the caster's, from their sheet, and the target's save and harm are
-  // the target's, which is what cast_at_enemy resolves for a character
-  // fighting the party (src/lib/dm/sheet-foe.ts). One engine for both.
-  if (args.casterCharacterId) {
+  // A character casting at another of the other side (issue 503), named by
+  // casterEnemyId like any foe: the cast is the caster's, from their sheet,
+  // and the target's save and harm are the target's, which is what
+  // cast_at_enemy resolves for a character fighting the party
+  // (src/lib/dm/sheet-foe.ts). One engine for both.
+  const casterSheet = args.casterEnemyId ? resolveCombatant(campaign.id, getActiveEncounter(campaign.id), args.casterEnemyId) : null;
+  if (casterSheet?.kind === "sheet") {
     if (!args.spell) {
-      return { error: "casterCharacterId casts a spell: name it in spell.", retry: true };
+      return { error: `${casterSheet.name} is a character: name the spell they cast in spell.`, retry: true };
     }
     return handleCastAtEnemy(
       campaign,
       turn,
       JSON.stringify({
-        characterId: args.casterCharacterId,
+        characterId: casterSheet.id,
         targetEnemyId: sheet.id,
         spell: args.spell,
         saveAbility: args.saveAbility,

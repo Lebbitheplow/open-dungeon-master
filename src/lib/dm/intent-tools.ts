@@ -31,7 +31,7 @@ export const declareIntentTool: ToolDef = {
   function: {
     name: "declare_intent",
     description:
-      "Telegraph what an enemy is about to do next, so the board shows it over that enemy for the rest of this round (players who cannot see the enemy are not told). Optional flavour: it rolls nothing and binds nothing, except for a creature a character dominates (Dominate Person, Beast or Monster): there the target is the caster's command, which its turns follow until a new one.",
+      "Telegraph what an enemy is about to do next, so the board shows it over that enemy for the rest of this round (players who cannot see the enemy are not told). Optional flavour: it rolls nothing and binds nothing, except on a creature a character dominates, whose turns follow the target.",
     parameters: {
       type: "object",
       additionalProperties: false,
@@ -43,7 +43,7 @@ export const declareIntentTool: ToolDef = {
           enum: [...INTENT_VERB_KINDS],
           description: "For a verb that is not one of its attacks: what kind of act it is (move for a retreat or a dash), which picks the board's badge.",
         },
-        target: { type: "string", description: "Its mark: exact characterId from GAME STATE, or the character's name; for a dominated creature, the enemyId it is commanded to attack. Omit when there is no single mark." },
+        target: { type: "string", description: "Its mark: exact characterId from GAME STATE, or the character's name (any combatant's id for a dominated one). Omit when there is no single mark." },
         expected: { type: "number", description: "Expected damage. Omit to use the named attack's average." },
       },
       required: ["actor", "verb"],
@@ -134,7 +134,7 @@ function commandDominated(enemy: { id: string; conditions: string[]; conditionMe
   }
   // The order rides the charm's meta (combat-sides-logic.ts dominationOrderOf
   // reads it), so it ends when the charm does.
-  const meta = { ...enemy.conditionMeta, [charmed]: { ...enemy.conditionMeta[charmed], order: targetId } } as unknown as ConditionMetaMap;
+  const meta: ConditionMetaMap = { ...enemy.conditionMeta, [charmed]: { ...enemy.conditionMeta[charmed], order: targetId } };
   patchEnemyConditions(enemy.id, enemy.conditions, meta);
   return true;
 }

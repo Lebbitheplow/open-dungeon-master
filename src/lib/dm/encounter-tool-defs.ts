@@ -101,7 +101,7 @@ export const enemyAttackTool: ToolDef = {
         enemyId: { type: "string", description: "Exact enemyId from GAME STATE." },
         targetCharacterId: {
           type: "string",
-          description: "Exact characterId from GAME STATE, or the enemyId of a creature fighting on the other side (one the party dominates).",
+          description: "Exact characterId from GAME STATE, or a party-side enemyId.",
         },
         attack: {
           type: "string",

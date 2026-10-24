@@ -18,6 +18,7 @@
 // clock path must not import enemy-damage.ts, which imports it): the
 // resistances, a concentration save, death and the token all follow here.
 
+import { lashOut } from "@/lib/dm/confusion";
 import type { CombatSide } from "@/lib/dm/combat-sides-logic";
 import { sideOf } from "@/lib/dm/combatant";
 import { sheetSpellAuthors } from "@/lib/dm/spell-authors";
@@ -342,32 +343,41 @@ function heroism(campaign: Campaign, sheet: CharacterSheet) {
 
 // Confusion: at the start of its turn the creature rolls a d10. 1: it moves
 // at random and takes no action; 2 to 6: it neither moves nor acts; 7 or 8:
-// it spends its action attacking a creature in reach at random; 9 or 10: it
-// acts as it chooses. What it may not do is laid down until its turn ends.
-function confusionRoll(enemy: EncounterEnemy, lines: string[]) {
-  const meta = enemy.conditionMeta as ConditionMetaMap;
+// it spends its action attacking a creature in reach at random, which the
+// engine picks with its own die (src/lib/dm/confusion.ts); 9 or 10: it acts
+// as it chooses. What it may not do is laid down until its turn ends. A
+// character rolls the same (its die shown to the table).
+function confusionRoll(campaign: Campaign, encounter: Encounter, who: { kind: "sheet" | "enemy"; id: string; name: string }, lines: string[]) {
+  const holder = who.kind === "enemy" ? getEnemy(who.id) : getSheetById(who.id);
+  const meta = (holder?.conditionMeta ?? {}) as ConditionMetaMap;
   const entry = meta.confused;
-  if (!enemy.conditions.includes("confused") || !entry) {
+  if (!holder || !holder.conditions.includes("confused") || !entry) {
     return;
   }
-  // The creature's own roll: the DM sees the die, the table what it does.
-  const roll = dmRoll(enemy.campaignId, null, "custom", `${enemy.displayName}: Confusion`, "1d10").total;
+  // The creature's own roll: the DM sees an enemy's die, the table a
+  // character's; everyone sees what it does.
+  const roll = who.kind === "enemy"
+    ? dmRoll(campaign.id, null, "custom", `${who.name}: Confusion`, "1d10").total
+    : rollCard(campaign, null, who.id, "custom", `${who.name}: Confusion`, "1d10", null).total;
   const lost = roll === 1 ? "wandering" : roll <= 6 ? "halted" : null;
-  if (lost && !enemy.conditions.includes(lost)) {
+  if (lost && !holder.conditions.includes(lost)) {
     // Until the end of this turn (src/lib/dm/turn-end.ts reads the mark).
-    const next: ConditionMetaMap = { ...meta, [lost]: { spell: entry.spell, source: entry.source, untilTurnEndOf: enemy.id } };
-    patchEnemyConditions(enemy.id, [...enemy.conditions, lost], next);
+    const next: ConditionMetaMap = { ...meta, [lost]: { spell: entry.spell, source: entry.source, untilTurnEndOf: who.id } };
+    if (who.kind === "enemy") {
+      patchEnemyConditions(who.id, [...holder.conditions, lost], next);
+    } else {
+      const updated = patchSheet(who.id, { conditions: [...holder.conditions, lost], conditionMeta: next });
+      if (updated) {
+        publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
+      }
+    }
   }
   lines.push(
-    `${enemy.displayName} is confused and rolls ${roll} on the d10: ${
-      roll === 1
-        ? "it moves in a random direction and takes no action"
-        : roll <= 6
-          ? "it does not move and takes no action"
-          : roll <= 8
-            ? "it uses its action to attack a random creature in reach, or does nothing if none is"
-            : "it acts as it chooses"
-    }.`,
+    roll === 7 || roll === 8
+      ? `${who.name} is confused and rolls ${roll} on the d10. ${lashOut(campaign, encounter, who.kind, who.id, who.name)}`
+      : `${who.name} is confused and rolls ${roll} on the d10: ${
+          roll === 1 ? "it moves in a random direction and takes no action" : roll <= 6 ? "it does not move and takes no action" : "it acts as it chooses"
+        }.`,
   );
 }
 
@@ -432,7 +442,7 @@ export function spellTurnStart(campaign: Campaign, encounter: Encounter, combata
       }
       const after = getEnemy(enemy.id);
       if (after?.status === "alive") {
-        confusionRoll(after, lines);
+        confusionRoll(campaign, encounter, { kind: "enemy", id: after.id, name: after.displayName }, lines);
       }
       const cursed = getEnemy(enemy.id);
       if (cursed?.status === "alive") {
@@ -443,6 +453,10 @@ export function spellTurnStart(campaign: Campaign, encounter: Encounter, combata
     const sheet = getSheetById(id);
     if (sheet && !sheet.deathSaves?.dead) {
       characterAuraHits(campaign, encounter, sheet, lines);
+      const standing = getSheetById(id);
+      if (standing && standing.currentHp > 0) {
+        confusionRoll(campaign, encounter, { kind: "sheet", id, name: standing.name }, lines);
+      }
       heroism(campaign, getSheetById(id) ?? sheet);
       characterTurnStartDamage(campaign, getSheetById(id) ?? sheet, lines);
       regenerate(campaign, getSheetById(id) ?? sheet);

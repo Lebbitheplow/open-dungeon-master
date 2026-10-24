@@ -68,7 +68,7 @@ export const pcAttackTool: ToolDef = {
       additionalProperties: false,
       properties: {
         characterId: { type: "string", description: "Exact characterId from GAME STATE." },
-        targetEnemyId: { type: "string", description: "Exact enemyId from GAME STATE, or the characterId of a character fighting on the other side (listed among the foes)." },
+        targetEnemyId: { type: "string", description: "Exact enemyId from GAME STATE, or a foe-side characterId." },
         weapon: {
           type: "string",
           description:

@@ -65,6 +65,12 @@ const conditionInstanceSchema = z.object({
     untilLongRest: z.boolean().optional(),
     // The temporary hit points the effect granted, gone when it ends.
     tempHp: z.number().int().min(1).max(500).optional(),
+    // A Dominate spell's standing order: the combatant its creature was told
+    // to attack (src/lib/dm/combat-sides-logic.ts dominationOrderOf).
+    order: z.string().trim().min(1).max(80).optional(),
+    // Confusion's lash-out: the creature its d10 picked for this round's
+    // melee attack (src/lib/dm/confusion.ts).
+    lashOut: z.object({ target: z.string().trim().min(1).max(80), round: z.number().int().min(0) }).optional(),
 });
 
 // Duration/save metadata for active conditions, keyed by condition name.

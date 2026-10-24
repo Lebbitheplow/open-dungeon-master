@@ -33,6 +33,7 @@ import { caster, closeTables, enemyOf } from "./lib/enforce-spell-kit.mjs";
 import { castOnOwnTurn, fightDummies, layMap } from "./lib/enforce-spells.mjs";
 import { board, holdTurn, mapOf, OPEN, place, tokenOf } from "./lib/enforce-zones.mjs";
 
+const { sideOf } = await import("../src/lib/dm/combatant.ts");
 const { test, finish } = suite("test-enforce-summons");
 const { listTokens } = await import("../src/lib/db/battle-maps.ts");
 
@@ -180,7 +181,7 @@ await test("When the caster's concentration on a conjuring spell ends, the creat
   assert.equal(summonsOf(world, "Conjure Animals").length, 0);
 });
 
-await test("Conjure Elemental: when concentration breaks the elemental does not vanish; it turns hostile, an enemy with its stat block where it stood.", async () => {
+await test("Conjure Elemental: when concentration breaks the elemental does not vanish; it turns hostile, the same sheet fighting on the foes' side where it stood (issue 503).", async () => {
   const { world, sheets: [wizard] } = await outOfFight([WIZARD(["Conjure Elemental"])]);
   const cast = await world.invoke("cast_buff", { characterId: wizard.id, spell: "Conjure Elemental", level: 5, variant: "fire elemental" });
   assert.equal(cast.ok, true, cast.error);
@@ -191,11 +192,14 @@ await test("Conjure Elemental: when concentration breaks the elemental does not 
   world.dice(1);
   await world.invoke("apply_damage", { characterId: wizard.id, amount: 4, type: "slashing" });
   world.clearDice();
-  assert.equal(world.sheet(elemental.id), null);
-  const hostile = world.enemies().find((enemy) => /fire elemental/i.test(enemy.displayName));
-  assert.ok(hostile, "the elemental is an enemy now");
+  const hostile = world.sheet(elemental.id);
+  assert.ok(hostile, "the elemental keeps its sheet");
   assert.equal(hostile.maxHp, 102);
-  const token = tokenOf(world, hostile.id);
+  assert.equal(hostile.summon.unbound, true, "no longer its maker's");
+  assert.equal(sideOf(world.encounter(), "sheet", elemental.id), "foe");
+  assert.ok(hostile.conditions.includes("summoned"), "its own hour still counts");
+  assert.equal(hostile.conditionMeta.summoned?.spell, undefined, "and no spell of the wizard's ends it");
+  const token = tokenOf(world, elemental.id);
   assert.deepEqual([token.x, token.y], [at.x, at.y]);
 });
 

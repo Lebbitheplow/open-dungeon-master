@@ -1,3 +1,4 @@
+import { lashOutTarget } from "@/lib/dm/confusion";
 import { resolveTargetFoe } from "@/lib/dm/sheet-foe";
 import { hostileTo, unknownCombatantRef } from "@/lib/dm/combatant";
 import { isSheetFoe } from "@/lib/dm/combat-sides-logic";
@@ -96,7 +97,14 @@ export function gatePcAttack(input: {
   // A character on the attacker's own side is an ally: pc_attack does not
   // strike one by mistake. A character who turns on the party is moved to
   // the other side by the server (combat-sides.ts), and is a target then.
-  if (isSheetFoe(enemy) && !input.anySide && !hostileTo(encounter, { kind: "sheet", id: sheet.id }, { kind: "sheet", id: enemy.id })) {
+  // Confusion's lash-out (confusion.ts): the creature its d10 picked, and no
+  // other, whichever side it is on.
+  const lash = lashOutTarget(sheet, encounter.round);
+  if (lash && enemy.id !== lash) {
+    const picked = resolveTargetFoe(campaign.id, encounter, lash);
+    return { refused: { error: `${sheet.name} is confused: this turn's attack is on ${picked?.displayName ?? "the creature Confusion picked"}, picked at random, and no other.`, refused: "rules" } };
+  }
+  if (isSheetFoe(enemy) && !input.anySide && !lash && !hostileTo(encounter, { kind: "sheet", id: sheet.id }, { kind: "sheet", id: enemy.id })) {
     return {
       refused: {
         error: `${enemy.displayName} fights on ${sheet.name}'s side: pc_attack does not strike an ally. Pick a creature on the other side.`,

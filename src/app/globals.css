@@ -797,6 +797,29 @@ body::before {
 .token-move {
   transition: transform var(--dur-move) var(--ease-settle);
 }
+/* A creature changing sides re-rims in 300 ms (issue 503): its rim and
+   plate fade to the new side's colours, and a ring of the new colour pulses
+   out once. Reduced motion keeps the colour and drops the pulse. */
+.token-rim {
+  transition:
+    stroke 300ms var(--ease-snap),
+    fill 300ms var(--ease-snap);
+}
+@keyframes side-flip {
+  0% { transform: scale(1); opacity: 0.95; }
+  100% { transform: scale(1.4); opacity: 0; }
+}
+.side-flip {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: side-flip 300ms var(--ease-snap) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .side-flip {
+    animation: none;
+    opacity: 0;
+  }
+}
 @keyframes composer-pulse {
   0% { border-color: rgba(212, 171, 58, 0.9); box-shadow: var(--shadow-glow-gold-strong); }
   100% { border-color: rgba(87, 83, 78, 0.7); box-shadow: var(--shadow-elev-1); }
@@ -813,6 +836,10 @@ body::before {
 [data-effects="low"] .turn-ring,
 [data-effects="low"] .ken-burns {
   animation: none;
+}
+[data-effects="low"] .side-flip {
+  animation: none;
+  opacity: 0;
 }
 [data-effects="low"] .token-move,
 [data-effects="low"] .sky-wash {

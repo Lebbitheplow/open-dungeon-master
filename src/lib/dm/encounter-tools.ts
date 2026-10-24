@@ -1,6 +1,7 @@
 import { dominationOrderOf, otherSide } from "@/lib/dm/combat-sides-logic";
-import { sheetsOnSide, sideOf, standingOn } from "@/lib/dm/combatant";
-import { sheetFoeView } from "@/lib/dm/sheet-foe";
+import { resolveCombatant, sheetsOnSide, sideOf, standingOn } from "@/lib/dm/combatant";
+import { resolveTargetFoe, sheetFoeView } from "@/lib/dm/sheet-foe";
+import { lashOutTarget } from "@/lib/dm/confusion";
 import type { SystemGlyph } from "@/lib/system-glyphs";
 import { holdsOn } from "@/lib/dm/vitals-logic";
 import { fieldedSheets } from "@/lib/dm/roster";
@@ -1517,13 +1518,16 @@ export function autoActSkippedEnemies(
     // A creature told whom to attack (a Dominate spell's order) goes for
     // that one while it stands.
     const foes = standingOn(campaign.id, live, otherSide(sideOf(live, "enemy", enemy.id, enemy)));
-    if (!foes.length) {
+    if (!foes.length && !lashOutTarget(enemy, live.round)) {
       continue;
     }
     const map = getBattleMapForEncounter(encounter.id);
     const attackerToken = map ? getTokenByRef(map.id, enemy.id) : null;
+    // Confusion's lash-out first: the creature its d10 picked, either side.
+    const lash = lashOutTarget(enemy, live.round);
     const ordered = dominationOrderOf(enemy.conditions, enemy.conditionMeta as Record<string, Record<string, unknown>>);
     const targetId =
+      lash ??
       (ordered && foes.some((foe) => foe.id === ordered) ? ordered : null) ??
       pickEnemyTarget(
         attackerToken ? { x: attackerToken.x, y: attackerToken.y } : null,
@@ -1547,8 +1551,9 @@ export function autoActSkippedEnemies(
       JSON.stringify({ enemyId: enemy.id, targetCharacterId: targetId }),
       sheets,
       sheetsById,
+      { anySide: Boolean(lash) },
     );
-    const targetName = foes.find((foe) => foe.id === targetId)?.name ?? sheetsById.get(targetId)?.name ?? "a hero";
+    const targetName = resolveCombatant(campaign.id, live, targetId)?.name ?? foes.find((foe) => foe.id === targetId)?.name ?? sheetsById.get(targetId)?.name ?? "a hero";
     if ("error" in result) {
       // Holding where it stands while a character has an action readied is
       // worth a line; out of reach or otherwise unable passes quietly.
@@ -1900,9 +1905,13 @@ function companionAutoAct(
   // companion of the party, the party for one that turned on it
   // (src/lib/dm/combatant.ts).
   const mySide = sideOf(encounter, "sheet", sheet.id);
-  const enemies = standingOn(campaign.id, encounter, otherSide(mySide)).map((foe) =>
-    foe.kind === "enemy" ? foe.enemy : sheetFoeView(encounter.id, foe.sheet),
-  );
+  // Confusion's lash-out (confusion.ts): the creature its d10 picked, and no
+  // other, whichever side it is on.
+  const lash = lashOutTarget(sheet, encounter.round);
+  const picked = lash ? resolveTargetFoe(campaign.id, encounter, lash) : null;
+  const enemies = picked
+    ? [picked]
+    : standingOn(campaign.id, encounter, otherSide(mySide)).map((foe) => (foe.kind === "enemy" ? foe.enemy : sheetFoeView(encounter.id, foe.sheet)));
   if (!enemies.length) {
     return;
   }
@@ -1942,6 +1951,7 @@ function companionAutoAct(
     new Map([[mover.id, mover]]),
     new Set<string>(),
     null,
+    { anySide: Boolean(picked) },
   );
   const note =
     (walked ? `${walked} ` : "") +
