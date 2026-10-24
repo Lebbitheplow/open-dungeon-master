@@ -717,6 +717,46 @@ for (const viewport of ["desktop", "phone"]) {
   courting[viewport] = { id: table.id, kael: kael.id, advanceSummary: advance.summary, advanceLine: ADVANCE_LINE };
 }
 
+// Companion conscience (issue 503): one table per viewport (the scenario
+// moves the ladder), run by the lead as its DM so the scenario records deeds
+// through the console the way a DM does. The player's Kael travels with
+// Seren Vale, a lawful good paladin of even temper, already uneasy after a
+// cruelty she saw.
+const CONSCIENCE_TITLE = "Conscience Table";
+const conscience = {};
+{
+  const { invokeEngine } = await import("../../src/lib/dm/invoke.ts");
+  const { companionNpcFor } = await import("../../src/lib/db/companion-npcs.ts");
+  const { patchNpcAgency } = await import("../../src/lib/db/npcs.ts");
+  for (const viewport of ["desktop", "phone"]) {
+    const table = campaigns.createCampaign(world.owner.id, {
+      title: `${CONSCIENCE_TITLE} (${viewport})`,
+      description: "A paladin who walks with the party, for now.",
+      theme: "high-fantasy",
+      maxPlayers: 6,
+      startingLevel: 3,
+      difficulty: "normal",
+      gameSettings: { ttsEnabled: false, dmMode: "human" },
+    });
+    campaigns.setCampaignStatus(table.id, "active");
+    campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+    const kael = sheets.createSheet(table.id, player.id, 3, heroInput({ name: "Kael Ashvale", class: "rogue", level: 3 }));
+    const bot = createCompanionUser("Seren Vale");
+    const seren = sheets.createSheet(table.id, bot.id, 3, heroInput({ name: "Seren Vale", class: "paladin", alignment: "LG", level: 3 }));
+    sheets.markSheetAsCompanion(seren.id, "party", "Stern, devout, slow to anger and slower to forgive.");
+    const row = companionNpcFor(sheets.getSheetById(seren.id));
+    patchNpcAgency(row.id, { personality: { drive: 0, diligence: 0, boldness: 0, warmth: 0, empathy: 0, composure: 0 } });
+    const cruelty = await invokeEngine(campaigns.getCampaignById(table.id), { kind: "human", userId: world.owner.id }, {
+      name: "relationship_beat",
+      args: { characterId: kael.id, subject: seren.name, beat: "cruelty", note: "Kael kicked a beggar out of the road." },
+    });
+    if (!cruelty.ok) {
+      throw new Error(`the conscience table's first deed was refused: ${cruelty.error}`);
+    }
+    conscience[viewport] = { id: table.id, kael: kael.id, seren: seren.name };
+  }
+}
+
 const ids = {
   lead: world.owner.username,
   player: player.username,
@@ -759,12 +799,14 @@ const ids = {
   levelTableId: levelTable.id,
   commandTableId: commandTable.id,
   courting,
+  conscience,
   pip: pip.id,
   // Every campaign a scenario opens, by id, for the app's home tiles.
   titles: {
     [levelTable.id]: "Level Table",
     [commandTable.id]: COMMAND_TITLE,
     ...Object.fromEntries(Object.entries(courting).map(([viewport, table]) => [table.id, `${COURTING_TITLE} (${viewport})`])),
+    ...Object.fromEntries(Object.entries(conscience).map(([viewport, table]) => [table.id, `${CONSCIENCE_TITLE} (${viewport})`])),
     [world.campaignId]: TITLE,
     [lobby.id]: LOBBY_TITLE,
     [quiet.id]: QUIET_TITLE,
