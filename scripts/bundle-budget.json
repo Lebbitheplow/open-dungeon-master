@@ -1,29 +1,29 @@
 {
-  "note": "First-load JavaScript and CSS per route, gzip KiB, from the production build's own manifests (scripts/check-bundle-budget.mjs). Each budget sits about 5% above the size measured when it was set (2026-10-11); raise one only in the change that needs it, with the reason. CSS raised 2026-10-17 (85 -> 90, rulebook 92 -> 97): release 0.28.0 lands the usability pass (#369: settings groups, phone table menu, first-turn tour, builder steps) and the addon framework (#371: admin addons, board view switch) together; each fit alone, together the shared stylesheet is 86 KiB (rulebook 92.6). Table JS raised 2026-10-18 (838 -> 900): the board reads what an item is (the ammunition a weapon fires, the focus an effect asks for) from its row in the item tag table (src/lib/classes/item-tags.json, about 30 KiB gzip) instead of English words in its name, so an item named in any table language is read the same; the table page measured 859.7 KiB. Workshop hub JS raised 2026-10-20 (493 -> 500): release 0.28.3 lands the three WorldForge M5 items together (#439 Ask sources, #440 the pack omission report, #441 scene origins and losses); each fit alone, together the hub measured 493.4 KiB. Workshop JS raised 2026-10-21 (shelf 518 -> 525, hub 500 -> 507): release 0.29.0 lands workshop classes (#477: the class registry and its kind in the shared homebrew code), the whole-name readers every engine shares (#470) and the rewritten tours and guides (#468) together; each fit alone, together the shelf measured 518.4 KiB and the hub 500.4.",
+  "note": "First-load JavaScript and CSS per route, gzip KiB, from the production build's own manifests (scripts/check-bundle-budget.mjs). Each budget sits about 5% above the size measured when it was set (2026-10-11); raise one only in the change that needs it, with the reason. CSS raised 2026-10-17 (85 -> 90, rulebook 92 -> 97): release 0.28.0 lands the usability pass (#369: settings groups, phone table menu, first-turn tour, builder steps) and the addon framework (#371: admin addons, board view switch) together; each fit alone, together the shared stylesheet is 86 KiB (rulebook 92.6). Table JS raised 2026-10-18 (838 -> 900): the board reads what an item is (the ammunition a weapon fires, the focus an effect asks for) from its row in the item tag table (src/lib/classes/item-tags.json, about 30 KiB gzip) instead of English words in its name, so an item named in any table language is read the same; the table page measured 859.7 KiB. Workshop hub JS raised 2026-10-20 (493 -> 500): release 0.28.3 lands the three WorldForge M5 items together (#439 Ask sources, #440 the pack omission report, #441 scene origins and losses); each fit alone, together the hub measured 493.4 KiB. Workshop JS raised 2026-10-21 (shelf 518 -> 525, hub 500 -> 507): release 0.29.0 lands workshop classes (#477: the class registry and its kind in the shared homebrew code), the whole-name readers every engine shares (#470) and the rewritten tours and guides (#468) together; each fit alone, together the shelf measured 518.4 KiB and the hub 500.4. CSS raised 2026-10-23 (90 -> 95, rulebook 97 -> 102): issues 501 to 503 land together (the advance and pact offer cards, the conscience ladder, the Gone list, the combat side bands and badges) with the day theme turning rose, emerald, violet and red so their tiers read on cream; each fit alone, together the shared stylesheet measured 91.1 KiB (rulebook 97.7).",
   "routes": {
     "page": {
       "jsGzipKiB": 526,
-      "cssGzipKiB": 90
+      "cssGzipKiB": 95
     },
     "campaigns/[campaignId]/page": {
       "jsGzipKiB": 408,
-      "cssGzipKiB": 90
+      "cssGzipKiB": 95
     },
     "campaigns/[campaignId]/table/page": {
       "jsGzipKiB": 900,
-      "cssGzipKiB": 90
+      "cssGzipKiB": 95
     },
     "workshop/page": {
       "jsGzipKiB": 525,
-      "cssGzipKiB": 90
+      "cssGzipKiB": 95
     },
     "workshop/[workshopId]/page": {
       "jsGzipKiB": 507,
-      "cssGzipKiB": 90
+      "cssGzipKiB": 95
     },
     "rulebook/page": {
       "jsGzipKiB": 457,
-      "cssGzipKiB": 97
+      "cssGzipKiB": 102
     }
   }
 }
