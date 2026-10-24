@@ -157,3 +157,70 @@ export function enemySwingOdds(input: {
   ];
   return { advantage, notes, autoCrit: conditionContext.autoCrit, authored, attackBonus: effect.bonus };
 }
+
+// The same odds for a swing at another creature's row (issue 503,
+// enemy-strike.ts): a dominated ogre at its old ally, a confused wolf at the
+// nearest creature. What only a character brings to a defence (Elusive, a
+// subclass's ward, a curse its caster laid) has no part here.
+export function enemyRowSwingOdds(input: {
+  campaign: Campaign;
+  encounterId: string;
+  standing: EncounterEnemy;
+  target: EncounterEnemy;
+  requested: Advantage;
+  ranged: boolean;
+  longRange: boolean;
+  distance: number | null;
+  outdoorsOnMap: boolean;
+  riders: ConditionRollRiders;
+}): { advantage: Advantage; notes: string[]; autoCrit: boolean; attackBonus: number } {
+  const { campaign, encounterId, standing, target, ranged, distance } = input;
+  const effect = effectOutcome(campaign.id, { kind: "enemy", id: standing.id }, "attack");
+  const conditionContext = attackContext({
+    attackerConditions: standing.conditions,
+    attackerType: standing.stats.type,
+    targetConditions: withLiveDodge(target.conditions),
+    melee: !ranged,
+    adjacent: distance === null ? !ranged : distance <= 1,
+    requested: input.requested,
+  });
+  const gale = input.outdoorsOnMap ? weatherRangedRider(normalizeClock(campaign.clock).weather, ranged, distance ?? 0) : { disadvantage: false, note: null };
+  const crowded = ranged && enemyShootsInMelee(encounterId, standing.id, standing.conditions);
+  const flanking = campaign.gameSettings.variantRules.flanking && !ranged && enemyFlanks(encounterId, standing.id, target.id);
+  const pack = hasTrait(standing.stats, "packTactics") && enemyAllyNear(encounterId, standing.id, target.id);
+  const worn = enemyExhaustion(standing.conditions) >= 3;
+  const sunlit = hasTrait(standing.stats, "sunlightSensitivity") && inDirectSunlight(campaign.id);
+  const light = lightOnAttack(
+    attackSight({
+      campaignId: campaign.id,
+      encounterId,
+      attacker: { refId: standing.id, senses: enemySenses(standing) },
+      target: { refId: target.id, senses: enemySenses(target) },
+    }),
+    { attacker: standing.displayName, target: target.displayName },
+  );
+  const marks: Array<[boolean, Advantage, string]> = [
+    [gale.disadvantage, "disadvantage", gale.note ?? ""],
+    [crowded, "disadvantage", "a hostile creature is within 5 feet: disadvantage on ranged attacks"],
+    [input.longRange, "disadvantage", "past its normal range: disadvantage"],
+    [sunlit, "disadvantage", "Sunlight Sensitivity: disadvantage in direct sunlight"],
+    [worn, "disadvantage", `exhaustion ${enemyExhaustion(standing.conditions)}: disadvantage on attack rolls`],
+    [flanking, "advantage", "flanking: advantage"],
+    [pack, "advantage", "Pack Tactics: advantage"],
+    [effect.advantage, "advantage", ""],
+    [effect.disadvantage, "disadvantage", ""],
+  ];
+  const advantage = mergeAdvantage([
+    ...conditionContext.sources,
+    ...light.sources,
+    ...input.riders.advantageSources,
+    ...marks.filter(([on]) => on).map(([, mode]) => mode),
+  ]);
+  const notes = [
+    ...(effect.sources.length ? [`on its attack rolls: ${effect.sources.join("; ")}`] : []),
+    ...conditionContext.notes,
+    ...light.notes,
+    ...marks.filter(([on, , note]) => on && note).map(([, , note]) => note),
+  ];
+  return { advantage, notes, autoCrit: conditionContext.autoCrit, attackBonus: effect.bonus };
+}

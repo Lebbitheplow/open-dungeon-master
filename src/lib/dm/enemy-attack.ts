@@ -14,10 +14,8 @@ import { lashOutTarget } from "@/lib/dm/confusion";
 
 import { weaponNamed } from "@/lib/srd/weapons";
 import { readiedHolder } from "@/lib/dm/readied-release";
-import { martialAdvantageDice, surpriseAttackDice } from "@/lib/dm/monster-traits";
-import { tilesBetween } from "@/lib/dm/attack-spatial";
-import { incapacitatedBy } from "@/lib/dm/condition-logic";
-import { listEnemies, patchEnemyConditions, type EncounterEnemy } from "@/lib/db/encounters";
+import { hitTraitDice } from "@/lib/dm/side-allies";
+import { patchEnemyConditions, type EncounterEnemy } from "@/lib/db/encounters";
 import { mirrorImageDecoy, sanctuaryRefusal } from "@/lib/dm/spell-defenses";
 import { enfeebledBlow, spellRetort, spendEnemyRiders } from "@/lib/dm/spell-retort";
 import { z } from "zod";
@@ -459,7 +457,7 @@ export function handleEnemyAttack(
 
     // Martial Advantage and Surprise Attack add their dice to the blow
     // (src/lib/dm/monster-traits.ts), doubled on a critical hit like the rest.
-    const bonus = traitDice(encounter, standing, target.id, attack, martialSpent);
+    const bonus = hitTraitDice(encounter, standing, target.id, attack, martialSpent);
     if (bonus.martial) {
       martialSpent = true;
     }
@@ -595,40 +593,6 @@ export function handleEnemyAttack(
     ...(targetHp ? { targetHp } : {}),
     ...(dropped ? { dropped: true, note: `${target.name} falls to 0 HP.` } : {}),
   };
-}
-
-// The dice a trait adds to a hit: Martial Advantage (a weapon hit on a
-// creature within 5 feet of one of its allies that isn't incapacitated, once
-// a turn) and Surprise Attack (a hit on a creature it surprised, in the
-// first round).
-function traitDice(
-  encounter: { id: string; round: number; surprisedIds: string[] },
-  enemy: { id: string; stats: { traits?: string[] } },
-  targetId: string,
-  attack: { spellAttack?: boolean },
-  martialSpent: boolean,
-): { dice: string[]; martial: boolean } {
-  const dice: string[] = [];
-  let martial = false;
-  const martialDice = martialAdvantageDice(enemy.stats);
-  if (martialDice && !martialSpent && !attack.spellAttack) {
-    const ally = listEnemies(encounter.id).some(
-      (other) =>
-        other.id !== enemy.id &&
-        other.status === "alive" &&
-        !incapacitatedBy(other.conditions) &&
-        (tilesBetween(encounter.id, other.id, targetId) ?? Infinity) <= 1,
-    );
-    if (ally) {
-      dice.push(martialDice);
-      martial = true;
-    }
-  }
-  const surprise = surpriseAttackDice(enemy.stats);
-  if (surprise && encounter.round === 1 && encounter.surprisedIds.includes(targetId)) {
-    dice.push(surprise);
-  }
-  return { dice, martial };
 }
 
 // Among the Dead (the Undying warlock): an undead that targets the warlock

@@ -41,6 +41,7 @@ import { summonSpellFor } from "@/lib/srd/summon-spells";
 import { castSummon } from "@/lib/dm/summon-cast";
 import { castFindFamiliar, isFindFamiliar } from "@/lib/dm/familiar-cast";
 import { castShapeAtEnemy, enemyShapeSpellFor } from "@/lib/dm/enemy-polymorph";
+import { allyRowRefusal, allyRowsOf, layBuffOnRows } from "@/lib/dm/cast-buff-allies";
 import { holdingHint, noneNamed, type ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
 import { nameChoice } from "@/lib/srd/feature-names";
@@ -174,9 +175,13 @@ export function handleCastBuff(
   if (redirect) {
     return redirect;
   }
-  // Only a mark (Hunter's Mark, Hex) names an enemy here. Any other buff
-  // given one would land on the caster instead, so it is refused unspent.
-  if (args.targetEnemyId && !MARKS.has(resolvedMech.mech.buff?.condition ?? "")) {
+  // Only a mark (Hunter's Mark, Hex) names an enemy here, or a creature on
+  // the caster's side (cast-buff-allies.ts); any other buff given an enemy
+  // would land on the caster instead, so it is refused unspent.
+  const marking = MARKS.has(resolvedMech.mech.buff?.condition ?? "");
+  const allies = allyRowsOf(campaign.id, sheet.id, marking ? [] : [...(args.targetCharacterIds ?? []), ...(args.targetEnemyId ? [args.targetEnemyId] : [])]);
+  const sheetRefs = (marking ? (args.targetCharacterIds ?? []) : allies.rest).filter((ref) => ref !== args.targetEnemyId);
+  if (args.targetEnemyId && !marking && allies.rest.includes(args.targetEnemyId)) {
     return {
       error: `${resolvedMech.name} cannot be cast on an enemy through cast_buff; name the caster or allies in targetCharacterIds, or cast a spell that targets enemies with cast_at_enemy. Nothing was spent.`,
       retry: true,
@@ -236,19 +241,23 @@ export function handleCastBuff(
       : { error: "No fight is running: a mark's targetEnemyId names an enemy of a fight. Nothing was spent.", retry: true };
   }
 
+  // What reaches a character through the sheet has no place on a row.
+  const rowRefusal = allyRowRefusal(resolvedMech.name, allies.rows, { sheetOnly: Boolean(polymorphForm || buff.maxHp || buff.tempHp || resolvedMech.mech.maxHpDice) });
+  if (rowRefusal) return rowRefusal;
   // Resolve the recipients: self-only spells ignore stray targets.
   const targetSheets: CharacterSheet[] = [];
-  if (buff.target === "self" || !args.targetCharacterIds?.length) {
+  const targetRows = buff.target === "self" ? [] : allies.rows;
+  if (buff.target === "self" || (!sheetRefs.length && !targetRows.length)) {
     targetSheets.push(sheet);
   } else {
-    for (const ref of args.targetCharacterIds) {
+    for (const ref of sheetRefs) {
       const found = resolveSheetRef(ref, sheets, sheetsById);
       const fresh = found ? (getSheetById(found.id) ?? found) : null;
       if (fresh && !fresh.deathSaves?.dead && !targetSheets.some((entry) => entry.id === fresh.id)) {
         targetSheets.push(fresh);
       }
     }
-    if (!targetSheets.length) {
+    if (!targetSheets.length && !targetRows.length) {
       targetSheets.push(sheet);
     }
   }
@@ -263,9 +272,9 @@ export function handleCastBuff(
       })
     : null;
   const most = buff.target === "self" ? 1 : (shares ?? (buff.target === "ally" ? 1 : 6));
-  if (targetSheets.length > most) {
+  if (targetSheets.length + targetRows.length > most) {
     return {
-      error: `${resolvedMech.name} from a level ${plannedSlot ?? resolvedMech.spellLevel} slot affects at most ${most} creature${most === 1 ? "" : "s"}; ${targetSheets.length} were named. Name ${most} or fewer, or cast it from a higher slot. Ask the player which. Nothing was spent.`,
+      error: `${resolvedMech.name} from a level ${plannedSlot ?? resolvedMech.spellLevel} slot affects at most ${most} creature${most === 1 ? "" : "s"}; ${targetSheets.length + targetRows.length} were named. Name ${most} or fewer, or cast it from a higher slot. Ask the player which. Nothing was spent.`,
       retry: true,
     };
   }
@@ -297,7 +306,7 @@ export function handleCastBuff(
   // targeted all the same, and the spell does nothing to them.
   const warded = new Map<string, string>();
   if (encounterNow) {
-    for (const target of targetSheets) {
+    for (const target of [...targetSheets, ...targetRows.map((row) => ({ id: row.id, name: row.displayName }))]) {
       const near = { encounterId: encounterNow.id, casterId: sheet.id, targetId: target.id, targetName: target.name, facts };
       const reach = spellReachProblem({ ...near, casterName: sheet.name });
       if (reach) {
@@ -442,6 +451,7 @@ export function handleCastBuff(
     // is no longer dying (death.ts healDeathHook, as healing settles it).
     healDeathHook(campaign, turn.id, fresh);
   }
+  applied.push(...layBuffOnRows(campaign, targetRows.filter((row) => !warded.has(row.id)), condition, spellMeta, rounds));
   const noEffect = [...warded.values()].join(" ");
   if (!applied.length && noEffect) {
     return { ok: true, spell: resolvedMech.name, targets: [], ...(cast.slot ? { slot: cast.slot } : {}), ...castToNoEffect(noEffect) };

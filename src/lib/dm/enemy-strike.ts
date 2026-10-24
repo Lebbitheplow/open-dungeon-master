@@ -6,10 +6,15 @@
 // character path, with all a sheet's defences.
 //
 // The routine is the block's (its Multiattack, or the attack named), each
-// swing an attack roll against the target's Armor Class with both sides'
-// conditions (condition-logic.ts attackContext), the blow by type, and the
-// damage through applyEnemyDamage: the target's resistances, Undead
-// Fortitude, its concentration, its death and the end of the fight. The
+// swing an attack roll against the target's Armor Class and cover with every
+// source of advantage a monster's swing at a character has (enemy-swing-odds.ts
+// enemyRowSwingOdds: both sides' conditions, light, Pack Tactics and flanking
+// by side, a spell left on either), the riders on its roll (Bless, Bane), the
+// dice its traits add to a hit (side-allies.ts: Martial Advantage beside an
+// ally of its side, Surprise Attack), an effect's damage, Ray of
+// Enfeeblement, the blow by type, the damage through applyEnemyDamage (the
+// target's resistances, Undead Fortitude, its concentration, its death and
+// the end of the fight), and what the hit carries (enemy-hit-rows.ts). The
 // attacker walks in first when it can (enemy-approach.ts).
 //
 // Must not import encounter-tools.
@@ -27,7 +32,14 @@ import { publishWithSeq } from "@/lib/events";
 import { rollAgainst } from "@/lib/roll-labels";
 import { enemyAcWithEffects } from "@/lib/dm/ac-effects";
 import { markEnemyActed } from "@/lib/dm/can-act";
-import { attackContext, mergeAdvantage } from "@/lib/dm/condition-logic";
+import { coverFor } from "@/lib/dm/attack-spatial";
+import { getBattleMapForEncounter } from "@/lib/db/battle-maps";
+import { effectOutcome } from "@/lib/dm/effect-tools";
+import { enemyRowSwingOdds } from "@/lib/dm/enemy-swing-odds";
+import { resolveRowOnHit } from "@/lib/dm/enemy-hit-rows";
+import { hitTraitDice } from "@/lib/dm/side-allies";
+import { enfeebledBlow, spendEnemyRiders } from "@/lib/dm/spell-retort";
+import { conditionRollRiders } from "@/lib/srd/condition-effects";
 import { applyEnemyDamage } from "@/lib/dm/enemy-damage";
 import { approachTarget, spendEnemyAction, standUpIfProne } from "@/lib/dm/enemy-approach";
 import { blowByType } from "@/lib/dm/enemy-hit";
@@ -96,6 +108,17 @@ export function enemyStrikesEnemy(
     recordEncounterTarget(encounter.id, encounter.round, enemy.id, target.id);
   }
   const notes: string[] = stood ? [`${enemy.displayName} stands up (half its speed)`] : [];
+  // Cover protects whoever stands behind it, a creature as a character.
+  const cover = coverFor(encounter.id, enemy.id, target.id);
+  if (cover) {
+    notes.push(`${target.displayName} has ${cover === 2 ? "half" : "three-quarters"} cover: +${cover} AC`);
+  }
+  // A spell a character left on the creature (Bless's d4 on, Bane's off).
+  let riders = conditionRollRiders(enemy.conditions, "attack");
+  notes.push(...riders.notes);
+  const board = getBattleMapForEncounter(encounter.id);
+  // Martial Advantage is once a turn: this call is the creature's turn.
+  let martialSpent = false;
   const swings: Array<Record<string, unknown>> = [];
   let totalDamage = 0;
   let last: Record<string, unknown> = {};
@@ -110,18 +133,23 @@ export function enemyStrikesEnemy(
       continue;
     }
     const attack: EnemyAttack = alternativeBlow(plannedAttack, { ranged: mode.ranged, bloodied: enemy.currentHp <= enemy.maxHp / 2 });
-    const context = attackContext({
-      attackerConditions: enemy.conditions,
-      targetConditions: now.conditions,
-      melee: !mode.ranged,
-      adjacent: spatial.distance === null || spatial.distance <= 1,
+    const odds = enemyRowSwingOdds({
+      campaign,
+      encounterId: encounter.id,
+      standing: enemy,
+      target: now,
       requested: input.advantage ?? "none",
-      attackerType: enemy.stats.type,
+      ranged: mode.ranged,
+      longRange: mode.longRange,
+      distance: spatial.distance,
+      outdoorsOnMap: Boolean(attackerPos && targetPos && board?.outdoors),
+      riders,
     });
-    const advantage = mergeAdvantage(context.sources);
-    notes.push(...context.notes.filter((note) => !notes.includes(note)));
-    const vsAc = enemyAcWithEffects(campaign.id, now);
-    const toHit = rollExpression(d20Expression(attack.toHit, advantage));
+    const advantage = odds.advantage;
+    notes.push(...odds.notes.filter((note) => !notes.includes(note)));
+    const vsAc = enemyAcWithEffects(campaign.id, now) + cover;
+    const toHit = rollExpression(`${d20Expression(attack.toHit + odds.attackBonus, advantage)}${riders.diceSuffix}`);
+    riders = spendEnemyRiders(enemy, riders);
     const hitRoll = insertRoll({
       campaignId: campaign.id,
       characterId: null,
@@ -136,7 +164,7 @@ export function enemyStrikesEnemy(
     turn.rollIds.push(hitRoll.id);
     const natCrit = toHit.crit === "nat20";
     const hit = toHit.crit !== "nat1" && (natCrit || toHit.total >= vsAc);
-    const crit = natCrit || (hit && context.autoCrit);
+    const crit = natCrit || (hit && odds.autoCrit);
     if (attackerPos && targetPos && !attackerPos.hidden) {
       publishFx(campaign.id, planAttackFx({ from: attackerPos.at, to: targetPos.at, fromTokenId: attackerPos.tokenId, toTokenId: targetPos.tokenId, hit, crit, ranged: mode.ranged, damageType: attack.type, visibility: hitRoll.visibility }));
     }
@@ -144,12 +172,19 @@ export function enemyStrikesEnemy(
       swings.push({ attack: attack.name, rolled: toHit.total, hit: false, ...(toHit.crit === "nat1" ? { fumble: true } : {}) });
       continue;
     }
+    // Martial Advantage and Surprise Attack add their dice to the blow, and
+    // an active effect its amount (set_effect), doubled on a crit like the rest.
+    const traits = hitTraitDice(live, enemy, now.id, attack, martialSpent);
+    martialSpent ||= traits.martial;
+    const effectDamage = effectOutcome(campaign.id, { kind: "enemy", id: enemy.id }, "damage").bonus;
+    const withTraits = traits.dice.length ? `${attack.damage}+${traits.dice.join("+")}` : attack.damage;
+    const base = effectDamage > 0 ? `${withTraits}+${effectDamage}` : effectDamage < 0 ? `${withTraits}-${-effectDamage}` : withTraits;
     const expression = crit
-      ? critDamageExpression(attack.damage, 0, {
+      ? critDamageExpression(base, 0, {
           powerfulCritical: campaign.gameSettings.variantRules.powerfulCritical,
           multiplyNumeric: campaign.gameSettings.variantRules.criticalDamageMods,
         })
-      : attack.damage;
+      : base;
     const damage = rollExpression(expression);
     const damageRoll = insertRoll({
       campaignId: campaign.id,
@@ -163,7 +198,8 @@ export function enemyStrikesEnemy(
     publishWithSeq(campaign.id, allocateSeq(campaign.id), "roll_result", { roll: damageRoll, source: "digital" });
     turn.rollIds.push(damageRoll.id);
     const blow = blowByType(attack, damage, crit);
-    const dealt = Math.max(0, blow.amount);
+    // Ray of Enfeeblement halves a Strength weapon's blow (spell-retort.ts).
+    const dealt = enfeebledBlow(enemy, attack, mode.ranged, Math.max(0, blow.amount));
     // Stamped on the roll as it lands, so the after-fight card counts it.
     last = dealt > 0
       ? landRoll(damageRoll.id, now.id, () =>
@@ -174,7 +210,10 @@ export function enemyStrikesEnemy(
         )
       : {};
     totalDamage += dealt;
-    swings.push({ attack: attack.name, rolled: toHit.total, hit: true, ...(crit ? { crit: true } : {}), damage: dealt, ...last });
+    // What the hit carries besides its damage (a save or be knocked prone).
+    const necrotic = blow.parts ? blow.parts.filter((part) => /necrotic/i.test(part.type)).reduce((sum, part) => sum + part.amount, 0) : /necrotic/i.test(blow.type ?? attack.type) ? dealt : 0;
+    const onHit = resolveRowOnHit(campaign, turn, enemy, attack, now.id, { sheets: input.sheets, sheetsById: input.sheetsById, dealt: { total: dealt, necrotic } });
+    swings.push({ attack: attack.name, rolled: toHit.total, hit: true, ...(crit ? { crit: true } : {}), ...(traits.martial ? { martialAdvantage: true } : {}), damage: dealt, ...last, ...(onHit ?? {}) });
   }
   const names = [...new Set(planned.map((attack) => attack.name))];
   return {
