@@ -67,6 +67,7 @@ import { handleRequestRoll } from "@/lib/dm/invoke-roll";
 import { handleSplitDamage } from "@/lib/dm/split-damage";
 import { strictBooleanArgs } from "@/lib/dm/arg-coerce";
 import { gateAiCall } from "@/lib/dm/ai-gate";
+import { conductGate } from "@/lib/dm/party-conduct";
 import { characterCallUnasked } from "@/lib/dm/player-word";
 import { EXPLORE_TOOL_NAMES, handleExploreCall } from "@/lib/dm/explore-tools";
 import type { Campaign } from "@/lib/db/campaigns";
@@ -134,7 +135,7 @@ export async function dispatchAdjudication(
       );
     case "cast_buff": {
       const unasked = characterCallUnasked(campaign.id, turn, rawArguments, "characterId");
-      return unasked ? unasked : handleCastBuff(campaign, turn, rawArguments, sheets, sheetsById);
+      return unasked ?? conductGate(campaign, name, rawArguments) ?? handleCastBuff(campaign, turn, rawArguments, sheets, sheetsById);
     }
     case "take_rest":
       return handleTakeRest(campaign, turn.id, rawArguments, sheets, sheetsById);

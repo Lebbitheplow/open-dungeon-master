@@ -45,6 +45,7 @@ import { encounterCeiling, evaluateEncounter } from "@/lib/srd/encounter-math";
 import { suggestEnemies } from "@/lib/bestiary";
 import { enemyRequestSchema, resolveEnemyRequests } from "@/lib/dm/encounter-spawn";
 import { fieldSheetFoes, sheetFoeIds, turnedFoes } from "@/lib/dm/sheet-foes";
+import { askShares, conductGate } from "@/lib/dm/party-conduct";
 import { hasHumanDm } from "@/lib/dm/viewer";
 import { decideAmbush, rollOpeningInitiative } from "@/lib/dm/encounter-open";
 import { heldRollUserIds } from "@/lib/dice/held-rolls";
@@ -368,6 +369,8 @@ function handleStartEncounter(
   const placed = createBattleMapForEncounter(campaign, encounter, enemies, sheets, args.distanceFeet, args.scene, args.from, caughtUnawares);
   // The characters named as foes take their side now the board exists.
   const against = foes.length ? fieldSheetFoes(campaign, foes) : [];
+  // A mercenary wary of the party asks its share first (party-conduct.ts).
+  const shares = askShares(campaign);
   publishEncounter(campaign.id);
   // The fight's card: the opening line in ember, "Ambush" when the party
   // was caught, with the combat sting (SceneTitle.tsx).
@@ -427,6 +430,7 @@ function handleStartEncounter(
           againstNote: `${against.map((sheet) => sheet.name).join(" and ")} fight${against.length === 1 ? "s" : ""} the party as their own sheet on the foes' side: you play them, with pc_attack and the cast tools by characterId.`,
         }
       : {}),
+    ...(shares.length ? { shares: shares.join(" ") } : {}),
     difficulty: `${evaluation.verdict} for this party`,
     ...(evaluation.verdict === "deadly" || evaluation.verdict === "beyond_deadly"
       ? { warning: "This fight can kill characters. Telegraph the danger." }
@@ -1108,6 +1112,12 @@ export function applyEncounterCall(
   // roll answers on resume.
   callContext?: { realDiceUserIds: Set<string>; toolCallId: string | null },
 ): { result: ToolResult } {
+  // A companion's unpaid share refuses its attack (issue 503,
+  // src/lib/dm/party-conduct.ts).
+  const conduct = conductGate(campaign, toolName, rawArguments);
+  if (conduct) {
+    return { result: conduct };
+  }
   switch (toolName) {
     case "start_encounter": {
       const started = handleStartEncounter(campaign, rawArguments, sheets, turn.actor);

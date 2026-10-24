@@ -1,4 +1,5 @@
 import { healerKitUse } from "@/lib/dm/stabilize";
+import { conductGate } from "@/lib/dm/party-conduct";
 import { shadowExperience } from "@/lib/db/companion-departures";
 import { subclassExtrasForTable } from "@/lib/db/subclass-extras";
 import { foldFieldValue } from "@/lib/dm/update-sheet-args";
@@ -546,6 +547,12 @@ export function applyDmMutation(
   }
   const args = parsed.data;
   const reason = (args.reason ?? "").slice(0, 200);
+  // A companion's slot or potion for someone it is wary of (issue 503,
+  // src/lib/dm/party-conduct.ts).
+  const conduct = toolName === "heal" || toolName === "use_item" ? conductGate(campaign, toolName, rawArguments) : null;
+  if (conduct) {
+    return { result: conduct };
+  }
 
   // Resolve by id or name, then RE-FETCH from the database: earlier
   // mutations in this same turn may have already changed the sheet.

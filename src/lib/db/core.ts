@@ -2584,6 +2584,15 @@ function ensureSchema(db: SqliteDatabase) {
   // earned since, and the return it is gathering help for. '' for everyone
   // else; snapshotted with the row, so a rewind undoes a departure whole.
   addColumns("npcs", [["departure_json", `TEXT NOT NULL DEFAULT ''`]]);
+  // A lasting companion inside the party (issue 503 Phase 4,
+  // src/lib/db/companion-conduct.ts): the share it wants before a fight, the
+  // fight it last took a blow in, what it last refused; and its hidden
+  // agenda (Phase 8, src/lib/db/companion-agenda.ts), a storyteller secret.
+  // '' for everyone else; snapshotted with the row, so a rewind restores both.
+  addColumns("npcs", [
+    ["conduct_json", `TEXT NOT NULL DEFAULT ''`],
+    ["agenda_json", `TEXT NOT NULL DEFAULT ''`],
+  ]);
 }
 
 // Widens battle_tokens.kind to accept the DM's own board furniture.

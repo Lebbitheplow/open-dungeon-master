@@ -27,7 +27,7 @@ import {
 } from "@/lib/dm/conscience-logic";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { textKey } from "@/lib/language/text-logic";
-import type { SouredLeaving } from "@/lib/dm/relationship-logic";
+import { friendshipTier, type SouredLeaving } from "@/lib/dm/relationship-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // A lasting companion's conscience (issue 503 Phase 1), the rim around
@@ -84,6 +84,15 @@ export function worstApproval(campaignId: string, companionName: string, sheets:
     .filter((relationship) => relationship.status === "active" && party.has(relationship.characterId) && textKey(relationship.subjectName) === key)
     .map((relationship) => relationship.approval);
   return approvals.length ? Math.min(...approvals) : null;
+}
+
+// The characters at the table this companion is devoted to.
+function devotedFriends(campaignId: string, companionName: string, sheets: readonly CharacterSheet[]): string[] {
+  const names = new Map(sheets.filter((sheet) => !sheet.isCompanion).map((sheet) => [sheet.id, sheet.name]));
+  const key = textKey(companionName);
+  return listRelationships(campaignId)
+    .filter((entry) => entry.status === "active" && names.has(entry.characterId) && textKey(entry.subjectName) === key && friendshipTier(entry.approval) === "devoted")
+    .map((entry) => names.get(entry.characterId)!);
 }
 
 export type ConscienceMove = {
@@ -263,6 +272,11 @@ export function conscienceBlockForPrompt(campaign: Campaign, sheets: readonly Ch
       parts.push(
         `their demand: "${conscience.ultimatum.condition}", by ${formatDate(campaign.clock.calendar, conscience.ultimatum.due)} (${durationLabel(minutesLeft(conscience.ultimatum, now))} left)`,
       );
+    }
+    // Issue 503 Phase 4: a devoted companion's reaction (devoted-guard.ts).
+    const devoted = devotedFriends(campaign.id, companion.name, sheets);
+    if (devoted.length) {
+      parts.push(`devoted to ${devoted.join(", ")}: may take a blow meant for them once a fight (use_reaction "Take the Blow", targetCharacterId)`);
     }
     return [parts.join("; ")];
   });

@@ -35,6 +35,7 @@ import { spellEngineName, spellFactsFor } from "@/lib/content";
 import { addSheetCondition, rollCard } from "@/lib/dm/action-common";
 import { tilesBetween } from "@/lib/dm/attack-spatial";
 import { reactionRefusal } from "@/lib/dm/reaction-gate";
+import { devotedGuard } from "@/lib/dm/devoted-guard";
 import { reactionTimingOf, timingOfDoes, type ReactionTiming } from "@/lib/dm/reaction-kinds";
 import { authoredReactionNamed, heldReaction } from "@/lib/srd/authored-effects";
 import { removeConditions } from "@/lib/dm/condition-logic";
@@ -458,6 +459,11 @@ export function handleUseReaction(
     };
   }
   const ctx: Ctx = { campaign, turn, sheet, args, sheets, sheetsById, encounter };
+  // A devoted companion's Take the Blow (src/lib/dm/devoted-guard.ts).
+  const guarded = devotedGuard(ctx);
+  if (guarded) {
+    return guarded;
+  }
 
   if (isNamed(feature, "opportunity attack", "attack of opportunity")) {
     return opportunity(ctx);
