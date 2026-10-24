@@ -41,6 +41,9 @@ const PACT = /A pact:|to turn Thorne|Deception, keeping|mean to (leave|weaken|tu
 
 // Two players and two lasting companions: Seren the paladin and Thorne, of
 // whatever class a test needs.
+// The road tests travel three hours: a leg of four or more rolls the sky,
+// and frigid or hot air makes every traveller's hourly saves first, which
+// took the dice queued for the pact's own rolls.
 async function table({ gameSettings = {}, thorne = {}, kael = {}, brin = {} } = {}) {
   const world = await openWorld({ gameSettings: { companions: "full", ...gameSettings } });
   const kaelSheet = world.addHero({ name: "Kael", gender: "Male", ...kael });
@@ -120,7 +123,7 @@ await test("once per long rest: the road the same day tries nothing more, the ne
   await longRest(t.world, [1, 20, 20]);
   assert.equal(secretRolls(t.world).filter((roll) => /to turn/.test(roll.detail)).length, 1, "one attempt at the rest");
   t.world.dice([20, 20, 20]);
-  const travel = await t.world.invoke("travel", { hours: 4 });
+  const travel = await t.world.invoke("travel", { hours: 3 });
   t.world.clearDice();
   assert.equal(travel.ok, true, travel.error);
   assert.equal(secretRolls(t.world).filter((roll) => /to turn/.test(roll.detail)).length, 1, "none on the road before the next rest");
@@ -134,7 +137,7 @@ await test("the road is a recruiting moment too, for one who has not tried since
   const t = await table();
   t.rung("Seren", 1);
   t.world.dice([20, 20, 20]);
-  const travel = await t.world.invoke("travel", { hours: 4 });
+  const travel = await t.world.invoke("travel", { hours: 3 });
   t.world.clearDice();
   assert.equal(travel.ok, true, travel.error);
   assert.equal(t.pacts().length, 1, "a pact formed on the road");
@@ -296,11 +299,11 @@ await test("a false trail costs a day: the guide's Survival beats the party's, t
   assert.equal(pact.trigger, "road");
   const before = getClock(t.world.campaignId).instant;
   t.world.dice([20, 1]);
-  const travel = await t.world.invoke("travel", { hours: 4 });
+  const travel = await t.world.invoke("travel", { hours: 3 });
   t.world.clearDice();
   assert.equal(travel.ok, true, travel.error);
   const after = getClock(t.world.campaignId).instant;
-  assert.ok(after - before >= 24 * 60 + 4 * 60, `a day lost besides the road (${after - before} minutes)`);
+  assert.ok(after - before >= 24 * 60 + 3 * 60, `a day lost besides the road (${after - before} minutes)`);
   assert.match(travel.result.companions.join(" "), /Thorne led the party off the road: it has lost a day/);
   assert.equal(t.companion("Thorne"), undefined);
 });
@@ -313,9 +316,9 @@ await test("a party that wins the Survival contest keeps to the road and loses n
   formPact(t, ["Thorne", "Seren"]);
   const before = getClock(t.world.campaignId).instant;
   t.world.dice([1, 20]);
-  const travel = await t.world.invoke("travel", { hours: 4 });
+  const travel = await t.world.invoke("travel", { hours: 3 });
   t.world.clearDice();
-  assert.equal(getClock(t.world.campaignId).instant - before, 4 * 60, "only the road's own hours");
+  assert.equal(getClock(t.world.campaignId).instant - before, 3 * 60, "only the road's own hours");
   assert.match(travel.result.companions.join(" "), /saw Thorne turning the party from the road in time/);
 });
 

@@ -4,7 +4,8 @@
 // stat block read off its sheet.
 //
 //   - a party member looking for a hidden turncoat rogue meets the rogue's
-//     own Stealth: expertise, and Reliable Talent turning a 2 into a 10;
+//     own Stealth: expertise, Supreme Sneak's advantage, and Reliable
+//     Talent turning a 2 into a 10;
 //   - a lie told to a turncoat meets its own Insight, with the disadvantage
 //     its poisoning gives every ability check.
 import assert from "node:assert/strict";
@@ -43,8 +44,11 @@ const contestRollOf = (sheet) => rolls.listRecentRolls(world.campaignId, 20).fin
 await test("A hidden turncoat rogue meets the lookout with its own Stealth: expertise, and Reliable Talent turning a 2 into a 10", async () => {
   const turncoat = await stage({});
   world.clearDice();
-  // Its d20: a 2, which Reliable Talent makes a 10; DEX +3 and twice +4.
-  world.dice(2);
+  // Its d20s: a level 11 rogue companion is a Thief (its class's SRD
+  // subclass), and Supreme Sneak gives it advantage when it moved little, so
+  // both dice are 2s, which Reliable Talent makes 10s; DEX +3 and twice +4.
+  // One forced die left the other to chance, and a real die over 10 won.
+  world.dice(2, 2);
   const out = await world.invoke("check_notice", { characterIds: [lookout.id], againstEnemyId: turncoat.id, reason: "a rogue in the shadows" });
   world.clearDice();
   assert.equal(out.ok, true, out.error);
