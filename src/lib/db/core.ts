@@ -2568,6 +2568,37 @@ function ensureSchema(db: SqliteDatabase) {
     CREATE INDEX IF NOT EXISTS idx_turn_corrections_campaign ON turn_corrections(campaign_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_turn_corrections_turn ON turn_corrections(turn_id);
 
+    -- How each AI turn ended (issue #460, src/lib/narrator-quality.ts): the
+    -- DM mode, the backend class and model, the call and tool counts, the
+    -- tool calls refused, and what the narration guard did. Written where a
+    -- turn ends (saveDmTurn on done or failed, the stale-turn sweep), and
+    -- written again if a retried turn ends again. Whether a turn was clean
+    -- is worked out when a report runs, never stored, so a changed rule
+    -- re-scores old turns. turn_id has no foreign key, for the same reason
+    -- as above: a rewind marks its rows rolled_back and they stay.
+    CREATE TABLE IF NOT EXISTS turn_quality (
+      turn_id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      actor TEXT NOT NULL,
+      dm_mode TEXT NOT NULL,
+      backend_class TEXT,
+      backend TEXT,
+      model TEXT,
+      status TEXT NOT NULL,
+      model_calls INTEGER NOT NULL DEFAULT 0,
+      tool_calls INTEGER NOT NULL DEFAULT 0,
+      refused_invalid INTEGER NOT NULL DEFAULT 0,
+      refused_rules INTEGER NOT NULL DEFAULT 0,
+      refused_limit INTEGER NOT NULL DEFAULT 0,
+      guard TEXT NOT NULL DEFAULT 'none',
+      guard_kinds TEXT NOT NULL DEFAULT '',
+      duration_ms INTEGER,
+      rolled_back INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_turn_quality_campaign ON turn_quality(campaign_id, created_at);
+
     -- Who a stored picture or document was made for (src/lib/media-access.ts):
     -- the account that uploaded or asked for it and the campaign or workshop
     -- it was made in, so it can be shown before any row names it (a portrait

@@ -545,6 +545,7 @@
     "lib/addons/board-bridge.ts#[a-z]": [["key",1,"a short id"]],
     "lib/characters/seat-picks.ts#toLowerCase": [["key",2,"skill ids"]],
     "lib/compressed-json.ts#str-includes": [["key",2,"HTTP Accept-Encoding content codings (protocol)"]],
+    "lib/narrator-quality.ts#str-list": [["key",1,"the narration guard's outcomes (fixed choices, stored values)"]],
     "lib/correction-reasons.ts#str-list": [["key",1,"the correction ledger's kinds of fix and its reason chips (fixed choices, stored values)"]],
     "lib/addons/board-bridge.ts#str-case": [["key",9,"addon board message types and view names (protocol)"]],
     "lib/addons/board-bridge.ts#str-eq": [["key",1,"addon board message types and view names (protocol)"]],

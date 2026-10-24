@@ -7,6 +7,7 @@ import { traceForViewer } from "@/lib/dm/context-budget";
 import { endpointKind } from "@/lib/dm/sampling-logic";
 import { harnessConfig } from "@/lib/harness/status";
 import { hostPlatform } from "@/lib/host-platform";
+import { bundleNarratorQuality } from "@/lib/narrator-quality-server";
 import {
   REPORT_TURNS,
   type ReportCall,
@@ -157,8 +158,12 @@ export function tableReportSources(context: MemberContext, parts: ReadonlySet<Re
       createdAt: message.createdAt,
     }));
   }
-  // Issue #460: the correction ledger's narrator quality rows join
-  // sources.narratorQuality here once it exists.
+  // Issue #460: the correction ledger's narrator quality rows for this
+  // table, hashed and nameless, under the turn timings' rule (the bundle
+  // drops them for anyone but the lead or a DM, src/lib/report-bundle.ts).
+  if (parts.has("turnTimings")) {
+    sources.narratorQuality = bundleNarratorQuality(campaign.id);
+  }
   return sources;
 }
 

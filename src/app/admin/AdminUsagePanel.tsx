@@ -3,6 +3,7 @@
 import { Loader2, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { ui } from "@/lib/ui";
+import { AdminNarratorQualityCard } from "@/app/admin/AdminNarratorQualityCard";
 import { PageSkeleton } from "@/components/PageSkeleton";
 import { SectionHead } from "@/components/ui/SectionHead";
 import type { AccountUsage, CampaignUsage, UsageTotals } from "@/lib/usage/ledger";
@@ -302,6 +303,8 @@ export function AdminUsagePanel() {
           </p>
         </section>
       ) : null}
+
+      <AdminNarratorQualityCard />
     </div>
   );
 }

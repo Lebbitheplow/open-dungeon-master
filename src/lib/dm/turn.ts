@@ -2235,6 +2235,9 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     // disagree. Its reads also say who speaks the narration's lines.
     const guarded = await enforceEngineBoundary(campaign, turn, sheets, partReads);
     spoken = guarded.spoken;
+    // What the guard did goes with the turn to its narrator quality row
+    // (issue #460), written when finalize() saves it as done.
+    turn.guard = guarded.guard;
     // A deed the narration showed that no relationship_beat recorded is
     // noted for the DM (issue 503, src/lib/dm/deed-claims.ts).
     noteUnrecordedDeeds(campaign, turn.conversation, guarded.deeds);

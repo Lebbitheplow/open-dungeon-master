@@ -1359,7 +1359,40 @@ const offeredPregen = createCharacter(player.id, 1, pregenSheet("Thessaly Bright
 setPregenOffered(player.id, offeredPregen.id, true);
 const hiddenPregen = createCharacter(player.id, 1, pregenSheet("Unoffered Orrin"), "pc", offerWorkshop.id);
 
+// Narrator quality (issue #460): an ended table with three AI turns that
+// finished, one the guard had to rewrite and one the lead undid a change of,
+// for Admin > Usage > Narrator quality and its export. Ended, so no list of
+// tables in play or in their lobbies counts it.
+const qualityTurnIds = [];
+{
+  const { createDmTurn, saveDmTurn } = await import("../../src/lib/db/dm-turns.ts");
+  const { recordTurnCorrection } = await import("../../src/lib/db/turn-ledger.ts");
+  const qualityTable = campaigns.createCampaign(world.owner.id, {
+    title: "Quality Table",
+    description: "Three turns the narrator ran, for the narrator quality card.",
+    theme: "high-fantasy",
+    maxPlayers: 4,
+    startingLevel: 1,
+    difficulty: "normal",
+    gameSettings: { ttsEnabled: false },
+  });
+  campaigns.setCampaignStatus(qualityTable.id, "active");
+  for (let index = 0; index < 3; index += 1) {
+    const turn = createDmTurn(qualityTable.id, [], "ai");
+    turn.status = "done";
+    turn.callIndex = 2;
+    turn.guard = index === 2 ? { outcome: "rewritten", kinds: ["hit"] } : { outcome: "quiet", kinds: [] };
+    saveDmTurn(turn);
+    if (index === 1) {
+      recordTurnCorrection({ campaignId: qualityTable.id, turnId: turn.id, attribution: "direct", kind: "sheet_undo", tool: "apply_damage", userId: world.owner.id });
+    }
+    qualityTurnIds.push(turn.id);
+  }
+  campaigns.setCampaignStatus(qualityTable.id, "ended");
+}
+
 const ids = {
+  qualityTurnIds,
   offerTableId: offerTable.id,
   offerWorkshopId: offerWorkshop.id,
   offeredPregen: offeredPregen.id,

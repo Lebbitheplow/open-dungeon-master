@@ -72,7 +72,11 @@ Promote a beta when all of these hold:
 - a copy of a real database upgraded cleanly from the current stable release to it,
   since stable installs jump across every beta in between at once (the client release
   workflow already does this for the Windows app, installing each beta over the latest
-  stable one).
+  stable one);
+- testers' narrator quality exports were read, and each tool-and-reason pair that keeps
+  coming back became a scripted turn (`scripts/lib/enforce-narrator.mjs`) with either an
+  engine check or a `gap()` in `docs/rules-enforcement-ledger.md`
+  ([testing.md](testing.md#narrator-quality)).
 
 Then clear the flag on the server release and on the client release that bundles it
 (the client release names its server):

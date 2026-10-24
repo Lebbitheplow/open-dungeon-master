@@ -1,7 +1,7 @@
 import { getDatabase, nowIso } from "@/lib/db/core";
 import { allocateSeq, getCampaignById } from "@/lib/db/campaigns";
 import { insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
-import { recordRollbackCorrections } from "@/lib/db/turn-ledger";
+import { markRolledBack, recordRollbackCorrections } from "@/lib/db/turn-ledger";
 import { deleteCompanionUser, isCompanionUserId } from "@/lib/db/users";
 import {
   capturePreRollbackSnapshot,
@@ -179,6 +179,8 @@ function rollbackNow(
     // The biggest correction there is, kept before its evidence goes: one
     // ledger row per AI turn the rewind deletes (issue #460).
     const recorded = byUserId ? recordRollbackCorrections(campaignId, byUserId, capturedAt) : [];
+    // Their narrator quality rows stay too, marked as rewound.
+    markRolledBack(campaignId, capturedAt);
     // A pin names a message and a beat sits at a seq: both belong to the
     // messages deleted below, and a pin left behind named a line nobody
     // could read. The pins go first, while the messages they name exist.
