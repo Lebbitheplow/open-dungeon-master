@@ -48,23 +48,31 @@ type ShopView = {
   // the counter for, and that haggle's step (null: they have not haggled).
   yourMarkup: number;
   yourHaggle: number | null;
+  // Where that haggle left the viewer's prices, in the server's words.
+  yourPrices: string | null;
   haggleDc: number;
 };
 
 type HaggleSkill = "persuasion" | "intimidation" | "deception";
 
 // A haggle's outcome for the person who made it, in the rules' own words.
-function haggleOutcome(steps: number): string {
-  return steps < 0
-    ? "You talked the keeper down: your prices here are a step lower."
-    : steps === 0
-      ? "The keeper holds firm: your prices stay where they were."
-      : `A bad failure (you missed the DC by 5 or more): your prices here are ${steps === 1 ? "a step" : "two steps"} higher.`;
+// `moved` is false at an end of the price ladder, where a step had nowhere
+// to go; `prices` is where it left them, in the server's words.
+function haggleOutcome(steps: number, moved: boolean, prices: string): string {
+  if (steps < 0) {
+    return moved ? `You talked the keeper down: your prices here are ${prices}.` : "You talked the keeper down, but your prices here are already at their lowest.";
+  }
+  if (steps === 0) {
+    return "The keeper holds firm: your prices stay where they were.";
+  }
+  return moved
+    ? `A bad failure (you missed the DC by 5 or more): your prices here are ${prices}.`
+    : "A bad failure (you missed the DC by 5 or more), but your prices here are already at their highest.";
 }
 
 // Where the viewer's haggle left their prices, for the line under a shop.
-function haggledLine(steps: number): string {
-  return steps < 0 ? "You haggled here: your prices are a step lower." : steps === 0 ? "You haggled here: the keeper held firm." : `You haggled here and pushed too hard: your prices are ${steps === 1 ? "a step" : "two steps"} higher.`;
+function haggledLine(steps: number, prices: string): string {
+  return steps < 0 ? `You haggled here: your prices are ${prices}.` : steps === 0 ? "You haggled here: the keeper held firm." : `You haggled here and pushed too hard: your prices are ${prices}.`;
 }
 
 const KINDS = ["general", "smith", "apothecary", "outfitter", "curiosities"] as const;
@@ -185,7 +193,9 @@ export function MarketPanel({
       } else if (!response.ok) {
         setError(String(data.error ?? "The keeper shakes their head."));
       } else if (action === "haggle") {
-        setError(haggleOutcome(Number(data.result?.steps) || 0));
+        // The haggler's new markup against the shop's own: equal when the
+        // step met an end of the ladder.
+        setError(haggleOutcome(Number(data.result?.steps) || 0, Number(data.result?.markup) !== shop.markup, String(data.result?.prices ?? "")));
       }
       setReload((current) => current + 1);
     } finally {
@@ -403,7 +413,7 @@ export function MarketPanel({
               </p>
             ) : mySheet && shop.yourHaggle !== null ? (
               <p data-haggle-rules="" className="text-[11px] leading-snug text-stone-500">
-                {haggledLine(shop.yourHaggle)}
+                {haggledLine(shop.yourHaggle, shop.yourPrices ?? "")}
               </p>
             ) : null}
             {/* Columns follow the panel, not the window: the side panel is

@@ -27,6 +27,7 @@ import {
   findStockLine,
   BAD_FAILURE_MARGIN,
   dealFor,
+  dealInWords,
   haggleDc,
   haggleSteps,
   KIND_POOL,
@@ -40,7 +41,7 @@ import {
   restockDue,
   shiftMarkup,
   SIZE_MARKUP,
-  stepsInWords,
+  stepMoves,
   stockFromPool,
   takeStock,
   type Shop,
@@ -514,19 +515,27 @@ export function handleHaggle(campaign: Campaign, rawArguments: string): ToolResu
   updateShop(shop.id, { haggles: [...shop.haggles, { ids: [sheet.id, ...joining.map((other) => other.id)], steps, skill }] });
   publishShops(campaign.id);
   const names = [sheet, ...joining].map((who) => who.name).join(" and ");
+  // At an end of the ladder the step has nowhere to go, and the outcome says
+  // so rather than claim a step the price never took.
+  const prices = dealInWords(shop.markup, steps);
+  const moved = stepMoves(shop.markup, steps);
   const outcome =
     steps < 0
-      ? `${names} talked the keeper down: their prices here are a step lower.`
+      ? moved
+        ? `${names} talked the keeper down: their prices here are ${prices}.`
+        : `${names} talked the keeper down, but their prices here are already at their lowest: they stay where they were.`
       : steps === 0
         ? `The keeper holds firm: prices stay where they were for ${names}.`
-        : `A bad failure (missed the DC by ${BAD_FAILURE_MARGIN} or more): the keeper raises prices ${steps === 1 ? "a step" : "two steps"} for ${names}.`;
+        : moved
+          ? `A bad failure (missed the DC by ${BAD_FAILURE_MARGIN} or more): the keeper raises prices for ${names}, ${prices}.`
+          : `A bad failure (missed the DC by ${BAD_FAILURE_MARGIN} or more), but prices for ${names} are already at their highest: they stay where they were.`;
   return {
     ok: true,
     success: steps < 0,
     skill,
     rolled: rolled.total,
     dc,
-    prices: stepsInWords(steps),
+    prices,
     steps,
     markup: shiftMarkup(shop.markup, steps),
     for: [sheet, ...joining].map((who) => who.name),

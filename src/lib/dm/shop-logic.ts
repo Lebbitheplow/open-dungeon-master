@@ -170,9 +170,26 @@ export function markupFor(shop: Pick<Shop, "haggles" | "markup">, characterId?: 
   return shiftMarkup(shop.markup, dealFor(shop, characterId)?.steps ?? 0);
 }
 
-// A haggle's step in words, for the DM's prompt, the tool's reply and the Market.
-export function stepsInWords(steps: number): string {
-  return steps < 0 ? "a step lower" : steps === 0 ? "unchanged" : steps === 1 ? "a step higher" : "two steps higher";
+// Whether a deal's steps move this markup at all: at the bottom rung a step
+// down has nowhere to go, and at the top a step up.
+export function stepMoves(markup: number, steps: number): boolean {
+  return shiftMarkup(markup, steps) !== clampMarkup(markup);
+}
+
+// Where a deal's steps leave this markup, in words, for the DM's prompt, the
+// tool's reply and the Market. A step the ladder has no room for is said as
+// the end the price stopped at, never claimed.
+export function dealInWords(markup: number, steps: number): string {
+  if (!steps) {
+    return "unchanged";
+  }
+  if (!stepMoves(markup, steps)) {
+    return steps < 0 ? "already at their lowest" : "already at their highest";
+  }
+  if (steps > 1 && shiftMarkup(markup, steps - 1) === shiftMarkup(markup, steps)) {
+    return "a step higher, as high as they go";
+  }
+  return steps < 0 ? "a step lower" : steps === 1 ? "a step higher" : "two steps higher";
 }
 
 // A pack cost string ("15 gp", "2 sp", "5,000 gp") in copper, or null.
@@ -333,7 +350,14 @@ export function renderShopsForPrompt(shops: Array<Shop & { keeperName: string }>
       .slice(0, 12)
       .map((line) => `${line.itemName} x${line.qty} at ${formatPrice(askingPriceCp(line.priceCp, shop.markup))}`)
       .join("; ");
-    const haggled = shop.haggles.map((deal) => `${deal.ids.map(nameOf).join(" and ")} ${deal.steps ? `pay prices ${stepsInWords(deal.steps)}` : "pay these prices (the keeper held firm)"}`);
+    const haggled = shop.haggles.map((deal) => {
+      const paid = !deal.steps
+        ? "pay these prices (the keeper held firm)"
+        : stepMoves(shop.markup, deal.steps)
+          ? `pay prices ${dealInWords(shop.markup, deal.steps)}`
+          : `pay these prices (${dealInWords(shop.markup, deal.steps)})`;
+      return `${deal.ids.map(nameOf).join(" and ")} ${paid}`;
+    });
     return `- ${shop.name}${shop.keeperName ? ` (kept by ${shop.keeperName})` : ""}, ${shop.kind}${shop.buys ? ", buys at half" : ", does not buy"}: ${shelf || "bare shelves"}${haggled.length ? `. Haggled: ${haggled.join("; ")}` : ""}`;
   });
   return `SHOPS HERE (prices are the server's; purchase moves the coin and the goods at this shelf's prices; a haggle moves them only for the characters it names):\n${lines.join("\n")}`;

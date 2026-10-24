@@ -3,7 +3,7 @@ import { hasPrepAuthority, isErrorResponse, requireMember, requirePrepAuthority,
 import { getCurrentLocation, listLocations } from "@/lib/db/locations";
 import { getNpcById, listNpcs } from "@/lib/db/npcs";
 import { insertShop, listShops, listShopsAt, normalizeStock, shopRefProblem, stockLineSchema } from "@/lib/db/shops";
-import { askingPriceCp, dealFor, haggleDc, markupFor, SIZE_MARKUP, type Shop } from "@/lib/dm/shop-logic";
+import { askingPriceCp, dealFor, dealInWords, haggleDc, markupFor, SIZE_MARKUP, type Shop } from "@/lib/dm/shop-logic";
 import { getSheetForUser } from "@/lib/db/sheets";
 import { announceShop, stockPool } from "@/lib/dm/shop-tools";
 import { stockFromPool } from "@/lib/dm/shop-logic";
@@ -24,6 +24,7 @@ export const dynamic = "force-dynamic";
 // a haggle they were at the counter for moves them, and only for them.
 export function shopView(shop: Shop, prep = true, viewerId: string | null = null) {
   const markup = markupFor(shop, viewerId);
+  const deal = dealFor(shop, viewerId);
   return {
     ...shop,
     preparedStock: prep ? shop.preparedStock : null,
@@ -31,7 +32,10 @@ export function shopView(shop: Shop, prep = true, viewerId: string | null = null
     keeperPortrait: shop.keeperNpcId ? getNpcById(shop.keeperNpcId)?.portraitUrl ?? "" : "",
     stock: shop.stock.map((line) => ({ ...line, askingCp: askingPriceCp(line.priceCp, markup) })),
     yourMarkup: markup,
-    yourHaggle: dealFor(shop, viewerId)?.steps ?? null,
+    yourHaggle: deal?.steps ?? null,
+    // Where that haggle left the viewer's prices, in words: at an end of the
+    // ladder a step had nowhere to go, and this says so.
+    yourPrices: deal ? dealInWords(shop.markup, deal.steps) : null,
     haggleDc: haggleDc(shop.size),
   };
 }

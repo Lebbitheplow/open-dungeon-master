@@ -23,6 +23,7 @@ const {
   costToCopper,
   BAD_FAILURE_MARGIN,
   dealFor,
+  dealInWords,
   findStockLine,
   haggledIds,
   haggleSteps,
@@ -33,6 +34,7 @@ const {
   renderShopsForPrompt,
   restockDue,
   shiftMarkup,
+  stepMoves,
   stockFromPool,
   takeStock,
 } = await import("../src/lib/dm/shop-logic.ts");
@@ -73,6 +75,30 @@ test("a haggle walks the ladder by steps and never off it; no step leaves the ma
   assert.equal(shiftMarkup(2, 1), 2);
   assert.equal(shiftMarkup(1.5, 2), 2);
   assert.equal(shiftMarkup(1.2, 0), 1.2, "held firm keeps an off-ladder markup exactly");
+});
+
+test("at an end of the ladder a deal is said as the end it stopped at, never as a step it did not take", () => {
+  assert.equal(dealInWords(1, -1), "a step lower");
+  assert.equal(dealInWords(1, 1), "a step higher");
+  assert.equal(dealInWords(1.25, 2), "two steps higher");
+  assert.equal(dealInWords(1.1, 0), "unchanged");
+  assert.equal(dealInWords(0.8, -1), "already at their lowest");
+  assert.equal(dealInWords(2, 1), "already at their highest");
+  assert.equal(dealInWords(2, 2), "already at their highest");
+  assert.equal(dealInWords(1.5, 2), "a step higher, as high as they go");
+  assert.equal(stepMoves(0.8, -1), false);
+  assert.equal(stepMoves(0.85, -1), true, "an off-ladder price still drops to the bottom rung");
+  const shelf = { name: "Cheap Jack's", keeperName: "", kind: "general", buys: true, stock: [], markup: 0.8 };
+  const block = renderShopsForPrompt(
+    [
+      { ...shelf, haggles: [{ ids: ["ann"], steps: -1, skill: "persuasion" }] },
+      { ...shelf, name: "Dear Jack's", markup: 2, haggles: [{ ids: ["bo"], steps: 1, skill: "persuasion" }] },
+    ],
+    (id) => ({ ann: "Ann", bo: "Bo" })[id],
+  );
+  assert.match(block, /Haggled: Ann pay these prices \(already at their lowest\)/);
+  assert.match(block, /Haggled: Bo pay these prices \(already at their highest\)/);
+  assert.doesNotMatch(block, /pay prices a step/);
 });
 
 test("a won haggle is a step down, a failure holds, a failure by 5 or more is a step up (two for Intimidation)", () => {

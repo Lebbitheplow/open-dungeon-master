@@ -286,6 +286,28 @@ await test("a haggled price never leaves the ladder", async () => {
   assert.equal(await ropeAsks(dear, ann), 200);
 });
 
+await test("at an end of the ladder a haggle says the price is already there, never a step it did not take", async () => {
+  const cheap = openShop(0.8);
+  const won = await haggle(cheap, ann, 20);
+  assert.equal(won.body.result.success, true);
+  assert.equal(won.body.result.prices, "already at their lowest");
+  assert.match(won.body.result.outcome, /talked the keeper down, but their prices here are already at their lowest: they stay where they were/);
+  assert.doesNotMatch(won.body.result.outcome, /a step lower/);
+  assert.equal(listing.shopView(shops.getShop(cheap.id), false, ann.hero.id).yourPrices, "already at their lowest", "the Market's line says the same");
+  const dear = openShop(2);
+  const bad = await haggle(dear, ann, 2);
+  assert.equal(bad.body.result.prices, "already at their highest");
+  assert.match(bad.body.result.outcome, /already at their highest: they stay where they were/);
+  // Two steps up from one below the top go one, and say so.
+  const near = openShop(1.5);
+  const leaned = await haggle(near, ann, 2, "intimidation");
+  assert.equal(leaned.body.result.prices, "a step higher, as high as they go");
+  assert.equal(await ropeAsks(near, ann), 200);
+  // Off the ends a step is still a step.
+  const plain = openShop(1);
+  assert.equal((await haggle(plain, ann, 20)).body.result.prices, "a step lower");
+});
+
 // ---- trades ----
 
 const offers = await world.route("campaigns/[campaignId]/item-proposals");
