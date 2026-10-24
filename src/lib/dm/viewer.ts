@@ -256,7 +256,7 @@ export function lobbyBlocker(seats: DmSeats, lobby: LobbySeat[]): string {
 // see the number. Redacting rather than withholding is deliberate, because a
 // roll that simply vanished would read as a bug.
 export type RollView = {
-  visibility: "public" | "dm" | "blind" | "self";
+  visibility: "public" | "dm" | "blind" | "self" | "secret";
   characterId: string | null;
 };
 
@@ -264,12 +264,19 @@ export type RollAccess = "full" | "redacted" | "hidden";
 
 export function rollAccessFor(
   roll: RollView,
-  caps: Pick<ViewerCaps, "adjudicates" | "steersStory">,
+  caps: Pick<ViewerCaps, "adjudicates" | "steersStory"> & Partial<Pick<ViewerCaps, "storytellerSecrets">>,
   // The sheets this viewer owns; a "self" roll is theirs to see.
   ownedCharacterIds: string[] = [],
 ): RollAccess {
   if (roll.visibility === "public") {
     return "full";
+  }
+  // A storyteller secret (a pact's recruiting, a player's secret action):
+  // the storyteller and the player whose character it is for, and nobody
+  // else, the lead who steers an AI table included. Not even redacted: that
+  // a roll happened at all would give it away.
+  if (roll.visibility === "secret") {
+    return caps.storytellerSecrets === true || (roll.characterId !== null && ownedCharacterIds.includes(roll.characterId)) ? "full" : "hidden";
   }
   // Whoever is adjudicating rolled it, or asked for it: they see everything.
   if (caps.adjudicates || caps.steersStory) {

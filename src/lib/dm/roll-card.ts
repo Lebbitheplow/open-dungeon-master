@@ -6,7 +6,7 @@
 
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import type { DmTurn } from "@/lib/db/dm-turns";
-import { insertRoll, type RollAttacker, type RollKind } from "@/lib/db/rolls";
+import { insertRoll, revealRollRow, type RollAttacker, type RollKind } from "@/lib/db/rolls";
 import { rollExpression } from "@/lib/dice";
 import { publishWithSeq } from "@/lib/events";
 
@@ -70,4 +70,49 @@ export function dmRoll(
   });
   turn?.rollIds.push(roll.id);
   return outcome;
+}
+
+// A roll that is a storyteller secret (issue 503: a recruiter's Persuasion,
+// a pact member's Deception, a player's secret action): stored "secret", so
+// only the storyteller and the player whose character it is for ever read
+// it (src/lib/dm/viewer.ts rollAccessFor), never the lead of an AI table,
+// who reads every "dm" roll. `characterId` is the player character it
+// belongs to, when it is one's own: that player is sent it as it is made.
+export function secretRoll(
+  campaignId: string,
+  turn: DmTurn | null,
+  characterId: string | null,
+  kind: Exclude<RollKind, "attack" | "damage">,
+  detail: string,
+  expression: string,
+  dc: number | null = null,
+) {
+  const outcome = rollExpression(expression);
+  const roll = insertRoll({
+    campaignId,
+    characterId,
+    requestedBy: "dm",
+    kind,
+    detail: detail.slice(0, 200),
+    result: outcome,
+    dc,
+    visibility: "secret",
+  });
+  turn?.rollIds.push(roll.id);
+  if (characterId) {
+    publishWithSeq(campaignId, allocateSeq(campaignId), "roll_result", { roll, source: "digital" });
+  }
+  return { ...outcome, rollId: roll.id };
+}
+
+// The reveal path for hidden rolls: when a secret comes out (a pact's plan
+// goes, a secret action is caught), each roll behind it turns public and
+// every seat is sent it whole, number and all.
+export function revealRolls(campaignId: string, rollIds: readonly string[]) {
+  for (const id of rollIds) {
+    const roll = id ? revealRollRow(id) : null;
+    if (roll) {
+      publishWithSeq(campaignId, allocateSeq(campaignId), "roll_result", { roll, source: "digital", revealed: true });
+    }
+  }
 }

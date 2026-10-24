@@ -1022,6 +1022,29 @@ function ensureSchema(db: SqliteDatabase) {
     CREATE INDEX IF NOT EXISTS idx_item_proposals
       ON item_proposals(campaign_id, status);
 
+    -- Pacts (issue 503 Phases 5 and 7, src/lib/dm/pact-logic.ts): lasting
+    -- companions, and players who agreed, conspiring against the party. A
+    -- storyteller secret (src/lib/dm/viewer.ts) until it goes or is caught;
+    -- in SNAPSHOT_TABLES, so a rewind undoes one whole. Clock instants are
+    -- the campaign clock's minutes.
+    CREATE TABLE IF NOT EXISTS pacts (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      status TEXT NOT NULL DEFAULT 'forming',
+      leader_npc_id TEXT NOT NULL DEFAULT '',
+      plan TEXT NOT NULL DEFAULT 'leave',
+      tactic TEXT NOT NULL DEFAULT '',
+      trigger_kind TEXT NOT NULL DEFAULT 'night_watch',
+      members_json TEXT NOT NULL DEFAULT '[]',
+      secrets_json TEXT NOT NULL DEFAULT '[]',
+      notes_json TEXT NOT NULL DEFAULT '{}',
+      created_at INTEGER NOT NULL DEFAULT 0,
+      fired_at INTEGER,
+      how TEXT NOT NULL DEFAULT '',
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_pacts_campaign ON pacts(campaign_id, status);
+
     -- Disputed rulings (src/lib/dm/dispute-logic.ts): a player's objection
     -- to a passage the AI narrated, and how whoever steers the story (or
     -- the table, by vote) settled it.
@@ -1390,6 +1413,21 @@ function ensureSchema(db: SqliteDatabase) {
     ["outcome", `TEXT NOT NULL DEFAULT ''`],
   ]);
 
+  addColumns("item_proposals", [
+    // 1 = an offer only its own player may read and answer (issue 503 Phase
+    // 7, a pact's approach): sent to that player's seat and a person running
+    // the table, never to the rest, and never told to the table when it
+    // settles (src/lib/table-delivery.ts).
+    ["owner_only", `INTEGER NOT NULL DEFAULT 0`],
+  ]);
+
+  addColumns("npcs", [
+    // The round a lasting companion last tried to recruit another into a
+    // pact in (issue 503 Phase 5, src/lib/dm/pact-logic.ts recruitRound):
+    // once per long rest. NULL = never.
+    ["pact_tried_at", `INTEGER`],
+  ]);
+
   addColumns("campaign_members", [
     // This member's own order for the Party panel's cards (issue 240): a
     // JSON list of sheet ids, first card first. Empty means the campaign's
@@ -1651,6 +1689,11 @@ function ensureSchema(db: SqliteDatabase) {
     // at this table (issue 501). Consent is per table, so it never syncs to
     // the library, and only the owner and a DM seat ever read it.
     ["open_to_advances", `INTEGER NOT NULL DEFAULT 0`],
+    // 1 = the owner said a pact may approach this character at this table
+    // (issue 503 Phase 7, "Pacts may approach me"). Consent per table, like
+    // the advances opt-in: never synced, and only the owner and a DM seat
+    // read it.
+    ["open_to_pacts", `INTEGER NOT NULL DEFAULT 0`],
   ]);
 
   if (sheetsNeedAcOverride) {

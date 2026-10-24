@@ -697,6 +697,9 @@ export type CharacterSheet = {
   // (issue 501). Blanked like the notes for anyone but the owner and a DM
   // seat (src/lib/dm/sheet-view.ts).
   openToAdvances?: boolean;
+  // The owner said a pact may approach this character at this table (issue
+  // 503 Phase 7, "Pacts may approach me"). Blanked like the advances opt-in.
+  openToPacts?: boolean;
   level: number;
   xp: number;
   abilities: AbilityScores;

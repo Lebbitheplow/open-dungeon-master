@@ -3,6 +3,8 @@ import { departedLinesForPrompt, settleReturns } from "@/lib/dm/companion-reveng
 import { conscienceBlockForPrompt } from "@/lib/dm/conscience";
 import { departureNote, departureOpenings, settleDepartures } from "@/lib/dm/departure";
 import { settleTurn, turnHolder } from "@/lib/dm/encounter-tools";
+import { getActiveEncounter } from "@/lib/db/encounters";
+import { pactsAtOwnTurn } from "@/lib/dm/pacts";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // Where the leaving and the return meet the turn machinery (issue 503
@@ -14,12 +16,17 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 // return follows the standing it was cued on. Returns what the DM is told.
 export function settleCompanionLeaving(campaign: Campaign): string[] {
   const holder = turnHolder(campaign.id);
+  // A pact that means to strike goes on its leader's own turn (issue 503
+  // Phase 5): its members cross to the foes' side where they stand.
+  const encounter = getActiveEncounter(campaign.id);
+  const current = encounter?.orderReady ? encounter.order[encounter.turnIndex] : undefined;
+  const pacts = current?.kind === "pc" ? pactsAtOwnTurn(campaign, current.characterId) : [];
   const outcomes = [...settleDepartures(campaign), ...departureOpenings(campaign, "own_turn")];
-  if (outcomes.some((outcome) => outcome.departed)) {
+  if (pacts.length || outcomes.some((outcome) => outcome.departed)) {
     settleTurn(campaign, holder);
   }
   settleReturns(campaign);
-  return outcomes.map(departureNote).filter(Boolean);
+  return [...pacts, ...outcomes.map(departureNote).filter(Boolean)];
 }
 
 // The moment part of GAME STATE for companions: each one's values and rung

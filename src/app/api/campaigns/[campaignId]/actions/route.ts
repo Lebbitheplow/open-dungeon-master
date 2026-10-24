@@ -37,6 +37,7 @@ import { confirmsSwap, swapQuestion } from "@/lib/dm/concentration-confirm-logic
 import { tableAuthors } from "@/lib/db/homebrew";
 import { tableBreakOn } from "@/lib/dm/table-break";
 import { breakRefusal } from "@/lib/dm/table-break-logic";
+import { isSecretActionBody, secretActionResponse } from "@/lib/dm/secret-action-request";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -84,6 +85,10 @@ export async function POST(
   }
 
   const raw = await request.json().catch(() => ({}));
+  // A secret action (issue 503 Phase 7) is held by the server, never posted.
+  if (isSecretActionBody(raw)) {
+    return secretActionResponse(campaign, user.id, selected, raw);
+  }
   const parsed = actionSchema.safeParse(raw);
   if (!parsed.success) {
     return Response.json({ error: "Invalid action." }, { status: 400 });

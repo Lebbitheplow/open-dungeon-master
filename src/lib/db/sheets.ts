@@ -86,6 +86,7 @@ type SheetRow = {
   feat_choices_json?: string | null;
   attraction_json?: string | null;
   open_to_advances?: number | null;
+  open_to_pacts?: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -124,6 +125,7 @@ function mapSheet(row: SheetRow): CharacterSheet {
     gender: storedGender(row.gender),
     attraction: normalizeAttraction(row.attraction_json ?? ""),
     openToAdvances: row.open_to_advances === 1,
+    openToPacts: row.open_to_pacts === 1,
     level: row.level,
     xp: row.xp,
     abilities: parseJson(row.abilities_json, { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 }),
@@ -219,7 +221,7 @@ const SHEET_COLUMNS = `
   proficiencies_json, equipment_json, gold, copper, feats_json, features_json,
   spellcasting_json, conditions_json, condition_meta_json, resources_json, wild_shape_json, pets_json, summon_json, exhaustion, death_saves_json, concentrating_on, concentration_rounds,
   portrait_json, notes, backstory, is_companion, companion_kind, commanded_by, personality, hand_layout_json, feat_choices_json,
-  attraction_json, open_to_advances, created_at, updated_at
+  attraction_json, open_to_advances, open_to_pacts, created_at, updated_at
 `;
 
 // The owner's answer to "Open to advances from NPCs" (issue 501), for this
@@ -228,6 +230,15 @@ const SHEET_COLUMNS = `
 export function setOpenToAdvances(sheetId: string, open: boolean): CharacterSheet | null {
   getDatabase()
     .prepare(`UPDATE character_sheets SET open_to_advances = ? WHERE id = ?`)
+    .run(open ? 1 : 0, sheetId);
+  return getSheetById(sheetId);
+}
+
+// The owner's answer to "Pacts may approach me" (issue 503 Phase 7), for
+// this table only: a preference, like the advances opt-in above.
+export function setOpenToPacts(sheetId: string, open: boolean): CharacterSheet | null {
+  getDatabase()
+    .prepare(`UPDATE character_sheets SET open_to_pacts = ? WHERE id = ?`)
     .run(open ? 1 : 0, sheetId);
   return getSheetById(sheetId);
 }

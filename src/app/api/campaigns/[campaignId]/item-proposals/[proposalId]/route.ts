@@ -19,6 +19,8 @@ import {
 } from "@/lib/dm/proposal-logic";
 import { publicItemProposal } from "@/lib/dm/proposal-intercept";
 import { ADVANCE_TOOL } from "@/lib/dm/advance-logic";
+import { APPROACH_TOOL, isApproachChoice } from "@/lib/dm/pact-logic";
+import { answerApproach, canResolveApproach, runsTable } from "@/lib/dm/pact-players";
 import { advancesAllowed } from "@/lib/dm/advance-tick";
 import { announceAdvanceSettled, canResolveAdvance, settleNpcAdvance } from "@/lib/dm/npc-advance";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
@@ -27,7 +29,9 @@ import type { SystemGlyph } from "@/lib/system-glyphs";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const bodySchema = z.object({ action: z.enum(["approve", "decline", "cancel"]) });
+// `choice`: an answer that is more than yes or no (a pact's approach,
+// issue 503: join, play along, tell the party, refuse), sent with approve.
+const bodySchema = z.object({ action: z.enum(["approve", "decline", "cancel"]), choice: z.string().max(40).optional() });
 
 function glyphFor(toolName: string): SystemGlyph {
   if (toolName === "apply_damage") return "cue-battle";
@@ -83,6 +87,31 @@ export async function POST(
     return Response.json({ error: "The offer was already resolved." }, { status: 400 });
   }
   const actorIsOwner = proposal.userId === context.user.id;
+  // A pact's approach (issue 503 Phase 7) is its player's alone to answer,
+  // and nobody else's to see: whoever runs the story may withdraw it, and
+  // to anyone else it does not exist. Nothing is told to the table, unless
+  // the answer is to tell the party.
+  if (proposal.toolName === APPROACH_TOOL) {
+    const runs = runsTable(context.campaign, context.user.id);
+    if (!actorIsOwner && !runs) {
+      return Response.json({ error: "Offer not found." }, { status: 404 });
+    }
+    if (!canResolveApproach(action, actorIsOwner, runs)) {
+      return Response.json({ error: action === "cancel" ? "Only whoever runs the story can withdraw this." : "Only that character's player can answer this." }, { status: 403 });
+    }
+    const choice = action === "decline" ? "refuse" : parsed.data.choice;
+    if (action === "approve" && !isApproachChoice(choice)) {
+      return Response.json({ error: "Choose an answer: join, play_along, report or refuse." }, { status: 400 });
+    }
+    const resolved = resolveItemProposal(proposalId, action === "cancel" ? "cancelled" : action === "approve" ? "approved" : "declined");
+    if (!resolved) {
+      return Response.json({ error: "The offer was already resolved." }, { status: 400 });
+    }
+    const outcome = action === "cancel" ? "withdrawn" : answerApproach(context.campaign, resolved, isApproachChoice(choice) ? choice : "refuse");
+    const settled = resolveOutcome(resolved, outcome) ?? resolved;
+    publishPersisted(campaignId, "item_proposal_resolved", { proposal: publicItemProposal(settled) });
+    return Response.json({ proposal: publicItemProposal(settled), outcome });
+  }
   // An NPC's romantic advance (issue 501) is the player's to answer and no
   // one else's: the lead may only withdraw it.
   if (proposal.toolName === ADVANCE_TOOL) {

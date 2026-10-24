@@ -6,6 +6,7 @@ import { bondTruthFor } from "@/lib/dm/scheme-logic";
 import { advancesAllowed } from "@/lib/dm/advance-tick";
 import { conscienceViews } from "@/lib/dm/conscience";
 import { heldIntents } from "@/lib/dm/departure";
+import { playerPactsPossible } from "@/lib/dm/pacts";
 import { textKey } from "@/lib/language/text-logic";
 
 export const runtime = "nodejs";
@@ -58,6 +59,9 @@ export async function GET(
     // tools do not rule them out), so the Bonds tab shows its opt-in only
     // where it can matter (issue 501).
     advances: advancesAllowed(context.campaign),
+    // Whether a pact could approach a player here (issue 503 Phase 7), so
+    // the Bonds tab shows "Pacts may approach me" only where it can matter.
+    pacts: playerPactsPossible(context.campaign, sheets),
     relationships: listRelationships(campaignId).map((relationship) => {
       const truth = bondTruthFor(viewer, relationship);
       const tier = friendshipTier(truth.approval);

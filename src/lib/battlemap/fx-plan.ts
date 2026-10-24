@@ -66,7 +66,7 @@ export type FxEvent = {
   at: number;
 };
 
-export type RollVisibility = "public" | "dm" | "blind" | "self";
+export type RollVisibility = "public" | "dm" | "blind" | "self" | "secret";
 
 // Whether an effect may be planned at all for a roll with this visibility.
 // A blind roll is one the table sees happen but not the result of, and an

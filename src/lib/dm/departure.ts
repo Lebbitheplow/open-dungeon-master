@@ -2,6 +2,7 @@ import { allocateSeq, getCampaignById, type Campaign } from "@/lib/db/campaigns"
 import { companionConscience, companionValues } from "@/lib/db/companion-conscience";
 import { companionDeparture, saveDeparture } from "@/lib/db/companion-departures";
 import { companionNpcFor } from "@/lib/db/companion-npcs";
+import { pactOfNpc } from "@/lib/db/pacts";
 import { getActiveEncounter } from "@/lib/db/encounters";
 import { findFactionByName, listFactions } from "@/lib/db/factions";
 import type { Faction } from "@/lib/dm/faction-logic";
@@ -122,6 +123,11 @@ export function settleBreakingPoint(
     return null;
   }
   if (departure.intent || departure.gone) {
+    return null;
+  }
+  // A companion in a pact goes with it, at its moment (src/lib/dm/pact-fire.ts),
+  // never alone.
+  if (pactOfNpc(campaign.id, npc.id)) {
     return null;
   }
   const values = companionValues(npc.id);

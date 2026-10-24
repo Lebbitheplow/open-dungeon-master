@@ -97,9 +97,11 @@ export const EVENT_AUDIENCE: Readonly<Record<string, Audience>> = {
   character_event: TABLE,
   relationships_updated: TABLE,
   attributes_updated: TABLE,
-  // Offers and trades are party knowledge.
-  item_proposal_added: TABLE,
-  item_proposal_resolved: TABLE,
+  // Offers and trades are party knowledge, except an owner-only offer (a
+  // pact's approach, issue 503), sent only to its own player and whoever
+  // runs the story.
+  item_proposal_added: SEAT,
+  item_proposal_resolved: SEAT,
   // A coordinated plan is drafted in the open, for the party to fit its
   // moves together (issue 254); nothing in it is the DM's secret.
   coordination_updated: TABLE,
