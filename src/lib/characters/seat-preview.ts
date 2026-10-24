@@ -44,6 +44,7 @@ export function seatPicksContextFor(campaign: Pick<Campaign, "id">): SeatPicksCo
     subclassOffered: (classId, name) => subclassIsOffered(classId, name, owner),
     subclassesOf: (classId) => offeredSubclasses(classId, owner),
     subclassExtras: subclassExtrasFor(owner),
+    campaignId: campaign.id,
   };
 }
 

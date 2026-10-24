@@ -34,6 +34,9 @@ import { asiTaken, withAsiLedger } from "@/lib/srd/asi-ledger";
 import { applyFeatIncrease, featSaveProficiency } from "@/lib/srd/feat-effects";
 import { applyFeatGrants, type FeatChoices } from "@/lib/srd/feat-grants";
 import { featSpellGrants } from "@/lib/srd/feat-spells";
+import { hpBonusPerLevelFor, retroactiveHp } from "@/lib/srd/hit-points";
+import { hpBonusPerLevel } from "@/lib/srd/race-id";
+import { featureHitPoints } from "@/lib/srd/trait-rules";
 import { bundledSubclassName, expertiseAllowed, expertiseSlotsFor, subclassLevelFor, THIEVES_TOOLS } from "@/lib/srd/features";
 import { applyChoices } from "@/lib/srd/level-up";
 import { castingClassesOf } from "@/lib/srd/legality/spells";
@@ -67,6 +70,8 @@ export type SeatPicksContext = {
   // Every subclass the table offers the class, for the picker.
   subclassesOf: (classId: string) => string[];
   subclassExtras?: SubclassExtras;
+  // The table, for a workshop feat that runs as Tough (its hit points).
+  campaignId?: string;
 };
 
 // What the confirm sheet offers to pick, read off the seated sheet.
@@ -161,6 +166,36 @@ export function owedPicksOf(seated: CreateSheetInput, level: number, context: Pi
 }
 
 export type PicksApplied = { ok: true; sheet: CreateSheetInput } | { ok: false; problems: string[] };
+
+// The hit points the picks add for the levels the hero already holds, as a
+// level-up pays them back (src/lib/srd/level-up.ts): a Constitution raised
+// here, a feat that adds hit points per level (Tough), a subclass that does
+// (Draconic Resilience). The stored door derives them again at a table that
+// takes the average or the maximum, but keeps a rolled table's hit points
+// while they are in range, so they are added here.
+function maxHpWithPicks(
+  seated: CreateSheetInput,
+  level: number,
+  before: ClassEntry[],
+  after: ClassEntry[],
+  abilities: AbilityScores,
+  feats: string[],
+  context: Pick<SeatPicksContext, "classOf" | "campaignId">,
+): number {
+  // A class the table cannot name counts a d8, as the stored door counts it.
+  const hpClasses = before.map((entry) => ({ die: context.classOf(entry.id)?.hitDie ?? 8, level: entry.level }));
+  const dwarf = hpBonusPerLevel(seated.race) > 0;
+  const backPay = retroactiveHp(
+    hpClasses,
+    { con: seated.abilities.con, perLevelBonus: hpBonusPerLevelFor(dwarf, seated.feats ?? [], context.campaignId) },
+    { con: abilities.con, perLevelBonus: hpBonusPerLevelFor(dwarf, feats, context.campaignId) },
+  );
+  // Every class is in the list, its subclass with it, so the feature reads
+  // the subclass there.
+  const traits = (classes: ClassEntry[]) => ({ class: seated.class, level, classes, features: seated.features ?? [] });
+  const featureHp = featureHitPoints(traits(after)) - featureHitPoints(traits(before));
+  return Math.max(1, Math.min(500, seated.maxHp + backPay + featureHp));
+}
 
 // The seated sheet with the picks made, or what is wrong with them. The
 // sheet still goes through the stored door after this (seat-preview.ts).
@@ -350,6 +385,7 @@ export function applySeatPicks(
       ...seated,
       subclass: classes[0].subclass ?? "",
       classes: multiclass ? classes : seated.classes,
+      maxHp: maxHpWithPicks(seated, level, before, classes, abilities, feats, context),
       abilities,
       feats,
       features,

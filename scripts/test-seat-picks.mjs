@@ -156,6 +156,53 @@ await test("a library hero joining above its level picks the improvement it owes
   table.world.close();
 });
 
+await test("a Constitution picked on the way in adds its hit points for every level, at a table that rolls them too.", async () => {
+  const joinWith = async (hpMethod, picks) => {
+    const table = await openCreation({ campaign: { startingLevel: 4 }, gameSettings: { hpMethod } });
+    table.world.signIn(table.player);
+    const made = await table.call(table.libraryRoute, "POST", { level: 1, sheet: LEGAL_FIGHTER });
+    const joined = await table.call(table.sheetRoute, "POST", {
+      libraryCharacterId: made.json.character.id,
+      ...(picks ? { picks } : {}),
+    }, { campaignId: table.campaignId });
+    assert.equal(joined.status, 201, JSON.stringify(joined.json));
+    const sheet = table.sheets.getSheetForUser(table.campaignId, table.player.id);
+    table.world.close();
+    return sheet;
+  };
+  const con = { asiChoices: [{ mode: "plus2", ability: "con" }] };
+  // Constitution 14 to 16: one more hit point for each of the four levels.
+  for (const hpMethod of ["rolled", "average"]) {
+    const without = await joinWith(hpMethod);
+    const raised = await joinWith(hpMethod, con);
+    assert.equal(raised.abilities.con, LEGAL_FIGHTER.abilities.con + 2);
+    assert.equal(raised.maxHp, without.maxHp + 4, `${hpMethod}: ${without.maxHp} without the pick, ${raised.maxHp} with it`);
+  }
+});
+
+await test("applySeatPicks pays back the hit points of a raised Constitution and of a feat that adds them per level.", () => {
+  const kara = pregenById("kara").sheet;
+  const seated = { ...kara, maxHp: 30, abilities: { ...kara.abilities, con: 13 }, features: [{ name: "Ability Score Improvements taken: 0", source: "story" }] };
+  const context = {
+    classOf: (id) => (id === "fighter" ? { hitDie: 10 } : null),
+    featOf: (name) => (/^tough$/i.test(name) ? { name: "Tough", prerequisite: "", desc: "Your hit point maximum increases by an amount equal to twice your level." } : null),
+    spellOf: () => null,
+    subclassOffered: () => true,
+    subclassesOf: () => [],
+  };
+  // Constitution 13 to 14 at level 4: the modifier rises by one, four hit points.
+  const raised = applySeatPicks(seated, 4, { asiChoices: [{ mode: "plus1x2", abilities: ["con", "str"] }] }, context);
+  assert.equal(raised.ok, true, raised.problems?.join("; "));
+  assert.equal(raised.sheet.maxHp, 34);
+  // Tough: two hit points for each of the four levels.
+  const tough = applySeatPicks(seated, 4, { asiChoices: [{ mode: "feat", feat: "Tough" }] }, context);
+  assert.equal(tough.ok, true, tough.problems?.join("; "));
+  assert.equal(tough.sheet.maxHp, 38);
+  // Strength raises no hit points.
+  const strength = applySeatPicks(seated, 4, { asiChoices: [{ mode: "plus2", ability: "str" }] }, context);
+  assert.equal(strength.sheet.maxHp, 30);
+});
+
 await test("the pickers read the owed choices off the seated sheet; a sheet that owes nothing offers none.", () => {
   const kara = pregenById("kara").sheet;
   const context = { subclassesOf: () => ["Champion", "Battle Master"] };
