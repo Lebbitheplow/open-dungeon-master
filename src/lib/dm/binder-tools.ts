@@ -60,7 +60,11 @@ export const binderTools: ToolDef[] = [
         properties: {
           questId: { type: "string", description: "The quest to change, by its title in GAME STATE; omit to add one." },
           title: { type: "string", description: "What the quest is called." },
-          objectives: { type: "array", items: { type: "string" }, description: "The steps, one line each. Replaces the list." },
+          objectives: {
+            type: "array",
+            items: { type: "string" },
+            description: "The steps, one line each. Replaces the list; a step restated word for word keeps its tick.",
+          },
           status: { type: "string", enum: ["active", "done", "failed"], description: "Default: 'active'." },
         },
         required: [],
@@ -203,21 +207,37 @@ export function handleSetQuest(campaign: Campaign, rawArguments: string): ToolRe
   } catch {
     return { error: "Invalid arguments: set_quest takes a title, objectives and a status.", retry: true };
   }
+  const update = (quest: Quest, retitle: boolean) =>
+    updateQuest(quest.id, {
+      ...(args.title && retitle ? { title: args.title } : {}),
+      // The steps already ticked stay ticked when the list is restated.
+      ...(args.objectives ? { objectives: normalizeObjectives(args.objectives, quest.objectives) } : {}),
+      ...(args.status ? { status: args.status as QuestStatus } : {}),
+      ...(args.visibility ? { visibility: args.visibility } : {}),
+    });
   if (args.questId) {
     const quest = questByRef(campaign.id, args.questId);
     if ("error" in quest) {
       return quest;
     }
-    const updated = updateQuest(quest.id, {
-      ...(args.title ? { title: args.title } : {}),
-      ...(args.objectives ? { objectives: normalizeObjectives(args.objectives) } : {}),
-      ...(args.status ? { status: args.status as QuestStatus } : {}),
-      ...(args.visibility ? { visibility: args.visibility } : {}),
-    });
-    return { ok: true, quest: updated };
+    return { ok: true, quest: update(quest, true) };
   }
   if (!args.title) {
     return { error: "A new quest needs a title.", retry: true };
+  }
+  // A title the log already holds, on a quest still open, is that quest: the
+  // model restates a quest by its title as often as it names it in questId,
+  // and a second row of the same quest splits its ticks. A quest the party
+  // finished or failed can be taken up again as a new one.
+  const open = listQuests(campaign.id).find(
+    (quest) => (quest.status === "active" || quest.status === "hidden") && textKey(quest.title) === textKey(args.title ?? ""),
+  );
+  if (open) {
+    return {
+      ok: true,
+      quest: update(open, false),
+      note: `"${open.title}" was already in the log, so it was updated rather than added again.`,
+    };
   }
   if (listQuests(campaign.id).filter((quest) => quest.status === "active").length >= 40) {
     return { error: "The quest log is full; finish or fail some first.", retry: true };
