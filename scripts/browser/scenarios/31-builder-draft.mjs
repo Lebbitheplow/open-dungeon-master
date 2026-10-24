@@ -7,14 +7,13 @@ import { check, eventually, sleep, currentStep } from "../lib.mjs";
 const visible = (page, root, text) =>
   page.locator(`${root}button`).filter({ hasText: text }).locator("visible=true");
 
-// The draft the builder keeps on the device (src/app/characters/builder/
-// builderDraft.ts), written a moment after each change; "" when there is none.
-const draft = (page) =>
+// The drafts the builder keeps on the device (src/app/characters/builder/
+// builderDraft.ts), each written 400 ms after a change of step or fields.
+const drafts = (page) =>
   page.evaluate(() =>
     Object.keys(window.localStorage)
       .filter((key) => key.startsWith("odm:builder-draft:"))
-      .map((key) => window.localStorage.getItem(key))
-      .join("\n"),
+      .map((key) => JSON.parse(window.localStorage.getItem(key) ?? "null")),
   );
 
 // A reload in a browser; in the app, whose router keeps a screen mounted
@@ -49,9 +48,10 @@ export default {
     const card = page.locator(`${root}section[data-active] .creator-card`).locator("visible=true").first();
     await card.waitFor({ state: "visible", timeout: 15_000 });
     const lineage = await card.getAttribute("aria-label");
-    const kept = await draft(page);
     await t.tap(card);
-    await eventually(async () => (await draft(page)) !== kept, { label: "the pick kept on the device" });
+    // The step change writes a draft of its own: only one holding the pick
+    // on the Ancestry step is what the reload has to find.
+    await eventually(async () => (await drafts(page)).some((kept) => kept?.step === 1 && kept.fields.raceId), { label: "the pick kept on the device" });
 
     await reopen(t);
     const resume = visible(page, root, /^Resume$/);
@@ -71,7 +71,7 @@ export default {
     await reopen(t);
     await eventually(() => visible(page, root, /^Start fresh$/).count(), { timeoutMs: 15_000, label: "the offer again" });
     await t.tap(visible(page, root, /^Start fresh$/).first());
-    await eventually(async () => (await draft(page)) === "", { label: "the draft thrown away" });
+    await eventually(async () => (await drafts(page)).length === 0, { label: "the draft thrown away" });
     await reopen(t);
     await name.waitFor({ state: "visible", timeout: 30_000 });
     // Time is the check: an offer the page still found would show within this while.
