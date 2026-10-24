@@ -13,7 +13,7 @@ import {
   moveToken,
 } from "@/lib/db/battle-maps";
 import { buildPlayerMapView, footprintLookup, occupiedTiles, pcMoveBudget, type PlayerMapView } from "@/lib/battlemap/view";
-import { boardState, forgetMoves, keepMove, sightedIds, stepFeet, type MoveStep } from "@/lib/battlemap/move-undo";
+import { boardState, forgetMoves, keepMove, revealedSince, sightOf, stepFeet, type MoveStep } from "@/lib/battlemap/move-undo";
 import { findPath, reachableTiles, speedToTiles } from "@/lib/battlemap/movement";
 import { pcMoveTraits } from "@/lib/battlemap/passage";
 import { tileIndex } from "@/lib/battlemap/types";
@@ -172,13 +172,13 @@ export async function POST(
   // back afterwards (src/lib/battlemap/move-undo.ts): only a fight's own
   // walk on its own turn is kept, and only when nothing answered it.
   const undoable = !scene && !readied;
-  const sightedBefore = undoable ? sightedIds(buildPlayerMapView(campaignId, user.id)) : null;
+  const sightBefore = undoable ? sightOf(buildPlayerMapView(campaignId, user.id)) : null;
   const settle = (view: PlayerMapView | null, lasting: boolean, step: Omit<MoveStep, "sheetId" | "tokenId" | "state">) => {
     if (!undoable) {
       return;
     }
     const live = getActiveBoard(campaignId);
-    const revealed = sightedBefore !== null && [...sightedIds(view)].some((id) => !sightedBefore.has(id));
+    const revealed = sightBefore !== null && revealedSince(sightBefore, view);
     if (lasting || revealed || !live || live.id !== encounter.id) {
       forgetMoves(encounter.id);
       return;

@@ -2,8 +2,9 @@
 // POST battle-map/undo): a walk nothing answered goes back square for square
 // with its movement returned, one press per walk, until anything else happens
 // in the fight. A walk that drew an opportunity attack, brought a creature
-// into sight, or came before an action, the end of the turn or another
-// figure's move stands. Standing up from prone is undone with the walk.
+// into sight, uncovered a square of the map, or came before an action, the
+// end of the turn or another figure's move stands. Standing up from prone is
+// undone with the walk.
 import assert from "node:assert/strict";
 import { openWorld } from "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
@@ -115,7 +116,8 @@ await test("A walk that brings an enemy into sight stands; one behind the same w
   kit.place(enemy.id, 6, 1);
   const tokenOf = () => kit.token(enemy.id).id;
   assert.ok(!view().tokens.some((token) => token.id === tokenOf()), "the enemy was in sight before the walk");
-  const hidden = await move({ x: 2, y: 2 });
+  // A step toward the wall: it sees nothing the first square did not.
+  const hidden = await move({ x: 3, y: 1 });
   assert.equal(hidden.status, 200, JSON.stringify(hidden.body));
   assert.ok(!hidden.body.view.tokens.some((token) => token.id === tokenOf()));
   assert.deepEqual(hidden.body.view.undoMove, { feet: 5 }, "a walk that saw nothing new is kept");
@@ -124,6 +126,23 @@ await test("A walk that brings an enemy into sight stands; one behind the same w
   assert.ok(seen.body.view.tokens.some((token) => token.id === tokenOf()), "the walk round the wall did not bring the enemy into sight");
   assert.equal(seen.body.view.undoMove, undefined);
   assert.equal((await undo()).status, 409, "nothing before the sighting can be taken back either");
+});
+
+await test("A walk that uncovers new squares of the map stands, with no creature newly seen (issue 504).", async () => {
+  const enemy = await stage();
+  // A wall down column 6 with a doorway at row 4; the room behind it is
+  // empty, and the enemy stands in plain sight on this side.
+  kit.openField(Array.from({ length: 30 }, (_, y) => y).filter((y) => y !== 4).map((y) => [6, y, "#"]));
+  kit.place(fighter.id, 3, 4);
+  kit.place(enemy.id, 1, 1);
+  const before = view();
+  assert.ok(before.tokens.some((token) => token.id === kit.token(enemy.id).id), "the enemy was not in sight before the walk");
+  const looked = await move({ x: 6, y: 4 });
+  assert.equal(looked.status, 200, JSON.stringify(looked.body));
+  assert.ok(looked.body.view.explored.length > before.explored.length, "stepping into the doorway uncovered nothing, so the test proves nothing");
+  assert.equal(looked.body.view.undoMove, undefined, "a walk that uncovered the room behind the doorway was kept");
+  assert.equal((await undo()).status, 409);
+  assert.deepEqual(at(fighter), { x: 6, y: 4, moved: 3 });
 });
 
 await test("Standing up from prone is undone with the walk: prone again, the movement back.", async () => {

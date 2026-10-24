@@ -51,7 +51,8 @@ const byId = (a: { id: string }, b: { id: string }) => (a.id < b.id ? -1 : a.id 
 // Everything that changes when anything else happens in the fight: whose turn
 // and what it has spent, where every figure stands and how far it has moved,
 // every enemy's hit points and conditions, and the mover's own. Explored
-// squares are left out on purpose: what a character saw on the walk stays seen.
+// squares are not part of it: a walk that uncovers any is never kept
+// (revealedSince), so what is kept saw nothing new.
 export function boardState(encounter: Pick<Encounter, "id" | "round" | "turnIndex" | "turnBudget">, mapId: string, sheetId: string): string {
   const sheet = getSheetById(sheetId);
   return JSON.stringify({
@@ -110,11 +111,26 @@ export function takeBack(campaignId: string, encounterId: string, step: MoveStep
   steps().get(encounterId)?.pop();
 }
 
-// The figures a projection shows only when they are seen (view.ts: enemies,
-// bystanders, props). A walk that adds one has told the player something,
-// and cannot be taken back.
-export function sightedIds(view: Pick<PlayerMapView, "tokens"> | null): Set<string> {
-  return new Set((view?.tokens ?? []).filter((token) => token.kind === "enemy" || token.kind === "npc" || token.kind === "prop").map((token) => token.id));
+// What the mover's projection shows before a walk: the figures it shows only
+// when they are seen (view.ts: enemies, bystanders, props) and how many
+// squares the character has explored.
+export type Sight = { ids: Set<string>; explored: number };
+
+export function sightOf(view: Pick<PlayerMapView, "tokens" | "explored"> | null): Sight {
+  return {
+    ids: new Set((view?.tokens ?? []).filter((token) => token.kind === "enemy" || token.kind === "npc" || token.kind === "prop").map((token) => token.id)),
+    explored: view?.explored.length ?? 0,
+  };
+}
+
+// A walk that brought a figure into sight or uncovered a square of the map
+// (a room behind a doorway, a corridor's dead end, a light, a spell's area)
+// has told the player something, and cannot be taken back: a step back
+// would make scouting free. Explored squares are kept per character as soon
+// as a view is built (mergeExplored), so they are counted, never hidden again.
+export function revealedSince(before: Sight, view: Pick<PlayerMapView, "tokens" | "explored"> | null): boolean {
+  const after = sightOf(view);
+  return after.explored > before.explored || [...after.ids].some((id) => !before.ids.has(id));
 }
 
 // What the board offers: how far the walk taken back went.
