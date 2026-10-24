@@ -136,7 +136,9 @@ try {
       } catch (error) {
         await harness.shot("failed");
         results.push({ tag, ok: false, ms: Date.now() - t0, error: String(error?.message ?? error) });
-        console.log(`FAIL  ${tag}: ${String(error?.message ?? error).split("\n")[0]}`);
+        // The whole message: a scenario that gathers its problems lists them
+        // on the lines after the first, and CI keeps no report to read them in.
+        console.log(`FAIL  ${tag}: ${String(error?.message ?? error)}`);
       } finally {
         // A route handler still waiting on its route.fetch when the page
         // closes rejects with "socket hang up", outside any scenario's await,

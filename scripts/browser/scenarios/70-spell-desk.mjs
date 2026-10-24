@@ -6,7 +6,7 @@
 // replaces (focus moves to the question, Escape calls it off and gives focus
 // back to the tile) and swaps the pair in one action. On a phone every
 // filter and swap control is at least 40 px tall.
-import { axeViolations, check, eventually, sleep } from "../lib.mjs";
+import { axeViolations, check, eventually } from "../lib.mjs";
 
 export default {
   name: "spell-desk",
@@ -75,8 +75,12 @@ export default {
     if (!/tap to swap in/.test(note)) found.push(`a new spell on a full list says "${note.trim()}"`);
     await t.tap(tile("Detect Magic").locator("button").first());
     await eventually(() => swap.isVisible(), { timeoutMs: 5_000, label: "the swap question" });
-    await sleep(150);
-    if (!(await swap.evaluate((node) => node === document.activeElement || node.contains(document.activeElement)))) found.push("focus did not move to the swap question");
+    // Focus moves after the question paints: waited for, not slept for, so a
+    // slower runner reads the same answer.
+    await eventually(() => swap.evaluate((node) => node === document.activeElement || node.contains(document.activeElement)), {
+      timeoutMs: 3_000,
+      label: "focus in the swap question",
+    }).catch(() => found.push("focus did not move to the swap question"));
     const question = (await swap.getAttribute("aria-label")) ?? "";
     if (question !== "Prepared list full. Swap Detect Magic in for:") found.push(`the swap asks "${question}"`);
     found.push(...(await axeViolations(page, "[data-spell-swap]")).map((violation) => `swap: ${violation.id} (${violation.impact}) ${violation.help}`));
@@ -85,7 +89,10 @@ export default {
     await t.shot("swap");
     await page.keyboard.press("Escape");
     await eventually(async () => (await swap.count()) === 0, { timeoutMs: 5_000, label: "Escape closing the swap" });
-    if (!(await tile("Detect Magic").evaluate((node) => node.contains(document.activeElement)))) found.push("Escape did not give focus back to the tile");
+    await eventually(() => tile("Detect Magic").evaluate((node) => node.contains(document.activeElement)), {
+      timeoutMs: 3_000,
+      label: "focus back on the tile",
+    }).catch(() => found.push("Escape did not give focus back to the tile"));
 
     await t.tap(tile("Detect Magic").locator("button").first());
     await eventually(() => swap.isVisible(), { timeoutMs: 5_000, label: "the swap question again" });
