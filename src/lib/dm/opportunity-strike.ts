@@ -14,6 +14,8 @@
 // opened for the swing and closed with it.
 
 import { getFoe } from "@/lib/dm/sheet-foe";
+import { isSheetFoe } from "@/lib/dm/combat-sides-logic";
+import { openLastHit } from "@/lib/dm/last-hit";
 import { hasSentinel } from "@/lib/srd/feat-combat";
 import { tryParry } from "@/lib/dm/enemy-reactions";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
@@ -83,8 +85,10 @@ export function opportunitySight(input: {
   });
 }
 
-// A character's opportunity attack on an enemy breaking away. Returns the
-// table line.
+// A character's opportunity attack on an enemy breaking away, or on a
+// character of the other side (issue 503). Returns the table line. A swing
+// at a character leaves the record its reactions answer, as an enemy's
+// attack does (last-hit.ts): Shield, Uncanny Dodge, Riposte on a miss.
 export function pcOpportunitySwing(input: {
   campaign: Campaign;
   encounter: Encounter;
@@ -158,6 +162,8 @@ export function pcOpportunitySwing(input: {
   }).profile;
 
   const targetAc = enemyAcWithEffects(campaign.id, enemy);
+  const hitLog = isSheetFoe(enemy) ? openLastHit(campaign.id, enemy.id) : null;
+  const closeLog = () => hitLog?.close({ attacker: { kind: "sheet", id: sheet.id, name: sheet.name }, attack: `${profile.weapon} (opportunity attack)`, type: profile.damageType, ranged: false });
   const hitOutcome = rollExpression(`${d20Expression(profile.toHit, advantage)}${attackRiders.diceSuffix}`);
   const hitRoll = insertRoll({
     campaignId: campaign.id,
@@ -191,6 +197,8 @@ export function pcOpportunitySwing(input: {
     }
   }
   if (!adjudicated.hit) {
+    hitLog?.swing(hitOutcome, targetAc, { hit: false, crit: false, raw: 0, advantage, ranged: false });
+    closeLog();
     return {
       note: `${sheet.name} swings at ${enemy.displayName} as it breaks away and misses (${hitOutcome.total} vs AC ${targetAc}${parry ? `; ${parry.note}` : ""}).`,
       dropped: false,
@@ -245,6 +253,8 @@ export function pcOpportunitySwing(input: {
     if (!("error" in applied)) {
       markRollApplied(damageRoll.id, enemy.id);
     }
+    hitLog?.swing(hitOutcome, targetAc, { hit: true, crit, raw: dealt, advantage, type: profile.damageType, ranged: false });
+    closeLog();
     const after = getFoe(enemy.id);
     const dropped = Boolean(applied.dead) || after?.status === "dead";
     const landed = typeof applied.damageApplied === "number" ? applied.damageApplied : dealt;
