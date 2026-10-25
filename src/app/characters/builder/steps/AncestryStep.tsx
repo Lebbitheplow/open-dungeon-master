@@ -149,9 +149,21 @@ export function AncestryStep({
       >
         {state.revisedSpecies ? (
           <p role="note" className="mb-3 rounded border border-amber-700/40 bg-amber-950/30 p-2 text-xs text-amber-100">
-            This character was made with the 2024 rules&rsquo; {race?.name ?? state.revisedSpecies}. This server plays the 2014
-            rules, so they now have the 2014 {race?.name ?? state.revisedSpecies}&rsquo;s traits, and their ability scores stay
-            as they were. Save to keep it, or choose another lineage.
+            {race ? (
+              <>
+                This character was made with the 2024 rules&rsquo; {race.name}. This server plays the 2014 rules, so they now
+                have the 2014 {race.name}&rsquo;s traits, and their ability scores stay as they were. Save to keep it, or
+                choose another lineage.
+              </>
+            ) : (
+              // A content pack that offers no such lineage: its id, written
+              // as a name, and the pick it now owes.
+              <>
+                This character was made with the 2024 rules&rsquo; {speciesWords(state.revisedSpecies)}. This server plays
+                the 2014 rules and offers no 2014 {speciesWords(state.revisedSpecies)} here, so choose a lineage below; their
+                ability scores stay as they were.
+              </>
+            )}
           </p>
         ) : null}
         {race?.note ? (
@@ -347,4 +359,14 @@ function raceFacets(slides: LineageSlide[]): CardFacet[] {
       ? [{ key: "book", label: "Book", options: books.map((book) => ({ value: book, label: book })), test: (id: string, book: string) => { const slide = byId.get(id); return Boolean(slide && bookOf(slide) === book); } }]
       : []),
   ];
+}
+
+// A lineage id as a name, for one the table does not offer ("half_orc" is
+// "Half Orc").
+function speciesWords(id: string): string {
+  return id
+    .split(/[_-]+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 }

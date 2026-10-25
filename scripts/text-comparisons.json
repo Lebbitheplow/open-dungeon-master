@@ -317,6 +317,7 @@
     "app/characters/builder/roving.ts#str-eq": [["key",2,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
     "app/characters/builder/steps/AbilitiesStep.tsx#toLowerCase": [["display",4,"race and class in a sentence"]],
     "app/characters/builder/steps/AncestryStep.tsx#str-list": [["key",6,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
+    "app/characters/builder/steps/AncestryStep.tsx#toUpperCase": [["display",1,"a lineage id the table does not offer, written as a name"]],
     "app/characters/builder/steps/CallingStep.tsx#str-list": [["key",2,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
     "app/characters/builder/steps/CallingStep.tsx#toLowerCase": [["key",5,"class role ids (playsLike); skill id"],["display",2,"class name in a sentence; a class name in a sentence"]],
     "app/characters/builder/steps/CallingStep.tsx#toUpperCase": [["display",5,"ability abbreviations shown"]],
