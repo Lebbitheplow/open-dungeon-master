@@ -49,8 +49,13 @@ export default {
       check(new RegExp(`what level ${target} brings`, "i").test(sheetText), "the sheet says what the level brings");
       check(/hit points/i.test(sheetText), "the sheet names the hit points the level adds");
 
-      // The level table: the level held now and the new one, marked in words.
+      // The level table: folded until asked for, then the level held now and
+      // the new one, marked in words.
+      const toggle = page.locator(`${root}[data-level-up-sheet] button[data-level-table-toggle]`).locator("visible=true");
+      check((await toggle.first().getAttribute("aria-expanded")) === "false", "the level table starts folded");
+      await t.tap(toggle.first());
       const table = page.locator(`${root}[data-level-up-sheet] table[data-level-table]`);
+      await eventually(() => table.first().isVisible(), { timeoutMs: 10_000, label: "the level table, unfolded" });
       check((await table.count()) === 1, "the level table is on the sheet");
       check((await table.locator(`tr[data-level-row="${target}"][data-mark="next"]`).count()) === 1, `level ${target} is marked as the new one`);
       check((await table.locator(`tr[data-level-row="${target - 1}"][data-mark="current"]`).count()) === 1, `level ${target - 1} is marked as the one held`);

@@ -1,6 +1,7 @@
 "use client";
 
-import { useId } from "react";
+import { ChevronDown } from "lucide-react";
+import { useId, useState } from "react";
 import { cn } from "@/lib/cn";
 import { formatModifier } from "@/lib/srd";
 import { FIGHTING_STYLES } from "@/lib/srd/feature-effects";
@@ -15,17 +16,24 @@ import { StepPanel } from "./steps/shared";
 // level's columns and down a column's levels. It never widens the page: on
 // a phone the table scrolls sideways inside its own box, which takes focus
 // so the keyboard can scroll it too, and the level column stays in view.
+//
+// Folded until asked for: it is reference, not a choice, and open it put up
+// to twenty wide rows between the picks and the button that saves them.
 export function LevelProgressionTable({
   rows,
   who,
   className,
+  defaultOpen = false,
 }: {
   rows: ProgressionRow[];
   // Whose levels these are, for the caption ("Brann's levels").
   who: string;
   className?: string;
+  defaultOpen?: boolean;
 }) {
   const captionId = useId();
+  const boxId = useId();
+  const [open, setOpen] = useState(defaultOpen);
   const columns = progressionColumns(rows);
   const last = rows[rows.length - 1]?.level ?? 1;
   const cell = "border-t border-stone-800/70 px-2.5 py-2 align-top";
@@ -41,17 +49,32 @@ export function LevelProgressionTable({
   const toChoose = <span className="text-amber-300">Still to choose</span>;
   return (
     <StepPanel title="Level by level" className={cn("border-amber-500/20", className)}>
-      <p className="mb-2 text-xs text-stone-500">
-        What each level from 1 to {last} grants, with {who}&apos;s pick where there is one.
-      </p>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <p className="min-w-0 flex-1 text-xs text-stone-500">
+          What each level from 1 to {last} grants, with {who}&apos;s pick where there is one.
+        </p>
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={boxId}
+          onClick={() => setOpen((was) => !was)}
+          data-level-table-toggle=""
+          className="inline-flex min-h-10 items-center gap-1 rounded-md px-2 text-sm text-sky-300 transition-colors hover:bg-stone-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+        >
+          {open ? "Hide the levels" : "Show each level"}
+          <ChevronDown aria-hidden="true" className={cn("size-4 transition-transform", open && "rotate-180")} />
+        </button>
+      </div>
       <div
+        id={boxId}
+        hidden={!open}
         role="region"
         aria-labelledby={captionId}
         tabIndex={0}
         data-level-table-scroll=""
         // Relative, so the screen-reader-only words in the cells (absolute)
         // are held inside the box and never widen the page.
-        className="relative max-w-full overflow-x-auto rounded-lg border border-stone-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+        className="relative reveal mt-2 max-w-full overflow-x-auto rounded-lg border border-stone-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
       >
         <table data-level-table="" className="w-full min-w-[36rem] border-collapse text-xs text-stone-300">
           <caption id={captionId} className="sr-only">
@@ -108,7 +131,9 @@ export function LevelProgressionTable({
                   className={cn(
                     cell,
                     "sticky left-0 whitespace-nowrap font-mono text-sm text-amber-100",
-                    row.mark === "next" ? "bg-[#2a2010]" : row.mark === "current" ? "bg-stone-900" : "bg-[#0d0a14]",
+                    // Opaque, from the theme's own ramps, so the column reads by day
+                    // as well as by night as the rows slide under it.
+                    row.mark === "next" ? "bg-amber-950" : row.mark === "current" ? "bg-stone-900" : "bg-stone-950",
                   )}
                 >
                   {row.level}
@@ -191,7 +216,8 @@ export function BuilderLevelTable({
   derived: BuilderDerived;
   klass: ClassOption | undefined;
 }) {
-  if (!klass) {
+  // A first-level build is one row, with nothing yet to compare it to.
+  if (!klass || derived.effectiveLevel <= 1) {
     return null;
   }
   return (

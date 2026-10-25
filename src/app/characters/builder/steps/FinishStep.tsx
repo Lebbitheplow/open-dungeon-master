@@ -94,8 +94,6 @@ export function FinishStep({
       {/* The playable character leads: each step's picks with a way back to
           it and anything still owed, then the numbers the sheet opens with. */}
       <SummaryPanel rows={summary} onEdit={(key) => onEdit?.(key)} onFix={onFix} />
-      {/* What each level up to this one grants, with the picks (backlog F8). */}
-      <BuilderLevelTable state={state} derived={derived} klass={klass} />
 
       {preview && race ? (
         <StepPanel title="Derived stats" ornate className="border-amber-500/30">
@@ -141,6 +139,11 @@ export function FinishStep({
           </div>
         </StepPanel>
       ) : null}
+
+      {/* What each level up to this one grants, with the picks (backlog F8),
+          folded under the numbers the sheet opens with: reference, not a
+          choice, so it never stands between the summary and the save. */}
+      <BuilderLevelTable state={state} derived={derived} klass={klass} />
 
       {role ? (
         <StepPanel title="Their place at the table" help="It changes nothing on the sheet, only how they join a campaign.">

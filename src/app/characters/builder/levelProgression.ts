@@ -129,8 +129,10 @@ export function levelProgressionRows(input: ProgressionInput): ProgressionRow[] 
       .map(([slotLevel, count]) => ({ level: Number(slotLevel), count }))
       .filter((entry) => entry.count > 0)
       .sort((a, b) => a.level - b.level);
+    // A level that holds no spells yet (a ranger's 1st) reads as none, not
+    // as "0 spells known".
     const spells: ProgressionSpells | null =
-      caster.casts && caster.spellCap
+      caster.casts && caster.spellCap && caster.spellCap.count > 0
         ? { ...caster.spellCap, ...(wizard ? { spellbook: spellbookAllowance(level) } : {}) }
         : null;
     rows.push({

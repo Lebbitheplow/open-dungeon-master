@@ -155,6 +155,16 @@ await test("The table renders as a <table> with column and row headers, inside i
   assert.match(markup, />Now</);
   assert.match(markup, /Feat: Alert/);
   assert.match(markup, /Still to choose/, "the open level 6 improvement");
+  // Folded until asked for, by a named toggle that says it is folded.
+  assert.match(markup, /<button type="button" aria-expanded="false" aria-controls="[^"]+" data-level-table-toggle=""[^>]*min-h-10/);
+  assert.match(markup, />Show each level</);
+  assert.match(markup, /hidden=""[^>]*role="region"/);
+  const open = renderToStaticMarkup(
+    createElement(LevelProgressionTable, { rows: levelProgressionRows(brann), who: "Brann", defaultOpen: true }),
+  );
+  assert.doesNotMatch(open, /hidden=""[^>]*role="region"/);
+  // The sticky level column takes the theme's ramps, so it reads by day too.
+  assert.doesNotMatch(read("src/app/characters/builder/LevelProgressionTable.tsx"), /bg-\[#/);
 });
 
 await test("The builder's input carries its improvement cards, subclass and style names", () => {
@@ -176,11 +186,13 @@ await test("The builder's input carries its improvement cards, subclass and styl
   assert.equal(input.next, 10);
 });
 
-await test("The builder's summary shows the table under the summary rows", () => {
+await test("The builder's summary shows the table under the summary rows and the numbers", () => {
   const finish = read("src/app/characters/builder/steps/FinishStep.tsx");
   const summaryAt = finish.indexOf("<SummaryPanel rows={summary}");
   const tableAt = finish.indexOf("<BuilderLevelTable state={state} derived={derived} klass={klass} />");
   assert.ok(summaryAt > 0 && tableAt > summaryAt, "the table follows the summary");
+  assert.ok(tableAt > finish.indexOf('title="Derived stats"'), "and the derived stats, so it never stands before them");
+  assert.match(read("src/app/characters/builder/LevelProgressionTable.tsx"), /derived\.effectiveLevel <= 1/, "a first-level build has no table");
 });
 
 console.log(`\n${passed} passed`);
