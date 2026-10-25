@@ -220,11 +220,21 @@ export async function untilStill(page) {
       .filter((animation) => animation.playState === "running" && animation.effect?.getComputedTiming().endTime !== Infinity);
     // A cancelled animation (its element unmounted) rejects `finished`; it has stopped all the same.
     const stopped = Promise.all(moving.map((animation) => animation.finished.catch(() => {})));
-    const late = new Promise((resolve) => setTimeout(resolve, 10_000)).then(() => {
-      const names = moving.filter((animation) => animation.playState === "running").map((animation) => animation.animationName ?? animation.transitionProperty ?? "an animation");
-      throw new Error(`still moving after 10 s: ${names.join(", ")}`);
+    // The timer is cleared once everything stops: left running, it would
+    // reject 10 s later with no one listening, and the page's own error
+    // log (src/lib/page-errors.ts, read by the report kit) would record it.
+    let timer;
+    const late = new Promise((resolve, reject) => {
+      timer = setTimeout(() => {
+        const names = moving.filter((animation) => animation.playState === "running").map((animation) => animation.animationName ?? animation.transitionProperty ?? "an animation");
+        reject(new Error(`still moving after 10 s: ${names.join(", ")}`));
+      }, 10_000);
     });
-    await Promise.race([stopped, late]);
+    try {
+      await Promise.race([stopped, late]);
+    } finally {
+      clearTimeout(timer);
+    }
   });
 }
 
