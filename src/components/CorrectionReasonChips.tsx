@@ -1,7 +1,7 @@
 "use client";
 
 import { X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type FocusEvent } from "react";
 import { CORRECTION_REASON_LABELS, CORRECTION_REASONS, type CorrectionReason } from "@/lib/correction-reasons";
 import { CORRECTION_OFFER_EVENT, type CorrectionOffer } from "@/lib/correction-offer";
 
@@ -15,6 +15,7 @@ const SHOWN_MS = 15_000;
 export function CorrectionReasonChips({ campaignId }: { campaignId: string }) {
   const [offer, setOffer] = useState<CorrectionOffer | null>(null);
   const [saved, setSaved] = useState(false);
+  const savedRef = useRef(false);
   const timer = useRef<number | null>(null);
 
   useEffect(() => {
@@ -30,6 +31,7 @@ export function CorrectionReasonChips({ campaignId }: { campaignId: string }) {
         return;
       }
       clear();
+      savedRef.current = false;
       setSaved(false);
       setOffer(detail);
       timer.current = window.setTimeout(() => setOffer(null), SHOWN_MS);
@@ -57,6 +59,7 @@ export function CorrectionReasonChips({ campaignId }: { campaignId: string }) {
 
   const choose = (reason: CorrectionReason) => {
     const ids = offer.ids;
+    savedRef.current = true;
     setSaved(true);
     if (timer.current !== null) {
       window.clearTimeout(timer.current);
@@ -71,11 +74,37 @@ export function CorrectionReasonChips({ campaignId }: { campaignId: string }) {
     }).catch(() => undefined);
   };
 
+  // While a keyboard user is inside the strip it stays; it goes by itself
+  // again once focus leaves. Escape closes it from any chip.
+  const hold = () => {
+    if (timer.current !== null) {
+      window.clearTimeout(timer.current);
+      timer.current = null;
+    }
+  };
+  const release = (event: FocusEvent<HTMLDivElement>) => {
+    if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+    hold();
+    timer.current = window.setTimeout(() => setOffer(null), savedRef.current ? 1_500 : SHOWN_MS);
+  };
+
   return (
     <>
       {status}
       <div className="pointer-events-none fixed inset-x-0 top-16 z-40 flex justify-center px-4" data-correction-chips="">
-        <div role="group" aria-label="Why the fix" className="panel pointer-events-auto flex max-w-xl flex-wrap items-center gap-1.5 rounded-xl px-3 py-2 text-xs text-stone-300 shadow-lg">
+        <div
+          role="group"
+          aria-label="Why the fix"
+          onFocus={hold}
+          onBlur={release}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.stopPropagation();
+              setOffer(null);
+            }
+          }}
+          className="panel pointer-events-auto flex max-w-xl flex-wrap items-center gap-1.5 rounded-xl px-3 py-2 text-xs text-stone-300 shadow-lg"
+        >
           {saved ? (
             <span data-correction-saved="">Noted, thank you.</span>
           ) : (
@@ -87,15 +116,20 @@ export function CorrectionReasonChips({ campaignId }: { campaignId: string }) {
                   type="button"
                   data-correction-reason={reason}
                   onClick={() => choose(reason)}
-                  className="rounded-full border border-stone-600/60 bg-stone-900/60 px-2.5 py-1 text-stone-200 hover:border-amber-500/50 hover:text-amber-100 motion-press"
+                  className="inline-flex min-h-10 items-center rounded-full border border-stone-600/60 bg-stone-900/60 px-3 text-stone-200 hover:border-amber-500/50 hover:text-amber-100 motion-press sm:min-h-8 sm:px-2.5"
                 >
                   {CORRECTION_REASON_LABELS[reason]}
                 </button>
               ))}
             </>
           )}
-          <button type="button" aria-label="Skip" onClick={() => setOffer(null)} className="ml-auto rounded-md p-1 text-stone-500 hover:text-stone-200">
-            <X className="size-3.5" />
+          <button
+            type="button"
+            aria-label="Close, no reason"
+            onClick={() => setOffer(null)}
+            className="ml-auto inline-flex size-10 items-center justify-center rounded-md text-stone-500 hover:text-stone-200 sm:size-8"
+          >
+            <X aria-hidden="true" className="size-4" />
           </button>
         </div>
       </div>
