@@ -1493,6 +1493,8 @@
     "lib/dm/pending-inspiration.ts#str-list": [["key",1,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/pet-tools.ts#str-includes": [["key",1,"a condition label (engine vocabulary)"]],
     "lib/dm/pet-tools.ts#str-list": [["key",3,"tool schema enums and field names"]],
+    "lib/dm/pregen-draft-logic.ts#re-word": [["key",1,"a model's JSON code fence"]],
+    "lib/dm/pregen-draft-logic.ts#str-list": [["key",1,"the playstyle ids and the reply's field names"]],
     "lib/dm/prep-logic.ts#re-affix": [["key",1,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/prep-logic.ts#str-list": [["key",1,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/prep-logic.ts#toLowerCase": [["key",2,"arc event id"]],
