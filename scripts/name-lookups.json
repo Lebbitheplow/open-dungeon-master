@@ -2258,6 +2258,9 @@
     "lib/dm/pet-build.ts#sql": [["key",1,"slug and id lookups, sqlite_master probes, rules prose (\"CR 4 or lower\"); the schema's name COLLATE NOCASE uniques (locations, battle maps) are weaker than textKey, never stricter, and the app checks by textKey first"]],
     "lib/dm/encounter-template-logic.ts#first": [["key",2,"the weakest group of a roster cut to fit, by challenge rating, never by name"]],
     "lib/dm/prepared-fit.ts#partial": [["key",2,"a roster row's resolved creature by the ref that row wrote, read as the roster is cut"]],
-    "lib/dm/enemy-blow.ts#partial": [["key",1,"damage types: a part of a blow that is radiant (Undead Fortitude)"]]
+    "lib/dm/enemy-blow.ts#partial": [["key",1,"damage types: a part of a blow that is radiant (Undead Fortitude)"]],
+    "lib/shell-report.ts#partial": [["key",1,"the report file's own fixed part label among its readable lines"]],
+    "app/characters/builder/steps/AncestryStep.tsx#partial": [["key",1,"a lineage id written as display words (each word capitalised), never matched against a record"]],
+    "app/characters/builder/LevelUpSheet.tsx#fallback": [["key",1,"the gate names an owed pick on the sheet first, else the build's earliest owed pick: an order of blocks, never a name lookup"]]
   }
 }

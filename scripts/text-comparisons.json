@@ -2503,6 +2503,7 @@
     "lib/srd/alignment.ts#str-includes": [["english-extra",5,"an alignment's English words beside the two-letter code the builder stores at every table; a miss reads as no alignment, as one written in another language does"]],
     "lib/srd/alignment.ts#str-key": [["key",1,"the builder's alignment codes"]],
     "lib/dm/pet-build.ts#str-list": [["key",2,"tool schema enums and field names: a drake's essences and the features that name one"]],
-    "lib/dm/enemy-blow.ts#re-word": [["key",1,"damage type (engine vocabulary): a part of a blow that is radiant"]]
+    "lib/dm/enemy-blow.ts#re-word": [["key",1,"damage type (engine vocabulary): a part of a blow that is radiant"]],
+    "components/CorrectionReasonChips.tsx#str-eq": [["key",1,"keyboard key"]]
   }
 }
