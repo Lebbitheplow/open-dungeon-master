@@ -375,6 +375,7 @@ export function kiCards(sheet: CharacterSheet, turn: HandTurn): HandCard[] {
     disabled: null,
     spent: false,
     compose: false,
+    pool: "ki",
     intent: { card: "feature", resourceId: "ki", variant: "flurry of blows" },
   };
   const afterAttack: Gate =

@@ -233,15 +233,14 @@ export function TurnHud({
             return (
               <span
                 key={pip.key}
-                className={cn(
-                  // A spent pip dims over a beat instead of blinking out.
-                  "flex items-center gap-[5px] rounded-full border px-2 py-[3px] font-mono text-[9px] tracking-[0.04em] transition-colors duration-[420ms] ease-snap @md:text-[10px]",
-                  left
-                    ? "border-[rgba(212,171,58,0.55)] bg-[rgba(43,32,8,0.7)] text-[#f9ecc8]"
-                    : "border-[rgba(107,99,148,0.3)] bg-[rgba(13,11,28,0.7)] text-[#575170]",
-                )}
+                // The Hand's pips' colour and shape for the same cost (issue
+                // 529, hand.css .turn-pip): a spent pip dims over a beat
+                // instead of blinking out.
+                data-cost={pip.key}
+                data-left={left ? "true" : undefined}
+                className="turn-pip flex items-center gap-[5px] rounded-full border px-2 py-[3px] font-mono text-[9px] tracking-[0.04em] @md:text-[10px]"
               >
-                <span className={cn("size-1.5 rounded-full transition-colors duration-[420ms] ease-snap", left ? "bg-[#d4ab3a]" : "bg-[#3a3358]")} />
+                <span className="turn-pip-shape" aria-hidden="true" />
                 {pip.label}
               </span>
             );

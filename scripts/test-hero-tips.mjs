@@ -89,10 +89,16 @@ await test("a wizard leads with the spell that out-hits the staff, and names the
   assert.ok(!texts(tips).some((text) => /Shield/.test(text)), "a reaction spell is not a thing to try on your turn");
 });
 
-await test("a wizard whose spell facts have not arrived gets no spell tip rather than an invented one", () => {
+await test("a wizard whose pack facts have not arrived is told of a spell from the engine's own facts, never an invented one", () => {
+  // The bundled facts the cast guard reads stand in for the pack's (issue
+  // 528): every spell used to read as one action here, so Shield, a
+  // reaction, could have been offered as a thing to do on your turn.
   const tips = threeThingsToTry(freshPlaySheet(wizard), {});
-  assert.ok(tips.every((tip) => tip.kind !== "spell"));
   assert.equal(tips.length, 3);
+  const spell = tips.find((tip) => tip.kind === "spell");
+  assert.ok(spell, "the spell the slot is for is named");
+  assert.match(spell.text, /^Cast (Magic Missile|Sleep)\b/);
+  assert.ok(!texts(tips).some((text) => /Shield/.test(text)), "a reaction spell is not a thing to try on your turn");
 });
 
 await test("a rogue swings the rapier with Sneak Attack's once a turn beside it, then the expertise skill", () => {

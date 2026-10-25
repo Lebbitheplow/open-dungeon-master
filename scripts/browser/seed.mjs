@@ -1432,8 +1432,100 @@ const chipTables = {};
   }
 }
 
+// Issue 528: a level 9 wizard in a fight, so a hand of thirty-odd cards:
+// her spells fold under one Spells card by level (a third-level slot
+// already spent), the basic actions under Actions, her gear under Items.
+// The table is a person's to run (the player's seat), so the lead plays
+// here and steers nothing: it offers no campaign prep (issue 530). One per
+// viewport.
+const SPELLBOOK_TITLE = "Spellbook Table";
+const spellbook = {};
+{
+  const { invokeEngine } = await import("../../src/lib/dm/invoke.ts");
+  const maps = await import("../../src/lib/db/battle-maps.ts");
+  const encounterRows = await import("../../src/lib/db/encounters.ts");
+  const slots = Object.fromEntries([4, 3, 3, 3, 1].map((max, index) => [String(index + 1), { max, used: index === 2 ? 1 : 0 }]));
+  for (const viewport of ["desktop", "phone"]) {
+    const table = campaigns.createCampaign(player.id, {
+      title: `${SPELLBOOK_TITLE} (${viewport})`,
+      description: "A wizard's whole spellbook in one fight.",
+      theme: "high-fantasy",
+      maxPlayers: 6,
+      startingLevel: 9,
+      difficulty: "normal",
+      gameSettings: { ttsEnabled: false, dmMode: "human" },
+    });
+    // Seated before the campaign starts: a running one admits no one unless
+    // it holds the door open mid-game.
+    const seated = campaigns.joinByInviteCode(world.owner.id, campaigns.getCampaignById(table.id).inviteCode);
+    if ("error" in seated) {
+      throw new Error(`could not seat the lead at the spellbook table: ${seated.error}`);
+    }
+    campaigns.setCampaignStatus(table.id, "active");
+    const wizard = sheets.createSheet(
+      table.id,
+      world.owner.id,
+      9,
+      heroInput({
+        name: "Maren Quill",
+        class: "wizard",
+        level: 9,
+        maxHp: 52,
+        abilities: { int: 18, con: 14, dex: 14 },
+        equipment: [
+          { name: "Component pouch", qty: 1 },
+          { name: "Quarterstaff", qty: 1, equipped: true },
+          { name: "Dagger", qty: 2 },
+          { name: "Potion of healing", qty: 2 },
+        ],
+        spellcasting: {
+          ability: "int",
+          slots,
+          known: [],
+          cantrips: ["Fire Bolt", "Ray of Frost", "Mage Hand", "Light", "Minor Illusion"],
+          prepared: [
+            "Magic Missile", "Shield", "Sleep", "Detect Magic", "Misty Step", "Hold Person", "Scorching Ray", "Fireball",
+            "Counterspell", "Lightning Bolt", "Fly", "Greater Invisibility", "Dimension Door", "Cone of Cold", "Wall of Force",
+          ],
+        },
+      }),
+    );
+    const started = await invokeEngine(campaigns.getCampaignById(table.id), { kind: "human", userId: player.id }, {
+      name: "start_encounter",
+      args: { enemies: [{ monster: "goblin", count: 1 }] },
+    });
+    if (!started.ok) {
+      throw new Error(`the spellbook table's fight did not start: ${started.error}`);
+    }
+    const encounter = encounterRows.getActiveEncounter(table.id);
+    const board = maps.getBattleMapForEncounter(encounter.id);
+    maps.setBattleMapTerrain(board.id, ".".repeat(board.width * board.height));
+    getDatabase().prepare("UPDATE battle_maps SET doors_json = '{}' WHERE id = ?").run(board.id);
+    // Her turn, the order rolled, so a card can be raised (as the combat
+    // kit's giveTurn does for the main table).
+    const place = encounter.order.findIndex((entry) => entry.characterId === wizard.id);
+    if (place < 0) {
+      throw new Error("the spellbook table's wizard has no place in the order");
+    }
+    // No enemy due before her, and the floor hers, as the DM's "Hand on the
+    // turn" leaves it.
+    encounterRows.saveEncounter({
+      ...encounter,
+      orderReady: true,
+      round: Math.max(1, encounter.round),
+      turnIndex: place,
+      turnBudget: null,
+      legendary: { ...encounter.legendary, due: [] },
+    });
+    const { initiativeFloorFor } = await import("../../src/lib/dm/encounter-tools.ts");
+    campaigns.setFloor(table.id, initiativeFloorFor(table.id) ?? { mode: "open" });
+    spellbook[viewport] = { id: table.id, wizard: wizard.id };
+  }
+}
+
 const ids = {
   qualityTurnIds,
+  spellbook,
   chipTables,
   offerTableId: offerTable.id,
   offerWorkshopId: offerWorkshop.id,
@@ -1507,6 +1599,7 @@ const ids = {
     ...Object.fromEntries(Object.entries(conduct).map(([viewport, table]) => [table.id, `${CONDUCT_TITLE} (${viewport})`])),
     ...Object.fromEntries(Object.entries(pactTables).flatMap(([kind, tables]) => Object.entries(tables).map(([viewport, table]) => [table.id, `Pact ${kind.charAt(0).toUpperCase()}${kind.slice(1)} (${viewport})`]))),
     ...Object.fromEntries(Object.entries(chipTables).map(([viewport, table]) => [table.id, `Chip Table (${viewport})`])),
+    ...Object.fromEntries(Object.entries(spellbook).map(([viewport, table]) => [table.id, `${SPELLBOOK_TITLE} (${viewport})`])),
     [world.campaignId]: TITLE,
     [lobby.id]: LOBBY_TITLE,
     [quiet.id]: QUIET_TITLE,

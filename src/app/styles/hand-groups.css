@@ -1,0 +1,298 @@
+/* The Hand's groups (issue 528, src/app/campaigns/[campaignId]/HandGroups.tsx):
+   the card that stands for a stack of cards, the group opened as a hand of
+   its own with its Back spine, its section tabs, chips and search, and the
+   group sections of the More sheet and Customize Hand. */
+
+/* ---- the group's card: a stack ---- */
+
+/* The cards under it, their edges showing past its top right. */
+.hand-group-under { position: absolute; inset: 0; border-radius: 14px; pointer-events: none; }
+.hand-group-under::before,
+.hand-group-under::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--hand-face);
+  border: 1px solid var(--hand-edge);
+  box-shadow: 0 4px 12px rgba(4, 2, 12, 0.45);
+  transition: transform 260ms var(--ease-spring);
+}
+.hand-group-under::before { transform: translate(4px, -5px) rotate(2deg); opacity: 0.8; }
+.hand-group-under::after { transform: translate(8px, -9px) rotate(4deg); opacity: 0.55; }
+/* The stack opens a little under the hand, as if about to be spread. */
+.hand-group-card:is(:hover, :focus-visible) .hand-group-under::before { transform: translate(7px, -8px) rotate(4deg); }
+.hand-group-card:is(:hover, :focus-visible) .hand-group-under::after { transform: translate(14px, -14px) rotate(8deg); }
+
+/* A group none of whose cards can be played dims like a refused card, but
+   still opens: its cards are worth reading. */
+.hand-group-card[data-quiet="true"] { filter: brightness(0.72) saturate(0.5); }
+.hand-group-card[data-quiet="true"][data-spent="true"] { filter: brightness(0.62) saturate(0.45); }
+.hand-group-card[data-quiet="true"] .hand-card-foil { opacity: 0; }
+.hand-group-card[data-quiet="true"]:is(:hover, :focus-visible) { filter: brightness(0.9) saturate(0.75); }
+
+/* Its art window: up to three of its cards' paintings, fanned. */
+.hand-group-art { position: relative; }
+.hand-group-art-leaf {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  margin: -23px 0 0 -23px;
+  overflow: hidden;
+  border-radius: 6px;
+  border: 1px solid var(--hand-art-edge);
+  background: var(--hand-art);
+  box-shadow: 0 2px 6px rgba(4, 2, 12, 0.5);
+  transition: transform 260ms var(--ease-spring);
+}
+.hand-group-art-leaf[data-of="2"][data-at="0"] { transform: translateX(-14px) rotate(-7deg); }
+.hand-group-art-leaf[data-of="2"][data-at="1"] { transform: translateX(14px) rotate(7deg); }
+.hand-group-art-leaf[data-of="3"][data-at="0"] { transform: translateX(-26px) rotate(-11deg); }
+.hand-group-art-leaf[data-of="3"][data-at="1"] { z-index: 2; transform: translateY(-2px); }
+.hand-group-art-leaf[data-of="3"][data-at="2"] { transform: translateX(26px) rotate(11deg); }
+.hand-group-card:is(:hover, :focus-visible) .hand-group-art-leaf[data-of="3"][data-at="0"] { transform: translateX(-32px) rotate(-15deg); }
+.hand-group-card:is(:hover, :focus-visible) .hand-group-art-leaf[data-of="3"][data-at="2"] { transform: translateX(32px) rotate(15deg); }
+.hand-group-card:is(:hover, :focus-visible) .hand-group-art-leaf[data-of="2"][data-at="0"] { transform: translateX(-19px) rotate(-10deg); }
+.hand-group-card:is(:hover, :focus-visible) .hand-group-art-leaf[data-of="2"][data-at="1"] { transform: translateX(19px) rotate(10deg); }
+
+/* The costs its cards are paid in, lit while one of them can be played. */
+.hand-costs { display: inline-flex; align-items: center; gap: 4px; min-height: 13px; }
+.hand-cost-dot {
+  width: 10px;
+  height: 10px;
+  background: var(--cost);
+  clip-path: var(--cost-clip);
+  opacity: 0.3;
+  transition: opacity var(--dur-beat) var(--ease-snap);
+}
+.hand-cost-dot[data-open="true"] { opacity: 1; }
+
+.hand-group-new {
+  border-radius: 999px;
+  border: 1px solid rgba(52, 211, 153, 0.5);
+  background: rgba(52, 211, 153, 0.12);
+  padding: 0 5px;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 8.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #a7f3d0;
+}
+html[data-theme="light"] .hand-group-new { color: #065f46; border-color: rgba(6, 95, 70, 0.45); background: rgba(16, 185, 129, 0.12); }
+
+/* ---- an open group: its bar, then its own fan ---- */
+
+.hand-group { animation: fade-up var(--dur-move) var(--ease-settle) both; }
+.hand-group-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 6px;
+}
+.hand-group-title { display: inline-flex; align-items: baseline; gap: 8px; color: var(--hand-gold); font-size: 14px; letter-spacing: 0.04em; }
+.hand-group-left { font-family: var(--font-geist-mono), monospace; font-size: 11px; color: var(--hand-ink-mute); }
+.hand-group-tabs {
+  position: relative;
+  display: flex;
+  gap: 4px;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.hand-group-tabs::-webkit-scrollbar { display: none; }
+.hand-group-tab {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  min-height: 38px;
+  padding: 2px 10px;
+  border-radius: 9px;
+  border: 1px solid rgba(107, 99, 148, 0.35);
+  background: rgba(13, 11, 28, 0.55);
+  color: var(--hand-ink-soft);
+  text-align: left;
+  white-space: nowrap;
+  transition: border-color var(--dur-quick) var(--ease-snap), background-color var(--dur-quick) var(--ease-snap), color var(--dur-quick) var(--ease-snap);
+}
+.hand-group-tab[aria-selected="true"] { border-color: rgba(212, 171, 58, 0.75); background: rgba(72, 60, 120, 0.6); color: var(--hand-ink); }
+.hand-group-tab:focus-visible { outline: none; box-shadow: 0 0 0 2px rgba(244, 224, 166, 0.85); }
+.hand-group-tab:not([aria-selected="true"]):hover { border-color: rgba(212, 171, 58, 0.45); }
+.hand-group-tab-label { font-family: var(--font-display); font-size: 12px; font-weight: 600; line-height: 1.2; }
+.hand-group-tab-note { font-family: var(--font-geist-mono), monospace; font-size: 9.5px; line-height: 1.2; color: var(--hand-ink-mute); }
+/* A level with nothing castable left says so in its note's colour. */
+.hand-group-tab[data-spent="true"] .hand-group-tab-note { color: #c08a6a; }
+.hand-group-found { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--hand-ink-soft); }
+.hand-group-clear {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 32px;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1px solid rgba(212, 171, 58, 0.4);
+  color: var(--hand-gold);
+  font-size: 12px;
+}
+.hand-group-clear:is(:hover, :focus-visible) { border-color: rgba(244, 224, 166, 0.9); outline: none; }
+
+/* The chips and the search box. */
+.hand-find { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.hand-find-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.hand-search {
+  display: flex;
+  flex: 1 1 140px;
+  align-items: center;
+  gap: 6px;
+  max-width: 280px;
+  min-height: 34px;
+  padding: 0 11px;
+  border-radius: 999px;
+  border: 1px solid rgba(107, 99, 148, 0.45);
+  background: rgba(13, 11, 28, 0.6);
+  color: #8f8aab;
+  transition: border-color var(--dur-quick) var(--ease-snap), box-shadow var(--dur-quick) var(--ease-snap);
+}
+.hand-search:focus-within { border-color: rgba(212, 171, 58, 0.8); box-shadow: 0 0 0 3px rgba(212, 171, 58, 0.15); }
+.hand-search input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: #f9ecc8; font-size: 13px; }
+.hand-search input::placeholder { color: #6f6a8a; }
+html[data-theme="light"] .hand-search { background: rgba(255, 250, 235, 0.9); border-color: rgba(122, 96, 40, 0.45); color: #6d6350; }
+html[data-theme="light"] .hand-search input { color: #2a2014; }
+html[data-theme="light"] .hand-search input::placeholder { color: #8a7f6a; }
+html[data-theme="light"] .hand-group-tab { background: rgba(255, 250, 235, 0.85); border-color: rgba(122, 96, 40, 0.35); color: #4a3e2d; }
+html[data-theme="light"] .hand-group-tab[aria-selected="true"] { background: #f3e6c4; border-color: #a6842a; color: #2a2014; }
+html[data-theme="light"] .hand-group-tab[data-spent="true"] .hand-group-tab-note { color: #9a4a1c; }
+html[data-theme="light"] .hand-group-clear { color: #6b4f0e; border-color: rgba(138, 107, 28, 0.55); }
+
+/* The open group's fan keeps room on its left for the Back spine. Its top
+   padding is only room for a lifted card, so the bar sits in it: the cards
+   stand where the main hand's stood, and the empty strip lets presses
+   through to the chips under it. */
+.hand-fan[data-group-open="true"] { padding-left: calc(var(--card-w) / 2 + 84px); }
+@media (min-width: 640px) and (min-height: 720px) {
+  .hand-group-bar + .hand-fan[data-group-open="true"] { margin-top: -28px; pointer-events: none; }
+  .hand-group-bar + .hand-fan[data-group-open="true"] > * { pointer-events: auto; }
+}
+/* A short window: the bar's rows a little tighter. */
+@media (min-width: 640px) and (max-height: 960px) {
+  .hand-group-tab { min-height: 34px; padding: 1px 9px; }
+  .hand-chip { min-height: 30px; }
+  .hand-search { min-height: 30px; }
+}
+
+/* The Back spine: the More spine's twin, on the hand's other side. */
+.hand-back {
+  position: absolute;
+  left: 0;
+  top: 58px;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 30px;
+  height: calc(var(--card-h) - 28px);
+  padding: 8px 0;
+  border-radius: 9px;
+  border: 1px solid rgba(212, 171, 58, 0.4);
+  background: linear-gradient(180deg, rgba(48, 40, 83, 0.7), rgba(13, 11, 28, 0.95));
+  color: #ecd287;
+  box-shadow: 0 8px 22px rgba(4, 2, 12, 0.5);
+  cursor: pointer;
+  animation: hand-back-in var(--dur-move) var(--ease-settle) backwards;
+  transition: translate 240ms var(--ease-spring), border-color var(--dur-quick) var(--ease-snap);
+}
+.hand-back:is(:hover, :focus-visible) { translate: 0 -3px; border-color: rgba(244, 224, 166, 0.9); outline: none; }
+.hand-back-arrow { width: 14px; height: 14px; flex: none; }
+.hand-back-word { writing-mode: vertical-rl; font-family: var(--font-display); font-size: 9px; letter-spacing: 0.22em; text-transform: uppercase; }
+@keyframes hand-back-in {
+  from { opacity: 0; translate: -14px 0; }
+  to { opacity: 1; translate: 0 0; }
+}
+html[data-theme="light"] .hand-back { background: linear-gradient(180deg, #fbf5e4, #e6dcc3); color: #6b4f0e; border-color: rgba(138, 107, 28, 0.6); box-shadow: 0 8px 20px rgba(60, 40, 10, 0.25); }
+
+/* ---- the phone's rail ---- */
+
+@media (max-width: 639px), (max-height: 719px) {
+  .hand-fan[data-group-open="true"] { padding-left: 12px; }
+  .hand-back {
+    position: static;
+    flex: 0 0 44px;
+    width: 44px;
+    height: var(--card-h);
+    scroll-snap-align: start;
+  }
+  .hand-group-art-leaf { width: 32px; height: 32px; margin: -16px 0 0 -16px; }
+  .hand-group-art-leaf[data-of="3"][data-at="0"] { transform: translateX(-18px) rotate(-11deg); }
+  .hand-group-art-leaf[data-of="3"][data-at="2"] { transform: translateX(18px) rotate(11deg); }
+  .hand-group-under { border-radius: 12px; }
+  .hand-group-tab { min-height: 40px; }
+  .hand-search { min-height: 40px; max-width: none; }
+  .hand-group-clear { min-height: 40px; }
+}
+
+/* ---- the More sheet's group sections ---- */
+
+.hand-more-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 2px;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #fde68a;
+}
+.hand-more-left { font-family: var(--font-geist-mono), monospace; font-size: 10.5px; letter-spacing: 0; text-transform: none; color: #a8a29e; }
+.hand-more-section { margin: 4px 0; font-size: 11.5px; color: #d6d3d1; }
+html[data-theme="light"] .hand-more-head { color: #6b4f0e; }
+html[data-theme="light"] .hand-more-left { color: #6d6350; }
+html[data-theme="light"] .hand-more-section { color: #4a3e2d; }
+
+/* ---- Customize Hand: a group's own row ---- */
+
+.hand-arrange-open {
+  display: inline-flex;
+  flex-basis: 100%;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 6px;
+  border-radius: 8px;
+  color: #ecd287;
+  font-size: 12px;
+  text-align: left;
+}
+.hand-arrange-open:is(:hover, :focus-visible) { color: #fde68a; outline: none; background: rgba(72, 60, 120, 0.3); }
+.hand-arrange-members {
+  display: flex;
+  flex-basis: 100%;
+  flex-direction: column;
+  gap: 2px;
+  margin-left: 6px;
+  padding-left: 10px;
+  border-left: 1px solid rgba(212, 171, 58, 0.28);
+  animation: fade-up var(--dur-move) var(--ease-settle) both;
+}
+.hand-arrange-member { display: flex; align-items: center; gap: 8px; min-height: 40px; }
+html[data-theme="light"] .hand-arrange-open { color: #6b4f0e; }
+
+/* ---- quieter tables ---- */
+
+[data-effects="low"] .hand-group-under::before,
+[data-effects="low"] .hand-group-under::after,
+[data-effects="low"] .hand-group-art-leaf { transition: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .hand-group, .hand-back, .hand-arrange-members { animation: none; }
+  .hand-group-under::before, .hand-group-under::after, .hand-group-art-leaf, .hand-cost-dot, .hand-group-tab, .hand-search, .hand-back { transition: none; }
+  .hand-back:is(:hover, :focus-visible) { translate: none; }
+}
