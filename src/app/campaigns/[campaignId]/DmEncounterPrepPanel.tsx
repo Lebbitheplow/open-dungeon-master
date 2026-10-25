@@ -42,7 +42,24 @@ import { useOpenOnArrival } from "@/app/workshop/world/WorldEntryLink";
 // through the same thresholdsForParty the workbench route and the target
 // party bar read, so the three never disagree about what "deadly" is.
 
-function DifficultyLine({ readout }: { readout: TemplateReadout }) {
+// At a table the AI narrates (where the lead cues fights), the storyteller
+// cuts a fight beyond the party down to fit, or holds it when even its
+// strongest creature is too much (src/lib/dm/prepared-fit.ts); a DM's own
+// Deploy is refused as written, for the DM to change.
+function refusedLine(readout: TemplateReadout, cue: boolean): string {
+  if (!readout.tooDeadly) {
+    return "";
+  }
+  if (cue && readout.held) {
+    return ". Beyond the party even cut down: the storyteller holds it until they are stronger.";
+  }
+  if (cue && readout.scaledWithout) {
+    return `. The storyteller cuts it to fit: it runs without ${readout.scaledWithout}.`;
+  }
+  return ". The engine will refuse this as written.";
+}
+
+function DifficultyLine({ readout, cue }: { readout: TemplateReadout; cue: boolean }) {
   if (readout.unknownMonster) {
     return (
       <p className="text-[11px] text-red-400">
@@ -51,10 +68,15 @@ function DifficultyLine({ readout }: { readout: TemplateReadout }) {
     );
   }
   return (
-    <p className={cn("text-[11px]", readout.tooDeadly ? "text-red-400" : "text-stone-400")}>
+    <p
+      className={cn(
+        "text-[11px]",
+        !readout.tooDeadly ? "text-stone-400" : cue && readout.scaledWithout && !readout.held ? "text-amber-400" : "text-red-400",
+      )}
+    >
       {readout.count} creature{readout.count === 1 ? "" : "s"}, {readout.verdict} ({readout.adjustedXp} XP
       against a {readout.ceiling} ceiling)
-      {readout.tooDeadly ? ". The engine will refuse this as written." : ""}
+      {refusedLine(readout, cue)}
     </p>
   );
 }
@@ -403,7 +425,7 @@ export function DmEncounterPrepPanel({
                         {rosterSummary(template.enemies, template.readout.names)}
                         {template.battlefield ? ` on ${template.battlefield}` : ""}
                       </p>
-                      <DifficultyLine readout={template.readout} />
+                      <DifficultyLine readout={template.readout} cue={cue} />
                       {template.notes ? (
                         <p className="reveal mt-0.5 whitespace-pre-wrap text-[11px] text-stone-500">
                           {template.notes}

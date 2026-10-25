@@ -2,7 +2,9 @@ import type { Campaign } from "@/lib/db/campaigns";
 import { listEncounterTemplates, setTemplateCued, type EncounterTemplate } from "@/lib/db/encounter-templates";
 import { getActiveEncounter } from "@/lib/db/encounters";
 import { getPreparedMap } from "@/lib/db/prepared-maps";
-import { describeExtras, formatRoster } from "@/lib/dm/encounter-template-logic";
+import { describeExtras, formatRoster, rosterSummary } from "@/lib/dm/encounter-template-logic";
+import { preparedFit } from "@/lib/dm/prepared-fit";
+import { fightingParty } from "@/lib/dm/party-budget";
 import { applyTemplateExtras, applyTemplateMap } from "@/lib/dm/template-apply";
 import type { ToolDef } from "@/lib/dm/encounter-tool-defs";
 import type { ToolResult } from "@/lib/dm/tool-errors";
@@ -107,9 +109,14 @@ function findTemplate(campaignId: string, name: string): EncounterTemplate | nul
 }
 
 // Starts the named fight through `start` (start_encounter as the
-// encounter tools run it), then lays down its map and plan. A refusal from
-// start_encounter (a fight already on, too deadly, an unknown monster) is
-// returned as it came, so the model reads the same sentence it would have.
+// encounter tools run it), then lays down its map and plan. A fight beyond
+// the party as it stands runs cut down to fit (src/lib/dm/prepared-fit.ts),
+// and one beyond it even cut down is held; either way the result says so in
+// words run_prepared_encounter can act on, since "use fewer enemies" is not
+// something it can do. A fight that cannot run for this party leaves the
+// lead's cue, so the storyteller is not sent back to it every turn. Any
+// other refusal from start_encounter (a fight already on) is returned as it
+// came.
 export function runPreparedEncounter(
   campaign: Campaign,
   rawArguments: string,
@@ -134,9 +141,23 @@ export function runPreparedEncounter(
       retry: true,
     };
   }
+  // With nobody to fight it there is no party to fit it to: start_encounter
+  // says so itself.
+  const fit = fightingParty(campaign).length ? preparedFit(campaign, template.enemies) : ({ kind: "fits" } as const);
+  if (fit.kind === "unknown" || fit.kind === "held") {
+    setTemplateCued(template.id, false);
+    return {
+      error:
+        fit.kind === "unknown"
+          ? `The prepared fight "${template.name}" names "${fit.monster}", which this world has no monster for; the party lead fixes it in their prep. Play the scene another way, or start_encounter a fight of your own.`
+          : `The prepared fight "${template.name}" is beyond the party as it stands, even cut down to its strongest creature (difficulty ${campaign.difficulty}). It stays prepared for when they are stronger: play the scene another way, or start_encounter a smaller fight.`,
+      retry: true,
+    };
+  }
+  const roster = fit.kind === "scaled" ? fit.rows : template.enemies;
   const started = start(
     JSON.stringify({
-      enemies: template.enemies,
+      enemies: roster,
       summary: template.notes.split("\n")[0]?.slice(0, 200) || template.name,
       ...(template.map.scene ? { scene: template.map.scene } : {}),
       ...(args.ambush ? { ambush: args.ambush } : {}),
@@ -145,6 +166,11 @@ export function runPreparedEncounter(
     }),
   );
   if (typeof started.error === "string") {
+    // A fight already on keeps the cue for when it ends; anything else
+    // would refuse again next turn.
+    if (!getActiveEncounter(campaign.id)) {
+      setTemplateCued(template.id, false);
+    }
     return started;
   }
   const mapError = applyTemplateMap(campaign, template);
@@ -156,6 +182,9 @@ export function runPreparedEncounter(
   return {
     ...started,
     prepared: template.name,
+    ...(fit.kind === "scaled"
+      ? { scaled: `As prepared it is beyond the party as it stands, so it runs without ${rosterSummary(fit.dropped)}. Narrate the fight that is here.` }
+      : {}),
     ...(plan.length ? { plan } : {}),
     ...(mapError ? { mapNote: `Its saved map could not be used (${mapError}); the fight is on a generated one.` } : {}),
   };

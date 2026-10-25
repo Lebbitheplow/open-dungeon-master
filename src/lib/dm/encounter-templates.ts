@@ -1,13 +1,13 @@
 import type { Campaign } from "@/lib/db/campaigns";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
-import { partyLevelsFor } from "@/lib/dm/party-budget";
+import { partyLevelsFor, rosterBudget } from "@/lib/dm/party-budget";
+import { preparedFit } from "@/lib/dm/prepared-fit";
 import { resolveEnemyRequests } from "@/lib/dm/encounter-spawn";
 import { resolveMonster } from "@/lib/bestiary";
-import { encounterCeiling, evaluateEncounter } from "@/lib/srd/encounter-math";
 import { invokeEngine } from "@/lib/dm/invoke";
 import type { EncounterTemplate } from "@/lib/db/encounter-templates";
 import { applyTemplateExtras, applyTemplateMap } from "@/lib/dm/template-apply";
-import type { TemplateEnemy } from "@/lib/dm/encounter-template-logic";
+import { rosterSummary, type TemplateEnemy } from "@/lib/dm/encounter-template-logic";
 
 // What a prepared encounter is worth, and what happens when the DM deploys
 // it. Both answers come from the engine that already owns them: the same
@@ -19,8 +19,15 @@ export type TemplateReadout = {
   adjustedXp: number;
   // The ceiling start_encounter will refuse above, at this difficulty.
   ceiling: number;
-  // True when deploying would be refused as written.
+  // True when deploying would be refused as written: past the ceiling, or
+  // more creatures than a fight takes.
   tooDeadly: boolean;
+  // What the storyteller runs instead (src/lib/dm/prepared-fit.ts): the
+  // creatures it leaves out ("goblin x3"), or held when even the strongest
+  // alone is beyond the party. Empty and false when the fight runs as
+  // written.
+  scaledWithout: string;
+  held: boolean;
   // The first monster reference the bestiary could not resolve, if any.
   unknownMonster: string | null;
   count: number;
@@ -61,21 +68,24 @@ export function templateDifficulty(
       adjustedXp: 0,
       ceiling: 0,
       tooDeadly: false,
+      scaledWithout: "",
+      held: false,
       unknownMonster: outcome.unknownMonster,
       count: 0,
       names,
     };
   }
-  const evaluation = evaluateEncounter(
-    levels,
-    outcome.resolved.map((entry) => entry.stats.cr),
-  );
-  const ceiling = encounterCeiling(campaign.difficulty, evaluation.thresholds.deadly);
+  // The same rails start_encounter reads (src/lib/dm/party-budget.ts).
+  const budget = rosterBudget(campaign, levels, outcome.resolved);
+  const refused = budget.tooDeadly || budget.tooMany;
+  const fit = refused ? preparedFit(campaign, enemies) : null;
   return {
-    verdict: `${evaluation.verdict.replace(/_/g, " ")} for this party`,
-    adjustedXp: evaluation.adjustedXp,
-    ceiling,
-    tooDeadly: evaluation.adjustedXp > ceiling,
+    verdict: `${budget.evaluation.verdict.replace(/_/g, " ")} for this party`,
+    adjustedXp: budget.stagedXp,
+    ceiling: budget.ceiling,
+    tooDeadly: refused,
+    scaledWithout: fit?.kind === "scaled" ? rosterSummary(fit.dropped) : "",
+    held: fit?.kind === "held",
     unknownMonster: null,
     count: outcome.resolved.length,
     names,

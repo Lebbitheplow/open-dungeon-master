@@ -2238,6 +2238,8 @@
     "lib/srd/creature-attacks.ts#partial": [["parse",2,"an attack's dice and damage types cut into their terms"]],
     "lib/srd/creature-attacks.ts#whole": [["parse",1,"a rider's dice found among the hit's terms"]],
     "lib/dm/pet-build.ts#partial": [["parse",1,"a stat block's speed text, and a feature name's chosen option"]],
-    "lib/dm/pet-build.ts#sql": [["key",1,"slug and id lookups, sqlite_master probes, rules prose (\"CR 4 or lower\"); the schema's name COLLATE NOCASE uniques (locations, battle maps) are weaker than textKey, never stricter, and the app checks by textKey first"]]
+    "lib/dm/pet-build.ts#sql": [["key",1,"slug and id lookups, sqlite_master probes, rules prose (\"CR 4 or lower\"); the schema's name COLLATE NOCASE uniques (locations, battle maps) are weaker than textKey, never stricter, and the app checks by textKey first"]],
+    "lib/dm/encounter-template-logic.ts#first": [["key",2,"the weakest group of a roster cut to fit, by challenge rating, never by name"]],
+    "lib/dm/prepared-fit.ts#partial": [["key",2,"a roster row's resolved creature by the ref that row wrote, read as the roster is cut"]]
   }
 }
