@@ -471,7 +471,7 @@ export function MarketPanel({
                       type="button"
                       onClick={() => setDetails(line)}
                       aria-label={`Details of ${line.itemName}`}
-                      className="flex min-w-0 items-center gap-1.5 rounded text-left text-xs text-stone-200 hover:text-amber-100"
+                      className="pk-tap flex min-w-0 items-center gap-1.5 rounded text-left text-xs text-stone-200 hover:text-amber-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-400"
                     >
                       <GameIcon icon={{ kind: "item", key: line.itemName, family: "item-gear" }} size="size-7" />
                       <span className="truncate">{line.itemName}</span>
