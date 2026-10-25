@@ -144,6 +144,9 @@ export function landTypedParts(input: {
           ...(input.nonlethal ? { nonlethal: true } : {}),
           ...(input.holdVictory ? { holdVictory: true } : {}),
           ...(input.crit ? { crit: true } : {}),
+          // The total lands untyped, so a radiant part says so itself
+          // (Undead Fortitude: "unless the damage is radiant").
+          ...(byType.some((part) => part.amount > 0 && /radiant/i.test(part.type)) ? { radiant: true } : {}),
           ...(input.concentrationDisadvantage ? { concentrationDisadvantage: true } : {}),
         })
       : {

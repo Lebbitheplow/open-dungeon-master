@@ -184,6 +184,27 @@ await test("An iron golem's Fire Absorption heals it by a smite's fire riding a 
   assert.equal(enemyOf(table, golem.id).currentHp, 50 - 9 + 4, JSON.stringify(out.result));
 });
 
+// Undead Fortitude: "unless the damage is radiant or from a critical hit".
+const UNDEAD_FORTITUDE = "Undead Fortitude: If damage reduces the zombie to 0 hit points, it must make a Constitution saving throw with a DC of 5 + the damage taken, unless the damage is radiant or from a critical hit. On a success, the zombie drops to 1 hit point instead.";
+
+await test("A zombie's Undead Fortitude does not save it from a blow that carries radiant damage (Branding Smite on a sword).", async () => {
+  const { world: table, sheets: [fighter], enemies: [zombie] } = await board([FIGHTER], { 0: { x: 11, y: 4 }, e0: { x: 12, y: 4 } });
+  dress(table, zombie.id, { traits: [UNDEAD_FORTITUDE] });
+  encounters.patchEnemyHp(zombie.id, 5, "alive");
+  table.patch(fighter.id, { conditions: ["branding smite"], conditionMeta: {} });
+  holdTurn(table, fighter.id);
+  // To hit, the longsword's d8, the smite's 2d6, and a 20 for a save that
+  // must not be rolled.
+  table.dice(18, 6, 4, 4, 20);
+  const out = await table.invoke("pc_attack", { characterId: fighter.id, targetEnemyId: zombie.id, weapon: "Longsword" });
+  const unused = table.clearDice();
+  assert.equal(out.ok, true, out.error);
+  assert.deepEqual(out.result.damageByType, ["9 slashing", "8 radiant"]);
+  assert.equal(out.result.dead, true, JSON.stringify(out.result));
+  assert.equal(out.result.undeadFortitude, undefined, "no Constitution save is offered against radiant damage");
+  assert.equal(unused, 1, "the save's die is never rolled");
+});
+
 await test("A clay golem's Acid Absorption heals it by Acid Arrow's lingering acid at the end of its turn, as it does by the arrow's hit.", async () => {
   const { world: table, sheets: [wizard], enemies: [golem] } = await board([caster("wizard", "int", ["Acid Arrow"])], { 0: { x: 2, y: 4 }, e0: { x: 8, y: 4 } });
   dress(table, golem.id, { traits: [ACID_ABSORPTION] });

@@ -262,6 +262,10 @@ export function applyEnemyDamage(
     holdVictory?: boolean;
     // A critical hit, which Undead Fortitude cannot save against.
     crit?: boolean;
+    // Radiant damage riding a blow of several types (a sword's slashing and
+    // Branding Smite's radiant), which lands untyped: Undead Fortitude cannot
+    // save against it either.
+    radiant?: boolean;
     // Not damage but death outright (exhaustion 6): no resistance halves it
     // and no Undead Fortitude holds it.
     death?: boolean;
@@ -370,6 +374,7 @@ export function applyEnemyDamage(
     options?.crit !== true &&
     options?.death !== true &&
     !/radiant/i.test(damageType ?? "") &&
+    options?.radiant !== true &&
     hasTrait(enemy.stats, "undeadFortitude")
   ) {
     const dc = 5 + adjusted.amount;
