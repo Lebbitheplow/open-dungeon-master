@@ -92,6 +92,7 @@ const sheetRoute = await world.route("campaigns/[campaignId]/sheets/[sheetId]");
 const editRoute = await world.route("campaigns/[campaignId]/messages/[messageId]/edit");
 const disputeRoute = await world.route("campaigns/[campaignId]/disputes/[disputeId]");
 const reasonRoute = await world.route("campaigns/[campaignId]/corrections");
+const loreRoute = await world.route("campaigns/[campaignId]/lore-check");
 
 await test("an undo of the AI's change writes one direct row naming the audit row and the tool", async () => {
   const before = rows(world.campaignId).length;
@@ -184,11 +185,32 @@ await test("a narration edit keeps the narrator's take beside the person's and w
   // A second edit rewrites the person's take, never the narrator's.
   const second = story("The bridge holds, barely, as Kara steps onto it.");
   const again = await call(editRoute, "POST", { campaignId: world.campaignId, messageId: message.id }, { content: second });
-  const twice = (await again.json()).message;
+  const againBody = await again.json();
+  const twice = againBody.message;
   assert.deepEqual(twice.variants, [original, second]);
   const added = rows(world.campaignId).slice(before);
-  assert.equal(added.length, 2, "one row per edit");
+  assert.equal(added.length, 1, "the second edit rewrites the person's own take, which is not another fix to the AI");
   assert.ok(added.every((row) => row.kind === "narration_edit" && row.messageId === message.id && row.turnId === turn.id));
+  assert.equal(againBody.corrections, undefined, "no reason chips for rewording one's own take");
+});
+
+await test("accepting a lore check's rewrite keeps the narrator's take and writes one row, like an edit", async () => {
+  const turn = createDmTurn(world.campaignId, [], "ai");
+  const original = "The tower of Velm stands on the eastern shore.";
+  const message = dmLine(world, turn.id, original);
+  const before = rows(world.campaignId).length;
+  const rewrite = story("The tower of Velm stands on the western shore.");
+  const response = await call(loreRoute, "POST", { campaignId: world.campaignId }, { action: "accept", messageId: message.id, content: rewrite });
+  assert.equal(response.status, 200, await response.clone().text());
+  const answer = await response.json();
+  assert.deepEqual(answer.message.variants, [original, rewrite], "the narrator's wording is kept as a take");
+  assert.equal(answer.message.content, rewrite);
+  assert.equal(answer.message.editedTake, 1);
+  const added = rows(world.campaignId).slice(before);
+  assert.equal(added.length, 1);
+  assert.equal(added[0].kind, "narration_edit");
+  assert.equal(added[0].messageId, message.id);
+  assert.deepEqual(answer.corrections, [added[0].id], "the answer offers the reason chips");
 });
 
 await test("keepOriginalTake: rerolled takes stay, and the person's take is one of its own", () => {
@@ -411,7 +433,7 @@ await test("every writer records inside the fix's own transaction", () => {
   const writers = [
     "lib/sheet-undo.ts",
     "app/api/campaigns/[campaignId]/sheets/[sheetId]/route.ts",
-    "app/api/campaigns/[campaignId]/messages/[messageId]/edit/route.ts",
+    "lib/dm/narration-edit.ts",
     "app/api/campaigns/[campaignId]/disputes/[disputeId]/route.ts",
     "app/api/campaigns/[campaignId]/dm/enemy-hp/route.ts",
     "app/api/campaigns/[campaignId]/dm/initiative/route.ts",

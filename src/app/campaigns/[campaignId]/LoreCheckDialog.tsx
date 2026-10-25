@@ -5,6 +5,7 @@ import { returnFocus } from "@/components/ui/return-focus";
 import { Check, Loader2, X } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
+import { offerCorrectionReason } from "@/lib/correction-offer";
 import { ui } from "@/lib/ui";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { SectionHead } from "@/components/ui/SectionHead";
@@ -110,6 +111,7 @@ export function LoreCheckDialog({
         return;
       }
       setAccepted(true);
+      offerCorrectionReason(campaignId, data);
     } catch {
       setError("Could not reach the server.");
     } finally {

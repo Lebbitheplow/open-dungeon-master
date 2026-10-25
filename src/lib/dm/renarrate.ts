@@ -47,7 +47,7 @@ export type RenarrateResult = { message: CampaignMessage; correctionId?: string 
 // The narration mp3 is keyed by message id, so a stale take would keep
 // playing under new prose. Regenerating overwrites the same file and
 // publishes tts_ready, which is all the client needs to swap.
-function refreshNarrationAudio(campaign: Campaign, message: CampaignMessage) {
+export function refreshNarrationAudio(campaign: Campaign, message: CampaignMessage) {
   if (!campaign.gameSettings.ttsEnabled) {
     return;
   }
