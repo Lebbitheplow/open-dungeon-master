@@ -4,16 +4,9 @@ import { useState } from "react";
 import { iconCandidates, type IconRef } from "@/lib/icons";
 import { cn } from "@/lib/cn";
 
-// A painted icon on its plate: a disc lit from its centre with a thin gold
-// rim, the same plate for every icon so a list of them reads as one set. Many
-// paintings are dark figures (a hooded rogue, a petrified statue); the lit
-// centre and a hair of warm rim light keep them readable on the night theme. Tries the thing's
-// own painting, then its family's, then renders nothing, so a homebrew spell
-// never shows a broken image (src/lib/icons.ts). The card paintings ship with a
-// wide margin, so the image is scaled up inside the plate and the rim crops it.
-// The UI glyphs and condition chips are drawn to fill their square
-// (scripts/glyph-set.mjs) and read by their whole silhouette, so they are
-// scaled only enough to meet the rim.
+// Action illustrations use the available rectangle without cropping or zoom.
+// Other icons retain their lit circular plate and magnification. The fallback
+// chain tries the requested painting, then its family, then renders nothing.
 const SNUG_KINDS = new Set<IconRef["kind"]>(["glyph", "condition"]);
 
 export function GameIcon({ icon, size = "size-6", className }: { icon: IconRef; size?: string; className?: string }) {
@@ -28,11 +21,15 @@ export function GameIcon({ icon, size = "size-6", className }: { icon: IconRef; 
   if (attempt >= candidates.length) {
     return null;
   }
+  const actionArt = candidates[attempt].startsWith("/assets/icons/action/");
   return (
     <span
       aria-hidden="true"
       className={cn(
-        "inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full border border-amber-700/50 bg-[radial-gradient(circle_at_50%_36%,#5b4c3a,#1d1712_80%)] p-px shadow-inner",
+        "inline-flex shrink-0 items-center justify-center overflow-hidden",
+        actionArt
+          ? "rounded-md"
+          : "rounded-full border border-amber-700/50 bg-[radial-gradient(circle_at_50%_36%,#5b4c3a,#1d1712_80%)] p-px shadow-inner",
         size,
         className,
       )}
@@ -44,8 +41,9 @@ export function GameIcon({ icon, size = "size-6", className }: { icon: IconRef; 
         loading="lazy"
         decoding="async"
         className={cn(
-          "size-full object-contain [filter:drop-shadow(0_0_1px_rgba(255,224,160,0.75))_brightness(1.06)]",
-          SNUG_KINDS.has(icon.kind) ? "scale-[1.25]" : "scale-[1.7]",
+          "size-full object-contain",
+          !actionArt && "[filter:drop-shadow(0_0_1px_rgba(255,224,160,0.75))_brightness(1.06)]",
+          !actionArt && (SNUG_KINDS.has(icon.kind) ? "scale-[1.25]" : "scale-[1.7]"),
         )}
         onError={() => setAttempt((n) => n + 1)}
       />

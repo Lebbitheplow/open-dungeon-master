@@ -220,7 +220,7 @@ export function bonusStrikeCards(
       rules,
       resource: "",
       condition: "",
-      icon: srd ? { kind: "item", key: srd.name, family: "item-weapon" } : { kind: "action", key: "attack" },
+      icon: srd ? { kind: "item", key: srd.name, family: "item-weapon" } : { kind: "action", key: "unarmed-strike" },
       target: "enemy",
       toHit: profile.toHit,
       damage: profile.damageExpression,

@@ -1,0 +1,204 @@
+[
+  {
+    "viewport": "desktop",
+    "measured": [
+      {
+        "kind": "action",
+        "areaWidth": 130,
+        "frameWidth": 130,
+        "frameHeight": 56,
+        "transform": "none",
+        "scale": "none",
+        "objectFit": "contain",
+        "borderRadius": "6px",
+        "naturalWidth": 256,
+        "naturalHeight": 128
+      },
+      {
+        "kind": "action",
+        "areaWidth": 130,
+        "frameWidth": 130,
+        "frameHeight": 56,
+        "transform": "none",
+        "scale": "none",
+        "objectFit": "contain",
+        "borderRadius": "6px",
+        "naturalWidth": 256,
+        "naturalHeight": 128
+      },
+      {
+        "kind": "action",
+        "areaWidth": 130,
+        "frameWidth": 130,
+        "frameHeight": 56,
+        "transform": "none",
+        "scale": "none",
+        "objectFit": "contain",
+        "borderRadius": "6px",
+        "naturalWidth": 256,
+        "naturalHeight": 128
+      },
+      {
+        "kind": "action",
+        "areaWidth": 130,
+        "frameWidth": 130,
+        "frameHeight": 56,
+        "transform": "none",
+        "scale": "none",
+        "objectFit": "contain",
+        "borderRadius": "6px",
+        "naturalWidth": 256,
+        "naturalHeight": 128
+      },
+      {
+        "kind": "action",
+        "areaWidth": 130,
+        "frameWidth": 130,
+        "frameHeight": 56,
+        "transform": "none",
+        "scale": "none",
+        "objectFit": "contain",
+        "borderRadius": "6px",
+        "naturalWidth": 256,
+        "naturalHeight": 128
+      },
+      {
+        "kind": "action",
+        "areaWidth": 130,
+        "frameWidth": 130,
+        "frameHeight": 56,
+        "transform": "none",
+        "scale": "none",
+        "objectFit": "contain",
+        "borderRadius": "6px",
+        "naturalWidth": 256,
+        "naturalHeight": 128
+      },
+      {
+        "kind": "action",
+        "areaWidth": 130,
+        "frameWidth": 130,
+        "frameHeight": 56,
+        "transform": "none",
+        "scale": "none",
+        "objectFit": "contain",
+        "borderRadius": "6px",
+        "naturalWidth": 256,
+        "naturalHeight": 128
+      }
+    ],
+    "more": {
+      "x": 24,
+      "y": 1319,
+      "width": 80,
+      "height": 40
+    }
+  },
+  {
+    "viewport": "phone",
+    "measured": [
+      {
+        "kind": "action",
+        "areaWidth": 110,
+        "frameWidth": 110,
+        "frameHeight": 38,
+        "transform": "none",
+        "scale": "none",
+        "objectFit": "contain",
+        "borderRadius": "6px",
+        "naturalWidth": 256,
+        "naturalHeight": 128
+      },
+      {
+        "kind": "action",
+        "areaWidth": 110,
+        "frameWidth": 110,
+        "frameHeight": 38,
+        "transform": "none",
+        "scale": "none",
+        "objectFit": "contain",
+        "borderRadius": "6px",
+        "naturalWidth": 256,
+        "naturalHeight": 128
+      },
+      {
+        "kind": "action",
+        "areaWidth": 110,
+        "frameWidth": 110,
+        "frameHeight": 38,
+        "transform": "none",
+        "scale": "none",
+        "objectFit": "contain",
+        "borderRadius": "6px",
+        "naturalWidth": 256,
+        "naturalHeight": 128
+      },
+      {
+        "kind": "action",
+        "areaWidth": 110,
+        "frameWidth": 110,
+        "frameHeight": 38,
+        "transform": "none",
+        "scale": "none",
+        "objectFit": "contain",
+        "borderRadius": "6px",
+        "naturalWidth": 256,
+        "naturalHeight": 128
+      },
+      {
+        "kind": "action",
+        "areaWidth": 110,
+        "frameWidth": 110,
+        "frameHeight": 38,
+        "transform": "none",
+        "scale": "none",
+        "objectFit": "contain",
+        "borderRadius": "6px",
+        "naturalWidth": 256,
+        "naturalHeight": 128
+      },
+      {
+        "kind": "action",
+        "areaWidth": 110,
+        "frameWidth": 110,
+        "frameHeight": 38,
+        "transform": "none",
+        "scale": "none",
+        "objectFit": "contain",
+        "borderRadius": "6px",
+        "naturalWidth": 256,
+        "naturalHeight": 128
+      },
+      {
+        "kind": "action",
+        "areaWidth": 110,
+        "frameWidth": 110,
+        "frameHeight": 38,
+        "transform": "none",
+        "scale": "none",
+        "objectFit": "contain",
+        "borderRadius": "6px",
+        "naturalWidth": 256,
+        "naturalHeight": 128
+      }
+    ],
+    "more": {
+      "x": 24,
+      "y": 1973,
+      "width": 80,
+      "height": 40
+    }
+  },
+  {
+    "gallery": "gallery-standalone.html",
+    "count": 45,
+    "embedded": true,
+    "overflow": false
+  },
+  {
+    "gallery": "../complete-art-standalone.html",
+    "count": 243,
+    "embedded": true,
+    "overflow": false
+  }
+]

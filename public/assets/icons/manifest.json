@@ -23580,8 +23580,8 @@
       "key": "attack",
       "label": "Attack",
       "src": "/assets/icons/action/attack.webp",
-      "bytes": 3206,
-      "seed": 342606658
+      "bytes": 10152,
+      "provenance": "docs/art/action-cards-2026-10-15.json"
     },
     {
       "id": "action-cast",
@@ -23589,8 +23589,8 @@
       "key": "cast",
       "label": "Cast a spell",
       "src": "/assets/icons/action/cast.webp",
-      "bytes": 3226,
-      "seed": 1148912605
+      "bytes": 12162,
+      "provenance": "docs/art/action-cards-2026-10-15.json"
     },
     {
       "id": "action-dodge",
@@ -23598,8 +23598,8 @@
       "key": "dodge",
       "label": "Dodge",
       "src": "/assets/icons/action/dodge.webp",
-      "bytes": 3340,
-      "seed": 1080995585
+      "bytes": 12818,
+      "provenance": "docs/art/action-cards-2026-10-15.json"
     },
     {
       "id": "action-dash",
@@ -23607,8 +23607,8 @@
       "key": "dash",
       "label": "Dash",
       "src": "/assets/icons/action/dash.webp",
-      "bytes": 3508,
-      "seed": 2126407982
+      "bytes": 12916,
+      "provenance": "docs/art/action-cards-2026-10-15.json"
     },
     {
       "id": "action-disengage",
@@ -23616,8 +23616,8 @@
       "key": "disengage",
       "label": "Disengage",
       "src": "/assets/icons/action/disengage.webp",
-      "bytes": 1430,
-      "seed": 1838356565
+      "bytes": 18096,
+      "provenance": "docs/art/action-cards-2026-10-15.json"
     },
     {
       "id": "action-help",
@@ -23625,8 +23625,8 @@
       "key": "help",
       "label": "Help",
       "src": "/assets/icons/action/help.webp",
-      "bytes": 2950,
-      "seed": 270525081
+      "bytes": 7450,
+      "provenance": "docs/art/action-cards-2026-10-15.json"
     },
     {
       "id": "action-hide",
@@ -23634,8 +23634,8 @@
       "key": "hide",
       "label": "Hide",
       "src": "/assets/icons/action/hide.webp",
-      "bytes": 2866,
-      "seed": 131635382
+      "bytes": 10496,
+      "provenance": "docs/art/action-cards-2026-10-15.json"
     },
     {
       "id": "action-ready",
@@ -23643,8 +23643,8 @@
       "key": "ready",
       "label": "Ready",
       "src": "/assets/icons/action/ready.webp",
-      "bytes": 2666,
-      "seed": 1714093622
+      "bytes": 11950,
+      "provenance": "docs/art/action-cards-2026-10-15.json"
     },
     {
       "id": "action-grapple",
@@ -23652,8 +23652,8 @@
       "key": "grapple",
       "label": "Grapple",
       "src": "/assets/icons/action/grapple.webp",
-      "bytes": 2142,
-      "seed": 1264852370
+      "bytes": 7828,
+      "provenance": "docs/art/action-cards-2026-10-15.json"
     },
     {
       "id": "action-shove",
@@ -23661,8 +23661,8 @@
       "key": "shove",
       "label": "Shove",
       "src": "/assets/icons/action/shove.webp",
-      "bytes": 1970,
-      "seed": 1723747480
+      "bytes": 13636,
+      "provenance": "docs/art/action-cards-2026-10-15.json"
     },
     {
       "id": "action-use-object",
@@ -23670,8 +23670,8 @@
       "key": "use-object",
       "label": "Use an object",
       "src": "/assets/icons/action/use-object.webp",
-      "bytes": 1752,
-      "seed": 716515860
+      "bytes": 10238,
+      "provenance": "docs/art/action-cards-2026-10-15.json"
     },
     {
       "id": "action-end-turn",
@@ -23679,8 +23679,8 @@
       "key": "end-turn",
       "label": "End turn",
       "src": "/assets/icons/action/end-turn.webp",
-      "bytes": 2736,
-      "seed": 858383481
+      "bytes": 11432,
+      "provenance": "docs/art/action-cards-2026-10-15.json"
     },
     {
       "id": "action-search",
@@ -23688,8 +23688,8 @@
       "key": "search",
       "label": "Search",
       "src": "/assets/icons/action/search.webp",
-      "bytes": 2466,
-      "seed": 622510167
+      "bytes": 10854,
+      "provenance": "docs/art/action-cards-2026-10-15.json"
     },
     {
       "id": "action-escape",
@@ -23697,8 +23697,8 @@
       "key": "escape",
       "label": "Escape",
       "src": "/assets/icons/action/escape.webp",
-      "bytes": 2046,
-      "seed": 1924766121
+      "bytes": 12422,
+      "provenance": "docs/art/action-cards-2026-10-15.json"
     },
     {
       "id": "action-stand-up",
@@ -23706,8 +23706,8 @@
       "key": "stand-up",
       "label": "Stand up",
       "src": "/assets/icons/action/stand-up.webp",
-      "bytes": 3124,
-      "seed": 1461678133
+      "bytes": 10934,
+      "provenance": "docs/art/action-cards-2026-10-15.json"
     },
     {
       "id": "family-damage-fire",
@@ -23825,6 +23825,606 @@
       "src": "/assets/icons/family/damage-slashing.webp",
       "bytes": 2612,
       "seed": 920207400
+    },
+    {
+      "id": "action-unarmed-strike",
+      "group": "action",
+      "key": "unarmed-strike",
+      "label": "Unarmed strike",
+      "src": "/assets/icons/action/unarmed-strike.webp",
+      "bytes": 21526,
+      "provenance": "docs/art/natural-strikes-2026-10-24.json"
+    },
+    {
+      "id": "action-natural-attack",
+      "group": "action",
+      "key": "natural-attack",
+      "label": "Natural attack · fallback",
+      "src": "/assets/icons/action/natural-attack.webp",
+      "bytes": 21508,
+      "provenance": "docs/art/natural-strikes-2026-10-24.json"
+    },
+    {
+      "id": "action-weapon-club",
+      "group": "action",
+      "key": "weapon-club",
+      "label": "Club",
+      "src": "/assets/icons/action/weapon-club.webp",
+      "bytes": 10698,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-weapon-dagger",
+      "group": "action",
+      "key": "weapon-dagger",
+      "label": "Dagger",
+      "src": "/assets/icons/action/weapon-dagger.webp",
+      "bytes": 9740,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-weapon-greatclub",
+      "group": "action",
+      "key": "weapon-greatclub",
+      "label": "Greatclub",
+      "src": "/assets/icons/action/weapon-greatclub.webp",
+      "bytes": 16476,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-weapon-handaxe",
+      "group": "action",
+      "key": "weapon-handaxe",
+      "label": "Handaxe",
+      "src": "/assets/icons/action/weapon-handaxe.webp",
+      "bytes": 11488,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-weapon-javelin",
+      "group": "action",
+      "key": "weapon-javelin",
+      "label": "Javelin",
+      "src": "/assets/icons/action/weapon-javelin.webp",
+      "bytes": 6716,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-weapon-light-hammer",
+      "group": "action",
+      "key": "weapon-light-hammer",
+      "label": "Light Hammer",
+      "src": "/assets/icons/action/weapon-light-hammer.webp",
+      "bytes": 17306,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-weapon-mace",
+      "group": "action",
+      "key": "weapon-mace",
+      "label": "Mace",
+      "src": "/assets/icons/action/weapon-mace.webp",
+      "bytes": 9798,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-weapon-quarterstaff",
+      "group": "action",
+      "key": "weapon-quarterstaff",
+      "label": "Quarterstaff",
+      "src": "/assets/icons/action/weapon-quarterstaff.webp",
+      "bytes": 6374,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-weapon-sickle",
+      "group": "action",
+      "key": "weapon-sickle",
+      "label": "Sickle",
+      "src": "/assets/icons/action/weapon-sickle.webp",
+      "bytes": 9706,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-weapon-spear",
+      "group": "action",
+      "key": "weapon-spear",
+      "label": "Spear",
+      "src": "/assets/icons/action/weapon-spear.webp",
+      "bytes": 6912,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-weapon-light-crossbow",
+      "group": "action",
+      "key": "weapon-light-crossbow",
+      "label": "Light Crossbow",
+      "src": "/assets/icons/action/weapon-light-crossbow.webp",
+      "bytes": 14322,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-weapon-dart",
+      "group": "action",
+      "key": "weapon-dart",
+      "label": "Dart",
+      "src": "/assets/icons/action/weapon-dart.webp",
+      "bytes": 8268,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-weapon-shortbow",
+      "group": "action",
+      "key": "weapon-shortbow",
+      "label": "Shortbow",
+      "src": "/assets/icons/action/weapon-shortbow.webp",
+      "bytes": 13898,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-weapon-sling",
+      "group": "action",
+      "key": "weapon-sling",
+      "label": "Sling",
+      "src": "/assets/icons/action/weapon-sling.webp",
+      "bytes": 16570,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-weapon-battleaxe",
+      "group": "action",
+      "key": "weapon-battleaxe",
+      "label": "Battleaxe",
+      "src": "/assets/icons/action/weapon-battleaxe.webp",
+      "bytes": 11416,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-weapon-flail",
+      "group": "action",
+      "key": "weapon-flail",
+      "label": "Flail",
+      "src": "/assets/icons/action/weapon-flail.webp",
+      "bytes": 17922,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-weapon-glaive",
+      "group": "action",
+      "key": "weapon-glaive",
+      "label": "Glaive",
+      "src": "/assets/icons/action/weapon-glaive.webp",
+      "bytes": 6110,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-weapon-greataxe",
+      "group": "action",
+      "key": "weapon-greataxe",
+      "label": "Greataxe",
+      "src": "/assets/icons/action/weapon-greataxe.webp",
+      "bytes": 13096,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-weapon-greatsword",
+      "group": "action",
+      "key": "weapon-greatsword",
+      "label": "Greatsword",
+      "src": "/assets/icons/action/weapon-greatsword.webp",
+      "bytes": 14610,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-weapon-halberd",
+      "group": "action",
+      "key": "weapon-halberd",
+      "label": "Halberd",
+      "src": "/assets/icons/action/weapon-halberd.webp",
+      "bytes": 8584,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-weapon-lance",
+      "group": "action",
+      "key": "weapon-lance",
+      "label": "Lance",
+      "src": "/assets/icons/action/weapon-lance.webp",
+      "bytes": 7670,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-weapon-longsword",
+      "group": "action",
+      "key": "weapon-longsword",
+      "label": "Longsword",
+      "src": "/assets/icons/action/weapon-longsword.webp",
+      "bytes": 14766,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-weapon-maul",
+      "group": "action",
+      "key": "weapon-maul",
+      "label": "Maul",
+      "src": "/assets/icons/action/weapon-maul.webp",
+      "bytes": 17186,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-weapon-morningstar",
+      "group": "action",
+      "key": "weapon-morningstar",
+      "label": "Morningstar",
+      "src": "/assets/icons/action/weapon-morningstar.webp",
+      "bytes": 9784,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-weapon-pike",
+      "group": "action",
+      "key": "weapon-pike",
+      "label": "Pike",
+      "src": "/assets/icons/action/weapon-pike.webp",
+      "bytes": 5258,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-weapon-rapier",
+      "group": "action",
+      "key": "weapon-rapier",
+      "label": "Rapier",
+      "src": "/assets/icons/action/weapon-rapier.webp",
+      "bytes": 12654,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-weapon-scimitar",
+      "group": "action",
+      "key": "weapon-scimitar",
+      "label": "Scimitar",
+      "src": "/assets/icons/action/weapon-scimitar.webp",
+      "bytes": 9766,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-weapon-shortsword",
+      "group": "action",
+      "key": "weapon-shortsword",
+      "label": "Shortsword",
+      "src": "/assets/icons/action/weapon-shortsword.webp",
+      "bytes": 9858,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-weapon-trident",
+      "group": "action",
+      "key": "weapon-trident",
+      "label": "Trident",
+      "src": "/assets/icons/action/weapon-trident.webp",
+      "bytes": 8504,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-weapon-war-pick",
+      "group": "action",
+      "key": "weapon-war-pick",
+      "label": "War Pick",
+      "src": "/assets/icons/action/weapon-war-pick.webp",
+      "bytes": 10064,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-weapon-warhammer",
+      "group": "action",
+      "key": "weapon-warhammer",
+      "label": "Warhammer",
+      "src": "/assets/icons/action/weapon-warhammer.webp",
+      "bytes": 11950,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-weapon-whip",
+      "group": "action",
+      "key": "weapon-whip",
+      "label": "Whip",
+      "src": "/assets/icons/action/weapon-whip.webp",
+      "bytes": 17094,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-weapon-blowgun",
+      "group": "action",
+      "key": "weapon-blowgun",
+      "label": "Blowgun",
+      "src": "/assets/icons/action/weapon-blowgun.webp",
+      "bytes": 15612,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-weapon-hand-crossbow",
+      "group": "action",
+      "key": "weapon-hand-crossbow",
+      "label": "Hand Crossbow",
+      "src": "/assets/icons/action/weapon-hand-crossbow.webp",
+      "bytes": 14558,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-weapon-heavy-crossbow",
+      "group": "action",
+      "key": "weapon-heavy-crossbow",
+      "label": "Heavy Crossbow",
+      "src": "/assets/icons/action/weapon-heavy-crossbow.webp",
+      "bytes": 15660,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-weapon-longbow",
+      "group": "action",
+      "key": "weapon-longbow",
+      "label": "Longbow",
+      "src": "/assets/icons/action/weapon-longbow.webp",
+      "bytes": 12976,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-weapon-net",
+      "group": "action",
+      "key": "weapon-net",
+      "label": "Net",
+      "src": "/assets/icons/action/weapon-net.webp",
+      "bytes": 26554,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-gear-potion-of-healing",
+      "group": "action",
+      "key": "gear-potion-of-healing",
+      "label": "Potion of Healing",
+      "src": "/assets/icons/action/gear-potion-of-healing.webp",
+      "bytes": 17110,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-gear-spell-scroll",
+      "group": "action",
+      "key": "gear-spell-scroll",
+      "label": "Spell Scroll",
+      "src": "/assets/icons/action/gear-spell-scroll.webp",
+      "bytes": 21764,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-gear-acid",
+      "group": "action",
+      "key": "gear-acid",
+      "label": "Acid",
+      "src": "/assets/icons/action/gear-acid.webp",
+      "bytes": 15724,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-gear-alchemists-fire",
+      "group": "action",
+      "key": "gear-alchemists-fire",
+      "label": "Alchemist's Fire",
+      "src": "/assets/icons/action/gear-alchemists-fire.webp",
+      "bytes": 21644,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-gear-holy-water",
+      "group": "action",
+      "key": "gear-holy-water",
+      "label": "Holy Water",
+      "src": "/assets/icons/action/gear-holy-water.webp",
+      "bytes": 13986,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-gear-oil",
+      "group": "action",
+      "key": "gear-oil",
+      "label": "Oil",
+      "src": "/assets/icons/action/gear-oil.webp",
+      "bytes": 16956,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-gear-antitoxin",
+      "group": "action",
+      "key": "gear-antitoxin",
+      "label": "Antitoxin",
+      "src": "/assets/icons/action/gear-antitoxin.webp",
+      "bytes": 15424,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-gear-torch",
+      "group": "action",
+      "key": "gear-torch",
+      "label": "Torch",
+      "src": "/assets/icons/action/gear-torch.webp",
+      "bytes": 11502,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-gear-hooded-lantern",
+      "group": "action",
+      "key": "gear-hooded-lantern",
+      "label": "Hooded Lantern",
+      "src": "/assets/icons/action/gear-hooded-lantern.webp",
+      "bytes": 10170,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-gear-rope",
+      "group": "action",
+      "key": "gear-rope",
+      "label": "Rope",
+      "src": "/assets/icons/action/gear-rope.webp",
+      "bytes": 20496,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-gear-caltrops",
+      "group": "action",
+      "key": "gear-caltrops",
+      "label": "Caltrops",
+      "src": "/assets/icons/action/gear-caltrops.webp",
+      "bytes": 16896,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-gear-ball-bearings",
+      "group": "action",
+      "key": "gear-ball-bearings",
+      "label": "Ball Bearings",
+      "src": "/assets/icons/action/gear-ball-bearings.webp",
+      "bytes": 16226,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-gear-healers-kit",
+      "group": "action",
+      "key": "gear-healers-kit",
+      "label": "Healer's Kit",
+      "src": "/assets/icons/action/gear-healers-kit.webp",
+      "bytes": 18916,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-gear-tinderbox",
+      "group": "action",
+      "key": "gear-tinderbox",
+      "label": "Tinderbox",
+      "src": "/assets/icons/action/gear-tinderbox.webp",
+      "bytes": 18696,
+      "provenance": "docs/art/gear-cards-2026-10-24.json"
+    },
+    {
+      "id": "action-strike-bite-mammal",
+      "group": "action",
+      "key": "strike-bite-mammal",
+      "label": "Bite · mammal",
+      "src": "/assets/icons/action/strike-bite-mammal.webp",
+      "bytes": 21474,
+      "provenance": "docs/art/natural-strikes-2026-10-24.json"
+    },
+    {
+      "id": "action-strike-bite-reptile",
+      "group": "action",
+      "key": "strike-bite-reptile",
+      "label": "Bite · reptile",
+      "src": "/assets/icons/action/strike-bite-reptile.webp",
+      "bytes": 25130,
+      "provenance": "docs/art/natural-strikes-2026-10-24.json"
+    },
+    {
+      "id": "action-strike-bite-serpent",
+      "group": "action",
+      "key": "strike-bite-serpent",
+      "label": "Bite · snake",
+      "src": "/assets/icons/action/strike-bite-serpent.webp",
+      "bytes": 22782,
+      "provenance": "docs/art/natural-strikes-2026-10-24.json"
+    },
+    {
+      "id": "action-strike-bite-arachnid",
+      "group": "action",
+      "key": "strike-bite-arachnid",
+      "label": "Bite · spider",
+      "src": "/assets/icons/action/strike-bite-arachnid.webp",
+      "bytes": 25588,
+      "provenance": "docs/art/natural-strikes-2026-10-24.json"
+    },
+    {
+      "id": "action-strike-claw-mammal",
+      "group": "action",
+      "key": "strike-claw-mammal",
+      "label": "Claw · mammal",
+      "src": "/assets/icons/action/strike-claw-mammal.webp",
+      "bytes": 23444,
+      "provenance": "docs/art/natural-strikes-2026-10-24.json"
+    },
+    {
+      "id": "action-strike-ram-antlers",
+      "group": "action",
+      "key": "strike-ram-antlers",
+      "label": "Ram · antlers",
+      "src": "/assets/icons/action/strike-ram-antlers.webp",
+      "bytes": 22340,
+      "provenance": "docs/art/natural-strikes-2026-10-24.json"
+    },
+    {
+      "id": "action-strike-fist-primate",
+      "group": "action",
+      "key": "strike-fist-primate",
+      "label": "Fist · primate",
+      "src": "/assets/icons/action/strike-fist-primate.webp",
+      "bytes": 22252,
+      "provenance": "docs/art/natural-strikes-2026-10-24.json"
+    },
+    {
+      "id": "action-strike-beak",
+      "group": "action",
+      "key": "strike-beak",
+      "label": "Beak · bird",
+      "src": "/assets/icons/action/strike-beak.webp",
+      "bytes": 23814,
+      "provenance": "docs/art/natural-strikes-2026-10-24.json"
+    },
+    {
+      "id": "action-strike-talons",
+      "group": "action",
+      "key": "strike-talons",
+      "label": "Talons · bird",
+      "src": "/assets/icons/action/strike-talons.webp",
+      "bytes": 20700,
+      "provenance": "docs/art/natural-strikes-2026-10-24.json"
+    },
+    {
+      "id": "action-strike-tentacles",
+      "group": "action",
+      "key": "strike-tentacles",
+      "label": "Tentacles · cephalopod",
+      "src": "/assets/icons/action/strike-tentacles.webp",
+      "bytes": 24142,
+      "provenance": "docs/art/natural-strikes-2026-10-24.json"
+    },
+    {
+      "id": "action-strike-constrict",
+      "group": "action",
+      "key": "strike-constrict",
+      "label": "Constrict · snake",
+      "src": "/assets/icons/action/strike-constrict.webp",
+      "bytes": 17332,
+      "provenance": "docs/art/natural-strikes-2026-10-24.json"
+    },
+    {
+      "id": "action-strike-tusks",
+      "group": "action",
+      "key": "strike-tusks",
+      "label": "Tusk / Gore · tusked",
+      "src": "/assets/icons/action/strike-tusks.webp",
+      "bytes": 20802,
+      "provenance": "docs/art/natural-strikes-2026-10-24.json"
+    },
+    {
+      "id": "action-strike-tail-reptile",
+      "group": "action",
+      "key": "strike-tail-reptile",
+      "label": "Tail · reptile",
+      "src": "/assets/icons/action/strike-tail-reptile.webp",
+      "bytes": 24126,
+      "provenance": "docs/art/natural-strikes-2026-10-24.json"
     }
-  ]
+  ],
+  "dimensionsByGroup": {
+    "action": {
+      "width": 256,
+      "height": 128
+    }
+  }
 }

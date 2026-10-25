@@ -1,0 +1,585 @@
+{
+  "date": "2026-10-24",
+  "tool": "built-in image_gen",
+  "dimensions": [
+    256,
+    128
+  ],
+  "records": [
+    {
+      "id": "weapon-club",
+      "key": "Club",
+      "label": "Club",
+      "category": "weapon",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a short stout wooden cudgel, simple knobbed striking head, no metal spikes. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends.",
+      "revisions": [],
+      "sourceSha256": "9fd75da911ac195f587438be3913ab00747d854b73c4dfe4f37cc23f99e9b764",
+      "assetSha256": "30d3d2b0d982a61acb1ed7fb99b9e6010718c943b400b2c627ba268da1955083",
+      "bytes": 10698
+    },
+    {
+      "id": "weapon-dagger",
+      "key": "Dagger",
+      "label": "Dagger",
+      "category": "weapon",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a short double-edged steel dagger with simple crossguard, leather grip. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends.",
+      "revisions": [],
+      "sourceSha256": "16efe2017ce0923dbe77e5bf03840aedd856946229fe1f5fc76b548ab8127950",
+      "assetSha256": "8c8671450d3435aee688131cceadea913c80985ebc6acb2eb40d24b12a633458",
+      "bytes": 9740
+    },
+    {
+      "id": "weapon-greatclub",
+      "key": "Greatclub",
+      "label": "Greatclub",
+      "category": "weapon",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: an enormous two-handed rough oak club, thick heavy striking end. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends.",
+      "revisions": [],
+      "sourceSha256": "64cf2579de2a43a5e885096974ca271eed43427f6a708dbfa8208dc959dfda54",
+      "assetSha256": "402eb7b7eec23bd254e52ef515bae73bdbb45e36c41ef4344c580152c493a14a",
+      "bytes": 16476
+    },
+    {
+      "id": "weapon-handaxe",
+      "key": "Handaxe",
+      "label": "Handaxe",
+      "category": "weapon",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a compact one-handed wood handled axe with single crescent steel blade. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends.",
+      "revisions": [],
+      "sourceSha256": "f09e8b6f5e9010f903106b1ea2d3e053d010937d2ea19b23258bec3360f3fdfe",
+      "assetSha256": "b546af2a3a6b932023957eb25b12efc7603d8365f4313c5f4bf8f68a6e8f30e7",
+      "bytes": 11488
+    },
+    {
+      "id": "weapon-javelin",
+      "key": "Javelin",
+      "label": "Javelin",
+      "category": "weapon",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a slender wooden throwing javelin, small leaf shaped iron spearhead. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends.",
+      "revisions": [],
+      "sourceSha256": "1d6d529310fb9109caead4112c72c67a34b03953cae1c754b8574c55a903becb",
+      "assetSha256": "2452d4305ff63950730e384ba1e34873d681cf39dba1fa976444ad7f0a3b981f",
+      "bytes": 6716
+    },
+    {
+      "id": "weapon-light-hammer",
+      "key": "Light Hammer",
+      "label": "Light Hammer",
+      "category": "weapon",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a small one-handed throwing hammer, compact square steel head and short wooden handle. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends.",
+      "revisions": [],
+      "sourceSha256": "3fe393cbf0c71bc944acc576eb6e64adf066050e6c723c5f4d355285776c74cd",
+      "assetSha256": "00ae373167eb59e46241fd81db8b7d30687e1e2db863bb68e3bac8208cb79b4a",
+      "bytes": 17306
+    },
+    {
+      "id": "weapon-mace",
+      "key": "Mace",
+      "label": "Mace",
+      "category": "weapon",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a sturdy one-handed flanged steel mace, six blunt metal flanges, no spikes. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends.",
+      "revisions": [],
+      "sourceSha256": "8bbec20d6b15e3b420abf32df3ae6e0cea4707dc5196d5b322732af3bd9d0ac3",
+      "assetSha256": "ab0d3c5ed3921bbcca37045faf8fc5865487659e1e791566ee18c93190512b93",
+      "bytes": 9798
+    },
+    {
+      "id": "weapon-quarterstaff",
+      "key": "Quarterstaff",
+      "label": "Quarterstaff",
+      "category": "weapon",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a long straight oak fighting staff with small iron endcaps, no blade. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends.",
+      "revisions": [],
+      "sourceSha256": "c40f69e3210e93241610e1b9ae8b3ba3b90c26ed3d7761938748ce5dc461d1a3",
+      "assetSha256": "99fa12e1aa875e59cea043cbcf84c33241961d3199bf12b0047e8eee65928f3f",
+      "bytes": 6374
+    },
+    {
+      "id": "weapon-sickle",
+      "key": "Sickle",
+      "label": "Sickle",
+      "category": "weapon",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a short wooden handle and strongly curved inward sharpened crescent steel blade. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends.",
+      "revisions": [],
+      "sourceSha256": "f5a4a5de2071b8d010159f5340110bf60d1a780dcc97dc5f7e6f093605973130",
+      "assetSha256": "ca4fa1cbc1dbe1c8f86fca0b5889ebc8855b35657a977c2f6833379d94e93f45",
+      "bytes": 9706
+    },
+    {
+      "id": "weapon-spear",
+      "key": "Spear",
+      "label": "Spear",
+      "category": "weapon",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a wooden spear with broad leaf shaped steel spearhead. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends.",
+      "revisions": [],
+      "sourceSha256": "3ab498443f1a37945df3264bca5c2b9588fa8db624ea5fe5a670ecbb8b703670",
+      "assetSha256": "84740705355a2710b6c74463d9041079a9ddd5c1619523930a74d6c358cab5a8",
+      "bytes": 6912
+    },
+    {
+      "id": "weapon-light-crossbow",
+      "key": "Light Crossbow",
+      "label": "Light Crossbow",
+      "category": "weapon",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a light wooden medieval crossbow, steel bow limbs, taut string and seated bolt, recognizable crossbow construction. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends.",
+      "revisions": [],
+      "sourceSha256": "e267ca248ac07a2b8bdd2c9da1e0a8390402cbc7105cfb3b390f72bca67c4afd",
+      "assetSha256": "8a360fd76ae925c4d23b57c63e6e242d943a7f8a4dfc0a2e5e91b64f33ccc271",
+      "bytes": 14322
+    },
+    {
+      "id": "weapon-dart",
+      "key": "Dart",
+      "label": "Dart",
+      "category": "weapon",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a single small medieval throwing dart with iron point, slender shaft and feather flights, no modern plastic. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends.",
+      "revisions": [],
+      "sourceSha256": "c2e627991e90b2260d9d63a02ecbf76ff59f029e887737df1d6828c1a50fac2d",
+      "assetSha256": "d00fc9f4b61334f894430f054507766bf0c5f6780fbbf4e4aab4dfc14f2aa240",
+      "bytes": 8268
+    },
+    {
+      "id": "weapon-shortbow",
+      "key": "Shortbow",
+      "label": "Shortbow",
+      "category": "weapon",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a compact simple wooden shortbow with clearly visible bowstring and nocked arrow. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends.",
+      "revisions": [
+        {
+          "prompt": "Edit only the arrow placement in this shortbow icon. Keep the wooden bow, its shape, grip, string, colors, angle and transparent background. Remove the arrow currently running inside/along the bow. Place one shorter separate arrow below and to the right of the bow, parallel but clearly detached from the bow and bowstring, like a laid-out equipment illustration. Both bow tips must remain connected by one taut straight bowstring. No nocked arrow, no hands, no extra objects. Wide 2:1 canvas.",
+          "applied": true
+        },
+        {
+          "prompt": "Remove the small silver triangular arrowhead still stuck on the UPPER RIGHT wooden bow limb. That shiny silver piece is a leftover artifact. Replace it with continuous natural brown wood matching the limb. Preserve the separate COMPLETE arrow at the bottom right, the bow, string, colors, and transparent background unchanged. Only remove that one silver triangle on the upper right bow tip.",
+          "applied": false
+        }
+      ],
+      "sourceSha256": "f281b14e3ac84b14f536f79a54ea0192df4e7ae706231c7936ebd3eed67afc62",
+      "assetSha256": "e0ff638a01254ac758228f4940c661e4969a67601ce01a351aa1f56616c8b6c7",
+      "bytes": 13898
+    },
+    {
+      "id": "weapon-sling",
+      "key": "Sling",
+      "label": "Sling",
+      "category": "weapon",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a medieval leather sling pouch cradling one round stone with two long braided cords sweeping behind; not a slingshot. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends.",
+      "revisions": [],
+      "sourceSha256": "e92ec6b77996da8759eb709de1cc9df9ca01c33fc12d0dd9c262676612bc49e5",
+      "assetSha256": "2eaad66e8fb8bca7ee08e563d9e20adf15c9c63527f07519f9babe35c2047496",
+      "bytes": 16570
+    },
+    {
+      "id": "weapon-battleaxe",
+      "key": "Battleaxe",
+      "label": "Battleaxe",
+      "category": "weapon",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a substantial one-handed battle axe with a single broad bearded steel blade, leatherwrapped haft. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends.",
+      "revisions": [],
+      "sourceSha256": "e0e511473a9ab65b56ccf6b7301c66f5c184a7bcce4a425b053734c1df8f7370",
+      "assetSha256": "c30f905a3fb9ce5c77d28edc1d9d065e4f9546deb8ae8434a36cd037e1998105",
+      "bytes": 11416
+    },
+    {
+      "id": "weapon-flail",
+      "key": "Flail",
+      "label": "Flail",
+      "category": "weapon",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a medieval flail with wooden grip, one short chain and one spiked iron ball, chain clearly attached. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends.",
+      "revisions": [],
+      "sourceSha256": "a81345b5f7f8b390d1c77b57311d7593474fa98cf52eeecbaf1a8c62d91db131",
+      "assetSha256": "5e1fc4ce636fb0e25648762eec41f22a34d75de23da71b7269efdba4222235c9",
+      "bytes": 17922
+    },
+    {
+      "id": "weapon-glaive",
+      "key": "Glaive",
+      "label": "Glaive",
+      "category": "weapon",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a long polearm bearing one single-edged curved swordlike blade at the tip, no axe blade. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends.",
+      "revisions": [],
+      "sourceSha256": "ce883bfc6a7403c5e8380285900f9c2ad6bea9699c3b46d60474e0b0d557ae1b",
+      "assetSha256": "8571a4457abc660518a1e2ac212df6fd8c897390db1d9fb17bf7f963bc334625",
+      "bytes": 6110
+    },
+    {
+      "id": "weapon-greataxe",
+      "key": "Greataxe",
+      "label": "Greataxe",
+      "category": "weapon",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a massive two-handed double-bitted steel battle axe with long dark wooden haft. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends.",
+      "revisions": [],
+      "sourceSha256": "e1c01b0da6ac50694fbdebc0438abd5e2f794d5fb8aafdffce667c0bbb3a4fba",
+      "assetSha256": "333d51f935ecc0598b6aa85e7d6ef7e8051d7110a66f97ce807fa04b5eddcf69",
+      "bytes": 13096
+    },
+    {
+      "id": "weapon-greatsword",
+      "key": "Greatsword",
+      "label": "Greatsword",
+      "category": "weapon",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a long broad two-handed straight double-edged sword, long grip, strong crossguard. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends.",
+      "revisions": [],
+      "sourceSha256": "1250c366791f0897873001317020553a68b03b9eb7101436c08bb4c11339fd00",
+      "assetSha256": "69da9ea2eff7602926db9d73ae5772d2bb066f4e6742af40ddd97895b08f8ca0",
+      "bytes": 14610
+    },
+    {
+      "id": "weapon-halberd",
+      "key": "Halberd",
+      "label": "Halberd",
+      "category": "weapon",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a long wooden polearm with recognizable axe blade, top spear point and rear hook. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends.",
+      "revisions": [],
+      "sourceSha256": "157d805e3a46811048710f9e25bfa908fe9159c05215cd563812edb64c643c0c",
+      "assetSha256": "7097be1f38ec2ca02c7fd36e6004588d2cffa960f59caa56f8748d772abe4a95",
+      "bytes": 8584
+    },
+    {
+      "id": "weapon-lance",
+      "key": "Lance",
+      "label": "Lance",
+      "category": "weapon",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a long tapered jousting lance with handguard cup, broad base and narrow steel tip. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends.",
+      "revisions": [],
+      "sourceSha256": "02c67a4cf24d01801a9d2336f103f54fb9c269d32a047915660694264caeb598",
+      "assetSha256": "51617a16ca3fc8e2f5477b3c26bc74723f609734ed2593d7cbc704bde1eb721a",
+      "bytes": 7670
+    },
+    {
+      "id": "weapon-longsword",
+      "key": "Longsword",
+      "label": "Longsword",
+      "category": "weapon",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a medieval straight double-edged longsword with cruciform guard and hand-and-a-half leather grip. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends.",
+      "revisions": [],
+      "sourceSha256": "a56f3524a7f184692f14232ffc7eaf9600b9f163cd9fd102dacdf789ce8e6df6",
+      "assetSha256": "b65716adcddf57b62631227bb81340dcdaa3ed964e30082de1eb8da5da3e6c9d",
+      "bytes": 14766
+    },
+    {
+      "id": "weapon-maul",
+      "key": "Maul",
+      "label": "Maul",
+      "category": "weapon",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a massive two-handed hammer with oversized rectangular iron striking head on long wood haft. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends.",
+      "revisions": [],
+      "sourceSha256": "85ff9794960031cbc4ba45940301acabe6d0d9fefe4d6c0863f5d925300bad48",
+      "assetSha256": "e812128a8e7146482819236b970858e4345cda3088fff2d77c4c87862ced29a4",
+      "bytes": 17186
+    },
+    {
+      "id": "weapon-morningstar",
+      "key": "Morningstar",
+      "label": "Morningstar",
+      "category": "weapon",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a one-handed medieval morningstar, rigid wood haft topped by steel ball covered in spikes, NO chain. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends.",
+      "revisions": [],
+      "sourceSha256": "25f77c1737b73558b9bb4e0dcf48f626e9ff4ebc15dc8febc3d90b10d01057a5",
+      "assetSha256": "e008222abe4f5e462d0698c3d0010fceb3e5b69dccd0b3e91b50178523cb108d",
+      "bytes": 9784
+    },
+    {
+      "id": "weapon-pike",
+      "key": "Pike",
+      "label": "Pike",
+      "category": "weapon",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: an extra-long slender infantry pike, narrow diamond steel point and long unadorned wood shaft. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends.",
+      "revisions": [],
+      "sourceSha256": "610d60aa93230cc8ff7cc1cfd04b20b961cb0b334751ef8e6f4c1d1c12a979c2",
+      "assetSha256": "ab57093f5d2e696cd43c2a376baa425341319e725d38da69223c0526b1ff4449",
+      "bytes": 5258
+    },
+    {
+      "id": "weapon-rapier",
+      "key": "Rapier",
+      "label": "Rapier",
+      "category": "weapon",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a slender straight thrusting sword with ornate swept steel guard, thin blade, elegant narrow profile. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends.",
+      "revisions": [],
+      "sourceSha256": "91f5fbb08b90c38918c65552eb49724132767a274ef2ba83ae5c52c86c600c26",
+      "assetSha256": "b2de9796d41f4946003e681d33267ada10cd7226df38202cba819e3f24156be0",
+      "bytes": 12654
+    },
+    {
+      "id": "weapon-scimitar",
+      "key": "Scimitar",
+      "label": "Scimitar",
+      "category": "weapon",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a gracefully curved single-edged steel scimitar with broadening tip and simple brass guard. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends.",
+      "revisions": [],
+      "sourceSha256": "c460c2967aeb7878ba87b57c9a396b2d18cf51d1bf60c04f3e7d1220845ef885",
+      "assetSha256": "158fa31ebc26d4efbaac564e5c5ed3e0c3c7b4d412f7f3fa2394f9a7a4d0e631",
+      "bytes": 9766
+    },
+    {
+      "id": "weapon-shortsword",
+      "key": "Shortsword",
+      "label": "Shortsword",
+      "category": "weapon",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a compact broad straight double-edged shortsword with short leather grip, bronze guard, clearly shorter than longsword. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends.",
+      "revisions": [],
+      "sourceSha256": "c908b6edb47135c0a6e533283f496e70eef17168274c65ecd0667b21411bfcfb",
+      "assetSha256": "acf560c9de4ab34e2e54a6e0544e80a3978b79a655dad01ceafea5fd3277eab7",
+      "bytes": 9858
+    },
+    {
+      "id": "weapon-trident",
+      "key": "Trident",
+      "label": "Trident",
+      "category": "weapon",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a sturdy wooden trident shaft with exactly three steel prongs, center prong slightly longer. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends.",
+      "revisions": [],
+      "sourceSha256": "e10ceff2bab172b99f401ecf23cc4d0765cb2fe0adaf87fe0b9358df4017edea",
+      "assetSha256": "6a55a76958d2d3ffc149c796ebd08e1c77170bc5c4496a5e405fe3b17a866da5",
+      "bytes": 8504
+    },
+    {
+      "id": "weapon-war-pick",
+      "key": "War Pick",
+      "label": "War Pick",
+      "category": "weapon",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a medieval one-handed war pick with a sharply curved pointed steel beak opposite a small hammer face. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends.",
+      "revisions": [],
+      "sourceSha256": "5f231520a104297dc93f80c85b7e2bc7fb2185af74c7dca5058113c613096dea",
+      "assetSha256": "8a372143602899b7aa4c55ff21992725612230900b243e243314c42963409df9",
+      "bytes": 10064
+    },
+    {
+      "id": "weapon-warhammer",
+      "key": "Warhammer",
+      "label": "Warhammer",
+      "category": "weapon",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a one-handed steel warhammer with rectangular hammer face and short rear spike, leather grip. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends.",
+      "revisions": [],
+      "sourceSha256": "aa7ffd2077ad632f5ccbc9e4f4151b8e4673474aeb32a90da1510b32b92ab78c",
+      "assetSha256": "8d064ad12254e2cdac40393d04760e15a7e1817c22f0f5be63dd4d007ede464f",
+      "bytes": 11950
+    },
+    {
+      "id": "weapon-whip",
+      "key": "Whip",
+      "label": "Whip",
+      "category": "weapon",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a long braided leather whip in a sweeping S curve, clear thick handle tapering to thin lash. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends.",
+      "revisions": [],
+      "sourceSha256": "0bf1c86ffa8017b5e96da263874fdc245c25645269b25a109d695bfae8055472",
+      "assetSha256": "d7ff7657b80ccfd557f4c897c5a7ad30c31a0fef7f4fe0011a32d0cd7d9815cf",
+      "bytes": 17094
+    },
+    {
+      "id": "weapon-blowgun",
+      "key": "Blowgun",
+      "label": "Blowgun",
+      "category": "weapon",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a simple long wooden blowpipe with small feathered dart beside it, no modern firearm parts. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends.",
+      "revisions": [],
+      "sourceSha256": "58b488f24da674cca927a6391828c960310a6b0c7ce6c1efca2f3f082984857a",
+      "assetSha256": "813d9605a32d78337cca539e71bc7c07d1a8cf1113fac982134dd7f03364e82f",
+      "bytes": 15612
+    },
+    {
+      "id": "weapon-hand-crossbow",
+      "key": "Hand Crossbow",
+      "label": "Hand Crossbow",
+      "category": "weapon",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a tiny one-handed medieval crossbow, pistol-like wood grip, small horizontal bow limbs and loaded bolt, no firearm barrel. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends.",
+      "revisions": [],
+      "sourceSha256": "9688030455bb45fe5d631946a68f461abb3d0a47eb0da627a003cc6709a54cdc",
+      "assetSha256": "da39bc61425f96f61f9ab47ed99d17c75e4e89328c11e237ae550411c79bfe01",
+      "bytes": 14558
+    },
+    {
+      "id": "weapon-heavy-crossbow",
+      "key": "Heavy Crossbow",
+      "label": "Heavy Crossbow",
+      "category": "weapon",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a powerful heavy medieval crossbow with thick steel bow, large reinforced wooden stock, winding crank and loaded bolt. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends.",
+      "revisions": [],
+      "sourceSha256": "41b3af610b0aada601fe1e00bb3924cb2dc4e6be88b07810c317de8a30ead505",
+      "assetSha256": "65d3386a424298e81263d206b78b845a1b7650e07bd966e0a22e14de3cac7a61",
+      "bytes": 15660
+    },
+    {
+      "id": "weapon-longbow",
+      "key": "Longbow",
+      "label": "Longbow",
+      "category": "weapon",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a tall long wooden warbow with long tapered limbs, clearly taut string and a separate arrow laid alongside the bow, NOT nocked and NOT touching the bowstring, elegantly angled across wide canvas. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends.",
+      "revisions": [],
+      "sourceSha256": "85a464479b640191c877e5b143e9a516d1c88834662bfabacdb8928eb2dcac4a",
+      "assetSha256": "be68cff89ea27205edc52c98bbfe3e37556f2e61a91125731be17e07c0ea6ff7",
+      "bytes": 12976
+    },
+    {
+      "id": "weapon-net",
+      "key": "Net",
+      "label": "Net",
+      "category": "weapon",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a weighted woven rope throwing net spreading out in midair, open diamond mesh and lead weights around its edge. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends.",
+      "revisions": [],
+      "sourceSha256": "414d81408270e52f2ec027cfaac3ea5f1fdd6c5e09604e350fc2938b066ba37d",
+      "assetSha256": "2733a52051c50a53d48b27e02c92e3f201599a9da953e776cce5264de8cb4a71",
+      "bytes": 26554
+    },
+    {
+      "id": "gear-potion-of-healing",
+      "key": "Potion of Healing",
+      "label": "Potion of Healing",
+      "category": "gear",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a squat clear glass potion bottle with glowing ruby red healing liquid, cork stopper, simple gold neck wrap and tiny heart shaped glint. A clear balanced close-up that communicates what this usable adventuring item does. Keep every essential part in frame. No weapon, no hands.",
+      "revisions": [],
+      "sourceSha256": "21138e455ec577639872b43bfa5ad11bc9b8597ae00146222a709ae6b1a44fa5",
+      "assetSha256": "fa354fffbfbddb79dd4470bded72ca25cd58df0398e30d124e0e66dc18227879",
+      "bytes": 17110
+    },
+    {
+      "id": "gear-spell-scroll",
+      "key": "Spell Scroll",
+      "label": "Spell Scroll",
+      "category": "gear",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: an unfurled parchment spell scroll, two wooden rollers, luminous blue arcane geometric glyphs WITHOUT readable writing. A clear balanced close-up that communicates what this usable adventuring item does. Keep every essential part in frame. No weapon, no hands.",
+      "revisions": [],
+      "sourceSha256": "4b881ea6382f5361aabb78447fafe92c87188989fbbc0af9e09d92964f4b37d7",
+      "assetSha256": "0844047667b5feef2ad708b53f39f49ea1fbf52156bbc132b0b5e96967bca713",
+      "bytes": 21764
+    },
+    {
+      "id": "gear-acid",
+      "key": "Acid",
+      "label": "Acid",
+      "category": "gear",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a sturdy stoppered glass vial of vivid lime green acid, a few sizzling green droplets, wax-sealed neck. A clear balanced close-up that communicates what this usable adventuring item does. Keep every essential part in frame. No weapon, no hands.",
+      "revisions": [
+        {
+          "prompt": "Fix a physical inconsistency in this acid-vial icon: liquid currently pours through a cork. Remove the cork completely and show a clearly OPEN glass mouth with green acid flowing out naturally. Keep the tilted bottle, vivid lime green liquid and droplets, red wax ornament, painted style and transparent background exactly the same. No other changes.",
+          "applied": true
+        }
+      ],
+      "sourceSha256": "df88701f9e0256843fbebf339b95a2dfc4946cb2043c202f8c20bb195aaa6922",
+      "assetSha256": "9c4af9860cb4a36bcbb13ce7d4067e08b641c0f98c5aa06ad8fdc42376f16ac3",
+      "bytes": 15724
+    },
+    {
+      "id": "gear-alchemists-fire",
+      "key": "Alchemist's Fire",
+      "label": "Alchemist's Fire",
+      "category": "gear",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a round ceramic flask cracking open with bright orange flame spilling upward, clearly a throwable alchemical fire bottle. A clear balanced close-up that communicates what this usable adventuring item does. Keep every essential part in frame. No weapon, no hands.",
+      "revisions": [],
+      "sourceSha256": "0ca3e8a2dfd712fe04442475dbcba515818f6951a1b8117feaf31c02b0221313",
+      "assetSha256": "1280b8f04cbfe39e5d55ea9824894f6db88723d8495c1c5f1134ecbc7a963e6e",
+      "bytes": 21644
+    },
+    {
+      "id": "gear-holy-water",
+      "key": "Holy Water",
+      "label": "Holy Water",
+      "category": "gear",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a small clear faceted bottle of brilliant pale blue holy water, silver sunburst charm on its neck, sacred silver radiance. A clear balanced close-up that communicates what this usable adventuring item does. Keep every essential part in frame. No weapon, no hands.",
+      "revisions": [],
+      "sourceSha256": "b56f9ad7fd7bbe6e69964b8a5ef05591524c3b953656205493e5dc940bf9562c",
+      "assetSha256": "3757def1476225e6ca4889bf6b08efa52fad8933ff197456425e90509d8ee02f",
+      "bytes": 13986
+    },
+    {
+      "id": "gear-oil",
+      "key": "Oil",
+      "label": "Oil",
+      "category": "gear",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a squat brown earthenware oil flask with cork and narrow spout, amber oil droplet, no fire. A clear balanced close-up that communicates what this usable adventuring item does. Keep every essential part in frame. No weapon, no hands.",
+      "revisions": [],
+      "sourceSha256": "66c284fb62281daaab6f4e399827507103b10eeccb583d279a9e97d70dc7b1f3",
+      "assetSha256": "7022c72e94cbadda9c59e30b82cd6eca1cf74eb289e3f9e039e82847706dc60e",
+      "bytes": 16956
+    },
+    {
+      "id": "gear-antitoxin",
+      "key": "Antitoxin",
+      "label": "Antitoxin",
+      "category": "gear",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a small amber medicine vial containing turquoise antidote, cork, green herb sprig tied around neck. A clear balanced close-up that communicates what this usable adventuring item does. Keep every essential part in frame. No weapon, no hands.",
+      "revisions": [],
+      "sourceSha256": "67b36de7f63112252786cb515fd65c00a7b92166a5d5417c1d1a4a91cd91e25a",
+      "assetSha256": "8a7e189a168fce7d25e24e6141287548e9b431a24335a58ba690ac8f31b70de6",
+      "bytes": 15424
+    },
+    {
+      "id": "gear-torch",
+      "key": "Torch",
+      "label": "Torch",
+      "category": "gear",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a medieval wooden torch with clothwrapped head burning with bright orange fire, warm light. A clear balanced close-up that communicates what this usable adventuring item does. Keep every essential part in frame. No weapon, no hands.",
+      "revisions": [],
+      "sourceSha256": "42f09658bb410f13ff4f2f37b5bcd7ff47ce30e0d69e7ebab498d9ee6b41dc86",
+      "assetSha256": "57b9ef1e2bff581830c78be55fe061d849280fe5ca4b5720aa6dd1af646bc494",
+      "bytes": 11502
+    },
+    {
+      "id": "gear-hooded-lantern",
+      "key": "Hooded Lantern",
+      "label": "Hooded Lantern",
+      "category": "gear",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a sturdy brass hooded lantern with lit candle, warm light spilling through glass panels, carrying ring. A clear balanced close-up that communicates what this usable adventuring item does. Keep every essential part in frame. No weapon, no hands.",
+      "revisions": [],
+      "sourceSha256": "da642c7a80333111cb9655bbe0ff98f2f5c9e695cad210ed3964f4848cac00ab",
+      "assetSha256": "fe4fae5623e7e2f99ccd4b38b4d9882ef8902e18378d926099f4cd29a78394ac",
+      "bytes": 10170
+    },
+    {
+      "id": "gear-rope",
+      "key": "Rope",
+      "label": "Rope",
+      "category": "gear",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a neatly coiled thick hemp rope with one strong looped knot and trailing end, warm tan fibers. A clear balanced close-up that communicates what this usable adventuring item does. Keep every essential part in frame. No weapon, no hands.",
+      "revisions": [],
+      "sourceSha256": "e09b8ffe35944a59e9a488d1a9ff895ebe6ea3215d5e0f8ce31b65c4abf4fea8",
+      "assetSha256": "f3480de409030ebefc5ea19e0bc56835dbadbe88555a31c059b19cd205a33de6",
+      "bytes": 20496
+    },
+    {
+      "id": "gear-caltrops",
+      "key": "Caltrops",
+      "label": "Caltrops",
+      "category": "gear",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: five clearly separate dark iron four-pointed caltrops scattered out of a small open leather pouch, sharp spikes facing upward. A clear balanced close-up that communicates what this usable adventuring item does. Keep every essential part in frame. No weapon, no hands.",
+      "revisions": [],
+      "sourceSha256": "629e0349f19386ef3ac78f63c7130a5aef05a9d98dfec3efd3b9f65ca47f4a1a",
+      "assetSha256": "1b07d186f12f98d33cb57e599385113631eebf5a9f845637d01a6633dbd0b445",
+      "bytes": 16896
+    },
+    {
+      "id": "gear-ball-bearings",
+      "key": "Ball Bearings",
+      "label": "Ball Bearings",
+      "category": "gear",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: a small tilted open leather pouch spilling many shiny round steel ball bearings in a short spreading trail. A clear balanced close-up that communicates what this usable adventuring item does. Keep every essential part in frame. No weapon, no hands.",
+      "revisions": [],
+      "sourceSha256": "e71e83ca42aafce1763864c6d1a4838a15a8cb83c1297919a0e0828499a883da",
+      "assetSha256": "2be50afd4355f1ca680da510e30fa117eaf001baeea95a6e91cf68bfdd406081",
+      "bytes": 16226
+    },
+    {
+      "id": "gear-healers-kit",
+      "key": "Healer's Kit",
+      "label": "Healer's Kit",
+      "category": "gear",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: an open compact leather medical satchel with ivory rolled bandages, scissors and small herbal salve jar, no modern medical symbols. A clear balanced close-up that communicates what this usable adventuring item does. Keep every essential part in frame. No weapon, no hands.",
+      "revisions": [],
+      "sourceSha256": "d9bd8ec016c40f724743b9a14f56f4632927b45d872ca8b875f3c8d795febc76",
+      "assetSha256": "8841d2061585f318888436e863db939c350536ed10b0332e10e9f090c679a87d",
+      "bytes": 18916
+    },
+    {
+      "id": "gear-tinderbox",
+      "key": "Tinderbox",
+      "label": "Tinderbox",
+      "category": "gear",
+      "prompt": "Premium hand-painted fantasy game action-card illustration, matching a richly painted medieval RPG action set. Transparent background. Wide 2:1 rectangular composition, full object clearly visible with a small safe margin, large readable silhouette even at 112 by 54 pixels. Crisp polished materials, warm rim lighting, controlled contrast, subtle golden brushstroke motion accent, no circular medallion, no border, no frame, no label, no text, no scenery, no extra objects or people. Subject: an open small brass tinderbox with flint, curved steel striker and dry tinder catching one bright spark. A clear balanced close-up that communicates what this usable adventuring item does. Keep every essential part in frame. No weapon, no hands.",
+      "revisions": [],
+      "sourceSha256": "5259a8240f8ac89b97168284a71a7f1a6579960b4ba5606f0eb08731de5265a5",
+      "assetSha256": "223d3115bd78434b5836e73f960f9f40acfef03eb185e828289b115281724322",
+      "bytes": 18696
+    }
+  ]
+}

@@ -1,0 +1,257 @@
+[
+  {
+    "id": "weapon-club",
+    "label": "Club",
+    "subject": "a short stout wooden cudgel, simple knobbed striking head, no metal spikes. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends."
+  },
+  {
+    "id": "weapon-dagger",
+    "label": "Dagger",
+    "subject": "a short double-edged steel dagger with simple crossguard, leather grip. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends."
+  },
+  {
+    "id": "weapon-greatclub",
+    "label": "Greatclub",
+    "subject": "an enormous two-handed rough oak club, thick heavy striking end. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends."
+  },
+  {
+    "id": "weapon-handaxe",
+    "label": "Handaxe",
+    "subject": "a compact one-handed wood handled axe with single crescent steel blade. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends."
+  },
+  {
+    "id": "weapon-javelin",
+    "label": "Javelin",
+    "subject": "a slender wooden throwing javelin, small leaf shaped iron spearhead. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends."
+  },
+  {
+    "id": "weapon-light-hammer",
+    "label": "Light Hammer",
+    "subject": "a small one-handed throwing hammer, compact square steel head and short wooden handle. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends."
+  },
+  {
+    "id": "weapon-mace",
+    "label": "Mace",
+    "subject": "a sturdy one-handed flanged steel mace, six blunt metal flanges, no spikes. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends."
+  },
+  {
+    "id": "weapon-quarterstaff",
+    "label": "Quarterstaff",
+    "subject": "a long straight oak fighting staff with small iron endcaps, no blade. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends."
+  },
+  {
+    "id": "weapon-sickle",
+    "label": "Sickle",
+    "subject": "a short wooden handle and strongly curved inward sharpened crescent steel blade. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends."
+  },
+  {
+    "id": "weapon-spear",
+    "label": "Spear",
+    "subject": "a wooden spear with broad leaf shaped steel spearhead. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends."
+  },
+  {
+    "id": "weapon-light-crossbow",
+    "label": "Light Crossbow",
+    "subject": "a light wooden medieval crossbow, steel bow limbs, taut string and seated bolt, recognizable crossbow construction. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends."
+  },
+  {
+    "id": "weapon-dart",
+    "label": "Dart",
+    "subject": "a single small medieval throwing dart with iron point, slender shaft and feather flights, no modern plastic. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends."
+  },
+  {
+    "id": "weapon-shortbow",
+    "label": "Shortbow",
+    "subject": "a compact simple wooden shortbow with clearly visible bowstring and nocked arrow. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends."
+  },
+  {
+    "id": "weapon-sling",
+    "label": "Sling",
+    "subject": "a medieval leather sling pouch cradling one round stone with two long braided cords sweeping behind; not a slingshot. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends."
+  },
+  {
+    "id": "weapon-battleaxe",
+    "label": "Battleaxe",
+    "subject": "a substantial one-handed battle axe with a single broad bearded steel blade, leatherwrapped haft. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends."
+  },
+  {
+    "id": "weapon-flail",
+    "label": "Flail",
+    "subject": "a medieval flail with wooden grip, one short chain and one spiked iron ball, chain clearly attached. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends."
+  },
+  {
+    "id": "weapon-glaive",
+    "label": "Glaive",
+    "subject": "a long polearm bearing one single-edged curved swordlike blade at the tip, no axe blade. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends."
+  },
+  {
+    "id": "weapon-greataxe",
+    "label": "Greataxe",
+    "subject": "a massive two-handed double-bitted steel battle axe with long dark wooden haft. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends."
+  },
+  {
+    "id": "weapon-greatsword",
+    "label": "Greatsword",
+    "subject": "a long broad two-handed straight double-edged sword, long grip, strong crossguard. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends."
+  },
+  {
+    "id": "weapon-halberd",
+    "label": "Halberd",
+    "subject": "a long wooden polearm with recognizable axe blade, top spear point and rear hook. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends."
+  },
+  {
+    "id": "weapon-lance",
+    "label": "Lance",
+    "subject": "a long tapered jousting lance with handguard cup, broad base and narrow steel tip. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends."
+  },
+  {
+    "id": "weapon-longsword",
+    "label": "Longsword",
+    "subject": "a medieval straight double-edged longsword with cruciform guard and hand-and-a-half leather grip. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends."
+  },
+  {
+    "id": "weapon-maul",
+    "label": "Maul",
+    "subject": "a massive two-handed hammer with oversized rectangular iron striking head on long wood haft. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends."
+  },
+  {
+    "id": "weapon-morningstar",
+    "label": "Morningstar",
+    "subject": "a one-handed medieval morningstar, rigid wood haft topped by steel ball covered in spikes, NO chain. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends."
+  },
+  {
+    "id": "weapon-pike",
+    "label": "Pike",
+    "subject": "an extra-long slender infantry pike, narrow diamond steel point and long unadorned wood shaft. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends."
+  },
+  {
+    "id": "weapon-rapier",
+    "label": "Rapier",
+    "subject": "a slender straight thrusting sword with ornate swept steel guard, thin blade, elegant narrow profile. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends."
+  },
+  {
+    "id": "weapon-scimitar",
+    "label": "Scimitar",
+    "subject": "a gracefully curved single-edged steel scimitar with broadening tip and simple brass guard. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends."
+  },
+  {
+    "id": "weapon-shortsword",
+    "label": "Shortsword",
+    "subject": "a compact broad straight double-edged shortsword with short leather grip, bronze guard, clearly shorter than longsword. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends."
+  },
+  {
+    "id": "weapon-trident",
+    "label": "Trident",
+    "subject": "a sturdy wooden trident shaft with exactly three steel prongs, center prong slightly longer. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends."
+  },
+  {
+    "id": "weapon-war-pick",
+    "label": "War Pick",
+    "subject": "a medieval one-handed war pick with a sharply curved pointed steel beak opposite a small hammer face. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends."
+  },
+  {
+    "id": "weapon-warhammer",
+    "label": "Warhammer",
+    "subject": "a one-handed steel warhammer with rectangular hammer face and short rear spike, leather grip. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends."
+  },
+  {
+    "id": "weapon-whip",
+    "label": "Whip",
+    "subject": "a long braided leather whip in a sweeping S curve, clear thick handle tapering to thin lash. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends."
+  },
+  {
+    "id": "weapon-blowgun",
+    "label": "Blowgun",
+    "subject": "a simple long wooden blowpipe with small feathered dart beside it, no modern firearm parts. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends."
+  },
+  {
+    "id": "weapon-hand-crossbow",
+    "label": "Hand Crossbow",
+    "subject": "a tiny one-handed medieval crossbow, pistol-like wood grip, small horizontal bow limbs and loaded bolt, no firearm barrel. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends."
+  },
+  {
+    "id": "weapon-heavy-crossbow",
+    "label": "Heavy Crossbow",
+    "subject": "a powerful heavy medieval crossbow with thick steel bow, large reinforced wooden stock, winding crank and loaded bolt. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends."
+  },
+  {
+    "id": "weapon-longbow",
+    "label": "Longbow",
+    "subject": "a tall long wooden warbow with long tapered limbs, clearly taut string and nocked arrow, elegantly angled across wide canvas. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends."
+  },
+  {
+    "id": "weapon-net",
+    "label": "Net",
+    "subject": "a weighted woven rope throwing net spreading out in midair, open diamond mesh and lead weights around its edge. Show the weapon alone in a decisive dynamic low diagonal across the rectangle, grip or haft to the lower left and striking tip to the upper right. Prioritize its identifying construction, avoid foreshortening that hides its shape. No hands. Complete object, no cropped ends."
+  },
+  {
+    "id": "gear-potion-of-healing",
+    "label": "Potion of Healing",
+    "subject": "a squat clear glass potion bottle with glowing ruby red healing liquid, cork stopper, simple gold neck wrap and tiny heart shaped glint. A clear balanced close-up that communicates what this usable adventuring item does. Keep every essential part in frame. No weapon, no hands."
+  },
+  {
+    "id": "gear-spell-scroll",
+    "label": "Spell Scroll",
+    "subject": "an unfurled parchment spell scroll, two wooden rollers, luminous blue arcane geometric glyphs WITHOUT readable writing. A clear balanced close-up that communicates what this usable adventuring item does. Keep every essential part in frame. No weapon, no hands."
+  },
+  {
+    "id": "gear-acid",
+    "label": "Acid",
+    "subject": "a sturdy stoppered glass vial of vivid lime green acid, a few sizzling green droplets, wax-sealed neck. A clear balanced close-up that communicates what this usable adventuring item does. Keep every essential part in frame. No weapon, no hands."
+  },
+  {
+    "id": "gear-alchemists-fire",
+    "label": "Alchemist's Fire",
+    "subject": "a round ceramic flask cracking open with bright orange flame spilling upward, clearly a throwable alchemical fire bottle. A clear balanced close-up that communicates what this usable adventuring item does. Keep every essential part in frame. No weapon, no hands."
+  },
+  {
+    "id": "gear-holy-water",
+    "label": "Holy Water",
+    "subject": "a small clear faceted bottle of brilliant pale blue holy water, silver sunburst charm on its neck, sacred silver radiance. A clear balanced close-up that communicates what this usable adventuring item does. Keep every essential part in frame. No weapon, no hands."
+  },
+  {
+    "id": "gear-oil",
+    "label": "Oil",
+    "subject": "a squat brown earthenware oil flask with cork and narrow spout, amber oil droplet, no fire. A clear balanced close-up that communicates what this usable adventuring item does. Keep every essential part in frame. No weapon, no hands."
+  },
+  {
+    "id": "gear-antitoxin",
+    "label": "Antitoxin",
+    "subject": "a small amber medicine vial containing turquoise antidote, cork, green herb sprig tied around neck. A clear balanced close-up that communicates what this usable adventuring item does. Keep every essential part in frame. No weapon, no hands."
+  },
+  {
+    "id": "gear-torch",
+    "label": "Torch",
+    "subject": "a medieval wooden torch with clothwrapped head burning with bright orange fire, warm light. A clear balanced close-up that communicates what this usable adventuring item does. Keep every essential part in frame. No weapon, no hands."
+  },
+  {
+    "id": "gear-hooded-lantern",
+    "label": "Hooded Lantern",
+    "subject": "a sturdy brass hooded lantern with lit candle, warm light spilling through glass panels, carrying ring. A clear balanced close-up that communicates what this usable adventuring item does. Keep every essential part in frame. No weapon, no hands."
+  },
+  {
+    "id": "gear-rope",
+    "label": "Rope",
+    "subject": "a neatly coiled thick hemp rope with one strong looped knot and trailing end, warm tan fibers. A clear balanced close-up that communicates what this usable adventuring item does. Keep every essential part in frame. No weapon, no hands."
+  },
+  {
+    "id": "gear-caltrops",
+    "label": "Caltrops",
+    "subject": "five clearly separate dark iron four-pointed caltrops scattered out of a small open leather pouch, sharp spikes facing upward. A clear balanced close-up that communicates what this usable adventuring item does. Keep every essential part in frame. No weapon, no hands."
+  },
+  {
+    "id": "gear-ball-bearings",
+    "label": "Ball Bearings",
+    "subject": "a small tilted open leather pouch spilling many shiny round steel ball bearings in a short spreading trail. A clear balanced close-up that communicates what this usable adventuring item does. Keep every essential part in frame. No weapon, no hands."
+  },
+  {
+    "id": "gear-healers-kit",
+    "label": "Healer's Kit",
+    "subject": "an open compact leather medical satchel with ivory rolled bandages, scissors and small herbal salve jar, no modern medical symbols. A clear balanced close-up that communicates what this usable adventuring item does. Keep every essential part in frame. No weapon, no hands."
+  },
+  {
+    "id": "gear-tinderbox",
+    "label": "Tinderbox",
+    "subject": "an open small brass tinderbox with flint, curved steel striker and dry tinder catching one bright spark. A clear balanced close-up that communicates what this usable adventuring item does. Keep every essential part in frame. No weapon, no hands."
+  }
+]

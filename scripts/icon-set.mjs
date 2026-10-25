@@ -54,6 +54,8 @@ const CLASS_TONE = {
 };
 
 const BASIC_ACTIONS = [
+  ["unarmed-strike","Unarmed strike","a bare fist with simple wrist wraps punching forward"],
+  ["natural-attack","Natural attack","three short golden motion strokes converging into a neutral physical impact burst"],
   ["attack", "Attack", "a sword striking, a bright arc of steel"],
   ["cast", "Cast a spell", "a hand releasing a swirl of arcane light"],
   ["dodge", "Dodge", "a shadowy figure sidestepping a blade with motion lines"],
@@ -395,6 +397,12 @@ export async function buildIconList() {
     list.push(entry("condition", id, id, subject));
   }
   for (const [id, label, subject] of BASIC_ACTIONS) {
+    list.push(entry("action", id, label, subject));
+  }
+  for (const { id, label, subject } of readJson("scripts/card-art-subjects.json")) {
+    list.push(entry("action", id, label, subject));
+  }
+  for (const { id, label, subject } of readJson("scripts/natural-strike-subjects.json")) {
     list.push(entry("action", id, label, subject));
   }
 

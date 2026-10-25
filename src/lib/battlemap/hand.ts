@@ -17,6 +17,7 @@ import { bonusRouteFor, kiLeft, usesLeft, type BonusRoute, type MoveAction } fro
 import { effectiveSpeed, exhaustionSpeed } from "@/lib/dm/condition-logic";
 import { martialArtsApplies } from "@/lib/dm/pc-attack-options";
 import { attackOptionsFor, bonusStrikeCards, fastHandsCards, kiCards } from "@/lib/battlemap/hand-class";
+import { beastAttackIcon } from "@/lib/battlemap/attack-art";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { acBreakdownFor, computeSheetDerived } from "@/lib/srd";
 import { AMMO_LABELS, ammoKindForWeapon, findAmmo } from "@/lib/srd/ammunition";
@@ -123,7 +124,7 @@ function attackCards(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders
             dice: `${attack.damage} ${attack.type}${(attack.riders ?? []).map((rider) => ` + ${rider.dice} ${rider.type}`).join("")}`.trim(),
             roll: `${signed(attack.toHit)} to hit`,
             rules: `${sheet.wildShape.form} form.`,
-            icon: { kind: "action", key: "attack" },
+            icon: beastAttackIcon(sheet.wildShape.form, attack.name),
             toHit: attack.toHit,
             damage: attack.damage,
             damageType: attack.type,
@@ -184,7 +185,9 @@ function attackCards(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders
       roll: `${signed(profile.toHit)} to hit`,
       rules: notes.slice(0, 2).join(" "),
       resource: ammoKind ? (ammo ? `${AMMO_LABELS[ammoKind]} ${ammo.count}` : `No ${AMMO_LABELS[ammoKind]}`) : "",
-      icon: srd ? { kind: "item", key: srd.name, family: "item-weapon" } : { kind: "action", key: "attack" },
+      icon: natural
+        ? beastAttackIcon("", name)
+        : srd ? { kind: "item", key: srd.name, family: "item-weapon" } : { kind: "action", key: "unarmed-strike" },
       toHit: profile.toHit,
       damage,
       damageType: profile.damageType,
