@@ -273,6 +273,48 @@ export type ViewMessage =
 
 export type Anchor = [x: number, top: number, bottom: number];
 
+// Where a view drew each figure, kept outside the page's state. A view
+// reports anchors as its camera moves, as often as every frame, and only the
+// plate and the action ring read them: they subscribe to their own figure
+// (AddonBoardView.tsx useAnchor), so a camera sweep re-renders those two and
+// not the board around them. An anchor that did not move keeps its identity,
+// and a report that moved nothing tells nobody.
+export type AnchorStore = {
+  get: (tokenId: string) => Anchor | undefined;
+  set: (tokens: Record<string, Anchor>) => void;
+  subscribe: (listener: () => void) => () => void;
+};
+
+export function createAnchorStore(): AnchorStore {
+  let anchors: Record<string, Anchor> = {};
+  const listeners = new Set<() => void>();
+  return {
+    get: (tokenId) => anchors[tokenId],
+    set: (tokens) => {
+      let moved = Object.keys(tokens).length !== Object.keys(anchors).length;
+      const next: Record<string, Anchor> = {};
+      for (const [id, anchor] of Object.entries(tokens)) {
+        const before = anchors[id];
+        if (before && before[0] === anchor[0] && before[1] === anchor[1] && before[2] === anchor[2]) {
+          next[id] = before;
+        } else {
+          next[id] = anchor;
+          moved = true;
+        }
+      }
+      if (!moved) return;
+      anchors = next;
+      for (const listener of listeners) listener();
+    },
+    subscribe: (listener) => {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+  };
+}
+
 const MAX_ANCHORS = 300;
 
 function readAnchors(raw: unknown): Record<string, Anchor> | null {

@@ -65,7 +65,7 @@ I/O, so the browser, the tests and `scripts/check-addon.mjs` share them.
 |---|---|
 | `manifest.ts` | The `addon.json` schema (client-safe): fields, permissions, settings and option fields, setup, conflicts, exclusive, `addonFit`, `ADDON_API_VERSION`. `docs/addons/addon.schema.json` is generated from it |
 | `contracts.ts` | Each extension point's arguments and result schema (client-safe), `toolPayload`, `normalizeOptionValues` |
-| `board-bridge.ts` | The board view contract (client-safe): the snapshot, the messages both ways, `BOARD_BRIDGE_VERSION` |
+| `board-bridge.ts` | The board view contract (client-safe): the snapshot, the messages both ways, `BOARD_BRIDGE_VERSION`, and the anchor store the plate and the action ring read |
 | `registry-index.ts` | The downloader list's entry schema (client-safe): source pinned by repository, folder and commit, content hash; `sourceFacts` |
 | `catalog-entry.ts` | Building an entry from a manifest, keeping the list sorted, offline checks (client-safe); used by the tool, the tests and CI |
 | `registry.ts` | Which list to read (the ODM repository's `main`, the bundled copy as a fallback), `fetchCapped` (https on every hop, capped), downloading an entry's commit |

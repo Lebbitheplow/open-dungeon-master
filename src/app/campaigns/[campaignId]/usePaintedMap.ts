@@ -20,8 +20,10 @@ type Picture = { mapId: string; canvas: HTMLCanvasElement };
 // (BattleMapGrid.tsx), so a repaint costs the render and nothing more: no
 // WebP encode, no object URL, no second decode. The previous picture stays
 // up while a newly explored room is painted, so walking through a door never
-// flashes the board back to flat tiles.
-export function usePaintedMap(view: PlayerMapView | null, genre: string | null | undefined): HTMLCanvasElement | null {
+// flashes the board back to flat tiles. Paused (an addon's view covers the
+// board) nothing new is painted; a picture already painted stays, for when
+// the board shows again.
+export function usePaintedMap(view: PlayerMapView | null, genre: string | null | undefined, paused = false): HTMLCanvasElement | null {
   const [picture, setPicture] = useState<Picture | null>(null);
   // The device setting, so flipping it repaints or clears an open board at once.
   const enabled = useSyncExternalStore(onPaintedMapsChange, paintedMapsOn, () => true);
@@ -33,7 +35,7 @@ export function usePaintedMap(view: PlayerMapView | null, genre: string | null |
   const wanted = Boolean(view) && !view?.backdrop && enabled;
 
   useEffect(() => {
-    if (!view || !wanted) {
+    if (!view || !wanted || paused) {
       return;
     }
     const quality = qualityNow();
@@ -77,7 +79,7 @@ export function usePaintedMap(view: PlayerMapView | null, genre: string | null |
     };
     // The view object changes every tick; the picture depends only on these.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapId, terrain, wanted, genre, skinKey, view?.width, view?.height, view?.theme]);
+  }, [mapId, terrain, wanted, paused, genre, skinKey, view?.width, view?.height, view?.theme]);
 
   useEffect(
     () => () => {

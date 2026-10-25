@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   boardFx,
   boardSnapshot,
@@ -8,6 +8,7 @@ import {
   fileForRequest,
   readViewMessage,
   type Anchor,
+  type AnchorStore,
   type BoardLook,
   type HostMessageBody,
   type ViewCameraState,
@@ -42,6 +43,13 @@ export function postTo(frame: HTMLIFrameElement | null, message: HostMessageBody
 }
 
 const NO_FX: FxEvent[] = [];
+const NO_STORE = () => () => {};
+
+// Where the view drew one figure, for the plate or the action ring that sits
+// on it; only a move of that figure re-renders the caller.
+export function useAnchor(store: AnchorStore | null, tokenId: string): Anchor | undefined {
+  return useSyncExternalStore(store ? store.subscribe : NO_STORE, () => store?.get(tokenId), () => undefined);
+}
 
 export function AddonBoardView({
   view,
@@ -195,6 +203,17 @@ export function AddonBoardView({
       postTo(frame.current, { type: "file", requestId, ok: false, name, error: "Not found." });
     }
 
+    // A view may report its figures several times a frame while its camera
+    // moves; the newest report is passed on once a frame.
+    let anchorFrame = 0;
+    let anchorsWaiting: Record<string, Anchor> | null = null;
+    function passAnchors() {
+      anchorFrame = 0;
+      const tokens = anchorsWaiting;
+      anchorsWaiting = null;
+      if (tokens && latest.current.view) latest.current.onAnchors?.(tokens);
+    }
+
     function onMessage(event: MessageEvent) {
       if (event.source !== frame.current?.contentWindow) return;
       const message = readViewMessage(event.data);
@@ -233,7 +252,10 @@ export function AddonBoardView({
           );
           break;
         case "anchors":
-          if (current.view) current.onAnchors?.(message.tokens);
+          if (current.view) {
+            anchorsWaiting = message.tokens;
+            if (!anchorFrame) anchorFrame = requestAnimationFrame(passAnchors);
+          }
           break;
         case "error":
           setProblem(message.message);
@@ -242,7 +264,10 @@ export function AddonBoardView({
       }
     }
     window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
+    return () => {
+      window.removeEventListener("message", onMessage);
+      cancelAnimationFrame(anchorFrame);
+    };
   }, [boardView.addonId]);
 
   return (
