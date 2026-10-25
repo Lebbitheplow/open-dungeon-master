@@ -158,7 +158,7 @@ export const SYSTEM_TOURS: Record<string, TourStep[]> = {
     {
       id: "draft",
       title: "Let the AI DM draft them",
-      body: "No time to build? The AI DM reads this adventure and proposes a party, and the builder's own rules make every sheet. Drafts arrive unoffered, marked as drafted until you edit them: look them over, then tick the ones players may take.",
+      body: "No time to build? The AI DM reads this adventure and proposes a hero for each seat of the party set above, and the builder's own rules make every sheet at that party's level. Drafts arrive unoffered, marked as drafted until you edit them: look them over, then tick the ones players may take.",
       anchors: ["party-draft"],
     },
     {

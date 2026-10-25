@@ -2,10 +2,12 @@
 
 import { Loader2, Sparkles } from "lucide-react";
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { SectionHead } from "@/components/ui/SectionHead";
-import { Select } from "@/components/ui/Select";
+import { DRAFT_COUNT_MAX } from "@/lib/dm/pregen-draft-logic";
+import type { TargetParty } from "@/lib/workshop/kind";
 
 // "Draft pregens" (src/lib/dm/pregen-draft.ts): the AI DM reads the
 // workshop's adventure and proposes a party, and the builder's own rules
@@ -13,14 +15,30 @@ import { Select } from "@/components/ui/Select";
 // player until the DM ticks Offer to players. With no AI DM set up the
 // button is off and says why.
 
-export type DraftReadiness = { ready: boolean; reason: string; defaultCount: number; maxCount: number };
+export type DraftReadiness = { ready: boolean; reason: string };
 
 // Whether this workshop's AI DM can draft, or null while asking. A failed
-// ask leaves the button off with a reason rather than guessing.
-export function useDraftReadiness(workshopId: string, enabled = true): DraftReadiness | null {
+// ask leaves the button off with a reason rather than guessing. Asked again
+// when the DM comes back to it (from Admin or the workshop's Story AI, in
+// another tab, or in the apps, which keep a screen mounted behind the next
+// one), so a model set up meanwhile turns the button on without a reload.
+function useDraftReadiness(workshopId: string): DraftReadiness | null {
   const [readiness, setReadiness] = useState<DraftReadiness | null>(null);
+  const pathname = usePathname();
+  const [asked, setAsked] = useState(0);
   useEffect(() => {
-    if (!enabled || !workshopId) {
+    const again = () => {
+      if (document.visibilityState === "visible") setAsked((count) => count + 1);
+    };
+    window.addEventListener("focus", again);
+    document.addEventListener("visibilitychange", again);
+    return () => {
+      window.removeEventListener("focus", again);
+      document.removeEventListener("visibilitychange", again);
+    };
+  }, []);
+  useEffect(() => {
+    if (!workshopId) {
       return;
     }
     let cancelled = false;
@@ -30,29 +48,30 @@ export function useDraftReadiness(workshopId: string, enabled = true): DraftRead
         if (cancelled) return;
         setReadiness(
           response.ok
-            ? { ready: Boolean(payload.ready), reason: payload.reason ?? "", defaultCount: payload.defaultCount ?? 4, maxCount: payload.maxCount ?? 6 }
-            : { ready: false, reason: payload.error ?? "Could not ask whether the AI DM can draft.", defaultCount: 4, maxCount: 6 },
+            ? { ready: Boolean(payload.ready), reason: payload.reason ?? "" }
+            : { ready: false, reason: payload.error ?? "Could not ask whether the AI DM can draft." },
         );
       })
       .catch(() => {
-        if (!cancelled) setReadiness({ ready: false, reason: "Could not reach the server to ask whether the AI DM can draft.", defaultCount: 4, maxCount: 6 });
+        if (!cancelled) setReadiness({ ready: false, reason: "Could not reach the server to ask whether the AI DM can draft." });
       });
     return () => {
       cancelled = true;
     };
-  }, [workshopId, enabled]);
+  }, [workshopId, pathname, asked]);
   return readiness;
 }
 
 export type DraftResult = { drafted: string[]; changes: string[]; level: number; pregens: unknown[] };
 
 // One draft, as the route answers it: the result, or what went wrong.
-export async function requestDraft(workshopId: string, body: { count: number; campaignId?: string }): Promise<{ ok: true; result: DraftResult } | { ok: false; error: string }> {
+// The server drafts for the party the workshop has saved.
+export async function requestDraft(workshopId: string): Promise<{ ok: true; result: DraftResult } | { ok: false; error: string }> {
   try {
     const response = await fetch(`/api/workshops/${workshopId}/pregens/draft`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: "{}",
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -64,32 +83,29 @@ export async function requestDraft(workshopId: string, body: { count: number; ca
   }
 }
 
-export function countOptions(max: number) {
-  return Array.from({ length: max }, (_, index) => {
-    const value = String(index + 1);
-    return { value, label: `${value} ${index === 0 ? "hero" : "heroes"}` };
-  });
-}
-
 export function DraftPregensCard({
   workshopId,
+  targetParty,
   onDrafted,
 }: {
   workshopId: string;
+  // The party the workshop is built for (the bar at the top): one hero is
+  // drafted for each of its seats, at its level, as Build makes one.
+  targetParty: TargetParty;
   onDrafted: (result: DraftResult) => void;
 }) {
   const readiness = useDraftReadiness(workshopId);
-  const [count, setCount] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState<DraftResult | null>(null);
-  const chosen = Number(count || readiness?.defaultCount || 4);
+  const count = Math.min(DRAFT_COUNT_MAX, Math.max(1, targetParty.size));
+  const heroes = `${count} ${count === 1 ? "hero" : "heroes"}`;
 
   async function draft() {
     setBusy(true);
     setError("");
     setDone(null);
-    const outcome = await requestDraft(workshopId, { count: chosen });
+    const outcome = await requestDraft(workshopId);
     setBusy(false);
     if (!outcome.ok) {
       setError(outcome.error);
@@ -104,22 +120,14 @@ export function DraftPregensCard({
     <div className={cn(ui.card, "space-y-2 p-3")} data-pregen-draft data-tour="party-draft">
       <SectionHead title="Draft pregens with the AI DM" glyph="system-party" className="mb-0" />
       <p className="text-xs text-stone-400">
-        The AI DM reads this adventure and proposes a balanced party, each with a backstory tied to it. Every
-        sheet is built by the builder&apos;s own rules at level 1. Drafts are not offered to players until you
-        tick Offer to players.
+        The AI DM reads this adventure and proposes a balanced party of {heroes}, one for each seat of the party
+        set above, each with a backstory tied to it. The builder&apos;s own rules make every sheet at level{" "}
+        {targetParty.level}. Drafts are not offered to players until you tick Offer to players.
       </p>
       <div className="flex flex-wrap items-center gap-2">
-        <span className="w-40">
-          <Select
-            value={String(chosen)}
-            onChange={setCount}
-            label="How many pregens to draft"
-            disabled={busy || off}
-            options={countOptions(readiness?.maxCount ?? 6)}
-          />
-        </span>
         <button type="button" disabled={busy || off} onClick={() => void draft()} className={ui.btnPrimary} data-pregen-draft-go>
-          {busy ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />} Draft pregens
+          {busy ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />} Draft {count}{" "}
+          {count === 1 ? "pregen" : "pregens"}
         </button>
       </div>
       {readiness === null ? <p className="text-xs text-stone-500">Asking whether the AI DM can draft...</p> : null}
@@ -129,7 +137,7 @@ export function DraftPregensCard({
         </p>
       ) : null}
       <div aria-live="polite" className="space-y-1">
-        {busy ? <p className="text-xs text-stone-300">The AI DM is drafting {chosen} {chosen === 1 ? "hero" : "heroes"}. This can take a minute.</p> : null}
+        {busy ? <p className="text-xs text-stone-300">The AI DM is drafting {heroes}. This can take a minute.</p> : null}
         {done ? (
           <div className="reveal space-y-1 text-xs text-stone-300" data-pregen-draft-done>
             <p>

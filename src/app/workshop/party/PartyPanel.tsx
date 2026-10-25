@@ -230,6 +230,7 @@ export function PartyPanel({
 
       <DraftPregensCard
         workshopId={workshopId}
+        targetParty={targetParty}
         onDrafted={(result) => {
           setPregens(result.pregens as Pregen[]);
           setVersion((current) => current + 1);

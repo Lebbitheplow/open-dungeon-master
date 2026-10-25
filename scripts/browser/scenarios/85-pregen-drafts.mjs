@@ -1,7 +1,9 @@
 // AI-drafted pregens (src/lib/dm/pregen-draft.ts). A workshop with an
 // adventure and no pregens: on a server with no model, Draft pregens is off
-// and says why. Pointed at a stand-in model, the DM drafts four: they land on
-// the roster marked Drafted by the AI DM, none of them offered to players,
+// and says why. Pointed at a stand-in model, the DM drafts four, one for each
+// seat of the workshop's party (four at level 3, the default), with no count
+// to pick: they land on the roster marked Drafted by the AI DM at the party's
+// level, none of them offered to players,
 // and the class the builder does not offer (a gunslinger) is said to have
 // fallen back. A second press that the stand-in answers with prose instead
 // of heroes says nothing was drafted, and the roster keeps its four. The
@@ -76,12 +78,18 @@ export default {
         data: { textProvider: "custom", customBaseUrl: `http://127.0.0.1:${port}/v1`, customModel: "drafting-test-model" },
       });
       check(pointed.ok(), `pointing the workshop at the stand-in answered ${pointed.status()}`);
+      // Away and back, as a DM who set up a model elsewhere comes back: the
+      // apps keep the Party screen mounted behind the next one, and the card
+      // asks again when it is shown.
+      await t.open("/workshop");
       await t.open(`/workshop/${id}?system=party`);
       await eventually(() => card.count(), { timeoutMs: 30_000, label: "the card again" });
       await eventually(async () => !(await go.isDisabled()), { timeoutMs: 20_000, label: "Draft pregens on" });
       check((await reason.count()) === 0, "a reason still shows with an AI DM set up");
       const size = await go.boundingBox();
       check(size && size.height >= 40, `Draft pregens is at least 40px tall (${size?.height})`);
+      check(/Draft 4 pregens/i.test(await go.innerText()), `the button says how many it drafts (${await go.innerText()})`);
+      check((await card.locator("select, [role='combobox'], [role='listbox']").count()) === 0, "the card still asks how many to draft");
 
       const drafted = page.waitForResponse(
         (response) => response.url().endsWith(`/api/workshops/${id}/pregens/draft`) && response.request().method() === "POST",
@@ -92,7 +100,7 @@ export default {
       const done = card.locator("[data-pregen-draft-done]");
       await eventually(() => done.count(), { timeoutMs: 20_000, label: "the draft's read-back" });
       const said = (await done.innerText()).replace(/\s+/g, " ");
-      check(/Drafted 4 pregens at level 1/.test(said), `the read-back counts the drafts (${said.slice(0, 160)})`);
+      check(/Drafted 4 pregens at level 3/.test(said), `the read-back counts the drafts (${said.slice(0, 160)})`);
       check(/Gunslinger is not a class the builder offers/.test(said), `the fallback is said (${said.slice(0, 400)})`);
 
       const marks = page.locator(`${root}[data-pregen-drafted]`).locator("visible=true");
@@ -103,7 +111,7 @@ export default {
         check(!(await ticks.nth(at).isChecked()), "a draft came offered to players");
       }
       const stored = await roster();
-      check(stored.length === 4 && stored.every((entry) => entry.drafted && !entry.offered), "the roster holds four unoffered drafts");
+      check(stored.length === 4 && stored.every((entry) => entry.drafted && !entry.offered && entry.level === 3), "the roster holds four unoffered drafts at the party's level");
       await marks.first().scrollIntoViewIfNeeded();
       await t.shot("drafted");
       if (t.viewport === "phone") {

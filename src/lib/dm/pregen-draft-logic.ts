@@ -9,8 +9,9 @@ import { textKey } from "@/lib/language/text-logic";
 // it (src/lib/characters/admit.ts). Nothing here touches the database or a
 // model, so scripts/test-pregen-drafts.mjs drives it directly.
 
-export const DRAFT_COUNT_DEFAULT = 4;
-export const DRAFT_COUNT_MAX = 6;
+// One hero for each seat of the party the workshop is built for (its target
+// party, src/lib/workshop/kind.ts), so the most is that party's largest.
+export const DRAFT_COUNT_MAX = 8;
 
 // The adventure as the prompt carries it. Clipped piece by piece and as a
 // whole, so a workshop with forty NPCs still sends a short request: the

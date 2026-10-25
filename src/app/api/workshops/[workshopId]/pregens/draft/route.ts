@@ -1,10 +1,10 @@
 import { z } from "zod";
 import { currentUser, unauthorized } from "@/lib/auth";
-import { getCampaignForUser } from "@/lib/db/campaigns";
 import { listPregens } from "@/lib/db/characters";
 import { getWorkshopForUser } from "@/lib/db/workshops";
 import { draftPregens, draftReadiness } from "@/lib/dm/pregen-draft";
-import { DRAFT_COUNT_DEFAULT, DRAFT_COUNT_MAX } from "@/lib/dm/pregen-draft-logic";
+import { DRAFT_COUNT_MAX } from "@/lib/dm/pregen-draft-logic";
+import { normalizeTargetParty } from "@/lib/workshop/kind";
 import { publicPregen } from "@/lib/workshop/pregen-roster";
 
 export const runtime = "nodejs";
@@ -14,15 +14,21 @@ export const dynamic = "force-dynamic";
 // for this workshop's adventure and the quick-build engine builds each hero.
 // GET says whether it can (no AI DM set up: not, and why); POST drafts.
 //
-// The heroes are built at the starting level of the table being made from
-// this workshop when the campaign creator asks (campaignId), and at level 1
-// from the workshop itself: a player who takes one at a higher table gets
-// a copy at that table's level (src/lib/db/pregen-offers.ts).
+// One hero for each seat of the party the workshop is built for, at its
+// level (the target party bar), as the Party tool's Build makes one: the
+// roster's off-level flag stays quiet on a fresh draft, and a player who
+// takes one at another table gets a copy at that table's level
+// (src/lib/db/pregen-offers.ts). A count may be named, within that party's
+// largest size.
 
 const bodySchema = z.object({
-  count: z.number().int().min(1).max(DRAFT_COUNT_MAX).default(DRAFT_COUNT_DEFAULT),
-  campaignId: z.string().min(1).max(80).optional(),
+  count: z.number().int().min(1).max(DRAFT_COUNT_MAX).optional(),
 });
+
+function draftSize(workshop: { gameSettings: { targetParty?: unknown } }) {
+  const party = normalizeTargetParty(workshop.gameSettings.targetParty);
+  return { count: Math.min(DRAFT_COUNT_MAX, party.size), level: party.level };
+}
 
 // One draft at a time per workshop: a second press while the AI DM is
 // still answering would draft a second party.
@@ -50,7 +56,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ wor
     return resolved.error;
   }
   const readiness = await draftReadiness(resolved.workshop);
-  return Response.json({ ...readiness, defaultCount: DRAFT_COUNT_DEFAULT, maxCount: DRAFT_COUNT_MAX });
+  return Response.json({ ...readiness, ...draftSize(resolved.workshop) });
 }
 
 export async function POST(request: Request, { params }: { params: Promise<{ workshopId: string }> }) {
@@ -64,14 +70,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ wor
   if (!parsed.success) {
     return Response.json({ error: `Draft between 1 and ${DRAFT_COUNT_MAX} pregens.` }, { status: 400 });
   }
-  let level = 1;
-  if (parsed.data.campaignId) {
-    const campaign = getCampaignForUser(parsed.data.campaignId, user.id);
-    if (!campaign || campaign.ownerUserId !== user.id) {
-      return Response.json({ error: "Campaign not found." }, { status: 404 });
-    }
-    level = Math.min(20, Math.max(1, campaign.startingLevel || 1));
-  }
+  const party = draftSize(workshop);
+  const count = parsed.data.count ?? party.count;
+  const { level } = party;
   const readiness = await draftReadiness(workshop);
   if (!readiness.ready) {
     return Response.json({ error: readiness.reason, reason: "no_ai" }, { status: 409 });
@@ -81,7 +82,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ wor
   }
   drafting().add(workshop.id);
   try {
-    const outcome = await draftPregens({ workshop, userId: user.id, count: parsed.data.count, level });
+    const outcome = await draftPregens({ workshop, userId: user.id, count, level });
     if (!outcome.ok) {
       return Response.json({ error: outcome.error }, { status: outcome.status });
     }
