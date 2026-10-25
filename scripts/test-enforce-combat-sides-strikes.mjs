@@ -15,10 +15,12 @@ import assert from "node:assert/strict";
 import { openWorld } from "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
 import { combatKit, DUMMY, TRAINED } from "./lib/enforce-combat.mjs";
+import { monsterKit } from "./lib/enforce-monsters.mjs";
 
 const { test, finish } = suite("test-enforce-combat-sides-strikes");
 const world = await openWorld();
 const kit = await combatKit(world);
+const mk = await monsterKit(world, kit);
 const encounters = await import("../src/lib/db/encounters.ts");
 const { moveToSide } = await import("../src/lib/dm/combat-sides.ts");
 const { sideOf } = await import("../src/lib/dm/combatant.ts");
@@ -78,6 +80,28 @@ await test("A dominated wolf has Pack Tactics' advantage on a goblin with a part
   assert.ok((bite.result.conditionEffects ?? []).some((note) => /Pack Tactics/.test(note)), JSON.stringify(bite.result.conditionEffects));
   assert.ok(kit.enemy(goblinA.id).conditions.includes("prone"), "the rider knocked it prone");
   assert.equal(kit.enemy(goblinA.id).conditionMeta.prone?.source, wolf.id);
+});
+
+await test("The model's claim of advantage for a dominated creature is held to the rule a claim on a character is: flanking is set aside, a named circumstance stands", async () => {
+  const { hob, goblinA } = await stage();
+  dominate(hob);
+  kit.place(hob.id, 12, 8);
+  kit.place(goblinA.id, 13, 8);
+  // The model's call waits for the creature's turn: end_turn has handed it over.
+  const upNext = () => {
+    const encounter = world.encounter();
+    encounters.saveEncounter({ ...encounter, legendary: { ...encounter.legendary, due: [hob.id] } });
+  };
+  const d20s = (call) => call.rolled.filter((die) => die.sides === 20).length;
+  upNext();
+  const flanked = await mk.forced([18, 4], () => mk.ai(mk.aiTurn(), "enemy_attack", { enemyId: hob.id, targetCharacterId: goblinA.id, attack: "Longsword", advantage: "advantage", advantageSource: "flanking" }));
+  assert.equal(flanked.ok, true, flanked.error);
+  assert.equal(d20s(flanked), 1, "one d20: flanking is the server's to decide");
+  kit.freshRound();
+  upNext();
+  const netted = await mk.forced([18, 4, 4], () => mk.ai(mk.aiTurn(), "enemy_attack", { enemyId: hob.id, targetCharacterId: goblinA.id, attack: "Longsword", advantage: "advantage", advantageSource: "other", advantageReason: "the goblin is tangled in its own net" }));
+  assert.equal(netted.ok, true, netted.error);
+  assert.equal(d20s(netted), 2, "two d20s for a circumstance the server cannot see");
 });
 
 await test("A dominated hobgoblin adds Martial Advantage's 2d6 beside a party member, and not beside the goblin's own kin", async () => {

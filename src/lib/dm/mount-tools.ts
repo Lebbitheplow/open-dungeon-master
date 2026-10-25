@@ -43,14 +43,14 @@ export const mountTools: ToolDef[] = [
     type: "function",
     function: {
       name: "mount_up",
-      description: `Put a character on a mount. While mounted they move at the mount's speed rather than their own (the board lets them walk that far), and mounting costs half their movement, taken from their own turn's movement in a fight. A mount must be one size larger than its rider. Known mounts: ${MOUNTS.map((mount) => mount.name).join(", ")}; one of them is sent in mount by that listed name whatever the table calls it (a 'cavallo da galoppo' is mount 'Riding horse'). customName, with a speed and a size, is only for an animal no list has.`,
+      description: `Put a character on a mount: a known one in mount by its listed name (${MOUNTS.map((mount) => mount.name).join(", ")}), or customName. While mounted they move at the mount's speed rather than their own (the board lets them walk that far), and mounting costs half their movement, taken from their own turn's movement in a fight. A mount must be one size larger than its rider.`,
       parameters: {
         type: "object",
         additionalProperties: false,
         properties: {
-          characterId: { type: "string" },
-          mount: { type: "string", description: "A known mount, by its listed name, at a table in any language." },
-          customName: { type: "string", description: "Or an animal no list has, by its name." },
+          characterId: { type: "string", description: "Exact characterId from GAME STATE." },
+          mount: { type: "string", description: "A known mount by its listed name, whatever the table calls it ('cavallo' is 'Riding horse')." },
+          customName: { type: "string", description: "Only for an animal no list has, by its name, with a speed and a size." },
           speed: { type: "integer", minimum: 0, maximum: 200, description: "For a custom mount." },
           size: { type: "string", enum: [...MOUNT_SIZES], description: "For a custom mount." },
           controlled: { type: "boolean", description: "Trained to bear a rider: it shares the rider's initiative." },
@@ -63,16 +63,16 @@ export const mountTools: ToolDef[] = [
     type: "function",
     function: {
       name: "dismount",
-      description: `Take a character off their mount. A voluntary dismount costs half their movement (taken from their own turn's movement on the board) and needs no roll. When something threw them, send cause: the server rolls their DC ${DISMOUNT_SAVE_DC} Dexterity save and lays them prone on a failure; do not roll it or set the condition yourself.`,
+      description: `Take a character off their mount. A voluntary dismount costs half their movement (taken from their own turn's movement on the board) and needs no roll. When something threw them, send cause: the server rolls their DC ${DISMOUNT_SAVE_DC} DEX save and lays them prone on a failure; do not roll it or set the condition yourself.`,
       parameters: {
         type: "object",
         additionalProperties: false,
         properties: {
-          characterId: { type: "string" },
+          characterId: { type: "string", description: "Exact characterId from GAME STATE." },
           cause: {
             type: "string",
             enum: ["voluntary", "forced-move", "mount-prone", "rider-prone"],
-            description: "Why they came off. Default 'voluntary'.",
+            description: "Why they came off. Default: 'voluntary'.",
           },
         },
         required: ["characterId"],

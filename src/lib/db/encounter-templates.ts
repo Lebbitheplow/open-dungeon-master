@@ -3,6 +3,7 @@ import { byName } from "@/lib/language/text-logic";
 import {
   EMPTY_TEMPLATE_MAP,
   normalizeTemplateExtras,
+  parseRoster,
   type TemplateEnemy,
   type TemplateExtras,
   type TemplateMap,
@@ -51,7 +52,9 @@ function mapTemplate(row: TemplateRow): EncounterTemplate {
     id: row.id,
     campaignId: row.campaign_id,
     name: row.name,
-    enemies: parseJson<TemplateEnemy[]>(row.enemies_json, []),
+    // Read through the roster parser, so a row a bundle wrote by hand ("goblin
+    // x4", a bare name, a count of 0) counts as the editor would have saved it.
+    enemies: parseRoster(parseJson<unknown>(row.enemies_json, [])),
     battlefield: row.battlefield ?? "",
     map: { ...EMPTY_TEMPLATE_MAP, ...parseJson<Partial<TemplateMap>>(row.map_json, {}) },
     notes: row.notes ?? "",

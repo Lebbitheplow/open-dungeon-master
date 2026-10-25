@@ -270,6 +270,18 @@ await test("Feather Fall saves a falling creature every point of falling damage,
   assert.ok(!world.sheet(rogue.id).conditions.includes("prone"));
 });
 
+await test("Out of a fight the model is offered use_reaction for a fall, beside apply_hazard, when someone can slow one.", async () => {
+  await kit.endFight();
+  const { dmTurnTools } = await import("../src/lib/dm/turn.ts");
+  const { TOOL_GROUPS } = await import("../src/lib/dm/tool-profiles.ts");
+  const { partyCanSlowAFall } = await import("../src/lib/dm/hazard-tools.ts");
+  assert.ok(dmTurnTools(world.campaign(), false, true, false).some((tool) => tool.function.name === "use_reaction"));
+  assert.ok(TOOL_GROUPS.hazards.tools.includes("use_reaction"), "the compact profile opens it with the hazards");
+  assert.ok(partyCanSlowAFall([world.sheet(monk.id)]), "Slow Fall");
+  assert.ok(partyCanSlowAFall([world.sheet(wizard.id)]), "Feather Fall");
+  assert.ok(!partyCanSlowAFall([world.sheet(rogue.id)]), "a party with neither is not offered it");
+});
+
 
 // ---- what the record makes possible besides the audited findings ----
 

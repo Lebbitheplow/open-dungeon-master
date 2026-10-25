@@ -212,6 +212,19 @@ await test("an item in the spoils goes to one character, once", async () => {
   assert.deepEqual(holders.map((entry) => entry.id), [hero.id]);
 });
 
+await test("a share a character cannot take is reported, never counted as awarded", async () => {
+  const before = world.sheet(hero.id);
+  world.patch(hero.id, { equipment: [], abilities: { ...before.abilities, str: 1 } });
+  const out = await world.invoke("party_award", { characterIds: [hero.id], amount: 10, name: "Plate Armor", qty: 1, reason: "test" });
+  assert.equal(out.ok, true, out.error);
+  assert.equal(out.result.refused.length, 1, JSON.stringify(out.result));
+  assert.ok(!out.result.awarded.includes("Plate Armor"), out.result.awarded);
+  assert.ok(!world.sheet(hero.id).equipment.some((item) => item.name === "Plate Armor"));
+  const nothing = await world.invoke("party_award", { characterIds: [hero.id], name: "Plate Armor", qty: 1, reason: "test" });
+  assert.equal(nothing.ok, false);
+  world.patch(hero.id, { abilities: before.abilities });
+});
+
 await test("an award of nothing to anyone is refused", async () => {
   assert.equal((await world.invoke("party_award", { characterIds: [hero.id], reason: "test" })).ok, false);
   assert.equal((await world.invoke("party_award", { characterIds: ["nobody"], delta: 50, reason: "test" })).ok, false);

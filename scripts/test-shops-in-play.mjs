@@ -118,6 +118,13 @@ test("a shop opening writes one line for every seat, carrying the shop", () => {
   assert.equal(shopLines().length, 1, "no second line for the same opening");
 });
 
+test("a keeper no tracked NPC answers to is left off the shop, and the result says so", () => {
+  const own = createCampaign(dm.id, { title: "K", description: "", theme: "", maxPlayers: 4, startingLevel: 3, difficulty: "normal" });
+  const opened = handleOpenShop(own, JSON.stringify({ name: "Odd Tilda's", kind: "general", keeper: "Tilda" }));
+  assert.equal(opened.ok, true, opened.error);
+  assert.match(String(opened.keeperUnknown), /Tilda is not a tracked NPC/);
+});
+
 test("with no content pack a shop stocks from the bundled SRD tables, magic left out", () => {
   // CONTENT_DB_PATH above names no file, as on a fresh server.
   const smith = stockPool("smith");

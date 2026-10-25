@@ -263,11 +263,12 @@ await test("finding 11: purchase is gated as grant_item is, and the bought line 
   assert.equal(carried("Lanterna schermabile").srdName, "Lantern, Hooded");
 });
 
-await test("purchase carries srdName, described past the tool's first sentence; the compact profile keeps the field and cuts the description. Loot no list has, and a spell scroll, are granted with grant_item and paid for with modify_gold, at every table.", async () => {
+await test("purchase carries srdName, described in its own field, which the compact profile keeps with the field. Loot no list has, and a spell scroll, are granted with grant_item and paid for with modify_gold, at every table.", async () => {
   const purchase = resourceTools.find((entry) => entry.function.name === "purchase");
-  assert.match(purchase.function.description, /srdName is the SRD or pack item it is, by its English name \('Longsword'\), sent with the first call/);
+  assert.match(purchase.function.parameters.properties.srdName.description, /the SRD or pack item's English name \('Longsword'\)\. Send it with the first call/);
   const compact = compactTool(purchase);
   assert.deepEqual(Object.keys(compact.function.parameters.properties), Object.keys(purchase.function.parameters.properties));
+  assert.match(compact.function.parameters.properties.srdName.description, /English name \('Longsword'\)/, "the compact field keeps what it is");
   // At a shop or not since buy_item and sell_item folded into it (issue #471).
   assert.equal(compact.function.description, "Resolve a character buying or selling an item in one audited step.");
   world.patch(hero.id, { gold: 500 });

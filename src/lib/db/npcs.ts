@@ -56,6 +56,13 @@ export type Npc = {
   companionSheetId: string;
   // Kept out of the Active NPCs prompt block; restored on a name mention.
   archived: boolean;
+  // When the party first dealt with them through a rule: a reaction roll, a
+  // social check, a moment that moved their approval, an attitude the story
+  // shifted, or travelling with them as a companion. "" until then. A
+  // set_npc alone leaves it "", since the DM registers people the party has
+  // only heard of as well as people in the room. A reaction roll is for a
+  // stranger (src/lib/dm/social-tools.ts), so it reads this.
+  metAt: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -84,6 +91,7 @@ type NpcRow = {
   attraction_json?: string | null;
   companion_sheet_id?: string | null;
   archived: number;
+  met_at?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -117,6 +125,7 @@ function mapNpc(row: NpcRow): Npc {
     factionId: row.faction_id ?? "",
     statBlock: row.stat_block ?? "",
     archived: row.archived === 1,
+    metAt: row.met_at ?? "",
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -394,15 +403,24 @@ export function setNpcPlace(npcId: string, patch: { factionId: string } | { loca
 }
 
 // Records an attitude change and the turn it happened on (the one-shift-per-
-// exchange guard reads last_shift_turn).
+// exchange guard reads last_shift_turn). Every caller moves an attitude the
+// party earned (a check, a moment, a companion turning or leaving), so it
+// also marks them met.
 export function setNpcAttitude(id: string, attitude: Attitude, turnId: string): Npc | null {
   const db = getDatabase();
-  db.prepare(`UPDATE npcs SET attitude = ?, last_shift_turn = ?, updated_at = ? WHERE id = ?`).run(
-    attitude,
-    turnId,
-    nowIso(),
-    id,
-  );
+  const now = nowIso();
+  db.prepare(
+    `UPDATE npcs SET attitude = ?, last_shift_turn = ?, met_at = CASE WHEN met_at = '' THEN ? ELSE met_at END, updated_at = ? WHERE id = ?`,
+  ).run(attitude, turnId, now, now, id);
+  const row = db.prepare(`SELECT * FROM npcs WHERE id = ?`).get(id) as NpcRow | undefined;
+  return row ? mapNpc(row) : null;
+}
+
+// The party has now dealt with them (see Npc.metAt). The first meeting is
+// kept: a later one does not move it.
+export function markNpcMet(id: string): Npc | null {
+  const db = getDatabase();
+  db.prepare(`UPDATE npcs SET met_at = ? WHERE id = ? AND met_at = ''`).run(nowIso(), id);
   const row = db.prepare(`SELECT * FROM npcs WHERE id = ?`).get(id) as NpcRow | undefined;
   return row ? mapNpc(row) : null;
 }
@@ -505,8 +523,12 @@ export function mergeNpcs(
   }
   const now = nowIso();
   const apply = db.transaction(() => {
-    db.prepare(`UPDATE npcs SET aliases_json = ?, updated_at = ? WHERE id = ?`).run(
+    // The two rows are one person, so the party met them when it met
+    // either: the earlier meeting is the one kept.
+    const metAt = [keep.metAt, merge.metAt].filter(Boolean).sort()[0] ?? "";
+    db.prepare(`UPDATE npcs SET aliases_json = ?, met_at = ?, updated_at = ? WHERE id = ?`).run(
       JSON.stringify(aliases),
+      metAt,
       now,
       keepId,
     );

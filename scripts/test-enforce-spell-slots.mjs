@@ -42,6 +42,7 @@ const world = await openWorld();
 const { spellSlotsFor } = await import("../src/lib/srd/index.ts");
 const { multiclassSlots, pactSlotsFor, slotTableFor } = await import("../src/lib/srd/multiclass.ts");
 const { createCharacter } = await import("../src/lib/db/characters.ts");
+const { mutationTools } = await import("../src/lib/dm/mutations.ts");
 const { default: slotJson } = await import("../src/lib/srd/spell-slots.json", { with: { type: "json" } });
 
 const LEVELS = Array.from({ length: 20 }, (_, index) => index + 1);
@@ -314,6 +315,16 @@ await test("a slot level the caster does not have cannot be spent", async () => 
     assert.equal(out.ok, false, `level ${level} was spent`);
   }
   assert.equal(JSON.stringify(slotsNow(mage)), before);
+});
+
+await test("a spell cast with no slot level named spends a slot of its own level, as use_spell_slot offers", async () => {
+  const caster = world.addHero(wizard(5));
+  const tool = mutationTools.find((entry) => entry.function.name === "use_spell_slot").function;
+  assert.ok(!tool.parameters.required.includes("level"), "the level is the caster's choice to upcast, not a must");
+  const out = await world.invoke("use_spell_slot", { characterId: caster.id, spell: "Mage Armor" });
+  assert.equal(out.ok, true, out.error);
+  assert.deepEqual(slotsNow(caster)["1"], { max: 4, used: 1 });
+  assert.deepEqual(slotsNow(caster)["2"], { max: 3, used: 0 }, "no higher level paid for it");
 });
 
 await test("a counter stays inside 0..max through any run of casts and rests", async () => {

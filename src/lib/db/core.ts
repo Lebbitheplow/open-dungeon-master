@@ -2660,6 +2660,14 @@ function ensureSchema(db: SqliteDatabase) {
     ["conduct_json", `TEXT NOT NULL DEFAULT ''`],
     ["agenda_json", `TEXT NOT NULL DEFAULT ''`],
   ]);
+  // When the party first dealt with an NPC (src/lib/db/npcs.ts Npc.metAt),
+  // which a reaction roll reads: it is for strangers. The rows already
+  // played get it once, from what play recorded about them.
+  const npcColumns = db.prepare(`PRAGMA table_info(npcs)`).all() as Array<{ name: string }>;
+  if (!npcColumns.some((column) => column.name === "met_at")) {
+    addColumns("npcs", [["met_at", `TEXT NOT NULL DEFAULT ''`]]);
+    backfillNpcMet(db);
+  }
 }
 
 // Widens battle_tokens.kind to accept the DM's own board furniture.
@@ -2907,6 +2915,31 @@ function backfillSheetPortraits(db: SqliteDatabase) {
       // Unparseable blobs stay untouched.
     }
   }
+}
+
+// Marks met the NPCs play already shows the party has dealt with: an
+// attitude a social check moved (last_shift_turn holds its turn), a
+// companion behind the row, an approval meter with someone in the
+// party, or a reaction roll made for them by name (the roll's detail is
+// "Reaction roll for <name>", src/lib/dm/social-tools.ts). Anyone else
+// stays a stranger: the old rows cannot say more.
+function backfillNpcMet(db: SqliteDatabase) {
+  db.prepare(
+    `UPDATE npcs SET met_at = updated_at
+     WHERE met_at = '' AND (
+       last_shift_turn != ''
+       OR companion_sheet_id != ''
+       OR EXISTS (
+         SELECT 1 FROM relationships r
+         WHERE r.campaign_id = npcs.campaign_id AND r.subject_kind = 'npc'
+           AND (r.subject_id = npcs.id OR r.subject_name = npcs.name)
+       )
+       OR EXISTS (
+         SELECT 1 FROM rolls
+         WHERE rolls.campaign_id = npcs.campaign_id AND rolls.detail = 'Reaction roll for ' || npcs.name
+       )
+     )`,
+  ).run();
 }
 
 // Folds every npcs.bonds_json entry into a relationships row at the meter

@@ -17,7 +17,7 @@ export const startEncounterTool: ToolDef = {
   function: {
     name: "start_encounter",
     description:
-      "Begin combat with real, server-tracked enemies.",
+      "Begin combat with real, server-tracked enemies. The server refuses more than 8 combatants, or a fight past the XP ceiling for this party and difficulty.",
     parameters: {
       type: "object",
       additionalProperties: false,
@@ -52,35 +52,35 @@ export const startEncounterTool: ToolDef = {
           type: "string",
           enum: ["enemies", "party"],
           description:
-            "Who was lying in wait, hidden: 'enemies' when they jump the party, 'party' when the party springs it. Those surprised lose their first turn.",
+            "Who was lying in wait, hidden: 'enemies' when they jump the party, 'party' when it springs the trap. Those surprised lose their first turn.",
         },
         surprised: {
           type: "string",
           enum: ["none", "enemies", "party"],
           description:
-            "A whole side the story has already decided is caught off guard, overriding ambush. Default 'none'.",
+            "A whole side the story has already decided is caught off guard, overriding ambush. Default: 'none'.",
         },
         scene: {
           type: "string",
           enum: sceneIds(),
           description:
-            "The kind of ground this fight is on, for its battle map, when it is not the current place's own (an ambush on the road outside the town). Omit it and the map follows the place.",
+            "The ground this fight is on, for its battle map, when it differs from the place's own. Such as the road outside town for an ambush. Omit it and the map follows the place.",
         },
         distanceFeet: {
           type: "integer",
           minimum: 5,
           description:
-            "How far the nearest enemy stands from the party as the fight opens, in feet, whenever the story has already said: 5 for a foe at arm's length, 10 for one two paces off, 30 across a room. The battle map places them there. Omit it and an ambush or a fight indoors opens 30 feet apart, anything else across the field.",
+            "Feet from the party to the nearest enemy as the fight opens, when the story has said. 5 for a foe at arm's length, 10 for one two paces off, 30 across a room. The battle map places them there. Omit it and an ambush or a fight indoors opens 30 feet apart, anything else across the field.",
         },
         lair: {
           type: "boolean",
-          description: "True when the fight is in a legendary creature's lair, so the lair acts on initiative 20 each round (lair_action).",
+          description: "True when the fight is in a legendary creature's lair: the lair acts on initiative 20 (lair_action).",
         },
         from: {
           type: "string",
           enum: ["ahead", "behind"],
           description:
-            "Where the enemy comes from against the party's travel formation (GAME STATE): 'ahead' (the default) puts the front of the formation nearest them, 'behind' the rear. The formation only places the party; it grants no surprise or bonus.",
+            "Where the enemy comes from against the travel formation: 'ahead' (the default) or 'behind'. The formation (GAME STATE) only places the party, with no surprise or bonus: ahead puts its front nearest them, behind its rear.",
         },
       },
       required: ["enemies"],
@@ -105,12 +105,12 @@ export const enemyAttackTool: ToolDef = {
         },
         attack: {
           type: "string",
-          description: "Attack name from the enemy's attack list. Default: its first.",
+          description: "Attack name from the enemy's attack list. Default: its Multiattack routine, or its first attack.",
         },
         advantage: {
           type: "string",
           enum: ["none", "advantage", "disadvantage"],
-          description: "Situational advantage the server cannot see; counts only with advantageSource 'other' and advantageReason. Conditions, light, cover, range, flanking, spells and Pack Tactics are the server's already.",
+          description: "Situational advantage the server cannot see: needs advantageSource 'other' and advantageReason. Conditions, light, cover, range, flanking, spells and Pack Tactics are the server's already.",
         },
         advantageSource: {
           type: "string",

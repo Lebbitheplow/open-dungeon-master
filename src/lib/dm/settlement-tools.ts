@@ -22,7 +22,7 @@ export const settlementTools: ToolDef[] = [
     function: {
       name: "generate_settlement",
       description:
-        "Populate the party's current place when nothing is written for it: the server invents its people (added to the cast), its shops (stocked and priced), two rumours as a roll table and a hook only you can read. Call it once on arrival somewhere new; then narrate from what comes back and GAME STATE.",
+        "Populate the party's current place when nothing is written for it, once on arrival somewhere new: the server invents its people, its shops, two rumours and a hook. The people join the cast, the shops come stocked and priced, the rumours as a roll table, and the hook is for you alone. Then narrate from what comes back and GAME STATE.",
       parameters: {
         type: "object",
         properties: {

@@ -10,6 +10,7 @@ import { NumberStepper } from "@/components/ui/NumberStepper";
 import { Switch } from "@/components/ui/Switch";
 import { OptionalNumber } from "@/app/campaigns/[campaignId]/DmConsoleParts";
 import type { CatalogField } from "@/lib/dm/invoke-catalog";
+import { fieldShown } from "@/lib/dm/catalog-types";
 import type { PublicEncounter } from "@/lib/db/encounter-view";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { DictateField } from "@/components/DictateField";
@@ -427,6 +428,10 @@ export function FieldInput({
 export function argsFor(fields: CatalogField[], values: Record<string, Value>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const field of fields) {
+    // A field the form hides (a drake's essence for an owl) sends nothing.
+    if (!fieldShown(field, values)) {
+      continue;
+    }
     const value = values[field.name];
     if (field.kind === "list" && typeof value === "string") {
       const list = value.split(/[,\n]/).map((entry) => entry.trim()).filter(Boolean);

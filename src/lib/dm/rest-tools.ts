@@ -61,12 +61,12 @@ export const takeRestTool: ToolDef = {
         spend: {
           type: "array",
           description:
-            "Short rest only: hit dice to spend for a character whose player is not at the table (the server otherwise spends toward half HP for them). A connected player chooses their own hit dice on their sheet after the rest; the server rolls them.",
+            "Short rest only: hit dice to spend for a character whose player is not at the table. The server otherwise spends toward half HP for them. A connected player chooses their own hit dice on their sheet after the rest; the server rolls them.",
           items: {
             type: "object",
             properties: {
               characterId: { type: "string", description: "Exact characterId from GAME STATE." },
-              dice: { type: "integer", minimum: 1, maximum: 20 },
+              dice: { type: "integer", minimum: 1, maximum: 20, description: "How many hit dice they spend." },
             },
             required: ["characterId", "dice"],
           },

@@ -6,6 +6,7 @@ import { chargeLifestyle } from "@/lib/dm/lifestyle";
 import { dawnsBetween } from "@/lib/dm/item-charges";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { publishWithSeq } from "@/lib/events";
+import { textKey } from "@/lib/language/text-logic";
 import { applyDmMutation } from "@/lib/dm/mutations";
 import { resolveSheetRef } from "@/lib/dm/rolls";
 import { hourlyConSaves, type HourSave } from "@/lib/dm/endurance";
@@ -74,7 +75,7 @@ const WATER_PROPERTY = {
   type: "string",
   enum: ["plenty", "half", "none"],
   description:
-    "Only when the table plays the supplies variant and water is scarce (a desert, a siege): half is a DC 15 Constitution save each day against a level of exhaustion, none a level each day whatever they carry. It holds until you send plenty.",
+    "Only for the supplies variant when water is scarce (a desert, a siege): half or none. With half, each day is a DC 15 CON save against a level of exhaustion; with none, each day costs a level whatever they carry. It holds until you send plenty.",
 };
 
 export const worldTools: ToolDef[] = [
@@ -88,7 +89,7 @@ export const worldTools: ToolDef[] = [
         type: "object",
         additionalProperties: false,
         properties: {
-          cr: { type: "number", description: "The challenge rating of what they overcame (or the toughest enemy's), which the treasure is scaled to." },
+          cr: { type: "number", description: "The challenge rating of what they overcame (or the toughest enemy's), which scales the treasure." },
           characterIds: {
             type: "array",
             items: { type: "string" },
@@ -99,7 +100,7 @@ export const worldTools: ToolDef[] = [
             description:
               "True for a single foe's pocket money (a tenth of a hoard) rather than a full hoard.",
           },
-          reason: { type: "string", description: "Short note on the source of the treasure." },
+          reason: { type: "string", description: "Short note on the source of the treasure. A second hoard in the same turn needs its own." },
         },
         required: ["cr"],
       },
@@ -110,19 +111,19 @@ export const worldTools: ToolDef[] = [
     function: {
       name: "damage_object",
       description:
-        "Resolve an attempt to break an inanimate object (a door, a chest, a rope, a window) against the DMG object table. Give its name, material and size (or an explicit ac and hp). Each call is one blow. Objects are immune to poison and psychic damage. A Wall of Ice is struck a section at a time: name it 'Wall of Ice' and give the section (10-foot sections from the end it was laid from): the server uses its AC 12 and 30 hit points, doubles fire, and when it breaks opens its squares and lays the frigid air.",
+        "Resolve one blow at an inanimate object (a door, a chest, a rope, a window) against the DMG object table: give its name, material and size, or an explicit ac and hp. Each call is one blow. Objects are immune to poison and psychic damage. A Wall of Ice is struck a section at a time: name it 'Wall of Ice' and give the section, 10 feet each. The server uses a section's AC 12 and 30 HP, doubles fire, and when it breaks opens its squares and lays the frigid air.",
       parameters: {
         type: "object",
         additionalProperties: false,
         properties: {
-          name: { type: "string", description: "What the object is ('the oak door'). The server keeps its damage between blows." },
+          name: { type: "string", description: "What the object is ('the oak door'), or 'Wall of Ice' with its section. The server keeps its damage, and what the first call said it is made of, between blows." },
           section: { type: "integer", minimum: 1, description: "A Wall of Ice's section, numbered from the end it was laid from." },
           characterId: { type: "string", description: "The character striking it with a weapon: exact characterId from GAME STATE." },
           weapon: { type: "string", description: "The weapon they strike with, from their equipment." },
-          improvised: { type: "boolean", description: "The weapon is an object they picked up that is no weapon on their sheet: it strikes as an improvised weapon." },
+          improvised: { type: "boolean", description: "True when weapon names an object that is no weapon on their sheet (a chair, a bottle). It strikes as an improvised weapon." },
           damageType: { type: "string", description: "Damage type, for damage you pass yourself." },
-          material: { type: "string", enum: MATERIALS, description: "What the object is made of." },
-          size: { type: "string", enum: SIZES, description: "Its size class." },
+          material: { type: "string", enum: MATERIALS, description: "What the object is made of. Default: wood." },
+          size: { type: "string", enum: SIZES, description: "Its size class. Default: medium." },
           fragile: { type: "boolean", description: "True for brittle objects (halves HP)." },
           damage: { type: "string", description: "The damage dealt by something other than a character's weapon, as dice (2d6) or a number." },
           ac: { type: "integer", description: "Override the material's AC if you know it." },
@@ -147,17 +148,17 @@ export const worldTools: ToolDef[] = [
           hours: { type: "integer", description: "Hours travelled that day. Give this or miles." },
           miles: {
             type: "number",
-            description: "Miles to cover instead of hours: the server works out the hours the pace, the ground and the weather need (one day's leg, 24 hours at most).",
+            description: "Miles to cover instead of hours, one day's leg of 24 hours at most. The server works out the hours the pace, the ground and the weather need.",
           },
           terrain: {
             type: "string",
             enum: ["normal", "difficult"],
-            description: "Difficult terrain (dense forest, deep swamp, steep mountains, ice) halves the distance covered. Default 'normal'.",
+            description: "Difficult terrain (dense forest, deep swamp, steep mountains, ice) halves the distance covered. Default: 'normal'.",
           },
           pace: {
             type: "string",
             enum: ["fast", "normal", "slow"],
-            description: "Travel pace. Default 'normal'.",
+            description: "Travel pace. Default: 'normal'.",
           },
           characterIds: {
             type: "array",
@@ -185,7 +186,7 @@ export const worldTools: ToolDef[] = [
           unit: {
             type: "string",
             enum: ["minutes", "hours", "days", "weeks"],
-            description: "Unit of the amount. Default 'hours'.",
+            description: "Unit of the amount. Default: 'hours'.",
           },
           water: WATER_PROPERTY,
           reason: { type: "string", description: "Short note on what filled the time." },
@@ -199,7 +200,7 @@ export const worldTools: ToolDef[] = [
     function: {
       name: "set_weather",
       description:
-        "Change the weather over the table when the story calls for it (a storm rolls in, the fog lifts). The server rolls weather on its own at each dawn and on long journeys; call this only to overrule it. Rain and fog cut what anyone sees and give disadvantage on Perception by sight; a gale gives disadvantage on ranged attacks past 30 ft; frigid or hot air is a hazard on a long march; the board's light follows the sky outdoors.",
+        "Change the weather over the table when the story calls for it (a storm rolls in, the fog lifts). The server rolls weather on its own at each dawn and on long journeys; call this only to overrule it. Rain and fog cut what anyone sees and give disadvantage on Perception by sight; a gale gives disadvantage on ranged attacks past 30 feet; frigid or hot air is a hazard on a long march; the board's light follows the sky outdoors.",
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -332,6 +333,22 @@ const treasureSchema = z.object({
   reason: z.string().optional(),
 });
 
+// The hoards each running turn has paid, by what its call named: the CR,
+// whether it is one foe's pocket money, who shares it, and the reason. No
+// record the engine keeps says which hoard a roll was for, so a later turn's
+// call is a new hoard; but the same call twice in one turn is the model
+// sending it again (a retry, a batch that repeated a line), and it used to
+// roll and pay the coin a second time. It is answered with the first payout.
+// Held for the last few turns only, keyed by turn id since each call reads
+// its turn afresh.
+const PAID_HOARDS = new Map<string, Map<string, Record<string, unknown>>>();
+const PAID_HOARD_TURNS = 20;
+
+function hoardKey(args: z.infer<typeof treasureSchema>, recipients: CharacterSheet[]): string {
+  const ids = recipients.map((sheet) => sheet.id).sort().join(",");
+  return [args.cr, args.individual ? "pocket" : "hoard", ids, textKey(args.reason ?? "")].join("|");
+}
+
 export function handleRollTreasure(
   campaign: Campaign,
   turn: DmTurn,
@@ -348,6 +365,16 @@ export function handleRollTreasure(
   const recipients = resolveTargets(args.characterIds, sheets, sheetsById);
   if (!recipients.length) {
     return { error: "No characters to receive treasure; use characterIds from GAME STATE.", retry: true };
+  }
+  const key = hoardKey(args, recipients);
+  const paidThisTurn = PAID_HOARDS.get(turn.id);
+  const already = paidThisTurn?.get(key);
+  if (already) {
+    return {
+      ...already,
+      repeat: true,
+      note: `This hoard was already rolled and paid this turn (${String(already.totalGold)} gp in all); nothing more was paid. A second, different hoard needs its own reason.`,
+    };
   }
   const tier = treasureTierForCr(args.cr);
   const { dice, mult } = hoardGoldDice(tier);
@@ -372,7 +399,7 @@ export function handleRollTreasure(
     }
   }
   const items = hoardItemCount(tier);
-  return {
+  const result = {
     ok: true,
     tier,
     totalGold: share * recipients.length,
@@ -386,6 +413,14 @@ export function handleRollTreasure(
         ? ` A hoard this size tends to hold about ${items} magic item${items === 1 ? "" : "s"}; hand any out with grant_item.`
         : ""),
   };
+  const ledger = paidThisTurn ?? new Map<string, Record<string, unknown>>();
+  ledger.set(key, result);
+  PAID_HOARDS.delete(turn.id);
+  PAID_HOARDS.set(turn.id, ledger);
+  while (PAID_HOARDS.size > PAID_HOARD_TURNS) {
+    PAID_HOARDS.delete(PAID_HOARDS.keys().next().value as string);
+  }
+  return result;
 }
 
 // ---- damage_object ----

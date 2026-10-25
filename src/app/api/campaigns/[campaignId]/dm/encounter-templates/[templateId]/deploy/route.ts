@@ -2,6 +2,8 @@ import { capsFor, isErrorResponse, requirePrepAuthority } from "@/lib/campaign-a
 import { getEncounterTemplate, setTemplateCued } from "@/lib/db/encounter-templates";
 import { deployTemplate } from "@/lib/dm/encounter-templates";
 import { readyTemplates } from "@/lib/dm/prepared-encounter-tool";
+import { preparedFit } from "@/lib/dm/prepared-fit";
+import { fightingParty } from "@/lib/dm/party-budget";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,6 +40,22 @@ export async function POST(
     if (cue && !readyTemplates(campaignId).some((entry) => entry.id === template.id)) {
       return Response.json(
         { error: "That fight has nobody in it yet. Give it a roster before the storyteller can run it." },
+        { status: 409 },
+      );
+    }
+    // A fight the storyteller could not run for this party is not cued to
+    // be refused every turn (src/lib/dm/prepared-fit.ts); one beyond the
+    // party is cut down to fit when it runs, which its readout says. A table
+    // with nobody rolled up yet has no party to judge it against.
+    const fit = cue && fightingParty(context.campaign).length ? preparedFit(context.campaign, template.enemies) : null;
+    if (fit?.kind === "held" || fit?.kind === "unknown") {
+      return Response.json(
+        {
+          error:
+            fit.kind === "held"
+              ? "That fight is beyond the party as it stands, even cut down to its strongest creature. Change its roster, or cue it when they are stronger."
+              : `Nothing in this world is called "${fit.monster}". Fix the roster before the storyteller can run it.`,
+        },
         { status: 409 },
       );
     }

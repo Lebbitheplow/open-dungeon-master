@@ -32,6 +32,7 @@ export const resourceTools: ToolDef[] = [
           charges: {
             type: "integer",
             minimum: 1,
+            maximum: 50,
             description:
               "For an item with charges (a wand, a staff, a once-a-day power): how many this use spends. The server keeps the count and refuses a use the item cannot pay for.",
           },
@@ -51,7 +52,7 @@ export const resourceTools: ToolDef[] = [
     function: {
       name: "purchase",
       description:
-        "Resolve a character buying or selling an item in one audited step. A shop standing here that stocks the item (or buys it) trades it from its own shelf at its own prices; anywhere else the list price is paid, and a seller gets half. Buying a thing the table names in its own words ('Spada lunga'): srdName is the SRD or pack item it is, by its English name ('Longsword'), sent with the first call as grant_item sends it; omit it when item already is that English name. Loot no list has, or a spell scroll, is granted with grant_item (its tags, its spell) and paid for with modify_gold.",
+        "Resolve a character buying or selling an item in one audited step. A shop standing here that stocks the item (or buys it) trades it from its own shelf at its own prices; anywhere else the list price is paid, and a seller gets half. Loot no list has, or a spell scroll, is granted with grant_item (its tags, its spell) and paid for with modify_gold.",
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -63,12 +64,12 @@ export const resourceTools: ToolDef[] = [
           qty: { type: "integer", minimum: 1, maximum: 99 },
           shop: {
             type: "string",
-            description: "A shop in SHOPS HERE the party picks; left out, one here that stocks (or buys) it.",
+            description: "A shop in SHOPS HERE the party picks; omit it and the server picks one that stocks (or buys) it.",
           },
-          // Described in the description of purchase itself, since the 16K
-          // compact profile, which cuts every description to its first
-          // sentence, carries purchase in its core with no room for one more.
-          srdName: { type: "string" },
+          srdName: {
+            type: "string",
+            description: "Only when item is in the table's own words: the SRD or pack item's English name ('Longsword'). Send it with the first call, as grant_item does; omit it when item already is that English name.",
+          },
           price: {
             type: "number",
             minimum: 0,
@@ -100,18 +101,18 @@ export const resourceTools: ToolDef[] = [
           amount: {
             type: "integer",
             minimum: 1,
-            maximum: 50,
-            description: "Uses or points to spend. Default 1. Lay on Hands spends HP from its pool.",
+            maximum: 100,
+            description: "Uses or points to spend. Default: 1. Lay on Hands spends HP from its pool.",
           },
           targetCharacterId: {
             type: "string",
             description:
-              "Who the feature is aimed at, for features that touch someone else (Lay on Hands, Bardic Inspiration): exact characterId from GAME STATE. Default: the user.",
+              "Who a feature that touches someone else is aimed at: exact characterId from GAME STATE. E.g. Lay on Hands, Bardic Inspiration. Default: the user.",
           },
           targetEnemyId: {
             type: "string",
             description:
-              "The creature a feature is aimed at, exact enemyId from GAME STATE: Intimidating Presence (the server rolls its WIS save against the barbarian's DC and frightens it until the end of the barbarian's next turn; a later use on a creature already frightened by it extends that). Also the subclass features aimed at a creature (Touch of the Long Death, Psychic Blades, Unsettling Words, Hound of Ill Omen, Versatile Trickster, Mighty Impel, Elemental Fury, Storm Aura's sea, Insightful Fighting, Cauterizing Flames' burn): the server rolls their saves and damage.",
+              "The creature a feature is aimed at: exact enemyId from GAME STATE. Intimidating Presence uses it (the server rolls its WIS save against the barbarian's DC and frightens it until the end of the barbarian's next turn; a later use on a creature already frightened by it extends that), and so do the subclass features aimed at a creature (Touch of the Long Death, Psychic Blades, Unsettling Words, Hound of Ill Omen, Versatile Trickster, Mighty Impel, Elemental Fury, Storm Aura's sea, Insightful Fighting, Cauterizing Flames' burn): the server rolls their saves and damage.",
           },
           form: {
             type: "string",
@@ -120,13 +121,13 @@ export const resourceTools: ToolDef[] = [
           variant: {
             type: "string",
             description:
-              "For features with a choice (Starry Form's archer/chalice/dragon, Spirit Totem's bear/hawk/unicorn; Totem Spirit or Transmuter's Stone, outside a fight): the chosen option. Ki Points: 'flurry of blows' (after the Attack action: two bonus-action unarmed strikes, each resolved with pc_attack), 'patient defense' (Dodge as a bonus action), 'step of the wind' (Disengage as a bonus action; 'step of the wind dash' to Dash); the server spends the ki and the bonus action and applies the effect.",
+              "The chosen option; Ki Points: 'flurry of blows', 'patient defense', 'step of the wind'. Features with a choice: Starry Form's archer/chalice/dragon, Spirit Totem's bear/hawk/unicorn; Totem Spirit or Transmuter's Stone, outside a fight. Flurry of blows: after the Attack action, two bonus-action unarmed strikes, each resolved with pc_attack; patient defense: Dodge as a bonus action; step of the wind: Disengage as a bonus action ('step of the wind dash' to Dash). The server spends the ki and the bonus action and applies the effect.",
           },
           formHp: {
             type: "integer",
             minimum: 1,
             maximum: 300,
-            description: "Wild Shape only: the beast form's hit points from its stat block.",
+            description: "Wild Shape only: the beast form's HP from its stat block.",
           },
           formAc: {
             type: "integer",
@@ -139,7 +140,7 @@ export const resourceTools: ToolDef[] = [
             minimum: 0,
             maximum: 30,
             description:
-              "Wild Shape only, for a beast the server does not know: its challenge rating from its stat block (0.25 for 1/4). The druid's level caps it.",
+              "Wild Shape only, for a beast the server does not know: its challenge rating (0.25 for 1/4). Take it from its stat block. The druid's level caps it.",
           },
           formFlies: {
             type: "boolean",

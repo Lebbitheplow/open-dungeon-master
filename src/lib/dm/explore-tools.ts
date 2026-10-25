@@ -41,14 +41,14 @@ const ACTIVITIES = ["crafting", "profession", "recuperating", "research", "train
 const activityProperties = {
   characterId: { type: "string", description: "Exact characterId from GAME STATE." },
   activity: { type: "string", enum: [...ACTIVITIES], description: "What they spend the days on." },
-  item: { type: "string", description: "Crafting: the nonmagical item being made (its market value sets the work: 5 gp a day per crafter, materials half the value, paid at the start)." },
+  item: { type: "string", description: "Crafting: the nonmagical item being made; its market value sets the work." },
   srdName: { type: "string", description: "Crafting, when item is in the table's language: its SRD or pack name in English ('Longsword')." },
   tool: { type: "string", description: "Crafting: the artisan's tools used; the crafter and every helper must be proficient with them." },
   helperIds: { type: "array", items: { type: "string" }, description: "Crafting: other characters proficient with the tools working on the same item; each adds 5 gp a day." },
   subject: { type: "string", description: "Training: the language or tool being learned (250 days at 1 gp a day)." },
   kind: { type: "string", enum: ["language", "tool"], description: "Training: a language or a tool." },
   topic: { type: "string", description: "Research: the question being researched (1 gp a day; what is found is yours to decide)." },
-  recover: { type: "string", enum: ["advantage", "end_effect"], description: "Recuperating: on a successful DC 15 CON save after three days, advantage on saves against their disease or poison for 24 hours (default), or end an effect that stops them regaining hit points." },
+  recover: { type: "string", enum: ["advantage", "end_effect"], description: "Recuperating, after three days and a passed DC 15 CON save: advantage (the default) or end_effect. advantage: on saves against their disease or poison for 24 hours; end_effect: ends an effect that stops them regaining HP." },
   organization: { type: "boolean", description: "Profession: a member of an organization that employs them (covers a comfortable lifestyle)." },
   perform: { type: "boolean", description: "Profession: performing, for a character proficient in Performance (covers a wealthy lifestyle)." },
 };
@@ -66,7 +66,7 @@ export const exploreTools: ToolDef[] = [
         properties: {
           characterId: { type: "string", description: "Exact characterId from GAME STATE." },
           weightLb: { type: "number", minimum: 1, description: "The weight in pounds (a boulder, a fallen beam, a portcullis)." },
-          how: { type: "string", enum: ["lift", "push", "drag"], description: "Default 'lift'." },
+          how: { type: "string", enum: ["lift", "push", "drag"], description: "Default: 'lift'." },
           reason: { type: "string", description: "Short note on what is being moved." },
         },
         required: ["characterId", "weightLb"],
@@ -78,12 +78,12 @@ export const exploreTools: ToolDef[] = [
     function: {
       name: "set_lifestyle",
       description:
-        "Set the lifestyle characters live between adventures (SRD 5.1 Lifestyle Expenses): wretched (free), squalid (1 sp a day), poor (2 sp), modest (1 gp), comfortable (2 gp), wealthy (4 gp), aristocratic (10 gp). From then on each dawn that pass_time or a long rest crosses charges a day of it from their purse, and downtime charges its days; a purse that cannot keep it up lives the best it can pay for. On the road they live off their supplies.",
+        "Set the lifestyle characters live between adventures: wretched (free), squalid (1 sp a day), poor (2 sp), modest (1 gp), comfortable (2 gp), wealthy (4 gp), aristocratic (10 gp). These are the SRD 5.1 Lifestyle Expenses. From then on each dawn that pass_time or a long rest crosses charges a day of it from their purse, and downtime charges its days; a purse that cannot keep it up lives the best it can pay for. On the road they live off their supplies.",
       parameters: {
         type: "object",
         additionalProperties: false,
         properties: {
-          characterIds: { type: "array", items: { type: "string" }, description: "Exact characterIds. Omit for the whole party." },
+          characterIds: { type: "array", items: { type: "string" }, description: "Exact characterIds from GAME STATE. Omit for the whole party." },
           lifestyle: { type: "string", enum: [...LIFESTYLES, "none"], description: "The lifestyle, or none to stop charging." },
           reason: { type: "string", description: "Short in-fiction cause." },
         },
@@ -96,7 +96,7 @@ export const exploreTools: ToolDef[] = [
     function: {
       name: "downtime",
       description:
-        "Resolve days of downtime between adventures (SRD 5.1 Downtime Activities), each character on one activity: crafting (5 gp of an item's value a day per crafter, materials half the value, the finished item lands in the pack), profession (work that pays their lifestyle), recuperating (a DC 15 CON save every three days against a disease or poison), research (1 gp a day; what is found is yours to say) or training (a language or tool in 250 days at 1 gp a day). Give one character's activity at the top level.",
+        "Resolve days of downtime between adventures (SRD 5.1 Downtime Activities), one activity for each character: give one character's activity at the top level, or several in activities. Crafting puts 5 gp of an item's value a day per crafter into it, with materials half the value paid at the start, and the finished item lands in the pack. Profession is work that pays their lifestyle.",
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -119,7 +119,7 @@ export const exploreTools: ToolDef[] = [
     function: {
       name: "afflict",
       description:
-        `Lay an SRD disease, madness or poison on a character; the server rolls the save and holds the effects from then on. Diseases (${Object.values(DISEASES).map((disease) => disease.name).join(", ")}): a CON save against catching it, symptoms after their incubation, then the disease's own saves after each long rest; lesser restoration cures it. Madness (short, long or indefinite): the server rolls the SRD table and its duration and applies the conditions; pass saveDc (and saveAbility wis or cha) for an effect that allows a save. Poisons (${POISONS.filter((poison) => poison.type !== "injury").map((poison) => poison.name).join(", ")}, and the injury poisons when a poisoned blade strikes a character): the server rolls the CON save, the damage and the conditions. The table's own diseases and poisons from the workshop are named under GAME STATE and work the same way. Never narrate a disease, madness or poison taking hold without this call.`,
+        `Lay an SRD disease (${Object.values(DISEASES).map((disease) => disease.name).join(", ")}), a madness or a poison on a character; the server rolls the save and holds the effects from then on. A disease is a CON save against catching it, symptoms after their incubation, then the disease's own saves after each long rest; lesser restoration cures it. For a madness the server rolls the SRD table and its duration and applies the conditions; pass saveDc (and saveAbility wis or cha) for an effect that allows a save. The SRD poisons are ${POISONS.filter((poison) => poison.type !== "injury").map((poison) => poison.name).join(", ")}, and the injury poisons when a poisoned blade strikes a character; the server rolls the CON save, the damage and the conditions. The table's own diseases and poisons from the workshop are named under GAME STATE and work the same way. Never narrate a disease, madness or poison taking hold without this call.`,
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -127,10 +127,10 @@ export const exploreTools: ToolDef[] = [
           characterId: { type: "string", description: "Exact characterId from GAME STATE." },
           kind: { type: "string", enum: ["disease", "madness", "poison"], description: "What it is." },
           name: { type: "string", description: "The disease or poison by name, or for madness: short, long or indefinite." },
-          save: { type: "boolean", description: "The server rolls the save against it; false when the character is already infected or has no save (a madness from a failed save you already rolled). Default true." },
+          save: { type: "boolean", description: "Whether the server rolls the save against it; false when already infected or with no save. Default: true. False for a madness from a failed save you already rolled." },
           dc: { type: "integer", minimum: 1, maximum: 30, description: "A disease's infection DC when the source sets its own; the SRD's otherwise." },
           saveDc: { type: "integer", minimum: 1, maximum: 30, description: "Madness only: the DC of the save that resists it." },
-          saveAbility: { type: "string", enum: ["wis", "cha"], description: "Madness only: the save's ability. Default 'wis'." },
+          saveAbility: { type: "string", enum: ["wis", "cha"], description: "Madness only: the save's ability. Default: 'wis'." },
           symptomsNow: { type: "boolean", description: "Disease only: the symptoms show now rather than after the incubation." },
           reason: { type: "string", description: "Short note on the source." },
         },

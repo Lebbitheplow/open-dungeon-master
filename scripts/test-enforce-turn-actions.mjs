@@ -437,7 +437,7 @@ await test("a drake attacks on the ranger's bonus action, once", async () => {
     equipment: [{ name: "Longbow", qty: 1 }],
   });
   heroes.push(warden);
-  assert.equal((await world.invoke("summon_pet", { characterId: warden.id, kind: "drake", form: "drake" })).ok, true);
+  assert.equal((await world.invoke("summon_pet", { characterId: warden.id, kind: "drake", form: "drake", essence: "fire" })).ok, true);
   const enemy = await stage(warden);
   world.dice(15, 3);
   const bite = await world.invoke("pet_attack", { characterId: warden.id, petName: "Drake", targetEnemyId: enemy.id });

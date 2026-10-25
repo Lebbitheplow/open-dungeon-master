@@ -210,7 +210,7 @@ export async function dispatchAdjudication(
     case "clear_effect":
       return handleClearEffect(campaign, rawArguments, sheets, sheetsById);
     case "start_scene":
-      return handleStartScene(campaign, rawArguments);
+      return handleStartScene(campaign, rawArguments, sheets, sheetsById);
     case "scene_check":
       return handleSceneCheck(campaign, rawArguments, sheets, sheetsById);
     case "end_scene":

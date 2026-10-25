@@ -25,6 +25,7 @@ import { tileIndex } from "@/lib/battlemap/types";
 import { heldAuthored, heldReaction, type AuthoredReaction, type HeldAuthored } from "@/lib/srd/authored-effects";
 import { removeConditions, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { applyEnemyDamage, publishEncounter } from "@/lib/dm/enemy-damage";
+import { hasTrait } from "@/lib/dm/monster-abilities";
 import { releaseGrapplesOutOfReach } from "@/lib/dm/grapple";
 import { attackerFoeId, freshLastHit, writeLastHit } from "@/lib/dm/last-hit";
 import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
@@ -172,7 +173,10 @@ function redirectMiss(ctx: Ctx, name: string, rangeFt: number): ToolResult {
   // The attacker's own blow, turned (Stand Against the Tide reads the same).
   const rolled = Math.max(0, rollCard(campaign, ctx.turn, null, "damage", rollAgainst(`${attack.name} (${name})`, target.displayName), attack.damage, attacker ? enemyAttacker(attacker) : null).total);
   const type = attack.type ?? record.type;
-  const applied = applyEnemyDamage(campaign, ctx.turn, encounter, target, rolled, ctx.sheets, ctx.sheetsById, type);
+  // Still the attacker's blow: a creature whose weapon attacks are magical,
+  // or a block that prints the blow as magical, strikes the other with magic.
+  const magical = hasTrait(attacker?.stats, "magicWeapons") || attack.magical === true || attack.spellAttack === true;
+  const applied = applyEnemyDamage(campaign, ctx.turn, encounter, target, rolled, ctx.sheets, ctx.sheetsById, type, magical ? { magical: true } : undefined);
   publishEncounter(campaign.id);
   writeLastHit(campaign.id, { ...record, answered: [...record.answered, label] });
   return { rolled: `${attack.damage}: ${rolled}`, applied: `${record.attacker.name}'s ${record.attack} hits ${target.displayName} instead.`, redirected: applied };

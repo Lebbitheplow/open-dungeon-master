@@ -34,6 +34,12 @@ export type SheetFoeBlow = {
   parts?: Array<{ amount: number; type: string }>;
   magical?: boolean;
   spell?: boolean;
+  // A silvered or adamantine weapon, one a good creature wields, and the
+  // type whose resistance the blow sets aside (pc-damage.ts).
+  silvered?: boolean;
+  adamantine?: boolean;
+  goodWielder?: boolean;
+  ignoreResistanceTo?: string;
   crit?: boolean;
   nonlethal?: boolean;
   // Death outright (exhaustion 6, Power Word Kill): no save, no track.
@@ -67,6 +73,10 @@ export function applySheetFoeDamage(campaign: Campaign, turn: DmTurn, view: Enco
     ...(blow.parts?.length ? { parts: blow.parts } : {}),
     ...(blow.magical ? { magical: true } : {}),
     ...(blow.spell ? { spell: true } : {}),
+    ...(blow.silvered ? { silvered: true } : {}),
+    ...(blow.adamantine ? { adamantine: true } : {}),
+    ...(blow.goodWielder ? { goodWielder: true } : {}),
+    ...(blow.ignoreResistanceTo ? { ignoreResistanceTo: blow.ignoreResistanceTo } : {}),
     ...(blow.crit ? { crit: true } : {}),
     reason: (blow.reason ?? "").slice(0, 200),
   });

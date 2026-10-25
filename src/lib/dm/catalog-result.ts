@@ -99,7 +99,7 @@ function describeRow(row: Row): ResultLine | null {
   if (damage !== null) {
     parts.push(`${damage} damage`);
   }
-  for (const key of ["hp", "health", "conditionApplied", "note", "resistance"]) {
+  for (const key of ["hp", "health", "conditionApplied", "conditionRefused", "note", "resistance"]) {
     const text = scalar(row[key]);
     if (text) {
       parts.push(key === "hp" ? `HP ${text}` : text);

@@ -25,7 +25,11 @@ import {
   EXTRAS_LIMITS,
   normalizeTemplateExtras,
   normalizeTemplateMap,
+  parseRoster,
+  rosterSize,
+  TEMPLATE_MAX_ROWS,
 } from "@/lib/dm/encounter-template-logic";
+import { normalizeRollEntries } from "@/lib/dm/roll-table-logic";
 import {
   decodeBundleImage,
   type BundleImage,
@@ -443,12 +447,14 @@ function writeBundleRows(
         { ...encounter.map, mapId: idAt(ids.maps, encounter.map.map) },
         { themes: MAP_THEMES, ambients: AMBIENTS, scenes: sceneIds() },
       );
-      // A roster row written as a bare name is one monster, as the roster
-      // reads it (workshop-bundle-shelf.ts rosterMonsters); counted, so its
-      // placements and overrides are not cut off on arrival.
-      const slots = (encounter.enemies as Array<string | { monster?: unknown; count?: unknown }>)
-        .filter((row) => (typeof row === "string" ? Boolean(row.trim()) : typeof row?.monster === "string" && row.monster))
-        .reduce((sum, row) => sum + (typeof row === "string" ? 1 : Math.min(99, Math.max(1, Math.round(Number(row.count) || 1)))), 0);
+      // The roster as the editor would have saved it (parseRoster: a row
+      // written as a bare name or as "goblin x4" counts), so the storyteller
+      // can run it and its placements and overrides are not cut off on
+      // arrival. A fight past the combatant cap still arrives as written:
+      // the readout says so, and a storyteller cuts it to fit when it runs
+      // (src/lib/dm/prepared-encounter-tool.ts).
+      const roster = parseRoster(encounter.enemies).slice(0, TEMPLATE_MAX_ROWS);
+      const slots = rosterSize(roster);
       const id = crypto.randomUUID();
       db.prepare(
         `INSERT INTO encounter_templates
@@ -459,7 +465,7 @@ function writeBundleRows(
         id,
         workshop.id,
         encounter.name,
-        JSON.stringify(encounter.enemies),
+        JSON.stringify(roster),
         encounter.battlefield,
         JSON.stringify(map),
         encounter.notes,
@@ -487,7 +493,10 @@ function writeBundleRows(
         tableId,
         workshop.id,
         dedupeName(table.name, tablesTaken),
-        JSON.stringify(table.entries),
+        // Read as the editor reads a paste (roll-table-logic.ts): a row the
+        // bundle wrote without its range is numbered, never stored as one
+        // no die can land on.
+        JSON.stringify(normalizeRollEntries(table.entries)),
         table.noReplacement ? 1 : 0,
         userId,
         now,

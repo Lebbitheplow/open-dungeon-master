@@ -1,4 +1,5 @@
 import { advanceRulesLine, openToAdvanceNames } from "@/lib/dm/advance-logic";
+import { defenseWords } from "@/lib/dm/pet-build";
 import { STORYTELLER_SECRET } from "@/lib/dm/viewer";
 import { attractionWords } from "@/lib/attraction";
 import { READIED, READIED_WORDS, RELEASE_TOOLS, readiedHeld } from "@/lib/dm/readied-kinds";
@@ -187,6 +188,9 @@ export type DmEncounterState = {
   // (src/lib/dm/encounter-tools.ts advancePointer); this adds their ids and
   // what to do.
   enemiesDue?: { before: string; enemies: Array<{ enemyId: string; name: string }> };
+  // A lair fight's printed options, numbered as lair_action takes them
+  // (src/lib/dm/legendary-tools.ts); absent when the lair prints none.
+  lairOptions?: string[];
   enemies: Array<{
     enemyId: string;
     name: string;
@@ -412,7 +416,7 @@ export function companionRules(campaign: Campaign, mode: "full" | "guests"): str
 ${setting}
 - A friendly NPC who joins one fight (a guard who takes your side, a stranger who draws a blade with the party) is a 'guest': add_companion them so the server tracks their HP, initiative, and attacks, and let them go afterwards. When a fight ends, every guest is dismissed AUTOMATICALLY and a table note says so; narrate their goodbye, and add_companion them again if the story keeps them around.
 - An ally who will fight or be targeted MUST go through add_companion BEFORE you narrate them joining, exactly like add_enemies for the other side; an ally who never went through add_companion has no sheet and cannot fight, be attacked, or be healed. Ordinary background NPCs (shopkeepers, quest-givers) are NOT companions; only use add_companion for someone who will act alongside the party.
-- A character's OWN bound creature (a familiar from Find Familiar, a Beast Master's companion, a Drakewarden's drake, a story pet) is a pet on their sheet, not a companion: a caster's Find Familiar is cast with cast_buff (the form in variant; the server pays the casting and binds the pet), and the others come with summon_pet (the server validates the granting feature and refuses characters who lack it), attack with pet_attack on the owner's own turn (it costs what the bond says: a Beast Master's companion the owner's action, a drake the bonus action, a Pact of the Chain familiar one attack of the Attack action; ordinary familiars cannot attack, and a downed owner commands nothing), route enemy damage at it with apply_damage and its petName (its own hit points, never the owner's; a familiar at 0 HP vanishes), and end the bond with dismiss_pet. Pets listed in GAME STATE are real; a pet not listed there does not exist.
+- A character's OWN bound creature (a familiar from Find Familiar, a Beast Master's companion, a Drakewarden's drake, a story pet) is a pet on their sheet, not a companion: a caster's Find Familiar is cast with cast_buff (the form in variant; the server pays the casting and binds the pet), and the others come with summon_pet (the server validates the granting feature and refuses characters who lack it), attack with pet_attack on the owner's own turn (it costs what the bond says: a Beast Master's companion the owner's action, a drake the bonus action, a Pact of the Chain familiar one attack of the Attack action; ordinary familiars cannot attack, and a downed owner commands nothing), route enemy damage at it with apply_damage, its petName and the damage's type (its own hit points and defenses, never the owner's; a familiar at 0 HP vanishes), and end the bond with dismiss_pet. Pets listed in GAME STATE are real; a pet not listed there does not exist.
 - You play companions fully. Speak their dialogue inline in your narration with a voice matching their personality brief. They are supporting cast: they advise, banter, and fight, but never make the party's decisions, never outshine the players, and never speak for a player character.
 - In combat, on a companion's initiative turn, act for them: move_token with no forced if they need to reposition (it spends their speed and draws opportunity attacks like any walk), then pc_attack or cast_at_enemy with their characterId (or another tool that fits), then end_turn for them if no attack fits. If you do nothing on their turn, the server makes a basic attack for them automatically.
 - A companion GAME STATE says a player commands in fights is the exception: on its turn that player gives its orders, and you resolve them from the player's message exactly as you resolve a player character's, never moving or attacking for it on your own. Its voice and choices out of fights stay yours.
@@ -655,8 +659,10 @@ export function describeSheet(
           .map((attack) => `${attack.name} +${attack.toHit} (${attack.damage} ${attack.type})`)
           .join(", ")}.`
       : " Cannot attack.";
+    // What it shrugs off, so the damage the DM routes at it carries a type.
+    const defenses = defenseWords(pet);
     lines.push(
-      `  Pet: ${pet.name} (${pet.form}, ${pet.kind.replaceAll("_", " ")}): ${pet.hp}/${pet.maxHp} HP, AC ${pet.ac}, speed ${pet.speed} ft.${attacks}${pet.notes ? ` ${pet.notes}` : ""}`,
+      `  Pet: ${pet.name} (${pet.form}, ${pet.kind.replaceAll("_", " ")}): ${pet.hp}/${pet.maxHp} HP, AC ${pet.ac}, speed ${pet.speed} ft.${attacks}${defenses ? ` Defenses: ${defenses}.` : ""}${pet.notes ? ` ${pet.notes}` : ""}`,
     );
   }
   // A creature a spell made: its stat block's attacks and how it ends
@@ -1005,6 +1011,9 @@ export function buildGameStateBlock(state: DmGameState): string {
       }
       if (encounter.movementLeft) {
         lines.push(`Movement left this turn: ${encounter.movementLeft}, counted by the board.`);
+      }
+      if (encounter.lairOptions) {
+        lines.push(`Lair options (lair_action by number): ${encounter.lairOptions.join(" ")}`);
       }
       // Their turns come first: asking the current character's player now
       // would leave them to the backstop.
@@ -1403,7 +1412,7 @@ export const requestRollTool = {
         damageType: {
           type: "string",
           description:
-            "damage only: the damage type (fire, slashing, poison...), so the target's resistances, immunities and vulnerabilities apply.",
+            "damage only: the damage type (fire, slashing, poison...), for resistances and immunities. Vulnerabilities apply too.",
         },
         advantage: {
           type: "string",
@@ -1425,7 +1434,7 @@ export const requestRollTool = {
         targetEnemyId: {
           type: "string",
           description:
-            "damage only, in combat, from someone with no sheet (an NPC ally who was never recruited): the enemy this damage strikes, exact enemyId from GAME STATE. The server applies the rolled total to that enemy automatically and reports its new state; never follow up with apply_damage. A party character's damage goes through pc_attack or the spell tools, and the server refuses it here.",
+            "damage only, in combat, from someone with no sheet: the enemy struck, exact enemyId from GAME STATE. Someone with no sheet is an NPC ally who was never recruited. The server applies the rolled total to that enemy automatically and reports its new state; never follow up with apply_damage. A party character's damage goes through pc_attack or the spell tools, and the server refuses it here.",
         },
         reason: {
           type: "string",
@@ -1436,7 +1445,7 @@ export const requestRollTool = {
           type: "string",
           enum: [...SAVE_AGAINST, NONE],
           description:
-            "saving_throw only: what the save resists: a condition (frightened, charmed, poisoned), a damage type (fire, poison), disease, dismount for being thrown from a mount, or 'none'. The server applies Brave, Fey Ancestry, Dwarven and Stout Resilience, Countercharm and the subclass traits from it.",
+            "saving_throw only: what the save resists (a condition, a damage type, disease, dismount) or 'none'. Such as frightened, charmed, poisoned; fire, poison; dismount for being thrown from a mount. The server applies Brave, Fey Ancestry, Dwarven and Stout Resilience, Countercharm and the subclass traits from it.",
         },
         magical: {
           type: "boolean",
@@ -1450,7 +1459,7 @@ export const requestRollTool = {
         tool: {
           type: "string",
           description:
-            "ability_check with a tool only: the tool's name as the sheet lists it (\"thieves' tools\" to pick a lock or disarm a trap, \"herbalism kit\"). A character proficient in it adds their proficiency bonus; the server does it, so never add it to an expression yourself.",
+            "ability_check with a tool only: the tool's name as the sheet lists it (\"thieves' tools\"). Also \"herbalism kit\"; thieves' tools pick a lock or disarm a trap. A character proficient in it adds their proficiency bonus; the server does it, so never add it to an expression yourself.",
         },
         useInspiration: {
           type: "boolean",
@@ -1465,17 +1474,17 @@ export const requestRollTool = {
         againstEnemyId: {
           type: "string",
           description:
-            "A contest (SRD 5.1): the enemy of the running fight that opposes this skill or ability check. The server rolls that creature's own check from its stat block (Insight against a lie, Perception against Stealth, Athletics against Athletics) and the character must beat it; a tie leaves things as they were. Send no dc or difficulty with it.",
+            "A contest in a fight: the enemy opposing this skill or ability check, exact enemyId from GAME STATE. The server rolls that creature's own check from its stat block, as SRD 5.1 contests do (Insight against a lie, Perception against Stealth, Athletics against Athletics) and the character must beat it; a tie leaves things as they were. Send no dc or difficulty with it.",
         },
         againstMonster: {
           type: "string",
           description:
-            "Out of a fight: the stat block, by name, of the creature that opposes the check (a guard, a spy, a goblin); the server rolls its check the same way.",
+            "Out of a fight: the stat block, by name, of the creature that opposes the check (a guard, a goblin). The server rolls that creature's own check from its stat block, as for againstEnemyId.",
         },
         contestSkill: {
           type: "string",
           description:
-            "The creature's skill in the contest, when the usual pairing is not the one wanted (it rolls Athletics to hold a door shut against a shove).",
+            "The creature's skill in the contest ('athletics'), when the usual pairing is not the one wanted. Such as Athletics to hold a door shut against a shove.",
         },
       },
       required: ["kind"],

@@ -53,22 +53,22 @@ export const handleItemTool = {
   function: {
     name: "handle_item",
     description:
-      "What a character (or an enemy) does with the gear in their hands, at its real cost. equip / unequip: put on or take off a shield (one action, on their own turn), draw or stow a weapon or other held thing (their free object interaction; a second takes the Use an Object action), wear or take off armor or a worn item (armor never changes in a fight; outside one the clock moves by the minutes it takes). drop: free; the item lies where it fell on the board, NOT destroyed, and anyone within 5 ft can pick_up it (use this, never remove_item, for anything set down, knocked away or let fall). pick_up: an item on the ground (its name or id from GAME STATE's ground list), from within 5 ft in a fight; the free object interaction. hand: give an item to an ally within 5 ft (the giver's free object interaction). An enemy may drop (something it holds: a disarmed blade) or pick_up an item on the ground; give enemyId instead of characterId.",
+      "Equip, unequip, drop, pick up or hand over gear for a character (or an enemy), at its real cost. equip / unequip: put on or take off a shield (one action, on their own turn), draw or stow a weapon or other held thing (their free object interaction; a second takes the Use an Object action), wear or take off armor or a worn item (armor never changes in a fight; outside one the clock moves by the minutes it takes). drop: free; the item lies where it fell on the board, NOT destroyed, and anyone within 5 feet can pick it up with pick_up (use this, never remove_item, for anything set down, knocked away or let fall). pick_up: an item on the ground, from within 5 feet in a fight; the free object interaction. hand: give an item to an ally within 5 feet (the giver's free object interaction). An enemy may drop (something it holds: a disarmed blade) or pick_up an item on the ground; give enemyId instead of characterId.",
     parameters: {
       type: "object",
       additionalProperties: false,
       properties: {
-        characterId: { type: "string", description: "The character who acts." },
-        enemyId: { type: "string", description: "Or the enemy who acts (drop or pick_up only)." },
+        characterId: { type: "string", description: "The character who acts: exact characterId from GAME STATE." },
+        enemyId: { type: "string", description: "Or the enemy who acts (drop or pick_up only): exact enemyId from GAME STATE." },
         action: { type: "string", enum: [...ACTIONS] },
         item: {
           type: "string",
-          description: "The carried item's name; for pick_up the item on the ground (name or id); for an enemy's drop what it lets fall.",
+          description: "The item's name: one carried, or for pick_up the one on the ground (name or id from GAME STATE). For an enemy's drop, what it lets fall.",
         },
-        qty: { type: "integer", minimum: 1, maximum: 99, description: "How many of a stack (drop, hand, pick_up). One when left out." },
+        qty: { type: "integer", minimum: 1, maximum: 99, description: "How many of a stack (drop, hand, pick_up). One when omitted." },
         srdName: { type: "string", description: "An enemy's drop in the table's language: its SRD or pack name in English ('Scimitar')." },
         tags: { type: "array", items: { type: "string" }, description: "An enemy's drop only: as grant_item's tags." },
-        toCharacterId: { type: "string", description: "hand: who receives it." },
+        toCharacterId: { type: "string", description: "hand: who receives it, exact characterId from GAME STATE." },
         reason: { type: "string" },
       },
       required: ["action", "item"],

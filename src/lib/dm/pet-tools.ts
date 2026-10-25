@@ -8,27 +8,23 @@ import { rollAgainst } from "@/lib/roll-labels";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { d20Expression, rollExpression } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
-import { proficiencyBonus } from "@/lib/srd";
-import { beastFormsHolding, findBeastForm } from "@/lib/srd/beast-forms";
 import { textKey } from "@/lib/language/text-logic";
-import { isNamed } from "@/lib/srd/feature-names";
 import { publishEncounter } from "@/lib/dm/enemy-damage";
 import { activeAuthored } from "@/lib/srd/authored-effects";
 import { enemyAcWithEffects } from "@/lib/dm/ac-effects";
 import { petAttackCost } from "@/lib/dm/pet-attack-cost";
 import { resolveSheetRef, unknownSheetRef } from "@/lib/dm/rolls";
 import type { CharacterSheet, SheetPet } from "@/lib/schemas/sheet";
-import { allSpellNames } from "@/lib/srd/spell-lists";
-import { familiarFormsHolding, familiarOffer, findFamiliarForm } from "@/lib/srd/familiar-forms";
 import { attackDamage, attackSummary } from "@/lib/srd/creature-attacks";
-import { traitLine } from "@/lib/srd/srd-creatures";
-import { sizeRank } from "@/lib/bestiary/statblock";
 import { critDamageExpression } from "@/lib/dm/encounter-logic";
 import { naturalAttackProfile, pickNaturalAttack } from "@/lib/dm/natural-attack";
 import { landNaturalOnHit } from "@/lib/dm/natural-onhit";
 import { landBlow } from "@/lib/dm/pc-attack-damage";
-import { holdingHint, noneNamed, toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
-import { subclassNamed } from "@/lib/srd/subclass-name";
+import { noneNamed, toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
+import { buildPet, defenseWords, DRAKE_ESSENCES } from "@/lib/dm/pet-build";
+import { damageAdjust } from "@/lib/dm/damage-logic";
+import { findTableMonster } from "@/lib/bestiary/homebrew-monsters";
+import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 
 // The creatures bound to a character: familiars (Find Familiar, Pact of the
 // Chain), the Beast Master's companion, the Drakewarden's drake, and story
@@ -54,17 +50,22 @@ export const petTools: ToolDef[] = [
     function: {
       name: "summon_pet",
       description:
-        "Summon or bond the creature a feature grants a character: Find Familiar (kind=familiar, form=bat/cat/crab/frog/hawk/lizard/octopus/owl/poisonous snake/quipper/rat/raven/sea horse/spider/weasel, or imp/quasit/pseudodragon/sprite with Pact of the Chain), a Beast Master ranger's companion (kind=beast_companion, a Medium or smaller beast of CR 1/4 or lower), a Drakewarden's drake (kind=drake), or a story-granted pet (kind=other, with the stats). The server validates the feature, loads the stat block, and attaches the pet to their sheet. Call it BEFORE narrating the summon.",
+        "Summon or bond a creature a feature grants: kind familiar (Find Familiar), beast_companion (Beast Master), drake (Drakewarden, its essence) or other (a story pet: a stat block's name, or hp and ac). A story pet with no stat block cannot attack. A Find Familiar form is bat, cat, crab, frog, hawk, lizard, octopus, owl, poisonous snake, quipper, rat, raven, sea horse, spider or weasel, or imp, quasit, pseudodragon or sprite with Pact of the Chain. A Beast Master companion is a Medium or smaller beast of CR 1/4 or lower. A story pet named for an SRD creature (mastiff, wolf, riding horse) or a monster the table made in the workshop takes that stat block, and fights with it when its CR is no higher than a druid of the owner's level could become (1/4, 1/2 from 4th level, 1 from 8th). The server validates the feature, loads the stat block, and attaches the pet to their sheet. Call it BEFORE narrating the summon.",
       parameters: {
         type: "object",
         additionalProperties: false,
         properties: {
           characterId: { type: "string", description: "Exact characterId from GAME STATE." },
           kind: { type: "string", enum: ["familiar", "beast_companion", "drake", "other"] },
-          form: { type: "string", description: "The creature ('owl', 'wolf', 'drake')." },
+          form: { type: "string", description: "The creature ('owl', 'wolf', 'drake'); for a story pet its stat block's name when it has one." },
           name: { type: "string", description: "The pet's given name. Default: the form." },
-          hp: { type: "integer", minimum: 1, maximum: 300, description: "kind=other only." },
-          ac: { type: "integer", minimum: 1, maximum: 30, description: "kind=other only." },
+          essence: {
+            type: "string",
+            enum: [...DRAKE_ESSENCES],
+            description: "kind=drake only: its Draconic Essence, the damage type it is immune to. The player chooses it at each summon.",
+          },
+          hp: { type: "integer", minimum: 1, maximum: 300, description: "kind=other with no stat block only, and required for it: the pet's HP." },
+          ac: { type: "integer", minimum: 1, maximum: 30, description: "kind=other with no stat block only, and required for it: the pet's armor class." },
           reason: { type: "string", description: "Short in-fiction cause." },
         },
         required: ["characterId", "kind", "form"],
@@ -76,7 +77,7 @@ export const petTools: ToolDef[] = [
     function: {
       name: "pet_attack",
       description:
-        "Resolve a character's pet attacking an enemy: the server checks the pet may attack at all (plain familiars cannot; Pact of the Chain forms, companions and drakes can), rolls to-hit against the enemy's real AC and damage with the pet's real numbers, and applies the result. In a fight it happens on the owner's own turn, while the owner can act, and the server charges it: a Beast Master companion costs the ranger's action, a drake the bonus action, a Pact of the Chain familiar one of the warlock's attacks of the Attack action (once a turn), a story pet the owner's action. A refusal spends nothing.",
+        "Resolve a character's pet attacking an enemy; in a fight it happens on the owner's own turn, and the server rolls and applies it with the pet's real numbers. The server checks the pet may attack at all (plain familiars cannot; Pact of the Chain forms, companions and drakes can) and rolls to-hit against the enemy's real AC. In a fight the owner must be able to act, and the server charges the attack: a Beast Master companion costs the ranger's action, a drake the bonus action, a Pact of the Chain familiar one of the warlock's attacks of the Attack action (once a turn), a story pet the owner's action. A refusal spends nothing.",
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -116,6 +117,7 @@ const summonSchema = z.object({
   kind: z.enum(["familiar", "beast_companion", "drake", "other"]),
   form: z.string().trim().min(1).max(60),
   name: z.string().trim().max(60).optional(),
+  essence: z.string().trim().max(20).optional(),
   hp: z.coerce.number().int().min(1).max(300).optional(),
   ac: z.coerce.number().int().min(1).max(30).optional(),
   reason: z.string().optional(),
@@ -133,6 +135,10 @@ const damagePetSchema = z.object({
   characterId: z.string(),
   petName: z.string().trim().max(60).optional(),
   amount: z.coerce.number().int().min(0).max(300),
+  // What the damage is, which the pet's defenses meet (issue 520): an imp
+  // shrugs off fire, a fire drake its essence.
+  type: z.string().trim().max(20).optional(),
+  magical: z.boolean().optional(),
   reason: z.string().optional(),
 });
 
@@ -141,36 +147,6 @@ const dismissSchema = z.object({
   petName: z.string().trim().max(60).optional(),
   reason: z.string().optional(),
 });
-
-// The names of a sheet's features and feats, as written.
-function featureNames(sheet: CharacterSheet): string[] {
-  return [...sheet.features.map((feature) => feature.name), ...sheet.feats];
-}
-
-function knowsFindFamiliar(sheet: CharacterSheet): boolean {
-  const spellList = sheet.spellcasting
-    ? allSpellNames(sheet.spellcasting)
-    : [];
-  return [...spellList, ...featureNames(sheet)].some((name) => isNamed(name, "Find Familiar"));
-}
-
-function hasPactOfTheChain(sheet: CharacterSheet): boolean {
-  return featureNames(sheet).some((name) => isNamed(name, "Pact of the Chain"));
-}
-
-function hasBeastCompanionFeature(sheet: CharacterSheet): boolean {
-  return (
-    subclassNamed(sheet.subclass ?? "", "Beast Master") ||
-    featureNames(sheet).some((name) => isNamed(name, "Ranger's Companion", "Animal Companion"))
-  );
-}
-
-function hasDrakeFeature(sheet: CharacterSheet): boolean {
-  return (
-    subclassNamed(sheet.subclass ?? "", "Drakewarden") ||
-    featureNames(sheet).some((name) => isNamed(name, "Drake Companion"))
-  );
-}
 
 // A creature the call names that the sheet does not hold: the call's to fix,
 // from the creatures they have.
@@ -204,123 +180,8 @@ function publishSheet(campaign: Campaign, sheetId: string) {
   }
 }
 
-// Builds the pet a summon produces, or an error string.
-export function buildPet(
-  sheet: CharacterSheet,
-  args: {
-    kind: SheetPet["kind"];
-    form: string;
-    name?: string;
-    hp?: number;
-    ac?: number;
-  },
-): SheetPet | ToolError {
-  const level = sheet.level;
-  const pb = proficiencyBonus(level);
-  if (args.kind === "familiar") {
-    if (!knowsFindFamiliar(sheet) && !hasPactOfTheChain(sheet)) {
-      return {
-        error: `${sheet.name} does not know Find Familiar and has no Pact of the Chain; they cannot summon a familiar.`,
-        refused: "rules",
-      };
-    }
-    const form = findFamiliarForm(args.form);
-    if (!form) {
-      const offer = familiarOffer(hasPactOfTheChain(sheet));
-      return {
-        error: args.form.trim()
-          ? `Unknown familiar form "${args.form.trim()}". The forms there are: ${offer}.${holdingHint(args.form, familiarFormsHolding(args.form))} Ask the player which, unless they named one.`
-          : `A familiar needs its form: ${offer}. Ask the player which, unless they named one.`,
-        retry: true,
-      };
-    }
-    if (form.chainOnly && !hasPactOfTheChain(sheet)) {
-      return {
-        error: `A ${form.form} familiar needs Pact of the Chain; ${sheet.name} can take an ordinary form instead (${familiarOffer(false)}). Ask the player which.`,
-        retry: true,
-      };
-    }
-    return {
-      name: args.name?.trim() || form.form,
-      kind: "familiar",
-      form: form.form,
-      hp: form.hp,
-      maxHp: form.maxHp,
-      ac: form.ac,
-      speed: form.speed,
-      attacks: form.attacks,
-      notes: `${form.notes} A familiar acts on its own but cannot attack${form.chainOnly ? "" : " (Pact of the Chain forms can)"}; the owner can see through its senses as an action.`,
-    };
-  }
-  if (args.kind === "beast_companion") {
-    if (!hasBeastCompanionFeature(sheet)) {
-      return {
-        error: `${sheet.name} has no Ranger's Companion feature; only a Beast Master gets a bonded beast.`,
-        refused: "rules",
-      };
-    }
-    // PHB Beast Master: a beast no larger than Medium, of challenge rating
-    // 1/4 or lower.
-    const beast = findBeastForm(args.form);
-    const fits = (entry: { cr: number; size: string }) => entry.cr <= 0.25 && sizeRank(entry.size) <= sizeRank("Medium");
-    if (!beast || !fits(beast)) {
-      return {
-        error: `A ranger's companion must be a Medium or smaller beast of CR 1/4 or lower (wolf, panther, boar, mastiff...)${beast ? `; a ${beast.name} is ${beast.size}, CR ${beast.cr}` : ""}.${beast ? "" : holdingHint(args.form, beastFormsHolding(args.form).filter(fits).map((entry) => entry.name))}`,
-        retry: true,
-      };
-    }
-    // PHB Beast Master: add the ranger's proficiency bonus to the beast's
-    // AC, attack and damage rolls; HP floor of four times ranger level.
-    return {
-      name: args.name?.trim() || beast.name,
-      kind: "beast_companion",
-      form: beast.name,
-      hp: Math.max(beast.hp, level * 4),
-      maxHp: Math.max(beast.hp, level * 4),
-      ac: beast.ac + pb,
-      speed: beast.speed,
-      attacks: beast.attacks.slice(0, 3).map((attack) => ({
-        ...attack,
-        toHit: attack.toHit + pb,
-        damage: `${attack.damage}+${pb}`,
-      })),
-      // The pet record keeps 300 characters of notes: the beast's traits as
-      // fit, then the command rule.
-      notes: `${traitLine(beast.traitLines, 200)} Commanding an attack costs the ranger's action; it otherwise defends itself.`.trim(),
-    };
-  }
-  if (args.kind === "drake") {
-    if (!hasDrakeFeature(sheet)) {
-      return { error: `${sheet.name} has no Drake Companion feature; only a Drakewarden bonds a drake.`, refused: "rules" };
-    }
-    return {
-      name: args.name?.trim() || "Drake",
-      kind: "drake",
-      form: "Drake",
-      hp: 5 + level * 5,
-      maxHp: 5 + level * 5,
-      ac: 14,
-      speed: 40,
-      attacks: [{ name: "Bite", toHit: 2 + pb, damage: `1d6+${pb}`, type: "piercing" }],
-      notes: `Infused with the ranger's chosen essence; commanded as a bonus action. It grows wings at higher ranger levels.`,
-    };
-  }
-  // Story pet: the model supplies honest numbers, clamped by the schema.
-  if (!args.hp || !args.ac) {
-    return { error: `A story pet needs hp and ac from its stat block.`, retry: true };
-  }
-  return {
-    name: args.name?.trim() || args.form,
-    kind: "other",
-    form: args.form,
-    hp: args.hp,
-    maxHp: args.hp,
-    ac: args.ac,
-    speed: 30,
-    attacks: [],
-    notes: "",
-  };
-}
+// The stat blocks a summon produces live in src/lib/dm/pet-build.ts.
+export { buildPet };
 
 export function handleSummonPet(
   campaign: Campaign,
@@ -343,8 +204,10 @@ export function handleSummonPet(
     return { error: `${sheet.name} already has ${sheet.pets.length} bound creatures (${sheet.pets.map((pet) => pet.name).join(", ")}); one is dismissed first. Ask the player which.`, retry: true };
   }
   // One creature per source: a second familiar replaces the first (5e: the
-  // ritual re-shapes the same spirit), companions and drakes are unique.
-  const built = buildPet(sheet, args);
+  // ritual re-shapes the same spirit), companions and drakes are unique. A
+  // story pet may be a monster this table's DMs built in the workshop.
+  const authors = spellAuthorsFor(campaign);
+  const built = buildPet(sheet, args, { tableMonster: (name) => findTableMonster(authors, name) });
   if ("error" in built) {
     return built;
   }
@@ -360,6 +223,7 @@ export function handleSummonPet(
           attacks: built.attacks.map(attackSummary).join(", "),
         }
       : { attacks: "none: this creature cannot attack" }),
+    ...(defenseWords(built) ? { defenses: defenseWords(built) } : {}),
     ...(built.notes ? { notes: built.notes } : {}),
   };
 }
@@ -391,7 +255,10 @@ export function handlePetAttack(
   }
   if (!pet.attacks.length) {
     return {
-      error: `${pet.name} is an ordinary familiar and cannot attack (only Pact of the Chain forms fight). It can scout, deliver touch spells, and grant its senses instead.`,
+      error:
+        pet.kind === "familiar"
+          ? `${pet.name} is an ordinary familiar and cannot attack (only Pact of the Chain forms fight). It can scout, deliver touch spells, and grant its senses instead.`
+          : `${pet.name} has no attacks on record, so it cannot attack.`,
       refused: "rules",
     };
   }
@@ -540,7 +407,15 @@ export function handleDamagePet(
   if (!pet) {
     return noPet(sheet, args.petName);
   }
-  const hp = Math.max(0, pet.hp - args.amount);
+  // The damage meets the pet's own defenses, as a character's meets theirs:
+  // an imp takes no fire, a drake none of its essence.
+  const adjusted = damageAdjust(args.amount, args.type, pet.resist ?? "", pet.immune ?? "", pet.vulnerable ?? "", {
+    magical: args.magical === true,
+  });
+  const dealt = adjusted.amount;
+  const typed = args.type?.trim() ? { type: args.type.trim() } : {};
+  const defended = adjusted.note ? { defenses: `${pet.name} is ${adjusted.note}.` } : {};
+  const hp = Math.max(0, pet.hp - dealt);
   if (hp <= 0 && pet.kind === "familiar") {
     // A familiar at 0 HP vanishes; the spell brings it back later.
     const pets = sheet.pets.filter((entry) => entry !== pet);
@@ -549,7 +424,9 @@ export function handleDamagePet(
     return {
       ok: true,
       pet: pet.name,
-      damage: args.amount,
+      damage: dealt,
+      ...typed,
+      ...defended,
       vanished: `${pet.name} drops and dissolves into shimmering mist. ${sheet.name} can resummon it by casting Find Familiar again (10 gp of incense, one hour).`,
     };
   }
@@ -559,7 +436,9 @@ export function handleDamagePet(
   return {
     ok: true,
     pet: pet.name,
-    damage: args.amount,
+    damage: dealt,
+    ...typed,
+    ...defended,
     hp: `${hp}/${pet.maxHp}`,
     ...(hp <= 0 ? { down: `${pet.name} falls unconscious at 0 HP.` } : {}),
   };

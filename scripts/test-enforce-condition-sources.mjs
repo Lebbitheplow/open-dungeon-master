@@ -151,6 +151,48 @@ await test("F15: ... and through aoe_damage", async () => {
   assert.ok(now.includes("incapacitated"), now.join(", "));
 });
 
+await test("F15: a condition a protection refuses is reported, on both of a monster's paths and on a player's own area spell", async () => {
+  const pattern = {
+    spells: ["Hypnotic Pattern"],
+    spellcasting: { dc: 16, casterLevel: 5, spells: [{ name: "Hypnotic Pattern", level: 3 }], slots: { 3: 2 } },
+  };
+  const warded = (world, sheet) => world.patch(sheet.id, { conditions: ["mind blank"], conditionMeta: {} });
+  {
+    const { world, sheets: [fighter], enemies: [foe] } = await table([FIGHTER], 1, pattern);
+    warded(world, fighter);
+    world.dice(1);
+    const single = await world.invoke("cast_at_player", { characterId: fighter.id, casterEnemyId: foe.id, spell: "Hypnotic Pattern", saveAbility: "wis", dc: 16 });
+    world.clearDice();
+    assert.equal(single.ok, true, single.error);
+    assert.match(String(single.result.conditionRefused), /Mind Blank/i, JSON.stringify(single.result));
+    assert.ok(!world.sheet(fighter.id).conditions.includes("charmed"));
+  }
+  {
+    const { world, sheets: [fighter], enemies: [foe] } = await table([FIGHTER], 1, pattern);
+    warded(world, fighter);
+    world.dice(1);
+    const area = await world.invoke("aoe_damage", { casterEnemyId: foe.id, spell: "Hypnotic Pattern", characterIds: [fighter.id], saveAbility: "wis", dc: 16 });
+    world.clearDice();
+    assert.equal(area.ok, true, area.error);
+    assert.match(JSON.stringify(area.result), /conditionRefused/, JSON.stringify(area.result));
+    assert.ok(!world.sheet(fighter.id).conditions.includes("charmed"));
+  }
+  {
+    // A player's Hypnotic Pattern over two allies: one bound, one warded.
+    const { world, sheets: [fighter, friend, mage] } = await table([FIGHTER, { ...FIGHTER, name: "Tamsin" }, caster("wizard", "int", ["Hypnotic Pattern"], [], 5)], 1, pattern);
+    warded(world, fighter);
+    world.dice(1, 1);
+    const own = await world.invoke("aoe_damage", { casterId: mage.id, spell: "Hypnotic Pattern", characterIds: [fighter.id, friend.id], saveAbility: "wis" });
+    world.clearDice();
+    assert.equal(own.ok, true, own.error);
+    const rows = JSON.stringify(own.result);
+    assert.ok(world.sheet(friend.id).conditions.includes("charmed"), rows);
+    assert.ok(!world.sheet(fighter.id).conditions.includes("charmed"), rows);
+    assert.match(rows, /"conditionApplied":"charmed/, rows);
+    assert.match(rows, /conditionRefused/, rows);
+  }
+});
+
 await test("F16: False Life's temporary hit points go when the spell does", async () => {
   const world = await openWorld();
   const mage = world.addHero(caster("wizard", "int", ["False Life"]));

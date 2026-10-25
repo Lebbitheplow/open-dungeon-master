@@ -121,11 +121,11 @@ function prepareFight(campaign: Campaign, npcId: string, name: string, gone: Gon
   if (!combatant || !wearing) {
     return null;
   }
-  // Every sheet at the table, as start_encounter budgets a fight.
-  const atTable = listSheets(campaign.id).filter((sheet) => !sheet.deathSaves?.dead).map((sheet) => sheet.level);
   const values = companionValues(npcId);
   const plan = planReturn({
-    partyLevels: atTable.length ? atTable : partyLevelsFor(campaign),
+    // The party start_encounter will budget the fight against
+    // (src/lib/dm/party-budget.ts).
+    partyLevels: partyLevelsFor(campaign),
     difficulty: campaign.difficulty,
     companionCr: combatant.cr,
     hostile: gone.hostile || (standing !== null && standing < -59),

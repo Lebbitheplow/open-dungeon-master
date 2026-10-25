@@ -1,6 +1,6 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { byName, textKey } from "@/lib/language/text-logic";
-import type { RollTableEntry } from "@/lib/dm/roll-table-logic";
+import { normalizeRollEntries, type RollTableEntry } from "@/lib/dm/roll-table-logic";
 import { dedupeName } from "@/lib/workshop/import";
 
 // DM-authored random tables. Owned by the campaign, written by whoever holds
@@ -38,7 +38,9 @@ function mapTable(row: TableRow): RollTable {
     id: row.id,
     campaignId: row.campaign_id,
     name: row.name,
-    entries: parseJson<RollTableEntry[]>(row.entries_json, []),
+    // Read as the editor reads a paste, so a row stored without its range (a
+    // bundle written by hand, before imports were read this way) rolls.
+    entries: normalizeRollEntries(parseJson<unknown>(row.entries_json, [])),
     drawn: parseJson<number[]>(row.drawn_json ?? "[]", []).filter((value) => Number.isInteger(value)),
     noReplacement: row.no_replacement === 1,
     createdByUserId: row.created_by_user_id,

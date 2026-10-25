@@ -25,10 +25,52 @@ export type MarchState = {
   // `ids` are the characters still choosing, `sung` those whose Song of Rest
   // die is spent. Closed the moment the clock moves again.
   shortRest?: { ids: string[]; sung: string[] };
-  // Damage each named object has taken, by its name in lower case, so a
-  // door struck twice remembers the first blow (src/lib/dm/object-damage.ts).
-  objects?: Record<string, number>;
+  // Each named object by its name in lower case: the damage it has taken,
+  // so a door struck twice remembers the first blow, and what the first call
+  // naming it decided it is, so a later call that names no material or size
+  // does not make the iron gate a wooden one (src/lib/dm/object-damage.ts).
+  objects?: Record<string, ObjectRecord>;
 };
+
+// One named object as the clock keeps it. A clock written before the
+// numbers were kept holds the damage alone, which reads as `taken`.
+export type ObjectRecord = {
+  taken: number;
+  ac?: number;
+  hp?: number;
+  threshold?: number;
+  broken?: boolean;
+};
+
+const bounded = (value: unknown, min: number, max: number): number | undefined => {
+  const number = Number(value);
+  return Number.isFinite(number) && value !== null && value !== "" ? Math.max(min, Math.min(max, Math.round(number))) : undefined;
+};
+
+function normalizeObjectRecord(raw: unknown): ObjectRecord | null {
+  if (typeof raw === "number" || typeof raw === "string") {
+    const taken = bounded(raw, 0, 10000);
+    return taken === undefined ? null : { taken };
+  }
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  const entry = raw as Record<string, unknown>;
+  const taken = bounded(entry.taken, 0, 10000);
+  if (taken === undefined) {
+    return null;
+  }
+  const ac = bounded(entry.ac, 1, 30);
+  const hp = bounded(entry.hp, 1, 1000);
+  const threshold = bounded(entry.threshold, 1, 100);
+  return {
+    taken,
+    ...(ac !== undefined ? { ac } : {}),
+    ...(hp !== undefined ? { hp } : {}),
+    ...(threshold !== undefined ? { threshold } : {}),
+    ...(entry.broken === true ? { broken: true } : {}),
+  };
+}
 
 function normalizeSupplies(raw: unknown): MarchState["supplies"] {
   if (!raw || typeof raw !== "object") {
@@ -55,9 +97,10 @@ export function normalizeMarch(record: Record<string, unknown>): MarchState {
   const waterRation = record.waterRation === "half" || record.waterRation === "none" ? record.waterRation : undefined;
   const objectsRaw = record.objects && typeof record.objects === "object" ? Object.entries(record.objects as Record<string, unknown>) : [];
   const objectEntries = objectsRaw
-    .filter(([name, taken]) => name.length <= 60 && Number.isFinite(Number(taken)))
-    .slice(-40)
-    .map(([name, taken]): [string, number] => [name, Math.max(0, Math.min(10000, Math.round(Number(taken))))]);
+    .filter(([name]) => name.length <= 60)
+    .map(([name, raw]): [string, ObjectRecord | null] => [name, normalizeObjectRecord(raw)])
+    .filter((entry): entry is [string, ObjectRecord] => entry[1] !== null)
+    .slice(-40);
   const objects = objectEntries.length ? Object.fromEntries(objectEntries) : undefined;
   const restRaw = record.shortRest as { ids?: unknown; sung?: unknown } | undefined;
   const ids = (list: unknown) =>
