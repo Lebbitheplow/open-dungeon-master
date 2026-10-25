@@ -26,6 +26,7 @@ import { dmRoll } from "@/lib/dm/roll-card";
 import type { ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
 import { fieldSheetFoes, sheetFoesByName, type SheetFoe, type SheetFoeEntry } from "@/lib/dm/sheet-foes";
+import { fightingParty, MAX_COMBATANTS } from "@/lib/dm/party-budget";
 
 // Enemy spawning shared by start_encounter and the mid-combat add_enemies
 // tool, so reinforcements and summons are real server-tracked combatants
@@ -210,11 +211,12 @@ export function handleAddEnemies(
   const foes = outcome.resolved.flatMap((entry) => (entry.sheetFoe ? [entry.sheetFoe] : []));
   const existing = listEnemies(encounter.id);
   const alive = existing.filter((enemy) => enemy.status === "alive");
-  if (alive.length + outcome.resolved.length > 8) {
-    return { error: "Too many combatants: keep the fight to 8 living enemies or fewer.", retry: true };
+  if (alive.length + outcome.resolved.length > MAX_COMBATANTS) {
+    return { error: `Too many combatants: keep the fight to ${MAX_COMBATANTS} living enemies or fewer.`, retry: true };
   }
-  // Budget check over the whole living opposition, reinforcements included.
-  const partyLevels = sheets.map((sheet) => sheet.level);
+  // Budget check over the whole living opposition, reinforcements included,
+  // against the characters fighting it (src/lib/dm/party-budget.ts).
+  const partyLevels = fightingParty(campaign, sheets).map((sheet) => sheet.level);
   const evaluation = evaluateEncounter(partyLevels, [
     ...alive.map((enemy) => enemy.cr),
     ...outcome.resolved.map((entry) => entry.stats.cr),
