@@ -430,6 +430,17 @@ await test("every writer records inside the fix's own transaction", () => {
   }
 });
 
+await test("an erased account's fixes stay counted without the link to the person", () => {
+  const before = ledger.listTurnCorrections();
+  const theirs = before.filter((correction) => correction.userId === world.owner.id).length;
+  assert.ok(theirs > 0);
+  ledger.forgetCorrectionsBy(world.owner.id);
+  const after = ledger.listTurnCorrections();
+  assert.equal(after.length, before.length, "the counts stay");
+  assert.equal(after.filter((correction) => correction.userId === world.owner.id).length, 0);
+  assert.ok(fs.readFileSync(path.join(import.meta.dirname, "../src/lib/account-deletion.ts"), "utf8").includes("forgetCorrectionsBy(userId)"), "purgeAccount forgets them");
+});
+
 if (failed) {
   throw new Error(`correction ledger: ${failed} test(s) failed`);
 }

@@ -147,6 +147,12 @@ export function setCorrectionReason(campaignId: string, userId: string, ids: rea
   return changed;
 }
 
+// An account erased (src/lib/account-deletion.ts): its fixes stay counted,
+// without the link to a person, as the usage ledger keeps its counts.
+export function forgetCorrectionsBy(userId: string): void {
+  getDatabase().prepare(`UPDATE turn_corrections SET user_id = '' WHERE user_id = ?`).run(userId);
+}
+
 export function listTurnCorrections(campaignId?: string): TurnCorrection[] {
   const rows = (
     campaignId

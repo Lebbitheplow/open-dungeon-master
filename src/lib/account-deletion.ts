@@ -1,5 +1,6 @@
 import { getGlobalConfig } from "@/lib/db/app-settings";
 import { forgetUsageFor } from "@/lib/usage/ledger";
+import { forgetCorrectionsBy } from "@/lib/db/turn-ledger";
 import { removeCampaignAudio } from "@/lib/campaign-deletion";
 import { deleteCampaign } from "@/lib/db/campaigns";
 import { getDatabase, parseJson } from "@/lib/db/core";
@@ -137,6 +138,8 @@ export function purgeAccount(userId: string) {
     db.prepare(`UPDATE campaign_messages SET user_id = NULL WHERE user_id = ?`).run(userId);
     // The usage ledger too: counts stay, the name goes.
     forgetUsageFor(userId);
+    // And the correction ledger's fixes (src/lib/db/turn-ledger.ts).
+    forgetCorrectionsBy(userId);
     // And the record of who made each stored file (src/lib/media-access.ts).
     db.prepare(`UPDATE media_files SET user_id = NULL WHERE user_id = ?`).run(userId);
 
