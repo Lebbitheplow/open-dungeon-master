@@ -9,6 +9,7 @@ import type { Ability } from "@/lib/schemas/sheet";
 import { canonicalRaceId, srdRaceFor } from "@/lib/content/race-options";
 import { textKey } from "@/lib/language/text-logic";
 import { SRD_SKILLS } from "@/lib/srd";
+import { ABILITY_NAMES } from "@/lib/srd/legality/types";
 
 const BASE = "/assets/placeholders";
 
@@ -19,6 +20,9 @@ export type LineageEntry = {
   name: string;
   asi: Partial<Record<Ability, number>>;
   asiChoice?: { count: number; amount: number };
+  // A species that lets its player choose (species-variants.ts): each
+  // option's bonuses, for the card's chip.
+  variants?: { options: Array<{ asi?: Partial<Record<Ability, number>> }> };
   bonusLanguages?: number;
   skillChoice?: { count: number; from?: string[] };
   cantripChoice?: { list: string; count: number };
@@ -195,7 +199,42 @@ export function lineageTagline(entry: Pick<LineageEntry, "asi" | "asiChoice">): 
   return ASI_CHARACTER[top[0]] ?? "";
 }
 
-export type AsiChip = { ability: string; bonus: string; label: string };
+// Card faces (backlog F11): a chip may print an ability's three-letter code
+// ("CON +2", "INT caster"), which AbilityAbbr.tsx wraps so a screen reader
+// hears the name ("Constitution +2"); a hit die is said in words ("High HP"),
+// its die added only with "Show rules and numbers" on.
+
+// An ability key as its name; a content pack's own key is shown as given.
+export function abilityName(ability: string): string {
+  return ABILITY_NAMES[ability] ?? ability.charAt(0).toUpperCase() + ability.slice(1);
+}
+
+// "INT caster": its own chip, so the play line above it never runs out of room.
+export function casterChip(ability: string): string {
+  return `${ability.toUpperCase()} caster`;
+}
+
+// A hit die in words: how many hit points the class gains each level. A
+// pack's odd die takes the word of the nearest size below it.
+export function hitDieWords(hitDie: number): string {
+  if (hitDie >= 12) return "Very high HP";
+  if (hitDie >= 10) return "High HP";
+  if (hitDie >= 8) return "Medium HP";
+  if (hitDie >= 6) return "Low HP";
+  return "Very low HP";
+}
+
+// The class card's and the header's hit die: the words, then the die once
+// the player asked for the numbers.
+export function hitDieChip(hitDie: number, numbers: boolean): string {
+  return numbers ? `${hitDieWords(hitDie)}, d${hitDie}` : hitDieWords(hitDie);
+}
+
+// `label` is what the chip prints ("CON +2"); `spoken` is the same with the
+// ability named ("Constitution +2"), for the search and the tests.
+export type AsiChip = { ability: string; bonus: string; label: string; spoken: string };
+
+const signed = (value: number) => (value > 0 ? `+${value}` : String(value));
 
 export function asiChips(asi: Partial<Record<Ability, number>>): AsiChip[] {
   const bumps = Object.entries(asi).filter(([, bonus]) => (bonus ?? 0) !== 0) as Array<
@@ -203,13 +242,36 @@ export function asiChips(asi: Partial<Record<Ability, number>>): AsiChip[] {
   >;
   // Six equal bumps read better as one chip than as the first two of six.
   if (bumps.length === 6 && bumps.every(([, bonus]) => bonus === bumps[0][1])) {
-    const bonus = `+${bumps[0][1]}`;
-    return [{ ability: "ALL", bonus, label: `ALL ${bonus}` }];
+    const bonus = signed(bumps[0][1]);
+    return [{ ability: "All", bonus, label: `All ${bonus}`, spoken: `All abilities ${bonus}` }];
   }
   return bumps.map(([ability, value]) => {
-    const bonus = value > 0 ? `+${value}` : String(value);
-    return { ability: ability.toUpperCase(), bonus, label: `${ability.toUpperCase()} ${bonus}` };
+    const bonus = signed(value);
+    const code = ability.toUpperCase();
+    return { ability: code, bonus, label: `${code} ${bonus}`, spoken: `${abilityName(ability)} ${bonus}` };
   });
+}
+
+// A bonus the player places rather than one the lineage fixes: "Choose +1 /
+// +1" for two abilities of their choice raised by 1, or a species whose
+// options (species-variants.ts) each give "+2 / +1". Options that give
+// different bonuses say only that the bonus is chosen.
+export function asiChoiceChip(entry: Pick<LineageEntry, "asiChoice" | "variants">): string | null {
+  if (entry.asiChoice && entry.asiChoice.count > 0) {
+    return `Choose ${Array.from({ length: entry.asiChoice.count }, () => signed(entry.asiChoice!.amount)).join(" / ")}`;
+  }
+  const shapes = (entry.variants?.options ?? []).map((option) =>
+    Object.values(option.asi ?? {})
+      .filter((value): value is number => Boolean(value))
+      .sort((a, b) => b - a)
+      .map(signed)
+      .join(" / "),
+  );
+  const kinds = new Set(shapes);
+  if (!shapes.some(Boolean)) {
+    return null;
+  }
+  return kinds.size === 1 ? `Choose ${[...kinds].join("")}` : "Choose a bonus";
 }
 
 const COUNT_WORD: Record<number, string> = { 1: "One", 2: "Two", 3: "Three", 4: "Four" };
@@ -354,9 +416,11 @@ export function wrapIndex(index: number, delta: number, length: number): number 
 }
 
 // The grid's search box: every word typed must appear somewhere the card
-// prints it: the name, the canonical name behind a reskin, the tagline ("Like
-// Fighter + Cleric") or a chip ("Tank", "DEX +2"). Groups left empty drop out.
-export function filterGroups<T extends { name: string; meta?: string; tagline?: string; chips?: string[] }>(
+// prints it: the name, the canonical name behind a reskin, the tagline
+// ("Fighter/Cleric mix") or a chip ("Tank", "CON +2"), or what a card says
+// another way: the die "Show rules and numbers" holds back ("d10") and an
+// ability's name behind its code ("Constitution"). Groups left empty drop out.
+export function filterGroups<T extends { name: string; meta?: string; tagline?: string; chips?: string[]; keywords?: string[] }>(
   groups: Array<CardGroupLike<T>>,
   query: string,
 ): Array<CardGroupLike<T>> {
@@ -368,7 +432,7 @@ export function filterGroups<T extends { name: string; meta?: string; tagline?: 
     .map((group) => ({
       ...group,
       options: group.options.filter((option) => {
-        const haystackText = [option.name, option.meta, option.tagline, ...(option.chips ?? [])]
+        const haystackText = [option.name, option.meta, option.tagline, ...(option.chips ?? []), ...(option.keywords ?? [])]
           .filter(Boolean)
           .join(" ");
         const haystack = textKey(haystackText);

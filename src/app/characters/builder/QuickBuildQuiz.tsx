@@ -213,12 +213,12 @@ function SeedCard({
   const name = [race?.name, klass.name].filter(Boolean).join(" ");
   return (
     <div className="panel flex h-full flex-col gap-2 rounded-xl p-3" data-quick-seed={seed.classId}>
-      <p className="eyebrow text-[10px] text-amber-400/80">{title}</p>
+      <p className="eyebrow text-[0.875rem] text-amber-400/80">{title}</p>
       <div className="flex items-center gap-2">
         <GameIcon icon={{ kind: "family", key: `class-${klass.id}` }} size="size-9" className="shrink-0" />
         <div className="min-w-0">
           <p className="font-display text-base tracking-wide text-amber-50">{name}</p>
-          <p className="text-[11px] text-stone-500">
+          <p className="text-sm text-stone-500">
             {reading.roles.join(" / ")} · plays like {reading.playsLike}
           </p>
         </div>

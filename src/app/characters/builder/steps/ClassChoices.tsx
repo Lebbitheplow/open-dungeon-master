@@ -132,7 +132,7 @@ export function ClassChoices({
                   className={optionCard(selected)}
                 >
                   <span className="block text-xs">{style.name}</span>
-                  <span className="block text-[11px] text-stone-500">{style.description}</span>
+                  <span className="block text-sm text-stone-500">{style.description}</span>
                 </button>
               );
             })}
@@ -169,7 +169,7 @@ export function ClassChoices({
                     className="grow text-left"
                   >
                     <span className="block text-xs">{option.n}</span>
-                    <span className="block text-[11px] text-stone-500">
+                    <span className="block text-sm text-stone-500">
                       {option.req ? `Requires ${option.req}. ` : ""}
                       {option.d}
                     </span>

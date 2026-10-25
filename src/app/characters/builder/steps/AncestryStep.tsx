@@ -8,7 +8,8 @@ import { STANDARD_LANGUAGES } from "@/lib/content/mechanics";
 import { describeRace } from "@/lib/help";
 import type { Reskinned } from "@/lib/worlds/reskin-logic";
 import { LineageCarousel, type LineageSlide } from "../LineageCarousel";
-import { asiChips, flattenGroups, lineageArt, srdRaceFor } from "../lineage";
+import { lineageCard } from "../cardFaces";
+import { flattenGroups, lineageArt, srdRaceFor } from "../lineage";
 import { lineageFits } from "../lineageFits";
 import { SRD_CLASSES } from "@/lib/srd";
 import type { CardFacet } from "../OptionCardGrid";
@@ -91,23 +92,7 @@ export function AncestryStep({
           if (!slide) {
             return [];
           }
-          return [
-            {
-              id: slide.id,
-              name: slide.name,
-              meta: slide.canonical,
-              art: slide.art,
-              // Under a reskin the canonical name leads, so a player always
-              // knows which SRD race they are actually taking; then the
-              // book, where the heading does not say it (issue #116).
-              // Then the classes its bonuses suit ("Suits Bard, Sorcerer"),
-              // where a phrase restating its biggest bonus used to sit.
-              tagline: [slide.canonical, slide.sourceOnCard, suitsLine(slide)].filter(Boolean).join(" · "),
-              chips: asiChips(slide.asi)
-                .slice(0, 2)
-                .map((chip) => chip.label),
-            },
-          ];
+          return [lineageCard({ slide })];
         }),
       })),
     [raceGroups, slides],
@@ -149,7 +134,7 @@ export function AncestryStep({
           <span className="mb-3 flex items-start gap-1 text-xs text-stone-500">
             <span className="line-clamp-2 grow">
               <span className="text-amber-200">{race.name}</span>
-              {race.source ? <span className="font-mono text-[0.6875rem] text-stone-500"> · {race.source}</span> : null}
+              {race.source ? <span className="font-mono text-[0.875rem] text-stone-500"> · {race.source}</span> : null}
               <span className="text-amber-200">: </span>
               {race.note}
             </span>
@@ -287,15 +272,6 @@ export function AncestryStep({
       ) : null}
     </div>
   );
-}
-
-// The first two classes a lineage's bonuses suit, for its card.
-function suitsLine(slide: LineageSlide): string {
-  const fits = lineageFits(slide, 2);
-  if (!fits) {
-    return "";
-  }
-  return fits.kind === "any" ? "Suits any class" : `Suits ${fits.names.join(", ")}`;
 }
 
 const ABILITY_WORDS: Array<[Ability, string]> = [

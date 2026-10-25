@@ -60,7 +60,7 @@ export default function BackgroundKitSection({
             {taken?.options ? (
               <div key={`${index}-${choice.chosen}`} className="reveal grid gap-1.5 sm:grid-cols-2">
                 <div>
-                  <span id={`${captionId}-${index}`} className="mb-1 block text-[11px] text-stone-400">Which {taken.label.toLowerCase()}</span>
+                  <span id={`${captionId}-${index}`} className="mb-1 block text-sm text-stone-400">Which {taken.label.toLowerCase()}</span>
                   <OptionPicker
                     labelledBy={`${captionId}-${index}`}
                     value={taken.items[0]?.name ?? ""}

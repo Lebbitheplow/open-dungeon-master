@@ -363,16 +363,16 @@ export default function AbilityEditor({
           />
         </div>
         {method === "pointbuy" ? (
-          <span className={cn("font-mono text-[11px]", remaining < 0 ? "text-red-400" : "text-stone-400")} aria-live="polite">
+          <span className={cn("font-mono text-[0.875rem]", remaining < 0 ? "text-red-400" : "text-stone-400")} aria-live="polite">
             {remaining} points left
           </span>
         ) : null}
         {method === "roll" ? (
           <>
             <span className="inline-flex items-center gap-2">
-              <span className="eyebrow text-[0.6875rem] tracking-[0.18em] text-amber-500/80">4d6 drop lowest</span>
+              <span className="eyebrow text-[0.875rem] tracking-[0.18em] text-amber-500/80">4d6 drop lowest</span>
               {pool ? (
-                <span className="font-mono text-[0.6875rem] text-stone-500" aria-live="polite">
+                <span className="font-mono text-[0.875rem] text-stone-500" aria-live="polite">
                   {placedCount} / 6 placed
                 </span>
               ) : null}
@@ -511,7 +511,7 @@ export default function AbilityEditor({
             </>
           ) : (
             <div className="pool-empty">
-              <p className="font-display text-[15px] font-semibold text-stone-100">Six throws of four dice</p>
+              <p className="font-display text-lg font-semibold text-stone-100">Six throws of four dice</p>
               <p className="max-w-sm text-xs text-stone-400">
                 Each throw keeps its best three. All six land at once, then you decide which ability gets which.
               </p>
@@ -524,7 +524,7 @@ export default function AbilityEditor({
               >
                 <Dices className={cn("size-4", asking && "animate-spin")} /> {asking ? "Rolling..." : "Roll the dice"}
               </button>
-              <p className="max-w-sm text-[11px] text-stone-500">
+              <p className="max-w-sm text-sm text-stone-500">
                 The server throws the dice and keeps them, so a rolled hero is one the table can trust.
               </p>
             </div>
@@ -590,11 +590,11 @@ export default function AbilityEditor({
                   controls keep one line in the builder's column; with feats
                   and improvements the notes wrap between whole pieces. */}
               <span className="flex min-w-0 flex-[1_1_104px] flex-col gap-px">
-                <span className="truncate font-display text-[13.5px] font-semibold text-stone-100">
+                <span className="truncate font-display text-base font-semibold text-stone-100">
                   <GameTerm id={ability}>{label}</GameTerm>
                 </span>
                 {notes.length ? (
-                  <span className="flex flex-wrap gap-x-1 font-mono text-[0.6875rem] leading-snug text-stone-400" data-ability-notes={ability}>
+                  <span className="flex flex-wrap gap-x-1 font-mono text-[0.875rem] leading-snug text-stone-400" data-ability-notes={ability}>
                     {notes.map((note, index) => (
                       <span key={note.key} className={cn("whitespace-nowrap", note.motion)}>
                         {index ? <span className="text-stone-600">· </span> : null}
@@ -664,8 +664,8 @@ export default function AbilityEditor({
                     −
                   </button>
                   <span className="flex flex-1 flex-col items-center leading-none" aria-live="polite">
-                    <span className="font-display text-[19px] font-bold text-amber-100">{assigned ?? POINT_BUY_MIN}</span>
-                    <span className="mt-0.5 font-mono text-[0.6875rem] text-stone-500">
+                    <span className="font-display text-[1.1875rem] font-bold text-amber-100">{assigned ?? POINT_BUY_MIN}</span>
+                    <span className="mt-0.5 font-mono text-[0.875rem] text-stone-500">
                       costs {pointBuyCost(assigned ?? POINT_BUY_MIN)}
                     </span>
                   </span>

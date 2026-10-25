@@ -11,7 +11,9 @@ import { subclassBlurb } from "@/lib/srd/features";
 import { SRD_SKILLS } from "@/lib/srd";
 import { displayName, type Reskinned } from "@/lib/worlds/reskin-logic";
 import type { WorldPack } from "@/lib/worlds/types";
-import { classArt } from "../lineage";
+import { classCard } from "../cardFaces";
+import { abilityName, hitDieChip } from "../lineage";
+import { useShowNumbers } from "../numbersPref";
 import { OptionCardGrid, type CardFacet, type OptionCardGroup } from "../OptionCardGrid";
 import OptionPicker, { type PickerGroup } from "../OptionPicker";
 import { classInfoText } from "../usePickerGroups";
@@ -21,7 +23,7 @@ import type { BuilderActions, BuilderDerived } from "../useBuilderDerived";
 import type { BuilderState } from "../useBuilderState";
 import { ClassChoices } from "./ClassChoices";
 import { PlaystylePicker } from "../PlaystylePicker";
-import { EASY_CLASSES, fillClassSkills, type PlaystyleId } from "../playstyles";
+import { fillClassSkills, type PlaystyleId } from "../playstyles";
 import FeatChoicesFields, { knownTraining } from "../FeatChoicesFields";
 import { Field, PickForMe, PickPill, StepPanel, inputClass } from "./shared";
 import { featChoice } from "@/lib/schemas/sheet";
@@ -98,6 +100,8 @@ export function CallingStep({
   // A genre class's feature text arrives on demand (issue 411).
   useClassFeatureText([klass?.id]);
   const [detailsFor, setDetailsFor] = useState<string | null>(null);
+  // "Show rules and numbers" (backlog F11): the cards add the hit die.
+  const numbers = useShowNumbers();
   // What "Suggest the rest" picked, said until the player changes a pick.
   const [suggested, setSuggested] = useState<string[] | null>(null);
   // The skills already the character's from race or background, and the
@@ -128,55 +132,24 @@ export function CallingStep({
       ),
     [classGroups, classes],
   );
+  // Each card's face: its play line, its job, its HP in words, its caster
+  // (cardFaces.ts, backlog F11).
   const cardGroups = useMemo<OptionCardGroup[]>(
     () =>
       classGroups.map((group) => ({
         label: group.label,
         recommended: group.recommended,
-        options: group.options.map((option) => {
-          const entry = classes.find((candidate) => candidate.id === option.id);
-          const reading = readings.get(option.id);
-          // Under a reskin the canonical class name leads the tagline, the
-          // same fact the dropdown kept in its meta column.
-          const canonical = entry?.packName ? option.meta?.split(" · ")[1] : undefined;
-          return {
-            id: option.id,
-            name: option.name,
-            meta: canonical,
-            art: classArt(option.id, gender),
-            // The book leads where the group heading does not say it
-            // (issue #116: a Marshal looked like a Core Rules class).
-            // "Like Fighter + Cleric" leads: it says what the class is in words
-            // a new player and a veteran new to the setting both read, short
-            // enough to fit the narrow class card's two tagline lines.
-            tagline: [
-              canonical,
-              // One of the core four says so rather than "Wizard: like Wizard".
-              reading
-                ? reading.playsLike.toLowerCase() === option.id.toLowerCase()
-                  ? "Core class"
-                  : `Like ${reading.playsLike}${reading.suggested ? " (suggested)" : ""}`
-                : "",
-              option.source,
-              entry?.spellAbility ? `${entry.spellAbility.toUpperCase()} caster` : "",
-              // Saves are left to the chosen-class line and the "?" box: the
-              // least of what a player chooses a class by, and the card's
-              // two lines are better spent on what it plays like.
-            ]
-              .filter(Boolean)
-              .join(" · "),
-            // "Easy to learn" leads where it applies: about play, where the
-            // setting's seal on the plate is about the world.
-            chips: [
-              ...(EASY_CLASSES.has(option.id) ? ["Easy to learn"] : []),
-              ...(reading?.roles ?? []),
-              ...(entry ? [`d${entry.hitDie}`] : []),
-            ],
-            icon: { kind: "family" as const, key: `class-${option.id}` },
-          };
-        }),
+        options: group.options.map((option) =>
+          classCard({
+            option,
+            entry: classes.find((candidate) => candidate.id === option.id),
+            reading: readings.get(option.id),
+            gender,
+            numbers,
+          }),
+        ),
       })),
-    [classGroups, classes, gender, readings],
+    [classGroups, classes, gender, readings, numbers],
   );
   // The class grid's filters (OptionCardGrid): its job in a fight, how much
   // magic it has, which of the core four it plays like, and its book or
@@ -251,13 +224,14 @@ export function CallingStep({
           {klass ? (
             <span className="mb-3 flex flex-wrap items-center gap-x-1 text-xs text-stone-500">
               <span className="text-amber-200">{klass.name}:</span>{" "}
-              <GameTerm id="hit_dice">d{klass.hitDie} hit die</GameTerm> ·{" "}
+              {/* In words first (backlog F11); the die joins them with "Show rules and numbers" on. */}
+              <GameTerm id="hit_dice">{hitDieChip(klass.hitDie, numbers)}</GameTerm> ·{" "}
               <GameTerm id="saving_throw">saves</GameTerm>{" "}
-              {klass.saves.map((save) => save.toUpperCase()).join(", ")}
+              {klass.saves.map(abilityName).join(", ")}
               {klass.spellAbility ? (
                 <>
                   {" · "}
-                  <GameTerm id={klass.spellAbility}>{klass.spellAbility.toUpperCase()}</GameTerm>{" "}
+                  <GameTerm id={klass.spellAbility}>{abilityName(klass.spellAbility)}</GameTerm>{" "}
                   caster
                   {klass.castingLabel ? ` (spells flavored as ${klass.castingLabel})` : ""}
                 </>
@@ -489,7 +463,7 @@ export function classDetailsMeta({
 }): string[] {
   return [
     meta,
-    saves?.length ? `Saves ${saves.map((save) => save.toUpperCase()).join(" ")}` : "",
+    saves?.length ? `Saves ${saves.map(abilityName).join(", ")}` : "",
     reading ? `Role: ${reading.roles.join(" / ")}` : "",
     reading
       ? reading.playsLike.toLowerCase() === id.toLowerCase()

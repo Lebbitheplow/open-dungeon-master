@@ -66,7 +66,7 @@ export function AbilitySummary({
                 key={label}
                 scope="col"
                 className={cn(
-                  "px-1 pb-1.5 font-display text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-stone-500 sm:tracking-[0.2em]",
+                  "px-1 pb-1.5 font-display text-[0.875rem] font-semibold uppercase tracking-[0.12em] text-stone-500 sm:tracking-[0.2em]",
                   index === 0 ? "pl-0 text-left" : "text-center",
                 )}
               >
@@ -84,9 +84,9 @@ export function AbilitySummary({
                 <th
                   scope="row"
                   style={style}
-                  className={cn(cell, "truncate pl-0 text-left font-display text-[12.5px] font-semibold text-stone-100")}
+                  className={cn(cell, "truncate pl-0 text-left font-display text-base font-semibold text-stone-100")}
                 >
-                  <span className="font-mono text-[11px] sm:hidden" aria-hidden="true">
+                  <span className="font-mono text-[0.875rem] sm:hidden" aria-hidden="true">
                     {row.ability.toUpperCase()}
                   </span>
                   <span className="sr-only sm:not-sr-only">{row.label}</span>
@@ -96,21 +96,21 @@ export function AbilitySummary({
                 </td>
                 <td
                   style={style}
-                  className={cn(cell, "text-center font-mono text-xs", row.bonus ? "text-amber-300" : "text-stone-600")}
+                  className={cn(cell, "text-center font-mono text-xs", row.bonus ? "text-amber-300" : "text-stone-500")}
                 >
                   {row.bonus ? `+${row.bonus}` : none}
                 </td>
                 {anyAdded ? (
                   <td
                     style={style}
-                    className={cn(cell, "text-center font-mono text-xs", row.added ? "text-amber-200" : "text-stone-600")}
+                    className={cn(cell, "text-center font-mono text-xs", row.added ? "text-amber-200" : "text-stone-500")}
                   >
                     {row.added ? <CountPop value={row.added}>+{row.added}</CountPop> : none}
                   </td>
                 ) : null}
                 <td
                   style={style}
-                  className={cn(cell, "text-center font-display text-[17px] font-bold", `roll-tier-${rollTier(row.base)}`)}
+                  className={cn(cell, "text-center font-display text-[1.0625rem] font-bold", `roll-tier-${rollTier(row.base)}`)}
                 >
                   <CountPop value={final} />
                 </td>

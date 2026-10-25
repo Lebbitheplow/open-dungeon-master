@@ -30,7 +30,7 @@ export function HelpDot({ label, onClick, className }: { label: string; onClick:
         className,
       )}
     >
-      <span className="flex size-[18px] items-center justify-center rounded-full border border-amber-500/45 font-mono text-[0.6875rem] leading-none text-amber-300 transition-[border-color,box-shadow,color] duration-[var(--dur-quick)] group-hover:border-amber-500/90 group-hover:text-amber-100 group-hover:shadow-glow-gold group-focus-visible:border-amber-500/90">
+      <span className="flex size-[1.375rem] items-center justify-center rounded-full border border-amber-500/45 font-mono text-[0.875rem] leading-none text-amber-300 transition-[border-color,box-shadow,color] duration-[var(--dur-quick)] group-hover:border-amber-500/90 group-hover:text-amber-100 group-hover:shadow-glow-gold group-focus-visible:border-amber-500/90">
         ?
       </span>
     </button>
@@ -68,14 +68,14 @@ export function MethodInfoDialog({
               )}
             >
               <div className="mb-1 flex items-baseline justify-between gap-2">
-                <span className={cn("font-display text-[13px] font-semibold", isCurrent ? "text-amber-100" : "text-stone-200")}>
+                <span className={cn("font-display text-base font-semibold", isCurrent ? "text-amber-100" : "text-stone-200")}>
                   {entry.label}
                 </span>
                 {isCurrent ? (
-                  <span className="shrink-0 font-mono text-[0.6875rem] uppercase tracking-[0.08em] text-amber-300">chosen</span>
+                  <span className="shrink-0 font-mono text-[0.875rem] uppercase tracking-[0.08em] text-amber-300">chosen</span>
                 ) : null}
               </div>
-              <p className="font-serif text-[12.5px] leading-normal text-stone-300">{entry.info}</p>
+              <p className="font-serif text-base leading-normal text-stone-300">{entry.info}</p>
             </div>
           );
         })}
@@ -122,7 +122,7 @@ function FormulaChip({
     >
       <span
         className={cn(
-          "text-center font-display text-[0.6875rem] font-semibold uppercase tracking-[0.16em]",
+          "text-center font-display text-[0.875rem] font-semibold uppercase tracking-[0.16em]",
           tone === "result" ? "text-ember-300" : "text-stone-500",
         )}
       >
@@ -131,7 +131,7 @@ function FormulaChip({
       <span className={cn("font-display text-xl font-bold leading-tight", tone === "result" ? "text-ember-300" : "text-amber-100")}>
         {value}
       </span>
-      <span className="text-center font-mono text-[0.6875rem] text-stone-500">{note}</span>
+      <span className="text-center font-mono text-[0.875rem] text-stone-500">{note}</span>
     </span>
   );
 }
@@ -178,7 +178,7 @@ export function HpExplainerDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange} title="How your health is worked out" width="w-[min(94vw,26rem)]">
       <Brackets />
-      <p className="mb-4 font-serif text-[13.5px] leading-normal text-stone-300">
+      <p className="mb-4 font-serif text-base leading-normal text-stone-300">
         At first level you take the best your hit die can give, then add your Constitution modifier.
       </p>
       <div className="mb-3 flex flex-wrap items-center justify-center gap-2">
@@ -205,14 +205,14 @@ export function HpExplainerDialog({
           note={kept ? "as saved" : "full health"}
         />
       </div>
-      <p className="mb-3.5 text-center font-mono text-[13px] text-amber-300">{sum}</p>
+      <p className="mb-3.5 text-center font-mono text-base text-amber-300">{sum}</p>
       {parts.bonusPerLevel ? (
-        <p className="mb-3 text-center font-mono text-[0.6875rem] text-stone-500">
+        <p className="mb-3 text-center font-mono text-sm text-stone-500">
           Includes +{parts.bonusPerLevel} per level from your lineage and feats.
         </p>
       ) : null}
       {parts.featureHp ? (
-        <p className="mb-3 text-center font-mono text-[0.6875rem] text-stone-500">
+        <p className="mb-3 text-center font-mono text-sm text-stone-500">
           Includes +{parts.featureHp} from Draconic Resilience.
         </p>
       ) : null}
@@ -223,10 +223,10 @@ export function HpExplainerDialog({
             style={stagger(index, 80)}
             className="creator-cascade flex items-start gap-2.5 rounded-[9px] border border-stone-700/50 bg-stone-950/60 px-2.5 py-2"
           >
-            <span className="flex size-[19px] shrink-0 items-center justify-center rounded-full border border-amber-500/40 font-mono text-[0.6875rem] text-amber-300">
+            <span className="flex size-[1.375rem] shrink-0 items-center justify-center rounded-full border border-amber-500/40 font-mono text-[0.875rem] text-amber-300">
               {index + 1}
             </span>
-            <span className="font-serif text-[12.5px] leading-snug text-stone-300">{text}</span>
+            <span className="font-serif text-base leading-snug text-stone-300">{text}</span>
           </li>
         ))}
       </ol>
@@ -249,7 +249,7 @@ export function HpExplainerButton({ hp, compact = false }: { hp: HpExplainerInpu
         <HelpDot label="How your health is worked out" onClick={() => setOpen(true)} className="-my-2" />
       ) : (
         <button type="button" onClick={() => setOpen(true)} className={cn(ui.btnSmall, "text-xs")}>
-          <span className="flex size-[15px] items-center justify-center rounded-full border border-amber-500/50 font-mono text-[0.6875rem] text-amber-300">
+          <span className="flex size-[1.25rem] items-center justify-center rounded-full border border-amber-500/50 font-mono text-[0.875rem] text-amber-300">
             ?
           </span>
           How is my health worked out?

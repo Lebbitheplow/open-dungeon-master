@@ -94,10 +94,10 @@ export function PlaystylePicker({
                       <GameIcon icon={{ kind: "family", key: `class-${id}` }} size="size-8" className="shrink-0" />
                       <span className="min-w-0 flex-1">
                         <span className="block font-display text-sm tracking-wide text-amber-50">{entry.name}</span>
-                        <span className="block text-[11px] text-stone-500">{entry.roles.join(" / ")}</span>
+                        <span className="block text-[0.875rem] text-stone-500">{entry.roles.join(" / ")}</span>
                       </span>
                       {EASY_CLASSES.has(id) ? (
-                        <span className="shrink-0 rounded-full border border-emerald-400/40 bg-emerald-400/10 px-1.5 py-0.5 text-[10px] text-emerald-200">
+                        <span className="shrink-0 rounded-full border border-emerald-400/40 bg-emerald-400/10 px-1.5 py-0.5 text-[0.875rem] text-emerald-200">
                           Easy to learn
                         </span>
                       ) : null}

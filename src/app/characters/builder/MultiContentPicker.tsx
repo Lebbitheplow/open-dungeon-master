@@ -170,7 +170,7 @@ export default function MultiContentPicker({
             </li>
           ) : null}
           {unadmitted.length ? (
-            <li className="px-3 py-1.5 text-[11px] text-stone-500">
+            <li className="px-3 py-1.5 text-sm text-stone-500">
               Your own {unadmitted.join(", ")} {unadmitted.length === 1 ? "is" : "are"} not offered at this table: whoever runs it (the owner, the DM or the assistant DM) keeps a copy to admit one.
             </li>
           ) : null}

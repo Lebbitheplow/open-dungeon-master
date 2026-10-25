@@ -202,7 +202,7 @@ export function Wizard({
   return (
     <div className={cn("flex h-full min-h-0 w-full flex-col", wipe && "relative", className)}>
       <header className="shrink-0">
-        <div className="flex items-center gap-2">
+        <div data-wizard-head="" className="flex items-center gap-2">
           {step > 0 || onCancel ? (
             <button
               type="button"
@@ -215,11 +215,11 @@ export function Wizard({
               <ChevronLeft className="size-4" />
             </button>
           ) : null}
-          <h2 className="min-w-0 flex-1 truncate font-display text-lg tracking-wide text-amber-100">
+          <h2 data-wizard-title="" className="min-w-0 flex-1 truncate font-display text-lg tracking-wide text-amber-100">
             {title}
           </h2>
           {aside ? (
-            <span className="mx-1 hidden min-w-0 shrink truncate font-mono text-xs text-stone-400 sm:inline">
+            <span data-wizard-aside="" className="mx-1 hidden min-w-0 shrink truncate font-mono text-xs text-stone-400 sm:inline">
               {aside}
             </span>
           ) : null}
@@ -385,7 +385,11 @@ export function Wizard({
             finishEarly ? ui.btnSecondary : ui.btnPrimary,
             // On a phone the label is the button's own text, cut with an
             // ellipsis: a span inside a held button is read apart from it.
-            "wizard-continue min-w-0 max-w-full max-sm:block max-sm:flex-1 max-sm:truncate max-sm:text-center max-sm:leading-10",
+            // It starts at its label's width (flex-auto, not flex-1), so
+            // beside Save changes the footer wraps rather than cut it: it
+            // read "C..." on a phone at enlarged text. Only a label wider
+            // than the whole footer is cut.
+            "wizard-continue min-w-0 max-w-full max-sm:block max-sm:flex-auto max-sm:truncate max-sm:text-center max-sm:leading-10",
             blocker && "wizard-continue-held",
           )}
         >

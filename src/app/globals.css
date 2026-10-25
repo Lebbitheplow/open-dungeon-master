@@ -1483,6 +1483,16 @@ html[data-theme="light"] .kit-switch[aria-checked="true"] .kit-switch-knob {
 @media (prefers-reduced-motion: reduce) {
   .kit-switch-knob { transition: none; }
 }
+/* Forced colours drop the track's gradient, the knob's fill and the focus
+   glow: the knob is drawn in the system's text colour, on in its highlight,
+   and focus gets an outline (backlog F17). */
+@media (forced-colors: active) {
+  /* :root outranks the day theme's knob colours. */
+  :root .kit-switch .kit-switch-knob { forced-color-adjust: none; background: ButtonText; border-color: ButtonText; }
+  :root .kit-switch[aria-checked="true"] { border-color: Highlight; }
+  :root .kit-switch[aria-checked="true"] .kit-switch-knob { background: Highlight; border-color: Highlight; }
+  .kit-switch:focus-visible { outline: 2px solid CanvasText; outline-offset: 2px; }
+}
 
 /* A panel that replaces another (a session tab, a sub-tab, a workshop tool)
    rises in rather than cutting. */
