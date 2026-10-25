@@ -35,7 +35,6 @@ export function ReviewStep({
   followUp = null,
   onEdit,
   defaultsPanel,
-  pregenOffer = null,
 }: StepProps & {
   // True while this is the step on screen; the cover assembles on arrival.
   active: boolean;
@@ -48,9 +47,6 @@ export function ReviewStep({
   followUp?: { problems: string[]; busy: boolean; onOpen: () => void } | null;
   onEdit: (target: EditTarget) => void;
   defaultsPanel: ReactNode;
-  // The offer of AI-drafted pregens for a workshop brought in with none
-  // (DraftPregensOffer), or nothing.
-  pregenOffer?: ReactNode;
 }) {
   const { solo, storyKnownMissing } = gates;
   const preset = genrePreset(draft.genre);
@@ -132,7 +128,6 @@ export function ReviewStep({
           onKeep={() => patch({ storySetupKept: true })}
         />
       ) : null}
-      {importing ? pregenOffer : null}
       {defaultsPanel}
       {solo && storyKnownMissing ? (
         <p className="rounded-lg border border-amber-900/50 bg-amber-950/30 p-3 text-amber-200">

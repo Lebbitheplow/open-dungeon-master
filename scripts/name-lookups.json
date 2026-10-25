@@ -342,7 +342,6 @@
     "app/characters/builder/usePickerGroups.ts#partial": [["identity",1,"builder picks, kit lines, spells, tools and skills by whole name or id; ids, steps and defaults"]],
     "app/characters/builder/usePickerGroups.ts#whole": [["identity",2,"builder picks, kit lines, spells, tools and skills by whole name or id; ids, steps and defaults"]],
     "app/characters/page.tsx#partial": [["pattern",1,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"]],
-    "app/create-campaign/DraftPregensOffer.tsx#number": [["key",1,"digits a regex already captured, ids, headers, stored and form numbers (number inputs), dice parts, the pack's English text (\"1,000 feet\", a purse); src/: every site read"]],
     "app/create-campaign/NarratorFields.tsx#number": [["key",2,"digits a regex already captured, ids, headers, stored and form numbers (number inputs), dice parts, the pack's English text (\"1,000 feet\", a purse); src/: every site read"]],
     "app/create-campaign/VoiceChatFields.tsx#number": [["key",1,"digits a regex already captured, ids, headers, stored and form numbers (number inputs), dice parts, the pack's English text (\"1,000 feet\", a purse); src/: every site read"]],
     "app/create-campaign/titles.ts#fallback": [["key",1,"title banks by genre"]],
