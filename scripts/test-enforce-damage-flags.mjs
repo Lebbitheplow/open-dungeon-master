@@ -120,5 +120,18 @@ await test("Elemental Adept's fire ignores a tiefling turncoat's fire resistance
 
 world.close();
 
+// ---- the board: spells, Silence and the golems ----
+
+await test("Ice Storm on an ally in a beast form that resists nonmagical blows: the bludgeoning is a spell's, so it lands whole.", async () => {
+  const { world: table, sheets: [druid, fighter] } = await board([caster("druid", "wis", ["Ice Storm"], [], 9), FIGHTER], { 0: { x: 2, y: 8 }, 1: { x: 12, y: 4 }, e0: { x: 20, y: 14 } });
+  table.patch(fighter.id, { wildShape: { form: "Stone Bear", beastHp: 100, beastMaxHp: 100, beastAc: 12, resist: NONMAGICAL } });
+  // Every die a 4: 2d8 bludgeoning is 8 and 4d6 cold 16, and the save fails.
+  table.dice(...new Array(12).fill(4));
+  const out = await table.invoke("aoe_damage", { casterId: druid.id, spell: "Ice Storm", characterIds: [fighter.id], saveAbility: "dex", dc: 15, level: 4, atX: 12, atY: 4 });
+  table.clearDice();
+  assert.equal(out.ok, true, out.error);
+  assert.equal(table.sheet(fighter.id).wildShape.beastHp, 100 - 24, JSON.stringify(out.result));
+});
+
 closeTables();
 finish();

@@ -115,7 +115,9 @@ export function aoeOnCharacters(input: {
           characterId: sheet.id,
           amount: part.amount,
           type: part.type,
-          ...(input.spell ? { spell: input.spell } : {}),
+          // A spell's damage is magical: "from nonmagical attacks" on a
+          // beast form's block does not cover Ice Storm's hail.
+          ...(input.spell ? { spell: input.spell, magical: true } : {}),
           reason: (input.reason ?? "area effect").slice(0, 200),
         }),
         sheets,
