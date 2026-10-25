@@ -9,7 +9,9 @@ import type { StepBlock } from "./submit";
 // here, so the rows are what a player reads before saving. Pure, for
 // scripts/test-builder-summary.mjs.
 
-export type SummaryRowKey = "identity" | "ancestry" | "calling" | "abilities" | "spells-gear" | "finish";
+// One row per step before the summary, in the wizard's order (backlog F4:
+// the class first, the name and story last).
+export type SummaryRowKey = "calling" | "ancestry" | "abilities" | "spells-gear" | "identity";
 
 export type SummaryRow = {
   key: SummaryRowKey;
@@ -79,24 +81,18 @@ export function summaryRows(input: SummaryInput): SummaryRow[] {
   ].filter((line): line is string => Boolean(line));
   return [
     {
-      key: "identity",
-      label: "Name and background",
-      lines: [name || "No name yet", input.background ? `${input.background} background` : "No background chosen"],
-      owed: owedPicks(input.owed.identity),
-    },
-    {
-      key: "ancestry",
-      label: "Ancestry",
-      lines: [input.race ?? "No ancestry chosen"],
-      owed: owedPicks(input.owed.ancestry),
-    },
-    {
       key: "calling",
       label: "Class",
       lines: input.klass
         ? [`${input.klass}, level ${input.level}`, ...(input.subclass ? [input.subclass] : [])]
         : ["No class chosen"],
       owed: owedPicks(input.owed.calling),
+    },
+    {
+      key: "ancestry",
+      label: "Ancestry and background",
+      lines: [input.race ?? "No ancestry chosen", input.background ? `${input.background} background` : "No background chosen"],
+      owed: owedPicks(input.owed.ancestry),
     },
     {
       key: "abilities",
@@ -122,7 +118,12 @@ export function summaryRows(input: SummaryInput): SummaryRow[] {
       ],
       owed: owedPicks(input.owed.spells),
     },
-    { key: "finish", label: "Finishing touches", lines: touches, owed: [] },
+    {
+      key: "identity",
+      label: "Name and story",
+      lines: [name || "No name yet", ...touches],
+      owed: owedPicks(input.owed.identity),
+    },
   ];
 }
 

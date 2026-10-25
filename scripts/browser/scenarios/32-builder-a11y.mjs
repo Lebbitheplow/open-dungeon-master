@@ -212,7 +212,8 @@ export default {
       const first = page.locator(`${root}button[aria-label^="Back to step 1"]`).locator("visible=true");
       await eventually(() => first.count(), { timeoutMs: 30_000, label: "the first diamond from the summary" });
       await t.tap(first.first());
-      await page.locator(`${root}section[data-active] input[aria-label="Name"]`).locator("visible=true").first().waitFor({ state: "visible", timeout: 30_000 });
+      // Step 1 is the class (backlog F4).
+      await page.locator(`${root}section[data-active] [data-builder-target="class"]`).locator("visible=true").first().waitFor({ state: "visible", timeout: 30_000 });
       for (let step = 1; step <= 6; step += 1) {
         const where = `${condition.label}, step ${step}`;
         if (step > 1) {
@@ -281,17 +282,15 @@ export default {
     await page.emulateMedia({ reducedMotion: null });
     if (outline) found.push(`Show me highlight is invisible with reduced motion: ${outline}`);
 
-    // The lineage carousel over a new character's Ancestry step.
+    // The lineage carousel over a new character's Ancestry step. The first
+    // step is the class (backlog F4): a barbarian owes only its two skills.
     await t.open("/characters/new");
     const fresh = page.locator(`${root}button`).filter({ hasText: /^Start fresh$/ }).locator("visible=true");
     if (await fresh.count()) await t.tap(fresh.first());
-    const name = page.locator(`${root}input[aria-label="Name"]`).locator("visible=true").first();
-    await name.waitFor({ state: "visible", timeout: 30_000 });
-    await name.fill("Axe Check");
-    // The first step owes a background once none is picked for the player
-    // (quick win Q1), so pick one before Continue.
-    await t.tap(page.locator(`${root}section[data-active] [data-builder-target="background"] button[aria-haspopup="listbox"]`).locator("visible=true").first());
-    await t.tap(page.locator(`${root}[role="option"]`).filter({ hasText: "Soldier" }).locator("visible=true").first());
+    const barbarian = page.locator(`${root}section[data-active] .creator-card[aria-label^="Barbarian"]`).locator("visible=true").first();
+    await barbarian.waitFor({ state: "visible", timeout: 30_000 });
+    await t.tap(barbarian);
+    await t.tap(page.locator(`${root}section[data-active] [data-suggest-skills]`).locator("visible=true").first());
     await t.tap(page.locator(`${root}button`).filter({ hasText: /^Continue/ }).locator("visible=true").first());
     await eventually(() => page.locator(`${root}section[data-active] .creator-card`).locator("visible=true").count(), { timeoutMs: 15_000, label: "the lineage cards" });
     await untilStill(page);

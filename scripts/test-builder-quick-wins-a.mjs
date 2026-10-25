@@ -25,14 +25,15 @@ const state = {
   repeatSkills: [],
 };
 
-// Q1. No background stands in before one is picked: the first step owes it,
-// and nothing on the page falls back to the list's first row (an Acolyte,
-// who owed two languages nobody asked for).
+// Q1. No background stands in before one is picked: the step that asks it
+// (beside the ancestry, backlog F4) owes it, and nothing on the page falls
+// back to the list's first row (an Acolyte, who owed two languages nobody
+// asked for).
 {
-  const owed = submit.identityBlocks(state, undefined);
+  const owed = submit.backgroundBlocks(state, undefined);
   assert.deepEqual(owed.map((entry) => entry.target), ["background"]);
   assert.match(owed[0].message, /did before adventuring \(background\)/);
-  assert.equal(submit.identityBlocker(state, { id: "soldier", name: "Soldier", skills: [] }), null);
+  assert.equal(submit.backgroundBlocker(state, { id: "soldier", name: "Soldier", skills: [] }), null);
   // An unpicked background owes no languages on the next step.
   assert.equal(submit.bonusLanguageCount({ bonusLanguages: 0 }, undefined), 0);
 
@@ -58,36 +59,37 @@ const state = {
 {
   const { DiamondStepper } = await import("../src/components/ui/DiamondStepper.tsx");
   const steps = [
-    { key: "identity", label: "Hero" },
-    { key: "ancestry", label: "Ancestry" },
     { key: "calling", label: "Class" },
+    { key: "ancestry", label: "Ancestry" },
+    { key: "abilities", label: "Abilities" },
   ];
   const markup = renderToStaticMarkup(createElement(DiamondStepper, { steps, current: 1, onSelect: () => {}, named: true }));
   const names = [...markup.matchAll(/<span aria-hidden="true" data-diamond-name=""[^>]*>([^<]+)<\/span>/g)].map((match) => match[1]);
-  assert.deepEqual(names, ["Hero", "Ancestry", "Class"], "each name is printed under its diamond");
+  assert.deepEqual(names, ["Class", "Ancestry", "Abilities"], "each name is printed under its diamond");
   const buttons = [...markup.matchAll(/<button[^>]*>/g)].map((match) => match[0]);
   assert.equal(buttons.length, 3);
   assert.ok(!buttons[0].includes("disabled"), "a done diamond goes back");
   assert.ok(!buttons[1].includes("disabled"), "the current diamond stays focusable");
   assert.ok(buttons[1].includes('aria-current="step"') && buttons[1].includes('aria-label="Step 2: Ancestry"'), "the current diamond says where the player is");
   assert.ok(buttons[2].includes("disabled"), "a diamond ahead stays inert");
-  assert.ok(buttons[2].includes('aria-label="Step 3: Class"'), "the spoken name is the printed one");
+  assert.ok(buttons[2].includes('aria-label="Step 3: Abilities"'), "the spoken name is the printed one");
 
   const unnamed = renderToStaticMarkup(createElement(DiamondStepper, { steps, current: 0 }));
   assert.ok(!unnamed.includes("data-diamond-name"), "a wizard that does not ask for names prints none");
 
   const builder = read("src/app/characters/builder/CharacterBuilder.tsx");
   const labelled = [...builder.matchAll(/^\s+label: "([^"]+)",\n\s+title: "([^"]+)",/gm)].map((match) => [match[1], match[2]]);
+  // How you want to play first, the name last (backlog F4).
   assert.deepEqual(labelled, [
-    ["Hero", "Name your hero and choose their past"],
-    ["Ancestry", "Choose where your hero comes from"],
     ["Class", "Choose how you fight or use magic"],
+    ["Ancestry", "Choose where your hero comes from"],
     ["Abilities", "Set what your hero is good at"],
+    ["Hero", "Name your hero and tell their story"],
     ["Finish", "Check your hero and finish"],
   ]);
   assert.ok(builder.includes('label: casts ? "Spells" : "Gear"') && builder.includes('title: casts ? "Choose spells and gear" : "Choose your gear"'));
   assert.ok(/variant="diamonds"\s+stepNames/.test(builder), "the builder prints its step names");
-  for (const file of ["src/app/characters/builder/steps/IdentityStep.tsx", "src/app/characters/builder/BackgroundKitSection.tsx"]) {
+  for (const file of ["src/app/characters/builder/steps/IdentityStep.tsx", "src/app/characters/builder/steps/BackgroundPanel.tsx", "src/app/characters/builder/BackgroundKitSection.tsx"]) {
     assert.ok(!read(file).includes("Calling step"), `${file} still sends the player to the Calling step`);
   }
   console.log("ok: steps are tasks, named under their diamonds (Q2)");
@@ -115,8 +117,11 @@ const state = {
   const calling = submit.callingBlocks(fighter, { ...state, chosenSkills: [], stylePicks: [], expertisePicks: [], subclass: "" }, derived);
   assert.deepEqual(calling.map((entry) => entry.message), [
     "Pick 2 more skills your training taught you (class skills).",
-    "Pick 2 more musical instruments you know how to use (tool proficiency).",
     "Pick how you like to fight (fighting style).",
+  ]);
+  // Open tool grants are asked beside the background (backlog F4).
+  assert.deepEqual(submit.backgroundBlocks(state, { id: "soldier", name: "Soldier", skills: [] }, derived).map((entry) => entry.message), [
+    "Pick 2 more musical instruments you know how to use (tool proficiency).",
   ]);
   // No message still leads with the rule's word alone.
   const source = read("src/app/characters/builder/submit.ts");
@@ -126,12 +131,13 @@ const state = {
   console.log("ok: Continue blockers say the task in plain words (Q3)");
 }
 
-// Q10. The Finish portrait is named for the hero, as the roster names it.
+// Q10. The portrait is named for the hero, as the roster names it. It is on
+// the identity step, beside the name (backlog F4).
 {
-  const finish = read("src/app/characters/builder/steps/FinishStep.tsx");
-  assert.ok(!finish.includes('alt="Character portrait"'), "the portrait is still just a character portrait");
-  assert.ok(finish.includes("alt={state.name.trim() ||"), "the portrait's alt is the hero's name");
-  console.log("ok: the Finish portrait is named for the hero (Q10)");
+  const identity = read("src/app/characters/builder/steps/IdentityStep.tsx");
+  assert.ok(!identity.includes('alt="Character portrait"'), "the portrait is still just a character portrait");
+  assert.ok(identity.includes("alt={state.name.trim() ||"), "the portrait's alt is the hero's name");
+  console.log("ok: the portrait is named for the hero (Q10)");
 }
 
 // Q13. The door decides: a link that knows the role or the level says so,

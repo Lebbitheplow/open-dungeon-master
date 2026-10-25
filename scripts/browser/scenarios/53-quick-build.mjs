@@ -16,7 +16,8 @@ async function fresh(t) {
   if (await startFresh.count()) {
     await t.tap(startFresh.first());
   }
-  await page.locator(`${root}input[aria-label="Name"]`).locator("visible=true").first().waitFor({ state: "visible", timeout: 30_000 });
+  // The class step comes first (backlog F4), with the job question.
+  await page.locator(`${root}section[data-active] [data-builder-target="class"]`).locator("visible=true").first().waitFor({ state: "visible", timeout: 30_000 });
 }
 
 export default {
@@ -24,7 +25,10 @@ export default {
   viewports: ["desktop", "phone"],
   async run(t) {
     const { page, root } = t;
-    const name = page.locator(`${root}input[aria-label="Name"]`).locator("visible=true").first();
+    // The name is on the identity step, mounted but hidden until it is
+    // reached: read through any copy, typed into the visible one.
+    const name = page.locator(`${root}input[aria-label="Name"]`).first();
+    const shownName = page.locator(`${root}section[data-active] input[aria-label="Name"]`).locator("visible=true").first();
     await fresh(t);
 
     // The first question on the step, then the other three in the quiz.
@@ -69,11 +73,25 @@ export default {
     await eventually(async () => (await page.locator(`${root}[data-quick-readback]`).count()) === 0, { timeoutMs: 10_000, label: "the read-back gone" });
     await eventually(async () => (await name.inputValue()) === "", { timeoutMs: 10_000, label: "the name cleared by Undo" });
 
-    // Fill what's left keeps what the player typed.
-    const hero = `Kept Name ${t.viewport}`;
-    await name.fill(hero);
+    // Fill what's left keeps what the player typed. The name is asked last
+    // (backlog F4), so the player fills the build, names the hero, then goes
+    // back and changes the class, and fills what that change left.
     const fillButton = page.locator(`${root}section[data-active] [data-quick-fill]`).locator("visible=true");
-    await eventually(() => fillButton.count(), { timeoutMs: 10_000, label: "Fill what's left" });
+    await eventually(() => fillButton.count(), { timeoutMs: 10_000, label: "Fill what's left on the class step" });
+    await t.tap(fillButton.first());
+    await eventually(() => readback.count(), { timeoutMs: 20_000, label: "the read-back after the first fill" });
+    await t.tap(visible(page, root, /^Keep them$/).first());
+    const hero = `Kept Name ${t.viewport}`;
+    const heroDiamond = page.locator(`${root}button[aria-label^="Go to step 5:"]`).locator("visible=true");
+    await eventually(async () => (await heroDiamond.count()) && heroDiamond.first().isEnabled(), { timeoutMs: 15_000, label: "the Hero diamond" });
+    await t.tap(heroDiamond.first());
+    await shownName.waitFor({ state: "visible", timeout: 15_000 });
+    await shownName.fill(hero);
+    await t.tap(page.locator(`${root}button[aria-label^="Back to step 1:"]`).locator("visible=true").first());
+    const other = page.locator(`${root}section[data-active] .creator-card[aria-pressed="false"]`).locator("visible=true").first();
+    await other.waitFor({ state: "visible", timeout: 15_000 });
+    await t.tap(other);
+    await eventually(() => fillButton.count(), { timeoutMs: 10_000, label: "Fill what's left after the class change" });
     await t.tap(fillButton.first());
     await eventually(() => readback.count(), { timeoutMs: 20_000, label: "the read-back after a fill" });
     check((await name.inputValue()) === hero, "the typed name is kept");

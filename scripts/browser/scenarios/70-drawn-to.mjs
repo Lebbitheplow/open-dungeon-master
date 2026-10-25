@@ -38,8 +38,13 @@ export default {
   name: "drawn-to",
   viewports: ["desktop", "phone"],
   async run(t) {
-    const { page, api, base } = t;
-    await t.open("/characters/new");
+    const { page, api, base, root, ids } = t;
+    // The identity step is the last before the summary (backlog F4): a
+    // stored build's summary row goes straight to it.
+    await t.open(`/characters/${ids.library}/edit`);
+    const identityRow = page.locator(`${root}section[data-active] [data-summary-edit="identity"]`).locator("visible=true");
+    await eventually(() => identityRow.count(), { timeoutMs: 30_000, label: "the summary's name and story row" });
+    await t.tap(identityRow.first());
     const picker = await checkPicker(t, "the builder");
     await picker.screenshot({ path: t.shotPath("builder"), animations: "disabled" }).catch(() => {});
     await t.shot("builder-page");

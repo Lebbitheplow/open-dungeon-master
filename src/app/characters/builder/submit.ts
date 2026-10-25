@@ -80,11 +80,29 @@ type SubmitInput = {
 // Each step has two forms: `...Blocks` lists every pick still owed, in the
 // order the gate asks for them, for the step's "choices left" line; the
 // `...Blocker` gate is the first of them.
-export function identityBlocks(state: BuilderState, background?: BackgroundOption): StepBlock[] {
+//
+// The name is asked last (backlog F4: how you want to play comes first, who
+// the hero is once they exist), so nothing before the identity step waits
+// on it.
+export function identityBlocks(state: Pick<BuilderState, "name">): StepBlock[] {
+  return state.name.trim() ? [] : [block("name", "Give your character a name.")];
+}
+
+export function identityBlocker(state: Pick<BuilderState, "name">): StepBlock | null {
+  return identityBlocks(state)[0] ?? null;
+}
+
+// The background, asked beside the ancestry: the background itself, the
+// skills a content pack's leaves open, and every open tool grant ("three
+// musical instruments", "one type of artisan's tools"). The tools are asked
+// here, the first step where both the class's and the background's grants
+// are known.
+export function backgroundBlocks(
+  state: Pick<BuilderState, "backgroundSkills">,
+  background?: BackgroundOption,
+  derived?: Pick<BuilderDerived, "toolGrants">,
+): StepBlock[] {
   const owed: StepBlock[] = [];
-  if (!state.name.trim()) {
-    owed.push(block("name", "Give your character a name."));
-  }
   // No background stands in until one is picked: the first row used to,
   // and an Acolyte nobody chose owed two languages.
   if (!background) {
@@ -93,11 +111,23 @@ export function identityBlocks(state: BuilderState, background?: BackgroundOptio
   if (background?.skillChoice && state.backgroundSkills.filter(Boolean).length < background.skillChoice.count) {
     owed.push(block("backgroundSkills", `Pick the skills your ${background.name} past trained (skill proficiencies).`));
   }
+  // An open tool grant ("three musical instruments") waits for its pick.
+  const grants = derived?.toolGrants;
+  const toolsOwed = grants ? grants.choices.findIndex((_, index) => grants.left[index] > 0) : -1;
+  if (grants && toolsOwed >= 0) {
+    const left = grants.left[toolsOwed];
+    const choice = grants.choices[toolsOwed];
+    owed.push(block("tools", `Pick ${left} more ${choice.label}${left === 1 ? "" : "s"} you know how to use (tool proficiency).`));
+  }
   return owed;
 }
 
-export function identityBlocker(state: BuilderState, background?: BackgroundOption): StepBlock | null {
-  return identityBlocks(state, background)[0] ?? null;
+export function backgroundBlocker(
+  state: Pick<BuilderState, "backgroundSkills">,
+  background?: BackgroundOption,
+  derived?: Pick<BuilderDerived, "toolGrants">,
+): StepBlock | null {
+  return backgroundBlocks(state, background, derived)[0] ?? null;
 }
 
 // Languages the player chooses: the race's bonus ones plus the background's
@@ -225,13 +255,7 @@ export function callingBlocks(
   if (strict && skillsLeft > 0) {
     owed.push(block("classSkills", `Pick ${skillsLeft} more ${skillsLeft === 1 ? "skill" : "skills"} your training taught you (class skills).`));
   }
-  // An open tool grant ("three musical instruments") waits for its pick.
-  const toolsOwed = derived.toolGrants.choices.findIndex((_, index) => derived.toolGrants.left[index] > 0);
-  if (toolsOwed >= 0) {
-    const left = derived.toolGrants.left[toolsOwed];
-    const choice = derived.toolGrants.choices[toolsOwed];
-    owed.push(block("tools", `Pick ${left} more ${choice.label}${left === 1 ? "" : "s"} you know how to use (tool proficiency).`));
-  }
+  // Open tool grants are asked with the background (backgroundBlocks).
   const pickLevel = subclassLevelFor(klass.id);
   if (pickLevel !== null && derived.effectiveLevel >= pickLevel && !state.subclass.trim()) {
     owed.push(block("subclass", `Choose your ${klass.name.toLowerCase()}'s path (subclass): a ${klass.name.toLowerCase()} chooses one at level ${pickLevel}.`));
@@ -446,13 +470,16 @@ export function validateBuilder(
   // the same sheet.
   const { picks } = reconcilePicks(input.state, { race, klass, background, level: derived.effectiveLevel });
   const state: BuilderState = { ...input.state, ...picks };
+  // In the wizard's order, so the save names the earliest step's pick; the
+  // name is last, as the wizard asks it.
   const blocked =
-    identityBlocker(state, background) ??
-    abilitiesBlocker(derived, state, input.featJudge) ??
-    ancestryBlocker(state, race, background, derived, input.featJudge) ??
     callingBlocker(klass, state, derived) ??
+    ancestryBlocker(state, race, background, derived, input.featJudge) ??
+    backgroundBlocker(state, background, derived) ??
+    abilitiesBlocker(derived, state, input.featJudge) ??
     spellsBlocker(derived, klass) ??
-    gearBlocker(derived);
+    gearBlocker(derived) ??
+    identityBlocker(state);
   if (blocked) {
     return { kind: "error", message: blocked.message, target: blocked.target };
   }

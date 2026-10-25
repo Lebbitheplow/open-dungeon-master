@@ -59,20 +59,20 @@ function walk(node, out = []) {
   return out;
 }
 
+// The class first, the name and story last (backlog F4).
 await test("one row per step, in step order, in plain words", () => {
   const rows = summaryRows(complete);
-  assert.deepEqual(rows.map((row) => row.key), ["identity", "ancestry", "calling", "abilities", "spells-gear", "finish"]);
-  assert.deepEqual(rows.map((row) => row.label), ["Name and background", "Ancestry", "Class", "Ability scores", "Spells and gear", "Finishing touches"]);
-  assert.deepEqual(rows[0].lines, ["Wren", "Sage background"]);
-  assert.deepEqual(rows[1].lines, ["High Elf"]);
-  assert.deepEqual(rows[2].lines, ["Wizard, level 3", "School of Evocation"]);
-  assert.deepEqual(rows[3].lines, ["Str 8, Dex 14, Con 13, Int 16, Wis 12, Cha 10"]);
-  assert.deepEqual(rows[4].lines, [
+  assert.deepEqual(rows.map((row) => row.key), ["calling", "ancestry", "abilities", "spells-gear", "identity"]);
+  assert.deepEqual(rows.map((row) => row.label), ["Class", "Ancestry and background", "Ability scores", "Spells and gear", "Name and story"]);
+  assert.deepEqual(rows[0].lines, ["Wizard, level 3", "School of Evocation"]);
+  assert.deepEqual(rows[1].lines, ["High Elf", "Sage background"]);
+  assert.deepEqual(rows[2].lines, ["Str 8, Dex 14, Con 13, Int 16, Wis 12, Cha 10"]);
+  assert.deepEqual(rows[3].lines, [
     "Cantrips: Fire Bolt, Light, Mage Hand and 1 more",
     "Spells: Magic Missile and Shield",
     "Gear: 4 items, Quarterstaff, Spellbook and Dagger",
   ]);
-  assert.deepEqual(rows[5].lines, ["Alignment Neutral Good", "No portrait yet", "Appearance written", "No backstory yet"]);
+  assert.deepEqual(rows[4].lines, ["Wren", "Alignment Neutral Good", "No portrait yet", "Appearance written", "No backstory yet"]);
   assert.equal(summaryOwedCount(rows), 0);
   assert.equal(someNames([]), "");
   assert.equal(someNames(["Light"]), "Light");
@@ -80,31 +80,33 @@ await test("one row per step, in step order, in plain words", () => {
 
 await test("an empty build says what is not chosen, and a fighter's row is Gear", () => {
   const rows = summaryRows({ ...complete, name: " ", background: undefined, race: undefined, klass: undefined, abilities: null, casts: false, gear: [] });
-  assert.deepEqual(rows[0].lines, ["No name yet", "No background chosen"]);
-  assert.deepEqual(rows[1].lines, ["No ancestry chosen"]);
-  assert.deepEqual(rows[2].lines, ["No class chosen"]);
-  assert.deepEqual(rows[3].lines, ["Not set yet"]);
-  assert.equal(rows[4].label, "Gear");
-  assert.deepEqual(rows[4].lines, ["No gear packed"]);
+  assert.deepEqual(rows[0].lines, ["No class chosen"]);
+  assert.deepEqual(rows[1].lines, ["No ancestry chosen", "No background chosen"]);
+  assert.deepEqual(rows[2].lines, ["Not set yet"]);
+  assert.equal(rows[3].label, "Gear");
+  assert.deepEqual(rows[3].lines, ["No gear packed"]);
+  assert.equal(rows[4].lines[0], "No name yet");
 });
 
 await test("each row lists what its step still owes, from the same blocks the gates hold", () => {
   const state = { name: "", backgroundSkills: [], bonusLanguages: [], racialAsi: [], racialSkills: [], feats: [], repeatSkills: [] };
   const owed = {
     ...none,
-    identity: submit.identityBlocks(state, undefined),
-    ancestry: submit.ancestryBlocks(state, undefined),
+    identity: submit.identityBlocks(state),
+    ancestry: [...submit.ancestryBlocks(state, undefined), ...submit.backgroundBlocks(state, undefined)],
     calling: submit.callingBlocks(undefined),
     abilities: submit.abilitiesBlocks({ abilities: null }),
   };
   const rows = summaryRows({ ...complete, owed });
-  assert.deepEqual(rows[0].owed.map((pick) => pick.target), owed.identity.map((block) => block.target));
-  assert.deepEqual(rows[1].owed.map((pick) => [pick.target, pick.message]), [["race", "Choose where your hero comes from (race)."]]);
-  assert.deepEqual(rows[2].owed.map((pick) => pick.label), ["Class"]);
-  assert.deepEqual(rows[3].owed.map((pick) => pick.target), ["scores"]);
-  assert.deepEqual(rows[4].owed, []);
-  assert.deepEqual(rows[5].owed, [], "finishing touches never hold a save");
-  assert.equal(summaryOwedCount(rows), rows[0].owed.length + 3);
+  assert.deepEqual(rows[0].owed.map((pick) => pick.label), ["Class"]);
+  assert.deepEqual(rows[1].owed.map((pick) => [pick.target, pick.message]), [
+    ["race", "Choose where your hero comes from (race)."],
+    ["background", "Choose what your hero did before adventuring (background)."],
+  ]);
+  assert.deepEqual(rows[2].owed.map((pick) => pick.target), ["scores"]);
+  assert.deepEqual(rows[3].owed, []);
+  assert.deepEqual(rows[4].owed.map((pick) => pick.target), ["name"], "the name is the only pick the last row holds");
+  assert.equal(summaryOwedCount(rows), 5);
 });
 
 await test("the panel has a heading per row and says a missing pick in words, with a Fix", () => {
@@ -123,7 +125,7 @@ await test("the panel has a heading per row and says a missing pick in words, wi
   assert.match(fix, /min-h-10/, "a 40px target");
   const edits = [...markup.matchAll(/<button[^>]*data-summary-edit="([^"]+)"[^>]*aria-label="([^"]+)"[^>]*>Edit<\/button>/g)].map((match) => [match[1], match[2]]);
   assert.deepEqual(edits.map(([key]) => key), rows.map((row) => row.key));
-  assert.equal(edits[3][1], "Edit Ability scores");
+  assert.equal(edits[2][1], "Edit Ability scores");
   assert.match(markup, /sm:flex-row/, "a row stacks on a phone and sits in a line from sm up");
 
   const done = renderToStaticMarkup(createElement(SummaryPanel, { rows: summaryRows(complete), onEdit: () => {}, onFix: () => {} }));
@@ -139,7 +141,7 @@ await test("Edit goes to its row's step and Fix to the owed pick", () => {
   const tree = walk(SummaryPanel({ rows, onEdit: (key) => edited.push(key), onFix: (target) => fixed.push(target) }));
   const buttons = tree.filter((node) => node.type === "button");
   for (const button of buttons) button.props.onClick();
-  assert.deepEqual(edited, ["identity", "ancestry", "calling", "abilities", "spells-gear", "finish"]);
+  assert.deepEqual(edited, ["calling", "ancestry", "abilities", "spells-gear", "identity"]);
   assert.deepEqual(fixed, ["spells", "gear"]);
 });
 
@@ -167,8 +169,10 @@ await test("an edit opens on the summary, and every step offers the way back onc
   assert.match(builder, /setStep\(STEP_ORDER\.length - 1\);\n\s+\}\n\s+\},\n\s+\}\);/);
 
   const finish = read("src/app/characters/builder/steps/FinishStep.tsx");
-  assert.match(finish, /<SummaryPanel rows=\{summary\} onEdit=\{editRow\} onFix=\{onFix\} \/>/);
-  assert.match(finish, /<div id=\{touchesId\}/, "the finishing touches row comes down to them");
+  assert.match(finish, /<SummaryPanel rows=\{summary\} onEdit=\{\(key\) => onEdit\?\.\(key\)\} onFix=\{onFix\} \/>/);
+  // The finishing touches are the identity step's now (backlog F4), so its
+  // row's Edit goes there like every other row's.
+  assert.doesNotMatch(finish, /touchesId|Backstory \(optional\)/);
 });
 
 await test("the wizard footer shows Back to summary as a named button", () => {

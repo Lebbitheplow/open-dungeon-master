@@ -43,7 +43,7 @@ export default {
       return (await edit.count()) ? edit.first() : null;
     }, { label: "the Edit build button" }));
     // The editor opens on its summary (backlog F3); the name row goes to
-    // the first step.
+    // the identity step, the last before it (backlog F4).
     const nameRow = page.locator(`${root}section[data-active] [data-summary-edit="identity"]`).locator("visible=true");
     await eventually(() => nameRow.count(), { timeoutMs: 30_000, label: "the summary's name row" });
     await t.tap(nameRow.first());

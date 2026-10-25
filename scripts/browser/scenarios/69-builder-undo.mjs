@@ -62,12 +62,11 @@ export default {
     // Offered again, then the step is left: the undo goes.
     await t.tap(card("Rogue"));
     await eventually(() => bar.isVisible(), { timeoutMs: 8_000, label: "the bar for a second change" });
-    await t.tap(page.locator(`${root}button[aria-label^="Back to step 2"]`).locator("visible=true").first());
-    await eventually(async () => /^Step 2:/.test(await currentStep(page, root)), { label: "back on step 2" });
-    const ahead = page.locator(`${root}button[aria-label^="Go to step 3:"]`).locator("visible=true");
-    await eventually(async () => (await ahead.count()) && ahead.first().isEnabled(), { timeoutMs: 15_000, label: "the step 3 diamond" });
-    await t.tap(ahead.first());
-    await eventually(async () => /^Step 3:/.test(await currentStep(page, root)), { label: "on step 3 again" });
+    // The class is the first step (backlog F4), and a rogue's picks hold the
+    // diamonds ahead: leave by Back to summary and return by its class row.
+    await t.tap(page.locator(`${root}button`).filter({ hasText: /^Back to summary$/ }).locator("visible=true").first());
+    await eventually(() => classRow.count(), { timeoutMs: 15_000, label: "the summary's class row again" });
+    await t.tap(classRow.first());
     await card("Rogue").waitFor({ state: "visible", timeout: 15_000 });
     if (await page.locator(`${root}[data-build-undo]`).count()) found.push("the undo outlived leaving the step");
 
