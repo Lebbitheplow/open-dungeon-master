@@ -2,13 +2,16 @@
 
 import { readLoad, useLoadStatus } from "@/lib/load-state";
 import { EmptyState } from "@/components/EmptyState";
-import { ChevronDown, Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, Info, Pencil, Plus, Trash2 } from "lucide-react";
 import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { Select } from "@/components/ui/Select";
 import { useEffect, useRef, useState } from "react";
 import { appConfirm } from "@/components/ui/ConfirmDialog";
+import { InfoDialog } from "@/components/ui/InfoDialog";
+import { contentSlug } from "@/lib/help";
+import { cardArtwork } from "@/lib/battlemap/card-art";
 import { cn } from "@/lib/cn";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { formatCopper, formatPrice } from "@/lib/srd/currency";
@@ -24,7 +27,9 @@ import { GameTerm } from "@/components/ui/GameTerm";
 // the purse when money moves. Whoever steers the story sees every shop in
 // the world; whoever holds the prep (the DM seat, the lead of an
 // AI-narrated table, the workshop's author: the server says which, #171)
-// opens shops here or in the workshop and writes their shelves.
+// opens shops here or in the workshop and writes their shelves. A tile's
+// name opens the item card (src/components/ui/InfoDialog.tsx): its damage,
+// armour class, properties and text, so a buyer knows what the coin gets.
 
 type StockView = { itemName: string; qty: number; priceCp: number; askingCp: number; note: string };
 type ShopView = {
@@ -121,6 +126,7 @@ export function MarketPanel({
   const [keepers, setKeepers] = useState<Named[]>([]);
   const [canPrep, setCanPrep] = useState(isDm);
   const [editing, setEditing] = useState("");
+  const [details, setDetails] = useState<StockView | null>(null);
   // A refused or failed read is shown in the server's words with a way to
   // ask again, never as "nothing here yet" (issue 140).
   const { loaded, loadError, settle } = useLoadStatus();
@@ -257,6 +263,17 @@ export function MarketPanel({
   }
   return (
     <div ref={listRef} className="space-y-2">
+      {details ? (
+        <InfoDialog
+          open
+          onOpenChange={(open) => !open && setDetails(null)}
+          title={details.itemName}
+          meta={`${formatPrice(details.askingCp)} here, ${details.qty} on the shelf`}
+          note={details.note || undefined}
+          reference={{ kind: "items", slug: contentSlug(details.itemName), name: details.itemName }}
+          icon={cardArtwork({ kind: "item", key: details.itemName, family: "item-gear" })}
+        />
+      ) : null}
       <SectionHead
         headingRef={headingRef}
         title="Market"
@@ -444,13 +461,22 @@ export function MarketPanel({
                     as="li"
                     key={line.itemName}
                     label={line.itemName}
-                    items={mySheet ? [{ id: "buy", label: `Buy for ${formatPrice(line.askingCp)}`, glyph: coinGlyph(line.askingCp), disabled: cannotBuy, onSelect: () => void counter(shop, "buy", line.itemName) }] : []}
+                    items={[
+                      { id: "details", label: "Details", glyph: "system-rules", onSelect: () => setDetails(line) },
+                      ...(mySheet ? [{ id: "buy", label: `Buy for ${formatPrice(line.askingCp)}`, glyph: coinGlyph(line.askingCp), disabled: cannotBuy, onSelect: () => void counter(shop, "buy", line.itemName) }] : []),
+                    ]}
                     className="flex flex-col justify-between rounded-lg border border-stone-700/60 bg-stone-900/50 p-2 transition-transform duration-[var(--dur-quick,150ms)] hover:-translate-y-0.5 hover:border-amber-500/40"
                   >
-                    <span className="flex min-w-0 items-center gap-1.5 text-xs text-stone-200" title={line.note || line.itemName}>
+                    <button
+                      type="button"
+                      onClick={() => setDetails(line)}
+                      aria-label={`Details of ${line.itemName}`}
+                      className="flex min-w-0 items-center gap-1.5 rounded text-left text-xs text-stone-200 hover:text-amber-100"
+                    >
                       <GameIcon icon={{ kind: "item", key: line.itemName, family: "item-gear" }} size="size-7" />
                       <span className="truncate">{line.itemName}</span>
-                    </span>
+                      <Info aria-hidden className="size-3.5 shrink-0 text-stone-500" />
+                    </button>
                     <span className="mt-1.5 flex flex-wrap items-center justify-between gap-1">
                       <span className="pk-chip max-w-full whitespace-normal text-amber-200">
                         <GameIcon icon={{ kind: "glyph", key: coinGlyph(line.askingCp) }} size="size-4" />
