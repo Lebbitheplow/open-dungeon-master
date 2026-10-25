@@ -40,6 +40,15 @@ test("common inventory spellings map to their intended item art", () => {
   ]) assert.equal(cardArtwork({ kind: "item", key: name }).key, key, name);
 });
 
+test("a weapon written in the book's order or with a bonus shows its weapon's painting", () => {
+  for (const [name, key] of [
+    ["Crossbow, hand", "weapon-hand-crossbow"],
+    ["Crossbow, light", "weapon-light-crossbow"],
+    ["Longsword +1", "weapon-longsword"],
+    ["+2 Warhammer", "weapon-warhammer"],
+  ]) assert.equal(cardArtwork({ kind: "item", key: name, family: "item-weapon" }).key, key, name);
+});
+
 test("unknown, custom and genre items retain their existing fallback", () => {
   for (const key of ["Moon Longsword", "Pistol", "Unknown Relic"]) {
     const ref = { kind: "item", key, family: "item-weapon" };
