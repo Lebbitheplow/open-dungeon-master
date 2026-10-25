@@ -35,7 +35,9 @@ import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { addDice } from "@/lib/srd/spell-scaling";
 import { tilesBetween } from "@/lib/dm/attack-spatial";
 import { rollCharacterSave, rollEnemySave } from "@/lib/dm/forced-save";
-import { damageAdjust, instancesOf, removeConditionInstances, resistsAllDamage, withTempHpClaim, type ConditionMetaMap, type SaveAbilityId } from "@/lib/dm/condition-logic";
+import { instancesOf, removeConditionInstances, withTempHpClaim, type ConditionMetaMap, type SaveAbilityId } from "@/lib/dm/condition-logic";
+import { meetEnemyPart } from "@/lib/dm/enemy-defenses";
+import { enemyHpCap } from "@/lib/dm/monster-abilities";
 import { createDmTurn, saveDmTurn } from "@/lib/db/dm-turns";
 import type { RollAttacker } from "@/lib/db/rolls";
 import { applyPcDamage } from "@/lib/dm/pc-damage";
@@ -53,11 +55,14 @@ const FEET_PER_TILE = 5;
 // Damage from a running spell landing on an enemy: its resistances, the
 // hit points, a concentration save, and death. Returns the line for the table.
 export function hurtEnemy(campaign: Campaign, encounter: Encounter, enemy: EncounterEnemy, amount: number, type: string, why: string): string {
-  const adjusted = damageAdjust(amount, type, enemy.stats.resist, enemy.stats.immune, enemy.stats.vulnerable, {
-    magical: true,
-    spell: true,
-    resistAll: resistsAllDamage(enemy.conditions),
-  });
+  // The board's defences as well as the block's: Silence, the water, a
+  // golem's Absorption (enemy-defenses.ts).
+  const adjusted = meetEnemyPart(campaign.id, enemy, amount, type, { magical: true, spell: true });
+  if (adjusted.absorbed > 0) {
+    const healed = Math.min(enemyHpCap(enemy), enemy.currentHp + adjusted.absorbed);
+    patchEnemyHp(enemy.id, healed, "alive");
+    return `${enemy.displayName} absorbs the ${type} from ${why} and regains ${healed - enemy.currentHp} hit points.`;
+  }
   if (adjusted.amount <= 0) {
     return `${enemy.displayName} takes no damage from ${why}.`;
   }

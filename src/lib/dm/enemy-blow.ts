@@ -5,16 +5,18 @@
 
 import { resolveTargetFoe } from "@/lib/dm/sheet-foe";
 import { getCampaignById, type Campaign } from "@/lib/db/campaigns";
-import { getActiveEncounter, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
+import { getActiveEncounter, getEnemy, patchEnemyHp, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
 import { listSheets } from "@/lib/db/sheets";
 import { getDmTurn, type DmTurn, type PendingRoll } from "@/lib/db/dm-turns";
 import { landRoll, type StoredRoll } from "@/lib/db/rolls";
 import { healthState } from "@/lib/bestiary/health";
-import { damageAdjust, resistsAllDamage } from "@/lib/dm/condition-logic";
+import { resistsAllDamage } from "@/lib/dm/condition-logic";
 import type { WeaponMaterial } from "@/lib/dm/damage-logic";
 import { damageParts, type TypedRider } from "@/lib/dm/damage-parts";
-import { applyEnemyDamage } from "@/lib/dm/enemy-damage";
-import { resistLineFor } from "@/lib/dm/underwater";
+import { applyEnemyDamage, applySheetFoeBlow } from "@/lib/dm/enemy-damage";
+import { meetEnemyPart, type EnemyPartFlags } from "@/lib/dm/enemy-defenses";
+import { isSheetFoe } from "@/lib/dm/combat-sides-logic";
+import { enemyHpCap } from "@/lib/dm/monster-abilities";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // How a parked attack's damage roll is resolved (carried on the pending
@@ -64,28 +66,85 @@ function applyBlow(
       ...material,
     });
   }
+  return landTypedParts({
+    campaign,
+    turn,
+    encounter,
+    enemy,
+    parts,
+    sheets,
+    sheetsById,
+    weapon: { magical, ...material },
+    nonlethal: blow?.nonlethal === true,
+    crit: blow?.crit === true,
+  });
+}
+
+// A blow of several damage types landing on one creature, the one way every
+// path lands it (pc_attack's digital blow, a rolled damage card). A
+// character fighting on the foes' side takes each part against its own
+// defences (pc-damage.ts). An enemy meets each part on its own, with the
+// board's defences as a blow of one type meets them (enemy-defenses.ts:
+// Silence, the water, a golem's Absorption, a feature that ignores the
+// type's resistance); what is left lands as one wound, and a part a golem
+// absorbs heals it once the wound has landed. Only the weapon's own part
+// (the first) can be nonmagical, silvered or a good wielder's: a rider is a
+// spell's or a feature's dice.
+export function landTypedParts(input: {
+  campaign: Campaign;
+  turn: DmTurn;
+  encounter: Encounter;
+  enemy: EncounterEnemy;
+  parts: Array<{ amount: number; type: string }>;
+  sheets: CharacterSheet[];
+  sheetsById: Map<string, CharacterSheet>;
+  weapon: EnemyPartFlags;
+  // From a spell, whatever part (Spell Resistance, "damage from spells").
+  spell?: boolean;
+  nonlethal?: boolean;
+  holdVictory?: boolean;
+  crit?: boolean;
+  concentrationDisadvantage?: boolean;
+}): Record<string, unknown> {
+  const { campaign, turn, encounter, enemy, parts, sheets, sheetsById, weapon } = input;
+  if (isSheetFoe(enemy)) {
+    return applySheetFoeBlow(campaign, turn, encounter, enemy, {
+      amount: parts.reduce((sum, part) => sum + part.amount, 0),
+      parts,
+      ...(weapon.magical ? { magical: true } : {}),
+      ...(weapon.silvered ? { silvered: true } : {}),
+      ...(weapon.adamantine ? { adamantine: true } : {}),
+      ...(weapon.goodWielder ? { goodWielder: true } : {}),
+      ...(input.spell || weapon.spell ? { spell: true } : {}),
+      ...(weapon.ignoreResistanceBy && parts[0]?.type ? { ignoreResistanceTo: parts[0].type } : {}),
+      ...(input.crit ? { crit: true } : {}),
+      ...(input.nonlethal ? { nonlethal: true } : {}),
+    }, sheets, sheetsById, input.holdVictory === true);
+  }
   // A creature that resists everything (petrified) is halved once, by
   // applyEnemyDamage, not once per part.
   const resistAll = resistsAllDamage(enemy.conditions);
+  const spell = input.spell === true || weapon.spell === true;
   const byType = parts.map((part, index) => ({
     ...part,
-    ...damageAdjust(
+    ...meetEnemyPart(
+      campaign.id,
+      enemy,
       part.amount,
       part.type,
-      resistAll ? "" : resistLineFor(campaign.id, enemy),
-      enemy.stats.immune,
-      enemy.stats.vulnerable,
-      // Only the weapon's own part can be nonmagical: a rider is a spell's or
-      // a feature's dice.
-      { magical: index === 0 ? magical : true, ...(index === 0 ? material : {}) },
+      index === 0 ? { ...weapon, spell, partOfBlow: true } : { magical: true, spell, partOfBlow: true },
     ),
   }));
   const landed = byType.reduce((sum, part) => sum + part.amount, 0);
-  const applied: Record<string, unknown> =
+  const absorbed = byType.reduce((sum, part) => sum + part.absorbed, 0);
+  let applied: Record<string, unknown> =
     landed > 0
       ? applyEnemyDamage(campaign, turn, encounter, enemy, landed, sheets, sheetsById, undefined, {
           magical: true,
-          nonlethal: blow?.nonlethal === true,
+          ...(input.nonlethal ? { nonlethal: true } : {}),
+          ...(input.holdVictory ? { holdVictory: true } : {}),
+          ...(input.crit ? { crit: true } : {}),
+          ...(input.concentrationDisadvantage ? { concentrationDisadvantage: true } : {}),
         })
       : {
           ok: true,
@@ -96,6 +155,16 @@ function applyBlow(
         };
   if ("error" in applied) {
     return applied;
+  }
+  const after = getEnemy(enemy.id);
+  if (absorbed > 0 && after && after.status === "alive") {
+    const healed = patchEnemyHp(after.id, Math.min(enemyHpCap(after), after.currentHp + absorbed), "alive") ?? after;
+    applied = {
+      ...applied,
+      hp: `${healed.currentHp}/${healed.maxHp}`,
+      health: healthState(healed.currentHp, healed.maxHp),
+      absorbed: healed.currentHp - after.currentHp,
+    };
   }
   return {
     ...applied,

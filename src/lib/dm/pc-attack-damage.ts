@@ -12,8 +12,7 @@ import type { Advantage, RollResult } from "@/lib/dice";
 import { claimOncePerTurn, type TurnBudget } from "@/lib/dm/action-budget";
 import { ragingMeleeBonus, type AttackProfile } from "@/lib/dm/attack-logic";
 import { damageParts, type TypedRider } from "@/lib/dm/damage-parts";
-import { damageAdjust, resistsAllDamage, type BlowSource } from "@/lib/dm/damage-logic";
-import { resistLineFor } from "@/lib/dm/underwater";
+import type { BlowSource } from "@/lib/dm/damage-logic";
 import { effectOutcome } from "@/lib/dm/effect-tools";
 import type { Encounter, EncounterEnemy } from "@/lib/db/encounters";
 import { DAMAGE_TYPES } from "@/lib/dm/condition-logic";
@@ -22,6 +21,7 @@ import { authoredSneakEdge } from "@/lib/dm/authored-hooks";
 import { authoredSneakBonus } from "@/lib/srd/authored-effects-more";
 import { getSheetById } from "@/lib/db/sheets";
 import { applyEnemyDamage, applySheetFoeBlow } from "@/lib/dm/enemy-damage";
+import { landTypedParts } from "@/lib/dm/enemy-blow";
 import { isSheetFoe } from "@/lib/dm/combat-sides-logic";
 import { allyAdjacentToEnemy } from "@/lib/dm/map-tools";
 import { storeBudget } from "@/lib/dm/turn-budget";
@@ -517,37 +517,21 @@ export function landBlow(input: {
     );
   } else {
     // Two damage types in one blow: each meets the creature's resistances
-    // on its own, and what is left lands as one wound. A creature that
-    // resists everything (petrified) is halved once, by applyEnemyDamage.
-    const resistAll = resistsAllDamage(enemy.conditions);
-    const byType = parts.map((part, index) => ({
-      ...part,
-      ...damageAdjust(
-        part.amount,
-        part.type,
-        resistAll ? "" : resistLineFor(campaign.id, enemy),
-        enemy.stats.immune,
-        enemy.stats.vulnerable,
-        { magical: index === 0 ? magical : true, ...(index === 0 ? material : {}), ...(index === 0 ? input.blow : { spell: input.blow?.spell }) },
-      ),
-    }));
-    const landed = byType.reduce((sum, part) => sum + part.amount, 0);
-    applied =
-      landed > 0
-        ? applyEnemyDamage(campaign, turn, encounter, enemy, landed, sheets, sheetsById, undefined, {
-            magical: true,
-            nonlethal,
-            holdVictory,
-            ...(input.concentrationDisadvantage ? { concentrationDisadvantage: true } : {}),
-          })
-        : unharmed;
-    applied = {
-      ...applied,
-      damageApplied: resistAll ? Math.floor(landed / 2) : landed,
-      damageByType: byType.map(
-        (part) => `${part.amount} ${part.type || "untyped"}${part.note ? ` (${part.note})` : ""}`,
-      ),
-    };
+    // on its own, and what is left lands as one wound (enemy-blow.ts).
+    applied = landTypedParts({
+      campaign,
+      turn,
+      encounter,
+      enemy,
+      parts,
+      sheets,
+      sheetsById,
+      weapon: { magical, ...material, ...input.blow, ...(input.ignoreResistance ? { ignoreResistanceBy: input.ignoreResistanceBy ?? "Elemental Adept" } : {}) },
+      nonlethal,
+      holdVictory,
+      crit,
+      concentrationDisadvantage: input.concentrationDisadvantage === true,
+    });
   }
   return applied;
 }

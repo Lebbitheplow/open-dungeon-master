@@ -20,7 +20,8 @@ import { getDatabase } from "@/lib/db/core";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { getActiveEncounter, getEnemy, patchEnemyConditions, setEnemyConcentration, type EncounterEnemy } from "@/lib/db/encounters";
 import { getSheetById } from "@/lib/db/sheets";
-import { addConditionInstance, damageAdjust, isIncapacitated, resistsAllDamage, type ConditionMeta, type ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { addConditionInstance, isIncapacitated, type ConditionMeta, type ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { meetEnemyPart } from "@/lib/dm/enemy-defenses";
 import { settleEnemyIncapacitation } from "@/lib/dm/enemy-incapacitation";
 import { breakConcentration, clearSpellConditionsByName } from "@/lib/dm/concentration";
 import { applyEnemyDamage, publishEncounter } from "@/lib/dm/enemy-damage";
@@ -79,20 +80,20 @@ export function maximizedDamage(mech: SpellMech | null, enemy: EncounterEnemy, e
 // the creature below the floor. Null when the spell has no floor; the
 // caller then lets applyEnemyDamage weigh the resistances itself.
 export function flooredDamage(
+  campaignId: string,
   mech: SpellMech | null,
   enemy: EncounterEnemy,
   amount: number,
   type: string | undefined,
+  ignoreResistanceBy?: string | null,
 ): number | null {
   const floor = mech?.riders?.hpFloor;
   if (!floor) {
     return null;
   }
-  const adjusted = damageAdjust(amount, type, enemy.stats.resist, enemy.stats.immune, enemy.stats.vulnerable, {
-    magical: true,
-    spell: true,
-    resistAll: resistsAllDamage(enemy.conditions),
-  }).amount;
+  // The defences the damage path weighs (enemy-defenses.ts): the Death
+  // cleric's Inescapable Destruction sets necrotic resistance aside here too.
+  const adjusted = meetEnemyPart(campaignId, enemy, amount, type, { magical: true, spell: true, ignoreResistanceBy }).amount;
   return Math.max(0, Math.min(adjusted, enemy.currentHp - floor));
 }
 

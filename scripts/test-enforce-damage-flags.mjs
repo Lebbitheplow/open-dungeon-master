@@ -133,5 +133,68 @@ await test("Ice Storm on an ally in a beast form that resists nonmagical blows: 
   assert.equal(table.sheet(fighter.id).wildShape.beastHp, 100 - 24, JSON.stringify(out.result));
 });
 
+await test("Inside Silence a smite's thunder does nothing: only the sword's slashing lands.", async () => {
+  const { world: table, sheets: [cleric, fighter], enemies: [goblin] } = await board([caster("cleric", "wis", ["Silence"]), FIGHTER], { 0: { x: 2, y: 8 }, 1: { x: 11, y: 4 }, e0: { x: 12, y: 4 } });
+  const cast = await table.invoke("use_spell_slot", { characterId: cleric.id, spell: "Silence", level: 2, atX: 12, atY: 4 });
+  assert.equal(cast.ok, true, cast.error);
+  table.patch(fighter.id, { conditions: ["thunderous smite"], conditionMeta: {} });
+  holdTurn(table, fighter.id);
+  // To hit, the longsword's d8, the smite's 2d6, the goblin's STR save.
+  table.dice(18, 6, 5, 5, 20);
+  const out = await table.invoke("pc_attack", { characterId: fighter.id, targetEnemyId: goblin.id, weapon: "Longsword" });
+  table.clearDice();
+  assert.equal(out.ok, true, out.error);
+  assert.equal(enemyOf(table, goblin.id).currentHp, 90 - 9, JSON.stringify(out.result));
+});
+
+await test("An iron golem's Fire Absorption heals it by a smite's fire riding a sword, after the sword's slashing lands.", async () => {
+  const { world: table, sheets: [fighter], enemies: [golem] } = await board([FIGHTER], { 0: { x: 11, y: 4 }, e0: { x: 12, y: 4 } });
+  dress(table, golem.id, { immune: "fire", traits: [FIRE_ABSORPTION] });
+  encounters.patchEnemyHp(golem.id, 50, "alive");
+  table.patch(fighter.id, { conditions: ["searing smite"], conditionMeta: {} });
+  holdTurn(table, fighter.id);
+  // To hit, the longsword's d8, the smite's 1d6.
+  table.dice(18, 6, 4);
+  const out = await table.invoke("pc_attack", { characterId: fighter.id, targetEnemyId: golem.id, weapon: "Longsword" });
+  table.clearDice();
+  assert.equal(out.ok, true, out.error);
+  assert.equal(enemyOf(table, golem.id).currentHp, 50 - 9 + 4, JSON.stringify(out.result));
+});
+
+await test("A clay golem's Acid Absorption heals it by Acid Arrow's lingering acid at the end of its turn, as it does by the arrow's hit.", async () => {
+  const { world: table, sheets: [wizard], enemies: [golem] } = await board([caster("wizard", "int", ["Acid Arrow"])], { 0: { x: 2, y: 4 }, e0: { x: 8, y: 4 } });
+  dress(table, golem.id, { traits: [ACID_ABSORPTION] });
+  encounters.patchEnemyHp(golem.id, 50, "alive");
+  holdTurn(table, wizard.id);
+  // A hit, then 4d4 of 1s: the hit heals 4.
+  table.dice(18, 1, 1, 1, 1);
+  const out = await table.invoke("pc_attack", { characterId: wizard.id, targetEnemyId: golem.id, spell: "Acid Arrow", level: 2 });
+  table.clearDice();
+  assert.equal(out.ok, true, out.error);
+  assert.equal(enemyOf(table, golem.id).currentHp, 54, JSON.stringify(out.result));
+  // The golem's turn comes and goes: the 2d4 of 3s heals 6 more.
+  table.dice(...new Array(8).fill(3));
+  let guard = 0;
+  while (enemyOf(table, golem.id).currentHp === 54 && guard < 6) {
+    await nextTurn(table);
+    guard += 1;
+  }
+  table.clearDice();
+  assert.equal(enemyOf(table, golem.id).currentHp, 60, "the lingering acid hurt the golem instead of healing it");
+});
+
+await test("Harm cast by a Death cleric ignores necrotic resistance (Inescapable Destruction), floor and all.", async () => {
+  const priest = caster("cleric", "wis", ["Harm"], [], 11, { subclass: "Death Domain" });
+  const { world: table, sheets: [cleric], enemies: [goblin] } = await board([priest], { 0: { x: 2, y: 4 }, e0: { x: 4, y: 4 } });
+  dress(table, goblin.id, { resist: "necrotic" });
+  holdTurn(table, cleric.id);
+  // The goblin's CON save fails, then 14d6 of 2s: 28 necrotic.
+  table.dice(1, ...new Array(14).fill(2));
+  const out = await table.invoke("cast_at_enemy", { characterId: cleric.id, targetEnemyId: goblin.id, spell: "Harm", level: 6 });
+  table.clearDice();
+  assert.equal(out.ok, true, out.error);
+  assert.equal(enemyOf(table, goblin.id).currentHp, 90 - 28, JSON.stringify(out.result));
+});
+
 closeTables();
 finish();
