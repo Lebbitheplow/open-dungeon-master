@@ -1976,6 +1976,7 @@
     "lib/report-bundle.ts#re-word": [["key",2,"session and cookie names redacted, and the narrator's whisper tools found by name (protocol)"]],
     "lib/report-bundle.ts#str-eq": [["key",1,"a kept page error's kind (fixed choice)"]],
     "lib/report-bundle.ts#toUpperCase": [["display",1,"log level shown"]],
+    "lib/shell-report.ts#str-startsWith": [["key",1,"the report file's own Version line, which the app's line follows (protocol)"]],
     "lib/roll-labels.ts#str-key": [["key",1,"roll kind ids"]],
     "lib/rulebook/catalog-rows.ts#RegExp i": [["english-source",1,"the bundled SRD rulebook's own Markdown (bundled data)"]],
     "lib/rulebook/catalog-rows.ts#[a-z]": [["english-source",1,"the bundled SRD rulebook's own Markdown (bundled data)"]],

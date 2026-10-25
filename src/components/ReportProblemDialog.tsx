@@ -3,17 +3,16 @@
 import { Bug, ExternalLink, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Dialog } from "@/components/ui/Dialog";
-import { downloadBlob } from "@/lib/download";
 import { readPageErrors } from "@/lib/page-errors";
 import {
   issueFormUrl,
   reportFileName,
-  reportFileText,
   withPageErrors,
   type OfferedPart,
   type ReportBundle,
   type ReportForm,
 } from "@/lib/report-bundle";
+import { saveReportFile, type ReportSaved } from "@/lib/shell-report";
 import { ui } from "@/lib/ui";
 
 const FORMS: Array<{ value: ReportForm; label: string; hint: string }> = [
@@ -48,7 +47,7 @@ export function ReportProblemDialog({
   const [form, setForm] = useState<ReportForm>("bug");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [saved, setSaved] = useState("");
+  const [saved, setSaved] = useState<ReportSaved | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -74,7 +73,7 @@ export function ReportProblemDialog({
   function change(next: boolean) {
     if (!next) {
       setError("");
-      setSaved("");
+      setSaved(null);
     }
     onOpenChange(next);
   }
@@ -97,11 +96,21 @@ export function ReportProblemDialog({
         return;
       }
       const bundle = withPageErrors(data, readPageErrors(), Boolean(ticked.pageErrors));
-      const name = reportFileName();
-      downloadBlob(name, new Blob([reportFileText(bundle)], { type: "application/json" }));
-      setSaved(name);
-      // A new tab on the form, with nothing from the report in its address.
-      // A blocked pop-up leaves the link below to do the same.
+      let result: ReportSaved;
+      try {
+        result = await saveReportFile(bundle, reportFileName());
+      } catch {
+        setError("The report could not be saved.");
+        return;
+      }
+      // Backing out of the app's save dialog or share sheet leaves the
+      // choices as they were, to save again or cancel.
+      if (!result.saved) return;
+      setSaved(result);
+      // The form opens once the file is saved, so the app's save dialog is
+      // never left under the browser: a new tab here, the system browser in
+      // the apps, with nothing from the report in its address. A blocked
+      // pop-up leaves the link below to do the same.
       window.open(issueFormUrl(form), "_blank", "noopener,noreferrer");
     } catch {
       setError("The report could not be made.");
@@ -116,8 +125,9 @@ export function ReportProblemDialog({
       {saved ? (
         <div className="reveal space-y-4" data-report-saved>
           <p className="text-sm leading-6 text-stone-300">
-            Saved <span className="font-mono text-amber-200">{saved}</span> to this device. Drag it into the last box of
-            the form. Open the file first if you want to see what it holds.
+            Saved <span className="font-mono text-amber-200">{saved.name}</span> to {saved.where || "this device"}. Add it
+            to the last box of the form: drop it there, or click the box and pick it. Open the file first if you want to
+            see what it holds.
           </p>
           <div className="flex flex-wrap justify-end gap-2">
             <a href={issueFormUrl(form)} target="_blank" rel="noopener noreferrer" className={ui.btnSmall} data-report-form-link>

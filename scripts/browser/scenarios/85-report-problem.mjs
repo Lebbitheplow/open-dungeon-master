@@ -14,8 +14,6 @@ const FORM = "https://github.com/Lebbitheplow/open-dungeon-master/issues/new?tem
 export default {
   name: "report-problem",
   viewports: ["desktop", "phone"],
-  // The apps' half of the button lives in open-dungeon-master-client.
-  app: false,
   async run(t) {
     const { page, root, ids, viewport } = t;
     await t.open(`/campaigns/${ids.campaignId}`);
@@ -49,9 +47,27 @@ export default {
     await t.shot("dialog");
     await t.tap(dialog.locator('[data-report-part="transcript"] input'));
 
+    // In the app the app saves the file (window.odmShell.saveReport, the
+    // client's share sheet on the phone shell this rig runs) and adds its own
+    // facts. Headless Chromium has no share sheet, so the sheet is answered at
+    // once, and the text the page handed the app is kept for the checks.
+    if (t.app) {
+      const offered = await page.evaluate(() => typeof window.odmShell?.saveReport === "function" && typeof window.odmShell?.reportFacts === "function");
+      check(offered, "the app offers no way to save the report");
+      await page.evaluate(() => {
+        navigator.share = async () => {};
+        const shell = window.odmShell;
+        const save = shell.saveReport;
+        shell.saveReport = async (input) => {
+          window.__odmReportText = input.text;
+          return save.call(shell, input);
+        };
+      });
+    }
+
     // GitHub is answered here; every wait starts before the click.
     await page.context().route("https://github.com/**", (route) => route.fulfill({ status: 200, contentType: "text/html", body: "<title>form</title>" }));
-    const download = page.waitForEvent("download", { timeout: 30_000 });
+    const download = t.app ? null : page.waitForEvent("download", { timeout: 30_000 });
     const popup = page.context().waitForEvent("page", { timeout: 30_000 });
     const posted = page.waitForResponse((response) => response.url().includes("/report-bundle") && response.request().method() === "POST", { timeout: 30_000 });
     await t.tap(dialog.locator("button[data-report-save]"));
@@ -60,9 +76,19 @@ export default {
     const sent = answer.request().postDataJSON();
     check(!("pageErrors" in (sent.parts ?? {})), "the page's errors were sent to the server");
 
-    const file = await download;
-    check(/^odm-report-[\d-]+\.json$/.test(file.suggestedFilename()), `the file is named ${file.suggestedFilename()}`);
-    const report = JSON.parse(fs.readFileSync(await file.path(), "utf8"));
+    let report;
+    if (download) {
+      const file = await download;
+      check(/^odm-report-[\d-]+\.json$/.test(file.suggestedFilename()), `the file is named ${file.suggestedFilename()}`);
+      report = JSON.parse(fs.readFileSync(await file.path(), "utf8"));
+    } else {
+      const text = await eventually(() => page.evaluate(() => window.__odmReportText ?? null), { label: "the file handed to the app" });
+      report = JSON.parse(text);
+      const app = report.setup?.app;
+      check(app?.platform === "android" && app.screens === "native" && app.localWorld === false, `the app's facts are wrong: ${JSON.stringify(app)}`);
+      check(report.readable.some((line) => line.startsWith("App: Open Dungeon Master")), "the readable lines leave out the app");
+      check(!/https?:\/\//.test(JSON.stringify(app)), "the app's facts carry an address");
+    }
     check(report.kind === "odm-report", "the file is a report");
     for (const part of ["setup", "pageErrors", "transcript"]) {
       check(report.included.includes(part), `the report holds ${part} (it holds ${report.included.join(", ")})`);
@@ -81,6 +107,7 @@ export default {
     const saved = page.locator("[data-report-saved]").locator("visible=true").first();
     await eventually(() => saved.count(), { label: "the saved note" });
     check((await saved.locator("[data-report-form-link]").getAttribute("href")) === FORM, "the note's link is not the form");
+    if (t.app) check((await saved.innerText()).includes("to the place you picked"), "the note does not say where the app put the file");
     await t.shot("saved");
   },
 };
