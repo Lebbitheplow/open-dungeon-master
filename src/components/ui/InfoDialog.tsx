@@ -495,6 +495,7 @@ export function InfoDialog({
   note,
   text,
   reference,
+  icon,
   children,
 }: {
   open: boolean;
@@ -504,12 +505,27 @@ export function InfoDialog({
   note?: string;
   text?: string | null;
   reference?: ContentRef;
+  // The thing's painting. An action card's rectangular painting (from
+  // cardArtwork, src/lib/battlemap/card-art.ts) spans the top at its own
+  // 256x128; a round icon sits beside the meta line.
+  icon?: IconRef;
   children?: ReactNode;
 }) {
+  const metaLine = meta ? <p className="reveal text-xs uppercase tracking-wide text-amber-200/70">{meta}</p> : null;
   return (
     <Dialog open={open} onOpenChange={onOpenChange} title={title} width="w-[min(92vw,32rem)]">
-      {meta ? (
-        <p className="reveal mb-3 text-xs uppercase tracking-wide text-amber-200/70">{meta}</p>
+      {icon?.kind === "action" ? (
+        <div className="mb-3 space-y-2">
+          <GameIcon icon={icon} size="mx-auto flex h-32 w-64 max-w-full" />
+          {metaLine}
+        </div>
+      ) : icon ? (
+        <div className="mb-3 flex items-center gap-3">
+          <GameIcon icon={icon} size="size-16" />
+          {metaLine}
+        </div>
+      ) : metaLine ? (
+        <div className="mb-3">{metaLine}</div>
       ) : null}
       <div className="space-y-2 text-sm leading-relaxed text-stone-400">
         {note ? <div className="rounded border border-amber-300/20 bg-amber-300/5 px-2.5 py-1.5 text-stone-300">{renderRules(note)}</div> : null}
