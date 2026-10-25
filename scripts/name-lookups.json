@@ -632,6 +632,8 @@
     "lib/backend-fetch.ts#whole": [["key",1,"hostnames and transport error codes"]],
     "lib/backend-host.ts#partial": [["pattern",5,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"]],
     "lib/backgrounds/index.ts#whole": [["identity",2,"a background feature by its whole name (textKey)"]],
+    "lib/battlemap/attack-art.ts#keyed": [["key",1,"a card painting picked by an SRD beast form and its attack, each by its whole name (textKey); a miss shows the neutral natural-attack painting and no rule reads the choice"]],
+    "lib/battlemap/card-art.ts#keyed": [["key",1,"a weapon or gear card painting by the item's icon slug, the same slug its round icon is found by (src/lib/icons.ts); a miss keeps the round icon"]],
     "lib/battlemap/beats.ts#switch": [["key",1,"switches on tool names, event kinds, key names and kinds"]],
     "lib/battlemap/condition-glyphs.ts#keyed": [["key",2,"ids, refs, slugs, tool names, field names, env names, event kinds, UI keys, caches, door and map keys; a sheet's conditionMeta by the condition key it was written under; the usage route's gear map by the sheet's own stored item names (src/: every site read)"]],
     "lib/battlemap/condition-glyphs.ts#partial": [["key",1,"a condition's head word for its glyph"]],

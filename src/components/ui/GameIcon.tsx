@@ -1,12 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { iconCandidates, type IconRef } from "@/lib/icons";
+import { iconCandidates, iconPath, isPainted, type IconRef } from "@/lib/icons";
 import { cn } from "@/lib/cn";
 
-// Action illustrations use the available rectangle without cropping or zoom.
-// Other icons retain their lit circular plate and magnification. The fallback
-// chain tries the requested painting, then its family, then renders nothing.
+// Action illustrations are wide paintings (256x128): they fill the box the
+// caller gives them, uncropped and unzoomed. Every other icon sits on the lit
+// round plate with its thin gold rim, scaled so the painting meets the rim.
+// The chain tries the requested painting, then its family's (a round one,
+// behind an action painting too), then renders nothing, so a homebrew thing
+// never shows a broken image (src/lib/icons.ts).
 const SNUG_KINDS = new Set<IconRef["kind"]>(["glyph", "condition"]);
 
 export function GameIcon({ icon, size = "size-6", className }: { icon: IconRef; size?: string; className?: string }) {
@@ -21,7 +24,8 @@ export function GameIcon({ icon, size = "size-6", className }: { icon: IconRef; 
   if (attempt >= candidates.length) {
     return null;
   }
-  const actionArt = candidates[attempt].startsWith("/assets/icons/action/");
+  // The first candidate is the action's own painting whenever it ships.
+  const actionArt = icon.kind === "action" && attempt === 0 && isPainted(iconPath("action", icon.key));
   return (
     <span
       aria-hidden="true"

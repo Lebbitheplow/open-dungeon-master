@@ -637,6 +637,8 @@
     "lib/backend-host.ts#str-eq": [["key",1,"host names and address prefixes"]],
     "lib/backend-host.ts#toLowerCase": [["key",1,"hostname"]],
     "lib/backgrounds/index.ts#toLowerCase": [["key",1,"background id"]],
+    "lib/battlemap/attack-art.ts#str-key": [["english-source",1,"an SRD attack name and its form's anatomy group, joined as the key of a card painting; a miss shows the neutral natural-attack painting"]],
+    "lib/battlemap/attack-art.ts#str-list": [["english-source",14,"SRD beast forms and the attack names on their stat blocks (src/lib/srd/beast-forms.ts), matched whole with textKey to pick a painting; any other form or attack shows the neutral natural-attack painting"]],
     "lib/battlemap/beats.ts#str-case": [["key",11,"beat kinds"]],
     "lib/battlemap/condition-glyphs.ts#str-key": [["key",2,"condition labels (engine vocabulary)"]],
     "lib/battlemap/condition-glyphs.ts#toLowerCase": [["key",1,"condition labels (engine vocabulary)"]],
