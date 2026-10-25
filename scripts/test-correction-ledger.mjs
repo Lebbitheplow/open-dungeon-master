@@ -142,6 +142,22 @@ await test("a sheet edit is tied to the newest AI change that wrote the same fie
   assert.equal(rows(world.campaignId).length, before + 1, "a person's own change corrected is nobody's fix");
 });
 
+await test("a sheet edit of two fields: a person's newer change to one does not hide the AI's change to the other", async () => {
+  const { turn, entry } = aiChange(world, hero, { gold: 5 }, { kind: "modify_gold" });
+  // A person's own change to another field, newer than the AI's.
+  const first = await call(sheetRoute, "PATCH", { campaignId: world.campaignId, sheetId: hero.id }, { currentHp: 6 });
+  assert.equal(first.status, 200, await first.clone().text());
+  const before = rows(world.campaignId).length;
+  const response = await call(sheetRoute, "PATCH", { campaignId: world.campaignId, sheetId: hero.id }, { currentHp: 5, gold: 9 });
+  assert.equal(response.status, 200, await response.clone().text());
+  const added = rows(world.campaignId).slice(before);
+  assert.equal(added.length, 1);
+  assert.deepEqual(
+    { kind: added[0].kind, turnId: added[0].turnId, auditId: added[0].auditId, tool: added[0].tool },
+    { kind: "sheet_edit", turnId: turn.id, auditId: entry.id, tool: "modify_gold" },
+  );
+});
+
 await test("undoing a person's own change writes nothing", async () => {
   const lead = getDatabase()
     .prepare(`SELECT id FROM sheet_audit WHERE campaign_id = ? AND kind = 'lead_edit' AND reverted_at IS NULL ORDER BY seq DESC LIMIT 1`)

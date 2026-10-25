@@ -166,16 +166,19 @@ export function listCorrectionsForTurns(turnIds: readonly string[]): TurnCorrect
 
 // ---- attribution ----
 
-// The newest live audit row on a character that wrote any of these fields,
-// before a hand correction lands: the change being corrected. Only an AI
-// change is anyone's correction to count; a person's own change, or a
-// correction already made, is not.
+// The change a hand correction fixes, read before it lands: for each field
+// it changes, the newest live audit row that wrote that field. The newest
+// of those an AI turn wrote is the one counted. A field a person wrote last
+// (their own change, a correction already made, a person's turn at the
+// engine) is theirs to change again and counts for nothing, but it does not
+// hide an AI change to another field the same edit fixes.
 export function auditRowCorrected(
   campaignId: string,
   characterId: string,
   fields: readonly string[],
 ): { auditId: string; turnId: string; tool: string } | null {
-  if (!fields.length) {
+  const open = new Set(fields);
+  if (!open.size) {
     return null;
   }
   const rows = getDatabase()
@@ -186,11 +189,19 @@ export function auditRowCorrected(
     )
     .all(campaignId, characterId) as Array<{ id: string; turn_id: string | null; actor: "dm" | "lead" | "player"; kind: string; patch_json: string | null }>;
   for (const row of rows) {
-    const touched = Object.keys(parseJson<Record<string, unknown>>(row.patch_json, {}));
-    if (!touched.some((field) => fields.includes(field))) {
+    const touched = Object.keys(parseJson<Record<string, unknown>>(row.patch_json, {})).filter((field) => open.has(field));
+    if (!touched.length) {
       continue;
     }
-    return row.actor === "dm" && row.turn_id ? { auditId: row.id, turnId: row.turn_id, tool: row.kind } : null;
+    if (row.actor === "dm" && row.turn_id && isAiTurn(campaignId, row.turn_id)) {
+      return { auditId: row.id, turnId: row.turn_id, tool: row.kind };
+    }
+    for (const field of touched) {
+      open.delete(field);
+    }
+    if (!open.size) {
+      return null;
+    }
   }
   return null;
 }
