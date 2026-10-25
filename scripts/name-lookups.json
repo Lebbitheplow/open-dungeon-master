@@ -289,6 +289,7 @@
     "app/characters/builder/heroNames.ts#partial": [["key",2,"rolled hero names"]],
     "app/characters/builder/heroNames.ts#whole": [["key",1,"rolled hero names"],["key",1,"the name generator's own list"]],
     "app/characters/builder/heroNames.ts#whole-single": [["key",1,"change detection, UI keys, ids, slugs, password confirmation, a saved selection (src/app: every site read)"]],
+    "app/characters/builder/levelProgression.ts#number": [["key",1,"digits a regex already captured, ids, headers, stored and form numbers (number inputs), dice parts, the pack's English text (\"1,000 feet\", a purse); src/: every site read"]],
     "app/characters/builder/lineage.ts#first": [["key",2,"ability score bumps by position"],["parse",1,"the first letter of a trait's body"]],
     "app/characters/builder/lineage.ts#partial": [["authoring",1,"a lineage's family read from its words"],["pattern",5,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"],["search",4,"which sentence a trait chip shows, by its words; a miss shows the bare line"],["parse",1,"a race note's lines"],["search",2,"the lineage filter box"]],
     "app/characters/builder/pickerRows.ts#partial": [["identity",2,"builder picks, kit lines, spells, tools and skills by whole name or id; ids, steps and defaults"]],

@@ -16,6 +16,7 @@ import type { SummaryRow } from "../summary";
 import { hpExplainerInput } from "./AbilitiesStep";
 import { Chip, Field, StepPanel } from "./shared";
 import { SummaryPanel } from "./SummaryPanel";
+import { BuilderLevelTable } from "../LevelProgressionTable";
 
 export type BuilderRole = "pc" | "companion";
 
@@ -93,6 +94,8 @@ export function FinishStep({
       {/* The playable character leads: each step's picks with a way back to
           it and anything still owed, then the numbers the sheet opens with. */}
       <SummaryPanel rows={summary} onEdit={(key) => onEdit?.(key)} onFix={onFix} />
+      {/* What each level up to this one grants, with the picks (backlog F8). */}
+      <BuilderLevelTable state={state} derived={derived} klass={klass} />
 
       {preview && race ? (
         <StepPanel title="Derived stats" ornate className="border-amber-500/30">
