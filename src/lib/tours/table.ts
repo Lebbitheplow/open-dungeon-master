@@ -141,7 +141,7 @@ export const PLAYER_TOUR: TourStep[] = [
   {
     id: "help",
     title: "Help, settings and the way home",
-    body: "Help explains every button, and Report a problem inside it saves a report file for a GitHub issue when something breaks. On a phone it shares the table menu with narration, sound and the rulebook, each row saying what it does. The account menu beside it holds your characters, settings, log out, and, inside the app, the way back to its home screen.",
+    body: "Help explains every button. On a phone it shares the table menu with narration, sound and the rulebook, each row saying what it does. The account menu beside it holds your characters, settings, log out, and, inside the app, the way back to its home screen.",
     anchors: ["header-help", "header-menu"],
   },
 ];
@@ -308,7 +308,7 @@ export const DM_TOUR: TourStep[] = [
   {
     id: "help",
     title: "Help and the way home",
-    body: "Help explains every button, replays this tour and holds Report a problem for when something breaks. On a phone it shares the table menu with narration, sound and the rulebook. The account menu beside it holds settings, log out and, inside the app, the way back to its home screen.",
+    body: "Help explains every button and replays this tour. On a phone it shares the table menu with narration, sound and the rulebook. The account menu beside it holds settings, log out and, inside the app, the way back to its home screen.",
     anchors: ["header-help", "header-menu"],
   },
 ];
