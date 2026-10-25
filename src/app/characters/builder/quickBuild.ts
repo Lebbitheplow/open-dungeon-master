@@ -442,9 +442,11 @@ export function fillRound(ctx: FillContext): FillRound {
     }
   }
   if (race.toolChoice && !fields.racialTool && wants("racialTool")) {
-    const pick = race.toolChoice.from.find((tool) => !tools.has(textKey(tool)));
+    const pick = race.toolChoice.from.find((tool) => !tools.has(textKey(tool)) && !has(fields.toolPicks, tool));
     if (pick) {
       patch.racialTool = pick;
+      // Held from here on, so the open tool grants below pick another.
+      tools.add(textKey(pick));
       note("racialTool", pick);
     }
   }

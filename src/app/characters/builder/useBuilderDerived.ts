@@ -77,12 +77,17 @@ export type TableRules = {
 // The class's and background's tool grants with the player's picks placed on
 // the open ones they fit. Nothing is picked for the player: `left` is what
 // each open grant still waits for, and the class step holds until it is 0.
+// A tool the hero already has from elsewhere (`held`: the ancestry's tools
+// and its tool pick) fills no open grant, as the library's door counts it
+// (src/lib/srd/legality/proficiencies.ts): a dwarf's brewer's supplies are
+// not also a folk hero's artisan's tools.
 export function resolveToolPicks(
   grants: string[],
   picks: string[],
+  held: string[] = [],
 ): { fixed: string[]; choices: ToolChoice[]; chosen: string[]; left: number[] } {
   const { fixed, choices } = splitToolGrants(grants);
-  const taken = new Set(fixed.map((tool) => textKey(tool)));
+  const taken = new Set([...fixed, ...held].filter(Boolean).map((tool) => textKey(tool)));
   const left = choices.map((choice) => choice.count);
   const chosen: string[] = [];
   for (const pick of picks.map((tool) => textKey(tool))) {
@@ -287,8 +292,8 @@ export function useBuilderDerived({
   );
 
   const toolGrants = useMemo(
-    () => resolveToolPicks([...(klass?.tools ?? []), ...(background?.tools ?? [])], toolPicks),
-    [klass, background, toolPicks],
+    () => resolveToolPicks([...(klass?.tools ?? []), ...(background?.tools ?? [])], toolPicks, [...(race?.tools ?? []), racialTool]),
+    [klass, background, toolPicks, race, racialTool],
   );
   // Every tool the character is trained with, the list the sheet carries;
   // the background's kit fills its "of your choice" lines from it.
