@@ -56,13 +56,19 @@ await test("An ordinary turn sends no reset: what streamed is what the table kee
   assert.equal(message?.content.trim(), story);
 });
 
-await test("A turn that rolls and then narrates sends no reset either.", async () => {
+await test("Text streamed beside a roll leaves the draft before the dice, and the draft holds the narration written from the result.", async () => {
+  // Issue #531: the text beside a roll is written before the dice.
   const climb = "You find a handhold and start up the gorge wall.";
   const top = "You haul yourself onto the ledge, breathing hard. What now?";
   model.script([reply({ text: climb, calls: [climbRoll()] }), reply({ text: top })]);
   model.claims([[]]);
-  const { resets } = await draftTurn("I climb the gorge wall.");
-  assert.deepEqual(resets, []);
+  const { message, sent, resets, draft } = await draftTurn("I climb the gorge wall.");
+  assert.deepEqual(resets, [{ type: "dm_draft_reset", text: "" }], "one reset, to nothing kept");
+  const resetAt = sent.findIndex((event) => event.type === "dm_draft_reset");
+  assert.match(sent.slice(0, resetAt).map((event) => event.text).join(""), /You find a handhold/, "the set-up had streamed first");
+  assert.doesNotMatch(sent.slice(resetAt + 1).map((event) => event.text).join(""), /You find a handhold/);
+  assert.equal(draft, top);
+  assert.doesNotMatch(message?.content ?? "", /You find a handhold/);
 });
 
 await test("A reply that was only a plan is taken out of the draft before the narration streams.", async () => {
@@ -92,19 +98,19 @@ await test("An aside cut from narration leaves the draft holding the narration k
 });
 
 await test("A plan withheld after a kept call resets the draft to the earlier narration, not to nothing.", async () => {
-  const climb = "You find a handhold and start up the gorge wall.";
+  const advance = "Mother Hesk counts ten gold into your palm for the climb ahead.";
   const plan = "I'll move the party to the cave mouth before narrating the climb.";
   const arrival = " You haul yourself onto the ledge outside the cave mouth. Who follows you up?";
   model.script([
-    reply({ text: climb, calls: [climbRoll()] }),
+    reply({ text: advance, calls: [call("modify_gold", { characterId: kara.id, delta: 10, reason: "the council's advance" })] }),
     reply({ text: plan, calls: [call("move_party", { name: "Cave Ledge", layoutDescription: "A narrow ledge before a dark cave." })] }),
     reply({ text: arrival }),
   ]);
-  model.claims([[aside(plan)], []]);
-  const { resets, draft } = await draftTurn("I climb the gorge wall again.");
+  model.claims([[], [aside(plan)], []]);
+  const { resets, draft } = await draftTurn("I take the advance and climb the gorge wall.");
   assert.equal(model.served(), 3);
-  assert.deepEqual(resets, [{ type: "dm_draft_reset", text: climb }]);
-  assert.equal(draft, `${climb}${arrival}`);
+  assert.deepEqual(resets, [{ type: "dm_draft_reset", text: advance }]);
+  assert.equal(draft, `${advance}${arrival}`);
 });
 
 await test("A fight announced in prose and sent back to start_encounter leaves the draft.", async () => {

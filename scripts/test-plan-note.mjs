@@ -90,7 +90,7 @@ await test("After a roll, an arrival beside move_party keeps its narration and l
   ]);
   model.claims([[aside(note)]]);
   const message = await model.turn(world, "I climb the gorge wall.", kara.id);
-  assert.match(message?.content ?? "", /You find a handhold/);
+  assert.doesNotMatch(message?.content ?? "", /You find a handhold/, "the text beside the roll, written before the dice, reached the table");
   assert.match(message?.content ?? "", /Cold air spills from the dark within\./, "the arrival was lost");
   assert.doesNotMatch(message?.content ?? "", /I'll move the party/);
 });

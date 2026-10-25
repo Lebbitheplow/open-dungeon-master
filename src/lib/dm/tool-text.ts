@@ -46,6 +46,15 @@ export function fakeRollMarkerRegex(): RegExp {
   return /\[roll:(?![0-9a-f-]{36}\])[^\]]*\]/gi;
 }
 
+// A reply the model just wrote, before finalize() places the real markers,
+// holds none of the server's: every "[roll:...]" in it is the model's, even
+// one with a real id. Qwen3.6-35B copied ids from the markers in earlier
+// narration (issue #531); a copied id would show that old roll's card in
+// the new passage, and the draft showed the marker raw.
+export function withoutRollMarkers(text: string): string {
+  return text.replace(/\[roll:[^\]]*\][ \t]*/gi, "");
+}
+
 // A third leak shape: a call's arguments written into the reply as a bare
 // JSON object, with no tool name ('{"characterIds":[...],"prompt":"..."}'),
 // alone or glued to the end of the prose (gpt-oss on vLLM, PR #53), or the
