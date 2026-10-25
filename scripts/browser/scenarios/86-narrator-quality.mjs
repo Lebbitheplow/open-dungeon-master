@@ -35,14 +35,23 @@ export default {
     check(overflow <= 1, `the page scrolls sideways by ${overflow}px`);
     await t.shot("card");
 
-    // Every wait starts before the click.
-    const download = page.waitForEvent("download", { timeout: 30_000 });
+    // Every wait starts before the click. Inside the apps the page hands the
+    // file to the app's download relay (the client's download shim), which
+    // this rig has no native side for, so there the rows are read from the
+    // export's answer and the same checks run on them.
+    const download = t.app ? null : page.waitForEvent("download", { timeout: 30_000 });
     const answered = page.waitForResponse((response) => response.url().includes("/api/admin/narrator-quality?export=1"), { timeout: 30_000 });
     await t.tap(card.locator("button[data-narrator-quality-export]"));
-    check((await answered).ok(), "the export answered with an error");
-    const file = await download;
-    check(/^odm-narrator-quality-[\d-]+\.json$/.test(file.suggestedFilename()), `the file is named ${file.suggestedFilename()}`);
-    const exported = JSON.parse(fs.readFileSync(await file.path(), "utf8"));
+    const answer = await answered;
+    check(answer.ok(), "the export answered with an error");
+    let exported;
+    if (download) {
+      const file = await download;
+      check(/^odm-narrator-quality-[\d-]+\.json$/.test(file.suggestedFilename()), `the file is named ${file.suggestedFilename()}`);
+      exported = JSON.parse(fs.readFileSync(await file.path(), "utf8"));
+    } else {
+      exported = await answer.json();
+    }
     check(exported.kind === "odm-narrator-quality", "the file is not a narrator quality export");
     const text = JSON.stringify(exported);
     for (const id of ids.qualityTurnIds) {
