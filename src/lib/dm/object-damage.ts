@@ -18,6 +18,7 @@ import { z } from "zod";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { getClock, setClock } from "@/lib/db/clock";
+import { getCurrentLocation } from "@/lib/db/locations";
 import type { ObjectRecord } from "@/lib/dm/march-state";
 import { insertRoll, type RollAttacker } from "@/lib/db/rolls";
 import { rollAgainst, rollOn } from "@/lib/roll-labels";
@@ -57,7 +58,15 @@ const objectSchema = z.object({
   reason: z.string().optional(),
 });
 
-const keyOf = (name: string) => textKey(name).slice(0, 60);
+// An object is the one of that name where the party is: "the door" broken
+// in the crypt is not the door of the next inn, nor of the material the
+// crypt's was. A place's id is cut to its first eight characters so the key
+// fits the clock's 60 (src/lib/dm/march-state.ts); a table with no place
+// set keeps the name alone.
+function keyOf(campaignId: string, name: string): string {
+  const place = getCurrentLocation(campaignId)?.id.slice(0, 8) ?? "";
+  return `${place ? `${place}:` : ""}${textKey(name)}`.slice(0, 60);
+}
 
 function publishRoll(campaign: Campaign, turn: DmTurn | null, characterId: string | null, kind: "attack" | "damage", detail: string, result: RollResult, attacker: RollAttacker | null) {
   const roll = insertRoll({ campaignId: campaign.id, characterId, requestedBy: "dm", kind, detail, result, attacker });
@@ -67,7 +76,7 @@ function publishRoll(campaign: Campaign, turn: DmTurn | null, characterId: strin
 
 // What the clock keeps of a named object, or null for one never named.
 function objectRecord(campaignId: string, name: string): ObjectRecord | null {
-  return getClock(campaignId).objects?.[keyOf(name)] ?? null;
+  return getClock(campaignId).objects?.[keyOf(campaignId, name)] ?? null;
 }
 
 // Damage a named object has already taken.
@@ -79,8 +88,9 @@ function recordObject(campaignId: string, name: string, record: ObjectRecord) {
   const current = getClock(campaignId);
   const objects = { ...(current.objects ?? {}) };
   // Written last, so the 40 kept are the ones most lately struck.
-  delete objects[keyOf(name)];
-  objects[keyOf(name)] = record;
+  const key = keyOf(campaignId, name);
+  delete objects[key];
+  objects[key] = record;
   const kept = Object.entries(objects).slice(-40);
   setClock(campaignId, { ...current, objects: Object.fromEntries(kept) });
 }

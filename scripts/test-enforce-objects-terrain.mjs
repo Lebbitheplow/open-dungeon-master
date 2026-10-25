@@ -83,6 +83,16 @@ await test("A broken object stays broken: the next blow finds nothing left to br
   assert.match(blow.result.note, /already broken/);
 });
 
+await test("An object is the one of that name where the party is: the crate of the next place is whole, and wood.", async () => {
+  const moved = await world.invoke("move_party", { name: "The Old Docks" });
+  assert.equal(moved.ok, true, moved.error);
+  const blow = await smash({ name: "the crate", size: "small", damage: "3" });
+  assert.equal(blow.ok, true, blow.error);
+  assert.equal(blow.result.damage, 3);
+  assert.equal(blow.result.broken, false);
+  assert.doesNotMatch(blow.result.note ?? "", /already broken/);
+});
+
 await test("A creature with a swimming speed crosses water at its normal cost; one without pays double.", () => {
   const terrain = "~".repeat(8);
   const walk = reachableTiles(terrain, 8, 1, new Set(), { x: 0, y: 0 }, 6, 1, false);
