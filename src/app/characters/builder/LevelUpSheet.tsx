@@ -181,7 +181,10 @@ function LevelUpSheetForm({
   }
   const owed = owedPicks(blocks);
   const owedTargets = new Set(owed.map((pick) => pick.target));
-  const firstOwed = blocks[0] ?? null;
+  // The gate names a pick on this sheet first: the ones it sends to the
+  // whole build are listed below it, with the way there.
+  const sheetTargets = new Set<BlockerTarget>(SHEET_TARGETS);
+  const firstOwed = blocks.find((entry) => sheetTargets.has(entry.target)) ?? blocks[0] ?? null;
 
   // What this level brings, read off the tables by level, so a section
   // stays while its pick is made (the owed list empties as it is).

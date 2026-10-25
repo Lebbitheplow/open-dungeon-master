@@ -75,6 +75,16 @@ await test("A level that adds a fighting style, or expertise, shows the class pi
   assert.equal(sections({ classId: "rogue", held: 5 }).classPicks, true, "a rogue's second expertise at 6");
   assert.equal(sections({ classId: "rogue", held: 6 }).classPicks, false);
   assert.equal(sections({ classId: "warlock", held: 4, owed: ["options"] }).classPicks, true, "an invocation slot owed");
+  // Read off the tables too, so the picker stays while the pick is made.
+  assert.equal(sections({ classId: "warlock", held: 4 }).classPicks, true, "a warlock's third invocation at 5, already picked");
+  assert.equal(sections({ classId: "sorcerer", held: 9 }).classPicks, true, "a sorcerer's third metamagic at 10, already picked");
+  assert.equal(sections({ classId: "warlock", held: 5 }).classPicks, false, "no invocation at 6");
+});
+
+await test("The table reads a level with no spells yet as none, not as 0 spells known", () => {
+  const rows = levelProgressionRows({ classId: "ranger", subclass: "", level: 2, baseAbilities: scores, asiSlotLevels: [], asiChoices: [] });
+  assert.equal(rows[0].spells, null);
+  assert.equal(rows[1].spells?.count, 2);
 });
 
 await test("A caster's spells show when the level changes what it holds, never for a level that changes nothing", () => {

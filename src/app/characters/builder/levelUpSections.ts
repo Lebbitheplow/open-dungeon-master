@@ -7,6 +7,7 @@
 // screen while its pick is made. Pure, for scripts/test-library-level-up-sheet.mjs.
 import { fightingStyleSlots } from "@/lib/srd/feature-effects";
 import { classFeaturesFor, expertiseSlotsFor, subclassLevelFor } from "@/lib/srd/features";
+import { openOptionSlots } from "@/lib/srd/options";
 import type { ProgressionRow } from "./levelProgression";
 import type { OwedPick } from "./owed";
 import type { BlockerTarget } from "./submit";
@@ -58,10 +59,20 @@ export function levelUpSections(input: {
     fightingStyleSlots(classFeaturesFor(classId, input.subclass, nextLevel)) >
     fightingStyleSlots(classFeaturesFor(classId, input.subclass, heldLevel));
   const expertiseGain = expertiseSlotsFor(classId, nextLevel) > expertiseSlotsFor(classId, heldLevel);
+  // An open option slot the level adds (a warlock's invocation at 5, a
+  // sorcerer's metamagic at 10), read off the tables too: by what is owed
+  // alone, the section went away as soon as the pick was made.
+  const optionTotal = (level: number) =>
+    openOptionSlots({ classId, subclass: input.subclass, level, features: classFeaturesFor(classId, input.subclass, level) }).reduce(
+      (sum, slot) => sum + slot.total,
+      0,
+    );
+  const optionGain = optionTotal(nextLevel) > optionTotal(heldLevel);
   return {
     subclass: owed.has("subclass") || (pickLevel !== null && nextLevel >= pickLevel && !input.storedSubclass.trim()),
     asi: input.asiSlotLevels.includes(nextLevel) || owed.has("asi"),
-    classPicks: styleGain || expertiseGain || owed.has("styles") || owed.has("expertise") || owed.has("options"),
+    classPicks:
+      styleGain || expertiseGain || optionGain || owed.has("styles") || owed.has("expertise") || owed.has("options"),
     spells: input.casts && (castingGrows(input.heldRow, input.nextRow) || owed.has("spells")),
   };
 }
