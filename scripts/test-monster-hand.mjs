@@ -13,6 +13,8 @@ const { deriveMonsterHand, monsterInvoke, monsterSentence, swingsLine, takesMany
   "../src/lib/battlemap/monster-hand.ts"
 );
 const { previewRows } = await import("../src/lib/battlemap/hand-play.ts");
+const { monsterAttackIcon } = await import("../src/lib/battlemap/attack-art.ts");
+const { cardArtwork } = await import("../src/lib/battlemap/card-art.ts");
 
 let passed = 0;
 function test(name, fn) {
@@ -238,6 +240,17 @@ test("Flee is enemy_flees and needs no target", () => {
 test("the multiattack line counts the swings", () => {
   assert.equal(swingsLine(["Bite"]), "");
   assert.equal(swingsLine(["Claw", "Claw", "Bite"]), "Multiattack: 2 Claw, 1 Bite. One card plays the whole routine.");
+});
+
+test("a monster's attack card shows its weapon's or its strike's painting, never a sword for a bite", () => {
+  const icons = deriveMonsterHand(drake).filter((card) => card.type === "attack").map((card) => card.icon.key);
+  assert.deepEqual(icons, ["natural-attack", "natural-attack", "natural-attack"]);
+  const wolf = { ...drake, name: "Wolf", actions: { ...drake.actions, attacks: [{ ...drake.actions.attacks[0], name: "Bite" }] } };
+  assert.equal(deriveMonsterHand(wolf)[0].icon.key, "strike-bite-mammal");
+  assert.equal(cardArtwork(monsterAttackIcon("Goblin", "Scimitar", false)).key, "weapon-scimitar");
+  assert.equal(cardArtwork(monsterAttackIcon("Bandit Captain", "Light Crossbow", false)).key, "weapon-light-crossbow");
+  assert.equal(monsterAttackIcon("Giant Eagle", "Talons", false).key, "strike-talons");
+  assert.equal(monsterAttackIcon("Lich", "Paralyzing Touch", true).key, "cast");
 });
 
 console.log(`\n${passed} monster hand checks passed`);

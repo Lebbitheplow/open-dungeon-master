@@ -1,5 +1,6 @@
 import type { IconRef } from "@/lib/icons";
 import { textKey } from "@/lib/language/text-logic";
+import { weaponNamed } from "@/lib/srd/weapons";
 
 // Choose the action first, then only the anatomy needed to depict it accurately.
 // Explicit form groups avoid guessing anatomy from a homebrew creature's name.
@@ -44,4 +45,16 @@ export function beastAttackIcon(form: string, attack: string): IconRef {
   const action = textKey(attack);
   const key = BODY_PART_ART.get(action) ?? ANATOMY_ART.get(`${action}:${anatomy}`) ?? "natural-attack";
   return { kind: "action", key };
+}
+
+// A monster's attack on the DM's hand (src/lib/battlemap/monster-hand.ts):
+// a spell attack shows the cast painting, an SRD weapon its own painting (a
+// goblin's Scimitar, through cardArtwork), and anything else the strike its
+// creature and attack name pick, or the neutral natural attack.
+export function monsterAttackIcon(monster: string, attack: string, spellAttack: boolean): IconRef {
+  if (spellAttack) {
+    return { kind: "action", key: "cast" };
+  }
+  const weapon = weaponNamed(attack);
+  return weapon ? { kind: "item", key: weapon.name, family: "item-weapon" } : beastAttackIcon(monster, attack);
 }

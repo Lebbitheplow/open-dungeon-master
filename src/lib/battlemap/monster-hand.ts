@@ -1,5 +1,6 @@
 import { signed, type HandCard, type MonsterAbilityUse } from "@/lib/battlemap/hand-core";
 import type { PublicEnemyAbility, PublicEnemyActions, PublicEnemyAttack } from "@/lib/dm/enemy-actions-view";
+import { monsterAttackIcon } from "@/lib/battlemap/attack-art";
 
 // The DM's hand: a monster's turn as cards (issue #108). A person running
 // the table used to play every goblin through the console's form; the
@@ -62,7 +63,7 @@ function attackCard(enemy: MonsterHandEnemy, actions: PublicEnemyActions, attack
     roll: `${signed(attack.toHit)} to hit`,
     rules: [swingsLine(attack.swings), attack.spellAttack ? "A spell attack." : ""].filter(Boolean).join(" "),
     condition: attack.onHit ?? "",
-    icon: { kind: "action", key: "attack" },
+    icon: monsterAttackIcon(enemy.name, attack.name, Boolean(attack.spellAttack)),
     target: "enemy",
     toHit: attack.toHit,
     damage: attack.damage || null,
