@@ -222,7 +222,7 @@ test("a beast form swings with its own statblock", () => {
   assert.match(byId(cards, "spell:fire bolt").disabled, /wild shaped as a Brown Bear/);
 });
 
-test("all supported beast forms have painted attack art and preserve their statblock", () => {
+test("every beast attack has painted art or a neutral fallback and preserves its statblock", () => {
   for (const form of BEAST_FORMS) {
     const character = sheet({ class: "druid", equipment: [item("Quarterstaff")], wildShape: {
       form: form.name, beastHp: form.hp, beastMaxHp: form.hp, beastAc: form.ac, attacks: form.attacks,
@@ -231,14 +231,13 @@ test("all supported beast forms have painted attack art and preserve their statb
     assert.equal(attacks.length, form.attacks.length, form.name);
     for (const attack of form.attacks) {
       const card = attacks.find(card => card.name === attack.name);
-      assert.match(card.icon.key, /^strike-/, `${form.name}: ${attack.name}`);
+      assert.match(card.icon.key, /^(?:strike-|natural-attack$)/, `${form.name}: ${attack.name}`);
       assert.equal(iconCandidates(card.icon).length, 1, form.name);
       assert.equal(card.toHit, attack.toHit);
       assert.equal(card.damage, attack.damage);
       assert.equal(card.damageType, attack.type);
       assert.deepEqual(card.intent, { card: "attack", weapon: attack.name });
     }
-    assert.equal(new Set(attacks.map(card => card.icon.key)).size, attacks.length, `${form.name}: each attack must look distinct`);
     const reverted = deriveHand({ ...character, wildShape: null });
     assert.equal(byId(reverted, "attack:unarmed strike").icon.key, "unarmed-strike");
     assert.equal(byId(reverted, "attack:quarterstaff").icon.kind, "item");
@@ -261,6 +260,11 @@ test("attack artwork distinguishes actions and shares compatible anatomy", () =>
   assert.equal(beastAttackIcon("Elk", "Ram").key, "strike-ram-antlers");
   assert.equal(beastAttackIcon("Mammoth", "Gore").key, "strike-tusks");
   assert.equal(beastAttackIcon("Boar", "Tusk").key, "strike-tusks");
+  assert.equal(beastAttackIcon("Polar Bear", "Claws").key, "strike-claw-mammal");
+  assert.equal(beastAttackIcon("Giant Crocodile", "Tail").key, "strike-tail-reptile");
+  for (const [form, first, second] of [["Brown Bear", "Bite", "Claws"], ["Giant Eagle", "Beak", "Talons"], ["Giant Constrictor Snake", "Bite", "Constrict"], ["Tyrannosaurus Rex", "Bite", "Tail"]]) {
+    assert.notEqual(beastAttackIcon(form, first).key, beastAttackIcon(form, second).key, form);
+  }
 });
 
 test("unknown anatomy stays neutral unless the attack identifies its body part", () => {
@@ -275,6 +279,9 @@ test("unknown anatomy stays neutral unless the attack identifies its body part",
   assert.equal(beastAttackIcon("Unknown form", "Talons").key, "strike-talons");
   assert.equal(beastAttackIcon("Unknown form", "Tentacle").key, "strike-tentacles");
   assert.equal(beastAttackIcon("Unknown form", "Beak").key, "strike-beak");
+  for (const [form, attack] of [["Giant Crab", "Claw"], ["Rhinoceros", "Gore"], ["Poisonous Snake", "Bite"], ["Reef Shark", "Bite"], ["Deer", "Bite"], ["Giant Ape", "Rock"]]) {
+    assert.equal(beastAttackIcon(form, attack).key, "natural-attack", `${form}: ${attack}`);
+  }
 });
 
 test("bonus unarmed strikes also use fist artwork", () => {

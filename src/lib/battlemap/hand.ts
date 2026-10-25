@@ -185,7 +185,9 @@ function attackCards(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders
       roll: `${signed(profile.toHit)} to hit`,
       rules: notes.slice(0, 2).join(" "),
       resource: ammoKind ? (ammo ? `${AMMO_LABELS[ammoKind]} ${ammo.count}` : `No ${AMMO_LABELS[ammoKind]}`) : "",
-      icon: srd ? { kind: "item", key: srd.name, family: "item-weapon" } : { kind: "action", key: "unarmed-strike" },
+      icon: natural
+        ? beastAttackIcon("", name)
+        : srd ? { kind: "item", key: srd.name, family: "item-weapon" } : { kind: "action", key: "unarmed-strike" },
       toHit: profile.toHit,
       damage,
       damageType: profile.damageType,
