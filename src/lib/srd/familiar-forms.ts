@@ -7,8 +7,9 @@
 import { findNamed, namesHolding } from "@/lib/language/text-logic";
 import type { SheetPet } from "@/lib/schemas/sheet";
 import { CHAIN_FORM_NAMES, FAMILIAR_FORM_NAMES, SRD_CREATURES, senseWords, traitName, type SrdCreature } from "@/lib/srd/srd-creatures";
+import { findBeastForm } from "@/lib/srd/beast-forms";
 
-export type FamiliarForm = Pick<SheetPet, "form" | "hp" | "maxHp" | "ac" | "speed" | "notes" | "attacks"> & {
+export type FamiliarForm = Pick<SheetPet, "form" | "hp" | "maxHp" | "ac" | "speed" | "notes" | "attacks" | "resist" | "immune" | "vulnerable"> & {
   // The other names the spell gives the form ("toad" for the frog).
   aliases: string[];
   chainOnly?: boolean;
@@ -30,6 +31,16 @@ function familiarNotes(creature: SrdCreature): string {
   return notes ? `${notes.charAt(0).toUpperCase()}${notes.slice(1)}.` : "";
 }
 
+// The damage a creature's block resists, is immune or vulnerable to, as a
+// pet record keeps it: only the lines the block has.
+export function creatureDefenses(creature: Pick<SrdCreature, "resist" | "immune" | "vulnerable">): Pick<SheetPet, "resist" | "immune" | "vulnerable"> {
+  return {
+    ...(creature.resist ? { resist: creature.resist } : {}),
+    ...(creature.immune ? { immune: creature.immune } : {}),
+    ...(creature.vulnerable ? { vulnerable: creature.vulnerable } : {}),
+  };
+}
+
 function familiarForm(creature: SrdCreature, aliases: string[], chainOnly: boolean): FamiliarForm {
   return {
     form: creature.name,
@@ -41,6 +52,7 @@ function familiarForm(creature: SrdCreature, aliases: string[], chainOnly: boole
     // A familiar cannot attack (Find Familiar); Pact of the Chain's forms
     // fight with their stat blocks' attacks.
     attacks: chainOnly ? creature.attacks.slice(0, 3).map((attack) => ({ ...attack })) : [],
+    ...creatureDefenses(creature),
     aliases,
     ...(chainOnly ? { chainOnly: true } : {}),
   };
@@ -78,20 +90,34 @@ export function familiarOffer(chain: boolean): string {
 // the creature table carry the attacks this server once invented (the imp's
 // sting as one "1d4+3+3d6" roll, its poison no save), so a familiar whose
 // form the table knows fights with the table's attacks, and one that cannot
-// attack keeps none. Read on every load (src/lib/db/sheets.ts), so a sheet
-// saved before the fix is right the first time it is read.
+// attack keeps none. Familiars and Beast Master companions stored before the
+// pet record kept defenses take their form's (issue 520): an imp shrugs off
+// fire again. Read on every load (src/lib/db/sheets.ts), so a sheet saved
+// before the fix is right the first time it is read.
 export function repairedPets(pets: SheetPet[]): SheetPet[] {
   let changed = false;
   const out = pets.map((pet) => {
-    if (pet.kind !== "familiar") {
+    const form = pet.kind === "familiar" ? findFamiliarForm(pet.form) : null;
+    const beast = pet.kind === "beast_companion" ? findBeastForm(pet.form) : null;
+    if (!form && !beast) {
       return pet;
     }
-    const form = findFamiliarForm(pet.form);
-    if (!form || JSON.stringify(pet.attacks ?? []) === JSON.stringify(form.attacks)) {
-      return pet;
+    let next = pet;
+    if (form && JSON.stringify(pet.attacks ?? []) !== JSON.stringify(form.attacks)) {
+      next = { ...next, attacks: form.attacks.map((attack) => ({ ...attack })) };
     }
-    changed = true;
-    return { ...pet, attacks: form.attacks.map((attack) => ({ ...attack })) };
+    const defenses = form ? creatureDefenses(form) : creatureDefenses(beast!);
+    if ((["resist", "immune", "vulnerable"] as const).some((key) => (pet[key] ?? "") !== (defenses[key] ?? ""))) {
+      const { resist: _resist, immune: _immune, vulnerable: _vulnerable, ...rest } = next;
+      void _resist;
+      void _immune;
+      void _vulnerable;
+      next = { ...rest, ...defenses };
+    }
+    if (next !== pet) {
+      changed = true;
+    }
+    return next;
   });
   return changed ? out : pets;
 }

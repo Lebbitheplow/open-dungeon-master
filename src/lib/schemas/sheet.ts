@@ -636,6 +636,14 @@ export const petSchema = z.object({
   attacks: z.array(summonAttackSchema).max(3).default([]),
   // One line of senses/traits for the DM to narrate.
   notes: z.string().trim().max(300).default(""),
+  // The damage it shrugs off, in the words damageAdjust reads
+  // (src/lib/dm/damage-logic.ts): its stat block's (an imp is immune to fire
+  // and poison and resists cold) or its bond's (a drake is immune to its
+  // Draconic Essence). Pets stored before these read as none until their
+  // form is looked up again (src/lib/srd/familiar-forms.ts repairedPets).
+  resist: z.string().trim().max(200).optional(),
+  immune: z.string().trim().max(200).optional(),
+  vulnerable: z.string().trim().max(120).optional(),
 });
 export type SheetPet = z.infer<typeof petSchema>;
 

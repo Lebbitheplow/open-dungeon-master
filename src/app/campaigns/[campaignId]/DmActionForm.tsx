@@ -15,7 +15,7 @@ import {
   type Value,
 } from "@/app/campaigns/[campaignId]/DmActionFields";
 import type { CatalogEntry, CatalogField } from "@/lib/dm/invoke-catalog";
-import { needsConfirm } from "@/lib/dm/catalog-types";
+import { fieldShown, needsConfirm } from "@/lib/dm/catalog-types";
 import { describeAdjudicationResult, type ResultLine } from "@/lib/dm/catalog-result";
 import { holdConsoleOutcome } from "@/app/campaigns/[campaignId]/ConsoleOutcomeBanner";
 import type { PublicEncounter } from "@/lib/db/encounter-view";
@@ -179,7 +179,7 @@ export function DmActionForm({
           label would press the first of them (the stepper's minus) whenever
           its caption was tapped. Each control carries the field's name. */}
       <div className="stagger space-y-2.5">
-        {entry.fields.map((field) => (
+        {entry.fields.filter((field) => fieldShown(field, values)).map((field) => (
           <div key={field.name} className={cn(field.kind === "boolean" && "flex flex-wrap items-center justify-between gap-x-3")}>
             <div className={cn(field.square && "flex flex-wrap items-center gap-x-2")}>
               <FieldLabel className={cn((field.kind === "boolean" || field.square) && "mb-0")}>

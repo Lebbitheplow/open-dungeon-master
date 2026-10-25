@@ -1417,7 +1417,6 @@
     "lib/dm/pending-inspiration.ts#partial": [["pattern",1,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"]],
     "lib/dm/pending-inspiration.ts#whole": [["key",1,"roll kinds"]],
     "lib/dm/pet-tools.ts#fallback": [["identity",1,"a pet by whole name or form; with none asked, the only one"]],
-    "lib/dm/pet-tools.ts#sql": [["key",1,"slug and id lookups, sqlite_master probes, rules prose (\"CR 4 or lower\"); the schema's name COLLATE NOCASE uniques (locations, battle maps) are weaker than textKey, never stricter, and the app checks by textKey first"]],
     "lib/dm/pet-tools.ts#whole": [["identity",2,"a pet by whole name or form"]],
     "lib/dm/player-word.ts#partial": [["pattern",1,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"],["key",1,"the (ooc) marker ODM writes"]],
     "lib/dm/prep-logic.ts#number": [["key",1,"digits a regex already captured, ids, headers, stored and form numbers (number inputs), dice parts, the pack's English text (\"1,000 feet\", a purse); src/: every site read"]],
@@ -1886,7 +1885,7 @@
     "lib/srd/currency.ts#number": [["key",1,"the pack's own cost notation (fixed English, ',' thousands)"]],
     "lib/srd/currency.ts#partial": [["pattern",2,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"]],
     "lib/srd/encumbrance.ts#keyed": [["identity",2,"SRD, spell, feature, subclass, hazard and magic rows by textKey (or armorKey/gearKey/rowKey/featureKey/priceKey, textKey-based); row tables keyed by the row's own name; the workshop's tables"]],
-    "lib/srd/familiar-forms.ts#whole": [["key",1,"a pet's kind (schema enum): only a familiar's attacks are repaired from the table"]],
+    "lib/srd/familiar-forms.ts#whole": [["key",2,"a pet's kind (schema enum): only a familiar's attacks are repaired from the table"]],
     "lib/srd/feat-combat.ts#normalizer": [["key",1,"slugs, hosts, file names, ids, env values, display text, throttle keys, model ids (src/: every site read)"]],
     "lib/srd/feat-combat.ts#number": [["key",1,"digits a regex already captured, ids, headers, stored and form numbers (number inputs), dice parts, the pack's English text (\"1,000 feet\", a purse); src/: every site read"]],
     "lib/srd/feat-combat.ts#partial": [["pattern",1,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"],["identity",1,"ODM's own \"Elemental Adept: <type>\" feature name, whole"],["parse",1,"damage dice"],["parse",1,"dice"]],
@@ -2235,6 +2234,10 @@
     "lib/dm/companion-level.ts#first": [["key",1,"the class's one SRD subclass"]],
     "lib/srd/magic-item-value.ts#number": [["parse",1,"a spell scroll's level digit in the pack's name"]],
     "lib/srd/magic-item-value.ts#keyed": [["key",1,"the content pack's potion and scroll categories"]],
-    "lib/db/npcs.ts#first": [["key",1,"the earlier of two stored meeting times, when one row is folded into another"]]
+    "lib/db/npcs.ts#first": [["key",1,"the earlier of two stored meeting times, when one row is folded into another"]],
+    "lib/srd/creature-attacks.ts#partial": [["parse",2,"an attack's dice and damage types cut into their terms"]],
+    "lib/srd/creature-attacks.ts#whole": [["parse",1,"a rider's dice found among the hit's terms"]],
+    "lib/dm/pet-build.ts#partial": [["parse",1,"a stat block's speed text, and a feature name's chosen option"]],
+    "lib/dm/pet-build.ts#sql": [["key",1,"slug and id lookups, sqlite_master probes, rules prose (\"CR 4 or lower\"); the schema's name COLLATE NOCASE uniques (locations, battle maps) are weaker than textKey, never stricter, and the app checks by textKey first"]]
   }
 }

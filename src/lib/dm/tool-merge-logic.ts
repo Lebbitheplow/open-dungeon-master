@@ -147,7 +147,7 @@ export function engineCall(name: string, args: ToolArgs): EngineCall | ToolError
         };
       }
       if (args.pet === true || present(args.petName)) {
-        return { name: "damage_pet", args: pick(args, ["characterId", "petName", ...DAMAGE_KEYS]) };
+        return { name: "damage_pet", args: pick(args, ["characterId", "petName", ...DAMAGE_KEYS, "magical"]) };
       }
       return { name, args: without(args, ["enemyId", "targets", "fallFeet", "source", "petName", "pet"]) };
     }

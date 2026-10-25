@@ -2097,7 +2097,7 @@
     "lib/srd/encumbrance.ts#str-case": [["key",4,"creature sizes and ability ids"]],
     "lib/srd/encumbrance.ts#str-list": [["key",1,"creature sizes and ability ids"]],
     "lib/srd/encumbrance.ts#toLowerCase": [["key",1,"creature size"]],
-    "lib/srd/familiar-forms.ts#str-list": [["key",1,"movement modes (engine vocabulary)"]],
+    "lib/srd/familiar-forms.ts#str-list": [["key",1,"movement modes (engine vocabulary)"],["key",1,"the pet record's defense fields (schema)"]],
     "lib/srd/familiar-forms.ts#toLowerCase": [["display",1,"familiar forms listed in an error"]],
     "lib/srd/familiar-forms.ts#toUpperCase": [["display",1,"a familiar's notes start with a capital"]],
     "lib/srd/feat-combat.ts#re-word": [["english-source",1,"reference: SRD feat and weapon names, the engine's own feature names (\"Elemental Adept: fire\")"]],
@@ -2476,6 +2476,7 @@
     "lib/srd/magic-item-value.ts#str-eq": [["key",1,"the content pack's scroll category"]],
     "lib/content/edition.ts#str-list": [["english-source",1,"the 2024-only spells by their printed names, read by textKey"]],
     "lib/srd/alignment.ts#str-includes": [["english-extra",5,"an alignment's English words beside the two-letter code the builder stores at every table; a miss reads as no alignment, as one written in another language does"]],
-    "lib/srd/alignment.ts#str-key": [["key",1,"the builder's alignment codes"]]
+    "lib/srd/alignment.ts#str-key": [["key",1,"the builder's alignment codes"]],
+    "lib/dm/pet-build.ts#str-list": [["key",2,"tool schema enums and field names: a drake's essences and the features that name one"]]
   }
 }
