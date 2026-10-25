@@ -153,14 +153,14 @@ export type ChatRequestOptions = {
   // the whole 4,096-token reply of the campaign's setup call thinking and
   // wrote no JSON.
   thinking?: boolean;
-  // A helper call that wants as little thinking as the model allows. A model
-  // whose template reads reasoning_effort and has no thinking switch
-  // (gpt-oss) is sent "low": `thinking: false` alone reaches it as
-  // enable_thinking, which it ignores, and the claims reader on gpt-oss-20b
-  // wrote up to 4,011 tokens (52 seconds) to answer a short form while the
-  // table waited (2026-10-23). Never set on a turn's calls: the effort is
-  // written into the prompt's first message, so changing it between the
-  // calls of one turn would make the server read the whole prompt again.
+  // As little thinking as the model allows. A model whose template reads
+  // reasoning_effort and has no thinking switch (gpt-oss) is sent "low":
+  // `thinking: false` alone reaches it as enable_thinking, which it ignores,
+  // and the claims reader on gpt-oss-20b wrote up to 4,011 tokens (52
+  // seconds) to answer a short form while the table waited (2026-10-23).
+  // The effort is written into the prompt's first tokens, so every call
+  // sends the same value (src/lib/dm/model.ts): a turn whose calls differed
+  // would make the server read the whole prompt again.
   reasoningEffort?: "low";
   // The most reasoning this call may stream, in characters, before it is cut
   // and the same call asked again without thinking. Unset, no limit: the
@@ -1141,7 +1141,7 @@ async function requestCustomMessageNow(
         requestPayload.reasoning_effort = "none";
       }
     }
-    // A helper call on a template that thinks by effort, not by a switch
+    // A call on a template that thinks by effort, not by a switch
     // (readReasoningKnob): "low" is the least it does.
     if (
       options.reasoningEffort &&

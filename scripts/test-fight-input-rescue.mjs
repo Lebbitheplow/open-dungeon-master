@@ -215,13 +215,17 @@ assert.equal(toolResults(nobody.requests[1]).get("call_request_player_input_0")?
 console.log("ok: question naming no player's character -> narrated after 2 calls");
 
 // The last call is sent with toolChoice "none"; a server that answers it with
-// a tool call anyway gets one more call with no tools offered.
+// a tool call anyway gets one more call, told that tools are closed. The
+// turn's tools stay in that call's prompt (src/lib/dm/turn.ts
+// proseOnlyTools): a local narrator that read the prompt without them would
+// read it all again, and again on the next turn.
 const leak = await run("Tool call on the last call", Array(MAX_MODEL_CALLS).fill("ask"), { fight: false });
 assert.ok(leak.text.includes(NARRATION), `expected narration after a leaked last call, got: ${leak.text}`);
 assert.equal(leak.calls, MAX_MODEL_CALLS + 1);
 assert.equal(leak.requests[MAX_MODEL_CALLS - 1].tool_choice, "none");
 const rescue = leak.requests[MAX_MODEL_CALLS];
-assert.equal(rescue.tools, undefined, "the rescue call offers no tools");
+assert.ok(rescue.tools?.length, "the rescue call keeps the turn's tools in the prompt");
+assert.equal(rescue.tool_choice, "none", "the rescue call may call nothing");
 assert.match(rescue.messages.at(-1).content, /Tools are closed for this turn/);
 for (const request of leak.requests) {
   assertPaired(request);

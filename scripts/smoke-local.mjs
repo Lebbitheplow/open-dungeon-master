@@ -293,6 +293,14 @@ const TOWN = [
     label: "attack",
     who: "bram",
     text: "I swing my shortsword at the nearest thug.",
+    // Played from the Hand, as a player at the table attacks: the card names
+    // the weapon and the foe, and the engine resolves it before the narrator
+    // is asked (src/lib/dm/turn.ts directCard).
+    intent: (campaignId) => {
+      const encounter = getActiveEncounter(campaignId);
+      const foe = encounter ? listEnemies(encounter.id).find((enemy) => enemy.currentHp > 0) : null;
+      return foe ? { card: "attack", weapon: "shortsword", targetKind: "enemy", targetId: foe.id, targetName: foe.displayName } : null;
+    },
     expect: (turn) => called(turn, ["pc_attack", "enemy_attack", "end_turn"], "the attack was told in prose with no combat tool"),
   },
   {
@@ -474,6 +482,8 @@ async function playRun(runNumber) {
       userId: player.user.id,
       characterId: player.sheet.id,
       content: script.text,
+      // A line played as a Hand card carries the card (src/lib/dm/intent-logic.ts).
+      ...(script.intent ? { intent: script.intent(campaign.id) ?? undefined } : {}),
     });
     captured = [];
     const rollsBefore = listRecentRolls(campaign.id, 500).length;

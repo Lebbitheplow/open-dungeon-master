@@ -76,7 +76,7 @@ import { fulfillAutoImage } from "@/lib/dm/images";
 import { imagesAvailable } from "@/lib/capabilities";
 import { imageProducerReady } from "@/lib/image-generate";
 import { enqueueNarrationAudio } from "@/lib/tts";
-import { fitsStoryWindow, requestDmMessage } from "@/lib/dm/model";
+import { fitsStoryWindow, requestDmMessage, type DmCallResult } from "@/lib/dm/model";
 import { requestTokens, sharedPrefixTokens } from "@/lib/dm/request-fit";
 import { OOC_ANSWER_INSTRUCTION, OOC_UNANSWERED_PREFIX, oocAnswer, oocQuestionPending } from "@/lib/dm/ooc-question";
 import { releaseHarnessConversation } from "@/lib/harness/bridge";
@@ -119,7 +119,7 @@ import { gateAiCall } from "@/lib/dm/ai-gate";
 import { characterAwaitingPlayer } from "@/lib/dm/player-word";
 import { enemiesDue, enemiesOwedTurn, personRunsTable } from "@/lib/dm/enemies-due";
 import { noteTurnHead, settleTurnWarmup, turnHeadKey, warmNextTurn } from "@/lib/dm/turn-warmup";
-import { intentAnswered, intentCorrection, intentNeedsTool, type MessageIntent } from "@/lib/dm/intent-logic";
+import { directCardCall, intentAnswered, intentCorrection, intentNeedsTool, type MessageIntent } from "@/lib/dm/intent-logic";
 import { handleCompleteBeat } from "@/lib/dm/arc";
 import { tickWaypointsFromCalls } from "@/lib/dm/waypoint-tick";
 import { enforceEngineBoundary } from "@/lib/dm/narration-guard";
@@ -862,7 +862,14 @@ async function openTurn(
   };
   const conversation = buildDmMessages(promptState, history);
   if (oocOnly) {
-    await answerOutOfCharacter(campaign, conversation, promptState.contextTrace);
+    await answerOutOfCharacter(
+      campaign,
+      conversation,
+      promptState.contextTrace,
+      tuning.toolProfile === "compact"
+        ? []
+        : dmTurnTools(campaign, Boolean(encounterNow), campaign.settings.imageGenerationEnabled && campaign.settings.autoImages, tuning.leanTools),
+    );
     return null;
   }
 
@@ -1437,6 +1444,9 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
   // attack or a cast, and whether the one corrective call for it was spent.
   const card = cardPlayed(context);
   let intentNudged = false;
+  // A complete card from the Hand is resolved by the engine as the turn's
+  // first step, with no model call to choose the tool (directCard).
+  const direct = directCard(context, turn);
   // The last turn's narration said again with no tool is sent back once.
   let repeatNudged = false;
   let lastNarration: string | null = null;
@@ -1492,8 +1502,10 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     const tools = toolsClosed ? [] : fitted.tools;
     if (!toolsClosed) {
       sentTools = { tools, noFight: keptTools ? true : !inEncounter };
+      toolsSentByTurn.set(turn.id, tools);
     }
-    const callTask = toolsClosed ? "turn_without_tools" : "turn";
+    const resolvesCard = Boolean(direct) && turn.callIndex === 0;
+    const callTask = resolvesCard ? "card" : toolsClosed ? "turn_without_tools" : "turn";
     if (toolsClosed) {
       console.warn(`[dm-turn] call ${turn.callIndex}: no compact tool set leaves the reply room in this window; this call narrates without tools.`);
     }
@@ -1509,12 +1521,15 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     // (src/lib/dm/turn-warmup.ts): the same one is waited for, another is
     // stopped. Either way it is the one the narrator holds after this call.
     const firstMessage = turn.conversation[0];
-    if (firstMessage?.role === "system" && typeof firstMessage.content === "string") {
+    if (!resolvesCard && firstMessage?.role === "system" && typeof firstMessage.content === "string") {
       const head = turnHeadKey(campaign.settings, firstMessage.content, tools);
       await settleTurnWarmup(campaignId, head);
       noteTurnHead(campaignId, head);
     }
-    const reply = await requestDmMessage(campaign.settings, turn.conversation, {
+    // The card's own tool call stands in for the first reply: the engine
+    // resolves it below exactly as a call the model made, and the next call
+    // narrates from the result (directCard).
+    const reply: DmCallResult = resolvesCard && direct ? cardReply(direct) : await requestDmMessage(campaign.settings, turn.conversation, {
       tools,
       harness: {
         campaignId,
@@ -2244,7 +2259,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     // the encounter as it now stands, and spend the one call held in
     // reserve for it (outside MAX_MODEL_CALLS) on a rewrite when they
     // disagree. Its reads also say who speaks the narration's lines.
-    const guarded = await enforceEngineBoundary(campaign, turn, sheets, partReads);
+    const guarded = await enforceEngineBoundary(campaign, turn, sheets, partReads, proseOnlyTools(turn.id));
     spoken = guarded.spoken;
     // What the guard did goes with the turn to its narrator quality row
     // (issue #460), written when finalize() saves it as done.
@@ -2416,13 +2431,74 @@ function cardPlayed(
   return { intent: last.intent, characterId: last.characterId, name: sheet?.name ?? "The player" };
 }
 
+// A card the engine resolves before the narrator is asked: the last player
+// message, when it came from the Hand with every choice made
+// (directCardCall) during a fight, on a turn that has run nothing yet. The
+// Hand posts a card with its own sentence and nothing more, so no free text
+// rides with it that the model would have to weigh ("only if he draws
+// first" is typed, and a typed line carries no card).
+type DirectCard = { messageId: string; name: string; args: Record<string, unknown> };
+function directCard(context: TurnContext, turn: DmTurn): DirectCard | null {
+  if (turn.callIndex > 0 || calledToolNames(turn.conversation).length || !getActiveEncounter(context.campaign.id)) {
+    return null;
+  }
+  const last = [...listRecentMessages(context.campaign.id, 20)]
+    .reverse()
+    .find((message) => message.authorType !== "system");
+  if (!last || last.authorType !== "player" || !last.intent || !last.characterId) {
+    return null;
+  }
+  const call = directCardCall(last.intent, last.characterId);
+  return call ? { messageId: last.id, ...call } : null;
+}
+
+// The reply the turn loop reads for a direct card, shaped as the model's
+// own would be: one tool call and no prose, so the engine runs it, echoes
+// it and its result, and the next call narrates from the result.
+function cardReply(card: DirectCard): DmCallResult {
+  return {
+    message: {
+      content: "",
+      tool_calls: [
+        {
+          id: `card_${card.messageId.replace(/-/g, "").slice(0, 12)}`,
+          type: "function",
+          function: { name: card.name, arguments: JSON.stringify(card.args) },
+        },
+      ],
+    },
+    finishReason: "tool_calls",
+  };
+}
+
+// The tool list each running turn's calls were last sent (runAdvance). A
+// call of the turn that must only write prose (the tool-leak rescue, the
+// guard's rewrite, the out-of-character answer) sends the same list with
+// toolChoice "none" rather than none at all: the tools ride in the prompt's
+// first message, and a local narrator (llama.cpp) that read the prompt
+// without them reads it all again, and again on the next turn (measured on
+// a BC-250, 2026-10-25: 38 s for the rescue and 97 s for the turn after it,
+// with the list kept in both cases 0.5 s). The model is still told not to
+// call anything, and a call it makes anyway is dropped as before.
+const toolsSentByTurn = new Map<string, unknown[]>();
+function proseOnlyTools(turnId: string): unknown[] {
+  return toolsSentByTurn.get(turnId) ?? [];
+}
+
 // The out-of-character answer to table talk put to the DM: one call with
 // the turn's whole prompt and no tools, written as table talk. It is not a
 // turn (no dm_turns row, nothing to reroll or retry) and runs none of a
 // turn's after-effects. Its place is taken before the call, so a move posted
 // while the DM is answering lands after the answer and is still the newest
 // line for the turn it wakes.
-async function answerOutOfCharacter(campaign: Campaign, conversation: DmTurn["conversation"], trace: DmTurn["contextTrace"] | undefined) {
+async function answerOutOfCharacter(
+  campaign: Campaign,
+  conversation: DmTurn["conversation"],
+  trace: DmTurn["contextTrace"] | undefined,
+  // The tools a turn's first call would carry, kept in the prompt so the
+  // narrator's cache holds (proseOnlyTools); the answer may call none.
+  tools: unknown[],
+) {
   const campaignId = campaign.id;
   const seq = allocateSeq(campaignId);
   try {
@@ -2430,7 +2506,7 @@ async function answerOutOfCharacter(campaign: Campaign, conversation: DmTurn["co
       campaign.settings,
       [...conversation, { role: "user", content: OOC_ANSWER_INSTRUCTION }],
       {
-        tools: [],
+        tools,
         toolChoice: "none",
         harness: { campaignId, turn: true },
         thinking: false,
@@ -2494,11 +2570,9 @@ async function narrateAfterToolLeak(context: TurnContext, turn: DmTurn) {
     narrationShown(campaignId, turn.id);
     publishEphemeral(campaignId, "dm_delta", { text });
   });
-  const rescue = await requestDmMessage(
-    campaign.settings,
-    [...turn.conversation, { role: "user", content: TOOLS_CLOSED_PROMPT }],
-    {
-      tools: [],
+  const ask = (tools: unknown[]) =>
+    requestDmMessage(campaign.settings, [...turn.conversation, { role: "user", content: TOOLS_CLOSED_PROMPT }], {
+      tools,
       toolChoice: "none",
       harness: { campaignId, turn: true },
       thinking: false,
@@ -2509,12 +2583,21 @@ async function narrateAfterToolLeak(context: TurnContext, turn: DmTurn) {
           batcher.push(visible);
         }
       },
-    },
-  );
+    });
+  // The turn's tools stay in the prompt (proseOnlyTools). A model that
+  // calls one anyway with nothing said is asked once more with none.
+  let tools = proseOnlyTools(turn.id);
+  let rescue = await ask(tools);
+  if (tools.length && !rescue.error && extractToolCalls(rescue.message?.tool_calls).length && !extractStoryText(rescue.message?.content).trim()) {
+    noteTurnCall(turn, "tools_closed_rescue", tools, rescue);
+    turn.callIndex += 1;
+    tools = [];
+    rescue = await ask(tools);
+  }
   const { message, error } = rescue;
   batcher.push(filter.flush());
   batcher.flush();
-  noteTurnCall(turn, "tools_closed_rescue", [], rescue);
+  noteTurnCall(turn, "tools_closed_rescue", tools, rescue);
   turn.callIndex += 1;
   if (process.env.DM_DEBUG) {
     console.log(
@@ -3071,6 +3154,7 @@ function finalize(context: TurnContext, turn: DmTurn, failed: string, spoken: re
 
   turn.status = "done";
   saveDmTurn(turn);
+  toolsSentByTurn.delete(turn.id);
   // A fight begun or ended, or a companion who joined, changes the next
   // turn's first message: the narrator reads it now, while the table reads.
   const after = getCampaignById(campaignId);

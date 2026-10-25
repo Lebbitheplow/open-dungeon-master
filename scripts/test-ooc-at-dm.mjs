@@ -100,13 +100,16 @@ await test("Table talk without @DM wakes nothing.", async () => {
   assert.equal(model.served(), 0, "plain table talk woke the DM");
 });
 
-await test("@DM gets an out-of-character answer at once: one call with no tools, written as table talk, with no turn row and nothing read aloud.", async () => {
+await test("@DM gets an out-of-character answer at once: one call that may call no tool, written as table talk, with no turn row and nothing read aloud.", async () => {
   const turnBefore = getLatestDmTurnId(world.campaignId);
   model.script([reply({ text: "Yes, it's about ten feet. You can try it with a Strength (Athletics) check when you act." })]);
   assert.equal(await act(world, userId, "@DM could I jump the gap to the far ledge?", "ooc"), 202);
   assert.equal(model.served(), 1, "the question did not wake the DM");
   const request = model.requests[0];
-  assert.ok(!request.tools?.length, "the answer was offered tools");
+  // The turn's tools stay in the prompt so a local narrator's cache holds
+  // (src/lib/dm/turn.ts proseOnlyTools); the answer may call none of them.
+  assert.ok(request.tools?.length, "the answer's prompt lost the turn's tools");
+  assert.equal(request.tool_choice, "none", "the answer could call a tool");
   assert.equal(request.messages.at(-1).content, OOC_ANSWER_INSTRUCTION);
   assert.match(JSON.stringify(request.messages), /could I jump the gap/);
   assert.deepEqual(said().at(-1), ["dm", "(ooc) Yes, it's about ten feet. You can try it with a Strength (Athletics) check when you act."]);
@@ -137,7 +140,7 @@ await test("A question while a spotlight waits on another player is answered, an
   model.script([reply({ text: "The post looks solid enough to hold one of you at a time." })]);
   assert.equal(await act(world, bramUser, "@DM would the post hold both of us?", "ooc"), 202);
   assert.equal(model.served(), 1);
-  assert.ok(!model.requests[0].tools?.length, "the question ran a real turn while the spotlight waited");
+  assert.equal(model.requests[0].tool_choice, "none", "the question ran a real turn while the spotlight waited");
   assert.match(said().at(-1)[1], /^\(ooc\) The post looks solid/);
   assert.equal(declaredThisTurn(world.campaignId, kara.id), true, "the answer took Kara's move from the turn");
   model.script([reply({ text: "Kara's rope snaps taut around the post, and Bram goes first." })]);
@@ -158,7 +161,7 @@ await test("A question the backend could not answer says so, and asking again is
   model.script([reply({ text: "It is, tied off on this side." })]);
   assert.equal(await act(world, userId, "@DM is the rope still there?", "ooc"), 202);
   assert.equal(model.served(), 1);
-  assert.ok(!model.requests[0].tools?.length, "asking again ran a real turn");
+  assert.equal(model.requests[0].tool_choice, "none", "asking again ran a real turn");
   assert.deepEqual(said().at(-1), ["dm", "(ooc) It is, tied off on this side."]);
 });
 

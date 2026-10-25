@@ -81,6 +81,40 @@ export function intentTools(intent: MessageIntent): string[] {
   }
 }
 
+// The tool call a card stands for when every choice the engine needs is on
+// the card: a weapon attack at a named enemy (its class options ride under
+// pc_attack's own names), or Dodge, Dash or Disengage. The turn runs it
+// before the narrator is asked (src/lib/dm/turn.ts directCard), so the
+// dice land at once and the first model call narrates from the result.
+// Null leaves the card to the model: a spell (slot, area and concentration
+// choices), a rider card (the attack and its rider are one call the model
+// composes), a target the card did not fix, or any other card.
+export function directCardCall(intent: MessageIntent, characterId: string): { name: string; args: Record<string, unknown> } | null {
+  switch (intent.card) {
+    case "attack":
+      if (intent.targetKind !== "enemy" || !intent.targetId || intent.riders?.length) {
+        return null;
+      }
+      return {
+        name: "pc_attack",
+        args: {
+          characterId,
+          targetEnemyId: intent.targetId,
+          ...(intent.weapon ? { weapon: intent.weapon } : {}),
+          ...(intent.offHand ? { offHand: true } : {}),
+          ...(intent.attack ?? {}),
+        },
+      };
+    case "basic":
+      if (intent.action === "dodge" || intent.action === "dash" || intent.action === "disengage") {
+        return { name: "take_action", args: { characterId, action: intent.action, ...(intent.bonus ? { bonus: true } : {}) } };
+      }
+      return null;
+    default:
+      return null;
+  }
+}
+
 // Only a card that resolves an attack or a cast is chased with a
 // corrective call: those are the ones whose outcome a model most often
 // narrates instead of rolling.
