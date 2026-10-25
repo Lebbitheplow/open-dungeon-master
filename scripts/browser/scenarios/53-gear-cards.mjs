@@ -2,7 +2,7 @@
 // draws it with a ring while it is within reach, and the Hand deals the
 // gear cards (Pick up with the item to choose, Drop, Stow) priced as the
 // engine charges them. Nothing is played: a played card wakes the DM.
-import { check, eventually, sleep } from "../lib.mjs";
+import { check, eventually, untilStill } from "../lib.mjs";
 
 // Every card dealt, the fan's and the ones behind More, by name.
 async function dealt(t) {
@@ -14,7 +14,7 @@ async function dealt(t) {
   if (!(await more.count())) return fan;
   await t.tap(more.first());
   await eventually(() => page.locator("li.hand-more-row").locator("visible=true").count(), { label: "the cards behind More" });
-  await sleep(700);
+  await untilStill(page);
   const behind = await page.locator("li.hand-more-row .font-display").evaluateAll((names) => names.map((name) => name.textContent?.trim() ?? ""));
   return [...fan, ...behind];
 }
@@ -39,7 +39,7 @@ export default {
         await t.tap(enlarge);
         const big = page.locator('[role="dialog"] .board-drop').first();
         await eventually(() => big.count(), { label: "the drop on the enlarged board" });
-        await sleep(900);
+        await untilStill(page);
         const at = await big.boundingBox();
         if (at) {
           const pad = 140;
@@ -49,7 +49,7 @@ export default {
           });
         }
         await page.keyboard.press("Escape");
-        await sleep(600);
+        await eventually(async () => (await big.count()) === 0, { label: "the enlarged board closing" });
       }
     } else {
       // The phone's Table tab holds the Hand.
@@ -68,9 +68,10 @@ export default {
       ? behind.first()
       : page.locator(`${root}button.hand-card[aria-label^="Pick up,"]`).locator("visible=true").first();
     await t.tap(card);
-    await sleep(900);
     const pills = page.locator(`[role="radiogroup"][aria-label="Item"] [role="radio"]`).locator("visible=true");
     await eventually(() => pills.count(), { label: "the Item pick on the aim bar" });
+    // The aim bar grows in; its pills are measured at their full size.
+    await untilStill(page);
     const first = pills.first();
     check(/Handaxe/.test((await first.textContent()) ?? ""), "the pick offers the handaxe within reach");
     check((await first.getAttribute("aria-checked")) === "true", "the only item is picked already");

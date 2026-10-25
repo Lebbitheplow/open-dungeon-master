@@ -4,7 +4,7 @@
 // the card that was chosen. The button is reached by keyboard, and pressing
 // it returns the fighter with its subclass and fighting style; another
 // change offered again ends when the player leaves the step.
-import { check, eventually, sleep } from "../lib.mjs";
+import { check, eventually, currentStep } from "../lib.mjs";
 
 export default {
   name: "builder-undo",
@@ -63,11 +63,11 @@ export default {
     await t.tap(card("Rogue"));
     await eventually(() => bar.isVisible(), { timeoutMs: 8_000, label: "the bar for a second change" });
     await t.tap(page.locator(`${root}button[aria-label^="Back to step 2"]`).locator("visible=true").first());
-    await sleep(700);
+    await eventually(async () => /^Step 2:/.test(await currentStep(page, root)), { label: "back on step 2" });
     const ahead = page.locator(`${root}button[aria-label^="Go to step 3:"]`).locator("visible=true");
     await eventually(async () => (await ahead.count()) && ahead.first().isEnabled(), { timeoutMs: 15_000, label: "the step 3 diamond" });
     await t.tap(ahead.first());
-    await sleep(700);
+    await eventually(async () => /^Step 3:/.test(await currentStep(page, root)), { label: "on step 3 again" });
     await card("Rogue").waitFor({ state: "visible", timeout: 15_000 });
     if (await page.locator(`${root}[data-build-undo]`).count()) found.push("the undo outlived leaving the step");
 

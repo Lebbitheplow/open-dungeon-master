@@ -4,7 +4,7 @@
 // three ways to a hero, the phone's More sheet reaching every tab, the
 // Settings tab's contents row, the phone header's table menu, Help finding
 // "volume" in its own words, and the home's menu inside its frame.
-import { check, eventually, openPanelTab, sleep } from "../lib.mjs";
+import { check, eventually, openPanelTab, untilStill } from "../lib.mjs";
 
 export default {
   name: "usability",
@@ -55,7 +55,7 @@ export default {
       label: "the ready-made heroes open",
     });
     await routes.scrollIntoViewIfNeeded();
-    await sleep(400);
+    await untilStill(page);
     await t.shot("hero-routes");
 
     // ---- the table: every tab reachable, the Settings tab's contents ----
@@ -85,7 +85,7 @@ export default {
       for (const words of ["Every rule, spell and monster", "How everything works"]) {
         check((await menu.getByText(words).count()) === 1, `the table menu says "${words}"`);
       }
-      await sleep(400);
+      await untilStill(page);
       await t.shot("table-menu");
       await t.tap(menu.getByRole("menuitem", { name: /^Help/ }));
     } else {
@@ -180,7 +180,7 @@ export default {
       await t.open("/");
       const rulebook = page.locator('[data-tour="tile-rulebook"]').first();
       await eventually(() => rulebook.count(), { label: "the home's menu" });
-      await sleep(1_500);
+      await untilStill(page);
       const frame = await page.locator(".ts-first").boundingBox();
       for (const tour of ["tile-rulebook", "tile-join", "tile-workshop"]) {
         const box = await page.locator(`[data-tour="${tour}"]`).first().boundingBox();

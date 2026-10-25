@@ -4,7 +4,7 @@
 // kept), say why not elsewhere, state the price before Fast is chosen, and
 // save the choice. The rig never calls a model: it saves Fast, reads it
 // back, and puts the settings back as found.
-import { check, eventually, sleep } from "../lib.mjs";
+import { check, eventually } from "../lib.mjs";
 
 const UNAVAILABLE = '[data-speed-unavailable]';
 const OFFERED = '[data-speed-field]';
@@ -87,7 +87,6 @@ export default {
       const saved = await (await api.get(`${base}/api/admin/settings`)).json();
       return saved.config?.text?.speed === "fast";
     }, { label: "Fast saved for the story model" });
-    await sleep(300);
     const back = await api.patch(`${base}/api/admin/settings`, { data: blank });
     check(back.ok(), `putting the settings back answered ${back.status()}`);
   },

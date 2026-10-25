@@ -5,7 +5,7 @@
 // map with its two visible pins and nothing of the hidden one or the notes.
 // Hide from the party takes it off the player's Map tab. The quiet table's
 // maps and pins are put back as they were.
-import { check, eventually, newContext, openPanelTab, settle, signIn, sleep } from "../lib.mjs";
+import { check, eventually, newContext, openPanelTab, settle, signIn, hydrated } from "../lib.mjs";
 
 export default {
   name: "party-atlas",
@@ -57,7 +57,7 @@ export default {
       await signIn(playerContext, base, ids.player, ids.password);
       const playerPage = await playerContext.newPage();
       await playerPage.goto(`${base}/campaigns/${ids.quietId}`, { waitUntil: "networkidle", timeout: 120_000 });
-      await sleep(1_500);
+      await hydrated(playerPage);
       await settle(playerPage);
       const mapTab = playerPage.locator('[data-tour="tab-map"]').locator("visible=true").first();
       await eventually(() => mapTab.count(), { timeoutMs: 30_000, label: "the player's Map tab" });

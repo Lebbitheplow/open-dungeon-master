@@ -2,7 +2,7 @@
 // cleric's build editor says the domain's heavy armor on its calling step,
 // the stored build walks through unchanged, and the save keeps heavy armor
 // on the library character.
-import { check, eventually, sleep } from "../lib.mjs";
+import { check, eventually, currentStep } from "../lib.mjs";
 
 const visible = (page, root, text) =>
   page.locator(`${root}a, ${root}button, ${root}[role="menuitem"]`).filter({ hasText: text }).locator("visible=true");
@@ -22,7 +22,7 @@ export default {
     const classRow = page.locator(`${root}section[data-active] [data-summary-edit="calling"]`).locator("visible=true");
     await eventually(() => classRow.count(), { timeoutMs: 30_000, label: "the summary's Class row" });
     await t.tap(classRow.first());
-    await sleep(500);
+    await eventually(() => page.getByText(/Step \d+ \/ \d+ · Class/i).locator("visible=true").count(), { label: "the Class step" });
 
     // Walk the stored build to Save, reading every step for the domain's
     // training on the way.
@@ -50,8 +50,9 @@ export default {
       const ready = await eventually(() => next.first().isEnabled(), { timeoutMs: 10_000, label: "Continue" }).catch(() => false);
       if (!ready) await t.shot(`step-${step + 1}`);
       check(ready, `step ${step + 1} of the stored Life Domain build is complete`);
+      const was = await currentStep(page, root);
       await t.tap(next.first());
-      await sleep(500);
+      await eventually(async () => (await currentStep(page, root)) !== was, { label: `step ${step + 2} of the build editor` });
     }
     check(Boolean(said), "the Class step says what the subclass trains");
     check(/heavy armor/i.test(said), `the Life Domain's heavy armor is named (${said.slice(-200)})`);

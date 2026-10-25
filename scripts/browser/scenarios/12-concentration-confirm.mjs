@@ -43,6 +43,7 @@ export default {
     await t.tap(first.getByRole("button", { name: /^cancel$/i }));
     await eventually(() => first.count().then((count) => count === 0), { label: "the dialog closing on Cancel" });
     check((await box.inputValue()) === CAST, "the draft is kept after Cancel");
+    // Time is the check: a post the Cancel let through would land within this while.
     await sleep(800);
     check((await posted()) === before, "nothing was posted after Cancel");
 
@@ -60,7 +61,7 @@ export default {
       const door = page.locator(selector).locator("visible=true").first();
       if (await door.count()) {
         await t.tap(door);
-        await sleep(800);
+        await eventually(() => card.count(), { timeoutMs: 800 }).catch(() => 0);
       }
     }
     await eventually(() => card.count(), { timeoutMs: 20_000, label: "Sister Ama's party card" });

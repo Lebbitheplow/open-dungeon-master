@@ -4,7 +4,7 @@
 // play along, tell the party, refuse) as 40px buttons, each described for a
 // screen reader. Joining settles the card, and Kael's Bonds tab then shows
 // the pact he is in. Clean under axe by night and by day.
-import { axeViolations, check, eventually, openPanelTab, sleep } from "../lib.mjs";
+import { axeViolations, check, eventually, openPanelTab, untilStill } from "../lib.mjs";
 
 async function axeClean(page, selector, where) {
   const found = await axeViolations(page, selector);
@@ -13,7 +13,7 @@ async function axeClean(page, selector, where) {
 
 async function inTheme(page, theme) {
   await page.evaluate((value) => (document.documentElement.dataset.theme = value), theme);
-  await sleep(300);
+  await untilStill(page);
 }
 
 export default {

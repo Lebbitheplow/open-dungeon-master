@@ -4,7 +4,7 @@
 // while the board has the keyboard. The button pops in, is named for screen
 // readers, and leaves once nothing is left to take back. Tavi ends on the
 // square he started on, so the scenarios after this one find him there.
-import { axeViolations, check, eventually, openPanelTab, sleep } from "../lib.mjs";
+import { axeViolations, check, eventually, openPanelTab, untilStill, upTo } from "../lib.mjs";
 
 const STEPS = [[-1, -1], [0, -1], [1, -1], [-1, 0], [1, 0], [-1, 1], [0, 1], [1, 1]];
 
@@ -72,7 +72,7 @@ export default {
     };
     const walk = async () => {
       await t.tap(tile);
-      await sleep(600);
+      await upTo(arrived, 600);
       if (!(await arrived())) {
         await t.tap(tile);
       }
@@ -92,7 +92,7 @@ export default {
     // The board keeps its night chrome in the day theme; checked there too.
     const theme = await page.evaluate(() => document.documentElement.dataset.theme ?? "");
     await page.evaluate(() => (document.documentElement.dataset.theme = "light"));
-    await sleep(600);
+    await untilStill(page);
     const day = await axeViolations(page, `${root}.board-endturn`);
     check(day.length === 0, `Undo move passes axe in the day theme: ${JSON.stringify(day).slice(0, 400)}`);
     await t.shot("offered-day");
@@ -117,7 +117,7 @@ export default {
       await page.keyboard.press("Control+z");
       await eventually(home, { label: "Ctrl+Z taking the walk back" });
     }
-    await sleep(300);
+    await eventually(async () => (await tavi()).undo === null, { label: "nothing left to undo" });
     const end = await tavi();
     check(end.x === start.x && end.y === start.y && end.undo === null, `Tavi ends where he began (${end.x},${end.y})`);
   },

@@ -5,7 +5,7 @@
 // agents (by a ?section= query, which the apps' router carries where it
 // drops a #hash), where the address is allowed live. The rig puts the
 // receiver list back and revokes the connection on the way out.
-import { check, eventually, sleep } from "../lib.mjs";
+import { check, eventually } from "../lib.mjs";
 
 const ADDRESS = "https://my-pc.example.ts.net:8443";
 
@@ -84,7 +84,6 @@ export default {
       for (const grant of listed.grants ?? []) {
         if (grant.name === agentName) await api.delete(`${base}/api/profile/agents/${grant.id}`).catch(() => undefined);
       }
-      await sleep(100);
     }
   },
 };

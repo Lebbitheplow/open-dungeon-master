@@ -2,10 +2,19 @@
 // device and offers it back with Resume, on the step it was left, and Start
 // fresh throws it away. The library's new-character page is a native screen
 // in the app too.
-import { check, eventually, sleep } from "../lib.mjs";
+import { check, eventually, sleep, currentStep } from "../lib.mjs";
 
 const visible = (page, root, text) =>
   page.locator(`${root}button`).filter({ hasText: text }).locator("visible=true");
+
+// The drafts the builder keeps on the device (src/app/characters/builder/
+// builderDraft.ts), each written 400 ms after a change of step or fields.
+const drafts = (page) =>
+  page.evaluate(() =>
+    Object.keys(window.localStorage)
+      .filter((key) => key.startsWith("odm:builder-draft:"))
+      .map((key) => JSON.parse(window.localStorage.getItem(key) ?? "null")),
+  );
 
 // A reload in a browser; in the app, whose router keeps a screen mounted
 // when it is pushed again, leaving for the library and coming back.
@@ -32,14 +41,17 @@ export default {
     // No background is picked for the player, and the first step owes one.
     await t.tap(page.locator(`${root}section[data-active] [data-builder-target="background"] button[aria-haspopup="listbox"]`).locator("visible=true").first());
     await t.tap(page.locator(`${root}[role="option"]`).filter({ hasText: "Soldier" }).locator("visible=true").first());
+    const was = await currentStep(page, root);
     await t.tap(visible(page, root, /^Continue/).first());
-    await sleep(900);
+    await eventually(async () => (await currentStep(page, root)) !== was, { label: "the Ancestry step" });
     // The first lineage card on the Ancestry step.
     const card = page.locator(`${root}section[data-active] .creator-card`).locator("visible=true").first();
     await card.waitFor({ state: "visible", timeout: 15_000 });
     const lineage = await card.getAttribute("aria-label");
     await t.tap(card);
-    await sleep(800);
+    // The step change writes a draft of its own: only one holding the pick
+    // on the Ancestry step is what the reload has to find.
+    await eventually(async () => (await drafts(page)).some((kept) => kept?.step === 1 && kept.fields.raceId), { label: "the pick kept on the device" });
 
     await reopen(t);
     const resume = visible(page, root, /^Resume$/);
@@ -59,9 +71,10 @@ export default {
     await reopen(t);
     await eventually(() => visible(page, root, /^Start fresh$/).count(), { timeoutMs: 15_000, label: "the offer again" });
     await t.tap(visible(page, root, /^Start fresh$/).first());
-    await sleep(300);
+    await eventually(async () => (await drafts(page)).length === 0, { label: "the draft thrown away" });
     await reopen(t);
     await name.waitFor({ state: "visible", timeout: 30_000 });
+    // Time is the check: an offer the page still found would show within this while.
     await sleep(800);
     check((await visible(page, root, /^Resume$/).count()) === 0, "Start fresh leaves no draft to resume");
   },

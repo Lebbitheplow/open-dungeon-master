@@ -5,7 +5,7 @@
 // turns back and the line says so; picking "You" takes them again. The pill
 // slides, the choices are a named radio group a finger can hit on a phone,
 // and axe finds nothing serious on the card. Pip ends under the lead again.
-import { axeViolations, check, eventually, sleep } from "../lib.mjs";
+import { axeViolations, check, eventually, untilStill } from "../lib.mjs";
 
 export default {
   name: "companion-command",
@@ -27,10 +27,12 @@ export default {
       const door = page.locator(selector).locator("visible=true").first();
       if (await door.count()) {
         await t.tap(door);
-        await sleep(800);
+        await eventually(() => card.count(), { timeoutMs: 800 }).catch(() => 0);
       }
     }
     await eventually(() => card.count(), { timeoutMs: 30_000, label: "Pip's In fights picker" });
+    // The card grows in; its targets are measured at their full size.
+    await untilStill(page);
     const group = card.getByRole("radiogroup", { name: "Who takes Pip Thistle's turns in fights" });
     check((await group.count()) === 1, "the picker is a named radio group");
     const you = group.getByRole("radio", { name: "You" });
@@ -50,7 +52,7 @@ export default {
     // Legible in the day theme too: the picker alone under axe, contrast included.
     const theme = await page.evaluate(() => document.documentElement.dataset.theme ?? "");
     await page.evaluate(() => (document.documentElement.dataset.theme = "light"));
-    await sleep(600);
+    await untilStill(page);
     const day = await axeViolations(page, `${root}[data-companion-command="${ids.pip}"]`);
     check(day.length === 0, `the picker passes axe in the day theme: ${JSON.stringify(day).slice(0, 400)}`);
     await t.shot("commanded-day");

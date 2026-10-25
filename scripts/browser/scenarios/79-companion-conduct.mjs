@@ -10,7 +10,7 @@
 // where he stands, and his party card wears the foes' colour with an
 // "against the party" tag that pops in. Reduced motion keeps the colour and the words and
 // drops the movement. Night and day, desktop and phone, clean under axe.
-import { axeViolations, check, eventually, openPanelTab, sleep } from "../lib.mjs";
+import { axeViolations, check, eventually, openPanelTab, untilStill, upTo } from "../lib.mjs";
 
 async function axeClean(page, selector, where) {
   const found = await axeViolations(page, selector);
@@ -19,7 +19,7 @@ async function axeClean(page, selector, where) {
 
 async function inTheme(page, theme) {
   await page.evaluate((value) => (document.documentElement.dataset.theme = value), theme);
-  await sleep(400);
+  await untilStill(page);
 }
 
 const scenario = {
@@ -61,7 +61,7 @@ const scenario = {
     await eventually(() => refused.count(), { timeoutMs: 15_000, label: "the refusal on his row" });
     check(((await refused.textContent()) ?? "").includes("a spell for Kael Ashvale"), "what he refused, in words");
     await ladder.scrollIntoViewIfNeeded();
-    await sleep(500);
+    await untilStill(page);
     await axeClean(page, `${root}[data-bond-row="${table.varnName}"]`, "Varn's row at night");
     await t.shot("refused");
     await inTheme(page, "light");
@@ -82,7 +82,7 @@ const scenario = {
     const demand = ladder.locator("[data-share-demand]");
     await eventually(() => demand.count(), { timeoutMs: 15_000, label: "his share on the row" });
     check(((await demand.textContent()) ?? "").includes("30 gp before they fight"), "what is still owed");
-    await sleep(500);
+    await untilStill(page);
     await t.shot("share");
     const reveals = await page.evaluate(() => window.__reveals);
     check(reveals.some((entry) => entry.what === "data-refused" && entry.name.replace(/^odm-game-/, "") === "fade-up"), `the refusal revealed (${JSON.stringify(reveals)})`);
@@ -111,7 +111,9 @@ const scenario = {
     const kaelRing = await page.locator(`${root}[data-party-card="${table.kael}"]`).locator("visible=true").first().evaluate((element) => getComputedStyle(element).borderTopColor);
     check(ring !== kaelRing && /oklab\(0\.6\d* 0\.2|rgba?\(2[0-4]\d, /.test(ring), `the card wears the foes' colour (${ring}, the party's ${kaelRing})`);
     await card.scrollIntoViewIfNeeded();
-    await sleep(500);
+    // The badge comes in once its card is scrolled into sight.
+    await upTo(async () => (await page.evaluate(() => window.__reveals)).some((entry) => entry.what === "data-side-badge"), 2_000);
+    await untilStill(page);
     const pops = await page.evaluate(() => window.__reveals);
     check(pops.some((entry) => entry.what === "data-side-badge" && entry.name.replace(/^odm-game-/, "") === "side-badge-in"), `the badge came in (${JSON.stringify(pops)})`);
     await axeClean(page, `${root}[data-party-card="${table.brannoc}"]`, "Brannoc's card at night");
@@ -130,7 +132,7 @@ const scenario = {
     await page.emulateMedia({ reducedMotion: "reduce" });
     const still = await tag.evaluate((element) => ({ animation: getComputedStyle(element).animationName, color: getComputedStyle(element).color }));
     check(still.animation === "none", `reduced motion drops the pop (${still.animation})`);
-    check(/^(rgb|lab|oklab)/.test(still.color) && !/ 0\)$/.test(still.color), `and keeps the colour (${still.color})`);
+    check(/^(rgb|lab|oklab|oklch)/.test(still.color) && !/ 0\)$/.test(still.color), `and keeps the colour (${still.color})`);
     await page.emulateMedia({ reducedMotion: null });
   },
 };

@@ -76,7 +76,6 @@ export default {
     await eventually(() => fillButton.count(), { timeoutMs: 10_000, label: "Fill what's left" });
     await t.tap(fillButton.first());
     await eventually(() => readback.count(), { timeoutMs: 20_000, label: "the read-back after a fill" });
-    await sleep(500);
     check((await name.inputValue()) === hero, "the typed name is kept");
     const text = await readback.first().innerText();
     check(!/Name:/.test(text), "the name is not read back as picked");
@@ -89,6 +88,7 @@ export default {
     await t.tap(visible(page, root, /^Show what was picked$/).first());
     await eventually(() => readback.count(), { timeoutMs: 10_000, label: "the panel back" });
     await t.tap(visible(page, root, /^Undo all of these$/).first());
+    // Time is the check: an Undo that took the name would clear it within this while.
     await sleep(300);
     check((await name.inputValue()) === hero, "Undo keeps the typed name too");
   },

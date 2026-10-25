@@ -18,7 +18,6 @@ export default {
     if (!(await board().count())) {
       // On a phone the board sits under the Battle tab of the bottom bar.
       await t.tap(page.locator(`${root}nav.cine-bottombar button`).filter({ hasText: /battle/i }).first());
-      await sleep(800);
     }
     const lit = () => board().locator('rect[fill="#f59e0b"][data-tile-x]');
     await eventually(() => lit().count(), { timeoutMs: 30_000, label: "the squares Tavi can reach" });
@@ -54,6 +53,7 @@ export default {
     // One tap aims and moves nothing; Escape drops the aim.
     await t.tap(square);
     await eventually(hint, { label: "the hint asking for the second tap" });
+    // Time is the check: a move the one tap set off would show within this while.
     await sleep(600);
     check((await where()) === start, `one tap on ${to} moved nothing (Tavi still on ${start})`);
     await t.shot("aimed");

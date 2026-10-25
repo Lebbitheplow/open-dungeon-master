@@ -8,7 +8,7 @@
 // harness has no speech-to-text, so the device's own recognizer (what the
 // Android app installs) is stood in for, which works the same on the
 // server's pages and in the app.
-import { check, eventually, sleep } from "../lib.mjs";
+import { check, eventually, sleep, untilStill } from "../lib.mjs";
 
 const SAID = "I search the altar for a hidden catch";
 
@@ -62,13 +62,13 @@ export default {
     await eventually(async () => /browser or system shortcut/.test((await problem.textContent().catch(() => "")) ?? ""), { label: "Ctrl+C refused" });
     await page.keyboard.press("KeyM");
     await eventually(async () => /types in the message box/.test((await problem.textContent().catch(() => "")) ?? ""), { label: "a bare letter refused" });
-    await sleep(700);
+    await untilStill(page);
     await t.shot("refused");
     await page.keyboard.press("Alt+KeyM");
     const saved = field.locator('[data-dictation-key="Alt+M"]');
     await eventually(() => saved.count(), { label: "Alt+M saved" });
     check(/Saved on this device/.test((await field.textContent()) ?? ""), "the field says where the key is kept");
-    await sleep(700);
+    await untilStill(page);
     await t.shot("saved");
 
     // ---- at the table ----
@@ -92,7 +92,7 @@ export default {
     await page.keyboard.down("KeyM");
     await eventually(async () => (await counts(page)).live, { label: "the take listening while the key is held" });
     check((await badge.getAttribute("data-held")) !== null, "the key's name lights while it is held");
-    await sleep(700);
+    await untilStill(page);
     await t.shot("held");
     await page.keyboard.down("KeyM");
     await page.keyboard.down("KeyM");
@@ -136,7 +136,7 @@ export default {
     await page.keyboard.down("KeyM");
     await page.keyboard.up("KeyM");
     await page.keyboard.up("Alt");
-    await sleep(1000);
+    await eventually(async () => (await counts(page)).cancels === seen.cancels + 1, { label: "the early release cancelling the take" });
     const early = await counts(page);
     check(!early.live && early.cancels === seen.cancels + 1 && early.stops === seen.stops, `an early release left nothing listening (${JSON.stringify(early)})`);
     check((await box.inputValue()) === "", `an early release put nothing in the box (${await box.inputValue()})`);
@@ -166,6 +166,7 @@ export default {
       }, html);
       await page.keyboard.down("Alt");
       await page.keyboard.down("KeyM");
+      // Time is the check: held this long, the key would have started a take.
       await sleep(300);
       await page.keyboard.up("KeyM");
       await page.keyboard.up("Alt");
@@ -187,6 +188,7 @@ export default {
     await eventually(async () => (await counts(page)).stops === seen.stops + 1, { label: "the button's take ended" });
 
     // Nothing was sent: the words wait for Send.
+    // Time is the check: a post the take made would land within this while.
     await sleep(500);
     const after = await (await api.get(`${base}/api/campaigns/${ids.quietId}/messages?limit=60`)).json();
     const fresh = (after.messages ?? []).filter((message) => !(before.messages ?? []).some((old) => old.id === message.id));

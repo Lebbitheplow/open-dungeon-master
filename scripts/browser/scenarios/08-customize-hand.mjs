@@ -1,7 +1,7 @@
 // Issue 231: Customize Hand. A card the player moves to More stays there
 // after a reload (the layout is the sheet's, saved on the server), and Back
 // to automatic gives the engine its own split again.
-import { check, eventually, sleep } from "../lib.mjs";
+import { check, eventually, untilStill } from "../lib.mjs";
 
 async function openArrange(t) {
   const { page, root } = t;
@@ -14,7 +14,7 @@ async function openArrange(t) {
   await eventually(() => button.count(), { timeoutMs: 30_000, label: "the Customize your hand button" });
   await t.tap(button.first());
   await eventually(() => page.locator(`${root}.hand-arrange-row`).locator("visible=true").count(), { label: "the arrange rows" });
-  await sleep(600);
+  await untilStill(page);
 }
 
 // The rows, each with its card's name and where it sits (data-place; the
@@ -38,6 +38,9 @@ export default {
     check(Boolean(seated), `a card sits in the Hand to move (${before.length} rows)`);
     const name = seated.name;
     const row = page.locator(`${root}li.hand-arrange-row[data-place="hand"]`).filter({ hasText: name }).first();
+    // The move is saved behind the screen's back (useHandLayout shows it at
+    // once), so the reload below waits for the save itself.
+    const saved = page.waitForResponse((response) => response.url().includes("/sheet/hand") && response.request().method() === "PUT");
     await t.tap(row.locator(".hand-arrange-move").first());
     // The card lands in More with its own motion, not a jump.
     const landing = await page
@@ -48,7 +51,7 @@ export default {
     check(landing > 0, `${name} animates as it moves`);
     await eventually(async () => (await placeOf(page, root, name)) === "more", { label: `${name} moving to More` });
     await t.tap(page.locator(`${root}.hand-arrange-done`).locator("visible=true").first());
-    await sleep(600);
+    await saved;
 
     // A reload keeps it in More: the layout lives on the sheet.
     await t.open(`/campaigns/${ids.campaignId}`);

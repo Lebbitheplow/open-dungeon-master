@@ -3,7 +3,7 @@
 // closing the dialog took it away, and the panel's board stood bare until
 // something repainted. The canvas must be on whichever board is on screen,
 // and back on the panel's after every close.
-import { check, eventually, sleep } from "../lib.mjs";
+import { check, eventually, untilStill } from "../lib.mjs";
 
 // The picture is the canvas usePaintedMap marks (the sky's particles are a
 // canvas too). The enlarged view is a dialog; the panel's board is every
@@ -30,14 +30,13 @@ export default {
       // On a phone the board sits under the Battle tab of the bottom bar.
       const tab = page.locator(`${root}nav.cine-bottombar button`).filter({ hasText: /battle/i }).first();
       await t.tap(tab);
-      await sleep(800);
     }
     for (let round = 1; round <= 2; round += 1) {
       await t.tap(page.locator(`${root}[aria-label="Enlarge battle map"]`).locator("visible=true").first());
       await eventually(() => page.locator(DIALOG_CANVAS).count(), { label: `the painted board in the enlarged view (open ${round})` });
       check((await panelCanvases(page, root)) === 0, "while the enlarged view is open, the panel's board draws its plain cells (the one canvas is in the dialog)");
       // The view fades in; the picture is for the eye, the checks above are the proof.
-      await sleep(900);
+      await untilStill(page);
       await t.shot(`enlarged-${round}`);
       await t.tap(page.locator(".cine-tabletop-close").first());
       await eventually(() => page.locator('[role="dialog"] [aria-label^="Board view"]').count().then((n) => n === 0), { label: `the enlarged view closing (${round})` });

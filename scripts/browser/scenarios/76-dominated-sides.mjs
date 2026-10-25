@@ -9,7 +9,7 @@
 // Table, which the player runs, a mage holds the lead's own Tamsin: the lead
 // is told the DM plays her until the charm ends, and told when she is theirs
 // again. Night and day, reduced motion, desktop and phone.
-import { check, eventually, openPanelTab, signIn, sleep } from "../lib.mjs";
+import { check, eventually, openPanelTab, signIn, untilStill } from "../lib.mjs";
 
 // BoardStage.tsx RING_BY_KIND: a character's rim and an enemy's.
 const PARTY_RIM = "#78716c";
@@ -64,8 +64,8 @@ export default {
     const zoomIn = board.getByRole("button", { name: "Zoom in", exact: true }).first();
     for (let step = 0; step < 4 && (await zoomIn.count()); step += 1) {
       await t.tap(zoomIn);
-      await sleep(350);
     }
+    await untilStill(page);
     await t.shot("board");
     await frame.screenshot({ path: t.shotPath("board-close") }).catch(() => {});
     // The ogre up close, where a band is a few pixels: the board zooms at
@@ -75,8 +75,8 @@ export default {
       await page.mouse.move(at.x + at.width / 2, at.y + at.height / 2);
       for (let step = 0; step < 3; step += 1) {
         await page.mouse.wheel(0, -400);
-        await sleep(300);
       }
+      await untilStill(page);
       const box = await figureOf(ogre.name).boundingBox();
       if (box) await page.screenshot({ path: t.shotPath("ogre-close"), clip: { x: Math.max(0, box.x - 40), y: Math.max(0, box.y - 40), width: box.width + 80, height: box.height + 80 } }).catch(() => {});
     }
@@ -95,7 +95,7 @@ export default {
     await eventually(async () => (await row("party", ogre.name).count()) === 1, { label: `the ${ogre.name}'s row on the party's side` });
     check(/with the party/i.test((await row("party", ogre.name).textContent()) ?? ""), `the ${ogre.name}'s row says "with the party"`);
     check(/against the party/i.test((await row("foe", bran.name).textContent()) ?? ""), `${bran.name}'s row says "against the party"`);
-    await sleep(400);
+    await untilStill(page);
     await t.shot("order");
     await page.keyboard.press("Escape");
     await eventually(async () => !(await dialog.isVisible().catch(() => false)), { label: "the order closed" });
@@ -120,7 +120,7 @@ export default {
     await eventually(() => targets.isVisible(), { label: "the targets" });
     const aimed = (await targets.getByRole("button").allTextContents()).join(" | ");
     check(aimed.includes(mage.name) && aimed.includes(bran.name) && !aimed.includes(sela.name), `the ${ogre.name} aims at the foes and at ${bran.name}, not at ${sela.name} (${aimed})`);
-    await sleep(600);
+    await untilStill(page);
     await t.shot("hand");
     await page.keyboard.press("Escape");
 
@@ -138,11 +138,11 @@ export default {
       height: node.getBoundingClientRect().height,
     }));
     check(chipLook.name === "side-badge-in" && chipLook.duration === "0.3s", `the chip comes in over 300 ms (${JSON.stringify(chipLook)})`);
-    await sleep(600);
+    await untilStill(page);
     await t.shot("party");
     const theme = await page.evaluate(() => document.documentElement.dataset.theme ?? "");
     await page.evaluate(() => (document.documentElement.dataset.theme = "light"));
-    await sleep(500);
+    await untilStill(page);
     await t.shot("party-day");
     await page.evaluate((mode) => (document.documentElement.dataset.theme = mode), theme);
 
@@ -160,18 +160,18 @@ export default {
     await openPanelTab(t, "battle");
     await eventually(async () => (await band(ogre.name)).opacity === "0", { label: `the ${ogre.name}'s band faded` });
     check((await rimSide(ogre.name)) === null, `the ${ogre.name} is a foe again`);
-    await sleep(400);
+    await untilStill(page);
     await t.shot("released");
 
     // The Held Table: the lead's own Tamsin is dominated, and told so.
     await t.open(`/campaigns/${table.heldId}`);
-    await sleep(1_000);
+    await eventually(() => page.locator(`${root}.cine-stage`).count(), { timeoutMs: 30_000, label: "the held table's stage" });
     if (await tableTab.count()) await t.tap(tableTab);
     const held = visible('[data-side-notice="foe"]').first();
     await eventually(() => held.isVisible(), { timeoutMs: 20_000, label: "the dominated notice" });
     check((await held.textContent()) === `${tamsin.name} is dominated: the DM plays ${tamsin.name} until the charm ends.`, `the player is told (${await held.textContent()})`);
     check((await held.evaluate((node) => node.parentElement?.getAttribute("role"))) === "status", "the notice is a status a screen reader announces");
-    await sleep(600);
+    await untilStill(page);
     await t.shot("held");
     // The player runs that table: their own session ends the charm.
     const dmContext = await page.context().browser().newContext();

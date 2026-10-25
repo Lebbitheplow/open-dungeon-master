@@ -8,7 +8,7 @@
 // form's "Worn on" picker, labelled, explained and clean under axe, and gone
 // once the item is armour. Runs on the website and inside the app's own
 // screens.
-import { axeViolations, check, eventually, sleep } from "../lib.mjs";
+import { axeViolations, check, eventually, untilStill } from "../lib.mjs";
 
 const PROTECTION = "Cloak of Protection";
 const ELVENKIND = "Cloak of Elvenkind";
@@ -32,7 +32,7 @@ export default {
       const door = page.locator(selector).locator("visible=true").first();
       if (await door.count()) {
         await t.tap(door);
-        await sleep(800);
+        await eventually(() => card.count(), { timeoutMs: 800 }).catch(() => 0);
       }
     }
     await eventually(() => card.count(), { timeoutMs: 30_000, label: "Vex's party card" });
@@ -48,7 +48,7 @@ export default {
     const explained = page.getByRole("dialog").filter({ hasText: /cyberdeck/ }).locator("visible=true").first();
     await eventually(() => explained.count(), { label: "Deck Interface explained" });
     // Past the dialog's fade-in, so the shot shows it.
-    await sleep(900);
+    await untilStill(page);
     await t.shot("feature-help");
     await page.keyboard.press("Escape");
     await eventually(async () => (await explained.count()) === 0, { label: "the help closing" });
@@ -64,7 +64,7 @@ export default {
     const text = ((await ask.textContent()) ?? "").replace(/\s+/g, " ");
     check(text.includes(`${ELVENKIND} goes where ${PROTECTION} is: a character wears one cloak at a time.`), `the question names both cloaks (${text})`);
     check((await ask.getByRole("button", { name: /Wear both/ }).count()) === 1, "the lead is offered the DM's exception");
-    await sleep(900);
+    await untilStill(page);
     await t.shot("asked");
     check((await gear())[ELVENKIND]?.equipped === false, "nothing was posted before the answer");
 
@@ -124,7 +124,7 @@ export default {
       const glossary = page.getByRole("dialog").filter({ hasText: "Shoulders (a cloak or cape)" }).locator("visible=true").first();
       await eventually(() => glossary.count(), { label: "the places explained" });
       check(/One cloak counts at a time/.test(await glossary.innerText()), "the glossary says one cloak counts");
-      await sleep(900);
+      await untilStill(page);
       await t.shot("worn-on-glossary");
       await page.keyboard.press("Escape");
       await eventually(async () => (await glossary.count()) === 0, { label: "the glossary closing" });
@@ -140,13 +140,13 @@ export default {
       const problems = await axeViolations(page, (await form.count()) ? `[role="dialog"]` : "main");
       check(problems.length === 0, `the item form passes axe: ${JSON.stringify(problems).slice(0, 400)}`);
       await wornOn.scrollIntoViewIfNeeded().catch(() => undefined);
-      await sleep(600);
+      await untilStill(page);
       await t.shot("worn-on");
       // Legible in the day theme too: the field alone under axe, contrast included.
       const theme = await page.evaluate(() => document.documentElement.dataset.theme ?? "");
       await page.evaluate(() => (document.documentElement.dataset.theme = "light"));
       await field.evaluate((element) => element.setAttribute("data-check", "worn-on"));
-      await sleep(600);
+      await untilStill(page);
       const day = await axeViolations(page, '[data-check="worn-on"]');
       check(day.length === 0, `the picker passes axe in the day theme: ${JSON.stringify(day).slice(0, 400)}`);
       await t.shot("worn-on-day");

@@ -6,7 +6,7 @@
 // lead of an AI table is offered no handout, which is the DM seat's. The
 // quiet table's secrets and lore are put back as they were, since every
 // viewport and later scenario shares them.
-import { check, eventually, newContext, openPanelTab, settle, signIn, sleep } from "../lib.mjs";
+import { check, eventually, newContext, openPanelTab, settle, signIn, hydrated } from "../lib.mjs";
 
 export default {
   name: "world-reveal",
@@ -33,7 +33,7 @@ export default {
       await signIn(playerContext, base, ids.player, ids.password);
       const playerPage = await playerContext.newPage();
       await playerPage.goto(`${base}/campaigns/${ids.quietId}`, { waitUntil: "networkidle", timeout: 120_000 });
-      await sleep(1_500);
+      await hydrated(playerPage);
       await settle(playerPage);
       const storyTab = playerPage.locator('[data-tour="tab-story"]').locator("visible=true").first();
       await eventually(() => storyTab.count(), { timeoutMs: 30_000, label: "the player's Story tab" });

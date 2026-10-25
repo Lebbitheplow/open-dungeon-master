@@ -4,7 +4,7 @@
 // review's Edit and its way back, personal defaults saved only on request
 // and used by the next campaign, and the campaign itself created with what
 // the draft held.
-import { check, eventually, sleep } from "../lib.mjs";
+import { check, eventually, untilStill } from "../lib.mjs";
 
 export default {
   name: "campaign-creator",
@@ -40,7 +40,7 @@ export default {
     await eventually(() => name.evaluate((el) => el === document.activeElement), { label: "focus back on the title" });
     await name.fill(title);
     // The step's entrance has finished before the picture.
-    await sleep(900);
+    await untilStill(page);
     await t.shot("essentials");
 
     // A closed group keeps what was typed in it.
@@ -75,7 +75,7 @@ export default {
       check(/no speech service/.test(await textOf(experience)), "a server with no speech says why nothing is read aloud");
     }
     // The step's entrance has finished before the picture.
-    await sleep(900);
+    await untilStill(page);
     await t.shot("experience");
 
     // A line typed and left at once (the diamond to the review) is kept.
@@ -94,7 +94,7 @@ export default {
       "the review reads back the casting choice, or why there is none",
     );
     // The step's entrance has finished before the picture.
-    await sleep(900);
+    await untilStill(page);
     await t.shot("review");
 
     // Edit from the review, and straight back.
@@ -132,7 +132,8 @@ export default {
 
     // The next campaign starts from the saved defaults, and the app's are one
     // press away.
-    await sleep(1_000);
+    // Create lands on the new table once its prep is in; the home is opened after.
+    await eventually(async () => (await t.url()).pathname.includes(made.id), { timeoutMs: 30_000, label: "the new table open" });
     dialog = await openCreator();
     await eventually(async () => /Starting from your saved defaults/.test(await textOf(dialog)), { label: "the next creator starts from the defaults" });
     const safetySummary = dialog.locator('[data-group="safety"] .cc-group-summary');
@@ -140,7 +141,7 @@ export default {
     await t.tap(dialog.getByRole("radio", { name: "App defaults" }));
     await eventually(async () => /no lines or veils/.test(await textOf(safetySummary)), { label: "app defaults put the line away" });
     // The step's entrance has finished before the picture.
-    await sleep(900);
+    await untilStill(page);
     await t.shot("app-defaults");
 
     await api.delete(`${base}/api/profile/campaign-defaults`);

@@ -5,7 +5,7 @@
 // stays away; with speech back (the harness's own server names Kokoro), the
 // table's switch is its own again. The server's answer is stood in for
 // here, so the same table is seen both ways.
-import { check, eventually, openSettingsGroup, sleep } from "../lib.mjs";
+import { check, eventually, openSettingsGroup } from "../lib.mjs";
 
 export default {
   name: "narration-held",
@@ -31,7 +31,7 @@ export default {
       await openSettingsGroup(t, "narration");
       const row = page.locator(`[role="switch"][aria-label="Narration"]`);
       await eventually(() => row.count(), { timeoutMs: 30_000, label: "the lobby's Narration switch" });
-      await sleep(800);
+      await eventually(async () => /Off on this server/.test(await page.locator("body").innerText()), { label: "the row saying the server holds it" });
       check(await row.isDisabled(), "with the server's speech off, the switch is held");
       check((await row.getAttribute("aria-checked")) === "false", "and reads off, whatever the table's own switch says");
       const words = await page.locator("body").innerText();
@@ -47,7 +47,7 @@ export default {
       await t.open(`/campaigns/${ids.lobbyId}`);
       await openSettingsGroup(t, "narration");
       await eventually(() => row.count(), { timeoutMs: 30_000, label: "the lobby's Narration switch, speech named" });
-      await sleep(800);
+      await eventually(async () => !(await row.isDisabled()), { label: "the switch the table's own" });
       check(!(await row.isDisabled()), "with speech named on the server, the switch is the table's own");
       check((await row.getAttribute("aria-checked")) === "true", "and reads on, as the table set it");
       await eventually(() => page.locator(`[aria-label="Narration voice"]`).count(), { timeoutMs: 15_000, label: "the voice picker" });
