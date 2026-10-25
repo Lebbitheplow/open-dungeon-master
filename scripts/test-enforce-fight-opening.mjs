@@ -222,8 +222,16 @@ await test("A warm-up gives way to any turn on the same narrator, and a turn wit
   const { storyRouteKey } = await import("../src/lib/dm/model.ts");
   const { settleTurnWarmup, warmNextTurn } = await import("../src/lib/dm/turn-warmup.ts");
   // A narrator that reads forever: each request stays open until the client lets go.
+  // It reads the request body as a real narrator does. One left unread stops
+  // Node's server reading the socket once more than 16 KiB of it waits, and
+  // the client's close queues behind the rest of the body, never seen: the
+  // warm-up's 50 KB body reached the server in two reads on one Windows 11 PC
+  // (2026-10-25, Node 24.18), so its close never arrived, though the app had
+  // let go. A body that arrives in one read is let through, which is why the
+  // CI runners passed: how the body splits is the machine's, not the app's.
   const hung = [];
   const server = http.createServer((req, res) => {
+    req.resume();
     if (!req.url.endsWith("/chat/completions")) {
       res.writeHead(404).end();
       return;
