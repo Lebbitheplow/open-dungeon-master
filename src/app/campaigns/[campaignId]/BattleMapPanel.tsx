@@ -1,6 +1,7 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
+import { returnFocus } from "@/components/ui/return-focus";
 import {
   Eraser,
   Footprints,
@@ -1566,7 +1567,7 @@ export function BattleMapPanel({
           <Dialog.Overlay className="cine-tabletop-veil fixed inset-0 z-40" />
           {/* The tabletop ("ODM World Concepts" 3c): the board framed in gold
               on a starfield table, the turn order down the right. */}
-          <Dialog.Content className="cine-tabletop fixed inset-0 z-50 flex flex-col outline-none">
+          <Dialog.Content {...returnFocus} className="cine-tabletop fixed inset-0 z-50 flex flex-col outline-none">
             <div className="cine-tabletop-head">
               <Dialog.Title className="cine-tabletop-title">
                 {scene ? "The ground here" : `Battle map, round ${view.round}`}

@@ -2,8 +2,9 @@
 
 import * as RadixDialog from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
-import { useRef, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { cn } from "@/lib/cn";
+import { returnFocus } from "./return-focus";
 
 // Shared Radix dialog shell: blurred night overlay, animated glass panel,
 // gold display-font title. Content scrolls internally when tall, under a
@@ -27,23 +28,12 @@ export function Dialog({
   width?: string;
   children: ReactNode;
 }) {
-  const opener = useRef<Element | null>(null);
   return (
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
       <RadixDialog.Portal>
         <RadixDialog.Overlay className="dialog-overlay fixed inset-0 z-[60] bg-[#05030d]/70 backdrop-blur-sm" />
         <RadixDialog.Content
-          onOpenAutoFocus={() => {
-            opener.current = document.activeElement;
-          }}
-          onCloseAutoFocus={(event) => {
-            const back = opener.current;
-            opener.current = null;
-            if (back instanceof HTMLElement && back.isConnected) {
-              event.preventDefault();
-              back.focus();
-            }
-          }}
+          {...returnFocus}
           className={cn(
             "texture-noise fixed left-1/2 top-1/2 z-[60] max-h-[90vh] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-xl border border-stone-600/50 bg-stone-950 p-6 shadow-elev-2",
             width,

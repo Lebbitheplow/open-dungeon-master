@@ -1,6 +1,7 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
+import { returnFocus } from "@/components/ui/return-focus";
 import { Bot, Users, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
@@ -128,7 +129,7 @@ export function CompanionBuilderDialog({
         {/* Full screen on a phone, as the join page's builder is: the
             builder's steps need the whole height, and a card floating in a
             margin wasted it. From a tablet up, the centred card as before. */}
-        <Dialog.Content
+        <Dialog.Content {...returnFocus}
           data-companion-builder=""
           className={cn(
             ui.dialog,

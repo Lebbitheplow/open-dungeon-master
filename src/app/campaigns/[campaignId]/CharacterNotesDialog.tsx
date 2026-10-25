@@ -1,6 +1,7 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
+import { returnFocus } from "@/components/ui/return-focus";
 import { Pencil, Trash2, X, Check } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
@@ -166,7 +167,7 @@ export function CharacterNotesDialog({
     <Dialog.Root open onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay className="dialog-overlay fixed inset-0 z-50 bg-[#05030d]/70 backdrop-blur-sm" />
-        <Dialog.Content
+        <Dialog.Content {...returnFocus}
           className={cn(
             ui.dialog,
             "fixed left-1/2 top-1/2 z-50 max-h-[80vh] w-[min(92vw,22rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto",
