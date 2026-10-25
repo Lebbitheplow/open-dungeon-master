@@ -7,7 +7,8 @@ import { listLocations } from "@/lib/db/locations";
 import { listNpcs } from "@/lib/db/npcs";
 import { listBeats } from "@/lib/db/workshop-beats";
 import { requestDmMessage } from "@/lib/dm/model";
-import { draftSystemPrompt, draftUserPrompt, parseDraftReply, type DraftAdventure } from "@/lib/dm/pregen-draft-logic";
+import { packClassIds } from "@/lib/dm/companion-tools";
+import { draftReplyTokens, draftSystemPrompt, draftUserPrompt, parseDraftReply, type DraftAdventure } from "@/lib/dm/pregen-draft-logic";
 import { withLanguage } from "@/lib/dm/table-language-logic";
 import { arcTextTimeoutMs } from "@/lib/model-client";
 import { stripReasoningArtifacts } from "@/lib/story-prompt";
@@ -66,14 +67,17 @@ export async function draftPregens(input: {
   rng?: () => number;
 }): Promise<DraftOutcome> {
   const { workshop, userId, count, level } = input;
-  const offered = draftOffered(workshop.gameSettings.genre);
+  // The classes the setting takes: the world pack's own list when the
+  // workshop is set in one, else the genre's (as the companion and level-up
+  // pickers choose them).
+  const offered = draftOffered(workshop.gameSettings.genre, packClassIds(workshop.gameSettings));
   const { message, error } = await requestDmMessage(
     workshop.settings,
     [
       { role: "system", content: withLanguage(draftSystemPrompt(count, draftOptionNames(offered)), workshop.gameSettings.tableLanguage) },
       { role: "user", content: draftUserPrompt(adventureOf(workshop)) },
     ],
-    { meta: { task: "draft_pregens" }, timeoutMs: arcTextTimeoutMs(), thinking: false },
+    { meta: { task: "draft_pregens" }, timeoutMs: arcTextTimeoutMs(), thinking: false, maxOutputTokens: draftReplyTokens(count) },
   );
   if (error) {
     return { ok: false, status: 502, error: "The AI DM could not be reached, so nothing was drafted. Try again in a moment." };

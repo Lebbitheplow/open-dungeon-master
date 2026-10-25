@@ -49,11 +49,12 @@ export type DraftOffered = {
 // What the library builder offers by default: ODM's bundled classes,
 // species and backgrounds, the classes cut to the ones the adventure's
 // setting takes (settingClassIds, the rule every place that drafts a class
-// follows: a netrunner is not drafted for a high fantasy keep). A custom
-// setting, or none, takes the whole catalog.
-export function draftOffered(genre?: Genre): DraftOffered {
+// follows: a netrunner is not drafted for a high fantasy keep, and a world
+// pack's own class list wins over its genre's). A custom setting, or none,
+// takes the whole catalog.
+export function draftOffered(genre?: Genre, packClassIds: string[] = []): DraftOffered {
   const all = srdClassOptions();
-  const setting = new Set(genre ? settingClassIds(genre, []) : []);
+  const setting = new Set(genre ? settingClassIds(genre, packClassIds) : []);
   const classes = setting.size ? all.filter((entry) => setting.has(entry.id)) : all;
   return { classes: classes.length ? classes : all, races: srdRaceOptions(), backgrounds: srdBackgroundOptions() };
 }

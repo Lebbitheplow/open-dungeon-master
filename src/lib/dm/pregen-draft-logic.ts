@@ -13,6 +13,13 @@ import { textKey } from "@/lib/language/text-logic";
 // party, src/lib/workshop/kind.ts), so the most is that party's largest.
 export const DRAFT_COUNT_MAX = 8;
 
+// The reply's budget: a short JSON entry per hero with its backstory, and
+// room for the wrapper. A model that runs on past it is cut off and the
+// reply refused, rather than left to write until the timeout.
+export function draftReplyTokens(count: number): number {
+  return 400 + count * 400;
+}
+
 // The adventure as the prompt carries it. Clipped piece by piece and as a
 // whole, so a workshop with forty NPCs still sends a short request: the
 // prompt stays well inside the compact profile's 16K window
