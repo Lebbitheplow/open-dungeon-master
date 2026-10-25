@@ -10,7 +10,7 @@
 // follows the newest anchors once a frame, and the panel's frame is hidden
 // while the tabletop is open, which all but stops its animation frames.
 import { readFileSync } from "node:fs";
-import { check, eventually, sleep } from "../lib.mjs";
+import { check, eventually, sleep, untilStill } from "../lib.mjs";
 
 // The example addon's view, served as a fixture (18-table-layout.mjs does the
 // same). The page in the frame also keeps the last snapshot and counts its
@@ -32,18 +32,21 @@ async function installFixture(page) {
   });
 }
 
+// The context counts every tour as seen (newContext), and open() closes
+// whatever greets the page; a tour still showing is closed here, each press
+// waiting for it to go rather than for a set time.
 async function dismissTour(page) {
   const tour = page.locator('[role="dialog"][aria-label="Guided tour"]');
-  await eventually(() => tour.count(), { timeoutMs: 4_000 }).catch(() => 0);
   for (let attempt = 0; attempt < 3 && (await tour.count()); attempt += 1) {
     await page.keyboard.press("Escape");
-    await sleep(250);
+    await tour.first().waitFor({ state: "hidden", timeout: 2_000 }).catch(() => {});
   }
 }
 
 // How many animation frames a frame's page ran in a second.
 async function framesPerSecond(frame) {
   const start = await frame.evaluate(() => window.__frames);
+  // Time is the check: the frames counted over one second are the rate.
   await sleep(1000);
   return (await frame.evaluate(() => window.__frames)) - start;
 }
@@ -62,10 +65,12 @@ const countCommits = () => {
 async function commitsWhile(page, run) {
   const count = () => page.evaluate(() => window.__commits);
   const a = await count();
+  // Time is the check: the commits of an idle while are the baseline.
   await sleep(600);
   const idle = (await count()) - a;
   const b = await count();
   await run();
+  // Time is the check: the renders the run set off land within this while.
   await sleep(150);
   return { idle, busy: (await count()) - b };
 }
@@ -113,7 +118,7 @@ export default {
     const covered = await board.boundingBox();
     check(Math.abs(covered.width - flat.width) < 2 && Math.abs(covered.height - flat.height) < 2, `the frame keeps the flat board's size (${flat.width}x${flat.height} then ${covered.width}x${covered.height})`);
     // The View switch slides to its choice and the frame paints its first picture.
-    await sleep(900);
+    await untilStill(page);
     await t.shot("covered");
 
     // Where the view drew the figures: nothing on the page reads them until a
@@ -152,7 +157,7 @@ export default {
     const shownRate = await framesPerSecond(big);
     check(hiddenRate <= 5, `the hidden panel view all but stops drawing (${hiddenRate} frames a second)`);
     check(shownRate >= 20, `the tabletop's view draws on (${shownRate} frames a second)`);
-    await sleep(600);
+    await untilStill(page);
     await t.shot("enlarged");
     await t.tap(page.getByRole("button", { name: "Close the board", exact: true }));
     await eventually(async () => (await page.getByRole("dialog").count()) === 0, { label: "the tabletop closed" });

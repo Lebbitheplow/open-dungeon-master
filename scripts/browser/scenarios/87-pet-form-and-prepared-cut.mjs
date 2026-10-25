@@ -4,7 +4,7 @@
 // prep says what the storyteller does with a fight beyond the party: cut it
 // down to fit, saying what it leaves out, or hold it. On desktop and phone,
 // on the website and in the app's own screens.
-import { check, eventually, openPanelTab, sleep } from "../lib.mjs";
+import { check, eventually, openPanelTab, untilStill } from "../lib.mjs";
 
 const visible = (locator) => locator.locator("visible=true").first();
 
@@ -41,14 +41,14 @@ export default {
     await choose("Drake");
     await eventually(() => label("Draconic Essence").count(), { label: "the essence once Kind is Drake" });
     check((await label("Hit points").count()) === 0, "no hit points for a drake");
-    await sleep(300);
+    await untilStill(page);
     await t.shot("summon-drake");
     await choose("A pet the story gave them");
     await eventually(async () => (await label("Hit points").count()) > 0 && (await label("Armor Class").count()) > 0, {
       label: "hit points and AC for a story pet",
     });
     check((await label("Draconic Essence").count()) === 0, "no essence for a story pet");
-    await sleep(300);
+    await untilStill(page);
     await t.shot("summon-story-pet");
 
     // The lead's prep at the AI table: two fights, one the party can be cut
@@ -84,10 +84,10 @@ export default {
         `the cut fight says what it leaves out (${cut.slice(0, 200)})`,
       );
       await row(made[1].name).scrollIntoViewIfNeeded();
-      await sleep(300);
+      await untilStill(page);
       await t.shot("prep-held");
       await row(made[0].name).scrollIntoViewIfNeeded();
-      await sleep(300);
+      await untilStill(page);
       await t.shot("prep-cut");
     } finally {
       for (const { id } of made) {

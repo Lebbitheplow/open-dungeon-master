@@ -151,6 +151,7 @@ export default {
     // Left alone, it goes by itself (15 seconds) and focus stays put.
     await eventually(async () => (await strip.count()) === 0, { timeoutMs: 25_000, label: "the ignored strip leaving by itself" });
     check(await composer.evaluate((element) => element === document.activeElement), "focus moved off the composer");
+    // Time is the check: a reason the strip sent as it left would land within this while.
     await sleep(300);
     const second = await recorded(table.turnIds[1]);
     check(second.reason === null, `the ignored fix has the reason ${second.reason}`);

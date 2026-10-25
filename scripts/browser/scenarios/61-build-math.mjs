@@ -68,8 +68,8 @@ export default {
     const hpBefore = (await panel.locator('tr[data-row="hp"] td').first().textContent())?.trim();
     // The level is on the class step, the first (backlog F4).
     await t.tap(page.locator(`${root}button[aria-label^="Back to step 1:"]`).locator("visible=true").first());
-    await sleep(500);
     const level = page.locator(`${root}section[data-active] button[aria-label="Level"]`).locator("visible=true").first();
+    await level.waitFor({ state: "visible", timeout: 15_000 });
     await t.tap(level);
     await t.tap(page.getByRole("menuitemradio", { name: "5", exact: true }).first());
     const said = await eventually(
