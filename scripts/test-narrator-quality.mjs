@@ -14,7 +14,7 @@ const ledger = await import("../src/lib/db/turn-ledger.ts");
 const quality = await import("../src/lib/narrator-quality.ts");
 const campaigns = await import("../src/lib/db/campaigns.ts");
 const messages = await import("../src/lib/db/messages.ts");
-const { haltDmTurn } = await import("../src/lib/dm/turn-halt.ts");
+const { haltDmTurn, haltUnbuiltTurn } = await import("../src/lib/dm/turn-halt.ts");
 const { enforceEngineBoundary } = await import("../src/lib/dm/narration-guard.ts");
 const { normalizeCreatureName } = await import("../src/lib/dm/engine-boundary.ts");
 const { ensureOpenChapter } = await import("../src/lib/db/chapters.ts");
@@ -199,6 +199,26 @@ await test("a halted turn and a swept stale turn end failed; a person's turn wri
   const running = createDmTurn(world.campaignId, [], "ai");
   saveDmTurn(running);
   assert.equal(row(running.id), undefined, "a turn still running has no row yet");
+});
+
+await test("a turn that never had a prompt stays failed when Retry closes it to start over", () => {
+  const unbuilt = haltUnbuiltTurn(world.campaignId, "the backend could not be reached.");
+  assert.equal(row(unbuilt.id).status, "failed");
+  // What Retry does with such a row (src/lib/dm/retry-turn.ts): closed as
+  // done so it is not retried twice, while a new turn makes its own row.
+  const closed = getDmTurn(unbuilt.id);
+  closed.status = "done";
+  saveDmTurn(closed);
+  assert.equal(getDmTurn(unbuilt.id).status, "done");
+  assert.equal(row(unbuilt.id).status, "failed", "the model never ran on it");
+});
+
+await test("a turn whose row a rewind deleted while it ended writes no quality row", () => {
+  const gone = createDmTurn(world.campaignId, [{ role: "user", content: "x" }], "ai");
+  getDatabase().prepare(`DELETE FROM dm_turns WHERE id = ?`).run(gone.id);
+  gone.status = "done";
+  saveDmTurn(gone);
+  assert.equal(row(gone.id), undefined);
 });
 
 await test("a later save without a guard keeps the outcome stored", () => {

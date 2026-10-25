@@ -3,7 +3,7 @@ import type { CorrectionAttribution, CorrectionKind, CorrectionReason } from "@/
 import { getGlobalConfig } from "@/lib/db/app-settings";
 import type { DmTurn, DmTurnActor } from "@/lib/db/dm-turns";
 import { isPrivateBackendHost } from "@/lib/backend-host";
-import { AGENT_MARK } from "@/lib/dm/agent-mark";
+import { AGENT_MARK, UNBUILT_TURN_MARK } from "@/lib/dm/agent-mark";
 import type { DmMode } from "@/lib/dm/viewer";
 import type { BackendClass, GuardKind, GuardOutcome, QualityRow } from "@/lib/narrator-quality";
 import { serverEnv } from "@/lib/server-env";
@@ -330,6 +330,11 @@ export function writeTurnQuality(turn: DmTurn): void {
     const dmMode: DmMode = parseJson<{ dmMode?: DmMode }>(campaign.game_settings_json, {}).dmMode ?? "ai";
     const settings = parseJson<{ textProvider?: TextProvider; customBaseUrl?: string }>(campaign.settings_json, {});
     const agentProgram = turn.conversation[0]?.content === AGENT_MARK;
+    // A turn that stopped before it had a prompt is closed as done when
+    // Retry starts it over (src/lib/dm/retry-turn.ts): the model never ran
+    // on it, so it stays failed here rather than reading as a clean turn.
+    const unbuilt = turn.conversation.length === 1 && turn.conversation[0]?.content === UNBUILT_TURN_MARK;
+    const status = unbuilt ? "failed" : turn.status;
     const lastCall = db
       .prepare(`SELECT backend, model FROM model_calls WHERE turn_id = ? AND role = 'story' ORDER BY id DESC LIMIT 1`)
       .get(turn.id) as { backend: UsageBackend | ""; model: string } | undefined;
@@ -361,7 +366,7 @@ export function writeTurnQuality(turn: DmTurn): void {
       backendClass,
       backend: backend ? String(backend).slice(0, 40) : null,
       model: model ? model.slice(0, 200) : null,
-      status: turn.status,
+      status,
       modelCalls: turn.callIndex,
       toolCalls: counts.toolCalls,
       refusedInvalid: counts.refusedInvalid,

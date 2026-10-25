@@ -128,7 +128,7 @@ export function getDmTurn(turnId: string): DmTurn | null {
 }
 
 export function saveDmTurn(turn: DmTurn) {
-  getDatabase()
+  const saved = getDatabase()
     .prepare(
       `
         UPDATE dm_turns SET
@@ -156,8 +156,11 @@ export function saveDmTurn(turn: DmTurn) {
       turn.id,
     );
   // A turn that ended (done or failed) gets its narrator quality row
-  // (issue #460); a person's turn and a turn still running do not.
-  writeTurnQuality(turn);
+  // (issue #460); a person's turn and a turn still running do not, and nor
+  // does a row a rewind deleted while the turn in hand was still ending.
+  if (saved.changes > 0) {
+    writeTurnQuality(turn);
+  }
 }
 
 // Turns stuck in `running` are stale after a crash/restart; fail them so a
