@@ -16,8 +16,6 @@ import { ui } from "@/lib/ui";
 // than it is. The export is what a tester attaches to a session report
 // (docs/testing.md).
 
-const th = "px-2 py-1.5 text-left text-[11px] font-medium uppercase tracking-wide text-stone-500";
-const td = "px-2 py-1.5 align-top text-xs text-stone-300 tabular-nums";
 
 const BACKEND_LABELS: Record<QualityGroup["backendClass"], string> = {
   local: "Local backend",
@@ -109,50 +107,54 @@ export function AdminNarratorQualityCard() {
         </p>
       ) : null}
       {groups.length ? (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[960px] border-separate border-spacing-0">
-            <thead>
-              <tr>
-                <th className={th}>Backend</th>
-                <th className={th}>DM mode</th>
-                <th className={th}>Turns</th>
-                <th className={th}>Clean</th>
-                <th className={th}>Failed</th>
-                <th className={th}>Tool refused</th>
-                <th className={th}>Hit a cap</th>
-                <th className={th}>Guard acted</th>
-                <th className={th}>Not checked</th>
-                <th className={th}>Corrected</th>
-                <th className={th}>Rewound</th>
-                <th className={th}>Most corrected</th>
-              </tr>
-            </thead>
-            <tbody>
-              {groups.map((group) => (
-                <tr key={`${group.backendClass}:${group.dmMode}`} className="border-t border-stone-800/60" data-quality-group={`${group.backendClass}:${group.dmMode}`}>
-                  <td className={td}>
-                    <span className="text-stone-100">{BACKEND_LABELS[group.backendClass]}</span>
-                  </td>
-                  <td className={td}>{MODE_LABELS[group.dmMode]}</td>
-                  <td className={td}>{group.turns}</td>
-                  <td className={td} data-quality-clean="">{percent(group.clean, group.turns)}</td>
-                  <td className={td}>{count(group.failed)}</td>
-                  <td className={td}>{count(group.refused)}</td>
-                  <td className={td}>{count(group.capped)}</td>
-                  <td className={td}>{count(group.guardFired)}</td>
-                  <td className={td} title="The prose reader failed, or the table turned the outcome check off">{count(group.unchecked)}</td>
-                  <td className={td}>{group.correctionsCounted ? percent(group.corrected, group.turns) : "not counted"}</td>
-                  <td className={td}>{count(group.rolledBack)}</td>
-                  <td className={td} data-quality-tools="">
+        // One block per backend and DM mode, its figures in a grid that
+        // wraps: a twelve-column table only scrolled sideways on a phone.
+        <ul className="space-y-3">
+          {groups.map((group) => {
+            const figures: Array<{ label: string; value: string; hint?: string; clean?: boolean }> = [
+              { label: "Turns", value: String(group.turns) },
+              { label: "Clean", value: percent(group.clean, group.turns), clean: true },
+              { label: "Failed", value: count(group.failed) },
+              { label: "Tool refused", value: count(group.refused) },
+              { label: "Hit a cap", value: count(group.capped) },
+              { label: "Guard acted", value: count(group.guardFired) },
+              { label: "Not checked", value: count(group.unchecked), hint: "The prose reader failed, or the table turned the outcome check off" },
+              { label: "Corrected", value: group.correctionsCounted ? percent(group.corrected, group.turns) : "not counted" },
+              { label: "Rewound", value: count(group.rolledBack) },
+            ];
+            return (
+              <li
+                key={`${group.backendClass}:${group.dmMode}`}
+                className="rounded-lg border border-stone-700/50 bg-stone-950/30 p-3"
+                data-quality-group={`${group.backendClass}:${group.dmMode}`}
+              >
+                <p className="mb-2 text-sm text-stone-100">
+                  {BACKEND_LABELS[group.backendClass]}
+                  <span className="text-stone-500"> &middot; </span>
+                  <span className="text-stone-300">{MODE_LABELS[group.dmMode]}</span>
+                </p>
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs sm:grid-cols-3 lg:grid-cols-5">
+                  {figures.map((figure) => (
+                    <div key={figure.label} className="flex items-baseline justify-between gap-2 sm:block" title={figure.hint}>
+                      <dt className="text-[11px] uppercase tracking-wide text-stone-500">{figure.label}</dt>
+                      <dd className="tabular-nums text-stone-200" {...(figure.clean ? { "data-quality-clean": "" } : {})}>
+                        {figure.value}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+                <p className="mt-2 text-xs text-stone-400">
+                  <span className="text-[11px] uppercase tracking-wide text-stone-500">Most corrected </span>
+                  <span className="text-stone-200" data-quality-tools="">
                     {group.tools.length
                       ? group.tools.map((tool) => `${tool.tool.replaceAll("_", " ")} (${tool.corrections})`).join(", ")
-                      : "–"}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                      : "none"}
+                  </span>
+                </p>
+              </li>
+            );
+          })}
+        </ul>
       ) : null}
       <p className="mt-2 text-[11px] text-stone-500">
         {overview?.rule ?? ""} Corrected and the tools leave out fixes marked &ldquo;changed my mind&rdquo;. At a table a

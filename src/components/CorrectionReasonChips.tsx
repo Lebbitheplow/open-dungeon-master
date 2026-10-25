@@ -103,7 +103,7 @@ export function CorrectionReasonChips({ campaignId }: { campaignId: string }) {
               setOffer(null);
             }
           }}
-          className="panel pointer-events-auto flex max-w-xl flex-wrap items-center gap-1.5 rounded-xl px-3 py-2 text-xs text-stone-300 shadow-lg"
+          className="panel panel-smoke pointer-events-auto flex max-w-xl flex-wrap items-center gap-1.5 rounded-xl px-3 py-2 text-xs text-stone-300 shadow-lg"
         >
           {saved ? (
             <span data-correction-saved="">Noted, thank you.</span>
