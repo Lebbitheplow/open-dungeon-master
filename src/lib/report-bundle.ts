@@ -256,23 +256,89 @@ const SESSION_SHAPES: Array<[RegExp, string]> = [
   [/\b([A-Za-z_-]*(?:cookie|session)[A-Za-z_-]*)(["']?\s*[:=]\s*["']?)([^\s"',&;]{8,})/gi, "$1$2[redacted]"],
 ];
 
-function cleanText(text: string, secrets: readonly string[]): string {
+// Public services whose names say nothing about the owner. An address on any
+// other host (the server's own domain, a machine on the owner's network, a
+// webhook) is cut to "[address]", so a report still says which provider
+// failed without naming where anything lives.
+const PUBLIC_HOSTS = ["github.com", "githubusercontent.com", "openai.com", "openrouter.ai", "anthropic.com", "googleapis.com", "huggingface.co", "models.dev", "npmjs.org", "ollama.com"];
+
+function isPublicHost(host: string): boolean {
+  const name = host.toLowerCase();
+  return PUBLIC_HOSTS.some((suffix) => name === suffix || name.endsWith(`.${suffix}`));
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// A web address: its scheme, its host (with any user and port), its path,
+// and its query and fragment, which are dropped whole.
+const URL_SHAPE = /\b([a-z][a-z0-9+.-]*:\/\/)([^\s/?#"'<>()\\]*)([^\s?#"'<>()\\]*)(?:[?#][^\s"'<>()\\]*)?/gi;
+const IPV4 = /\b(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}(?::\d{1,5})?\b/g;
+// Node's network errors name the host they could not reach.
+const NETWORK_ERROR_HOST = /\b(ENOTFOUND|EAI_AGAIN|EHOSTUNREACH|ECONNREFUSED|ETIMEDOUT|ECONNRESET)\s+([^\s,;)'"]+)/g;
+const EMAIL = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}\b/g;
+// A home folder names the person who owns it: /home/name, /Users/name and
+// C:\Users\name (a model file's path, a stack frame in the apps).
+const HOME_FOLDER = /([\\/](?:home|Users)[\\/]+)([^\\/\s"'<>:)]+)/gi;
+
+function cutAddresses(text: string, addresses: readonly string[]): string {
+  let out = text;
+  for (const address of addresses) {
+    out = out.replace(new RegExp(escapeRegExp(address), "gi"), "[address]");
+  }
+  out = out.replace(URL_SHAPE, (_whole, scheme: string, authority: string, path: string) => {
+    if (!authority) return `${scheme}${path}`;
+    const host = authority.replace(/^.*@/, "").replace(/:\d+$/, "");
+    return isPublicHost(host) ? `${scheme}${host}${path}` : `${scheme}[address]${path}`;
+  });
+  return out
+    .replace(NETWORK_ERROR_HOST, "$1 [address]")
+    .replace(IPV4, "[address]")
+    .replace(EMAIL, "[email]")
+    .replace(HOME_FOLDER, "$1[user]");
+}
+
+function cleanText(text: string, secrets: readonly string[], addresses: readonly string[] = []): string {
   let out = redactSecrets(text, secrets);
   for (const [pattern, replacement] of SESSION_SHAPES) {
     out = out.replace(pattern, replacement);
   }
-  return out;
+  return cutAddresses(out, addresses);
 }
 
 // Every string in the value, cut. Keys are the bundle's own names.
-function cleanDeep<T>(value: T, secrets: readonly string[]): T {
-  if (typeof value === "string") return cleanText(value, secrets) as T;
-  if (Array.isArray(value)) return value.map((item) => cleanDeep(item, secrets)) as T;
+function cleanDeep<T>(value: T, secrets: readonly string[], addresses: readonly string[]): T {
+  if (typeof value === "string") return cleanText(value, secrets, addresses) as T;
+  if (Array.isArray(value)) return value.map((item) => cleanDeep(item, secrets, addresses)) as T;
   if (value && typeof value === "object") {
-    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, cleanDeep(item, secrets)])) as T;
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, cleanDeep(item, secrets, addresses)])) as T;
   }
   return value;
 }
+
+// The hosts in a list of addresses, for the cutter: only names with a dot or
+// a colon (a single word like "cube" would cut narration), never a public
+// service or this machine's own loopback.
+export function addressHosts(values: readonly string[]): string[] {
+  const hosts = new Set<string>();
+  for (const raw of values) {
+    const value = raw.trim();
+    if (!value) continue;
+    let host = "";
+    try {
+      host = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(value) ? value : `http://${value}`).hostname;
+    } catch {
+      continue;
+    }
+    host = host.replace(/^\[|\]$/g, "");
+    if (host.length < 4 || !/[.:]/.test(host) || isPublicHost(host) || LOOPBACK.has(host.toLowerCase())) continue;
+    hosts.add(host);
+  }
+  return [...hosts].sort((a, b) => b.length - a.length);
+}
+
+const LOOPBACK = new Set(["localhost", "127.0.0.1", "0.0.0.0", "::1"]);
 
 // A whisper tool's arguments are the private line itself.
 const WHISPER_TOOL = /whisper/i;
@@ -317,6 +383,9 @@ export function buildReportBundle(input: {
   viewer: ReportViewer;
   reporterUserId: string;
   secrets: readonly string[];
+  // Host names this server knows (its own, its backends'), cut wherever
+  // they appear (addressHosts).
+  addresses?: readonly string[];
   now?: Date;
 }): ReportBundle {
   const { sources, parts, viewer, reporterUserId } = input;
@@ -387,7 +456,7 @@ export function buildReportBundle(input: {
     }));
   }
 
-  const cleaned = cleanDeep(bundle, secrets);
+  const cleaned = cleanDeep(bundle, secrets, input.addresses ?? []);
   return finishBundle(cleaned);
 }
 
@@ -396,7 +465,9 @@ export function buildReportBundle(input: {
 // One error as the page keeps it: cut to size, keys and tokens cut out, and
 // the page's path without its query or fragment.
 export function cleanPageError(raw: { kind?: unknown; message?: unknown; stack?: unknown; where?: unknown; at?: unknown }): PageError {
-  const where = typeof raw.where === "string" ? raw.where.split(/[?#]/)[0].slice(0, 300) : "";
+  // The path alone, and through the cutter too: inside the apps it can be a
+  // file's path in the person's home folder.
+  const where = typeof raw.where === "string" ? cleanText(raw.where.split(/[?#]/)[0].slice(0, 300), []) : "";
   const stack = typeof raw.stack === "string" && raw.stack.trim() ? cut(cleanText(raw.stack, []), MAX_ERROR_TEXT) : undefined;
   return {
     at: typeof raw.at === "string" && !Number.isNaN(Date.parse(raw.at)) ? raw.at : new Date().toISOString(),

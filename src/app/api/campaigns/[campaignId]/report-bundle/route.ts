@@ -1,6 +1,6 @@
 import { isErrorResponse, requireMember } from "@/lib/campaign-api";
 import { buildReportBundle, chosenParts, offeredParts } from "@/lib/report-bundle";
-import { reportSecrets, tableReportSources, tableReportViewer } from "@/lib/report-bundle-server";
+import { reportAddresses, reportSecrets, tableReportSources, tableReportViewer } from "@/lib/report-bundle-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,12 +35,16 @@ export async function POST(
   const body = (await request.json().catch(() => ({}))) as { parts?: unknown } | null;
   const viewer = tableReportViewer(context);
   const parts = chosenParts(body?.parts, viewer);
+  // The server log can print any table's keys and backends, so with it every
+  // table's are cut, not only this one's.
+  const scope = { headers: request.headers, everyTable: parts.has("serverLog") };
   const bundle = buildReportBundle({
     sources: tableReportSources(context, parts, viewer),
     parts,
     viewer,
     reporterUserId: context.user.id,
-    secrets: reportSecrets(context),
+    secrets: reportSecrets(context, scope),
+    addresses: reportAddresses(context, scope),
   });
   return Response.json(bundle, { headers: { "cache-control": "no-store" } });
 }

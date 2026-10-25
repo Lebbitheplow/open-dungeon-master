@@ -1,6 +1,6 @@
 import { isErrorResponse, requireAdmin } from "@/lib/admin-api";
 import { buildReportBundle, chosenParts, offeredParts } from "@/lib/report-bundle";
-import { ADMIN_REPORT_VIEWER, adminReportSources, reportSecrets } from "@/lib/report-bundle-server";
+import { ADMIN_REPORT_VIEWER, adminReportSources, reportAddresses, reportSecrets } from "@/lib/report-bundle-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,7 +28,9 @@ export async function POST(request: Request) {
     parts,
     viewer: ADMIN_REPORT_VIEWER,
     reporterUserId: admin.id,
-    secrets: reportSecrets(),
+    // The log can print any table's keys and backends.
+    secrets: reportSecrets(undefined, { headers: request.headers, everyTable: true }),
+    addresses: reportAddresses(undefined, { headers: request.headers, everyTable: true }),
   });
   return Response.json(bundle, { headers: { "cache-control": "no-store" } });
 }

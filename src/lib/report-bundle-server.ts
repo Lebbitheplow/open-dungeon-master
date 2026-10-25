@@ -1,6 +1,7 @@
 import os from "node:os";
 import { capsFor, isLead, type MemberContext } from "@/lib/campaign-api";
 import { getGlobalConfig } from "@/lib/db/app-settings";
+import { getDatabase } from "@/lib/db/core";
 import { listRecentDmTurns, type DmTurn } from "@/lib/db/dm-turns";
 import { listRecentMessages } from "@/lib/db/messages";
 import { traceForViewer } from "@/lib/dm/context-budget";
@@ -9,6 +10,7 @@ import { harnessConfig } from "@/lib/harness/status";
 import { hostPlatform } from "@/lib/host-platform";
 import { bundleNarratorQuality } from "@/lib/narrator-quality-server";
 import {
+  addressHosts,
   REPORT_TURNS,
   type ReportCall,
   type ReportPartId,
@@ -102,7 +104,11 @@ function callsOf(turn: DmTurn): ReportCall[] {
 // The tool calls the turn's own model calls made: the assistant messages
 // after the prompt, never the prompt itself.
 function toolCallsOf(turn: DmTurn): ReportToolCall[] {
-  const start = (turn.contextTrace as TraceShape | null)?.shape?.promptMessages ?? 0;
+  // Where the prompt ends is known only from the trace. Without it nothing is
+  // read, rather than reading from the start and taking the prompt's own
+  // history for the turn's calls.
+  const start = (turn.contextTrace as TraceShape | null)?.shape?.promptMessages;
+  if (typeof start !== "number") return [];
   const out: ReportToolCall[] = [];
   for (const message of turn.conversation.slice(start)) {
     if (message.role !== "assistant" || !Array.isArray(message.tool_calls)) continue;
@@ -175,11 +181,61 @@ export function adminReportSources(parts: ReadonlySet<ReportPartId>): ReportSour
   return sources;
 }
 
-// Every key value this server knows, the table's own saved keys included.
-export function reportSecrets(context?: MemberContext): string[] {
+// Every table's saved settings, for a part (the server log) that can print
+// any table's key or backend address, not only this one's.
+function everyTableSettings(): unknown[] {
+  const rows = getDatabase().prepare(`SELECT settings_json FROM campaigns`).all() as Array<{ settings_json: string }>;
+  return rows.map((row) => {
+    try {
+      return JSON.parse(row.settings_json) as unknown;
+    } catch {
+      return null;
+    }
+  });
+}
+
+// The request's own cookie values: the reporter's session among them.
+function cookieValues(headers?: Headers): string[] {
+  return (headers?.get("cookie") ?? "")
+    .split(";")
+    .map((pair) => pair.slice(pair.indexOf("=") + 1).trim())
+    .filter((value) => value.length >= 8);
+}
+
+type SecretScope = { headers?: Headers; everyTable?: boolean };
+
+// Every key value this server knows: the environment's, the panel's, the
+// table's own saved keys, every table's when the server log goes in, and
+// the cookies the request came with.
+export function reportSecrets(context?: MemberContext, scope: SecretScope = {}): string[] {
   const values = new Set(knownSecretValues(getGlobalConfig()));
-  if (context) {
-    for (const value of secretValuesIn(context.campaign.settings)) values.add(value);
-  }
+  const settings = [context?.campaign.settings, ...(scope.everyTable ? everyTableSettings() : [])];
+  for (const value of settings.flatMap((item) => secretValuesIn(item))) values.add(value);
+  for (const value of cookieValues(scope.headers)) values.add(value);
   return [...values];
+}
+
+// A setting's or variable's name that holds an address.
+const ADDRESS_NAME = /url|host|origin|endpoint|address/i;
+
+function addressValuesIn(value: unknown, name = ""): string[] {
+  if (typeof value === "string") return ADDRESS_NAME.test(name) ? [value] : [];
+  if (Array.isArray(value)) return value.flatMap((item) => addressValuesIn(item, name));
+  if (value && typeof value === "object") {
+    return Object.entries(value as Record<string, unknown>).flatMap(([key, item]) => addressValuesIn(item, key));
+  }
+  return [];
+}
+
+// Every host name the server knows of: the address the reporter reached it
+// by, its public address and its backends' from the environment, the panel
+// and the table (every table's with the server log). The bundle cuts each
+// wherever it appears, as well as any address by its shape.
+export function reportAddresses(context?: MemberContext, scope: SecretScope = {}): string[] {
+  const env = Object.entries(process.env)
+    .filter(([name, value]) => ADDRESS_NAME.test(name) && typeof value === "string")
+    .map(([, value]) => String(value));
+  const headers = ["host", "x-forwarded-host", "origin", "referer"].map((name) => scope.headers?.get(name) ?? "");
+  const settings = [getGlobalConfig(), context?.campaign.settings, ...(scope.everyTable ? everyTableSettings() : [])];
+  return addressHosts([...env, ...headers, ...settings.flatMap((item) => addressValuesIn(item))]);
 }

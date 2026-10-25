@@ -34,14 +34,23 @@ function keep(raw: Parameters<typeof cleanPageError>[0]) {
   }
 }
 
+// What went wrong, never the whole value: a promise can be rejected with any
+// object, a response body or a slice of the table's state among them, and
+// that could carry other players' words. Only an error's own name, message
+// and stack are kept, or the kind of value it was.
 function describe(value: unknown): { message: string; stack?: string } {
   if (value instanceof Error) return { message: `${value.name}: ${value.message}`, stack: value.stack };
   if (typeof value === "string") return { message: value };
-  try {
-    return { message: JSON.stringify(value) ?? String(value) };
-  } catch {
-    return { message: String(value) };
+  if (value && typeof value === "object") {
+    const fields = value as { name?: unknown; message?: unknown; error?: unknown; stack?: unknown };
+    const said = typeof fields.message === "string" ? fields.message : typeof fields.error === "string" ? fields.error : "";
+    const name = typeof fields.name === "string" ? fields.name : value.constructor?.name || "Object";
+    return {
+      message: said ? `${name}: ${said}` : `A ${name} with no message`,
+      ...(typeof fields.stack === "string" ? { stack: fields.stack } : {}),
+    };
   }
+  return { message: String(value) };
 }
 
 function onError(event: ErrorEvent) {

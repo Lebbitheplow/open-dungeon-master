@@ -170,6 +170,56 @@ await test("The page's own errors are kept cut to size, without the address's qu
   assert.equal(withErrors.pageErrors.length, bundle.PAGE_ERROR_LIMIT);
   assert.ok(!JSON.stringify(withErrors).includes("abcdefghijklmnop"));
   assert.deepEqual(withErrors.included, ["setup", "pageErrors"]);
+  const fromApp = bundle.cleanPageError({
+    message: "TypeError: failed to fetch https://table.private-domain.test/api/campaigns/abc/state?invite=CODE123",
+    stack: "TypeError\n    at run (https://table.private-domain.test/_next/static/chunks/page.js?dpl=dpl_secret_build:1:2345)",
+    where: "/C:/Users/Someone/AppData/Local/Programs/odm/www/index.html",
+  });
+  const appText = JSON.stringify(fromApp);
+  for (const leak of ["private-domain.test", "CODE123", "dpl_secret_build", "Someone"]) {
+    assert.ok(!appText.includes(leak), `"${leak}" was kept in a page error: ${appText}`);
+  }
+  assert.ok(appText.includes("/_next/static/chunks/page.js"), "the stack lost its file");
+});
+
+const turnSourceForAddresses = {
+  id: "turn-a",
+  status: "failed",
+  actor: "ai",
+  createdAt: "2026-10-24T10:00:00.000Z",
+  updatedAt: "2026-10-24T10:00:01.000Z",
+  modelCalls: 1,
+  rolls: 0,
+  calls: [],
+  toolCalls: [],
+  trace: null,
+};
+
+await test("No address says where anything lives: hosts, IPs, emails and home folders are cut, a public provider's name stays.", () => {
+  const made = bundle.buildReportBundle({
+    sources: {
+      setup: { ...setup, narrator: { backend: "OpenAI-compatible server", model: "/home/someone/models/qwen.gguf" } },
+      serverLog: [
+        { at: 0, level: "warn", text: "POST http://gpu-box.lan:8001/v1/chat/completions?trace=1 failed: connect ECONNREFUSED 10.20.30.40:8080" },
+        { at: 0, level: "info", text: "getaddrinfo ENOTFOUND nas-box.lan, then https://api.openai.com/v1/models answered" },
+        { at: 0, level: "info", text: "signed in as someone@example.test from table.private-domain.test" },
+        { at: 0, level: "error", text: "at C:\\Users\\Someone\\AppData\\Local\\odm\\server.js:10:2" },
+      ],
+      turns: [{ ...turnSourceForAddresses, calls: [{ task: "turn", error: "fetch failed for http://192.168.7.9:11434/api/chat" }] }],
+    },
+    parts: new Set(["setup", "serverLog", "turnTimings"]),
+    viewer: { ...AI_LEAD, isAdmin: true },
+    reporterUserId: "me",
+    secrets: [],
+    addresses: bundle.addressHosts(["https://table.private-domain.test/", "localhost:3000", "api.openai.com", "cube"]),
+  });
+  const text = JSON.stringify(made);
+  for (const leak of ["gpu-box.lan", "10.20.30.40", "nas-box.lan", "someone@example.test", "private-domain.test", "Someone", "/home/someone", "192.168.7.9", "trace=1"]) {
+    assert.ok(!text.includes(leak), `"${leak}" reached the bundle:\n${text}`);
+  }
+  assert.ok(text.includes("https://api.openai.com/v1/models"), "a public provider's address lost its name");
+  assert.ok(text.includes("/v1/chat/completions"), "the path of a cut address went too");
+  assert.deepEqual(bundle.addressHosts(["https://table.private-domain.test/", "localhost:3000", "api.openai.com", "cube"]), ["table.private-domain.test"], "a loopback, a public host or one word was listed to cut");
 });
 
 await test("The issue forms open with nothing from the report in the address.", () => {
@@ -280,6 +330,45 @@ await test("Admin's report needs an admin, and holds the setup and the log only.
   assert.deepEqual(made.included, ["setup", "serverLog"]);
   assert.equal(made.madeFrom, "admin");
   assert.ok(!JSON.stringify(made).includes("panel-saved-key-11223344"));
+});
+
+await test("A request's own address and cookies, a backend's address in an error, and another table's key never reach the file.", async () => {
+  getDatabase().prepare(`UPDATE users SET is_admin = 1 WHERE id = ?`).run(lead.id);
+  const elsewhere = await openWorld();
+  getDatabase().prepare(`UPDATE campaigns SET settings_json = json_set(settings_json, '$.customApiKey', 'other-table-key-77665544', '$.customBaseUrl', 'http://other-gpu.lan:9000/v1') WHERE id = ?`).run(elsewhere.campaignId);
+  console.log("[test] other-table-key-77665544 at http://other-gpu.lan:9000/v1 for a user at reports.private-domain.test cookie-value-abcdef123456");
+  const failed = turns.createDmTurn(world.campaignId, [{ role: "system", content: "prompt" }]);
+  turns.saveDmTurn({
+    ...failed,
+    status: "failed",
+    callIndex: 1,
+    contextTrace: { limitTokens: 10, promptTokens: 1, blocks: [], calls: [{ index: 0, task: "turn", windowTokens: 10, promptTokens: 1, toolTokens: 0, toolCount: 0, outputTokens: 1, dropped: 0, clipped: 0, error: "connect ECONNREFUSED 10.20.30.40:8080 (http://gpu-box.lan:8001/v1)" }] },
+  });
+  world.signIn(lead);
+  const request = new Request("http://test/x", {
+    method: "POST",
+    headers: { host: "reports.private-domain.test", cookie: "odm_theme=dark; odm_pref=cookie-value-abcdef123456" },
+    body: JSON.stringify({ parts: ALL }),
+  });
+  const made = await (await route.POST(request, params)).json();
+  const text = JSON.stringify(made);
+  assert.ok(made.serverLog.some((line) => line.includes("[test] [redacted] at http://[address]/v1")), text);
+  for (const leak of ["other-table-key-77665544", "other-gpu.lan", "private-domain.test", "cookie-value-abcdef123456", "10.20.30.40", "gpu-box.lan"]) {
+    assert.ok(!text.includes(leak), `"${leak}" reached the bundle`);
+  }
+  getDatabase().prepare(`UPDATE users SET is_admin = 0 WHERE id = ?`).run(lead.id);
+});
+
+await test("A turn with no trace gives no tool calls: where its prompt ended is unknown, so none of the prompt is read.", async () => {
+  const untraced = turns.createDmTurn(world.campaignId, [
+    { role: "system", content: "prompt" },
+    { role: "assistant", content: "", tool_calls: [{ id: "h", type: "function", function: { name: "set_scene", arguments: JSON.stringify({ scene: "HISTORY-CALL" }) } }] },
+  ]);
+  turns.saveDmTurn({ ...untraced, status: "done", contextTrace: null });
+  world.signIn(lead);
+  const made = await (await post({ parts: ALL })).json();
+  assert.deepEqual(made.turnRecords.at(-1).toolCalls, []);
+  assert.ok(!JSON.stringify(made).includes("HISTORY-CALL"));
 });
 
 const humanWorld = await openWorld({ gameSettings: { dmMode: "human" } });
