@@ -200,6 +200,14 @@ docker compose up -d        # http://localhost:3005
 Both follow the stable releases. Nightly betas, and how a beta becomes stable:
 [docs/releases.md](docs/releases.md).
 
+## Help us test it
+
+Testers are wanted, on any setup: a different computer, model or kind of table finds
+problems the developers cannot. A Mac is the biggest gap. The
+[testing guide](docs/testing.md) says what to try, what to attach and which form to
+use for a [bug report](https://github.com/Lebbitheplow/open-dungeon-master/issues/new?template=bug_report.yml)
+or a [session report](https://github.com/Lebbitheplow/open-dungeon-master/issues/new?template=session_report.yml).
+
 ## Documentation
 
 Playing, hosting from the apps, leading a table and every setting are in the

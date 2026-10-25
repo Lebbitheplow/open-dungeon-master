@@ -1,11 +1,12 @@
 "use client";
 
-import { Copy, Download, Search } from "lucide-react";
+import { Bug, Copy, Download, Search } from "lucide-react";
 import { textKey } from "@/lib/language/text-logic";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LoadFailed } from "@/app/campaigns/[campaignId]/PanelKit";
 import { EmptyState } from "@/components/EmptyState";
 import { PageSkeleton } from "@/components/PageSkeleton";
+import { ReportProblemDialog } from "@/components/ReportProblemDialog";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { SegmentedControl, type SegmentedOption } from "@/components/ui/SegmentedControl";
 import { Switch } from "@/components/ui/Switch";
@@ -50,6 +51,7 @@ export function AdminServerLogPanel() {
   const [query, setQuery] = useState("");
   const [follow, setFollow] = useState(true);
   const [note, setNote] = useState("");
+  const [reportOpen, setReportOpen] = useState(false);
   const { loaded, loadError, settle } = useLoadStatus();
   const latest = useRef(0);
   const scroller = useRef<HTMLDivElement>(null);
@@ -165,7 +167,11 @@ export function AdminServerLogPanel() {
         <button type="button" onClick={() => void download()} className={ui.btnSmall}>
           <Download className="size-3.5" /> Download
         </button>
+        <button type="button" onClick={() => setReportOpen(true)} className={ui.btnSmall} data-report-problem>
+          <Bug className="size-3.5" /> Report a problem
+        </button>
       </div>
+      <ReportProblemDialog open={reportOpen} onOpenChange={setReportOpen} endpoint="/api/admin/report-bundle" />
       {note ? <p className="live-in text-xs text-stone-400">{note}</p> : null}
       {shown.length ? (
         <div

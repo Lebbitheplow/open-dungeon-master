@@ -173,6 +173,15 @@ export function getLatestDmTurnId(campaignId: string): string | null {
   return row?.id ?? null;
 }
 
+// The campaign's last `limit` turns, oldest first: what the tester's report
+// bundle times and records (src/lib/report-bundle-server.ts).
+export function listRecentDmTurns(campaignId: string, limit: number): DmTurn[] {
+  const rows = getDatabase()
+    .prepare(`SELECT * FROM dm_turns WHERE campaign_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?`)
+    .all(campaignId, Math.max(1, Math.floor(limit))) as TurnRow[];
+  return rows.reverse().map(mapTurn);
+}
+
 // Atomically take ownership of a failed turn for a retry. better-sqlite3 is
 // synchronous, so the conditional UPDATE is the whole race guard: two players
 // hitting Retry at the same moment, only one gets changes > 0 and the loser

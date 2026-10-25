@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { ArrowLeft, Check, Coffee } from "lucide-react";
-import { memo, useRef, useState, type ComponentProps, type ReactNode } from "react";
+import { ArrowLeft, Bug, Check, Coffee } from "lucide-react";
+import { memo, useCallback, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { HeaderGlyph } from "@/app/campaigns/[campaignId]/SessionGlyph";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { Slider } from "@/components/ui/Slider";
@@ -15,6 +15,7 @@ import { headerButtonClass } from "@/app/campaigns/[campaignId]/headerButton";
 import { VoiceDock } from "@/app/campaigns/[campaignId]/VoiceDock";
 import { useCapabilities } from "@/lib/use-capabilities";
 import { RulebookDialog } from "@/components/rulebook/RulebookDialog";
+import { ReportProblemDialog } from "@/components/ReportProblemDialog";
 import type { NarrationAudio } from "@/app/campaigns/[campaignId]/useNarrationAudio";
 import type { AmbienceAudio } from "@/app/campaigns/[campaignId]/useAmbienceAudio";
 import { SoundControl, type SoundSteering } from "@/app/campaigns/[campaignId]/SoundPanel";
@@ -147,6 +148,7 @@ export const SessionHeader = memo(function SessionHeader({
   stage,
   layoutSeat,
   tableBreak,
+  campaignId,
 }: {
   title: string;
   scene: string;
@@ -185,7 +187,11 @@ export const SessionHeader = memo(function SessionHeader({
   // Pause the table for a break (TableBreakBanner.tsx): any person in a
   // seat, from sm up here and in the phone's table menu below it.
   tableBreak?: TableBreakControl;
+  // The table whose report bundle "Report a problem" saves (issue #459).
+  campaignId: string;
 }) {
+  const [reportOpen, setReportOpen] = useState(false);
+  const openReport = useCallback(() => setReportOpen(true), []);
   // Narration switched off server-wide: no passage is read aloud, so the
   // narration volume would steer nothing (issue 275; the lobby's own row
   // reads Off for the same reason).
@@ -341,6 +347,19 @@ export const SessionHeader = memo(function SessionHeader({
             </button>
           </Tooltip>
         </div>
+        <div className="hidden sm:flex">
+          <Tooltip content="Report a problem: save a report file for a GitHub issue" side="bottom">
+            <button
+              type="button"
+              onClick={openReport}
+              aria-label="Report a problem"
+              data-report-problem
+              className={headerButtonClass(reportOpen)}
+            >
+              <Bug aria-hidden="true" className="size-5 text-amber-200" />
+            </button>
+          </Tooltip>
+        </div>
         <HeaderPhoneMenu
           narrates={narrates}
           narration={narration}
@@ -348,6 +367,7 @@ export const SessionHeader = memo(function SessionHeader({
           ambience={ambience}
           sound={sound}
           onHelp={onHelp}
+          onReport={openReport}
           tableBreak={tableBreak}
         />
         </div>
@@ -364,6 +384,7 @@ export const SessionHeader = memo(function SessionHeader({
         <AppHomeButton className="hidden sm:block" />
         <AccountMenu user={user} onHelp={onHelp} />
       </div>
+      <ReportProblemDialog open={reportOpen} onOpenChange={setReportOpen} endpoint={`/api/campaigns/${campaignId}/report-bundle`} />
     </header>
   );
 });

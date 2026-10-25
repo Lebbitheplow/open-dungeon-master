@@ -8,6 +8,7 @@ import { ui } from "@/lib/ui";
 import { Suspense, lazy, use, useEffect } from "react";
 import { useCampaignStream } from "@/app/campaigns/[campaignId]/useCampaignStream";
 import { ContentScopeProvider } from "@/lib/content-scope";
+import { installPageErrorRecorder } from "@/lib/page-errors";
 
 // The lobby and the table are separate downloads: a table in play never
 // needs the lobby's character builder, and a lobby never needs the board,
@@ -44,6 +45,10 @@ export default function CampaignPage({
   useEffect(() => {
     void loadSessionView();
   }, []);
+
+  // This browser keeps the game page's own errors for "Report a problem"
+  // (issue #459, src/lib/page-errors.ts).
+  useEffect(() => installPageErrorRecorder(), []);
 
   if (state.loading) {
     return (

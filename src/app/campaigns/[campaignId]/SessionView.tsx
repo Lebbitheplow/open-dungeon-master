@@ -1027,6 +1027,7 @@ export function SessionView({
         stage={sessionLayout || (state.battleMap && docked && !battlePane) ? { on: shownStageView === "board", onToggle: toggleStage } : undefined}
         layoutSeat={sessionLayout ? undefined : layoutSeat}
         tableBreak={breakControl}
+        campaignId={campaign.id}
         ribbon={
           state.encounter?.status === "active" ? (
             <InitiativeRibbon
