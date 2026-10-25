@@ -214,6 +214,25 @@ await test("leaving an enemy's reach draws its opportunity attack, and spends it
   assert.deepEqual(world.encounter().reactionsUsed, [enemy.id]);
 });
 
+await test("an opportunity attack the block prints as magical is magic against a beast form that resists nonmagical blows, as enemy_attack's is", async () => {
+  const [enemy] = await stage();
+  kit.setEnemy(enemy.id, { stats: { attacks: [{ name: "Slam", toHit: 4, damage: "1d6+2", type: "bludgeoning", mode: "melee", magical: true }] } });
+  kit.place(enemy.id, 2, 3);
+  world.patch(runner.id, {
+    wildShape: { form: "Stone Bear", beastHp: 30, beastMaxHp: 30, beastAc: 12, resist: "bludgeoning, piercing, and slashing from nonmagical attacks" },
+  });
+  try {
+    world.dice(15, 4);
+    const moved = await walk(runnerUser, 2, 0);
+    world.clearDice();
+    assert.equal(moved.status, 200);
+    // 4 + 2, not halved.
+    assert.equal(world.sheet(runner.id).wildShape.beastHp, 30 - 6);
+  } finally {
+    world.patch(runner.id, { wildShape: null });
+  }
+});
+
 await test("one reaction: the same enemy does not strike a second character that round", async () => {
   const [enemy] = await stage();
   kit.place(enemy.id, 2, 3);

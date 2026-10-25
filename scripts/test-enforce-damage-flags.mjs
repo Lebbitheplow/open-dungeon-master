@@ -118,6 +118,29 @@ await test("Elemental Adept's fire ignores a tiefling turncoat's fire resistance
   assert.equal(world.sheet(foe.id).currentHp, 30 - 10, JSON.stringify(out.result));
 });
 
+await test("Tipsy Sway turns a magic-weaponed attacker's miss onto a creature that resists nonmagical blows, and the blow stays magical.", async () => {
+  await kit.endFight();
+  const monk = world.addHero({ name: "Lio", class: "monk", subclass: "Way of the Drunken Master", level: 6, abilities: { dex: 16, wis: 14 }, proficiencies: TRAINED, maxHp: 40, portrait: { url: "/uploads/test.png" } });
+  world.patch(monk.id, { ac: 30, acOverride: true });
+  await kit.fight(2, { heroFaces: { [monk.id]: 20 } });
+  const [attacker, other] = world.enemies();
+  kit.setEnemy(attacker.id, { stats: { ...attacker.stats, traits: ["Magic Weapons: The creature's weapon attacks are magical."], attacks: [{ name: "Club", toHit: 4, damage: "1d6+2", type: "bludgeoning", mode: "melee" }] } });
+  kit.setEnemy(other.id, { maxHp: 90, currentHp: 90, stats: { ...other.stats, resist: NONMAGICAL, immune: "", vulnerable: "" } });
+  kit.place(monk.id, 5, 5);
+  kit.place(attacker.id, 6, 5);
+  kit.place(other.id, 4, 5);
+  kit.freshRound();
+  world.dice(2);
+  const swing = await world.invoke("enemy_attack", { enemyId: attacker.id, targetCharacterId: monk.id });
+  world.clearDice();
+  assert.equal(swing.ok, true, swing.error);
+  world.dice(4);
+  const out = await world.invoke("use_reaction", { characterId: monk.id, feature: "Tipsy Sway", targetEnemyId: other.id });
+  world.clearDice();
+  assert.equal(out.ok, true, out.error);
+  assert.equal(kit.enemy(other.id).currentHp, 90 - 6, JSON.stringify(out.result));
+});
+
 world.close();
 
 // ---- the board: spells, Silence and the golems ----
