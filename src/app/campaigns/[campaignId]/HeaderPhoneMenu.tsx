@@ -1,7 +1,7 @@
 "use client";
 
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
-import { Bug, Coffee } from "lucide-react";
+import { Coffee } from "lucide-react";
 import { useRef, useState } from "react";
 import { HeaderGlyph } from "@/app/campaigns/[campaignId]/SessionGlyph";
 import { headerButtonClass } from "@/app/campaigns/[campaignId]/headerButton";
@@ -25,7 +25,6 @@ export function HeaderPhoneMenu({
   ambience,
   sound,
   onHelp,
-  onReport,
   tableBreak,
 }: {
   narrates: boolean;
@@ -34,8 +33,6 @@ export function HeaderPhoneMenu({
   ambience: AmbienceAudio;
   sound: SoundSteering;
   onHelp: () => void;
-  // "Report a problem" (issue #459), whose dialog the header holds.
-  onReport: () => void;
   tableBreak?: TableBreakControl;
 }) {
   const [soundOpen, setSoundOpen] = useState(false);
@@ -150,16 +147,7 @@ export function HeaderPhoneMenu({
               <HeaderGlyph glyph="tab-reference" />
               <span>
                 Help
-                {hint("How everything works, and the guided tours")}
-              </span>
-            </DropdownMenu.Item>
-            <DropdownMenu.Item className={row} onSelect={onReport} data-report-problem>
-              <span className="flex size-7 items-center justify-center">
-                <Bug aria-hidden="true" className="size-5 text-amber-200" />
-              </span>
-              <span>
-                Report a problem
-                {hint("Save a report file to attach to a GitHub issue")}
+                {hint("How everything works, the guided tours and Report a problem")}
               </span>
             </DropdownMenu.Item>
           </DropdownMenu.Content>

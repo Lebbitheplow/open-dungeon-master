@@ -1,7 +1,8 @@
 // Issue 459: "Report a problem" at the table saves one report file to the
 // device and opens the matching GitHub form in a new tab, with nothing from
-// the report in its address. The header's button from sm up, the table
-// menu on a phone. The page's own errors are kept in this browser (a
+// the report in its address. It lives in Help (the header's Help from sm
+// up, the table menu's Help row on a phone), never as a header button of
+// its own. The page's own errors are kept in this browser (a
 // synthetic error event here, so the rig's own page-error watch stays
 // quiet) and go in the file with their keys cut out; the transcript is off
 // until ticked, and once ticked holds only the reporter's lines and the
@@ -24,15 +25,19 @@ export default {
       window.dispatchEvent(new ErrorEvent("error", { message: "boom", error: new Error("scenario boom with ?token=abc123SECRETVALUE") }));
     });
 
+    check((await page.locator(`${root}header [data-report-problem]`).count()) === 0, "the header carries a Report a problem button of its own");
     if (viewport === "desktop") {
-      await t.tap(page.locator(`${root}header button[data-report-problem]`).locator("visible=true").first());
+      await t.tap(page.locator(`${root}header button[data-tour="header-help"]`).locator("visible=true").first());
     } else {
-      check((await page.locator(`${root}header button[data-report-problem]`).locator("visible=true").count()) === 0, "the header's button shows on a phone");
       await t.tap(page.locator(`${root}button[aria-label^="Table menu"]`).locator("visible=true").first());
-      const row = page.locator('[role="menuitem"][data-report-problem]').locator("visible=true").first();
-      await eventually(() => row.count(), { label: "Report a problem in the table menu" });
+      const row = page.locator('[role="menuitem"]', { hasText: "Help" }).locator("visible=true").first();
+      await eventually(() => row.count(), { label: "Help in the table menu" });
       await t.tap(row);
     }
+    const inHelp = page.locator("[role=dialog] button[data-report-problem]").locator("visible=true").first();
+    await eventually(() => inHelp.count(), { timeoutMs: 15_000, label: "Report a problem in Help" });
+    await inHelp.scrollIntoViewIfNeeded();
+    await t.tap(inHelp);
 
     const dialog = page.locator("[data-report-problem-dialog]").locator("visible=true").first();
     await eventually(() => dialog.locator("[data-report-part]").count(), { label: "the report's tick boxes" });

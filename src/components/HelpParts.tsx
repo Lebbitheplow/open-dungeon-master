@@ -16,6 +16,7 @@ const SECTION_GLYPHS: Record<string, string> = {
   "Talking to the DM": "tab-chat",
   "Your hand in a fight": "tab-battle",
   "When the DM gets it wrong": "rest-concentration-break",
+  "Report a problem": "tab-context",
   "What the DM remembers": "tab-facts",
   "The side panel": "tab-session",
   Dice: "die-d20",
@@ -101,6 +102,7 @@ const SECTION_WORDS: Record<string, string> = {
   "Talking to the DM": "message type action speak ooc direct ask question composer",
   "Your hand in a fight": "combat battle attack cards spells turn initiative",
   "When the DM gets it wrong": "undo mistake reroll edit retry wrong fix",
+  "Report a problem": "bug broken error crash report tester github issue feedback",
   "What the DM remembers": "memory pin remember canon facts forget",
   "The side panel": "tabs inventory sheet hp party story notes chat settings layout arrange",
   Dice: "roll rolls secret physical real pixels bluetooth",
@@ -137,7 +139,16 @@ function jumpToSection(title: string) {
 // reads the sections' own words as well as their titles, so the question a
 // person actually has ("volume", "mic", "inventory") finds the place that
 // answers it.
-export function HelpContents({ withTours, initialSection }: { withTours: boolean; initialSection?: string }) {
+export function HelpContents({
+  withTours,
+  withReport = false,
+  initialSection,
+}: {
+  withTours: boolean;
+  // Only the table offers "Report a problem" (issue #459).
+  withReport?: boolean;
+  initialSection?: string;
+}) {
   const [find, setFind] = useState("");
   const needle = textKey(find);
   // Opened from a control that has a section of its own: brought into view
@@ -149,6 +160,7 @@ export function HelpContents({ withTours, initialSection }: { withTours: boolean
   }, [initialSection]);
   const contents = Object.keys(SECTION_GLYPHS).filter((title) => {
     if (title === "Guided tours" && !withTours) return false;
+    if (title === "Report a problem" && !withReport) return false;
     if (!needle) return true;
     const text = typeof document === "undefined" ? "" : document.getElementById(sectionId(title))?.textContent ?? "";
     return helpMatches(title, needle, text);

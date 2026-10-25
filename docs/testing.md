@@ -32,8 +32,8 @@ what to test, how to save a report file, and where to send it.
 
 ## How to save a report file
 
-- **At the table:** use **Report a problem** in the header (on a phone, it is in the
-  table menu).
+- **At the table:** open **Help** (the book in the header, or the table menu on a
+  phone) and use **Report a problem**.
 - **As the server's admin:** go to **Admin > Server log** and use **Report a problem**.
 
 Choose what goes in the file, then save it. The file is saved to your own device and

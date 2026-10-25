@@ -122,8 +122,9 @@ const tablePieces = {
   LoreCheckDialog: preloadable(() => import("@/app/campaigns/[campaignId]/LoreCheckDialog").then((module) => module.LoreCheckDialog)),
   RenarrateDialog: preloadable(() => import("@/app/campaigns/[campaignId]/RenarrateDialog").then((module) => module.RenarrateDialog)),
   LabelSheet: preloadable(() => import("@/app/campaigns/[campaignId]/LabelSheet").then((module) => module.LabelSheet)),
+  ReportProblemDialog: preloadable(() => import("@/components/ReportProblemDialog").then((module) => module.ReportProblemDialog)),
 };
-const { HelpDialog, GuidedTour, CharacterGate, DiceLookDialog, DiceTrayDialog, LoreCheckDialog, RenarrateDialog, LabelSheet } = tablePieces;
+const { HelpDialog, GuidedTour, CharacterGate, DiceLookDialog, DiceTrayDialog, LoreCheckDialog, RenarrateDialog, LabelSheet, ReportProblemDialog } = tablePieces;
 const { BattleMapPanel } = panels;
 
 // True from the first time `open` is true: a dialog mounts then and stays.
@@ -265,8 +266,12 @@ export function SessionView({
   const openDiceTray = useCallback(() => setDiceTrayOpen(true), []);
   const [helpOpen, setHelpOpen] = useState(false);
   const openHelp = useCallback(() => setHelpOpen(true), []);
+  // "Report a problem" (issue #459) is opened from Help.
+  const [reportOpen, setReportOpen] = useState(false);
+  const openReport = useCallback(() => setReportOpen(true), []);
   usePreloadTable();
   const helpMounted = useOpenedOnce(helpOpen);
+  const reportMounted = useOpenedOnce(reportOpen);
   const diceLookMounted = useOpenedOnce(diceLookOpen);
   const diceTrayMounted = useOpenedOnce(diceTrayOpen);
   const tourMounted = useOpenedOnce(tour !== null);
@@ -1029,7 +1034,6 @@ export function SessionView({
         stage={sessionLayout || (state.battleMap && docked && !battlePane) ? { on: shownStageView === "board", onToggle: toggleStage } : undefined}
         layoutSeat={sessionLayout ? undefined : layoutSeat}
         tableBreak={breakControl}
-        campaignId={campaign.id}
         ribbon={
           state.encounter?.status === "active" ? (
             <InitiativeRibbon
@@ -1316,6 +1320,7 @@ export function SessionView({
       <HelpDialog
         open={helpOpen}
         onOpenChange={setHelpOpen}
+        onReport={openReport}
         tours={[
           {
             label: "Tour the table",
@@ -1333,6 +1338,10 @@ export function SessionView({
             : []),
         ]}
       />
+      ) : null}
+
+      {reportMounted ? (
+      <ReportProblemDialog open={reportOpen} onOpenChange={setReportOpen} endpoint={`/api/campaigns/${campaign.id}/report-bundle`} />
       ) : null}
 
       {tourMounted ? (

@@ -146,7 +146,8 @@ export function AdminServerLogPanel() {
           ? `The last ${meta.capacity.toLocaleString()} lines since the server started at ${new Date(meta.startedAt).toLocaleString()}. `
           : ""}
         The server&apos;s console keeps every line as well (the terminal, <code>docker logs</code>, or the desktop
-        app&apos;s local-server.log). Keys and tokens are cut out.
+        app&apos;s local-server.log). Keys and tokens are cut out. Report a problem saves the newest lines and the
+        server&apos;s setup in one file for a GitHub issue; at a table it is in Help.
       </p>
       {loadError ? <LoadFailed error={loadError} onRetry={() => void pull()} /> : null}
       <div className="flex flex-wrap items-center gap-2">
