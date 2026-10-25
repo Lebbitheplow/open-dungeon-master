@@ -115,6 +115,19 @@ export default {
           await t.api.delete(`${t.base}/api/characters/${copyId}`);
         }
       }
+
+      // Edit the whole build changes only the query (?whole=1). The app's
+      // router keeps a page mounted across a change of query, so the page
+      // has to swap the sheet for the full builder on the query alone.
+      await t.open(`/characters/${ids.library}/edit?levelUp=1`);
+      const again = page.locator(`${root}[data-level-up-sheet]`).locator("visible=true");
+      await again.first().waitFor({ state: "visible", timeout: 30_000 });
+      await t.tap(page.locator(`${root}a[data-level-up-whole]`).locator("visible=true").first());
+      await eventually(async () => (await page.locator(`${root}[data-finish-summary]`).locator("visible=true").count()) > 0, {
+        timeoutMs: 30_000,
+        label: "the full builder after Edit the whole build",
+      });
+      check((await page.locator(`${root}[data-level-up-sheet]`).count()) === 0, "the sheet is gone once the whole build opens");
     } finally {
       await page.unroute(own, catchSave);
     }
