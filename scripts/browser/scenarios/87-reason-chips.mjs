@@ -120,6 +120,16 @@ export default {
     const first = await recorded(table.turnIds[0]);
     check(first.reason === picked, `the fix's reason is ${first.reason}, not ${picked}`);
 
+    // The narrator's wording stayed as a take beside the edit: the take
+    // arrows page back to it and forward to the edit, for the whole table.
+    const edited = page.locator(`${root}[data-scenario-passage="0"]`).first();
+    await eventually(async () => /1\s*\/\s*2|2\s*\/\s*2/.test(await edited.innerText()), { label: "the take counter after the edit" });
+    check(/2\s*\/\s*2/.test(await edited.innerText()), "the edit is not the selected take");
+    await t.tap(edited.getByRole("button", { name: "Previous take" }));
+    await eventually(async () => (await edited.innerText()).includes("names a price twice what the sign says"), { label: "the narrator's own take" });
+    await t.tap(edited.getByRole("button", { name: "Next take" }));
+    await eventually(async () => (await edited.innerText()).includes("names the price on the sign"), { label: "the edited take again" });
+
     // ---- a fix whose strip is ignored ----
     await edit(1, "a dog noses through the gap", "Behind him the gate creaks open a hand's width, and a goat noses through the gap.");
     check(!(await chipFocused()), "the second strip took focus");
