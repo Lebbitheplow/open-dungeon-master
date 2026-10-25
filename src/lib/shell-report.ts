@@ -5,7 +5,7 @@ import { shellHost, type ShellReportFacts } from "@/lib/shell-host";
 // Saving Report a problem's file (issue #459) wherever the page runs. In a
 // browser it is a download. Inside the desktop and Android apps the app
 // saves it itself (a save dialog that starts in Downloads; the phone's
-// share sheet, where the tester picks Files, Drive or another app) and
+// share sheet, where the admin picks Files, Drive or another app) and
 // adds what only the app knows: its version and platform, how it shows the
 // pages, and whether the table is the device's own world. An app without
 // that door (apps up to 0.21.0, the apps' web view) gets the browser's way,

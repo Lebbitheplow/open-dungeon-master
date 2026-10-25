@@ -1,8 +1,8 @@
 // Narrator quality (issue #460): one turn_quality row per AI turn where it
 // ends, the guard's outcome returned rather than only logged, the clean rule
 // worked out at report time (src/lib/narrator-quality.ts), Admin's card and
-// export with every id hashed and no names, and the tester report bundle
-// (#515) carrying a table's rows only for the party lead or a DM.
+// export with every id hashed and no names, and the admin's report bundle
+// (#515) carrying a table's rows only when the admin is its lead or DM.
 import assert from "node:assert/strict";
 import { openWorld } from "./lib/enforce-world.mjs";
 import { combatKit, TRAINED } from "./lib/enforce-combat.mjs";

@@ -1,22 +1,35 @@
-import { isErrorResponse, requireMember } from "@/lib/campaign-api";
+import { isErrorResponse, requireMember, type MemberContext } from "@/lib/campaign-api";
 import { buildReportBundle, chosenParts, offeredParts } from "@/lib/report-bundle";
 import { reportAddresses, reportSecrets, tableReportSources, tableReportViewer } from "@/lib/report-bundle-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// The tester's report bundle at a table (issue #459, src/lib/report-bundle.ts).
-// GET says which parts this member may include; POST builds the server's
-// share of the file and hands it back to be saved on the member's own
-// device. Nothing is kept or sent anywhere. Who may include what is read
-// from the member's seat here, never from the request: a part the request
-// asks for and the seat does not allow is left out.
+// The report bundle at a table (issue #459, src/lib/report-bundle.ts), for
+// the server's admin only: a player who hits a problem tells whoever runs
+// the server, who can check its setup before anything reaches GitHub.
+// GET says which parts the admin may include from their seat; POST builds
+// the server's share of the file and hands it back to be saved on the
+// admin's own device. Nothing is kept or sent anywhere. Who may include
+// what is read from the seat here, never from the request: a part the
+// request asks for and the seat does not allow is left out.
+async function requireReporter(campaignId: string): Promise<MemberContext | Response> {
+  const context = await requireMember(campaignId);
+  if (isErrorResponse(context)) {
+    return context;
+  }
+  if (!context.user.isAdmin) {
+    return Response.json({ error: "Only the server's admin can save a report." }, { status: 403 });
+  }
+  return context;
+}
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ campaignId: string }> },
 ) {
   const { campaignId } = await params;
-  const context = await requireMember(campaignId);
+  const context = await requireReporter(campaignId);
   if (isErrorResponse(context)) {
     return context;
   }
@@ -28,7 +41,7 @@ export async function POST(
   { params }: { params: Promise<{ campaignId: string }> },
 ) {
   const { campaignId } = await params;
-  const context = await requireMember(campaignId);
+  const context = await requireReporter(campaignId);
   if (isErrorResponse(context)) {
     return context;
   }

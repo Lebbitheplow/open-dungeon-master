@@ -195,7 +195,7 @@ export function getLatestDmTurnId(campaignId: string): string | null {
   return row?.id ?? null;
 }
 
-// The campaign's last `limit` turns, oldest first: what the tester's report
+// The campaign's last `limit` turns, oldest first: what the admin's report
 // bundle times and records (src/lib/report-bundle-server.ts).
 export function listRecentDmTurns(campaignId: string, limit: number): DmTurn[] {
   const rows = getDatabase()

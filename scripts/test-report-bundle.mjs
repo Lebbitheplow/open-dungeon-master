@@ -1,6 +1,7 @@
-// The tester's report bundle (issue #459, src/lib/report-bundle.ts): one file
-// a player or an admin saves to their own device for a GitHub issue. What
-// must hold is privacy. Keys and tokens never land in it, by shape or by the
+// The report bundle (issue #459, src/lib/report-bundle.ts): one file the
+// server's admin saves to their own device for a GitHub bug report, at a
+// table or from Admin. Nobody else may make one: a player tells whoever runs
+// the server. What must hold is privacy. Keys and tokens never land in it, by shape or by the
 // server's own saved values. Other players' lines and whispers never land
 // in it at all. The narrator's prompt is never copied, and its tool calls'
 // arguments go only to whoever runs the table, never a whisper's. The server
@@ -222,9 +223,8 @@ await test("No address says where anything lives: hosts, IPs, emails and home fo
   assert.deepEqual(bundle.addressHosts(["https://table.private-domain.test/", "localhost:3000", "api.openai.com", "cube"]), ["table.private-domain.test"], "a loopback, a public host or one word was listed to cut");
 });
 
-await test("The issue forms open with nothing from the report in the address.", () => {
-  assert.equal(bundle.issueFormUrl("bug"), "https://github.com/Lebbitheplow/open-dungeon-master/issues/new?template=bug_report.yml");
-  assert.equal(bundle.issueFormUrl("session"), "https://github.com/Lebbitheplow/open-dungeon-master/issues/new?template=session_report.yml");
+await test("The bug report form opens with nothing from the report in the address.", () => {
+  assert.equal(bundle.BUG_REPORT_URL, "https://github.com/Lebbitheplow/open-dungeon-master/issues/new?template=bug_report.yml");
   assert.match(bundle.reportFileName(new Date("2026-10-24T10:11:12Z")), /^odm-report-2026-10-24-10-11-12\.json$/);
 });
 
@@ -262,11 +262,25 @@ turns.saveDmTurn({
 
 const NEVER = ["OTHER-PLAYER-SECRET-PLAN", "SYSTEM-NOTICE-LINE", "WHISPER-TABLE-TEXT", "PROMPT-WHISPER-TEXT", "WHISPER-REPLY-TEXT", "SECRET-ARC-PROMPT", "TOOL-RESULT-TEXT", "panel-saved-key-11223344", "lineToken0123456789"];
 
-await test("A player asking for every part gets their own lines and the DM's, and nothing of the log, the timings or the records.", async () => {
+const setAdmin = (userId, on) => getDatabase().prepare(`UPDATE users SET is_admin = ? WHERE id = ?`).run(on ? 1 : 0, userId);
+
+await test("At a table only the server's admin may make a report: a player or a lead who is not the admin is refused.", async () => {
+  world.signIn({ id: other.userId });
+  const offered = await route.GET(new Request("http://test/x"), params);
+  assert.equal(offered.status, 403);
+  const refused = await post({ parts: ALL });
+  assert.equal(refused.status, 403);
+  assert.match((await refused.json()).error, /admin/);
+  world.signIn(lead);
+  assert.equal((await post({ parts: ALL })).status, 403, "a lead who is not the admin made a report");
+});
+
+await test("An admin seated as a player gets their own lines and the DM's, and nothing of the timings or the records.", async () => {
+  setAdmin(other.userId, true);
   world.signIn({ id: other.userId });
   const offered = await (await route.GET(new Request("http://test/x"), params)).json();
-  assert.deepEqual(offered.parts.map((part) => part.id), ["setup", "pageErrors", "transcript"]);
-  const response = await post({ parts: ALL });
+  assert.deepEqual(offered.parts.map((part) => part.id), ["setup", "pageErrors", "serverLog", "transcript"]);
+  const response = await post({ parts: { ...ALL, serverLog: false } });
   assert.equal(response.status, 200);
   const made = await response.json();
   const text = JSON.stringify(made);
@@ -280,16 +294,19 @@ await test("A player asking for every part gets their own lines and the DM's, an
   assert.ok(made.transcript.some((line) => line.from === "you" && line.text === "OTHER-PLAYER-SECRET-PLAN"), "the reporter's own line is missing");
   assert.ok(made.transcript.some((line) => line.from === "dm" && line.text === "The door creaks open."));
   assert.equal(made.setup.role, "player");
+  setAdmin(other.userId, false);
 });
 
-await test("The lead of an AI table gets the timings and the tool names, never the prompt, a whisper or another player's line.", async () => {
+// From here the lead is the server's admin.
+await test("An admin who leads an AI table gets the timings and the tool names, never the prompt, a whisper or another player's line.", async () => {
+  setAdmin(lead.id, true);
   world.signIn(lead);
-  const made = await (await post({ parts: ALL })).json();
+  const made = await (await post({ parts: { ...ALL, serverLog: false } })).json();
   const text = JSON.stringify(made);
   for (const kept of NEVER) {
     assert.ok(!text.includes(kept), `"${kept}" reached the lead's bundle`);
   }
-  assert.equal(made.serverLog, undefined, "the lead, not an admin, got the server log");
+  assert.equal(made.serverLog, undefined, "the server log went in unasked");
   assert.equal(made.turnTimings.at(-1).id, turn.id);
   assert.equal(made.turnTimings.at(-1).calls[0].durationMs, 1234);
   assert.deepEqual(made.turnRecords.at(-1).toolCalls, [{ name: "send_whisper", withheld: "a whisper is private to its player" }]);
@@ -297,13 +314,11 @@ await test("The lead of an AI table gets the timings and the tool names, never t
 });
 
 await test("An admin at the table gets the server log with the panel's keys and token shapes cut out.", async () => {
-  getDatabase().prepare(`UPDATE users SET is_admin = 1 WHERE id = ?`).run(lead.id);
   world.signIn(lead);
   const made = await (await post({ parts: { serverLog: true } })).json();
   assert.ok(made.serverLog.some((line) => line.includes("[test] the backend refused")), "the log line is missing");
   const text = JSON.stringify(made);
   assert.ok(!text.includes("panel-saved-key-11223344") && !text.includes("lineToken0123456789"), text);
-  getDatabase().prepare(`UPDATE users SET is_admin = 0 WHERE id = ?`).run(lead.id);
 });
 
 await test("The setup names the narrator's kind and model, never its address; a stranger to the table is refused.", async () => {
@@ -324,7 +339,6 @@ await test("Admin's report needs an admin, and holds the setup and the log only.
   world.signIn({ id: other.userId });
   const refused = await adminRoute.POST(new Request("http://test/x", { method: "POST", body: "{}" }));
   assert.ok(refused.status === 401 || refused.status === 403, `a player made Admin's report (${refused.status})`);
-  getDatabase().prepare(`UPDATE users SET is_admin = 1 WHERE id = ?`).run(lead.id);
   world.signIn(lead);
   const made = await (await adminRoute.POST(new Request("http://test/x", { method: "POST", body: JSON.stringify({ parts: ALL }) }))).json();
   assert.deepEqual(made.included, ["setup", "serverLog"]);
@@ -333,7 +347,6 @@ await test("Admin's report needs an admin, and holds the setup and the log only.
 });
 
 await test("A request's own address and cookies, a backend's address in an error, and another table's key never reach the file.", async () => {
-  getDatabase().prepare(`UPDATE users SET is_admin = 1 WHERE id = ?`).run(lead.id);
   const elsewhere = await openWorld();
   getDatabase().prepare(`UPDATE campaigns SET settings_json = json_set(settings_json, '$.customApiKey', 'other-table-key-77665544', '$.customBaseUrl', 'http://other-gpu.lan:9000/v1') WHERE id = ?`).run(elsewhere.campaignId);
   console.log("[test] other-table-key-77665544 at http://other-gpu.lan:9000/v1 for a user at reports.private-domain.test cookie-value-abcdef123456");
@@ -356,7 +369,6 @@ await test("A request's own address and cookies, a backend's address in an error
   for (const leak of ["other-table-key-77665544", "other-gpu.lan", "private-domain.test", "cookie-value-abcdef123456", "10.20.30.40", "gpu-box.lan"]) {
     assert.ok(!text.includes(leak), `"${leak}" reached the bundle`);
   }
-  getDatabase().prepare(`UPDATE users SET is_admin = 0 WHERE id = ?`).run(lead.id);
 });
 
 await test("A turn with no trace gives no tool calls: where its prompt ended is unknown, so none of the prompt is read.", async () => {
@@ -383,6 +395,7 @@ await test("At a table a person runs, the DM's records carry tool arguments but 
     ] },
   ]);
   turns.saveDmTurn({ ...humanTurn, status: "done", contextTrace: { limitTokens: 1, promptTokens: 1, blocks: [], shape: { historyStart: 1, historyEnd: 1, promptMessages: 1 } } });
+  setAdmin(humanWorld.owner.id, true);
   humanWorld.signIn(humanWorld.owner);
   const made = await (await humanRoute.POST(new Request("http://test/x", { method: "POST", body: JSON.stringify({ parts: ALL }) }), humanParams)).json();
   assert.equal(made.setup.dmMode, "human");

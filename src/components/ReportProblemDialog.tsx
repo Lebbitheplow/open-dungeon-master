@@ -4,34 +4,17 @@ import { Bug, ExternalLink, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Dialog } from "@/components/ui/Dialog";
 import { readPageErrors } from "@/lib/page-errors";
-import {
-  issueFormUrl,
-  reportFileName,
-  withPageErrors,
-  type OfferedPart,
-  type ReportBundle,
-  type ReportForm,
-} from "@/lib/report-bundle";
+import { BUG_REPORT_URL, reportFileName, withPageErrors, type OfferedPart, type ReportBundle } from "@/lib/report-bundle";
 import { saveReportFile, type ReportSaved } from "@/lib/shell-report";
 import { ui } from "@/lib/ui";
 
-const FORMS: Array<{ value: ReportForm; label: string; hint: string }> = [
-  { value: "bug", label: "Bug report", hint: "One thing that went wrong" },
-  { value: "session", label: "Session report", hint: "How a whole session went" },
-];
-
-const OPEN_LABEL: Record<ReportForm, string> = {
-  bug: "Open the bug report form",
-  session: "Open the session report form",
-};
-
-// "Report a problem" (issue #459): the tester picks what goes in the report
-// file, saves it to this device, and the matching GitHub form opens in a
-// new tab for them to drag it into. The file is never sent anywhere, and
-// nothing from it goes in the form's address. The server decides which tick
-// boxes are offered and checks them again when it builds the file
-// (src/lib/report-bundle.ts); the page's own errors are added here, from
-// this browser.
+// "Report a problem" (issue #459), for the server's admin: they pick what
+// goes in the report file, save it to this device, and the bug report form
+// opens in a new tab for them to drag it into. The file is never sent
+// anywhere, and nothing from it goes in the form's address. The server
+// decides which tick boxes are offered and checks them again when it builds
+// the file (src/lib/report-bundle.ts); the page's own errors are added
+// here, from this browser.
 export function ReportProblemDialog({
   open,
   onOpenChange,
@@ -44,7 +27,6 @@ export function ReportProblemDialog({
 }) {
   const [parts, setParts] = useState<OfferedPart[] | null>(null);
   const [ticked, setTicked] = useState<Record<string, boolean>>({});
-  const [form, setForm] = useState<ReportForm>("bug");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState<ReportSaved | null>(null);
@@ -111,7 +93,7 @@ export function ReportProblemDialog({
       // never left under the browser: a new tab here, the system browser in
       // the apps, with nothing from the report in its address. A blocked
       // pop-up leaves the link below to do the same.
-      window.open(issueFormUrl(form), "_blank", "noopener,noreferrer");
+      window.open(BUG_REPORT_URL, "_blank", "noopener,noreferrer");
     } catch {
       setError("The report could not be made.");
     } finally {
@@ -119,7 +101,6 @@ export function ReportProblemDialog({
     }
   }
 
-  const openLabel = OPEN_LABEL[form];
   return (
     <Dialog open={open} onOpenChange={change} title="Report a problem" icon={<Bug className="size-4 text-amber-300" />}>
       {saved ? (
@@ -130,8 +111,8 @@ export function ReportProblemDialog({
             see what it holds.
           </p>
           <div className="flex flex-wrap justify-end gap-2">
-            <a href={issueFormUrl(form)} target="_blank" rel="noopener noreferrer" className={ui.btnSmall} data-report-form-link>
-              <ExternalLink className="size-3.5" /> {openLabel}
+            <a href={BUG_REPORT_URL} target="_blank" rel="noopener noreferrer" className={ui.btnSmall} data-report-form-link>
+              <ExternalLink className="size-3.5" /> Open the bug report form
             </a>
             <button type="button" onClick={() => change(false)} className={ui.btnPrimary}>
               Done
@@ -141,8 +122,8 @@ export function ReportProblemDialog({
       ) : (
         <div className="space-y-4" data-report-problem-dialog>
           <p className="text-sm leading-6 text-stone-400">
-            This saves a report file to this device for you to attach to an issue on GitHub. Nothing is sent anywhere. It
-            never holds other players&apos; lines, whispers, passwords or keys.
+            This saves a report file to this device for you to attach to a bug report on GitHub. Nothing is sent anywhere.
+            It never holds other players&apos; lines, whispers, passwords or keys.
           </p>
           <fieldset className="space-y-2">
             <legend className="mb-1 text-xs uppercase tracking-wide text-stone-500">What goes in the file</legend>
@@ -164,23 +145,6 @@ export function ReportProblemDialog({
             ) : error ? null : (
               <Loader2 className="size-4 animate-spin text-stone-500" aria-label="Loading" />
             )}
-          </fieldset>
-          <fieldset className="space-y-1.5">
-            <legend className="mb-1 text-xs uppercase tracking-wide text-stone-500">Then open</legend>
-            {FORMS.map((entry) => (
-              <label key={entry.value} className="flex cursor-pointer items-center gap-2 text-sm text-stone-300">
-                <input
-                  type="radio"
-                  name="report-form"
-                  value={entry.value}
-                  checked={form === entry.value}
-                  onChange={() => setForm(entry.value)}
-                  className="accent-amber-400"
-                />
-                {entry.label}
-                <span className="text-xs text-stone-500">{entry.hint}</span>
-              </label>
-            ))}
           </fieldset>
           {error ? <p className="motion-shake text-sm text-red-400">{error}</p> : null}
           <div className="flex justify-end gap-2">

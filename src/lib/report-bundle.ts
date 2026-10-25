@@ -2,10 +2,15 @@ import { REPOSITORY_URL } from "@/lib/build-info";
 import type { ExportedTurn } from "@/lib/narrator-quality";
 import { redactSecrets } from "@/lib/redact-secrets";
 
-// The tester's report bundle (issue #459): one file a player or an admin
-// saves to their own device and drags into a GitHub issue. Nothing here sends
-// it anywhere; the privacy page's promise holds because the person attaches
-// it themselves.
+// The report bundle (issue #459): one file the server's admin saves to
+// their own device and drags into a GitHub bug report. Only the admin may
+// make one (the routes refuse everyone else): a player tells whoever runs
+// the server, who can check its setup before anything reaches GitHub.
+// Nothing here sends it anywhere; the privacy page's promise holds because
+// the person attaches it themselves.
+//
+// At a table the admin's seat still decides the table's parts, below: an
+// admin seated as a player gets a player's transcript and no turn records.
 //
 // Who may put what in it is decided here, once, as a pure function of the
 // viewer the server resolved (src/lib/report-bundle-server.ts). The page
@@ -539,9 +544,5 @@ export function reportFileText(bundle: ReportBundle): string {
   return `${JSON.stringify(bundle, null, 2)}\n`;
 }
 
-export type ReportForm = "bug" | "session";
-
-// The form on GitHub, with nothing from the report in the address.
-export function issueFormUrl(form: ReportForm): string {
-  return `${REPOSITORY_URL}/issues/new?template=${form === "session" ? "session_report.yml" : "bug_report.yml"}`;
-}
+// The bug report form on GitHub, with nothing from the report in the address.
+export const BUG_REPORT_URL = `${REPOSITORY_URL}/issues/new?template=bug_report.yml`;

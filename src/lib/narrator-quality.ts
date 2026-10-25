@@ -19,7 +19,7 @@ import type { DmMode } from "./dm/viewer.ts";
 //   can delete many turns for reasons that have nothing to do with the AI);
 //   it is shown as its own count.
 // - Rates are compared within one backend class and DM mode, never pooled:
-//   the testers who send these lean towards people who know the rules.
+//   the admins who send these lean towards people who know the rules.
 // - It counts only mistakes someone noticed.
 
 // What the narration guard (src/lib/dm/narration-guard.ts) did with a

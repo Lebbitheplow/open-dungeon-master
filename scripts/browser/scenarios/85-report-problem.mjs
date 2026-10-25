@@ -1,14 +1,16 @@
 // Issue 459: "Report a problem" at the table saves one report file to the
-// device and opens the matching GitHub form in a new tab, with nothing from
-// the report in its address. It lives in Help (the header's Help from sm
-// up, the table menu's Help row on a phone), never as a header button of
-// its own. The page's own errors are kept in this browser (a
-// synthetic error event here, so the rig's own page-error watch stays
-// quiet) and go in the file with their keys cut out; the transcript is off
-// until ticked, and once ticked holds only the reporter's lines and the
-// DM's. The rig never reaches GitHub: the form's address is answered here.
+// device and opens the bug report form in a new tab, with nothing from the
+// report in its address. It is the server admin's alone: it lives in Help
+// (the header's Help from sm up, the table menu's Help row on a phone),
+// never as a header button of its own, and a player who is not the admin
+// finds there who to ask instead, with the table's report route refusing
+// them. The page's own errors are kept in the admin's browser (a synthetic
+// error event here, so the rig's own page-error watch stays quiet) and go
+// in the file with their keys cut out; the transcript is off until ticked,
+// and once ticked holds only the reporter's lines and the DM's. The rig
+// never reaches GitHub: the form's address is answered here.
 import fs from "node:fs";
-import { check, eventually } from "../lib.mjs";
+import { check, eventually, hydrated, newContext, settle, signIn } from "../lib.mjs";
 
 const FORM = "https://github.com/Lebbitheplow/open-dungeon-master/issues/new?template=bug_report.yml";
 
@@ -16,7 +18,7 @@ export default {
   name: "report-problem",
   viewports: ["desktop", "phone"],
   async run(t) {
-    const { page, root, ids, viewport } = t;
+    const { page, root, ids, viewport, base } = t;
     await t.open(`/campaigns/${ids.campaignId}`);
     await eventually(() => page.locator(`${root}.cine-stage`).count(), { timeoutMs: 30_000, label: "the table's stage" });
 
@@ -114,5 +116,30 @@ export default {
     check((await saved.locator("[data-report-form-link]").getAttribute("href")) === FORM, "the note's link is not the form");
     if (t.app) check((await saved.innerText()).includes("to the place you picked"), "the note does not say where the app put the file");
     await t.shot("saved");
+
+    // The seeded player is not the admin: Help tells them who to ask, with
+    // no button, and the table's report route refuses them.
+    if (viewport === "desktop" && !t.app) {
+      const playerContext = await newContext(page.context().browser(), viewport, { app: false });
+      try {
+        await signIn(playerContext, base, ids.player, ids.password);
+        const refused = await playerContext.request.get(`${base}/api/campaigns/${ids.campaignId}/report-bundle`);
+        check(refused.status() === 403, `the table's report answered a player ${refused.status()}`);
+        const playerPage = await playerContext.newPage();
+        await playerPage.goto(`${base}/campaigns/${ids.campaignId}`, { waitUntil: "networkidle", timeout: 120_000 });
+        await hydrated(playerPage);
+        await settle(playerPage);
+        const help = playerPage.locator('header button[data-tour="header-help"]').locator("visible=true").first();
+        await eventually(() => help.count(), { timeoutMs: 30_000, label: "the player's Help" });
+        await help.click();
+        const ask = playerPage.locator("[role=dialog] [data-report-ask-host]").locator("visible=true").first();
+        await eventually(() => ask.count(), { timeoutMs: 15_000, label: "who to ask, in the player's Help" });
+        check((await playerPage.locator("[role=dialog] [data-report-problem]").count()) === 0, "a player who is not the admin was offered Report a problem");
+        await ask.scrollIntoViewIfNeeded();
+        await playerPage.screenshot({ path: t.shotPath("player-help") }).catch(() => {});
+      } finally {
+        await playerContext.close();
+      }
+    }
   },
 };

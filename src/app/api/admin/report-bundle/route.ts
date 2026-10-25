@@ -5,7 +5,7 @@ import { ADMIN_REPORT_VIEWER, adminReportSources, reportAddresses, reportSecrets
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// The tester's report bundle from Admin (issue #459): the server's setup and
+// The report bundle from Admin (issue #459): the server's setup and
 // the tail of its log, for a problem that is not one table's. Admins only;
 // saved on the admin's own device, never sent anywhere.
 export async function GET() {

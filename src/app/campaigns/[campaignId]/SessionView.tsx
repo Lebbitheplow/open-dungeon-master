@@ -266,9 +266,12 @@ export function SessionView({
   const openDiceTray = useCallback(() => setDiceTrayOpen(true), []);
   const [helpOpen, setHelpOpen] = useState(false);
   const openHelp = useCallback(() => setHelpOpen(true), []);
-  // "Report a problem" (issue #459) is opened from Help.
+  // "Report a problem" (issue #459) is opened from Help, by the server's
+  // admin only; everyone else is told there to ask whoever runs the server.
   const [reportOpen, setReportOpen] = useState(false);
   const openReport = useCallback(() => setReportOpen(true), []);
+  const isAdmin = Boolean(me?.isAdmin);
+  const helpReport = useMemo(() => ({ onSave: isAdmin ? openReport : undefined }), [isAdmin, openReport]);
   usePreloadTable();
   const helpMounted = useOpenedOnce(helpOpen);
   const reportMounted = useOpenedOnce(reportOpen);
@@ -446,9 +449,9 @@ export function SessionView({
       campaignId: campaign?.id ?? "",
       canSteer: steersStory,
       auto: Boolean(campaign?.gameSettings?.ambienceAuto),
-      isAdmin: Boolean((me as { isAdmin?: boolean } | null)?.isAdmin),
+      isAdmin,
     }),
-    [campaign?.id, campaign?.gameSettings?.ambienceAuto, steersStory, me],
+    [campaign?.id, campaign?.gameSettings?.ambienceAuto, steersStory, isAdmin],
   );
   // A table break (TableBreakBanner.tsx): any seat may call one on a table
   // that is playing; the one who called it, the lead or the DM ends it.
@@ -1320,7 +1323,7 @@ export function SessionView({
       <HelpDialog
         open={helpOpen}
         onOpenChange={setHelpOpen}
-        onReport={openReport}
+        report={helpReport}
         tours={[
           {
             label: "Tour the table",

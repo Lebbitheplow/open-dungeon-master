@@ -102,7 +102,7 @@ const SECTION_WORDS: Record<string, string> = {
   "Talking to the DM": "message type action speak ooc direct ask question composer",
   "Your hand in a fight": "combat battle attack cards spells turn initiative",
   "When the DM gets it wrong": "undo mistake reroll edit retry wrong fix",
-  "Report a problem": "bug broken error crash report tester github issue feedback",
+  "Report a problem": "bug broken error crash report problem github issue admin host",
   "What the DM remembers": "memory pin remember canon facts forget",
   "The side panel": "tabs inventory sheet hp party story notes chat settings layout arrange",
   Dice: "roll rolls secret physical real pixels bluetooth",
@@ -145,7 +145,8 @@ export function HelpContents({
   initialSection,
 }: {
   withTours: boolean;
-  // Only the table offers "Report a problem" (issue #459).
+  // Only the table has "Report a problem" (issue #459): the admin's button,
+  // or for everyone else, who to ask.
   withReport?: boolean;
   initialSection?: string;
 }) {
