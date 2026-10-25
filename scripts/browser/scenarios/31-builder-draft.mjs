@@ -50,8 +50,9 @@ export default {
     const lineage = await card.getAttribute("aria-label");
     await t.tap(card);
     // The step change writes a draft of its own: only one holding the pick
-    // on the Ancestry step is what the reload has to find.
-    await eventually(async () => (await drafts(page)).some((kept) => kept?.step === 1 && kept.fields.raceId), { label: "the pick kept on the device" });
+    // on the Ancestry step is what the reload has to find. Version 2 drafts
+    // name their step by key (builderDraft.ts).
+    await eventually(async () => (await drafts(page)).some((kept) => kept?.step === "ancestry" && kept.fields.raceId), { label: "the pick kept on the device" });
 
     await reopen(t);
     const resume = visible(page, root, /^Resume$/);
