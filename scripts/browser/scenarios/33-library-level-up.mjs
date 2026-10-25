@@ -10,7 +10,7 @@
 // level for the scenarios after this one. What the sheet sent goes through
 // the same route and rules check on a copy of him, which is then deleted.
 // The library pages are native screens in the app too.
-import { axeViolations, check, eventually } from "../lib.mjs";
+import { axeViolations, check, eventually, untilStill } from "../lib.mjs";
 
 const visible = (page, root, text) =>
   page.locator(`${root}a, ${root}button`).filter({ hasText: text }).locator("visible=true");
@@ -56,6 +56,8 @@ export default {
       await t.tap(toggle.first());
       const table = page.locator(`${root}[data-level-up-sheet] table[data-level-table]`);
       await eventually(() => table.first().isVisible(), { timeoutMs: 10_000, label: "the level table, unfolded" });
+      // Its fade in done, so axe reads the colours it rests at.
+      await untilStill(page);
       check((await table.count()) === 1, "the level table is on the sheet");
       check((await table.locator(`tr[data-level-row="${target}"][data-mark="next"]`).count()) === 1, `level ${target} is marked as the new one`);
       check((await table.locator(`tr[data-level-row="${target - 1}"][data-mark="current"]`).count()) === 1, `level ${target - 1} is marked as the one held`);
@@ -114,6 +116,13 @@ export default {
         } finally {
           await t.api.delete(`${t.base}/api/characters/${copyId}`);
         }
+        // The save leaves for the character's page; let it land, its Level
+        // up button drawn, before the next address is opened.
+        await eventually(async () => (await page.locator(`${root}[data-level-up-sheet]`).count()) === 0 && (await visible(page, root, /Level up to \d+/).count()) > 0, {
+          timeoutMs: 15_000,
+          label: "the character's page after the save",
+        });
+        await page.waitForLoadState("load");
       }
 
       // Edit the whole build changes only the query (?whole=1). The app's
