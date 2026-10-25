@@ -1,0 +1,58 @@
+/* A running campaign's prep over its table (issue 530,
+   src/app/campaigns/[campaignId]/CampaignPrep.tsx): laid from the header's
+   foot to the bottom of the table, above everything the table draws in its
+   own column (the header and its call stay above it), and scrolled on its
+   own. The table under it stays laid out and inert. */
+
+.session-prep {
+  position: absolute;
+  inset: 4.5rem 0 0;
+  z-index: 5;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: env(safe-area-inset-bottom);
+  outline: none;
+  animation: session-prep-in var(--dur-move) var(--ease-settle) both;
+}
+.session-prep[data-leaving="true"] {
+  pointer-events: none;
+  animation: session-prep-out 240ms var(--ease-snap) both;
+}
+@keyframes session-prep-in {
+  from { opacity: 0; translate: 0 12px; }
+  to { opacity: 1; translate: 0 0; }
+}
+@keyframes session-prep-out {
+  from { opacity: 1; }
+  to { opacity: 0; translate: 0 8px; }
+}
+/* The lobby inside it fills its height, its sky behind the panels. */
+.session-prep > .cine-stage { min-height: 100%; }
+
+/* The way back, at the top of the prep: a heading and the one button. */
+.prep-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  padding: 12px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(212, 171, 58, 0.35);
+  background: linear-gradient(180deg, rgba(41, 34, 71, 0.85), rgba(13, 11, 28, 0.9));
+  box-shadow: 0 10px 28px rgba(4, 2, 12, 0.45);
+}
+/* The words keep a readable measure; on a phone the button drops under
+   them and takes the width, a finger's target. */
+.prep-banner > span { flex: 1 1 16rem; }
+@media (max-width: 639px) {
+  .prep-banner > button { flex: 1 1 100%; justify-content: center; }
+}
+html[data-theme="light"] .prep-banner {
+  border-color: rgba(138, 107, 28, 0.45);
+  background: linear-gradient(180deg, #fdf9ee, #f1e7cf);
+  box-shadow: 0 8px 22px rgba(60, 40, 10, 0.18);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .session-prep, .session-prep[data-leaving="true"] { animation: none; }
+}

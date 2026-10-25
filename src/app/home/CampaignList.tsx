@@ -95,6 +95,11 @@ function SaveSlot({
   // a long press. The buttons stay: the menu is a second way, not the only one.
   const menu: ContextMenuItem[] = [
     { id: "open", label: "Open", glyph: "tab-campaigns", onSelect: () => router.push(`/campaigns/${campaign.id}`) },
+    // A running campaign's prep (issue 530), for whoever steers its story:
+    // the second door, the slot itself still opening the table.
+    ...(campaign.status === "active" && steersStory(campaign, userId)
+      ? [{ id: "prep", label: "Open prep", glyph: "tab-journal", onSelect: () => router.push(`/campaigns/${campaign.id}?view=prep`) }]
+      : []),
     { id: "export-html", label: "Export story: HTML page", glyph: "ui-export", separated: true, onSelect: () => downloadStory(campaign.id, "html") },
     { id: "export-odt", label: "Export story: OpenDocument (.odt)", glyph: "ui-export", onSelect: () => downloadStory(campaign.id, "odt") },
     { id: "export-docx", label: "Export story: Word (.docx)", glyph: "ui-export", onSelect: () => downloadStory(campaign.id, "docx") },
