@@ -1411,7 +1411,7 @@
     "lib/dm/pc-attack-riders.ts#whole": [["identity",1,"a mark by whole name, its \"(note)\" dropped"],["identity",1,"condition instances by whole name or key"],["identity",1,"a refused maneuver by whole name"]],
     "lib/dm/pc-attack-situation.ts#partial": [["identity",1,"invisible or hidden by whole name (anchored)"],["identity",1,"ODM's own condition with its die note, whole"]],
     "lib/dm/pc-attack-spend.ts#whole": [["key",1,"once-per-turn keys"]],
-    "lib/dm/pc-damage.ts#partial": [["key",1,"damage types"]],
+    "lib/dm/pc-damage.ts#partial": [["key",2,"damage types"]],
     "lib/dm/pc-defenses.ts#normalizer": [["key",1,"slugs, hosts, file names, ids, env values, display text, throttle keys, model ids (src/: every site read)"]],
     "lib/dm/pc-defenses.ts#partial": [["authoring",2,"resistances read from a feature's name"]],
     "lib/dm/pending-inspiration.ts#partial": [["pattern",1,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"]],

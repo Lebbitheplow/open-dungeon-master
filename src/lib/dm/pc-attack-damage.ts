@@ -494,7 +494,12 @@ export function landBlow(input: {
       amount: typed ? typed.reduce((sum, part) => sum + part.amount, 0) : dealt,
       ...(typed ? { parts: typed } : { type: profile.damageType }),
       ...(magical ? { magical: true } : {}),
+      // The weapon's material and the blow's source meet the character's
+      // form as they meet a block (a silvered sword and a lycanthrope).
+      ...material,
       ...(input.blow?.spell ? { spell: true } : {}),
+      ...(input.blow?.goodWielder ? { goodWielder: true } : {}),
+      ...(input.ignoreResistance && profile.damageType ? { ignoreResistanceTo: profile.damageType } : {}),
       ...(crit ? { crit: true } : {}),
       ...(nonlethal ? { nonlethal: true } : {}),
     }, sheets, sheetsById, holdVictory);

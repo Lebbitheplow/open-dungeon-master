@@ -287,8 +287,10 @@ export function applyEnemyDamage(
   // the blow lands as harm lands on a character (sheet-foe-damage.ts), and
   // a fall may end the fight as a foe's does.
   if (isSheetFoe(enemy)) {
-    const { magical, spell, crit, nonlethal, death, holdVictory } = options ?? {};
-    const blow = { amount, type: damageType ?? undefined, magical, spell, crit, nonlethal, death };
+    const { magical, spell, silvered, adamantine, goodWielder, crit, nonlethal, death, holdVictory } = options ?? {};
+    // Elemental Adept, Poisoner or Inescapable Destruction hold on a character too.
+    const ignores = damageType && (options?.ignoreResistance || authoredIgnoresResistance(campaign.id, damageType)) ? damageType : undefined;
+    const blow = { amount, type: damageType ?? undefined, magical, spell, silvered, adamantine, goodWielder, ignoreResistanceTo: ignores, crit, nonlethal, death };
     return applySheetFoeBlow(campaign, turn, encounter, enemy, blow, sheets, sheetsById, holdVictory === true);
   }
   // Inescapable Destruction: the acting Death cleric's necrotic ignores resistance (authored-saves.ts).

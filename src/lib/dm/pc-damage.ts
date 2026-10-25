@@ -54,8 +54,19 @@ export type PcDamageInput = {
   // From a spell, a magic weapon or strikes that count as magical, so
   // resistance to nonmagical attacks does not apply.
   magical?: boolean;
-  // From a spell: Spell Resistance and Aura of Warding resist it.
+  // From a spell: Spell Resistance and Aura of Warding resist it, and so
+  // does a form or a summoned creature whose block resists "damage from
+  // spells".
   spell?: boolean;
+  // A silvered or adamantine weapon, or one a good creature wields: the
+  // clauses of a form's or a summoned creature's block that name them (a
+  // lycanthrope's "that aren't silvered", damage-logic.ts).
+  silvered?: boolean;
+  adamantine?: boolean;
+  goodWielder?: boolean;
+  // The type whose resistance this blow sets aside (Elemental Adept, the
+  // Death cleric's Inescapable Destruction), on a character as on an enemy.
+  ignoreResistanceTo?: string;
   // The creature lands prone if any of this damage gets through (a fall).
   knocksProne?: boolean;
   // Disintegrate: dropping to 0 is death, not dying.
@@ -141,24 +152,33 @@ export function applyPcDamage(
   // elemental is immune to fire: beast-forms.ts wildShapeRecord), each its
   // own clause so a "from nonmagical attacks" binds only its own types.
   const shape = sheet.wildShape;
-  const resisted = [
+  const ignored = (input.ignoreResistanceTo ?? "").trim();
+  const resistedLine = [
     [pcResistances(sheet, { magical: input.magical === true, spell: input.spell === true, except: input.exceptFeatures }), ...authoredAuraResistances(campaign.id, sheet, { spell: input.spell === true }), summonResistances(sheet), immersedResistance(campaign.id, sheet.id)].filter(Boolean).join(", "),
     shape?.resist ?? "",
   ].filter(Boolean).join("; ");
+  const resisted = ignored ? resistedLine.replace(new RegExp(`\\b${ignored}\\b`, "gi"), "") : resistedLine;
+  // What the blow is made of and where it comes from, for the clauses of a
+  // block that name them.
+  const blowFlags = {
+    magical: input.magical === true,
+    spell: input.spell === true,
+    silvered: input.silvered,
+    adamantine: input.adamantine,
+    goodWielder: input.goodWielder,
+  };
   // Inside Silence, thunder does nothing (zone-rules.ts).
   const immune = `${summonImmunities(sheet)}${pcImmunities(sheet)}${silencedImmunity(campaign.id, sheet.id)}${shape?.immune ? `; ${shape.immune}` : ""}`;
   const vulnerable = [summonVulnerabilities(sheet), shape?.vulnerable ?? ""].filter(Boolean).join("; ");
   // A blow of several types: each part meets resistance, immunity and
   // vulnerability on its own, then the hit lands once.
   const met = input.parts?.length
-    ? partsPast(input.parts, arcaneWard?.absorbed ?? 0).map((part) => ({ ...part, ...damageAdjust(part.amount, part.type, resisted, immune, vulnerable, { magical: input.magical === true }) }))
+    ? partsPast(input.parts, arcaneWard?.absorbed ?? 0).map((part) => ({ ...part, ...damageAdjust(part.amount, part.type, resisted, immune, vulnerable, blowFlags) }))
     : null;
   const adjusted = met
     ? { amount: met.reduce((sum, part) => sum + part.amount, 0), note: met.map((part) => part.note).filter(Boolean).join("; ") || null }
     : overflow > 0
-      ? damageAdjust(overflow, input.type, resisted, immune, vulnerable, {
-          magical: input.magical === true,
-        })
+      ? damageAdjust(overflow, input.type, resisted, immune, vulnerable, blowFlags)
       : { amount: 0, note: null };
   const byType = met ? { damageByType: met.map((part) => `${part.amount} ${part.type}${part.note ? ` (${part.note})` : ""}`) } : {};
   if (adjusted.amount <= 0) {
