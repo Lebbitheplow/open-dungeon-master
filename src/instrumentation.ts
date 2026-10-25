@@ -18,6 +18,15 @@ export async function register() {
     // itself is left running in the background. A failure here must not stop
     // the server: the worst case is the keyword fallback search already has.
     if (process.env.NEXT_PHASE !== "phase-production-build") {
+      // Whether the pages are cross-origin isolated for an addon's threads
+      // (src/lib/page-isolation.ts), before the first page is served.
+      try {
+        const { refreshPageIsolation } = await import("@/lib/addons/store");
+        refreshPageIsolation();
+      } catch (error) {
+        console.error("[addons] could not read whether the pages are isolated", error);
+      }
+
       // The classes made in the workshop, registered with the engines before
       // the first request reads a sheet that holds one (src/lib/db/homebrew.ts).
       try {

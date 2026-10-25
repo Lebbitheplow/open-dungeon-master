@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { allowedAppOrigin, appCorsHeaders, extraAppOrigins, isPreflight } from "@/lib/app-cors";
 import { describeLimit, judgeBody } from "@/lib/body-limits";
 import { maintenanceState } from "@/lib/maintenance";
+import { ISOLATION_HEADERS, pagesIsolated } from "@/lib/page-isolation";
 import {
   PORTAL_LOGOUT_PATH,
   PORTAL_ORIGIN_COOKIE,
@@ -39,8 +40,25 @@ import {
 const extra = extraAppOrigins(process.env.ODM_APP_ORIGINS);
 const portalSecret = process.env.ODM_PORTAL_SECRET;
 
+// The data paths, where the doors below apply. Every other path is a page or
+// a public file, and passes through only for cross-origin isolation, when
+// the server's addons call for it (src/lib/page-isolation.ts).
+const DATA_ROOTS = ["/api", "/uploads", "/generated", "/generated-audio", "/ambience", "/assets", "/dice-box", "/sidebar-icons"];
+
+function isDataPath(pathname: string): boolean {
+  return DATA_ROOTS.some((root) => pathname === root || pathname.startsWith(`${root}/`));
+}
+
+function isolated(response: NextResponse): NextResponse {
+  if (pagesIsolated()) {
+    for (const [name, value] of ISOLATION_HEADERS) response.headers.set(name, value);
+  }
+  return response;
+}
+
 export function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
+  if (!isDataPath(pathname)) return isolated(NextResponse.next());
   const appOrigin = allowedAppOrigin(request.headers.get("origin"), extra);
 
   if (appOrigin && isPreflight(request.method, request.headers.get("access-control-request-method"))) {
@@ -111,18 +129,12 @@ export function proxy(request: NextRequest) {
   if (appOrigin) {
     for (const [name, value] of appCorsHeaders(appOrigin)) response.headers.set(name, value);
   }
-  return response;
+  // A PDF the lore panel frames is a page inside an isolated page.
+  return isolated(response);
 }
 
+// Everything but Next's own build files: the data paths for the doors above,
+// the rest for isolation.
 export const config = {
-  matcher: [
-    "/api/:path*",
-    "/uploads/:path*",
-    "/generated/:path*",
-    "/generated-audio/:path*",
-    "/ambience/:path*",
-    "/assets/:path*",
-    "/dice-box/:path*",
-    "/sidebar-icons/:path*",
-  ],
+  matcher: ["/((?!_next/static/|_next/image).*)"],
 };

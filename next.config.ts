@@ -72,6 +72,8 @@ const reportedCsp = [
   "manifest-src 'self'",
 ].join("; ");
 
+// Cross-origin isolation is not here: it depends on the addons a server has
+// (src/lib/page-isolation.ts), so src/proxy.ts adds it per request.
 export const securityHeaders = [
   { key: "Content-Security-Policy", value: enforcedCsp },
   { key: "Content-Security-Policy-Report-Only", value: reportedCsp },

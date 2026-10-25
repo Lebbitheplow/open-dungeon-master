@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { getAppSetting, setAppSetting } from "@/lib/db/app-settings";
 import { ADDON_ID } from "@/lib/addons/manifest";
+import { setPageIsolation } from "@/lib/page-isolation";
 
 // What the server remembers about its addons, as one app_settings row: the
 // catalog to browse, whether files may be installed by hand, and per addon
@@ -74,6 +75,18 @@ export function readAddonConfig(): AddonConfig {
 
 export function writeAddonConfig(config: AddonConfig): void {
   setAppSetting(ADDONS_KEY, addonConfigSchema.parse(config));
+  setPageIsolation(threadsGranted(config));
+}
+
+// Whether an addon that is on was given the threads permission, which is
+// what makes the server's pages cross-origin isolated (src/lib/page-isolation.ts).
+function threadsGranted(config: AddonConfig): boolean {
+  return Object.values(config.addons).some((state) => state.enabled && state.granted.includes("threads"));
+}
+
+// At start, from what the server remembers.
+export function refreshPageIsolation(): void {
+  setPageIsolation(threadsGranted(readAddonConfig()));
 }
 
 export function updateAddonConfig(change: (config: AddonConfig) => void): AddonConfig {

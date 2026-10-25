@@ -323,18 +323,47 @@ defaults filled in:
 
 ### The frame
 
-Your page runs in `<iframe sandbox="allow-scripts">`: an opaque origin, no
-cookies, no access to the page around it, no popups or navigation. Its
-response headers add a policy of its own: scripts, styles, pictures, fonts and
-workers from your `ui/` folder (and inline, and `blob:`), WebAssembly allowed,
-connections to this server only (which, without a cookie, means its public
-files). Bundle your libraries (three.js and its GLTFLoader, say) into `ui/`;
-nothing can load from a CDN. Keep the page self-contained: it must work with
-no network beyond your own files.
+Your page runs in `<iframe sandbox="allow-scripts" credentialless>`: an
+opaque origin, no cookies, no access to the page around it, no popups or
+navigation. Its response headers add a policy of its own: scripts, styles,
+pictures and fonts from your `ui/` folder (and inline, and `blob:`), workers
+from `blob:` (below), WebAssembly allowed, connections to this server only
+(which, without a cookie, means its public files). Bundle your libraries
+(three.js and its GLTFLoader, say) into `ui/`; nothing can load from a CDN.
+Keep the page self-contained: it must work with no network beyond your own
+files.
 
-Godot single-threaded Web views may ship their `.pck` resource pack beside
+Godot Web views may ship their `.pck` resource pack beside
 `.wasm`/JavaScript in `ui/`. Packs use `application/octet-stream`; `.wav` UI
 audio uses `audio/wav`. Existing size limits and sandbox policy apply.
+
+### Workers and threads
+
+The frame's opaque origin owns no address, so `new Worker("worker.js")`
+throws a SecurityError there. Fetch the script and start the worker from a
+Blob instead; it runs the same:
+
+```js
+const source = await (await fetch("worker.js")).text();
+const worker = new Worker(URL.createObjectURL(new Blob([source], { type: "text/javascript" })));
+```
+
+Start it as a classic worker: a module worker from a Blob does not start, so
+bundle what it imports. A worker can draw: hand it an `OffscreenCanvas`
+(`canvas.transferControlToOffscreen()`) and it renders there with WebGL,
+leaving your page's own thread to input. `audioWorklet.addModule("worklet.js")`
+loads from your folder as it is.
+
+Shared memory between threads needs the `threads` permission. Once the admin
+accepts it, the table lets your frame be cross-origin isolated: where the
+browser can isolate the table page, `self.crossOriginIsolated` is true in
+your page and `SharedArrayBuffer` is there, for your workers too. Where it
+cannot, the flag is false: check it and fall back to one thread. An engine
+that starts its threads from its own script's address, such as Emscripten's
+pthreads, needs that script handed to it as a Blob: Emscripten reads it from
+`Module.mainScriptUrlOrBlob`. Set `minServerVersion` when you ask for
+`threads`: an older server does not know the permission and refuses the
+manifest.
 
 Your view may be open twice: in the board panel and on the enlarged tabletop,
 each its own page. While the tabletop is open, the panel's page is hidden
