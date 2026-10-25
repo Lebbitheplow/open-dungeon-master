@@ -1,4 +1,5 @@
 import { REPOSITORY_URL } from "@/lib/build-info";
+import type { ExportedTurn } from "@/lib/narrator-quality";
 import { redactSecrets } from "@/lib/redact-secrets";
 
 // The tester's report bundle (issue #459): one file a player or an admin
@@ -83,7 +84,7 @@ const PARTS: readonly ReportPart[] = [
   {
     id: "turnTimings",
     label: "Turn timings",
-    hint: `The ids and timings of the last ${REPORT_TURNS} turns, and how each call to the narrator ended.`,
+    hint: `The ids and timings of the last ${REPORT_TURNS} turns, how each call to the narrator ended, and how often the table had to fix the narrator lately, with ids hashed and no names.`,
     defaultOn: true,
     allowed: (viewer) => viewer.atTable && viewer.leadOrDm,
   },
@@ -196,10 +197,11 @@ export type ReportSources = {
   turns?: ReportTurnSource[];
   // Oldest first.
   messages?: ReportMessageSource[];
-  // Issue #460's correction ledger: the narrator quality rows for the last
-  // few turns go here once the ledger exists, under the turn timings' rule
-  // (party lead or DM). Nothing supplies them yet.
-  narratorQuality?: unknown[];
+  // Issue #460's correction ledger: this table's newest narrator quality
+  // rows and their fixes, every id hashed and no name, prompt or narration
+  // (src/lib/narrator-quality.ts exportedTurns). Under the turn timings'
+  // rule: the party lead or a DM, at the table.
+  narratorQuality?: ExportedTurn[];
 };
 
 // ---- the file ----
@@ -232,7 +234,7 @@ export type ReportBundle = {
     rolls: number;
     calls: ReportCall[];
   }>;
-  narratorQuality?: unknown[];
+  narratorQuality?: ExportedTurn[];
   serverLog?: string[];
   transcript?: Array<{ seq: number; at: string; from: "you" | "dm"; text: string }>;
   turnRecords?: Array<{
@@ -446,6 +448,10 @@ function readableLines(bundle: ReportBundle): string[] {
     for (const turn of bundle.turnTimings) {
       lines.push(`  ${turn.id}: ${turn.status}, ${turn.seconds}s, ${turn.modelCalls} model calls, ${turn.rolls} rolls`);
     }
+  }
+  if (bundle.narratorQuality) {
+    const corrected = bundle.narratorQuality.filter((turn) => turn.corrections.length).length;
+    lines.push(`Narrator quality for ${bundle.narratorQuality.length} turns (${corrected} corrected), ids hashed.`);
   }
   if (bundle.pageErrors) lines.push(`${bundle.pageErrors.length} recent page errors.`);
   if (bundle.serverLog) lines.push(`${bundle.serverLog.length} server log lines.`);

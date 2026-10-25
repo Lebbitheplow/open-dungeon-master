@@ -1749,6 +1749,11 @@ function ensureSchema(db: SqliteDatabase) {
     // announceShop), so the chat's Browse wares opens the Market on it.
     // Null on every other message.
     ["shop_id", `TEXT`],
+    // Which take in variants_json a person wrote by editing the narration
+    // (src/app/api/campaigns/[campaignId]/messages/[messageId]/edit): the
+    // narrator's takes stay beside it, so an edit never loses the original
+    // (issue #460). Null when nobody has edited the message.
+    ["edited_take", `INTEGER`],
   ]);
 
   addColumns("dm_turns", [
@@ -2540,6 +2545,59 @@ function ensureSchema(db: SqliteDatabase) {
     );
     CREATE INDEX IF NOT EXISTS idx_model_calls_at ON model_calls(at);
     CREATE INDEX IF NOT EXISTS idx_model_calls_turn ON model_calls(turn_id);
+
+    -- The correction ledger (issue #460, src/lib/db/turn-ledger.ts): one
+    -- row per fix a table made to state an AI turn set, written in the same
+    -- transaction as the fix. turn_id has no foreign key, so a rollback's
+    -- rows outlive the turns it deleted. No story text: the kind of fix, the
+    -- tool, the audit row or message it fixed, who made it, and an optional
+    -- reason chip. Kept like dm_turns, with no pruning.
+    CREATE TABLE IF NOT EXISTS turn_corrections (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      turn_id TEXT,
+      attribution TEXT NOT NULL CHECK (attribution IN ('direct','inferred')),
+      kind TEXT NOT NULL,
+      audit_id TEXT,
+      message_id TEXT,
+      tool TEXT,
+      reason TEXT,
+      user_id TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_turn_corrections_campaign ON turn_corrections(campaign_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_turn_corrections_turn ON turn_corrections(turn_id);
+
+    -- How each AI turn ended (issue #460, src/lib/narrator-quality.ts): the
+    -- DM mode, the backend class and model, the call and tool counts, the
+    -- tool calls refused, and what the narration guard did. Written where a
+    -- turn ends (saveDmTurn on done or failed, the stale-turn sweep), and
+    -- written again if a retried turn ends again. Whether a turn was clean
+    -- is worked out when a report runs, never stored, so a changed rule
+    -- re-scores old turns. turn_id has no foreign key, for the same reason
+    -- as above: a rewind marks its rows rolled_back and they stay.
+    CREATE TABLE IF NOT EXISTS turn_quality (
+      turn_id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      actor TEXT NOT NULL,
+      dm_mode TEXT NOT NULL,
+      backend_class TEXT,
+      backend TEXT,
+      model TEXT,
+      status TEXT NOT NULL,
+      model_calls INTEGER NOT NULL DEFAULT 0,
+      tool_calls INTEGER NOT NULL DEFAULT 0,
+      refused_invalid INTEGER NOT NULL DEFAULT 0,
+      refused_rules INTEGER NOT NULL DEFAULT 0,
+      refused_limit INTEGER NOT NULL DEFAULT 0,
+      guard TEXT NOT NULL DEFAULT 'none',
+      guard_kinds TEXT NOT NULL DEFAULT '',
+      duration_ms INTEGER,
+      rolled_back INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_turn_quality_campaign ON turn_quality(campaign_id, created_at);
 
     -- Who a stored picture or document was made for (src/lib/media-access.ts):
     -- the account that uploaded or asked for it and the campaign or workshop

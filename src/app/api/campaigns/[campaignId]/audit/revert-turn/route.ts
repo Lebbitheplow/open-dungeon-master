@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
+import { correctionsField } from "@/lib/correction-reasons";
 import { listAuditForTurn } from "@/lib/db/sheet-audit";
 import { revertAuditEntry, undoConflictWarnings } from "@/lib/sheet-undo";
 
@@ -45,14 +46,18 @@ export async function POST(
   }
 
   const errors: string[] = [];
+  // One ledger row per AI change reverted, each in its own undo's transaction.
+  const corrections: string[] = [];
   for (const entry of [...entries].sort((a, b) => b.seq - a.seq)) {
-    const outcome = revertAuditEntry(context.campaign, entry);
+    const outcome = revertAuditEntry(context.campaign, entry, { userId: context.user.id, kind: "turn_revert" });
     if (!outcome.ok) {
       errors.push(outcome.error);
+    } else if (outcome.correctionId) {
+      corrections.push(outcome.correctionId);
     }
   }
   if (errors.length === entries.length) {
     return Response.json({ error: errors[0] }, { status: 400 });
   }
-  return Response.json({ ok: true, reverted: entries.length - errors.length });
+  return Response.json({ ok: true, reverted: entries.length - errors.length, ...correctionsField(corrections) });
 }

@@ -3,6 +3,7 @@
 import { Check, Scale, Users, X } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
+import { offerCorrectionReason } from "@/lib/correction-offer";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { KitButton, PanelError } from "./PanelKit";
 import type { RulingDispute } from "@/app/campaigns/[campaignId]/useCampaignStream";
@@ -45,6 +46,8 @@ export function RulingBar({
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
         setError(String(data.error ?? "That did not work."));
+      } else {
+        offerCorrectionReason(campaignId, await response.json().catch(() => null));
       }
     } finally {
       setBusyId("");

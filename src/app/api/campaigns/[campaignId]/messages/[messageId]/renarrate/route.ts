@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
+import { correctionsField } from "@/lib/correction-reasons";
 import { getLatestDmMessage } from "@/lib/db/messages";
 import { publishPersisted } from "@/lib/events";
 import { getDmStatus } from "@/lib/dm/status";
@@ -81,10 +82,11 @@ export async function POST(
     messageId,
     guidance: parsed.data.guidance,
     tempOffset: parsed.data.tempOffset,
+    userId: context.user.id,
   });
   if ("error" in result) {
     return Response.json({ error: result.error }, { status: result.status });
   }
   publishPersisted(campaignId, "message_updated", { message: result.message });
-  return Response.json({ message: result.message });
+  return Response.json({ message: result.message, ...correctionsField(result.correctionId ? [result.correctionId] : []) });
 }

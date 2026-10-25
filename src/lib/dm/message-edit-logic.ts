@@ -85,6 +85,24 @@ export function checkEdit(original: string, edited: string): EditCheck {
 // alone, matching how a continue behaves, so the reroll invariant
 // (content === variants[variantIndex]) still holds and the lead can still
 // browse back to an earlier wording.
+// An edit that keeps what the narrator wrote (issue #460): the narrator's
+// takes stay in the set, and the person's wording is one take of its own,
+// selected. A message carries at most one person's take: a second edit
+// rewrites it in place, whichever take it was made from, so editing never
+// piles up copies and never loses a narrator's take. The correction ledger
+// can then always read back what the AI said.
+export function keepOriginalTake(
+  variants: string[],
+  editedTake: number | null | undefined,
+  content: string,
+): { variants: string[]; index: number; editedTake: number } {
+  if (typeof editedTake === "number" && editedTake >= 0 && editedTake < variants.length) {
+    return { variants: replaceSelectedTake(variants, editedTake, content), index: editedTake, editedTake };
+  }
+  const kept = [...variants, content];
+  return { variants: kept, index: kept.length - 1, editedTake: kept.length - 1 };
+}
+
 export function replaceSelectedTake(
   variants: string[],
   index: number,

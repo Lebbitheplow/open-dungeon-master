@@ -3,6 +3,7 @@
 import { Loader2, RotateCcw } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
+import { offerCorrectionReason } from "@/lib/correction-offer";
 import { ui } from "@/lib/ui";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { DM_HALTED_PREFIX } from "@/lib/campaign-types";
@@ -50,8 +51,10 @@ export function HaltedTurnBanner({
       if (!response.ok) {
         const payload = (await response.json().catch(() => null)) as { error?: string } | null;
         setError(payload?.error || "Could not restart that turn.");
+      } else {
+        offerCorrectionReason(campaignId, await response.json().catch(() => null));
       }
-      // On success nothing is done here: the banner goes away when the
+      // On success nothing else is done here: the banner goes away when the
       // message_updated event lands, and the narration streams in as usual.
     } catch {
       setError("Could not reach the server.");

@@ -4,6 +4,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { Trash2, X } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
+import { offerCorrectionReason } from "@/lib/correction-offer";
 import { ui } from "@/lib/ui";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { NumberStepper } from "@/components/ui/NumberStepper";
@@ -205,6 +206,7 @@ export function LeadEditDialog({
           setError(data.error || "Could not save the correction.");
           return;
         }
+        offerCorrectionReason(campaignId, data);
         if (Array.isArray(data.held) && data.held.length) {
           setHeld(data.held);
           return;

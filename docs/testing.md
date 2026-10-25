@@ -46,7 +46,7 @@ What the file can hold:
 |---|---|---|
 | Version, operating system, DM mode, narrator backend kind and model | anyone | yes |
 | Recent errors from the game page in this browser | anyone | yes |
-| Turn ids and timings for the last few turns | the party lead or the DM | yes |
+| Turn ids and timings for the last few turns, and the table's recent [narrator quality](#narrator-quality) rows | the party lead or the DM | yes |
 | The last lines of the server log, with keys and tokens removed | the server's admin | yes |
 | A transcript of the last few turns: your own lines and the DM's narration | anyone | no |
 | What the narrator did in those turns (tools it called, how its prompt was spent) | whoever steers the story: the party lead at an AI table, otherwise the DM | no |
@@ -57,6 +57,28 @@ server checks who you are before it adds each part, whatever the page asks for.
 The desktop and Android apps have their own diagnostics under
 **Settings > Troubleshooting**. Copy that summary into the issue as well if you play in
 an app.
+
+## Narrator quality
+
+Every time a table fixes something the AI DM did (an undo, a sheet edit, an enemy's
+hit points, the turn order, a narration edit, a reroll, a retry, an overruled ruling,
+a rewind), the server counts it. It also notes how each AI turn ended: which kind of
+backend and model ran it, how many tool calls were refused, and whether the narration
+check had to step in. After a fix you can tap one reason (wrong rule, wrong number,
+wrong target, story, changed my mind), or skip it. Fixes at a table a person runs are
+not counted, and "changed my mind" is left out of every rate.
+
+**Admin > Usage > Narrator quality** shows the rates for each kind of backend and DM
+mode, and the tools tables fix most often. **Export narrator quality** saves those rows
+as one file, with every id scrambled and no names, prompts or story text. Attach it to
+a [session report](https://github.com/Lebbitheplow/open-dungeon-master/issues/new?template=session_report.yml).
+The party lead's report file carries the same rows for their own table.
+
+What the export is for: before a release is promoted to stable, we read the exports
+testers sent in. A tool and reason that keep coming back become a scripted test turn,
+and then either a check in the engine so no backend can make that mistake, or a known
+gap in the rules ledger. Only compare rates within one kind of backend and DM mode. The
+numbers only count mistakes someone noticed.
 
 ## Which form to use
 

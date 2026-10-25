@@ -1,4 +1,6 @@
 import { getCampaignById } from "@/lib/db/campaigns";
+import { getDatabase } from "@/lib/db/core";
+import { recordTurnCorrection } from "@/lib/db/turn-ledger";
 import {
   claimFailedDmTurn,
   getAwaitingTurn,
@@ -47,8 +49,10 @@ import {
 const RETRY_NOTE =
   "[System] Your last attempt at this turn was interrupted by an internal error and nothing you wrote then reached the table. Pick the scene back up and narrate it now. Some bookkeeping from that attempt may already have taken effect (a move, a recorded event, a closed beat): if a tool reports something is already done, accept it and keep going rather than repeating it.";
 
-export type RetryRequest = { campaignId: string; turnId: string };
-export type RetryResult = { ok: true; turnId: string } | { ok: false; status: number; error: string };
+// userId: who asked, for the correction ledger (issue #460); left out,
+// nothing is recorded.
+export type RetryRequest = { campaignId: string; turnId: string; userId?: string };
+export type RetryResult = { ok: true; turnId: string; correctionId?: string | null } | { ok: false; status: number; error: string };
 
 // A tool call the halted turn never answered, where the answer is a physical
 // roll the player already submitted (the crash landed between the roll
@@ -103,7 +107,17 @@ export function requestTurnRetry(request: RetryRequest): RetryResult {
   // The claim, and the only race guard that matters: two players hitting
   // Retry at the same instant both pass the checks above, but this
   // conditional UPDATE only reports changes for one of them.
-  const claimed = claimFailedDmTurn(turnId);
+  // The claim and the correction ledger's row for the retry land together.
+  const { claimed, correctionId } = getDatabase().transaction(() => {
+    const taken = claimFailedDmTurn(turnId);
+    return {
+      claimed: taken,
+      correctionId:
+        taken && request.userId
+          ? recordTurnCorrection({ campaignId, turnId, attribution: "direct", kind: "retry", userId: request.userId })
+          : null,
+    };
+  })();
   if (!claimed) {
     return { ok: false, status: 409, error: "That turn is already being retried." };
   }
@@ -127,7 +141,7 @@ export function requestTurnRetry(request: RetryRequest): RetryResult {
     saveDmTurn(claimed);
     setDmStatus(campaignId, "thinking");
     enqueueDmJob(campaignId, () => startDmTurn(campaignId), { kind: "turn" });
-    return { ok: true, turnId };
+    return { ok: true, turnId, correctionId };
   }
 
   // Undo the model call the crash swallowed: its narration never reached the
@@ -201,7 +215,7 @@ export function requestTurnRetry(request: RetryRequest): RetryResult {
     }
   }, { kind: "turn" });
 
-  return { ok: true, turnId };
+  return { ok: true, turnId, correctionId };
 }
 
 // Put an abandoned retry back where it found things: the turn failed (it never

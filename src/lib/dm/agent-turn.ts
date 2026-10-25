@@ -18,6 +18,7 @@ import type { Campaign } from "@/lib/db/campaigns";
 import { guardOutcomes, ruleClaims } from "@/lib/dm/engine-boundary";
 import { liveStateFor, readClaims } from "@/lib/dm/claims";
 import { guardKinds } from "@/lib/dm/narration-guard";
+import { AGENT_MARK } from "@/lib/dm/agent-mark";
 import { hasQuotedLine, type SpokenLine } from "@/lib/dm/speech";
 import { modelTextLines } from "@/lib/dm/speech-lines";
 
@@ -29,8 +30,7 @@ export function isAgentRequest(request: Request): boolean {
 
 // A turn row the agent's calls hang on is marked by its first message, so
 // it is never mistaken for a storyteller turn (whose first message is the
-// system prompt).
-const AGENT_MARK = "[agent program in the DM seat]";
+// system prompt): src/lib/dm/agent-mark.ts.
 
 export function isAgentTurn(turn: Pick<DmTurn, "conversation">): boolean {
   return turn.conversation[0]?.content === AGENT_MARK;

@@ -1,5 +1,7 @@
 import { getCampaignById, type Campaign } from "@/lib/db/campaigns";
+import { getDatabase } from "@/lib/db/core";
 import { getDmTurn } from "@/lib/db/dm-turns";
+import { recordTurnCorrection } from "@/lib/db/turn-ledger";
 import { listSheets } from "@/lib/db/sheets";
 import {
   getCampaignMessage,
@@ -38,7 +40,9 @@ import {
 // narration segments are reused verbatim, so the "[roll:<id>]" markers land
 // byte-identically in every variant.
 
-export type RenarrateResult = { message: CampaignMessage } | { error: string; status: number };
+// correctionId: the correction ledger's row for the reroll (issue #460), or
+// null when none was written (a table a person runs).
+export type RenarrateResult = { message: CampaignMessage; correctionId?: string | null } | { error: string; status: number };
 
 // The narration mp3 is keyed by message id, so a stale take would keep
 // playing under new prose. Regenerating overwrites the same file and
@@ -64,6 +68,9 @@ export async function runRenarrate(input: {
   // Added to the story model's base temperature for this take only, so a lead
   // browsing takes can push for more variation without retuning the campaign.
   tempOffset?: number;
+  // Who asked for the reroll, for the correction ledger. Left out, nothing
+  // is recorded.
+  userId?: string;
 }): Promise<RenarrateResult> {
   const campaign = getCampaignById(input.campaignId);
   if (!campaign) {
@@ -157,12 +164,29 @@ export async function runRenarrate(input: {
   if (appended.capped) {
     return { error: `That is all ${MAX_VARIANTS} takes; pick one.`, status: 409 };
   }
-  const updated = setMessageVariants(input.messageId, appended.variants, appended.index, mergeLines(current.speech, spoken));
+  // The take and its correction ledger row land together.
+  const { updated, correctionId } = getDatabase().transaction(() => {
+    const saved = setMessageVariants(input.messageId, appended.variants, appended.index, mergeLines(current.speech, spoken));
+    return {
+      updated: saved,
+      correctionId:
+        saved && input.userId
+          ? recordTurnCorrection({
+              campaignId: input.campaignId,
+              turnId: turn.id,
+              attribution: "direct",
+              kind: "renarrate",
+              messageId: input.messageId,
+              userId: input.userId,
+            })
+          : null,
+    };
+  })();
   if (!updated) {
     return { error: "Could not store the new take.", status: 500 };
   }
   refreshNarrationAudio(campaign, updated);
-  return { message: updated };
+  return { message: updated, correctionId };
 }
 
 // Browsing the takes: pure bookkeeping, no model call. Kept here rather than

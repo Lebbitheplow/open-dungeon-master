@@ -1,13 +1,12 @@
 import { z } from "zod";
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
-import {
-  getCampaignMessage,
-  setMessageVariants,
-  updateMessageContent,
-} from "@/lib/db/messages";
+import { correctionsField } from "@/lib/correction-reasons";
+import { getDatabase } from "@/lib/db/core";
+import { getCampaignMessage, setMessageVariants } from "@/lib/db/messages";
+import { recordTurnCorrection } from "@/lib/db/turn-ledger";
 import { publishPersisted } from "@/lib/events";
-import { MAX_EDITED_LENGTH, checkEdit, replaceSelectedTake } from "@/lib/dm/message-edit-logic";
-import { resolveVariantIndex, seedVariants } from "@/lib/dm/renarrate-logic";
+import { MAX_EDITED_LENGTH, checkEdit, keepOriginalTake } from "@/lib/dm/message-edit-logic";
+import { seedVariants } from "@/lib/dm/renarrate-logic";
 import { mergeLines } from "@/lib/dm/speech";
 import { personLines } from "@/lib/dm/speech-lines";
 
@@ -52,21 +51,36 @@ export async function POST(
     return Response.json({ error: check.reason }, { status: 400 });
   }
 
-  // Keep the variant set coherent: replace the take being read, leave the
-  // others, so browsing still works after an edit.
-  const variants = seedVariants(message.variants ?? [], message.content);
-  const index = resolveVariantIndex(variants, message.variantIndex ?? 0);
+  // The narrator's wording is kept: the edit is a take of its own beside
+  // the narrator's, selected, so browsing still works and the original is
+  // never lost (issue #460). A second edit rewrites the person's take.
+  const kept = keepOriginalTake(seedVariants(message.variants ?? [], message.content), message.editedTake, check.content);
   // The lines the edit left alone keep their speakers; new ones are read
   // from the person's words (src/lib/dm/speech-lines.ts).
   const speech = mergeLines(message.speech, personLines(context.campaign, check.content));
-  const updated =
-    index >= 0 && variants.length > 1
-      ? setMessageVariants(messageId, replaceSelectedTake(variants, index, check.content), index, speech)
-      : updateMessageContent(messageId, check.content, speech);
+  // The edit and its ledger row land together. The turn behind the message
+  // is the one corrected; nothing is recorded for a person's own narration
+  // or at a table a person runs.
+  const { updated, correctionId } = getDatabase().transaction(() => {
+    const saved = setMessageVariants(messageId, kept.variants, kept.index, speech, kept.editedTake);
+    return {
+      updated: saved,
+      correctionId: saved
+        ? recordTurnCorrection({
+            campaignId,
+            turnId: message.dmTurnId ?? null,
+            attribution: "direct",
+            kind: "narration_edit",
+            messageId,
+            userId: context.user.id,
+          })
+        : null,
+    };
+  })();
 
   if (!updated) {
     return Response.json({ error: "Could not save the edit." }, { status: 500 });
   }
   publishPersisted(campaignId, "message_updated", { message: updated });
-  return Response.json({ message: updated });
+  return Response.json({ message: updated, ...correctionsField(correctionId ? [correctionId] : []) });
 }

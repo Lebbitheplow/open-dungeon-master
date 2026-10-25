@@ -1,4 +1,5 @@
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
+import { correctionsField } from "@/lib/correction-reasons";
 import { getAuditEntry } from "@/lib/db/sheet-audit";
 import { revertAuditEntry, undoConflictWarnings } from "@/lib/sheet-undo";
 
@@ -36,9 +37,9 @@ export async function POST(
     return Response.json({ warnings }, { status: 409 });
   }
 
-  const outcome = revertAuditEntry(context.campaign, entry);
+  const outcome = revertAuditEntry(context.campaign, entry, { userId: context.user.id, kind: "sheet_undo" });
   if (!outcome.ok) {
     return Response.json({ error: outcome.error }, { status: 400 });
   }
-  return Response.json({ ok: true, sheet: outcome.sheet });
+  return Response.json({ ok: true, sheet: outcome.sheet, ...correctionsField(outcome.correctionId ? [outcome.correctionId] : []) });
 }

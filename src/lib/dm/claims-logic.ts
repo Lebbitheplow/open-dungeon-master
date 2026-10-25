@@ -91,7 +91,9 @@ export type ReaderGate = {
 
 // One read of a passage: the kinds it was asked and the claims that
 // survived the checks. A kind it was not asked says nothing either way.
-export type PartRead = { kinds: readonly ClaimKind[]; claims: readonly NarrationClaim[] };
+// unread: the reader failed on this part, so its claims are none for want
+// of a reading, not because it claimed nothing (issue #460).
+export type PartRead = { kinds: readonly ClaimKind[]; claims: readonly NarrationClaim[]; unread?: true };
 
 export function claimKindsFor(gate: ReaderGate): ClaimKind[] {
   const kinds: ClaimKind[] = [];
