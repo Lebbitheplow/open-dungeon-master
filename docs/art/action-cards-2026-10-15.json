@@ -1,0 +1,382 @@
+{
+  "date": "2026-10-15",
+  "generator": "Codex built-in image_gen",
+  "baseCommit": "015b6d88",
+  "encoding": {
+    "format": "WebP",
+    "width": 256,
+    "height": 128,
+    "fit": "contain",
+    "quality": 92,
+    "alphaQuality": 100,
+    "effort": 4
+  },
+  "display": {
+    "component": "GameIcon",
+    "presentation": "uncropped rectangle for action assets",
+    "scale": 1,
+    "card": "full art area",
+    "moreActions": "80x40"
+  },
+  "records": [
+    {
+      "id": "attack",
+      "src": "/assets/icons/action/attack.webp",
+      "prompt": "Create one premium fantasy tabletop RPG action-card illustration, square canvas, transparent background. Use-case: stylized-concept. This is a small 128px card icon, so communicate the action instantly with large bold forms, a strong silhouette, very few elements and clean negative space. Art direction: polished hand-painted fantasy game art, sculptural brushwork, warm ivory highlights on steel and leather, controlled jewel-tone accents, crisp edges, convincing physical anatomy and materials. Rich color and strong midtone contrast, never muddy or nearly black. Center the subject, occupy 85% of the square with a 7% safe margin. It should look beautiful enlarged and be legible at 48px. No text, letters, numbers, symbols resembling writing, border, frame, badge, watermark, background scene or checkerboard. Paint a single coherent illustration, not a collage or multiple panels. Real transparent alpha around the artwork. ACTION: ATTACK. A large steel longsword held by a leather-gauntleted hand sweeping through a powerful diagonal slash. The whole sword blade and hand are clearly visible; one broad warm amber crescent of motion follows the cutting edge. The sword is the dominant unmistakable silhouette. No shield, no opponent, no blood.",
+      "previousSeed": 342606658,
+      "originalSha256": "f87c7982ce29ee751b5bcd0c68b36267468e183f99e170dfcbab869f2b69fd03",
+      "generatedSha256": "0b9edf2153b66b9e5f0d4a0c1e837809e4c58a2e01254e2303ea00b1b1773805",
+      "finalSha256": "5a1d5aaee56e53cf5cce821ba606f214cafb6c0aa84280c35414c3468ae370f4",
+      "bytes": 10152
+    },
+    {
+      "id": "cast",
+      "src": "/assets/icons/action/cast.webp",
+      "prompt": "Create one premium fantasy tabletop RPG action-card illustration, square canvas, transparent background. Use-case: stylized-concept. This is a small 128px card icon, so communicate the action instantly with large bold forms, a strong silhouette, very few elements and clean negative space. Art direction: polished hand-painted fantasy game art, sculptural brushwork, warm ivory highlights on steel and leather, controlled jewel-tone accents, crisp edges, convincing physical anatomy and materials. Rich color and strong midtone contrast, never muddy or nearly black. Center the subject, occupy 85% of the square with a 7% safe margin. It should look beautiful enlarged and be legible at 48px. No text, letters, numbers, symbols resembling writing, border, frame, badge, watermark, background scene or checkerboard. Paint a single coherent illustration, not a collage or multiple panels. Real transparent alpha around the artwork. ACTION: CAST A SPELL. Close-up of one outstretched spellcaster's bare hand, fingers splayed naturally beneath a brilliant levitating violet-white magical orb. Three broad curling ribbons of violet and cyan energy converge into the orb. Sleeve is deep indigo with simple gold trim. Hand and spell fill the frame. No written runes.",
+      "previousSeed": 1148912605,
+      "originalSha256": "e6414a8393fc5db70734f9b68ba2da3a58fd12d212fe496c948ed4ada2ecac7c",
+      "generatedSha256": "11cfbdd1df4fbacca1c384e7f6a52e74771e559f53e842aaed379aee6c0bc1de",
+      "finalSha256": "dc0b6e467de7c944a6cb4590eac32666310695154a8f929febf6dcc886030180",
+      "bytes": 12162
+    },
+    {
+      "id": "dash",
+      "src": "/assets/icons/action/dash.webp",
+      "prompt": "Create one premium fantasy tabletop RPG action-card illustration, square canvas, transparent background. Use-case: stylized-concept. This is a small 128px card icon, so communicate the action instantly with large bold forms, a strong silhouette, very few elements and clean negative space. Art direction: polished hand-painted fantasy game art, sculptural brushwork, warm ivory highlights on steel and leather, controlled jewel-tone accents, crisp edges, convincing physical anatomy and materials. Rich color and strong midtone contrast, never muddy or nearly black. Center the subject, occupy 85% of the square with a 7% safe margin. It should look beautiful enlarged and be legible at 48px. No text, letters, numbers, symbols resembling writing, border, frame, badge, watermark, background scene or checkerboard. Paint a single coherent illustration, not a collage or multiple panels. Real transparent alpha around the artwork. ACTION: DASH / SPRINT. One agile leather-armored adventurer sprinting in profile, full body in a forceful long running stride, torso leaned forward, bent arms pumping, copper-orange scarf streaming behind. Two broad pale gold speed strokes trailing the figure. Dynamic and immediately legible as running fast. No weapons, no scenery.",
+      "previousSeed": 2126407982,
+      "originalSha256": "24ff8532233dd3c3ae955e3e1689153459b8df7aa7e16b0c747eb18f2b9804ee",
+      "generatedSha256": "9c67184a51013feabfc93a8db2706d9e53af59aaeec131f36e89b411246e388e",
+      "finalSha256": "87f0160b2ce5d48d4b6fce03d9c08f69f2c3164b596ff47820630f35d69c3b77",
+      "bytes": 12916
+    },
+    {
+      "id": "disengage",
+      "src": "/assets/icons/action/disengage.webp",
+      "prompt": "Precise edit of this fantasy game illustration. ONLY change the TWO TURQUOISE ARROWS. Preserve both people, faces, poses, hands, limbs, boots, armor, cape, sword, shield, dimensions and positions exactly. The arrows currently extend far left toward the male attacker and misleadingly look like HIS movement. SHORTEN THEIR LEFT ENDS substantially. Erase ALL turquoise from the open gap between the man and woman. BOTH arrows must be confined to the RIGHTMOST THIRD of the entire image, tightly attached visually to the woman's stance. Their tails start directly behind her near/front thigh and planted boot at about 70 percent of image width, NOT in the center gap. Both arrows point RIGHT away from the opponent: one short thick arrow behind her thighs ending just right of her rear leg, one short thick arrow beneath her boots ending by her rear heel. Keep two separated arrows, bold turquoise body with bright pale-cyan highlights and large clear arrowheads; preserve THICKNESS and contrast, only reduce LENGTH to about half its present length. No arrow or turquoise streak at all under or near the man's sword, legs or feet, and no connecting trail across the gap. Keep woman's legs fully visible in front of the upper arrow, her boots unchanged. Transparent alpha in the restored empty gap and everywhere outside figures/arrows. No new elements, no background, no writing. Preserve wide 2:1 composition and painterly style.",
+      "previousSeed": 1838356565,
+      "originalSha256": "d82ba4d645b0839f16d661fcb42528d1dd41d4720c1ab0874149b25623d56f3f",
+      "generatedSha256": "5f3e790ff1aa0bd5bbd3e8861381676a4aa89cdf7daaa75e520daa410c5e5165",
+      "finalSha256": "c412e18fab0adb0c9b02ce9bea42866f29c5e2805da5464e965157e9cc46ecee",
+      "bytes": 18096,
+      "revisions": [
+        {
+          "date": "2026-10-16",
+          "reason": "Replace original retreat with corrected anatomy of guarded withdrawal variant",
+          "previousGeneratedSha256": "35bb4be23babd8fcc741550d19c02ddcf3717d47a30b77279d25e850e4594661",
+          "previousFinalSha256": "f71fbc1a161520be5f6c12a8acabb3fae278955fa69dc6cedc4587c8e17cda60",
+          "previousPrompt": "Create one premium fantasy tabletop RPG action-card illustration, square canvas, transparent background. Use-case: stylized-concept. This is a small 128px card icon, so communicate the action instantly with large bold forms, a strong silhouette, very few elements and clean negative space. Art direction: polished hand-painted fantasy game art, sculptural brushwork, warm ivory highlights on steel and leather, controlled jewel-tone accents, crisp edges, convincing physical anatomy and materials. Rich color and strong midtone contrast, never muddy or nearly black. Center the subject, occupy 85% of the square with a 7% safe margin. It should look beautiful enlarged and be legible at 48px. No text, letters, numbers, symbols resembling writing, border, frame, badge, watermark, background scene or checkerboard. Paint a single coherent illustration, not a collage or multiple panels. Real transparent alpha around the artwork. ACTION: DISENGAGE / CAREFUL WITHDRAWAL FROM A FOE. A full-body teal-cloaked adventurer stepping BACKWARD away from a threatening sword entering the frame from the left. Adventurer is on the right, still FACING the sword at left, one defensive open palm towards it, torso leaning away, rear foot retreating rightward. A large clear gap between sword tip and adventurer communicates leaving melee reach. One subtle rightward teal motion sweep near the feet. No shield. No running forward, no weapon contact, no ropes."
+        },
+        {
+          "date": "2026-10-16",
+          "reason": "Replace original retreat with corrected anatomy of guarded withdrawal variant",
+          "previousGeneratedSha256": "1af8a6ef6afe1e1c9ce3016d6147fa48dbca0d9ee6e1c692d5e0cb2b701fd2b0",
+          "previousFinalSha256": "7041de401de22380023391192450c99e92b41cce4177740780eeb64e6f6bf91e",
+          "previousPrompt": "Edit this fantasy RPG Disengage illustration. Preserve the polished painterly style, female adventurer identity, teal scarf, leather armor, round shield, incoming spear from the left, and turquoise rightward retreat arrow. REDRAW the entire figure's body pose for correct natural anatomy and controlled backward withdrawal. The previous long lunge and twisted waist are the problems to fix. Show a quiet SHORT BACKWARD STEP to the RIGHT while facing LEFT toward the spear. Side-on three-quarter view, shoulders aligned over hips, a normal-length waist, pelvis directly below ribcage, no torsion. Torso nearly upright, center of gravity between feet. Both knees only slightly flexed. Feet only shoulder-width apart; left-facing front boot planted under the forward hip, rear boot a small step behind to the right. Normal proportionate thighs, knees, shins and ankles; two clearly separated legs. No wide lunge, no stretched back leg, no running or crouching. Shield on bent left arm held close in front of chest toward spear. RIGHT HAND EMPTY, bent elbow comfortably beside waist, open relaxed fingers held near the hip, remove the sword entirely to declutter and avoid the awkward arm/waist overlap. No sword or scabbard. Face remains watchfully turned toward spear, not toward viewer. Keep a clear gap between spear and shield. Small broad turquoise arrow underneath feet points rightward away from threat. Full body entirely visible including both boots. Transparent background, no border, no text. Make a coherent beautiful action illustration with physically plausible balanced posture, not an anatomical diagram. Compose in uncropped square source for rectangular card use."
+        },
+        {
+          "date": "2026-10-16",
+          "reason": "Show the enemy combatant and withdrawal gap in a wide scene; remove arrow",
+          "previousGeneratedSha256": "5692686553f4f198377603b1bd697fd7a9a3c6b8259610116e8d053896dac399",
+          "previousFinalSha256": "e22620a3ef3e329515cce458edcde5afa6a0af34d9a3e8e117955a680c54ef3a",
+          "previousPrompt": "Create a new premium hand-painted fantasy RPG illustration for DISENGAGE: a woman withdrawing cautiously backward while watching a threat. Transparent background, square source canvas, uncropped artwork for a rectangular card, no words or border. Polished fantasy game art, warm ivory highlights, teal cloth, brown practical leather armor, realistic adult anatomy. Full body in a CLEAN LEFT-FACING SIDE PROFILE, camera at hip height, no twisted front-facing pelvis. Her head, shoulders, pelvis, knees and BOTH feet all face left; her movement is backward to the right. Torso upright, hips naturally under shoulders. Weight rests on the NEAR leg planted almost vertically beneath her hip. The FAR leg is taking one small backward step to the right: it is clearly behind the near leg in depth, only lightly bent, with heel lifted and the BALL OF THAT FOOT touching the ground. Both boot toes point LEFT. Draw TWO DIFFERENT FEET viewed from their physically correct sides, NOT two mirrored left boots: the near boot shows its OUTSIDE ankle and outer edge; the far boot shows its INNER ankle and inner arch. Simple low brown leather ankle boots with plain soles and NO decorative cuffs, straps, buckles or armored greaves to confuse leg geometry. Both boots have natural heel, instep and toe proportions. Plain fitted trousers make the two leg contours readable. Short balanced walking-backward stance, not a lunge, no crossed legs or outward-turned foot. A compact round shield is held in front of her left-facing torso on a bent arm. Other hand empty and relaxed beside her hip, no weapon, no sword, no scabbard. She has a short teal cape that ends above hips so it cannot obscure the waist or legs, tied-back auburn hair, calm watchful expression. From the left edge one small steel spear tip points toward the shield with a generous gap. A simple turquoise rightward arrow on the ground below the boots shows retreat. The woman and anatomically natural walking pose dominate; spear and arrow are secondary. Keep every body part inside canvas. Prioritize correct joints, plausible balance, distinct near/far feet and a simple readable silhouette above ornament. Genuine transparent alpha around illustration.\n\nFinishing edit: Finish this existing image as a production fantasy game asset. Preserve EXACTLY the current natural body anatomy, side profile, joint positions, legs, ankles, boot directions, planted near foot and far foot with raised heel. Preserve the spear, shield, short teal cape and rightward turquoise ground arrow. Remove ALL background: no black backdrop, no gradient, no smoke, no haze, no glows or shadows outside objects. Produce genuinely transparent alpha everywhere outside the woman, shield, spear, and solid arrow. Maintain the internal opaque materials. Recompose on a SQUARE transparent canvas with the woman nearly full height, keeping her full head and both boots visible, shortening only the empty spear shaft at the left as needed. Keep the figure's pose perfectly unchanged. Give the leather, teal cape and steel a lightly richer hand-painted fantasy game finish and crisp warm highlights matching premium painted RPG icons, without changing anatomical shapes. Do NOT invent a new pose, clothing, weapons, text, border or background. Transparent cutout output."
+        },
+        {
+          "date": "2026-10-16",
+          "reason": "Add rightward retreat arrow beneath heroine while retaining the enemy",
+          "previousGeneratedSha256": "67c66319177f34b1e285e74b49f119cbf4a46167bb41c90cfc91dec01a4882db",
+          "previousFinalSha256": "e86f8fb7b22b421f1d5c6a299ef06929710dd02ebb639c752f468feadda0bc95",
+          "previousPrompt": "Expand this fantasy action-card illustration into a WIDE LANDSCAPE 2:1 scene with TWO full-body combatants. ACTION: DISENGAGE — withdraw out of an enemy's melee reach. Use the referenced woman as the exact visual and pose reference, preserving her teal short cape, tied auburn hair, brown leather vest, plain trousers, simple ankle boots, shield, natural side-profile anatomy, planted near foot and raised far heel as she steps BACKWARD to the RIGHT while facing LEFT. Place her in the RIGHT half. On the LEFT add one clearly separate hostile male raider in muted burgundy cloth and dull iron armor, full body visible, oriented RIGHT toward her. His compact broad sword is held forward in one hand; he is starting a small forward step toward her. His colors and detailing are subdued so the heroine is the focal point. Crucial composition: an obvious open GAP between his sword tip and her shield; they are NOT touching, striking, blocking or grappling. She is creating distance, not charging. Keep both combatants roughly equal physical height, both on same implied ground plane, anatomically correct normal legs and RIGHT/LEFT feet. Remove the old floating spear entirely. Remove the turquoise arrow entirely: the two figures, backward step, and empty gap must carry the meaning. No blood, motion-symbols, arrows, lettering or graphic badges. No background scene, no black background, no haze: genuine transparent alpha around the two figures. Polished HAND-PAINTED fantasy game artwork with broad readable shapes and warm highlights, consistent with reference rather than photorealism. Keep all heads, weapons and boots inside the wide rectangular canvas with a small safety margin. Strong readable silhouettes at 110 by 54 pixels. The combined figure group should use the full width of the image, no giant empty margins."
+        },
+        {
+          "date": "2026-10-16",
+          "reason": "Replace small off-center arrow with two broad central retreat sweeps for card-size readability",
+          "previousGeneratedSha256": "9985cd08223e4fa3d62b6384ffc6ee904b68edac31cc8b6cd8d215dfaa17706f",
+          "previousFinalSha256": "aa9ee2b9c8aef97323af64e07ab00c6a044b68e4507eb5f430b41903f89c581a",
+          "previousPrompt": "Make one precise edit to this wide fantasy RPG Disengage illustration: ADD A CLEAR TURQUOISE RETREAT ARROW beneath the woman's feet on the RIGHT half of the image, pointing horizontally to the RIGHT, AWAY from the enemy on the LEFT. The arrow should start below her front planted boot and extend just beyond her rear boot. Use one bold simple gently sweeping painted turquoise shaft and one large unmistakable right-pointing arrowhead, legible even at small card size, coordinated with her teal cape. Leave a small transparent gap between arrow and boots. Keep the arrow wholly inside the canvas; add a little transparent canvas space below if required. Preserve BOTH combatants, their faces, anatomically correct poses, hands, legs, boots, clothing, sword, shield, their relative positions and the empty gap between blade and shield. Do not redraw the people or alter their anatomy. Preserve the existing polished painted fantasy style and wide approximately 2:1 landscape composition. Only one arrow, below the retreating woman, never under the enemy or pointing toward him. Preserve genuine transparent alpha; no background, haze, extra effects, border or text."
+        },
+        {
+          "date": "2026-10-16",
+          "reason": "Shorten both retreat arrows so they belong only to the woman's stance and leave the central gap clear",
+          "previousGeneratedSha256": "3565bea1bab7d38384a2bb01d739ee379f9cf9894841a3f302791858b6441a36",
+          "previousFinalSha256": "9fd6bc650d68af4e4bef41c06cadb368d3de6fe1f1c48367cf26c5379aa3d073",
+          "previousPrompt": "Edit this wide 2:1 fantasy action card image for SMALL-SIZE LEGIBILITY. Preserve BOTH combatants exactly: identities, poses, anatomy, hands, boots, shield, sword and composition. Replace the tiny turquoise arrow under the woman with TWO LARGE BOLD TURQUOISE RETREAT ARROW SWEEPS pointing RIGHT, away from the enemy. They must be prominent like strong painted speed trails in a game action icon, unmistakable when the entire illustration is only 110 pixels wide. Use broad luminous turquoise strokes with pale cyan/ivory highlights and large solid triangular arrowheads. Both sweeps should begin in the EMPTY CENTRAL LOWER GAP between the figures and curve gently to the RIGHT behind/below the retreating woman. Upper sweep: behind her lower thighs, crossing the empty central area and emerging to the right of her legs; lower sweep: just under her boots, spanning the central gap and ending at the far right below her rear boot. Each sweep is roughly 40 percent of total image width and clearly thick, not thin lines. Keep negative space between the two arrows so there are TWO independently readable directional cues. Layer the upper arrow BEHIND the woman's silhouette so her legs and boots remain fully visible and anatomically unchanged. Do not let arrows originate at the enemy's sword or look like projectiles fired at her. Keep sword/shield gap clear. Remove the old small arrow. Add a little transparent room at the right/bottom if needed to keep both arrowheads entirely in frame. Maintain approximately 2:1 landscape, same polished painted fantasy style, no words, no border, no background haze. Genuine transparent alpha outside people and arrows. These are explicit graphic movement cues: prioritize bold clarity, not subtle realism."
+        }
+      ]
+    },
+    {
+      "id": "dodge",
+      "src": "/assets/icons/action/dodge.webp",
+      "prompt": "Create one premium fantasy tabletop RPG action-card illustration, square canvas, transparent background. Use-case: stylized-concept. This is a small 128px card icon, so communicate the action instantly with large bold forms, a strong silhouette, very few elements and clean negative space. Art direction: polished hand-painted fantasy game art, sculptural brushwork, warm ivory highlights on steel and leather, controlled jewel-tone accents, crisp edges, convincing physical anatomy and materials. Rich color and strong midtone contrast, never muddy or nearly black. Center the subject, occupy 85% of the square with a 7% safe margin. It should look beautiful enlarged and be legible at 48px. No text, letters, numbers, symbols resembling writing, border, frame, badge, watermark, background scene or checkerboard. Paint a single coherent illustration, not a collage or multiple panels. Real transparent alpha around the artwork. ACTION: DODGE AN INCOMING ATTACK. A leather-armored adventurer dramatically leaning sideways and ducking under ONE incoming horizontal arrow. The arrow passes visibly ABOVE the character's head through clean empty space, missing by a clear gap. Focus on head and bent torso, strong curved evasion pose, pale cyan motion arc. Hands empty, no shield, no sword, no impact. Immediately understandable as avoiding a hit.",
+      "previousSeed": 1080995585,
+      "originalSha256": "78ba5ec0f38d6ccc43689386447ecd68b7943a1efe4c39e78f23f4f6993fe571",
+      "generatedSha256": "009b6bba2a453582dbc09dca145a48ef4aa88a2321e687a08ebd5a1a007b66a2",
+      "finalSha256": "beb18a42469169e6a78296ac7ba7b1af25ddc9c50dbe62f29a4e0476fe7d5eb7",
+      "bytes": 12818
+    },
+    {
+      "id": "help",
+      "src": "/assets/icons/action/help.webp",
+      "prompt": "Create one premium fantasy tabletop RPG action-card illustration, square canvas, transparent background. Use-case: stylized-concept. This is a small 128px card icon, so communicate the action instantly with large bold forms, a strong silhouette, very few elements and clean negative space. Art direction: polished hand-painted fantasy game art, sculptural brushwork, warm ivory highlights on steel and leather, controlled jewel-tone accents, crisp edges, convincing physical anatomy and materials. Rich color and strong midtone contrast, never muddy or nearly black. Center the subject, occupy 85% of the square with a 7% safe margin. It should look beautiful enlarged and be legible at 48px. No text, letters, numbers, symbols resembling writing, border, frame, badge, watermark, background scene or checkerboard. Paint a single coherent illustration, not a collage or multiple panels. Real transparent alpha around the artwork. ACTION: HELP AN ALLY. Close-up of two different adventurers' forearms and hands in a strong supportive forearm clasp, one arm descending from upper right in a brown leather bracer, the other rising from lower left in a teal cloth sleeve. The upper hand firmly grips the lower forearm while pulling it upward; the lower hand reciprocates. Convey cooperative support with warm golden light. Clear anatomically plausible two hands, no other objects.",
+      "previousSeed": 270525081,
+      "originalSha256": "a4ce4ef17186ef2dc1b1c37a511989f5da10a22a082bae34ae86f62d4d2b42fc",
+      "generatedSha256": "b4d8a1910301c545da4be425e8acf259be45066d063c9a371689be547babf8ce",
+      "finalSha256": "b0b3907b85c676b952458c506eeef49e4eda50545e2e10ceb4e626f217777316",
+      "bytes": 7450
+    },
+    {
+      "id": "hide",
+      "src": "/assets/icons/action/hide.webp",
+      "prompt": "Create one premium fantasy tabletop RPG action-card illustration, square canvas, transparent background. Use-case: stylized-concept. This is a small 128px card icon, so communicate the action instantly with large bold forms, a strong silhouette, very few elements and clean negative space. Art direction: polished hand-painted fantasy game art, sculptural brushwork, warm ivory highlights on steel and leather, controlled jewel-tone accents, crisp edges, convincing physical anatomy and materials. Rich color and strong midtone contrast, never muddy or nearly black. Center the subject, occupy 85% of the square with a 7% safe margin. It should look beautiful enlarged and be legible at 48px. No text, letters, numbers, symbols resembling writing, border, frame, badge, watermark, background scene or checkerboard. Paint a single coherent illustration, not a collage or multiple panels. Real transparent alpha around the artwork. ACTION: HIDE. A hooded rogue with a muted plum cloak crouches tightly behind a single rough upright stone block. Only the hooded head peeking around the edge, shoulder and tucked knee are visible. One watchful eye and subtle amber rimlight distinguish the rogue from the cool slate stone. Body mostly concealed, quiet pose, no attack or magic. Compact bold silhouette.",
+      "previousSeed": 131635382,
+      "originalSha256": "d6209681b2bf749561235c8ef8354b641e1a14efa0d0f6210f5ab3f915d48da6",
+      "generatedSha256": "41887d23345e1b4812e4f24a5b13d5844af7f2a5720d141713d6a38f140bf755",
+      "finalSha256": "45042433169dd9b39208ab31e2b0a8607adceca77ac17ec4cae819c0965dacc5",
+      "bytes": 10496
+    },
+    {
+      "id": "ready",
+      "src": "/assets/icons/action/ready.webp",
+      "prompt": "Create one premium fantasy tabletop RPG action-card illustration, square canvas, transparent background. Use-case: stylized-concept. This is a small 128px card icon, so communicate the action instantly with large bold forms, a strong silhouette, very few elements and clean negative space. Art direction: polished hand-painted fantasy game art, sculptural brushwork, warm ivory highlights on steel and leather, controlled jewel-tone accents, crisp edges, convincing physical anatomy and materials. Rich color and strong midtone contrast, never muddy or nearly black. Center the subject, occupy 85% of the square with a 7% safe margin. It should look beautiful enlarged and be legible at 48px. No text, letters, numbers, symbols resembling writing, border, frame, badge, watermark, background scene or checkerboard. Paint a single coherent illustration, not a collage or multiple panels. Real transparent alpha around the artwork. ACTION: READY / HOLD AN ACTION UNTIL THE RIGHT MOMENT. A focused archer shown waist-up in side profile, holding a bow fully drawn with one arrow nocked, aimed off-frame. The bow is bent under tension and the draw hand is anchored at the cheek. Perfectly still poised anticipation, no projectile in flight and no motion streak. Deep moss-green cloak and warm wood bow. Clean believable archery geometry, clear face, arrow and taut bowstring.",
+      "previousSeed": 1714093622,
+      "originalSha256": "0014b96c4fcbae606b06e98b9caa1a71e9308dc7f3a88ddb4ffe6307fffd2cbe",
+      "generatedSha256": "a463de603dd366173400e09f588d297cc20be1cf3980facb908025a976061916",
+      "finalSha256": "30994eb382655280fbc5580f1bb68204d4e506644d313140df5c79e289da0575",
+      "bytes": 11950
+    },
+    {
+      "id": "grapple",
+      "src": "/assets/icons/action/grapple.webp",
+      "prompt": "Create one premium fantasy tabletop RPG action-card illustration, square canvas, transparent background. Use-case: stylized-concept. This is a small 128px card icon, so communicate the action instantly with large bold forms, a strong silhouette, very few elements and clean negative space. Art direction: polished hand-painted fantasy game art, sculptural brushwork, warm ivory highlights on steel and leather, controlled jewel-tone accents, crisp edges, convincing physical anatomy and materials. Rich color and strong midtone contrast, never muddy or nearly black. Center the subject, occupy 85% of the square with a 7% safe margin. It should look beautiful enlarged and be legible at 48px. No text, letters, numbers, symbols resembling writing, border, frame, badge, watermark, background scene or checkerboard. Paint a single coherent illustration, not a collage or multiple panels. Real transparent alpha around the artwork. ACTION: GRAPPLE / HOLD SOMEONE IN PLACE. Close-up of a brown leather-gauntleted hand tightly ENCIRCLING AND RESTRAINING another person's blue-sleeved wrist. The captive forearm points upward, captive hand clenched into a fist, captor forearm entering horizontally. Clear right-angle composition and visible gripping fingers, one-sided firm restraint rather than mutual handshake. Only two hands and forearms, anatomically correct. No chains, no weapons, no blood.",
+      "previousSeed": 1264852370,
+      "originalSha256": "f7b6b03cb6163f41c470c7a362bf93bf70eac3c1a5921015cf0319f3477cbb5b",
+      "generatedSha256": "c6c5f4f5cd1e227cc5bb724b8775d9c2a97ae66e176823891e60869bf7915eb2",
+      "finalSha256": "c0a603711fa8be951639fd262c803ebea7338ffecdab0f2630781a5a3fa4e806",
+      "bytes": 7828
+    },
+    {
+      "id": "shove",
+      "src": "/assets/icons/action/shove.webp",
+      "prompt": "Create one premium fantasy tabletop RPG action-card illustration, square canvas, transparent background. Use-case: stylized-concept. This is a small 128px card icon, so communicate the action instantly with large bold forms, a strong silhouette, very few elements and clean negative space. Art direction: polished hand-painted fantasy game art, sculptural brushwork, warm ivory highlights on steel and leather, controlled jewel-tone accents, crisp edges, convincing physical anatomy and materials. Rich color and strong midtone contrast, never muddy or nearly black. Center the subject, occupy 85% of the square with a 7% safe margin. It should look beautiful enlarged and be legible at 48px. No text, letters, numbers, symbols resembling writing, border, frame, badge, watermark, background scene or checkerboard. Paint a single coherent illustration, not a collage or multiple panels. Real transparent alpha around the artwork. ACTION: SHOVE / PUSH AN OPPONENT AWAY. Side-view vignette of two simple armored adventurers, shown from head to knees. The left figure plants feet, leans forward, and pushes both open palms against the right figure's upper chest. Right figure reels backward with arms flung wide and body tilted away. One warm amber broad movement sweep reinforces the push. Clear physical contact with palms; no weapons, no fists, no hug.",
+      "previousSeed": 1723747480,
+      "originalSha256": "d1061c2fba8aaaefd19bb2860c7196beb7281aef30243c41bccfc1f8a3af5878",
+      "generatedSha256": "a1ca17aa363cbf365f5ff0f6e775e945698bdb9d4e5d09dc46a72a980bfc0d7c",
+      "finalSha256": "43c4c2f132ee7a9a9a138c541eeb30aefb0692096215f14d5b09404675b5c583",
+      "bytes": 13636
+    },
+    {
+      "id": "use-object",
+      "src": "/assets/icons/action/use-object.webp",
+      "prompt": "Create one premium fantasy tabletop RPG action-card illustration, square canvas, transparent background. Use-case: stylized-concept. This is a small 128px card icon, so communicate the action instantly with large bold forms, a strong silhouette, very few elements and clean negative space. Art direction: polished hand-painted fantasy game art, sculptural brushwork, warm ivory highlights on steel and leather, controlled jewel-tone accents, crisp edges, convincing physical anatomy and materials. Rich color and strong midtone contrast, never muddy or nearly black. Center the subject, occupy 85% of the square with a 7% safe margin. It should look beautiful enlarged and be legible at 48px. No text, letters, numbers, symbols resembling writing, border, frame, badge, watermark, background scene or checkerboard. Paint a single coherent illustration, not a collage or multiple panels. Real transparent alpha around the artwork. ACTION: USE AN OBJECT. One leather-gloved adventurer's hand firmly grasping and pulling a chunky brass mechanical lever with a round red wooden knob. Lever tilts diagonally from a small simple metal pivot base. Close-up, lever and gripping hand occupy most of the canvas. Elegant polished brass highlights and tactile leather, unmistakable physical interaction with a usable mechanism. No other objects, text, symbols or scenery.",
+      "previousSeed": 716515860,
+      "originalSha256": "b2cb9511a603ee2ba58966b1413725e0993d5d2769dc969a8258cd4602917cb9",
+      "generatedSha256": "7e050499391f9df0d73522b223babc709147b68daf48f6a40fb145651cc5d3d2",
+      "finalSha256": "1744852ccacd66bf27bc2e3358d86f3e95b6796d8c5764740fbfc59aa32a9ebf",
+      "bytes": 10238
+    },
+    {
+      "id": "end-turn",
+      "src": "/assets/icons/action/end-turn.webp",
+      "prompt": "Create one premium fantasy tabletop RPG action-card illustration, square canvas, transparent background. Use-case: stylized-concept. This is a small 128px card icon, so communicate the action instantly with large bold forms, a strong silhouette, very few elements and clean negative space. Art direction: polished hand-painted fantasy game art, sculptural brushwork, warm ivory highlights on steel and leather, controlled jewel-tone accents, crisp edges, convincing physical anatomy and materials. Rich color and strong midtone contrast, never muddy or nearly black. Center the subject, occupy 85% of the square with a 7% safe margin. It should look beautiful enlarged and be legible at 48px. No text, letters, numbers, symbols resembling writing, border, frame, badge, watermark, background scene or checkerboard. Paint a single coherent illustration, not a collage or multiple panels. Real transparent alpha around the artwork. ACTION: END TURN / FINISH YOUR TURN. One beautiful small brass hourglass with ALL its golden sand collected in the LOWER bulb and the upper bulb visibly EMPTY, no falling stream. Beside the hourglass, a large simple emerald-green check mark rendered as a solid polished enamel shape, instantly readable. The completed hourglass is the main object, check mark secondary. Broad clear glass silhouette and warm gold edges. No clock face, numbers, words or circular arrow.",
+      "previousSeed": 858383481,
+      "originalSha256": "ab6651dfe121e663d908c15926a9be8548ab1ef0baa32dc6f961be6400798016",
+      "generatedSha256": "49b80fbe71054b4b504691da8e33c27ef2ecc4118570cc8ae6677f395a26ce11",
+      "finalSha256": "5fce7ebc4929869f544640663388d1080b51cf3aa297a84f9077b2ddac5b628f",
+      "bytes": 11432
+    },
+    {
+      "id": "search",
+      "src": "/assets/icons/action/search.webp",
+      "prompt": "Use-case: stylized-concept. Create a single premium hand-painted fantasy tabletop RPG action-card illustration on a transparent background. Polished sculptural brushwork, warm ivory edge highlights, rich leather and metal materials, restrained jewel-tone accents. Strong simple silhouette, very few elements, instantly readable at small card size; beautiful at full size. Compose freely for an uncropped rectangular card illustration area, not a circular badge. Square source canvas, all important elements inside edges with a small safe margin. No text, writing, border, label, badge, watermark, checkerboard, or scenery beyond the specified elements. Real transparent alpha. ACTION: SEARCH / INVESTIGATE. One large elegant brass magnifying glass examining a SINGLE medieval soft leather boot impression in a small irregular patch of damp brown earth. The boot impression MUST be one plain continuous smooth sole-shaped shallow depression with a rounded toe and narrow heel. Its interior is smooth compressed mud with only natural faint dirt texture. Absolutely NO modern shoe tread, rubber outsole, lug pattern, crosshatching, grooves, geometric blocks, separate heel pad, sneakers, tire tracks or repeating pattern anywhere. The glass enlarges part of this simple plain footprint. A leather-gloved hand holds the magnifier at lower right. Lens has a subtle pale turquoise edge and clear transparent center so the smooth footprint is readable. Earth patch is compact and isolated; magnifier is the dominant shape. Warm brass and earth against cool turquoise reflections.",
+      "previousSeed": 622510167,
+      "originalSha256": "180b94f0b6f7ca56cd2522a0d41334abecf268f946c841f6a76e4d4b12aa9661",
+      "generatedSha256": "08394332f5ca2207c62b7fc3bcbbddc1636324d661c256200740fb11dbeff019",
+      "finalSha256": "70d9cda12a7ec11da61466f23b16c49c47c2315cc7287e38b7ef11ab2b650e76",
+      "bytes": 10854,
+      "revisions": [
+        {
+          "date": "2026-10-16",
+          "reason": "Remove modern footwear tread",
+          "previousGeneratedSha256": "d33d082aa1f77333124ab08e923ddb971fec790311984cb3f10669d6d5d7156b",
+          "previousFinalSha256": "2b7a6f80043c9fbc18b0725f84eba9ad0ffbbf327aa1e5e891598b062cfa5aa7",
+          "previousPrompt": "Create one premium fantasy tabletop RPG action-card illustration, square canvas, transparent background. Use-case: stylized-concept. This is a small 128px card icon, so communicate the action instantly with large bold forms, a strong silhouette, very few elements and clean negative space. Art direction: polished hand-painted fantasy game art, sculptural brushwork, warm ivory highlights on steel and leather, controlled jewel-tone accents, crisp edges, convincing physical anatomy and materials. Rich color and strong midtone contrast, never muddy or nearly black. Center the subject, occupy 85% of the square with a 7% safe margin. It should look beautiful enlarged and be legible at 48px. No text, letters, numbers, symbols resembling writing, border, frame, badge, watermark, background scene or checkerboard. Paint a single coherent illustration, not a collage or multiple panels. Real transparent alpha around the artwork. ACTION: SEARCH / INSPECT. A large elegant brass magnifying glass held by a gloved hand, examining one distinct muddy boot print on a small torn scrap of cream parchment. The lens clearly enlarges the central heel print. Close-up, big readable magnifying glass silhouette, warm brass, teal reflected glass and light parchment. No writing, no map lines, no extra props. The magnifying lens dominates."
+        }
+      ]
+    },
+    {
+      "id": "escape",
+      "src": "/assets/icons/action/escape.webp",
+      "prompt": "Create one premium fantasy tabletop RPG action-card illustration, square canvas, transparent background. Use-case: stylized-concept. This is a small 128px card icon, so communicate the action instantly with large bold forms, a strong silhouette, very few elements and clean negative space. Art direction: polished hand-painted fantasy game art, sculptural brushwork, warm ivory highlights on steel and leather, controlled jewel-tone accents, crisp edges, convincing physical anatomy and materials. Rich color and strong midtone contrast, never muddy or nearly black. Center the subject, occupy 85% of the square with a 7% safe margin. It should look beautiful enlarged and be legible at 48px. No text, letters, numbers, symbols resembling writing, border, frame, badge, watermark, background scene or checkerboard. Paint a single coherent illustration, not a collage or multiple panels. Real transparent alpha around the artwork. ACTION: ESCAPE / BREAK FREE FROM A RESTRAINT. Two leather-bracered wrists pulling forcefully apart, breaking a thick hemp rope binding. The rope has clearly parted at the center with two frayed ends separated by a wide visible gap, taut loops still around the wrists. Two clenched hands at opposite upper corners, bold outward movement, warm amber fibers against steel-blue bracers. The unmistakable focus is snapped restraint and separation. No lock or key, no weapons, no blood.",
+      "previousSeed": 1924766121,
+      "originalSha256": "3e52e9d537d198a55e7466b2094553d571d4e20228e5cccfd7e0dea79a1ff610",
+      "generatedSha256": "0c752d689e72b4b7d1d5343a7e0a5c7dacf3ede5ae0d4999968dc408ab567db1",
+      "finalSha256": "8cc7e43da038a1896500eb6d806d388c3344b00dece99768d9550b885a8572a0",
+      "bytes": 12422
+    },
+    {
+      "id": "stand-up",
+      "src": "/assets/icons/action/stand-up.webp",
+      "prompt": "Create one premium fantasy tabletop RPG action-card illustration, square canvas, transparent background. Use-case: stylized-concept. This is a small 128px card icon, so communicate the action instantly with large bold forms, a strong silhouette, very few elements and clean negative space. Art direction: polished hand-painted fantasy game art, sculptural brushwork, warm ivory highlights on steel and leather, controlled jewel-tone accents, crisp edges, convincing physical anatomy and materials. Rich color and strong midtone contrast, never muddy or nearly black. Center the subject, occupy 85% of the square with a 7% safe margin. It should look beautiful enlarged and be legible at 48px. No text, letters, numbers, symbols resembling writing, border, frame, badge, watermark, background scene or checkerboard. Paint a single coherent illustration, not a collage or multiple panels. Real transparent alpha around the artwork. ACTION: STAND UP FROM PRONE. One full-body leather-armored adventurer halfway through pushing up from the ground: one knee still low, opposite boot firmly planted, one palm braced against a small low stone surface, torso and head rising upright. A single broad pale gold upward sweep behind the rising torso conveys upward motion. Teal tunic, warm brown boots, no weapon, no other people. Clear grounded get-up pose, not running or jumping.",
+      "previousSeed": 1461678133,
+      "originalSha256": "9c9e9f318ec09ac7219e942b72b5dfc8caf1595387e49a053740aea5becba05d",
+      "generatedSha256": "67bc6c1adcbe0045c893e946430f903d0b0d8b0626fa420fcea3c59eb3fffa2d",
+      "finalSha256": "c86295bc75ed4dfafa1fb29da961d571f3a6b80c662d6614d74b607ef2887d7d",
+      "bytes": 10934
+    }
+  ],
+  "reviewPreview": "docs/art/action-cards-2026-10-15.webp",
+  "lastUpdated": "2026-10-16",
+  "validation": {
+    "assetCount": 15,
+    "integrity": "passed",
+    "dimensions": "256x128",
+    "alpha": "transparent and opaque pixels verified in every asset",
+    "originalHashes": "matched HEAD for all 15",
+    "finalHashes": "matched all shipped files",
+    "unrelatedManifestEntries": "unchanged",
+    "repositoryChecks": "node scripts/test-icons.mjs: 6 passed",
+    "visualReview": {
+      "sizes": [
+        "112x54",
+        "84x40"
+      ],
+      "surrounds": [
+        "dark",
+        "light"
+      ],
+      "result": "All fifteen inspected as uncropped rectangular illustrations. Disengage includes two separated combatants. Fine detail simplifies at compact size."
+    },
+    "code": {
+      "iconChecks": 6,
+      "handLookChecks": 13,
+      "lint": "Three changed TSX files passed",
+      "render": {
+        "scope": "Actual GameIcon component rendered with repository CSS in a static card-area fixture; no authenticated campaign session",
+        "viewports": [
+          "1100x1000",
+          "390x844"
+        ],
+        "result": "Action artwork fills width without scale or circular clipping; spell circle/zoom retained; More actions 80x40",
+        "measurements": [
+          {
+            "viewport": "desktop",
+            "measured": [
+              {
+                "kind": "action",
+                "areaWidth": 130,
+                "frameWidth": 130,
+                "frameHeight": 56,
+                "transform": "none",
+                "scale": "none",
+                "objectFit": "contain",
+                "borderRadius": "6px",
+                "naturalWidth": 256,
+                "naturalHeight": 128
+              },
+              {
+                "kind": "action",
+                "areaWidth": 130,
+                "frameWidth": 130,
+                "frameHeight": 56,
+                "transform": "none",
+                "scale": "none",
+                "objectFit": "contain",
+                "borderRadius": "6px",
+                "naturalWidth": 256,
+                "naturalHeight": 128
+              },
+              {
+                "kind": "action",
+                "areaWidth": 130,
+                "frameWidth": 130,
+                "frameHeight": 56,
+                "transform": "none",
+                "scale": "none",
+                "objectFit": "contain",
+                "borderRadius": "6px",
+                "naturalWidth": 256,
+                "naturalHeight": 128
+              },
+              {
+                "kind": "spell",
+                "areaWidth": 130,
+                "frameWidth": 52,
+                "frameHeight": 52,
+                "transform": "none",
+                "scale": "1.7",
+                "objectFit": "contain",
+                "borderRadius": "3.35544e+07px",
+                "naturalWidth": 128,
+                "naturalHeight": 128
+              }
+            ],
+            "more": {
+              "x": 24,
+              "y": 388,
+              "width": 80,
+              "height": 40
+            }
+          },
+          {
+            "viewport": "phone",
+            "measured": [
+              {
+                "kind": "action",
+                "areaWidth": 110,
+                "frameWidth": 110,
+                "frameHeight": 38,
+                "transform": "none",
+                "scale": "none",
+                "objectFit": "contain",
+                "borderRadius": "6px",
+                "naturalWidth": 256,
+                "naturalHeight": 128
+              },
+              {
+                "kind": "action",
+                "areaWidth": 110,
+                "frameWidth": 110,
+                "frameHeight": 38,
+                "transform": "none",
+                "scale": "none",
+                "objectFit": "contain",
+                "borderRadius": "6px",
+                "naturalWidth": 256,
+                "naturalHeight": 128
+              },
+              {
+                "kind": "action",
+                "areaWidth": 110,
+                "frameWidth": 110,
+                "frameHeight": 38,
+                "transform": "none",
+                "scale": "none",
+                "objectFit": "contain",
+                "borderRadius": "6px",
+                "naturalWidth": 256,
+                "naturalHeight": 128
+              },
+              {
+                "kind": "spell",
+                "areaWidth": 110,
+                "frameWidth": 36,
+                "frameHeight": 36,
+                "transform": "none",
+                "scale": "1.7",
+                "objectFit": "contain",
+                "borderRadius": "3.35544e+07px",
+                "naturalWidth": 128,
+                "naturalHeight": 128
+              }
+            ],
+            "more": {
+              "x": 24,
+              "y": 612,
+              "width": 80,
+              "height": 40
+            }
+          }
+        ]
+      }
+    }
+  }
+}

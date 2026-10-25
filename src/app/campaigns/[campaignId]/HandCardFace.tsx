@@ -4,6 +4,7 @@ import * as RadixTooltip from "@radix-ui/react-tooltip";
 import { memo, useMemo } from "react";
 import type { CSSProperties } from "react";
 import { GameIcon } from "@/components/ui/GameIcon";
+import { cardArtwork } from "@/lib/battlemap/card-art";
 import type { HandCard, HandCardType, HandCost } from "@/lib/battlemap/hand";
 import { previewRows, type HandAim, type PreviewRow } from "@/lib/battlemap/hand-play";
 
@@ -122,6 +123,7 @@ function HandCardFaceInner({
   onPick: (card: HandCard) => void;
 }) {
   const rows = useMemo(() => previewRows(card, aim, conditions), [card, aim, conditions]);
+  const artwork = cardArtwork(card.icon);
   const aimName = aim && card.target === "enemy" && aim.kind === "enemy" ? aim.name : "";
   const slotStyle = {
     "--i": index,
@@ -158,7 +160,11 @@ function HandCardFaceInner({
           <span className="hand-range">{card.range}</span>
         </span>
         <span className="hand-art">
-          <GameIcon icon={card.icon} size="size-[52px] max-sm:size-9" className="hand-art-icon" />
+          <GameIcon
+            icon={artwork}
+            size={artwork.kind === "action" ? "h-full w-full p-0.5" : "size-[52px] max-sm:size-9"}
+            className="hand-art-icon"
+          />
         </span>
         <span className="hand-name">{card.name}</span>
         <span className="hand-numbers">

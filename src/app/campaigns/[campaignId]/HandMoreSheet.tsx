@@ -2,6 +2,7 @@
 
 import type { CSSProperties, ReactNode } from "react";
 import { GameIcon } from "@/components/ui/GameIcon";
+import { cardArtwork } from "@/lib/battlemap/card-art";
 import { Sheet } from "@/components/ui/Sheet";
 import { cn } from "@/lib/cn";
 import type { HandCard } from "@/lib/battlemap/hand";
@@ -87,6 +88,7 @@ export function HandMoreSheet({
               // Held only by the turn: readable at full strength, and its own
               // line is not spent repeating what the note above already said.
               const waiting = isWaiting(card);
+              const artwork = cardArtwork(card.icon);
               const rows = previewRows(card, card.intent.card === "reaction" ? null : aim, conditions);
               const facts = [card.dice, card.roll, card.range].filter(Boolean).join(" · ");
               return (
@@ -100,7 +102,7 @@ export function HandMoreSheet({
                       card.disabled && !waiting && "opacity-60",
                     )}
                   >
-                    <GameIcon icon={card.icon} size="size-10" className="mt-0.5" />
+                    <GameIcon icon={artwork} size={artwork.kind === "action" ? "h-10 w-20" : "size-10"} className="mt-0.5" />
                     <span className="min-w-0 flex-1">
                       <span className="flex items-baseline gap-2">
                         <span className="truncate font-display text-sm font-semibold text-stone-100">{card.name}</span>

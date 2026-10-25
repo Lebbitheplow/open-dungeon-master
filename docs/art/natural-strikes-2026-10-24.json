@@ -1,0 +1,236 @@
+{
+  "date": "2026-10-24",
+  "tool": "built-in image_gen",
+  "dimensions": [
+    256,
+    128
+  ],
+  "approach": "Attack first, shared anatomy groups",
+  "records": [
+    {
+      "id": "unarmed-strike",
+      "label": "Unarmed strike",
+      "prompt": "Use-case: stylized-concept. One premium hand-painted fantasy tabletop RPG ATTACK CARD illustration, wide 2:1 landscape source, genuine TRANSPARENT background. Match a cohesive illustrated fantasy set: warm ivory rim highlights, tactile painterly fur/leather/steel, rich restrained colors, bold sculptural forms. The action must read instantly at 110x54 pixels. One dominant subject and one broad warm amber action-sweep, very simple silhouette, minimal tiny detail. Fill the wide rectangle; keep defining anatomy inside edges with small margins. No scenery, frame, words, writing, watermark, round badge or background haze. Original animal design, not official game art. A large BARE HUMAN FIST punching forcefully toward the viewer and slightly right, foreshortened but anatomically correct knuckles and tucked thumb. Wrist and forearm wrapped in simple ivory training cloth with a worn brown leather wristband. One broad amber motion swoosh behind the punch. No weapon, no gauntlet, no target, no blood. Clearly a punch, not a handshake or grabbing hand.",
+      "sourceSha256": "8808db674334970fc0459a7b1a0df14700e432ec293a2e9a0a72d46c7e20cceb",
+      "assetSha256": "67706f2cbcd76a5444e25dfdd515ea977c3a0cc561b3a85058a17cc6b84a14d4",
+      "bytes": 21526,
+      "uses": [
+        "Player unarmed strike and bonus unarmed strikes"
+      ]
+    },
+    {
+      "id": "strike-bite-mammal",
+      "label": "Bite · mammal",
+      "subject": "A close-up of a furred mammal muzzle and open jaws snapping toward the right, ivory canine teeth unmistakable. Neutral brown fur and a compact muzzle usable for bears, wolves and big cats. Emphasize upper and lower jaw closing, not a whole animal portrait. No oversized saber teeth.",
+      "uses": [
+        "Wolf · Bite",
+        "Dire Wolf · Bite",
+        "Black Bear · Bite",
+        "Brown Bear · Bite",
+        "Panther · Bite"
+      ],
+      "prompt": "Use case: stylized-concept. Asset type: premium painted fantasy RPG action-card artwork. Create ONE finished rectangular illustration, wide landscape 2:1 canvas, transparent background. Art direction: crisp sculpted painterly realism, rich natural material colors, warm ivory-gold edge lighting, high contrast silhouette, restrained short gold motion accents. Close-up of the striking body part in action, not a full creature portrait. It must read instantly at 112 by 54 pixels and look polished enlarged. Fill 85-90% of the width and most of the height, keep essential tips fully within the canvas, no circular containment, no medallion, no frame, no ground or scenery, no text, no labels, no letters, no watermark, no blood or wounds. Genuine transparent alpha around the subject, no dark square background. Subject: A close-up of a furred mammal muzzle and open jaws snapping toward the right, ivory canine teeth unmistakable. Neutral brown fur and a compact muzzle usable for bears, wolves and big cats. Emphasize upper and lower jaw closing, not a whole animal portrait. No oversized saber teeth.",
+      "generatedPath": "exec-f00654ee-8500-47b5-a9fe-c1046dc47110.png",
+      "revision": null,
+      "sourceSha256": "6f67c161bdcfca65a4b873234c57c48abe1b619e2accb4d693f3b51dddc1879d",
+      "assetSha256": "9cc106c7f61cb38cc102ba7d73fbc338886c06a580dc714f11f60142557d9f39",
+      "bytes": 21474
+    },
+    {
+      "id": "strike-bite-reptile",
+      "label": "Bite · reptile",
+      "subject": "A close-up of robust olive-brown reptilian jaws snapping horizontally right, thick scaly snout, rows of conical teeth, strong lower jaw. Anatomy broadly usable for crocodilians and large predatory dinosaurs. No fur, no horns, no dragon spikes, no long snake fangs.",
+      "uses": [
+        "Crocodile · Bite",
+        "Tyrannosaurus Rex · Bite"
+      ],
+      "prompt": "Use case: stylized-concept. Asset type: premium painted fantasy RPG action-card artwork. Create ONE finished rectangular illustration, wide landscape 2:1 canvas, transparent background. Art direction: crisp sculpted painterly realism, rich natural material colors, warm ivory-gold edge lighting, high contrast silhouette, restrained short gold motion accents. Close-up of the striking body part in action, not a full creature portrait. It must read instantly at 112 by 54 pixels and look polished enlarged. Fill 85-90% of the width and most of the height, keep essential tips fully within the canvas, no circular containment, no medallion, no frame, no ground or scenery, no text, no labels, no letters, no watermark, no blood or wounds. Genuine transparent alpha around the subject, no dark square background. Subject: A close-up of robust olive-brown reptilian jaws snapping horizontally right, thick scaly snout, rows of conical teeth, strong lower jaw. Anatomy broadly usable for crocodilians and large predatory dinosaurs. No fur, no horns, no dragon spikes, no long snake fangs.",
+      "generatedPath": "exec-fe5a149a-408a-42ab-965a-f81e8dd313b6.png",
+      "revision": null,
+      "sourceSha256": "9887227c5c9e6245344c8663e80ef53a0ee756155e19f28ebd8a5c8e59633e0f",
+      "assetSha256": "0c0e1752e073ec083e72a0b240d2a9a9698e9b5bddd8ae6658346cfeaa16de3c",
+      "bytes": 25130
+    },
+    {
+      "id": "strike-bite-serpent",
+      "label": "Bite · snake",
+      "subject": "A close-up of a nonvenomous constrictor snake head and short curved neck lunging right with an open mouth. Rounded python-like head, gold-olive scales, small recurved teeth; absolutely no long venom fangs or cobra hood. The open jaws and lunge are the dominant subject.",
+      "uses": [
+        "Giant Constrictor Snake · Bite"
+      ],
+      "prompt": "Use case: stylized-concept. Asset type: premium painted fantasy RPG action-card artwork. Create ONE finished rectangular illustration, wide landscape 2:1 canvas, transparent background. Art direction: crisp sculpted painterly realism, rich natural material colors, warm ivory-gold edge lighting, high contrast silhouette, restrained short gold motion accents. Close-up of the striking body part in action, not a full creature portrait. It must read instantly at 112 by 54 pixels and look polished enlarged. Fill 85-90% of the width and most of the height, keep essential tips fully within the canvas, no circular containment, no medallion, no frame, no ground or scenery, no text, no labels, no letters, no watermark, no blood or wounds. Genuine transparent alpha around the subject, no dark square background. Subject: A close-up of a nonvenomous constrictor snake head and short curved neck lunging right with an open mouth. Rounded python-like head, gold-olive scales, small recurved teeth; absolutely no long venom fangs or cobra hood. The open jaws and lunge are the dominant subject.",
+      "generatedPath": "exec-7a43f651-b925-4e34-a680-a2e91a40712f.png",
+      "revision": null,
+      "sourceSha256": "58b838fd68df4874b8734df8f3254897afd55c530f70c686110691ef2364768f",
+      "assetSha256": "a8aa015d1154c81b41f18dc1c6c60633b2a11ec641f5743766420192d7130f5a",
+      "bytes": 22782
+    },
+    {
+      "id": "strike-bite-arachnid",
+      "label": "Bite · spider",
+      "subject": "A tight dramatic front-three-quarter close-up of a spider's paired chelicerae and two short curved pointed fangs thrusting forward and inward, attached to the compact hairy front of its cephalothorax. Multiple small eyes above, two pedipalps framing the fangs, no full eight-leg body. Two clearly separated fangs, no mammal jaw or human teeth.",
+      "uses": [
+        "Giant Spider · Bite"
+      ],
+      "prompt": "Use case: stylized-concept. Asset type: premium painted fantasy RPG action-card artwork. Create ONE finished rectangular illustration, wide landscape 2:1 canvas, transparent background. Art direction: crisp sculpted painterly realism, rich natural material colors, warm ivory-gold edge lighting, high contrast silhouette, restrained short gold motion accents. Close-up of the striking body part in action, not a full creature portrait. It must read instantly at 112 by 54 pixels and look polished enlarged. Fill 85-90% of the width and most of the height, keep essential tips fully within the canvas, no circular containment, no medallion, no frame, no ground or scenery, no text, no labels, no letters, no watermark, no blood or wounds. Genuine transparent alpha around the subject, no dark square background. Subject: A tight dramatic front-three-quarter close-up of a spider's paired chelicerae and two short curved pointed fangs thrusting forward and inward, attached to the compact hairy front of its cephalothorax. Multiple small eyes above, two pedipalps framing the fangs, no full eight-leg body. Two clearly separated fangs, no mammal jaw or human teeth.",
+      "generatedPath": "exec-acb8077d-6664-4ff3-87c3-23b47704c535.png",
+      "revision": null,
+      "sourceSha256": "703819217f2727ec5606e63ffe18f5898ecdbe03bc7e763bd6bcce8d9b972da6",
+      "assetSha256": "fd6c90671df06bec73590d662bdecb2b565e766ea0314c5031e1f69b8381135a",
+      "bytes": 25588
+    },
+    {
+      "id": "strike-claw-mammal",
+      "label": "Claw · mammal",
+      "subject": "One powerful furred mammal forepaw sweeping horizontally from left to right, four distinct ivory claws hooked forward, warm brown fur and one connected wrist, a few short gold slash trails emphasizing the swipe. Close-up body-part action, no animal face, no multiple paws, no hand gripping anything.",
+      "uses": [
+        "Black Bear · Claws",
+        "Brown Bear · Claws",
+        "Panther · Claw"
+      ],
+      "prompt": "Use case: stylized-concept. Asset type: premium painted fantasy RPG action-card artwork. Create ONE finished rectangular illustration, wide landscape 2:1 canvas, transparent background. Art direction: crisp sculpted painterly realism, rich natural material colors, warm ivory-gold edge lighting, high contrast silhouette, restrained short gold motion accents. Close-up of the striking body part in action, not a full creature portrait. It must read instantly at 112 by 54 pixels and look polished enlarged. Fill 85-90% of the width and most of the height, keep essential tips fully within the canvas, no circular containment, no medallion, no frame, no ground or scenery, no text, no labels, no letters, no watermark, no blood or wounds. Genuine transparent alpha around the subject, no dark square background. Subject: One powerful furred mammal forepaw sweeping horizontally from left to right, four distinct ivory claws hooked forward, warm brown fur and one connected wrist, a few short gold slash trails emphasizing the swipe. Close-up body-part action, no animal face, no multiple paws, no hand gripping anything.",
+      "generatedPath": "exec-c89573dc-4865-489e-99a0-2807a080e1ea.png",
+      "revision": null,
+      "sourceSha256": "ba8cbf9531a670a0c9bc4bbb890a0ccc560a630037e559a449d866902ffb3ccd",
+      "assetSha256": "a86c1c354b887d2c09caea3ec4cccd9e2bad74285ef19baffea650874f318dd9",
+      "bytes": 23444
+    },
+    {
+      "id": "strike-ram-antlers",
+      "label": "Ram · antlers",
+      "subject": "A compact frontal-three-quarter view of a lowered antlered brow driving to the right, two branching antlers extending across the wide frame. Focus tightly on the antlers and lowered forehead, with short rightward motion streaks. Brown fur, branched bone antlers, no curled sheep horns. Clear charging headbutt, no full body.",
+      "uses": [
+        "Elk · Ram"
+      ],
+      "prompt": "Use case: stylized-concept. Asset type: premium painted fantasy RPG action-card artwork. Create ONE finished rectangular illustration, wide landscape 2:1 canvas, transparent background. Art direction: crisp sculpted painterly realism, rich natural material colors, warm ivory-gold edge lighting, high contrast silhouette, restrained short gold motion accents. Close-up of the striking body part in action, not a full creature portrait. It must read instantly at 112 by 54 pixels and look polished enlarged. Fill 85-90% of the width and most of the height, keep essential tips fully within the canvas, no circular containment, no medallion, no frame, no ground or scenery, no text, no labels, no letters, no watermark, no blood or wounds. Genuine transparent alpha around the subject, no dark square background. Subject: A compact frontal-three-quarter view of a lowered antlered brow driving to the right, two branching antlers extending across the wide frame. Focus tightly on the antlers and lowered forehead, with short rightward motion streaks. Brown fur, branched bone antlers, no curled sheep horns. Clear charging headbutt, no full body.",
+      "generatedPath": "exec-76595ae6-7b14-49ab-83f0-b1a89c69c2dd.png",
+      "revision": {
+        "prompt": "Edit this illustration only to correct the framing. Preserve the painted style, lowered charging head, branching antler anatomy, gold motion accents and transparent background. Zoom out/recompose enough that ALL antler tips, including the tallest points at the upper left, are completely visible with a little transparent margin on every edge. Complete the previously clipped tips naturally. Keep a wide 2:1 rectangle, not square. No text, no frame.",
+        "source": "exec-3b3d63a8-4639-4377-90ee-52ddd97aae89.png"
+      },
+      "sourceSha256": "a6ef852451fad3f093f9eccfe284bbc772bb66503e854e6154b6d54dd1a8e217",
+      "assetSha256": "d72312d5d17717e3c4c00473d523b9694b23251a0ad27df6ba273b8226dd6b10",
+      "bytes": 22340
+    },
+    {
+      "id": "strike-fist-primate",
+      "label": "Fist · primate",
+      "subject": "A broad dark leathery closed primate fist with a short furred forearm punching from left to right, four knuckles in a single connected fist, thumb correctly wrapped outside curled fingers. Bare natural skin and brown-black fur, no human wrist wraps or armor. Clean anatomy, brief warm gold motion strokes behind.",
+      "uses": [
+        "Ape · Fist",
+        "Giant Ape · Fist"
+      ],
+      "prompt": "Use case: stylized-concept. Asset type: premium painted fantasy RPG action-card artwork. Create ONE finished rectangular illustration, wide landscape 2:1 canvas, transparent background. Art direction: crisp sculpted painterly realism, rich natural material colors, warm ivory-gold edge lighting, high contrast silhouette, restrained short gold motion accents. Close-up of the striking body part in action, not a full creature portrait. It must read instantly at 112 by 54 pixels and look polished enlarged. Fill 85-90% of the width and most of the height, keep essential tips fully within the canvas, no circular containment, no medallion, no frame, no ground or scenery, no text, no labels, no letters, no watermark, no blood or wounds. Genuine transparent alpha around the subject, no dark square background. Subject: A broad dark leathery closed primate fist with a short furred forearm punching from left to right, four knuckles in a single connected fist, thumb correctly wrapped outside curled fingers. Bare natural skin and brown-black fur, no human wrist wraps or armor. Clean anatomy, brief warm gold motion strokes behind.",
+      "generatedPath": "exec-7334cafc-1276-4499-bc74-3ce1db704245.png",
+      "revision": null,
+      "sourceSha256": "fe5de9d679a64a0152bfea746906dae232af1e78aa7fd213a68ac8085ee90839",
+      "assetSha256": "9c3bb3e1213fbc7ff9580e8e61375c1280ae1c2e6201fd127192ef6bb223d67c",
+      "bytes": 22252
+    },
+    {
+      "id": "strike-beak",
+      "label": "Beak · bird",
+      "subject": "A close crop of a feathered bird head in side-three-quarter view, powerful curved golden beak open slightly, thrusting horizontally right in a sharp peck. Make the beak dominate the composition; swept-back feathers and short motion trails communicate pecking rather than a still bird portrait. No talons.",
+      "uses": [
+        "Giant Eagle · Beak"
+      ],
+      "prompt": "Use case: stylized-concept. Asset type: premium painted fantasy RPG action-card artwork. Create ONE finished rectangular illustration, wide landscape 2:1 canvas, transparent background. Art direction: crisp sculpted painterly realism, rich natural material colors, warm ivory-gold edge lighting, high contrast silhouette, restrained short gold motion accents. Close-up of the striking body part in action, not a full creature portrait. It must read instantly at 112 by 54 pixels and look polished enlarged. Fill 85-90% of the width and most of the height, keep essential tips fully within the canvas, no circular containment, no medallion, no frame, no ground or scenery, no text, no labels, no letters, no watermark, no blood or wounds. Genuine transparent alpha around the subject, no dark square background. Subject: A close crop of a feathered bird head in side-three-quarter view, powerful curved golden beak open slightly, thrusting horizontally right in a sharp peck. Make the beak dominate the composition; swept-back feathers and short motion trails communicate pecking rather than a still bird portrait. No talons.",
+      "generatedPath": "exec-045a54ef-c01e-4cfc-9ec8-64b6a002c8d5.png",
+      "revision": {
+        "prompt": "Edit the attached bird attack illustration to correct the anatomy of the beak. The current upper beak is much too long and narrow. Replace it with a SHORT, DEEP, COMPACT raptor beak: a broad deep base directly ahead of the eye, a short sharply hooked upper tip, and a proportionately short lower mandible. Beak length from face to tip should be roughly HALF its current length. Use believable eagle anatomy, not a toucan, raven, or fantasy elongated bill. Keep the mouth just slightly open in a forward peck, not a wide gaping mouth. Preserve the painted feather textures, warm ivory-gold rim lighting, rightward pecking motion accents, transparent background and wide 2:1 rectangular format. Rebalance the subject within the rectangle after shortening the beak; no text or frame.",
+        "source": "exec-8a46151a-f71a-4d6b-8ce4-f490efbca3f9.png"
+      },
+      "sourceSha256": "07beb1f0d16e1eeb058e1f6000d7e8f0f396bde2452f7105afc12ee96935a28c",
+      "assetSha256": "2c08ba05d92a0047b2fbfdad433f4b0c3de67195d224d2d54670f5f30843c5da",
+      "bytes": 23814
+    },
+    {
+      "id": "strike-talons",
+      "label": "Talons · bird",
+      "subject": "One scaled golden avian foot and short feathered ankle sweeping forward horizontally in a grabbing strike, three forward toes with long curved dark claws and one rear opposing talon, all connected naturally at the foot. Clear bird foot rather than furry mammal paw. Bold separated toe silhouettes and short gold motion traces, no bird head.",
+      "uses": [
+        "Giant Eagle · Talons"
+      ],
+      "prompt": "Use case: stylized-concept. Asset type: premium painted fantasy RPG action-card artwork. Create ONE finished rectangular illustration, wide landscape 2:1 canvas, transparent background. Art direction: crisp sculpted painterly realism, rich natural material colors, warm ivory-gold edge lighting, high contrast silhouette, restrained short gold motion accents. Close-up of the striking body part in action, not a full creature portrait. It must read instantly at 112 by 54 pixels and look polished enlarged. Fill 85-90% of the width and most of the height, keep essential tips fully within the canvas, no circular containment, no medallion, no frame, no ground or scenery, no text, no labels, no letters, no watermark, no blood or wounds. Genuine transparent alpha around the subject, no dark square background. Subject: One scaled golden avian foot and short feathered ankle sweeping forward horizontally in a grabbing strike, three forward toes with long curved dark claws and one rear opposing talon, all connected naturally at the foot. Clear bird foot rather than furry mammal paw. Bold separated toe silhouettes and short gold motion traces, no bird head.",
+      "generatedPath": "exec-f80e44d3-eb31-4173-814e-580e28f723e8.png",
+      "revision": null,
+      "sourceSha256": "e0dbdb8c4f0811aa5c18d2843e83c1e836a31b970dc891e94d8019f4c099cc85",
+      "assetSha256": "0d85907283ed72b79e91d809e4201737fabffec7eba33cbc777c9cdb3399b9f4",
+      "bytes": 20700
+    },
+    {
+      "id": "strike-tentacles",
+      "label": "Tentacles · cephalopod",
+      "subject": "Three muscular reddish copper octopus arms reaching from a shared off-frame left origin across the rectangle toward the right, curling grasping tips with obvious pale double rows of suction cups. Express an active reach and grab, not a decorative knot. No octopus head, no splash background, no claws or snake scales.",
+      "uses": [
+        "Giant Octopus · Tentacles"
+      ],
+      "prompt": "Use case: stylized-concept. Asset type: premium painted fantasy RPG action-card artwork. Create ONE finished rectangular illustration, wide landscape 2:1 canvas, transparent background. Art direction: crisp sculpted painterly realism, rich natural material colors, warm ivory-gold edge lighting, high contrast silhouette, restrained short gold motion accents. Close-up of the striking body part in action, not a full creature portrait. It must read instantly at 112 by 54 pixels and look polished enlarged. Fill 85-90% of the width and most of the height, keep essential tips fully within the canvas, no circular containment, no medallion, no frame, no ground or scenery, no text, no labels, no letters, no watermark, no blood or wounds. Genuine transparent alpha around the subject, no dark square background. Subject: Three muscular reddish copper octopus arms reaching from a shared off-frame left origin across the rectangle toward the right, curling grasping tips with obvious pale double rows of suction cups. Express an active reach and grab, not a decorative knot. No octopus head, no splash background, no claws or snake scales.",
+      "generatedPath": "exec-23390eab-906e-4468-a73a-a3b4fd322a3d.png",
+      "revision": null,
+      "sourceSha256": "a0835bf40104f2d2bd7b372a627655d9207ec5db9f5bff56cc7e9233ca09dbf5",
+      "assetSha256": "fb8f47bd84ef4eade1075aba8f67ecfde47eeefd49d57cc6f650a791460c1b2d",
+      "bytes": 24142
+    },
+    {
+      "id": "strike-constrict",
+      "label": "Constrict · snake",
+      "subject": "A thick olive-gold snake body in two tight horizontal overlapping coils squeezing a small plain weathered wooden practice post at center. The post's surface cracks slightly under pressure so compression is clear. Snake body and broad muscular coils dominate, a small closed-mouth head at one side, no exposed teeth or venom fangs. No victim or gore. Distinct squeezing action, not biting.",
+      "uses": [
+        "Giant Constrictor Snake · Constrict"
+      ],
+      "prompt": "Use case: stylized-concept. Asset type: premium painted fantasy RPG action-card artwork. Create ONE finished rectangular illustration, wide landscape 2:1 canvas, transparent background. Art direction: crisp sculpted painterly realism, rich natural material colors, warm ivory-gold edge lighting, high contrast silhouette, restrained short gold motion accents. Close-up of the striking body part in action, not a full creature portrait. It must read instantly at 112 by 54 pixels and look polished enlarged. Fill 85-90% of the width and most of the height, keep essential tips fully within the canvas, no circular containment, no medallion, no frame, no ground or scenery, no text, no labels, no letters, no watermark, no blood or wounds. Genuine transparent alpha around the subject, no dark square background. Subject: A thick olive-gold snake body in two tight horizontal overlapping coils squeezing a small plain weathered wooden practice post at center. The post's surface cracks slightly under pressure so compression is clear. Snake body and broad muscular coils dominate, a small closed-mouth head at one side, no exposed teeth or venom fangs. No victim or gore. Distinct squeezing action, not biting.",
+      "generatedPath": "exec-2c87a55a-5884-4219-b32a-167b2f75361f.png",
+      "revision": {
+        "prompt": "Edit this illustration to correct one defect: the wooden cracks incorrectly continue across the snake's body. The snake must have entirely continuous intact olive-gold scales and smooth unbroken coils; remove ALL fissures, cracks, splinters and damage from the snake. Keep cracks ONLY in the exposed wooden practice post above and below the coils. Preserve the tight squeezing pose, closed mouth, warm painted style, wide rectangular composition and transparent background. The snake wraps in front of the post, clearly overlapping it. No text or blood.",
+        "source": "exec-091cedda-3e9e-4b33-a6e2-4af306a4366b.png"
+      },
+      "sourceSha256": "f5fe5ea903892c7366010915c5bf86163b01dd606669f5ca6ab1190d3671f0b6",
+      "assetSha256": "5179b7a00f79dd10f84c799f6d3ef475cdb622e5219a7fc047c055bda2aeb262",
+      "bytes": 17332
+    },
+    {
+      "id": "strike-tusks",
+      "label": "Tusk / Gore · tusked",
+      "subject": "A pair of sturdy curved ivory tusks attached to a small dark furred muzzle base at the left, sweeping forward and upward toward the right in a forceful thrust. Compose both tusks as bold horizontally extending curves, pointed tips fully visible and clearly separated. Close-up of tusks in motion, no full animal head, no trunk, no rhinoceros horn. Generic tusked mammal anatomy suitable for a boar strike or mammoth gore.",
+      "uses": [
+        "Boar · Tusk",
+        "Mammoth · Gore"
+      ],
+      "prompt": "Use case: stylized-concept. Asset type: premium painted fantasy RPG action-card artwork. Create ONE finished rectangular illustration, wide landscape 2:1 canvas, transparent background. Art direction: crisp sculpted painterly realism, rich natural material colors, warm ivory-gold edge lighting, high contrast silhouette, restrained short gold motion accents. Close-up of the striking body part in action, not a full creature portrait. It must read instantly at 112 by 54 pixels and look polished enlarged. Fill 85-90% of the width and most of the height, keep essential tips fully within the canvas, no circular containment, no medallion, no frame, no ground or scenery, no text, no labels, no letters, no watermark, no blood or wounds. Genuine transparent alpha around the subject, no dark square background. Subject: A pair of sturdy curved ivory tusks attached to a small dark furred muzzle base at the left, sweeping forward and upward toward the right in a forceful thrust. Compose both tusks as bold horizontally extending curves, pointed tips fully visible and clearly separated. Close-up of tusks in motion, no full animal head, no trunk, no rhinoceros horn. Generic tusked mammal anatomy suitable for a boar strike or mammoth gore.",
+      "generatedPath": "exec-82ff49a0-39ad-4f51-b0a3-cc05a02bf7c9.png",
+      "revision": null,
+      "sourceSha256": "2974953fff85b5736f221dd1dd80b918f8a5499f6017b810c69cbe6165e6c35d",
+      "assetSha256": "b9a2627c687bd8d97ddc13f705377c197456b4f689a911d34f9b64f3e9178edc",
+      "bytes": 20802
+    },
+    {
+      "id": "strike-tail-reptile",
+      "label": "Tail · reptile",
+      "subject": "A thick muscular tapering olive-brown reptile tail attached to a cropped hindquarter at the left, whipping in a broad low horizontal curve across the rectangle. Subtle pebbled dinosaur/crocodilian scales, plain powerful taper without dragon spikes or a club. Gold motion strokes behind the tail arc make the lateral tail strike unmistakable. No head or legs.",
+      "uses": [
+        "Tyrannosaurus Rex · Tail"
+      ],
+      "prompt": "Use case: stylized-concept. Asset type: premium painted fantasy RPG action-card artwork. Create ONE finished rectangular illustration, wide landscape 2:1 canvas, transparent background. Art direction: crisp sculpted painterly realism, rich natural material colors, warm ivory-gold edge lighting, high contrast silhouette, restrained short gold motion accents. Close-up of the striking body part in action, not a full creature portrait. It must read instantly at 112 by 54 pixels and look polished enlarged. Fill 85-90% of the width and most of the height, keep essential tips fully within the canvas, no circular containment, no medallion, no frame, no ground or scenery, no text, no labels, no letters, no watermark, no blood or wounds. Genuine transparent alpha around the subject, no dark square background. Subject: A thick muscular tapering olive-brown reptile tail attached to a cropped hindquarter at the left, whipping in a broad low horizontal curve across the rectangle. Subtle pebbled dinosaur/crocodilian scales, plain powerful taper without dragon spikes or a club. Gold motion strokes behind the tail arc make the lateral tail strike unmistakable. No head or legs.",
+      "generatedPath": "exec-9703dfbd-11f7-41d0-aeb8-cf650360f183.png",
+      "revision": null,
+      "sourceSha256": "e26048e226e3cf48d92826068f932e4655354c461fcdadaf7f140cc9a3c17b06",
+      "assetSha256": "ff78a0c091dc55cc2e7121fe6a20f23e5b16b159d2dbaa4f04ec1279a5b5f436",
+      "bytes": 24126
+    },
+    {
+      "id": "natural-attack",
+      "label": "Natural attack · fallback",
+      "subject": "A single clean physical impact symbol: three short bold golden motion strokes converging from the left into a small bright ivory-gold angular impact burst at the right. Hand-painted fantasy UI illustration with textured warm gold strokes. Wide asymmetrical action composition, no animal, no claw, no sword, no fist, no spell orb, no circular ring. A neutral readable fallback for an unspecified physical strike.",
+      "uses": [
+        "Unknown attack or unsupported anatomy"
+      ],
+      "prompt": "Use case: stylized-concept. Asset type: premium painted fantasy RPG action-card artwork. Create ONE finished rectangular illustration, wide landscape 2:1 canvas, transparent background. Art direction: crisp sculpted painterly realism, rich natural material colors, warm ivory-gold edge lighting, high contrast silhouette, restrained short gold motion accents. Close-up of the striking body part in action, not a full creature portrait. It must read instantly at 112 by 54 pixels and look polished enlarged. Fill 85-90% of the width and most of the height, keep essential tips fully within the canvas, no circular containment, no medallion, no frame, no ground or scenery, no text, no labels, no letters, no watermark, no blood or wounds. Genuine transparent alpha around the subject, no dark square background. Subject: A single clean physical impact symbol: three short bold golden motion strokes converging from the left into a small bright ivory-gold angular impact burst at the right. Hand-painted fantasy UI illustration with textured warm gold strokes. Wide asymmetrical action composition, no animal, no claw, no sword, no fist, no spell orb, no circular ring. A neutral readable fallback for an unspecified physical strike.",
+      "generatedPath": "exec-21c0eb7d-5248-4725-8d92-b4db230e9458.png",
+      "revision": null,
+      "sourceSha256": "127e898a125bc0b9e2ac59d06c501887d23d1a156f04b42abbafccb2c7d3bf43",
+      "assetSha256": "c419b7351e95066dfb149607c6f282c7be0cfce8493f09061c8c2607e374efe5",
+      "bytes": 21508
+    }
+  ]
+}
