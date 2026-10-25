@@ -223,12 +223,34 @@ await test("No address says where anything lives: hosts, IPs, emails and home fo
   assert.deepEqual(bundle.addressHosts(["https://table.private-domain.test/", "localhost:3000", "api.openai.com", "cube"]), ["table.private-domain.test"], "a loopback, a public host or one word was listed to cut");
 });
 
-await test("The bug report form opens with nothing from the report in the address.", () => {
+await test("The bug report form opens with nothing from the report in the address but Your setup, cut by whole lines.", () => {
   assert.equal(bundle.BUG_REPORT_URL, "https://github.com/Lebbitheplow/open-dungeon-master/issues/new?template=bug_report.yml");
+  assert.equal(bundle.bugReportUrl(), bundle.BUG_REPORT_URL);
+  assert.equal(bundle.bugReportUrl({}), bundle.BUG_REPORT_URL, "a report without its setup filled the form");
+  const setup = { version: "1.0.0", build: "1.0.0", commit: "", platform: "linux", arch: "x64", node: "22", deviceWorld: false, narrator: { backend: "none", model: "", off: true }, checkFirst: Array.from({ length: 400 }, (_, index) => `check number ${index}`) };
+  const url = bundle.bugReportUrl({ setup });
+  assert.ok(url.length < 6200, `the address is ${url.length} long`);
+  const field = decodeURIComponent(url.slice(url.indexOf("&setup=") + 7));
+  assert.ok(field.startsWith("- Version 1.0.0\n"), field.slice(0, 80));
+  assert.ok(field.includes("- Narrator: none\n"), field.slice(0, 200));
+  assert.match(field, /- check number \d+$/, "a line was cut in the middle");
   assert.match(bundle.reportFileName(new Date("2026-10-24T10:11:12Z")), /^odm-report-2026-10-24-10-11-12\.json$/);
 });
 
 // ---- the routes, on a real table ----
+
+// The setup asks the table's backends about themselves (src/lib/report-setup-server.ts).
+// Here the only one that answers is a llama.cpp server on a private address,
+// serving an 8B model with an 8K window: two things a report must flag.
+// Everything else answers 404 at once, so no probe waits on the network.
+const LLAMA = "http://10.20.30.40:8080";
+globalThis.fetch = async (input) => {
+  const url = String(input instanceof Request ? input.url : input);
+  const json = (body) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+  if (url.startsWith(`${LLAMA}/v1/models`)) return json({ object: "list", data: [{ id: "qwen3-8b", object: "model", owned_by: "llamacpp" }] });
+  if (url.startsWith(`${LLAMA}/props`)) return json({ n_ctx: 8192 });
+  return new Response("", { status: 404 });
+};
 
 const world = await openWorld();
 const route = await world.route("campaigns/[campaignId]/report-bundle");
@@ -321,15 +343,44 @@ await test("An admin at the table gets the server log with the panel's keys and 
   assert.ok(!text.includes("panel-saved-key-11223344") && !text.includes("lineToken0123456789"), text);
 });
 
-await test("The setup names the narrator's kind and model, never its address; a stranger to the table is refused.", async () => {
-  getDatabase().prepare(`UPDATE campaigns SET settings_json = json_set(settings_json, '$.textProvider', 'custom', '$.customBaseUrl', 'http://10.20.30.40:8080/v1', '$.customModel', 'qwen-test', '$.customApiKey', 'campaign-own-key-99887766') WHERE id = ?`).run(world.campaignId);
+await test("The setup names the narrator's engine, model, size and window, never its address, and flags a small model and a short window.", async () => {
+  getDatabase().prepare(`UPDATE campaigns SET settings_json = json_set(settings_json, '$.textProvider', 'custom', '$.customBaseUrl', '${LLAMA}/v1', '$.customModel', 'qwen3-8b', '$.customApiKey', 'campaign-own-key-99887766') WHERE id = ?`).run(world.campaignId);
   world.signIn(lead);
   const made = await (await post({ parts: { setup: true } })).json();
-  assert.deepEqual(made.setup.narrator, { backend: "OpenAI-compatible server", model: "qwen-test" });
+  const narrator = made.setup.narrator;
+  assert.equal(narrator.backend, "llama.cpp on another machine");
+  assert.equal(narrator.model, "qwen3-8b");
+  assert.equal(narrator.answers, true);
+  assert.equal(narrator.contextTokens, 8192);
+  assert.equal(narrator.windowAssumed, undefined, "a window the server reported was called assumed");
+  assert.equal(narrator.paramsB, 8);
+  const checks = made.setup.checkFirst;
+  assert.ok(checks.some((line) => line.includes("is small, about 8B parameters")), checks.join("\n"));
+  assert.ok(checks.some((line) => line.startsWith("The narrator's window:") && line.includes("too small to narrate")), checks.join("\n"));
+  assert.equal(made.setup.helper, null);
+  assert.equal(made.setup.agentProgram, null);
+  for (const key of ["install", "channel", "pictures", "narration", "dictation", "voiceChat"]) {
+    assert.ok(made.setup[key] !== undefined, `the setup leaves out ${key}`);
+  }
+  assert.ok(made.readable.includes("Narrator: llama.cpp on another machine, model qwen3-8b, 8B parameters, 8,192-token window, answering."), made.readable.join("\n"));
+  assert.ok(made.readable.includes("Check these first:"));
   const text = JSON.stringify(made);
   assert.ok(!text.includes("10.20.30.40"), "the backend's address reached the bundle");
   assert.ok(!text.includes("campaign-own-key-99887766"));
   assert.equal(made.setup.dmMode, "ai");
+
+  // The dialog shows the same checks before anything is saved.
+  const offered = await (await route.GET(new Request("http://test/x"), params)).json();
+  assert.deepEqual(offered.checkFirst, checks);
+
+  // The form opens with Your setup filled in from these lines, and nothing else.
+  const url = bundle.bugReportUrl(made);
+  assert.ok(url.startsWith(`${bundle.BUG_REPORT_URL}&setup=`), url);
+  const field = decodeURIComponent(url.slice(url.indexOf("&setup=") + 7));
+  assert.ok(field.includes("- Narrator: llama.cpp on another machine, model qwen3-8b"), field);
+  assert.ok(field.includes("Found by Report a problem, to check first:"), field);
+  assert.ok(!field.includes("10.20.30.40") && !field.includes("campaign-own-key"), field);
+  assert.equal(new URL(url).searchParams.size, 2, "something besides the template and Your setup went in the address");
   world.signIn(world.addUser("stranger"));
   const refused = await post({ parts: ALL });
   assert.equal(refused.status, 404);

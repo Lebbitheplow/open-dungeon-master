@@ -9,7 +9,7 @@ body:
 
         **Playing on someone else's server?** Tell whoever runs it first. Most problems come from how a server is set up, and they can check that.
 
-        **Running the server yourself?** Save a report file first: **Admin > Server log > Report a problem**, or **Report a problem** in the table's Help. It is saved to your device and never sent anywhere. Drag it into the last box below. Open it first if you want to see what it holds.
+        **Running the server yourself?** Start from **Report a problem** in the table's Help, or **Admin > Server log > Report a problem**. It lists what to check first (an unsupported model, a backend that does not answer), saves a report file to your device, and opens this form with Your setup filled in. Drag the file into the last box below. Open it first if you want to see what it holds.
   - type: checkboxes
     id: checks
     attributes:
@@ -44,7 +44,7 @@ body:
     id: setup
     attributes:
       label: Your setup
-      description: The report file holds most of this.
+      description: Report a problem fills this in for you, with anything below the supported minimum. Otherwise, fill in what you know.
       value: |
         - Version (your account menu > About):
         - Operating system:

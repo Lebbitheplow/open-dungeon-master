@@ -1,6 +1,13 @@
 import { isErrorResponse, requireMember, type MemberContext } from "@/lib/campaign-api";
 import { buildReportBundle, chosenParts, offeredParts } from "@/lib/report-bundle";
-import { reportAddresses, reportSecrets, tableReportSources, tableReportViewer } from "@/lib/report-bundle-server";
+import {
+  reportAddresses,
+  reportCheckFirst,
+  reportSecrets,
+  tableReportSetup,
+  tableReportSources,
+  tableReportViewer,
+} from "@/lib/report-bundle-server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,8 +31,10 @@ async function requireReporter(campaignId: string): Promise<MemberContext | Resp
   return context;
 }
 
+// GET also says what in the setup to check first (src/lib/report-setup.ts),
+// for the dialog to show before anything is saved.
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ campaignId: string }> },
 ) {
   const { campaignId } = await params;
@@ -33,7 +42,15 @@ export async function GET(
   if (isErrorResponse(context)) {
     return context;
   }
-  return Response.json({ parts: offeredParts(tableReportViewer(context)) }, { headers: { "cache-control": "no-store" } });
+  const viewer = tableReportViewer(context);
+  const scope = { headers: request.headers };
+  const checkFirst = reportCheckFirst(await tableReportSetup(context), {
+    viewer,
+    reporterUserId: context.user.id,
+    secrets: reportSecrets(context, scope),
+    addresses: reportAddresses(context, scope),
+  });
+  return Response.json({ parts: offeredParts(viewer), checkFirst }, { headers: { "cache-control": "no-store" } });
 }
 
 export async function POST(
@@ -52,7 +69,7 @@ export async function POST(
   // table's are cut, not only this one's.
   const scope = { headers: request.headers, everyTable: parts.has("serverLog") };
   const bundle = buildReportBundle({
-    sources: tableReportSources(context, parts, viewer),
+    sources: await tableReportSources(context, parts, viewer),
     parts,
     viewer,
     reporterUserId: context.user.id,

@@ -1,6 +1,9 @@
-import { REPOSITORY_URL } from "@/lib/build-info";
 import type { ExportedTurn } from "@/lib/narrator-quality";
 import { redactSecrets } from "@/lib/redact-secrets";
+import { setupLines, type ReportSetup } from "@/lib/report-setup";
+
+export type { ReportSetup } from "@/lib/report-setup";
+export { BUG_REPORT_URL, bugReportUrl } from "@/lib/report-setup";
 
 // The report bundle (issue #459): one file the server's admin saves to
 // their own device and drags into a GitHub bug report. Only the admin may
@@ -35,7 +38,8 @@ import { redactSecrets } from "@/lib/redact-secrets";
 // Pure: no "@/" import that touches the database, so the privacy suite
 // (scripts/test-report-bundle.mjs) builds bundles from plain objects.
 
-export const REPORT_BUNDLE_FORMAT = 1;
+// 2: the setup names every AI piece and what to check first (src/lib/report-setup.ts).
+export const REPORT_BUNDLE_FORMAT = 2;
 // The last few turns: what the transcript, the timings and the records cover.
 export const REPORT_TURNS = 5;
 export const REPORT_LOG_LINES = 300;
@@ -74,7 +78,7 @@ const PARTS: readonly ReportPart[] = [
   {
     id: "setup",
     label: "Version and setup",
-    hint: "The version, the server's operating system, the DM mode, and the narrator's backend kind and model. No addresses or keys.",
+    hint: "Versions, how the server and the app were installed, the server's machine, the DM mode, and every AI piece by kind and model (narrator, helper, agent program, pictures, narration, dictation), with what is below the supported minimum. No addresses or keys. It also fills in the form's Your setup.",
     defaultOn: true,
     allowed: () => true,
   },
@@ -144,21 +148,6 @@ export function chosenParts(requested: unknown, viewer: ReportViewer): Set<Repor
 }
 
 // ---- what the server gathers ----
-
-export type ReportSetup = {
-  version: string;
-  build: string;
-  commit: string;
-  platform: string;
-  arch: string;
-  node: string;
-  // A world the desktop or Android app hosts on the device.
-  deviceWorld: boolean;
-  // Absent from Admin, which has no table.
-  dmMode?: string;
-  role?: string;
-  narrator: { backend: string; model: string };
-};
 
 export type ReportLogLine = { at: number; level: string; text: string };
 
@@ -501,8 +490,10 @@ export function withPageErrors(bundle: ReportBundle, errors: readonly unknown[],
 
 const ORDER: readonly ReportPartId[] = PARTS.map((part) => part.id);
 
-function finishBundle(bundle: ReportBundle): ReportBundle {
-  const out: ReportBundle = { ...bundle };
+// The bundle with its parts listed and its readable summary written again:
+// after the browser adds the page's errors or the app's facts too.
+export function finishBundle<T extends ReportBundle>(bundle: T): T {
+  const out: T = { ...bundle };
   if (out.pageErrors === undefined) delete out.pageErrors;
   out.included = ORDER.filter((id) => out[id] !== undefined);
   out.readable = readableLines(out);
@@ -513,11 +504,9 @@ function readableLines(bundle: ReportBundle): string[] {
   const lines = [`Open Dungeon Master report, made ${bundle.createdAt} from ${bundle.madeFrom === "table" ? "a table" : "Admin"}.`];
   const setup = bundle.setup;
   if (setup) {
-    lines.push(
-      `Version ${setup.build || setup.version}${setup.commit ? ` (${setup.commit.slice(0, 12)})` : ""} on ${setup.platform} ${setup.arch}, Node ${setup.node}${setup.deviceWorld ? ", a world hosted by the app" : ""}.`,
-      `Narrator: ${setup.narrator.backend}${setup.narrator.model ? `, model ${setup.narrator.model}` : ""}.`,
-    );
-    if (setup.dmMode) lines.push(`DM mode: ${setup.dmMode}. Reporter's seat: ${setup.role ?? "unknown"}.`);
+    lines.push(...setupLines(setup).map((line) => `${line}.`));
+    const checks = setup.checkFirst ?? [];
+    if (checks.length) lines.push("Check these first:", ...checks.map((line) => `  - ${line}`));
   }
   if (bundle.turnTimings) {
     lines.push(`Last ${bundle.turnTimings.length} turns:`);
@@ -543,6 +532,3 @@ export function reportFileName(now = new Date()): string {
 export function reportFileText(bundle: ReportBundle): string {
   return `${JSON.stringify(bundle, null, 2)}\n`;
 }
-
-// The bug report form on GitHub, with nothing from the report in the address.
-export const BUG_REPORT_URL = `${REPOSITORY_URL}/issues/new?template=bug_report.yml`;

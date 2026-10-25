@@ -1,20 +1,25 @@
 "use client";
 
-import { Bug, ExternalLink, Loader2 } from "lucide-react";
+import { AlertTriangle, Bug, ExternalLink, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Dialog } from "@/components/ui/Dialog";
 import { readPageErrors } from "@/lib/page-errors";
-import { BUG_REPORT_URL, reportFileName, withPageErrors, type OfferedPart, type ReportBundle } from "@/lib/report-bundle";
-import { saveReportFile, type ReportSaved } from "@/lib/shell-report";
+import { reportFileName, withPageErrors, type OfferedPart, type ReportBundle } from "@/lib/report-bundle";
+import { bugReportUrl } from "@/lib/report-setup";
+import { saveReportFile, withShellFacts, type ReportSaved } from "@/lib/shell-report";
 import { ui } from "@/lib/ui";
 
 // "Report a problem" (issue #459), for the server's admin: they pick what
 // goes in the report file, save it to this device, and the bug report form
 // opens in a new tab for them to drag it into. The file is never sent
-// anywhere, and nothing from it goes in the form's address. The server
+// anywhere. With "Version and setup" ticked, the form opens with Your setup
+// already filled in from it (versions, how things were installed, the
+// models and programs, and what is below the supported minimum), so a
+// report says which model it was even when nobody attaches the file;
+// nothing else from the file goes in the form's address. The server
 // decides which tick boxes are offered and checks them again when it builds
-// the file (src/lib/report-bundle.ts); the page's own errors are added
-// here, from this browser.
+// the file (src/lib/report-bundle.ts); the page's own errors and the app's
+// facts are added here.
 export function ReportProblemDialog({
   open,
   onOpenChange,
@@ -30,13 +35,16 @@ export function ReportProblemDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [saved, setSaved] = useState<ReportSaved | null>(null);
+  const [formUrl, setFormUrl] = useState(() => bugReportUrl());
+  // What the server found in its setup to check first, shown before saving.
+  const [checkFirst, setCheckFirst] = useState<string[]>([]);
 
   useEffect(() => {
     if (!open) return;
     let live = true;
     void fetch(endpoint, { cache: "no-store" })
       .then(async (response) => {
-        const data = (await response.json().catch(() => ({}))) as { parts?: OfferedPart[]; error?: string };
+        const data = (await response.json().catch(() => ({}))) as { parts?: OfferedPart[]; checkFirst?: string[]; error?: string };
         if (!live) return;
         if (!response.ok || !Array.isArray(data.parts)) {
           setError(data.error || "The report options could not be loaded.");
@@ -44,6 +52,7 @@ export function ReportProblemDialog({
         }
         setParts(data.parts);
         setTicked(Object.fromEntries(data.parts.map((part) => [part.id, part.defaultOn])));
+        setCheckFirst(Array.isArray(data.checkFirst) ? data.checkFirst.filter((line) => typeof line === "string") : []);
       })
       .catch(() => live && setError("The report options could not be loaded."));
     return () => {
@@ -77,7 +86,10 @@ export function ReportProblemDialog({
         setError(data?.error || "The report could not be made.");
         return;
       }
-      const bundle = withPageErrors(data, readPageErrors(), Boolean(ticked.pageErrors));
+      // Inside an app, the app's own facts go in before the file is saved,
+      // so the file and the form carry the same setup.
+      const bundle = await withShellFacts(withPageErrors(data, readPageErrors(), Boolean(ticked.pageErrors)));
+      const url = bugReportUrl(bundle);
       let result: ReportSaved;
       try {
         result = await saveReportFile(bundle, reportFileName());
@@ -89,11 +101,12 @@ export function ReportProblemDialog({
       // choices as they were, to save again or cancel.
       if (!result.saved) return;
       setSaved(result);
+      setFormUrl(url);
       // The form opens once the file is saved, so the app's save dialog is
       // never left under the browser: a new tab here, the system browser in
       // the apps, with nothing from the report in its address. A blocked
       // pop-up leaves the link below to do the same.
-      window.open(BUG_REPORT_URL, "_blank", "noopener,noreferrer");
+      window.open(url, "_blank", "noopener,noreferrer");
     } catch {
       setError("The report could not be made.");
     } finally {
@@ -111,7 +124,7 @@ export function ReportProblemDialog({
             see what it holds.
           </p>
           <div className="flex flex-wrap justify-end gap-2">
-            <a href={BUG_REPORT_URL} target="_blank" rel="noopener noreferrer" className={ui.btnSmall} data-report-form-link>
+            <a href={formUrl} target="_blank" rel="noopener noreferrer" className={ui.btnSmall} data-report-form-link>
               <ExternalLink className="size-3.5" /> Open the bug report form
             </a>
             <button type="button" onClick={() => change(false)} className={ui.btnPrimary}>
@@ -123,8 +136,27 @@ export function ReportProblemDialog({
         <div className="space-y-4" data-report-problem-dialog>
           <p className="text-sm leading-6 text-stone-400">
             This saves a report file to this device for you to attach to a bug report on GitHub. Nothing is sent anywhere.
-            It never holds other players&apos; lines, whispers, passwords or keys.
+            It never holds other players&apos; lines, whispers, passwords or keys. With Version and setup ticked, the
+            form&apos;s Your setup box is filled in from it: versions, how it was installed and the models, never
+            addresses or keys.
           </p>
+          {checkFirst.length ? (
+            <div className="reveal rounded-lg border border-amber-700/60 bg-amber-950/30 p-3 text-sm text-amber-100" role="note" data-report-check-first>
+              <p className="flex items-start gap-2 font-medium">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-300" aria-hidden="true" />
+                Check these first
+              </p>
+              <ul className="mt-1 list-disc space-y-1 pl-5 text-amber-100/90">
+                {checkFirst.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+              <p className="mt-1.5 text-xs text-amber-200/80">
+                These cause most reported problems and are not bugs. Fix them and try again; if the problem stays,
+                save the report. They go in it too.
+              </p>
+            </div>
+          ) : null}
           <fieldset className="space-y-2">
             <legend className="mb-1 text-xs uppercase tracking-wide text-stone-500">What goes in the file</legend>
             {parts ? (

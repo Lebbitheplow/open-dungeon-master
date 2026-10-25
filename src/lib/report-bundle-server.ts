@@ -1,16 +1,13 @@
-import os from "node:os";
 import { capsFor, isLead, type MemberContext } from "@/lib/campaign-api";
 import { getGlobalConfig } from "@/lib/db/app-settings";
 import { getDatabase } from "@/lib/db/core";
 import { listRecentDmTurns, type DmTurn } from "@/lib/db/dm-turns";
 import { listRecentMessages } from "@/lib/db/messages";
 import { traceForViewer } from "@/lib/dm/context-budget";
-import { endpointKind } from "@/lib/dm/sampling-logic";
-import { harnessConfig } from "@/lib/harness/status";
-import { hostPlatform } from "@/lib/host-platform";
 import { bundleNarratorQuality } from "@/lib/narrator-quality-server";
 import {
   addressHosts,
+  buildReportBundle,
   REPORT_TURNS,
   type ReportCall,
   type ReportPartId,
@@ -20,11 +17,9 @@ import {
   type ReportTurnSource,
   type ReportViewer,
 } from "@/lib/report-bundle";
+import { gatherSetup } from "@/lib/report-setup-server";
 import { configuredDefaultStorySettings } from "@/lib/runtime-defaults";
-import { isDeviceWorld, serverEnv } from "@/lib/server-env";
 import { knownSecretValues, readServerLog, secretValuesIn } from "@/lib/server-log";
-import type { StorySettings } from "@/lib/types";
-import { currentBuild } from "@/lib/update-check";
 
 // The server's half of the report bundle (src/lib/report-bundle.ts): who the
 // viewer is, read from their seat and never from the request, and the
@@ -49,40 +44,6 @@ export const ADMIN_REPORT_VIEWER: ReportViewer = {
   steersStory: false,
   storytellerSecrets: false,
 };
-
-// The narrator as a kind and a model: never its address, which can name a
-// machine on the owner's network, and never its key.
-function narratorOf(settings: Pick<StorySettings, "textProvider" | "localTextModel" | "customBaseUrl" | "customModel">): ReportSetup["narrator"] {
-  if (settings.textProvider === "harness") {
-    const harness = harnessConfig();
-    return { backend: `agent program (${harness.id || "none chosen"})`, model: harness.model || "the program's default" };
-  }
-  if (settings.textProvider === "local") {
-    return { backend: "local (Ollama)", model: settings.localTextModel };
-  }
-  if (settings.textProvider === "none") {
-    return { backend: "none", model: "" };
-  }
-  const kind = endpointKind(settings.customBaseUrl || serverEnv("OPENAI_COMPAT_BASE_URL"));
-  const model = (settings.customModel || "").trim() || getGlobalConfig().text.customModel || serverEnv("OPENAI_COMPAT_MODEL");
-  const backend = kind === "openai" ? "OpenAI API" : kind === "openrouter" ? "OpenRouter" : "OpenAI-compatible server";
-  return { backend, model };
-}
-
-function setupOf(settings: Parameters<typeof narratorOf>[0], table?: { dmMode: string; role: string }): ReportSetup {
-  const build = currentBuild();
-  return {
-    version: build.version,
-    build: build.label,
-    commit: build.commit,
-    platform: `${hostPlatform()} ${os.release()}`,
-    arch: os.arch(),
-    node: process.versions.node,
-    deviceWorld: isDeviceWorld(),
-    ...(table ? { dmMode: table.dmMode, role: table.role } : {}),
-    narrator: narratorOf(settings),
-  };
-}
 
 function serverLogLines() {
   return readServerLog({ secrets: secretValuesIn(getGlobalConfig()) }).entries;
@@ -138,15 +99,36 @@ function turnSourceOf(turn: DmTurn, parts: ReadonlySet<ReportPartId>, viewer: Re
   };
 }
 
-export function tableReportSources(context: MemberContext, parts: ReadonlySet<ReportPartId>, viewer: ReportViewer): ReportSources {
+// The table's setup: its own narrator and pictures, the server's agent
+// program, voice and dictation, and the seat the report was made from.
+export function tableReportSetup(context: MemberContext) {
   const { campaign } = context;
   const caps = capsFor(context);
-  const sources: ReportSources = {
-    setup: setupOf(campaign.settings, {
-      dmMode: campaign.gameSettings.dmMode,
-      role: isLead(context) && caps.role === "player" ? "lead" : caps.role,
-    }),
-  };
+  return gatherSetup(campaign.settings, {
+    dmMode: campaign.gameSettings.dmMode,
+    role: isLead(context) && caps.role === "player" ? "lead" : caps.role,
+    game: campaign.gameSettings,
+  });
+}
+
+// Admin's setup: the server's defaults for a new table.
+export function adminReportSetup() {
+  return gatherSetup(configuredDefaultStorySettings());
+}
+
+// What the dialog shows before anything is saved: the setup's checks, cut
+// for keys and addresses exactly as the file's are.
+export function reportCheckFirst(
+  setup: ReportSetup,
+  input: { viewer: ReportViewer; reporterUserId: string; secrets: readonly string[]; addresses: readonly string[] },
+): string[] {
+  const bundle = buildReportBundle({ sources: { setup }, parts: new Set(["setup"]), ...input });
+  return bundle.setup?.checkFirst ?? [];
+}
+
+export async function tableReportSources(context: MemberContext, parts: ReadonlySet<ReportPartId>, viewer: ReportViewer): Promise<ReportSources> {
+  const { campaign } = context;
+  const sources: ReportSources = { setup: await tableReportSetup(context) };
   if (parts.has("serverLog")) {
     sources.serverLog = serverLogLines();
   }
@@ -173,8 +155,8 @@ export function tableReportSources(context: MemberContext, parts: ReadonlySet<Re
   return sources;
 }
 
-export function adminReportSources(parts: ReadonlySet<ReportPartId>): ReportSources {
-  const sources: ReportSources = { setup: setupOf(configuredDefaultStorySettings()) };
+export async function adminReportSources(parts: ReadonlySet<ReportPartId>): Promise<ReportSources> {
+  const sources: ReportSources = { setup: await adminReportSetup() };
   if (parts.has("serverLog")) {
     sources.serverLog = serverLogLines();
   }

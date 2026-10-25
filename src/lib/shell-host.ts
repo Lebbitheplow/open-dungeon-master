@@ -53,6 +53,11 @@ export interface ShellReportFacts {
   screens: string;
   // Whether the table is the world this device hosts.
   localWorld: boolean;
+  // The local AI the desktop app manages, by model and state, never by its
+  // address: "gpt-oss-20b (gptoss20b), running". Absent from apps up to
+  // 0.21.1 and from the phone, which runs no local AI.
+  localStory?: string;
+  localImages?: string;
 }
 
 // The app's answer once the file is saved. saved is false when the person
