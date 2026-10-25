@@ -867,7 +867,7 @@
     "lib/db/core.ts#first": [["key",1,"a pragma's one row"],["key",1,"a one-player table's only player id (companion command backfill)"]],
     "lib/db/core.ts#helper": [["authoring",1,"WorldForge lore authoring"]],
     "lib/db/core.ts#partial": [["key",30,"schema SQL"],["pattern",5,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"]],
-    "lib/db/core.ts#sql": [["key",6,"slug and id lookups, sqlite_master probes, rules prose (\"CR 4 or lower\"); the schema's name COLLATE NOCASE uniques (locations, battle maps) are weaker than textKey, never stricter, and the app checks by textKey first"]],
+    "lib/db/core.ts#sql": [["key",6,"slug and id lookups, sqlite_master probes, rules prose (\"CR 4 or lower\"); the schema's name COLLATE NOCASE uniques (locations, battle maps) are weaker than textKey, never stricter, and the app checks by textKey first"],["search",1,"the met-mark backfill (backfillNpcMet): a roll or a meter written under an NPC's stored name, compared exactly, so a miss leaves the NPC a stranger as before and never marks another"]],
     "lib/db/core.ts#whole": [["key",1,"schema SQL"]],
     "lib/db/creation-rolls.ts#normalizer": [["key",1,"slugs, hosts, file names, ids, env values, display text, throttle keys, model ids (src/: every site read)"]],
     "lib/db/dm-turns.ts#partial": [["key",1,"schema SQL"]],
@@ -2234,6 +2234,7 @@
     "lib/dm/companion-level.ts#partial": [["identity",1,"spells the subclass grants, textKey on both sides"]],
     "lib/dm/companion-level.ts#first": [["key",1,"the class's one SRD subclass"]],
     "lib/srd/magic-item-value.ts#number": [["parse",1,"a spell scroll's level digit in the pack's name"]],
-    "lib/srd/magic-item-value.ts#keyed": [["key",1,"the content pack's potion and scroll categories"]]
+    "lib/srd/magic-item-value.ts#keyed": [["key",1,"the content pack's potion and scroll categories"]],
+    "lib/db/npcs.ts#first": [["key",1,"the earlier of two stored meeting times, when one row is folded into another"]]
   }
 }
