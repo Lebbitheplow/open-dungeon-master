@@ -52,6 +52,7 @@ export function ruleContextFor(input: {
   recall: boolean;
   map: boolean;
   legendary: boolean;
+  moreTools: boolean;
   brief?: boolean;
 }): RuleContext {
   const sheets = input.sheets;
@@ -74,6 +75,7 @@ export function ruleContextFor(input: {
     recall: input.recall,
     map: input.map,
     legendary: input.legendary,
+    moreTools: input.moreTools,
     classes: tableClasses(sheets),
   };
 }

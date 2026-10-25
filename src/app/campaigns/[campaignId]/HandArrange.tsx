@@ -3,6 +3,7 @@
 import { ArrowDown, ArrowUp } from "lucide-react";
 import { useRef, useState, type CSSProperties } from "react";
 import { GameIcon } from "@/components/ui/GameIcon";
+import { cardArtwork } from "@/lib/battlemap/card-art";
 import { cn } from "@/lib/cn";
 import type { HandCard } from "@/lib/battlemap/hand";
 import {
@@ -70,6 +71,7 @@ export function HandArrange({
   };
 
   const row = (card: HandCard, index: number, place: "hand" | "more") => {
+    const artwork = cardArtwork(card.icon);
     const seat = place === "hand" ? working.fan.indexOf(card.id) : -1;
     const flash = moved?.id === card.id;
     return (
@@ -80,9 +82,9 @@ export function HandArrange({
         data-moved={flash ? "true" : undefined}
         style={{ "--i": index } as CSSProperties}
       >
-        <div className="flex min-h-14 w-full items-center gap-2 rounded-xl border border-stone-700/60 bg-stone-900/50 px-2.5 py-2">
-          <GameIcon icon={card.icon} size="size-9" />
-          <span className="min-w-0 flex-1">
+        <div className="flex min-h-14 w-full flex-wrap items-center gap-2 rounded-xl border border-stone-700/60 bg-stone-900/50 px-2.5 py-2">
+          <GameIcon icon={artwork} size={artwork.kind === "action" ? "h-9 w-[72px]" : "size-9"} />
+          <span className="min-w-[120px] flex-1">
             <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
               <span className="truncate font-display text-sm font-semibold text-stone-100">{card.name}</span>
               <span
@@ -104,7 +106,7 @@ export function HandArrange({
             <span className="block font-mono text-[10px] uppercase tracking-wider text-amber-200/80">{costLabel(card.cost)}</span>
           </span>
           {place === "hand" ? (
-            <span className="flex shrink-0 items-center gap-1">
+            <span className="ml-auto flex shrink-0 items-center gap-1">
               <button
                 type="button"
                 className="hand-arrange-step motion-press"
@@ -134,7 +136,7 @@ export function HandArrange({
           ) : (
             <button
               type="button"
-              className="hand-arrange-move motion-press"
+              className="hand-arrange-move motion-press ml-auto"
               data-full={used >= HAND_SEATS ? "true" : undefined}
               onClick={() => {
                 const next = addToHand(working, card);

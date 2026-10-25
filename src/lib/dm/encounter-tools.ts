@@ -41,7 +41,7 @@ import { createDmTurn, listOpenPendingRolls, saveDmTurn, type DmTurn } from "@/l
 import { d20Expression, rollExpression } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { computeSheetDerived } from "@/lib/srd";
-import { encounterCeiling, evaluateEncounter } from "@/lib/srd/encounter-math";
+import { fightingParty, MAX_COMBATANTS, rosterBudget } from "@/lib/dm/party-budget";
 import { suggestEnemies } from "@/lib/bestiary";
 import { enemyRequestSchema, resolveEnemyRequests } from "@/lib/dm/encounter-spawn";
 import { fieldSheetFoes, sheetFoeIds, turnedFoes } from "@/lib/dm/sheet-foes";
@@ -297,8 +297,8 @@ function handleStartEncounter(
     };
   }
   const resolved = outcome.resolved;
-  if (resolved.length > 8) {
-    return { error: "Too many enemies; keep encounters to 8 combatants or fewer.", retry: true };
+  if (resolved.length > MAX_COMBATANTS) {
+    return { error: `Too many enemies; keep encounters to ${MAX_COMBATANTS} combatants or fewer.`, retry: true };
   }
   // A character named as a foe fights as its own sheet (issue 503,
   // src/lib/dm/sheet-foes.ts): no enemy row, and not one of the party.
@@ -309,15 +309,12 @@ function handleStartEncounter(
   const turnedIds = sheetFoeIds(foes);
   sheets = sheets.filter((sheet) => !turnedIds.has(sheet.id));
 
-  // 5e budget check: refuse fights the party cannot plausibly survive. A
-  // companion that turned on the party chose its fight: only what the DM
-  // adds to it answers to the ceiling.
-  const partyLevels = sheets.map((sheet) => sheet.level);
-  const evaluation = evaluateEncounter(partyLevels, resolved.map((entry) => entry.stats.cr));
-  const ceiling = encounterCeiling(campaign.difficulty, evaluation.thresholds.deadly);
-  const staged = resolved.filter((entry) => entry.sheetFoe?.kind !== "turned");
-  const stagedXp = staged.length === resolved.length ? evaluation.adjustedXp : evaluateEncounter(partyLevels, staged.map((entry) => entry.stats.cr)).adjustedXp;
-  if (stagedXp > ceiling) {
+  // 5e budget check: refuse fights the party cannot plausibly survive,
+  // measured against the characters who fight it (src/lib/dm/party-budget.ts):
+  // the dead and a player's benched characters do not.
+  const partyLevels = fightingParty(campaign, sheets).map((sheet) => sheet.level);
+  const { evaluation, ceiling, stagedXp, tooDeadly } = rosterBudget(campaign, partyLevels, resolved);
+  if (tooDeadly) {
     return {
       error: `Too deadly for this party: adjusted XP ${stagedXp} vs an allowed ceiling of ${ceiling} (difficulty ${campaign.difficulty}). Use fewer or weaker enemies. Good picks for this world: ${suggestionLines(campaign, sheets)}.`,
       retry: true,

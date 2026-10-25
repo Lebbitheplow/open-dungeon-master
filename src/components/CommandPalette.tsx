@@ -1,6 +1,7 @@
 "use client";
 
 import * as RadixDialog from "@radix-ui/react-dialog";
+import { returnFocus } from "@/components/ui/return-focus";
 import { Search, X } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { GameIcon } from "@/components/ui/GameIcon";
@@ -133,7 +134,7 @@ export function CommandPalette({
       <RadixDialog.Root open={open} onOpenChange={setOpen}>
         <RadixDialog.Portal>
           <RadixDialog.Overlay className="dialog-overlay fixed inset-0 z-[60] bg-[#05030d]/70 backdrop-blur-sm" />
-          <RadixDialog.Content
+          <RadixDialog.Content {...returnFocus}
             aria-describedby={undefined}
             className="palette-panel panel fixed left-1/2 top-[12vh] z-[60] flex max-h-[70vh] w-[min(94vw,34rem)] -translate-x-1/2 flex-col overflow-hidden rounded-xl p-0 shadow-elev-2"
           >

@@ -106,7 +106,7 @@ export function SpellsGearStep({
 // ones lit, the suggested ones starred, the subclass's free ones locked. One
 // place to choose, instead of suggestions, a catalog and a search box that
 // each said something slightly different.
-function SpellsSection({
+export function SpellsSection({
   state,
   derived,
   klass,

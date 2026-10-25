@@ -1,6 +1,7 @@
 "use client";
 
 import * as RadixDialog from "@radix-ui/react-dialog";
+import { returnFocus } from "@/components/ui/return-focus";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
@@ -76,7 +77,7 @@ export function Book({
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
       <RadixDialog.Portal>
         <RadixDialog.Overlay className="dialog-overlay fixed inset-0 z-[60] bg-[#05030d]/80 backdrop-blur-sm" />
-        <RadixDialog.Content
+        <RadixDialog.Content {...returnFocus}
           aria-describedby={undefined}
           onKeyDown={(event) => {
             if (event.key === "ArrowRight") turn("forward");

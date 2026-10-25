@@ -5,6 +5,7 @@ import { insertCampaignMessage } from "@/lib/db/messages";
 import { runOutsideDmJob, type DmJobControl } from "@/lib/dm/job-control";
 import { takeNarrationSeq } from "@/lib/dm/narration-slot";
 import { setDmStatus } from "@/lib/dm/status";
+import { UNBUILT_TURN_MARK } from "@/lib/dm/agent-mark";
 import { publishEphemeral, publishWithSeq } from "@/lib/events";
 
 // A turn that could not finish: the "DM ran into a problem" notice, and the
@@ -36,8 +37,9 @@ export function haltDmTurn(campaignId: string, turn: DmTurn, failed: string, cla
 // The whole conversation of a turn that stopped before it had a prompt
 // (issue #383). There is nothing to replay, so Retry starts the turn over
 // (src/lib/dm/retry-turn.ts); the row exists so the notice can carry the
-// link the Retry button reads, as every other halted turn's does.
-export const UNBUILT_TURN_MARK = "[odm:turn-not-built]";
+// link the Retry button reads, as every other halted turn's does. The mark
+// lives in src/lib/dm/agent-mark.ts, a leaf the turn quality writer reads.
+export { UNBUILT_TURN_MARK };
 
 export function isUnbuiltTurn(turn: Pick<DmTurn, "conversation">): boolean {
   return turn.conversation.length === 1 && turn.conversation[0]?.content === UNBUILT_TURN_MARK;

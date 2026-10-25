@@ -2,6 +2,7 @@
 
 import { EmptyState } from "@/components/EmptyState";
 import * as Dialog from "@radix-ui/react-dialog";
+import { returnFocus } from "@/components/ui/return-focus";
 import { ImageOff, ImagePlus, Loader2, RefreshCw, X } from "lucide-react";
 import { useRef, useState } from "react";
 import { cn } from "@/lib/cn";
@@ -351,7 +352,7 @@ export function MapPanel({
         <Dialog.Root open={enlarged} onOpenChange={setEnlarged}>
           <Dialog.Portal>
             <Dialog.Overlay className="dialog-overlay fixed inset-0 z-50 bg-[#05030d]/70 backdrop-blur-sm" />
-            <Dialog.Content className="fixed left-1/2 top-1/2 z-50 max-h-[92vh] w-[min(94vw,64rem)] -translate-x-1/2 -translate-y-1/2 overflow-auto panel rounded-xl p-4">
+            <Dialog.Content {...returnFocus} className="fixed left-1/2 top-1/2 z-50 max-h-[92vh] w-[min(94vw,64rem)] -translate-x-1/2 -translate-y-1/2 overflow-auto panel rounded-xl p-4">
               <div className="mb-2 flex items-center justify-between">
                 <Dialog.Title className="gold-title font-display text-lg">{shown.name}</Dialog.Title>
                 <Dialog.Close aria-label="Close" className="pk-tap rounded p-1 text-stone-400 hover:bg-stone-900 hover:text-amber-200 motion-nudge">

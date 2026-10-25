@@ -3,7 +3,7 @@
 // own screens. A new class opens on its defaults (a d8, two saves, the
 // subclass level, casting as one control), is kept under a name, comes back
 // from the shelf with what was kept, and lists as a class.
-import { check, eventually, sleep } from "../lib.mjs";
+import { check, eventually, untilStill, upTo } from "../lib.mjs";
 
 export default {
   name: "workshop-classes",
@@ -31,7 +31,7 @@ export default {
         check(await editor.getByText(field, { exact: true }).first().isVisible(), `the class form shows ${field}`);
       }
       await editor.getByLabel("Name", { exact: true }).fill(name);
-      await sleep(900);
+      await untilStill(page);
       await t.shot("class-editor");
       const keep = editor.locator('[data-tour="homebrew-save"]');
       check(await keep.isEnabled(), "Keep it is enabled for a named class on its defaults");
@@ -56,7 +56,7 @@ export default {
       // what was kept.
       for (let attempt = 0; attempt < 3 && (await page.getByRole("dialog").count()); attempt += 1) {
         await page.keyboard.press("Escape");
-        await sleep(300);
+        await upTo(async () => (await page.getByRole("dialog").count()) === 0, 300);
       }
       await eventually(() => page.getByRole("dialog").count().then((count) => count === 0), { timeoutMs: 10_000, label: "the editor closing" });
       const row = page.locator(`${root}ul button`, { hasText: name }).first();

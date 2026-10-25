@@ -5,7 +5,7 @@
 // plan resolves on its own: both parts are posted as the characters' own
 // actions with one table note, and the panel goes away for everyone.
 import { request } from "playwright-core";
-import { check, eventually, sleep } from "../lib.mjs";
+import { check, eventually, untilStill } from "../lib.mjs";
 
 export default {
   name: "coordinate-actions",
@@ -81,7 +81,7 @@ export default {
       check(fresh.filter((message) => /The party acts together/.test(message.content)).length === 1, "one table note for the plan");
       const state = await (await api.get(`${base}/api/campaigns/${ids.quietId}`)).json();
       check(state.coordination === null, "no plan is left open");
-      await sleep(500);
+      await untilStill(page);
       await t.shot("resolved");
     } finally {
       await playerApi.dispose().catch(() => {});

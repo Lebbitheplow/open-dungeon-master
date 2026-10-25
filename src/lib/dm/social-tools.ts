@@ -10,6 +10,7 @@ import { renderWitnessNote } from "@/lib/dm/witness-logic";
 import {
   getNpcByName,
   listCastNpcs,
+  markNpcMet,
   nearestNpcName,
   patchNpcAgency,
   setNpcAttitude,
@@ -71,7 +72,7 @@ export const socialTools: ToolDef[] = [
     function: {
       name: "set_npc",
       description:
-        "Register or update a named NPC the party is dealing with, so the server tracks who they are and how they feel about the party across the whole campaign; call it again when the story itself (not a check) changes how they feel.",
+        "Register or update a named NPC the party is dealing with, so the server tracks who they are and how they feel about the party. Call it again when the story itself (not a check) changes how they feel.",
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -81,7 +82,7 @@ export const socialTools: ToolDef[] = [
           attitude: {
             type: "string",
             enum: [...ATTITUDE_ENUM],
-            description: "How they currently feel about the party. Default 'indifferent'.",
+            description: "How they currently feel about the party. Default: 'indifferent'.",
           },
           trait: {
             type: "string",
@@ -91,12 +92,12 @@ export const socialTools: ToolDef[] = [
           gender: {
             type: "string",
             enum: [...TOLD_GENDERS],
-            description: `${TOLD_GENDER_HELP} Give it when you register someone new; leave it out on later calls.`,
+            description: `${TOLD_GENDER_HELP} Give it when you register someone new; omit it on later calls.`,
           },
           drawnTo: {
             type: "array",
             items: { type: "string", enum: TOLD_ATTRACTION },
-            description: "Who they could fall for, once the story shows it. Set once and kept, so it never changes between characters.",
+            description: "Who they could fall for, once the story shows it. The server keeps the first value it is given, so it never changes between characters.",
           },
           goal: {
             type: "string",
@@ -117,7 +118,7 @@ export const socialTools: ToolDef[] = [
     function: {
       name: "npc_reaction",
       description:
-        "Roll a first-meeting reaction for a new NPC when it is genuinely uncertain how they take the party. The server rolls 2d6 (plus any modifier for the party's approach or reputation) and turns it into a starting attitude (hostile, indifferent, or friendly), registering the NPC with it. Call it instead of simply deciding how a stranger feels. Skip it when the story already fixes the NPC's stance (a sworn enemy, a hired ally).",
+        "Roll a first-meeting reaction for a new NPC when it is genuinely uncertain how they take the party. The server rolls 2d6 (plus any modifier for the party's approach or reputation) and turns it into a starting attitude (hostile, indifferent, or friendly), registering the NPC with it. Call it instead of simply deciding how a stranger feels. Skip it when the story already fixes the NPC's stance (a sworn enemy, a hired ally). Someone the party has already dealt with, or whose attitude is already set, is not rolled again: the result reports how they feel.",
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -126,6 +127,8 @@ export const socialTools: ToolDef[] = [
           name: { type: "string", description: "The new NPC's name." },
           modifier: {
             type: "integer",
+            minimum: -10,
+            maximum: 10,
             description:
               "A small +/- for the situation (a good first impression, a fearsome reputation). Usually -2 to +2.",
           },
@@ -284,6 +287,27 @@ export function handleNpcReaction(
   } catch {
     return { error: "Invalid arguments: npc_reaction needs a name and a gender (Female, Male, Nonbinary or Unknown).", retry: true };
   }
+  // A reaction roll decides how a stranger takes the party, once. Someone
+  // the party has dealt with keeps the attitude play gave them, and so does
+  // someone whose attitude was set before they were met (the story's
+  // villain, the author's patron, a friendly keeper): only a stranger whose
+  // attitude is still the default is rolled. A known name is answered with
+  // how they feel, not refused, since the model asked how to play them.
+  const known = getNpcByName(campaign.id, args.name);
+  if (known && (known.metAt || known.attitude !== "indifferent")) {
+    const npc = markNpcMet(
+      upsertNpc({ campaignId: campaign.id, name: args.name, trait: args.trait, location: args.location, gender: toldGender(args.gender) }).id,
+    ) ?? known;
+    return {
+      ok: true,
+      npc: npc.name,
+      attitude: npc.attitude,
+      rolled: false,
+      note: known.metAt
+        ? `${npc.name} already knows the party and is ${npc.attitude}; a first impression is not rolled twice. Narrate them true to it: a social_check, or set_npc when the story itself changes how they feel, moves it.`
+        : `${npc.name}'s attitude was already set before this meeting: ${npc.attitude}. Narrate the greeting in that light: a social_check, or set_npc when the story itself changes how they feel, moves it.`,
+    };
+  }
   const modifier = args.modifier ?? 0;
   // A penalty is written as 2d6-3, never 2d6+-3, which no dice parser reads.
   const outcome = rollExpression(modifier ? `2d6${modifier < 0 ? "-" : "+"}${Math.abs(modifier)}` : "2d6");
@@ -300,18 +324,16 @@ export function handleNpcReaction(
   // Strictness leans the stranger a step (docs/vtt-parity-implementation-
   // plan.md 9.2): warmer when lenient, warier when harsh.
   const attitude = shiftAttitude(reactionAttitude(outcome.total), reactionBias(campaign.gameSettings.gm?.strictness ?? "standard"));
-  const npc = bootstrapAgency(
-    campaign,
-    upsertNpc({
-      campaignId: campaign.id,
-      name: args.name,
-      attitude,
-      trait: args.trait,
-      location: args.location,
-      gender: toldGender(args.gender),
-    }),
-    {},
-  );
+  const registered = upsertNpc({
+    campaignId: campaign.id,
+    name: args.name,
+    attitude,
+    trait: args.trait,
+    location: args.location,
+    gender: toldGender(args.gender),
+  });
+  // The roll is the meeting.
+  const npc = bootstrapAgency(campaign, markNpcMet(registered.id) ?? registered, {});
   return {
     ok: true,
     npc: npc.name,
@@ -408,6 +430,8 @@ export function handleSocialCheck(
   });
   publishRoll(campaign.id, roll);
   turn.rollIds.push(roll.id);
+  // Talking someone round, or failing to, is dealing with them.
+  markNpcMet(npc.id);
 
   const outcome = resolveSocialCheck(rolled.total, npc.attitude);
   // The one-shift-per-exchange guard: an attitude that already moved this

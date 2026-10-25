@@ -132,6 +132,16 @@ await test("a compacted tool keeps its name, kinds, enums and what is required; 
   assert.deepEqual(profiles.readMoreToolsCall("not json"), { group: null, tool: null });
 });
 
+await test("a coins field names the coin codes in its first sentence, so the compact cut keeps them", async () => {
+  const { mutationTools } = await import("../src/lib/dm/mutations.ts");
+  const { partyTools } = await import("../src/lib/dm/party-tools.ts");
+  const tools = [mutationTools.find((tool) => tool.function.name === "modify_gold"), partyTools.find((tool) => tool.function.name === "party_stash")];
+  for (const tool of tools) {
+    const coins = profiles.compactTool(tool).function.parameters.properties.coins.description;
+    for (const code of ["pp", "gp", "ep", "sp", "cp"]) assert.match(coins, new RegExp(`\\b${code}\\b`), `${tool.function.name}.coins keeps ${code}: ${coins}`);
+  }
+});
+
 await test("the full rules are every line, word for word; a compact table's carry only what it needs", () => {
   const empty = { inEncounter: false, groups: new Set(), caster: false, features: false, classFeatures: false, featSpells: false, dying: false, arc: false, recall: false, map: false, legendary: false };
   assert.equal(rules.dmSystemText(false), rules.DM_SYSTEM);
@@ -519,6 +529,21 @@ await test("the combat minimum opens a fight and plays its next turn with the at
   const offered = (dmBodies()[0].tools ?? []).map((tool) => tool.function.name);
   for (const name of COMBAT_TOOLS) assert.ok(offered.includes(name), `${name} offered on the fight's next turn`);
   allFit(windows.MIN_COMBAT_WINDOW);
+
+  // A fight in a lair whose block prints its options: GAME STATE numbers
+  // them, the numbers lair_action takes.
+  const { getActiveEncounter, listEnemies, saveEncounter } = await import("../src/lib/db/encounters.ts");
+  const { getDatabase } = await import("../src/lib/db/core.ts");
+  const fight = getActiveEncounter(campaign.id);
+  saveEncounter({ ...fight, legendary: { ...fight.legendary, lair: true } });
+  const [bandit] = listEnemies(fight.id);
+  getDatabase().prepare("UPDATE encounter_enemies SET stat_json = ? WHERE id = ?").run(JSON.stringify({ ...bandit.stats, lairOptions: ["The ceiling collapses above one creature.", "A pillar of stone erupts from the floor."] }), bandit.id);
+  insertCampaignMessage({ campaignId: campaign.id, seq: allocateSeq(campaign.id), authorType: "player", userId: lead.id, characterId: bram.id, content: "I hold my ground." });
+  script = [{ content: "Dust sifts from the ceiling." }];
+  requests.length = 0;
+  await startDmTurn(campaign.id);
+  const prompt = JSON.stringify(dmBodies()[0].messages);
+  assert.ok(prompt.includes("1. The ceiling collapses above one creature.") && prompt.includes("2. A pillar of stone erupts"), "the lair's options are numbered in GAME STATE");
   process.env.OPENAI_COMPAT_CONTEXT = "16384";
 });
 

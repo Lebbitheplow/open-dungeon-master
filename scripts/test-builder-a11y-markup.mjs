@@ -29,8 +29,9 @@ const read = (path) => fs.readFileSync(new URL(`../${path}`, import.meta.url), "
   const named = renderToStaticMarkup(createElement(Field, { label: "Appearance", captionId: "look" }, null));
   assert.ok(named.includes('aria-labelledby="look"') && named.includes('<span id="look"'), "a given caption id is used");
 
-  const finish = read("src/app/characters/builder/steps/FinishStep.tsx");
-  const appearance = finish.slice(finish.indexOf('<Field label="Appearance"'), finish.indexOf("</Field>", finish.indexOf('<Field label="Appearance"')));
+  // The Appearance box is on the identity step, the last before the summary (backlog F4).
+  const identity = read("src/app/characters/builder/steps/IdentityStep.tsx");
+  const appearance = identity.slice(identity.indexOf('<Field label="Appearance"'), identity.indexOf("</Field>", identity.indexOf('<Field label="Appearance"')));
   assert.ok(appearance.includes("captionId={appearanceId}"), "the Appearance field names its caption");
   assert.ok(appearance.includes("aria-labelledby={appearanceId}"), "the Appearance textarea is labelled by its caption");
   console.log("ok: builder field captions name their fields (B11)");

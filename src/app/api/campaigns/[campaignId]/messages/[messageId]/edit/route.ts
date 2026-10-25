@@ -1,13 +1,11 @@
 import { z } from "zod";
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
-import {
-  getCampaignMessage,
-  setMessageVariants,
-  updateMessageContent,
-} from "@/lib/db/messages";
+import { correctionsField } from "@/lib/correction-reasons";
+import { getCampaignMessage } from "@/lib/db/messages";
 import { publishPersisted } from "@/lib/events";
-import { MAX_EDITED_LENGTH, checkEdit, replaceSelectedTake } from "@/lib/dm/message-edit-logic";
-import { resolveVariantIndex, seedVariants } from "@/lib/dm/renarrate-logic";
+import { MAX_EDITED_LENGTH, checkEdit } from "@/lib/dm/message-edit-logic";
+import { saveNarrationEdit } from "@/lib/dm/narration-edit";
+import { refreshNarrationAudio } from "@/lib/dm/renarrate";
 import { mergeLines } from "@/lib/dm/speech";
 import { personLines } from "@/lib/dm/speech-lines";
 
@@ -52,21 +50,25 @@ export async function POST(
     return Response.json({ error: check.reason }, { status: 400 });
   }
 
-  // Keep the variant set coherent: replace the take being read, leave the
-  // others, so browsing still works after an edit.
-  const variants = seedVariants(message.variants ?? [], message.content);
-  const index = resolveVariantIndex(variants, message.variantIndex ?? 0);
   // The lines the edit left alone keep their speakers; new ones are read
   // from the person's words (src/lib/dm/speech-lines.ts).
   const speech = mergeLines(message.speech, personLines(context.campaign, check.content));
-  const updated =
-    index >= 0 && variants.length > 1
-      ? setMessageVariants(messageId, replaceSelectedTake(variants, index, check.content), index, speech)
-      : updateMessageContent(messageId, check.content, speech);
+  // The narrator's wording stays as a take beside the person's, and the
+  // edit and its correction ledger row land together (issue #460).
+  const { updated, correctionId } = saveNarrationEdit({
+    campaignId,
+    message,
+    content: check.content,
+    speech,
+    userId: context.user.id,
+  });
 
   if (!updated) {
     return Response.json({ error: "Could not save the edit." }, { status: 500 });
   }
   publishPersisted(campaignId, "message_updated", { message: updated });
-  return Response.json({ message: updated });
+  // The narration mp3 is keyed by message id: read the edited words aloud,
+  // not the narrator's, as a reroll or a picked take does.
+  refreshNarrationAudio(context.campaign, updated);
+  return Response.json({ message: updated, ...correctionsField(correctionId ? [correctionId] : []) });
 }

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
+import { correctionsField } from "@/lib/correction-reasons";
 import { requestTurnRetry } from "@/lib/dm/retry-turn";
 
 export const runtime = "nodejs";
@@ -29,9 +30,9 @@ export async function POST(
     return Response.json({ error: "Invalid retry request." }, { status: 400 });
   }
 
-  const result = requestTurnRetry({ campaignId, turnId: parsed.data.turnId });
+  const result = requestTurnRetry({ campaignId, turnId: parsed.data.turnId, userId: context.user.id });
   if (!result.ok) {
     return Response.json({ error: result.error }, { status: result.status });
   }
-  return Response.json({ ok: true, turnId: result.turnId });
+  return Response.json({ ok: true, turnId: result.turnId, ...correctionsField(result.correctionId ? [result.correctionId] : []) });
 }

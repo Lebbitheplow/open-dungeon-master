@@ -462,7 +462,8 @@ export function handleAoeDamage(
         sheets,
         sheetsById,
         part.type,
-        plan ? { magical: true, spell: true, ...(elementalAdeptApplies(plan.caster, part.type) ? { ignoreResistance: true } : {}) } : undefined,
+        // An enemy's spell is a spell's damage too (casterEnemyId).
+        plan || args.spell ? { magical: true, spell: true, ...(plan && elementalAdeptApplies(plan.caster, part.type) ? { ignoreResistance: true } : {}) } : undefined,
       );
       if (applied.damageNote) {
         row.note = [row.note, applied.damageNote].filter(Boolean).join(" ");
@@ -586,6 +587,9 @@ export function handleAoeDamage(
       ];
       if (landed.length) {
         row.conditionApplied = landed.join(", ");
+      }
+      if (applied && "error" in applied) {
+        row.conditionRefused = String(applied.error);
       }
     }
   }

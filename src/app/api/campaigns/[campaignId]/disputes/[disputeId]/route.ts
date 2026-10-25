@@ -2,7 +2,10 @@ import { z } from "zod";
 import { capsFor, isErrorResponse, requireMember } from "@/lib/campaign-api";
 import { allocateSeq, campaignSeats, listMembers } from "@/lib/db/campaigns";
 import { castVote, getDispute, openVote, publicDispute, settleDispute, type RulingDispute } from "@/lib/db/disputes";
-import { insertCampaignMessage } from "@/lib/db/messages";
+import { correctionsField } from "@/lib/correction-reasons";
+import { getDatabase } from "@/lib/db/core";
+import { getCampaignMessage, insertCampaignMessage } from "@/lib/db/messages";
+import { recordTurnCorrection } from "@/lib/db/turn-ledger";
 import { getUserById } from "@/lib/db/users";
 import { disputeTranscriptLine, tallyEarly, tallyVotes } from "@/lib/dm/dispute-logic";
 import { isDmSeat } from "@/lib/dm/viewer";
@@ -28,8 +31,28 @@ function settle(
   status: "upheld" | "overruled" | "withdrawn",
   decidedBy: string | null,
   byVote: boolean,
-) {
-  const settled = settleDispute(dispute.id, status, decidedBy);
+): { settled: RulingDispute; correctionId: string | null } | null {
+  // An overruled ruling is the AI's narration ruled wrong (the issue's
+  // "upheld dispute": the objection stood). Its correction ledger row
+  // (issue #460) goes in with the ruling, tied to the turn that narrated
+  // the passage. "Upheld" keeps the ruling: nothing was corrected.
+  const { settled, correctionId } = getDatabase().transaction(() => {
+    const done = settleDispute(dispute.id, status, decidedBy);
+    const turnId = done && status === "overruled" ? getCampaignMessage(dispute.messageId)?.dmTurnId ?? null : null;
+    return {
+      settled: done,
+      correctionId: turnId
+        ? recordTurnCorrection({
+            campaignId,
+            turnId,
+            attribution: "direct",
+            kind: "dispute_overruled",
+            messageId: dispute.messageId,
+            userId: decidedBy ?? dispute.raisedByUserId,
+          })
+        : null,
+    };
+  })();
   if (!settled) {
     return null;
   }
@@ -48,7 +71,19 @@ function settle(
   });
   publishWithSeq(campaignId, seq, "message_added", { message });
   publishPersisted(campaignId, "ruling_resolved", { dispute: publicDispute(settled) });
-  return settled;
+  return { settled, correctionId };
+}
+
+// The answer to a settling action: the dispute, and the ledger row's id
+// for the reason chip when the one who settled it overruled the AI. A vote
+// the last ballot settled offers no chip: the row is the raiser's, not the
+// last voter's.
+function settledAnswer(outcome: ReturnType<typeof settle>, fallback?: RulingDispute, offerChip = true) {
+  if (!outcome) {
+    return fallback ? Response.json({ dispute: publicDispute(fallback) }) : Response.json({ error: "Already settled." }, { status: 400 });
+  }
+  const ids = offerChip && outcome.correctionId ? [outcome.correctionId] : [];
+  return Response.json({ dispute: publicDispute(outcome.settled), ...correctionsField(ids) });
 }
 
 export async function POST(
@@ -79,8 +114,7 @@ export async function POST(
     if (dispute.raisedByUserId !== context.user.id) {
       return Response.json({ error: "Only whoever raised it can withdraw it." }, { status: 403 });
     }
-    const settled = settle(campaignId, dispute, "withdrawn", context.user.id, false);
-    return settled ? Response.json({ dispute: publicDispute(settled) }) : Response.json({ error: "Already settled." }, { status: 400 });
+    return settledAnswer(settle(campaignId, dispute, "withdrawn", context.user.id, false));
   }
 
   if (action === "cast") {
@@ -96,8 +130,7 @@ export async function POST(
     }
     const tally = tallyVotes(voted.votes, voted.voterIds);
     if (tally.outcome) {
-      const settled = settle(campaignId, voted, tally.outcome, null, true);
-      return Response.json({ dispute: publicDispute(settled ?? voted) });
+      return settledAnswer(settle(campaignId, voted, tally.outcome, null, true), voted, false);
     }
     publishPersisted(campaignId, "ruling_disputed", { dispute: publicDispute(voted) });
     return Response.json({ dispute: publicDispute(voted) });
@@ -120,8 +153,7 @@ export async function POST(
     }
     const tally = tallyVotes(opened.votes, opened.voterIds);
     if (tally.outcome) {
-      const settled = settle(campaignId, opened, tally.outcome, context.user.id, true);
-      return Response.json({ dispute: publicDispute(settled ?? opened) });
+      return settledAnswer(settle(campaignId, opened, tally.outcome, context.user.id, true), opened);
     }
     publishPersisted(campaignId, "ruling_disputed", { dispute: publicDispute(opened) });
     return Response.json({ dispute: publicDispute(opened) });
@@ -130,9 +162,7 @@ export async function POST(
     if (dispute.status !== "voting") {
       return Response.json({ error: "There is no vote to count." }, { status: 400 });
     }
-    const settled = settle(campaignId, dispute, tallyEarly(dispute.votes, dispute.voterIds), context.user.id, true);
-    return settled ? Response.json({ dispute: publicDispute(settled) }) : Response.json({ error: "Already settled." }, { status: 400 });
+    return settledAnswer(settle(campaignId, dispute, tallyEarly(dispute.votes, dispute.voterIds), context.user.id, true));
   }
-  const settled = settle(campaignId, dispute, action === "uphold" ? "upheld" : "overruled", context.user.id, false);
-  return settled ? Response.json({ dispute: publicDispute(settled) }) : Response.json({ error: "Already settled." }, { status: 400 });
+  return settledAnswer(settle(campaignId, dispute, action === "uphold" ? "upheld" : "overruled", context.user.id, false));
 }

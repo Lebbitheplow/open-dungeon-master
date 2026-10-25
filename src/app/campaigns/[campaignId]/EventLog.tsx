@@ -5,6 +5,7 @@ import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import { Loader2, RotateCcw, ScrollText, Star } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
+import { offerCorrectionReason } from "@/lib/correction-offer";
 import { ui } from "@/lib/ui";
 import type { CharacterEvent } from "@/lib/db/character-events";
 import type { AuditEntry } from "@/app/campaigns/[campaignId]/useCampaignStream";
@@ -203,6 +204,8 @@ export function EventLog({
             setConfirming(null);
             if (!retry.response?.ok) {
               noteError(busyKey, refusal(retry.response, retry.data));
+            } else {
+              offerCorrectionReason(campaignId, retry.data);
             }
           },
         });
@@ -210,6 +213,8 @@ export function EventLog({
       }
       if (!response?.ok) {
         noteError(busyKey, refusal(response, data));
+      } else {
+        offerCorrectionReason(campaignId, data);
       }
     } finally {
       setBusyId("");

@@ -1,0 +1,67 @@
+[
+  {
+    "id": "strike-bite-mammal",
+    "label": "Bite · mammal",
+    "subject": "A close-up of a furred mammal muzzle and open jaws snapping toward the right, ivory canine teeth unmistakable. Neutral brown fur and a compact muzzle usable for bears, wolves and big cats. Emphasize upper and lower jaw closing, not a whole animal portrait. No oversized saber teeth."
+  },
+  {
+    "id": "strike-bite-reptile",
+    "label": "Bite · reptile",
+    "subject": "A close-up of robust olive-brown reptilian jaws snapping horizontally right, thick scaly snout, rows of conical teeth, strong lower jaw. Anatomy broadly usable for crocodilians and large predatory dinosaurs. No fur, no horns, no dragon spikes, no long snake fangs."
+  },
+  {
+    "id": "strike-bite-serpent",
+    "label": "Bite · snake",
+    "subject": "A close-up of a nonvenomous constrictor snake head and short curved neck lunging right with an open mouth. Rounded python-like head, gold-olive scales, small recurved teeth; absolutely no long venom fangs or cobra hood. The open jaws and lunge are the dominant subject."
+  },
+  {
+    "id": "strike-bite-arachnid",
+    "label": "Bite · spider",
+    "subject": "A tight dramatic front-three-quarter close-up of a spider's paired chelicerae and two short curved pointed fangs thrusting forward and inward, attached to the compact hairy front of its cephalothorax. Multiple small eyes above, two pedipalps framing the fangs, no full eight-leg body. Two clearly separated fangs, no mammal jaw or human teeth."
+  },
+  {
+    "id": "strike-claw-mammal",
+    "label": "Claw · mammal",
+    "subject": "One powerful furred mammal forepaw sweeping horizontally from left to right, four distinct ivory claws hooked forward, warm brown fur and one connected wrist, a few short gold slash trails emphasizing the swipe. Close-up body-part action, no animal face, no multiple paws, no hand gripping anything."
+  },
+  {
+    "id": "strike-ram-antlers",
+    "label": "Ram · antlers",
+    "subject": "A compact frontal-three-quarter view of a lowered antlered brow driving to the right, two branching antlers extending across the wide frame. Focus tightly on the antlers and lowered forehead, with short rightward motion streaks. Brown fur, branched bone antlers, no curled sheep horns. Clear charging headbutt, no full body."
+  },
+  {
+    "id": "strike-fist-primate",
+    "label": "Fist · primate",
+    "subject": "A broad dark leathery closed primate fist with a short furred forearm punching from left to right, four knuckles in a single connected fist, thumb correctly wrapped outside curled fingers. Bare natural skin and brown-black fur, no human wrist wraps or armor. Clean anatomy, brief warm gold motion strokes behind."
+  },
+  {
+    "id": "strike-beak",
+    "label": "Beak · bird",
+    "subject": "A close crop of a feathered bird head in side-three-quarter view, powerful curved golden beak open slightly, thrusting horizontally right in a sharp peck. Make the beak dominate the composition; swept-back feathers and short motion trails communicate pecking rather than a still bird portrait. No talons."
+  },
+  {
+    "id": "strike-talons",
+    "label": "Talons · bird",
+    "subject": "One scaled golden avian foot and short feathered ankle sweeping forward horizontally in a grabbing strike, three forward toes with long curved dark claws and one rear opposing talon, all connected naturally at the foot. Clear bird foot rather than furry mammal paw. Bold separated toe silhouettes and short gold motion traces, no bird head."
+  },
+  {
+    "id": "strike-tentacles",
+    "label": "Tentacles · cephalopod",
+    "subject": "Three muscular reddish copper octopus arms reaching from a shared off-frame left origin across the rectangle toward the right, curling grasping tips with obvious pale double rows of suction cups. Express an active reach and grab, not a decorative knot. No octopus head, no splash background, no claws or snake scales."
+  },
+  {
+    "id": "strike-constrict",
+    "label": "Constrict · snake",
+    "subject": "A thick olive-gold snake body in two tight horizontal overlapping coils squeezing a small plain weathered wooden practice post at center. The post's surface cracks slightly under pressure so compression is clear. Snake body and broad muscular coils dominate, a small closed-mouth head at one side, no exposed teeth or venom fangs. No victim or gore. Distinct squeezing action, not biting."
+  },
+  {
+    "id": "strike-tusks",
+    "label": "Tusk / Gore · tusked",
+    "subject": "A pair of sturdy curved ivory tusks attached to a small dark furred muzzle base at the left, sweeping forward and upward toward the right in a forceful thrust. Compose both tusks as bold horizontally extending curves, pointed tips fully visible and clearly separated. Close-up of tusks in motion, no full animal head, no trunk, no rhinoceros horn. Generic tusked mammal anatomy suitable for a boar strike or mammoth gore."
+  },
+  {
+    "id": "strike-tail-reptile",
+    "label": "Tail · reptile",
+    "subject": "A thick muscular tapering olive-brown reptile tail attached to a cropped hindquarter at the left, whipping in a broad low horizontal curve across the rectangle. Subtle pebbled dinosaur/crocodilian scales, plain powerful taper without dragon spikes or a club. Gold motion strokes behind the tail arc make the lateral tail strike unmistakable. No head or legs."
+  }
+]

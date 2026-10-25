@@ -25,7 +25,7 @@ const os = await import("node:os");
 const fsp = await import("node:fs/promises");
 const nodePath = (await import("node:path")).default;
 const { cleanSettings, effectiveSettings, missingRequiredSettings, setupSettingKeys, downloadApplies } = await import("../src/lib/addons/settings.ts");
-const { boardSnapshot, boardFx, readViewMessage, fileForRequest } = await import("../src/lib/addons/board-bridge.ts");
+const { boardSnapshot, boardFx, readViewMessage, fileForRequest, createAnchorStore } = await import("../src/lib/addons/board-bridge.ts");
 const { normalizeMapAddonView } = await import("../src/lib/addons/map-view.ts");
 const { withManifestDefaults } = await import("../src/lib/addons/import-defaults.ts");
 const { sniffImage } = await import("../src/lib/addons/sniff.ts");
@@ -82,6 +82,7 @@ await test("ids, paths and empty addons are refused", () => {
   const viewOutsideUi = { ...example.contributes, boardViews: [{ id: "x", title: "X", entry: "board.html" }] };
   assert.equal(bad({ contributes: viewOutsideUi }), false);
   assert.equal(bad({ permissions: ["root"] }), false);
+  assert.equal(bad({ permissions: ["threads"] }), true, "threads is a permission a board view may ask for");
   assert.equal(bad({ version: "one" }), false);
 });
 
@@ -594,6 +595,34 @@ await test("anchors: fractions of the frame, within reason, for a bounded number
   assert.equal(readViewMessage({ odm: 1, type: "anchors", tokens: many }), null);
 });
 
+await test("the anchor store tells its readers only when a figure moved", () => {
+  const store = createAnchorStore();
+  let told = 0;
+  const stop = store.subscribe(() => { told += 1; });
+  store.set({ t1: [0.5, 0.4, 0.6], t2: [0.1, 0.1, 0.2] });
+  assert.equal(told, 1);
+  const kept = store.get("t1");
+  assert.deepEqual(kept, [0.5, 0.4, 0.6]);
+  // The same places in a new report: nobody is told, and t1 keeps its identity.
+  store.set({ t1: [0.5, 0.4, 0.6], t2: [0.1, 0.1, 0.2] });
+  assert.equal(told, 1);
+  assert.equal(store.get("t1"), kept);
+  // One figure moved: readers are told, and the one that stayed keeps its identity.
+  store.set({ t1: [0.5, 0.4, 0.6], t2: [0.3, 0.1, 0.2] });
+  assert.equal(told, 2);
+  assert.equal(store.get("t1"), kept);
+  assert.deepEqual(store.get("t2"), [0.3, 0.1, 0.2]);
+  // A figure gone, or another in its place, is a change too.
+  store.set({ t1: [0.5, 0.4, 0.6] });
+  assert.equal(told, 3);
+  assert.equal(store.get("t2"), undefined);
+  store.set({ t3: [0.5, 0.4, 0.6] });
+  assert.equal(told, 4);
+  stop();
+  store.set({ t3: [0.9, 0.4, 0.6] });
+  assert.equal(told, 4, "an unsubscribed reader hears nothing");
+});
+
 await test("stored view data is normalized: our own paths only", () => {
   const view = normalizeMapAddonView({
     addonId: "hello-dungeon",
@@ -629,6 +658,8 @@ await test("Godot resources are isolated, typed and size-limited like other addo
       assert.match(response.headers.get("Content-Security-Policy"), /sandbox allow-scripts/);
       assert.ok(!response.headers.get("Content-Security-Policy").includes("allow-same-origin"));
       assert.equal(response.headers.get("Access-Control-Allow-Origin"), "*");
+      // Framed by the cross-origin isolated table in a browser without credentialless frames.
+      assert.equal(response.headers.get("Cross-Origin-Embedder-Policy"), "credentialless");
       await response.arrayBuffer();
       assert.equal((await serveAddonFile(root, [name], 1)).status, 404);
     }

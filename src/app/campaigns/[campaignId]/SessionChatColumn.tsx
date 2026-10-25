@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
+import { offerCorrectionReason } from "@/lib/correction-offer";
 import { MessageList } from "@/app/campaigns/[campaignId]/MessageList";
 import { ReportDialog, type ReportTarget } from "@/app/campaigns/[campaignId]/ReportDialog";
 import { ItemProposalBar } from "@/app/campaigns/[campaignId]/ItemProposalBar";
@@ -197,6 +198,7 @@ export function SessionChatColumn({
                   const data = await response.json().catch(() => ({}));
                   return data.error || "Could not save that edit.";
                 }
+                offerCorrectionReason(campaignId, await response.json().catch(() => null));
                 return null;
               }
             : undefined

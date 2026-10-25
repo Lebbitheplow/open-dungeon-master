@@ -3,13 +3,10 @@
 // summary" comes back with focus on that row. A pick still owed is said in
 // words with a Fix that lands on its field. A new build ends on the same
 // summary, with its save button there. Nothing here is saved.
-import { check, eventually, sleep } from "../lib.mjs";
+import { check, eventually, untilStill, currentStep, upTo } from "../lib.mjs";
 
 const visible = (page, root, text) =>
   page.locator(`${root}button`).filter({ hasText: text }).locator("visible=true");
-
-const currentStep = async (page, root) =>
-  (await page.locator(`${root}button[aria-current="step"]`).locator("visible=true").first().getAttribute("aria-label")) ?? "";
 
 async function onStep(page, root, number, label) {
   await eventually(async () => new RegExp(`^Step ${number}:`).test(await currentStep(page, root)), {
@@ -36,8 +33,10 @@ export default {
       label: "focus on the summary heading",
     });
     const rows = await summary.first().locator("h4").allInnerTexts();
-    check(rows.length === 6, `one heading per step (${rows.join(", ")})`);
-    check(rows[5] === "Finishing touches", `the last row is the finishing touches (${rows[5]})`);
+    // One row per step before the summary, the class first and the name last
+    // (backlog F4).
+    check(rows.length === 5, `one heading per step (${rows.join(", ")})`);
+    check(rows[0] === "Class" && rows[4] === "Name and story", `the class leads and the name and story close (${rows.join(", ")})`);
     check(/Every step is complete/.test(await summary.first().locator("xpath=..").innerText()), "a stored build owes nothing");
     check((await visible(page, root, /^Save changes$/).count()) > 0, "Save changes is on the summary");
     check((await visible(page, root, /^Back to summary$/).count()) === 0, "the summary has no Back to summary");
@@ -67,7 +66,7 @@ export default {
     check(t.viewport !== "desktop" || plain.shown === 6, `every step name is printed on a desktop (${plain.shown})`);
     check(plain.gap >= 8, `the step heading starts below the step names (${plain.gap}px clear)`);
     await page.evaluate(() => (document.documentElement.style.fontSize = "150%"));
-    await sleep(300);
+    await untilStill(page);
     const enlarged = await clearance();
     await t.shot("summary-enlarged");
     await page.evaluate(() => (document.documentElement.style.fontSize = ""));
@@ -77,7 +76,7 @@ export default {
 
     // A row goes to its step, and Back to summary returns focus to it.
     await t.tap(page.locator(`${root}section[data-active] [data-summary-edit="calling"]`).first());
-    await onStep(page, root, 3, "Class");
+    await onStep(page, root, 1, "Class");
     const back = visible(page, root, /^Back to summary$/);
     await eventually(() => back.count(), { timeoutMs: 5_000, label: "Back to summary on the Class step" });
     check((await visible(page, root, /^Save changes$/).count()) > 0, "saving from any step still works");
@@ -86,7 +85,9 @@ export default {
     await eventually(() => focusMatches(page, '[data-summary-edit="calling"]'), { timeoutMs: 5_000, label: "focus back on the Class row" });
 
     // A level up owes a pick: said in words, with a Fix that lands on it.
-    await t.open(`/characters/${ids.library}/edit?levelUp=1`);
+    // The whole build one level up (Level up itself opens the slim sheet,
+    // backlog F7, walked in 33-library-level-up.mjs).
+    await t.open(`/characters/${ids.library}/edit?levelUp=1&whole=1`);
     await eventually(() => summary.count(), { timeoutMs: 30_000, label: "the summary of a level up" });
     const owedRow = page.locator(`${root}section[data-active] [data-summary-row][data-owed]`).locator("visible=true");
     await eventually(() => owedRow.count(), { timeoutMs: 15_000, label: "a row with a pick owed" });
@@ -110,13 +111,14 @@ export default {
     await onStep(page, root, 6, "back from the Fix");
     await eventually(() => focusMatches(page, `[data-summary-edit="${rowKey}"]`), { timeoutMs: 5_000, label: `focus back on the ${rowKey} row` });
 
-    // A new build ends on the same summary, with its save there.
+    // A new build ends on the same summary, with its save there. It opens on
+    // the class (backlog F4); a class picked, the owed line offers the fill.
     await t.open("/characters/new");
     const startFresh = visible(page, root, /^Start fresh$/);
     if (await startFresh.count()) await t.tap(startFresh.first());
-    const name = page.locator(`${root}section[data-active] input[aria-label="Name"]`).locator("visible=true").first();
-    await name.waitFor({ state: "visible", timeout: 30_000 });
-    await name.fill(`Summary Check ${t.viewport}`);
+    const barbarian = page.locator(`${root}section[data-active] .creator-card[aria-label^="Barbarian"]`).locator("visible=true").first();
+    await barbarian.waitFor({ state: "visible", timeout: 30_000 });
+    await t.tap(barbarian);
     check((await visible(page, root, /^Back to summary$/).count()) === 0, "no Back to summary before the summary is reached");
     const fill = page.locator(`${root}section[data-active] [data-quick-fill]`).locator("visible=true");
     await eventually(() => fill.count(), { timeoutMs: 10_000, label: "Fill what's left" });
@@ -131,12 +133,11 @@ export default {
         async () => {
           if (new RegExp(`^Step ${step + 1}:`).test(await currentStep(page, root))) return true;
           if (await next.isEnabled()) await t.tap(next);
-          await sleep(800);
+          await upTo(async () => new RegExp(`^Step ${step + 1}:`).test(await currentStep(page, root)), 800);
           return new RegExp(`^Step ${step + 1}:`).test(await currentStep(page, root));
         },
         { timeoutMs: 20_000, label: `Continue from step ${step}` },
       );
-      await sleep(300);
     }
     await eventually(() => summary.count(), { timeoutMs: 10_000, label: "the summary at the end of a new build" });
     check(/Every step is complete/.test(await page.locator(`${root}section[data-active]`).first().innerText()), "the filled build owes nothing");

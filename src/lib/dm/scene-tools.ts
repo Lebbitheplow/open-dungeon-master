@@ -3,7 +3,8 @@ import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { getSceneTracker, setSceneTracker } from "@/lib/db/scene-tracker";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
-import { computeSheetDerived } from "@/lib/srd";
+import { computeSheetDerived, SRD_SKILLS } from "@/lib/srd";
+import { strictnessShift } from "@/lib/dm/safety-logic";
 import { dcForDifficulty, DIFFICULTY_TIERS, type DifficultyTier } from "@/lib/srd/dc";
 import { rollCharacterCheck } from "@/lib/dm/contest-roll";
 import { resolveSheetRef, unknownSheetRef } from "@/lib/dm/rolls";
@@ -47,11 +48,11 @@ export const sceneTools: ToolDef[] = [
         properties: {
           kind: { type: "string", enum: [...TRACKER_KINDS] },
           title: { type: "string", description: "What the scene is ('Talking the reeve round')." },
-          successesNeeded: { type: "integer", minimum: 1, maximum: 12 },
-          failuresAllowed: { type: "integer", minimum: 1, maximum: 12 },
+          successesNeeded: { type: "integer", minimum: 1, maximum: 12, description: "Successes that win the scene. Default: 4." },
+          failuresAllowed: { type: "integer", minimum: 1, maximum: 12, description: "Failures that lose it. Default: 3." },
           onSuccess: { type: "string", description: "What happens if they win it." },
           onFailure: { type: "string", description: "What happens if they lose it." },
-          characterIds: { type: "array", items: { type: "string" } },
+          characterIds: { type: "array", items: { type: "string" }, description: "Exact character ids from GAME STATE: who takes part. Omit for the whole party." },
         },
         required: ["kind", "title"],
       },
@@ -67,15 +68,15 @@ export const sceneTools: ToolDef[] = [
         type: "object",
         additionalProperties: false,
         properties: {
-          characterId: { type: "string" },
-          skill: { type: "string", description: "Skill name ('persuasion')." },
-          ability: { type: "string", enum: ["str", "dex", "con", "int", "wis", "cha"] },
+          characterId: { type: "string", description: "Exact characterId from GAME STATE." },
+          skill: { type: "string", enum: SRD_SKILLS.map((skill) => skill.id), description: "The skill the approach calls for. Give this or ability." },
+          ability: { type: "string", enum: ["str", "dex", "con", "int", "wis", "cha"], description: "A raw ability check when no skill fits. Default: 'wis'." },
           difficulty: {
             type: "string",
             enum: [...DIFFICULTY_TIERS],
-            description: "Or send an exact dc.",
+            description: "How hard this attempt is; the server sets the DC. Or send an exact dc.",
           },
-          dc: { type: "integer", minimum: 1, maximum: 30 },
+          dc: { type: "integer", minimum: 1, maximum: 30, description: "An exact DC, used instead of difficulty." },
           approach: { type: "string", description: "What they tried, in a few words." },
           endRound: { type: "boolean", description: "True when this was the last character to act this round." },
         },
@@ -137,6 +138,8 @@ function publish(campaignId: string, tracker: SceneTracker | null) {
 export function handleStartScene(
   campaign: Campaign,
   rawArguments: string,
+  sheets: CharacterSheet[],
+  sheetsById: Map<string, CharacterSheet>,
 ): ToolResult {
   let args: z.infer<typeof startSchema>;
   try {
@@ -151,7 +154,17 @@ export function handleStartScene(
       retry: true,
     };
   }
-  const checked = checkTracker(args);
+  // Participants are stored as sheet ids: scene_check matches on them, so a
+  // name sent here would shut its character out of the scene.
+  const participants: string[] = [];
+  for (const ref of args.characterIds ?? []) {
+    const sheet = resolveSheetRef(ref, sheets, sheetsById);
+    if (!sheet) {
+      return unknownSheetRef("characterIds", ref, sheets);
+    }
+    participants.push(sheet.id);
+  }
+  const checked = checkTracker({ ...args, characterIds: participants });
   if ("error" in checked) {
     return checked;
   }
@@ -206,7 +219,7 @@ export function handleSceneCheck(
   const dc =
     typeof args.dc === "number" && args.dc > 0
       ? Math.min(30, Math.max(1, Math.round(args.dc)))
-      : dcForDifficulty((args.difficulty ?? "moderate") as DifficultyTier);
+      : dcForDifficulty((args.difficulty ?? "moderate") as DifficultyTier, strictnessShift(campaign.gameSettings.gm?.strictness ?? "standard"));
 
   // A scene check is a check like any other (src/lib/dm/contest-roll.ts):
   // lasting effects, Guidance, Reliable Talent, exhaustion, a held die and

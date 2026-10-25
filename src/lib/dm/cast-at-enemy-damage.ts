@@ -73,7 +73,7 @@ export function landSpellDamage(input: {
   let damageDealt = saved && !mech?.riders?.damageIgnoresSave ? (halves ? Math.floor(total / 2) : 0) : total;
   // Harm: never below 1 hit point. The floor is on what gets through the
   // creature's resistances, so those are weighed here and not again.
-  const floored = flooredDamage(mech, enemy, damageDealt, damageType);
+  const floored = flooredDamage(campaign.id, mech, enemy, damageDealt, damageType, adept ? "Elemental Adept" : null);
   if (floored !== null) {
     damageDealt = floored;
   }

@@ -66,6 +66,7 @@ function linkedRow(sheet: CompanionLike): Npc | null {
          gender = CASE WHEN gender = '' THEN ? ELSE gender END,
          attraction_json = CASE WHEN attraction_json = '' THEN ? ELSE attraction_json END,
          personality_json = CASE WHEN personality_json = '' THEN ? ELSE personality_json END,
+         met_at = CASE WHEN met_at = '' THEN ? ELSE met_at END,
          updated_at = ?
        WHERE id = ?`,
     ).run(
@@ -73,6 +74,8 @@ function linkedRow(sheet: CompanionLike): Npc | null {
       sheet.gender ?? "",
       attractionJson(sheet.attraction),
       JSON.stringify(derivePersonality(sheet.name, "friendly", sheet.personality ?? "")),
+      // Travelling with the party is meeting them (Npc.metAt).
+      now,
       now,
       named.id,
     );
@@ -82,8 +85,8 @@ function linkedRow(sheet: CompanionLike): Npc | null {
   db.prepare(
     `INSERT INTO npcs
        (id, campaign_id, name, attitude, trait, location, gender, attraction_json, personality_json,
-        companion_sheet_id, last_shift_turn, created_at, updated_at)
-     VALUES (?, ?, ?, 'friendly', ?, '', ?, ?, ?, ?, '', ?, ?)`,
+        companion_sheet_id, last_shift_turn, met_at, created_at, updated_at)
+     VALUES (?, ?, ?, 'friendly', ?, '', ?, ?, ?, ?, '', ?, ?, ?)`,
   ).run(
     id,
     sheet.campaignId,
@@ -93,6 +96,7 @@ function linkedRow(sheet: CompanionLike): Npc | null {
     attractionJson(sheet.attraction),
     JSON.stringify(derivePersonality(sheet.name, "friendly", sheet.personality ?? "")),
     sheet.id,
+    now,
     now,
     now,
   );

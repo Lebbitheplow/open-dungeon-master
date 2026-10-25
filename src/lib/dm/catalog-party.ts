@@ -495,7 +495,7 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
     summary: "Marks a spell slot used and starts concentration when the spell needs it.",
     fields: [
       { name: "characterId", label: "Character", kind: "character", required: true },
-      { name: "level", label: "Slot level", kind: "number", required: true, min: 1, max: 9 },
+      { name: "level", label: "Slot level", kind: "number", requiredUnless: ["spell"], min: 1, max: 9, help: "Empty for the spell's own level." },
       // The handler reads `spell`: the name is what it checks the list, the
       // slot level, the casting time and concentration against. It may be
       // left out: a slot burned with no spell (Divine Smite) still spends.

@@ -39,6 +39,31 @@ export interface ShellShare {
   subscribe(listener: (status: ShellShareStatus) => void): () => void;
 }
 
+// What an app says about itself for a report file (Report a problem): the
+// facts the server cannot see. Never an address, a path, a name or a key.
+export interface ShellReportFacts {
+  version: string;
+  // How it was installed: "AppImage", "nsis", "dmg", "android" and so on.
+  installKind: string;
+  platform: string;
+  arch: string;
+  os: string;
+  runtime: string;
+  // How the app shows these pages: "native" for its own screens.
+  screens: string;
+  // Whether the table is the world this device hosts.
+  localWorld: boolean;
+}
+
+// The app's answer once the file is saved. saved is false when the person
+// backed out of the save dialog or the share sheet; name is what the file
+// was saved as, and where is a short place to show ("~/Downloads").
+export interface ShellReportSaved {
+  saved: boolean;
+  name: string;
+  where: string;
+}
+
 export interface ShellHost {
   platform: "desktop" | "android";
   // Leaves this server's pages for the app's home screen (its servers,
@@ -67,6 +92,14 @@ export interface ShellHost {
   // (apps 0.15.0 and up); the account menu offers both.
   openSettings?(): void;
   openHelp?(): void;
+  // Report a problem (src/components/ReportProblemDialog.tsx through
+  // src/lib/shell-report.ts): the app saves the report file itself (the
+  // desktop's save dialog, starting in Downloads; the phone's share sheet)
+  // and describes itself for the file. Absent in apps up to 0.21.0 and in
+  // the apps' web view; the page then saves the file the way a browser
+  // does, which both apps already take.
+  reportFacts?(): Promise<ShellReportFacts>;
+  saveReport?(input: { name: string; text: string }): Promise<ShellReportSaved>;
 }
 
 declare global {

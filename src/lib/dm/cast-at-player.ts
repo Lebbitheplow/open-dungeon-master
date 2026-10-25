@@ -457,6 +457,9 @@ export function handleCastAtPlayer(
       base.duration = rounds
         ? `${rounds} round${rounds === 1 ? "" : "s"}${saveEnds ? `, or until a successful ${ability.toUpperCase()} save (DC ${dc}) at the end of one of their turns` : ""}`
         : `until they succeed on a ${ability.toUpperCase()} save (DC ${dc}) at the end of one of their turns`;
+    } else {
+      // A trait or a cap refused it: the narration must not bind them.
+      base.conditionRefused = String(applied.error);
     }
   }
   // A failure by a margin with no first condition (a breath that also

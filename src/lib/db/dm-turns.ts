@@ -4,6 +4,8 @@ import type { Advantage } from "@/lib/dice";
 import type { RollKind, RollVisibility } from "@/lib/db/rolls";
 import type { ContextTrace } from "@/lib/dm/context-budget";
 import { parkReasonFor, type ParkReason } from "@/lib/dice/held-rolls";
+import { writeTurnQuality } from "@/lib/db/turn-ledger";
+import type { GuardReport } from "@/lib/narrator-quality";
 
 // A DM narration turn persisted as a state machine so it can park while a
 // player rolls physical dice and resume later (across restarts).
@@ -42,6 +44,11 @@ export type DmTurn = {
   contextTrace: ContextTrace | null;
   createdAt: string;
   updatedAt: string;
+  // What the narration guard did, set on the turn in hand just before it
+  // ends (src/lib/dm/turn.ts) and written to its turn_quality row (issue
+  // #460). Not a column of dm_turns: a turn read back carries none, and its
+  // quality row keeps the outcome already stored.
+  guard?: GuardReport;
 };
 
 type TurnRow = {
@@ -121,7 +128,7 @@ export function getDmTurn(turnId: string): DmTurn | null {
 }
 
 export function saveDmTurn(turn: DmTurn) {
-  getDatabase()
+  const saved = getDatabase()
     .prepare(
       `
         UPDATE dm_turns SET
@@ -148,17 +155,32 @@ export function saveDmTurn(turn: DmTurn) {
       nowIso(),
       turn.id,
     );
+  // A turn that ended (done or failed) gets its narrator quality row
+  // (issue #460); a person's turn and a turn still running do not, and nor
+  // does a row a rewind deleted while the turn in hand was still ending.
+  if (saved.changes > 0) {
+    writeTurnQuality(turn);
+  }
 }
 
 // Turns stuck in `running` are stale after a crash/restart; fail them so a
-// new turn can start. `awaiting_rolls` turns are durable by design.
+// new turn can start. `awaiting_rolls` turns are durable by design. Each one
+// swept ends here, so its narrator quality row is written here too.
 export function failStaleRunningTurns(campaignId: string, olderThanMinutes = 10) {
   const cutoff = new Date(Date.now() - olderThanMinutes * 60_000).toISOString();
-  getDatabase()
-    .prepare(
-      `UPDATE dm_turns SET status = 'failed', updated_at = ? WHERE campaign_id = ? AND status = 'running' AND updated_at < ?`,
-    )
-    .run(nowIso(), campaignId, cutoff);
+  const db = getDatabase();
+  const stale = db
+    .prepare(`SELECT id FROM dm_turns WHERE campaign_id = ? AND status = 'running' AND updated_at < ?`)
+    .all(campaignId, cutoff) as Array<{ id: string }>;
+  db.prepare(
+    `UPDATE dm_turns SET status = 'failed', updated_at = ? WHERE campaign_id = ? AND status = 'running' AND updated_at < ?`,
+  ).run(nowIso(), campaignId, cutoff);
+  for (const { id } of stale) {
+    const turn = getDmTurn(id);
+    if (turn) {
+      writeTurnQuality(turn);
+    }
+  }
 }
 
 // The campaign's newest turn. A halted turn is only retryable while it is
@@ -171,6 +193,15 @@ export function getLatestDmTurnId(campaignId: string): string | null {
     )
     .get(campaignId) as { id: string } | undefined;
   return row?.id ?? null;
+}
+
+// The campaign's last `limit` turns, oldest first: what the tester's report
+// bundle times and records (src/lib/report-bundle-server.ts).
+export function listRecentDmTurns(campaignId: string, limit: number): DmTurn[] {
+  const rows = getDatabase()
+    .prepare(`SELECT * FROM dm_turns WHERE campaign_id = ? ORDER BY created_at DESC, rowid DESC LIMIT ?`)
+    .all(campaignId, Math.max(1, Math.floor(limit))) as TurnRow[];
+  return rows.reverse().map(mapTurn);
 }
 
 // Atomically take ownership of a failed turn for a retry. better-sqlite3 is

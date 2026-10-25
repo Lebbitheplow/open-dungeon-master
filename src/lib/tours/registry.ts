@@ -42,6 +42,9 @@ const REVISED: Readonly<Record<string, number>> = {
   "workshop-homebrew": 2,
   "workshop-share": 2,
   "table-dm": 2,
+  // The Party tool's AI-drafted pregens: Draft pregens, and that drafts wait
+  // unoffered until the DM ticks them.
+  "workshop-party": 2,
 };
 
 export function tourVersion(tourId: string): number {

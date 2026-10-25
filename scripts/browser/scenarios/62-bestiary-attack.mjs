@@ -3,7 +3,7 @@
 // hit points, a printed block shows its Bonus actions, and a block resistant
 // to a condition shows that line. On desktop and phone, on the website and
 // in the app's own screens, which an older host would drop.
-import { check, eventually, sleep } from "../lib.mjs";
+import { check, eventually, untilStill } from "../lib.mjs";
 
 export default {
   name: "bestiary-attack",
@@ -55,7 +55,7 @@ export default {
       await eventually(() => bonus.isVisible(), { timeoutMs: 10_000, label: "the attack's details" });
       await t.tap(bonus);
       await page.getByLabel("At half its hit points or fewer").locator("visible=true").first().fill("1d6");
-      await sleep(600);
+      await untilStill(page);
       await t.shot("attack-details");
       await eventually(() => details.textContent().then((text) => /bonus action/.test(text ?? "") && /weaker when bloodied/.test(text ?? "")), { label: "the chip naming the bonus action and the weaker blow" });
       await t.tap(page.getByRole("button", { name: "Save the block" }).locator("visible=true").first());

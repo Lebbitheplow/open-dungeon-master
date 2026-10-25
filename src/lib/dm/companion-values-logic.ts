@@ -316,7 +316,7 @@ export const VALUES_PARAMETER = {
     properties: {
       value: { type: "string", enum: [...COMPANION_VALUES] },
       strength: { type: "string", enum: [...VALUE_STRENGTHS] },
-      faction: { type: "string", description: "For faction_loyalty." },
+      faction: { type: "string", description: "Only when value is faction_loyalty: the faction they are loyal to. The server refuses a faction_loyalty sent without one." },
     },
     required: ["value", "strength"],
   },

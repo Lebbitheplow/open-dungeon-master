@@ -50,8 +50,9 @@ anything whose main purpose is to fetch content the user has no right to.
   (models, Python wheels) name exact versions and verify a checksum.
 - **Declare what you do.** `network` if the addon ever reaches the internet,
   `programs` if it starts other programs, `ai.text` if it asks the
-  storyteller. A permission that is used but not declared fails review; so
-  does one that is declared but never used.
+  storyteller, `threads` if its board view shares memory between threads
+  (`SharedArrayBuffer`). A permission that is used but not declared fails
+  review; so does one that is declared but never used.
 - **Stay in your folders.** Write only to `outputDir` and `ODM_ADDON_DATA_DIR`
   (and the system temp folder). Read the input you were given, your own
   package, and the programs you declared.

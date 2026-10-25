@@ -129,7 +129,7 @@ try {
 
   await test("the DM is told the campaign sets the look", () => {
     const description = generateImageTool.function.parameters.properties.prompt.description;
-    assert.match(description, /Leave out the art style/);
+    assert.match(description, /Omit the art style/);
     assert.doesNotMatch(description, /camera style/);
   });
 

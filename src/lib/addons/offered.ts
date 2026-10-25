@@ -1,5 +1,5 @@
 import type { BoardView, MapGenerator, OptionField, WorkshopImporter } from "@/lib/addons/manifest";
-import { listInstalledAddons } from "@/lib/addons/installed";
+import { grantedPermission, listInstalledAddons } from "@/lib/addons/installed";
 import { addonSupport } from "@/lib/addons/support";
 
 // What the ready addons contribute, flattened for the pages that offer them
@@ -9,7 +9,9 @@ type Owner = { addonId: string; addonName: string; addonVersion: string };
 
 export type OfferedImporter = Owner & Pick<WorkshopImporter, "id" | "title" | "description" | "accepts" | "maxInputMB"> & { options: OptionField[] };
 export type OfferedGenerator = Owner & Pick<MapGenerator, "id" | "title" | "description"> & { options: OptionField[] };
-export type OfferedBoardView = Owner & Pick<BoardView, "id" | "title" | "description" | "needsViewData" | "sessionLayout" | "sessionTheme"> & { url: string; options: OptionField[] };
+// `threads`: the admin accepted the addon's threads permission, so the table
+// lets its frame be cross-origin isolated (AddonBoardView.tsx).
+export type OfferedBoardView = Owner & Pick<BoardView, "id" | "title" | "description" | "needsViewData" | "sessionLayout" | "sessionTheme"> & { url: string; options: OptionField[]; threads?: boolean };
 
 export type OfferedContributions = {
   supported: boolean;
@@ -59,6 +61,7 @@ export function offeredContributions(): OfferedContributions {
         sessionTheme: view.sessionTheme,
         url: boardViewUrl(addon.id, addon.manifest.version, view.entry),
         options: view.options,
+        threads: grantedPermission(addon, "threads"),
       });
     }
   }

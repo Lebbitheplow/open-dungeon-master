@@ -125,20 +125,28 @@ export default {
     const params = async () => (await t.url()).searchParams;
     // Create asks the tool it opens to open its editor, and asks once more a
     // beat later only when nothing answered (src/app/workshop/[workshopId]/
-    // page.tsx). The asks are counted on the page, with the page's clock at
-    // the step, so a step can wait until the retry would have come.
+    // page.tsx): on a slow machine the first ask can come before the panel
+    // has mounted, and the retry is then right. What must never come is an
+    // ask after one was answered. The asks are counted on the page, with the
+    // page's clock at the step, so a step can wait until the retry would
+    // have come; an ask is answered once its dispatch is over and a panel
+    // has cancelled it.
     const countAsks = () =>
       page.evaluate(() => {
-        window.__odmAsks = 0;
+        window.__odmAsks = { answered: 0, after: 0 };
         window.__odmAskStart = performance.now();
         if (!window.__odmAsksHeard) {
-          window.addEventListener("odm-tour-prepare", () => {
-            window.__odmAsks += 1;
+          window.addEventListener("odm-tour-prepare", (event) => {
+            if (window.__odmAsks.answered) window.__odmAsks.after += 1;
+            queueMicrotask(() => {
+              if (event.defaultPrevented) window.__odmAsks.answered += 1;
+            });
           });
           window.__odmAsksHeard = true;
         }
       });
-    const asked = () => page.evaluate(() => window.__odmAsks ?? 0);
+    // The asks after the first answered one, or -1 when none was answered.
+    const askedAfterAnswer = () => page.evaluate(() => (window.__odmAsks?.answered ? window.__odmAsks.after : -1));
     const pastRetry = () => page.evaluate(() => performance.now() - (window.__odmAskStart ?? 0) > 1_800);
     const entryPage = page.locator(`${root}[data-tour="world-entry"]`).locator("visible=true").first();
     try {
@@ -193,7 +201,7 @@ export default {
       // editor stays closed past the moment the retry used to come.
       await page.keyboard.press("Escape");
       await eventually(async () => (await pastRetry()) && (await page.getByRole("dialog").count()) === 0, { label: "the Cast with no editor open, past Create's retry" });
-      check((await asked()) === 1, `Create asked the Cast ${await asked()} times, though the Cast answered the first`);
+      check((await askedAfterAnswer()) === 0, `Create asked the Cast again after it answered, or it never answered (${await askedAfterAnswer()})`);
 
       // ---- a place by hand, in the wiki's form, by keyboard ----
       await openCreate();
@@ -211,7 +219,7 @@ export default {
       // The same fix: the wiki answered the first ask, so the new-entry form
       // does not open again over the place, taking the focus.
       await eventually(() => pastRetry(), { label: "past Create's retry" });
-      check((await asked()) === 1, `Create asked the wiki ${await asked()} times, though the wiki answered the first`);
+      check((await askedAfterAnswer()) === 0, `Create asked the wiki again after it answered, or it never answered (${await askedAfterAnswer()})`);
       check((await page.locator(`${root}input[aria-label="Name"]`).count()) === 0, "the new-entry form opened again after the place was made");
 
       // The World says what needs AI, offers no AI view, and no Paint.
@@ -256,7 +264,7 @@ export default {
       const monsterName = page.getByPlaceholder("Bone Tyrant").locator("visible=true").first();
       await eventually(() => monsterName.isVisible(), { timeoutMs: 20_000, label: "the Bestiary's builder" });
       await eventually(() => pastRetry(), { label: "past Create's retry" });
-      check((await asked()) === 1, `Create asked the Bestiary ${await asked()} times, though the Bestiary answered the first`);
+      check((await askedAfterAnswer()) === 0, `Create asked the Bestiary again after it answered, or it never answered (${await askedAfterAnswer()})`);
       await monsterName.fill(creatureName);
       await page.getByRole("button", { name: "Start from the baseline" }).click();
       const give = page.locator('[data-testid="give-world-entry"]').locator("visible=true").first();

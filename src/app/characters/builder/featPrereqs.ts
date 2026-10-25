@@ -1,4 +1,3 @@
-import { createContext, useContext } from "react";
 import { ABILITIES, type Ability, type AbilityScores } from "@/lib/schemas/sheet";
 import { ABILITY_SCORE_CAP } from "@/lib/srd/asi";
 import { authoredFeatPrerequisite } from "@/lib/srd/feat-effects";
@@ -34,11 +33,11 @@ export type FeatJudge = {
   held: (name: string) => boolean;
 };
 
-export const FeatJudgeContext = createContext<FeatJudge | null>(null);
-
-export function useFeatJudge(): FeatJudge | null {
-  return useContext(FeatJudgeContext);
-}
+// The pickers read the judge from a React context, which lives in its own
+// client module so the rest of this file stays pure: the server builds the
+// AI DM's drafted pregens with the same save check (submit.ts reads
+// unmetFeatMessage here), and a server module cannot create a context.
+export { FeatJudgeContext, useFeatJudge } from "./featJudgeContext";
 
 // A feat's prerequisite from where the save reads it: ODM's own table
 // first, then the row's text.

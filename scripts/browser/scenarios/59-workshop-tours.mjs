@@ -7,7 +7,7 @@
 // floating over nothing. The page is told it has a text model, so the
 // AI views' steps (Outline, Forge, Ask) are walked as well.
 import { readFileSync } from "node:fs";
-import { check, eventually, sleep } from "../lib.mjs";
+import { check, eventually, untilStill, upTo } from "../lib.mjs";
 
 const TOUR = '[role="dialog"][aria-label="Guided tour"]';
 
@@ -69,14 +69,16 @@ export default {
           }
           // A few of the rewritten steps, as they stand, for the review.
           if (["to-table", "create", "outline", "atlas", "list"].includes(stepId) && ["the hub", "WorldForge", "Bestiary"].includes(name)) {
-            await sleep(400);
+            await untilStill(page);
             await t.shot(`${name === "the hub" ? "hub" : name.toLowerCase()}-${stepId}`);
           }
         }
         // The tour's own key: a sheet a lazy step opened can sit over the
         // card's buttons for a pointer, never for the keyboard.
+        const was = await card.evaluateAll((cards) => cards[0]?.getAttribute("data-tour-step") ?? null);
         await page.keyboard.press("ArrowRight");
-        await sleep(300);
+        // A press the tour does not take yet is pressed again on the next pass.
+        await upTo(async () => (await card.evaluateAll((cards) => cards[0]?.getAttribute("data-tour-step") ?? null)) !== was, 300);
       }
       check((await card.count()) === 0, `${name}: the tour did not end`);
       return { shown, unlit };
@@ -112,7 +114,7 @@ export default {
         // An editor a lazy step opened closes before the next tool.
         for (let attempt = 0; attempt < 3 && (await page.getByRole("dialog").count()); attempt += 1) {
           await page.keyboard.press("Escape");
-          await sleep(200);
+          await upTo(async () => (await page.getByRole("dialog").count()) === 0, 200);
         }
         if (system === "world") await t.shot("world-tour-walked");
       }

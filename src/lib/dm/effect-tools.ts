@@ -67,9 +67,13 @@ export const effectTools: ToolDef[] = [
               required: ["field"],
             },
           },
-          duration: { type: "string", enum: [...EFFECT_DURATIONS] },
+          duration: {
+            type: "string",
+            enum: [...EFFECT_DURATIONS],
+            description: "How it ends; manual (the default) lasts until clear_effect. rounds and minutes count down remaining; encounter ends with the fight.",
+          },
           remaining: { type: "integer", minimum: 1, description: "Rounds or minutes it lasts." },
-          saveAbility: { type: "string", enum: ["str", "dex", "con", "int", "wis", "cha"], description: "A save to shake it off: the target rolls it at the end of each of its turns (once per stretch of time outside a fight), and a success ends the effect." },
+          saveAbility: { type: "string", enum: ["str", "dex", "con", "int", "wis", "cha"], description: "A save to shake it off, with saveDc: the target rolls it at the end of each of its turns. Outside a fight it rolls once per stretch of time, and a success ends the effect." },
           saveDc: { type: "integer", minimum: 1, maximum: 30 },
           visible: { type: "boolean", description: "True when the party can tell it is there." },
           auraFeet: {
@@ -77,7 +81,7 @@ export const effectTools: ToolDef[] = [
             minimum: 5,
             maximum: 120,
             description:
-              "Radius in feet when the effect reaches around its target (a haunted shrine's chill 15); the board draws the ring. Spell and class auras are the server's own, never an effect.",
+              "Radius in feet when the effect reaches around its target (a haunted shrine's chill 15). The board draws the ring. Spell and class auras are the server's own, never an effect.",
           },
           auraTone: {
             type: "string",
@@ -99,8 +103,8 @@ export const effectTools: ToolDef[] = [
         type: "object",
         additionalProperties: false,
         properties: {
-          characterId: { type: "string" },
-          enemyId: { type: "string" },
+          characterId: { type: "string", description: "Exact characterId from GAME STATE." },
+          enemyId: { type: "string", description: "Or an enemy: exact enemyId from GAME STATE." },
           name: { type: "string", description: "The effect's name." },
         },
         required: ["name"],

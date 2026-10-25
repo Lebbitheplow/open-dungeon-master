@@ -1,9 +1,11 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
+import { returnFocus } from "@/components/ui/return-focus";
 import { Loader2, X } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
+import { offerCorrectionReason } from "@/lib/correction-offer";
 import { ui } from "@/lib/ui";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { SectionHead } from "@/components/ui/SectionHead";
@@ -58,6 +60,7 @@ export function RenarrateDialog({
         setError(data.error || "The reroll failed; try again.");
         return;
       }
+      offerCorrectionReason(campaignId, data);
       onClose();
     } catch {
       setError("Could not reach the server.");
@@ -70,7 +73,7 @@ export function RenarrateDialog({
     <Dialog.Root open onOpenChange={(open) => !open && !running && onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay className="dialog-overlay fixed inset-0 z-50 bg-[#05030d]/70 backdrop-blur-sm" />
-        <Dialog.Content
+        <Dialog.Content {...returnFocus}
           className={cn(
             ui.dialog,
             "fixed left-1/2 top-1/2 z-50 max-h-[85vh] w-[min(92vw,28rem)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto",

@@ -14,7 +14,7 @@ export default {
     const found = [];
     await t.open(`/characters/${ids.library}/edit`);
     // The edit opens on its summary (backlog F3); the name row goes to the
-    // first step, where the name and the level are.
+    // identity step, the last before it (backlog F4).
     const nameRow = page.locator(`${root}section[data-active] [data-summary-edit="identity"]`).locator("visible=true");
     await eventually(() => nameRow.count(), { timeoutMs: 30_000, label: "the summary's name row" });
     await t.tap(nameRow.first());
@@ -66,7 +66,10 @@ export default {
     // A level change moves a burst of numbers; one line is said.
     const status = panel.locator('[role="status"]');
     const hpBefore = (await panel.locator('tr[data-row="hp"] td').first().textContent())?.trim();
-    const level = page.locator(`${root}button[aria-label="Level"]`).locator("visible=true").first();
+    // The level is on the class step, the first (backlog F4).
+    await t.tap(page.locator(`${root}button[aria-label^="Back to step 1:"]`).locator("visible=true").first());
+    const level = page.locator(`${root}section[data-active] button[aria-label="Level"]`).locator("visible=true").first();
+    await level.waitFor({ state: "visible", timeout: 15_000 });
     await t.tap(level);
     await t.tap(page.getByRole("menuitemradio", { name: "5", exact: true }).first());
     const said = await eventually(
@@ -79,6 +82,7 @@ export default {
     const hpAfter = (await panel.locator('tr[data-row="hp"] td').first().textContent())?.trim();
     if (hpAfter === hpBefore) found.push(`hit points stayed ${hpBefore} at level 5`);
     if (!/^Hit points \d+, was \d+\. \d+ more numbers changed\.$/.test(said)) found.push(`said "${said}"`);
+    // Time is the check: a second line would follow the burst within this while.
     await sleep(2_000);
     if (((await status.textContent())?.trim() ?? "") !== said) found.push("a second line followed the burst");
 

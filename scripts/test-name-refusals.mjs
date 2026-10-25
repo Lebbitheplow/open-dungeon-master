@@ -180,8 +180,8 @@ await test("mount_up: a mount no table lists is refused with the mounts; its nam
 
 await test("mount_up says a listed mount goes in mount by its listed name at any table, and customName is only for an animal no list has.", () => {
   const tool = mountTools.find((entry) => entry.function.name === "mount_up").function;
-  assert.match(tool.description, /listed name whatever the table calls it/);
-  assert.match(tool.description, /customName, with a speed and a size, is only for an animal no list has/);
+  assert.match(tool.parameters.properties.mount.description, /listed name, whatever the table calls it/);
+  assert.match(tool.parameters.properties.customName.description, /Only for an animal no list has, by its name, with a speed and a size/);
   const refusal = checkMount({ ref: "cavallo da galoppo", riderSize: "medium" });
   assert.match(refusal.error, /sent in mount by that name whatever the table calls it/);
 });

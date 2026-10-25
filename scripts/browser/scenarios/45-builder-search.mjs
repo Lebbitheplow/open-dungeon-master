@@ -4,7 +4,7 @@
 // touch screen on the step's title; Enter on a lone match chooses it; and a
 // step of the carousel says which lineage it reached while the button that
 // paged keeps focus. The static checks are scripts/test-builder-search-carousel.mjs.
-import { check, eventually, sleep } from "../lib.mjs";
+import { check, eventually, upTo } from "../lib.mjs";
 
 export default {
   name: "builder-search",
@@ -16,18 +16,18 @@ export default {
     await t.open("/characters/new");
     const fresh = page.locator(`${root}button`).filter({ hasText: /^Start fresh$/ }).locator("visible=true");
     if (await fresh.count()) await t.tap(fresh.first());
-    const name = page.locator(`${root}input[aria-label="Name"]`).locator("visible=true").first();
-    await name.waitFor({ state: "visible", timeout: 30_000 });
-    await name.fill("Search Check");
-    // The first step owes a background once none stands in for the player
-    // (quick win Q1), so pick one before Continue.
-    await t.tap(page.locator(`${root}section[data-active] [data-builder-target="background"] button[aria-haspopup="listbox"]`).locator("visible=true").first());
-    await t.tap(page.locator(`${root}[role="option"]`).filter({ hasText: "Soldier" }).locator("visible=true").first());
+    // The first step is the class (backlog F4): a barbarian owes only its
+    // two skills, which the step suggests.
+    const barbarian = page.locator(`${root}section[data-active] .creator-card[aria-label^="Barbarian"]`).locator("visible=true").first();
+    await barbarian.waitFor({ state: "visible", timeout: 30_000 });
+    await t.tap(barbarian);
+    await t.tap(page.locator(`${root}section[data-active] [data-suggest-skills]`).locator("visible=true").first());
     await t.tap(page.locator(`${root}button`).filter({ hasText: /^Continue/ }).locator("visible=true").first());
 
     const search = page.locator(`${root}section[data-active] input[type="search"]`).locator("visible=true");
     await eventually(() => search.count(), { timeoutMs: 15_000, label: "the lineage search box" });
-    await sleep(900);
+    // The step lands focus a moment after it opens: in the search box or on its title.
+    await upTo(() => page.evaluate(() => document.activeElement?.matches('input[type="search"], .wizard-step-heading') ?? false), 2_000);
     const entry = await page.evaluate(() => ({
       fine: matchMedia("(hover: hover) and (pointer: fine)").matches,
       search: document.activeElement?.matches('input[type="search"]') ?? false,
@@ -48,7 +48,7 @@ export default {
     for (const query of ["tiefling", ...names.filter(Boolean)]) {
       await search.first().focus();
       await search.first().fill(query);
-      await sleep(300);
+      await upTo(async () => (await matches.count()) === 1, 300);
       if ((await matches.count()) === 1) {
         lone = query;
         break;
@@ -56,14 +56,14 @@ export default {
     }
     if (lone) {
       await page.keyboard.press("Enter");
-      await sleep(300);
+      await upTo(async () => (await matches.first().getAttribute("aria-pressed")) === "true", 2_000);
       const pressed = await matches.first().getAttribute("aria-pressed");
       if (pressed !== "true") found.push(`Enter on the lone match for "${lone}" did not choose it`);
     } else {
       found.push(`no search among ${names.length} card names matched one card alone`);
     }
     await search.first().fill("");
-    await sleep(300);
+    await eventually(async () => (await matches.count()) > 1, { label: "every card back" });
 
     // The carousel names where a step landed, and focus stays on Next.
     const details = page.locator(`${root}section[data-active] .creator-help`).locator("visible=true");
@@ -73,7 +73,7 @@ export default {
     const nextName = (await next.getAttribute("aria-label")).replace(/^Next: /, "");
     await next.focus();
     await page.keyboard.press("Enter");
-    await sleep(500);
+    await upTo(() => page.evaluate(() => document.querySelector('[role="dialog"] .sr-only[aria-live="polite"]')?.textContent ?? "").then((live) => / 2 of /.test(live)), 2_000);
     const after = await page.evaluate(() => ({
       live: document.querySelector('[role="dialog"] .sr-only[aria-live="polite"]')?.textContent ?? "",
       focusNext: document.activeElement?.getAttribute("aria-label")?.startsWith("Next: ") ?? false,

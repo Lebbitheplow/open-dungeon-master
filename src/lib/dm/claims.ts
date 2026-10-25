@@ -256,6 +256,10 @@ export async function readClaims(
     registering?: readonly string[];
     // A player's own words rather than narration (readTurnEndInWords).
     heading?: "Player's words";
+    // Told when the reader failed or its reply was unreadable, so the
+    // narration guard can say "unread" rather than "quiet" (issue #460):
+    // either way the passage counts as claiming nothing.
+    onUnread?: () => void;
   },
 ): Promise<NarrationClaim[]> {
   if (!input.kinds.length || !input.text.trim()) {
@@ -330,6 +334,7 @@ export async function readClaims(
     });
     if (error) {
       console.error(`[claims] ${input.label}: the reader call failed; the passage counts as claiming nothing`);
+      input.onUnread?.();
       return [];
     }
     reply = String(message?.content ?? "");
@@ -341,6 +346,7 @@ export async function readClaims(
   }
   if (!raw) {
     console.error(`[claims] ${input.label}: the reader's reply was unreadable; the passage counts as claiming nothing`);
+    input.onUnread?.();
     return [];
   }
   const claims = checkClaims(raw, {
@@ -403,11 +409,19 @@ export async function readReply(
     aside: true,
     turnOver: Boolean(turnOverFor(campaign.id, turn)),
   });
-  return {
+  let unread = false;
+  const claims = await readClaims(campaign, {
+    label: `turn ${turn.id}`,
+    text,
     kinds,
-    claims: await readClaims(campaign, { label: `turn ${turn.id}`, text, kinds, outcomes, sheets, registering: state.registering }),
     outcomes,
-  };
+    sheets,
+    registering: state.registering,
+    onUnread: () => {
+      unread = true;
+    },
+  });
+  return { kinds, claims, outcomes, ...(unread ? { unread: true } : {}) };
 }
 
 // The narrator's asides in prose no reply read covers and that goes to the

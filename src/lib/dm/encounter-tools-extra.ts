@@ -92,6 +92,8 @@ const enemyRefArgsSchema = z.object({
   sourceEnemyId: z.string().max(80).optional(),
   // Exhaustion only: the level it now has (1 to 6).
   level: z.coerce.number().int().min(1).max(6).optional(),
+  // From magic: Magic Resistance applies to the save against it.
+  magical: z.coerce.boolean().optional(),
   reason: z.string().optional(),
 });
 
@@ -201,6 +203,7 @@ function handleEnemyCondition(
       const save = rollEnemySave(campaign.id, enemy, args.saveAbility, args.saveDc, {
         resist: true,
         against: wanted,
+        magical: args.magical === true,
         record: { turn: ctx.turn, detail: `${enemy.displayName}: ${args.saveAbility.toUpperCase()} save against being ${wanted}` },
       });
       initialSave = `${args.saveAbility.toUpperCase()} save ${save.total ?? "failed outright"} vs DC ${args.saveDc}`;

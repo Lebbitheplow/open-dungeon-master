@@ -27,7 +27,7 @@ import { attackerFoeId, freshLastHit } from "@/lib/dm/last-hit";
 import { applyDmMutation } from "@/lib/dm/mutations";
 import { READIED } from "@/lib/dm/object-actions";
 import { handlePcAttack } from "@/lib/dm/pc-attack";
-import { allyOf, noHit, settle, softenFall, spendReaction, type Ctx } from "@/lib/dm/reaction-tools";
+import { allyOf, noFall, settle, softenFall, spendReaction, type Ctx } from "@/lib/dm/reaction-tools";
 import type { ToolError, ToolResult } from "@/lib/dm/tool-errors";
 import { takeItemCast } from "@/lib/srd/item-cast-credit";
 import { spellHeldProblem } from "@/lib/dm/cast-rules";
@@ -119,7 +119,7 @@ export function reactionSpell(ctx: Ctx, spellName: string): ToolResult {
     const target = allyOf(ctx) ?? sheet;
     const record = freshLastHit(campaign.id, target.id);
     if (!record || record.source !== "fall") {
-      return noHit(target.name, "Feather Fall", `a fall of ${target.name}'s (apply_hazard falling)`);
+      return noFall(target.name, "Feather Fall");
     }
     const cast = castReactionSpell(ctx, spellName);
     if ("error" in cast) {

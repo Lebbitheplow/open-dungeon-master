@@ -329,7 +329,7 @@ export const SessionHeader = memo(function SessionHeader({
           <RulebookButton />
         </div>
         <div className="hidden sm:flex">
-          <Tooltip content="How everything works, and the guided tours" side="bottom">
+          <Tooltip content="How everything works, the guided tours and Report a problem" side="bottom">
             <button
               type="button"
               onClick={onHelp}

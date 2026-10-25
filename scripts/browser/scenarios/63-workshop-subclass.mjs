@@ -12,7 +12,7 @@
 //     beside the subclass list (the table's answer is mocked, as
 //     55-import-owed mocks its; scripts/test-workshop-references.mjs holds
 //     the server to it).
-import { check, eventually, sleep } from "../lib.mjs";
+import { check, eventually, untilStill, upTo } from "../lib.mjs";
 
 export default {
   name: "workshop-subclass",
@@ -59,51 +59,21 @@ export default {
       const said = (await where.textContent()) ?? "";
       check(/under Fighter in the character builder from level 3/.test(said), `the editor names the class and level: ${said}`);
       check(/owner, DM or assistant DM/.test(said), "the editor says whose tables offer it");
-      await sleep(900);
+      await untilStill(page);
       await t.shot("subclass-kept");
       for (let attempt = 0; attempt < 3 && (await page.getByRole("dialog").count()); attempt += 1) {
         await page.keyboard.press("Escape");
-        await sleep(300);
+        await upTo(async () => (await page.getByRole("dialog").count()) === 0, 300);
       }
 
       // ---- chosen in the builder at the class's subclass level ----
       await t.open("/characters/new");
       const startFresh = page.locator(`${root}button`).filter({ hasText: /^Start fresh$/ }).locator("visible=true");
       if (await startFresh.count()) await t.tap(startFresh.first());
-      const name = page.locator(`${root}input[aria-label="Name"]`).locator("visible=true").first();
-      await name.waitFor({ state: "visible", timeout: 30_000 });
-      await name.fill(`Marsh Squire ${stamp}`);
-      await t.tap(page.getByRole("button", { name: "Level" }).locator("visible=true").first());
+      // The class is the first step, with the level under it (backlog F4).
+      await page.locator(`${root}section[data-active] [data-builder-target="class"]`).locator("visible=true").first().waitFor({ state: "visible", timeout: 30_000 });
+      await t.tap(page.locator(`${root}section[data-active]`).getByRole("button", { name: "Level" }).locator("visible=true").first());
       await t.tap(page.getByRole("menuitemradio", { name: "3", exact: true }).locator("visible=true").first());
-      // The steps before the class are answered as a player would: a
-      // background, then a lineage, each step's own "Fill what's left"
-      // taking any pick it still owes.
-      const fill = async () => {
-        const button = page.locator(`${root}button`).filter({ hasText: /^\s*Fill what's left\s*$/ }).locator("visible=true");
-        // The bar leaves with a fade once nothing is owed, so a press that
-        // finds it already going is not a failure.
-        if (await button.count()) {
-          await button.first().click({ timeout: 3_000 }).catch(() => {});
-          await sleep(400);
-        }
-      };
-      const next = page.locator(`${root}button`).filter({ hasText: /^Continue/ }).locator("visible=true").first();
-      await t.tap(page.locator(`${root}section[data-active] [data-builder-target="background"] button[aria-haspopup="listbox"]`).locator("visible=true").first());
-      await t.tap(page.locator(`${root}[role="option"]`).filter({ hasText: "Soldier" }).locator("visible=true").first());
-      await sleep(600);
-      await t.tap(next);
-      const lineages = page.locator(`${root}section[data-active] .creator-card`).locator("visible=true");
-      await eventually(() => lineages.count(), { timeoutMs: 20_000, label: "the lineage cards" });
-      const search = page.locator(`${root}section[data-active] input[type="search"]`).locator("visible=true").first();
-      for (const query of ["tiefling", "half-orc", "human"]) {
-        await search.fill(query);
-        await sleep(300);
-        if ((await lineages.count()) >= 1) break;
-      }
-      await t.tap(lineages.first());
-      await search.fill("");
-      await fill();
-      await t.tap(next);
       const fighter = page.locator(`${root}section[data-active] .creator-card`).filter({ hasText: /^\s*Fighter/ }).locator("visible=true").first();
       await eventually(() => fighter.count(), { timeoutMs: 20_000, label: "the fighter card" });
       await t.tap(fighter);
@@ -117,7 +87,7 @@ export default {
       await t.tap(option);
       const gained = page.locator(`${root}section[data-active]`).getByText("Bog Ward", { exact: true }).first();
       await eventually(() => gained.isVisible(), { timeoutMs: 10_000, label: "the subclass's feature granted at level 3" });
-      await sleep(900);
+      await untilStill(page);
       await t.shot("subclass-chosen");
 
       // ---- renamed: the builder offers it under its new name ----
@@ -146,7 +116,7 @@ export default {
       const note = page.locator(`${root}section[data-active] [data-testid="table-scope-unadmitted"]`).locator("visible=true").first();
       await eventually(() => note.count(), { timeoutMs: 15_000, label: "the left-out note beside the subclass list" });
       check(/Your own Player Marsh Knight is not offered at this table/.test((await note.textContent()) ?? ""), "the note names the subclass and why");
-      await sleep(600);
+      await untilStill(page);
       await t.shot("subclass-left-out");
       await page.unroute(/\/api\/content\/archetypes\?/);
     } finally {

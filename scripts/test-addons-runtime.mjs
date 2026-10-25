@@ -274,6 +274,7 @@ try {
     assert.equal(offered.workshopImporters[0].id, "statblocks");
     assert.match(offered.boardViews[0].url, /^\/api\/addons\/hello-dungeon\/ui\/board\.html\?v=1\.2\.0$/);
     assert.deepEqual(offered.boardViews[0].options.map((field) => field.key), ["outlines", "walls"]);
+    assert.equal(offered.boardViews[0].threads, false, "an addon that never asked for threads gets none");
   });
 
   await test("the asset library is served by name, sandboxed, and nothing outside it", async () => {
@@ -634,6 +635,39 @@ server.listen();
     assert.equal(findInstalledAddon("board-beta").status, "ready");
     assert.equal((await removeAddon("board-alpha")).ok, true);
     assert.equal((await removeAddon("board-beta")).ok, true);
+  });
+
+  await test("a board view gets threads only once the admin accepts the addon's threads permission", async () => {
+    const id = "threaded-view";
+    const folder = path.join(dir, id);
+    fs.mkdirSync(path.join(folder, "server"), { recursive: true });
+    fs.mkdirSync(path.join(folder, "ui"), { recursive: true });
+    fs.copyFileSync(path.join(example, "server", "mcp.mjs"), path.join(folder, "server", "mcp.mjs"));
+    fs.writeFileSync(path.join(folder, "server", "main.mjs"), `import { createServer } from "./mcp.mjs";\ncreateServer({ name: "${id}", version: "1.0.0" }).listen();\n`);
+    fs.writeFileSync(path.join(folder, "ui", "board.html"), "<!doctype html><title>Deep</title>");
+    fs.writeFileSync(
+      path.join(folder, "addon.json"),
+      JSON.stringify({
+        id,
+        name: "threaded view",
+        version: "1.0.0",
+        apiVersion: 1,
+        description: "A test addon.",
+        author: "tests",
+        license: "MIT",
+        runtime: { kind: "node", entry: "server/main.mjs" },
+        permissions: ["threads"],
+        contributes: { boardViews: [{ id: "deep", title: "Deep", entry: "ui/board.html" }] },
+      }),
+    );
+    const installed = await installAddonArchive(await (await zipFolder(folder, `${id}/`)).generateAsync({ type: "nodebuffer" }), "file");
+    assert.equal(installed.ok, true, installed.error);
+    setAddonState(id, { enabled: true, granted: [] });
+    assert.equal(findInstalledAddon(id).status, "needs-approval");
+    assert.equal(offeredContributions().boardViews.some((view) => view.addonId === id), false, "its view waits for the admin's yes");
+    setAddonState(id, { enabled: true, granted: ["threads"] });
+    assert.equal(offeredContributions().boardViews.find((view) => view.addonId === id)?.threads, true);
+    assert.equal((await removeAddon(id)).ok, true);
   });
 
   await test("runs that need the same resource take turns, and a waiting run can be stopped", async () => {

@@ -430,8 +430,9 @@ export default function CharacterDetailPage({
             <GameIcon icon={{ kind: "glyph", key: "tab-campaigns" }} size="size-6" />{" "}
             {character.role === "companion" ? "Bring to a campaign" : "Use in a campaign"}
           </button>
-          {/* Levelling is the change made most often; it opens the build one
-              level up instead of making the player find the level field.
+          {/* Levelling is the change made most often; it opens the level-up
+              sheet (backlog F7), only what the next level brings, instead of
+              making the player find the level field.
               A multiclass split levels at a table, where the class is
               chosen. */}
           {character.level < 20 && (character.sheet?.classes ?? []).length <= 1 ? (

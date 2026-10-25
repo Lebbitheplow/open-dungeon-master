@@ -1,8 +1,6 @@
-"use client";
-
 import type { Genre } from "@/lib/schemas/game-settings";
 import { expertiseAllowed, subclassExpandedSpellsFor, subclassSpellListsFor } from "@/lib/srd/features";
-import { useMemo } from "react";
+import { useMemo as useReactMemo, type DependencyList } from "react";
 import { starterSpellsFor } from "@/lib/help";
 import type { Ability, AbilityScores, AsiChoice, EquipmentItem } from "@/lib/schemas/sheet";
 import { acBreakdownFor, computeSheetDerived } from "@/lib/srd";
@@ -52,6 +50,16 @@ import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOpti
 import type { BuilderState, EquipmentItem as BuilderItem } from "./useBuilderState";
 import { textKey } from "@/lib/language/text-logic";
 
+// The derivation memoises each value with React's useMemo while the wizard
+// renders. Not marked "use client", so the server can run the same body
+// once, outside any render, through deriveBuilder below: the AI DM's
+// drafted pregens (src/lib/characters/pregen-drafts.ts) are built by the
+// quick-build engine against exactly the numbers the wizard would show.
+let memoize: <T>(compute: () => T, deps: DependencyList) => T = useReactMemo;
+function useMemo<T>(compute: () => T, deps: DependencyList): T {
+  return memoize(compute, deps);
+}
+
 // Everything the builder computes from its fields: final abilities, the sheet
 // preview, the auto loadout and AC, spell counts and the class option slots.
 // Kept apart from the fields so each wizard step can read what it needs
@@ -69,12 +77,17 @@ export type TableRules = {
 // The class's and background's tool grants with the player's picks placed on
 // the open ones they fit. Nothing is picked for the player: `left` is what
 // each open grant still waits for, and the class step holds until it is 0.
+// A tool the hero already has from elsewhere (`held`: the ancestry's tools
+// and its tool pick) fills no open grant, as the library's door counts it
+// (src/lib/srd/legality/proficiencies.ts): a dwarf's brewer's supplies are
+// not also a folk hero's artisan's tools.
 export function resolveToolPicks(
   grants: string[],
   picks: string[],
+  held: string[] = [],
 ): { fixed: string[]; choices: ToolChoice[]; chosen: string[]; left: number[] } {
   const { fixed, choices } = splitToolGrants(grants);
-  const taken = new Set(fixed.map((tool) => textKey(tool)));
+  const taken = new Set([...fixed, ...held].filter(Boolean).map((tool) => textKey(tool)));
   const left = choices.map((choice) => choice.count);
   const chosen: string[] = [];
   for (const pick of picks.map((tool) => textKey(tool))) {
@@ -279,8 +292,8 @@ export function useBuilderDerived({
   );
 
   const toolGrants = useMemo(
-    () => resolveToolPicks([...(klass?.tools ?? []), ...(background?.tools ?? [])], toolPicks),
-    [klass, background, toolPicks],
+    () => resolveToolPicks([...(klass?.tools ?? []), ...(background?.tools ?? [])], toolPicks, [...(race?.tools ?? []), racialTool]),
+    [klass, background, toolPicks, race, racialTool],
   );
   // Every tool the character is trained with, the list the sheet carries;
   // the background's kit fills its "of your choice" lines from it.
@@ -833,6 +846,20 @@ export function useBuilderDerived({
 }
 
 export type BuilderDerived = ReturnType<typeof useBuilderDerived>;
+
+// useBuilderDerived run once outside a render, each memo simply computed:
+// what scripts/lib/enforce-builder.mjs does for the test suites, without
+// reaching into React. Synchronous, so no render can interleave.
+export function deriveBuilder(input: Parameters<typeof useBuilderDerived>[0]): BuilderDerived {
+  const before = memoize;
+  memoize = (compute) => compute();
+  try {
+    // eslint-disable-next-line react-hooks/rules-of-hooks -- no hook state is read: every memo is computed in place
+    return useBuilderDerived(input);
+  } finally {
+    memoize = before;
+  }
+}
 
 // Action helpers that close over the state setters. Plain functions rather
 // than hooks so the steps can call them from any handler.

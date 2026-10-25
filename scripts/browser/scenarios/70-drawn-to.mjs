@@ -3,7 +3,7 @@
 // people) and a short note. A labelled group, each chip a pressed-or-not
 // button at a finger's size that works by keyboard, legible by night and by
 // day, and clean under axe.
-import { axeViolations, check, eventually, sleep } from "../lib.mjs";
+import { axeViolations, check, eventually, untilStill } from "../lib.mjs";
 
 async function checkPicker(t, where) {
   const { page, root } = t;
@@ -38,13 +38,18 @@ export default {
   name: "drawn-to",
   viewports: ["desktop", "phone"],
   async run(t) {
-    const { page, api, base } = t;
-    await t.open("/characters/new");
+    const { page, api, base, root, ids } = t;
+    // The identity step is the last before the summary (backlog F4): a
+    // stored build's summary row goes straight to it.
+    await t.open(`/characters/${ids.library}/edit`);
+    const identityRow = page.locator(`${root}section[data-active] [data-summary-edit="identity"]`).locator("visible=true");
+    await eventually(() => identityRow.count(), { timeoutMs: 30_000, label: "the summary's name and story row" });
+    await t.tap(identityRow.first());
     const picker = await checkPicker(t, "the builder");
     await picker.screenshot({ path: t.shotPath("builder"), animations: "disabled" }).catch(() => {});
     await t.shot("builder-page");
     await page.evaluate(() => (document.documentElement.dataset.theme = "light"));
-    await sleep(300);
+    await untilStill(page);
     const dayFound = await axeViolations(page, "[data-attraction-picker]");
     check(!dayFound.length, `axe on Drawn to by day: ${dayFound.map((entry) => entry.id).join(", ")}`);
     await picker.screenshot({ path: t.shotPath("builder-day"), animations: "disabled" }).catch(() => {});
@@ -62,7 +67,7 @@ export default {
       await editor.screenshot({ path: t.shotPath("npc-editor"), animations: "disabled" }).catch(() => {});
       await t.shot("npc-editor-page");
       await page.evaluate(() => (document.documentElement.dataset.theme = "light"));
-      await sleep(300);
+      await untilStill(page);
       await editor.screenshot({ path: t.shotPath("npc-editor-day"), animations: "disabled" }).catch(() => {});
       await page.evaluate(() => (document.documentElement.dataset.theme = "dark"));
     } finally {

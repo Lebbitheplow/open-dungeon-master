@@ -1,6 +1,7 @@
 "use client";
 
 import * as RadixDialog from "@radix-ui/react-dialog";
+import { returnFocus } from "@/components/ui/return-focus";
 import { X } from "lucide-react";
 import { RulebookReader } from "./RulebookReader";
 
@@ -22,7 +23,7 @@ export function RulebookDialog({
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
       <RadixDialog.Portal>
         <RadixDialog.Overlay className="dialog-overlay fixed inset-0 z-[60] bg-[#05030d]/80 backdrop-blur-sm" />
-        <RadixDialog.Content aria-describedby={undefined} className="rb-dialog">
+        <RadixDialog.Content {...returnFocus} aria-describedby={undefined} className="rb-dialog">
           <RadixDialog.Title className="sr-only">The Rulebook</RadixDialog.Title>
           <RulebookReader embedded startAt={startAt} startAnchor={startAnchor} />
           <RadixDialog.Close aria-label="Close the rulebook" className="rb-dialog-close motion-press">

@@ -17,7 +17,7 @@ export type PlaystyleId = "tank" | "dps" | "healer" | "support" | "utility";
 // `tag` is the job in the words a gamer already knows, printed in bold
 // brackets after the plain words: "Deal the damage (DPS)".
 // `backgrounds` are the SRD backgrounds whose skills suit the job, offered
-// on the first step before the class is: a soldier's Athletics for the
+// beside the background picker on the ancestry step: a soldier's Athletics for the
 // front line, an acolyte's Religion for a healer, a criminal's Stealth for
 // a scout.
 export const PLAYSTYLES: ReadonlyArray<{ id: PlaystyleId; label: string; tag: string; blurb: string; roles: ClassRole[]; first: string[]; backgrounds: string[] }> = [

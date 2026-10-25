@@ -95,7 +95,15 @@ export type CatalogField = {
   // or first square, or the square a wall or line runs toward), so the board
   // can preview the area the pick would lay.
   square?: { row: string; role: "at" | "toward" };
+  // Shown, and sent, only while another field holds one of these values: a
+  // drake's essence only for a drake, a story pet's numbers only for one.
+  onlyWhen?: { field: string; equals: string[] };
 };
+
+// Whether a field can matter with the values the form holds now.
+export function fieldShown(field: CatalogField, values: Record<string, unknown>): boolean {
+  return !field.onlyWhen || field.onlyWhen.equals.includes(String(values[field.onlyWhen.field] ?? ""));
+}
 
 export type CatalogEntry = {
   // The tool name the engine dispatches on. Identical to the name the model

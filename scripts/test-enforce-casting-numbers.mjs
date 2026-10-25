@@ -297,6 +297,18 @@ await test("Bless from a 2nd level slot blesses four", async () => {
   assert.equal(world.sheet(priest.id).spellcasting.slots["2"].used, 1);
 });
 
+await test("Bless from a 5th level slot blesses seven", async () => {
+  const world = castOnOwnTurn(await openWorld({ campaign: { maxPlayers: 8 } }));
+  closing.push(world);
+  const priest = world.addHero(cleric(9));
+  const friends = [1, 2, 3, 4, 5, 6].map(() => world.addHero({ class: "fighter", level: 5 }));
+  const out = await world.invoke("cast_buff", {
+    characterId: priest.id, spell: "Bless", level: 5, targetCharacterIds: [priest.id, ...friends.map((friend) => friend.id)],
+  });
+  assert.equal(out.ok, true, out.error);
+  assert.equal(world.sheets().filter((sheet) => sheet.conditions.includes("blessed")).length, 7);
+});
+
 // ---- healing ----
 
 const healer = castOnOwnTurn(await openWorld());
@@ -313,6 +325,16 @@ await test("healing never raises hit points above the maximum", async () => {
   const again = await healer.invoke("heal", { characterId: hurt.id, amount: 1 });
   assert.equal(again.ok, true, again.error);
   assert.equal(hpNow(hurt), 40);
+});
+
+await test("a healing spell from a caster no sheet answers to is refused, never cast by the wounded", async () => {
+  healer.patch(hurt.id, { currentHp: 10 });
+  const slots = healer.sheet(priest.id).spellcasting.slots;
+  const out = await healer.invoke("heal", { characterId: hurt.id, spell: "Cure Wounds", casterId: "Brother Nobody", level: 1 });
+  assert.equal(out.ok, false);
+  assert.match(String(out.error), /casterId/, out.error);
+  assert.equal(hpNow(hurt), 10);
+  assert.deepEqual(healer.sheet(priest.id).spellcasting.slots, slots);
 });
 
 await test("healing needs an amount above zero", async () => {

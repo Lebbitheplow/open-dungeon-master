@@ -1,6 +1,5 @@
 import { settleDroppedOnFightEnd } from "@/lib/db/dropped-items";
 import { getFloor, setFloor, type Campaign } from "@/lib/db/campaigns";
-import { silencedImmunity } from "@/lib/dm/zone-rules";
 import { burnWebUnder } from "@/lib/dm/zone-cast";
 import { endEncounter, getActiveEncounter, getEnemy, listEnemies, patchEnemyHp, setEnemyConcentration, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
 import { activePublicEncounter } from "@/lib/db/encounter-view";
@@ -17,7 +16,7 @@ import { clearSpellConditionsByName } from "@/lib/dm/concentration";
 import { spellEffectsOnEnemyDamage } from "@/lib/dm/spell-effects";
 import { enemyDamageMath } from "@/lib/dm/encounter-logic";
 import { damageAdjust, resistsAllDamage } from "@/lib/dm/condition-logic";
-import { resistLineFor } from "@/lib/dm/underwater";
+import { enemyDefenseLines } from "@/lib/dm/enemy-defenses";
 import { authoredIgnoresResistance } from "@/lib/dm/authored-saves";
 import { isKnockedOut, knockedOutConditions } from "@/lib/dm/knockout";
 import { endConditionsHeldBy } from "@/lib/dm/enemy-conditions";
@@ -263,6 +262,10 @@ export function applyEnemyDamage(
     holdVictory?: boolean;
     // A critical hit, which Undead Fortitude cannot save against.
     crit?: boolean;
+    // Radiant damage riding a blow of several types (a sword's slashing and
+    // Branding Smite's radiant), which lands untyped: Undead Fortitude cannot
+    // save against it either.
+    radiant?: boolean;
     // Not damage but death outright (exhaustion 6): no resistance halves it
     // and no Undead Fortitude holds it.
     death?: boolean;
@@ -287,12 +290,16 @@ export function applyEnemyDamage(
   // the blow lands as harm lands on a character (sheet-foe-damage.ts), and
   // a fall may end the fight as a foe's does.
   if (isSheetFoe(enemy)) {
-    const { magical, spell, crit, nonlethal, death, holdVictory } = options ?? {};
-    const blow = { amount, type: damageType ?? undefined, magical, spell, crit, nonlethal, death };
+    const { magical, spell, silvered, adamantine, goodWielder, crit, nonlethal, death, holdVictory } = options ?? {};
+    // Elemental Adept, Poisoner or Inescapable Destruction hold on a character too.
+    const ignores = damageType && (options?.ignoreResistance || authoredIgnoresResistance(campaign.id, damageType)) ? damageType : undefined;
+    const blow = { amount, type: damageType ?? undefined, magical, spell, silvered, adamantine, goodWielder, ignoreResistanceTo: ignores, crit, nonlethal, death };
     return applySheetFoeBlow(campaign, turn, encounter, enemy, blow, sheets, sheetsById, holdVictory === true);
   }
-  // Inescapable Destruction: the acting Death cleric's necrotic ignores resistance (authored-saves.ts).
-  const ignores = (damageType && authoredIgnoresResistance(campaign.id, damageType)) || (options?.ignoreResistance && damageType ? (options.ignoreResistanceBy ?? "Elemental Adept") : null);
+  // Inescapable Destruction (the acting Death cleric's necrotic), Elemental
+  // Adept or Poisoner set the type's resistance aside; under water the block
+  // resists fire, inside Silence it is immune to thunder (enemy-defenses.ts).
+  const lines = enemyDefenseLines(campaign.id, enemy, damageType, options?.ignoreResistance ? (options.ignoreResistanceBy ?? "Elemental Adept") : null);
   // Lightning, Fire or Acid Absorption (the golems): the damage heals it
   // instead (src/lib/dm/monster-traits.ts).
   if (!options?.death && absorbs(enemy.stats, damageType) && enemy.status === "alive") {
@@ -310,16 +317,14 @@ export function applyEnemyDamage(
   }
   const adjusted = options?.death
     ? { amount: Math.max(1, enemy.currentHp), note: null }
-    : damageAdjust(
-        amount,
-        damageType,
-        // Fully immersed in water: resistance to fire (underwater.ts).
-        ignores ? resistLineFor(campaign.id, enemy).replace(new RegExp(`\\b${damageType}\\b`, "gi"), "") : resistLineFor(campaign.id, enemy),
-        // Inside Silence, thunder does nothing (zone-rules.ts).
-        `${enemy.stats.immune ?? ""}${silencedImmunity(campaign.id, enemy.id)}`,
-        enemy.stats.vulnerable,
-        { magical: options?.magical === true, resistAll: resistsAllDamage(enemy.conditions), silvered: options?.silvered, adamantine: options?.adamantine, spell: options?.spell, goodWielder: options?.goodWielder },
-      );
+    : damageAdjust(amount, damageType, lines.resist, lines.immune, lines.vulnerable, {
+        magical: options?.magical === true,
+        resistAll: resistsAllDamage(enemy.conditions),
+        silvered: options?.silvered,
+        adamantine: options?.adamantine,
+        spell: options?.spell,
+        goodWielder: options?.goodWielder,
+      });
   if (adjusted.amount <= 0) {
     return {
       ok: true,
@@ -369,6 +374,7 @@ export function applyEnemyDamage(
     options?.crit !== true &&
     options?.death !== true &&
     !/radiant/i.test(damageType ?? "") &&
+    options?.radiant !== true &&
     hasTrait(enemy.stats, "undeadFortitude")
   ) {
     const dc = 5 + adjusted.amount;

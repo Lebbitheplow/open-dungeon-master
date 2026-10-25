@@ -145,5 +145,28 @@ await test("The console's own bare numbers still land.", async () => {
   assert.equal(hp(), 34);
 });
 
+// ---- treasure ----
+
+await test("A hoard is rolled and paid once a turn: the same roll_treasure again in that turn pays nothing more and reports the first payout.", async () => {
+  await kit.endFight();
+  const call = aiTurn();
+  const before = world.sheet(hero.id).gold;
+  const first = await call("roll_treasure", { cr: 4, characterIds: [hero.id], reason: "the ogre's chest" });
+  assert.equal(first.ok, true, first.error);
+  const paid = world.sheet(hero.id).gold - before;
+  assert.ok(paid > 0, "the hoard paid");
+  assert.equal(paid, first.result.totalGold);
+  const again = await call("roll_treasure", { cr: 4, characterIds: [hero.id], reason: "The ogre's chest" });
+  assert.equal(again.ok, true, again.error);
+  assert.equal(world.sheet(hero.id).gold - before, paid, "the coin moved once");
+  assert.equal(again.result.totalGold, first.result.totalGold);
+  assert.match(again.result.note, /already rolled and paid this turn/);
+  // Another hoard in the same turn is its own, and so is the next turn's.
+  const purse = await call("roll_treasure", { cr: 4, characterIds: [hero.id], reason: "the ogre's purse", individual: true });
+  assert.notEqual(purse.result.repeat, true);
+  const later = await aiTurn()("roll_treasure", { cr: 4, characterIds: [hero.id], reason: "the ogre's chest" });
+  assert.notEqual(later.result.repeat, true);
+});
+
 world.close();
 finish();

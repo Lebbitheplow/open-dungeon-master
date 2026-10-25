@@ -1,10 +1,13 @@
 import { z } from "zod";
 import { isErrorResponse, seesStorytellerSecrets, steersStory, requireMember } from "@/lib/campaign-api";
 import { listSheets } from "@/lib/db/sheets";
-import { getCampaignMessage, updateMessageContent } from "@/lib/db/messages";
+import { correctionsField } from "@/lib/correction-reasons";
+import { getCampaignMessage } from "@/lib/db/messages";
 import { publishPersisted } from "@/lib/events";
 import { runLoreCheck } from "@/lib/dm/lore-check";
 import { LORE_CHECK_CATEGORIES } from "@/lib/dm/lore-logic";
+import { saveNarrationEdit } from "@/lib/dm/narration-edit";
+import { refreshNarrationAudio } from "@/lib/dm/renarrate";
 import { mergeLines } from "@/lib/dm/speech";
 import { personLines } from "@/lib/dm/speech-lines";
 
@@ -63,16 +66,22 @@ export async function POST(
         { status: 400 },
       );
     }
-    const updated = updateMessageContent(
-      message.id,
-      parsed.data.content,
-      mergeLines(message.speech, personLines(context.campaign, parsed.data.content)),
-    );
+    // Like a hand edit (messages/[messageId]/edit): the narrator's wording
+    // stays as a take beside the rewrite, and fixing what the AI said is a
+    // correction in the ledger (issue #460).
+    const { updated, correctionId } = saveNarrationEdit({
+      campaignId,
+      message,
+      content: parsed.data.content,
+      speech: mergeLines(message.speech, personLines(context.campaign, parsed.data.content)),
+      userId: context.user.id,
+    });
     if (!updated) {
       return Response.json({ error: "Could not update the message." }, { status: 500 });
     }
     publishPersisted(campaignId, "message_updated", { message: updated });
-    return Response.json({ message: updated });
+    refreshNarrationAudio(context.campaign, updated);
+    return Response.json({ message: updated, ...correctionsField(correctionId ? [correctionId] : []) });
   }
 
   const parsed = runSchema.safeParse(raw);

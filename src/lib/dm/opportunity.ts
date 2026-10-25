@@ -279,7 +279,9 @@ export function resolveOpportunityAttacks(
     // Damage like any other (src/lib/dm/pc-damage.ts): resistances, temporary
     // hit points, a beast form's pool first, Relentless Endurance, the rage
     // ending at 0, the death engine, and the concentration save.
-    const magical = hasTrait(enemy.stats, "magicWeapons");
+    // Magic Weapons, or a blow the block prints as magical ("magical
+    // bludgeoning"), as enemy_attack reads it.
+    const magical = hasTrait(enemy.stats, "magicWeapons") || attack.magical === true;
     const blow = blowByType(attack, damageOutcome, crit);
     const rolled = enfeebledBlow(enemy, attack, false, Math.max(0, blow.amount));
     const { landed, onHit } = withOpportunityTurn(campaign.id, (turn) => {

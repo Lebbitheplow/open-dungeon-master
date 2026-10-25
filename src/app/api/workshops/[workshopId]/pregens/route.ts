@@ -2,6 +2,7 @@ import { z } from "zod";
 import { currentUser, unauthorized } from "@/lib/auth";
 import { listPregens, setCharacterWorkshop, setPregenOffered } from "@/lib/db/characters";
 import { getWorkshopForUser } from "@/lib/db/workshops";
+import { publicPregen } from "@/lib/workshop/pregen-roster";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,22 +25,6 @@ async function resolve(workshopId: string) {
     return { error: Response.json({ error: "Workshop not found." }, { status: 404 }) };
   }
   return { user, workshop };
-}
-
-function publicPregen(character: ReturnType<typeof listPregens>[number]) {
-  return {
-    id: character.id,
-    name: character.name,
-    role: character.role,
-    race: character.race,
-    class: character.class,
-    subclass: character.subclass,
-    background: character.background,
-    level: character.level,
-    // Ticked: players joining a table made from this workshop may take it
-    // (src/lib/db/pregen-offers.ts).
-    offered: character.offered,
-  };
 }
 
 export async function GET(

@@ -80,6 +80,34 @@ export function parseRollTable(raw: string): RollTableEntry[] {
   return entries.sort((a, b) => a.min - b.min || a.max - b.max);
 }
 
+// Rows from anywhere but the editor (a bundle written by hand, or stored by
+// an older server), read the way the editor reads a paste: an entry with its
+// range keeps it, a string or an entry without one is a bare line numbered
+// in order, and the table holds what the editor would (TABLE_MAX_ENTRIES
+// rows of TABLE_TEXT_MAX characters). A row with no number for its range,
+// which no die can land on, is never kept.
+export function normalizeRollEntries(raw: unknown): RollTableEntry[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const lines = raw
+    .map((entry) => {
+      if (typeof entry === "string") {
+        return entry;
+      }
+      const row = (entry ?? {}) as Partial<RollTableEntry>;
+      const ref = row.ref && (ROLL_REF_KINDS as readonly string[]).includes(row.ref.kind) && typeof row.ref.name === "string" ? row.ref : null;
+      const text = ref ? `@${ref.kind}: ${ref.name}` : String(row.text ?? "");
+      const min = Number(row.min);
+      const max = Number(row.max ?? row.min);
+      const ranged = [min, max].every((value) => Number.isInteger(value) && value >= 1 && value <= 999);
+      return ranged ? `${min === max ? min : `${Math.min(min, max)}-${Math.max(min, max)}`}. ${text}` : text;
+    })
+    .map((line) => line.replace(/\s*\n\s*/g, " ").trim())
+    .filter(Boolean);
+  return parseRollTable(lines.join("\n"));
+}
+
 // The die a table wants, from the highest result it covers. A 12-row table
 // rolls d12; a 7-row table rolls d8 and can therefore have a gap, which
 // tableGaps reports rather than hiding.

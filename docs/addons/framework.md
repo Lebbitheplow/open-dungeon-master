@@ -65,7 +65,7 @@ I/O, so the browser, the tests and `scripts/check-addon.mjs` share them.
 |---|---|
 | `manifest.ts` | The `addon.json` schema (client-safe): fields, permissions, settings and option fields, setup, conflicts, exclusive, `addonFit`, `ADDON_API_VERSION`. `docs/addons/addon.schema.json` is generated from it |
 | `contracts.ts` | Each extension point's arguments and result schema (client-safe), `toolPayload`, `normalizeOptionValues` |
-| `board-bridge.ts` | The board view contract (client-safe): the snapshot, the messages both ways, `BOARD_BRIDGE_VERSION` |
+| `board-bridge.ts` | The board view contract (client-safe): the snapshot, the messages both ways, `BOARD_BRIDGE_VERSION`, and the anchor store the plate and the action ring read |
 | `registry-index.ts` | The downloader list's entry schema (client-safe): source pinned by repository, folder and commit, content hash; `sourceFacts` |
 | `catalog-entry.ts` | Building an entry from a manifest, keeping the list sorted, offline checks (client-safe); used by the tool, the tests and CI |
 | `registry.ts` | Which list to read (the ODM repository's `main`, the bundled copy as a fallback), `fetchCapped` (https on every hop, capped), downloading an entry's commit |
@@ -90,8 +90,8 @@ I/O, so the browser, the tests and `scripts/check-addon.mjs` share them.
 | `run-map.ts` | Map generator runs into a library |
 | `map-view.ts` | What a map keeps for its addon's board view (`addon_view_json`) |
 | `view-data.ts` | The 256 KB cap on a board view's data and the refusal every door gives (`viewDataProblem`); imports nothing |
-| `static-files.ts` | Serving an addon's `ui/` and asset library with the sandboxing headers |
-| `offered.ts` | What ready addons contribute, for `GET /api/addons` |
+| `static-files.ts` | Serving an addon's `ui/` and asset library with the sandboxing headers (and the embedder policy an isolated table needs) |
+| `offered.ts` | What ready addons contribute, for `GET /api/addons`; a board view's `threads` says its addon's threads permission was accepted |
 | `admin-view.ts` | The admin panel's picture of addons and the catalog; `installedResponse` |
 | `support.ts` | Where addons run at all (`ODM_ADDONS`, not on Android yet) |
 | `paths.ts` | `ADDONS_DIR` layout and `resolveInside`, the one path check every file access goes through |
@@ -124,6 +124,7 @@ The app around it:
 | `SessionView.tsx`, `SessionChatColumn.tsx`, `SidePanel.tsx`, `TableLayout.tsx`, `styles/table-layout.css` | Optional board-view `sessionLayout: "stage"` and bounded `sessionTheme` colors; stable native region ownership (including the native Story board), per-device selection and native fallback |
 | `src/lib/db/map-addon-view*.ts`, `addon_view_json` on `prepared_maps` and `battle_maps` | View data stored with maps, carried in bundles |
 | `next.config.ts` | Leaves `ui/` and `assets/` out of the app's framing headers |
+| `src/lib/page-isolation.ts`, `src/proxy.ts` | Whether the pages are cross-origin isolated (an addon that is on has `threads`), and the headers that make them so on every page |
 
 The downloader list: `addons/catalog.json` (the entries; the build imports it
 as the offline fallback), `scripts/addon-catalog.mjs` (writes an entry from a
@@ -153,10 +154,14 @@ to bend one needs saying so in its pull request, plainly.
    `ODM_ADDON_SETTINGS`, only its own.
 3. **Board views are sandboxed.** `sandbox="allow-scripts"` and nothing more,
    files served with `Content-Security-Policy: sandbox allow-scripts`. The
-   snapshot is built from the projection the server made for that viewer, so
-   it never holds what that player may not see. A frame's messages are read
-   by `readViewMessage`, strictly, and taps go through the same handlers as
-   the flat grid's.
+   frame is also `credentialless` (it has no cookies or storage to lose),
+   and gets `allow="cross-origin-isolated"` only when its addon's `threads`
+   permission was accepted; the pages are isolated only while such an addon
+   is on (`src/lib/page-isolation.ts`, set by `store.ts`, sent by
+   `src/proxy.ts`). The snapshot is built from the projection the server
+   made for that viewer, so it never holds what that player may not see. A
+   frame's messages are read by `readViewMessage`, strictly, and taps go
+   through the same handlers as the flat grid's.
 4. **Paths stay inside their folders.** Every file an addon names is resolved
    with `resolveInside`; a fetched folder or a zip is refused for absolute
    paths, `..`, links and submodules; served files are held to a list of
@@ -346,8 +351,10 @@ both themes, and the enlarged tabletop.
   `src/lib/host-platform.ts`.
 - **The desktop app:** the server runs inside it, so addons work there.
   `node` addons run on Electron's own Node (`ELECTRON_RUN_AS_NODE`). Board
-  views need the renderer's CSP to allow the frame; that lives in the client
-  repository.
+  views need the renderer's CSP to allow the frame, and threads need the
+  app's own page to be cross-origin isolated (it adds the headers to its
+  `file://` pages); both live in the client repository. The frame being
+  `credentialless` is what lets it load inside that page from any server.
 - **Android:** off (`support.ts`), and the admin tab is hidden.
 - **Docker:** an addon can only start programs inside the container.
 

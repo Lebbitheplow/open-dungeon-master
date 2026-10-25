@@ -31,14 +31,25 @@ async function refused(id, expected) {
 }
 
 try {
+  const stranger = await world.invoke("start_scene", { kind: "chase", title: "Down the alley", characterIds: [first.id, "Nobody"] });
+  assert.equal(stranger.ok, false, "a participant no sheet answers to is refused");
+  assert.equal(tracker(), null);
+  // A participant named rather than given by id is stored by id, so their
+  // checks count.
   const started = await world.invoke("start_scene", {
     kind: "chase",
     title: "Down the alley",
     successesNeeded: 3,
     failuresAllowed: 3,
-    characterIds: [first.id, second.id],
+    characterIds: [first.id, "Mira"],
   });
   assert.equal(started.ok, true, started.error);
+  assert.deepEqual(tracker().characterIds, [first.id, second.id]);
+  // The model is offered the skill ids the sheet knows, as request_roll is.
+  const { sceneTools } = await import("../src/lib/dm/scene-tools.ts");
+  const { SRD_SKILLS } = await import("../src/lib/srd/index.ts");
+  const sceneCheck = sceneTools.find((tool) => tool.function.name === "scene_check").function;
+  assert.deepEqual(sceneCheck.parameters.properties.skill.enum, SRD_SKILLS.map((skill) => skill.id));
 
   await refused(outsider.id, /participant/i);
 

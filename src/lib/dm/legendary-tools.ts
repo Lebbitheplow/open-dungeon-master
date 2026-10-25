@@ -66,7 +66,7 @@ export const legendaryTools: ToolDef[] = [
     function: {
       name: "legendary_resist",
       description:
-        "Spend one use of Legendary Resistance so the creature succeeds on the save it just failed this round. The server keeps the count and the last failed save: it lifts what that save laid and gives back the hit points a success would have spared. With no failed save on record, or none left, it is refused. The server already spends one on its own when a failed save would leave the creature under a binding condition; use this for anything else (a damaging save it must not fail).",
+        "Spend one use of Legendary Resistance so the creature succeeds on the save it just failed this round. The server keeps the count and the last failed save: it lifts what that save laid and gives back the HP a success would have spared. With no failed save on record, or none left, it is refused. The server already spends one on its own when a failed save would leave the creature under a binding condition; use this for anything else (a damaging save it must not fail).",
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -84,7 +84,7 @@ export const legendaryTools: ToolDef[] = [
       parameters: {
         type: "object",
         additionalProperties: false,
-        properties: { action: { type: "string", description: "Which printed lair option (its number in the list, or the whole line), or a line for a lair with none printed." } },
+        properties: { action: { type: "string", description: "The printed lair option by its list number or whole line, or your own line for a lair with none." } },
         required: ["action"],
       },
     },
@@ -415,7 +415,7 @@ export function handleLairAction(campaign: Campaign, turn: DmTurn | null, rawArg
   };
 }
 
-function legendaryLairLines(enemies: EncounterEnemy[]): string[] {
+export function legendaryLairLines(enemies: EncounterEnemy[]): string[] {
   // A book's printed lair options (Tome of Beasts' dragons) are offered in a
   // fight the DM started in the lair; they never make one a lair fight.
   return enemies.flatMap((enemy) => [...(legendaryProfile(enemy.stats)?.lairActions ?? []), ...(enemy.stats.lairOptions ?? [])]);

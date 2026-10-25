@@ -8,6 +8,8 @@ import { removeFile } from "@/lib/image-files";
 // What the server keeps, and for how long (audit P13). The story is kept
 // forever: messages, notes, rolls, sheets and their audit trail, chapter
 // snapshots, and every DM turn's conversation, which re-narrate replays.
+// So is the correction ledger (turn_corrections, turn_quality; issue
+// #460), which holds counts and ids, not text.
 // What goes is what nothing reads back past a point:
 //
 //   - The event log past the replay window. A page that reconnects more

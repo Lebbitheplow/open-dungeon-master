@@ -14,7 +14,7 @@
 // count down as the clock moves; amends climb her back and the ultimatum
 // goes. Reduced motion keeps the colour and drops the slide. Every move
 // here comes from a server outcome, never from narration.
-import { axeViolations, check, eventually, openPanelTab, openSettingsGroup, sleep } from "../lib.mjs";
+import { axeViolations, check, eventually, openPanelTab, openSettingsGroup, sleep, untilStill } from "../lib.mjs";
 
 async function axeClean(page, selector, where) {
   const found = await axeViolations(page, selector);
@@ -23,7 +23,7 @@ async function axeClean(page, selector, where) {
 
 async function inTheme(page, theme) {
   await page.evaluate((value) => (document.documentElement.dataset.theme = value), theme);
-  await sleep(400);
+  await untilStill(page);
 }
 
 export default {
@@ -46,7 +46,6 @@ export default {
     const row = page.locator(`${root}[data-settings-row="conscience"]`).locator("visible=true").first();
     await eventually(() => row.count(), { timeoutMs: 30_000, label: "the Conscience row" });
     await row.scrollIntoViewIfNeeded();
-    await sleep(500);
     check(/Conscience/.test((await row.textContent()) ?? ""), "a visible label");
     const picker = row.locator(`[aria-label="Companion conscience"]`).first();
     check((await picker.count()) > 0, "the picker is named for screen readers");
@@ -92,7 +91,7 @@ export default {
       "the ladder is named for screen readers",
     );
     await ladder.scrollIntoViewIfNeeded();
-    await sleep(300);
+    await untilStill(page);
     await t.shot("ladder-uneasy");
 
     // The marker's transitions, as the server moves her.
@@ -116,9 +115,10 @@ export default {
     });
     check(warned.conscience === "uneasy -> warning", `the server moved her (${warned.conscience})`);
     await eventually(async () => (await ladder.getAttribute("data-rung")) === "warning", { label: "the ladder at warning" });
+    // Time is the point: the picture is of the marker mid-slide.
     await sleep(120);
     await t.shot("ladder-sliding");
-    await sleep(600);
+    await untilStill(page);
     await t.shot("ladder-warning");
     const moves = await page.evaluate(() => window.__conscienceMoves);
     const slide = moves.find((move) => move.property === "transform");
@@ -139,7 +139,7 @@ export default {
     await eventually(() => terms.count(), { label: "the ultimatum on the row" });
     check(((await terms.textContent()) ?? "").includes("Free the captive in the cellar"), "its demand");
     check(((await terms.locator("[data-countdown]").textContent()) ?? "") === "6 h left", "the time left on the clock");
-    await sleep(500);
+    await untilStill(page);
     await axeClean(page, `${root}[data-bond-row="${table.seren}"]`, "Seren's row at night");
     await t.shot("ultimatum");
     await inTheme(page, "light");
@@ -158,7 +158,7 @@ export default {
     check(amends.conscience === "ultimatum -> warning", `amends climb her back (${amends.conscience})`);
     await eventually(async () => (await ladder.getAttribute("data-rung")) === "warning", { label: "back at warning" });
     await eventually(async () => (await ladder.locator("[data-ultimatum]").count()) === 0, { label: "the demand met" });
-    await sleep(500);
+    await untilStill(page);
     await t.shot("amends");
 
     // Reduced motion: the colour still changes, the marker no longer slides.

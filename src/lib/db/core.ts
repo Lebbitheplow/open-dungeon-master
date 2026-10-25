@@ -1749,6 +1749,11 @@ function ensureSchema(db: SqliteDatabase) {
     // announceShop), so the chat's Browse wares opens the Market on it.
     // Null on every other message.
     ["shop_id", `TEXT`],
+    // Which take in variants_json a person wrote by editing the narration
+    // (src/app/api/campaigns/[campaignId]/messages/[messageId]/edit): the
+    // narrator's takes stay beside it, so an edit never loses the original
+    // (issue #460). Null when nobody has edited the message.
+    ["edited_take", `INTEGER`],
   ]);
 
   addColumns("dm_turns", [
@@ -2290,6 +2295,11 @@ function ensureSchema(db: SqliteDatabase) {
     // for every other character. It keeps one player per pregen per table
     // however the copy is seated again (src/lib/db/pregen-offers.ts).
     ["pregen_origin_id", `TEXT NOT NULL DEFAULT ''`],
+    // A pregen the AI DM drafted for its workshop
+    // (src/app/api/workshops/[workshopId]/pregens/draft), until the DM
+    // edits it: the roster marks it "Drafted by the AI DM". 0 for every
+    // other character, and for a draft once edited.
+    ["ai_drafted", `INTEGER NOT NULL DEFAULT 0`],
   ]);
 
   // The romance meter was generalized into the relationship meter: one
@@ -2541,6 +2551,59 @@ function ensureSchema(db: SqliteDatabase) {
     CREATE INDEX IF NOT EXISTS idx_model_calls_at ON model_calls(at);
     CREATE INDEX IF NOT EXISTS idx_model_calls_turn ON model_calls(turn_id);
 
+    -- The correction ledger (issue #460, src/lib/db/turn-ledger.ts): one
+    -- row per fix a table made to state an AI turn set, written in the same
+    -- transaction as the fix. turn_id has no foreign key, so a rollback's
+    -- rows outlive the turns it deleted. No story text: the kind of fix, the
+    -- tool, the audit row or message it fixed, who made it, and an optional
+    -- reason chip. Kept like dm_turns, with no pruning.
+    CREATE TABLE IF NOT EXISTS turn_corrections (
+      id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      turn_id TEXT,
+      attribution TEXT NOT NULL CHECK (attribution IN ('direct','inferred')),
+      kind TEXT NOT NULL,
+      audit_id TEXT,
+      message_id TEXT,
+      tool TEXT,
+      reason TEXT,
+      user_id TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_turn_corrections_campaign ON turn_corrections(campaign_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_turn_corrections_turn ON turn_corrections(turn_id);
+
+    -- How each AI turn ended (issue #460, src/lib/narrator-quality.ts): the
+    -- DM mode, the backend class and model, the call and tool counts, the
+    -- tool calls refused, and what the narration guard did. Written where a
+    -- turn ends (saveDmTurn on done or failed, the stale-turn sweep), and
+    -- written again if a retried turn ends again. Whether a turn was clean
+    -- is worked out when a report runs, never stored, so a changed rule
+    -- re-scores old turns. turn_id has no foreign key, for the same reason
+    -- as above: a rewind marks its rows rolled_back and they stay.
+    CREATE TABLE IF NOT EXISTS turn_quality (
+      turn_id TEXT PRIMARY KEY,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      actor TEXT NOT NULL,
+      dm_mode TEXT NOT NULL,
+      backend_class TEXT,
+      backend TEXT,
+      model TEXT,
+      status TEXT NOT NULL,
+      model_calls INTEGER NOT NULL DEFAULT 0,
+      tool_calls INTEGER NOT NULL DEFAULT 0,
+      refused_invalid INTEGER NOT NULL DEFAULT 0,
+      refused_rules INTEGER NOT NULL DEFAULT 0,
+      refused_limit INTEGER NOT NULL DEFAULT 0,
+      guard TEXT NOT NULL DEFAULT 'none',
+      guard_kinds TEXT NOT NULL DEFAULT '',
+      duration_ms INTEGER,
+      rolled_back INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_turn_quality_campaign ON turn_quality(campaign_id, created_at);
+
     -- Who a stored picture or document was made for (src/lib/media-access.ts):
     -- the account that uploaded or asked for it and the campaign or workshop
     -- it was made in, so it can be shown before any row names it (a portrait
@@ -2660,6 +2723,14 @@ function ensureSchema(db: SqliteDatabase) {
     ["conduct_json", `TEXT NOT NULL DEFAULT ''`],
     ["agenda_json", `TEXT NOT NULL DEFAULT ''`],
   ]);
+  // When the party first dealt with an NPC (src/lib/db/npcs.ts Npc.metAt),
+  // which a reaction roll reads: it is for strangers. The rows already
+  // played get it once, from what play recorded about them.
+  const npcColumns = db.prepare(`PRAGMA table_info(npcs)`).all() as Array<{ name: string }>;
+  if (!npcColumns.some((column) => column.name === "met_at")) {
+    addColumns("npcs", [["met_at", `TEXT NOT NULL DEFAULT ''`]]);
+    backfillNpcMet(db);
+  }
 }
 
 // Widens battle_tokens.kind to accept the DM's own board furniture.
@@ -2907,6 +2978,31 @@ function backfillSheetPortraits(db: SqliteDatabase) {
       // Unparseable blobs stay untouched.
     }
   }
+}
+
+// Marks met the NPCs play already shows the party has dealt with: an
+// attitude a social check moved (last_shift_turn holds its turn), a
+// companion behind the row, an approval meter with someone in the
+// party, or a reaction roll made for them by name (the roll's detail is
+// "Reaction roll for <name>", src/lib/dm/social-tools.ts). Anyone else
+// stays a stranger: the old rows cannot say more.
+function backfillNpcMet(db: SqliteDatabase) {
+  db.prepare(
+    `UPDATE npcs SET met_at = updated_at
+     WHERE met_at = '' AND (
+       last_shift_turn != ''
+       OR companion_sheet_id != ''
+       OR EXISTS (
+         SELECT 1 FROM relationships r
+         WHERE r.campaign_id = npcs.campaign_id AND r.subject_kind = 'npc'
+           AND (r.subject_id = npcs.id OR r.subject_name = npcs.name)
+       )
+       OR EXISTS (
+         SELECT 1 FROM rolls
+         WHERE rolls.campaign_id = npcs.campaign_id AND rolls.detail = 'Reaction roll for ' || npcs.name
+       )
+     )`,
+  ).run();
 }
 
 // Folds every npcs.bonds_json entry into a relationships row at the meter

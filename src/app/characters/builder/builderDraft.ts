@@ -8,11 +8,32 @@
 import type { BuilderDraftFields } from "./useBuilderState";
 
 const PREFIX = "odm:builder-draft:";
-const VERSION = 1;
+// Version 2 keeps the step by its key, not its place: the steps were put in
+// a new order (backlog F4), and a place would resume a draft one step off.
+const VERSION = 2;
+// The steps in the order version 1 drafts counted them, before F4 put the
+// class first and the name last.
+const V1_STEPS = ["identity", "ancestry", "calling", "abilities", "spells-gear", "finish"];
 // A draft this old is from another evening's plans, not this one's.
 const MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
-export type BuilderDraft = { v: typeof VERSION; savedAt: number; step: number; fields: BuilderDraftFields };
+export type BuilderDraft = { v: typeof VERSION; savedAt: number; step: string; fields: BuilderDraftFields };
+
+// The step a stored draft was left on, by key, from either version. A
+// version 1 draft left on its first step ("identity", then the name and
+// background) had finished nothing yet, so it resumes on the new first step;
+// its name and background are kept for the steps that now ask them. Pure,
+// for scripts/test-builder-calling-first.mjs.
+export function draftStepKey(stored: { v?: unknown; step?: unknown }): string | null {
+  if (stored.v === VERSION) {
+    return typeof stored.step === "string" ? stored.step : null;
+  }
+  if (stored.v === 1 && typeof stored.step === "number") {
+    const key = V1_STEPS[Math.min(Math.max(0, Math.trunc(stored.step)), V1_STEPS.length - 1)];
+    return key === "identity" ? "calling" : key;
+  }
+  return null;
+}
 
 // The door a draft belongs to: the library's new character, a table's join
 // page, or a table's companion dialog.
@@ -26,18 +47,19 @@ export function readBuilderDraft(key: string): BuilderDraft | null {
     if (!raw) {
       return null;
     }
-    const draft = JSON.parse(raw) as BuilderDraft;
-    if (draft?.v !== VERSION || !draft.fields || Date.now() - draft.savedAt > MAX_AGE_MS) {
+    const stored = JSON.parse(raw) as { v?: unknown; savedAt?: number; step?: unknown; fields?: BuilderDraftFields };
+    const step = stored ? draftStepKey(stored) : null;
+    if (!step || !stored.fields || Date.now() - (stored.savedAt ?? 0) > MAX_AGE_MS) {
       window.localStorage.removeItem(PREFIX + key);
       return null;
     }
-    return draft;
+    return { v: VERSION, savedAt: stored.savedAt ?? 0, step, fields: stored.fields };
   } catch {
     return null;
   }
 }
 
-export function writeBuilderDraft(key: string, step: number, fields: BuilderDraftFields) {
+export function writeBuilderDraft(key: string, step: string, fields: BuilderDraftFields) {
   try {
     const draft: BuilderDraft = { v: VERSION, savedAt: Date.now(), step, fields };
     window.localStorage.setItem(PREFIX + key, JSON.stringify(draft));

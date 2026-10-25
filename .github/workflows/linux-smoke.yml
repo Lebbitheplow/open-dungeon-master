@@ -8,15 +8,19 @@ on:
 permissions:
   contents: read
 
+# A newer push to a pull request replaces its run still going; every commit
+# on main keeps its own.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# One job doing all of this took 60 minutes by 0.30.0 (213 scenario runs,
+# 770-odd test files one at a time): the work is split across runners
+# instead, each a few minutes plus its own install and build.
 jobs:
-  smoke:
+  build:
     runs-on: ubuntu-latest
-    # Lint, the unit suite (770-odd files), the build and 213 browser
-    # scenario runs on desktop and phone: the tests and the build alone take
-    # about 27 minutes on a hosted runner. The 45-minute limit cut 0.28.3's
-    # run off in the middle of the scenarios with everything before them
-    # green, and 0.30.0's grown suite left 75 minutes under 50 for them.
-    timeout-minutes: 100
+    timeout-minutes: 20
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -33,18 +37,8 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Tests
-        run: npm test
-
       - name: Build
         run: npm run build
-
-      # The built server in a real Chromium: dialogs, scrolls, polls and
-      # preferences that no static render can exercise (scripts/browser).
-      - name: Browser scenarios
-        run: |
-          npx playwright-core install --with-deps chromium
-          npm run test:browser
 
       # A route's first-load JS and CSS against scripts/bundle-budget.json.
       - name: First-load size budgets
@@ -54,3 +48,80 @@ jobs:
       # compiled server has to keep its Windows branches wherever it is built.
       - name: The built server keeps its Windows code
         run: node scripts/check-built-platform.mjs
+
+  # Each runner takes a share of the files and runs them a few at a time
+  # (vitest.config.mts), each file in its own process.
+  tests:
+    name: tests (${{ matrix.shard }}/3)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Tests
+        run: npm test -- --shard=${{ matrix.shard }}/3
+
+  # The built server in a real Chromium: dialogs, scrolls, polls and
+  # preferences that no static render can exercise (scripts/browser). Each
+  # runner builds, seeds and serves its own share of the scenarios.
+  browser:
+    name: browser (${{ matrix.shard }}/6)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      # The browser is kept between runs for the playwright-core version that
+      # drives it; its system libraries are not, so they are installed either way.
+      - name: Read the browser's version
+        id: playwright
+        run: echo "version=$(node -p "require('playwright-core/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Restore the browser
+        id: browser-cache
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ steps.playwright.outputs.version }}
+
+      - name: Install the browser
+        if: steps.browser-cache.outputs.cache-hit != 'true'
+        run: npx playwright-core install --with-deps chromium
+
+      - name: Install the browser's system libraries
+        if: steps.browser-cache.outputs.cache-hit == 'true'
+        run: npx playwright-core install-deps chromium
+
+      - name: Browser scenarios
+        run: npm run test:browser -- --shard ${{ matrix.shard }}/6

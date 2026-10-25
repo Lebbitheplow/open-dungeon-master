@@ -1,4 +1,5 @@
 import { emptyTurnLine, type EmptyTurnPlayer } from "@/lib/dm/empty-turn";
+import { legendaryLairLines } from "@/lib/dm/legendary-tools";
 import { defaultSide } from "@/lib/dm/combat-sides-logic";
 import { combatantsOf } from "@/lib/dm/combatant";
 import { manualTraits } from "@/lib/dm/monster-traits";
@@ -223,7 +224,7 @@ import {
 import { handleRequestRoll } from "@/lib/dm/invoke-roll";
 import { restTools } from "@/lib/dm/rest-tools";
 import { checkTools, CHECK_TOOL_NAMES } from "@/lib/dm/check-tools";
-import { hazardTools, HAZARD_TOOL_NAMES } from "@/lib/dm/hazard-tools";
+import { hazardTools, HAZARD_TOOL_NAMES, partyCanSlowAFall } from "@/lib/dm/hazard-tools";
 import { SPLIT_DAMAGE_TOOL_NAMES } from "@/lib/dm/split-damage";
 import { routeToolCall } from "@/lib/dm/tool-merge";
 import { acceptsCall, offeredAs } from "@/lib/dm/tool-merge-logic";
@@ -249,6 +250,7 @@ import { exploreTools, EXPLORE_TOOL_NAMES } from "@/lib/dm/explore-tools";
 import { betweenLinesBySheet } from "@/lib/dm/between-lines";
 import { BINDER_TOOL_NAMES, binderTools } from "@/lib/dm/binder-tools";
 import { FACTION_TOOL_NAMES, factionTools } from "@/lib/dm/faction-tools";
+import { actionTools } from "@/lib/dm/action-tools";
 import { SHOP_TOOL_NAMES, shopTools, shopsBlock } from "@/lib/dm/shop-tools";
 import { preparedEncounterTools, preparedFightsBlock } from "@/lib/dm/prepared-encounter-tool";
 import { SETTLEMENT_TOOL_NAMES, settlementTools } from "@/lib/dm/settlement-tools";
@@ -399,6 +401,7 @@ function buildEncounterState(campaignId: string, sheets: CharacterSheet[]) {
   }
   const enemies = listEnemies(encounter.id);
   const due = enemiesOwedTurn(encounter);
+  const lair = encounter.legendary.lair ? legendaryLairLines(enemies) : [];
   const staged = new Set(
     encounter.order
       .filter((entry) => entry.kind === "pc")
@@ -417,6 +420,9 @@ function buildEncounterState(campaignId: string, sheets: CharacterSheet[]) {
       ? []
       : sheets.filter((sheet) => !staged.has(sheet.id)).map((sheet) => sheet.name),
     turnBudget: encounter.turnBudget ? describeBudget(encounter.turnBudget) : null,
+    // The printed lair options lair_action takes by number: a block's own
+    // list never reaches its traits whole.
+    ...(lair.length ? { lairOptions: lair.map((line, at) => `${at + 1}. ${line}`) } : {}),
     movementLeft: encounter.orderReady ? movementLeft(campaignId, encounter, sheets) : null,
     awaitingPlayer: characterAwaitingPlayer(campaignId)?.name ?? null,
     ...(due.length
@@ -686,7 +692,7 @@ async function openTurn(
         : "";
     const intent = [...autoGroups({ inEncounter: false, englishPlayerText })];
     const signals = profileSignals(campaign, context.sheets, Boolean(encounterNow));
-    const offered = compactTurnTools(campaign, Boolean(encounterNow), campaign.settings.imageGenerationEnabled && campaign.settings.autoImages, signals, intent).offered;
+    const { offered, closed } = compactTurnTools(campaign, Boolean(encounterNow), campaign.settings.imageGenerationEnabled && campaign.settings.autoImages, signals, intent);
     const groups = Object.keys(TOOL_GROUPS).filter((group) => TOOL_GROUPS[group as ToolGroupId].tools.some((name) => offered.has(name)));
     profileTrace = { name: "compact", intent, groups, opened: [] };
     ruleContext = ruleContextFor({
@@ -697,6 +703,7 @@ async function openTurn(
       recall: isStageEnabled(stages, "recall"),
       map: Boolean(encounterNow?.map),
       legendary: Boolean(signals.legendary),
+      moreTools: closed.length > 0,
       brief: tuning.briefRules,
     });
   } else if (tuning.briefRules) {
@@ -710,6 +717,7 @@ async function openTurn(
       recall: isStageEnabled(stages, "recall"),
       map: Boolean(encounterNow?.map),
       legendary: true,
+      moreTools: false,
       brief: true,
     });
   }
@@ -1119,6 +1127,8 @@ export function dmTurnTools(
     // fight (src/lib/dm/gear-tool.ts, issue #424).
     handleItemTool,
     ...encounterTools(inEncounter),
+    // Out of a fight a reaction answers only a fall (src/lib/dm/reaction-tools.ts).
+    ...(inEncounter || !partyCanSlowAFall(listSheets(campaign.id)) ? [] : actionTools.filter((tool) => tool.function.name === "use_reaction")),
     // The table's prepared fights, by name, when it has any (#154).
     ...(inEncounter ? [] : preparedEncounterTools(campaign)),
     castBuffTool,
@@ -1200,7 +1210,7 @@ export function compactTurnTools(
   imageEnabled: boolean,
   signals: ProfileSignals,
   opened: Iterable<ToolGroupId>,
-): { tools: unknown[]; offered: Set<string> } {
+): { tools: unknown[]; offered: Set<string>; closed: ToolGroupId[] } {
   const full = dmTurnTools(campaign, inEncounter, imageEnabled, false) as ToolDefLike[];
   const names = full.map((tool) => tool.function.name);
   const offered = compactToolNames(names, signals, opened);
@@ -1208,6 +1218,7 @@ export function compactTurnTools(
   return {
     tools: [...full.filter((tool) => offered.has(tool.function.name)).map(compactTool), ...(closed.length ? [moreToolsTool(closed)] : [])],
     offered,
+    closed,
   };
 }
 
@@ -2235,6 +2246,9 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     // disagree. Its reads also say who speaks the narration's lines.
     const guarded = await enforceEngineBoundary(campaign, turn, sheets, partReads);
     spoken = guarded.spoken;
+    // What the guard did goes with the turn to its narrator quality row
+    // (issue #460), written when finalize() saves it as done.
+    turn.guard = guarded.guard;
     // A deed the narration showed that no relationship_beat recorded is
     // noted for the DM (issue 503, src/lib/dm/deed-claims.ts).
     noteUnrecordedDeeds(campaign, turn.conversation, guarded.deeds);
@@ -2742,6 +2756,9 @@ export function handleLocationCall(
   // narration of the return would otherwise invent the room anew. (A place
   // known only as somebody's route has a row but no layout yet.)
   let returnedTo = false;
+  // What the world simulation just wrote here, so the model narrates it
+  // rather than asking generate_settlement for a place already peopled.
+  let peopled: string | null = null;
   if (toolName === "move_party") {
     const name = typeof args.name === "string" ? args.name.trim() : "";
     if (!name) {
@@ -2765,7 +2782,10 @@ export function handleLocationCall(
     // before the model narrates it (docs/vtt-parity-implementation-plan.md
     // 12.1). Anywhere already peopled is left as it was.
     if (movedToNewLocation && campaign.gameSettings.worldSimulation && !location.layoutDescription.trim() && !placeIsWritten(campaign, location)) {
-      populateSettlement(campaign, location, {});
+      const outcome = populateSettlement(campaign, location, {});
+      if (!("error" in outcome)) {
+        peopled = `The server peopled ${location.name}: ${outcome.npcs} people and ${outcome.shops} shops, now in GAME STATE; generate_settlement is not needed.`;
+      }
       location = getCurrentLocation(campaign.id) ?? location;
     }
     // Keep the old area linked to the new one so routes stay consistent.
@@ -2822,7 +2842,9 @@ export function handleLocationCall(
     note:
       returnedTo && recorded
         ? `Recorded. The party is back at ${location.name}, as it was left: ${recorded} Continue the scene.`
-        : "Recorded. Continue the scene.",
+        : peopled
+          ? `Recorded. ${peopled} Continue the scene.`
+          : "Recorded. Continue the scene.",
     // Consumed by advance() as the chapter-break and inline-map signals,
     // then stripped before the result reaches the model.
     ...(movedToNewLocation

@@ -9,6 +9,7 @@ import {
 } from "@/lib/db/sheet-audit";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { forgetLongRest } from "@/lib/db/clock";
+import { recordTurnCorrection } from "@/lib/db/turn-ledger";
 import { publishPersisted } from "@/lib/events";
 import { fullPatchSheetSchema, type CharacterSheet } from "@/lib/schemas/sheet";
 
@@ -19,8 +20,13 @@ import { fullPatchSheetSchema, type CharacterSheet } from "@/lib/schemas/sheet";
 // notices) are not rescinded.
 
 export type UndoOutcome =
-  | { ok: true; compensating: SheetAuditEntry; sheet: CharacterSheet }
+  // correctionId: the ledger row the undo wrote (issue #460), or null when
+  // the change undone was not the AI's.
+  | { ok: true; compensating: SheetAuditEntry; sheet: CharacterSheet; correctionId: string | null }
   | { ok: false; error: string };
+
+// Who undid it, and from where: one change, or every change of a turn.
+export type UndoBy = { userId: string; kind: "sheet_undo" | "turn_revert" };
 
 // Newer live changes on the same character that wrote any of the same
 // fields; undoing past them means last-write-wins, so the lead confirms.
@@ -44,7 +50,7 @@ export function undoConflictWarnings(
   return warnings;
 }
 
-export function revertAuditEntry(campaign: Campaign, entry: SheetAuditEntry): UndoOutcome {
+export function revertAuditEntry(campaign: Campaign, entry: SheetAuditEntry, by?: UndoBy): UndoOutcome {
   if (entry.revertedAt) {
     return { ok: false, error: "That change was already undone." };
   }
@@ -68,6 +74,7 @@ export function revertAuditEntry(campaign: Campaign, entry: SheetAuditEntry): Un
   }
 
   let compensating: SheetAuditEntry | null = null;
+  let correctionId: string | null = null;
   getDatabase().transaction(() => {
     patchSheet(entry.characterId, parsed.data);
     compensating = insertSheetAudit({
@@ -83,6 +90,19 @@ export function revertAuditEntry(campaign: Campaign, entry: SheetAuditEntry): Un
       patch: parsed.data as Record<string, unknown>,
     });
     markReverted(entry.id, compensating.id);
+    // The AI's change, undone: the correction ledger's row goes in with the
+    // undo, or not at all. A person's own change undone is nobody's fix.
+    if (by && entry.actor === "dm") {
+      correctionId = recordTurnCorrection({
+        campaignId: campaign.id,
+        turnId: entry.turnId,
+        attribution: "direct",
+        kind: by.kind,
+        auditId: entry.id,
+        tool: entry.kind,
+        userId: by.userId,
+      });
+    }
   })();
   // A long rest undone never happened: the 24 hours it started are given
   // back, so the character may rest again (SRD 5.1, one long rest a day).
@@ -100,5 +120,5 @@ export function revertAuditEntry(campaign: Campaign, entry: SheetAuditEntry): Un
     revertedAt: new Date().toISOString(),
   });
   publishPersisted(campaign.id, "sheet_updated", { sheet });
-  return { ok: true, compensating: compensating!, sheet };
+  return { ok: true, compensating: compensating!, sheet, correctionId };
 }

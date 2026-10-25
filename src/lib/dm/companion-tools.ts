@@ -162,7 +162,7 @@ function companionToolDefs(campaign: Campaign): ToolDef[] {
     : `SRD race id ('human', 'hill_dwarf', 'high_elf'). ${preset.raceHint}`;
   const kindDescription =
     mode === "full"
-      ? "'party' for a lasting party member who travels with the party until dismissed; 'guest' for a scene-scoped ally (a soldier helping defend the town) who leaves when the scene ends."
+      ? "'party' for a lasting member until dismissed; 'guest' for a scene-scoped ally. A guest leaves when the scene ends, for example a soldier helping defend the town."
       : "Only 'guest' is allowed at this table: a scene-scoped ally (a soldier helping defend the town) who leaves when the scene or battle ends. Lasting party companions are disabled.";
   return [
     {
@@ -186,7 +186,7 @@ function companionToolDefs(campaign: Campaign): ToolDef[] {
             drawnTo: {
               type: "array",
               items: { type: "string", enum: TOLD_ATTRACTION },
-              description: "Who they could fall for, if the story has shown it.",
+              description: "Who they could fall for, once the story shows it.",
             },
             level: {
               type: "integer",
@@ -209,7 +209,7 @@ function companionToolDefs(campaign: Campaign): ToolDef[] {
             alignment: {
               type: "string",
               enum: [...ALIGNMENT_CODES],
-              description: "When the story has shown it: with their class, sets what a party member holds to.",
+              description: "Their alignment, when the story has shown it; with their class it sets what a party member holds to.",
             },
             values: VALUES_PARAMETER,
             agenda: {
@@ -300,6 +300,9 @@ export function handleAddCompanion(
         "Invalid arguments: add_companion needs name, class, gender (Female, Male, Nonbinary or Unknown), personality, and kind ('party' or 'guest').",
       retry: true,
     };
+  }
+  if (args.values?.some((held) => held.value === "faction_loyalty" && !held.faction)) {
+    return { error: "A faction_loyalty value names its faction: send faction with it, or leave that value out. Nothing was added.", retry: true };
   }
 
   const notes: string[] = [];

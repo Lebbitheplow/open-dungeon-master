@@ -7,7 +7,7 @@
 // (a lift from a blur). Brin's hidden roll turns public. Reduced motion
 // keeps the colour and the words and drops the movement. Clean under axe by
 // night and by day.
-import { axeViolations, check, eventually, sleep } from "../lib.mjs";
+import { axeViolations, check, eventually, sleep, untilStill, upTo } from "../lib.mjs";
 
 async function axeClean(page, selector, where) {
   const found = await axeViolations(page, selector);
@@ -16,7 +16,7 @@ async function axeClean(page, selector, where) {
 
 async function inTheme(page, theme) {
   await page.evaluate((value) => (document.documentElement.dataset.theme = value), theme);
-  await sleep(400);
+  await untilStill(page);
 }
 
 export default {
@@ -26,6 +26,7 @@ export default {
     const { page, root, ids, base, api, viewport } = t;
     const table = ids.pacts.reveal[viewport];
     await t.open(`/campaigns/${table.id}`);
+    // Time is the check: a reveal the visit set off would show within this while.
     await sleep(800);
     check((await page.locator(`${root}[data-pact-reveal]`).count()) === 0, "nothing revealed before the pact moves");
     await page.evaluate(() => {
@@ -48,9 +49,9 @@ export default {
 
     // The long rest's dawn card covers the table a moment; the player
     // returns to it as anyone would.
-    await sleep(400);
+    await eventually(() => page.locator(".moment-rest").count(), { timeoutMs: 400 }).catch(() => 0);
     await page.keyboard.press("Escape");
-    await sleep(600);
+    await upTo(async () => (await page.locator(".moment-rest").count()) === 0, 600);
     const card = page.locator(`${root}[data-pact-reveal]`).locator("visible=true").last();
     await eventually(() => card.count(), { timeoutMs: 20_000, label: "the reveal card" });
     await card.scrollIntoViewIfNeeded();
@@ -58,7 +59,7 @@ export default {
     check(/Revealed/i.test(words), "headed Revealed");
     check(/The pact made its move: Seren Vale, Brin Hale/.test(words), `it names the pact: ${words}`);
     check(words.includes(table.secret), "and Brin's secret");
-    await sleep(600);
+    await upTo(async () => (await page.evaluate(() => window.__reveals)).some((entry) => entry.name.replace(/^odm-game-/, "") === "pact-unmask"), 2_000);
     const reveals = await page.evaluate(() => window.__reveals);
     const unmask = reveals.find((entry) => entry.name.replace(/^odm-game-/, "") === "pact-unmask");
     check(Boolean(unmask), `the card unmasked itself (${JSON.stringify(reveals)})`);

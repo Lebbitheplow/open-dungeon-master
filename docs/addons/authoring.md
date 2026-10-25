@@ -68,7 +68,7 @@ every check the server does, including the ones a JSON Schema cannot express.
 | `platforms` | Optional: `["linux", "win32", "darwin"]` or fewer. Absent means everywhere |
 | `runtime` | How it is started; see below |
 | `requires` | Programs it needs on the computer, checked before it starts |
-| `permissions` | `ai.text`, `network`, `programs`; see [addons.md](../addons.md#switching-an-addon-on) |
+| `permissions` | `ai.text`, `network`, `programs`, `threads`; see [addons.md](../addons.md#switching-an-addon-on) and, for `threads`, [Workers and threads](extension-points.md#workers-and-threads) |
 | `setup` | Optional: what it fetches and prepares on the server before it is used; see [Setup](#setup) |
 | `conflicts` | Optional: addons it cannot run beside, each `{ "id", "reason" }`; see [Living beside other addons](#living-beside-other-addons) |
 | `exclusive` | Optional: shared resources its runs take turns for, like `["gpu"]`; see [Living beside other addons](#living-beside-other-addons) |

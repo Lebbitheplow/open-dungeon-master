@@ -1,7 +1,7 @@
 // Issue #432, where a player meets it: the table's Fights row (how often
 // fights come), under the AI storytelling group, with its plain-word hint
 // and a finger-sized picker.
-import { check, eventually, openPanelTab, openSettingsGroup, sleep } from "../lib.mjs";
+import { check, eventually, openPanelTab, openSettingsGroup } from "../lib.mjs";
 
 export default {
   name: "fights-row",
@@ -15,7 +15,6 @@ export default {
     const row = page.locator(`${root}[data-settings-row="combat-pace"]`).locator("visible=true").first();
     await eventually(() => row.count(), { timeoutMs: 30_000, label: "the Fights row" });
     await row.scrollIntoViewIfNeeded();
-    await sleep(500);
     const words = (await row.textContent()) ?? "";
     check(/Fights/.test(words), `the row is labelled Fights (${words.slice(0, 80)})`);
     const picker = row.locator(`[aria-label="How often fights come"]`).first();

@@ -7,8 +7,9 @@ import { EASY_CLASSES, PLAYSTYLES, playstyleSuggestions, type PlaystyleId } from
 
 // A new player's way in: pick your job in a fight, see the classes that
 // suit it with the easy ones marked, and choose one or keep browsing the
-// full grid. Nothing is chosen for the player. The first step asks it
-// first; the class step opens on the same answer (`style` is the builder's).
+// full grid. Nothing is chosen for the player. The class step, the first,
+// asks it over the class cards (`style` is the builder's, so the
+// background's hints on the next step follow the same answer).
 // It is the quick-build quiz's first question too: `onHelpMeBuild` offers
 // the other three, and a whole character from the answers.
 export function PlaystylePicker({

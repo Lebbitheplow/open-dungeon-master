@@ -115,6 +115,12 @@ function heaviestHit(swings: SwingRecord[], which: (swing: SwingRecord) => boole
   return best;
 }
 
+// A fall reaction sent before the fall: the fall is resolved first, then the
+// reaction answers it, in the same turn.
+export function noFall(who: string, feature: string): ToolError {
+  return { error: `${feature} answers a fall that has landed: call apply_hazard falling for ${who} first, then send this use_reaction again. Nothing was spent.`, retry: true };
+}
+
 export function noHit(who: string, feature: string, what = "an attack that hit them"): ToolError {
   return { error: `${feature} answers ${what} this turn, and the server has none on record against ${who}. Nothing was spent.`, refused: "rules" };
 }
@@ -370,7 +376,7 @@ function slowFall(ctx: Ctx): ToolResult {
   }
   const record = freshLastHit(ctx.campaign.id, sheet.id);
   if (!record || record.source !== "fall") {
-    return noHit(sheet.name, "Slow Fall", "a fall (apply_hazard falling)");
+    return noFall(sheet.name, "Slow Fall");
   }
   spendReaction(ctx);
   const settled = softenFall(ctx, sheet, "slow fall", 5 * (monk || sheet.level))!;

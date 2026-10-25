@@ -31,7 +31,7 @@ export const declareIntentTool: ToolDef = {
   function: {
     name: "declare_intent",
     description:
-      "Telegraph an enemy's next act over it on the board for the round (players who cannot see it are not told). Flavour: it rolls and binds nothing.",
+      "Telegraph an enemy's next act over it on the board for the round (players who cannot see it are not told). Flavour: it rolls and binds nothing, except on a creature a Dominate spell holds, whose turns the server plays by the mark.",
     parameters: {
       type: "object",
       additionalProperties: false,
@@ -41,9 +41,9 @@ export const declareIntentTool: ToolDef = {
         kind: {
           type: "string",
           enum: [...INTENT_VERB_KINDS],
-          description: "For a verb that is not one of its attacks: what kind of act it is (move for a retreat or a dash), which picks the board's badge.",
+          description: "For a verb that is not one of its attacks: what kind of act it is (move for a retreat or a dash). It picks the board's badge.",
         },
-        target: { type: "string", description: "Its mark: exact characterId from GAME STATE, or the character's name; omit for no single mark." },
+        target: { type: "string", description: "Its mark: exact characterId or enemyId from GAME STATE, or a name; omit for no single mark." },
         expected: { type: "number", description: "Expected damage. Omit to use the named attack's average." },
       },
       required: ["actor", "verb"],

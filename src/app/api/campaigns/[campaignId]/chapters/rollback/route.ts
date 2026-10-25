@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
+import { correctionsField } from "@/lib/correction-reasons";
 import { computeRollbackScope, performRollback, warningsForRollback } from "@/lib/dm/rollback";
 
 export const runtime = "nodejs";
@@ -40,12 +41,12 @@ export async function POST(
     return Response.json({ warnings }, { status: 409 });
   }
 
-  const result = await performRollback(campaignId, chapterIndex);
+  const result = await performRollback(campaignId, chapterIndex, context.user.id);
   if (!result.ok) {
     return Response.json(
       { error: result.error ?? "The rewind failed." },
       { status: 500 },
     );
   }
-  return Response.json({ ok: true });
+  return Response.json({ ok: true, ...correctionsField(result.corrections ?? []) });
 }

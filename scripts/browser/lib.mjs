@@ -157,15 +157,19 @@ export async function newContext(browser, viewport, { app, toursSeen = true }) {
   // way. Every tour counts as seen before any page loads: the browser's old
   // per-tour flag (legacyKey in src/lib/tours/account-logic.ts), which the
   // first account to load carries to its record. Only tours-account is about
-  // the tour itself, and it asks for contexts without the flags.
-  if (!toursSeen) return context;
+  // the tour itself, and it asks for contexts without the flags. The app
+  // shell's own tour of its home (client src/renderer/tour.ts
+  // maybeStartAppTour, 600 ms after it paints, over the Add a server button)
+  // is not the server's, so it counts as seen in every context.
+  const keys = ["odm.tour.app"];
+  if (toursSeen) keys.push(...["table-player", "table-dm", "workshop-shelf", "workshop-hub"].map((id) => `odm:tour:${id}`));
   await context.addInitScript((keys) => {
     try {
       for (const key of keys) localStorage.setItem(key, "done");
     } catch {
       // A page with no storage shows its tour, and settle() closes it.
     }
-  }, ["table-player", "table-dm", "workshop-shelf", "workshop-hub"].map((id) => `odm:tour:${id}`));
+  }, keys);
   return context;
 }
 
@@ -192,11 +196,64 @@ export async function seeAllTours(request, base) {
   }
 }
 
+// A page is ready for a click once React has hydrated it: before that a
+// click lands on server HTML with no handler and is lost. The root layout's
+// <body> carries React's fiber key from its hydration on, and an idle
+// callback runs only after that long task and the first effects. There is
+// no public signal for this, so the key is React's own (react-dom
+// precacheFiberNode); a React that renamed it fails here at once, loudly.
+export async function hydrated(page) {
+  await page.waitForFunction(() => Object.keys(document.body).some((key) => key.startsWith("__reactFiber$")), null, { timeout: 60_000 });
+  await page.evaluate(() => new Promise((resolve) => requestIdleCallback(() => resolve(), { timeout: 2_000 })));
+}
+
+// A picture or a measurement waits for the page to stop moving: the
+// transitions and entrances started by the last press (two frames, so the
+// style change that starts them has landed) have all finished. An endless
+// animation, a spinner or a pulse, never finishes, so it is not waited on;
+// one that runs on past ten seconds is named in the failure.
+export async function untilStill(page) {
+  await page.evaluate(async () => {
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const moving = document
+      .getAnimations()
+      .filter((animation) => animation.playState === "running" && animation.effect?.getComputedTiming().endTime !== Infinity);
+    // A cancelled animation (its element unmounted) rejects `finished`; it has stopped all the same.
+    const stopped = Promise.all(moving.map((animation) => animation.finished.catch(() => {})));
+    // The timer is cleared once everything stops: left running, it would
+    // reject 10 s later with no one listening, and the page's own error
+    // log (src/lib/page-errors.ts, read by the report kit) would record it.
+    let timer;
+    const late = new Promise((resolve, reject) => {
+      timer = setTimeout(() => {
+        const names = moving.filter((animation) => animation.playState === "running").map((animation) => animation.animationName ?? animation.transitionProperty ?? "an animation");
+        reject(new Error(`still moving after 10 s: ${names.join(", ")}`));
+      }, 10_000);
+    });
+    try {
+      await Promise.race([stopped, late]);
+    } finally {
+      clearTimeout(timer);
+    }
+  });
+}
+
+// The step a builder is on, as its diamond stepper names it (src/components/
+// ui/DiamondStepper.tsx): a step change is a change of this name.
+export const currentStep = async (page, root) =>
+  (await page.locator(`${root}button[aria-current="step"]`).locator("visible=true").first().getAttribute("aria-label")) ?? "";
+
 // Closes whatever greets a page: the welcome tour, a "got it", a dialog.
+// Escape goes only to what is open, until nothing is: a blind press could
+// close a dialog a scenario opened on purpose a moment later.
+const GREETERS = '[role="dialog"]:visible, [role="alertdialog"]:visible, [data-tour-step]:visible';
 export async function settle(page) {
-  for (let index = 0; index < 3; index += 1) {
-    await page.keyboard.press("Escape").catch(() => {});
-    await sleep(150);
+  // A key press is also the page's first gesture (the browser's autoplay
+  // rule), which narration's controls wait for; Shift closes nothing.
+  await page.keyboard.press("Shift");
+  for (let index = 0; index < 3 && (await page.locator(GREETERS).count()); index += 1) {
+    await page.keyboard.press("Escape");
+    await page.locator(GREETERS).first().waitFor({ state: "hidden", timeout: 2_000 }).catch(() => {});
   }
   const gotIt = page.getByRole("button", { name: /got it/i });
   if (await gotIt.count()) await gotIt.first().click({ timeout: 2_000 }).catch(() => {});
@@ -245,18 +302,19 @@ export function pageHarness({ page, base, ids, app, viewport, outDir, tag, api }
     // (reloading index.html would restart the app at its home).
     reload: async () => {
       if (!app) {
-        await page.reload();
+        await page.reload({ waitUntil: "networkidle" });
+        await hydrated(page);
         return;
       }
       await page.evaluate(() => window.odmShell?.navigation?.reload?.());
-      await sleep(1_500);
+      await requestsIdle(page);
     },
     // On the server, a URL; in the app, the shell's own navigation (the
     // runner has already signed in and entered the host).
     open: async (route) => {
       if (!app) {
         await page.goto(`${base}${route}`, { waitUntil: "networkidle", timeout: 120_000 });
-        await sleep(1_500);
+        await hydrated(page);
         await settle(page);
         return;
       }
@@ -265,29 +323,73 @@ export function pageHarness({ page, base, ids, app, viewport, outDir, tag, api }
   };
 }
 
+// The app's screens have no load of their own: the shell swaps them in
+// place, so what goto's "networkidle" gives the server's pages (no request
+// for half a second) is counted here by hand, over what a screen waits on:
+// its calls to the host. An event stream never ends and is not a call (the
+// app opens the table's with fetch, to carry its token, so it is told by
+// what it asks for); the shell's own files are not the screen's data (and
+// Chromium reports no end for the script chunks it already holds).
+const requestsByPage = new WeakMap();
+function trackRequests(page, host) {
+  const state = { open: new Set(), changed: Date.now() };
+  const done = (request) => {
+    if (state.open.delete(request)) state.changed = Date.now();
+  };
+  page.on("request", (request) => {
+    if (!["fetch", "xhr"].includes(request.resourceType()) || !request.url().startsWith(host)) return;
+    if ((request.headers().accept ?? "").includes("text/event-stream")) return;
+    state.open.add(request);
+    state.changed = Date.now();
+  });
+  page.on("requestfinished", done);
+  page.on("requestfailed", done);
+  requestsByPage.set(page, state);
+}
+// The half second counts from the call too, so a screen just pushed has had
+// the time to start asking.
+async function requestsIdle(page) {
+  const state = requestsByPage.get(page);
+  const since = Date.now();
+  await eventually(
+    () => {
+      if (state.open.size) throw new Error(`open: ${[...state.open].map((request) => `${request.method()} ${new URL(request.url()).pathname}`).join(" | ")}`);
+      return Date.now() - Math.max(state.changed, since) >= 500;
+    },
+    { timeoutMs: 60_000, every: 100, label: "the app's requests settling" },
+  );
+}
+
+// Where the app's shell is, by its own navigation.
+const shellPath = (page) => page.evaluate(() => window.odmShell?.navigation?.location?.()?.pathname ?? null);
+
 // The app's native screens: add the host, sign in, press Enter, then walk
 // to a route by the shell's own links (the previous rigs did this by hand).
 export async function enterApp(page, shellBase, host, ids, touch) {
   const tap = (locator) => (touch ? locator.tap() : locator.click());
+  trackRequests(page, host);
   await page.goto(`${shellBase}/index.html`, { waitUntil: "networkidle", timeout: 120_000 });
-  await sleep(2_000);
-  await page.keyboard.press("Escape");
+  const add = page.getByRole("button", { name: /add a server/i }).first();
+  await add.waitFor({ state: "visible", timeout: 30_000 });
+  await settle(page);
   const close = page.locator('[aria-label*="lose" i]').first();
   if (await close.count()) await close.click({ timeout: 2_000 }).catch(() => {});
-  await tap(page.getByRole("button", { name: /add a server/i }).first());
-  await sleep(800);
+  await tap(add);
+  await page.getByRole("button", { name: /^continue$/i }).waitFor({ state: "visible", timeout: 30_000 });
   await page.locator('input[type="text"]').first().fill(host);
   await tap(page.getByRole("button", { name: /^continue$/i }));
-  await sleep(3_000);
+  const password = page.locator('input[type="password"]').first();
+  await password.waitFor({ state: "visible", timeout: 30_000 });
   await page.locator('input[type="text"]').last().fill(ids.lead);
-  await page.locator('input[type="password"]').first().fill(ids.password);
+  await password.fill(ids.password);
   await tap(page.getByRole("button", { name: /^sign in$/i }).last());
-  await sleep(4_000);
+  await password.waitFor({ state: "hidden", timeout: 30_000 });
   // A fresh sign-in reads the host's tables at once, so the home's hero is
   // the latest table ("Enter the world") rather than the host ("Enter").
+  await requestsIdle(page);
   await tap(page.getByRole("button", { name: /^enter(?: the world)?$/i }).first());
   await page.waitForSelector(".game-root", { timeout: 60_000 });
-  await sleep(2_000);
+  await requestsIdle(page);
   await settle(page);
 }
 
@@ -328,22 +430,21 @@ async function appNavigate(page, route, ids, touch) {
       .first();
     if (!(await tile.isVisible().catch(() => false))) {
       await push("/");
-      await sleep(2_000);
     }
     await tile.waitFor({ state: "visible", timeout: 30_000 });
     await tap(tile);
+    await eventually(async () => (await shellPath(page))?.startsWith(`/campaigns/${campaign}`), { timeoutMs: 30_000, label: `the app in campaign ${campaign}` });
     // A page under the campaign (its character chooser, its table): once the
     // campaign is open, push the full route on the shell's router, the way
     // the lobby's own links do.
     const rest = route.slice(`/campaigns/${campaign}`.length);
     if (rest && !rest.startsWith("?")) {
-      await sleep(2_000);
       await push(route);
     }
   } else {
     await push(route);
   }
-  await sleep(4_000);
+  await requestsIdle(page);
   await settle(page);
 }
 
@@ -368,6 +469,11 @@ export async function eventually(fn, { timeoutMs = 15_000, every = 250, label = 
   }
   throw new Error(`${label} did not hold within ${timeoutMs / 1000}s${last instanceof Error ? `: ${last.message}` : ""}`);
 }
+
+// A wait no longer than the pause it replaced: it ends once fn holds, or
+// after ms either way, with fn's value or false. What follows checks the
+// outcome or tries again, as it did after the pause.
+export const upTo = (fn, ms) => eventually(fn, { timeoutMs: ms }).catch(() => false);
 
 // Opens a side-panel tab the way a person would on this viewport: its rail
 // or bottom-bar cell when it has one, otherwise More and the tab's row in

@@ -80,6 +80,16 @@ await test("a lasting companion holds values from its class and alignment, and t
   assert.equal(added.ok, true, added.error);
   const vex = npcs.listNpcs(world.campaignId).find((npc) => npc.name === "Vex");
   assert.deepEqual(conscienceDb.companionValues(vex.id).map((held) => held.value), ["mercenary", "ruthless"], "red lines first");
+  const loyalToNobody = await world.invoke("add_companion", {
+    name: "Ash",
+    class: "fighter",
+    gender: "Male",
+    personality: "Quiet.",
+    kind: "party",
+    values: [{ value: "faction_loyalty", strength: "cares" }],
+  });
+  assert.equal(loyalToNobody.ok, false, "a faction loyalty with no faction is refused, not dropped");
+  assert.ok(!world.sheets().some((entry) => entry.name === "Ash"), "nothing was added");
   const guest = await world.invoke("add_companion", { name: "Guard", class: "fighter", gender: "Female", personality: "Brisk.", kind: "guest" });
   assert.equal(guest.ok, true, guest.error);
   assert.ok(!npcs.listNpcs(world.campaignId).some((npc) => npc.name === "Guard"), "a guest holds nothing: no row behind them");

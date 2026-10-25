@@ -10,7 +10,7 @@
 // CSS animation, greying as it sinks a little), then files under Gone with
 // how she went. Reduced motion keeps the dimming colour and the words and
 // drops the movement.
-import { axeViolations, check, eventually, openPanelTab, sleep } from "../lib.mjs";
+import { axeViolations, check, eventually, openPanelTab, untilStill } from "../lib.mjs";
 
 async function axeClean(page, selector, where) {
   const found = await axeViolations(page, selector);
@@ -19,7 +19,7 @@ async function axeClean(page, selector, where) {
 
 async function inTheme(page, theme) {
   await page.evaluate((value) => (document.documentElement.dataset.theme = value), theme);
-  await sleep(400);
+  await untilStill(page);
 }
 
 export default {
@@ -47,7 +47,7 @@ export default {
     const card = page.locator(`${root}[data-party-card="${table.seren}"]`).locator("visible=true").first();
     await eventually(() => card.count(), { label: "Seren's card in the party" });
     await goneList.scrollIntoViewIfNeeded();
-    await sleep(300);
+    await untilStill(page);
     await axeClean(page, `${root}[data-party-gone]`, "the Gone list at night");
     await t.shot("gone-list");
     await inTheme(page, "light");
@@ -104,7 +104,7 @@ export default {
     const seren = goneList.locator(`[data-gone-entry="Seren Vale"]`);
     check(/Walked out on the party/.test((await seren.textContent()) ?? ""), "filed with how she went");
     await seren.scrollIntoViewIfNeeded();
-    await sleep(500);
+    await untilStill(page);
     await axeClean(page, `${root}[data-party-gone]`, "the Gone list after she left, at night");
     await t.shot("gone-after");
     await inTheme(page, "light");

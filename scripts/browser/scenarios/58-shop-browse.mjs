@@ -47,6 +47,36 @@ export default {
     check((await market.count()) === 1, "the Party tab's Market section is the one showing");
     await t.shot("market");
 
+    // A tile's name opens the item card (#524): finger-sized on a phone, a
+    // dialog drawn inside the game's root (in the apps a dialog outside it
+    // arrives unstyled), with the price here and the shelf count, that fits
+    // the screen and scrolls inside itself, and Escape hands focus back.
+    const details = first.getByRole("button", { name: /^Details of / });
+    check((await details.count()) === 1, "the tile's name is a Details button");
+    if (t.touch) {
+      const box = await details.boundingBox();
+      check(box && box.height >= 40, `the name is finger-sized on a phone (${box?.width}x${box?.height})`);
+    }
+    await t.tap(details);
+    const card = page.locator(`${root}[role=dialog]`).locator("visible=true");
+    await eventually(() => card.count(), { label: "the item card" });
+    const said = (await card.first().textContent()) ?? "";
+    check(/here, \d+ on the shelf/.test(said), `the card leads with the price and the shelf: ${said.slice(0, 120)}`);
+    await eventually(async () => !/Looking it up/.test((await card.first().textContent()) ?? ""), { label: "the item's details loaded" });
+    const fits = await card.first().evaluate((el) => {
+      const rect = el.getBoundingClientRect();
+      return { top: rect.top, bottom: rect.bottom, height: window.innerHeight, scrolls: getComputedStyle(el).overflowY };
+    });
+    check(fits.top >= 0 && fits.bottom <= fits.height + 1, `the card fits the screen (${fits.top}-${fits.bottom} of ${fits.height})`);
+    check(fits.scrolls === "auto", `and scrolls inside itself (${fits.scrolls})`);
+    await t.shot("item-card");
+    await page.keyboard.press("Escape");
+    await eventually(async () => (await card.count()) === 0, { label: "the card closed on Escape" });
+    await eventually(
+      () => page.evaluate(() => /^Details of /.test(document.activeElement?.getAttribute("aria-label") ?? "")),
+      { label: "focus back on the tile's name" },
+    );
+
     // The haggling rules in plain words under the shop, then a haggle: a
     // village's DC is 15, and the result is the haggler's own. The world
     // is shared across viewports, so a later one finds the try used.

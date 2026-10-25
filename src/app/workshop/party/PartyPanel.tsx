@@ -14,6 +14,7 @@ import { ListHead, useListHead } from "@/app/workshop/ListHead";
 import { rowIcon } from "@/app/workshop/kit";
 import { LoadFailed } from "@/app/campaigns/[campaignId]/PanelKit";
 import { readLoad, useLoadStatus } from "@/lib/load-state";
+import { DraftPregensCard } from "@/app/workshop/party/DraftPregens";
 import type { TargetParty } from "@/lib/workshop/kind";
 
 // The Party system (docs/workshop-parity-audit.md phase 15): the party a
@@ -34,6 +35,8 @@ type Pregen = {
   level: number;
   // Ticked: players joining a table made from this workshop may take it.
   offered?: boolean;
+  // Drafted by the AI DM and not edited since (src/lib/dm/pregen-draft.ts).
+  drafted?: boolean;
 };
 
 type LibraryEntry = Pregen & { workshopId: string };
@@ -178,6 +181,11 @@ export function PartyPanel({
                     {character.role === "companion" ? (
                       <span className={cn(chip, "border-stone-700 text-stone-400")}>Companion</span>
                     ) : null}
+                    {character.drafted ? (
+                      <span className={cn(chip, "border-sky-800 text-sky-200/90")} data-pregen-drafted={character.id}>
+                        Drafted by the AI DM
+                      </span>
+                    ) : null}
                     {offLevel ? (
                       <span className={cn(chip, "border-amber-800 text-amber-300/90")}>
                         Level {character.level}, the party is built for {targetParty.level}
@@ -214,11 +222,21 @@ export function PartyPanel({
             );
           })}
           {pregens.length === 0 ? (
-            <li className="sm:col-span-2"><EmptyState art="board" title="No pregens yet. Pick one from your library below, or build one and come back." /></li>
+            <li className="sm:col-span-2"><EmptyState art="board" title="No pregens yet. Let the AI DM draft some, pick one from your library below, or build one and come back." /></li>
           ) : null}
         </ul>
         </>
       )}
+
+      <DraftPregensCard
+        workshopId={workshopId}
+        targetParty={targetParty}
+        onDrafted={(result) => {
+          setPregens(result.pregens as Pregen[]);
+          setVersion((current) => current + 1);
+          onChanged();
+        }}
+      />
 
       <div className={cn(ui.card, "space-y-2 p-3")} data-tour="party-add">
         <SectionHead title="Add to the roster" glyph="tab-characters" className="mb-0" />

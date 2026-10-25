@@ -26,7 +26,7 @@ export function placeIsWritten(campaign: Campaign, location: CampaignLocation): 
 
 export function populateSettlement(campaign: Campaign, location: CampaignLocation, options: { size?: unknown; terrain?: unknown; seed?: number; force?: boolean } = {}): PopulateOutcome {
   if (!options.force && placeIsWritten(campaign, location)) {
-    return { error: `${location.name} already has people in it.`, retry: true };
+    return { error: `${location.name} already has people in it: GAME STATE lists them and its shops. Narrate from those.`, refused: "rules" };
   }
   const settlement = generateSettlement({
     name: location.name,

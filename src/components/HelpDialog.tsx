@@ -4,6 +4,7 @@ import Link from "next/link";
 import {
   BookOpen,
   Brain,
+  Bug,
   Compass,
   Footprints,
   Crown,
@@ -36,6 +37,7 @@ export function HelpDialog({
   onOpenChange,
   tours,
   section,
+  onReport,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -44,6 +46,10 @@ export function HelpDialog({
   // The table offers its guided tours from here; each runs once on its own
   // and can be replayed at will. Other pages pass nothing.
   tours?: { label: string; detail: string; onStart: () => void }[];
+  // The table's "Report a problem" (issue #459): Help is where a tester
+  // looks when something broke, so the report lives here and in Admin >
+  // Server log rather than as a header button every player pays for.
+  onReport?: () => void;
 }) {
   return (
     <Dialog
@@ -53,7 +59,7 @@ export function HelpDialog({
       icon={<GameIcon icon={{ kind: "glyph", key: "tab-story" }} size="size-7" />}
       width="w-[min(94vw,44rem)]"
     >
-      <HelpContents withTours={Boolean(tours?.length)} initialSection={section} />
+      <HelpContents withTours={Boolean(tours?.length)} withReport={Boolean(onReport)} initialSection={section} />
       {tours && tours.length ? (
         <Section icon={Footprints} title="Guided tours">
           <p>
@@ -213,7 +219,34 @@ export function HelpDialog({
           resumes the turn that was already running, so nobody has to retype an action and nothing
           lands in the transcript twice.
         </p>
+        <p>
+          An edit keeps the DM&apos;s own wording as a take beside yours, so you can page back to it.
+          After you fix something the AI did (an undo, an edit, a reroll, a retry, a rewind), a small
+          row asks <span className="text-stone-300">Why the fix?</span> with a few reasons. One tap
+          helps the project see what the AI gets wrong; ignore it or close it and nothing changes.
+        </p>
       </Section>
+
+      {onReport ? (
+        <Section icon={Bug} title="Report a problem">
+          <p>
+            Something broke, or you want to tell us how a session went? Save a report file and attach
+            it to an issue on GitHub. You choose what goes in it; it is saved to this device and never
+            sent anywhere, and it never holds other players&apos; lines, whispers, passwords or keys.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              onOpenChange(false);
+              onReport();
+            }}
+            className={ui.btnSmall}
+            data-report-problem
+          >
+            <Bug className="size-4" /> Report a problem
+          </button>
+        </Section>
+      ) : null}
 
       <Section icon={Brain} title="What the DM remembers">
         <p>

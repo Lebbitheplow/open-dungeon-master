@@ -4,7 +4,7 @@
 // three ways to a hero, the phone's More sheet reaching every tab, the
 // Settings tab's contents row, the phone header's table menu, Help finding
 // "volume" in its own words, and the home's menu inside its frame.
-import { check, eventually, openPanelTab, sleep } from "../lib.mjs";
+import { check, eventually, openPanelTab, untilStill } from "../lib.mjs";
 
 export default {
   name: "usability",
@@ -55,7 +55,7 @@ export default {
       label: "the ready-made heroes open",
     });
     await routes.scrollIntoViewIfNeeded();
-    await sleep(400);
+    await untilStill(page);
     await t.shot("hero-routes");
 
     // ---- the table: every tab reachable, the Settings tab's contents ----
@@ -85,7 +85,7 @@ export default {
       for (const words of ["Every rule, spell and monster", "How everything works"]) {
         check((await menu.getByText(words).count()) === 1, `the table menu says "${words}"`);
       }
-      await sleep(400);
+      await untilStill(page);
       await t.shot("table-menu");
       await t.tap(menu.getByRole("menuitem", { name: /^Help/ }));
     } else {
@@ -108,22 +108,28 @@ export default {
     await t.shot("help-search");
     await page.keyboard.press("Escape");
 
-    // The character builder: your job in a fight comes first, with the
-    // backgrounds that suit it, and a line counts the choices left.
+    // The character builder: your job in a fight comes first, over the
+    // classes (backlog F4), and a line counts the choices left. The
+    // backgrounds that suit the job wait beside the ancestry.
     await t.open("/characters/new");
+    const startFresh = page.locator(`${root}button`).filter({ hasText: /^Start fresh$/ }).locator("visible=true");
+    if (await startFresh.count()) await t.tap(startFresh.first());
     const playstyle = page.getByRole("radiogroup", { name: "In a fight, what's your job?" }).locator("visible=true").first();
     await eventually(() => playstyle.count(), { timeoutMs: 30_000, label: "the playstyle question on step 1" });
     // The builder keeps every step mounted; the active one's line is the one read.
     const owed = page.locator(`${root}[data-active] [data-owed]`).first();
     await eventually(() => owed.count(), { label: "the choices-left line" });
-    check(/choice.? left on this step/.test(await owed.innerText()) && /Name/.test(await owed.innerText()), `the line names what is owed ("${await owed.innerText()}")`);
+    check(/choice.? left on this step/.test(await owed.innerText()) && /Class/.test(await owed.innerText()) && !/Name/.test(await owed.innerText()), `the line names what is owed, and no name ("${await owed.innerText()}")`);
     await t.tap(playstyle.getByRole("radio", { name: "Hold the line, take the hits" }));
-    const hints = page.locator(`${root}[data-background-hints]`).locator("visible=true").first();
-    await eventually(() => hints.count(), { label: "backgrounds that suit the playstyle" });
-    await page.getByRole("textbox", { name: "Name" }).locator("visible=true").first().fill("Wren Ashdown");
+    await t.tap(page.locator(`${root}section[data-active] .creator-card[aria-label^="Barbarian"]`).locator("visible=true").first());
+    await t.tap(page.locator(`${root}section[data-active] [data-suggest-skills]`).locator("visible=true").first());
+    await eventually(async () => (await page.locator(`${root}[data-active] [data-owed]`).count()) === 0, { label: "the line goes once nothing is owed" });
+    await t.tap(page.locator(`${root}button`).filter({ hasText: /^Continue/ }).locator("visible=true").first());
+    const hints = page.locator(`${root}section[data-active] [data-background-hints]`).locator("visible=true").first();
+    await eventually(() => hints.count(), { timeoutMs: 15_000, label: "backgrounds that suit the playstyle, beside the ancestry" });
     // No background is picked for the player: one of the suggested ones.
     await t.tap(hints.locator("button").first());
-    await eventually(async () => (await page.locator(`${root}[data-active] [data-owed]`).count()) === 0, { label: "the line goes once nothing is owed" });
+    await eventually(async () => (await hints.locator('button[aria-pressed="true"]').count()) === 1, { label: "the suggested background picked" });
     await t.shot("builder-playstyle");
 
     // The workshop hub starts with four tasks; each opens Create on it.
@@ -180,7 +186,7 @@ export default {
       await t.open("/");
       const rulebook = page.locator('[data-tour="tile-rulebook"]').first();
       await eventually(() => rulebook.count(), { label: "the home's menu" });
-      await sleep(1_500);
+      await untilStill(page);
       const frame = await page.locator(".ts-first").boundingBox();
       for (const tour of ["tile-rulebook", "tile-join", "tile-workshop"]) {
         const box = await page.locator(`[data-tour="${tour}"]`).first().boundingBox();

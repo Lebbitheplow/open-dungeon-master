@@ -147,7 +147,7 @@ export function HeaderPhoneMenu({
               <HeaderGlyph glyph="tab-reference" />
               <span>
                 Help
-                {hint("How everything works, and the guided tours")}
+                {hint("How everything works, the guided tours and Report a problem")}
               </span>
             </DropdownMenu.Item>
           </DropdownMenu.Content>

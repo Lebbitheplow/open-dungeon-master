@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   boardFx,
   boardSnapshot,
@@ -8,6 +8,7 @@ import {
   fileForRequest,
   readViewMessage,
   type Anchor,
+  type AnchorStore,
   type BoardLook,
   type HostMessageBody,
   type ViewCameraState,
@@ -34,6 +35,16 @@ import { useThemePrefs } from "@/lib/theme-mode";
 // taps the built-in grid makes, into the same handlers, so a move, a target
 // or a ping from a 3D view goes through exactly the checks a click on the
 // flat board does.
+//
+// The page is cross-origin isolated (next.config.ts), and the frame is
+// credentialless: it has no cookies or storage of its own to lose, and it
+// loads under the isolated page even from a server older than these headers
+// (the desktop app draws the table from its own page for any server). An
+// addon whose threads permission the admin accepted gets the isolation in
+// its frame too: shared memory between its threads and precise timers.
+
+// Typed apart: React knows the credentialless attribute, its types do not yet.
+const CREDENTIALLESS = { credentialless: true } as Record<string, boolean>;
 
 // The frame's origin is opaque ("null"), so "*" is the only target that
 // reaches it; the message only ever goes to this frame's own window.
@@ -42,6 +53,13 @@ export function postTo(frame: HTMLIFrameElement | null, message: HostMessageBody
 }
 
 const NO_FX: FxEvent[] = [];
+const NO_STORE = () => () => {};
+
+// Where the view drew one figure, for the plate or the action ring that sits
+// on it; only a move of that figure re-renders the caller.
+export function useAnchor(store: AnchorStore | null, tokenId: string): Anchor | undefined {
+  return useSyncExternalStore(store ? store.subscribe : NO_STORE, () => store?.get(tokenId), () => undefined);
+}
 
 export function AddonBoardView({
   view,
@@ -195,6 +213,17 @@ export function AddonBoardView({
       postTo(frame.current, { type: "file", requestId, ok: false, name, error: "Not found." });
     }
 
+    // A view may report its figures several times a frame while its camera
+    // moves; the newest report is passed on once a frame.
+    let anchorFrame = 0;
+    let anchorsWaiting: Record<string, Anchor> | null = null;
+    function passAnchors() {
+      anchorFrame = 0;
+      const tokens = anchorsWaiting;
+      anchorsWaiting = null;
+      if (tokens && latest.current.view) latest.current.onAnchors?.(tokens);
+    }
+
     function onMessage(event: MessageEvent) {
       if (event.source !== frame.current?.contentWindow) return;
       const message = readViewMessage(event.data);
@@ -233,7 +262,10 @@ export function AddonBoardView({
           );
           break;
         case "anchors":
-          if (current.view) current.onAnchors?.(message.tokens);
+          if (current.view) {
+            anchorsWaiting = message.tokens;
+            if (!anchorFrame) anchorFrame = requestAnimationFrame(passAnchors);
+          }
           break;
         case "error":
           setProblem(message.message);
@@ -242,7 +274,10 @@ export function AddonBoardView({
       }
     }
     window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
+    return () => {
+      window.removeEventListener("message", onMessage);
+      cancelAnimationFrame(anchorFrame);
+    };
   }, [boardView.addonId]);
 
   return (
@@ -253,8 +288,9 @@ export function AddonBoardView({
         src={src}
         title={`${boardView.title} board view, from ${boardView.addonName}`}
         sandbox="allow-scripts"
+        {...CREDENTIALLESS}
         referrerPolicy="no-referrer"
-        allow=""
+        allow={boardView.threads ? "cross-origin-isolated" : ""}
         className="block h-full w-full rounded-lg border-0 bg-transparent"
       />
       {problem ? (

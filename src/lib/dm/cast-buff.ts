@@ -60,7 +60,7 @@ const castBuffSchema = z.object({
   characterId: z.string(),
   spell: z.string().max(80),
   level: z.coerce.number().int().min(1).max(9).optional(),
-  targetCharacterIds: z.array(z.string()).max(6).optional(),
+  targetCharacterIds: z.array(z.string()).max(12).optional(),
   // A mark's quarry, Dispel Magic's or a shape spell's target, or an ally creature.
   targetEnemyId: z.string().max(80).optional(),
   variant: z.string().max(40).optional(),

@@ -4,6 +4,20 @@ import { editInitiative, newNpcEntryId, resetInitiative } from "@/lib/dm/initiat
 import { askInitiativeAgain, onPersonsTurn } from "@/lib/dm/invoke";
 import { handOnEnemyTurns, playCompanionTurn } from "@/lib/dm/encounter-tools";
 import { ENTRY_NAME_MAX, MAX_INITIATIVE, MIN_INITIATIVE } from "@/lib/dm/initiative-edit";
+import { correctionsField } from "@/lib/correction-reasons";
+import { getDatabase } from "@/lib/db/core";
+import { getActiveEncounter } from "@/lib/db/encounters";
+import { recordFightCorrection } from "@/lib/db/turn-ledger";
+
+// The edits that correct the order the AI kept (issue #460). Stepping the
+// turn on is a turn ending, and a delay is a combatant's own choice, so
+// neither is a correction.
+function correctsOrder(body: z.infer<typeof bodySchema>): boolean {
+  if (body.op === "step") {
+    return body.direction === "back";
+  }
+  return body.op !== "delay";
+}
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -62,20 +76,35 @@ export async function POST(
     );
     return error ? Response.json({ error }, { status: 409 }) : Response.json({ ok: true });
   }
-  const outcome =
-    body.op === "reset"
-      ? resetInitiative(context.campaign)
-      : editInitiative(
-          context.campaign,
-          // The id for a new slot is minted here rather than in the pure
-          // module, so the edit stays deterministic and testable.
-          body.op === "insert" ? { ...body, id: newNpcEntryId() } : body,
-        );
+  const fight = getActiveEncounter(campaignId);
+  // The edit and its ledger row land together, or neither does.
+  const { outcome, correctionId } = getDatabase().transaction(() => {
+    const result =
+      body.op === "reset"
+        ? resetInitiative(context.campaign)
+        : editInitiative(
+            context.campaign,
+            // The id for a new slot is minted here rather than in the pure
+            // module, so the edit stays deterministic and testable.
+            body.op === "insert" ? { ...body, id: newNpcEntryId() } : body,
+          );
+    const recorded =
+      !("error" in result) && fight && correctsOrder(body)
+        ? recordFightCorrection({
+            campaignId,
+            fightStartedAt: fight.createdAt,
+            kind: "initiative",
+            userId: context.user.id,
+            refId: "id" in body ? body.id : null,
+          })
+        : null;
+    return { outcome: result, correctionId: recorded };
+  })();
   if ("error" in outcome) {
     return Response.json({ error: outcome.error }, { status: 409 });
   }
   // "Have everyone roll again" means asking them: a person has no turn loop
   // to go round the table (src/lib/dm/initiative-ask.ts, issue 63).
   const asked = body.op === "reset" ? askInitiativeAgain(context.campaign) : null;
-  return Response.json({ ok: true, note: outcome.note, ...(asked ?? {}) });
+  return Response.json({ ok: true, note: outcome.note, ...(asked ?? {}), ...correctionsField(correctionId ? [correctionId] : []) });
 }

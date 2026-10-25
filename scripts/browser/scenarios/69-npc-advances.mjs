@@ -5,7 +5,7 @@
 // Accept and Decline at a finger's size; accepting settles the card and
 // Mira's Bonds row reads Courting with its rung; the switch is a real
 // switch that works by keyboard. Checked by axe in the night and day themes.
-import { axeViolations, check, eventually, openPanelTab, sleep } from "../lib.mjs";
+import { axeViolations, check, eventually, openPanelTab, untilStill } from "../lib.mjs";
 
 async function axeClean(page, selector, where) {
   const found = await axeViolations(page, selector);
@@ -14,7 +14,7 @@ async function axeClean(page, selector, where) {
 
 async function inTheme(page, theme) {
   await page.evaluate((value) => (document.documentElement.dataset.theme = value), theme);
-  await sleep(300);
+  await untilStill(page);
 }
 
 export default {

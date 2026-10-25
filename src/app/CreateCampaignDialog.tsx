@@ -1,6 +1,7 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
+import { returnFocus } from "@/components/ui/return-focus";
 import { Loader2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { GoldTitle } from "@/components/ui/GoldTitle";
@@ -491,7 +492,7 @@ export function CreateCampaignDialog({
             sheet on a phone; the rem cap keeps it a dialog on a monitor.
             Wide at lg so the eight portals sit four across; on a phone the
             panel takes nearly the whole width so they still fit two. */}
-        <Dialog.Content
+        <Dialog.Content {...returnFocus}
           ref={shell}
           className="cc-shell panel fixed left-1/2 top-1/2 z-50 flex h-[min(90vh,46rem)] w-[min(96vw,34rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl p-4 sm:p-6 lg:w-[min(96vw,60rem)]"
         >

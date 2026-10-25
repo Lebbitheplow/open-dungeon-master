@@ -81,7 +81,6 @@ export default {
       await eventually(() => page.evaluate(() => window.__odmStreams.length > 0), { label: "the table's event stream" });
       // A key press is the gesture that lets narration play.
       await page.keyboard.press("Shift");
-      await sleep(300);
 
       // Narration plays before any break: the stubs are wired.
       await say("before");
@@ -115,9 +114,10 @@ export default {
       // Narration landing during the break waits.
       const before = (await played()).length;
       await say("during");
+      // Time is the check: narration the break let through would start within this while.
       await sleep(1_500);
       check((await played()).length === before, `narration started during the break: ${(await played()).join(", ")}`);
-      // The clock moves.
+      // The clock moves; time is the check: a running clock would tick within this while.
       await sleep(1_000);
       check(/Paused for ([2-9]|\d\d) s/.test(await banner.innerText()), "the break clock stands still");
       await t.shot("paused");

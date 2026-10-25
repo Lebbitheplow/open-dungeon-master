@@ -2,7 +2,7 @@
 // Arrange, move a card with the arrows and by dragging its handle, see the
 // order kept across a reload (it is saved on the membership), and reset it.
 // Nothing here opens a sheet or changes the table for anyone else.
-import { check, eventually, sleep } from "../lib.mjs";
+import { check, eventually, sleep, upTo } from "../lib.mjs";
 
 export default {
   name: "party-order",
@@ -24,13 +24,14 @@ export default {
     // the party rail opens it where there is one.
     const openParty = async () => {
       await eventually(() => page.locator(`${root}.cine-stage`).count(), { timeoutMs: 30_000, label: "the table's stage" });
-      await sleep(1_500);
+      // A desktop's roster shows its cards by itself; only then are the doors tried.
+      await upTo(async () => (await cards().count()) >= 2, 1_500);
       for (const selector of [`${root}[data-tour="tab-party"]`, `${root}[data-tour="tab-battle"]`, `${root}.cine-party button`]) {
         if ((await cards().count()) >= 2) break;
         const door = page.locator(selector).locator("visible=true").first();
         if (await door.count()) {
           await t.tap(door);
-          await sleep(800);
+          await upTo(async () => (await cards().count()) >= 2, 800);
         }
       }
       await eventually(async () => (await cards().count()) >= 2, { timeoutMs: 30_000, label: "two party cards" });

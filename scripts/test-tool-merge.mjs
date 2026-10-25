@@ -357,6 +357,9 @@ await test("each retired name maps onto its merged tool and routes back to its o
   assert.equal(engineCall("move_token", { tokenName: "t", x: 1, y: 1, forced: true }).name, "move_token");
   assert.equal(engineCall("move_token", { tokenName: "t", x: 1, y: 1, spell: "Misty Step", casterId: "c" }).name, "teleport_token");
   assert.equal(engineCall("party_award", { characterIds: ["c"], amount: 50, delta: 5 }).name, "party_award");
+  // What a description promises reaches the handler on every path.
+  assert.deepEqual(engineCall("apply_damage", { amount: 4, targets: [{ enemyId: "e" }], magical: true, source: "hazard" }).args, { amount: 4, targets: [{ enemyId: "e" }], magical: true, source: "hazard" });
+  assert.equal(engineCall("set_condition", { enemyId: "e", condition: "charmed", saveAbility: "wis", saveDc: 13, magical: true }).args.magical, true);
   // Where a merged tool is offered, its retired names are accepted.
   const offered = new Set(["purchase", "apply_damage"]);
   assert.ok(acceptsCall((name) => offered.has(name), "buy_item"));

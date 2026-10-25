@@ -8,7 +8,7 @@
 // render static markup and never see a missing label, a name a screen reader
 // cannot hear or a contrast below 4.5:1; the next art pass could add any of
 // them unseen.
-import { axeViolations, check, eventually, sleep } from "../lib.mjs";
+import { axeViolations, check, eventually, untilStill, upTo } from "../lib.mjs";
 
 // What axe does not catch: a field caption that names nothing, a tab with no
 // panel, or a score summary laid out as loose spans.
@@ -39,7 +39,7 @@ async function pickerKeys(page, trigger) {
   const problems = [];
   await trigger.focus();
   await page.keyboard.press("ArrowDown");
-  await sleep(200);
+  await upTo(() => page.evaluate(() => document.activeElement?.getAttribute("role") === "listbox"), 2_000);
   const state = () =>
     page.evaluate(() => {
       const focused = document.activeElement;
@@ -65,8 +65,7 @@ async function pickerKeys(page, trigger) {
   }
   problems.push(...report("open list", await axeViolations(page, '[role="listbox"]')));
   await page.keyboard.press("Escape");
-  await sleep(200);
-  const back = await trigger.evaluate((node) => node === document.activeElement && node.getAttribute("aria-expanded") === "false");
+  const back = await upTo(() => trigger.evaluate((node) => node === document.activeElement && node.getAttribute("aria-expanded") === "false"), 2_000);
   if (!back) problems.push("Escape did not close the list and return focus to the trigger");
   return problems;
 }
@@ -121,7 +120,7 @@ async function arrayKeys(page) {
     // Enter on the value already held takes it back, so press it twice then.
     if ((await active()).pressed === "true") await page.keyboard.press("Enter");
     await page.keyboard.press("Enter");
-    await sleep(150);
+    await upTo(async () => (await named(values[at])) && (await active()).pressed === "true", 2_000);
     if (!(await named(values[at])) || (await active()).pressed !== "true") problems.push(`Enter did not give ${ability} ${values[at]}: ${(await active()).label}`);
     if (at === 0) {
       await page.keyboard.press("Tab");
@@ -166,7 +165,7 @@ async function gridKeys(page) {
   const down = await state();
   if (down.index <= 0 || down.top <= top) problems.push(`Arrow Down did not reach the row below (card ${down.index})`);
   await page.keyboard.press("Enter");
-  await sleep(300);
+  await upTo(async () => (await state()).pressed === "true", 2_000);
   if ((await state()).pressed !== "true") problems.push("Enter did not choose the focused card");
   if ((await state()).stops !== 1) problems.push("the grid's tab stop did not follow the arrows");
   await page.keyboard.press("Tab");
@@ -213,14 +212,15 @@ export default {
       const first = page.locator(`${root}button[aria-label^="Back to step 1"]`).locator("visible=true");
       await eventually(() => first.count(), { timeoutMs: 30_000, label: "the first diamond from the summary" });
       await t.tap(first.first());
-      await page.locator(`${root}section[data-active] input[aria-label="Name"]`).locator("visible=true").first().waitFor({ state: "visible", timeout: 30_000 });
+      // Step 1 is the class (backlog F4).
+      await page.locator(`${root}section[data-active] [data-builder-target="class"]`).locator("visible=true").first().waitFor({ state: "visible", timeout: 30_000 });
       for (let step = 1; step <= 6; step += 1) {
         const where = `${condition.label}, step ${step}`;
         if (step > 1) {
           const diamond = page.locator(`${root}button[aria-label^="Go to step ${step}:"]`).locator("visible=true");
           await eventually(async () => (await diamond.count()) && diamond.first().isEnabled(), { timeoutMs: 15_000, label: `the step ${step} diamond` });
           await t.tap(diamond.first());
-          await sleep(700);
+          await untilStill(page);
           // Wizard.tsx moves focus to the new step's title on a step change,
           // so a keyboard or screen reader starts at the top of the step. A
           // step with a card grid then puts the caret in the grid's search
@@ -273,8 +273,8 @@ export default {
       if (!target) return "no visible target";
       target.setAttribute("data-flash", "");
       // A card's own transition runs under the global 0.01ms cap; read the
-      // outline once it has settled, a moment in, as a player would see it.
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      // outline once it has settled, two frames in, as a player would see it.
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       const { outlineStyle, outlineWidth } = getComputedStyle(target);
       target.removeAttribute("data-flash");
       return outlineStyle !== "none" && parseFloat(outlineWidth) > 0 ? "" : `outline ${outlineStyle} ${outlineWidth}`;
@@ -282,26 +282,24 @@ export default {
     await page.emulateMedia({ reducedMotion: null });
     if (outline) found.push(`Show me highlight is invisible with reduced motion: ${outline}`);
 
-    // The lineage carousel over a new character's Ancestry step.
+    // The lineage carousel over a new character's Ancestry step. The first
+    // step is the class (backlog F4): a barbarian owes only its two skills.
     await t.open("/characters/new");
     const fresh = page.locator(`${root}button`).filter({ hasText: /^Start fresh$/ }).locator("visible=true");
     if (await fresh.count()) await t.tap(fresh.first());
-    const name = page.locator(`${root}input[aria-label="Name"]`).locator("visible=true").first();
-    await name.waitFor({ state: "visible", timeout: 30_000 });
-    await name.fill("Axe Check");
-    // The first step owes a background once none is picked for the player
-    // (quick win Q1), so pick one before Continue.
-    await t.tap(page.locator(`${root}section[data-active] [data-builder-target="background"] button[aria-haspopup="listbox"]`).locator("visible=true").first());
-    await t.tap(page.locator(`${root}[role="option"]`).filter({ hasText: "Soldier" }).locator("visible=true").first());
+    const barbarian = page.locator(`${root}section[data-active] .creator-card[aria-label^="Barbarian"]`).locator("visible=true").first();
+    await barbarian.waitFor({ state: "visible", timeout: 30_000 });
+    await t.tap(barbarian);
+    await t.tap(page.locator(`${root}section[data-active] [data-suggest-skills]`).locator("visible=true").first());
     await t.tap(page.locator(`${root}button`).filter({ hasText: /^Continue/ }).locator("visible=true").first());
-    await sleep(900);
     await eventually(() => page.locator(`${root}section[data-active] .creator-card`).locator("visible=true").count(), { timeoutMs: 15_000, label: "the lineage cards" });
+    await untilStill(page);
     found.push(...(await gridKeys(page)).map((problem) => `lineage grid: ${problem}`));
     const details = page.locator(`${root}section[data-active] button[aria-label^="Details"], ${root}section[data-active] .creator-help`).locator("visible=true");
     await eventually(() => details.count(), { timeoutMs: 15_000, label: "a lineage card's details button" });
     await t.tap(details.first());
     await eventually(() => page.locator('[role="dialog"]').count(), { timeoutMs: 10_000, label: "the lineage carousel" });
-    await sleep(500);
+    await untilStill(page);
     found.push(...report("lineage carousel", await axeViolations(page, '[role="dialog"]')));
 
     if (found.length) await t.shot("violations");

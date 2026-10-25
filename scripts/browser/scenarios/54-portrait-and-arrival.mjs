@@ -12,7 +12,7 @@
 // "<name> takes a seat" from its own event stream. With motion it leaves on
 // its own; with Effects set to low it waits for its Dismiss. Escape skips
 // it. The seat is taken back at the end so the lobby stays as seeded.
-import { check, eventually } from "../lib.mjs";
+import { check, eventually, untilStill } from "../lib.mjs";
 
 const PORTRAIT = "/assets/placeholders/character/masculine.webp";
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -90,7 +90,7 @@ export default {
       check((await banner.getByRole("button").count()) === 0, "with motion it carries no button");
       // It covers only the lobby card's art, never another card's words.
       // Measured once its short slide-in has settled.
-      await sleep(600);
+      await untilStill(page);
       const box = await banner.boundingBox();
       const card = await page.locator(".lobby-hero").first().boundingBox();
       check(
@@ -106,12 +106,16 @@ export default {
         window.dispatchEvent(new Event("odm-effects-pref"));
       });
       await unseat();
+      // The lobby counts only a sheet it has not seen (seeSheets, ArrivalBanner.tsx),
+      // so it has to hear the seat empty first, and nothing on its page shows that:
+      // this waits out the event's way to the page.
       await sleep(1_000);
       check((await seat()).ok(), "the seat was taken again");
       await eventually(() => banner.count(), { timeoutMs: 15_000, label: "the still arrival banner" });
       check((await banner.getAttribute("data-still")) === "true", "drawn still under low effects");
       const dismiss = banner.getByRole("button", { name: "Dismiss" });
       check((await dismiss.count()) === 1, "a Dismiss is offered");
+      // Time is the check: the moving banner would have left within this while.
       await sleep(6_000);
       check((await banner.count()) === 1, "it waited past the moving banner's time");
       await t.shot("arrival-still");
@@ -119,12 +123,13 @@ export default {
       await eventually(async () => (await banner.count()) === 0, { label: "Dismiss closing the banner" });
 
       await unseat();
+      // As above: the lobby hears the seat empty before it is taken again.
       await sleep(1_000);
       check((await seat()).ok(), "the seat was taken a third time");
       await eventually(() => banner.count(), { timeoutMs: 15_000, label: "the banner for Escape" });
       // The key is listened for once the banner has painted, as a person
       // would see it; a press in the same frame it appears would be early.
-      await sleep(300);
+      await untilStill(page);
       await page.keyboard.press("Escape");
       await eventually(async () => (await banner.count()) === 0, { label: "Escape closing the banner" });
     } finally {

@@ -4,7 +4,7 @@
 // damage_enemy, set_enemy_condition and teleport_token. On desktop and
 // phone, on the website and in the app's own screens, which an older host
 // would refuse.
-import { check, eventually, openPanelTab, sleep } from "../lib.mjs";
+import { check, eventually, openPanelTab, untilStill } from "../lib.mjs";
 
 export default {
   name: "directed-token-menu",
@@ -47,7 +47,7 @@ export default {
     const amount = page.getByRole("dialog", { name: /^Damage Goblin/ }).getByRole("textbox").first();
     await eventually(() => amount.isVisible(), { label: "the damage prompt" });
     await amount.fill("3");
-    await sleep(300);
+    await untilStill(page);
     await t.shot("damage-prompt");
     await amount.press("Enter");
     await eventually(async () => Number((await enemy())?.currentHp ?? (await enemy())?.hp) === hpBefore - 3, {
@@ -80,7 +80,7 @@ export default {
       const now = await token();
       return now && now.x !== from.x && now.y === from.y;
     }, { timeoutMs: 15_000, label: "the goblin teleported along its row" });
-    await sleep(600);
+    await untilStill(page);
     await t.shot("after-teleport");
   },
 };

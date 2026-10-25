@@ -5,6 +5,7 @@ import { initiativeCharacter, selectedCharacter } from "@/lib/player-characters"
 import { useThemePrefs } from "@/lib/theme-mode";
 import { LevelUpMoment, LootMoment, MomentVeil, RestMoment, TravelBanner } from "@/app/campaigns/[campaignId]/Moments";
 import { CoordinationPanel } from "@/app/campaigns/[campaignId]/CoordinationPanel";
+import { CorrectionReasonChips } from "@/components/CorrectionReasonChips";
 import { haptic, useEffectsRoot, useTurnChime } from "@/lib/effects-mode";
 import { levelForXp } from "@/lib/srd";
 import { transcribesVoice, useCapabilities } from "@/lib/use-capabilities";
@@ -121,8 +122,9 @@ const tablePieces = {
   LoreCheckDialog: preloadable(() => import("@/app/campaigns/[campaignId]/LoreCheckDialog").then((module) => module.LoreCheckDialog)),
   RenarrateDialog: preloadable(() => import("@/app/campaigns/[campaignId]/RenarrateDialog").then((module) => module.RenarrateDialog)),
   LabelSheet: preloadable(() => import("@/app/campaigns/[campaignId]/LabelSheet").then((module) => module.LabelSheet)),
+  ReportProblemDialog: preloadable(() => import("@/components/ReportProblemDialog").then((module) => module.ReportProblemDialog)),
 };
-const { HelpDialog, GuidedTour, CharacterGate, DiceLookDialog, DiceTrayDialog, LoreCheckDialog, RenarrateDialog, LabelSheet } = tablePieces;
+const { HelpDialog, GuidedTour, CharacterGate, DiceLookDialog, DiceTrayDialog, LoreCheckDialog, RenarrateDialog, LabelSheet, ReportProblemDialog } = tablePieces;
 const { BattleMapPanel } = panels;
 
 // True from the first time `open` is true: a dialog mounts then and stays.
@@ -264,8 +266,12 @@ export function SessionView({
   const openDiceTray = useCallback(() => setDiceTrayOpen(true), []);
   const [helpOpen, setHelpOpen] = useState(false);
   const openHelp = useCallback(() => setHelpOpen(true), []);
+  // "Report a problem" (issue #459) is opened from Help.
+  const [reportOpen, setReportOpen] = useState(false);
+  const openReport = useCallback(() => setReportOpen(true), []);
   usePreloadTable();
   const helpMounted = useOpenedOnce(helpOpen);
+  const reportMounted = useOpenedOnce(reportOpen);
   const diceLookMounted = useOpenedOnce(diceLookOpen);
   const diceTrayMounted = useOpenedOnce(diceTrayOpen);
   const tourMounted = useOpenedOnce(tour !== null);
@@ -1008,6 +1014,7 @@ export function SessionView({
         seed={campaign.id}
         dark={state.scene?.isDark}
       />
+      <CorrectionReasonChips campaignId={campaign.id} />
       <SessionHeader
         title={campaign.title}
         scene={campaign.scene}
@@ -1313,6 +1320,7 @@ export function SessionView({
       <HelpDialog
         open={helpOpen}
         onOpenChange={setHelpOpen}
+        onReport={openReport}
         tours={[
           {
             label: "Tour the table",
@@ -1330,6 +1338,10 @@ export function SessionView({
             : []),
         ]}
       />
+      ) : null}
+
+      {reportMounted ? (
+      <ReportProblemDialog open={reportOpen} onOpenChange={setReportOpen} endpoint={`/api/campaigns/${campaign.id}/report-bundle`} />
       ) : null}
 
       {tourMounted ? (

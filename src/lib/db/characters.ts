@@ -56,6 +56,8 @@ export type LibraryCharacter = {
   // The DM's pregen this is a player's copy of (src/lib/db/pregen-offers.ts),
   // or "" for every other character. A duplicate of a copy keeps it.
   pregenOriginId: string;
+  // A pregen the AI DM drafted, not yet edited by its DM.
+  aiDrafted: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -75,6 +77,7 @@ type LibraryRow = {
   workshop_id: string | null;
   offered_to_table?: number | null;
   pregen_origin_id?: string | null;
+  ai_drafted?: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -133,6 +136,7 @@ function mapCharacter(row: LibraryRow): LibraryCharacter {
     workshopId: row.workshop_id ?? "",
     offered: Boolean(row.workshop_id) && row.offered_to_table === 1,
     pregenOriginId: row.pregen_origin_id ?? "",
+    aiDrafted: row.ai_drafted === 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -234,6 +238,26 @@ export function listPregens(userId: string, workshopId: string): LibraryCharacte
   return rows.map(mapCharacter).sort(byName);
 }
 
+// The AI DM's drafted pregens, stored together or not at all: each an
+// ordinary player character filed under the workshop, not offered to
+// players, and marked as drafted until the DM edits it. Each sheet has
+// already passed the library's door (src/lib/characters/admit.ts).
+export function createDraftedPregens(
+  userId: string,
+  workshopId: string,
+  drafts: Array<{ level: number; sheet: CreateSheetInput }>,
+): LibraryCharacter[] {
+  const db = getDatabase();
+  const ids = db.transaction(() =>
+    drafts.map(({ level, sheet }) => {
+      const character = createCharacter(userId, level, sheet, "pc", workshopId);
+      db.prepare(`UPDATE library_characters SET ai_drafted = 1, offered_to_table = 0 WHERE id = ?`).run(character.id);
+      return character.id;
+    }),
+  )();
+  return ids.map((id) => getCharacter(id)).filter((character): character is LibraryCharacter => Boolean(character));
+}
+
 // Files a library character under a workshop as a pregen, or takes it out
 // ("" for the workshop). The sheet is untouched either way: a pregen is an
 // ordinary character the workshop happens to list.
@@ -317,7 +341,7 @@ export function updateCharacter(
       `
         UPDATE library_characters SET
           name = ?, role = ?, race = ?, class = ?, subclass = ?, background = ?,
-          level = ?, xp = ?, sheet_json = ?, updated_at = ?
+          level = ?, xp = ?, sheet_json = ?, ai_drafted = 0, updated_at = ?
         WHERE id = ?
       `,
     )

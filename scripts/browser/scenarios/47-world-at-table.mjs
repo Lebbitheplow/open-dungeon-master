@@ -4,7 +4,7 @@
 // is refused the world's route; and once a person holds the DM seat, the
 // World tab sits beside their console. The quiet table goes back to the AI
 // whatever happens, since every viewport and later scenario shares it.
-import { check, eventually, newContext, openPanelTab, settle, signIn, sleep } from "../lib.mjs";
+import { check, eventually, newContext, openPanelTab, settle, signIn, hydrated } from "../lib.mjs";
 
 export default {
   name: "world-at-table",
@@ -44,7 +44,7 @@ export default {
       await signIn(playerContext, base, ids.player, ids.password);
       const playerPage = await playerContext.newPage();
       await playerPage.goto(`${base}/campaigns/${ids.quietId}`, { waitUntil: "networkidle", timeout: 120_000 });
-      await sleep(1_500);
+      await hydrated(playerPage);
       await settle(playerPage);
       const partyTab = playerPage.locator('[data-tour="tab-party"]').locator("visible=true").first();
       const more = playerPage.locator('[data-tour="tab-more"]').locator("visible=true").first();
@@ -52,7 +52,7 @@ export default {
       check((await playerPage.locator('[data-tour="tab-world"]').count()) === 0, "the player has no World tab");
       if (await more.count()) {
         await (t.touch ? more.tap() : more.click());
-        await sleep(400);
+        await eventually(() => playerPage.locator("[data-more-tab]").count(), { label: "the player's More sheet" });
         check((await playerPage.locator('[data-more-tab="world"]').count()) === 0, "nor one under More");
         await playerPage.keyboard.press("Escape");
       }

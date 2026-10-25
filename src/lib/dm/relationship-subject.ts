@@ -2,7 +2,7 @@ import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { getSheetById } from "@/lib/db/sheets";
 import { insertCharacterEvent } from "@/lib/db/character-events";
 import { insertFact } from "@/lib/db/facts";
-import { getNpcByName, nearestNpcName, setNpcAttitude, standsBehindLiveCompanion, type Npc } from "@/lib/db/npcs";
+import { getNpcByName, markNpcMet, nearestNpcName, setNpcAttitude, standsBehindLiveCompanion, type Npc } from "@/lib/db/npcs";
 import { companionNpcFor } from "@/lib/db/companion-npcs";
 import { settleConsciences } from "@/lib/dm/conscience";
 import {
@@ -99,6 +99,11 @@ export function resolveActor(
 }
 
 export function openLedger(campaign: Campaign, sheet: CharacterSheet, subject: Subject): Relationship {
+  // A moment between a character and an NPC means the party has met them
+  // (Npc.metAt): a reaction roll no longer applies.
+  if (subject.npc) {
+    markNpcMet(subject.npc.id);
+  }
   return (
     getRelationship(campaign.id, sheet.id, subject.name) ??
     ensureRelationship({

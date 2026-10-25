@@ -21,6 +21,9 @@ import { resolveInside } from "@/lib/addons/paths";
 //     the table from its own file:// page and frames the host from there.
 //   - Access-Control-Allow-Origin: *, because the frame's opaque origin
 //     makes even its own module scripts cross-origin requests.
+//   - Cross-Origin-Embedder-Policy credentialless, so the page can be framed
+//     by the cross-origin isolated table (next.config.ts) in a browser that
+//     does not know credentialless frames, and its workers inherit it.
 
 const CONTENT_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -92,6 +95,7 @@ export async function serveAddonFile(root: string, segments: string[], maxBytes:
       "Referrer-Policy": "no-referrer",
       "Access-Control-Allow-Origin": "*",
       "Cross-Origin-Resource-Policy": "cross-origin",
+      "Cross-Origin-Embedder-Policy": "credentialless",
       "Cache-Control": "no-cache",
     },
   });

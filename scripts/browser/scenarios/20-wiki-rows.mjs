@@ -4,7 +4,7 @@
 // minimum height). Sixty entries in a fresh workshop: every row keeps its
 // height, none is drawn over its neighbour, and the list scrolls instead.
 // Measured, not read: the unit suite renders no layout.
-import { check, eventually, sleep } from "../lib.mjs";
+import { check, eventually, untilStill } from "../lib.mjs";
 
 const COUNT = 60;
 
@@ -26,7 +26,7 @@ export default {
       await eventually(() => list.count(), { timeoutMs: 30_000, label: "the wiki's entry list" });
       await eventually(async () => (await list.locator(`[role="option"]`).count()) >= COUNT, { timeoutMs: 30_000, label: `${COUNT} entries listed` });
       // The rows arrive one after another; measure them settled.
-      await sleep(1_200);
+      await untilStill(page);
       const metrics = await list.evaluate((node) => {
         const rows = [...node.querySelectorAll('[role="option"]')].map((row) => row.getBoundingClientRect());
         return {

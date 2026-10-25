@@ -23,6 +23,9 @@ export type CampaignMessage = {
   // Absent until the first reroll; content always mirrors the selected entry.
   variants?: string[];
   variantIndex?: number;
+  // The take in variants a person wrote by editing the narration; the
+  // narrator's takes stay beside it (issue #460). Absent when nobody has.
+  editedTake?: number;
   // The dm_turns row this message came from, serving two features. On a DM
   // narration it is the turn a reroll replays the stored conversation of. On
   // the "DM ran into a problem" system notice it is the turn the lead can
@@ -60,6 +63,7 @@ type MessageRow = {
   location_id: string | null;
   variants_json: string | null;
   variant_index: number | null;
+  edited_take?: number | null;
   dm_turn_id: string | null;
   speaker_json: string | null;
   intent_json?: string | null;
@@ -83,6 +87,7 @@ function mapMessage(row: MessageRow): CampaignMessage {
     locationId: row.location_id ?? undefined,
     variants: parseJson<string[] | undefined>(row.variants_json, undefined),
     variantIndex: row.variant_index ?? undefined,
+    editedTake: row.edited_take ?? undefined,
     dmTurnId: row.dm_turn_id ?? undefined,
     speaker: normalizeSpeaker(parseJson<unknown>(row.speaker_json ?? "null", null)) ?? undefined,
     intent: parseMessageIntent(parseJson<unknown>(row.intent_json ?? "null", null)) ?? undefined,
@@ -285,7 +290,7 @@ export function updateMessageContent(messageId: string, content: string, speech:
       // Clearing the reroll takes keeps content === variants[variant_index]:
       // an accepted rewrite supersedes every take, and browsing back to one
       // afterwards would silently undo the fix.
-      `UPDATE campaign_messages SET content = ?, speech_json = ?, variants_json = NULL, variant_index = NULL WHERE id = ?`,
+      `UPDATE campaign_messages SET content = ?, speech_json = ?, variants_json = NULL, variant_index = NULL, edited_take = NULL WHERE id = ?`,
     )
     .run(content, speech.length ? JSON.stringify(speech) : null, messageId);
   return result.changes > 0 ? getCampaignMessage(messageId) : null;
@@ -312,15 +317,21 @@ export function setMessageVariants(
   variants: string[],
   index: number,
   speech: readonly SpokenLine[],
+  // Which take a person wrote (an edit, issue #460); left out, it is kept.
+  editedTake?: number,
 ): CampaignMessage | null {
   const selected = variants[index];
   if (selected === undefined) {
     return null;
   }
-  const result = getDatabase()
-    .prepare(
-      `UPDATE campaign_messages SET variants_json = ?, variant_index = ?, content = ?, speech_json = ? WHERE id = ?`,
-    )
-    .run(JSON.stringify(variants), index, selected, speech.length ? JSON.stringify(speech) : null, messageId);
+  const db = getDatabase();
+  const result =
+    editedTake === undefined
+      ? db
+          .prepare(`UPDATE campaign_messages SET variants_json = ?, variant_index = ?, content = ?, speech_json = ? WHERE id = ?`)
+          .run(JSON.stringify(variants), index, selected, speech.length ? JSON.stringify(speech) : null, messageId)
+      : db
+          .prepare(`UPDATE campaign_messages SET variants_json = ?, variant_index = ?, content = ?, speech_json = ?, edited_take = ? WHERE id = ?`)
+          .run(JSON.stringify(variants), index, selected, speech.length ? JSON.stringify(speech) : null, editedTake, messageId);
   return result.changes > 0 ? getCampaignMessage(messageId) : null;
 }

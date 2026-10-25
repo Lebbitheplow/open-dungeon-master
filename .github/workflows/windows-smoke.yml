@@ -10,17 +10,20 @@ on:
     branches: [main]
   pull_request:
 
-jobs:
-  windows-smoke:
-    runs-on: windows-2025-vs2026
-    # The same ceiling as the Linux smoke. The suite alone takes 15 to 16
-    # minutes on this runner and the build another 1.5, so 20 left no room:
-    # main already ran at 18.5 of them, and the next suites tipped a run
-    # into a cancelled build with every check passed.
-    timeout-minutes: 45
-    permissions:
-      contents: read
+permissions:
+  contents: read
 
+# A newer push to a pull request replaces its run still going; every commit
+# on main keeps its own.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: windows build
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 20
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
@@ -37,9 +40,6 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Tests
-        run: npm test
-
       - name: Build
         run: npm run build
 
@@ -47,3 +47,30 @@ jobs:
       # compiled server has to keep its Windows branches wherever it is built.
       - name: The built server keeps its Windows code
         run: node scripts/check-built-platform.mjs
+
+  # The suite took 30 of its 45 minutes in one job by 0.30.0; the runners
+  # share its files instead, each running its share a few at a time
+  # (vitest.config.mts).
+  tests:
+    name: windows tests (${{ matrix.shard }}/3)
+    runs-on: windows-2025-vs2026
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Tests
+        run: npm test -- --shard=${{ matrix.shard }}/3

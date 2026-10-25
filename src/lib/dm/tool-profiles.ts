@@ -120,7 +120,7 @@ export const TOOL_GROUPS: Record<ToolGroupId, { summary: string; tools: readonly
     tools: ["set_movement", "declare_intent"],
   },
   legendary: { summary: "legendary actions, legendary resistance and lair actions", tools: ["legendary_action", "legendary_resist", "lair_action"] },
-  hazards: { summary: "falls, traps, drowning, suffocation, extreme heat and cold", tools: ["apply_hazard"] },
+  hazards: { summary: "falls, traps, drowning, suffocation, extreme heat and cold", tools: ["apply_hazard", "use_reaction"] },
   world: {
     summary: "treasure hoards, overland travel, passing time, weather, breaking objects, a title card",
     tools: ["roll_treasure", "damage_object", "travel", "pass_time", "set_weather", "show_title"],
@@ -316,7 +316,12 @@ function compactSchema(value: unknown): unknown {
 }
 
 // A tool with its descriptions cut to their first sentence; names, kinds,
-// enums and what is required are untouched.
+// enums and what is required are untouched. The cut is safe because every
+// description is written to be cut: its first sentence stands alone, within
+// the caps above, and carries what the model must get right (what the tool
+// does or the field is, and the values, codes or ids the engine reads); what
+// follows is detail, examples and edge cases a cut may drop.
+// scripts/test-tool-descriptions.mjs holds it.
 export function compactTool<T extends ToolDefLike>(tool: T): T {
   return {
     ...tool,

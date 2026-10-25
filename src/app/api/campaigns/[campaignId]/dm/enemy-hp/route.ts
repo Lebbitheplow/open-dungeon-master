@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { isErrorResponse, requireDm } from "@/lib/campaign-api";
+import { correctionsField } from "@/lib/correction-reasons";
+import { getDatabase } from "@/lib/db/core";
 import { getActiveEncounter, getEnemy, patchEnemyConditions, patchEnemyHp } from "@/lib/db/encounters";
+import { recordFightCorrection } from "@/lib/db/turn-ledger";
 import { enemyHpCorrection } from "@/lib/dm/catalog-enemy-hp";
 import { publishEncounter } from "@/lib/dm/enemy-damage";
 import type { ConditionMetaMap } from "@/lib/dm/condition-logic";
@@ -38,23 +41,36 @@ export async function POST(
   if ("error" in correction) {
     return Response.json({ error: correction.error }, { status: 409 });
   }
-  patchEnemyHp(enemy.id, correction.currentHp, "alive");
-  if (correction.wakes) {
-    const meta = { ...(enemy.conditionMeta as ConditionMetaMap) };
-    const kept = enemy.conditions.filter((entry) => {
-      const woke = entry.trim().toLowerCase() === "unconscious";
-      if (woke) {
-        delete meta[entry];
-      }
-      return !woke;
+  // The fix and its ledger row (issue #460) land together: the fight's
+  // latest AI turn is the one corrected, inferred, since the fix names only
+  // the enemy. Nothing is recorded at a table a person runs.
+  const correctionId = getDatabase().transaction(() => {
+    patchEnemyHp(enemy.id, correction.currentHp, "alive");
+    if (correction.wakes) {
+      const meta = { ...(enemy.conditionMeta as ConditionMetaMap) };
+      const kept = enemy.conditions.filter((entry) => {
+        const woke = entry.trim().toLowerCase() === "unconscious";
+        if (woke) {
+          delete meta[entry];
+        }
+        return !woke;
+      });
+      patchEnemyConditions(enemy.id, kept, meta);
+    }
+    return recordFightCorrection({
+      campaignId,
+      fightStartedAt: encounter.createdAt,
+      kind: "enemy_hp",
+      userId: context.user.id,
+      refId: enemy.id,
     });
-    patchEnemyConditions(enemy.id, kept, meta);
-  }
+  })();
   publishEncounter(campaignId);
   return Response.json({
     ok: true,
     name: enemy.displayName,
     hp: `${correction.currentHp}/${enemy.maxHp}`,
     ...(correction.wakes ? { woke: true } : {}),
+    ...correctionsField(correctionId ? [correctionId] : []),
   });
 }

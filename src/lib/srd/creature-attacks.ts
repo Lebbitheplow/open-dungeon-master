@@ -157,7 +157,7 @@ function enemyRider(onHit: CreatureOnHit): OnHitRider | undefined {
     ...(onHit.repeatSave ? { repeatSave: true } : {}),
     ...(onHit.maxSize ? { maxSize: onHit.maxSize } : {}),
     ...(onHit.drainMaxHp ? { drainMaxHp: onHit.drainMaxHp } : {}),
-    ...(manual.length ? { manual } : {}),
+    ...(manual.length ? { manual: manual.slice(0, 6) } : {}),
   };
   return Object.keys(rider).length ? rider : undefined;
 }
@@ -177,4 +177,65 @@ export function enemyAttackOf(attack: CreatureAttack): EnemyAttack {
     ...(attack.riders?.length ? { riders: attack.riders.map((entry) => ({ dice: entry.dice, type: entry.type })) } : {}),
     ...(rider ? { onHit: rider } : {}),
   };
+}
+
+// The other way: an attack as an enemy's stat block holds it, made by a
+// creature bound to a character (a story pet the table built in the
+// workshop, src/lib/dm/pet-build.ts). The block's damage carries its riders'
+// dice ("1d8+3+2d6"), so each rider's dice come out of the hit's own and
+// ride it again under their own type. A rider whose dice the expression does
+// not hold as written stays in the hit's dice, never counted twice. What
+// the natural-attack engine has no field for is named to the DM.
+export function creatureAttackOf(attack: EnemyAttack): CreatureAttack {
+  const terms = attack.damage.replace(/\s+/g, "").match(/[+-]?[^+-]+/g) ?? [attack.damage];
+  const riders: CreatureRider[] = [];
+  for (const rider of attack.riders ?? []) {
+    const at = terms.findIndex((term, index) => index > 0 && term.replace(/^\+/, "") === rider.dice.replace(/\s+/g, ""));
+    if (at > 0) {
+      terms.splice(at, 1);
+      riders.push({ dice: rider.dice, type: rider.type });
+    }
+  }
+  const own = terms.join("").replace(/^\+/, "") || attack.damage;
+  const ranged = attack.mode === "ranged" || attack.mode === "both";
+  const onHit = attack.onHit ? creatureRider(attack.onHit) : undefined;
+  return {
+    name: attack.name,
+    toHit: attack.toHit,
+    damage: own,
+    type: attack.type.split("/")[0] ?? "",
+    ...(!ranged || attack.mode === "both" ? { reach: attack.reach ?? 5 } : {}),
+    ...(ranged && attack.range ? { range: attack.range.normal, longRange: attack.range.long } : {}),
+    ...(attack.mode === "both" ? { thrown: true } : {}),
+    ...(riders.length ? { riders } : {}),
+    ...(onHit ? { onHit } : {}),
+  };
+}
+
+function creatureRider(onHit: OnHitRider): CreatureOnHit | undefined {
+  const manual = [...(onHit.manual ?? [])];
+  if (onHit.swallow) {
+    manual.unshift("The target is swallowed whole: the DM resolves it.");
+  }
+  if (onHit.drainMaxHp === "necrotic") {
+    manual.unshift("Its hit point maximum falls by the necrotic damage taken: the DM applies it.");
+  }
+  if (onHit.untilLongRest || onHit.lasting) {
+    manual.push("The condition lasts until a long rest or a cure ends it.");
+  }
+  const rider: CreatureOnHit = {
+    ...(onHit.save ? { save: onHit.save } : {}),
+    ...(onHit.dc ? { dc: onHit.dc } : {}),
+    ...(onHit.condition ? { condition: onHit.condition } : {}),
+    ...(onHit.alsoCondition ? { alsoCondition: onHit.alsoCondition } : {}),
+    ...(onHit.damage ? { damage: onHit.damage, ...(onHit.damageType ? { damageType: onHit.damageType } : {}) } : {}),
+    ...(onHit.halfOnSave ? { halfOnSave: true } : {}),
+    ...(onHit.escapeDc ? { escapeDc: onHit.escapeDc } : {}),
+    ...(onHit.rounds ? { rounds: onHit.rounds } : {}),
+    ...(onHit.repeatSave ? { repeatSave: true } : {}),
+    ...(onHit.maxSize ? { maxSize: onHit.maxSize } : {}),
+    ...(onHit.drainMaxHp === "all" ? { drainMaxHp: "all" as const } : {}),
+    ...(manual.length ? { manual: manual.slice(0, 6) } : {}),
+  };
+  return Object.keys(rider).length ? rider : undefined;
 }

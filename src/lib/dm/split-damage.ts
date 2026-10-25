@@ -38,8 +38,10 @@ const targetSchema = z.object({
 });
 
 const splitSchema = z.object({
-  amount: z.coerce.number().int().min(1).max(500),
+  amount: z.coerce.number().int().min(1).max(200),
   type: z.string().max(30).optional(),
+  magical: z.coerce.boolean().optional(),
+  source: z.enum(["hazard", "environment"]).optional(),
   targets: z.array(targetSchema).min(1).max(20),
   reason: z.string().optional(),
 });
@@ -58,6 +60,14 @@ export function handleSplitDamage(
     return { error: "apply_damage with targets needs an amount (or dice) and at least one target.", retry: true };
   }
 
+  // The rule damage_enemy holds (encounter-tools.ts): the model hurts an
+  // enemy here only with a hazard or the environment, never a blow.
+  if (turn.actor === "ai" && args.targets.some((target) => target.enemyId) && args.source === undefined) {
+    return {
+      error: "apply_damage on an enemy takes only harm no creature's attack deals: send source 'hazard' or 'environment' with the reason. A character's attack is pc_attack; a spell is cast_at_enemy or aoe_damage.",
+      retry: true,
+    };
+  }
   const encounter = getActiveEncounter(campaign.id);
   const applied: string[] = [];
   const skipped: string[] = [];
@@ -97,11 +107,12 @@ export function handleSplitDamage(
         sheets,
         sheetsById,
         args.type,
+        { magical: args.magical === true },
       );
       applied.push(
         "error" in result
           ? `${enemy.displayName}: ${String(result.error)}`
-          : `${enemy.displayName} takes ${amount}${result.dead ? " and falls" : ""}`,
+          : `${enemy.displayName} takes ${typeof result.damageApplied === "number" ? result.damageApplied : amount}${result.dead ? " and falls" : ""}`,
       );
       continue;
     }
@@ -115,6 +126,7 @@ export function handleSplitDamage(
           characterId: target.characterId,
           amount,
           type: args.type,
+          ...(args.magical ? { magical: true } : {}),
           reason: args.reason,
         }),
         sheets,
@@ -124,7 +136,7 @@ export function handleSplitDamage(
       applied.push(
         "error" in outcome.result
           ? `${name}: ${String(outcome.result.error)}`
-          : `${name} takes ${amount}`,
+          : `${name} is dealt ${amount}${typeof outcome.result.resistance === "string" ? ` (${outcome.result.resistance})` : ""}, now ${String(outcome.result.hp)} HP`,
       );
       continue;
     }
