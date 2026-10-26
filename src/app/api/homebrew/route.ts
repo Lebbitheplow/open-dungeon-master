@@ -1,6 +1,6 @@
 import { currentUser, unauthorized } from "@/lib/auth";
 import { createHomebrew, listHomebrew } from "@/lib/db/homebrew";
-import { normalizeHomebrewData } from "@/lib/homebrew/gear";
+import { normalizeHomebrewForSave } from "@/lib/homebrew/species-choice-server";
 import { homebrewLimitProblems } from "@/lib/homebrew/limits";
 import { serverPublishedNameProblem } from "@/lib/homebrew/published-names-server";
 import { forgetTableFeats } from "@/lib/db/table-feats";
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
   if (over) {
     return Response.json({ error: over.text, field: over.field }, { status: 400 });
   }
-  const normalized = normalizeHomebrewData(parsed.data.kind, parsed.data.data, parsed.data.name);
+  const normalized = normalizeHomebrewForSave(parsed.data.kind, parsed.data.data, parsed.data.name);
   if ("error" in normalized) {
     return Response.json({ error: normalized.error }, { status: 400 });
   }

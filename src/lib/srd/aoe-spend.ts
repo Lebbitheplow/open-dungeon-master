@@ -7,9 +7,11 @@
 // ancestry sets the damage type and whether the save is Dexterity or
 // Constitution (SRD 5.1, Dragonborn). A dragonborn stored before the ancestry
 // was chosen has none, and keeps the counter's own dice and Dexterity save.
+// A workshop species' option writes its own breath (a type, a shape and any
+// save), which scales the same way.
 
 import type { ResourceDef, SaveAbilityId } from "@/lib/srd/class-resources";
-import { ancestryOf, breathWeaponFor, findDraconicAncestry } from "@/lib/srd/racial-grants";
+import { ancestryOf, breathWeaponFor, findDraconicAncestry, variantBreathOf } from "@/lib/srd/racial-grants";
 
 export type AoeSpend = {
   dice: string;
@@ -24,10 +26,11 @@ type AoeHolder = {
   racialChoices?: { ancestry?: string } | null;
 };
 
-// The ancestry a sheet holds: the race feature the creation check writes,
-// else the choice stored beside the race.
+// The breath a sheet holds: an option's own, the ancestry's race feature the
+// creation check writes, else the choice stored beside the race.
 function heldAncestry(sheet: AoeHolder) {
-  return ancestryOf(sheet.features ?? []) ?? findDraconicAncestry(sheet.racialChoices?.ancestry);
+  const features = sheet.features ?? [];
+  return variantBreathOf(features) ?? ancestryOf(features) ?? findDraconicAncestry(sheet.racialChoices?.ancestry);
 }
 
 // `level` is the level the counter scales by (resourceLevel: the character

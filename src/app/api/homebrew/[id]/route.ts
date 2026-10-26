@@ -2,7 +2,7 @@ import { currentUser, unauthorized } from "@/lib/auth";
 import { archiveHomebrew, deleteHomebrew, getHomebrew, restoreHomebrew } from "@/lib/db/homebrew";
 import { updateHomebrewCarried } from "@/lib/db/homebrew-rename";
 import { serverPublishedNameProblem } from "@/lib/homebrew/published-names-server";
-import { normalizeHomebrewData } from "@/lib/homebrew/gear";
+import { normalizeHomebrewForSave } from "@/lib/homebrew/species-choice-server";
 import { homebrewLimitProblems } from "@/lib/homebrew/limits";
 import { patchHomebrewSchema } from "@/lib/schemas/homebrew";
 import { forgetSpeciesRules } from "@/lib/characters/species-rules";
@@ -62,7 +62,7 @@ export async function PATCH(
     if (over) {
       return Response.json({ error: over.text, field: over.field }, { status: 400 });
     }
-    const normalized = normalizeHomebrewData(existing.kind, data, parsed.data.name ?? existing.name);
+    const normalized = normalizeHomebrewForSave(existing.kind, data, parsed.data.name ?? existing.name);
     if ("error" in normalized) {
       return Response.json({ error: normalized.error }, { status: 400 });
     }

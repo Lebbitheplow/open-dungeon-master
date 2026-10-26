@@ -70,6 +70,8 @@ import { judgeProficiencies } from "@/lib/srd/legality/proficiencies";
 import { applySubclassTraining, autoSubclassPicks, subclassFixedTraining, subclassGrants } from "@/lib/srd/subclass-training";
 import { castingClassesOf, judgeSpellcasting } from "@/lib/srd/legality/spells";
 import { judgeRacialCantrips } from "@/lib/srd/legality/racial-cantrips";
+import { judgeSpeciesVariant, withoutOldVariant } from "@/lib/srd/legality/species-variant";
+import { withHeldVariant } from "@/lib/content/species-variants";
 import { racialCantripFields } from "@/lib/srd/racial-cantrips";
 import {
   type ClassGrants,
@@ -188,12 +190,13 @@ function subclassesOf(
   });
 }
 
+// `race` with its species option folded in, so a pick of the player's choice
+// cannot stack on the ability the option raises.
 function racialIncrease(
   input: CreateSheetInput,
-  context: LegalityContext,
+  race: NonNullable<LegalityContext["race"]>,
   problems: string[],
 ): { racial: Partial<Record<Ability, number>>; picks: Ability[] } {
-  const race = context.race!;
   const racial: Partial<Record<Ability, number>> = { ...race.asi };
   const sent = input.racialChoices?.asi ?? [];
   const choice = race.asiChoice;
@@ -265,8 +268,8 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
   const policy = policyFor(context);
   const level = Math.max(1, Math.min(20, Math.floor(context.level)));
   const klass = context.classOf(input.class);
-  const { race, background } = context;
-  if (context.door === "stored" && (!klass || !race)) {
+  const { race: baseRace, background } = context;
+  if (context.door === "stored" && (!klass || !baseRace)) {
     // A character stored with a class or a race no table describes (made
     // when any name was taken) has nothing to be derived from. It enters
     // play as it was stored, which is how it has always played.
@@ -277,7 +280,7 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
       `"${input.class}" is not a class this server knows; pick one from the builder's list.`,
     );
   }
-  if (!race) {
+  if (!baseRace) {
     problems.push(`"${input.race}" is not a race this server knows; pick one from the builder's list.`);
   }
   if (input.background.trim() && !background && context.door !== "stored") {
@@ -285,10 +288,24 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
       `"${input.background}" is not a background this server knows; pick one from the builder's list.`,
     );
   }
-  if (!klass || !race) {
+  if (!klass || !baseRace) {
     return { problems, sheet: input };
   }
   const held = policy.trustsHeld ? input : (context.baseline?.sheet ?? null);
+
+  // ---- the species' own choice ----
+  // The option picked (a Half-Dragon's ancestry), folded into the race every
+  // rule below reads: its scores, skills, tools and languages.
+  const speciesChoice = judgeSpeciesVariant({
+    race: baseRace,
+    picked: (input.racialChoices?.variant ?? "").trim(),
+    heldGrants: input.racialChoices?.variantGrants,
+    door: context.door,
+    ...policy,
+    rollDie: context.rollDie,
+  });
+  problems.push(...speciesChoice.problems);
+  const race = speciesChoice.race;
 
   // ---- classes and subclasses ----
   const classes = subclassesOf(
@@ -358,14 +375,17 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
   const takesHalfFeats = policy.made || policy.edit;
   const featText = (feat: string) => context.featOf(feat)?.desc ?? "";
   const halfFeats = halfFeatPicks({ ...input, feats: feats.feats }, race.feats, featText);
-  const increase = racialIncrease(input, context, problems);
+  const increase = racialIncrease(input, race, problems);
   // On an edit the stored scores are a pool too: they may be moved about,
-  // as the builder lets them be, and not raised.
+  // as the builder lets them be, and not raised. They carry what the stored
+  // character's option gave it (which an edit may swap for another, and the
+  // workshop may since have changed or removed) and its own racial picks,
+  // not the ones the edit sends.
   const storedPool = context.baseline
     ? Object.values(
         baseSpans({
           scores: context.baseline.sheet.abilities,
-          racial: increase.racial,
+          racial: racialIncrease(context.baseline.sheet, withHeldVariant(baseRace, context.baseline.sheet.racialChoices), []).racial,
           recorded: context.baseline.sheet.asiChoices ?? [],
           halfFeats: halfFeatPoints(halfFeatPicks(context.baseline.sheet, race.feats, featText)),
           freePoints: 0,
@@ -489,9 +509,13 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
     // again from what the new one offers.
     // The picks its feats made come off first and go back on below, so an
     // edit that re-picks Linguist's languages replaces them (issue #125).
+    // An option of the species given up takes its grants with it; a stored
+    // character entering play keeps what it holds.
     held:
       held && held.class === input.class && held.race === input.race && held.background === input.background
-        ? withoutFeatPicks(held.proficiencies, held.featChoices)
+        ? policy.trustsHeld
+          ? withoutFeatPicks(held.proficiencies, held.featChoices)
+          : withoutOldVariant(withoutFeatPicks(held.proficiencies, held.featChoices), baseRace, held.racialChoices, speciesChoice.option)
         : null,
     // The builder's doors name the tools an open grant leaves to the player.
     requireToolPicks: context.door === "table" || context.door === "library",
@@ -549,7 +573,7 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
   if (policy.judgesPicks) {
     problems.push(...taught.problems);
   }
-  const owed = [...(granted.owed ?? []), ...(bySubclass.owed ?? []), ...(taught.owed ?? [])];
+  const owed = [...speciesChoice.owed, ...(granted.owed ?? []), ...(bySubclass.owed ?? []), ...(taught.owed ?? [])];
   // Elemental Adept's type is kept the same way ("Elemental Adept: fire").
   const elementPicks = feats.feats.flatMap((name) => {
     const spec = featGrantSpec(context.featOf(name)?.desc ?? "");
@@ -619,7 +643,8 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
     : judgeFeatures({
         sent: (input.features ?? []).filter((feature) => !isAncestry(feature) && !featDerived(feature.name)),
         held: (held?.features ?? []).filter((feature) => !featDerived(feature.name)),
-        raceTraits: bundledTraits ? [] : race.traitNames,
+        // Written afresh every time, so an option given up leaves nothing.
+        raceTraits: [...(bundledTraits ? [] : race.traitNames), ...speciesChoice.traits],
         backgroundFeature: backgroundFeatureOf(background),
         derived: [...(casts ? [] : racialPicks.map((name) => `Racial cantrip: ${name}`)), ...freeCasts],
         allowPlainStory: policy.plainStory,
@@ -765,6 +790,8 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
       ...racialCantripFields(racialPicks),
       tool: race.toolChoice ? (input.racialChoices?.tool ?? "") : "",
       ancestry: ancestry?.id ?? "",
+      variant: speciesChoice.variant,
+      ...(speciesChoice.grants ? { variantGrants: speciesChoice.grants } : {}),
       ...(race.feats && input.racialChoices?.featAbility
         ? { featAbility: input.racialChoices.featAbility }
         : {}),

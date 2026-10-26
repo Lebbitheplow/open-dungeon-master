@@ -18,6 +18,7 @@ import { SelectedPrerequisite } from "./AsiFeatEditor";
 import { judgeEntry, useFeatJudge } from "./featPrereqs";
 import { racialFeatCount } from "@/lib/srd/race-id";
 import { DRACONIC_ANCESTRIES, takesDraconicAncestry } from "@/lib/srd/racial-grants";
+import { variantShort, variantSummary } from "@/lib/content/species-variants";
 import { Chip } from "./steps/shared";
 import { RacialCantripPicker } from "./RacialCantripPicker";
 import { featChoice } from "@/lib/schemas/sheet";
@@ -52,6 +53,8 @@ export function RacialChoicesSection({
   onToolChange,
   ancestry = "",
   onAncestryChange,
+  variant = "",
+  onVariantChange,
   repeated = [],
   repeatSkills = [],
   onRepeatChange,
@@ -80,6 +83,10 @@ export function RacialChoicesSection({
   // A dragonborn's draconic ancestry, by id.
   ancestry?: string;
   onAncestryChange?: (ancestry: string) => void;
+  // The option of a workshop species' choice (a Half-Dragon's ancestry), by
+  // id, for a race that offers one.
+  variant?: string;
+  onVariantChange?: (variant: string) => void;
   // Skills the race and the background both give, and the ones chosen in
   // their place.
   repeated?: string[];
@@ -105,8 +112,9 @@ export function RacialChoicesSection({
   const draconic = takesDraconicAncestry(race.id);
   const racialFeats = onFeatsChange ? racialFeatCount(race.id) : 0;
   const hasChoices = Boolean(
-    race.asiChoice || race.skillChoice || race.cantripChoice || race.toolChoice || draconic || repeated.length || racialFeats,
+    race.asiChoice || race.skillChoice || race.cantripChoice || race.toolChoice || draconic || race.variants || repeated.length || racialFeats,
   );
+  const chosen = race.variants?.options.find((option) => option.id === variant) ?? null;
   // The half-feat's choice of score, offered once the feat is picked.
   const featScores = racialFeats ? (featAbilityIncrease(feats[0] ?? "", featDescOf?.(feats[0] ?? ""))?.from ?? []) : [];
   // The builder's prerequisite check (featPrereqs.ts): read off each row,
@@ -132,6 +140,34 @@ export function RacialChoicesSection({
   return (
     <div className="space-y-3 rounded-lg border border-amber-900/40 bg-amber-950/10 p-3">
       <p className="text-xs text-amber-200/90">{race.name} choices</p>
+
+      {/* First: what it gives changes what the picks below may be. */}
+      {race.variants && onVariantChange ? (
+        <div data-builder-target="variant">
+          <label className="block">
+            <span className="mb-1 block text-stone-400">
+              {race.variants.label}: it changes what your {race.name} gets
+            </span>
+            <Select<string>
+              value={variant}
+              onChange={onVariantChange}
+              className="w-full"
+              label={race.variants.label}
+              placeholder="Choose one..."
+              options={[
+                { value: "", label: "Choose one..." },
+                ...race.variants.options.map((option) => ({ value: option.id, label: `${option.name} (${variantShort(option)})` })),
+              ]}
+            />
+          </label>
+          {chosen ? (
+            <p className="live-in mt-1 whitespace-pre-line text-xs text-stone-400" data-variant-summary>
+              {variantSummary(chosen)}
+              {chosen.description ? `\n${chosen.description}` : ""}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       {race.asiChoice ? (
         <div data-builder-target="racialAsi">

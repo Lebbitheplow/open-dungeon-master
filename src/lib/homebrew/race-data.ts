@@ -1,5 +1,7 @@
 import { clamp, text, type Raw } from "@/lib/homebrew/coerce";
-import { ALL_SKILLS, raceSizeOf } from "@/lib/content/mechanics";
+import { ALL_SKILLS, raceMechanics, raceSizeOf } from "@/lib/content/mechanics";
+import { checkSpeciesVariants } from "@/lib/content/species-variants";
+import { speciesHoldsTrait } from "@/lib/srd/race-id";
 
 // A workshop species in the fields the builder and the creation check read
 // a race by (src/lib/content/mechanics.ts raceMechanics): its scores, speed,
@@ -52,7 +54,12 @@ function asiRows(raw: unknown): Array<{ attributes: string[]; value: number }> {
   return out;
 }
 
-export function normalizeRaceData(source: Raw, data: Raw & { desc: string }): Raw & { desc: string } {
+// The species' own choice of packages (src/lib/content/species-variants.ts)
+// is refused by name when it breaks a limit, never trimmed to fit, and so is
+// a choice beside the Draconic Ancestry trait, which already asks the player
+// for a published dragon: two picks would each write a breath and a
+// resistance.
+export function normalizeRaceData(source: Raw, data: Raw & { desc: string }): { data: Raw & { desc: string } } | { error: string } {
   data.traits = text(source.traits, RACE_LIMITS.traits);
   data.size = raceSizeOf(source.size) ?? "Medium";
   if (source.heavyArmorSpeed === true) data.heavyArmorSpeed = true;
@@ -91,5 +98,17 @@ export function normalizeRaceData(source: Raw, data: Raw & { desc: string }): Ra
   if (cantrip && CLASS_LISTS.includes(String(cantrip.list))) {
     data.cantripChoice = { list: String(cantrip.list), count: clamp(cantrip.count, 1, 3, 1) };
   }
-  return data;
+  const variants = checkSpeciesVariants(source.variants);
+  if ("error" in variants) {
+    return variants;
+  }
+  if (variants.group) {
+    if (speciesHoldsTrait({ traitNames: raceMechanics({ traits: data.traits }).traitNames }, "draconic ancestry")) {
+      return {
+        error: "This species already asks for a published dragon through its Draconic Ancestry trait. Rename that trait (Draconic Heritage, say) or remove the player's choice.",
+      };
+    }
+    data.variants = variants.group;
+  }
+  return { data };
 }

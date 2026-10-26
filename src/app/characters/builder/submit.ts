@@ -16,6 +16,7 @@ import {
 } from "@/lib/srd/point-buy";
 import { findDraconicAncestry, innateCantripsFor, repeatedGrants, takesDraconicAncestry } from "@/lib/srd/racial-grants";
 import { racialCantripFields } from "@/lib/srd/racial-cantrips";
+import { pickedVariant, variantFeatureNames, withSpeciesVariant } from "@/lib/content/species-variants";
 import { reconcilePicks } from "./reconcile";
 import { builderCasting, builderSpellSlots } from "./casting";
 import { unmetFeatMessage, type FeatJudge } from "./featPrereqs";
@@ -44,6 +45,7 @@ export type BlockerTarget =
   | "racialCantrip"
   | "racialFeat"
   | "ancestry"
+  | "variant"
   | "repeatSkills"
   | "class"
   | "classSkills"
@@ -57,9 +59,11 @@ export type BlockerTarget =
   | "spells"
   | "gear";
 
-export type StepBlock = { message: string; target: BlockerTarget };
+// `label`: the pick's own name where the race names it (a workshop
+// species' "Bloodline"), for the line of choices left (owed.ts).
+export type StepBlock = { message: string; target: BlockerTarget; label?: string };
 
-const block = (target: BlockerTarget, message: string): StepBlock => ({ target, message });
+const block = (target: BlockerTarget, message: string, label?: string): StepBlock => ({ target, message, ...(label ? { label } : {}) });
 
 type SubmitInput = {
   state: BuilderState;
@@ -171,6 +175,11 @@ export function ancestryBlocks(
   }
   const owed: StepBlock[] = [];
   const { bonusLanguages, racialAsi, racialSkills, racialTool, racialCantrips } = state;
+  // The species' own choice comes first: it changes what the picks below
+  // offer (a +1 it gives cannot take a pick of the player's choice too).
+  if (race.variants && !race.variants.options.some((option) => option.id === state.racialVariant)) {
+    owed.push(block("variant", `Pick your ${race.name}'s ${race.variants.label.toLowerCase()}.`, race.variants.label));
+  }
   const languageCount = bonusLanguageCount(race, background);
   if (languageCount > 0 && bonusLanguages.filter(Boolean).length < languageCount) {
     const left = languageCount - bonusLanguages.filter(Boolean).length;
@@ -459,7 +468,8 @@ export function gearBlocker(derived: BuilderDerived): StepBlock | null {
 export function validateBuilder(
   input: SubmitInput,
 ): { kind: "error" | "spellWarning"; message: string; target?: BlockerTarget } | null {
-  const { derived, race, klass, background } = input;
+  const { derived, klass, background } = input;
+  const race = input.race && withSpeciesVariant(input.race, input.state.racialVariant);
   // Each missing piece by its own name and step: this used to say "Assign
   // all six ability scores first." whatever was missing.
   if (!race) {
@@ -511,7 +521,8 @@ export function validateBuilder(
 // after validateBuilder returned null.
 export function buildBuilderResult(input: SubmitInput): BuilderResult {
   const { state, derived } = input;
-  const race = input.race as RaceOption;
+  // With the species option picked, however the caller read the race.
+  const race = withSpeciesVariant(input.race as RaceOption, state.racialVariant);
   const klass = input.klass as ClassOption;
   const background = input.background as BackgroundOption;
   const abilities = derived.abilities as NonNullable<BuilderDerived["abilities"]>;
@@ -556,7 +567,7 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
       ...picks.backgroundSkills.filter(Boolean),
       ...(race.skills ?? []),
       ...picks.racialSkills.filter(Boolean),
-      ...(state.repeatSkills ?? []).filter(Boolean),
+      ...picks.repeatSkills.filter(Boolean),
     ]),
   ];
   const proficiencies = {
@@ -607,9 +618,14 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
         ? (state.racialFeatAbility as Ability)
         : racialFeatChoice[0]
       : null;
+  // The species option's own (its record, resistances and breath) as the
+  // server writes them; the server writes every race feature again anyway.
+  const option = pickedVariant(race);
   const packRaceTraits = racialTraitsFor(race.id).length
     ? []
-    : race.traitNames.map((traitName) => ({ name: traitName.slice(0, 80), source: "race" as const }));
+    : [...race.traitNames, ...(option && race.variants ? variantFeatureNames(race.variants.label, option, race.traitNames) : [])].map(
+        (traitName) => ({ name: traitName.slice(0, 80), source: "race" as const }),
+      );
 
   return {
     level: effectiveLevel,
@@ -684,6 +700,7 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
         ...racialCantripFields(racialCantrips),
         tool: picks.racialTool,
         ancestry: takesDraconicAncestry(race.id) ? (findDraconicAncestry(state.racialAncestry ?? "")?.id ?? "") : "",
+        variant: race.variants ? picks.racialVariant : "",
         ...(racialFeatAbility ? { featAbility: racialFeatAbility } : {}),
       },
       backgroundChoices: {

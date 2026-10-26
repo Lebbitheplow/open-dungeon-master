@@ -283,6 +283,8 @@ export function AncestryStep({
           onToolChange={state.setRacialTool}
           ancestry={state.racialAncestry}
           onAncestryChange={state.setRacialAncestry}
+          variant={state.racialVariant}
+          onVariantChange={state.chooseRacialVariant}
           repeated={repeatedGrants(background?.skills, race.skills)}
           repeatSkills={state.repeatSkills}
           onRepeatChange={(index, skill) =>

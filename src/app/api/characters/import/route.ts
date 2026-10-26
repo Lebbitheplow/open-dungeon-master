@@ -112,7 +112,9 @@ export async function POST(request: Request) {
       character: { ...character, portraitStatus: portraitStatus(character.id), campaigns: [] },
       ...(admitted.owed?.length ? { owed: admitted.owed } : {}),
       // What of the file's Homebrew landed on the importer's shelf.
-      ...(landed.arrival.copied || landed.arrival.reused.length || landed.arrival.renamed.length ? { homebrew: landed.arrival } : {}),
+      ...(landed.arrival.copied || landed.arrival.reused.length || landed.arrival.renamed.length || landed.arrival.refused.length
+        ? { homebrew: landed.arrival }
+        : {}),
     },
     { status: 201 },
   );

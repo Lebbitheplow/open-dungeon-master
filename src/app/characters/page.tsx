@@ -562,7 +562,7 @@ function CharacterCard({
 }
 
 // What a character file's Homebrew did on arrival, in one line.
-function importShelfNote(name: string, shelf: { copied?: number; reused?: string[]; renamed?: string[] } | undefined): string {
+function importShelfNote(name: string, shelf: { copied?: number; reused?: string[]; renamed?: string[]; refused?: string[] } | undefined): string {
   if (!shelf) {
     return "";
   }
@@ -570,6 +570,7 @@ function importShelfNote(name: string, shelf: { copied?: number; reused?: string
     shelf.copied ? `${name}'s Homebrew came with the file and is on your shelf now (${shelf.copied} entr${shelf.copied === 1 ? "y" : "ies"}).` : "",
     shelf.reused?.length ? `Already on your shelf, the same: ${shelf.reused.join(", ")}.` : "",
     ...(shelf.renamed ?? []),
+    ...(shelf.refused ?? []),
   ];
   return lines.filter(Boolean).join(" ");
 }

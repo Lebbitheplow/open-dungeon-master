@@ -1,4 +1,5 @@
 import { raceMechanics, type RaceMechanics } from "@/lib/content/mechanics";
+import { readSpeciesVariants } from "@/lib/content/species-variants";
 import { SRD_RACES, type SrdRace } from "@/lib/srd";
 import { isDwarf, srdRaceId } from "@/lib/srd/race-id";
 import { isEdition2024 } from "@/lib/content/edition";
@@ -224,7 +225,10 @@ export function packRaceOptions(rows: RaceRow[], keepIds: Iterable<string> = [])
   const mechanicsFor = (row: RaceRow): RaceMechanics => {
     let mechanics = parsed.get(row.slug);
     if (!mechanics) {
-      mechanics = raceMechanics(row.data);
+      // A workshop species' choice rides along, so the builder offers it
+      // and the creation check holds a character to it.
+      const variants = readSpeciesVariants(row.data.variants);
+      mechanics = { ...raceMechanics(row.data), ...(variants ? { variants } : {}) };
       parsed.set(row.slug, mechanics);
     }
     return mechanics;
