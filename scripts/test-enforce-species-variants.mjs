@@ -15,7 +15,13 @@
 //   it was made, while its next edit is asked for a pick that exists;
 //   at the table the breath is spent as the option says, comes back on a
 //   short rest, and grows with the level;
-//   a Workshop bundle and a character file carry the species and the pick.
+//   a Workshop bundle and a character file carry the species and the pick,
+//   and a pregen whose species a bundle could not bring stays behind with it;
+//   an option the workshop removes or changes takes what it gave off at the
+//   next edit, the +1 included, read from the sheet's own record of it;
+//   an edit's stored scores are read with the stored character's own picks;
+//   a replacement skill left replacing nothing is not sent;
+//   a choice the table would run as one of its own features is refused.
 import assert from "node:assert/strict";
 import { suite } from "./lib/enforce-harness.mjs";
 import { openCreation, PORTRAIT } from "./lib/enforce-creation.mjs";
@@ -261,11 +267,26 @@ await test("a Workshop bundle carries the species and the pick to a new owner, b
   assert.equal(theirs.sheet.race, `homebrew:${copy.id}`);
   const entering = characters.admitLibraryCharacter(theirs, null, keeper.id, 1);
   assert.equal(entering.ok, true, entering.problems?.join(" | "));
-  // A species this server refuses is named, not dropped in silence.
+  // A species this server refuses is named, not dropped in silence, and the
+  // pregen on it stays behind with it, named too: it could not be seated.
   const broken = { ...bundle, homebrew: bundle.homebrew.map((entry) => (entry.kind === "race" ? { ...entry, data: scalekin(Array.from({ length: 17 }, (_, at) => ({ name: `Scale ${at + 1}` }))) } : entry)) };
-  const told = importWorkshopBundle(world.addUser("told").id, broken);
+  const toldUser = world.addUser("told");
+  const told = importWorkshopBundle(toldUser.id, broken);
   assert.ok(!("error" in told), told.error);
   assert.ok(told.shelf.refused.some((line) => /^species Scalekin did not come: A choice holds 2 to 16 options; this one has 17\.$/.test(line)), JSON.stringify(told.shelf.refused));
+  assert.ok(told.shelf.refused.includes("pregen Cinder did not come: its species, Scalekin, was refused here."), JSON.stringify(told.shelf.refused));
+  assert.ok(!characters.listCharactersForUser(toldUser.id).some((character) => character.name === "Cinder"), "a pregen landed on a species that did not");
+  // Nor is it pointed at the importer's own Scalekin, which has other rules.
+  const rival = world.addUser("own-scalekin");
+  assert.equal((await brew("Scalekin", scalekin([{ ...MIRRORSCALE, id: "mirrorscale" }, MOONSTONE]), rival)).status, 201);
+  const ownTold = importWorkshopBundle(rival.id, broken);
+  assert.ok(ownTold.shelf.refused.includes("pregen Cinder did not come: its species, Scalekin, was refused here."), JSON.stringify(ownTold.shelf.refused));
+  assert.ok(!characters.listCharactersForUser(rival.id).some((character) => character.name === "Cinder"));
+  // A choice the table would run as one of its own features is refused on
+  // arrival as it is at a save.
+  const clashing = { ...bundle, homebrew: bundle.homebrew.map((entry) => (entry.kind === "race" ? { ...entry, data: { ...entry.data, variants: { ...entry.data.variants, label: "Second Wind" } } } : entry)) };
+  const warned = importWorkshopBundle(world.addUser("warned").id, clashing);
+  assert.ok(warned.shelf.refused.some((line) => /^species Scalekin did not come: The table would read the choice's label, "Second Wind", as Second Wind, a feature it runs/.test(line)), JSON.stringify(warned.shelf.refused));
 });
 
 // A one-pixel PNG: the file brings its own face, so none is painted.
@@ -296,6 +317,149 @@ await test("a character file carries the species and the pick to another account
   const refused = await importFile(ghost);
   assert.equal(refused.status, 400);
   assert.match(refused.json.problems.join(" | "), /"ghost" is not a draconic ancestry the Scalekin offers; pick one of Ashen, Mirrorscale\./);
+});
+
+// A library character of its own on a species of its own, made on
+// Mirrorscale, and an edit of it as the builder sends one.
+async function madeOn(name, options, variant) {
+  const saved = await brew(name, scalekin(options));
+  assert.equal(saved.status, 201, JSON.stringify(saved.json));
+  world.signIn(owner);
+  const made = await call(libraryRoute, "POST", { level: 1, sheet: built(saved.json.entry, variant) });
+  assert.equal(made.status, 201, JSON.stringify(made.json));
+  return { entry: saved.json.entry, character: made.json.character };
+}
+async function editOf(character, sheet) {
+  world.signIn(owner);
+  return call(characterRoute, "PATCH", { level: 1, sheet }, { characterId: character.id });
+}
+const MIRRORSCALE_GAVE = { asi: { wis: 1 }, skills: ["insight"], tools: [], languages: ["Draconic"] };
+
+await test("the sheet records what its option gave, written by the server: a record the request sends is not read", async () => {
+  const saved = await brew("Gleamkin", scalekin([ASHEN, MIRRORSCALE]));
+  world.signIn(owner);
+  const sheet = built(saved.json.entry, "mirrorscale");
+  const forged = { ...sheet, racialChoices: { ...sheet.racialChoices, variantGrants: { asi: {}, skills: [], tools: [], languages: [] } } };
+  const made = await call(libraryRoute, "POST", { level: 1, sheet: forged });
+  assert.equal(made.status, 201, JSON.stringify(made.json));
+  assert.deepEqual(made.json.character.sheet.racialChoices.variantGrants, MIRRORSCALE_GAVE);
+});
+
+await test("an option the workshop removes takes its grants off at the next edit: its +1 is no base score, and its skill and language go", async () => {
+  const { entry, character } = await madeOn("Glintkin", [ASHEN, MIRRORSCALE], "mirrorscale");
+  assert.equal(character.sheet.abilities.wis, 11);
+  world.signIn(owner);
+  const removed = await call(homebrewEntry, "PATCH", { data: { ...entry.data, variants: { label: "Draconic ancestry", options: [entry.data.variants.options[0], MOONSTONE] } } }, { id: entry.id });
+  assert.equal(removed.status, 200, JSON.stringify(removed.json));
+  const ashen = built(removed.json.entry, "ashen");
+  // Mirrorscale's +1 Wisdom sent back as a base score, with Ashen's +1
+  // Constitution on top: one point too many.
+  const inflated = await editOf(character, { ...ashen, abilities: { ...ashen.abilities, wis: 11 } });
+  assert.equal(inflated.status, 400, JSON.stringify(inflated.json.character?.sheet.abilities));
+  assert.match(inflated.json.problems.join(" | "), /Before the race's increase the ability scores are 15, 14, 13, 12, 11, 8\./);
+  const honest = await editOf(character, ashen);
+  assert.equal(honest.status, 200, JSON.stringify(honest.json));
+  const sheet = honest.json.character.sheet;
+  assert.equal(sheet.abilities.wis, 10);
+  assert.equal(sheet.abilities.con, 14);
+  assert.ok(!sheet.proficiencies.skills.includes("insight"), "Mirrorscale's Insight stayed after the option was removed");
+  assert.ok(!sheet.proficiencies.languages.includes("Draconic"), "Mirrorscale's Draconic stayed after the option was removed");
+  assert.deepEqual(sheet.racialChoices.variantGrants, { asi: { con: 1 }, skills: [], tools: [], languages: [] });
+});
+
+await test("an option the author changes under the same id takes off what it gave then, and the edit holds what it gives now", async () => {
+  const { entry, character } = await madeOn("Shimmerkin", [ASHEN, MIRRORSCALE], "mirrorscale");
+  // Mirrorscale now raises Charisma and trains Arcana, still as "mirrorscale".
+  const changed = { ...entry.data.variants.options[1], asi: { cha: 1 }, skills: ["arcana"] };
+  world.signIn(owner);
+  const patched = await call(homebrewEntry, "PATCH", { data: { ...entry.data, variants: { label: "Draconic ancestry", options: [entry.data.variants.options[0], changed] } } }, { id: entry.id });
+  assert.equal(patched.status, 200, JSON.stringify(patched.json));
+  const kept = built(patched.json.entry, "mirrorscale");
+  const inflated = await editOf(character, { ...kept, abilities: { ...kept.abilities, wis: 11 } });
+  assert.equal(inflated.status, 400, "the old +1 Wisdom was kept as a base score");
+  const honest = await editOf(character, kept);
+  assert.equal(honest.status, 200, JSON.stringify(honest.json));
+  const sheet = honest.json.character.sheet;
+  assert.equal(sheet.abilities.wis, 10);
+  assert.equal(sheet.abilities.cha, 9);
+  assert.ok(!sheet.proficiencies.skills.includes("insight"), "Insight stayed after Mirrorscale stopped giving it");
+  assert.ok(sheet.proficiencies.skills.includes("arcana"));
+  assert.ok(sheet.proficiencies.languages.includes("Draconic"));
+});
+
+await test("an edit's stored scores are read with the stored character's own racial picks: a moved pick is no free point, and an honest move is kept", async () => {
+  const data = { ...scalekin([ASHEN, MIRRORSCALE]), asi: [{ attributes: ["Charisma"], value: 2 }, { attributes: ["Any"], value: 1 }, { attributes: ["Any"], value: 1 }] };
+  const saved = await brew("Halfkin", data);
+  assert.equal(saved.status, 201, JSON.stringify(saved.json));
+  // Six rolls this server never saw: a 16 is no point buy.
+  const ROLLED = { str: 16, dex: 13, con: 12, int: 11, wis: 10, cha: 9 };
+  const rolled = (variant, racialAsi) => {
+    const result = builder.build({
+      race: withSpeciesVariant(raceOf(saved.json.entry), variant),
+      class: "fighter",
+      background: "soldier",
+      method: "roll",
+      scores: ROLLED,
+      racialAsi,
+      chosenSkills: ["acrobatics", "perception"],
+      stylePicks: ["defense"],
+      racialVariant: variant,
+    });
+    assert.equal(result.blocker, null, result.blocker?.message);
+    return { ...result.sheet, portrait: PORTRAIT };
+  };
+  // Stored as it was made: Ashen, the +1s of the player's choice on
+  // Strength and Dexterity.
+  const stored = characters.createCharacter(owner.id, 1, rolled("ashen", ["str", "dex"]));
+  assert.deepEqual(stored.sheet.abilities, { str: 17, dex: 14, con: 13, int: 11, wis: 10, cha: 11 });
+  // Mirrorscale, the +1s moved to Strength and Constitution: the same rolls.
+  const honest = rolled("mirrorscale", ["str", "con"]);
+  // The Dexterity point the old pick gave, kept as a base score.
+  const cheat = await editOf(stored, { ...honest, abilities: { ...honest.abilities, dex: honest.abilities.dex + 1 } });
+  assert.equal(cheat.status, 400, `a point too many: ${JSON.stringify(cheat.json.character?.sheet.abilities)}`);
+  const moved = await editOf(stored, honest);
+  assert.equal(moved.status, 200, JSON.stringify(moved.json));
+  assert.deepEqual(moved.json.character.sheet.abilities, { str: 17, dex: 13, con: 13, int: 11, wis: 11, cha: 11 });
+});
+
+await test("a replacement skill left over from an option that no longer repeats the background's skill is not sent, and the character is admitted", async () => {
+  // Mirrorscale's Insight and the acolyte's repeat; Perception is picked in
+  // its place. Then Ashen, which gives no Insight.
+  const sheetOf = (variant) =>
+    builder.build({
+      race: withSpeciesVariant(raceOf(species), variant),
+      class: "fighter",
+      background: "acolyte",
+      scores: BASE,
+      chosenSkills: ["acrobatics", "athletics"],
+      stylePicks: ["defense"],
+      racialVariant: variant,
+      repeatSkills: ["perception"],
+      bonusLanguages: ["Giant", "Elvish"],
+    });
+  assert.ok(sheetOf("mirrorscale").sheet.proficiencies.skills.includes("perception"));
+  const ashen = sheetOf("ashen");
+  assert.equal(ashen.blocker, null, ashen.blocker?.message);
+  assert.ok(!ashen.sheet.proficiencies.skills.includes("perception"), "the replacement was sent with nothing to replace");
+  world.signIn(owner);
+  const made = await call(libraryRoute, "POST", { level: 1, sheet: { ...ashen.sheet, portrait: PORTRAIT } });
+  assert.equal(made.status, 201, JSON.stringify(made.json));
+});
+
+await test("the workshop refuses a choice the table would run as one of its own features, at a new save and an edit, and names it", async () => {
+  const before = listHomebrew(owner.id, "race").length;
+  const second = await brew("Windkin", { ...scalekin([ASHEN, MIRRORSCALE]), variants: { label: "Second Wind", options: [ASHEN, MIRRORSCALE] } });
+  assert.equal(second.status, 400);
+  assert.equal(second.json.error, `The table would read the choice's label, "Second Wind", as Second Wind, a feature it runs, and give it to every character who picks an option. Call the choice something else, such as Bloodline or Lineage.`);
+  const winged = await brew("Wingkin", scalekin([ASHEN, { name: "Dragon Wings" }]));
+  assert.equal(winged.status, 400);
+  assert.match(winged.json.error, /"Draconic ancestry \(Dragon Wings\)", the feature Dragon Wings writes on a sheet, as a flying speed/);
+  assert.equal(listHomebrew(owner.id, "race").length, before, "a refused species was kept");
+  world.signIn(owner);
+  const relabelled = await call(homebrewEntry, "PATCH", { data: { ...species.data, variants: { ...species.data.variants, label: "Dwarven Resilience" } } }, { id: species.id });
+  assert.equal(relabelled.status, 400);
+  assert.match(relabelled.json.error, /as Dwarven Resilience, a feature it runs/);
+  assert.equal(listHomebrew(owner.id, "race").find((entry) => entry.id === species.id).data.variants.label, "Draconic ancestry");
 });
 
 finish();

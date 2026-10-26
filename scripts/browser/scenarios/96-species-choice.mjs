@@ -30,8 +30,11 @@ async function smallTargets(scope) {
       const stepper = target.closest(".kit-stepper");
       const width = Math.max(target.offsetWidth, reached ? parseFloat(reach.width) : 0);
       const height = Math.max(stepper instanceof HTMLElement ? stepper.offsetHeight : target.offsetHeight, reached ? parseFloat(reach.height) : 0);
+      // A stepper's buttons are the kit's own stepper's width (2.1rem), the
+      // size AGENTS.md calls a finger's, as 92-workshop-targets holds them.
       const typed = control.matches("input:not([type=checkbox]):not([type=radio]), textarea");
-      if (height >= min && (typed || width >= min)) continue;
+      const wide = stepper ? 33 : min;
+      if (height >= min && (typed || width >= wide)) continue;
       found.push(`${control.getAttribute("aria-label") || control.textContent?.trim().slice(0, 40) || control.tagName} ${Math.round(width)}x${Math.round(height)}`);
     }
     return found;

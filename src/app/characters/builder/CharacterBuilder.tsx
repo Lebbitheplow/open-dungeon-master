@@ -120,6 +120,7 @@ function droppedName(drop: DroppedPick): string {
     case "classSkills":
     case "racialSkills":
     case "backgroundSkills":
+    case "repeatSkills":
     case "expertise":
       return SRD_SKILLS.find((skill) => skill.id === drop.value)?.name ?? drop.value;
     case "styles":

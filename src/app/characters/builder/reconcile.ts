@@ -2,7 +2,7 @@ import type { Ability } from "@/lib/schemas/sheet";
 import { classFeaturesFor, expertiseSlotsFor, racialTraitsFor, subclassLevelFor } from "@/lib/srd/features";
 import { fightingStyleChoices, fightingStyleSlots, type FightingStyleId } from "@/lib/srd/feature-effects";
 import { findOptionByFeatureName, optionSlotsFor } from "@/lib/srd/options";
-import { innateCantripsFor } from "@/lib/srd/racial-grants";
+import { innateCantripsFor, repeatedGrants } from "@/lib/srd/racial-grants";
 import { withSpeciesVariant } from "@/lib/content/species-variants";
 import { spellLevelOf } from "@/lib/srd/spell-lists";
 import { builderCasting } from "./casting";
@@ -35,6 +35,8 @@ export type BuilderPicks = {
   racialAsi: Array<Ability | "">;
   racialCantrips: string[];
   racialTool: string;
+  // The skill picked in place of one the race and the background both give.
+  repeatSkills: string[];
   backgroundSkills: string[];
   bonusLanguages: string[];
   subclass: string;
@@ -146,6 +148,7 @@ export function reconcilePicks(
     racialAsi: input.racialAsi ?? [],
     racialCantrips: input.racialCantrips ?? [],
     racialTool: input.racialTool ?? "",
+    repeatSkills: input.repeatSkills ?? [],
     backgroundSkills: input.backgroundSkills ?? [],
     bonusLanguages: input.bonusLanguages ?? [],
     subclass: input.subclass ?? "",
@@ -208,6 +211,19 @@ export function reconcilePicks(
     ? slotted(picks.racialSkills, race.skillChoice.count, (skill) => !granted.has(textKey(skill)) && !classPicked.has(textKey(skill)) && !backgroundPicked.has(textKey(skill)) && (!racialPool || racialPool.has(textKey(skill))))
     : [];
   note("racial skill", "racialSkills", picks.racialSkills, racialSkills);
+
+  // The skill picked in place of one the race and the background both give
+  // (SRD 5.1, Backgrounds) stays only while they still both give one: a
+  // species option, a race or a background that no longer repeats a skill
+  // leaves it replacing nothing, and the server would refuse it as a skill
+  // the character was never offered.
+  const racialPicked = new Set(racialSkills.filter(Boolean).map(textKey));
+  const repeatSkills = slotted(
+    picks.repeatSkills,
+    repeatedGrants(background?.skills, race?.skills).length,
+    (skill) => !granted.has(textKey(skill)) && !classPicked.has(textKey(skill)) && !backgroundPicked.has(textKey(skill)) && !racialPicked.has(textKey(skill)),
+  );
+  note("replacement skill", "repeatSkills", picks.repeatSkills, repeatSkills);
 
   const fixedAsi = new Set(
     Object.entries(race?.asi ?? {})
@@ -317,6 +333,7 @@ export function reconcilePicks(
       racialAsi,
       racialCantrips,
       racialTool,
+      repeatSkills,
       backgroundSkills,
       bonusLanguages,
       subclass,

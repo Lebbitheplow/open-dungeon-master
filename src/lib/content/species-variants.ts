@@ -70,10 +70,12 @@ type Raw = Record<string, unknown>;
 const L = VARIANT_LIMITS;
 const ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 // The table reads these in a feature's name: a bracket note or a "Family:"
-// prefix as the choice made, "resistance" as damage resisted, "breath
-// weapon" as the breath's counter (src/lib/dm/pc-defenses.ts,
-// src/lib/srd/feature-names.ts).
-const RESERVED = /[():]|\bresistance\b|\bbreath weapon\b/i;
+// prefix as the choice made, "resistance" anywhere in it as damage resisted
+// (so "Resistances" and "Resistant" too), "breath weapon" as the breath's
+// counter (src/lib/dm/pc-defenses.ts, src/lib/srd/feature-names.ts). The
+// label and every option's name are held to the same words, since both are
+// written into the choice's record.
+const RESERVED = /[():]|resistan|breath\s*weapon/i;
 const RESERVED_WORDS = `brackets, a colon, "resistance" or "breath weapon": the table reads those words`;
 
 const quoted = (name: string) => `"${name.length > 40 ? `${name.slice(0, 40)}...` : name}"`;
@@ -320,6 +322,37 @@ function union(base: string[] | undefined, extra: string[] | undefined): string[
   return out;
 }
 
+// What an option gave a character: its scores, skills, tools and
+// languages. The server writes it on the sheet beside the pick when it
+// admits one (racialChoices.variantGrants), so what an edit takes off is
+// what the character was given, even after the workshop changes the option
+// or removes it.
+export type SpeciesVariantGrants = Pick<SpeciesVariantOption, "asi" | "skills" | "tools" | "languages">;
+
+export function variantGrantsOf(option: SpeciesVariantOption): Required<SpeciesVariantGrants> {
+  return {
+    asi: { ...(option.asi ?? {}) },
+    skills: [...(option.skills ?? [])],
+    tools: [...(option.tools ?? [])],
+    languages: [...(option.languages ?? [])],
+  };
+}
+
+// The race with these grants added, starting from the race without any
+// option, so it is the same whatever was folded in before.
+function folded<T extends VariantRace>(race: T, grants: SpeciesVariantGrants, option?: SpeciesVariantOption): T {
+  const base = (race as WithVariant<T>).variantOf ?? race;
+  return {
+    ...base,
+    asi: sumAsi(base.asi, grants.asi),
+    skills: union(base.skills, grants.skills),
+    tools: union(base.tools, grants.tools),
+    languages: union(base.languages, grants.languages) ?? [],
+    variantOf: base,
+    ...(option ? { variantPicked: option } : {}),
+  };
+}
+
 // The race as the rules read it once the option is picked: its scores,
 // skills, tools and languages with the option's added. It starts from the
 // race without any option every time, so a second pick replaces the first
@@ -328,18 +361,29 @@ function union(base: string[] | undefined, extra: string[] | undefined): string[
 export function withSpeciesVariant<T extends VariantRace>(race: T, id: string | null | undefined): T {
   const base = (race as WithVariant<T>).variantOf ?? race;
   const option = base.variants?.options.find((entry) => entry.id === (id ?? "").trim());
-  if (!option) {
-    return base;
+  return option ? folded(base, option, option) : base;
+}
+
+type HeldChoices = { variant?: string; variantGrants?: SpeciesVariantGrants } | null | undefined;
+
+// What a stored character's option gave it: what the server wrote beside
+// the pick when it admitted the sheet, or, for a sheet stored before it
+// wrote that, the option of that id the species offers today. Null when the
+// character holds no option.
+export function heldVariantGrants(race: VariantRace, held: HeldChoices): SpeciesVariantGrants | null {
+  if (held?.variantGrants) {
+    return held.variantGrants;
   }
-  return {
-    ...base,
-    asi: sumAsi(base.asi, option.asi),
-    skills: union(base.skills, option.skills),
-    tools: union(base.tools, option.tools),
-    languages: union(base.languages, option.languages) ?? [],
-    variantOf: base,
-    variantPicked: option,
-  };
+  const id = (held?.variant ?? "").trim();
+  const option = id ? race.variants?.options.find((entry) => entry.id === id) : undefined;
+  return option ? variantGrantsOf(option) : null;
+}
+
+// The race as a stored character holds it: with what its option gave it,
+// which its stored scores and training already carry.
+export function withHeldVariant<T extends VariantRace>(race: T, held: HeldChoices): T {
+  const grants = heldVariantGrants((race as WithVariant<T>).variantOf ?? race, held);
+  return grants ? folded(race, grants) : ((race as WithVariant<T>).variantOf ?? race);
 }
 
 // The option a race read through withSpeciesVariant holds, or null.

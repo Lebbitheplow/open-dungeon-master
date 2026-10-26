@@ -71,7 +71,7 @@ import { applySubclassTraining, autoSubclassPicks, subclassFixedTraining, subcla
 import { castingClassesOf, judgeSpellcasting } from "@/lib/srd/legality/spells";
 import { judgeRacialCantrips } from "@/lib/srd/legality/racial-cantrips";
 import { judgeSpeciesVariant, withoutOldVariant } from "@/lib/srd/legality/species-variant";
-import { withSpeciesVariant } from "@/lib/content/species-variants";
+import { withHeldVariant } from "@/lib/content/species-variants";
 import { racialCantripFields } from "@/lib/srd/racial-cantrips";
 import {
   type ClassGrants,
@@ -299,6 +299,7 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
   const speciesChoice = judgeSpeciesVariant({
     race: baseRace,
     picked: (input.racialChoices?.variant ?? "").trim(),
+    heldGrants: input.racialChoices?.variantGrants,
     door: context.door,
     ...policy,
     rollDie: context.rollDie,
@@ -376,13 +377,15 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
   const halfFeats = halfFeatPicks({ ...input, feats: feats.feats }, race.feats, featText);
   const increase = racialIncrease(input, race, problems);
   // On an edit the stored scores are a pool too: they may be moved about,
-  // as the builder lets them be, and not raised. They carry the option the
-  // stored character held, which an edit may have swapped for another.
+  // as the builder lets them be, and not raised. They carry what the stored
+  // character's option gave it (which an edit may swap for another, and the
+  // workshop may since have changed or removed) and its own racial picks,
+  // not the ones the edit sends.
   const storedPool = context.baseline
     ? Object.values(
         baseSpans({
           scores: context.baseline.sheet.abilities,
-          racial: racialIncrease(input, withSpeciesVariant(baseRace, context.baseline.sheet.racialChoices?.variant), []).racial,
+          racial: racialIncrease(context.baseline.sheet, withHeldVariant(baseRace, context.baseline.sheet.racialChoices), []).racial,
           recorded: context.baseline.sheet.asiChoices ?? [],
           halfFeats: halfFeatPoints(halfFeatPicks(context.baseline.sheet, race.feats, featText)),
           freePoints: 0,
@@ -506,10 +509,13 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
     // again from what the new one offers.
     // The picks its feats made come off first and go back on below, so an
     // edit that re-picks Linguist's languages replaces them (issue #125).
-    // An option of the species given up takes its grants with it.
+    // An option of the species given up takes its grants with it; a stored
+    // character entering play keeps what it holds.
     held:
       held && held.class === input.class && held.race === input.race && held.background === input.background
-        ? withoutOldVariant(withoutFeatPicks(held.proficiencies, held.featChoices), baseRace, held.racialChoices?.variant, speciesChoice.variant)
+        ? policy.trustsHeld
+          ? withoutFeatPicks(held.proficiencies, held.featChoices)
+          : withoutOldVariant(withoutFeatPicks(held.proficiencies, held.featChoices), baseRace, held.racialChoices, speciesChoice.option)
         : null,
     // The builder's doors name the tools an open grant leaves to the player.
     requireToolPicks: context.door === "table" || context.door === "library",
@@ -785,6 +791,7 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
       tool: race.toolChoice ? (input.racialChoices?.tool ?? "") : "",
       ancestry: ancestry?.id ?? "",
       variant: speciesChoice.variant,
+      ...(speciesChoice.grants ? { variantGrants: speciesChoice.grants } : {}),
       ...(race.feats && input.racialChoices?.featAbility
         ? { featAbility: input.racialChoices.featAbility }
         : {}),

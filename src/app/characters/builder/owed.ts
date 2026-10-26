@@ -18,7 +18,8 @@ export const TARGET_WORDS: Record<BlockerTarget, string> = {
   racialCantrip: "Cantrip",
   racialFeat: "Feat",
   ancestry: "Draconic ancestry",
-  variant: "Lineage",
+  // The species names its own choice ("Bloodline"); the block carries it.
+  variant: "Species choice",
   repeatSkills: "Replacement skill",
   class: "Class",
   classSkills: "Class skills",
@@ -41,7 +42,7 @@ export function owedPicks(blocks: ReadonlyArray<StepBlock>): OwedPick[] {
   for (const entry of blocks) {
     if (seen.has(entry.target)) continue;
     seen.add(entry.target);
-    out.push({ target: entry.target, label: TARGET_WORDS[entry.target], message: entry.message });
+    out.push({ target: entry.target, label: entry.label ?? TARGET_WORDS[entry.target], message: entry.message });
   }
   return out;
 }

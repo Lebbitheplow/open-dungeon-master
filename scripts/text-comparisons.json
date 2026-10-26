@@ -2520,12 +2520,12 @@
     "lib/dm/enemy-blow.ts#re-word": [["key",1,"damage type (engine vocabulary): a part of a blow that is radiant"]],
     "components/CorrectionReasonChips.tsx#str-eq": [["key",1,"keyboard key"]],
     "lib/content/species-variants.ts#[a-z]": [["key",3,"option ids: lower-case letters and digits joined by dashes"]],
-    "lib/content/species-variants.ts#\\b": [["english-source",4,"ODM's own feature-name words the table reads (\"resistance\", \"breath weapon\"), refused in a species choice's label and option names"]],
-    "lib/content/species-variants.ts#re-word": [["english-source",1,"ODM's own feature-name words the table reads (\"resistance\", \"breath weapon\"), refused in a species choice's label and option names"]],
+    "lib/content/species-variants.ts#re-word": [["english-source",1,"ODM's own feature-name words the table reads anywhere in a name (\"resistance\" in any form, \"breath weapon\"), refused in a species choice's label and option names"]],
     "lib/content/species-variants.ts#str-eq": [["display",1,"a skill id title-cased for display"]],
     "lib/content/species-variants.ts#str-list": [["key",2,"the field names an option holds"]],
     "lib/content/species-variants.ts#toLowerCase": [["key",4,"damage types and skill ids an option names"]],
     "lib/content/species-variants.ts#toUpperCase": [["display",2,"ability abbreviations, capitalised words"]],
-    "lib/srd/legality/species-variant.ts#toLowerCase": [["display",1,"a species choice's label in a sentence"]]
+    "lib/srd/legality/species-variant.ts#toLowerCase": [["display",1,"a species choice's label in a sentence"]],
+    "lib/homebrew/species-choice-server.ts#re-word": [["english-source",2,"ODM's own feature-name words two engine readers find anywhere in a feature's name (\"see invisibility\", \"true seeing\", \"multiattack defense\"), refused in a species choice's label and option names on the server"]]
   }
 }

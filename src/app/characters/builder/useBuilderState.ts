@@ -25,7 +25,7 @@ import {
   type FightingStyleId,
 } from "@/lib/srd/feature-effects";
 import { canonicalRaceId } from "@/lib/content/race-options";
-import { withSpeciesVariant } from "@/lib/content/species-variants";
+import { withHeldVariant } from "@/lib/content/species-variants";
 import type { AbilityMethod, AbilityState } from "./AbilityEditor";
 import type { PoolEntry, PoolSlots } from "./abilityDice";
 import { reconcilePicks, type BuilderPicks, type DroppedPick } from "./reconcile";
@@ -324,13 +324,14 @@ export function useBuilderState({
   // (reconcile.ts). Read from the render's values: every caller is an event
   // handler or an effect of this render.
   const picks: BuilderPicks = {
-    racialVariant, chosenSkills, racialSkills, racialAsi, racialCantrips, racialTool, backgroundSkills, bonusLanguages,
+    racialVariant, chosenSkills, racialSkills, racialAsi, racialCantrips, racialTool, repeatSkills, backgroundSkills, bonusLanguages,
     subclass, expertisePicks, stylePicks, optionPicks, spells, bookPrepared, cantrips,
   };
   function applyPicks(next: BuilderPicks) {
     setRacialVariant(next.racialVariant);
     setChosenSkills(next.chosenSkills);
     setRacialSkills(next.racialSkills);
+    setRepeatSkills(next.repeatSkills);
     setRacialAsi(next.racialAsi);
     setRacialCantrips(next.racialCantrips);
     setRacialTool(next.racialTool);
@@ -362,12 +363,13 @@ export function useBuilderState({
       level: fixedLevel ?? ids.level,
     });
     // A stored content-pack background is not in the bundled list the
-    // builder opens with; its skill pick waits for the pack's rows rather
-    // than being checked against no background and lost.
+    // builder opens with; its skill pick, and the skill picked in place of
+    // one it repeats, wait for the pack's rows rather than being checked
+    // against no background and lost.
     if (ids.backgroundId && !background) {
       return {
-        picks: { ...picks, backgroundSkills: current.backgroundSkills },
-        drops: drops.filter((drop) => drop.target !== "backgroundSkills"),
+        picks: { ...picks, backgroundSkills: current.backgroundSkills, repeatSkills: current.repeatSkills },
+        drops: drops.filter((drop) => drop.target !== "backgroundSkills" && drop.target !== "repeatSkills"),
       };
     }
     return { picks, drops };
@@ -427,9 +429,11 @@ export function useBuilderState({
     const ids = { ...selection };
     if (initial && !hydratedInitial.current) {
       hydratedInitial.current = true;
-      // With the stored option of the species' choice: its +1 sits in the
-      // stored scores, and its skills and languages are not picks.
-      const initialRace = withSpeciesVariant(findRace(races, ids.raceId) ?? races[0], initial.racialChoices?.variant);
+      // With what the stored option of the species' choice gave, as the
+      // sheet records it (the workshop may since have changed the option or
+      // removed it): its +1 sits in the stored scores, and its skills and
+      // languages are not picks.
+      const initialRace = withHeldVariant(findRace(races, ids.raceId) ?? races[0], initial.racialChoices);
       const initialBackground = backgrounds.find((entry) => entry.id === initial.background) ?? backgrounds[0];
       const withoutAsi = removeAsiChoices(initial.abilities, initial.asiChoices ?? []);
       const base: Record<Ability, number> = { ...withoutAsi };
@@ -520,10 +524,9 @@ export function useBuilderState({
     applyChange(
       "race",
       { raceId: id },
-      { ...picks, racialVariant: "", racialAsi: [], racialSkills: [], racialCantrips: [], racialTool: "" },
+      { ...picks, racialVariant: "", racialAsi: [], racialSkills: [], racialCantrips: [], racialTool: "", repeatSkills: [] },
     );
     setRacialAncestry("");
-    setRepeatSkills([]);
     // The old race's own feats lead the list (submit.ts reads the racial
     // feat as the first); they go with it. Feats granted in play, which an
     // edit carries after them, stay.

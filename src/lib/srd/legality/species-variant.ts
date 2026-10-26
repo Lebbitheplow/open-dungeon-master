@@ -8,7 +8,14 @@
 // since removed, since its features and scores already carry it; a companion
 // the engine drafts rolls one, as it rolls a dragonborn's ancestry.
 import { textKey } from "@/lib/language/text-logic";
-import { variantFeatureNames, withSpeciesVariant, type SpeciesVariantOption } from "@/lib/content/species-variants";
+import {
+  heldVariantGrants,
+  variantFeatureNames,
+  variantGrantsOf,
+  withSpeciesVariant,
+  type SpeciesVariantGrants,
+  type SpeciesVariantOption,
+} from "@/lib/content/species-variants";
 import type { Proficiencies } from "@/lib/schemas/sheet";
 import { lower, type Door, type RaceGrants } from "@/lib/srd/legality/types";
 
@@ -20,6 +27,10 @@ export type SpeciesVariantVerdict = {
   traits: string[];
   // What racialChoices.variant keeps.
   variant: string;
+  // What racialChoices.variantGrants keeps: what the option admitted here
+  // gives, or for a stored character what it was given (absent on a sheet
+  // stored before the field).
+  grants: Required<SpeciesVariantGrants> | undefined;
   problems: string[];
   owed: string[];
 };
@@ -27,6 +38,8 @@ export type SpeciesVariantVerdict = {
 export function judgeSpeciesVariant(input: {
   race: RaceGrants;
   picked: string;
+  // What the stored character's option gave it, as the sheet records it.
+  heldGrants?: Required<SpeciesVariantGrants>;
   door: Door;
   made: boolean;
   edit: boolean;
@@ -63,28 +76,39 @@ export function judgeSpeciesVariant(input: {
     // A stored character's pick stays as it was made, an option since
     // removed included; anyone else's is the option found, or none.
     variant: option?.id ?? (input.trustsHeld ? picked : ""),
+    // Likewise what it gave: a stored character keeps the record of what
+    // its scores and training carry; anyone else's is written afresh from
+    // the option admitted, never read from the request.
+    grants: input.trustsHeld ? input.heldGrants : option ? variantGrantsOf(option) : undefined,
     problems,
     owed,
   };
 }
 
 // The training a stored character holds, without what its old option gave
-// when an edit picks another: "what the character holds stays with it" is
-// for what it earned, and an option given up is not that.
+// that the option picked now does not: "what the character holds stays with
+// it" is for what it earned, and an option given up, or a grant the author
+// has since taken out of it, is not that. What it gave is the sheet's own
+// record of it; a sheet stored before that record reads the option of its id
+// the species offers today, and only when the edit picks another.
 export function withoutOldVariant(
   held: Proficiencies,
   race: RaceGrants,
-  heldVariant: string | undefined,
-  variant: string,
+  heldChoices: { variant?: string; variantGrants?: SpeciesVariantGrants } | undefined,
+  picked: SpeciesVariantOption | null,
 ): Proficiencies {
-  const old = (heldVariant ?? "").trim();
-  const option = old && old !== variant ? race.variants?.options.find((entry) => entry.id === old) : undefined;
-  if (!option) {
+  const old = heldVariantGrants(race, heldChoices);
+  if (!old || (!heldChoices?.variantGrants && (heldChoices?.variant ?? "").trim() === (picked?.id ?? ""))) {
     return held;
   }
-  const skills = new Set((option.skills ?? []).map(lower));
-  const tools = new Set((option.tools ?? []).map(textKey));
-  const languages = new Set((option.languages ?? []).map(textKey));
+  // What the old option gave and the picked one does not.
+  const takenOff = (gave: string[] | undefined, gives: string[] | undefined, key: (entry: string) => string) => {
+    const kept = new Set((gives ?? []).map(key));
+    return new Set((gave ?? []).map(key).filter((entry) => !kept.has(entry)));
+  };
+  const skills = takenOff(old.skills, picked?.skills, lower);
+  const tools = takenOff(old.tools, picked?.tools, textKey);
+  const languages = takenOff(old.languages, picked?.languages, textKey);
   return {
     ...held,
     skills: held.skills.filter((skill) => !skills.has(lower(skill))),

@@ -14,7 +14,15 @@
 //   its breath is spent as the Dragonborn's scales, with its own type, save
 //   and shape;
 //   the builder sets aside a racial pick the new option covers, and an
-//   option the species no longer offers.
+//   option the species no longer offers;
+//   "resistance" in any form, in the label or an option's name, is refused;
+//   a label or option the table would read as a feature it runs (Second
+//   Wind, Dwarven Resilience, a Fighting Style, wings) is refused on the
+//   server, and the choices it was made for are not;
+//   what an option gave is taken off from the sheet's own record of it, even
+//   after the workshop changed the option or removed it;
+//   a replacement skill that no longer replaces anything is set aside;
+//   the line of choices left names the species' own choice.
 import assert from "node:assert/strict";
 import { register } from "node:module";
 
@@ -26,8 +34,13 @@ const {
   uniqueVariantId,
   variantFeatureNames,
   variantSummary,
+  withHeldVariant,
   withSpeciesVariant,
 } = await import("../src/lib/content/species-variants.ts");
+const { withoutOldVariant } = await import("../src/lib/srd/legality/species-variant.ts");
+const { normalizeHomebrewForSave } = await import("../src/lib/homebrew/species-choice-server.ts");
+const { ancestryBlocks } = await import("../src/app/characters/builder/submit.ts");
+const { owedPicks } = await import("../src/app/characters/builder/owed.ts");
 const { normalizeHomebrewData } = await import("../src/lib/homebrew/gear.ts");
 const { speciesFindings } = await import("../src/lib/rulesets/validate-options.ts");
 const { packRaceOptions } = await import("../src/lib/content/race-options.ts");
@@ -111,6 +124,11 @@ const REFUSED = [
   ["a name in brackets", choice([ASHEN, { ...MIRRORSCALE, name: "Mirrorscale (old)" }]), /an option's name cannot hold brackets, a colon, "resistance" or "breath weapon"/],
   ["a label naming a resistance", choice([ASHEN, MIRRORSCALE], "Fire Resistance"), /The choice's label cannot hold brackets/],
   ["a label naming the breath", choice([ASHEN, MIRRORSCALE], "Breath Weapon"), /The choice's label cannot hold brackets/],
+  // The damage engine finds "resistance" anywhere in a name, plural or not.
+  ["a label naming resistances", choice([ASHEN, MIRRORSCALE], "Elemental Resistances"), /The choice's label cannot hold brackets, a colon, "resistance"/],
+  ["a name naming resistances", choice([ASHEN, { ...MIRRORSCALE, name: "Fire Resistances" }]), /"Fire Resistances": an option's name cannot hold brackets, a colon, "resistance"/],
+  ["a name calling itself resistant", choice([ASHEN, { ...MIRRORSCALE, name: "Cold-RESISTANT" }]), /"Cold-RESISTANT": an option's name cannot hold/],
+  ["a label naming breath weapons", choice([ASHEN, MIRRORSCALE], "Breath Weapons"), /The choice's label cannot hold brackets/],
   ["a damage type the table does not know", choice([ASHEN, { ...MIRRORSCALE, resistances: ["plasma"] }]), /"plasma" is not a damage type the table knows/],
   ["+4 in all", choice([ASHEN, { ...MIRRORSCALE, asi: { wis: 2, cha: 2 } }]), /raises scores by \+4 in all; an option gives at most \+3\./],
   ["+3 to one score", choice([ASHEN, { ...MIRRORSCALE, asi: { wis: 3 } }]), /an increase is \+1 or \+2 to str, dex, con, int, wis or cha\./],
@@ -222,6 +240,122 @@ test("the builder sets aside a racial +1 the new option already gives, and an op
   // A race with no choice keeps no pick of one.
   const plain = raceOf(species(undefined));
   assert.deepEqual(reconcilePicks({ racialVariant: "ashen" }, { race: plain, level: 1 }).drops.map((drop) => drop.target), ["variant"]);
+});
+
+test("the words the damage engine reads anywhere in a name are refused in every form, since it would read them", () => {
+  // What the refusals above keep off a sheet: the record of a pick is read
+  // by pcResistances, which finds "resistance" and a damage type anywhere.
+  assert.match(pcResistances({ race: "homebrew:scalekin", features: [{ name: "Elemental Resistances (Cold)", source: "race" }] }), /\bcold\b/);
+  assert.match(pcResistances({ race: "homebrew:scalekin", features: [{ name: "Bloodline (Fire Resistances)", source: "race" }] }), /\bfire\b/);
+});
+
+// A choice the table would run as one of its own features, through the
+// server's save: the engines read the record "<label> (<option>)" by the name
+// before its bracket, and some words anywhere in it.
+const ENGINE_CLASHES = [
+  ["Second Wind", [ASHEN, MIRRORSCALE], /the choice's label, "Second Wind", as Second Wind, a feature it runs/],
+  ["Dwarven Resilience", [ASHEN, MIRRORSCALE], /the choice's label, "Dwarven Resilience", as Dwarven Resilience, a feature it runs/],
+  ["Relentless Endurance", [ASHEN, MIRRORSCALE], /as Relentless Endurance, a feature it runs/],
+  ["Fighting Style", [{ id: "defense", name: "Defense" }, ASHEN], /the choice's label, "Fighting Style", as Fighting Style, a feature it runs/],
+  ["Lucky", [ASHEN, MIRRORSCALE], /as Lucky, a feature it runs/],
+  ["Bloodline", [ASHEN, { id: "dragon-wings", name: "Dragon Wings" }], /"Bloodline \(Dragon Wings\)", the feature Dragon Wings writes on a sheet, as a flying speed\. Give the option another name\./],
+  ["Bloodline", [ASHEN, { id: "deepsight", name: "Darkvision 120" }], /as a sense \(darkvision/],
+  ["Bloodline", [ASHEN, { id: "eel", name: "Eel Swimmer" }], /as a swimming speed/],
+];
+
+for (const [label, options, expected] of ENGINE_CLASHES) {
+  const what = `${label} (${options[1].name})`;
+  test(`the server refuses a choice the table would read as one of its own features: ${what}`, () => {
+    const data = species(choice(options, label));
+    // The editor's own check passes it: the names the engines run stay on
+    // the server, which refuses it as the save's error.
+    assert.ok("data" in saved(data), `${what} was refused before the server's check`);
+    const refused = normalizeHomebrewForSave("race", data, "Scalekin");
+    assert.ok("error" in refused, `${what} was saved`);
+    assert.match(refused.error, expected);
+  });
+}
+
+test("a choice the table reads as nothing but its record is saved: Draconic ancestry, a bloodline, a gem lineage", () => {
+  for (const [label, options] of [
+    ["Draconic ancestry", [ASHEN, MIRRORSCALE]],
+    ["Bloodline", [ASHEN, MIRRORSCALE]],
+    ["Gem lineage", [{ id: "fire-opal", name: "Fire Opal", resistances: ["psychic"] }, ASHEN]],
+    ["Bloodline of the Drowned Kings", [{ id: "longest", name: "N".repeat(40) }, ASHEN]],
+  ]) {
+    const kept = normalizeHomebrewForSave("race", species(choice(options, label)), "Scalekin");
+    assert.ok("data" in kept, `${label}: ${kept.error}`);
+  }
+  // And what the refusals stand on: unrefused, these records run.
+  assert.ok(Object.keys(populateResources([{ name: "Second Wind (Ashen)", source: "race" }], 5, { con: 2 })).includes("second_wind"));
+  assert.match(pcResistances({ race: "homebrew:scalekin", features: [{ name: "Dwarven Resilience (Ashen)", source: "race" }] }), /\bpoison\b/);
+});
+
+// The Scalekin of the table: +2 Strength and one +1 of the player's choice.
+// Mirrorscale's grants, as a character made on it was given them.
+const MIRRORSCALE_GAVE = { asi: { wis: 1 }, skills: ["insight"], tools: [], languages: ["Draconic"] };
+
+test("what a stored character's option gave comes off from the sheet's own record, though the workshop has since removed the option", () => {
+  const now = raceOf(species(choice([ASHEN, { id: "moonstone", name: "Moonstone", asi: { cha: 1 } }])));
+  // The stored scores carry Mirrorscale's +1 Wisdom, which the species no
+  // longer offers: the record says so, and the builder's base scores and the
+  // server's stored pool both read it.
+  assert.deepEqual(withHeldVariant(now, { variant: "mirrorscale", variantGrants: MIRRORSCALE_GAVE }).asi, { str: 2, wis: 1 });
+  assert.ok(withHeldVariant(now, { variant: "mirrorscale", variantGrants: MIRRORSCALE_GAVE }).skills.includes("insight"));
+  // A sheet stored before the record reads the option of its id today, and
+  // with that option gone, the race alone.
+  assert.deepEqual(withHeldVariant(now, { variant: "mirrorscale" }).asi, { str: 2 });
+  assert.deepEqual(withHeldVariant(raceOf(species(choice([ASHEN, MIRRORSCALE]))), { variant: "mirrorscale" }).asi, { str: 2, wis: 1 });
+  // An edit to Ashen takes Insight and Draconic off what the character holds.
+  const held = { skills: ["athletics", "insight"], tools: [], languages: ["Common", "Draconic"], armor: [], weapons: [], saves: [], expertise: [] };
+  const ashen = now.variants.options[0];
+  const edited = withoutOldVariant(held, now, { variant: "mirrorscale", variantGrants: MIRRORSCALE_GAVE }, ashen);
+  assert.deepEqual(edited.skills, ["athletics"]);
+  assert.deepEqual(edited.languages, ["Common"]);
+});
+
+test("an option the author changed under the same id takes off what it gave then, and keeps what it still gives", () => {
+  // Mirrorscale now raises Charisma and trains Arcana; the character was
+  // made when it raised Wisdom and trained Insight.
+  const changed = { id: "mirrorscale", name: "Mirrorscale", asi: { cha: 1 }, skills: ["arcana"], languages: ["Draconic"] };
+  const race = raceOf(species(choice([ASHEN, changed])));
+  assert.deepEqual(withHeldVariant(race, { variant: "mirrorscale", variantGrants: MIRRORSCALE_GAVE }).asi, { str: 2, wis: 1 }, "the stored pool read today's option");
+  const held = { skills: ["athletics", "insight"], tools: [], languages: ["Common", "Draconic"], armor: [], weapons: [], saves: [], expertise: [] };
+  const kept = withoutOldVariant(held, race, { variant: "mirrorscale", variantGrants: MIRRORSCALE_GAVE }, race.variants.options[1]);
+  assert.deepEqual(kept.skills, ["athletics"], "Insight stayed after the option stopped giving it");
+  assert.deepEqual(kept.languages, ["Common", "Draconic"]);
+  // A sheet stored before the record, with the same pick, keeps what it holds.
+  assert.deepEqual(withoutOldVariant(held, race, { variant: "mirrorscale" }, race.variants.options[1]), held);
+});
+
+test("a replacement skill that no longer replaces anything is set aside and said so, after a new option or a new background", () => {
+  const race = raceOf(species(choice([ASHEN, MIRRORSCALE])));
+  // Mirrorscale's Insight and the acolyte's Insight repeat: Perception is
+  // picked in its place.
+  const acolyte = { id: "acolyte", name: "Acolyte", skills: ["insight", "religion"], knownLanguages: [] };
+  const kept = reconcilePicks({ racialVariant: "mirrorscale", repeatSkills: ["perception"] }, { race, background: acolyte, level: 1 });
+  assert.deepEqual(kept.picks.repeatSkills, ["perception"]);
+  assert.deepEqual(kept.drops, []);
+  // Ashen gives no Insight: nothing repeats, and the pick goes.
+  const ashen = reconcilePicks({ racialVariant: "ashen", repeatSkills: ["perception"] }, { race, background: acolyte, level: 1 });
+  assert.deepEqual(ashen.picks.repeatSkills, []);
+  assert.deepEqual(ashen.drops, [{ label: "replacement skill", value: "perception", target: "repeatSkills" }]);
+  // A soldier repeats nothing of Mirrorscale's either.
+  const soldier = { id: "soldier", name: "Soldier", skills: ["athletics", "intimidation"], knownLanguages: [] };
+  const moved = reconcilePicks({ racialVariant: "mirrorscale", repeatSkills: ["perception"] }, { race, background: soldier, level: 1 });
+  assert.deepEqual(moved.drops, [{ label: "replacement skill", value: "perception", target: "repeatSkills" }]);
+  // A replacement the character now holds another way goes too.
+  const twice = reconcilePicks({ racialVariant: "mirrorscale", repeatSkills: ["religion"] }, { race, background: acolyte, level: 1 });
+  assert.deepEqual(twice.picks.repeatSkills, [""]);
+});
+
+test("the line of choices left names the species' own choice: its Draconic ancestry, its Bloodline", () => {
+  const state = { racialVariant: "", racialAsi: [], racialSkills: [], racialTool: "", racialCantrips: [], bonusLanguages: [], feats: [], repeatSkills: [] };
+  for (const label of ["Draconic ancestry", "Bloodline"]) {
+    const race = raceOf(species(choice([ASHEN, MIRRORSCALE], label)));
+    const owed = owedPicks(ancestryBlocks(state, race)).find((pick) => pick.target === "variant");
+    assert.equal(owed?.label, label);
+  }
 });
 
 test("the summary line says what an option gives, with the species' own scores when asked", () => {

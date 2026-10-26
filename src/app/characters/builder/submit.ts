@@ -59,9 +59,11 @@ export type BlockerTarget =
   | "spells"
   | "gear";
 
-export type StepBlock = { message: string; target: BlockerTarget };
+// `label`: the pick's own name where the race names it (a workshop
+// species' "Bloodline"), for the line of choices left (owed.ts).
+export type StepBlock = { message: string; target: BlockerTarget; label?: string };
 
-const block = (target: BlockerTarget, message: string): StepBlock => ({ target, message });
+const block = (target: BlockerTarget, message: string, label?: string): StepBlock => ({ target, message, ...(label ? { label } : {}) });
 
 type SubmitInput = {
   state: BuilderState;
@@ -176,7 +178,7 @@ export function ancestryBlocks(
   // The species' own choice comes first: it changes what the picks below
   // offer (a +1 it gives cannot take a pick of the player's choice too).
   if (race.variants && !race.variants.options.some((option) => option.id === state.racialVariant)) {
-    owed.push(block("variant", `Pick your ${race.name}'s ${race.variants.label.toLowerCase()}.`));
+    owed.push(block("variant", `Pick your ${race.name}'s ${race.variants.label.toLowerCase()}.`, race.variants.label));
   }
   const languageCount = bonusLanguageCount(race, background);
   if (languageCount > 0 && bonusLanguages.filter(Boolean).length < languageCount) {
@@ -565,7 +567,7 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
       ...picks.backgroundSkills.filter(Boolean),
       ...(race.skills ?? []),
       ...picks.racialSkills.filter(Boolean),
-      ...(state.repeatSkills ?? []).filter(Boolean),
+      ...picks.repeatSkills.filter(Boolean),
     ]),
   ];
   const proficiencies = {
