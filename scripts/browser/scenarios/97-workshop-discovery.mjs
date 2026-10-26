@@ -7,7 +7,8 @@
 //     the list is a listbox again once it has a row.
 //   - Shops had no way in: the Market sits under Lore's entries. Create
 //     offers a Shop, which opens Lore with the Market's form ready, and the
-//     command palette's New shop does the same.
+//     command palette's New shop does the same. A shop whose opening is lost
+//     on the connection says so and keeps its name (WA-05).
 import { axeViolations, check, eventually } from "../lib.mjs";
 
 export default {
@@ -57,6 +58,16 @@ export default {
     await shopName().fill(shop);
     const bare = page.getByRole("switch", { name: /Stock the shelves/ }).locator("visible=true").first();
     if ((await bare.getAttribute("aria-checked")) === "true") await t.tap(bare);
+    // A connection that drops before the server answers (audit WA-05): the
+    // market is read again, the shop is not there, it says so, and the name
+    // stays to press Open it again.
+    const shopsRoute = /\/api\/campaigns\/[^/]+\/shops$/;
+    await page.route(shopsRoute, (route) => (route.request().method() === "POST" ? route.abort("failed") : route.continue()));
+    await t.tap(page.getByRole("button", { name: "Open it" }).locator("visible=true").first());
+    const alert = page.getByRole("alert").filter({ hasText: /not opened|not known yet/ }).locator("visible=true").first();
+    await eventually(() => alert.isVisible(), { timeoutMs: 15_000, label: "the lost opening said as an alert" });
+    check((await shopName().inputValue()) === shop, "the shop's name is kept");
+    await page.unroute(shopsRoute);
     await t.tap(page.getByRole("button", { name: "Open it" }).locator("visible=true").first());
     await eventually(async () => {
       const body = await (await api.get(`${base}/api/campaigns/${id}/shops`)).json().catch(() => ({}));

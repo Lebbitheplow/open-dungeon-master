@@ -166,6 +166,7 @@
     "app/campaigns/[campaignId]/MapToolbox.tsx#whole": [["key",1,"UI keys, ids, refs, view choices and documented defaults (a palette, a tile, a peer volume, the first sheet)"]],
     "app/campaigns/[campaignId]/MarketPanel.tsx#bypass": [["identity",1,"selling a carried line by its own name (the line itself)"]],
     "app/campaigns/[campaignId]/MarketPanel.tsx#whole": [["key",1,"UI keys, ids, refs, view choices and documented defaults (a palette, a tile, a peer volume, the first sheet)"]],
+    "app/campaigns/[campaignId]/MarketPanel.tsx#whole-single": [["key",1,"a create whose answer was lost, looked for in the list read again by the name it was sent with, compared as the server stored it (WA-05)"]],
     "app/campaigns/[campaignId]/MarketShopEditor.tsx#number": [["key",1,"digits a regex already captured, ids, headers, stored and form numbers (number inputs), dice parts, the pack's English text (\"1,000 feet\", a purse); src/: every site read"]],
     "app/campaigns/[campaignId]/MarketShopEditor.tsx#whole": [["identity",2,"a stock line by whole name"]],
     "app/campaigns/[campaignId]/MessageActions.tsx#whole": [["key",1,"UI keys, ids, refs, view choices and documented defaults (a palette, a tile, a peer volume, the first sheet)"]],
