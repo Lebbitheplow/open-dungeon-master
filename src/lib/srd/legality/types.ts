@@ -6,6 +6,7 @@ import type { BackgroundOption, ClassOption, RaceOption } from "@/lib/characters
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
 import type { HpMethod } from "@/lib/srd/hit-points";
 import type { PriceLookup, StartingWealthMethod } from "@/lib/srd/starting-wealth";
+import type { OlderBuilder } from "@/lib/srd/legality/older-builder";
 
 export type ClassGrants = ClassOption;
 export type RaceGrants = RaceOption & {
@@ -70,6 +71,10 @@ export type LegalityContext = {
   subclassExtras?: SubclassExtras;
   // A die for the rolled HP method: the server's own.
   rollDie: (sides: number) => number;
+  // The picks the builder that sent the sheet had no field for (an app built
+  // before them, src/lib/srd/legality/older-builder.ts). Absent for every
+  // sheet the server builds itself.
+  olderBuilder?: OlderBuilder | null;
 };
 
 export type Legalized = {

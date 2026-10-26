@@ -2294,6 +2294,9 @@
     "lib/content/species-variants.ts#partial": [["key",6,"a species option's ids, damage types, skill ids, abilities and breath shapes checked against the engines' own lists; ODM's own feature names by textKey"]],
     "lib/content/species-variants.ts#whole": [["key",4,"a species option by its id"]],
     "lib/srd/legality/species-variant.ts#partial": [["key",3,"the skill ids, tools and languages an option given up, or changed since, granted, by lower case and textKey"]],
+    "lib/srd/legality/older-builder.ts#first": [["key",1,"the first stored racial cantrip, by position: the one the older builder shows and sends back"]],
+    "lib/srd/legality/older-builder.ts#whole-single": [["identity",2,"an edit's stored character on the same species, by textKey of its whole name"]],
+    "lib/srd/legality/older-builder.ts#whole": [["identity",1,"a stored racial cantrip pick against the one an older builder sent, by textKey of its whole name"]],
     "lib/homebrew/species-choice-server.ts#partial": [["identity",2,"a species choice's record against the names the engines run, by textKey of the whole name and of the name before its bracket note, as isNamed reads it"],["pattern",2,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"]]
   }
 }

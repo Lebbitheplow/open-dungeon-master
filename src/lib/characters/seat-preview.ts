@@ -16,6 +16,7 @@ import {
 
 export type { JoinPreview };
 import { createSheetSchema, type CreateSheetInput } from "@/lib/schemas/sheet";
+import type { OlderBuilder } from "@/lib/srd/legality/older-builder";
 import type { Pregen } from "@/lib/starter/pregens";
 
 // The ways a hero takes a seat, each written once: the join itself (POST
@@ -181,8 +182,8 @@ export function previewPregenJoin(pregen: Pregen, campaign: Campaign, userId: st
 // A character the builder made for this table, not stored yet: the table
 // door judges it at the table's level, as its join will. It was built with
 // every choice its level offers, so the confirm sheet asks for none.
-export function previewBuiltJoin(sheet: CreateSheetInput, campaign: Campaign, userId: string): JoinPreview {
+export function previewBuiltJoin(sheet: CreateSheetInput, campaign: Campaign, userId: string, olderBuilder: OlderBuilder | null = null): JoinPreview {
   const level = Math.max(1, Math.min(20, campaign.startingLevel));
-  const admitted = admitSheet({ door: "table", level, sheet, userId, campaign });
+  const admitted = admitSheet({ door: "table", level, sheet, userId, campaign, olderBuilder });
   return preview(sheet.name, sheet, level, level, { ok: false }, admitted, campaign);
 }

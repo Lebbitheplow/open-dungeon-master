@@ -11,6 +11,7 @@ import {
 import { listEventsForLibraryCharacter } from "@/lib/db/character-events";
 import { mirrorToCampaignSheets, portraitStatus, queueLibraryPortrait } from "@/lib/portrait";
 import { admitSheet, refusal } from "@/lib/characters/admit";
+import { olderBuilderOf } from "@/lib/srd/legality/older-builder";
 import { attachmentSchema, createSheetSchema } from "@/lib/schemas/sheet";
 import { workshopClassDefs } from "@/lib/classes/workshop-registry";
 
@@ -112,6 +113,7 @@ export async function PATCH(
     sheet: parsed.data.sheet,
     userId: user.id,
     baseline: { sheet: stored.sheet, level: stored.level },
+    olderBuilder: olderBuilderOf((raw as { sheet?: unknown } | null)?.sheet),
   });
   if (!admitted.ok) {
     return refusal(admitted.problems);

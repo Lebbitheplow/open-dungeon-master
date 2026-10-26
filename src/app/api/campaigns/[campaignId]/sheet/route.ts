@@ -9,6 +9,7 @@ import {
 } from "@/lib/campaign-api";
 import { seatAddedSheet } from "@/lib/character-seat";
 import { admitSheet, refusal } from "@/lib/characters/admit";
+import { olderBuilderOf } from "@/lib/srd/legality/older-builder";
 import { admitLibraryForSeat } from "@/lib/characters/seat-preview";
 import { hasSeatPicks, seatPicksSchema, type SeatPicks } from "@/lib/characters/seat-picks";
 import { announceMidGameJoin } from "@/lib/characters/mid-game-join";
@@ -217,6 +218,7 @@ export async function POST(
     sheet: parsed.data,
     userId: targetUserId,
     campaign: context.campaign,
+    olderBuilder: olderBuilderOf(raw),
   });
   if (!admitted.ok) {
     return refusal(admitted.problems);
@@ -370,6 +372,7 @@ export async function PUT(
       userId: context.user.id,
       campaign: context.campaign,
       baseline: { sheet: character.sheet, level: character.level },
+      olderBuilder: olderBuilderOf((raw as { sheet?: unknown } | null)?.sheet),
     });
     if (!edited.ok) {
       return refusal(edited.problems);
@@ -436,6 +439,7 @@ export async function PUT(
     sheet: parsed.data,
     userId: context.user.id,
     campaign: context.campaign,
+    olderBuilder: olderBuilderOf(raw),
   });
   if (!replaced.ok) {
     return refusal(replaced.problems);

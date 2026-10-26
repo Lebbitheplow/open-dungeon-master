@@ -71,6 +71,7 @@ import { applySubclassTraining, autoSubclassPicks, subclassFixedTraining, subcla
 import { castingClassesOf, judgeSpellcasting } from "@/lib/srd/legality/spells";
 import { judgeRacialCantrips } from "@/lib/srd/legality/racial-cantrips";
 import { judgeSpeciesVariant, withoutOldVariant } from "@/lib/srd/legality/species-variant";
+import { carriedCantrips, carriedVariant } from "@/lib/srd/legality/older-builder";
 import { withHeldVariant } from "@/lib/content/species-variants";
 import { racialCantripFields } from "@/lib/srd/racial-cantrips";
 import {
@@ -292,16 +293,23 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
     return { problems, sheet: input };
   }
   const held = policy.trustsHeld ? input : (context.baseline?.sheet ?? null);
+  // A builder older than a species' own picks had no field for them
+  // (src/lib/srd/legality/older-builder.ts): an edit keeps the stored
+  // character's, and one made there owes them.
+  const older = context.olderBuilder ?? null;
 
   // ---- the species' own choice ----
   // The option picked (a Half-Dragon's ancestry), folded into the race every
   // rule below reads: its scores, skills, tools and languages.
   const speciesChoice = judgeSpeciesVariant({
     race: baseRace,
-    picked: (input.racialChoices?.variant ?? "").trim(),
+    picked: older?.variant
+      ? carriedVariant(held, input.race, (baseRace.variants?.options ?? []).map((option) => option.id))
+      : (input.racialChoices?.variant ?? "").trim(),
     heldGrants: input.racialChoices?.variantGrants,
     door: context.door,
     ...policy,
+    ...(older?.variant ? { made: false, edit: false, picksMayWait: true } : {}),
     rollDie: context.rollDie,
   });
   problems.push(...speciesChoice.problems);
@@ -585,12 +593,12 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
   // ---- spells ----
   const racialCantrips = judgeRacialCantrips({
     race,
-    sent: input.racialChoices,
+    sent: older?.cantrips ? carriedCantrips(input.racialChoices, held, input.race) : input.racialChoices,
     casts,
     spellOf: context.spellOf,
     judgesPicks: policy.judgesPicks,
     countsPicks: context.door !== "engine",
-    picksMayWait: policy.picksMayWait,
+    picksMayWait: policy.picksMayWait || Boolean(older?.cantrips),
   });
   problems.push(...racialCantrips.problems);
   owed.push(...racialCantrips.owed);

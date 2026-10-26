@@ -4,6 +4,7 @@ import { previewBuiltJoin, previewLibraryJoin, previewPregenJoin, type JoinPrevi
 import { companionRoleRefusal, getCharacterForUser } from "@/lib/db/characters";
 import { getSheetForUser, listSheetsForUser } from "@/lib/db/sheets";
 import { createSheetSchema } from "@/lib/schemas/sheet";
+import { olderBuilderOf } from "@/lib/srd/legality/older-builder";
 import { pregenById } from "@/lib/starter/pregens";
 import { seatPicksSchema } from "@/lib/characters/seat-picks";
 import { claimRefusal, offeredPregenFor, pregenSeatRefusal } from "@/lib/db/pregen-offers";
@@ -48,7 +49,8 @@ export async function POST(
   if (!capsFor(context).needsCharacter) {
     return Response.json({ error: "The DM seat plays no character." }, { status: 400 });
   }
-  const parsed = previewSchema.safeParse(await request.json().catch(() => ({})));
+  const raw = await request.json().catch(() => ({}));
+  const parsed = previewSchema.safeParse(raw);
   if (!parsed.success) {
     return Response.json({ error: parsed.error.issues[0]?.message || "Pick a hero." }, { status: 400 });
   }
@@ -79,7 +81,7 @@ export async function POST(
       preview = { ...preview, ok: false, problems: [held, ...preview.problems] };
     }
   } else if (sheet) {
-    preview = previewBuiltJoin(sheet, context.campaign, context.user.id);
+    preview = previewBuiltJoin(sheet, context.campaign, context.user.id, olderBuilderOf((raw as { sheet?: unknown } | null)?.sheet));
   } else if (offeredPregenId) {
     // Unticked, another table's, or not a pregen at all: no such hero. The
     // DM's own pregens are in their library already.

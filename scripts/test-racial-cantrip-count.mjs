@@ -321,8 +321,11 @@ await test("a Sparkborn fighter with three cantrips joins at the table and throu
   assert.equal(through.character.sheet.racialChoices.cantrip, PICKS[0]);
   assert.deepEqual(racialFeatures(through.sheet), PICKS.map((name) => `Racial cantrip: ${name}`));
 
-  // The sheet the bug let through: three offered, one named.
-  const short = await creation.atTable(withPicks(sheet, { cantrip: "Prestidigitation" }));
+  // The sheet the bug let through: three offered, one named. Today's
+  // builder names its picks in cantrips; a sheet without that field is the
+  // 0.30.2 builder's, whose one picker could name no more, and its picks are
+  // owed (scripts/test-older-builder-sheets.mjs).
+  const short = await creation.atTable(withPicks(sheet, { cantrip: "Prestidigitation", cantrips: ["Prestidigitation"], variant: "" }));
   assert.equal(short.status, 400);
   assert.match(short.error, /learns 3 wizard cantrips/);
 });

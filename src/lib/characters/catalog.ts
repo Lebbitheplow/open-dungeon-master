@@ -47,6 +47,7 @@ import type {
   RaceGrants,
   SpellFacts,
 } from "@/lib/srd/legality/types";
+import type { OlderBuilder } from "@/lib/srd/legality/older-builder";
 import { textKey } from "@/lib/language/text-logic";
 import { PLAYED_DOCUMENTS_SQL } from "@/lib/content/edition";
 
@@ -269,6 +270,9 @@ export type ContextInput = {
   // own shelf.
   campaign?: { id: string; ownerUserId: string; gameSettings: GameSettings } | null;
   baseline?: { sheet: CreateSheetInput; level: number } | null;
+  // What the page that built the sheet had no field for, read off the
+  // request (src/lib/srd/legality/older-builder.ts olderBuilderOf).
+  olderBuilder?: OlderBuilder | null;
 };
 
 // Whose homebrew a character is judged against: the same scope the pickers
@@ -315,5 +319,6 @@ export function legalityContextFor(input: ContextInput): LegalityContext {
     subclassOffered: (classId, name) => subclassIsOffered(classId, name, owner),
     subclassExtras: subclassExtrasFor(owner),
     rollDie: defaultRng,
+    olderBuilder: input.olderBuilder ?? null,
   };
 }
