@@ -268,7 +268,7 @@ function PicksSoFar({
             large
             meta={classDetailsMeta({ id: klass.id, saves: klass.saves, reading: classRoles(klass) }).join(" · ")}
             text={classInfoText(klass)}
-            reference={{ kind: "classes", slug: klass.id }}
+            reference={{ kind: "classes", slug: klass.id, name: klass.name }}
           />
         </div>
       ) : null}
