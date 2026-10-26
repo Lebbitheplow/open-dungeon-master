@@ -328,7 +328,11 @@ export function Wizard({
         </div>
       </div>
 
-      <footer className="mt-4 flex shrink-0 items-center justify-end gap-2">
+      {/* On a phone the reason Continue is held takes a line of its own
+          above the buttons, and a long label ("Continue as" a homebrew
+          species) ends in an ellipsis inside its button rather than
+          running out of it. */}
+      <footer className="mt-4 flex shrink-0 flex-wrap items-center justify-end gap-2">
         {blocker ? (
           // The reason Continue is held, right next to it. A button when the
           // step can take the player to the pick, a plain line otherwise.
@@ -337,13 +341,13 @@ export function Wizard({
               type="button"
               id={blockerId}
               onClick={current.onBlocked}
-              className="wizard-blocker reveal min-w-0 flex-1 text-left text-xs text-amber-300/90 underline-offset-2 hover:text-amber-200 hover:underline"
+              className="wizard-blocker reveal min-w-0 flex-1 text-left text-xs text-amber-300/90 underline-offset-2 hover:text-amber-200 hover:underline max-sm:basis-full"
             >
               <span role="status">{blocker}</span>
               <span className="ml-1 whitespace-nowrap font-mono text-xs text-stone-400">Show me</span>
             </button>
           ) : (
-            <p id={blockerId} role="status" className="wizard-blocker reveal min-w-0 flex-1 text-xs text-amber-300/90">
+            <p id={blockerId} role="status" className="wizard-blocker reveal min-w-0 flex-1 text-xs text-amber-300/90 max-sm:basis-full">
               {blocker}
             </p>
           )
@@ -379,11 +383,11 @@ export function Wizard({
           title={blocker ?? undefined}
           className={cn(
             finishEarly ? ui.btnSecondary : ui.btnPrimary,
-            "wizard-continue",
+            "wizard-continue min-w-0 max-w-full max-sm:flex-1",
             blocker && "wizard-continue-held",
           )}
         >
-          {last ? doneLabel : (current?.continueLabel ?? "Continue")}
+          <span className="min-w-0 truncate">{last ? doneLabel : (current?.continueLabel ?? "Continue")}</span>
         </button>
         {finishEarly ? (
           <button type="button" onClick={onDone} className={ui.btnPrimary}>
