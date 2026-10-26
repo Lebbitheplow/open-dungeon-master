@@ -431,6 +431,9 @@ export const createSheetSchema = z.object({
       tool: z.string().trim().max(60).default(""),
       // A dragonborn's draconic ancestry ("red"), src/lib/srd/racial-grants.ts.
       ancestry: z.string().trim().max(20).default(""),
+      // The option of a workshop species' choice the player picked, by its
+      // id ("ashen"), src/lib/content/species-variants.ts.
+      variant: z.string().trim().max(40).default(""),
       // The score a variant human's half-feat raises where the feat offers a
       // choice (Resilient, Athlete); src/lib/srd/legality/half-feats.ts.
       featAbility: z.enum(ABILITIES).optional(),

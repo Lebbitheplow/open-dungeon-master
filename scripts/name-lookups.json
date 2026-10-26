@@ -1830,8 +1830,8 @@
     "lib/rulebook/search.ts#partial": [["search",9,"the rulebook search"],["pattern",2,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"]],
     "lib/rulebook/search.ts#whole": [["search",2,"the rulebook search"]],
     "lib/rulesets/validate-options.ts#first": [["key",1,"whether a class id has a published subclass"]],
-    "lib/rulesets/validate-options.ts#keyed": [["key",1,"ids, refs, slugs, tool names, field names, env names, event kinds, UI keys, caches, door and map keys; a sheet's conditionMeta by the condition key it was written under; the usage route's gear map by the sheet's own stored item names (src/: every site read)"]],
-    "lib/rulesets/validate-options.ts#partial": [["key",1,"ruleset validation against SRD types, conditions and its own feature keys (workshop rulesets)"],["pattern",1,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"]],
+    "lib/rulesets/validate-options.ts#keyed": [["key",1,"ids, refs, slugs, tool names, field names, env names, event kinds, UI keys, caches, door and map keys; a sheet's conditionMeta by the condition key it was written under; the usage route's gear map by the sheet's own stored item names (src/: every site read)"],["key",1,"ability ids to their names"]],
+    "lib/rulesets/validate-options.ts#partial": [["key",1,"ruleset validation against SRD types, conditions and its own feature keys (workshop rulesets)"],["pattern",1,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"],["key",2,"a species option's names and resistances against the species' own trait names and resisted types, by textKey"]],
     "lib/rulesets/validate.ts#keyed": [["key",3,"ids, refs, slugs, tool names, field names, env names, event kinds, UI keys, caches, door and map keys; a sheet's conditionMeta by the condition key it was written under; the usage route's gear map by the sheet's own stored item names (src/: every site read)"]],
     "lib/rulesets/validate.ts#number": [["key",3,"digits a regex already captured, ids, headers, stored and form numbers (number inputs), dice parts, the pack's English text (\"1,000 feet\", a purse); src/: every site read"]],
     "lib/rulesets/validate.ts#partial": [["key",7,"ruleset validation against SRD types, conditions and its own feature keys (workshop rulesets)"],["pattern",3,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"]],
@@ -2030,7 +2030,7 @@
     "lib/srd/racial-cantrips.ts#partial": [["identity",1,"a racial cantrip pick seen twice, by textKey of its whole name"]],
     "lib/srd/racial-grants.ts#keyed": [["identity",2,"SRD, spell, feature, subclass, hazard and magic rows by textKey (or armorKey/gearKey/rowKey/featureKey/priceKey, textKey-based); row tables keyed by the row's own name; the workshop's tables"]],
     "lib/srd/racial-grants.ts#normalizer": [["key",1,"slugs, hosts, file names, ids, env values, display text, throttle keys, model ids (src/: every site read)"]],
-    "lib/srd/racial-grants.ts#partial": [["key",3,"ODM's own \"Draconic Ancestry: \" feature names and ancestry ids"]],
+    "lib/srd/racial-grants.ts#partial": [["key",3,"ODM's own \"Draconic Ancestry: \" feature names and ancestry ids"],["key",1,"ODM's own \"Breath Weapon (fire, 15 ft. cone, DEX save)\" feature name a species option writes"]],
     "lib/srd/racial-grants.ts#whole": [["key",2,"ODM's own \"Draconic Ancestry: \" feature names and ancestry ids"]],
     "lib/srd/racial-weapons.ts#partial": [["key",1,"ODM's own trait-name format"]],
     "lib/srd/sense-checks.ts#whole": [["identity",1,"a condition by its whole name"]],
@@ -2269,6 +2269,12 @@
     "lib/dm/prepared-fit.ts#partial": [["key",2,"a roster row's resolved creature by the ref that row wrote, read as the roster is cut"]],
     "lib/dm/enemy-blow.ts#partial": [["key",1,"damage types: a part of a blow that is radiant (Undead Fortitude)"]],
     "app/characters/builder/steps/AncestryStep.tsx#partial": [["key",1,"a lineage id written as display words (each word capitalised), never matched against a record"]],
-    "app/characters/builder/LevelUpSheet.tsx#fallback": [["key",1,"the gate names an owed pick on the sheet first, else the build's earliest owed pick: an order of blocks, never a name lookup"]]
+    "app/characters/builder/LevelUpSheet.tsx#fallback": [["key",1,"the gate names an owed pick on the sheet first, else the build's earliest owed pick: an order of blocks, never a name lookup"]],
+    "app/workshop/homebrew/SpeciesChoiceFields.tsx#first": [["authoring",1,"the first ability no increase row holds yet, for a new row"]],
+    "app/workshop/homebrew/SpeciesChoiceFields.tsx#keyed": [["authoring",1,"workshop authoring (pickers, drafts, copied rows); every site read, none reads a carried item's row"]],
+    "lib/content/species-variants.ts#keyed": [["key",2,"ability ids and breath shapes to their words"]],
+    "lib/content/species-variants.ts#partial": [["key",6,"a species option's ids, damage types, skill ids, abilities and breath shapes checked against the engines' own lists; ODM's own feature names by textKey"]],
+    "lib/content/species-variants.ts#whole": [["key",4,"a species option by its id"]],
+    "lib/srd/legality/species-variant.ts#partial": [["key",3,"the skill ids, tools and languages an option given up granted, by lower case and textKey"]]
   }
 }

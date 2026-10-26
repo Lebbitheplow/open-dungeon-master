@@ -122,9 +122,6 @@ function normalizeOptionData(raw: unknown, kind: HomebrewKind): HomebrewData {
     case "background":
       normalizeBackgroundData(source, data);
       break;
-    case "race":
-      normalizeRaceData(source, data);
-      break;
     case "archetype": {
       data.classSlug = text(source.classSlug, 60).toLowerCase();
       const levels: Record<string, Array<{ n: string; d: string }>> = {};
@@ -227,6 +224,12 @@ function normalizeHomebrewKind(
       const source = (raw ?? {}) as Raw;
       const data = { desc: text(source.desc, GEAR_LIMITS.descMax) };
       return normalizeHazardData(source, data);
+    }
+    case "race": {
+      // A species may be refused: its player's choice is held to its limits
+      // by name (src/lib/content/species-variants.ts).
+      const source = (raw ?? {}) as Raw;
+      return normalizeRaceData(source, { desc: text(source.desc, GEAR_LIMITS.descMax) });
     }
     case "class": {
       // A class (src/lib/homebrew/class-data.ts): the numbers every class has.

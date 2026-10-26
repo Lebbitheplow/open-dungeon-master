@@ -88,9 +88,15 @@ export function ImportBundleButton({
       const data = await post({ text, kinds, sharedWorkshopId });
       // Arrivals kept beside the importer's own entries of the same name,
       // said before the new workshop opens (workshop-bundle-shelf.ts).
-      const renamed = ((data as { shelf?: { renamed?: string[] } }).shelf?.renamed ?? []).filter(Boolean);
+      const shelf = (data as { shelf?: { renamed?: string[]; refused?: string[] } }).shelf;
+      const renamed = (shelf?.renamed ?? []).filter(Boolean);
       if (renamed.length) {
         await appNotice(`${renamed.join(" ")} The new workshop's Cast, fights and pregens use these names; your other workshops are unchanged.`, "Kept beside your own");
+      }
+      // An entry this server refuses, with why, rather than lost unsaid.
+      const refused = (shelf?.refused ?? []).filter(Boolean);
+      if (refused.length) {
+        await appNotice(`${refused.join(" ")} The rest of the workshop came in without ${refused.length === 1 ? "it" : "them"}.`, "Left out");
       }
       navigateTo(`/workshop/${data.workshopId}`);
     } catch (thrown) {

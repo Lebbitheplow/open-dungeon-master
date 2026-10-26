@@ -14,6 +14,7 @@ import { SKILL_IDS } from "@/lib/homebrew/item-magic-schema";
 import { SRD_WEAPONS } from "@/lib/srd/weapons";
 import { addChip, rowIcon } from "@/app/workshop/kit";
 import { SpeciesTraitPicker } from "@/app/workshop/homebrew/SpeciesTraitPicker";
+import { SpeciesChoiceFields } from "@/app/workshop/homebrew/SpeciesChoiceFields";
 import type { Data } from "@/app/workshop/homebrew/draft";
 import { speciesHoldsTrait } from "@/lib/srd/race-id";
 import { heldTraitNames, resistanceTrait, resistedByTraits, withTrait } from "@/lib/workshop/species-traits";
@@ -245,6 +246,7 @@ export function SpeciesFields({ data, set }: Props) {
       <AbilityIncreases data={data} set={set} />
       <Languages data={data} set={set} />
       <Training data={data} set={set} />
+      <SpeciesChoiceFields data={data} set={set} />
       <div className="space-y-1.5">
         <SpeciesTraitPicker traits={String(data.traits ?? "")} onChange={(traits) => set({ traits })} />
         <TextArea
@@ -258,7 +260,7 @@ export function SpeciesFields({ data, set }: Props) {
         />
         <TraitsRead traits={String(data.traits ?? "")} />
         <Resistances traits={String(data.traits ?? "")} onChange={(traits) => set({ traits })} />
-        <DraconicNote traits={String(data.traits ?? "")} />
+        <DraconicNote traits={String(data.traits ?? "")} choice={Boolean(data.variants)} />
       </div>
     </div>
   );
@@ -295,12 +297,13 @@ function Resistances({ traits, onChange }: { traits: string; onChange: (traits: 
 
 // A species with the Dragonborn's ancestry (a Half-Dragon, say): what the
 // player will be asked, and the breath that goes with it. A breath with no
-// ancestry has no damage type of its own.
-function DraconicNote({ traits }: { traits: string }) {
+// ancestry has no damage type of its own. A species with a player's choice
+// of its own says what its options breathe in the findings instead.
+function DraconicNote({ traits, choice }: { traits: string; choice: boolean }) {
   const rules = { traitNames: heldTraitNames(traits) };
   const ancestry = speciesHoldsTrait(rules, "draconic ancestry");
   const breath = speciesHoldsTrait(rules, "breath weapon");
-  if (!ancestry && !breath) return null;
+  if (choice || (!ancestry && !breath)) return null;
   return (
     <p className="live-in text-[11px] text-stone-400" data-draconic-note>
       {ancestry && breath

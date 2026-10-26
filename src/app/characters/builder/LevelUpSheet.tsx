@@ -14,6 +14,7 @@ import type { CreateSheetInput } from "@/lib/schemas/sheet";
 import { featChoice } from "@/lib/schemas/sheet";
 import { subclassBlurb, subclassLevelFor } from "@/lib/srd/features";
 import { racialFeatCount } from "@/lib/srd/race-id";
+import { withSpeciesVariant } from "@/lib/content/species-variants";
 import { ui } from "@/lib/ui";
 import { applyClassReskins, applyIdReskins } from "@/lib/worlds/reskin-logic";
 import AsiFeatEditor from "./AsiFeatEditor";
@@ -109,7 +110,9 @@ function LevelUpSheetForm({
     ...(initial.asiChoices ?? []).flatMap((choice) => (choice.mode === "feat" ? [choice.feat] : [])),
   ]);
   const state = useBuilderState({ initial, initialFeatDescs, initialLevel, startLevel: nextLevel, races, classes, backgrounds });
-  const race = findRace(races, state.raceId);
+  // With the species option the character holds, as the whole build reads it.
+  const pickedRace = findRace(races, state.raceId);
+  const race = useMemo(() => pickedRace && withSpeciesVariant(pickedRace, state.racialVariant), [pickedRace, state.racialVariant]);
   const klass = classes.find((entry) => entry.id === state.classId);
   const background = backgrounds.find((entry) => entry.id === state.backgroundId);
   const subclassOptions = useArchetypeOptions(klass?.id ?? "");

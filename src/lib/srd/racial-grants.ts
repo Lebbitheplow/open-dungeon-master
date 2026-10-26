@@ -77,15 +77,41 @@ export function ancestryOf(features: Array<{ name: string }>): DraconicAncestry 
   return null;
 }
 
+// What a breath needs to be spent: its damage, its shape and the save it
+// asks for. A dragon of the table above is one; a workshop species' option
+// (src/lib/content/species-variants.ts) is another, with any save.
+export type BreathSpec = { damageType: string; area: string; save: Ability };
+
+// The race feature an option's breath is written as: "Breath Weapon (fire,
+// 15 ft. cone, DEX save)". The counter reads it as Breath Weapon by the name
+// before its bracket note; the spend reads the note back (variantBreathOf).
+export const variantBreathFeatureName = (spec: BreathSpec) =>
+  `Breath Weapon (${spec.damageType}, ${spec.area}, ${spec.save.toUpperCase()} save)`;
+
+// Only the two shapes the SRD's breaths take, so the bundled trait's own
+// "Breath Weapon (2d6, DC 8 + CON mod + PB)" is never read as one.
+const VARIANT_BREATH = /^breath weapon \(([a-z]+), (15 ft\. cone|5 by 30 ft\. line), (str|dex|con|int|wis|cha) save\)$/i;
+
+// The breath an option wrote on the sheet, or null.
+export function variantBreathOf(features: Array<{ name: string }>): BreathSpec | null {
+  for (const feature of features) {
+    const match = VARIANT_BREATH.exec(feature.name.trim());
+    if (match) {
+      return { damageType: match[1].toLowerCase(), area: match[2], save: match[3].toLowerCase() as Ability };
+    }
+  }
+  return null;
+}
+
 // Breath Weapon (SRD 5.1): 2d6, 3d6 at 6th level, 4d6 at 11th, 5d6 at 16th;
 // DC 8 + Constitution modifier + proficiency bonus; the save and the damage
 // type are the ancestry's.
 export function breathWeaponFor(
-  ancestry: DraconicAncestry,
+  ancestry: BreathSpec,
   level: number,
   conMod: number,
   proficiencyBonus: number,
-): { dice: string; damageType: string; save: "dex" | "con"; dc: number; area: string } {
+): { dice: string; damageType: string; save: Ability; dc: number; area: string } {
   const dice = level >= 16 ? "5d6" : level >= 11 ? "4d6" : level >= 6 ? "3d6" : "2d6";
   return {
     dice,

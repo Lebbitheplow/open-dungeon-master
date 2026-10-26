@@ -287,5 +287,5 @@ export function writeBundleShelf(userId: string, workshopId: string, bundle: Wor
     copied += 1;
   }
   // Where each monster and entry landed, for the World entries' links.
-  return { copied, reused: arrival.reused, renamed: arrival.renamed, entryFor: arrival.entryFor };
+  return { copied, reused: arrival.reused, renamed: arrival.renamed, refused: arrival.refused, entryFor: arrival.entryFor };
 }

@@ -75,7 +75,7 @@ export { exportWorkshopBundle } from "@/lib/db/workshop-bundle-export";
 export type BundleImportResult =
   // `shelf`: arrivals that were the importer's own entry already, and those
   // kept beside it under the bundle's name (workshop-bundle-shelf.ts).
-  | { workshopId: string; copied: number; linkedShared: number; droppedLinks: number; shelf: { reused: string[]; renamed: string[] } }
+  | { workshopId: string; copied: number; linkedShared: number; droppedLinks: number; shelf: { reused: string[]; renamed: string[]; refused: string[] } }
   | { error: string; refusal?: UploadRefusal };
 
 // Writes a decoded image to /uploads under a fresh uuid name, exactly the
@@ -572,5 +572,5 @@ function writeBundleRows(
     copied += worldFromBundle(workshop.id, bundle.world, { npc: ids.npcs, location: ids.locations, faction: ids.factions, lore: ids.lore }, shelf.entryFor, { maps: ids.maps, encounters: ids.encounters }, saveWorldImage);
   }
 
-  return { workshopId: workshop.id, copied, linkedShared, droppedLinks, shelf: { reused: shelf.reused, renamed: shelf.renamed } };
+  return { workshopId: workshop.id, copied, linkedShared, droppedLinks, shelf: { reused: shelf.reused, renamed: shelf.renamed, refused: shelf.refused } };
 }

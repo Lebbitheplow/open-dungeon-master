@@ -157,9 +157,14 @@ export function AddonImportButton({
       setBusy(false);
       return;
     }
-    const renamed = ((data as { shelf?: { renamed?: string[] } }).shelf?.renamed ?? []).filter(Boolean);
+    const shelf = (data as { shelf?: { renamed?: string[]; refused?: string[] } }).shelf;
+    const renamed = (shelf?.renamed ?? []).filter(Boolean);
     if (renamed.length) {
       await appNotice(`${renamed.join(" ")} The new workshop's Cast, fights and pregens use these names; your other workshops are unchanged.`, "Kept beside your own");
+    }
+    const refused = (shelf?.refused ?? []).filter(Boolean);
+    if (refused.length) {
+      await appNotice(`${refused.join(" ")} The rest of the workshop came in without ${refused.length === 1 ? "it" : "them"}.`, "Left out");
     }
     navigateTo(`/workshop/${data.workshopId}`);
   }

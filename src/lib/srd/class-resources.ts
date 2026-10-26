@@ -535,7 +535,7 @@ const SRD_RESOURCE_DEFS: ResourceDef[] = [
     action: "action",
     effect: { kind: "aoe", dice: breathDice, save: "dex" },
     guidance:
-      "A cone or line of the dragonborn's ancestral damage type. Resolve it with aoe_damage using the dice, save, DC and damage type this call reports (the ancestry sets the type and the save).",
+      "A cone or line of the breath's damage type. Resolve it with aoe_damage using the dice, save, DC and damage type this call reports (the ancestry, or the species option the player picked, sets the type and the save).",
   },
   {
     id: "indomitable",

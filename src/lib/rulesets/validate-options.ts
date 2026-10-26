@@ -2,8 +2,11 @@ import type { Finding } from "@/lib/rulesets/validate";
 import { classFeaturesFor, subclassLevelFor, subclassNamesFor } from "@/lib/srd/features";
 import { featAbilityIncreaseFrom } from "@/lib/srd/feat-effects";
 import { featGrantSpec } from "@/lib/srd/feat-grant-text";
-import { unreadResistances, unreadTraitLines } from "@/lib/workshop/species-traits";
+import { heldTraitNames, resistedByTraits, unreadResistances, unreadTraitLines } from "@/lib/workshop/species-traits";
 import { backgroundMechanics, raceMechanics } from "@/lib/content/mechanics";
+import { checkSpeciesVariants } from "@/lib/content/species-variants";
+import { speciesHoldsTrait } from "@/lib/srd/race-id";
+import { textKey } from "@/lib/language/text-logic";
 
 // What the workshop's checker says about a feat, a background, a species, a
 // subclass or a hazard, measured against the SRD 5.1's own: two skills from
@@ -101,6 +104,62 @@ export function speciesFindings(data: Data): Finding[] {
       level: "warn",
       text: `"${name}" reads like a trait, but the table does not see it as one: begin its paragraph with the name in bold and a full stop, as **${name}.**`,
     });
+  }
+  out.push(...speciesChoiceFindings(data, parsed.asi));
+  return out;
+}
+
+// The player's choice of packages (src/lib/content/species-variants.ts):
+// what the save refuses, as errors the editor holds the save on, and what
+// the table will feel of each option beside the species' own traits.
+function speciesChoiceFindings(data: Data, fixedAsi: Partial<Record<string, number>>): Finding[] {
+  const checked = checkSpeciesVariants(data.variants);
+  if ("error" in checked) {
+    return [{ level: "error", text: checked.error }];
+  }
+  const group = checked.group;
+  if (!group) {
+    return [];
+  }
+  const out: Finding[] = [];
+  const traits = String(data.traits ?? "");
+  const held = heldTraitNames(traits);
+  if (speciesHoldsTrait({ traitNames: held }, "draconic ancestry")) {
+    out.push({
+      level: "error",
+      text: "This species already asks for a published dragon through its Draconic Ancestry trait. Rename that trait (Draconic Heritage, say) or remove the player's choice.",
+    });
+  }
+  const heldKeys = new Set(held.map(textKey));
+  if (heldKeys.has(textKey(group.label))) {
+    out.push({ level: "warn", text: `The choice is called ${group.label}, as a trait of the species is: the sheet would hold both, and read them as one.` });
+  }
+  const resisted = new Set(resistedByTraits(traits));
+  for (const option of group.options) {
+    if (heldKeys.has(textKey(option.name))) {
+      out.push({ level: "warn", text: `${option.name} is named as a trait of the species is: call the option something of its own.` });
+    }
+    const twice = (option.resistances ?? []).filter((type) => resisted.has(type));
+    if (twice.length) {
+      out.push({ level: "warn", text: `${option.name} resists ${twice.join(" and ")}, which the species already resists: the pick adds nothing there.` });
+    }
+    for (const [ability, value] of Object.entries(option.asi ?? {})) {
+      const total = (fixedAsi[ability] ?? 0) + (value ?? 0);
+      if (total > 2) {
+        out.push({ level: "warn", text: `${option.name} raises ${ABILITY_NAMES[ability] ?? ability} by ${total} with the species' own: no SRD race raises a score by more than 2.` });
+      }
+    }
+  }
+  // A Breath Weapon trait is read with the counter's own Dexterity save and
+  // no damage type; an option's breath is what gives it one.
+  if (speciesHoldsTrait({ traitNames: held }, "breath weapon")) {
+    const without = group.options.filter((option) => !option.breath);
+    if (!without.length) {
+      out.push({ level: "note", text: "Every option sets a breath, so the Breath Weapon trait is only its description now." });
+    }
+    for (const option of without) {
+      out.push({ level: "note", text: `${option.name} sets no breath: its Breath Weapon deals untyped damage against a Dexterity save.` });
+    }
   }
   return out;
 }

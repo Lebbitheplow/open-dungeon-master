@@ -224,7 +224,9 @@ export function shelfForBundle(input: {
 
 // ---- in ----
 
-export type ShelfArrival = { copied: number; reused: string[]; renamed: string[] };
+// `refused`: an entry this server's checks refuse (a species whose choice
+// breaks a limit here), named with the reason, since it does not land.
+export type ShelfArrival = { copied: number; reused: string[]; renamed: string[]; refused: string[] };
 
 // The rules an entry carries, the same however its keys were ordered and
 // whether or not it was normalized when saved; where it was copied from is
@@ -281,6 +283,7 @@ export function writeShelfArrivals(userId: string, workshopId: string, bundle: W
   const bundleName = bundle.manifest.name;
   const reused: string[] = [];
   const renamed: string[] = [];
+  const refused: string[] = [];
   let copied = 0;
   // kind:textKey(name in the bundle) -> the name it has here.
   const renames = new Map<string, string>();
@@ -299,7 +302,11 @@ export function writeShelfArrivals(userId: string, workshopId: string, bundle: W
     const withParent = parentId ? { ...arrival.data, classSlug: workshopClassId(parentId) } : arrival.data;
     const entry = { ...arrival, data: renameHomebrewDataRefs(arrival.kind, withParent, asHere).data };
     const normalized = normalizeHomebrewData(entry.kind, entry.data, entry.name);
-    if ("error" in normalized) continue;
+    if ("error" in normalized) {
+      // Said, not dropped in silence: the importer learns what to fix.
+      refused.push(`${label(entry.kind, entry.name)} did not come: ${normalized.error}`);
+      continue;
+    }
     const key = `${entry.kind}:${textKey(entry.name)}`;
     const held = byKey.get(key);
     if (held && comparable(entry.kind, held.name, held.data) === comparable(entry.kind, entry.name, normalized.data)) {
@@ -352,6 +359,7 @@ export function writeShelfArrivals(userId: string, workshopId: string, bundle: W
     copied,
     reused,
     renamed,
+    refused,
     renames,
     // An entry the bundle did not carry (its homebrew left unticked) is the
     // importer's own of that kind and name, when they keep one, rather than

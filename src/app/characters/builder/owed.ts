@@ -18,6 +18,7 @@ export const TARGET_WORDS: Record<BlockerTarget, string> = {
   racialCantrip: "Cantrip",
   racialFeat: "Feat",
   ancestry: "Draconic ancestry",
+  variant: "Lineage",
   repeatSkills: "Replacement skill",
   class: "Class",
   classSkills: "Class skills",

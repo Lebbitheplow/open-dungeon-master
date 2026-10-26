@@ -3,6 +3,7 @@ import { classFeaturesFor, expertiseSlotsFor, racialTraitsFor, subclassLevelFor 
 import { fightingStyleChoices, fightingStyleSlots, type FightingStyleId } from "@/lib/srd/feature-effects";
 import { findOptionByFeatureName, optionSlotsFor } from "@/lib/srd/options";
 import { innateCantripsFor } from "@/lib/srd/racial-grants";
+import { withSpeciesVariant } from "@/lib/content/species-variants";
 import { spellLevelOf } from "@/lib/srd/spell-lists";
 import { builderCasting } from "./casting";
 import { bonusLanguageCount, type BlockerTarget } from "./submit";
@@ -26,6 +27,9 @@ import { textKey } from "@/lib/language/text-logic";
 // slot is blanked, not shifted.
 
 export type BuilderPicks = {
+  // The option of a workshop species' choice (a Half-Dragon's ancestry), by
+  // id. First, since what it grants changes what the other racial picks may be.
+  racialVariant: string;
   chosenSkills: string[];
   racialSkills: string[];
   racialAsi: Array<Ability | "">;
@@ -130,11 +134,13 @@ export function grantingTrait(raceId: string, skillName: string): string | null 
 
 export function reconcilePicks(
   input: Partial<BuilderPicks>,
-  { race, klass, background, level }: ReconcileContext,
+  context: ReconcileContext,
 ): { picks: BuilderPicks; dropped: string[]; drops: DroppedPick[] } {
+  const { klass, background, level } = context;
   // A caller may hold only some of the lists (an edit stub, an older state
   // shape); a missing list is an empty one.
   const picks: BuilderPicks = {
+    racialVariant: input.racialVariant ?? "",
     chosenSkills: input.chosenSkills ?? [],
     racialSkills: input.racialSkills ?? [],
     racialAsi: input.racialAsi ?? [],
@@ -159,6 +165,15 @@ export function reconcilePicks(
       }
     }
   };
+
+  // The species' own choice first: an option the species no longer offers
+  // (removed in the workshop, or another species picked) is dropped and
+  // asked for again, and every rule below reads the race with the option
+  // picked, so a racial pick it now covers is dropped too.
+  const group = context.race?.variants;
+  const racialVariant = group?.options.some((option) => option.id === picks.racialVariant) ? picks.racialVariant : "";
+  note((group?.label ?? "species choice").toLowerCase(), "variant", [picks.racialVariant], [racialVariant]);
+  const race = context.race && withSpeciesVariant(context.race, racialVariant);
 
   // Skills the background and race hand over outright are not picks, and a
   // pick that duplicates one is a wasted slot the player never sees.
@@ -296,6 +311,7 @@ export function reconcilePicks(
 
   return {
     picks: {
+      racialVariant,
       chosenSkills,
       racialSkills,
       racialAsi,

@@ -25,6 +25,7 @@ import {
   type FightingStyleId,
 } from "@/lib/srd/feature-effects";
 import { canonicalRaceId } from "@/lib/content/race-options";
+import { withSpeciesVariant } from "@/lib/content/species-variants";
 import type { AbilityMethod, AbilityState } from "./AbilityEditor";
 import type { PoolEntry, PoolSlots } from "./abilityDice";
 import { reconcilePicks, type BuilderPicks, type DroppedPick } from "./reconcile";
@@ -78,6 +79,7 @@ export type BuilderDraftFields = {
   racialCantrips: string[];
   racialTool: string;
   racialAncestry: string;
+  racialVariant: string;
   racialFeatAbility: Ability | "";
   toolPicks: string[];
   repeatSkills: string[];
@@ -238,6 +240,9 @@ export function useBuilderState({
   const [racialTool, setRacialTool] = useState(initial?.racialChoices?.tool ?? "");
   // A dragonborn's draconic ancestry ("red").
   const [racialAncestry, setRacialAncestry] = useState(initial?.racialChoices?.ancestry ?? "");
+  // The option of a workshop species' choice ("ashen"), checked like the
+  // other racial picks (reconcile.ts).
+  const [racialVariant, setRacialVariant] = useState(initial?.racialChoices?.variant ?? "");
   // The score a variant human's half-feat raises, where the feat offers a
   // choice (Resilient, Athlete).
   const [racialFeatAbility, setRacialFeatAbility] = useState<Ability | "">(
@@ -319,10 +324,11 @@ export function useBuilderState({
   // (reconcile.ts). Read from the render's values: every caller is an event
   // handler or an effect of this render.
   const picks: BuilderPicks = {
-    chosenSkills, racialSkills, racialAsi, racialCantrips, racialTool, backgroundSkills, bonusLanguages,
+    racialVariant, chosenSkills, racialSkills, racialAsi, racialCantrips, racialTool, backgroundSkills, bonusLanguages,
     subclass, expertisePicks, stylePicks, optionPicks, spells, bookPrepared, cantrips,
   };
   function applyPicks(next: BuilderPicks) {
+    setRacialVariant(next.racialVariant);
     setChosenSkills(next.chosenSkills);
     setRacialSkills(next.racialSkills);
     setRacialAsi(next.racialAsi);
@@ -421,7 +427,9 @@ export function useBuilderState({
     const ids = { ...selection };
     if (initial && !hydratedInitial.current) {
       hydratedInitial.current = true;
-      const initialRace = findRace(races, ids.raceId) ?? races[0];
+      // With the stored option of the species' choice: its +1 sits in the
+      // stored scores, and its skills and languages are not picks.
+      const initialRace = withSpeciesVariant(findRace(races, ids.raceId) ?? races[0], initial.racialChoices?.variant);
       const initialBackground = backgrounds.find((entry) => entry.id === initial.background) ?? backgrounds[0];
       const withoutAsi = removeAsiChoices(initial.abilities, initial.asiChoices ?? []);
       const base: Record<Ability, number> = { ...withoutAsi };
@@ -512,7 +520,7 @@ export function useBuilderState({
     applyChange(
       "race",
       { raceId: id },
-      { ...picks, racialAsi: [], racialSkills: [], racialCantrips: [], racialTool: "" },
+      { ...picks, racialVariant: "", racialAsi: [], racialSkills: [], racialCantrips: [], racialTool: "" },
     );
     setRacialAncestry("");
     setRepeatSkills([]);
@@ -524,6 +532,14 @@ export function useBuilderState({
       setFeats((current) => current.slice(oldRacialFeats));
     }
     setRacialFeatAbility("");
+  }
+
+  // The species' own choice (a Half-Dragon's ancestry). What the new option
+  // gives is checked against the racial picks already made, so a +1 of the
+  // player's choice on the ability it now raises is set aside, and said so.
+  function chooseRacialVariant(id: string) {
+    const label = findRace(races, raceId)?.variants?.label.toLowerCase() ?? "species choice";
+    applyChange(label, {}, { ...picks, racialVariant: id });
   }
 
   // Same for the class: skills, subclass, spells, loadout edits and the
@@ -644,6 +660,7 @@ export function useBuilderState({
     racialCantrips: setRacialCantrips,
     racialTool: setRacialTool,
     racialAncestry: setRacialAncestry,
+    racialVariant: setRacialVariant,
     racialFeatAbility: setRacialFeatAbility,
     toolPicks: setToolPicks,
     repeatSkills: setRepeatSkills,
@@ -724,6 +741,7 @@ export function useBuilderState({
     racialCantrips,
     racialTool,
     racialAncestry,
+    racialVariant,
     racialFeatAbility,
     toolPicks,
     repeatSkills,
@@ -795,6 +813,7 @@ export function useBuilderState({
     racialCantrips, setRacialCantrips,
     racialTool, setRacialTool,
     racialAncestry, setRacialAncestry,
+    racialVariant, chooseRacialVariant,
     racialFeatAbility, setRacialFeatAbility,
     toolPicks, setToolPicks,
     repeatSkills, setRepeatSkills,
