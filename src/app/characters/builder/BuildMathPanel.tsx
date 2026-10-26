@@ -26,9 +26,10 @@ import type { BuilderState } from "./useBuilderState";
 // opened. The rows are buildMath.ts's, read
 // from the calculations the save uses.
 //
-// Until there are six scores the table cannot be worked out, so the panel
-// shows the picks so far instead: what is already settled, and the chosen
-// class's and ancestry's write-ups, the same ones their cards' "?" opens.
+// Until there are a class, an ancestry, a background and six scores the
+// table cannot be worked out, so the panel shows the picks so far instead:
+// what is already settled, and the chosen class's and ancestry's write-ups,
+// the same ones their cards' "?" opens.
 export function BuildMathPanel({
   derived,
   scores,
@@ -225,7 +226,8 @@ function PicksSoFar({
         Your picks so far
       </h3>
       <p className="mb-2 text-base text-stone-400">
-        Every number and how it is made appears here once your hero has six scores.
+        Every number and how it is made appears here once your hero has a class, an ancestry, a background and six
+        scores.
       </p>
       <table className="w-full table-fixed border-collapse text-left">
         <caption className="sr-only">What is already settled</caption>

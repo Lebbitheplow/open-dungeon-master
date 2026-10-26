@@ -9,12 +9,14 @@
 // slots the save stores (casting.ts builderSpellSlots). This module only
 // lays them out as rows and says what changed.
 import type { Ability } from "@/lib/schemas/sheet";
+import { pickedVariant, type SpeciesVariantGroup } from "@/lib/content/species-variants";
 import { SRD_SKILLS, findSkill, formatModifier, proficiencyBonus, type DerivedPart } from "@/lib/srd";
 import { ABILITY_NAMES } from "@/lib/srd/legality/types";
 import { armorClassLine, hitPointsLine } from "./derivedReasons";
 import type { BuilderDerived } from "./useBuilderDerived";
 
 const ABILITIES: Ability[] = ["str", "dex", "con", "int", "wis", "cha"];
+const COUNT_WORDS: Record<number, string> = { 1: "one", 2: "two", 3: "three", 4: "four" };
 
 export type BuildMathRow = {
   // Stable across renders: the announcement compares rows by it.
@@ -207,6 +209,9 @@ export function buildMathSections({ derived, scores, klass, atTable }: BuildMath
 // scores there is no modifier, but the proficiency bonus, the class's hit
 // die and saves, the ancestry's bonuses and speed and the skills picked so
 // far are the sheet's already. Read from the same rows the save reads.
+// The race is the one the builder reads, with its species option folded in
+// (species-variants.ts withSpeciesVariant), so the option's bonuses are in
+// racialBonus and the option itself is named.
 export function knownSoFarRows({
   level,
   klass,
@@ -216,13 +221,32 @@ export function knownSoFarRows({
 }: {
   level: number;
   klass: { name: string; hitDie: number; saves: string[] } | undefined;
-  race: { name: string; speed: number } | undefined;
+  race:
+    | {
+        name: string;
+        speed: number;
+        asi?: Partial<Record<Ability, number>>;
+        asiChoice?: { count: number; amount: number };
+        variants?: SpeciesVariantGroup;
+      }
+    | undefined;
   racialBonus: Partial<Record<Ability, number>>;
   proficientSkills: string[];
 }): BuildMathRow[] {
   const bonuses = ABILITIES.flatMap((ability) =>
     racialBonus[ability] ? [`${ABILITY_NAMES[ability]} ${formatModifier(racialBonus[ability] ?? 0)}`] : [],
   );
+  // The bumps the race leaves to the player (a half-elf's two +1s) that are
+  // not placed yet: a placed one is in racialBonus beyond the race's own.
+  const choice = race?.asiChoice;
+  if (choice && choice.amount > 0) {
+    const placed = ABILITIES.reduce((sum, ability) => sum + Math.max(0, (racialBonus[ability] ?? 0) - (race?.asi?.[ability] ?? 0)), 0);
+    const owed = choice.count - Math.round(placed / choice.amount);
+    if (owed > 0) {
+      bonuses.push(`+${choice.amount} to ${COUNT_WORDS[owed] ?? owed} ${bonuses.length ? "more " : ""}of your choice`);
+    }
+  }
+  const variant = race?.variants ? pickedVariant(race) : null;
   const skills = proficientSkills.flatMap((id) => {
     const skill = findSkill(id);
     return skill ? [skill.name] : [];
@@ -239,6 +263,9 @@ export function knownSoFarRows({
             working: klass.name,
           },
         ]
+      : []),
+    ...(race?.variants
+      ? [{ id: "species-choice", label: race.variants.label, value: variant?.name ?? "still to choose", working: race.name }]
       : []),
     ...(race
       ? [

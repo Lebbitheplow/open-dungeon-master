@@ -16,6 +16,7 @@ const { buildMathSections, changeLine, createChangeAnnouncer, knownSoFarRows, sn
   "../src/app/characters/builder/buildMath.ts"
 );
 const { computeSheetDerived, deriveAc, formatModifier, SRD_SKILLS } = await import("../src/lib/srd/index.ts");
+const { withSpeciesVariant } = await import("../src/lib/content/species-variants.ts");
 const { deriveHand } = await import("../src/lib/battlemap/hand.ts");
 const { storedSheetSchema } = await import("../src/lib/schemas/sheet.ts");
 
@@ -256,6 +257,62 @@ test("with only a class chosen, the settled rows say nothing of an ancestry", ()
   assert.equal(rows.get("hit-die").value, "d10");
   assert.equal(rows.get("ancestry-bonuses"), undefined);
   assert.equal(rows.get("speed"), undefined);
+});
+
+test("bonuses the ancestry leaves to the player are said as still to place, not as none", () => {
+  const halfElf = (racialAsi) => knownOf(builder.build({ race: "half_elf", class: "bard", scores: UNSCORED, racialAsi }), "bard", "half_elf");
+  assert.equal(halfElf([]).get("ancestry-bonuses").value, "Charisma +2, +1 to two more of your choice");
+  assert.equal(halfElf(["dex"]).get("ancestry-bonuses").value, "Dexterity +1, Charisma +2, +1 to one more of your choice");
+  assert.equal(halfElf(["dex", "con"]).get("ancestry-bonuses").value, "Dexterity +1, Constitution +1, Charisma +2");
+  const human = knownOf(builder.build({ race: "variant_human", class: "fighter", scores: UNSCORED }), "fighter", "variant_human");
+  assert.equal(human.get("ancestry-bonuses").value, "+1 to two of your choice");
+});
+
+// A workshop species whose player picks an option (#538): the builder reads
+// the race with the option folded in, and the panel names the option.
+test("a species that lets its player choose shows the option picked, and what it adds", () => {
+  const base = builder.races.find((entry) => entry.id === "dragonborn");
+  const species = {
+    ...base,
+    id: "homebrew:half-dragon",
+    name: "Half-Dragon",
+    variants: {
+      label: "Draconic ancestry",
+      options: [
+        { id: "ashen", name: "Ashen", asi: { con: 1 }, resistances: ["fire"] },
+        { id: "mirrorscale", name: "Mirrorscale", asi: { wis: 1 }, skills: ["insight"] },
+      ],
+    },
+  };
+  const rowsFor = (race) => {
+    const built = builder.build({ race, class: "fighter", scores: UNSCORED });
+    return rowsOf([
+      {
+        id: "known",
+        title: "",
+        rows: knownSoFarRows({
+          level: built.derived.effectiveLevel,
+          klass: builder.classes.find((entry) => entry.id === "fighter"),
+          race,
+          racialBonus: built.derived.racialBonus,
+          proficientSkills: built.derived.proficientSkills,
+        }),
+      },
+    ]);
+  };
+  const open = rowsFor(species);
+  assert.equal(open.get("species-choice").label, "Draconic ancestry");
+  assert.equal(open.get("species-choice").value, "still to choose");
+  assert.equal(open.get("ancestry-bonuses").value, "Strength +2, Charisma +1");
+  const ashen = rowsFor(withSpeciesVariant(species, "ashen"));
+  assert.equal(ashen.get("species-choice").value, "Ashen");
+  assert.equal(ashen.get("species-choice").working, "Half-Dragon");
+  assert.equal(ashen.get("ancestry-bonuses").value, "Strength +2, Constitution +1, Charisma +1");
+  const mirrorscale = rowsFor(withSpeciesVariant(species, "mirrorscale"));
+  assert.equal(mirrorscale.get("ancestry-bonuses").value, "Strength +2, Wisdom +1, Charisma +1");
+  assert.match(mirrorscale.get("skill-proficiencies").value, /Insight/);
+  // A race with no choice has no such row.
+  assert.equal(rowsFor(base).get("species-choice"), undefined);
 });
 
 test("the picks show the class and ancestry write-ups their cards' details show", () => {
