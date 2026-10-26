@@ -1,4 +1,5 @@
 import { capsFor, isErrorResponse, requirePrepAuthority } from "@/lib/campaign-api";
+import { refuseDuringBreak } from "@/lib/dm/table-break";
 import { getEncounterTemplate, setTemplateCued } from "@/lib/db/encounter-templates";
 import { deployTemplate } from "@/lib/dm/encounter-templates";
 import { readyTemplates } from "@/lib/dm/prepared-encounter-tool";
@@ -63,6 +64,12 @@ export async function POST(
     return Response.json({ ok: true, cued: cue });
   }
 
+  // Deploying is the console's start_encounter, which waits out a break;
+  // the lead's cue above is prep and goes on.
+  const paused = refuseDuringBreak(campaignId);
+  if (paused) {
+    return paused;
+  }
   const outcome = await deployTemplate(context.campaign, context.user.id, template);
   if (!outcome.ok) {
     return Response.json({ error: outcome.error }, { status: 409 });

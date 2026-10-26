@@ -927,6 +927,15 @@ test("Correct a sheet turns a named field and its value into the sheet's own key
   assert.match(foldFieldValue({ field: "level", value: "five" }, SCORES).error, /whole number/);
   assert.match(foldFieldValue({ field: "level", value: "4.5" }, SCORES).error, /whole number/);
   assert.match(foldFieldValue({ field: "level" }, SCORES).error, /becomes/);
+  // Left empty, only the list is answered: a name or a number is asked for
+  // again, and a value left out is no answer at all (table audit
+  // 2026-10-26, T09).
+  for (const field of ["alignment", "name", "level", "str"]) {
+    assert.match(foldFieldValue({ field, value: "" }, SCORES).error, /becomes/, field);
+    assert.match(foldFieldValue({ field, value: "  " }, SCORES).error, /becomes/, field);
+  }
+  assert.match(foldFieldValue({ field: "conditions" }, SCORES).error, /becomes/);
+  assert.deepEqual(foldFieldValue({ field: "conditions", value: "  " }, SCORES), { args: { conditions: [] } });
   // Every field the form offers is one the fold knows.
   for (const field of UPDATE_SHEET_FIELDS) {
     const value = field.kind === "text" ? "x" : field.kind === "list" ? "prone" : "3";

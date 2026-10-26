@@ -9,7 +9,8 @@ import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { enqueueNarrationAudio } from "@/lib/tts";
 import { getNpcById } from "@/lib/db/npcs";
 import type { Speaker } from "@/lib/dm/speech";
-import { closeAgentTurn, isAgentRequest, readAgentNarration } from "@/lib/dm/agent-turn";
+import { agentTurnBegunBefore, closeAgentTurn, isAgentRequest, readAgentNarration } from "@/lib/dm/agent-turn";
+import { refuseDuringBreak } from "@/lib/dm/table-break";
 import { narratedLines } from "@/lib/dm/speech-lines";
 import { NARRATION_MAX_CHARS, textLength, tooLongMessage } from "@/lib/text-limits";
 
@@ -59,6 +60,17 @@ export async function POST(
       { error: tooLongMessage("A passage", NARRATION_MAX_CHARS, textLength(parsed.data.content)), maxChars: NARRATION_MAX_CHARS },
       { status: 400 },
     );
+  }
+
+  // Narration is play, and it holds the floor (below), so a break holds it
+  // (table audit 2026-10-26, T05). An agent program's turn begun before the
+  // break lands its text, as the storyteller's does.
+  const paused = refuseDuringBreak(
+    campaignId,
+    isAgentRequest(request) ? (tableBreak) => agentTurnBegunBefore(campaignId, tableBreak.at) : undefined,
+  );
+  if (paused) {
+    return paused;
   }
 
   // An NPC speaker is named from the record so a stale client name never

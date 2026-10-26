@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isErrorResponse, requireDm } from "@/lib/campaign-api";
+import { refuseDuringBreak } from "@/lib/dm/table-break";
 import { editInitiative, newNpcEntryId, resetInitiative } from "@/lib/dm/initiative";
 import { askInitiativeAgain, onPersonsTurn } from "@/lib/dm/invoke";
 import { handOnEnemyTurns, playCompanionTurn } from "@/lib/dm/encounter-tools";
@@ -69,6 +70,13 @@ export async function POST(
     return Response.json({ error: "That is not an edit the order takes." }, { status: 400 });
   }
   const body = parsed.data;
+  // The order is what the initiative pointer walks, and the pointer waits out
+  // a break where it stands: every edit here can move it, play a turn or ask
+  // the table to roll again (table audit 2026-10-26, T05).
+  const paused = refuseDuringBreak(campaignId);
+  if (paused) {
+    return paused;
+  }
   if (body.op === "enemies" || body.op === "companion") {
     const campaign = context.campaign;
     const error = onPersonsTurn(campaign, (turn) =>

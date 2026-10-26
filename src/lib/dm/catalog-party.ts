@@ -546,6 +546,12 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
         name: "value",
         label: "Becomes",
         kind: "text",
+        // The hint promises that Conditions left empty clears them, so the
+        // empty box reaches the handler as an answer (it used to be dropped
+        // on the way and refused as no answer, table audit 2026-10-26, T09);
+        // the handler still asks again for an empty name or number
+        // (update-sheet-args.ts).
+        keepsEmpty: true,
         help: "A whole number for a number. Conditions as a list (poisoned, prone), or left empty to clear them.",
       },
       REASON,

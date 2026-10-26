@@ -3,8 +3,7 @@ import type { Campaign } from "@/lib/db/campaigns";
 import { getSheetById } from "@/lib/db/sheets";
 import { SECRET_KINDS, SECRET_SKILLS } from "@/lib/dm/pact-logic";
 import { declareSecretAction } from "@/lib/dm/pact-players";
-import { tableBreakOn } from "@/lib/dm/table-break";
-import { breakRefusal } from "@/lib/dm/table-break-logic";
+import { refuseDuringBreak } from "@/lib/dm/table-break";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // The /actions route's secret mode (issue 503 Phase 7): an action a player
@@ -32,9 +31,9 @@ export function secretActionResponse(campaign: Campaign, userId: string, selecte
   if (!parsed.success) {
     return Response.json({ error: "A secret action needs a kind (steal, scheme, harm or attack) and what you do." }, { status: 400 });
   }
-  const tableBreak = tableBreakOn(campaign.id);
-  if (tableBreak) {
-    return Response.json({ error: breakRefusal(tableBreak), tableBreak }, { status: 409 });
+  const paused = refuseDuringBreak(campaign.id);
+  if (paused) {
+    return paused;
   }
   const named = parsed.data.characterId ? getSheetById(parsed.data.characterId) : null;
   const sheet = named && named.campaignId === campaign.id && named.userId === userId && !named.isCompanion ? named : selected;

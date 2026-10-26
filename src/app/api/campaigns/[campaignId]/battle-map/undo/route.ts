@@ -5,8 +5,7 @@ import { getActiveBoard } from "@/lib/db/encounters";
 import { takeBack, undoableMove } from "@/lib/battlemap/move-undo";
 import { buildPlayerMapView } from "@/lib/battlemap/view";
 import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
-import { tableBreakOn } from "@/lib/dm/table-break";
-import { breakRefusal } from "@/lib/dm/table-break-logic";
+import { refuseDuringBreak } from "@/lib/dm/table-break";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,9 +24,9 @@ export async function POST(
     return context;
   }
   // Tokens stay where they stood while the table is on a break.
-  const tableBreak = tableBreakOn(campaignId);
-  if (tableBreak) {
-    return Response.json({ error: breakRefusal(tableBreak) }, { status: 409 });
+  const paused = refuseDuringBreak(campaignId);
+  if (paused) {
+    return paused;
   }
   const encounter = getActiveBoard(campaignId);
   const map = encounter ? getBattleMapForEncounter(encounter.id) : null;

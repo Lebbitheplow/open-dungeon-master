@@ -1,4 +1,5 @@
 import { isErrorResponse, requireMember } from "@/lib/campaign-api";
+import { refuseDuringBreak } from "@/lib/dm/table-break";
 import { allocateSeq, capsFor } from "@/lib/db/campaigns";
 import { insertItemProposal, listOpenItemProposals } from "@/lib/db/item-proposals";
 import { getSheetById, getSheetForUser } from "@/lib/db/sheets";
@@ -44,6 +45,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ cam
   const offer = normalizeTradeOffer(raw);
   if (!offer) {
     return Response.json({ error: "Offer something, or ask for something." }, { status: 400 });
+  }
+  // A trade between characters is play, which waits out a break.
+  const paused = refuseDuringBreak(campaignId);
+  if (paused) {
+    return paused;
   }
   const from = getSheetForUser(campaignId, context.user.id);
   if (!from) {

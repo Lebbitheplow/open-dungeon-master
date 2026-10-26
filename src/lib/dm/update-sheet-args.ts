@@ -75,6 +75,8 @@ export function foldFieldValue(
       retry: true,
     };
   }
+  // Nothing sent is no answer, from anyone: the model, an agent or a console
+  // that left the value out never clears a field by leaving it out.
   if (value === undefined || value === null) {
     return { error: `Say what ${found.label.toLowerCase()} becomes.`, retry: true };
   }
@@ -82,9 +84,16 @@ export function foldFieldValue(
     const list = Array.isArray(value)
       ? value.map(String)
       : String(value).split(/[,\n]/);
-    // Left empty, the list is cleared.
+    // Sent empty, the list is cleared: the one field the form's hint says
+    // may be left empty, and the console sends that empty box on for it
+    // (catalog-party.ts, keepsEmpty on Becomes).
     const names = list.map((entry) => entry.trim()).filter(Boolean);
     return { args: { [found.name]: names, ...rest } };
+  }
+  // A name or a number left empty is a question not answered, never a blank
+  // written over the sheet.
+  if (typeof value === "string" && value.trim() === "") {
+    return { error: `Say what ${found.label.toLowerCase()} becomes.`, retry: true };
   }
   if (found.kind === "text") {
     return { args: { [found.name]: String(value).trim(), ...rest } };

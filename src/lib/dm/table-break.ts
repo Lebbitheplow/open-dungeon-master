@@ -1,6 +1,6 @@
 import { getDatabase } from "@/lib/db/core";
 import { dmQueuePausedFor, pauseDmQueue, resumeDmQueue } from "@/lib/dm/queue";
-import type { TableBreak } from "@/lib/dm/table-break-logic";
+import { breakRefusal, type TableBreak } from "@/lib/dm/table-break-logic";
 import { latestEventOfType, publishPersisted } from "@/lib/events";
 
 // The table break (src/lib/dm/table-break-logic.ts has the rules). It holds
@@ -21,6 +21,33 @@ export function tableBreakOn(campaignId: string): TableBreak | null {
   }
   const event = latestEventOfType(campaignId, ["table_paused"]);
   return breakFrom(event?.payload) ?? { at: Date.now(), userId: "", name: "Someone" };
+}
+
+// The one gate a new play mutation passes (table audit 2026-10-26, T05).
+// While the table is on a break only table talk goes through
+// (table-break-logic.ts), so a route that would start something in play (an
+// action, a move, a turn ended, a trade, a parked roll resolved, the DM's
+// adjudication or narration, the floor or the initiative order moved) asks
+// this first and answers its 409, the break's own words beside the break
+// itself, before it changes anything. Ask it after the body is read, so
+// nothing awaits between the answer and the write. Null while the table
+// plays. Only six routes asked before, each in its own words; a purchase, a
+// fresh adjudication and a parked initiative roll went straight through.
+//
+// What the break lets finish never asks: a storyteller turn already running
+// reaches the engine directly (src/lib/dm/turn.ts), not through a route, and
+// its text lands. `finishing` says the same of work begun before the break
+// that does come through a route: a connected agent program's turn
+// (src/lib/dm/agent-turn.ts agentTurnBegunBefore).
+export function refuseDuringBreak(
+  campaignId: string,
+  finishing?: (tableBreak: TableBreak) => boolean,
+): Response | null {
+  const tableBreak = tableBreakOn(campaignId);
+  if (!tableBreak || finishing?.(tableBreak)) {
+    return null;
+  }
+  return Response.json({ error: breakRefusal(tableBreak), tableBreak }, { status: 409 });
 }
 
 function breakFrom(payload: unknown): TableBreak | null {

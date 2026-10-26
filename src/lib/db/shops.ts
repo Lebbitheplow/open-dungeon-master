@@ -114,12 +114,31 @@ export function listShops(campaignId: string): Shop[] {
   return (getDatabase().prepare(`SELECT * FROM shops WHERE campaign_id = ?`).all(campaignId) as Row[]).map(map).sort((a, b) => compareNames(a.name, b.name));
 }
 
-// The shops at a place, by id first and by name for a place that was
-// written before it had an id.
+// Whether a shop stands at a place: by id, or by name for a shop written
+// before its place had an id. A party that is nowhere stands with the shops
+// that are nowhere too, as open_shop opens one when the table has no place
+// (src/lib/dm/shop-tools.ts handleOpenShop), and at no other. The Market
+// lists by this and its counter trades by it (table audit 2026-10-26, T07),
+// so a shop a player cannot see there is one they cannot trade at.
+export function shopStandsAt(
+  shop: Pick<Shop, "locationId" | "locationName">,
+  place: { id: string; name: string } | null,
+): boolean {
+  if (!place) {
+    return !shop.locationId && textKey(shop.locationName) === "";
+  }
+  if (shop.locationId) {
+    return shop.locationId === place.id;
+  }
+  // A shop with no name for its place is not at every place whose name has
+  // no letters in it.
+  const key = textKey(shop.locationName);
+  return key !== "" && key === textKey(place.name);
+}
+
+// The shops at a place, by the rule above.
 export function listShopsAt(campaignId: string, locationId: string, locationName: string): Shop[] {
-  return listShops(campaignId).filter(
-    (shop) => (shop.locationId && shop.locationId === locationId) || (!shop.locationId && textKey(shop.locationName) === textKey(locationName)),
-  );
+  return listShops(campaignId).filter((shop) => shopStandsAt(shop, { id: locationId, name: locationName }));
 }
 
 export function getShop(shopId: string): Shop | null {

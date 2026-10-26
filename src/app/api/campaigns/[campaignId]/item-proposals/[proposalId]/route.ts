@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isErrorResponse, steersStory, requireMember } from "@/lib/campaign-api";
+import { refuseDuringBreak } from "@/lib/dm/table-break";
 import { allocateSeq } from "@/lib/db/campaigns";
 import { getItemProposal, recordProposalOutcome as resolveOutcome, resolveItemProposal, type ItemProposal } from "@/lib/db/item-proposals";
 import { insertCampaignMessage } from "@/lib/db/messages";
@@ -76,6 +77,12 @@ export async function POST(
   const parsed = bodySchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {
     return Response.json({ error: "Invalid action." }, { status: 400 });
+  }
+  // Settling an offer moves sheets and tells the table: play, which waits
+  // out a break.
+  const paused = refuseDuringBreak(campaignId);
+  if (paused) {
+    return paused;
   }
   const { action } = parsed.data;
 

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isErrorResponse, requireMember } from "@/lib/campaign-api";
+import { refuseDuringBreak } from "@/lib/dm/table-break";
 import { getCampaignById } from "@/lib/db/campaigns";
 import { claimRestSong, inShortRestWindow } from "@/lib/db/clock";
 import { getActiveEncounter } from "@/lib/db/encounters";
@@ -51,6 +52,11 @@ export async function POST(
   const parsed = spendSchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {
     return Response.json({ error: "Send the number of hit dice to spend, 1 or more." }, { status: 400 });
+  }
+  // A short rest's hit dice roll and heal: play, which waits out a break.
+  const paused = refuseDuringBreak(campaignId);
+  if (paused) {
+    return paused;
   }
   const sheet = ownSheetFor(campaignId, context.user.id, parsed.data.characterId);
   if (!sheet) {

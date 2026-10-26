@@ -29,6 +29,38 @@ export function currentOrderIndex(
   return order.findIndex((row) => row.name === acting.name);
 }
 
+// The rows whose turn it is now, as every tracker lights them: the row the
+// pointer rests on (found by the engine's `acting` in a player's order,
+// which leaves hidden combatants out), or, while the enemies before the
+// player up next take their turns, those enemies' rows as this viewer may
+// see them (the projection's `enemiesUp`, src/lib/dm/turn-owner.ts) and
+// never that player's. The trackers used to light the pointer's index
+// alone, so they named the player while the enemies still had the turn,
+// and in a player's order with a hidden enemy before the pointer they lit
+// the seat after it.
+export function litOrderRows(
+  order: OrderRow[],
+  turnIndex: number,
+  acting: { name: string } | null | undefined,
+  enemiesUp?: readonly string[],
+): number[] {
+  if (enemiesUp) {
+    const up = new Set(enemiesUp);
+    return order.flatMap((row, index) => (up.has(row.id) ? [index] : []));
+  }
+  const at = currentOrderIndex(order, turnIndex, acting);
+  return at >= 0 ? [at] : [];
+}
+
+// The row the pointer rests on, for the turns already taken this round: the
+// player up next while the enemies before them play, else whoever acts.
+export function pointerOrderIndex(
+  order: OrderRow[],
+  encounter: { turnIndex: number; acting?: { name: string } | null; upNext?: { name: string } },
+): number {
+  return currentOrderIndex(order, encounter.turnIndex, encounter.upNext ?? encounter.acting);
+}
+
 // The tag a reflex row carries.
 export const REFLEX_LABEL = "Thief's Reflexes";
 

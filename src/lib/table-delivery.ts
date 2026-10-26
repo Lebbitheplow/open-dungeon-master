@@ -23,11 +23,18 @@
 //   the seats that hold the story's secrets are sent it whole;
 //   an owner-only offer (a pact's approach, issue 503) is stored as its id
 //   alone and sent whole to its own player and the storyteller, and to
-//   nobody else, not even as an empty card.
+//   nobody else, not even as an empty card;
+//   the list of active effects is stored and sent without the ones the party
+//   cannot tell are there; the seats that read every effect through
+//   GET /dm/effects are sent them all, live;
+//   a sheet's audit row is stored and sent with the character's notes and
+//   opt-ins blanked in its delta; the owner and the DM seats are sent it
+//   whole, as they are the sheet.
 import { campaignSeats, capsFor, getCampaignById, type Campaign } from "@/lib/db/campaigns";
 import { getRoll } from "@/lib/db/rolls";
+import { getAuditEntry } from "@/lib/db/sheet-audit";
 import { getSheetById, listSheetsForUser } from "@/lib/db/sheets";
-import { mayReadNotes, publicSheet } from "@/lib/dm/sheet-view";
+import { auditEntryForViewer, mayReadNotes, publicAuditEntry, publicSheet } from "@/lib/dm/sheet-view";
 import { redactRoll, rollAccessFor, type RollView } from "@/lib/dm/viewer";
 import { audienceOf, type SeatRight } from "@/lib/event-audience";
 import { offerVisibleTo, publicItemProposal, readProposal } from "@/lib/dm/proposal-view";
@@ -35,6 +42,8 @@ import { offerVisibleTo, publicItemProposal, readProposal } from "@/lib/dm/propo
 type Payload = Record<string, unknown>;
 type SheetLike = { id: string; userId: string; notes?: string; openToAdvances?: boolean; openToPacts?: boolean };
 type RollLike = RollView & { id?: string; total?: number | null };
+type AuditLike = { id?: string; characterId: string; delta: Record<string, unknown> };
+type EffectLike = { visible?: boolean; targetId?: string };
 
 function asPayload(payload: unknown): Payload | null {
   return payload && typeof payload === "object" && !Array.isArray(payload)
@@ -56,6 +65,24 @@ function rollOf(type: string, payload: unknown): RollLike | null {
   }
   const roll = asPayload(payload)?.roll as RollLike | undefined;
   return roll && typeof roll === "object" && typeof roll.visibility === "string" ? roll : null;
+}
+
+// A sheet's audit row (src/lib/db/sheet-audit.ts).
+function auditOf(type: string, payload: unknown): AuditLike | null {
+  if (type !== "sheet_audit") {
+    return null;
+  }
+  const entry = asPayload(asPayload(payload)?.entry) as AuditLike | null;
+  return entry && typeof entry.characterId === "string" && asPayload(entry.delta) ? entry : null;
+}
+
+// The active effects (src/lib/db/active-effects.ts).
+function effectsOf(type: string, payload: unknown): EffectLike[] | null {
+  if (type !== "effects_updated") {
+    return null;
+  }
+  const effects = asPayload(payload)?.effects;
+  return Array.isArray(effects) ? (effects as EffectLike[]) : null;
 }
 
 // An effect whose damage figure is the DM's (src/lib/battlemap/fx-plan.ts).
@@ -111,6 +138,20 @@ export function tablePayload(type: string, payload: unknown): unknown {
   if (sheet) {
     return { ...(payload as Payload), sheet: publicSheet(sheet) };
   }
+  const entry = auditOf(type, payload);
+  if (entry) {
+    const blanked = publicAuditEntry(entry);
+    return blanked === entry ? payload : { ...(payload as Payload), entry: blanked };
+  }
+  const effects = effectsOf(type, payload);
+  if (effects) {
+    // Nor one on an enemy the DM keeps off the board, which its target id
+    // alone would give away (active-effects.ts effectsUpdate names them).
+    const rest = { ...(payload as Payload) };
+    const hidden = new Set(Array.isArray(rest.hiddenTargets) ? (rest.hiddenTargets as unknown[]).map(String) : []);
+    delete rest.hiddenTargets;
+    return { ...rest, effects: effects.filter((effect) => effect.visible === true && !hidden.has(String(effect.targetId ?? ""))) };
+  }
   const roll = rollOf(type, payload);
   // A caller that forgot to redact does not get to publish the number.
   if (roll && roll.visibility !== "public" && typeof roll.total === "number") {
@@ -153,6 +194,13 @@ export function viewerFor(campaignId: string, userId: string): Viewer {
 function holds(viewer: Viewer | null, right: SeatRight): boolean {
   const campaign = viewer?.campaign();
   return Boolean(viewer && campaign && capsFor(campaign, viewer.userId)[right]);
+}
+
+// The seats GET /dm/effects answers with every effect.
+function readsEveryEffect(viewer: Viewer | null): boolean {
+  const campaign = viewer?.campaign();
+  const caps = viewer && campaign ? capsFor(campaign, viewer.userId) : null;
+  return Boolean(caps && (caps.adjudicates || caps.secretStory));
 }
 
 // What `viewer` is sent of a stored event: the payload, or null for nothing.
@@ -221,6 +269,38 @@ export function payloadForViewer(
           sheet: { ...sheet, notes: whole.notes ?? "", openToAdvances: Boolean(whole.openToAdvances), openToPacts: Boolean(whole.openToPacts) },
         }
       : stored;
+  }
+
+  const entry = auditOf(type, stored);
+  if (entry) {
+    // Nothing in it is private (most rows: hit points, gold, a condition),
+    // so every seat reads the same, and no seat is looked up for it.
+    const blanked = publicAuditEntry(entry);
+    if (blanked === entry) {
+      return stored;
+    }
+    // Or this seat is not owed it back. Blanked again on the way out: a row
+    // logged before the table's copy was blanked holds the values whole.
+    const campaign = viewer?.campaign();
+    if (!viewer || !campaign || auditEntryForViewer(entry, campaignSeats(campaign), viewer.userId, viewer.owned()) !== entry) {
+      return { ...(stored as Payload), entry: blanked };
+    }
+    // Live, the row is still whole on the published payload; on replay it
+    // is read back from the database, which never held it blanked.
+    const whole = auditOf(type, original) ?? (entry.id ? getAuditEntry(entry.id) : null);
+    return whole ? { ...(stored as Payload), entry: whole } : stored;
+  }
+
+  // The hidden effects ride only live: a replay is the table's list, and the
+  // DM's console reads the whole list from GET /dm/effects when it opens.
+  const listed = effectsOf(type, stored);
+  if (listed) {
+    if (readsEveryEffect(viewer) && effectsOf(type, original)) {
+      return original;
+    }
+    // The table's list, filtered again on the way out: one logged before it
+    // was filtered when stored holds the hidden effects too.
+    return tablePayload(type, stored);
   }
 
   // The figure rides only live: an effect is ephemeral and never replayed.

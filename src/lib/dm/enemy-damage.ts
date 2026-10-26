@@ -1,4 +1,5 @@
 import { settleDroppedOnFightEnd } from "@/lib/db/dropped-items";
+import { endFightEffects } from "@/lib/db/active-effects";
 import { getFloor, setFloor, type Campaign } from "@/lib/db/campaigns";
 import { burnWebUnder } from "@/lib/dm/zone-cast";
 import { endEncounter, getActiveEncounter, getEnemy, listEnemies, patchEnemyHp, setEnemyConcentration, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
@@ -94,6 +95,8 @@ export function finishEncounter(
     }
   }
   endEncounter(encounter.id, outcome);
+  // An effect set "until the fight ends" ends now (active-effects.ts).
+  endFightEffects(campaign.id);
   // A frenzy outliving its rage costs its level of exhaustion (frenzy.ts).
   settleFrenzies(campaign);
   // What was dropped stays where it fell; what a fallen enemy held lies with

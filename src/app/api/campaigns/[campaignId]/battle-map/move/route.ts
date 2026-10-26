@@ -37,8 +37,7 @@ import { jumpMove } from "@/lib/dm/jump-move";
 import { jumpLine } from "@/lib/srd/jump";
 import { sizeForRace } from "@/lib/srd";
 import { proneCharge } from "@/lib/battlemap/board-move";
-import { tableBreakOn } from "@/lib/dm/table-break";
-import { breakRefusal } from "@/lib/dm/table-break-logic";
+import { refuseDuringBreak } from "@/lib/dm/table-break";
 
 export const runtime = "nodejs";
 
@@ -89,9 +88,9 @@ export async function POST(
   }
   const { user } = context;
   // Tokens stay where they stood while the table is on a break.
-  const tableBreak = tableBreakOn(campaignId);
-  if (tableBreak) {
-    return Response.json({ error: breakRefusal(tableBreak) }, { status: 409 });
+  const paused = refuseDuringBreak(campaignId);
+  if (paused) {
+    return paused;
   }
 
   // The board, which is a fight or an exploration scene. Every combat rule

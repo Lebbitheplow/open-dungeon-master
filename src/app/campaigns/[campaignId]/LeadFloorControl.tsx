@@ -10,7 +10,7 @@ import { SequenceEditor } from "./SequenceEditor";
 import { fitSequence, type PlanSequence } from "@/lib/dm/plan-order";
 import type { Floor } from "@/lib/db/campaigns";
 import type { PublicEncounter } from "@/lib/db/encounter-view";
-import { extraTurnTag, orderRowKey } from "@/lib/battlemap/initiative-rows";
+import { extraTurnTag, litOrderRows, orderRowKey } from "@/lib/battlemap/initiative-rows";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // Who may speak right now, from the lead's desk. The same route the DM
@@ -165,14 +165,14 @@ export function LeadFloorControl({
             {encounter?.orderReady && encounter.order.length ? (
               <>
                 {" · "}
-                {encounter.order.map((entry, index) => (
+                {encounter.order.map((entry, index, order) => (
                   // Keyed by position: a thief's second round-1 turn repeats the id.
                   <span
                     key={orderRowKey(entry, index)}
                     title={extraTurnTag(entry)?.title}
                     className={cn(
                       "transition-colors duration-200",
-                      index === encounter.turnIndex ? "font-medium text-amber-200" : undefined,
+                      litOrderRows(order, encounter.turnIndex, encounter.acting, encounter.enemiesUp).includes(index) ? "font-medium text-amber-200" : undefined,
                     )}
                   >
                     {index > 0 ? " > " : ""}

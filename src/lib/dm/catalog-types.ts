@@ -98,6 +98,13 @@ export type CatalogField = {
   // Shown, and sent, only while another field holds one of these values: a
   // drake's essence only for a drake, a story pet's numbers only for one.
   onlyWhen?: { field: string; equals: string[] };
+  // An empty input here is an answer, not a field left blank: the facade
+  // passes "" on to the handler instead of dropping it (src/lib/dm/invoke.ts
+  // normalizeArgs), and the handler decides what an empty answer means. A
+  // value left out altogether is still no answer, and this is no way past
+  // `required`: checkArgs reads "" as missing all the same. Only
+  // update_sheet's Becomes says it, where an empty Conditions clears them.
+  keepsEmpty?: boolean;
 };
 
 // Whether a field can matter with the values the form holds now.
