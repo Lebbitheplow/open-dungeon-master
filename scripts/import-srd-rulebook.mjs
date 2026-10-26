@@ -224,6 +224,7 @@ const ERRATA = [
   ["alignment", "good- aligned", "good-aligned"],
   ["half-dragon-template", "half- dragon's", "half-dragon's"],
   ["the-planes-of-existence", "fog- shrouded", "fog-shrouded"],
+  ["madness", "self- destructive", "self-destructive"],
 ];
 
 // Em dashes the conversion turned into hyphens ("trade goods-bars of iron,

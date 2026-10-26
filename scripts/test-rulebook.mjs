@@ -160,6 +160,21 @@ try {
     }
   });
 
+  // A hyphen the PDF broke across a line kept its space ("self- destructive")
+  // and a few came through as soft or Unicode hyphens: the import mends them
+  // (scripts/import-srd-rulebook.mjs). A suspended hyphen ("a 5- to 20-foot
+  // cone"), the conversion's "Table- X" captions and the blink dog's line,
+  // which the SRD does not print, are left as they are.
+  await test("no word is split at a hyphen the PDF broke across a line", () => {
+    for (const page of rulebookPages()) {
+      assert.ok(!/[­‐‑]/.test(page.md), `${page.id} keeps a soft or Unicode hyphen`);
+      for (const match of page.md.matchAll(/(\w+)- (?!to\b|or\b|and\b)([a-z]+)/g)) {
+        if (match[1] === "Table" || (page.id === "blink-dog" && match[0] === "long- standing")) continue;
+        assert.fail(`${page.id} splits "${match[0]}"`);
+      }
+    }
+  });
+
   // ---- the markdown ----
   await test("every page parses with no markdown left in its text", () => {
     for (const page of rulebookPages()) {
