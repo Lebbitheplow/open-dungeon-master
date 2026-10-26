@@ -5,13 +5,13 @@ import { Plus, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useTourPrepare } from "@/lib/tours/prepare";
 import { collectTags } from "@/lib/workshop/pickers";
-import { WORLD_LORE_CATEGORIES, type LoreLinkTarget } from "@/lib/dm/world-lore-logic";
+import { LORE_TITLE_MAX, WORLD_LORE_CATEGORIES, type LoreLinkTarget } from "@/lib/dm/world-lore-logic";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { Sheet } from "@/components/ui/Sheet";
-import { KitButton, LoadFailed, PanelLoading } from "./PanelKit";
+import { KitButton, LoadFailed, PanelError, PanelLoading } from "./PanelKit";
 import { WorldEntryLink, useOpenOnArrival } from "@/app/workshop/world/WorldEntryLink";
 import { useUnsavedDraft } from "@/app/workshop/unsaved";
-import { readLoad, useLoadStatus } from "@/lib/load-state";
+import { findLostCreate, readLoad, readWrite, useLoadStatus } from "@/lib/load-state";
 import { LoreEntryActions } from "@/app/workshop/lore/LoreEntryActions";
 import { LoreEditorForm } from "@/app/workshop/lore/LoreEditorForm";
 import { LoreEntryRow, MentionedIn } from "@/app/workshop/lore/LoreEntryRow";
@@ -112,6 +112,7 @@ export function LorePanel({
   }
 
   function startAdd() {
+    setSaveError("");
     setDraft(blankLoreDraft());
     setEditingId(null);
     setAdding(true);
@@ -129,6 +130,7 @@ export function LorePanel({
   });
 
   function startEdit(entry: LoreEntryView) {
+    setSaveError("");
     setDraft(draftFromEntry(entry));
     setAdding(false);
     setEditingId(entry.id);
@@ -143,6 +145,7 @@ export function LorePanel({
   );
 
   function closeEditor() {
+    setSaveError("");
     setAdding(false);
     setEditingId(null);
     setReadingId(null);
@@ -169,85 +172,137 @@ export function LorePanel({
         attachmentPath: draft.attachmentPath,
         style: draft.style,
       };
-      const response = editingId
-        ? await fetch(`/api/campaigns/${campaignId}/lore/${editingId}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          })
-        : await fetch(`/api/campaigns/${campaignId}/lore`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
-      if (response.ok) {
-        const data = await response.json();
-        if (data.entry) {
-          setEntries((current) =>
-            editingId
-              ? current.map((entry) => (entry.id === editingId ? data.entry : entry))
-              : [...current, data.entry],
+      const sent = await readWrite<{ entry?: LoreEntryView }>(
+        fetch(editingId ? `/api/campaigns/${campaignId}/lore/${editingId}` : `/api/campaigns/${campaignId}/lore`, {
+          method: editingId ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        }),
+        "That entry could not be saved.",
+      );
+      if (sent.error !== null) {
+        // A new entry whose answer was lost is looked for before anything is
+        // said, so a second press never makes two (WA-05). The form keeps
+        // the draft unless the entry is there.
+        if (sent.unanswered && !editingId) {
+          const title = draft.title.trim().slice(0, LORE_TITLE_MAX);
+          const found = await findLostCreate(entries, reread, (entry) => entry.title === title);
+          if (found === "made") {
+            setAdding(false);
+            return;
+          }
+          setSaveError(
+            found === "missing"
+              ? "The server did not answer and the entry is not in the list, so it was not added. Your words are kept; press Add again."
+              : "The server could not be reached, so it is not known yet whether the entry was added. Your words are kept. Check the list before adding it again.",
           );
+          return;
         }
-        setAdding(false);
-        setEditingId(null);
-      } else {
-        const payload = (await response.json().catch(() => ({}))) as { error?: string };
-        setSaveError(payload.error ?? "That entry could not be saved.");
+        setSaveError(sent.unanswered ? `${sent.error} Your words are kept here.` : sent.error);
+        return;
       }
+      const saved = sent.payload.entry;
+      if (saved) {
+        setEntries((current) =>
+          editingId ? current.map((entry) => (entry.id === editingId ? saved : entry)) : [...current, saved],
+        );
+      }
+      setAdding(false);
+      setEditingId(null);
     } finally {
       setBusy(false);
     }
   }
 
-  async function togglePin(entry: LoreEntryView) {
-    const response = await fetch(`/api/campaigns/${campaignId}/lore/${entry.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pinned: !entry.pinned }),
-    });
-    if (response.ok) {
-      const data = await response.json();
-      if (data.entry) {
-        setEntries((current) => current.map((e) => (e.id === entry.id ? data.entry : e)));
+  // The list read again outside the load effect, for a create whose answer
+  // was lost: the entries it found, or null when it could not read them.
+  const reread = () =>
+    readLoad<{ entries?: LoreEntryView[] }>(fetch(`/api/campaigns/${campaignId}/lore`), "The lore").then((outcome) => {
+      if (!outcome.payload || !Array.isArray(outcome.payload.entries)) {
+        return null;
       }
+      setEntries(outcome.payload.entries);
+      return outcome.payload.entries;
+    });
+
+  // Pin, delete and duplicate say what the server refused, or that it was
+  // not reached, where the editor's own refusals show.
+  async function togglePin(entry: LoreEntryView) {
+    setSaveError("");
+    const sent = await readWrite<{ entry?: LoreEntryView }>(
+      fetch(`/api/campaigns/${campaignId}/lore/${entry.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pinned: !entry.pinned }),
+      }),
+      "That entry could not be pinned.",
+    );
+    if (sent.error !== null) {
+      setSaveError(sent.error);
+      if (sent.unanswered) void reread();
+      return;
+    }
+    const saved = sent.payload.entry;
+    if (saved) {
+      setEntries((current) => current.map((e) => (e.id === entry.id ? saved : e)));
     }
   }
 
-  async function remove(entryId: string) {
-    const response = await fetch(`/api/campaigns/${campaignId}/lore/${entryId}`, {
-      method: "DELETE",
-    });
-    if (response.ok) {
-      setEntries((current) => current.filter((entry) => entry.id !== entryId));
+  async function remove(entryId: string): Promise<boolean> {
+    setSaveError("");
+    const sent = await readWrite(fetch(`/api/campaigns/${campaignId}/lore/${entryId}`, { method: "DELETE" }), "That entry could not be deleted.");
+    if (sent.error !== null) {
+      setSaveError(sent.error);
+      if (sent.unanswered) void reread();
+      return false;
     }
+    setEntries((current) => current.filter((entry) => entry.id !== entryId));
+    return true;
   }
 
   // Same create route as submitDraft, with the copy landing in the list the
   // same way a new entry does.
   async function duplicate(entry: LoreEntryView) {
     setBusy(true);
+    setSaveError("");
     try {
-      const response = await fetch(`/api/campaigns/${campaignId}/lore`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          category: entry.category,
-          title: `${entry.title} (copy)`,
-          body: entry.body,
-          tags: entry.tags,
-          visibility: entry.visibility,
-          imagePath: entry.imagePath,
-          audience: entry.audience ?? null,
-          attachmentPath: entry.attachmentPath ?? "",
-          style: entry.style ?? "plain",
+      const title = `${entry.title} (copy)`;
+      const sent = await readWrite<{ entry?: LoreEntryView }>(
+        fetch(`/api/campaigns/${campaignId}/lore`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            category: entry.category,
+            title,
+            body: entry.body,
+            tags: entry.tags,
+            visibility: entry.visibility,
+            imagePath: entry.imagePath,
+            audience: entry.audience ?? null,
+            attachmentPath: entry.attachmentPath ?? "",
+            style: entry.style ?? "plain",
+          }),
         }),
-      });
-      if (response.ok) {
-        const data = await response.json();
-        if (data.entry) {
-          setEntries((current) => [...current, data.entry]);
+        "That entry could not be copied.",
+      );
+      if (sent.error !== null) {
+        if (sent.unanswered) {
+          const found = await findLostCreate(entries, reread, (row) => row.title === title.trim().slice(0, LORE_TITLE_MAX));
+          if (found !== "made") {
+            setSaveError(
+              found === "missing"
+                ? "The server did not answer and the copy is not in the list, so it was not made. Duplicate it again."
+                : "The server could not be reached, so it is not known yet whether the copy was made. Check the list before duplicating it again.",
+            );
+          }
+          return;
         }
+        setSaveError(sent.error);
+        return;
+      }
+      const copy = sent.payload.entry;
+      if (copy) {
+        setEntries((current) => [...current, copy]);
       }
     } finally {
       setBusy(false);
@@ -300,13 +355,21 @@ export function LorePanel({
   ];
   const knownTags = collectTags(entries);
 
-  // Show this now (section 5.2): the same engine call the model makes.
+  // Show this now (section 5.2): the same engine call the model makes. A
+  // refusal, or a request that never arrived, is said rather than dropped.
   async function showNow(entry: LoreEntryView) {
-    await fetch(`/api/campaigns/${campaignId}/dm/invoke`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "show_handout", args: { loreId: entry.id } }),
-    });
+    setSaveError("");
+    const sent = await readWrite(
+      fetch(`/api/campaigns/${campaignId}/dm/invoke`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: "show_handout", args: { loreId: entry.id } }),
+      }),
+      "That handout could not be shown.",
+    );
+    if (sent.error !== null) {
+      setSaveError(sent.unanswered ? `${sent.error} The party may have it already; look at the table before showing it again.` : sent.error);
+    }
   }
 
   // The author form is the same fields in both layouts; only what wraps it
@@ -322,7 +385,7 @@ export function LorePanel({
         targets={targets}
         rows={rows}
       />
-      {saveError ? <p className="motion-shake text-[11px] text-red-400">{saveError}</p> : null}
+      {saveError ? <PanelError className="text-[11px]">{saveError}</PanelError> : null}
       <div className="flex gap-1.5" data-tour="lore-save">
         <KitButton tone="primary" onClick={submitDraft} disabled={busy || !draft.title.trim() || !draft.body.trim()} busy={busy}>
           {editingId ? "Save" : "Add"}
@@ -345,6 +408,7 @@ export function LorePanel({
     return (
       <div className="space-y-3">
         {loaded && loadError ? <LoadFailed error={loadError} onRetry={retry} /> : null}
+        {saveError && !editorOpen ? <PanelError>{saveError}</PanelError> : null}
         {loading ? (
           <PanelLoading label="Loading..." />
         ) : !loaded && loadError ? (
@@ -375,7 +439,7 @@ export function LorePanel({
                   entry={editing}
                   onPin={() => void togglePin(editing)}
                   onDuplicate={() => void duplicate(editing)}
-                  onDelete={() => void remove(editing.id).then(closeEditor)}
+                  onDelete={() => void remove(editing.id).then((gone) => gone && closeEditor())}
                 />
               ) : null}
               {editing && onWorldEntry ? <WorldEntryLink onOpen={() => onWorldEntry(editing.id)} /> : null}
@@ -411,6 +475,7 @@ export function LorePanel({
         <PanelLoading label="Loading..." />
       ) : null}
       {!loading && loadError ? <LoadFailed error={loadError} onRetry={retry} /> : null}
+      {saveError && !editorOpen ? <PanelError className="mb-2">{saveError}</PanelError> : null}
       {!loading && loaded && !entries.length && !editorOpen ? (
         <EmptyState size="sm" art="scrolls" title={steersStory ? "No lore yet. Write your world's places, factions, and history; the DM treats it as canon." : "The party lead has not written any world lore yet."} />
       ) : null}

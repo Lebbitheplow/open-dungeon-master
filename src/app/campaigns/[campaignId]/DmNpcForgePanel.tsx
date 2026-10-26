@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Listed } from "@/app/campaigns/[campaignId]/PanelKit";
-import { readLoad, useLoadStatus } from "@/lib/load-state";
+import { Listed, PanelError } from "@/app/campaigns/[campaignId]/PanelKit";
+import { readLoad, readWrite, useLoadStatus } from "@/lib/load-state";
 import {
   Archive,
   ArchiveRestore,
@@ -191,6 +191,15 @@ export function DmNpcForgePanel({
     }
   }
 
+  // Every write goes through readWrite (WA-05): a refusal or a request that
+  // never arrived is said, and the form keeps what was typed. With no
+  // answer the change may have landed, so the cast is read again; a second
+  // create of the same name is refused by the server, never doubled.
+  function failed(sent: { error: string; unanswered: boolean }) {
+    setError(sent.unanswered ? `${sent.error} The cast was read again; check it before you try again.` : sent.error);
+    if (sent.unanswered) void load();
+  }
+
   async function save() {
     setBusy(true);
     setError("");
@@ -198,19 +207,21 @@ export function DmNpcForgePanel({
       const url = selected
         ? `/api/campaigns/${campaignId}/dm/npcs/${selected.id}`
         : `/api/campaigns/${campaignId}/dm/npcs`;
-      const response = await fetch(url, {
-        method: selected ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ draft }),
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setError((payload as { error?: string }).error ?? "That did not save.");
+      const sent = await readWrite<{ npc?: { id: string } }>(
+        fetch(url, {
+          method: selected ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ draft }),
+        }),
+        "That did not save.",
+      );
+      if (sent.error !== null) {
+        failed(sent);
         return;
       }
       await load();
-      if (!selected && payload.npc) {
-        setSelectedId(payload.npc.id);
+      if (!selected && sent.payload.npc) {
+        setSelectedId(sent.payload.npc.id);
       }
     } finally {
       setBusy(false);
@@ -222,12 +233,20 @@ export function DmNpcForgePanel({
       return;
     }
     setBusy(true);
+    setError("");
     try {
-      await fetch(`/api/campaigns/${campaignId}/dm/npcs/${selected.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
+      const sent = await readWrite(
+        fetch(`/api/campaigns/${campaignId}/dm/npcs/${selected.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }),
+        "That did not save.",
+      );
+      if (sent.error !== null) {
+        failed(sent);
+        return;
+      }
       await load();
     } finally {
       setBusy(false);
@@ -239,9 +258,13 @@ export function DmNpcForgePanel({
       return;
     }
     setBusy(true);
+    setError("");
     try {
-      await fetch(`/api/campaigns/${campaignId}/dm/npcs/${selected.id}`, { method: "DELETE" });
-      setError("");
+      const sent = await readWrite(fetch(`/api/campaigns/${campaignId}/dm/npcs/${selected.id}`, { method: "DELETE" }), "That could not be deleted.");
+      if (sent.error !== null) {
+        failed(sent);
+        return;
+      }
       setSelectedId("");
       setDraft(blankDraft());
       setEditorOpen(false);
@@ -262,20 +285,20 @@ export function DmNpcForgePanel({
     setError("");
     try {
       const base = draftFrom(selected as Parameters<typeof draftFrom>[0]);
-      const response = await fetch(`/api/campaigns/${campaignId}/dm/npcs`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ draft: { ...base, name: `${base.name} (copy)`.slice(0, 80) } }),
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setError((payload as { error?: string }).error ?? "That could not be copied.");
+      const sent = await readWrite<{ npc?: Parameters<typeof draftFrom>[0] & { id: string } }>(
+        fetch(`/api/campaigns/${campaignId}/dm/npcs`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ draft: { ...base, name: `${base.name} (copy)`.slice(0, 80) } }),
+        }),
+        "That could not be copied.",
+      );
+      if (sent.error !== null) {
+        failed(sent);
         return;
       }
       await load();
-      const created = (
-        payload as { npc?: Parameters<typeof draftFrom>[0] & { id: string } }
-      ).npc;
+      const created = sent.payload.npc;
       if (created) {
         setSelectedId(created.id);
         setDraft(draftFrom(created));
@@ -467,7 +490,7 @@ export function DmNpcForgePanel({
         ) : null}
       </div>
 
-      {error ? <p className="motion-shake text-[11px] text-red-400">{error}</p> : null}
+      {error ? <PanelError className="text-[11px]">{error}</PanelError> : null}
     </div>
   );
 

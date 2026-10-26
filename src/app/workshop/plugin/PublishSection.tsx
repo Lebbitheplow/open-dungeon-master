@@ -14,7 +14,8 @@ import type { WorldPackSummary } from "@/lib/worlds/summary";
 import { MAX_MANIFEST_BYTES } from "@/lib/worlds/types";
 import { notInDraft, type PackOmission, type SettingLists } from "@/lib/workshop/to-pack";
 import { OmissionReport } from "@/app/workshop/plugin/OmissionReport";
-import type { SectionProps } from "@/app/workshop/plugin/types";
+import { PanelError } from "@/app/campaigns/[campaignId]/PanelKit";
+import type { Flushed, SectionProps } from "@/app/workshop/plugin/types";
 
 // The last tab: what is still missing, and the three ways out. Download
 // hands over the manifest as a file, the same file Admin, Campaign plugins
@@ -54,8 +55,8 @@ export function PublishSection({
   workshopId: string;
   isAdmin: boolean;
   // Writes the draft now rather than after the autosave delay, so the
-  // export reads what is on screen.
-  flushSave: () => Promise<void>;
+  // export reads what is on screen, and says whether that landed.
+  flushSave: () => Promise<Flushed>;
   onClear: () => Promise<void>;
 }) {
   const check = checkDraft(draft);
@@ -107,11 +108,19 @@ export function PublishSection({
     setNotice("");
     setServerProblems([]);
     try {
-      await flushSave();
+      // The export builds from the server's copy (WA-04). A save that did
+      // not land leaves an older copy there, so nothing is built from it;
+      // and the export names the revision this save left, so a copy changed
+      // since (another tab) is refused rather than built.
+      const saved = await flushSave();
+      if (!saved.ok) {
+        setError("The draft on screen is not saved, so nothing was built from the older copy on the server. Your changes are kept here. Try again.");
+        return;
+      }
       const response = await fetch(`/api/workshops/${workshopId}/plugin/export`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ install }),
+        body: JSON.stringify({ install, revision: saved.revision }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -194,6 +203,8 @@ export function PublishSection({
           `Started from "${data.pack.name}". Its pictures stay with the installed copy; give this one a new name so the two do not share an id.`,
         );
       }
+    } catch {
+      setError("Could not reach the server.");
     } finally {
       setBusy("");
       setStartFrom("");
@@ -265,7 +276,7 @@ export function PublishSection({
             : "The file installs from Admin, Campaign plugins, Install from a file, on any server whose admin trusts it. Only an admin can install here."}
         </p>
         {notice ? <p className="live-in mt-2 text-xs text-amber-200/90">{notice}</p> : null}
-        {error ? <p className="motion-shake mt-2 text-xs text-red-300">{error}</p> : null}
+        {error ? <PanelError className="mt-2">{error}</PanelError> : null}
       </section>
 
       <section className={ui.card + " p-4"}>

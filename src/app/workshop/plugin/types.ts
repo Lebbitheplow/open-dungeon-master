@@ -24,6 +24,11 @@ export type OnDraft = (next: WorldPackDraft) => void;
 
 export type SectionProps = { draft: WorldPackDraft; onDraft: OnDraft };
 
+// The draft on screen written now: whether the server took it, and the
+// revision (its updatedAt) it holds after, which an export names so it is
+// built from that copy and no other.
+export type Flushed = { ok: true; revision: string | null } | { ok: false };
+
 export function replaceAt<T>(list: T[], index: number, entry: T): T[] {
   return list.map((current, at) => (at === index ? entry : current));
 }

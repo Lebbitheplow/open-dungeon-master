@@ -5,7 +5,9 @@ import { Select } from "@/components/ui/Select";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { cn } from "@/lib/cn";
+import { readWrite } from "@/lib/load-state";
 import { ui } from "@/lib/ui";
+import { PanelError } from "@/app/campaigns/[campaignId]/PanelKit";
 import { BEAT_LABELS, type BeatKind, type Suggestion } from "@/lib/workshop/board";
 import type { CompileSummary } from "@/lib/workshop/board-compile";
 
@@ -106,18 +108,23 @@ export function SharedWorkshopCard({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  // A choice that dies on the connection is said (WA-05); with no answer it
+  // may have landed, so the board is read again and the picker shows which.
   async function choose(commonWorkshopId: string) {
     setBusy(true);
     setError("");
     try {
-      const response = await fetch(`/api/workshops/${workshopId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ commonWorkshopId }),
-      });
-      const payload = (await response.json().catch(() => ({}))) as { error?: string };
-      if (!response.ok) {
-        setError(payload.error ?? "That could not be changed.");
+      const sent = await readWrite(
+        fetch(`/api/workshops/${workshopId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ commonWorkshopId }),
+        }),
+        "That could not be changed.",
+      );
+      if (sent.error !== null) {
+        setError(sent.error);
+        if (sent.unanswered) onChanged();
         return;
       }
       onChanged();
@@ -162,7 +169,7 @@ export function SharedWorkshopCard({
           />
         </>
       )}
-      {error ? <p className="motion-shake text-[11px] text-red-400">{error}</p> : null}
+      {error ? <PanelError className="text-[11px]">{error}</PanelError> : null}
     </AsideCard>
   );
 }

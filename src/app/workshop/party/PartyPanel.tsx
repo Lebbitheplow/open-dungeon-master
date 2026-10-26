@@ -12,8 +12,8 @@ import { Select } from "@/components/ui/Select";
 import { newCharacterHref } from "@/app/characters/builder/door";
 import { ListHead, useListHead } from "@/app/workshop/ListHead";
 import { rowIcon } from "@/app/workshop/kit";
-import { LoadFailed } from "@/app/campaigns/[campaignId]/PanelKit";
-import { readLoad, useLoadStatus } from "@/lib/load-state";
+import { LoadFailed, PanelError } from "@/app/campaigns/[campaignId]/PanelKit";
+import { readLoad, readWrite, useLoadStatus } from "@/lib/load-state";
 import { DraftPregensCard } from "@/app/workshop/party/DraftPregens";
 import type { TargetParty } from "@/lib/workshop/kind";
 
@@ -103,22 +103,27 @@ export function PartyPanel({
   }, [workshopId, version, settle]);
 
   // POST files a character, DELETE takes it off, PATCH ticks or unticks
-  // "Offer to players" (src/lib/db/pregen-offers.ts).
+  // "Offer to players" (src/lib/db/pregen-offers.ts). All three are safe to
+  // send twice, so one that dies on the connection is said (WA-05) and the
+  // roster read again, since it may have landed all the same.
   async function change(method: "POST" | "DELETE" | "PATCH", characterId: string, offered?: boolean) {
     setBusy(true);
     setError("");
     try {
-      const response = await fetch(`/api/workshops/${workshopId}/pregens`, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(method === "PATCH" ? { characterId, offered } : { characterId }),
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setError((payload as { error?: string }).error ?? "That did not work.");
+      const sent = await readWrite<{ pregens: Pregen[] }>(
+        fetch(`/api/workshops/${workshopId}/pregens`, {
+          method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(method === "PATCH" ? { characterId, offered } : { characterId }),
+        }),
+        "That did not work.",
+      );
+      if (sent.error !== null) {
+        setError(sent.error);
+        if (sent.unanswered) setVersion((current) => current + 1);
         return;
       }
-      setPregens((payload as { pregens: Pregen[] }).pregens);
+      setPregens(sent.payload.pregens);
       setPicked("");
       setVersion((current) => current + 1);
       onChanged();
@@ -273,7 +278,7 @@ export function PartyPanel({
         {available.length === 0 && library.length > 0 ? (
           <p className="reveal text-xs text-stone-500">Every character in your library is already on the roster.</p>
         ) : null}
-        {error ? <p className="motion-shake text-xs text-red-400">{error}</p> : null}
+        {error ? <PanelError>{error}</PanelError> : null}
       </div>
     </section>
   );
