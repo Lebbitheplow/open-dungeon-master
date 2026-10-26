@@ -212,6 +212,29 @@ await test("an offer that lapses unanswered is told to the table as lapsed, once
   await answer(world.owner, lastPending().id, "cancel");
 });
 
+// An offer staged by the server before a grant's item was renamed from name
+// (PR #542) waits in the table as it was made: accepted after the upgrade it
+// lands, and an identical new offer is still the same one.
+await test("an offer stored under an argument's older name is applied and compared as it was meant", async () => {
+  const { allocateSeq } = await import("../src/lib/db/campaigns.ts");
+  const row = proposals.insertItemProposal({
+    campaignId: world.campaignId,
+    turnId: null,
+    characterId: nysa.id,
+    userId: nysaUser.id,
+    toolName: "grant_item",
+    argsJson: JSON.stringify({ characterId: nysa.id, name: "Brass compass", qty: 1, reason: "the crypt" }),
+    summary: "Give Brass compass to Nysa",
+    reason: "the crypt",
+    seq: allocateSeq(world.campaignId),
+  });
+  assert.match(offer("grant_item", { item: "brass compass" }).error, /still waiting for Nysa's player/);
+  const done = await answer(nysaUser, row.id, "approve");
+  assert.equal(done.status, 200, done.body.error);
+  assert.equal(held("Brass compass"), 1);
+  assert.equal(proposals.getItemProposal(row.id).outcome, "Nysa now carries Brass compass.");
+});
+
 await test("with item offers off, a grant applies at once and nothing here runs", async () => {
   const other = await openWorld({ gameSettings: { inventoryApprovals: false } });
   const hero = other.addHero({ class: "fighter", level: 1 });

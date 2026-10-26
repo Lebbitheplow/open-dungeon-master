@@ -13,8 +13,8 @@ import {
   appliedOutcome,
   canResolveProposal,
   OFFER_NOTE_PREFIX,
-  parseOfferArgs,
   resolutionNote,
+  storedOfferArgs,
   VITALS_PROPOSAL_TOOL_NAMES,
   type OfferResolution,
 } from "@/lib/dm/proposal-logic";
@@ -187,11 +187,14 @@ export async function POST(
     const sheets = listSheets(campaignId);
     const sheetsById = new Map(sheets.map((sheet) => [sheet.id, sheet]));
     const holder = turnHolder(campaignId);
+    // Under the names the tool reads now: an offer made before a rename
+    // still waits with the old ones.
+    const offered = storedOfferArgs(proposal.toolName, proposal.argsJson);
     const { result } = applyDmMutation(
       context.campaign,
       proposal.turnId ?? "",
       proposal.toolName,
-      proposal.argsJson,
+      JSON.stringify(offered),
       sheets,
       sheetsById,
     );
@@ -215,7 +218,7 @@ export async function POST(
     }
     const after = getSheetById(proposal.characterId);
     if (after) {
-      outcome = appliedOutcome(proposal.toolName, parseOfferArgs(proposal.argsJson), {
+      outcome = appliedOutcome(proposal.toolName, offered, {
         name: after.name,
         equipment: after.equipment,
         gold: after.gold,

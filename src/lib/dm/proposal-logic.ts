@@ -7,6 +7,7 @@
 import type { ToolError } from "./tool-errors.ts";
 import { textKey } from "../language/text-logic.ts";
 import { lineNamed } from "../srd/item-row.ts";
+import { renamedArgs } from "./tool-merge-logic.ts";
 
 export const PROPOSAL_TOOL_NAMES = new Set([
   "grant_item",
@@ -202,6 +203,13 @@ export function parseOfferArgs(raw: string): OfferArgs {
   }
 }
 
+// A stored offer's arguments under the names its tool reads now. An offer
+// made before an argument was renamed still waits with the old name (a
+// grant's item was its name), and is applied and compared as it was meant.
+export function storedOfferArgs(toolName: string, raw: string): OfferArgs {
+  return renamedArgs(toolName, parseOfferArgs(raw)) as OfferArgs;
+}
+
 export function purseWords(gold: number, copper: number): string {
   const cp = Math.max(0, Math.round(gold * 100 + copper));
   const gp = Math.floor(cp / 100);
@@ -290,7 +298,7 @@ export function duplicateOfferProblem(
     if (offer.characterId !== character.id || offer.toolName !== toolName) {
       continue;
     }
-    if (offerKey(offer.toolName, parseOfferArgs(offer.argsJson)) !== key) {
+    if (offerKey(offer.toolName, storedOfferArgs(offer.toolName, offer.argsJson)) !== key) {
       continue;
     }
     if (offer.status === "pending" && !proposalExpired(offer.createdAt, new Date(nowMs))) {
