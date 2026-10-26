@@ -158,6 +158,11 @@
   text-transform: uppercase;
   color: var(--ts-gold);
   white-space: nowrap;
+  /* Past the brand's width it ends in an ellipsis rather than painting
+     under the header's buttons (the apps' header holds one more). */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .ts-cluster {
   display: flex;
@@ -1830,6 +1835,9 @@ html[data-theme="light"] .cine-stage .cine-header .session-menu-row { color: inh
   text-transform: uppercase;
   color: var(--color-amber-400);
   white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   transition: color var(--dur-quick) var(--ease-snap), text-shadow var(--dur-move) var(--ease-snap);
 }
 .app-brand:hover .app-wordmark { color: var(--color-amber-200); text-shadow: 0 0 14px rgba(212, 171, 58, 0.35); }

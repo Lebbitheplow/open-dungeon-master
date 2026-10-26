@@ -105,7 +105,7 @@ export default {
       const banner = page.locator(".session-banner").filter({ hasText: "Narration is waiting" });
       // Above the composer, or over the bottom tabs on a phone whose view
       // has no composer (a fight opens on the board): one of them in view.
-      const listen = banner.getByRole("button", { name: "Click to listen", exact: true }).locator("visible=true");
+      const listen = banner.getByRole("button", { name: "Listen", exact: true }).locator("visible=true");
       // Audio fetched to play, by message: /generated-audio/<campaign>/<message>.mp3
       let fetched = [];
       page.on("request", (request) => {
