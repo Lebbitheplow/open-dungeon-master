@@ -199,8 +199,8 @@ await test("at the table Ashen's breath is fire against a Dexterity save at 2d6,
   const breathe = () => table.invoke("use_resource", { characterId: seated.id, resource: "Breath Weapon" });
   const first = await breathe();
   assert.equal(first.ok, true, first.error);
-  assert.equal(first.result.dice, "2d6");
-  assert.equal(first.result.damageType, "fire");
+  assert.equal(first.result.damage, "2d6");
+  assert.equal(first.result.type, "fire");
   assert.equal(first.result.saveAbility, "dex");
   assert.equal(first.result.area, "15 ft. cone");
   // 8 + Constitution 14 (+2) + proficiency at 5th (+3).
@@ -227,7 +227,7 @@ await test("at the table Ashen's breath is fire against a Dexterity save at 2d6,
   await table.invoke("take_rest", { kind: "short", characterIds: [seated.id] });
   const sixth = await breathe();
   assert.equal(sixth.ok, true, sixth.error);
-  assert.equal(sixth.result.dice, "3d6");
+  assert.equal(sixth.result.damage, "3d6");
   table.close();
 });
 
