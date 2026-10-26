@@ -1,4 +1,4 @@
-// Audit WA-08 (docs/workshop-complete-audit-2026-10-26.md): on a phone the
+// Audit WA-08 (the Workshop audit of 2026-10-26): on a phone the
 // Workshop's editors drew controls a finger could barely hit, among them
 // the Homebrew dialog's Close at 24 px, a glossary ⓘ at 14 px, a chip's
 // remove at 20 px and the small steppers of a subclass's levels and the

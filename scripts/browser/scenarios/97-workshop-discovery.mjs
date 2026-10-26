@@ -1,4 +1,4 @@
-// Audit WA-09 and WA-10 (docs/workshop-complete-audit-2026-10-26.md), on
+// Audit WA-09 and WA-10 (the Workshop audit of 2026-10-26), on
 // desktop and phone:
 //
 //   - WorldForge with no entries is no listbox: its empty state holds the

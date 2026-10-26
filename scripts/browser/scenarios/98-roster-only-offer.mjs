@@ -1,4 +1,4 @@
-// Audit WA-07 (docs/workshop-complete-audit-2026-10-26.md): a workshop
+// Audit WA-07 (the Workshop audit of 2026-10-26): a workshop
 // holding only a pregen ticked "Offer to players" could not offer it to a
 // table. Offers read the table's source workshop off the prep it copied,
 // and there was no prep to copy, so the Start from picker said the

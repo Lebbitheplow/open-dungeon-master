@@ -1,5 +1,5 @@
 // What the Workshop audit's WA-01, WA-02 and WA-06 fixed, seen on the page
-// (docs/workshop-complete-audit-2026-10-26.md), on desktop and phone:
+// (the Workshop audit of 2026-10-26), on desktop and phone:
 //
 //   - WA-06: a species' traits are read paragraph by paragraph, whatever
 //     bold each heading uses, and the editor lists the traits the table

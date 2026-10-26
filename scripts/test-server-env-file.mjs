@@ -4,7 +4,7 @@
 // scenario. Before, the runner blanked keys with empty strings, and an empty
 // value in process.env falls back to the file: a Workshop audit's website
 // runs called this machine's models until it overrode them by hand
-// (docs/workshop-complete-audit-2026-10-26.md, test environment).
+// (the Workshop audit of 2026-10-26, its test environment).
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
