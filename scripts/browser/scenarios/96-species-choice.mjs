@@ -83,6 +83,9 @@ export default {
       await picks.press("Tab");
       // From the keyboard: the choice asked for, its label, an option added.
       await choose.focus();
+      // The control where it lives, at its default: no choice yet.
+      await untilStill(page);
+      await t.shot("choice-default");
       await page.keyboard.press("Enter");
       const label = editor.getByLabel("What the player chooses");
       await eventually(() => label.isVisible(), { timeoutMs: 10_000, label: "the choice's label field" });
