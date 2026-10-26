@@ -6,6 +6,8 @@
 // The rules held:
 //   homebrew is its author's: nobody else lists, reads, edits or deletes it;
 //   a homebrew spell is of level 0 to 9 and says how it resolves;
+//   a list longer than its kind keeps (src/lib/homebrew/limits.ts) is
+//   refused by its field, never cut short on the way in;
 //   whatever was stored, the monster that reaches a fight is inside the
 //   bounds of src/lib/bestiary/monster-draft.ts (armor class 30, 2,000 hit
 //   points, +20 to hit, ten attacks a turn, dice the table can roll), and
@@ -173,6 +175,27 @@ await test(
     assert.equal(picked.status, 400, `a player's own spell was accepted; waiting to be prepared: ${pending.join(", ")}`);
   },
 );
+
+// ---- what an entry keeps ----
+
+await test("a list longer than its kind keeps is refused by its field, and what was stored stays", async () => {
+  const before = (await listed(who.player, "class")).length;
+  const levels = { 3: Array.from({ length: 9 }, (_, at) => ({ n: `Edge ${at + 1}`, d: "x" })) };
+  const crowded = await brew(who.player, "class", "Crowded Blade", { desc: "x", saves: ["str", "con"], levels });
+  assert.equal(crowded.status, 400, JSON.stringify(crowded.json));
+  assert.equal(crowded.json.field, "levels.3");
+  assert.match(crowded.json.error, /Level 3 has 9 features/);
+  assert.equal((await listed(who.player, "class")).length, before);
+
+  const six = ["Bless", "Shield of Faith", "Aid", "Light", "Sacred Flame", "Guidance"];
+  const made = await brew(who.player, "archetype", "Domain of Six", { desc: "x", classSlug: "cleric", levels: { 1: [{ n: "Six", d: "x" }] }, spells: { 1: six } });
+  assert.equal(made.status, 201, JSON.stringify(made.json));
+  const target = { id: made.json.entry.id };
+  const seventh = await call(route.one, "PATCH", { data: { ...made.json.entry.data, spells: { 1: [...six, "Command"] } } }, target);
+  assert.equal(seventh.status, 400, JSON.stringify(seventh.json));
+  assert.equal(seventh.json.field, "spells.1");
+  assert.deepEqual((await call(route.one, "GET", undefined, target)).json.entry.data.spells, { 1: six });
+});
 
 // ---- monsters ----
 

@@ -13,6 +13,7 @@ import {
   checkSpellcasting,
 } from "@/lib/bestiary/block-check";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { HOMEBREW_NAME_MAX } from "@/lib/schemas/homebrew";
 
 // The monster a person writes, and the rules for turning it into the stat
 // block the engine fights with.
@@ -288,7 +289,7 @@ function normalizeBlockExtras(
     out.alignment = alignment;
   }
   if (Array.isArray(source.spells)) {
-    const spells = [...new Set(source.spells.map((spell) => text(spell, 60)).filter(Boolean))].slice(0, 40);
+    const spells = [...new Set(source.spells.map((spell) => text(spell, HOMEBREW_NAME_MAX)).filter(Boolean))].slice(0, 40);
     if (spells.length) {
       out.spells = spells;
     }

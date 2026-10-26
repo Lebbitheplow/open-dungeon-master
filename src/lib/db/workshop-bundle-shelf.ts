@@ -14,6 +14,7 @@ import { normalizeHomebrewData } from "@/lib/homebrew/gear";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
 import type { WorkshopBundle } from "@/lib/workshop/bundle";
 import { textKey } from "@/lib/language/text-logic";
+import { HOMEBREW_NAME_MAX } from "@/lib/schemas/homebrew";
 
 // A workshop bundle's share of its author's shelf (hand-built monsters, and
 // items, spells and options), both ways (docs/workshop-rulebook-audit-
@@ -248,11 +249,11 @@ export function sameRules(kind: HomebrewEntry["kind"], a: { name: string; data: 
   return comparable(kind, a.name, a.data) === comparable(kind, b.name, b.data);
 }
 
-// A name the importer's shelf does not have yet for this kind. A spell's is
-// held to 60 letters, the most a subclass's or a monster's spell list keeps
-// (src/lib/homebrew/gear.ts, src/lib/bestiary/monster-draft.ts), so the
-// entries that name it still name it whole.
-export function freeName(taken: Set<string>, name: string, bundleName: string, max = 80): string {
+// A name the importer's shelf does not have yet for this kind, held to the
+// letters an entry's name keeps. A subclass's, an item's and a monster's
+// spell lists keep as many (HOMEBREW_NAME_MAX), so the entries that name a
+// renamed spell still name it whole.
+export function freeName(taken: Set<string>, name: string, bundleName: string, max = HOMEBREW_NAME_MAX): string {
   const base = `${name} [${bundleName}]`.slice(0, max);
   let candidate = base;
   for (let attempt = 2; taken.has(textKey(candidate)); attempt += 1) {
@@ -260,8 +261,6 @@ export function freeName(taken: Set<string>, name: string, bundleName: string, m
   }
   return candidate;
 }
-
-const NAME_MAX = (kind: string) => (kind === "spell" ? 60 : 80);
 
 // Kinds land in this order, so an entry that names another lands after it
 // and names it as it is called here: spells before the subclasses, items and
@@ -309,7 +308,7 @@ export function writeShelfArrivals(userId: string, workshopId: string, bundle: W
       continue;
     }
     const taken = names.get(entry.kind) ?? new Set<string>();
-    const name = held ? freeName(taken, entry.name, bundleName, NAME_MAX(entry.kind)) : entry.name;
+    const name = held ? freeName(taken, entry.name, bundleName) : entry.name;
     if (held) {
       renames.set(key, name);
       renamed.push(`${label(entry.kind, entry.name)} is "${name}" here: your own ${entry.name} has other rules.`);

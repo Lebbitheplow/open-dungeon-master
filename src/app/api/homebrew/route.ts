@@ -1,6 +1,7 @@
 import { currentUser, unauthorized } from "@/lib/auth";
 import { createHomebrew, listHomebrew } from "@/lib/db/homebrew";
 import { normalizeHomebrewData } from "@/lib/homebrew/gear";
+import { homebrewLimitProblems } from "@/lib/homebrew/limits";
 import { serverPublishedNameProblem } from "@/lib/homebrew/published-names-server";
 import { forgetTableFeats } from "@/lib/db/table-feats";
 import { forgetTableHazards } from "@/lib/db/table-hazards";
@@ -42,6 +43,11 @@ export async function POST(request: Request) {
   const published = serverPublishedNameProblem(parsed.data.kind, parsed.data.name);
   if (published) {
     return Response.json({ error: published }, { status: 400 });
+  }
+  // A list longer than its kind keeps is refused by name, not cut short.
+  const over = homebrewLimitProblems(parsed.data.kind, parsed.data.data)[0];
+  if (over) {
+    return Response.json({ error: over.text, field: over.field }, { status: 400 });
   }
   const normalized = normalizeHomebrewData(parsed.data.kind, parsed.data.data, parsed.data.name);
   if ("error" in normalized) {

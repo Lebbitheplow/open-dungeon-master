@@ -206,18 +206,23 @@ export function TextArea({
   );
 }
 
-// A word chip that toggles: weapon properties, spell classes.
+// A word chip that toggles: weapon properties, spell classes. With `max`,
+// the chips not picked rest once that many are, and a line says so; the
+// entry keeps no more (src/lib/homebrew/limits.ts).
 export function ToggleChips<T extends string>({
   options,
   selected,
   onChange,
   labels,
+  max,
 }: {
   options: ReadonlyArray<T>;
   selected: ReadonlyArray<string>;
   onChange: (next: T[]) => void;
   labels?: Partial<Record<T, string>>;
+  max?: number;
 }) {
+  const full = max !== undefined && selected.length >= max;
   return (
     <div className={cn("stagger-pop", chipRow)}>
       {options.map((option) => {
@@ -227,6 +232,7 @@ export function ToggleChips<T extends string>({
             key={option}
             type="button"
             aria-pressed={on}
+            disabled={full && !on}
             onClick={() =>
               onChange(
                 on
@@ -240,6 +246,11 @@ export function ToggleChips<T extends string>({
           </button>
         );
       })}
+      {full ? (
+        <p role="status" className="live-in basis-full text-[11px] text-stone-400">
+          {selected.length} of {max} picked, the most it keeps. Untick one to pick another.
+        </p>
+      ) : null}
     </div>
   );
 }

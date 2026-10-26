@@ -28,6 +28,10 @@ export type BackgroundGrants = {
   purse: number;
 };
 
+// The skills a background grants outright and the lines of its kit: a save
+// over either is refused by name (src/lib/homebrew/limits.ts).
+export const BACKGROUND_LIMITS = { skills: 6, kit: 80 } as const;
+
 function words(value: unknown, count: number, max: number): string[] {
   if (!Array.isArray(value)) return [];
   return [...new Set(value.map((entry) => text(entry, max)).filter(Boolean))].slice(0, count);
@@ -36,7 +40,7 @@ function words(value: unknown, count: number, max: number): string[] {
 // A kit line per item: ten torches are ten lines, as the class kits write them.
 function kitLines(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
-  return value.map((entry) => text(entry, 200)).filter(Boolean).slice(0, 80);
+  return value.map((entry) => text(entry, 200)).filter(Boolean).slice(0, BACKGROUND_LIMITS.kit);
 }
 
 const skillIds = (value: unknown, count: number) =>
@@ -55,7 +59,7 @@ export function backgroundGrantsOf(raw: unknown): BackgroundGrants | null {
   const choiceFrom = skillIds(choice?.from, 18);
   const choiceCount = clamp(choice?.count, 0, 4, 0);
   return {
-    skills: skillIds(source.skills, 6),
+    skills: skillIds(source.skills, BACKGROUND_LIMITS.skills),
     ...(choiceCount ? { skillChoice: { count: choiceCount, from: choiceFrom } } : {}),
     tools: words(source.tools, 8, 120),
     languages: clamp(source.languages, 0, 8, 0),

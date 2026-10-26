@@ -956,7 +956,7 @@
     "lib/db/workshop-bundle-export.ts#str-key": [["key",1,"SQL column names and stored enum values"]],
     "lib/db/workshop-bundle-export.ts#str-list": [["key",10,"SQL column names and stored enum values"]],
     "lib/db/workshop-bundle-parts.ts#str-key": [["key",1,"SQL table names"]],
-    "lib/db/workshop-bundle-shelf.ts#str-eq": [["key",6,"homebrew kinds"]],
+    "lib/db/workshop-bundle-shelf.ts#str-eq": [["key",5,"homebrew kinds"]],
     "lib/db/workshop-bundle.ts#str-list": [["key",1,"light levels"]],
     "lib/db/workshop-storyboard.ts#str-list": [["key",3,"field and table names"]],
     "lib/db/world-forge-bundle.ts#re-word": [["key",2,"homebrew and bundle reference formats"]],

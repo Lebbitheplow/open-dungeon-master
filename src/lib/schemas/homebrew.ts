@@ -115,14 +115,19 @@ export const homebrewDataSchema = z
   })
   .loose();
 
+// The longest name an entry keeps. Whatever names a homebrew spell (a
+// subclass's list, an item's or a monster's spells) keeps as many letters,
+// so a spell is named whole wherever it is cast from.
+export const HOMEBREW_NAME_MAX = 80;
+
 export const createHomebrewSchema = z.object({
   kind: z.enum(HOMEBREW_KINDS),
-  name: z.string().trim().min(1).max(80),
+  name: z.string().trim().min(1).max(HOMEBREW_NAME_MAX),
   data: homebrewDataSchema.default({ desc: "" }),
 });
 
 export const patchHomebrewSchema = z.object({
-  name: z.string().trim().min(1).max(80).optional(),
+  name: z.string().trim().min(1).max(HOMEBREW_NAME_MAX).optional(),
   data: homebrewDataSchema.optional(),
 });
 

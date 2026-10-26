@@ -188,13 +188,19 @@ await test("F13: the checker finds nothing wrong with any of the SRD's magic ite
     : withMechanics("items", bundledItemRows());
   assert.ok(rows.length >= 200, `${rows.length} SRD magic items`);
   const wrong = [];
+  // A description longer than an entry keeps is no rule, and a true finding:
+  // the Wand of Wonder's d100 table runs past 8,000 characters, which the
+  // save refuses (src/lib/homebrew/limits.ts), so the copy says so first.
+  const long = [];
   for (const row of rows) {
     const draft = draftFromCatalog("item", row);
     for (const finding of draftFindings({ ...draft, name: `${row.name} Test` }, {})) {
-      if (finding.level === "error" || (finding.level === "warn" && FALSE_FINDING.test(finding.text))) wrong.push(`${row.name}: ${finding.text}`);
+      if (finding.level === "error" && /^The description runs to/.test(finding.text)) long.push(row.name);
+      else if (finding.level === "error" || (finding.level === "warn" && FALSE_FINDING.test(finding.text))) wrong.push(`${row.name}: ${finding.text}`);
     }
   }
   assert.deepEqual(wrong, [], `${wrong.length} false findings:\n${wrong.slice(0, 30).join("\n")}`);
+  assert.ok(long.every((name) => name === "Wand of Wonder"), `too long to keep: ${long.join(", ")}`);
 });
 
 world.close();

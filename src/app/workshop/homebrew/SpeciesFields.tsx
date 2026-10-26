@@ -19,6 +19,7 @@ import { speciesHoldsTrait } from "@/lib/srd/race-id";
 import { heldTraitNames, resistanceTrait, resistedByTraits, withTrait } from "@/lib/workshop/species-traits";
 import { DAMAGE_TYPES } from "@/lib/dm/damage-logic";
 import { AddFromList } from "@/components/ui/AddFromList";
+import { RACE_LIMITS } from "@/lib/homebrew/race-data";
 
 // A species: the numbers the builder reads (scores, speed, size, languages),
 // the structured grants the SRD's races carry (skills, tools, weapon and
@@ -166,7 +167,7 @@ function Training({ data, set }: Props) {
     <MechGroup title="What it trains" summary={summary || "nothing"} open={open}>
       <div className="col-span-2 space-y-1 sm:col-span-4">
         <span className="text-[11px] text-stone-400">Skills it is proficient in</span>
-        <ToggleChips options={SKILL_IDS} labels={SKILL_LABELS} selected={skills} onChange={(next) => set({ skills: next.length ? next : undefined })} />
+        <ToggleChips options={SKILL_IDS} labels={SKILL_LABELS} selected={skills} max={RACE_LIMITS.skills} onChange={(next) => set({ skills: next.length ? next : undefined })} />
       </div>
       <NumberField
         label="Skills of the player's choice"

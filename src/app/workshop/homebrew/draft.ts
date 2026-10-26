@@ -17,6 +17,7 @@ import { engineSpellNamed, materialOf, spellFlagsOf } from "@/lib/srd/spell-fact
 import { readWeightLb } from "@/lib/content/weight";
 import { textKey } from "@/lib/language/text-logic";
 import { blankClassData } from "@/lib/homebrew/class-data";
+import { homebrewLimitProblems } from "@/lib/homebrew/limits";
 
 // The editor's working copy of an entry and what can be said about it
 // before it is saved. Pure so the panel's findings run client-side on
@@ -84,8 +85,11 @@ export function draftFindings(draft: HomebrewDraft, variantRules: Partial<Varian
   const published = publishedNameProblem(draft.kind, draft.name);
   const kept = savedName !== undefined && textKey(savedName) === textKey(draft.name);
   const naming: Finding[] = published ? [{ level: kept ? "warn" : "error", text: published }] : [];
+  // What the save would refuse for holding more than its kind keeps
+  // (src/lib/homebrew/limits.ts), said before it is sent.
+  const over: Finding[] = homebrewLimitProblems(draft.kind, draft.data).map((problem) => ({ level: "error", text: problem.text }));
   const page = pageFor(draft);
-  return [...naming, ...kindFindings(draft, variantRules).map((finding) => (finding.page || !page ? finding : { ...finding, page }))];
+  return [...naming, ...over, ...kindFindings(draft, variantRules).map((finding) => (finding.page || !page ? finding : { ...finding, page }))];
 }
 
 // The twelve classes the bundled book prints a page for, under their slugs.

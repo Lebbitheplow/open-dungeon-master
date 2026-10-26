@@ -13,7 +13,7 @@ import { SKILL_IDS } from "@/lib/homebrew/item-magic-schema";
 import { backgroundMechanics } from "@/lib/content/mechanics";
 import { splitPurse } from "@/lib/characters/options";
 import { rowIcon } from "@/app/workshop/kit";
-import type { BackgroundGrants } from "@/lib/homebrew/background-data";
+import { BACKGROUND_LIMITS, type BackgroundGrants } from "@/lib/homebrew/background-data";
 import type { Data } from "@/app/workshop/homebrew/draft";
 
 // A background: what the builder grants and the creation check holds a
@@ -50,31 +50,39 @@ export function grantsOfDraft(data: Data): BackgroundGrants {
 }
 
 // The kit as lines with a count each: ten torches are ten lines, shown as
-// one row of ten.
+// one row of ten. A kit keeps BACKGROUND_LIMITS.kit lines, so a count stops
+// where the rest of the kit leaves room and the search goes once it is full.
 function KitList({ items, onChange }: { items: string[]; onChange: (next: string[]) => void }) {
   const counts = new Map<string, number>();
   for (const item of items) counts.set(item, (counts.get(item) ?? 0) + 1);
   const rows = [...counts.entries()];
   const write = (next: Array<[string, number]>) => onChange(next.flatMap(([name, count]) => Array.from({ length: count }, () => name)));
+  const room = BACKGROUND_LIMITS.kit - items.length;
   return (
     <div className="space-y-1.5">
       <ul className="stagger-up space-y-1">
         {rows.map(([name, count], index) => (
           <li key={name} className="live-in flex items-center gap-2 text-xs text-stone-200">
             <span className="min-w-0 flex-1 truncate">{name}</span>
-            <NumberStepper size="sm" label={`How many ${name}`} value={count} min={1} max={20} onChange={(value) => write(rows.map((row, at) => (at === index ? [row[0], value || 1] : row)))} />
+            <NumberStepper size="sm" label={`How many ${name}`} value={count} min={1} max={Math.max(count, Math.min(20, count + room))} onChange={(value) => write(rows.map((row, at) => (at === index ? [row[0], value || 1] : row)))} />
             <button type="button" aria-label={`Remove ${name}`} onClick={() => write(rows.filter((_, at) => at !== index))} className={cn(ui.iconAction, rowIcon, "hover:text-red-300")}>
               <X className="size-3.5" />
             </button>
           </li>
         ))}
       </ul>
-      <ContentPick
-        kind="items"
-        label="Add an item to the kit"
-        placeholder="Add an item..."
-        onPick={(entry) => onChange([...items, entry.name])}
-      />
+      {room > 0 ? (
+        <ContentPick
+          kind="items"
+          label="Add an item to the kit"
+          placeholder="Add an item..."
+          onPick={(entry) => onChange([...items, entry.name])}
+        />
+      ) : (
+        <p role="status" className="live-in text-[11px] text-stone-400">
+          {items.length} items, the most a kit keeps ({BACKGROUND_LIMITS.kit}). Remove one to add another.
+        </p>
+      )}
     </div>
   );
 }
@@ -87,7 +95,7 @@ export function BackgroundFields({ data, set }: Props) {
     <div className="space-y-3">
       <div className="space-y-1.5 text-sm">
         <SectionHead title="Skills" glyph="rest-proficiency" className="mb-1" />
-        <ToggleChips options={SKILL_IDS} labels={SKILL_LABELS} selected={grants.skills} onChange={(skills) => put({ skills })} />
+        <ToggleChips options={SKILL_IDS} labels={SKILL_LABELS} selected={grants.skills} max={BACKGROUND_LIMITS.skills} onChange={(skills) => put({ skills })} />
         <div className="flex flex-wrap items-center gap-2 text-[11px] text-stone-400">
           <span>And the player picks</span>
           <NumberStepper

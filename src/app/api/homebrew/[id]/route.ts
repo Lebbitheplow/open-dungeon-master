@@ -3,6 +3,7 @@ import { archiveHomebrew, deleteHomebrew, getHomebrew, restoreHomebrew } from "@
 import { updateHomebrewCarried } from "@/lib/db/homebrew-rename";
 import { serverPublishedNameProblem } from "@/lib/homebrew/published-names-server";
 import { normalizeHomebrewData } from "@/lib/homebrew/gear";
+import { homebrewLimitProblems } from "@/lib/homebrew/limits";
 import { patchHomebrewSchema } from "@/lib/schemas/homebrew";
 import { forgetSpeciesRules } from "@/lib/characters/species-rules";
 import { forgetTableFeats } from "@/lib/db/table-feats";
@@ -54,6 +55,11 @@ export async function PATCH(
   }
   let data = parsed.data.data;
   if (data !== undefined) {
+    // A list longer than its kind keeps is refused by name, not cut short.
+    const over = homebrewLimitProblems(existing.kind, data)[0];
+    if (over) {
+      return Response.json({ error: over.text, field: over.field }, { status: 400 });
+    }
     const normalized = normalizeHomebrewData(existing.kind, data, parsed.data.name ?? existing.name);
     if ("error" in normalized) {
       return Response.json({ error: normalized.error }, { status: 400 });
