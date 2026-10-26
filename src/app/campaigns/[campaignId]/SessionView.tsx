@@ -90,7 +90,7 @@ import {
   useNarrationStatus,
 } from "@/app/campaigns/[campaignId]/NarrationFailureBanner";
 import { AudioWaitingBanner } from "@/app/campaigns/[campaignId]/AudioWaitingBanner";
-import { turnFromEncounter, turnHudBudget } from "@/lib/battlemap/hand-table";
+import { turnCharacterId, turnFromEncounter, turnHudBudget } from "@/lib/battlemap/hand-table";
 
 import { TabPane, useDocked } from "@/app/campaigns/[campaignId]/SidePanel";
 import type { SidePanelRouterProps } from "@/app/campaigns/[campaignId]/SidePanelRouter";
@@ -460,7 +460,7 @@ export function SessionView({
     () => selectedCharacter(sheets, me?.id ?? "", state.activeSheetId) ?? sheets.find((sheet) => sheet.userId === me?.id) ?? null,
     [sheets, me?.id, state.activeSheetId],
   );
-  const turnSheet = initiativeCharacter(sheets, me?.id ?? "", state.encounter?.acting?.id);
+  const turnSheet = initiativeCharacter(sheets, me?.id ?? "", turnCharacterId(state.encounter));
   const actingSheet = turnSheet ?? mySheet;
   // The server's notice opens the level-up dialog once, when the experience
   // lands. Closing it only puts it off: the sheet's experience still earns

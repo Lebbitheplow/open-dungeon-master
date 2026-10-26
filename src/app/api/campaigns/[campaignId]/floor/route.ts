@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
+import { refuseDuringBreak } from "@/lib/dm/table-break";
 import { getFloor, setFloor, type Floor } from "@/lib/db/campaigns";
 import { listSheets } from "@/lib/db/sheets";
 import { fightOwnsFloor, floorAfterRelease, skipCurrentTurn } from "@/lib/dm/encounter-tools";
@@ -35,6 +36,12 @@ export async function POST(
   const context = await requireStoryAuthority(campaignId);
   if (isErrorResponse(context)) {
     return context;
+  }
+  // The floor is left as it was through a break, so Resume picks up there;
+  // a release here would also skip a turn or play the enemies.
+  const paused = refuseDuringBreak(campaignId);
+  if (paused) {
+    return paused;
   }
   const floor = getFloor(campaignId);
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { isOocAnswer } from "@/lib/dm/ooc-question";
-import { extraTurnTag } from "@/lib/battlemap/initiative-rows";
+import { extraTurnTag, litOrderRows, pointerOrderIndex } from "@/lib/battlemap/initiative-rows";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { EyeOff } from "lucide-react";
 import { GameIcon } from "@/components/ui/GameIcon";
@@ -123,7 +123,12 @@ export function InitiativeRibbon({
   const orderRef = useRef<HTMLOListElement>(null);
   const ready = encounter.orderReady && encounter.order.length > 0;
   const shown = ready ? encounter.order.filter((entry) => !entry.hidden) : [];
-  const turnAt = shown.findIndex((entry) => encounter.order.indexOf(entry) === encounter.turnIndex);
+  // The seats whose turn it is (initiative-rows.ts litOrderRows): while the
+  // enemies before the player up next play, their seats are lit, not his.
+  const lit = new Set(ready ? litOrderRows(encounter.order, encounter.turnIndex, encounter.acting, encounter.enemiesUp) : []);
+  // The pointer's own seat, for the turns already taken this round.
+  const pointerAt = ready ? pointerOrderIndex(encounter.order, encounter) : -1;
+  const turnAt = shown.findIndex((entry) => lit.has(encounter.order.indexOf(entry)));
   // The seat whose turn it is glides into view; the pool of light under it
   // (world.css, --turn) travels the same way, so a turn change reads as a
   // spotlight moving rather than one face blinking off and another on.
@@ -148,13 +153,13 @@ export function InitiativeRibbon({
       >
         {shown.map((entry) => {
           const index = encounter.order.indexOf(entry);
-          const current = index === encounter.turnIndex;
+          const current = lit.has(index);
           return (
             <li
               key={`${entry.id}-${index}`}
               className="cine-ribbon-seat"
               data-current={current ? "true" : undefined}
-              data-done={index < encounter.turnIndex ? "true" : undefined}
+              data-done={!current && index < pointerAt ? "true" : undefined}
               data-foe={entry.kind === "enemy" ? "true" : undefined}
             >
               <button type="button" className="cine-ribbon-face" onClick={onOpen} aria-label={`${entry.name}${current ? ", their turn" : ""}`} aria-current={current ? "step" : undefined} data-no-motion>
@@ -375,8 +380,8 @@ export function TabletopOrder({
     <aside className="cine-order" aria-label={`Round ${encounter.round}, turn order`}>
       <span className="cine-order-round">Round {encounter.round}</span>
       <ol className="cine-order-list">
-        {encounter.order.map((entry, index) => (
-          <li key={`${entry.id}-${index}`} className="cine-order-row" data-current={index === encounter.turnIndex ? "true" : undefined} data-foe={entry.kind === "enemy" ? "true" : undefined}>
+        {encounter.order.map((entry, index, order) => (
+          <li key={`${entry.id}-${index}`} className="cine-order-row" data-current={litOrderRows(order, encounter.turnIndex, encounter.acting, encounter.enemiesUp).includes(index) ? "true" : undefined} data-foe={entry.kind === "enemy" ? "true" : undefined}>
             <TokenFace candidates={faceOf(entry)} name={entry.name} enemy={entry.kind === "enemy"} className="cine-order-face" />
             <span className="cine-order-name">
               {entry.name}

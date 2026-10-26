@@ -2,14 +2,20 @@ import { z } from "zod";
 import { isErrorResponse, requireMember, steersStory } from "@/lib/campaign-api";
 import { getSheetForUser } from "@/lib/db/sheets";
 import { getShop } from "@/lib/db/shops";
-import { handleBuyItem, handleHaggle, handleSellItem } from "@/lib/dm/shop-tools";
+import { handleBuyItem, handleHaggle, handleSellItem, type TradeAt } from "@/lib/dm/shop-tools";
+import { refuseDuringBreak } from "@/lib/dm/table-break";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // A member at the counter (docs/vtt-parity-implementation-plan.md 11.1):
-// buy, sell or haggle with their own character, through the same handlers
-// the model and the console use, so the price and the ledger are one.
+// buy, sell or haggle, through the same handlers the model and the console
+// use, so the price and the ledger are one. The counter is a place, which
+// the model's and the console's calls are not: the shop has to stand where
+// the party is now, as the Market lists it, and the character has to be able
+// to stand at it (atCounter, src/lib/dm/shop-tools.ts). A sale the DM
+// settles on someone's behalf, or at a shop the party has left, goes through
+// the DM's own buy_item, sell_item or purchase.
 const bodySchema = z.object({
   action: z.enum(["buy", "sell", "haggle"]),
   item: z.string().trim().max(80).default(""),
@@ -20,6 +26,8 @@ const bodySchema = z.object({
   // at the counter, which the story says through the DM's haggle.
   skill: z.enum(["persuasion", "intimidation", "deception"]).default("persuasion"),
 });
+
+const AT_COUNTER: TradeAt = { atCounter: true };
 
 export async function POST(request: Request, { params }: { params: Promise<{ campaignId: string; shopId: string }> }) {
   const { campaignId, shopId } = await params;
@@ -35,7 +43,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ cam
   if (!parsed.success) {
     return Response.json({ error: "Say what you are doing at the counter." }, { status: 400 });
   }
-  // Players trade as themselves; the DM seat may act for any character.
+  // A trade is play, and play waits out a table break (table audit
+  // 2026-10-26, T05).
+  const paused = refuseDuringBreak(campaignId);
+  if (paused) {
+    return paused;
+  }
+  // Players trade as themselves; the DM seat may act for any character, at
+  // the counter like anyone standing there.
   const own = getSheetForUser(campaignId, context.user.id);
   const characterId = steersStory(context) && parsed.data.characterId ? parsed.data.characterId : own?.id;
   if (!characterId) {
@@ -44,10 +59,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ cam
   const raw = JSON.stringify({ characterId, shop: shop.id, item: parsed.data.item, qty: parsed.data.qty });
   const result =
     parsed.data.action === "buy"
-      ? handleBuyItem(context.campaign, raw)
+      ? handleBuyItem(context.campaign, raw, AT_COUNTER)
       : parsed.data.action === "sell"
-        ? handleSellItem(context.campaign, raw)
-        : handleHaggle(context.campaign, JSON.stringify({ characterId, shop: shop.id, skill: parsed.data.skill }));
+        ? handleSellItem(context.campaign, raw, AT_COUNTER)
+        : handleHaggle(context.campaign, JSON.stringify({ characterId, shop: shop.id, skill: parsed.data.skill }), AT_COUNTER);
   if ("error" in result) {
     // Something nobody has priced: the keeper names a price, through the DM.
     if (result.unpriced === true) {

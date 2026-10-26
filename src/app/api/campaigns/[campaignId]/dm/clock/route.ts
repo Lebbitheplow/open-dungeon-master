@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isErrorResponse, requireDm } from "@/lib/campaign-api";
+import { refuseDuringBreak } from "@/lib/dm/table-break";
 import { advanceClock, getClock, setCalendar, setClockInstant } from "@/lib/db/clock";
 import {
   ADVANCE_UNITS,
@@ -75,6 +76,12 @@ export async function POST(
   const body = parsed.data;
 
   if (body.do === "advance") {
+    // Moving time on is play (effects end, rests close, shops restock);
+    // setting the clock is a correction and stays open through a break.
+    const paused = refuseDuringBreak(campaignId);
+    if (paused) {
+      return paused;
+    }
     const moved = advanceClock(campaignId, body.amount, body.unit);
     if ("error" in moved) {
       return Response.json({ error: moved.error }, { status: 409 });

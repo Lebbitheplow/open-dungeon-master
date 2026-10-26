@@ -2,10 +2,13 @@ import { z } from "zod";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import {
   deleteEffectsByName,
-  insertEffect,
+  effectsUpdate,
   listEffects,
+  replaceEffectsByName,
 } from "@/lib/db/active-effects";
-import { getActiveEncounter, listEnemies } from "@/lib/db/encounters";
+import { getActiveEncounter, getEnemy, listEnemies } from "@/lib/db/encounters";
+import { activePublicEncounter } from "@/lib/db/encounter-view";
+import { getSheetById } from "@/lib/db/sheets";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import {
@@ -183,10 +186,27 @@ function resolveTarget(
   return null;
 }
 
-function publishEffects(campaignId: string) {
-  publishPersisted(campaignId, "effects_updated", {
-    effects: listEffects(campaignId),
-  });
+// The target as a line the whole table reads may name it: an enemy the DM
+// keeps off the board is "someone unseen" there, as on the tracker
+// (src/lib/db/encounter-view.ts).
+function tableName(campaignId: string, target: { kind: EffectTargetKind; id: string; name: string }): string {
+  return target.kind === "enemy" && effectsUpdate(campaignId).hiddenTargets.includes(target.id) ? "someone unseen" : target.name;
+}
+
+// What an effect's "add" modifiers do to a maximum.
+function maxHpShift(modifiers: Array<{ field: string; mode: string; value: number }>): number {
+  return modifiers.filter((modifier) => modifier.field === "maxHp" && modifier.mode === "add").reduce((sum, modifier) => sum + modifier.value, 0);
+}
+
+// The list for each seat (src/lib/table-delivery.ts), and the tracker when
+// the change moved an enemy's maximum: a sheet's move is published with the
+// sheet (active-effects.ts followingMaxHp), an enemy's had no event at all,
+// so its bar kept the old maximum until something else moved the fight.
+export function publishEffects(campaignId: string, movedEnemyMax = false) {
+  publishPersisted(campaignId, "effects_updated", effectsUpdate(campaignId));
+  if (movedEnemyMax) {
+    publishPersisted(campaignId, "encounter_updated", { encounter: activePublicEncounter(campaignId) });
+  }
 }
 
 export function handleSetEffect(
@@ -219,21 +239,42 @@ export function handleSetEffect(
   if ("error" in checked) {
     return checked;
   }
+  // A maximum taken below 1 cannot be given back exactly when the effect
+  // lifts (an enemy's stops at 1, encounters.ts shiftEnemyMaxHp, and a sheet
+  // would hold a maximum of 0 or less), so the call is refused with the room
+  // there is. A drain that kills is a death, ruled as one.
+  const wanted = textKey(checked.effect.name);
+  const shift =
+    maxHpShift(checked.effect.modifiers) -
+    listEffects(campaign.id, target)
+      .filter((effect) => textKey(effect.name) === wanted)
+      .reduce((sum, effect) => sum + maxHpShift(effect.modifiers), 0);
+  if (shift < 0) {
+    const maximum = target.kind === "enemy" ? getEnemy(target.id)?.maxHp : getSheetById(target.id)?.maxHp;
+    if (typeof maximum === "number" && maximum + shift < 1) {
+      return {
+        error: `${target.name}'s hit point maximum is ${maximum}, so it can be lowered by at most ${Math.max(0, maximum - 1)}; ${-shift} would leave none. If the drain kills them, rule the death itself.`,
+        retry: true,
+      };
+    }
+  }
   // Reapplying by the same name replaces rather than stacks: casting Bless
   // twice on the same target does not double it, and two rows would leave the
-  // second one impossible to lift.
-  deleteEffectsByName(campaign.id, target, checked.effect.name);
+  // second one impossible to lift. The old rows and the new one change in one
+  // step (active-effects.ts replaceEffectsByName), so the maximum moves once,
+  // from what the old modifiers gave to what the new ones give, and a refresh
+  // heals nobody.
   const aura = normalizeAura({ radiusFeet: args.auraFeet, tone: args.auraTone });
-  const effect = insertEffect({
+  const effect = replaceEffectsByName({
     campaignId: campaign.id,
     targetKind: target.kind,
     targetId: target.id,
     ...checked.effect,
     ...(aura ? { aura } : {}),
   });
-  publishEffects(campaign.id);
+  publishEffects(campaign.id, target.kind === "enemy" && shift !== 0);
   if (effect.visible) {
-    tableNote(campaign, `${target.name}: ${describeEffect(effect)}`);
+    tableNote(campaign, `${tableName(campaign.id, target)}: ${describeEffect(effect)}`);
   }
   return { ok: true, effect: describeEffect(effect), on: target.name };
 }
@@ -254,6 +295,11 @@ export function handleClearEffect(
   if (!target) {
     return { error: "clear_effect needs a characterId or an enemyId from GAME STATE.", retry: true };
   }
+  // Read before they go: lifting an effect the party never knew about is
+  // not news to them, and the line naming it used to tell them anyway.
+  const wanted = textKey(args.name);
+  const lifting = listEffects(campaign.id, target).filter((effect) => textKey(effect.name) === wanted);
+  const known = lifting.some((effect) => effect.visible);
   const removed = deleteEffectsByName(campaign.id, target, args.name);
   if (!removed) {
     // The effects they are under, so the call is fixed from them.
@@ -261,8 +307,10 @@ export function handleClearEffect(
     const asked = args.name.trim() ? `"${args.name.trim()}"` : "an effect without a name";
     return { error: `${target.name} is not under ${asked}; ${held.length ? `they are under ${held.join(", ")}` : "they are under no effect"}.`, retry: true };
   }
-  publishEffects(campaign.id);
-  tableNote(campaign, `${args.name} lifts from ${target.name}.`);
+  publishEffects(campaign.id, target.kind === "enemy" && lifting.some((effect) => maxHpShift(effect.modifiers) !== 0));
+  if (known) {
+    tableNote(campaign, `${args.name} lifts from ${tableName(campaign.id, target)}.`);
+  }
   return { ok: true, cleared: args.name, from: target.name };
 }
 

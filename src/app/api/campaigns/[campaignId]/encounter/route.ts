@@ -1,4 +1,5 @@
 import { capsFor, isErrorResponse, requireMember, requireStoryAuthority } from "@/lib/campaign-api";
+import { endFightEffects } from "@/lib/db/active-effects";
 import { getFloor, setFloor } from "@/lib/db/campaigns";
 import { endEncounter, getActiveEncounter, listEnemies, patchEnemyHp } from "@/lib/db/encounters";
 import { activePublicEncounter } from "@/lib/db/encounter-view";
@@ -49,6 +50,8 @@ export async function DELETE(
     }
   }
   endEncounter(encounter.id, "aborted");
+  // A fight called off is over all the same: what lasted until its end ends.
+  endFightEffects(campaignId);
   const floor = getFloor(campaignId);
   if (floor.mode === "initiative" || (floor.mode === "hold" && floor.next.mode === "initiative")) {
     setFloor(campaignId, { mode: "open" });

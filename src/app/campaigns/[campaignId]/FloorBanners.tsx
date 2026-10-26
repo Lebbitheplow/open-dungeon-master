@@ -6,7 +6,7 @@ import { cn } from "@/lib/cn";
 import { SessionBanner, bannerButtonClass } from "@/app/campaigns/[campaignId]/SessionBanner";
 import type { Floor } from "@/lib/db/campaigns";
 import type { PublicEncounter } from "@/lib/db/encounter-view";
-import { extraTurnTag, currentOrderIndex, orderRowKey } from "@/lib/battlemap/initiative-rows";
+import { extraTurnTag, litOrderRows, orderRowKey } from "@/lib/battlemap/initiative-rows";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // Spotlight, held-responses, and initiative banners above the composer;
@@ -97,7 +97,7 @@ export function FloorBanners({
                     // pointer's index can point past them; the engine names
                     // who it rests on. A thief's second round-1 turn is a
                     // second row with the same id (Thief's Reflexes).
-                    const current = index === currentOrderIndex(encounter.order, encounter.turnIndex, encounter.acting);
+                    const current = litOrderRows(encounter.order, encounter.turnIndex, encounter.acting, encounter.enemiesUp).includes(index);
                     return (
                       <span
                         key={orderRowKey(entry, index)}

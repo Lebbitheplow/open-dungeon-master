@@ -159,9 +159,14 @@ export function normalizeArgs(
     delete renamed.characterIds;
   }
   args = renamed;
+  // An input left blank is dropped, so a required one is reported missing
+  // below and a handler never reads "" as a value. A field whose empty input
+  // is an answer keeps it (catalog-types.ts keepsEmpty): update_sheet's
+  // Becomes, where an empty Conditions clears them.
+  const keepsEmpty = new Set(entry.fields.filter((field) => field.keepsEmpty).map((field) => field.name));
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(args)) {
-    if (value === undefined || value === null || value === "") {
+    if (value === undefined || value === null || (value === "" && !keepsEmpty.has(key))) {
       continue;
     }
     if (key === "enemies") {

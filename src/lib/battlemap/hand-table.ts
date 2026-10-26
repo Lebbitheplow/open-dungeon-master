@@ -61,6 +61,16 @@ export function turnFromEncounter(
 // tags wear too (issue 529).
 export type TurnPip = { label: string; used: boolean; cost: "action" | "bonus" | "reaction" };
 
+// The character a player's controls follow in a fight: the one whose turn
+// it is, or, while the enemies before them take theirs, the one up next, so
+// the Hand and the board keep that character's cards and reach, waiting,
+// rather than switching to another sheet and back as the enemies play.
+export function turnCharacterId(
+  encounter: Pick<PublicEncounter, "acting" | "upNext"> | null | undefined,
+): string | undefined {
+  return encounter?.acting?.id || encounter?.upNext?.id || undefined;
+}
+
 export function turnPips(turn: HandTurn): TurnPip[] {
   return [
     {

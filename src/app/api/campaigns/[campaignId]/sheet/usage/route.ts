@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { capsFor, isErrorResponse, isLead, requireMember } from "@/lib/campaign-api";
+import { refuseDuringBreak } from "@/lib/dm/table-break";
 import { allocateSeq } from "@/lib/db/campaigns";
 import { getActiveEncounter } from "@/lib/db/encounters";
 import { getSheetById, getSheetForUser, patchSheet } from "@/lib/db/sheets";
@@ -103,6 +104,15 @@ export async function POST(
       { error: parsed.error.issues[0]?.message || "Invalid adjustment." },
       { status: 400 },
     );
+  }
+  // Gear changes spend the turn's action or interaction in a fight and pass
+  // minutes out of one: play, which waits out a break. Marking a counter
+  // spent, or a correction, is record keeping and goes on.
+  if (parsed.data.gear) {
+    const paused = refuseDuringBreak(campaignId);
+    if (paused) {
+      return paused;
+    }
   }
 
   const encounter = getActiveEncounter(campaignId);

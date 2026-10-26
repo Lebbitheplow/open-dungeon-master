@@ -2,7 +2,7 @@ import { closeAdvancesToward } from "@/lib/dm/npc-advance";
 import { companionNpcFor } from "@/lib/db/companion-npcs";
 import { z } from "zod";
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
-import { allocateSeq, setMemberActiveCharacter } from "@/lib/db/campaigns";
+import { allocateSeq, campaignSeats, setMemberActiveCharacter } from "@/lib/db/campaigns";
 import { insertCharacterEvent } from "@/lib/db/character-events";
 import { getCharacter } from "@/lib/db/characters";
 import { activePublicEncounter } from "@/lib/db/encounter-view";
@@ -17,6 +17,7 @@ import {
   setOpenToAdvances,
 } from "@/lib/db/sheets";
 import { defaultCommander } from "@/lib/dm/companion-command";
+import { sheetForViewer } from "@/lib/dm/sheet-view";
 import { createCompanionUser } from "@/lib/db/users";
 import { lastingCompanionProblem } from "@/lib/dm/companion-tools";
 import { publishEphemeral, publishPersisted, publishWithSeq } from "@/lib/events";
@@ -157,5 +158,7 @@ export async function POST(
     publishWithSeq(campaignId, seq, "message_added", { message });
   }
 
-  return Response.json({ ok: true, sheet: adopted });
+  // The notes the player wrote stay theirs: the lead taking the character
+  // into the party is not given them (src/lib/dm/sheet-view.ts).
+  return Response.json({ ok: true, sheet: sheetForViewer(adopted, campaignSeats(campaign), context.user.id) });
 }

@@ -39,7 +39,7 @@ import { tableFeatsFrom } from "@/lib/db/table-feats";
 import { getDatabase } from "@/lib/db/core";
 import { requestDmTurn } from "@/lib/dm/loop";
 import { hasHumanDm, isPrimaryDm, lobbyBlocker, narratorIsAi } from "@/lib/dm/viewer";
-import { sheetForViewer } from "@/lib/dm/sheet-view";
+import { auditEntryForViewer, sheetForViewer } from "@/lib/dm/sheet-view";
 import { enqueueDmJob, runningDmJob } from "@/lib/dm/queue";
 import { runStorySetup } from "@/lib/dm/setup";
 import { generateStoryArc } from "@/lib/dm/arc";
@@ -153,7 +153,11 @@ export async function GET(
     // have (src/lib/dm/viewer.ts).
     rolls: listRollsVisibleTo(campaignId, caps, ownedCharacterIds, 20),
     pendingRolls: listOpenPendingRolls(campaignId).map(publicPendingRoll),
-    auditLog: listRecentAudit(campaignId, 50),
+    // A correction of someone's notes is listed without them, as their sheet
+    // is (src/lib/dm/sheet-view.ts).
+    auditLog: listRecentAudit(campaignId, 50).map((entry) =>
+      auditEntryForViewer(entry, campaignSeats(campaign), user.id, ownedCharacterIds),
+    ),
     locations: listLocations(campaignId),
     chapters: listChaptersForSnapshot(campaignId),
     notes: listNotesVisibleTo(campaignId, user.id, caps.steersStory),

@@ -51,6 +51,26 @@ function findAgentTurn(campaignId: string): DmTurn | null {
   return null;
 }
 
+// How long into a break an agent program's running turn may still finish.
+// The storyteller's turn ends on its own within that; an agent's turn ends
+// when it narrates, and one that never did would otherwise play on through
+// the whole break.
+const AGENT_TURN_FINISH_MS = 5 * 60_000;
+
+// Whether the agent program's open turn began before `at` (ms since the
+// epoch), the start of a break, and the break is young enough for it to be
+// finishing. A table break lets that turn finish, its calls and its
+// narration, as it lets the storyteller's running turn finish; a turn the
+// agent would open during the break waits for Resume
+// (src/lib/dm/table-break.ts).
+export function agentTurnBegunBefore(campaignId: string, at: number): boolean {
+  if (Date.now() - at > AGENT_TURN_FINISH_MS) {
+    return false;
+  }
+  const turn = findAgentTurn(campaignId);
+  return turn !== null && Date.parse(turn.createdAt) < at;
+}
+
 export function agentTurnFor(campaignId: string): DmTurn {
   return findAgentTurn(campaignId) ?? createDmTurn(campaignId, [{ role: "user", content: AGENT_MARK }]);
 }

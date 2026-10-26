@@ -1,12 +1,14 @@
 import { z } from "zod";
 import { conscienceForbidsCommand } from "@/lib/dm/conscience";
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
-import { allocateSeq } from "@/lib/db/campaigns";
+import { refuseDuringBreak } from "@/lib/dm/table-break";
+import { allocateSeq, campaignSeats } from "@/lib/db/campaigns";
 import { activePublicEncounter } from "@/lib/db/encounter-view";
 import { getActiveEncounter } from "@/lib/db/encounters";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { getSheetById, listSheets, setCompanionCommander } from "@/lib/db/sheets";
 import { commandable, commandingPlayers } from "@/lib/dm/companion-command";
+import { sheetForViewer } from "@/lib/dm/sheet-view";
 import { handleDismissCompanion } from "@/lib/dm/companion-tools";
 import { setInitiativeFloor, settleTurn, turnHolder } from "@/lib/dm/encounter-tools";
 import { requestDmTurn } from "@/lib/dm/loop";
@@ -27,7 +29,13 @@ export async function DELETE(
   if (isErrorResponse(context)) {
     return context;
   }
+  // The same path as the DM's dismiss_companion, which waits out a break.
+  const paused = refuseDuringBreak(campaignId);
+  if (paused) {
+    return paused;
+  }
   const holder = turnHolder(campaignId);
+
   const result = handleDismissCompanion(
     context.campaign,
     JSON.stringify({ characterId, reason: "the party lead sent them on their way" }),
@@ -101,5 +109,5 @@ export async function PATCH(
       requestDmTurn(campaignId);
     }
   }
-  return Response.json({ sheet: updated });
+  return Response.json({ sheet: sheetForViewer(updated, campaignSeats(context.campaign), context.user.id) });
 }

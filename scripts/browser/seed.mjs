@@ -629,8 +629,13 @@ const directed = {};
       difficulty: "normal",
       gameSettings: { ttsEnabled: false, dmMode: "human" },
     });
+    // Seated in the lobby: a table in play turns a newcomer away, and the
+    // join used to fail here unseen, leaving Ilse's player outside the table.
+    const seated = campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+    if ("error" in seated) {
+      throw new Error(`could not seat the player at the directed table: ${seated.error}`);
+    }
     campaigns.setCampaignStatus(table.id, "active");
-    campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
     sheets.createSheet(table.id, player.id, 3, heroInput({ name: "Ilse Marr", class: "fighter", level: 3 }));
     const started = await invokeEngine(campaigns.getCampaignById(table.id), { kind: "human", userId: world.owner.id }, {
       name: "start_encounter",
@@ -650,6 +655,61 @@ const directed = {};
       maps.moveToken(token.id, x, 6, 0);
     }
     directed[viewport] = { id: table.id, goblin: goblin.id };
+  }
+}
+
+// A person's table where two goblins act before the hero, per viewport
+// (table function audit 2026-10-26, T11 and T09): the goblins win
+// initiative, so the fight opens held for their turns, and the second is
+// kept off the board. The DM hands the turn on from the Enemy turns banner,
+// and corrects the hero's sheet from the console.
+const enemyTurns = {};
+{
+  const { invokeEngine } = await import("../../src/lib/dm/invoke.ts");
+  const { dice, clearDice } = await import("../lib/enforce-world.mjs");
+  const maps = await import("../../src/lib/db/battle-maps.ts");
+  const encounterRows = await import("../../src/lib/db/encounters.ts");
+  for (const viewport of ["desktop", "phone"]) {
+    const table = campaigns.createCampaign(world.owner.id, {
+      title: `Enemy Turn Table (${viewport})`,
+      description: "A table whose goblins act first.",
+      theme: "high-fantasy",
+      maxPlayers: 6,
+      startingLevel: 3,
+      difficulty: "normal",
+      gameSettings: { ttsEnabled: false, dmMode: "human" },
+    });
+    // Seated in the lobby: a table in play turns a newcomer away.
+    const seated = campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+    if ("error" in seated) {
+      throw new Error(`could not seat the player at the enemy turn table: ${seated.error}`);
+    }
+    campaigns.setCampaignStatus(table.id, "active");
+    const hero = sheets.createSheet(table.id, player.id, 3, heroInput({ name: "Wren Hale", class: "fighter", level: 3 }));
+    // The goblins' dice, then the hero's.
+    clearDice();
+    dice(20, 20, 1);
+    const started = await invokeEngine(campaigns.getCampaignById(table.id), { kind: "human", userId: world.owner.id }, {
+      name: "start_encounter",
+      args: { enemies: [{ monster: "goblin", count: 2 }] },
+    });
+    clearDice();
+    if (!started.ok) {
+      throw new Error(`the enemy turn table's fight did not start: ${started.error}`);
+    }
+    const encounter = encounterRows.getActiveEncounter(table.id);
+    if (!encounter.legendary.due?.length) {
+      throw new Error("the enemy turn table's goblins are not due first");
+    }
+    const board = maps.getBattleMapForEncounter(encounter.id);
+    maps.setBattleMapTerrain(board.id, ".".repeat(board.width * board.height));
+    getDatabase().prepare("UPDATE battle_maps SET doors_json = '{}' WHERE id = ?").run(board.id);
+    const [seen, unseen] = encounterRows.listEnemies(encounter.id);
+    for (const [token, x] of maps.listTokens(board.id).map((entry) => [entry, entry.refId === hero.id ? 2 : entry.refId === seen.id ? 6 : 8])) {
+      maps.moveToken(token.id, x, 6, 0);
+    }
+    maps.setTokenHidden(maps.getTokenByRef(board.id, unseen.id).id, true);
+    enemyTurns[viewport] = { id: table.id, hero: hero.id, heroName: hero.name, seen: seen.displayName, unseen: unseen.displayName };
   }
 }
 
@@ -1609,6 +1669,7 @@ const ids = {
   stopTables,
   wardrobe,
   directed,
+  enemyTurns,
   levelTableId: levelTable.id,
   commandTableId: commandTable.id,
   courting,
@@ -1646,6 +1707,7 @@ const ids = {
     ...Object.fromEntries(Object.entries(stopTables).map(([viewport, id]) => [id, `Stop Table (${viewport})`])),
     ...Object.fromEntries(Object.entries(wardrobe).map(([viewport, id]) => [id, `Wardrobe (${viewport})`])),
     ...Object.fromEntries(Object.entries(directed).map(([viewport, table]) => [table.id, `Directed Table (${viewport})`])),
+    ...Object.fromEntries(Object.entries(enemyTurns).map(([viewport, table]) => [table.id, `Enemy Turn Table (${viewport})`])),
     ...Object.fromEntries(Object.entries(dominate).flatMap(([viewport, table]) => [[table.id, `Dominate Table (${viewport})`], [table.heldId, `Held Table (${viewport})`]])),
   },
   systemLine,

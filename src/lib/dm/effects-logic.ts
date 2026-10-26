@@ -278,7 +278,10 @@ export function resolveField(effects: ActiveEffect[], field: EffectField): Field
       if (modifier.field !== field) {
         continue;
       }
-      const label = effect.source ? `${effect.name} (${effect.source})` : effect.name;
+      // These lines land on the roll's breakdown, which the whole table
+      // reads; an effect the party cannot tell is there still moves the
+      // number, honestly, but is not named.
+      const label = effect.visible === false ? "something unseen" : effect.source ? `${effect.name} (${effect.source})` : effect.name;
       if (modifier.mode === "add") {
         out.bonus += modifier.value;
         out.sources.push(`${label} ${modifier.value >= 0 ? "+" : ""}${modifier.value}`);

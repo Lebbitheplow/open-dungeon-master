@@ -35,8 +35,7 @@ import { concentrationSwapFor } from "@/lib/dm/concentration-confirm";
 import { inCoordination } from "@/lib/dm/coordination";
 import { confirmsSwap, swapQuestion } from "@/lib/dm/concentration-confirm-logic";
 import { tableAuthors } from "@/lib/db/homebrew";
-import { tableBreakOn } from "@/lib/dm/table-break";
-import { breakRefusal } from "@/lib/dm/table-break-logic";
+import { refuseDuringBreak } from "@/lib/dm/table-break";
 import { isSecretActionBody, secretActionResponse } from "@/lib/dm/secret-action-request";
 
 export const runtime = "nodejs";
@@ -105,9 +104,9 @@ export async function POST(
   // A table break (src/lib/dm/table-break.ts) stops play where it stands:
   // table talk goes on, nothing in character does, and the floor underneath
   // is left alone so Resume picks up exactly there.
-  const tableBreak = kind === "ooc" ? null : tableBreakOn(campaignId);
-  if (tableBreak) {
-    return Response.json({ error: breakRefusal(tableBreak), tableBreak }, { status: 409 });
+  const paused = kind === "ooc" ? null : refuseDuringBreak(campaignId);
+  if (paused) {
+    return paused;
   }
   // A character dominated by the other side is the DM's to play until the
   // charm ends (src/lib/dm/companion-command.ts): its player hears why,
@@ -132,9 +131,13 @@ export async function POST(
   const reactionOffTurn = intent?.card === "reaction" && combatOwnsFloor(floor);
   if (!reactionOffTurn && !canAct(floor, user.id, kind)) {
     if (floor.mode === "hold") {
+      // The enemies hold the floor only while some are still owed a turn
+      // (src/lib/dm/enemies-due.ts); a hold over a fight with none due is
+      // the storyteller's, and says so.
+      const enemiesDue = combatOwnsFloor(floor) && (getActiveEncounter(campaignId)?.legendary.due?.length ?? 0) > 0;
       return Response.json(
         {
-          error: combatOwnsFloor(floor)
+          error: enemiesDue
             ? "The enemies are taking their turns; the DM hands the turn on. Use OOC for table talk."
             : `The ${campaign.dmUserId ? "DM" : "party lead"} has not opened responses yet. Use OOC for table talk.`,
           floor,

@@ -1,6 +1,6 @@
 "use client";
 
-import { playingSheet, turnFromEncounter, turnHudBudget } from "@/lib/battlemap/hand-table";
+import { playingSheet, turnCharacterId, turnFromEncounter, turnHudBudget } from "@/lib/battlemap/hand-table";
 import { initiativeCharacter } from "@/lib/player-characters";
 import { BookMarked, BookOpen, Flag, Heart, History, ListChecks, ScrollText, ShoppingBag, Users } from "lucide-react";
 import { Suspense, useMemo, useState, type ReactNode } from "react";
@@ -517,7 +517,7 @@ export function SidePanelRouter({
   if (tab === "battle" && battleMap) {
     // The turn's character when it is this player's (their own, or a
     // companion they command), else the one being played.
-    const playing = initiativeCharacter(sheets, meUserId, encounter?.acting?.id) ?? playingSheet(sheets, meUserId, activeSheetId);
+    const playing = initiativeCharacter(sheets, meUserId, turnCharacterId(encounter)) ?? playingSheet(sheets, meUserId, activeSheetId);
     return (
       // board-dock: the side panel and the phone hold the board in a fixed
       // window too, so its header and footer stay on screen (issue 87).
