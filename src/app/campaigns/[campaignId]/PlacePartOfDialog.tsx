@@ -43,9 +43,20 @@ export function PlacePartOfDialog({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ parent: { locationId: place.id, parentName } }),
       });
+      const data = (await response.json().catch(() => ({}))) as {
+        error?: string;
+        locations?: Array<{ id: string; parentName?: string | null }>;
+      };
       if (!response.ok) {
-        const data = (await response.json().catch(() => ({}))) as { error?: string };
         setError(data.error ?? "Could not file it there.");
+        return;
+      }
+      // A host from before places had parents answers this without filing
+      // anything (an app newer than its server): its places carry no
+      // parentName, so say so rather than close as if it worked.
+      const answered = data.locations?.find((location) => location.id === place.id);
+      if (answered && !("parentName" in answered)) {
+        setError("This server is too old to file places. Updating it adds this.");
         return;
       }
       onOpenChange(false);
