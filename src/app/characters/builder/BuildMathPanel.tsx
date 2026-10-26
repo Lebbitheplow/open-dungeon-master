@@ -17,8 +17,9 @@ import type { ClassOption, RaceOption } from "./useBuilderOptions";
 import type { BuilderDerived } from "./useBuilderDerived";
 import type { BuilderState } from "./useBuilderState";
 
-// The build math table (backlog F10): every number the sheet will carry,
-// with the parts each is made of, beside the picks on every step. Where the
+// Character details, the build math table (backlog F10): every number the
+// sheet will carry, with the parts each is made of, beside the picks on
+// every step. Where the
 // builder is wide (a 56rem container, which creator.css gives the page on a
 // desktop) it is a column of its own, always open; where it is narrow, a
 // phone or the companion dialog, it sits under the steps, folded until
@@ -90,16 +91,19 @@ export function BuildMathPanel({
     >
       <div className="flex shrink-0 items-center gap-2 px-3 py-1">
         <h2 id={headingId} className="min-w-0 flex-1 font-display text-base tracking-wide text-amber-100">
-          Build math
+          Character details
         </h2>
         <button
           type="button"
           aria-expanded={open}
           aria-controls={bodyId}
+          // The heading beside it says what; the word on its face fits a
+          // phone's row, and the name read aloud starts with that word.
+          aria-label={open ? "Hide character details" : "Show character details"}
           onClick={() => setOpen((was) => !was)}
-          className="flex min-h-11 items-center gap-1 rounded-md px-2 text-base text-sky-300 transition-colors hover:bg-stone-800 @4xl:hidden"
+          className="flex min-h-11 shrink-0 items-center gap-1 rounded-md px-2 text-base text-sky-300 transition-colors hover:bg-stone-800 @4xl:hidden"
         >
-          {open ? "Hide the numbers" : "Show the numbers"}
+          {open ? "Hide" : "Show"}
           <ChevronDown aria-hidden="true" className={cn("size-4 transition-transform", open && "rotate-180")} />
         </button>
       </div>

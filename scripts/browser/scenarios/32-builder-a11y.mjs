@@ -295,7 +295,7 @@ export default {
     await eventually(() => page.locator(`${root}section[data-active] .creator-card`).locator("visible=true").count(), { timeoutMs: 15_000, label: "the lineage cards" });
     await untilStill(page);
     found.push(...(await gridKeys(page)).map((problem) => `lineage grid: ${problem}`));
-    const details = page.locator(`${root}section[data-active] button[aria-label^="Details"], ${root}section[data-active] .creator-help`).locator("visible=true");
+    const details = page.locator(`${root}section[data-active] button[aria-label^="About "], ${root}section[data-active] .creator-help`).locator("visible=true");
     await eventually(() => details.count(), { timeoutMs: 15_000, label: "a lineage card's details button" });
     await t.tap(details.first());
     await eventually(() => page.locator('[role="dialog"]').count(), { timeoutMs: 10_000, label: "the lineage carousel" });

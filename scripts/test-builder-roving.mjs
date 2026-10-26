@@ -200,7 +200,7 @@ const tabStops = (markup, pattern) =>
   const helps = tabStops(chosen, /class="creator-help"/);
   assert.equal(cards.length, 3);
   assert.deepEqual(cards.filter((stop) => stop.tabindex === "0").map((stop) => stop.label), ["Dwarf"], "the chosen card holds the grid's stop");
-  assert.deepEqual(helps.filter((stop) => stop.tabindex === "0").map((stop) => stop.label), ["Details for Dwarf"], "only the chosen card's ? is a stop");
+  assert.deepEqual(helps.filter((stop) => stop.tabindex === "0").map((stop) => stop.label), ["About Dwarf"], "only the chosen card's ? is a stop");
   assert.ok([...cards, ...helps].every((stop) => stop.tabindex === "0" || stop.tabindex === "-1"));
   assert.ok(chosen.includes('aria-label="Elf, fits this setting"'), "a recommended card keeps its name");
   assert.equal((chosen.match(/aria-pressed="true"/g) ?? []).length, 1, "one card is pressed");
@@ -210,6 +210,6 @@ const tabStops = (markup, pattern) =>
   assert.ok(chosen.includes("move between them with the arrow keys"), "the search hint says how to move through the cards");
   const none = grid("");
   assert.deepEqual(tabStops(none, /class="creator-card /).filter((stop) => stop.tabindex === "0").map((stop) => stop.label), ["Elf, fits this setting"], "with nothing chosen the first card holds the stop");
-  assert.deepEqual(tabStops(none, /class="creator-help"/).filter((stop) => stop.tabindex === "0").map((stop) => stop.label), ["Details for Elf"]);
+  assert.deepEqual(tabStops(none, /class="creator-help"/).filter((stop) => stop.tabindex === "0").map((stop) => stop.label), ["About Elf"]);
   console.log("ok: a card grid is one tab stop with the focused card's ? as the next (F16)");
 }
