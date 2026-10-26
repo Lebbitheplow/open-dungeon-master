@@ -44,12 +44,16 @@ function download(name: string, payload: unknown) {
   URL.revokeObjectURL(url);
 }
 
+// Said when Download or Install stops for a save that did not land.
+const NOT_SAVED = "The draft on screen is not saved, so nothing was built from the older copy on the server. Your changes are kept here. Try again.";
+
 export function PublishSection({
   draft,
   onDraft,
   workshopId,
   isAdmin,
   flushSave,
+  saved,
   onClear,
 }: SectionProps & {
   workshopId: string;
@@ -57,6 +61,9 @@ export function PublishSection({
   // Writes the draft now rather than after the autosave delay, so the
   // export reads what is on screen, and says whether that landed.
   flushSave: () => Promise<Flushed>;
+  // The draft on screen is the server's: a refusal for an unsaved draft is
+  // no longer true once a save lands.
+  saved: boolean;
   onClear: () => Promise<void>;
 }) {
   const check = checkDraft(draft);
@@ -114,7 +121,7 @@ export function PublishSection({
       // since (another tab) is refused rather than built.
       const saved = await flushSave();
       if (!saved.ok) {
-        setError("The draft on screen is not saved, so nothing was built from the older copy on the server. Your changes are kept here. Try again.");
+        setError(NOT_SAVED);
         return;
       }
       const response = await fetch(`/api/workshops/${workshopId}/plugin/export`, {
@@ -276,7 +283,7 @@ export function PublishSection({
             : "The file installs from Admin, Campaign plugins, Install from a file, on any server whose admin trusts it. Only an admin can install here."}
         </p>
         {notice ? <p className="live-in mt-2 text-xs text-amber-200/90">{notice}</p> : null}
-        {error ? <PanelError className="mt-2">{error}</PanelError> : null}
+        {error && !(error === NOT_SAVED && saved) ? <PanelError className="mt-2">{error}</PanelError> : null}
       </section>
 
       <section className={ui.card + " p-4"}>

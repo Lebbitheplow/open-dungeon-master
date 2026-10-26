@@ -77,10 +77,15 @@ export async function readWrite<T = Record<string, unknown>>(request: Promise<Re
 export type LostCreate = "made" | "missing" | "unknown";
 
 export async function findLostCreate<T extends { id: string }>(
-  before: readonly T[],
+  // The rows on screen before the create; null when the list was never read,
+  // so a row there all along cannot be told from the new one.
+  before: readonly T[] | null,
   reread: () => Promise<readonly T[] | null>,
   matches: (row: T) => boolean,
 ): Promise<LostCreate> {
+  if (!before) {
+    return "unknown";
+  }
   const known = new Set(before.map((row) => row.id));
   const fresh = await reread().catch(() => null);
   if (!fresh) {

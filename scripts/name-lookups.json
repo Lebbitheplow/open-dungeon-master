@@ -121,6 +121,7 @@
     "app/campaigns/[campaignId]/EventLog.tsx#keyed": [["key",2,"ids, refs, slugs, tool names, field names, env names, event kinds, UI keys, caches, door and map keys; a sheet's conditionMeta by the condition key it was written under; the usage route's gear map by the sheet's own stored item names (src/: every site read)"]],
     "app/campaigns/[campaignId]/EventLog.tsx#switch": [["key",1,"switches on tool names, event kinds, key names and kinds"]],
     "app/campaigns/[campaignId]/FactionsPanel.tsx#partial": [["key",1,"UI keys, ids, refs, view choices and documented defaults (a palette, a tile, a peer volume, the first sheet)"]],
+    "app/campaigns/[campaignId]/FactionsPanel.tsx#whole-single": [["key",1,"a create whose answer was lost, looked for in the list read again by the name it was sent with, compared as the server stored it (WA-05)"]],
     "app/campaigns/[campaignId]/FightSummaryCard.tsx#first": [["key",1,"the fighter who dealt most"]],
     "app/campaigns/[campaignId]/GameSettingsGroups.tsx#number": [["key",5,"digits a regex already captured, ids, headers, stored and form numbers (number inputs), dice parts, the pack's English text (\"1,000 feet\", a purse); src/: every site read"],["key",2,"a setting's select value (UI)"]],
     "app/campaigns/[campaignId]/GameSettingsPanel.tsx#partial": [["key",1,"UI keys, ids, refs, view choices and documented defaults (a palette, a tile, a peer volume, the first sheet)"]],

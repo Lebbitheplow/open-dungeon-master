@@ -49,6 +49,11 @@ const SAVE_DELAY_MS = 700;
 // The browser keeps a request alive past its page only up to 64 KB, so a
 // panel already gone sends a larger draft as an ordinary request.
 const KEEPALIVE_BYTES = 60_000;
+// A save that hears nothing for this long is given up, so the writes queued
+// behind it (a reopened panel's read, Pull, Try again) are not held forever.
+const SAVE_TIMEOUT_MS = 60_000;
+// Said when Pull stops for a save that did not land; gone once one does.
+const PULL_WAITS = "Pull waits for the draft to save, and it did not. Nothing was pulled; your changes are kept here. Try again.";
 
 type SaveState = "idle" | "dirty" | "saving" | "saved" | "error";
 
@@ -145,6 +150,12 @@ export function PluginPanel({
         const next = latest.current;
         const json = JSON.stringify(next);
         if (!next || json === savedJson.current) {
+          // Nothing to send: an edit that came back to what the server holds
+          // (a letter typed and deleted, a value picked again) is saved.
+          if (next && mounted.current) {
+            setSaveError("");
+            setSaveState("saved");
+          }
           return true;
         }
         const live = mounted.current;
@@ -156,6 +167,7 @@ export function PluginPanel({
             headers: { "Content-Type": "application/json" },
             body,
             keepalive: !live && new TextEncoder().encode(body).length < KEEPALIVE_BYTES,
+            signal: AbortSignal.timeout(SAVE_TIMEOUT_MS),
           }),
           "The draft could not be saved.",
         );
@@ -239,7 +251,7 @@ export function PluginPanel({
       // The pull merges into the server's copy and hands that back for the
       // screen, so it goes only once the screen's copy is the server's.
       if (!(await flushSave()).ok) {
-        setError("Pull waits for the draft to save, and it did not. Nothing was pulled; your changes are kept here. Try again.");
+        setError(PULL_WAITS);
         return;
       }
       const sent = await inTurn(workshopId, () =>
@@ -363,7 +375,7 @@ export function PluginPanel({
         {saveState === "error" && saveError ? (
           <LoadFailed error={`${saveError} Your changes are kept here.`} onRetry={() => void flushSave()} className="basis-full" />
         ) : null}
-        {error ? <PanelError className="basis-full">{error}</PanelError> : null}
+        {error && !(error === PULL_WAITS && saveState === "saved") ? <PanelError className="basis-full">{error}</PanelError> : null}
       </section>
 
       <div data-tour="plugin-sections" className="w-fit max-w-full">
@@ -390,6 +402,7 @@ export function PluginPanel({
             workshopId={workshopId}
             isAdmin={isAdmin}
             flushSave={flushSave}
+            saved={saveState === "saved"}
             onClear={clear}
           />
         ) : null}

@@ -57,7 +57,9 @@ export function Field({
 }) {
   return (
     <Tag className={cn("flex min-w-0 flex-col gap-1", className)}>
-      <span className="flex items-center gap-1">
+      {/* With something beside it (an info button) the caption is a
+          finger's height on a phone, so its reach stays off the field below. */}
+      <span className={cn("flex items-center gap-1", aside ? "pointer-coarse:min-h-10" : undefined)}>
         <FieldLabel>{label}</FieldLabel>
         {aside}
       </span>

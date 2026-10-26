@@ -268,7 +268,7 @@ export function MarketPanel({
           const name = draft.name.trim();
           const reread = async () =>
             (await readLoad<{ shops?: ShopView[] }>(fetch(`/api/campaigns/${campaignId}/shops`), "The market")).payload?.shops ?? null;
-          const found = await findLostCreate(shops ?? [], reread, (shop) => shop.name === name);
+          const found = await findLostCreate(shops, reread, (shop) => shop.name === name);
           if (found === "made") {
             setOpening(false);
             setDraft({ name: "", kind: "general", size: "village", locationId: "", keeperNpcId: "", stockFromPack: true });

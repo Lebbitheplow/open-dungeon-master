@@ -26,7 +26,7 @@ function draftOf(faction: FactionView): Draft {
     portraitPath: faction.portraitPath,
   };
 }
-import { readLoad, readWrite, useLoadStatus } from "@/lib/load-state";
+import { findLostCreate, readLoad, readWrite, useLoadStatus } from "@/lib/load-state";
 import { FACTION_ATTITUDES, REPUTATION_MAX, REPUTATION_MIN, reputationLabel, type FactionAttitude } from "@/lib/dm/faction-logic";
 import { DictateField } from "@/components/DictateField";
 import { appendDictation } from "@/lib/dictation";
@@ -137,6 +137,26 @@ export function FactionsPanel({
         "That faction could not be saved.",
       );
       if (sent.error !== null) {
+        // A new faction whose answer was lost is looked for first: the
+        // server takes a second one of the same name, so a blind second
+        // press would make two.
+        if (sent.unanswered && creating) {
+          const name = draft.name.trim();
+          const reread = async () =>
+            (await readLoad<{ factions?: FactionView[] }>(fetch(`/api/campaigns/${campaignId}/factions`), "The factions")).payload?.factions ?? null;
+          const found = await findLostCreate(loaded ? factions : null, reread, (faction) => faction.name === name);
+          setReload((current) => current + 1);
+          if (found === "made") {
+            setEditing(null);
+            return;
+          }
+          setError(
+            found === "missing"
+              ? "The server did not answer and the faction is not in the list, so it was not added. Your words are kept; press Add again."
+              : "The server could not be reached, so it is not known yet whether the faction was added. Your words are kept. Check the list before adding it again.",
+          );
+          return;
+        }
         setError(sent.unanswered ? `${sent.error} The list was read again; check it before saving again.` : sent.error);
         if (sent.unanswered) setReload((current) => current + 1);
         return;
@@ -227,7 +247,12 @@ export function FactionsPanel({
             <KitButton tone="primary" disabled={busy || !draft.name.trim()} busy={busy} onClick={() => void save()}>
               {editing === "new" ? "Add" : "Save"}
             </KitButton>
-            <KitButton onClick={() => setEditing(null)}>
+            <KitButton
+              onClick={() => {
+                setEditing(null);
+                setError("");
+              }}
+            >
               <X className="size-3.5" /> Cancel
             </KitButton>
             {onWorldEntry && editing !== "new" ? <WorldEntryLink onOpen={() => onWorldEntry(editing)} /> : null}

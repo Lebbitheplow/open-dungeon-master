@@ -186,7 +186,7 @@ export function LorePanel({
         // the draft unless the entry is there.
         if (sent.unanswered && !editingId) {
           const title = draft.title.trim().slice(0, LORE_TITLE_MAX);
-          const found = await findLostCreate(entries, reread, (entry) => entry.title === title);
+          const found = await findLostCreate(loaded ? entries : null, reread, (entry) => entry.title === title);
           if (found === "made") {
             setAdding(false);
             return;
@@ -287,7 +287,7 @@ export function LorePanel({
       );
       if (sent.error !== null) {
         if (sent.unanswered) {
-          const found = await findLostCreate(entries, reread, (row) => row.title === title.trim().slice(0, LORE_TITLE_MAX));
+          const found = await findLostCreate(loaded ? entries : null, reread, (row) => row.title === title.trim().slice(0, LORE_TITLE_MAX));
           if (found !== "made") {
             setSaveError(
               found === "missing"

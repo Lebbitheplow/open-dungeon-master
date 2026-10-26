@@ -241,7 +241,7 @@ export function DmEncounterPrepPanel({
       if (sent.error !== null) {
         if (sent.unanswered && !editingId) {
           const name = draft.name.trim();
-          const found = await findLostCreate(templates, load, (template) => template.name === name);
+          const found = await findLostCreate(loaded ? templates : null, load, (template) => template.name === name);
           const prepared = lostCreate(found, {
             made: "Prepared. The server's answer was lost on the way, so the list was read again to make sure.",
             missing: "The server did not answer and the fight is not in the list, so it was not prepared. Your roster is kept; press Prepare it again.",
@@ -294,7 +294,7 @@ export function DmEncounterPrepPanel({
       if (sent.error !== null) {
         if (sent.unanswered) {
           const copy = name.trim();
-          const found = await findLostCreate(templates, load, (row) => row.name === copy);
+          const found = await findLostCreate(loaded ? templates : null, load, (row) => row.name === copy);
           lostCreate(found, {
             made: "Copied. The server's answer was lost on the way, so the list was read again to make sure.",
             missing: "The server did not answer and the copy is not in the list, so it was not made. Duplicate it again.",

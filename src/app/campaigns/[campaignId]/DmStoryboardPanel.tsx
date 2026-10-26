@@ -141,9 +141,10 @@ export function DmStoryboardPanel({
         "That card could not be added.",
       );
       if (sent.error !== null && sent.unanswered) {
-        const wanted = title.trim();
+        // As the server keeps it (src/lib/workshop/board.ts): trimmed, cut at TITLE_MAX.
+        const wanted = title.trim().slice(0, TITLE_MAX);
         const found = await findLostCreate(
-          data?.board.nodes ?? [],
+          data ? data.board.nodes : null,
           () => load().then((payload) => payload?.board.nodes ?? null),
           (node) => node.kind === kind && node.title === wanted,
         );

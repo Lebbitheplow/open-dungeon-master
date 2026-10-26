@@ -41,7 +41,9 @@ export function Field({
   const Wrap = glossary || plain ? "div" : "label";
   return (
     <Wrap className={cn("flex min-w-0 flex-col gap-1", className)}>
-      <span className="flex items-center gap-1">
+      {/* With an info button the caption is a finger's height on a phone,
+          so the button's 40 px reach stays off the field below. */}
+      <span className={cn("flex items-center gap-1", glossary && "pointer-coarse:min-h-10")}>
         <FieldLabel>{label}</FieldLabel>
         {glossary ? <OptionGlossary title={glossary.title} entries={glossary.entries} /> : null}
       </span>

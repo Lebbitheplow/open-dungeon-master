@@ -101,6 +101,10 @@ await test("an old row of the same name does not count, and a list without the r
 await test("a list that cannot be read either leaves it unknown", async () => {
   assert.equal(await findLostCreate([], async () => null, () => true), "unknown");
   assert.equal(await findLostCreate([], () => Promise.reject(new Error("offline")), () => true), "unknown");
+  // A list never read cannot tell a row there all along from the new one: a
+  // panel whose first read failed does not call an old row "made" and close
+  // the editor on a draft that was not sent.
+  assert.equal(await findLostCreate(null, async () => [{ id: "a", name: "Bandits at the ford" }], () => true), "unknown");
 });
 
 console.log(`test-load-state: ${passed} passed`);
