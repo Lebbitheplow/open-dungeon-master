@@ -79,7 +79,8 @@ await test("A roll parked for a player's own dice survives a restart, and the ro
   setMemberRealDice(world.campaignId, userId, true);
 
   // The DM narrates the setup and asks for the roll in one reply, as real
-  // models usually do: that prose is already on the turn when it parks.
+  // models usually do. That prose was written before the dice, so the turn
+  // parks without it and the roll card does the asking (issue #531).
   model.script([
     reply({
       text: "The rusted gate groans and swings for Kara.",
@@ -114,7 +115,7 @@ await test("A roll parked for a player's own dice survives a restart, and the ro
   assert.deepEqual(listOpenPendingRolls(world.campaignId), []);
   const said = listRecentMessages(world.campaignId, 50).filter((message) => message.authorType === "dm");
   assert.equal(said.length, 1, `expected one narration, found ${said.length}`);
-  assert.match(said[0].content, /rusted gate groans/, "the prose written before the park was lost");
+  assert.doesNotMatch(said[0].content, /rusted gate groans/, "the prose written beside the roll reached the table");
   assert.match(said[0].content, /slams against her shield/);
 
   // It resumed rather than ran again: one more call, carrying the player's roll.

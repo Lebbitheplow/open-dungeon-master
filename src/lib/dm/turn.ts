@@ -90,7 +90,7 @@ import {
   salvageXmlToolCalls,
   unknownSheetRef,
 } from "@/lib/dm/rolls";
-import { fakeRollMarkerRegex, stripToolText } from "@/lib/dm/tool-text";
+import { stripToolText, withoutRollMarkers } from "@/lib/dm/tool-text";
 import {
   collectExchanges,
   earlierFigures,
@@ -336,12 +336,27 @@ export const TURN_RUN_NAMES: ReadonlySet<string> = new Set<string>([
 // where a resumed turn may re-enter the loop.
 export const MAX_MODEL_CALLS = 4;
 
+// What the model reads with each roll's result, from the turn and from a
+// retry alike (src/lib/dm/retry-turn.ts). The text it wrote beside the roll
+// was withheld (OUTCOME_TOOLS), so the narration it writes now is the first
+// the table hears of the attempt.
+export const ROLL_RESULT_NOTE =
+  "Narrate this real result, the attempt and what it decides together: the table has seen nothing you wrote beside the roll. Do not roll again for the same action.";
+
 // Tools whose results decide an outcome the model cannot know yet (a hit, a
-// save, a contest, damage or healing rolled): narration written in the same
-// model call is a premature guess and is withheld from players. A plain
-// request_roll is not here, because the prose beside it is the set-up (and,
-// for a player on physical dice, the ask to roll); its damage kind is.
+// save, a check, a contest, damage or healing rolled): narration written in
+// the same model call is a premature guess and is withheld from players.
+// Every roll and check is here, a plain request_roll too: the "set-up"
+// beside one told what the check would find before it was rolled (Qwen3.6-35B
+// described the hidden crawlway, the flooded chamber and the missing bell
+// before the Investigation card, issue #531), and for a player on physical
+// dice it stood on screen until they rolled. The roll card does the asking.
 const OUTCOME_TOOLS = new Set([
+  "request_roll",
+  "group_check",
+  "check_notice",
+  "social_check",
+  "npc_reaction",
   "pc_attack",
   "cast_at_enemy",
   "enemy_attack",
@@ -365,16 +380,17 @@ const OUTCOME_TOOLS = new Set([
   "stabilize",
 ]);
 
-function resolvesOutcome(toolCall: { name: string; rawArguments: string }): boolean {
-  if (toolCall.name === "request_roll") {
-    try {
-      return (JSON.parse(toolCall.rawArguments || "{}") as { kind?: unknown }).kind === "damage";
-    } catch {
-      return false;
-    }
-  }
+function resolvesOutcome(toolCall: { name: string }): boolean {
   return OUTCOME_TOOLS.has(toolCall.name);
 }
+
+// The checks whose same-call prose is withheld since issue #531. Beside one
+// that prose is often the scene the check happens in (an arrival written
+// with check_notice), so the result that follows withheld text says so, as
+// ROLL_RESULT_NOTE does for a roll, and the follow-up tells the scene too.
+const UNSEEN_CHECKS = new Set(["group_check", "check_notice", "social_check", "npc_reaction"]);
+const UNSEEN_CHECK_NOTE =
+  "The table has seen nothing you wrote beside this check: narrate the moment and what the result decides together.";
 
 type TurnContext = {
   campaign: Campaign;
@@ -978,7 +994,7 @@ export async function resumeDmTurn(campaignId: string, turnId: string) {
         ...(pending.dc !== null ? { dc: pending.dc, success: roll.total >= pending.dc } : {}),
         ...(roll.breakdown.crit ? { crit: roll.breakdown.crit } : {}),
         rolledBy: pending.status === "submitted" ? "the player, with physical dice" : "the server",
-        note: "Narrate this real result. Do not roll again for the same action.",
+        note: ROLL_RESULT_NOTE,
         // What the server already did with this roll (initiative locked,
         // damage applied); the model must narrate from it, not repeat it.
         ...(pending.combatNote ? { combat: pending.combatNote } : {}),
@@ -1633,22 +1649,17 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     // for the rolls it asks in words, a fight it announces, a blow it lands,
     // who speaks its quoted lines, the narrator's asides to itself and, with
     // the guard on, what it claims. Not read on the forced final call, where
-    // nothing found could run (only its asides are read, below); nor when
-    // the reply already rolls (no double dice); nor beside an attack, whose
-    // text is dropped below. Kept prose left unread is read by the guard at
-    // the end of the turn. So an aside beside request_roll stays: that text
-    // is the line setting up the roll, and reading it would cost a call on
-    // every roll for a sentence the follow-up narrates past.
+    // nothing found could run (only its asides are read, below); nor beside
+    // a roll, a check or an attack, whose text is dropped below (and a reply
+    // that already rolls must not roll twice). Kept prose left unread is
+    // read by the guard at the end of the turn.
     const structuredCalls = [
       ...extractToolCalls(message?.tool_calls),
       ...xmlSalvage.calls,
       ...jsonSalvage.calls,
       ...salvage.calls,
     ];
-    const replyRead =
-      !finalCall &&
-      Boolean(salvage.text.trim()) &&
-      !structuredCalls.some((toolCall) => toolCall.name === "request_roll" || resolvesOutcome(toolCall));
+    const replyRead = !finalCall && Boolean(salvage.text.trim()) && !structuredCalls.some(resolvesOutcome);
     const read = replyRead
       ? await readReply(campaign, sheets, turn, salvage.text, {
           inEncounter,
@@ -1690,17 +1701,20 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       const standing = getActiveEncounter(campaignId);
       return standing ? listEnemies(standing.id).map((enemy) => enemy.displayName) : [];
     })();
-    // Text streamed alongside an attack-resolving tool call is the model
+    // Text streamed alongside a roll, a check or an attack is the model
     // guessing the outcome before the dice exist ("the blade bites deep" on
-    // what turns out to be a miss). Drop it from the persisted narration;
-    // the tool result comes back this same turn and the follow-up call
-    // narrates from the real numbers. It stays in the echoed assistant
-    // message, so the model keeps its own context.
-    const calledAttackTool = toolCalls.some(resolvesOutcome);
+    // what turns out to be a miss, the secret door found before the
+    // Investigation roll). Drop it from the persisted narration; the tool
+    // result comes back (at once, or when a player enters their dice) and
+    // the follow-up call narrates from the real numbers. It stays in the
+    // echoed assistant message, so the model keeps its own context. So does
+    // the plan a model sometimes writes out beside the call once its thought
+    // was cut short (Qwen3.6-35B, issue #531).
+    const calledOutcomeTool = toolCalls.some(resolvesOutcome);
     // Hand-written "[roll:...]" markers rolled nothing (real markers are
     // appended by finalize() from actual roll ids); drop them before the
     // text is persisted so players never see dead bookkeeping tokens.
-    const prose = (visibleText ?? "").replace(fakeRollMarkerRegex(), "").trim();
+    const prose = withoutRollMarkers(visibleText ?? "").trim();
     // The narrator's asides ("I'll check how the table records that before
     // she answers") are the model talking to itself, not the story: the
     // sentences the reader quoted as asides are cut from what the table
@@ -1720,7 +1734,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     const planBesideCalls = planOnly && toolCalls.length > 0 && !finalCall;
     // On the last call the tools never run (toolChoice "none"; a leaked call
     // is dropped), so its prose is the only narration there will be.
-    if (narration && (!calledAttackTool || finalCall)) {
+    if (narration && (!calledOutcomeTool || finalCall)) {
       turn.narrationParts.push(narration);
       if (read) {
         partReads.set(narration, read);
@@ -2177,8 +2191,9 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       saveDmTurn(turn);
       break;
     }
-    // Text beside an attack is withheld now, before the dice: a pc_attack
-    // can park for a player's physical roll and leave the draft up for long.
+    // Text beside a roll or an attack is withheld now, before the dice: a
+    // request_roll or pc_attack can park for a player's physical roll and
+    // leave the draft up for long, so the roll card stands alone meanwhile.
     settleDraft();
 
     setDmStatus(campaignId, "rolling");
@@ -2216,10 +2231,11 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       if (!("error" in outcome)) {
         accepted.add(toolCall);
       }
+      const told = narration && UNSEEN_CHECKS.has(toolCall.name) && !("error" in outcome) ? { ...outcome, table: UNSEEN_CHECK_NOTE } : outcome;
       turn.conversation.push({
         role: "tool",
         ...(toolCall.id ? { tool_call_id: toolCall.id } : {}),
-        content: JSON.stringify(outcome),
+        content: JSON.stringify(told),
       });
     }
 
@@ -2405,7 +2421,7 @@ async function resolveModelCall(
       return { [PARKED]: true };
     }
     return typeof result.total === "number"
-      ? { ...result, note: "Narrate this real result. Do not roll again for the same action." }
+      ? { ...result, note: ROLL_RESULT_NOTE }
       : result;
   }
   return dispatchAdjudication(name, rawArguments, { campaign, turn, sheets, sheetsById, realDiceUserIds });
@@ -3066,10 +3082,14 @@ function finalize(context: TurnContext, turn: DmTurn, failed: string, spoken: re
   // Persist the turn: narration segments joined, roll markers appended so
   // the UI renders dice cards inline between narration and interpretation.
   // What the table reads keeps the fight's bookkeeping out of the story and
-  // says each sentence once (src/lib/dm/narration-tidy-logic.ts).
+  // says each sentence once (src/lib/dm/narration-tidy-logic.ts). Any
+  // marker already in a part is the model's own (the rescue's and the
+  // guard's rewrite included), never one of the real ones placed below.
   const combatants = fightNames(campaignId);
   const narrationParts = withoutRepeatedSentences(
-    turn.narrationParts.map((part) => withoutToolTalk(withoutCombatBookkeeping(part, combatants, campaignLanguage(campaignId)))),
+    turn.narrationParts.map((part) =>
+      withoutToolTalk(withoutCombatBookkeeping(withoutRollMarkers(part), combatants, campaignLanguage(campaignId))),
+    ),
   );
   let content = narrationParts.join("\n\n").trim();
   if (!content) {

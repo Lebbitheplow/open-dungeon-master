@@ -16,8 +16,8 @@ import { getRoll } from "@/lib/db/rolls";
 import { publishPersisted } from "@/lib/events";
 import { enqueueDmJob } from "@/lib/dm/queue";
 import { setDmStatus } from "@/lib/dm/status";
-import { fakeRollMarkerRegex } from "@/lib/dm/tool-text";
-import { MAX_MODEL_CALLS, reenterDmTurn, startDmTurn } from "@/lib/dm/turn";
+import { withoutRollMarkers } from "@/lib/dm/tool-text";
+import { MAX_MODEL_CALLS, ROLL_RESULT_NOTE, reenterDmTurn, startDmTurn } from "@/lib/dm/turn";
 import { isUnbuiltTurn } from "@/lib/dm/turn-halt";
 import {
   assistantTextOf,
@@ -79,7 +79,7 @@ function resolvedRollResult(
     ...(pending.dc !== null ? { dc: pending.dc, success: roll.total >= pending.dc } : {}),
     ...(roll.breakdown.crit ? { crit: roll.breakdown.crit } : {}),
     rolledBy: pending.status === "submitted" ? "the player, with physical dice" : "the server",
-    note: "Narrate this real result. Do not roll again for the same action.",
+    note: ROLL_RESULT_NOTE,
     ...(pending.combatNote ? { combat: pending.combatNote } : {}),
   });
 }
@@ -149,7 +149,7 @@ export function requestTurnRetry(request: RetryRequest): RetryResult {
   const rewind = rewindHaltedCall({
     narrationParts: claimed.narrationParts,
     callIndex: claimed.callIndex,
-    assistantText: assistantTextOf(claimed.conversation).replace(fakeRollMarkerRegex(), ""),
+    assistantText: withoutRollMarkers(assistantTextOf(claimed.conversation)),
   });
   claimed.narrationParts = rewind.narrationParts;
   // A turn that burned its whole call budget resumes at the forced-narration

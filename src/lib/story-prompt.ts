@@ -120,9 +120,16 @@ const STREAM_CHANNEL_BOUNDARY = /<\|?channel\|?>|<\|?(?:start|im_start)\|?>/i;
 // Markers dropped from visible text: orphan closers, final-channel switches,
 // and bare Harmony/ChatML tokens. Opening think tags are NOT here — they are
 // handled by STREAM_SUPPRESS_OPEN so the match kinds stay unambiguous.
+// A "[roll:...]" marker is the model imitating the ones the server places in
+// finished narration (src/lib/dm/tool-text.ts withoutRollMarkers): it never
+// reaches the draft either (issue #531).
 const STREAM_STRIP =
-  /<\/(?:think|thinking|thought|reasoning)>|<\|?channel\|?>\s*final\s*(?:<\|?message\|?>)?|assistantfinal[:\s]*|<\|?(?:start|im_start)\|?>\s*assistant\b|<\|?(?:start|end|message|channel|return|constrain|call|im_start|im_end)\|?>/i;
+  /<\/(?:think|thinking|thought|reasoning)>|<\|?channel\|?>\s*final\s*(?:<\|?message\|?>)?|assistantfinal[:\s]*|<\|?(?:start|im_start)\|?>\s*assistant\b|<\|?(?:start|end|message|channel|return|constrain|call|im_start|im_end)\|?>|\[roll:[^\]\n]{0,80}\][ \t]*/i;
 const STREAM_HOLDBACK_CHARS = 48;
+// The longest "[roll:" marker body held back while its closing bracket is
+// still arriving, the same that STREAM_STRIP cuts; past this it is prose that
+// happens to open a bracket.
+const ROLL_MARKER_HOLDBACK_CHARS = 80;
 
 // Whether text stops inside a reasoning block it opened (a <think> or a
 // thought channel with no end yet): what follows the opener is the model's
@@ -132,7 +139,20 @@ export function endsInsideReasoning(text: string): boolean {
   return opened >= 0 && lastMatchEnd(text, new RegExp(STREAM_SUPPRESS_END.source, "gi")) < opened;
 }
 
+// Where a "[roll:" marker still arriving at the end of the text starts (its
+// head, or the whole marker before its closing bracket), or -1.
+const PARTIAL_ROLL_MARKER = new RegExp(`\\[(?:r(?:o(?:l(?:l(?::[^\\]\\n]{0,${ROLL_MARKER_HOLDBACK_CHARS}})?)?)?)?)?$`, "i");
+function partialRollMarkerStart(text: string): number {
+  return text.search(PARTIAL_ROLL_MARKER);
+}
+
 function partialMarkerStart(text: string): number {
+  const roll = partialRollMarkerStart(text);
+  const other = partialTokenStart(text);
+  return roll < 0 ? other : other < 0 ? roll : Math.min(roll, other);
+}
+
+function partialTokenStart(text: string): number {
   // A trailing '<'-run with no '>' yet could be the head of a marker.
   const angle = text.lastIndexOf("<");
   if (angle >= 0 && angle >= text.length - 40 && !text.slice(angle).includes(">")) {
