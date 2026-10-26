@@ -55,7 +55,8 @@ export default {
     check((await details.count()) === 1, "the tile's name is a Details button");
     if (t.touch) {
       const box = await details.boundingBox();
-      check(box && box.height >= 40, `the name is finger-sized on a phone (${box?.width}x${box?.height})`);
+      // 39.5: a 40px box can measure 39.99998 after layout rounding.
+      check(box && box.height >= 39.5, `the name is finger-sized on a phone (${box?.width}x${box?.height})`);
     }
     await t.tap(details);
     const card = page.locator(`${root}[role=dialog]`).locator("visible=true");
@@ -96,7 +97,7 @@ export default {
       check((await door.getAttribute("aria-haspopup")) === "menu", "and it says it opens a menu");
       if (t.touch) {
         const box = await door.boundingBox();
-        check(box && box.width >= 40 && box.height >= 40, `the door is finger-sized on a phone (${box?.width}x${box?.height})`);
+        check(box && box.width >= 39.5 && box.height >= 39.5, `the door is finger-sized on a phone (${box?.width}x${box?.height})`);
       }
       await door.focus();
       await page.keyboard.press("Enter");

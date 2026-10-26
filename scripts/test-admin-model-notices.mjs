@@ -71,7 +71,9 @@ test("the admin panels say when no model is picked", async () => {
   // before its list has answered.
   assert.doesNotMatch(speech({ ttsProvider: "openai", ttsBaseUrl: "http://127.0.0.1:8000/v1", ttsModel: "" }), spoken);
   console.log("ok - the admin panels say when no model is picked");
-});
+// The first settings read opens the database: well under a second on Linux,
+// past vitest's five-second default on the Windows runner (PR 534's smoke).
+}, 60_000);
 
 test("the dictation card reads an older host's status, which has no model fields", () => {
   const builtin = { model: "whisper", downloadMb: 76, installed: false, status: "idle", progress: 0, error: "" };
