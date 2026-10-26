@@ -93,7 +93,7 @@ export const sceneTools: ToolDef[] = [
       parameters: {
         type: "object",
         additionalProperties: false,
-        properties: { reason: { type: "string" } },
+        properties: { reason: { type: "string", description: "Short in-fiction cause." } },
       },
     },
   },

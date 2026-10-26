@@ -20,7 +20,7 @@ await test("A character's area that names no spell (a breath weapon) is theirs."
   const { world, sheets: [breather], enemies: [goblin] } = await table([{ ...FIGHTER, name: "Drax" }]);
   const before = snapshot(world);
   world.dice(3, 3, 1);
-  const out = await world.invoke("aoe_damage", { casterId: breather.id, enemyIds: [goblin.id], saveAbility: "dex", dc: 13, damage: "2d6", type: "fire", reason: "Breath Weapon" });
+  const out = await world.invoke("aoe_damage", { casterCharacterId: breather.id, enemyIds: [goblin.id], saveAbility: "dex", dc: 13, damage: "2d6", type: "fire", reason: "Breath Weapon" });
   world.clearDice();
   assert.equal(out.ok, true, out.error);
   const [blast] = since(world, before);

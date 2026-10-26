@@ -123,20 +123,25 @@ export const EXPLORE_ADJUDICATIONS: CatalogEntry[] = [
         name: "name",
         label: "Which",
         kind: "select",
-        required: true,
         options: [
           ...Object.values(DISEASES).map((disease) => ({ value: disease.name, label: `Disease: ${disease.name}` })),
-          { value: "short", label: "Madness: short-term" },
-          { value: "long", label: "Madness: long-term" },
-          { value: "indefinite", label: "Madness: indefinite" },
           ...POISONS.map((poison) => ({ value: poison.name, label: `Poison: ${poison.name} (${poison.type})` })),
         ],
         // The table's own diseases and poisons from the workshop, by name.
         other: { label: "One of this table's diseases or poisons", placeholder: "Marsh Fever" },
       },
+      {
+        name: "duration",
+        label: "Madness lasts",
+        kind: "select",
+        options: [
+          { value: "short", label: "Short-term" },
+          { value: "long", label: "Long-term" },
+          { value: "indefinite", label: "Indefinite" },
+        ],
+      },
       { name: "save", label: "Roll the save", kind: "boolean", default: true, help: "Untick when they are already infected or have no save." },
-      { name: "dc", label: "Infection DC", kind: "number", min: 1, max: 30, help: "Disease: when the source sets its own DC." },
-      { name: "saveDc", label: "Madness save DC", kind: "number", min: 1, max: 30 },
+      { name: "saveDc", label: "Save DC", kind: "number", min: 1, max: 30, help: "A disease's infection DC when the source sets its own, or a madness's save." },
       {
         name: "saveAbility",
         label: "Madness save",

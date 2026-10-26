@@ -174,7 +174,7 @@ export function infectWorkshopDisease(
   turnId: string,
   sheet: CharacterSheet,
   own: { id: string; name: string; disease: DiseaseSpec },
-  input: { save?: boolean; dc?: number; symptomsNow?: boolean },
+  input: { save?: boolean; saveDc?: number; symptomsNow?: boolean },
 ): Record<string, unknown> {
   const spec = own.disease;
   if (spec.runsAs && DISEASES[spec.runsAs]) {
@@ -185,7 +185,7 @@ export function infectWorkshopDisease(
     return { ok: true, note: `${sheet.name} already has ${own.name}.` };
   }
   if (input.save !== false) {
-    const dc = input.dc ?? spec.infect.dc;
+    const dc = input.saveDc ?? spec.infect.dc;
     const save = characterSave(campaign, sheet, { ability: spec.infect.ability, dc, detail: `${sheet.name}: ${spec.infect.ability.toUpperCase()} save vs ${own.name}`, against: "disease", advantage: holds(sheet, "recuperated") });
     if (save.success) {
       return { ok: true, resisted: true, note: `${sheet.name} resists ${own.name} (${spec.infect.ability.toUpperCase()} save ${save.total} vs DC ${dc}).` };
@@ -255,14 +255,14 @@ export function infectDisease(
   turnId: string,
   sheet: CharacterSheet,
   disease: Disease,
-  input: { save?: boolean; dc?: number; symptomsNow?: boolean },
+  input: { save?: boolean; saveDc?: number; symptomsNow?: boolean },
 ): Record<string, unknown> {
   const list = liveAfflictions(campaign.id, sheet);
   if (list.some((entry) => entry.kind === "disease" && entry.id === disease.id)) {
     return { ok: true, note: `${sheet.name} already has ${disease.name}.` };
   }
   if (input.save !== false) {
-    const dc = input.dc ?? disease.infectDc;
+    const dc = input.saveDc ?? disease.infectDc;
     const save = characterSave(campaign, sheet, { ability: "con", dc, detail: `${sheet.name}: CON save vs ${disease.name}`, against: "disease", advantage: holds(sheet, "recuperated") });
     if (save.success) {
       return { ok: true, resisted: true, note: `${sheet.name} resists ${disease.name} (CON save ${save.total} vs DC ${dc}).` };

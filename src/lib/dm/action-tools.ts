@@ -116,7 +116,7 @@ export const actionTools: ToolDef[] = [
             type: "string",
             description: "Use an Object only: the object, when it is one they carry. For consumables, use use_item.",
           },
-          enemyId: {
+          escapingEnemyId: {
             type: "string",
             description: "Escape only, for an ENEMY escaping a character's grapple: the enemy, exact enemyId from GAME STATE. Omit characterId then.",
           },
@@ -194,7 +194,7 @@ const takeActionSchema = z.object({
   trigger: z.string().max(200).optional(),
   skill: z.enum(["perception", "investigation"]).optional(),
   item: z.string().max(80).optional(),
-  enemyId: z.string().optional(),
+  escapingEnemyId: z.string().optional(),
   spell: z.string().max(80).optional(),
   level: z.coerce.number().int().min(1).max(9).optional(),
   reason: z.string().optional(),
@@ -356,8 +356,8 @@ export function handleTakeAction(
   } catch {
     return { error: "Invalid arguments: take_action needs characterId and a known action.", retry: true };
   }
-  if (args.action === "escape" && args.enemyId && !args.characterId) {
-    return enemyEscape(campaign, turn, args.enemyId);
+  if (args.action === "escape" && args.escapingEnemyId && !args.characterId) {
+    return enemyEscape(campaign, turn, args.escapingEnemyId);
   }
   const staleSheet = resolveSheetRef(args.characterId, sheets, sheetsById);
   const sheet = staleSheet ? (getSheetById(staleSheet.id) ?? staleSheet) : null;

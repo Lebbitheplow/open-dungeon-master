@@ -97,7 +97,7 @@ await test("A renamed copy of a dragon breathes with its own DC, dice and rechar
   assert.equal(bite.reach, 10);
   assert.deepEqual(bite.riders, [{ dice: "2d6", type: "fire" }]);
   const out = await mk.forced([...new Array(18).fill(1), 1], () =>
-    world.invoke("aoe_damage", { characterIds: [tank.id], casterEnemyId: enemy.id, ability: "Fire Breath", damage: "1d6", saveAbility: "str", dc: 5 }),
+    world.invoke("aoe_damage", { characterIds: [tank.id], casterEnemyId: enemy.id, enemyAbility: "Fire Breath", damage: "1d6", saveAbility: "str", dc: 5 }),
   );
   assert.equal(out.ok, true, out.error);
   assert.equal(out.result.dc, 21);
@@ -105,7 +105,7 @@ await test("A renamed copy of a dragon breathes with its own DC, dice and rechar
   assert.equal(out.rolled.filter((die) => die.sides === 6).length, 18, "the breath was not the block's 18d6");
   kit.freshRound();
   const again = await mk.forced([...new Array(18).fill(1), 1], () =>
-    world.invoke("aoe_damage", { characterIds: [tank.id], casterEnemyId: enemy.id, ability: "Fire Breath", damage: "1d6", saveAbility: "dex", dc: 21 }),
+    world.invoke("aoe_damage", { characterIds: [tank.id], casterEnemyId: enemy.id, enemyAbility: "Fire Breath", damage: "1d6", saveAbility: "dex", dc: 21 }),
   );
   assert.equal(again.ok, false, "a spent Recharge 5-6 breath came back without a recharge roll");
 });

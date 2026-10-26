@@ -24,7 +24,6 @@ import { infectDisease, infectWorkshopDisease, inflictMadness } from "@/lib/dm/a
 import { diseaseAt, hazardNamesAt, poisonAt } from "@/lib/srd/table-hazards";
 import { applyPoison } from "@/lib/dm/affliction-poisons";
 import { DISEASES, MADNESS_KINDS, POISONS, findDisease } from "@/lib/srd/afflictions";
-import { textKey } from "@/lib/language/text-logic";
 import { formatPrice } from "@/lib/srd/currency";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolResult } from "@/lib/dm/tool-errors";
@@ -119,22 +118,22 @@ export const exploreTools: ToolDef[] = [
     function: {
       name: "afflict",
       description:
-        `Lay an SRD disease (${Object.values(DISEASES).map((disease) => disease.name).join(", ")}), a madness or a poison on a character; the server rolls the save and holds the effects from then on. A disease is a CON save against catching it, symptoms after their incubation, then the disease's own saves after each long rest; lesser restoration cures it. For a madness the server rolls the SRD table and its duration and applies the conditions; pass saveDc (and saveAbility wis or cha) for an effect that allows a save. The SRD poisons are ${POISONS.filter((poison) => poison.type !== "injury").map((poison) => poison.name).join(", ")}, and the injury poisons when a poisoned blade strikes a character; the server rolls the CON save, the damage and the conditions. The table's own diseases and poisons from the workshop are named under GAME STATE and work the same way. Never narrate a disease, madness or poison taking hold without this call.`,
+        `Lay an SRD disease (${Object.values(DISEASES).map((disease) => disease.name).join(", ")}), a madness or a poison on a character; the server rolls the save and holds the effects from then on. A disease is a CON save against catching it, symptoms after their incubation, then the disease's own saves after each long rest; lesser restoration cures it. For a madness, pass its duration (short, long or indefinite); the server rolls that table and how long it lasts, and applies the conditions; pass saveDc (and saveAbility wis or cha) for an effect that allows a save. The SRD poisons are ${POISONS.filter((poison) => poison.type !== "injury").map((poison) => poison.name).join(", ")}, and the injury poisons when a poisoned blade strikes a character; the server rolls the CON save, the damage and the conditions. The table's own diseases and poisons from the workshop are named under GAME STATE and work the same way. Never narrate a disease, madness or poison taking hold without this call.`,
       parameters: {
         type: "object",
         additionalProperties: false,
         properties: {
           characterId: { type: "string", description: "Exact characterId from GAME STATE." },
           kind: { type: "string", enum: ["disease", "madness", "poison"], description: "What it is." },
-          name: { type: "string", description: "The disease or poison by name, or for madness: short, long or indefinite." },
+          name: { type: "string", description: "Disease or poison only: which, by name." },
+          duration: { type: "string", enum: [...MADNESS_KINDS], description: "Madness only: how long it lasts." },
           save: { type: "boolean", description: "Whether the server rolls the save against it; false when already infected or with no save. Default: true. False for a madness from a failed save you already rolled." },
-          dc: { type: "integer", minimum: 1, maximum: 30, description: "A disease's infection DC when the source sets its own; the SRD's otherwise." },
-          saveDc: { type: "integer", minimum: 1, maximum: 30, description: "Madness only: the DC of the save that resists it." },
+          saveDc: { type: "integer", minimum: 1, maximum: 30, description: "The save's DC, if the source sets one: a disease's infection, a madness's save. A poison uses its own." },
           saveAbility: { type: "string", enum: ["wis", "cha"], description: "Madness only: the save's ability. Default: 'wis'." },
           symptomsNow: { type: "boolean", description: "Disease only: the symptoms show now rather than after the incubation." },
           reason: { type: "string", description: "Short note on the source." },
         },
-        required: ["characterId", "kind", "name"],
+        required: ["characterId", "kind"],
       },
     },
   },
@@ -229,9 +228,9 @@ const downtimeSchema = entrySchema.partial().extend({
 const afflictSchema = z.object({
   characterId: z.string(),
   kind: z.enum(["disease", "madness", "poison"]),
-  name: z.string().max(60),
+  name: z.string().max(60).optional(),
+  duration: z.enum(MADNESS_KINDS).optional(),
   save: z.boolean().optional(),
-  dc: z.coerce.number().int().min(1).max(30).optional(),
   saveDc: z.coerce.number().int().min(1).max(30).optional(),
   saveAbility: z.enum(["wis", "cha"]).optional(),
   symptomsNow: z.boolean().optional(),
@@ -327,7 +326,7 @@ export function handleExploreCall(
   if (name === "afflict") {
     const args = parse(afflictSchema, rawArguments);
     if (!args) {
-      return { error: "Invalid arguments: afflict needs characterId, kind (disease, madness, poison) and name.", retry: true };
+      return { error: "Invalid arguments: afflict needs characterId and kind (disease, madness, poison), with a name, or a duration for madness.", retry: true };
     }
     const stale = resolveSheetRef(args.characterId, sheets, sheetsById);
     const sheet = stale ? (getSheetById(stale.id) ?? stale) : null;
@@ -337,32 +336,41 @@ export function handleExploreCall(
     if (sheet.deathSaves?.dead) {
       return { error: `${sheet.name} is dead; nothing more takes hold.`, retry: true };
     }
+    if (args.kind === "madness") {
+      if (!args.duration) {
+        return { error: "Madness needs its duration: short, long or indefinite.", retry: true };
+      }
+      return inflictMadness(campaign, turn.id, sheet, args.duration, { saveDc: args.save === false ? undefined : args.saveDc, saveAbility: args.saveAbility });
+    }
+    if (!args.name) {
+      return { error: `A ${args.kind} needs its name.`, retry: true };
+    }
     if (args.kind === "disease") {
       const disease = findDisease(args.name);
       if (disease) {
-        return infectDisease(campaign, turn.id, sheet, disease, { save: args.save, dc: args.dc, symptomsNow: args.symptomsNow });
+        return infectDisease(campaign, turn.id, sheet, disease, { save: args.save, saveDc: args.saveDc, symptomsNow: args.symptomsNow });
       }
       // One of the table's own (the workshop's hazards).
       const own = diseaseAt(args.name, campaign.id);
       if (own) {
-        return infectWorkshopDisease(campaign, turn.id, sheet, own, { save: args.save, dc: args.dc, symptomsNow: args.symptomsNow });
+        return infectWorkshopDisease(campaign, turn.id, sheet, own, { save: args.save, saveDc: args.saveDc, symptomsNow: args.symptomsNow });
       }
       const table = hazardNamesAt(campaign.id).disease;
       return { error: `The server knows the SRD diseases ${Object.values(DISEASES).map((entry) => entry.name).join(", ")}${table.length ? ` and this table's ${table.join(", ")}` : ""}; "${args.name}" is not one. A story illness is set_condition with a duration.`, retry: true };
-    }
-    if (args.kind === "madness") {
-      const kind = MADNESS_KINDS.find((entry) => entry === textKey(args.name));
-      if (!kind) {
-        return { error: "Madness is short, long or indefinite: pass that as name.", retry: true };
-      }
-      return inflictMadness(campaign, turn.id, sheet, kind, { saveDc: args.save === false ? undefined : args.saveDc, saveAbility: args.saveAbility });
     }
     const poison = poisonAt(args.name, campaign.id);
     if (!poison) {
       const table = hazardNamesAt(campaign.id).poison;
       return { error: `The server knows the SRD poisons ${POISONS.map((entry) => entry.name).join(", ")}${table.length ? ` and this table's ${table.join(", ")}` : ""}; "${args.name}" is not one. Another poison is apply_damage with type poison and set_condition poisoned with a duration.`, retry: true };
     }
-    return applyPoison(campaign, turn.id, sheet, poison, { save: args.save });
+    // A poison's DC is its own (SRD 5.1, Poisons). A different one sent (a
+    // trap's, say) is set aside in the reply rather than refused: the server
+    // already knows the right DC, and a refusal costs the model a call.
+    const outcome = applyPoison(campaign, turn.id, sheet, poison, { save: args.save });
+    if (args.saveDc === undefined || args.saveDc === poison.dc) {
+      return outcome;
+    }
+    return { ...outcome, note: `${poison.name} sets its own save DC (${poison.dc}), so the ${args.saveDc} sent was not used. ${String(outcome.note)}` };
   }
   return { error: `Unknown tool ${name}.`, retry: true };
 }

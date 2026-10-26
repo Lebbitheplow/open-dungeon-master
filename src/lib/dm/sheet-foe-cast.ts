@@ -18,7 +18,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 export type SheetCasterArgs = {
   casterEnemyId?: string;
   spell?: string;
-  saveAbility: string;
+  saveAbility?: string;
   damage?: string;
   damageType?: string;
   halfOnSave?: boolean;

@@ -20,6 +20,9 @@ import type { SaveAbility } from "@/lib/bestiary/statblock";
 import { trackEnemyConcentration } from "@/lib/dm/cast-tools";
 import { prepareEnemyUse, type EnemyUse } from "@/lib/dm/enemy-casting";
 import { layEnemyCondition, layFailedSaveExtras } from "@/lib/dm/cast-at-player";
+import { layEnemyConditionInstance } from "@/lib/dm/enemy-condition-lay";
+import { canonicalCondition } from "@/lib/dm/mutations";
+import { conditionNameRefusal } from "@/lib/dm/set-condition";
 import { charmedBy } from "@/lib/dm/enemy-profile";
 import { planAoeSpell, type AoeSpellPlan } from "@/lib/dm/aoe-spell";
 import { freeRepeatOf, markRepeatStruck, repeatStrikesProblem } from "@/lib/dm/area-casting";
@@ -51,22 +54,26 @@ const aoeArgsSchema = z.object({
   // server knows rolls its own dice whatever is sent.
   damage: z.union([z.string().max(30), z.number().int().min(0).max(300)]).optional(),
   type: z.string().optional(),
-  // Optional when a player's spell (casterId + spell) or an enemy's block
+  // Optional when a player's spell (casterCharacterId + spell) or an enemy's block
   // sets them; an effect that names neither must send both (refused below).
   saveAbility: z.preprocess(normalizeAbility, z.enum(["str", "dex", "con", "int", "wis", "cha"])).optional(),
   dc: z.coerce.number().int().min(1).max(30).optional(),
   halfOnSave: z.boolean().optional(),
+  // What a failed save lays, for an effect with no rules of its own (a
+  // class feature's spend, a trap): a spell or an enemy's block lays its own.
+  condition: z.string().max(40).optional(),
+  rounds: z.coerce.number().int().min(1).max(100).optional(),
   enemyIds: z.array(z.string()).optional(),
   characterIds: z.array(z.string()).optional(),
   targets: z.string().max(400).optional(),
-  casterId: z.string().optional(),
+  casterCharacterId: z.string().optional(),
   casterEnemyId: z.string().optional(),
-  ability: z.string().max(80).optional(),
+  enemyAbility: z.string().max(80).optional(),
   spell: z.string().max(80).optional(),
   level: z.coerce.number().int().min(1).max(9).optional(),
   // A wizard's Overchannel and an evoker's Sculpt Spells (aoe-spell.ts).
   overchannel: z.coerce.boolean().optional(),
-  sculpt: z.array(z.string()).max(10).optional(),
+  sparedCharacterIds: z.array(z.string()).max(10).optional(),
   reason: z.string().optional(),
   ...zoneArgsSchema,
 });
@@ -95,9 +102,21 @@ export function handleAoeDamage(
   // and DC are the caller's, and nothing else could supply them.
   if (!args.spell && !args.casterEnemyId && (!args.saveAbility || !args.dc)) {
     return {
-      error: "aoe_damage needs saveAbility and dc for an effect that names no spell; a player's spell (casterId and spell) or an enemy's (casterEnemyId) brings its own.",
+      error: "aoe_damage needs saveAbility and dc for an effect that names no spell; a player's spell (casterCharacterId and spell) or an enemy's (casterEnemyId) brings its own.",
       retry: true,
     };
+  }
+
+  if (args.condition && (args.spell || args.casterEnemyId)) {
+    return { error: "aoe_damage: condition is for an effect that names no spell and no enemy; a spell or an enemy's block lays its own. Leave condition out. Nothing was spent.", retry: true };
+  }
+  const misnamed = args.condition ? conditionNameRefusal(args.condition) : null;
+  if (misnamed) {
+    return misnamed;
+  }
+  const laysCondition = args.condition ? canonicalCondition(args.condition) : null;
+  if (laysCondition === "exhaustion") {
+    return { error: "aoe_damage does not lay exhaustion, which goes up by levels: use set_condition for each creature that failed. Nothing was spent.", retry: true };
   }
 
   // The area a player's spell lays is the one of the published spell a
@@ -150,7 +169,7 @@ export function handleAoeDamage(
   // A creature Blink, Etherealness, Maze or a Resilient Sphere took away is
   // beyond the area's reach, and a caster off the Material Plane reaches
   // nobody (src/lib/dm/spell-planes.ts).
-  const awayCaster = args.casterId ? resolveSheetRef(args.casterId, sheets, sheetsById) : null;
+  const awayCaster = args.casterCharacterId ? resolveSheetRef(args.casterCharacterId, sheets, sheetsById) : null;
   const casterAway = awayCaster ? castingHold(awayCaster) : null;
   if (casterAway) {
     return casterAway;
@@ -166,16 +185,16 @@ export function handleAoeDamage(
       // A character's spell is the player's to hear about; an enemy's or a
       // trap's is the DM's own call, to aim elsewhere.
       const error = `${beyondReach.join(", ")} ${beyondReach.length === 1 ? "is" : "are"} out of reach of the Material Plane; the area catches nobody. Nothing was spent; aim it elsewhere.`;
-      return args.casterId ? { error, refused: "rules" } : { error, retry: true };
+      return args.casterCharacterId ? { error, refused: "rules" } : { error, retry: true };
     }
   }
   // A Globe of Invulnerability or an Antimagic Field keeps the creatures
   // inside it out of a spell's area from outside (src/lib/dm/zone-rules.ts):
   // the spell is cast all the same, and catches only the others, or nobody.
-  const areaCasterRef = args.casterEnemyId ?? args.casterId;
+  const areaCasterRef = args.casterEnemyId ?? args.casterCharacterId;
   const shielded: string[] = [];
   if (args.spell && areaCasterRef) {
-    const caster = args.casterEnemyId ? resolveEnemyRef(encounter.id, args.casterEnemyId)?.id : resolveSheetRef(args.casterId ?? "", sheets, sheetsById)?.id;
+    const caster = args.casterEnemyId ? resolveEnemyRef(encounter.id, args.casterEnemyId)?.id : resolveSheetRef(args.casterCharacterId ?? "", sheets, sheetsById)?.id;
     const facts = spellFactsFor(args.spell, spellAuthorsFor(campaign));
     const wardOn = (id: string, name: string) => (caster ? spellWardOn({ encounterId: encounter.id, casterId: caster, targetId: id, targetName: name, facts }) : null);
     for (const enemy of [...enemyTargets]) {
@@ -205,7 +224,7 @@ export function handleAoeDamage(
   }
 
   // SRD 5.1, Charmed: no harmful magic at the charmer (monsters workstream).
-  const charmedCaster = args.casterId ? resolveSheetRef(args.casterId, sheets, sheetsById) : null;
+  const charmedCaster = args.casterCharacterId ? resolveSheetRef(args.casterCharacterId, sheets, sheetsById) : null;
   const charmer = charmedCaster
     ? enemyTargets.find((enemy) => charmedBy(charmedCaster.conditions, charmedCaster.conditionMeta, enemy.id))
     : null;
@@ -231,11 +250,11 @@ export function handleAoeDamage(
     const planned = planAoeSpell(campaign, turn, sheets, sheetsById, {
       encounterId: encounter.id,
       spell: args.spell,
-      casterId: args.casterId,
+      casterCharacterId: args.casterCharacterId,
       level: args.level,
       damage: args.damage,
       overchannel: args.overchannel,
-      sculpt: args.sculpt,
+      sparedCharacterIds: args.sparedCharacterIds,
       ...(args.saveAbility ? { saveAbility: args.saveAbility as SaveAbility } : {}),
       ...(args.dc ? { dc: args.dc } : {}),
       halfOnSave: args.halfOnSave,
@@ -279,7 +298,7 @@ export function handleAoeDamage(
   if (args.casterEnemyId) {
     const prepared = prepareEnemyUse(campaign, {
       casterEnemyId: args.casterEnemyId,
-      ability: args.ability,
+      enemyAbility: args.enemyAbility,
       spell: args.spell,
       targetIds: pcTargets.map((sheet) => sheet.id),
       sent: { save: args.saveAbility, dc: args.dc, damage: typeof args.damage === "string" ? args.damage : undefined },
@@ -304,7 +323,7 @@ export function handleAoeDamage(
     }
     // One breath, one cone: everyone caught fits one placement of the shape
     // the block prints (src/lib/dm/aoe-shape.ts).
-    const area = args.ability ? abilityAreaShape(prepared.enemy.stats, args.ability) : args.spell ? spellAreaShape(args.spell) : null;
+    const area = args.enemyAbility ? abilityAreaShape(prepared.enemy.stats, args.enemyAbility) : args.spell ? spellAreaShape(args.spell) : null;
     if (area) {
       const problem = areaProblem({
         encounterId: encounter.id,
@@ -328,8 +347,8 @@ export function handleAoeDamage(
   if (plan?.mech?.hitPointPool) {
     return aoePool(campaign, encounter.id, plan, enemyTargets, corrections);
   }
-  if (args.damage === undefined && !plan?.conditions.length && !plan?.mech?.riders && !enemyUse?.condition && !areaOnly) {
-    return { error: "aoe_damage needs damage (dice or a number), or a known spell that lays a condition.", retry: true };
+  if (args.damage === undefined && !plan?.conditions.length && !plan?.mech?.riders && !enemyUse?.condition && !laysCondition && !areaOnly) {
+    return { error: "aoe_damage needs damage (dice or a number), a condition, or a known spell that lays one.", retry: true };
   }
 
   // The damage rolls once for the whole effect; a spell that deals none
@@ -420,8 +439,10 @@ export function handleAoeDamage(
           magical: Boolean(plan) || Boolean(enemyUse?.magical),
           // A legendary creature spends a resistance on an area's binding
           // condition, as it would on one cast at it alone (legendary-logic.ts).
-          resist: Boolean(plan?.conditions.length) && bindsWorthResisting(plan?.conditions ?? [], Boolean(plan?.mech?.condition?.endsWith)),
-          against: plan?.conditions ?? (enemyUse?.condition ? [enemyUse.condition] : []),
+          resist: plan?.conditions.length
+            ? bindsWorthResisting(plan.conditions, Boolean(plan.mech?.condition?.endsWith))
+            : Boolean(laysCondition) && bindsWorthResisting([laysCondition ?? ""], false),
+          against: plan?.conditions ?? (enemyUse?.condition ? [enemyUse.condition] : laysCondition ? [laysCondition] : []),
           ...(plan ? spellSaveOptions(plan.mech, enemy) : {}),
           ...(plan ? { record: { turn, detail: `${enemy.displayName}: ${ability.toUpperCase()} save against ${plan.spell}` } } : {}),
         });
@@ -444,6 +465,20 @@ export function handleAoeDamage(
       if (landed.length) {
         row.conditionApplied = landed.join(", ");
         publishEncounter(campaign.id);
+      }
+    }
+    if (!success && laysCondition) {
+      if (enemy.stats.conditionImmune.toLowerCase().includes(laysCondition)) {
+        row.conditionRefused = `${enemy.displayName} is immune to ${laysCondition}.`;
+      } else {
+        const incoming = {
+          ...(awayCaster ? { source: awayCaster.id } : {}),
+          ...(args.rounds ? { rounds: args.rounds } : { saveEnds: { ability, dc: saveDc } }),
+        };
+        if (layEnemyConditionInstance(campaign, getEnemy(enemy.id) ?? enemy, laysCondition, incoming)) {
+          laid = [laysCondition];
+          row.conditionApplied = laysCondition;
+        }
       }
     }
     const hpBefore = enemy.currentHp;
@@ -554,8 +589,8 @@ export function handleAoeDamage(
   // a human caster may still move or use a bonus action, so only end_turn
   // advances past them. Companion casters resolve here so the auto-act
   // backstop cannot act them a second time.
-  if (args.casterId) {
-    const caster = resolveSheetRef(args.casterId, sheets, sheetsById);
+  if (args.casterCharacterId) {
+    const caster = resolveSheetRef(args.casterCharacterId, sheets, sheetsById);
     if (caster?.isCompanion && !turn.resolvedCharacterIds.includes(caster.id)) {
       turn.resolvedCharacterIds.push(caster.id);
     }
@@ -593,6 +628,23 @@ export function handleAoeDamage(
       }
     }
   }
+  // A condition the caller named lands on each character who failed as an
+  // enemy's would, timed or ended by a save each turn (cast-at-player.ts).
+  if (laysCondition) {
+    for (const sheet of pcTargets) {
+      const row = results.find((entry) => entry.target === sheet.name);
+      const standing = getSheetById(sheet.id);
+      if (!row || row.success || !standing || standing.currentHp <= 0) {
+        continue;
+      }
+      const applied = layEnemyCondition(campaign, turn, sheet, null, laysCondition, { ability, dc: saveDc }, { rounds: args.rounds, saveEnds: !args.rounds }, args.reason || "the effect", sheets, sheetsById);
+      if ("error" in applied) {
+        row.conditionRefused = String(applied.error);
+      } else {
+        row.conditionApplied = laysCondition;
+      }
+    }
+  }
   // An enemy caster's concentration spell (Web, Cloud of Daggers) is
   // tracked so damage to the caster can end the effect.
   const enemyConcentration =
@@ -625,7 +677,7 @@ export function handleAoeDamage(
     ...(shielded.length ? { noEffect: shielded.join(" ") } : {}),
     // The second save the same use forces (src/lib/dm/ability-entries.ts).
     ...(enemyUse?.followUp
-      ? { next: `${enemyUse.name} also forces a second save on the creatures its text names: resolve it with aoe_damage or cast_at_player, casterEnemyId ${enemyUse.enemy.id} and ability "${enemyUse.followUp}".` }
+      ? { next: `${enemyUse.name} also forces a second save on the creatures its text names: resolve it with aoe_damage or cast_at_player, casterEnemyId ${enemyUse.enemy.id} and enemyAbility "${enemyUse.followUp}".` }
       : {}),
     ...encounterOver,
   };

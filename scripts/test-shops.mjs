@@ -353,7 +353,7 @@ test("a keeper buys back a potion or a scroll at half its value, and no other ma
 
 test("a haggle leaves the shop's own markup alone, is one try per character, and is shared with who was present", () => {
   const before = getShop(shop.id).markup;
-  const result = handleHaggle(campaign, JSON.stringify({ characterId: marla.id, shop: shop.id, present: ["Pike"] }));
+  const result = handleHaggle(campaign, JSON.stringify({ characterId: marla.id, shop: shop.id, presentCharacterIds: ["Pike"] }));
   assert.equal(result.ok, true, JSON.stringify(result));
   assert.deepEqual(result.for, ["Marla", "Pike"]);
   assert.match(result.outcome, /Anyone else pays the shop's normal price/);
@@ -362,7 +362,7 @@ test("a haggle leaves the shop's own markup alone, is one try per character, and
   assert.deepEqual(after.haggles, [{ ids: [marla.id, pike.id], steps: result.steps, skill: "persuasion" }]);
   assert.match(String(handleHaggle(campaign, JSON.stringify({ characterId: marla.id, shop: shop.id })).error), /already tried/);
   assert.match(String(handleHaggle(campaign, JSON.stringify({ characterId: pike.id, shop: shop.id })).error), /already tried/, "a companion at the counter used their try");
-  assert.equal(handleHaggle(campaign, JSON.stringify({ characterId: marla.id, shop: shop.id, present: ["Nobody"] })).retry, true);
+  assert.equal(handleHaggle(campaign, JSON.stringify({ characterId: marla.id, shop: shop.id, presentCharacterIds: ["Nobody"] })).retry, true);
   assert.equal(handleHaggle(campaign, JSON.stringify({ characterId: marla.id, shop: shop.id, skill: "bribery" })).retry, true);
 });
 

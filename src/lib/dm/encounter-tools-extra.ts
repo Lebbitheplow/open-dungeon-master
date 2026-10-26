@@ -9,10 +9,10 @@ import { handleLairAction, handleLegendaryAction, handleLegendaryResist, legenda
 import { declareIntentTool, handleDeclareIntent } from "@/lib/dm/intent-tools";
 import { canonicalCondition } from "@/lib/dm/mutations";
 import { conditionNameRefusal } from "@/lib/dm/set-condition";
-import { addConditionInstance, instancesOf, isIncapacitated, pruneMeta, type ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { instancesOf, pruneMeta, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { AI_BIND_REFUSAL, AI_CLEAR_REFUSAL, bindsCreature, engineKept } from "@/lib/dm/ai-boundary";
 import { rollEnemySave } from "@/lib/dm/forced-save";
-import { onEnemyIncapacitated } from "@/lib/dm/enemy-conditions";
+import { layEnemyConditionInstance } from "@/lib/dm/enemy-condition-lay";
 import { setEnemyExhaustion } from "@/lib/dm/enemy-exhaustion";
 import { enemyCallOutOfTurn, enemyTurnRefusal } from "@/lib/dm/enemy-turn-order";
 import { characterCallUnasked } from "@/lib/dm/player-word";
@@ -21,8 +21,6 @@ import { enemySpeedTiles } from "@/lib/dm/enemy-speed";
 import { namesExhaustion, PRONE } from "@/lib/dm/vitals-logic";
 import { normalizeAbility } from "@/lib/dm/arg-coerce";
 import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
-import { planConditionFx } from "@/lib/battlemap/fx-plan";
-import { publishFx, tokenPosition } from "@/lib/dm/fx";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { aoeDamageTool, handleAoeDamage } from "@/lib/dm/aoe-damage";
 import type { ToolResult } from "@/lib/dm/tool-errors";
@@ -222,26 +220,11 @@ function handleEnemyCondition(
               : {}),
           }
         : undefined;
-    // A second source of a condition it holds holds it too, each with its
-    // own lifetime (src/lib/dm/condition-logic.ts).
-    const laid = addConditionInstance(enemy.conditions, enemy.conditionMeta as ConditionMetaMap, wanted, incoming);
-    if (JSON.stringify(laid.meta) === JSON.stringify(enemy.conditionMeta) && laid.conditions.length === enemy.conditions.length) {
+    const laid = layEnemyConditionInstance(campaign, enemy, wanted, incoming);
+    if (!laid) {
       return { ok: true, note: `${enemy.displayName} is already ${wanted}.` };
     }
-    patchEnemyConditions(enemy.id, laid.conditions, laid.meta);
-    // An incapacitated creature loses its concentration (and the spell's
-    // hold on its targets) and lets go of whoever it grapples.
-    const released = isIncapacitated([wanted]) ? onEnemyIncapacitated(campaign, enemy) : [];
-    publishEncounter(campaign.id);
-    {
-      const pos = tokenPosition(campaign.id, enemy.id);
-      if (pos && !pos.hidden) {
-        publishFx(
-          campaign.id,
-          planConditionFx({ to: pos.at, toTokenId: pos.tokenId, condition: wanted, applied: true }),
-        );
-      }
-    }
+    const { released } = laid;
     return {
       ok: true,
       name: enemy.displayName,
@@ -326,7 +309,7 @@ export function applyExtraEncounterCall(
       // character's spell waits for their player's word.
       const early =
         enemyCallOutOfTurn(campaign.id, turn, rawArguments, "casterEnemyId") ??
-        characterCallUnasked(campaign.id, turn, rawArguments, "casterId");
+        characterCallUnasked(campaign.id, turn, rawArguments, "casterCharacterId");
       return { result: early ? early : handleAoeDamage(campaign, turn, rawArguments, sheets, sheetsById) };
     }
     case "legendary_action":

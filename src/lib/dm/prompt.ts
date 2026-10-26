@@ -1377,7 +1377,7 @@ export const requestRollTool = {
       properties: {
         characterId: {
           type: "string",
-          description: "The character whose roll this is: exact characterId from GAME STATE.",
+          description: "Exact characterId from GAME STATE.",
         },
         kind: {
           type: "string",
@@ -1437,7 +1437,7 @@ export const requestRollTool = {
         advantageReason: {
           type: "string",
           description:
-            "The circumstance behind the advantage or disadvantage you claim, one the server cannot see itself. Without one, the server sets the claim aside.",
+            "The circumstance behind the advantage or disadvantage, one the server cannot see. Without one, the server sets the claim aside.",
         },
         targetEnemyId: {
           type: "string",
@@ -1472,7 +1472,7 @@ export const requestRollTool = {
         useInspiration: {
           type: "boolean",
           description:
-            "True when the player spends their character's Inspiration on this roll for advantage. Refused when they hold none.",
+            "True when the player spends the character's Inspiration for advantage. Refused when they hold none.",
         },
         luck: {
           type: "boolean",
@@ -1543,6 +1543,25 @@ const sceneProperty = {
   description: "What kind of place this is, for its sound, battle map and picture. Set it when the party arrives somewhere new.",
 } as const;
 
+// What both location tools write about a place, worded once.
+const layoutProperties = {
+  layoutDescription: {
+    type: "string",
+    description:
+      "Physical layout: rooms, exits, landmarks, spatial relationships. 2-5 sentences.",
+  },
+  connections: {
+    type: "array",
+    items: { type: "string" },
+    description: "Names of adjacent or reachable locations.",
+  },
+  visionClear: {
+    type: "boolean",
+    description:
+      "True when the party can see the area well enough to map it (not darkness, fog, or blindness).",
+  },
+} as const;
+
 export const movePartyTool = {
   type: "function",
   function: {
@@ -1555,21 +1574,7 @@ export const movePartyTool = {
       properties: {
         ...waypointProperty,
         name: { type: "string", description: "Short place name (The Rusted Flagon)." },
-        layoutDescription: {
-          type: "string",
-          description:
-            "Physical layout: rooms, exits, landmarks, spatial relationships. 2-5 sentences.",
-        },
-        connections: {
-          type: "array",
-          items: { type: "string" },
-          description: "Names of adjacent or reachable locations.",
-        },
-        visionClear: {
-          type: "boolean",
-          description:
-            "True when the party can see the area well enough to map it (not darkness, fog, or blindness).",
-        },
+        ...layoutProperties,
         scene: sceneProperty,
         partOf: {
           type: "string",
@@ -1611,7 +1616,7 @@ export const recordEventTool = {
   function: {
     name: "record_event",
     description:
-      "Record a lasting milestone for a character: a feat achieved, bond formed, treasure gained, death, level up, or a major story beat, milestone, or plot point (kind 'story'). Use sparingly, only for things worth remembering months later.",
+      "Record a lasting milestone for a character: a feat achieved, bond formed, treasure gained, death, level up, or a major story beat (kind 'story'). Use sparingly, only for things worth remembering months later.",
     parameters: {
       type: "object",
       additionalProperties: false,
@@ -1707,9 +1712,7 @@ export const updateLocationTool = {
       additionalProperties: false,
       properties: {
         ...waypointProperty,
-        layoutDescription: { type: "string" },
-        connections: { type: "array", items: { type: "string" } },
-        visionClear: { type: "boolean" },
+        ...layoutProperties,
         scene: sceneProperty,
       },
       required: ["layoutDescription", "visionClear"],

@@ -397,7 +397,7 @@ await test("Each damaging ray of Prismatic Spray stores a card: the caster's, ag
   const before = new Set(listRecentRolls(spells.campaignId, 200).map((roll) => roll.id));
   // Each creature: its DEX save, its ray (1: red), the ray's 10d6.
   spells.dice(1, 1, ...new Array(10).fill(2), 1, 1, ...new Array(10).fill(2));
-  const out = await spells.invoke("aoe_damage", { casterId: wizard.id, spell: "Prismatic Spray", enemyIds: [goblin.id], characterIds: [fighter.id], saveAbility: "dex", dc: 17, level: 7 });
+  const out = await spells.invoke("aoe_damage", { casterCharacterId: wizard.id, spell: "Prismatic Spray", enemyIds: [goblin.id], characterIds: [fighter.id], saveAbility: "dex", dc: 17, level: 7 });
   spells.clearDice();
   assert.equal(out.ok, true, out.error);
   const wizardRoller = { kind: "sheet", id: wizard.id, name: wizard.name };
@@ -411,7 +411,7 @@ await test("A character's area spell is theirs and names the creatures it can ha
   spells.patch(wizard.id, { features: [...spells.sheet(wizard.id).features, { name: "Sculpt Spells", source: "test" }] });
   const before = new Set(listRecentRolls(spells.campaignId, 200).map((roll) => roll.id));
   spells.dice(...new Array(8).fill(3), 1, 1, 1);
-  const out = await spells.invoke("aoe_damage", { casterId: wizard.id, spell: "Fireball", enemyIds: enemies.map((enemy) => enemy.id), characterIds: [fighter.id], saveAbility: "dex", dc: 15, level: 3 });
+  const out = await spells.invoke("aoe_damage", { casterCharacterId: wizard.id, spell: "Fireball", enemyIds: enemies.map((enemy) => enemy.id), characterIds: [fighter.id], saveAbility: "dex", dc: 15, level: 3 });
   spells.clearDice();
   assert.equal(out.ok, true, out.error);
   const [blast] = combatSince(before, spells.campaignId);
@@ -437,7 +437,7 @@ await test("An area roll leaves out an enemy whose token the players cannot see.
   getDatabase().prepare("UPDATE battle_tokens SET hidden = 1 WHERE ref_id = ?").run(unseen.id);
   const before = new Set(listRecentRolls(spells.campaignId, 200).map((roll) => roll.id));
   spells.dice(...new Array(8).fill(3), 1, 1);
-  const out = await spells.invoke("aoe_damage", { casterId: wizard.id, spell: "Fireball", enemyIds: [seen.id, unseen.id], saveAbility: "dex", dc: 15, level: 3 });
+  const out = await spells.invoke("aoe_damage", { casterCharacterId: wizard.id, spell: "Fireball", enemyIds: [seen.id, unseen.id], saveAbility: "dex", dc: 15, level: 3 });
   spells.clearDice();
   assert.equal(out.ok, true, out.error);
   const [blast] = combatSince(before, spells.campaignId);
@@ -453,7 +453,7 @@ await test("An area that catches only hidden enemies names none of them, and the
   getDatabase().prepare("UPDATE battle_tokens SET hidden = 1 WHERE ref_id = ?").run(unseen.id);
   const before = new Set(listRecentRolls(spells.campaignId, 200).map((roll) => roll.id));
   spells.dice(...new Array(8).fill(3), 1);
-  const out = await spells.invoke("aoe_damage", { casterId: wizard.id, spell: "Fireball", enemyIds: [unseen.id], saveAbility: "dex", dc: 15, level: 3 });
+  const out = await spells.invoke("aoe_damage", { casterCharacterId: wizard.id, spell: "Fireball", enemyIds: [unseen.id], saveAbility: "dex", dc: 15, level: 3 });
   spells.clearDice();
   assert.equal(out.ok, true, out.error);
   const [blast] = combatSince(before, spells.campaignId);

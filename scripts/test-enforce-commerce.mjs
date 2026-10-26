@@ -258,7 +258,7 @@ await test("the characters at the counter share the result and the used try; a l
   const shop = openShop(1);
   world.clearDice();
   world.dice(20);
-  const out = await world.invoke("haggle", { characterId: ann.hero.id, shop: shop.id, present: [bo.hero.id] });
+  const out = await world.invoke("haggle", { characterId: ann.hero.id, shop: shop.id, presentCharacterIds: [bo.hero.id] });
   world.clearDice();
   assert.equal(out.ok, true, JSON.stringify(out));
   assert.equal(await ropeAsks(shop, ann), 90);
@@ -332,9 +332,9 @@ await test("only who can stand at the counter shares a haggle: the dead and a co
   // Brin lies dead: named at the counter, the call is sent back to leave
   // him out; as the haggler, the game says no.
   camp.patch(brin.id, { deathSaves: { successes: 0, failures: 3, stable: false, dead: true } });
-  const withDead = await haggleAt({ characterId: kael.id, present: [brin.id] });
+  const withDead = await haggleAt({ characterId: kael.id, presentCharacterIds: [brin.id] });
   assert.equal(withDead.out.retry, true, JSON.stringify(withDead.out));
-  assert.match(withDead.out.error, /Brin is dead, so not at the counter: send present without them/);
+  assert.match(withDead.out.error, /Brin is dead, so not at the counter: send presentCharacterIds without them/);
   assert.equal(withDead.rolled, 0);
   const byDead = await haggleAt({ characterId: brin.id });
   assert.equal(byDead.out.refused, "rules", JSON.stringify(byDead.out));
@@ -346,7 +346,7 @@ await test("only who can stand at the counter shares a haggle: the dead and a co
   const row = npcs.listNpcs(camp.campaignId).find((npc) => npc.name === "Seren");
   departures.saveDeparture(row.id, { intent: null, gone: null, turned: { response: "confront", at: 0 } });
   camp.patch(seren.id, { currentHp: 0 });
-  const withTurncoat = await haggleAt({ characterId: kael.id, present: ["Seren"] });
+  const withTurncoat = await haggleAt({ characterId: kael.id, presentCharacterIds: ["Seren"] });
   assert.equal(withTurncoat.out.retry, true, JSON.stringify(withTurncoat.out));
   assert.match(withTurncoat.out.error, /Seren has turned against the party, so not at the counter/);
   assert.equal(withTurncoat.rolled, 0);
@@ -462,11 +462,11 @@ await test("an offer is checked again on acceptance: gold spent in between stops
 await test("an item given away in between stops the trade, from either side", async () => {
   const start = deal();
   let made = await offer(ann, { toCharacterId: bo.hero.id, give: [{ name: "Ruby", qty: 3 }], wantCp: 100 });
-  await world.invoke("remove_item", { characterId: ann.hero.id, name: "Ruby", qty: 1, reason: "lost" });
+  await world.invoke("remove_item", { characterId: ann.hero.id, item: "Ruby", qty: 1, reason: "lost" });
   assert.equal((await answer(bo, made.body.proposal.id, "approve")).status, 409);
   assert.deepEqual([held(ann, "Ruby"), held(bo, "Ruby"), copperOf(bo)], [2, 0, 2000]);
   made = await offer(ann, { toCharacterId: bo.hero.id, giveCp: 100, want: [{ name: "Map", qty: 1 }] });
-  await world.invoke("remove_item", { characterId: bo.hero.id, name: "Map", reason: "burned" });
+  await world.invoke("remove_item", { characterId: bo.hero.id, item: "Map", reason: "burned" });
   assert.equal((await answer(bo, made.body.proposal.id, "approve")).status, 409);
   assert.equal(copperOf(ann), start.copper - 2500);
   assert.equal(held(ann, "Map"), 0);

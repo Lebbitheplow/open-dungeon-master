@@ -272,21 +272,21 @@ await test("a teleport and a forced move provoke nothing and spend no movement",
   const [enemy] = await stage();
   kit.place(enemy.id, 2, 3);
   world.dice(15, 4);
-  const jump = await world.invoke("teleport_token", { tokenName: runner.id, x: 8, y: 8, rangeFeet: 30 });
+  const jump = await world.invoke("teleport_token", { token: runner.id, x: 8, y: 8, rangeFeet: 30 });
   assert.equal(jump.ok, true, jump.error);
   assert.equal(world.clearDice(), 2);
   assert.deepEqual(at(runner.id), [8, 8]);
   assert.equal(kit.token(runner.id).movedThisRound, 0);
   assert.equal(world.sheet(runner.id).currentHp, 30);
   // Past the spell's range: refused.
-  const far = await world.invoke("teleport_token", { tokenName: runner.id, x: 16, y: 8, rangeFeet: 30 });
+  const far = await world.invoke("teleport_token", { token: runner.id, x: 16, y: 8, rangeFeet: 30 });
   assert.equal(far.ok, false);
   assert.deepEqual(at(runner.id), [8, 8]);
   // A push on somebody else's turn.
   kit.place(friend.id, 5, 5);
   kit.place(enemy.id, 5, 6);
   world.dice(15, 4);
-  const push = await world.invoke("move_token", { tokenName: friend.id, x: 5, y: 3, forced: true });
+  const push = await world.invoke("move_token", { token: friend.id, x: 5, y: 3, forced: true });
   assert.equal(push.ok, true, push.error);
   assert.equal(world.clearDice(), 2);
   assert.equal(world.sheet(friend.id).currentHp, 30);
@@ -294,9 +294,9 @@ await test("a teleport and a forced move provoke nothing and spend no movement",
 
 await test("the DM cannot walk a player's token for them", async () => {
   await stage();
-  const plain = await world.invoke("move_token", { tokenName: runner.id, x: 3, y: 2 });
+  const plain = await world.invoke("move_token", { token: runner.id, x: 3, y: 2 });
   assert.equal(plain.ok, false);
-  const forced = await world.invoke("move_token", { tokenName: runner.id, x: 3, y: 2, forced: true });
+  const forced = await world.invoke("move_token", { token: runner.id, x: 3, y: 2, forced: true });
   assert.equal(forced.ok, false);
   assert.deepEqual(at(runner.id), [2, 2]);
 });
@@ -304,11 +304,11 @@ await test("the DM cannot walk a player's token for them", async () => {
 await test("an enemy's move stops where its speed runs out", async () => {
   const [enemy] = await stage();
   kit.place(enemy.id, 2, 10);
-  const moved = await world.invoke("move_token", { tokenName: enemy.id, x: 12, y: 10 });
+  const moved = await world.invoke("move_token", { token: enemy.id, x: 12, y: 10 });
   assert.equal(moved.ok, true, moved.error);
   assert.deepEqual(at(enemy.id), [8, 10]);
   assert.equal(kit.token(enemy.id).movedThisRound, 6);
-  const again = await world.invoke("move_token", { tokenName: enemy.id, x: 12, y: 10 });
+  const again = await world.invoke("move_token", { token: enemy.id, x: 12, y: 10 });
   assert.equal(again.ok, false);
   assert.deepEqual(at(enemy.id), [8, 10]);
 });
@@ -317,7 +317,7 @@ await test("an enemy leaving a character's reach draws their opportunity attack"
   const [enemy] = await stage();
   kit.place(enemy.id, 2, 3);
   world.dice(15, 4);
-  const moved = await world.invoke("move_token", { tokenName: enemy.id, x: 2, y: 6 });
+  const moved = await world.invoke("move_token", { token: enemy.id, x: 2, y: 6 });
   assert.equal(world.clearDice(), 0);
   assert.equal(moved.ok, true, moved.error);
   // 1d8+3 from the longsword.
@@ -331,10 +331,10 @@ await test("a character's reaction is one: the second enemy walks away untouched
   kit.place(one.id, 2, 3);
   kit.place(two.id, 3, 2);
   world.dice(15, 4);
-  assert.equal((await world.invoke("move_token", { tokenName: one.id, x: 2, y: 6 })).ok, true);
+  assert.equal((await world.invoke("move_token", { token: one.id, x: 2, y: 6 })).ok, true);
   world.clearDice();
   world.dice(15, 4);
-  assert.equal((await world.invoke("move_token", { tokenName: two.id, x: 6, y: 2 })).ok, true);
+  assert.equal((await world.invoke("move_token", { token: two.id, x: 6, y: 2 })).ok, true);
   assert.equal(world.clearDice(), 2);
   assert.equal(kit.enemy(two.id).currentHp, 400);
 });
@@ -344,7 +344,7 @@ await test("a kill by opportunity attack leaves the fight open (ODM's rule)", as
   kit.place(enemy.id, 2, 3);
   kit.setEnemy(enemy.id, { currentHp: 2 });
   world.dice(15, 4);
-  assert.equal((await world.invoke("move_token", { tokenName: enemy.id, x: 2, y: 6 })).ok, true);
+  assert.equal((await world.invoke("move_token", { token: enemy.id, x: 2, y: 6 })).ok, true);
   world.clearDice();
   assert.equal(kit.enemy(enemy.id).status, "dead");
   assert.notEqual(world.encounter(), null);
@@ -407,7 +407,7 @@ await test("A critical hit rolls the attack's damage dice twice, on an opportuni
   const [enemy] = await stage();
   kit.place(enemy.id, 2, 3);
   world.dice(20, 4, 5);
-  assert.equal((await world.invoke("move_token", { tokenName: enemy.id, x: 2, y: 6 })).ok, true);
+  assert.equal((await world.invoke("move_token", { token: enemy.id, x: 2, y: 6 })).ok, true);
   world.clearDice();
   assert.equal(kit.enemy(enemy.id).currentHp, 400 - (4 + 5 + 3), `a critical opportunity attack dealt ${400 - kit.enemy(enemy.id).currentHp}`);
 });
@@ -426,7 +426,7 @@ await test("a raging barbarian's opportunity attack is an attack that keeps the 
   kit.place(enemy.id, 10, 11);
   world.patch(brute.id, { currentHp: 40, conditions: ["raging"], conditionMeta: { raging: { rounds: 10 } } });
   world.dice(15, 4);
-  assert.equal((await world.invoke("move_token", { tokenName: enemy.id, x: 10, y: 14 })).ok, true);
+  assert.equal((await world.invoke("move_token", { token: enemy.id, x: 10, y: 14 })).ok, true);
   assert.equal(world.clearDice(), 0);
   // 1d12 + STR 3 + rage 2 at 5th level.
   assert.equal(kit.enemy(enemy.id).currentHp, 400 - (4 + 3 + 2));

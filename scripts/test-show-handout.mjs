@@ -39,15 +39,15 @@ const aiTurn = { actor: "ai" };
 const humanTurn = { actor: "human_dm" };
 
 test("the model is refused a DM-only entry; a person is not", () => {
-  const refused = handleShowHandout(live(), aiTurn, JSON.stringify({ loreId: secret.id }));
+  const refused = handleShowHandout(live(), aiTurn, JSON.stringify({ lore: secret.id }));
   assert.match(refused.error, /secret/);
-  const shown = handleShowHandout(live(), humanTurn, JSON.stringify({ loreId: secret.id }));
+  const shown = handleShowHandout(live(), humanTurn, JSON.stringify({ lore: secret.id }));
   assert.equal(shown.ok, true);
 });
 
 test("a party entry publishes a persisted handout with its audience and style", () => {
   const before = events.length;
-  const shown = handleShowHandout(live(), aiTurn, JSON.stringify({ loreId: letter.id, caption: "Found under the door" }));
+  const shown = handleShowHandout(live(), aiTurn, JSON.stringify({ lore: letter.id, caption: "Found under the door" }));
   assert.equal(shown.ok, true);
   const event = events.slice(before).find((chunk) => chunk.includes("handout_shown"));
   assert.ok(event, "a handout_shown event went out");
@@ -69,7 +69,7 @@ test("a bare picture must be an uploaded file, and dismissing names the handout"
 
 test("a stranger's entry is not shown", () => {
   const other = createCampaign(dm.id, { title: "O", description: "", theme: "", maxPlayers: 4, startingLevel: 1, difficulty: "normal" });
-  assert.ok("error" in handleShowHandout(getCampaignById(other.id), humanTurn, JSON.stringify({ loreId: letter.id })));
+  assert.ok("error" in handleShowHandout(getCampaignById(other.id), humanTurn, JSON.stringify({ lore: letter.id })));
 });
 
 console.log(`test-show-handout: ${passed} passed`);

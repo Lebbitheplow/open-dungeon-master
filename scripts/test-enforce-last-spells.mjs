@@ -132,7 +132,7 @@ await test("Wind Wall: a Small or smaller flying creature cannot pass through th
   );
   const cast = await world.invoke("use_spell_slot", { characterId: druid.id, spell: "Wind Wall", level: 3, atX: 12, atY: 0, towardX: 12, towardY: 8 });
   assert.equal(cast.ok, true, cast.error);
-  await world.invoke("set_movement", { tokenName: sprite.id, movement: "fly" });
+  await world.invoke("set_movement", { token: sprite.id, movement: "fly" });
   // Its 40 feet would carry it from x 15 to x 9; the wall on x 12 stops it.
   const barred = await stride(world, sprite.id, 9, 4);
   assert.equal(tokenOf(world, sprite.id).x, 13, `the tiny flyer crossed the wind: ${JSON.stringify(barred).slice(0, 200)}`);
@@ -146,7 +146,7 @@ await test("Wind Wall stops only a Small or smaller flyer: a Medium flyer crosse
   );
   const cast = await world.invoke("use_spell_slot", { characterId: druid.id, spell: "Wind Wall", level: 3, atX: 12, atY: 0, towardX: 12, towardY: 8 });
   assert.equal(cast.ok, true, cast.error);
-  await world.invoke("set_movement", { tokenName: harpy.id, movement: "fly" });
+  await world.invoke("set_movement", { token: harpy.id, movement: "fly" });
   const crossed = await stride(world, harpy.id, 9, 4);
   assert.equal(tokenOf(world, harpy.id).x, 9, JSON.stringify(crossed).slice(0, 300));
 });
@@ -265,7 +265,7 @@ await test("Earthquake: fissures open at the start of the caster's next turn; a 
 await test("Meteor Swarm deals 20d6 fire and 20d6 bludgeoning; a creature resistant to fire halves only the fire.", async () => {
   const { world, sheets: [wizard], enemies: [imp] } = await board([caster("wizard", "int", ["Meteor Swarm"], [], 17)], { 0: { x: 2, y: 8 }, e0: { x: 14, y: 4 } }, { stats: { resist: "fire" } });
   world.dice(1, ...new Array(40).fill(1));
-  const out = await world.invoke("aoe_damage", { casterId: wizard.id, spell: "Meteor Swarm", enemyIds: [imp.id], saveAbility: "dex", dc: 18, level: 9 });
+  const out = await world.invoke("aoe_damage", { casterCharacterId: wizard.id, spell: "Meteor Swarm", enemyIds: [imp.id], saveAbility: "dex", dc: 18, level: 9 });
   world.clearDice();
   assert.equal(out.ok, true, out.error);
   assert.equal(enemyOf(world, imp.id).currentHp, 90 - 10 - 20);
@@ -275,7 +275,7 @@ await test("Flame Strike deals 4d6 fire and 4d6 radiant; a creature resistant to
   const { world, sheets: [cleric], enemies: [wight] } = await board([caster("cleric", "wis", ["Flame Strike"], [], 9)], { 0: { x: 2, y: 8 }, e0: { x: 8, y: 4 } }, { stats: { resist: "radiant" } });
   const before = enemyOf(world, wight.id).currentHp;
   world.dice(...new Array(9).fill(1));
-  const out = await world.invoke("aoe_damage", { casterId: cleric.id, spell: "Flame Strike", enemyIds: [wight.id], saveAbility: "dex", dc: 15, level: 5 });
+  const out = await world.invoke("aoe_damage", { casterCharacterId: cleric.id, spell: "Flame Strike", enemyIds: [wight.id], saveAbility: "dex", dc: 15, level: 5 });
   world.clearDice();
   assert.equal(out.ok, true, out.error);
   assert.equal(enemyOf(world, wight.id).currentHp, before - 4 - 2);
@@ -284,7 +284,7 @@ await test("Flame Strike deals 4d6 fire and 4d6 radiant; a creature resistant to
 await test("Ice Storm's hail leaves its area difficult terrain after the blast.", async () => {
   const { world, sheets: [druid, fighter], enemies: [goblin] } = await board([caster("druid", "wis", ["Ice Storm"], [], 9), FIGHTER], { 0: { x: 2, y: 8 }, 1: { x: 10, y: 2 }, e0: { x: 12, y: 4 } });
   world.dice(...new Array(8).fill(20));
-  const out = await world.invoke("aoe_damage", { casterId: druid.id, spell: "Ice Storm", enemyIds: [goblin.id], saveAbility: "dex", dc: 15, level: 4, atX: 12, atY: 4 });
+  const out = await world.invoke("aoe_damage", { casterCharacterId: druid.id, spell: "Ice Storm", enemyIds: [goblin.id], saveAbility: "dex", dc: 15, level: 4, atX: 12, atY: 4 });
   world.clearDice();
   assert.equal(out.ok, true, out.error);
   assert.ok(zonesOf(world).some((zone) => zone.spell === "Ice Storm"), "the hail lies on the board");
@@ -319,7 +319,7 @@ await test("Earthquake shakes only creatures on the ground: a flying creature do
     { 0: { x: 2, y: 8 }, 1: { x: 3, y: 8 }, e0: { x: 12, y: 4 } },
     { stats: { speed: "20 ft., fly 40 ft." } },
   );
-  await world.invoke("set_movement", { tokenName: harpy.id, movement: "fly" });
+  await world.invoke("set_movement", { token: harpy.id, movement: "fly" });
   world.dice(...new Array(12).fill(1));
   const cast = await world.invoke("use_spell_slot", { characterId: cleric.id, spell: "Earthquake", level: 8, atX: 12, atY: 4 });
   world.clearDice();

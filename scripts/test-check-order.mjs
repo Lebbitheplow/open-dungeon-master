@@ -113,7 +113,7 @@ for (const entry of CASES) {
       // The question itself, with nothing else in the way.
       const args = entry.stabilize
         ? { characterId: ally.id, healerId: kara.id, ...entry.stabilize }
-        : { ...(entry.area ? { casterId: kara.id, enemyIds: [enemy.id] } : { characterId: kara.id }), ...(entry.tool === "pc_attack" || entry.tool === "cast_at_enemy" ? { targetEnemyId: enemy.id } : {}), ...(entry.tool === "cast_buff" ? { targetCharacterIds: [kara.id] } : {}), ...entry.args };
+        : { ...(entry.area ? { casterCharacterId: kara.id, enemyIds: [enemy.id] } : { characterId: kara.id }), ...(entry.tool === "pc_attack" || entry.tool === "cast_at_enemy" ? { targetEnemyId: enemy.id } : {}), ...(entry.tool === "cast_buff" ? { targetCharacterIds: [kara.id] } : {}), ...entry.args };
       if (entry.stabilize) {
         world.patch(ally.id, { currentHp: 0, deathSaves: { successes: 0, failures: 0, stable: false, dead: false } });
       }

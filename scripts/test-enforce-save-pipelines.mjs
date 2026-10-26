@@ -185,7 +185,7 @@ const resistancesOf = (t) => t.world.encounter().legendary.pools[t.enemies[0].id
 await test("An area's binding condition spends a Legendary Resistance: Hypnotic Pattern leaves the creature uncharmed.", async () => {
   const t = await legendaryTable([caster("wizard", "int", ["Hypnotic Pattern"])]);
   t.world.dice(1);
-  const out = await t.world.invoke("aoe_damage", { casterId: t.sheets[0].id, spell: "Hypnotic Pattern", level: 3, saveAbility: "wis", enemyIds: [t.enemies[0].id] });
+  const out = await t.world.invoke("aoe_damage", { casterCharacterId: t.sheets[0].id, spell: "Hypnotic Pattern", level: 3, saveAbility: "wis", enemyIds: [t.enemies[0].id] });
   t.world.clearDice();
   assert.equal(out.ok, true, out.error);
   assert.equal(resistancesOf(t), 2);
@@ -195,7 +195,7 @@ await test("An area's binding condition spends a Legendary Resistance: Hypnotic 
 await test("legendary_resist settles the failed save as a success: Fireball's damage comes back to half.", async () => {
   const t = await legendaryTable([caster("wizard", "int", ["Fireball"])]);
   t.world.dice(3, 3, 3, 3, 3, 3, 3, 3, 1);
-  const out = await t.world.invoke("aoe_damage", { casterId: t.sheets[0].id, spell: "Fireball", level: 3, enemyIds: [t.enemies[0].id] });
+  const out = await t.world.invoke("aoe_damage", { casterCharacterId: t.sheets[0].id, spell: "Fireball", level: 3, enemyIds: [t.enemies[0].id] });
   t.world.clearDice();
   assert.equal(out.ok, true, out.error);
   // Damage alone is not worth a resistance on its own: the DM chooses.
@@ -232,7 +232,7 @@ await test("A paralyzed rogue fails a DEX save automatically and Evasion still h
   const [, hero] = t.sheets;
   t.world.patch(hero.id, { maxHp: 60, currentHp: 60, conditions: ["paralyzed"], conditionMeta: { paralyzed: { rounds: 10 } } });
   t.world.dice(3, 3, 3, 3, 3, 3, 3, 3);
-  const out = await t.world.invoke("aoe_damage", { casterId: t.sheets[0].id, spell: "Fireball", level: 3, characterIds: [hero.id] });
+  const out = await t.world.invoke("aoe_damage", { casterCharacterId: t.sheets[0].id, spell: "Fireball", level: 3, characterIds: [hero.id] });
   t.world.clearDice();
   assert.equal(out.ok, true, out.error);
   assert.equal(t.world.sheet(hero.id).currentHp, 48, "half of 24, not all of it");

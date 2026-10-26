@@ -157,13 +157,13 @@ await test("Off the board the light is the place's, not the sky's: a lit inn at 
 
 await test("A character cannot carry more than Strength x 15 pounds: 65 lb of plate is refused to a Strength 3 character, and one already past the capacity moves at 5 feet.", async () => {
   const weak = world.addHero({ class: "wizard", level: 1, abilities: { str: 3 } });
-  const refused = await world.invoke("grant_item", { characterId: weak.id, name: "Plate Armor" });
+  const refused = await world.invoke("grant_item", { characterId: weak.id, item: "Plate Armor" });
   assert.equal(refused.ok, false, "65 lb of plate was granted past a 45 lb capacity");
   world.patch(weak.id, { gold: 2000 });
   const bought = await world.invoke("purchase", { characterId: weak.id, item: "Plate Armor", price: 1500, action: "buy" });
   assert.equal(bought.ok, false, "65 lb of plate was bought past a 45 lb capacity");
   const strong = world.addHero({ class: "fighter", level: 1, abilities: { str: 10 } });
-  const granted = await world.invoke("grant_item", { characterId: strong.id, name: "Plate Armor" });
+  const granted = await world.invoke("grant_item", { characterId: strong.id, item: "Plate Armor" });
   assert.equal(granted.ok, true, granted.error);
   world.patch(strong.id, { equipment: [{ name: "Plate Armor", qty: 2 }, { name: "Chain Mail", qty: 1 }] });
   assert.equal(speedFor(world.sheet(strong.id)), 5, "185 lb on a 150 lb capacity did not drop the speed to 5 feet");

@@ -218,7 +218,7 @@ await test("a druid in beast form casts nothing, and the slot is not spent", asy
   });
   await shape(druid.id, "wolf");
   await refusedUnchanged(world, druid.id, () =>
-    world.invoke("use_spell_slot", { characterId: druid.id, level: 1, name: "Cure Wounds" }),
+    world.invoke("use_spell_slot", { characterId: druid.id, level: 1, spell: "Cure Wounds" }),
   );
 });
 

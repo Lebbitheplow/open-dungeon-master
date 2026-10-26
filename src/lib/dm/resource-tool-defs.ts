@@ -140,15 +140,15 @@ export const resourceTools: ToolDef[] = [
             minimum: 0,
             maximum: 30,
             description:
-              "Wild Shape only, for a beast the server does not know: its challenge rating (0.25 for 1/4). Take it from its stat block. The druid's level caps it.",
+              "Wild Shape only, for a beast the server lacks: its challenge rating (0.25 for 1/4). Take it from its stat block. The druid's level caps it.",
           },
           formFlies: {
             type: "boolean",
-            description: "Wild Shape only, for a beast the server does not know: it has a flying speed.",
+            description: "Wild Shape only, for a beast the server lacks: it has a flying speed.",
           },
           formSwims: {
             type: "boolean",
-            description: "Wild Shape only, for a beast the server does not know: it has a swimming speed.",
+            description: "Wild Shape only, for a beast the server lacks: it has a swimming speed.",
           },
           reason: { type: "string", description: "Short in-fiction cause." },
         },

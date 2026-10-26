@@ -99,11 +99,11 @@ export function gateAiCall(name: string, rawArguments: string, ctx: GateContext)
     case "reveal_item":
       return itemFacts(ctx, name, args, rawArguments);
     case "purchase":
-      return args.action === "buy" ? itemFacts(ctx, name, { ...args, name: args.item }, rawArguments) : { args: rawArguments };
+      return args.action === "buy" ? itemFacts(ctx, name, args, rawArguments) : { args: rawArguments };
     // What an enemy lets fall reaches a sheet when it is picked up.
     case "handle_item":
       return args.enemyId && args.action === "drop" && !enemyHoldsItem(ctx.campaign.id, String(args.enemyId), String(args.item ?? ""))
-        ? itemFacts(ctx, name, { ...args, name: args.item }, rawArguments)
+        ? itemFacts(ctx, name, args, rawArguments)
         : { args: rawArguments };
     case "pc_attack":
     case "enemy_attack":
@@ -122,7 +122,7 @@ export function gateAiCall(name: string, rawArguments: string, ctx: GateContext)
 // named in the table's language with neither would heal no one, a scroll
 // with no spell would cast nothing.
 function itemFacts(ctx: GateContext, name: string, args: Record<string, unknown>, rawArguments: string): GateOutcome {
-  const described = String(args.name ?? "").trim();
+  const described = String(args.item ?? "").trim();
   const itemName = (name === "reveal_item" && typeof args.revealedName === "string" && args.revealedName.trim()) || described;
   if (!itemName || args.unidentified === true) {
     return { args: rawArguments };

@@ -83,7 +83,7 @@ const openTile = () => {
 test("the model cannot walk a character with a forced move on that character's own turn", () => {
   const before = karaToken();
   const to = openTile();
-  const result = handleMoveToken(live(), JSON.stringify({ tokenName: "Kara", x: to.x, y: to.y, forced: true }), sheets(), byId());
+  const result = handleMoveToken(live(), JSON.stringify({ token: "Kara", x: to.x, y: to.y, forced: true }), sheets(), byId());
   assert.match(String(result.error), /own turn/);
   assert.deepEqual([karaToken().x, karaToken().y], [before.x, before.y], "the token stayed put");
 });
@@ -92,7 +92,7 @@ test("a push on somebody else's turn still moves them", () => {
   assert.equal(endOwnTurn(campaign.id, kara.id), true);
   assert.equal(getActiveEncounter(campaign.id).order[getActiveEncounter(campaign.id).turnIndex].name, "Brom");
   const to = openTile();
-  const result = handleMoveToken(live(), JSON.stringify({ tokenName: "Kara", x: to.x, y: to.y, forced: true }), sheets(), byId());
+  const result = handleMoveToken(live(), JSON.stringify({ token: "Kara", x: to.x, y: to.y, forced: true }), sheets(), byId());
   assert.equal(result.error, undefined, JSON.stringify(result));
   assert.deepEqual([karaToken().x, karaToken().y], [to.x, to.y]);
 });

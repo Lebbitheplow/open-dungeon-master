@@ -52,7 +52,7 @@ export function signalFromToolCall(
     case "social_check":
       return text("npc") ? { kind: "npc", names: [text("npc")] } : null;
     case "grant_item":
-      return text("name") ? { kind: "item", names: [text("name")] } : null;
+      return text("item") ? { kind: "item", names: [text("item")] } : null;
     // A purchase is an item gained only when it buys (issue #471: buy_item,
     // a purchase at a shop, is still sent by older callers).
     case "purchase":
@@ -106,7 +106,7 @@ export function matchSignal(beat: ArcBeat, signal: WaypointSignal, language: Tab
 }
 
 // The kind of step each ticking tool can satisfy, for the `waypoint` tag
-// below. tick_objective ticks by its quest's own ids and takes no tag.
+// below. tick_objective names its quest and objective and takes no tag.
 const TOOL_WAYPOINT_KIND: Record<string, WaypointKind> = {
   move_party: "place",
   update_location: "place",
@@ -126,7 +126,7 @@ export const waypointProperty = {
   waypoint: {
     type: "integer",
     minimum: 1,
-    description: "The [NOW] checklist step number this call accomplishes, if any.",
+    description: "The [NOW] checklist step this call completes, if any.",
   },
 };
 

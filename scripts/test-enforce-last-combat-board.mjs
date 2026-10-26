@@ -87,7 +87,7 @@ await test("An enemy drags the character it grapples at half speed (move_token d
   kit.place(fighter.id, 5, 6);
   kit.place(enemy.id, 5, 7);
   world.patch(fighter.id, { conditions: ["grappled"], conditionMeta: { grappled: { source: enemy.id } } });
-  const out = await world.invoke("move_token", { tokenName: enemy.id, x: 5, y: 12, drag: true });
+  const out = await world.invoke("move_token", { token: enemy.id, x: 5, y: 12, drag: true });
   assert.equal(out.ok, true, out.error);
   // Speed 30 is six squares; dragging, three.
   assert.deepEqual([kit.token(enemy.id).x, kit.token(enemy.id).y], [5, 10]);
@@ -95,7 +95,7 @@ await test("An enemy drags the character it grapples at half speed (move_token d
   assert.equal(chebyshevOf(kit.token(fighter.id), kit.token(enemy.id)), 1, "the dragged character was left behind");
   assert.ok(lower(world.sheet(fighter.id).conditions).includes("grappled"));
   world.patch(fighter.id, { conditions: [], conditionMeta: {} });
-  const none = await world.invoke("move_token", { tokenName: enemy.id, x: 5, y: 11, drag: true });
+  const none = await world.invoke("move_token", { token: enemy.id, x: 5, y: 11, drag: true });
   assert.equal(none.ok, false, "a drag with nobody held was allowed");
 });
 

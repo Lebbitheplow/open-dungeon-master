@@ -353,12 +353,12 @@ await test("a surprised enemy does not walk in round 1 either", async () => {
   await kit.fight(1, { surprised: "enemies" });
   const [enemy] = world.enemies();
   const before = kit.token(enemy.id);
-  const moved = await world.invoke("move_token", { tokenName: enemy.id, x: before.x - 1, y: before.y });
+  const moved = await world.invoke("move_token", { token: enemy.id, x: before.x - 1, y: before.y });
   assert.equal(moved.ok, false);
   assert.deepEqual([kit.token(enemy.id).x, kit.token(enemy.id).y], [before.x, before.y]);
   // A shove moves it all the same.
   const pushed = await world.invoke("move_token", {
-    tokenName: enemy.id, x: before.x - 1, y: before.y, forced: true,
+    token: enemy.id, x: before.x - 1, y: before.y, forced: true,
   });
   assert.equal(pushed.ok, true, pushed.error);
 });

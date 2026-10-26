@@ -99,7 +99,7 @@ await test("a spell name resolves; a misspelling or another language is fixed fr
   const [goblin] = await fightDummies(world, 1, { heroFaces: { [mage.id]: 20 } });
   await onTurnOf(world, mage.id, async () => {
     for (const tool of ["use_spell_slot", "cast_at_enemy", "aoe_damage"]) {
-      const target = tool === "use_spell_slot" ? {} : tool === "aoe_damage" ? { casterId: mage.id, enemyIds: [goblin.id] } : { targetEnemyId: goblin.id };
+      const target = tool === "use_spell_slot" ? {} : tool === "aoe_damage" ? { casterCharacterId: mage.id, enemyIds: [goblin.id] } : { targetEnemyId: goblin.id };
       const caster = tool === "aoe_damage" ? {} : { characterId: mage.id };
       expect(await ai(world, tool, { ...caster, ...target, spell: "Firebal" }, mage), "retry", /No spell called "Firebal" is known/);
       expect(await ai(world, tool, { ...caster, ...target, spell: "Palla di fuoco" }, mage), "retry", /Fireball/);
@@ -191,7 +191,7 @@ await test("Overchannel on a caster without it asks whether to cast without it; 
   const mage = world.addHero(wizard(5));
   const [goblin] = await fightDummies(world, 1, { heroFaces: { [mage.id]: 20 } });
   await turnTo(world, mage.id);
-  expect(await ai(world, "aoe_damage", { casterId: mage.id, spell: "Fireball", enemyIds: [goblin.id], overchannel: true }, mage), "retry", /Ask the player whether to cast/);
+  expect(await ai(world, "aoe_damage", { casterCharacterId: mage.id, spell: "Fireball", enemyIds: [goblin.id], overchannel: true }, mage), "retry", /Ask the player whether to cast/);
   expect(await ai(world, "cast_at_enemy", { characterId: mage.id, targetEnemyId: goblin.id, spell: "Mage Armor" }, mage), "retry", /cast it with cast_buff/);
   world.close();
 });
@@ -256,7 +256,7 @@ await test("a potion name nobody knows lists what they carry; a potion the rules
   expect(await ai(world, "use_item", { characterId: kara.id, item: "Potoin of healing" }), "retry", /They carry: Longsword, Rope/);
   expect(await ai(world, "use_item", { characterId: kara.id, item: "Potion of Healing" }), "rules", /does not carry "Potion of Healing"/);
   // The SRD's adventuring gear is known with or without a content pack.
-  expect(await ai(world, "remove_item", { characterId: kara.id, name: "Torch", reason: "the test asks" }), "rules", /does not carry "Torch"/);
+  expect(await ai(world, "remove_item", { characterId: kara.id, item: "Torch", reason: "the test asks" }), "rules", /does not carry "Torch"/);
   expect(await ai(world, "pet_attack", { characterId: kara.id, petName: "Shadow", targetEnemyId: "nobody" }), "retry", /has no bound creature called "Shadow"\. They have none/);
   world.close();
 });
@@ -425,7 +425,7 @@ await test("choices only the player makes are asked for: a Channel Divinity opti
   const mira = world.addHero(fighter({ name: "Mira" }));
   const dax = world.addHero(fighter({ name: "Dax" }));
   // More than they can carry.
-  expect(await ai(world, "grant_item", { characterId: weak.id, name: "Plate Armor", qty: 3, reason: "the test asks" }), "retry", /Ask the player which/);
+  expect(await ai(world, "grant_item", { characterId: weak.id, item: "Plate Armor", qty: 3, reason: "the test asks" }), "retry", /Ask the player which/);
   // Stabilize with a kit they do not have.
   world.patch(kara.id, { currentHp: 0, deathSaves: { successes: 0, failures: 0, stable: false, dead: false } });
   expect(await ai(world, "stabilize", { healerId: mira.id, characterId: kara.id, method: "kit" }), "retry", /Ask the player whether to try it/);
@@ -456,7 +456,7 @@ await test("in a fight on a map: a square off the board and a target out of reac
   // Out of melee reach, the character can move to it.
   expect(await aiEncounter(world, "pc_attack", { characterId: kara.id, targetEnemyId: goblin.id, weapon: "Longsword" }, kara), "retry", /out of melee reach/);
   // A square off the board.
-  expect(await aiEncounter(world, "move_token", { tokenName: goblin.displayName, x: 999, y: 999, forced: true }), "retry", /outside the/);
+  expect(await aiEncounter(world, "move_token", { token: goblin.displayName, x: 999, y: 999, forced: true }), "retry", /outside the/);
   // An enemy acting before its turn.
   expect(await aiEncounter(world, "enemy_attack", { enemyId: goblin.id, targetCharacterId: kara.id }), "retry", /turn has not come yet/);
   // A character without the feature.
@@ -481,7 +481,7 @@ await test("bookkeeping with nothing to work on: no board for a teleport is skip
   const world = await openWorld();
   const kara = world.addHero(fighter());
   // No board.
-  expect(await ai(world, "teleport_token", { tokenName: kara.name, x: 1, y: 1, cause: "hazard" }), "retry", /no board/);
+  expect(await ai(world, "teleport_token", { token: kara.name, x: 1, y: 1, cause: "hazard" }), "retry", /no board/);
   // A cap the DM manages.
   for (let index = 0; index < 40; index += 1) {
     assert.equal(kindOf(await ai(world, "set_quest", { title: `Quest ${index}` })), "ok");
@@ -494,7 +494,7 @@ await test("the same offer twice is dropped while the first waits; a romance ste
   const world = await openWorld({ gameSettings: { inventoryApprovals: true, romance: true } });
   const kara = world.addHero(fighter());
   // Pacing, the DM's own offer already waiting.
-  const offer = { characterId: kara.id, name: "Coin purse", qty: 1, tags: [], reason: "the test asks" };
+  const offer = { characterId: kara.id, item: "Coin purse", qty: 1, tags: [], reason: "the test asks" };
   assert.equal(kindOf(await ai(world, "grant_item", offer)), "ok");
   expect(await ai(world, "grant_item", offer), "retry", /still waiting/);
   // A relationship the story has not earned.

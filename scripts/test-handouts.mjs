@@ -35,31 +35,29 @@ insertLoreEntry({ campaignId: campaign.id, category: "magic", title: "The Lich's
 
 test("the model shows an entry by its title, or by the ref search_lore gives it", () => {
   for (const ref of ["the miller's letter", "history: The Miller's Letter"]) {
-    const out = handleShowHandout(live(), ai, JSON.stringify({ loreId: ref }));
+    const out = handleShowHandout(live(), ai, JSON.stringify({ lore: ref }));
     assert.equal(out.shown, "The Miller's Letter", ref);
   }
-  assert.equal(handleShowHandout(live(), ai, JSON.stringify({ loreId: letter.id })).shown, "The Miller's Letter", "an id still works");
+  assert.equal(handleShowHandout(live(), ai, JSON.stringify({ lore: letter.id })).shown, "The Miller's Letter", "the console's id works");
 });
 
 test("an unknown title is refused with the entries the table may see, never the DM's secrets", () => {
-  const out = handleShowHandout(live(), ai, JSON.stringify({ loreId: "The Map" }));
+  const out = handleShowHandout(live(), ai, JSON.stringify({ lore: "The Map" }));
   assert.match(out.error, /The Miller's Letter/);
   assert.doesNotMatch(out.error, /Phylactery/);
-  assert.match(handleShowHandout(live(), ai, JSON.stringify({ loreId: "The Lich's Phylactery" })).error, /secret/);
+  assert.match(handleShowHandout(live(), ai, JSON.stringify({ lore: "The Lich's Phylactery" })).error, /secret/);
 });
 
 test("another campaign cannot show this one's entry by its title or its id", () => {
   const other = createCampaign(dm.id, { title: "Elsewhere", description: "", theme: "", maxPlayers: 4, startingLevel: 1, difficulty: "normal" });
-  for (const ref of ["The Miller's Letter", letter.id]) {
-    const out = handleShowHandout(getCampaignById(other.id), ai, JSON.stringify({ loreId: ref }));
-    assert.ok("error" in out, ref);
-    assert.match(out.error, /There is none to use/, "nothing of the first campaign is listed");
-  }
+  const byTitle = handleShowHandout(getCampaignById(other.id), ai, JSON.stringify({ lore: "The Miller's Letter" }));
+  assert.match(byTitle.error, /There is none to use/, "nothing of the first campaign is listed");
+  assert.ok("error" in handleShowHandout(getCampaignById(other.id), ai, JSON.stringify({ lore: letter.id })), "nor reached by its id");
 });
 
 test("the model is offered no upload path to fill: nothing it reads holds one", () => {
   const tool = binderTools.find((entry) => entry.function.name === "show_handout").function;
-  assert.deepEqual(Object.keys(tool.parameters.properties), ["loreId", "caption"]);
+  assert.deepEqual(Object.keys(tool.parameters.properties), ["lore", "caption"]);
 });
 
 console.log(`test-handouts: ${passed} passed`);

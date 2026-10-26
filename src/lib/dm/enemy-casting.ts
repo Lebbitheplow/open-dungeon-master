@@ -90,7 +90,7 @@ export function boughtByLegendary(encounter: Encounter, enemyId: string): string
 
 type Input = {
   casterEnemyId: string;
-  ability?: string;
+  enemyAbility?: string;
   spell?: string;
   source?: string;
   targetIds: string[];
@@ -131,7 +131,7 @@ export function prepareEnemyUse(campaign: Campaign, input: Input): EnemyUse | To
   let spend: (ledger: AbilityLedger | undefined) => AbilityLedger | undefined = (ledger) => ledger;
 
   const spellName = (input.spell ?? "").trim();
-  const abilityName = (input.ability ?? "").trim() || (!spellName ? (input.source ?? "").trim() : "");
+  const abilityName = (input.enemyAbility ?? "").trim() || (!spellName ? (input.source ?? "").trim() : "");
   const hasBlock = abilityNames(enemy.stats).length > 0 || Boolean(enemy.stats.spells?.length) || Boolean(enemy.stats.spellcasting);
 
   if (spellName) {
@@ -251,7 +251,7 @@ export function prepareEnemyUse(campaign: Campaign, input: Input): EnemyUse | To
     }
   } else if (hasBlock) {
     return {
-      error: `Name what ${enemy.displayName} uses: ability (a name from its block) or spell (one it knows).${describe(enemy)}`,
+      error: `Name what ${enemy.displayName} uses: enemyAbility (a name from its block) or spell (one it knows).${describe(enemy)}`,
       retry: true,
     };
   }

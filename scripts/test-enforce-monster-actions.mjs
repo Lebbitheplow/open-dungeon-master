@@ -19,6 +19,21 @@ const mk = await monsterKit(world, kit);
 const encounters = await import("../src/lib/db/encounters.ts");
 const rolls = await import("../src/lib/db/rolls.ts");
 const conditionTick = await import("../src/lib/dm/condition-tick.ts");
+const { dispatchAdjudication } = await import("../src/lib/dm/invoke-dispatch.ts");
+const { createDmTurn } = await import("../src/lib/db/dm-turns.ts");
+const { listSheets } = await import("../src/lib/db/sheets.ts");
+
+// A call as the model's turn loop makes it, past the console's forms.
+async function modelCall(name, args) {
+  const sheets = listSheets(world.campaignId);
+  return dispatchAdjudication(name, JSON.stringify(args), {
+    campaign: world.campaign(),
+    turn: createDmTurn(world.campaignId, [], "human_dm"),
+    sheets,
+    sheetsById: new Map(sheets.map((sheet) => [sheet.id, sheet])),
+    realDiceUserIds: new Set(),
+  });
+}
 
 const tank = world.addHero({
   name: "Tank", class: "fighter", level: 5, abilities: { str: 16 }, proficiencies: TRAINED,
@@ -123,7 +138,7 @@ await test("A monster's special action is its action: after an attack it casts n
   const hit = await mk.forced([15, 1], () => world.invoke("enemy_attack", { enemyId: spitter.id, targetCharacterId: tank.id }));
   assert.equal(hit.ok, true, hit.error);
   const cast = await mk.forced([1, 6, 6, 6], () =>
-    world.invoke("cast_at_player", { characterId: tank.id, casterEnemyId: spitter.id, ability: "Poison Spit", saveAbility: "con", dc: 13, damage: "3d6" }),
+    world.invoke("cast_at_player", { characterId: tank.id, casterEnemyId: spitter.id, enemyAbility: "Poison Spit", saveAbility: "con", dc: 13, damage: "3d6" }),
   );
   assert.equal(cast.ok, false, "the spitter attacked and spat in the same round");
   const breath = await mk.forced([1, 6, 6, 6], () =>
@@ -132,11 +147,11 @@ await test("A monster's special action is its action: after an attack it casts n
   assert.equal(breath.ok, false, "the spitter attacked and breathed in the same round");
   kit.freshRound();
   kit.setEnemy(spitter.id, { conditions: ["stunned"] });
-  const stunned = await world.invoke("cast_at_player", { characterId: tank.id, casterEnemyId: spitter.id, ability: "Poison Spit", saveAbility: "con", dc: 13, damage: "3d6" });
+  const stunned = await world.invoke("cast_at_player", { characterId: tank.id, casterEnemyId: spitter.id, enemyAbility: "Poison Spit", saveAbility: "con", dc: 13, damage: "3d6" });
   assert.equal(stunned.ok, false, "a stunned creature cast");
   kit.setEnemy(spitter.id, { conditions: [], currentHp: 0 });
   encounters.patchEnemyHp(spitter.id, 0, "dead");
-  const dead = await world.invoke("cast_at_player", { characterId: tank.id, casterEnemyId: spitter.id, ability: "Poison Spit", saveAbility: "con", dc: 13, damage: "3d6" });
+  const dead = await world.invoke("cast_at_player", { characterId: tank.id, casterEnemyId: spitter.id, enemyAbility: "Poison Spit", saveAbility: "con", dc: 13, damage: "3d6" });
   assert.equal(dead.ok, false, "a dead creature cast");
   assert.equal(world.sheet(tank.id).currentHp, 300 - 3);
 });
@@ -145,7 +160,7 @@ await test("An area ability a monster uses is its action for the round: it attac
   const [spitter] = await stage(SPITTER);
   kit.freshRound();
   const spit = await mk.forced([20, 1, 1, 1], () =>
-    world.invoke("aoe_damage", { characterIds: [tank.id], casterEnemyId: spitter.id, ability: "Poison Spit", damage: "3d6", saveAbility: "con", dc: 13 }),
+    world.invoke("aoe_damage", { characterIds: [tank.id], casterEnemyId: spitter.id, enemyAbility: "Poison Spit", damage: "3d6", saveAbility: "con", dc: 13 }),
   );
   assert.equal(spit.ok, true, spit.error);
   const hit = await mk.forced([15, 1], () => world.invoke("enemy_attack", { enemyId: spitter.id, targetCharacterId: tank.id }));
@@ -156,7 +171,7 @@ await test("A monster ability's save, DC and dice are the ones its block prints,
   const [spitter] = await stage(SPITTER);
   kit.freshRound();
   const out = await mk.forced([1, 2, 2, 2], () =>
-    world.invoke("cast_at_player", { characterId: tank.id, casterEnemyId: spitter.id, ability: "Poison Spit", saveAbility: "dex", dc: 5, damage: "1d4" }),
+    world.invoke("cast_at_player", { characterId: tank.id, casterEnemyId: spitter.id, enemyAbility: "Poison Spit", saveAbility: "dex", dc: 5, damage: "1d4" }),
   );
   assert.equal(out.ok, true, out.error);
   const save = lastSave();
@@ -166,12 +181,25 @@ await test("A monster ability's save, DC and dice are the ones its block prints,
   assert.equal(world.sheet(tank.id).currentHp, 300 - 6);
 });
 
+await test("A monster ability needs no save or DC sent: its block brings them, and only a hazard with no creature behind it is asked for its own.", async () => {
+  const [spitter] = await stage(SPITTER);
+  kit.freshRound();
+  const hazard = await modelCall("cast_at_player", { characterId: tank.id, source: "a poison needle", damage: "1d4" });
+  assert.match(String(hazard.error), /needs saveAbility and dc for a hazard/);
+  const out = await mk.forced([1, 2, 2, 2], () => modelCall("cast_at_player", { characterId: tank.id, casterEnemyId: spitter.id, enemyAbility: "Poison Spit" }));
+  assert.equal(out.error, undefined, out.error);
+  const save = lastSave();
+  assert.equal(save.dc, 13);
+  assert.match(save.detail, /CON/);
+  assert.equal(world.sheet(tank.id).currentHp, 300 - 6);
+});
+
 await test("A Recharge 5-6 ability is spent when used and comes back only on a 5 or 6 rolled at the start of the creature's turn; its DC and dice are the block's.", async () => {
   const [dragon] = await stage(ROWS.adultRedDragon);
   kit.freshRound();
   const breathe = (dice) =>
     mk.forced(dice, () =>
-      world.invoke("aoe_damage", { characterIds: [tank.id], casterEnemyId: dragon.id, ability: "Fire Breath", damage: "1d6", saveAbility: "str", dc: 5 }),
+      world.invoke("aoe_damage", { characterIds: [tank.id], casterEnemyId: dragon.id, enemyAbility: "Fire Breath", damage: "1d6", saveAbility: "str", dc: 5 }),
     );
   const first = await breathe([...new Array(18).fill(1), 1]);
   assert.equal(first.ok, true, first.error);
@@ -327,7 +355,7 @@ await test("A charmed creature cannot attack its charmer or target it with harmf
   kit.freshRound();
   const hit = await mk.forced([15, 1], () => world.invoke("enemy_attack", { enemyId: enemy.id, targetCharacterId: tank.id }));
   assert.equal(hit.ok, false, "a charmed creature attacked its charmer");
-  const spit = await world.invoke("cast_at_player", { characterId: tank.id, casterEnemyId: enemy.id, ability: "Poison Spit", saveAbility: "con", dc: 13 });
+  const spit = await world.invoke("cast_at_player", { characterId: tank.id, casterEnemyId: enemy.id, enemyAbility: "Poison Spit", saveAbility: "con", dc: 13 });
   assert.equal(spit.ok, false, "a charmed creature spat at its charmer");
   // The other way round: a charmed cleric cannot cast at the charmer, and
   // the refusal spends nothing.
@@ -351,7 +379,7 @@ await test("A charmed creature cannot attack its charmer or target it with harmf
 await test("An ability a monster does not have is not improvised", async () => {
   const [spitter] = await stage(SPITTER);
   kit.freshRound();
-  const out = await world.invoke("cast_at_player", { characterId: tank.id, casterEnemyId: spitter.id, ability: "Disintegration Ray", saveAbility: "dex", dc: 25, damage: "10d6" });
+  const out = await world.invoke("cast_at_player", { characterId: tank.id, casterEnemyId: spitter.id, enemyAbility: "Disintegration Ray", saveAbility: "dex", dc: 25, damage: "10d6" });
   assert.equal(out.ok, false, "an ability the block does not list resolved");
   assert.equal(world.sheet(tank.id).currentHp, 300);
   // Nor is its action spent by the refusal: it can still attack.

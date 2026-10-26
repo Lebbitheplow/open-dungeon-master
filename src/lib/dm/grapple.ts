@@ -172,7 +172,7 @@ export function enemyEscape(
   }
   const enemy = resolveEnemyRef(encounter.id, enemyRef);
   if (!enemy) {
-    return unknownEnemyRef(encounter.id, "enemyId", enemyRef);
+    return unknownEnemyRef(encounter.id, "escapingEnemyId", enemyRef);
   }
   const held = enemy.conditions.some((entry) => entry.toLowerCase() === GRAPPLED)
     ? grappleOf(enemy.conditionMeta)

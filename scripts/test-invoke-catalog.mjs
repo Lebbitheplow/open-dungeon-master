@@ -429,9 +429,48 @@ function formDrift(entry) {
 const { COMBAT_ADJUDICATIONS } = await import("../src/lib/dm/catalog-combat.ts");
 const COMBAT_NAMES = new Set(COMBAT_ADJUDICATIONS.map((entry) => entry.name));
 
+// A console built from an older catalog (the client apps compile the
+// server's screens) still sends the names its forms had; normalizeArgs maps
+// each onto the name the handler reads, and the old one is gone.
+const { normalizeArgs } = await import("../src/lib/dm/invoke.ts");
+const OLDER_FORM_NAMES = [
+  ["aoe_damage", { casterId: "c1" }, { casterCharacterId: "c1" }],
+  ["aoe_damage", { ability: "Fire Breath" }, { enemyAbility: "Fire Breath" }],
+  ["aoe_damage", { sculpt: ["c1"] }, { sparedCharacterIds: ["c1"] }],
+  ["cast_at_player", { ability: "Poison Spit" }, { enemyAbility: "Poison Spit" }],
+  ["move_token", { tokenName: "Bram", casterId: "c1" }, { token: "Bram", casterCharacterId: "c1" }],
+  ["set_movement", { tokenName: "Bram" }, { token: "Bram" }],
+  ["party_award", { amount: 50, delta: 10, name: "Rope" }, { xp: 50, gold: 10, item: "Rope" }],
+  ["party_stash", { amount: 10, name: "Rope" }, { gold: 10, item: "Rope" }],
+  ["haggle", { present: ["c2"] }, { presentCharacterIds: ["c2"] }],
+  ["afflict", { kind: "disease", dc: 12 }, { kind: "disease", saveDc: 12 }],
+  ["afflict", { kind: "madness", name: "short" }, { kind: "madness", duration: "short" }],
+  ["take_action", { action: "escape", enemyId: "e1" }, { action: "escape", escapingEnemyId: "e1" }],
+  ["set_quest", { questId: "q1", status: "done" }, { quest: "q1", status: "done" }],
+  ["tick_objective", { questId: "q1", objectiveId: "o1" }, { quest: "q1", objective: "o1" }],
+  ["show_handout", { loreId: "l1" }, { lore: "l1" }],
+  ["grant_item", { name: "Rope" }, { item: "Rope" }],
+  ["remove_item", { name: "Rope" }, { item: "Rope" }],
+  ["reveal_item", { name: "an ornate ring" }, { item: "an ornate ring" }],
+  ["use_spell_slot", { name: "Cure Wounds" }, { spell: "Cure Wounds" }],
+  ["learn_spell", { name: "Shield" }, { spell: "Shield" }],
+];
+test("an older form's field names reach the names the handler reads", () => {
+  for (const [name, sent, read] of OLDER_FORM_NAMES) {
+    assert.deepEqual(normalizeArgs(adjudication(name), sent), read, name);
+    for (const key of Object.keys(read)) {
+      assert.ok(toolProperties(name).keys.includes(key), `${name} defines no ${key}`);
+    }
+    // The model is offered only the new name; afflict keeps name for a disease or a poison.
+    for (const key of Object.keys(sent).filter((key) => !(key in read) && !(name === "afflict" && key === "name"))) {
+      assert.ok(!toolProperties(name).keys.includes(key), `${name} still offers ${key}`);
+    }
+  }
+});
+
 test("the property scan reads the tools it is pointed at", () => {
   assert.deepEqual(toolProperties("take_action").keys.sort(), [
-    "action", "bonus", "characterId", "enemyId", "item", "level", "readied", "reason", "shove", "skill",
+    "action", "bonus", "characterId", "escapingEnemyId", "item", "level", "readied", "reason", "shove", "skill",
     "spell", "targetCharacterId", "targetEnemyId", "trigger",
   ]);
   assert.ok(toolProperties("apply_damage").keys.includes("amount"));
@@ -665,9 +704,6 @@ test("every form offers every field its handler reads, or names why not", () => 
 const REQUIRED_BY_THE_FORM_ONLY = {
   // The façade folds the flat fields into modifiers (FOLDED_BY_THE_FACADE).
   set_effect: ["field"],
-  // The handler refuses a move with no hands in it ("someone has to be
-  // handing it over or taking it"), so the form asks up front.
-  party_stash: ["characterId"],
   // The handler refuses downtime without a character and an activity unless
   // activities lists several; the form runs one character, so it asks.
   downtime: ["characterId", "activity"],
@@ -779,7 +815,7 @@ test("multi-target forms pick creatures instead of typing ids (U:UD5)", () => {
   // The damage tray is apply_damage's targets now (issue #471).
   assert.equal(adjudication("apply_damage").fields.find((field) => field.name === "targets").kind, "shares");
   for (const name of ["move_token", "set_movement"]) {
-    assert.equal(adjudication(name).fields.find((field) => field.name === "tokenName").kind, "combatant", name);
+    assert.equal(adjudication(name).fields.find((field) => field.name === "token").kind, "combatant", name);
   }
   const split = adjudication("apply_damage");
   assert.equal(checkArgs(split, { amount: 9, targets: [{ enemyId: "e1", share: "half" }] }), null);
@@ -792,7 +828,7 @@ test("the lair switch, a player's area spell and chosen hit dice reach the conso
   const start = adjudication("start_encounter");
   assert.equal(start.fields.find((field) => field.name === "lair")?.kind, "boolean");
   const aoe = adjudication("aoe_damage");
-  for (const name of ["casterId", "spell", "level", "casterEnemyId"]) {
+  for (const name of ["casterCharacterId", "spell", "level", "casterEnemyId"]) {
     assert.ok(aoe.fields.some((field) => field.name === name), `aoe_damage.${name}`);
   }
   assert.equal(aoe.fields.find((field) => field.name === "damage").required, undefined);

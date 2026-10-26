@@ -26,10 +26,10 @@ export const PARTY_TOOL_NAMES = ["party_stash"] as const;
 const stashSchema = z.object({
   do: z.enum(["stow", "take", "deposit", "withdraw"]),
   characterId: z.string().optional(),
-  name: z.string().max(80).optional(),
+  item: z.string().max(80).optional(),
   qty: z.coerce.number().int().min(1).max(999).optional(),
   coins: z.string().max(60).optional(),
-  amount: z.coerce.number().int().min(0).max(1000000).optional(),
+  gold: z.coerce.number().int().min(0).max(1000000).optional(),
   reason: z.string().max(200).optional(),
 });
 
@@ -52,13 +52,13 @@ export const partyTools: ToolDef[] = [
           do: {
             type: "string",
             enum: ["stow", "take", "deposit", "withdraw"],
-            description: "stow/take an item (name, qty); deposit/withdraw money (coins, or amount in whole gold).",
+            description: "stow/take an item (item, qty); deposit/withdraw money (coins, or gold in whole pieces).",
           },
           characterId: { type: "string", description: "Whose hands it comes from or goes to: exact characterId from GAME STATE." },
-          name: { type: "string", description: "Item name, for stow and take." },
+          item: { type: "string", description: "By name, for stow and take." },
           qty: { type: "integer", minimum: 1, maximum: 999 },
-          coins: { type: "string", description: "Money in the coins' codes pp, gp, ep, sp and cp ('3 gp 4 sp'), whatever the table's language. It wins over amount when both are sent." },
-          amount: { type: "integer", minimum: 0, description: "Money in whole gold, if coins is not used." },
+          coins: { type: "string", description: "Money in the coins' codes pp, gp, ep, sp and cp ('3 gp 4 sp'), whatever the table's language. It wins over gold when both are sent." },
+          gold: { type: "integer", minimum: 0, description: "Whole gold pieces, if coins is not used." },
           reason: { type: "string", description: "Short in-fiction cause." },
         },
         required: ["do", "characterId"],
@@ -120,9 +120,9 @@ export function handlePartyStash(
   const fresh = getSheetById(sheet.id) ?? sheet;
 
   if (args.do === "stow" || args.do === "take") {
-    const name = (args.name ?? "").trim();
+    const name = (args.item ?? "").trim();
     if (!name) {
-      return { error: "Name the item.", retry: true };
+      return { error: "Name the item in item.", retry: true };
     }
     const qty = args.qty ?? 1;
 
@@ -172,16 +172,16 @@ export function handlePartyStash(
     return { ok: true, took: taken.item.name, qty: taken.removed };
   }
 
-  // Money. Coins win over the whole-gold amount when both are sent, for the
+  // Money. Coins win over the whole gold when both are sent, for the
   // same reason they do in modify_gold: the more specific one was meant.
   const parsed = args.coins?.trim() ? parseCoins(args.coins) : null;
   // Coins sent and unread are asked for again, never taken as the amount.
   if (args.coins?.trim() && parsed === null) {
     return { error: `${unreadCoins(args.coins)}. Nothing changed.`, retry: true };
   }
-  const copper = parsed ?? (args.amount ?? 0) * 100;
+  const copper = parsed ?? (args.gold ?? 0) * 100;
   if (copper <= 0) {
-    return { error: "Say how much: coins like '3 gp 4 sp', or an amount in gold.", retry: true };
+    return { error: "Say how much: coins like '3 gp 4 sp', or gold in whole pieces.", retry: true };
   }
 
   if (args.do === "deposit") {

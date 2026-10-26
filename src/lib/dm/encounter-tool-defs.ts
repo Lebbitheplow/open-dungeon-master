@@ -137,7 +137,7 @@ export const endEncounterTool: ToolDef = {
       properties: {
         ...waypointProperty,
         outcome: { type: "string", enum: [...ENCOUNTER_OUTCOMES] },
-        reason: { type: "string" },
+        reason: { type: "string", description: "Short in-fiction cause." },
       },
       required: ["outcome"],
     },

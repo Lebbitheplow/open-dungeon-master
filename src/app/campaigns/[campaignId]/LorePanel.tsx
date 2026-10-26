@@ -363,7 +363,7 @@ export function LorePanel({
       fetch(`/api/campaigns/${campaignId}/dm/invoke`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "show_handout", args: { loreId: entry.id } }),
+        body: JSON.stringify({ name: "show_handout", args: { lore: entry.id } }),
       }),
       "That handout could not be shown.",
     );

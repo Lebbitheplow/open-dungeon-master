@@ -368,7 +368,7 @@ test("the nine materials a single price cannot hold are kept as printed", () => 
   assert.deepEqual(pair.uses.map((use) => use.take), [2]);
   // Imprisonment counts the target's Hit Dice.
   const prison = { ...facts("Imprisonment"), material: true };
-  assert.match(materialPlan(caster({ gold: 100000 }), prison).error, /Hit Die/);
+  assert.match(materialPlan(caster({ gold: 100000 }), prison).error, /per Hit Die of its target: send units with the target.s Hit Dice/, "the refusal names the field that carries them");
   assert.equal(materialPlan(caster({ gold: 100000 }), prison, { units: 10 }).bought[0].copper, 500000);
 });
 

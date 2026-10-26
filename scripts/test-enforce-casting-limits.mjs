@@ -42,7 +42,7 @@ const castsOf = (hero, enemy) => [
   ["use_spell_slot", { characterId: hero.id, level: 1, spell: "Magic Missile" }],
   ["cast_at_enemy", { characterId: hero.id, targetEnemyId: enemy.id, spell: "Hold Person", saveAbility: "wis", level: 2 }],
   ["cast_buff", { characterId: hero.id, spell: "Blur" }],
-  ["aoe_damage", { damage: "3d6", saveAbility: "dex", dc: 14, enemyIds: [enemy.id], casterId: hero.id, spell: "Burning Hands", level: 1 }],
+  ["aoe_damage", { damage: "3d6", saveAbility: "dex", dc: 14, enemyIds: [enemy.id], casterCharacterId: hero.id, spell: "Burning Hands", level: 1 }],
 ];
 
 // Which of the casts went through while the caster was in `state`.
@@ -200,7 +200,7 @@ await test("casting a spell spends its casting time from the turn", async () => 
   assert.equal(first.ok, true, first.error);
   const spent = world.encounter().turnBudget?.actionUsed === true;
   world.dice(1, 1, 1, 1, 1, 1, 1, 1, 1);
-  const second = await world.invoke("aoe_damage", { damage: "8d6", saveAbility: "dex", dc: 14, enemyIds: [enemy.id], casterId: hero.id, spell: pack ? "Fireball" : "Burning Hands", level: 3 });
+  const second = await world.invoke("aoe_damage", { damage: "8d6", saveAbility: "dex", dc: 14, enemyIds: [enemy.id], casterCharacterId: hero.id, spell: pack ? "Fireball" : "Burning Hands", level: 3 });
   world.clearDice();
   assert.ok(spent, "Hold Person left the action unspent in the turn budget");
   assert.equal(second.ok, false, "a second levelled spell was cast with the same action");

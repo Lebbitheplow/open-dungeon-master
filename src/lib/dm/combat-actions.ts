@@ -273,7 +273,7 @@ export function contest(
     contest: contested,
     success: true,
     applied: `${enemy.displayName} is ${condition}. The server applied the condition and its mechanics.${
-      condition === "grappled" ? " It can try to escape with its action (take_action escape with its enemyId)." : ""
+      condition === "grappled" ? " It can try to escape with its action (take_action escape with its escapingEnemyId)." : ""
     }`,
   };
 }

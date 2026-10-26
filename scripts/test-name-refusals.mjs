@@ -388,10 +388,10 @@ await test("teleport_token and pc_attack: a token or a natural weapon is the who
     rename(second, article);
     kit.place(first.id, 2, 2);
     kit.place(second.id, 6, 6);
-    accepted(await world.invoke("teleport_token", { tokenName: article, x: 7, y: 7 }));
+    accepted(await world.invoke("teleport_token", { token: article, x: 7, y: 7 }));
     assert.deepEqual([kit.token(second.id).x, kit.token(first.id).x], [7, 2], `${language}: ${article}`);
     rename(second, other);
-    refused(await world.invoke("teleport_token", { tokenName: article, x: 8, y: 8 }), plain, other);
+    refused(await world.invoke("teleport_token", { token: article, x: 8, y: 8 }), plain, other);
     assert.equal(kit.token(first.id).x, 2, `${language}: ${article} moved ${plain}`);
   }
   updateGameSettings(world.campaignId, { tableLanguage: "english" });

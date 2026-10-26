@@ -109,7 +109,7 @@ await test("C:G34: A save the server forces (aoe_damage, cast_at_player) passes 
   world.diceLog();
   world.dice(3, 17, 2, 2);
   const out = await world.invoke("aoe_damage", {
-    characterIds: [dwarf.id], saveAbility: "con", ability: "con", dc: 13, damage: "2d4", type: "poison", reason: "poison gas",
+    characterIds: [dwarf.id], saveAbility: "con", enemyAbility: "con", dc: 13, damage: "2d4", type: "poison", reason: "poison gas",
   });
   world.clearDice();
   await kit.endFight();

@@ -425,7 +425,7 @@ await test("Hound of Ill Omen: 3 sorcery points, and the hunted creature saves a
   world.clearDice();
   // Burning Hands' 3d6, then the creature's save: 18 and 2, the lower kept.
   world.dice(5, 5, 5, 18, 2);
-  const blast = await world.invoke("aoe_damage", { casterId: shadow.id, spell: "Burning Hands", level: 1, enemyIds: [enemy.id], saveAbility: "dex", dc: 14 });
+  const blast = await world.invoke("aoe_damage", { casterCharacterId: shadow.id, spell: "Burning Hands", level: 1, enemyIds: [enemy.id], saveAbility: "dex", dc: 14 });
   world.clearDice();
   assert.equal(blast.ok, true, blast.error);
   assert.equal(kit.enemy(enemy.id).currentHp, 300 - 15, "the lower die stands: a failed save, full damage");

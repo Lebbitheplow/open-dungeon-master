@@ -783,7 +783,7 @@ export function BattleMapPanel({
         setTeleporting(null);
         setHudTokenId(null);
         if (token) {
-          void invoke("move_token", { tokenName: token.name, x, y, teleport: true });
+          void invoke("move_token", { token: token.name, x, y, teleport: true });
         }
         return;
       }

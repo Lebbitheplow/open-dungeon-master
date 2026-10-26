@@ -70,11 +70,11 @@ test("companions and missing targets stay auto-applied", () => {
 
 test("proposalSummary phrasings", () => {
   assert.equal(
-    proposalSummary("grant_item", { name: "Healing Potion", qty: 2 }, "Avery"),
+    proposalSummary("grant_item", { item: "Healing Potion", qty: 2 }, "Avery"),
     "Give Healing Potion x2 to Avery",
   );
   assert.equal(
-    proposalSummary("remove_item", { name: "Rope" }, "Avery"),
+    proposalSummary("remove_item", { item: "Rope" }, "Avery"),
     "Take Rope from Avery",
   );
   assert.equal(proposalSummary("modify_gold", { delta: 50 }, "Avery"), "Give 50 gold to Avery");
@@ -130,10 +130,10 @@ function check(name, fn) {
 const nysa = { name: "Nysa", equipment: [{ name: "Dart", qty: 10 }, { name: "Rope", qty: 1 }], gold: 5, copper: 50 };
 
 check("a removal of what is not carried, or of more than carried, is refused before any offer", () => {
-  assert.match(offerPrecheck("remove_item", { name: "Longsword" }, nysa)?.error, /does not carry "Longsword"/);
-  assert.match(offerPrecheck("remove_item", { name: "dart", qty: 11 }, nysa)?.error, /carries only 10 dart/);
-  assert.equal(offerPrecheck("remove_item", { name: "Dart", qty: 10 }, nysa), null);
-  assert.equal(offerPrecheck("remove_item", { name: "DART" }, nysa), null);
+  assert.match(offerPrecheck("remove_item", { item: "Longsword" }, nysa)?.error, /does not carry "Longsword"/);
+  assert.match(offerPrecheck("remove_item", { item: "dart", qty: 11 }, nysa)?.error, /carries only 10 dart/);
+  assert.equal(offerPrecheck("remove_item", { item: "Dart", qty: 10 }, nysa), null);
+  assert.equal(offerPrecheck("remove_item", { item: "DART" }, nysa), null);
 });
 
 check("coin is never prechecked: modify_gold floors at zero and a purchase is priced by the shelf", () => {
@@ -149,21 +149,21 @@ check("a sale checks the pack; a buy is left to the shelf", () => {
 
 check("only the first row by that name counts, as a removal takes it", () => {
   const twins = { ...nysa, equipment: [{ name: "Silver ring", qty: 1 }, { name: "Silver ring", qty: 1, identified: false }] };
-  assert.match(offerPrecheck("remove_item", { name: "Silver ring", qty: 2 }, twins)?.error, /carries only 1 Silver ring/);
+  assert.match(offerPrecheck("remove_item", { item: "Silver ring", qty: 2 }, twins)?.error, /carries only 1 Silver ring/);
   assert.deepEqual(parseOfferArgs('{"name":"Rope"}'), { name: "Rope" });
   assert.deepEqual(parseOfferArgs("[1]"), {});
   assert.deepEqual(parseOfferArgs("not json"), {});
 });
 
 check("grants and vitals pass the precheck; it is about what cannot apply", () => {
-  assert.equal(offerPrecheck("grant_item", { name: "Coin purse" }, nysa), null);
+  assert.equal(offerPrecheck("grant_item", { item: "Coin purse" }, nysa), null);
   assert.equal(offerPrecheck("apply_damage", { amount: 3 }, nysa), null);
 });
 
 check("an offer's key is what it is, not who made it or when", () => {
-  assert.equal(offerKey("grant_item", { name: "Coin Purse", qty: 1 }), offerKey("grant_item", { name: "coin purse" }));
-  assert.notEqual(offerKey("grant_item", { name: "Coin purse", qty: 2 }), offerKey("grant_item", { name: "Coin purse" }));
-  assert.notEqual(offerKey("grant_item", { name: "ring", unidentified: true }), offerKey("grant_item", { name: "ring" }));
+  assert.equal(offerKey("grant_item", { item: "Coin Purse", qty: 1 }), offerKey("grant_item", { item: "coin purse" }));
+  assert.notEqual(offerKey("grant_item", { item: "Coin purse", qty: 2 }), offerKey("grant_item", { item: "Coin purse" }));
+  assert.notEqual(offerKey("grant_item", { item: "ring", unidentified: true }), offerKey("grant_item", { item: "ring" }));
   assert.equal(offerKey("modify_gold", { delta: 15 }), offerKey("modify_gold", { delta: 15, reason: "loot" }));
   assert.equal(offerKey("apply_damage", { amount: 3 }), null);
 });
@@ -171,7 +171,7 @@ check("an offer's key is what it is, not who made it or when", () => {
 const now = Date.parse("2026-10-11T18:00:00Z");
 const at = (minutesAgo) => new Date(now - minutesAgo * 60_000).toISOString();
 const character = { id: "nysa", name: "Nysa" };
-const recent = (status, minutesAgo, args = { name: "Coin purse", qty: 1 }, toolName = "grant_item") => ({
+const recent = (status, minutesAgo, args = { item: "Coin purse", qty: 1 }, toolName = "grant_item") => ({
   toolName,
   characterId: "nysa",
   argsJson: JSON.stringify({ characterId: "nysa", ...args }),
@@ -181,21 +181,21 @@ const recent = (status, minutesAgo, args = { name: "Coin purse", qty: 1 }, toolN
 });
 
 check("the same loot again just after it was accepted is refused, with the reason", () => {
-  const problem = duplicateOfferProblem("grant_item", { name: "coin purse" }, character, [recent("approved", 2)], now)?.error;
+  const problem = duplicateOfferProblem("grant_item", { item: "coin purse" }, character, [recent("approved", 2)], now)?.error;
   assert.match(problem, /already accepted "Give coin purse to Nysa" 2 minutes ago/);
   assert.match(problem, /additional: true/);
   // Said to be another, it passes; so does the same loot much later.
-  assert.equal(duplicateOfferProblem("grant_item", { name: "coin purse", additional: true }, character, [recent("approved", 2)], now), null);
-  assert.equal(duplicateOfferProblem("grant_item", { name: "coin purse" }, character, [recent("approved", DUPLICATE_OFFER_WINDOW_MS / 60_000 + 1)], now), null);
+  assert.equal(duplicateOfferProblem("grant_item", { item: "coin purse", additional: true }, character, [recent("approved", 2)], now), null);
+  assert.equal(duplicateOfferProblem("grant_item", { item: "coin purse" }, character, [recent("approved", DUPLICATE_OFFER_WINDOW_MS / 60_000 + 1)], now), null);
   // A different item, a different character, a declined offer: no bar.
-  assert.equal(duplicateOfferProblem("grant_item", { name: "Rope" }, character, [recent("approved", 2)], now), null);
-  assert.equal(duplicateOfferProblem("grant_item", { name: "coin purse" }, { id: "kael", name: "Kael" }, [recent("approved", 2)], now), null);
-  assert.equal(duplicateOfferProblem("grant_item", { name: "coin purse" }, character, [recent("declined", 2)], now), null);
+  assert.equal(duplicateOfferProblem("grant_item", { item: "Rope" }, character, [recent("approved", 2)], now), null);
+  assert.equal(duplicateOfferProblem("grant_item", { item: "coin purse" }, { id: "kael", name: "Kael" }, [recent("approved", 2)], now), null);
+  assert.equal(duplicateOfferProblem("grant_item", { item: "coin purse" }, character, [recent("declined", 2)], now), null);
 });
 
 check("while an identical offer still waits, a second one is refused, additional or not", () => {
-  assert.match(duplicateOfferProblem("grant_item", { name: "Coin purse" }, character, [recent("pending", 1)], now)?.error, /still waiting for Nysa's player/);
-  assert.match(duplicateOfferProblem("grant_item", { name: "Coin purse", additional: true }, character, [recent("pending", 1)], now)?.error, /still waiting/);
+  assert.match(duplicateOfferProblem("grant_item", { item: "Coin purse" }, character, [recent("pending", 1)], now)?.error, /still waiting for Nysa's player/);
+  assert.match(duplicateOfferProblem("grant_item", { item: "Coin purse", additional: true }, character, [recent("pending", 1)], now)?.error, /still waiting/);
   assert.match(duplicateOfferProblem("modify_gold", { delta: 15 }, character, [recent("approved", 1, { delta: 15 }, "modify_gold")], now)?.error, /that coin is claimed/);
   // Vitals are never barred: a second blow is its own.
   assert.equal(duplicateOfferProblem("apply_damage", { amount: 3 }, character, [recent("pending", 1, { amount: 3 }, "apply_damage")], now), null);
@@ -203,9 +203,9 @@ check("while an identical offer still waits, a second one is refused, additional
 
 check("what applying an offer left on the sheet, in a sentence", () => {
   const after = { name: "Nysa", equipment: [{ name: "Coin purse", qty: 2 }], gold: 12, copper: 5, currentHp: 7, maxHp: 15, tempHp: 0, conditions: ["poisoned"] };
-  assert.equal(appliedOutcome("grant_item", { name: "Coin purse" }, after), "Nysa now carries Coin purse x2.");
-  assert.equal(appliedOutcome("remove_item", { name: "Dart" }, after), "Nysa no longer carries any Dart.");
-  assert.equal(appliedOutcome("remove_item", { name: "Coin purse" }, after), "Nysa still carries Coin purse x2.");
+  assert.equal(appliedOutcome("grant_item", { item: "Coin purse" }, after), "Nysa now carries Coin purse x2.");
+  assert.equal(appliedOutcome("remove_item", { item: "Dart" }, after), "Nysa no longer carries any Dart.");
+  assert.equal(appliedOutcome("remove_item", { item: "Coin purse" }, after), "Nysa still carries Coin purse x2.");
   assert.equal(appliedOutcome("modify_gold", { delta: 7 }, after), "Nysa's purse now holds 12 gp 5 cp.");
   assert.equal(appliedOutcome("apply_damage", { amount: 8 }, after), "Nysa is at 7/15 hit points.");
   assert.equal(appliedOutcome("heal", { amount: 8 }, { ...after, tempHp: 3 }), "Nysa is at 7/15 hit points with 3 temporary.");
