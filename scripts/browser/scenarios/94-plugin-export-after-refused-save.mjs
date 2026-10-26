@@ -79,10 +79,22 @@ export default {
 
       // ---- the server takes the save: Download hands over the typed draft ----
       await page.unroute(draftRoute);
-      const file = page.waitForEvent("download", { timeout: 30_000 });
+      // Inside the apps the page hands the file to the app's download relay
+      // (the client's download shim), which this rig has no native side for:
+      // there the pack is read from the export's answer (as 86 does).
+      const file = t.app ? null : page.waitForEvent("download", { timeout: 30_000 });
+      const built = page.waitForResponse((response) => /\/plugin\/export$/.test(new URL(response.url()).pathname), { timeout: 30_000 });
       await t.tap(download);
-      const got = await file;
-      check(got.suggestedFilename() === "unsaved_new_audit_world.json", `the file is named for the typed name (${got.suggestedFilename()})`);
+      const answer = await built;
+      check(answer.ok(), `the export answered ${answer.status()}`);
+      if (file) {
+        const got = await file;
+        check(got.suggestedFilename() === "unsaved_new_audit_world.json", `the file is named for the typed name (${got.suggestedFilename()})`);
+      } else {
+        const pack = await answer.json().catch(() => ({}));
+        const name = pack.pack?.name ?? pack.name;
+        check(name === typed, `the pack built is the typed draft (${name})`);
+      }
       check(posts.export === 1, `one build once saved (${posts.export})`);
       check((await stored()).name === typed, "the server holds the typed name");
 
