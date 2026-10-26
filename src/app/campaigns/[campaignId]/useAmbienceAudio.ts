@@ -200,14 +200,17 @@ export function useAmbienceAudio(
   const setDucked = useCallback((ducked: boolean) => playerRef.current?.setLevels({ ducked }), []);
 
   // A later gesture can retry a cue that the browser refused after the first.
+  // On the click, as narration's (useNarrationAudio.ts): unlocking takes the
+  // sound banner off the composer, and on the press that moved the button
+  // being pressed out from under the release.
   useEffect(() => {
     if (!enabled) {
       return;
     }
-    window.addEventListener("pointerdown", unlock);
+    window.addEventListener("click", unlock);
     window.addEventListener("keydown", unlock);
     return () => {
-      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("click", unlock);
       window.removeEventListener("keydown", unlock);
     };
   }, [enabled, unlock]);
