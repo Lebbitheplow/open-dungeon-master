@@ -174,7 +174,7 @@ try {
     world.close();
   });
 
-  await test("A wizard's 2nd level through the agent: the school, two spells for the book and the cantrip the read counts, which the engine then accepts.", async () => {
+  await test("A wizard's 2nd level through the agent: the school and two spells for the book, and no cantrip past the race's free one, which the engine then accepts.", async () => {
     const { world, campaignId, hero, play, sheets, player } = await seated(LEGAL_WIZARD);
     globalThis.fetch = await routeFetch(world);
     const out = await world.invoke("award_xp", { characterIds: [hero.id], amount: 300, reason: "the library" });
@@ -185,9 +185,9 @@ try {
     assert.deepEqual(
       [read.choices.spells?.style, read.choices.spells?.newSpells, read.choices.spells?.newCantrips, read.choices.spells?.maxSpellLevel],
       // A high elf's wizard cantrip is known on top of the class's three
-      // (src/lib/srd/free-cantrips.ts), so of the three held one is the
-      // race's and the class has room for one more, as the engine counts.
-      ["spellbook", 2, 1, 1],
+      // (src/lib/srd/free-cantrips.ts): of the four held one is the race's,
+      // and the class's three are all a 2nd-level wizard knows.
+      ["spellbook", 2, 0, 1],
       JSON.stringify(read.choices.spells),
     );
 
@@ -205,7 +205,7 @@ try {
       campaignId,
       level: 2,
       subclass: "School of Evocation",
-      levelUpSpells: ["Thunderwave", "Feather Fall", "Ray of Frost"],
+      levelUpSpells: ["Thunderwave", "Feather Fall"],
     });
     assert.equal(taken.isError, false, taken.text);
     const after = sheets.getSheetForUser(campaignId, player.id);
@@ -214,7 +214,7 @@ try {
     for (const spell of ["Thunderwave", "Feather Fall"]) {
       assert.ok(after.spellcasting.spellbook.includes(spell), `${spell} did not reach the book`);
     }
-    assert.ok(after.spellcasting.cantrips.includes("Ray of Frost"), "the counted cantrip was refused or lost");
+    assert.ok(after.spellcasting.cantrips.includes("Prestidigitation"), "the race's cantrip was lost");
     world.close();
   });
 

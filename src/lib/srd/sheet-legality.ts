@@ -69,6 +69,8 @@ import { judgeFeats, judgeFeatures } from "@/lib/srd/legality/features";
 import { judgeProficiencies } from "@/lib/srd/legality/proficiencies";
 import { applySubclassTraining, autoSubclassPicks, subclassFixedTraining, subclassGrants } from "@/lib/srd/subclass-training";
 import { castingClassesOf, judgeSpellcasting } from "@/lib/srd/legality/spells";
+import { judgeRacialCantrips } from "@/lib/srd/legality/racial-cantrips";
+import { racialCantripFields } from "@/lib/srd/racial-cantrips";
 import {
   type ClassGrants,
   type LegalityContext,
@@ -557,9 +559,18 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
   const freeCasts = [...freeCastFeatures(taught.grants), ...elementPicks];
 
   // ---- spells ----
-  const cantripPick = (input.racialChoices?.cantrip ?? "").trim();
-  const racialCantrip =
-    race.cantripChoice && cantripPick ? { name: cantripPick, list: race.cantripChoice.list } : null;
+  const racialCantrips = judgeRacialCantrips({
+    race,
+    sent: input.racialChoices,
+    casts,
+    spellOf: context.spellOf,
+    judgesPicks: policy.judgesPicks,
+    countsPicks: context.door !== "engine",
+    picksMayWait: policy.picksMayWait,
+  });
+  problems.push(...racialCantrips.problems);
+  owed.push(...racialCantrips.owed);
+  const racialPicks = racialCantrips.picks.map((pick) => pick.name);
   const spells = judgeSpellcasting({
     sent: input.spellcasting ?? null,
     classes,
@@ -567,7 +578,7 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
     subclassExtras: context.subclassExtras,
     abilities,
     spellOf: context.spellOf,
-    racialCantrip: casts ? racialCantrip : null,
+    racialCantrips: casts ? racialCantrips.picks : [],
     // Cantrips the race casts by nature (a tiefling's thaumaturgy) ride on
     // the caster's list, free.
     innateCantrips: innateCantripsFor(race.id, level),
@@ -577,14 +588,6 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
     bookAllowance: policy.made,
   });
   problems.push(...spells.problems);
-  if (racialCantrip && !casts && policy.judgesPicks) {
-    const spell = context.spellOf(racialCantrip.name);
-    if (!spell || spell.level !== 0 || !spell.classes.map(textKey).includes(textKey(racialCantrip.list))) {
-      problems.push(
-        `${racialCantrip.name} is not a ${racialCantrip.list} cantrip, which is what the ${race.name}'s cantrip must be.`,
-      );
-    }
-  }
 
   // ---- draconic ancestry ----
   // A dragonborn chooses one (SRD 5.1, Dragonborn). It is written as a race
@@ -618,7 +621,7 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
         held: (held?.features ?? []).filter((feature) => !featDerived(feature.name)),
         raceTraits: bundledTraits ? [] : race.traitNames,
         backgroundFeature: backgroundFeatureOf(background),
-        derived: [...(racialCantrip && !casts ? [`Racial cantrip: ${racialCantrip.name}`] : []), ...freeCasts],
+        derived: [...(casts ? [] : racialPicks.map((name) => `Racial cantrip: ${name}`)), ...freeCasts],
         allowPlainStory: policy.plainStory,
         sameBackground: (held?.background ?? "") === input.background,
       });
@@ -759,7 +762,7 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
     racialChoices: {
       asi: increase.picks,
       skills: input.racialChoices?.skills ?? [],
-      cantrip: race.cantripChoice ? cantripPick : "",
+      ...racialCantripFields(racialPicks),
       tool: race.toolChoice ? (input.racialChoices?.tool ?? "") : "",
       ancestry: ancestry?.id ?? "",
       ...(race.feats && input.racialChoices?.featAbility

@@ -20,7 +20,7 @@ const state = {
   racialAsi: [],
   racialSkills: [],
   racialTool: "",
-  racialCantrip: "",
+  racialCantrips: [],
   feats: [],
   repeatSkills: [],
 };

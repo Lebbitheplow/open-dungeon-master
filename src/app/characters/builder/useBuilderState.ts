@@ -15,6 +15,7 @@ import { earnedAsiCount, removeAsiChoices } from "@/lib/srd/asi";
 import { halfFeatPicks, halfFeatPoints } from "@/lib/srd/legality/half-feats";
 import { withoutFeatPicks, type FeatChoices, type FeatPicks } from "@/lib/srd/feat-grants";
 import { racialFeatCount } from "@/lib/srd/race-id";
+import { racialCantripsOf } from "@/lib/srd/racial-cantrips";
 import { holdsFeature, reachesPrimalChampion, withoutPrimalChampion } from "@/lib/srd/trait-rules";
 import type { KitChoices } from "@/lib/srd/starting-kit";
 import { findOptionByFeatureName } from "@/lib/srd/options";
@@ -74,7 +75,7 @@ export type BuilderDraftFields = {
   bonusLanguages: string[];
   racialAsi: Array<Ability | "">;
   racialSkills: string[];
-  racialCantrip: string;
+  racialCantrips: string[];
   racialTool: string;
   racialAncestry: string;
   racialFeatAbility: Ability | "";
@@ -231,7 +232,9 @@ export function useBuilderState({
   const [racialSkills, setRacialSkills] = useState<string[]>(
     initial?.racialChoices?.skills ?? [],
   );
-  const [racialCantrip, setRacialCantrip] = useState(initial?.racialChoices?.cantrip ?? "");
+  // Every cantrip the race let them pick; a sheet from before there could
+  // be more than one holds its pick in `cantrip`.
+  const [racialCantrips, setRacialCantrips] = useState<string[]>(() => racialCantripsOf(initial?.racialChoices));
   const [racialTool, setRacialTool] = useState(initial?.racialChoices?.tool ?? "");
   // A dragonborn's draconic ancestry ("red").
   const [racialAncestry, setRacialAncestry] = useState(initial?.racialChoices?.ancestry ?? "");
@@ -316,14 +319,14 @@ export function useBuilderState({
   // (reconcile.ts). Read from the render's values: every caller is an event
   // handler or an effect of this render.
   const picks: BuilderPicks = {
-    chosenSkills, racialSkills, racialAsi, racialCantrip, racialTool, backgroundSkills, bonusLanguages,
+    chosenSkills, racialSkills, racialAsi, racialCantrips, racialTool, backgroundSkills, bonusLanguages,
     subclass, expertisePicks, stylePicks, optionPicks, spells, bookPrepared, cantrips,
   };
   function applyPicks(next: BuilderPicks) {
     setChosenSkills(next.chosenSkills);
     setRacialSkills(next.racialSkills);
     setRacialAsi(next.racialAsi);
-    setRacialCantrip(next.racialCantrip);
+    setRacialCantrips(next.racialCantrips);
     setRacialTool(next.racialTool);
     setBackgroundSkills(next.backgroundSkills);
     setBonusLanguages(next.bonusLanguages);
@@ -509,7 +512,7 @@ export function useBuilderState({
     applyChange(
       "race",
       { raceId: id },
-      { ...picks, racialAsi: [], racialSkills: [], racialCantrip: "", racialTool: "" },
+      { ...picks, racialAsi: [], racialSkills: [], racialCantrips: [], racialTool: "" },
     );
     setRacialAncestry("");
     setRepeatSkills([]);
@@ -638,7 +641,7 @@ export function useBuilderState({
     bonusLanguages: setBonusLanguages,
     racialAsi: setRacialAsi,
     racialSkills: setRacialSkills,
-    racialCantrip: setRacialCantrip,
+    racialCantrips: setRacialCantrips,
     racialTool: setRacialTool,
     racialAncestry: setRacialAncestry,
     racialFeatAbility: setRacialFeatAbility,
@@ -656,9 +659,11 @@ export function useBuilderState({
     hpOverride: setHpOverride,
     acOverride: setAcOverride,
   };
+  // A field this builder no longer keeps (an older draft's) is passed over.
   function setFields(fields: Partial<BuilderDraftFields>) {
     for (const key of Object.keys(fields) as Array<keyof BuilderDraftFields>) {
-      (setters[key] as (value: unknown) => void)(fields[key]);
+      const set = setters[key] as ((value: unknown) => void) | undefined;
+      set?.(fields[key]);
     }
   }
 
@@ -716,7 +721,7 @@ export function useBuilderState({
     bonusLanguages,
     racialAsi,
     racialSkills,
-    racialCantrip,
+    racialCantrips,
     racialTool,
     racialAncestry,
     racialFeatAbility,
@@ -787,7 +792,7 @@ export function useBuilderState({
     bonusLanguages, setBonusLanguages,
     racialAsi, setRacialAsi,
     racialSkills, setRacialSkills,
-    racialCantrip, setRacialCantrip,
+    racialCantrips, setRacialCantrips,
     racialTool, setRacialTool,
     racialAncestry, setRacialAncestry,
     racialFeatAbility, setRacialFeatAbility,

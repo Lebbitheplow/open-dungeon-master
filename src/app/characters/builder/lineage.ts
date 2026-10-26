@@ -179,7 +179,7 @@ export function asiChips(asi: Partial<Record<Ability, number>>): AsiChip[] {
 }
 
 const COUNT_WORD: Record<number, string> = { 1: "One", 2: "Two", 3: "Three", 4: "Four" };
-const countWord = (count: number) => COUNT_WORD[count] ?? String(count);
+export const countWord = (count: number) => COUNT_WORD[count] ?? String(count);
 
 // Everything the lineage leaves to the player, which is what the section
 // under the grid is there to collect.

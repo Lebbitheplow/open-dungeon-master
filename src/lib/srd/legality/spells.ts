@@ -206,8 +206,8 @@ export type SpellcastingInput = {
   subclassExtras?: SubclassExtras;
   abilities: AbilityScores;
   spellOf: (name: string) => SpellFacts | null;
-  // The race's cantrip pick, with the list it comes from.
-  racialCantrip: { name: string; list: string } | null;
+  // The race's cantrip picks, each with the list it comes from.
+  racialCantrips?: Array<{ name: string; list: string }>;
   // Cantrips the race knows by nature (src/lib/srd/racial-grants.ts): free,
   // and not judged against the class's list.
   innateCantrips?: string[];
@@ -350,12 +350,15 @@ export function judgeSpellcasting(input: SpellcastingInput): SpellcastingVerdict
       ? { ...view, spellbook: spellbookOf(view) }
       : view,
   );
-  // The race's cantrip sits with the first caster's, on top of its own.
-  const racial = input.racialCantrip;
-  if (racial?.name && views.length) {
+  // The race's cantrips sit with the first caster's, on top of its own.
+  const racial = (input.racialCantrips ?? []).filter((entry) => entry.name);
+  if (racial.length && views.length) {
     const holder = views[0];
-    if (!views.some((view) => view.cantrips.some((name) => textKey(name) === textKey(racial.name)))) {
-      views[0] = { ...holder, cantrips: [...holder.cantrips, racial.name] };
+    const missing = racial.filter(
+      (entry) => !views.some((view) => view.cantrips.some((name) => textKey(name) === textKey(entry.name))),
+    );
+    if (missing.length) {
+      views[0] = { ...holder, cantrips: [...holder.cantrips, ...missing.map((entry) => entry.name)] };
     }
   }
 
@@ -405,7 +408,7 @@ export function judgeSpellcasting(input: SpellcastingInput): SpellcastingVerdict
         ...spellNameProblems(view, list, {
           spellOf: input.spellOf,
           held,
-          racialCantrips: racial?.name ? [racial] : [],
+          racialCantrips: racial,
         }),
         ...spellFilingProblems(view),
       );
@@ -436,7 +439,7 @@ export function judgeSpellcasting(input: SpellcastingInput): SpellcastingVerdict
         { ...sheetLike, spellcasting: written },
         {
           bookAllowance: input.bookAllowance,
-          freeCantrips: [...(racial?.name ? [racial.name] : []), ...innate, ...taught.cantrips],
+          freeCantrips: [...racial.map((entry) => entry.name), ...innate, ...taught.cantrips],
           freeSpells: taught.spells,
           extras: input.subclassExtras,
         },

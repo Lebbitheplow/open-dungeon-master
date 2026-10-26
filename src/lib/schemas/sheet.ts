@@ -422,7 +422,12 @@ export const createSheetSchema = z.object({
     .object({
       asi: z.array(z.enum(ABILITIES)).max(3).default([]),
       skills: z.array(z.string().trim().min(1).max(40)).max(4).default([]),
+      // The race's cantrip picks (a homebrew species may offer up to three),
+      // and the first of them again in `cantrip`, the field a sheet held
+      // before there could be more than one, so an older server reading this
+      // sheet keeps that one (src/lib/srd/racial-cantrips.ts).
       cantrip: z.string().trim().max(80).default(""),
+      cantrips: z.array(z.string().trim().min(1).max(80)).max(6).default([]),
       tool: z.string().trim().max(60).default(""),
       // A dragonborn's draconic ancestry ("red"), src/lib/srd/racial-grants.ts.
       ancestry: z.string().trim().max(20).default(""),

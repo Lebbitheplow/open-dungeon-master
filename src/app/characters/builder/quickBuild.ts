@@ -29,6 +29,7 @@ import { expertiseAllowed, expertiseSlotsFor, subclassLevelFor, subclassNamesFor
 import { optionFeatureName } from "@/lib/srd/options";
 import { racialFeatCount } from "@/lib/srd/race-id";
 import { DRACONIC_ANCESTRIES, findDraconicAncestry, repeatedGrants, takesDraconicAncestry } from "@/lib/srd/racial-grants";
+import { racialCantripsOf } from "@/lib/srd/racial-cantrips";
 import { checklistSpellsOn, spellLevelOf } from "@/lib/srd/spell-lists";
 import { classRoles, type ClassRole } from "@/lib/srd/class-roles";
 import { spellClassFor } from "@/lib/classes";
@@ -450,13 +451,21 @@ export function fillRound(ctx: FillContext): FillRound {
       note("racialTool", pick);
     }
   }
-  if (race.cantripChoice && !fields.racialCantrip && wants("racialCantrip")) {
-    const known = new Set(fields.cantrips.map((name) => textKey(name)));
-    const pick = preferredSpellOrder(checklistSpellsOn(race.cantripChoice.list).filter((spell) => spell.level === 0))
-      .find((spell) => !known.has(textKey(spell.name)));
-    if (pick) {
-      patch.racialCantrip = pick.name;
-      note("racialCantrip", pick.name);
+  // Every cantrip the race offers, each a different spell and none the
+  // class already took.
+  const racialPicked = racialCantripsOf({ cantrips: fields.racialCantrips });
+  if (race.cantripChoice && racialPicked.length < race.cantripChoice.count && wants("racialCantrip")) {
+    const known = new Set([...fields.cantrips, ...racialPicked].map((name) => textKey(name)));
+    const added: string[] = [];
+    for (const spell of preferredSpellOrder(checklistSpellsOn(race.cantripChoice.list).filter((entry) => entry.level === 0))) {
+      if (racialPicked.length + added.length >= race.cantripChoice.count) break;
+      if (known.has(textKey(spell.name))) continue;
+      known.add(textKey(spell.name));
+      added.push(spell.name);
+    }
+    if (added.length) {
+      patch.racialCantrips = [...racialPicked, ...added];
+      note("racialCantrip", added.join(", "));
     }
   }
   if (takesDraconicAncestry(race.id) && !findDraconicAncestry(fields.racialAncestry) && wants("ancestry")) {

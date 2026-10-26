@@ -732,11 +732,11 @@ export function useBuilderDerived({
   // count leaves them out, as the sheet and a level-up already did (issue
   // #118: a tiefling cleric filled with Thaumaturgy left play two cantrips
   // down).
-  const racialCantripPick = state.racialCantrip;
+  const racialCantripPicks = state.racialCantrips;
   const racialCantrips = useMemo(() => {
     const own = race ? innateCantripsFor(race.id, effectiveLevel) : [];
     const seen = new Set<string>();
-    return [...(racialCantripPick ? [racialCantripPick] : []), ...own].filter((name) => {
+    return [...racialCantripPicks, ...own].filter((name) => {
       const key = textKey(name);
       if (!key || seen.has(key)) {
         return false;
@@ -744,7 +744,7 @@ export function useBuilderDerived({
       seen.add(key);
       return true;
     });
-  }, [race, effectiveLevel, racialCantripPick]);
+  }, [race, effectiveLevel, racialCantripPicks]);
   // The spells the feats teach (src/lib/srd/feat-spells.ts) are known the
   // same way: shown granted, left out of the class's counts.
   const featSpells = useMemo(
