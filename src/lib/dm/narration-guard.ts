@@ -156,6 +156,9 @@ export async function enforceEngineBoundary(
   sheets: readonly CharacterSheet[],
   // What each kept reply was read for, by its persisted text.
   partReads: ReadonlyMap<string, PartRead>,
+  // The tools the turn's calls were sent, kept in the rewrite's prompt so a
+  // local narrator's cache holds (src/lib/dm/turn.ts proseOnlyTools).
+  tools: readonly unknown[] = [],
 ): Promise<GuardedNarration> {
   const narration = turn.narrationParts.join("\n\n").trim();
   if (!narration) {
@@ -193,10 +196,11 @@ export async function enforceEngineBoundary(
           .join("\n\n"),
       },
     ],
-    // No tools: this call exists to rewrite prose, and a tool call here would
-    // resolve mechanics a second time. It is the reserved call, so it is
-    // made whatever the turn's budget has left.
-    { tools: [], toolChoice: "none", thinking: false, ...turnCallOptions(campaign, turn, "guard_rewrite") },
+    // toolChoice "none": this call exists to rewrite prose, and a tool call
+    // here would resolve mechanics a second time (one made anyway is dropped
+    // below). It is the reserved call, so it is made whatever the turn's
+    // budget has left.
+    { tools: [...tools], toolChoice: "none", thinking: false, ...turnCallOptions(campaign, turn, "guard_rewrite") },
   );
   noteTurnCall(turn, "guard_rewrite", [], rewrite);
   const { message, error } = rewrite;

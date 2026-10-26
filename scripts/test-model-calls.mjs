@@ -540,15 +540,15 @@ const lastCalls = (n) =>
   await requestUtilityMessage(settings({ utilityModel: "reader", utilityBaseUrl: at("effort") }), read, { meta: { task: "claims" }, thinking: false });
   assert.equal(bodies.at(-1).reasoning_effort, "low", "the effort template's helper call was not asked for low");
   await requestUtilityMessage(settings({ utilityModel: "reader", utilityBaseUrl: at("effort") }), read, { meta: { task: "claims" }, thinking: true });
-  assert.equal(bodies.at(-1).reasoning_effort, undefined, "a helper call that wants thinking keeps the default");
+  assert.equal(bodies.at(-1).reasoning_effort, "low", "every call on the effort template is asked for low, so a turn's prompt keeps its first tokens");
   await requestUtilityMessage(settings({ utilityModel: "reader", utilityBaseUrl: at("switch") }), read, { meta: { task: "claims" }, thinking: false });
   assert.equal(bodies.at(-1).reasoning_effort, undefined, "a template with the switch was sent an effort");
   assert.equal(bodies.at(-1).chat_template_kwargs?.enable_thinking, false);
-  // A turn's call on the effort template: never, whatever it asks.
+  // A turn's call on the effort template: low as well, whatever it asks.
   await probeCustomContextWindow(at("effort"), "", "narrator");
   await requestDmMessage(settings({ customBaseUrl: at("effort"), customModel: "narrator" }), read, { meta: { task: "turn" }, thinking: false });
   assert.equal(bodies.at(-1).model, "narrator");
-  assert.equal(bodies.at(-1).reasoning_effort, undefined, "a turn's call was sent an effort");
+  assert.equal(bodies.at(-1).reasoning_effort, "low", "a turn's call on the effort template is asked for low like every other, so its prompt's first tokens never change");
   // A helper named alone runs on the storyteller's server.
   await requestUtilityMessage(settings({ customBaseUrl: at("effort"), customModel: "narrator", utilityModel: "reader", utilityBaseUrl: "" }), read, { meta: { task: "claims" }, thinking: false });
   assert.equal(bodies.at(-1).kind, "effort");

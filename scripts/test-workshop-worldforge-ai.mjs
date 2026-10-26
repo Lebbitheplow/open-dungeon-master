@@ -48,6 +48,12 @@ const server = http.createServer((req, res) => {
   const chunks = [];
   req.on("data", (chunk) => chunks.push(chunk));
   req.on("end", () => {
+    // The backend's /props is probed before the first call (model.ts); only
+    // a chat POST carries a body to read.
+    if (req.method !== "POST") {
+      res.writeHead(404).end();
+      return;
+    }
     const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
     requests.push(body);
     if (failing) {
