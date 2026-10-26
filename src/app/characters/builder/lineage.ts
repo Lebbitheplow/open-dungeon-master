@@ -31,10 +31,13 @@ export { canonicalRaceId, srdRaceFor };
 
 // Pack lineages beyond the SRD still deserve a face. Most are a heritage or a
 // variant of a family we have painted, so the family word in the slug or the
-// name picks the plate. Order matters: more-specific names win — wood elf
-// before elf, mountain dwarf before dwarf, rock/forest gnome before gnome,
-// stout/stoor before lightfoot, castes and heritages before their base, and a
-// gearforged "dwarf chassis" is a construct before it is a dwarf.
+// name picks the plate. Order matters: the more specific name wins (wood elf
+// before elf, mountain dwarf before dwarf, rock and forest gnome before gnome,
+// stout and stoor before lightfoot, castes and heritages before their base),
+// and a gearforged "dwarf chassis" is a construct before it is a dwarf. A
+// caste named with an ordinary word (Purified, Mutated, Favored) counts beside
+// its people's name here, and alone only at the end of the list, so a
+// "Mutated Human" is still a human.
 const FAMILY_WORDS: Array<[RegExp, string]> = [
   // A darakhul heritage is a ghoul first: the living race's word in its name
   // must not catch it, so these run before every living family. Ravenfolk is
@@ -61,9 +64,9 @@ const FAMILY_WORDS: Array<[RegExp, string]> = [
   [/gearforged/, "gearforged"],
   [/chassis|warforged/, "warforged"],
   // Drow castes before the base drow plate.
-  [/delver/, "delver"],
+  [/drow.*delver|delver.*drow/, "delver"],
   [/fever[\s_-]?bit/, "fever-bit"],
-  [/purified/, "purified"],
+  [/drow.*purified|purified.*drow/, "purified"],
   [/drow/, "drow"],
   [/half[\s_-]?elf/, "half-elf"],
   [/half[\s_-]?orc/, "half-orc"],
@@ -71,12 +74,12 @@ const FAMILY_WORDS: Array<[RegExp, string]> = [
   [/deep[\s_-]?gnome|gnome[\s_(-]+deep|svirfneblin/, "deep-gnome"],
   [/rock[\s_-]?gnome|gnome[\s_(-]+rock/, "rock-gnome"],
   [/forest[\s_-]?gnome|gnome[\s_(-]+forest/, "forest-gnome"],
-  [/mountain[\s_-]?dwarf/, "mountain-dwarf"],
+  [/mountain[\s_-]?dwarf|dwarf[\s_(-]+mountain/, "mountain-dwarf"],
   [/dwarf/, "dwarf"],
   [/stoor/, "stoor-halfling"],
   [/stout/, "stout-halfling"],
   [/halfling|lightfoot/, "halfling"],
-  [/wood[\s_-]?elf/, "wood-elf"],
+  [/wood[\s_-]?elf|elf[\s_(-]+wood/, "wood-elf"],
   [/elf/, "elf"],
   [/gnome/, "gnome"],
   [/dragonborn/, "dragonborn"],
@@ -92,12 +95,12 @@ const FAMILY_WORDS: Array<[RegExp, string]> = [
   [/boghaid/, "boghaid"],
   [/minotaur/, "minotaur"],
   [/acid[\s_-]?cap/, "acid-cap"],
-  [/favored/, "favored"],
-  [/morel/, "morel"],
+  [/mushroomfolk.*favored|favored.*mushroomfolk/, "favored"],
+  [/mushroomfolk.*morel|morel.*mushroomfolk/, "morel"],
   [/mushroomfolk/, "mushroomfolk"],
   [/far[\s_-]?touched/, "far-touched"],
-  [/mutated/, "mutated"],
-  [/uncorrupted/, "uncorrupted"],
+  [/derro.*mutated|mutated.*derro/, "mutated"],
+  [/derro.*uncorrupted|uncorrupted.*derro/, "uncorrupted"],
   [/derro/, "derro"],
   [/alseid/, "alseid"],
   [/erina/, "erina"],
@@ -115,6 +118,14 @@ const FAMILY_WORDS: Array<[RegExp, string]> = [
   [/goblin/, "goblin"],
   [/lizardfolk/, "lizardfolk"],
   [/human/, "human"],
+  // The castes named with ordinary words, alone: only a lineage no other
+  // family word caught borrows one of these plates.
+  [/delver/, "delver"],
+  [/purified/, "purified"],
+  [/favored/, "favored"],
+  [/morel/, "morel"],
+  [/mutated/, "mutated"],
+  [/uncorrupted/, "uncorrupted"],
 ];
 
 export function lineageFamily(raceId: string, name = ""): string | null {

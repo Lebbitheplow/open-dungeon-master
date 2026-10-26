@@ -282,6 +282,30 @@ test("heritage and chassis names win over the living race's word", () => {
   assert.equal(lineageFamily("x", "Minotaur (Bhain Kwai)"), "bhain-kwai");
 });
 
+// A subrace under an id the tables do not know (a workshop copy, a pack's
+// renamed row) still finds its own plate by its card name, "Parent (Sub)" or
+// "Sub Parent", and by the bare caste name.
+test("a subrace's own plate by its card name, and ordinary words do not steal a lineage", () => {
+  const byName = {
+    "Elf (Wood)": "wood-elf", "Elf (High)": "elf", "Dwarf (Mountain)": "mountain-dwarf", "Dwarf (Hill)": "dwarf",
+    "Halfling (Stoor)": "stoor-halfling", "Halfling (Stout)": "stout-halfling", "Halfling (Lightfoot)": "halfling",
+    "Drow (Delver)": "delver", "Drow (Purified)": "purified", "Delver Drow": "delver",
+    "Derro (Far-Touched)": "far-touched", "Derro (Mutated)": "mutated", "Derro (Uncorrupted)": "uncorrupted",
+    "Mushroomfolk (Acid Cap)": "acid-cap", "Mushroomfolk (Favored)": "favored", "Mushroomfolk (Morel)": "morel",
+    "Minotaur (Boghaid)": "boghaid", Gearforged: "gearforged", "Gearforged (Human Chassis)": "warforged",
+    Delver: "delver", Purified: "purified", Mutated: "mutated", Uncorrupted: "uncorrupted", Favored: "favored", Morel: "morel",
+  };
+  for (const [name, family] of Object.entries(byName)) {
+    assert.equal(lineageFamily("homebrew-1", name), family, name);
+  }
+  // A homebrew people named with one of those words is still its people.
+  assert.equal(lineageFamily("homebrew-1", "Mutated Human"), "human");
+  assert.equal(lineageFamily("homebrew-1", "Storm-Favored Human"), "human");
+  assert.equal(lineageFamily("homebrew-1", "Purified Tiefling"), "tiefling");
+  assert.equal(lineageFamily("homebrew-1", "Deep Delver Dwarf"), "dwarf");
+  assert.equal(lineageFamily("homebrew-1", "Uncorrupted Goblin"), "goblin");
+});
+
 test("every class card has a plate that exists, and a neutral look still shows the class", () => {
   const ids = [...SRD_CLASSES.map((klass) => klass.id), ...CUSTOM_CLASSES.map((klass) => klass.id)];
   assert.ok(ids.length > 40);

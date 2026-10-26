@@ -311,7 +311,7 @@
     "app/characters/builder/door.ts#str-key": [["key",1,"UI: ids, fixed choices, stored values"]],
     "app/characters/builder/heroNames.ts#str-key": [["key",1,"race family ids"]],
     "app/characters/builder/heroNames.ts#str-list": [["english-source",16,"the builder's own suggested names (UI copy, not a reader)"]],
-    "app/characters/builder/lineage.ts#re-word": [["english-source",73,"reference: SRD and content-pack race names found in a lineage's id and name, to pick its art family (a new species has none)"],["table-language",5,"meaning reader: language, cantrip, skill and tool read in a lineage's trait lines (bundled races, and a homebrew species' traits) to show which choice a line asks for"]],
+    "app/characters/builder/lineage.ts#re-word": [["english-source",79,"reference: SRD and content-pack race names found in a lineage's id and name, to pick its art family (a new species has none)"],["table-language",5,"meaning reader: language, cantrip, skill and tool read in a lineage's trait lines (bundled races, and a homebrew species' traits) to show which choice a line asks for"]],
     "app/characters/builder/lineage.ts#toLowerCase": [["english-source",1,"reference: SRD and content-pack race names found in a lineage's id and name, to pick its art family (a new species has none)"]],
     "app/characters/builder/lineage.ts#toUpperCase": [["display",3,"ability abbreviation, capitalised text"]],
     "app/characters/builder/owed.ts#str-list": [["key",1,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
