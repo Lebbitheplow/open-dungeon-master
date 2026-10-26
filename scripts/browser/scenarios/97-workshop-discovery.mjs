@@ -47,6 +47,7 @@ export default {
     await t.tap(chooser.locator('[data-testid="create-choice-shop"]'));
     const lands = (await chooser.locator('[data-testid="create-lands"]').innerText()).trim();
     check(/Lore/.test(lands) && /Market/.test(lands), `a shop says it lands in Lore's Market (${lands})`);
+    await t.shot("create-shop");
     await t.tap(chooser.locator('[data-testid="create-step"]', { hasText: "Open a shop" }));
     await eventually(async () => (await params()).get("system") === "lore", { timeoutMs: 20_000, label: "the Lore tool" });
     await eventually(() => shopName().isVisible(), { timeoutMs: 20_000, label: "the Market's form, opened" });
