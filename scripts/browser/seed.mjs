@@ -534,6 +534,102 @@ const marketSecond = sheets.createSheet(marketTable.id, world.owner.id, 3, heroI
   updateShop(forge.id, { haggles: [{ ids: [marketSecond.id], steps: 2, skill: "intimidation" }] });
 }
 
+// Issue 548: a made-up world seventeen places in, the way an AI DM left it
+// before a place could be part of another (the names are the issue's own):
+// every approach and room its own place, each anchored the way the old
+// placement put it (reproduced below, 4 to 7 tiles from the first of its
+// routes already drawn, then the first free tile in ring order), and the
+// routes a web between them, then upgraded the way an old database is (its
+// places filed once by name). One table per viewport: the region-map
+// scenario files places on it.
+const REGION_TITLE = "Region Table";
+const REGION_PLACES = [
+  ["Thornhollow Village Hall", ["Thornhollow Fair"]],
+  ["Thornhollow Fair", ["Thornhollow Village Hall", "Thornhollow Village Hall Approach", "Thornhollow Smithy", "Thornhollow Road"]],
+  ["Thornhollow Village Hall Approach", ["Thornhollow Village Hall", "Thornhollow Fair"]],
+  ["Thornhollow Smithy", ["Thornhollow Fair", "Thornhollow Road"]],
+  ["Thornhollow Road", ["Thornhollow Fair", "Thornhollow Smithy", "Duskleaf Road", "Duskleaf Shrine"]],
+  ["Duskleaf Road", ["Thornhollow Road", "Duskleaf Shrine"]],
+  ["Duskleaf Shrine", ["Duskleaf Road", "Duskleaf Shrine Root Cellar", "Briarwatch Provisioning Road", "Thornhollow Road"]],
+  ["Duskleaf Shrine Root Cellar", ["Duskleaf Shrine"]],
+  ["Briarwatch Provisioning Road", ["Duskleaf Shrine", "Briarwatch Tower", "Hollowroot Survey Trail"]],
+  ["Briarwatch Tower", ["Briarwatch Provisioning Road", "Hollowroot Vault Woodland Approach"]],
+  ["Hollowroot Survey Trail", ["Briarwatch Provisioning Road", "Second Hollowroot Waystone Woodland Flank", "Hollowroot Vault Woodland Approach"]],
+  ["Second Hollowroot Waystone Woodland Flank", ["Hollowroot Survey Trail", "Second Hollowroot Waystone Bend"]],
+  ["Second Hollowroot Waystone Bend", ["Second Hollowroot Waystone Woodland Flank", "Third Hollowroot Waystone Approach", "First Hollowroot Waystone Approach"]],
+  ["Third Hollowroot Waystone Approach", ["Second Hollowroot Waystone Bend"]],
+  ["First Hollowroot Waystone Approach", ["Second Hollowroot Waystone Bend", "Hollowroot Vault Woodland Approach"]],
+  ["Hollowroot Vault Woodland Approach", ["First Hollowroot Waystone Approach", "Hollowroot Vault Entrance Passage", "Briarwatch Tower", "Hollowroot Survey Trail"]],
+  ["Hollowroot Vault Entrance Passage", ["Hollowroot Vault Woodland Approach"]],
+];
+const regionTables = {};
+{
+  const { upsertCurrentLocation, listLocations } = await import("../../src/lib/db/locations.ts");
+  const { regenerateOverworld } = await import("../../src/lib/db/overworld.ts");
+  const { fnv1a, mulberry32, tileAt } = await import("../../src/lib/overworld/logic.ts");
+  const { textKey } = await import("../../src/lib/language/text-logic.ts");
+  const { fileSubAreasByName } = await import("../../src/lib/db/place-parents-backfill.ts");
+  const oldPlacement = (terrain, width, height, existing, connected, name) => {
+    const rng = mulberry32(fnv1a(textKey(name)));
+    let start;
+    if (connected) {
+      const angle = rng() * Math.PI * 2;
+      const distance = 4 + rng() * 3;
+      start = { x: Math.round(connected.x + Math.cos(angle) * distance), y: Math.round(connected.y + Math.sin(angle) * distance) };
+    } else if (existing.length) {
+      const anchor = existing[existing.length - 1];
+      const angle = rng() * Math.PI * 2;
+      start = { x: Math.round(anchor.x + Math.cos(angle) * 6), y: Math.round(anchor.y + Math.sin(angle) * 6) };
+    } else {
+      start = { x: Math.floor(width / 2), y: Math.floor(height / 2) };
+    }
+    const clamp = (point) => ({ x: Math.min(width - 3, Math.max(2, point.x)), y: Math.min(height - 3, Math.max(2, point.y)) });
+    const usable = (point) =>
+      !["w", "m"].includes(tileAt(terrain, width, point.x, point.y)) &&
+      !existing.some((anchor) => Math.abs(anchor.x - point.x) <= 1 && Math.abs(anchor.y - point.y) <= 1);
+    if (usable(clamp(start))) return clamp(start);
+    for (let radius = 1; radius < Math.max(width, height); radius += 1) {
+      for (let dy = -radius; dy <= radius; dy += 1) {
+        for (let dx = -radius; dx <= radius; dx += 1) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) === radius && usable(clamp({ x: start.x + dx, y: start.y + dy }))) {
+            return clamp({ x: start.x + dx, y: start.y + dy });
+          }
+        }
+      }
+    }
+    return clamp(start);
+  };
+  for (const viewport of ["desktop", "phone"]) {
+    const table = campaigns.createCampaign(world.owner.id, {
+      title: `${REGION_TITLE} (${viewport})`,
+      description: "Seventeen places of a made-up world.",
+      theme: "high-fantasy",
+      maxPlayers: 4,
+      startingLevel: 3,
+      difficulty: "normal",
+      gameSettings: { ttsEnabled: false },
+    });
+    campaigns.setCampaignStatus(table.id, "active");
+    sheets.createSheet(table.id, world.owner.id, 3, heroInput({ name: "Rook Vale", class: "ranger", level: 3 }));
+    for (const [name, connections] of REGION_PLACES) {
+      upsertCurrentLocation({ campaignId: table.id, name, layoutDescription: `${name}, as the party found it.`, connections });
+    }
+    const map = regenerateOverworld(table.id, { seed: 548 });
+    const byName = new Map(listLocations(table.id).map((place) => [textKey(place.name), place]));
+    const anchors = {};
+    for (const [name, connections] of REGION_PLACES) {
+      const connected = connections.map((other) => anchors[byName.get(textKey(other))?.id]).find(Boolean) ?? null;
+      anchors[byName.get(textKey(name)).id] = oldPlacement(map.terrain, map.width, map.height, Object.values(anchors), connected, name);
+    }
+    getDatabase().prepare(`UPDATE overworld_maps SET anchors_json = ? WHERE campaign_id = ?`).run(JSON.stringify(anchors), table.id);
+    // The table as an old database brings it: nothing filed, then the
+    // upgrade's one pass by name.
+    getDatabase().prepare(`UPDATE locations SET parent_name = NULL WHERE campaign_id = ?`).run(table.id);
+    fileSubAreasByName(getDatabase(), table.id);
+    regionTables[viewport] = table.id;
+  }
+}
+
 for (const user of [world.owner, player, ...tourAccounts]) {
   setUserPassword(user.id, await hashPassword(PASSWORD), false);
 }
@@ -1620,6 +1716,8 @@ const ids = {
   conduct,
   pacts: pactTables,
   pip: pip.id,
+  // Issue 548's made-up world, one table per viewport.
+  regionTables,
   // Every campaign a scenario opens, by id, for the app's home tiles.
   titles: {
     [levelTable.id]: "Level Table",
@@ -1638,6 +1736,7 @@ const ids = {
     [lobby.id]: LOBBY_TITLE,
     [quiet.id]: QUIET_TITLE,
     [marketTable.id]: MARKET_TITLE,
+    ...Object.fromEntries(Object.entries(regionTables).map(([viewport, id]) => [id, `${REGION_TITLE} (${viewport})`])),
     [prepared.id]: PREP_TITLE,
     [tourTable.id]: TOUR_TITLE,
     [prepSource.id]: PREP_SOURCE_TITLE,

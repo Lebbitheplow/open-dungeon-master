@@ -1,4 +1,5 @@
 import { openDatabase, type SqliteDatabase } from "./driver.ts";
+import { fileSubAreasByName } from "./place-parents-backfill.ts";
 import { createHash } from "node:crypto";
 import { mkdirSync, statSync } from "node:fs";
 import path from "node:path";
@@ -1812,12 +1813,24 @@ function ensureSchema(db: SqliteDatabase) {
   addColumns("prepared_maps", [["addon_view_json", `TEXT NOT NULL DEFAULT ''`]]);
   addColumns("battle_maps", [["addon_view_json", `TEXT NOT NULL DEFAULT ''`]]);
 
+  const placesHadParents = (db.prepare(`PRAGMA table_info(locations)`).all() as Array<{ name: string }>).some(
+    (column) => column.name === "parent_name",
+  );
   addColumns("locations", [
     // The prepared map this place stands on, so arriving offers the DM a
     // one-tap deploy, and the sound the place makes.
     ["prepared_map_id", `TEXT`],
     ["ambience_json", `TEXT`],
+    // The bigger place this one is part of, by name as connections are
+    // (issue 548): a name, or NULL or '' for a place of its own ('' when the
+    // DM said so) (src/lib/overworld/places.ts).
+    ["parent_name", `TEXT`],
   ]);
+  // The places already on record are filed once, by their names, as a new
+  // campaign's are when they are made.
+  if (!placesHadParents) {
+    fileSubAreasByName(db);
+  }
 
   addColumns("battle_tokens", [
     // Walking, flying or burrowing (src/lib/battlemap/types.ts). Flying

@@ -611,6 +611,11 @@ const OMITTED_ON_PURPOSE = {
   // model sets, and a person running the table writes it in the story's
   // own notes rather than in a console form.
   add_companion: ["values", "agenda"],
+  // Where a place sits in the region (issue 548). A person files an area
+  // under a bigger place from that area's menu on the Map tab, and puts a
+  // new place where it belongs by dragging it on the region map; the model
+  // has neither, so only it says these on the call.
+  move_party: ["partOf", "direction", "distance"],
 };
 
 function formOmissions(entry) {

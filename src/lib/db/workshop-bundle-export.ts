@@ -134,7 +134,7 @@ export const BUNDLE_COLUMNS: Record<string, { carried: string[]; left: Record<st
     left: { ...IDENTITY, created_by_user_id: "the importer", cued: "a lead's cue is the source table's play" },
   },
   locations: {
-    carried: ["name", "layout_description", "connections_json", "prepared_map_id", "ambience_json"],
+    carried: ["name", "layout_description", "connections_json", "prepared_map_id", "ambience_json", "parent_name"],
     left: { ...IDENTITY, visited: "play", is_current: "play", map_image_json: "a legacy column nothing reads" },
   },
   npcs: {
@@ -370,6 +370,7 @@ export function exportWorkshopBundle(
       connections: parseJson<string[]>(str(row.connections_json, "[]"), []),
       map: at(mapIndex, row.prepared_map_id),
       ambience: row.ambience_json ? parseJson<Record<string, unknown> | null>(str(row.ambience_json), null) : null,
+      partOf: typeof row.parent_name === "string" ? row.parent_name : null,
       ref: refFor(row.home, "locations", str(row.id)),
       shared: row.home !== workshopId,
     })),

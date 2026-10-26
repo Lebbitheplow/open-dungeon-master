@@ -85,14 +85,19 @@ export function remapImportedRefs(input: {
     if (changed) db.prepare(`UPDATE roll_tables SET entries_json = ? WHERE id = ?`).run(JSON.stringify(entries), id);
   }
 
-  // Places: the places a path leads to.
+  // Places: the places a path leads to, and the bigger place each is part of
+  // (issue 548), both by name.
   for (const id of written("locations")) {
-    const row = db.prepare(`SELECT connections_json FROM locations WHERE id = ?`).get(id) as { connections_json: string } | undefined;
+    const row = db.prepare(`SELECT connections_json, parent_name FROM locations WHERE id = ?`).get(id) as { connections_json: string; parent_name: string | null } | undefined;
     if (!row) continue;
     const connections = parseJson<unknown[]>(row.connections_json, []);
     const next = connections.map((name) => (typeof name === "string" ? (names.locations.get(textKey(name)) ?? name) : name));
     if (next.some((name, index) => name !== connections[index])) {
       db.prepare(`UPDATE locations SET connections_json = ? WHERE id = ?`).run(JSON.stringify(next), id);
+    }
+    const parent = row.parent_name ? (names.locations.get(textKey(row.parent_name)) ?? row.parent_name) : row.parent_name;
+    if (parent !== row.parent_name) {
+      db.prepare(`UPDATE locations SET parent_name = ? WHERE id = ?`).run(parent, id);
     }
   }
 

@@ -333,8 +333,8 @@ function writeBundleRows(
       db.prepare(
         `INSERT INTO locations
            (id, campaign_id, name, layout_description, connections_json, visited, is_current,
-            prepared_map_id, ambience_json, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?)`,
+            prepared_map_id, ambience_json, parent_name, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?)`,
       ).run(
         id,
         workshop.id,
@@ -343,6 +343,7 @@ function writeBundleRows(
         JSON.stringify(location.connections),
         idAt(ids.maps, location.map),
         location.ambience ? JSON.stringify(normalizeAmbience(location.ambience)) : null,
+        location.partOf ?? null,
         now,
         now,
       );

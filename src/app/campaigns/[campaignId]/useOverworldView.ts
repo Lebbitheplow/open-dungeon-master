@@ -9,7 +9,9 @@ import { useCallback, useEffect, useRef, useState, type PointerEvent, type RefOb
 
 export type MapView = { x: number; y: number; zoom: number };
 
-const ZOOM = { min: 0.4, max: 4 };
+// Down to where a phone shows the whole of a large region, up to where a
+// tile is a thumb wide.
+const ZOOM = { min: 0.15, max: 4 };
 
 export function useOverworldView(canvasRef: RefObject<HTMLCanvasElement | null>, ready: boolean) {
   const [view, setView] = useState<MapView>({ x: 0, y: 0, zoom: 1 });
@@ -51,18 +53,30 @@ export function useOverworldView(canvasRef: RefObject<HTMLCanvasElement | null>,
   // Fits the whole map into the canvas: on the first draw, and again when
   // the map changed size under the view (a reroll at another size, an
   // import), because a view fitted to the old grid shows a corner of the
-  // new one.
+  // new one. The view is in CSS pixels, the ones a pointer reports; the
+  // panel draws at the screen's own density underneath (OverworldPanel).
+  // `focus`, in map pixels, is the part to frame instead of the whole: where
+  // the places are.
   const fit = useCallback(
-    (canvas: HTMLCanvasElement, mapWidth: number, mapHeight: number, force = false) => {
+    (
+      canvas: HTMLCanvasElement,
+      mapWidth: number,
+      mapHeight: number,
+      force = false,
+      focus: { x: number; y: number; width: number; height: number } | null = null,
+    ) => {
+      const width = canvas.clientWidth;
+      const height = canvas.clientHeight;
+      const frame = focus ?? { x: 0, y: 0, width: mapWidth, height: mapHeight };
       setView((current) => {
         if (!force && (current.x || current.y)) {
           return current;
         }
-        const zoom = Math.min(canvas.width / mapWidth, canvas.height / mapHeight);
+        const zoom = Math.min(ZOOM.max, width / frame.width, height / frame.height);
         return {
           zoom,
-          x: (canvas.width - mapWidth * zoom) / 2,
-          y: (canvas.height - mapHeight * zoom) / 2,
+          x: width / 2 - (frame.x + frame.width / 2) * zoom,
+          y: height / 2 - (frame.y + frame.height / 2) * zoom,
         };
       });
     },
@@ -142,8 +156,8 @@ export function useOverworldView(canvasRef: RefObject<HTMLCanvasElement | null>,
       if (!canvas) {
         return;
       }
-      const centreX = canvas.width / 2;
-      const centreY = canvas.height / 2;
+      const centreX = canvas.clientWidth / 2;
+      const centreY = canvas.clientHeight / 2;
       setView((current) => {
         const zoom = Math.min(ZOOM.max, Math.max(ZOOM.min, current.zoom * factor));
         const scale = zoom / current.zoom;

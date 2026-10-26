@@ -161,6 +161,9 @@ export type CampaignLocation = {
   mapPending?: boolean;
   // The place's ambience bed and music, which name its kind of scene.
   ambience: { bed: string; music: string } | null;
+  // The bigger place it is part of (src/lib/db/locations.ts); absent from
+  // an older server.
+  parentName?: string | null;
   updatedAt: string;
 };
 
