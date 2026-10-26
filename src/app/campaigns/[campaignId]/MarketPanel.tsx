@@ -468,7 +468,6 @@ export function MarketPanel({
                   {shop.kind}
                   {shop.keeperName ? `, kept by ${shop.keeperName}` : ""}
                   {steersStory && shop.locationName ? ` at ${shop.locationName}` : ""}
-                  {shop.standsHere === false ? ", not where the party is now" : ""}
                   {shop.yourMarkup !== 1 ? ` (prices ${shop.yourMarkup > 1 ? "+" : ""}${Math.round((shop.yourMarkup - 1) * 100)}%)` : ""}
                   {shop.kind === "curiosities" || shop.kind === "apothecary" ? (
                     <>
@@ -512,6 +511,12 @@ export function MarketPanel({
                 Haggling is a Persuasion check against DC {shop.haggleDc}: win and your prices drop a step, fail and they stay where they were, fail by 5 or
                 more and they rise a step. One try each, and the price you get is yours, not the whole party&apos;s. The menu beside Haggle offers
                 Intimidation and Deception instead.
+              </p>
+            ) : mySheet && shop.standsHere === false ? (
+              <p data-shop-away="" className="text-pretty text-[11px] leading-snug text-stone-500">
+                {shop.locationName
+                  ? `The party is not at ${shop.locationName}. Its shelf is for looking until they get there.`
+                  : "This shop has no place yet. Its shelf is for looking until it opens where the party is."}
               </p>
             ) : mySheet && shop.yourHaggle !== null ? (
               <p data-haggle-rules="" className="text-[11px] leading-snug text-stone-500">

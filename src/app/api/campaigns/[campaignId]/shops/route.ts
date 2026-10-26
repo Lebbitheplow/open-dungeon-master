@@ -54,8 +54,11 @@ export async function GET(_request: Request, { params }: { params: Promise<{ cam
   return Response.json({
     // standsHere: whether the shop is where the party is now, which is where
     // its counter trades (the trade route asks the same). Only a viewer who
-    // steers the story is shown a shop elsewhere, to prep it.
-    shops: shops.map((shop) => ({ ...shopView(shop, prep, viewerId), standsHere: shopStandsAt(shop, here) })),
+    // steers the story is shown a shop elsewhere, to prep it, and the shops
+    // the party can reach come first.
+    shops: shops
+      .map((shop) => ({ ...shopView(shop, prep, viewerId), standsHere: shopStandsAt(shop, here) }))
+      .sort((a, b) => Number(b.standsHere) - Number(a.standsHere)),
     here: here ? { id: here.id, name: here.name } : null,
     places: dm ? listLocations(campaignId).map((location) => ({ id: location.id, name: location.name })) : [],
     // Who may keep a shop: the cast, for the prep holder's editor.

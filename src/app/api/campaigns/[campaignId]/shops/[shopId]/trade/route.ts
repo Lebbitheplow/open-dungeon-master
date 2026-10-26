@@ -68,7 +68,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ cam
     if (result.unpriced === true) {
       return Response.json({ error: "The shopkeeper will name a price.", unpriced: true }, { status: 409 });
     }
-    return Response.json({ error: String(result.error) }, { status: 409 });
+    // away: the shop stands where the party is not, so the panel keeps its
+    // shelf on view and offers no counter.
+    return Response.json({ error: String(result.error), ...(result.away === true ? { away: true } : {}) }, { status: 409 });
   }
   return Response.json({ result });
 }

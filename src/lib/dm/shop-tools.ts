@@ -394,16 +394,19 @@ export type TradeAt = { atCounter?: boolean };
 
 // The shop is not where the party stands now, by the rule the Market lists
 // by, so a stale panel or a kept shop id cannot skip the travel there.
-function shopElsewhere(campaign: Campaign, shop: Shop, nothing: string): ToolError | null {
+// away marks it for the trade route, which tells the panel.
+function shopElsewhere(campaign: Campaign, shop: Shop, nothing: string): (ToolError & { away: true }) | null {
   const here = getCurrentLocation(campaign.id);
   if (shopStandsAt(shop, here)) {
     return null;
   }
+  const stands = shop.locationName.trim() ? ` It stands at ${shop.locationName.trim()}.` : "";
   return {
     error: here
-      ? `${shop.name} is not at ${here.name}, where the party is now, so its counter is out of reach. ${nothing}`
-      : `${shop.name} is not where the party is now, so its counter is out of reach. ${nothing}`,
+      ? `${shop.name} is not at ${here.name}, where the party is now, so its counter is out of reach.${stands} ${nothing}`
+      : `${shop.name} is not where the party is now, so its counter is out of reach.${stands} ${nothing}`,
     refused: "rules",
+    away: true,
   };
 }
 
