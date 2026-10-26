@@ -42,6 +42,12 @@ async function waitFor(url, { timeoutMs, label }) {
 
 // The production server (`next start`) on the built tree, against the seeded
 // database. The build must exist already: CI builds before it runs this.
+// A settings file that is not there, beside the run's database, for
+// ODM_ENV_FILE (src/lib/server-env.ts): the seed and the server read none.
+export function noEnvFile(dbPath) {
+  return path.join(path.dirname(dbPath), "no-env-server");
+}
+
 export async function startServer({ tree, dbPath, key, port, log }) {
   const nextBin = path.join(tree, "node_modules", "next", "dist", "bin", "next");
   const env = {
@@ -65,6 +71,10 @@ export async function startServer({ tree, dbPath, key, port, log }) {
     // scenario that dictates stands in the device's own recognizer, the same
     // here as on CI.
     STT_URL: "off",
+    // Nor this machine's .env.server (its models, utility models and keys):
+    // an empty value above falls back to that file, so OPENAI_API_KEY ""
+    // could not keep a key out. The server reads no file at all.
+    ODM_ENV_FILE: noEnvFile(dbPath),
   };
   const out = fs.openSync(log, "a");
   const child = spawn(process.execPath, [nextBin, "start", "-H", "127.0.0.1", "-p", String(port)], {

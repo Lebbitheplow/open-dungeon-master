@@ -15,6 +15,7 @@ import type { CustomClass, CustomFeatureTable } from "@/lib/classes";
 import type { Ability } from "@/lib/schemas/sheet";
 import { ALL_SKILLS } from "@/lib/content/mechanics";
 import { textKey } from "@/lib/language/text-logic";
+import { HOMEBREW_DESC_MAX } from "@/lib/schemas/homebrew";
 
 export type ClassFeatureRow = { n: string; d: string };
 
@@ -66,9 +67,21 @@ export const LIST_ABILITY: Record<(typeof SPELL_LISTS)[number], "int" | "wis" | 
 export const ASI_LEVELS = [4, 8, 12, 16, 19];
 export const ASI_FEATURE = "Ability Score Improvement";
 
-const MAX_FEATURES_PER_LEVEL = 8;
-const MAX_NAME = 80;
-const MAX_TEXT = 1500;
+// What a class or a subclass keeps: features at a level, and each feature's
+// name and words. A save over any of them is refused by name
+// (src/lib/homebrew/limits.ts) rather than cut here, so these are the one
+// place the numbers live; the editor, the routes and the normalizers read them.
+export const FEATURE_LIMITS = { perLevel: 8, name: 80, text: 1500 } as const;
+export const CLASS_LIST_LIMITS = { tools: 8, weapons: 24 } as const;
+// A subclass's always-prepared spells at one class level (a domain's five).
+export const SUBCLASS_SPELLS_PER_LEVEL = 6;
+
+// A level key as the stored tables read it: "3" and "3.0" are both level 3,
+// and a level outside the game is none.
+export function levelOfKey(key: string): number | null {
+  const level = Math.floor(Number(key));
+  return key.trim() && Number.isFinite(level) && level >= 1 && level <= 20 ? level : null;
+}
 
 // The id a workshop class is known by on a sheet and in every table: its
 // entry's own id, so two people's "Spellblade" never meet.
@@ -126,30 +139,30 @@ export function normalizeClassData(raw: Record<string, unknown>): { data: Worksh
   const spellAbility = casterType === "none" ? null : oneOf(raw.spellAbility, ["int", "wis", "cha"] as const, LIST_ABILITY[spellListFrom ?? "wizard"]);
   const levels: Record<string, ClassFeatureRow[]> = {};
   for (const [key, rows] of Object.entries((raw.levels ?? {}) as Record<string, unknown>)) {
-    const level = Math.floor(Number(key));
-    if (!Number.isFinite(level) || level < 1 || level > 20 || !Array.isArray(rows)) {
+    const level = levelOfKey(key);
+    if (level === null || !Array.isArray(rows)) {
       continue;
     }
     const kept = rows
       .map((row) => ({
-        n: String((row as ClassFeatureRow)?.n ?? "").trim().slice(0, MAX_NAME),
-        d: String((row as ClassFeatureRow)?.d ?? "").trim().slice(0, MAX_TEXT),
+        n: String((row as ClassFeatureRow)?.n ?? "").trim().slice(0, FEATURE_LIMITS.name),
+        d: String((row as ClassFeatureRow)?.d ?? "").trim().slice(0, FEATURE_LIMITS.text),
       }))
       .filter((row) => row.n);
     if (kept.length) {
-      levels[String(level)] = [...(levels[String(level)] ?? []), ...kept].slice(0, MAX_FEATURES_PER_LEVEL);
+      levels[String(level)] = [...(levels[String(level)] ?? []), ...kept].slice(0, FEATURE_LIMITS.perLevel);
     }
   }
   return {
     data: {
-      desc: String(raw.desc ?? "").slice(0, 8_000),
+      desc: String(raw.desc ?? "").slice(0, HOMEBREW_DESC_MAX),
       hitDie: oneOf(Number(raw.hitDie), HIT_DICE, blank.hitDie),
       saves,
       skillChoices: { count, from },
       armor: stringList(raw.armor, ARMOR_TERMS.length).filter((entry) => ARMOR_TERMS.includes(entry)),
       // A category or a weapon by name ("simple", "longsword").
-      weapons: stringList(raw.weapons, 24),
-      tools: stringList(raw.tools, 8),
+      weapons: stringList(raw.weapons, CLASS_LIST_LIMITS.weapons),
+      tools: stringList(raw.tools, CLASS_LIST_LIMITS.tools),
       casterType,
       spellAbility,
       spellListFrom,

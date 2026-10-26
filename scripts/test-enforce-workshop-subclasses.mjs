@@ -157,7 +157,7 @@ await test("The server accepts a level 3 Spellblade's spells and hands it a thir
     subclassExtras: extrasNow(),
     abilities: { str: 16, dex: 10, con: 14, int: 14, wis: 10, cha: 8 },
     spellOf: (name) => spellFactsFor(name, tableAuthors(world.campaignId)),
-    racialCantrip: null,
+    racialCantrips: [],
     judgeLists: true,
   });
   assert.deepEqual(verdict.problems, []);
@@ -192,7 +192,7 @@ await test("A homebrew domain's always-prepared spells are free at the table: le
     subclassExtras: extrasNow(),
     abilities: { str: 10, dex: 10, con: 14, int: 10, wis: 16, cha: 10 },
     spellOf: (name) => spellFactsFor(name, tableAuthors(world.campaignId)),
-    racialCantrip: null,
+    racialCantrips: [],
     judgeLists: true,
   });
   assert.deepEqual(verdict.problems.filter((problem) => /Burning Hands|Faerie Fire/.test(problem)), []);
@@ -239,7 +239,7 @@ await test("A barbarian's workshop subclass casts by the Arcane Trickster's rule
       subclassExtras: extrasNow(),
       abilities: { str: 16, dex: 12, con: 14, int: 14, wis: 10, cha: 8 },
       spellOf: (name) => spellFactsFor(name, tableAuthors(world.campaignId)),
-      racialCantrip: null,
+      racialCantrips: [],
       judgeLists: true,
     });
   const fine = judge(["Sleep", "Charm Person", "Disguise Self"], ["Mage Hand", "Minor Illusion", "Friends"]);
@@ -317,7 +317,7 @@ await test("A content-pack third caster casts by its own rules: a Soulspy rogue 
     subclassExtras: { rogue: [table] },
     abilities: { str: 10, dex: 16, con: 12, int: 10, wis: 14, cha: 8 },
     spellOf: (name) => spellFactsFor(name, tableAuthors(world.campaignId)),
-    racialCantrip: null,
+    racialCantrips: [],
     judgeLists: true,
   });
   assert.deepEqual(verdict.problems, []);

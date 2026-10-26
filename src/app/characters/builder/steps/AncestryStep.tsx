@@ -277,8 +277,8 @@ export function AncestryStep({
               return next;
             })
           }
-          cantrip={state.racialCantrip}
-          onCantripChange={state.setRacialCantrip}
+          cantrips={state.racialCantrips}
+          onCantripsChange={state.setRacialCantrips}
           tool={state.racialTool}
           onToolChange={state.setRacialTool}
           ancestry={state.racialAncestry}

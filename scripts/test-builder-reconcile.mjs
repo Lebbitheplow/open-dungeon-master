@@ -41,7 +41,7 @@ const klass = (id) => classes.find((entry) => entry.id === id);
 const background = (id) => backgrounds.find((entry) => entry.id === id);
 
 const empty = {
-  chosenSkills: [], racialSkills: [], racialAsi: [], racialCantrip: "", racialTool: "",
+  chosenSkills: [], racialSkills: [], racialAsi: [], racialCantrips: [], racialTool: "",
   bonusLanguages: [], subclass: "", expertisePicks: [], stylePicks: [], optionPicks: [],
   spells: [], bookPrepared: [], cantrips: [],
 };
@@ -81,7 +81,7 @@ test("every dropped pick names the block it is made on again, so a notice can go
   // Every kind of pick has a target: a sheet with one of each, under a
   // class and race that offer none of them, drops them all.
   const everything = {
-    chosenSkills: ["stealth"], racialSkills: ["arcana"], racialAsi: ["str"], racialCantrip: "Light", racialTool: "smith's tools",
+    chosenSkills: ["stealth"], racialSkills: ["arcana"], racialAsi: ["str"], racialCantrips: ["Light"], racialTool: "smith's tools",
     backgroundSkills: ["insight"], bonusLanguages: ["Elvish"], subclass: "Champion", expertisePicks: ["stealth"],
     stylePicks: ["defense"], optionPicks: ["Maneuver: Riposte"], spells: ["Fireball"], bookPrepared: ["Fireball"], cantrips: ["Fire Bolt"],
   };
@@ -168,16 +168,16 @@ test("a non-caster keeps no spells, and a level 1 paladin no cantrips", () => {
 });
 
 test("racial choices belong to the race that offers them", () => {
-  const before = { ...empty, racialSkills: ["perception", "stealth"], racialAsi: ["str", "dex"], racialTool: "smith's tools", racialCantrip: "Fire Bolt" };
+  const before = { ...empty, racialSkills: ["perception", "stealth"], racialAsi: ["str", "dex"], racialTool: "smith's tools", racialCantrips: ["Fire Bolt"] };
   const halfElf = reconcilePicks(before, { race: race("half_elf"), klass: klass("fighter"), background: background("soldier"), level: 1 });
   assert.deepEqual(halfElf.picks.racialSkills, ["perception", "stealth"]);
   assert.deepEqual(halfElf.picks.racialAsi, ["str", "dex"]);
   assert.equal(halfElf.picks.racialTool, "");
-  assert.equal(halfElf.picks.racialCantrip, "");
+  assert.deepEqual(halfElf.picks.racialCantrips, []);
   const highElf = reconcilePicks(before, { race: race("high_elf"), klass: klass("fighter"), background: background("soldier"), level: 1 });
   assert.deepEqual(highElf.picks.racialSkills, []);
   assert.deepEqual(highElf.picks.racialAsi, []);
-  assert.equal(highElf.picks.racialCantrip, "Fire Bolt");
+  assert.deepEqual(highElf.picks.racialCantrips, ["Fire Bolt"]);
   const hillDwarf = reconcilePicks(before, { race: race("hill_dwarf"), klass: klass("fighter"), background: background("soldier"), level: 1 });
   assert.equal(hillDwarf.picks.racialTool, "smith's tools");
 });

@@ -10,7 +10,7 @@ import { GameIcon } from "@/components/ui/GameIcon";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { Slider } from "@/components/ui/Slider";
 import { LoreImageField } from "@/app/workshop/lore/LoreFields";
-import { GlyphChip, KitButton, LoadFailed, PanelLoading, panelField, panelRow } from "./PanelKit";
+import { GlyphChip, KitButton, LoadFailed, PanelError, PanelLoading, panelField, panelRow } from "./PanelKit";
 import { WorldEntryLink, useOpenOnArrival } from "@/app/workshop/world/WorldEntryLink";
 import { useUnsavedDraft } from "@/app/workshop/unsaved";
 
@@ -26,7 +26,7 @@ function draftOf(faction: FactionView): Draft {
     portraitPath: faction.portraitPath,
   };
 }
-import { readLoad, useLoadStatus } from "@/lib/load-state";
+import { findLostCreate, readLoad, readWrite, useLoadStatus } from "@/lib/load-state";
 import { FACTION_ATTITUDES, REPUTATION_MAX, REPUTATION_MIN, reputationLabel, type FactionAttitude } from "@/lib/dm/faction-logic";
 import { DictateField } from "@/components/DictateField";
 import { appendDictation } from "@/lib/dictation";
@@ -78,6 +78,7 @@ export function FactionsPanel({
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const [draft, setDraft] = useState<Draft>(blank());
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   const [reload, setReload] = useState(0);
   // A refused list is shown in the server's words, never as "no factions
   // yet" (issue 140); the rows stay up when a later read fails.
@@ -100,6 +101,7 @@ export function FactionsPanel({
   }, [campaignId, refreshKey, reload, settle]);
 
   function startEdit(faction: FactionView) {
+    setError("");
     setDraft(draftOf(faction));
     setEditing(faction.id);
   }
@@ -113,21 +115,54 @@ export function FactionsPanel({
 
   useOpenOnArrival(openId, steersStory ? factions : null, startEdit);
 
+  // Every write says what the server refused, or that it was not reached
+  // (WA-05); a refused save used to close nothing and say nothing. With no
+  // answer a change may have landed, so the list is read again, and the
+  // editor keeps the draft.
   async function save() {
     if (!draft.name.trim()) {
       return;
     }
     setBusy(true);
+    setError("");
     try {
       const body = { ...draft, tags: draft.tags.split(",").map((tag) => tag.trim()).filter(Boolean) };
-      const response =
-        editing === "new"
-          ? await fetch(`/api/campaigns/${campaignId}/factions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
-          : await fetch(`/api/campaigns/${campaignId}/factions/${editing}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-      if (response.ok) {
-        setEditing(null);
-        setReload((current) => current + 1);
+      const creating = editing === "new";
+      const sent = await readWrite(
+        fetch(creating ? `/api/campaigns/${campaignId}/factions` : `/api/campaigns/${campaignId}/factions/${editing}`, {
+          method: creating ? "POST" : "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }),
+        "That faction could not be saved.",
+      );
+      if (sent.error !== null) {
+        // A new faction whose answer was lost is looked for first: the
+        // server takes a second one of the same name, so a blind second
+        // press would make two.
+        if (sent.unanswered && creating) {
+          const name = draft.name.trim();
+          const reread = async () =>
+            (await readLoad<{ factions?: FactionView[] }>(fetch(`/api/campaigns/${campaignId}/factions`), "The factions")).payload?.factions ?? null;
+          const found = await findLostCreate(loaded ? factions : null, reread, (faction) => faction.name === name);
+          setReload((current) => current + 1);
+          if (found === "made") {
+            setEditing(null);
+            return;
+          }
+          setError(
+            found === "missing"
+              ? "The server did not answer and the faction is not in the list, so it was not added. Your words are kept; press Add again."
+              : "The server could not be reached, so it is not known yet whether the faction was added. Your words are kept. Check the list before adding it again.",
+          );
+          return;
+        }
+        setError(sent.unanswered ? `${sent.error} The list was read again; check it before saving again.` : sent.error);
+        if (sent.unanswered) setReload((current) => current + 1);
+        return;
       }
+      setEditing(null);
+      setReload((current) => current + 1);
     } finally {
       setBusy(false);
     }
@@ -137,16 +172,23 @@ export function FactionsPanel({
     if (!(await appConfirm(`Take ${faction.name} out of the world?`, { actionLabel: "Take them out", tone: "danger" }))) {
       return;
     }
-    await fetch(`/api/campaigns/${campaignId}/factions/${faction.id}`, { method: "DELETE" });
+    setError("");
+    const sent = await readWrite(fetch(`/api/campaigns/${campaignId}/factions/${faction.id}`, { method: "DELETE" }), "That faction could not be taken out.");
+    setError(sent.error ?? "");
     setReload((current) => current + 1);
   }
 
   async function setStanding(faction: FactionView, standing: number) {
-    await fetch(`/api/campaigns/${campaignId}/factions/${faction.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ standing }),
-    });
+    setError("");
+    const sent = await readWrite(
+      fetch(`/api/campaigns/${campaignId}/factions/${faction.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ standing }),
+      }),
+      "The standing could not be changed.",
+    );
+    setError(sent.error ?? "");
     setReload((current) => current + 1);
   }
 
@@ -163,6 +205,7 @@ export function FactionsPanel({
           steersStory && editing === null ? (
             <KitButton
               onClick={() => {
+                setError("");
                 setDraft(blank());
                 setEditing("new");
               }}
@@ -175,6 +218,7 @@ export function FactionsPanel({
           ) : null
         }
       />
+      {error ? <PanelError>{error}</PanelError> : null}
       {editing !== null ? (
         <div className="panel reveal space-y-1.5 rounded-lg p-2.5">
           <input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} maxLength={80} placeholder="The Reed Court" aria-label="Faction name" className={panelField} />
@@ -203,7 +247,12 @@ export function FactionsPanel({
             <KitButton tone="primary" disabled={busy || !draft.name.trim()} busy={busy} onClick={() => void save()}>
               {editing === "new" ? "Add" : "Save"}
             </KitButton>
-            <KitButton onClick={() => setEditing(null)}>
+            <KitButton
+              onClick={() => {
+                setEditing(null);
+                setError("");
+              }}
+            >
               <X className="size-3.5" /> Cancel
             </KitButton>
             {onWorldEntry && editing !== "new" ? <WorldEntryLink onOpen={() => onWorldEntry(editing)} /> : null}

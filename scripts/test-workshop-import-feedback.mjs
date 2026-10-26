@@ -75,6 +75,25 @@ await test("F03: a successful import says what it brought; nothing chosen asks n
   assert.equal(asked, false);
 });
 
+await test("A workshop whose pregens come with it is sent with nothing ticked, and the note names them", async () => {
+  let sent = null;
+  answering((url, init) => {
+    sent = JSON.parse(init.body);
+    return json(200, { copied: 0, kept: 0, pregensOffered: ["Thessaly"] });
+  });
+  const outcome = await submitContentImport("c1", { ...selection, select: [], offersParty: true });
+  assert.equal(outcome.ok, true);
+  assert.deepEqual(sent.select, []);
+  assert.equal(sent.sourceId, "workshop-1");
+  assert.match(outcome.note, /Offered to players here: Thessaly\./);
+  assert.doesNotMatch(outcome.note, /Brought 0/);
+  // Prep and pregens together say both.
+  answering(() => json(200, { copied: 2, pregensOffered: ["Bram", "Thessaly"] }));
+  const both = await postContentImport("c1", selection);
+  assert.match(both.note, /^Brought 2 items across\./);
+  assert.match(both.note, /Offered to players here: Bram, Thessaly\./);
+});
+
 await test("F03 family: house rules and lore that did not save are returned, and said", async () => {
   answering((url) => (url.endsWith("/rules") ? json(500, {}) : url.endsWith("/lore") ? json(201, {}) : json(404, {})));
   const drafts = [

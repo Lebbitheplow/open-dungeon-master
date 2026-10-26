@@ -19,11 +19,19 @@ export const dynamic = "force-dynamic";
 //
 //   { }                 answer with the pack, for a download
 //   { install: true }   also write it to this server's data/worlds
+//   { revision }        the draft's updatedAt the editor last saved (null
+//                       for a draft never stored); a stored draft changed
+//                       since is refused with 409 (WA-04)
 //
 // Installing is the one admin-only branch, for the reason every world pack
 // install is: it writes a file the whole server serves. The owner of a
 // workshop who is not an admin still gets the file to hand to whoever is.
-const bodySchema = z.object({ install: z.boolean().default(false) });
+//
+// The export reads the stored draft, not the one on the author's screen, so
+// the editor saves first and names the revision that save left. A second tab
+// that saved since would otherwise have its draft downloaded or installed
+// under the first tab's press.
+const bodySchema = z.object({ install: z.boolean().default(false), revision: z.string().nullable().optional() });
 
 export async function POST(
   request: Request,
@@ -36,6 +44,7 @@ export async function POST(
   }
   const parsed = bodySchema.safeParse(await request.json().catch(() => ({})));
   const install = parsed.success && parsed.data.install;
+  const revision = parsed.success ? parsed.data.revision : undefined;
   if (install && !context.user.isAdmin) {
     return Response.json(
       { error: "Only an admin can install a world on this server. Download the file and hand it to one." },
@@ -43,7 +52,13 @@ export async function POST(
     );
   }
 
-  const { draft } = getPackDraft(workshopId, context.workshop.gameSettings.genre);
+  const { draft, updatedAt } = getPackDraft(workshopId, context.workshop.gameSettings.genre);
+  if (revision !== undefined && revision !== updatedAt) {
+    return Response.json(
+      { error: "The draft was changed somewhere else after this page saved it. Reload it, check it, and export again." },
+      { status: 409 },
+    );
+  }
   const check = checkDraft(draft);
   if (check.problems.length) {
     return Response.json({ error: "The pack is not finished.", problems: check.problems }, { status: 400 });

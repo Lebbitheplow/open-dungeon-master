@@ -415,6 +415,12 @@ export const SYSTEM_TOURS: Record<string, TourStep[]> = {
       prepare: "open-lore-editor",
       lazy: true,
     },
+    {
+      id: "market",
+      title: "Shops",
+      body: "Below the entries is the Market. Open a shop, say where it stands and who keeps it, and stock its shelf from the content pack or line by line. A campaign that brings this workshop in gets the shops with their shelves.",
+      anchors: ["market-open"],
+    },
   ]),
   tables: tool([
     {

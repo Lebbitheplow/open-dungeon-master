@@ -19,7 +19,12 @@ const list = read("src/app/workshop/world/EntryList.tsx");
 const css = read("src/app/globals.css");
 
 // The list is still a capped, scrolling flex column (the shape that shrinks).
-assert.match(list, /className="flex max-h-\[60vh\] flex-col[^"]*overflow-y-auto[^"]*"\s+role="listbox"\s+aria-label="Entries"/);
+// It is a listbox only while it has rows: an empty one holds the buttons to
+// make a first entry, and a listbox may hold only options (audit WA-09).
+assert.match(
+  list,
+  /className="flex max-h-\[60vh\] flex-col[^"]*overflow-y-auto[^"]*"\s+role=\{hasRows \? "listbox" : undefined\}\s+aria-label=\{hasRows \? "Entries" : undefined\}/,
+);
 // Each row is a pressable option that refuses to shrink.
 const row = list.match(/role="option"[\s\S]*?className=\{cn\(\s*"([^"]+)"/);
 assert.ok(row, "the entry row's class list");

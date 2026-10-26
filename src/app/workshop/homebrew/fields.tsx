@@ -41,7 +41,9 @@ export function Field({
   const Wrap = glossary || plain ? "div" : "label";
   return (
     <Wrap className={cn("flex min-w-0 flex-col gap-1", className)}>
-      <span className="flex items-center gap-1">
+      {/* With an info button the caption is a finger's height on a phone,
+          so the button's 40 px reach stays off the field below. */}
+      <span className={cn("flex items-center gap-1", glossary && "pointer-coarse:min-h-10")}>
         <FieldLabel>{label}</FieldLabel>
         {glossary ? <OptionGlossary title={glossary.title} entries={glossary.entries} /> : null}
       </span>
@@ -164,12 +166,14 @@ export function CheckField({
   onChange: (checked: boolean) => void;
   hint?: string;
 }) {
+  // A label, so its words take the tap as the switch does: the switch alone
+  // is 24 px tall, the row 40 (audit WA-08).
   return (
-    <div className="flex min-h-10 flex-wrap items-center gap-2 text-sm text-stone-300">
+    <label className="flex min-h-10 flex-wrap items-center gap-2 text-sm text-stone-300">
       <Switch on={checked} onChange={onChange} label={label} />
       {label}
       {hint ? <span className="text-[11px] text-stone-500">{hint}</span> : null}
-    </div>
+    </label>
   );
 }
 
@@ -204,18 +208,23 @@ export function TextArea({
   );
 }
 
-// A word chip that toggles: weapon properties, spell classes.
+// A word chip that toggles: weapon properties, spell classes. With `max`,
+// the chips not picked rest once that many are, and a line says so; the
+// entry keeps no more (src/lib/homebrew/limits.ts).
 export function ToggleChips<T extends string>({
   options,
   selected,
   onChange,
   labels,
+  max,
 }: {
   options: ReadonlyArray<T>;
   selected: ReadonlyArray<string>;
   onChange: (next: T[]) => void;
   labels?: Partial<Record<T, string>>;
+  max?: number;
 }) {
+  const full = max !== undefined && selected.length >= max;
   return (
     <div className={cn("stagger-pop", chipRow)}>
       {options.map((option) => {
@@ -225,6 +234,7 @@ export function ToggleChips<T extends string>({
             key={option}
             type="button"
             aria-pressed={on}
+            disabled={full && !on}
             onClick={() =>
               onChange(
                 on
@@ -238,6 +248,11 @@ export function ToggleChips<T extends string>({
           </button>
         );
       })}
+      {full ? (
+        <p role="status" className="live-in basis-full text-[11px] text-stone-400">
+          {selected.length} of {max} picked, the most it keeps. Untick one to pick another.
+        </p>
+      ) : null}
     </div>
   );
 }

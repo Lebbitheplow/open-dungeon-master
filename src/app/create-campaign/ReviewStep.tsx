@@ -15,6 +15,7 @@ import type { GroupId, StepKey } from "@/app/create-campaign/groups";
 import { coverSheet } from "@/app/create-campaign/cover-sheet";
 import { customRules, narrationSummary, safetySummary } from "@/app/create-campaign/summaries";
 import { featuresOn } from "@/app/create-campaign/table-sheet";
+import { bringsSomething } from "@/app/workshop/ContentImportPicker";
 
 export type EditTarget = { step: Exclude<StepKey, "review">; group?: GroupId };
 
@@ -53,7 +54,7 @@ export function ReviewStep({
   const sheet = coverSheet(draft, gates, selectedPack?.name ?? null);
   const voices = useTtsVoices();
   const rules = customRules(draft);
-  const importing = Boolean(draft.contentImport.sourceId && draft.contentImport.select.length);
+  const importing = bringsSomething(draft.contentImport);
   const storyboardClash = Boolean(prep?.arcComing && importing && gates.aiNarrates && draft.aiStorySetup && !draft.storySetupKept);
   let index = 0;
   const row = (label: string, value: ReactNode, target: EditTarget, options: { gold?: boolean; wrap?: boolean } = {}) => (

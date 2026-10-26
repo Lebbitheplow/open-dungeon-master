@@ -164,10 +164,10 @@ await test("a race's cantrip is not a class cantrip when a stored sheet is read 
   assert.deepEqual(dropped, [], "the race's cantrip leaving the class list is not a dropped pick");
   // The high elf's pick likewise, under whichever name it was chosen.
   const elfWizard = reconcilePicks(
-    { racialCantrip: "Fire Bolt", cantrips: ["Fire Bolt", "Mage Hand", "Prestidigitation"] },
+    { racialCantrips: ["Fire Bolt"], cantrips: ["Fire Bolt", "Mage Hand", "Prestidigitation"] },
     { race: race("high_elf"), klass: klass("wizard"), background: background("sage"), level: 1 },
   );
-  assert.equal(elfWizard.picks.racialCantrip, "Fire Bolt");
+  assert.deepEqual(elfWizard.picks.racialCantrips, ["Fire Bolt"]);
   assert.deepEqual(elfWizard.picks.cantrips, ["Mage Hand", "Prestidigitation"]);
   // A forest gnome bard's Minor Illusion.
   const gnome = reconcilePicks(
@@ -180,7 +180,7 @@ await test("a race's cantrip is not a class cantrip when a stored sheet is read 
 await test("each step blocker names the block that holds the missing pick (issue 117)", () => {
   const state = {
     name: "", backgroundSkills: [], bonusLanguages: [], racialAsi: [], racialSkills: [], racialTool: "",
-    racialCantrip: "", racialAncestry: "", repeatSkills: [], chosenSkills: [], subclass: "", stylePicks: [],
+    racialCantrips: [], racialAncestry: "", repeatSkills: [], chosenSkills: [], subclass: "", stylePicks: [],
     expertisePicks: [], method: "standard", scores: {}, rollPool: [],
   };
   assert.deepEqual(submit.identityBlocker(state, background("acolyte")), { target: "name", message: "Give your character a name." });

@@ -128,7 +128,7 @@ function builderEdit(initial, level, overrides = {}) {
     racialAsi: [],
     racialSkills: [],
     racialTool: "",
-    racialCantrip: "",
+    racialCantrips: [],
     backstory: initial.backstory,
     spells: [],
     spellWarningAck: true,

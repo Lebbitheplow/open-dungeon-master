@@ -286,7 +286,7 @@ test("a Workshop casting profile is derived only from the selected fighter or ro
     subclassExtras: extras,
     abilities: { str: 10, dex: 10, con: 10, int: 14, wis: 10, cha: 10 },
     spellOf: (name) => ({ name, level: name === "Fire Bolt" ? 0 : 1, school: "abjuration", list: "wizard" }),
-    racialCantrip: null,
+    racialCantrips: [],
     judgeLists: false,
   });
   assert.deepEqual(accepted.problems, []);
@@ -300,7 +300,7 @@ test("a Workshop casting profile is derived only from the selected fighter or ro
     classOf: (id) => classes.find((entry) => entry.id === id) ?? null,
     abilities: { str: 10, dex: 10, con: 10, int: 14, wis: 10, cha: 10 },
     spellOf: (name) => ({ name, level: 1, school: "abjuration", list: "wizard" }),
-    racialCantrip: null,
+    racialCantrips: [],
     judgeLists: false,
   });
   assert.ok(rejected.problems.some((problem) => problem.includes("not configured")));

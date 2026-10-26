@@ -2682,6 +2682,17 @@ function ensureSchema(db: SqliteDatabase) {
       PRIMARY KEY (campaign_id, character_id)
     );
 
+    -- The workshops a table starts from (src/lib/db/campaign-workshops.ts):
+    -- written by every import out of a workshop, one that copies nothing
+    -- included, so a workshop holding only pregens still offers them here
+    -- (src/lib/db/pregen-offers.ts).
+    CREATE TABLE IF NOT EXISTS campaign_workshops (
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      workshop_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (campaign_id, workshop_id)
+    );
+
     -- The last attack against each character, for the reactions that answer
     -- it (src/lib/dm/last-hit.ts). No foreign keys: deleteCampaign clears a
     -- table's rows by hand. That module used to make the table on first use,
@@ -2695,6 +2706,16 @@ function ensureSchema(db: SqliteDatabase) {
       PRIMARY KEY (campaign_id, character_id)
     );
   `);
+  // Tables made from a workshop before the link had a row of its own were
+  // known by the prep they copied from it: each such table keeps its link.
+  // One pass, guarded by an app_settings marker.
+  const workshopLinkMarker = db.prepare(`SELECT key FROM app_settings WHERE key = 'workshop_link_backfill_done'`).get();
+  if (!workshopLinkMarker) {
+    db.transaction(() => {
+      backfillWorkshopLinks(db);
+      db.prepare(`INSERT INTO app_settings (key, value_json, updated_at) VALUES (?, ?, ?)`).run("workshop_link_backfill_done", "true", new Date().toISOString());
+    })();
+  }
   // Databases that created player_webhooks before receivers could carry
   // their own Authorization value or extra headers (docs/player-webhooks.md).
   addColumns("player_webhooks", [["authorization_header", `TEXT`], ["extra_headers", `TEXT`]]);
@@ -3103,6 +3124,24 @@ export function backfillWorldTexts(db: SqliteDatabase): number {
     if (changed) setDoc.run(JSON.stringify(doc), row.campaign_id);
   }
   return settled;
+}
+
+// Links each table to every workshop it holds copied prep from, dated by the
+// first copy (see the call in ensureSchema). A link already there stays as
+// it is. Both ends are joined to a live row, since OR IGNORE does not cover
+// a foreign key and an origin row left over from a table gone without its
+// cascade would stop the boot. Returns how many were made, for the tests.
+export function backfillWorkshopLinks(db: SqliteDatabase): number {
+  return db
+    .prepare(
+      `INSERT OR IGNORE INTO campaign_workshops (campaign_id, workshop_id, created_at)
+       SELECT o.campaign_id, o.origin_id, MIN(o.created_at)
+         FROM content_origins o
+         JOIN campaigns c ON c.id = o.campaign_id
+         JOIN campaigns w ON w.id = o.origin_id AND w.kind = 'workshop'
+        GROUP BY o.campaign_id, o.origin_id`,
+    )
+    .run().changes;
 }
 
 // Copy each linked campaign sheet's portrait into its library character when

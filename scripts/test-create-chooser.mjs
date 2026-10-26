@@ -35,12 +35,14 @@ const PANELS = {
   maps: ["src/app/campaigns/[campaignId]/DmMapLibraryPanel.tsx"],
   encounters: ["src/app/campaigns/[campaignId]/DmEncounterPrepPanel.tsx"],
   tables: ["src/app/campaigns/[campaignId]/DmTablesPanel.tsx"],
+  // Lore's tool holds the Market below its entries (audit WA-10).
+  lore: ["src/app/campaigns/[campaignId]/LorePanel.tsx", "src/app/campaigns/[campaignId]/MarketPanel.tsx"],
 };
 const choice = (id) => CREATE_CHOICES.find((entry) => entry.id === id);
 const steps = () => CREATE_CHOICES.flatMap((entry) => entry.steps.map((step) => ({ choice: entry.id, ...step })));
 
 await test("Create offers every output the plan names, each saying where it lands.", () => {
-  const wanted = ["outline", "npc", "pc", "creature", "item", "spell", "option", "place", "region", "map", "encounter", "table", "illustration"];
+  const wanted = ["outline", "npc", "pc", "creature", "item", "shop", "spell", "option", "place", "region", "map", "encounter", "table", "illustration"];
   assert.deepEqual(CREATE_CHOICES.map((entry) => entry.id).sort(), [...wanted].sort());
   for (const entry of CREATE_CHOICES) {
     assert.ok(entry.lands && entry.blurb && entry.steps.length, `${entry.id} says nothing about where it goes`);
@@ -61,6 +63,14 @@ await test("Every way in reaches a real tool or page, and the tool's panel answe
     assert.ok(text.includes(`"${name}"`), `${step.choice}: ${step.system}'s panel does not answer "${name}"`);
     if (detail) assert.ok(text.includes(`split(":")`), `${step.choice}: ${step.system}'s panel ignores the "${detail}" in "${step.prepare}"`);
   }
+});
+
+await test("Shops have a way in: Create's Shop and the palette's New shop open the Market's form under Lore (audit WA-10).", async () => {
+  assert.deepEqual(choice("shop").steps.map((step) => [step.system, step.prepare]), [["lore", "open-shop-editor"]]);
+  const { SYSTEM_CREATE } = await import("../src/app/workshop/[workshopId]/palette-commands.ts");
+  assert.ok(SYSTEM_CREATE.lore.some((entry) => entry.prepare === "open-shop-editor" && entry.label === "New shop"));
+  // The panel answers only once it can: shops loaded and the viewer may prep.
+  assert.match(source("src/app/campaigns/[campaignId]/MarketPanel.tsx"), /name !== "open-shop-editor" \|\| shops === null \|\| !canPrep/);
 });
 
 await test("NPC and player-character choices lead to their own editors and stores; playable things never stop at WorldForge.", () => {

@@ -11,7 +11,7 @@ import {
 import * as Dialog from "@radix-ui/react-dialog";
 import { returnFocus } from "@/components/ui/return-focus";
 import { ChevronDown, Dices, Loader2, Search, Sparkles, X } from "lucide-react";
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
 import { InfoButton, InfoChipList } from "@/components/ui/InfoDialog";
 import { describeFeature, describeSkill } from "@/lib/help";
@@ -137,6 +137,23 @@ export function LevelUpDialog({
   } | null>(null);
   // A caster who knows their spells may give one up for another.
   const [forgetPick, setForgetPick] = useState("");
+  // How many cantrips the character's species gave, as the server counts
+  // them: a homebrew species' are on no list here, and a table's sheet keeps
+  // the race's features but not its picks, so the class's new cantrips were
+  // short by that many. Until the route answers, the bundled races' count.
+  const [speciesCantrips, setSpeciesCantrips] = useState<number | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/campaigns/${campaignId}/sheet/level-up`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data: { racialCantripChoice?: unknown } | null) => {
+        if (!cancelled && typeof data?.racialCantripChoice === "number") setSpeciesCantrips(data.racialCantripChoice);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [campaignId]);
   const [asiChoices, setAsiChoices] = useState<Array<AsiChoice | null>>([]);
   // The picks a feat taken this level leaves open (Linguist's languages),
   // by feat name; the server applies them (src/lib/srd/feat-grants.ts).
@@ -568,7 +585,7 @@ export function LevelUpDialog({
   // The race's cantrips (a high elf's pick, a tiefling's Thaumaturgy) are
   // known on top of the class's and leave its count alone (U:UB2), as the
   // level-up route counts them.
-  const freeCantrips = freeCantripsIn(sheet, cantripList);
+  const freeCantrips = freeCantripsIn(sheet, cantripList, speciesCantrips);
   const remainingCantrips =
     cantripAllowance !== null
       ? Math.max(0, cantripAllowance - Math.max(0, cantripList.length - freeCantrips))

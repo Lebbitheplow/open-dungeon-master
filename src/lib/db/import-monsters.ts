@@ -209,7 +209,7 @@ function bringSpells(sourceAuthors: string[], targetAuthors: string[], owner: st
     const held = authorsEntryNamed(targetAuthors, "spell", name);
     if (held && sameRules("spell", held, entry)) continue;
     const clash = mine.get(textKey(entry.name));
-    const landed = clash ? freeName(new Set(mine.keys()), entry.name, sourceTitle, 60) : entry.name;
+    const landed = clash ? freeName(new Set(mine.keys()), entry.name, sourceTitle) : entry.name;
     if (clash) renames.set(textKey(entry.name), landed);
     const made = createHomebrew(owner, { kind: "spell", name: landed, data: { desc: "", ...entry.data } as Parameters<typeof createHomebrew>[1]["data"] });
     mine.set(textKey(landed), made);

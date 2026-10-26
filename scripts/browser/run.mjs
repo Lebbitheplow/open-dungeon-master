@@ -11,7 +11,7 @@
 //
 //   npm run build && npm run test:browser
 //   node scripts/browser/run.mjs --only board,chronicle      (a few)
-//   node scripts/browser/run.mjs --app ../open-dungeon-master-client/mobile/www
+//   node scripts/browser/run.mjs --app <client>/mobile/www   (built from this tree: ODM_SERVER_DIR=<this tree> node scripts/build-www.mjs)
 //   node scripts/browser/run.mjs --base http://127.0.0.1:3005 --ids /tmp/x/ids.json
 //   node scripts/browser/run.mjs --viewports desktop,phone --keep
 //   node scripts/browser/run.mjs --shard 2/6      (CI: every 6th scenario from the 2nd)
@@ -26,7 +26,7 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import { pathToFileURL } from "node:url";
 import { removeTempDir } from "../lib/remove-temp-dir.mjs";
-import { enterApp, freePort, launchBrowser, newContext, pageHarness, seeAllTours, serveFolder, signIn, startServer } from "./lib.mjs";
+import { enterApp, freePort, launchBrowser, newContext, noEnvFile, pageHarness, seeAllTours, serveFolder, signIn, startServer } from "./lib.mjs";
 
 const { values: args } = parseArgs({
   options: {
@@ -71,7 +71,11 @@ if (base) {
   const seeded = spawnSync(process.execPath, [path.join(import.meta.dirname, "seed.mjs"), outDir], {
     cwd: tree,
     stdio: ["ignore", "pipe", "pipe"],
-    env: { ...process.env, CONTENT_DB_PATH: process.env.CONTENT_DB_PATH ?? path.join(tree, "data", "content", "open5e.sqlite") },
+    env: {
+      ...process.env,
+      CONTENT_DB_PATH: process.env.CONTENT_DB_PATH ?? path.join(tree, "data", "content", "open5e.sqlite"),
+      ODM_ENV_FILE: noEnvFile(path.join(outDir, "world.sqlite")),
+    },
   });
   if (seeded.status !== 0) {
     throw new Error(`seed failed:\n${seeded.stdout}\n${seeded.stderr}`);
@@ -97,6 +101,26 @@ if (app) {
     throw new Error(`${www} holds no index.html: build the client's mobile shell first (cd mobile && node scripts/build-www.mjs)`);
   }
   shell = await serveFolder(www, await freePort());
+  // Which sources the shell was built from (the client's build-www.mjs
+  // writes build-info.json). A shell built from older pages fails for faults
+  // already fixed, as a Workshop audit once found, so a mismatch is said.
+  const info = (() => {
+    try {
+      return JSON.parse(fs.readFileSync(path.join(www, "build-info.json"), "utf8"));
+    } catch {
+      return null;
+    }
+  })();
+  const here = spawnSync("git", ["-C", tree, "rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim();
+  if (!info) {
+    console.log(`The shell at ${www} does not say what it was built from: rebuild it to be sure it holds these pages.`);
+  } else {
+    const short = (source) => (source ? `${source.commit.slice(0, 8)}${source.changed ? " with changes" : ""}` : "unknown");
+    console.log(`The shell was built ${info.builtAt} from client ${short(info.client)} and server ${short(info.server)}.`);
+    if (!info.server || info.server.commit !== here) {
+      console.log(`Warning: these pages are server ${here.slice(0, 8)}; the shell holds ${short(info.server)}. Rebuild it (cd mobile && ODM_SERVER_DIR=${tree} node scripts/build-www.mjs).`);
+    }
+  }
 }
 
 // ---- the scenarios ----

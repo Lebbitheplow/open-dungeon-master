@@ -35,6 +35,18 @@ export function draftStepKey(stored: { v?: unknown; step?: unknown }): string | 
   return null;
 }
 
+// A draft saved before a race could offer more than one cantrip kept its
+// pick as `racialCantrip`; it comes back as the one-name list the builder
+// keeps now. Pure, for scripts/test-racial-cantrip-count.mjs.
+export function migrateDraftFields(fields: BuilderDraftFields): BuilderDraftFields {
+  const { racialCantrip, ...rest } = fields as BuilderDraftFields & { racialCantrip?: unknown };
+  if (Array.isArray(rest.racialCantrips)) {
+    return rest;
+  }
+  const one = typeof racialCantrip === "string" ? racialCantrip.trim() : "";
+  return { ...rest, racialCantrips: one ? [one] : [] };
+}
+
 // The door a draft belongs to: the library's new character, a table's join
 // page, or a table's companion dialog.
 export function builderDraftKey(door: "library" | "table" | "companion", campaignId?: string): string {
@@ -53,7 +65,7 @@ export function readBuilderDraft(key: string): BuilderDraft | null {
       window.localStorage.removeItem(PREFIX + key);
       return null;
     }
-    return { v: VERSION, savedAt: stored.savedAt ?? 0, step, fields: stored.fields };
+    return { v: VERSION, savedAt: stored.savedAt ?? 0, step, fields: migrateDraftFields(stored.fields) };
   } catch {
     return null;
   }

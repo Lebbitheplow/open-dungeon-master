@@ -1461,7 +1461,7 @@ const pactTables = { consent: {}, offer: {}, secret: {}, reveal: {} };
 // and the confirm sheet's owed picks. Level 4, so a level 1 fighter owes its
 // subclass and an improvement there.
 const { createWorkshop } = await import("../../src/lib/db/workshops.ts");
-const { recordOrigin } = await import("../../src/lib/db/content-origins.ts");
+const { linkWorkshop } = await import("../../src/lib/db/campaign-workshops.ts");
 const { setPregenOffered } = await import("../../src/lib/db/characters.ts");
 const OFFER_TITLE = "Offer Table";
 const offerTable = campaigns.createCampaign(player.id, {
@@ -1475,7 +1475,7 @@ const offerTable = campaigns.createCampaign(player.id, {
 });
 campaigns.joinByInviteCode(world.owner.id, campaigns.getCampaignById(offerTable.id).inviteCode);
 const offerWorkshop = createWorkshop(player.id, { title: "The Sunken Keep" });
-recordOrigin(offerTable.id, "npcs", "seeded-npc-copy", offerWorkshop.id, "seeded-npc");
+linkWorkshop(offerTable.id, offerWorkshop.id);
 const pregenSheet = (name) => ({
   name,
   race: "human",

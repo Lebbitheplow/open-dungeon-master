@@ -22,10 +22,11 @@ import { builderFeatJudge, FeatJudgeContext, unmetFeatMessage } from "./featPrer
 import { hitPointsLine } from "./derivedReasons";
 import { builderProgressionInput, LevelProgressionTable } from "./LevelProgressionTable";
 import { levelProgressionRows } from "./levelProgression";
-import { levelUpSections, SHEET_TARGETS, splitOwed } from "./levelUpSections";
+import { levelUpSections, racialCantripsDue, SHEET_TARGETS, splitOwed } from "./levelUpSections";
 import OptionPicker, { type PickerGroup } from "./OptionPicker";
 import { owedPicks } from "./owed";
 import { QuickBuildReadback } from "./QuickBuildReadback";
+import { RacialCantripPicker } from "./RacialCantripPicker";
 import { ClassChoices } from "./steps/ClassChoices";
 import { SpellsSection } from "./steps/SpellsGearStep";
 import { Field, StepPanel, inputClass } from "./steps/shared";
@@ -212,8 +213,9 @@ function LevelUpSheetForm({
   const showAsi = sections.asi;
   const showClassPicks = sections.classPicks;
   const showSpells = sections.spells;
+  const showRacialCantrips = racialCantripsDue(initial.racialChoices, race?.cantripChoice?.count ?? 0, owedTargets);
   const { here: sheetOwed, elsewhere } = splitOwed(owed);
-  const nothingToChoose = !showSubclass && !showAsi && !showClassPicks && !showSpells;
+  const nothingToChoose = !showSubclass && !showAsi && !showClassPicks && !showSpells && !showRacialCantrips;
 
   // To the block that takes a pick, lit for a moment, focus on its first
   // control (as the builder's "Show me" does).
@@ -421,6 +423,12 @@ function LevelUpSheetForm({
         {showClassPicks ? <ClassChoices state={state} derived={derived} actions={actions} klass={klass} /> : null}
 
         {showSpells && klass ? <SpellsSection state={state} derived={derived} klass={klass} pack={null} /> : null}
+
+        {showRacialCantrips && race ? (
+          <StepPanel title={`${race.name} choices`}>
+            <RacialCantripPicker race={race} cantrips={state.racialCantrips} onChange={state.setRacialCantrips} />
+          </StepPanel>
+        ) : null}
 
         {elsewhere.length ? (
           <section

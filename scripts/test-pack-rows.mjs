@@ -254,7 +254,7 @@ test("a pack-only race saves its trait names, and a level-up regrant keeps them"
     state: {
       name: "Mira", subclass: "", alignment: "N", gender: "", appearance: "", acOverride: null, portrait: null,
       gold: 15, feats: [], stylePicks: [], optionPicks: [], racialAsi: [], racialSkills: [], racialTool: "",
-      racialCantrip: "", backgroundSkills: ["insight"], backstory: "", spells: [], spellWarningAck: true,
+      racialCantrips: [], backgroundSkills: ["insight"], backstory: "", spells: [], spellWarningAck: true,
     },
     derived: {
       abilities: { str: 10, dex: 14, con: 12, int: 10, wis: 12, cha: 10 },

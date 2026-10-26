@@ -42,18 +42,22 @@ export async function GET(
   }
   // The table's homebrew, whoever of its DM seats wrote it, as the level-up.
   const owner = tableAuthors(context.campaign.id);
+  // How many cantrips the species leaves to the player. A table's sheet
+  // keeps the race's features, not its picks, and only the server knows a
+  // homebrew species, so the level-up dialog reads the number here.
+  const racialCantripChoice = raceGrantsFor(sheet.race, owner)?.cantripChoice?.count ?? 0;
   const options = levelUpOptions(sheet, {
     hpMethod: context.campaign.gameSettings.hpMethod ?? "average",
     multiclassAllowed: context.campaign.gameSettings.multiclassingEnabled !== false,
     classId,
     subclass,
     subclassesOf: (id) => offeredSubclasses(id, owner),
-    freeCantrips: freeCantripCount(sheet, raceGrantsFor(sheet.race, owner)?.cantripChoice?.count ?? 0),
+    freeCantrips: freeCantripCount(sheet, racialCantripChoice),
     subclassExtras: subclassExtrasFor(owner),
     settingClassIds: settingClassIds(context.campaign.gameSettings.genre, packClassIds(context.campaign.gameSettings)),
   });
   if ("error" in options) {
     return Response.json({ error: options.error }, { status: 400 });
   }
-  return Response.json(options);
+  return Response.json({ ...options, racialCantripChoice });
 }

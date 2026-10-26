@@ -7,7 +7,10 @@ import { Sheet } from "@/components/ui/Sheet";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { useTourPrepare } from "@/lib/tours/prepare";
+import { readLoad, readWrite } from "@/lib/load-state";
 import { draftCount, worldPackDraftSchema, type WorldPackDraft } from "@/lib/worlds/draft";
+import { LoadFailed, PanelError } from "@/app/campaigns/[campaignId]/PanelKit";
+import { useUnsavedDraft } from "@/app/workshop/unsaved";
 import { ArtSection } from "@/app/workshop/plugin/ArtSection";
 import { IdentitySection } from "@/app/workshop/plugin/IdentityFields";
 import { MonsterSection } from "@/app/workshop/plugin/MonsterSection";
@@ -15,7 +18,7 @@ import { PluginWizard } from "@/app/workshop/plugin/PluginWizard";
 import { PublishSection } from "@/app/workshop/plugin/PublishSection";
 import { MagicSection, PeopleSection } from "@/app/workshop/plugin/ReskinSection";
 import { SettingSection } from "@/app/workshop/plugin/SettingSection";
-import { PLUGIN_SECTIONS, type SectionId } from "@/app/workshop/plugin/types";
+import { PLUGIN_SECTIONS, type Flushed, type SectionId } from "@/app/workshop/plugin/types";
 
 // The Plugin system: a world pack written in the workshop.
 //
@@ -32,10 +35,39 @@ import { PLUGIN_SECTIONS, type SectionId } from "@/app/workshop/plugin/types";
 // panel autosaves it a moment after each change, the whole value each
 // time. Nothing here is written to the server's world directory until the
 // Publish tab says so.
+//
+// The save contract (WA-03, WA-04). Writes go out one at a time, in the
+// order they were made, so an older write can never land after a newer one
+// or flip the badge after it. Leaving the tool saves first (the workshop's
+// leave check, src/app/workshop/unsaved.ts), and a panel taken down inside
+// the autosave pause sends its last edit rather than dropping it. Pull and
+// export wait for the save and stop when it did not land: both read the
+// server's copy, and an older copy is not the draft on screen.
 
 const SAVE_DELAY_MS = 700;
 
+// The browser keeps a request alive past its page only up to 64 KB, so a
+// panel already gone sends a larger draft as an ordinary request.
+const KEEPALIVE_BYTES = 60_000;
+// A save that hears nothing for this long is given up, so the writes queued
+// behind it (a reopened panel's read, Pull, Try again) are not held forever.
+const SAVE_TIMEOUT_MS = 60_000;
+// Said when Pull stops for a save that did not land; gone once one does.
+const PULL_WAITS = "Pull waits for the draft to save, and it did not. Nothing was pulled; your changes are kept here. Try again.";
+
 type SaveState = "idle" | "dirty" | "saving" | "saved" | "error";
+
+type StoredReply = { draft?: unknown; updatedAt?: string | null };
+
+// One write at a time per workshop, kept across remounts, so a panel opened
+// again reads the draft after the last write from its previous visit.
+const chains = new Map<string, Promise<unknown>>();
+
+function inTurn<T>(workshopId: string, write: () => Promise<T>): Promise<T> {
+  const run = (chains.get(workshopId) ?? Promise.resolve()).then(write);
+  chains.set(workshopId, run.catch(() => undefined));
+  return run;
+}
 
 export function PluginPanel({
   workshopId,
@@ -47,14 +79,28 @@ export function PluginPanel({
   const [draft, setDraft] = useState<WorldPackDraft | null>(null);
   const [section, setSection] = useState<SectionId>("identity");
   const [saveState, setSaveState] = useState<SaveState>("idle");
+  // Why the last autosave did not land, shown with a way to send it again.
+  const [saveError, setSaveError] = useState("");
+  // Anything else the server refused: the load, a pull, Start blank.
   const [error, setError] = useState("");
   const [wizardOpen, setWizardOpen] = useState(false);
   const [pulling, setPulling] = useState(false);
   const [pullNotice, setPullNotice] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
-  // The draft the server has, so a save only goes out when something moved.
+  // The draft on screen, which a queued write reads when its turn comes.
+  const latest = useRef<WorldPackDraft | null>(null);
+  // The draft the server has, so a save only goes out when something moved,
+  // and the revision it holds, which an export names.
   const savedJson = useRef("");
+  const revision = useRef<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // A write that finishes after the panel is gone still counts on the
+  // workshop's card, but sets nothing here.
+  const mounted = useRef(false);
+  const onChangedRef = useRef(onChanged);
+  useEffect(() => {
+    onChangedRef.current = onChanged;
+  });
 
   useTourPrepare((name) => {
     if (name !== "open-plugin-wizard") return;
@@ -62,26 +108,102 @@ export function PluginPanel({
     return true;
   });
 
+  // The stored draft as the panel's own, saved copy.
+  const adopt = useCallback((stored: WorldPackDraft, updatedAt: string | null) => {
+    latest.current = stored;
+    savedJson.current = JSON.stringify(stored);
+    revision.current = updatedAt;
+    setDraft(stored);
+  }, []);
+
   const load = useCallback(
     () =>
-      fetch(`/api/workshops/${workshopId}/plugin`)
-        .then((response) => (response.ok ? response.json() : null))
-        .then((data: { draft?: unknown; updatedAt?: string | null } | null) => {
-          const parsed = worldPackDraftSchema.safeParse(data?.draft);
+      // After any write still on its way from an earlier visit to this tool.
+      (chains.get(workshopId) ?? Promise.resolve())
+        .then(() => readLoad<StoredReply>(fetch(`/api/workshops/${workshopId}/plugin`), "The draft"))
+        .then((outcome) => {
+          if (!mounted.current) return;
+          if (outcome.error !== null) {
+            setError(outcome.error);
+            return;
+          }
+          const parsed = worldPackDraftSchema.safeParse(outcome.payload.draft);
           if (!parsed.success) {
             setError("The draft could not be read.");
             return;
           }
-          savedJson.current = JSON.stringify(parsed.data);
-          setDraft(parsed.data);
+          setError("");
+          adopt(parsed.data, outcome.payload.updatedAt ?? null);
           // A draft nobody has touched opens on the guide.
-          if (!data?.updatedAt && !parsed.data.name) {
+          if (!outcome.payload.updatedAt && !parsed.data.name) {
             setWizardOpen(true);
           }
-        })
-        .catch(() => setError("Could not reach the server.")),
+        }),
+    [workshopId, adopt],
+  );
+
+  // Writes the draft on screen once the writes before it are done; true
+  // when the server holds it after.
+  const save = useCallback(
+    (): Promise<boolean> =>
+      inTurn(workshopId, async () => {
+        const next = latest.current;
+        const json = JSON.stringify(next);
+        if (!next || json === savedJson.current) {
+          // Nothing to send: an edit that came back to what the server holds
+          // (a letter typed and deleted, a value picked again) is saved.
+          if (next && mounted.current) {
+            setSaveError("");
+            setSaveState("saved");
+          }
+          return true;
+        }
+        const live = mounted.current;
+        if (live) setSaveState("saving");
+        const body = JSON.stringify({ draft: next });
+        const sent = await readWrite<StoredReply>(
+          fetch(`/api/workshops/${workshopId}/plugin`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body,
+            keepalive: !live && new TextEncoder().encode(body).length < KEEPALIVE_BYTES,
+            signal: AbortSignal.timeout(SAVE_TIMEOUT_MS),
+          }),
+          "The draft could not be saved.",
+        );
+        if (sent.error !== null) {
+          if (mounted.current) {
+            setSaveError(sent.error);
+            setSaveState("error");
+          }
+          return false;
+        }
+        savedJson.current = json;
+        revision.current = sent.payload.updatedAt ?? null;
+        onChangedRef.current?.(draftCount(next));
+        if (mounted.current) {
+          setSaveError("");
+          // An edit made while this write was out is still to go.
+          setSaveState(JSON.stringify(latest.current) === json ? "saved" : "dirty");
+        }
+        return true;
+      }),
     [workshopId],
   );
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      // Taken down inside the autosave pause (a header link, the browser's
+      // Back): the last edit is sent, not cancelled.
+      if (timer.current) {
+        clearTimeout(timer.current);
+        timer.current = null;
+        void save();
+      }
+    };
+  }, [save]);
 
   useEffect(() => {
     void load();
@@ -91,86 +213,69 @@ export function PluginPanel({
       .catch(() => undefined);
   }, [load]);
 
-  const save = useCallback(
-    async (next: WorldPackDraft) => {
-      const json = JSON.stringify(next);
-      if (json === savedJson.current) {
-        setSaveState("saved");
-        return;
-      }
-      setSaveState("saving");
-      try {
-        const response = await fetch(`/api/workshops/${workshopId}/plugin`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ draft: next }),
-        });
-        if (!response.ok) {
-          const data = await response.json().catch(() => ({}));
-          setError(data.error ?? "The draft could not be saved.");
-          setSaveState("error");
-          return;
-        }
-        savedJson.current = json;
-        setError("");
-        setSaveState("saved");
-        onChanged?.(draftCount(next));
-      } catch {
-        setError("Could not reach the server; the last change is not saved.");
-        setSaveState("error");
-      }
-    },
-    [workshopId, onChanged],
-  );
-
   // Every edit lands here. The write goes out after a pause so a person
   // typing a blurb does not send thirty saves.
   const update = useCallback(
     (next: WorldPackDraft) => {
+      latest.current = next;
       setDraft(next);
       setSaveState("dirty");
       if (timer.current) clearTimeout(timer.current);
-      timer.current = setTimeout(() => void save(next), SAVE_DELAY_MS);
+      timer.current = setTimeout(() => {
+        timer.current = null;
+        void save();
+      }, SAVE_DELAY_MS);
     },
     [save],
   );
 
-  useEffect(
-    () => () => {
-      if (timer.current) clearTimeout(timer.current);
-    },
-    [],
-  );
-
-  const flushSave = useCallback(async () => {
+  // Writes the draft now rather than after the autosave pause.
+  const flushSave = useCallback(async (): Promise<Flushed> => {
     if (timer.current) {
       clearTimeout(timer.current);
       timer.current = null;
     }
-    if (draft) await save(draft);
-  }, [draft, save]);
+    return (await save()) ? { ok: true, revision: revision.current } : { ok: false };
+  }, [save]);
+
+  // Unsaved, saving or refused: leaving the tool saves first, and asks only
+  // when that did not land.
+  const flushOnLeave = useCallback(() => flushSave().then((result) => result.ok), [flushSave]);
+  useUnsavedDraft(saveState === "dirty" || saveState === "saving" || saveState === "error", flushOnLeave);
 
   async function pull() {
     setPulling(true);
     setPullNotice("");
+    setError("");
     try {
-      await flushSave();
-      const response = await fetch(`/api/workshops/${workshopId}/plugin/pull`, { method: "POST" });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setError(data.error ?? "Nothing could be pulled.");
+      // The pull merges into the server's copy and hands that back for the
+      // screen, so it goes only once the screen's copy is the server's.
+      if (!(await flushSave()).ok) {
+        setError(PULL_WAITS);
         return;
       }
+      const sent = await inTurn(workshopId, () =>
+        readWrite<StoredReply & { added?: number; omissions?: Array<{ assets: string[] }> }>(
+          fetch(`/api/workshops/${workshopId}/plugin/pull`, { method: "POST" }),
+          "Nothing could be pulled.",
+        ),
+      );
+      if (sent.error !== null) {
+        setError(sent.error);
+        // No answer: the pull may have landed, so the screen reads the draft again.
+        if (sent.unanswered) void load();
+        return;
+      }
+      const data = sent.payload;
       const parsed = worldPackDraftSchema.safeParse(data.draft);
       if (parsed.success) {
-        savedJson.current = JSON.stringify(parsed.data);
-        setDraft(parsed.data);
+        adopt(parsed.data, data.updatedAt ?? null);
         setSaveState("saved");
-        onChanged?.(draftCount(parsed.data));
+        onChangedRef.current?.(draftCount(parsed.data));
       }
       // What stayed behind is listed whole on the Publish tab; the notice
       // only counts it, so a pull never reads as having taken everything.
-      const left = ((data.omissions ?? []) as Array<{ assets: string[] }>).reduce((sum, omission) => sum + omission.assets.length, 0);
+      const left = (data.omissions ?? []).reduce((sum, omission) => sum + omission.assets.length, 0);
       const behind = left ? ` ${left} ${left === 1 ? "entry stays" : "entries stay"} in the workshop; Check & publish lists them.` : "";
       setPullNotice(
         data.added
@@ -182,23 +287,49 @@ export function PluginPanel({
     }
   }
 
+  // Start blank. The pending autosave is cancelled and the throw-away waits
+  // its turn, so no save still on its way can bring the old draft back.
   async function clear() {
-    const response = await fetch(`/api/workshops/${workshopId}/plugin`, { method: "DELETE" });
-    const data = await response.json().catch(() => null);
-    const parsed = worldPackDraftSchema.safeParse(data?.draft);
-    if (parsed.success) {
-      savedJson.current = JSON.stringify(parsed.data);
-      setDraft(parsed.data);
-      setSaveState("saved");
-      onChanged?.(0);
-      setSection("identity");
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
     }
+    setError("");
+    const sent = await inTurn(workshopId, () =>
+      readWrite<StoredReply>(fetch(`/api/workshops/${workshopId}/plugin`, { method: "DELETE" }), "The draft could not be thrown away."),
+    );
+    if (sent.error !== null) {
+      setError(`${sent.error} The draft on screen is kept.`);
+      // The edit whose autosave was cancelled above still goes.
+      if (JSON.stringify(latest.current) !== savedJson.current) void save();
+      return;
+    }
+    const parsed = worldPackDraftSchema.safeParse(sent.payload.draft);
+    if (!parsed.success) {
+      void load();
+      return;
+    }
+    adopt(parsed.data, sent.payload.updatedAt ?? null);
+    setSaveState("saved");
+    setSaveError("");
+    onChangedRef.current?.(0);
+    setSection("identity");
   }
 
   if (!draft) {
     return (
       <div className="flex justify-center py-10">
-        {error ? <p className="reveal text-sm text-red-300">{error}</p> : <Loader2 className="size-5 animate-spin text-stone-500" />}
+        {error ? (
+          <LoadFailed
+            error={error}
+            onRetry={() => {
+              setError("");
+              void load();
+            }}
+          />
+        ) : (
+          <Loader2 className="size-5 animate-spin text-stone-500" />
+        )}
       </div>
     );
   }
@@ -241,7 +372,10 @@ export function PluginPanel({
           </button>
         </div>
         {pullNotice ? <p className="live-in basis-full text-xs text-amber-200/90">{pullNotice}</p> : null}
-        {error ? <p className="motion-shake basis-full text-xs text-red-300">{error}</p> : null}
+        {saveState === "error" && saveError ? (
+          <LoadFailed error={`${saveError} Your changes are kept here.`} onRetry={() => void flushSave()} className="basis-full" />
+        ) : null}
+        {error && !(error === PULL_WAITS && saveState === "saved") ? <PanelError className="basis-full">{error}</PanelError> : null}
       </section>
 
       <div data-tour="plugin-sections" className="w-fit max-w-full">
@@ -268,6 +402,7 @@ export function PluginPanel({
             workshopId={workshopId}
             isAdmin={isAdmin}
             flushSave={flushSave}
+            saved={saveState === "saved"}
             onClear={clear}
           />
         ) : null}

@@ -6,7 +6,9 @@
 // (POST /sheet/preview), and a player takes a seat with a copy at the
 // table's level (POST /sheet/offered). One player per pregen per table.
 // Every one of those checks is the server's (src/lib/db/pregen-offers.ts):
-// the tick, the table's link to the workshop and the claim.
+// the tick, the table's link to the workshop and the claim. The link is
+// made by choosing the workshop under Start from (POST /import), whether or
+// not it has prep to copy (src/lib/db/campaign-workshops.ts).
 import assert from "node:assert/strict";
 import { suite } from "./lib/enforce-harness.mjs";
 import { openCreation, LEGAL_FIGHTER } from "./lib/enforce-creation.mjs";
@@ -15,6 +17,9 @@ const { test, finish } = suite("test-offered-pregens");
 const campaigns = await import("../src/lib/db/campaigns.ts");
 const { createWorkshop } = await import("../src/lib/db/workshops.ts");
 const { recordOrigin } = await import("../src/lib/db/content-origins.ts");
+const { drawsFrom, linkWorkshop } = await import("../src/lib/db/campaign-workshops.ts");
+const { backfillWorkshopLinks, getDatabase } = await import("../src/lib/db/core.ts");
+const { setHouseRules } = await import("../src/lib/db/rules.ts");
 const { owedChoices } = await import("../src/lib/srd/owed-choices.ts");
 
 // A table whose DM wrote a workshop with one pregen in it, a level 1
@@ -24,10 +29,9 @@ async function openTable({ link = true, level = 4, gameSettings } = {}) {
   const { world, campaignId } = table;
   const dm = world.owner;
   const workshop = createWorkshop(dm.id, { title: "The Sunken Keep" });
-  // The table was made from the workshop: its prep was imported, and each
-  // copied row names the workshop it came from (content-origins.ts).
+  // The table starts from the workshop: its DM chose it under Start from.
   if (link) {
-    recordOrigin(campaignId, "npcs", "npc-copy", workshop.id, "npc-original");
+    linkWorkshop(campaignId, workshop.id);
   }
   const pregen = table.characters.createCharacter(dm.id, 1, { ...LEGAL_FIGHTER, name: "Thessaly" }, "pc", workshop.id);
   const second = world.addUser("second");
@@ -38,6 +42,7 @@ async function openTable({ link = true, level = 4, gameSettings } = {}) {
     list: await world.route("campaigns/[campaignId]/pregens"),
     preview: await world.route("campaigns/[campaignId]/sheet/preview"),
     offered: await world.route("campaigns/[campaignId]/sheet/offered"),
+    import: await world.route("campaigns/[campaignId]/import"),
   };
   async function as(user, mod, method, body, params = { campaignId }) {
     world.signIn(user);
@@ -48,7 +53,11 @@ async function openTable({ link = true, level = 4, gameSettings } = {}) {
   const list = async (user) => (await as(user, route.list, "GET")).json.pregens;
   const preview = (user, body = {}) => as(user, route.preview, "POST", { offeredPregenId: pregen.id, ...body });
   const take = (user, body = {}) => as(user, route.offered, "POST", { id: pregen.id, ...body });
-  return { ...table, dm, second, workshop, pregen, route, as, offer, list, preview, take };
+  // Choosing a source under Start from and bringing it in, through the route.
+  const bring = (user, body) => as(user, route.import, "POST", body);
+  // This table's rows in a table keyed by campaign_id.
+  const rows = (table) => getDatabase().prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE campaign_id = ?`).get(campaignId).n;
+  return { ...table, dm, second, workshop, pregen, route, as, offer, list, preview, take, bring, rows };
 }
 
 await test("an unticked pregen is invisible to the players: not listed, not previewed, not seated.", async () => {
@@ -236,7 +245,7 @@ await test("a pregen whose owner does not run this table is not offered, ticked 
   const table = await openTable();
   // A player's own workshop, linked to this table, with a ticked pregen.
   const workshop = createWorkshop(table.second.id, { title: "Someone else's" });
-  recordOrigin(table.campaignId, "npcs", "npc-copy-2", workshop.id, "npc-original-2");
+  linkWorkshop(table.campaignId, workshop.id);
   const stray = table.characters.createCharacter(table.second.id, 1, { ...LEGAL_FIGHTER, name: "Stray" }, "pc", workshop.id);
   table.world.signIn(table.second);
   const ticked = await table.call(table.route.roster, "PATCH", { characterId: stray.id, offered: true }, { workshopId: workshop.id });
@@ -244,6 +253,112 @@ await test("a pregen whose owner does not run this table is not offered, ticked 
   assert.deepEqual(await table.list(table.player), []);
   table.world.signIn(table.player);
   assert.equal((await table.call(table.route.offered, "POST", { id: stray.id }, { campaignId: table.campaignId })).status, 404);
+  table.world.close();
+});
+
+await test("a workshop of pregens alone, chosen under Start from, offers them with nothing copied.", async () => {
+  const table = await openTable({ link: false });
+  await table.offer(true);
+  assert.deepEqual(await table.list(table.player), []);
+  const brought = await table.bring(table.dm, { sourceId: table.workshop.id, select: [] });
+  assert.equal(brought.status, 200, JSON.stringify(brought.json));
+  assert.equal(brought.json.copied, 0);
+  assert.deepEqual(brought.json.pregensOffered, ["Thessaly"]);
+  assert.deepEqual((await table.list(table.player)).map((entry) => [entry.name, entry.taken]), [["Thessaly", null]]);
+  assert.equal(table.rows("content_origins"), 0, "a roster-only choice copied a row");
+  assert.equal(table.rows("campaign_workshops"), 1);
+  table.world.close();
+});
+
+await test("a workshop of house rules alone links the table too.", async () => {
+  const table = await openTable({ link: false });
+  await table.offer(true);
+  setHouseRules(table.workshop.id, "Flanking grants advantage.");
+  const brought = await table.bring(table.dm, { sourceId: table.workshop.id, select: ["houseRules"] });
+  assert.equal(brought.status, 200, JSON.stringify(brought.json));
+  assert.equal(brought.json.copied, 1);
+  assert.deepEqual(brought.json.pregensOffered, ["Thessaly"]);
+  assert.deepEqual((await table.list(table.player)).map((entry) => entry.name), ["Thessaly"]);
+  table.world.close();
+});
+
+await test("only the person steering the story links a workshop, and only their own; a campaign needs something chosen.", async () => {
+  const table = await openTable({ link: false });
+  await table.offer(true);
+  // A player at the table is not steering it.
+  assert.equal((await table.bring(table.player, { sourceId: table.workshop.id, select: [] })).status, 403);
+  // Another person's workshop is not a source the DM may copy from.
+  const theirs = createWorkshop(table.second.id, { title: "Someone else's" });
+  assert.equal((await table.bring(table.dm, { sourceId: theirs.id, select: [] })).status, 404);
+  // A campaign brings only what is ticked: with nothing, there is nothing to do.
+  const lastYear = campaigns.createCampaign(table.dm.id, {
+    title: "Last Year",
+    description: "",
+    theme: "high-fantasy",
+    maxPlayers: 4,
+    startingLevel: 1,
+    difficulty: "normal",
+  });
+  const refused = await table.bring(table.dm, { sourceId: lastYear.id, select: [] });
+  assert.equal(refused.status, 400, JSON.stringify(refused.json));
+  assert.match(refused.json.error, /Choose what to bring in/);
+  assert.equal(table.rows("campaign_workshops"), 0);
+  assert.deepEqual(await table.list(table.player), []);
+  table.world.close();
+});
+
+await test("a roster-only link keeps one player per pregen.", async () => {
+  const table = await openTable({ link: false });
+  await table.offer(true);
+  assert.equal((await table.bring(table.dm, { sourceId: table.workshop.id, select: [] })).status, 200);
+  assert.equal((await table.take(table.player)).status, 201);
+  assert.equal((await table.take(table.second)).status, 409);
+  assert.equal((await table.list(table.second))[0].taken, "other");
+  table.world.close();
+});
+
+await test("choosing the same workshop again is one link.", async () => {
+  const table = await openTable({ link: false });
+  for (let round = 0; round < 2; round += 1) {
+    const brought = await table.bring(table.dm, { sourceId: table.workshop.id, select: [] });
+    assert.equal(brought.status, 200, JSON.stringify(brought.json));
+    // Nothing is offered yet, so nothing is said about pregens.
+    assert.equal(brought.json.pregensOffered, undefined);
+  }
+  assert.equal(table.rows("campaign_workshops"), 1);
+  table.world.close();
+});
+
+await test("a table made from a workshop before the link had its own row keeps it; other origins link nothing.", async () => {
+  const table = await openTable({ link: false });
+  await table.offer(true);
+  const db = getDatabase();
+  recordOrigin(table.campaignId, "npcs", "npc-copy", table.workshop.id, "npc-original");
+  // A bundle's rows and another campaign's are not a workshop's.
+  recordOrigin(table.campaignId, "lore", "lore-copy", "bundle", "lore-key");
+  const lastYear = campaigns.createCampaign(table.dm.id, {
+    title: "Last Year",
+    description: "",
+    theme: "high-fantasy",
+    maxPlayers: 4,
+    startingLevel: 1,
+    difficulty: "normal",
+  });
+  recordOrigin(table.campaignId, "maps", "map-copy", lastYear.id, "map-original");
+  // A row left by a table gone without its cascade links nothing, and does
+  // not stop the pass (a broken foreign key would stop the boot).
+  db.pragma("foreign_keys = OFF");
+  recordOrigin("gone-table", "npcs", "npc-copy", table.workshop.id, "npc-original");
+  db.pragma("foreign_keys = ON");
+  assert.equal(drawsFrom(table.campaignId, table.workshop.id), false);
+  assert.deepEqual(await table.list(table.player), []);
+  assert.equal(backfillWorkshopLinks(db), 1);
+  assert.equal(drawsFrom(table.campaignId, table.workshop.id), true);
+  assert.equal(drawsFrom(table.campaignId, lastYear.id), false);
+  assert.deepEqual((await table.list(table.player)).map((entry) => entry.name), ["Thessaly"]);
+  // Run again, it changes nothing.
+  assert.equal(backfillWorkshopLinks(db), 0);
+  assert.equal(table.rows("campaign_workshops"), 1);
   table.world.close();
 });
 

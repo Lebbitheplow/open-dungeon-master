@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { EmptyState } from "@/components/EmptyState";
 import { appConfirm } from "@/components/ui/ConfirmDialog";
 import { cn } from "@/lib/cn";
@@ -8,8 +8,8 @@ import { ui } from "@/lib/ui";
 import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { SectionHead } from "@/components/ui/SectionHead";
-import { Listed, RowMenu, panelRow } from "@/app/campaigns/[campaignId]/PanelKit";
-import { readLoad, useLoadStatus } from "@/lib/load-state";
+import { Listed, PanelError, RowMenu, panelRow } from "@/app/campaigns/[campaignId]/PanelKit";
+import { findLostCreate, readLoad, readWrite, useLoadStatus, type LostCreate } from "@/lib/load-state";
 import { formatRoster, rosterSummary, TEMPLATE_NAME_MAX } from "@/lib/dm/encounter-template-logic";
 import { thresholdsForParty } from "@/lib/srd/encounter-math";
 import { targetPartyLevels, type TargetParty } from "@/lib/workshop/kind";
@@ -123,6 +123,8 @@ export function DmEncounterPrepPanel({
   // effect linter, which is what it is.
   // A refused or failed list is settled, not dropped (issue 140), so the
   // list says "nothing prepared" only once the server has said so.
+  // The list it read, or null when it could not, so a create whose answer
+  // was lost can look for its fight.
   const { loaded, loadError, settle } = useLoadStatus();
   const load = useCallback(
     () =>
@@ -132,6 +134,7 @@ export function DmEncounterPrepPanel({
             setTemplates(outcome.payload.templates);
           }
           settle(outcome);
+          return outcome.payload?.templates ?? null;
         },
       ),
     [campaignId, settle],
@@ -200,27 +203,60 @@ export function DmEncounterPrepPanel({
     if (!open && only) onClose?.();
   }
 
+  // Every write goes through readWrite (WA-05), so one that dies on the
+  // connection is said here and leaves the roster in the form. A create
+  // whose answer was lost never clears the form and never invites a blind
+  // second press: the list is read again first, and the fight found there
+  // counts as prepared.
+  function lostCreate(found: LostCreate, what: { made: string; missing: string; unknown: string }) {
+    if (found === "made") {
+      setNote(what.made);
+      return true;
+    }
+    setError(found === "missing" ? what.missing : what.unknown);
+    return false;
+  }
+
   async function save() {
     setBusy(true);
     setError("");
     setNote("");
     try {
       const base = `/api/campaigns/${campaignId}/dm/encounter-templates`;
-      const response = await fetch(editingId ? `${base}/${editingId}` : base, {
-        method: editingId ? "PATCH" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: draft.name,
-          enemies: draft.enemies,
-          battlefield: draft.battlefield,
-          notes: draft.notes,
-          map: { mapId: draft.mapId || null, scene: draft.scene || null },
-          extras: draft.extras,
+      const sent = await readWrite(
+        fetch(editingId ? `${base}/${editingId}` : base, {
+          method: editingId ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: draft.name,
+            enemies: draft.enemies,
+            battlefield: draft.battlefield,
+            notes: draft.notes,
+            map: { mapId: draft.mapId || null, scene: draft.scene || null },
+            extras: draft.extras,
+          }),
         }),
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setError((payload as { error?: string }).error ?? "That could not be saved.");
+        "That could not be saved.",
+      );
+      if (sent.error !== null) {
+        if (sent.unanswered && !editingId) {
+          const name = draft.name.trim();
+          const found = await findLostCreate(loaded ? templates : null, load, (template) => template.name === name);
+          const prepared = lostCreate(found, {
+            made: "Prepared. The server's answer was lost on the way, so the list was read again to make sure.",
+            missing: "The server did not answer and the fight is not in the list, so it was not prepared. Your roster is kept; press Prepare it again.",
+            unknown: "The server could not be reached, so it is not known yet whether the fight was prepared. Your roster is kept. Check the list before preparing it again.",
+          });
+          if (prepared) {
+            setDraft(EMPTY_ENCOUNTER_DRAFT);
+            setEditingId(null);
+            showEditor(false);
+          }
+          return;
+        }
+        setError(sent.unanswered ? `${sent.error} Your changes are kept here; the list was read again.` : sent.error);
+        // An edit with no answer may have landed all the same.
+        if (sent.unanswered) await load();
         return;
       }
       setDraft(EMPTY_ENCOUNTER_DRAFT);
@@ -239,21 +275,34 @@ export function DmEncounterPrepPanel({
     setError("");
     setNote("");
     try {
-      const response = await fetch(`/api/campaigns/${campaignId}/dm/encounter-templates`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: `${template.name} (copy)`.slice(0, TEMPLATE_NAME_MAX),
-          enemies: formatRoster(template.enemies),
-          battlefield: template.battlefield,
-          notes: template.notes,
-          map: template.map,
-          extras: template.extras,
+      const name = `${template.name} (copy)`.slice(0, TEMPLATE_NAME_MAX);
+      const sent = await readWrite(
+        fetch(`/api/campaigns/${campaignId}/dm/encounter-templates`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name,
+            enemies: formatRoster(template.enemies),
+            battlefield: template.battlefield,
+            notes: template.notes,
+            map: template.map,
+            extras: template.extras,
+          }),
         }),
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setError((payload as { error?: string }).error ?? "That could not be copied.");
+        "That could not be copied.",
+      );
+      if (sent.error !== null) {
+        if (sent.unanswered) {
+          const copy = name.trim();
+          const found = await findLostCreate(loaded ? templates : null, load, (row) => row.name === copy);
+          lostCreate(found, {
+            made: "Copied. The server's answer was lost on the way, so the list was read again to make sure.",
+            missing: "The server did not answer and the copy is not in the list, so it was not made. Duplicate it again.",
+            unknown: "The server could not be reached, so it is not known yet whether the copy was made. Check the list before duplicating it again.",
+          });
+          return;
+        }
+        setError(sent.error);
         return;
       }
       await load();
@@ -270,10 +319,11 @@ export function DmEncounterPrepPanel({
     }
     setError("");
     setNote("");
-    const response = await fetch(`/api/campaigns/${campaignId}/dm/encounter-templates/${id}`, { method: "DELETE" }).catch(() => null);
-    if (!response?.ok) {
-      const payload = (await response?.json().catch(() => ({}))) as { error?: string } | undefined;
-      setError(payload?.error ?? (response ? "That could not be deleted." : "Could not reach the server."));
+    const sent = await readWrite(fetch(`/api/campaigns/${campaignId}/dm/encounter-templates/${id}`, { method: "DELETE" }), "That could not be deleted.");
+    if (sent.error !== null) {
+      setError(sent.error);
+      // No answer: it may be gone all the same, and the list says which.
+      if (sent.unanswered) await load();
       return;
     }
     if (editingId === id) {
@@ -288,23 +338,22 @@ export function DmEncounterPrepPanel({
     setError("");
     setNote("");
     try {
-      const response = await fetch(
-        `/api/campaigns/${campaignId}/dm/encounter-templates/${id}/deploy`,
-        {
+      const sent = await readWrite<{ mapError?: string | null; cued?: boolean }>(
+        fetch(`/api/campaigns/${campaignId}/dm/encounter-templates/${id}/deploy`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(cue ? { cue: cueIt } : {}),
-        },
+        }),
+        "That could not be deployed.",
       );
-      const payload = (await response.json().catch(() => ({}))) as {
-        error?: string;
-        mapError?: string | null;
-        cued?: boolean;
-      };
-      if (!response.ok) {
-        setError(payload.error ?? "That could not be deployed.");
+      if (sent.error !== null) {
+        // A deploy with no answer may have put the fight on the table; a
+        // second press would put it there twice.
+        setError(sent.unanswered ? `${sent.error} The fight may already be on the table; look before deploying it again.` : sent.error);
+        if (sent.unanswered) await load();
         return;
       }
+      const payload = sent.payload;
       if (payload.cued !== undefined) {
         setNote(
           payload.cued
@@ -324,9 +373,16 @@ export function DmEncounterPrepPanel({
     }
   }
 
+  // In the sheet the sentence sits under a long form; a new one is scrolled
+  // to, so it is seen as well as announced.
+  const sheetFeedback = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (error) sheetFeedback.current?.scrollIntoView({ block: "nearest" });
+  }, [error]);
+
   const feedback = (
     <>
-      {error ? <p className="motion-shake text-[11px] text-red-400">{error}</p> : null}
+      {error ? <PanelError className="text-[11px]">{error}</PanelError> : null}
       {note ? <p className="live-in text-[11px] text-emerald-400">{note}</p> : null}
     </>
   );
@@ -336,7 +392,7 @@ export function DmEncounterPrepPanel({
     return (
       <Sheet open={editorOpen} onOpenChange={showEditor} title={editing ? editing.name : "Encounter"} className="lg:w-[min(92vw,40rem)]">
         <EncounterForm campaignId={campaignId} value={draft} onChange={setDraft} maps={maps} busy={busy} submitLabel="Save" onSubmit={() => void save()} variant="sheet" />
-        <div className="mt-2">{feedback}</div>
+        <div ref={sheetFeedback} className="mt-2">{feedback}</div>
       </Sheet>
     );
   }
@@ -376,7 +432,7 @@ export function DmEncounterPrepPanel({
             onSubmit={() => void save()}
             variant="sheet"
           />
-          <div className="mt-2">{feedback}</div>
+          <div ref={sheetFeedback} className="mt-2">{feedback}</div>
         </Sheet>
       </div>
     );

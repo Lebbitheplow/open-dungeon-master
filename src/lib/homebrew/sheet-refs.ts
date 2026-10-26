@@ -22,6 +22,8 @@ const isRec = (value: unknown): value is Rec => Boolean(value) && typeof value =
 const strings = (value: unknown): string[] => (Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : []);
 
 const SPELL_LISTS = ["prepared", "known", "cantrips", "pending", "spellbook"] as const;
+// A non-caster's racial cantrip, written as a story feature (submit.ts).
+const RACIAL_CANTRIP_FEATURE = /^(racial cantrip:\s*)(.+)$/i;
 
 // Every name a sheet holds, by kind. A subclass is read with the class that
 // took it, since two classes may each have a subclass of one name.
@@ -40,6 +42,7 @@ export function sheetRefNames(sheet: unknown): { archetype: Array<{ classId: str
     ...lists.flatMap((list) => SPELL_LISTS.flatMap((field) => strings(list[field]))),
     ...choices.flatMap((picks) => [...strings(picks.spells), ...strings(picks.cantrips)]),
     ...(isRec(record.racialChoices) && typeof record.racialChoices.cantrip === "string" ? [record.racialChoices.cantrip] : []),
+    ...(isRec(record.racialChoices) ? strings(record.racialChoices.cantrips) : []),
     ...equipment.flatMap((item) => (typeof item.spell === "string" ? [item.spell] : [])),
   ].filter((name) => name.trim());
   const asi = Array.isArray(record.asiChoices) ? record.asiChoices.filter(isRec) : [];
@@ -108,8 +111,19 @@ export function renameSheetRefs<T>(sheet: T, rename: SheetRenamer): { sheet: T; 
   if (typeof record.concentratingOn === "string" && record.concentratingOn) {
     record.concentratingOn = to("spell", record.concentratingOn);
   }
-  if (isRec(record.racialChoices) && typeof record.racialChoices.cantrip === "string" && record.racialChoices.cantrip) {
-    record.racialChoices = { ...record.racialChoices, cantrip: to("spell", record.racialChoices.cantrip) };
+  // The race's picks are held twice (the list, and the first of it on its
+  // own for an older server), and a non-caster's again as a feature.
+  if (isRec(record.racialChoices)) {
+    const choices: Rec = { ...record.racialChoices };
+    if (typeof choices.cantrip === "string" && choices.cantrip) choices.cantrip = to("spell", choices.cantrip);
+    if (Array.isArray(choices.cantrips)) choices.cantrips = list("spell", choices.cantrips);
+    record.racialChoices = choices;
+  }
+  if (Array.isArray(record.features)) {
+    record.features = record.features.map((feature) => {
+      const named = isRec(feature) && typeof feature.name === "string" ? RACIAL_CANTRIP_FEATURE.exec(feature.name) : null;
+      return named ? { ...(feature as Rec), name: `${named[1]}${to("spell", named[2])}` } : feature;
+    });
   }
   if (Array.isArray(record.equipment)) {
     record.equipment = record.equipment.map((item) => {

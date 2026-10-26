@@ -19,6 +19,7 @@ import { judgeEntry, useFeatJudge } from "./featPrereqs";
 import { racialFeatCount } from "@/lib/srd/race-id";
 import { DRACONIC_ANCESTRIES, takesDraconicAncestry } from "@/lib/srd/racial-grants";
 import { Chip } from "./steps/shared";
+import { RacialCantripPicker } from "./RacialCantripPicker";
 import { featChoice } from "@/lib/schemas/sheet";
 
 const ABILITY_NAMES: Record<Ability, string> = {
@@ -45,8 +46,8 @@ export function RacialChoicesSection({
   onAsiChange,
   skills,
   onSkillsChange,
-  cantrip,
-  onCantripChange,
+  cantrips,
+  onCantripsChange,
   tool,
   onToolChange,
   ancestry = "",
@@ -72,8 +73,8 @@ export function RacialChoicesSection({
   onAsiChange: (index: number, ability: Ability | "") => void;
   skills: string[];
   onSkillsChange: (index: number, skill: string) => void;
-  cantrip: string;
-  onCantripChange: (spell: string) => void;
+  cantrips: string[];
+  onCantripsChange: (cantrips: string[]) => void;
   tool: string;
   onToolChange: (tool: string) => void;
   // A dragonborn's draconic ancestry, by id.
@@ -348,66 +349,7 @@ export function RacialChoicesSection({
         </label>
       ) : null}
 
-      {race.cantripChoice ? (
-        <div data-builder-target="racialCantrip">
-          <span className="mb-1 flex flex-wrap items-center gap-1 text-stone-400">
-            Bonus <GameTerm id="cantrip">cantrip</GameTerm> (one {race.cantripChoice.list}{" "}
-            cantrip)
-          </span>
-          <p className="mb-1.5 text-xs text-stone-500">
-            A cantrip is a small spell you can cast as often as you like, forever. Pick one from
-            the list below (tap ⓘ to read what each does), or search by name if you already have
-            one in mind.
-          </p>
-          {cantrip ? (
-            <div className="mb-1.5 flex items-center gap-2">
-              <span className="flex items-center gap-1 rounded-full border border-amber-800 bg-amber-950/40 px-2.5 py-1 text-xs text-amber-200">
-                {cantrip}
-                <InfoButton
-                  label={cantrip}
-                  reference={{ kind: "spells", slug: contentSlug(cantrip), name: cantrip }}
-                />
-              </span>
-              <button
-                type="button"
-                onClick={() => onCantripChange("")}
-                className="text-xs text-stone-500 hover:text-stone-300"
-              >
-                Change
-              </button>
-            </div>
-          ) : (
-            <>
-              {/* Nobody can search for a cantrip they have never heard of.
-                  Every one this race may take is listed from the start, each
-                  with the ⓘ that says what it does; the search is second. */}
-              <CatalogBrowser
-                kind="spells"
-                buttonLabel={`Every ${race.cantripChoice.list} cantrip`}
-                defaultOpen
-                openSections={[`cantrips:${race.cantripChoice.list}`]}
-                selectedNames={cantrip ? [cantrip] : []}
-                onPick={(entry) => onCantripChange(entry.name)}
-                sections={[
-                  {
-                    key: `cantrips:${race.cantripChoice.list}`,
-                    label: `Every ${race.cantripChoice.list} cantrip`,
-                    params: { class: race.cantripChoice.list, level: "0" },
-                  },
-                ]}
-                metaOf={(entry) => entry.school ?? ""}
-              />
-              <p className="mt-2 mb-1 text-xs text-stone-500">Or search by name:</p>
-              <ContentPicker
-                kind="spells"
-                extraParams={{ class: race.cantripChoice.list, level: "0" }}
-                placeholder="Search cantrips (e.g. fire bolt)"
-                onPick={(entry) => onCantripChange(entry.name)}
-              />
-            </>
-          )}
-        </div>
-      ) : null}
+      <RacialCantripPicker race={race} cantrips={cantrips} onChange={onCantripsChange} />
     </div>
   );
 }

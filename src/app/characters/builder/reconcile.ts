@@ -29,7 +29,7 @@ export type BuilderPicks = {
   chosenSkills: string[];
   racialSkills: string[];
   racialAsi: Array<Ability | "">;
-  racialCantrip: string;
+  racialCantrips: string[];
   racialTool: string;
   backgroundSkills: string[];
   bonusLanguages: string[];
@@ -138,7 +138,7 @@ export function reconcilePicks(
     chosenSkills: input.chosenSkills ?? [],
     racialSkills: input.racialSkills ?? [],
     racialAsi: input.racialAsi ?? [],
-    racialCantrip: input.racialCantrip ?? "",
+    racialCantrips: input.racialCantrips ?? [],
     racialTool: input.racialTool ?? "",
     backgroundSkills: input.backgroundSkills ?? [],
     bonusLanguages: input.bonusLanguages ?? [],
@@ -215,8 +215,10 @@ export function reconcilePicks(
       ? picks.racialTool
       : "";
   note("racial tool", "racialTool", [picks.racialTool], [racialTool]);
-  const racialCantrip = race?.cantripChoice ? picks.racialCantrip : "";
-  note("racial cantrip", "racialCantrip", [picks.racialCantrip], [racialCantrip]);
+  // As many different cantrips as the race offers, and none from a race
+  // that offers none.
+  const racialCantrips = race?.cantripChoice ? unique(picks.racialCantrips).slice(0, race.cantripChoice.count) : [];
+  note("racial cantrip", "racialCantrip", picks.racialCantrips, racialCantrips);
 
   // Languages: never one the race, class or background already speaks; a
   // slot that comes from a short list ("your choice of Common or
@@ -276,7 +278,7 @@ export function reconcilePicks(
   // the class's (submit.ts finalCantrips), and read back they would count
   // against the class's allowance (issue #118).
   const racialKnown = new Set(
-    [racialCantrip, ...innateCantripsFor(race?.id ?? "", level)].filter(Boolean).map(textKey),
+    [...racialCantrips, ...innateCantripsFor(race?.id ?? "", level)].filter(Boolean).map(textKey),
   );
   const classCantrips = unique(picks.cantrips).filter((name) => !racialKnown.has(textKey(name)));
   const cantrips = casts && cantripCap !== null ? classCantrips : [];
@@ -297,7 +299,7 @@ export function reconcilePicks(
       chosenSkills,
       racialSkills,
       racialAsi,
-      racialCantrip,
+      racialCantrips,
       racialTool,
       backgroundSkills,
       bonusLanguages,

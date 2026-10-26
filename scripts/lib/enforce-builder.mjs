@@ -78,7 +78,7 @@ export async function openBuilder() {
       racialAncestry: "",
       toolPicks: [],
       repeatSkills: [],
-      racialCantrip: "",
+      racialCantrips: [],
       backgroundSkills: [],
       backgroundGearPicks: [],
       bonusLanguages: [],
