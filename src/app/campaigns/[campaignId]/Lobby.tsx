@@ -123,6 +123,9 @@ export function Lobby({
   // ids here, so a button it would refuse is never rendered.
   const seatCampaignId =
     campaign && campaign.gameSettings.dmMode !== "ai" ? campaign.id : "";
+  // Asked again when the DM seat changes hands: a DM the owner replaced may
+  // no longer move the seats.
+  const seatHolder = campaign?.dmUserId ?? "";
   useEffect(() => {
     // No reset on the way out: the buttons are also gated on the campaign
     // being human-run, so a stale yes renders nothing.
@@ -141,7 +144,7 @@ export function Lobby({
     return () => {
       cancelled = true;
     };
-  }, [seatCampaignId, seatVersion]);
+  }, [seatCampaignId, seatVersion, seatHolder]);
 
   if (!campaign || !me) {
     return null;
@@ -364,9 +367,9 @@ export function Lobby({
   }
 
   // Moves a DM seat; userId null empties it (the server allows that only for
-  // the co-DM seat, since a human-run game always needs a DM). The seat
-  // change event is not one the stream applies, so the mover reloads the
-  // snapshot to see the new seats.
+  // the co-DM seat, since a human-run game always needs a DM). Every seat's
+  // stream reads the snapshot again on the seat change (reloadsSnapshot);
+  // the mover reads it at once so its own screen does not wait for the event.
   async function assignSeat(seat: "dm" | "assistant", userId: string | null) {
     setSeatError("");
     try {

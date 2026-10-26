@@ -4,6 +4,12 @@
 // is refused the world's route; and once a person holds the DM seat, the
 // World tab sits beside their console. The quiet table goes back to the AI
 // whatever happens, since every viewport and later scenario shares it.
+//
+// Audit WA-11: the seat change itself brings the console, with no refresh
+// (the stream reads the snapshot again on dm_seat_changed), and handing the
+// game back to the AI takes it away the same way. A refresh asks for the
+// campaign again, in the app's own screens too, where it once remounted
+// nothing.
 import { check, eventually, newContext, openPanelTab, settle, signIn, hydrated } from "../lib.mjs";
 
 export default {
@@ -65,9 +71,17 @@ export default {
       // the World tab, with the same entry.
       const steered = await api.patch(`${campaign}/settings`, { data: { dmMode: "steered" } });
       check(steered.ok(), `the lead took the DM seat (${steered.status()})`);
+      await eventually(() => page.locator(`${root}[data-tour="tab-dm"]`).count(), { timeoutMs: 30_000, label: "the DM console's tab, with no refresh" });
+      let snapshots = 0;
+      const countSnapshot = (request) => {
+        if (new URL(request.url()).pathname === `/api/campaigns/${ids.quietId}`) snapshots += 1;
+      };
+      page.on("request", countSnapshot);
       await t.reload();
       await settle(page);
-      await eventually(() => page.locator(`${root}[data-tour="tab-dm"]`).count(), { timeoutMs: 30_000, label: "the DM console's tab" });
+      page.off("request", countSnapshot);
+      check(snapshots > 0, `a refresh asked for the campaign again (${snapshots})`);
+      await eventually(() => page.locator(`${root}[data-tour="tab-dm"]`).count(), { timeoutMs: 30_000, label: "the DM console's tab after a refresh" });
       await openPanelTab(t, "world");
       const dmPanel = page.locator(`${root}[data-world-at="table"]`).locator("visible=true").first();
       await eventually(() => dmPanel.count(), { timeoutMs: 30_000, label: "the DM's World tab" });
@@ -76,6 +90,13 @@ export default {
         label: "the DM back on the entry they had open",
       });
       await t.shot("dm-world");
+
+      // Handed back to the AI: the console goes, again with no refresh.
+      check((await api.patch(`${campaign}/settings`, { data: { dmMode: "ai" } })).ok(), "the seat handed back to the AI");
+      await eventually(async () => (await page.locator(`${root}[data-tour="tab-dm"]`).count()) === 0, {
+        timeoutMs: 30_000,
+        label: "the DM console gone, with no refresh",
+      });
     } finally {
       await api.patch(`${campaign}/settings`, { data: { dmMode: "ai" } });
       await api.delete(`${campaign}/world/entities/${encodeURIComponent(ref)}`);
