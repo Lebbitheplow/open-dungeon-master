@@ -1,7 +1,7 @@
 "use client";
 
 import { Eye, EyeOff, Hand, Loader2, Send } from "lucide-react";
-import { memo, useId, type ReactNode } from "react";
+import { memo, useEffect, useId, useRef, type ReactNode } from "react";
 import type { Dispatch, FormEvent, RefObject, SetStateAction } from "react";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
@@ -163,6 +163,28 @@ function ComposerInner({
 }) {
   // The Hand outlives the fight by one beat so its fold-away can play.
   const hand = useLingeringEncounter(encounter);
+  // A DM who plays characters too (a test fight a person runs, issue 553):
+  // on one of theirs the party's Hand and its Do and Say, on every other turn
+  // the monsters'. At any other table the DM holds no character, so this is
+  // never true there.
+  const current = hand.encounter?.orderReady ? hand.encounter.order[hand.encounter.turnIndex] : undefined;
+  const heroUp =
+    isDm &&
+    !hand.encounter?.enemyTurns &&
+    current?.kind === "pc" &&
+    sheets.some((sheet) => sheet.id === current.id && sheet.userId === meUserId && !sheet.isCompanion);
+  const partyHand = !isDm || heroUp;
+  // The box speaks for whoever's turn it is: the hero's coming up (or the
+  // table opening on it) turns it to Do, and the turn passing on turns Do or
+  // Say back to Narrate, so text typed after the turn moved is never sent in
+  // the wrong voice.
+  const heroWasUp = useRef(false);
+  useEffect(() => {
+    if (heroWasUp.current === heroUp) return;
+    heroWasUp.current = heroUp;
+    if (heroUp) onKindChange("do");
+    else if (kind === "do" || kind === "say") onKindChange("narrate");
+  }, [heroUp, kind, onKindChange]);
   // Each mode's limit, counted as its route counts it. The count shows once
   // a draft nears it, and a draft over it is held here, marked, rather than
   // refused after the send or cut short on the server (issue 207).
@@ -230,7 +252,7 @@ function ComposerInner({
             work exactly as they do without it. */}
         {/* The DM's hand (issue #108): the monsters' attacks and abilities
             as the same cards, played through the console's invoke route. */}
-        {isDm && hand.encounter ? (
+        {!partyHand && hand.encounter ? (
           <MonsterHand
             campaignId={campaignId}
             sheets={sheets}
@@ -238,7 +260,7 @@ function ComposerInner({
             leaving={hand.leaving}
           />
         ) : null}
-        {!isDm && hand.encounter ? (
+        {partyHand && hand.encounter ? (
           <CombatHand
             activeSheetId={activeSheetId}
             campaignId={campaignId}
@@ -266,7 +288,9 @@ function ComposerInner({
               character to act or speak as, and the story directions exist to
               steer an AI narrator they have replaced. */}
           {(isDm
-            ? (["narrate", "ooc"] as const)
+            ? heroUp
+              ? (["do", "say", "narrate", "ooc"] as const)
+              : (["narrate", "ooc"] as const)
             : ([
                 "do",
                 "say",

@@ -1226,7 +1226,13 @@ export function SessionView({
                   </Suspense>
                 ) : (
                   <>
-                  {state.testFight ? <TestFightBanner campaignId={campaign.id} source={state.testFight} /> : null}
+                  {state.testFight ? (
+                    <TestFightBanner
+                      campaignId={campaign.id}
+                      source={state.testFight}
+                      runsIt={campaign.gameSettings?.dmMode === "ai" ? "ai" : "person"}
+                    />
+                  ) : null}
                   {ended ? (
                     <SessionBanner
                       glyph="tab-campaigns"

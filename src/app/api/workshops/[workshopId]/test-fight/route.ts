@@ -11,8 +11,8 @@ export const dynamic = "force-dynamic";
 
 // A workshop's test fight (issue 553, src/lib/workshop/test-fight.ts): what
 // the Test fight sheet reads before it offers the button (whether an AI DM
-// can run one, the stand-in party, the test already open), starting one,
-// and ending it.
+// is there to run one, the stand-in party, the test already open), starting
+// one, by the AI DM or by its author, and ending it.
 
 const startSchema = z.object({
   templateId: z.string().trim().min(1).max(80),
@@ -23,6 +23,8 @@ const startSchema = z.object({
       characterIds: z.array(z.string().trim().min(1).max(80)).min(1).max(TARGET_PARTY_LIMITS.size.max),
     }),
   ]),
+  // Who runs it. Left out: the AI DM where one is set up, else the author.
+  runner: z.enum(["ai", "person"]).optional(),
 });
 
 async function resolve(workshopId: string) {
@@ -70,11 +72,13 @@ export async function POST(
   if (!parsed.success) {
     return Response.json({ error: "Pick a fight and who fights it." }, { status: 400 });
   }
+  const runner = parsed.data.runner ?? ((await testFightReadiness(resolved.workshop)).ready ? "ai" : "person");
   const outcome = await openTestFight({
     workshop: resolved.workshop,
     userId: resolved.user.id,
     templateId: parsed.data.templateId,
     party: parsed.data.party,
+    runner,
   });
   if (!outcome.ok) {
     return Response.json({ error: outcome.error }, { status: outcome.status });

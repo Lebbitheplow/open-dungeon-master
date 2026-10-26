@@ -125,7 +125,7 @@ export const WORKSHOP_GUIDES: ToolGuide[] = [
       "Choose the map it opens on, then place each creature and the party's entrance on it.",
       "Write the plan: what the fight is worth, and what happens when.",
       "Prepare it. At the table the fight is one press of Deploy.",
-      "Press Test fight to play it now: pick the stand-in party or your own characters, and the AI DM runs the enemies on a table only you can see.",
+      "Press Test fight to play it now on a table only you can see: pick the stand-in party or your own characters, and who runs the enemies, the AI DM or you. With no AI DM set up, you do.",
     ],
     atTable: "Deploy lays the fight down on its map with its plan. A hand-built monster in its roster is copied into the campaign that brings the fight in.",
     tips: [
