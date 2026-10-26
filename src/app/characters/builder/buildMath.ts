@@ -9,7 +9,7 @@
 // slots the save stores (casting.ts builderSpellSlots). This module only
 // lays them out as rows and says what changed.
 import type { Ability } from "@/lib/schemas/sheet";
-import { SRD_SKILLS, formatModifier, type DerivedPart } from "@/lib/srd";
+import { SRD_SKILLS, findSkill, formatModifier, proficiencyBonus, type DerivedPart } from "@/lib/srd";
 import { ABILITY_NAMES } from "@/lib/srd/legality/types";
 import { armorClassLine, hitPointsLine } from "./derivedReasons";
 import type { BuilderDerived } from "./useBuilderDerived";
@@ -201,6 +201,55 @@ export function buildMathSections({ derived, scores, klass, atTable }: BuildMath
     sections.push({ id: "weapons", title: "Weapons", rows: weapons });
   }
   return sections;
+}
+
+// What is already settled before the table can be worked out: before six
+// scores there is no modifier, but the proficiency bonus, the class's hit
+// die and saves, the ancestry's bonuses and speed and the skills picked so
+// far are the sheet's already. Read from the same rows the save reads.
+export function knownSoFarRows({
+  level,
+  klass,
+  race,
+  racialBonus,
+  proficientSkills,
+}: {
+  level: number;
+  klass: { name: string; hitDie: number; saves: string[] } | undefined;
+  race: { name: string; speed: number } | undefined;
+  racialBonus: Partial<Record<Ability, number>>;
+  proficientSkills: string[];
+}): BuildMathRow[] {
+  const bonuses = ABILITIES.flatMap((ability) =>
+    racialBonus[ability] ? [`${ABILITY_NAMES[ability]} ${formatModifier(racialBonus[ability] ?? 0)}`] : [],
+  );
+  const skills = proficientSkills.flatMap((id) => {
+    const skill = findSkill(id);
+    return skill ? [skill.name] : [];
+  });
+  return [
+    { id: "proficiency", label: "Proficiency bonus", value: formatModifier(proficiencyBonus(level)), working: `level ${level}` },
+    ...(klass
+      ? [
+          { id: "hit-die", label: "Hit die", value: `d${klass.hitDie}`, working: klass.name },
+          {
+            id: "save-proficiencies",
+            label: "Proficient saves",
+            value: klass.saves.map((save) => ABILITY_NAMES[save] ?? save).join(", "),
+            working: klass.name,
+          },
+        ]
+      : []),
+    ...(race
+      ? [
+          { id: "ancestry-bonuses", label: "Ancestry bonuses", value: bonuses.join(", ") || "none", working: race.name },
+          { id: "speed", label: "Speed", value: `${race.speed} ft`, working: race.name },
+        ]
+      : []),
+    ...(skills.length
+      ? [{ id: "skill-proficiencies", label: "Proficient skills", value: skills.join(", "), working: "class, background and ancestry picks" }]
+      : []),
+  ];
 }
 
 // What a screen reader hears when picks move the numbers: the first number

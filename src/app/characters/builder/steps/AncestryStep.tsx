@@ -79,28 +79,7 @@ export function AncestryStep({
 
   // One slide per picker row, in the picker's order, so the carousel walks
   // exactly what the grid shows.
-  const slides = useMemo<LineageSlide[]>(
-    () =>
-      flattenGroups(raceGroups).flatMap(({ option, group, recommended }) => {
-        const entry = races.find((candidate) => candidate.id === option.id);
-        if (!entry) {
-          return [];
-        }
-        return [
-          {
-            ...entry,
-            art: lineageArt(entry.id, `${option.meta ?? ""} ${entry.name}`, gender),
-            canonical: option.meta,
-            // Named on the card only where the group heading is not the book.
-            sourceOnCard: option.source,
-            group,
-            recommended,
-            info: { text: option.infoText, reference: option.reference },
-          },
-        ];
-      }),
-    [raceGroups, races, gender],
-  );
+  const slides = useMemo(() => lineageSlidesFor(raceGroups, races, gender), [raceGroups, races, gender]);
 
   const cardGroups = useMemo<OptionCardGroup[]>(
     () =>
@@ -369,4 +348,31 @@ function speciesWords(id: string): string {
     .filter(Boolean)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
+}
+
+// One slide per picker row, in the picker's order: what the grid's cards,
+// the carousel and the build math panel's picks all show of a lineage.
+export function lineageSlidesFor(
+  raceGroups: PickerGroup[],
+  races: Array<Reskinned<RaceOption>>,
+  gender: BuilderState["gender"],
+): LineageSlide[] {
+  return flattenGroups(raceGroups).flatMap(({ option, group, recommended }) => {
+    const entry = races.find((candidate) => candidate.id === option.id);
+    if (!entry) {
+      return [];
+    }
+    return [
+      {
+        ...entry,
+        art: lineageArt(entry.id, `${option.meta ?? ""} ${entry.name}`, gender),
+        canonical: option.meta,
+        // Named on the card only where the group heading is not the book.
+        sourceOnCard: option.source,
+        group,
+        recommended,
+        info: { text: option.infoText, reference: option.reference },
+      },
+    ];
+  });
 }

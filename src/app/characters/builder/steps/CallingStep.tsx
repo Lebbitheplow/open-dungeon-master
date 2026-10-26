@@ -287,22 +287,16 @@ export function CallingStep({
             title={details?.name ?? ""}
             // The card's role and "plays like", said again where the class
             // is read about at length.
-            meta={(() => {
-              const reading = details ? readings.get(details.id) : undefined;
-              const saves = details ? classes.find((candidate) => candidate.id === details.id)?.saves : undefined;
-              return [
-                details?.meta,
-                saves?.length ? `Saves ${saves.map((save) => save.toUpperCase()).join(" ")}` : "",
-                reading ? `Role: ${reading.roles.join(" / ")}` : "",
-                reading
-                  ? reading.playsLike.toLowerCase() === details?.id.toLowerCase()
-                    ? "One of the core four"
-                    : `Plays like ${reading.playsLike}${reading.suggested ? " (suggested)" : ""}`
-                  : "",
-              ]
-                .filter(Boolean)
-                .join(" · ");
-            })()}
+            meta={
+              details
+                ? classDetailsMeta({
+                    id: details.id,
+                    meta: details.meta,
+                    saves: classes.find((candidate) => candidate.id === details.id)?.saves,
+                    reading: readings.get(details.id),
+                  }).join(" · ")
+                : undefined
+            }
             text={details?.infoText}
             reference={details?.reference}
           />
@@ -476,4 +470,31 @@ export function CallingStep({
 function genreWords(genre: string): string {
   const words = genre.replace(/[-_]/g, " ");
   return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+// The parts of the line over a class's write-up, joined with " · ": its
+// book, its saves, its job in a fight and which of the core four it plays
+// like. The card's details dialog and the build math panel's picks both
+// read it.
+export function classDetailsMeta({
+  id,
+  meta,
+  saves,
+  reading,
+}: {
+  id: string;
+  meta?: string;
+  saves?: string[];
+  reading?: ReturnType<typeof classRoles>;
+}): string[] {
+  return [
+    meta,
+    saves?.length ? `Saves ${saves.map((save) => save.toUpperCase()).join(" ")}` : "",
+    reading ? `Role: ${reading.roles.join(" / ")}` : "",
+    reading
+      ? reading.playsLike.toLowerCase() === id.toLowerCase()
+        ? "One of the core four"
+        : `Plays like ${reading.playsLike}${reading.suggested ? " (suggested)" : ""}`
+      : "",
+  ].filter((part): part is string => Boolean(part));
 }
