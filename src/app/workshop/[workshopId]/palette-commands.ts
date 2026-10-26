@@ -29,16 +29,21 @@ const GLYPH: Record<SystemId, string> = {
   share: "system-share",
 };
 
-export const SYSTEM_CREATE: Partial<Record<SystemId, { label: string; prepare: string; keywords: string[] }>> = {
-  world: { label: "New world entry", prepare: "open-world-entry", keywords: ["create", "add", "worldforge", "wiki", "entry"] },
-  maps: { label: "New battle map", prepare: "open-map-create", keywords: ["create", "add", "map", "room"] },
-  encounters: { label: "New encounter", prepare: "open-encounter-editor", keywords: ["create", "add", "fight"] },
-  cast: { label: "New NPC", prepare: "open-npc-editor", keywords: ["create", "add", "person", "character"] },
-  bestiary: { label: "Build a monster", prepare: "open-monster-build", keywords: ["create", "new", "add", "creature"] },
-  homebrew: { label: "New homebrew", prepare: "open-homebrew-editor", keywords: ["create", "add", "item", "spell", "option"] },
-  lore: { label: "New lore entry", prepare: "open-lore-editor", keywords: ["create", "add", "fact", "place"] },
-  tables: { label: "New roll table", prepare: "open-table-editor", keywords: ["create", "add", "random"] },
-  plugin: { label: "Open the world pack wizard", prepare: "open-plugin-wizard", keywords: ["create", "new", "pack", "plugin"] },
+// Lore has two: its own entries, and the Market's shops below them, which
+// an author looking for shops could not find (audit WA-10).
+export const SYSTEM_CREATE: Partial<Record<SystemId, Array<{ label: string; prepare: string; keywords: string[] }>>> = {
+  world: [{ label: "New world entry", prepare: "open-world-entry", keywords: ["create", "add", "worldforge", "wiki", "entry"] }],
+  maps: [{ label: "New battle map", prepare: "open-map-create", keywords: ["create", "add", "map", "room"] }],
+  encounters: [{ label: "New encounter", prepare: "open-encounter-editor", keywords: ["create", "add", "fight"] }],
+  cast: [{ label: "New NPC", prepare: "open-npc-editor", keywords: ["create", "add", "person", "character"] }],
+  bestiary: [{ label: "Build a monster", prepare: "open-monster-build", keywords: ["create", "new", "add", "creature"] }],
+  homebrew: [{ label: "New homebrew", prepare: "open-homebrew-editor", keywords: ["create", "add", "item", "spell", "option"] }],
+  lore: [
+    { label: "New lore entry", prepare: "open-lore-editor", keywords: ["create", "add", "fact", "place", "handout"] },
+    { label: "New shop", prepare: "open-shop-editor", keywords: ["create", "add", "market", "merchant", "store", "trade"] },
+  ],
+  tables: [{ label: "New roll table", prepare: "open-table-editor", keywords: ["create", "add", "random"] }],
+  plugin: [{ label: "Open the world pack wizard", prepare: "open-plugin-wizard", keywords: ["create", "new", "pack", "plugin"] }],
 };
 
 export function workshopCommands({
@@ -67,22 +72,17 @@ export function workshopCommands({
     keywords: ["open", "jump", system.id],
     onSelect: () => onJump(system.id),
   }));
-  const creates: PaletteCommand[] = WORKSHOP_SYSTEMS.flatMap((system) => {
-    const create = SYSTEM_CREATE[system.id];
-    return create
-      ? [
-          {
-            id: `new-${system.id}`,
-            label: create.label,
-            hint: `In ${system.label}`,
-            group: "Create an entry",
-            glyph: GLYPH[system.id],
-            keywords: [...create.keywords, system.label],
-            onSelect: () => onCreate(system.id, create.prepare),
-          },
-        ]
-      : [];
-  });
+  const creates: PaletteCommand[] = WORKSHOP_SYSTEMS.flatMap((system) =>
+    (SYSTEM_CREATE[system.id] ?? []).map((create, index) => ({
+      id: index ? `new-${system.id}-${index}` : `new-${system.id}`,
+      label: create.label,
+      hint: `In ${system.label}`,
+      group: "Create an entry",
+      glyph: GLYPH[system.id],
+      keywords: [...create.keywords, system.label],
+      onSelect: () => onCreate(system.id, create.prepare),
+    })),
+  );
   const here: PaletteCommand[] = [
     ...(current
       ? [{ id: "hub", label: "Back to the hub", hint: "Every system at a glance", group: "This workshop", glyph: "tab-campaigns", keywords: ["home", "cards"], onSelect: onHub }]

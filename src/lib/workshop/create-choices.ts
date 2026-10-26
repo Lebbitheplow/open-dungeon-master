@@ -184,6 +184,24 @@ export const CREATE_CHOICES: CreateChoice[] = [
     ],
   },
   {
+    // The Market lives under Lore, below its entries; without this way in,
+    // an author looking for shops found no tool for them (audit WA-10).
+    id: "shop",
+    label: "Shop",
+    blurb: "A merchant with a shelf, prices and a keeper the party can trade with.",
+    lands: "Lore, in the Market below its entries",
+    group: "playable",
+    steps: [
+      {
+        label: "Open a shop",
+        detail: "Name the shop, where it stands and who keeps it, then stock its shelf from the content pack or line by line.",
+        ways: ["blank"],
+        system: "lore",
+        prepare: "open-shop-editor",
+      },
+    ],
+  },
+  {
     id: "spell",
     label: "Spell",
     blurb: "A spell with its level, school, range and effect.",

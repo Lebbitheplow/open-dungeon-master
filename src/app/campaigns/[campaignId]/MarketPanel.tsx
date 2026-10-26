@@ -20,6 +20,7 @@ import { MarketShopEditor, type Named } from "./MarketShopEditor";
 import type { StockLine } from "@/lib/dm/shop-logic";
 import type { MarketRequest } from "@/lib/dm/table-tabs";
 import { GameTerm } from "@/components/ui/GameTerm";
+import { useTourPrepare } from "@/lib/tours/prepare";
 
 // The market (docs/vtt-parity-implementation-plan.md 11.1): the shops at
 // the party's place, stock as tiles with a price chip in coin, a Buy on
@@ -169,6 +170,25 @@ export function MarketPanel({
     };
   }, [campaignId, refreshKey, reload, settle, isDm, viewerId]);
 
+  // Create's Shop and the palette's New shop (audit WA-10). The Market sits
+  // below Lore's entries in a workshop, so the form comes into view with its
+  // name field ready. Unanswered until the shops have loaded, so the asker
+  // tries again rather than giving up on a panel still on the wire.
+  const nameRef = useRef<HTMLInputElement>(null);
+  const [askedToOpen, setAskedToOpen] = useState(0);
+  useTourPrepare((name) => {
+    if (name !== "open-shop-editor" || shops === null || !canPrep) return;
+    setOpening(true);
+    setAskedToOpen((count) => count + 1);
+    return true;
+  });
+  useEffect(() => {
+    const input = nameRef.current;
+    if (!askedToOpen || !input) return;
+    input.scrollIntoView({ block: "center", behavior: "smooth" });
+    input.focus({ preventScroll: true });
+  }, [askedToOpen]);
+
   // Deferred a tick, as the hero page's heading is: the panel paints the
   // shops on the render that loads them, after this effect is scheduled.
   const loadedShops = shops !== null;
@@ -302,7 +322,7 @@ export function MarketPanel({
       {canPrep ? (
         opening ? (
           <div className="panel reveal flex flex-wrap items-center gap-1.5 rounded-lg p-2.5">
-            <input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} maxLength={80} placeholder="Marla's Sundries" aria-label="Shop name" className={cn(panelField, "min-w-[9rem] flex-1")} />
+            <input ref={nameRef} value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} maxLength={80} placeholder="Marla's Sundries" aria-label="Shop name" className={cn(panelField, "min-w-[9rem] flex-1")} />
             <Select size="sm" label="Kind of shop" value={draft.kind} options={KIND_OPTIONS} onChange={(kind) => setDraft({ ...draft, kind })} className="pk-w-28" />
             <Select size="sm" label="Size of the place" value={draft.size} options={SIZE_OPTIONS} onChange={(size) => setDraft({ ...draft, size })} className="pk-w-24" />
             {places.length ? (
@@ -335,7 +355,7 @@ export function MarketPanel({
             <KitButton onClick={() => setOpening(false)}>Cancel</KitButton>
           </div>
         ) : (
-          <KitButton onClick={() => setOpening(true)}>
+          <KitButton data-tour="market-open" onClick={() => setOpening(true)}>
             <Plus className="size-3.5" /> Open a shop {here ? `at ${here.name}` : ""}
           </KitButton>
         )
