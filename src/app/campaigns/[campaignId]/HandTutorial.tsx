@@ -13,7 +13,7 @@ const ROWS = [
   {
     tag: "Card",
     title: "Play a card",
-    body: "Pick one, then pick who it lands on. The numbers come from your sheet, so nothing is typed twice. Spent cards dim and say why when you press them.",
+    body: "Pick one, then pick who it lands on. Your spells, items and basic actions each wait under one card: open it to choose. A card's coloured corner is the pip it spends. Spent cards dim and say why when you press them.",
     className: "border-amber-500/45 bg-amber-500/10",
     tagClassName: "border-amber-400/60 text-amber-200",
   },

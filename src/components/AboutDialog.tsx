@@ -13,7 +13,9 @@ import { ui } from "@/lib/ui";
 // that number, and whether a newer release is out. It exists so "is the fix
 // in what I am running?" can be answered from the browser, and so a problem
 // can be reported with the build it happened on: the Copy button puts that
-// on the clipboard in the shape an issue wants.
+// on the clipboard in the shape an issue wants. The link to the issues is
+// the admin's alone: a player tells whoever runs the server, who can check
+// its setup before anything reaches GitHub (issue #459's follow-up).
 
 type About = {
   serverName: string;
@@ -124,7 +126,7 @@ function UpdateLine({ update, build }: { update: UpdateStatus; build: BuildInfo 
   );
 }
 
-export function AboutDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+export function AboutDialog({ open, onOpenChange, isAdmin = false }: { open: boolean; onOpenChange: (open: boolean) => void; isAdmin?: boolean }) {
   const [about, setAbout] = useState<About | null>(null);
   const [failed, setFailed] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -209,7 +211,7 @@ export function AboutDialog({ open, onOpenChange }: { open: boolean; onOpenChang
           <div className="flex flex-wrap items-center gap-2">
             <button type="button" onClick={() => void copy()} className={cn(ui.btnSmall, "gap-1.5")}>
               {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-              {copied ? "Copied" : "Copy details for a bug report"}
+              {copied ? "Copied" : isAdmin ? "Copy details for a bug report" : "Copy these details"}
             </button>
             {about.canRecheck && about.update.state !== "off" ? (
               <button
@@ -236,9 +238,13 @@ export function AboutDialog({ open, onOpenChange }: { open: boolean; onOpenChang
             <a href={`${about.repositoryUrl}/releases`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-stone-400 underline-offset-2 hover:text-amber-200 hover:underline">
               Release notes <ExternalLink className="size-3" />
             </a>
-            <a href={`${about.repositoryUrl}/issues`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-stone-400 underline-offset-2 hover:text-amber-200 hover:underline">
-              Report a problem <ExternalLink className="size-3" />
-            </a>
+            {isAdmin ? (
+              <a href={`${about.repositoryUrl}/issues`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-stone-400 underline-offset-2 hover:text-amber-200 hover:underline">
+                Report a problem <ExternalLink className="size-3" />
+              </a>
+            ) : (
+              <span className="text-stone-500">Something not working? Tell whoever runs this server.</span>
+            )}
           </p>
         </div>
       )}

@@ -11,6 +11,7 @@ import {
   type ChatMessage,
   type ChatRequestOptions,
   type UpstreamResult,
+  probeCustomContextWindow,
 } from "@/lib/model-client";
 import { requestHarnessMessage } from "@/lib/harness/bridge";
 import { harnessConfig, harnessContextTokens } from "@/lib/harness/status";
@@ -328,10 +329,22 @@ async function attempt(
   const background = asked ?? scope?.background ?? false;
   void _min;
   void _fit;
-  // A utility job that wants no thinking thinks as little as the model
-  // allows (model-client's reasoningEffort), on its own route or the
-  // story's. A turn's calls never do: see that option.
-  const leastThought = ledgerRole === "utility" && options.thinking === false ? { reasoningEffort: "low" as const } : {};
+  // A model whose template thinks by effort and has no thinking switch
+  // (gpt-oss) is asked for "low" on every call, story and utility alike
+  // (model-client's reasoningEffort). One value for every call keeps the
+  // prompt's first tokens the same, so the narrator's cache holds across a
+  // turn; the server's own budget still caps what "low" writes. Measured on
+  // a BC-250 (2026-10-25): the default effort thought up to the 1,024-token
+  // budget on calls that only narrate, about 12 seconds each.
+  const leastThought = { reasoningEffort: "low" as const };
+  // The backend's /props, once per route (cached in model-client): the
+  // first calls of a process (a campaign's setup, the first turn after a
+  // restart) otherwise go out before the template's reasoning knob is
+  // known, without the effort the later calls carry, and on a local
+  // narrator that is a different prompt start and a whole prompt read again.
+  if (route.provider === "custom") {
+    await probeCustomContextWindow(route.baseUrl, route.apiKey, route.model);
+  }
   const call = () =>
     send(route, sent, {
       ...transport,

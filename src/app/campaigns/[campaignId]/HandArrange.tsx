@@ -1,12 +1,13 @@
 "use client";
 
-import { ArrowDown, ArrowUp } from "lucide-react";
+import { ArrowDown, ArrowUp, ChevronDown } from "lucide-react";
 import { useRef, useState, type CSSProperties } from "react";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { cardArtwork } from "@/lib/battlemap/card-art";
 import { cn } from "@/lib/cn";
 import type { HandCard } from "@/lib/battlemap/hand";
 import {
+  END_TURN_ID,
   HAND_SEATS,
   addToHand,
   missingFromHand,
@@ -15,6 +16,7 @@ import {
   type HandLayout,
 } from "@/lib/battlemap/hand-layout";
 import { costLabel } from "@/lib/battlemap/hand-play";
+import { groupSummary, isGroup, type HandGroup, type HandUnit } from "@/lib/battlemap/hand-groups";
 import { replayAnimation } from "@/lib/motion/replay";
 
 // Customize Hand (issue 231): every card the character holds right now, each
@@ -22,18 +24,25 @@ import { replayAnimation } from "@/lib/motion/replay";
 // seat is refused in words and changes nothing; the player chooses what goes.
 // Placement only: a card in More is played from there exactly as before, and
 // every card keeps the rules' own reason when it cannot be played.
+//
+// A group (issue 528) takes one seat for all its cards. Any one of them can
+// still be seated on its own as a favourite from under the group's row: it
+// sits in the fan and stays inside the group too.
 export function HandArrange({
+  units,
   cards,
   working,
   arranged,
   urgent,
   displaced,
-  fresh,
+  freshIds,
   onChange,
   onReset,
   onDone,
 }: {
-  // Every card in the hand now, in the hand's own order.
+  // What the fan deals now (cards and groups), in the hand's own order.
+  units: HandUnit[];
+  // Every card in the hand now, those inside groups too.
   cards: HandCard[];
   // The layout being arranged: the saved one, or what the automatic split
   // shows now (startingLayout), so the first change moves one card.
@@ -42,21 +51,23 @@ export function HandArrange({
   arranged: boolean;
   // Cards the moment has seated ahead of the chosen ones (Escape, Stand up).
   urgent: HandCard[];
-  displaced: HandCard[];
-  fresh: HandCard[];
+  displaced: HandUnit[];
+  freshIds: Set<string>;
   onChange: (layout: HandLayout) => Promise<string | null>;
   onReset: () => Promise<string | null>;
   onDone: () => void;
 }) {
   const [notice, setNotice] = useState("");
   const [moved, setMoved] = useState<{ id: string; seq: number } | null>(null);
+  // The groups whose cards are listed for seating one on its own.
+  const [openGroups, setOpenGroups] = useState<string[]>([]);
   const noticeRef = useRef<HTMLParagraphElement>(null);
-  const byId = new Map(cards.map((card) => [card.id, card]));
-  const inHand = working.fan.map((id) => byId.get(id)).filter((card): card is HandCard => Boolean(card));
+  const byId = new Map<string, HandUnit>([...cards, ...units].map((unit) => [unit.id, unit]));
+  const inHand = working.fan.map((id) => byId.get(id)).filter((unit): unit is HandUnit => Boolean(unit));
   const chosen = new Set(working.fan);
-  const inMore = cards.filter((card) => !chosen.has(card.id) && card.id !== "basic:end-turn" && !urgent.includes(card));
-  const missing = missingFromHand(working, cards).length;
-  const freshIds = new Set(fresh.map((card) => card.id));
+  const inMore = units.filter((unit) => !chosen.has(unit.id) && unit.id !== END_TURN_ID && !urgent.includes(unit as HandCard));
+  const missing = missingFromHand(working, [...units, ...cards]).length;
+  const isFresh = (unit: HandUnit) => (isGroup(unit) ? unit.cards.some((card) => freshIds.has(card.id)) : freshIds.has(unit.id));
   const used = working.fan.length;
 
   const refuse = (text: string) => {
@@ -70,10 +81,50 @@ export function HandArrange({
     if (error) refuse(error);
   };
 
-  const row = (card: HandCard, index: number, place: "hand" | "more") => {
-    const artwork = cardArtwork(card.icon);
+  const seatButton = (card: HandUnit, className = "") => (
+    <button
+      type="button"
+      className={cn("hand-arrange-move motion-press", className)}
+      data-full={used >= HAND_SEATS ? "true" : undefined}
+      onClick={() => {
+        const next = addToHand(working, card);
+        if ("error" in next) {
+          refuse(next.error);
+          return;
+        }
+        void apply(next.layout, card.id);
+      }}
+    >
+      To Hand
+    </button>
+  );
+
+  // A group's cards, any one of which may take a seat of its own.
+  const members = (group: HandGroup) => (
+    <ul id={`arrange-${group.id}`} className="hand-arrange-members">
+      {group.cards.map((card) => {
+        const seat = working.fan.indexOf(card.id);
+        return (
+          <li key={card.id} className="hand-arrange-member">
+            <span className="min-w-0 flex-1 truncate text-sm text-stone-200">{card.name}</span>
+            <span className="hand-cost shrink-0" data-cost={card.cost}>{costLabel(card.cost)}</span>
+            {seat >= 0 ? (
+              <span className="shrink-0 text-[10px] uppercase tracking-wider text-amber-200">In Hand · seat {seat + 1}</span>
+            ) : (
+              seatButton(card)
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+
+  const row = (card: HandUnit, index: number, place: "hand" | "more") => {
+    const group = isGroup(card) ? card : null;
+    const artwork = cardArtwork(group ? (group.icons[0] ?? { kind: "action", key: "use-object" }) : (card as HandCard).icon);
     const seat = place === "hand" ? working.fan.indexOf(card.id) : -1;
     const flash = moved?.id === card.id;
+    const listed = group ? openGroups.includes(group.id) : false;
     return (
       <li
         key={`${card.id}:${flash ? moved?.seq : 0}`}
@@ -97,13 +148,17 @@ export function HandArrange({
               >
                 {place === "hand" ? `In Hand · seat ${seat + 1}` : "In More"}
               </span>
-              {freshIds.has(card.id) ? (
+              {isFresh(card) ? (
                 <span className="shrink-0 rounded-full border border-emerald-400/50 bg-emerald-400/10 px-1.5 py-px text-[10px] uppercase tracking-wider text-emerald-200">
                   New
                 </span>
               ) : null}
             </span>
-            <span className="block font-mono text-[10px] uppercase tracking-wider text-amber-200/80">{costLabel(card.cost)}</span>
+            {group ? (
+              <span className="block text-[11px] text-stone-400">{groupSummary(group)}</span>
+            ) : (
+              <span className="hand-cost mt-0.5" data-cost={(card as HandCard).cost}>{costLabel((card as HandCard).cost)}</span>
+            )}
           </span>
           {place === "hand" ? (
             <span className="ml-auto flex shrink-0 items-center gap-1">
@@ -134,22 +189,23 @@ export function HandArrange({
               </button>
             </span>
           ) : (
+            seatButton(card, "ml-auto")
+          )}
+          {group ? (
             <button
               type="button"
-              className="hand-arrange-move motion-press ml-auto"
-              data-full={used >= HAND_SEATS ? "true" : undefined}
-              onClick={() => {
-                const next = addToHand(working, card);
-                if ("error" in next) {
-                  refuse(next.error);
-                  return;
-                }
-                void apply(next.layout, card.id);
-              }}
+              className="hand-arrange-open motion-press"
+              aria-expanded={listed}
+              aria-controls={`arrange-${group.id}`}
+              onClick={() =>
+                setOpenGroups((current) => (listed ? current.filter((id) => id !== group.id) : [...current, group.id]))
+              }
             >
-              To Hand
+              <ChevronDown aria-hidden="true" className={cn("chevron-turn size-3.5", listed && "rotate-180")} />
+              Seat one of its {group.noun[1]} on its own
             </button>
-          )}
+          ) : null}
+          {group && listed ? members(group) : null}
         </div>
       </li>
     );

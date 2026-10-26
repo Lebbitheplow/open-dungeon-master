@@ -29,25 +29,26 @@ export function AudioWaitingBanner({
   }
   const narration = narrationHeld > 0;
   // One click plays one passage, so the count says what arrived, not what
-  // will play.
+  // will play. The words fit a browser tab and the apps' screens alike: the
+  // apps' web view holds sound back the same way, and a phone is tapped.
   const said =
     narrationHeld === 1
-      ? "A passage arrived while your browser held sound back. Click to hear it."
-      : `${narrationHeld} passages arrived while your browser held sound back. Click to hear the newest; the others have replay buttons.`;
+      ? "A passage arrived before sound could play here. Tap or click to hear it."
+      : `${narrationHeld} passages arrived before sound could play here. Tap or click to hear the newest; the others have replay buttons.`;
   return (
     <SessionBanner
       glyph={narration ? "ui-speech" : "tab-ambience"}
       title={narration ? "Narration is waiting" : "Sound is waiting"}
       actions={
         <button type="button" className={bannerButtonClass(true)} onClick={onListen}>
-          Click to listen
+          Listen
         </button>
       }
     >
       <span role="status" className="block">
         {narration
           ? said
-          : "Your browser holds the table's sound back until you click this tab."}
+          : "The table's sound starts once you tap or click anywhere here."}
       </span>
     </SessionBanner>
   );

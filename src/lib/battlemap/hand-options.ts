@@ -66,6 +66,7 @@ function card(
     disabled: null,
     spent: false,
     compose: false,
+    pool: pool.id,
     intent:
       cost === "reaction"
         ? { card: "reaction", feature: option.name }

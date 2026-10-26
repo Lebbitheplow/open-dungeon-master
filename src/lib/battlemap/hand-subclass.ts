@@ -96,6 +96,7 @@ export function subclassSpendCards(sheet: CharacterSheet, turn: HandTurn, taken:
         // player says how much in the box.
         compose: perUnit,
         ...(perUnit ? { unit: pool!.id === "ki" ? "ki" : "points" } : {}),
+        ...(pool ? { pool: pool.id } : {}),
         intent: { card: "feature", resourceId: spend.name },
       };
       if (does.kind === "variants") {

@@ -9,9 +9,19 @@
 // No runtime imports: the sheet store reads layouts through this module.
 import type { HandCard } from "@/lib/battlemap/hand-core";
 
+// What takes a seat: a card, or since issue 528 a group of them
+// (hand-groups.ts), seated by its own id ("group:spells"). A group names its
+// cards, so it reads as known while every card in it is.
+export type Seat = {
+  id: string;
+  disabled: string | null;
+  intent?: { card: string };
+  cards?: ReadonlyArray<{ id: string }>;
+};
+
 export type HandLayout = {
-  // The cards chosen for the fan, left to right, by card id. End turn is not
-  // among them: it always keeps the last seat.
+  // The cards chosen for the fan, left to right, by card id (or a group's).
+  // End turn is not among them: it always keeps the last seat.
   fan: string[];
   // Every card the hand held when it was arranged, so one gained since (a
   // level-up's spell, a new weapon) can be marked as new in "more".
@@ -53,31 +63,41 @@ export function normalizeHandLayout(raw: unknown): HandLayout | null {
   return { fan, known: [...new Set([...fan, ...known])].slice(0, KNOWN_CAP) };
 }
 
-export type HandArrangement = {
-  fan: HandCard[];
-  more: HandCard[];
+export type HandArrangement<T extends Seat = HandCard> = {
+  fan: T[];
+  more: T[];
   // Chosen cards an urgent one has pushed out of the fan for now; the layout
   // still holds them, and they come back when the moment passes.
-  displaced: HandCard[];
-  // Cards in "more" the hand did not hold when it was arranged.
-  fresh: HandCard[];
+  displaced: T[];
+  // What sits in "more" that the hand did not hold when it was arranged: a
+  // card, or a group holding such a card.
+  fresh: T[];
+  // Every card or group gained since, by id, wherever it sits (a group's new
+  // spell is marked inside the group).
+  freshIds: string[];
   // Whether a saved layout placed the cards (false: the automatic split).
   arranged: boolean;
 };
 
+function isKnown(seat: Seat, known: Set<string>): boolean {
+  return seat.cards ? seat.cards.every((card) => known.has(card.id)) : known.has(seat.id);
+}
+
 // The automatic split: nine in the fan, the rest behind the "more" spine in
 // the same order. A playable card is never pushed behind the spine by an
 // unplayable one.
-export function splitHand(cards: HandCard[], cap = HAND_FAN_CAP): { fan: HandCard[]; more: HandCard[] } {
-  if (cards.length <= cap) return { fan: cards, more: [] };
+export function splitHand<T extends Seat>(cards: T[], cap = HAND_FAN_CAP): { fan: T[]; more: T[] } {
   const end = cards.find((card) => card.id === END_TURN_ID);
   const rest = cards.filter((card) => card !== end);
+  // End turn keeps the last seat even when the whole hand fits: the gear
+  // cards and the groups are dealt after it.
+  if (cards.length <= cap) return { fan: end ? [...rest, end] : cards, more: [] };
   // A bare fist gives its seat up too when there is steel to swing.
-  const armed = rest.some((card) => card.intent.card === "attack" && card.id !== "attack:unarmed strike");
+  const armed = rest.some((card) => card.intent?.card === "attack" && card.id !== "attack:unarmed strike");
   // Escape and Stand up are dealt only while something holds the character
   // or they lie prone, which is when they matter most: they keep a seat.
-  const situational = (card: HandCard) => card.id === "basic:escape" || card.id === "basic:stand-up";
-  const rank = (card: HandCard) =>
+  const situational = (card: T) => card.id === "basic:escape" || card.id === "basic:stand-up";
+  const rank = (card: T) =>
     card.disabled ? 2 : situational(card) ? -1 : armed && card.id === "attack:unarmed strike" ? 1 : 0;
   const ranked = [...rest].sort((a, b) => rank(a) - rank(b));
   const keep = new Set(ranked.slice(0, end ? cap - 1 : cap));
@@ -89,21 +109,27 @@ export function splitHand(cards: HandCard[], cap = HAND_FAN_CAP): { fan: HandCar
 // The hand as the player arranged it, or the automatic split when they have
 // not. Urgent cards sit first; the chosen ones follow in the player's order
 // and, when an urgent card needs a seat, the last of them waits in "more".
-export function arrangeHand(
-  cards: HandCard[],
+//
+// `cards` are what the fan deals (a group stands for its cards); `members`
+// are the cards inside the groups, which a player may still seat on their
+// own as a favourite: a seated Fireball sits in the fan and stays inside
+// Spells too.
+export function arrangeHand<T extends Seat>(
+  cards: T[],
   layout: HandLayout | null | undefined,
   cap = HAND_FAN_CAP,
-): HandArrangement {
+  members: T[] = [],
+): HandArrangement<T> {
   if (!layout) {
-    return { ...splitHand(cards, cap), displaced: [], fresh: [], arranged: false };
+    return { ...splitHand(cards, cap), displaced: [], fresh: [], freshIds: [], arranged: false };
   }
   const end = cards.find((card) => card.id === END_TURN_ID) ?? null;
   const seats = end ? cap - 1 : cap;
-  const byId = new Map(cards.map((card) => [card.id, card]));
+  const byId = new Map([...members, ...cards].map((card) => [card.id, card]));
   const urgent = cards.filter((card) => card !== end && isUrgentCard(card)).slice(0, seats);
   const chosen = layout.fan
     .map((id) => byId.get(id))
-    .filter((card): card is HandCard => Boolean(card) && card !== end && !urgent.includes(card!));
+    .filter((card): card is T => Boolean(card) && card !== end && !urgent.includes(card!));
   const free = Math.max(0, seats - urgent.length);
   const seated = [...urgent, ...chosen.slice(0, free)];
   const displaced = chosen.slice(free);
@@ -115,7 +141,8 @@ export function arrangeHand(
     fan,
     more,
     displaced,
-    fresh: more.filter((card) => !known.has(card.id) && !isUrgentCard(card)),
+    fresh: more.filter((card) => !isKnown(card, known) && !isUrgentCard(card)),
+    freshIds: [...new Set([...cards, ...members].filter((card) => !card.cards && !known.has(card.id) && !isUrgentCard(card)).map((card) => card.id))],
     arranged: true,
   };
 }
@@ -123,7 +150,7 @@ export function arrangeHand(
 // A card picked from "more" to play now takes a seat for the moment: an empty
 // one if the fan has room, otherwise the last before End turn. Nothing is
 // saved by it.
-export function seatPicked(fan: HandCard[], picked: HandCard | null, cap = HAND_FAN_CAP): HandCard[] {
+export function seatPicked<T extends { id: string }>(fan: T[], picked: T | null, cap = HAND_FAN_CAP): T[] {
   if (!picked || fan.includes(picked)) return fan;
   const endIndex = fan.findIndex((card) => card.id === END_TURN_ID);
   const before = endIndex === -1 ? fan : fan.slice(0, endIndex);
@@ -137,14 +164,15 @@ export function seatPicked(fan: HandCard[], picked: HandCard | null, cap = HAND_
 // The layout a player starts arranging from: their saved one, or the fan the
 // automatic split shows them now, so the first change moves one card and
 // not the whole hand.
-export function startingLayout(cards: HandCard[], saved: HandLayout | null | undefined): HandLayout {
+export function startingLayout<T extends Seat>(cards: T[], saved: HandLayout | null | undefined, members: T[] = []): HandLayout {
+  const held = [...new Set([...cards, ...members].map((card) => card.id))];
   if (saved) {
-    return { fan: [...saved.fan], known: [...new Set([...saved.known, ...cards.map((card) => card.id)])] };
+    return { fan: [...saved.fan], known: [...new Set([...saved.known, ...held])] };
   }
   const { fan } = splitHand(cards);
   return {
     fan: fan.filter((card) => card.id !== END_TURN_ID && !isUrgentCard(card)).map((card) => card.id).slice(0, HAND_SEATS),
-    known: cards.map((card) => card.id),
+    known: held,
   };
 }
 
@@ -187,7 +215,7 @@ export function moveInHand(layout: HandLayout, cardId: string, direction: -1 | 1
 // The cards the layout names that the hand does not hold now (a spell no
 // longer prepared, a weapon sold). They keep no seat; the count says why the
 // fan has room.
-export function missingFromHand(layout: HandLayout, cards: HandCard[]): string[] {
+export function missingFromHand(layout: HandLayout, cards: Array<{ id: string }>): string[] {
   const held = new Set(cards.map((card) => card.id));
   return layout.fan.filter((id) => !held.has(id));
 }

@@ -1,14 +1,20 @@
 // Issue 459: "Report a problem" at the table saves one report file to the
-// device and opens the matching GitHub form in a new tab, with nothing from
-// the report in its address. It lives in Help (the header's Help from sm
-// up, the table menu's Help row on a phone), never as a header button of
-// its own. The page's own errors are kept in this browser (a
-// synthetic error event here, so the rig's own page-error watch stays
-// quiet) and go in the file with their keys cut out; the transcript is off
-// until ticked, and once ticked holds only the reporter's lines and the
-// DM's. The rig never reaches GitHub: the form's address is answered here.
+// device and opens the bug report form in a new tab, with nothing from the
+// report in its address. It is the server admin's alone: it lives in Help
+// (the header's Help from sm up, the table menu's Help row on a phone),
+// never as a header button of its own, and a player who is not the admin
+// finds there who to ask instead, with the table's report route refusing
+// them. The page's own errors are kept in the admin's browser (a synthetic
+// error event here, so the rig's own page-error watch stays quiet) and go
+// in the file with their keys cut out; the transcript is off until ticked,
+// and once ticked holds only the reporter's lines and the DM's. The form
+// opens with Your setup filled in from the file's setup (versions, how it
+// was installed, the models; in the app, the app's facts too) and nothing
+// else in its address, and what the server found to check first shows in
+// the dialog and goes in the file. The rig never reaches GitHub: the form's
+// address is answered here.
 import fs from "node:fs";
-import { check, eventually } from "../lib.mjs";
+import { check, eventually, hydrated, newContext, settle, signIn } from "../lib.mjs";
 
 const FORM = "https://github.com/Lebbitheplow/open-dungeon-master/issues/new?template=bug_report.yml";
 
@@ -16,7 +22,7 @@ export default {
   name: "report-problem",
   viewports: ["desktop", "phone"],
   async run(t) {
-    const { page, root, ids, viewport } = t;
+    const { page, root, ids, viewport, base } = t;
     await t.open(`/campaigns/${ids.campaignId}`);
     await eventually(() => page.locator(`${root}.cine-stage`).count(), { timeoutMs: 30_000, label: "the table's stage" });
 
@@ -50,6 +56,7 @@ export default {
     check(ticked.transcript === false, "the transcript is ticked before it is asked for");
     check(ticked.turnRecords === false, "the narrator's records are ticked before they are asked for");
     await t.shot("dialog");
+    const shownChecks = await dialog.locator("[data-report-check-first] li").count();
     await t.tap(dialog.locator('[data-report-part="transcript"] input'));
 
     // In the app the app saves the file (window.odmShell.saveReport, the
@@ -104,15 +111,53 @@ export default {
     check(!text.includes("abc123SECRETVALUE"), "the error's token reached the report");
     check(report.transcript.every((line) => line.from === "you" || line.from === "dm"), "another player's line reached the transcript");
 
+    check(Array.isArray(report.setup.checkFirst), "the file's setup has no checks");
+    check(shownChecks === report.setup.checkFirst.length, `the dialog showed ${shownChecks} checks and the file holds ${report.setup.checkFirst.length}`);
+    check(typeof report.setup.install === "string" && report.setup.install.length > 0, "the setup does not say how the server was installed");
+
     const tab = await popup;
     await eventually(() => tab.url().startsWith("https://github.com/"), { label: "the form's tab" });
-    check(tab.url() === FORM, `the form opened at ${tab.url()}, with something more in its address`);
+    const opened = new URL(tab.url());
+    check(tab.url().startsWith(`${FORM}&setup=`), `the form opened at ${tab.url()}`);
+    check([...opened.searchParams.keys()].join(",") === "template,setup", `the form's address carries ${[...opened.searchParams.keys()].join(", ")}`);
+    const field = opened.searchParams.get("setup") ?? "";
+    check(field.includes("- Version ") && field.includes("- Narrator: ") && field.includes("- Installed as: "), `Your setup is missing facts:\n${field}`);
+    check(!/https?:\/\//.test(field) && !field.includes("127.0.0.1"), `an address went in Your setup:\n${field}`);
+    if (t.app) check(field.includes("- App: Open Dungeon Master"), `Your setup leaves out the app:\n${field}`);
     await tab.close();
 
     const saved = page.locator("[data-report-saved]").locator("visible=true").first();
     await eventually(() => saved.count(), { label: "the saved note" });
-    check((await saved.locator("[data-report-form-link]").getAttribute("href")) === FORM, "the note's link is not the form");
+    // Compared decoded: the opened tab's address has the browser's own
+    // escaping (an apostrophe becomes %27), the link the dialog's.
+    const link = new URL((await saved.locator("[data-report-form-link]").getAttribute("href")) ?? "");
+    check(`${link.origin}${link.pathname}` === `${opened.origin}${opened.pathname}` && link.searchParams.get("setup") === field, "the note's link is not the form that opened");
     if (t.app) check((await saved.innerText()).includes("to the place you picked"), "the note does not say where the app put the file");
     await t.shot("saved");
+
+    // The seeded player is not the admin: Help tells them who to ask, with
+    // no button, and the table's report route refuses them.
+    if (viewport === "desktop" && !t.app) {
+      const playerContext = await newContext(page.context().browser(), viewport, { app: false });
+      try {
+        await signIn(playerContext, base, ids.player, ids.password);
+        const refused = await playerContext.request.get(`${base}/api/campaigns/${ids.campaignId}/report-bundle`);
+        check(refused.status() === 403, `the table's report answered a player ${refused.status()}`);
+        const playerPage = await playerContext.newPage();
+        await playerPage.goto(`${base}/campaigns/${ids.campaignId}`, { waitUntil: "networkidle", timeout: 120_000 });
+        await hydrated(playerPage);
+        await settle(playerPage);
+        const help = playerPage.locator('header button[data-tour="header-help"]').locator("visible=true").first();
+        await eventually(() => help.count(), { timeoutMs: 30_000, label: "the player's Help" });
+        await help.click();
+        const ask = playerPage.locator("[role=dialog] [data-report-ask-host]").locator("visible=true").first();
+        await eventually(() => ask.count(), { timeoutMs: 15_000, label: "who to ask, in the player's Help" });
+        check((await playerPage.locator("[role=dialog] [data-report-problem]").count()) === 0, "a player who is not the admin was offered Report a problem");
+        await ask.scrollIntoViewIfNeeded();
+        await playerPage.screenshot({ path: t.shotPath("player-help") }).catch(() => {});
+      } finally {
+        await playerContext.close();
+      }
+    }
   },
 };

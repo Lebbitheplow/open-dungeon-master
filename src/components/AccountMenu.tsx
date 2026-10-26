@@ -259,7 +259,7 @@ export function AccountMenu({
         </DropdownMenu.Portal>
       </DropdownMenu.Root>
       {onHelp ? null : <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />}
-      <AboutDialog open={aboutOpen} onOpenChange={setAboutOpen} />
+      <AboutDialog open={aboutOpen} onOpenChange={setAboutOpen} isAdmin={Boolean(user.isAdmin)} />
     </>
   );
 }

@@ -59,7 +59,7 @@ export function HandPreviewRows({ rows }: { rows: PreviewRow[] }) {
           <span className="hand-row-key">{row.key}</span>
           {/* Keyed by what it says, so a number that changes with the target
               arrives as a new one (hand-motion.css) instead of cutting. */}
-          <span key={row.value} className="hand-row-value" data-tone={row.tone}>
+          <span key={row.value} className="hand-row-value" data-tone={row.tone} data-cost={row.cost}>
             {row.value}
           </span>
         </span>
@@ -101,6 +101,7 @@ function HandCardFaceInner({
   aim,
   conditions,
   waiting = false,
+  fresh = false,
   onPick,
 }: {
   card: HandCard;
@@ -120,6 +121,9 @@ function HandCardFaceInner({
   // Such a card is still read like a playable one: its preview opens, and
   // the hand's header, not a tooltip on every card, says whose turn it is.
   waiting?: boolean;
+  // Gained since the player arranged the hand (issue 231), shown inside a
+  // group the same way the More sheet marks it.
+  fresh?: boolean;
   onPick: (card: HandCard) => void;
 }) {
   const rows = useMemo(() => previewRows(card, aim, conditions), [card, aim, conditions]);
@@ -134,7 +138,11 @@ function HandCardFaceInner({
     <button
       type="button"
       className="hand-card motion-card"
+      data-card-id={card.id}
       data-type={card.type}
+      // The cost wears its own colour and shape on the card's corner and
+      // left edge, the pip's (issue 529): one colour means one thing.
+      data-cost={card.cost}
       data-tilt="16"
       data-picked={picked ? "true" : undefined}
       data-spent={card.spent ? "true" : undefined}
@@ -150,6 +158,8 @@ function HandCardFaceInner({
       <span className="hand-card-foil" />
       <span className="hand-card-sheen" />
       <span className="hand-card-ribbon">{TYPE_LABEL[card.type]}</span>
+      <span className="hand-card-notch" aria-hidden="true" />
+      <span className="hand-card-edge" aria-hidden="true" />
       <span className="hand-card-corner" data-at="tl" />
       <span className="hand-card-corner" data-at="br" />
       <span className="hand-card-body">
@@ -157,7 +167,7 @@ function HandCardFaceInner({
           <span className="hand-cost" data-cost={card.cost}>
             {COST_SHORT[card.cost]}
           </span>
-          <span className="hand-range">{card.range}</span>
+          {fresh ? <span className="hand-group-new">New</span> : <span className="hand-range">{card.range}</span>}
         </span>
         <span className="hand-art">
           <GameIcon

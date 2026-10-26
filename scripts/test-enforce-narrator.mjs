@@ -893,8 +893,11 @@ await test("When a card's attack gets no pc_attack call, the turn sends one corr
     reply({ calls: [call("pc_attack", { characterId: kara.id, targetEnemyId: enemy.id, weapon: "Longsword" })] }),
     reply({ text: "The blade bites." }),
   ]);
+  // A card with no fixed target: the model picks it, so the engine does not
+  // resolve the card ahead of the model (src/lib/dm/turn.ts directCard;
+  // scripts/test-direct-card.mjs covers a card that names its foe).
   await model.turn(world, "I attack Goblin 1 with my Longsword.", kara.id, world.owner.id, {
-    intent: { card: "attack", weapon: "Longsword", targetId: enemy.id, targetName: enemy.displayName, targetKind: "enemy" },
+    intent: { card: "attack", weapon: "Longsword" },
   });
   world.clearDice();
   assert.ok(model.served() >= 2, "no corrective call");

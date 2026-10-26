@@ -1,15 +1,26 @@
 name: Bug report
-description: Something went wrong while you played or ran the server.
+description: Something in Open Dungeon Master itself is broken.
 labels: ["bug"]
 body:
   - type: markdown
     attributes:
       value: |
-        Thank you for testing. Only **What happened** and **Your setup** are required, so a short report is fine.
+        This form is for bugs in Open Dungeon Master itself. Questions about installing it, choosing a model or setting up a backend go to [Q&A in Discussions](https://github.com/Lebbitheplow/open-dungeon-master/discussions/categories/q-a) or [Discord](https://discord.gg/B2tQFr3TYD), where other players can help.
 
-        If you can, save a report file first: at the table, open **Report a problem** (the table menu on a phone), or go to **Admin > Server log > Report a problem**. The file is saved to your device and never sent anywhere. Drag it into the last box below. Open the file first if you want to see what it holds.
+        **Playing on someone else's server?** Tell whoever runs it first. Most problems come from how a server is set up, and they can check that.
 
-        New to testing? [docs/testing.md](https://github.com/Lebbitheplow/open-dungeon-master/blob/main/docs/testing.md) explains how.
+        **Running the server yourself?** Start from **Report a problem** in the table's Help, or **Admin > Server log > Report a problem**. It lists what to check first (an unsupported model, a backend that does not answer), saves a report file to your device, and opens this form with Your setup filled in. Drag the file into the last box below. Open it first if you want to see what it holds.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you file
+      options:
+        - label: I am on the latest release (your account menu > About says whether a newer one is out).
+          required: true
+        - label: I searched the open and closed issues, and this is not one of them.
+          required: true
+        - label: If the narrator is a local model, the machine has at least 16 GB of graphics memory, the minimum in the README. Below that, a small model's mistakes are not bugs.
+          required: true
   - type: textarea
     id: what-happened
     attributes:
@@ -26,17 +37,20 @@ body:
     id: steps
     attributes:
       label: How to make it happen again
-      description: The steps, if you know them. "It happened once" is a useful answer too.
+      description: The steps from opening the page. If it happened once and you cannot make it happen again, say exactly what you were doing.
+    validations:
+      required: true
   - type: textarea
     id: setup
     attributes:
       label: Your setup
-      description: The report file holds most of this. Fill in what you know; "not sure" is fine.
+      description: Report a problem fills this in for you, with anything below the supported minimum. Otherwise, fill in what you know.
       value: |
         - Version (your account menu > About):
         - Operating system:
         - Install kind (desktop app, Android app, Docker, from source):
-        - Narrator backend and model (for example Ollama with qwen3, OpenAI with gpt-5, Claude Code):
+        - Narrator backend and model (for example llama.cpp with gpt-oss-20b, OpenAI with gpt-5, Claude Code):
+        - Graphics memory, if the narrator is a local model:
         - DM mode (AI Dungeon Master, AI narrates and a person steers, a person runs the game, a person runs it with AI help):
     validations:
       required: true

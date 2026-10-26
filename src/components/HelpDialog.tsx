@@ -37,7 +37,7 @@ export function HelpDialog({
   onOpenChange,
   tours,
   section,
-  onReport,
+  report,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -46,10 +46,12 @@ export function HelpDialog({
   // The table offers its guided tours from here; each runs once on its own
   // and can be replayed at will. Other pages pass nothing.
   tours?: { label: string; detail: string; onStart: () => void }[];
-  // The table's "Report a problem" (issue #459): Help is where a tester
-  // looks when something broke, so the report lives here and in Admin >
-  // Server log rather than as a header button every player pays for.
-  onReport?: () => void;
+  // The table's "Report a problem" (issue #459): Help is where someone
+  // looks when something broke. The server's admin saves a report file
+  // from here (onSave) or Admin > Server log; everyone else is told to ask
+  // whoever runs the server, who can check its setup first. Other pages
+  // pass nothing.
+  report?: { onSave?: () => void };
 }) {
   return (
     <Dialog
@@ -59,7 +61,7 @@ export function HelpDialog({
       icon={<GameIcon icon={{ kind: "glyph", key: "tab-story" }} size="size-7" />}
       width="w-[min(94vw,44rem)]"
     >
-      <HelpContents withTours={Boolean(tours?.length)} withReport={Boolean(onReport)} initialSection={section} />
+      <HelpContents withTours={Boolean(tours?.length)} withReport={Boolean(report)} initialSection={section} />
       {tours && tours.length ? (
         <Section icon={Footprints} title="Guided tours">
           <p>
@@ -227,24 +229,34 @@ export function HelpDialog({
         </p>
       </Section>
 
-      {onReport ? (
+      {report ? (
         <Section icon={Bug} title="Report a problem">
-          <p>
-            Something broke, or you want to tell us how a session went? Save a report file and attach
-            it to an issue on GitHub. You choose what goes in it; it is saved to this device and never
-            sent anywhere, and it never holds other players&apos; lines, whispers, passwords or keys.
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              onOpenChange(false);
-              onReport();
-            }}
-            className={ui.btnSmall}
-            data-report-problem
-          >
-            <Bug className="size-4" /> Report a problem
-          </button>
+          {report.onSave ? (
+            <>
+              <p>
+                Something broke? Save a report file and attach it to a bug report on GitHub. You choose
+                what goes in it; it is saved to this device and never sent anywhere, and it never holds
+                other players&apos; lines, whispers, passwords or keys.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  onOpenChange(false);
+                  report.onSave?.();
+                }}
+                className={ui.btnSmall}
+                data-report-problem
+              >
+                <Bug className="size-4" /> Report a problem
+              </button>
+            </>
+          ) : (
+            <p data-report-ask-host>
+              Something not working? Tell whoever runs this server. Most problems come from how a server
+              is set up, and they can check that. If it turns out to be a bug, they can save a report
+              file for it.
+            </p>
+          )}
         </Section>
       ) : null}
 

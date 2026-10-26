@@ -116,6 +116,14 @@ export type HandCard = {
   // is picked on the board (src/lib/battlemap/hand-area.ts) and sent as the
   // tool's atX/atY/towardX/towardY.
   area?: HandArea;
+  // A spell card's own level (0 for a cantrip) and whether it is held by
+  // concentration: the Spells group's sections and its Concentration filter
+  // (hand-groups.ts, issue 528).
+  level?: number;
+  concentration?: boolean;
+  // The counter the card spends from, by resource id (ki, superiority dice,
+  // a Channel Divinity use): cards that share one gather under one card.
+  pool?: string;
 };
 
 export type HandChoice = {

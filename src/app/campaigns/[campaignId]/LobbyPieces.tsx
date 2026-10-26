@@ -50,6 +50,7 @@ export function LobbyHero({
   onEdit,
   className,
   style,
+  eyebrow = "Waiting in the lobby",
 }: {
   campaign: {
     id: string;
@@ -65,6 +66,8 @@ export function LobbyHero({
   onEdit: () => void;
   className?: string;
   style?: CSSProperties;
+  // Where the campaign stands: a running one's prep says so (issue 530).
+  eyebrow?: string;
 }) {
   return (
     <div className={cn(ui.card, "lobby-hero ornate texture-noise mb-6", className)} style={style}>
@@ -78,7 +81,7 @@ export function LobbyHero({
         />
       </div>
       <div className="relative -mt-1 px-4 pb-4 sm:px-5 sm:pb-5">
-        <p className={ui.sectionEyebrow}>Waiting in the lobby</p>
+        <p className={ui.sectionEyebrow}>{eyebrow}</p>
         <div className="mt-1 flex items-start gap-2">
           <GoldTitle className="min-w-0 text-balance break-words leading-tight">{campaign.title}</GoldTitle>
           {canEdit ? (

@@ -67,6 +67,8 @@ export function LobbyParty({
   style,
   companionsClassName,
   companionsStyle,
+  inPlay = false,
+  joinsOpen = true,
 }: {
   campaign: {
     maxPlayers: number;
@@ -78,6 +80,10 @@ export function LobbyParty({
   sheets: CharacterSheet[];
   // The lead or the owner may hand the lead seat on.
   canMakeLead: boolean;
+  // A running campaign's prep (issue 530): nobody readies up any more, and
+  // an open seat is offered only while the table admits players mid-game.
+  inPlay?: boolean;
+  joinsOpen?: boolean;
   // A human sits in the DM seat ("human" and "assisted" alike), so the list
   // shows who holds it.
   humanDmTable: boolean;
@@ -178,6 +184,7 @@ export function LobbyParty({
                         real dice
                       </SeatBadge>
                     ) : null}
+                    {inPlay ? null : (
                     <span
                       // Keyed by the state so the pill remounts and pops when
                       // a player readies up or backs out.
@@ -192,6 +199,7 @@ export function LobbyParty({
                       {member.ready ? <Check className="size-3" /> : null}
                       {member.ready ? "ready" : "not ready"}
                     </span>
+                    )}
                   </span>
                 </div>
                 {(() => {
@@ -269,7 +277,7 @@ export function LobbyParty({
           })}
         </ul>
         {/* Open seats read as an invitation rather than as nothing. */}
-        {members.length < campaign.maxPlayers ? (
+        {members.length < campaign.maxPlayers && (!inPlay || joinsOpen) ? (
           <p className="reveal mt-2 rounded-xl border border-dashed border-stone-700/70 px-4 py-2.5 text-center text-xs text-stone-500">
             {campaign.maxPlayers - members.length} open{" "}
             {campaign.maxPlayers - members.length === 1 ? "seat" : "seats"}. Share the room code to fill{" "}

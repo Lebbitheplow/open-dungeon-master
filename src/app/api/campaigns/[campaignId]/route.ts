@@ -115,7 +115,9 @@ export async function GET(
     // issue 249). Told to whoever steers the story, who is warned by it;
     // the arc itself never leaves the server.
     prepArc: caps.steersStory && campaign.status === "lobby" && Boolean(campaign.storyArc) && !campaign.dmOutline,
-    me: { id: user.id, username: user.username, avatar: user.avatar },
+    // isAdmin: the server's admin is offered what only an admin can do at
+    // the table (Report a problem in Help, installing the sound library).
+    me: { id: user.id, username: user.username, avatar: user.avatar, isAdmin: Boolean(user.isAdmin) },
     // The plan the party is coordinating, when it is (issue 254).
     coordination: currentCoordination(campaignId),
     // Who the DM is waiting on before its next turn, at a table that waits

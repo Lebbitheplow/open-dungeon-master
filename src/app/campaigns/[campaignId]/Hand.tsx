@@ -13,6 +13,7 @@ import { HandAimBar, type HandTargetChip } from "@/app/campaigns/[campaignId]/Ha
 import { HandCardFace, HandPlayedCard } from "@/app/campaigns/[campaignId]/HandCardFace";
 import { HandArrange } from "@/app/campaigns/[campaignId]/HandArrange";
 import { HandMoreSheet } from "@/app/campaigns/[campaignId]/HandMoreSheet";
+import { HandGroupFace, HandGroupView, fanStep } from "@/app/campaigns/[campaignId]/HandGroups";
 import { useHandLayout } from "@/app/campaigns/[campaignId]/useHandLayout";
 import { HAND_TUTORIAL_ID, HandTutorial } from "@/app/campaigns/[campaignId]/HandTutorial";
 import { useHandSpells } from "@/app/campaigns/[campaignId]/HandSpells";
@@ -22,7 +23,8 @@ import { handTargets } from "@/app/campaigns/[campaignId]/handTargets";
 import { holdPendingCards, useHandChoices, useHandPending } from "@/app/campaigns/[campaignId]/useHandChoices";
 import { deriveHand, waitingHand, type HandCard, type HandGearContext } from "@/lib/battlemap/hand";
 import type { PlayerMapView } from "@/lib/battlemap/view-types";
-import { arrangeHand, isUrgentCard, seatPicked, startingLayout } from "@/lib/battlemap/hand-layout";
+import { HAND_FAN_CAP, arrangeHand, isUrgentCard, seatPicked, startingLayout } from "@/lib/battlemap/hand-layout";
+import { groupHand, isGroup, type HandGroup } from "@/lib/battlemap/hand-groups";
 import {
   HAND_TARGET_EVENT,
   composeSentence,
@@ -170,11 +172,21 @@ function HandInner({
     return holdPendingCards(withReactions(reactions, deriveHand(sheet, turn, { spells, trackAmmo, gear })), waiting);
   }, [sheet, turn, reactions, spells, trackAmmo, gear, waiting]);
 
-  // Where each card sits, the fan or "more": the player's own arrangement
-  // for this character when they have made one (issue 231).
+  // Cards that spend one thing (spell slots, ki, superiority dice, gear, the
+  // basic actions) gather under one card each (issue 528, hand-groups.ts).
+  const { units, groups } = useMemo(() => groupHand(cards, sheet), [cards, sheet]);
+  // Where each card or group sits, the fan or "more": the player's own
+  // arrangement for this character when they have made one (issue 231). A
+  // card inside a group may still be seated on its own as a favourite.
   const { layout, save: saveLayout } = useHandLayout(campaignId, sheet);
-  const arrangement = useMemo(() => arrangeHand(cards, layout), [cards, layout]);
+  const arrangement = useMemo(() => arrangeHand(units, layout, HAND_FAN_CAP, cards), [units, layout, cards]);
+  const freshIds = useMemo(() => new Set(arrangement.freshIds), [arrangement.freshIds]);
   const [arranging, setArranging] = useState(false);
+  // The group opened as a hand of its own; it closes itself if the group
+  // no longer folds (a spell unprepared below the fold).
+  const [openGroupId, setOpenGroupId] = useState<string | null>(null);
+  const openGroup = groups.find((group) => group.id === openGroupId) ?? null;
+  const sectionRef = useRef<HTMLElement>(null);
 
   const [pickedId, setPickedId] = useState<string | null>(null);
   const [targetId, setTargetId] = useState<string | null>(null);
@@ -245,11 +257,41 @@ function HandInner({
     [picked, aim, defaultAim, conditions, choices],
   );
 
+  // Where there is no room for both (a phone, a fight on the stage) the aim
+  // bar takes the fan's place, and the card that was pressed goes with it:
+  // the keyboard follows into the aim bar rather than falling out of the
+  // hand, so its targets are a Tab away and Escape still lets the card go.
+  useEffect(() => {
+    if (!pickedId) return;
+    const frame = window.requestAnimationFrame(() => {
+      const section = sectionRef.current;
+      const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      if (!section || (active && section.contains(active) && active.offsetParent !== null)) return;
+      if (active && active !== document.body && !section.contains(active)) return;
+      section.querySelector<HTMLElement>(".hand-aim button:not([disabled])")?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [pickedId]);
+
   const clearAim = useCallback(() => {
     setPickedId(null);
     setTargetId(null);
     resetChoices();
   }, [resetChoices]);
+
+  // A card let go (Escape, or the aim bar's Back) hands the keyboard back to
+  // the card itself, which the fan shows again where the aim bar stood.
+  const releaseAim = useCallback(() => {
+    const id = pickedId;
+    clearAim();
+    if (!id) return;
+    window.requestAnimationFrame(() => {
+      const card = [...(sectionRef.current?.querySelectorAll<HTMLElement>("[data-card-id]") ?? [])].find(
+        (element) => element.dataset.cardId === id,
+      );
+      card?.focus({ preventScroll: true });
+    });
+  }, [pickedId, clearAim]);
 
   useEffect(() => {
     const onTarget = (event: Event) => {
@@ -276,6 +318,8 @@ function HandInner({
       setMoreOpen(false);
       if (card.type === "rider") {
         setRiderIds((current) => (current.includes(card.id) ? current.filter((id) => id !== card.id) : [...current, card.id]));
+        // A maneuver rides the next attack card, which is in the main hand.
+        setOpenGroupId(null);
         return;
       }
       setTargetId(null);
@@ -368,7 +412,12 @@ function HandInner({
       setRiderIds([]);
       // The board's sentence has done its work as the pick; it is not sent twice.
       if (boardName) setInput("");
-      window.setTimeout(clearAim, LEFT_MS);
+      window.setTimeout(() => {
+        clearAim();
+        // A card played from a group goes home with it: End turn and the
+        // attacks are in the main hand.
+        setOpenGroupId(null);
+      }, LEFT_MS);
       // A second card played inside the first one's beat takes the stage over.
       window.clearTimeout(playedTimer.current);
       playedTimer.current = window.setTimeout(() => setPlayed(null), PLAYED_MS);
@@ -389,27 +438,53 @@ function HandInner({
   const isWaiting = (card: HandCard) => card.disabled !== null && Boolean(waitingOn?.sentences.has(card.disabled));
 
   const { fan, more, displaced, fresh } = arrangement;
-  const urgent = fan.filter(isUrgentCard);
-  // A card chosen from behind the spine takes a seat for the moment: a free
-  // one, else the last before End turn. The arrangement is not changed by it.
-  const shown = seatPicked(fan, picked && more.includes(picked) ? picked : null);
+  const urgent = fan.filter((unit): unit is HandCard => !isGroup(unit) && isUrgentCard(unit));
+  // A card chosen from behind the spine, or raised inside a group, takes a
+  // seat for the moment: a free one, else the last before End turn. The
+  // arrangement is not changed by it.
+  const shown = seatPicked(fan, picked && !fan.includes(picked) ? picked : null);
   const middle = (shown.length - 1) / 2;
   // The mockup's 4.4 degrees between neighbours, eased off as the hand fills
   // so nine cards lean no further than five did.
-  const step = shown.length > 1 ? Math.min(4.4, 13 / (shown.length - 1)) : 0;
+  const step = fanStep(shown.length);
+  // A group held only by the turn reads like a waiting card: at full strength.
+  const groupWaiting = (group: HandGroup) => Boolean(group.disabled) && group.cards.every((card) => !card.disabled || isWaiting(card));
+  const openGroupCard = (group: HandGroup) => {
+    if (collapsed) writeFlag(COLLAPSED_KEY, false);
+    clearAim();
+    setNotice("");
+    setOpenGroupId(group.id);
+  };
+  // Back to the main hand, the keyboard landing on the group's own card.
+  const backToHand = () => {
+    const id = openGroupId;
+    setOpenGroupId(null);
+    window.requestAnimationFrame(() => {
+      sectionRef.current?.querySelector<HTMLElement>(`[data-group-id="${id}"]`)?.focus({ preventScroll: true });
+    });
+  };
   // The engine's count, the same one the cards read.
   const pips = turnPips(turn);
 
   return (
     <section
+      ref={sectionRef}
       className="hand"
       data-tour="battle-hand"
       data-tutorial={showTutorial ? "true" : undefined}
+      data-group-open={openGroup ? "true" : undefined}
       aria-label="Your hand"
       onKeyDown={(event) => {
-        if (event.key === "Escape" && picked) {
+        if (event.key !== "Escape") return;
+        // Escape in a group's search box clears the words first.
+        const typed = event.target instanceof HTMLInputElement && event.target.value !== "";
+        if (typed) return;
+        if (picked) {
           event.stopPropagation();
-          clearAim();
+          releaseAim();
+        } else if (openGroup) {
+          event.stopPropagation();
+          backToHand();
         }
       }}
     >
@@ -508,6 +583,23 @@ function HandInner({
 
       {collapsed ? null : (
         <>
+          {openGroup ? (
+            <HandGroupView
+              key={openGroup.id}
+              group={openGroup}
+              pickedId={picked?.id ?? null}
+              riderIds={riderIds}
+              playedId={played?.card.id ?? null}
+              aim={defaultAim}
+              conditions={conditions}
+              isWaiting={isWaiting}
+              freshIds={freshIds}
+              aiming={Boolean(picked)}
+              folding={folding || Boolean(leaving)}
+              onPick={pick}
+              onBack={backToHand}
+            />
+          ) : (
           <div
             className="hand-fan"
             data-aiming={picked ? "true" : undefined}
@@ -516,22 +608,35 @@ function HandInner({
             role="group"
             aria-label="Cards"
           >
-            {shown.map((card, index) => (
-              <HandCardFace
-                key={card.id}
-                card={card}
-                index={index}
-                offset={index - middle}
-                step={step}
-                picked={picked?.id === card.id}
-                attached={riderIds.includes(card.id)}
-                played={played?.card.id === card.id}
-                aim={card.intent.card === "reaction" ? null : defaultAim}
-                conditions={conditions}
-                waiting={isWaiting(card)}
-                onPick={pick}
-              />
-            ))}
+            {shown.map((unit, index) =>
+              isGroup(unit) ? (
+                <HandGroupFace
+                  key={unit.id}
+                  group={unit}
+                  index={index}
+                  offset={index - middle}
+                  step={step}
+                  waiting={groupWaiting(unit)}
+                  fresh={unit.cards.some((card) => freshIds.has(card.id))}
+                  onOpen={openGroupCard}
+                />
+              ) : (
+                <HandCardFace
+                  key={unit.id}
+                  card={unit}
+                  index={index}
+                  offset={index - middle}
+                  step={step}
+                  picked={picked?.id === unit.id}
+                  attached={riderIds.includes(unit.id)}
+                  played={played?.card.id === unit.id}
+                  aim={unit.intent.card === "reaction" ? null : defaultAim}
+                  conditions={conditions}
+                  waiting={isWaiting(unit)}
+                  onPick={pick}
+                />
+              ),
+            )}
             {more.length ? (
               <button
                 type="button"
@@ -544,6 +649,7 @@ function HandInner({
               </button>
             ) : null}
           </div>
+          )}
           {played ? <HandPlayedCard key={played.seq} card={played.card} /> : null}
           {picked ? (
             <HandAimBar
@@ -566,7 +672,7 @@ function HandInner({
               // A reaction is taken on anyone's turn: the initiative floor
               // does not hold it (the engine's canAct judges it instead).
               blocked={inputBlocked && picked.cost !== "reaction" ? blockedReason : null}
-              onBack={clearAim}
+              onBack={releaseAim}
               onEdit={() => toComposer(sentence)}
               onCommit={() => void commit()}
             />
@@ -591,15 +697,17 @@ function HandInner({
         displaced={displaced}
         urgent={urgent}
         fresh={fresh}
+        freshIds={freshIds}
         arrange={
           arranging ? (
             <HandArrange
+              units={units}
               cards={cards}
-              working={startingLayout(cards, layout)}
+              working={startingLayout(units, layout, cards)}
               arranged={arrangement.arranged}
               urgent={urgent}
               displaced={displaced}
-              fresh={fresh}
+              freshIds={freshIds}
               onChange={saveLayout}
               onReset={() => saveLayout(null)}
               onDone={() => {
@@ -609,7 +717,7 @@ function HandInner({
             />
           ) : null
         }
-        cards={more}
+        units={more}
         onPick={pick}
         waitingNote={waitingOn?.note ?? null}
         isWaiting={isWaiting}

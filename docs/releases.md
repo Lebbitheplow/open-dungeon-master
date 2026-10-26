@@ -73,10 +73,12 @@ Promote a beta when all of these hold:
   since stable installs jump across every beta in between at once (the client release
   workflow already does this for the Windows app, installing each beta over the latest
   stable one);
-- testers' narrator quality exports were read, and each tool-and-reason pair that keeps
-  coming back became a scripted turn (`scripts/lib/enforce-narrator.mjs`) with either an
-  engine check or a `gap()` in `docs/rules-enforcement-ledger.md`
-  ([testing.md](testing.md#narrator-quality)).
+- the narrator quality exports at hand were read (**Admin > Usage > Narrator quality >
+  Export narrator quality** on the servers we play on, and any an admin attached to a bug
+  report), and each tool-and-reason pair that keeps coming back became a scripted turn
+  (`scripts/lib/enforce-narrator.mjs`) with either an engine check or a `gap()` in
+  `docs/rules-enforcement-ledger.md`. Compare rates only within one kind of backend and
+  DM mode, and remember they count only the mistakes someone noticed.
 
 Then clear the flag on the server release and on the client release that bundles it
 (the client release names its server):

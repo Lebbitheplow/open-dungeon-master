@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { appConfirm } from "@/components/ui/ConfirmDialog";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Play } from "lucide-react";
 import { Suspense, lazy, useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { transcribesVoice, useCapabilities } from "@/lib/use-capabilities";
@@ -60,8 +60,23 @@ const EditCampaignDialog = lazy(() =>
 // both columns are display: contents below lg, so their children interleave).
 const EMPTY_MESSAGES: never[] = [];
 
-export function Lobby({ state, refresh }: { state: CampaignState; refresh: () => void }) {
+// The same panels serve a running campaign's prep (issue 530, page.tsx):
+// laid over the table under its header, with the way back to the table in
+// place of Ready and Begin, and without what belongs before the first
+// scene or to the table's own header (the call, the way out).
+export function Lobby({
+  state,
+  refresh,
+  mode = "lobby",
+  onResume,
+}: {
+  state: CampaignState;
+  refresh: () => void;
+  mode?: "lobby" | "prep";
+  onResume?: () => void;
+}) {
   const { campaign, me, members, sheets } = state;
+  const prep = mode === "prep";
   const voiceSpeaking = useVoiceSpeaking();
   // The call records and announces a transcript only where it can be written.
   const transcribes = transcribesVoice(useCapabilities());
@@ -447,17 +462,35 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
     }
   }
 
+  // Who may bring others in mid-campaign: the room code only works while
+  // the table holds the door open (src/lib/join-preview.ts).
+  const showRoomCode = !isSolo && (!prep || campaign.gameSettings.midGameJoinOpen);
+  const Shell = prep ? "div" : "main";
   return (
-    <main className="cine-stage cine-lobby mx-auto w-full max-w-2xl flex-1 p-4 sm:p-6 lg:max-w-6xl">
+    <Shell className="cine-stage cine-lobby mx-auto w-full max-w-2xl flex-1 p-4 sm:p-6 lg:max-w-6xl" data-lobby-mode={mode}>
       {/* The lobby under the same sky as the table: the cover art behind
           the panels, dimmed, so the door and the room read as one place. */}
       <SceneBackdrop messages={EMPTY_MESSAGES} cover={campaign.cover} genre={campaign.genre} seed={campaign.id} />
-      <Link
-        href="/"
-        className="mb-3 inline-flex items-center gap-1.5 text-sm text-stone-500 transition-colors hover:text-amber-200"
-      >
-        <ArrowLeft className="size-4" /> All campaigns
-      </Link>
+      {prep ? (
+        <div className="prep-banner reveal-banner mb-4" data-prep-banner="">
+          <span className="min-w-0 flex-1">
+            <h2 className="font-display text-lg tracking-wide text-amber-100">Campaign prep</h2>
+            <p className="text-sm text-stone-400">
+              The adventure is still running: nothing here ends it, and the table is as you left it.
+            </p>
+          </span>
+          <button type="button" onClick={onResume} className={cn(ui.btnPrimary, "min-h-11 px-5")} data-prep-resume="">
+            <Play aria-hidden="true" className="size-4" /> Back to the table
+          </button>
+        </div>
+      ) : (
+        <Link
+          href="/"
+          className="mb-3 inline-flex items-center gap-1.5 text-sm text-stone-500 transition-colors hover:text-amber-200"
+        >
+          <ArrowLeft className="size-4" /> All campaigns
+        </Link>
+      )}
 
       <div className="flex flex-col lg:grid lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:items-start lg:gap-x-8">
         <div className="contents lg:flex lg:min-w-0 lg:flex-col">
@@ -467,6 +500,7 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
           <div className="relative order-1">
             <LobbyHero
               campaign={campaign}
+              eyebrow={prep ? "The adventure is under way" : undefined}
               canEdit={isLead}
               onEdit={() => setEditing(true)}
               className="lobby-enter"
@@ -494,12 +528,14 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
               canBuildCompanion={canBuildCompanion}
               onBuildCompanion={() => setBuildingCompanion(true)}
               onDismissCompanion={dismissCompanion}
+              inPlay={prep}
+              joinsOpen={campaign.gameSettings.midGameJoinOpen}
               className="lobby-enter order-3"
               style={enter(2)}
             />
           ) : null}
 
-          <div className="lobby-enter order-4 mb-8" style={enter(3)}>
+          <div className={cn("lobby-enter order-4", prep ? "mb-4" : "mb-8")} style={enter(3)}>
             {campaign.gameSettings.multiCharacter !== "off" && mySheets.length > 1 ? (
               <div className="mb-3 flex flex-wrap justify-center gap-2" aria-label="Your characters">
                 {mySheets.map((sheet) => (
@@ -522,6 +558,9 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
                 className="mb-3"
               />
             ) : null}
+            {/* Ready and Begin are the lobby's; a running campaign is
+                already begun, and its characters are changed at the table. */}
+            {prep ? null : (
             <LobbyActions
               next={next}
               campaign={campaign}
@@ -540,6 +579,7 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
               onRemoveCharacter={() => void removeCharacter()}
               onDelete={() => void deleteCampaign()}
             />
+            )}
           </div>
 
           {/* Optional, and written once characters have joined: how this
@@ -600,7 +640,7 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
         </div>
 
         <div className="contents lg:flex lg:min-w-0 lg:flex-col">
-          {!isSolo ? (
+          {showRoomCode ? (
             <LobbyRoomCode
               campaignId={campaign.id}
               campaignTitle={campaign.title}
@@ -640,7 +680,8 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
               are still building characters. Pointless in a solo campaign, which
               is the same reason the party list is hidden there. No floor to
               show: the game has not started, so everyone can talk. */}
-          {!isSolo ? (
+          {/* In prep the call is the table header's, live above this. */}
+          {!isSolo && !prep ? (
             <section className="reveal lobby-enter order-7 mb-6" style={enter(3)}>
               <VoicePanel
                 campaignId={campaign.id}
@@ -691,6 +732,6 @@ export function Lobby({ state, refresh }: { state: CampaignState; refresh: () =>
         />
       ) : null}
       </Suspense>
-    </main>
+    </Shell>
   );
 }

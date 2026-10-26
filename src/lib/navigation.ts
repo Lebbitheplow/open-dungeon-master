@@ -34,6 +34,24 @@ export function navigateTo(url: string): void {
   else window.location.href = url;
 }
 
+// A view kept in the address (?view=prep), changed without navigating: the
+// page stays mounted and useSearchParams follows, because Next keeps it in
+// step with a native pushState or replaceState given no state of its own.
+// replaceAddress below hands Next its own state back, which Next takes for
+// one of its own calls and does not follow. Inside the app its router does
+// the same as these.
+export function pushView(url: string): void {
+  const app = nav();
+  if (app) app.push(url);
+  else window.history.pushState(null, "", url);
+}
+
+export function replaceView(url: string): void {
+  const app = nav();
+  if (app) app.replace(url);
+  else window.history.replaceState(null, "", url);
+}
+
 // Rewrites the address without navigating (a consumed ?query=).
 export function replaceAddress(url: string): void {
   const app = nav();
