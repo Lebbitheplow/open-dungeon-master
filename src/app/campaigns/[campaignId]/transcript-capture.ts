@@ -6,9 +6,16 @@
 
 import { RING_SECONDS } from "@/lib/voice/transcript";
 
-export function startTranscriptCapture(campaignId: string, stream: MediaStream): () => void {
-  if (typeof MediaRecorder === "undefined") {
-    return () => {};
+// Whether this browser can cut rings at all. The call's notice asks, so it
+// never tells a player their words are written down when they cannot be.
+export function canRecordTranscript(): boolean {
+  return typeof MediaRecorder !== "undefined";
+}
+
+// The stop function, or null when this browser cannot record.
+export function startTranscriptCapture(campaignId: string, stream: MediaStream): (() => void) | null {
+  if (!canRecordTranscript()) {
+    return null;
   }
   const mimeType = ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/webm"].find((type) => MediaRecorder.isTypeSupported(type)) ?? "";
   let recorder: MediaRecorder | null = null;

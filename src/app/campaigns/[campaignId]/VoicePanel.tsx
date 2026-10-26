@@ -20,6 +20,7 @@ import { GameIcon } from "@/components/ui/GameIcon";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { Select } from "@/components/ui/Select";
 import { VoiceRooms, VoiceSettings } from "@/app/campaigns/[campaignId]/VoicePanelParts";
+import { canRecordTranscript } from "@/app/campaigns/[campaignId]/transcript-capture";
 import { useVoiceRoom } from "@/app/campaigns/[campaignId]/useVoiceRoom";
 import { VoicePeerRow } from "@/app/campaigns/[campaignId]/VoicePeerRow";
 import {
@@ -73,8 +74,23 @@ export function VoicePanel({
   // The table's transcription switch (13.3).
   transcribe?: boolean;
 }) {
-  const voice = useVoiceRoom(campaignId, roster, meUserId, audibilityVersion, meshSignal, { transcribe });
+  // The same rule the server enforces, asked here to label the UI. The
+  // server is what actually pauses a producer; in mesh, where no server
+  // carries the audio, the hook closes the track itself so "you are muted"
+  // stays true (src/lib/voice/turn-logic.ts).
+  const myVerdict = mayTransmit(
+    floorMode,
+    floorUserIds,
+    { userId: meUserId, adjudicates },
+    turnEnforcement,
+  );
+  const voice = useVoiceRoom(campaignId, roster, meUserId, audibilityVersion, meshSignal, {
+    transcribe,
+    floorClosed: turnEnforcement === "strict" && !myVerdict.mayTransmit,
+  });
   const [channels, setChannels] = useState<VoiceChannelView[]>([]);
+  // Why the last room change did not go through, said where it was asked.
+  const [roomError, setRoomError] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   // Whose volume slider is open. One at a time, so a busy table does not turn
   // the roster into a mixing desk.
@@ -103,14 +119,21 @@ export function VoicePanel({
 
   const channelAction = useCallback(
     async (body: Record<string, unknown>) => {
-      const response = await fetch(`/api/campaigns/${campaignId}/voice/channels`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (response.ok) {
-        const data = await response.json();
+      try {
+        const response = await fetch(`/api/campaigns/${campaignId}/voice/channels`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          setRoomError(data.error || "That room change did not go through.");
+          return;
+        }
+        setRoomError("");
         setChannels(data.channels ?? []);
+      } catch {
+        setRoomError("Could not reach the server.");
       }
     },
     [campaignId],
@@ -137,21 +160,15 @@ export function VoicePanel({
   // no clock to run here.
   const isSpeaking = (userId: string) => speaking?.userId === userId;
 
-  // The same rule the server enforces, asked here only to label the UI. The
-  // server is what actually pauses a producer; this never gates anything on
-  // its own (src/lib/voice/turn-logic.ts).
-  const myVerdict = mayTransmit(
-    floorMode,
-    floorUserIds,
-    { userId: meUserId, adjudicates },
-    turnEnforcement,
-  );
+  // Mesh voice has no breakout rooms and no hand queue: the server holds no
+  // room for either, so their controls are not offered there.
+  const sfu = voice.transport === "sfu";
   const floorNote =
     turnEnforcement === "off" || floorMode === "open" ? "" : FLOOR_VOICE_LABELS[floorMode];
   const control = cn(ui.btnSmall, "session-voice-btn");
 
   return (
-    <div className={cn("panel rounded-xl", compact ? "p-3" : "p-4")}>
+    <div data-voice-panel={voice.transport} className={cn("panel rounded-xl", compact ? "p-3" : "p-4")}>
       <SectionHead
         title="Voice"
         glyph="ui-voice"
@@ -171,7 +188,7 @@ export function VoicePanel({
             {/* Asking for the floor without talking over whoever holds it.
                 Hidden for the DM, who never has to queue for their own
                 floor. */}
-            {!adjudicates && !myVerdict.mayTransmit ? (
+            {sfu && !adjudicates && !myVerdict.mayTransmit ? (
               <button
                 type="button"
                 onClick={() => void voice.toggleHand()}
@@ -330,7 +347,7 @@ export function VoicePanel({
       {/* Breakout rooms. Everyone can see the list and who is in each: a side
           room nobody can see reads as a bug rather than a secret. Only story
           authority can open one or move anybody. */}
-      {channels.length > 1 || steersStory ? (
+      {sfu && (channels.length > 1 || steersStory) ? (
         <VoiceRooms
           channels={channels}
           occupants={(channelId) => voice.peers.filter((peer) => peer.channelId === channelId).length}
@@ -338,10 +355,16 @@ export function VoicePanel({
           onAction={(body) => void channelAction(body)}
         />
       ) : null}
+      {roomError ? <p className="motion-shake mt-2 text-xs text-red-400">{roomError}</p> : null}
 
+      {/* Said from what this device can do: a browser that cannot record
+          sends nothing to be written down, and the player is told so. */}
       {transcribe && voice.connected ? (
         <p className="reveal mt-2 flex items-center gap-1 text-[11px] text-amber-300/80">
-          <Radio className="size-3" /> This table is being transcribed while you are on the call.
+          <Radio className="size-3" />
+          {canRecordTranscript()
+            ? "This table is being transcribed while you are on the call."
+            : "This table is transcribed, but this device cannot record, so what you say is not written down."}
         </p>
       ) : null}
       {voice.peers.length ? (
@@ -354,7 +377,7 @@ export function VoicePanel({
               speaking={isSpeaking(peer.userId)}
               volume={voice.peerVolume(peer.userId)}
               expanded={volumeFor === peer.userId}
-              channels={channels}
+              channels={sfu ? channels : []}
               // The row's flag only gates its move-to-room select, and moving
               // somebody POSTs to the channels route, which asks for story
               // authority rather than the DM seat.

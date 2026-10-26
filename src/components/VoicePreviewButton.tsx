@@ -53,10 +53,18 @@ export function VoicePreviewButton({ voice, className }: { voice: string; classN
     audio.onended = done;
     audio.onerror = done;
     audioRef.current = audio;
+    // Stopped, or another voice picked, while this one was still loading:
+    // its play() is called off by that, which is not a failure to report.
+    const overtaken = () => audioRef.current !== audio;
     try {
       await audio.play();
-      setPlaying(true);
+      if (!overtaken()) {
+        setPlaying(true);
+      }
     } catch {
+      if (overtaken()) {
+        return;
+      }
       // The element only knows that it failed; the route knows why.
       const reason = await fetch(source)
         .then((response) => (response.ok ? null : response.json()))
