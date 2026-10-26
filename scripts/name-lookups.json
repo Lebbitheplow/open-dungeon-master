@@ -1595,7 +1595,7 @@
     "lib/dm/token-rules.ts#partial": [["authoring",1,"a teleport found at a trait line's start"]],
     "lib/dm/token-rules.ts#whole": [["identity",3,"an enemy, spell or ability by id or whole name"]],
     "lib/dm/tool-errors.ts#whole": [["identity",1,"an option by whole name"]],
-    "lib/dm/tool-merge-logic.ts#keyed": [["key",4,"retired tool names, read from their table by the name a call sends"]],
+    "lib/dm/tool-merge-logic.ts#keyed": [["key",4,"retired tool names, read from their table by the name a call sends"],["key",1,"renamed argument keys, read from their table by the tool a call names"]],
     "lib/dm/tool-merge-logic.ts#switch": [["key",2,"switches on tool names"]],
     "lib/dm/tool-merge-logic.ts#whole": [["key",1,"argument keys a call keeps or drops"]],
     "lib/dm/tool-merge.ts#whole-single": [["key",1,"tool names: a call the routing left as it came"]],

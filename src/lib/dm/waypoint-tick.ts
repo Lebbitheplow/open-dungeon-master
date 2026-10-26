@@ -17,6 +17,7 @@ import {
   taggedWaypoint,
   tickWaypoints,
 } from "@/lib/dm/waypoint-logic";
+import { mergedCallText } from "@/lib/dm/tool-merge-logic";
 
 // Ticking the [NOW] beat's waypoints (issue #31). Two sources, in order of
 // trust: the DM's own tool calls, which name the place, person, item,
@@ -52,13 +53,15 @@ export async function tickWaypointsFromCalls(
   }
   const matched = new Set<number>();
   for (const call of calls) {
-    const tagged = extra.accepted?.has(call) ? taggedWaypoint(active.beat, call.name, call.rawArguments) : null;
+    // Read under the names it ran by: a retired tool, an older argument name.
+    const ran = mergedCallText(call.name, call.rawArguments);
+    const tagged = extra.accepted?.has(call) ? taggedWaypoint(active.beat, ran.name, ran.rawArguments) : null;
     if (tagged !== null) {
       matched.add(tagged);
     }
-    const signal = signalFromToolCall(call.name, call.rawArguments, {
+    const signal = signalFromToolCall(ran.name, ran.rawArguments, {
       enemyNames: extra.enemyNames,
-      objectiveText: call.name === "tick_objective" ? objectiveText(campaignId, call.rawArguments) : undefined,
+      objectiveText: ran.name === "tick_objective" ? objectiveText(campaignId, ran.rawArguments) : undefined,
     });
     if (signal) {
       for (const index of matchSignal(active.beat, signal, campaign.gameSettings.tableLanguage)) {

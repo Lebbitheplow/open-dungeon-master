@@ -34,7 +34,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { toolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { routeCall } from "@/lib/dm/tool-merge";
 import { settleCompanionLeaving } from "@/lib/dm/departure-turn";
-import { mergedCall } from "@/lib/dm/tool-merge-logic";
+import { mergedCall, renamedArgs } from "@/lib/dm/tool-merge-logic";
 
 export type Actor =
   | { kind: "ai"; turnId: string }
@@ -113,29 +113,13 @@ function toDamageTargets(
 // Names a form has used for an argument its handler reads under another
 // one. The catalog now carries the handler's names; these stay so a console
 // built from an older catalog (the client apps compile the server's screens)
-// still reaches the engine.
+// still reaches the engine. The arguments a tool renamed for every caller
+// are mapped first, at every door (tool-merge-logic.ts RENAMED_ARGS).
 const FIELD_ALIASES: Record<string, Record<string, string>> = {
   pc_attack: { enemyId: "targetEnemyId" },
   pet_attack: { enemyId: "targetEnemyId" },
   cast_at_enemy: { enemyId: "targetEnemyId" },
   check_notice: { skill: "sense" },
-  aoe_damage: { casterId: "casterCharacterId", ability: "enemyAbility", sculpt: "sparedCharacterIds" },
-  cast_at_player: { ability: "enemyAbility" },
-  move_token: { casterId: "casterCharacterId", tokenName: "token" },
-  set_movement: { tokenName: "token" },
-  party_award: { amount: "xp", delta: "gold", name: "item" },
-  party_stash: { amount: "gold", name: "item" },
-  haggle: { present: "presentCharacterIds" },
-  afflict: { dc: "saveDc" },
-  take_action: { enemyId: "escapingEnemyId" },
-  set_quest: { questId: "quest" },
-  tick_objective: { questId: "quest", objectiveId: "objective" },
-  show_handout: { loreId: "lore" },
-  grant_item: { name: "item" },
-  remove_item: { name: "item" },
-  reveal_item: { name: "item" },
-  use_spell_slot: { name: "spell" },
-  learn_spell: { name: "spell" },
   relationship_beat: { npc: "subject" },
   romance_advance: { npc: "subject" },
   relationship_end: { npc: "subject" },
@@ -154,7 +138,7 @@ export function normalizeArgs(
   entry: CatalogEntry,
   args: Record<string, unknown>,
 ): Record<string, unknown> {
-  const renamed: Record<string, unknown> = { ...args };
+  const renamed: Record<string, unknown> = { ...renamedArgs(entry.name, args) };
   for (const [from, to] of Object.entries(FIELD_ALIASES[entry.name] ?? {})) {
     const value = renamed[from];
     const empty = (entry: unknown) => entry === undefined || entry === null || entry === "";
@@ -170,11 +154,6 @@ export function normalizeArgs(
   if (entry.name === "cast_at_enemy" && !renamed.targetEnemyId && firstOf(renamed.enemyIds)) {
     renamed.targetEnemyId = firstOf(renamed.enemyIds);
     delete renamed.enemyIds;
-  }
-  // An older form named a madness's duration in name.
-  if (entry.name === "afflict" && renamed.kind === "madness" && !renamed.duration && renamed.name) {
-    renamed.duration = renamed.name;
-    delete renamed.name;
   }
   if (entry.name === "cast_at_player" && !renamed.characterId && firstOf(renamed.characterIds)) {
     renamed.characterId = firstOf(renamed.characterIds);
