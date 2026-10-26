@@ -248,7 +248,7 @@
     "app/campaigns/[campaignId]/usePainter.ts#whole-single": [["key",1,"change detection, UI keys, ids, slugs, password confirmation, a saved selection (src/app: every site read)"]],
     "app/campaigns/[campaignId]/useVoicePrefs.ts#fallback": [["key",3,"UI keys, ids, refs, view choices and documented defaults (a palette, a tile, a peer volume, the first sheet)"]],
     "app/campaigns/[campaignId]/useVoiceRoom.ts#fallback": [["key",3,"UI keys, ids, refs, view choices and documented defaults (a palette, a tile, a peer volume, the first sheet)"]],
-    "app/campaigns/[campaignId]/useVoiceRoom.ts#first": [["key",2,"a stream's audio track"]],
+    "app/campaigns/[campaignId]/useVoiceRoom.ts#first": [["key",3,"a stream's audio track"]],
     "app/campaigns/[campaignId]/useVoiceRoom.ts#partial": [["pattern",1,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"]],
     "app/campaigns/[campaignId]/useVoiceRoom.ts#whole-single": [["key",1,"change detection, UI keys, ids, slugs, password confirmation, a saved selection (src/app: every site read)"]],
     "app/characters/[characterId]/SheetSections.tsx#keyed": [["key",1,"ids, refs, slugs, tool names, field names, env names, event kinds, UI keys, caches, door and map keys; a sheet's conditionMeta by the condition key it was written under; the usage route's gear map by the sheet's own stored item names (src/: every site read)"]],

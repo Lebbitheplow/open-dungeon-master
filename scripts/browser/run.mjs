@@ -120,6 +120,17 @@ if (shard) {
   scenarios.push(...all.filter((_, position) => position % shard.count === shard.index - 1));
 }
 const viewportFilter = args.viewports ? args.viewports.split(",") : null;
+// A filter that matches nothing (a typo, a web-only scenario under --app, a
+// viewport no scenario has) would print "0 of 0 passed" and exit green, so a
+// run with nothing to run fails, as npm test does (vitest.config.mts).
+const nothingToRun = () =>
+  `No scenario ran${args.only ? ` for --only ${args.only}` : ""}${app ? " with --app" : ""}${viewportFilter ? ` at --viewports ${args.viewports}` : ""}.`;
+if (!scenarios.length) {
+  if (shell) await shell.stop();
+  if (server) await server.stop();
+  console.error(nothingToRun());
+  process.exit(1);
+}
 
 const browser = await launchBrowser({ app });
 const results = [];
@@ -175,6 +186,10 @@ try {
 
 const failed = results.filter((result) => !result.ok);
 fs.writeFileSync(path.join(outDir, "report.json"), JSON.stringify({ base, app, results }, null, 2));
+if (!results.length) {
+  console.error(nothingToRun());
+  process.exit(1);
+}
 console.log(
   `\n${results.length - failed.length} of ${results.length} passed in ${((Date.now() - started) / 1000).toFixed(0)}s` +
     (failed.length ? `; screenshots and server.log in ${outDir}` : args.keep ? `; run folder kept at ${outDir}` : ""),

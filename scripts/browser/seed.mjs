@@ -1575,6 +1575,42 @@ for (const content of [
   messages.insertCampaignMessage({ campaignId: replayTable.id, seq: campaigns.allocateSeq(replayTable.id), authorType: "dm", speech: [], content });
 }
 
+// Audit 2026-10-26: a lobby with voice and transcription on, the player
+// seated beside the lead, for the microphone checks (scenario voice-mic).
+const VOICE_TITLE = "Voice Table";
+const voiceTable = campaigns.createCampaign(world.owner.id, {
+  title: VOICE_TITLE,
+  description: "A table that talks before it plays.",
+  theme: "high-fantasy",
+  maxPlayers: 4,
+  startingLevel: 1,
+  difficulty: "normal",
+  gameSettings: { ttsEnabled: false, voice: { enabled: true, transcribe: true } },
+});
+campaigns.joinByInviteCode(player.id, voiceTable.inviteCode);
+
+// Audit 2026-10-26 K01: a quiet table whose music, takes and stings are
+// heard one after another (scenario ambience-takes).
+const SOUND_TITLE = "Sound Table";
+const soundTable = campaigns.createCampaign(world.owner.id, {
+  title: SOUND_TITLE,
+  description: "Music that changes with the scene.",
+  theme: "high-fantasy",
+  maxPlayers: 4,
+  startingLevel: 3,
+  difficulty: "normal",
+  gameSettings: { ttsEnabled: false },
+});
+campaigns.setCampaignStatus(soundTable.id, "active");
+sheets.createSheet(soundTable.id, world.owner.id, 3, heroInput({ name: "Ilsa Venn", class: "bard", level: 3 }));
+messages.insertCampaignMessage({
+  campaignId: soundTable.id,
+  seq: campaigns.allocateSeq(soundTable.id),
+  authorType: "dm",
+  speech: [],
+  content: "Rain taps on the shutters. Somewhere below, a fiddler starts a slow tune.",
+});
+
 const ids = {
   qualityTurnIds,
   spellbook,
@@ -1633,6 +1669,8 @@ const ids = {
   levelTableId: levelTable.id,
   commandTableId: commandTable.id,
   replayTableId: replayTable.id,
+  voiceTableId: voiceTable.id,
+  soundTableId: soundTable.id,
   courting,
   conscience,
   masked,
@@ -1647,6 +1685,8 @@ const ids = {
     [levelTable.id]: "Level Table",
     [commandTable.id]: COMMAND_TITLE,
     [replayTable.id]: REPLAY_TITLE,
+    [voiceTable.id]: VOICE_TITLE,
+    [soundTable.id]: SOUND_TITLE,
     ...Object.fromEntries(Object.entries(courting).map(([viewport, table]) => [table.id, `${COURTING_TITLE} (${viewport})`])),
     ...Object.fromEntries(Object.entries(conscience).map(([viewport, table]) => [table.id, `${CONSCIENCE_TITLE} (${viewport})`])),
     ...Object.fromEntries(Object.entries(masked).map(([viewport, table]) => [table.id, `${MASKED_TITLE} (${viewport})`])),

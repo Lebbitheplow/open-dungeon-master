@@ -32,10 +32,12 @@ export async function POST(request: Request) {
   }
   const form = parsed.data;
   // With the model settled, so a blank field that runs the server's only
-  // model says which one spoke.
+  // model says which one spoke. A blank provider is the saved one, like
+  // every other blank: the apps' "Hear a sample" posts {} to hear what is
+  // saved, and a blank here used to read as Kokoro whatever was saved.
   const backend = await withNarrationModel(
     ttsBackend({
-      provider: form.provider,
+      provider: form.provider || undefined,
       kokoroUrl: form.kokoroUrl,
       openaiUrl: form.baseUrl,
       model: form.model,

@@ -13,6 +13,7 @@ import {
   handQueue,
   handsToLower,
   mayTransmit,
+  micOpen,
   nextInLine,
 } from "../src/lib/voice/turn-logic.ts";
 
@@ -152,6 +153,30 @@ check("getting the floor lowers your hand", () => {
 });
 
 // ---- labels ----
+
+// Audit 2026-10-26 F01-F03: a new or swapped track came up open under a
+// "muted" label or an idle push-to-talk. Every opening asks micOpen now.
+check("push-to-talk keeps the microphone closed until the control is held", () => {
+  const gate = { transport: "sfu", mode: "ptt", muted: false, talking: false, floorClosed: false };
+  assert.equal(micOpen(gate), false);
+  assert.equal(micOpen({ ...gate, transport: "mesh" }), false);
+  assert.equal(micOpen({ ...gate, talking: true }), true);
+  // A mute left over from open mode does not hold a talk key shut.
+  assert.equal(micOpen({ ...gate, talking: true, muted: true }), true);
+});
+
+check("open mode follows the mute", () => {
+  const gate = { transport: "mesh", mode: "open", muted: false, talking: false, floorClosed: false };
+  assert.equal(micOpen(gate), true);
+  assert.equal(micOpen({ ...gate, muted: true }), false);
+});
+
+check("a strict floor closes the track only where no server pauses it", () => {
+  const gate = { transport: "mesh", mode: "open", muted: false, talking: false, floorClosed: true };
+  assert.equal(micOpen(gate), false, "mesh: the track is the only gate");
+  assert.equal(micOpen({ ...gate, mode: "ptt", talking: true }), false);
+  assert.equal(micOpen({ ...gate, transport: "sfu" }), true, "sfu: the producer is paused server-side");
+});
 
 check("every mode and block has wording", () => {
   for (const mode of VOICE_FLOOR_MODES) {

@@ -121,16 +121,44 @@ export function useNarrationAudio(onBreak = false): NarrationAudio {
     };
   }, []);
 
-  const setMuted = useCallback((next: boolean) => {
-    writeAudioPref("narrationMuted", next);
-    if (next) {
-      audioRef.current?.pause();
-      queueRef.current = [];
+  // Stops the passage being read and drops what was waiting behind it.
+  const silence = useCallback(() => {
+    audioRef.current?.pause();
+    queueRef.current = [];
+    if (pendingRef.current.length) {
       setPending([]);
+    }
+    if (playingRef.current) {
       playingRef.current = null;
       setPlayingMessageId(null);
     }
   }, [setPending]);
+
+  // The prefs reach what is already playing, whoever wrote them: the
+  // header's own controls, the apps' Settings screen while the table stays
+  // open, or the account's copy landing after the first passage started.
+  useEffect(() => {
+    const follow = () => {
+      if (audioRef.current) {
+        audioRef.current.volume = readVolume();
+      }
+      if (readMuted()) {
+        silence();
+      }
+    };
+    window.addEventListener(PREFS_EVENT, follow);
+    return () => window.removeEventListener(PREFS_EVENT, follow);
+  }, [silence]);
+
+  // Applied here as well as through the event, for a browser that will not
+  // store the pref (private browsing), where the event's re-read finds the
+  // old value.
+  const setMuted = useCallback((next: boolean) => {
+    writeAudioPref("narrationMuted", next);
+    if (next) {
+      silence();
+    }
+  }, [silence]);
 
   const setVolume = useCallback((next: number) => {
     const clamped = Math.max(0, Math.min(1, next));
