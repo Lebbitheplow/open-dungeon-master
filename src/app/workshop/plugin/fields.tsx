@@ -229,7 +229,7 @@ export function ChipList({
               type="button"
               onClick={() => onChange(items.filter((current) => current !== item))}
               aria-label={`Remove ${item}`}
-              className={cn(ui.iconAction, "rounded-full p-1 opacity-100 hover:text-red-300")}
+              className={cn(ui.iconAction, "tap-reach rounded-full p-1 opacity-100 hover:text-red-300")}
             >
               <X className="size-3" />
             </button>

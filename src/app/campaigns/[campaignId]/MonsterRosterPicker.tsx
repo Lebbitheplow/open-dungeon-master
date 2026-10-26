@@ -9,7 +9,7 @@ import { addToRoster, formatRoster, parseRoster } from "@/lib/dm/encounter-templ
 import { textKey } from "@/lib/language/text-logic";
 
 const input =
-  "rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200 focus:border-amber-500/50 focus:outline-none";
+  "rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200 focus:border-amber-500/50 focus:outline-none pointer-coarse:min-h-10";
 
 const chip = "rounded-full border px-2 py-0.5 text-[10px] transition-colors duration-150";
 

@@ -164,12 +164,14 @@ export function CheckField({
   onChange: (checked: boolean) => void;
   hint?: string;
 }) {
+  // A label, so its words take the tap as the switch does: the switch alone
+  // is 24 px tall, the row 40 (audit WA-08).
   return (
-    <div className="flex min-h-10 flex-wrap items-center gap-2 text-sm text-stone-300">
+    <label className="flex min-h-10 flex-wrap items-center gap-2 text-sm text-stone-300">
       <Switch on={checked} onChange={onChange} label={label} />
       {label}
       {hint ? <span className="text-[11px] text-stone-500">{hint}</span> : null}
-    </div>
+    </label>
   );
 }
 

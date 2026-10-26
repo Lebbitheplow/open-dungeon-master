@@ -19,8 +19,9 @@ import { useContentSearch, type PickerEntry } from "@/app/characters/builder/use
 // inside editor sheets that scroll, and an absolute list opening near the
 // bottom of one is clipped away entirely.
 
+// Compact under a mouse; a finger gets 40 px (audit WA-08).
 const input =
-  "rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200 focus:border-amber-500/50 focus:outline-none";
+  "rounded-md border border-stone-700 bg-stone-950 px-2 py-1 text-xs text-stone-200 focus:border-amber-500/50 focus:outline-none pointer-coarse:min-h-10";
 
 export function ContentPick({
   kind,

@@ -404,8 +404,10 @@ export function InfoButton({
           setOpen(true);
         }}
         aria-label={`What is ${label}?`}
+        // tap-reach: the glyph stays small in its line, a finger gets 40 px
+        // round it (audit WA-08).
         className={cn(
-          "inline-flex shrink-0 items-center justify-center rounded-full text-stone-500 transition-colors hover:text-amber-200",
+          "tap-reach inline-flex shrink-0 items-center justify-center rounded-full text-stone-500 transition-colors hover:text-amber-200",
           className,
         )}
       >

@@ -231,7 +231,7 @@ export function SpeciesFields({ data, set }: Props) {
           maxLength={120}
           suggestions={VISION_SUGGESTIONS}
         />
-        <label className="flex items-center gap-2 self-end pb-2 text-xs text-stone-300">
+        <label className="flex items-center gap-2 self-end pb-2 text-xs text-stone-300 pointer-coarse:min-h-10">
           <input
             type="checkbox"
             checked={data.heavyArmorSpeed === true}

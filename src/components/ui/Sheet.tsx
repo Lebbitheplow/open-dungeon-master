@@ -78,7 +78,8 @@ export function Sheet({
             </RadixDialog.Title>
             <RadixDialog.Close
               className={cn(
-                "rounded-md p-1 text-stone-400 transition-colors hover:bg-stone-800 hover:text-stone-200",
+                // pk-tap: 40 px for a finger, the glyph still small (audit WA-08).
+                "pk-tap inline-flex items-center justify-center rounded-md p-1 text-stone-400 transition-colors hover:bg-stone-800 hover:text-stone-200",
                 // Over a full-screen editor the X floats on the content, which
                 // comes later in the page and would otherwise paint over it,
                 // leaving a phone (no backdrop to tap) only the Escape key.
