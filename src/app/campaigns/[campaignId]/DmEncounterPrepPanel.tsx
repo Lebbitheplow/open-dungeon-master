@@ -26,6 +26,8 @@ import {
   type TemplateReadout,
 } from "@/app/workshop/encounters/types";
 import { useOpenOnArrival } from "@/app/workshop/world/WorldEntryLink";
+import { OpenTestFightCard, useTestFight } from "@/app/workshop/encounters/OpenTestFight";
+import { TestFightSheet } from "@/app/workshop/encounters/TestFightSheet";
 
 // Prepared encounters: the roster a DM writes down before the session and
 // deploys in one action.
@@ -89,6 +91,7 @@ export function DmEncounterPrepPanel({
   openOnArrival,
   only = false,
   onClose,
+  testFight,
 }: {
   campaignId: string;
   // The fight to open on arrival, by id: a World entry's "Add to a fight"
@@ -107,7 +110,13 @@ export function DmEncounterPrepPanel({
   // workshop declares one; a real campaign has no need of it because the
   // console never shows the bar.
   targetParty?: TargetParty;
+  // The workshop's Encounters, which has no table to deploy to: each fight's
+  // button tests it on a table of its own instead (issue 553,
+  // src/lib/workshop/test-fight.ts).
+  testFight?: { workshopId: string };
 }) {
+  const [testing, setTesting] = useState<PreparedEncounter | null>(null);
+  const test = useTestFight(testFight?.workshopId ?? null);
   const [templates, setTemplates] = useState<PreparedEncounter[]>([]);
   const [draft, setDraft] = useState<EncounterDraft>(EMPTY_ENCOUNTER_DRAFT);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -403,6 +412,7 @@ export function DmEncounterPrepPanel({
     return (
       <div className="space-y-3">
         <DmWorkbenchPanel campaignId={campaignId} collapsible />
+        {testFight ? <OpenTestFightCard workshopId={testFight.workshopId} info={test.info} onEnded={test.reload} /> : null}
         <Listed loaded={loaded} error={loadError} onRetry={() => void load()} loading="Opening the fights...">
           <EncounterRows
             encounters={templates}
@@ -410,12 +420,25 @@ export function DmEncounterPrepPanel({
             thresholds={thresholds}
             busy={busy}
             onOpen={openEditor}
-            onDeploy={(template) => void deploy(template.id)}
+            onDeploy={(template) => {
+              if (!testFight) {
+                void deploy(template.id);
+                return;
+              }
+              // What the sheet offers is read again as it opens: a model set
+              // up, or a test ended, since this tool was opened.
+              test.reload();
+              setTesting(template);
+            }}
+            deployLabel={testFight ? "Test fight" : undefined}
             onDuplicate={(template) => void duplicate(template)}
             onDelete={(template) => void remove(template)}
           />
         </Listed>
         {feedback}
+        {testFight ? (
+          <TestFightSheet workshopId={testFight.workshopId} encounter={testing} info={test.info} onClose={() => setTesting(null)} />
+        ) : null}
         <Sheet
           open={editorOpen}
           onOpenChange={showEditor}

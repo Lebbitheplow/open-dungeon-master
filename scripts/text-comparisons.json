@@ -2425,7 +2425,7 @@
     "lib/workshop/import-kinds.ts#str-list": [["key",2,"import and link kinds"]],
     "lib/workshop/import.ts#str-list": [["english-source",7,"the summary lines ODM writes after an import"]],
     "lib/workshop/import.ts#toLowerCase": [["display",8,"labels in a sentence; labels in sentences"]],
-    "lib/workshop/kind.ts#str-eq": [["key",1,"campaign kinds"]],
+    "lib/workshop/kind.ts#str-eq": [["key",2,"campaign kinds"]],
     "lib/workshop/kind.ts#str-list": [["key",1,"campaign kinds"]],
     "lib/workshop/links.ts#str-list": [["key",1,"link query parameter names"]],
     "lib/workshop/pickers.ts#str-list": [["english-source",5,"UI copy: the workshop's suggestion and picker lists"]],

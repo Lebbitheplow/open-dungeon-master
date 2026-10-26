@@ -125,10 +125,12 @@ export const WORKSHOP_GUIDES: ToolGuide[] = [
       "Choose the map it opens on, then place each creature and the party's entrance on it.",
       "Write the plan: what the fight is worth, and what happens when.",
       "Prepare it. At the table the fight is one press of Deploy.",
+      "Press Test fight to play it now: pick the stand-in party or your own characters, and the AI DM runs the enemies on a table only you can see.",
     ],
     atTable: "Deploy lays the fight down on its map with its plan. A hand-built monster in its roster is copied into the campaign that brings the fight in.",
     tips: [
       "The difficulty pill is the same maths the engine enforces; every number in the workbench shows its parts.",
+      "End a test from its table, or from Encounters; starting the next one ends it too. Nothing a test does reaches your characters.",
       "A monster the world does not know is flagged on the card rather than failing at the table.",
     ],
   },

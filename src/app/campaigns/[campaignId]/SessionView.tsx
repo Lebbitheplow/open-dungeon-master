@@ -76,6 +76,8 @@ import { AddonBoardView } from "@/app/campaigns/[campaignId]/AddonBoardView";
 import { SessionHeader } from "@/app/campaigns/[campaignId]/SessionHeader";
 import { PrepLayer } from "@/app/campaigns/[campaignId]/CampaignPrep";
 import { SessionBanner, bannerButtonClass } from "@/app/campaigns/[campaignId]/SessionBanner";
+import { TestFightBanner } from "@/app/campaigns/[campaignId]/TestFightBanner";
+import { workshopHref } from "@/lib/workshop/links";
 import { isPrimaryDm } from "@/lib/dm/viewer";
 import Link from "next/link";
 import { SidePanel } from "@/app/campaigns/[campaignId]/SidePanel";
@@ -396,6 +398,16 @@ export function SessionView({
       </>
     ),
     [audioWaiting, messageIds, narrationStatus, replayNarration],
+  );
+  // A test fight is in no campaign list (issue 553): the header's way out,
+  // the phone's back arrow included, leads to the workshop it tests.
+  const testWorkshopId = state.testFight?.workshopId ?? "";
+  const headerExit = useMemo(
+    () =>
+      testWorkshopId
+        ? { href: workshopHref(`/workshop/${testWorkshopId}`, { system: "encounters" }), label: "Back to the workshop", glyph: "system-encounters" }
+        : undefined,
+    [testWorkshopId],
   );
   // Chime on new private messages (side chats + DM whispers). The loaded
   // flags keep the page-load backlog silent.
@@ -1080,6 +1092,7 @@ export function SessionView({
         layoutSeat={sessionLayout ? undefined : layoutSeat}
         tableBreak={breakControl}
         prep={headerPrep}
+        exit={headerExit}
         ribbon={
           state.encounter?.status === "active" ? (
             <InitiativeRibbon
@@ -1213,6 +1226,7 @@ export function SessionView({
                   </Suspense>
                 ) : (
                   <>
+                  {state.testFight ? <TestFightBanner campaignId={campaign.id} source={state.testFight} /> : null}
                   {ended ? (
                     <SessionBanner
                       glyph="tab-campaigns"

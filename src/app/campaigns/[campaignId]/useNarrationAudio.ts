@@ -326,16 +326,21 @@ export function useNarrationAudio(onBreak = false): NarrationAudio {
 
   // Any first interaction with the page (click, key press) also counts as
   // the unlock gesture, so narration autoplays without hunting for the
-  // speaker button.
+  // speaker button. On the click, not the press: unlocking takes the
+  // "narration is waiting" banner off the composer, and the table's column,
+  // anchored to its foot, moves everything above it while the button is still
+  // held, so the release landed beside the button pressed and the first
+  // press on End turn or a test fight's Back did nothing (issue 553). A click
+  // still carries the gesture the browser asks for.
   useEffect(() => {
     if (unlocked) {
       return;
     }
     const handle = () => unlock();
-    window.addEventListener("pointerdown", handle, { once: true });
+    window.addEventListener("click", handle, { once: true });
     window.addEventListener("keydown", handle, { once: true });
     return () => {
-      window.removeEventListener("pointerdown", handle);
+      window.removeEventListener("click", handle);
       window.removeEventListener("keydown", handle);
     };
   }, [unlocked, unlock]);

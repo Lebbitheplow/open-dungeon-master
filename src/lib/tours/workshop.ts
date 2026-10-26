@@ -234,7 +234,7 @@ export const SYSTEM_TOURS: Record<string, TourStep[]> = {
     {
       id: "list",
       title: "Prepared fights",
-      body: "Each card carries its difficulty against the stand-in party and the map it opens on. Deploy puts it on a running table in one press.",
+      body: "Each card carries its difficulty against the stand-in party and the map it opens on. Test fight plays it on a table only you can see, with the stand-ins or characters you pick.",
       anchors: ["encounters-list"],
     },
     {

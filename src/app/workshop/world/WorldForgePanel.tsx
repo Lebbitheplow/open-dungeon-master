@@ -399,7 +399,7 @@ export function WorldForgePanel({
             {view === "ask" ? <AskView api={api} world={world} onOpen={open} /> : null}
             {view === "web" ? <WebView world={world} focus={focus} onOpen={open} /> : null}
             {view === "timeline" ? <TimelineView api={api} world={world} onOpen={open} /> : null}
-            {view === "atlas" ? <AtlasView campaignId={campaignId} api={api} world={world} onOpen={open} onOpenPrep={openPrep} /> : null}
+            {view === "atlas" ? <AtlasView campaignId={campaignId} api={api} world={world} onOpen={open} onOpenPrep={openPrep} atTable={atTable} /> : null}
             {view === "secrets" ? <SecretsView api={api} world={world} onOpen={open} atTable={atTable} canShowHandouts={canShowHandouts} /> : null}
             {view === "stubs" ? <StubsView api={api} world={world} onOpen={open} /> : null}
             {view === "types" ? <TypesView api={api} world={world} /> : null}

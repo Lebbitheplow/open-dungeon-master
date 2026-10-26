@@ -65,6 +65,7 @@ export function FactionsPanel({
   refreshKey = 0,
   openId,
   onWorldEntry,
+  workshop = false,
 }: {
   campaignId: string;
   steersStory: boolean;
@@ -73,7 +74,12 @@ export function FactionsPanel({
   // record to open on arrival, and the way to its WorldForge entry.
   openId?: string | null;
   onWorldEntry?: (id: string) => void;
+  // A workshop has no party to stand with a faction (issue 553): standing is
+  // the table's play and no import carries it. The faction's attitude is
+  // how prep says where it starts, and that travels.
+  workshop?: boolean;
 }) {
+  const showsStanding = !workshop;
   const [factions, setFactions] = useState<FactionView[] | null>(null);
   const [editing, setEditing] = useState<string | "new" | null>(null);
   const [draft, setDraft] = useState<Draft>(blank());
@@ -263,14 +269,20 @@ export function FactionsPanel({
           size="sm"
           art="board"
           title="No factions yet. The powers of this world are unnamed."
-          hint={steersStory ? "Name each power, what the table knows of it and what it wants, and set where the party stands with it." : undefined}
+          hint={
+            steersStory
+              ? workshop
+                ? "Name each power, what the table knows of it, what it wants and how it starts out toward the party."
+                : "Name each power, what the table knows of it and what it wants, and set where the party stands with it."
+              : undefined
+          }
         /> : null}
       <ul className="stagger space-y-1.5" data-tour="factions-list">
         {factions.map((faction) => {
           const items: ContextMenuItem[] = steersStory
             ? [
                 { id: "edit", label: "Edit", glyph: "ui-edit", onSelect: () => startEdit(faction) },
-                ...Array.from({ length: REPUTATION_MAX - REPUTATION_MIN + 1 }, (_, index) => REPUTATION_MIN + index).map((step, index) => ({
+                ...(showsStanding ? Array.from({ length: REPUTATION_MAX - REPUTATION_MIN + 1 }, (_, index) => REPUTATION_MIN + index) : []).map((step, index) => ({
                   id: `standing-${step}`,
                   label: `Standing ${step > 0 ? "+" : ""}${step}: ${reputationLabel(step)}`,
                   glyph: step < 0 ? "attitude-hostile" : step === 0 ? "attitude-neutral" : "attitude-friendly",
@@ -300,23 +312,25 @@ export function FactionsPanel({
                   </p>
                   {faction.blurb ? <p className="reveal text-xs leading-5 text-stone-400">{faction.blurb}</p> : null}
                   {faction.goal ? <p className="reveal text-xs italic leading-5 text-violet-300/80">Goal: {faction.goal}</p> : null}
-                  <div className="mt-1 flex items-center gap-1" title={`The party is ${faction.standingLabel} to them`}>
-                    {Array.from({ length: REPUTATION_MAX - REPUTATION_MIN + 1 }, (_, index) => REPUTATION_MIN + index).map((step) => (
-                      <button
-                        key={step}
-                        type="button"
-                        disabled={!steersStory}
-                        onClick={() => void setStanding(faction, step)}
-                        aria-label={`Standing ${step}`}
-                        aria-pressed={step === faction.standing}
-                        className={cn(
-                          "bar-ease h-2.5 w-3.5 rounded-sm enabled:hover:brightness-125 motion-press",
-                          step === 0 ? "bg-stone-600" : step < 0 ? (step >= faction.standing ? "bg-red-500/80" : "bg-stone-800") : step <= faction.standing ? "bg-amber-400" : "bg-stone-800",
-                        )}
-                      />
-                    ))}
-                    <span key={faction.standing} className="count-pop ml-1 text-[11px] text-stone-400">{reputationLabel(faction.standing)}</span>
-                  </div>
+                  {showsStanding ? (
+                    <div className="mt-1 flex items-center gap-1" title={`The party is ${faction.standingLabel} to them`}>
+                      {Array.from({ length: REPUTATION_MAX - REPUTATION_MIN + 1 }, (_, index) => REPUTATION_MIN + index).map((step) => (
+                        <button
+                          key={step}
+                          type="button"
+                          disabled={!steersStory}
+                          onClick={() => void setStanding(faction, step)}
+                          aria-label={`Standing ${step}`}
+                          aria-pressed={step === faction.standing}
+                          className={cn(
+                            "bar-ease h-2.5 w-3.5 rounded-sm enabled:hover:brightness-125 motion-press",
+                            step === 0 ? "bg-stone-600" : step < 0 ? (step >= faction.standing ? "bg-red-500/80" : "bg-stone-800") : step <= faction.standing ? "bg-amber-400" : "bg-stone-800",
+                          )}
+                        />
+                      ))}
+                      <span key={faction.standing} className="count-pop ml-1 text-[11px] text-stone-400">{reputationLabel(faction.standing)}</span>
+                    </div>
+                  ) : null}
                   {faction.members.length ? (
                     <p className="reveal mt-1 text-[11px] text-stone-500">Members: {faction.members.map((member) => member.name).join(", ")}</p>
                   ) : null}

@@ -52,6 +52,8 @@ import { latestEventOfType, publishPersisted, publishWithSeq } from "@/lib/event
 import type { HandoutShown, TitleCard } from "@/lib/scene/state";
 import { narrationAudioFor } from "@/lib/tts";
 import { tableAuthors, workshopClassesFor } from "@/lib/db/homebrew";
+import { testFightSource } from "@/lib/db/test-fights";
+import { isPlaytest } from "@/lib/workshop/kind";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -110,6 +112,9 @@ export async function GET(
   const messages = listRecentMessages(campaignId, 100);
   return Response.json({
     campaign: publicCampaign(campaign),
+    // A test fight's workshop (issue 553), for its way back there; null at
+    // every other table.
+    testFight: isPlaytest(campaign) ? testFightSource(campaign.id) : null,
     // Whether the table already holds a story arc that AI Story Setup has
     // not yet built on (a Workshop Storyboard brought in before the start,
     // issue 249). Told to whoever steers the story, who is warned by it;

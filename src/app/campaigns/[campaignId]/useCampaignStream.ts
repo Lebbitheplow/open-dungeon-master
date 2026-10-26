@@ -184,6 +184,9 @@ export type CampaignState = {
     // The table holds a story arc AI Story Setup has not built on yet (the
   // lobby's warning, issue 249); false for anyone who does not steer.
   prepArc: boolean;
+  // A test fight's workshop (issue 553, src/lib/workshop/test-fight.ts), for
+  // the table's way back; null at every other table.
+  testFight: { workshopId: string; title: string } | null;
   // What this seat may see and do, decided by the server
   // (src/lib/dm/viewer.ts). The client never re-derives it from ids, so a
   // control the server would refuse is never rendered in the first place.
@@ -352,6 +355,7 @@ const initialState: CampaignState = {
   answeredBy: "",
   campaign: null,
   prepArc: false,
+  testFight: null,
   coordination: null,
   tableWait: null,
   // A plain player until the snapshot says otherwise: the safe default is
@@ -1318,6 +1322,7 @@ export function useCampaignStream(campaignId: string) {
           answeredBy,
           campaign: data.campaign,
           prepArc: Boolean(data.prepArc),
+          testFight: (data.testFight as CampaignState["testFight"]) ?? null,
           coordination: (data.coordination as CoordinationPhase | null) ?? null,
           tableWait: (data.tableWait as TableWaitView | null) ?? null,
           caps: data.caps ?? capsForRole("player", "ai"),

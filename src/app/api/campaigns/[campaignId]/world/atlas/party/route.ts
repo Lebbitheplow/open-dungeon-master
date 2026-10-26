@@ -34,6 +34,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ cam
   if (isErrorResponse(context)) {
     return context;
   }
+  if (context.campaign.kind === "workshop") {
+    return Response.json({ error: "A workshop has no party to show a map to. Show it from a campaign's World tab." }, { status: 400 });
+  }
   const raw = (await request.json().catch(() => ({}))) as { mapId?: unknown; apply?: unknown };
   const mapId = typeof raw.mapId === "string" ? raw.mapId.trim().slice(0, 80) : "";
   if (!mapId) {
