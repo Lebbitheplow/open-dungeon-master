@@ -15,6 +15,7 @@ import type { CustomClass, CustomFeatureTable } from "@/lib/classes";
 import type { Ability } from "@/lib/schemas/sheet";
 import { ALL_SKILLS } from "@/lib/content/mechanics";
 import { textKey } from "@/lib/language/text-logic";
+import { HOMEBREW_DESC_MAX } from "@/lib/schemas/homebrew";
 
 export type ClassFeatureRow = { n: string; d: string };
 
@@ -154,7 +155,7 @@ export function normalizeClassData(raw: Record<string, unknown>): { data: Worksh
   }
   return {
     data: {
-      desc: String(raw.desc ?? "").slice(0, 8_000),
+      desc: String(raw.desc ?? "").slice(0, HOMEBREW_DESC_MAX),
       hitDie: oneOf(Number(raw.hitDie), HIT_DICE, blank.hitDie),
       saves,
       skillChoices: { count, from },

@@ -68,9 +68,11 @@ test("a class's ninth tool, a species's and a background's seventh skill and a k
 
 test("species traits and a description longer than they keep are named", () => {
   assert.deepEqual(homebrewLimitProblems("race", { traits: "x".repeat(6_001) }).map((problem) => problem.field), ["traits"]);
-  const long = homebrewLimitProblems("item", { desc: "x".repeat(9_214) });
+  const long = homebrewLimitProblems("item", { desc: "x".repeat(20_214) });
   assert.equal(long[0].field, "desc");
-  assert.match(long[0].text, /9,214 characters/);
+  assert.match(long[0].text, /20,214 characters/);
+  // The longest published entry, the Figurine of Wondrous Power at 15,816, fits.
+  assert.deepEqual(homebrewLimitProblems("item", { desc: "x".repeat(15_816) }), []);
 });
 
 test("a 75-letter spell name stays whole on a subclass, an item and a monster", () => {

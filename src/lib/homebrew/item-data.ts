@@ -11,6 +11,7 @@ import type { ArmorRiders, ChargeRule, WeaponRiders } from "@/lib/srd/magic-gear
 import type { ItemSpell } from "@/lib/srd/item-spells";
 import type { AttunementRule } from "@/lib/srd/magic-items";
 import { isWornPlace, type WornPlace } from "@/lib/srd/worn-places";
+import { HOMEBREW_DESC_MAX } from "@/lib/schemas/homebrew";
 
 // A homebrew item as the engine reads it: its weapon block (an SrdWeapon),
 // its armour block (an SrdArmor), its magic effects (the MagicItemEffect
@@ -42,7 +43,7 @@ export const EFFECT_KINDS = ["ac_bonus", "ac_unarmored", "save_bonus", "set_abil
 // The ceilings are the published game's own: no magic bonus in the SRD goes
 // past +3, and no weapon a character swings rolls more than a dozen or two.
 export const GEAR_LIMITS = {
-  descMax: 8_000,
+  descMax: HOMEBREW_DESC_MAX,
   effectsMax: 6,
   bonusMax: 3,
   // The largest die a weapon rolls, and the most its dice and flat damage

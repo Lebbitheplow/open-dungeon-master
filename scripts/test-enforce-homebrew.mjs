@@ -109,7 +109,7 @@ await test("a homebrew spell is of level 0 to 9 and says how it resolves", async
     { desc: "", level: 1 },
     { level: 1 },
     { desc: "x", level: 1, mech: { resolution: "save" } },
-    { desc: "x".repeat(8001), level: 1 },
+    { desc: "x".repeat(20_001), level: 1 },
   ]) {
     const response = await brew(who.player, "spell", "Broken", data);
     assert.equal(response.status, 400, JSON.stringify(data).slice(0, 80));

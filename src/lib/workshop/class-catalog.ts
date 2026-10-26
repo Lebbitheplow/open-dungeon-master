@@ -9,6 +9,7 @@
 import "@/lib/classes/feature-text-all";
 import { ALL_CLASSES, findClass } from "@/lib/srd";
 import { classFeaturesFor, subclassLevelFor } from "@/lib/srd/features";
+import { HOMEBREW_DESC_MAX } from "@/lib/schemas/homebrew";
 import { describeFeature } from "@/lib/help";
 import { classMechanics } from "@/lib/content/mechanics";
 import { findCustomClass } from "@/lib/classes";
@@ -64,7 +65,7 @@ export function classMechanicsOf(row: Row): WorkshopClassData | null {
   }
   const numbers = classMechanics(row.slug ?? row.name, row.data);
   return {
-    desc: String(row.data.desc ?? "").slice(0, 8_000),
+    desc: String(row.data.desc ?? "").slice(0, HOMEBREW_DESC_MAX),
     hitDie: numbers.hitDie,
     saves: numbers.saves,
     skillChoices: numbers.skillChoices,

@@ -95,9 +95,15 @@ export const homebrewGearSchema = z
 // through src/lib/homebrew/gear.ts, which is where a weapon's damage
 // expression is refused and an armour's class is clamped. name + desc are
 // required; kind-specific fields are what the normalizers read.
+// The longest description an entry keeps. Start from copies a published
+// entry whole, and the longest of those run past 15,000 characters (the
+// Figurine of Wondrous Power, the Warlock); at 8,000 their copies could not
+// be saved, nor a class or subclass copied without losing its tail.
+export const HOMEBREW_DESC_MAX = 20_000;
+
 export const homebrewDataSchema = z
   .object({
-    desc: z.string().trim().max(8_000).default(""),
+    desc: z.string().trim().max(HOMEBREW_DESC_MAX).default(""),
     // spell hints
     level: z.number().int().min(0).max(9).optional(),
     school: z.string().trim().max(40).optional(),
