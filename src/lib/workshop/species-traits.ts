@@ -1,4 +1,4 @@
-import { raceMechanics, traitHeading } from "@/lib/content/mechanics";
+import { PLAIN_TRAIT_LINE, raceMechanics, traitHeading } from "@/lib/content/mechanics";
 import { DAMAGE_TYPES } from "@/lib/dm/damage-logic";
 import { pcResistances } from "@/lib/dm/pc-defenses";
 import { byName, textKey } from "@/lib/language/text-logic";
@@ -37,7 +37,7 @@ export function traitParagraphs(markdown: string): Map<string, string> {
 // Weapon.*"), and, in a text whose other traits are marked, one that opens
 // with a plain "Breath Weapon. You...".
 const MARKED_LIKE_A_TRAIT = /^(?:\*{1,3}|_{1,2}|\*\*_|_\*\*)([^*_\n]{2,60}?)(?:\*{1,3}|_{1,2}|_\*\*|\*\*_)(?![*_])\s*[:.–-]?\s*\S/;
-const PLAIN_LIKE_A_TRAIT = /^([A-Z][\w’'()-]*(?:\s+(?:of|the|and|[A-Z][\w’'()-]*)){0,4})\.\s+[A-Z]/;
+
 
 // The paragraphs that read like a trait the table does not see, each with
 // the name it seems to give: the table runs only what traitHeading reads,
@@ -45,11 +45,13 @@ const PLAIN_LIKE_A_TRAIT = /^([A-Z][\w’'()-]*(?:\s+(?:of|the|and|[A-Z][\w’'(
 // Bullets (a trait's options) and table rows are no trait's opening.
 export function unreadTraitLines(traits: string): Array<{ name: string; line: string }> {
   const lines = String(traits ?? "").split("\n").map((line) => line.trim()).filter(Boolean);
-  const headed = lines.some((line) => traitHeading(line) !== null);
+  // Plain "Name. Words" lines are read as traits beside bold ones in a text a
+  // person typed (raceMechanics); only among a pack's headings are they not.
+  const packed = lines.some((line) => /^(?:\*\*\*|\*\*_)/.test(line) && traitHeading(line) !== null);
   const out: Array<{ name: string; line: string }> = [];
   for (const line of lines) {
     if (traitHeading(line) || /^[*-]\s/.test(line) || line.startsWith("|")) continue;
-    const said = MARKED_LIKE_A_TRAIT.exec(line)?.[1] ?? (headed ? PLAIN_LIKE_A_TRAIT.exec(line)?.[1] : undefined);
+    const said = MARKED_LIKE_A_TRAIT.exec(line)?.[1] ?? (packed ? PLAIN_TRAIT_LINE.exec(line)?.[1] : undefined);
     const name = said?.replace(/[\s:.–-]+$/, "").trim();
     if (name) out.push({ name, line });
   }

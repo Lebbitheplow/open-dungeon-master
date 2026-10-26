@@ -114,6 +114,11 @@ await test("a homebrew spell is of level 0 to 9 and says how it resolves", async
     const response = await brew(who.player, "spell", "Broken", data);
     assert.equal(response.status, 400, JSON.stringify(data).slice(0, 80));
   }
+  // A description past what an entry keeps is named, not "Invalid homebrew entry".
+  const long = await brew(who.player, "spell", "Broken", { desc: "x".repeat(20_001), level: 1 });
+  const said = long.json;
+  assert.equal(said.field, "desc");
+  assert.match(said.error, /description runs to 20,001 characters/);
   for (const body of [
     { kind: "curse", name: "x", data: { desc: "x" } },
     { kind: "spell", name: "", data: { desc: "x" } },

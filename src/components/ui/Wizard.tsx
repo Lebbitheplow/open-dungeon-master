@@ -383,11 +383,13 @@ export function Wizard({
           title={blocker ?? undefined}
           className={cn(
             finishEarly ? ui.btnSecondary : ui.btnPrimary,
-            "wizard-continue min-w-0 max-w-full max-sm:flex-1",
+            // On a phone the label is the button's own text, cut with an
+            // ellipsis: a span inside a held button is read apart from it.
+            "wizard-continue min-w-0 max-w-full max-sm:block max-sm:flex-1 max-sm:truncate max-sm:text-center max-sm:leading-10",
             blocker && "wizard-continue-held",
           )}
         >
-          <span className="min-w-0 truncate">{last ? doneLabel : (current?.continueLabel ?? "Continue")}</span>
+          {last ? doneLabel : (current?.continueLabel ?? "Continue")}
         </button>
         {finishEarly ? (
           <button type="button" onClick={onDone} className={ui.btnPrimary}>

@@ -38,7 +38,12 @@ export async function POST(request: Request) {
   const raw = await request.json().catch(() => ({}));
   const parsed = createHomebrewSchema.safeParse(raw);
   if (!parsed.success) {
-    return Response.json({ error: "Invalid homebrew entry." }, { status: 400 });
+    // A description past what an entry keeps fails the schema as well: it is
+    // named, as the limits check below names it (WA-02).
+    const kind = (raw as { kind?: unknown })?.kind;
+    const problems = HOMEBREW_KINDS.includes(kind as HomebrewKind) ? homebrewLimitProblems(kind as HomebrewKind, (raw as { data?: unknown }).data) : [];
+    const over = problems[0];
+    return Response.json(over ? { error: over.text, field: over.field } : { error: "Invalid homebrew entry." }, { status: 400 });
   }
   const published = serverPublishedNameProblem(parsed.data.kind, parsed.data.name);
   if (published) {

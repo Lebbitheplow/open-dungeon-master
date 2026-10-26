@@ -44,7 +44,9 @@ export async function PATCH(
   const raw = await request.json().catch(() => ({}));
   const parsed = patchHomebrewSchema.safeParse(raw);
   if (!parsed.success) {
-    return Response.json({ error: "Invalid homebrew patch." }, { status: 400 });
+    // An over-long description fails the schema as well: it is named (WA-02).
+    const over = homebrewLimitProblems(existing.kind, (raw as { data?: unknown })?.data)[0];
+    return Response.json(over ? { error: over.text, field: over.field } : { error: "Invalid homebrew patch." }, { status: 400 });
   }
   // A rename to a published name is refused; an entry saved under one before
   // the rule keeps its name (and the editor says what that means).

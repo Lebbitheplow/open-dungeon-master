@@ -285,16 +285,40 @@ export function traitHeading(line: string): { name: string; rest: string } | nul
   return null;
 }
 
+// The heading forms only the packs and "Add a published trait" write. A
+// text holding one is a pack's, whose other paragraphs are its traits' words.
+const PACK_HEADING = /^(?:\*\*\*|\*\*_)/;
+// A trait named the plain way, one per line: "Trance. You do not sleep." or a
+// short title on its own, "Darkvision 60 ft". A sentence that goes on ("You
+// can use this trait once...") is a trait's words, not a trait.
+export const PLAIN_TRAIT_LINE = /^([A-Z][\w’'()-]*(?:\s+(?:of|the|and|[A-Z][\w’'()-]*)){0,4})\.\s+[A-Z]/;
+export function plainTraitName(line: string): string | null {
+  const trimmed = line.trim();
+  if (!trimmed || /^[*_|-]/.test(trimmed)) {
+    return null;
+  }
+  const named = PLAIN_TRAIT_LINE.exec(trimmed);
+  if (named) {
+    return named[1];
+  }
+  return /^[A-Z]/.test(trimmed) && !/[.!?:;,]/.test(trimmed) && trimmed.split(/\s+/).length <= 6 ? trimmed : null;
+}
+
 function proseTraitNames(text: string): { names: string[]; choices: string[] } {
-  const headings = text
-    .split(/\n+/)
+  const lines = text.split(/\n+/);
+  const headings = lines
     .map(traitHeading)
     .filter((heading): heading is { name: string; rest: string } => heading !== null);
   if (headings.length) {
-    return {
-      names: headings.map((heading) => heading.name),
-      choices: headings.filter((heading) => CHOICE_HEADING.test(heading.rest)).map((heading) => heading.name),
-    };
+    const choices = headings.filter((heading) => CHOICE_HEADING.test(heading.rest)).map((heading) => heading.name);
+    // A text a person typed may name some traits in bold and the rest one per
+    // line, as it always could: those lines are traits too. A pack's text
+    // keeps to its headings.
+    if (!lines.some((line) => PACK_HEADING.test(line.trim()) && traitHeading(line))) {
+      const names = lines.map((line) => traitHeading(line)?.name ?? plainTraitName(line)).filter((name): name is string => Boolean(name));
+      return { names, choices };
+    }
+    return { names: headings.map((heading) => heading.name), choices };
   }
   // No headings: the expanded pack writes one trait per line.
   const names = text

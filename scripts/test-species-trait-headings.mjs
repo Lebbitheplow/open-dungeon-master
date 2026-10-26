@@ -90,4 +90,20 @@ test("a paragraph marked another way is named as unread, and a read one is not",
   assert.deepEqual(unreadTraitLines("Keen Smell. You smell well."), []);
 });
 
+test("a typed text keeps its plain trait lines beside a bold one", () => {
+  // A homebrew species written one trait per line, with one trait put in
+  // bold later: every line was a trait before the per-paragraph reading,
+  // and still is (the review of WA-06).
+  const plain = "Darkvision. You can see in dim light.\n\n**Fey Ancestry.** You have advantage against being charmed.\n\nTrance. You don't need to sleep.";
+  assert.deepEqual(raceMechanics({ traits: plain }).traitNames, ["Darkvision", "Fey Ancestry", "Trance"]);
+  const expanded = "Darkvision 60 ft\nStonecunning\n**Marsh Stride.** Marsh costs you no extra movement.";
+  assert.deepEqual(raceMechanics({ traits: expanded }).traitNames, ["Darkvision 60 ft", "Stonecunning", "Marsh Stride"]);
+  // A trait's own words that go on are not traits.
+  const words = "**Marsh Stride.** Marsh costs you no extra movement.\n\nYou can use this trait once per long rest.";
+  assert.deepEqual(raceMechanics({ traits: words }).traitNames, ["Marsh Stride"]);
+  // A pack's text keeps to its headings.
+  const pack = "***Darkvision.*** You see.\n\nYou can see in dim light within 60 feet.";
+  assert.deepEqual(raceMechanics({ traits: pack }).traitNames, ["Darkvision"]);
+});
+
 console.log(`\ntest-species-trait-headings: ${passed} tests passed.`);
