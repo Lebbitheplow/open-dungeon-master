@@ -239,6 +239,25 @@ const RACES = [
   { id: "gearforged-dwarf", name: "Gearforged dwarf", traits: "a clockwork construct body with gears at the joints, shaped like a dwarf" },
   { id: "gearforged-gnome", name: "Gearforged gnome", traits: "a clockwork construct body with gears at the joints, shaped like a gnome" },
   { id: "gearforged-kobold", name: "Gearforged kobold", traits: "a clockwork construct body with gears at the joints, shaped like a kobold" },
+  // Distinct painted subrace / caste / heritage plates (Albert-approved splits).
+  { id: "wood-elf", name: "Wood elf", traits: "long pointed ears, leaf-toned cloak and woodland braid" },
+  { id: "mountain-dwarf", name: "Mountain dwarf", traits: "a short stout heavy build, braided beard and mountain cloak" },
+  { id: "rock-gnome", name: "Rock gnome", traits: "a small slight build, a pointed cap and tinker's goggles" },
+  { id: "forest-gnome", name: "Forest gnome", traits: "a small slight build, mossy cloak and woodland hood" },
+  { id: "stout-halfling", name: "Stout halfling", traits: "a small sturdy build, curly hair and a broad belt" },
+  { id: "stoor-halfling", name: "Stoor halfling", traits: "a small broad-shouldered riverside build and a weather cloak" },
+  { id: "delver", name: "Delver", traits: "a deep drow caste build with mining gear and pale eyes" },
+  { id: "fever-bit", name: "Fever-bit", traits: "a fever-marked drow caste with wild eyes and ragged cloak" },
+  { id: "purified", name: "Purified", traits: "a purified drow caste with ritual marks and pale hair" },
+  { id: "bhain-kwai", name: "Bhain kwai", traits: "a bull-headed minotaur heritage with distinctive horns" },
+  { id: "boghaid", name: "Boghaid", traits: "a bog-touched minotaur heritage with mossy hide" },
+  { id: "acid-cap", name: "Acid cap", traits: "a mushroomfolk with an acid-weeping cap" },
+  { id: "favored", name: "Favored", traits: "a favored mushroomfolk with a crowned fungal cap" },
+  { id: "morel", name: "Morel", traits: "a morel mushroomfolk with a pitted conical cap" },
+  { id: "far-touched", name: "Far-touched", traits: "a derro heritage warped by far realms stare" },
+  { id: "mutated", name: "Mutated", traits: "a mutated derro with warped limbs and wild hair" },
+  { id: "uncorrupted", name: "Uncorrupted", traits: "an uncorrupted derro with clearer eyes and steadier stance" },
+  { id: "gearforged", name: "Gearforged", traits: "a clockwork construct body with gears at the joints and a faceplate" },
 ];
 
 // Silhouette shorthand for a class: the gear is the whole tell.
