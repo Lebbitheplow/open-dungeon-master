@@ -249,13 +249,15 @@ const RACES = [
   { id: "delver", name: "Delver", traits: "a deep drow caste build with mining gear and pale eyes" },
   { id: "fever-bit", name: "Fever-bit", traits: "a fever-marked drow caste with wild eyes and ragged cloak" },
   { id: "purified", name: "Purified", traits: "a purified drow caste with ritual marks and pale hair" },
-  { id: "bhain-kwai", name: "Bhain kwai", traits: "a bull-headed minotaur heritage with distinctive horns" },
-  { id: "boghaid", name: "Boghaid", traits: "a bog-touched minotaur heritage with mossy hide" },
+  // Tome of Heroes: the bhain kwai live in bogs and wetlands, the boghaid in
+  // cold highlands under a thick wooly coat.
+  { id: "bhain-kwai", name: "Bhain kwai", traits: "a water-buffalo minotaur of the wetlands, swept-back horns and reed-woven gear" },
+  { id: "boghaid", name: "Boghaid", traits: "a shaggy highland minotaur with a thick curling wool coat and wide horns" },
   { id: "acid-cap", name: "Acid cap", traits: "a mushroomfolk with an acid-weeping cap" },
   { id: "favored", name: "Favored", traits: "a favored mushroomfolk with a crowned fungal cap" },
   { id: "morel", name: "Morel", traits: "a morel mushroomfolk with a pitted conical cap" },
-  { id: "far-touched", name: "Far-touched", traits: "a derro heritage warped by far realms stare" },
-  { id: "mutated", name: "Mutated", traits: "a mutated derro with warped limbs and wild hair" },
+  { id: "far-touched", name: "Far-touched", traits: "a derro touched by its mad gods, eyes glowing violet" },
+  { id: "mutated", name: "Mutated", traits: "a derro with a tentacle-like growth from the shoulder and wild hair" },
   { id: "uncorrupted", name: "Uncorrupted", traits: "an uncorrupted derro with clearer eyes and steadier stance" },
   { id: "gearforged", name: "Gearforged", traits: "a clockwork construct body with gears at the joints and a faceplate" },
 ];
