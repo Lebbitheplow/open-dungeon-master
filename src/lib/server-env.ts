@@ -20,7 +20,13 @@ function loadEnvServer() {
     return cachedEnvServer;
   }
 
-  const envPath = path.join(/*turbopackIgnore: true*/ process.cwd(), ".env.server");
+  // ODM_ENV_FILE points a server at another settings file: the browser
+  // runner names one that does not exist, so this machine's own models and
+  // keys never reach its scenarios (an empty value in process.env falls
+  // back to the file, so blanking a key there could not keep it out).
+  const envPath = process.env.ODM_ENV_FILE
+    ? path.resolve(/*turbopackIgnore: true*/ process.env.ODM_ENV_FILE)
+    : path.join(/*turbopackIgnore: true*/ process.cwd(), ".env.server");
   if (!existsSync(envPath)) {
     cachedEnvServer = {};
     return cachedEnvServer;
