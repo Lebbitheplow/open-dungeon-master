@@ -12,26 +12,37 @@
 // pure predicates, and scripts/test-workshop-isolation.mjs asserts them.
 //
 // Pure by design: no "@/" imports and no I/O, so the test can drive it.
+//
+// The third kind is a test fight (issue 553, src/lib/workshop/test-fight.ts):
+// a table the Workshop makes to play one of its prepared fights, seated with
+// a party for it. It plays like any AI table, but it is its author's alone:
+// no campaign list shows it, nobody can join it, and ending the test deletes
+// it.
 
-export const CAMPAIGN_KINDS = ["campaign", "workshop"] as const;
+export const CAMPAIGN_KINDS = ["campaign", "workshop", "playtest"] as const;
 export type CampaignKind = (typeof CAMPAIGN_KINDS)[number];
 
 // Rows written before the column existed read as NULL, and anything a client
 // invents reads as garbage. Both mean "a table that plays", which is the
 // answer that preserves existing behaviour for every campaign in the file.
 export function normalizeCampaignKind(raw: unknown): CampaignKind {
-  return raw === "workshop" ? "workshop" : "campaign";
+  return raw === "workshop" || raw === "playtest" ? raw : "campaign";
 }
 
 export function isWorkshop(row: { kind: CampaignKind }): boolean {
   return row.kind === "workshop";
 }
 
+export function isPlaytest(row: { kind: CampaignKind }): boolean {
+  return row.kind === "playtest";
+}
+
 // The single predicate every AI entry point asks before it spends a model
 // call on a campaign. Phrased as a capability rather than as "not a
-// workshop" so a future third kind has one obvious place to declare itself.
+// workshop" so a third kind has one obvious place to declare itself: a test
+// fight is played, and its AI DM runs the enemies.
 export function runsAiTurns(row: { kind: CampaignKind }): boolean {
-  return row.kind === "campaign";
+  return row.kind === "campaign" || row.kind === "playtest";
 }
 
 // ---- the stand-in party ----

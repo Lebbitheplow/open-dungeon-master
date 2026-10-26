@@ -121,6 +121,12 @@ export async function PATCH(
     return Response.json({ error: "Invalid overworld update." }, { status: 400 });
   }
   const patch = parsed.data;
+  // Where the party stands is play, and a workshop has no party (issue 553):
+  // an import would leave the marker behind without a word. Clearing an old
+  // one stays allowed.
+  if (patch.partyXy && context.campaign.kind === "workshop") {
+    return Response.json({ error: "A workshop has no party to place. The party is placed at the table, as it travels." }, { status: 400 });
+  }
   // Painting first: a refused paint is the DM's picture being rejected, and
   // they should hear about it instead of it being buried under whatever else
   // the same request happened to carry.

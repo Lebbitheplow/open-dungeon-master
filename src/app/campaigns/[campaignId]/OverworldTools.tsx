@@ -139,6 +139,7 @@ const MODES = [
 export function ModeBar({
   mode,
   onMode,
+  partyTool = true,
   partyPlaced,
   onPartyTransit,
   pinsCount,
@@ -148,6 +149,8 @@ export function ModeBar({
 }: {
   mode: OverworldMode;
   onMode: (mode: OverworldMode) => void;
+  // Off in a workshop, which has no party to place (issue 553).
+  partyTool?: boolean;
   partyPlaced: boolean;
   onPartyTransit: () => void;
   pinsCount: number;
@@ -157,7 +160,7 @@ export function ModeBar({
 }) {
   return (
     <div className="flex flex-wrap items-center gap-1.5" data-tour="region-modes">
-      {MODES.map(([value, label, Icon]) => (
+      {MODES.filter(([value]) => partyTool || value !== "party").map(([value, label, Icon]) => (
         <button
           key={value}
           type="button"

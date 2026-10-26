@@ -4,6 +4,7 @@ import { deployTemplate } from "@/lib/dm/encounter-templates";
 import { readyTemplates } from "@/lib/dm/prepared-encounter-tool";
 import { preparedFit } from "@/lib/dm/prepared-fit";
 import { fightingParty } from "@/lib/dm/party-budget";
+import { isWorkshop } from "@/lib/workshop/kind";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,6 +34,15 @@ export async function POST(
   const template = getEncounterTemplate(templateId);
   if (!template || template.campaignId !== campaignId) {
     return Response.json({ error: "No such prepared encounter." }, { status: 404 });
+  }
+  // A workshop is prep with no party in it, so a fight deployed there had
+  // nobody to fight (issue 553). It is played on a table of its own:
+  // src/app/api/workshops/[workshopId]/test-fight/route.ts.
+  if (isWorkshop(context.campaign)) {
+    return Response.json(
+      { error: "A workshop has no table to deploy to. Press Test fight to play it with the stand-in party or characters you pick." },
+      { status: 409 },
+    );
   }
 
   if (capsFor(context).role !== "dm") {

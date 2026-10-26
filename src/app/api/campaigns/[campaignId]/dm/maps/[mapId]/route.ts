@@ -22,6 +22,7 @@ import {
   setLibrarySkin,
 } from "@/lib/dm/map-library";
 import { SKIN_CHARS, isMaterialId, skinById } from "@/lib/battlemap/skins";
+import { isWorkshop } from "@/lib/workshop/kind";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -194,6 +195,13 @@ export async function POST(
   const parsed = postSchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {
     return Response.json({ error: "Invalid request." }, { status: 400 });
+  }
+  // Both put the map in play, and a workshop is not played (issue 553).
+  if (isWorkshop(context.campaign)) {
+    return Response.json(
+      { error: "A workshop has no table to put a map on. Draw a prepared fight on it, then test that fight from Encounters." },
+      { status: 400 },
+    );
   }
   const outcome =
     parsed.data.do === "deploy"

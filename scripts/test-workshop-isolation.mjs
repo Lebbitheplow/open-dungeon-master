@@ -10,6 +10,7 @@ register("./lib/register-alias.mjs", import.meta.url);
 const {
   CAMPAIGN_KINDS,
   DEFAULT_TARGET_PARTY,
+  isPlaytest,
   isWorkshop,
   normalizeCampaignKind,
   normalizeTargetParty,
@@ -57,6 +58,19 @@ test("an unrecognised kind reads as a campaign rather than throwing", () => {
 
 test("only the literal string opts a row out of play", () => {
   assert.equal(normalizeCampaignKind("workshop"), "workshop");
+});
+
+// ---- a test fight (issue 553) ----
+
+test("a test fight is played: its AI DM takes the enemies' turns", () => {
+  const playtest = { kind: "playtest" };
+  assert.equal(normalizeCampaignKind("playtest"), "playtest");
+  assert.equal(runsAiTurns(playtest), true);
+  assert.equal(isPlaytest(playtest), true);
+  // ...but it is never a workshop, and no campaign is one.
+  assert.equal(isWorkshop(playtest), false);
+  assert.equal(isPlaytest(campaign), false);
+  assert.equal(isPlaytest(workshop), false);
 });
 
 test("every declared kind normalizes to itself", () => {

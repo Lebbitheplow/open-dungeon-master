@@ -58,10 +58,14 @@ export function OverworldPanel({
   genre,
   steersStory,
   visible = true,
+  workshop = false,
 }: {
   campaignId: string;
   genre: string;
   steersStory: boolean;
+  // A workshop's region map has no party on it (issue 553): where the party
+  // stands is play, which an import leaves behind.
+  workshop?: boolean;
   // On a phone the side panel stays mounted behind the chat; the pulse loop
   // rests while it is off screen and picks up again when it is shown.
   visible?: boolean;
@@ -540,7 +544,8 @@ export function OverworldPanel({
           <ModeBar
             mode={mode}
             onMode={changeMode}
-            partyPlaced={Boolean(data.map.partyXy)}
+            partyTool={!workshop}
+            partyPlaced={!workshop && Boolean(data.map.partyXy)}
             onPartyTransit={() => void patch({ partyXy: null })}
             pinsCount={data.map.pins.length}
             onClearPins={() => void patch({ pins: [] })}
@@ -618,7 +623,9 @@ export function OverworldPanel({
         </>
       ) : null}
       <p className="text-[11px] text-stone-500">
-        Drag to pan, scroll or pinch to zoom. Locations appear as the party discovers them.
+        {workshop
+          ? "Drag to pan, scroll or pinch to zoom. At a table made from this workshop, a place appears to the players as the party discovers it."
+          : "Drag to pan, scroll or pinch to zoom. Locations appear as the party discovers them."}
       </p>
       <PromptDialog
         open={asking !== null}

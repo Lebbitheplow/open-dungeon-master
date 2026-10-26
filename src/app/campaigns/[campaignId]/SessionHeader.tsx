@@ -148,6 +148,7 @@ export const SessionHeader = memo(function SessionHeader({
   layoutSeat,
   tableBreak,
   prep,
+  exit,
 }: {
   title: string;
   scene: string;
@@ -189,7 +190,11 @@ export const SessionHeader = memo(function SessionHeader({
   // The campaign's prep while play runs (issue 530): whoever steers the
   // story steps out to it and back. Absent for everyone else.
   prep?: PrepControl;
+  // Where the way out leads. All campaigns, except at a test fight (issue
+  // 553), which no campaign list shows: its way out is its workshop.
+  exit?: HeaderExit;
 }) {
+  const out = exit ?? ALL_CAMPAIGNS;
   // Narration switched off server-wide: no passage is read aloud, so the
   // narration volume would steer nothing (issue 275; the lobby's own row
   // reads Off for the same reason).
@@ -203,8 +208,8 @@ export const SessionHeader = memo(function SessionHeader({
           avatar menu is not one a newcomer, or an installed app with no
           browser back button, finds. The title gives up the width. */}
       <Link
-        href="/"
-        aria-label="All campaigns"
+        href={out.href}
+        aria-label={out.label}
         className="-ml-1.5 flex size-10 shrink-0 items-center justify-center rounded-md text-stone-400 transition-colors hover:text-amber-200 sm:hidden"
       >
         <ArrowLeft className="size-5" />
@@ -357,14 +362,14 @@ export const SessionHeader = memo(function SessionHeader({
         />
         </div>
         {prep ? <PrepButton control={prep} /> : null}
-        <Tooltip content="All campaigns" side="bottom">
+        <Tooltip content={out.label} side="bottom">
           <Link
-            href="/"
-            aria-label="All campaigns"
+            href={out.href}
+            aria-label={out.label}
             className={cn(ui.btnSmall, "hidden h-9 gap-1.5 py-0 pl-1 sm:inline-flex")}
           >
-            <HeaderGlyph glyph="tab-campaigns" />
-            <span className="hidden md:inline">All campaigns</span>
+            <HeaderGlyph glyph={out.glyph} />
+            <span className="hidden md:inline">{out.label}</span>
           </Link>
         </Tooltip>
         <AppHomeButton className="hidden sm:block" />
@@ -375,6 +380,10 @@ export const SessionHeader = memo(function SessionHeader({
 });
 
 export type PrepControl = { open: boolean; onToggle: () => void };
+
+export type HeaderExit = { href: string; label: string; glyph: string };
+
+const ALL_CAMPAIGNS: HeaderExit = { href: "/", label: "All campaigns", glyph: "tab-campaigns" };
 
 // Campaign prep, or the way back from it. Beside All campaigns from sm up,
 // because both are places to go; a phone has it in its table menu.

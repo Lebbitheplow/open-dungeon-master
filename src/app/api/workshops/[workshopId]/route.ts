@@ -10,6 +10,7 @@ import {
 import { readImportSource } from "@/lib/db/content-import";
 import { setCommonWorkshop } from "@/lib/db/workshop-common";
 import { IMPORT_KINDS, type ImportKind } from "@/lib/workshop/import";
+import { deleteWorkshopTestFights } from "@/lib/workshop/test-fight";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -114,7 +115,9 @@ export async function DELETE(
     return resolved.error;
   }
   // A workshop is a campaign row, so it gets the same sweep a deleted
-  // campaign does: the cascades, then the art only it used.
+  // campaign does: the cascades, then the art only it used. Its test fights
+  // (src/lib/workshop/test-fight.ts) are tables of their own and go first.
+  deleteWorkshopTestFights(resolved.workshop.id);
   deleteCampaignWithFiles(resolved.workshop.id);
   return Response.json({ ok: true });
 }

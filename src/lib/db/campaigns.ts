@@ -556,6 +556,12 @@ export function findCampaignByInviteCode(inviteCode: string): Campaign | null {
 // signup, so a code from a long-ended campaign is not a standing invitation
 // to make accounts; joining asks it too, so the two never disagree.
 function admitsByRow(row: CampaignRow): string | null {
+  // Only a campaign seats players. A workshop is one person's prep, and a
+  // test fight is its author's alone (issue 553): neither is a table a code
+  // can bring anyone to, whatever its status says.
+  if (normalizeCampaignKind(row.kind) !== "campaign") {
+    return "No campaign with that invite code.";
+  }
   // Mid-game joining is allowed only while the lead has it switched on.
   if (row.status === "ended") {
     return "That campaign has ended.";
