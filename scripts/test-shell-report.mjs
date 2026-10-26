@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { suite } from "./lib/enforce-harness.mjs";
 
 const { test, finish } = suite("test-shell-report");
-const { cleanAppFacts, saveReportFile, withAppFacts } = await import("../src/lib/shell-report.ts");
+const { cleanAppFacts, saveReportFile, withAppFacts, withShellFacts } = await import("../src/lib/shell-report.ts");
 
 const FACTS = {
   version: "0.22.0",
@@ -56,12 +56,25 @@ function withShell(shell, run) {
   });
 }
 
-await test("The app's facts go under Version and setup, with a line after the version.", () => {
+await test("The app's facts go under Version and setup, with a line after the server's.", () => {
   const made = withAppFacts(bundle(), FACTS);
   assert.deepEqual(made.setup.app, FACTS);
   assert.equal(made.setup.version, "0.30.0");
-  assert.match(made.readable[2], /^App: Open Dungeon Master 0\.22\.0 \(android\) on android, .*native screens, at a server elsewhere\.$/);
-  assert.equal(made.readable[3], "Narrator: openai, model m.");
+  const app = made.readable.findIndex((line) => line.startsWith("App: "));
+  assert.match(made.readable[app], /^App: Open Dungeon Master 0\.22\.0 \(android\) on android, .*native screens, at a server elsewhere\.$/);
+  assert.match(made.readable[app - 1], /^Server: linux x64/);
+  assert.equal(made.readable[app + 1], "Narrator: openai, model m.");
+});
+
+await test("The desktop app's local AI goes in by model and state, a line each, cut short.", () => {
+  const story = "gpt-oss-20b (gptoss20b), running";
+  const made = withAppFacts(bundle(), { ...FACTS, platform: "linux", installKind: "AppImage", localStory: story, localImages: `ComfyUI stopped (${"x".repeat(400)})` });
+  assert.equal(made.setup.app.localStory, story);
+  assert.equal(made.setup.app.localImages.length, 300);
+  assert.ok(made.readable.includes(`The app's local story AI: ${story}.`));
+  assert.ok(made.readable.some((line) => line.startsWith("The app's local image AI: ComfyUI stopped")));
+  // An app that sends no local AI lines adds no empty ones.
+  assert.ok(!("localStory" in withAppFacts(bundle(), FACTS).setup.app));
 });
 
 await test("A report with Version and setup unticked carries nothing about the app.", () => {
@@ -91,7 +104,7 @@ await test("In an app the app saves the file, with its facts in it, and says whe
       return { saved: true, name: "renamed.json", where: "~/Downloads" };
     },
   };
-  const result = await withShell(shell, () => saveReportFile(bundle(), "odm-report-2026-10-24-10-00-00.json"));
+  const result = await withShell(shell, async () => saveReportFile(await withShellFacts(bundle()), "odm-report-2026-10-24-10-00-00.json"));
   assert.deepEqual(result, { saved: true, name: "renamed.json", where: "~/Downloads" });
   assert.equal(saves.length, 1);
   assert.equal(saves[0].name, "odm-report-2026-10-24-10-00-00.json");
@@ -121,7 +134,7 @@ await test("An app that cannot describe itself still saves the file, without the
       return { saved: true, name: input.name, where: "the place you picked" };
     },
   };
-  const result = await withShell(shell, () => saveReportFile(bundle(), "odm-report-x.json"));
+  const result = await withShell(shell, async () => saveReportFile(await withShellFacts(bundle()), "odm-report-x.json"));
   assert.equal(result.where, "the place you picked");
   assert.equal(JSON.parse(saves[0].text).setup.app, undefined);
 });

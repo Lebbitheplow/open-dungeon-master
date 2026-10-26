@@ -46,9 +46,11 @@ export default function CampaignPage({
     void loadSessionView();
   }, []);
 
-  // This browser keeps the game page's own errors for "Report a problem"
-  // (issue #459, src/lib/page-errors.ts).
-  useEffect(() => installPageErrorRecorder(), []);
+  // The admin's browser keeps the game page's own errors for "Report a
+  // problem" (issue #459, src/lib/page-errors.ts); nobody else can save a
+  // report, so nobody else's browser keeps them.
+  const recordErrors = Boolean(state.me?.isAdmin);
+  useEffect(() => (recordErrors ? installPageErrorRecorder() : undefined), [recordErrors]);
 
   if (state.loading) {
     return (

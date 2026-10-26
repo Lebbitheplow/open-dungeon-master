@@ -13,8 +13,8 @@ import { ui } from "@/lib/ui";
 // and what tables had to fix, one row per backend class and DM mode. Rates
 // are only compared within a row: the people who send these lean towards
 // those who know the rules, and a table that trusts the AI looks cleaner
-// than it is. The export is what a tester attaches to a session report
-// (docs/testing.md).
+// than it is. The export is read before a beta is promoted to stable
+// (docs/releases.md).
 
 
 const BACKEND_LABELS: Record<QualityGroup["backendClass"], string> = {
