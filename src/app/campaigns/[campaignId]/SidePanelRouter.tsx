@@ -575,6 +575,9 @@ export function SidePanelRouter({
           genre={campaign?.gameSettings?.genre ?? "high_fantasy"}
           steersStory={steersStory}
           visible={visible}
+          placesKey={locations
+            .map((location) => `${location.id}:${location.name}:${location.parentName ?? "-"}:${Number(location.isCurrent)}${Number(location.visited)}:${location.connections.length}`)
+            .join("|")}
         />
         <MapPanel
           campaignId={campaignId}

@@ -26,12 +26,15 @@ import {
 } from "@/lib/overworld/features";
 import { isUploadedImagePath } from "@/lib/uploads";
 import { textKey } from "@/lib/language/text-logic";
+import { drawnAnchors, placeTree } from "@/lib/overworld/places";
 
 // Overworld region map storage: one seeded terrain grid per campaign, with
 // known locations anchored at tile coordinates and lead-placed pins.
-// Anchors reconcile lazily at read time: any location without one gets
-// placed near its first connected anchor, so the map grows as the party
-// travels without hooks in the location write path.
+// Anchors reconcile lazily at read time: any place of its own without one
+// gets placed near its first connected anchor, so the map grows as the party
+// travels without hooks in the location write path. A place that is part of
+// a bigger one (src/lib/overworld/places.ts) gets no anchor of its own: the
+// region map shows its place.
 
 export type OverworldPin = { id: string; x: number; y: number; label: string };
 
@@ -199,22 +202,34 @@ function carryAuthoring(
     );
 }
 
-// Places anchors for any locations that lack one, oldest first so a
-// location lands near the places it was discovered from.
+// Places anchors for any place of its own that lacks one, oldest first so a
+// location lands near the places it was discovered from. A connection to a
+// part counts as one to its place. A place made as the parent of parts that
+// already stood on the map takes the spot of the first of them, so the
+// story's geography survives the fold.
 function reconcileAnchors(map: OverworldMap, locations: CampaignLocation[]): OverworldMap {
   const anchorsByLocationId = { ...map.anchors };
   const idByName = new Map(locations.map((location) => [textKey(location.name), location.id]));
-  const ordered = [...locations].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const tree = placeTree(locations);
+  // Ties (places made in the same moment) by id, so every read agrees.
+  const ordered = [...locations].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  const createdOrder = new Map(ordered.map((location, index) => [location.id, index]));
   let changed = false;
   for (const location of ordered) {
-    if (anchorsByLocationId[location.id]) {
+    if (anchorsByLocationId[location.id] || tree.topOf(location.id) !== location.id) {
       continue;
     }
+    const partSpot = tree
+      .descendantsOf(location.id)
+      .filter((id) => anchorsByLocationId[id])
+      .sort((a, b) => (createdOrder.get(a) ?? 0) - (createdOrder.get(b) ?? 0))
+      .map((id) => anchorsByLocationId[id])[0];
     let connected: XY | null = null;
     for (const connectionName of location.connections) {
       const connectedId = idByName.get(textKey(connectionName));
-      if (connectedId && anchorsByLocationId[connectedId]) {
-        connected = anchorsByLocationId[connectedId];
+      const place = connectedId ? tree.topOf(connectedId) : null;
+      if (place && place !== location.id && anchorsByLocationId[place]) {
+        connected = anchorsByLocationId[place];
         break;
       }
     }
@@ -222,9 +237,10 @@ function reconcileAnchors(map: OverworldMap, locations: CampaignLocation[]): Ove
       terrain: map.terrain,
       width: map.width,
       height: map.height,
-      existing: Object.values(anchorsByLocationId),
+      existing: drawnAnchors(anchorsByLocationId, tree, location.id),
       connected,
       name: location.name,
+      target: partSpot ?? null,
     });
     changed = true;
   }
@@ -312,19 +328,22 @@ export function paintOverworldTerrain(
   strokes: OverworldStroke[],
 ): { map: OverworldMap; stranded: AnchorRef[]; changed: number } | { error: string } {
   const map = getOverworld(campaignId);
-  const locationNames = new Map(
-    listLocations(campaignId).map((location) => [location.id, location.name]),
-  );
+  const locations = listLocations(campaignId);
+  const locationNames = new Map(locations.map((location) => [location.id, location.name]));
+  const tree = placeTree(locations);
   const painted = paintOverworld({
     terrain: map.terrain,
     width: map.width,
     height: map.height,
     strokes,
-    anchors: Object.entries(map.anchors).map(([id, at]) => ({
-      id,
-      name: locationNames.get(id) ?? "",
-      at,
-    })),
+    // Only places the map draws: a part's old spot has no dot to strand.
+    anchors: Object.entries(map.anchors)
+      .filter(([id]) => tree.topOf(id) === id)
+      .map(([id, at]) => ({
+        id,
+        name: locationNames.get(id) ?? "",
+        at,
+      })),
   });
   if ("error" in painted) {
     return { error: painted.error };
@@ -439,6 +458,7 @@ export function overworldView(campaignId: string, secrets: boolean) {
     visited: location.visited,
     isCurrent: location.isCurrent,
     connections: location.connections,
+    parentName: location.parentName,
     anchor: map.anchors[location.id] ?? null,
   }));
   return {

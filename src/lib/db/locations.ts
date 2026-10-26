@@ -1,5 +1,6 @@
 import { textKey } from "@/lib/language/text-logic";
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
+import { placeTree } from "@/lib/overworld/places";
 import type { GeneratedImage } from "@/lib/types";
 
 // Structured location state: the DM records each area's layout and exits so
@@ -24,6 +25,11 @@ export type CampaignLocation = {
   // sound it makes (docs/vtt-parity-implementation-plan.md section 3.5).
   preparedMapId: string | null;
   ambience: { bed: string; music: string } | null;
+  // The bigger place this one is part of (issue 548): that place's name, or
+  // null or "" for a place of its own ("" when the DM said so). Written when
+  // the place is made (src/lib/dm/place-filing.ts), by the DM, or once by the
+  // upgrade; read through src/lib/overworld/places.ts.
+  parentName: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -39,6 +45,7 @@ type LocationRow = {
   map_image_json: string | null;
   prepared_map_id: string | null;
   ambience_json: string | null;
+  parent_name: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -73,6 +80,7 @@ function mapLocation(row: LocationRow): CampaignLocation {
     ...storedMap(row.map_image_json),
     preparedMapId: row.prepared_map_id ?? null,
     ambience: parseJson<{ bed: string; music: string } | null>(row.ambience_json ?? "", null),
+    parentName: typeof row.parent_name === "string" ? row.parent_name : null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -246,10 +254,11 @@ export function insertKnownLocation(input: {
   return getLocation(id);
 }
 
-// Renames a place and repoints every connection that named it. Connections
-// are stored as names rather than ids, so a rename that touched only this
-// row would quietly cut the location out of the overworld's route graph.
-// Returns null when the name is taken or the location is gone.
+// Renames a place and repoints every connection and every part that named
+// it. Both are stored as names rather than ids, so a rename that touched
+// only this row would quietly cut the location out of the overworld's route
+// graph and set its parts loose on the region map. Returns null when the
+// name is taken or the location is gone.
 export function renameLocation(
   campaignId: string,
   locationId: string,
@@ -288,9 +297,78 @@ export function renameLocation(
           other.id,
         );
       }
+      if (other.parentName && textKey(other.parentName) === textKey(location.name)) {
+        db.prepare(`UPDATE locations SET parent_name = ? WHERE id = ?`).run(trimmed, other.id);
+      }
     }
   })();
   return getLocation(locationId);
+}
+
+// Files a place under a bigger one, or ("") says it stands on its own. The
+// bigger place has to be another place on record and not one of this
+// place's own parts, which would make a loop. Stored under the bigger
+// place's own spelling, so the folded comparison is only ever needed once.
+export function setLocationParent(
+  campaignId: string,
+  locationId: string,
+  parentName: string,
+): CampaignLocation | { error: string } {
+  const location = getLocation(locationId);
+  if (!location || location.campaignId !== campaignId) {
+    return { error: "That place is not in this campaign." };
+  }
+  const wanted = parentName.trim();
+  let stored = "";
+  if (wanted) {
+    const places = listLocations(campaignId);
+    const parent = places.find((place) => textKey(place.name) === textKey(wanted));
+    if (!parent) {
+      return { error: `There is no place called ${wanted} yet.` };
+    }
+    if (parent.id === location.id) {
+      return { error: "A place cannot be part of itself." };
+    }
+    if (placeTree(places).descendantsOf(location.id).includes(parent.id)) {
+      return { error: `${parent.name} is already part of ${location.name}.` };
+    }
+    stored = parent.name;
+  }
+  getDatabase()
+    .prepare(`UPDATE locations SET parent_name = ?, updated_at = ? WHERE id = ?`)
+    .run(stored, nowIso(), location.id);
+  return getLocation(location.id)!;
+}
+
+// The DM named the bigger place an area is part of (move_party or
+// update_location's partOf): files the area under it, making the bigger
+// place first when it is new. It is made the way a described region's places
+// are, unvisited and nobody's current location, because the party stands in
+// one of its parts and the region map counts that as being there. `created`
+// is what tells the caller to place it on the map and announce it.
+export function fileUnderPlace(
+  campaignId: string,
+  locationId: string,
+  parentName: string,
+): { location: CampaignLocation; parent: CampaignLocation; created: boolean } | { error: string } {
+  const name = parentName.trim().slice(0, 80);
+  const location = getLocation(locationId);
+  if (!name || !location) {
+    return { error: "No bigger place was named." };
+  }
+  if (textKey(name) === textKey(location.name)) {
+    return { error: "A place cannot be part of itself." };
+  }
+  const known = getLocationByName(campaignId, name);
+  const parent = known ?? insertKnownLocation({ campaignId, name });
+  if (!parent) {
+    return { error: "No bigger place was named." };
+  }
+  const filed = setLocationParent(campaignId, location.id, parent.name);
+  if ("error" in filed) {
+    return filed;
+  }
+  return { location: filed, parent: getLocation(parent.id) ?? parent, created: !known };
 }
 
 // null takes the map away: the panel shows the stand-in plate for the kind
