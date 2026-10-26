@@ -2,7 +2,7 @@ import type { Finding } from "@/lib/rulesets/validate";
 import { classFeaturesFor, subclassLevelFor, subclassNamesFor } from "@/lib/srd/features";
 import { featAbilityIncreaseFrom } from "@/lib/srd/feat-effects";
 import { featGrantSpec } from "@/lib/srd/feat-grant-text";
-import { unreadResistances } from "@/lib/workshop/species-traits";
+import { unreadResistances, unreadTraitLines } from "@/lib/workshop/species-traits";
 import { backgroundMechanics, raceMechanics } from "@/lib/content/mechanics";
 
 // What the workshop's checker says about a feat, a background, a species, a
@@ -92,6 +92,14 @@ export function speciesFindings(data: Data): Finding[] {
     out.push({
       level: "warn",
       text: `${trait} says it resists ${types.join(" and ")} damage, but the table reads a resistance from a trait's name: pick it under "Add a resistance", or call the trait "${types.map((type) => `${type.charAt(0).toUpperCase()}${type.slice(1)}`).join(" and ")} Resistance".`,
+    });
+  }
+  // A trait the table reads only by a heading it knows; one written another
+  // way is granted to nobody, so it is named here.
+  for (const { name } of unreadTraitLines(String(data.traits ?? ""))) {
+    out.push({
+      level: "warn",
+      text: `"${name}" reads like a trait, but the table does not see it as one: begin its paragraph with the name in bold and a full stop, as **${name}.**`,
     });
   }
   return out;

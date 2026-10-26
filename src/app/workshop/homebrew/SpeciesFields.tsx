@@ -254,12 +254,25 @@ export function SpeciesFields({ data, set }: Props) {
           placeholder={"**_Marsh Stride._** Difficult terrain in wetlands costs you no extra movement.\n\n**_Reed Sight._** You have advantage on Perception checks in tall grass."}
           rows={6}
           maxLength={6000}
-          hint="One trait per paragraph, its name in bold. A trait picked above, or named like a published one (Draconic Ancestry, Dwarven Toughness, Lucky, Infernal Legacy), is run by the engine at the table."
+          hint="One trait per paragraph, its name in bold with a full stop: **Marsh Stride.** or **_Marsh Stride._** The traits the table reads are listed below. A trait picked above, or named like a published one (Draconic Ancestry, Dwarven Toughness, Lucky, Infernal Legacy), is run by the engine at the table."
         />
+        <TraitsRead traits={String(data.traits ?? "")} />
         <Resistances traits={String(data.traits ?? "")} onChange={(traits) => set({ traits })} />
         <DraconicNote traits={String(data.traits ?? "")} />
       </div>
     </div>
+  );
+}
+
+// The traits the table reads off the text, as the builder and the server
+// read them (src/lib/content/mechanics.ts traitHeading), so a paragraph
+// written another way is seen to be missing here as well as in the findings.
+function TraitsRead({ traits }: { traits: string }) {
+  const names = heldTraitNames(traits);
+  return (
+    <p data-species-traits className="text-[11px] text-stone-400">
+      {names.length ? `Traits the table reads: ${names.join(", ")}.` : "The table reads no traits yet."}
+    </p>
   );
 }
 
