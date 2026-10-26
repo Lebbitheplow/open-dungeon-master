@@ -140,8 +140,9 @@ export function PartyPanel({
         down without one. They ride along in the bundle.
       </p>
       <p className="text-xs text-stone-400">
-        Tick Offer to players and anyone joining a table made from this workshop can take that
-        pregen, as a copy at the table&apos;s level. One player each per table.
+        Tick Offer to players and anyone joining a table that starts from this workshop can take
+        that pregen, as a copy at the table&apos;s level. One player each per table. A table starts
+        from it when you choose it under Start from, at creation or later in the lobby.
       </p>
 
       {loadError && (pregens !== null || loaded) ? <LoadFailed error={loadError} onRetry={() => setVersion((current) => current + 1)} /> : null}

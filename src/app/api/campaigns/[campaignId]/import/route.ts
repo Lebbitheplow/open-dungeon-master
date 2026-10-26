@@ -3,6 +3,7 @@ import { isErrorResponse, requireMember, steersStory } from "@/lib/campaign-api"
 import { getImportSourceForUser } from "@/lib/db/import-sources";
 import { planContentImport, runContentImport } from "@/lib/db/content-import";
 import { keptNotes } from "@/lib/db/world-forge-io";
+import { listOfferedPregens } from "@/lib/db/pregen-offers";
 import { IMPORT_KINDS } from "@/lib/workshop/import";
 import { publishEphemeral } from "@/lib/events";
 
@@ -31,7 +32,9 @@ export const dynamic = "force-dynamic";
 
 const importSchema = z.object({
   sourceId: z.string().trim().min(1).max(80),
-  select: z.array(z.enum(IMPORT_KINDS)).min(1),
+  // May be empty for a workshop: choosing it is what offers its pregens
+  // here (src/lib/db/campaign-workshops.ts), with or without prep to copy.
+  select: z.array(z.enum(IMPORT_KINDS)).max(IMPORT_KINDS.length).default([]),
   houseRules: z.enum(["replace", "append"]).default("replace"),
   // What an earlier import from the same source already brought: kept as
   // the campaign has it, or copied again under a number.
@@ -119,6 +122,9 @@ export async function POST(
   if (!source || source.id === campaignId) {
     return Response.json({ error: "Source not found." }, { status: 404 });
   }
+  if (!parsed.data.select.length && source.kind !== "workshop") {
+    return Response.json({ error: "Choose what to bring in." }, { status: 400 });
+  }
 
   const result = runContentImport({
     sourceId: source.id,
@@ -138,6 +144,14 @@ export async function POST(
   // shows without a refresh. Contentless: each seat reads back only what it
   // may.
   publishEphemeral(campaignId, "prep_imported", {});
+  // The workshop's pregens its players can now take here, by name, so the
+  // picker can say the roster came along even when no prep did.
+  const pregensOffered =
+    source.kind === "workshop"
+      ? listOfferedPregens(campaignId)
+          .filter((offer) => offer.character.workshopId === source.id)
+          .map((offer) => offer.character.name)
+      : [];
   return Response.json({
     plan: result.plan,
     copied: result.copied,
@@ -153,5 +167,6 @@ export async function POST(
     ...(result.monstersReused?.length ? { monstersReused: result.monstersReused } : {}),
     ...(result.itemsBrought?.length ? { itemsBrought: result.itemsBrought } : {}),
     ...(result.itemsReused?.length ? { itemsReused: result.itemsReused } : {}),
+    ...(pregensOffered.length ? { pregensOffered } : {}),
   });
 }

@@ -26,4 +26,6 @@ export type ImportSourceSummary = {
   contents: Record<ImportKind, number>;
   // Its storyboard compiles into a story arc of its own (issue 249).
   boardArc?: boolean;
+  // A workshop's pregens ticked Offer to players, by name.
+  offeredPregens?: string[];
 };

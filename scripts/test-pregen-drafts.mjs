@@ -27,7 +27,7 @@ const logic = await import("../src/lib/dm/pregen-draft-logic.ts");
 const engine = await import("../src/lib/characters/pregen-drafts.ts");
 const { admitSheet } = await import("../src/lib/characters/admit.ts");
 const { createWorkshop } = await import("../src/lib/db/workshops.ts");
-const { recordOrigin } = await import("../src/lib/db/content-origins.ts");
+const { linkWorkshop } = await import("../src/lib/db/campaign-workshops.ts");
 const { upsertNpc } = await import("../src/lib/db/npcs.ts");
 const { insertBeat } = await import("../src/lib/db/workshop-beats.ts");
 const campaignsDb = await import("../src/lib/db/campaigns.ts");
@@ -58,7 +58,7 @@ async function openDesk({ level = 1, ai = true, party } = {}) {
     description: "A keep half drowned in the marsh, where the abbess Mother Ysolde has gone missing.",
     ...(party ? { targetParty: party } : {}),
   });
-  recordOrigin(table.campaignId, "npcs", "npc-copy", workshop.id, "npc-original");
+  linkWorkshop(table.campaignId, workshop.id);
   upsertNpc({ campaignId: workshop.id, name: "Mother Ysolde", trait: "stern, kind to the lost" });
   insertBeat(workshop.id, { kind: "hook", title: "The bell", body: "A drowned bell rings at night.", links: {}, edges: [], routes: {}, x: 0, y: 0 });
   insertBeat(workshop.id, { kind: "secret", title: "The truth", body: "Ysolde drowned the bell-ringer herself.", links: {}, edges: [], routes: {}, x: 0, y: 0 });
