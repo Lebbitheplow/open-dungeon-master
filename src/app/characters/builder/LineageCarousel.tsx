@@ -108,6 +108,90 @@ function Traits({ slide }: { slide: LineageSlide }) {
   );
 }
 
+// One lineage's write-up: its plate, bonuses and facts, the classes it suits,
+// its tongues, what it leaves to choose and its traits. The carousel shows it
+// for the lineage being browsed; the build math panel for the one chosen.
+export function LineageDetails({ slide }: { slide: LineageSlide }) {
+  const srd = srdRaceFor(slide.id);
+  const choices = lineageChoices(slide);
+  const lines = traitLines(slide);
+  const facts = [
+    { key: "Speed", value: `${slide.speed} ft` },
+    ...(srd?.size ? [{ key: "Size", value: srd.size }] : []),
+    { key: "Traits", value: String(lines.length) },
+    ...(slide.source ? [{ key: "Source", value: slide.source }] : []),
+  ];
+  const fits = lineageFits(slide);
+  return (
+    <>
+      <div className="flex w-full flex-row gap-3 sm:w-[172px] sm:flex-none sm:flex-col sm:gap-2.5">
+        <span className="creator-plate rounded-[10px] border border-amber-500/30 shadow-glow-gold" data-detail="" role="img" aria-label={`${slide.name} portrait`}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={slide.art} alt="" draggable={false} />
+        </span>
+        <div className="flex min-w-0 flex-1 flex-col gap-2.5">
+          <div className="flex flex-wrap gap-1">
+            {asiChips(slide.asi).map((chip) => (
+              <span key={chip.label} className="creator-chip" data-size="md">
+                {chip.ability} <span className="font-display text-[11px] font-bold text-amber-100">{chip.bonus}</span>
+              </span>
+            ))}
+          </div>
+          <dl className="flex flex-col gap-[3px]">
+            {facts.map((fact) => (
+              <div key={fact.key} className="flex items-baseline justify-between gap-2 font-mono text-[0.6875rem] text-stone-500">
+                <dt>{fact.key}</dt>
+                <dd className="text-stone-200">{fact.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </div>
+
+      <div className="flex min-w-0 flex-[1_1_260px] flex-col gap-2.5">
+        {/* The classes this lineage's bonuses suit (lineageFits.ts), so a
+            player who picks the people first knows where it leads. */}
+        {fits ? (
+          <p className="text-xs leading-normal text-stone-300">
+            <span className="font-display font-semibold uppercase tracking-[0.12em] text-amber-400/90">Good fits </span>
+            {fits.kind === "any"
+              ? "Any class: its bonuses are yours to place."
+              : `${fits.names.join(", ")}.`}
+          </p>
+        ) : null}
+        {slide.packBlurb ? (
+          <p className="font-serif text-[13px] italic leading-normal text-stone-300">{slide.packBlurb}</p>
+        ) : null}
+        <div className="rounded-[10px] border border-stone-700/60 bg-stone-950/60 px-3 py-2.5">
+          <span className={sectionLabel}>Tongues</span>
+          <span className="font-serif text-[13px] leading-normal text-stone-300">{slide.languages.join(", ")}</span>
+        </div>
+        {choices.length ? (
+          <div className="rounded-[10px] border border-amber-500/30 bg-amber-950/20 px-3 py-2.5">
+            <span className={sectionLabel}>Leaves you to choose</span>
+            <div className="flex flex-wrap gap-1">
+              {choices.map((choice) => (
+                <span key={choice} className="creator-chip" data-size="md">
+                  {choice}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        <div>
+          <span className={cn(sectionLabel, "flex items-center gap-1.5")}>
+            Lineage traits
+            {/* The full write-up, as the old picker's info button gave it:
+                the pack's own entry when one is installed. */}
+            <InfoButton label={slide.name} text={slide.info.text} reference={slide.info.reference} />
+          </span>
+          <Traits slide={slide} />
+        </div>
+      </div>
+    </>
+  );
+}
+
 // The detail carousel over the lineage grid: walks the same ordered list the
 // grid shows, wrapping at both ends, and names the neighbours so browsing is
 // not blind. Choose picks the lineage and closes; nothing is chosen by
@@ -159,17 +243,7 @@ export function LineageCarousel({
   };
   const prev = slides[wrapIndex(index, -1, slides.length)];
   const next = slides[wrapIndex(index, 1, slides.length)];
-  const srd = srdRaceFor(slide.id);
-  const choices = lineageChoices(slide);
-  const lines = traitLines(slide);
-  const facts = [
-    { key: "Speed", value: `${slide.speed} ft` },
-    ...(srd?.size ? [{ key: "Size", value: srd.size }] : []),
-    { key: "Traits", value: String(lines.length) },
-    ...(slide.source ? [{ key: "Source", value: slide.source }] : []),
-  ];
   const chosen = slide.id === chosenId;
-  const fits = lineageFits(slide);
   const navButton = cn(ui.btnSmall, "min-w-0 max-w-[38%] px-2 py-1 text-xs");
 
   return (
@@ -251,70 +325,7 @@ export function LineageCarousel({
             touchStart.current = null;
           }}
         >
-          <div className="flex w-full flex-row gap-3 sm:w-[172px] sm:flex-none sm:flex-col sm:gap-2.5">
-            <span className="creator-plate rounded-[10px] border border-amber-500/30 shadow-glow-gold" data-detail="" role="img" aria-label={`${slide.name} portrait`}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={slide.art} alt="" draggable={false} />
-            </span>
-            <div className="flex min-w-0 flex-1 flex-col gap-2.5">
-              <div className="flex flex-wrap gap-1">
-                {asiChips(slide.asi).map((chip) => (
-                  <span key={chip.label} className="creator-chip" data-size="md">
-                    {chip.ability} <span className="font-display text-[11px] font-bold text-amber-100">{chip.bonus}</span>
-                  </span>
-                ))}
-              </div>
-              <dl className="flex flex-col gap-[3px]">
-                {facts.map((fact) => (
-                  <div key={fact.key} className="flex items-baseline justify-between gap-2 font-mono text-[0.6875rem] text-stone-500">
-                    <dt>{fact.key}</dt>
-                    <dd className="text-stone-200">{fact.value}</dd>
-                  </div>
-                ))}
-              </dl>
-            </div>
-          </div>
-
-          <div className="flex min-w-0 flex-[1_1_260px] flex-col gap-2.5">
-            {/* The classes this lineage's bonuses suit (lineageFits.ts), so a
-                player who picks the people first knows where it leads. */}
-            {fits ? (
-              <p className="text-xs leading-normal text-stone-300">
-                <span className="font-display font-semibold uppercase tracking-[0.12em] text-amber-400/90">Good fits </span>
-                {fits.kind === "any"
-                  ? "Any class: its bonuses are yours to place."
-                  : `${fits.names.join(", ")}.`}
-              </p>
-            ) : null}
-            {slide.packBlurb ? (
-              <p className="font-serif text-[13px] italic leading-normal text-stone-300">{slide.packBlurb}</p>
-            ) : null}
-            <div className="rounded-[10px] border border-stone-700/60 bg-stone-950/60 px-3 py-2.5">
-              <span className={sectionLabel}>Tongues</span>
-              <span className="font-serif text-[13px] leading-normal text-stone-300">{slide.languages.join(", ")}</span>
-            </div>
-            {choices.length ? (
-              <div className="rounded-[10px] border border-amber-500/30 bg-amber-950/20 px-3 py-2.5">
-                <span className={sectionLabel}>Leaves you to choose</span>
-                <div className="flex flex-wrap gap-1">
-                  {choices.map((choice) => (
-                    <span key={choice} className="creator-chip" data-size="md">
-                      {choice}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-            <div>
-              <span className={cn(sectionLabel, "flex items-center gap-1.5")}>
-                Lineage traits
-                {/* The full write-up, as the old picker's info button gave it:
-                    the pack's own entry when one is installed. */}
-                <InfoButton label={slide.name} text={slide.info.text} reference={slide.info.reference} />
-              </span>
-              <Traits slide={slide} />
-            </div>
-          </div>
+          <LineageDetails slide={slide} />
         </div>
 
         <div className="mt-4 flex justify-end gap-2">

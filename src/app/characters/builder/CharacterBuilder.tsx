@@ -948,7 +948,16 @@ function CharacterBuilderForm({
           )
         }
       />
-      <BuildMathPanel derived={derived} scores={state.scores} klass={klass} atTable={Boolean(table.rules)} />
+      <BuildMathPanel
+        derived={derived}
+        scores={state.scores}
+        klass={klass}
+        atTable={Boolean(table.rules)}
+        race={race}
+        races={races}
+        raceGroups={pickers.raceGroups}
+        gender={state.gender}
+      />
       </div>
       </div>
       </FeatJudgeContext.Provider>

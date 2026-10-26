@@ -513,9 +513,39 @@ export function InfoDialog({
   icon?: IconRef;
   children?: ReactNode;
 }) {
-  const metaLine = meta ? <p className="reveal text-xs uppercase tracking-wide text-amber-200/70">{meta}</p> : null;
   return (
     <Dialog open={open} onOpenChange={onOpenChange} title={title} width="w-[min(92vw,32rem)]">
+      <InfoBody meta={meta} note={note} text={text} reference={reference} icon={icon}>
+        {children}
+      </InfoBody>
+    </Dialog>
+  );
+}
+
+// What the info dialog shows under its title, for the places that show the
+// same write-up without a dialog (the builder's picks beside its steps).
+export function InfoBody({
+  meta,
+  note,
+  text,
+  reference,
+  icon,
+  children,
+  large,
+}: {
+  meta?: string;
+  note?: string;
+  text?: string | null;
+  reference?: ContentRef;
+  icon?: IconRef;
+  children?: ReactNode;
+  // The text at 1rem, where it is read beside the picks rather than in a
+  // dialog opened to read it.
+  large?: boolean;
+}) {
+  const metaLine = meta ? <p className="reveal text-xs uppercase tracking-wide text-amber-200/70">{meta}</p> : null;
+  return (
+    <>
       {icon?.kind === "action" ? (
         <div className="mb-3 space-y-2">
           <GameIcon icon={icon} size="mx-auto flex h-32 w-64 max-w-full" />
@@ -529,7 +559,7 @@ export function InfoDialog({
       ) : metaLine ? (
         <div className="mb-3">{metaLine}</div>
       ) : null}
-      <div className="space-y-2 text-sm leading-relaxed text-stone-400">
+      <div className={cn("space-y-2 leading-relaxed text-stone-400", large ? "text-base" : "text-sm")}>
         {note ? <div className="rounded border border-amber-300/20 bg-amber-300/5 px-2.5 py-1.5 text-stone-300">{renderRules(note)}</div> : null}
         {text?.trim() ? (
           renderRules(text)
@@ -540,6 +570,6 @@ export function InfoDialog({
         ) : null}
         {children}
       </div>
-    </Dialog>
+    </>
   );
 }
