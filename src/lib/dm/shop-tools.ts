@@ -89,7 +89,7 @@ export const shopTools: ToolDef[] = [
       parameters: {
         type: "object",
         properties: {
-          name: { type: "string" },
+          name: { type: "string", description: "The shop's name ('The Gilded Anvil'); one here by that name reopens." },
           kind: { type: "string", enum: ["general", "smith", "apothecary", "outfitter", "curiosities"] },
           size: { type: "string", enum: ["hamlet", "village", "town", "city"], description: "Default: village." },
           keeper: { type: "string", description: "The keeper: an NPC's exact name from GAME STATE. Omit for none." },
@@ -103,14 +103,14 @@ export const shopTools: ToolDef[] = [
     function: {
       name: "haggle",
       description:
-        "A haggling check at a shop: success lowers prices a step, failure leaves them where they were, and failing the DC by 5 or more raises them a step. The server rolls it against the settlement's DC (city 12, town 13, village 15, hamlet 17) with Persuasion, or with skill intimidation (a bad failure raises prices two steps) or deception (a keeper falls for it once: one Deception try per shop). The result and the used try belong to the haggler and the characters in present; anyone else pays the shop's normal price and keeps their own try. One try per character per shop until it restocks. Narrate the outcome the reply gives.",
+        "A haggling check at a shop: success lowers prices a step, and failing the DC by 5 or more raises them a step. The server rolls it against the settlement's DC (city 12, town 13, village 15, hamlet 17) with Persuasion, or with skill intimidation (a bad failure raises prices two steps) or deception (a keeper falls for it once: one Deception try per shop). The result and the used try belong to the haggler and the characters in presentCharacterIds; anyone else pays the shop's normal price and keeps their own try. One try per character per shop until it restocks. Narrate the outcome the reply gives.",
       parameters: {
         type: "object",
         properties: {
           characterId: { type: "string", description: "Exact characterId from GAME STATE." },
           shop: { type: "string", description: "The shop in SHOPS HERE, by name or id." },
           skill: { type: "string", enum: ["persuasion", "intimidation", "deception"] },
-          present: { type: "array", items: { type: "string" }, description: "Others at the counter now, who share the result: exact characterIds from GAME STATE." },
+          presentCharacterIds: { type: "array", items: { type: "string" }, description: "Others at the counter now, who share the result: exact characterIds from GAME STATE." },
         },
         required: ["characterId", "shop"],
       },
@@ -454,7 +454,7 @@ const haggleSchema = z.object({
   characterId: z.string().trim().min(1),
   shop: z.string().trim().min(1),
   skill: z.string().trim().max(40).optional(),
-  present: z.array(z.string().trim().min(1).max(80)).max(12).default([]),
+  presentCharacterIds: z.array(z.string().trim().min(1).max(80)).max(12).default([]),
 });
 
 const SKILL_LABEL = { persuasion: "Persuasion", intimidation: "Intimidation", deception: "Deception" } as const;
@@ -481,7 +481,7 @@ function awayFromCounter(campaign: Campaign, sheet: CharacterSheet): string | nu
 export function handleHaggle(campaign: Campaign, rawArguments: string): ToolResult {
   const args = parse(haggleSchema, rawArguments);
   if (!args) {
-    return { error: "Invalid arguments: haggle needs characterId and shop, a skill of persuasion, intimidation or deception, and present as a list of characters.", retry: true };
+    return { error: "Invalid arguments: haggle needs characterId and shop, a skill of persuasion, intimidation or deception, and presentCharacterIds as a list of characters.", retry: true };
   }
   const skill = args.skill ? normalizeHaggleSkill(args.skill) : "persuasion";
   if (!skill) {
@@ -496,10 +496,10 @@ export function handleHaggle(campaign: Campaign, rawArguments: string): ToolResu
     return { error: `${away} and cannot haggle. Nothing was rolled.`, refused: "rules" };
   }
   const company: CharacterSheet[] = [];
-  for (const ref of args.present) {
+  for (const ref of args.presentCharacterIds) {
     const other = resolveSheet(campaign, ref);
     if (!other) {
-      return unknownSheetRef("present", ref, listSheets(campaign.id));
+      return unknownSheetRef("presentCharacterIds", ref, listSheets(campaign.id));
     }
     if (other.id !== sheet.id && !company.some((known) => known.id === other.id)) {
       company.push(other);
@@ -520,7 +520,7 @@ export function handleHaggle(campaign: Campaign, rawArguments: string): ToolResu
   for (const other of company) {
     const absent = awayFromCounter(campaign, other);
     if (absent) {
-      return { error: `${absent}, so not at the counter: send present without them. Nothing was rolled.`, retry: true };
+      return { error: `${absent}, so not at the counter: send presentCharacterIds without them. Nothing was rolled.`, retry: true };
     }
   }
   // Held carriers and lasting effects ride the haggling check, and the
@@ -599,7 +599,7 @@ export function shopsBlock(campaign: Campaign): string {
 // any other. Anything else changes hands at list price, outside a shop.
 export function tradeCall(campaign: Campaign, args: ToolArgs): EngineCall {
   const action = args.action === "buy" || args.action === "sell" ? args.action : null;
-  const item = String(args.item ?? args.name ?? "").trim();
+  const item = String(args.item ?? "").trim();
   const named = typeof args.shop === "string" ? args.shop.trim() : "";
   const listPrice = { name: "purchase", args: Object.fromEntries(Object.entries(args).filter(([key]) => key !== "shop" && key !== "priceCp")) };
   if (!action || !item) {

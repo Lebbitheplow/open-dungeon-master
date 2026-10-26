@@ -138,7 +138,7 @@ const teleport = (args) => handleTeleportToken(live(), JSON.stringify(args), she
 
 test("a teleport lands on open floor, spends no movement, and plays one effect", () => {
   const before = getTokenByRef(map.id, sheet.id);
-  const out = teleport({ tokenName: "Vex", x: 3, y: 3 });
+  const out = teleport({ token: "Vex", x: 3, y: 3 });
   assert.equal(out.ok, true, JSON.stringify(out));
   const after = getTokenByRef(map.id, sheet.id);
   assert.equal(after.x, 3);
@@ -152,42 +152,42 @@ test("a teleport lands on open floor, spends no movement, and plays one effect",
 });
 
 test("a wall tile is refused", () => {
-  const out = teleport({ tokenName: "Vex", x: 0, y: 0 });
+  const out = teleport({ token: "Vex", x: 0, y: 0 });
   assert.match(out.error, /wall/i);
   assert.equal(fxSeen.length, 1, "nothing played");
 });
 
 test("an occupied tile is refused", () => {
-  const out = teleport({ tokenName: "Vex", x: 8, y: 3 });
+  const out = teleport({ token: "Vex", x: 8, y: 3 });
   assert.match(out.error, /occupied/i);
 });
 
 test("a spell refuses a jump past its range; the DM's own hand has none", () => {
   // Vex at (3,3); (8,1) is 5 tiles = 25 ft.
-  const far = teleport({ tokenName: sheet.id, x: 8, y: 1, rangeFeet: 20 });
+  const far = teleport({ token: sheet.id, x: 8, y: 1, rangeFeet: 20 });
   assert.match(far.error, /past the 20 ft range/);
-  const near = teleport({ tokenName: sheet.id, x: 7, y: 3, rangeFeet: 20 });
+  const near = teleport({ token: sheet.id, x: 7, y: 3, rangeFeet: 20 });
   assert.equal(near.ok, true, JSON.stringify(near));
   assert.equal(near.distanceFeet, 20);
-  const dm = teleport({ tokenName: "Vex", x: 1, y: 1 });
+  const dm = teleport({ token: "Vex", x: 1, y: 1 });
   assert.equal(dm.ok, true);
 });
 
 test("an enemy teleports by name and an unknown name is refused", () => {
-  const out = teleport({ tokenName: "goblin", x: 8, y: 2 });
+  const out = teleport({ token: "goblin", x: 8, y: 2 });
   assert.equal(out.ok, true, JSON.stringify(out));
   assert.equal(getTokenByRef(map.id, goblin.id).y, 2);
-  const unknown = teleport({ tokenName: "Dragon", x: 2, y: 2 });
+  const unknown = teleport({ token: "Dragon", x: 2, y: 2 });
   assert.match(unknown.error, /No combatant on the battle map is called "Dragon"; it holds .*Goblin/);
 });
 
 test("set_movement records flying and the projection reports it", () => {
-  const out = handleSetMovement(live(), JSON.stringify({ tokenName: "Goblin", movement: "fly" }), sheets, sheetsById);
+  const out = handleSetMovement(live(), JSON.stringify({ token: "Goblin", movement: "fly" }), sheets, sheetsById);
   assert.equal(out.ok, true, JSON.stringify(out));
   assert.equal(getTokenByRef(map.id, goblin.id).movement, "fly");
-  const again = handleSetMovement(live(), JSON.stringify({ tokenName: "Goblin", movement: "fly" }), sheets, sheetsById);
+  const again = handleSetMovement(live(), JSON.stringify({ token: "Goblin", movement: "fly" }), sheets, sheetsById);
   assert.match(again.note, /Already/);
-  const bad = handleSetMovement(live(), JSON.stringify({ tokenName: "Goblin", movement: "swim" }), sheets, sheetsById);
+  const bad = handleSetMovement(live(), JSON.stringify({ token: "Goblin", movement: "swim" }), sheets, sheetsById);
   assert.match(bad.error, /walk, fly or burrow/);
   const view = buildPlayerMapView(campaign.id, alice.id, { fullVision: true });
   const goblinToken = getTokenByRef(map.id, goblin.id);

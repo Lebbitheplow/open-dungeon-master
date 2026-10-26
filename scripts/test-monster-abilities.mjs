@@ -159,8 +159,8 @@ await test("A5e's count printed as the first option is the count and no option; 
   const zmey = mk.parse({ name: "Zmey", special_abilities: [{ name: "Multiheaded", desc: "The zmey normally has four heads." }], legendary_desc: "The zmey can take 1 legendary action per head.", legendary_actions: [{ name: "Bite", desc: "The zmey makes a bite attack." }] });
   assert.equal(legendaryProfile(zmey).actionsPerRound, 4);
   assert.deepEqual([parseLegendaryLine("Tentacle Sweep (2). Spins in place.").cost, parseLegendaryLine("Move (2 actions). Moves half its speed.").cost], [2, 2]);
-  // A lair option's failure is named for the DM to lay.
-  assert.match(lairResolution("The ground shakes; each creature makes a DC 15 Dex save or falls prone."), /dc 15, saveAbility "dex".*A failure lays prone/);
+  // A lair option's failure is laid by the same aoe_damage call.
+  assert.match(lairResolution("The ground shakes; each creature makes a DC 15 Dex save or falls prone."), /dc 15, saveAbility "dex", condition "prone"/);
 });
 
 await test("Legendary actions printed run together are read apart (Creature Codex lord zombie, pack-corrections.ts).", () => {
@@ -239,13 +239,13 @@ function nextRound(...faces) {
 
 await test("Either breath spends the one recharge, and one d6 brings both back; the sleep it lays ends on damage.", async () => {
   const dragon = await stage(YOUNG_BRASS);
-  const fire = await mk.forced([...new Array(12).fill(1), 1], () => world.invoke("aoe_damage", { characterIds: [tank.id], casterEnemyId: dragon.id, ability: "Fire Breath", saveAbility: "dex", dc: 14 }));
+  const fire = await mk.forced([...new Array(12).fill(1), 1], () => world.invoke("aoe_damage", { characterIds: [tank.id], casterEnemyId: dragon.id, enemyAbility: "Fire Breath", saveAbility: "dex", dc: 14 }));
   assert.equal(fire.ok, true, fire.error);
   kit.freshRound();
-  const refused = await world.invoke("cast_at_player", { characterId: tank.id, casterEnemyId: dragon.id, ability: "Sleep Breath", saveAbility: "con", dc: 14 });
+  const refused = await world.invoke("cast_at_player", { characterId: tank.id, casterEnemyId: dragon.id, enemyAbility: "Sleep Breath", saveAbility: "con", dc: 14 });
   assert.match(refused.error ?? "", /Breath Weapons \(Sleep Breath\) has not recharged/);
   nextRound(5);
-  const sleep = await mk.forced([1], () => world.invoke("cast_at_player", { characterId: tank.id, casterEnemyId: dragon.id, ability: "Sleep Breath", saveAbility: "con", dc: 14 }));
+  const sleep = await mk.forced([1], () => world.invoke("cast_at_player", { characterId: tank.id, casterEnemyId: dragon.id, enemyAbility: "Sleep Breath", saveAbility: "con", dc: 14 }));
   assert.equal(sleep.ok, true, sleep.error);
   const sheet = world.sheet(tank.id);
   assert.ok(sheet.conditions.includes("unconscious"));
@@ -260,17 +260,17 @@ await test("A failure by the margin adds its condition, and the conditions liste
       { name: "Dazzle", desc: "One creature must succeed on a DC 12 Constitution saving throw or be blinded and deafened for 1 minute." },
     ],
   });
-  const near = await mk.forced([10], () => world.invoke("cast_at_player", { characterId: tank.id, casterEnemyId: medusa.id, ability: "Petrifying Gaze", saveAbility: "con", dc: 14 }));
+  const near = await mk.forced([10], () => world.invoke("cast_at_player", { characterId: tank.id, casterEnemyId: medusa.id, enemyAbility: "Petrifying Gaze", saveAbility: "con", dc: 14 }));
   assert.equal(near.ok, true, near.error);
   assert.deepEqual([world.sheet(tank.id).conditions.includes("restrained"), world.sheet(tank.id).conditions.includes("petrified")], [true, false]);
   world.patch(tank.id, { conditions: [], conditionMeta: {} });
   kit.freshRound();
-  const far = await mk.forced([1], () => world.invoke("cast_at_player", { characterId: tank.id, casterEnemyId: medusa.id, ability: "Petrifying Gaze", saveAbility: "con", dc: 14 }));
+  const far = await mk.forced([1], () => world.invoke("cast_at_player", { characterId: tank.id, casterEnemyId: medusa.id, enemyAbility: "Petrifying Gaze", saveAbility: "con", dc: 14 }));
   assert.equal(far.ok, true, far.error);
   assert.ok(world.sheet(tank.id).conditions.includes("petrified"), JSON.stringify(far.result));
   world.patch(tank.id, { conditions: [], conditionMeta: {} });
   kit.freshRound();
-  const dazzle = await mk.forced([1], () => world.invoke("cast_at_player", { characterId: tank.id, casterEnemyId: medusa.id, ability: "Dazzle", saveAbility: "con", dc: 12 }));
+  const dazzle = await mk.forced([1], () => world.invoke("cast_at_player", { characterId: tank.id, casterEnemyId: medusa.id, enemyAbility: "Dazzle", saveAbility: "con", dc: 12 }));
   assert.equal(dazzle.ok, true, dazzle.error);
   assert.deepEqual(["blinded", "deafened"].map((name) => world.sheet(tank.id).conditions.includes(name)), [true, true]);
 });
@@ -280,12 +280,12 @@ await test("A second save comes only with its parent's use, on the same turn, an
     name: "Deep Drake", size: "Large", type: "Dragon", armor_class: 17, hit_points: 150, cr: 9,
     actions: [{ name: "Breath Weapon (Recharge 5-6)", desc: "A deep drake blasts forth a crackling 80-foot line of energy. This attack deals 35 (10d6) necrotic damage, or half damage with a successful DC 16 Dexterity saving throw. Targets that fail this saving throw must also succeed on a DC 16 Constitution saving throw or become stunned for 1 minute." }],
   });
-  const early = await world.invoke("cast_at_player", { characterId: tank.id, casterEnemyId: drake.id, ability: "Breath Weapon (Constitution save)", saveAbility: "con", dc: 16 });
+  const early = await world.invoke("cast_at_player", { characterId: tank.id, casterEnemyId: drake.id, enemyAbility: "Breath Weapon (Constitution save)", saveAbility: "con", dc: 16 });
   assert.match(early.error ?? "", /Use Breath Weapon first/);
-  const breath = await mk.forced([...new Array(10).fill(1), 1], () => world.invoke("aoe_damage", { characterIds: [tank.id], casterEnemyId: drake.id, ability: "Breath Weapon", saveAbility: "dex", dc: 16 }));
+  const breath = await mk.forced([...new Array(10).fill(1), 1], () => world.invoke("aoe_damage", { characterIds: [tank.id], casterEnemyId: drake.id, enemyAbility: "Breath Weapon", saveAbility: "dex", dc: 16 }));
   assert.equal(breath.ok, true, breath.error);
   assert.match(breath.result.next ?? "", /Breath Weapon \(Constitution save\)/);
-  const second = await mk.forced([1], () => world.invoke("cast_at_player", { characterId: tank.id, casterEnemyId: drake.id, ability: "Breath Weapon (Constitution save)", saveAbility: "con", dc: 16 }));
+  const second = await mk.forced([1], () => world.invoke("cast_at_player", { characterId: tank.id, casterEnemyId: drake.id, enemyAbility: "Breath Weapon (Constitution save)", saveAbility: "con", dc: 16 }));
   assert.equal(second.ok, true, second.error);
   assert.ok(world.sheet(tank.id).conditions.includes("stunned"));
 });
@@ -296,13 +296,13 @@ await test("A once-a-turn ability is refused a second time that turn, and a Rech
     special_abilities: [{ name: "Stunning Strike (1/Turn)", desc: "When the grandmaster hits a creature with a melee attack, they can force it to make a DC 18 Constitution saving throw. On a failure, it is stunned until the end of the grandmasters next turn." }],
     actions: [{ name: "Flare (Recharge Special)", desc: "Each creature within 20 feet must make a DC 17 Dexterity saving throw, taking 22 (4d10) fire damage on a failed save. After using Flare, the alnaar is starving. It can't use Flare if it is starving." }],
   });
-  assert.equal((await mk.forced([20], () => world.invoke("cast_at_player", { characterId: tank.id, casterEnemyId: monk.id, ability: "Stunning Strike", saveAbility: "con", dc: 18 }))).ok, true);
-  const again = await world.invoke("cast_at_player", { characterId: tank.id, casterEnemyId: monk.id, ability: "Stunning Strike", saveAbility: "con", dc: 18 });
+  assert.equal((await mk.forced([20], () => world.invoke("cast_at_player", { characterId: tank.id, casterEnemyId: monk.id, enemyAbility: "Stunning Strike", saveAbility: "con", dc: 18 }))).ok, true);
+  const again = await world.invoke("cast_at_player", { characterId: tank.id, casterEnemyId: monk.id, enemyAbility: "Stunning Strike", saveAbility: "con", dc: 18 });
   assert.match(again.error ?? "", /once a turn/);
   nextRound();
-  assert.equal((await mk.forced([20, 1, 1, 1, 1], () => world.invoke("aoe_damage", { characterIds: [tank.id], casterEnemyId: monk.id, ability: "Flare", saveAbility: "dex", dc: 17 }))).ok, true);
+  assert.equal((await mk.forced([20, 1, 1, 1, 1], () => world.invoke("aoe_damage", { characterIds: [tank.id], casterEnemyId: monk.id, enemyAbility: "Flare", saveAbility: "dex", dc: 17 }))).ok, true);
   nextRound();
-  const flare = await world.invoke("aoe_damage", { characterIds: [tank.id], casterEnemyId: monk.id, ability: "Flare", saveAbility: "dex", dc: 17 });
+  const flare = await world.invoke("aoe_damage", { characterIds: [tank.id], casterEnemyId: monk.id, enemyAbility: "Flare", saveAbility: "dex", dc: 17 });
   assert.match(flare.error ?? "", /its block says what brings it back/);
 });
 

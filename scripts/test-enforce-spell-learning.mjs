@@ -211,7 +211,7 @@ await test(
 // ---- the DM's learn_spell ----
 
 const learn = (table, hero, spell, action = "add") =>
-  table.invoke("learn_spell", { characterId: hero.id, name: spell, spell, action });
+  table.invoke("learn_spell", { characterId: hero.id, spell, action });
 
 await test("a copied spell is written in the book, and is not castable until prepared and rested on", async () => {
   const table = await openWorld();
@@ -310,7 +310,7 @@ await test("the console's Spend a slot checks the spell named", async () => {
   const table = await openWorld();
   const mage = table.addHero(wizard(5));
   const before = JSON.stringify(table.sheet(mage.id).spellcasting.slots);
-  const out = await table.invoke("use_spell_slot", { characterId: mage.id, level: 1, name: "Cure Wounds" });
+  const out = await table.invoke("use_spell_slot", { characterId: mage.id, level: 1, spell: "Cure Wounds" });
   assert.equal(out.ok, false, "a wizard spent a slot on Cure Wounds");
   assert.equal(JSON.stringify(table.sheet(mage.id).spellcasting.slots), before);
 });

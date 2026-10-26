@@ -37,8 +37,8 @@ const act = (name, args) => world.invoke(name, { characterId: hero.id, reason: "
 
 await test("a granted item lands on the sheet, and a second grant stacks onto the same row", async () => {
   pack([]);
-  assert.equal((await act("grant_item", { name: "Torch", qty: 3 })).ok, true);
-  assert.equal((await act("grant_item", { name: "torch", qty: 2 })).ok, true);
+  assert.equal((await act("grant_item", { item: "Torch", qty: 3 })).ok, true);
+  assert.equal((await act("grant_item", { item: "torch", qty: 2 })).ok, true);
   assert.equal(sheet().equipment.length, 1);
   assert.equal(row("Torch").qty, 5);
 });
@@ -46,30 +46,30 @@ await test("a granted item lands on the sheet, and a second grant stacks onto th
 await test("a grant of nothing, or of less than nothing, never lowers a count", async () => {
   pack([{ name: "Rations", qty: 4 }]);
   for (const qty of [0, -1, -50]) {
-    await act("grant_item", { name: "Rations", qty });
+    await act("grant_item", { item: "Rations", qty });
     assert.ok(row("Rations").qty >= 4, `qty ${qty} left ${row("Rations").qty}`);
   }
-  await act("grant_item", { name: "Rope", qty: -3 });
+  await act("grant_item", { item: "Rope", qty: -3 });
   assert.ok(row("Rope") === undefined || row("Rope").qty >= 1);
 });
 
 await test("a grant without a name is refused", async () => {
   pack([]);
-  assert.equal((await act("grant_item", { name: "   " })).ok, false);
+  assert.equal((await act("grant_item", { item: "   " })).ok, false);
   assert.equal(sheet().equipment.length, 0);
 });
 
 await test("taking part of a stack leaves the rest, taking all of it removes the row", async () => {
   pack([{ name: "Arrows", qty: 20 }]);
-  assert.equal((await act("remove_item", { name: "Arrows", qty: 5 })).ok, true);
+  assert.equal((await act("remove_item", { item: "Arrows", qty: 5 })).ok, true);
   assert.equal(row("Arrows").qty, 15);
-  assert.equal((await act("remove_item", { name: "arrows", qty: 15 })).ok, true);
+  assert.equal((await act("remove_item", { item: "arrows", qty: 15 })).ok, true);
   assert.equal(row("Arrows"), undefined);
 });
 
 await test("taking more than is held takes what there is and never leaves a negative count", async () => {
   pack([{ name: "Caltrops", qty: 2 }]);
-  const taken = await act("remove_item", { name: "Caltrops", qty: 9 });
+  const taken = await act("remove_item", { item: "Caltrops", qty: 9 });
   assert.equal(taken.result.qty, 2);
   assert.equal(row("Caltrops"), undefined);
   assert.ok(sheet().equipment.every((item) => item.qty >= 1));
@@ -78,19 +78,19 @@ await test("taking more than is held takes what there is and never leaves a nega
 await test("taking what is not carried is refused and the pack is untouched", async () => {
   pack([{ name: "Lantern", qty: 1 }]);
   const before = sheet().equipment;
-  assert.equal((await act("remove_item", { name: "Crown of Kings" })).ok, false);
+  assert.equal((await act("remove_item", { item: "Crown of Kings" })).ok, false);
   assert.deepEqual(sheet().equipment, before);
 });
 
 await test("An item's count on a sheet runs from 1 to 999 (equipmentItemSchema).", async () => {
   pack([{ name: "Ball Bearings", qty: 990 }]);
-  await act("grant_item", { name: "Ball Bearings", qty: 99 });
+  await act("grant_item", { item: "Ball Bearings", qty: 99 });
   assert.ok(row("Ball Bearings").qty <= 999, `the stack holds ${row("Ball Bearings").qty}`);
 });
 
 await test("A sheet holds at most 60 kinds of item (createSheetSchema and patchSheetSchema).", async () => {
   pack(Array.from({ length: 60 }, (_, index) => ({ name: `Trinket ${index + 1}`, qty: 1 })));
-  const granted = await act("grant_item", { name: "Trinket 61" });
+  const granted = await act("grant_item", { item: "Trinket 61" });
   const held = sheet().equipment.length;
   pack([]);
   assert.ok(granted.ok === false && held === 60, `the sheet holds ${held} rows`);
@@ -178,14 +178,14 @@ await test("a consumable with no dice of its own is simply spent", async () => {
 
 await test("an unidentified item is carried under its description and kept apart from a known one", async () => {
   pack([{ name: "Silver Ring", qty: 1 }]);
-  await act("grant_item", { name: "Silver Ring", unidentified: true });
+  await act("grant_item", { item: "Silver Ring", unidentified: true });
   const rings = sheet().equipment.filter((item) => item.name === "Silver Ring");
   assert.equal(rings.length, 2);
   assert.deepEqual(rings.map((item) => item.identified === false), [false, true]);
 });
 
 await test("the reveal renames the mystery and only the mystery", async () => {
-  const revealed = await act("reveal_item", { name: "Silver Ring", revealedName: "Ring of Protection" });
+  const revealed = await act("reveal_item", { item: "Silver Ring", revealedName: "Ring of Protection" });
   assert.equal(revealed.ok, true, revealed.error);
   assert.equal(row("Ring of Protection").identified, undefined);
   assert.equal(row("Silver Ring").identified, undefined);
@@ -194,7 +194,7 @@ await test("the reveal renames the mystery and only the mystery", async () => {
 
 await test("an item that was never a mystery cannot be revealed into something else", async () => {
   pack([{ name: "Pebble", qty: 1 }]);
-  const revealed = await act("reveal_item", { name: "Pebble", revealedName: "Staff of Power" });
+  const revealed = await act("reveal_item", { item: "Pebble", revealedName: "Staff of Power" });
   assert.equal(revealed.ok, false);
   assert.deepEqual(sheet().equipment.map((item) => item.name), ["Pebble"]);
 });
@@ -309,7 +309,7 @@ await test("a grant past the carrying capacity (Strength x 15) is refused, and u
   // carry at all (src/lib/dm/load-rules.ts capacityProblem). This pinned
   // ODM's old rule (the grant kept) until last-explore made it the SRD's.
   weighed.carry(149);
-  const granted = await weighed.table.invoke("grant_item", { characterId: weighed.porter.id, name: "Leather", qty: 1 });
+  const granted = await weighed.table.invoke("grant_item", { characterId: weighed.porter.id, item: "Leather", qty: 1 });
   assert.equal(granted.ok, false, "10 lb of leather was granted onto 149 lb at a 150 lb capacity");
   assert.equal(weighed.table.sheet(weighed.porter.id).equipment.some((item) => item.name === "Leather"), false);
   assert.equal(weighed.speed(), 10);

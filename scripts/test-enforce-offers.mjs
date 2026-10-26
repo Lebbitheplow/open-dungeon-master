@@ -50,7 +50,7 @@ const settledLine = () => {
 };
 
 await test("an accepted offer lands on the sheet, is recorded with what it did, and is told to the table", async () => {
-  const made = offer("grant_item", { name: "Coin purse", qty: 1, reason: "the dead bandit's" });
+  const made = offer("grant_item", { item: "Coin purse", qty: 1, reason: "the dead bandit's" });
   assert.equal(made.ok, true, made.error);
   assert.match(made.note, /answer arrives as a table note/);
   const row = lastPending();
@@ -66,11 +66,11 @@ await test("an accepted offer lands on the sheet, is recorded with what it did, 
 });
 
 await test("the same loot again, right after it was accepted, is refused; said to be another, it is offered", async () => {
-  const again = offer("grant_item", { name: "coin purse", reason: "the purse" });
+  const again = offer("grant_item", { item: "coin purse", reason: "the purse" });
   assert.match(again.error, /already accepted "Give coin purse to Nysa"/);
   assert.equal(held("Coin purse"), 1);
   assert.equal(pending().length, 0);
-  const another = offer("grant_item", { name: "Coin purse", additional: true, reason: "the second bandit's" });
+  const another = offer("grant_item", { item: "Coin purse", additional: true, reason: "the second bandit's" });
   assert.equal(another.ok, true, another.error);
   const row = lastPending();
   const refused = await answer(nysaUser, row.id, "decline");
@@ -80,10 +80,10 @@ await test("the same loot again, right after it was accepted, is refused; said t
 });
 
 await test("while an offer waits, an identical one is refused even as another; the lead may withdraw it", async () => {
-  const made = offer("grant_item", { name: "Rope" });
+  const made = offer("grant_item", { item: "Rope" });
   assert.equal(made.ok, true, made.error);
-  assert.match(offer("grant_item", { name: "rope" }).error, /still waiting for Nysa's player/);
-  assert.match(offer("grant_item", { name: "Rope", additional: true }).error, /still waiting/);
+  assert.match(offer("grant_item", { item: "rope" }).error, /still waiting for Nysa's player/);
+  assert.match(offer("grant_item", { item: "Rope", additional: true }).error, /still waiting/);
   assert.equal(pending().length, 1);
   const row = lastPending();
   const withdrawn = await answer(world.owner, row.id, "cancel");
@@ -94,21 +94,21 @@ await test("while an offer waits, an identical one is refused even as another; t
 
 await test("a removal of what is not carried, or of more than carried, never becomes an offer", async () => {
   const before = pending().length;
-  assert.match(offer("remove_item", { name: "Longsword" }).error, /does not carry "Longsword"/);
-  assert.match(offer("remove_item", { name: "Dart", qty: 11 }).error, /carries only 10 Dart/);
+  assert.match(offer("remove_item", { item: "Longsword" }).error, /does not carry "Longsword"/);
+  assert.match(offer("remove_item", { item: "Dart", qty: 11 }).error, /carries only 10 Dart/);
   assert.equal(pending().length, before);
   assert.equal(held("Dart"), 10);
 });
 
 await test("an accepted removal empties the sheet and says so; the next attempt is refused before it is shown", async () => {
-  const made = offer("remove_item", { name: "Dart", qty: 10, reason: "dropped" });
+  const made = offer("remove_item", { item: "Dart", qty: 10, reason: "dropped" });
   assert.equal(made.ok, true, made.error);
   const row = lastPending();
   const done = await answer(nysaUser, row.id, "approve");
   assert.equal(done.status, 200, done.body.error);
   assert.equal(held("Dart"), 0);
   assert.equal(settledLine(), "Nysa accepted the offer: Take Dart x10 from Nysa. Nysa no longer carries any Dart.");
-  assert.match(offer("remove_item", { name: "Dart", qty: 10 }).error, /does not carry "Dart"/);
+  assert.match(offer("remove_item", { item: "Dart", qty: 10 }).error, /does not carry "Dart"/);
   assert.equal(pending().length, 0);
 });
 
@@ -125,7 +125,7 @@ await test("an accepted award says the new purse, and the same sum again is refu
 
 await test("an offer the world moved under fails as a failure, told as such, and moves nothing", async () => {
   world.patch(nysa.id, { equipment: [...sheet().equipment, { name: "Lantern", qty: 1 }] });
-  const made = offer("remove_item", { name: "Lantern" });
+  const made = offer("remove_item", { item: "Lantern" });
   assert.equal(made.ok, true, made.error);
   const row = lastPending();
   world.patch(nysa.id, { equipment: sheet().equipment.filter((item) => item.name !== "Lantern") });
@@ -139,7 +139,7 @@ await test("an offer the world moved under fails as a failure, told as such, and
 });
 
 await test("the lead answering for the player is said as the lead", async () => {
-  const made = offer("grant_item", { name: "Lantern" });
+  const made = offer("grant_item", { item: "Lantern" });
   assert.equal(made.ok, true, made.error);
   const row = lastPending();
   const done = await answer(world.owner, row.id, "approve");
@@ -160,7 +160,7 @@ await test("a confirmed blow says the hit points it left", async () => {
 });
 
 await test("the DM's game state lists what waits and what was settled, and the transcript marks the table's answer", async () => {
-  const waiting = offer("grant_item", { name: "Torch" });
+  const waiting = offer("grant_item", { item: "Torch" });
   assert.equal(waiting.ok, true, waiting.error);
   const lines = offerLinesForPrompt(world.campaignId, sheetsById());
   assert.equal(lines[0].status, "pending");
@@ -193,7 +193,7 @@ await test("the DM's game state lists what waits and what was settled, and the t
 });
 
 await test("an offer that lapses unanswered is told to the table as lapsed, once", async () => {
-  const made = offer("grant_item", { name: "Candle" });
+  const made = offer("grant_item", { item: "Candle" });
   assert.equal(made.ok, true, made.error);
   const row = lastPending();
   const { getDatabase } = await import("../src/lib/db/core.ts");
@@ -207,7 +207,7 @@ await test("an offer that lapses unanswered is told to the table as lapsed, once
   assert.equal(count(), before, "a second read says nothing more");
   assert.ok(offerLinesForPrompt(world.campaignId, sheetsById()).some((line) => line.status === "expired" && line.summary === "Give Candle to Nysa"));
   // The lapsed loot may be offered again.
-  const again = offer("grant_item", { name: "Candle" });
+  const again = offer("grant_item", { item: "Candle" });
   assert.equal(again.ok, true, again.error);
   await answer(world.owner, lastPending().id, "cancel");
 });
@@ -219,7 +219,7 @@ await test("with item offers off, a grant applies at once and nothing here runs"
     other.campaign(),
     "",
     "grant_item",
-    JSON.stringify({ characterId: hero.id, name: "Coin purse" }),
+    JSON.stringify({ characterId: hero.id, item: "Coin purse" }),
     new Map(other.sheets().map((entry) => [entry.id, entry])),
   );
   assert.equal(direct, null);

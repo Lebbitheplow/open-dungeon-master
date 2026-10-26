@@ -159,12 +159,12 @@ await test("The prompt says what a spell does beyond its damage is the server's,
   assert.match(text, /Name the choice in condition on cast_at_enemy: Command's word \(grovel, halt\), Eyebite's form \(unconscious, frightened, sickened\), Bestow Curse's curse/);
   assert.match(text, /Lesser Restoration, Greater Restoration and Remove Curse go through cast_buff/);
   assert.match(text, /A creature held by Entangle, Web or Black Tentacles breaks free the same way, take_action escape/);
-  assert.match(text, /Sculpt Spells; send sculpt \[\] on aoe_damage to spare nobody/);
+  assert.match(text, /Sculpt Spells; send sparedCharacterIds \[\] on aoe_damage to spare nobody/);
   assert.match(text, /Overchannel is overchannel true on cast_at_enemy or aoe_damage/);
   assert.match(text, /Signature Spells cost no slot once per short rest/);
   assert.doesNotMatch(text, /Phantasmal Killer[^.]*start of (the target's|its) turn/);
   const aoe = offered("aoe_damage").parameters.properties;
-  assert.ok(aoe.sculpt && aoe.overchannel, "aoe_damage does not take sculpt and overchannel");
+  assert.ok(aoe.sparedCharacterIds && aoe.overchannel, "aoe_damage does not take sparedCharacterIds and overchannel");
   assert.ok(offered("cast_at_enemy").parameters.properties.overchannel, "cast_at_enemy does not take overchannel");
 });
 
@@ -292,7 +292,7 @@ async function walkAway(owner, count) {
     kit.freshRound();
     world.clearDice();
     world.dice(15, 4);
-    await world.invoke("move_token", { tokenName: enemy.id, x: 1 + index * 8, y: 10 });
+    await world.invoke("move_token", { token: enemy.id, x: 1 + index * 8, y: 10 });
     world.clearDice();
   }
   return newRolls(before).filter((roll) => roll.kind === "attack" && roll.characterId === owner.id).length;
@@ -360,7 +360,7 @@ await test("Relentless Avenger: after the paladin's opportunity attack hits, the
   assert.equal(early.ok, false, "no opportunity attack has hit");
   world.clearDice();
   world.dice(18, 5);
-  await world.invoke("move_token", { tokenName: enemy.id, x: 5, y: 10 });
+  await world.invoke("move_token", { token: enemy.id, x: 5, y: 10 });
   world.clearDice();
   const out = await react(avenger, "Relentless Avenger", { x: 5, y: 8 });
   assert.equal(out.ok, true, out.error);
@@ -412,7 +412,7 @@ await test("Grasping Tentacles: casting Evard's Black Tentacles gives the warloc
   const [enemy] = await stage(fathomless);
   fresh(fathomless.id);
   world.dice(1, 1, 1);
-  const cast = await world.invoke("aoe_damage", { spell: "Evard's Black Tentacles", casterId: fathomless.id, enemyIds: [enemy.id], saveAbility: "dex", dc: 15 });
+  const cast = await world.invoke("aoe_damage", { spell: "Evard's Black Tentacles", casterCharacterId: fathomless.id, enemyIds: [enemy.id], saveAbility: "dex", dc: 15 });
   world.clearDice();
   assert.equal(cast.ok, true, cast.error);
   assert.equal(world.sheet(fathomless.id).tempHp, 10, "the warlock level in temporary hit points");

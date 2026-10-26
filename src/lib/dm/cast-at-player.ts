@@ -49,8 +49,8 @@ import { saveAgainst } from "@/lib/dm/roll-about";
 const castAtPlayerSchema = z.object({
   characterId: z.string(),
   source: z.string().max(80).optional(),
-  saveAbility: z.preprocess(normalizeAbility, z.enum(["str", "dex", "con", "int", "wis", "cha"])),
-  dc: z.coerce.number().int().min(1).max(30),
+  saveAbility: z.preprocess(normalizeAbility, z.enum(["str", "dex", "con", "int", "wis", "cha"])).optional(),
+  dc: z.coerce.number().int().min(1).max(30).optional(),
   damage: z.string().max(30).optional(),
   damageType: z.string().max(30).optional(),
   halfOnSave: z.coerce.boolean().optional(),
@@ -59,7 +59,7 @@ const castAtPlayerSchema = z.object({
   // An enemy, or a character fighting on the other side (issue 503), who
   // casts from their own sheet.
   casterEnemyId: z.string().optional(),
-  ability: z.string().max(80).optional(),
+  enemyAbility: z.string().max(80).optional(),
   spell: z.string().max(80).optional(),
   reason: z.string().optional(),
   // Set by apply_hazard for a trap: Dungeon Delver saves at advantage and
@@ -220,7 +220,7 @@ export function handleCastAtPlayer(
     args = castAtPlayerSchema.parse(JSON.parse(rawArguments || "{}"));
   } catch {
     return {
-      error: "Invalid arguments: cast_at_player needs characterId, saveAbility, and dc.",
+      error: "Invalid arguments: cast_at_player needs characterId, and saveAbility and dc unless an enemy's ability or spell sets them.",
       retry: true,
     };
   }
@@ -254,7 +254,7 @@ export function handleCastAtPlayer(
   if (args.casterEnemyId) {
     const prepared = prepareEnemyUse(campaign, {
       casterEnemyId: args.casterEnemyId,
-      ability: args.ability,
+      enemyAbility: args.enemyAbility,
       spell: args.spell,
       source: args.source,
       targetIds: [sheet.id],
@@ -275,8 +275,16 @@ export function handleCastAtPlayer(
     use = prepared;
   }
   const byBlock = Boolean(use?.fromBlock);
-  const ability = (use?.save ?? args.saveAbility) as SaveAbility;
+  const ability = (use?.save ?? args.saveAbility) as SaveAbility | undefined;
   const dc = use?.dc ?? args.dc;
+  // A hazard with no creature behind it names its own save: nothing else
+  // could supply it. An enemy's ability or spell brings the block's.
+  if (!ability || !dc) {
+    return {
+      error: "cast_at_player needs saveAbility and dc for a hazard with no creature behind it; an enemy's ability or spell (casterEnemyId with enemyAbility or spell) brings its own.",
+      retry: true,
+    };
+  }
   const damage = byBlock ? use?.damage : args.damage;
   const damageType = (byBlock ? use?.damageType : undefined) ?? args.damageType;
   const halfOnSave = byBlock ? Boolean(use?.halfOnSave) : Boolean(args.halfOnSave);
@@ -475,7 +483,7 @@ export function handleCastAtPlayer(
   }
   // The second save the same use forces (src/lib/dm/ability-entries.ts).
   if (use?.followUp) {
-    base.next = `${use.name} also forces a second save on the creatures its text names: resolve it with cast_at_player or aoe_damage, casterEnemyId ${use.enemy.id} and ability "${use.followUp}".`;
+    base.next = `${use.name} also forces a second save on the creatures its text names: resolve it with cast_at_player or aoe_damage, casterEnemyId ${use.enemy.id} and enemyAbility "${use.followUp}".`;
   }
   // A concentration spell cast by a named enemy is tracked even when the
   // save succeeded (Hold Person holds nobody yet the hag still concentrates).

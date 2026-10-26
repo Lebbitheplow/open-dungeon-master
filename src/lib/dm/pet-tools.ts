@@ -86,7 +86,7 @@ export const petTools: ToolDef[] = [
           petName: { type: "string", description: "Which pet, when they have several." },
           targetEnemyId: { type: "string", description: "The enemy being attacked: exact enemyId from GAME STATE." },
           attack: { type: "string", description: "Named attack when the pet has several." },
-          reason: { type: "string" },
+          reason: { type: "string", description: "Short in-fiction cause." },
         },
         required: ["characterId", "targetEnemyId"],
       },
@@ -104,7 +104,7 @@ export const petTools: ToolDef[] = [
         properties: {
           characterId: { type: "string", description: "The owner: exact characterId from GAME STATE." },
           petName: { type: "string", description: "Which pet, when they have several." },
-          reason: { type: "string" },
+          reason: { type: "string", description: "Short in-fiction cause." },
         },
         required: ["characterId"],
       },

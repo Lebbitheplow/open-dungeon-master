@@ -75,7 +75,7 @@ export const setConditionTool: ToolDef = {
   function: {
     name: "set_condition",
     description:
-      "Apply a condition to a character or an enemy by its exact 5e name when one fits; always give a duration the fiction has, since only timed conditions expire on their own. The 5e names are blinded, charmed, deafened, frightened, grappled, incapacitated, invisible, paralyzed, petrified, poisoned, prone, restrained, stunned, unconscious and exhaustion. Custom names are allowed for story effects. A duration is rounds for combat-scale effects, minutes, hours or days for longer ones (a poison, a curse, a potion), or saveAbility + saveDc for save-ends effects the server re-rolls. In combat the countdown runs by round; outside it the in-world clock runs it down as the party travels, rests, or passes time.",
+      "Apply a condition to a character or an enemy; always give a duration the fiction has, since only timed conditions expire on their own. The 5e names are blinded, charmed, deafened, frightened, grappled, incapacitated, invisible, paralyzed, petrified, poisoned, prone, restrained, stunned, unconscious and exhaustion. Custom names are allowed for story effects. A duration is rounds for combat-scale effects, minutes, hours or days for longer ones (a poison, a curse, a potion), or saveAbility + saveDc for save-ends effects the server re-rolls. In combat the countdown runs by round; outside it the in-world clock runs it down as the party travels, rests, or passes time.",
     parameters: {
       type: "object",
       additionalProperties: false,
@@ -83,7 +83,7 @@ export const setConditionTool: ToolDef = {
         characterId: { type: "string", description: CHARACTER_TARGET },
         enemyId: { type: "string", description: ENEMY_TARGET },
         reason: { type: "string", description: "Short in-fiction cause." },
-        condition: { type: "string" },
+        condition: { type: "string", description: "Its 5e name (poisoned, prone, exhaustion), or a custom name for a story effect." },
         rounds: {
           type: "integer",
           minimum: 1,
@@ -106,7 +106,7 @@ export const setConditionTool: ToolDef = {
           type: "integer",
           minimum: 1,
           maximum: 365,
-          description: "In-world days until the condition ends (Geas's thirty, Contagion's seven).",
+          description: "In-world days until the condition ends.",
         },
         saveAbility: {
           type: "string",
@@ -121,11 +121,11 @@ export const setConditionTool: ToolDef = {
         sourceEnemyId: {
           type: "string",
           description:
-            "The enemy that caused it, when the condition is tied to one: exact enemyId from GAME STATE. E.g. the charmer, the grappler, the source of the fear.",
+            "The enemy that caused it: exact enemyId from GAME STATE. E.g. the charmer, the grappler, the source of the fear.",
         },
         sourceCharacterId: {
           type: "string",
-          description: "The character that caused it, when it was one of the party: exact characterId from GAME STATE.",
+          description: "The party member that caused it: exact characterId from GAME STATE.",
         },
         level: {
           type: "integer",
@@ -152,7 +152,7 @@ export const clearConditionTool: ToolDef = {
         characterId: { type: "string", description: CHARACTER_TARGET },
         enemyId: { type: "string", description: ENEMY_TARGET },
         reason: { type: "string", description: "Short in-fiction cause." },
-        condition: { type: "string" },
+        condition: { type: "string", description: "Its name as GAME STATE shows it." },
       },
       required: ["condition"],
     },

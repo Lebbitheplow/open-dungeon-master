@@ -37,7 +37,7 @@ export const searchLoreTool = {
   function: {
     name: "search_lore",
     description:
-      "Search the campaign's established canon: world lore, tracked facts, party notes, past chapters, and the DM-only prep cards of an imported storyboard. Call it before inventing details about places, factions, history, or NPCs that may already be established. A long entry answers with the passage nearest the query.",
+      "Search the campaign's established canon: world lore, tracked facts, party notes, past chapters, and an imported storyboard's DM-only prep cards. Call it before inventing details about places, factions, history, or NPCs that may already be established. A long entry answers with the passage nearest the query.",
     parameters: {
       type: "object",
       additionalProperties: false,

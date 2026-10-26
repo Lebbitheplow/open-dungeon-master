@@ -53,9 +53,11 @@ export type ToolArgs = Record<string, unknown>;
 export type EngineCall = { name: string; args: ToolArgs };
 
 // A call to a retired name, as a call to the tool that took its place. Every
-// argument the old tool took keeps its name in the new one, but for three:
-// a sale's priceCp becomes a price in gold, and a pet's damage and a
-// teleport say which they are, since nothing else in their arguments would.
+// argument the old tool took keeps its name in the new one, but for these:
+// a sale's priceCp becomes a price in gold, an award's amount its xp, a
+// teleport's tokenName and casterId its token and casterCharacterId, and a
+// pet's damage and a teleport say which they are, since nothing else in
+// their arguments would.
 export function mergedCall(name: string, args: ToolArgs): EngineCall {
   switch (name) {
     case "buy_item":
@@ -67,8 +69,17 @@ export function mergedCall(name: string, args: ToolArgs): EngineCall {
     }
     case "damage_pet":
       return { name: "apply_damage", args: { ...args, pet: true } };
-    case "teleport_token":
-      return { name: "move_token", args: { ...args, teleport: true } };
+    case "award_xp": {
+      const { amount, ...rest } = args;
+      return { name: "party_award", args: { ...rest, ...(amount !== undefined ? { xp: amount } : {}) } };
+    }
+    case "teleport_token": {
+      const { casterId, tokenName, ...rest } = args;
+      return {
+        name: "move_token",
+        args: { ...rest, teleport: true, ...(tokenName !== undefined ? { token: tokenName } : {}), ...(casterId !== undefined ? { casterCharacterId: casterId } : {}) },
+      };
+    }
     default:
       return { name: offeredAs(name), args };
   }
@@ -107,7 +118,7 @@ function enemyRounds(args: ToolArgs): number | undefined {
 }
 
 const DAMAGE_KEYS = ["amount", "dice", "type", "reason"] as const;
-const TELEPORT_KEYS = ["teleport", "spell", "casterId", "casterEnemyId", "cause", "rangeFeet"] as const;
+const TELEPORT_KEYS = ["teleport", "spell", "enemyAbility", "casterCharacterId", "casterEnemyId", "cause", "rangeFeet"] as const;
 
 // The handler a call to a merged tool reaches, with the arguments that
 // handler reads, or the reason it reaches none. Any other call, a purchase
@@ -154,14 +165,14 @@ export function engineCall(name: string, args: ToolArgs): EngineCall | ToolError
     case "party_award": {
       // Experience alone is the award_xp it always was, its level-ups
       // reported the same way.
-      const xp = Number(args.amount) || 0;
-      const gold = Number(args.delta) || 0;
-      return xp > 0 && !gold && !present(args.name) ? { name: "award_xp", args: pick(args, ["characterIds", "amount", "reason"]) } : { name, args };
+      const xp = Number(args.xp) || 0;
+      const gold = Number(args.gold) || 0;
+      return xp > 0 && !gold && !present(args.item) ? { name: "award_xp", args: { ...pick(args, ["characterIds", "reason"]), amount: xp } } : { name, args };
     }
     case "move_token": {
-      const teleport = args.teleport === true || present(args.spell) || present(args.casterEnemyId) || args.cause === "hazard";
+      const teleport = args.teleport === true || present(args.spell) || present(args.enemyAbility) || present(args.casterEnemyId) || args.cause === "hazard";
       return teleport
-        ? { name: "teleport_token", args: pick(args, ["tokenName", "x", "y", ...TELEPORT_KEYS.slice(1), "reason"]) }
+        ? { name: "teleport_token", args: pick(args, ["token", "x", "y", ...TELEPORT_KEYS.slice(1), "reason"]) }
         : { name, args: without(args, TELEPORT_KEYS) };
     }
     default:

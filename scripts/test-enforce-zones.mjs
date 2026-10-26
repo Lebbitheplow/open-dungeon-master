@@ -333,7 +333,7 @@ await test("Silence: a creature entirely inside the sphere is immune to thunder 
   const cast = await world.invoke("use_spell_slot", { characterId: cleric.id, spell: "Silence", level: 2, atX: 12, atY: 4 });
   assert.equal(cast.ok, true, cast.error);
   world.dice(1, 8, 8, 8);
-  const out = await world.invoke("aoe_damage", { casterId: wizard.id, spell: "Shatter", enemyIds: [goblin.id], saveAbility: "con", dc: 15, level: 2 });
+  const out = await world.invoke("aoe_damage", { casterCharacterId: wizard.id, spell: "Shatter", enemyIds: [goblin.id], saveAbility: "con", dc: 15, level: 2 });
   world.clearDice();
   assert.equal(out.ok, true, out.error);
   assert.equal(enemyOf(world, goblin.id).currentHp, 90);
@@ -510,13 +510,13 @@ await test("Sleet Storm: a creature concentrating in the storm when its turn sta
 await test("Moonbeam's beam moves when its caster moves it (the spell again on a later turn): the old square is no longer in it.", async () => {
   const { world, sheets: [druid], enemies: [first, second] } = await board([caster("druid", "wis", ["Moonbeam"])], { 0: { x: 2, y: 4 }, e0: { x: 10, y: 2 }, e1: { x: 16, y: 6 } }, { count: 2 });
   world.dice(20, 1, 1);
-  const cast = await world.invoke("aoe_damage", { casterId: druid.id, spell: "Moonbeam", enemyIds: [first.id], saveAbility: "con", dc: 15, level: 2 });
+  const cast = await world.invoke("aoe_damage", { casterCharacterId: druid.id, spell: "Moonbeam", enemyIds: [first.id], saveAbility: "con", dc: 15, level: 2 });
   world.clearDice();
   assert.equal(cast.ok, true, cast.error);
   const beam = () => zonesOf(world).find((zone) => zone.spell === "Moonbeam");
   assert.ok(beam().cells.includes(2 * 24 + 10));
   world.dice(20, 1, 1);
-  const again = await world.invoke("aoe_damage", { casterId: druid.id, spell: "Moonbeam", enemyIds: [second.id], saveAbility: "con", dc: 15, level: 2 });
+  const again = await world.invoke("aoe_damage", { casterCharacterId: druid.id, spell: "Moonbeam", enemyIds: [second.id], saveAbility: "con", dc: 15, level: 2 });
   world.clearDice();
   assert.equal(again.ok, true, again.error);
   assert.ok(beam().cells.includes(6 * 24 + 16) && !beam().cells.includes(2 * 24 + 10));
@@ -604,7 +604,7 @@ await test("The rules and tools the model reads say where a spell's area is laid
 await test("Web: fire burns away the web around a creature it strikes, freeing it, and the burning cube deals 2d4 fire to a creature starting its turn in it.", async () => {
   const { world, sheets: [wizard, fighter], enemies: [goblin] } = await board([caster("wizard", "int", ["Web"]), FIGHTER], { 0: { x: 2, y: 8 }, 1: { x: 4, y: 8 }, e0: { x: 12, y: 2 } });
   world.dice(1);
-  const cast = await world.invoke("aoe_damage", { casterId: wizard.id, spell: "Web", enemyIds: [goblin.id], saveAbility: "dex", dc: 15, level: 2, atX: 12, atY: 2 });
+  const cast = await world.invoke("aoe_damage", { casterCharacterId: wizard.id, spell: "Web", enemyIds: [goblin.id], saveAbility: "dex", dc: 15, level: 2, atX: 12, atY: 2 });
   world.clearDice();
   assert.equal(cast.ok, true, cast.error);
   assert.ok(enemyOf(world, goblin.id).conditions.includes("restrained"));
@@ -708,7 +708,7 @@ await test("Globe of Invulnerability: a spell of 5th level or lower cast from ou
   assert.equal(bolt.ok, true, bolt.error);
   assert.equal(bolt.result.hit, false, "Fire Bolt reached through the globe");
   world.dice(1, 6, 6, 6, 6, 6, 6, 6, 6);
-  const ball = await world.invoke("aoe_damage", { casterId: wizard.id, spell: "Fireball", enemyIds: [mage.id], saveAbility: "dex", dc: 15, level: 3 });
+  const ball = await world.invoke("aoe_damage", { casterCharacterId: wizard.id, spell: "Fireball", enemyIds: [mage.id], saveAbility: "dex", dc: 15, level: 3 });
   world.clearDice();
   assert.equal(ball.ok, true, ball.error);
   assert.equal(enemyOf(world, mage.id).currentHp, 90, "Fireball burned a creature inside the globe");

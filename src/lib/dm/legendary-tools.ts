@@ -208,7 +208,7 @@ export function handleLegendaryAction(campaign: Campaign, rawArguments: string):
   const turnDue =
     Boolean(encounter.legendary.handoff?.enemyIds.includes(enemy.id)) && !enemyActedThisRound(encounter, enemy.id);
   if ((current && orderEntryId(current) === enemy.id) || turnDue) {
-    return { error: `It is ${enemy.displayName}'s own turn; legendary actions come at the end of other creatures' turns. Take its turn first: enemy_attack, or cast_at_player / aoe_damage with casterEnemyId for an ability or spell.`, retry: true };
+    return { error: `It is ${enemy.displayName}'s own turn; legendary actions come at the end of other creatures' turns. Take its turn first: enemy_attack, or cast_at_player / aoe_damage with casterEnemyId and enemyAbility or spell.`, retry: true };
   }
   // One option at the end of each other creature's turn: the turn is the
   // pointer's, and each enemy that acts since closes a turn of its own.
@@ -271,7 +271,7 @@ export function handleLegendaryAction(campaign: Campaign, rawArguments: string):
     remaining: outcome.pool.actions,
     ...(attack ? { next: `Resolve it now with enemy_attack (enemyId ${enemy.id}, attack "${attack.name}"): one attack.` } : {}),
     ...(effect
-      ? { next: `Resolve it now with aoe_damage (or cast_at_player for one target) with casterEnemyId ${enemy.id} and ability "${ability?.name}"; the server takes its DC and dice from the block.` }
+      ? { next: `Resolve it now with aoe_damage (or cast_at_player for one target) with casterEnemyId ${enemy.id} and enemyAbility "${ability?.name}"; the server takes its DC and dice from the block.` }
       : {}),
     ...(cantrip ? { next: `Resolve it now with the cantrip from its list: cast_at_player or aoe_damage with casterEnemyId ${enemy.id} and spell.` } : {}),
   };

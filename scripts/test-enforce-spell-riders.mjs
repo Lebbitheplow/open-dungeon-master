@@ -236,7 +236,7 @@ await test("Empowered Evocation adds the wizard's Intelligence to an evocation s
   const { world, sheets: [wizard], enemies: [goblin] } = await table([evoker]);
   // The damage rolls first, once for the area, then each save.
   world.dice(1, 1, 1, 1, 1, 1, 1, 1, 20);
-  await world.invoke("aoe_damage", { casterId: wizard.id, spell: "Fireball", level: 3, damage: "8d6", saveAbility: "dex", dc: 15, enemyIds: [goblin.id] });
+  await world.invoke("aoe_damage", { casterCharacterId: wizard.id, spell: "Fireball", level: 3, damage: "8d6", saveAbility: "dex", dc: 15, enemyIds: [goblin.id] });
   world.clearDice();
   // A made save: half of (8 + 4).
   const now = enemyOf(world, goblin.id);
@@ -266,7 +266,7 @@ await test("Elemental Affinity adds the sorcerer's Charisma to a spell of the an
   });
   const { world, sheets: [sorcerer], enemies: [goblin] } = await table([draconic]);
   world.dice(1, 1, 1, 1);
-  await world.invoke("aoe_damage", { casterId: sorcerer.id, spell: "Burning Hands", level: 1, damage: "3d6", saveAbility: "dex", dc: 15, enemyIds: [goblin.id] });
+  await world.invoke("aoe_damage", { casterCharacterId: sorcerer.id, spell: "Burning Hands", level: 1, damage: "3d6", saveAbility: "dex", dc: 15, enemyIds: [goblin.id] });
   world.clearDice();
   // A failed save: 3 + 4 CHA.
   const now = enemyOf(world, goblin.id);

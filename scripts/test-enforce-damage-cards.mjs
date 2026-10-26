@@ -165,13 +165,13 @@ await test("Overchannel's second use: the necrotic it costs is the wizard's card
   const { world, sheets: [wizard], enemies: [goblin] } = await table([caster("wizard", "int", ["Fireball"], [], 14)]);
   world.patch(wizard.id, { features: [...world.sheet(wizard.id).features, { name: "Overchannel", source: "test" }] });
   world.dice(1);
-  await world.invoke("aoe_damage", { casterId: wizard.id, spell: "Fireball", enemyIds: [goblin.id], saveAbility: "dex", dc: 15, level: 3, overchannel: true });
+  await world.invoke("aoe_damage", { casterCharacterId: wizard.id, spell: "Fireball", enemyIds: [goblin.id], saveAbility: "dex", dc: 15, level: 3, overchannel: true });
   world.clearDice();
   const { freshTurn } = await import("./lib/enforce-spells.mjs");
   await freshTurn(world);
   const before = snapshot(world);
   world.dice(1, ...new Array(6).fill(1));
-  await world.invoke("aoe_damage", { casterId: wizard.id, spell: "Fireball", enemyIds: [goblin.id], saveAbility: "dex", dc: 15, level: 3, overchannel: true });
+  await world.invoke("aoe_damage", { casterCharacterId: wizard.id, spell: "Fireball", enemyIds: [goblin.id], saveAbility: "dex", dc: 15, level: 3, overchannel: true });
   world.clearDice();
   const cost = cardsSince(world, before).find((card) => card.detail === "Overchannel");
   assert.ok(cost, "no Overchannel card");
@@ -240,7 +240,7 @@ await test("Prismatic Spray: the d8 that picks each creature's ray is a card the
   const { world, sheets: [wizard, fighter], enemies: [goblin] } = await table([caster("wizard", "int", ["Prismatic Spray"], [], 13), { ...FIGHTER, name: "Bren" }]);
   const before = snapshot(world);
   world.dice(1, 1, ...new Array(10).fill(2), 1, 1, ...new Array(10).fill(2));
-  const out = await world.invoke("aoe_damage", { casterId: wizard.id, spell: "Prismatic Spray", enemyIds: [goblin.id], characterIds: [fighter.id], saveAbility: "dex", dc: 17, level: 7 });
+  const out = await world.invoke("aoe_damage", { casterCharacterId: wizard.id, spell: "Prismatic Spray", enemyIds: [goblin.id], characterIds: [fighter.id], saveAbility: "dex", dc: 17, level: 7 });
   world.clearDice();
   assert.equal(out.ok, true, out.error);
   const rays = newRolls(world, before).filter((roll) => roll.detail.startsWith("Prismatic Spray: the ray"));

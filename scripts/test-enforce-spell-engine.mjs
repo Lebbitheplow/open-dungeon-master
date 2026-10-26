@@ -72,7 +72,7 @@ await test("Entangle through aoe_damage restrains every creature that fails, dea
   const { world, sheets: [druid], enemies: [a, b] } = await table([caster("druid", "wis", ["Entangle"])], 2);
   world.dice(1, 1);
   const out = await world.invoke("aoe_damage", {
-    casterId: druid.id, spell: "Entangle", level: 1, damage: "2d4", saveAbility: "str", dc: 15, enemyIds: [a.id, b.id],
+    casterCharacterId: druid.id, spell: "Entangle", level: 1, damage: "2d4", saveAbility: "str", dc: 15, enemyIds: [a.id, b.id],
   });
   const unused = world.clearDice();
   assert.equal(out.ok, true, out.error);
@@ -107,13 +107,13 @@ await test("Slow takes up to six creatures from one casting, and a seventh is re
   const { world, sheets: [wizard], enemies } = await table([caster("wizard", "int", ["Slow"])], 7);
   const before = JSON.stringify(world.sheet(wizard.id).spellcasting.slots);
   const seven = await world.invoke("aoe_damage", {
-    casterId: wizard.id, spell: "Slow", level: 3, damage: "0", saveAbility: "wis", dc: 15, enemyIds: enemies.map((entry) => entry.id),
+    casterCharacterId: wizard.id, spell: "Slow", level: 3, damage: "0", saveAbility: "wis", dc: 15, enemyIds: enemies.map((entry) => entry.id),
   });
   assert.equal(seven.ok, false);
   assert.equal(JSON.stringify(world.sheet(wizard.id).spellcasting.slots), before);
   world.dice(1, 1, 1, 1, 1, 1);
   const six = await world.invoke("aoe_damage", {
-    casterId: wizard.id, spell: "Slow", level: 3, damage: "0", saveAbility: "wis", dc: 15, enemyIds: enemies.slice(0, 6).map((entry) => entry.id),
+    casterCharacterId: wizard.id, spell: "Slow", level: 3, damage: "0", saveAbility: "wis", dc: 15, enemyIds: enemies.slice(0, 6).map((entry) => entry.id),
   });
   world.clearDice();
   assert.equal(six.ok, true, six.error);
@@ -127,14 +127,14 @@ await test("a second Call Lightning bolt on a later turn spends no slot", async 
   const { world, sheets: [druid], enemies: [goblin] } = await table([caster("druid", "wis", ["Call Lightning"])]);
   world.dice(1, 5, 5, 5);
   const one = await world.invoke("aoe_damage", {
-    casterId: druid.id, spell: "Call Lightning", level: 3, damage: "3d10", saveAbility: "dex", dc: 15, enemyIds: [goblin.id],
+    casterCharacterId: druid.id, spell: "Call Lightning", level: 3, damage: "3d10", saveAbility: "dex", dc: 15, enemyIds: [goblin.id],
   });
   world.clearDice();
   assert.equal(one.ok, true, one.error);
   await freshTurn(world);
   world.dice(1, 5, 5, 5);
   const two = await world.invoke("aoe_damage", {
-    casterId: druid.id, spell: "Call Lightning", level: 3, damage: "3d10", saveAbility: "dex", dc: 15, enemyIds: [goblin.id],
+    casterCharacterId: druid.id, spell: "Call Lightning", level: 3, damage: "3d10", saveAbility: "dex", dc: 15, enemyIds: [goblin.id],
   });
   world.clearDice();
   assert.equal(two.ok, true, two.error);
@@ -146,14 +146,14 @@ await test("a Call Lightning bolt from a 4th level casting keeps rolling 4d10 on
   const { world, sheets: [druid], enemies: [goblin] } = await table([caster("druid", "wis", ["Call Lightning"])]);
   world.dice(1, 1, 1, 1, 1);
   await world.invoke("aoe_damage", {
-    casterId: druid.id, spell: "Call Lightning", level: 4, damage: "3d10", saveAbility: "dex", dc: 15, enemyIds: [goblin.id],
+    casterCharacterId: druid.id, spell: "Call Lightning", level: 4, damage: "3d10", saveAbility: "dex", dc: 15, enemyIds: [goblin.id],
   });
   world.clearDice();
   await freshTurn(world);
   world.diceLog();
   world.dice(1, 1, 1, 1, 1);
   await world.invoke("aoe_damage", {
-    casterId: druid.id, spell: "Call Lightning", damage: "3d10", saveAbility: "dex", dc: 15, enemyIds: [goblin.id],
+    casterCharacterId: druid.id, spell: "Call Lightning", damage: "3d10", saveAbility: "dex", dc: 15, enemyIds: [goblin.id],
   });
   const log = world.diceLog();
   world.clearDice();
@@ -348,7 +348,7 @@ await test("aoe_damage naming a spell with no caster is refused and deals nothin
 await test("aoe_damage naming a caster who is not a character is refused and deals nothing", async () => {
   const { world, enemies: [goblin] } = await table([caster("wizard", "int", ["Fireball"])]);
   const out = await world.invoke("aoe_damage", {
-    spell: "Fireball", casterId: "nobody", level: 3, damage: "8d6", saveAbility: "dex", dc: 15, enemyIds: [goblin.id],
+    spell: "Fireball", casterCharacterId: "nobody", level: 3, damage: "8d6", saveAbility: "dex", dc: 15, enemyIds: [goblin.id],
   });
   world.clearDice();
   assert.equal(out.ok, false);

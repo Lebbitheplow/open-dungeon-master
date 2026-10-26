@@ -51,7 +51,7 @@ if (pack) {
     world.dice(4, 4, 4, 4, 4, 4, 4, 4, 1, 20);
     const out = await world.invoke("aoe_damage", {
       damage: "1d4", type: "cold", saveAbility: "str", dc: 5, halfOnSave: false,
-      enemyIds: [first.id, second.id], casterId: mage.id, spell: "Fireball",
+      enemyIds: [first.id, second.id], casterCharacterId: mage.id, spell: "Fireball",
     });
     assert.equal(out.ok, true, out.error);
     const log = world.diceLog();
@@ -71,7 +71,7 @@ if (pack) {
     const { world, sheets: [mage], first } = await table([wizard(7)]);
     world.dice(1, 1, 1, 1, 1, 1, 1, 1, 1, 1);
     const out = await world.invoke("aoe_damage", {
-      damage: "8d6", saveAbility: "dex", dc: 15, enemyIds: [first.id], casterId: mage.id, spell: "Fireball", level: 4,
+      damage: "8d6", saveAbility: "dex", dc: 15, enemyIds: [first.id], casterCharacterId: mage.id, spell: "Fireball", level: 4,
     });
     assert.equal(out.ok, true, out.error);
     assert.equal(sided(world.diceLog(), 6).length, 9);

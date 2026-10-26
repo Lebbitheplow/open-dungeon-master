@@ -119,6 +119,23 @@ const FIELD_ALIASES: Record<string, Record<string, string>> = {
   pet_attack: { enemyId: "targetEnemyId" },
   cast_at_enemy: { enemyId: "targetEnemyId" },
   check_notice: { skill: "sense" },
+  aoe_damage: { casterId: "casterCharacterId", ability: "enemyAbility", sculpt: "sparedCharacterIds" },
+  cast_at_player: { ability: "enemyAbility" },
+  move_token: { casterId: "casterCharacterId", tokenName: "token" },
+  set_movement: { tokenName: "token" },
+  party_award: { amount: "xp", delta: "gold", name: "item" },
+  party_stash: { amount: "gold", name: "item" },
+  haggle: { present: "presentCharacterIds" },
+  afflict: { dc: "saveDc" },
+  take_action: { enemyId: "escapingEnemyId" },
+  set_quest: { questId: "quest" },
+  tick_objective: { questId: "quest", objectiveId: "objective" },
+  show_handout: { loreId: "lore" },
+  grant_item: { name: "item" },
+  remove_item: { name: "item" },
+  reveal_item: { name: "item" },
+  use_spell_slot: { name: "spell" },
+  learn_spell: { name: "spell" },
   relationship_beat: { npc: "subject" },
   romance_advance: { npc: "subject" },
   relationship_end: { npc: "subject" },
@@ -153,6 +170,11 @@ export function normalizeArgs(
   if (entry.name === "cast_at_enemy" && !renamed.targetEnemyId && firstOf(renamed.enemyIds)) {
     renamed.targetEnemyId = firstOf(renamed.enemyIds);
     delete renamed.enemyIds;
+  }
+  // An older form named a madness's duration in name.
+  if (entry.name === "afflict" && renamed.kind === "madness" && !renamed.duration && renamed.name) {
+    renamed.duration = renamed.name;
+    delete renamed.name;
   }
   if (entry.name === "cast_at_player" && !renamed.characterId && firstOf(renamed.characterIds)) {
     renamed.characterId = firstOf(renamed.characterIds);

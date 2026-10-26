@@ -44,7 +44,6 @@ const quest = insertQuest({
   title: "The Pilgrim's Burden",
   objectives: ["Find the glass fragment", "Return it to Father Kaelen"],
 });
-const fragmentObjective = quest.objectives[0].id;
 
 setStoryArc(
   campaign.id,
@@ -92,9 +91,9 @@ try {
 
   await (async () => {
     const ticked = await tickWaypointsFromCalls(campaign.id, [
-      { name: "tick_objective", rawArguments: JSON.stringify({ questId: quest.id, objectiveId: fragmentObjective }) },
+      { name: "tick_objective", rawArguments: JSON.stringify({ quest: "the pilgrim's burden", objective: "Find the glass fragment" }) },
     ]);
-    test("a quest objective ticks its waypoint through the quest's own text", () => {
+    test("a quest objective named by its title and text, as GAME STATE shows them, ticks its waypoint through the quest's own text", () => {
       assert.deepEqual(ticked, ["Find the glass fragment"]);
     });
   })();

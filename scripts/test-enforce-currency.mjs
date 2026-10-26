@@ -192,7 +192,7 @@ await test("a hoard split by party_award reaches the sheets whole, whatever the 
       heroes.forEach((entry) => purse(entry.id, 0, 0));
       const awarded = await world.invoke("party_award", {
         characterIds: sharers.map((entry) => entry.id),
-        delta: hoard,
+        gold: hoard,
         reason: "test",
       });
       assert.equal(awarded.ok, true, awarded.error);
@@ -207,7 +207,7 @@ await test("a hoard split by party_award reaches the sheets whole, whatever the 
 
 await test("an item in the spoils goes to one character, once", async () => {
   heroes.forEach((entry) => world.patch(entry.id, { equipment: [] }));
-  await world.invoke("party_award", { characterIds: heroes.map((entry) => entry.id), name: "Silver Chalice", qty: 1, reason: "test" });
+  await world.invoke("party_award", { characterIds: heroes.map((entry) => entry.id), item: "Silver Chalice", qty: 1, reason: "test" });
   const holders = heroes.filter((entry) => world.sheet(entry.id).equipment.some((item) => item.name === "Silver Chalice"));
   assert.deepEqual(holders.map((entry) => entry.id), [hero.id]);
 });
@@ -215,19 +215,19 @@ await test("an item in the spoils goes to one character, once", async () => {
 await test("a share a character cannot take is reported, never counted as awarded", async () => {
   const before = world.sheet(hero.id);
   world.patch(hero.id, { equipment: [], abilities: { ...before.abilities, str: 1 } });
-  const out = await world.invoke("party_award", { characterIds: [hero.id], amount: 10, name: "Plate Armor", qty: 1, reason: "test" });
+  const out = await world.invoke("party_award", { characterIds: [hero.id], xp: 10, item: "Plate Armor", qty: 1, reason: "test" });
   assert.equal(out.ok, true, out.error);
   assert.equal(out.result.refused.length, 1, JSON.stringify(out.result));
   assert.ok(!out.result.awarded.includes("Plate Armor"), out.result.awarded);
   assert.ok(!world.sheet(hero.id).equipment.some((item) => item.name === "Plate Armor"));
-  const nothing = await world.invoke("party_award", { characterIds: [hero.id], name: "Plate Armor", qty: 1, reason: "test" });
+  const nothing = await world.invoke("party_award", { characterIds: [hero.id], item: "Plate Armor", qty: 1, reason: "test" });
   assert.equal(nothing.ok, false);
   world.patch(hero.id, { abilities: before.abilities });
 });
 
 await test("an award of nothing to anyone is refused", async () => {
   assert.equal((await world.invoke("party_award", { characterIds: [hero.id], reason: "test" })).ok, false);
-  assert.equal((await world.invoke("party_award", { characterIds: ["nobody"], delta: 50, reason: "test" })).ok, false);
+  assert.equal((await world.invoke("party_award", { characterIds: ["nobody"], gold: 50, reason: "test" })).ok, false);
 });
 
 // ---- the common purse and the shared pack ----

@@ -32,7 +32,7 @@ const carried = (name) => getSheetById(hero.id).equipment.find((item) => item.na
 
 await test("A thing no table knows by name, sent with no tags, is asked what it is, at every table, and nothing is granted.", async () => {
   for (const name of ["Pozione di guarigione", "Potion de soins", "Poción de curación", "Heiltrank", "Glowing vial"]) {
-    const out = await ai("grant_item", { characterId: hero.id, name, reason: "the chest" }, hero);
+    const out = await ai("grant_item", { characterId: hero.id, item: name, reason: "the chest" }, hero);
     assert.equal(out.retry, true, `${name}: granted without asking`);
     assert.match(out.error, /send it again with srdName/);
     assert.equal(carried(name), undefined);
@@ -40,42 +40,42 @@ await test("A thing no table knows by name, sent with no tags, is asked what it 
 });
 
 await test("Told it heals, the potion is asked which healing potion it is, and granted once srdName names it; tags [] grants a thing that is none of them.", async () => {
-  const asked = await ai("grant_item", { characterId: hero.id, name: "Pozione di guarigione", tags: ["consumable", "potion", "healing_potion"], reason: "the chest" }, hero);
+  const asked = await ai("grant_item", { characterId: hero.id, item: "Pozione di guarigione", tags: ["consumable", "potion", "healing_potion"], reason: "the chest" }, hero);
   assert.equal(asked.retry, true, "a healing potion of no kind was granted");
   assert.match(asked.error, /srdName naming the potion's kind/);
-  const granted = await ai("grant_item", { characterId: hero.id, name: "Pozione di guarigione", srdName: "Potion of Healing", tags: ["consumable", "potion", "healing_potion"], reason: "the chest" }, hero);
+  const granted = await ai("grant_item", { characterId: hero.id, item: "Pozione di guarigione", srdName: "Potion of Healing", tags: ["consumable", "potion", "healing_potion"], reason: "the chest" }, hero);
   assert.equal(granted.ok, true, granted.error);
   assert.deepEqual(carried("Pozione di guarigione").tags, ["consumable", "potion", "healing_potion"]);
-  const letter = await ai("grant_item", { characterId: hero.id, name: "Lettera sigillata", tags: [], reason: "the courier" }, hero);
+  const letter = await ai("grant_item", { characterId: hero.id, item: "Lettera sigillata", tags: [], reason: "the courier" }, hero);
   assert.equal(letter.ok, true, letter.error);
 });
 
 await test("A spell scroll that names no spell is asked for it, whatever it is called; named, it is granted.", async () => {
-  const english = await ai("grant_item", { characterId: hero.id, name: "Spell Scroll of Cure Wounds", reason: "the chest" }, hero);
+  const english = await ai("grant_item", { characterId: hero.id, item: "Spell Scroll of Cure Wounds", reason: "the chest" }, hero);
   assert.equal(english.retry, true, "the English scroll was granted without its spell");
   assert.match(english.error, /names its spell in spell/);
-  const tagged = await ai("grant_item", { characterId: hero.id, name: "Pergamena di Cura ferite", tags: ["consumable", "scroll"], reason: "the chest" }, hero);
+  const tagged = await ai("grant_item", { characterId: hero.id, item: "Pergamena di Cura ferite", tags: ["consumable", "scroll"], reason: "the chest" }, hero);
   assert.equal(tagged.retry, true, "the tagged scroll was granted without its spell");
   assert.match(tagged.error, /send it again with the spell/);
-  const named = await ai("grant_item", { characterId: hero.id, name: "Spell Scroll of Cure Wounds", tags: ["consumable", "scroll"], spell: "Cure Wounds", reason: "the chest" }, hero);
+  const named = await ai("grant_item", { characterId: hero.id, item: "Spell Scroll of Cure Wounds", tags: ["consumable", "scroll"], spell: "Cure Wounds", reason: "the chest" }, hero);
   assert.equal(named.ok, true, named.error);
   assert.equal(carried("Spell Scroll of Cure Wounds").spell, "Cure Wounds");
-  const unread = await ai("grant_item", { characterId: hero.id, name: "Rotolo sigillato", unidentified: true, reason: "the chest" }, hero);
+  const unread = await ai("grant_item", { characterId: hero.id, item: "Rotolo sigillato", unidentified: true, reason: "the chest" }, hero);
   assert.equal(unread.ok, true, unread.error);
 });
 
 await test("An SRD item by its English name is never asked, and the console is never asked.", async () => {
   for (const name of ["Potion of Healing", "Longsword", "Rope, hempen (50 feet)"]) {
-    const out = await ai("grant_item", { characterId: hero.id, name, reason: "the chest" }, hero);
+    const out = await ai("grant_item", { characterId: hero.id, item: name, reason: "the chest" }, hero);
     assert.equal(out.ok, true, `${name}: ${out.error}`);
   }
-  const console = await world.invoke("grant_item", { characterId: hero.id, name: "Strano amuleto", reason: "the console" });
+  const console = await world.invoke("grant_item", { characterId: hero.id, item: "Strano amuleto", reason: "the console" });
   assert.equal(console.ok, true, console.error);
 });
 
 await test("Named as the SRD item it is, a potion in the table's language works as that item: the Elixir of Health cures the poisoned.", async () => {
   world.patch(hero.id, { equipment: [], conditions: ["poisoned"], conditionMeta: {} });
-  const granted = await ai("grant_item", { characterId: hero.id, name: "Elisir di salute", srdName: "elixir of health", reason: "the chest" }, hero);
+  const granted = await ai("grant_item", { characterId: hero.id, item: "Elisir di salute", srdName: "elixir of health", reason: "the chest" }, hero);
   assert.equal(granted.ok, true, granted.error);
   assert.equal(carried("Elisir di salute").srdName, "Elixir of Health", "the row's own spelling is stored");
   const used = await world.invoke("use_item", { characterId: hero.id, item: "Elisir di salute" });
@@ -85,8 +85,8 @@ await test("Named as the SRD item it is, a potion in the table's language works 
 
 await test("An srdName no list holds is asked again, from the model and the console alike, and nothing is granted.", async () => {
   for (const out of [
-    await ai("grant_item", { characterId: hero.id, name: "Elisir strano", srdName: "Elixir of Nowhere", reason: "the chest" }, hero),
-    await world.invoke("grant_item", { characterId: hero.id, name: "Elisir strano", srdName: "Elixir of Nowhere", reason: "the console" }),
+    await ai("grant_item", { characterId: hero.id, item: "Elisir strano", srdName: "Elixir of Nowhere", reason: "the chest" }, hero),
+    await world.invoke("grant_item", { characterId: hero.id, item: "Elisir strano", srdName: "Elixir of Nowhere", reason: "the console" }),
   ]) {
     assert.equal(out.retry, true, "an unknown srdName was stored");
     assert.match(out.error, /no SRD or pack item is called "Elixir of Nowhere"/);
@@ -96,18 +96,18 @@ await test("An srdName no list holds is asked again, from the model and the cons
 
 await test("An srdName that carries a bonus is asked again, with the bonus kept in the name, and nothing is granted.", async () => {
   for (const srdName of ["Longsword +1", "+2 Plate", "Weapon, +1", "Shield +3"]) {
-    const out = await ai("grant_item", { characterId: hero.id, name: "Lama del destino", srdName, reason: "the chest" }, hero);
+    const out = await ai("grant_item", { characterId: hero.id, item: "Lama del destino", srdName, reason: "the chest" }, hero);
     assert.equal(out.retry, true, `${srdName} was stored`);
     assert.match(out.error, /carries a bonus, which belongs in name/, srdName);
   }
   assert.equal(carried("Lama del destino"), undefined);
-  const granted = await ai("grant_item", { characterId: hero.id, name: "Lama del destino +1", srdName: "Longsword", reason: "the chest" }, hero);
+  const granted = await ai("grant_item", { characterId: hero.id, item: "Lama del destino +1", srdName: "Longsword", reason: "the chest" }, hero);
   assert.equal(granted.ok, true, granted.error);
   assert.equal(carried("Lama del destino +1").srdName, "Longsword");
 });
 
 await test("A spell named for a thing no row knows makes it a spell scroll, with no question asked.", async () => {
-  const out = await ai("grant_item", { characterId: hero.id, name: "Rotolo di Dardo incantato", spell: "Magic Missile", reason: "the chest" }, hero);
+  const out = await ai("grant_item", { characterId: hero.id, item: "Rotolo di Dardo incantato", spell: "Magic Missile", reason: "the chest" }, hero);
   assert.equal(out.ok, true, out.error);
   assert.deepEqual(carried("Rotolo di Dardo incantato").tags, ["consumable", "scroll"]);
   assert.equal(carried("Rotolo di Dardo incantato").spell, "Magic Missile");
@@ -121,7 +121,7 @@ await test("What an item is goes into the shared pack and comes back out with it
     { name: "a sealed vial", qty: 1, identified: false },
   ] });
   for (const name of ["Pozione di guarigione", "Elisir di salute", "Rubino", "a sealed vial"]) {
-    const stowed = await world.invoke("party_stash", { do: "stow", characterId: hero.id, name });
+    const stowed = await world.invoke("party_stash", { do: "stow", characterId: hero.id, item: name });
     assert.equal(stowed.ok, true, `${name}: ${stowed.error}`);
   }
   const pack = Object.fromEntries(getParty(world.campaignId).inventory.map((item) => [item.name, item]));
@@ -130,7 +130,7 @@ await test("What an item is goes into the shared pack and comes back out with it
   assert.equal(pack["Rubino"].worth, 1000);
   assert.equal(pack["a sealed vial"].identified, false);
   for (const name of ["Pozione di guarigione", "Elisir di salute", "Rubino", "a sealed vial"]) {
-    const taken = await world.invoke("party_stash", { do: "take", characterId: hero.id, name });
+    const taken = await world.invoke("party_stash", { do: "take", characterId: hero.id, item: name });
     assert.equal(taken.ok, true, `${name}: ${taken.error}`);
   }
   assert.deepEqual(carried("Pozione di guarigione").tags, ["consumable", "potion", "healing_potion"]);

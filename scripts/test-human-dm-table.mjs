@@ -64,7 +64,7 @@ await test("an AI turn waiting on a roll closes when a person holds the seat, wi
 
 await test("the console's item for a player character is an offer under inventoryApprovals", async () => {
   const before = world.sheet(hero.id).equipment.length;
-  const out = await world.invoke("grant_item", { characterId: hero.id, name: "Rope", reason: "found" });
+  const out = await world.invoke("grant_item", { characterId: hero.id, item: "Rope", reason: "found" });
   assert.equal(out.ok, true, out.error);
   assert.equal(world.sheet(hero.id).equipment.length, before, "the item landed without the player's say");
 });

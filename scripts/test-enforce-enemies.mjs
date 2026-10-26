@@ -378,7 +378,7 @@ await test("legendary actions wait while the creature's own turn is in the model
   kit.saveEncounter(encounter);
   const out = await world.invoke("legendary_action", { enemyId: enemy.id, action: "Detect" });
   assert.equal(out.ok, false);
-  assert.match(out.error, /Take its turn first: enemy_attack, or cast_at_player \/ aoe_damage with casterEnemyId for an ability or spell\./);
+  assert.match(out.error, /Take its turn first: enemy_attack, or cast_at_player \/ aoe_damage with casterEnemyId and enemyAbility or spell\./);
   assert.equal(pool(enemy).actions, 3, "nothing was spent");
 });
 

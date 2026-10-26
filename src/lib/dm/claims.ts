@@ -123,8 +123,8 @@ export function ruledFor(conversation: readonly GuardMessage[], sheet: Pick<Char
     try {
       const args = JSON.parse(exchange.arguments || "{}") as Record<string, unknown>;
       // move_token names its walker by name or id.
-      const walker = typeof args.tokenName === "string" ? args.tokenName : "";
-      return args.characterId === sheet.id || args.casterId === sheet.id || walker === sheet.id || (walker !== "" && textKey(walker) === textKey(sheet.name));
+      const walker = typeof args.token === "string" ? args.token : "";
+      return args.characterId === sheet.id || args.casterId === sheet.id || args.casterCharacterId === sheet.id || args.healerId === sheet.id || walker === sheet.id || (walker !== "" && textKey(walker) === textKey(sheet.name));
     } catch {
       return false;
     }

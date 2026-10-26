@@ -79,7 +79,7 @@ await test("Freedom of Movement: a spell cannot restrain the creature (Entangle'
   const cast = await world.invoke("cast_buff", { characterId: cleric.id, spell: "Freedom of Movement", level: 4, targetCharacterIds: [fighter.id] });
   assert.equal(cast.ok, true, cast.error);
   world.dice(1, 1, 1);
-  await world.invoke("aoe_damage", { casterId: druid.id, spell: "Entangle", characterIds: [fighter.id], saveAbility: "str", dc: 15, level: 1 });
+  await world.invoke("aoe_damage", { casterCharacterId: druid.id, spell: "Entangle", characterIds: [fighter.id], saveAbility: "str", dc: 15, level: 1 });
   world.clearDice();
   assert.ok(!has(world.sheet(fighter.id).conditions, "restrained"), "Entangle restrained a creature under Freedom of Movement");
 });
@@ -169,7 +169,7 @@ await test("Maze: no save; the creature is banished (no attack reaches it) and e
   const swing = await world.invoke("pc_attack", { characterId: fighter.id, targetEnemyId: goblin.id });
   assert.equal(swing.ok, false, "an attack reached a creature in the maze");
   world.dice(19);
-  const tried = await world.invoke("take_action", { action: "escape", enemyId: goblin.id });
+  const tried = await world.invoke("take_action", { action: "escape", escapingEnemyId: goblin.id });
   world.clearDice();
   assert.equal(tried.ok, true, tried.error);
   assert.ok(has(enemyOf(world, goblin.id).conditions, "mazed"), "19 beat DC 20");
@@ -253,7 +253,7 @@ await test("Calm Emotions: a humanoid that fails its CHA save is calmed and make
 await test("Fear: a creature frightened by the spell must Dash away; it makes no attacks while the fear lasts.", async () => {
   const { world, sheets: [wizard, fighter], enemies: [goblin] } = await table([caster("wizard", "int", ["Fear"]), FIGHTER]);
   world.dice(1);
-  await world.invoke("aoe_damage", { casterId: wizard.id, spell: "Fear", enemyIds: [goblin.id], saveAbility: "wis", dc: 15, level: 3 });
+  await world.invoke("aoe_damage", { casterCharacterId: wizard.id, spell: "Fear", enemyIds: [goblin.id], saveAbility: "wis", dc: 15, level: 3 });
   world.clearDice();
   assert.ok(has(enemyOf(world, goblin.id).conditions, "frightened"));
   const swing = await world.invoke("enemy_attack", { enemyId: goblin.id, targetCharacterId: fighter.id });
@@ -279,7 +279,7 @@ await test("Divine Word: a fiend (or celestial, elemental, fey) that fails its s
   const { world, sheets: [cleric, fighter], enemies: [imp, goblin] } = await table([caster("cleric", "wis", ["Divine Word"], [], 13), FIGHTER], 2);
   encountersDb().prepare("UPDATE encounter_enemies SET stat_json = json_set(stat_json, '$.type', 'fiend') WHERE id = ?").run(imp.id);
   world.dice(1, 1);
-  const out = await world.invoke("aoe_damage", { casterId: cleric.id, spell: "Divine Word", enemyIds: [imp.id, goblin.id], saveAbility: "cha", dc: 17, level: 7 });
+  const out = await world.invoke("aoe_damage", { casterCharacterId: cleric.id, spell: "Divine Word", enemyIds: [imp.id, goblin.id], saveAbility: "cha", dc: 17, level: 7 });
   world.clearDice();
   assert.equal(out.ok, true, out.error);
   assert.equal(enemyOf(world, imp.id).status, "fled", "the fiend stayed on this plane");
@@ -291,7 +291,7 @@ await test("Prismatic Spray: each creature rolls its own ray; the red ray deals 
   const { world, sheets: [wizard], enemies: [goblin] } = await table([caster("wizard", "int", ["Prismatic Spray"], [], 13)]);
   const before = enemyOf(world, goblin.id).currentHp;
   world.dice(1, 1, ...new Array(10).fill(2));
-  const out = await world.invoke("aoe_damage", { casterId: wizard.id, spell: "Prismatic Spray", enemyIds: [goblin.id], saveAbility: "dex", dc: 17, level: 7 });
+  const out = await world.invoke("aoe_damage", { casterCharacterId: wizard.id, spell: "Prismatic Spray", enemyIds: [goblin.id], saveAbility: "dex", dc: 17, level: 7 });
   world.clearDice();
   assert.equal(out.ok, true, out.error);
   assert.equal(enemyOf(world, goblin.id).currentHp, before - 20);
@@ -300,7 +300,7 @@ await test("Prismatic Spray: each creature rolls its own ray; the red ray deals 
 await test("Prismatic Spray's indigo ray restrains, and three failed CON saves at the end of the creature's turns turn it to stone.", async () => {
   const { world, sheets: [wizard], enemies: [goblin] } = await table([caster("wizard", "int", ["Prismatic Spray"], [], 13)]);
   world.dice(1, 6);
-  await world.invoke("aoe_damage", { casterId: wizard.id, spell: "Prismatic Spray", enemyIds: [goblin.id], saveAbility: "dex", dc: 17, level: 7 });
+  await world.invoke("aoe_damage", { casterCharacterId: wizard.id, spell: "Prismatic Spray", enemyIds: [goblin.id], saveAbility: "dex", dc: 17, level: 7 });
   world.clearDice();
   assert.ok(has(enemyOf(world, goblin.id).conditions, "restrained"), "the indigo ray did not restrain");
   roundTurn(world);
@@ -315,7 +315,7 @@ await test("Prismatic Spray's indigo ray restrains, and three failed CON saves a
 await test("Prismatic Spray's violet ray blinds; a failed WIS save at the start of the caster's next turn sends the creature to another plane.", async () => {
   const { world, sheets: [wizard], enemies: [goblin] } = await table([caster("wizard", "int", ["Prismatic Spray"], [], 13)]);
   world.dice(1, 7);
-  await world.invoke("aoe_damage", { casterId: wizard.id, spell: "Prismatic Spray", enemyIds: [goblin.id], saveAbility: "dex", dc: 17, level: 7 });
+  await world.invoke("aoe_damage", { casterCharacterId: wizard.id, spell: "Prismatic Spray", enemyIds: [goblin.id], saveAbility: "dex", dc: 17, level: 7 });
   world.clearDice();
   assert.ok(has(enemyOf(world, goblin.id).conditions, "blinded"), "the violet ray did not blind");
   world.dice(1, 1, 1);
@@ -412,7 +412,7 @@ await test("Irresistible Dance: the dancer rolls no free save as the round ends;
   await stride(world, goblin.id, 12, 4);
   assert.equal(tokenOf(world, goblin.id).x, 8, "the dancer left its space");
   world.dice(20);
-  const tried = await world.invoke("take_action", { action: "escape", enemyId: goblin.id });
+  const tried = await world.invoke("take_action", { action: "escape", escapingEnemyId: goblin.id });
   world.clearDice();
   assert.equal(tried.ok, true, tried.error);
   assert.ok(!has(enemyOf(world, goblin.id).conditions, "dancing"), "its action bought no save");

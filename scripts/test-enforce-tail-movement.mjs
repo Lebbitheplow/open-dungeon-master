@@ -124,7 +124,7 @@ await test("A Large creature squeezes down a corridor one square wide at double 
   }
   kit.openField(walls);
   kit.place(enemy.id, 0, 4);
-  const out = await world.invoke("move_token", { tokenName: enemy.id, x: 3, y: 2 });
+  const out = await world.invoke("move_token", { token: enemy.id, x: 3, y: 2 });
   assert.equal(out.ok, true, out.error);
   assert.deepEqual(at(enemy.id), [3, 2]);
   assert.ok(kit.enemy(enemy.id).conditions.includes("squeezing"), "no squeezing condition");

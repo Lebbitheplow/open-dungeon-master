@@ -356,7 +356,7 @@ await test("A passive check takes -5 when the character would have disadvantage 
 
 await test("The DM console's passive check uses the sense the DM picked.", async () => {
   reset();
-  const out = await world.invoke("check_notice", { dc: 10, skill: "investigation", characterIds: [scout.id] });
+  const out = await world.invoke("check_notice", { dc: 10, sense: "investigation", characterIds: [scout.id] });
   assert.equal(out.ok, true, out.error);
   assert.equal(out.result.sense, "investigation", `the check was made with passive ${out.result.sense}`);
 });

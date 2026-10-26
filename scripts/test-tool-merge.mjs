@@ -241,14 +241,14 @@ await test("move_token teleports with teleport, and teleport_token still runs", 
     return { x: index % map.width, y: Math.floor(index / map.width) };
   };
   const to = open();
-  const moved = ok(await world.invoke("move_token", { tokenName: brom.id, x: to.x, y: to.y, teleport: true }));
+  const moved = ok(await world.invoke("move_token", { token: brom.id, x: to.x, y: to.y, teleport: true }));
   assert.match(moved.note, /No movement was spent/);
   assert.deepEqual([token().x, token().y], [to.x, to.y]);
   const next = open();
   ok(await world.invoke("teleport_token", { tokenName: brom.id, x: next.x, y: next.y }));
   assert.deepEqual([token().x, token().y], [next.x, next.y]);
   ai.fresh();
-  const unpaid = await ai.invoke("move_token", { tokenName: brom.id, x: to.x, y: to.y, teleport: true });
+  const unpaid = await ai.invoke("move_token", { token: brom.id, x: to.x, y: to.y, teleport: true });
   assert.equal(unpaid.ok, false, "the AI's teleport is a spell or a hazard, as before");
 });
 
@@ -256,10 +256,10 @@ await test("move_token teleports with teleport, and teleport_token still runs", 
 
 await test("party_award is XP for one character, and reports a level-up however the award is made up", async () => {
   const novice = world.addHero({ name: "Novice", level: 1, xp: 0 });
-  const alone = ok(await world.invoke("party_award", { characterIds: [novice.id], amount: 300, reason: "The bridge troll" }));
+  const alone = ok(await world.invoke("party_award", { characterIds: [novice.id], xp: 300, reason: "The bridge troll" }));
   assert.deepEqual(alone.levelUpAvailable, ["Novice"]);
   const second = world.addHero({ name: "Second", level: 1, xp: 0 });
-  const spoils = ok(await world.invoke("party_award", { characterIds: [second.id], amount: 300, delta: 10, reason: "A hoard" }));
+  const spoils = ok(await world.invoke("party_award", { characterIds: [second.id], xp: 300, gold: 10, reason: "A hoard" }));
   assert.deepEqual(spoils.levelUpAvailable, ["Second"], "XP with a purse beside it still says who can level up");
   assert.equal(world.sheet(second.id).gold, 10);
   const third = world.addHero({ name: "Third", level: 1, xp: 0 });
@@ -351,12 +351,13 @@ await test("each retired name maps onto its merged tool and routes back to its o
   assert.equal(route("split_damage", { amount: 4, targets: [{ enemyId: "e", share: "half" }] }).name, "split_damage");
   assert.deepEqual(route("award_xp", { characterIds: ["c"], amount: 50 }), { name: "award_xp", args: { characterIds: ["c"], amount: 50 } });
   assert.equal(route("teleport_token", { tokenName: "t", x: 1, y: 2 }).name, "teleport_token");
+  assert.deepEqual(mergedCall("teleport_token", { tokenName: "t", x: 1, y: 2, casterId: "c" }).args, { x: 1, y: 2, teleport: true, token: "t", casterCharacterId: "c" });
   // The merged tools reach their first handlers when no sibling's argument is sent.
   assert.equal(engineCall("apply_damage", { characterId: "c", amount: 3 }).name, "apply_damage");
   assert.equal(engineCall("set_condition", { characterId: "c", condition: "prone" }).name, "set_condition");
-  assert.equal(engineCall("move_token", { tokenName: "t", x: 1, y: 1, forced: true }).name, "move_token");
-  assert.equal(engineCall("move_token", { tokenName: "t", x: 1, y: 1, spell: "Misty Step", casterId: "c" }).name, "teleport_token");
-  assert.equal(engineCall("party_award", { characterIds: ["c"], amount: 50, delta: 5 }).name, "party_award");
+  assert.equal(engineCall("move_token", { token: "t", x: 1, y: 1, forced: true }).name, "move_token");
+  assert.equal(engineCall("move_token", { token: "t", x: 1, y: 1, spell: "Misty Step", casterCharacterId: "c" }).name, "teleport_token");
+  assert.equal(engineCall("party_award", { characterIds: ["c"], xp: 50, gold: 5 }).name, "party_award");
   // What a description promises reaches the handler on every path.
   assert.deepEqual(engineCall("apply_damage", { amount: 4, targets: [{ enemyId: "e" }], magical: true, source: "hazard" }).args, { amount: 4, targets: [{ enemyId: "e" }], magical: true, source: "hazard" });
   assert.equal(engineCall("set_condition", { enemyId: "e", condition: "charmed", saveAbility: "wis", saveDc: 13, magical: true }).args.magical, true);

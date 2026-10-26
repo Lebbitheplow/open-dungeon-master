@@ -87,7 +87,7 @@ test("tool calls become typed signals with the name the DM used", () => {
   assert.deepEqual(signalFromToolCall("update_location", '{"name":"Glass Plain"}'), { kind: "place", names: ["Glass Plain"] });
   assert.deepEqual(signalFromToolCall("set_npc", '{"name":"Brisca Hale"}'), { kind: "npc", names: ["Brisca Hale"] });
   assert.deepEqual(signalFromToolCall("social_check", '{"npc":"Brisca","approach":"persuade"}'), { kind: "npc", names: ["Brisca"] });
-  assert.deepEqual(signalFromToolCall("grant_item", '{"name":"glass fragment"}'), { kind: "item", names: ["glass fragment"] });
+  assert.deepEqual(signalFromToolCall("grant_item", '{"item":"glass fragment"}'), { kind: "item", names: ["glass fragment"] });
   assert.deepEqual(signalFromToolCall("buy_item", '{"item":"rope"}'), { kind: "item", names: ["rope"] });
   assert.deepEqual(signalFromToolCall("tick_objective", "{}", { objectiveText: "Find the fragment" }), { kind: "objective", names: ["Find the fragment"] });
   assert.deepEqual(signalFromToolCall("end_encounter", "{}", { enemyNames: ["Salt-Glass Husk"] }), { kind: "fight", names: ["Salt-Glass Husk"] });

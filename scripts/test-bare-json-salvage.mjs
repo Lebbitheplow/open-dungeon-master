@@ -90,12 +90,12 @@ const catalogue = dmTurnToolCatalogue(getCampaignById(probe.id), false, false);
   assert.equal(either.calls.length, 0);
   // A teleport is move_token's since teleport_token folded into it (issue
   // #471), so a token and a square name one tool now.
-  const move = salvageJsonToolCalls('The bandit circles. {"tokenName":"Bandit 1","x":5,"y":8}', catalogue);
+  const move = salvageJsonToolCalls('The bandit circles. {"token":"Bandit 1","x":5,"y":8}', catalogue);
   assert.deepEqual(move.calls.map((call) => call.name), ["move_token"]);
   assert.equal(move.text, "The bandit circles.");
-  const named = salvageJsonToolCalls('{"name":"move_token","arguments":"{\\"tokenName\\":\\"Avery\\",\\"x\\":2,\\"y\\":3}"}', catalogue);
+  const named = salvageJsonToolCalls('{"name":"move_token","arguments":"{\\"token\\":\\"Avery\\",\\"x\\":2,\\"y\\":3}"}', catalogue);
   assert.deepEqual(named.calls.map((call) => call.name), ["move_token"]);
-  assert.deepEqual(JSON.parse(named.calls[0].rawArguments), { tokenName: "Avery", x: 2, y: 3 });
+  assert.deepEqual(JSON.parse(named.calls[0].rawArguments), { token: "Avery", x: 2, y: 3 });
   // A key no tool takes: cut, never run.
   const stray = salvageJsonToolCalls('The fog rolls in. {"mood":"grim","weatherLevel":3}', catalogue);
   assert.equal(stray.text, "The fog rolls in.");

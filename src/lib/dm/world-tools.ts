@@ -217,7 +217,7 @@ export const worldTools: ToolDef[] = [
             maximum: 3,
             description: "0 none, 1 light, 2 steady, 3 heavy. Default: from the sky.",
           },
-          reason: { type: "string" },
+          reason: { type: "string", description: "Short in-fiction cause." },
         },
         required: ["sky"],
       },

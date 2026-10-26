@@ -45,7 +45,7 @@ if (world.hasPack) {
 for (const name of ["Ruby", "Rubino", "Rubis", "Rubí", "Rubin"]) {
   await test(`A gem granted with its worth sells at its full value: a ${name} worth 1000 gp fetches 1000 gp.`, async () => {
     carry([]);
-    const granted = await world.invoke("grant_item", { characterId: trader.id, name, tags: ["gem"], worth: 1000, reason: "a dragon's hoard" });
+    const granted = await world.invoke("grant_item", { characterId: trader.id, item: name, tags: ["gem"], worth: 1000, reason: "a dragon's hoard" });
     assert.equal(granted.ok, true, granted.error);
     assert.deepEqual(world.sheet(trader.id).equipment, [{ name, qty: 1, tags: ["gem"], worth: 1000 }]);
     const sold = await world.invoke("purchase", { characterId: trader.id, item: name, price: 5, qty: 1, action: "sell" });
@@ -67,10 +67,10 @@ await test("Anything else given a worth sells for half of it, and an unidentifie
   assert.equal(sold.ok, true, sold.error);
   assert.equal(purse(), 200);
   carry([]);
-  const hidden = await world.invoke("grant_item", { characterId: trader.id, name: "a red stone", unidentified: true, tags: ["gem"], worth: 1000, reason: "found" });
+  const hidden = await world.invoke("grant_item", { characterId: trader.id, item: "a red stone", unidentified: true, tags: ["gem"], worth: 1000, reason: "found" });
   assert.equal(hidden.ok, true, hidden.error);
   assert.deepEqual(world.sheet(trader.id).equipment, [{ name: "a red stone", qty: 1, identified: false }]);
-  const revealed = await world.invoke("reveal_item", { characterId: trader.id, name: "a red stone", revealedName: "Ruby", tags: ["gem"], worth: 1000, reason: "appraised" });
+  const revealed = await world.invoke("reveal_item", { characterId: trader.id, item: "a red stone", revealedName: "Ruby", tags: ["gem"], worth: 1000, reason: "appraised" });
   assert.equal(revealed.ok, true, revealed.error);
   assert.deepEqual(world.sheet(trader.id).equipment, [{ name: "Ruby", qty: 1, tags: ["gem"], worth: 1000 }]);
 });
@@ -85,7 +85,7 @@ await test("A thing bought at the price named, with no price of its own, keeps t
 if (world.hasPack) {
   await test("A worth given to a thing the pack prices is refused: the pack's price is its worth.", async () => {
     carry([]);
-    const granted = await world.invoke("grant_item", { characterId: trader.id, name: "Longsword", worth: 500, reason: "loot" });
+    const granted = await world.invoke("grant_item", { characterId: trader.id, item: "Longsword", worth: 500, reason: "loot" });
     assert.equal(granted.retry, true, "a longsword was given a worth of 500 gp");
     assert.deepEqual(world.sheet(trader.id).equipment, []);
   });
@@ -107,17 +107,17 @@ if (world.hasPack) {
 
   await test("A magic item given or revealed takes its rarity's value, not a worth the model names: a gifted Potion of Climbing sells for half its 50 gp.", async () => {
     carry([]);
-    const priced = await world.invoke("grant_item", { characterId: trader.id, name: "Potion of Climbing", worth: 900, reason: "a grateful witch" });
+    const priced = await world.invoke("grant_item", { characterId: trader.id, item: "Potion of Climbing", worth: 900, reason: "a grateful witch" });
     assert.equal(priced.retry, true, "a potion of climbing was given a worth of 900 gp");
     assert.deepEqual(world.sheet(trader.id).equipment, []);
-    const granted = await world.invoke("grant_item", { characterId: trader.id, name: "Potion of Climbing", reason: "a grateful witch" });
+    const granted = await world.invoke("grant_item", { characterId: trader.id, item: "Potion of Climbing", reason: "a grateful witch" });
     assert.equal(granted.ok, true, granted.error);
     const sold = await world.invoke("purchase", { characterId: trader.id, item: "Potion of Climbing", price: 900, qty: 1, action: "sell" });
     assert.equal(sold.ok, true, sold.error);
     assert.equal(purse(), 2500);
-    const hidden = await world.invoke("grant_item", { characterId: trader.id, name: "a grey cloak", unidentified: true, reason: "found" });
+    const hidden = await world.invoke("grant_item", { characterId: trader.id, item: "a grey cloak", unidentified: true, reason: "found" });
     assert.equal(hidden.ok, true, hidden.error);
-    const revealed = await world.invoke("reveal_item", { characterId: trader.id, name: "a grey cloak", revealedName: "Cloak of Protection", worth: 9000, reason: "identify" });
+    const revealed = await world.invoke("reveal_item", { characterId: trader.id, item: "a grey cloak", revealedName: "Cloak of Protection", worth: 9000, reason: "identify" });
     assert.equal(revealed.retry, true, "a cloak of protection was revealed with a worth of 9,000 gp");
   });
 
@@ -141,7 +141,7 @@ if (world.hasPack) {
     assert.equal(tv.listPriceCp({ name: "Shield +2" }), 500000, "a +2 shield is rare");
     assert.equal(tv.listPriceCp({ name: "Longsword" }), 1500, "a plain longsword keeps its list price");
     carry([]);
-    const granted = await world.invoke("grant_item", { characterId: trader.id, name: "Longsword +1", worth: 2000, reason: "a knight's bequest" });
+    const granted = await world.invoke("grant_item", { characterId: trader.id, item: "Longsword +1", worth: 2000, reason: "a knight's bequest" });
     assert.equal(granted.retry, true, "a +1 longsword was given a worth of 2,000 gp");
   });
 }

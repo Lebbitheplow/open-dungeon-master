@@ -26,7 +26,7 @@ if (probe === "fireball") {
   world.diceLog();
   world.dice(20, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1);
   const cast = await world.invoke("aoe_damage", {
-    casterId: wizard.id, spell: "Fireball", level: 3, damage: "20d6", saveAbility: "wis", dc: 25, enemyIds: [goblin.id],
+    casterCharacterId: wizard.id, spell: "Fireball", level: 3, damage: "20d6", saveAbility: "wis", dc: 25, enemyIds: [goblin.id],
   });
   const log = world.diceLog();
   world.clearDice();

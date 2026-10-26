@@ -406,8 +406,8 @@ await test("A dragonborn's Breath Weapon deals its ancestry's damage type agains
       });
       const spent = await breathers.invoke("use_resource", { characterId: hero.id, resource: "Breath Weapon" });
       assert.equal(spent.ok, true, spent.error);
-      assert.equal(spent.result.dice, dice, `${ancestryId} at ${level}`);
-      assert.equal(spent.result.damageType, damageType, `${ancestryId} at ${level}`);
+      assert.equal(spent.result.damage, dice, `${ancestryId} at ${level}`);
+      assert.equal(spent.result.type, damageType, `${ancestryId} at ${level}`);
       assert.equal(spent.result.saveAbility, save, `${ancestryId} at ${level}`);
       assert.equal(spent.result.dc, 8 + 2 + proficiency, `${ancestryId} at ${level}`);
     }

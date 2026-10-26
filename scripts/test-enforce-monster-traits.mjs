@@ -139,13 +139,13 @@ await test("Nimble Escape: a goblin disengages as a bonus action and still has i
   kit.place(brute.id, 6, 6);
   kit.freshRound();
   const before = rolls.listRecentRolls(world.campaignId, 100).filter((roll) => roll.kind === "attack").length;
-  const away = await world.invoke("move_token", { tokenName: goblin.id, x: 5, y: 9, disengage: true });
+  const away = await world.invoke("move_token", { token: goblin.id, x: 5, y: 9, disengage: true });
   assert.equal(away.ok, true, away.error);
   const after = rolls.listRecentRolls(world.campaignId, 100).filter((roll) => roll.kind === "attack").length;
   assert.equal(after, before, "the disengaging goblin drew an opportunity attack");
   const shot = await mk.forced([15, 1], () => world.invoke("enemy_attack", { enemyId: goblin.id, targetCharacterId: tank.id, attack: "Shortbow" }));
   assert.equal(shot.ok, true, shot.error);
-  const zombieAway = await world.invoke("move_token", { tokenName: brute.id, x: 8, y: 9, disengage: true });
+  const zombieAway = await world.invoke("move_token", { token: brute.id, x: 8, y: 9, disengage: true });
   assert.equal(zombieAway.ok, true, zombieAway.error);
   const slam = await world.invoke("enemy_attack", { enemyId: brute.id, targetCharacterId: tank.id });
   assert.equal(slam.ok, false, "a zombie disengaged and still attacked");
@@ -176,7 +176,7 @@ await test("Exhaustion 2 halves a creature's walk; 4 halves its hit points; 6 ki
   const two = await world.invoke("set_enemy_condition", { enemyId: enemy.id, condition: "exhaustion", level: 2 });
   assert.equal(two.ok, true, two.error);
   // Speed 30 ft is 6 tiles; halved, 3.
-  const walked = await world.invoke("move_token", { tokenName: enemy.id, x: 16, y: 6 });
+  const walked = await world.invoke("move_token", { token: enemy.id, x: 16, y: 6 });
   assert.equal(walked.ok, true, walked.error);
   assert.equal(kit.token(enemy.id).x, 13, "an exhausted creature walked its full speed");
   const four = await world.invoke("set_enemy_condition", { enemyId: enemy.id, condition: "exhaustion", level: 4 });

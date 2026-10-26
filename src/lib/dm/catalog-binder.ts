@@ -36,7 +36,7 @@ export const BINDER_ADJUDICATIONS: CatalogEntry[] = [
     category: "table",
     summary: "Put a lore entry or a picture on every player's screen until you take it down.",
     fields: [
-      { name: "loreId", label: "Lore entry id", kind: "text", placeholder: "Paste from the binder, or use Show this now there" },
+      { name: "lore", label: "Lore entry", kind: "text", placeholder: "Its title, or use Show this now in the binder" },
       { name: "imagePath", label: "Or an uploaded picture", kind: "text", placeholder: "/uploads/..." },
       { name: "caption", label: "Caption", kind: "text", placeholder: "Found in the abbot's desk" },
     ],
@@ -54,7 +54,7 @@ export const BINDER_ADJUDICATIONS: CatalogEntry[] = [
     category: "story",
     summary: "Add a quest to the party's log, or change one: its title, objectives and status.",
     fields: [
-      { name: "questId", label: "Quest id (to change one)", kind: "text" },
+      { name: "quest", label: "Quest to change (its title)", kind: "text" },
       { name: "title", label: "Title", kind: "text", placeholder: "Find the miller's daughter" },
       { name: "objectives", label: "Objectives, one per line", kind: "longtext", placeholder: "Ask at the mill\nSearch the weir" },
       {
@@ -84,8 +84,8 @@ export const BINDER_ADJUDICATIONS: CatalogEntry[] = [
     category: "story",
     summary: "Mark one step of a quest done. When every step is done the quest is.",
     fields: [
-      { name: "questId", label: "Quest id", kind: "text", required: true },
-      { name: "objectiveId", label: "Objective id", kind: "text", required: true },
+      { name: "quest", label: "Quest (its title)", kind: "text", required: true },
+      { name: "objective", label: "Objective (its text)", kind: "text", required: true },
       { name: "done", label: "Done", kind: "boolean", default: true },
     ],
   },

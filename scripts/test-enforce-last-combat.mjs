@@ -185,7 +185,7 @@ async function grabbed() {
 
 await test("A monster's grapple from 10 feet holds while it stays within its reach: another token moving does not end it.", async () => {
   await grabbed();
-  const moved = await world.invoke("move_token", { tokenName: rogue.id, x: 12, y: 13, forced: true });
+  const moved = await world.invoke("move_token", { token: rogue.id, x: 12, y: 13, forced: true });
   assert.equal(moved.ok, true, moved.error);
   assert.ok(lower(world.sheet(fighter.id).conditions).includes("grappled"), "an unrelated move ended a reach-10 grapple");
 });
@@ -210,7 +210,7 @@ await test("The restraint a grapple brings ends with the grapple: an escape, or 
   await grabbed();
   // Pulled away on someone else's turn (a forced move is not the mover's own).
   kit.giveTurn(rogue.id);
-  const pulled = await world.invoke("move_token", { tokenName: fighter.id, x: 5, y: 1, forced: true });
+  const pulled = await world.invoke("move_token", { token: fighter.id, x: 5, y: 1, forced: true });
   assert.equal(pulled.ok, true, pulled.error);
   assert.deepEqual(lower(world.sheet(fighter.id).conditions).filter((entry) => ["grappled", "restrained"].includes(entry)), []);
 });

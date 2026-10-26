@@ -33,7 +33,7 @@ import { publishPersisted } from "@/lib/events";
 // enemy into reach (src/lib/dm/enemy-approach.ts) and makes every swing of
 // a Multiattack (src/lib/dm/enemy-profile.ts plannedSwings).
 export const ENEMY_TURNS_CUE =
-  "Play each in order, one action apiece: enemy_attack (it walks the enemy into reach and makes every swing of a Multiattack), or cast_at_player / aoe_damage with casterEnemyId for an ability or spell. Then narrate and stop; any you leave make their default attack after your narration.";
+  "Play each in order, one action apiece: enemy_attack (it walks the enemy into reach and makes every swing of a Multiattack), or cast_at_player / aoe_damage with casterEnemyId and enemyAbility or spell. Then narrate and stop; any you leave make their default attack after your narration.";
 
 // Whether a person is playing the monsters right now: a human DM in the seat
 // and no AI cover stretch answering for them.

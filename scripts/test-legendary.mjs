@@ -21,6 +21,7 @@ const { createCampaign, getCampaignById } = await import("../src/lib/db/campaign
 const { createEncounter, insertEnemy, getActiveEncounter, saveEncounter } = await import("../src/lib/db/encounters.ts");
 const { handleLairAction, handleLegendaryAction, handleLegendaryResist, initLegendaryPools, refillLegendaryForTurn, autoLegendaryResistance } = await import("../src/lib/dm/legendary-tools.ts");
 const { publicEncounter } = await import("../src/lib/db/encounter-view.ts");
+const { aoeDamageTool } = await import("../src/lib/dm/aoe-damage-tool.ts");
 
 let passed = 0;
 function test(name, fn) {
@@ -41,6 +42,7 @@ const dragonStats = {
     "Legendary action: Detect. The dragon makes a Wisdom (Perception) check.",
     "Legendary action: Tail Attack. The dragon makes a tail attack.",
     "Legendary action: Wing Attack (Costs 2 Actions). The dragon beats its wings.",
+    "Wing Attack. Each creature within 10 feet of the dragon must succeed on a DC 22 Dexterity saving throw or take 15 (2d6 + 8) bludgeoning damage.",
     "Lair action: The ground shakes; each creature makes a DC 15 Dex save or falls prone.",
   ],
   resist: "",
@@ -117,6 +119,20 @@ test("legendary_action is refused on the creature's own turn and spent on anothe
   saveEncounter(stored);
 });
 
+test("an action with its own save is handed on to aoe_damage under the field that tool takes", () => {
+  const stored = getActiveEncounter(campaign.id);
+  stored.turnIndex = 2;
+  saveEncounter(stored);
+  const wing = handleLegendaryAction(live(), JSON.stringify({ enemyId: dragon.id, action: "Wing Attack" }));
+  assert.equal(wing.ok, true, wing.error);
+  assert.match(wing.next, new RegExp(`casterEnemyId ${dragon.id} and enemyAbility "Wing Attack"`));
+  const aoe = aoeDamageTool.function.parameters.properties;
+  assert.ok(aoe.casterEnemyId && aoe.enemyAbility, "aoe_damage takes the fields the hint names");
+  refillLegendaryForTurn(stored, dragon);
+  stored.turnIndex = 0;
+  saveEncounter(stored);
+});
+
 test("resistance is spent on a binding failure and by hand, and the tracker shows both to the DM only", () => {
   const stored = getActiveEncounter(campaign.id);
   assert.equal(autoLegendaryResistance(live(), stored, dragon), true);
@@ -153,7 +169,8 @@ test("the lair acts on initiative count 20, with an option its block prints, onc
   const first = handleLairAction(live(), null, JSON.stringify({ action: "1" }));
   assert.equal(first.ok, true, first.error);
   // Its save resolves through the engine: aoe_damage with the printed DC.
-  assert.match(first.next, /aoe_damage: dc 15, saveAbility "dex"/);
+  assert.match(first.next, /aoe_damage: dc 15, saveAbility "dex", condition "prone", and the enemyIds/);
+  assert.doesNotMatch(first.next, /set_enemy_condition/, "a retired tool named");
   const again = handleLairAction(live(), null, JSON.stringify({ action: "The ground shakes; each creature makes a DC 15 Dex save or falls prone." }));
   assert.match(again.error, /already acted/);
 });

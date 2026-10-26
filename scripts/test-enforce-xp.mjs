@@ -115,8 +115,8 @@ await test("the party's spoils: experience each, the purse split, the remainder 
   const before = [world.sheet(fighter.id), world.sheet(rogue.id)];
   const shared = await world.invoke("party_award", {
     characterIds: [fighter.id, rogue.id],
-    amount: 150,
-    delta: 11,
+    xp: 150,
+    gold: 11,
     reason: "the hoard",
   });
   assert.equal(shared.ok, true, shared.error);

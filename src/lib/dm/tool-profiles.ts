@@ -132,11 +132,11 @@ export const TOOL_GROUPS: Record<ToolGroupId, { summary: string; tools: readonly
   shop: { summary: "opening a shop and haggling over its prices", tools: ["open_shop", "haggle"] },
   settlement: { summary: "inventing a settlement", tools: ["generate_settlement"] },
   party: { summary: "the party's shared pack and purse", tools: ["party_stash"] },
-  effects: { summary: "lasting effects that are not conditions (a blessing, a curse, a boon)", tools: ["set_effect", "clear_effect"] },
+  effects: { summary: "a lasting blessing, curse or boon that is not a condition", tools: ["set_effect", "clear_effect"] },
   scenes: { summary: "structured scenes: chases, heists, skill challenges", tools: ["start_scene", "scene_check", "end_scene"] },
   sound: { summary: "the table's music and sound stings", tools: ["set_ambience", "play_sting"] },
   mounts: { summary: "mounting and dismounting", tools: ["mount_up", "dismount"] },
-  gear: { summary: "a shield put on or off, a weapon drawn or stowed, something dropped, picked up or handed over", tools: ["handle_item"] },
+  gear: { summary: "donning a shield, drawing a weapon, dropping, picking up or handing over an item", tools: ["handle_item"] },
   // A pet's damage is apply_damage's (issue #471), which a table with pets
   // is offered with this group.
   pets: { summary: "familiars, pets and animal companions", tools: ["summon_pet", "pet_attack", "dismiss_pet", "apply_damage"] },
@@ -280,7 +280,7 @@ export function moreToolsTool(closed: readonly ToolGroupId[]): ToolDefLike {
     type: "function",
     function: {
       name: MORE_TOOLS,
-      description: `More actions than the ones listed here. Name a group and its actions are offered from your next reply on; call it before narrating anything that needs them. Groups: ${closed.map((id) => `${id} (${TOOL_GROUPS[id].summary})`).join("; ")}. Name a tool instead to read its full instructions.`,
+      description: `More actions than the ones listed here. Name a group and its actions are offered from your next reply on; call it before narrating anything that needs them. Groups: ${closed.map((id) => `${id} (${TOOL_GROUPS[id].summary})`).join("; ")}.`,
       parameters: {
         type: "object",
         additionalProperties: false,

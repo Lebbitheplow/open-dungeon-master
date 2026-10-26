@@ -69,7 +69,7 @@ export const handleItemTool = {
         srdName: { type: "string", description: "An enemy's drop in the table's language: its SRD or pack name in English ('Scimitar')." },
         tags: { type: "array", items: { type: "string" }, description: "An enemy's drop only: as grant_item's tags." },
         toCharacterId: { type: "string", description: "hand: who receives it, exact characterId from GAME STATE." },
-        reason: { type: "string" },
+        reason: { type: "string", description: "Short in-fiction cause." },
       },
       required: ["action", "item"],
     },

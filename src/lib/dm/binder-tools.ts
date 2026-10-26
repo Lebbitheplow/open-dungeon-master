@@ -3,11 +3,11 @@ import type { Campaign } from "@/lib/db/campaigns";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { getLoreEntry, listLoreEntries } from "@/lib/db/lore";
 import { getQuest, insertQuest, listQuests, updateQuest } from "@/lib/db/quests";
-import { DM_ONLY_MARK, normalizeObjectives, tickObjective, type Quest, type QuestStatus } from "@/lib/dm/quest-logic";
+import { DM_ONLY_MARK, normalizeObjectives, tickObjective, type Quest, type QuestObjective, type QuestStatus } from "@/lib/dm/quest-logic";
 import { dismissHandout, publishHandout } from "@/lib/dm/scene-state";
 import { isUploadedImagePath } from "@/lib/uploads";
 import type { WorldLoreEntry } from "@/lib/dm/world-lore-logic";
-import { unknownRef, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
+import { noneNamed, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
 
 // The binder's tools (docs/vtt-parity-implementation-plan.md sections 5.2
@@ -33,7 +33,7 @@ export const binderTools: ToolDef[] = [
         type: "object",
         additionalProperties: false,
         properties: {
-          loreId: { type: "string", description: "The lore entry to show, by its title as search_lore gives it." },
+          lore: { type: "string", description: "Its title, as search_lore gives it." },
           caption: { type: "string", description: "A line under it." },
         },
         required: [],
@@ -58,8 +58,8 @@ export const binderTools: ToolDef[] = [
         type: "object",
         additionalProperties: false,
         properties: {
-          questId: { type: "string", description: "The quest to change, by its title in GAME STATE; omit to add one." },
-          title: { type: "string", description: "What the quest is called." },
+          quest: { type: "string", description: "The quest to change, by its title in GAME STATE; omit to add one." },
+          title: { type: "string", description: "What the quest is called; a new quest needs it." },
           objectives: {
             type: "array",
             items: { type: "string" },
@@ -80,33 +80,37 @@ export const binderTools: ToolDef[] = [
         type: "object",
         additionalProperties: false,
         properties: {
-          questId: { type: "string", description: "The quest, by its title in GAME STATE." },
-          objectiveId: { type: "string", description: "The objective, by its text in GAME STATE." },
+          quest: { type: "string", description: "Its title in GAME STATE." },
+          objective: { type: "string", description: "Its text in GAME STATE." },
           done: { type: "boolean", description: "Default: true." },
         },
-        required: ["questId", "objectiveId"],
+        required: ["quest", "objective"],
       },
     },
   },
 ];
 
+// The model names a lore entry by its title (search_lore gives it as
+// "category: title"); the binder's Show this now button sends its id.
 const handoutSchema = z.object({
-  loreId: z.string().trim().min(1).optional(),
+  lore: z.string().trim().min(1).optional(),
   imagePath: z.string().trim().optional(),
   caption: z.string().trim().max(200).optional(),
 });
 
-// The model reads a lore entry by its title (search_lore gives it as
-// "category: title"), never its id; a person's console sends the id.
-function loreByRef(campaignId: string, ref: string): WorldLoreEntry | ToolError {
-  const byId = getLoreEntry(ref);
+function loreEntryFor(campaignId: string, args: z.infer<typeof handoutSchema>): WorldLoreEntry | ToolError | null {
+  if (!args.lore) {
+    return null;
+  }
+  const byId = getLoreEntry(args.lore);
   if (byId?.campaignId === campaignId) {
     return byId;
   }
+  const wanted = textKey(args.lore);
   const entries = listLoreEntries(campaignId);
   return (
-    entries.find((entry) => textKey(entry.title) === textKey(ref) || textKey(`${entry.category}: ${entry.title}`) === textKey(ref)) ??
-    unknownRef("loreId", ref, entries.filter((entry) => entry.visibility !== "dm" && !entry.unpublished).map((entry) => ({ id: entry.id, name: entry.title })))
+    entries.find((entry) => textKey(entry.title) === wanted || textKey(`${entry.category}: ${entry.title}`) === wanted) ??
+    noneNamed("No lore entry is titled", args.lore, entries.filter((entry) => entry.visibility !== "dm" && !entry.unpublished).map((entry) => entry.title))
   );
 }
 
@@ -117,11 +121,11 @@ export function handleShowHandout(campaign: Campaign, turn: DmTurn | null, rawAr
   try {
     args = handoutSchema.parse(JSON.parse(rawArguments || "{}"));
   } catch {
-    return { error: "Invalid arguments: show_handout needs a loreId, the lore entry's title.", retry: true };
+    return { error: "Invalid arguments: show_handout needs lore: the lore entry's title.", retry: true };
   }
   const human = turn?.actor === "human_dm";
-  if (args.loreId) {
-    const entry = loreByRef(campaign.id, args.loreId);
+  const entry = loreEntryFor(campaign.id, args);
+  if (entry) {
     if ("error" in entry) {
       return entry;
     }
@@ -154,7 +158,7 @@ export function handleShowHandout(campaign: Campaign, turn: DmTurn | null, rawAr
     });
     return { ok: true, shown: handout.title, handoutId: handout.id };
   }
-  return { error: "show_handout needs a loreId, the lore entry's title.", retry: true };
+  return { error: "show_handout needs lore: the lore entry's title.", retry: true };
 }
 
 export function handleDismissHandout(campaign: Campaign, rawArguments: string): Record<string, unknown> {
@@ -170,26 +174,25 @@ export function handleDismissHandout(campaign: Campaign, rawArguments: string): 
 }
 
 // GAME STATE lists a quest by its title and an objective by its text, never
-// their ids, so either stands for the id (as resolveSheetRef takes a name).
-function questByRef(campaignId: string, ref: string): Quest | ToolError {
-  const byId = getQuest(ref);
+// their ids, so the model names them that way; an older console sends ids.
+function questFor(campaignId: string, ref: { quest?: string }): Quest | ToolError | null {
+  if (!ref.quest) {
+    return null;
+  }
+  const byId = getQuest(ref.quest);
   if (byId?.campaignId === campaignId) {
     return byId;
   }
   const quests = listQuests(campaignId);
   // GAME STATE marks the DM's own quests (renderQuestsForPrompt), and the
   // model copies the line it reads.
-  const title = textKey(ref.startsWith(DM_ONLY_MARK) ? ref.slice(DM_ONLY_MARK.length) : ref);
+  const title = textKey(ref.quest.startsWith(DM_ONLY_MARK) ? ref.quest.slice(DM_ONLY_MARK.length) : ref.quest);
   const named = quests.filter((quest) => textKey(quest.title) === title);
-  return (
-    named.find((quest) => quest.status === "active") ??
-    named[0] ??
-    unknownRef("questId", ref, quests.map((quest) => ({ id: quest.id, name: quest.title })))
-  );
+  return named.find((quest) => quest.status === "active") ?? named[0] ?? noneNamed("No quest is titled", ref.quest, quests.map((quest) => quest.title));
 }
 
 const questSchema = z.object({
-  questId: z.string().trim().optional(),
+  quest: z.string().trim().optional(),
   title: z.string().trim().max(120).optional(),
   // The console sends the objectives as lines; the model sends a list.
   objectives: z
@@ -215,8 +218,8 @@ export function handleSetQuest(campaign: Campaign, rawArguments: string): ToolRe
       ...(args.status ? { status: args.status as QuestStatus } : {}),
       ...(args.visibility ? { visibility: args.visibility } : {}),
     });
-  if (args.questId) {
-    const quest = questByRef(campaign.id, args.questId);
+  const quest = questFor(campaign.id, args);
+  if (quest) {
     if ("error" in quest) {
       return quest;
     }
@@ -226,7 +229,7 @@ export function handleSetQuest(campaign: Campaign, rawArguments: string): ToolRe
     return { error: "A new quest needs a title.", retry: true };
   }
   // A title the log already holds, on a quest still open, is that quest: the
-  // model restates a quest by its title as often as it names it in questId,
+  // model restates a quest by its title in title as often as it names it in quest,
   // and a second row of the same quest splits its ticks. A quest the party
   // finished or failed can be taken up again as a new one.
   const open = listQuests(campaign.id).find(
@@ -242,7 +245,7 @@ export function handleSetQuest(campaign: Campaign, rawArguments: string): ToolRe
   if (listQuests(campaign.id).filter((quest) => quest.status === "active").length >= 40) {
     return { error: "The quest log is full; finish or fail some first.", retry: true };
   }
-  const quest = insertQuest({
+  const added = insertQuest({
     campaignId: campaign.id,
     title: args.title,
     objectives: normalizeObjectives(args.objectives ?? []),
@@ -250,30 +253,52 @@ export function handleSetQuest(campaign: Campaign, rawArguments: string): ToolRe
     visibility: args.visibility ?? "party",
     source: "dm",
   });
-  return { ok: true, quest };
+  return { ok: true, quest: added };
 }
 
 const tickSchema = z.object({
-  questId: z.string().trim().min(1),
-  objectiveId: z.string().trim().min(1),
+  quest: z.string().trim().min(1).optional(),
+  objective: z.string().trim().min(1).optional(),
   done: z.boolean().optional(),
 });
+
+function objectiveFor(campaignId: string, args: z.infer<typeof tickSchema>): { quest: Quest; objective: QuestObjective } | ToolError {
+  const needs: ToolError = { error: "tick_objective needs a quest, by its title, and an objective, by its text.", retry: true };
+  const quest = questFor(campaignId, args);
+  if (!quest) {
+    return needs;
+  }
+  if ("error" in quest) {
+    return quest;
+  }
+  if (!args.objective) {
+    return needs;
+  }
+  const wanted = textKey(args.objective);
+  const objective = quest.objectives.find((entry) => entry.id === args.objective || textKey(entry.text) === wanted);
+  return objective ? { quest, objective } : noneNamed(`"${quest.title}" has no objective`, args.objective, quest.objectives.map((entry) => entry.text));
+}
+
+// The waypoint check reads a tick as the tool does, so a quest named by its
+// title ticks its waypoint too.
+export function tickedObjective(campaignId: string, rawArguments: string): { quest: Quest; objective: QuestObjective } | null {
+  const parsed = tickSchema.safeParse(JSON.parse(rawArguments || "{}"));
+  const found = parsed.success ? objectiveFor(campaignId, parsed.data) : null;
+  return found && !("error" in found) ? found : null;
+}
 
 export function handleTickObjective(campaign: Campaign, rawArguments: string): ToolResult {
   let args: z.infer<typeof tickSchema>;
   try {
     args = tickSchema.parse(JSON.parse(rawArguments || "{}"));
   } catch {
-    return { error: "Invalid arguments: tick_objective needs a questId and an objectiveId.", retry: true };
+    return { error: "Invalid arguments: tick_objective needs a quest and an objective.", retry: true };
   }
-  const quest = questByRef(campaign.id, args.questId);
-  if ("error" in quest) {
-    return quest;
+  const found = objectiveFor(campaign.id, args);
+  if ("error" in found) {
+    return found;
   }
-  const objective = quest.objectives.find((entry) => entry.id === args.objectiveId || textKey(entry.text) === textKey(args.objectiveId));
-  if (!objective) {
-    return unknownRef("objectiveId", args.objectiveId, quest.objectives.map((entry) => ({ id: entry.id, name: entry.text })));
-  }
+  const { quest, objective } = found;
   const objectives = tickObjective(quest.objectives, objective.id, args.done ?? true);
   const allDone = objectives.length > 0 && objectives.every((objective) => objective.done);
   const updated = updateQuest(quest.id, { objectives, ...(allDone ? { status: "done" as const } : {}) });

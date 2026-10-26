@@ -74,7 +74,7 @@ export const effectTools: ToolDef[] = [
           },
           remaining: { type: "integer", minimum: 1, description: "Rounds or minutes it lasts." },
           saveAbility: { type: "string", enum: ["str", "dex", "con", "int", "wis", "cha"], description: "A save to shake it off, with saveDc: the target rolls it at the end of each of its turns. Outside a fight it rolls once per stretch of time, and a success ends the effect." },
-          saveDc: { type: "integer", minimum: 1, maximum: 30 },
+          saveDc: { type: "integer", minimum: 1, maximum: 30, description: "With saveAbility: the save's DC." },
           visible: { type: "boolean", description: "True when the party can tell it is there." },
           auraFeet: {
             type: "integer",

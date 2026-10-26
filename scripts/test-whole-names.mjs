@@ -88,12 +88,12 @@ await test("finding 1: the row's own name, its plural, the book's comma order an
 
 await test("finding 1: the gate asks what a lookalike is before it is granted, at every table; with srdName it is that row.", async () => {
   for (const name of ["Dinner plate", "Piatto da portata", "Assiette plate", "Plato de cobre", "Fischernetz"]) {
-    const out = await ai("grant_item", { characterId: hero.id, name, reason: "the chest" }, hero);
+    const out = await ai("grant_item", { characterId: hero.id, item: name, reason: "the chest" }, hero);
     assert.equal(out.retry, true, `${name}: granted without asking`);
     assert.match(out.error, /srdName/);
     assert.equal(carried(name), undefined);
   }
-  const named = await ai("grant_item", { characterId: hero.id, name: "Spada lunga", srdName: "longsword", reason: "the chest" }, hero);
+  const named = await ai("grant_item", { characterId: hero.id, item: "Spada lunga", srdName: "longsword", reason: "the chest" }, hero);
   assert.equal(named.ok, true, named.error);
   assert.equal(carried("Spada lunga").srdName, "Longsword");
   assert.equal(matchWeapon(carried("Spada lunga"))?.name, "Longsword");
@@ -214,9 +214,9 @@ await test("finding 7: a place, a faction, a shop, a card or a prepared fight is
 
 await test("finding 8: reveal_item's gate and its math find the line one way: the line's name in any case is revealed; a part of it is refused.", async () => {
   world.patch(hero.id, { equipment: [{ name: "Anello opaco", qty: 1, identified: false }] });
-  const partial = await ai("reveal_item", { characterId: hero.id, name: "Anello", revealedName: "Anello della protezione", srdName: "Ring of Protection", reason: "identify" }, hero);
+  const partial = await ai("reveal_item", { characterId: hero.id, item: "Anello", revealedName: "Anello della protezione", srdName: "Ring of Protection", reason: "identify" }, hero);
   assert.ok(partial.error, "a part of the line's name was revealed");
-  const whole = await ai("reveal_item", { characterId: hero.id, name: "ANELLO OPACO", revealedName: "Anello della protezione", srdName: "Ring of Protection", reason: "identify" }, hero);
+  const whole = await ai("reveal_item", { characterId: hero.id, item: "ANELLO OPACO", revealedName: "Anello della protezione", srdName: "Ring of Protection", reason: "identify" }, hero);
   assert.equal(whole.ok, true, whole.error);
   assert.equal(carried("Anello della protezione").srdName, "Ring of Protection");
 });
@@ -230,7 +230,7 @@ await test("finding 10: tags add to the row's tags: Arrows sent with consumable 
     assert.deepEqual(itemTags(item), ["silvered"], name);
     assert.equal(matchWeapon(item)?.name, "Longsword", name);
   }
-  const granted = await ai("grant_item", { characterId: hero.id, name: "Spada lunga argentata", srdName: "Longsword", tags: ["silvered"], reason: "the smith" }, hero);
+  const granted = await ai("grant_item", { characterId: hero.id, item: "Spada lunga argentata", srdName: "Longsword", tags: ["silvered"], reason: "the smith" }, hero);
   assert.equal(granted.ok, true, granted.error);
   assert.deepEqual(carried("Spada lunga argentata").tags, ["silvered"]);
 });
@@ -307,7 +307,7 @@ await test("Every item ODM's own class, pack and genre kits write is the row it 
 
 await test("finding 12: a healing potion sent with tags alone is asked which potion it is; its row decides the tier, at every table.", async () => {
   for (const name of ["Pozione di guarigione superiore", "Potion de soins supérieurs", "Poción de curación mayor", "Großer Heiltrank", "Greater Healing Potion"]) {
-    const asked = await ai("grant_item", { characterId: hero.id, name, tags: ["consumable", "potion", "healing_potion"], reason: "the chest" }, hero);
+    const asked = await ai("grant_item", { characterId: hero.id, item: name, tags: ["consumable", "potion", "healing_potion"], reason: "the chest" }, hero);
     assert.equal(asked.retry, true, `${name}: granted without its row`);
     assert.equal(consumableEffect({ name, srdName: "Potion of Greater Healing" }).expression, "4d4+4", name);
   }
@@ -333,7 +333,7 @@ await test("srdName takes every weapon and armor as ODM's own tables name it (\"
     ["Revolver des Sheriffs", "Revolver", "Revolver"],
     ["Light Crossbow", "Crossbow, light", "Light Crossbow"],
   ]) {
-    const out = await ai("grant_item", { characterId: hero.id, name, srdName, reason: "the armory" }, hero);
+    const out = await ai("grant_item", { characterId: hero.id, item: name, srdName, reason: "the armory" }, hero);
     assert.ok(!out.error, `${name}: ${out.error}`);
     assert.equal(matchWeapon(carried(name))?.name, weapon, name);
     const [line] = normalizeStock([{ itemName: name, qty: 1, priceCp: 100, srdName }]);
@@ -390,7 +390,7 @@ await test("a magic item named at the table is priced by the rarity of the row s
     assert.equal(bought.ok, true, `${name}: ${bought.error}`);
     const sheet = getSheetById(hero.id);
     assert.equal(100000 - (sheet.gold * 100 + (sheet.copper ?? 0)), paidCp, name);
-    const gift = await ai("grant_item", { characterId: hero.id, name, ...(srdName ? { srdName } : {}), worth: 5, reason: "a gift" }, hero);
+    const gift = await ai("grant_item", { characterId: hero.id, item: name, ...(srdName ? { srdName } : {}), worth: 5, reason: "a gift" }, hero);
     assert.match(String(gift.error), /has a price the rules set/, name);
   }
 });

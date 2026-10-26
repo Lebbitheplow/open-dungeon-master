@@ -28,6 +28,7 @@ import { rollCard, sheetAttacker } from "@/lib/dm/roll-card";
 import { rollAgainst } from "@/lib/roll-labels";
 import { namedOption, type ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
+import { creditFeatureTeleport } from "@/lib/dm/feature-teleport";
 import { isConditionNamed, isNamed, nameChoice } from "@/lib/srd/feature-names";
 
 // A spend's damage on one enemy, as the holder's dice card.
@@ -238,7 +239,8 @@ export function resolveSpendEffect(ctx: SpendContext, does: SpendDoes): Resoluti
         }
       }
       if (does.teleportFeet) {
-        lines.push(`${sheet.name} teleports up to ${does.teleportFeet} feet: move their token with move_token (forced).`);
+        creditFeatureTeleport(sheet.id, ctx.spend.name, does.teleportFeet);
+        lines.push(`${sheet.name} teleports up to ${does.teleportFeet} feet: move their token with move_token, teleport true, spell "${ctx.spend.name}" and casterCharacterId ${sheet.id}.`);
       }
       if (does.burst) {
         lines.push(...burst(ctx, does.burst));
@@ -315,23 +317,26 @@ export function resolveSpendEffect(ctx: SpendContext, does: SpendDoes): Resoluti
       return {
         result: {
           resolveWith: "aoe_damage",
-          dice,
+          damage: dice,
           saveAbility: does.save,
           dc: saveDc(ctx, does.dcAbility),
-          damageType: does.type,
+          type: does.type,
           area: does.area,
           note: `Resolve it with aoe_damage using these numbers; ${ctx.spend.name} is paid for.`,
         },
       };
     }
-    case "teleport":
+    case "teleport": {
+      creditFeatureTeleport(sheet.id, ctx.spend.name, does.feet);
+      const move = `move_token, teleport true, spell "${ctx.spend.name}" and casterCharacterId ${sheet.id}`;
       return {
         result: {
           teleport: does.touched
-            ? `A willing creature ${sheet.name} touches moves up to ${does.feet} feet${does.note ? `, ${does.note}` : ""}: move its token with move_token (forced: true) if a battle map is live.`
-            : `${sheet.name} moves up to ${does.feet} feet${does.note ? `, ${does.note}` : ""}: move their token with move_token (forced: true) if a battle map is live.`,
+            ? `A willing creature ${sheet.name} touches moves up to ${does.feet} feet${does.note ? `, ${does.note}` : ""}: if a battle map is live, move its token with ${move}.`
+            : `${sheet.name} moves up to ${does.feet} feet${does.note ? `, ${does.note}` : ""}: if a battle map is live, move their token with ${move}.`,
         },
       };
+    }
     case "die_damage": {
       const enemy = targetEnemy(ctx);
       if ("error" in enemy) {

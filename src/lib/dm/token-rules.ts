@@ -29,6 +29,7 @@ import { resolveSheetRef, unknownSheetRef } from "@/lib/dm/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
+import { takeFeatureTeleport } from "@/lib/dm/feature-teleport";
 import { unknownEnemyRef } from "@/lib/dm/enemy-damage";
 
 // The rules behind two board moves the model can make: a teleport, which
@@ -61,7 +62,8 @@ export function teleportRangeFeet(spell: string): number | null {
 
 export type TeleportArgs = {
   spell?: string;
-  casterId?: string;
+  enemyAbility?: string;
+  casterCharacterId?: string;
   casterEnemyId?: string;
   cause?: "hazard";
   reason?: string;
@@ -85,13 +87,21 @@ export function payForTeleport(
     return null;
   }
   const spell = (args.spell ?? "").trim();
-  if (!spell) {
-    return { error: "A teleport is a spell or an ability: pass spell with casterId (a character's, cast and paid for) or casterEnemyId (one on the enemy's block), or cause 'hazard' for a trap door or a portal. Walking is move_token or the player's own board.", retry: true };
+  const ability = (args.enemyAbility ?? "").trim();
+  if (ability && !args.casterEnemyId) {
+    return { error: "enemyAbility is an enemy's own ability: send it with casterEnemyId. A character's teleport is spell with casterCharacterId.", retry: true };
   }
-  if (args.casterId) {
-    const caster = resolveSheetRef(args.casterId, sheets, sheetsById);
+  if (!spell && !ability) {
+    return { error: "A teleport is a spell or an ability: pass spell with casterCharacterId (a character's, cast and paid for), casterEnemyId with enemyAbility or spell (one on the enemy's block), or cause 'hazard' for a trap door or a portal. Walking is move_token or the player's own board.", retry: true };
+  }
+  if (args.casterCharacterId && spell) {
+    const caster = resolveSheetRef(args.casterCharacterId, sheets, sheetsById);
     if (!caster) {
-      return unknownSheetRef("casterId", args.casterId, sheets);
+      return unknownSheetRef("casterCharacterId", args.casterCharacterId, sheets);
+    }
+    // A class feature's spend paid for it already (src/lib/dm/feature-teleport.ts).
+    if (takeFeatureTeleport(caster.id, spell)) {
+      return null;
     }
     const facts = spellFactsFor(spell);
     if (facts?.range.kind === "self" && token.refId !== caster.id) {
@@ -118,14 +128,15 @@ export function payForTeleport(
     if (enemy.status !== "alive") {
       return { error: `${enemy.displayName} is ${enemy.status} and casts nothing.`, retry: true };
     }
-    const key = textKey(spell);
+    const named = ability || spell;
+    const key = textKey(named);
     const listed =
       (enemy.stats.spells ?? []).some((name) => textKey(name) === key) ||
       abilityNames(enemy.stats).some((name) => textKey(name) === key) ||
       (enemy.stats.traits ?? []).some((line) => textKey(line).startsWith(key));
-    return listed ? null : { error: `${enemy.displayName} has no ${spell} on its stat block, so it cannot teleport. It may move with move_token or take another action.`, retry: true };
+    return listed ? null : { error: `${enemy.displayName} has no ${named} on its stat block, so it cannot teleport. It may move with move_token or take another action.`, retry: true };
   }
-  return { error: `${spell} needs its caster: casterId for a character, casterEnemyId for an enemy.`, retry: true };
+  return { error: `${spell} needs its caster: casterCharacterId for a character, casterEnemyId for an enemy.`, retry: true };
 }
 
 // An enemy's Disengage before it walks: a bonus action with Nimble Escape

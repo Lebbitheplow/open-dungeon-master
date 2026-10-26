@@ -30,7 +30,7 @@ import { lineNamed } from "@/lib/srd/item-row";
 // offer's line showed the call's own price, which the engine ignores for
 // anything the book lists (issue #471).
 function quotedPurchase(args: OfferArgs, sheet: CharacterSheet): OfferArgs | ToolError {
-  const name = String(args.item ?? args.name ?? "").trim();
+  const name = String(args.item ?? "").trim();
   const sold = args.action === "sell" ? sheet.equipment[lineNamed(sheet.equipment, name)] : undefined;
   const item = sold ?? { name, srdName: typeof (args as { srdName?: unknown }).srdName === "string" ? String((args as { srdName?: unknown }).srdName) : undefined };
   const listCp = listPriceCp(item);
@@ -74,13 +74,13 @@ export function maybeProposeItemChange(
 
   // Light validation now, so a malformed offer fails while the model can
   // still fix it; the full check reruns in applyDmMutation on approval.
-  if ((toolName === "grant_item" || toolName === "remove_item") && !String(args.name ?? "").trim()) {
+  if ((toolName === "grant_item" || toolName === "remove_item") && !String(args.item ?? "").trim()) {
     return { error: `${toolName} needs an item name.`, retry: true };
   }
   if (toolName === "modify_gold" && !Number(args.delta ?? 0)) {
     return { error: "modify_gold needs a nonzero delta.", retry: true };
   }
-  if (toolName === "purchase" && (!String(args.item ?? args.name ?? "").trim() || (args.action !== "buy" && args.action !== "sell"))) {
+  if (toolName === "purchase" && (!String(args.item ?? "").trim() || (args.action !== "buy" && args.action !== "sell"))) {
     return { error: "purchase needs item and action buy|sell.", retry: true };
   }
 

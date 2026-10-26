@@ -100,7 +100,7 @@ const ANNOUNCED = [
   ["clear_condition", { characterId: hero, condition: "poisoned" }, "sheet_updated"],
   ["use_spell_slot", { characterId: hero, level: 1, spell: "Magic Missile" }, "sheet_updated"],
   // The console's form calls the spell `name`; the handler reads `spell`.
-  ["learn_spell", { characterId: hero, action: "add", spell: "Shield", name: "Shield" }, "sheet_updated"],
+  ["learn_spell", { characterId: hero, action: "add", spell: "Shield" }, "sheet_updated"],
   ["use_resource", { characterId: fighter, resource: "second_wind" }, "sheet_updated"],
   ["take_rest", { kind: "short" }, "sheet_updated"],
   ["request_roll", { characterId: fighter, kind: "ability_check", ability: "str", dc: 12, reason: "a door" }, "roll_result"],
@@ -182,7 +182,7 @@ await test("calls made together on one sheet and one enemy lose no update", asyn
     ...many(10, "apply_damage", { characterId: hero, amount: 1 }),
     ...many(10, "modify_gold", { characterId: hero, delta: 1 }),
     ...many(10, "award_xp", { characterIds: [hero], amount: 1 }),
-    ...many(10, "grant_item", { characterId: hero, name: "Arrow", qty: 1 }),
+    ...many(10, "grant_item", { characterId: hero, item: "Arrow", qty: 1 }),
     ...many(10, "damage_enemy", { enemyId: enemy.id, amount: 1 }),
   ]);
   assert.equal(results.filter((result) => result.ok).length, 50);

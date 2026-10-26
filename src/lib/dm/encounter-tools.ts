@@ -1190,7 +1190,7 @@ export function applyEncounterCall(
     case "move_token":
       return { result: handleMoveToken(campaign, rawArguments, sheets, sheetsById, turn) };
     case "teleport_token": {
-      const unasked = characterCallUnasked(campaign.id, turn, rawArguments, "casterId");
+      const unasked = characterCallUnasked(campaign.id, turn, rawArguments, "casterCharacterId");
       return { result: unasked ? unasked : handleTeleportToken(campaign, rawArguments, sheets, sheetsById, turn) };
     }
     case "set_movement":

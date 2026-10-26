@@ -98,7 +98,7 @@ const SCROLL = ["consumable", "scroll", "carried"];
 for (const name of ["Scroll of Magic Missile", "Pergamena di Dardo incantato", "Parchemin de projectile magique", "Pergamino de proyectil mágico", "Schriftrolle Magisches Geschoss"]) {
   await test(`A scroll given its spell is read as that spell: "${name}" casts Magic Missile.`, async () => {
     world.patch(mage.id, { equipment: [] });
-    const granted = await world.invoke("grant_item", { characterId: mage.id, name, tags: SCROLL, spell: "magic missile", reason: "found" });
+    const granted = await world.invoke("grant_item", { characterId: mage.id, item: name, tags: SCROLL, spell: "magic missile", reason: "found" });
     assert.equal(granted.ok, true, granted.error);
     assert.deepEqual(world.sheet(mage.id).equipment, [{ name, qty: 1, tags: SCROLL, spell: "Magic Missile" }]);
     const cast = await world.invoke("use_item", { characterId: mage.id, item: name });
@@ -114,20 +114,20 @@ await test("A scroll's name is never read for its spell: a Scroll of Magic Missi
 
 await test("A spell is refused on a thing that is no scroll, and a spell nobody knows is refused.", async () => {
   world.patch(mage.id, { equipment: [] });
-  const ring = await world.invoke("grant_item", { characterId: mage.id, name: "Ring of Protection", spell: "Fireball", reason: "found" });
+  const ring = await world.invoke("grant_item", { characterId: mage.id, item: "Ring of Protection", spell: "Fireball", reason: "found" });
   assert.equal(ring.retry, true, "a ring was given a spell");
-  const unknown = await world.invoke("grant_item", { characterId: mage.id, name: "Scroll", tags: SCROLL, spell: "Gloomwhistle", reason: "found" });
+  const unknown = await world.invoke("grant_item", { characterId: mage.id, item: "Scroll", tags: SCROLL, spell: "Gloomwhistle", reason: "found" });
   assert.equal(unknown.retry, true, "a scroll was given a spell nobody knows");
   assert.deepEqual(world.sheet(mage.id).equipment, []);
 });
 
 await test("An unidentified scroll keeps its spell off the sheet until it is revealed, and two scrolls of different spells never merge.", async () => {
   world.patch(mage.id, { equipment: [] });
-  await world.invoke("grant_item", { characterId: mage.id, name: "a sealed parchment", unidentified: true, tags: SCROLL, spell: "Fireball", reason: "found" });
+  await world.invoke("grant_item", { characterId: mage.id, item: "a sealed parchment", unidentified: true, tags: SCROLL, spell: "Fireball", reason: "found" });
   assert.deepEqual(world.sheet(mage.id).equipment, [{ name: "a sealed parchment", qty: 1, identified: false }]);
-  const revealed = await world.invoke("reveal_item", { characterId: mage.id, name: "a sealed parchment", revealedName: "Pergamena", tags: SCROLL, spell: "Fireball", reason: "read" });
+  const revealed = await world.invoke("reveal_item", { characterId: mage.id, item: "a sealed parchment", revealedName: "Pergamena", tags: SCROLL, spell: "Fireball", reason: "read" });
   assert.equal(revealed.ok, true, revealed.error);
-  await world.invoke("grant_item", { characterId: mage.id, name: "Pergamena", tags: SCROLL, spell: "Magic Missile", reason: "found" });
+  await world.invoke("grant_item", { characterId: mage.id, item: "Pergamena", tags: SCROLL, spell: "Magic Missile", reason: "found" });
   assert.deepEqual(world.sheet(mage.id).equipment.map((item) => [item.name, item.qty, item.spell]), [["Pergamena", 1, "Fireball"], ["Pergamena", 1, "Magic Missile"]]);
 });
 

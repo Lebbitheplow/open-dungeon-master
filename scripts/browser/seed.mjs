@@ -204,7 +204,7 @@ const offer = itemProposals.insertItemProposal({
   characterId: tavi.id,
   userId: world.owner.id,
   toolName: "grant_item",
-  argsJson: JSON.stringify({ characterId: tavi.id, name: "Healing potion", qty: 1, reason: "found in the mill" }),
+  argsJson: JSON.stringify({ characterId: tavi.id, item: "Healing potion", qty: 1, reason: "found in the mill" }),
   summary: "Give Healing potion to Tavi Lockwhisper",
   reason: "found in the mill",
   seq: campaigns.allocateSeq(world.campaignId),

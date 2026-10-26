@@ -1,5 +1,5 @@
 import { getCampaignById, setStoryArc } from "@/lib/db/campaigns";
-import { getQuest } from "@/lib/db/quests";
+import { tickedObjective } from "@/lib/dm/binder-tools";
 import { listMessagesInSeqRange } from "@/lib/db/messages";
 import { latestSeq } from "@/lib/db/campaigns";
 import { publishEphemeral } from "@/lib/events";
@@ -74,13 +74,8 @@ export async function tickWaypointsFromCalls(
 
 function objectiveText(campaignId: string, rawArguments: string): string | undefined {
   try {
-    const args = JSON.parse(rawArguments || "{}") as { questId?: unknown; objectiveId?: unknown };
-    const quest = typeof args.questId === "string" ? getQuest(args.questId) : null;
-    if (!quest || quest.campaignId !== campaignId) {
-      return undefined;
-    }
-    const objective = quest.objectives.find((entry) => entry.id === args.objectiveId);
-    return objective ? `${quest.title} ${objective.text}` : undefined;
+    const found = tickedObjective(campaignId, rawArguments);
+    return found ? `${found.quest.title} ${found.objective.text}` : undefined;
   } catch {
     return undefined;
   }

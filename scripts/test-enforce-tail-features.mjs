@@ -187,10 +187,10 @@ await test("Expeditious Retreat: the Dash comes with the casting, and on each la
 
 await test("Only a creature with a flying speed takes to the air: the AI's set_movement fly is refused for a character without one, and Fly gives a 60-foot flying speed on the board.", async () => {
   await stage(wizard);
-  const grounded = await ai.invoke("set_movement", { tokenName: world.sheet(wizard.id).name, movement: "fly" });
+  const grounded = await ai.invoke("set_movement", { token: world.sheet(wizard.id).name, movement: "fly" });
   assert.equal(grounded.ok, false, "a wizard with no flying speed took off");
   world.patch(wizard.id, { conditions: ["flying"], conditionMeta: { flying: { rounds: 100, spell: "Fly", source: wizard.id } } });
-  const aloft = await ai.invoke("set_movement", { tokenName: world.sheet(wizard.id).name, movement: "fly" });
+  const aloft = await ai.invoke("set_movement", { token: world.sheet(wizard.id).name, movement: "fly" });
   assert.equal(aloft.ok, true, aloft.error);
   const { pcMoveBudget } = await import("../src/lib/battlemap/view.ts");
   const move = pcMoveBudget(world.campaignId, world.encounter(), kit.map(), world.sheet(wizard.id), kit.token(wizard.id));

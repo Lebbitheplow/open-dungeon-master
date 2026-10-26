@@ -67,14 +67,14 @@ await test("an item that asks for attunement does nothing until the player attun
 await test("an attuned item that leaves the pack takes its magic with it", async () => {
   carry([{ name: "Cloak of Protection", qty: 1, attuned: true }]);
   assert.equal(sheet().ac, 11);
-  await world.invoke("remove_item", { characterId: hero.id, name: "Cloak of Protection", reason: "stolen" });
+  await world.invoke("remove_item", { characterId: hero.id, item: "Cloak of Protection", reason: "stolen" });
   assert.equal(sheet().ac, 10);
   assert.equal(saves().con, 0);
 });
 
 await test("an item handed over by the DM never arrives attuned", async () => {
   carry([]);
-  await world.invoke("grant_item", { characterId: hero.id, name: "Ring of Protection", reason: "loot" });
+  await world.invoke("grant_item", { characterId: hero.id, item: "Ring of Protection", reason: "loot" });
   assert.deepEqual(attunedNames(), []);
   assert.equal(sheet().ac, 10);
 });

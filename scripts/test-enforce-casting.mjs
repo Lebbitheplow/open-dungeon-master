@@ -80,7 +80,7 @@ await test("a spell that is not on the sheet is refused by every cast tool", asy
 
 await test("an area spell that is not on the sheet is refused", async () => {
   await refused(priest, "aoe_damage", {
-    damage: "8d6", saveAbility: "dex", dc: 15, enemyIds: [ogre.id, other.id], casterId: priest.id, spell: "Fireball",
+    damage: "8d6", saveAbility: "dex", dc: 15, enemyIds: [ogre.id, other.id], casterCharacterId: priest.id, spell: "Fireball",
   });
 });
 
@@ -97,7 +97,7 @@ await test("a spell chosen since the last long rest is not castable until the re
 await test("a spell only written in the spellbook is not castable", async () => {
   await refused(mage, "use_spell_slot", { characterId: mage.id, level: 3, spell: "Lightning Bolt" });
   await refused(mage, "aoe_damage", {
-    damage: "8d6", saveAbility: "dex", dc: 14, enemyIds: [ogre.id], casterId: mage.id, spell: pack ? "Lightning Bolt" : "Faerie Fire",
+    damage: "8d6", saveAbility: "dex", dc: 14, enemyIds: [ogre.id], casterCharacterId: mage.id, spell: pack ? "Lightning Bolt" : "Faerie Fire",
   });
 });
 
@@ -114,7 +114,7 @@ await test("a slot below the spell's level cannot pay for it", async () => {
     await refused(mage, "use_spell_slot", { characterId: mage.id, level, spell: "Fireball" }, `Fireball from a level ${level} slot`);
   }
   await refused(mage, "aoe_damage", {
-    damage: "8d6", saveAbility: "dex", dc: 14, enemyIds: [ogre.id], casterId: mage.id, spell: "Fireball", level: 2,
+    damage: "8d6", saveAbility: "dex", dc: 14, enemyIds: [ogre.id], casterCharacterId: mage.id, spell: "Fireball", level: 2,
   });
   await refused(mage, "cast_at_enemy", { characterId: mage.id, targetEnemyId: ogre.id, spell: "Hold Person", saveAbility: "wis", level: 1 });
 });
@@ -209,7 +209,7 @@ await test("a character with no Spellcasting casts no cantrip and no ritual", as
 
 await test("a character with no Spellcasting casts no area spell", async () => {
   await refused(soldier, "aoe_damage", {
-    damage: "8d6", saveAbility: "dex", dc: 15, enemyIds: [ogre.id], casterId: soldier.id, spell: "Arcane Detonation",
+    damage: "8d6", saveAbility: "dex", dc: 15, enemyIds: [ogre.id], casterCharacterId: soldier.id, spell: "Arcane Detonation",
   });
 });
 

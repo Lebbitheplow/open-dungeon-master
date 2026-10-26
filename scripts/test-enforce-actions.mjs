@@ -217,7 +217,7 @@ await test("Grapple: Athletics against the enemy, a win grapples and pins its sp
   assert.equal(out.result.contest, `${10 + ATHLETICS} vs ${10 + 1}`);
   assert.deepEqual(kit.enemy(enemy.id).conditions, ["grappled"]);
   const before = kit.token(enemy.id);
-  const moved = await world.invoke("move_token", { tokenName: enemy.id, x: 9, y: 9 });
+  const moved = await world.invoke("move_token", { token: enemy.id, x: 9, y: 9 });
   assert.equal(moved.ok, false);
   assert.deepEqual([kit.token(enemy.id).x, kit.token(enemy.id).y], [before.x, before.y]);
 });
