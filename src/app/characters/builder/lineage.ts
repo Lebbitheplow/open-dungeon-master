@@ -31,8 +31,10 @@ export { canonicalRaceId, srdRaceFor };
 
 // Pack lineages beyond the SRD still deserve a face. Most are a heritage or a
 // variant of a family we have painted, so the family word in the slug or the
-// name picks the plate. Order matters: "half-elf" before "elf", a gearforged
-// "dwarf chassis" is a construct before it is a dwarf.
+// name picks the plate. Order matters: more-specific names win — wood elf
+// before elf, mountain dwarf before dwarf, rock/forest gnome before gnome,
+// stout/stoor before lightfoot, castes and heritages before their base, and a
+// gearforged "dwarf chassis" is a construct before it is a dwarf.
 const FAMILY_WORDS: Array<[RegExp, string]> = [
   // A darakhul heritage is a ghoul first: the living race's word in its name
   // must not catch it, so these run before every living family. Ravenfolk is
@@ -50,18 +52,31 @@ const FAMILY_WORDS: Array<[RegExp, string]> = [
   [/heritage.*tiefling|tiefling.*heritage/, "darakhul-tiefling"],
   [/heritage.*trollkin|trollkin.*heritage/, "darakhul-trollkin"],
   [/darakhul/, "darakhul-human"],
-  // A gearforged chassis is a construct before it is a dwarf.
+  // A gearforged chassis is a construct before it is a dwarf; bare gearforged
+  // keeps its own plate, and warforged / human chassis stay on warforged.
   [/(dwarf|dwarven).*chassis|chassis.*dwarf/, "gearforged-dwarf"],
   [/gnome.*chassis|chassis.*gnome/, "gearforged-gnome"],
   [/kobold.*chassis|chassis.*kobold/, "gearforged-kobold"],
-  [/chassis|gearforged|warforged/, "warforged"],
-  [/drow|delver|fever[\s_-]?bit|purified/, "drow"],
+  [/human.*chassis|chassis.*human/, "warforged"],
+  [/gearforged/, "gearforged"],
+  [/chassis|warforged/, "warforged"],
+  // Drow castes before the base drow plate.
+  [/delver/, "delver"],
+  [/fever[\s_-]?bit/, "fever-bit"],
+  [/purified/, "purified"],
+  [/drow/, "drow"],
   [/half[\s_-]?elf/, "half-elf"],
   [/half[\s_-]?orc/, "half-orc"],
   [/(^|[\s_(])orc([\s_)]|$)/, "orc"],
   [/deep[\s_-]?gnome|gnome[\s_(-]+deep|svirfneblin/, "deep-gnome"],
+  [/rock[\s_-]?gnome|gnome[\s_(-]+rock/, "rock-gnome"],
+  [/forest[\s_-]?gnome|gnome[\s_(-]+forest/, "forest-gnome"],
+  [/mountain[\s_-]?dwarf/, "mountain-dwarf"],
   [/dwarf/, "dwarf"],
-  [/halfling|lightfoot|stout/, "halfling"],
+  [/stoor/, "stoor-halfling"],
+  [/stout/, "stout-halfling"],
+  [/halfling|lightfoot/, "halfling"],
+  [/wood[\s_-]?elf/, "wood-elf"],
   [/elf/, "elf"],
   [/gnome/, "gnome"],
   [/dragonborn/, "dragonborn"],
@@ -73,9 +88,17 @@ const FAMILY_WORDS: Array<[RegExp, string]> = [
   [/pantheran/, "pantheran"],
   [/catfolk/, "catfolk"],
   [/tabaxi/, "tabaxi"],
-  [/minotaur|bhain[\s_-]?kwai|boghaid/, "minotaur"],
-  [/mushroomfolk|acid[\s_-]?cap|morel/, "mushroomfolk"],
-  [/derro|far[\s_-]?touched|uncorrupted/, "derro"],
+  [/bhain[\s_-]?kwai/, "bhain-kwai"],
+  [/boghaid/, "boghaid"],
+  [/minotaur/, "minotaur"],
+  [/acid[\s_-]?cap/, "acid-cap"],
+  [/favored/, "favored"],
+  [/morel/, "morel"],
+  [/mushroomfolk/, "mushroomfolk"],
+  [/far[\s_-]?touched/, "far-touched"],
+  [/mutated/, "mutated"],
+  [/uncorrupted/, "uncorrupted"],
+  [/derro/, "derro"],
   [/alseid/, "alseid"],
   [/erina/, "erina"],
   [/satarre/, "satarre"],
