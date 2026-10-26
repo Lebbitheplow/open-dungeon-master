@@ -56,6 +56,7 @@ export default {
         timeoutMs: 10_000,
         label: "both traits read, whichever bold each uses",
       });
+      await read.scrollIntoViewIfNeeded();
       await t.shot("species-traits");
       await closeEditor();
 
@@ -65,8 +66,9 @@ export default {
       await eventually(async () => (await chips.count()) >= 7, { timeoutMs: 10_000, label: "the skill chips" });
       for (let index = 0; index < 6; index += 1) await t.tap(chips.nth(index));
       await eventually(async () => (await chips.nth(6).isDisabled()), { timeoutMs: 5_000, label: "the seventh skill off once six are picked" });
-      const said = (await backgroundEditor.innerText()).replace(/\s+/g, " ");
-      check(/6 (skills|of 6)/i.test(said), "a line says the background keeps six skills");
+      const full = backgroundEditor.getByText(/^6 of 6 picked, the most it keeps/);
+      await eventually(() => full.isVisible(), { timeoutMs: 5_000, label: "a line says the background keeps six skills" });
+      await untilStill(page);
       await t.shot("background-skills");
       await closeEditor();
 
