@@ -9,6 +9,7 @@ import { SoundDialog, soundSummary, type SoundSteering } from "@/app/campaigns/[
 import type { AmbienceAudio } from "@/app/campaigns/[campaignId]/useAmbienceAudio";
 import type { NarrationAudio } from "@/app/campaigns/[campaignId]/useNarrationAudio";
 import type { TableBreakControl } from "@/app/campaigns/[campaignId]/TableBreakBanner";
+import type { PrepControl } from "@/app/campaigns/[campaignId]/SessionHeader";
 import { RulebookDialog } from "@/components/rulebook/RulebookDialog";
 import { Slider } from "@/components/ui/Slider";
 
@@ -26,6 +27,7 @@ export function HeaderPhoneMenu({
   sound,
   onHelp,
   tableBreak,
+  prep,
 }: {
   narrates: boolean;
   narration: NarrationAudio;
@@ -34,6 +36,8 @@ export function HeaderPhoneMenu({
   sound: SoundSteering;
   onHelp: () => void;
   tableBreak?: TableBreakControl;
+  // Campaign prep and back (issue 530), for whoever steers the story.
+  prep?: PrepControl;
 }) {
   const [soundOpen, setSoundOpen] = useState(false);
   const [rulebookOpen, setRulebookOpen] = useState(false);
@@ -48,6 +52,11 @@ export function HeaderPhoneMenu({
   // unlocks audio and re-renders before the row is selected, so toggling
   // mute on the state at select time would switch narration off instead.
   const enablingRef = useRef(false);
+  // Campaign prep opens once the menu has closed: an open menu holds the
+  // keyboard inside itself, and would pull it back out of the prep the
+  // moment the prep took it (CampaignPrep.tsx), then hand it to nobody as
+  // it closed. Nor does the menu return focus to its button behind the prep.
+  const prepPending = useRef(false);
   const notePress = () => {
     enablingRef.current = !narration.unlocked && !narration.muted;
   };
@@ -70,7 +79,35 @@ export function HeaderPhoneMenu({
           </button>
         </DropdownMenu.Trigger>
         <DropdownMenu.Portal>
-          <DropdownMenu.Content align="end" sideOffset={4} className="panel z-50 w-[min(18rem,calc(100vw-1.5rem))] rounded-lg p-1">
+          <DropdownMenu.Content
+            align="end"
+            sideOffset={4}
+            className="panel z-50 w-[min(18rem,calc(100vw-1.5rem))] rounded-lg p-1"
+            onCloseAutoFocus={(event) => {
+              if (!prepPending.current) return;
+              prepPending.current = false;
+              if (!prep?.open) event.preventDefault();
+              prep?.onToggle();
+            }}
+          >
+            {prep ? (
+              <>
+                <DropdownMenu.Item
+                  className={row}
+                  onSelect={() => {
+                    prepPending.current = true;
+                  }}
+                  data-campaign-prep-row=""
+                >
+                  <HeaderGlyph glyph={prep.open ? "tab-session" : "tab-journal"} />
+                  <span>
+                    {prep.open ? "Back to the table" : "Campaign prep"}
+                    {hint(prep.open ? "Play is where you left it" : "Party, rules, lore and Bring in prep, without ending play")}
+                  </span>
+                </DropdownMenu.Item>
+                <DropdownMenu.Separator className="my-1 h-px bg-stone-700/60" />
+              </>
+            ) : null}
             {tableBreak && (!tableBreak.paused || tableBreak.mayResume) ? (
               <>
                 <DropdownMenu.Item className={row} onSelect={tableBreak.paused ? tableBreak.onResume : tableBreak.onPause}>

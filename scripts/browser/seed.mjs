@@ -1523,9 +1523,42 @@ const spellbook = {};
   }
 }
 
+// Issue 530: a running campaign the lead steers, one per viewport, to step
+// out of play to its prep and back without ending anything.
+const PREP_RETURN_TITLE = "Waystation Table";
+const prepReturn = {};
+for (const viewport of ["desktop", "phone"]) {
+  const table = campaigns.createCampaign(world.owner.id, {
+    title: `${PREP_RETURN_TITLE} (${viewport})`,
+    description: "A campaign between sessions.",
+    theme: "high-fantasy",
+    maxPlayers: 6,
+    startingLevel: 3,
+    difficulty: "normal",
+    gameSettings: { ttsEnabled: false },
+  });
+  const seated = campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+  if ("error" in seated) {
+    throw new Error(`could not seat the player at ${PREP_RETURN_TITLE}: ${seated.error}`);
+  }
+  campaigns.setCampaignStatus(table.id, "active");
+  sheets.createSheet(table.id, world.owner.id, 3, heroInput({ name: "Odile Fenwick", class: "fighter", level: 3 }));
+  sheets.createSheet(table.id, player.id, 3, heroInput({ name: "Ansel Fenwick", class: "rogue", level: 3 }));
+  messages.insertCampaignMessage({
+    campaignId: table.id,
+    seq: campaigns.allocateSeq(table.id),
+    authorType: "dm",
+    speech: [],
+    content: "The waystation's fire burns low. The road north waits for morning.",
+  });
+  prepReturn[viewport] = table.id;
+}
+
 const ids = {
   qualityTurnIds,
   spellbook,
+  prepReturn,
+  prepReturnTitle: PREP_RETURN_TITLE,
   chipTables,
   offerTableId: offerTable.id,
   offerWorkshopId: offerWorkshop.id,
@@ -1600,6 +1633,7 @@ const ids = {
     ...Object.fromEntries(Object.entries(pactTables).flatMap(([kind, tables]) => Object.entries(tables).map(([viewport, table]) => [table.id, `Pact ${kind.charAt(0).toUpperCase()}${kind.slice(1)} (${viewport})`]))),
     ...Object.fromEntries(Object.entries(chipTables).map(([viewport, table]) => [table.id, `Chip Table (${viewport})`])),
     ...Object.fromEntries(Object.entries(spellbook).map(([viewport, table]) => [table.id, `${SPELLBOOK_TITLE} (${viewport})`])),
+    ...Object.fromEntries(Object.entries(prepReturn).map(([viewport, id]) => [id, `${PREP_RETURN_TITLE} (${viewport})`])),
     [world.campaignId]: TITLE,
     [lobby.id]: LOBBY_TITLE,
     [quiet.id]: QUIET_TITLE,

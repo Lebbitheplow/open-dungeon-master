@@ -25,10 +25,13 @@ const NOOP_CUE: (cue: string) => void = () => {};
 // One shared empty list: a fresh [] per render would defeat the memo on
 // every panel that takes it.
 const EMPTY_IDS: string[] = [];
+// The prep layer's fade out (src/app/styles/session-prep.css).
+const PREP_FADE_MS = 240;
 
 import {
   type FormEvent,
   type CSSProperties,
+  type ReactNode,
   lazy,
   Suspense,
   useCallback,
@@ -71,6 +74,7 @@ import { SessionChatColumn } from "@/app/campaigns/[campaignId]/SessionChatColum
 import { AddonViewSwitch, boardViewKey, useBoardView, useBoardViewOptions } from "@/app/campaigns/[campaignId]/AddonViewSwitch";
 import { AddonBoardView } from "@/app/campaigns/[campaignId]/AddonBoardView";
 import { SessionHeader } from "@/app/campaigns/[campaignId]/SessionHeader";
+import { PrepLayer } from "@/app/campaigns/[campaignId]/CampaignPrep";
 import { SessionBanner, bannerButtonClass } from "@/app/campaigns/[campaignId]/SessionBanner";
 import { isPrimaryDm } from "@/lib/dm/viewer";
 import Link from "next/link";
@@ -195,6 +199,7 @@ export function SessionView({
   markCameraDone = NOOP,
   markTitleCardShown = NOOP_ID,
   playSting = NOOP_CUE,
+  prep,
 }: {
   state: CampaignState;
   refreshNotes: () => Promise<void>;
@@ -209,9 +214,45 @@ export function SessionView({
   markCameraDone?: () => void;
   markTitleCardShown?: (id: string) => void;
   playSting?: (cue: string) => void;
+  // The campaign's prep while the adventure runs (issue 530, page.tsx): for
+  // whoever steers the story, the header's way there and back, and the
+  // lobby's panels laid over this table while it is open.
+  prep?: { open: boolean; onToggle: () => void; screen: ReactNode };
 }) {
   // The effects mode rides on <html data-effects> for CSS-only consumers.
   useEffectsRoot();
+  const prepOpen = Boolean(prep?.open);
+  const prepToggle = prep?.onToggle;
+  // Stable for the memoized header.
+  const headerPrep = useMemo(
+    () => (prepToggle ? { open: prepOpen, onToggle: prepToggle } : undefined),
+    [prepOpen, prepToggle],
+  );
+  // Leaving prep fades it out over the table, already live beneath it:
+  // the layer stays for PREP_FADE_MS once closed (none under reduced motion).
+  const [prepLeaving, setPrepLeaving] = useState(false);
+  const [prepWasOpen, setPrepWasOpen] = useState(prepOpen);
+  if (prepWasOpen !== prepOpen) {
+    setPrepWasOpen(prepOpen);
+    setPrepLeaving(!prepOpen && !window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  }
+  useEffect(() => {
+    if (!prepLeaving) return;
+    const timer = window.setTimeout(() => setPrepLeaving(false), PREP_FADE_MS);
+    return () => window.clearTimeout(timer);
+  }, [prepLeaving]);
+  // Back from prep, the keyboard returns to the header's prep button.
+  const wasPrepOpen = useRef(prepOpen);
+  useEffect(() => {
+    if (wasPrepOpen.current && !prepOpen) {
+      // The header's button from sm up; on a phone, the table menu holding it.
+      const shown = [...document.querySelectorAll<HTMLElement>("[data-campaign-prep], [data-tour='header-menu']")].find(
+        (element) => element.offsetParent !== null,
+      );
+      shown?.focus({ preventScroll: true });
+    }
+    wasPrepOpen.current = prepOpen;
+  }, [prepOpen]);
   const turnChime = useTurnChime();
   const { campaign, me, sheets, messages, pendingRolls, auditLog, levelUps, locations, dmStatus, caps } =
     state;
@@ -1005,6 +1046,7 @@ export function SessionView({
 
   return (
     <main className="cine-stage flex h-dvh flex-col" data-session-view={sessionLayout ? shownStageView : undefined} data-side-board={boardInPanel ? "" : undefined}
+      data-prep={prepOpen ? "" : undefined}
       data-addon-theme={sessionTheme ? "" : undefined}
       style={sessionTheme ? { "--session-surface": sessionTheme.surface, "--session-accent": sessionTheme.accent } as CSSProperties : undefined}>
       {/* The cinematic frame ("ODM World Concepts" 3b): the scene's painting
@@ -1037,6 +1079,7 @@ export function SessionView({
         stage={sessionLayout || (state.battleMap && docked && !battlePane) ? { on: shownStageView === "board", onToggle: toggleStage } : undefined}
         layoutSeat={sessionLayout ? undefined : layoutSeat}
         tableBreak={breakControl}
+        prep={headerPrep}
         ribbon={
           state.encounter?.status === "active" ? (
             <InitiativeRibbon
@@ -1049,6 +1092,9 @@ export function SessionView({
         }
       />
 
+      {/* The table itself. While prep is open it stays laid out under it,
+          inert, so nothing in it is torn down or loses its place. */}
+      <div className="contents" inert={prepOpen}>
       {docked && ((!state.battleMap && addonViews.some((view) => view.sessionLayout)) || (sessionLayout && shownStageView === "story")) ? (
         <div className="relative px-3 py-1">
           <AddonViewSwitch views={addonViews.filter((view) => state.battleMap || view.sessionLayout)} value={addonBoardView ? boardViewKey(addonBoardView) : ""} onChange={chooseBoardView} stored={addonOptions} onOption={setAddonOption} />
@@ -1282,6 +1328,9 @@ export function SessionView({
         storyDue={storyDue}
         steersStory={steersStory}
       />
+      </div>
+
+      {prep && (prepOpen || prepLeaving) ? <PrepLayer leaving={!prepOpen}>{prep.screen}</PrepLayer> : null}
 
       {dice3d ? <DiceOverlay latestRoll={state.latestRoll} enabled /> : null}
       <SceneTitle card={state.titleCard} onShown={markTitleCardShown} />

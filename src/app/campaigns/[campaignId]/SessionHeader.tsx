@@ -147,6 +147,7 @@ export const SessionHeader = memo(function SessionHeader({
   stage,
   layoutSeat,
   tableBreak,
+  prep,
 }: {
   title: string;
   scene: string;
@@ -185,6 +186,9 @@ export const SessionHeader = memo(function SessionHeader({
   // Pause the table for a break (TableBreakBanner.tsx): any person in a
   // seat, from sm up here and in the phone's table menu below it.
   tableBreak?: TableBreakControl;
+  // The campaign's prep while play runs (issue 530): whoever steers the
+  // story steps out to it and back. Absent for everyone else.
+  prep?: PrepControl;
 }) {
   // Narration switched off server-wide: no passage is read aloud, so the
   // narration volume would steer nothing (issue 275; the lobby's own row
@@ -349,8 +353,10 @@ export const SessionHeader = memo(function SessionHeader({
           sound={sound}
           onHelp={onHelp}
           tableBreak={tableBreak}
+          prep={prep}
         />
         </div>
+        {prep ? <PrepButton control={prep} /> : null}
         <Tooltip content="All campaigns" side="bottom">
           <Link
             href="/"
@@ -367,6 +373,37 @@ export const SessionHeader = memo(function SessionHeader({
     </header>
   );
 });
+
+export type PrepControl = { open: boolean; onToggle: () => void };
+
+// Campaign prep, or the way back from it. Beside All campaigns from sm up,
+// because both are places to go; a phone has it in its table menu.
+function PrepButton({ control }: { control: PrepControl }) {
+  const label = control.open ? "Back to the table" : "Campaign prep";
+  return (
+    <Tooltip
+      content={
+        control.open
+          ? "Back to the table, as you left it"
+          : "The party, rules, lore and Bring in prep, without ending play. The table waits as it is."
+      }
+      side="bottom"
+    >
+      <button
+        type="button"
+        onClick={control.onToggle}
+        aria-label={label}
+        aria-pressed={control.open}
+        data-campaign-prep=""
+        data-tour="header-prep"
+        className={cn(ui.btnSmall, "hidden h-9 gap-1.5 py-0 pl-1 sm:inline-flex", control.open && "border-amber-400/70 text-amber-100")}
+      >
+        <HeaderGlyph glyph={control.open ? "tab-session" : "tab-journal"} />
+        <span key={label} className="live-in hidden md:inline">{label}</span>
+      </button>
+    </Tooltip>
+  );
+}
 
 // Pause for a break, or, while one is on, Resume for those who may lift it.
 // Lit while the table is paused; for anyone else it only says so.

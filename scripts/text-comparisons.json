@@ -251,6 +251,7 @@
     "app/campaigns/[campaignId]/mapToolState.ts#str-list": [["key",1,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
     "app/campaigns/[campaignId]/overworldDraw.ts#str-list": [["key",1,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
     "app/campaigns/[campaignId]/overworldDraw.ts#toUpperCase": [["display",1,"large map label"]],
+    "app/campaigns/[campaignId]/page.tsx#str-eq": [["key",1,"a campaign's status and the address's view (?view=prep): fixed choices"]],
     "app/campaigns/[campaignId]/sessionGlyphs.ts#str-key": [["key",1,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
     "app/campaigns/[campaignId]/table-layout-store.ts#str-eq": [["key",1,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
     "app/campaigns/[campaignId]/table-settings-groups.ts#str-key": [["key",4,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
