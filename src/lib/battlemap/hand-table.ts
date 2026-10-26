@@ -57,14 +57,19 @@ export function turnFromEncounter(
 }
 
 // What the turn's pips show: the engine's count, the same one the cards read.
-export function turnPips(turn: HandTurn): Array<{ label: string; used: boolean }> {
+// Each names the cost it pays for, whose colour and shape the cards' cost
+// tags wear too (issue 529).
+export type TurnPip = { label: string; used: boolean; cost: "action" | "bonus" | "reaction" };
+
+export function turnPips(turn: HandTurn): TurnPip[] {
   return [
     {
       label: "Action",
       used: turn.actionUsed && (turn.extraActions ?? 0) <= 0 && (turn.grantedActions ?? 0) <= 0,
+      cost: "action",
     },
-    { label: "Bonus", used: turn.bonusUsed },
-    { label: "Reaction", used: turn.reactionUsed },
+    { label: "Bonus", used: turn.bonusUsed, cost: "bonus" },
+    { label: "Reaction", used: turn.reactionUsed, cost: "reaction" },
   ];
 }
 

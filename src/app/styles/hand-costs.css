@@ -1,0 +1,199 @@
+/* The action economy's colours (issue 529). Each cost has one colour and one
+   shape, worn by the turn's pips above the Hand, every card's cost tag, its
+   corner notch and left edge, the board's turn pips and the filter chips, so
+   a card links to the pip it would spend at a glance: Action a circle, Bonus
+   action a triangle, Reaction a diamond. No card type wears these colours:
+   a type is the cloth ribbon along a card's top, a cost a solid gem. Free
+   and Rider spend no pip and stay a dashed outline. */
+
+:root {
+  --cost-action: #f4ead2;
+  --cost-action-ink: #1c1407;
+  --cost-bonus: #b9e35a;
+  --cost-bonus-ink: #172200;
+  --cost-reaction: #ee86cf;
+  --cost-reaction-ink: #2a0420;
+  /* The board is night in both themes, so its pips keep these. */
+  --cost-action-night: #f4ead2;
+  --cost-bonus-night: #b9e35a;
+  --cost-reaction-night: #ee86cf;
+}
+/* Parchment day: the same three, deep enough to fill a gem on vellum. */
+html[data-theme="light"] {
+  --cost-action: #2a2014;
+  --cost-action-ink: #fbf5e4;
+  --cost-bonus: #4f7a0c;
+  --cost-bonus-ink: #ffffff;
+  --cost-reaction: #a8287f;
+  --cost-reaction-ink: #ffffff;
+}
+
+/* One rule per cost sets the pair and the shape everything below reads. */
+[data-cost="action"] { --cost: var(--cost-action); --cost-ink: var(--cost-action-ink); --cost-night: var(--cost-action-night); --cost-clip: circle(50%); }
+[data-cost="bonus"] { --cost: var(--cost-bonus); --cost-ink: var(--cost-bonus-ink); --cost-night: var(--cost-bonus-night); --cost-clip: polygon(50% 4%, 100% 96%, 0 96%); }
+[data-cost="reaction"] { --cost: var(--cost-reaction); --cost-ink: var(--cost-reaction-ink); --cost-night: var(--cost-reaction-night); --cost-clip: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
+
+/* ---- the tag on a card, a More row, the arrange view ---- */
+
+.hand-cost {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-geist-mono), monospace;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  border-radius: 999px;
+  padding: 1px 6px;
+  color: var(--hand-ink-mute, #a8a29e);
+  border: 1px dashed rgba(214, 207, 194, 0.4);
+  background: transparent;
+}
+.hand-cost:is([data-cost="action"], [data-cost="bonus"], [data-cost="reaction"]) {
+  border: 1px solid var(--cost);
+  background: var(--cost);
+  color: var(--cost-ink);
+  font-weight: 700;
+}
+:is(.hand-cost, .hand-pip, .hand-chip):is([data-cost="action"], [data-cost="bonus"], [data-cost="reaction"])::before {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  background: currentColor;
+  clip-path: var(--cost-clip);
+}
+html[data-theme="light"] .hand-cost { color: #4a3e2d; border-color: rgba(109, 99, 80, 0.55); }
+
+/* ---- the corner notch and the left edge of a card ----
+   In the fan each card shows little more than its left side, so the cost is
+   drawn there: a gem in the ribbon's corner, and a line down the edge. */
+
+.hand-card-notch,
+.hand-card-edge { display: none; pointer-events: none; }
+.hand-card:is([data-cost="action"], [data-cost="bonus"], [data-cost="reaction"]) .hand-card-notch {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 18px;
+  border-radius: 14px 0 7px 0;
+  background: var(--cost);
+  color: var(--cost-ink);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--cost) 45%, transparent);
+  transition: box-shadow var(--dur-quick) var(--ease-snap);
+}
+.hand-card-notch::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  margin: 0 0 0 2px;
+  background: currentColor;
+  clip-path: var(--cost-clip);
+}
+.hand-card:is([data-cost="action"], [data-cost="bonus"], [data-cost="reaction"]) .hand-card-edge {
+  position: absolute;
+  left: 0;
+  top: 18px;
+  bottom: 16px;
+  display: block;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: linear-gradient(180deg, var(--cost), transparent);
+  opacity: 0.85;
+}
+.hand-card:is(:hover, :focus-visible) .hand-card-notch { box-shadow: 0 0 16px color-mix(in srgb, var(--cost) 70%, transparent); }
+html[data-theme="light"] .hand-card-notch { box-shadow: 0 1px 2px rgba(60, 40, 10, 0.35); }
+
+/* ---- the pips: what the turn has left ---- */
+
+.hand-pip[data-cost] {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-color: var(--cost);
+  background: var(--cost);
+  color: var(--cost-ink);
+  font-weight: 700;
+}
+.hand-pip[data-cost][data-used="true"] {
+  border-color: rgba(120, 113, 108, 0.45);
+  background: transparent;
+  color: #78716c;
+  font-weight: 400;
+}
+html[data-theme="light"] .hand-pip[data-cost][data-used="true"] { color: #8a7f6a; border-color: rgba(109, 99, 80, 0.4); }
+
+/* The board's own pips (BoardChrome.tsx TurnHud), on the night board. */
+.turn-pip {
+  border-color: rgba(107, 99, 148, 0.3);
+  background: rgba(13, 11, 28, 0.7);
+  color: #575170;
+  transition: color var(--dur-beat) var(--ease-snap), background-color var(--dur-beat) var(--ease-snap), border-color var(--dur-beat) var(--ease-snap);
+}
+.turn-pip[data-left="true"] {
+  border-color: var(--cost-night);
+  background: color-mix(in srgb, var(--cost-night) 16%, rgba(13, 11, 28, 0.82));
+  color: var(--cost-night);
+  font-weight: 600;
+}
+.turn-pip-shape {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  background: currentColor;
+  clip-path: var(--cost-clip);
+}
+
+/* ---- the filter chips of a group and the More sheet ---- */
+
+.hand-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(214, 207, 194, 0.28);
+  background: rgba(20, 16, 38, 0.55);
+  color: #e7e2d6;
+  font-size: 12px;
+  white-space: nowrap;
+  transition: background-color var(--dur-quick) var(--ease-snap), border-color var(--dur-quick) var(--ease-snap), color var(--dur-quick) var(--ease-snap);
+}
+.hand-chip:is([data-cost="action"], [data-cost="bonus"], [data-cost="reaction"])::before { background: var(--cost); }
+.hand-chip[data-cost="concentration"]::before {
+  content: "";
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+}
+.hand-chip:is(:hover, :focus-visible) { border-color: rgba(244, 224, 166, 0.75); outline: none; }
+.hand-chip:focus-visible { box-shadow: 0 0 0 2px rgba(244, 224, 166, 0.85); }
+.hand-chip[aria-pressed="true"] {
+  border-color: var(--cost, #ecd287);
+  background: var(--cost, #ecd287);
+  color: var(--cost-ink, #1c1407);
+  font-weight: 600;
+}
+.hand-chip[aria-pressed="true"]::before { background: currentColor; }
+.hand-chip[aria-pressed="true"][data-cost="concentration"]::before { background: transparent; }
+.hand-chip-count { font-family: var(--font-geist-mono), monospace; font-size: 10px; opacity: 0.7; }
+html[data-theme="light"] .hand-chip { background: rgba(255, 250, 235, 0.85); border-color: rgba(122, 96, 40, 0.4); color: #2a2014; }
+html[data-theme="light"] .hand-chip[aria-pressed="true"] { color: var(--cost-ink, #fbf5e4); background: var(--cost, #6b4f0e); border-color: var(--cost, #6b4f0e); }
+
+/* A finger's worth on a phone. */
+@media (max-width: 639px) {
+  .hand-chip { min-height: 40px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hand-card-notch, .hand-chip, .turn-pip { transition: none; }
+}

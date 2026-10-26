@@ -1,6 +1,9 @@
 /* The beats (pips, target chips, the committed card, folding away) live in a
-   sibling so neither file outgrows a screenful of scrolling. */
+   sibling so neither file outgrows a screenful of scrolling; so do the
+   costs' colours (issue 529) and the groups (issue 528). */
 @import "./hand-motion.css";
+@import "./hand-costs.css";
+@import "./hand-groups.css";
 
 /* The Hand: the combat action cards above the composer
    (src/app/campaigns/[campaignId]/Hand.tsx, docs/visual-overhaul-plan.md 5.2).
@@ -176,21 +179,7 @@
   min-width: 0;
 }
 .hand-card-top { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 6px; }
-.hand-cost {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 9px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: #ecd287;
-  border: 1px solid rgba(212, 171, 58, 0.45);
-  background: rgba(43, 32, 8, 0.3);
-  border-radius: 999px;
-  padding: 1px 6px;
-  white-space: nowrap;
-}
-.hand-cost[data-cost="bonus"] { color: #ffbe8f; border-color: rgba(198, 90, 36, 0.5); background: rgba(69, 20, 6, 0.3); }
-.hand-cost[data-cost="reaction"] { color: #9fe3f5; border-color: rgba(127, 184, 230, 0.4); background: rgba(12, 26, 36, 0.4); }
-.hand-cost[data-cost="free"] { color: #d6cfc2; border-color: rgba(214, 207, 194, 0.35); background: rgba(20, 16, 12, 0.4); }
+/* The cost tag's colours and shapes are hand-costs.css's (issue 529). */
 .hand-range { font-family: var(--font-geist-mono), monospace; font-size: 9px; color: var(--hand-ink-mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 .hand-art {
@@ -336,6 +325,7 @@
 .hand-row-value[data-tone="muted"] { color: #aeaac6; }
 .hand-row-value[data-tone="applies"] { color: #ff9d5c; }
 .hand-row-value[data-tone="cost"] { color: #ecd287; }
+.hand-row-value[data-tone="cost"]:is([data-cost="action"], [data-cost="bonus"], [data-cost="reaction"]) { color: var(--cost); }
 .hand-preview-head { display: flex; align-items: center; gap: 7px; margin-bottom: 6px; min-width: 0; }
 .hand-type-chip {
   display: inline-flex;
@@ -593,10 +583,6 @@ html[data-theme="light"] .hand-card-sheen { background: radial-gradient(170px ci
 html[data-theme="light"] .hand-dice { color: #a3461a; }
 html[data-theme="light"] .hand-dice[data-heals="true"] { color: #166534; }
 html[data-theme="light"] .hand-cond { color: #b4530f; }
-html[data-theme="light"] .hand-cost { color: #6b4f0e; border-color: rgba(138, 107, 28, 0.55); background: rgba(212, 171, 58, 0.2); }
-html[data-theme="light"] .hand-cost[data-cost="bonus"] { color: #8f3a12; border-color: rgba(163, 70, 26, 0.5); background: rgba(198, 90, 36, 0.14); }
-html[data-theme="light"] .hand-cost[data-cost="reaction"] { color: #1f5a86; border-color: rgba(31, 90, 134, 0.45); background: rgba(56, 109, 168, 0.12); }
-html[data-theme="light"] .hand-cost[data-cost="free"] { color: #4a3e2d; border-color: rgba(109, 99, 80, 0.5); background: rgba(109, 99, 80, 0.12); }
 html[data-theme="light"] .hand-card[data-type="attack"] { --ribbon-bg: linear-gradient(180deg, #d9763f, #b9531f); --ribbon-edge: rgba(122, 50, 14, 0.5); }
 html[data-theme="light"] .hand-card[data-type="rider"], html[data-theme="light"] .hand-card[data-type="feature"] { --ribbon-bg: linear-gradient(180deg, #e0bd57, #b8922a); --ribbon-edge: rgba(122, 96, 40, 0.55); }
 html[data-theme="light"] .hand-card[data-type="spell"], html[data-theme="light"] .hand-card[data-type="control"] { --ribbon-bg: linear-gradient(180deg, #8d74d6, #6a4fb8); --ribbon-edge: rgba(62, 40, 130, 0.5); }

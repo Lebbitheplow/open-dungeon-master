@@ -4,12 +4,22 @@
 // engine charges them. Nothing is played: a played card wakes the DM.
 import { check, eventually, untilStill } from "../lib.mjs";
 
-// Every card dealt, the fan's and the ones behind More, by name.
+const cardNames = (locator) => locator.evaluateAll((cards) => cards.map((card) => (card.getAttribute("aria-label") ?? "").split(",")[0].trim()));
+
+// Every card dealt, the fan's, the ones inside its groups (issue 528: the
+// gear cards fold under Items) and the ones behind More, by name.
 async function dealt(t) {
   const { page, root } = t;
-  const fan = await page
-    .locator(`${root}button.hand-card`)
-    .evaluateAll((cards) => cards.map((card) => (card.getAttribute("aria-label") ?? "").split(",")[0].trim()));
+  const fan = await cardNames(page.locator(`${root}.hand-fan button.hand-card:not(.hand-group-card)`));
+  const groups = await page.locator(`${root}button.hand-group-card`).evaluateAll((cards) => cards.map((card) => card.dataset.groupId));
+  for (const id of groups) {
+    await t.tap(page.locator(`${root}button.hand-group-card[data-group-id="${id}"]`).first());
+    const back = page.locator(`${root}.hand-back`).locator("visible=true");
+    await eventually(() => back.count(), { label: `the ${id} group open` });
+    fan.push(...(await cardNames(page.locator(`${root}.hand-fan button.hand-card`))));
+    await t.tap(back.first());
+    await eventually(async () => (await back.count()) === 0, { label: "the main hand again" });
+  }
   const more = page.locator(`${root}button.hand-more`).locator("visible=true");
   if (!(await more.count())) return fan;
   await t.tap(more.first());
@@ -62,8 +72,14 @@ export default {
     for (const name of ["Pick up", "Drop", "Stow a weapon"]) {
       check(names.includes(name), `${name} is dealt (${names.join(", ")})`);
     }
-    // The More sheet is open when the card sits behind it.
+    // The More sheet is open when the card sits behind it; otherwise it is
+    // in the fan, or inside Items.
     const behind = page.locator("li.hand-more-row button").filter({ hasText: "Pick up" }).locator("visible=true");
+    const items = page.locator(`${root}button.hand-group-card[data-group-id="group:items"]`).locator("visible=true");
+    if (!(await behind.count()) && (await items.count())) {
+      await t.tap(items.first());
+      await eventually(() => page.locator(`${root}.hand-back`).locator("visible=true").count(), { label: "Items open" });
+    }
     const card = (await behind.count())
       ? behind.first()
       : page.locator(`${root}button.hand-card[aria-label^="Pick up,"]`).locator("visible=true").first();

@@ -8,7 +8,7 @@ import { resourceDef, resourceLevel, type ResourceDef } from "@/lib/srd/class-re
 import { psionicOptions } from "@/lib/dm/option-costs";
 import { BONUS_ATTACK_COUNTERS } from "@/lib/dm/feature-bonus-attacks";
 import { isMeleeSpellAttack } from "@/lib/srd/melee-spell";
-import { bundledSpellFacts } from "@/lib/srd/spell-facts";
+import { bundledSpellFacts, type CastingTime, type SpellRange } from "@/lib/srd/spell-facts";
 import { aoeSpendFor } from "@/lib/srd/aoe-spend";
 import type { CombatRiders } from "@/lib/srd/feature-effects";
 import { authoredSpellRow, parseSpellMech, spellMechFor, type SpellMech } from "@/lib/srd/spell-mechanics";
@@ -60,19 +60,38 @@ export function spellNames(sheet: CharacterSheet): string[] {
   });
 }
 
+// The bundled facts in the words a pack's row uses, so a table without the
+// pack deals the same card the pack would (and the cast guard, which reads
+// these facts, would accept).
+function castingText(time: CastingTime): string {
+  if (typeof time === "number") return `${time} minute${time === 1 ? "" : "s"}`;
+  return time === "bonus" ? "1 bonus action" : time === "reaction" ? "1 reaction" : "1 action";
+}
+
+function rangeText(range: SpellRange): string {
+  if (range.kind === "feet") return `${range.feet} feet`;
+  if (range.kind === "self") return "Self";
+  return range.kind === "unknown" ? "" : range.kind.replace(/^./, (c) => c.toUpperCase());
+}
+
 function factFor(name: string, options: HandOptions): SpellFact | null {
   const fetched = options.spells?.[textKey(name)];
   if (fetched) return fetched;
+  // No pack: the authored rows' prose, and the bundled facts' casting time,
+  // range and concentration. Every spell used to read as one action here,
+  // so Shield and Counterspell were dealt as actions and Misty Step's cost
+  // rested on the cast guard alone.
   const row = authoredSpellRow(name);
-  if (!row) return null;
+  const facts = bundledSpellFacts(name);
+  if (!row && !facts) return null;
   return {
-    level: row.level,
+    level: facts?.level ?? row?.level ?? 0,
     school: "",
-    castingTime: "1 action",
-    range: "",
-    desc: row.desc,
-    higherLevel: row.higher_level ?? "",
-    concentration: Boolean(row.concentration),
+    castingTime: facts ? castingText(facts.castingTime) : "1 action",
+    range: facts ? rangeText(facts.range) : "",
+    desc: row?.desc ?? "",
+    higherLevel: row?.higher_level ?? "",
+    concentration: facts?.concentration ?? Boolean(row?.concentration),
   };
 }
 
@@ -283,6 +302,8 @@ function spellCard(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders, 
     disabled: null,
     spent: false,
     compose: false,
+    level: fact.level,
+    ...(fact.concentration ? { concentration: true } : {}),
     // A reaction spell (Shield, Hellish Rebuke) is played as a reaction:
     // use_reaction resolves it, off the caster's turn too.
     intent:
@@ -443,6 +464,7 @@ export function featureCards(sheet: CharacterSheet, turn: HandTurn): HandCard[] 
       disabled: null,
       spent: false,
       compose,
+      pool: id,
       intent:
         cost === "reaction"
           ? { card: "reaction", feature: def.displayName }

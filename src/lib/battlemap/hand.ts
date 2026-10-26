@@ -338,6 +338,7 @@ function riderCards(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders)
             icon: { kind: "feature", key: name, family: "class-fighter" },
             damage: use === "grapple" ? null : die,
             damageType: "",
+            pool: "sub_superiority_dice",
             intent: { card: "rider", rider: name },
           },
           standing,
@@ -420,6 +421,8 @@ function basicCards(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders)
       spent: false,
       compose: Boolean(basic.compose),
       ...(basic.asks ? { asks: basic.asks } : {}),
+      // Step of the Wind and Patient Defense spend ki; a counted route its uses.
+      ...(route?.ki ? { pool: "ki" } : route?.counter ? { pool: route.counter } : {}),
       intent: { card: "basic", action: basic.id, ...(route ? { bonus: true } : {}) },
     };
   };

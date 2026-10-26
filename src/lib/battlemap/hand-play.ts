@@ -61,7 +61,13 @@ function chosenLabel(card: HandCard, choices: HandChoices): string | null {
   return card.choice?.options.find((option) => option.value === value)?.label ?? value;
 }
 
-export type PreviewRow = { key: string; value: string; tone: "damage" | "heal" | "plain" | "save" | "muted" | "applies" | "cost" };
+export type PreviewRow = {
+  key: string;
+  value: string;
+  tone: "damage" | "heal" | "plain" | "save" | "muted" | "applies" | "cost";
+  // The Cost row's cost, so it wears that cost's colour (issue 529).
+  cost?: HandCost;
+};
 
 // The armour class a creature of this challenge usually carries (the SRD's
 // monster statistics by challenge rating). An estimate, and labelled as one.
@@ -160,7 +166,7 @@ export function previewRows(
   }
   if (card.damageType) rows.push({ key: "Type", value: card.damageType, tone: "muted" });
   if (card.condition) rows.push({ key: "Applies", value: card.condition, tone: "applies" });
-  rows.push({ key: "Cost", value: card.resource ? `${costLabel(card.cost)} · ${card.resource}` : costLabel(card.cost), tone: "cost" });
+  rows.push({ key: "Cost", value: card.resource ? `${costLabel(card.cost)} · ${card.resource}` : costLabel(card.cost), tone: "cost", cost: card.cost });
   return rows;
 }
 
