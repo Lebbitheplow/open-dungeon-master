@@ -79,6 +79,9 @@ export function useNarrationAudio(onBreak = false): NarrationAudio {
   const [audioByMessage] = useState(() => new Map<string, string>());
   const unlockedRef = useRef(false);
   const playingRef = useRef<string | null>(null);
+  // Counts every start, so a playback can tell it was overtaken even by a
+  // replay of the same passage.
+  const turnRef = useRef(0);
   // Narrations wait for the current one instead of cutting it off.
   const queueRef = useRef<Array<{ messageId: string; url: string }>>([]);
   // Every messageId ever started or queued; guards against replays when the
@@ -107,6 +110,8 @@ export function useNarrationAudio(onBreak = false): NarrationAudio {
   useEffect(() => {
     return () => {
       const audio = audioRef.current;
+      // Leaving the table is this hook's own stop.
+      turnRef.current += 1;
       if (audio) {
         audio.pause();
         audio.src = "";
@@ -165,38 +170,64 @@ export function useNarrationAudio(onBreak = false): NarrationAudio {
       };
       audio.onended = finish;
       audio.onerror = fail;
+      const turn = ++turnRef.current;
+      // This hook stopped it or moved on: a newer passage or a replay, mute,
+      // a break, leaving the table.
+      const overtaken = () => playingRef.current !== id || turnRef.current !== turn;
       playingRef.current = id;
       setPlayingMessageId(id);
       setPlaybackFailure((current) => (current === id ? null : current));
       audio.src = src;
       audio.volume = readVolume();
-      audio.play().catch((error: unknown) => {
-        if (playingRef.current !== id) {
-          return;
-        }
-        if (error instanceof DOMException && error.name === "NotAllowedError") {
-          // The browser wants a gesture first (a tab that was never
-          // touched, or one that sat idle). This narration is offered only
-          // once, so it goes back to wait, along with whatever queued
-          // behind it, and the header shows the "enable audio" state again.
-          // Oldest first, so the next unlock() plays only the newest of them
-          // and leaves the rest to their replay buttons, as at first load.
-          setPending([{ messageId: id, url: src }, ...queueRef.current, ...pendingRef.current]);
-          queueRef.current = [];
-          playingRef.current = null;
-          setPlayingMessageId(null);
-          unlockedRef.current = false;
-          setUnlocked(false);
-          return;
-        }
-        // A pause() that interrupts a play() rejects with AbortError: that
-        // is this hook stopping it, not a failure.
-        if (error instanceof DOMException && error.name === "AbortError") {
-          finish();
-          return;
-        }
-        fail();
-      });
+      let retried = false;
+      const start = () => {
+        audio.play().catch((error: unknown) => {
+          if (overtaken()) {
+            return;
+          }
+          if (error instanceof DOMException && error.name === "NotAllowedError") {
+            // The browser wants a gesture first (a tab that was never
+            // touched, or one that sat idle). This narration is offered only
+            // once, so it goes back to wait, along with whatever queued
+            // behind it, and the header shows the "enable audio" state
+            // again. Oldest first, so the next unlock() plays only the newest
+            // of them and leaves the rest to their replay buttons, as at
+            // first load.
+            setPending([{ messageId: id, url: src }, ...queueRef.current, ...pendingRef.current]);
+            queueRef.current = [];
+            playingRef.current = null;
+            setPlayingMessageId(null);
+            unlockedRef.current = false;
+            setUnlocked(false);
+            return;
+          }
+          // Every stop this hook makes is overtaken() above, so an
+          // AbortError here came from elsewhere: a new load started under
+          // this play() (issue 539: the apps hand the element a protected
+          // file once it is fetched, a beat after src was set). The passage
+          // is still wanted, so it is tried once more when the element can
+          // play; a second failure is reported, never dropped in silence.
+          if (error instanceof DOMException && error.name === "AbortError" && !retried) {
+            retried = true;
+            if (audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+              start();
+              return;
+            }
+            audio.addEventListener(
+              "canplay",
+              () => {
+                if (!overtaken()) {
+                  start();
+                }
+              },
+              { once: true },
+            );
+            return;
+          }
+          fail();
+        });
+      };
+      start();
     }
     run(messageId, url);
   }, [setPending]);

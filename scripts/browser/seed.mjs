@@ -1554,6 +1554,27 @@ for (const viewport of ["desktop", "phone"]) {
   prepReturn[viewport] = table.id;
 }
 
+// Issue 539: a table outside a fight, narration on, with two passages to
+// read aloud one after the other (scenario narration-replay).
+const REPLAY_TITLE = "Replay Table";
+const replayTable = campaigns.createCampaign(world.owner.id, {
+  title: REPLAY_TITLE,
+  description: "Two passages to hear, one after the other.",
+  theme: "high-fantasy",
+  maxPlayers: 4,
+  startingLevel: 3,
+  difficulty: "normal",
+  gameSettings: { ttsEnabled: true },
+});
+campaigns.setCampaignStatus(replayTable.id, "active");
+sheets.createSheet(replayTable.id, world.owner.id, 3, heroInput({ name: "Maren Holt", class: "bard", level: 3 }));
+for (const content of [
+  "Fog lifts off the millpond. A heron stands in the reeds and watches the road.",
+  "Bells ring from the abbey on the hill. The gate below swings open for the carts.",
+]) {
+  messages.insertCampaignMessage({ campaignId: replayTable.id, seq: campaigns.allocateSeq(replayTable.id), authorType: "dm", speech: [], content });
+}
+
 const ids = {
   qualityTurnIds,
   spellbook,
@@ -1611,6 +1632,7 @@ const ids = {
   directed,
   levelTableId: levelTable.id,
   commandTableId: commandTable.id,
+  replayTableId: replayTable.id,
   courting,
   conscience,
   masked,
@@ -1624,6 +1646,7 @@ const ids = {
   titles: {
     [levelTable.id]: "Level Table",
     [commandTable.id]: COMMAND_TITLE,
+    [replayTable.id]: REPLAY_TITLE,
     ...Object.fromEntries(Object.entries(courting).map(([viewport, table]) => [table.id, `${COURTING_TITLE} (${viewport})`])),
     ...Object.fromEntries(Object.entries(conscience).map(([viewport, table]) => [table.id, `${CONSCIENCE_TITLE} (${viewport})`])),
     ...Object.fromEntries(Object.entries(masked).map(([viewport, table]) => [table.id, `${MASKED_TITLE} (${viewport})`])),
