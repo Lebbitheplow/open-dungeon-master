@@ -13,11 +13,13 @@ import { TARGET_PARTY_LIMITS } from "@/lib/workshop/kind";
 import type { PreparedEncounter } from "@/app/workshop/encounters/types";
 
 // Test fight (issue 553): who fights the prepared fight, then the table
-// (src/lib/workshop/test-fight.ts). One question with a default that needs
-// no answer: the stand-ins are the party the workshop is built for, so one
-// press tests what every budget in the workshop was measured against. The
+// (src/lib/workshop/test-fight.ts). Each question has a default that needs
+// no answer. The stand-ins are the party the workshop is built for, so one
+// press tests what every budget in the workshop was measured against; the
 // other answer is the author's own characters, when the question is how
-// their party fares.
+// their party fares. Where an AI DM is set up it runs the fight unless the
+// author would rather run it, as they run their own tables; where none is,
+// the author runs it and the sheet only says so.
 
 export type TestFightInfo = {
   ready: boolean;
@@ -62,6 +64,7 @@ export function TestFightSheet({
   onClose: () => void;
 }) {
   const [who, setWho] = useState<Who>("stand-ins");
+  const [runner, setRunner] = useState<"ai" | "person">("ai");
   const [picked, setPicked] = useState<string[]>([]);
   const [pregens, setPregens] = useState<Character[] | null>(null);
   const [library, setLibrary] = useState<Character[] | null>(null);
@@ -111,6 +114,7 @@ export function TestFightSheet({
         body: JSON.stringify({
           templateId: encounter.id,
           party: who === "stand-ins" ? { kind: "stand-ins" } : { kind: "characters", characterIds: picked },
+          runner: info?.ready ? runner : "person",
         }),
       }),
       "The test fight could not be set up.",
@@ -131,7 +135,7 @@ export function TestFightSheet({
   const others = (library ?? []).filter((character) => !pregenIds.has(character.id));
   const full = picked.length >= TARGET_PARTY_LIMITS.size.max;
   const standIns = info?.standIns;
-  const canStart = Boolean(info?.ready) && !busy && (who === "stand-ins" || picked.length > 0);
+  const canStart = Boolean(info) && !busy && (who === "stand-ins" || picked.length > 0);
 
   const checkbox = (character: Character) => {
     const on = picked.includes(character.id);
@@ -154,49 +158,44 @@ export function TestFightSheet({
     );
   };
 
+  // One answer of a question, as a card the whole of which is its label.
+  const radio = (group: string, checked: boolean, onSelect: () => void, title: string, hint: string) => (
+    <label className={cn(choiceCard, checked ? "border-amber-500/50 bg-amber-500/10" : "border-stone-800 bg-stone-950/40")}>
+      <input type="radio" name={group} checked={checked} onChange={onSelect} className="mt-0.5 size-4 shrink-0 accent-amber-500" />
+      <span className="min-w-0">
+        <span className="block text-sm text-stone-100">{title}</span>
+        <span className="block text-xs text-stone-400">{hint}</span>
+      </span>
+    </label>
+  );
+  const legend = "mb-1.5 font-display text-xs uppercase tracking-[0.14em] text-amber-200/90";
+
   return (
     <Sheet open={open} onOpenChange={close} title={encounter ? `Test ${encounter.name}` : "Test fight"} className="lg:w-[min(92vw,34rem)]">
       <div className="space-y-4" data-testid="test-fight-sheet">
         <p className="text-sm text-stone-300">
-          Play this fight on a table only you can see. The AI DM runs the enemies, by their plan and
-          on their map; you play the party, each hero on their own turn.
+          Play this fight on a table only you can see, on its map and by its plan. You play the
+          party, each hero on their own turn.
         </p>
 
         <fieldset className="space-y-2">
-          <legend className="mb-1.5 font-display text-xs uppercase tracking-[0.14em] text-amber-200/90">Who fights it</legend>
-          <label className={cn(choiceCard, who === "stand-ins" ? "border-amber-500/50 bg-amber-500/10" : "border-stone-800 bg-stone-950/40")}>
-            <input
-              type="radio"
-              name="test-fight-party"
-              checked={who === "stand-ins"}
-              onChange={() => setWho("stand-ins")}
-              className="mt-0.5 size-4 shrink-0 accent-amber-500"
-            />
-            <span className="min-w-0">
-              <span className="block text-sm text-stone-100">The stand-in party</span>
-              <span className="block text-xs text-stone-400">
-                {standIns
-                  ? `${standIns.size} ${standIns.size === 1 ? "hero" : "heroes"} at level ${standIns.level}, the party this workshop is built for: ${listed(standIns.classes)}. Built by the rules when the test starts.`
-                  : "The party this workshop is built for, built by the rules when the test starts."}
-              </span>
-            </span>
-          </label>
-          <label className={cn(choiceCard, who === "characters" ? "border-amber-500/50 bg-amber-500/10" : "border-stone-800 bg-stone-950/40")}>
-            <input
-              type="radio"
-              name="test-fight-party"
-              checked={who === "characters"}
-              onChange={() => setWho("characters")}
-              className="mt-0.5 size-4 shrink-0 accent-amber-500"
-            />
-            <span className="min-w-0">
-              <span className="block text-sm text-stone-100">Characters you pick</span>
-              <span className="block text-xs text-stone-400">
-                This workshop&apos;s pregens or anyone in your library, at their own levels. They fight as
-                copies: nothing in the test reaches your library.
-              </span>
-            </span>
-          </label>
+          <legend className={legend}>Who fights it</legend>
+          {radio(
+            "test-fight-party",
+            who === "stand-ins",
+            () => setWho("stand-ins"),
+            "The stand-in party",
+            standIns
+              ? `${standIns.size} ${standIns.size === 1 ? "hero" : "heroes"} at level ${standIns.level}, the party this workshop is built for: ${listed(standIns.classes)}. Built by the rules when the test starts.`
+              : "The party this workshop is built for, built by the rules when the test starts.",
+          )}
+          {radio(
+            "test-fight-party",
+            who === "characters",
+            () => setWho("characters"),
+            "Characters you pick",
+            "This workshop's pregens or anyone in your library, at their own levels. They fight as copies: nothing in the test reaches your library.",
+          )}
         </fieldset>
 
         {who === "characters" ? (
@@ -234,8 +233,28 @@ export function TestFightSheet({
           </div>
         ) : null}
 
-        {info && !info.ready ? (
-          <p className="flex items-start gap-2 rounded-lg border border-amber-700/40 bg-amber-950/20 px-3 py-2 text-xs text-amber-200/90" data-testid="test-fight-not-ready">
+        {/* Who runs it is a question only where an AI DM could; with none,
+            the author does, and the note says so. */}
+        {info?.ready ? (
+          <fieldset className="space-y-2">
+            <legend className={legend}>Who runs it</legend>
+            {radio(
+              "test-fight-runner",
+              runner === "ai",
+              () => setRunner("ai"),
+              "The AI DM",
+              "It opens the fight and runs the enemies by their plan, as at a table the AI runs.",
+            )}
+            {radio(
+              "test-fight-runner",
+              runner === "person",
+              () => setRunner("person"),
+              "You",
+              "You run the enemies with their cards and the party with theirs, as a DM at a table you run. No AI is called.",
+            )}
+          </fieldset>
+        ) : info ? (
+          <p className="flex items-start gap-2 rounded-lg border border-stone-700/60 bg-stone-950/40 px-3 py-2 text-xs text-stone-300" data-testid="test-fight-not-ready">
             <GameIcon icon={{ kind: "glyph", key: "ui-ai" }} size="size-5" className="shrink-0" />
             {info.reason}
           </p>

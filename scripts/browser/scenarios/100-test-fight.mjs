@@ -1,8 +1,10 @@
 // Issue 553: a workshop's prepared fight answered Deploy with "No party
 // characters to fight.", because a workshop has no party. The fight's
 // button is Test fight now (src/lib/workshop/test-fight.ts): it asks who
-// fights it (the stand-in party by default, or characters the author picks),
-// opens a table only the author can see with the fight on the board, and
+// fights it (the stand-in party by default, or characters the author picks)
+// and, where an AI DM is set up, who runs it; with none the author does,
+// dealt the party's Hand on a hero's turn and the monsters' on the enemies'.
+// It opens a table only the author can see with the fight on the board, and
 // the table's banner leads back to the workshop, where the open test can be
 // returned to or ended.
 import http from "node:http";
@@ -105,15 +107,68 @@ export default {
         await eventually(() => sheetPanel.isVisible(), { timeoutMs: 15_000, label: "the Test fight sheet" });
       };
 
-      // No model on this server: the sheet says why, and nothing starts.
+      // No model on this server: the author runs the test, and the sheet
+      // says so instead of asking.
+      const phone = t.viewport === "phone";
       await openSheet();
       check(/Test fight/i.test(await button.textContent()), `the fight's button tests it (${await button.textContent()})`);
       const notReady = sheetPanel.locator('[data-testid="test-fight-not-ready"]');
-      await eventually(() => notReady.count(), { timeoutMs: 15_000, label: "the reason a test cannot start" });
-      check(/run by the AI DM/.test(await notReady.innerText()), `the reason says why (${await notReady.innerText()})`);
-      check(await sheetPanel.getByRole("button", { name: /Start the test fight/ }).isDisabled(), "Start is off with no AI DM");
+      await eventually(() => notReady.count(), { timeoutMs: 15_000, label: "the note that the author runs it" });
+      check(/you run the test/.test(await notReady.innerText()), `the note says who runs it (${await notReady.innerText()})`);
+      check(!(await sheetPanel.getByRole("radio", { name: /The AI DM/ }).count()), "no AI DM to choose");
+      const startNoAi = sheetPanel.getByRole("button", { name: /Start the test fight/ });
+      check(await startNoAi.isEnabled(), "Start works with no AI DM");
       await t.shot("sheet-no-ai");
-      await page.keyboard.press("Escape");
+      await t.tap(startNoAi);
+      await eventually(async () => (await t.url()).pathname.startsWith("/campaigns/"), { timeoutMs: 60_000, label: "the table the author runs" });
+      const personalId = (await t.url()).pathname.split("/")[2];
+      const runBanner = page.locator(`${root}.test-fight-banner`).locator("visible=true").first();
+      if (!phone) {
+        await eventually(() => runBanner.isVisible(), { timeoutMs: 30_000, label: "the banner of the table the author runs" });
+        const told = (await runBanner.innerText()).replace(/\s+/g, " ");
+        check(/you run it/.test(told), `the banner says the author runs it (${told})`);
+        await axeBothThemes(t, `${root}.test-fight-banner`, "the banner of a test you run");
+      }
+      // Each turn deals its own Hand: the party's on a hero's turn, the
+      // monsters' on the enemies'. A hero's turn is ended the way its End
+      // turn card ends it; the enemies are played from their Hand.
+      // On a phone the Hand is under the box, in the Table view, as a
+      // player's is; the table opens a fight on the board.
+      if (phone) await t.tap(page.locator(`${root}nav.cine-bottombar`).getByRole("button", { name: "Table", exact: true }));
+      const yours = page.locator(`${root}section[aria-label="Your hand"]`).locator("visible=true").first();
+      const theirs = page.locator(`${root}section[aria-label="The monsters' hand"]`).locator("visible=true").first();
+      const fightNow = async () => (await (await api.get(`${base}/api/campaigns/${personalId}`)).json()).encounter;
+      let sawYours = false;
+      let sawTheirs = false;
+      for (let step = 0; step < 10 && !(sawYours && sawTheirs); step += 1) {
+        const now = await fightNow();
+        check(now?.orderReady, `the opening rolled the order (${JSON.stringify(now)?.slice(0, 200)})`);
+        if (now.enemiesDue?.length) {
+          await eventually(() => theirs.isVisible(), { timeoutMs: 30_000, label: "the monsters' hand on the enemies' turn" });
+          check(!(await yours.count()), "the party's hand is put away on the enemies' turn");
+          if (!sawTheirs) await t.shot("person-enemies-turn");
+          sawTheirs = true;
+          await t.tap(theirs.getByRole("button", { name: "Play the rest for me" }));
+          await eventually(async () => !(await fightNow()).enemiesDue?.length, { timeoutMs: 30_000, label: "the enemies played" });
+          continue;
+        }
+        const up = now.order[now.turnIndex];
+        check(up?.kind === "pc", `a hero is up (${JSON.stringify(up)})`);
+        await eventually(() => yours.isVisible(), { timeoutMs: 30_000, label: `the party's hand on ${up.name}'s turn` });
+        check(!(await theirs.count()), "the monsters' hand is put away on a hero's turn");
+        check(await yours.getByRole("button", { name: /^End turn,/ }).count(), "the hero's End turn card is dealt");
+        if (!sawYours) await t.shot("person-hero-turn");
+        sawYours = true;
+        if (sawTheirs) break;
+        const ended = await api.post(`${base}/api/campaigns/${personalId}/encounter/end-turn`);
+        check(ended.ok(), `${up.name}'s turn ended (${ended.status()}: ${(await ended.text()).slice(0, 200)})`);
+        await eventually(async () => {
+          const after = await fightNow();
+          return after.turnIndex !== now.turnIndex || after.round !== now.round || Boolean(after.enemiesDue?.length);
+        }, { timeoutMs: 30_000, label: "the turn moved on" });
+      }
+      check(sawYours && sawTheirs, `both hands dealt in turn (party ${sawYours}, monsters ${sawTheirs})`);
+      check((await api.delete(`${base}/api/campaigns/${personalId}`)).ok(), "the test the author ran is ended");
 
       // The workshop's own story settings name a model; the test table takes them.
       const pointed = await api.patch(`${base}/api/campaigns/${workshopId}/story-settings`, {
@@ -126,6 +181,9 @@ export default {
       check(/4 heroes at level 3/.test(said) && /Fighter, Cleric, Rogue and Wizard/.test(said), `the stand-ins are named (${said.slice(0, 300)})`);
       const standIns = sheetPanel.getByRole("radio", { name: /The stand-in party/ });
       check(await standIns.isChecked(), "the stand-in party is the default");
+      // With an AI DM there, who runs it is a question, the AI by default.
+      check(await sheetPanel.getByRole("radio", { name: /The AI DM/ }).isChecked(), "the AI DM runs it by default");
+      check(await sheetPanel.getByRole("radio", { name: /^You/ }).count(), "the author can run it instead");
       await t.shot("sheet-stand-ins");
 
       // The other answer lists the author's characters, and can come back.
@@ -148,7 +206,6 @@ export default {
       const tableId = (await t.url()).pathname.split("/")[2];
       // The header's way out leads to the workshop, on a phone's battle view
       // as everywhere; the banner above the composer says what the table is.
-      const phone = t.viewport === "phone";
       const back = page.locator(`${root}header a[aria-label="Back to the workshop"]`).locator("visible=true").first();
       await eventually(() => back.isVisible(), { timeoutMs: 60_000, label: "the header's way back to the workshop" });
       const banner = page.locator(`${root}.test-fight-banner`).locator("visible=true").first();

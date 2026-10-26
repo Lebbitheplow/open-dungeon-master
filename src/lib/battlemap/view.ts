@@ -350,7 +350,11 @@ export function buildPlayerMapView(
   // their full speed (readied-release.ts; the move route charges it the same).
   const readiedMove = sheet ? readiedReleaseFor(sheet, encounter, "move") : null;
   const readiedWalk = Boolean(readiedMove && !("error" in readiedMove));
-  if (!fullVision && sheet && myToken && sheet.currentHp > 0 && (canMoveNow(campaignId, sheet.id) || readiedWalk)) {
+  // The DM's full view moves nobody, except a character the DM plays
+  // (a test fight a person runs, issue 553): on its turn it walks by the
+  // same rules as anyone's. `sheet` is the viewer's own, so at any other
+  // table the DM, who holds none, still gets none.
+  if (sheet && myToken && sheet.currentHp > 0 && (canMoveNow(campaignId, sheet.id) || readiedWalk)) {
     const turnBudget = pcMoveBudget(campaignId, encounter, map, sheet, myToken);
     const budget = readiedWalk ? { ...turnBudget, tiles: speedToTiles(turnBudget.speed), fullTiles: speedToTiles(turnBudget.speed) } : turnBudget;
     budgetLeft = budget.tiles;
@@ -506,7 +510,7 @@ export function buildPlayerMapView(
       })
     : [];
   // The viewer's last walk, while it can still be taken back.
-  const undoMove = !fullVision && sheet && myToken && encounter.kind !== "scene" ? undoOffer(undoableMove(encounter, map.id, sheet.id)) : undefined;
+  const undoMove = sheet && myToken && encounter.kind !== "scene" ? undoOffer(undoableMove(encounter, map.id, sheet.id)) : undefined;
 
   return {
     mapId: map.id,
@@ -551,7 +555,7 @@ export function buildPlayerMapView(
     targets,
     intents,
     edges:
-      !fullVision && sheet && myToken && encounter.kind === "fight"
+      sheet && myToken && encounter.kind === "fight"
         ? targetEdges({
             encounterId: encounter.id,
             characterId: sheet.id,

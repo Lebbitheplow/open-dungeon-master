@@ -211,6 +211,122 @@ await test("what a test fight refuses, before any table is made", async () => {
   world.signIn(author);
 });
 
+// ---- run by its author ----
+//
+// The same table run by a person (a server with no AI DM, or a DM who runs
+// their own tables): the author sits in the DM seat and holds the party, so
+// a hero's card resolves at once instead of waiting in the DM's own queue,
+// and the enemies are theirs to play or to hand on.
+
+const play = {
+  actions: await world.route("campaigns/[campaignId]/actions"),
+  endTurn: await world.route("campaigns/[campaignId]/encounter/end-turn"),
+  initiative: await world.route("campaigns/[campaignId]/dm/initiative"),
+};
+const { saveEncounter } = await import("../src/lib/db/encounters.ts");
+const { getFloor, setFloor } = campaigns;
+const { getTokenByRef, moveToken } = await import("../src/lib/db/battle-maps.ts");
+const { listRecentRolls } = await import("../src/lib/db/rolls.ts");
+
+// The fighter first, then every enemy, then the other heroes: a known turn
+// whatever the dice said, with the floor on it.
+function fighterFirst(campaignId) {
+  const encounter = getActiveEncounter(campaignId);
+  assert.ok(encounter?.orderReady, "the opening rolled everyone's initiative");
+  const fighter = listSheets(campaignId).find((sheet) => sheet.class === "fighter");
+  const lead = encounter.order.find((entry) => entry.kind === "pc" && entry.characterId === fighter.id);
+  const order = [lead, ...encounter.order.filter((entry) => entry.kind !== "pc"), ...encounter.order.filter((entry) => entry.kind === "pc" && entry !== lead)].map(
+    (entry, index) => ({ ...entry, initiative: 30 - index }),
+  );
+  const legendary = { ...encounter.legendary };
+  delete legendary.due;
+  saveEncounter({ ...encounter, order, turnIndex: 0, turnBudget: null, legendary });
+  setFloor(campaignId, { mode: "initiative", encounterId: encounter.id, userIds: [author.id], currentName: fighter.name, round: encounter.round });
+  return { encounter: getActiveEncounter(campaignId), fighter, next: order.find((entry, index) => index > 0 && entry.kind === "pc") };
+}
+
+async function asTable(mod, campaignId, body) {
+  return call(mod, "POST", body, { campaignId });
+}
+
+let personal = "";
+await test("Run it yourself: a table a person runs, its author in the DM seat holding the party, and no AI asked", async () => {
+  const out = await call(route.test, "POST", { templateId: keep.fight.id, party: { kind: "stand-ins" }, runner: "person" }, at);
+  assert.equal(out.status, 200, JSON.stringify(out.json));
+  personal = out.json.campaignId;
+  const table = campaigns.getCampaignById(personal);
+  assert.equal(table.kind, "playtest");
+  assert.equal(table.gameSettings.dmMode, "human");
+  assert.equal(table.dmUserId, author.id);
+  assert.ok(listSheets(personal).every((sheet) => sheet.userId === author.id));
+  assert.ok(getActiveEncounter(personal), "the fight is on the board");
+  // The AI's instructions are for an AI table only.
+  assert.equal(getDatabase().prepare(`SELECT dm_outline FROM campaigns WHERE id = ?`).get(personal).dm_outline, "");
+  const said = getDatabase().prepare(`SELECT content FROM campaign_messages WHERE campaign_id = ? AND author_type = 'system'`).all(personal);
+  assert.ok(said.some((row) => /you run the enemies/.test(row.content)), JSON.stringify(said));
+});
+
+await test("a hero's attack card the author plays resolves at once: the engine rolls it, and nothing waits in their own DM queue", async () => {
+  const { encounter, fighter } = fighterFirst(personal);
+  const goblin = listEnemies(encounter.id).find((enemy) => /goblin/i.test(enemy.slug));
+  const board = getBattleMapForEncounter(encounter.id);
+  const at = getTokenByRef(board.id, fighter.id);
+  moveToken(getTokenByRef(board.id, goblin.id).id, at.x + 1 > board.width - 1 ? at.x - 1 : at.x + 1, at.y, 0);
+  const before = getDatabase().prepare(`SELECT COUNT(*) AS n FROM campaign_messages WHERE campaign_id = ? AND author_type = 'player'`).get(personal).n;
+  const out = await asTable(play.actions, personal, {
+    content: `${fighter.name} attacks the goblin.`,
+    kind: "do",
+    characterId: fighter.id,
+    intent: { card: "attack", targetKind: "enemy", targetId: goblin.id, targetName: goblin.displayName },
+  });
+  assert.equal(out.status, 200, JSON.stringify(out.json));
+  assert.equal(out.json.resolved, true);
+  const swing = listRecentRolls(personal, 10).find((roll) => roll.kind === "attack");
+  assert.ok(swing, "no attack was rolled");
+  assert.equal(swing.characterId, fighter.id);
+  assert.equal(
+    getDatabase().prepare(`SELECT COUNT(*) AS n FROM campaign_messages WHERE campaign_id = ? AND author_type = 'player'`).get(personal).n,
+    before,
+    "the card was queued for the DM who played it",
+  );
+});
+
+await test("the author ends the hero's turn, the enemies wait for them, and Play the rest hands the turn to the next hero", async () => {
+  const { next } = fighterFirst(personal);
+  const ended = await asTable(play.endTurn, personal, {});
+  assert.equal(ended.status, 200, JSON.stringify(ended.json));
+  assert.equal(getFloor(personal).mode, "hold", "the enemies' turns are the DM's to play");
+  assert.ok(getActiveEncounter(personal).legendary.due?.length, "no enemy is due");
+  const played = await asTable(play.initiative, personal, { op: "enemies", play: true });
+  assert.equal(played.status, 200, JSON.stringify(played.json));
+  const floor = getFloor(personal);
+  assert.equal(floor.mode, "initiative");
+  assert.deepEqual(floor.userIds, [author.id]);
+  assert.equal(floor.currentName, next.name);
+});
+
+await test("with no AI DM on the server the author runs the test: the sheet says so, an AI run is refused, and Start opens a table they run", async () => {
+  const saved = process.env.DEFAULT_TEXT_PROVIDER;
+  process.env.DEFAULT_TEXT_PROVIDER = "none";
+  try {
+    // A workshop made now copies the server's storyteller: none.
+    const bare = openWorkshop("No narrator here");
+    const where = { workshopId: bare.workshop.id };
+    const info = await call(route.test, "GET", undefined, where);
+    assert.equal(info.json.ready, false);
+    assert.match(info.json.reason, /you run the test/);
+    const ai = await call(route.test, "POST", { templateId: bare.lone.id, party: { kind: "stand-ins" }, runner: "ai" }, where);
+    assert.equal(ai.status, 409);
+    assert.match(ai.json.error, /Run the test yourself/);
+    const out = await call(route.test, "POST", { templateId: bare.lone.id, party: { kind: "stand-ins" } }, where);
+    assert.equal(out.status, 200, JSON.stringify(out.json));
+    assert.equal(campaigns.getCampaignById(out.json.campaignId).gameSettings.dmMode, "human");
+    assert.equal((await call(route.test, "DELETE", undefined, where)).json.ended, 1);
+  } finally {
+    process.env.DEFAULT_TEXT_PROVIDER = saved;
+  }
+});
+
 await test("End the test deletes its table; deleting the workshop takes its tests with it", async () => {
   const ended = await call(route.test, "DELETE", undefined, at);
   assert.equal(ended.status, 200);

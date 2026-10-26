@@ -16,9 +16,12 @@ import { workshopHref } from "@/lib/workshop/links";
 export function TestFightBanner({
   campaignId,
   source,
+  runsIt,
 }: {
   campaignId: string;
   source: { workshopId: string; title: string };
+  // Who runs the enemies: the AI DM, or the author from the DM seat.
+  runsIt: "ai" | "person";
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -61,8 +64,9 @@ export function TestFightBanner({
         </>
       }
     >
-      From {source.title}. Only you can see this table: the AI DM runs the enemies and you play the
-      party, each hero on their own turn.
+      {runsIt === "ai"
+        ? `From ${source.title}. Only you can see this table: the AI DM runs the enemies and you play the party, each hero on their own turn.`
+        : `From ${source.title}. Only you can see this table, and you run it: the party's cards on each hero's turn, the enemies' cards on theirs.`}
       {error ? <PanelError className="mt-1 text-[11px]">{error}</PanelError> : null}
     </SessionBanner>
   );

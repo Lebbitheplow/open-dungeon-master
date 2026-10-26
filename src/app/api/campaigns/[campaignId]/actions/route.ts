@@ -22,12 +22,13 @@ import { requestDmTurn } from "@/lib/dm/loop";
 import { settleTableWait, waitsForTable } from "@/lib/dm/table-wait";
 import { holdsPostForTable } from "@/lib/dm/table-wait-logic";
 import { coverInEffect } from "@/lib/dm/delegation";
-import { hasHumanDm } from "@/lib/dm/viewer";
+import { hasHumanDm, isPrimaryDm } from "@/lib/dm/viewer";
+import { invokeEngine } from "@/lib/dm/invoke";
 import { claimNarrationSeq } from "@/lib/dm/narration-slot";
 import { enqueueDmJob } from "@/lib/dm/queue";
 import { runResumeRecap } from "@/lib/dm/recap";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
-import { parseMessageIntent } from "@/lib/dm/intent-logic";
+import { directCardCall, parseMessageIntent } from "@/lib/dm/intent-logic";
 import { addressesDm } from "@/lib/dm/ooc-question";
 import { spokenLine } from "@/lib/dm/speech";
 import { intentRefusal } from "@/lib/dm/intent-check";
@@ -220,6 +221,21 @@ export async function POST(
       { error: swapQuestion(swap, sheet.name), confirmConcentration: { ...swap, characterName: sheet.name } },
       { status: 409 },
     );
+  }
+  // A card the DM plays for a character they hold, at a table they run (a
+  // test fight a person runs, issue 553): the one who would adjudicate it
+  // played it, so the engine resolves it now, with the same call an AI turn
+  // makes before it narrates (directCardCall), and nothing waits in the DM's
+  // queue for the DM. A card the engine cannot resolve whole (a spell, a
+  // rider) is posted below and queued as any player's is, for the console.
+  const dmSeats = campaignSeats(campaign);
+  const direct = intent && kind === "do" && hasHumanDm(dmSeats) && isPrimaryDm(dmSeats, user.id) ? directCardCall(intent, sheet.id) : null;
+  if (direct) {
+    const resolved = await invokeEngine(campaign, { kind: "human", userId: user.id }, direct);
+    if (!resolved.ok) {
+      return Response.json({ error: resolved.error }, { status: 409 });
+    }
+    return Response.json({ resolved: true });
   }
   let spotlightStillWaiting = false;
   if (kind !== "ooc" && floor.mode === "spotlight") {

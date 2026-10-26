@@ -35,23 +35,30 @@ import { buildStandIns } from "@/lib/workshop/stand-ins";
 // or characters the author picks from their library, seated as copies so
 // nothing the fight does reaches the library. The fight is copied in with
 // its map and any cast member its roster names, and deployed the way a DM's
-// Deploy lays it out. Then the AI DM opens it and runs the enemies, as it
-// would at a table the AI runs, while the author plays the party.
+// Deploy lays it out.
+//
+// Who runs it: the AI DM, which opens the fight and runs the enemies as it
+// would at a table the AI runs, while the author plays the party; or the
+// author, at a table a person runs, for a server with no AI DM or a DM who
+// runs their own tables. Then the author sits in the DM seat and holds the
+// party too: on a hero's turn the party's Hand, whose weapon attacks the
+// engine resolves at once, and on the enemies' the monsters' Hand.
 //
 // Ending the test deletes the table. So does starting the next one, and so
 // does deleting the workshop.
 
 export type TestParty = { kind: "stand-ins" } | { kind: "characters"; characterIds: string[] };
 
+export type TestFightRunner = "ai" | "person";
+
 export type TestFightOutcome = { ok: true; campaignId: string } | { ok: false; status: number; error: string };
 
 export const NO_AI_TEST_REASON =
-  "A test fight is run by the AI DM, and none is set up on this server. Set up a text model in Admin to test fights here; How hard is this? above works without one.";
+  "No AI DM is set up on this server, so you run the test: the enemies' cards on their turns, the party's on each hero's.";
 
 // How the test table plays. The workshop's own settings ride under these:
 // its setting, rules and variant rules are the fight's.
 const TEST_FIGHT_SETTINGS = {
-  dmMode: "ai",
   // The author plays every hero, each on their own turn.
   multiCharacter: "all_active",
   // One fight, already chosen: no premise to write, no world turning, no
@@ -175,8 +182,9 @@ export async function openTestFight(input: {
   userId: string;
   templateId: string;
   party: TestParty;
+  runner: TestFightRunner;
 }): Promise<TestFightOutcome> {
-  const { workshop, userId } = input;
+  const { workshop, userId, runner } = input;
   const template = getEncounterTemplate(input.templateId);
   if (!template || template.campaignId !== workshop.id) {
     return { ok: false, status: 404, error: "No such prepared encounter." };
@@ -184,9 +192,8 @@ export async function openTestFight(input: {
   if (!readyTemplates(workshop.id).some((entry) => entry.id === template.id)) {
     return { ok: false, status: 409, error: "That fight has nobody in it yet. Give it a roster, then test it." };
   }
-  const readiness = await testFightReadiness(workshop);
-  if (!readiness.ready) {
-    return { ok: false, status: 409, error: readiness.reason };
+  if (runner === "ai" && !(await testFightReadiness(workshop)).ready) {
+    return { ok: false, status: 409, error: "No AI DM is set up on this server to run it. Run the test yourself." };
   }
   const party = seatsFor(workshop, userId, input.party);
   if (!party.ok) {
@@ -202,14 +209,15 @@ export async function openTestFight(input: {
     startingLevel: level,
     difficulty: workshop.difficulty,
     kind: "playtest",
-    gameSettings: { ...workshop.gameSettings, ...TEST_FIGHT_SETTINGS },
+    // A person's table seats its maker in the DM seat (createCampaign).
+    gameSettings: { ...workshop.gameSettings, ...TEST_FIGHT_SETTINGS, dmMode: runner === "ai" ? "ai" : "human" },
   });
   try {
     // The workshop's own narrator, and no scene pictures: a test is about
     // the fight, and a picture per passage is minutes of waiting.
     getDatabase()
       .prepare(`UPDATE campaigns SET settings_json = ?, dm_outline = ?, updated_at = ? WHERE id = ?`)
-      .run(JSON.stringify({ ...workshop.settings, autoImages: false }), TEST_FIGHT_OUTLINE, nowIso(), created.id);
+      .run(JSON.stringify({ ...workshop.settings, autoImages: false }), runner === "ai" ? TEST_FIGHT_OUTLINE : "", nowIso(), created.id);
     linkWorkshop(created.id, workshop.id);
 
     const fight = copyFight(workshop, created.id, template);
@@ -235,7 +243,7 @@ export async function openTestFight(input: {
       seq,
       authorType: "system",
       glyph: "cue-battle",
-      content: `Test fight: ${template.name}, from the workshop "${workshop.title}". ${listed(names)} ${names.length === 1 ? "fights" : "fight"} it; the AI DM runs the enemies.`,
+      content: `Test fight: ${template.name}, from the workshop "${workshop.title}". ${listed(names)} ${names.length === 1 ? "fights" : "fight"} it; ${runner === "ai" ? "the AI DM runs the enemies" : "you run the enemies"}.`,
     });
     publishWithSeq(campaign.id, seq, "message_added", { message: note });
 
@@ -247,8 +255,11 @@ export async function openTestFight(input: {
     // One test at a time per workshop: this one replaces the one before it,
     // now that it has started. A start the engine refused left that one be.
     endTestFights(workshop.id, userId, campaign.id);
-    // The opening, and the enemies' turns when they act first.
-    requestDmTurn(campaign.id);
+    // The AI's opening, and the enemies' turns when they act first. A
+    // person's fight waits for its person.
+    if (runner === "ai") {
+      requestDmTurn(campaign.id);
+    }
     return { ok: true, campaignId: campaign.id };
   } catch (error) {
     deleteCampaignWithFiles(created.id);
