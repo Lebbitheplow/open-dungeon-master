@@ -25,6 +25,8 @@ const npcs = await import("../src/lib/db/npcs.ts");
 const departures = await import("../src/lib/db/companion-departures.ts");
 const proposals = await import("../src/lib/db/item-proposals.ts");
 const { searchItems } = await import("../src/lib/content/index.ts");
+const locations = await import("../src/lib/db/locations.ts");
+const { setDmMode } = await import("../src/lib/db/campaigns.ts");
 
 const world = await openWorld();
 // The owner runs the story; the three at the counter are ordinary players.
@@ -147,6 +149,81 @@ await test("a shop in another campaign is not a shop here", async () => {
   give(ann, { gold: 10 });
   assert.equal((await at(foreign, ann, { action: "buy", item: "Rope" })).status, 404);
   assert.equal(copperOf(ann), 1000);
+});
+
+// The counter is where the shop stands. The lead of an AI table sees every
+// shop in the world, and trades only where the party is; a person in the DM
+// seat may work any counter by hand.
+const lead = { user: world.owner, hero: world.sheets().find((entry) => entry.userId === world.owner.id) };
+const shopList = await world.route("campaigns/[campaignId]/shops");
+async function listFor(user) {
+  world.signIn(user);
+  const response = await shopList.GET(new Request("http://test/"), { params: Promise.resolve({ campaignId: world.campaignId }) });
+  return (await response.json()).shops;
+}
+
+await test("a shop at another place refuses the lead and a player alike, for buy, sell and haggle, and nothing moves", async () => {
+  const village = locations.upsertCurrentLocation({ campaignId: world.campaignId, name: "Thornhollow" });
+  locations.upsertCurrentLocation({ campaignId: world.campaignId, name: "Hollowroot Vault" });
+  const smith = shops.updateShop(openShop().id, { locationId: village.id, locationName: village.name });
+  give(ann, { gold: 10, equipment: [{ name: "Rope", qty: 1 }] });
+  give(lead, { gold: 10 });
+  for (const who of [ann, lead]) {
+    for (const body of [{ action: "buy", item: "Rope" }, { action: "sell", item: "Rope" }, { action: "haggle" }]) {
+      const reply = await at(smith, who, body);
+      assert.equal(reply.status, 409, `${body.action} by ${who.user.id}`);
+      assert.equal(reply.body.away, true);
+      assert.match(reply.body.error, /Thornhollow/);
+    }
+  }
+  assert.equal(copperOf(ann), 1000);
+  assert.equal(copperOf(lead), 1000);
+  assert.equal(held(ann, "Rope"), 1);
+  assert.equal(shelf(smith, "Rope"), 5);
+  assert.deepEqual(shops.getShop(smith.id).haggledBy, []);
+});
+
+await test("the party arriving opens the counter, and a shop that stands nowhere is open wherever they are", async () => {
+  const village = locations.upsertCurrentLocation({ campaignId: world.campaignId, name: "Thornhollow" });
+  const smith = shops.updateShop(openShop().id, { locationId: village.id, locationName: village.name });
+  const peddler = openShop();
+  give(ann, { gold: 10 });
+  assert.equal((await at(smith, ann, { action: "buy", item: "Rope" })).status, 200);
+  locations.upsertCurrentLocation({ campaignId: world.campaignId, name: "Hollowroot Vault" });
+  assert.equal((await at(peddler, ann, { action: "buy", item: "Rope" })).status, 200);
+  assert.equal(held(ann, "Rope"), 2);
+});
+
+await test("the lead's list puts the counters the party can reach first, and marks the rest out of reach", async () => {
+  const village = locations.upsertCurrentLocation({ campaignId: world.campaignId, name: "Thornhollow" });
+  const vault = locations.upsertCurrentLocation({ campaignId: world.campaignId, name: "Hollowroot Vault" });
+  const far = shops.updateShop(openShop().id, { locationId: village.id, locationName: village.name });
+  const near = shops.updateShop(openShop().id, { locationId: vault.id, locationName: vault.name });
+  const listed = await listFor(lead.user);
+  const reach = new Map(listed.map((entry) => [entry.id, entry.atCounter]));
+  assert.equal(reach.get(far.id), false);
+  assert.equal(reach.get(near.id), true);
+  const firstAway = listed.findIndex((entry) => !entry.atCounter);
+  assert.ok(listed.slice(firstAway).every((entry) => !entry.atCounter), "every reachable counter comes before the first one out of reach");
+  // A player sees only the shops where the party is, all of them in reach.
+  const theirs = await listFor(ann.user);
+  assert.ok(theirs.some((entry) => entry.id === near.id) && !theirs.some((entry) => entry.id === far.id));
+  assert.ok(theirs.every((entry) => entry.atCounter));
+});
+
+await test("a person in the DM seat may still work a far counter for a character", async () => {
+  const village = locations.upsertCurrentLocation({ campaignId: world.campaignId, name: "Thornhollow" });
+  locations.upsertCurrentLocation({ campaignId: world.campaignId, name: "Hollowroot Vault" });
+  const smith = shops.updateShop(openShop().id, { locationId: village.id, locationName: village.name });
+  give(ann, { gold: 10 });
+  assert.ok(setDmMode(world.campaignId, "human", world.owner.id)?.dmUserId, "the owner takes the DM seat");
+  try {
+    assert.equal((await at(smith, lead, { action: "buy", item: "Rope", characterId: ann.hero.id })).status, 200);
+    assert.equal(held(ann, "Rope"), 1);
+    assert.ok((await listFor(world.owner)).every((entry) => entry.atCounter));
+  } finally {
+    setDmMode(world.campaignId, "ai", world.owner.id);
+  }
 });
 
 await test("selling what is not carried is refused and pays nothing", async () => {

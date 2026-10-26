@@ -1,7 +1,8 @@
 import { z } from "zod";
-import { isErrorResponse, requireMember, steersStory } from "@/lib/campaign-api";
+import { isDm, isErrorResponse, requireMember, steersStory } from "@/lib/campaign-api";
+import { getCurrentLocation } from "@/lib/db/locations";
 import { getSheetForUser } from "@/lib/db/sheets";
-import { getShop } from "@/lib/db/shops";
+import { getShop, shopOpenToParty } from "@/lib/db/shops";
 import { handleBuyItem, handleHaggle, handleSellItem } from "@/lib/dm/shop-tools";
 
 export const runtime = "nodejs";
@@ -34,6 +35,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ cam
   const parsed = bodySchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {
     return Response.json({ error: "Say what you are doing at the counter." }, { status: 400 });
+  }
+  // The counter is where the shop stands. The lead of an AI table sees every
+  // shop in the world, but trades only where the party is; a person running
+  // the game may still work a far counter by hand.
+  if (!isDm(context) && !shopOpenToParty(shop, getCurrentLocation(campaignId))) {
+    return Response.json({ error: `The party is not at ${shop.locationName || "that shop"}.`, away: true }, { status: 409 });
   }
   // Players trade as themselves; the DM seat may act for any character.
   const own = getSheetForUser(campaignId, context.user.id);

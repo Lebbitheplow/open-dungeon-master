@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { hasPrepAuthority, isErrorResponse, requireMember, requirePrepAuthority, steersStory } from "@/lib/campaign-api";
+import { hasPrepAuthority, isDm, isErrorResponse, requireMember, requirePrepAuthority, steersStory } from "@/lib/campaign-api";
 import { getCurrentLocation, listLocations } from "@/lib/db/locations";
 import { getNpcById, listNpcs } from "@/lib/db/npcs";
-import { insertShop, listShops, listShopsAt, normalizeStock, shopRefProblem, stockLineSchema } from "@/lib/db/shops";
+import { insertShop, listShops, listShopsAt, normalizeStock, shopOpenToParty, shopRefProblem, stockLineSchema } from "@/lib/db/shops";
 import { askingPriceCp, dealFor, dealInWords, haggleDc, markupFor, SIZE_MARKUP, type Shop } from "@/lib/dm/shop-logic";
 import { getSheetForUser } from "@/lib/db/sheets";
 import { announceShop, stockPool } from "@/lib/dm/shop-tools";
@@ -51,8 +51,13 @@ export async function GET(_request: Request, { params }: { params: Promise<{ cam
   const prep = hasPrepAuthority(context);
   const shops = dm ? listShops(campaignId) : here ? listShopsAt(campaignId, here.id, here.name) : [];
   const viewerId = getSheetForUser(campaignId, context.user.id)?.id ?? null;
+  // The counters the party can reach come first; a person running the game
+  // works any of them (the trade route holds the same line).
+  const views = shops
+    .map((shop) => ({ ...shopView(shop, prep, viewerId), atCounter: isDm(context) || shopOpenToParty(shop, here) }))
+    .sort((a, b) => Number(b.atCounter) - Number(a.atCounter));
   return Response.json({
-    shops: shops.map((shop) => shopView(shop, prep, viewerId)),
+    shops: views,
     here: here ? { id: here.id, name: here.name } : null,
     places: dm ? listLocations(campaignId).map((location) => ({ id: location.id, name: location.name })) : [],
     // Who may keep a shop: the cast, for the prep holder's editor.

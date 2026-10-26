@@ -56,6 +56,9 @@ type ShopView = {
   // Where that haggle left the viewer's prices, in the server's words.
   yourPrices: string | null;
   haggleDc: number;
+  // Whether the party stands at this counter. The lead sees every shop in
+  // the world, and buys, sells and haggles only where the party is.
+  atCounter: boolean;
 };
 
 type HaggleSkill = "persuasion" | "intimidation" | "deception";
@@ -348,7 +351,8 @@ export function MarketPanel({
         ) : null
       ) : null}
       {shops.map((shop) => {
-        const canHaggle = Boolean(mySheet && !shop.haggledBy.includes(mySheet.id));
+        const trades = Boolean(mySheet && shop.atCounter);
+        const canHaggle = Boolean(trades && mySheet && !shop.haggledBy.includes(mySheet.id));
         // A keeper falls for a lie once: after one Deception here, nobody may try another.
         const canDeceive = canHaggle && !shop.haggles.some((deal) => deal.skill === "deception");
         // The haggle's skills: the menu beside Haggle and the shop's own
@@ -444,6 +448,10 @@ export function MarketPanel({
                 more and they rise a step. One try each, and the price you get is yours, not the whole party&apos;s. The menu beside Haggle offers
                 Intimidation and Deception instead.
               </p>
+            ) : mySheet && !shop.atCounter ? (
+              <p data-shop-away="" className="text-pretty text-[11px] leading-snug text-stone-500">
+                The party is not {shop.locationName ? `at ${shop.locationName}` : "here"}. Its shelf is for looking until they get there.
+              </p>
             ) : mySheet && shop.yourHaggle !== null ? (
               <p data-haggle-rules="" className="text-[11px] leading-snug text-stone-500">
                 {haggledLine(shop.yourHaggle, shop.yourPrices ?? "")}
@@ -463,7 +471,7 @@ export function MarketPanel({
                     label={line.itemName}
                     items={[
                       { id: "details", label: "Details", glyph: "system-rules", onSelect: () => setDetails(line) },
-                      ...(mySheet ? [{ id: "buy", label: `Buy for ${formatPrice(line.askingCp)}`, glyph: coinGlyph(line.askingCp), disabled: cannotBuy, onSelect: () => void counter(shop, "buy", line.itemName) }] : []),
+                      ...(trades ? [{ id: "buy", label: `Buy for ${formatPrice(line.askingCp)}`, glyph: coinGlyph(line.askingCp), disabled: cannotBuy, onSelect: () => void counter(shop, "buy", line.itemName) }] : []),
                     ]}
                     className="flex flex-col justify-between rounded-lg border border-stone-700/60 bg-stone-900/50 p-2 transition-transform duration-[var(--dur-quick,150ms)] hover:-translate-y-0.5 hover:border-amber-500/40"
                   >
@@ -484,7 +492,7 @@ export function MarketPanel({
                       </span>
                       <span className="text-[11px] tabular-nums text-stone-500">x{line.qty}</span>
                     </span>
-                    {mySheet ? (
+                    {trades ? (
                       <KitButton disabled={cannotBuy} busy={buying} onClick={() => void counter(shop, "buy", line.itemName)} className="mt-1.5 w-full justify-center border-amber-500/30 text-amber-100">
                         {buying ? null : "Buy"}
                       </KitButton>
@@ -494,7 +502,7 @@ export function MarketPanel({
               })}
               {!shop.stock.length ? <li className="col-span-full text-xs italic text-stone-500">Bare shelves.</li> : null}
             </ul>
-            {shop.buys && mySheet?.equipment.length ? (
+            {trades && shop.buys && mySheet?.equipment.length ? (
               <details className="group/sell text-xs">
                 <summary className="pk-link pk-tap flex cursor-pointer list-none items-center gap-1">
                   <GameIcon icon={{ kind: "glyph", key: "tab-trade" }} size="size-5" /> Sell from your pack

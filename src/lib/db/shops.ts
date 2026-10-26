@@ -114,12 +114,25 @@ export function listShops(campaignId: string): Shop[] {
   return (getDatabase().prepare(`SELECT * FROM shops WHERE campaign_id = ?`).all(campaignId) as Row[]).map(map).sort((a, b) => compareNames(a.name, b.name));
 }
 
-// The shops at a place, by id first and by name for a place that was
-// written before it had an id.
+// Whether a shop stands at a place, by id first and by name for a place
+// that was written before it had an id.
+export function shopStandsAt(shop: Shop, locationId: string, locationName: string): boolean {
+  return Boolean((shop.locationId && shop.locationId === locationId) || (!shop.locationId && textKey(shop.locationName) === textKey(locationName)));
+}
+
+// The shops at a place.
 export function listShopsAt(campaignId: string, locationId: string, locationName: string): Shop[] {
-  return listShops(campaignId).filter(
-    (shop) => (shop.locationId && shop.locationId === locationId) || (!shop.locationId && textKey(shop.locationName) === textKey(locationName)),
-  );
+  return listShops(campaignId).filter((shop) => shopStandsAt(shop, locationId, locationName));
+}
+
+// Whether the party can walk up to a shop's counter: it stands where they
+// are, or it stands nowhere in particular (a peddler, or one opened before
+// the party had a place). A shop across the map is not open to them.
+export function shopOpenToParty(shop: Shop, here: { id: string; name: string } | null): boolean {
+  if (!shop.locationId && !shop.locationName.trim()) {
+    return true;
+  }
+  return here ? shopStandsAt(shop, here.id, here.name) : false;
 }
 
 export function getShop(shopId: string): Shop | null {
