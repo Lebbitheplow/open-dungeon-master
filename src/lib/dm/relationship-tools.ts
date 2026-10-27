@@ -40,7 +40,7 @@ import {
   resolveSubject,
 } from "@/lib/dm/relationship-subject";
 import { handleNpcAdvance } from "@/lib/dm/npc-advance";
-import { conscienceNotes, landBeat, settleUnrecordedDeeds, type DeedOptions, type Landing } from "@/lib/dm/beat-landing";
+import { conscienceNotes, landBeat, landBystanders, settleUnrecordedDeeds, type DeedOptions, type Landing } from "@/lib/dm/beat-landing";
 import { DEED_KINDS, DEED_SEVERITIES, deedSeverity, isDeedKind, valueLabel } from "@/lib/dm/companion-values-logic";
 import { MAX_DEADLINE_HOURS } from "@/lib/dm/conscience-logic";
 import { getActiveEncounter } from "@/lib/db/encounters";
@@ -137,7 +137,8 @@ export function relationshipTools(campaign: Campaign, inEncounter = false): Tool
             type: "string",
             description: "One short line on what actually happened, for the relationship's memory.",
           },
-          witnesses: { type: "array", items: { type: "string" }, description: "Deeds only: everyone else tracked who saw it, by exact name." },
+          witnesses: { type: "array", items: { type: "string" }, description: "Deeds only: everyone else who saw it, by exact name, player characters who stood by too." },
+          objected: { type: "array", items: { type: "string" }, description: "Deeds only: other player characters there who spoke against it or tried to stop it." },
           severity: { type: "string", enum: [...DEED_SEVERITIES], description: "Deeds only: how grave it was, where minor counts half and atrocity double. Default: serious. The server counts a mercy sent as an atrocity as serious." },
           faction: { type: "string", description: "Deeds only: the faction whose people it was done to or for, by the name a companion's loyalty uses. The server matches it against the faction loyalty of each companion who saw it." },
           demand: {
@@ -238,6 +239,7 @@ const beatSchema = z.object({
   beat: z.string().min(1).max(40),
   note: z.string().max(200).optional(),
   witnesses: z.array(z.string().trim().min(1).max(80)).max(8).optional(),
+  objected: z.array(z.string().trim().min(1).max(80)).max(8).optional(),
   severity: z.enum(DEED_SEVERITIES).optional(),
   faction: z.string().trim().max(80).optional(),
   demand: z.string().trim().max(160).optional(),
@@ -293,7 +295,11 @@ export function handleRelationshipBeat(
   }
 
   const relationship = openLedger(campaign, sheet, subject);
-  if (relationship.status === "ended") {
+  // A deed done to someone they are finished with still happened in front
+  // of everyone else who saw it (issue 563): the bond stays shut and every
+  // witness takes the deed. Any other beat has nobody to land on.
+  const ended = relationship.status === "ended";
+  if (ended && !deedKind) {
     return {
       error: `${sheet.name} and ${subject.name} are finished. Nothing changes that without the story reopening it first.`,
       refused: "rules",
@@ -356,19 +362,33 @@ export function handleRelationshipBeat(
       }
     : null;
   const beat = args.beat as RelationshipBeat;
-  const landing = landBeat(campaign, turn, sheet, subject, relationship, beat, outcome, args.note, deed);
-  const others = deedKind ? landWitnesses(campaign, turn, sheet, subject, args.witnesses ?? [], sheets, beat, args.note, deed!) : null;
+  const others = deedKind ? landWitnesses(campaign, sheet, subject, args.witnesses ?? [], sheets, beat, args.note, deed!) : null;
+  if (ended && !others?.landed.length) {
+    return {
+      error: `${sheet.name} and ${subject.name} are finished, so the deed changes nothing between them, and nobody else tracked saw it. Name who did in witnesses.`,
+      refused: "rules",
+    };
+  }
+  const landing = ended ? null : landBeat(campaign, sheet, subject, relationship, beat, outcome, args.note, deed);
+  const landings = [...(landing ? [landing] : []), ...(others?.landed ?? [])];
+  // The party's own who were there (issue 563): those who stood by bear a
+  // share of the cost, those who objected none.
+  const objectors = deedKind ? partyCharactersNamed(args.objected ?? [], sheets, sheet) : [];
+  const objected = new Set(objectors.map((entry) => entry.id));
+  const shares = deedKind ? landBystanders(campaign, landings, (others?.bystanders ?? []).filter((entry) => !objected.has(entry.id))) : [];
   if (deedKind) {
     settleUnrecordedDeeds(campaign.id, sheet);
   }
   publishRelationshipsUpdated(campaign.id);
 
-  const { updated, delta, alignment } = landing;
-  const tier = friendshipTier(updated.approval);
   const notes = [
-    buildBeatNote(sheet.name, subject.name, spec.label, delta, alignment, updated, outcome),
+    landing
+      ? buildBeatNote(sheet.name, subject.name, spec.label, landing.delta, landing.alignment, landing.updated, outcome)
+      : `${sheet.name} and ${subject.name} are finished: the deed changes nothing between them, but others saw it.`,
     ...(others?.landed.map((other) => `${other.subject.name} saw it too: ${TIER_LABEL[friendshipTier(other.updated.approval)]} toward ${sheet.name} now.`) ?? []),
-    ...conscienceNotes([landing, ...(others?.landed ?? [])]),
+    ...shares,
+    ...(objectors.length ? [`${objectors.map((entry) => entry.name).join(" and ")} spoke against it and bear none of it.`] : []),
+    ...conscienceNotes(landings),
     ...(others?.unknown.length ? [`Not tracked, so they keep no memory of it: ${others.unknown.join(", ")}. Register someone who matters with set_npc first.`] : []),
   ];
   return {
@@ -377,20 +397,7 @@ export function handleRelationshipBeat(
     subject: subject.name,
     beat: args.beat,
     ...(deed ? { severity: deed.severity } : {}),
-    ...(spec.skill ? { skill: spec.skill, roll: rollTotal, dc, outcome } : {}),
-    approvalChange: delta,
-    approval: updated.approval,
-    standing: tier,
-    ...(alignment !== 0
-      ? { suitsThem: alignment > 0 ? "yes" : "no", alignment }
-      : {}),
-    ...valuesResult(landing),
-    ...(landing.conscience ? { conscience: `${landing.conscience.from} -> ${landing.conscience.to}` } : {}),
-    ...(landing.departure?.departed ? { departed: landing.departure.how } : landing.departure?.turned ? { turned: landing.departure.how } : {}),
-    ...(updated.romance !== "none" ? { romance: updated.romance } : {}),
-    ...(updated.romance !== relationship.romance
-      ? { romanceSlipped: `${relationship.romance} -> ${updated.romance}` }
-      : {}),
+    ...(landing ? subjectResult(landing, relationship, spec.skill ? { skill: spec.skill, roll: rollTotal, dc, outcome } : {}) : { finished: `${sheet.name} and ${subject.name}` }),
     ...(others?.landed.length
       ? {
           witnesses: others.landed.map((other) => ({
@@ -404,8 +411,39 @@ export function handleRelationshipBeat(
         }
       : {}),
     note: notes.join(" "),
-    ...actResult(subject.name, sheet.name, updated),
+    ...(landing ? actResult(subject.name, sheet.name, landing.updated) : {}),
   };
+}
+
+// The subject's half of the result: the roll, the meter and what it did to
+// a companion's conscience.
+function subjectResult(landing: Landing, before: Relationship, roll: Record<string, unknown>): Record<string, unknown> {
+  const { updated, delta, alignment } = landing;
+  return {
+    ...roll,
+    approvalChange: delta,
+    approval: updated.approval,
+    standing: friendshipTier(updated.approval),
+    ...(alignment !== 0 ? { suitsThem: alignment > 0 ? "yes" : "no", alignment } : {}),
+    ...valuesResult(landing),
+    ...(landing.conscience ? { conscience: `${landing.conscience.from} -> ${landing.conscience.to}` } : {}),
+    ...(landing.departure?.departed ? { departed: landing.departure.how } : landing.departure?.turned ? { turned: landing.departure.how } : {}),
+    ...(updated.romance !== "none" ? { romance: updated.romance } : {}),
+    ...(updated.romance !== before.romance ? { romanceSlipped: `${before.romance} -> ${updated.romance}` } : {}),
+  };
+}
+
+// The player characters a list names, by characterId or name, leaving out
+// the one who did the deed.
+function partyCharactersNamed(refs: readonly string[], sheets: readonly CharacterSheet[], doer: CharacterSheet): CharacterSheet[] {
+  const found = new Map<string, CharacterSheet>();
+  for (const ref of refs) {
+    const sheet = sheets.find((candidate) => !candidate.isCompanion && (candidate.id === ref || textKey(candidate.name) === textKey(ref)));
+    if (sheet && sheet.id !== doer.id) {
+      found.set(sheet.id, sheet);
+    }
+  }
+  return [...found.values()];
 }
 
 // What a companion's values made of it, for the result: which they saw
@@ -424,7 +462,6 @@ function valuesResult(landing: Landing): Record<string, string[]> {
 // listed back rather than failing the deed, which has already happened.
 function landWitnesses(
   campaign: Campaign,
-  turn: DmTurn,
   sheet: CharacterSheet,
   subject: { name: string },
   names: readonly string[],
@@ -432,10 +469,11 @@ function landWitnesses(
   beat: RelationshipBeat,
   note: string | undefined,
   deed: DeedOptions,
-): { landed: Landing[]; unknown: string[] } {
+): { landed: Landing[]; unknown: string[]; bystanders: CharacterSheet[] } {
   const seen = new Set([textKey(sheet.name), textKey(subject.name)]);
   const landed: Landing[] = [];
   const unknown: string[] = [];
+  const bystanders: CharacterSheet[] = [];
   for (const name of names) {
     if (seen.has(textKey(name))) {
       continue;
@@ -443,9 +481,12 @@ function landWitnesses(
     seen.add(textKey(name));
     const witness = resolveSubject(campaign, name, sheets);
     if ("error" in witness) {
-      // Another player's character keeps their own counsel; anyone else is
-      // simply not tracked.
-      if (!sheets.some((candidate) => !candidate.isCompanion && textKey(candidate.name) === textKey(name))) {
+      // Another player's character keeps their own counsel, and stood by
+      // (issue 563); anyone else is simply not tracked.
+      const character = sheets.find((candidate) => !candidate.isCompanion && (candidate.id === name || textKey(candidate.name) === textKey(name)));
+      if (character) {
+        bystanders.push(character);
+      } else {
         unknown.push(name);
       }
       continue;
@@ -454,9 +495,9 @@ function landWitnesses(
     if (ledger.status === "ended") {
       continue;
     }
-    landed.push(landBeat(campaign, turn, sheet, witness, ledger, beat, null, note, deed));
+    landed.push(landBeat(campaign, sheet, witness, ledger, beat, null, note, deed));
   }
-  return { landed, unknown };
+  return { landed, unknown, bystanders };
 }
 
 // While an NPC keeps up an act, a tool result says so plainly beside the

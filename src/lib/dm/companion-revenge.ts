@@ -20,6 +20,7 @@ import {
   type ReturnKind,
 } from "@/lib/dm/departure-logic";
 import { EMPTY_TEMPLATE_MAP } from "@/lib/dm/encounter-template-logic";
+import { ceilingHoldsCompanion, settingOf } from "@/lib/dm/conscience-logic";
 import type { FactCandidate } from "@/lib/dm/fact-logic";
 import type { NpcSessionGoal } from "@/lib/dm/npc-logic";
 import { partyLevelsFor } from "@/lib/dm/party-budget";
@@ -122,6 +123,9 @@ function prepareFight(campaign: Campaign, npcId: string, name: string, gone: Gon
     return null;
   }
   const values = companionValues(npcId);
+  // One rule with a turn on the spot (issue 563): where the table chose
+  // Turn, the companion comes at its own full strength.
+  const ceilingHolds = ceilingHoldsCompanion(settingOf(campaign.gameSettings));
   const plan = planReturn({
     // The party start_encounter will budget the fight against
     // (src/lib/dm/party-budget.ts).
@@ -132,8 +136,9 @@ function prepareFight(campaign: Campaign, npcId: string, name: string, gone: Gon
     candidates: allyCandidates(campaign, values, Boolean(gone.reportedTo)),
     wearSteps: wearing.steps,
     rateWorn: wearing.rate,
+    ceilingHolds,
   });
-  if (plan.standoff || plan.adjustedXp > plan.ceiling) {
+  if (plan.standoff || (ceilingHolds && plan.adjustedXp > plan.ceiling)) {
     return null;
   }
   const wear = plan.wear;
@@ -270,6 +275,10 @@ export function departedLinesForPrompt(campaign: Campaign): string[] {
     }
     const goal = getNpcById(entry.npcId)?.agency.goals.session;
     const parts = [`- ${entry.name} (gone: ${gone.how.charAt(0).toLowerCase()}${gone.how.slice(1)})`];
+    // Who they still care for (issue 563): a thread a player may keep.
+    if (gone.caresFor.length) {
+      parts.push(`still cares for ${gone.caresFor.join(" and ")}`);
+    }
     if (gone.cued) {
       parts.push(`ready to return (${gone.cued === "fight" ? (gone.wornBy ? "alone and worn, to fight" : "with help, to fight") : gone.standoff ? "to face the party in words" : "to talk"}); see the director's notes`);
     } else if (gone.avenging) {

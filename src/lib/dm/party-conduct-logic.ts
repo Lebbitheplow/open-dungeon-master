@@ -4,9 +4,12 @@
 // modifier; each is a server outcome the AI narrates, with the reason in the
 // tool result.
 //   - aid: one wary of a character, or worse, spends no spell slot and no
-//     potion on them unless they are dying;
+//     potion on them unless they are dying; and a devoted one, while the
+//     friend it is devoted to lies dying, spends neither on anyone else who
+//     is not (issue 563): it goes to that friend first;
 //   - orders: under a player's command, it refuses an order that would walk
-//     it out of a foe's reach (an opportunity attack) when it is wary of that
+//     it out of a foe's reach (an opportunity attack), or into an area laid
+//     on the board that would strike it (issue 563), when it is wary of that
 //     player's character, or worse;
 //   - its share: a mercenary wary of the party, or worse, wants its share
 //     before a fight and neither attacks nor casts in it until paid;
@@ -57,6 +60,17 @@ export function aidRefusal(input: AidCase): string | null {
   return `${input.companion} will not spend ${what} on ${input.target}: ${input.companion} ${standing(input.approval!)} (${input.approval}). Only if ${input.target} were dying. Nothing was spent.`;
 }
 
+// A devoted companion's friend lies dying: what it spends goes to that
+// friend first, unless the one it was asked to aid is dying too. Null when
+// it spends it.
+export function devotedFirstRefusal(input: { companion: string; target: string; targetDying: boolean; dyingFriends: readonly string[]; spend: Spend }): string | null {
+  if (input.targetDying || !input.dyingFriends.length || input.dyingFriends.includes(input.target)) {
+    return null;
+  }
+  const what = input.spend === "slot" ? "a spell slot" : "a potion";
+  return `${input.companion} will not spend ${what} on ${input.target} while ${input.dyingFriends.join(" and ")} lies dying: ${input.companion} is devoted to them and goes to them first. Nothing was spent.`;
+}
+
 // What the Bonds row and the table line say was refused.
 export function aidRefusedWords(input: Pick<AidCase, "target" | "spend">): string {
   return `${input.spend === "slot" ? "a spell" : "a potion"} for ${input.target}`;
@@ -64,11 +78,17 @@ export function aidRefusedWords(input: Pick<AidCase, "target" | "spend">): strin
 
 // ---- orders ----
 
-export function riskyOrderRefusal(input: { companion: string; commander: string; approval: number | null; provokers: readonly string[] }): string | null {
-  if (!input.provokers.length || !waryOrWorse(input.approval)) {
+// `provokers`: the foes whose reach the walk leaves; `areas`: the spells
+// laid on the board whose area it walks into and that would strike it.
+export function riskyOrderRefusal(input: { companion: string; commander: string; approval: number | null; provokers: readonly string[]; areas?: readonly string[] }): string | null {
+  const areas = input.areas ?? [];
+  if ((!input.provokers.length && !areas.length) || !waryOrWorse(input.approval)) {
     return null;
   }
-  return `${input.companion} will not walk out of ${input.provokers.join(" and ")}'s reach on ${input.commander}'s word: ${input.companion} ${standing(input.approval!)}. Take a path that leaves no foe's reach, or Disengage first. Nothing moved.`;
+  if (input.provokers.length) {
+    return `${input.companion} will not walk out of ${input.provokers.join(" and ")}'s reach on ${input.commander}'s word: ${input.companion} ${standing(input.approval!)}. Take a path that leaves no foe's reach, or Disengage first. Nothing moved.`;
+  }
+  return `${input.companion} will not walk into the ${areas.join(" and the ")} on ${input.commander}'s word: ${input.companion} ${standing(input.approval!)}. Take a path around it. Nothing moved.`;
 }
 
 // ---- the mercenary's share ----

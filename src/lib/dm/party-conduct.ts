@@ -13,9 +13,15 @@ import { sideOf } from "@/lib/dm/combatant";
 import { conscienceSetting, consciousCompanions, worstApproval } from "@/lib/dm/conscience";
 import { opportunityWeapon } from "@/lib/dm/enemy-profile";
 import { leavesReachAt } from "@/lib/dm/opportunity-reach-logic";
+import { hostileTo } from "@/lib/battlemap/zones";
+import { zoneRowFor } from "@/lib/battlemap/zones-spells";
+import { tileIndex } from "@/lib/battlemap/types";
+import { liveZones } from "@/lib/dm/zone-store";
 import {
   aidRefusal,
   aidRefusedWords,
+  devotedFirstRefusal,
+  devotedTo,
   demandMet,
   demandRefusal,
   REFUSAL_SHOWN_MINUTES,
@@ -99,13 +105,18 @@ function aidGate(campaign: Campaign, actorRef: unknown, targets: readonly unknow
   if (!actor) {
     return null;
   }
+  // The friends it is devoted to who lie dying now (issue 563): what it
+  // spends goes to them first.
+  const dyingFriends = listSheets(campaign.id)
+    .filter((sheet) => !sheet.isCompanion && dying(sheet) && devotedTo(standingWith(campaign.id, actor.sheet.name, sheet.id)))
+    .map((sheet) => sheet.name);
   for (const ref of targets) {
     const target = characterNamed(campaign.id, ref);
     if (!target || target.id === actor.sheet.id) {
       continue;
     }
     const aid = { companion: actor.sheet.name, target: target.name, approval: standingWith(campaign.id, actor.sheet.name, target.id), dying: dying(target), spend: spend! };
-    const refused = aidRefusal(aid);
+    const refused = aidRefusal(aid) ?? devotedFirstRefusal({ companion: aid.companion, target: aid.target, targetDying: aid.dying, dyingFriends, spend: aid.spend });
     if (refused) {
       return refuse(campaign, actor.npcId, actor.sheet.name, aidRefusedWords(aid), refused);
     }
@@ -235,9 +246,44 @@ export function provokers(campaignId: string, walkerId: string, steps: readonly 
   });
 }
 
+// The spells laid on the board this walk enters that would strike the
+// walker as it goes in or moves through (zone-triggers.ts zonesAfterMove
+// strikes the same ones): a Wall of Fire, a Spike Growth, a Cloudkill.
+export function harmfulAreas(campaignId: string, walkerId: string, steps: readonly Xy[]): string[] {
+  const encounter = getActiveEncounter(campaignId);
+  const map = encounter ? getBattleMapForEncounter(encounter.id) : null;
+  if (!encounter || !map || steps.length < 2) {
+    return [];
+  }
+  const [start, ...walked] = steps;
+  const found = new Set<string>();
+  for (const zone of liveZones(map, encounter)) {
+    const row = zoneRowFor(zone);
+    const trigger = row?.trigger;
+    if (!trigger || !trigger.on.some((moment) => moment === "enter" || moment === "each5")) {
+      continue;
+    }
+    // Nobody suffers their own aura; a hostile-only area spares its caster's
+    // side.
+    if ((zone.casterId === walkerId && row.shape === "aura") || (trigger.who === "hostile" && !hostileTo(zone, "pc"))) {
+      continue;
+    }
+    let wasIn = zone.cells.includes(tileIndex(map.width, start.x, start.y));
+    for (const step of walked) {
+      const nowIn = zone.cells.includes(tileIndex(map.width, step.x, step.y));
+      if (nowIn && (!wasIn || trigger.on.includes("each5"))) {
+        found.add(zone.spell);
+        break;
+      }
+      wasIn = nowIn;
+    }
+  }
+  return [...found];
+}
+
 // A player's order to the companion they command: one that walks it out of
-// a foe's reach is refused when it is wary of that player's character, or
-// worse. Null when the order stands.
+// a foe's reach, or into an area that would strike it, is refused when it is
+// wary of that player's character, or worse. Null when the order stands.
 export function riskyOrderGate(campaign: Campaign, companion: CharacterSheet, commanderId: string, steps: readonly Xy[], disengaged: boolean): string | null {
   const actor = !disengaged && companion.commandedBy === commanderId ? conscientious(campaign, companion.id) : null;
   if (!actor) {
@@ -247,7 +293,13 @@ export function riskyOrderGate(campaign: Campaign, companion: CharacterSheet, co
   const standings = theirs.map((sheet) => standingWith(campaign.id, companion.name, sheet.id)).filter((value): value is number => value !== null);
   const approval = standings.length ? Math.min(...standings) : null;
   const commander = theirs.find((sheet) => standingWith(campaign.id, companion.name, sheet.id) === approval)?.name ?? "their commander";
-  const refused = riskyOrderRefusal({ companion: companion.name, commander, approval, provokers: provokers(campaign.id, companion.id, steps) });
+  const refused = riskyOrderRefusal({
+    companion: companion.name,
+    commander,
+    approval,
+    provokers: provokers(campaign.id, companion.id, steps),
+    areas: harmfulAreas(campaign.id, companion.id, steps),
+  });
   return refused ? refuse(campaign, actor.npcId, companion.name, `an order from ${commander}`, refused).error : null;
 }
 

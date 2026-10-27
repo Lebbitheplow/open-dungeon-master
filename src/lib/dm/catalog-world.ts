@@ -75,6 +75,8 @@ export const WORLD_ADJUDICATIONS: CatalogEntry[] = [
       { name: "connections", label: "Leads to", kind: "text", help: "Other place names, comma separated." },
       { name: "visionClear", label: "They can see it", kind: "boolean", default: true, help: "Off in darkness or fog: no map is drawn." },
       SCENE_FIELD,
+      // Issue 563: the party splitting up, where a companion may slip away.
+      { name: "characterIds", label: "Who goes", kind: "characters", help: "Leave empty for the whole party. Naming some splits the party: the rest stay behind." },
     ],
   },
   {
@@ -462,7 +464,10 @@ export const SOCIAL_ADJUDICATIONS: CatalogEntry[] = [
       NOTE,
       // A deed's (issue 503): who else saw it and how grave it was, and what
       // a companion it pushes to an ultimatum demands.
-      { name: "witnesses", label: "Others who saw it", kind: "list", placeholder: "Brother Aldo, Seren", help: "Deeds only: every other tracked NPC or companion who saw it, comma separated." },
+      { name: "witnesses", label: "Others who saw it", kind: "list", placeholder: "Brother Aldo, Seren", help: "Deeds only: every other tracked NPC or companion who saw it, and other player characters who stood by, comma separated." },
+      // Issue 563: a player character there who stood by bears a share of
+      // the cost; one who objected bears none.
+      { name: "objected", label: "Spoke against it", kind: "characters", help: "Deeds only: player characters there who objected or tried to stop it. They bear none of it." },
       {
         name: "severity",
         label: "How grave",

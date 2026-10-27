@@ -126,6 +126,7 @@ import { enforceEngineBoundary } from "@/lib/dm/narration-guard";
 import { souredLeaving } from "@/lib/dm/conscience";
 import { companionMomentBlock, settleCompanionLeaving } from "@/lib/dm/departure-turn";
 import { intentLinesForPrompt } from "@/lib/dm/departure";
+import { partySplit } from "@/lib/dm/party-split";
 import { agendaLinesForPrompt } from "@/lib/dm/companion-agenda";
 import { pactLinesForPrompt } from "@/lib/dm/pacts";
 import { returnDirectorNotes } from "@/lib/dm/companion-revenge";
@@ -267,6 +268,7 @@ import {
   COMPANION_TOOL_NAMES,
   companionTools,
 } from "@/lib/dm/companion-tools";
+import { dismissCompanion } from "@/lib/dm/companion-dismissal";
 import { getActiveEncounter, listEnemies, type Encounter } from "@/lib/db/encounters";
 import { getBattleMapForEncounter, getTokenByRef, listTokens } from "@/lib/db/battle-maps";
 import { pcMoveBudget } from "@/lib/battlemap/view";
@@ -2389,7 +2391,11 @@ async function resolveModelCall(
   // snapshot is refreshed in place so a pc_attack later in the same reply
   // resolves the new (or removed) companion.
   if (COMPANION_TOOL_NAMES.has(name)) {
-    const result = applyCompanionCall(campaign, name, rawArguments, listSheets(campaign.id));
+    // The AI's dismissal answers to a companion's conscience (issue 563).
+    const result =
+      name === "dismiss_companion"
+        ? dismissCompanion(campaign, rawArguments, listSheets(campaign.id), "ai")
+        : applyCompanionCall(campaign, name, rawArguments, listSheets(campaign.id));
     if (!("error" in result)) {
       const fresh = listSheets(campaign.id);
       sheets.length = 0;
@@ -2845,6 +2851,7 @@ export function handleLocationCall(
     partOf?: unknown;
     direction?: unknown;
     distance?: unknown;
+    characterIds?: unknown;
   };
   try {
     args = JSON.parse(rawArguments || "{}");
@@ -2887,6 +2894,7 @@ export function handleLocationCall(
   // where a new place lands on the region map.
   const madeIds: string[] = [];
   let setOutFrom: string | null = null;
+  let split = "";
   if (toolName === "move_party") {
     const name = typeof args.name === "string" ? args.name.trim() : "";
     if (!name) {
@@ -2929,6 +2937,9 @@ export function handleLocationCall(
       }
     }
     setCampaignScene(campaign.id, location.name);
+    // Some of the party went and the rest stayed (issue 563): a moment a
+    // companion may slip away.
+    split = partySplit(campaign, args.characterIds, location.name);
   } else {
     previousLayout = getCurrentLocation(campaign.id)?.layoutDescription ?? "";
     location = updateCurrentLocationDetails(campaign.id, { layoutDescription, connections });
@@ -2998,7 +3009,9 @@ export function handleLocationCall(
         ? `Recorded. The party is back at ${location.name}, as it was left: ${recorded} Continue the scene.`
         : peopled
           ? `Recorded. ${peopled} Continue the scene.`
-          : "Recorded. Continue the scene.") + filedNote,
+          : "Recorded. Continue the scene.") +
+      filedNote +
+      (split ? ` ${split}` : ""),
     // Consumed by advance() as the chapter-break and inline-map signals,
     // then stripped before the result reaches the model.
     ...(movedToNewLocation

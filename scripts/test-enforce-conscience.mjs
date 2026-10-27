@@ -219,7 +219,7 @@ await test("in a fight relationship_beat is offered for deeds alone, and a deed 
   assert.ok(fight, "offered in a fight");
   assert.deepEqual(
     [...fight.function.parameters.properties.beat.enum].sort(),
-    ["betrayal", "broke_word", "cruelty", "desecration", "mercy", "murder_helpless", "necromancy", "slaving", "theft_from_poor", "torture"],
+    ["betrayal", "broke_word", "cruelty", "desecration", "freed_captives", "laid_to_rest", "mercy", "murder_helpless", "necromancy", "slaving", "theft_from_poor", "torture", "upheld_law"],
   );
   assert.ok(!dmTurnTools(world.campaign(), true, false, false).some((tool) => tool.function?.name === "relationship_end"), "the rest waits");
   for (const tool of [calm, fight]) {

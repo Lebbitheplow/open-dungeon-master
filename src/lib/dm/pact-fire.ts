@@ -12,6 +12,7 @@ import { d20Expression } from "@/lib/dice";
 import { computeSheetDerived } from "@/lib/srd";
 import { passiveScore } from "@/lib/dm/check-tools";
 import { moveToSide } from "@/lib/dm/combat-sides";
+import { fightingParty } from "@/lib/dm/party-budget";
 import { conscienceSetting } from "@/lib/dm/conscience";
 import { departNow } from "@/lib/dm/departure";
 import type { DepartureResponse, DepartureWhere } from "@/lib/dm/departure-logic";
@@ -123,7 +124,10 @@ export function firePact(campaign: Campaign, turnId: string, stale: Pact, where:
   const byId = new Map(sheets.map((sheet) => [sheet.id, sheet]));
   const companions = companionMembers(pact).flatMap((member) => (byId.has(member.sheetId) ? [byId.get(member.sheetId)!] : []));
   const ours = new Set([...companions.map((sheet) => sheet.id), ...playerMembers(pact).filter((member) => member.stance === "joined").map((member) => member.characterId)]);
-  const party = sheets.filter((sheet) => !sheet.isCompanion && !sheet.summon && !ours.has(sheet.id));
+  // Who keeps watch and whose packs lie open: the party as it fights
+  // (party-budget.ts), loyal companions with it and benched characters away
+  // (issue 563).
+  const party = fightingParty(live, sheets).filter((sheet) => !sheet.summon && !ours.has(sheet.id));
   const leader = companions.find((sheet) => companionNpcFor(sheet)?.id === pact.leaderNpcId) ?? companions[0];
   const lines: string[] = [];
   const departed: string[] = [];

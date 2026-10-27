@@ -20,4 +20,7 @@ export type GoneEntry = {
   race: string;
   class: string;
   gender: string;
+  // Who they still cared for as they went (issue 563); an older server
+  // sends none.
+  caresFor?: string[];
 };

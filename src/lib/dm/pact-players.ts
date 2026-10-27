@@ -37,6 +37,7 @@ import { revealRolls, secretRoll } from "@/lib/dm/roll-card";
 import { isDmSeat } from "@/lib/dm/viewer";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { fightingParty } from "@/lib/dm/party-budget";
 
 // Players in a pact (issue 503 Phase 7): the answer to a pact's approach,
 // which is its player's alone; the secret actions a member takes, held by
@@ -147,7 +148,9 @@ export function declareSecretAction(campaign: Campaign, sheet: CharacterSheet, i
   const text = input.text.trim().slice(0, 300);
   const sheets = listSheets(campaign.id);
   const inside = new Set([...companionMembers(pact).map((member) => member.sheetId), ...playerMembers(pact).map((member) => member.characterId)]);
-  const party = sheets.filter((other) => !other.isCompanion && !other.summon && !inside.has(other.id) && other.currentHp > 0 && !other.deathSaves?.dead);
+  // Who is about to notice: the party as it fights (party-budget.ts), loyal
+  // companions with it and benched characters away (issue 563).
+  const party = fightingParty(campaign, sheets).filter((other) => !other.summon && !inside.has(other.id) && other.currentHp > 0);
   const target = input.targetId ? sheets.find((other) => other.id === input.targetId && !other.summon) : undefined;
   if ((input.kind === "steal" || input.kind === "attack") && (!target || target.id === sheet.id)) {
     return { error: "Say whose character, another at this table.", status: 400 };

@@ -13,7 +13,7 @@ import { usePackArt } from "@/lib/worlds/use-pack-art";
 // out, slipping away, reporting the party, or a plain parting) arrives with
 // the sheet's going (sheet_deleted's `departed`): its card stays where the
 // party can see it and dims over 600 ms, then files under "Gone" with how
-// they went. Reduced motion keeps the colour and the words and drops the
+// they went, and who among the party they still cared for (issue 563). Reduced motion keeps the colour and the words and drops the
 // movement. Every seat sees the same list; nothing here is a secret, and a
 // plan a companion still holds never reaches it.
 
@@ -132,6 +132,11 @@ export function PartyGone({
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-medium text-stone-200">{entry.name}</span>
                   <span className="block text-xs text-stone-400">{entry.how}</span>
+                  {entry.caresFor?.length ? (
+                    <span className="block text-xs text-stone-400" data-gone-cares="">
+                      Still cares for {entry.caresFor.join(" and ")}
+                    </span>
+                  ) : null}
                 </span>
               </li>
             ))}

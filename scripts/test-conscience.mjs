@@ -139,24 +139,30 @@ test("standing alone puts them on a rung: wary is uneasy, disliked a warning, ho
 });
 
 test("a breach steps down one rung from where they stand; an atrocity goes straight to the breaking point", () => {
-  assert.equal(ladder.stepLadder(at(0), "breach", 0, "t1", "cruelty by Kael").held, 1);
-  assert.equal(ladder.stepLadder(at(1), "breach", -30, "t1", "x").held, 3, "standing already held them at a warning");
-  assert.equal(ladder.stepLadder(at(4), "breach", 0, "t1", "x").held, 4, "nothing past the breaking point");
-  const atrocity = ladder.stepLadder(at(0), "atrocity", 80, "t1", "the killing of someone helpless by Kael");
+  assert.equal(ladder.stepLadder(at(0), "breach", 0, 1, "cruelty by Kael").held, 1);
+  assert.equal(ladder.stepLadder(at(1), "breach", -30, 1, "x").held, 3, "standing already held them at a warning");
+  assert.equal(ladder.stepLadder(at(4), "breach", 0, 1, "x").held, 4, "nothing past the breaking point");
+  const atrocity = ladder.stepLadder(at(0), "atrocity", 80, 1, "the killing of someone helpless by Kael");
   assert.equal(atrocity.held, 4);
   assert.equal(atrocity.cause, "the killing of someone helpless by Kael");
-  assert.equal(ladder.stepLadder(at(2), null, 0, "t1", "x").held, 2, "a deed nothing they hold cares about moves no rung");
+  assert.equal(ladder.stepLadder(at(2), null, 0, 1, "x").held, 2, "a deed nothing they hold cares about moves no rung");
 });
 
-test("honour climbs one rung, once an exchange, never past what their standing allows", () => {
-  const up = ladder.stepLadder(at(3), "honour", 0, "t1", "amends made by Kael");
+test("honour climbs one rung, once a day of the campaign's clock, never past what their standing allows (issue 563)", () => {
+  const day = ladder.clockDay(3 * 1440 + 600);
+  assert.equal(day, 3, "the day an instant falls on");
+  assert.equal(ladder.clockDay(3 * 1440 + 1439), 3, "the same day until midnight");
+  const up = ladder.stepLadder(at(3), "honour", 0, day, "amends made by Kael");
   assert.equal(up.held, 2);
-  assert.equal(up.climbedTurn, "t1");
-  assert.equal(ladder.stepLadder(up, "honour", 0, "t1", "again").held, 2, "the same exchange climbs once");
-  assert.equal(ladder.stepLadder(up, "honour", 0, "t2", "later").held, 1, "the next exchange climbs again");
-  assert.equal(ladder.stepLadder(at(0), "honour", 0, "t1", "x").held, 0, "content stays content");
-  const held = ladder.stepLadder(at(2), "honour", -70, "t1", "x");
+  assert.equal(up.climbedDay, 3);
+  assert.equal(ladder.stepLadder(up, "honour", 0, day, "again").held, 2, "amends again the same day climbs no further");
+  assert.equal(ladder.stepLadder(up, "honour", 0, day + 1, "the next day").held, 1, "the next day climbs again");
+  assert.equal(ladder.stepLadder(at(0), "honour", 0, day, "x").held, 0, "content stays content");
+  const held = ladder.stepLadder(at(2), "honour", -70, day, "x");
   assert.equal(ladder.effectiveRung(held, -70), 4, "a companion who is hostile stays at the breaking point");
+  // A row written before the day was kept reads as never climbed.
+  assert.equal(ladder.parseConscience(JSON.stringify({ held: 2, shown: 2, climbedTurn: "t1" })).climbedDay, -1);
+  assert.equal(ladder.parseConscience(JSON.stringify({ held: 2, shown: 2, climbedDay: 7 })).climbedDay, 7);
 });
 
 test("the ultimatum rung asks for one; climbing above it meets it; its deadline passing is the breaking point", () => {
@@ -266,6 +272,65 @@ test("a deed claim survives only for a party character and a known deed, quoting
     context,
   );
   assert.deepEqual(kept, [{ kind: "deed", character: "pc-1", name: "Kael", deed: "murder_helpless", quote: "drives the blade into the bound man's chest" }]);
+});
+
+// ---- issue 563 ----
+
+test("every value has deeds that honour it: the dead laid to rest, captives freed, a wrongdoer handed to the law", () => {
+  const red = (value) => [{ value, strength: "red_line", faction: "" }];
+  assert.equal(values.deedVerdict(red("reveres_dead"), "laid_to_rest", "serious").ladder, "honour");
+  assert.equal(values.deedVerdict(red("hates_tyranny"), "freed_captives", "serious").ladder, "honour");
+  assert.equal(values.deedVerdict(red("protects_innocent"), "freed_captives", "serious").ladder, "honour");
+  assert.equal(values.deedVerdict(red("respects_law"), "upheld_law", "serious").ladder, "honour");
+  assert.ok(values.deedVerdict(red("respects_law"), "upheld_law", "serious").approval > 0);
+  // A mercenary sees a ransom walk away.
+  const mercenary = values.deedVerdict([{ value: "mercenary", strength: "cares", faction: "" }], "freed_captives", "serious");
+  assert.equal(mercenary.broken.length, 1);
+  assert.ok(mercenary.approval < 0);
+  for (const value of ["respects_law", "reveres_dead", "hates_tyranny"]) {
+    assert.ok(
+      values.DEED_KINDS.some((deed) => values.deedVerdict(red(value), deed, "serious").ladder === "honour"),
+      `${value} has a deed that honours it`,
+    );
+  }
+  for (const deed of ["laid_to_rest", "freed_captives", "upheld_law"]) {
+    assert.ok(values.isDeedKind(deed));
+    assert.equal(values.deedSeverity(deed, "atrocity"), "serious", "a kindness is never an atrocity");
+    assert.ok(RELATIONSHIP_BEATS[deed].base > 0, `${deed} earns regard`);
+  }
+  // Freeing a faction's people honours a loyalty to it, as a mercy does.
+  const loyal = [{ value: "faction_loyalty", strength: "cares", faction: "the Free Towns" }];
+  assert.equal(values.deedVerdict(loyal, "freed_captives", "serious", "The Free Towns").ladder, "honour");
+  assert.equal(values.deedVerdict(loyal, "torture", "serious", "The Free Towns").broken.length, 1);
+});
+
+test("one ceiling rule: a Turn table never holds the companion itself back; every other table does (issue 563)", () => {
+  assert.equal(ladder.ceilingHoldsCompanion("turn"), false);
+  for (const setting of ["off", "talk", "leave"]) {
+    assert.equal(ladder.ceilingHoldsCompanion(setting), true);
+  }
+  assert.equal(ladder.settingOf({ relationships: "off", companionConscience: "turn" }), "off", "no relationships, no conscience");
+  assert.equal(ladder.settingOf({ relationships: "on" }), "leave", "Leave is the default");
+  assert.equal(ladder.settingOf({ relationships: "on", companionConscience: "turn" }), "turn");
+});
+
+test("the rules name who stood by, that nobody knows an alignment, and where a slip-away comes from", () => {
+  const leave = ladder.conscienceRules("leave", true, values.DEED_KINDS);
+  assert.match(leave, /stood by in witnesses/);
+  assert.match(leave, /in objected/);
+  assert.match(leave, /No NPC or companion knows anyone's alignment/);
+  assert.match(leave, /take_rest/);
+  assert.match(leave, /move_party naming who goes/);
+  const talk = ladder.conscienceRules("talk", true, values.DEED_KINDS);
+  assert.ok(!/take_rest/.test(talk), "a table that keeps its companions has nobody slipping away");
+  const off = ladder.conscienceRules("off", false, values.DEED_KINDS);
+  assert.match(off, /No NPC or companion knows anyone's alignment/, "every table with relationships is told");
+});
+
+test("the claims reader knows the honouring deeds", () => {
+  for (const deed of ["laid_to_rest", "freed_captives", "upheld_law"]) {
+    assert.match(claims.readerSystem([], false), new RegExp(deed));
+  }
 });
 
 console.log(`test-conscience: ${passed} passed`);

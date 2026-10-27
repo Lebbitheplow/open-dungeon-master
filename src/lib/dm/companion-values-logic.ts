@@ -58,7 +58,9 @@ export function valueLabel(held: CompanionValue): string {
 
 // The morally weighty acts relationship_beat records with witnesses and a
 // severity, and the only beats it takes in a fight, where most of them
-// happen. The first four were beats already; the rest came with issue 503.
+// happen. The first four were beats already; the next six came with issue
+// 503, and the last three with issue 563, so that every value has deeds that
+// honour it as well as deeds that break it.
 export const DEED_KINDS = [
   "mercy",
   "cruelty",
@@ -70,11 +72,22 @@ export const DEED_KINDS = [
   "necromancy",
   "desecration",
   "slaving",
+  "laid_to_rest",
+  "freed_captives",
+  "upheld_law",
 ] as const;
 export type DeedKind = (typeof DEED_KINDS)[number];
 
 export function isDeedKind(beat: string): beat is DeedKind {
   return (DEED_KINDS as readonly string[]).includes(beat);
+}
+
+// The deeds that do someone good. A kindness is never an atrocity, and one
+// done for a faction's people honours a loyalty to that faction.
+const KIND_DEEDS: ReadonlySet<string> = new Set(["mercy", "laid_to_rest", "freed_captives", "upheld_law"]);
+
+export function isKindDeed(beat: string): boolean {
+  return KIND_DEEDS.has(beat);
 }
 
 export const DEED_SEVERITIES = ["minor", "serious", "atrocity"] as const;
@@ -83,10 +96,10 @@ export type DeedSeverity = (typeof DEED_SEVERITIES)[number];
 // How far a deed's weight carries: a minor one half, an atrocity double.
 export const SEVERITY_FACTOR: Record<DeedSeverity, number> = { minor: 0.5, serious: 1, atrocity: 2 };
 
-// A mercy is never an atrocity: the worst of a kindness is a great one.
+// A kindness is never an atrocity: the worst of a kindness is a great one.
 export function deedSeverity(beat: string, raw: string | undefined): DeedSeverity {
   const severity = (DEED_SEVERITIES as readonly string[]).includes(raw ?? "") ? (raw as DeedSeverity) : "serious";
-  return beat === "mercy" && severity === "atrocity" ? "serious" : severity;
+  return isKindDeed(beat) && severity === "atrocity" ? "serious" : severity;
 }
 
 // The values each beat honours and breaks. Deeds and the social beats that
@@ -104,14 +117,20 @@ const BEAT_VALUES: Record<string, { honours: CompanionValueId[]; breaks: Compani
   necromancy: { honours: [], breaks: ["reveres_dead"] },
   desecration: { honours: [], breaks: ["reveres_dead"] },
   slaving: { honours: [], breaks: ["hates_tyranny", "protects_innocent", "respects_law"] },
+  // Burying the fallen, rites for the dead, a grave put right.
+  laid_to_rest: { honours: ["reveres_dead"], breaks: [] },
+  // Prisoners, slaves or hostages set free.
+  freed_captives: { honours: ["hates_tyranny", "protects_innocent"], breaks: ["mercenary"] },
+  // A wrongdoer handed to the law rather than killed, freed or sold.
+  upheld_law: { honours: ["respects_law"], breaks: [] },
   kept_word: { honours: ["keeps_oaths"], breaks: [] },
   defended: { honours: ["protects_innocent"], breaks: [] },
   greed: { honours: ["mercenary"], breaks: [] },
 };
 
 // The deeds that harm someone, which break a faction loyalty to the faction
-// they were done to; a mercy shown to that faction's people honours it.
-const HARMFUL = new Set<string>(DEED_KINDS.filter((kind) => kind !== "mercy"));
+// they were done to; a kindness done to that faction's people honours it.
+const HARMFUL = new Set<string>(DEED_KINDS.filter((kind) => !KIND_DEEDS.has(kind)));
 
 // Approval each value moves, before severity: a red line counts for more
 // either way. Honouring one outweighs the cost a harmful deed has with
@@ -143,7 +162,7 @@ export function deedVerdict(
   const named = textKey(faction);
   const touches = (held: CompanionValue, list: CompanionValueId[], forFaction: boolean) =>
     held.value === "faction_loyalty" ? forFaction && named !== "" && textKey(held.faction) === named : list.includes(held.value);
-  const honoured = values.filter((held) => touches(held, map.honours, beat === "mercy"));
+  const honoured = values.filter((held) => touches(held, map.honours, KIND_DEEDS.has(beat)));
   const broken = values.filter((held) => touches(held, map.breaks, HARMFUL.has(beat)));
   const factor = SEVERITY_FACTOR[severity];
   const approval = Math.round(
