@@ -308,6 +308,13 @@ function HandInner({
     setNotice(text);
     replayAnimation(noticeRef.current, "shake-x var(--dur-beat) var(--ease-snap) both");
   }, []);
+  // The notice line sits at the Hand's foot. On a short phone the Hand
+  // scrolls in what the message box leaves it (hand.css), and a refusal
+  // (out of reach, nothing left to spend) landed below the fold, so the
+  // press seemed to do nothing. A new notice is brought into view.
+  useEffect(() => {
+    if (notice) noticeRef.current?.scrollIntoView({ block: "nearest" });
+  }, [notice]);
 
   const pick = useCallback(
     (card: HandCard) => {
