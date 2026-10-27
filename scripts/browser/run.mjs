@@ -156,6 +156,22 @@ if (!scenarios.length) {
   process.exit(1);
 }
 
+// A close that never settles must not hold the run past its report: on CI a
+// shard sat on one for half an hour after its last scenario had passed, until
+// the job's own timeout cancelled it. It is named, and the run goes on (the
+// browser goes with the process at exit).
+async function closeWithin(promise, label, ms = 20_000) {
+  let timer;
+  const late = new Promise((resolve) => {
+    timer = setTimeout(() => {
+      console.warn(`[browser] ${label} did not close within ${ms / 1000}s`);
+      resolve();
+    }, ms);
+  });
+  await Promise.race([promise.catch(() => {}), late]);
+  clearTimeout(timer);
+}
+
 const browser = await launchBrowser({ app });
 const results = [];
 const started = Date.now();
@@ -197,13 +213,13 @@ try {
         // and that ended the whole run after workshop-tours had passed.
         await page.unrouteAll({ behavior: "ignoreErrors" }).catch(() => {});
         await context.unrouteAll({ behavior: "ignoreErrors" }).catch(() => {});
-        await apiContext.close().catch(() => {});
-        await context.close().catch(() => {});
+        await closeWithin(apiContext.close(), `${tag}: its API context`);
+        await closeWithin(context.close(), `${tag}: its page's context`);
       }
     }
   }
 } finally {
-  await browser.close().catch(() => {});
+  await closeWithin(browser.close(), "the browser");
   if (shell) await shell.stop();
   if (server) await server.stop();
 }
