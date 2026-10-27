@@ -73,11 +73,23 @@ await test("melee: in reach at 5 feet, diagonals included, refused at 10", async
 await test("an attack out of reach names the nearest open square beside the target, and from there it lands", async () => {
   // Qwen3.5 9B walked a character twice the wrong way when told only to
   // "move adjacent": the refusal now says where.
+  // The directions are in the model's own tool words, so a person refused at
+  // the Hand reads the sentence alone (the phone check of 0.30.3 showed them
+  // "approach true" and "move_token").
   const enemy = await stage([5, 5], [9, 5]);
   const swing = await kit.swing(hero.id, enemy.id, [15, 4], { weapon: "Longsword" });
   assert.equal(swing.ok, false);
-  const named = /nearest open square beside .+ is \((\d+),(\d+)\): move_token/.exec(swing.error ?? "");
-  assert.ok(named, `no square named: ${swing.error}`);
+  assert.match(swing.error ?? "", /out of melee reach \(5 ft\)\. They must move their token adjacent first or attack with a ranged weapon\.$/);
+  const { invokeEngine } = await import("../src/lib/dm/invoke.ts");
+  const { createDmTurn } = await import("../src/lib/db/dm-turns.ts");
+  world.say("player", "I swing at it.", world.sheet(hero.id));
+  const asModel = await invokeEngine(world.campaign(), { kind: "ai", turnId: createDmTurn(world.campaignId, []).id }, {
+    name: "pc_attack",
+    args: { characterId: hero.id, enemyId: enemy.id, targetEnemyId: enemy.id, weapon: "Longsword" },
+  });
+  assert.equal(asModel.ok, false);
+  const named = /nearest open square beside .+ is \((\d+),(\d+)\): move_token/.exec(asModel.error ?? "");
+  assert.ok(named, `no square named for the model: ${asModel.error}`);
   const [x, y] = [Number(named[1]), Number(named[2])];
   assert.ok(Math.max(Math.abs(x - 9), Math.abs(y - 5)) === 1, `(${x},${y}) is not beside the target`);
   assert.equal(Math.max(Math.abs(x - 5), Math.abs(y - 5)), 3, `(${x},${y}) is not the nearest such square`);
