@@ -34,7 +34,7 @@ import {
   type HandTargetDetail,
 } from "@/lib/battlemap/hand-play";
 import { reactionAim, reactionCards, withReactions } from "@/lib/battlemap/hand-react";
-import { turnFromEncounter, turnPips, turnSignature } from "@/lib/battlemap/hand-table";
+import { turnCharacterId, turnFromEncounter, turnPips, turnSignature } from "@/lib/battlemap/hand-table";
 
 import type { TargetEdge } from "@/lib/battlemap/view-tactics";
 import { replayAnimation } from "@/lib/motion/replay";
@@ -127,9 +127,10 @@ function HandInner({
   drops?: PlayerMapView["drops"];
   mounts?: PlayerMapView["mounts"];
 }) {
+  const turnId = turnCharacterId(encounter);
   const sheet = useMemo(
-    () => initiativeCharacter(sheets, meUserId, encounter.acting?.id) ?? selectedCharacter(sheets, meUserId, activeSheetId),
-    [sheets, meUserId, activeSheetId, encounter.acting?.id],
+    () => initiativeCharacter(sheets, meUserId, turnId) ?? selectedCharacter(sheets, meUserId, activeSheetId),
+    [sheets, meUserId, activeSheetId, turnId],
   );
   const floorTurn = floor.mode === "initiative" ? floor.userIds.includes(meUserId) : !inputBlocked;
   const floorName = floor.mode === "initiative" ? floor.currentName : undefined;

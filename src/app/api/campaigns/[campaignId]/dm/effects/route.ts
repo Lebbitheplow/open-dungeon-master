@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { capsFor, isErrorResponse, requireMember } from "@/lib/campaign-api";
-import { deleteEffect, listEffects } from "@/lib/db/active-effects";
+import { refuseDuringBreak } from "@/lib/dm/table-break";
+import { deleteEffect, effectsUpdate, listEffects } from "@/lib/db/active-effects";
 import { visibleEffects } from "@/lib/dm/effects-logic";
-import { publishPersisted } from "@/lib/events";
+import { publishEffects } from "@/lib/dm/effect-tools";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,8 +29,13 @@ export async function GET(
     return context;
   }
   const caps = capsFor(context);
+  const secrets = caps.adjudicates || caps.secretStory;
+  // A player's list leaves out an effect on an enemy the DM keeps off the
+  // board as well, as the event's table copy does (src/lib/table-delivery.ts).
+  const { effects, hiddenTargets } = effectsUpdate(campaignId);
+  const hidden = new Set(secrets ? [] : hiddenTargets);
   return Response.json({
-    effects: visibleEffects(listEffects(campaignId), caps.adjudicates || caps.secretStory),
+    effects: visibleEffects(effects, secrets).filter((effect) => !hidden.has(effect.targetId)),
   });
 }
 
@@ -49,10 +55,20 @@ export async function POST(
   if (!parsed.success) {
     return Response.json({ error: "Say which effect." }, { status: 400 });
   }
+  // Lifting one is clear_effect from a list, an adjudication, which waits
+  // out a break as the console's does.
+  const paused = refuseDuringBreak(campaignId);
+  if (paused) {
+    return paused;
+  }
+  const lifting = listEffects(campaignId).find((effect) => effect.id === parsed.data.effectId);
   if (!deleteEffect(campaignId, parsed.data.effectId)) {
     return Response.json({ error: "That effect is already gone." }, { status: 409 });
   }
-  const effects = listEffects(campaignId);
-  publishPersisted(campaignId, "effects_updated", { effects });
-  return Response.json({ effects });
+  // An enemy's maximum moved with it reaches the tracker, as clear_effect's does.
+  publishEffects(
+    campaignId,
+    lifting?.targetKind === "enemy" && lifting.modifiers.some((modifier) => modifier.field === "maxHp" && modifier.mode === "add" && modifier.value),
+  );
+  return Response.json({ effects: listEffects(campaignId) });
 }

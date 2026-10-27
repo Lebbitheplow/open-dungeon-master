@@ -1,6 +1,8 @@
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
 import { correctionsField } from "@/lib/correction-reasons";
+import { campaignSeats } from "@/lib/db/campaigns";
 import { getAuditEntry } from "@/lib/db/sheet-audit";
+import { sheetForViewer } from "@/lib/dm/sheet-view";
 import { revertAuditEntry, undoConflictWarnings } from "@/lib/sheet-undo";
 
 export const runtime = "nodejs";
@@ -41,5 +43,11 @@ export async function POST(
   if (!outcome.ok) {
     return Response.json({ error: outcome.error }, { status: 400 });
   }
-  return Response.json({ ok: true, sheet: outcome.sheet, ...correctionsField(outcome.correctionId ? [outcome.correctionId] : []) });
+  // The lead undoes numbers; the owner's notes are still the owner's, as in
+  // the correction route this undoes.
+  return Response.json({
+    ok: true,
+    sheet: sheetForViewer(outcome.sheet, campaignSeats(context.campaign), context.user.id),
+    ...correctionsField(outcome.correctionId ? [outcome.correctionId] : []),
+  });
 }

@@ -17,7 +17,7 @@ export const castAtPlayerTool: ToolDef = {
   function: {
     name: "cast_at_player",
     description:
-      "Resolve an enemy or hazard forcing a saving throw on ONE character (a hag's Hold Person, a spider's web, a trap's poison needle, a curse). The server rolls that character's full save from their real sheet (Evasion, Brave and the like included), applies the damage and/or condition on a failure, and reports it. When an enemy does it (casterEnemyId, with ability or spell), that is the enemy's action for the round (refused if it already acted, cannot act, or is charmed by the target); the save, DC, dice and condition come from its block or the spell whatever you send, a Recharge ability must have recharged, and a spell spends the enemy's slot. Only a hazard with no creature behind it uses your own numbers. For several characters caught, use aoe_damage; never apply a condition to a character with set_condition when a save should have decided it.",
+      "Resolve an enemy or hazard forcing a saving throw on ONE character (a hag's Hold Person, a spider's web, a trap's poison needle, a curse). The server rolls that character's full save from their real sheet (Evasion, Brave and the like included), applies the damage and/or condition on a failure, and reports it. When an enemy does it (casterEnemyId, with enemyAbility or spell), that is the enemy's action for the round (refused if it already acted, cannot act, or is charmed by the target); the save, DC, dice and condition come from its block or the spell whatever you send, a Recharge ability must have recharged, and a spell spends the enemy's slot. Only a hazard with no creature behind it uses your own numbers. For several characters caught, use aoe_damage; never apply a condition to a character with set_condition when a save should have decided it.",
     parameters: {
       type: "object",
       additionalProperties: false,
@@ -27,9 +27,9 @@ export const castAtPlayerTool: ToolDef = {
         saveAbility: {
           type: "string",
           enum: ["str", "dex", "con", "int", "wis", "cha"],
-          description: "The save the effect forces.",
+          description: "Required for a hazard with no creature behind it (a trap's needle). An enemy's ability or spell (casterEnemyId) brings its own; omit it then.",
         },
-        dc: { type: "integer", minimum: 1, maximum: 30, description: "The save DC." },
+        dc: { type: "integer", minimum: 1, maximum: 30, description: "Required with saveAbility for a hazard. An enemy's uses its block or the spell." },
         damage: {
           type: "string",
           description: "Damage dice on a failed save ('3d6'). Omit for pure-condition effects.",
@@ -51,7 +51,7 @@ export const castAtPlayerTool: ToolDef = {
           description:
             "The enemy doing it, when a specific one does: exact enemyId from GAME STATE. With a concentration spell the server tracks the enemy's concentration and breaks it (ending the effect) when the enemy takes damage or dies.",
         },
-        ability: {
+        enemyAbility: {
           type: "string",
           description: "With casterEnemyId: the ability's name as its block lists it ('Poison Spit', 'Frightful Presence').",
         },
@@ -61,7 +61,7 @@ export const castAtPlayerTool: ToolDef = {
         },
         reason: { type: "string", description: "Short in-fiction cause." },
       },
-      required: ["characterId", "saveAbility", "dc"],
+      required: ["characterId"],
     },
   },
 };

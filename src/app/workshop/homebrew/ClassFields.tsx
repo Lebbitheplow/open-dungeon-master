@@ -18,6 +18,8 @@ import { classFeatureCatalog } from "@/lib/workshop/class-feature-catalog";
 import {
   ABILITIES,
   ARMOR_TRAINING,
+  CLASS_LIST_LIMITS,
+  FEATURE_LIMITS,
   HIT_DICE,
   LIST_ABILITY,
   NONMETAL_SHIELDS,
@@ -27,6 +29,7 @@ import {
   type ClassFeatureRow,
 } from "@/lib/homebrew/class-data";
 import { SRD_WEAPONS, weaponNamed } from "@/lib/srd/weapons";
+import { featureCounts } from "@/lib/homebrew/limits";
 
 // A class: the numbers every class has (hit die, saves, skills, training,
 // how it casts), the level its subclass is picked at, and its features by
@@ -59,7 +62,7 @@ function engineTag(name: string): string | null {
   return null;
 }
 
-function BorrowFeature({ onPick, taken }: { onPick: (feature: CatalogFeature) => void; taken: Set<string> }) {
+function BorrowFeature({ onPick, taken, full }: { onPick: (feature: CatalogFeature) => void; taken: Set<string>; full: Set<number> }) {
   const [query, setQuery] = useState("");
   const all = classFeatureCatalog();
   const results = useMemo(() => {
@@ -83,15 +86,17 @@ function BorrowFeature({ onPick, taken }: { onPick: (feature: CatalogFeature) =>
         <ul className="reveal stagger-up max-h-64 space-y-1 overflow-y-auto rounded-lg border border-stone-800 bg-stone-950/60 p-1.5">
           {results.map((entry) => {
             const done = taken.has(textKey(entry.name));
+            const levelFull = !done && full.has(entry.level);
             return (
               <li key={`${entry.classId}/${entry.subclass}/${entry.name}`} className="flex items-start gap-2">
                 <button
                   type="button"
-                  disabled={done}
+                  disabled={done || levelFull}
                   onClick={() => onPick(entry)}
                   className={cn(ui.btnSmall, addChip, "shrink-0", done && "border-emerald-500/40 text-emerald-200")}
                 >
-                  {done ? <Check className="size-3" /> : <Plus className="size-3" />} Level {entry.level}
+                  {done ? <Check className="size-3" /> : levelFull ? null : <Plus className="size-3" />} Level {entry.level}
+                  {levelFull ? " full" : ""}
                 </button>
                 <span className="min-w-0 text-[11px] leading-snug text-stone-400">
                   <span className="text-stone-200">{entry.name}</span> ({capital(entry.classId)}
@@ -120,6 +125,8 @@ function Features({ data, set }: { data: Data; set: (patch: Data) => void }) {
     set({ levels: grouped });
   };
   const taken = new Set(flat.map((row) => textKey(row.feature.n)));
+  const counts = featureCounts(levels);
+  const full = new Set([...counts].filter(([, count]) => count >= FEATURE_LIMITS.perLevel).map(([level]) => level));
   return (
     <div className="space-y-1.5 text-sm">
       <SectionHead title="Features by level" glyph="rest-level-up" className="mb-1" />
@@ -173,7 +180,15 @@ function Features({ data, set }: { data: Data; set: (patch: Data) => void }) {
       >
         <Plus className="size-3" /> Add a feature
       </button>
-      <BorrowFeature taken={taken} onPick={(entry) => write([...flat, { level: entry.level, feature: { n: entry.name, d: entry.text } }])} />
+      {[...counts]
+        .filter(([, count]) => count > FEATURE_LIMITS.perLevel)
+        .sort(([a], [b]) => a - b)
+        .map(([level, count]) => (
+          <p key={level} role="alert" className="live-in text-[11px] text-red-300">
+            Level {level} has {count} features; a level keeps {FEATURE_LIMITS.perLevel}.
+          </p>
+        ))}
+      <BorrowFeature taken={taken} full={full} onPick={(entry) => write([...flat, { level: entry.level, feature: { n: entry.name, d: entry.text } }])} />
       <p className="text-[11px] text-stone-500">
         Granted by name as the character reaches each level. A borrowed feature keeps its name so the engine runs it; renaming it makes it words for the DM.
         Ability Score Improvements are counted by name, so keep them where the class should take them.
@@ -218,12 +233,18 @@ function WeaponTraining({ weapons, onChange }: { weapons: string[]; onChange: (w
               </button>
             </span>
           ))}
-          <AddFromList
-            prompt="Add a weapon"
-            className="min-h-10 sm:min-h-0"
-            options={open.map((weapon) => ({ value: weapon.name.toLowerCase(), label: weapon.name }))}
-            onPick={(weapon) => onChange([...weapons, weapon])}
-          />
+          {weapons.length < CLASS_LIST_LIMITS.weapons ? (
+            <AddFromList
+              prompt="Add a weapon"
+              className="min-h-10 sm:min-h-0"
+              options={open.map((weapon) => ({ value: weapon.name.toLowerCase(), label: weapon.name }))}
+              onPick={(weapon) => onChange([...weapons, weapon])}
+            />
+          ) : (
+            <span role="status" className="live-in text-[11px] text-stone-400">
+              Weapon training holds {weapons.length}, the most a class keeps ({CLASS_LIST_LIMITS.weapons}): tick simple or martial instead of naming each.
+            </span>
+          )}
         </div>
       </div>
     </Field>
@@ -283,12 +304,18 @@ export function ClassFields({ data, set }: { data: Data; set: (patch: Data) => v
               </button>
             </span>
           ))}
-          <AddFromList
-            prompt="Add a tool"
-            className="min-h-10 sm:min-h-0"
-            options={TOOL_PROFICIENCIES.filter((tool) => !tools.some((entry) => textKey(entry) === textKey(tool))).map((tool) => ({ value: tool.toLowerCase(), label: tool }))}
-            onPick={(tool) => set({ tools: [...tools, tool] })}
-          />
+          {tools.length < CLASS_LIST_LIMITS.tools ? (
+            <AddFromList
+              prompt="Add a tool"
+              className="min-h-10 sm:min-h-0"
+              options={TOOL_PROFICIENCIES.filter((tool) => !tools.some((entry) => textKey(entry) === textKey(tool))).map((tool) => ({ value: tool.toLowerCase(), label: tool }))}
+              onPick={(tool) => set({ tools: [...tools, tool] })}
+            />
+          ) : (
+            <span role="status" className="live-in text-[11px] text-stone-400">
+              {tools.length} tools, the most a class keeps ({CLASS_LIST_LIMITS.tools}).
+            </span>
+          )}
         </div>
       </Field>
 

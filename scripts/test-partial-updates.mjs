@@ -357,7 +357,7 @@ function builderEdit(level, klass) {
     racialAsi: [],
     racialSkills: [],
     racialTool: "",
-    racialCantrip: "",
+    racialCantrips: [],
     backstory: SYNCED.backstory,
     spells: [],
     spellWarningAck: true,

@@ -333,3 +333,15 @@ html[data-theme="light"] .formation-step { color: #44403c; border-color: rgba(12
   .formation-step, .formation-answer { transition: none; }
   .formation-step:not(:disabled):is(:hover, :focus-visible) { transform: none; }
 }
+
+/* A heading whose title is a name the story wrote (an area of the map):
+   "Hollowroot Vault Entrance Passage" in spaced capitals is wider than the
+   column, and kept on one line it pushed the whole panel sideways. It wraps
+   instead, the way a DM card's does. Outside the layer, like the kit's own
+   heading rules (kit.css), or theirs would win. */
+.section-head-wraps .section-head-title {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}

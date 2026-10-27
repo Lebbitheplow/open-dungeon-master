@@ -61,9 +61,14 @@ export function tickEncounterConditions(campaign: Campaign, encounter: Encounter
 
   // Active effects count down with conditions, so an effect and a condition
   // applied in the same breath end in the same breath
-  // (src/lib/dm/effects-logic.ts).
-  for (const expired of tickEffectRound(campaign.id, encounter.round)) {
-    lines.push(`${expired.name} wears off.`);
+  // (src/lib/dm/effects-logic.ts). One the party could not tell was there
+  // ends as quietly as it began, and still counts as a change below: its end
+  // can move an enemy's maximum on the tracker.
+  const expired = tickEffectRound(campaign.id, encounter.round);
+  for (const effect of expired) {
+    if (effect.visible) {
+      lines.push(`${effect.name} wears off.`);
+    }
   }
 
   // What belongs to a turn is counted there (startTurnConditions, and the
@@ -80,16 +85,18 @@ export function tickEncounterConditions(campaign: Campaign, encounter: Encounter
   tickSheetConditions(campaign, 1, lines, { encounter, ...outside });
   rollEffectSaves(campaign, encounter, (holderId) => !inOrder.has(holderId), lines);
   lines.push(...tickConcentrationClocks(campaign, 1, (casterId) => !inOrder.has(casterId)));
-  if (lines.length) {
+  if (lines.length || expired.length) {
     endSpentConcentration(campaign, lines);
   }
   // A frenzy outliving its rage costs its level of exhaustion (frenzy.ts).
   lines.push(...settleFrenzies(campaign));
 
-  if (lines.length) {
+  if (lines.length || expired.length) {
     publishPersisted(campaign.id, "encounter_updated", {
       encounter: activePublicEncounter(campaign.id),
     });
+  }
+  if (lines.length) {
     noteAtTable(campaign.id, lines);
   }
 }

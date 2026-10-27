@@ -3,6 +3,7 @@ import { isValidExpression } from "@/lib/dice";
 import type { ArmorRiders, ChargeRule, GearDice, WeaponRiders } from "@/lib/srd/magic-gear";
 import type { ItemSpell } from "@/lib/srd/item-spells";
 import type { AttunementRule } from "@/lib/srd/magic-items";
+import { HOMEBREW_NAME_MAX } from "@/lib/schemas/homebrew";
 
 // The magic of a workshop item in the same words the SRD's magic items are
 // run by (src/lib/srd/magic-gear.ts, item-check-riders.ts, item-spells.ts,
@@ -85,7 +86,7 @@ export const checkRidersSchema = z.object({
 });
 
 export const itemSpellSchema = z.object({
-  spell: z.string().trim().min(1).max(60),
+  spell: z.string().trim().min(1).max(HOMEBREW_NAME_MAX),
   charges: int(0, 50),
   level: int(0, 9),
   perCharge: flag,

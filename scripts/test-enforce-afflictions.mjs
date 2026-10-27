@@ -133,7 +133,7 @@ await test("Sight Rot: -1 to sight checks and attack rolls, 1 worse after a long
 
 await test("Short-term madness 01-20: paralyzed for 1d10 minutes, and it ends when the character takes damage.", async () => {
   const shaken = world.addHero({ class: "fighter", level: 3, maxHp: 30 });
-  const out = await afflict({ characterId: shaken.id, kind: "madness", name: "short" }, [15, 3]);
+  const out = await afflict({ characterId: shaken.id, kind: "madness", duration: "short" }, [15, 3]);
   assert.equal(out.ok, true, out.error);
   assert.equal(has(shaken.id, "paralyzed"), true);
   assert.equal(world.sheet(shaken.id).conditionMeta.paralyzed.rounds, 30);
@@ -143,7 +143,7 @@ await test("Short-term madness 01-20: paralyzed for 1d10 minutes, and it ends wh
 
 await test("Long-term madness 21-30: paranoid, disadvantage on Wisdom checks, for 1d10 x 10 hours by the clock.", async () => {
   const paranoid = world.addHero({ class: "fighter", level: 3, maxHp: 30 });
-  await afflict({ characterId: paranoid.id, kind: "madness", name: "long" }, [25, 2]);
+  await afflict({ characterId: paranoid.id, kind: "madness", duration: "long" }, [25, 2]);
   assert.equal(has(paranoid.id, "paranoid"), true);
   world.clearDice();
   world.diceLog();
@@ -159,10 +159,10 @@ await test("Long-term madness 21-30: paranoid, disadvantage on Wisdom checks, fo
 
 await test("Indefinite madness gains a flaw from the table, shown for the narrator; a madness a save resists takes no hold.", async () => {
   const lost = world.addHero({ class: "wizard", level: 3, maxHp: 20, abilities: { wis: 10 } });
-  const resisted = await afflict({ characterId: lost.id, kind: "madness", name: "indefinite", saveDc: 10 }, [15]);
+  const resisted = await afflict({ characterId: lost.id, kind: "madness", duration: "indefinite", saveDc: 10 }, [15]);
   assert.equal(resisted.result.resisted, true);
   assert.equal(has(lost.id, "indefinite madness"), false);
-  await afflict({ characterId: lost.id, kind: "madness", name: "indefinite" }, [60]);
+  await afflict({ characterId: lost.id, kind: "madness", duration: "indefinite" }, [60]);
   assert.equal(has(lost.id, "indefinite madness"), true);
   assert.match(afflictionLines(world.campaignId, world.sheet(lost.id)).join(" "), /smartest, wisest/);
 });
@@ -176,6 +176,13 @@ await test("Serpent Venom: a failed DC 11 CON save is 3d6 poison, a success half
   assert.equal(world.sheet(bitten.id).currentHp, 32);
   await afflict({ characterId: bitten.id, kind: "poison", name: "serpent venom" }, [18, 4, 4, 4]);
   assert.equal(world.sheet(bitten.id).currentHp, 26);
+  // Its DC is its own: another one sent is set aside in one call, and said so.
+  const other = await afflict({ characterId: bitten.id, kind: "poison", name: "Serpent Venom", saveDc: 15 }, [18, 4, 4, 4]);
+  assert.equal(other.ok, true);
+  assert.match(other.result.note, /Serpent Venom sets its own save DC \(11\), so the 15 sent was not used/);
+  assert.match(other.result.note, /vs DC 11\b/, "rolled against its own DC");
+  const own = await afflict({ characterId: bitten.id, kind: "poison", name: "Serpent Venom", saveDc: 11 }, [18, 4, 4, 4]);
+  assert.ok(!/was not used/.test(own.result.note), "its own DC sent is said nothing of");
 });
 
 await test("Drow Poison: a failure is poisoned for an hour, and unconscious as well when it fails by 5 or more.", async () => {

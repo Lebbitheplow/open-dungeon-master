@@ -179,7 +179,7 @@ await test("effects, the clock, the party purse, parked rolls and the table's ru
   assert.equal(blessed.ok, true, blessed.error);
   assert.equal((await world.invoke("pass_time", { amount: 90, unit: "minutes" })).ok, true);
   assert.equal(
-    (await world.invoke("party_stash", { do: "deposit", characterId: hero.id, amount: 5 })).ok,
+    (await world.invoke("party_stash", { do: "deposit", characterId: hero.id, gold: 5 })).ok,
     true,
   );
   campaigns.setMemberHoldRolls(world.campaignId, world.owner.id, true);
@@ -398,9 +398,9 @@ await test("a rewind ends a fight that began after the chapter opened", async ()
 await test("A rewind takes back everything that moved since the chapter opened, together: what a hero put in the party's pack is in the pack or in their hands, never both.", async () => {
   const { world, hero, freeze, rewind } = await chapter();
   freeze();
-  assert.equal((await world.invoke("party_stash", { do: "deposit", characterId: hero.id, amount: 50 })).ok, true);
+  assert.equal((await world.invoke("party_stash", { do: "deposit", characterId: hero.id, gold: 50 })).ok, true);
   assert.equal(
-    (await world.invoke("party_stash", { do: "stow", characterId: hero.id, name: "Silver Dagger" })).ok,
+    (await world.invoke("party_stash", { do: "stow", characterId: hero.id, item: "Silver Dagger" })).ok,
     true,
   );
   assert.equal(world.sheet(hero.id).gold, 0);
@@ -488,7 +488,7 @@ await test("a snapshot taken before the purse, the effects and the clock were ke
   delete old.campaign.scene_tracker_json;
   db.prepare("UPDATE chapter_snapshots SET snapshot_json = ? WHERE id = ?").run(JSON.stringify(old), row.id);
 
-  assert.equal((await world.invoke("party_stash", { do: "deposit", characterId: hero.id, amount: 5 })).ok, true);
+  assert.equal((await world.invoke("party_stash", { do: "deposit", characterId: hero.id, gold: 5 })).ok, true);
   assert.equal((await world.invoke("pass_time", { amount: 2, unit: "hours" })).ok, true);
   const laid = await world.invoke("set_effect", {
     characterId: hero.id,
@@ -524,7 +524,7 @@ await test("an undone grant is taken back once, and an undone spend is returned 
   const hero = world.addHero({ name: "Undone", gold: 10 });
   const { revertAuditEntry } = await import("../src/lib/sheet-undo.ts");
   const { getAuditEntry } = await import("../src/lib/db/sheet-audit.ts");
-  await world.invoke("grant_item", { characterId: hero.id, name: "Pearl", qty: 1 });
+  await world.invoke("grant_item", { characterId: hero.id, item: "Pearl", qty: 1 });
   await world.invoke("modify_gold", { characterId: hero.id, delta: -4 });
   const trail = listRecentAudit(world.campaignId, 5);
   const spend = trail.find((entry) => entry.kind === "modify_gold");

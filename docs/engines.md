@@ -74,7 +74,7 @@ and clamped by code.
 
 ### World simulation
 
-- **Overworld and region map generation** - seeded value-noise terrain on a 96x72 grid with genre reskins, reconciling locations to anchors lazily as the party travels.
+- **Overworld and region map generation** - seeded value-noise terrain on a 96x72 grid with genre reskins, reconciling locations to anchors lazily as the party travels. A room or street the DM files under a bigger place (move_party's partOf, or a name that opens with the place's own) shares that place's dot; a new place lands at the direction and distance the DM gave; names on the map make way for each other (src/lib/overworld/places.ts, label-layout.ts).
 - **Battle map generation** - seeded tactical maps (terrain, lighting, spawns, line of sight and cover, movement budgets, pathfinding), regenerable from the encounter.
 - **Location persistence** - structured per-area layout, exits, and connections so narration stays spatially consistent, plus an illustrated top-down map image.
 - **Living-world tick engine** - a zero-model-call heartbeat that advances world state on dice and computes encounter pressure after each narration.

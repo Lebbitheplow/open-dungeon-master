@@ -14,6 +14,7 @@ import type { CreateSheetInput } from "@/lib/schemas/sheet";
 import { featChoice } from "@/lib/schemas/sheet";
 import { subclassBlurb, subclassLevelFor } from "@/lib/srd/features";
 import { racialFeatCount } from "@/lib/srd/race-id";
+import { withSpeciesVariant } from "@/lib/content/species-variants";
 import { ui } from "@/lib/ui";
 import { applyClassReskins, applyIdReskins } from "@/lib/worlds/reskin-logic";
 import AsiFeatEditor from "./AsiFeatEditor";
@@ -22,10 +23,11 @@ import { builderFeatJudge, FeatJudgeContext, unmetFeatMessage } from "./featPrer
 import { hitPointsLine } from "./derivedReasons";
 import { builderProgressionInput, LevelProgressionTable } from "./LevelProgressionTable";
 import { levelProgressionRows } from "./levelProgression";
-import { levelUpSections, SHEET_TARGETS, splitOwed } from "./levelUpSections";
+import { levelUpSections, racialCantripsDue, SHEET_TARGETS, splitOwed } from "./levelUpSections";
 import OptionPicker, { type PickerGroup } from "./OptionPicker";
 import { owedPicks } from "./owed";
 import { QuickBuildReadback } from "./QuickBuildReadback";
+import { RacialCantripPicker } from "./RacialCantripPicker";
 import { ClassChoices } from "./steps/ClassChoices";
 import { SpellsSection } from "./steps/SpellsGearStep";
 import { Field, StepPanel, inputClass } from "./steps/shared";
@@ -108,7 +110,9 @@ function LevelUpSheetForm({
     ...(initial.asiChoices ?? []).flatMap((choice) => (choice.mode === "feat" ? [choice.feat] : [])),
   ]);
   const state = useBuilderState({ initial, initialFeatDescs, initialLevel, startLevel: nextLevel, races, classes, backgrounds });
-  const race = findRace(races, state.raceId);
+  // With the species option the character holds, as the whole build reads it.
+  const pickedRace = findRace(races, state.raceId);
+  const race = useMemo(() => pickedRace && withSpeciesVariant(pickedRace, state.racialVariant), [pickedRace, state.racialVariant]);
   const klass = classes.find((entry) => entry.id === state.classId);
   const background = backgrounds.find((entry) => entry.id === state.backgroundId);
   const subclassOptions = useArchetypeOptions(klass?.id ?? "");
@@ -212,8 +216,9 @@ function LevelUpSheetForm({
   const showAsi = sections.asi;
   const showClassPicks = sections.classPicks;
   const showSpells = sections.spells;
+  const showRacialCantrips = racialCantripsDue(initial.racialChoices, race?.cantripChoice?.count ?? 0, owedTargets);
   const { here: sheetOwed, elsewhere } = splitOwed(owed);
-  const nothingToChoose = !showSubclass && !showAsi && !showClassPicks && !showSpells;
+  const nothingToChoose = !showSubclass && !showAsi && !showClassPicks && !showSpells && !showRacialCantrips;
 
   // To the block that takes a pick, lit for a moment, focus on its first
   // control (as the builder's "Show me" does).
@@ -421,6 +426,12 @@ function LevelUpSheetForm({
         {showClassPicks ? <ClassChoices state={state} derived={derived} actions={actions} klass={klass} /> : null}
 
         {showSpells && klass ? <SpellsSection state={state} derived={derived} klass={klass} pack={null} /> : null}
+
+        {showRacialCantrips && race ? (
+          <StepPanel title={`${race.name} choices`}>
+            <RacialCantripPicker race={race} cantrips={state.racialCantrips} onChange={state.setRacialCantrips} />
+          </StepPanel>
+        ) : null}
 
         {elsewhere.length ? (
           <section

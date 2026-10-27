@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isErrorResponse, steersStory, requireMember } from "@/lib/campaign-api";
+import { refuseDuringBreak } from "@/lib/dm/table-break";
 import { allocateSeq } from "@/lib/db/campaigns";
 import { getItemProposal, recordProposalOutcome as resolveOutcome, resolveItemProposal, type ItemProposal } from "@/lib/db/item-proposals";
 import { insertCampaignMessage } from "@/lib/db/messages";
@@ -12,8 +13,8 @@ import {
   appliedOutcome,
   canResolveProposal,
   OFFER_NOTE_PREFIX,
-  parseOfferArgs,
   resolutionNote,
+  storedOfferArgs,
   VITALS_PROPOSAL_TOOL_NAMES,
   type OfferResolution,
 } from "@/lib/dm/proposal-logic";
@@ -76,6 +77,12 @@ export async function POST(
   const parsed = bodySchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {
     return Response.json({ error: "Invalid action." }, { status: 400 });
+  }
+  // Settling an offer moves sheets and tells the table: play, which waits
+  // out a break.
+  const paused = refuseDuringBreak(campaignId);
+  if (paused) {
+    return paused;
   }
   const { action } = parsed.data;
 
@@ -180,11 +187,14 @@ export async function POST(
     const sheets = listSheets(campaignId);
     const sheetsById = new Map(sheets.map((sheet) => [sheet.id, sheet]));
     const holder = turnHolder(campaignId);
+    // Under the names the tool reads now: an offer made before a rename
+    // still waits with the old ones.
+    const offered = storedOfferArgs(proposal.toolName, proposal.argsJson);
     const { result } = applyDmMutation(
       context.campaign,
       proposal.turnId ?? "",
       proposal.toolName,
-      proposal.argsJson,
+      JSON.stringify(offered),
       sheets,
       sheetsById,
     );
@@ -208,7 +218,7 @@ export async function POST(
     }
     const after = getSheetById(proposal.characterId);
     if (after) {
-      outcome = appliedOutcome(proposal.toolName, parseOfferArgs(proposal.argsJson), {
+      outcome = appliedOutcome(proposal.toolName, offered, {
         name: after.name,
         equipment: after.equipment,
         gold: after.gold,

@@ -211,7 +211,7 @@ await test("the breath is spent once, says its SRD dice and DC, and is refused u
       resource: "Breath Weapon",
     });
     assert.equal(breath.ok, true, breath.error);
-    assert.equal(breath.result.dice, dice, `level ${level}`);
+    assert.equal(breath.result.damage, dice, `level ${level}`);
     assert.equal(breath.result.dc, 8 + proficiency + 2, `level ${level}`);
     assert.deepEqual(world.sheet(dragonborn.id).resources.breath_weapon, { max: 1, used: 1 });
     const again = await world.invoke("use_resource", {

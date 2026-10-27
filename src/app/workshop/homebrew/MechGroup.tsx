@@ -36,7 +36,7 @@ export function MechGroup({ title, summary, open: startOpen, children }: { title
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
-        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left"
+        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left pointer-coarse:min-h-10"
       >
         <span className="font-display text-[11px] tracking-[0.1em] text-amber-300/85">{title}</span>
         <span className="flex min-w-0 items-center gap-2 text-[11px] text-stone-500">

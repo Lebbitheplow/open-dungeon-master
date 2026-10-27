@@ -70,7 +70,7 @@ const setUp = [
     state.setCantrips(["Fire Bolt", "Light", "Mage Hand"]);
     state.setSpells(["Magic Missile", "Shield", "Sleep"]);
     state.setBookPrepared(["Magic Missile", "Shield"]);
-    state.setRacialCantrip("Prestidigitation");
+    state.setRacialCantrips(["Prestidigitation"]);
   },
 ];
 
@@ -80,7 +80,7 @@ test("the set-up picks are held", () => {
   assert.equal(state.raceId, "elf");
   assert.deepEqual(state.chosenSkills, ["Arcana", "History"]);
   assert.deepEqual(state.spells, ["Magic Missile", "Shield", "Sleep"]);
-  assert.equal(state.racialCantrip, "Prestidigitation");
+  assert.deepEqual(state.racialCantrips, ["Prestidigitation"]);
 });
 
 test("choosing the class already chosen keeps its skills, spells and prepared spells", () => {
@@ -104,14 +104,14 @@ test("choosing another class still clears the old class's picks", () => {
 test("choosing the race already chosen keeps its picks", () => {
   const state = runBuilder([...setUp, (s) => s.changeRace("elf")]);
   assert.equal(state.raceId, "elf");
-  assert.equal(state.racialCantrip, "Prestidigitation");
+  assert.deepEqual(state.racialCantrips, ["Prestidigitation"]);
   assert.deepEqual(state.spells, ["Magic Missile", "Shield", "Sleep"]);
 });
 
 test("choosing another race still clears the old race's picks", () => {
   const state = runBuilder([...setUp, (s) => s.changeRace("dwarf")]);
   assert.equal(state.raceId, "dwarf");
-  assert.equal(state.racialCantrip, "");
+  assert.deepEqual(state.racialCantrips, []);
 });
 
 test("a spell in the book is pressed only while the book is being written", () => {

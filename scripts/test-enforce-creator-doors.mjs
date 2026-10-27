@@ -53,7 +53,7 @@ function wizard(fields = {}) {
     level: 1,
     // The sage brings Arcana and History; the class picks are two others.
     chosenSkills: ["investigation", "medicine"],
-    racialCantrip: "Minor Illusion",
+    racialCantrips: ["Minor Illusion"],
     bonusLanguages: ["Dwarvish", "Giant", "Orc"],
     cantrips: ["Fire Bolt", "Mage Hand", "Prestidigitation"],
     spells: ["Magic Missile", "Shield", "Mage Armor", "Detect Magic", "Sleep", "Burning Hands"],

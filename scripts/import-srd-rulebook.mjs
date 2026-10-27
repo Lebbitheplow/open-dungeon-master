@@ -210,6 +210,144 @@ const PARTS = [
 const ERRATA = [
   ["creation", "vegetable matter within\n**Range:** soft goods", "vegetable matter within range: soft goods"],
   ["contagion", "**Range:** Touch\n**Component:** V, S", "**Range:** Touch\n\n**Components:** V, S"],
+  ["coinage", "The old piece is", "The gold piece is"],
+  ["guardian-of-faith", "when it has delat a total", "when it has dealt a total"],
+  ["spell-scroll", "copied from a the copier", "copied from a *spell scroll*, the copier"],
+  ["spellcasting", "later in the this chapter", "later in this chapter"],
+  ["salamander", "**Sense**s", "**Senses**"],
+  ["satyr", "**Sense**s", "**Senses**"],
+  // Hyphens the PDF broke across a line, which kept the space.
+  ["elf", "self- expression", "self-expression"],
+  ["monk", "two- handed", "two-handed"],
+  ["paladin", "all- night", "all-night"],
+  ["multiclassing", "higher- than-average", "higher-than-average"],
+  ["alignment", "good- aligned", "good-aligned"],
+  ["half-dragon-template", "half- dragon's", "half-dragon's"],
+  ["the-planes-of-existence", "fog- shrouded", "fog-shrouded"],
+  ["madness", "self- destructive", "self-destructive"],
+];
+
+// Em dashes the conversion turned into hyphens ("trade goods-bars of iron,
+// ... and so on-retain"): page id, then the text around one such hyphen. The
+// hyphen, and any space beside it, becomes an em dash, as the SRD prints it.
+const DASHES = [
+  ["barbarian", "end- that"],
+  ["cleric", "spells - its"],
+  ["cleric", "spells - that"],
+  ["cleric", "energy-one"],
+  ["cleric", "universe-that"],
+  ["druid", "land-arctic"],
+  ["druid", "swamp-and"],
+  ["paladin", "angels-the"],
+  ["paladin", "good-as"],
+  ["rogue", "focus-not"],
+  ["warlock", "will-targeting"],
+  ["warlock", "elemental-without"],
+  ["warlock", "existence-not"],
+  ["wizard", "book-for"],
+  ["multiclassing", "know-and"],
+  ["alignment", "alignments-they"],
+  ["backgrounds", "cleric - performing"],
+  ["selling-treasure", "goods-bars"],
+  ["selling-treasure", "on-retain"],
+  ["weapons", "property-the"],
+  ["adventuring-gear", "item-an"],
+  ["adventuring-gear", "item- designed"],
+  ["adventuring-gear", "torch-or"],
+  ["adventuring-gear", "fuel-takes"],
+  ["expenses", "afford-paying"],
+  ["expenses", "payment-the"],
+  ["feats", "somehow-perhaps"],
+  ["feats", "curse-you"],
+  ["using-ability-scores", "qualities-a"],
+  ["using-ability-scores", "game-the"],
+  ["using-ability-scores", "roll-rely"],
+  ["using-ability-scores", "success-the"],
+  ["using-ability-scores", "goal- for"],
+  ["using-ability-scores", "skill-for"],
+  ["using-ability-scores", "effort-or"],
+  ["using-ability-scores", "modifier-can"],
+  ["using-ability-scores", "throw-also"],
+  ["using-ability-scores", "save-represents"],
+  ["adventuring", "slope-all"],
+  ["adventuring", "ground-all"],
+  ["adventuring", "terrain- moving"],
+  ["adventuring", "speed-so"],
+  ["adventuring", "adventuring- noticing"],
+  ["adventuring", "few-rely"],
+  ["adventuring", "area-such"],
+  ["adventuring", "foliage-blocks"],
+  ["adventuring", "rest-time"],
+  ["adventuring", "activity-at"],
+  ["adventuring", "activity-the"],
+  ["combat", "speed- sometimes"],
+  ["combat", "speed-is"],
+  ["combat", "staircases-the"],
+  ["combat", "hidden-both"],
+  ["combat", "unheard-when"],
+  ["combat", "modifier-the"],
+  ["combat", "roll-to"],
+  ["combat", "attacks-hammers"],
+  ["combat", "like-deal"],
+  ["spellcasting", "effect-in"],
+  ["spellcasting", "Cantrips-simple"],
+  ["spellcasting", "rote-are"],
+  ["spellcasting", "size-small"],
+  ["spellcasting", "components-or"],
+  ["spellcasting", "focus-but"],
+  ["spellcasting", "effect-such"],
+  ["spellcasting", "bonus-from"],
+  ["minor-illusion", "object-such"],
+  ["minor-illusion", "chest-it"],
+  ["disguise-self", "yourself-including"],
+  ["disguise-self", "person- look"],
+  ["detect-thoughts", "creature-what"],
+  ["enlarge-reduce", "category- from"],
+  ["enlarge-reduce", "category-from"],
+  ["locate-object", "close-within"],
+  ["locate-object", "feet-at"],
+  ["water-walk", "surface-such"],
+  ["water-walk", "lava-as"],
+  ["locate-creature", "close-within"],
+  ["locate-creature", "feet-at"],
+  ["resilient-sphere", "Nothing-not"],
+  ["resilient-sphere", "effects-can"],
+  ["raise-dead", "survival-its"],
+  ["raise-dead", "instance-the"],
+  ["teleportation-circle", "sequence-a"],
+  ["contingency", "spell-called"],
+  ["contingency", "spell-as"],
+  ["find-the-path", "tools- such"],
+  ["find-the-path", "runes-worth"],
+  ["move-earth", "soils-clay"],
+  ["astral-projection", "cut-something"],
+  ["astral-projection", "does-your"],
+  ["prismatic-wall", "wall-up"],
+  ["prismatic-wall", "thick-centered"],
+  ["diseases", "stress-including"],
+  ["diseases", "nightmare-forces"],
+  ["deck-of-many-things", "death-a"],
+  ["helm-of-telepathy", "reply-using"],
+  ["helm-of-telepathy", "so-while"],
+  ["marvelous-pigments", "features-such"],
+  ["marvelous-pigments", "weapons - that"],
+  ["rod-of-absorption", "energy-not"],
+  ["rod-of-absorption", "itself-is"],
+  ["monster-statistics", "sense-frightening"],
+  ["monster-statistics", "actions-called"],
+  ["monster-statistics", "actions-outside"],
+  ["medusa", "attacks-one"],
+  ["medusa", "shortsword-or"],
+  ["gods-of-the-multiverse", "oak-and"],
+  ["gods-of-the-multiverse", "Ma'at-the"],
+  ["gods-of-the-multiverse", "spring-this"],
+  ["the-planes-of-existence", "touches-such"],
+  ["the-planes-of-existence", "locations- circles"],
+  ["the-planes-of-existence", "towns-that"],
+  ["the-planes-of-existence", "Planes** - Air"],
+  ["the-planes-of-existence", "Water - form"],
+  ["the-planes-of-existence", "form-great"],
+  ["the-planes-of-existence", "day-if"],
 ];
 
 const NUMERALS = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII", "XIII", "XIV", "XV", "XVI", "XVII", "XVIII"];
@@ -238,9 +376,18 @@ function tidyHeading(text) {
 
 // One page's markdown, cleaned: no title heading (the book letters its own),
 // no trailing spaces, capitals tidied, and the one struck-through dash the
-// PDF export left behind put back as the dash it was.
+// PDF export left behind put back as the dash it was. The PDF also spells a
+// few hyphens as a hyphen, a soft hyphen and two Unicode hyphens (U+00AD,
+// U+2010, U+2011 after the "-" of "7th-level"), and a hyphen at a line break
+// kept its space ("a 15- foot cone", "6th- level spell"); both become the
+// plain hyphen they are in print.
 function tidy(markdown, { until } = {}) {
-  let lines = markdown.replace(/\r\n?/g, "\n").replace(/\u0336/g, "\u2014").split("\n");
+  let lines = markdown
+    .replace(/\r\n?/g, "\n")
+    .replace(/\u0336/g, "\u2014")
+    .replace(/-\u00AD?[\u2010\u2011]+/g, "-")
+    .replace(/(\d(?:st|nd|rd|th)?)- (level|foot)\b/g, "$1-$2")
+    .split("\n");
   if (until) {
     const stop = lines.findIndex((line) => new RegExp(`^#+\\s+${until}\\s*$`).test(line));
     if (stop > 0) lines = lines.slice(0, stop);
@@ -372,6 +519,11 @@ async function main() {
       const page = pages.find((candidate) => candidate.id === id);
       if (!page || !page.md.includes(from)) throw new Error(`Erratum for ${id} no longer applies`);
       page.md = page.md.replace(from, to);
+    }
+    for (const [id, from] of DASHES) {
+      const page = pages.find((candidate) => candidate.id === id);
+      if (!page || !page.md.includes(from)) throw new Error(`Dash for ${id} no longer applies: ${from}`);
+      page.md = page.md.replace(from, from.replace(/ *- */, "\u2014"));
     }
 
     // Each book is a run of chapters in the order they are bound.

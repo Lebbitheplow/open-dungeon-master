@@ -7,7 +7,10 @@
 // - any person in a seat may pause; an agent program never may;
 // - the person who paused, the party lead or the DM may resume; nobody else
 //   cuts someone's break short;
-// - while the table is paused, only table talk (OOC) goes through.
+// - while the table is paused, only table talk (OOC) goes through: nothing
+//   new in play starts (refuseDuringBreak in table-break.ts), a DM turn
+//   already running finishes, and prep and corrections to the record stay
+//   open, since they move no turn, roll no die and change no floor.
 
 export type TableBreak = {
   // When the break began (ms since the epoch); the banner counts from it.
@@ -24,7 +27,8 @@ export function mayResumeBreak(
   return viewer.userId === tableBreak.userId || viewer.isLead || viewer.isDm;
 }
 
-// What a refused in-character move, roll of the board or turn end reads.
+// What any refused play reads: an in-character move, a trade, a roll
+// resolved, an adjudication, a turn end (refuseDuringBreak).
 export function breakRefusal(tableBreak: Pick<TableBreak, "name">): string {
   return `The table is paused: ${tableBreak.name} called a break. Use OOC for table talk until it resumes.`;
 }

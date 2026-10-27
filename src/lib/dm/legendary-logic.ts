@@ -320,12 +320,17 @@ export function lairResolution(line: string): string | null {
   const ability = save[2].slice(0, 3).toLowerCase();
   const word = Object.keys(ABILITY_WORDS).find((name) => ABILITY_WORDS[name] === ability) ?? "";
   const effect = parseSaveEffect(line.replace(save[0], `DC ${save[1]} ${word} saving throw`));
-  const laid = effect.condition ? [effect.condition, ...(effect.also ?? [])].join(" and ") : "";
+  const laid = effect.condition ? [effect.condition, ...(effect.also ?? [])] : [];
+  // aoe_damage lays one condition on a failed save; a line that lays more
+  // leaves the rest to set_condition on each creature that failed.
+  const one = laid.length === 1 ? `, condition "${laid[0]}"${effect.rounds ? `, rounds ${effect.rounds}` : ""}` : "";
   return `Resolve it now with aoe_damage: dc ${save[1]}, saveAbility "${ability}"${
     damage ? `, damage "${damage[1].replace(/\s+/g, "")}", type "${damage[2].toLowerCase()}"` : ""
-  }, and the enemyIds and characterIds of the creatures it reaches; the server rolls every save. ${
-    laid
-      ? `A failure lays ${laid}${effect.rounds ? ` for ${effect.rounds} round${effect.rounds === 1 ? "" : "s"}` : ""}: set it on each creature that failed (set_condition, set_enemy_condition).`
-      : "Lay what a failure brings as the line says."
-  }`;
+  }${one}, and the enemyIds and characterIds of the creatures it reaches; the server rolls every save${one ? " and lays the condition on a failure." : "."} ${
+    laid.length > 1
+      ? `A failure lays ${laid.join(" and ")}${effect.rounds ? ` for ${effect.rounds} round${effect.rounds === 1 ? "" : "s"}` : ""}: set it on each creature that failed with set_condition.`
+      : one
+        ? ""
+        : "Lay what a failure brings as the line says."
+  }`.trim();
 }

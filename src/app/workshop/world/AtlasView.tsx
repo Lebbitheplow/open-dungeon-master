@@ -48,6 +48,7 @@ export function AtlasView({
   world,
   onOpen,
   onOpenPrep,
+  atTable = false,
 }: {
   campaignId: string;
   api: WorldApi;
@@ -55,6 +56,9 @@ export function AtlasView({
   onOpen: (ref: string) => void;
   // Opens a place's battle map or encounter; absent where neither can be.
   onOpenPrep?: OpenPrep;
+  // At a table a map can be shown to its party; a workshop has none to
+  // show it to (issue 553).
+  atTable?: boolean;
 }) {
   const { doc } = world;
   const [mapId, setMapId] = useState(doc.maps[0]?.id ?? "");
@@ -255,7 +259,7 @@ export function AtlasView({
           </p>
         ) : null}
         <RegionBar region={region} atlas={atlas} pins={pins} />
-        <PartyBar key={`party-${atlas.id}`} api={api} atlas={atlas} region={region} />
+        {atTable ? <PartyBar key={`party-${atlas.id}`} api={api} atlas={atlas} region={region} /> : null}
         {settings ? <MapSettings key={`settings-${atlas.id}`} api={api} atlas={atlas} region={region} onClose={() => setSettings(false)} /> : null}
         <RegionReview key={region.step ? region.step.kind : "none"} region={region} />
         <DeleteReview

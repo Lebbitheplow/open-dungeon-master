@@ -227,7 +227,7 @@ export function AdminUsagePanel() {
                   <td className={td}>
                     <span className="text-stone-100">{campaign.title}</span>
                     <span className="ml-1 text-[10px] uppercase text-stone-500">
-                      {campaign.kind === "workshop" ? "workshop" : campaign.status}
+                      {campaign.kind === "workshop" ? "workshop" : campaign.kind === "playtest" ? "test fight" : campaign.status}
                     </span>
                   </td>
                   <td className={td}>{campaign.leadUsername || "–"}</td>

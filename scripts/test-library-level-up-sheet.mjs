@@ -105,7 +105,7 @@ await test("The sheet keeps its own picks and sends the rest to the whole build"
   const split = splitOwed(owed);
   assert.deepEqual(split.here.map((pick) => pick.target), ["asi"]);
   assert.deepEqual(split.elsewhere.map((pick) => pick.target), ["tools"]);
-  assert.deepEqual([...SHEET_TARGETS], ["subclass", "asi", "styles", "expertise", "options", "spells"]);
+  assert.deepEqual([...SHEET_TARGETS], ["subclass", "asi", "styles", "expertise", "options", "spells", "racialCantrip"]);
 });
 
 await test("Level up opens the sheet; Edit the whole build opens the full builder one level up", () => {

@@ -122,7 +122,7 @@ const FAMILIES = [
     tool: "aoe_damage", who: mage, line: "Burning Hands on the goblin.", dice: [10, 1, 1, 1],
     args: (enemy) => ({ casterId: mage.id, spell: "Burning Hands", level: 1, enemyIds: [enemy.id], saveAbility: "dex", damage: "3d6", type: "fire", halfOnSave: true }),
   },
-  { tool: "teleport_token", who: mage, line: "I Misty Step away.", args: () => ({ tokenName: mage.id, x: 9, y: 5, spell: "Misty Step", casterId: mage.id }) },
+  { tool: "teleport_token", who: mage, line: "I Misty Step away.", args: () => ({ token: mage.id, x: 9, y: 5, spell: "Misty Step", casterId: mage.id }) },
   { tool: "cast_buff", who: sage, line: "I bless Kara.", setup: () => kit.place(kara.id, 4, 5), args: () => ({ characterId: sage.id, spell: "Bless", level: 1, targetCharacterIds: [kara.id] }) },
   {
     tool: "heal", who: sage, line: "Cure Wounds on Kara.", dice: [4],

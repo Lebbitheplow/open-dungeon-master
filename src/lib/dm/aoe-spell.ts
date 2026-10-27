@@ -72,13 +72,13 @@ export function planAoeSpell(
   input: {
     encounterId: string;
     spell: string;
-    casterId?: string;
+    casterCharacterId?: string;
     level?: number;
     damage: string | number | undefined;
     // Overchannel: the spell's maximum damage.
     overchannel?: boolean;
     // Sculpt Spells: the characters to spare (every one caught when absent).
-    sculpt?: string[];
+    sparedCharacterIds?: string[];
     // Optional: the spell's own save and the caster's DC are used; the
     // caller's numbers count only where neither is known.
     saveAbility?: SaveAbilityId;
@@ -93,16 +93,16 @@ export function planAoeSpell(
     toward?: { x: number; y: number };
   },
 ): AoeSpellPlan | ToolError {
-  if (!input.casterId) {
+  if (!input.casterCharacterId) {
     return {
-      error: `aoe_damage names ${input.spell} but no caster. A player's spell needs casterId (the server spends the slot and uses the spell's own numbers); an enemy's needs casterEnemyId; a trap or a breath weapon names no spell.`,
+      error: `aoe_damage names ${input.spell} but no caster. A player's spell needs casterCharacterId (the server spends the slot and uses the spell's own numbers); an enemy's needs casterEnemyId; a trap or a breath weapon names no spell.`,
       retry: true,
     };
   }
-  const stale = resolveSheetRef(input.casterId, sheets, sheetsById);
+  const stale = resolveSheetRef(input.casterCharacterId, sheets, sheetsById);
   const caster = stale ? (getSheetById(stale.id) ?? stale) : null;
   if (!caster) {
-    return { error: `casterId "${input.casterId}" is not a character in GAME STATE; nothing was cast.`, retry: true };
+    return { error: `casterCharacterId "${input.casterCharacterId}" is not a character in GAME STATE; nothing was cast.`, retry: true };
   }
   const authors = spellAuthorsFor(campaign);
   const resolved = spellMechanicsFor({ spell: input.spell, userIds: authors });
@@ -329,7 +329,7 @@ export function planAoeSpell(
       spellSchoolFor(input.spell, authors),
       slotLevel ?? spellLevel,
       input.characters.map((sheet) => sheet.id),
-      input.sculpt,
+      input.sparedCharacterIds,
     ),
   };
 }

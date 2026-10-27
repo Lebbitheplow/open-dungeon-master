@@ -122,7 +122,7 @@ import { turnStartEffects } from "@/lib/dm/turn-start-effects";
 import { endEncounterTool, endTurnTool, enemyAttackTool, startEncounterTool, type ToolDef } from "@/lib/dm/encounter-tool-defs";
 import { RUN_PREPARED_ENCOUNTER, runPreparedEncounter } from "@/lib/dm/prepared-encounter-tool";
 import { rollDeathSave } from "@/lib/dm/death";
-import { getBattleMapForEncounter, getTokenByRef, resetRoundBudgets, resetTurnBudgets } from "@/lib/db/battle-maps";
+import { getBattleMapForEncounter, getTokenByRef, listHiddenRefIds, resetRoundBudgets, resetTurnBudgets } from "@/lib/db/battle-maps";
 import { tilesApart } from "@/lib/dm/board-reach";
 
 import { initLegendaryPools } from "@/lib/dm/legendary-tools";
@@ -1190,7 +1190,7 @@ export function applyEncounterCall(
     case "move_token":
       return { result: handleMoveToken(campaign, rawArguments, sheets, sheetsById, turn) };
     case "teleport_token": {
-      const unasked = characterCallUnasked(campaign.id, turn, rawArguments, "casterId");
+      const unasked = characterCallUnasked(campaign.id, turn, rawArguments, "casterCharacterId");
       return { result: unasked ? unasked : handleTeleportToken(campaign, rawArguments, sheets, sheetsById, turn) };
     }
     case "set_movement":
@@ -1483,7 +1483,7 @@ function advancePointer(
   // the enemies due, the banner says they go first, and so does the note:
   // it is the newest line the DM turn the pass wakes answers.
   const landedOn = encounter.order[encounter.turnIndex];
-  const owed = enemiesOwedTurn(encounter).map((enemy) => enemy.displayName);
+  const owed = owedNamesForTable(encounter);
   const owedNote = owed.length ? ` ${owed.join(" and ")} act${owed.length === 1 ? "s" : ""} before ${landedOn.name}.` : "";
   if (typeof options?.announce === "function") {
     tableNote(campaign, `${options.announce(landedOn)}${owedNote}`, "cue-battle");
@@ -2026,6 +2026,16 @@ export function endOwnTurn(campaignId: string, userId: string): boolean {
 // Why endOwnTurn said no, in the End Turn button's words. The pointer is on
 // this player while the floor waits for the enemies before them: their turn
 // has not come yet, and "not your combat turn" would contradict the Hand.
+// The enemies still owed a turn, as a line the whole table reads may name
+// them: one the DM keeps off the board is "someone unseen" there, as on the
+// tracker (src/lib/db/encounter-view.ts). The turn note and a player's End
+// Turn refusal used to name a hidden ambusher outright.
+function owedNamesForTable(encounter: Encounter): string[] {
+  const map = getBattleMapForEncounter(encounter.id);
+  const hidden = new Set(map ? listHiddenRefIds(map.id) : []);
+  return [...new Set(enemiesOwedTurn(encounter).map((enemy) => (hidden.has(enemy.id) ? "someone unseen" : enemy.displayName)))];
+}
+
 export function endTurnRefusal(campaignId: string, userId: string): string {
   const encounter = getActiveEncounter(campaignId);
   const current = encounter?.orderReady ? encounter.order[encounter.turnIndex] : undefined;
@@ -2037,7 +2047,7 @@ export function endTurnRefusal(campaignId: string, userId: string): string {
     return dominated;
   }
   if (encounter && campaign && current?.kind === "pc" && turnUserId(campaign, current) === userId) {
-    const waiting = enemiesOwedTurn(encounter).map((enemy) => enemy.displayName);
+    const waiting = owedNamesForTable(encounter);
     if (waiting.length) {
       const one = waiting.length === 1;
       return `${waiting.join(" and ")} ${one ? "acts" : "act"} first: wait for ${one ? "its turn" : "their turns"}, then take yours.`;
@@ -2108,6 +2118,13 @@ export function playCompanionTurn(campaign: Campaign, turn: DmTurn): string | nu
   const current = encounter.order[encounter.turnIndex];
   if (!current || current.kind !== "pc" || !isCompanionUserId(current.userId)) {
     return "It is not a companion's turn.";
+  }
+  // The enemies before the companion take their turns first, as they do
+  // before a player's (src/lib/dm/enemies-due.ts): only the console's button
+  // waited for them, so a call straight to the route played the companion
+  // ahead of them.
+  if (enemiesOwedTurn(encounter).length) {
+    return "The enemies before them have not had their turns yet: hand the turn on once they have, then the companion plays.";
   }
   companionAutoAct(campaign, turn, encounter, current.characterId);
   const live = getActiveEncounter(campaign.id);

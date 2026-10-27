@@ -128,7 +128,7 @@ export function downtimeProblem(campaign: Campaign, sheet: CharacterSheet, entry
   }
   if (entry.activity === "crafting") {
     if (!entry.item?.trim() || !entry.tool?.trim()) {
-      return { error: `Crafting needs the item to make and the tool it is made with (smith's tools, leatherworker's tools...).`, retry: true };
+      return { error: `Crafting needs the item to make (item) and the tools it is made with (tool: smith's tools, leatherworker's tools...).`, retry: true };
     }
     const made = { name: entry.item, ...(entry.srdName ? { srdName: entry.srdName } : {}) };
     if (magicItemNamed(rowName(made)) || magicValueOf(made)) {
@@ -168,7 +168,7 @@ export function downtimeProblem(campaign: Campaign, sheet: CharacterSheet, entry
     }
   }
   if (entry.activity === "research" && !entry.topic?.trim()) {
-    return { error: "Research needs the topic being researched.", retry: true };
+    return { error: "Research needs the topic being researched (topic).", retry: true };
   }
   return null;
 }

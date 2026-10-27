@@ -140,6 +140,31 @@ export function handsToLower(
     .map((hand) => hand.userId);
 }
 
+// ---- this microphone ----
+
+// Whether this browser's own microphone track may carry sound. Every way a
+// track can be opened (a join, a microphone swap, unmute, a held talk key,
+// leaving push-to-talk) asks this one question, so a new track never comes
+// up open while the controls say it is closed.
+//
+// `floorClosed` is a strict floor that silences this seat. The SFU pauses the
+// producer server-side for that, so there it changes nothing here; mesh has
+// no server in the audio path, so the track itself is the only gate there is.
+export type MicGate = {
+  transport: "sfu" | "mesh";
+  mode: "open" | "ptt";
+  muted: boolean;
+  talking: boolean;
+  floorClosed: boolean;
+};
+
+export function micOpen(gate: MicGate): boolean {
+  if (gate.transport === "mesh" && gate.floorClosed) {
+    return false;
+  }
+  return gate.mode === "ptt" ? gate.talking : !gate.muted;
+}
+
 // ---- labels ----
 
 // What the table is told about the current floor. Kept here next to the rules

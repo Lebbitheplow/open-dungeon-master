@@ -51,6 +51,7 @@ import { standUpTiles } from "@/lib/srd/authored-effects-more";
 import { addSilenceChips, viewerMoves } from "@/lib/battlemap/view-moves";
 import { undoableMove, undoOffer } from "@/lib/battlemap/move-undo";
 import type { AuraTone, PlayerMapView } from "@/lib/battlemap/view-types";
+import { ENEMY_TURN_NAME, turnOwner } from "@/lib/dm/turn-owner";
 import { holdsFeature } from "@/lib/srd/feature-names";
 
 export type { PlayerMapView } from "@/lib/battlemap/view-types";
@@ -350,7 +351,11 @@ export function buildPlayerMapView(
   // their full speed (readied-release.ts; the move route charges it the same).
   const readiedMove = sheet ? readiedReleaseFor(sheet, encounter, "move") : null;
   const readiedWalk = Boolean(readiedMove && !("error" in readiedMove));
-  if (!fullVision && sheet && myToken && sheet.currentHp > 0 && (canMoveNow(campaignId, sheet.id) || readiedWalk)) {
+  // The DM's full view moves nobody, except a character the DM plays
+  // (a test fight a person runs, issue 553): on its turn it walks by the
+  // same rules as anyone's. `sheet` is the viewer's own, so at any other
+  // table the DM, who holds none, still gets none.
+  if (sheet && myToken && sheet.currentHp > 0 && (canMoveNow(campaignId, sheet.id) || readiedWalk)) {
     const turnBudget = pcMoveBudget(campaignId, encounter, map, sheet, myToken);
     const budget = readiedWalk ? { ...turnBudget, tiles: speedToTiles(turnBudget.speed), fullTiles: speedToTiles(turnBudget.speed) } : turnBudget;
     budgetLeft = budget.tiles;
@@ -383,7 +388,15 @@ export function buildPlayerMapView(
     }
   }
 
-  const currentEntry = encounter.orderReady ? encounter.order[encounter.turnIndex] : undefined;
+  // Whose turn it is, which is not always who the pointer rests on: while
+  // the enemies before the player up next still have their turns, the turn
+  // is theirs, so the board lights no figure and names the enemy side
+  // (src/lib/dm/turn-owner.ts), as the encounter's `acting` does. The turn
+  // chime, the turn banner and End turn key on `turn`, so they wait for the
+  // player's turn to begin as well.
+  const owner = turnOwner(encounter);
+  const enemiesFirst = owner.enemies.length > 0;
+  const currentEntry = enemiesFirst ? undefined : (owner.next ?? undefined);
 
   // The stage layer: facts about each shown token, keyed by token id.
   // Names a condition's metadata may point at: the combatants this viewer
@@ -400,7 +413,8 @@ export function buildPlayerMapView(
   const tokenByRef = new Map(tokens.map((token) => [token.refId, token]));
   const effectAuras = new Map<string, Array<{ id: string; radiusFeet: number; tone: AuraTone }>>();
   for (const effect of listEffects(campaignId)) {
-    if (!effect.aura) {
+    // An effect the party cannot tell is there draws no ring on their board.
+    if (!effect.aura || (!effect.visible && !fullVision)) {
       continue;
     }
     const list = effectAuras.get(effect.targetId) ?? [];
@@ -506,7 +520,7 @@ export function buildPlayerMapView(
       })
     : [];
   // The viewer's last walk, while it can still be taken back.
-  const undoMove = !fullVision && sheet && myToken && encounter.kind !== "scene" ? undoOffer(undoableMove(encounter, map.id, sheet.id)) : undefined;
+  const undoMove = sheet && myToken && encounter.kind !== "scene" ? undoOffer(undoableMove(encounter, map.id, sheet.id)) : undefined;
 
   return {
     mapId: map.id,
@@ -534,7 +548,7 @@ export function buildPlayerMapView(
     ...(undoMove ? { undoMove } : {}),
     myTokenId: myToken?.id ?? null,
     round: encounter.round,
-    currentTurnName: currentEntry?.name ?? "",
+    currentTurnName: enemiesFirst ? ENEMY_TURN_NAME : (currentEntry?.name ?? ""),
     board: encounter.kind,
     fullVision,
     labels: labelsFor(map.labels, map.width, { dm: fullVision, explored }),
@@ -551,7 +565,7 @@ export function buildPlayerMapView(
     targets,
     intents,
     edges:
-      !fullVision && sheet && myToken && encounter.kind === "fight"
+      sheet && myToken && encounter.kind === "fight"
         ? targetEdges({
             encounterId: encounter.id,
             characterId: sheet.id,

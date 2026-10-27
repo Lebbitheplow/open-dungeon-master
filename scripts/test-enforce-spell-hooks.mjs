@@ -135,7 +135,7 @@ await test("Phantasmal Killer's target saves at the END of each of its turns or 
 await test("Weird frightens on a failed save, and the frightened creature saves at the end of each of its turns or takes 4d10 psychic.", async () => {
   const { world, sheets: [wizard], enemies: [goblin] } = await table([caster("wizard", "int", ["Weird"], [], 17)]);
   world.dice(1);
-  await world.invoke("aoe_damage", { casterId: wizard.id, spell: "Weird", enemyIds: [goblin.id], saveAbility: "wis", dc: 15, level: 9 });
+  await world.invoke("aoe_damage", { casterCharacterId: wizard.id, spell: "Weird", enemyIds: [goblin.id], saveAbility: "wis", dc: 15, level: 9 });
   world.clearDice();
   assert.ok(enemyOf(world, goblin.id).conditions.includes("frightened"));
   nextTurn(world);
@@ -218,7 +218,7 @@ await test("Divine Word acts by hit points on a failed save: 20 or fewer killed,
   encounters.patchEnemyHp(b.id, 25, "alive");
   encounters.patchEnemyHp(c.id, 45, "alive");
   world.dice(1, 1, 1);
-  const out = await world.invoke("aoe_damage", { casterId: cleric.id, spell: "Divine Word", enemyIds: [a.id, b.id, c.id], saveAbility: "cha", dc: 15, level: 7 });
+  const out = await world.invoke("aoe_damage", { casterCharacterId: cleric.id, spell: "Divine Word", enemyIds: [a.id, b.id, c.id], saveAbility: "cha", dc: 15, level: 7 });
   world.clearDice();
   assert.equal(out.ok, true, out.error);
   assert.equal(enemyOf(world, a.id).status, "dead");
@@ -244,11 +244,11 @@ await test("A creature enclosed in a Resilient Sphere cannot be struck from outs
 await test("A creature Entangle restrains frees itself with its action and a Strength check against the caster's DC.", async () => {
   const { world, sheets: [druid], enemies: [goblin] } = await table([caster("druid", "wis", ["Entangle"])]);
   world.dice(1);
-  await world.invoke("aoe_damage", { casterId: druid.id, spell: "Entangle", enemyIds: [goblin.id], saveAbility: "str", dc: 15, level: 1 });
+  await world.invoke("aoe_damage", { casterCharacterId: druid.id, spell: "Entangle", enemyIds: [goblin.id], saveAbility: "str", dc: 15, level: 1 });
   world.clearDice();
   assert.ok(enemyOf(world, goblin.id).conditions.includes("restrained"));
   world.dice(20);
-  const out = await world.invoke("take_action", { action: "escape", enemyId: goblin.id });
+  const out = await world.invoke("take_action", { action: "escape", escapingEnemyId: goblin.id });
   world.clearDice();
   assert.equal(out.ok, true, out.error);
   assert.ok(!enemyOf(world, goblin.id).conditions.includes("restrained"));
@@ -316,7 +316,7 @@ await test("Dispel Evil and Good gives celestials, elementals, fey, fiends and u
 await test("Animate Objects makes creatures; it is not an automatic blast of damage.", async () => {
   const { world, sheets: [wizard], enemies: [goblin] } = await table([caster("wizard", "int", ["Animate Objects"])]);
   world.dice(6, 6, 6);
-  const out = await world.invoke("aoe_damage", { casterId: wizard.id, spell: "Animate Objects", enemyIds: [goblin.id], damage: "3d6", saveAbility: "dex", dc: 15, level: 5 });
+  const out = await world.invoke("aoe_damage", { casterCharacterId: wizard.id, spell: "Animate Objects", enemyIds: [goblin.id], damage: "3d6", saveAbility: "dex", dc: 15, level: 5 });
   world.clearDice();
   assert.equal(out.ok, false);
   assert.equal(hurt(world, goblin.id), 0);

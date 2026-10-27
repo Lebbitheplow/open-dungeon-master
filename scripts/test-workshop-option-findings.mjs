@@ -77,4 +77,15 @@ test("a species trait that resists by its words but not its name is told the tab
   assert.deepEqual(warns(check("race", picked)), [], "the picked Fire Resistance still drew the warning");
 });
 
+test("a species paragraph that reads like a trait the table does not see is named, once each", () => {
+  const base = { asi: [{ attributes: ["Strength"], value: 2 }, { attributes: ["Charisma"], value: 1 }], speed: { walk: 30 } };
+  const ancestry = "**_Draconic Ancestry._** You have draconic ancestry.";
+  for (const line of ["**Breath Weapon:** You exhale fire.", "*Breath Weapon.* You exhale fire.", "Breath Weapon. You exhale fire."]) {
+    const unread = warns(check("race", { ...base, traits: `${ancestry}\n\n${line}` })).filter((text) => /reads like a trait/.test(text));
+    assert.equal(unread.length, 1, line);
+    assert.match(unread[0], /"Breath Weapon" reads like a trait, but the table does not see it as one: begin its paragraph with the name in bold and a full stop, as \*\*Breath Weapon\.\*\*/);
+  }
+  assert.deepEqual(warns(check("race", { ...base, traits: `${ancestry}\n\n**Breath Weapon.** You exhale fire.` })), []);
+});
+
 console.log(`test-workshop-option-findings: ${passed} passed`);

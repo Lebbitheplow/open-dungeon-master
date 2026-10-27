@@ -118,7 +118,10 @@ const BROKEN = {
   }),
   "ids of another table": JSON.stringify({
     characterId: foreign.id, characterIds: [foreign.id], targetCharacterId: foreign.id, casterId: foreign.id,
+    casterCharacterId: foreign.id, sourceCharacterId: foreign.id, healerId: foreign.id, toCharacterId: foreign.id,
+    targetCharacterIds: [foreign.id], sparedCharacterIds: [foreign.id], presentCharacterIds: [foreign.id], helperIds: [foreign.id],
     enemyId: foe.id, targetEnemyId: foe.id, enemyIds: [foe.id], attackerId: foe.id,
+    casterEnemyId: foe.id, sourceEnemyId: foe.id, againstEnemyId: foe.id, secondTargetEnemyId: foe.id, escapingEnemyId: foe.id,
     amount: 5, delta: 5, name: "Rope", item: "Rope", condition: "poisoned", level: 1,
     spell: "Magic Missile", resource: "arcane_recovery", action: "add", weapon: "Dagger",
     x: 1, y: 1, feet: 5, saveAbility: "dex", damage: "1d4", reason: "crossed",
@@ -144,6 +147,54 @@ await test("every tool refuses broken arguments, mid fight, and changes nothing"
       assert.equal(state(), before, `${name} changed state on ${label}`);
     }
   }
+});
+
+// A parameter renamed for what it holds: a call that still sends the old
+// name (the model copying an earlier turn) is refused, and the refusal never
+// asks for the old name back. The escape refusal once named enemyId.
+await test("a call with a renamed field's old name is not told to send the old name", async () => {
+  const table = await openWorld();
+  const pc = table.addHero({ ...WIZARD, name: "Echo" });
+  const goblin = await fight(table);
+  const OLD = [
+    ["aoe_damage", "casterId", { casterId: pc.id, spell: "Fireball", level: 3, enemyIds: [goblin.id] }],
+    ["aoe_damage", "ability", { casterEnemyId: goblin.id, ability: "Scimitar", characterIds: [pc.id] }],
+    ["aoe_damage", "sculpt", { saveAbility: "dex", dc: 12, damage: "2d6", enemyIds: ["no-such"], sculpt: [pc.id] }],
+    ["cast_at_player", "ability", { casterEnemyId: goblin.id, ability: "Scimitar", characterId: pc.id }],
+    ["move_token", "tokenName", { tokenName: "Echo", x: 0, y: 0 }],
+    ["move_token", "casterId", { token: "Echo", x: 0, y: 0, teleport: true, spell: "Misty Step", casterId: pc.id }],
+    ["set_movement", "tokenName", { tokenName: "Echo", movement: "fly" }],
+    ["take_action", "enemyId", { action: "escape", enemyId: "no-such" }],
+    ["party_award", "amount", { characterIds: [pc.id], amount: 100 }],
+    ["party_award", "delta", { characterIds: [pc.id], delta: 10 }],
+    ["party_stash", "name", { characterId: pc.id, do: "stow", name: "Rope" }],
+    ["party_stash", "amount", { characterId: pc.id, do: "deposit", amount: 5 }],
+    ["haggle", "present", { characterId: pc.id, shop: "none", skill: "persuasion", present: [pc.id] }],
+    ["set_quest", "questId", { questId: "No Such Quest", status: "completed" }],
+    ["tick_objective", "objectiveId", { questId: "No Such Quest", objectiveId: "nothing" }],
+    ["show_handout", "loreId", { loreId: "No Such Letter" }],
+    // the new name with a value the engine refuses: its own refusals too
+    ["take_action", "enemyId", { action: "escape", escapingEnemyId: "no-such" }],
+    ["aoe_damage", "casterId", { casterCharacterId: "no-such", spell: "Fireball", level: 3, enemyIds: [goblin.id] }],
+    ["aoe_damage", "ability", { casterEnemyId: goblin.id, enemyAbility: "No Such Breath", characterIds: [pc.id] }],
+    ["cast_at_player", "ability", { casterEnemyId: goblin.id, enemyAbility: "No Such Gaze", characterId: pc.id }],
+    ["move_token", "casterId", { token: "Echo", x: 0, y: 0, teleport: true, spell: "Misty Step", casterCharacterId: "no-such" }],
+    ["move_token", "tokenName", { token: "No Such Token", x: 0, y: 0 }],
+    ["set_movement", "tokenName", { token: "No Such Token", movement: "fly" }],
+    ["haggle", "present", { characterId: pc.id, shop: "none", skill: "persuasion", presentCharacterIds: ["no-such"] }],
+    ["party_stash", "name", { characterId: pc.id, do: "take", item: "No Such Thing" }],
+    ["set_quest", "questId", { quest: "No Such Quest", status: "completed" }],
+    ["tick_objective", "objectiveId", { quest: "No Such Quest", objective: "nothing" }],
+    ["show_handout", "loreId", { lore: "No Such Letter" }],
+    ["afflict", "dc", { characterId: pc.id, kind: "disease", name: "Cackle Fever", saveDc: 31 }],
+  ];
+  for (const [name, old, args] of OLD) {
+    const result = await raw(name, JSON.stringify(args), table);
+    assert.equal(typeof result?.error, "string", `${name} took its old ${old}: ${JSON.stringify(result).slice(0, 160)}`);
+    const asks = new RegExp(`(\\b(with|send|pass|its|needs|in|and) ${old}\\b)|"${old}"|\\b${old} "`);
+    assert.doesNotMatch(result.error, asks, `${name}'s refusal asks for ${old}: ${result.error}`);
+  }
+  table.close();
 });
 
 await test("every tool refuses broken arguments at a table with no fight running", async () => {
@@ -183,7 +234,7 @@ await test("an amount is a whole number inside the tool's bounds", async () => {
     ["award_xp", { characterIds: [hero.id], amount: 0 }],
     ["award_xp", { characterIds: [hero.id], amount: -5 }],
     ["award_xp", { characterIds: [hero.id], amount: 20001 }],
-    ["party_award", { characterIds: [hero.id], amount: 1000000 }],
+    ["party_award", { characterIds: [hero.id], xp: 1000000 }],
     ["party_award", { characterIds: [hero.id] }],
     ["modify_gold", { characterId: hero.id, delta: 0.5 }],
     ["purchase", { characterId: hero.id, item: "Rope", price: -5, action: "buy" }],
@@ -243,7 +294,7 @@ await test("a fight can always be ended, whatever the arguments say", async () =
 await test("modify_gold and party_award move at most 100,000 gp in one call: the bound both tools declare to the model, beside update_sheet's ceiling of 1,000 gp and award_xp's of 20,000 XP.", async () => {
   const before = here.sheet(hero.id).gold;
   await sent("modify_gold", { characterId: hero.id, delta: 1000000000000, reason: "a generous dragon" });
-  await sent("party_award", { characterIds: [hero.id], delta: 1000000000000, reason: "and another" });
+  await sent("party_award", { characterIds: [hero.id], gold: 1000000000000, reason: "and another" });
   const after = here.sheet(hero.id).gold;
   here.patch(hero.id, { gold: before });
   assert.ok(after - before <= 200000, `${after - before} gp in two calls`);
@@ -251,9 +302,9 @@ await test("modify_gold and party_award move at most 100,000 gp in one call: the
 
 await test("grant_item and remove_item take a quantity from 1 to 99, the bound both declare to the model; any other number is refused.", async () => {
   const before = here.sheet(hero.id).equipment;
-  const huge = await sent("grant_item", { characterId: hero.id, name: "Rope", qty: 1000000 });
-  const negative = await sent("grant_item", { characterId: hero.id, name: "Rope", qty: -3 });
-  const taken = await sent("remove_item", { characterId: hero.id, name: "Rope", qty: 0 });
+  const huge = await sent("grant_item", { characterId: hero.id, item: "Rope", qty: 1000000 });
+  const negative = await sent("grant_item", { characterId: hero.id, item: "Rope", qty: -3 });
+  const taken = await sent("remove_item", { characterId: hero.id, item: "Rope", qty: 0 });
   const held = here.sheet(hero.id).equipment.find((item) => item.name === "Rope")?.qty;
   here.patch(hero.id, { equipment: before });
   assert.equal(typeof huge.error, "string", `a million ropes granted; the pack holds ${held}`);
@@ -265,8 +316,8 @@ await test("a pack holds 60 rows and a row 999 of a thing, however the grants ar
   const before = here.sheet(hero.id).equipment;
   try {
     here.patch(hero.id, { equipment: [{ name: "Arrow", qty: 950 }] });
-    assert.equal(typeof (await sent("grant_item", { characterId: hero.id, name: "Arrow", qty: 50 })).error, "string");
-    assert.equal((await sent("grant_item", { characterId: hero.id, name: "Arrow", qty: 49 })).ok, true);
+    assert.equal(typeof (await sent("grant_item", { characterId: hero.id, item: "Arrow", qty: 50 })).error, "string");
+    assert.equal((await sent("grant_item", { characterId: hero.id, item: "Arrow", qty: 49 })).ok, true);
     assert.equal(here.sheet(hero.id).equipment[0].qty, 999);
     assert.equal(
       typeof (await sent("purchase", { characterId: hero.id, item: "Arrow", price: 0, qty: 1, action: "buy" })).error,
@@ -275,9 +326,9 @@ await test("a pack holds 60 rows and a row 999 of a thing, however the grants ar
     here.patch(hero.id, {
       equipment: Array.from({ length: 60 }, (_, index) => ({ name: `Trinket ${index + 1}`, qty: 1 })),
     });
-    assert.equal(typeof (await sent("grant_item", { characterId: hero.id, name: "One more", qty: 1 })).error, "string");
+    assert.equal(typeof (await sent("grant_item", { characterId: hero.id, item: "One more", qty: 1 })).error, "string");
     // More of what is already carried needs no new row.
-    assert.equal((await sent("grant_item", { characterId: hero.id, name: "Trinket 7", qty: 2 })).ok, true);
+    assert.equal((await sent("grant_item", { characterId: hero.id, item: "Trinket 7", qty: 2 })).ok, true);
     assert.equal(here.sheet(hero.id).equipment.length, 60);
   } finally {
     here.patch(hero.id, { equipment: before });
@@ -297,7 +348,7 @@ await test("gold moves inside the purse's own ceiling, in coins as in gold piece
     assert.equal(here.sheet(hero.id).gold, 900000);
     // A refused purse leaves the experience that came with it unawarded.
     const xp = here.sheet(hero.id).xp;
-    const spoils = await sent("party_award", { characterIds: [hero.id], amount: 50, delta: 100001 });
+    const spoils = await sent("party_award", { characterIds: [hero.id], xp: 50, gold: 100001 });
     assert.equal(typeof spoils.error, "string");
     assert.equal(here.sheet(hero.id).xp, xp);
   } finally {

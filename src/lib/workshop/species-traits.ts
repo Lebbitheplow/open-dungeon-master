@@ -1,4 +1,4 @@
-import { raceMechanics } from "@/lib/content/mechanics";
+import { PLAIN_TRAIT_LINE, raceMechanics, traitHeading } from "@/lib/content/mechanics";
 import { DAMAGE_TYPES } from "@/lib/dm/damage-logic";
 import { pcResistances } from "@/lib/dm/pc-defenses";
 import { byName, textKey } from "@/lib/language/text-logic";
@@ -13,20 +13,47 @@ import { byName, textKey } from "@/lib/language/text-logic";
 export type PublishedTrait = { name: string; text: string; from: string[] };
 
 // A trait paragraph per name, out of a race's markdown: "**_Keen Senses._**
-// You have proficiency..." and "***Brave.*** You have advantage..." both.
-const TRAIT_LINE = /^(?:\*\*\*|\*\*_)(.+?)(?:\*\*\*|_\*\*)\s*(.*)$/;
-
+// You have proficiency...", "***Brave.*** You have advantage..." and a
+// hand-typed "**Ember Blood.** You have resistance..." alike, each heading
+// read the way the table reads it (src/lib/content/mechanics.ts
+// traitHeading).
 export function traitParagraphs(markdown: string): Map<string, string> {
   const out = new Map<string, string>();
   let current: string | null = null;
   for (const line of String(markdown ?? "").split("\n")) {
-    const head = TRAIT_LINE.exec(line.trim());
+    const head = traitHeading(line);
     if (head) {
-      current = head[1].replace(/\.$/, "").trim();
-      out.set(current, head[2].trim());
+      current = head.name;
+      out.set(current, head.rest);
     } else if (current && line.trim()) {
       out.set(current, `${out.get(current)} ${line.trim()}`.trim());
     }
+  }
+  return out;
+}
+
+// A paragraph whose name is marked some other way than the table reads a
+// trait ("**Breath Weapon** You...", "**Breath Weapon:**", "*Breath
+// Weapon.*"), and, in a text whose other traits are marked, one that opens
+// with a plain "Breath Weapon. You...".
+const MARKED_LIKE_A_TRAIT = /^(?:\*{1,3}|_{1,2}|\*\*_|_\*\*)([^*_\n]{2,60}?)(?:\*{1,3}|_{1,2}|_\*\*|\*\*_)(?![*_])\s*[:.–-]?\s*\S/;
+
+
+// The paragraphs that read like a trait the table does not see, each with
+// the name it seems to give: the table runs only what traitHeading reads,
+// so a trait written another way grants nothing and is never said to.
+// Bullets (a trait's options) and table rows are no trait's opening.
+export function unreadTraitLines(traits: string): Array<{ name: string; line: string }> {
+  const lines = String(traits ?? "").split("\n").map((line) => line.trim()).filter(Boolean);
+  // Plain "Name. Words" lines are read as traits beside bold ones in a text a
+  // person typed (raceMechanics); only among a pack's headings are they not.
+  const packed = lines.some((line) => /^(?:\*\*\*|\*\*_)/.test(line) && traitHeading(line) !== null);
+  const out: Array<{ name: string; line: string }> = [];
+  for (const line of lines) {
+    if (traitHeading(line) || /^[*-]\s/.test(line) || line.startsWith("|")) continue;
+    const said = MARKED_LIKE_A_TRAIT.exec(line)?.[1] ?? (packed ? PLAIN_TRAIT_LINE.exec(line)?.[1] : undefined);
+    const name = said?.replace(/[\s:.–-]+$/, "").trim();
+    if (name) out.push({ name, line });
   }
   return out;
 }

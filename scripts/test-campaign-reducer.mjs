@@ -8,7 +8,7 @@ import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { campaignReducer, INITIAL_CAMPAIGN_STATE, refreshesBattleMap, STREAMED_EVENTS } = await import(
+const { campaignReducer, INITIAL_CAMPAIGN_STATE, refreshesBattleMap, reloadsSnapshot, STREAMED_EVENTS } = await import(
   "../src/app/campaigns/[campaignId]/useCampaignStream.ts"
 );
 const { EVENT_AUDIENCE } = await import("../src/lib/event-audience.ts");
@@ -247,6 +247,24 @@ test("every table event the reducer handles is one the stream listens for", () =
   const party = { marchingOrder: ["a", "b"], formationChange: null };
   const withCampaign = { ...loaded, campaign: { id: "c1", party: { marchingOrder: [] } } };
   assert.deepEqual(campaignReducer(withCampaign, event("party_updated", { party }, 11)).campaign.party, party);
+});
+
+test("a change of who holds authority reads the snapshot again (audit WA-11)", () => {
+  // The seat that gains the DM's tools and the seat that loses them both
+  // hear it; before, only the mover reloaded, so the new DM had no console
+  // until they left and came back.
+  assert.ok(new Set(STREAMED_EVENTS).has("dm_seat_changed"), "the stream listens for dm_seat_changed");
+  assert.deepEqual(EVENT_AUDIENCE.dm_seat_changed, { kind: "table" });
+  assert.equal(reloadsSnapshot("dm_seat_changed", { seat: "dm", userId: "u2" }), true, "a seat filled");
+  assert.equal(reloadsSnapshot("dm_seat_changed", { seat: "dm", userId: null }), true, "handed to the AI: the old DM loses the tools");
+  assert.equal(reloadsSnapshot("dm_seat_changed", { seat: "assistant", userId: null }), true, "a co-DM removed");
+  assert.equal(reloadsSnapshot("campaign_updated", { leadUserId: "u3" }), true, "the lead handed on");
+  assert.equal(reloadsSnapshot("campaign_updated", { cover: null }), false);
+  assert.equal(reloadsSnapshot("campaign_rewound", {}), true);
+  assert.equal(reloadsSnapshot("prep_imported", {}), true);
+  assert.equal(reloadsSnapshot("narration", {}), false);
+  const next = campaignReducer(loaded, event("dm_seat_changed", { seat: "dm", userId: "u2" }, loaded.lastSeq + 1));
+  assert.equal(next.lastSeq, loaded.lastSeq + 1, "persisted: its seq is recorded");
 });
 
 console.log(`\n${passed} campaign reducer tests passed.`);

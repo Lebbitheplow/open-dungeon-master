@@ -1,5 +1,6 @@
 import { getDatabase, nowIso } from "@/lib/db/core";
 import { getCharacter, type LibraryCharacter } from "@/lib/db/characters";
+import { drawsFrom } from "@/lib/db/campaign-workshops";
 import { tableAuthors } from "@/lib/db/homebrew";
 import { getSheetById } from "@/lib/db/sheets";
 import { byName } from "@/lib/language/text-logic";
@@ -15,8 +16,9 @@ import { byName } from "@/lib/language/text-logic";
 //   - the pregen is ticked, a player character, and filed under a workshop;
 //   - its owner holds a DM seat at this table (src/lib/db/homebrew.ts
 //     tableAuthors), so a workshop someone else imported offers nothing;
-//   - this table was made from that workshop: prep was imported from it
-//     (src/lib/db/content-origins.ts records every copied row's source);
+//   - this table starts from that workshop: its DM chose it under Start
+//     from and the import went through, whether or not it copied anything
+//     (src/lib/db/campaign-workshops.ts);
 //   - nobody else holds it here.
 // An unticked pregen is never listed and never seats.
 //
@@ -43,15 +45,6 @@ export type PregenClaim = { userId: string; sheetId: string; libraryCharacterId:
 // any other character.
 export function pregenOf(character: Pick<LibraryCharacter, "id" | "workshopId" | "pregenOriginId">): string {
   return character.pregenOriginId || (character.workshopId ? character.id : "");
-}
-
-// Whether this table drew prep from that workshop.
-function drawsFrom(campaignId: string, workshopId: string): boolean {
-  return Boolean(
-    getDatabase()
-      .prepare(`SELECT 1 FROM content_origins WHERE campaign_id = ? AND origin_id = ? LIMIT 1`)
-      .get(campaignId, workshopId),
-  );
 }
 
 // Who holds a pregen at a table: the first sheet there that plays it or a

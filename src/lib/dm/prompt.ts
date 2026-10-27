@@ -99,6 +99,7 @@ import { CHECK_KEY_PROPERTIES, NONE, SAVE_AGAINST } from "@/lib/dm/roll-about";
 import { stopWordsFor } from "@/lib/language/language";
 import { textKey } from "@/lib/language/text-logic";
 import { ADVANTAGE_SOURCES } from "@/lib/dm/pc-attack-options";
+import { PLACE_DIRECTIONS, PLACE_DISTANCES } from "@/lib/overworld/places";
 
 export { DM_SYSTEM, dmSystemText, ENCOUNTER_RULES, encounterRulesText } from "@/lib/dm/prompt-rules";
 
@@ -243,6 +244,8 @@ export type DmGameState = {
     name: string;
     layoutDescription: string;
     connections: string[];
+    // The bigger place it is part of, "" for a place of its own (issue 548).
+    partOf?: string;
   } | null;
   visitedLocationNames?: string[];
   // Recent lasting milestones per campaign character id.
@@ -977,7 +980,7 @@ export function buildGameStateBlock(state: DmGameState): string {
   }
   if (state.currentLocation) {
     const location = state.currentLocation;
-    const lines = [`Current location: ${location.name}`];
+    const lines = [`Current location: ${location.name}${location.partOf ? ` (part of ${location.partOf})` : ""}`];
     if (location.layoutDescription) {
       lines.push(`Layout: ${location.layoutDescription}`);
     }
@@ -993,6 +996,11 @@ export function buildGameStateBlock(state: DmGameState): string {
     lines.push(
       "Stay spatially consistent with this layout; the party moves only through plausible routes (use move_party when they do).",
     );
+    // Here rather than in the rules, which a 16K table cannot grow: it only
+    // matters once there is a place to be part of (issue 548).
+    if (!location.partOf) {
+      lines.push("A room or street of a bigger place names that place in move_party's partOf.");
+    }
     sections.push(lines.join("\n"));
   }
   if (state.encounter) {
@@ -1369,7 +1377,7 @@ export const requestRollTool = {
       properties: {
         characterId: {
           type: "string",
-          description: "The character whose roll this is: exact characterId from GAME STATE.",
+          description: "Exact characterId from GAME STATE.",
         },
         kind: {
           type: "string",
@@ -1429,7 +1437,7 @@ export const requestRollTool = {
         advantageReason: {
           type: "string",
           description:
-            "The circumstance behind the advantage or disadvantage you claim, one the server cannot see itself. Without one, the server sets the claim aside.",
+            "The circumstance behind the advantage or disadvantage, one the server cannot see. Without one, the server sets the claim aside.",
         },
         targetEnemyId: {
           type: "string",
@@ -1464,7 +1472,7 @@ export const requestRollTool = {
         useInspiration: {
           type: "boolean",
           description:
-            "True when the player spends their character's Inspiration on this roll for advantage. Refused when they hold none.",
+            "True when the player spends the character's Inspiration for advantage. Refused when they hold none.",
         },
         luck: {
           type: "boolean",
@@ -1535,6 +1543,25 @@ const sceneProperty = {
   description: "What kind of place this is, for its sound, battle map and picture. Set it when the party arrives somewhere new.",
 } as const;
 
+// What both location tools write about a place, worded once.
+const layoutProperties = {
+  layoutDescription: {
+    type: "string",
+    description:
+      "Physical layout: rooms, exits, landmarks, spatial relationships. 2-5 sentences.",
+  },
+  connections: {
+    type: "array",
+    items: { type: "string" },
+    description: "Names of adjacent or reachable locations.",
+  },
+  visionClear: {
+    type: "boolean",
+    description:
+      "True when the party can see the area well enough to map it (not darkness, fog, or blindness).",
+  },
+} as const;
+
 export const movePartyTool = {
   type: "function",
   function: {
@@ -1547,25 +1574,39 @@ export const movePartyTool = {
       properties: {
         ...waypointProperty,
         name: { type: "string", description: "Short place name (The Rusted Flagon)." },
-        layoutDescription: {
+        ...layoutProperties,
+        scene: sceneProperty,
+        partOf: {
           type: "string",
           description:
-            "Physical layout: rooms, exits, landmarks, spatial relationships. 2-5 sentences.",
+            "The bigger place this area is part of, by name (a dungeon for its room, a town for its square). The same name each time; omit for a place of its own.",
         },
-        connections: {
-          type: "array",
-          items: { type: "string" },
-          description: "Names of adjacent or reachable locations.",
+        direction: {
+          type: "string",
+          enum: PLACE_DIRECTIONS,
+          description: "Which way a new place lies from where the party set out, for the region map.",
         },
-        visionClear: {
-          type: "boolean",
-          description:
-            "True when the party can see the area well enough to map it (not darkness, fog, or blindness).",
-        },
-        scene: sceneProperty,
+        distance: { type: "string", enum: PLACE_DISTANCES, description: "How far it lies from there." },
       },
       required: ["name", "visionClear"],
     },
+  },
+} as const;
+
+// move_party before the table has any place: no partOf, direction or
+// distance (issue 548), since a direction reads from where the party set out
+// and partOf files the next room of where they are. The first scene of a 16K
+// table has no room to spare for them (scripts/test-tool-profiles.mjs).
+const firstMoveProperties = Object.fromEntries(
+  Object.entries(movePartyTool.function.parameters.properties).filter(
+    ([key]) => !["partOf", "direction", "distance"].includes(key),
+  ),
+);
+export const firstMovePartyTool = {
+  ...movePartyTool,
+  function: {
+    ...movePartyTool.function,
+    parameters: { ...movePartyTool.function.parameters, properties: firstMoveProperties },
   },
 } as const;
 
@@ -1575,7 +1616,7 @@ export const recordEventTool = {
   function: {
     name: "record_event",
     description:
-      "Record a lasting milestone for a character: a feat achieved, bond formed, treasure gained, death, level up, or a major story beat, milestone, or plot point (kind 'story'). Use sparingly, only for things worth remembering months later.",
+      "Record a lasting milestone for a character: a feat achieved, bond formed, treasure gained, death, level up, or a major story beat (kind 'story'). Use sparingly, only for things worth remembering months later.",
     parameters: {
       type: "object",
       additionalProperties: false,
@@ -1671,9 +1712,7 @@ export const updateLocationTool = {
       additionalProperties: false,
       properties: {
         ...waypointProperty,
-        layoutDescription: { type: "string" },
-        connections: { type: "array", items: { type: "string" } },
-        visionClear: { type: "boolean" },
+        ...layoutProperties,
         scene: sceneProperty,
       },
       required: ["layoutDescription", "visionClear"],

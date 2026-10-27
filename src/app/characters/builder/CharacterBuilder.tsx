@@ -56,6 +56,7 @@ import { findRace, useBuilderState, type DroppedNotice } from "./useBuilderState
 import { useFeatDescs, useFeatTexts } from "./useFeatDescs";
 import { builderFeatJudge, FeatJudgeContext, unmetFeatMessage } from "./featPrereqs";
 import { racialFeatCount } from "@/lib/srd/race-id";
+import { withSpeciesVariant } from "@/lib/content/species-variants";
 import { usePickerGroups } from "./usePickerGroups";
 import type { PickerGroup } from "./OptionPicker";
 import { useWiderSpellPool } from "@/components/sheet/useSpellPool";
@@ -83,6 +84,7 @@ const STEP_OF_TARGET: Record<BlockerTarget, string> = {
   racialCantrip: "ancestry",
   racialFeat: "ancestry",
   ancestry: "ancestry",
+  variant: "ancestry",
   repeatSkills: "ancestry",
   class: "calling",
   classSkills: "calling",
@@ -118,6 +120,7 @@ function droppedName(drop: DroppedPick): string {
     case "classSkills":
     case "racialSkills":
     case "backgroundSkills":
+    case "repeatSkills":
     case "expertise":
       return SRD_SKILLS.find((skill) => skill.id === drop.value)?.name ?? drop.value;
     case "styles":
@@ -269,7 +272,10 @@ function CharacterBuilderForm({
   // the first row used to be shown as if picked ("Continue as Aarakocra"),
   // so the step's own race gate could never hold, and an untouched
   // background was an Acolyte owing two languages nobody asked for.
-  const race = findRace(races, state.raceId);
+  // The race with its species option picked (a Half-Dragon's ancestry): the
+  // scores, skills and languages every step and the math read include it.
+  const pickedRace = findRace(races, state.raceId);
+  const race = useMemo(() => pickedRace && withSpeciesVariant(pickedRace, state.racialVariant), [pickedRace, state.racialVariant]);
   const klass = classes.find((entry) => entry.id === state.classId);
   const background = backgrounds.find((entry) => entry.id === state.backgroundId);
   const subclassOptions = useArchetypeOptions(klass?.id ?? "");
@@ -942,7 +948,16 @@ function CharacterBuilderForm({
           )
         }
       />
-      <BuildMathPanel derived={derived} scores={state.scores} klass={klass} atTable={Boolean(table.rules)} />
+      <BuildMathPanel
+        derived={derived}
+        scores={state.scores}
+        klass={klass}
+        atTable={Boolean(table.rules)}
+        race={race}
+        races={races}
+        raceGroups={pickers.raceGroups}
+        gender={state.gender}
+      />
       </div>
       </div>
       </FeatJudgeContext.Provider>

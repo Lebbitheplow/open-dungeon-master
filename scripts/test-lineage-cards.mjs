@@ -214,7 +214,7 @@ test("pack lineages borrow the family in their slug or name, else the adventurer
   assert.equal(lineageFamily("humanhalf-elf-heritage"), "darakhul-human");
   assert.equal(lineageFamily("elfshadow-fey-heritage"), "darakhul-elf");
   assert.equal(lineageFamily("dwarf-chassis"), "gearforged-dwarf");
-  assert.equal(lineageFamily("stoor-halfling"), "halfling");
+  assert.equal(lineageFamily("stoor-halfling"), "stoor-halfling");
   assert.equal(lineageFamily("orc"), "orc");
   assert.equal(lineageFamily("x", "Orc"), "orc");
   assert.equal(lineageFamily("half-orc"), "half-orc");
@@ -222,7 +222,11 @@ test("pack lineages borrow the family in their slug or name, else the adventurer
   assert.equal(lineageFamily("deep_gnome"), "deep-gnome");
   assert.equal(lineageFamily("x", "Gnome (Deep)"), "deep-gnome");
   assert.equal(lineageFamily("x", "Deep Gnome"), "deep-gnome");
-  assert.equal(lineageFamily("x", "Gnome (Rock)"), "gnome");
+  assert.equal(lineageFamily("x", "Gnome (Rock)"), "rock-gnome");
+  assert.equal(lineageFamily("x", "Gnome (Forest)"), "forest-gnome");
+  assert.equal(lineageFamily("x", "Wood Elf"), "wood-elf");
+  assert.equal(lineageFamily("x", "Mountain Dwarf"), "mountain-dwarf");
+  assert.equal(lineageFamily("x", "Stout Halfling"), "stout-halfling");
   for (const element of ["air", "earth", "fire", "water"]) {
     assert.equal(lineageFamily(`${element}_genasi`), `genasi-${element}`);
     assert.equal(lineageFamily("x", `Genasi (${element[0].toUpperCase()}${element.slice(1)})`), `genasi-${element}`);
@@ -246,12 +250,12 @@ const TOH = {
   "gnome-heritage": "darakhul-gnome", "halfling-heritage": "darakhul-halfling", "humanhalf-elf-heritage": "darakhul-human",
   "kobold-heritage": "darakhul-kobold", ravenfolk: "darakhul-ravenfolk", "tiefling-heritage": "darakhul-tiefling",
   "trollkin-heritage": "darakhul-trollkin",
-  derro: "derro", "far-touched": "derro", mutated: "derro", uncorrupted: "derro",
-  delver: "drow", "fever-bit": "drow", purified: "drow",
-  erina: "erina", gearforged: "warforged", "dwarf-chassis": "gearforged-dwarf", "gnome-chassis": "gearforged-gnome",
+  derro: "derro", "far-touched": "far-touched", mutated: "mutated", uncorrupted: "uncorrupted",
+  delver: "delver", "fever-bit": "fever-bit", purified: "purified",
+  erina: "erina", gearforged: "gearforged", "dwarf-chassis": "gearforged-dwarf", "gnome-chassis": "gearforged-gnome",
   "kobold-chassis": "gearforged-kobold", "human-chassis": "warforged",
-  minotaur: "minotaur", "bhain-kwai": "minotaur", boghaid: "minotaur",
-  mushroomfolk: "mushroomfolk", "acid-cap": "mushroomfolk", favored: "mushroomfolk", morel: "mushroomfolk",
+  minotaur: "minotaur", "bhain-kwai": "bhain-kwai", boghaid: "boghaid",
+  mushroomfolk: "mushroomfolk", "acid-cap": "acid-cap", favored: "favored", morel: "morel",
   satarre: "satarre", shade: "shade",
 };
 
@@ -273,9 +277,33 @@ test("heritage and chassis names win over the living race's word", () => {
   assert.equal(lineageFamily("x", "Darakhul (Elf/Shadow Fey Heritage)"), "darakhul-elf");
   assert.equal(lineageFamily("x", "Gearforged (Kobold Chassis)"), "gearforged-kobold");
   assert.equal(lineageFamily("x", "Ravenfolk"), "kenku");
-  assert.equal(lineageFamily("x", "Drow (Fever-Bit)"), "drow");
+  assert.equal(lineageFamily("x", "Drow (Fever-Bit)"), "fever-bit");
   assert.equal(lineageFamily("x", "Catfolk (Malkin)"), "malkin");
-  assert.equal(lineageFamily("x", "Minotaur (Bhain Kwai)"), "minotaur");
+  assert.equal(lineageFamily("x", "Minotaur (Bhain Kwai)"), "bhain-kwai");
+});
+
+// A subrace under an id the tables do not know (a workshop copy, a pack's
+// renamed row) still finds its own plate by its card name, "Parent (Sub)" or
+// "Sub Parent", and by the bare caste name.
+test("a subrace's own plate by its card name, and ordinary words do not steal a lineage", () => {
+  const byName = {
+    "Elf (Wood)": "wood-elf", "Elf (High)": "elf", "Dwarf (Mountain)": "mountain-dwarf", "Dwarf (Hill)": "dwarf",
+    "Halfling (Stoor)": "stoor-halfling", "Halfling (Stout)": "stout-halfling", "Halfling (Lightfoot)": "halfling",
+    "Drow (Delver)": "delver", "Drow (Purified)": "purified", "Delver Drow": "delver",
+    "Derro (Far-Touched)": "far-touched", "Derro (Mutated)": "mutated", "Derro (Uncorrupted)": "uncorrupted",
+    "Mushroomfolk (Acid Cap)": "acid-cap", "Mushroomfolk (Favored)": "favored", "Mushroomfolk (Morel)": "morel",
+    "Minotaur (Boghaid)": "boghaid", Gearforged: "gearforged", "Gearforged (Human Chassis)": "warforged",
+    Delver: "delver", Purified: "purified", Mutated: "mutated", Uncorrupted: "uncorrupted", Favored: "favored", Morel: "morel",
+  };
+  for (const [name, family] of Object.entries(byName)) {
+    assert.equal(lineageFamily("homebrew-1", name), family, name);
+  }
+  // A homebrew people named with one of those words is still its people.
+  assert.equal(lineageFamily("homebrew-1", "Mutated Human"), "human");
+  assert.equal(lineageFamily("homebrew-1", "Storm-Favored Human"), "human");
+  assert.equal(lineageFamily("homebrew-1", "Purified Tiefling"), "tiefling");
+  assert.equal(lineageFamily("homebrew-1", "Deep Delver Dwarf"), "dwarf");
+  assert.equal(lineageFamily("homebrew-1", "Uncorrupted Goblin"), "goblin");
 });
 
 test("every class card has a plate that exists, and a neutral look still shows the class", () => {

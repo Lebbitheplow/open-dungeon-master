@@ -18,14 +18,15 @@ import { ui } from "@/lib/ui";
 // is visible where the button is.
 // Every button in the app inherits its font (globals.css), so a text size on
 // the button itself is ignored: the row that holds the chips sets it.
+// A finger gets 40 px on a phone (audit WA-08); a mouse keeps the compact chip.
 export const chipRow = "flex flex-wrap items-center gap-1.5 text-xs";
-export const chip = "px-2 py-1.5 capitalize";
+export const chip = "px-2 py-1.5 capitalize pointer-coarse:min-h-10";
 export const chipOn = "border-amber-500/60 bg-amber-400/10 text-amber-100";
 // A quiet add button under a list ("+ Trait").
-export const addChip = "px-2 py-1.5";
+export const addChip = "px-2 py-1.5 pointer-coarse:min-h-10";
 // A remove or clear button inside a dense row: the icon action, always
 // shown, with a phone-sized target.
-export const rowIcon = "grid size-9 shrink-0 place-items-center opacity-100 text-stone-500";
+export const rowIcon = "grid size-9 shrink-0 place-items-center opacity-100 text-stone-500 pointer-coarse:size-10";
 
 export function FieldLabel({ children, className }: { children: ReactNode; className?: string }) {
   return (
@@ -56,7 +57,9 @@ export function Field({
 }) {
   return (
     <Tag className={cn("flex min-w-0 flex-col gap-1", className)}>
-      <span className="flex items-center gap-1">
+      {/* With something beside it (an info button) the caption is a
+          finger's height on a phone, so its reach stays off the field below. */}
+      <span className={cn("flex items-center gap-1", aside ? "pointer-coarse:min-h-10" : undefined)}>
         <FieldLabel>{label}</FieldLabel>
         {aside}
       </span>
@@ -110,7 +113,7 @@ export function OptionalStepper({
         disabled={disabled}
       />
       {set && !disabled ? (
-        <button type="button" aria-label={`Clear ${label}`} title="Leave unset" onClick={() => onChange("")} className={cn(ui.iconAction, "opacity-100")}>
+        <button type="button" aria-label={`Clear ${label}`} title="Leave unset" onClick={() => onChange("")} className={cn(ui.iconAction, "shrink-0 opacity-100 pointer-coarse:grid pointer-coarse:size-10 pointer-coarse:place-items-center")}>
           <X className="size-3.5" aria-hidden="true" />
         </button>
       ) : null}

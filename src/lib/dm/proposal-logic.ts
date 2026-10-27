@@ -7,6 +7,7 @@
 import type { ToolError } from "./tool-errors.ts";
 import { textKey } from "../language/text-logic.ts";
 import { lineNamed } from "../srd/item-row.ts";
+import { renamedArgs } from "./tool-merge-logic.ts";
 
 export const PROPOSAL_TOOL_NAMES = new Set([
   "grant_item",
@@ -27,7 +28,6 @@ export const VITALS_PROPOSAL_TOOL_NAMES = new Set([
 export const PROPOSAL_TTL_HOURS = 24;
 
 export type ProposalArgs = {
-  name?: string;
   item?: string;
   qty?: number;
   delta?: number;
@@ -84,7 +84,7 @@ export function proposalSummary(
   characterName: string,
 ): string {
   const qty = Math.max(1, Number(args.qty ?? 1));
-  const itemName = String(args.name ?? args.item ?? "an item").trim() || "an item";
+  const itemName = String(args.item ?? "an item").trim() || "an item";
   const suffix = qty > 1 ? ` x${qty}` : "";
   switch (toolName) {
     case "grant_item":
@@ -203,6 +203,13 @@ export function parseOfferArgs(raw: string): OfferArgs {
   }
 }
 
+// A stored offer's arguments under the names its tool reads now. An offer
+// made before an argument was renamed still waits with the old name (a
+// grant's item was its name), and is applied and compared as it was meant.
+export function storedOfferArgs(toolName: string, raw: string): OfferArgs {
+  return renamedArgs(toolName, parseOfferArgs(raw)) as OfferArgs;
+}
+
 export function purseWords(gold: number, copper: number): string {
   const cp = Math.max(0, Math.round(gold * 100 + copper));
   const gp = Math.floor(cp / 100);
@@ -222,7 +229,7 @@ export function purseWords(gold: number, copper: number): string {
 export function offerPrecheck(toolName: string, args: OfferArgs, sheet: OfferSheet): ToolError | null {
   const qty = Math.max(1, Math.floor(Number(args.qty ?? 1) || 1));
   if (toolName === "remove_item") {
-    const name = String(args.name ?? "").trim();
+    const name = String(args.item ?? "").trim();
     const held = heldQty(sheet, name);
     if (!held) {
       return { error: `${sheet.name} does not carry "${name}", so there is nothing to take and no offer was made. Check the sheet before offering a removal.`, retry: true };
@@ -233,7 +240,7 @@ export function offerPrecheck(toolName: string, args: OfferArgs, sheet: OfferShe
     return null;
   }
   if (toolName === "purchase" && args.action === "sell") {
-    const item = String(args.item ?? args.name ?? "").trim();
+    const item = String(args.item ?? "").trim();
     const held = heldQty(sheet, item);
     if (!held) {
       return { error: `${sheet.name} does not carry "${item}" to sell. No offer was made.`, retry: true };
@@ -252,11 +259,11 @@ export function offerKey(toolName: string, args: OfferArgs): string | null {
   switch (toolName) {
     case "grant_item":
     case "remove_item":
-      return `${toolName}|${textKey(String(args.name ?? ""))}|${qty}|${args.unidentified ? 1 : 0}`;
+      return `${toolName}|${textKey(String(args.item ?? ""))}|${qty}|${args.unidentified ? 1 : 0}`;
     case "modify_gold":
       return `${toolName}|${Number(args.delta ?? 0) || 0}|${String(args.coins ?? "").trim().toLowerCase()}`;
     case "purchase":
-      return `${toolName}|${args.action}|${textKey(String(args.item ?? args.name ?? ""))}|${qty}|${Number(args.price ?? 0) || 0}`;
+      return `${toolName}|${args.action}|${textKey(String(args.item ?? ""))}|${qty}|${Number(args.price ?? 0) || 0}`;
     default:
       return null;
   }
@@ -291,7 +298,7 @@ export function duplicateOfferProblem(
     if (offer.characterId !== character.id || offer.toolName !== toolName) {
       continue;
     }
-    if (offerKey(offer.toolName, parseOfferArgs(offer.argsJson)) !== key) {
+    if (offerKey(offer.toolName, storedOfferArgs(offer.toolName, offer.argsJson)) !== key) {
       continue;
     }
     if (offer.status === "pending" && !proposalExpired(offer.createdAt, new Date(nowMs))) {
@@ -321,7 +328,7 @@ export type OfferAfter = OfferSheet & {
 // and the DM both read.
 export function appliedOutcome(toolName: string, args: OfferArgs, after: OfferAfter): string {
   const name = after.name;
-  const item = String(args.name ?? args.item ?? "").trim();
+  const item = String(args.item ?? "").trim();
   switch (toolName) {
     case "grant_item": {
       const held = heldQty(after, item);

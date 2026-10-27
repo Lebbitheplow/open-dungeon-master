@@ -4,8 +4,9 @@ import { EmptyState } from "@/components/EmptyState";
 import * as Dialog from "@radix-ui/react-dialog";
 import { returnFocus } from "@/components/ui/return-focus";
 import { ImageOff, ImagePlus, Loader2, RefreshCw, X } from "lucide-react";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
+import { nameWithin, placeTree } from "@/lib/overworld/places";
 import { encodeImageForUpload } from "@/lib/image-encode";
 import { variantUrl } from "@/lib/image-format";
 import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
@@ -14,6 +15,7 @@ import { SectionHead } from "@/components/ui/SectionHead";
 import { KitButton, PanelError, RowMenu } from "./PanelKit";
 import { SkyLayer } from "@/components/SkyLayer";
 import { TheatreInserts } from "@/app/campaigns/[campaignId]/TheatreInserts";
+import { PlacePartOfDialog } from "@/app/campaigns/[campaignId]/PlacePartOfDialog";
 import type { CastMember } from "@/lib/dm/cast";
 import type { Speaker } from "@/lib/dm/speech";
 import type { SceneState } from "@/lib/scene/state";
@@ -30,6 +32,12 @@ import type {
 // Whoever runs the story can always put a map of their own on an area; the
 // redraw button beside it is only offered when the server has an image
 // backend to draw with, so a table without one sees the upload alone.
+//
+// The places are listed the way the region map above draws them (issue
+// 548): each place of its own, with the parts filed under it (a vault's
+// entrance, a village's hall) indented beneath it by their short names.
+// Whoever runs the story files an area under a bigger place, or lifts it
+// out, from the area's menu.
 export function MapPanel({
   campaignId,
   locations,
@@ -79,6 +87,42 @@ export function MapPanel({
   const canPaint = offersImages(useCapabilities());
 
   const shown = (selectedId ? locations.find((l) => l.id === selectedId) : null) ?? current;
+
+  const tree = useMemo(() => placeTree(locations), [locations]);
+  // Places of their own in the order they come, each followed by its parts,
+  // depth first, named under their place.
+  const rows = useMemo(() => {
+    const byId = new Map(locations.map((location) => [location.id, location]));
+    const out: Array<{ location: CampaignLocation; depth: number; label: string }> = [];
+    const seen = new Set<string>();
+    const visit = (location: CampaignLocation, depth: number, within: string) => {
+      if (seen.has(location.id)) {
+        return;
+      }
+      seen.add(location.id);
+      out.push({ location, depth, label: within ? nameWithin(location.name, within) : location.name });
+      for (const id of tree.childrenOf.get(location.id) ?? []) {
+        const part = byId.get(id);
+        if (part) {
+          visit(part, depth + 1, location.name);
+        }
+      }
+    };
+    for (const location of locations) {
+      if (!tree.parentOf.get(location.id)) {
+        visit(location, 0, "");
+      }
+    }
+    return out;
+  }, [locations, tree]);
+  const parentOfShown = shown ? (locations.find((location) => location.id === tree.parentOf.get(shown.id)) ?? null) : null;
+
+  // The area the "Part of" picker was opened for, from its menu: held by id,
+  // so an arrival that changes the shown area while it is open does not
+  // change which area it files.
+  const [filingId, setFilingId] = useState<string | null>(null);
+  const filingPlace = filingId ? (locations.find((location) => location.id === filingId) ?? null) : null;
+  const filingParentId = filingPlace ? (tree.parentOf.get(filingPlace.id) ?? null) : null;
 
   // The uploaded file goes to /api/upload first, then its path to the same
   // route a redraw uses; the panel updates through location_map_ready.
@@ -171,6 +215,7 @@ export function MapPanel({
           ...(canPaint ? [{ id: "redraw", label: "Redraw this map", glyph: "ui-paint", disabled: regenerating || uploading, onSelect: () => void regenerate() }] : []),
           ...(shown.mapImage ? [{ id: "clear", label: "Use the placeholder instead", glyph: "ui-placeholder", disabled: uploading || regenerating, onSelect: () => void clearToPlaceholder() }] : []),
           { id: "populate", label: "Populate", glyph: "system-party", separated: true, disabled: populating, onSelect: () => void populate(shown.id) },
+          { id: "part-of", label: parentOfShown ? "Part of another place" : "Part of a bigger place", glyph: "system-region", onSelect: () => setFilingId(shown.id) },
         ]
       : shown?.mapImage
         ? [{ id: "enlarge", label: "Enlarge the map", glyph: "ui-zoom", onSelect: () => setEnlarged(true) }]
@@ -192,6 +237,7 @@ export function MapPanel({
               </>
             }
             glyph="tab-map"
+            className="section-head-wraps"
             aside={
               steersStory ? (
                 <span className="flex items-center gap-0.5">
@@ -243,6 +289,18 @@ export function MapPanel({
               ) : null
             }
           />
+          {parentOfShown ? (
+            <p className="-mt-1 mb-1.5 text-xs text-stone-500">
+              Part of{" "}
+              <button
+                type="button"
+                onClick={() => setSelectedId(parentOfShown.id)}
+                className="pk-tap rounded px-0.5 text-amber-300/90 underline-offset-2 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400 motion-press"
+              >
+                {parentOfShown.name}
+              </button>
+            </p>
+          ) : null}
           {regenerateError ? <PanelError className="mb-1.5">{regenerateError}</PanelError> : null}
 
           {shown.mapImage ? (
@@ -322,14 +380,19 @@ export function MapPanel({
         <div>
           <SectionHead title="Charted areas" glyph="system-region" level="h4" aside={locations.length} />
           <ul className="space-y-1">
-            {locations.map((location) => (
-              <li key={location.id}>
+            {rows.map(({ location, depth, label }) => (
+              <li
+                key={location.id}
+                className={cn("live-in", depth ? "border-l border-stone-700/70 pl-2" : "")}
+                style={depth ? { marginLeft: `${depth * 0.75}rem` } : undefined}
+              >
                 <button
                   type="button"
                   onClick={() =>
                     setSelectedId(location.id === shown?.id ? null : location.id)
                   }
                   aria-pressed={location.id === shown?.id}
+                  aria-label={label === location.name ? undefined : `${location.name}${location.isCurrent ? " (here)" : ""}${location.mapImage ? "" : ", unmapped"}`}
                   className={cn(
                     "pk-tap flex w-full items-center gap-1.5 rounded-md border border-transparent px-2 py-1.5 text-left text-xs motion-press",
                     location.id === shown?.id
@@ -338,9 +401,14 @@ export function MapPanel({
                   )}
                 >
                   <GameIcon icon={{ kind: "glyph", key: location.mapImage ? "tab-map" : "quest-hidden" }} size="size-4" className="shrink-0" />
-                  {location.name}
+                  {label}
                   {location.isCurrent ? " (here)" : ""}
                   {location.mapImage ? "" : " · unmapped"}
+                  {!depth && tree.childrenOf.get(location.id)?.length ? (
+                    <span className="ml-auto shrink-0 rounded-full border border-stone-700 px-1.5 text-[10px] text-stone-500">
+                      {tree.descendantsOf(location.id).length} inside
+                    </span>
+                  ) : null}
                 </button>
               </li>
             ))}
@@ -364,6 +432,22 @@ export function MapPanel({
             </Dialog.Content>
           </Dialog.Portal>
         </Dialog.Root>
+      ) : null}
+
+      {filingPlace && steersStory ? (
+        <PlacePartOfDialog
+          campaignId={campaignId}
+          place={filingPlace}
+          parentId={filingParentId}
+          rows={rows}
+          tree={tree}
+          open
+          onOpenChange={(open) => {
+            if (!open) {
+              setFilingId(null);
+            }
+          }}
+        />
       ) : null}
     </div>
   );

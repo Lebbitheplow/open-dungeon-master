@@ -79,6 +79,9 @@ export function useNarrationAudio(onBreak = false): NarrationAudio {
   const [audioByMessage] = useState(() => new Map<string, string>());
   const unlockedRef = useRef(false);
   const playingRef = useRef<string | null>(null);
+  // Counts every start, so a playback can tell it was overtaken even by a
+  // replay of the same passage.
+  const turnRef = useRef(0);
   // Narrations wait for the current one instead of cutting it off.
   const queueRef = useRef<Array<{ messageId: string; url: string }>>([]);
   // Every messageId ever started or queued; guards against replays when the
@@ -107,6 +110,8 @@ export function useNarrationAudio(onBreak = false): NarrationAudio {
   useEffect(() => {
     return () => {
       const audio = audioRef.current;
+      // Leaving the table is this hook's own stop.
+      turnRef.current += 1;
       if (audio) {
         audio.pause();
         audio.src = "";
@@ -116,16 +121,44 @@ export function useNarrationAudio(onBreak = false): NarrationAudio {
     };
   }, []);
 
-  const setMuted = useCallback((next: boolean) => {
-    writeAudioPref("narrationMuted", next);
-    if (next) {
-      audioRef.current?.pause();
-      queueRef.current = [];
+  // Stops the passage being read and drops what was waiting behind it.
+  const silence = useCallback(() => {
+    audioRef.current?.pause();
+    queueRef.current = [];
+    if (pendingRef.current.length) {
       setPending([]);
+    }
+    if (playingRef.current) {
       playingRef.current = null;
       setPlayingMessageId(null);
     }
   }, [setPending]);
+
+  // The prefs reach what is already playing, whoever wrote them: the
+  // header's own controls, the apps' Settings screen while the table stays
+  // open, or the account's copy landing after the first passage started.
+  useEffect(() => {
+    const follow = () => {
+      if (audioRef.current) {
+        audioRef.current.volume = readVolume();
+      }
+      if (readMuted()) {
+        silence();
+      }
+    };
+    window.addEventListener(PREFS_EVENT, follow);
+    return () => window.removeEventListener(PREFS_EVENT, follow);
+  }, [silence]);
+
+  // Applied here as well as through the event, for a browser that will not
+  // store the pref (private browsing), where the event's re-read finds the
+  // old value.
+  const setMuted = useCallback((next: boolean) => {
+    writeAudioPref("narrationMuted", next);
+    if (next) {
+      silence();
+    }
+  }, [silence]);
 
   const setVolume = useCallback((next: number) => {
     const clamped = Math.max(0, Math.min(1, next));
@@ -165,38 +198,64 @@ export function useNarrationAudio(onBreak = false): NarrationAudio {
       };
       audio.onended = finish;
       audio.onerror = fail;
+      const turn = ++turnRef.current;
+      // This hook stopped it or moved on: a newer passage or a replay, mute,
+      // a break, leaving the table.
+      const overtaken = () => playingRef.current !== id || turnRef.current !== turn;
       playingRef.current = id;
       setPlayingMessageId(id);
       setPlaybackFailure((current) => (current === id ? null : current));
       audio.src = src;
       audio.volume = readVolume();
-      audio.play().catch((error: unknown) => {
-        if (playingRef.current !== id) {
-          return;
-        }
-        if (error instanceof DOMException && error.name === "NotAllowedError") {
-          // The browser wants a gesture first (a tab that was never
-          // touched, or one that sat idle). This narration is offered only
-          // once, so it goes back to wait, along with whatever queued
-          // behind it, and the header shows the "enable audio" state again.
-          // Oldest first, so the next unlock() plays only the newest of them
-          // and leaves the rest to their replay buttons, as at first load.
-          setPending([{ messageId: id, url: src }, ...queueRef.current, ...pendingRef.current]);
-          queueRef.current = [];
-          playingRef.current = null;
-          setPlayingMessageId(null);
-          unlockedRef.current = false;
-          setUnlocked(false);
-          return;
-        }
-        // A pause() that interrupts a play() rejects with AbortError: that
-        // is this hook stopping it, not a failure.
-        if (error instanceof DOMException && error.name === "AbortError") {
-          finish();
-          return;
-        }
-        fail();
-      });
+      let retried = false;
+      const start = () => {
+        audio.play().catch((error: unknown) => {
+          if (overtaken()) {
+            return;
+          }
+          if (error instanceof DOMException && error.name === "NotAllowedError") {
+            // The browser wants a gesture first (a tab that was never
+            // touched, or one that sat idle). This narration is offered only
+            // once, so it goes back to wait, along with whatever queued
+            // behind it, and the header shows the "enable audio" state
+            // again. Oldest first, so the next unlock() plays only the newest
+            // of them and leaves the rest to their replay buttons, as at
+            // first load.
+            setPending([{ messageId: id, url: src }, ...queueRef.current, ...pendingRef.current]);
+            queueRef.current = [];
+            playingRef.current = null;
+            setPlayingMessageId(null);
+            unlockedRef.current = false;
+            setUnlocked(false);
+            return;
+          }
+          // Every stop this hook makes is overtaken() above, so an
+          // AbortError here came from elsewhere: a new load started under
+          // this play() (issue 539: the apps hand the element a protected
+          // file once it is fetched, a beat after src was set). The passage
+          // is still wanted, so it is tried once more when the element can
+          // play; a second failure is reported, never dropped in silence.
+          if (error instanceof DOMException && error.name === "AbortError" && !retried) {
+            retried = true;
+            if (audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) {
+              start();
+              return;
+            }
+            audio.addEventListener(
+              "canplay",
+              () => {
+                if (!overtaken()) {
+                  start();
+                }
+              },
+              { once: true },
+            );
+            return;
+          }
+          fail();
+        });
+      };
+      start();
     }
     run(messageId, url);
   }, [setPending]);
@@ -267,16 +326,21 @@ export function useNarrationAudio(onBreak = false): NarrationAudio {
 
   // Any first interaction with the page (click, key press) also counts as
   // the unlock gesture, so narration autoplays without hunting for the
-  // speaker button.
+  // speaker button. On the click, not the press: unlocking takes the
+  // "narration is waiting" banner off the composer, and the table's column,
+  // anchored to its foot, moves everything above it while the button is still
+  // held, so the release landed beside the button pressed and the first
+  // press on End turn or a test fight's Back did nothing (issue 553). A click
+  // still carries the gesture the browser asks for.
   useEffect(() => {
     if (unlocked) {
       return;
     }
     const handle = () => unlock();
-    window.addEventListener("pointerdown", handle, { once: true });
+    window.addEventListener("click", handle, { once: true });
     window.addEventListener("keydown", handle, { once: true });
     return () => {
-      window.removeEventListener("pointerdown", handle);
+      window.removeEventListener("click", handle);
       window.removeEventListener("keydown", handle);
     };
   }, [unlocked, unlock]);

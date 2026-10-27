@@ -1,5 +1,6 @@
 import { TABLE_LANGUAGE_LABELS } from "@/lib/schemas/game-settings-options";
 import type { CampaignDraft, WizardGates } from "@/app/create-campaign/draft";
+import { bringsSomething } from "@/app/workshop/ContentImportPicker";
 
 // The one line under each group's name, and the review's read-back of what
 // is inside the groups. Worked out from the draft only, so a closed group
@@ -36,7 +37,7 @@ export function characterSummary(draft: CampaignDraft): string {
 
 export function prepSummary(draft: CampaignDraft, sourceTitle: string | null): string {
   const lore = draft.loreDrafts.filter((entry) => entry.title.trim()).length;
-  const importing = Boolean(draft.contentImport.sourceId && draft.contentImport.select.length);
+  const importing = bringsSomething(draft.contentImport);
   return [
     draft.houseRules.trim() ? "house rules written" : "no house rules",
     lore ? count(lore, "lore entry", "lore entries") : "no lore yet",

@@ -29,7 +29,7 @@ const { getBattleMapForEncounter, getTokenByRef, listTokens } = await import("..
 const { occupiedTiles } = await import("../src/lib/battlemap/view.ts");
 const { reachableTiles } = await import("../src/lib/battlemap/movement.ts");
 const turnModule = await import("../src/lib/dm/turn.ts");
-const { RETIRED_TOOLS, mergedCall, engineCall, acceptsCall } = await import("../src/lib/dm/tool-merge-logic.ts");
+const { RETIRED_TOOLS, RENAMED_ARGS, mergedCall, mergedCallText, engineCall, acceptsCall } = await import("../src/lib/dm/tool-merge-logic.ts");
 const { ADJUDICATION_NAMES } = await import("../src/lib/dm/invoke-catalog.ts");
 
 let passed = 0;
@@ -241,14 +241,14 @@ await test("move_token teleports with teleport, and teleport_token still runs", 
     return { x: index % map.width, y: Math.floor(index / map.width) };
   };
   const to = open();
-  const moved = ok(await world.invoke("move_token", { tokenName: brom.id, x: to.x, y: to.y, teleport: true }));
+  const moved = ok(await world.invoke("move_token", { token: brom.id, x: to.x, y: to.y, teleport: true }));
   assert.match(moved.note, /No movement was spent/);
   assert.deepEqual([token().x, token().y], [to.x, to.y]);
   const next = open();
   ok(await world.invoke("teleport_token", { tokenName: brom.id, x: next.x, y: next.y }));
   assert.deepEqual([token().x, token().y], [next.x, next.y]);
   ai.fresh();
-  const unpaid = await ai.invoke("move_token", { tokenName: brom.id, x: to.x, y: to.y, teleport: true });
+  const unpaid = await ai.invoke("move_token", { token: brom.id, x: to.x, y: to.y, teleport: true });
   assert.equal(unpaid.ok, false, "the AI's teleport is a spell or a hazard, as before");
 });
 
@@ -256,10 +256,10 @@ await test("move_token teleports with teleport, and teleport_token still runs", 
 
 await test("party_award is XP for one character, and reports a level-up however the award is made up", async () => {
   const novice = world.addHero({ name: "Novice", level: 1, xp: 0 });
-  const alone = ok(await world.invoke("party_award", { characterIds: [novice.id], amount: 300, reason: "The bridge troll" }));
+  const alone = ok(await world.invoke("party_award", { characterIds: [novice.id], xp: 300, reason: "The bridge troll" }));
   assert.deepEqual(alone.levelUpAvailable, ["Novice"]);
   const second = world.addHero({ name: "Second", level: 1, xp: 0 });
-  const spoils = ok(await world.invoke("party_award", { characterIds: [second.id], amount: 300, delta: 10, reason: "A hoard" }));
+  const spoils = ok(await world.invoke("party_award", { characterIds: [second.id], xp: 300, gold: 10, reason: "A hoard" }));
   assert.deepEqual(spoils.levelUpAvailable, ["Second"], "XP with a purse beside it still says who can level up");
   assert.equal(world.sheet(second.id).gold, 10);
   const third = world.addHero({ name: "Third", level: 1, xp: 0 });
@@ -289,6 +289,42 @@ await test("the model's turn runs a merged purchase at the shop, and a retired n
   assert.ok(results.length && !results.some((entry) => /no action called/.test(String(entry.result.error ?? ""))), JSON.stringify(results));
   assert.equal(shelf("Longsword"), before - 2, "the retired name traded too");
   model.close();
+});
+
+// An argument renamed for what it holds (PR #542) is offered only by its new
+// name, and its old one still reaches the handler from the model's own turn,
+// as a retired tool name does: a model copying an older call, an agent
+// program that learned the old names.
+await test("the model's turn runs a call that still sends a renamed argument's old name", async () => {
+  const model = await fakeModel();
+  model.pointAt(world);
+  const xp = world.sheet(marla.id).xp ?? 0;
+  model.script([
+    reply({ calls: [call("party_award", { characterIds: [marla.id], amount: 50, name: "Lucky Coin", reason: "the riddle" })] }),
+    reply({ text: "Marla pockets the coin." }),
+  ]);
+  await model.turn(world, "We solved the riddle.", marla.id, marla.userId);
+  const results = model.results(model.requests[1]);
+  assert.ok(results.length && !results.some((entry) => typeof entry.result.error === "string"), JSON.stringify(results));
+  assert.equal(world.sheet(marla.id).xp, xp + 50, "the old amount was the XP");
+  assert.ok(world.sheet(marla.id).equipment.some((item) => item.name === "Lucky Coin"), "the old name was the item");
+  model.close();
+});
+
+await test("every renamed argument is read under its new name by both doors, the new name winning", () => {
+  for (const [tool, renames] of Object.entries(RENAMED_ARGS)) {
+    for (const [from, to] of Object.entries(renames)) {
+      assert.deepEqual(mergedCall(tool, { [from]: "x" }).args, { [to]: "x" }, `${tool}.${from}`);
+      assert.deepEqual(mergedCall(tool, { [from]: "old", [to]: "new" }).args, { [to]: "new" }, `${tool}.${from} beside ${to}`);
+    }
+  }
+  assert.deepEqual(mergedCall("afflict", { kind: "madness", name: "short" }).args, { kind: "madness", duration: "short" });
+  assert.deepEqual(mergedCall("afflict", { kind: "disease", name: "Sewer Plague", dc: 12 }).args, { kind: "disease", name: "Sewer Plague", saveDc: 12 });
+  // A call with nothing renamed is the call it was, so its text is kept.
+  const untouched = { characterId: "c", item: "Rope" };
+  assert.equal(mergedCall("grant_item", untouched).args, untouched);
+  assert.deepEqual(mergedCallText("grant_item", '{"characterId":"c","name":"Rope"}'), { name: "grant_item", rawArguments: '{"characterId":"c","item":"Rope"}' });
+  assert.deepEqual(mergedCallText("grant_item", "{not json"), { name: "grant_item", rawArguments: "{not json" });
 });
 
 // ---- what the model is offered ------------------------------------------------
@@ -351,12 +387,13 @@ await test("each retired name maps onto its merged tool and routes back to its o
   assert.equal(route("split_damage", { amount: 4, targets: [{ enemyId: "e", share: "half" }] }).name, "split_damage");
   assert.deepEqual(route("award_xp", { characterIds: ["c"], amount: 50 }), { name: "award_xp", args: { characterIds: ["c"], amount: 50 } });
   assert.equal(route("teleport_token", { tokenName: "t", x: 1, y: 2 }).name, "teleport_token");
+  assert.deepEqual(mergedCall("teleport_token", { tokenName: "t", x: 1, y: 2, casterId: "c" }).args, { x: 1, y: 2, teleport: true, token: "t", casterCharacterId: "c" });
   // The merged tools reach their first handlers when no sibling's argument is sent.
   assert.equal(engineCall("apply_damage", { characterId: "c", amount: 3 }).name, "apply_damage");
   assert.equal(engineCall("set_condition", { characterId: "c", condition: "prone" }).name, "set_condition");
-  assert.equal(engineCall("move_token", { tokenName: "t", x: 1, y: 1, forced: true }).name, "move_token");
-  assert.equal(engineCall("move_token", { tokenName: "t", x: 1, y: 1, spell: "Misty Step", casterId: "c" }).name, "teleport_token");
-  assert.equal(engineCall("party_award", { characterIds: ["c"], amount: 50, delta: 5 }).name, "party_award");
+  assert.equal(engineCall("move_token", { token: "t", x: 1, y: 1, forced: true }).name, "move_token");
+  assert.equal(engineCall("move_token", { token: "t", x: 1, y: 1, spell: "Misty Step", casterCharacterId: "c" }).name, "teleport_token");
+  assert.equal(engineCall("party_award", { characterIds: ["c"], xp: 50, gold: 5 }).name, "party_award");
   // What a description promises reaches the handler on every path.
   assert.deepEqual(engineCall("apply_damage", { amount: 4, targets: [{ enemyId: "e" }], magical: true, source: "hazard" }).args, { amount: 4, targets: [{ enemyId: "e" }], magical: true, source: "hazard" });
   assert.equal(engineCall("set_condition", { enemyId: "e", condition: "charmed", saveAbility: "wis", saveDc: 13, magical: true }).args.magical, true);

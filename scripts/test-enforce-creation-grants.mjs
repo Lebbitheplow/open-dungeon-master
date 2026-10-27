@@ -295,7 +295,7 @@ await test("A high elf knows one wizard cantrip from its race, on top of the can
     scores: { str: 8, dex: 14, con: 13, int: 15, wis: 12, cha: 10 },
     chosenSkills: ["investigation", "insight"],
     bonusLanguages: ["Dwarvish", "Giant", "Draconic"],
-    racialCantrip: "Prestidigitation",
+    racialCantrips: ["Prestidigitation"],
     cantrips: ["Fire Bolt", "Light", "Mage Hand"],
     spells: ["Magic Missile", "Shield", "Sleep", "Mage Armor", "Detect Magic", "Burning Hands"],
     bookPrepared: ["Magic Missile", "Shield", "Sleep", "Mage Armor"],

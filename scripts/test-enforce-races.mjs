@@ -89,7 +89,7 @@ function buildRace(raceId, fields = {}) {
     racialAsi: ["str", "dex", "con"].slice(0, race.asiChoice?.count ?? 0),
     racialSkills: free.slice(0, race.skillChoice?.count ?? 0),
     racialTool: race.toolChoice?.from[0] ?? "",
-    racialCantrip: race.cantripChoice ? "Prestidigitation" : "",
+    racialCantrips: race.cantripChoice ? ["Prestidigitation"] : [],
     // A dragonborn chooses an ancestry; a race that repeats one of the
     // soldier's skills chooses another in its place.
     racialAncestry: raceId === "dragonborn" ? "red" : "",
@@ -264,7 +264,7 @@ await test("the builder asks for every choice the race offers", () => {
   assert.equal(buildRace("half_elf", { racialSkills: ["arcana"] }).blocker?.kind, "error");
   assert.equal(buildRace("half_elf", { bonusLanguages: [] }).blocker?.kind, "error");
   assert.equal(buildRace("hill_dwarf", { racialTool: "" }).blocker?.kind, "error");
-  assert.equal(buildRace("high_elf", { racialCantrip: "" }).blocker?.kind, "error");
+  assert.equal(buildRace("high_elf", { racialCantrips: [] }).blocker?.kind, "error");
   assert.equal(buildRace("variant_human", { racialSkills: [] }).blocker?.kind, "error");
   assert.equal(buildRace("human", { bonusLanguages: [] }).blocker?.kind, "error");
 });
@@ -406,8 +406,8 @@ await test("A dragonborn's Breath Weapon deals its ancestry's damage type agains
       });
       const spent = await breathers.invoke("use_resource", { characterId: hero.id, resource: "Breath Weapon" });
       assert.equal(spent.ok, true, spent.error);
-      assert.equal(spent.result.dice, dice, `${ancestryId} at ${level}`);
-      assert.equal(spent.result.damageType, damageType, `${ancestryId} at ${level}`);
+      assert.equal(spent.result.damage, dice, `${ancestryId} at ${level}`);
+      assert.equal(spent.result.type, damageType, `${ancestryId} at ${level}`);
       assert.equal(spent.result.saveAbility, save, `${ancestryId} at ${level}`);
       assert.equal(spent.result.dc, 8 + 2 + proficiency, `${ancestryId} at ${level}`);
     }

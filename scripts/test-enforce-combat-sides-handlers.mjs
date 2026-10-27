@@ -141,7 +141,7 @@ await test("Opportunity attacks run both ways between a turncoat and the party, 
   kit.giveTurn(turncoat.id);
   const before = attacksBy(hero.id).length;
   world.dice(15, 4, 15, 4);
-  const walked = await world.invoke("move_token", { tokenName: turncoat.id, x: 5, y: 9 });
+  const walked = await world.invoke("move_token", { token: turncoat.id, x: 5, y: 9 });
   world.clearDice();
   assert.equal(walked.ok, true, walked.error);
   assert.equal(attacksBy(hero.id).length, before + 1, "Mira's opportunity attack on the turncoat");

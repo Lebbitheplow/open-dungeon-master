@@ -131,7 +131,7 @@ export function handleCastAtEnemy(
   if (isSheetFoe(enemy) && !hostileTo(encounter, { kind: "sheet", id: sheet.id }, { kind: "sheet", id: enemy.id })) {
     return { error: `${enemy.displayName} fights on ${sheet.name}'s side: cast_at_enemy does not aim at an ally. Nothing was spent.`, refused: "rules" };
   }
-  const barred = castBarred(campaign, turn.id, { characterId: sheet.id, spell: args.spell, ...(args.level ? { level: args.level } : {}), via, units: hitDiceOf(enemy) }, sheets, sheetsById);
+  const barred = castBarred(campaign, turn.id, { characterId: sheet.id, spell: args.spell, ...(args.level ? { level: args.level } : {}), via }, sheets, sheetsById);
   if (barred) {
     return barred;
   }
@@ -328,8 +328,6 @@ export function handleCastAtEnemy(
       ...(args.level ? { level: args.level } : {}),
       // Magic Missile: the darts named, or every dart the casting holds.
       ...(mech?.darts ? { uses: args.darts ?? 20 } : {}),
-      // A material priced per Hit Die of the target (Imprisonment).
-      units: hitDiceOf(enemy),
       via,
       reason: (args.reason ?? "").slice(0, 200),
     }),
@@ -567,13 +565,4 @@ export function handleCastAtEnemy(
     markRepeatStruck(campaign, spellName, sheet.id, [enemy.id]);
   }
   return { ok: true, ...base, ...(zone ? { area: zone } : {}) };
-}
-
-// A creature's Hit Dice, as its block is built: hit points over the average
-// of its size's hit die plus its Constitution modifier (SRD 5.1, Monsters).
-const SIZE_DIE: Record<string, number> = { tiny: 2.5, small: 3.5, medium: 4.5, large: 5.5, huge: 6.5, gargantuan: 10.5 };
-function hitDiceOf(enemy: { maxHp: number; stats: { size?: string; abilities?: { con?: number } } }): number {
-  const die = SIZE_DIE[(enemy.stats.size ?? "medium").toLowerCase()] ?? 4.5;
-  const con = Math.floor(((enemy.stats.abilities?.con ?? 10) - 10) / 2);
-  return Math.max(1, Math.round(enemy.maxHp / Math.max(1, die + con)));
 }

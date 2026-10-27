@@ -101,7 +101,7 @@ export const BOARD_ADJUDICATIONS: CatalogEntry[] = [
     summary: "Walks, pushes or teleports a combatant on the map; walls, occupancy and speed still apply to a walk.",
     fields: [
       {
-        name: "tokenName",
+        name: "token",
         label: "Who moves",
         kind: "combatant",
         required: true,
@@ -130,9 +130,10 @@ export const BOARD_ADJUDICATIONS: CatalogEntry[] = [
       },
       // Teleport a token's fields (issue #471): no path, no movement spent.
       { name: "teleport", label: "Teleports there", kind: "boolean", help: "No path and no movement: Misty Step, a portal, a trap door." },
-      { name: "spell", label: "Spell or ability", kind: "text", placeholder: "Misty Step", help: "With a caster below: the server casts it and refuses a jump past its range." },
-      { name: "casterId", label: "Cast by character", kind: "character", help: "Spends their slot and the casting time." },
+      { name: "spell", label: "Spell or feature", kind: "text", placeholder: "Misty Step", help: "With a caster below: the server casts it and refuses a jump past its range." },
+      { name: "casterCharacterId", label: "Cast by character", kind: "character", help: "Spends their slot and the casting time." },
       { name: "casterEnemyId", label: "Or used by enemy", kind: "enemy" },
+      { name: "enemyAbility", label: "Enemy's ability", kind: "text", placeholder: "Fey Step", help: "With an enemy: the teleport on its stat block, when it is no spell." },
       {
         name: "cause",
         label: "Or no spell",
@@ -210,7 +211,7 @@ export const BOARD_ADJUDICATIONS: CatalogEntry[] = [
     summary: "Marks a combatant as flying, burrowing or back on foot; the board draws it and tremorsense reads it.",
     fields: [
       {
-        name: "tokenName",
+        name: "token",
         label: "Who",
         kind: "combatant",
         required: true,

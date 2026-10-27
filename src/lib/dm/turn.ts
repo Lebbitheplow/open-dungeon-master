@@ -137,6 +137,7 @@ import {
   relationshipRules,
   tableConscienceRules,
   completeBeatTool,
+  firstMovePartyTool,
   movePartyTool,
   recallStoryTool,
   recordEventTool,
@@ -196,6 +197,9 @@ import {
   upsertCurrentLocation,
   withNewNames,
 } from "@/lib/db/locations";
+import { placeArrival } from "@/lib/db/overworld-arrival";
+import { filePlace } from "@/lib/dm/place-filing";
+import { normalizeDirection, normalizeDistance, placeTree } from "@/lib/overworld/places";
 import { sceneIds } from "@/lib/ambience/catalog";
 import { compactHistoryInBackground } from "@/lib/dm/compaction";
 import { createDeltaBatcher } from "@/lib/dm/delta-buffer";
@@ -631,6 +635,13 @@ async function openTurn(
   }
   const { summary, coveredCount } = getCampaignSummaryState(campaignId);
   const currentLocation = getCurrentLocation(campaignId);
+  const knownPlaces = listLocations(campaignId);
+  // The bigger place the party's area is part of, said or read from its
+  // name, so the model files the next room of the same vault under the
+  // same name (issue 548).
+  const knownTree = placeTree(knownPlaces);
+  const currentParentId = currentLocation ? knownTree.parentOf.get(currentLocation.id) : null;
+  const currentPartOf = currentParentId ? (knownPlaces.find((place) => place.id === currentParentId)?.name ?? "") : "";
   // Variant rules always ride; house rules and world lore are retrieved
   // against the current moment (one local embed, keyword fallback).
   // Naming an archived NPC brings them back before the prompt is built, so
@@ -793,11 +804,12 @@ async function openTurn(
             name: currentLocation.name,
             layoutDescription: currentLocation.layoutDescription,
             connections: currentLocation.connections,
+            partOf: currentPartOf,
           }
         : null,
       recentPlayerLine: [...history].reverse().find((message) => message.authorType === "player")?.content.slice(0, 400) ?? "",
       npcMomentText: history.slice(-6).map((entry) => clipKeepingEnds(entry.content, 600, 150, () => " ")).join("\n"),
-      visitedLocationNames: listLocations(campaignId)
+      visitedLocationNames: knownPlaces
         .filter((location) => location.visited)
         .map((location) => location.name)
         .slice(0, 15),
@@ -1098,7 +1110,9 @@ export function dmTurnTools(
   return [
     requestRollTool,
     requestPlayerInputTool,
-    movePartyTool,
+    // partOf and bearing ride once there is a place to be part of or to set
+    // out from (issue 548).
+    getCurrentLocation(campaign.id) ? movePartyTool : firstMovePartyTool,
     updateLocationTool,
     recordEventTool,
     ...(isStageEnabled(campaign.gameSettings.stages, "recall") ? [recallStoryTool] : []),
@@ -2828,12 +2842,23 @@ export function handleLocationCall(
     connections?: unknown;
     visionClear?: unknown;
     scene?: unknown;
+    partOf?: unknown;
+    direction?: unknown;
+    distance?: unknown;
   };
   try {
     args = JSON.parse(rawArguments || "{}");
   } catch {
     return { error: "Invalid arguments.", retry: true };
   }
+  // Where the place sits in the region (issue 548): the bigger place it is
+  // part of, and for a new place reached by travel, which way and how far it
+  // lies from where the party set out. A direction or distance off the list
+  // is no hint at all rather than a refusal: the arrival is the part that
+  // matters.
+  const partOf = typeof args.partOf === "string" ? args.partOf.trim().slice(0, 80) : "";
+  const direction = normalizeDirection(args.direction);
+  const distance = normalizeDistance(args.distance);
   const beds = sceneIds();
   if (args.scene !== undefined && !beds.includes(String(args.scene))) {
     return { error: `Unknown scene "${String(args.scene)}"; use one of: ${beds.join(", ")}.`, retry: true };
@@ -2858,6 +2883,10 @@ export function handleLocationCall(
   // What the world simulation just wrote here, so the model narrates it
   // rather than asking generate_settlement for a place already peopled.
   let peopled: string | null = null;
+  // The places this call made, and the one the party set out from, for
+  // where a new place lands on the region map.
+  const madeIds: string[] = [];
+  let setOutFrom: string | null = null;
   if (toolName === "move_party") {
     const name = typeof args.name === "string" ? args.name.trim() : "";
     if (!name) {
@@ -2871,6 +2900,10 @@ export function handleLocationCall(
       layoutDescription,
       connections,
     });
+    if (!onRecord) {
+      madeIds.push(location.id);
+    }
+    setOutFrom = previous?.id ?? null;
     movedToNewLocation = !previous || previous.id !== location.id;
     returnedTo =
       movedToNewLocation &&
@@ -2902,6 +2935,28 @@ export function handleLocationCall(
     if (!location) {
       return { error: "No current location; call move_party first.", retry: true };
     }
+  }
+
+  // A part of a bigger place folds into it on the region map
+  // (src/lib/dm/place-filing.ts). A bigger place named for the first time is
+  // made here and announced like any place, and a partOf that cannot apply
+  // is reported without undoing the move.
+  const filed = filePlace(campaign.id, {
+    locationId: location.id,
+    isNew: madeIds.includes(location.id),
+    partOf,
+    setOutFrom,
+    distance,
+    hasBearing: Boolean(direction || distance),
+  });
+  location = filed.location ?? location;
+  const filedNote = filed.note;
+  if (filed.parentMade) {
+    madeIds.push(filed.parentMade.id);
+    publishPersisted(campaign.id, "location_updated", { location: filed.parentMade });
+  }
+  if (madeIds.length) {
+    placeArrival(campaign.id, { locationId: location.id, fromId: setOutFrom, newIds: madeIds, direction, distance });
   }
 
   // The kind of place is its sound: stored as the place's bed, so the
@@ -2939,11 +2994,11 @@ export function handleLocationCall(
     ok: true,
     location: location.name,
     note:
-      returnedTo && recorded
+      (returnedTo && recorded
         ? `Recorded. The party is back at ${location.name}, as it was left: ${recorded} Continue the scene.`
         : peopled
           ? `Recorded. ${peopled} Continue the scene.`
-          : "Recorded. Continue the scene.",
+          : "Recorded. Continue the scene.") + filedNote,
     // Consumed by advance() as the chapter-break and inline-map signals,
     // then stripped before the result reaches the model.
     ...(movedToNewLocation

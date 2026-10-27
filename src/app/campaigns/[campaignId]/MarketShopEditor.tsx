@@ -7,6 +7,7 @@ import { GameIcon } from "@/components/ui/GameIcon";
 import { NumberStepper } from "@/components/ui/NumberStepper";
 import { Select } from "@/components/ui/Select";
 import { cn } from "@/lib/cn";
+import { readWrite } from "@/lib/load-state";
 import { MARKUP_STEPS, costToCopper, type StockLine } from "@/lib/dm/shop-logic";
 import { formatPrice, parseCoins, unreadCoins } from "@/lib/srd/currency";
 import { withoutBonus } from "@/lib/srd/item-row";
@@ -131,14 +132,18 @@ export function MarketShopEditor({
     setBusy(what);
     setError("");
     try {
-      const response = await fetch(`/api/campaigns/${campaignId}/shops/${shop.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        setError(String(data.error ?? "The shop could not be saved."));
+      // A PATCH sent twice lands the same, so a lost answer is only said,
+      // and the shelf stays as typed to send again (audit WA-05).
+      const sent = await readWrite(
+        fetch(`/api/campaigns/${campaignId}/shops/${shop.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }),
+        "The shop could not be saved.",
+      );
+      if (sent.error !== null) {
+        setError(sent.unanswered ? `${sent.error} The shelf is kept here; save again.` : sent.error);
         return false;
       }
       onSaved();
@@ -274,7 +279,7 @@ export function MarketShopEditor({
         <p className="text-[11px] text-stone-500">A shelf holds {MAX_LINES} lines.</p>
       )}
 
-      {error ? <p role="status" className="live-in motion-shake text-xs text-red-300">{error}</p> : null}
+      {error ? <p role="alert" className="live-in motion-shake text-xs text-red-300">{error}</p> : null}
       {unnamed ? <p className="live-in text-[11px] text-amber-300/90">Name every line, or take it off the shelf.</p> : null}
       <div className="flex flex-wrap items-center gap-1.5">
         <KitButton tone="primary" disabled={Boolean(busy) || unnamed} busy={busy === "save"} onClick={() => void save()}>

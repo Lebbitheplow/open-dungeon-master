@@ -69,7 +69,7 @@ export const COMMERCE_ADJUDICATIONS: CatalogEntry[] = [
           { value: "deception", label: "Deception" },
         ],
       },
-      { name: "present", label: "Also at the counter", kind: "characters" },
+      { name: "presentCharacterIds", label: "Also at the counter", kind: "characters" },
     ],
   },
 ];

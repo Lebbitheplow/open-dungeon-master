@@ -344,7 +344,7 @@ const CASTER_ARG = {
   cast_at_enemy: "characterId",
   cast_buff: "characterId",
   pc_attack: "characterId",
-  aoe_damage: "casterId",
+  aoe_damage: "casterCharacterId",
   heal: "casterId",
 };
 

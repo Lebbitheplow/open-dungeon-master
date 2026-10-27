@@ -112,7 +112,7 @@ export const checkTools: ToolDef[] = [
             type: "string",
             enum: ["perception", "insight", "investigation"],
             description:
-              "Which passive score decides it: perception, insight or investigation. Default: 'perception'. Perception: traps, ambushers, sounds; insight: a lie, a hidden motive; investigation: a concealed mechanism or clue.",
+              "Which passive score decides it. Default: 'perception'. Perception: traps, ambushers, sounds; insight: a lie, a hidden motive; investigation: a concealed mechanism or clue.",
           },
           by: {
             type: "string",
@@ -124,7 +124,7 @@ export const checkTools: ToolDef[] = [
             type: "string",
             enum: ["bright", "dim", "dark"],
             description:
-              "Off the battle map, the light where the party is (bright, dim, dark), when you know it. A lamplit hall is bright, a moonlit glade dim, an unlit crypt dark. Omit it and the server reads the current location: underground is dark, a building lit, the open air follows the hour.",
+              "Off the battle map, the light where the party is, when you know it. A lamplit hall is bright, a moonlit glade dim, an unlit crypt dark. Omit it and the server reads the current location: underground is dark, a building lit, the open air follows the hour.",
           },
           againstEnemyId: {
             type: "string",

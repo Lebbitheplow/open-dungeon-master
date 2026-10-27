@@ -9,8 +9,9 @@ import { cn } from "@/lib/cn";
 // back to its prompt, so it reads as "add one of these" rather than as the
 // field's value. Options can be plain strings or value/label pairs.
 
+// Compact under a mouse; a finger gets 40 px (audit WA-08).
 const select =
-  "rounded-md border border-stone-700 bg-stone-950 px-1.5 py-1 text-xs text-stone-300 focus:border-amber-500/50 focus:outline-none";
+  "rounded-md border border-stone-700 bg-stone-950 px-1.5 py-1 text-xs text-stone-300 focus:border-amber-500/50 focus:outline-none pointer-coarse:min-h-10";
 
 export type AddOption = string | { value: string; label: string };
 

@@ -72,7 +72,7 @@ export async function walk(world, heroId, x, y) {
 }
 
 // An enemy walks on its own, as the console's move_token moves it.
-export const stride = (world, enemyId, x, y) => world.invoke("move_token", { tokenName: enemyId, x, y });
+export const stride = (world, enemyId, x, y) => world.invoke("move_token", { token: enemyId, x, y });
 
 // The pointer rests on this hero from now on, with a fresh turn.
 export function holdTurn(world, heroId) {

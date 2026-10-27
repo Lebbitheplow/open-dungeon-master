@@ -15,6 +15,8 @@ import {
   pointBuyRemaining,
 } from "@/lib/srd/point-buy";
 import { findDraconicAncestry, innateCantripsFor, repeatedGrants, takesDraconicAncestry } from "@/lib/srd/racial-grants";
+import { racialCantripFields } from "@/lib/srd/racial-cantrips";
+import { pickedVariant, variantFeatureNames, withSpeciesVariant } from "@/lib/content/species-variants";
 import { reconcilePicks } from "./reconcile";
 import { builderCasting, builderSpellSlots } from "./casting";
 import { unmetFeatMessage, type FeatJudge } from "./featPrereqs";
@@ -43,6 +45,7 @@ export type BlockerTarget =
   | "racialCantrip"
   | "racialFeat"
   | "ancestry"
+  | "variant"
   | "repeatSkills"
   | "class"
   | "classSkills"
@@ -56,9 +59,11 @@ export type BlockerTarget =
   | "spells"
   | "gear";
 
-export type StepBlock = { message: string; target: BlockerTarget };
+// `label`: the pick's own name where the race names it (a workshop
+// species' "Bloodline"), for the line of choices left (owed.ts).
+export type StepBlock = { message: string; target: BlockerTarget; label?: string };
 
-const block = (target: BlockerTarget, message: string): StepBlock => ({ target, message });
+const block = (target: BlockerTarget, message: string, label?: string): StepBlock => ({ target, message, ...(label ? { label } : {}) });
 
 type SubmitInput = {
   state: BuilderState;
@@ -169,7 +174,12 @@ export function ancestryBlocks(
     return [block("race", "Choose where your hero comes from (race).")];
   }
   const owed: StepBlock[] = [];
-  const { bonusLanguages, racialAsi, racialSkills, racialTool, racialCantrip } = state;
+  const { bonusLanguages, racialAsi, racialSkills, racialTool, racialCantrips } = state;
+  // The species' own choice comes first: it changes what the picks below
+  // offer (a +1 it gives cannot take a pick of the player's choice too).
+  if (race.variants && !race.variants.options.some((option) => option.id === state.racialVariant)) {
+    owed.push(block("variant", `Pick your ${race.name}'s ${race.variants.label.toLowerCase()}.`, race.variants.label));
+  }
   const languageCount = bonusLanguageCount(race, background);
   if (languageCount > 0 && bonusLanguages.filter(Boolean).length < languageCount) {
     const left = languageCount - bonusLanguages.filter(Boolean).length;
@@ -187,8 +197,20 @@ export function ancestryBlocks(
   if (race.toolChoice && !racialTool) {
     owed.push(block("racialTool", `Pick a tool your ${race.name} knows how to use (tool proficiency).`));
   }
-  if (race.cantripChoice && !racialCantrip) {
-    owed.push(block("racialCantrip", `Pick the simple spell your ${race.name} can cast at will (cantrip).`));
+  // Every cantrip the race offers (a homebrew species may offer three),
+  // each a different spell.
+  const cantripChoice = race.cantripChoice;
+  const cantripsPicked = cantripChoice ? new Set(racialCantrips.filter(Boolean).map(textKey)).size : 0;
+  if (cantripChoice && cantripsPicked < cantripChoice.count) {
+    const left = cantripChoice.count - cantripsPicked;
+    owed.push(
+      block(
+        "racialCantrip",
+        cantripChoice.count === 1
+          ? `Pick the simple spell your ${race.name} can cast at will (cantrip).`
+          : `Pick ${left} ${cantripsPicked ? "more " : ""}simple ${left === 1 ? "spell" : "spells"} your ${race.name} can cast at will (${left === 1 ? "cantrip" : "cantrips"}).`,
+      ),
+    );
   }
   // The variant human's feat is a racial choice like the others, and used
   // to be the one no gate asked for (issue #124).
@@ -446,7 +468,8 @@ export function gearBlocker(derived: BuilderDerived): StepBlock | null {
 export function validateBuilder(
   input: SubmitInput,
 ): { kind: "error" | "spellWarning"; message: string; target?: BlockerTarget } | null {
-  const { derived, race, klass, background } = input;
+  const { derived, klass, background } = input;
+  const race = input.race && withSpeciesVariant(input.race, input.state.racialVariant);
   // Each missing piece by its own name and step: this used to say "Assign
   // all six ability scores first." whatever was missing.
   if (!race) {
@@ -498,7 +521,8 @@ export function validateBuilder(
 // after validateBuilder returned null.
 export function buildBuilderResult(input: SubmitInput): BuilderResult {
   const { state, derived } = input;
-  const race = input.race as RaceOption;
+  // With the species option picked, however the caller read the race.
+  const race = withSpeciesVariant(input.race as RaceOption, state.racialVariant);
   const klass = input.klass as ClassOption;
   const background = input.background as BackgroundOption;
   const abilities = derived.abilities as NonNullable<BuilderDerived["abilities"]>;
@@ -529,10 +553,10 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
   // The picks were checked against every change as it was made; checked
   // once more here so the sheet can never carry what the rules do not allow.
   const { picks } = reconcilePicks(state, { race, klass, background, level: effectiveLevel });
-  // A racial cantrip (high elf) joins the cantrip list for casters. A
-  // non-caster has nowhere to put it, so it rides along as a feature
-  // instead, which populateFeatures keeps and the DM prompt can see.
-  const { spells, cantrips, racialCantrip } = picks;
+  // The racial cantrips (a high elf's one) join the cantrip list for
+  // casters. A non-caster has nowhere to put them, so each rides along as a
+  // feature instead, which populateFeatures keeps and the DM prompt can see.
+  const { spells, cantrips, racialCantrips } = picks;
   // Skills, expertise and languages are picks too, so they come from the
   // reconciled ones: what the class, the background and the race grant, and
   // no more of the player's own than each of them offers.
@@ -543,7 +567,7 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
       ...picks.backgroundSkills.filter(Boolean),
       ...(race.skills ?? []),
       ...picks.racialSkills.filter(Boolean),
-      ...(state.repeatSkills ?? []).filter(Boolean),
+      ...picks.repeatSkills.filter(Boolean),
     ]),
   ];
   const proficiencies = {
@@ -563,7 +587,7 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
   const finalCantrips = [
     ...new Set([
       ...cantrips,
-      ...(racialCantrip ? [racialCantrip] : []),
+      ...racialCantrips,
       ...innateCantripsFor(race.id, effectiveLevel),
     ]),
   ];
@@ -573,10 +597,9 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
     (spell) => !spells.some((entry) => textKey(entry) === textKey(spell)),
   );
   const finalSpells = casting.ability ? [...spells, ...grantedSpells] : spells;
-  const racialFeatures =
-    racialCantrip && !casting.ability
-      ? [{ name: `Racial cantrip: ${racialCantrip}`, source: "story" as const }]
-      : [];
+  const racialFeatures = casting.ability
+    ? []
+    : racialCantrips.map((name) => ({ name: `Racial cantrip: ${name}`, source: "story" as const }));
   // The server grants the feature of every bundled background itself
   // (db/sheets.ts withBackgroundFeature); a content-pack background's is
   // known only here, so it rides along the same way.
@@ -595,9 +618,14 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
         ? (state.racialFeatAbility as Ability)
         : racialFeatChoice[0]
       : null;
+  // The species option's own (its record, resistances and breath) as the
+  // server writes them; the server writes every race feature again anyway.
+  const option = pickedVariant(race);
   const packRaceTraits = racialTraitsFor(race.id).length
     ? []
-    : race.traitNames.map((traitName) => ({ name: traitName.slice(0, 80), source: "race" as const }));
+    : [...race.traitNames, ...(option && race.variants ? variantFeatureNames(race.variants.label, option, race.traitNames) : [])].map(
+        (traitName) => ({ name: traitName.slice(0, 80), source: "race" as const }),
+      );
 
   return {
     level: effectiveLevel,
@@ -669,9 +697,10 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
       racialChoices: {
         asi: picks.racialAsi.filter((ability): ability is Ability => Boolean(ability)),
         skills: picks.racialSkills.filter(Boolean),
-        cantrip: racialCantrip,
+        ...racialCantripFields(racialCantrips),
         tool: picks.racialTool,
         ancestry: takesDraconicAncestry(race.id) ? (findDraconicAncestry(state.racialAncestry ?? "")?.id ?? "") : "",
+        variant: race.variants ? picks.racialVariant : "",
         ...(racialFeatAbility ? { featAbility: racialFeatAbility } : {}),
       },
       backgroundChoices: {

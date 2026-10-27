@@ -161,6 +161,9 @@ export type CampaignLocation = {
   mapPending?: boolean;
   // The place's ambience bed and music, which name its kind of scene.
   ambience: { bed: string; music: string } | null;
+  // The bigger place it is part of (src/lib/db/locations.ts); absent from
+  // an older server.
+  parentName?: string | null;
   updatedAt: string;
 };
 
@@ -181,6 +184,9 @@ export type CampaignState = {
     // The table holds a story arc AI Story Setup has not built on yet (the
   // lobby's warning, issue 249); false for anyone who does not steer.
   prepArc: boolean;
+  // A test fight's workshop (issue 553, src/lib/workshop/test-fight.ts), for
+  // the table's way back; null at every other table.
+  testFight: { workshopId: string; title: string } | null;
   // What this seat may see and do, decided by the server
   // (src/lib/dm/viewer.ts). The client never re-derives it from ids, so a
   // control the server would refuse is never rendered in the first place.
@@ -349,6 +355,7 @@ const initialState: CampaignState = {
   answeredBy: "",
   campaign: null,
   prepArc: false,
+  testFight: null,
   coordination: null,
   tableWait: null,
   // A plain player until the snapshot says otherwise: the safe default is
@@ -1102,6 +1109,10 @@ const PERSISTED_EVENTS = [
   // player joining mid-stretch is told, rather than quietly talking to a
   // stand-in they cannot see.
   "dm_cover_changed",
+  // A DM or co-DM seat filled or emptied, or the game handed to or from the
+  // AI (the dm/seat and settings routes). What a seat may see and do follows
+  // the seats, so the stream reads the snapshot again (reloadsSnapshot).
+  "dm_seat_changed",
   // The sky over the table, a title card, a handout on the table, and the
   // X-card pause. Persisted so a late joiner lands in the same scene.
   "scene_state",
@@ -1238,6 +1249,19 @@ export function refreshesBattleMap(eventType: string, boardUp: boolean): boolean
   );
 }
 
+// Events the stream cannot apply by itself, after which the snapshot is read
+// again. A rewind and imported prep change more rows than an event carries.
+// A seat change and a new party lead change what each seat may see and do:
+// the caps come from the seats (src/lib/dm/viewer.ts viewerCaps) and only
+// the snapshot route works them out per seat, so the seat that gains the
+// DM's tools and the seat that loses them both read it again (audit WA-11).
+export function reloadsSnapshot(eventType: string, payload: unknown): boolean {
+  if (eventType === "campaign_rewound" || eventType === "prep_imported" || eventType === "dm_seat_changed") {
+    return true;
+  }
+  return eventType === "campaign_updated" && typeof (payload as { leadUserId?: unknown } | null)?.leadUserId === "string";
+}
+
 export function useCampaignStream(campaignId: string) {
   const [state, dispatch] = useReducer(campaignReducer, initialState);
   // The SSE handlers are registered once, so they cannot close over `state`.
@@ -1298,6 +1322,7 @@ export function useCampaignStream(campaignId: string) {
           answeredBy,
           campaign: data.campaign,
           prepArc: Boolean(data.prepArc),
+          testFight: (data.testFight as CampaignState["testFight"]) ?? null,
           coordination: (data.coordination as CoordinationPhase | null) ?? null,
           tableWait: (data.tableWait as TableWaitView | null) ?? null,
           caps: data.caps ?? capsForRole("player", "ai"),
@@ -1595,13 +1620,9 @@ export function useCampaignStream(campaignId: string) {
           if (eventType === "note_suggested") {
             void refreshNotes();
           }
-          // A rewind mass-deletes state that incremental events cannot
-          // express; reload everything from the snapshot endpoint.
-          if (eventType === "campaign_rewound") {
-            resync();
-          }
-          // Imported prep lands in a dozen tables at once; the same reload.
-          if (eventType === "prep_imported") {
+          // A rewind, imported prep (a dozen tables at once), or a change in
+          // who holds authority: everything again from the snapshot endpoint.
+          if (reloadsSnapshot(eventType, payload)) {
             resync();
           }
           if (eventType === "side_activity") {

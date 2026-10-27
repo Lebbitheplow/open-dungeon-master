@@ -1,9 +1,11 @@
 import { capsFor, isErrorResponse, requirePrepAuthority } from "@/lib/campaign-api";
+import { refuseDuringBreak } from "@/lib/dm/table-break";
 import { getEncounterTemplate, setTemplateCued } from "@/lib/db/encounter-templates";
 import { deployTemplate } from "@/lib/dm/encounter-templates";
 import { readyTemplates } from "@/lib/dm/prepared-encounter-tool";
 import { preparedFit } from "@/lib/dm/prepared-fit";
 import { fightingParty } from "@/lib/dm/party-budget";
+import { isWorkshop } from "@/lib/workshop/kind";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,6 +36,21 @@ export async function POST(
   if (!template || template.campaignId !== campaignId) {
     return Response.json({ error: "No such prepared encounter." }, { status: 404 });
   }
+  // A workshop is prep with no party in it, so a fight deployed there had
+  // nobody to fight (issue 553). It is played on a table of its own:
+  // src/app/api/workshops/[workshopId]/test-fight/route.ts. Today's
+  // Encounters offers Test fight in Deploy's place, so the page that reads
+  // this is an app built before it (client 0.21.2 and older), which has no
+  // such button: it is told where the button is, and the way it has.
+  if (isWorkshop(context.campaign)) {
+    return Response.json(
+      {
+        error:
+          "A workshop has no table to deploy to. Test this fight with Test fight, on the website or in an updated app, or bring it into a campaign and deploy it there.",
+      },
+      { status: 409 },
+    );
+  }
 
   if (capsFor(context).role !== "dm") {
     const cue = (await request.json().catch(() => ({})))?.cue !== false;
@@ -63,6 +80,12 @@ export async function POST(
     return Response.json({ ok: true, cued: cue });
   }
 
+  // Deploying is the console's start_encounter, which waits out a break;
+  // the lead's cue above is prep and goes on.
+  const paused = refuseDuringBreak(campaignId);
+  if (paused) {
+    return paused;
+  }
   const outcome = await deployTemplate(context.campaign, context.user.id, template);
   if (!outcome.ok) {
     return Response.json({ error: outcome.error }, { status: 409 });

@@ -308,7 +308,9 @@ export function OptionCardGrid({
                     <button
                       type="button"
                       onClick={() => onDetails(option.id)}
-                      aria-label={`Details for ${option.name}`}
+                      // "About", since "Character details" is the panel
+                      // beside the steps; the face stays a bare "?".
+                      aria-label={`About ${option.name}`}
                       tabIndex={roving.tabIndex(option.id)}
                       className="creator-help"
                     >

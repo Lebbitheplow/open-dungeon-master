@@ -41,6 +41,59 @@ export async function readLoad<T>(request: Promise<Response>, what: string): Pro
   return failed(reason);
 }
 
+// A change sent to the server, read to its end (WA-05): the reply's JSON
+// when it said yes; otherwise one sentence, the server's own where it gave
+// one, or what failed and why. Never throws, so a press whose request dies
+// on the way says so in the panel instead of leaving an unhandled rejection
+// and a draft that looks saved. A request with no answer at all is
+// `unanswered`: the server may have done it all the same, so a create reads
+// its list again before it offers to send the same thing twice.
+export type WriteOutcome<T> =
+  | { payload: T; error: null; unanswered: false }
+  | { payload: null; error: string; unanswered: boolean };
+
+export async function readWrite<T = Record<string, unknown>>(request: Promise<Response>, failed: string): Promise<WriteOutcome<T>> {
+  let response: Response;
+  try {
+    response = await request;
+  } catch {
+    return { payload: null, error: `${failed} ${UNREACHABLE}`, unanswered: true };
+  }
+  // A yes whose body is not JSON (a 204, a cut-off body) is still a yes: the
+  // change was made, and a panel that needs the row reads its list again.
+  const body = (await response.json().catch(() => ({}))) as { error?: unknown };
+  if (response.ok) {
+    return { payload: body as T, error: null, unanswered: false };
+  }
+  const reason = typeof body.error === "string" && body.error.trim() ? body.error.trim() : `${failed} The server answered ${response.status}.`;
+  return { payload: null, error: reason, unanswered: false };
+}
+
+// After a create whose answer was lost: whether the new row is on the
+// server. The list is read again and a row that was not there before and
+// matches what was sent means it was made; a list without one means it was
+// not; a list that cannot be read either means nobody knows yet, and the
+// panel keeps the draft and says so rather than invite a second copy.
+export type LostCreate = "made" | "missing" | "unknown";
+
+export async function findLostCreate<T extends { id: string }>(
+  // The rows on screen before the create; null when the list was never read,
+  // so a row there all along cannot be told from the new one.
+  before: readonly T[] | null,
+  reread: () => Promise<readonly T[] | null>,
+  matches: (row: T) => boolean,
+): Promise<LostCreate> {
+  if (!before) {
+    return "unknown";
+  }
+  const known = new Set(before.map((row) => row.id));
+  const fresh = await reread().catch(() => null);
+  if (!fresh) {
+    return "unknown";
+  }
+  return fresh.some((row) => !known.has(row.id) && matches(row)) ? "made" : "missing";
+}
+
 // The two facts a panel renders by: whether any load has ever landed (until
 // then it is loading, not empty) and the last load's refusal, if any. A
 // refetch that fails after a good load keeps the rows and adds the sentence.

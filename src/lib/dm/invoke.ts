@@ -34,7 +34,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { toolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { routeCall } from "@/lib/dm/tool-merge";
 import { settleCompanionLeaving } from "@/lib/dm/departure-turn";
-import { mergedCall } from "@/lib/dm/tool-merge-logic";
+import { mergedCall, renamedArgs } from "@/lib/dm/tool-merge-logic";
 
 export type Actor =
   | { kind: "ai"; turnId: string }
@@ -113,7 +113,8 @@ function toDamageTargets(
 // Names a form has used for an argument its handler reads under another
 // one. The catalog now carries the handler's names; these stay so a console
 // built from an older catalog (the client apps compile the server's screens)
-// still reaches the engine.
+// still reaches the engine. The arguments a tool renamed for every caller
+// are mapped first, at every door (tool-merge-logic.ts RENAMED_ARGS).
 const FIELD_ALIASES: Record<string, Record<string, string>> = {
   pc_attack: { enemyId: "targetEnemyId" },
   pet_attack: { enemyId: "targetEnemyId" },
@@ -137,7 +138,7 @@ export function normalizeArgs(
   entry: CatalogEntry,
   args: Record<string, unknown>,
 ): Record<string, unknown> {
-  const renamed: Record<string, unknown> = { ...args };
+  const renamed: Record<string, unknown> = { ...renamedArgs(entry.name, args) };
   for (const [from, to] of Object.entries(FIELD_ALIASES[entry.name] ?? {})) {
     const value = renamed[from];
     const empty = (entry: unknown) => entry === undefined || entry === null || entry === "";
@@ -159,9 +160,14 @@ export function normalizeArgs(
     delete renamed.characterIds;
   }
   args = renamed;
+  // An input left blank is dropped, so a required one is reported missing
+  // below and a handler never reads "" as a value. A field whose empty input
+  // is an answer keeps it (catalog-types.ts keepsEmpty): update_sheet's
+  // Becomes, where an empty Conditions clears them.
+  const keepsEmpty = new Set(entry.fields.filter((field) => field.keepsEmpty).map((field) => field.name));
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(args)) {
-    if (value === undefined || value === null || value === "") {
+    if (value === undefined || value === null || (value === "" && !keepsEmpty.has(key))) {
       continue;
     }
     if (key === "enemies") {

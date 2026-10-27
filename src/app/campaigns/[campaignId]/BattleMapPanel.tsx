@@ -701,7 +701,9 @@ export function BattleMapPanel({
     if (token && token.x === x && token.y === y) {
       return;
     }
-    if (canDirect) {
+    // The DM's own character on its turn walks, as a player's does (a test
+    // fight a person runs, issue 553); every other figure the DM places.
+    if (canDirect && !(canMove && drag.tokenId === view.myTokenId)) {
       void board({ do: "place", tokenId: drag.tokenId, x, y });
     } else {
       // Carrying the figure there is deliberate: the drop is the move.
@@ -783,7 +785,7 @@ export function BattleMapPanel({
         setTeleporting(null);
         setHudTokenId(null);
         if (token) {
-          void invoke("move_token", { tokenName: token.name, x, y, teleport: true });
+          void invoke("move_token", { token: token.name, x, y, teleport: true });
         }
         return;
       }
@@ -854,7 +856,11 @@ export function BattleMapPanel({
         });
         return;
       }
-      return;
+      // With no tool in hand, a DM who plays a character walks it on its
+      // turn, below; any other DM taps nothing here.
+      if (!canMove) {
+        return;
+      }
     }
     if (canMove) {
       // The first tap aims, the second on the same square walks.

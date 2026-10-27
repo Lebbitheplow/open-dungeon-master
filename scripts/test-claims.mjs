@@ -17,7 +17,7 @@ const world = await openWorld({ gameSettings: { ttsEnabled: false } });
 const { checkClaims, claimKindsFor, englishEndsTurn, namedSpeakers, parseReaderReply, readerSystem, renderReaderInput, withoutAsides } = await import(
   "../src/lib/dm/claims-logic.ts"
 );
-const { leveledSpellNames, readClaims } = await import("../src/lib/dm/claims.ts");
+const { leveledSpellNames, readClaims, ruledFor } = await import("../src/lib/dm/claims.ts");
 const { guardOutcomes, normalizeSpellName } = await import("../src/lib/dm/engine-boundary.ts");
 const campaigns = await import("../src/lib/db/campaigns.ts");
 
@@ -393,6 +393,21 @@ await test("Who speaks is read from the public cast, the party and an NPC the re
   );
   assert.equal(model.readerRequests.length, 0, "a passage naming nobody is not read for its speakers");
   model.close();
+});
+
+await test("A call that names the character as its actor, a healer or a caster among them, is a ruling for them.", () => {
+  const exchange = (name, args) => [
+    { role: "assistant", content: "", tool_calls: [{ id: "c1", type: "function", function: { name, arguments: JSON.stringify(args) } }] },
+    { role: "tool", tool_call_id: "c1", content: JSON.stringify({ ok: true }) },
+  ];
+  for (const [name, args] of [
+    ["stabilize", { characterId: "someone-else", healerId: mira.id }],
+    ["aoe_damage", { casterCharacterId: mira.id, spell: "Fireball", level: 3 }],
+    ["heal", { characterId: "someone-else", casterId: mira.id, spell: "Cure Wounds", level: 1 }],
+  ]) {
+    assert.ok(ruledFor(exchange(name, args), mira), `${name} names Mira and rules for her`);
+  }
+  assert.ok(!ruledFor(exchange("stabilize", { characterId: "someone-else" }), mira), "a call that does not name her is no ruling for her");
 });
 
 world.close();

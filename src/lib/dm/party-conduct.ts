@@ -203,7 +203,7 @@ export function conductGate(campaign: Campaign, name: string, rawArguments: stri
         ? (shareGate(campaign, args.casterId) ?? aidGate(campaign, args.casterId, [args.characterId], "slot"))
         : null;
     case "use_item":
-      return args.targetCharacterId && potionNamed(args.characterId, campaign.id, args.item ?? args.name)
+      return args.targetCharacterId && potionNamed(args.characterId, campaign.id, args.item)
         ? aidGate(campaign, args.characterId, [args.targetCharacterId], "potion")
         : null;
     default:

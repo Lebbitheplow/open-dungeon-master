@@ -17,6 +17,7 @@ import { mergeHouseRules } from "@/lib/rulesets/logic";
 import { arcRoom } from "@/lib/dm/arc-logic";
 import { checkProse, proseWarningLine } from "@/lib/workshop/prose-check";
 import { copiesFrom, recordOrigin, type OriginKind } from "@/lib/db/content-origins";
+import { linkWorkshop } from "@/lib/db/campaign-workshops";
 import {
   copyFactions,
   copyKind,
@@ -401,9 +402,26 @@ export function runContentImport(input: {
     return { error: "Nothing can import into itself." };
   }
 
+  // The table starts from every workshop this import draws on
+  // (src/lib/db/campaign-workshops.ts): the one chosen, and a shared one
+  // whose rows come along. Once each, however many rows travel.
+  const linked = new Set<string>();
+  const link = (workshopId: string) => {
+    if (!linked.has(workshopId)) {
+      linked.add(workshopId);
+      linkWorkshop(campaignId, workshopId);
+    }
+  };
+
   // The plan is told what the DM ticked, so it can say what came with it.
   const plan = planContentImport(sourceId, campaignId, input.selection, { again, arcMode: input.arcMode, exclude: input.exclude });
   if (plan.empty) {
+    // Nothing to copy is still a choice of workshop: one holding only
+    // pregens, or prep an earlier import already brought, names the
+    // workshop the table starts from all the same.
+    if (source.kind === "workshop") {
+      link(source.id);
+    }
     return { plan, copied: 0, idMap: new Map(), kept: plan.kept, unbound: 0, beatsAdded: 0 };
   }
 
@@ -443,6 +461,10 @@ export function runContentImport(input: {
       const id = crypto.randomUUID();
       idMap.set(`${kind}:${sourceRowId}`, id);
       recordOrigin(campaignId, kind, id, originId, sourceRowId);
+      // A row from the shared workshop draws on it too.
+      if (originId !== sourceId) {
+        link(originId);
+      }
       return id;
     },
     resolve: (kind, sourceRowId) => idMap.get(`${kind}:${sourceRowId}`) ?? earlier.get(`${kind}:${sourceRowId}`) ?? null,
@@ -478,6 +500,10 @@ export function runContentImport(input: {
   let fights: ReturnType<typeof writeStoryboardRows>["fights"] = new Map();
 
   db.transaction(() => {
+    // Inside the transaction, so an import that fails leaves no link.
+    if (source.kind === "workshop") {
+      link(source.id);
+    }
     // Maps first: places and fights bind to them by id, and the binding is
     // rewritten through the copy only if the copy already exists.
     if (selected.has("maps")) {

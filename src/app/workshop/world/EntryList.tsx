@@ -112,12 +112,15 @@ export function EntryList({
   const first = virtual ? Math.max(0, Math.floor(top / ROW_PX) - OVERSCAN) : 0;
   const last = virtual ? Math.min(shown.length, Math.ceil((top + height) / ROW_PX) + OVERSCAN) : shown.length;
 
+  // An empty list is no listbox: what it shows then is a word and the
+  // buttons to make a first entry, and a listbox may hold only options
+  // (audit WA-09). The same box stays, so its size is still watched.
   return (
     <div
       ref={box}
       className="flex max-h-[60vh] flex-col overflow-y-auto pr-1"
-      role="listbox"
-      aria-label="Entries"
+      role={hasRows ? "listbox" : undefined}
+      aria-label={hasRows ? "Entries" : undefined}
       onScroll={(event) => setTop(event.currentTarget.scrollTop)}
       onKeyDown={onKeyDown}
     >

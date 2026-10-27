@@ -21,6 +21,8 @@ import {
   thirdCasterProfileForFeature,
 } from "@/lib/srd/third-caster";
 import { subclassMayCast } from "@/lib/srd/features";
+import { FEATURE_LIMITS, SUBCLASS_SPELLS_PER_LEVEL } from "@/lib/homebrew/class-data";
+import { featureCounts } from "@/lib/homebrew/limits";
 
 // A subclass: its class, its features by level and the always-prepared
 // spells it hands out (a domain's, an oath's). A character who takes it is
@@ -38,7 +40,7 @@ const ABILITY_NAMES = { int: "Intelligence", wis: "Wisdom", cha: "Charisma" } as
 // A class with Spellcasting of its own: its subclass's spells join that.
 const casterClass = (classId: string) => !subclassMayCast(classId);
 
-function BorrowFeature({ onPick, taken }: { onPick: (feature: CatalogFeature) => void; taken: Set<string> }) {
+function BorrowFeature({ onPick, taken, full }: { onPick: (feature: CatalogFeature) => void; taken: Set<string>; full: Set<number> }) {
   const [query, setQuery] = useState("");
   const all = subclassFeatureCatalog();
   const results = useMemo(() => {
@@ -65,15 +67,17 @@ function BorrowFeature({ onPick, taken }: { onPick: (feature: CatalogFeature) =>
           {results.map((entry) => {
             const key = `${entry.classId}/${entry.subclass}/${entry.name}`;
             const done = taken.has(textKey(entry.name));
+            const levelFull = !done && full.has(entry.level);
             return (
               <li key={key} className="flex items-start gap-2">
                 <button
                   type="button"
-                  disabled={done}
+                  disabled={done || levelFull}
                   onClick={() => onPick(entry)}
                   className={cn(ui.btnSmall, addChip, "shrink-0", done && "border-emerald-500/40 text-emerald-200")}
                 >
-                  {done ? <Check className="size-3" /> : <Plus className="size-3" />} Level {entry.level}
+                  {done ? <Check className="size-3" /> : levelFull ? null : <Plus className="size-3" />} Level {entry.level}
+                  {levelFull ? " full" : ""}
                 </button>
                 <span className="min-w-0 text-[11px] leading-snug text-stone-400">
                   <span className="text-stone-200">{entry.name}</span> ({capital(entry.classId)}, {entry.subclass})
@@ -110,7 +114,9 @@ function SpellLists({
       <SectionHead title="Always-prepared spells" glyph="rest-spell-slot" className="mb-1" />
       {rows.map(([at, names]) => (
         <div key={at} className="live-in flex flex-wrap items-center gap-1.5 text-xs">
-          <span className="w-16 text-stone-400">Level {at}</span>
+          <span className="w-28 shrink-0 text-stone-400">
+            Level {at} ({names.length} of {SUBCLASS_SPELLS_PER_LEVEL})
+          </span>
           {names.map((name) => (
             <span key={name} className="inline-flex items-center gap-1 rounded-md border border-stone-700 px-1.5 py-0.5 text-stone-200">
               {name}
@@ -137,17 +143,23 @@ function SpellLists({
           At class level
           <NumberStepper size="sm" label="Class level the spells arrive at" min={1} max={20} value={level} onChange={setLevel} />
         </span>
-        <ContentPick
-          kind="spells"
-          label="Find a spell the subclass always has prepared"
-          placeholder="Add a spell..."
-          className="min-w-48 flex-1"
-          onPick={(entry) => {
-            const list = spells[String(level)] ?? [];
-            if (list.some((name) => textKey(name) === textKey(entry.name))) return;
-            put({ ...spells, [String(level)]: [...list, entry.name] });
-          }}
-        />
+        {(spells[String(level)] ?? []).length < SUBCLASS_SPELLS_PER_LEVEL ? (
+          <ContentPick
+            kind="spells"
+            label="Find a spell the subclass always has prepared"
+            placeholder="Add a spell..."
+            className="min-w-48 flex-1"
+            onPick={(entry) => {
+              const list = spells[String(level)] ?? [];
+              if (list.some((name) => textKey(name) === textKey(entry.name))) return;
+              put({ ...spells, [String(level)]: [...list, entry.name] });
+            }}
+          />
+        ) : (
+          <span role="status" className="live-in text-[11px] text-stone-400">
+            Level {level} holds {SUBCLASS_SPELLS_PER_LEVEL}, the most a level keeps.
+          </span>
+        )}
       </div>
       {castsNothing && rows.length ? (
         <p className="reveal text-[11px] text-amber-300/90">
@@ -183,6 +195,8 @@ export function ArchetypeFields({
     set({ levels: grouped });
   };
   const taken = new Set(flat.map((row) => textKey(row.feature.n)));
+  const counts = featureCounts(levels);
+  const full = new Set([...counts].filter(([, count]) => count >= FEATURE_LIMITS.perLevel).map(([level]) => level));
   // A subclass of a class that casts nothing itself may cast as an Eldritch
   // Knight or an Arcane Trickster does. A copy of either, or a subclass that
   // borrowed their Spellcasting, casts by its rules until turned off
@@ -285,7 +299,15 @@ export function ArchetypeFields({
         >
           <Plus className="size-3" /> Add a feature
         </button>
-        <BorrowFeature taken={taken} onPick={(entry) => write([...flat, { level: entry.level, feature: { n: entry.name, d: entry.text } }])} />
+        {[...counts]
+          .filter(([, count]) => count > FEATURE_LIMITS.perLevel)
+          .sort(([a], [b]) => a - b)
+          .map(([level, count]) => (
+            <p key={level} role="alert" className="live-in text-[11px] text-red-300">
+              Level {level} has {count} features; a level keeps {FEATURE_LIMITS.perLevel}.
+            </p>
+          ))}
+        <BorrowFeature taken={taken} full={full} onPick={(entry) => write([...flat, { level: entry.level, feature: { n: entry.name, d: entry.text } }])} />
         <p className="text-[11px] text-stone-500">
           Granted by name when a character takes this subclass. A borrowed feature keeps its name so the engine runs it; renaming it makes it words for the DM.
         </p>

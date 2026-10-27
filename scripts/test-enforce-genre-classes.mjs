@@ -246,5 +246,54 @@ await test("A feature that says it has two uses has two: a road warrior's Harden
   assert.deepEqual(wrong, [], wrong.join("; "));
 });
 
+// A setting class's save feature hands back aoe_damage's own fields; that
+// call rolls each creature's save and lays the condition on a failure. It
+// once named cast_at_enemy, which refuses a character who casts no spells.
+await test("An enforcer's Menace resolves through aoe_damage: the frightened lands on the failed save only.", async () => {
+  const { fightDummies, onTurnOf } = await import("./lib/enforce-spells.mjs");
+  const { aoeDamageTool } = await import("../src/lib/dm/aoe-damage-tool.ts");
+  const table = await openWorld();
+  const enforcer = table.addHero({ name: "Brann", class: "enforcer", level: 20, maxHp: 120 });
+  const [first, second] = await fightDummies(table, 2);
+  await onTurnOf(table, enforcer.id, async () => {
+    const spent = await table.invoke("use_resource", { characterId: enforcer.id, resource: "Menace", reason: "a glare" });
+    assert.equal(spent.ok, true, spent.error);
+    const { resolveWith, note, ...fields } = spent.result;
+    assert.equal(resolveWith, "aoe_damage");
+    assert.ok(note);
+    const taken = aoeDamageTool.function.parameters.properties;
+    for (const key of ["casterCharacterId", "saveAbility", "dc", "condition"]) {
+      assert.ok(key in fields && key in taken, `the spend hands back ${key}, which aoe_damage takes`);
+    }
+    table.dice(1, 20);
+    const out = await table.invoke("aoe_damage", { ...pick(fields, ["casterCharacterId", "saveAbility", "dc", "condition"]), enemyIds: [first.id, second.id] });
+    table.clearDice();
+    assert.equal(out.ok, true, out.error);
+    const held = (id) => table.enemies().find((enemy) => enemy.id === id).conditions;
+    assert.ok(held(first.id).includes("frightened"), "the failed save lays it");
+    assert.ok(!held(second.id).includes("frightened"), "the saved one is spared");
+    assert.equal(table.enemies().find((enemy) => enemy.id === first.id).conditionMeta.frightened.source, enforcer.id, "frightened of the enforcer");
+  });
+  const spelled = await table.invoke("aoe_damage", { casterCharacterId: enforcer.id, spell: "Fireball", level: 3, enemyIds: [first.id], condition: "prone" });
+  assert.equal(spelled.ok, false);
+  assert.match(spelled.error, /condition is for an effect that names no spell/);
+  table.close();
+});
+
+await test("An occultist's Walk Between hands back the move_token teleport that its spend paid for.", async () => {
+  const { featureTeleportFeet } = await import("../src/lib/dm/feature-teleport.ts");
+  const table = await openWorld();
+  const occultist = table.addHero({ name: "Iris", class: "occultist", level: 20, subclass: "Keeper of the Veil", maxHp: 90 });
+  const spent = await table.invoke("use_resource", { characterId: occultist.id, resource: "Walk Between", reason: "a step" });
+  assert.equal(spent.ok, true, spent.error);
+  assert.match(spent.result.teleport, new RegExp(`move_token, teleport true, spell "Walk Between" and casterCharacterId ${occultist.id}`));
+  assert.equal(featureTeleportFeet(occultist.id, "Walk Between"), 60);
+  table.close();
+});
+
+function pick(object, keys) {
+  return Object.fromEntries(keys.filter((key) => key in object).map((key) => [key, object[key]]));
+}
+
 world.close();
 finish();

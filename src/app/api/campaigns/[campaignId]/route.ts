@@ -39,7 +39,7 @@ import { tableFeatsFrom } from "@/lib/db/table-feats";
 import { getDatabase } from "@/lib/db/core";
 import { requestDmTurn } from "@/lib/dm/loop";
 import { hasHumanDm, isPrimaryDm, lobbyBlocker, narratorIsAi } from "@/lib/dm/viewer";
-import { sheetForViewer } from "@/lib/dm/sheet-view";
+import { auditEntryForViewer, sheetForViewer } from "@/lib/dm/sheet-view";
 import { enqueueDmJob, runningDmJob } from "@/lib/dm/queue";
 import { runStorySetup } from "@/lib/dm/setup";
 import { generateStoryArc } from "@/lib/dm/arc";
@@ -52,6 +52,8 @@ import { latestEventOfType, publishPersisted, publishWithSeq } from "@/lib/event
 import type { HandoutShown, TitleCard } from "@/lib/scene/state";
 import { narrationAudioFor } from "@/lib/tts";
 import { tableAuthors, workshopClassesFor } from "@/lib/db/homebrew";
+import { testFightSource } from "@/lib/db/test-fights";
+import { isPlaytest } from "@/lib/workshop/kind";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -110,6 +112,9 @@ export async function GET(
   const messages = listRecentMessages(campaignId, 100);
   return Response.json({
     campaign: publicCampaign(campaign),
+    // A test fight's workshop (issue 553), for its way back there; null at
+    // every other table.
+    testFight: isPlaytest(campaign) ? testFightSource(campaign.id) : null,
     // Whether the table already holds a story arc that AI Story Setup has
     // not yet built on (a Workshop Storyboard brought in before the start,
     // issue 249). Told to whoever steers the story, who is warned by it;
@@ -153,7 +158,11 @@ export async function GET(
     // have (src/lib/dm/viewer.ts).
     rolls: listRollsVisibleTo(campaignId, caps, ownedCharacterIds, 20),
     pendingRolls: listOpenPendingRolls(campaignId).map(publicPendingRoll),
-    auditLog: listRecentAudit(campaignId, 50),
+    // A correction of someone's notes is listed without them, as their sheet
+    // is (src/lib/dm/sheet-view.ts).
+    auditLog: listRecentAudit(campaignId, 50).map((entry) =>
+      auditEntryForViewer(entry, campaignSeats(campaign), user.id, ownedCharacterIds),
+    ),
     locations: listLocations(campaignId),
     chapters: listChaptersForSnapshot(campaignId),
     notes: listNotesVisibleTo(campaignId, user.id, caps.steersStory),

@@ -21,6 +21,7 @@ import { homebrewAvailability } from "@/lib/homebrew/availability";
 import { subclassLevelFor } from "@/lib/srd/features";
 import { CopySource } from "@/app/workshop/homebrew/CopySource";
 import dynamic from "next/dynamic";
+import { HOMEBREW_DESC_MAX } from "@/lib/schemas/homebrew";
 
 // The class form and the catalog it borrows from load when a class is
 // opened, not with the workshop (scripts/bundle-budget.json).
@@ -123,6 +124,7 @@ export function HomebrewEditor({
         label="Description"
         value={String(draft.data.desc ?? "")}
         onChange={(desc) => setData({ ...draft.data, desc })}
+        maxLength={HOMEBREW_DESC_MAX}
         rows={draft.kind === "spell" ? 5 : 3}
         placeholder={
           draft.kind === "spell"

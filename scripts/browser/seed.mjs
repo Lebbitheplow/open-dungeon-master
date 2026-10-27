@@ -204,7 +204,7 @@ const offer = itemProposals.insertItemProposal({
   characterId: tavi.id,
   userId: world.owner.id,
   toolName: "grant_item",
-  argsJson: JSON.stringify({ characterId: tavi.id, name: "Healing potion", qty: 1, reason: "found in the mill" }),
+  argsJson: JSON.stringify({ characterId: tavi.id, item: "Healing potion", qty: 1, reason: "found in the mill" }),
   summary: "Give Healing potion to Tavi Lockwhisper",
   reason: "found in the mill",
   seq: campaigns.allocateSeq(world.campaignId),
@@ -534,6 +534,102 @@ const marketSecond = sheets.createSheet(marketTable.id, world.owner.id, 3, heroI
   updateShop(forge.id, { haggles: [{ ids: [marketSecond.id], steps: 2, skill: "intimidation" }] });
 }
 
+// Issue 548: a made-up world seventeen places in, the way an AI DM left it
+// before a place could be part of another (the names are the issue's own):
+// every approach and room its own place, each anchored the way the old
+// placement put it (reproduced below, 4 to 7 tiles from the first of its
+// routes already drawn, then the first free tile in ring order), and the
+// routes a web between them, then upgraded the way an old database is (its
+// places filed once by name). One table per viewport: the region-map
+// scenario files places on it.
+const REGION_TITLE = "Region Table";
+const REGION_PLACES = [
+  ["Thornhollow Village Hall", ["Thornhollow Fair"]],
+  ["Thornhollow Fair", ["Thornhollow Village Hall", "Thornhollow Village Hall Approach", "Thornhollow Smithy", "Thornhollow Road"]],
+  ["Thornhollow Village Hall Approach", ["Thornhollow Village Hall", "Thornhollow Fair"]],
+  ["Thornhollow Smithy", ["Thornhollow Fair", "Thornhollow Road"]],
+  ["Thornhollow Road", ["Thornhollow Fair", "Thornhollow Smithy", "Duskleaf Road", "Duskleaf Shrine"]],
+  ["Duskleaf Road", ["Thornhollow Road", "Duskleaf Shrine"]],
+  ["Duskleaf Shrine", ["Duskleaf Road", "Duskleaf Shrine Root Cellar", "Briarwatch Provisioning Road", "Thornhollow Road"]],
+  ["Duskleaf Shrine Root Cellar", ["Duskleaf Shrine"]],
+  ["Briarwatch Provisioning Road", ["Duskleaf Shrine", "Briarwatch Tower", "Hollowroot Survey Trail"]],
+  ["Briarwatch Tower", ["Briarwatch Provisioning Road", "Hollowroot Vault Woodland Approach"]],
+  ["Hollowroot Survey Trail", ["Briarwatch Provisioning Road", "Second Hollowroot Waystone Woodland Flank", "Hollowroot Vault Woodland Approach"]],
+  ["Second Hollowroot Waystone Woodland Flank", ["Hollowroot Survey Trail", "Second Hollowroot Waystone Bend"]],
+  ["Second Hollowroot Waystone Bend", ["Second Hollowroot Waystone Woodland Flank", "Third Hollowroot Waystone Approach", "First Hollowroot Waystone Approach"]],
+  ["Third Hollowroot Waystone Approach", ["Second Hollowroot Waystone Bend"]],
+  ["First Hollowroot Waystone Approach", ["Second Hollowroot Waystone Bend", "Hollowroot Vault Woodland Approach"]],
+  ["Hollowroot Vault Woodland Approach", ["First Hollowroot Waystone Approach", "Hollowroot Vault Entrance Passage", "Briarwatch Tower", "Hollowroot Survey Trail"]],
+  ["Hollowroot Vault Entrance Passage", ["Hollowroot Vault Woodland Approach"]],
+];
+const regionTables = {};
+{
+  const { upsertCurrentLocation, listLocations } = await import("../../src/lib/db/locations.ts");
+  const { regenerateOverworld } = await import("../../src/lib/db/overworld.ts");
+  const { fnv1a, mulberry32, tileAt } = await import("../../src/lib/overworld/logic.ts");
+  const { textKey } = await import("../../src/lib/language/text-logic.ts");
+  const { fileSubAreasByName } = await import("../../src/lib/db/place-parents-backfill.ts");
+  const oldPlacement = (terrain, width, height, existing, connected, name) => {
+    const rng = mulberry32(fnv1a(textKey(name)));
+    let start;
+    if (connected) {
+      const angle = rng() * Math.PI * 2;
+      const distance = 4 + rng() * 3;
+      start = { x: Math.round(connected.x + Math.cos(angle) * distance), y: Math.round(connected.y + Math.sin(angle) * distance) };
+    } else if (existing.length) {
+      const anchor = existing[existing.length - 1];
+      const angle = rng() * Math.PI * 2;
+      start = { x: Math.round(anchor.x + Math.cos(angle) * 6), y: Math.round(anchor.y + Math.sin(angle) * 6) };
+    } else {
+      start = { x: Math.floor(width / 2), y: Math.floor(height / 2) };
+    }
+    const clamp = (point) => ({ x: Math.min(width - 3, Math.max(2, point.x)), y: Math.min(height - 3, Math.max(2, point.y)) });
+    const usable = (point) =>
+      !["w", "m"].includes(tileAt(terrain, width, point.x, point.y)) &&
+      !existing.some((anchor) => Math.abs(anchor.x - point.x) <= 1 && Math.abs(anchor.y - point.y) <= 1);
+    if (usable(clamp(start))) return clamp(start);
+    for (let radius = 1; radius < Math.max(width, height); radius += 1) {
+      for (let dy = -radius; dy <= radius; dy += 1) {
+        for (let dx = -radius; dx <= radius; dx += 1) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) === radius && usable(clamp({ x: start.x + dx, y: start.y + dy }))) {
+            return clamp({ x: start.x + dx, y: start.y + dy });
+          }
+        }
+      }
+    }
+    return clamp(start);
+  };
+  for (const viewport of ["desktop", "phone"]) {
+    const table = campaigns.createCampaign(world.owner.id, {
+      title: `${REGION_TITLE} (${viewport})`,
+      description: "Seventeen places of a made-up world.",
+      theme: "high-fantasy",
+      maxPlayers: 4,
+      startingLevel: 3,
+      difficulty: "normal",
+      gameSettings: { ttsEnabled: false },
+    });
+    campaigns.setCampaignStatus(table.id, "active");
+    sheets.createSheet(table.id, world.owner.id, 3, heroInput({ name: "Rook Vale", class: "ranger", level: 3 }));
+    for (const [name, connections] of REGION_PLACES) {
+      upsertCurrentLocation({ campaignId: table.id, name, layoutDescription: `${name}, as the party found it.`, connections });
+    }
+    const map = regenerateOverworld(table.id, { seed: 548 });
+    const byName = new Map(listLocations(table.id).map((place) => [textKey(place.name), place]));
+    const anchors = {};
+    for (const [name, connections] of REGION_PLACES) {
+      const connected = connections.map((other) => anchors[byName.get(textKey(other))?.id]).find(Boolean) ?? null;
+      anchors[byName.get(textKey(name)).id] = oldPlacement(map.terrain, map.width, map.height, Object.values(anchors), connected, name);
+    }
+    getDatabase().prepare(`UPDATE overworld_maps SET anchors_json = ? WHERE campaign_id = ?`).run(JSON.stringify(anchors), table.id);
+    // The table as an old database brings it: nothing filed, then the
+    // upgrade's one pass by name.
+    getDatabase().prepare(`UPDATE locations SET parent_name = NULL WHERE campaign_id = ?`).run(table.id);
+    fileSubAreasByName(getDatabase(), table.id);
+    regionTables[viewport] = table.id;
+  }
+}
+
 for (const user of [world.owner, player, ...tourAccounts]) {
   setUserPassword(user.id, await hashPassword(PASSWORD), false);
 }
@@ -629,8 +725,13 @@ const directed = {};
       difficulty: "normal",
       gameSettings: { ttsEnabled: false, dmMode: "human" },
     });
+    // Seated in the lobby: a table in play turns a newcomer away, and the
+    // join used to fail here unseen, leaving Ilse's player outside the table.
+    const seated = campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+    if ("error" in seated) {
+      throw new Error(`could not seat the player at the directed table: ${seated.error}`);
+    }
     campaigns.setCampaignStatus(table.id, "active");
-    campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
     sheets.createSheet(table.id, player.id, 3, heroInput({ name: "Ilse Marr", class: "fighter", level: 3 }));
     const started = await invokeEngine(campaigns.getCampaignById(table.id), { kind: "human", userId: world.owner.id }, {
       name: "start_encounter",
@@ -650,6 +751,61 @@ const directed = {};
       maps.moveToken(token.id, x, 6, 0);
     }
     directed[viewport] = { id: table.id, goblin: goblin.id };
+  }
+}
+
+// A person's table where two goblins act before the hero, per viewport
+// (table function audit 2026-10-26, T11 and T09): the goblins win
+// initiative, so the fight opens held for their turns, and the second is
+// kept off the board. The DM hands the turn on from the Enemy turns banner,
+// and corrects the hero's sheet from the console.
+const enemyTurns = {};
+{
+  const { invokeEngine } = await import("../../src/lib/dm/invoke.ts");
+  const { dice, clearDice } = await import("../lib/enforce-world.mjs");
+  const maps = await import("../../src/lib/db/battle-maps.ts");
+  const encounterRows = await import("../../src/lib/db/encounters.ts");
+  for (const viewport of ["desktop", "phone"]) {
+    const table = campaigns.createCampaign(world.owner.id, {
+      title: `Enemy Turn Table (${viewport})`,
+      description: "A table whose goblins act first.",
+      theme: "high-fantasy",
+      maxPlayers: 6,
+      startingLevel: 3,
+      difficulty: "normal",
+      gameSettings: { ttsEnabled: false, dmMode: "human" },
+    });
+    // Seated in the lobby: a table in play turns a newcomer away.
+    const seated = campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+    if ("error" in seated) {
+      throw new Error(`could not seat the player at the enemy turn table: ${seated.error}`);
+    }
+    campaigns.setCampaignStatus(table.id, "active");
+    const hero = sheets.createSheet(table.id, player.id, 3, heroInput({ name: "Wren Hale", class: "fighter", level: 3 }));
+    // The goblins' dice, then the hero's.
+    clearDice();
+    dice(20, 20, 1);
+    const started = await invokeEngine(campaigns.getCampaignById(table.id), { kind: "human", userId: world.owner.id }, {
+      name: "start_encounter",
+      args: { enemies: [{ monster: "goblin", count: 2 }] },
+    });
+    clearDice();
+    if (!started.ok) {
+      throw new Error(`the enemy turn table's fight did not start: ${started.error}`);
+    }
+    const encounter = encounterRows.getActiveEncounter(table.id);
+    if (!encounter.legendary.due?.length) {
+      throw new Error("the enemy turn table's goblins are not due first");
+    }
+    const board = maps.getBattleMapForEncounter(encounter.id);
+    maps.setBattleMapTerrain(board.id, ".".repeat(board.width * board.height));
+    getDatabase().prepare("UPDATE battle_maps SET doors_json = '{}' WHERE id = ?").run(board.id);
+    const [seen, unseen] = encounterRows.listEnemies(encounter.id);
+    for (const [token, x] of maps.listTokens(board.id).map((entry) => [entry, entry.refId === hero.id ? 2 : entry.refId === seen.id ? 6 : 8])) {
+      maps.moveToken(token.id, x, 6, 0);
+    }
+    maps.setTokenHidden(maps.getTokenByRef(board.id, unseen.id).id, true);
+    enemyTurns[viewport] = { id: table.id, hero: hero.id, heroName: hero.name, seen: seen.displayName, unseen: unseen.displayName };
   }
 }
 
@@ -1305,7 +1461,7 @@ const pactTables = { consent: {}, offer: {}, secret: {}, reveal: {} };
 // and the confirm sheet's owed picks. Level 4, so a level 1 fighter owes its
 // subclass and an improvement there.
 const { createWorkshop } = await import("../../src/lib/db/workshops.ts");
-const { recordOrigin } = await import("../../src/lib/db/content-origins.ts");
+const { linkWorkshop } = await import("../../src/lib/db/campaign-workshops.ts");
 const { setPregenOffered } = await import("../../src/lib/db/characters.ts");
 const OFFER_TITLE = "Offer Table";
 const offerTable = campaigns.createCampaign(player.id, {
@@ -1319,7 +1475,7 @@ const offerTable = campaigns.createCampaign(player.id, {
 });
 campaigns.joinByInviteCode(world.owner.id, campaigns.getCampaignById(offerTable.id).inviteCode);
 const offerWorkshop = createWorkshop(player.id, { title: "The Sunken Keep" });
-recordOrigin(offerTable.id, "npcs", "seeded-npc-copy", offerWorkshop.id, "seeded-npc");
+linkWorkshop(offerTable.id, offerWorkshop.id);
 const pregenSheet = (name) => ({
   name,
   race: "human",
@@ -1554,6 +1710,63 @@ for (const viewport of ["desktop", "phone"]) {
   prepReturn[viewport] = table.id;
 }
 
+// Issue 539: a table outside a fight, narration on, with two passages to
+// read aloud one after the other (scenario narration-replay).
+const REPLAY_TITLE = "Replay Table";
+const replayTable = campaigns.createCampaign(world.owner.id, {
+  title: REPLAY_TITLE,
+  description: "Two passages to hear, one after the other.",
+  theme: "high-fantasy",
+  maxPlayers: 4,
+  startingLevel: 3,
+  difficulty: "normal",
+  gameSettings: { ttsEnabled: true },
+});
+campaigns.setCampaignStatus(replayTable.id, "active");
+sheets.createSheet(replayTable.id, world.owner.id, 3, heroInput({ name: "Maren Holt", class: "bard", level: 3 }));
+for (const content of [
+  "Fog lifts off the millpond. A heron stands in the reeds and watches the road.",
+  "Bells ring from the abbey on the hill. The gate below swings open for the carts.",
+]) {
+  messages.insertCampaignMessage({ campaignId: replayTable.id, seq: campaigns.allocateSeq(replayTable.id), authorType: "dm", speech: [], content });
+}
+
+// Audit 2026-10-26: a lobby with voice and transcription on, the player
+// seated beside the lead, for the microphone checks (scenario voice-mic).
+const VOICE_TITLE = "Voice Table";
+const voiceTable = campaigns.createCampaign(world.owner.id, {
+  title: VOICE_TITLE,
+  description: "A table that talks before it plays.",
+  theme: "high-fantasy",
+  maxPlayers: 4,
+  startingLevel: 1,
+  difficulty: "normal",
+  gameSettings: { ttsEnabled: false, voice: { enabled: true, transcribe: true } },
+});
+campaigns.joinByInviteCode(player.id, voiceTable.inviteCode);
+
+// Audit 2026-10-26 K01: a quiet table whose music, takes and stings are
+// heard one after another (scenario ambience-takes).
+const SOUND_TITLE = "Sound Table";
+const soundTable = campaigns.createCampaign(world.owner.id, {
+  title: SOUND_TITLE,
+  description: "Music that changes with the scene.",
+  theme: "high-fantasy",
+  maxPlayers: 4,
+  startingLevel: 3,
+  difficulty: "normal",
+  gameSettings: { ttsEnabled: false },
+});
+campaigns.setCampaignStatus(soundTable.id, "active");
+sheets.createSheet(soundTable.id, world.owner.id, 3, heroInput({ name: "Ilsa Venn", class: "bard", level: 3 }));
+messages.insertCampaignMessage({
+  campaignId: soundTable.id,
+  seq: campaigns.allocateSeq(soundTable.id),
+  authorType: "dm",
+  speech: [],
+  content: "Rain taps on the shutters. Somewhere below, a fiddler starts a slow tune.",
+});
+
 const ids = {
   qualityTurnIds,
   spellbook,
@@ -1609,8 +1822,12 @@ const ids = {
   stopTables,
   wardrobe,
   directed,
+  enemyTurns,
   levelTableId: levelTable.id,
   commandTableId: commandTable.id,
+  replayTableId: replayTable.id,
+  voiceTableId: voiceTable.id,
+  soundTableId: soundTable.id,
   courting,
   conscience,
   masked,
@@ -1620,10 +1837,15 @@ const ids = {
   conduct,
   pacts: pactTables,
   pip: pip.id,
+  // Issue 548's made-up world, one table per viewport.
+  regionTables,
   // Every campaign a scenario opens, by id, for the app's home tiles.
   titles: {
     [levelTable.id]: "Level Table",
     [commandTable.id]: COMMAND_TITLE,
+    [replayTable.id]: REPLAY_TITLE,
+    [voiceTable.id]: VOICE_TITLE,
+    [soundTable.id]: SOUND_TITLE,
     ...Object.fromEntries(Object.entries(courting).map(([viewport, table]) => [table.id, `${COURTING_TITLE} (${viewport})`])),
     ...Object.fromEntries(Object.entries(conscience).map(([viewport, table]) => [table.id, `${CONSCIENCE_TITLE} (${viewport})`])),
     ...Object.fromEntries(Object.entries(masked).map(([viewport, table]) => [table.id, `${MASKED_TITLE} (${viewport})`])),
@@ -1638,6 +1860,7 @@ const ids = {
     [lobby.id]: LOBBY_TITLE,
     [quiet.id]: QUIET_TITLE,
     [marketTable.id]: MARKET_TITLE,
+    ...Object.fromEntries(Object.entries(regionTables).map(([viewport, id]) => [id, `${REGION_TITLE} (${viewport})`])),
     [prepared.id]: PREP_TITLE,
     [tourTable.id]: TOUR_TITLE,
     [prepSource.id]: PREP_SOURCE_TITLE,
@@ -1646,6 +1869,7 @@ const ids = {
     ...Object.fromEntries(Object.entries(stopTables).map(([viewport, id]) => [id, `Stop Table (${viewport})`])),
     ...Object.fromEntries(Object.entries(wardrobe).map(([viewport, id]) => [id, `Wardrobe (${viewport})`])),
     ...Object.fromEntries(Object.entries(directed).map(([viewport, table]) => [table.id, `Directed Table (${viewport})`])),
+    ...Object.fromEntries(Object.entries(enemyTurns).map(([viewport, table]) => [table.id, `Enemy Turn Table (${viewport})`])),
     ...Object.fromEntries(Object.entries(dominate).flatMap(([viewport, table]) => [[table.id, `Dominate Table (${viewport})`], [table.heldId, `Held Table (${viewport})`]])),
   },
   systemLine,

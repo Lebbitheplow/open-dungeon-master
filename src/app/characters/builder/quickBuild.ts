@@ -29,6 +29,8 @@ import { expertiseAllowed, expertiseSlotsFor, subclassLevelFor, subclassNamesFor
 import { optionFeatureName } from "@/lib/srd/options";
 import { racialFeatCount } from "@/lib/srd/race-id";
 import { DRACONIC_ANCESTRIES, findDraconicAncestry, repeatedGrants, takesDraconicAncestry } from "@/lib/srd/racial-grants";
+import { racialCantripsOf } from "@/lib/srd/racial-cantrips";
+import { pickedVariant, withSpeciesVariant } from "@/lib/content/species-variants";
 import { checklistSpellsOn, spellLevelOf } from "@/lib/srd/spell-lists";
 import { classRoles, type ClassRole } from "@/lib/srd/class-roles";
 import { spellClassFor } from "@/lib/classes";
@@ -383,13 +385,25 @@ export function fillRound(ctx: FillContext): FillRound {
   if (!ctx.klass || !ctx.race || !ctx.background) {
     return { patch, filled };
   }
-  const race = ctx.race;
+  let race = withSpeciesVariant(ctx.race, fields.racialVariant);
   const background = ctx.background;
   klass = ctx.klass;
 
   const proficient = new Set(derived.proficientSkills);
   const languages = new Set(derived.training.languages.map((language) => textKey(language)));
   const tools = new Set((derived.training.tools ?? []).map((tool) => textKey(tool)));
+
+  // The species' own choice first, the list's first option: the picks below
+  // read the race with it, so none lands on what it already gives.
+  if (race.variants && !pickedVariant(race) && wants("variant")) {
+    const pick = race.variants.options[0];
+    patch.racialVariant = pick.id;
+    note("variant", pick.name, race.variants.label);
+    race = withSpeciesVariant(race, pick.id);
+    pick.skills?.forEach((skill) => proficient.add(skill));
+    pick.languages?.forEach((language) => languages.add(textKey(language)));
+    pick.tools?.forEach((tool) => tools.add(textKey(tool)));
+  }
 
   // The background's own skill pick.
   if (background.skillChoice && wants("backgroundSkills")) {
@@ -450,13 +464,21 @@ export function fillRound(ctx: FillContext): FillRound {
       note("racialTool", pick);
     }
   }
-  if (race.cantripChoice && !fields.racialCantrip && wants("racialCantrip")) {
-    const known = new Set(fields.cantrips.map((name) => textKey(name)));
-    const pick = preferredSpellOrder(checklistSpellsOn(race.cantripChoice.list).filter((spell) => spell.level === 0))
-      .find((spell) => !known.has(textKey(spell.name)));
-    if (pick) {
-      patch.racialCantrip = pick.name;
-      note("racialCantrip", pick.name);
+  // Every cantrip the race offers, each a different spell and none the
+  // class already took.
+  const racialPicked = racialCantripsOf({ cantrips: fields.racialCantrips });
+  if (race.cantripChoice && racialPicked.length < race.cantripChoice.count && wants("racialCantrip")) {
+    const known = new Set([...fields.cantrips, ...racialPicked].map((name) => textKey(name)));
+    const added: string[] = [];
+    for (const spell of preferredSpellOrder(checklistSpellsOn(race.cantripChoice.list).filter((entry) => entry.level === 0))) {
+      if (racialPicked.length + added.length >= race.cantripChoice.count) break;
+      if (known.has(textKey(spell.name))) continue;
+      known.add(textKey(spell.name));
+      added.push(spell.name);
+    }
+    if (added.length) {
+      patch.racialCantrips = [...racialPicked, ...added];
+      note("racialCantrip", added.join(", "));
     }
   }
   if (takesDraconicAncestry(race.id) && !findDraconicAncestry(fields.racialAncestry) && wants("ancestry")) {

@@ -245,7 +245,7 @@ await test("Sleep through aoe_damage rolls one 5d8 pool and puts two 7 hit point
   const { world, sheets: [wizard], enemies: [a, b] } = await table([caster("wizard", "int", ["Sleep"])], 2, { maxHp: 7 });
   world.diceLog();
   world.dice(4, 4, 4, 4, 4);
-  const out = await world.invoke("aoe_damage", { casterId: wizard.id, spell: "Sleep", level: 1, damage: "5d8", saveAbility: "wis", dc: 10, enemyIds: [a.id, b.id] });
+  const out = await world.invoke("aoe_damage", { casterCharacterId: wizard.id, spell: "Sleep", level: 1, damage: "5d8", saveAbility: "wis", dc: 10, enemyIds: [a.id, b.id] });
   const log = world.diceLog();
   world.clearDice();
   assert.equal(out.ok, true, out.error);
@@ -348,7 +348,7 @@ await test("Cure Wounds on an ally 145 feet away is refused and spends nothing",
 await test("a Fireball cannot catch a creature beyond its range and radius, and nothing is spent", async () => {
   const { world, sheets: [wizard], enemies: [goblin] } = await table([caster("wizard", "int", ["Fireball"])]);
   await layMap(world, field(80), { [wizard.id]: { x: 0, y: 2 }, [goblin.id]: { x: 79, y: 2 } });
-  const out = await world.invoke("aoe_damage", { casterId: wizard.id, spell: "Fireball", level: 3, damage: "8d6", saveAbility: "dex", dc: 15, enemyIds: [goblin.id] });
+  const out = await world.invoke("aoe_damage", { casterCharacterId: wizard.id, spell: "Fireball", level: 3, damage: "8d6", saveAbility: "dex", dc: 15, enemyIds: [goblin.id] });
   assert.equal(out.ok, false);
   assert.equal(world.sheet(wizard.id).spellcasting.slots["3"].used, 0);
 });

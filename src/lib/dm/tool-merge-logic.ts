@@ -52,11 +52,69 @@ export function acceptsCall(offers: (name: string) => boolean, name: string): bo
 export type ToolArgs = Record<string, unknown>;
 export type EngineCall = { name: string; args: ToolArgs };
 
+// Arguments renamed where the old name said something other than what the
+// field holds (PR #542), by the tool that takes them: old name, new name.
+// Like a retired tool, an old name is never offered again and is still
+// accepted at every door: a console compiled from older pages, an agent
+// program or a model that learned the old names, and an item offer stored
+// before the rename. The new name wins when both are sent; the old one is
+// dropped either way. The last five were never offered, but their handlers
+// read them until the rename.
+export const RENAMED_ARGS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  aoe_damage: { casterId: "casterCharacterId", ability: "enemyAbility", sculpt: "sparedCharacterIds" },
+  cast_at_player: { ability: "enemyAbility" },
+  move_token: { casterId: "casterCharacterId", tokenName: "token" },
+  set_movement: { tokenName: "token" },
+  party_award: { amount: "xp", delta: "gold", name: "item" },
+  party_stash: { amount: "gold", name: "item" },
+  haggle: { present: "presentCharacterIds" },
+  afflict: { dc: "saveDc" },
+  take_action: { enemyId: "escapingEnemyId" },
+  set_quest: { questId: "quest" },
+  tick_objective: { questId: "quest", objectiveId: "objective" },
+  show_handout: { loreId: "lore" },
+  grant_item: { name: "item" },
+  remove_item: { name: "item" },
+  reveal_item: { name: "item" },
+  use_item: { name: "item" },
+  purchase: { name: "item" },
+  use_resource: { name: "resource" },
+  use_spell_slot: { name: "spell" },
+  learn_spell: { name: "spell" },
+};
+
+const unset = (value: unknown) => value === undefined || value === null || value === "";
+
+// A call's arguments under the names its handler reads. The same object when
+// nothing was renamed, so a caller can tell an untouched call apart.
+export function renamedArgs(name: string, args: ToolArgs): ToolArgs {
+  const old = Object.entries(RENAMED_ARGS[name] ?? {}).filter(([from]) => Object.hasOwn(args, from));
+  // afflict keeps name for a disease or a poison; a madness's was its duration.
+  const madness = name === "afflict" && args.kind === "madness" && unset(args.duration) && typeof args.name === "string" && args.name.trim() !== "";
+  if (!old.length && !madness) {
+    return args;
+  }
+  const out: ToolArgs = { ...args };
+  for (const [from, to] of old) {
+    if (unset(out[to]) && !unset(out[from])) {
+      out[to] = out[from];
+    }
+    delete out[from];
+  }
+  if (madness) {
+    out.duration = args.name;
+    delete out.name;
+  }
+  return out;
+}
+
 // A call to a retired name, as a call to the tool that took its place. Every
 // argument the old tool took keeps its name in the new one, but for three:
 // a sale's priceCp becomes a price in gold, and a pet's damage and a
 // teleport say which they are, since nothing else in their arguments would.
-export function mergedCall(name: string, args: ToolArgs): EngineCall {
+// An argument renamed since (an award's amount, a teleport's tokenName and
+// casterId) is then read under its new name, as for any call.
+function retiredAsMerged(name: string, args: ToolArgs): EngineCall {
   switch (name) {
     case "buy_item":
       return { name: "purchase", args: { ...args, action: "buy" } };
@@ -72,6 +130,30 @@ export function mergedCall(name: string, args: ToolArgs): EngineCall {
     default:
       return { name: offeredAs(name), args };
   }
+}
+
+// A call by any name, offered or retired, with any argument names it has
+// ever had, as a call to the offered tool under the names it reads now.
+export function mergedCall(name: string, args: ToolArgs): EngineCall {
+  const merged = retiredAsMerged(name, args);
+  return { name: merged.name, args: renamedArgs(merged.name, merged.args) };
+}
+
+// The same for a call still in the text the model sent, for what reads a
+// turn's calls after they ran (its waypoints, who it ruled for): a call this
+// does not change keeps its text.
+export function mergedCallText(name: string, rawArguments: string): { name: string; rawArguments: string } {
+  let args: unknown;
+  try {
+    args = JSON.parse(rawArguments || "{}");
+  } catch {
+    return { name, rawArguments };
+  }
+  if (!args || typeof args !== "object" || Array.isArray(args)) {
+    return { name, rawArguments };
+  }
+  const merged = mergedCall(name, args as ToolArgs);
+  return !isRetiredTool(name) && merged.args === args ? { name, rawArguments } : { name: merged.name, rawArguments: JSON.stringify(merged.args) };
 }
 
 const present = (value: unknown) => (typeof value === "string" ? value.trim() !== "" : value !== undefined && value !== null);
@@ -107,7 +189,7 @@ function enemyRounds(args: ToolArgs): number | undefined {
 }
 
 const DAMAGE_KEYS = ["amount", "dice", "type", "reason"] as const;
-const TELEPORT_KEYS = ["teleport", "spell", "casterId", "casterEnemyId", "cause", "rangeFeet"] as const;
+const TELEPORT_KEYS = ["teleport", "spell", "enemyAbility", "casterCharacterId", "casterEnemyId", "cause", "rangeFeet"] as const;
 
 // The handler a call to a merged tool reaches, with the arguments that
 // handler reads, or the reason it reaches none. Any other call, a purchase
@@ -154,14 +236,14 @@ export function engineCall(name: string, args: ToolArgs): EngineCall | ToolError
     case "party_award": {
       // Experience alone is the award_xp it always was, its level-ups
       // reported the same way.
-      const xp = Number(args.amount) || 0;
-      const gold = Number(args.delta) || 0;
-      return xp > 0 && !gold && !present(args.name) ? { name: "award_xp", args: pick(args, ["characterIds", "amount", "reason"]) } : { name, args };
+      const xp = Number(args.xp) || 0;
+      const gold = Number(args.gold) || 0;
+      return xp > 0 && !gold && !present(args.item) ? { name: "award_xp", args: { ...pick(args, ["characterIds", "reason"]), amount: xp } } : { name, args };
     }
     case "move_token": {
-      const teleport = args.teleport === true || present(args.spell) || present(args.casterEnemyId) || args.cause === "hazard";
+      const teleport = args.teleport === true || present(args.spell) || present(args.enemyAbility) || present(args.casterEnemyId) || args.cause === "hazard";
       return teleport
-        ? { name: "teleport_token", args: pick(args, ["tokenName", "x", "y", ...TELEPORT_KEYS.slice(1), "reason"]) }
+        ? { name: "teleport_token", args: pick(args, ["token", "x", "y", ...TELEPORT_KEYS.slice(1), "reason"]) }
         : { name, args: without(args, TELEPORT_KEYS) };
     }
     default:

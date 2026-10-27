@@ -307,7 +307,9 @@ await test("Strictness shifts EVERY named difficulty's DC by two: a moderate che
 // ---- switches nothing reads ----
 
 // Every file under src/lib that an engine could read a rule from, apart from
-// the ones that only store, describe or validate the settings.
+// the ones that only store, describe or validate the settings. Matched on the
+// path inside src/lib: a checkout whose own path held "workshop" skipped
+// every file, and the engines read nothing.
 function engineSources() {
   const root = path.resolve(import.meta.dirname, "../src/lib");
   const skip = /schemas\/|rulesets\/|rules-logic\.ts$|tours\/|help\/|db\/rulesets\.ts$|workshop/;
@@ -317,7 +319,7 @@ function engineSources() {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
         walk(full);
-      } else if (/\.ts$/.test(entry.name) && !skip.test(full)) {
+      } else if (/\.ts$/.test(entry.name) && !skip.test(path.relative(root, full))) {
         out.push(fs.readFileSync(full, "utf8"));
       }
     }

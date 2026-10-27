@@ -1,4 +1,5 @@
 import { isErrorResponse, requireMember } from "@/lib/campaign-api";
+import { refuseDuringBreak } from "@/lib/dm/table-break";
 import { allocateSeq } from "@/lib/db/campaigns";
 import { getPendingRoll, publicPendingRoll, setPendingAdvantage } from "@/lib/db/dm-turns";
 import { insertSheetAudit } from "@/lib/db/sheet-audit";
@@ -22,6 +23,11 @@ export async function POST(
   const context = await requireMember(campaignId);
   if (isErrorResponse(context)) {
     return context;
+  }
+  // Inspiration is spent on a roll the break holds parked.
+  const paused = refuseDuringBreak(campaignId);
+  if (paused) {
+    return paused;
   }
 
   const pending = getPendingRoll(pendingRollId);

@@ -11,9 +11,11 @@ import { draftFromData } from "@/lib/bestiary/monster-draft";
 import { resolveMonster } from "@/lib/bestiary";
 import type { SettingRef } from "@/lib/worlds/preset";
 import { normalizeHomebrewData } from "@/lib/homebrew/gear";
+import { normalizeHomebrewForSave } from "@/lib/homebrew/species-choice-server";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
 import type { WorkshopBundle } from "@/lib/workshop/bundle";
 import { textKey } from "@/lib/language/text-logic";
+import { HOMEBREW_NAME_MAX } from "@/lib/schemas/homebrew";
 
 // A workshop bundle's share of its author's shelf (hand-built monsters, and
 // items, spells and options), both ways (docs/workshop-rulebook-audit-
@@ -223,7 +225,9 @@ export function shelfForBundle(input: {
 
 // ---- in ----
 
-export type ShelfArrival = { copied: number; reused: string[]; renamed: string[] };
+// `refused`: an entry this server's checks refuse (a species whose choice
+// breaks a limit here), named with the reason, since it does not land.
+export type ShelfArrival = { copied: number; reused: string[]; renamed: string[]; refused: string[] };
 
 // The rules an entry carries, the same however its keys were ordered and
 // whether or not it was normalized when saved; where it was copied from is
@@ -248,11 +252,11 @@ export function sameRules(kind: HomebrewEntry["kind"], a: { name: string; data: 
   return comparable(kind, a.name, a.data) === comparable(kind, b.name, b.data);
 }
 
-// A name the importer's shelf does not have yet for this kind. A spell's is
-// held to 60 letters, the most a subclass's or a monster's spell list keeps
-// (src/lib/homebrew/gear.ts, src/lib/bestiary/monster-draft.ts), so the
-// entries that name it still name it whole.
-export function freeName(taken: Set<string>, name: string, bundleName: string, max = 80): string {
+// A name the importer's shelf does not have yet for this kind, held to the
+// letters an entry's name keeps. A subclass's, an item's and a monster's
+// spell lists keep as many (HOMEBREW_NAME_MAX), so the entries that name a
+// renamed spell still name it whole.
+export function freeName(taken: Set<string>, name: string, bundleName: string, max = HOMEBREW_NAME_MAX): string {
   const base = `${name} [${bundleName}]`.slice(0, max);
   let candidate = base;
   for (let attempt = 2; taken.has(textKey(candidate)); attempt += 1) {
@@ -261,15 +265,19 @@ export function freeName(taken: Set<string>, name: string, bundleName: string, m
   return candidate;
 }
 
-const NAME_MAX = (kind: string) => (kind === "spell" ? 60 : 80);
-
 // Kinds land in this order, so an entry that names another lands after it
 // and names it as it is called here: spells before the subclasses, items and
 // monsters that cast them, items before the backgrounds that hand them out,
 // classes before their subclasses.
 const ARRIVAL_ORDER: HomebrewEntry["kind"][] = ["spell", "item", "feat", "race", "background", "hazard", "class", "archetype"];
 
-export type ShelfLanding = ShelfArrival & { entryFor: (kind: string, name: string) => string | null; renames: Map<string, string> };
+export type ShelfLanding = ShelfArrival & {
+  entryFor: (kind: string, name: string) => string | null;
+  renames: Map<string, string>;
+  // The reason an entry the bundle carried did not land, or null when it
+  // did (or the bundle never carried it).
+  refusal: (kind: string, name: string) => string | null;
+};
 
 // The shelf a bundle carries, written onto the importer's own: an entry the
 // importer already keeps with the same rules is reused, one with other rules
@@ -282,6 +290,9 @@ export function writeShelfArrivals(userId: string, workshopId: string, bundle: W
   const bundleName = bundle.manifest.name;
   const reused: string[] = [];
   const renamed: string[] = [];
+  const refused: string[] = [];
+  // kind:textKey(name in the bundle) -> why this server refused it.
+  const refusals = new Map<string, string>();
   let copied = 0;
   // kind:textKey(name in the bundle) -> the name it has here.
   const renames = new Map<string, string>();
@@ -299,8 +310,13 @@ export function writeShelfArrivals(userId: string, workshopId: string, bundle: W
     const parentId = arrival.kind === "archetype" && parent.startsWith(`${PORTABLE_REF}class:`) ? ids.get(`class:${textKey(parent.slice(`${PORTABLE_REF}class:`.length))}`) : undefined;
     const withParent = parentId ? { ...arrival.data, classSlug: workshopClassId(parentId) } : arrival.data;
     const entry = { ...arrival, data: renameHomebrewDataRefs(arrival.kind, withParent, asHere).data };
-    const normalized = normalizeHomebrewData(entry.kind, entry.data, entry.name);
-    if ("error" in normalized) continue;
+    const normalized = normalizeHomebrewForSave(entry.kind, entry.data, entry.name);
+    if ("error" in normalized) {
+      // Said, not dropped in silence: the importer learns what to fix.
+      refused.push(`${label(entry.kind, entry.name)} did not come: ${normalized.error}`);
+      refusals.set(`${entry.kind}:${textKey(entry.name)}`, normalized.error);
+      continue;
+    }
     const key = `${entry.kind}:${textKey(entry.name)}`;
     const held = byKey.get(key);
     if (held && comparable(entry.kind, held.name, held.data) === comparable(entry.kind, entry.name, normalized.data)) {
@@ -309,7 +325,7 @@ export function writeShelfArrivals(userId: string, workshopId: string, bundle: W
       continue;
     }
     const taken = names.get(entry.kind) ?? new Set<string>();
-    const name = held ? freeName(taken, entry.name, bundleName, NAME_MAX(entry.kind)) : entry.name;
+    const name = held ? freeName(taken, entry.name, bundleName) : entry.name;
     if (held) {
       renames.set(key, name);
       renamed.push(`${label(entry.kind, entry.name)} is "${name}" here: your own ${entry.name} has other rules.`);
@@ -353,12 +369,31 @@ export function writeShelfArrivals(userId: string, workshopId: string, bundle: W
     copied,
     reused,
     renamed,
+    refused,
     renames,
     // An entry the bundle did not carry (its homebrew left unticked) is the
     // importer's own of that kind and name, when they keep one, rather than
-    // a reference nothing on this server can read.
-    entryFor: (kind, name) => ids.get(`${kind}:${textKey(name)}`) ?? byKey.get(`${kind}:${textKey(name)}`)?.id ?? null,
+    // a reference nothing on this server can read. One it carried and this
+    // server refused is no one's here: the importer's own of that name has
+    // other rules.
+    entryFor: (kind, name) => {
+      const key = `${kind}:${textKey(name)}`;
+      return refusals.has(key) ? null : (ids.get(key) ?? byKey.get(key)?.id ?? null);
+    },
+    refusal: (kind, name) => refusals.get(`${kind}:${textKey(name)}`) ?? null,
   };
+}
+
+// Why a pregen does not land: the species its sheet names by portable ref
+// ("homebrew:@race:Scalekin") was carried by the bundle and refused here, so
+// the pregen could not be seated. Null when it may land.
+export function pregenRefusal(name: string, sheet: CreateSheetInput, landing: Pick<ShelfLanding, "refusal">): string | null {
+  const prefix = `${PORTABLE_REF}race:`;
+  if (typeof sheet.race !== "string" || !sheet.race.startsWith(prefix)) {
+    return null;
+  }
+  const species = sheet.race.slice(prefix.length);
+  return landing.refusal("race", species) ? `pregen ${name} did not come: its species, ${species}, was refused here.` : null;
 }
 
 // A pregen's sheet as it lands: its portable refs back to this server's ids,

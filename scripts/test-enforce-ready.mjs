@@ -102,14 +102,14 @@ await test("A readied move releases off turn through move_token: the reaction, t
   assert.equal((await act(fighter, "ready", { trigger: "when it comes next to me", readied: "move" })).ok, true);
   assert.equal(kit.endTurn(fighter.userId), true);
   assert.equal(kit.current().characterId, ally.id);
-  const walk = await world.invoke("move_token", { tokenName: name(fighter), x: 5, y: 1 });
+  const walk = await world.invoke("move_token", { token: name(fighter), x: 5, y: 1 });
   assert.equal(walk.ok, true, walk.error);
   assert.deepEqual(at(fighter.id), [5, 1], "thirty feet, the character's full speed");
   assert.equal(kit.token(fighter.id).movedThisRound, 4, "their own turn's movement is as it was");
   assert.equal(walk.result.released, true);
   assert.ok(reacted(fighter));
   assert.ok(!held(fighter));
-  const again = await world.invoke("move_token", { tokenName: name(fighter), x: 5, y: 2 });
+  const again = await world.invoke("move_token", { token: name(fighter), x: 5, y: 2 });
   assert.equal(again.ok, false, "a second move: nothing readied, not their turn");
   assert.deepEqual(at(fighter.id), [5, 1]);
 });
@@ -191,7 +191,7 @@ await test("While a character holds a readied action, an enemy out of reach does
   assert.deepEqual(at(enemy.id), [5, 9], "it did not walk");
   assert.equal(world.sheet(fighter.id).currentHp, 30, "and did not swing");
   // The DM walks it in; the trigger has come, and the readied attack answers it.
-  const walk = await world.invoke("move_token", { tokenName: enemy.displayName, x: 5, y: 6 });
+  const walk = await world.invoke("move_token", { token: enemy.displayName, x: 5, y: 6 });
   assert.equal(walk.ok, true, walk.error);
   assert.deepEqual(at(enemy.id), [5, 6]);
   const swing = await kit.swing(fighter.id, enemy.id, [15, 4]);

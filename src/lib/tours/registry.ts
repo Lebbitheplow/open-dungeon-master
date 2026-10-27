@@ -45,6 +45,10 @@ const REVISED: Readonly<Record<string, number>> = {
   // The Party tool's AI-drafted pregens: Draft pregens, and that drafts wait
   // unoffered until the DM ticks them.
   "workshop-party": 2,
+  // The Lore tool's Market: its shops, which nothing pointed at (audit WA-10).
+  "workshop-lore": 2,
+  // Encounters: a prepared fight's button is Test fight now (issue 553).
+  "workshop-encounters": 2,
 };
 
 export function tourVersion(tourId: string): number {

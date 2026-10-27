@@ -38,14 +38,14 @@ await test("A wizard's two Signature Spells are each cast once at 3rd level with
   const { world, sheets: [wizard], enemies: [goblin] } = await table([caster("wizard", "int", ["Fireball", "Counterspell"], [], 20)]);
   grant(world, wizard.id, "Signature Spells: Fireball, Counterspell");
   world.dice(...new Array(8).fill(1), 1);
-  const first = await world.invoke("aoe_damage", { casterId: wizard.id, spell: "Fireball", enemyIds: [goblin.id], saveAbility: "dex", dc: 15 });
+  const first = await world.invoke("aoe_damage", { casterCharacterId: wizard.id, spell: "Fireball", enemyIds: [goblin.id], saveAbility: "dex", dc: 15 });
   world.clearDice();
   assert.equal(first.ok, true, first.error);
   assert.equal(world.sheet(wizard.id).spellcasting.slots["3"].used, 0);
   const { freshTurn } = await import("./lib/enforce-spells.mjs");
   await freshTurn(world);
   world.dice(...new Array(8).fill(1), 1);
-  await world.invoke("aoe_damage", { casterId: wizard.id, spell: "Fireball", enemyIds: [goblin.id], saveAbility: "dex", dc: 15 });
+  await world.invoke("aoe_damage", { casterCharacterId: wizard.id, spell: "Fireball", enemyIds: [goblin.id], saveAbility: "dex", dc: 15 });
   world.clearDice();
   assert.equal(world.sheet(wizard.id).spellcasting.slots["3"].used, 1);
 });
@@ -55,7 +55,7 @@ await test("An evoker's Sculpt Spells lets allies caught in the wizard's evocati
   grant(world, wizard.id, "Sculpt Spells");
   const before = world.sheet(fighter.id).currentHp;
   world.dice(...new Array(8).fill(3), 1);
-  const out = await world.invoke("aoe_damage", { casterId: wizard.id, spell: "Fireball", enemyIds: [goblin.id], characterIds: [fighter.id], saveAbility: "dex", dc: 15, level: 3 });
+  const out = await world.invoke("aoe_damage", { casterCharacterId: wizard.id, spell: "Fireball", enemyIds: [goblin.id], characterIds: [fighter.id], saveAbility: "dex", dc: 15, level: 3 });
   world.clearDice();
   assert.equal(out.ok, true, out.error);
   assert.equal(hurt(world, goblin.id), 24);
@@ -66,7 +66,7 @@ await test("Overchannel deals a 1st to 5th level evocation's maximum damage; a s
   const { world, sheets: [wizard], enemies: [goblin] } = await table([caster("wizard", "int", ["Fireball"], [], 14)]);
   grant(world, wizard.id, "Overchannel");
   world.dice(1);
-  const out = await world.invoke("aoe_damage", { casterId: wizard.id, spell: "Fireball", enemyIds: [goblin.id], saveAbility: "dex", dc: 15, level: 3, overchannel: true });
+  const out = await world.invoke("aoe_damage", { casterCharacterId: wizard.id, spell: "Fireball", enemyIds: [goblin.id], saveAbility: "dex", dc: 15, level: 3, overchannel: true });
   world.clearDice();
   assert.equal(out.ok, true, out.error);
   assert.equal(hurt(world, goblin.id), 48);
@@ -74,7 +74,7 @@ await test("Overchannel deals a 1st to 5th level evocation's maximum damage; a s
   await freshTurn(world);
   const hp = world.sheet(wizard.id).currentHp;
   world.dice(1, ...new Array(6).fill(1));
-  await world.invoke("aoe_damage", { casterId: wizard.id, spell: "Fireball", enemyIds: [goblin.id], saveAbility: "dex", dc: 15, level: 3, overchannel: true });
+  await world.invoke("aoe_damage", { casterCharacterId: wizard.id, spell: "Fireball", enemyIds: [goblin.id], saveAbility: "dex", dc: 15, level: 3, overchannel: true });
   world.clearDice();
   assert.equal(hp - world.sheet(wizard.id).currentHp, 6);
 });

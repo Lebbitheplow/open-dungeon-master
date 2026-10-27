@@ -234,7 +234,7 @@ export const SYSTEM_TOURS: Record<string, TourStep[]> = {
     {
       id: "list",
       title: "Prepared fights",
-      body: "Each card carries its difficulty against the stand-in party and the map it opens on. Deploy puts it on a running table in one press.",
+      body: "Each card carries its difficulty against the stand-in party and the map it opens on. Test fight plays it on a table only you can see, with the stand-ins or characters you pick.",
       anchors: ["encounters-list"],
     },
     {
@@ -414,6 +414,12 @@ export const SYSTEM_TOURS: Record<string, TourStep[]> = {
       anchors: ["lore-save"],
       prepare: "open-lore-editor",
       lazy: true,
+    },
+    {
+      id: "market",
+      title: "Shops",
+      body: "Below the entries is the Market. Open a shop, say where it stands and who keeps it, and stock its shelf from the content pack or line by line. A campaign that brings this workshop in gets the shops with their shelves.",
+      anchors: ["market-open"],
     },
   ]),
   tables: tool([

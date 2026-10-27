@@ -88,6 +88,8 @@ export const LEGAL_WIZARD = {
   },
   equipment: [{ name: "Quarterstaff", qty: 1 }],
   features: [],
+  // The high elf's wizard cantrip, on top of the class's three.
+  racialChoices: { asi: [], skills: [], cantrips: ["Prestidigitation"], tool: "" },
   spellcasting: {
     ability: "int",
     slots: { 1: { max: 2, used: 0 } },

@@ -126,7 +126,8 @@ export function CommandPalette({
         aria-label={`${title}: open the command palette`}
         aria-keyshortcuts="/ Control+K Meta+K"
         title="Press / or Ctrl K"
-        className={cn("kbd-chip shrink-0", className)}
+        // A finger gets 40 px on a phone (audit WA-08).
+        className={cn("kbd-chip shrink-0 pointer-coarse:min-h-10", className)}
       >
         <span className="kbd-key" aria-hidden="true">/</span>
         {chipLabel}

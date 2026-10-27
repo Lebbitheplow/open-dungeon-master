@@ -73,7 +73,7 @@ const setUp = [
     state.setCantrips(["Fire Bolt", "Light", "Mage Hand"]);
     state.setSpells(["Magic Missile", "Shield", "Misty Step"]);
     state.setBookPrepared(["Magic Missile", "Misty Step"]);
-    state.setRacialCantrip("Prestidigitation");
+    state.setRacialCantrips(["Prestidigitation"]);
   },
   null,
 ];
@@ -106,11 +106,11 @@ test("Put it back returns the class and every pick that hung off it", () => {
 
 test("Put it back returns the race and the race's own picks", () => {
   const state = runBuilder([...setUp, (s) => s.changeRace("hill_dwarf"), null]);
-  assert.equal(state.racialCantrip, "");
+  assert.deepEqual(state.racialCantrips, []);
   assert.equal(state.undo?.because, "race");
   const back = runBuilder([...setUp, (s) => s.changeRace("hill_dwarf"), null, (s) => s.putBack(), null]);
   assert.equal(back.raceId, "high_elf");
-  assert.equal(back.racialCantrip, "Prestidigitation");
+  assert.deepEqual(back.racialCantrips, ["Prestidigitation"]);
   assert.deepEqual(back.spells, ["Magic Missile", "Shield", "Misty Step"]);
 });
 

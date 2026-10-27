@@ -269,7 +269,7 @@ await test("Counterspell is taught as called before the enemy's spell resolves, 
   assert.match(rule, /Counterspell is the exception: it is called BEFORE you resolve the enemy's spell/);
   assert.match(rule, /do not call cast_at_player or aoe_damage for it/);
   assert.match(rule, /Deflect Missiles with the missile caught throws it back when you pass targetEnemyId/);
-  assert.match(rule, /take_action escape with its enemyId and no characterId/);
+  assert.match(rule, /take_action escape with its escapingEnemyId and no characterId/);
 });
 
 await test("The prompt says a grapple or shove replaces one attack, and a character attacks off their turn only as an opportunity attack or a readied action.", () => {
@@ -309,11 +309,11 @@ await test("A dead character comes back only through a revival spell with its wi
   assert.match(text, /revival spell cast with heal \(spell and casterId: Revivify within a minute of the death, Raise Dead within ten days, Resurrection within a century, True Resurrection within two hundred years/);
 });
 
-await test("The spell rules match the spell engine: one aoe_damage with casterId, no slot for a concentration spell's later turns, the buff list, set_condition refusing spell effects, and a break ending only that casting.", () => {
+await test("The spell rules match the spell engine: one aoe_damage with casterCharacterId, no slot for a concentration spell's later turns, the buff list, set_condition refusing spell effects, and a break ending only that casting.", () => {
   const text = systemText();
-  assert.match(text, /aoe_damage \(with spell and the caster's casterId\)/);
+  assert.match(text, /aoe_damage \(with spell and the caster's casterCharacterId\)/);
   assert.match(text, /An area spell \(Fireball, Entangle, Hypnotic Pattern, Slow, Sleep\) is ONE aoe_damage call/);
-  assert.match(text, /refuses a spell with neither casterId nor casterEnemyId/);
+  assert.match(text, /refuses a spell with neither casterCharacterId nor casterEnemyId/);
   assert.match(text, /later turns \([^)]*\) are the same tool again, and the server spends no slot for them/);
   for (const buff of ["Spirit Guardians", "Aid", "Heroism", "Death Ward", "Magic Weapon", "Beacon of Hope", "Mirror Image", "Sanctuary"]) {
     assert.ok(text.includes(buff), `${buff} missing from the cast_buff list`);
@@ -375,14 +375,14 @@ await test("The monster rules match the monster engine: apply_damage on an enemy
   }
   assert.match(text, /an enemy that falls takes it with fallFeet instead of an amount/);
   assert.ok(offeredTool("apply_damage").parameters.properties.fallFeet, "apply_damage takes no fallFeet");
-  assert.match(text, /Pass casterEnemyId with the ability or spell by the name its block uses/);
+  assert.match(text, /Pass casterEnemyId with enemyAbility or spell by the name its block uses/);
   assert.match(text, /a Recharge ability is refused until it recharges/);
   assert.match(text, /on a hit it also resolves the rider the attack prints/);
   assert.match(text, /For an ambush pass ambush with the side lying in wait/);
   assert.ok(offeredTool("start_encounter").parameters.properties.ambush, "start_encounter takes no ambush");
   assert.match(text, /pass disengage when an enemy Disengages before it walks/);
   assert.ok(offeredTool("move_token").parameters.properties.disengage, "move_token takes no disengage");
-  assert.match(text, /A teleport \(Misty Step, a portal\) is move_token with teleport true and spell and casterId/);
+  assert.match(text, /A teleport \(Misty Step, a portal\) is move_token with teleport true and spell and casterCharacterId/);
   assert.ok(offeredTool("move_token").parameters.properties.teleport, "move_token takes no teleport");
   assert.match(text, /take the turns of the enemies its result lists as enemiesToAct/);
   assert.match(text, /An enemy acts only on its own turn: off it, it only reacts \(opportunity attacks are automatic\) or takes a legendary action/);

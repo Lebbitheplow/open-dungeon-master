@@ -119,7 +119,7 @@ await test("A party member's opportunity attack on a turncoat walking away leave
   kit.place(turncoat.id, 5, 6);
   kit.giveTurn(turncoat.id);
   world.dice(15, 4);
-  const walked = await world.invoke("move_token", { tokenName: turncoat.id, x: 5, y: 9 });
+  const walked = await world.invoke("move_token", { token: turncoat.id, x: 5, y: 9 });
   world.clearDice();
   assert.equal(walked.ok, true, walked.error);
   const record = freshLastHit(world.campaignId, turncoat.id);

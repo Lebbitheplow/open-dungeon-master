@@ -1,6 +1,7 @@
 import { healerKitUse } from "@/lib/dm/stabilize";
 import { conductGate } from "@/lib/dm/party-conduct";
 import { shadowExperience } from "@/lib/db/companion-departures";
+import { ALIGNMENT_CODES } from "@/lib/dm/companion-values-logic";
 import { subclassExtrasForTable } from "@/lib/db/subclass-extras";
 import { foldFieldValue } from "@/lib/dm/update-sheet-args";
 import { aiSheetFieldRefusal } from "@/lib/dm/update-sheet-ai";
@@ -147,7 +148,7 @@ const characterProperty = {
 const ITEM_SRD_NAME_PROPERTY = {
   type: "string",
   description:
-    "English SRD or pack name ('Potion of Healing') when name is the table's own; omit for invented loot. E.g. 'Longsword' for name 'Spada lunga': the server reads what it does from that item. A magic weapon or armor built on a chosen base is named with it as the SRD writes it ('Flame Tongue Scimitar', 'Vicious Rapier', 'Mithral Half Plate', 'Chain Mail of Fire Resistance'). Also omit when name already is that English name, and while it is unidentified.",
+    "English SRD or pack name ('Potion of Healing') when item is the table's own; omit for invented loot. E.g. 'Longsword' for item 'Spada lunga': the server reads what it does from that item. A magic weapon or armor built on a chosen base is named with it as the SRD writes it ('Flame Tongue Scimitar', 'Vicious Rapier', 'Mithral Half Plate', 'Chain Mail of Fire Resistance'). Also omit when item already is that English name, and while it is unidentified.",
 };
 
 const ITEM_TAGS_PROPERTY = {
@@ -171,7 +172,7 @@ const ITEM_WORTH_PROPERTY = {
   minimum: 0.01,
   maximum: 100000,
   description:
-    "Gold pieces one is worth, for a thing no SRD or pack row prices: a gem, a trade good, invented loot. A gem is 10 to 5,000 gp, an art object 25 to 7,500 gp. The server prices its sale by it (full for treasure, half for anything else) and a spell's costly material by it. Write the name without its worth. Omit for an SRD item, and while it is unidentified.",
+    "Gold pieces one is worth, for a thing no SRD or pack row prices: a gem, a trade good, invented loot. A gem is 10 to 5,000 gp, an art object 25 to 7,500 gp. The server prices its sale by it (full for treasure, half for anything else) and a spell's costly material by it. Write item without its worth. Omit for an SRD item, and while it is unidentified.",
 };
 
 function tool(name: string, description: string, extra: Record<string, unknown>, required: string[]): ToolDef {
@@ -192,7 +193,7 @@ function tool(name: string, description: string, extra: Record<string, unknown>,
 
 export const mutationTools: ToolDef[] = [
   applyDamageTool,
-  tool("heal", "Restore a character's HP, capped at their max: amount or dice for plain healing, or spell, casterId and level for a HEALING SPELL. For a spell the server casts it (the caster must have the spell; the slot and the action are spent), rolls the spell's real dice, adds the caster's ability modifier, and shows the dice card.", {
+  tool("heal", "Restore a character's HP, capped at their max, from plain healing or a HEALING SPELL. For a spell the server casts it (the caster must have the spell; the slot and the action are spent), rolls the spell's real dice, adds the caster's ability modifier, and shows the dice card.", {
     amount: { type: "integer", minimum: 1, maximum: 200, description: "Hit points the server rolled this turn, for healing that is not a spell." },
     dice: { type: "string", description: "Dice the server rolls for healing that is not a spell ('2d4+2'). Instead of amount." },
     spell: {
@@ -238,16 +239,16 @@ export const mutationTools: ToolDef[] = [
         additionalProperties: false,
         properties: {
           characterIds: { type: "array", items: { type: "string" }, minItems: 1, description: "Exact characterIds from GAME STATE." },
-          amount: { type: "integer", minimum: 1, maximum: 20000, description: "XP for EACH character." },
-          delta: {
+          xp: { type: "integer", minimum: 1, maximum: 20000, description: "XP for EACH character." },
+          gold: {
             type: "integer",
             minimum: -100000,
             maximum: 100000,
             description: "Gold in all, split evenly; the remainder to the first.",
           },
-          name: { type: "string", description: "One item, to the first listed (who found it)." },
+          item: { type: "string", description: "One item, to the first listed (who found it)." },
           qty: { type: "integer", minimum: 1, maximum: 99 },
-          reason: { type: "string" },
+          reason: { type: "string", description: "Short in-fiction cause." },
         },
         required: ["characterIds"],
       },
@@ -265,32 +266,32 @@ export const mutationTools: ToolDef[] = [
   }, ["delta"]),
   tool("grant_item", "Give a character an item (loot, purchase, gift), only one the fiction actually put in their hands.", {
     ...waypointProperty,
-    unidentified: { type: "boolean", description: "True when the party cannot tell what it is yet; name is then their description, not the true name. E.g. 'an ornate silver ring'; reveal_item names it later." },
-    name: { type: "string" },
+    unidentified: { type: "boolean", description: "True when the party cannot tell what it is yet; item then describes it, not its true name. E.g. 'an ornate silver ring'; reveal_item names it later." },
+    item: { type: "string", description: "The item's name in the table's words ('Spada lunga')." },
     qty: { type: "integer", minimum: 1, maximum: 99 },
     additional: { type: "boolean", description: "Only when a player just accepted this same item and this is another one from a different source." },
     srdName: ITEM_SRD_NAME_PROPERTY,
     tags: ITEM_TAGS_PROPERTY,
     worth: ITEM_WORTH_PROPERTY,
     spell: ITEM_SPELL_PROPERTY,
-  }, ["name"]),
+  }, ["item"]),
   tool("remove_item", "Take an item from a character for good (stolen, destroyed, burned up). Something dropped, set down or knocked away is NOT removed: use handle_item drop, which leaves it where it fell. For consumables being USED, use use_item; for sales, use purchase.", {
-    name: { type: "string", description: "The item as named on the character's sheet." },
+    item: { type: "string", description: "The item as named on the character's sheet." },
     qty: { type: "integer", minimum: 1, maximum: 99 },
-  }, ["name"]),
+  }, ["item"]),
   tool("reveal_item", "Name an item the party has been carrying without knowing what it is. Only for items granted unidentified; an ordinary item needs no revealing.", {
-    name: { type: "string", description: "The description they have been calling it by, as on the sheet now ('an ornate silver ring')." },
+    item: { type: "string", description: "The description they have been calling it by, as on the sheet now ('an ornate silver ring')." },
     revealedName: { type: "string", description: "What it truly is ('Ring of Protection')." },
     srdName: ITEM_SRD_NAME_PROPERTY,
     tags: ITEM_TAGS_PROPERTY,
     worth: ITEM_WORTH_PROPERTY,
     spell: ITEM_SPELL_PROPERTY,
-  }, ["name"]),
+  }, ["item"]),
   ...resourceTools,
   setConditionTool,
   clearConditionTool,
   tool("use_spell_slot", "Cast a spell that no other tool resolves (a utility spell, a summoning, a ritual): the server spends the slot and tracks concentration. It checks the caster holds the spell and can cast it now, and spends the slot of the spell's level (or the higher one named), its casting time from the turn and any costly material; a new concentration spell ends the previous one and its effects. A spell that leaves an area on the battle map with nobody caught in it yet (Fog Cloud, Darkness, Silence, Spike Growth, Web, Moonbeam, Daylight, a Wall of Stone, Force, Ice, Fire or Thorns, Guardian of Faith) is laid there (atX); the server applies the area from then on (movement, sight, Silence, the saves and damage of creatures entering it or starting or ending a turn in it) and removes it when the concentration or the duration ends.", {
-    level: { type: "integer", minimum: 1, maximum: 9 },
+    level: { type: "integer", minimum: 1, maximum: 9, description: "The slot level it is cast from, for a higher one; omit for the spell's own (a warlock's pact slot)." },
     spell: { type: "string", description: "Exact name of the spell being cast, from the character's spell list." },
     ritual: {
       type: "boolean",
@@ -321,11 +322,11 @@ export const mutationTools: ToolDef[] = [
     "update_sheet",
     "Set who a character is in the story (a feat, a curse's ability score); never a level, HP, XP, AC, gold or conditions: heal, apply_damage, party_award, modify_gold and set_condition move those. A modifier to one of them for a while goes through set_effect. Include ONLY the fields that change.",
     {
-      name: { type: "string" },
-      race: { type: "string" },
-      background: { type: "string" },
-      alignment: { type: "string" },
-      speed: { type: "integer", minimum: 0, maximum: 120 },
+      name: { type: "string", description: "Their new name, when the story gives them one." },
+      race: { type: "string", description: "Their race by its SRD or pack name in English ('Hill Dwarf'), as after a reincarnation." },
+      background: { type: "string", description: "Their background by its SRD or pack name in English ('Acolyte')." },
+      alignment: { type: "string", description: `One of ${ALIGNMENT_CODES.join(", ")}.` },
+      speed: { type: "integer", minimum: 0, maximum: 120, description: "Walking speed in feet, for a lasting change (a curse); a passing one is set_effect." },
       abilities: {
         type: "object",
         description: "Full ability block: str, dex, con, int, wis, cha (1-20 each).",
@@ -338,7 +339,11 @@ export const mutationTools: ToolDef[] = [
           cha: { type: "integer" },
         },
       },
-      feats: { type: "array", items: { type: "string" } },
+      feats: {
+        type: "array",
+        items: { type: "string" },
+        description: "FULL replacement feat list, by SRD or pack name in English ('Grappler'). Resend the existing feats plus the new one.",
+      },
       features: {
         type: "array",
         description:
@@ -412,6 +417,9 @@ const argsSchema = z.object({
   // heal: temporary hit points instead of healing.
   temp: z.coerce.boolean().optional(),
   delta: z.coerce.number().int().optional(),
+  // party_award: XP for each character, and gold in all.
+  xp: z.coerce.number().int().optional(),
+  gold: z.coerce.number().int().optional(),
   // modify_gold / purchase in the coins' codes: "340 sp", "2 pp 5 sp".
   // Parsed to copper by src/lib/srd/currency.ts, and it wins over `delta`
   // when both are sent, because it is the more specific of the two.
@@ -587,8 +595,8 @@ export function applyDmMutation(
     // Every part is judged before any part is handed out, so a refused
     // purse does not leave the experience behind it awarded.
     const bounds =
-      goldProblem(args.delta ?? 0, "party_award") ??
-      ((args.name ?? "").trim() ? quantityProblem(args.qty, "party_award") : null);
+      goldProblem(args.gold ?? 0, "party_award") ??
+      ((args.item ?? "").trim() ? quantityProblem(args.qty, "party_award") : null);
     if (bounds) {
       return { result: bounds };
     }
@@ -599,7 +607,7 @@ export function applyDmMutation(
     // What the experience reported (who can level up, who was skipped as
     // dead), passed on: the call is the party's award_xp too.
     let experience: Record<string, unknown> = {};
-    const xp = args.amount ?? 0;
+    const xp = args.xp ?? 0;
     if (xp > 0) {
       const outcome = applyDmMutation(
         campaign,
@@ -618,7 +626,7 @@ export function applyDmMutation(
       experience = reported;
       awarded.push(`${xp} XP each`);
     }
-    const gold = args.delta ?? 0;
+    const gold = args.gold ?? 0;
     if (gold) {
       // The remainder rides on the first share so the party ends up with
       // exactly what the hoard held, not one coin less.
@@ -643,7 +651,7 @@ export function applyDmMutation(
       });
       awarded.push(`${gold} gold split ${targets.length} ways`);
     }
-    const item = (args.name ?? "").trim();
+    const item = (args.item ?? "").trim();
     if (item) {
       // An item cannot be split; it goes to the first character listed,
       // which is the one who found it.
@@ -651,7 +659,7 @@ export function applyDmMutation(
         campaign,
         turnId,
         "grant_item",
-        JSON.stringify({ characterId: targets[0].id, name: item, qty: args.qty ?? 1, reason }),
+        JSON.stringify({ characterId: targets[0].id, item, qty: args.qty ?? 1, reason }),
         sheets,
         sheetsById,
       );
@@ -662,7 +670,7 @@ export function applyDmMutation(
       }
     }
     if (!awarded.length) {
-      return { result: refused.length ? { error: `Nothing was awarded: ${refused.join("; ")}`, retry: true } : { error: "party_award needs XP, gold or an item to hand out.", retry: true } };
+      return { result: refused.length ? { error: `Nothing was awarded: ${refused.join("; ")}`, retry: true } : { error: "party_award needs xp, gold or item to hand out.", retry: true } };
     }
     return { result: { ok: true, awarded: awarded.join("; "), ...(refused.length ? { refused } : {}), ...experience } };
   }
@@ -972,7 +980,7 @@ export function applyDmMutation(
       };
     }
     case "grant_item": {
-      const name = (args.name ?? "").trim().slice(0, 80);
+      const name = (args.item ?? "").trim().slice(0, 80);
       if (!name) {
         return { result: { error: "grant_item needs an item name.", retry: true } };
       }
@@ -1015,7 +1023,7 @@ export function applyDmMutation(
       return { result: { ok: true, granted: name } };
     }
     case "reveal_item": {
-      const name = (args.name ?? "").trim();
+      const name = (args.item ?? "").trim();
       if (!name) {
         return { result: { error: "reveal_item needs the description the sheet carries now.", retry: true } };
       }
@@ -1061,7 +1069,7 @@ export function applyDmMutation(
       return { result: { ok: true, was: math.from, is: math.to } };
     }
     case "remove_item": {
-      const name = (args.name ?? "").trim();
+      const name = (args.item ?? "").trim();
       const badQty = quantityProblem(args.qty, "remove_item");
       if (badQty) {
         return { result: badQty };
@@ -1082,7 +1090,7 @@ export function applyDmMutation(
       if (unasked) {
         return { result: unasked };
       }
-      const itemName = (args.item ?? args.name ?? "").trim();
+      const itemName = (args.item ?? "").trim();
       if (!itemName) {
         return { result: { error: "use_item needs an item name.", retry: true } };
       }
@@ -1154,7 +1162,7 @@ export function applyDmMutation(
       return { result: outcome.result };
     }
     case "purchase": {
-      const itemName = (args.item ?? args.name ?? "").trim();
+      const itemName = (args.item ?? "").trim();
       const action = args.action === "sell" ? "sell" : args.action === "buy" ? "buy" : null;
       if (!itemName || !action) {
         return { result: { error: "purchase needs item and action buy|sell.", retry: true } };
@@ -1213,7 +1221,7 @@ export function applyDmMutation(
       if (unasked) {
         return { result: unasked };
       }
-      const resourceName = (args.resource ?? args.name ?? "").trim();
+      const resourceName = (args.resource ?? "").trim();
       if (!resourceName) {
         return { result: { error: "use_resource needs a resource name.", retry: true } };
       }
@@ -1471,9 +1479,8 @@ export function applyDmMutation(
       const level = args.level ?? 0;
       // A missing spell is tolerated (weak tool calling must not break
       // casting, and Divine Smite burns a slot with no spell): the slot
-      // alone is spent. `name` is the same argument under the word a person
-      // at the console reaches for.
-      const spell = (args.spell ?? args.name ?? "").trim();
+      // alone is spent.
+      const spell = (args.spell ?? "").trim();
       // Combat Wild Shape: while transformed, a slot becomes 1d8 healing per
       // slot level, restoring the beast form's pool. Called as
       // use_spell_slot with spell="Combat Wild Shape".
@@ -1578,9 +1585,8 @@ export function applyDmMutation(
       };
     }
     case "learn_spell": {
-      // `name` is the word a person at the console reaches for, and a spell
-      // named with no action is one being learned.
-      const spell = (args.spell ?? args.name ?? "").trim().slice(0, 80);
+      // A spell named with no action is one being learned.
+      const spell = (args.spell ?? "").trim().slice(0, 80);
       const action = args.action ?? (spell ? "add" : undefined);
       if (!spell || (action !== "add" && action !== "remove")) {
         return { result: { error: "learn_spell needs a spell name and action add|remove.", retry: true } };

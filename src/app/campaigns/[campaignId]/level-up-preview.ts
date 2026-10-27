@@ -16,6 +16,7 @@ import { findClass, findRace } from "@/lib/srd";
 import { applyFeatIncrease } from "@/lib/srd/feat-effects";
 import { expertiseSlotsFor } from "@/lib/srd/features";
 import { freeCantripCount } from "@/lib/srd/free-cantrips";
+import type { RacialCantripChoices } from "@/lib/srd/racial-cantrips";
 import {
   fixedDieValue,
   hpBonusPerLevelFor,
@@ -225,10 +226,14 @@ export function casterPreview(input: {
 // Cantrips in this list that the race gave, which the class count leaves
 // out (src/lib/srd/free-cantrips.ts; the level-up route uses the same).
 export function freeCantripsIn(
-  sheet: Pick<CharacterSheet, "race" | "level"> & { racialChoices?: { cantrip?: string } | null },
+  sheet: Pick<CharacterSheet, "race" | "level"> & { racialChoices?: RacialCantripChoices },
   cantrips: string[],
+  // The species' cantrip count as the server reads it (the level-up route):
+  // a homebrew species is not in the bundled list, and a table's sheet does
+  // not keep the picks. Unknown until the route answers.
+  speciesCount: number | null = null,
 ): number {
-  const racial = findRace(srdRaceId(sheet.race))?.cantripChoice?.count ?? 0;
+  const racial = speciesCount ?? findRace(srdRaceId(sheet.race))?.cantripChoice?.count ?? 0;
   return freeCantripCount(
     {
       race: sheet.race,

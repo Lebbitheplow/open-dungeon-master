@@ -131,7 +131,7 @@ function picksFor(race, background = acolyte, klass = fighter) {
       ? (race.asiChoice.from ?? ["str", "dex", "con", "int", "wis", "cha"]).filter((ability) => !race.asi?.[ability]).slice(0, race.asiChoice.count)
       : [],
     racialTool: race.toolChoice?.from?.[0] ?? "",
-    racialCantrip: race.cantripChoice ? (CANTRIPS[race.cantripChoice.list] ?? "Light") : "",
+    racialCantrips: race.cantripChoice ? [CANTRIPS[race.cantripChoice.list] ?? "Light"] : [],
     racialAncestry: takesDraconicAncestry(race.id) ? "red" : "",
     feats: racialFeatCount(race.id) ? ["Alert"] : [],
   };

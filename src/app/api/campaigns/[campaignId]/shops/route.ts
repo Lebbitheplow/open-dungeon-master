@@ -2,7 +2,7 @@ import { z } from "zod";
 import { hasPrepAuthority, isErrorResponse, requireMember, requirePrepAuthority, steersStory } from "@/lib/campaign-api";
 import { getCurrentLocation, listLocations } from "@/lib/db/locations";
 import { getNpcById, listNpcs } from "@/lib/db/npcs";
-import { insertShop, listShops, listShopsAt, normalizeStock, shopRefProblem, stockLineSchema } from "@/lib/db/shops";
+import { insertShop, listShops, normalizeStock, shopRefProblem, shopStandsAt, stockLineSchema } from "@/lib/db/shops";
 import { askingPriceCp, dealFor, dealInWords, haggleDc, markupFor, SIZE_MARKUP, type Shop } from "@/lib/dm/shop-logic";
 import { getSheetForUser } from "@/lib/db/sheets";
 import { announceShop, stockPool } from "@/lib/dm/shop-tools";
@@ -49,10 +49,16 @@ export async function GET(_request: Request, { params }: { params: Promise<{ cam
   const here = getCurrentLocation(campaignId);
   const dm = steersStory(context);
   const prep = hasPrepAuthority(context);
-  const shops = dm ? listShops(campaignId) : here ? listShopsAt(campaignId, here.id, here.name) : [];
+  const shops = dm ? listShops(campaignId) : listShops(campaignId).filter((shop) => shopStandsAt(shop, here));
   const viewerId = getSheetForUser(campaignId, context.user.id)?.id ?? null;
   return Response.json({
-    shops: shops.map((shop) => shopView(shop, prep, viewerId)),
+    // standsHere: whether the shop is where the party is now, which is where
+    // its counter trades (the trade route asks the same). Only a viewer who
+    // steers the story is shown a shop elsewhere, to prep it, and the shops
+    // the party can reach come first.
+    shops: shops
+      .map((shop) => ({ ...shopView(shop, prep, viewerId), standsHere: shopStandsAt(shop, here) }))
+      .sort((a, b) => Number(b.standsHere) - Number(a.standsHere)),
     here: here ? { id: here.id, name: here.name } : null,
     places: dm ? listLocations(campaignId).map((location) => ({ id: location.id, name: location.name })) : [],
     // Who may keep a shop: the cast, for the prep holder's editor.

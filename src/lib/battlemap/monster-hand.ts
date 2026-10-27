@@ -234,7 +234,7 @@ export function monsterInvoke(
       args: {
         characterId: targetIds[0],
         casterEnemyId: intent.enemyId,
-        ability: ability.name,
+        enemyAbility: ability.name,
         ...numbers,
         ...(ability.damageType ? { damageType: ability.damageType } : {}),
         ...(ability.condition ? { condition: ability.condition } : {}),
@@ -246,7 +246,7 @@ export function monsterInvoke(
     name: "aoe_damage",
     args: {
       casterEnemyId: intent.enemyId,
-      ability: ability.name,
+      enemyAbility: ability.name,
       characterIds: targetIds.filter((id) => !rows.has(id)),
       ...(targetIds.some((id) => rows.has(id)) ? { enemyIds: targetIds.filter((id) => rows.has(id)) } : {}),
       ...numbers,

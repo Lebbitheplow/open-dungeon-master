@@ -247,16 +247,20 @@ export function MapEditor({
     "flex min-h-10 cursor-pointer items-center gap-2 rounded-md px-3 text-sm text-stone-300 outline-none data-[disabled]:cursor-default data-[disabled]:opacity-40 data-[highlighted]:bg-stone-800 data-[highlighted]:text-amber-100";
   const primary = (
     <span className="flex shrink-0 items-center gap-1">
-      <button
-        type="button"
-        disabled={busy || !canDeploy}
-        title={canDeploy ? "Replace the board's ground with this map" : "Nothing is on the table to replace"}
-        onClick={() => void act("deploy")}
-        className="flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg bg-gradient-to-b from-amber-100 via-amber-200 to-amber-400 px-3 text-amber-950 shadow-[0_1px_0_rgba(253,247,231,0.6)_inset,0_2px_8px_rgba(4,2,12,0.5)] disabled:opacity-45 motion-magnet"
-      >
-        <Upload className="size-3.5" />
-        <span className="font-display text-[11px] font-semibold uppercase tracking-[0.12em]">Put it on the table</span>
-      </button>
+      {/* A workshop has no table to put a map on (issue 553): a map is
+          played there by testing a prepared fight drawn on it. */}
+      {state.workshop ? null : (
+        <button
+          type="button"
+          disabled={busy || !canDeploy}
+          title={canDeploy ? "Replace the board's ground with this map" : "Nothing is on the table to replace"}
+          onClick={() => void act("deploy")}
+          className="flex h-9 items-center gap-1.5 whitespace-nowrap rounded-lg bg-gradient-to-b from-amber-100 via-amber-200 to-amber-400 px-3 text-amber-950 shadow-[0_1px_0_rgba(253,247,231,0.6)_inset,0_2px_8px_rgba(4,2,12,0.5)] disabled:opacity-45 motion-magnet"
+        >
+          <Upload className="size-3.5" />
+          <span className="font-display text-[11px] font-semibold uppercase tracking-[0.12em]">Put it on the table</span>
+        </button>
+      )}
       <DropdownMenu.Root>
         <DropdownMenu.Trigger asChild>
           <button type="button" aria-label="More for this map" className="flex size-9 items-center justify-center rounded-lg border border-stone-700 text-stone-300 hover:text-amber-200">

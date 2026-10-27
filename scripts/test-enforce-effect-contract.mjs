@@ -38,7 +38,7 @@ await test("F27: a speed override of 5 is the speed a character and an enemy mov
   assert.equal(pcMoveBudget(world.campaignId, world.encounter(), map, world.sheet(hero.id), token).speed, 5);
   const enemy = world.enemies().find((entry) => entry.id === goblin.id);
   assert.equal(enemySpeedTiles(enemy), 1, "one square, not the printed six");
-  const walk = await world.invoke("move_token", { tokenName: goblin.id, x: 1, y: 0 });
+  const walk = await world.invoke("move_token", { token: goblin.id, x: 1, y: 0 });
   assert.equal(listTokens(map.id).find((entry) => entry.refId === goblin.id).x, 4, walk.error ?? "one square of the walk");
 });
 

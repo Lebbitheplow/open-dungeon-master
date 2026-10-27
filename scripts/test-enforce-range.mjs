@@ -142,7 +142,7 @@ await test("a token named by one letter is no enemy whose name holds that letter
   // gpt-oss-20b sent "A" for Avery and walked Bandit 1, the first name with
   // an "a" in it. The goblin's name holds a "b".
   const enemy = await stage([5, 5], [12, 5]);
-  const out = await world.invoke("move_token", { tokenName: "b", x: 10, y: 5 });
+  const out = await world.invoke("move_token", { token: "b", x: 10, y: 5 });
   assert.equal(out.ok, false);
   assert.match(out.error ?? "", /No combatant on the battle map is called "b"/);
   assert.equal(kit.token(enemy.id).x, 12);

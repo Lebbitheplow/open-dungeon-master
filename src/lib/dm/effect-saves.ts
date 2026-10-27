@@ -1,5 +1,5 @@
 import type { Campaign } from "@/lib/db/campaigns";
-import { deleteEffect, listEffects } from "@/lib/db/active-effects";
+import { deleteEffect, effectsUpdate, listEffects } from "@/lib/db/active-effects";
 import { listEnemies, type Encounter } from "@/lib/db/encounters";
 import { getSheetById } from "@/lib/db/sheets";
 import { publishPersisted } from "@/lib/events";
@@ -58,6 +58,6 @@ export function rollEffectSaves(
     }
   }
   if (lifted) {
-    publishPersisted(campaign.id, "effects_updated", { effects: listEffects(campaign.id) });
+    publishPersisted(campaign.id, "effects_updated", effectsUpdate(campaign.id));
   }
 }

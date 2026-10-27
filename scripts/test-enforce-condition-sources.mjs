@@ -182,7 +182,7 @@ await test("F15: a condition a protection refuses is reported, on both of a mons
     const { world, sheets: [fighter, friend, mage] } = await table([FIGHTER, { ...FIGHTER, name: "Tamsin" }, caster("wizard", "int", ["Hypnotic Pattern"], [], 5)], 1, pattern);
     warded(world, fighter);
     world.dice(1, 1);
-    const own = await world.invoke("aoe_damage", { casterId: mage.id, spell: "Hypnotic Pattern", characterIds: [fighter.id, friend.id], saveAbility: "wis" });
+    const own = await world.invoke("aoe_damage", { casterCharacterId: mage.id, spell: "Hypnotic Pattern", characterIds: [fighter.id, friend.id], saveAbility: "wis" });
     world.clearDice();
     assert.equal(own.ok, true, own.error);
     const rows = JSON.stringify(own.result);

@@ -10,7 +10,7 @@ import { getNpcById, getNpcByName } from "@/lib/db/npcs";
 import { insertRoll } from "@/lib/db/rolls";
 import { insertSheetAudit } from "@/lib/db/sheet-audit";
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
-import { findShopNear, getShop, insertShop, listShops, listShopsAt, updateShop } from "@/lib/db/shops";
+import { findShopNear, getShop, insertShop, listShops, listShopsAt, shopStandsAt, updateShop } from "@/lib/db/shops";
 import { searchItems } from "@/lib/content";
 import { SRD_GEAR, SRD_GOODS } from "@/lib/srd/adventuring-gear";
 import { SRD_ARMOR } from "@/lib/srd/armor";
@@ -21,6 +21,8 @@ import { grantItemMath, removeItemMath } from "@/lib/dm/mutation-math";
 import { resolveRollExpression, resolveSheetRef, type RollArgs, unknownSheetRef } from "@/lib/dm/rolls";
 import { rollExtrasFor, spendRollCarriers } from "@/lib/dm/forced-save";
 import { sheetsAgainstParty } from "@/lib/dm/combat-sides";
+import { canAct } from "@/lib/dm/can-act";
+import { incapacitatedBy } from "@/lib/dm/condition-logic";
 import { turncoatsAtTable } from "@/lib/dm/turncoat";
 import { keepsFullValue, listPriceCp, magicValueOf, soldToShops } from "@/lib/dm/trade-value";
 import { capacityProblem } from "@/lib/dm/load-rules";
@@ -89,7 +91,7 @@ export const shopTools: ToolDef[] = [
       parameters: {
         type: "object",
         properties: {
-          name: { type: "string" },
+          name: { type: "string", description: "The shop's name ('The Gilded Anvil'); one here by that name reopens." },
           kind: { type: "string", enum: ["general", "smith", "apothecary", "outfitter", "curiosities"] },
           size: { type: "string", enum: ["hamlet", "village", "town", "city"], description: "Default: village." },
           keeper: { type: "string", description: "The keeper: an NPC's exact name from GAME STATE. Omit for none." },
@@ -103,14 +105,14 @@ export const shopTools: ToolDef[] = [
     function: {
       name: "haggle",
       description:
-        "A haggling check at a shop: success lowers prices a step, failure leaves them where they were, and failing the DC by 5 or more raises them a step. The server rolls it against the settlement's DC (city 12, town 13, village 15, hamlet 17) with Persuasion, or with skill intimidation (a bad failure raises prices two steps) or deception (a keeper falls for it once: one Deception try per shop). The result and the used try belong to the haggler and the characters in present; anyone else pays the shop's normal price and keeps their own try. One try per character per shop until it restocks. Narrate the outcome the reply gives.",
+        "A haggling check at a shop: success lowers prices a step, and failing the DC by 5 or more raises them a step. The server rolls it against the settlement's DC (city 12, town 13, village 15, hamlet 17) with Persuasion, or with skill intimidation (a bad failure raises prices two steps) or deception (a keeper falls for it once: one Deception try per shop). The result and the used try belong to the haggler and the characters in presentCharacterIds; anyone else pays the shop's normal price and keeps their own try. One try per character per shop until it restocks. Narrate the outcome the reply gives.",
       parameters: {
         type: "object",
         properties: {
           characterId: { type: "string", description: "Exact characterId from GAME STATE." },
           shop: { type: "string", description: "The shop in SHOPS HERE, by name or id." },
           skill: { type: "string", enum: ["persuasion", "intimidation", "deception"] },
-          present: { type: "array", items: { type: "string" }, description: "Others at the counter now, who share the result: exact characterIds from GAME STATE." },
+          presentCharacterIds: { type: "array", items: { type: "string" }, description: "Others at the counter now, who share the result: exact characterIds from GAME STATE." },
         },
         required: ["characterId", "shop"],
       },
@@ -138,7 +140,11 @@ function noShop(campaign: Campaign, ref: string): ToolError {
   return { ...refusal, error: `${refusal.error} A new one opens with open_shop.` };
 }
 
-// By id, or by name at the party's place before anywhere else.
+// By id, or by name at the party's place before anywhere else. Anywhere on
+// purpose: this is the DM's hand (the console and the storyteller), which
+// settles a sale at a shop the party has left, or at one opened before the
+// table had a place. The Market's counter asks where the shop stands itself
+// (shopElsewhere), before anything moves.
 function resolveShop(campaign: Campaign, ref: string): Shop | null {
   const byId = getShop(ref);
   return byId && byId.campaignId === campaign.id ? byId : findShopNear(campaign.id, getCurrentLocation(campaign.id), ref);
@@ -348,7 +354,75 @@ function ledger(campaign: Campaign, sheet: CharacterSheet, kind: string, delta: 
   });
 }
 
-export function handleBuyItem(campaign: Campaign, rawArguments: string): ToolResult {
+// Why a character cannot stand at a counter, or null when they can. The
+// engine's own answer to "can this character do anything at all"
+// (src/lib/dm/can-act.ts), asked outside the turn order since a counter keeps
+// none: not the dead; not anyone at 0 HP, dying or stable, who is
+// unconscious (SRD 5.1, Dropping to 0 Hit Points); not anyone incapacitated,
+// paralyzed, stunned, unconscious or petrified, who can take no action and
+// mostly can neither move nor speak (SRD 5.1, Conditions). And not a
+// companion set against the party (issue 503: turned where it stood, or
+// fielded against it), whose sheet the server keeps while the party decides
+// what becomes of them (src/lib/dm/turncoat.ts). The turn is checked before
+// the hit points, so a turncoat lying at the party's mercy is named as one.
+// It used to stop only the dead and the turned, and only at a haggle: a
+// dead character could still buy and sell (table audit 2026-10-26, T06).
+function awayFromCounter(campaign: Campaign, sheet: CharacterSheet): string | null {
+  const able = canAct({ sheet, encounter: null, kind: "free" });
+  if (!able.ok && able.reason === "dead") {
+    return `${sheet.name} is dead`;
+  }
+  const encounter = getActiveEncounter(campaign.id);
+  const against = encounter ? sheetsAgainstParty(encounter) : turncoatsAtTable(campaign.id).map((other) => other.id);
+  if (against.includes(sheet.id)) {
+    return `${sheet.name} has turned against the party`;
+  }
+  if (able.ok) {
+    return null;
+  }
+  return able.reason === "down" ? `${sheet.name} is at 0 HP` : `${sheet.name} is ${incapacitatedBy(sheet.conditions) ?? "incapacitated"}`;
+}
+
+// Where a trade is asked from. The Market's counter (the trade route) is a
+// character standing at a shop: the shop has to be where the party is now,
+// and the trader able to stand there (table audit 2026-10-26, T06 and T07).
+// The DM's own adjudications (buy_item, sell_item, haggle, a purchase, from
+// the console or the storyteller) send no option: they settle a sale for
+// anyone, at any shop, which is how a fallen friend's goods or an errand to
+// the last town are settled.
+export type TradeAt = { atCounter?: boolean };
+
+// The shop is not where the party stands now, by the rule the Market lists
+// by, so a stale panel or a kept shop id cannot skip the travel there.
+// away marks it for the trade route, which tells the panel.
+function shopElsewhere(campaign: Campaign, shop: Shop, nothing: string): (ToolError & { away: true }) | null {
+  const here = getCurrentLocation(campaign.id);
+  if (shopStandsAt(shop, here)) {
+    return null;
+  }
+  const stands = shop.locationName.trim() ? ` It stands at ${shop.locationName.trim()}.` : "";
+  return {
+    error: here
+      ? `${shop.name} is not at ${here.name}, where the party is now, so its counter is out of reach.${stands} ${nothing}`
+      : `${shop.name} is not where the party is now, so its counter is out of reach.${stands} ${nothing}`,
+    refused: "rules",
+    away: true,
+  };
+}
+
+// Why the Market's counter turns a purchase or a sale away, or null. Asked
+// before the shelf, the purse or the pack is read.
+function counterRefusal(campaign: Campaign, sheet: CharacterSheet, shop: Shop, verb: "buy" | "sell"): ToolError | null {
+  const nothing = "Nothing changed hands.";
+  const elsewhere = shopElsewhere(campaign, shop, nothing);
+  if (elsewhere) {
+    return elsewhere;
+  }
+  const away = awayFromCounter(campaign, sheet);
+  return away ? { error: `${away} and cannot ${verb}. ${nothing}`, refused: "rules" } : null;
+}
+
+export function handleBuyItem(campaign: Campaign, rawArguments: string, at: TradeAt = {}): ToolResult {
   const args = parse(buySchema, rawArguments);
   if (!args) {
     return { error: "Invalid arguments: a purchase at a shop needs characterId, shop and item.", retry: true };
@@ -360,6 +434,11 @@ export function handleBuyItem(campaign: Campaign, rawArguments: string): ToolRes
   const shop = resolveShop(campaign, args.shop);
   if (!shop) {
     return noShop(campaign, args.shop);
+  }
+  // At the Market's counter: before the shelf, the purse or the pack is read.
+  const refused = at.atCounter ? counterRefusal(campaign, sheet, shop, "buy") : null;
+  if (refused) {
+    return refused;
   }
   const line = findStockLine(shop.stock, args.item);
   if (!line) {
@@ -398,7 +477,7 @@ export function handleBuyItem(campaign: Campaign, rawArguments: string): ToolRes
 const MAX_UNPRICED_CP = 10_000_000;
 const sellSchema = buySchema.extend({ priceCp: z.coerce.number().int().min(1).max(MAX_UNPRICED_CP).optional() });
 
-export function handleSellItem(campaign: Campaign, rawArguments: string): ToolResult {
+export function handleSellItem(campaign: Campaign, rawArguments: string, at: TradeAt = {}): ToolResult {
   const args = parse(sellSchema, rawArguments);
   if (!args) {
     return { error: "Invalid arguments: a sale at a shop needs characterId, shop and item, and a price of at most 100,000 gp each when one is given.", retry: true };
@@ -410,6 +489,11 @@ export function handleSellItem(campaign: Campaign, rawArguments: string): ToolRe
   const shop = resolveShop(campaign, args.shop);
   if (!shop) {
     return noShop(campaign, args.shop);
+  }
+  // At the Market's counter: before the shelf, the purse or the pack is read.
+  const refused = at.atCounter ? counterRefusal(campaign, sheet, shop, "sell") : null;
+  if (refused) {
+    return refused;
   }
   if (!shop.buys) {
     return { error: `${shop.name} does not buy.`, refused: "rules" };
@@ -454,23 +538,10 @@ const haggleSchema = z.object({
   characterId: z.string().trim().min(1),
   shop: z.string().trim().min(1),
   skill: z.string().trim().max(40).optional(),
-  present: z.array(z.string().trim().min(1).max(80)).max(12).default([]),
+  presentCharacterIds: z.array(z.string().trim().min(1).max(80)).max(12).default([]),
 });
 
 const SKILL_LABEL = { persuasion: "Persuasion", intimidation: "Intimidation", deception: "Deception" } as const;
-
-// Why a character cannot stand at a counter, or null when they can: the
-// dead, and a companion set against the party (issue 503: turned where it
-// stood, or fielded against it), whose sheet the server keeps while the
-// party decides what becomes of them (src/lib/dm/turncoat.ts).
-function awayFromCounter(campaign: Campaign, sheet: CharacterSheet): string | null {
-  if (sheet.deathSaves?.dead) {
-    return `${sheet.name} is dead`;
-  }
-  const encounter = getActiveEncounter(campaign.id);
-  const against = encounter ? sheetsAgainstParty(encounter) : turncoatsAtTable(campaign.id).map((other) => other.id);
-  return against.includes(sheet.id) ? `${sheet.name} has turned against the party` : null;
-}
 
 // A haggle (Albert's rules, 2026-10-23, after #456): a win lowers the price
 // a step, a failure holds it, a failure by BAD_FAILURE_MARGIN or more raises
@@ -478,10 +549,10 @@ function awayFromCounter(campaign: Campaign, sheet: CharacterSheet): string | nu
 // the haggler and the characters the call names as present at the counter;
 // the party keeps no record of who stands where, so nobody else is assumed
 // there. Anyone else pays the shop's own price and keeps their try.
-export function handleHaggle(campaign: Campaign, rawArguments: string): ToolResult {
+export function handleHaggle(campaign: Campaign, rawArguments: string, at: TradeAt = {}): ToolResult {
   const args = parse(haggleSchema, rawArguments);
   if (!args) {
-    return { error: "Invalid arguments: haggle needs characterId and shop, a skill of persuasion, intimidation or deception, and present as a list of characters.", retry: true };
+    return { error: "Invalid arguments: haggle needs characterId and shop, a skill of persuasion, intimidation or deception, and presentCharacterIds as a list of characters.", retry: true };
   }
   const skill = args.skill ? normalizeHaggleSkill(args.skill) : "persuasion";
   if (!skill) {
@@ -496,10 +567,10 @@ export function handleHaggle(campaign: Campaign, rawArguments: string): ToolResu
     return { error: `${away} and cannot haggle. Nothing was rolled.`, refused: "rules" };
   }
   const company: CharacterSheet[] = [];
-  for (const ref of args.present) {
+  for (const ref of args.presentCharacterIds) {
     const other = resolveSheet(campaign, ref);
     if (!other) {
-      return unknownSheetRef("present", ref, listSheets(campaign.id));
+      return unknownSheetRef("presentCharacterIds", ref, listSheets(campaign.id));
     }
     if (other.id !== sheet.id && !company.some((known) => known.id === other.id)) {
       company.push(other);
@@ -508,6 +579,12 @@ export function handleHaggle(campaign: Campaign, rawArguments: string): ToolResu
   const shop = resolveShop(campaign, args.shop);
   if (!shop) {
     return noShop(campaign, args.shop);
+  }
+  // At the Market's counter the shop has to be where the party stands,
+  // before anything is rolled or a try is used.
+  const elsewhere = at.atCounter ? shopElsewhere(campaign, shop, "Nothing was rolled.") : null;
+  if (elsewhere) {
+    return elsewhere;
   }
   if (dealFor(shop, sheet.id)) {
     return { error: `${sheet.name} already tried their luck with ${shop.name}'s keeper.`, refused: "rules" };
@@ -520,7 +597,7 @@ export function handleHaggle(campaign: Campaign, rawArguments: string): ToolResu
   for (const other of company) {
     const absent = awayFromCounter(campaign, other);
     if (absent) {
-      return { error: `${absent}, so not at the counter: send present without them. Nothing was rolled.`, retry: true };
+      return { error: `${absent}, so not at the counter: send presentCharacterIds without them. Nothing was rolled.`, retry: true };
     }
   }
   // Held carriers and lasting effects ride the haggling check, and the
@@ -599,7 +676,7 @@ export function shopsBlock(campaign: Campaign): string {
 // any other. Anything else changes hands at list price, outside a shop.
 export function tradeCall(campaign: Campaign, args: ToolArgs): EngineCall {
   const action = args.action === "buy" || args.action === "sell" ? args.action : null;
-  const item = String(args.item ?? args.name ?? "").trim();
+  const item = String(args.item ?? "").trim();
   const named = typeof args.shop === "string" ? args.shop.trim() : "";
   const listPrice = { name: "purchase", args: Object.fromEntries(Object.entries(args).filter(([key]) => key !== "shop" && key !== "priceCp")) };
   if (!action || !item) {

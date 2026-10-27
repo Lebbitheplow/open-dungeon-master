@@ -8,6 +8,7 @@ import { listSheets } from "@/lib/db/sheets";
 import { finalizeNewCompanion, lastingCompanionProblem } from "@/lib/dm/companion-tools";
 import { requestDmTurn } from "@/lib/dm/loop";
 import { admitSheet, refusal } from "@/lib/characters/admit";
+import { olderBuilderOf } from "@/lib/srd/legality/older-builder";
 import { createSheetSchema } from "@/lib/schemas/sheet";
 import { publishWithSeq } from "@/lib/events";
 
@@ -99,6 +100,7 @@ export async function POST(
       sheet: parsed.data.sheet,
       userId: context.user.id,
       campaign,
+      olderBuilder: olderBuilderOf((raw as { sheet?: unknown } | null)?.sheet),
     });
   }
   if (!admitted.ok) {

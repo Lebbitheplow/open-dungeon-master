@@ -1,5 +1,6 @@
 import { ABILITIES, fitName, LANGUAGE_NAME_MAX, type Ability } from "@/lib/schemas/sheet";
 import { textKey } from "@/lib/language/text-logic";
+import type { SpeciesVariantGroup } from "@/lib/content/species-variants";
 
 // Parses Open5e's prose-ish mechanics fields (race asi arrays, class
 // proficiency strings) into the same shapes the bundled SRD data uses, so
@@ -41,6 +42,9 @@ export type RaceMechanics = {
   // not reduced by wearing heavy armor."
   size?: RaceSize;
   heavyArmorSpeed?: boolean;
+  // A workshop species' choice of packages (a Half-Dragon's ancestry), read
+  // by src/lib/content/race-options.ts; the player picks one.
+  variants?: SpeciesVariantGroup;
 };
 
 export const RACE_SIZES = ["Tiny", "Small", "Medium", "Large"] as const;
@@ -246,27 +250,79 @@ const COUNT_WORDS: Record<string, number> = {
 // A heading paragraph that asks the player to pick one of several options
 // the text goes on to list, or to name another race.
 const CHOICE_HEADING = /\bchoose (?:one of (?:these|the following)\b|another race\b|[^.]*\bbelow\b)/i;
-// "***Name.***" and "**_Name._**", the two ways the pack marks a trait. A
-// bulleted "* **Option.**" under one is an option of that trait, not a trait.
-const TRAIT_HEADING = /^(?:\*\*\*|\*\*_)(.+?)(?:\*\*\*|_\*\*)\s*(.*)$/;
+// The ways a paragraph opens with a trait's name: "***Name.***" and
+// "**_Name._**" as the packs and "Add a published trait" write it, and
+// "**Name.**", "_**Name.**_" and "__Name.__" as a person types it. The full
+// stop may sit inside the markers or just after them; the forms a person
+// types need it, so a bold caption over a table ("**Draconic Ancestry**") is
+// not a trait. A bulleted "* **Option.**" under one is an option of that
+// trait, not a trait. The boolean is whether the form needs the full stop.
+const TRAIT_HEADINGS: Array<[RegExp, boolean]> = [
+  [/^\*\*\*(.+?)\*\*\*(.*)$/, false],
+  [/^\*\*_(.+?)_\*\*(.*)$/, false],
+  [/^_\*\*(.+?)\*\*_(.*)$/, true],
+  [/^\*\*(?![*_\s])(.+?)\*\*(?!\*)(.*)$/, true],
+  [/^__(?![_\s])(.+?)__(.*)$/, true],
+];
+
+// The trait a paragraph's first line names, and the words after the name;
+// null when the line opens no trait. Each paragraph is read on its own, so
+// one written another way never changes how the rest are read.
+export function traitHeading(line: string): { name: string; rest: string } | null {
+  const trimmed = line.trim();
+  for (const [pattern, needsStop] of TRAIT_HEADINGS) {
+    const match = pattern.exec(trimmed);
+    if (!match) {
+      continue;
+    }
+    let name = match[1].trim();
+    let rest = match[2];
+    if (name.endsWith(".")) {
+      name = name.slice(0, -1).trim();
+    } else if (/^\s*\./.test(rest)) {
+      rest = rest.replace(/^\s*\./, "");
+    } else if (needsStop) {
+      return null;
+    }
+    return name ? { name, rest: rest.trim() } : null;
+  }
+  return null;
+}
+
+// The heading forms only the packs and "Add a published trait" write. A
+// text holding one is a pack's, whose other paragraphs are its traits' words.
+const PACK_HEADING = /^(?:\*\*\*|\*\*_)/;
+// A trait named the plain way, one per line: "Trance. You do not sleep." or a
+// short title on its own, "Darkvision 60 ft". A sentence that goes on ("You
+// can use this trait once...") is a trait's words, not a trait.
+export const PLAIN_TRAIT_LINE = /^([A-Z][\w’'()-]*(?:\s+(?:of|the|and|[A-Z][\w’'()-]*)){0,4})\.\s+[A-Z]/;
+export function plainTraitName(line: string): string | null {
+  const trimmed = line.trim();
+  if (!trimmed || /^[*_|-]/.test(trimmed)) {
+    return null;
+  }
+  const named = PLAIN_TRAIT_LINE.exec(trimmed);
+  if (named) {
+    return named[1];
+  }
+  return /^[A-Z]/.test(trimmed) && !/[.!?:;,]/.test(trimmed) && trimmed.split(/\s+/).length <= 6 ? trimmed : null;
+}
 
 function proseTraitNames(text: string): { names: string[]; choices: string[] } {
-  const lines = text.split(/\n+/).map((line) => line.trim());
-  if (lines.some((line) => TRAIT_HEADING.test(line))) {
-    const names: string[] = [];
-    const choices: string[] = [];
-    for (const line of lines) {
-      const heading = TRAIT_HEADING.exec(line);
-      if (!heading) {
-        continue;
-      }
-      const name = heading[1].replace(/\.$/, "").trim();
-      names.push(name);
-      if (CHOICE_HEADING.test(heading[2])) {
-        choices.push(name);
-      }
+  const lines = text.split(/\n+/);
+  const headings = lines
+    .map(traitHeading)
+    .filter((heading): heading is { name: string; rest: string } => heading !== null);
+  if (headings.length) {
+    const choices = headings.filter((heading) => CHOICE_HEADING.test(heading.rest)).map((heading) => heading.name);
+    // A text a person typed may name some traits in bold and the rest one per
+    // line, as it always could: those lines are traits too. A pack's text
+    // keeps to its headings.
+    if (!lines.some((line) => PACK_HEADING.test(line.trim()) && traitHeading(line))) {
+      const names = lines.map((line) => traitHeading(line)?.name ?? plainTraitName(line)).filter((name): name is string => Boolean(name));
+      return { names, choices };
     }
-    return { names, choices };
+    return { names: headings.map((heading) => heading.name), choices };
   }
   // No headings: the expanded pack writes one trait per line.
   const names = text

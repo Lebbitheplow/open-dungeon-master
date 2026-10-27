@@ -8,6 +8,7 @@ import { openWorld } from "./lib/enforce-world.mjs";
 const world = await openWorld({ gameSettings: { multiCharacter: "all_active", mapsEnabled: true } });
 const campaigns = await import("../src/lib/db/campaigns.ts");
 const sheets = await import("../src/lib/db/sheets.ts");
+const encounters = await import("../src/lib/db/encounters.ts");
 const { listRecentMessages } = await import("../src/lib/db/messages.ts");
 const { actingSheetFor, ownSheetFor, seatAddedSheet, currentPcId } = await import("../src/lib/character-seat.ts");
 
@@ -105,11 +106,20 @@ assert.match((await json(acted)).error, /Wait for that character's turn/);
 console.log("ok: in a fight the acting character follows the turn, and the wrong sibling is told so");
 
 // The enemies' turns keep the hold's own words, and a floor the DM opened
-// mid-fight lets the player act as whoever they have selected.
+// mid-fight lets the player act as whoever they have selected. The hold is
+// the enemies' only while one of them is still owed a turn
+// (src/lib/dm/enemies-due.ts); a hold over the fight with none due is the
+// DM's, and says so.
+const [goblin] = world.enemies();
+encounters.saveEncounter({ ...world.encounter(), legendary: { ...world.encounter().legendary, due: [goblin.id] } });
 campaigns.setFloor(world.campaignId, { mode: "hold", next: { mode: "initiative", encounterId: fight.id, userIds: [b1.userId], currentName: "B1", round: 1 } });
 acted = await actions.POST(post({ content: "I swing.", kind: "do" }), params);
 assert.equal(acted.status, 409);
 assert.match((await json(acted)).error, /enemies are taking their turns/);
+encounters.saveEncounter({ ...world.encounter(), legendary: { ...world.encounter().legendary, due: [] } });
+acted = await actions.POST(post({ content: "I swing.", kind: "do" }), params);
+assert.equal(acted.status, 409);
+assert.match((await json(acted)).error, /has not opened responses yet/);
 campaigns.setFloor(world.campaignId, { mode: "open" });
 acted = await actions.POST(post({ content: "Hold the line!", kind: "say" }), params);
 assert.equal(acted.status, 202, JSON.stringify(await json(acted)));

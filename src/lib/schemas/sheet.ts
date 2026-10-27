@@ -422,10 +422,31 @@ export const createSheetSchema = z.object({
     .object({
       asi: z.array(z.enum(ABILITIES)).max(3).default([]),
       skills: z.array(z.string().trim().min(1).max(40)).max(4).default([]),
+      // The race's cantrip picks (a homebrew species may offer up to three),
+      // and the first of them again in `cantrip`, the field a sheet held
+      // before there could be more than one, so an older server reading this
+      // sheet keeps that one (src/lib/srd/racial-cantrips.ts).
       cantrip: z.string().trim().max(80).default(""),
+      cantrips: z.array(z.string().trim().min(1).max(80)).max(6).default([]),
       tool: z.string().trim().max(60).default(""),
       // A dragonborn's draconic ancestry ("red"), src/lib/srd/racial-grants.ts.
       ancestry: z.string().trim().max(20).default(""),
+      // The option of a workshop species' choice the player picked, by its
+      // id ("ashen"), src/lib/content/species-variants.ts.
+      variant: z.string().trim().max(40).default(""),
+      // What that option gave the character, written by the server when it
+      // admits the sheet (src/lib/srd/legality/species-variant.ts), never
+      // taken from a request: an edit takes off exactly this, even after the
+      // workshop changes the option or removes it. Held to an option's own
+      // limits (VARIANT_LIMITS).
+      variantGrants: z
+        .object({
+          asi: z.partialRecord(z.enum(ABILITIES), z.number().int().min(1).max(2)).default({}),
+          skills: z.array(z.string().trim().min(1).max(40)).max(2).default([]),
+          tools: z.array(z.string().trim().min(1).max(60)).max(2).default([]),
+          languages: z.array(z.string().trim().min(1).max(40)).max(2).default([]),
+        })
+        .optional(),
       // The score a variant human's half-feat raises where the feat offers a
       // choice (Resilient, Athlete); src/lib/srd/legality/half-feats.ts.
       featAbility: z.enum(ABILITIES).optional(),

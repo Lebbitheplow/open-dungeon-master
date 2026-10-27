@@ -90,7 +90,7 @@ export function characterFileShelf(userId: string, sheet: CreateSheetInput): { s
   };
 }
 
-export type FileArrival = { copied: number; reused: string[]; renamed: string[] };
+export type FileArrival = { copied: number; reused: string[]; renamed: string[]; refused: string[] };
 
 // A file's Homebrew onto the importer's shelf, and its sheet pointed at the
 // entries as they are here. Runs inside the import's transaction: a sheet the
@@ -99,14 +99,17 @@ export function landCharacterFile(userId: string, file: Pick<CharacterBundle, "n
   const portable = JSON.stringify(file.sheet).includes(PORTABLE_REF);
   if (!file.homebrew?.length && !portable) {
     // A file from before the field, or a sheet that holds no homebrew.
-    return { sheet: file.sheet, arrival: { copied: 0, reused: [], renamed: [] } };
+    return { sheet: file.sheet, arrival: { copied: 0, reused: [], renamed: [], refused: [] } };
   }
   const landing = writeShelfArrivals(userId, "", {
     manifest: { name: file.name },
     homebrew: file.homebrew ?? [],
     monsters: [],
   } as unknown as WorkshopBundle);
-  return { sheet: landedSheet(file.sheet, landing), arrival: { copied: landing.copied, reused: landing.reused, renamed: landing.renamed } };
+  return {
+    sheet: landedSheet(file.sheet, landing),
+    arrival: { copied: landing.copied, reused: landing.reused, renamed: landing.renamed, refused: landing.refused },
+  };
 }
 
 // After a refused import rolled its arrivals back: the workshop classes the

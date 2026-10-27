@@ -31,7 +31,7 @@ if (pack) {
     const mage = world.addHero(wizard(5, { name: "Ilsa" }));
     const [goblin] = await fightDummies(world, 1, { heroFaces: { [mage.id]: 20 } });
     world.dice(1, 1, 1, 1, 1, 1, 1, 1, 1);
-    const out = await world.invoke("aoe_damage", { enemyIds: [goblin.id], casterId: mage.id, spell: "Fireball" });
+    const out = await world.invoke("aoe_damage", { enemyIds: [goblin.id], casterCharacterId: mage.id, spell: "Fireball" });
     world.clearDice();
     assert.equal(out.ok, true, out.error);
     assert.equal(out.result.saveAbility, "dex");

@@ -114,6 +114,9 @@ const locationSchema = z.object({
   // makes (normalised on import by src/lib/battlemap/scene.ts).
   map: indexSchema,
   ambience: z.record(z.string(), z.unknown()).nullable().default(null),
+  // The bigger place it is part of, by name like its connections (issue
+  // 548): absent or null when nobody said, "" when it stands on its own.
+  partOf: z.string().trim().max(120).nullable().default(null),
   ref: refSchema,
   shared: sharedSchema,
 });

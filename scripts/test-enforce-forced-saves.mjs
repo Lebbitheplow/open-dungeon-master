@@ -154,10 +154,12 @@ await test("The DM console's forms for Cast at a player and Cast at an enemy rea
   assert.equal(out.ok, true, out.error);
   assert.equal(out.result.saved, false);
   assert.ok(world.sheet(scout.id).conditions.includes("paralyzed"));
-  // A form left without its save is stopped by the form, by name.
+  // A hazard sent without its save is stopped by the handler, by name: an
+  // enemy's ability or spell would have brought its own.
   reset();
-  const bare = checkArgs(adjudication("cast_at_player"), { characterId: scout.id, dc: 13 });
-  assert.match(String(bare), /save/i);
+  const bare = await world.invoke("cast_at_player", { characterId: scout.id, dc: 13, condition: "poisoned" });
+  assert.equal(bare.ok, false);
+  assert.match(bare.error, /needs saveAbility and dc for a hazard/);
   // The list of targets an older console sends is read as its first.
   world.dice(19);
   const listed = await world.invoke("cast_at_player", {

@@ -22,12 +22,13 @@ import { requestDmTurn } from "@/lib/dm/loop";
 import { settleTableWait, waitsForTable } from "@/lib/dm/table-wait";
 import { holdsPostForTable } from "@/lib/dm/table-wait-logic";
 import { coverInEffect } from "@/lib/dm/delegation";
-import { hasHumanDm } from "@/lib/dm/viewer";
+import { hasHumanDm, isPrimaryDm } from "@/lib/dm/viewer";
+import { invokeEngine } from "@/lib/dm/invoke";
 import { claimNarrationSeq } from "@/lib/dm/narration-slot";
 import { enqueueDmJob } from "@/lib/dm/queue";
 import { runResumeRecap } from "@/lib/dm/recap";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
-import { parseMessageIntent } from "@/lib/dm/intent-logic";
+import { directCardCall, parseMessageIntent } from "@/lib/dm/intent-logic";
 import { addressesDm } from "@/lib/dm/ooc-question";
 import { spokenLine } from "@/lib/dm/speech";
 import { intentRefusal } from "@/lib/dm/intent-check";
@@ -35,8 +36,7 @@ import { concentrationSwapFor } from "@/lib/dm/concentration-confirm";
 import { inCoordination } from "@/lib/dm/coordination";
 import { confirmsSwap, swapQuestion } from "@/lib/dm/concentration-confirm-logic";
 import { tableAuthors } from "@/lib/db/homebrew";
-import { tableBreakOn } from "@/lib/dm/table-break";
-import { breakRefusal } from "@/lib/dm/table-break-logic";
+import { refuseDuringBreak } from "@/lib/dm/table-break";
 import { isSecretActionBody, secretActionResponse } from "@/lib/dm/secret-action-request";
 
 export const runtime = "nodejs";
@@ -105,9 +105,9 @@ export async function POST(
   // A table break (src/lib/dm/table-break.ts) stops play where it stands:
   // table talk goes on, nothing in character does, and the floor underneath
   // is left alone so Resume picks up exactly there.
-  const tableBreak = kind === "ooc" ? null : tableBreakOn(campaignId);
-  if (tableBreak) {
-    return Response.json({ error: breakRefusal(tableBreak), tableBreak }, { status: 409 });
+  const paused = kind === "ooc" ? null : refuseDuringBreak(campaignId);
+  if (paused) {
+    return paused;
   }
   // A character dominated by the other side is the DM's to play until the
   // charm ends (src/lib/dm/companion-command.ts): its player hears why,
@@ -132,9 +132,13 @@ export async function POST(
   const reactionOffTurn = intent?.card === "reaction" && combatOwnsFloor(floor);
   if (!reactionOffTurn && !canAct(floor, user.id, kind)) {
     if (floor.mode === "hold") {
+      // The enemies hold the floor only while some are still owed a turn
+      // (src/lib/dm/enemies-due.ts); a hold over a fight with none due is
+      // the storyteller's, and says so.
+      const enemiesDue = combatOwnsFloor(floor) && (getActiveEncounter(campaignId)?.legendary.due?.length ?? 0) > 0;
       return Response.json(
         {
-          error: combatOwnsFloor(floor)
+          error: enemiesDue
             ? "The enemies are taking their turns; the DM hands the turn on. Use OOC for table talk."
             : `The ${campaign.dmUserId ? "DM" : "party lead"} has not opened responses yet. Use OOC for table talk.`,
           floor,
@@ -220,6 +224,21 @@ export async function POST(
       { error: swapQuestion(swap, sheet.name), confirmConcentration: { ...swap, characterName: sheet.name } },
       { status: 409 },
     );
+  }
+  // A card the DM plays for a character they hold, at a table they run (a
+  // test fight a person runs, issue 553): the one who would adjudicate it
+  // played it, so the engine resolves it now, with the same call an AI turn
+  // makes before it narrates (directCardCall), and nothing waits in the DM's
+  // queue for the DM. A card the engine cannot resolve whole (a spell, a
+  // rider) is posted below and queued as any player's is, for the console.
+  const dmSeats = campaignSeats(campaign);
+  const direct = intent && kind === "do" && hasHumanDm(dmSeats) && isPrimaryDm(dmSeats, user.id) ? directCardCall(intent, sheet.id) : null;
+  if (direct) {
+    const resolved = await invokeEngine(campaign, { kind: "human", userId: user.id }, direct);
+    if (!resolved.ok) {
+      return Response.json({ error: resolved.error }, { status: 409 });
+    }
+    return Response.json({ resolved: true });
   }
   let spotlightStillWaiting = false;
   if (kind !== "ooc" && floor.mode === "spotlight") {

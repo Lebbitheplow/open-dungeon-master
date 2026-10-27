@@ -4,7 +4,7 @@
 // racial trait's spell is known on top of the class's), so a level-up must
 // too, on the server and in the dialog alike.
 //
-// Creation already did (src/lib/srd/legality/spells.ts passes the racial pick
+// Creation already did (src/lib/srd/legality/spells.ts passes the racial picks
 // and innateCantripsFor as free). A level-up counted only the race's
 // cantripChoice, so a tiefling warlock whose list held Thaumaturgy was
 // refused her fourth-level cantrip (U:UB3), and the dialog counted neither
@@ -14,11 +14,12 @@
 // [campaignId]/sheet/route.ts) and the dialog
 // (src/app/campaigns/[campaignId]/LevelUpDialog.tsx) share it.
 import { innateCantripsFor } from "@/lib/srd/racial-grants";
+import { racialCantripsOf, type RacialCantripChoices } from "@/lib/srd/racial-cantrips";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { textKey } from "@/lib/language/text-logic";
 
 type FreeCantripSheet = Pick<CharacterSheet, "race" | "level" | "spellcasting"> & {
-  racialChoices?: { cantrip?: string } | null;
+  racialChoices?: RacialCantripChoices;
 };
 
 // Every cantrip name the sheet holds, across the per-class lists.
@@ -32,14 +33,15 @@ function cantripsHeld(sheet: FreeCantripSheet): string[] {
 
 // How many of the cantrips the sheet holds are free. `racialChoiceCount` is
 // the race's cantripChoice count (a homebrew race's too, which only the
-// server's content lookup knows): a sheet written before the pick was
-// recorded by name still gets its racial cantrip left out of the count.
+// server's content lookup knows): a sheet written before the picks were
+// recorded by name still gets its racial cantrips left out of the count.
+// Each pick the sheet names and holds counts once, however many the race
+// offers (a homebrew species' three).
 export function freeCantripCount(sheet: FreeCantripSheet, racialChoiceCount: number): number {
   const held = new Set(cantripsHeld(sheet).map(textKey));
-  const pick = sheet.racialChoices?.cantrip ?? "";
-  const namedPick = pick && held.has(textKey(pick)) ? 1 : 0;
+  const picks = new Set(racialCantripsOf(sheet.racialChoices).map(textKey).filter((key) => held.has(key)));
   const innate = innateCantripsFor(sheet.race, sheet.level).filter(
-    (name) => held.has(textKey(name)) && textKey(name) !== textKey(pick),
+    (name) => held.has(textKey(name)) && !picks.has(textKey(name)),
   ).length;
-  return Math.max(racialChoiceCount, namedPick) + innate;
+  return Math.max(racialChoiceCount, picks.size) + innate;
 }

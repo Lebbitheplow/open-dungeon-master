@@ -284,7 +284,7 @@ function builderEdit(initial, level, overrides = {}) {
     racialAsi: [],
     racialSkills: [],
     racialTool: "",
-    racialCantrip: "",
+    racialCantrips: [],
     backstory: "Veteran of the border war, now a ferryman's sworn blade.",
     spells: [],
     spellWarningAck: true,

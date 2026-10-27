@@ -155,14 +155,17 @@ export default {
     check(!(await inline.isVisible()), "the panel's own view is hidden behind the open tabletop");
     const hiddenRate = await framesPerSecond(view);
     const shownRate = await framesPerSecond(big);
+    // A drawing view against one that has stopped: a loaded CI runner drew
+    // the shown view at 18 and 19 frames a second, so the bar sits at 10,
+    // still twice the most the hidden one may draw.
     check(hiddenRate <= 5, `the hidden panel view all but stops drawing (${hiddenRate} frames a second)`);
-    check(shownRate >= 20, `the tabletop's view draws on (${shownRate} frames a second)`);
+    check(shownRate >= 10, `the tabletop's view draws on (${shownRate} frames a second)`);
     await untilStill(page);
     await t.shot("enlarged");
     await t.tap(page.getByRole("button", { name: "Close the board", exact: true }));
     await eventually(async () => (await page.getByRole("dialog").count()) === 0, { label: "the tabletop closed" });
     await eventually(() => inline.isVisible(), { label: "the panel's view shown again" });
-    check((await framesPerSecond(view)) >= 20, "and drawing again, the same page, not a reload");
+    check((await framesPerSecond(view)) >= 10, "and drawing again, the same page, not a reload");
     check(await view.evaluate(() => Boolean(window.__snapshot)), "it kept the board it was sent while hidden");
 
     // Drawing uses the grid: the pencil brings it back, putting it away covers it again.

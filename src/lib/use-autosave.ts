@@ -64,6 +64,19 @@ export function useAutosave<T>(
     return ok;
   }, []);
 
+  // Taken down inside the pause (the editor closed, another map opened): the
+  // last edit is sent rather than cancelled, the way the Plugin tool learned
+  // to (WA-03). Declared before the debounce below so its cleanup runs first,
+  // while the pending timer is still there to say an edit is waiting.
+  useEffect(
+    () => () => {
+      if (timerRef.current !== null) {
+        void flush();
+      }
+    },
+    [flush],
+  );
+
   useEffect(() => {
     if (options.enabled === false) {
       return;

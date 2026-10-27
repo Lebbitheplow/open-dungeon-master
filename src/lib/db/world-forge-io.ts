@@ -549,7 +549,16 @@ export function copyWorldDoc(
   });
   const merged = mergeImportedLinks(target.links, mapped.links, source, (ref) => names.get(ref) ?? "someone");
   target.links = merged.links;
-  const rows = mergeSlices(target, moved, mapped, source, LATER_SLICES);
+  // A map shown to the party is the source table's play, and a workshop has
+  // no party to show one to (issue 553): a map arrives shown only where this
+  // table already showed it. Its own players see a map after the review a
+  // DM runs here (src/lib/db/party-atlas.ts), never because a copy said so.
+  const shownHere = new Set(target.maps.filter((atlas) => atlas.party === "shown").map((atlas) => atlas.id));
+  const rows = mergeSlices(target, moved, mapped, source, LATER_SLICES, (atlas) => {
+    const rest = { ...atlas };
+    delete rest.party;
+    return shownHere.has(atlas.id) ? { ...rest, party: "shown" as const } : rest;
+  });
   settle(target, [...firstRows.pending, ...rows.pending], (origin, value) => rowValue(target, origin, value));
   saveWorldDoc(targetId, target);
   // What this source's earlier imports kept and the author has not settled

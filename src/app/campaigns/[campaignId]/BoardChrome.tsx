@@ -1,6 +1,7 @@
 "use client";
 
 import { EyeOff } from "lucide-react";
+import { litOrderRows, pointerOrderIndex } from "@/lib/battlemap/initiative-rows";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { GameIcon } from "@/components/ui/GameIcon";
@@ -88,6 +89,11 @@ export function InitiativeRail({
   if (!encounter.orderReady || !encounter.order.length) {
     return null;
   }
+  // The plates whose turn it is, and the pointer's own plate: they differ
+  // while the enemies before the player up next take their turns
+  // (initiative-rows.ts litOrderRows).
+  const lit = litOrderRows(encounter.order, encounter.turnIndex, encounter.acting, encounter.enemiesUp);
+  const up = lit[0] ?? Math.max(0, pointerOrderIndex(encounter.order, encounter));
   if (namesOnly) {
     return (
       <div className="board-initiative-names" data-tour="battle-initiative">
@@ -96,7 +102,7 @@ export function InitiativeRail({
         </button>
         <ol tabIndex={0} aria-label="Initiative order">
           {encounter.order.map((entry, at) => (
-            <li key={`${entry.id}-${at}`} aria-current={at === encounter.turnIndex ? "step" : undefined} title={entry.name}>
+            <li key={`${entry.id}-${at}`} aria-current={lit.includes(at) ? "step" : undefined} title={entry.name}>
               {entry.name}
               <SideSr side={offSide(encounter, entry.id, entry.kind)} />
             </li>
@@ -113,7 +119,7 @@ export function InitiativeRail({
   const NARROW = 5;
   const order = encounter.order;
   const cyclic = order.length > NARROW;
-  const start = cyclic ? (encounter.turnIndex - 1 + order.length) % order.length : 0;
+  const start = cyclic ? (up - 1 + order.length) % order.length : 0;
   const shown = Array.from({ length: Math.min(MAX, order.length) }, (_, i) => {
     const at = (start + i) % order.length;
     return { entry: order[at], at };
@@ -125,7 +131,7 @@ export function InitiativeRail({
       onClick={onOpen}
       disabled={!onOpen}
       data-tour="battle-initiative"
-      aria-label={`Round ${round}, initiative order. ${order[encounter.turnIndex]?.name ?? ""} is up. ${sidesLine(encounter)}Open the order.`}
+      aria-label={`Round ${round}, initiative order. ${encounter.acting?.name ?? order[up]?.name ?? ""} is up. ${sidesLine(encounter)}Open the order.`}
       className="absolute left-2 top-2 z-10 flex flex-col items-start gap-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 @md:left-3.5 @md:top-3.5 @md:gap-1.5"
     >
       <span className="board-eyebrow">
@@ -134,7 +140,7 @@ export function InitiativeRail({
       </span>
       <span className="flex gap-[3px] @md:gap-[5px]">
         {shown.map(({ entry, at }, index) => {
-          const current = at === encounter.turnIndex;
+          const current = lit.includes(at);
           return (
             <span
               key={`${entry.id}-${at}`}

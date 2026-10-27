@@ -209,15 +209,15 @@ test("an ability on one target is cast_at_player; on several it is one aoe_damag
   const breath = cards[3];
   assert.deepEqual(monsterInvoke(breath, ["s1"]), {
     name: "cast_at_player",
-    args: { characterId: "s1", casterEnemyId: "e1", ability: "Fire Breath", saveAbility: "dex", dc: 12, damage: "4d6", halfOnSave: true, damageType: "fire" },
+    args: { characterId: "s1", casterEnemyId: "e1", enemyAbility: "Fire Breath", saveAbility: "dex", dc: 12, damage: "4d6", halfOnSave: true, damageType: "fire" },
   });
   assert.deepEqual(monsterInvoke(breath, ["s1", "s2"]), {
     name: "aoe_damage",
-    args: { casterEnemyId: "e1", ability: "Fire Breath", characterIds: ["s1", "s2"], saveAbility: "dex", dc: 12, damage: "4d6", halfOnSave: true, type: "fire" },
+    args: { casterEnemyId: "e1", enemyAbility: "Fire Breath", characterIds: ["s1", "s2"], saveAbility: "dex", dc: 12, damage: "4d6", halfOnSave: true, type: "fire" },
   });
   const fear = cards[4];
   assert.deepEqual(monsterInvoke(fear, ["s1"]).args, {
-    characterId: "s1", casterEnemyId: "e1", ability: "Frightful Presence", saveAbility: "wis", dc: 12, condition: "frightened", rounds: 10,
+    characterId: "s1", casterEnemyId: "e1", enemyAbility: "Frightful Presence", saveAbility: "wis", dc: 12, condition: "frightened", rounds: 10,
   });
   assert.equal(monsterSentence("Drake", breath, ["Kael", "Lys", "Bran"]), "Drake uses Fire Breath on Kael, Lys and Bran.");
 });
@@ -227,7 +227,7 @@ test("a creature on the other side (issue 503): its row takes the bite by id, an
   const rows = new Set(["e2"]);
   assert.deepEqual(monsterInvoke(cards[0], ["e2"], "none", rows).args, { enemyId: "e1", targetCharacterId: "e2", attack: "Bite" });
   assert.deepEqual(monsterInvoke(cards[3], ["s1", "e2"], "none", rows).args, {
-    casterEnemyId: "e1", ability: "Fire Breath", characterIds: ["s1"], enemyIds: ["e2"], saveAbility: "dex", dc: 12, damage: "4d6", halfOnSave: true, type: "fire",
+    casterEnemyId: "e1", enemyAbility: "Fire Breath", characterIds: ["s1"], enemyIds: ["e2"], saveAbility: "dex", dc: 12, damage: "4d6", halfOnSave: true, type: "fire",
   });
 });
 

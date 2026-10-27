@@ -183,7 +183,7 @@ export function SystemView({
         ) : null}
         {system === "maps" ? <DmMapLibraryPanel campaignId={workshop.id} layout="gallery" openOnArrival={openId} /> : null}
         {system === "region" ? (
-          <OverworldPanel campaignId={workshop.id} genre={workshop.gameSettings.genre} steersStory />
+          <OverworldPanel campaignId={workshop.id} genre={workshop.gameSettings.genre} steersStory workshop />
         ) : null}
         {system === "cast" ? <DmNpcForgePanel campaignId={workshop.id} layout="rows" refreshKey={versions.npc} openId={openId} onWorldEntry={(id) => onWorldEntry(refOf("npc", id))} /> : null}
         {system === "encounters" ? (
@@ -194,6 +194,7 @@ export function SystemView({
             layout="rows"
             openOnArrival={openId}
             targetParty={workshop.gameSettings.targetParty}
+            testFight={{ workshopId: workshop.id }}
           />
         ) : null}
         {system === "bestiary" ? <DmBestiaryPanel campaignId={workshop.id} layout="rows" openOnArrival={openId} onWorldEntry={onWorldEntry} /> : null}
@@ -212,7 +213,7 @@ export function SystemView({
             <MarketPanel campaignId={workshop.id} steersStory isDm mySheet={null} />
           </>
         ) : null}
-        {system === "factions" ? <FactionsPanel campaignId={workshop.id} steersStory refreshKey={versions.faction} openId={openId} onWorldEntry={(id) => onWorldEntry(refOf("faction", id))} /> : null}
+        {system === "factions" ? <FactionsPanel campaignId={workshop.id} steersStory workshop refreshKey={versions.faction} openId={openId} onWorldEntry={(id) => onWorldEntry(refOf("faction", id))} /> : null}
         {system === "tables" ? <DmTablesPanel campaignId={workshop.id} layout="rows" /> : null}
         {system === "plugin" ? (
           <PluginPanel workshopId={workshop.id} onChanged={onPluginChanged} />

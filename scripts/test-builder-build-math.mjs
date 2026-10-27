@@ -12,10 +12,11 @@ import { register } from "node:module";
 register("./lib/register-alias.mjs", import.meta.url);
 
 const { openBuilder } = await import("./lib/enforce-builder.mjs");
-const { buildMathSections, changeLine, createChangeAnnouncer, snapshotOf, workingOf } = await import(
+const { buildMathSections, changeLine, createChangeAnnouncer, knownSoFarRows, snapshotOf, workingOf } = await import(
   "../src/app/characters/builder/buildMath.ts"
 );
 const { computeSheetDerived, deriveAc, formatModifier, SRD_SKILLS } = await import("../src/lib/srd/index.ts");
+const { withSpeciesVariant } = await import("../src/lib/content/species-variants.ts");
 const { deriveHand } = await import("../src/lib/battlemap/hand.ts");
 const { storedSheetSchema } = await import("../src/lib/schemas/sheet.ts");
 
@@ -27,6 +28,7 @@ function test(name, fn) {
 }
 
 const builder = await openBuilder();
+const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8").replace(/\r\n/g, "\n");
 const ABILITIES = ["str", "dex", "con", "int", "wis", "cha"];
 
 function tableOf(built) {
@@ -217,6 +219,123 @@ test("no table before the hero has a class, ancestry, background and scores", ()
   assert.deepEqual(tableOf(built), []);
 });
 
+// Before six scores: the picks so far.
+const UNSCORED = { str: null, dex: null, con: null, int: null, wis: null, cha: null };
+const knownOf = (built, classId, raceId) =>
+  rowsOf([
+    {
+      id: "known",
+      title: "",
+      rows: knownSoFarRows({
+        level: built.derived.effectiveLevel,
+        klass: builder.classes.find((entry) => entry.id === classId),
+        race: builder.races.find((entry) => entry.id === raceId),
+        racialBonus: built.derived.racialBonus,
+        proficientSkills: built.derived.proficientSkills,
+      }),
+    },
+  ]);
+
+test("before six scores, the panel shows what is already settled", () => {
+  const built = builder.build({ race: "high_elf", class: "bard", background: "entertainer", scores: UNSCORED });
+  assert.deepEqual(tableOf({ ...built, klass: builder.classes.find((entry) => entry.id === "bard") }), [], "no full table yet");
+  const rows = knownOf(built, "bard", "high_elf");
+  assert.equal(rows.get("proficiency").value, "+2");
+  assert.equal(rows.get("hit-die").value, "d8");
+  assert.equal(rows.get("hit-die").working, "Bard");
+  assert.equal(rows.get("save-proficiencies").value, "Dexterity, Charisma");
+  assert.equal(rows.get("ancestry-bonuses").value, "Dexterity +2, Intelligence +1");
+  assert.equal(rows.get("speed").value, "30 ft");
+  // The background's skills are the character's before any score is.
+  assert.match(rows.get("skill-proficiencies").value, /Acrobatics/);
+  assert.match(rows.get("skill-proficiencies").value, /Performance/);
+});
+
+test("with only a class chosen, the settled rows say nothing of an ancestry", () => {
+  const built = builder.build({ race: undefined, class: "fighter", background: undefined, scores: UNSCORED });
+  const rows = knownOf(built, "fighter", undefined);
+  assert.equal(rows.get("hit-die").value, "d10");
+  assert.equal(rows.get("ancestry-bonuses"), undefined);
+  assert.equal(rows.get("speed"), undefined);
+});
+
+test("bonuses the ancestry leaves to the player are said as still to place, not as none", () => {
+  const halfElf = (racialAsi) => knownOf(builder.build({ race: "half_elf", class: "bard", scores: UNSCORED, racialAsi }), "bard", "half_elf");
+  assert.equal(halfElf([]).get("ancestry-bonuses").value, "Charisma +2, +1 to two more of your choice");
+  assert.equal(halfElf(["dex"]).get("ancestry-bonuses").value, "Dexterity +1, Charisma +2, +1 to one more of your choice");
+  assert.equal(halfElf(["dex", "con"]).get("ancestry-bonuses").value, "Dexterity +1, Constitution +1, Charisma +2");
+  const human = knownOf(builder.build({ race: "variant_human", class: "fighter", scores: UNSCORED }), "fighter", "variant_human");
+  assert.equal(human.get("ancestry-bonuses").value, "+1 to two of your choice");
+});
+
+// A workshop species whose player picks an option (#538): the builder reads
+// the race with the option folded in, and the panel names the option.
+test("a species that lets its player choose shows the option picked, and what it adds", () => {
+  const base = builder.races.find((entry) => entry.id === "dragonborn");
+  const species = {
+    ...base,
+    id: "homebrew:half-dragon",
+    name: "Half-Dragon",
+    variants: {
+      label: "Draconic ancestry",
+      options: [
+        { id: "ashen", name: "Ashen", asi: { con: 1 }, resistances: ["fire"] },
+        { id: "mirrorscale", name: "Mirrorscale", asi: { wis: 1 }, skills: ["insight"] },
+      ],
+    },
+  };
+  const rowsFor = (race) => {
+    const built = builder.build({ race, class: "fighter", scores: UNSCORED });
+    return rowsOf([
+      {
+        id: "known",
+        title: "",
+        rows: knownSoFarRows({
+          level: built.derived.effectiveLevel,
+          klass: builder.classes.find((entry) => entry.id === "fighter"),
+          race,
+          racialBonus: built.derived.racialBonus,
+          proficientSkills: built.derived.proficientSkills,
+        }),
+      },
+    ]);
+  };
+  const open = rowsFor(species);
+  assert.equal(open.get("species-choice").label, "Draconic ancestry");
+  assert.equal(open.get("species-choice").value, "still to choose");
+  assert.equal(open.get("ancestry-bonuses").value, "Strength +2, Charisma +1");
+  const ashen = rowsFor(withSpeciesVariant(species, "ashen"));
+  assert.equal(ashen.get("species-choice").value, "Ashen");
+  assert.equal(ashen.get("species-choice").working, "Half-Dragon");
+  assert.equal(ashen.get("ancestry-bonuses").value, "Strength +2, Constitution +1, Charisma +1");
+  const mirrorscale = rowsFor(withSpeciesVariant(species, "mirrorscale"));
+  assert.equal(mirrorscale.get("ancestry-bonuses").value, "Strength +2, Wisdom +1, Charisma +1");
+  assert.match(mirrorscale.get("skill-proficiencies").value, /Insight/);
+  // A race with no choice has no such row.
+  assert.equal(rowsFor(base).get("species-choice"), undefined);
+});
+
+test("the picks show the class and ancestry write-ups their cards' details show", () => {
+  const panel = read("../src/app/characters/builder/BuildMathPanel.tsx");
+  const carousel = read("../src/app/characters/builder/LineageCarousel.tsx");
+  const calling = read("../src/app/characters/builder/steps/CallingStep.tsx");
+  // One write-up each, rendered by the dialog and by the panel.
+  assert.match(carousel, /<LineageDetails slide=\{slide\} \/>/);
+  assert.match(panel, /<LineageDetails slide=\{slide\} \/>/);
+  assert.match(calling, /meta=\{\s*details\s*\?\s*classDetailsMeta\(/);
+  assert.match(panel, /classDetailsMeta\(/);
+  assert.match(panel, /<InfoBody\s/);
+  assert.match(read("../src/components/ui/InfoDialog.tsx"), /<InfoBody meta=\{meta\}/);
+  // Named for a new player, and the card's "?" is "About", so "details"
+  // means one thing.
+  assert.match(panel, /Character details/);
+  assert.match(panel, /aria-label=\{open \? "Hide character details" : "Show character details"\}/);
+  assert.match(panel, /\{open \? "Hide" : "Show"\}/);
+  assert.match(read("../src/app/characters/builder/OptionCardGrid.tsx"), /aria-label=\{`About \$\{option\.name\}`\}/);
+  // Shown only until the full table can be worked out.
+  assert.match(panel, /sections\.length \? \([\s\S]*<table[\s\S]*\) : \(\s*<PicksSoFar/);
+});
+
 // The announcement.
 const sections = (values) => [
   { id: "core", title: "Core", rows: Object.entries(values).map(([id, value]) => ({ id, label: LABELS[id], value, working: "" })) },
@@ -314,7 +433,6 @@ test("an unmounted table says nothing later", () => {
 });
 
 // The panel: a real table, placed with one slot.
-const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8").replace(/\r\n/g, "\n");
 test("the panel is a real table with row and column headers and a polite status", () => {
   const panel = read("../src/app/characters/builder/BuildMathPanel.tsx");
   assert.match(panel, /<table/);
@@ -337,7 +455,7 @@ test("the panel is a real table with row and column headers and a polite status"
 
 test("CharacterBuilder places the panel in one slot beside the steps", () => {
   const source = read("../src/app/characters/builder/CharacterBuilder.tsx");
-  assert.equal(source.match(/<BuildMathPanel /g)?.length, 1);
+  assert.equal(source.match(/<BuildMathPanel\b/g)?.length, 1);
 });
 
 console.log(`\n${passed} build math checks passed`);

@@ -350,9 +350,9 @@ const SPITTER = {
 
 await test("A bonus action's ability is the creature's bonus action: it leaves the action to swing, and a second in the round is refused.", async () => {
   const spitter = await stage(SPITTER);
-  const spit = await mk.forced([1, 3, 3], () => world.invoke("cast_at_player", { characterId: tank.id, casterEnemyId: spitter.id, ability: "Venom Spit", saveAbility: "con", dc: 12 }));
+  const spit = await mk.forced([1, 3, 3], () => world.invoke("cast_at_player", { characterId: tank.id, casterEnemyId: spitter.id, enemyAbility: "Venom Spit", saveAbility: "con", dc: 12 }));
   assert.equal(spit.ok, true, spit.error);
-  const again = await world.invoke("cast_at_player", { characterId: tank.id, casterEnemyId: spitter.id, ability: "Venom Spit", saveAbility: "con", dc: 12 });
+  const again = await world.invoke("cast_at_player", { characterId: tank.id, casterEnemyId: spitter.id, enemyAbility: "Venom Spit", saveAbility: "con", dc: 12 });
   assert.equal(again.ok, false, "a second bonus action in one round");
   assert.match(again.error, /bonus action/);
   const claw = await mk.forced([15, 3], () => world.invoke("enemy_attack", { enemyId: spitter.id, targetCharacterId: tank.id }));

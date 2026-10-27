@@ -243,10 +243,16 @@ export function tileAt(terrain: string, width: number, x: number, y: number): st
 
 const UNANCHORABLE = new Set(["w", "m"]);
 
-// Deterministic placement for a location's map anchor: 4-7 tiles from its
-// connected anchor in a direction hashed from the name (map center for the
-// first location), then an outward spiral to the nearest tile that is not
-// water or mountain and not already taken.
+// A new place keeps at least this many tiles from every other one when the
+// story did not say where it is, so its dot and its name have room.
+const CLEARANCE = 3;
+
+// Deterministic placement for a location's map anchor: the spot the story
+// gave (`target`, src/lib/overworld/places.ts spotFrom), or else 4-7 tiles
+// from its connected anchor in a direction hashed from the name (map center
+// for the first location), turned toward open ground when that spot crowds
+// a place already there; then the nearest tile that is not water or
+// mountain and not already taken.
 export function placeAnchor(input: {
   terrain: string;
   width: number;
@@ -254,18 +260,44 @@ export function placeAnchor(input: {
   existing: XY[];
   connected: XY | null;
   name: string;
+  target?: XY | null;
 }): XY {
-  const { terrain, width, height, existing, connected, name } = input;
+  const { terrain, width, height, existing, connected, name, target } = input;
   const hash = fnv1a(textKey(name));
   const rng = mulberry32(hash);
+  const clamp = (point: XY): XY => ({
+    x: Math.min(width - 3, Math.max(2, point.x)),
+    y: Math.min(height - 3, Math.max(2, point.y)),
+  });
+  const taken = (point: XY) =>
+    existing.some((anchor) => Math.abs(anchor.x - point.x) <= 1 && Math.abs(anchor.y - point.y) <= 1);
+  const usable = (point: XY) =>
+    !UNANCHORABLE.has(tileAt(terrain, width, point.x, point.y)) && !taken(point);
+  const clearance = (point: XY) =>
+    Math.min(
+      Infinity,
+      ...existing.map((anchor) => Math.max(Math.abs(anchor.x - point.x), Math.abs(anchor.y - point.y))),
+    );
   let start: XY;
-  if (connected) {
+  if (target) {
+    start = target;
+  } else if (connected) {
     const angle = rng() * Math.PI * 2;
     const distance = 4 + rng() * 3;
-    start = {
-      x: Math.round(connected.x + Math.cos(angle) * distance),
-      y: Math.round(connected.y + Math.sin(angle) * distance),
-    };
+    const spotAt = (turn: number): XY => ({
+      x: Math.round(connected.x + Math.cos(angle + (turn * Math.PI) / 4) * distance),
+      y: Math.round(connected.y + Math.sin(angle + (turn * Math.PI) / 4) * distance),
+    });
+    // The hashed direction first, as it always was; then a turn either way
+    // at a time, until the spot is clear of the places already drawn.
+    start = spotAt(0);
+    for (const turn of [0, 1, -1, 2, -2, 3, -3, 4]) {
+      const spot = clamp(spotAt(turn));
+      if (usable(spot) && clearance(spot) >= CLEARANCE) {
+        start = spot;
+        break;
+      }
+    }
   } else if (existing.length) {
     const anchor = existing[existing.length - 1];
     const angle = rng() * Math.PI * 2;
@@ -276,34 +308,35 @@ export function placeAnchor(input: {
   } else {
     start = { x: Math.floor(width / 2), y: Math.floor(height / 2) };
   }
-  const clamp = (point: XY): XY => ({
-    x: Math.min(width - 3, Math.max(2, point.x)),
-    y: Math.min(height - 3, Math.max(2, point.y)),
-  });
-  const taken = (point: XY) =>
-    existing.some((anchor) => Math.abs(anchor.x - point.x) <= 1 && Math.abs(anchor.y - point.y) <= 1);
-  const usable = (point: XY) =>
-    !UNANCHORABLE.has(tileAt(terrain, width, point.x, point.y)) && !taken(point);
 
-  let candidate = clamp(start);
-  if (usable(candidate)) {
-    return candidate;
+  const first = clamp(start);
+  if (usable(first)) {
+    return first;
   }
-  // Outward ring search; radius is bounded by the map, so this terminates.
+  // Outward rings; in each, the usable tile nearest the spot wanted, so a
+  // lake in the way moves the place round it rather than to the ring's
+  // top-left corner. The radius is bounded by the map, so this terminates.
   for (let radius = 1; radius < Math.max(width, height); radius += 1) {
+    let best: XY | null = null;
+    let bestDistance = Infinity;
     for (let dy = -radius; dy <= radius; dy += 1) {
       for (let dx = -radius; dx <= radius; dx += 1) {
         if (Math.max(Math.abs(dx), Math.abs(dy)) !== radius) {
           continue;
         }
-        candidate = clamp({ x: start.x + dx, y: start.y + dy });
-        if (usable(candidate)) {
-          return candidate;
+        const candidate = clamp({ x: start.x + dx, y: start.y + dy });
+        const distance = Math.hypot(candidate.x - start.x, candidate.y - start.y);
+        if (distance < bestDistance && usable(candidate)) {
+          best = candidate;
+          bestDistance = distance;
         }
       }
     }
+    if (best) {
+      return best;
+    }
   }
-  return clamp(start);
+  return first;
 }
 
 // Client legend + palette per genre; the same classifier drives every

@@ -5,6 +5,7 @@ import {
   type Campaign,
 } from "@/lib/db/campaigns";
 import { listWorkshopsForUser } from "@/lib/db/workshops";
+import { listPregens } from "@/lib/db/characters";
 import { boardWritesArc, readImportSource } from "@/lib/db/content-import";
 import { IMPORT_KINDS, type ImportKind } from "@/lib/workshop/import";
 import type { CampaignKind } from "@/lib/workshop/kind";
@@ -35,6 +36,10 @@ export type ImportSourceSummary = {
   contents: Record<ImportKind, number>;
   // Its storyboard compiles into a story arc of its own (issue 249).
   boardArc: boolean;
+  // A workshop's pregens ticked Offer to players, by name: a table that
+  // starts from it offers them (src/lib/db/pregen-offers.ts). Empty for a
+  // campaign.
+  offeredPregens: string[];
 };
 
 export function getImportSourceForUser(sourceId: string, userId: string): Campaign | null {
@@ -59,6 +64,12 @@ function summarize(campaign: Campaign): ImportSourceSummary {
       IMPORT_KINDS.map((kind) => [kind, source[kind].length]),
     ) as Record<ImportKind, number>,
     boardArc: source.storyboard.length > 0 && boardWritesArc(campaign.id),
+    offeredPregens:
+      campaign.kind === "workshop"
+        ? listPregens(campaign.ownerUserId, campaign.id)
+            .filter((character) => character.offered && character.role !== "companion")
+            .map((character) => character.name)
+        : [],
   };
 }
 

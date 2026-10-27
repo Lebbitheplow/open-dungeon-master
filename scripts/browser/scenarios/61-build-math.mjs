@@ -86,6 +86,52 @@ export default {
     await sleep(2_000);
     if (((await status.textContent())?.trim() ?? "") !== said) found.push("a second line followed the burst");
 
+    // A new hero has no scores on its first steps: the panel shows the picks
+    // so far, the settled numbers and the chosen class's and ancestry's
+    // write-ups, where the table will be.
+    await t.open("/characters/new");
+    const fresh = page.locator(`${root}button`).filter({ hasText: /^Start fresh$/ }).locator("visible=true");
+    if (await fresh.count()) await t.tap(fresh.first());
+    const cards = page.locator(`${root}section[data-active] .creator-card`).locator("visible=true");
+    await eventually(() => cards.count(), { timeoutMs: 30_000, label: "the class cards" });
+    await t.tap(page.locator(`${root}section[data-active] .creator-card[aria-label^="Bard"]`).locator("visible=true").first());
+    const picks = page.locator(`${root}[data-build-math] [data-picks-so-far]`);
+    if (!wide) await t.tap(page.locator(`${root}[data-build-math] button[aria-expanded]`).first());
+    await eventually(() => picks.locator('[data-picked="class"]').isVisible(), { timeoutMs: 10_000, label: "the class in the picks" }).catch(() =>
+      found.push("the chosen class is not in the panel"),
+    );
+    const settled = await picks.evaluate((node) => [...node.querySelectorAll("tr[data-row]")].map((row) => row.getAttribute("data-row")));
+    for (const row of ["proficiency", "hit-die", "save-proficiencies"]) {
+      if (!settled.includes(row)) found.push(`no settled ${row} row before scores`);
+    }
+    // On to the ancestry step, where the chosen lineage joins the class. The
+    // step holds until the class's skills are picked; the step's own
+    // suggestion picks them.
+    const suggest = page.locator(`${root}section[data-active] button`).filter({ hasText: /^Suggest the rest$/ }).locator("visible=true");
+    await eventually(() => suggest.count(), { timeoutMs: 10_000, label: "the skills' Suggest the rest" });
+    await t.tap(suggest.first());
+    await t.tap(page.locator(`${root}button`).filter({ hasText: /^Continue/ }).locator("visible=true").first());
+    const elf = page.locator(`${root}section[data-active] .creator-card[aria-label^="Elf (High)"]`).locator("visible=true");
+    await eventually(() => elf.count(), { timeoutMs: 15_000, label: "the lineage cards" });
+    await t.tap(elf.first());
+    await eventually(() => picks.locator('[data-picked="ancestry"]').isVisible(), { timeoutMs: 10_000, label: "the ancestry in the picks" }).catch(() =>
+      found.push("the chosen ancestry is not in the panel"),
+    );
+    const picked = await picks.evaluate((node) => ({
+      rows: [...node.querySelectorAll("tr[data-row]")].map((row) => row.getAttribute("data-row")),
+      smallest: Math.min(...[...node.querySelectorAll("tbody th, tbody td")].map((cell) => parseFloat(getComputedStyle(cell).fontSize))),
+    }));
+    for (const row of ["ancestry-bonuses", "speed"]) {
+      if (!picked.rows.includes(row)) found.push(`no settled ${row} row once an ancestry is chosen`);
+    }
+    if (picked.smallest < 16) found.push(`picks text at ${picked.smallest}px, under 1rem`);
+    found.push(
+      ...(await axeViolations(page, "[data-build-math]")).map(
+        (violation) => `picks: ${violation.id} (${violation.impact}) ${violation.help} at ${violation.nodes.join(", ")}`,
+      ),
+    );
+    await t.shot("picks");
+
     if (found.length) await t.shot("problems");
     check(found.length === 0, `the build math table:\n  ${found.join("\n  ")}`);
   },

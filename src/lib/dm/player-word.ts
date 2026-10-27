@@ -70,13 +70,13 @@ export function characterAwaitingPlayer(campaignId: string): CharacterSheet | nu
 }
 
 // Read from a tool call's arguments (characterId for an attack or an
-// action, casterId or healerId where the character is not the target): the
-// refusal, or null.
+// action; casterCharacterId, heal's casterId or healerId where the character
+// is not the target): the refusal, or null.
 export function characterCallUnasked(
   campaignId: string,
   turn: Pick<DmTurn, "actor"> | null,
   rawArguments: string,
-  key: "characterId" | "casterId" | "healerId",
+  key: "characterId" | "casterId" | "casterCharacterId" | "healerId",
 ): ToolError | null {
   if (turn?.actor !== "ai") {
     return null;

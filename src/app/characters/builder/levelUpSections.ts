@@ -8,13 +8,25 @@
 import { fightingStyleSlots } from "@/lib/srd/feature-effects";
 import { classFeaturesFor, expertiseSlotsFor, subclassLevelFor } from "@/lib/srd/features";
 import { openOptionSlots } from "@/lib/srd/options";
+import { racialCantripsOf, type RacialCantripChoices } from "@/lib/srd/racial-cantrips";
 import type { ProgressionRow } from "./levelProgression";
 import type { OwedPick } from "./owed";
 import type { BlockerTarget } from "./submit";
 
 // The picks the sheet asks for itself. Anything else still owed (a tool
-// grant, a score, a race pick) is named with the way to the whole build.
-export const SHEET_TARGETS: readonly BlockerTarget[] = ["subclass", "asi", "styles", "expertise", "options", "spells"];
+// grant, a score, most race picks) is named with the way to the whole build.
+// The race's cantrips are the exception: a character stored when a sheet
+// kept only one (a homebrew species offering three) owes the rest, and they
+// are picked here (racialCantripsDue).
+export const SHEET_TARGETS: readonly BlockerTarget[] = [
+  "subclass",
+  "asi",
+  "styles",
+  "expertise",
+  "options",
+  "spells",
+  "racialCantrip",
+];
 
 export type LevelUpSections = {
   subclass: boolean;
@@ -75,6 +87,13 @@ export function levelUpSections(input: {
       styleGain || expertiseGain || optionGain || owed.has("styles") || owed.has("expertise") || owed.has("options"),
     spells: input.casts && (castingGrows(input.heldRow, input.nextRow) || owed.has("spells")),
   };
+}
+
+// Whether the sheet shows the race's cantrip picker: while one is owed, and
+// for as long as the sheet is open once the stored character came short of
+// the race's count, so the picker stays while its picks are made.
+export function racialCantripsDue(stored: RacialCantripChoices, count: number, owed: ReadonlySet<BlockerTarget>): boolean {
+  return owed.has("racialCantrip") || racialCantripsOf(stored).length < count;
 }
 
 // The owed picks the sheet asks for, and the ones it sends to the whole

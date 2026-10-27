@@ -208,11 +208,11 @@ await test("An AI companion walks on its own turn with its own speed, through mo
     kit.place(companionId, 1, 1);
     kit.giveTurn(companionId);
     const turn = mk.aiTurn();
-    const moved = await mk.ai(turn, "move_token", { tokenName: companionId, x: 1, y: 5 });
+    const moved = await mk.ai(turn, "move_token", { token: companionId, x: 1, y: 5 });
     assert.equal(moved.ok, true, moved.error);
     assert.deepEqual([kit.token(companionId).x, kit.token(companionId).y], [1, 5]);
     assert.equal(kit.token(companionId).movedThisRound, 4);
-    const past = await mk.ai(turn, "move_token", { tokenName: companionId, x: 1, y: 12 });
+    const past = await mk.ai(turn, "move_token", { token: companionId, x: 1, y: 12 });
     assert.notDeepEqual([kit.token(companionId).x, kit.token(companionId).y], [1, 12], "a companion walked past its speed");
     assert.ok(past);
   } finally {
@@ -247,13 +247,47 @@ await test("The AI moves a combatant by teleport only through the spell that doe
   kit.giveTurn(watcher.id);
   const turn = mk.aiTurn();
   world.say("player", "I Misty Step away.", watcher);
-  const free = await mk.ai(turn, "teleport_token", { tokenName: watcher.id, x: 8, y: 12 });
+  const free = await mk.ai(turn, "teleport_token", { token: watcher.id, x: 8, y: 12 });
   assert.equal(free.ok, false, "a free teleport");
-  const misty = await mk.ai(turn, "teleport_token", { tokenName: watcher.id, x: 8, y: 12, spell: "Misty Step", casterId: watcher.id });
+  const misty = await mk.ai(turn, "teleport_token", { token: watcher.id, x: 8, y: 12, spell: "Misty Step", casterId: watcher.id });
   assert.equal(misty.ok, true, misty.error);
   assert.equal(world.sheet(watcher.id).spellcasting.slots[2].used, 1);
   world.patch(watcher.id, { spellcasting: watcher.spellcasting });
-  assert.equal((await world.invoke("teleport_token", { tokenName: watcher.id, x: 9, y: 12 })).ok, true);
+  assert.equal((await world.invoke("teleport_token", { token: watcher.id, x: 9, y: 12 })).ok, true);
+});
+
+// A class feature's teleport is paid by its spend (src/lib/dm/feature-teleport.ts):
+// move_token names the feature and its user, spends no slot, and goes no
+// farther than the feature allows, once.
+await test("The AI teleports a character by the feature they just spent, within its range and only once.", async () => {
+  const { creditFeatureTeleport } = await import("../src/lib/dm/feature-teleport.ts");
+  await stage();
+  kit.giveTurn(watcher.id);
+  const turn = mk.aiTurn();
+  world.say("player", "I step between the shadows.", watcher);
+  const slots = JSON.stringify(world.sheet(watcher.id).spellcasting.slots);
+  creditFeatureTeleport(watcher.id, "Walk Between", 30);
+  const far = await mk.ai(turn, "move_token", { token: watcher.id, x: 5, y: 20, teleport: true, spell: "Walk Between", casterCharacterId: watcher.id });
+  assert.equal(far.ok, false, "a jump past the feature's 30 feet");
+  const step = await mk.ai(turn, "move_token", { token: watcher.id, x: 8, y: 12, teleport: true, spell: "Walk Between", casterCharacterId: watcher.id });
+  assert.equal(step.ok, true, step.error);
+  assert.equal(JSON.stringify(world.sheet(watcher.id).spellcasting.slots), slots, "the feature's teleport spent a slot");
+  const again = await mk.ai(turn, "move_token", { token: watcher.id, x: 9, y: 12, teleport: true, spell: "Walk Between", casterCharacterId: watcher.id });
+  assert.equal(again.ok, false, "one spend paid for two teleports");
+});
+
+// An enemy's teleport is the ability on its block, named in enemyAbility
+// beside casterEnemyId, as an area's is (aoe_damage).
+await test("The AI teleports an enemy by the ability on its stat block, and by no other.", async () => {
+  const [enemy] = await stage();
+  kit.setEnemy(enemy.id, { stats: { ...enemy.stats, traits: ["Fey Step. The creature magically teleports up to 30 feet to an unoccupied space it can see."] } });
+  const turn = mk.aiTurn();
+  const alone = await mk.ai(turn, "move_token", { token: enemy.id, x: 9, y: 6, teleport: true, enemyAbility: "Fey Step" });
+  assert.match(alone.error ?? "", /send it with casterEnemyId/);
+  const unlisted = await mk.ai(turn, "move_token", { token: enemy.id, x: 9, y: 6, teleport: true, enemyAbility: "Shadow Step", casterEnemyId: enemy.id });
+  assert.match(unlisted.error ?? "", /has no Shadow Step on its stat block/);
+  const step = await mk.ai(turn, "move_token", { token: enemy.id, x: 9, y: 6, teleport: true, enemyAbility: "Fey Step", casterEnemyId: enemy.id });
+  assert.equal(step.ok, true, step.error);
 });
 
 // ---- companion auto-act (N:R8) ----

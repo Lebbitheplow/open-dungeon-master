@@ -18,7 +18,9 @@ import { SelectedPrerequisite } from "./AsiFeatEditor";
 import { judgeEntry, useFeatJudge } from "./featPrereqs";
 import { racialFeatCount } from "@/lib/srd/race-id";
 import { DRACONIC_ANCESTRIES, takesDraconicAncestry } from "@/lib/srd/racial-grants";
+import { variantShort, variantSummary } from "@/lib/content/species-variants";
 import { Chip } from "./steps/shared";
+import { RacialCantripPicker } from "./RacialCantripPicker";
 import { featChoice } from "@/lib/schemas/sheet";
 
 const ABILITY_NAMES: Record<Ability, string> = {
@@ -45,12 +47,14 @@ export function RacialChoicesSection({
   onAsiChange,
   skills,
   onSkillsChange,
-  cantrip,
-  onCantripChange,
+  cantrips,
+  onCantripsChange,
   tool,
   onToolChange,
   ancestry = "",
   onAncestryChange,
+  variant = "",
+  onVariantChange,
   repeated = [],
   repeatSkills = [],
   onRepeatChange,
@@ -72,13 +76,17 @@ export function RacialChoicesSection({
   onAsiChange: (index: number, ability: Ability | "") => void;
   skills: string[];
   onSkillsChange: (index: number, skill: string) => void;
-  cantrip: string;
-  onCantripChange: (spell: string) => void;
+  cantrips: string[];
+  onCantripsChange: (cantrips: string[]) => void;
   tool: string;
   onToolChange: (tool: string) => void;
   // A dragonborn's draconic ancestry, by id.
   ancestry?: string;
   onAncestryChange?: (ancestry: string) => void;
+  // The option of a workshop species' choice (a Half-Dragon's ancestry), by
+  // id, for a race that offers one.
+  variant?: string;
+  onVariantChange?: (variant: string) => void;
   // Skills the race and the background both give, and the ones chosen in
   // their place.
   repeated?: string[];
@@ -104,8 +112,9 @@ export function RacialChoicesSection({
   const draconic = takesDraconicAncestry(race.id);
   const racialFeats = onFeatsChange ? racialFeatCount(race.id) : 0;
   const hasChoices = Boolean(
-    race.asiChoice || race.skillChoice || race.cantripChoice || race.toolChoice || draconic || repeated.length || racialFeats,
+    race.asiChoice || race.skillChoice || race.cantripChoice || race.toolChoice || draconic || race.variants || repeated.length || racialFeats,
   );
+  const chosen = race.variants?.options.find((option) => option.id === variant) ?? null;
   // The half-feat's choice of score, offered once the feat is picked.
   const featScores = racialFeats ? (featAbilityIncrease(feats[0] ?? "", featDescOf?.(feats[0] ?? ""))?.from ?? []) : [];
   // The builder's prerequisite check (featPrereqs.ts): read off each row,
@@ -131,6 +140,34 @@ export function RacialChoicesSection({
   return (
     <div className="space-y-3 rounded-lg border border-amber-900/40 bg-amber-950/10 p-3">
       <p className="text-xs text-amber-200/90">{race.name} choices</p>
+
+      {/* First: what it gives changes what the picks below may be. */}
+      {race.variants && onVariantChange ? (
+        <div data-builder-target="variant">
+          <label className="block">
+            <span className="mb-1 block text-stone-400">
+              {race.variants.label}: it changes what your {race.name} gets
+            </span>
+            <Select<string>
+              value={variant}
+              onChange={onVariantChange}
+              className="w-full"
+              label={race.variants.label}
+              placeholder="Choose one..."
+              options={[
+                { value: "", label: "Choose one..." },
+                ...race.variants.options.map((option) => ({ value: option.id, label: `${option.name} (${variantShort(option)})` })),
+              ]}
+            />
+          </label>
+          {chosen ? (
+            <p className="live-in mt-1 whitespace-pre-line text-xs text-stone-400" data-variant-summary>
+              {variantSummary(chosen)}
+              {chosen.description ? `\n${chosen.description}` : ""}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       {race.asiChoice ? (
         <div data-builder-target="racialAsi">
@@ -348,66 +385,7 @@ export function RacialChoicesSection({
         </label>
       ) : null}
 
-      {race.cantripChoice ? (
-        <div data-builder-target="racialCantrip">
-          <span className="mb-1 flex flex-wrap items-center gap-1 text-stone-400">
-            Bonus <GameTerm id="cantrip">cantrip</GameTerm> (one {race.cantripChoice.list}{" "}
-            cantrip)
-          </span>
-          <p className="mb-1.5 text-xs text-stone-500">
-            A cantrip is a small spell you can cast as often as you like, forever. Pick one from
-            the list below (tap ⓘ to read what each does), or search by name if you already have
-            one in mind.
-          </p>
-          {cantrip ? (
-            <div className="mb-1.5 flex items-center gap-2">
-              <span className="flex items-center gap-1 rounded-full border border-amber-800 bg-amber-950/40 px-2.5 py-1 text-xs text-amber-200">
-                {cantrip}
-                <InfoButton
-                  label={cantrip}
-                  reference={{ kind: "spells", slug: contentSlug(cantrip), name: cantrip }}
-                />
-              </span>
-              <button
-                type="button"
-                onClick={() => onCantripChange("")}
-                className="text-xs text-stone-500 hover:text-stone-300"
-              >
-                Change
-              </button>
-            </div>
-          ) : (
-            <>
-              {/* Nobody can search for a cantrip they have never heard of.
-                  Every one this race may take is listed from the start, each
-                  with the ⓘ that says what it does; the search is second. */}
-              <CatalogBrowser
-                kind="spells"
-                buttonLabel={`Every ${race.cantripChoice.list} cantrip`}
-                defaultOpen
-                openSections={[`cantrips:${race.cantripChoice.list}`]}
-                selectedNames={cantrip ? [cantrip] : []}
-                onPick={(entry) => onCantripChange(entry.name)}
-                sections={[
-                  {
-                    key: `cantrips:${race.cantripChoice.list}`,
-                    label: `Every ${race.cantripChoice.list} cantrip`,
-                    params: { class: race.cantripChoice.list, level: "0" },
-                  },
-                ]}
-                metaOf={(entry) => entry.school ?? ""}
-              />
-              <p className="mt-2 mb-1 text-xs text-stone-500">Or search by name:</p>
-              <ContentPicker
-                kind="spells"
-                extraParams={{ class: race.cantripChoice.list, level: "0" }}
-                placeholder="Search cantrips (e.g. fire bolt)"
-                onPick={(entry) => onCantripChange(entry.name)}
-              />
-            </>
-          )}
-        </div>
-      ) : null}
+      <RacialCantripPicker race={race} cantrips={cantrips} onChange={onCantripsChange} />
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
+import { refuseDuringBreak } from "@/lib/dm/table-break";
 import { getLatestDmMessage } from "@/lib/db/messages";
 import { publishPersisted } from "@/lib/events";
 import { getDmStatus } from "@/lib/dm/status";
@@ -34,6 +35,12 @@ export async function POST(
   // would queue behind it and extend a message the story has moved on from.
   if (getDmStatus(campaignId) !== "idle") {
     return Response.json({ error: "The DM is mid-turn; try again after." }, { status: 409 });
+  }
+  // Narration, which would wait at the DM queue's gate with this request
+  // held open for the whole break: refused at once instead.
+  const paused = refuseDuringBreak(campaignId);
+  if (paused) {
+    return paused;
   }
 
   const result = await runContinueScene({ campaignId, messageId });

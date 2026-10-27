@@ -23,6 +23,7 @@ import {
   type MicMode,
 } from "@/app/campaigns/[campaignId]/useVoicePrefs";
 import { registerOutput, releaseOutput, withMicGain } from "@/lib/audio-devices";
+import { micOpen } from "@/lib/voice/turn-logic";
 import { startTranscriptCapture } from "@/app/campaigns/[campaignId]/transcript-capture";
 
 export type VoiceStatus = "idle" | "connecting" | "connected" | "error" | "reconnecting";
@@ -53,6 +54,15 @@ function applyVolumes(
   }
 }
 
+// A capture nobody will use: the join or swap that asked for it was
+// overtaken while the permission prompt was up. Stopping it turns the
+// browser's recording indicator back off.
+function stopStream(stream: MediaStream) {
+  for (const track of stream.getTracks()) {
+    track.stop();
+  }
+}
+
 // Signaling rides plain POST routes and the campaign SSE stream, so there is
 // no WebSocket here. mediasoup's signaling is request/response by nature and
 // the only server-push need (the roster changed) is already a thing this app
@@ -65,16 +75,21 @@ export function useVoiceRoom(
   audibilityVersion = 0,
   // Mesh signaling nudge from the stream: someone left mail in a mailbox.
   meshSignal: { to: string; version: number } | null = null,
-  // The table's transcription switch (docs/vtt-parity-implementation-plan.md 13.3).
-  options: { transcribe?: boolean } = {},
+  // The table's transcription switch (docs/vtt-parity-implementation-plan.md
+  // 13.3), and whether a strict floor silences this seat (see micOpen).
+  options: { transcribe?: boolean; floorClosed?: boolean } = {},
 ) {
+  const transcribe = Boolean(options.transcribe);
+  const floorClosed = Boolean(options.floorClosed);
   const [status, setStatus] = useState<VoiceStatus>("idle");
-  const optionsRef = useRef(options);
-  useEffect(() => {
-    optionsRef.current = options;
-  }, [options]);
+  const transcribeRef = useRef(transcribe);
+  const floorClosedRef = useRef(floorClosed);
   const [error, setError] = useState("");
   const [muted, setMuted] = useState(false);
+  // What the microphone gate reads, as refs: joins and swaps decide it after
+  // an await, when the state a render closed over may be stale.
+  const mutedRef = useRef(false);
+  const talkingRef = useRef(false);
   const [handRaised, setHandRaised] = useState(false);
   // The roster from this client's own first probe, used only until the stream
   // delivers one. `peers` below prefers the stream, so this is never a second
@@ -105,6 +120,9 @@ export function useVoiceRoom(
   // written elsewhere (the apps' Settings) is applied exactly once.
   const activeMicRef = useRef("");
   const activeModeRef = useRef<MicMode>("open");
+  // The device the live capture really came from, which a failed swap
+  // returns the choice to.
+  const liveMicRef = useRef("");
   const joinedRef = useRef(false);
   // How loudly this client should play each other person, from the server's
   // audibility matrix. Whether a voice arrives at all is enforced server-side
@@ -113,14 +131,24 @@ export function useVoiceRoom(
   // Kept so the microphone can be swapped without rebuilding the transport:
   // replaceTrack keeps the same producer, so nobody else renegotiates.
   const producerRef = useRef<Awaited<ReturnType<Transport["produce"]>> | null>(null);
-  const stopCaptureRef = useRef<(() => void) | null>(null);
+  // The transcript recorder and the stream it records, so it can follow a
+  // swapped microphone.
+  const captureRef = useRef<{ stream: MediaStream; stop: () => void } | null>(null);
+  // Bumped by every join and every teardown. A join compares it after each
+  // await, so one overtaken by a leave or by the table closing (the
+  // permission prompt can outlast both) stops its capture and gives up its
+  // seat instead of carrying on with nobody to hang it up.
+  const attemptRef = useRef(0);
+  // Bumped by every microphone swap, so only the newest choice lands.
+  const swapRef = useRef(0);
 
   // Which transport this server runs, learned from the availability probe.
   // "mesh" is browser-to-browser WebRTC: one RTCPeerConnection per other
-  // player, signaled through the server's mailbox relay. A ref rather than
-  // state because only callbacks read it, and the probe resolves before the
-  // Join button can exist.
+  // player, signaled through the server's mailbox relay. The ref is for
+  // callbacks; the state is for the panel, which offers only what the
+  // transport has (mesh has no breakout rooms and no raised hands).
   const modeRef = useRef<"sfu" | "mesh">("sfu");
+  const [transport, setTransport] = useState<"sfu" | "mesh">("sfu");
   type MeshConn = {
     pc: RTCPeerConnection;
     polite: boolean;
@@ -215,10 +243,44 @@ export function useVoiceRoom(
     }
   }, [campaignId]);
 
+  // Opens or closes the live track (or a new one, before it is published) to
+  // match the controls. See micOpen in src/lib/voice/turn-logic.ts.
+  const applyGate = useCallback((stream: MediaStream | null = micStreamRef.current) => {
+    const open = micOpen({
+      transport: modeRef.current,
+      mode: activeModeRef.current,
+      muted: mutedRef.current,
+      talking: talkingRef.current,
+      floorClosed: floorClosedRef.current,
+    });
+    for (const track of stream?.getAudioTracks() ?? []) {
+      track.enabled = open;
+    }
+  }, []);
+
+  // The transcript recorder follows the call, the live microphone and the
+  // table's switch, whichever moved: it records the stream actually being
+  // sent, starts on either transport, and stops the moment transcription is
+  // turned off rather than at the end of the call.
+  const reconcileCapture = useCallback(() => {
+    const stream = joinedRef.current ? micStreamRef.current : null;
+    const wanted = Boolean(stream && transcribeRef.current);
+    const capture = captureRef.current;
+    if (capture && (!wanted || capture.stream !== stream)) {
+      capture.stop();
+      captureRef.current = null;
+    }
+    if (wanted && stream && !captureRef.current) {
+      const stop = startTranscriptCapture(campaignId, stream);
+      captureRef.current = stop ? { stream, stop } : null;
+    }
+  }, [campaignId]);
+
   const teardown = useCallback(() => {
     joinedRef.current = false;
-    stopCaptureRef.current?.();
-    stopCaptureRef.current = null;
+    attemptRef.current += 1;
+    captureRef.current?.stop();
+    captureRef.current = null;
     micStreamRef.current?.getTracks().forEach((track) => track.stop());
     micStreamRef.current = null;
     producerRef.current = null;
@@ -383,29 +445,63 @@ export function useVoiceRoom(
     }
   }, [handleMeshSignal, post, teardown]);
 
+  // The microphone a join starts with, closed or open as the saved controls
+  // say before it reaches anyone: a saved push-to-talk is closed until the
+  // control is held, on a first join and a rejoin alike.
+  const captureForJoin = useCallback(async () => {
+    const savedMic = readMicId();
+    const stream = withMicGain(
+      await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          // A saved device that has since been unplugged would make this
+          // throw outright, so it is a preference rather than a requirement.
+          ...(savedMic ? { deviceId: { ideal: savedMic } } : {}),
+        },
+      }),
+    );
+    activeMicRef.current = savedMic;
+    liveMicRef.current = savedMic;
+    activeModeRef.current = readMicMode();
+    mutedRef.current = false;
+    talkingRef.current = false;
+    applyGate(stream);
+    return stream;
+  }, [applyGate]);
+
   const joinMesh = useCallback(async () => {
+    const attempt = ++attemptRef.current;
+    const overtaken = () => attempt !== attemptRef.current;
     setStatus("connecting");
     setError("");
+    setMuted(false);
+    setTalking(false);
     try {
-      const savedMic = readMicId();
-      const stream = withMicGain(
-        await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-            ...(savedMic ? { deviceId: { ideal: savedMic } } : {}),
-          },
-        }),
-      );
+      const stream = await captureForJoin();
+      if (overtaken()) {
+        stopStream(stream);
+        return;
+      }
       micStreamRef.current = stream;
-      activeMicRef.current = savedMic;
-      activeModeRef.current = readMicMode();
       const data = await post("mesh/join");
+      if (overtaken()) {
+        // Seated after the table closed: nobody else will give the seat up.
+        void post("mesh/leave").catch(() => {});
+        return;
+      }
       meshIceRef.current = (data.iceServers ?? []) as RTCIceServer[];
       meshHeartbeatMsRef.current = Number(data.heartbeatMs) || 10_000;
       joinedRef.current = true;
+      // The roster shows a push-to-talk seat as muted from the start.
+      if (activeModeRef.current === "ptt") {
+        void post("mesh/state", { muted: true }).catch(() => {});
+      }
       await refreshGains();
+      if (overtaken()) {
+        return;
+      }
       // The newcomer rings everyone already seated; adding the mic track
       // fires negotiationneeded, which sends the offers.
       for (const peer of data.peers ?? []) {
@@ -413,15 +509,18 @@ export function useVoiceRoom(
           ensureMeshConn(peer.userId);
         }
       }
+      reconcileCapture();
       setStatus("connected");
-      setMuted(false);
       setHandRaised(false);
     } catch (cause) {
+      if (overtaken()) {
+        return;
+      }
       teardown();
       setError(cause instanceof Error ? cause.message : "Could not join voice chat.");
       setStatus("error");
     }
-  }, [ensureMeshConn, mePeerId, post, refreshGains, teardown]);
+  }, [captureForJoin, ensureMeshConn, mePeerId, post, reconcileCapture, refreshGains, teardown]);
 
   const join = useCallback(async () => {
     if (joinedRef.current || status === "connecting") {
@@ -437,33 +536,50 @@ export function useVoiceRoom(
       await joinMesh();
       return;
     }
+    const attempt = ++attemptRef.current;
+    const overtaken = () => attempt !== attemptRef.current;
     setStatus("connecting");
     setError("");
+    setMuted(false);
+    setTalking(false);
     try {
       // Ask for the mic before building any transports: if the player denies
       // it there is nothing worth setting up, and the prompt is the slowest
       // part of joining anyway.
-      const savedMic = readMicId();
-      const stream = withMicGain(
-        await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-            // A saved device that has since been unplugged would make this
-            // throw outright, so it is a preference rather than a requirement.
-            ...(savedMic ? { deviceId: { ideal: savedMic } } : {}),
-          },
-        }),
-      );
+      const stream = await captureForJoin();
+      if (overtaken()) {
+        stopStream(stream);
+        return;
+      }
       micStreamRef.current = stream;
-      activeMicRef.current = savedMic;
-      activeModeRef.current = readMicMode();
 
       const { Device } = await import("mediasoup-client");
+      if (overtaken()) {
+        return;
+      }
       const data = await post("join");
+      // Seated, but until joinedRef says so the table closing will not hang
+      // this seat up, so an overtaken join gives it back itself.
+      const abandoned = () => {
+        if (!overtaken()) {
+          return false;
+        }
+        void post("leave").catch(() => {});
+        return true;
+      };
+      if (abandoned()) {
+        return;
+      }
+      // A push-to-talk seat is muted before its producer exists, so the
+      // server creates it paused (produceAudio honours a mute chosen early).
+      if (activeModeRef.current === "ptt") {
+        await post("state", { muted: true }).catch(() => {});
+      }
       const device = new Device();
       await device.load({ routerRtpCapabilities: data.routerRtpCapabilities });
+      if (abandoned()) {
+        return;
+      }
       deviceRef.current = device;
       joinedRef.current = true;
 
@@ -507,25 +623,34 @@ export function useVoiceRoom(
           .catch((cause) => errback(cause as Error));
       });
 
-      producerRef.current = await sendTransport.produce({ track: stream.getAudioTracks()[0] });
+      const producer = await sendTransport.produce({ track: stream.getAudioTracks()[0] });
+      // From here on the table closing hangs up through joinedRef, and the
+      // teardown has already closed this transport.
+      if (overtaken()) {
+        return;
+      }
+      producerRef.current = producer;
       // A transcribed table (13.3): this microphone is cut into rings and
       // written down with this player's name from here on.
-      if (optionsRef.current.transcribe) {
-        stopCaptureRef.current = startTranscriptCapture(campaignId, stream);
-      }
+      reconcileCapture();
       // Gains before consumers, so the first audio plays at the right volume
       // rather than blaring at full and being corrected a moment later.
       await refreshGains();
       await syncConsumers();
+      if (overtaken()) {
+        return;
+      }
       setStatus("connected");
-      setMuted(false);
       setHandRaised(false);
     } catch (cause) {
+      if (overtaken()) {
+        return;
+      }
       teardown();
       setError(cause instanceof Error ? cause.message : "Could not join voice chat.");
       setStatus("error");
     }
-  }, [campaignId, joinMesh, post, refreshGains, status, syncConsumers, teardown]);
+  }, [captureForJoin, joinMesh, post, reconcileCapture, refreshGains, status, syncConsumers, teardown]);
 
   const leave = useCallback(async () => {
     const leavePath = modeRef.current === "mesh" ? "mesh/leave" : "leave";
@@ -548,21 +673,44 @@ export function useVoiceRoom(
     [post],
   );
 
+  // The local track is muted too, so the mute is visible in the browser's
+  // own recording indicator rather than being a server-side promise the
+  // player has to take on trust; in mesh it is the only gate there is.
+  // Closing never waits on the server. Opening does, so a request that fails
+  // leaves the microphone closed under a "muted" label, never live under one.
+  const muteTurnRef = useRef(0);
   const toggleMute = useCallback(async () => {
-    const next = !muted;
-    setMuted(next);
-    // The local track is stopped too, so the mute is visible in the browser's
-    // own recording indicator rather than being a server-side promise the
-    // player has to take on trust.
-    for (const track of micStreamRef.current?.getAudioTracks() ?? []) {
-      track.enabled = !next;
+    const turn = ++muteTurnRef.current;
+    if (!mutedRef.current) {
+      mutedRef.current = true;
+      setMuted(true);
+      applyGate();
+      try {
+        await postState({ muted: true });
+        setError("");
+      } catch {
+        if (turn === muteTurnRef.current) {
+          setError("Your microphone is off, but the call could not be told you muted.");
+        }
+      }
+      return;
     }
     try {
-      await postState({ muted: next });
+      await postState({ muted: false });
     } catch {
-      setMuted(!next);
+      if (turn === muteTurnRef.current) {
+        setError("Could not unmute. Your microphone is still off.");
+      }
+      return;
     }
-  }, [muted, postState]);
+    if (turn !== muteTurnRef.current) {
+      return;
+    }
+    mutedRef.current = false;
+    setMuted(false);
+    applyGate();
+    setError("");
+  }, [applyGate, postState]);
 
   // How far this player's voice carries, when the say-range rule is on.
   const setSayRange = useCallback(
@@ -578,19 +726,29 @@ export function useVoiceRoom(
 
   // Swaps the microphone without touching the transport: replaceTrack keeps
   // the same producer, so nobody else on the call renegotiates or hears a gap.
-  const swapMic = useCallback(
-    async (deviceId: string) => {
-      activeMicRef.current = deviceId;
-      if (!joinedRef.current) {
+  // The new track comes up exactly as open as the controls say (muted stays
+  // muted, an idle push-to-talk stays closed), and a call with nobody else
+  // on it yet swaps too, so whoever joins next hears the chosen microphone.
+  // Swaps run one at a time, and a choice overtaken by a newer one is
+  // skipped, so two quick picks never leave two captures running.
+  const swapChainRef = useRef<Promise<void>>(Promise.resolve());
+  const swapNow = useCallback(
+    async (deviceId: string, swap: number) => {
+      const attempt = attemptRef.current;
+      if (swap !== swapRef.current || !joinedRef.current || !micStreamRef.current) {
         return;
       }
-      const producer = producerRef.current;
-      const meshConns = [...meshConnsRef.current.values()];
-      if (!producer && meshConns.length === 0) {
-        return;
-      }
+      const fail = () => {
+        if (swap === swapRef.current && attempt === attemptRef.current) {
+          // The choice snaps back to the microphone still in use.
+          activeMicRef.current = liveMicRef.current;
+          writeMicId(liveMicRef.current);
+          setError("Could not switch microphone.");
+        }
+      };
+      let stream: MediaStream;
       try {
-        const stream = withMicGain(
+        stream = withMicGain(
           await navigator.mediaDevices.getUserMedia({
             audio: {
               echoCancellation: true,
@@ -600,27 +758,64 @@ export function useVoiceRoom(
             },
           }),
         );
-        const track = stream.getAudioTracks()[0];
+      } catch {
+        fail();
+        return;
+      }
+      if (attempt !== attemptRef.current || !joinedRef.current) {
+        stopStream(stream);
+        return;
+      }
+      applyGate(stream);
+      const track = stream.getAudioTracks()[0];
+      const oldTrack = micStreamRef.current?.getAudioTracks()[0] ?? null;
+      const undo: Array<() => Promise<void>> = [];
+      try {
+        const producer = producerRef.current;
         if (producer) {
           await producer.replaceTrack({ track });
+          undo.push(() => producer.replaceTrack({ track: oldTrack }));
         }
         // Mesh side of the same move: replaceTrack on each connection's audio
         // sender, which renegotiates nothing and leaves no gap.
-        for (const conn of meshConns) {
+        for (const conn of meshConnsRef.current.values()) {
           const sender = conn.pc.getSenders().find((entry) => entry.track?.kind === "audio");
           if (sender) {
             await sender.replaceTrack(track);
+            undo.push(() => sender.replaceTrack(oldTrack));
           }
         }
-        // Only stop the old capture once the new one is live, so there is no
-        // moment where this player is transmitting nothing.
-        micStreamRef.current?.getTracks().forEach((old) => old.stop());
-        micStreamRef.current = stream;
       } catch {
-        setError("Could not switch microphone.");
+        for (const step of undo) {
+          await step().catch(() => {});
+        }
+        stopStream(stream);
+        fail();
+        return;
       }
+      if (attempt !== attemptRef.current) {
+        stopStream(stream);
+        return;
+      }
+      // Only stop the old capture once the new one is live, so there is no
+      // moment where this player is transmitting nothing.
+      micStreamRef.current?.getTracks().forEach((old) => old.stop());
+      micStreamRef.current = stream;
+      liveMicRef.current = deviceId;
+      reconcileCapture();
     },
-    [],
+    [applyGate, reconcileCapture],
+  );
+
+  const swapMic = useCallback(
+    (deviceId: string) => {
+      activeMicRef.current = deviceId;
+      const swap = ++swapRef.current;
+      const run = swapChainRef.current.then(() => swapNow(deviceId, swap));
+      swapChainRef.current = run.catch(() => {});
+      return run;
+    },
+    [swapNow],
   );
 
   // The stored preference is the one source of truth: the panel here and
@@ -630,43 +825,66 @@ export function useVoiceRoom(
     writeMicId(deviceId);
   }, []);
 
+  // Also asked once the call connects: a choice written while the join was
+  // still on its way (the apps' Settings) is applied then, not left behind.
   useEffect(() => {
     if (!joinedRef.current || micId === activeMicRef.current) {
       return;
     }
     void swapMic(micId);
-  }, [micId, swapMic]);
+  }, [micId, status, swapMic]);
 
   // Push-to-talk. The local track flips instantly so the player hears no lag
   // on their own control, and the server mute follows to make it real for
   // everyone else (a local-only gate would still transmit).
   const setTalking_ = useCallback(
     (held: boolean) => {
-      setTalking(held);
-      for (const track of micStreamRef.current?.getAudioTracks() ?? []) {
-        track.enabled = held;
+      // A release after the pointer already left, or a blur with nothing
+      // held, changes nothing and tells the server nothing.
+      if (activeModeRef.current !== "ptt" || talkingRef.current === held) {
+        return;
       }
-      void postState({ muted: !held }).catch(() => {});
+      talkingRef.current = held;
+      setTalking(held);
+      applyGate();
+      if (joinedRef.current) {
+        void postState({ muted: !held }).catch(() => {});
+      }
     },
-    [postState],
+    [applyGate, postState],
   );
 
   const applyMicMode = useCallback(
     (mode: MicMode) => {
       activeModeRef.current = mode;
-      // Leaving push-to-talk opens the microphone again; entering it closes
-      // the microphone until the control is held.
-      const open = mode === "open";
+      // Leaving push-to-talk opens the microphone again, and the mute button
+      // it comes back to says so; entering it closes the microphone until
+      // the control is held.
+      talkingRef.current = false;
       setTalking(false);
-      for (const track of micStreamRef.current?.getAudioTracks() ?? []) {
-        track.enabled = open;
-      }
+      mutedRef.current = false;
+      setMuted(false);
+      applyGate();
       if (joinedRef.current) {
-        void postState({ muted: !open }).catch(() => {});
+        void postState({ muted: mode !== "open" }).catch(() => {});
       }
     },
-    [postState],
+    [applyGate, postState],
   );
+
+  // The table's transcription switch reaches a call already in progress:
+  // turning it on starts the recorder, turning it off stops it at once.
+  useEffect(() => {
+    transcribeRef.current = transcribe;
+    reconcileCapture();
+  }, [reconcileCapture, transcribe]);
+
+  // A strict floor moving to or away from this seat, which only the track
+  // can enforce in mesh.
+  useEffect(() => {
+    floorClosedRef.current = floorClosed;
+    applyGate();
+  }, [applyGate, floorClosed]);
 
   // Same one-source rule as the microphone: the mode is written to the
   // preference, and the live call applies whatever the preference says.
@@ -679,20 +897,7 @@ export function useVoiceRoom(
       return;
     }
     applyMicMode(micMode);
-  }, [applyMicMode, micMode]);
-
-  // Asking for the floor. Never moves the floor by itself: the DM grants it
-  // through the controls they already have, so there is one way the floor
-  // changes rather than two.
-  const toggleHand = useCallback(async () => {
-    const next = !handRaised;
-    setHandRaised(next);
-    try {
-      await post("hand", { raised: next });
-    } catch {
-      setHandRaised(!next);
-    }
-  }, [handRaised, post]);
+  }, [applyMicMode, micMode, status]);
 
   // Device labels are only readable once microphone permission has been
   // granted, so the list is enumerated after joining rather than before, when
@@ -771,6 +976,7 @@ export function useVoiceRoom(
         setUnavailableReason(String(data.unavailableReason ?? ""));
         setProbedPeers(data.peers ?? []);
         modeRef.current = data.mode === "mesh" ? "mesh" : "sfu";
+        setTransport(modeRef.current);
       })
       .catch(() => {});
     return () => {
@@ -871,6 +1077,23 @@ export function useVoiceRoom(
   // the roster is authoritative and the local flag only covers the moment
   // between clicking and the event coming back.
   const myEntry = peers.find((peer) => peer.userId === mePeerId);
+  const handShown = myEntry ? Boolean(myEntry.handRaisedAt) : handRaised;
+
+  // Asking for the floor. Never moves the floor by itself: the DM grants it
+  // through the controls they already have, so there is one way the floor
+  // changes rather than two. Toggles the hand the button shows: the server
+  // lowers it by itself when the floor is granted, which the local flag
+  // never hears about.
+  const toggleHand = useCallback(async () => {
+    const next = !handShown;
+    setHandRaised(next);
+    try {
+      await post("hand", { raised: next });
+    } catch (cause) {
+      setHandRaised(!next);
+      setError(cause instanceof Error ? cause.message : "Could not raise your hand.");
+    }
+  }, [handShown, post]);
 
   // What this listener wants to hear, which is a property of this browser
   // rather than of the call, so it comes from localStorage and not the roster.
@@ -889,7 +1112,7 @@ export function useVoiceRoom(
     status,
     error,
     muted,
-    handRaised: myEntry ? Boolean(myEntry.handRaisedAt) : handRaised,
+    handRaised: handShown,
     toggleHand,
     sayRange: myEntry?.sayRange ?? "normal",
     setSayRange,
@@ -901,6 +1124,7 @@ export function useVoiceRoom(
     talking,
     setTalking: setTalking_,
     reconnecting: status === "reconnecting",
+    transport,
     peers,
     available,
     unavailableReason,

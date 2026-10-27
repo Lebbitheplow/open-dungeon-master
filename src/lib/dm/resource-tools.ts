@@ -21,6 +21,7 @@ import { noneNamed, type ToolError, type ToolResult } from "@/lib/dm/tool-errors
 import { isConditionNamed, nameChoice } from "@/lib/srd/feature-names";
 import { isTableGearName } from "@/lib/db/homebrew";
 import { spentSlotRefusal } from "@/lib/dm/cast-rules";
+import { creditFeatureTeleport } from "@/lib/dm/feature-teleport";
 
 export { computePurchase } from "@/lib/dm/purchase-math";
 
@@ -553,26 +554,31 @@ export function computeUseResource(
       return outcome;
     }
     case "enemy_save": {
-      // The spend hands back the real numbers; the model resolves the
-      // save with cast_at_enemy so the enemy's stat block rolls it.
+      // The spend hands back the real numbers under aoe_damage's own
+      // names; that call rolls each creature's save from its stat block and
+      // lays the condition on a failure. A feature is no spell, so
+      // cast_at_enemy (which needs a caster and takes their spell DC) is not it.
       const dc =
         derived.spellSaveDc ??
         8 +
           derived.proficiencyBonus +
           Math.max(...Object.values(derived.abilityMods));
-      outcome.result.resolveWith = "cast_at_enemy";
+      outcome.result.resolveWith = "aoe_damage";
+      outcome.result.casterCharacterId = sheet.id;
       outcome.result.saveAbility = def.effect.save;
       outcome.result.dc = dc;
       if (def.effect.condition) {
         outcome.result.condition = def.effect.condition;
       }
       if (def.effect.dice) {
-        outcome.result.dice = def.effect.dice(fxLevel, derived.abilityMods);
+        outcome.result.damage = def.effect.dice(fxLevel, derived.abilityMods);
       }
+      outcome.result.note = "Resolve it with aoe_damage, these fields and the creatures it catches (enemyIds, characterIds).";
       return outcome;
     }
     case "teleport": {
-      outcome.result.teleport = `${sheet.name} teleports up to ${def.effect.feet} feet; move their token with move_token (forced: true) if a battle map is live.`;
+      creditFeatureTeleport(sheet.id, def.displayName, def.effect.feet);
+      outcome.result.teleport = `${sheet.name} teleports up to ${def.effect.feet} feet: if a battle map is live, move their token with move_token, teleport true, spell "${def.displayName}" and casterCharacterId ${sheet.id}.`;
       return outcome;
     }
     case "condition": {
@@ -632,11 +638,12 @@ export function computeUseResource(
     case "aoe": {
       const spend = aoeSpendFor(def, sheet, fxLevel, derived)!;
       outcome.result.resolveWith = "aoe_damage";
-      outcome.result.dice = spend.dice;
+      outcome.result.casterCharacterId = sheet.id;
+      outcome.result.damage = spend.dice;
       outcome.result.saveAbility = spend.saveAbility;
       outcome.result.dc = spend.dc;
       if (spend.damageType) {
-        outcome.result.damageType = spend.damageType;
+        outcome.result.type = spend.damageType;
       }
       if (spend.area) {
         outcome.result.area = spend.area;

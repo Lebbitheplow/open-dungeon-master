@@ -69,6 +69,11 @@ import { judgeFeats, judgeFeatures } from "@/lib/srd/legality/features";
 import { judgeProficiencies } from "@/lib/srd/legality/proficiencies";
 import { applySubclassTraining, autoSubclassPicks, subclassFixedTraining, subclassGrants } from "@/lib/srd/subclass-training";
 import { castingClassesOf, judgeSpellcasting } from "@/lib/srd/legality/spells";
+import { judgeRacialCantrips } from "@/lib/srd/legality/racial-cantrips";
+import { judgeSpeciesVariant, withoutOldVariant } from "@/lib/srd/legality/species-variant";
+import { carriedCantrips, carriedVariant } from "@/lib/srd/legality/older-builder";
+import { withHeldVariant } from "@/lib/content/species-variants";
+import { racialCantripFields } from "@/lib/srd/racial-cantrips";
 import {
   type ClassGrants,
   type LegalityContext,
@@ -186,12 +191,13 @@ function subclassesOf(
   });
 }
 
+// `race` with its species option folded in, so a pick of the player's choice
+// cannot stack on the ability the option raises.
 function racialIncrease(
   input: CreateSheetInput,
-  context: LegalityContext,
+  race: NonNullable<LegalityContext["race"]>,
   problems: string[],
 ): { racial: Partial<Record<Ability, number>>; picks: Ability[] } {
-  const race = context.race!;
   const racial: Partial<Record<Ability, number>> = { ...race.asi };
   const sent = input.racialChoices?.asi ?? [];
   const choice = race.asiChoice;
@@ -263,8 +269,8 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
   const policy = policyFor(context);
   const level = Math.max(1, Math.min(20, Math.floor(context.level)));
   const klass = context.classOf(input.class);
-  const { race, background } = context;
-  if (context.door === "stored" && (!klass || !race)) {
+  const { race: baseRace, background } = context;
+  if (context.door === "stored" && (!klass || !baseRace)) {
     // A character stored with a class or a race no table describes (made
     // when any name was taken) has nothing to be derived from. It enters
     // play as it was stored, which is how it has always played.
@@ -275,7 +281,7 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
       `"${input.class}" is not a class this server knows; pick one from the builder's list.`,
     );
   }
-  if (!race) {
+  if (!baseRace) {
     problems.push(`"${input.race}" is not a race this server knows; pick one from the builder's list.`);
   }
   if (input.background.trim() && !background && context.door !== "stored") {
@@ -283,10 +289,31 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
       `"${input.background}" is not a background this server knows; pick one from the builder's list.`,
     );
   }
-  if (!klass || !race) {
+  if (!klass || !baseRace) {
     return { problems, sheet: input };
   }
   const held = policy.trustsHeld ? input : (context.baseline?.sheet ?? null);
+  // A builder older than a species' own picks had no field for them
+  // (src/lib/srd/legality/older-builder.ts): an edit keeps the stored
+  // character's, and one made there owes them.
+  const older = context.olderBuilder ?? null;
+
+  // ---- the species' own choice ----
+  // The option picked (a Half-Dragon's ancestry), folded into the race every
+  // rule below reads: its scores, skills, tools and languages.
+  const speciesChoice = judgeSpeciesVariant({
+    race: baseRace,
+    picked: older?.variant
+      ? carriedVariant(held, input.race, (baseRace.variants?.options ?? []).map((option) => option.id))
+      : (input.racialChoices?.variant ?? "").trim(),
+    heldGrants: input.racialChoices?.variantGrants,
+    door: context.door,
+    ...policy,
+    ...(older?.variant ? { made: false, edit: false, picksMayWait: true } : {}),
+    rollDie: context.rollDie,
+  });
+  problems.push(...speciesChoice.problems);
+  const race = speciesChoice.race;
 
   // ---- classes and subclasses ----
   const classes = subclassesOf(
@@ -356,14 +383,17 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
   const takesHalfFeats = policy.made || policy.edit;
   const featText = (feat: string) => context.featOf(feat)?.desc ?? "";
   const halfFeats = halfFeatPicks({ ...input, feats: feats.feats }, race.feats, featText);
-  const increase = racialIncrease(input, context, problems);
+  const increase = racialIncrease(input, race, problems);
   // On an edit the stored scores are a pool too: they may be moved about,
-  // as the builder lets them be, and not raised.
+  // as the builder lets them be, and not raised. They carry what the stored
+  // character's option gave it (which an edit may swap for another, and the
+  // workshop may since have changed or removed) and its own racial picks,
+  // not the ones the edit sends.
   const storedPool = context.baseline
     ? Object.values(
         baseSpans({
           scores: context.baseline.sheet.abilities,
-          racial: increase.racial,
+          racial: racialIncrease(context.baseline.sheet, withHeldVariant(baseRace, context.baseline.sheet.racialChoices), []).racial,
           recorded: context.baseline.sheet.asiChoices ?? [],
           halfFeats: halfFeatPoints(halfFeatPicks(context.baseline.sheet, race.feats, featText)),
           freePoints: 0,
@@ -487,9 +517,13 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
     // again from what the new one offers.
     // The picks its feats made come off first and go back on below, so an
     // edit that re-picks Linguist's languages replaces them (issue #125).
+    // An option of the species given up takes its grants with it; a stored
+    // character entering play keeps what it holds.
     held:
       held && held.class === input.class && held.race === input.race && held.background === input.background
-        ? withoutFeatPicks(held.proficiencies, held.featChoices)
+        ? policy.trustsHeld
+          ? withoutFeatPicks(held.proficiencies, held.featChoices)
+          : withoutOldVariant(withoutFeatPicks(held.proficiencies, held.featChoices), baseRace, held.racialChoices, speciesChoice.option)
         : null,
     // The builder's doors name the tools an open grant leaves to the player.
     requireToolPicks: context.door === "table" || context.door === "library",
@@ -547,7 +581,7 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
   if (policy.judgesPicks) {
     problems.push(...taught.problems);
   }
-  const owed = [...(granted.owed ?? []), ...(bySubclass.owed ?? []), ...(taught.owed ?? [])];
+  const owed = [...speciesChoice.owed, ...(granted.owed ?? []), ...(bySubclass.owed ?? []), ...(taught.owed ?? [])];
   // Elemental Adept's type is kept the same way ("Elemental Adept: fire").
   const elementPicks = feats.feats.flatMap((name) => {
     const spec = featGrantSpec(context.featOf(name)?.desc ?? "");
@@ -557,9 +591,18 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
   const freeCasts = [...freeCastFeatures(taught.grants), ...elementPicks];
 
   // ---- spells ----
-  const cantripPick = (input.racialChoices?.cantrip ?? "").trim();
-  const racialCantrip =
-    race.cantripChoice && cantripPick ? { name: cantripPick, list: race.cantripChoice.list } : null;
+  const racialCantrips = judgeRacialCantrips({
+    race,
+    sent: older?.cantrips ? carriedCantrips(input.racialChoices, held, input.race) : input.racialChoices,
+    casts,
+    spellOf: context.spellOf,
+    judgesPicks: policy.judgesPicks,
+    countsPicks: context.door !== "engine",
+    picksMayWait: policy.picksMayWait || Boolean(older?.cantrips),
+  });
+  problems.push(...racialCantrips.problems);
+  owed.push(...racialCantrips.owed);
+  const racialPicks = racialCantrips.picks.map((pick) => pick.name);
   const spells = judgeSpellcasting({
     sent: input.spellcasting ?? null,
     classes,
@@ -567,7 +610,7 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
     subclassExtras: context.subclassExtras,
     abilities,
     spellOf: context.spellOf,
-    racialCantrip: casts ? racialCantrip : null,
+    racialCantrips: casts ? racialCantrips.picks : [],
     // Cantrips the race casts by nature (a tiefling's thaumaturgy) ride on
     // the caster's list, free.
     innateCantrips: innateCantripsFor(race.id, level),
@@ -577,14 +620,6 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
     bookAllowance: policy.made,
   });
   problems.push(...spells.problems);
-  if (racialCantrip && !casts && policy.judgesPicks) {
-    const spell = context.spellOf(racialCantrip.name);
-    if (!spell || spell.level !== 0 || !spell.classes.map(textKey).includes(textKey(racialCantrip.list))) {
-      problems.push(
-        `${racialCantrip.name} is not a ${racialCantrip.list} cantrip, which is what the ${race.name}'s cantrip must be.`,
-      );
-    }
-  }
 
   // ---- draconic ancestry ----
   // A dragonborn chooses one (SRD 5.1, Dragonborn). It is written as a race
@@ -616,9 +651,10 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
     : judgeFeatures({
         sent: (input.features ?? []).filter((feature) => !isAncestry(feature) && !featDerived(feature.name)),
         held: (held?.features ?? []).filter((feature) => !featDerived(feature.name)),
-        raceTraits: bundledTraits ? [] : race.traitNames,
+        // Written afresh every time, so an option given up leaves nothing.
+        raceTraits: [...(bundledTraits ? [] : race.traitNames), ...speciesChoice.traits],
         backgroundFeature: backgroundFeatureOf(background),
-        derived: [...(racialCantrip && !casts ? [`Racial cantrip: ${racialCantrip.name}`] : []), ...freeCasts],
+        derived: [...(casts ? [] : racialPicks.map((name) => `Racial cantrip: ${name}`)), ...freeCasts],
         allowPlainStory: policy.plainStory,
         sameBackground: (held?.background ?? "") === input.background,
       });
@@ -759,9 +795,11 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
     racialChoices: {
       asi: increase.picks,
       skills: input.racialChoices?.skills ?? [],
-      cantrip: race.cantripChoice ? cantripPick : "",
+      ...racialCantripFields(racialPicks),
       tool: race.toolChoice ? (input.racialChoices?.tool ?? "") : "",
       ancestry: ancestry?.id ?? "",
+      variant: speciesChoice.variant,
+      ...(speciesChoice.grants ? { variantGrants: speciesChoice.grants } : {}),
       ...(race.feats && input.racialChoices?.featAbility
         ? { featAbility: input.racialChoices.featAbility }
         : {}),

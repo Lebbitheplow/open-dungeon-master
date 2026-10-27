@@ -188,6 +188,8 @@ await test("F13: the checker finds nothing wrong with any of the SRD's magic ite
     : withMechanics("items", bundledItemRows());
   assert.ok(rows.length >= 200, `${rows.length} SRD magic items`);
   const wrong = [];
+  // The Wand of Wonder's d100 table runs past 15,000 characters: a copy
+  // keeps it whole (HOMEBREW_DESC_MAX), so nothing is found here either.
   for (const row of rows) {
     const draft = draftFromCatalog("item", row);
     for (const finding of draftFindings({ ...draft, name: `${row.name} Test` }, {})) {

@@ -50,7 +50,7 @@ export const WORKSHOP_SYSTEMS = [
   { id: "factions", label: "Factions", blurb: "Powers & standing", icon: Flag },
   { id: "bestiary", label: "Bestiary", blurb: "Homebrew monsters", icon: Skull },
   { id: "homebrew", label: "Homebrew", blurb: "Items, spells & options", icon: FlaskConical },
-  { id: "lore", label: "Lore", blurb: "World facts & history", icon: BookOpen },
+  { id: "lore", label: "Lore", blurb: "Facts, handouts & shops", icon: BookOpen },
   { id: "tables", label: "Tables", blurb: "Roll tables", icon: Dices },
   { id: "rules", label: "Rules", blurb: "House & variant", icon: Scale },
   { id: "plugin", label: "Plugin", blurb: "Build a world pack", icon: Puzzle },
@@ -167,8 +167,16 @@ export function systemCount(
         total: bestiary ?? 0,
       };
     case "lore": {
+      // The Market's shops sit under Lore's entries, so the card counts and
+      // names them too (audit WA-10).
       const count = contents.lore;
-      return { figure: String(count), phrase: plural(count, "entry", "entries"), total: count };
+      const shops = contents.shops ?? 0;
+      const entries = plural(count, "entry", "entries");
+      return {
+        figure: String(count + shops),
+        phrase: shops ? `${entries}, ${plural(shops, "shop", "shops")}` : entries,
+        total: count + shops,
+      };
     }
     case "tables":
       return {

@@ -301,7 +301,7 @@ await test("A grapple ends when the grappler is moved out of reach of the grappl
   assert.deepEqual(kit.enemy(enemy.id).conditions, ["grappled"]);
   // Carried off on someone else's turn: forced movement.
   assert.equal(kit.endTurn(fighter.userId), true);
-  const moved = await world.invoke("move_token", { tokenName: fighter.id, x: 5, y: 1, forced: true });
+  const moved = await world.invoke("move_token", { token: fighter.id, x: 5, y: 1, forced: true });
   assert.equal(moved.ok, true, moved.error);
   assert.deepEqual(kit.enemy(enemy.id).conditions, []);
 });
@@ -375,8 +375,10 @@ await test("an enemy escapes a character's grapple with its action, and then it 
   assert.equal((await act(fighter, "grapple", { targetEnemyId: enemy.id })).ok, true);
   world.clearDice();
   kit.freshRound();
+  const stray = await world.invoke("take_action", { action: "escape", escapingEnemyId: "no-such-enemy" });
+  assert.match(stray.error, /escapingEnemyId/, "the refusal names the field the call sent");
   world.dice(20, 1);
-  const out = await world.invoke("take_action", { action: "escape", enemyId: enemy.id });
+  const out = await world.invoke("take_action", { action: "escape", escapingEnemyId: enemy.id });
   world.clearDice();
   assert.equal(out.ok, true, out.error);
   assert.equal(out.result.success, true);

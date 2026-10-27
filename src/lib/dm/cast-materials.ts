@@ -136,7 +136,7 @@ function unitsFor(component: MaterialComponent, spell: string, ctx: MaterialCont
     // Create Undead: three corpses at 6th level, one more for each slot above.
     return Math.max(1, (ctx.slotLevel ?? 6) - 3);
   }
-  return { error: `${spell}'s component is worth ${component.gp} gp per Hit Die of its target: name the target so the server knows its Hit Dice. Nothing was spent.`, retry: true };
+  return { error: `${spell}'s component is worth ${component.gp} gp per Hit Die of its target: send units with the target's Hit Dice. Nothing was spent.`, retry: true };
 }
 
 const title = (word: string) => `${word[0].toUpperCase()}${word.slice(1)}`;

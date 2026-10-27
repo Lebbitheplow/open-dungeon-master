@@ -25,6 +25,7 @@ import {
 } from "@/lib/dm/engine-boundary";
 import { hasQuotedLine, type Speaker } from "@/lib/dm/speech";
 import { textKey } from "@/lib/language/text-logic";
+import { mergedCallText } from "@/lib/dm/tool-merge-logic";
 import {
   checkClaims,
   claimKindsFor,
@@ -121,10 +122,12 @@ export function ruledFor(conversation: readonly GuardMessage[], sheet: Pick<Char
       return false;
     }
     try {
-      const args = JSON.parse(exchange.arguments || "{}") as Record<string, unknown>;
+      // Under the names the call ran by: an older name (a walk's tokenName)
+      // names the character all the same.
+      const args = JSON.parse(mergedCallText(exchange.name, exchange.arguments || "{}").rawArguments || "{}") as Record<string, unknown>;
       // move_token names its walker by name or id.
-      const walker = typeof args.tokenName === "string" ? args.tokenName : "";
-      return args.characterId === sheet.id || args.casterId === sheet.id || walker === sheet.id || (walker !== "" && textKey(walker) === textKey(sheet.name));
+      const walker = typeof args.token === "string" ? args.token : "";
+      return args.characterId === sheet.id || args.casterId === sheet.id || args.casterCharacterId === sheet.id || args.healerId === sheet.id || walker === sheet.id || (walker !== "" && textKey(walker) === textKey(sheet.name));
     } catch {
       return false;
     }

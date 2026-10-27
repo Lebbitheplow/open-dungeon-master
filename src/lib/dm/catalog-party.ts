@@ -168,10 +168,10 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
         ],
       },
       { name: "characterId", label: "Whose hands", kind: "character", required: true },
-      { name: "name", label: "Item", kind: "text" },
+      { name: "item", label: "Item", kind: "text" },
       { name: "qty", label: "How many", kind: "number", min: 1, max: 999 },
       { name: "coins", label: "Money", kind: "text", placeholder: "3 gp 4 sp" },
-      { name: "amount", label: "Or gold", kind: "number", min: 0, max: 1000000 },
+      { name: "gold", label: "Or gold", kind: "number", min: 0, max: 1000000 },
       REASON,
     ],
   },
@@ -182,9 +182,9 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
     summary: "XP each to whoever earned it, with a purse split evenly and one item to the finder if there are spoils; levels follow on their own.",
     fields: [
       { name: "characterIds", label: "Who earned it", kind: "characters", required: true },
-      { name: "amount", label: "XP each", kind: "number", min: 1, max: 20000 },
-      { name: "delta", label: "Gold in total", kind: "number", min: -100000, max: 100000, help: "Split evenly; the remainder goes to the first share." },
-      { name: "name", label: "Item", kind: "text", help: "Goes to the first character listed." },
+      { name: "xp", label: "XP each", kind: "number", min: 1, max: 20000 },
+      { name: "gold", label: "Gold in total", kind: "number", min: -100000, max: 100000, help: "Split evenly; the remainder goes to the first share." },
+      { name: "item", label: "Item", kind: "text", help: "Goes to the first character listed." },
       { name: "qty", label: "How many", kind: "number", min: 1, max: 99 },
       REASON,
     ],
@@ -220,7 +220,7 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
     summary: "Puts an item in a character's hands, weight and all.",
     fields: [
       { name: "characterId", label: "Character", kind: "character", required: true },
-      { name: "name", label: "Item", kind: "text", required: true },
+      { name: "item", label: "Item", kind: "text", required: true },
       { name: "qty", label: "How many", kind: "number", min: 1, max: 99 },
       {
         name: "unidentified",
@@ -248,7 +248,7 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
     summary: "Turns an unidentified item into what it actually is, on the sheet and in the log.",
     fields: [
       { name: "characterId", label: "Character", kind: "character", required: true },
-      { name: "name", label: "Called on the sheet", kind: "text", required: true },
+      { name: "item", label: "Called on the sheet", kind: "text", required: true },
       { name: "revealedName", label: "Actually", kind: "text", placeholder: "Ring of Protection" },
       ITEM_SRD_NAME_FIELD,
       ITEM_TAGS_FIELD,
@@ -264,7 +264,7 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
     summary: "Stolen or destroyed for good. Something dropped goes through Handle an item, where it stays on the ground; consumables being used through Use an item.",
     fields: [
       { name: "characterId", label: "Character", kind: "character", required: true },
-      { name: "name", label: "Item", kind: "text", required: true },
+      { name: "item", label: "Item", kind: "text", required: true },
       { name: "qty", label: "How many", kind: "number", min: 1, max: 99 },
       REASON,
     ],
@@ -546,6 +546,12 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
         name: "value",
         label: "Becomes",
         kind: "text",
+        // The hint promises that Conditions left empty clears them, so the
+        // empty box reaches the handler as an answer (it used to be dropped
+        // on the way and refused as no answer, table audit 2026-10-26, T09);
+        // the handler still asks again for an empty name or number
+        // (update-sheet-args.ts).
+        keepsEmpty: true,
         help: "A whole number for a number. Conditions as a list (poisoned, prone), or left empty to clear them.",
       },
       REASON,
