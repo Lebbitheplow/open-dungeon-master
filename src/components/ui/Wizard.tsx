@@ -385,11 +385,12 @@ export function Wizard({
             finishEarly ? ui.btnSecondary : ui.btnPrimary,
             // On a phone the label is the button's own text, cut with an
             // ellipsis: a span inside a held button is read apart from it.
-            // It starts at its label's width (flex-auto, not flex-1), so
-            // beside Save changes the footer wraps rather than cut it: it
-            // read "C..." on a phone at enlarged text. Only a label wider
-            // than the whole footer is cut.
-            "wizard-continue min-w-0 max-w-full max-sm:block max-sm:flex-auto max-sm:truncate max-sm:text-center max-sm:leading-10",
+            // Beside Back it takes the rest of the row and a long label is
+            // cut. Beside Save changes it starts at its label's width
+            // (flex-auto, not flex-1), so the footer wraps rather than cut
+            // it: it read "C..." there on a phone at enlarged text.
+            "wizard-continue min-w-0 max-w-full max-sm:block max-sm:truncate max-sm:text-center max-sm:leading-10",
+            finishEarly ? "max-sm:flex-auto" : "max-sm:flex-1",
             blocker && "wizard-continue-held",
           )}
         >
