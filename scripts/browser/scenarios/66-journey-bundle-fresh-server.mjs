@@ -286,8 +286,13 @@ async function bringIn(page, title, { keys = false, plan } = {}) {
     await page.keyboard.press("Enter");
     const item = page.getByRole("menuitemradio", { name: title }).locator("visible=true").first();
     await eventually(() => item.count(), { label: "the picker's menu" });
+    // One row a press: on a slow runner the focus lagged a press behind, and
+    // the next press went past the row it was about to reach.
+    const focusedText = () => page.evaluate(() => document.activeElement?.textContent?.trim() ?? "");
     for (let index = 0; index < 20 && !(await item.evaluate((element) => element === document.activeElement)); index += 1) {
+      const before = await focusedText();
       await page.keyboard.press("ArrowDown");
+      await eventually(async () => (await focusedText()) !== before, { timeoutMs: 3_000, label: "the focus moving" }).catch(() => {});
     }
     check(await item.evaluate((element) => element === document.activeElement), `the arrow keys reach ${title}`);
     await page.keyboard.press("Enter");
