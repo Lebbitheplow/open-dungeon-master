@@ -77,7 +77,11 @@ export async function startServer({ tree, dbPath, key, port, log }) {
     ODM_ENV_FILE: noEnvFile(dbPath),
   };
   const out = fs.openSync(log, "a");
-  const child = spawn(process.execPath, [nextBin, "start", "-H", "127.0.0.1", "-p", String(port)], {
+  // Node closes an idle connection after 5 s by default, and a request the
+  // test's client sent on one just as it closed failed with ECONNRESET
+  // (test-fight on CI, subclass-training under load). Idle connections stay
+  // open long past any pause a scenario makes.
+  const child = spawn(process.execPath, [nextBin, "start", "-H", "127.0.0.1", "-p", String(port), "--keepAliveTimeout", "120000"], {
     cwd: tree,
     env,
     stdio: ["ignore", out, out],
