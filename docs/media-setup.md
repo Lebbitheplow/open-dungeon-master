@@ -46,7 +46,7 @@ menu, top right). Players never touch it.
    ```
 
    Open `http://127.0.0.1:8188` in a browser to confirm it is up. If Open
-   Dungeon Master runs in Docker, or on another machine, start ComfyUI with
+   Game Master runs in Docker, or on another machine, start ComfyUI with
    `--listen 0.0.0.0` so it can be reached from outside its own machine.
 
 4. **Point the server at it.** In **Admin > Image generation**:
@@ -65,7 +65,7 @@ menu, top right). Players never touch it.
 Things to know:
 
 - Pictures and narration share one queue and run one at a time. On a machine
-  where the DM model and the image model share memory, that is what keeps a
+  where the GM model and the image model share memory, that is what keeps a
   picture from stalling a turn.
 - ComfyUI must be running whenever you want pictures. Nothing breaks when it is
   not; the placeholder has a Generate button that works once it is back.

@@ -19,7 +19,7 @@ Two engine bugs were found in scaling that is otherwise correct: Brutal Critical
 - The XP table `XP_THRESHOLDS` (srd/index.ts:540) is the SRD's, row for row.
 - An award never raises a level. It publishes `level_up_available`; the client opens the dialog when `levelForXp(xp) > level` (SessionView.tsx:299). The player takes all earned levels in one dialog.
 - ODM's own ceiling: one award is at most 20000 XP (mutations.ts, MAX_XP_PER_AWARD).
-- The DM's `update_sheet` is bounded by `sheetBuffViolation` (one level at a time, no XP worth more than one level, scores at most 20, bounded HP and gold). The player's route has none of these bounds.
+- The GM's `update_sheet` is bounded by `sheetBuffViolation` (one level at a time, no XP worth more than one level, scores at most 20, bounded HP and gold). The player's route has none of these bounds.
 - Class features: `class-features.json` plus `subclasses.json`, granted by `populateFeaturesForClasses`. Server-side at creation, on the multiclass branch and for companions. Client-side on a single-class level-up.
 - Counters: `populateResources` runs inside `patchSheet` whenever level, features, abilities or classes change; spent uses are preserved and clamped.
 - Artificer is shipped (outside SRD 5.1); its published table is matched.
@@ -119,7 +119,7 @@ Reproduce any of them with `ODM_ENFORCE_REPORT=/tmp/x.jsonl node scripts/<file>`
 - **levelup-subclass-early**: a fighter 2 stores "Champion"; features are still held to their levels.
 - **feat-taken-twice**, **feat-unknown-name**: stored as sent.
 - **xp-companion-never-improves**: autoLevelCompanion applies no ASI; scores at 20 are the scores at 1.
-- **xp-console-correction-does-nothing**: the console's "Correct a sheet" form sends `{ field, value }` (catalog-party.ts:345), the handler parses sheet keys (mutations.ts:1705), so it always answers "changed nothing". Outside my area strictly; found while testing the DM level path.
+- **xp-console-correction-does-nothing**: the console's "Correct a sheet" form sends `{ field, value }` (catalog-party.ts:345), the handler parses sheet keys (mutations.ts:1705), so it always answers "changed nothing". Outside my area strictly; found while testing the GM level path.
 - **subclass-genie-spell-above-slot**: The Genie lists Phantasmal Force (2nd level) at warlock 1 and again at 3 (subclasses.json:4104).
 - **subclass-loose-name-grants-features**: a paladin whose subclass reads "Oath" gets Oath of Devotion's five features (features.ts subclassMatches:178).
 

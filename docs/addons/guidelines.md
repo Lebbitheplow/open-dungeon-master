@@ -26,7 +26,7 @@ do, so these rules are firm.
 ## What belongs on the list
 
 Addons that make running or prepping a game better through the
-[extension points](extension-points.md): importers that turn material a DM owns
+[extension points](extension-points.md): importers that turn material a GM owns
 into workshop content, map generators, board views. An addon that would need
 something the extension points do not offer starts as an issue on the server
 repository ([asking for a new extension point](extension-points.md#asking-for-a-new-extension-point)),
@@ -68,7 +68,7 @@ anything whose main purpose is to fetch content the user has no right to.
 
 ## Privacy
 
-- What a DM gives an addon (a rulebook, a map request, the board) stays on
+- What a GM gives an addon (a rulebook, a map request, the board) stays on
   their server. An addon that uses an outside service says so in its
   description, sends only what the service needs, and says what it sends in its
   settings' help text.
@@ -108,8 +108,8 @@ outside it belongs to its publishers.
 - **Works everywhere it claims.** If `platforms` is absent it runs on Linux,
   Windows and macOS. Prefer the `node` runtime; a `python` addon works with the
   Python versions it names.
-- **Tells the DM what is happening.** Progress at least every minute on long
-  work, with words a DM understands ("Rendering the room", not "stage 3/7").
+- **Tells the GM what is happening.** Progress at least every minute on long
+  work, with words a GM understands ("Rendering the room", not "stage 3/7").
   Errors say what to do next.
 - **Stops when asked.** Cancellation ends the work promptly and cleans up.
 - **Light when idle.** The server stops an idle addon after ten minutes; it
@@ -128,7 +128,7 @@ The app's own controls draw an addon's settings, options and progress, so most
 of the look is not yours to get wrong. What is:
 
 - `name`, `description`, titles and help text in plain, short sentences, in
-  the second person where it helps. Say what it does for a DM.
+  the second person where it helps. Say what it does for a GM.
 - A board view follows the table's appearance (`appearance.theme`) and honours
   `reducedMotion`, reads at phone and desktop sizes, and keeps the board
   legible: figures distinguishable at a glance, the active turn obvious, fog

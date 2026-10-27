@@ -120,7 +120,7 @@ its manifest declares before it is used.
 | Extension point | Where it appears | What the addon does |
 |---|---|---|
 | Workshop importer | Workshop shelf and hub: **Import with an addon** | Reads a file you pick (a rulebook PDF, a stat block file) and returns a workshop bundle. You see the same preview a bundle file gets, untick what you do not want, and **Import** creates a new workshop |
-| Map generator | Map library (workshop Maps, and the DM's map drawer): **Build a map with an addon** | Builds a battle map from a request (size, kind of place, light, a description in your words). It lands in the library as a prepared map, with a picture under the grid and, if the addon makes one, a 3D model for its board view |
+| Map generator | Map library (workshop Maps, and the GM's map drawer): **Build a map with an addon** | Builds a battle map from a request (size, kind of place, light, a description in your words). It lands in the library as a prepared map, with a picture under the grid and, if the addon makes one, a 3D model for its board view |
 | Board view | The board's **View** switch (with **Options** for that device, when the view has any) | Draws the board in a sandboxed frame instead of the grid (an isometric, pixel-art or 3D table): the map, the figures, spell areas, auras, labels and the enemies' intents, with attacks, spells and pings as they happen. Taps on squares and figures work as they do on the flat board, and the plates and action ring open on the figures it drew |
 
 The rules engine stays in charge throughout. A map's walls, doors and water

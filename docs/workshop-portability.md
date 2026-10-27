@@ -20,7 +20,7 @@ are `scripts/test-workshop-dependencies.mjs` (the whole path, end to end) and
    ones listed with a reason in `COPY_OVERRIDES` (src/lib/db/content-copy.ts).
    Every reference is remapped to the copy, and each copy records where it
    came from (src/lib/db/content-origins.ts).
-5. **At the table.** The human DM uses the DM console. At an AI-narrated
+5. **At the table.** The human GM uses the GM console. At an AI-narrated
    table the party lead uses the lead's desk, and the storyteller uses its
    game state and tools.
 
@@ -30,7 +30,7 @@ means the words only. **No** means not carried, with the reason.
 
 ## Records
 
-| Record | Bundle | Campaign import | Human DM | AI storyteller |
+| Record | Bundle | Campaign import | Human GM | AI storyteller |
 | --- | --- | --- | --- | --- |
 | Lore (title, body, tags, pinned, secret, style, picture) | Yes. An attached PDF stays behind. | Yes, every column. Re-embedded. | Binder | Retrieved by relevance. Pinned entries always included. Secrets marked SECRET. |
 | Places (layout, connections, map, sound) | Yes | Yes. Visited and current reset. | Places panel. One-tap deploy of its map. | Current location, and as waypoints |
@@ -77,8 +77,8 @@ means the words only. **No** means not carried, with the reason.
 - **A reason to go:** a quest in the Quests panel. The storyteller reads that
   log; before #158 these quests went to an older log it ignored whenever an
   arc existed.
-- **Something hidden:** a DM-only note. The storyteller now reads these
-  notes as DM prep notes. Before, a secret was invisible at an AI-narrated
+- **Something hidden:** a GM-only note. The storyteller now reads these
+  notes as GM prep notes. Before, a secret was invisible at an AI-narrated
   table.
 - **Every card, whole:** a prep card (issues #301 and #302). The arc's beat
   is one line (the card's title and first line, cut at 220 characters) and a
@@ -96,7 +96,7 @@ means the words only. **No** means not carried, with the reason.
   cards that cannot join ("the last 3 of the board's cannot join it: ...")
   before the button. Those cards still land as prep cards, marked unplaced,
   and nothing pending in the arc is ever evicted to make room.
-- Each DM turn shows the main beats in a window around the `[NOW]` beat and
+- Each GM turn shows the main beats in a window around the `[NOW]` beat and
   the planned events the scene is about first (the place, the people in it,
   the fight, the party's newest line), inside a character budget. What was
   held back is listed by id in the prompt and, with the reason, in the
@@ -160,7 +160,7 @@ workshop's cast, places, maps and fights after the chapter's own, marked
   source's own, so the source's next change to it applies. Where the entry
   cannot hold the import's version whole (a folder or an option no longer
   here), the page says so. A later import that agrees with the campaign
-  clears the notice. Only the DM sees it. A WorldForge file brought in
+  clears the notice. Only the GM sees it. A WorldForge file brought in
   again works the same way (`src/lib/worldforge/import-kept.ts`).
 - **Boards.** A second import of the same board does not repeat its lore,
   fights, notes or quests.
@@ -176,7 +176,7 @@ workshop's cast, places, maps and fights after the chapter's own, marked
 
 ## Who may use the prep
 
-- **Human DM table.** The DM seat holds the prepared fights and the map
+- **Human GM table.** The GM seat holds the prepared fights and the map
   library. The lead is a player there.
 - **AI-narrated table.** The party lead holds them, from the lead's desk
   (`Prepared fights and maps`), and the Market's shops and shelves from the

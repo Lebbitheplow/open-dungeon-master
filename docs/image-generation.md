@@ -198,7 +198,7 @@ request finds, in this order:
    `api.openai.com`
 
 That third rule is what makes a bring-your-own-key table work with one key
-instead of two: the DM model and the pictures are two APIs on the same
+instead of two: the GM model and the pictures are two APIs on the same
 account, so pasting the key once in the Text Model panel covers both. It is
 gated on the host, so a key for llama.cpp, LM Studio or OpenRouter is never
 sent to OpenAI. Keys stay server-side either way; the campaign's settings are

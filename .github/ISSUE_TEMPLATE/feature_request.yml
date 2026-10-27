@@ -10,7 +10,7 @@ body:
     id: what
     attributes:
       label: What should happen?
-      description: The feature or change, as a player or Dungeon Master would see it.
+      description: The feature or change, as a player or Game Master would see it.
     validations:
       required: true
   - type: textarea

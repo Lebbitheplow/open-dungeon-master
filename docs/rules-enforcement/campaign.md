@@ -4,7 +4,7 @@ The second audit and repair (2026-09-30) and the state after it are in [`../rule
 
 Area: campaign creation and settings, permissions, persistence, import and export, custom
 content (homebrew, rulesets, world packs, genre classes), multiplayer synchronization, and the
-AI DM's tool interface. Continued from an interrupted agent; its seven files were kept, re-run,
+AI GM's tool interface. Continued from an interrupted agent; its seven files were kept, re-run,
 reviewed and reclassified under the owner decisions, and five files were added.
 
 All twelve files pass both ways (`node scripts/test-enforce-x.mjs` and `npx vitest run`), each
@@ -19,18 +19,18 @@ Totals: 131 test() and 45 gap(). By severity: 17 high, 16 medium, 12 low.
 Campaign frame
 - Starting level 1 to 20, party 1 to 8, difficulty easy, normal, hard or deadly. A table nobody
   configured runs plain SRD 5.1: every variant off, standard rests, digital dice, one character
-  each, multiclassing on, item approvals off, AI DM.
+  each, multiclassing on, item approvals off, AI GM.
 - Variant toggles stored: flanking, criticalFumbles, encumbrance, lingeringInjuries,
   powerfulCritical, criticalDamageMods, ammunition, restVariant (standard, gritty, heroic).
-  Five are read by an engine. Three are only a sentence in the DM prompt (findings below).
+  Five are read by an engine. Three are only a sentence in the GM prompt (findings below).
 - Unknown setting keys are stripped, out of range values refused.
 
 Deliberate deviations from SRD 5.1, each declared in the source and pinned as a test()
 - Settings may change mid campaign and mid fight (settings/route.ts).
-- At an AI table the party lead holds story authority and there is no DM seat, so the console
+- At an AI table the party lead holds story authority and there is no GM seat, so the console
   is closed to everyone. Once a person runs the table the lead is an ordinary player
   (src/lib/dm/viewer.ts, campaign-api.ts requireStoryAuthority).
-- A DM seat holds no party slot (db/campaigns.ts countPartySlots).
+- A GM seat holds no party slot (db/campaigns.ts countPartySlots).
 - A library character enters at the TABLE's level: going down gives back improvements, hit
   dice, slots and spells; going up resizes and the new improvements are taken in play
   (characters/adapt.ts).
@@ -139,7 +139,7 @@ sync-private-notes-sent-to-the-table
 - Observed: a player's notes are in the event log and in another player's snapshot.
 - Root cause: every publishPersisted("sheet_updated", { sheet }) and the campaign GET send the
   sheet whole to every member.
-- Fix: a public projection of a sheet that drops notes for everyone but the owner and the DM.
+- Fix: a public projection of a sheet that drops notes for everyone but the owner and the GM.
 
 tool-gold-ignores-declared-bounds
 - Rule: modify_gold and party_award declare a bound of 100,000 gp to the model.

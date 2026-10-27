@@ -51,7 +51,7 @@ body:
         - Install kind (desktop app, Android app, Docker, from source):
         - Narrator backend and model (for example llama.cpp with gpt-oss-20b, OpenAI with gpt-5, Claude Code):
         - Graphics memory, if the narrator is a local model:
-        - DM mode (AI Dungeon Master, AI narrates and a person steers, a person runs the game, a person runs it with AI help):
+        - GM mode (AI Game Master, AI narrates and a person steers, a person runs the game, a person runs it with AI help):
     validations:
       required: true
   - type: textarea

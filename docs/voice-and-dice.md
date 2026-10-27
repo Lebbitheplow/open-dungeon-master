@@ -43,13 +43,13 @@ voice can do things a separate call cannot:
 
 - **Turn-taking** rides the floor the table already has (open, hold, spotlight,
   initiative). By default the panel just shows whose turn it is; a table that
-  wants it can have players off the floor muted server-side. The DM is never
+  wants it can have players off the floor muted server-side. The GM is never
   muted, and anyone who cannot speak gets a Raise hand button.
 - **Proximity**, off by default: distance on the battle map decides who hears
   whom, with whisper (5 ft) / normal / shout (120 ft), walls that muffle rather
   than block, and an option for downed characters to stop hearing the table.
-  The DM always hears everyone.
-- **Side rooms** the DM can open and move people between, for a private word or
+  The GM always hears everyone.
+- **Side rooms** the GM can open and move people between, for a private word or
   a split party. Moving somebody is instant, with no gap in their audio.
 
 Each campaign turns voice and each rule on or off in its settings, and a server
@@ -61,7 +61,7 @@ owner can disable it entirely with `VOICE_ENABLED=0`. Full details in
 With the campaign's dice policy set to allow real dice, each player can opt in and
 then choose, per die shape, where that die's numbers come from:
 
-- **Type it in**: roll your physical die and enter the result; the DM turn parks
+- **Type it in**: roll your physical die and enter the result; the GM turn parks
   until the table's dice are in.
 - **Server roll**: the server rolls that die for you with a cryptographic RNG, so
   a mixed handful (your d20, its damage dice) still submits in one go.

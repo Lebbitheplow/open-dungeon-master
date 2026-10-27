@@ -3,7 +3,7 @@
 The second audit and repair (2026-09-30) and the state after it are in [`../rules-enforcement-audit.md`](../rules-enforcement-audit.md); this report describes the first audit.
 
 Area: the combat engine through the real tool handlers (src/lib/dm/invoke.ts invokeEngine as a
-human DM, and the two player routes a fight has: battle-map/move and encounter/end-turn), every
+human GM, and the two player routes a fight has: battle-map/move and encounter/end-turn), every
 die forced. 14 test files and one helper. 187 test(), 60 gap(). Every file passes under
 `node scripts/<file>.mjs` (five runs in a row each, identical counts) and under
 `npx vitest run scripts/<file>.mjs` (14 files passed). Nothing under src/ was touched.
@@ -49,7 +49,7 @@ Supported, enforced and pinned by test():
 Deliberate deviations from SRD 5.1, each pinned as test() with the declaring comment:
 | ODM rule | SRD 5.1 | Declared in |
 |---|---|---|
-| Initiative ties go to player characters, then by name | DM decides | src/lib/dm/encounter-logic.ts buildOrder |
+| Initiative ties go to player characters, then by name | GM decides | src/lib/dm/encounter-logic.ts buildOrder |
 | The pointer rests only on player characters; enemies act as it passes them | every creature has a turn | encounter-tools.ts header, advanceOrder |
 | A PC at 0 HP (or incapacitated) is passed over and the server rolls the death save as the pointer goes by | they take the turn and roll at its start | encounter-tools.ts entryAlive, advancePointer |
 | Reactions come back when the round wraps | at the start of the creature's own turn | encounter-tools.ts advancePointer comment ("one round is the granularity the server tracks them at") |
@@ -167,7 +167,7 @@ calls that bookkeeping "what stops an enemy swinging twice", which it does not. 
 enemies per round on the encounter and refuse a second action, with an explicit exception for
 legendary actions and reactions.
 
-**turn-console-end-turn-noop**: the DM console's "End a turn" reports success and the pointer
+**turn-console-end-turn-noop**: the GM console's "End a turn" reports success and the pointer
 stays. Root cause: handleEndTurn:1140 only marks the turn resolved; advanceAfterTurn is called
 from src/lib/dm/turn.ts:2062 alone and src/app/api/campaigns/[campaignId]/dm/invoke/route.ts never
 calls it. Fix: for a human actor, call advancePointer (and the skipped-enemy handling) from
@@ -297,7 +297,7 @@ refill for every legendary enemy in next.enemiesPassed.
 | actions-dodge-kept-at-speed-zero | Dodge is lost at speed 0 | a grappled dodger still imposes disadvantage | condition-logic.ts attackContext:124 checks incapacitation only | also check speed-zero conditions |
 | actions-refused-action-still-spent | a refused action costs nothing | a grapple refused for size spent the action | handleTakeAction:264-270 spends before the action's own checks | validate first, spend last |
 | actions-grapple-ignores-enemy-skill | defender contests with Athletics or Acrobatics | 16 vs 11 with Athletics +9 on the block | action-tools.ts:384 uses saveModFor | read stats.skills, fall back to ability modifiers |
-| actions-shove-push-moves-nothing | a won shove pushes 5 feet | token stays | action-tools.ts:444 reports and asks the DM to move it | move the token one square away when the square is free |
+| actions-shove-push-moves-nothing | a won shove pushes 5 feet | token stays | action-tools.ts:444 reports and asks the GM to move it | move the token one square away when the square is free |
 | advantage-flanking-switch-inert | flanking variant gives advantage | straight roll with the switch on | no engine reads variantRules.flanking (also held as variant-flanking-unread) | compute from token positions in handlePcAttack and handleEnemyAttack |
 | advantage-prone-target-at-reach | prone target: advantage only within 5 feet | a glaive at 10 feet has advantage | pc-attack.ts:474 adjacent: !profile.ranged | pass the real distance |
 | attacks-minimum-one-damage | a penalty can bring damage to 0 | a hit for -1 took 1 | pc-attack.ts:911, encounter-tools.ts:973, opportunity.ts:161 and 301 Math.max(1, ...) | Math.max(0, ...) |

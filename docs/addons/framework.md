@@ -85,7 +85,7 @@ I/O, so the browser, the tests and `scripts/check-addon.mjs` share them.
 | `requirements.ts` | Finding programs an addon needs (`requires`) and their versions |
 | `resources.ts` | Turn-taking for shared resources (`exclusive`) across addons |
 | `tasks.ts` | Runs: ownership, progress, cancellation, work folders, per-user and server limits |
-| `uploads.ts` | Chunked uploads of a DM's file for an importer |
+| `uploads.ts` | Chunked uploads of a GM's file for an importer |
 | `run-importer.ts`, `import-defaults.ts` | Workshop importer runs, `file:` picture references, the larger addon bundle cap |
 | `run-map.ts` | Map generator runs into a library |
 | `map-view.ts` | What a map keeps for its addon's board view (`addon_view_json`) |

@@ -259,7 +259,7 @@ wakes the agent when that changes.
 3. **Agent:** give its hook the link to `GET` every minute or so. Wake the
    agent when `wake` is `true` and `fingerprint` differs from the fingerprint
    it **last woke the agent for** (not the last one it saw). The fingerprint
-   covers only the campaign's lifecycle and the opportunity IDs. While the DM
+   covers only the campaign's lifecycle and the opportunity IDs. While the GM
    narrates, the list is briefly empty and then the same decision comes back
    with the same fingerprint, so comparing with the last wake, not the last
    check, keeps one decision to one wake.
@@ -292,7 +292,7 @@ the current `opportunityId` in every `odm_take_action`, `odm_answer_roll`,
   reverse-proxy and the agent platform's own request logs can record it.
   Anyone holding it can see what the answer above shows, for that one
   character: the campaign, character and subscription IDs, whether the
-  campaign is active, paused or ended, whether the DM is busy, and the kind of
+  campaign is active, paused or ended, whether the GM is busy, and the kind of
   decision waiting (a combat turn, a roll, a response or an earned level,
   with its number). Never the story,
   names, sheets or anything another player sees.
@@ -533,9 +533,9 @@ use the existing database encryption option where supported.
 
 The agent reads the table with `odm_get_campaign`, `odm_get_sheet` (the
 table's copy of its character, not the library copy), `odm_get_whispers`
-(the DM's private whispers, which the transcript never carries) and
+(the GM's private whispers, which the transcript never carries) and
 `odm_get_messages`. Every tool result stays under the agent's result cap
-as valid JSON. `odm_get_campaign` puts the safety pause, table break, DM status, floor,
+as valid JSON. `odm_get_campaign` puts the safety pause, table break, GM status, floor,
 caps, pending rolls and encounter first, then the newest messages that
 fit; `history.olderBefore` pages further back through `odm_get_messages`.
 
@@ -568,13 +568,13 @@ started while developing this feature.
 ## Tables that wait for everyone
 
 A campaign can turn on **Wait for the table** (Settings, Players, Pacing).
-After each narration on an open floor, the AI DM then waits until every
+After each narration on an open floor, the AI GM then waits until every
 present player has acted or passed, or until nobody has answered for the
 table's timeout (five minutes unless the lead changes it; every post or
 pass restarts the clock), and answers them all in one turn. A player with a
 live webhook or poll link counts as present even with no tab open.
 
-While the table gathers, the DM stays idle, so a `response_requested`
+While the table gathers, the GM stays idle, so a `response_requested`
 narration opportunity stays live after another player posts: the agent's
 guarded write is no longer refused as stale. `odm_get_campaign` carries
 `tableWait`, which lists `waitingOn` and `answered`. An agent with nothing

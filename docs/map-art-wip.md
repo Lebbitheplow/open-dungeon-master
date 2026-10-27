@@ -144,7 +144,7 @@ Prompt lessons, all hit in practice:
    - Keep the grid overlay toggle, and keep props from implying obstacles.
    - Carry the change to the client apps.
 5. **Open questions for the user:**
-   - Should DMs be able to place, move and delete props as editor stamps, or only
+   - Should GMs be able to place, move and delete props as editor stamps, or only
      get the automatic ones?
    - Several variants per material?
    - Fitting orientation (stairs, bridges) is still inconsistent.

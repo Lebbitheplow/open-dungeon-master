@@ -67,7 +67,7 @@ are recorded in [aboleth-replacements-2026-10-11.json](aboleth-replacements-2026
 
 ## What happens during play
 
-The curated Bestiary is not the DM's only source. `resolveMonster` in
+The curated Bestiary is not the GM's only source. `resolveMonster` in
 `src/lib/bestiary/index.ts` also resolves installed content and table authors'
 homebrew. World packs can overlay or extend the genre catalog. In
 `src/lib/dm/encounter-spawn.ts`, an unresolved name with a supplied challenge

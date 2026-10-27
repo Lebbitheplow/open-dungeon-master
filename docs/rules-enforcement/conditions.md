@@ -103,7 +103,7 @@ Deliberate deviations (documented in code or docs, pinned by `test()`):
 - "Within 5 ft" is approximated as "melee attack", and "further" as "ranged attack"
   (`pc-attack.ts:474`, `encounter-tools.ts:878`); the board's real distance is not consulted.
 - Frightened applies regardless of the source's line of sight.
-- The pointer only ever stops on player characters; enemies are passed and act through the DM or the
+- The pointer only ever stops on player characters; enemies are passed and act through the GM or the
   auto-act fallback. A PC who cannot act is passed too (`encounter-tools.ts entryAlive`).
 - Reactions such as Uncanny Dodge are "enforced (economy) + guidance (effect)" per
   `docs/rules-coverage.md`: the reaction is spent, the halving is left to the caller.
@@ -364,7 +364,7 @@ Reproduce any of them with `node scripts/<file>`; the gap's function is the repr
   randomly generated, so there is nothing stable to assert beyond the melee/ranged proxy that is pinned.
 - Death saves for a physical-dice player through `pending-rolls`: read the route and `rollDeathSave`;
   the save is always server-rolled and never parked, so there is no player path to drive.
-- `update_sheet` as the AI DM calls it: the human console's catalog entry takes a different shape
+- `update_sheet` as the AI GM calls it: the human console's catalog entry takes a different shape
   (field and value), so `world.invoke` cannot send the model's arguments. The handler was read, not driven.
 - Travel's forced-march exhaustion and companions' death handling: outside this area's handlers.
 - AI narration itself: these suites prove what the engine refuses, not what a model writes.

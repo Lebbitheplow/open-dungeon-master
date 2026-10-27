@@ -1,6 +1,6 @@
 # OpenAI-compatible backend capability probe
 
-A `/models` response or a successful plain chat completion does not prove that a backend can run Open Game Master's DM loop. ODM depends on streaming and structured function/tool calls, including a continuation after the tool result is returned.
+A `/models` response or a successful plain chat completion does not prove that a backend can run Open Game Master's GM loop. ODM depends on streaming and structured function/tool calls, including a continuation after the tool result is returned.
 
 Run the probe before assigning a new backend/model to a campaign:
 

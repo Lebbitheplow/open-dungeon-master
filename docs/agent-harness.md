@@ -3,11 +3,11 @@
 Open Game Master can use an agent program you already have, signed in
 on the server's computer, in two ways:
 
-1. **As the storyteller.** The server starts the program for each DM turn
+1. **As the storyteller.** The server starts the program for each GM turn
    and it narrates the table on its own sign-in and plan.
 2. **As your own assistant.** Your Claude Code, Codex or other MCP client
    connects to the server and acts as you: reads your campaigns, plays your
-   character, or runs a table where you hold the DM seat.
+   character, or runs a table where you hold the GM seat.
 
 Neither way ever asks for, reads or stores the program's password or key.
 
@@ -27,9 +27,9 @@ agent" in a campaign's Setup tab.
 
 The program is started with **none of its own tools**. No shell, no files,
 no web, none of your own MCP servers, settings, hooks or CLAUDE.md. Its only
-tools are the DM's tools for the turn it is narrating, served by the
+tools are the GM's tools for the turn it is narrating, served by the
 server's own MCP endpoint on a token that works from this computer only and
-dies with the turn. Every call goes through the same DM loop as the built-in
+dies with the turn. Every call goes through the same GM loop as the built-in
 storyteller, so the server rolls the dice, the per-turn caps apply, a
 physical-dice roll parks the turn, and the narration guard checks its prose.
 The program never sees the server's database key or any provider key.
@@ -117,7 +117,7 @@ are packed against; default 128K).
 
 Open **Settings > Connected agents** (or the guided setup's last question),
 name the connection, tick what it may do (read, play, characters, campaigns,
-Dungeon Master), optionally limit it to one campaign, pick your program and
+Game Master), optionally limit it to one campaign, pick your program and
 copy its one line. The token is shown once. The panel then watches for the
 agent's first call and says when it arrives, so you know the line worked.
 
