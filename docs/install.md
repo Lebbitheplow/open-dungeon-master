@@ -16,7 +16,7 @@ What each setup needs from the machine:
 
 The app's own needs, the measured machines and what hosting a group takes are on
 one page of the guide:
-[System requirements](https://opendungeonmaster.com/guide/start/system-requirements/).
+[System requirements](https://opengamemaster.com/guide/start/system-requirements/).
 Software:
 
 - **Node 22.18+, 24 or 26+** (npm). `npm install` pulls everything the app itself needs. Or

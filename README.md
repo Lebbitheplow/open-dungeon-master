@@ -36,13 +36,13 @@ The AI drives the session, requesting rolls, starting encounters, and playing NP
 and companions, following a secret story arc it regenerates as the campaign moves.
 
 > [!TIP]
-> **New here? Start with the [knowledge base](https://opendungeonmaster.com/guide/)
+> **New here? Start with the [knowledge base](https://opengamemaster.com/guide/)
 > on the website.** It covers choosing a setup, the
-> [system requirements](https://opendungeonmaster.com/guide/start/system-requirements/),
+> [system requirements](https://opengamemaster.com/guide/start/system-requirements/),
 > installing the desktop and Android apps or this server, playing, leading a table,
 > running one as a human Dungeon Master and every setting, and it is checked against
 > each release. Most players never need a server: the
-> [apps](https://opendungeonmaster.com/download/) host a world themselves. This README
+> [apps](https://opengamemaster.com/download/) host a world themselves. This README
 > and [docs/](docs) are the reference for people running and changing the server.
 
 <div align="center">
@@ -168,7 +168,7 @@ RTX 4060 Ti 16 GB, 4070 Ti Super, 4080, 5060 Ti 16 GB, 5070 Ti or 5080, or a Rad
 RX 7600 XT, 7800 XT, 9060 XT 16 GB or 9070) runs **gpt-oss-20b** whole on the card,
 the pick for that card, and about 28 GB runs the recommended Qwen3.6-35B-A3B
 ([what each size of card runs](docs/text-backends.md#hardware-for-a-local-model),
-and the [system requirements](https://opendungeonmaster.com/guide/start/system-requirements/)).
+and the [system requirements](https://opengamemaster.com/guide/start/system-requirements/)).
 Below 16 GB a local model is not supported; use an API key, an agent program or
 a human Dungeon Master. Run it on llama.cpp, with a **context window of at
 least 16K tokens to narrate and 24K to run fights; 32K or more is
@@ -203,9 +203,9 @@ Both follow the stable releases. Nightly betas, and how a beta becomes stable:
 ## Documentation
 
 Playing, hosting from the apps, leading a table and every setting are in the
-**[knowledge base](https://opendungeonmaster.com/guide/)** on opendungeonmaster.com,
-with a [FAQ](https://opendungeonmaster.com/guide/reference/faq/) and
-[what changed in each release](https://opendungeonmaster.com/guide/reference/whats-new/).
+**[knowledge base](https://opengamemaster.com/guide/)** on opengamemaster.com,
+with a [FAQ](https://opengamemaster.com/guide/reference/faq/) and
+[what changed in each release](https://opengamemaster.com/guide/reference/whats-new/).
 The documents below are the server's own reference.
 
 - **Getting started**

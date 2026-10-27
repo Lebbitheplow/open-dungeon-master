@@ -18,7 +18,7 @@
 
 import { pageOrigin } from "./navigation.ts";
 
-const SHARE_DOMAIN = "https://opendungeonmaster.com";
+const SHARE_DOMAIN = "https://opengamemaster.com";
 
 export type ShareLinks = {
   origin: string;
@@ -29,17 +29,19 @@ export type ShareLinks = {
   roomCode: string;
 };
 
-// A world shared through the broker lives at play-CODE.opendungeonmaster.com,
+// A world shared through the broker lives at play-CODE.opengamemaster.com,
 // where the code and the hostname are the same string. That makes a spoken
 // code enough to find the host: no lookup, no directory. Pair it with the
 // campaign's invite code and it names the table too, which is the whole
 // room code the apps parse back (src/shared/deep-link.ts in the client
-// repo, parseRoomCode; keep the two in step).
+// repo, parseRoomCode; keep the two in step). An app from before the move
+// to opengamemaster.com still shares at play-CODE.opendungeonmaster.com
+// until that domain lapses, and the broker names every session in both.
 const HOST_CODE_SHAPE = /^[A-HJKMNP-Z2-9]{8}$/;
 
 export function hostCodeFromOrigin(origin: string): string {
   const label =
-    /^https:\/\/play-([a-z0-9]+)\.opendungeonmaster\.com$/.exec(
+    /^https:\/\/play-([a-z0-9]+)\.(?:opengamemaster|opendungeonmaster)\.com$/.exec(
       (origin || "").trim().toLowerCase(),
     )?.[1] ?? "";
   const code = label.toUpperCase();

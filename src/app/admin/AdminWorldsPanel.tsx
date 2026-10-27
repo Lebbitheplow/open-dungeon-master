@@ -30,7 +30,7 @@ import { PluginThumb } from "./PluginThumb";
 //
 // The guide on the project site walks through making one in the workshop's
 // Plugin tool, from a world built in WorldForge, or by hand.
-const PLUGIN_GUIDE_URL = "https://opendungeonmaster.com/guide/dm/make-a-campaign-plugin/";
+const PLUGIN_GUIDE_URL = "https://opengamemaster.com/guide/dm/make-a-campaign-plugin/";
 // The same ceiling as MAX_MANIFEST_BYTES in src/lib/worlds/install.ts, which
 // this client component cannot import: a pack with its thumbnails aboard is a
 // few megabytes, and anything near this is not one.
@@ -267,7 +267,7 @@ export function AdminWorldsPanel() {
           >
             how to make a campaign plugin
           </a>{" "}
-          on opendungeonmaster.com.
+          on opengamemaster.com.
         </p>
       </section>
 

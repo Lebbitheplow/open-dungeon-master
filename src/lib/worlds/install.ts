@@ -33,7 +33,7 @@ const MAX_REDIRECTS = 5;
 // community works this project does not distribute, so a server browses one
 // only when its operator names it, and otherwise installs packs from a file.
 // The plugin browser links to the guide for making one
-// (https://opendungeonmaster.com/guide/dm/make-a-campaign-plugin/).
+// (https://opengamemaster.com/guide/dm/make-a-campaign-plugin/).
 
 // "Browse nothing", for an admin who wants to switch off a registry the
 // environment names. Blank keeps meaning "fall through to the next source".
