@@ -4,20 +4,28 @@
 #   npx wrangler login
 #   cd workers/j-redirector && npx wrangler deploy
 #
-# The route below binds it to opendungeonmaster.com/j* once the zone's DNS
-# is proxied through Cloudflare. Nothing else in the zone is touched.
+# On opengamemaster.com the routes below take only /j* and the App Link
+# check (the site itself is on Railway); www.opengamemaster.com is the
+# Worker's own custom domain and moves to the bare name. On the old domain,
+# opendungeonmaster.com, it takes every page: invites and the App Link check
+# are answered there until the domain lapses, everything else moves to the
+# same path on the site (src/index.js, MOVED_HOSTS).
 
 name = "odm-j-redirector"
 main = "src/index.js"
 compatibility_date = "2026-08-01"
 
 routes = [
-  { pattern = "opendungeonmaster.com/j*", zone_name = "opendungeonmaster.com" },
+  { pattern = "opengamemaster.com/j*", zone_name = "opengamemaster.com" },
   # Android App Link verification for the client's https /j intent-filter.
-  { pattern = "opendungeonmaster.com/.well-known/assetlinks.json", zone_name = "opendungeonmaster.com" },
+  { pattern = "opengamemaster.com/.well-known/assetlinks.json", zone_name = "opengamemaster.com" },
+  { pattern = "www.opengamemaster.com", custom_domain = true },
+  { pattern = "opendungeonmaster.com/*", zone_name = "opendungeonmaster.com" },
+  { pattern = "www.opendungeonmaster.com/*", zone_name = "opendungeonmaster.com" },
 ]
 
 [vars]
+SITE_URL = "https://opengamemaster.com"
 # SHA-256 fingerprints of APK signing certificates allowed to handle /j App
 # Links, comma-separated. Debug keystore on the dev machine first, then the
 # GitHub release keystore (~/.local/share/odm), then the Play App Signing

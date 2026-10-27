@@ -444,7 +444,7 @@ await test("failed teardown remains queued and the hourly cron retries it", asyn
     const pending = JSON.parse(await brokerEnv.SESSIONS.get(`session:${session.code}`));
     assert.equal(pending.cleanupPending, true);
     assert.equal(pending.tunnelId, "fake-id");
-    assert.equal(pending.dnsRecordId, undefined);
+    assert.deepEqual(pending.records, []);
     assert.equal(brokerEnv.SESSIONS.raw(`session:${session.code}`).expires_at, null);
     await worker.scheduled({}, brokerEnv);
     assert.equal(await brokerEnv.SESSIONS.get(`session:${session.code}`), null);
@@ -483,7 +483,7 @@ await test("failed DNS teardown retries only DNS and accepts an already-gone rec
     );
     assert.equal(response.status, 502);
     const pending = JSON.parse(await brokerEnv.SESSIONS.get(`session:${session.code}`));
-    assert.equal(pending.dnsRecordId, "fake-dns-id");
+    assert.deepEqual(pending.records, [{ zoneId: "zone", id: "fake-dns-id" }]);
     assert.equal(pending.tunnelId, undefined);
     await worker.scheduled({}, brokerEnv);
     assert.equal(await brokerEnv.SESSIONS.get(`session:${session.code}`), null);
@@ -523,7 +523,7 @@ await test("a failed provisioning cleanup is retained for the cron", async () =>
     const pending = JSON.parse(await brokerEnv.SESSIONS.get(pendingKeys[0].name));
     assert.equal(pending.cleanupPending, true);
     assert.equal(pending.tunnelId, "fake-id");
-    assert.equal(pending.dnsRecordId, undefined);
+    assert.deepEqual(pending.records, []);
     await worker.scheduled({}, brokerEnv);
     assert.equal(await brokerEnv.SESSIONS.get(pendingKeys[0].name), null);
     assert.equal(tunnelDeletes, 2);
@@ -985,6 +985,145 @@ await test("the ten-minute schedule runs the kill switch and skips the hourly ch
   assert.equal(sweeps, 0);
   await worker.scheduled({ cron: "17 * * * *" }, e);
   assert.equal(sweeps, 1);
+});
+
+// ---------- two domains at once ----------
+
+// A Cloudflare API whose zones have ids of their own, and whose token sees
+// only the zones listed in `visible`. Records every call with its body.
+function zoneApi({ visible = ["opendungeonmaster.com", "opengamemaster.com"] } = {}) {
+  const seen = [];
+  const fetchImpl = async (url, init = {}) => {
+    const { pathname, searchParams } = new URL(url);
+    const method = init.method || "GET";
+    seen.push({ method, path: pathname, body: init.body ? JSON.parse(init.body) : undefined });
+    let result = { id: "fake-id" };
+    if (pathname.endsWith("/token")) result = "fake-tunnel-token";
+    if (pathname === "/client/v4/zones") {
+      const name = searchParams.get("name");
+      result = visible.includes(name) ? [{ id: `zone-${name.split(".")[0]}` }] : [];
+    }
+    const dns = /^\/client\/v4\/zones\/([^/]+)\/dns_records$/.exec(pathname);
+    if (dns && method === "POST") result = { id: `dns-${dns[1]}` };
+    return new Response(JSON.stringify({ success: true, result }), { status: 200 });
+  };
+  return { seen, fetchImpl };
+}
+
+function movingEnv() {
+  return { ...env, SESSIONS: new TestStore(), SECONDARY_ZONE_NAMES: "opengamemaster.com" };
+}
+
+function sessionAt(host) {
+  return new Request(`https://${host}/session`, {
+    method: "POST",
+    headers: { "cf-connecting-ip": "1.2.3.4" },
+    body: JSON.stringify({ port: 3210 }),
+  });
+}
+
+await test("a session is named in every zone and answers in the domain the app called", async () => {
+  const realFetch = globalThis.fetch;
+  const { seen, fetchImpl } = zoneApi();
+  globalThis.fetch = fetchImpl;
+  try {
+    const e = movingEnv();
+    const fresh = await (await worker.fetch(sessionAt("broker.opengamemaster.com"), e)).json();
+    assert.equal(fresh.hostname, `play-${fresh.code.toLowerCase()}.opengamemaster.com`);
+    assert.equal(fresh.url, `https://${fresh.hostname}`);
+    const old = await (await worker.fetch(sessionAt("broker.opendungeonmaster.com"), e)).json();
+    assert.equal(old.hostname, `play-${old.code.toLowerCase()}.opendungeonmaster.com`);
+    const oldest = await (await worker.fetch(sessionAt("odm-tunnel-broker.example.workers.dev"), e)).json();
+    assert.equal(oldest.hostname, `play-${oldest.code.toLowerCase()}.opendungeonmaster.com`, "workers.dev gets ZONE_NAME");
+
+    const label = `play-${fresh.code.toLowerCase()}`;
+    const ingress = seen.find((call) => call.path.endsWith("/configurations")).body.config.ingress;
+    assert.deepEqual(
+      ingress.map((rule) => rule.hostname),
+      [`${label}.opendungeonmaster.com`, `${label}.opengamemaster.com`, undefined],
+    );
+    const names = seen.filter((call) => call.method === "POST" && call.path.endsWith("/dns_records")).slice(0, 2);
+    assert.deepEqual(
+      names.map((call) => [call.path, call.body.name]),
+      [
+        ["/client/v4/zones/zone-opendungeonmaster/dns_records", `${label}.opendungeonmaster.com`],
+        ["/client/v4/zones/zone-opengamemaster/dns_records", `${label}.opengamemaster.com`],
+      ],
+    );
+
+    seen.length = 0;
+    const deleted = await worker.fetch(
+      new Request(`https://broker.opengamemaster.com/session/${fresh.code}`, {
+        method: "DELETE",
+        headers: { "cf-connecting-ip": "1.2.3.4", "x-session-secret": fresh.secret },
+      }),
+      e,
+    );
+    assert.equal(deleted.status, 200);
+    assert.deepEqual(
+      seen.filter((call) => call.method === "DELETE" && call.path.includes("/dns_records/")).map((call) => call.path),
+      [
+        "/client/v4/zones/zone-opendungeonmaster/dns_records/dns-zone-opendungeonmaster",
+        "/client/v4/zones/zone-opengamemaster/dns_records/dns-zone-opengamemaster",
+      ],
+    );
+    assert.equal(await e.SESSIONS.get(`session:${fresh.code}`), null);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+await test("a zone the token cannot edit yet is skipped, and the app hears the first", async () => {
+  const realFetch = globalThis.fetch;
+  const realError = console.error;
+  const { seen, fetchImpl } = zoneApi({ visible: ["opendungeonmaster.com"] });
+  globalThis.fetch = fetchImpl;
+  console.error = () => {};
+  try {
+    const e = movingEnv();
+    const response = await worker.fetch(sessionAt("broker.opengamemaster.com"), e);
+    assert.equal(response.status, 200);
+    const session = await response.json();
+    assert.equal(session.hostname, `play-${session.code.toLowerCase()}.opendungeonmaster.com`);
+    assert.equal(seen.filter((call) => call.method === "POST" && call.path.endsWith("/dns_records")).length, 1);
+    const stored = JSON.parse(await e.SESSIONS.get(`session:${session.code}`));
+    assert.deepEqual(stored.records, [{ zoneId: "zone-opendungeonmaster", id: "dns-zone-opendungeonmaster" }]);
+  } finally {
+    globalThis.fetch = realFetch;
+    console.error = realError;
+  }
+});
+
+await test("a session row from before the move is torn down in the zone cached then", async () => {
+  const realFetch = globalThis.fetch;
+  const { seen, fetchImpl } = zoneApi();
+  globalThis.fetch = fetchImpl;
+  try {
+    const e = movingEnv();
+    await e.SESSIONS.put("zone-id", "zone-before");
+    await e.SESSIONS.put(
+      "session:ABCD2345",
+      JSON.stringify({ tunnelId: "t-before", secretHash: "h", createdAt: 1, dnsRecordId: "dns-before" }),
+    );
+    await worker.scheduled({}, e);
+    assert.equal(await e.SESSIONS.get("session:ABCD2345"), null);
+    const deletes = seen.filter((call) => call.method === "DELETE").map((call) => call.path);
+    assert.ok(deletes.includes("/client/v4/zones/zone-before/dns_records/dns-before"), deletes.join(" "));
+    assert.ok(deletes.includes("/client/v4/accounts/acct/cfd_tunnel/t-before"));
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+await test("a world shared at either domain's play address is accepted", async () => {
+  const both = ["opendungeonmaster.com", "opengamemaster.com"];
+  assert.equal(parseWorldUrl("https://play-abcd2345.opengamemaster.com", both), "https://play-abcd2345.opengamemaster.com");
+  assert.equal(parseWorldUrl(PLAY, both), PLAY);
+  assert.equal(parseWorldUrl("https://play-abcd2345.opengamemaster.com", "opendungeonmaster.com"), null);
+  assert.equal(parseWorldUrl("https://play-abcd2345.opengamemaster.com.evil.com", both), null);
+  const e = { ...worldEnv(), SECONDARY_ZONE_NAMES: "opengamemaster.com" };
+  const response = await putWorld(e, { url: "https://play-abcd2345.opengamemaster.com", instanceId: "inst-12345678" });
+  assert.equal(response.status, 200);
 });
 
 console.log(`\n${passed} checks passed`);
