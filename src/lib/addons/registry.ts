@@ -19,7 +19,7 @@ import {
 // Nothing here installs on its own: browsing it is a GET, installing is an
 // admin's act.
 export const DEFAULT_ADDON_REGISTRY_URL =
-  "https://raw.githubusercontent.com/Lebbitheplow/open-dungeon-master/main/addons/catalog.json";
+  "https://raw.githubusercontent.com/Lebbitheplow/open-game-master/main/addons/catalog.json";
 
 
 export const REGISTRY_OFF = "off";
@@ -147,4 +147,4 @@ export async function fetchAddonRegistry(url: string): Promise<RegistryRead> {
   return read;
 }
 
-const AGENT = { "user-agent": "open-dungeon-master" };
+const AGENT = { "user-agent": "open-game-master" };

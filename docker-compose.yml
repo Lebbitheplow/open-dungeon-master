@@ -15,7 +15,7 @@
 
 services:
   open-dungeon-master:
-    image: ${ODM_IMAGE:-lebbi/open-dungeon-master}:${ODM_IMAGE_TAG:-latest}
+    image: ${ODM_IMAGE:-lebbi/open-game-master}:${ODM_IMAGE_TAG:-latest}
     build:
       context: .
       # `--build` also bakes EMBEDDING_MODEL into the image, if set, so its

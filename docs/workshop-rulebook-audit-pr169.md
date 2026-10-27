@@ -1,6 +1,6 @@
 # Workshop and rulebook audit — PR #169
 
-Audit date: 2026-10-09. PR: [Workshop rules fidelity, and WorldForge built into the workshop](https://github.com/Lebbitheplow/open-dungeon-master/pull/169). Audited head: **ecd78fe3b3456541f085b72bea1ec002d83e0551**. Source links below are pinned to that head; this report remains meaningful if the PR changes.
+Audit date: 2026-10-09. PR: [Workshop rules fidelity, and WorldForge built into the workshop](https://github.com/Lebbitheplow/open-game-master/pull/169). Audited head: **ecd78fe3b3456541f085b72bea1ec002d83e0551**. Source links below are pinned to that head; this report remains meaningful if the PR changes.
 
 **Conclusion:** the PR substantially improves the workshop, and its existing tests pass, but it does not yet establish that every rulebook entry can be copied, edited, discovered, and played with its full rules intact. There are reproducible gaps in spell copying, monster data preservation, homebrew lifecycle, campaign scope, and WorldForge integration. These should be addressed before describing the workshop as fully faithful to the rulebook.
 
@@ -29,7 +29,7 @@ All 319 book spell titles found an exact-name catalog result with the pack insta
 
 For the 319 book spells, spellMechanicsFor returned 210 structured blocks and no block for 109 names. The 210 comprise save 90, attack 16, buff 61, utility 25, auto 5, heal 12, summon 1. **109 without this block does not mean 109 broken spells:** some are narrative utility and others have separate engines, including summons and zones. Conversely, having a block does not prove full behavior, as Web demonstrates below.
 
-Sources: [rulebook types](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/rulebook/types.ts#L1), [book contents/search](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/rulebook/book.ts#L1), [spell mechanics resolver](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/content/index.ts#L625).
+Sources: [rulebook types](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/rulebook/types.ts#L1), [book contents/search](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/rulebook/book.ts#L1), [spell mechanics resolver](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/content/index.ts#L625).
 
 ## Prioritized backlog
 
@@ -70,7 +70,7 @@ P1 means a core copy/play path produces the wrong mechanics or loses rules data.
 
 **Acceptance:** renamed Web creates the same zone and resolves movement/turn-entry/fire behavior; renamed Conjure Animals produces the same valid summons and removes them when concentration ends; renamed Polymorph replaces and restores the enemy's statistics. Compare stored state and costs, not only response text or block equality.
 
-Sources: [spellMechanicsOf](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/workshop/catalog-mechanics.ts#L30), [zone casting](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/dm/zone-cast.ts#L1), [zone registry](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/battlemap/zones-spells.ts#L1), [buff/summon routing](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/dm/cast-buff.ts#L1), [enemy transformation routing](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/dm/enemy-polymorph-logic.ts#L1).
+Sources: [spellMechanicsOf](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/workshop/catalog-mechanics.ts#L30), [zone casting](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/dm/zone-cast.ts#L1), [zone registry](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/battlemap/zones-spells.ts#L1), [buff/summon routing](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/dm/cast-buff.ts#L1), [enemy transformation routing](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/dm/enemy-polymorph-logic.ts#L1).
 
 ### F02 — Copying drops costly and consumed material components
 
@@ -84,7 +84,7 @@ The browser's Revivify draft contains only “V, S, M.” The pack stores diamon
 
 **Acceptance:** compare all casting facts before and after a copy/save/reload. Renamed costly spells refuse casting without the required component and consume the component when required. Include separate material fields and parenthetical formats.
 
-Sources: [spell draft creation](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/workshop/homebrew/draft.ts#L147), [spell normalization](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/homebrew/gear.ts#L43), [material/casting-facts extraction](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/srd/spell-facts.ts#L158).
+Sources: [spell draft creation](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/workshop/homebrew/draft.ts#L147), [spell normalization](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/homebrew/gear.ts#L43), [material/casting-facts extraction](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/srd/spell-facts.ts#L158).
 
 ### F03 — “Start from” existing homebrew loses structured data
 
@@ -102,7 +102,7 @@ Sources: [spell draft creation](https://github.com/Lebbitheplow/open-dungeon-mas
 
 **Acceptance:** selecting a saved homebrew row through “Start from,” renaming, saving, and reloading preserves every engine field and choice. Cover all selectable kinds. Homebrew hazards are not currently included by hazardCatalog, so the draft-only hazard case was not counted as a reachable picker failure.
 
-Sources: [picker rows](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/workshop/homebrew/CatalogStart.tsx#L97), [draftFromCatalog](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/workshop/homebrew/draft.ts#L127), [homebrew enrichment exclusions](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/workshop/catalog-mechanics.ts#L44), [Duplicate implementation](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/workshop/homebrew/HomebrewPanel.tsx#L1).
+Sources: [picker rows](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/workshop/homebrew/CatalogStart.tsx#L97), [draftFromCatalog](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/workshop/homebrew/draft.ts#L127), [homebrew enrichment exclusions](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/workshop/catalog-mechanics.ts#L44), [Duplicate implementation](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/workshop/homebrew/HomebrewPanel.tsx#L1).
 
 ### F04 — Discovery, creation, and runtime disagree about whose content applies
 
@@ -114,7 +114,7 @@ Monster spawning also resolves workshop stat blocks with the campaign owner only
 
 **Acceptance:** owner, human DM, assistant DM, ordinary player, and library-only author each browse/create/play with the intended content. A player's campaign picker can select the DM's admitted custom feat/species/spell/subclass. A DM-seat's accepted monster resolves when an NPC or encounter uses it. Unadmitted player content remains excluded consistently.
 
-Sources: [content API scope](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/api/content/[kind]/route.ts#L38), [builder requests](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/characters/builder/useBuilderOptions.ts#L55), [legality context](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/characters/catalog.ts#L245), [tableAuthors](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/db/homebrew.ts#L169), [monster author scope](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/dm/encounter-spawn.ts#L48).
+Sources: [content API scope](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/api/content/[kind]/route.ts#L38), [builder requests](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/characters/builder/useBuilderOptions.ts#L55), [legality context](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/characters/catalog.ts#L245), [tableAuthors](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/db/homebrew.ts#L169), [monster author scope](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/dm/encounter-spawn.ts#L48).
 
 ### F05 — Monster fidelity compares against an already reduced source
 
@@ -126,7 +126,7 @@ Sources: [content API scope](https://github.com/Lebbitheplow/open-dungeon-master
 
 **Acceptance:** every source action, special trait, reaction, legendary action, and variant is retained somewhere accessible after copy/save/reload. A Vampire copy still exposes its full weaknesses and escape rules. Regression tests derive expected names/text from the source row independently of parseMonster.
 
-Sources: [caps and trait projection](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/bestiary/statblock.ts#L198), [source parsing](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/bestiary/statblock.ts#L264), [draftFromStats](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/bestiary/monster-draft.ts#L299), [recognized engine traits](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/dm/monster-abilities.ts#L484).
+Sources: [caps and trait projection](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/bestiary/statblock.ts#L198), [source parsing](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/bestiary/statblock.ts#L264), [draftFromStats](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/bestiary/monster-draft.ts#L299), [recognized engine traits](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/dm/monster-abilities.ts#L484).
 
 ### F06 — Deletion contradicts the promise to preserve carried gear
 
@@ -136,7 +136,7 @@ Sources: [caps and trait projection](https://github.com/Lebbitheplow/open-dungeo
 
 **Acceptance:** deletion behavior agrees with the dialog on existing sheets, including after reload and subsequent writes. Editing, archiving, deleting, and changing the author scope have explicit behavior for items already carried.
 
-Sources: [delete confirmation](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/workshop/homebrew/HomebrewPanel.tsx#L157), [gear hydration and snapshot removal](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/db/homebrew.ts#L194).
+Sources: [delete confirmation](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/workshop/homebrew/HomebrewPanel.tsx#L157), [gear hydration and snapshot removal](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/db/homebrew.ts#L194).
 
 ### F07 — Browser feat mechanics persist across campaigns
 
@@ -146,7 +146,7 @@ Sources: [delete confirmation](https://github.com/Lebbitheplow/open-dungeon-mast
 
 **Acceptance:** two campaigns can use the same custom feat name with different effects without leakage. Removing a feat clears its effect in the browser, matching the server. Test sequential navigation in one JS runtime, not only isolated page loads.
 
-Sources: [browser cache registration and lookup](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/srd/feat-effects.ts#L86), [campaign snapshot registration](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/campaigns/[campaignId]/useCampaignStream.ts#L1119).
+Sources: [browser cache registration and lookup](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/srd/feat-effects.ts#L86), [campaign snapshot registration](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/campaigns/[campaignId]/useCampaignStream.ts#L1119).
 
 ### F08 — No-pack fallback is available in the API but hidden in the UI
 
@@ -158,7 +158,7 @@ Published spells/items have no searchable pack rows in that state, even though m
 
 **Acceptance:** no-pack “Start from” and the builder expose returned custom/bundled options. Installing a pack or recovering from an API error restores the picker. Any requirement for the optional content pack is visible where it matters.
 
-Sources: [unavailable flag](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/characters/builder/useContentSearch.ts#L65), [hidden picker](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/workshop/homebrew/CatalogStart.tsx#L61), [early return](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/characters/builder/useBuilderOptions.ts#L68), [catalog API](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/api/content/[kind]/route.ts#L1).
+Sources: [unavailable flag](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/characters/builder/useContentSearch.ts#L65), [hidden picker](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/workshop/homebrew/CatalogStart.tsx#L61), [early return](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/characters/builder/useBuilderOptions.ts#L68), [catalog API](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/api/content/[kind]/route.ts#L1).
 
 ### F09 — Renamed equipment loses its carried weight
 
@@ -170,7 +170,7 @@ Sources: [unavailable flag](https://github.com/Lebbitheplow/open-dungeon-master/
 
 **Acceptance:** renamed weapon, tool, supply, and mundane gear copies have the same carried weight, quantity behavior, and encumbrance effect as the original. Test actual catalog rows, including string weights.
 
-Sources: [item draft fields](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/workshop/homebrew/draft.ts#L169), [armor weight enrichment](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/workshop/catalog-mechanics.ts#L69), [name-based weight lookup](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/content/item-weights.ts#L1), [inventory weight calculation](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/srd/encumbrance.ts#L77).
+Sources: [item draft fields](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/workshop/homebrew/draft.ts#L169), [armor weight enrichment](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/workshop/catalog-mechanics.ts#L69), [name-based weight lookup](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/content/item-weights.ts#L1), [inventory weight calculation](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/srd/encumbrance.ts#L77).
 
 ### F10 — The prose preview can misstate the effective spell
 
@@ -180,7 +180,7 @@ Sources: [item draft fields](https://github.com/Lebbitheplow/open-dungeon-master
 
 **Acceptance:** the displayed dice/save/effect match what a saved draft actually resolves. Editing prose alone either changes the effective value where supported or visibly explains that a structured override remains active. Do not use Fireball as a universal example: spells without explicit dice can legitimately continue to read their prose.
 
-Sources: [prose preview](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/workshop/homebrew/SpellFields.tsx#L29), [description hint](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/workshop/homebrew/HomebrewEditor.tsx#L101), [structured dice precedence](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/srd/spell-dice.ts#L41), [mechanics precedence](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/content/index.ts#L632).
+Sources: [prose preview](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/workshop/homebrew/SpellFields.tsx#L29), [description hint](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/workshop/homebrew/HomebrewEditor.tsx#L101), [structured dice precedence](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/srd/spell-dice.ts#L41), [mechanics precedence](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/content/index.ts#L632).
 
 ### F11 — Named trap attacks omit basic attack-roll rules
 
@@ -190,7 +190,7 @@ Sources: [prose preview](https://github.com/Lebbitheplow/open-dungeon-master/blo
 
 **Acceptance:** natural 1 misses, natural 20 hits, eligible hit dice double on a critical, poison-save damage remains governed by its own rules, and the target AC matches the value used by other attacks against that character.
 
-Source: [trap attack and damage path](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/dm/trap-run.ts#L30).
+Source: [trap attack and damage path](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/dm/trap-run.ts#L30).
 
 ### F12 — Unrenamed copies can save while the original retains authority
 
@@ -202,7 +202,7 @@ Protecting published rules is a reasonable policy. The gap is allowing an edited
 
 **Acceptance:** an edited spell saved under a published name cannot silently masquerade as the edited version. Users receive a clear rename/admission requirement or a stable explicit identity that resolves consistently after reload/export/import.
 
-Sources: [original default name](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/workshop/homebrew/draft.ts#L147), [published spell guard](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/content/index.ts#L167), [known feat precedence](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/srd/feat-effects.ts#L114), [gear identity/precedence](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/db/homebrew.ts#L218).
+Sources: [original default name](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/workshop/homebrew/draft.ts#L147), [published spell guard](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/content/index.ts#L167), [known feat precedence](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/srd/feat-effects.ts#L114), [gear identity/precedence](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/db/homebrew.ts#L218).
 
 ### F13 — SRD findings are not a full mechanics or balance check
 
@@ -214,7 +214,7 @@ Sources: [original default name](https://github.com/Lebbitheplow/open-dungeon-ma
 
 **Acceptance:** unchanged published examples have no false deviations; independently exaggerated riders/charges/check bonuses get appropriate feedback; unrecognized conditions/effect combinations cannot silently imply working automation.
 
-Sources: [heavy armor/shield findings](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/rulesets/validate.ts#L138), [fields sent to validation](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/workshop/homebrew/draft.ts#L73), [option findings](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/rulesets/validate-options.ts#L1).
+Sources: [heavy armor/shield findings](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/rulesets/validate.ts#L138), [fields sent to validation](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/workshop/homebrew/draft.ts#L73), [option findings](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/rulesets/validate-options.ts#L1).
 
 ### F14 — WorldForge prose and structured world facts do not reach the DM feed
 
@@ -226,7 +226,7 @@ Custom fields, article prose, timelines, calendars, and atlas context are not re
 
 **Acceptance:** a fact stored only in an NPC article becomes available when that NPC is relevant in play. Hidden facts remain DM-only. Late entries remain retrievable rather than being permanently excluded by first-N truncation. Imported world content behaves the same.
 
-Sources: [overlay versus ordinary record](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/db/world-forge.ts#L100), [article storage](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/db/world-forge.ts#L274), [bounded DM feed](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/dm/world-prompt.ts#L14), [feed integration](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/dm/turn.ts#L423), [WorldForge AI article input](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/dm/world-ai.ts#L58).
+Sources: [overlay versus ordinary record](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/db/world-forge.ts#L100), [article storage](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/db/world-forge.ts#L274), [bounded DM feed](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/dm/world-prompt.ts#L14), [feed integration](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/dm/turn.ts#L423), [WorldForge AI article input](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/dm/world-ai.ts#L58).
 
 ### F15 — Reimport retains old relationship metadata
 
@@ -238,7 +238,7 @@ Sources: [overlay versus ordinary record](https://github.com/Lebbitheplow/open-d
 
 **Acceptance:** repeating an import updates intended veracity, rank, and direction changes without duplicating links; intentional target edits produce a reviewable conflict rather than silent stale content.
 
-Source: [copyWorldDoc relationship merge](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/db/world-forge-io.ts#L247), [JSON import relationship merge](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/db/world-forge-io.ts#L130).
+Source: [copyWorldDoc relationship merge](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/db/world-forge-io.ts#L247), [JSON import relationship merge](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/db/world-forge-io.ts#L130).
 
 ### F16 — WorldForge's optimistic whole-slice saves have no conflict protection
 
@@ -250,7 +250,7 @@ This was not reproduced as a timed browser race. The replacement/rollback contra
 
 **Acceptance:** delayed responses, one failed overlapping save, and two concurrent editors never silently lose another accepted change. The saving indicator reflects outstanding requests, and conflicts have a usable recovery path.
 
-Sources: [state reference](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/workshop/world/useWorld.ts#L30), [optimistic replacement and rollback](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/workshop/world/useWorld.ts#L74), [server slice replacement](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/db/world-forge.ts#L71).
+Sources: [state reference](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/workshop/world/useWorld.ts#L30), [optimistic replacement and rollback](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/workshop/world/useWorld.ts#L74), [server slice replacement](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/db/world-forge.ts#L71).
 
 ### F17 — Portability depends on a global shelf and collision policy
 
@@ -262,7 +262,7 @@ Ordinary campaign content import does not transfer the user-scoped homebrew shel
 
 **Acceptance:** two bundles defining different monsters with the same name can be imported without silently changing either adventure's intended stats. The export preview lists included unrelated shelf content and missing dependencies. Test both bundle import and ordinary campaign import across authorized authors.
 
-Sources: [portable NPC stat block](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/db/workshop-bundle-export.ts#L31), [entire owner shelf export](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/db/workshop-bundle-export.ts#L385), [same-name import precedence](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/db/workshop-bundle-parts.ts#L224), [ordinary content copying](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/db/content-import.ts#L384).
+Sources: [portable NPC stat block](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/db/workshop-bundle-export.ts#L31), [entire owner shelf export](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/db/workshop-bundle-export.ts#L385), [same-name import precedence](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/db/workshop-bundle-parts.ts#L224), [ordinary content copying](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/db/content-import.ts#L384).
 
 ### F18 — The reader and workshop lack a durable source crosswalk
 
@@ -274,7 +274,7 @@ The exact-title inventory illustrates why a name-based crosswalk is insufficient
 
 **Acceptance:** every book entry has a tested mapping to a catalog/template/rules-only destination. A copied entry exposes its source and changes. A DM can open the relevant original rule without losing an unsaved draft.
 
-Sources: [book identity model](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/rulebook/types.ts#L8), [catalog information popover](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/workshop/homebrew/CatalogStart.tsx#L121), [draft identity/data conversion](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/workshop/homebrew/draft.ts#L127).
+Sources: [book identity model](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/rulebook/types.ts#L8), [catalog information popover](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/workshop/homebrew/CatalogStart.tsx#L121), [draft identity/data conversion](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/workshop/homebrew/draft.ts#L127).
 
 ### F19 — Broader chapter coverage still needs an explicit product decision
 
@@ -284,7 +284,7 @@ Sources: [book identity model](https://github.com/Lebbitheplow/open-dungeon-mast
 
 **Acceptance:** every one of the 36 general rules pages and every class/race chapter has an explicit destination and supported workflow. No whole-chapter integration claim rests solely on the page rendering successfully.
 
-Sources: [available editor kinds](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/workshop/homebrew/types.ts#L12), [hazard coverage](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/workshop/hazard-catalog.ts#L34), [book chapter structure](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/rulebook/book.ts#L1).
+Sources: [available editor kinds](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/app/workshop/homebrew/types.ts#L12), [hazard coverage](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/workshop/hazard-catalog.ts#L34), [book chapter structure](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/src/lib/rulebook/book.ts#L1).
 
 ### F20 — Strengthen the definition and evidence for “fidelity”
 
@@ -298,7 +298,7 @@ The PR also acknowledges that actual local-model Forge/Ask/Draft behavior was no
 
 **Acceptance:** every completeness assertion has a defined denominator and a current artifact behind it. Exercise renamed and edited copies, pack/no-pack, library/campaign, all DM/player scopes, deletion, collisions, and export/import. Existing passing assertions must remain useful, but passing them alone is insufficient to close the findings above.
 
-Sources: [spell equality assertion](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/scripts/test-workshop-fidelity.mjs#L182), [synthesized item fixtures](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/scripts/test-workshop-fidelity.mjs#L264), [historical coverage distinctions](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/docs/rules-enforcement-audit.md#L62), [AI contract tests](https://github.com/Lebbitheplow/open-dungeon-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/scripts/test-workshop-worldforge-ai.mjs#L1).
+Sources: [spell equality assertion](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/scripts/test-workshop-fidelity.mjs#L182), [synthesized item fixtures](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/scripts/test-workshop-fidelity.mjs#L264), [historical coverage distinctions](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/docs/rules-enforcement-audit.md#L62), [AI contract tests](https://github.com/Lebbitheplow/open-game-master/blob/ecd78fe3b3456541f085b72bea1ec002d83e0551/scripts/test-workshop-worldforge-ai.mjs#L1).
 
 ## Suggested order for follow-up sessions
 

@@ -6,7 +6,7 @@
   "apiVersion": 1,
   "description": "The example addon: imports plain-text stat blocks into a workshop, builds cavern maps with a picture and a small 3D model, and draws the board in an isometric view.",
   "author": "Open Game Master",
-  "homepage": "https://github.com/Lebbitheplow/open-dungeon-master/tree/main/examples/addons/hello-dungeon",
+  "homepage": "https://github.com/Lebbitheplow/open-game-master/tree/main/examples/addons/hello-dungeon",
   "license": "MIT",
   "runtime": {
     "kind": "node",

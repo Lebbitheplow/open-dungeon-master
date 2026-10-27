@@ -38,7 +38,7 @@ const { CATALOG_CATEGORIES, catalogEntry, catalogProblems, emptyCatalog, entryDi
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const COMMIT = /^[a-f0-9]{40}$/;
-const AGENT = { "user-agent": "open-dungeon-master" };
+const AGENT = { "user-agent": "open-game-master" };
 
 const argv = process.argv.slice(2);
 const [command, target] = argv;

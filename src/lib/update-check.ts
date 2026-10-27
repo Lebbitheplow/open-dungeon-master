@@ -55,7 +55,7 @@ async function askGitHub(channel: UpdateChannel): Promise<Kept> {
     const path = channel === "beta" ? "releases?per_page=30" : "releases/latest";
     const response = await fetch(`https://api.github.com/repos/${REPOSITORY}/${path}`, {
       cache: "no-store",
-      headers: { Accept: "application/vnd.github+json", "User-Agent": `open-dungeon-master/${packageJson.version}` },
+      headers: { Accept: "application/vnd.github+json", "User-Agent": `open-game-master/${packageJson.version}` },
       signal: AbortSignal.timeout(5_000),
     });
     if (response.ok) {

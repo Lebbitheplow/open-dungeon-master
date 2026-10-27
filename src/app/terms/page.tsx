@@ -38,7 +38,7 @@ export default function TermsPage() {
             <span className="text-stone-200">If you run the server.</span> Your relationship with
             this project is the{" "}
             <a
-              href="https://github.com/Lebbitheplow/open-dungeon-master/blob/main/LICENSE"
+              href="https://github.com/Lebbitheplow/open-game-master/blob/main/LICENSE"
               target="_blank"
               rel="noopener noreferrer"
               className="text-amber-200 hover:text-amber-400"
@@ -251,12 +251,12 @@ export default function TermsPage() {
         </p>
         <p className="mt-2 text-sm leading-6">
           <a
-            href="https://github.com/Lebbitheplow/open-dungeon-master"
+            href="https://github.com/Lebbitheplow/open-game-master"
             target="_blank"
             rel="noopener noreferrer"
             className="text-amber-200 hover:text-amber-400"
           >
-            github.com/Lebbitheplow/open-dungeon-master
+            github.com/Lebbitheplow/open-game-master
           </a>
         </p>
       </PageSection>

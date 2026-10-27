@@ -61,7 +61,7 @@ try {
 } catch (error) {
   db.close();
   if (String(error?.code || "").startsWith("SQLITE_BUSY")) {
-    fail("Database is in use. Stop the server (systemctl --user stop open-dungeon-master) and rerun.");
+    fail("Database is in use. Stop the server and rerun.");
   }
   throw error;
 }

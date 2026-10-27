@@ -15,7 +15,7 @@ export function HomeFooter() {
       </a>
       <span className="ts-footer-dot" aria-hidden="true">&middot;</span>
       <a
-        href="https://github.com/Lebbitheplow/open-dungeon-master"
+        href="https://github.com/Lebbitheplow/open-game-master"
         target="_blank"
         rel="noopener noreferrer"
         className="ts-footer-link inline-flex items-center gap-1.5"

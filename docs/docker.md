@@ -15,14 +15,20 @@ arm64 host builds its own image from a clone, below, and gets working embeddings
 way):
 
 ```bash
-docker pull lebbi/open-dungeon-master:latest                 # Docker Hub
-docker pull ghcr.io/lebbitheplow/open-dungeon-master:latest  # GHCR
+docker pull lebbi/open-game-master:latest                 # Docker Hub
+docker pull ghcr.io/lebbitheplow/open-game-master:latest  # GHCR
 ```
+
+Releases still go out under the image's names from before the rename to Open Game Master
+too (`lebbi/open-dungeon-master` and `ghcr.io/lebbitheplow/open-dungeon-master`), so an
+install set up with them keeps updating for now. To move one over, download the compose
+file again (or change `ODM_IMAGE` in `.env`) and run `docker compose pull && docker
+compose up -d`; the service and its volumes keep their names, so nothing else changes.
 
 Grab the compose file and start it:
 
 ```bash
-curl -O https://raw.githubusercontent.com/Lebbitheplow/open-dungeon-master/stable/docker-compose.yml
+curl -O https://raw.githubusercontent.com/Lebbitheplow/open-game-master/stable/docker-compose.yml
 docker compose pull
 docker compose up -d        # http://localhost:3005
 ```
@@ -33,7 +39,7 @@ and takes only its fixes, and `:beta` follows the nightly betas
 or pin one version with `ODM_IMAGE_TAG=0.10.1`. On `:beta`, set `ODM_UPDATE_CHANNEL=beta`
 too, so the About dialog compares against the betas. The
 compose file pulls from Docker Hub by default; set
-`ODM_IMAGE=ghcr.io/lebbitheplow/open-dungeon-master` in `.env` to use GHCR instead. To
+`ODM_IMAGE=ghcr.io/lebbitheplow/open-game-master` in `.env` to use GHCR instead. To
 build the image yourself rather than pulling it, clone the repository (the first two
 lines of the [Quick start](install.md#quick-start)) and run `docker compose up -d --build`
 inside it.
@@ -131,8 +137,10 @@ starts the pushed image and waits for `/api/health` before it counts as successf
 it can be re-run by hand from the Actions tab.
 
 **GHCR needs no setup** - it authenticates with the built-in `GITHUB_TOKEN`. A brand new
-package is private, so make it public once (Packages > open-dungeon-master > Package
-settings > Change visibility) for other people to pull it.
+package is private, so make it public once (Packages > open-game-master > Package
+settings > Change visibility) for other people to pull it. Each release is also pushed to
+the names from before the rename (`LEGACY_GHCR_IMAGE` and `LEGACY_DOCKERHUB_IMAGE` in the
+workflow); delete those two lines once the installs that use them have moved.
 
 **Docker Hub is optional.** Set two repository secrets and it publishes there too;
 without them the workflow succeeds and publishes to GHCR only.

@@ -6,7 +6,7 @@ Every build ships first as a **beta**. The betas that hold up are promoted to
 **stable** unchanged: promotion clears the GitHub release's prerelease flag, so a
 stable install runs the exact build the beta testers ran. The same rules cover this
 server and the desktop and Android apps
-([open-dungeon-master-client](https://github.com/Lebbitheplow/open-dungeon-master-client)).
+([open-game-master-client](https://github.com/Lebbitheplow/open-game-master-client)).
 
 ## Channels
 
@@ -85,7 +85,7 @@ Then clear the flag on the server release and on the client release that bundles
 
 ```bash
 gh release edit v0.29.4 --prerelease=false --latest
-gh release edit v0.20.3 --prerelease=false --latest --repo Lebbitheplow/open-dungeon-master-client
+gh release edit v0.20.3 --prerelease=false --latest --repo Lebbitheplow/open-game-master-client
 ```
 
 On Google Play, upload that client release's `.aab` to production (or promote it
@@ -138,7 +138,7 @@ and the desktop app's Beta updates switch and `ODM_UPDATE_CHANNEL` reach people 
 the first beta. The day the betas start:
 
 ```bash
-gh variable set PUBLISH_AS_BETA --body true --repo Lebbitheplow/open-dungeon-master-client
+gh variable set PUBLISH_AS_BETA --body true --repo Lebbitheplow/open-game-master-client
 ```
 
 and the server is published with `--prerelease` from then on. The release that is out at

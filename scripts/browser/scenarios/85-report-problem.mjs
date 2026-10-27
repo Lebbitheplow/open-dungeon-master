@@ -16,7 +16,7 @@
 import fs from "node:fs";
 import { check, eventually, hydrated, newContext, settle, signIn } from "../lib.mjs";
 
-const FORM = "https://github.com/Lebbitheplow/open-dungeon-master/issues/new?template=bug_report.yml";
+const FORM = "https://github.com/Lebbitheplow/open-game-master/issues/new?template=bug_report.yml";
 
 export default {
   name: "report-problem",

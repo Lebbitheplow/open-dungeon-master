@@ -421,7 +421,7 @@ export default function SettingsPage() {
             Licenses and attribution
           </Link>
           <a
-            href="https://github.com/Lebbitheplow/open-dungeon-master"
+            href="https://github.com/Lebbitheplow/open-game-master"
             target="_blank"
             rel="noopener noreferrer"
             className={ui.btnSmall}

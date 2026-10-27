@@ -114,7 +114,7 @@ export function compareVersions(a: string, b: string): number {
   return 0;
 }
 
-export const REPOSITORY = "Lebbitheplow/open-dungeon-master";
+export const REPOSITORY = "Lebbitheplow/open-game-master";
 export const REPOSITORY_URL = `https://github.com/${REPOSITORY}`;
 
 // Which releases a server is told about (docs/releases.md). Every build is
