@@ -3608,7 +3608,7 @@ export function getDatabase() {
   if (revision > SCHEMA_REVISION) {
     db.close();
     throw new Error(
-      `${dbPath} was saved by a newer version of Open Dungeon Master (database revision ${revision}; ` +
+      `${dbPath} was saved by a newer version of Open Game Master (database revision ${revision}; ` +
         `this version reads up to ${SCHEMA_REVISION}). Update the app or server to open it; nothing in it was changed.`,
     );
   }

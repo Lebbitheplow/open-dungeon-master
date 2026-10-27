@@ -40,7 +40,7 @@ import type {
 import { HARNESS_MAX_RUN_MS, isHarnessEffort } from "../types.ts";
 
 const AGENT = "odm-dm";
-const TITLE = "Open Dungeon Master";
+const TITLE = "Open Game Master";
 // Set on every session ODM creates and never by opencode, so the sweep can
 // tell ODM's sessions from the admin's own.
 const SESSION_TAG = { openDungeonMaster: "run" };
@@ -561,7 +561,7 @@ async function waitFor<T>(check: () => Promise<T | null>): Promise<T | null> {
 // on 1.x.
 function unsupportedMessage(version: string | undefined) {
   const install = onWindows() ? INSTALL_HINT_WINDOWS : INSTALL_HINT;
-  return `${version ? `opencode ${version} is installed` : "This opencode is older than 2.x"}; Open Dungeon Master drives opencode 2.x. Upgrade with \`opencode upgrade --major\` (opencode 1.19 or later), or install it with \`${install}\`.`;
+  return `${version ? `opencode ${version} is installed` : "This opencode is older than 2.x"}; Open Game Master drives opencode 2.x. Upgrade with \`opencode upgrade --major\` (opencode 1.19 or later), or install it with \`${install}\`.`;
 }
 
 type OpencodeApi = <T>(method: string, route: string, body?: unknown, missing?: T) => Promise<T>;

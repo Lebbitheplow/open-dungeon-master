@@ -29,7 +29,7 @@ export async function GET() {
     // No accounts yet: the first one (the admin) needs the one-time setup
     // code from the server log, so the form asks for it. Never the code.
     needsSetup: needsSetup(),
-    serverName: config.serverName || "Open Dungeon Master",
+    serverName: config.serverName || "Open Game Master",
     version: packageJson.version,
     // How long a deleted account lingers before the purge, so confirmation
     // copy in the app and the client shells can quote the real number.

@@ -1,5 +1,5 @@
 {
-  "_license": "Original content for Open Dungeon Master. The open datasets carry almost no 5e feats (two rows), so these describe the widely played ones in our own wording. Mechanics are not copyrightable, expression is; no publisher's text is reproduced here.",
+  "_license": "Original content for Open Game Master. The open datasets carry almost no 5e feats (two rows), so these describe the widely played ones in our own wording. Mechanics are not copyrightable, expression is; no publisher's text is reproduced here.",
   "_shape": "feats[] = { name, prerequisite, desc }. Imported as document_slug 'odm-expanded' by scripts/import-open5e.mjs. Feats with a server-enforced effect must also appear in src/lib/srd/feature-effects.ts.",
   "feats": [
     {

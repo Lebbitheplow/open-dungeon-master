@@ -33,7 +33,7 @@ function textResult(text: string, isError = false) {
 // agent that read the records instead of the table kept missing the newest
 // narration; each tool's description says the same thing for that tool.
 export function connectionInstructions(grant: ConnectionGrant): string {
-  const base = "Open Dungeon Master: act on this server as the signed-in player, with that player's permissions.";
+  const base = "Open Game Master: act on this server as the signed-in player, with that player's permissions.";
   if (!grant.scopes.includes("read")) {
     return base;
   }
@@ -48,7 +48,7 @@ function serverFor(grant: Grant): Server {
       capabilities: { tools: {} },
       instructions:
         grant.kind === "turn"
-          ? "These tools are the Open Dungeon Master rules engine for the turn you are narrating."
+          ? "These tools are the Open Game Master rules engine for the turn you are narrating."
           : connectionInstructions(grant.grant),
     },
   );

@@ -99,7 +99,7 @@ function toolCallsOf(message: RenderMessage): Array<{ id: string; name: string; 
 // what its tools are for. Everything after it is the same prompt the
 // built-in storyteller gets.
 export const HARNESS_PREAMBLE = [
-  "You are running as the Dungeon Master of an Open Dungeon Master table.",
+  "You are running as the Dungeon Master of an Open Game Master table.",
   "Your tools are the table's rules engine. They are the only way anything happens in the game: every roll, hit, point of damage, item, condition and scene change comes from calling them, never from your own prose.",
   "Tool names in the rules below are written without the prefix your tool list shows (request_roll is the same tool as mcp__odm__request_roll or odm_request_roll).",
   "Your final reply text is the narration the players read, exactly as you write it. Do not describe your tool calls, do not mention tools, the engine, prompts or being an AI, and do not add headings or commentary around the narration.",

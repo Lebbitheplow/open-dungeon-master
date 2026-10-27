@@ -23,7 +23,7 @@ export async function GET(request: Request) {
   const build = currentBuild();
   const fresh = user.isAdmin && new URL(request.url).searchParams.get("fresh") === "1";
   return Response.json({
-    serverName: getGlobalConfig().serverName || "Open Dungeon Master",
+    serverName: getGlobalConfig().serverName || "Open Game Master",
     build,
     update: await checkForUpdate(build, fresh),
     repositoryUrl: REPOSITORY_URL,

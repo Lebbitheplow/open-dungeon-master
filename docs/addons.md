@@ -11,7 +11,7 @@ This page is for whoever runs a server. Writing an addon:
 [addons/extension-points.md](addons/extension-points.md). What the downloader
 list accepts and how an author submits an addon: [addons/guidelines.md](addons/guidelines.md).
 
-Addons are their authors' own projects. Open Dungeon Master provides the
+Addons are their authors' own projects. Open Game Master provides the
 framework they plug into and a list of addons that have been audited; it does
 not write, ship or update any addon itself.
 
@@ -46,7 +46,7 @@ An operator can switch addons off entirely with `ODM_ADDONS=off`.
 
 **Admin > Addons** lists what this server has and the addons on the
 downloader list. The list is [`addons/catalog.json`](../addons/catalog.json)
-in the Open Dungeon Master repository, read from its `main` branch so a newly
+in the Open Game Master repository, read from its `main` branch so a newly
 audited addon shows up without waiting for a release (and from the copy this
 version shipped with when GitHub cannot be reached; that copy is only the
 list, never an addon's code). Each addon lives in its author's own GitHub
@@ -167,7 +167,7 @@ from disk on every change, and marked as such. See
 
 | Variable | Default | |
 |---|---|---|
-| `ADDON_REGISTRY_URL` | the Open Dungeon Master list | The https address of an addon list in the same format (or set it under Admin > Addons). `off` browses none |
+| `ADDON_REGISTRY_URL` | the Open Game Master list | The https address of an addon list in the same format (or set it under Admin > Addons). `off` browses none |
 | `ADDONS_DIR` | `data/addons` | Where addon packages, their data folders and their working files live |
 | `ODM_ADDONS` | on | `off` switches addons off on this server |
 | `ODM_ADDON_DEV_DIRS` | unset | Development folders to load addons from, for authors |

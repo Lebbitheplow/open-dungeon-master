@@ -252,7 +252,7 @@ export function AdminAddonsPanel() {
         {!state.support.supported ? (
           <EmptyState art="scrolls" size="sm" title="Addons are not available on this server." />
         ) : !state.catalog.url ? (
-          <EmptyState art="scrolls" size="sm" title="This server's addon list is turned off." hint="Clear the list address below to use the Open Dungeon Master list." />
+          <EmptyState art="scrolls" size="sm" title="This server's addon list is turned off." hint="Clear the list address below to use the Open Game Master list." />
         ) : state.catalog.error ? (
           <p role="alert" className="motion-shake rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-300">
             {state.catalog.error}
@@ -287,7 +287,7 @@ export function AdminAddonsPanel() {
         )}
         {state.catalog.bundled ? (
           <p className="mt-2 text-[11px] leading-4 text-stone-500">
-            GitHub could not be reached, so this is the list this version of Open Dungeon Master shipped with. Addons
+            GitHub could not be reached, so this is the list this version of Open Game Master shipped with. Addons
             added since then show once it can be reached again.
           </p>
         ) : null}
@@ -306,7 +306,7 @@ export function AdminAddonsPanel() {
             key={state.config.registryUrl}
             ref={registryInput}
             defaultValue={state.config.registryUrl}
-            placeholder="Blank uses the Open Dungeon Master list"
+            placeholder="Blank uses the Open Game Master list"
             aria-label="Addon list address"
             className={cn(ui.input, "min-w-0 flex-1 text-xs")}
           />
@@ -322,7 +322,7 @@ export function AdminAddonsPanel() {
         </div>
         <p className="mt-1 text-[11px] leading-4 text-stone-500">
           Blank falls through to the <span className="font-mono">ADDON_REGISTRY_URL</span> environment variable, then to the
-          Open Dungeon Master list. Point it at your own over https, or set it to <span className="font-mono">off</span>.
+          Open Game Master list. Point it at your own over https, or set it to <span className="font-mono">off</span>.
           {state.catalog.url ? <span className="block break-all font-mono">Reading: {state.catalog.url}</span> : null}
         </p>
 

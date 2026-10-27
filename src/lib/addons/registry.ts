@@ -109,7 +109,7 @@ export type RegistryRead =
 export function readRegistry(value: unknown): RegistryRead {
   const record = value && typeof value === "object" ? (value as Record<string, unknown>) : null;
   if (!record || record.kind !== ADDON_REGISTRY_KIND || record.version !== ADDON_REGISTRY_VERSION || !Array.isArray(record.addons)) {
-    return { ok: false, error: "That address is not an Open Dungeon Master addon catalog." };
+    return { ok: false, error: "That address is not an Open Game Master addon catalog." };
   }
   const addons: RegistryAddon[] = [];
   const ids = new Set<string>();

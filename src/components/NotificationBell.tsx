@@ -87,7 +87,7 @@ export function NotificationBell() {
     }
     for (const item of fresh.slice(0, 3)) {
       try {
-        new Notification("Open Dungeon Master", { body: item.body, tag: item.id });
+        new Notification("Open Game Master", { body: item.body, tag: item.id });
       } catch {
         // No notification daemon on this platform; the badge still shows.
       }

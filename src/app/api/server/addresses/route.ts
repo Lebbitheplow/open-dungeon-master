@@ -21,7 +21,7 @@ export async function GET(request: Request) {
   const protocol = request.headers.get("x-forwarded-proto") ?? url.protocol;
   const config = getGlobalConfig();
   return Response.json({
-    serverName: config.serverName || "Open Dungeon Master",
+    serverName: config.serverName || "Open Game Master",
     publicUrl: livePublicUrl(config.publicUrl, os.networkInterfaces()),
     lanUrls: lanOrigins(os.networkInterfaces(), protocol, url.port),
   });

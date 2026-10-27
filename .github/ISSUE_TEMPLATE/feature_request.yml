@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Open Dungeon Master tries to work well with no setup, so most features should simply work with a good default. If your idea needs a new setting, toggle or option, show us what it would look like: the setup already asks a lot of new players, and every new control has to earn its place.
+        Open Game Master tries to work well with no setup, so most features should simply work with a good default. If your idea needs a new setting, toggle or option, show us what it would look like: the setup already asks a lot of new players, and every new control has to earn its place.
   - type: textarea
     id: what
     attributes:

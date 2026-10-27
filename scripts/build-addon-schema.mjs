@@ -21,7 +21,7 @@ const out = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "docs"
 const schema = {
   ...z.toJSONSchema(addonManifestSchema, { io: "input", unrepresentable: "any" }),
   $id: "https://github.com/Lebbitheplow/open-dungeon-master/blob/main/docs/addons/addon.schema.json",
-  title: `Open Dungeon Master addon manifest (addon contract ${ADDON_API_VERSION})`,
+  title: `Open Game Master addon manifest (addon contract ${ADDON_API_VERSION})`,
 };
 const text = `${JSON.stringify(schema, null, 2)}\n`;
 

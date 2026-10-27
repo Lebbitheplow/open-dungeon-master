@@ -149,7 +149,7 @@ jobs:
           flavor: |
             latest=${{ github.event.action == 'released' }}
           labels: |
-            org.opencontainers.image.title=Open Dungeon Master
+            org.opencontainers.image.title=Open Game Master
             org.opencontainers.image.description=Self-hosted multiplayer D&D 5e platform with an AI Dungeon Master
 
       - name: Promote the beta's image

@@ -98,7 +98,7 @@ export default {
       report = JSON.parse(text);
       const app = report.setup?.app;
       check(app?.platform === "android" && app.screens === "native" && app.localWorld === false, `the app's facts are wrong: ${JSON.stringify(app)}`);
-      check(report.readable.some((line) => line.startsWith("App: Open Dungeon Master")), "the readable lines leave out the app");
+      check(report.readable.some((line) => line.startsWith("App: Open Game Master")), "the readable lines leave out the app");
       check(!/https?:\/\//.test(JSON.stringify(app)), "the app's facts carry an address");
     }
     check(report.kind === "odm-report", "the file is a report");
@@ -123,7 +123,7 @@ export default {
     const field = opened.searchParams.get("setup") ?? "";
     check(field.includes("- Version ") && field.includes("- Narrator: ") && field.includes("- Installed as: "), `Your setup is missing facts:\n${field}`);
     check(!/https?:\/\//.test(field) && !field.includes("127.0.0.1"), `an address went in Your setup:\n${field}`);
-    if (t.app) check(field.includes("- App: Open Dungeon Master"), `Your setup leaves out the app:\n${field}`);
+    if (t.app) check(field.includes("- App: Open Game Master"), `Your setup leaves out the app:\n${field}`);
     await tab.close();
 
     const saved = page.locator("[data-report-saved]").locator("visible=true").first();

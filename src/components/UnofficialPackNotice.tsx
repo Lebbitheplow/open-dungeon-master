@@ -26,7 +26,7 @@ export function UnofficialPackNotice({
   const holder = rightsHolder.trim();
   const body = holder
     ? `This campaign is a fan-created work and is not affiliated with, sponsored by, or endorsed by ${holder}.`
-    : "This campaign is community-created content and does not ship with Open Dungeon Master.";
+    : "This campaign is community-created content and does not ship with Open Game Master.";
 
   if (variant === "inline") {
     return (

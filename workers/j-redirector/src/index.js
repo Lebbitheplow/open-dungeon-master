@@ -157,10 +157,10 @@ const worker = {
 
     if (!server || !code) {
       return page(
-        "Open Dungeon Master",
+        "Open Game Master",
         `<h1>That invite link is incomplete</h1>
          <p>Ask whoever sent it to share it again from their campaign.</p>
-         <a class="btn secondary" href="${escapeHtml(site)}">About Open Dungeon Master</a>`,
+         <a class="btn secondary" href="${escapeHtml(site)}">About Open Game Master</a>`,
       );
     }
 
@@ -178,7 +178,7 @@ const worker = {
        <p class="fine">No app yet? The browser works fully. Downloads live at
          ${siteLink}.</p>
        <p class="fine">Only continue if you expected this invite. This game server is run by
-         whoever shared the link, not by Open Dungeon Master.</p>`,
+         whoever shared the link, not by Open Game Master.</p>`,
     );
   },
 };

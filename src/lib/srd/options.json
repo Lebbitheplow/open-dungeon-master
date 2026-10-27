@@ -1,5 +1,5 @@
 {
-  "_license": "Original content for Open Dungeon Master. The pick-lists 5e hands out alongside class features: invocations, maneuvers, metamagic, pact boons, infusions, runes and elemental disciplines. Each line states the option's mechanics in our own wording; no publisher's descriptive text is reproduced. See docs/LICENSES.md.",
+  "_license": "Original content for Open Game Master. The pick-lists 5e hands out alongside class features: invocations, maneuvers, metamagic, pact boons, infusions, runes and elemental disciplines. Each line states the option's mechanics in our own wording; no publisher's descriptive text is reproduced. See docs/LICENSES.md.",
   "_note": "Before this file these were not choices at all. A warlock's sheet said 'Eldritch Invocations' and stopped, so the player never picked any and never got the abilities. A pick is stored on the sheet as a choice-sourced feature named with the kind's prefix ('Invocation: Agonizing Blast'), which is exactly how Fighting Style already worked, so populateFeatures preserves it across level-ups with no schema change.",
   "_shape": "kinds[kind] = { label, prefix, grantedBy: the feature name that unlocks the picks }. options[] = { k: kind, n: name, d: rules text, req?: prerequisite note }. Counts live in src/lib/srd/options.ts.",
   "kinds": {

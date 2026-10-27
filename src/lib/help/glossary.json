@@ -1,5 +1,5 @@
 {
-  "_license": "Original content for Open Dungeon Master. Plain-language explanations of core 5e concepts for players who have never played, written from scratch. Mechanics only; no publisher's descriptive text is reproduced. See docs/LICENSES.md.",
+  "_license": "Original content for Open Game Master. Plain-language explanations of core 5e concepts for players who have never played, written from scratch. Mechanics only; no publisher's descriptive text is reproduced. See docs/LICENSES.md.",
   "_shape": "terms[] = { id, term, short, long? }. `short` is one sentence for a tooltip-sized read; `long` adds the detail a first-timer needs. Look up with glossaryTerm(id) from src/lib/help.",
   "terms": [
     {

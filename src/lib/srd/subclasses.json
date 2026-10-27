@@ -1,5 +1,5 @@
 {
-  "_license": "Original content for Open Dungeon Master. These tables describe the mechanics of widely played 5e class options in our own wording; no publisher's descriptive text is reproduced. Game mechanics are not copyrightable, expression is, so every blurb and every line of rules text here is written from scratch. Keep it that way when adding entries.",
+  "_license": "Original content for Open Game Master. These tables describe the mechanics of widely played 5e class options in our own wording; no publisher's descriptive text is reproduced. Game mechanics are not copyrightable, expression is, so every blurb and every line of rules text here is written from scratch. Keep it that way when adding entries.",
   "_shape": "classes[classId] = [{ name, aliases?, desc, levels: { level: [{ n: featureName, d: oneLineRulesText }] }, spells?: { level: [spell] }, expanded?: { level: [spell] }, choiceSpells?: { feature, expanded?, options: { option: { level: [spell] } } } }]. `spells` are known or always prepared and free (domain, circle, oath lists, a learned cantrip); `expanded` are added to the spells the class may learn but are not granted (a warlock patron's list); `choiceSpells` hang off the option chosen for a feature (\"Genie's Vessel (Efreeti)\"). Feature names must also be covered by scripts/test-feature-coverage.mjs.",
   "classes": {
     "barbarian": [

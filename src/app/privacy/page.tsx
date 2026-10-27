@@ -3,7 +3,7 @@ import { PIXEL_ICONS } from "@/lib/ui";
 import { PageSection, PageShell } from "@/components/PageShell";
 
 export const metadata = {
-  title: "Privacy Policy | Open Dungeon Master",
+  title: "Privacy Policy | Open Game Master",
 };
 
 export default function PrivacyPage() {
@@ -15,15 +15,15 @@ export default function PrivacyPage() {
       blurb="What this server stores, what it never does, and who is responsible for it."
       actions={
         <Link href="/" className="text-sm text-amber-200 hover:text-amber-100">
-          Back to Open Dungeon Master
+          Back to Open Game Master
         </Link>
       }
     >
       <PageSection bodyClassName="space-y-4">
         <p className="text-sm leading-6 text-stone-400">
-          Open Dungeon Master is an open source (MIT licensed), self-hosted application. You run
+          Open Game Master is an open source (MIT licensed), self-hosted application. You run
           it on your own server, or on your own phone or computer, and your data stays there. The
-          creator of Open Dungeon Master does not collect, sell, or share any user data, and has
+          creator of Open Game Master does not collect, sell, or share any user data, and has
           no access to the data on any server or device running the app. The one exception is
           described under &quot;Sharing a world from your device&quot; below.
         </p>
@@ -38,7 +38,7 @@ export default function PrivacyPage() {
 
       <PageSection heading="What data is stored">
         <p className="text-sm leading-6 text-stone-400">
-          Open Dungeon Master stores only the information needed to run your server, in a local
+          Open Game Master stores only the information needed to run your server, in a local
           database on your machine:
         </p>
         <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-stone-400">
@@ -69,7 +69,7 @@ export default function PrivacyPage() {
 
       <PageSection heading="The desktop and Android apps">
         <p className="text-sm leading-6 text-stone-400">
-          The Open Dungeon Master apps are a shell around this same server. They can run a
+          The Open Game Master apps are a shell around this same server. They can run a
           world on your own device, share it with friends, or connect to a server somebody
           else runs. Everything a world stores stays in the app&apos;s private storage on that
           device, and is excluded from Android and desktop cloud backups. The apps ask for

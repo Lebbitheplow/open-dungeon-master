@@ -164,7 +164,7 @@ export function parseCharacterBundle(raw: unknown, byteLength?: number): ParsedB
   }
   const record = raw as Record<string, unknown>;
   if (record.kind !== CHARACTER_BUNDLE_KIND) {
-    return { ok: false, error: "Not an Open Dungeon Master character file." };
+    return { ok: false, error: "Not an Open Game Master character file." };
   }
   if (record.version !== CHARACTER_BUNDLE_VERSION) {
     return { ok: false, error: `Unsupported character file version (${String(record.version)}).` };

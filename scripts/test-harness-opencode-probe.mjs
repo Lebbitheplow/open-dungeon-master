@@ -74,7 +74,7 @@ await test("opencode 1.x is installed but unsupported, with its version and the 
   assert.deepEqual(status.models, []);
   assert.equal(
     status.message,
-    "opencode 1.18.30 is installed; Open Dungeon Master drives opencode 2.x. Upgrade with `opencode upgrade --major` (opencode 1.19 or later), or install it with `curl -fsSL https://opencode.ai/v2/install | bash`.",
+    "opencode 1.18.30 is installed; Open Game Master drives opencode 2.x. Upgrade with `opencode upgrade --major` (opencode 1.19 or later), or install it with `curl -fsSL https://opencode.ai/v2/install | bash`.",
     "plain `opencode upgrade` keeps 1.19 on 1.x",
   );
   assert.deepEqual(logged(), ["version"], "nothing but --version ran");

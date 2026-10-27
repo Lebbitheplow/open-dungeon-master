@@ -3,7 +3,7 @@ import { PIXEL_ICONS } from "@/lib/ui";
 import { PageSection, PageShell } from "@/components/PageShell";
 
 export const metadata = {
-  title: "Terms of Service | Open Dungeon Master",
+  title: "Terms of Service | Open Game Master",
 };
 
 export default function TermsPage() {
@@ -15,19 +15,19 @@ export default function TermsPage() {
       blurb="What the software is, what it is not, and who is responsible for what."
       actions={
         <Link href="/" className="text-sm text-amber-200 hover:text-amber-100">
-          Back to Open Dungeon Master
+          Back to Open Game Master
         </Link>
       }
     >
       <PageSection bodyClassName="space-y-4">
         <p className="text-sm leading-6 text-stone-400">
-          Open Dungeon Master is open source (MIT licensed), self-hosted software. There is no
+          Open Game Master is open source (MIT licensed), self-hosted software. There is no
           hosted service to sign up for, no company behind it, and no account with the project
           itself. You download the code and run it on hardware you control. These terms explain
           what the software is, what it is not, and who is responsible for what.
         </p>
         <p className="text-sm leading-6 text-stone-400">
-          By installing, running, or playing on an install of Open Dungeon Master, you accept
+          By installing, running, or playing on an install of Open Game Master, you accept
           these terms. If you do not accept them, do not use the software.
         </p>
       </PageSection>
@@ -52,7 +52,7 @@ export default function TermsPage() {
             <span className="text-stone-200">If you play on someone else&apos;s server.</span> The
             person or group operating that server is who you are actually dealing with. They
             control the accounts, the data, the rules of the table, and whether the server keeps
-            running. The creator of Open Dungeon Master is not a party to that arrangement, has no
+            running. The creator of Open Game Master is not a party to that arrangement, has no
             access to that server, and cannot moderate, recover, or delete anything on it.
           </li>
         </ul>
@@ -108,7 +108,7 @@ export default function TermsPage() {
 
       <PageSection heading="Acceptable use">
         <p className="text-sm leading-6 text-stone-400">
-          Whether you are the operator or a player, do not use Open Dungeon Master to:
+          Whether you are the operator or a player, do not use Open Game Master to:
         </p>
         <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-stone-400">
           <li>break the law, or to create, store, or share material that is illegal where you are;</li>

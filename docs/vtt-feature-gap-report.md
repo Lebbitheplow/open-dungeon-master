@@ -1,4 +1,4 @@
-# Feature gap report: Open Dungeon Master against the VTT and world-building field
+# Feature gap report: Open Game Master against the VTT and world-building field
 
 Dated 2026-09-13, against ODM 0.18.0. Companion to
 `docs/workshop-parity-audit.md` (2026-09-05), which compared the workshop to

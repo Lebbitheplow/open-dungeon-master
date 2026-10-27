@@ -1,5 +1,5 @@
 {
-  "_license": "Original content for Open Dungeon Master. One plain-language line per SRD class feature that has no rules text elsewhere in the app, written for a player who has never played 5e. These state mechanics in our own wording; no publisher's descriptive text is reproduced. See docs/LICENSES.md.",
+  "_license": "Original content for Open Game Master. One plain-language line per SRD class feature that has no rules text elsewhere in the app, written for a player who has never played 5e. These state mechanics in our own wording; no publisher's descriptive text is reproduced. See docs/LICENSES.md.",
   "_shape": "features[name] = text. byClass[classId][name] = text overrides it where two classes give the same feature name different meanings. Resolution order lives in src/lib/help/index.ts; scripts/test-help-coverage.mjs fails if any grantable feature ends up with no text.",
   "features": {
     "Additional Fighting Style": "You pick a second Fighting Style, and both apply at once.",

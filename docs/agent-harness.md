@@ -1,6 +1,6 @@
 # Agent programs: Claude Code, Codex, opencode, Grok Build
 
-Open Dungeon Master can use an agent program you already have, signed in
+Open Game Master can use an agent program you already have, signed in
 on the server's computer, in two ways:
 
 1. **As the storyteller.** The server starts the program for each DM turn
