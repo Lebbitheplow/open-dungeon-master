@@ -141,7 +141,8 @@ test("the header and the footer wrap rather than cut their words", () => {
   assert.match(aside, /^[^}]*display: block;[^}]*flex: 1 0 100%;[^}]*white-space: normal;/, "the line has a row of its own, on a phone too");
   const wizard = read("src/components/ui/Wizard.tsx");
   assert.match(wizard, /data-wizard-head=""/);
-  assert.match(wizard, /"wizard-continue [^"]*max-sm:flex-auto max-sm:truncate/, "Continue starts at its label's width on a phone, so the footer wraps before it is cut");
+  assert.match(wizard, /"wizard-continue [^"]*max-sm:truncate/, "a label too long for the footer is cut on a phone");
+  assert.match(wizard, /finishEarly \? "max-sm:flex-auto" : "max-sm:flex-1"/, "beside Save changes Continue starts at its label's width, so the footer wraps before it is cut; beside Back it takes the rest of the row");
 });
 
 console.log(`test-builder-readable-text: ${passed} passed`);
