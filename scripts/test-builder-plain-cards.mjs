@@ -64,11 +64,11 @@ const text = (html) => html.replace(/<[^>]+>/g, " ").replace(/&amp;/g, "&").repl
 // Each card's face (its choose button) in the grid's markup, a dozen cards to
 // a grid so none is folded away: what the eye reads (the screen-reader-only
 // names left out) and what a screen reader hears (the hidden codes left out).
-function cardFaces(cards) {
+function cardFaces(cards, extra = {}) {
   let markup = "";
   for (let start = 0; start < cards.length; start += 12) {
     markup += renderToStaticMarkup(
-      createElement(OptionCardGrid, { groups: [{ label: null, options: cards.slice(start, start + 12) }], value: "", onChoose: noop, onDetails: noop, noun: "class" }),
+      createElement(OptionCardGrid, { groups: [{ label: null, options: cards.slice(start, start + 12) }], value: "", onChoose: noop, onDetails: noop, noun: "class", numbersSwitch: true, ...extra }),
     );
   }
   const buttons = [...markup.matchAll(/<button[^>]*class="creator-card motion-card"[^>]*>([\s\S]*?)<\/button>/g)].map((match) => match[1]);
@@ -170,11 +170,16 @@ await test("the numbers a card holds back are still searched", async () => {
   assert.ok(ids("high hp").includes("fighter"), "and the HP in words");
 });
 
-await test("the grid offers the switch, off until it is set", () => {
+await test("the class grid offers the switch, off until it is set", () => {
   const { markup } = cardFaces(classCards(false).slice(0, 2));
   assert.match(markup, /<button[^>]*role="switch"[^>]*aria-checked="false"[^>]*aria-label="Show rules and numbers"/, "a named switch, off");
   assert.ok(markup.includes(">Show rules and numbers<"), "with a visible label");
   assert.ok(markup.includes("Adds the hit die after HP"), "and a hint that says what it adds");
+});
+
+await test("a grid the switch changes nothing on does not offer it", () => {
+  const { markup } = cardFaces(classCards(false).slice(0, 2), { numbersSwitch: false });
+  assert.ok(!markup.includes("Show rules and numbers"), "no switch where it would change nothing");
 });
 
 await test("the switch stays as the player set it", async () => {

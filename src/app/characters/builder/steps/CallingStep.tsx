@@ -251,6 +251,7 @@ export function CallingStep({
             noun="class"
             facets={classFacets}
             compact
+            numbersSwitch
           />
           {classNote}
           {/* The same write-up the dropdown's info button opened: the pack's

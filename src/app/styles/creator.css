@@ -1128,6 +1128,28 @@ html[data-theme="light"] .roll-tier-5 { color: #6d28d9; text-shadow: none; }
 @container (width < 28rem) {
   [data-builder-root] .diamond-step:not([data-state="current"]) [data-diamond-name] { visibility: hidden; }
 }
+/* A phone's room goes to the step. There the diamonds say how far along the
+   player is, so "Step 1 / 6" is said to a screen reader only and the name
+   gets the row (it wrapped to two lines beside it at 125%), and the line
+   under it starts at the edge. Narrower still, which on a phone means
+   enlarged text, the current step's name under its diamond goes too: the
+   step's own gold title says it just below. Together they gave the step a
+   half again as much room on a phone at 125%. */
+@container (width < 28rem) {
+  [data-builder-root] [data-wizard-head] > .eyebrow {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  [data-builder-root] [data-wizard-head]:has(> button:first-child) > [data-wizard-aside] { padding-left: 0; }
+}
+@container (width < 22rem) {
+  [data-builder-root] .diamond-stepper[data-named] { padding-bottom: 0; }
+  [data-builder-root] [data-diamond-name] { display: none; }
+}
 
 /* Enlarged text makes the cards a list. The grid's columns are rem wide and
    two always fit side by side (46%), so a column narrower than a card's

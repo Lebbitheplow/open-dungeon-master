@@ -77,6 +77,7 @@ export function OptionCardGrid({
   noun,
   compact = false,
   facets = [],
+  numbersSwitch = false,
 }: {
   groups: OptionCardGroup[];
   value: string;
@@ -87,6 +88,9 @@ export function OptionCardGrid({
   compact?: boolean;
   // The filters offered above the grid; none, no bar.
   facets?: CardFacet[];
+  // Offer "Show rules and numbers" above the cards: only where it changes
+  // them, which today is the class cards' hit die.
+  numbersSwitch?: boolean;
 }) {
   const gridId = useId();
   const searchRef = useRef<HTMLInputElement>(null);
@@ -235,13 +239,15 @@ export function OptionCardGrid({
           the hit die behind them (backlog F11), on the class cards and the
           builder's header, and stays as the player leaves it
           (numbersPref.ts). */}
-      <label className="mb-3 flex min-h-10 w-fit cursor-pointer items-center gap-3 text-stone-300">
-        <Switch label="Show rules and numbers" on={numbers} onChange={writeNumbers} />
-        <span>
-          Show rules and numbers
-          <span className="block text-stone-400">Adds the hit die after HP, as in &ldquo;High HP, d10&rdquo;.</span>
-        </span>
-      </label>
+      {numbersSwitch ? (
+        <label className="mb-3 flex min-h-10 w-fit cursor-pointer items-center gap-3 text-stone-300">
+          <Switch label="Show rules and numbers" on={numbers} onChange={writeNumbers} />
+          <span>
+            Show rules and numbers
+            <span className="block text-stone-400">Adds the hit die after HP, as in &ldquo;High HP, d10&rdquo;.</span>
+          </span>
+        </label>
+      ) : null}
 
       {shown.length ? null : (
         <p className="py-6 text-center text-xs text-stone-500">

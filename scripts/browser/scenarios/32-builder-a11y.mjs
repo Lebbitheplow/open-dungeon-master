@@ -182,7 +182,7 @@ async function gridKeys(page) {
 // the HP words with the switch on and kept on the device, the header's name
 // and HP line whole, and the app's 125% interface scale turning the cards
 // into a list where two side by side could not hold their text, with the
-// footer's buttons whole.
+// footer's buttons whole and room left for the step.
 const BARE_DIE = /\bd(?:4|6|8|10|12|20)\b/i;
 const LOOSE_CODE = /\b(?:STR|DEX|CON|INT|WIS|CHA)\b(?! (?:[+−-]\d|caster\b))/;
 async function plainAndReadable(page, t, viewport) {
@@ -237,9 +237,13 @@ async function plainAndReadable(page, t, viewport) {
       columns: grid ? getComputedStyle(grid).gridTemplateColumns.split(" ").length : 0,
       thumb: card && img ? img.getBoundingClientRect().width / card.getBoundingClientRect().width : 1,
       clipped: footer.filter((button) => button.scrollWidth > button.clientWidth + 1).map((button) => button.textContent.trim()),
+      room: document.querySelector(step).getBoundingClientRect().height / document.querySelector("[data-builder-root]").getBoundingClientRect().height,
     };
   }, step);
   if (layout.clipped.length) problems.push(`at 125% text the footer cuts ${layout.clipped.join(", ")}`);
+  // The step keeps a fair share of the builder: on a phone the header,
+  // stepper, footer and details bar once left it under a third.
+  if (layout.room < 0.4) problems.push(`at 125% text the step has ${Math.round(layout.room * 100)}% of the builder's height`);
   await page.evaluate(() => (document.documentElement.style.fontSize = ""));
   if (viewport === "phone" && (layout.columns !== 1 || layout.thumb > 0.5)) problems.push(`at 125% text on a phone the cards are not a list (${layout.columns} columns)`);
   if (viewport !== "phone" && layout.columns < 2) problems.push(`at 125% text on a wide screen the cards became a list (${layout.columns} column)`);
@@ -419,6 +423,10 @@ export default {
     await t.tap(page.locator(`${root}button`).filter({ hasText: /^Continue/ }).locator("visible=true").first());
     await eventually(() => page.locator(`${root}section[data-active] .creator-card`).locator("visible=true").count(), { timeoutMs: 15_000, label: "the lineage cards" });
     await untilStill(page);
+    // The switch adds the class cards' hit die; the lineage cards have none to add.
+    if (await page.locator(`${root}section[data-active] [role="switch"][aria-label="Show rules and numbers"]`).count()) {
+      found.push("lineage grid: offers Show rules and numbers, which changes nothing there");
+    }
     found.push(...(await gridKeys(page)).map((problem) => `lineage grid: ${problem}`));
     const details = page.locator(`${root}section[data-active] button[aria-label^="About "], ${root}section[data-active] .creator-help`).locator("visible=true");
     await eventually(() => details.count(), { timeoutMs: 15_000, label: "a lineage card's details button" });
