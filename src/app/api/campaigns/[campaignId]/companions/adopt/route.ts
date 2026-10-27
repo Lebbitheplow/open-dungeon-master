@@ -57,13 +57,13 @@ export async function POST(
     return Response.json({ error: "That character is not at this table." }, { status: 404 });
   }
   if (sheet.isCompanion) {
-    return Response.json({ error: `${sheet.name} is already an ally the DM plays.` }, { status: 409 });
+    return Response.json({ error: `${sheet.name} is already an ally the GM plays.` }, { status: 409 });
   }
   const library = sheet.libraryCharacterId ? getCharacter(sheet.libraryCharacterId) : null;
   if (!library || library.role !== "companion") {
     return Response.json(
       {
-        error: `${sheet.name} is a player's character. Only a character whose library entry is an ally the DM plays can be handed to the DM.`,
+        error: `${sheet.name} is a player's character. Only a character whose library entry is an ally the GM plays can be handed to the GM.`,
       },
       { status: 403 },
     );
@@ -76,7 +76,7 @@ export async function POST(
   if (blocked) {
     return Response.json(
       {
-        error: `${sheet.name} cannot be handed to the DM yet. ${blocked.reason} ${blocked.remedy}`,
+        error: `${sheet.name} cannot be handed to the GM yet. ${blocked.reason} ${blocked.remedy}`,
         code: blocked.code,
         reason: blocked.reason,
         remedy: blocked.remedy,
@@ -95,7 +95,7 @@ export async function POST(
   const handed = adoptSheetAsCompanion(sheet.id, bot.id, sheet.personality || sheet.backstory || "");
   const adopted = handed ? setCompanionCommander(handed.id, defaultCommander(campaign, "party")) ?? handed : null;
   if (!adopted) {
-    return Response.json({ error: "Could not hand the character to the DM." }, { status: 500 });
+    return Response.json({ error: "Could not hand the character to the GM." }, { status: 500 });
   }
   // The person behind the companion's sheet (#503 Phase 0.1). A character
   // the DM now plays answers no advance any more: their opt-in goes with
@@ -142,7 +142,7 @@ export async function POST(
     campaignId,
     seq: allocateSeq(campaignId),
     kind: "story",
-    summary: `${sheet.name} travels with the party as an ally the DM plays.`,
+    summary: `${sheet.name} travels with the party as an ally the GM plays.`,
   });
   // In play, a table note so the DM knows whose turns are now its own. In the
   // lobby the opening narration reads every party sheet anyway.
@@ -153,7 +153,7 @@ export async function POST(
       seq,
       authorType: "system",
       glyph: "system-party",
-      content: `${context.user.username} hands ${sheet.name} to the DM: from here they travel with the party as a companion, and the DM plays their turns.`,
+      content: `${context.user.username} hands ${sheet.name} to the GM: from here they travel with the party as a companion, and the GM plays their turns.`,
     });
     publishWithSeq(campaignId, seq, "message_added", { message });
   }

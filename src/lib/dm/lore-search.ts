@@ -37,7 +37,7 @@ export const searchLoreTool = {
   function: {
     name: "search_lore",
     description:
-      "Search the campaign's established canon: world lore, tracked facts, party notes, past chapters, and an imported storyboard's DM-only prep cards. Call it before inventing details about places, factions, history, or NPCs that may already be established. A long entry answers with the passage nearest the query.",
+      "Search the campaign's established canon: world lore, tracked facts, party notes, past chapters, and an imported storyboard's GM-only prep cards. Call it before inventing details about places, factions, history, or NPCs that may already be established. A long entry answers with the passage nearest the query.",
     parameters: {
       type: "object",
       additionalProperties: false,
@@ -174,7 +174,7 @@ export async function handleSearchLore(
             : card.role;
       candidates.push({
         id: `prep:${card.id}`,
-        source: "prep card (DM-only storyboard)",
+        source: "prep card (GM-only storyboard)",
         ref: `${card.title} (${standing}; read_card ${placement?.kind === "event" ? placement.id : placement?.kind === "beat" ? placement.number : `"${card.title}"`} for the whole card)`,
         text: passage(`${card.trigger ? `When: ${card.trigger}\n\n` : ""}${card.body || card.title}${card.cues ? `\n\n${card.cues}` : ""}`),
         haystack: `${card.title} ${card.trigger} ${card.cues} ${card.body}`,

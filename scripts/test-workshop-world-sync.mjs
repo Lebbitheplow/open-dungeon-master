@@ -81,7 +81,7 @@ await test("F14: an entry's fields go with its article; its hidden truth is mark
   assert.match(block, new RegExp(`${field.name}: Lamplighter`));
   // A Cast member's hidden truth rides on their own line of the roster.
   assert.match(npcNotes.get("Mara Quill"), /secretly: Mara drowned the last keeper/);
-  assert.match(block, /anything marked secretly is the DM's/);
+  assert.match(block, /anything marked secretly is the GM's/);
 });
 
 await test("F14: a draft entry is marked as not canon yet, and a retired one is left out.", () => {

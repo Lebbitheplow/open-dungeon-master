@@ -60,7 +60,7 @@ export default function PrivacyPage() {
           <li>No advertising or third-party services.</li>
           <li>
             No data is sold or shared with any third party, including the creator of Open
-            Dungeon Master. The only things that ever leave your server or device are the
+            Game Master. The only things that ever leave your server or device are the
             optional integrations and the sharing tunnel described below, each of which you or
             your operator switches on.
           </li>
@@ -136,13 +136,13 @@ export default function PrivacyPage() {
         </ul>
         <p className="mt-3 text-sm leading-6 text-stone-400">
           Stop sharing, and both end. Nothing about the session is kept by the creator of Open
-          Dungeon Master once the temporary address expires.
+          Game Master once the temporary address expires.
         </p>
       </PageSection>
 
       <PageSection heading="Optional integrations configured by your server operator">
         <p className="text-sm leading-6 text-stone-400">
-          By default the AI Dungeon Master runs on your own hardware and nothing leaves your
+          By default the AI Game Master runs on your own hardware and nothing leaves your
           server. A server operator may optionally enable additional integrations, in which case
           the relevant data flows to the corresponding provider:
         </p>
@@ -203,7 +203,7 @@ export default function PrivacyPage() {
 
       <PageSection heading="Reports and blocks">
         <p className="text-sm leading-6 text-stone-400">
-          You can report a Dungeon Master passage, a message, or a player from the table, and
+          You can report a Game Master passage, a message, or a player from the table, and
           block a player so their messages are hidden from you and neither of you can contact
           the other. Reports are stored on this server with a copy of the reported text and go
           to this server&apos;s admins, who are the only moderators: there is no central

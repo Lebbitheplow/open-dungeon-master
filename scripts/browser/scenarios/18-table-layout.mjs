@@ -464,8 +464,8 @@ export default {
       const statusBox = await boxOf(status);
       const liveChronicle = await boxOf(page.locator(`${root}.cine-fight > .cine-chronicle`));
       check(Math.abs(statusBox.x - liveChronicle.x) < 2 && statusBox.y + statusBox.height <= liveChronicle.y + 1, "native DM activity is pinned above Chronicle");
-      check((await status.innerText()).includes("DM at work"), "activity uses the native job phrase");
-      check(await status.getByRole("button", { name: "Stop the DM" }).count() === 1, "native story authority still controls Stop");
+      check((await status.innerText()).includes("GM at work"), "activity uses the native job phrase");
+      check(await status.getByRole("button", { name: "Stop the GM" }).count() === 1, "native story authority still controls Stop");
       await page.evaluate(() => { window.__statusNode = document.querySelector(".session-compose-entry .session-status"); });
       await t.shot("chronicle-composer-status");
       await t.tap(page.getByRole("radio", { name: "Board", exact: true }));
@@ -510,7 +510,7 @@ export default {
         await player.keyboard.press("+");
         check((await cameraOf(view)).zoom === 2, "native local zoom respects the DM lock");
         await steer("free");
-        await eventually(() => player.getByText("The DM is steering the view", { exact: false }).count().then(n => n === 0), { label: "server camera release" });
+        await eventually(() => player.getByText("The GM is steering the view", { exact: false }).count().then(n => n === 0), { label: "server camera release" });
         await player.getByRole("button", { name: "Fit the board", exact: true }).click();
         await eventually(async () => (await cameraOf(view)).zoom === 1, { label: "released renderer accepting local fit" });
         await player.getByRole("radio", { name: "Board", exact: true }).click();

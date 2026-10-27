@@ -81,7 +81,7 @@ export async function runRenarrate(input: {
     return { error: "Message not found.", status: 404 };
   }
   if (message.authorType !== "dm") {
-    return { error: "Only DM narration can be rerolled.", status: 400 };
+    return { error: "Only GM narration can be rerolled.", status: 400 };
   }
   if (!message.dmTurnId) {
     return { error: "This narration predates rerolls; there is no turn to replay.", status: 400 };
@@ -149,7 +149,7 @@ export async function runRenarrate(input: {
     narration = withoutAsides(narration, await readAsides(campaign, listSheets(campaign.id), turn, narration), campaign.gameSettings.tableLanguage);
   }
   if (!narration) {
-    return { error: "The DM returned nothing; try again.", status: 502 };
+    return { error: "The GM returned nothing; try again.", status: 502 };
   }
 
   const content = assembleVariantContent(turn.narrationParts, turn.rollIds, narration);

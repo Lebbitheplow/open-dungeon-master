@@ -193,7 +193,7 @@ const PARTS = [
   },
   {
     id: "dungeon-master",
-    title: "The Dungeon Master",
+    title: "The Game Master",
     blurb: "The Dungeon Master's Guide, as far as the SRD opens it: hazards to run and every magic item.",
     chapters: ["running-the-game", "magic-items"],
   },

@@ -74,7 +74,7 @@ const DmDraftBubble = memo(function DmDraftBubble({
   if (dmDraft) {
     return (
       <div className="session-dm animate-fade-up">
-        <SectionHead title="Dungeon Master" glyph="tab-dm" level="h4" />
+        <SectionHead title="Game Master" glyph="tab-dm" level="h4" />
         <p className="session-dm-body whitespace-pre-wrap text-pretty font-serif text-base leading-relaxed text-stone-100">
           <Prose text={dmDraft} />
           <span className="stream-caret" aria-hidden="true" />

@@ -154,10 +154,10 @@ export function LobbyParty({
                     <p className="flex flex-wrap items-center gap-1.5 font-medium text-stone-100">
                       <span className="truncate">{member.username}</span>
                       {humanDmTable && member.userId === campaign.dmUserId ? (
-                        <SeatBadge>DM</SeatBadge>
+                        <SeatBadge>GM</SeatBadge>
                       ) : null}
                       {humanDmTable && member.userId === campaign.assistantDmUserId ? (
-                        <SeatBadge>co-DM</SeatBadge>
+                        <SeatBadge>co-GM</SeatBadge>
                       ) : null}
                       {member.userId === campaign.leadUserId ? (
                         <SeatBadge>
@@ -180,7 +180,7 @@ export function LobbyParty({
                       </SeatBadge>
                     ) : null}
                     {member.useRealDice ? (
-                      <SeatBadge tip="Rolls physical dice: the DM waits for this player to enter real rolls">
+                      <SeatBadge tip="Rolls physical dice: the GM waits for this player to enter real rolls">
                         real dice
                       </SeatBadge>
                     ) : null}
@@ -222,24 +222,24 @@ export function LobbyParty({
                       {maySeat ? (
                         <>
                           <SeatAction
-                            tip="Hand this player the DM seat and the game"
+                            tip="Hand this player the GM seat and the game"
                             onClick={() => onAssignSeat("dm", member.userId)}
                           >
-                            make DM
+                            make GM
                           </SeatAction>
                           {member.userId === campaign.assistantDmUserId ? (
                             <SeatAction
-                              tip="Take back the co-DM seat"
+                              tip="Take back the co-GM seat"
                               onClick={() => onAssignSeat("assistant", null)}
                             >
-                              remove co-DM
+                              remove co-GM
                             </SeatAction>
                           ) : (
                             <SeatAction
-                              tip="Seat this player as co-DM: every DM power except handing out seats"
+                              tip="Seat this player as co-GM: every GM power except handing out seats"
                               onClick={() => onAssignSeat("assistant", member.userId)}
                             >
-                              make co-DM
+                              make co-GM
                             </SeatAction>
                           )}
                         </>

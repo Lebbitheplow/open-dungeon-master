@@ -100,7 +100,7 @@ export function moveTokenFreely(
   }
   placeToken(token.id, x, y);
   publishBattleMapUpdate(campaign.id);
-  const note = `The DM moved ${token.name} to ${x + 1}, ${y + 1}.`;
+  const note = `The GM moved ${token.name} to ${x + 1}, ${y + 1}.`;
   recordBoardAction(campaign, note);
   return { ok: true, note };
 }
@@ -144,7 +144,7 @@ export function addAdhocToken(
     hidden: input.hidden === true,
   });
   publishBattleMapUpdate(campaign.id);
-  const note = `The DM placed ${named.name} on the board.`;
+  const note = `The GM placed ${named.name} on the board.`;
   recordBoardAction(campaign, note);
   return { ok: true, note };
 }
@@ -165,7 +165,7 @@ export function removeAdhocToken(campaign: Campaign, tokenId: string): BoardOutc
   }
   deleteToken(token.id);
   publishBattleMapUpdate(campaign.id);
-  const note = `The DM took ${token.name} off the board.`;
+  const note = `The GM took ${token.name} off the board.`;
   recordBoardAction(campaign, note);
   return { ok: true, note };
 }
@@ -191,7 +191,7 @@ export function setTokenVisibility(
   publishBattleMapUpdate(campaign.id);
   publishEncounter(campaign.id);
   const note = hidden
-    ? `The DM hid ${token.name} from the party.`
+    ? `The GM hid ${token.name} from the party.`
     : `${token.name} is revealed.`;
   recordBoardAction(campaign, note);
   return { ok: true, note };

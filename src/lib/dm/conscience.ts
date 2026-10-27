@@ -186,7 +186,7 @@ function endCommand(campaign: Campaign, companion: CharacterSheet): string | nul
     seq,
     authorType: "system",
     glyph: "system-party",
-    content: `${companion.name} no longer takes ${name}'s orders in a fight: what the party has done stands between them. The DM plays their turns now.`,
+    content: `${companion.name} no longer takes ${name}'s orders in a fight: what the party has done stands between them. The GM plays their turns now.`,
   });
   publishWithSeq(campaign.id, seq, "message_added", { message });
   // On their own turn, that turn is the DM's now, as the companion's card

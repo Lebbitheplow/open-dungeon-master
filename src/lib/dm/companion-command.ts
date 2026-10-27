@@ -50,7 +50,7 @@ export function dominatedByFoe(campaignId: string, sheet: HeldFields): boolean {
 // The player's refusal while their character is dominated, or null.
 export function dominatedRefusal(campaignId: string, sheet: HeldFields & { name: string }): string | null {
   return dominatedByFoe(campaignId, sheet)
-    ? `${sheet.name} is dominated: the DM plays ${sheet.name} until the charm ends. Use OOC for table talk.`
+    ? `${sheet.name} is dominated: the GM plays ${sheet.name} until the charm ends. Use OOC for table talk.`
     : null;
 }
 

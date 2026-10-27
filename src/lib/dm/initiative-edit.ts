@@ -135,8 +135,8 @@ export function applyInitiativeEdit(
       state: next,
       note:
         edit.direction === "back"
-          ? `The DM stepped the initiative back to ${name}.`
-          : `The DM moved the initiative on to ${name}.`,
+          ? `The GM stepped the initiative back to ${name}.`
+          : `The GM moved the initiative on to ${name}.`,
     };
   }
 
@@ -246,7 +246,7 @@ export function applyInitiativeEdit(
   }
   return {
     state: { ...state, turnIndex: index },
-    note: `The DM gave the turn to ${subject.name}.`,
+    note: `The GM gave the turn to ${subject.name}.`,
   };
 }
 

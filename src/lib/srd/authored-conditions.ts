@@ -211,7 +211,7 @@ export const AUTHORED_CONDITION_ROWS: ConditionEffectRow[] = [
   {
     id: "living_legend",
     match: ["living legend"],
-    summary: "Living Legend: advantage on Charisma checks for a minute, once on each turn a missed weapon attack can hit instead (the DM rules the hit), and a reaction rerolls a failed save (use_resource 'Living Legend Reroll').",
+    summary: "Living Legend: advantage on Charisma checks for a minute, once on each turn a missed weapon attack can hit instead (the GM rules the hit), and a reaction rerolls a failed save (use_resource 'Living Legend Reroll').",
     advantageOn: [{ kind: "check", ability: "cha" }],
   },
   summaryOnly("mortal_bulwark", "mortal bulwark", "Mortal Bulwark: truesight 120 feet and advantage on attacks against aberrations, celestials, elementals, fey and fiends."),

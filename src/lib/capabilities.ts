@@ -391,7 +391,7 @@ export async function harnessReady(): Promise<boolean> {
 // its own reasons answers yes, so a broken probe never stops a table from
 // being made; it is the positive "nothing is set up" that refuses.
 export const NO_STORYTELLER_MESSAGE =
-  "This server has no AI storyteller set up, so the AI cannot run this table. Choose a human Dungeon Master, or set up a text model in Admin first.";
+  "This server has no AI storyteller set up, so the AI cannot run this table. Choose a human Game Master, or set up a text model in Admin first.";
 
 export async function storytellerConfigured(): Promise<boolean> {
   try {

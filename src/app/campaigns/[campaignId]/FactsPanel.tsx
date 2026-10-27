@@ -64,14 +64,14 @@ function FactCard({
     }
   }
 
-  const pinTitle = fact.pinned ? "Unpin" : "Pin: always kept in front of the DM, never auto-replaced";
+  const pinTitle = fact.pinned ? "Unpin" : "Pin: always kept in front of the GM, never auto-replaced";
   const items: ContextMenuItem[] = steersStory
     ? [
         { id: "pin", label: pinTitle, glyph: "ui-pin", disabled: busy, onSelect: () => void patch({ pinned: !fact.pinned }) },
         { id: "edit", label: "Edit", glyph: "ui-edit", onSelect: () => setEditing(true) },
         {
           id: "retire",
-          label: "Retire: the DM stops treating this as true",
+          label: "Retire: the GM stops treating this as true",
           glyph: "ui-delete",
           tone: "danger",
           separated: true,
@@ -129,7 +129,7 @@ function FactCard({
           </p>
           <div className="mt-1 flex min-h-6 items-center gap-2 text-[11px] text-stone-500">
             <span className={isSecretFact(fact.knownBy) ? "text-violet-300" : undefined}>
-              {isStorytellerFact(fact.knownBy) ? "Storyteller secret" : isSecretFact(fact.knownBy) ? "DM secret" : CATEGORY_LABELS[fact.category]}
+              {isStorytellerFact(fact.knownBy) ? "Storyteller secret" : isSecretFact(fact.knownBy) ? "GM secret" : CATEGORY_LABELS[fact.category]}
             </span>
             {steersStory ? (
               <span className="ml-auto flex shrink-0 items-center gap-0.5">
@@ -226,7 +226,7 @@ function FactComposer({
           onChange={(event) => setFact(event.target.value)}
           rows={2}
           maxLength={300}
-          placeholder="One sentence the DM must never contradict"
+          placeholder="One sentence the GM must never contradict"
           aria-label="Fact"
           className={cn(panelField, "leading-5")}
         />
@@ -328,14 +328,14 @@ export function FactsPanel({
       })}
 
       {!facts.length ? (
-        <EmptyState size="sm" art="board" title={`Nothing recorded yet. The DM writes durable facts here as chapters close${steersStory ? ", or pin one yourself above" : ""}.`} />
+        <EmptyState size="sm" art="board" title={`Nothing recorded yet. The GM writes durable facts here as chapters close${steersStory ? ", or pin one yourself above" : ""}.`} />
       ) : null}
 
       {steersStory ? (
         <div className="reveal space-y-1.5">
           <KitButton tone="link" onClick={toggleSecrets} aria-expanded={Boolean(secrets)}>
             {secrets ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-            {secrets ? "Hide DM secrets" : "Show DM secrets (spoilers)"}
+            {secrets ? "Hide GM secrets" : "Show GM secrets (spoilers)"}
           </KitButton>
           {secrets ? (
             secrets.length ? (
@@ -351,7 +351,7 @@ export function FactsPanel({
                 ))}
               </ul>
             ) : (
-              <p className="live-in px-1 text-xs text-stone-500">No DM secrets recorded.</p>
+              <p className="live-in px-1 text-xs text-stone-500">No GM secrets recorded.</p>
             )
           ) : null}
         </div>

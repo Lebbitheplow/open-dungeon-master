@@ -265,8 +265,8 @@ export function RulesetLibrary({
                     <SectionHead title="Homebrew" glyph="system-homebrew" level="h4" />
                     <p className="text-xs text-stone-400">
                       A ruleset carries variant rules and house rules, not Homebrew. Everything on your Homebrew shelf already
-                      counts at every table you run as its owner, DM or assistant DM, whichever ruleset it plays. To give
-                      Homebrew to another DM or server, put it in a Workshop bundle.
+                      counts at every table you run as its owner, GM or assistant GM, whichever ruleset it plays. To give
+                      Homebrew to another GM or server, put it in a Workshop bundle.
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2 text-sm">

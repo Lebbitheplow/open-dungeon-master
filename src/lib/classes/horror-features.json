@@ -78,7 +78,7 @@
           { "n": "Adrenaline Surge", "d": "Dash, Disengage, or Hide as a bonus action, CON-mod uses per short rest." },
           { "n": "Won't Die Here", "d": "1/day, when you drop to 0 HP, drop to 1 instead." }
         ],
-        "2": [{ "n": "Scrounger's Instinct", "d": "1/rest, find one mundane useful item nearby (a weapon, keys, bandages); the DM decides what plausibly exists." }],
+        "2": [{ "n": "Scrounger's Instinct", "d": "1/rest, find one mundane useful item nearby (a weapon, keys, bandages); the GM decides what plausibly exists." }],
         "3": [{ "n": "How They Made It", "d": "Chooses a survival style (subclass)." }],
         "5": [{ "n": "Extra Attack", "d": "Attack twice when taking the Attack action." }],
         "6": [{ "n": "Read the Room", "d": "Advantage on initiative; on your first turn, learn the most immediate danger in the scene." }],

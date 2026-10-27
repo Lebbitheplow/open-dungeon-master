@@ -13,7 +13,7 @@ import { parseWorldArcsJson, type WorldArc } from "@/lib/dm/world-arc-logic";
 // fires at most once per act in practice. Every rung is authored here, up
 // front; advancing them later is pure dice (world-tick-logic.ts).
 
-const GENERATE_SYSTEM = `You are planning the OFF-SCREEN side of an AI DM's secret story arc for a D&D 5e campaign: 1 or 2 world arcs, storylines that advance on their own whether or not the party engages (a cult's summoning nearing completion, a warlord's march, a plague's spread, a rival expedition closing in). Keep it brief and answer quickly.
+const GENERATE_SYSTEM = `You are planning the OFF-SCREEN side of an AI GM's secret story arc for a D&D 5e campaign: 1 or 2 world arcs, storylines that advance on their own whether or not the party engages (a cult's summoning nearing completion, a warlord's march, a plague's spread, a rival expedition closing in). Keep it brief and answer quickly.
 
 Reply with ONLY a strict JSON array, no code fences, shaped exactly: [{"name": string, "driver": string, "rungs": string[]}]
 

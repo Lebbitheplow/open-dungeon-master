@@ -228,15 +228,15 @@ await test("An entry's own references are read and renamed: a subclass's spells,
 await test("F06: the editor says where a kept entry is offered, a subclass with its class and level", () => {
   const subclass = homebrewAvailability("archetype", { name: "Fighter", subclassLevel: 3 });
   assert.match(subclass, /under Fighter in the character builder from level 3/);
-  assert.match(subclass, /owner, DM or assistant DM/);
-  assert.match(subclass, /once that table's owner or DM keeps a copy/);
+  assert.match(subclass, /owner, GM or assistant GM/);
+  assert.match(subclass, /once that table's owner or GM keeps a copy/);
   assert.match(homebrewAvailability("spell"), /spell lists of the classes it names/);
 });
 
 await test("F06: the builder says why a subclass is missing: left out at this table, or not loaded", () => {
   const excluded = renderToStaticMarkup(createElement(TableScopeNote, { noun: "subclasses", unadmitted: ["Player Marsh Knight"] }));
   assert.match(excluded, /Your own Player Marsh Knight is not offered at this table/);
-  assert.match(excluded, /owner, the DM or the assistant DM/);
+  assert.match(excluded, /owner, the GM or the assistant GM/);
   const failed = renderToStaticMarkup(createElement(TableScopeNote, { noun: "subclasses", unadmitted: [], failed: true, onRetry: () => {} }));
   assert.match(failed, /role="alert"/);
   assert.match(failed, /Could not load your subclasses/);

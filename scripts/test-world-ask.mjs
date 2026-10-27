@@ -193,7 +193,7 @@ await test("Each passage keeps its canon state: tagged in the prompt, a retired 
   // The DM's own lines are marked as theirs.
   const leak = askPassages(doc, entities, "Who sold the sluice codes?", "english");
   const hidden = leak.passages.find((passage) => passage.part === "hidden" && passage.name === "Ivo Brannock");
-  assert.ok(hidden && hidden.dmOnly && passageLabel(hidden).endsWith("hidden truth, DM only"));
+  assert.ok(hidden && hidden.dmOnly && passageLabel(hidden).endsWith("hidden truth, GM only"));
   const secret = leak.passages.find((passage) => passage.part === "secret");
   assert.ok(secret && secret.dmOnly && secret.ref === entity("Ivo Brannock").ref);
   updateWorldEntity(workshop.id, entity("Wall Lore 3").ref, { canon: "canon" });

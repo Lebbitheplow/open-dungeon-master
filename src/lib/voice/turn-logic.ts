@@ -171,13 +171,13 @@ export function micOpen(gate: MicGate): boolean {
 // so the words and the behaviour cannot drift apart.
 export const FLOOR_VOICE_LABELS: Record<VoiceFloorMode, string> = {
   open: "Anyone can speak",
-  hold: "The DM has the floor",
+  hold: "The GM has the floor",
   spotlight: "The spotlight is on",
   initiative: "Speaking in initiative order",
 };
 
 export const TRANSMIT_BLOCK_LABELS: Record<Exclude<TransmitBlock, "">, string> = {
-  dm_holds_floor: "The DM has the floor",
+  dm_holds_floor: "The GM has the floor",
   not_your_turn: "Wait for your turn in initiative",
   spotlight_elsewhere: "The spotlight is on someone else",
 };

@@ -847,7 +847,7 @@
           "2": [
             {
               "n": "Channel Divinity: Guided Strike",
-              "d": "When you make an attack roll, spend Channel Divinity for a +10 bonus to it, after seeing the roll but before the DM says whether it hits."
+              "d": "When you make an attack roll, spend Channel Divinity for a +10 bonus to it, after seeing the roll but before the GM says whether it hits."
             }
           ],
           "6": [
@@ -3512,11 +3512,11 @@
           "1": [
             {
               "n": "Wild Magic Surge",
-              "d": "After casting a sorcerer spell of 1st level or higher, the DM may have you roll a d20; on a 1 you roll on the wild magic table."
+              "d": "After casting a sorcerer spell of 1st level or higher, the GM may have you roll a d20; on a 1 you roll on the wild magic table."
             },
             {
               "n": "Tides of Chaos",
-              "d": "Gain advantage on one attack, check or save; the DM can then trigger a Wild Magic Surge to restore the use."
+              "d": "Gain advantage on one attack, check or save; the GM can then trigger a Wild Magic Surge to restore the use."
             }
           ],
           "6": [

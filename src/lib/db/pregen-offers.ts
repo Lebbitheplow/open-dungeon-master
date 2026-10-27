@@ -151,7 +151,7 @@ export function pregenSeatRefusal(
   }
   return claim.userId === userId
     ? `You already play ${character.name} at this table, from another copy of the same pregen.`
-    : `${character.name} is a pregen another player already plays at this table. The DM offers each pregen to one player.`;
+    : `${character.name} is a pregen another player already plays at this table. The GM offers each pregen to one player.`;
 }
 
 // Records the seat a player took with the pregen. Called once the sheet is

@@ -131,7 +131,7 @@ export function SideChatPanel({
         }
       />
       <p className="text-xs leading-5 text-stone-500">
-        Only the people in a chat can read it. The Dungeon Master never sees these.
+        Only the people in a chat can read it. The Game Master never sees these.
       </p>
       {error ? <PanelError className="text-sm">{error}</PanelError> : null}
 

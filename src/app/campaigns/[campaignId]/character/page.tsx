@@ -192,7 +192,7 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
         <>
           {companionCount > 0 ? (
             <p className="reveal mb-4 text-xs text-stone-400">
-              {companionCount === 1 ? "One ally the DM plays is" : `${companionCount} allies the DM plays are`} not listed here: whoever runs the story brings them in from the party panel, under Build a companion.
+              {companionCount === 1 ? "One ally the GM plays is" : `${companionCount} allies the GM plays are`} not listed here: whoever runs the story brings them in from the party panel, under Build a companion.
             </p>
           ) : null}
           {/* Every hero this seat can take, on one screen, each through the

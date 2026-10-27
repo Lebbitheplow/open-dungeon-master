@@ -33,7 +33,7 @@ export async function POST(
     return Response.json({ error: "Message not found." }, { status: 404 });
   }
   if (message.authorType !== "dm") {
-    return Response.json({ error: "Only the DM's narration can be voiced." }, { status: 400 });
+    return Response.json({ error: "Only the GM's narration can be voiced." }, { status: 400 });
   }
 
   if (ttsBackend().provider === "off") {

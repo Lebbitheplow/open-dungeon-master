@@ -45,7 +45,7 @@ const TABLE_WORDS: Record<string, string> = {
 
 function tableValue(key: string, value: string | number | boolean): string {
   if (typeof value === "boolean") return value ? "yes" : "";
-  if (key === "visibility") return value === "dm" ? "the DM only" : "the party";
+  if (key === "visibility") return value === "dm" ? "the GM only" : "the party";
   return String(value);
 }
 

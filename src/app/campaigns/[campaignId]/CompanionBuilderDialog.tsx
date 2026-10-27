@@ -159,8 +159,8 @@ export function CompanionBuilderDialog({
           </div>
           <p className="mb-3 text-xs text-stone-500">
             {humanDm
-              ? "This ally joins the party as a character you play from the DM console. In combat their turn waits for you: act for them, then end the turn. They start at the party's level."
-              : "This ally joins the party as an AI companion the DM plays. They start at the party's level."}
+              ? "This ally joins the party as a character you play from the GM console. In combat their turn waits for you: act for them, then end the turn. They start at the party's level."
+              : "This ally joins the party as an AI companion the GM plays. They start at the party's level."}
           </p>
 
           {library.length && !tweaking ? (

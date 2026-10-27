@@ -248,7 +248,7 @@ export function AdminWorldsPanel() {
         <SectionHead level="h2" title="Campaign plugins" glyph="system-plugin" />
         <p className="text-xs leading-5 text-stone-400">
           A world pack renames the rules into a setting: its own races, classes, spells, gear,
-          monsters, factions and lore, plus a brief telling the DM how that world sounds. Every
+          monsters, factions and lore, plus a brief telling the GM how that world sounds. Every
           mechanic stays 5e, so a character built in one still works anywhere.
         </p>
         <p className="mt-2 text-xs leading-5 text-stone-500">

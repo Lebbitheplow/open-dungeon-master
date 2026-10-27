@@ -32,7 +32,7 @@ export type RetryEligibility = { ok: true } | { ok: false; status: number; error
 export function checkRetryEligible(input: RetryEligibilityInput): RetryEligibility {
   const { turn } = input;
   if (!turn || turn.campaignId !== input.campaignId) {
-    return { ok: false, status: 404, error: "That DM turn is not part of this campaign." };
+    return { ok: false, status: 404, error: "That GM turn is not part of this campaign." };
   }
   if (!input.campaignActive) {
     return { ok: false, status: 409, error: "This campaign is not active." };
@@ -45,7 +45,7 @@ export function checkRetryEligible(input: RetryEligibilityInput): RetryEligibili
   if (turn.status === "running") {
     // Either the original run is still going or another player just claimed
     // the retry; either way the queue already owns this turn.
-    return { ok: false, status: 409, error: "The DM is already working on that turn." };
+    return { ok: false, status: 409, error: "The GM is already working on that turn." };
   }
   if (turn.status === "awaiting_rolls" || input.openPendingRollCount > 0) {
     // Physical dice are the resume path for a parked turn (submitting the

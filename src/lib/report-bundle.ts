@@ -78,7 +78,7 @@ const PARTS: readonly ReportPart[] = [
   {
     id: "setup",
     label: "Version and setup",
-    hint: "Versions, how the server and the app were installed, the server's machine, the DM mode, and every AI piece by kind and model (narrator, helper, agent program, pictures, narration, dictation), with what is below the supported minimum. No addresses or keys. It also fills in the form's Your setup.",
+    hint: "Versions, how the server and the app were installed, the server's machine, the GM mode, and every AI piece by kind and model (narrator, helper, agent program, pictures, narration, dictation), with what is below the supported minimum. No addresses or keys. It also fills in the form's Your setup.",
     defaultOn: true,
     allowed: () => true,
   },
@@ -107,7 +107,7 @@ const PARTS: readonly ReportPart[] = [
   {
     id: "transcript",
     label: "Transcript of the last few turns",
-    hint: `Your own lines and the DM's narration from the last ${REPORT_TURNS} turns. Never other players' lines or whispers.`,
+    hint: `Your own lines and the GM's narration from the last ${REPORT_TURNS} turns. Never other players' lines or whispers.`,
     defaultOn: false,
     allowed: (viewer) => viewer.atTable,
   },
@@ -520,7 +520,7 @@ function readableLines(bundle: ReportBundle): string[] {
   }
   if (bundle.pageErrors) lines.push(`${bundle.pageErrors.length} recent page errors.`);
   if (bundle.serverLog) lines.push(`${bundle.serverLog.length} server log lines.`);
-  if (bundle.transcript) lines.push(`${bundle.transcript.length} transcript lines (the reporter's own and the DM's).`);
+  if (bundle.transcript) lines.push(`${bundle.transcript.length} transcript lines (the reporter's own and the GM's).`);
   if (bundle.turnRecords) lines.push(`Narrator records for ${bundle.turnRecords.length} turns.`);
   return lines;
 }

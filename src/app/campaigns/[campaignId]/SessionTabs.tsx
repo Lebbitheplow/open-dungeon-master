@@ -84,7 +84,7 @@ const TableIcon = paintedRailIcon(TABLE_GLYPH);
 // a given viewer sees, and in what order, is visiblePanelTabs's decision.
 const TAB_PRESENTATION: Record<PanelTab, [string, LucideIcon, string]> = {
   dm: [
-    "DM",
+    "GM",
     RAIL_ICONS.dm,
     "Everything waiting on you, and every ruling the engine can make on your say-so.",
   ],
@@ -99,14 +99,14 @@ const TAB_PRESENTATION: Record<PanelTab, [string, LucideIcon, string]> = {
     "Character sheets, HP and conditions for the whole party, and their bonds with the people they have met.",
   ],
   battle: ["Battle", RAIL_ICONS.battle, "The tactical battle map. Move your token on your turn."],
-  map: ["Map", RAIL_ICONS.map, "The scene map, the places the party has found, and the Atlas maps the DM has shown."],
+  map: ["Map", RAIL_ICONS.map, "The scene map, the places the party has found, and the Atlas maps the GM has shown."],
   story: [
     "Story",
     RAIL_ICONS.story,
     "Chapters and the tale so far, the world-state record, and the audited log of rolls and stat changes.",
   ],
   notes: ["Notes", RAIL_ICONS.notes, "Suggest story notes; the party lead approves them."],
-  chat: ["Chat", RAIL_ICONS.chat, "Side chat between players. The DM does not see it."],
+  chat: ["Chat", RAIL_ICONS.chat, "Side chat between players. The GM does not see it."],
   world: [
     "World",
     RAIL_ICONS.world,
@@ -115,7 +115,7 @@ const TAB_PRESENTATION: Record<PanelTab, [string, LucideIcon, string]> = {
   context: [
     "Context",
     RAIL_ICONS.context,
-    "What the DM was actually sent last turn, and anything the budget cut.",
+    "What the GM was actually sent last turn, and anything the budget cut.",
   ],
   settings: [
     "Settings",

@@ -87,7 +87,7 @@ for (const { file, pack } of packs) {
   check(file, pack.baseGenre !== "custom", "baseGenre must not be custom");
   check(file, pack.theme.length <= 120, "theme is longer than 120 chars");
   check(file, pack.premise.length <= 500, "premise is longer than 500 chars");
-  check(file, pack.dmFlavor.length >= 200, "dmFlavor is too thin to steer the DM");
+  check(file, pack.dmFlavor.length >= 200, "dmFlavor is too thin to steer the GM");
 
   for (const entry of pack.races) {
     check(file, Boolean(findRace(entry.id)), `race id ${entry.id} does not exist`);

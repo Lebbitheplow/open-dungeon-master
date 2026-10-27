@@ -46,7 +46,7 @@ export function HowToPlayDialog({
       <Section icon={Compass} title="Getting started">
         <p>
           <span className="text-stone-300">New campaign</span> creates the world: pick a genre,
-          difficulty and starting level, and optionally give the DM a secret story setup only it
+          difficulty and starting level, and optionally give the GM a secret story setup only it
           will know. If the server has campaign plugins installed, you can pick a pre-built world
           here instead of a bare genre, which brings its own races, classes, monsters and lore
           without changing a rule. You get an eight-letter invite code to share with your friends.
@@ -65,13 +65,13 @@ export function HowToPlayDialog({
 
       <Section icon={Dices} title="How the game is run">
         <p>
-          The app does all the calculation and gives the result to the DM, who weaves it into the
+          The app does all the calculation and gives the result to the GM, who weaves it into the
           story. Attack rolls, damage, saving throws, death saves, conditions, spell slots, rests,
           XP and level-ups are all resolved by the server against the 5e rules and written straight
           to your character sheet.
         </p>
         <p>
-          The DM narrates what those results mean. It cannot invent a roll or quietly hand you a
+          The GM narrates what those results mean. It cannot invent a roll or quietly hand you a
           bonus, so play the story rather than arguing the numbers. Every roll and stat change is
           recorded in the Log, under the Story tab, if you want to check the maths.
         </p>
@@ -80,16 +80,16 @@ export function HowToPlayDialog({
       <Section icon={MessageSquareText} title="Taking your turn">
         <p>The buttons above the message box change what your message means:</p>
         <ModeRow label="Do">
-          Describe what your character does. The DM narrates the outcome and asks for a roll when
+          Describe what your character does. The GM narrates the outcome and asks for a roll when
           the rules call for one.
         </ModeRow>
         <ModeRow label="Say">Speak in character. Your text is sent as spoken dialogue.</ModeRow>
         <ModeRow label="OOC">
-          Out-of-character table talk. The DM does not read it or respond to it.
+          Out-of-character table talk. The GM does not read it or respond to it.
         </ModeRow>
         <p>
-          To ask the DM a question about the story, the world, the rules, or your sheet, open the{" "}
-          <span className="text-stone-300">Ask the DM</span> strip just above the message box. The
+          To ask the GM a question about the story, the world, the rules, or your sheet, open the{" "}
+          <span className="text-stone-300">Ask the GM</span> strip just above the message box. The
           answer quotes what the campaign has on record, and you choose whether it is just for you
           or for the whole table. Asking never moves the story on, so it works even while the floor
           is locked.
@@ -98,7 +98,7 @@ export function HowToPlayDialog({
 
       <Section icon={Hourglass} title="One turn at a time">
         <p>
-          When the DM starts thinking, it reads everything sent up to that moment and writes one
+          When the GM starts thinking, it reads everything sent up to that moment and writes one
           reply for the whole table. Anything you send while it is still thinking will not change
           that reply. It is picked up on the next turn, together with whatever everyone else sent.
         </p>
@@ -107,19 +107,19 @@ export function HowToPlayDialog({
           <span className="text-stone-300">
             talk your options over before someone sends, then send one clear action each
           </span>
-          . Piling on more messages mid-narration does not speed the DM up or steer the reply
+          . Piling on more messages mid-narration does not speed the GM up or steer the reply
           already in progress.
         </p>
         <p>
-          OOC is the safe channel for that discussion: it never wakes the DM, and it still works
-          while the floor is locked during narration. Sometimes the DM puts one player in the
+          OOC is the safe channel for that discussion: it never wakes the GM, and it still works
+          while the floor is locked during narration. Sometimes the GM puts one player in the
           spotlight and waits for them, and a banner will tell you when that is why you cannot act.
         </p>
       </Section>
 
       <Section icon={RefreshCw} title="If a reply lands badly">
         <p>
-          Nothing the DM writes is final. Hovering one of its messages shows a row of actions. The
+          Nothing the GM writes is final. Hovering one of its messages shows a row of actions. The
           party lead can have it <span className="text-stone-300">reroll</span> that moment, with
           the same dice and the same outcome and only the wording changed, then page between the
           takes and leave the best one up for the table. The lead can also have it{" "}
@@ -129,7 +129,7 @@ export function HowToPlayDialog({
         <p>
           Two of those actions are open to everyone. Anyone can check a passage against what the
           campaign has already established, and anyone can select a line and press the bookmark to
-          keep that detail in front of the DM for the rest of the campaign.
+          keep that detail in front of the GM for the rest of the campaign.
         </p>
       </Section>
 

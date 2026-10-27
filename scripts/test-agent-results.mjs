@@ -158,7 +158,7 @@ try {
     assert.match(view.history.read, /odm_get_messages/);
     const spoken = shown.find((m) => m.author === "player");
     assert.equal(spoken.from, "Liriel");
-    assert.equal(shown.find((m) => m.author === "dm").from, "Dungeon Master");
+    assert.equal(shown.find((m) => m.author === "dm").from, "Game Master");
     assert.equal(Object.hasOwn(shown[0], "generatedImage"), false);
   });
 

@@ -129,7 +129,7 @@ await test("Ask reads every record with its canon tag, the settled ones first, a
   assert.match(prompt, /60 TR \(= 1300 AF\): Orrin sells the fleet \[retired\]/);
   assert.match(prompt, /2000 AF \(= 760 TR\): Orrin's statue raised/, "the asked entry's latest event was not read");
   assert.match(prompt, /\] Wenna is Orrin's sister, secret\nthe party has learned this/);
-  assert.match(prompt, /\] The chain was cut from inside, secret, DM only\nDM only: the party has not learned this\. [^\n]*Kept by Captain Orrin/);
+  assert.match(prompt, /\] The chain was cut from inside, secret, GM only\nGM only: the party has not learned this\. [^\n]*Kept by Captain Orrin/);
   const general = ask.askPassages(doc, entities, "What is going on?", "english").passages;
   const at = (name) => general.findIndex((passage) => passage.name === name);
   assert.ok(at("Captain Orrin") >= 0 && at("Captain Orrin") < at("The Old Toll"), "a retired entry came before a canon one");

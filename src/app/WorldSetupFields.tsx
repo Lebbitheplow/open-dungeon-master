@@ -137,7 +137,7 @@ export function WorldSetupFields({
               className={ui.input}
             />
             <span className="mt-1 block text-xs text-stone-500">
-              The DM is reminded of the relevant rules each turn. Editable later in the table&apos;s Settings.
+              The GM is reminded of the relevant rules each turn. Editable later in the table&apos;s Settings.
             </span>
           </label>
 
@@ -196,7 +196,7 @@ export function WorldSetupFields({
               </button>
             </div>
             <span className="mt-1 block text-xs text-stone-500">
-              Places, factions, and history the DM treats as canon. Grows anytime from the lobby
+              Places, factions, and history the GM treats as canon. Grows anytime from the lobby
               and the Facts tab.
             </span>
           </div>

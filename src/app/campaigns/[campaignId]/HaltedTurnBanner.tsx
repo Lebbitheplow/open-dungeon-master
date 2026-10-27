@@ -6,7 +6,7 @@ import { cn } from "@/lib/cn";
 import { offerCorrectionReason } from "@/lib/correction-offer";
 import { ui } from "@/lib/ui";
 import { SectionHead } from "@/components/ui/SectionHead";
-import { DM_HALTED_PREFIX } from "@/lib/campaign-types";
+import { haltedTurnPrefix } from "@/lib/campaign-types";
 
 // A DM turn that threw. Everything the turn had (its conversation, tool calls
 // and tool results) is still on the dm_turns row, so the lead can send the DM
@@ -31,9 +31,7 @@ export function HaltedTurnBanner({
   const [error, setError] = useState("");
   // The reason follows "The DM ran into a problem: " in the transcript, so
   // some start lower case; standing alone here it starts a sentence.
-  const stated = content.startsWith(DM_HALTED_PREFIX)
-    ? content.slice(DM_HALTED_PREFIX.length)
-    : content;
+  const stated = content.slice(haltedTurnPrefix(content).length);
   const reason = stated.charAt(0).toUpperCase() + stated.slice(1);
 
   async function retry() {
@@ -65,14 +63,14 @@ export function HaltedTurnBanner({
 
   return (
     <div className="panel ornate session-banner-card reveal-banner rounded-xl">
-      <SectionHead title="DM halted, context preserved" glyph="cue-bell" level="h4" className="mb-1.5" />
+      <SectionHead title="GM halted, context preserved" glyph="cue-bell" level="h4" className="mb-1.5" />
       <p className="text-sm text-stone-400">{reason}</p>
       {canRetry ? (
         <button
           type="button"
           onClick={retry}
           disabled={retrying}
-          title="Send the DM back into this turn with everything it already had"
+          title="Send the GM back into this turn with everything it already had"
           className={cn(ui.btnSmall, "mt-2.5")}
         >
           {retrying ? (
@@ -84,7 +82,7 @@ export function HaltedTurnBanner({
         </button>
       ) : (
         <p className="mt-1 text-xs text-stone-500">
-          The party lead can send the DM back in from here.
+          The party lead can send the GM back in from here.
         </p>
       )}
       {error ? <p className="motion-shake mt-1 text-xs text-red-400">{error}</p> : null}

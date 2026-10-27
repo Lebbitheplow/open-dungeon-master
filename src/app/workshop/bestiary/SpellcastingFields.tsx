@@ -163,7 +163,7 @@ export function SpellcastingEditor({ draft, onChange }: Props) {
             ) : null}
           </div>
           <span className="text-[11px] text-stone-500">
-            The DM casts these for the monster; the server spends the slot or the use, and uses this DC for the save.
+            The GM casts these for the monster; the server spends the slot or the use, and uses this DC for the save.
           </span>
         </div>
       ) : null}

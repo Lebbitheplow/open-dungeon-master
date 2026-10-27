@@ -229,7 +229,7 @@ await test("an ally the DM plays, a stranger's hero and an unknown starter are r
   assert.equal(ally.status, 201, JSON.stringify(ally.json));
   const allyPreview = await previewAs(table, { libraryCharacterId: ally.json.character.id });
   assert.equal(allyPreview.status, 400);
-  assert.match(allyPreview.json.error, /ally the DM plays/);
+  assert.match(allyPreview.json.error, /ally the GM plays/);
 
   const stranger = table.world.addUser("stranger");
   table.world.signIn(stranger);

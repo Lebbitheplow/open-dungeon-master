@@ -55,13 +55,13 @@ export async function POST(
   const { campaign, user } = context;
   if (campaign.gameSettings.dmMode === "ai") {
     return Response.json(
-      { error: "The AI runs this game; there is no DM seat to fill." },
+      { error: "The AI runs this game; there is no GM seat to fill." },
       { status: 400 },
     );
   }
   if (!isPrimaryDm(campaignSeats(campaign), user.id) && campaign.ownerUserId !== user.id) {
     return Response.json(
-      { error: "Only the Dungeon Master can hand out the DM seats." },
+      { error: "Only the Game Master can hand out the GM seats." },
       { status: 403 },
     );
   }
@@ -79,7 +79,7 @@ export async function POST(
   // just the DM, and the pair would then disagree about who may re-seat whom.
   if (userId && seat === "assistant" && userId === campaign.dmUserId) {
     return Response.json(
-      { error: "They already run the game; a co-DM has to be someone else." },
+      { error: "They already run the game; a co-GM has to be someone else." },
       { status: 400 },
     );
   }
@@ -90,7 +90,7 @@ export async function POST(
   }
   if (seat === "dm" && !userId) {
     return Response.json(
-      { error: "A human-run game needs someone in the DM seat. Switch to the AI instead." },
+      { error: "A human-run game needs someone in the GM seat. Switch to the AI instead." },
       { status: 400 },
     );
   }

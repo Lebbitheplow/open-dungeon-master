@@ -132,7 +132,15 @@ export const OPENING_SCENE_CUE = "Introduce the opening scene, set the premise, 
 
 // Marks the system message a halted DM turn writes. The client pairs it with
 // the message's dmTurnId to offer the lead a retry of that exact turn.
-export const DM_HALTED_PREFIX = "The DM ran into a problem: ";
+export const DM_HALTED_PREFIX = "The GM ran into a problem: ";
+// The same mark in the wording halted turns were written with before the
+// role was called the GM; those messages stay in old transcripts.
+const LEGACY_DM_HALTED_PREFIX = "The DM ran into a problem: ";
+
+// The halted-turn mark a system message starts with, either wording, or "".
+export function haltedTurnPrefix(content: string): string {
+  return [DM_HALTED_PREFIX, LEGACY_DM_HALTED_PREFIX].find((prefix) => content.startsWith(prefix)) ?? "";
+}
 
 // Marks the system message announcing a mid-game joiner's new character.
 // The lead's "new adventurer" banner derives from it: shown until a DM

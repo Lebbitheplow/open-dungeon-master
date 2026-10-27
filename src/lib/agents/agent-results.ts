@@ -128,7 +128,7 @@ type Message = {
 function agentMessage(message: Message, names: Record<string, string>): JsonObject {
   const from =
     message.authorType === "dm"
-      ? (message.speaker?.name ?? "Dungeon Master")
+      ? (message.speaker?.name ?? "Game Master")
       : message.authorType === "system"
         ? "Table"
         : (message.characterId && names[message.characterId]) || (message.userId && names[message.userId]) || "A player";

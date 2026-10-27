@@ -70,7 +70,7 @@ export async function POST(
   }
   if (!inShortRestWindow(campaignId, sheet.id)) {
     return refuse(
-      `Hit dice are spent at the end of a short rest. ${sheet.name} is not resting now; ask the DM for a short rest and spend them when it ends.`,
+      `Hit dice are spent at the end of a short rest. ${sheet.name} is not resting now; ask the GM for a short rest and spend them when it ends.`,
     );
   }
   const campaign = getCampaignById(campaignId);

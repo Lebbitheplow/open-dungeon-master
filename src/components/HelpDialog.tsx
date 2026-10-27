@@ -110,39 +110,39 @@ export function HelpDialog({
       <Section icon={DoorOpen} title="The lobby">
         <p>
           Before the game begins, each player picks a hero and readies up; the line above the
-          buttons always says what comes next. Whoever steers the story (the party lead, or the DM
+          buttons always says what comes next. Whoever steers the story (the party lead, or the GM
           when a person runs the table) can change the table settings, in the same named groups the
           campaign creator used: world and story, character creation, narration, atmosphere, safety,
           and the rest. Each group says what is set inside before you open it, and every change
           applies to everyone at once. Share the room code or copy the invite link to bring in more
-          players; the owner or the DM opens the table once everyone is ready.
+          players; the owner or the GM opens the table once everyone is ready.
         </p>
       </Section>
 
-      <Section icon={MessageSquareText} title="Talking to the DM">
+      <Section icon={MessageSquareText} title="Talking to the GM">
         <p>The buttons above the message box change what your message means:</p>
         <ModeRow label="Do">
-          Describe what your character does. The DM narrates the outcome and asks for dice rolls
+          Describe what your character does. The GM narrates the outcome and asks for dice rolls
           when the rules call for them.
         </ModeRow>
         <ModeRow label="Say">
           Speak in character. Your text is sent as spoken dialogue, in quotes.
         </ModeRow>
         <ModeRow label="OOC">
-          Out-of-character table talk. The DM does not respond to it, and it stays available even
+          Out-of-character table talk. The GM does not respond to it, and it stays available even
           when the floor is locked during narration or a spotlight.
         </ModeRow>
         <ModeRow label="Direct" lead>
-          Party lead only. Send the DM an authoritative story direction it must weave into the
+          Party lead only. Send the GM an authoritative story direction it must weave into the
           tale, or arm one of the seven canned events: Combat, Place, Social, Romance, Mystery,
           Weird or Windfall. Turn on <span className="text-stone-300">Private</span> and the
-          direction goes to the DM alone: no character hears it, it never enters the transcript,
+          direction goes to the GM alone: no character hears it, it never enters the transcript,
           and it steers the next turn instead of this one. The table still sees that something is
           armed, just never what.
         </ModeRow>
         <p>
           Questions are not one of these buttons. Open the{" "}
-          <span className="text-stone-300">Ask the DM</span> strip just above the message box and
+          <span className="text-stone-300">Ask the GM</span> strip just above the message box and
           use its own question box. Set <span className="text-stone-300">About</span> to Auto,
           Story, Rules or My sheet to say where the answer should come from, and{" "}
           <span className="text-stone-300">Seen by</span> to Just me or The table to say who reads
@@ -155,7 +155,7 @@ export function HelpDialog({
           the strip keeps a half-typed question and your place in the thread.
         </p>
         <p>
-          Sometimes the DM puts one player in the spotlight and waits for them to act. While the
+          Sometimes the GM puts one player in the spotlight and waits for them to act. While the
           floor is locked for you, a banner explains why, and OOC and the Ask strip still work.
           Small chips above the message box name the background work the engine is doing between
           turns, such as compacting history, sealing a chapter, running the world tick or answering
@@ -185,15 +185,15 @@ export function HelpDialog({
         </p>
       </Section>
 
-      <Section icon={RefreshCw} title="When the DM gets it wrong">
+      <Section icon={RefreshCw} title="When the GM gets it wrong">
         <p>
-          Hover a DM message and a row of actions appears above it. None of them advance the story
+          Hover a GM message and a row of actions appears above it. None of them advance the story
           or change a single number the rules produced. Rewriting the narration belongs to the
           party lead, since everyone reads the same transcript:
         </p>
         <ul className="list-none space-y-1.5">
           <li>
-            <span className="text-stone-300">Reroll:</span> lead only. Have the DM write that
+            <span className="text-stone-300">Reroll:</span> lead only. Have the GM write that
             moment again with the same dice and the same outcome, optionally with a note on what to
             do differently. Only the prose changes.
           </li>
@@ -203,11 +203,11 @@ export function HelpDialog({
             message for the whole table.
           </li>
           <li>
-            <span className="text-stone-300">Continue:</span> lead only. Have the DM keep writing
+            <span className="text-stone-300">Continue:</span> lead only. Have the GM keep writing
             from where a reply stopped short, without moving the story on.
           </li>
           <li>
-            <span className="text-stone-300">Edit:</span> lead only. Fix what the DM said by hand.
+            <span className="text-stone-300">Edit:</span> lead only. Fix what the GM said by hand.
             Mechanics are untouched and every dice marker in the passage has to survive the edit.
           </li>
           <li>
@@ -217,12 +217,12 @@ export function HelpDialog({
           </li>
         </ul>
         <p>
-          If a DM turn fails outright, a banner offers to send it back in from where it stopped. It
+          If a GM turn fails outright, a banner offers to send it back in from where it stopped. It
           resumes the turn that was already running, so nobody has to retype an action and nothing
           lands in the transcript twice.
         </p>
         <p>
-          An edit keeps the DM&apos;s own wording as a take beside yours, so you can page back to it.
+          An edit keeps the GM&apos;s own wording as a take beside yours, so you can page back to it.
           After you fix something the AI did (an undo, an edit, a reroll, a retry, a rewind), a small
           row asks <span className="text-stone-300">Why the fix?</span> with a few reasons. One tap
           helps the project see what the AI gets wrong; ignore it or close it and nothing changes.
@@ -260,15 +260,15 @@ export function HelpDialog({
         </Section>
       ) : null}
 
-      <Section icon={Brain} title="What the DM remembers">
+      <Section icon={Brain} title="What the GM remembers">
         <p>
-          Recent turns are in front of the DM word for word. Older ones are compacted into a
+          Recent turns are in front of the GM word for word. Older ones are compacted into a
           rolling summary, and closed chapters become chapter summaries it can search and re-read
           when the table brings up something from long ago.
         </p>
         <ul className="list-none space-y-1.5">
           <li>
-            <span className="text-stone-300">Remember:</span> any player can select text in a DM
+            <span className="text-stone-300">Remember:</span> any player can select text in a GM
             message and press the bookmark icon, or press it with nothing selected to keep the
             whole message. Pinned memories ride in every prompt from then on. There is a size
             budget, and the Pinned memories list under Story, Facts shows how much of it the table
@@ -276,12 +276,12 @@ export function HelpDialog({
           </li>
           <li>
             <span className="text-stone-300">Pin as canon:</span> party lead only, because it
-            writes to the campaign record. Keeps a passage in front of the DM permanently as
+            writes to the campaign record. Keeps a passage in front of the GM permanently as
             established fact.
           </li>
           <li>
-            <span className="text-stone-300">Facts and lore:</span> Story, Facts also holds DM
-            secrets the DM must never contradict and the lore entries the table has written up.
+            <span className="text-stone-300">Facts and lore:</span> Story, Facts also holds GM
+            secrets the GM must never contradict and the lore entries the table has written up.
           </li>
           <li>
             <span className="text-stone-300">Bonds:</span> under Party, where each character stands
@@ -290,7 +290,7 @@ export function HelpDialog({
         </ul>
         <p>
           NPCs the party stops mentioning are archived so they do not crowd out the ones in play,
-          and the party lead can see exactly what the DM was sent on the last turn, plus anything
+          and the party lead can see exactly what the GM was sent on the last turn, plus anything
           the budget cut, in the Context tab.
         </p>
       </Section>
@@ -309,36 +309,36 @@ export function HelpDialog({
           <li>
             <span className="text-stone-300">Map:</span> the scene map, the overworld and
             discovered locations, when maps are enabled, and the party&apos;s Atlas: the world maps the
-            DM has shown the party, with only the pins and regions they chose to show.
+            GM has shown the party, with only the pins and regions they chose to show.
           </li>
           <li>
             <span className="text-stone-300">Story:</span> three sub-tabs. Chapters is the tale so
             far and the arc in play, and it is where you export the story. Facts holds pinned
-            memories, DM secrets and lore. Log is the audited record of every dice roll and every
-            stat change the DM makes.
+            memories, GM secrets and lore. Log is the audited record of every dice roll and every
+            stat change the GM makes.
           </li>
           <li>
             <span className="text-stone-300">Notes:</span> suggest campaign notes for the story; the
             party lead approves them.
           </li>
           <li>
-            <span className="text-stone-300">Chat:</span> private whispers between you and the DM,
-            and side chat between players that the DM and the campaign transcript never see.
+            <span className="text-stone-300">Chat:</span> private whispers between you and the GM,
+            and side chat between players that the GM and the campaign transcript never see.
           </li>
           <li>
             <span className="text-stone-300">World:</span> whoever runs the story only. The
             campaign&apos;s own copy of its WorldForge world: a change there stays at this table.{" "}
             <span className="text-stone-300">Reveal to the party</span> turns a secret into lore every
-            player can read, and the DM can put it on every screen as a handout.
+            player can read, and the GM can put it on every screen as a handout.
           </li>
           <li>
-            <span className="text-stone-300">Context:</span> party lead only. What the DM was
+            <span className="text-stone-300">Context:</span> party lead only. What the GM was
             actually sent last turn, and anything the token budget dropped.
           </li>
           <li>
             <span className="text-stone-300">Settings:</span> the campaign&apos;s details, the table
             settings and the Story AI it plays with. Whoever steers the story can bring in more prep
-            from a workshop here at any point, and the owner or the DM can end the campaign, which
+            from a workshop here at any point, and the owner or the GM can end the campaign, which
             saves each library character&apos;s progress back to the player&apos;s library.
           </li>
         </ul>
@@ -361,10 +361,10 @@ export function HelpDialog({
           Every check, save, and attack is rolled by the server, never invented by the AI. The dice
           button in the header opens <span className="text-stone-300">Roll dice</span>: tap dice
           into the tray (or type an expression such as 2d6+3), add a bonus, and roll. Turn on{" "}
-          <span className="text-stone-300">Roll in secret</span> to roll behind the screen: a DM&apos;s
-          secret roll is seen by the DM seats alone, and a player&apos;s by that player and the DM;
+          <span className="text-stone-300">Roll in secret</span> to roll behind the screen: a GM&apos;s
+          secret roll is seen by the GM seats alone, and a player&apos;s by that player and the GM;
           the rest of the table is not told a die was rolled. The same menu toggles the 3D dice
-          animation. If the table allows real dice and you opt in, the DM waits for you to enter your physical roll, with a digital fallback
+          animation. If the table allows real dice and you opt in, the GM waits for you to enter your physical roll, with a digital fallback
           button if you would rather let the server roll.
         </p>
         <p>
@@ -381,15 +381,15 @@ export function HelpDialog({
 
       <Section icon={Volume2} title="Voice and narration">
         <p>
-          The story itself is written: the storyteller (the AI or the person in the DM&apos;s seat) writes each reply, and
+          The story itself is written: the storyteller (the AI or the person in the GM&apos;s seat) writes each reply, and
           nothing about sound changes that. Four different things then use sound, and each has its own switch.{" "}
-          <span className="text-stone-300">Narration</span> reads the DM&apos;s written replies aloud, and the table decides
+          <span className="text-stone-300">Narration</span> reads the GM&apos;s written replies aloud, and the table decides
           whether it is on.{" "}
           <span className="text-stone-300">Your volume</span> is yours alone: the speaker button in
           the header unmutes (browsers require one click before audio can play) and its slider sets
           how loud it plays on this device. <span className="text-stone-300">Live voice chat</span> is
           people talking to each other (below), and <span className="text-stone-300">dictation</span>{" "}
-          turns your speech into typed words. Hover a DM message to replay its narration. Push-to-talk, when configured,
+          turns your speech into typed words. Hover a GM message to replay its narration. Push-to-talk, when configured,
           lets you hold the microphone button to dictate your message.
         </p>
         <p>
@@ -415,7 +415,7 @@ export function HelpDialog({
           split party or a private word, and can hold the floor: soft enforcement marks who should
           be talking, strict actually mutes everyone else, and a raised-hand queue keeps it civil.
           A table can also opt into rules that make the call behave like the world: proximity
-          hearing (you only hear players whose characters are near yours on the map, while the DM
+          hearing (you only hear players whose characters are near yours on the map, while the GM
           hears everyone), whisper and shout ranges, walls muffling speech, and downed characters
           going deaf. All of that lives under Live voice chat in the Settings tab, and all of it is
           off by default, so a plain group call is what you get until the table asks for more.
@@ -426,7 +426,7 @@ export function HelpDialog({
         <p>
           With ambience on in the table settings (under Atmosphere), the table shares a soundtrack: a room for
           where the party is (a tavern, a forest, a crypt), music for what the scene is doing, and
-          one-shot sounds for dramatic moments. The DM changes it as the story moves, and combat
+          one-shot sounds for dramatic moments. The GM changes it as the story moves, and combat
           brings its own music. A cue may have several takes; the player moves between them so a
           long fight is not one loop forever, and Next skips ahead.
         </p>
@@ -443,14 +443,14 @@ export function HelpDialog({
         </p>
       </Section>
 
-      <Section icon={Gavel} title="Playing with a human DM">
+      <Section icon={Gavel} title="Playing with a human GM">
         <p>
           A campaign does not have to be run by the AI. Created with{" "}
-          <span className="text-stone-300">a person in the DM seat</span>, the table works the way
-          a kitchen-table game does: the DM narrates in their own words (most tables do it over
+          <span className="text-stone-300">a person in the GM seat</span>, the table works the way
+          a kitchen-table game does: the GM narrates in their own words (most tables do it over
           voice chat), and the app keeps the sheets, the dice, the maps and the record straight
           underneath them. Your Do and Say messages still land in the transcript, but instead of
-          waking the AI they queue as intents for the DM to answer. The DM holds no party slot
+          waking the AI they queue as intents for the GM to answer. The GM holds no party slot
           (though they can build a companion to play from the console), holds the story secrets
           the party lead would hold at an AI table, and gets a console of
           tools: initiative, monsters, maps, NPCs, roll tables and rulings, with an AI assistant
@@ -458,13 +458,13 @@ export function HelpDialog({
         </p>
         <p>
           The in-between setting, <span className="text-stone-300">assisted mode</span>, lets the
-          DM keep the story and hand the bookkeeping to the AI a piece at a time: it can run the
-          monsters&apos; turns, read the DM&apos;s notes aloud as full prose, or{" "}
+          GM keep the story and hand the bookkeeping to the AI a piece at a time: it can run the
+          monsters&apos; turns, read the GM&apos;s notes aloud as full prose, or{" "}
           <span className="text-stone-300">cover the table</span> for a counted stretch of answers
-          while the DM steps away, following the outline they left behind.
+          while the GM steps away, following the outline they left behind.
         </p>
         <p>
-          Because the narration happens out loud, the app nudges the DM every so often to jot down
+          Because the narration happens out loud, the app nudges the GM every so often to jot down
           a <span className="text-stone-300">story beat</span>, a line or two about what just
           happened. Beats are what chapter summaries, recaps and the exported story are built
           from, so a table that never writes any ends up with a transcript of intents and no tale.
@@ -492,10 +492,10 @@ export function HelpDialog({
           them on a guess, the lead is the one who settles it.
         </p>
         <p>
-          At a table with a human DM the split is different: the lead keeps the invites and the
+          At a table with a human GM the split is different: the lead keeps the invites and the
           campaign details but is otherwise a player, because the story powers listed above exist
           to steer the AI and there is no AI to steer. Story secrets, settings, rules, floor
-          control, narration fixes and the DM seats belong to the person in the DM seat instead.
+          control, narration fixes and the GM seats belong to the person in the GM seat instead.
         </p>
       </Section>
 
@@ -503,7 +503,7 @@ export function HelpDialog({
         <p>
           A campaign can run in a <span className="text-stone-300">world pack</span>: a pre-built
           setting with its own races, classes, spells, gear, monsters, factions and lore, and a
-          brief telling the DM how that world should sound. Picking one at creation also sets the
+          brief telling the GM how that world should sound. Picking one at creation also sets the
           campaign&apos;s genre and can fill in its theme and premise.
         </p>
         <p>
@@ -521,7 +521,7 @@ export function HelpDialog({
 
       <Section icon={BookOpen} title="New to D&amp;D?">
         <p>
-          You do not need to know the rules to play; the DM and the server handle them. When a term
+          You do not need to know the rules to play; the GM and the server handle them. When a term
           comes up that you do not recognize, look for the small info button next to it: every
           feature, spell and stat on your sheet explains itself.
         </p>
@@ -537,7 +537,7 @@ export function HelpDialog({
           </Link>{" "}
           is the whole fifth edition reference document, searchable, for the moment a rule needs
           checking word for word. Its contents are bound as three books: the players&apos; rules,
-          the Dungeon Master&apos;s, and the monsters, each holding everything the reference document
+          the Game Master&apos;s, and the monsters, each holding everything the reference document
           opens from the Player&apos;s Handbook, the Dungeon Master&apos;s Guide and the Monster Manual
           (the rest of those books is not openly licensed). At the table it opens from the book
           button in the header.
@@ -547,7 +547,7 @@ export function HelpDialog({
       <Section icon={BookOpen} title="About">
         <p>
           Open Game Master is a self-hosted, multiplayer Dungeons &amp; Dragons 5e platform run
-          by an AI Dungeon Master. Server admins manage users, models, images, voice and campaign
+          by an AI Game Master. Server admins manage users, models, images, voice and campaign
           plugins from the Admin panel. Game content comes from the SRD 5.1 and Open5e; see{" "}
           <Link href="/licenses" className="text-amber-300 underline-offset-2 hover:underline">
             licenses and attribution

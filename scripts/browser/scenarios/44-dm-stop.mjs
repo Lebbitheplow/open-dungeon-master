@@ -63,12 +63,12 @@ export default {
         timeoutMs: 15_000,
         label: "the status line's clock",
       });
-      const stop = status.getByRole("button", { name: "Stop the DM" });
+      const stop = status.getByRole("button", { name: "Stop the GM" });
       check((await stop.count()) === 1, "the lead is offered Stop");
       await t.shot("waiting");
 
       await t.tap(stop);
-      const banner = page.locator(`${root}*`).filter({ hasText: /^DM halted, context preserved$/ }).locator("visible=true").first();
+      const banner = page.locator(`${root}*`).filter({ hasText: /^GM halted, context preserved$/ }).locator("visible=true").first();
       await eventually(() => banner.count(), { timeoutMs: 30_000, label: "the halted notice" });
       const notice = page.getByText(/the lead stopped this turn/i).locator("visible=true").first();
       await eventually(() => notice.count(), { label: "the notice saying the lead stopped it" });

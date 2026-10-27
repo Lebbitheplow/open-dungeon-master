@@ -38,7 +38,7 @@ export function inspirationProblem(sheet: Sheet, asked: boolean | undefined): To
   if (!asked || heldInspiration(sheet)) {
     return null;
   }
-  return { error: `${sheet.name} holds no Inspiration to spend. The DM awards it with set_condition condition "inspiration"; attack without useInspiration.`, retry: true };
+  return { error: `${sheet.name} holds no Inspiration to spend. The GM awards it with set_condition condition "inspiration"; attack without useInspiration.`, retry: true };
 }
 
 // ---- Feral Senses ----

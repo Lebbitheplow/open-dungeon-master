@@ -41,7 +41,7 @@ export async function POST(
   // Pictures belong under narration. A player's words and the table's
   // system notes are never illustrated, by the AI or by hand.
   if (message.authorType !== "dm") {
-    return Response.json({ error: "Only a DM passage can carry a picture." }, { status: 400 });
+    return Response.json({ error: "Only a GM passage can carry a picture." }, { status: 400 });
   }
   const image = uploadedImageRecord(parsed.data.url, context.campaign.settings.aspect);
   if (!setMessageGeneratedImage(messageId, image)) {

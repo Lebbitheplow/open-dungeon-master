@@ -39,7 +39,7 @@ await test("An enemy's Dominate Person on a player's character: the table is tol
   world.clearDice();
   assert.equal(cast.ok, true, cast.error);
   assert.equal(sideOf(world.encounter(), "sheet", victim.id), "foe", "it fights for its dominator");
-  const told = listRecentMessages(world.campaignId, 10).some((message) => /Brin is dominated: the DM plays Brin until the charm ends/.test(message.content));
+  const told = listRecentMessages(world.campaignId, 10).some((message) => /Brin is dominated: the GM plays Brin until the charm ends/.test(message.content));
   assert.ok(told, "the table, its player among them, is told");
 
   // Its turn: the floor is nobody's at the table, and the DM plays it.
@@ -62,7 +62,7 @@ await test("An enemy's Dominate Person on a player's character: the table is tol
   );
   assert.equal(refused.status, 409);
   const body = await refused.json();
-  assert.match(body.error, /Brin is dominated: the DM plays Brin until the charm ends/);
+  assert.match(body.error, /Brin is dominated: the GM plays Brin until the charm ends/);
   assert.equal(body.dominated, true);
 
   // The charm ends: Brin is the player's again, on every client too.

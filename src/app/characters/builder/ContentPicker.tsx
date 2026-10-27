@@ -93,7 +93,7 @@ export default function ContentPicker({
       {unadmitted.length ? (
         <p className="mt-1 text-[11px] text-stone-500">
           Your own {unadmitted.join(", ")} {unadmitted.length === 1 ? "is" : "are"} not offered at this table: whoever runs it (the owner, the
-          DM or the assistant DM) keeps a copy in their workshop to admit one.
+          GM or the assistant GM) keeps a copy in their workshop to admit one.
         </p>
       ) : null}
       {open && results.length ? (

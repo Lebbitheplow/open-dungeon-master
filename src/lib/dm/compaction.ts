@@ -181,7 +181,7 @@ export async function maybeCompactHistory(campaignId: string, options: { evicted
   const existing = stripMilestoneBlock(summary);
   const window = await utilityContextTokens(campaign.settings);
   const budget = transcriptBudgetTokens(window, estimateTokens(COMPACTION_SYSTEM) + estimateTokens(existing) + 450, SUMMARY_REPLY_TOKENS);
-  const line = (message: (typeof page)[number]) => `${message.authorType === "dm" ? "DM" : "Player"}: ${message.content}`;
+  const line = (message: (typeof page)[number]) => `${message.authorType === "dm" ? "GM" : "Player"}: ${message.content}`;
   const batch: typeof page = [];
   let spent = 0;
   for (const message of page) {

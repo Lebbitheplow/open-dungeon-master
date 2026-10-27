@@ -78,7 +78,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ wor
     return Response.json({ error: readiness.reason, reason: "no_ai" }, { status: 409 });
   }
   if (drafting().has(workshop.id)) {
-    return Response.json({ error: "The AI DM is already drafting pregens for this workshop." }, { status: 409 });
+    return Response.json({ error: "The AI GM is already drafting pregens for this workshop." }, { status: 409 });
   }
   drafting().add(workshop.id);
   try {

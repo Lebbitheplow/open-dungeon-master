@@ -219,7 +219,7 @@ console.log(`renarrate: ${passed} tests passed`);
     model.script([reply({ text: plan })]);
     model.claims([[aside(plan)]]);
     const rerolled = await runRenarrate({ campaignId: world.campaignId, messageId: first.id, guidance: "" });
-    assert.deepEqual(rerolled, { error: "The DM returned nothing; try again.", status: 502 });
+    assert.deepEqual(rerolled, { error: "The GM returned nothing; try again.", status: 502 });
     const after = messages.getCampaignMessage(first.id);
     assert.deepEqual(after.variants, before.variants, "a plan was stored as a take");
     assert.equal(after.content, before.content);

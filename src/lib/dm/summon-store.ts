@@ -345,7 +345,7 @@ export function sweepSummons(campaign: Campaign): string[] {
         continue;
       }
       removeSummon(campaign, sheet);
-      lines.push(`${sheet.name} slips out of ${sheet.summon.casterName || "its maker"}'s control as ${sheet.summon.spell}'s hold runs out. It still stands, no longer the party's to command; the DM places it.`);
+      lines.push(`${sheet.name} slips out of ${sheet.summon.casterName || "its maker"}'s control as ${sheet.summon.spell}'s hold runs out. It still stands, no longer the party's to command; the GM places it.`);
       continue;
     }
     removeSummon(campaign, sheet);

@@ -322,7 +322,7 @@ export const ZONE_ROWS: Record<string, ZoneRow> = {
   "antimagic field": {
     shape: "aura", feet: 10, level: 8, concentration: true, rounds: 60 * MINUTE,
     antimagic: true, tone: "force",
-    summary: "no spell can be cast inside it, and a spell cast from outside has no effect on a creature inside; magic items and other spells' effects inside are suppressed (the DM's to narrate)",
+    summary: "no spell can be cast inside it, and a spell cast from outside has no effect on a creature inside; magic items and other spells' effects inside are suppressed (the GM's to narrate)",
   },
   "wall of thorns": {
     shape: "wall", feet: 60, level: 6, concentration: true, rounds: 10 * MINUTE,

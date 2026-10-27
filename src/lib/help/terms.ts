@@ -46,7 +46,7 @@ export const WEAPON_PROPERTY_BLURBS: Record<string, string> = {
   loading: "Slow to reload: only one shot per action, bonus action or reaction, however many attacks you have.",
   magazine: "Holds the number of shots in brackets; once they are spent, an action reloads it.",
   reach: "Strikes 5 feet further than usual, so 10 feet away instead of 5.",
-  special: "Has its own rules beyond the usual attack; the DM applies them when it is used.",
+  special: "Has its own rules beyond the usual attack; the GM applies them when it is used.",
   thrown: "Can be thrown to make a ranged attack, using the same ability as a melee swing with it.",
   "two-handed": "Needs both hands to attack with, so no shield or second weapon.",
   versatile: "Usable in one hand or two; the two-handed grip does the larger damage die in brackets.",

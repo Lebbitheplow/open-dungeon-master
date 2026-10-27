@@ -92,7 +92,7 @@ export async function PATCH(
     return Response.json({ error: "That character is not on this roster." }, { status: 404 });
   }
   if (parsed.data.offered && listed.role === "companion") {
-    return Response.json({ error: `${listed.name} is an ally the DM plays, so players cannot take them.` }, { status: 400 });
+    return Response.json({ error: `${listed.name} is an ally the GM plays, so players cannot take them.` }, { status: 400 });
   }
   setPregenOffered(resolved.user.id, listed.id, parsed.data.offered);
   return Response.json({

@@ -147,8 +147,8 @@ export default function FeatChoicesFields({
     source === "subclass"
       ? "Your subclass grants this training; it goes on the sheet with the character."
       : applied.length
-        ? `The table applies ${applied.join(", ")}; the DM runs the rest from the feat's text.`
-        : "Nothing of this feat is applied by the table itself; the DM runs it from its text.";
+        ? `The table applies ${applied.join(", ")}; the GM runs the rest from the feat's text.`
+        : "Nothing of this feat is applied by the table itself; the GM runs it from its text.";
   if (!hasPicks && !teaches && !fixed.length) {
     return (
       <p className="mt-1 text-[11px] text-stone-500" data-feat-coverage={feat}>

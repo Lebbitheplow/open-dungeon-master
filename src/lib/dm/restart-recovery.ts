@@ -32,7 +32,7 @@ declare global {
 }
 
 // What the table reads in the notice of a turn a restart cut short.
-export const RESTART_HALT = "The server restarted while the Dungeon Master was working on this turn.";
+export const RESTART_HALT = "The server restarted while the Game Master was working on this turn.";
 
 // What a place's map placeholder reads when a restart dropped its render.
 export const RESTART_MAP_FAILED = "The server restarted before this map was drawn.";

@@ -220,5 +220,5 @@ export function renderWorldArcsForPrompt(arcs: WorldArc[]): string {
     }
     return parts.join("\n");
   });
-  return `Off-screen world arcs (DM-secret clocks advancing on their own; weave reached stages into scenes as rumors, news, and encountered aftermath, never as announcements. The party's stance is judged at each chapter close; ignoring a direct threat has permanent consequences):\n${lines.join("\n")}`;
+  return `Off-screen world arcs (GM-secret clocks advancing on their own; weave reached stages into scenes as rumors, news, and encountered aftermath, never as announcements. The party's stance is judged at each chapter close; ignoring a direct threat has permanent consequences):\n${lines.join("\n")}`;
 }

@@ -112,7 +112,7 @@ export function HandoutStage({
         <p className={cn("mt-4 text-[11px] italic opacity-80", style === "notice" ? "text-center" : "")}>{handout.caption}</p>
       ) : null}
       <div className="mt-4 flex items-center justify-between">
-        <span className="wax-seal">From the DM</span>
+        <span className="wax-seal">From the GM</span>
         {entry?.attachmentPath ? (
           <a href={entry.attachmentPath} target="_blank" rel="noreferrer" className="text-[11px] underline">
             Open the pages

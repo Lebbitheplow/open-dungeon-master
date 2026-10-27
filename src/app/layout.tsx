@@ -39,7 +39,7 @@ const cinzel = localFont({
 
 export const metadata: Metadata = {
   title: "Open Game Master",
-  description: "Multiplayer D&D 5e campaigns with an AI Dungeon Master.",
+  description: "Multiplayer D&D 5e campaigns with an AI Game Master.",
   applicationName: "Open Game Master",
   appleWebApp: {
     capable: true,

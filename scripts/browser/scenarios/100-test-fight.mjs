@@ -115,7 +115,7 @@ export default {
       const notReady = sheetPanel.locator('[data-testid="test-fight-not-ready"]');
       await eventually(() => notReady.count(), { timeoutMs: 15_000, label: "the note that the author runs it" });
       check(/you run the test/.test(await notReady.innerText()), `the note says who runs it (${await notReady.innerText()})`);
-      check(!(await sheetPanel.getByRole("radio", { name: /The AI DM/ }).count()), "no AI DM to choose");
+      check(!(await sheetPanel.getByRole("radio", { name: /The AI GM/ }).count()), "no AI DM to choose");
       const startNoAi = sheetPanel.getByRole("button", { name: /Start the test fight/ });
       check(await startNoAi.isEnabled(), "Start works with no AI DM");
       await t.shot("sheet-no-ai");
@@ -182,7 +182,7 @@ export default {
       const standIns = sheetPanel.getByRole("radio", { name: /The stand-in party/ });
       check(await standIns.isChecked(), "the stand-in party is the default");
       // With an AI DM there, who runs it is a question, the AI by default.
-      check(await sheetPanel.getByRole("radio", { name: /The AI DM/ }).isChecked(), "the AI DM runs it by default");
+      check(await sheetPanel.getByRole("radio", { name: /The AI GM/ }).isChecked(), "the AI DM runs it by default");
       check(await sheetPanel.getByRole("radio", { name: /^You/ }).count(), "the author can run it instead");
       await t.shot("sheet-stand-ins");
 

@@ -61,7 +61,7 @@ for (let index = 1; index <= 44; index += 1) {
 }
 // Table talk put to the DM and its out-of-character answer (PR 314): the
 // chronicle reads the answer as a line, never as a passage.
-const oocQuestion = "@DM can Tavi see the dog from the east wall?";
+const oocQuestion = "@GM can Tavi see the dog from the east wall?";
 const oocAnswer = "Not from there: the dog sleeps under the cart, out of sight until you round the corner.";
 say(`(ooc) ${oocQuestion}`, { authorType: "player", userId: world.owner.id, characterId: tavi.id });
 say(`(ooc) ${oocAnswer}`, { authorType: "dm", speech: [] });
@@ -1466,7 +1466,7 @@ const { setPregenOffered } = await import("../../src/lib/db/characters.ts");
 const OFFER_TITLE = "Offer Table";
 const offerTable = campaigns.createCampaign(player.id, {
   title: OFFER_TITLE,
-  description: "A table its DM made from a workshop with pregens.",
+  description: "A table its GM made from a workshop with pregens.",
   theme: "high-fantasy",
   maxPlayers: 6,
   startingLevel: 4,

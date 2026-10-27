@@ -17,7 +17,7 @@ export default {
     const line = log.locator(".cine-chronicle-line").filter({ hasText: ids.oocAnswer.slice(0, 40) });
     await eventually(() => line.count(), { label: "the DM's answer on the scroll" });
     const text = ((await line.first().textContent()) ?? "").replace(/\s+/g, " ");
-    check(text.startsWith("Dungeon Master:"), `the answer is the DM's line (${text.slice(0, 60)})`);
+    check(text.startsWith("Game Master:"), `the answer is the DM's line (${text.slice(0, 60)})`);
     check(text.includes(ids.oocAnswer), "the answer reads whole");
     const asPassage = log.locator(".cine-chronicle-passage").filter({ hasText: ids.oocAnswer.slice(0, 40) });
     check((await asPassage.count()) === 0, "the answer is not drawn as a passage");

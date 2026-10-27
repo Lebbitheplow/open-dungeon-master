@@ -125,7 +125,7 @@ function gated(spec: RowSpec, gates: WizardGates): boolean {
 function copy(spec: RowSpec, draft: CampaignDraft, gates: WizardGates): { label: string; hint: string } {
   switch (spec.key) {
     case "aiStorySetup":
-      return { label: "AI story setup", hint: "The DM invents the plot" };
+      return { label: "AI story setup", hint: "The GM invents the plot" };
     case "narrationGuard":
       return { label: "Outcome check", hint: "Narration that contradicts the dice is rewritten" };
     case "worldSimulation":
@@ -133,7 +133,7 @@ function copy(spec: RowSpec, draft: CampaignDraft, gates: WizardGates): { label:
     case "ttsEnabled":
       return {
         label: "Voice narration",
-        hint: gates.ttsAvailable ? "Spoken DM narration" : "No speech service on this server",
+        hint: gates.ttsAvailable ? "Spoken GM narration" : "No speech service on this server",
       };
     case "mapsEnabled":
       return {
@@ -143,7 +143,7 @@ function copy(spec: RowSpec, draft: CampaignDraft, gates: WizardGates): { label:
     case "ambienceEnabled":
       return { label: "Ambience", hint: "Room tone, music and stings" };
     case "ambienceAuto":
-      return { label: "Sound follows the scene", hint: "Off leaves it to the DM" };
+      return { label: "Sound follows the scene", hint: "Off leaves it to the GM" };
     case "presentation":
       return {
         label: "Theatre inserts",
@@ -170,13 +170,13 @@ function copy(spec: RowSpec, draft: CampaignDraft, gates: WizardGates): { label:
     case "multiclassingEnabled":
       return { label: "Multiclassing", hint: "Second classes at level-up" };
     case "inventoryApprovals":
-      return { label: "Item offers", hint: "Players confirm DM loot and gold changes" };
+      return { label: "Item offers", hint: "Players confirm GM loot and gold changes" };
     case "vitalsApprovals":
-      return { label: "Vitals confirmed", hint: "Players confirm DM damage, healing and conditions" };
+      return { label: "Vitals confirmed", hint: "Players confirm GM damage, healing and conditions" };
     case "boardDrawing":
       return {
         label: "Players draw on the board",
-        hint: "Plans and circles on the battle map; the DM always may",
+        hint: "Plans and circles on the battle map; the GM always may",
       };
     case "enemyIntent":
       return { label: "Enemy intent", hint: "Show what enemies look likely to do next" };

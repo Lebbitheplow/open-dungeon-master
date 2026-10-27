@@ -190,7 +190,7 @@ export function checkDraft(draft: WorldPackDraft): DraftCheck {
   // ---- advice ----
   if (String(pack.dmFlavor).length < DM_FLAVOR_FLOOR) {
     advice.push(
-      `The DM brief is ${String(pack.dmFlavor).length} characters; ${DM_FLAVOR_FLOOR} or more is what steers the narrator.`,
+      `The GM brief is ${String(pack.dmFlavor).length} characters; ${DM_FLAVOR_FLOOR} or more is what steers the narrator.`,
     );
   }
   for (const target of SIZE_TARGETS) {

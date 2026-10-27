@@ -215,7 +215,7 @@ console.log(`continue-scene: ${passed} tests passed`);
     model.script([reply({ text: plan })]);
     model.claims([[aside(plan)]]);
     const continued = await runContinueScene({ campaignId: world.campaignId, messageId: first.id });
-    assert.deepEqual(continued, { error: "The DM returned nothing; try again.", status: 502 });
+    assert.deepEqual(continued, { error: "The GM returned nothing; try again.", status: 502 });
     const after = messages.getCampaignMessage(first.id);
     assert.equal(after.content, before.content, "a plan was added to the narration");
     assert.deepEqual(after.variants, before.variants);

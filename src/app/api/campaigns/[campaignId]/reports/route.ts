@@ -78,7 +78,7 @@ export async function POST(
     {
       kind: "content_report",
       body: `${context.user.username} reported ${
-        authorType === "dm" ? "a Dungeon Master passage" : "a player"
+        authorType === "dm" ? "a Game Master passage" : "a player"
       } in ${context.campaign.title}.`,
     },
   );

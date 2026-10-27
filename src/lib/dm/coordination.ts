@@ -72,7 +72,7 @@ export function currentCoordination(campaignId: string): CoordinationPhase | nul
 // owns the floor.
 export function coordinationRefusal(campaign: Campaign): string | null {
   if (!narratorIsAi(campaign.gameSettings.dmMode) || hasHumanDm(campaignSeats(campaign))) {
-    return "Coordinated actions are for a table the AI narrates; a DM in the seat already takes the party's moves together.";
+    return "Coordinated actions are for a table the AI narrates; a GM in the seat already takes the party's moves together.";
   }
   if (campaign.status !== "active") {
     return "The adventure has not started yet.";

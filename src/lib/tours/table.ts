@@ -23,14 +23,14 @@ export const PLAYER_TOUR: TourStep[] = [
   {
     id: "modes",
     title: "How you speak",
-    body: "Do describes what your character does. Say speaks in character. OOC is table talk the Dungeon Master ignores. Pick one, then write in the box below.",
+    body: "Do describes what your character does. Say speaks in character. OOC is table talk the Game Master ignores. Pick one, then write in the box below.",
     anchors: ["composer-modes"],
     prepare: "show-chat",
   },
   {
     id: "compose",
     title: "Take your turn",
-    body: "Type your action here and press Enter. The Dungeon Master reads everything sent up to that moment and answers the whole table at once, whether that is the AI or a person in the DM seat, so agree on a plan before you send.",
+    body: "Type your action here and press Enter. The Game Master reads everything sent up to that moment and answers the whole table at once, whether that is the AI or a person in the GM seat, so agree on a plan before you send.",
     anchors: ["composer-input"],
     prepare: "show-chat",
   },
@@ -50,7 +50,7 @@ export const PLAYER_TOUR: TourStep[] = [
   },
   {
     id: "ask",
-    title: "Ask the DM",
+    title: "Ask the GM",
     body: "Questions about the story, the rules or your sheet go here, not in the message box. Asking never moves the story on, so it works even while the floor is locked.",
     anchors: ["ask-dm"],
     prepare: "show-chat",
@@ -84,7 +84,7 @@ export const PLAYER_TOUR: TourStep[] = [
   {
     id: "story",
     title: "The story so far",
-    body: "Chapters, the facts the table has pinned, and the log of every roll and stat change the Dungeon Master made. Once a chapter closes, Open the chronicle turns the closed chapters like the pages of a book.",
+    body: "Chapters, the facts the table has pinned, and the log of every roll and stat change the Game Master made. Once a chapter closes, Open the chronicle turns the closed chapters like the pages of a book.",
     anchors: ["tab-story"],
     prepare: "open-story",
   },
@@ -110,7 +110,7 @@ export const PLAYER_TOUR: TourStep[] = [
   {
     id: "chat",
     title: "Whispers and side chat",
-    body: "Private words with the Dungeon Master, and side chat between players that never reaches the transcript.",
+    body: "Private words with the Game Master, and side chat between players that never reaches the transcript.",
     anchors: ["tab-chat"],
     prepare: "open-chat",
   },
@@ -161,7 +161,7 @@ export const FIRST_TURN_TOUR: TourStep[] = [
   {
     id: "first-act",
     title: "Say what you do",
-    body: "Pick Do for an action or Say to speak in character, write it here and press Enter. The Dungeon Master answers the whole table at once, so agree on a plan before you send.",
+    body: "Pick Do for an action or Say to speak in character, write it here and press Enter. The Game Master answers the whole table at once, so agree on a plan before you send.",
     anchors: ["composer-input", "composer-modes"],
     prepare: "show-chat",
   },
@@ -196,14 +196,14 @@ export const DM_TOUR: TourStep[] = [
   {
     id: "modes",
     title: "Narrate and OOC",
-    body: "Narrate writes into the story as the Dungeon Master. OOC is table talk. Player actions arrive as intents for you to answer.",
+    body: "Narrate writes into the story as the Game Master. OOC is table talk. Player actions arrive as intents for you to answer.",
     anchors: ["composer-modes"],
     prepare: "show-chat",
   },
   {
     id: "console",
     title: "Your console",
-    body: "Only the DM seats have this tab. It holds the floor, the story beats, the hand-over switches when an assistant is on, the queue of intents waiting on you, and every tool underneath.",
+    body: "Only the GM seats have this tab. It holds the floor, the story beats, the hand-over switches when an assistant is on, the queue of intents waiting on you, and every tool underneath.",
     anchors: ["tab-dm"],
     prepare: "open-dm",
   },
@@ -245,7 +245,7 @@ export const DM_TOUR: TourStep[] = [
   {
     id: "world",
     title: "The world, at the table",
-    body: "Whoever runs the story has this tab: the campaign's own copy of its WorldForge world, so a change here stays at this table. Reveal to the party turns a secret into lore the players read, and the DM can put it on every screen as a handout. An Atlas map reaches the players' Map tab only once you show it to the party.",
+    body: "Whoever runs the story has this tab: the campaign's own copy of its WorldForge world, so a change here stays at this table. Reveal to the party turns a secret into lore the players read, and the GM can put it on every screen as a handout. An Atlas map reaches the players' Map tab only once you show it to the party.",
     anchors: ["tab-world", "tab-more"],
   },
   {

@@ -80,7 +80,7 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
     summary: "A character, an enemy, a pet, or several at their share of one total: temp hit points absorb first, resistances and death saves resolve themselves.",
     fields: [
       { name: "characterId", label: "Character", kind: "character", requiredUnless: ["enemyId", "targets"], help: "With a pet named below, its owner." },
-      { name: "enemyId", label: "Or enemy", kind: "enemy", help: "In a fight. The AI DM may only hurt one with a hazard or the environment." },
+      { name: "enemyId", label: "Or enemy", kind: "enemy", help: "In a fight. The AI GM may only hurt one with a hazard or the environment." },
       { name: "petName", label: "Their pet", kind: "text", help: "The character's pet takes it instead, by name." },
       {
         name: "targets",
@@ -106,7 +106,7 @@ export const PARTY_ADJUDICATIONS: CatalogEntry[] = [
           { value: "hazard", label: "A hazard (a trap, a falling object)" },
           { value: "environment", label: "The environment (fire, lava, acid)" },
         ],
-        help: "The AI DM must name one for an enemy; the console's own hand may leave it empty.",
+        help: "The AI GM must name one for an enemy; the console's own hand may leave it empty.",
       },
       REASON,
     ],

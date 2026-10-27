@@ -128,7 +128,7 @@ export function handleCastBuff(
   const resolvedMech = spellMechanicsFor({ spell: args.spell, userIds: authors });
   if (!resolvedMech) {
     return {
-      error: `The server does not know "${args.spell}", so it cannot apply its effect. Spend the slot with use_spell_slot and narrate it; a human DM can set a story condition from the console.`,
+      error: `The server does not know "${args.spell}", so it cannot apply its effect. Spend the slot with use_spell_slot and narrate it; a human GM can set a story condition from the console.`,
       retry: true,
     };
   }

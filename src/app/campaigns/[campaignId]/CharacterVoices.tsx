@@ -231,7 +231,7 @@ export function CharacterVoices({
           <div className="mb-1 flex flex-wrap items-center gap-2">
             <p className="min-w-0 flex-1 basis-56 text-[11px] leading-4 text-stone-500">
               The narrator reads the prose. Anyone with a voice here reads their own quoted lines, and whatever the
-              DM speaks as them.
+              GM speaks as them.
             </p>
             <button
               type="button"

@@ -88,7 +88,7 @@ export function packOmissions(bundle: WorkshopBundle, world: BundleWorld, carrie
     key: "held",
     group: "world",
     label: "Kept back",
-    reason: "A lore entry kept for the DM, and an entry that is not canon yet, stay out of the pack: it has no private part and no way to mark a line as unsettled.",
+    reason: "A lore entry kept for the GM, and an entry that is not canon yet, stay out of the pack: it has no private part and no way to mark a line as unsettled.",
     assets: all.filter((row) => row.held).map((row) => `${row.name} (${row.held})`),
   });
   add({

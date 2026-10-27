@@ -116,7 +116,7 @@ export async function POST(
   }
 
   const encounter = getActiveEncounter(campaignId);
-  const lead = "Ask the DM or the party lead if the count needs correcting.";
+  const lead = "Ask the GM or the party lead if the count needs correcting.";
 
   if (!corrects) {
     if (sheet.deathSaves?.dead) {
@@ -134,7 +134,7 @@ export async function POST(
     // or a rest that never happened.
     if (usageSpendsHitDice(sheet, parsed.data)) {
       return refuse(
-        `Hit dice are spent at the end of a short rest, which the DM runs; ask the DM for a short rest and ${sheet.name} spends them there.`,
+        `Hit dice are spent at the end of a short rest, which the GM runs; ask the GM for a short rest and ${sheet.name} spends them there.`,
       );
     }
   }

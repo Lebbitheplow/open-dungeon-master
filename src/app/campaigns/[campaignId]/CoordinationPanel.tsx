@@ -249,8 +249,8 @@ export function CoordinationPanel({
       <p className="mb-2 text-xs text-stone-400">
         {phase.prompt ? <span className="mr-1 font-serif italic text-amber-200/80">{phase.prompt}</span> : null}
         {sequence
-          ? "The lead has set the order: each step happens after the one before it, and characters in one step act at the same time. Write what your character does at their step. Nothing happens until every player is ready; then the DM resolves the plan as one scene, step by step."
-          : 'Say what each character does in the same moment, with any "while", "after" or "if". Nothing happens until every player is ready; then the DM resolves the plan as one moment.'}
+          ? "The lead has set the order: each step happens after the one before it, and characters in one step act at the same time. Write what your character does at their step. Nothing happens until every player is ready; then the GM resolves the plan as one scene, step by step."
+          : 'Say what each character does in the same moment, with any "while", "after" or "if". Nothing happens until every player is ready; then the GM resolves the plan as one moment.'}
       </p>
       {sequence ? (
         <ol className="stagger space-y-2" aria-label="The plan's order">
@@ -269,7 +269,7 @@ export function CoordinationPanel({
                 </p>
                 {passedBefore.length ? (
                   <p className="mb-1 text-[11px] text-amber-300/80" data-step-pass-note>
-                    {passedBefore.join(", ")} passed before this step; the DM will not count on {passedBefore.length === 1 ? "it" : "them"}.
+                    {passedBefore.join(", ")} passed before this step; the GM will not count on {passedBefore.length === 1 ? "it" : "them"}.
                   </p>
                 ) : null}
                 <ul className="space-y-2">{members.map(entryRow)}</ul>
@@ -341,7 +341,7 @@ export function CoordinationPanel({
                 ? `The order changed after ${unconfirmed.join(" and ")} ${unconfirmed.length === 1 ? "was" : "were"} ready; they mark it Ready again first`
                 : waiting.length
                   ? `${waiting.join(", ")} will pass`
-                  : "Hand the plan to the DM now"
+                  : "Hand the plan to the GM now"
             }
             data-coordination-resolve
           >

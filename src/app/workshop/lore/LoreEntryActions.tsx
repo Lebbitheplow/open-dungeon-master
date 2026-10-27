@@ -43,7 +43,7 @@ export function LoreEntryActions({
         type="button"
         onClick={onPin}
         title={
-          entry.pinned ? "Unpin: retrieved only when relevant" : "Pin: included in every DM turn"
+          entry.pinned ? "Unpin: retrieved only when relevant" : "Pin: included in every GM turn"
         }
         aria-pressed={entry.pinned}
         className={cn(ui.btnSmall, action, entry.pinned && "border-amber-500/60 bg-amber-400/10 text-amber-200")}

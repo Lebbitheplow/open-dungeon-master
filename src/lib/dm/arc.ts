@@ -197,7 +197,7 @@ const EVENT_SHAPE =
 // the model broke them in verification: it wrote "Beat 5 occurs" as a
 // trigger, and it wrote a "twist" that merely restated the antagonist line
 // the DM already has in front of it.
-const EVENT_RULES = `Two rules for every event you write. trigger is something that HAPPENS IN THE STORY and that the DM can recognise at the table ("the first time the party sleeps outside the walls", "when they open the reliquary"); it may never be a beat, act, chapter, or turn number, and never the word "beat" followed by a number. A twist or betrayal must reveal something that is NOT already stated in the premise, the stakes, the antagonist line, or any beat; if the DM already knows it, it reveals nothing and is not a twist.`;
+const EVENT_RULES = `Two rules for every event you write. trigger is something that HAPPENS IN THE STORY and that the GM can recognise at the table ("the first time the party sleeps outside the walls", "when they open the reliquary"); it may never be a beat, act, chapter, or turn number, and never the word "beat" followed by a number. A twist or betrayal must reveal something that is NOT already stated in the premise, the stakes, the antagonist line, or any beat; if the GM already knows it, it reveals nothing and is not a twist.`;
 
 const BOSS_SHAPE = '{"name": string, "detail": string}';
 
@@ -205,7 +205,7 @@ const BOSS_SHAPE = '{"name": string, "detail": string}';
 // so beats that are really one scene ("reach the village", then "speak to
 // its elder") burn an act in a single evening. Every prompt that writes
 // main beats carries this rule.
-const BEAT_RULE = `Each beat is a turning point that takes a stretch of play to reach: a different place, confrontation, or discovery from the beat before it, never the next small step of the same scene (do not follow "reach the village" with "speak to its elder"; fold those into one beat). Leave room between beats for the travel, investigation, and trouble the DM improvises.`;
+const BEAT_RULE = `Each beat is a turning point that takes a stretch of play to reach: a different place, confrontation, or discovery from the beat before it, never the next small step of the same scene (do not follow "reach the village" with "speak to its elder"; fold those into one beat). Leave room between beats for the travel, investigation, and trouble the GM improvises.`;
 
 // A beat with its checklist (issue #31). The steps are what the chapter
 // engine gates the beat on: the server ticks them from the DM's tool calls
@@ -230,13 +230,13 @@ act1Beats: 3 to 5 ordered beats for act 1 ONLY, one short sentence each as text.
 finaleBoss: the last act's boss is the saga's final boss; repeat them here.
 cast: 2 to 4 recurring NPCs the campaign returns to, each with a concrete name and something they personally want. The antagonist may be one of them.
 events: 4 to 6 planned special moments, most of them placed in the first two acts (actHint); later acts get their events when they are detailed. Use the kinds: a recurring NPC turning up (npc_encounter), a temporary ally or companion joining the party (ally), a revelation that reframes what came before (twist), someone the party trusted turning on them (betrayal), a clock that forces a choice (deadline), a find that opens a new road (discovery), or a memorable staged scene (setpiece). actHint is a soft placement only.
-subArcs: ${profile.subArcsText} opening quest- or dungeon-scale threads; name and goal are player-safe and may appear in a quest log, hook is a DM-only secret tying the quest to the main story, beats are 2 to 4 expected steps.`;
+subArcs: ${profile.subArcsText} opening quest- or dungeon-scale threads; name and goal are player-safe and may appear in a quest log, hook is a GM-only secret tying the quest to the main story, beats are 2 to 4 expected steps.`;
 }
 
 const SAGA_STYLE_RULES = `Name concrete people, factions, and places instead of roles ("Vicar Osseth", "the Ashen Concord", "the drowned undercroft"), and stay consistent with any premise or outline you are given, carrying any twists it already names into events. Hook at least one boss, event, or cast member to each party member's own background, abilities, or backstory, and keep every promise in the party composition notes when they are given. Every string under 200 characters. Players never see any of this.`;
 
 function sagaGenerateSystem(profile: LengthProfile): string {
-  return `You plot the secret story saga an AI Dungeon Master will steer a long D&D 5e campaign by. It is a loose guideline of people and events to keep the story moving, not a script: the table will wander, and the DM must be able to improvise around it.
+  return `You plot the secret story saga an AI Game Master will steer a long D&D 5e campaign by. It is a loose guideline of people and events to keep the story moving, not a script: the table will wander, and the GM must be able to improvise around it.
 
 Reply with ONLY a strict JSON object, no code fences, shaped exactly: ${SAGA_SHAPE}
 
@@ -274,7 +274,7 @@ export async function generateStoryArc(
       worldContext(campaignId),
       partyCompositionContext(campaignId),
       campaign.dmOutline
-        ? `The DM's existing secret outline; keep the arc consistent with it:\n${campaign.dmOutline}`
+        ? `The GM's existing secret outline; keep the arc consistent with it:\n${campaign.dmOutline}`
         : "",
     ]
       .filter(Boolean)
@@ -430,7 +430,7 @@ export function completeActiveBeat(campaignId: string): { completed: boolean; ga
   return { completed: true, gated: Boolean(active.beat.waypoints?.length) };
 }
 
-const WAYPOINT_FILL_SYSTEM = `You are adding waypoints to the beats of an AI DM's secret story arc for a D&D 5e campaign already in progress. Keep it brief and answer quickly.
+const WAYPOINT_FILL_SYSTEM = `You are adding waypoints to the beats of an AI GM's secret story arc for a D&D 5e campaign already in progress. Keep it brief and answer quickly.
 
 Reply with ONLY a strict JSON object, no code fences, shaped exactly: {"beats": [{"beat": int, "waypoints": [{"kind": "place"|"npc"|"item"|"objective"|"fight"|"narrative", "text": string}]}]}
 
@@ -488,7 +488,7 @@ export async function judgeBeatCompleted(campaignId: string, sinceSeq: number): 
     const recent = listMessagesInSeqRange(campaignId, sinceSeq, latestSeq(campaignId))
       .filter((message) => message.authorType !== "system")
       .slice(-8)
-      .map((message) => `${message.authorType === "dm" ? "DM" : "Player"}: ${message.content}`)
+      .map((message) => `${message.authorType === "dm" ? "GM" : "Player"}: ${message.content}`)
       .join("\n\n")
       .slice(-6_000);
     if (!recent) {
@@ -529,7 +529,7 @@ export async function judgeBeatCompleted(campaignId: string, sinceSeq: number): 
   }
 }
 
-const REFRESH_SYSTEM = `You maintain the AI DM's secret story arc between chapters of a D&D 5e campaign. Keep it brief and answer quickly. Compare the arc with what actually happened in the chapter that just closed and reply with ONLY a strict JSON object, no code fences, shaped exactly: {"beatsDone": int[], "beatsSkipped": int[], "beatAnnotations": [{"beat": int, "detail": string}], "beatRewrites": [{"beat": int, "text": string}], "activeBeat": int|null, "subArcUpdates": [{"id": string, "status": "active"|"resolved"|"abandoned", "resolution": string}], "newSubArcs": [{"name": string, "goal": string, "hook": string, "beats": string[]}], "eventsFired": string[], "eventsDropped": string[], "newEvents": [${EVENT_SHAPE}], "castUpdates": [{"id": string, "notes": string, "status": "active"|"gone"}], "newCast": [{"name": string, "role": string, "agenda": string, "notes": string}], "sketchUpdates": [{"act": int, "milestone": string, "boss": ${BOSS_SHAPE}|null, "allies": string[]}], "worldArcUpdates": [{"id": string, "stance": "unaware"|"ignoring"|"opposing"|"aiding"|"fleeing", "consequence": string}]}
+const REFRESH_SYSTEM = `You maintain the AI GM's secret story arc between chapters of a D&D 5e campaign. Keep it brief and answer quickly. Compare the arc with what actually happened in the chapter that just closed and reply with ONLY a strict JSON object, no code fences, shaped exactly: {"beatsDone": int[], "beatsSkipped": int[], "beatAnnotations": [{"beat": int, "detail": string}], "beatRewrites": [{"beat": int, "text": string}], "activeBeat": int|null, "subArcUpdates": [{"id": string, "status": "active"|"resolved"|"abandoned", "resolution": string}], "newSubArcs": [{"name": string, "goal": string, "hook": string, "beats": string[]}], "eventsFired": string[], "eventsDropped": string[], "newEvents": [${EVENT_SHAPE}], "castUpdates": [{"id": string, "notes": string, "status": "active"|"gone"}], "newCast": [{"name": string, "role": string, "agenda": string, "notes": string}], "sketchUpdates": [{"act": int, "milestone": string, "boss": ${BOSS_SHAPE}|null, "allies": string[]}], "worldArcUpdates": [{"id": string, "stance": "unaware"|"ignoring"|"opposing"|"aiding"|"fleeing", "consequence": string}]}
 
 Be conservative. Empty arrays are a correct answer when little changed.
 - beatsDone: mark a main beat done only if the chapter clearly accomplished it. Never renumber existing beats.
@@ -547,13 +547,13 @@ ${EVENT_RULES}
 
 If the story has drifted from the arc, do not rewrite the arc; annotate the beats, drop the events that no longer fit, and add or update a sub-arc that steers play back toward the current main beat.`;
 
-const ACT_DETAIL_SYSTEM = `The party of a D&D 5e campaign has finished the current act of the AI DM's secret story arc, and the next act exists only as a sketch. Write that act's real beats now, growing out of what the table actually did. Keep it brief and answer quickly.
+const ACT_DETAIL_SYSTEM = `The party of a D&D 5e campaign has finished the current act of the AI GM's secret story arc, and the next act exists only as a sketch. Write that act's real beats now, growing out of what the table actually did. Keep it brief and answer quickly.
 
 Reply with ONLY a strict JSON object, no code fences, shaped exactly: {"beats": [${BEAT_PLAN_SHAPE}], "title": string, "milestone": string, "finale": string, "bossEvent": ${EVENT_SHAPE}|null, "newEvents": [${EVENT_SHAPE}], "newCast": [{"name": string, "role": string, "agenda": string}]}
 
 beats: 3 to 5 ordered beats for the new act, one short sentence each as text, escalating from where play actually stands. ${BEAT_RULE} ${WAYPOINT_RULE} Never restate, renumber, or rewrite existing beats.
 milestone: the sketch's milestone, revised only if play has changed what this act must accomplish; otherwise repeat it. ${ACT_TITLE_RULE}
-bossEvent: the act's planned boss as a set-piece event with a trigger the DM can recognise in the fiction. If play already killed or dissolved the planned boss, name who or what fills that role now; null only if this act genuinely no longer has a boss.
+bossEvent: the act's planned boss as a set-piece event with a trigger the GM can recognise in the fiction. If play already killed or dissolved the planned boss, name who or what fills that role now; null only if this act genuinely no longer has a boss.
 finale: what this act escalates toward.
 newEvents: at most 2 additional planned moments for the act; include one ally event if the sketch planned allies. newCast: at most 2.
 
@@ -574,7 +574,7 @@ ${SOLVABLE_RULE}
 You may NOT change, reword, reorder, or renumber the existing beats or acts: those already happened or are in play. Grow the future out of the arc's own antagonist, threats, and unfinished threads, and honor the party composition notes when they are given. Every string under 200 characters. Players never see this.`;
 
 function sagaChainSystem(profile: LengthProfile): string {
-  return `The party of a D&D 5e campaign has played the AI DM's secret story saga to its conclusion, and the table is still playing. Plot the SEQUEL saga: a new large story that grows out of the concluded one's consequences.
+  return `The party of a D&D 5e campaign has played the AI GM's secret story saga to its conclusion, and the table is still playing. Plot the SEQUEL saga: a new large story that grows out of the concluded one's consequences.
 
 Reply with ONLY a strict JSON object, no code fences, shaped exactly (the fields after previousResolution form a complete new saga): {"previousResolution": string, ${SAGA_SHAPE.slice(1)}
 
@@ -588,7 +588,7 @@ ${SOLVABLE_RULE}
 Sequel rules: grow the new premise and stakes out of the concluded saga's consequences (a power vacuum, a surviving lieutenant, a debt come due, something the party's own victory unleashed). Never recycle a dead antagonist as the villain again. Reuse surviving cast members the party cares about in cast, and let act 1 open in the aftermath of the finale the party just played. ${SAGA_STYLE_RULES}`;
 }
 
-const EXTEND_SYSTEM = `The party has played through every beat of an AI DM's secret story arc for a D&D 5e campaign, and the campaign is still running. Write the next act. Keep it brief and answer quickly.
+const EXTEND_SYSTEM = `The party has played through every beat of an AI GM's secret story arc for a D&D 5e campaign, and the campaign is still running. Write the next act. Keep it brief and answer quickly.
 
 Reply with ONLY a strict JSON object, no code fences, shaped exactly: {"beats": [${BEAT_PLAN_SHAPE}], "finale": string, "antagonist": string, "newEvents": [${EVENT_SHAPE}]}
 
@@ -600,7 +600,7 @@ ${SOLVABLE_RULE}
 
 Reuse the campaign's existing cast and unfinished threads instead of inventing a fresh world. Do NOT re-propose an event the arc already lists; newEvents is only for moments that do not exist yet. Every string under 200 characters. Players never see this.`;
 
-const ENRICH_SYSTEM = `You are adding two planning layers to an AI DM's existing secret story arc for a D&D 5e campaign already in progress. Keep it brief and answer quickly.
+const ENRICH_SYSTEM = `You are adding two planning layers to an AI GM's existing secret story arc for a D&D 5e campaign already in progress. Keep it brief and answer quickly.
 
 Reply with ONLY a strict JSON object, no code fences, shaped exactly: {"cast": [{"name": string, "role": string, "agenda": string}], "events": [${EVENT_SHAPE}], "beatActs": [{"beat": int, "act": int}]}
 

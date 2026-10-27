@@ -39,11 +39,11 @@ import { composerLimit, textLength } from "@/lib/text-limits";
 export type { InputKind };
 
 const KIND_TIPS: Record<InputKind, string> = {
-  do: "Act in the world. The DM narrates what happens.",
+  do: "Act in the world. The GM narrates what happens.",
   say: "Speak in character. Sent as dialogue in quotes.",
-  ooc: "Table talk. The DM does not respond, and it works even when the floor is locked.",
-  lead: "Party lead only. Send the DM an authoritative story direction.",
-  narrate: "Dungeon Master only. Write the passage the table reads.",
+  ooc: "Table talk. The GM does not respond, and it works even when the floor is locked.",
+  lead: "Party lead only. Send the GM an authoritative story direction.",
+  narrate: "Game Master only. Write the passage the table reads.",
 };
 
 // The action composer at the bottom of the game chat: pending-roll cards,
@@ -339,8 +339,8 @@ function ComposerInner({
             <Tooltip
               content={
                 leadPrivate
-                  ? "Only the DM sees this. It steers the next turn and never enters the transcript."
-                  : "The table sees this direction, and the DM acts on it now."
+                  ? "Only the GM sees this. It steers the next turn and never enters the transcript."
+                  : "The table sees this direction, and the GM acts on it now."
               }
             >
               <span className="ml-auto inline-flex items-center gap-1.5 text-[11px] text-stone-300">

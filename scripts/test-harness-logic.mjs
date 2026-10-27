@@ -97,7 +97,7 @@ test("a turn is rendered as the DM's own rules plus a transcript, with the pream
   assert.ok(system.startsWith(HARNESS_PREAMBLE));
   assert.ok(system.includes("RULES: the server is the rules engine."));
   assert.ok(prompt.includes("[Avery | attempt] I kick the door."));
-  assert.ok(prompt.includes("[Dungeon Master] The door groans."));
+  assert.ok(prompt.includes("[Game Master] The door groans."));
   assert.ok(prompt.includes("[a picture was shared here]"), "pictures are named, not silently dropped");
   assert.ok(prompt.endsWith("then write the narration."));
   assert.ok(!prompt.includes("RULES:"), "the rules stay in the system prompt, not the transcript");
@@ -487,7 +487,7 @@ test("an agent program reads the turn-to-turn state after the transcript, and th
   }
   const transcript = prompt.indexOf("</table_transcript>");
   const moment = prompt.indexOf(THIS_MOMENT_HEADING);
-  const instruction = prompt.indexOf("It is your turn as the Dungeon Master");
+  const instruction = prompt.indexOf("It is your turn as the Game Master");
   assert.ok(transcript > 0 && transcript < moment && moment < instruction, "transcript, then the moment, then the instruction");
   for (const part of ["Active combat, round 2", "WORLD LORE:", "Private messages from players", "=== END GAME STATE ==="]) {
     assert.equal(count(prompt, part) + count(system, part), 1, part);

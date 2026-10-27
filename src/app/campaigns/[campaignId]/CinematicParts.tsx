@@ -550,7 +550,7 @@ export function TabletopChronicle({
             if (message.authorType === "dm" && isOocAnswer(message.content)) {
               return (
                 <p key={message.id} className="cine-chronicle-line">
-                  Dungeon Master: &ldquo;{message.content.trim()}&rdquo;
+                  Game Master: &ldquo;{message.content.trim()}&rdquo;
                 </p>
               );
             }

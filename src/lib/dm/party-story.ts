@@ -72,7 +72,7 @@ export function mayWritePartyBackstory(viewer: {
 }
 
 export const PARTY_BACKSTORY_REFUSAL =
-  "Build a character at this table first: the party backstory is written by the players, the party lead and the DM.";
+  "Build a character at this table first: the party backstory is written by the players, the party lead and the GM.";
 
 // ---- the draft button ----
 

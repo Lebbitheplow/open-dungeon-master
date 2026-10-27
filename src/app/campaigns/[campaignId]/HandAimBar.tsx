@@ -347,7 +347,7 @@ export function HandAimBar({
               content={
                 blocked ??
                 (ready
-                  ? "Send this to the Dungeon Master."
+                  ? "Send this to the Game Master."
                   : needsTrigger
                     ? "Name the trigger first."
                     : card.area

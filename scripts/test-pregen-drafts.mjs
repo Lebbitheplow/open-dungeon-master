@@ -124,7 +124,7 @@ await test("drafts land on the roster unticked and marked, every sheet legal, an
     const character = desk.characters.getCharacter(entry.id);
     assert.equal(character.workshopId, desk.workshop.id);
     assert.equal(character.role, "pc");
-    assert.match(character.sheet.notes, /^Drafted by the AI DM\./);
+    assert.match(character.sheet.notes, /^Drafted by the AI GM\./);
     assert.ok(character.sheet.backstory.length > 20, "the backstory was not kept");
     const verdict = admitSheet({ door: "library", level: character.level, sheet: character.sheet, userId: desk.dm.id });
     assert.ok(verdict.ok, `${entry.name} is not legal: ${verdict.problems?.join("; ")}`);
@@ -220,7 +220,7 @@ await test("with no AI DM set up, the action is off with a plain reason and draf
     const readiness = await desk.readiness();
     assert.equal(readiness.status, 200);
     assert.equal(readiness.json.ready, false);
-    assert.match(readiness.json.reason, /No AI DM is set up/);
+    assert.match(readiness.json.reason, /No AI GM is set up/);
     const before = model.requests.length;
     const drafted = await desk.draft();
     assert.equal(drafted.status, 409);

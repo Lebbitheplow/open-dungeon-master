@@ -290,7 +290,7 @@ function summarizeMonsterCall(
 // is a record of play that ALREADY happened, so the expansion has nothing to
 // decide: every die is already rolled and every hit point already spent.
 const EXPAND_DIRECTIVE =
-  "[System] The Dungeon Master ran this stretch at the table and wrote down what happened in one line. Say it to the players in full, in your narrating voice, as the moment they are living through. Every mechanical fact stays exactly as the DM wrote it: the same events, the same outcomes, the same people. Add colour, not consequence. Introduce no new event, no die roll, no decision and no NPC the line does not already contain, do not call any tool, and do not carry the scene past where the DM left it. Two or three short paragraphs at most.";
+  "[System] The Game Master ran this stretch at the table and wrote down what happened in one line. Say it to the players in full, in your narrating voice, as the moment they are living through. Every mechanical fact stays exactly as the GM wrote it: the same events, the same outcomes, the same people. Add colour, not consequence. Introduce no new event, no die roll, no decision and no NPC the line does not already contain, do not call any tool, and do not carry the scene past where the GM left it. Two or three short paragraphs at most.";
 
 export type ExpandOutcome = { content: string } | { error: string };
 
@@ -319,7 +319,7 @@ export async function expandBeat(
     ...(recent.length
       ? [{ role: "user" as const, content: `Recently at this table:\n${recent.join("\n")}` }]
       : []),
-    { role: "user" as const, content: `${EXPAND_DIRECTIVE}\nThe DM wrote: ${beat}` },
+    { role: "user" as const, content: `${EXPAND_DIRECTIVE}\nThe GM wrote: ${beat}` },
   ];
 
   let narration = "";

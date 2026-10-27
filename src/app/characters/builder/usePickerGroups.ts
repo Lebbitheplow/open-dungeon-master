@@ -71,7 +71,7 @@ export const ALIGNMENT_LABELS: Record<string, { name: string; blurb: string }> =
 };
 
 const ALIGNMENT_INFO =
-  "Alignment is a two-word shorthand for how your character treats rules (lawful, neutral, chaotic) and other people (good, neutral, evil). It binds nothing: it is a note to yourself and to the DM about how this person tends to act, and characters drift over a campaign. Pick the one that sounds most like them and stop worrying about it.";
+  "Alignment is a two-word shorthand for how your character treats rules (lawful, neutral, chaotic) and other people (good, neutral, evil). It binds nothing: it is a note to yourself and to the GM about how this person tends to act, and characters drift over a campaign. Pick the one that sounds most like them and stop worrying about it.";
 
 // A pack's own heading for its recommended tier ("Peoples of Middle-earth"),
 // so the group reads like the world rather than like a filter.

@@ -178,7 +178,7 @@ test("the DM's prompt is told which doors are shut and what the rooms are called
   assert.equal(lines.length, 3);
   assert.ok(lines[0].includes("(5,3)"));
   assert.ok(lines[1].includes("Secret"));
-  assert.ok(lines[2].includes("Altar [DM only]"));
+  assert.ok(lines[2].includes("Altar [GM only]"));
   assert.deepEqual(describeScene({ doors: {}, labels: [] }), []);
 });
 

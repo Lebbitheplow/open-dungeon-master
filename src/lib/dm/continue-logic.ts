@@ -134,7 +134,7 @@ export type MergeResult = { take: string; appended: boolean; reason?: string };
 export function mergeContinuation(currentTake: string, continuation: string): MergeResult {
   const addition = stripEchoedOpening(currentTake, continuation);
   if (!addition) {
-    return { take: currentTake, appended: false, reason: "The DM added nothing new." };
+    return { take: currentTake, appended: false, reason: "The GM added nothing new." };
   }
   const merged = `${currentTake.trim()}\n\n${addition}`;
   if (merged.length > MAX_CONTINUED_LENGTH) {

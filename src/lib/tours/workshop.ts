@@ -144,7 +144,7 @@ export const SYSTEM_TOURS: Record<string, TourStep[]> = {
     {
       id: "compile",
       title: "What it becomes",
-      body: "The preview of what the board turns into when imported into a campaign: lore, quests, prepared fights, DM notes and the story arc.",
+      body: "The preview of what the board turns into when imported into a campaign: lore, quests, prepared fights, GM notes and the story arc.",
       anchors: ["storyboard-compile"],
     },
   ]),
@@ -157,8 +157,8 @@ export const SYSTEM_TOURS: Record<string, TourStep[]> = {
     },
     {
       id: "draft",
-      title: "Let the AI DM draft them",
-      body: "No time to build? The AI DM reads this adventure and proposes a hero for each seat of the party set above, and the builder's own rules make every sheet at that party's level. Drafts arrive unoffered, marked as drafted until you edit them: look them over, then tick the ones players may take.",
+      title: "Let the AI GM draft them",
+      body: "No time to build? The AI GM reads this adventure and proposes a hero for each seat of the party set above, and the builder's own rules make every sheet at that party's level. Drafts arrive unoffered, marked as drafted until you edit them: look them over, then tick the ones players may take.",
       anchors: ["party-draft"],
     },
     {
@@ -302,7 +302,7 @@ export const SYSTEM_TOURS: Record<string, TourStep[]> = {
     {
       id: "add",
       title: "Name a power",
-      body: "A faction is who it is to the table and what it wants. What the table knows of them is for everyone; what they want is kept from players, though the AI DM is told it, and in a campaign it moves on in the background as chapters close.",
+      body: "A faction is who it is to the table and what it wants. What the table knows of them is for everyone; what they want is kept from players, though the AI GM is told it, and in a campaign it moves on in the background as chapters close.",
       anchors: ["factions-add"],
     },
     {

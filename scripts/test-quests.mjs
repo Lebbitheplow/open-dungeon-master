@@ -86,7 +86,7 @@ test("the quest tools take a quest by its title and an objective by its text, as
   assert.equal(ticked.ok, true, ticked.error);
   assert.deepEqual(ticked.quest.objectives.map((objective) => objective.done), [true, false]);
   insertQuest({ campaignId: campaign.id, title: "Hidden debt", objectives: normalizeObjectives(["Pay it", "Hide it"]), visibility: "dm" });
-  const secret = handleTickObjective(live(), JSON.stringify({ quest: "[DM only] Hidden debt", objective: "Pay it" }));
+  const secret = handleTickObjective(live(), JSON.stringify({ quest: "[GM only] Hidden debt", objective: "Pay it" }));
   assert.equal(secret.ok, true, secret.error);
   const before = listQuests(campaign.id).length;
   const edited = handleSetQuest(live(), JSON.stringify({ quest: "Clear the Cellar", status: "done" }));
@@ -140,7 +140,7 @@ test("a player's log drops the DM's rows and the prompt block shows the ticks", 
   assert.ok(all.some((quest) => quest.visibility === "dm"));
   const block = renderQuestsForPrompt(all);
   assert.ok(block.includes("[x] a"));
-  assert.ok(block.includes("[DM only] Secret errand"));
+  assert.ok(block.includes("[GM only] Secret errand"));
   assert.ok(!block.includes("Find the daughter"), "a failed quest is out of the block");
 });
 

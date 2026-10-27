@@ -116,7 +116,7 @@ export const LONG_TERM_MADNESS: MadnessEffect[] = [
   { low: 11, high: 20, text: "sees vivid hallucinations: disadvantage on ability checks", conditions: ["hallucinating"] },
   { low: 21, high: 30, text: "suffers extreme paranoia: disadvantage on Wisdom and Charisma checks", conditions: ["paranoid"] },
   { low: 31, high: 40, text: "regards something (usually the source of the madness) with intense revulsion, as the antipathy effect of antipathy/sympathy", conditions: ["madness: revulsion"] },
-  { low: 41, high: 45, text: "imagines they are under the effects of a potion of the DM's choice", conditions: ["madness: delusion"] },
+  { low: 41, high: 45, text: "imagines they are under the effects of a potion of the GM's choice", conditions: ["madness: delusion"] },
   { low: 46, high: 55, text: "clings to a lucky charm: disadvantage on attack rolls, ability checks and saving throws while more than 30 feet from it", conditions: ["madness: lucky charm"] },
   { low: 56, high: 65, text: "is blinded (25%) or deafened (75%)", conditions: [] },
   { low: 66, high: 75, text: "has uncontrollable tremors or tics: disadvantage on attack rolls, and on checks and saves that use Strength or Dexterity", conditions: ["tremors"] },

@@ -91,7 +91,7 @@ export function DmWhisperPanel({
         open={open}
         onToggle={() => setOpen((current) => !current)}
         glyph="tab-dm"
-        title="Private line to the DM"
+        title="Private line to the GM"
         aside={
           unread > 0 ? (
             <span key={unread} className="count-pop rounded-full bg-gradient-to-b from-amber-300 to-amber-500 px-1.5 text-[10px] font-semibold text-amber-950 shadow-glow-gold">
@@ -103,7 +103,7 @@ export function DmWhisperPanel({
       {open ? (
         <div className="reveal space-y-2 border-t border-amber-500/20 px-2 py-2">
           <p className="text-[11px] leading-4 text-amber-200/70">
-            Only you and the DM can see this. Whisper here to act in secret; the DM answers
+            Only you and the GM can see this. Whisper here to act in secret; the GM answers
             privately and the table only sees what their characters could.
           </p>
           {whispers.length ? (
@@ -121,7 +121,7 @@ export function DmWhisperPanel({
                       <p className="mt-1 text-[10px] text-stone-500">
                         {formatWhen(whisper.createdAt)}
                         {" | "}
-                        {whisper.answered ? "Seen by the DM" : "Waiting on the DM"}
+                        {whisper.answered ? "Seen by the GM" : "Waiting on the GM"}
                       </p>
                     </li>
                   );
@@ -163,10 +163,10 @@ export function DmWhisperPanel({
                 disabled={capped || sending}
                 placeholder={
                   capped
-                    ? "Wait for the DM to answer your last whispers."
-                    : "Whisper to the DM..."
+                    ? "Wait for the GM to answer your last whispers."
+                    : "Whisper to the GM..."
                 }
-                aria-label="Whisper to the DM"
+                aria-label="Whisper to the GM"
                 className={cn(ui.input, "min-h-[3rem] flex-1 resize-none disabled:opacity-60")}
               />
               <button
@@ -174,7 +174,7 @@ export function DmWhisperPanel({
                 onClick={() => void sendWhisper()}
                 disabled={!draft.trim() || capped || sending}
                 className={cn(ui.btnSecondary, "size-10 shrink-0 px-0 text-amber-200")}
-                aria-label="Send private message to the DM"
+                aria-label="Send private message to the GM"
               >
                 <Send className="size-4" />
               </button>

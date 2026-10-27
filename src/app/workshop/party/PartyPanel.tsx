@@ -189,7 +189,7 @@ export function PartyPanel({
                     ) : null}
                     {character.drafted ? (
                       <span className={cn(chip, "border-sky-800 text-sky-200/90")} data-pregen-drafted={character.id}>
-                        Drafted by the AI DM
+                        Drafted by the AI GM
                       </span>
                     ) : null}
                     {offLevel ? (
@@ -228,7 +228,7 @@ export function PartyPanel({
             );
           })}
           {pregens.length === 0 ? (
-            <li className="sm:col-span-2"><EmptyState art="board" title="No pregens yet. Let the AI DM draft some, pick one from your library below, or build one and come back." /></li>
+            <li className="sm:col-span-2"><EmptyState art="board" title="No pregens yet. Let the AI GM draft some, pick one from your library below, or build one and come back." /></li>
           ) : null}
         </ul>
         </>

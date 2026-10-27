@@ -50,7 +50,7 @@ export function storyWindowVerdict(tokens: number): { level: StoryWindowLevel; t
   if (tokens < MIN_NARRATION_WINDOW) {
     return {
       level: "short",
-      text: `${size} window is too small to narrate: the DM's instructions and tools leave no room for the story. ${STORY_WINDOW_NEEDS}`,
+      text: `${size} window is too small to narrate: the GM's instructions and tools leave no room for the story. ${STORY_WINDOW_NEEDS}`,
     };
   }
   if (tokens < MIN_COMBAT_WINDOW) {

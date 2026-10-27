@@ -17,7 +17,7 @@ import { textKey } from "@/lib/language/text-logic";
 
 export const EMPTY_TURN_LINE = "The moment hangs there, waiting on the party's next move.";
 export const RESOLVED_TURN_LINE =
-  "Your action went through, and its dice and changes are on the table, but the DM gave no narration for it. Go on with your next move.";
+  "Your action went through, and its dice and changes are on the table, but the GM gave no narration for it. Go on with your next move.";
 
 const PLAYER_ACTION_TOOLS = new Set([
   "cast_at_enemy",
@@ -52,7 +52,7 @@ type ToolCallLike = { id?: string; name?: string; function?: { name?: string } }
 export function emptyTurnLine(conversation: ChatMessage[], player?: EmptyTurnPlayer | null): string {
   const outcome = lastActionOutcome(conversation);
   if (outcome?.refusal) {
-    return `The DM could not resolve that: ${outcome.refusal} ${CARDS_HINT}`;
+    return `The GM could not resolve that: ${outcome.refusal} ${CARDS_HINT}`;
   }
   if (outcome?.resolved) {
     return RESOLVED_TURN_LINE;
@@ -119,15 +119,15 @@ function explainLooseAction(player: EmptyTurnPlayer): string {
     .sort((a, b) => b.length - a.length)
     .find((spell) => lower.includes(textKey(spell)));
   if (!named) {
-    return `The DM had no answer to that. Try again saying plainly what your character does, and to whom or what; for a spell, its name as it is on your sheet, the slot level and the target. ${CARDS_HINT}`;
+    return `The GM had no answer to that. Try again saying plainly what your character does, and to whom or what; for a spell, its name as it is on your sheet, the slot level and the target. ${CARDS_HINT}`;
   }
   const waiting = player.notReady?.(named);
   if (waiting) {
-    return `The DM could not resolve that: ${waiting}`;
+    return `The GM could not resolve that: ${waiting}`;
   }
   const level = player.levelOf(named);
   const slot = level === 0 ? "" : ` using a level ${level ?? 1} slot`;
-  return `The DM could not resolve ${named}. Try again with the spell, slot and target spelled out, for example "I cast ${named}${slot} on myself." ${CARDS_HINT}`;
+  return `The GM could not resolve ${named}. Try again with the spell, slot and target spelled out, for example "I cast ${named}${slot} on myself." ${CARDS_HINT}`;
 }
 
 // Tool errors often go on to coach the model ("spend the slot with

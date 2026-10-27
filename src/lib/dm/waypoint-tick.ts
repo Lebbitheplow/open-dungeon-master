@@ -123,7 +123,7 @@ export async function judgeWaypoints(campaignId: string, sinceSeq: number): Prom
     const recent = listMessagesInSeqRange(campaignId, sinceSeq, latestSeq(campaignId))
       .filter((message) => message.authorType !== "system")
       .slice(-8)
-      .map((message) => `${message.authorType === "dm" ? "DM" : "Player"}: ${message.content}`)
+      .map((message) => `${message.authorType === "dm" ? "GM" : "Player"}: ${message.content}`)
       .join("\n\n")
       .slice(-6_000);
     if (!recent) {

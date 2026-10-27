@@ -20,7 +20,7 @@ const ROWS = [
   {
     tag: "Type",
     title: "Or type your move",
-    body: "The message box still takes prose for anything the cards do not cover. Both land in the same chronicle, and the Dungeon Master rules on both the same way.",
+    body: "The message box still takes prose for anything the cards do not cover. Both land in the same chronicle, and the Game Master rules on both the same way.",
     className: "border-stone-600/50 bg-stone-950/60",
     tagClassName: "border-stone-500/60 text-stone-300",
   },

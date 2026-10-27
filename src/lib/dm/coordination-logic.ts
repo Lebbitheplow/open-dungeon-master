@@ -376,8 +376,8 @@ export function resolvedNote(phase: Pick<CoordinationPhase, "entries">): string 
   const asked = entries.filter((entry) => entry.companion && entry.text);
   return [
     sequence
-      ? `The party acts in order: ${sequence.map((ids, index) => `${index + 1}. ${listWords(ids.map(nameOf))}${ids.length > 1 ? " together" : ""}`).join("; ")}. The DM resolves the plan as one scene, step by step.`
-      : "The party acts together; the DM resolves the plan as one moment.",
+      ? `The party acts in order: ${sequence.map((ids, index) => `${index + 1}. ${listWords(ids.map(nameOf))}${ids.length > 1 ? " together" : ""}`).join("; ")}. The GM resolves the plan as one scene, step by step.`
+      : "The party acts together; the GM resolves the plan as one moment.",
     ...asked.map((entry) => `${entry.requestedBy ?? "The party"} asked ${entry.name} to ${entry.text}.`),
     ...(passed.length ? [`Passed: ${passed.join(", ")}.`] : []),
   ].join(" ");

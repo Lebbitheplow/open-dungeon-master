@@ -38,7 +38,7 @@ test("a refused spell says why, first sentence only", () => {
       refused: "rules",
     }),
   ]);
-  assert.match(line, /^The DM could not resolve that: No content pack knows "Guardian Angel"\. You can/);
+  assert.match(line, /^The GM could not resolve that: No content pack knows "Guardian Angel"\. You can/);
   assert.ok(!line.includes("set_condition"));
 });
 
@@ -79,7 +79,7 @@ test("a message naming no spell on the sheet gets the plain hint, which says wha
 
 test("a spell waiting for the long rest says so", () => {
   const player = { ...mage("cast ambush"), notReady: (spell) => `${spell} is chosen but not prepared yet.` };
-  assert.equal(emptyTurnLine([], player), "The DM could not resolve that: Ambush is chosen but not prepared yet.");
+  assert.equal(emptyTurnLine([], player), "The GM could not resolve that: Ambush is chosen but not prepared yet.");
 });
 
 test("only a rules refusal reaches the table: a retry or a limit is the model's to answer", () => {

@@ -48,7 +48,7 @@ export { LIVING_WORLD_INFO } from "@/app/campaigns/[campaignId]/GameSettingsGrou
 export const BONDS_INFO = [
   "How each NPC and AI companion feels about each character, tracked by the server on one meter from hostile through neutral to devoted.",
   "Deeds move it, and the same deed lands differently on different people: mercy wins over a kind healer and irritates a hard-bitten mercenary.",
-  "Standing shows in the Bonds tab and colors how the DM plays them. Off: the DM tracks no personal standing and NPCs react to the party as a whole.",
+  "Standing shows in the Bonds tab and colors how the GM plays them. Off: the GM tracks no personal standing and NPCs react to the party as a whole.",
 ].join("\n\n");
 
 export const ROMANCE_INFO = [
@@ -58,8 +58,8 @@ export const ROMANCE_INFO = [
 ].join("\n\n");
 
 export const NARRATION_GUARD_INFO = [
-  "After each turn the server compares the DM's narration against what the dice and tools actually resolved: a hit written on a miss, a death the hit points deny, a damage number no die rolled.",
-  "A contradiction is sent back to the DM once for a rewrite. Nothing on any sheet changes either way.",
+  "After each turn the server compares the GM's narration against what the dice and tools actually resolved: a hit written on a miss, a death the hit points deny, a damage number no die rolled.",
+  "A contradiction is sent back to the GM once for a rewrite. Nothing on any sheet changes either way.",
   "Off costs nothing but the check, and the narration is persisted exactly as written.",
 ].join("\n\n");
 
@@ -232,13 +232,13 @@ export function GameSettingsPanel({
       <section className="panel mb-6 rounded-xl p-4" data-table-settings="read">
         {heading ? <SectionHead title="Table settings" glyph="tab-settings" level="h2" /> : null}
         <p className="mb-2 text-xs text-stone-500">
-          {settings.dmMode === "ai" ? "The party lead" : "The DM"} sets these for everyone at this table.
+          {settings.dmMode === "ai" ? "The party lead" : "The GM"} sets these for everyone at this table.
         </p>
         <div className="stagger flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-stone-300">
           <span className="flex items-center gap-1.5">
             <GameIcon icon={{ kind: "glyph", key: "system-region" }} size="size-5" />
             {selectedPack?.name ?? preset.name}
-            {settings.dmMode === "human" ? " · human DM" : settings.dmMode === "steered" ? " · AI narrates, a person steers" : ""}
+            {settings.dmMode === "human" ? " · human GM" : settings.dmMode === "steered" ? " · AI narrates, a person steers" : ""}
             {settings.dmMode !== "human" && settings.aiStorySetup ? " · AI story setup" : ""}
             {settings.dmMode !== "human"
               ? ` · ${CAMPAIGN_LENGTH_LABELS[settings.campaignLength].split(" (")[0]} campaign`

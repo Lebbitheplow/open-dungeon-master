@@ -138,7 +138,7 @@ await test("Ask answers from the world's passages, hidden truths marked as the D
   // The stand-in cites nothing, so nothing is shown as a source.
   assert.deepEqual(result.sources, []);
   const sent = requests.at(-1).messages.at(-1).content;
-  assert.match(sent, /\] Ivo Brannock \(Character\), hidden truth, DM only\nIvo sold the sluice codes/);
+  assert.match(sent, /\] Ivo Brannock \(Character\), hidden truth, GM only\nIvo sold the sluice codes/);
   assert.match(sent, /# The question\nWho sold the codes\?/);
 });
 

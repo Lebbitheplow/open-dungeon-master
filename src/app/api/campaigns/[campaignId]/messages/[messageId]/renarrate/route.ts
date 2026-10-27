@@ -67,14 +67,14 @@ export async function POST(
   const latest = getLatestDmMessage(campaignId);
   if (!latest || latest.id !== messageId) {
     return Response.json(
-      { error: "Only the DM's most recent message can be rerolled." },
+      { error: "Only the GM's most recent message can be rerolled." },
       { status: 400 },
     );
   }
   // A turn in flight is about to replace this narration anyway, and the
   // reroll would queue behind it and rewrite the wrong message.
   if (getDmStatus(campaignId) !== "idle") {
-    return Response.json({ error: "The DM is mid-turn; try again after." }, { status: 409 });
+    return Response.json({ error: "The GM is mid-turn; try again after." }, { status: 409 });
   }
 
   const result = await runRenarrate({
