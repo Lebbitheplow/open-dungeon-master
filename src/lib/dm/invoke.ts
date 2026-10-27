@@ -366,7 +366,13 @@ export async function invokeEngine(
   saveDmTurn(turn);
 
   if (typeof result.error === "string") {
-    return { ok: false, ...toolError(result) };
+    const refusal = toolError(result);
+    // An attack out of reach names the square to walk to in the model's own
+    // tool words (map-tools.ts checkPcAttackRange): a model or an agent
+    // reads them after the sentence, a person never sees them.
+    return actor.kind === "ai" && typeof result.closeIn === "string"
+      ? { ok: false, ...refusal, error: `${refusal.error} ${result.closeIn}` }
+      : { ok: false, ...refusal };
   }
   return { ok: true, result, turnId: turn.id };
 }

@@ -835,7 +835,7 @@ export function checkPcAttackRange(
     // saved without one still do.
     longRangeTiles?: number;
   },
-): ToolError | null {
+): (ToolError & { closeIn?: string }) | null {
   const map = getBattleMapForEncounter(encounterId);
   if (!map) {
     return null;
@@ -875,8 +875,13 @@ export function checkPcAttackRange(
     return { error: `${attacker.name} is ${distance * 5} ft from ${target.name}, beyond this attack's ${maxTiles * 5} ft maximum range. They must move their token closer or pick another target.`, retry: true };
   }
   // Named, so a model that cannot count tiles knows where the walk ends.
+  // The directions name the model's own tools, so they ride beside the
+  // sentence: a person refused at the Hand or the console reads the
+  // sentence alone, and a model reads both (src/lib/dm/invoke.ts).
   const enemy = listEnemies(encounterId).find((entry) => entry.id === target.refId);
   const square = openSquaresBeside(encounterId, map, attacker, target, footprintForSize(enemy?.stats.size))[0];
-  const where = square ? ` When their player said they close in, send the attack again with approach true: the server walks them to (${square.x},${square.y}), the nearest open square beside ${target.name}, and attacks. The nearest open square beside ${target.name} is (${square.x},${square.y}): move_token ${attacker.name} there, then attack.` : "";
-  return { error: `${attacker.name} is ${distance * 5} ft from ${target.name}, out of melee reach (${options.reachTiles * 5} ft). They must move their token adjacent first or attack with a ranged weapon.${where}`, retry: true };
+  const refusal = { error: `${attacker.name} is ${distance * 5} ft from ${target.name}, out of melee reach (${options.reachTiles * 5} ft). They must move their token adjacent first or attack with a ranged weapon.`, retry: true as const };
+  return square
+    ? { ...refusal, closeIn: `When their player said they close in, send the attack again with approach true: the server walks them to (${square.x},${square.y}), the nearest open square beside ${target.name}, and attacks. The nearest open square beside ${target.name} is (${square.x},${square.y}): move_token ${attacker.name} there, then attack.` }
+    : refusal;
 }
