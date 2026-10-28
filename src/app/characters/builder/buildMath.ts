@@ -13,6 +13,7 @@ import { pickedVariant, type SpeciesVariantGroup } from "@/lib/content/species-v
 import { SRD_SKILLS, findSkill, formatModifier, proficiencyBonus, type DerivedPart } from "@/lib/srd";
 import { ABILITY_NAMES } from "@/lib/srd/legality/types";
 import { armorClassLine, hitPointsLine } from "./derivedReasons";
+import { casterLevelFor } from "@/lib/srd/multiclass";
 import type { BuilderDerived } from "./useBuilderDerived";
 
 const ABILITIES: Ability[] = ["str", "dex", "con", "int", "wis", "cha"];
@@ -45,7 +46,7 @@ export type BuildMathInput = {
     | "abilityGains"
   > &
     // A character with levels in more than one class (backlog F9).
-    Partial<Pick<BuilderDerived, "extras" | "casterKlass" | "casterLevel" | "pactSlots" | "multiclass">>;
+    Partial<Pick<BuilderDerived, "extras" | "casterKlass" | "casterLevel" | "pactSlots" | "multiclass" | "casterDesks" | "classList">>;
   // The scores as assigned, before the race's bonus.
   scores: Record<Ability, number | null>;
   klass: { name: string; hitDie: number } | undefined;
@@ -181,10 +182,35 @@ export function buildMathSections({ derived, scores, klass, atTable }: BuildMath
   });
 
   // The table the slots are read from: the casting class's at its own
-  // level, the first class's for a single class.
-  const slotTable = derived.multiclass && derived.casterKlass
-    ? `${derived.casterKlass.name} table at ${derived.casterKlass.name.toLowerCase()} level ${derived.casterLevel ?? effectiveLevel}`
-    : `${klass.name} table at level ${effectiveLevel}`;
+  // level, the first class's for a single class, and the shared multiclass
+  // table at the combined caster level for two or more (backlog F9).
+  const slotDesks = (derived.casterDesks ?? []).filter((desk) => desk.klass.casterType !== "pact" && desk.maxSpellLevel > 0);
+  const slotTable =
+    derived.multiclass && slotDesks.length > 1
+      ? `multiclass table at caster level ${casterLevelFor(derived.classList ?? [])}`
+      : derived.multiclass && derived.casterKlass
+        ? `${derived.casterKlass.name} table at ${derived.casterKlass.name.toLowerCase()} level ${derived.casterLevel ?? effectiveLevel}`
+        : `${klass.name} table at level ${effectiveLevel}`;
+  // With more than one casting class each has its own save DC and attack,
+  // from its own ability (backlog F9, phase 2).
+  const desks = (derived.casterDesks ?? []).filter((desk) => desk.ability && desk.spellSaveDc !== null);
+  const perClass = derived.multiclass && desks.length > 1;
+  const deskRows = perClass
+    ? desks.flatMap((desk) => [
+        {
+          id: `spell-dc-${desk.classId}`,
+          label: `${desk.klass.name} spell save DC`,
+          value: String(desk.spellSaveDc),
+          working: `8, proficiency ${formatModifier(sheet.proficiencyBonus)}, ${(desk.ability ?? "").toUpperCase()} modifier ${formatModifier((desk.spellSaveDc ?? 8) - 8 - sheet.proficiencyBonus)}`,
+        },
+        {
+          id: `spell-attack-${desk.classId}`,
+          label: `${desk.klass.name} spell attack`,
+          value: formatModifier(desk.spellAttack ?? 0),
+          working: `proficiency ${formatModifier(sheet.proficiencyBonus)}, ${(desk.ability ?? "").toUpperCase()} modifier ${formatModifier((desk.spellAttack ?? 0) - sheet.proficiencyBonus)}`,
+        },
+      ])
+    : [];
   const slotRows = [
     ...SLOT_LEVELS.flatMap(([level, ordinal]) => {
       const slot = derived.spellSlots[level];
@@ -204,15 +230,16 @@ export function buildMathSections({ derived, scores, klass, atTable }: BuildMath
         ]
       : []),
   ];
-  if (sheet.spellSaveDc !== null || slotRows.length) {
+  if (sheet.spellSaveDc !== null || slotRows.length || deskRows.length) {
     sections.push({
       id: "spells",
       title: "Spellcasting",
       rows: [
-        ...(sheet.spellSaveDc !== null
+        ...deskRows,
+        ...(sheet.spellSaveDc !== null && !perClass
           ? [{ id: "spell-dc", label: "Spell save DC", value: String(sheet.spellSaveDc), working: workingOf(sheet.parts.spellSaveDc) }]
           : []),
-        ...(sheet.spellAttack !== null
+        ...(sheet.spellAttack !== null && !perClass
           ? [{ id: "spell-attack", label: "Spell attack", value: formatModifier(sheet.spellAttack), working: workingOf(sheet.parts.spellAttack) }]
           : []),
         ...slotRows,

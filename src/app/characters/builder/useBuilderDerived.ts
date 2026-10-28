@@ -36,7 +36,8 @@ import {
 import { suggestWeapons } from "@/lib/srd/weapons";
 import { abilityGains } from "./abilityGains";
 import { builderCasting, builderClassListSlots, builderSpellAdvice, builderSpellSlots } from "./casting";
-import { builderAsiSlotLevels, castingIndexOf, primaryLevelOf, type ExtraClass } from "./multiclassBuild";
+import { builderAsiSlotLevels, castingIndexOf, classCasts, primaryLevelOf, type ExtraClass, type SpellLists } from "./multiclassBuild";
+import { abilityMod, proficiencyBonus } from "@/lib/srd";
 import { grantedSkillSources } from "./reconcile";
 import { authoredFeatDesc } from "@/lib/srd/feat-effects";
 import { applyFeatGrants, featGrantSpec, type FeatGrantSpec } from "@/lib/srd/feat-grants";
@@ -121,6 +122,105 @@ export function extraClassRows(extras: ReadonlyArray<ExtraClass> | undefined, cl
 }
 
 const NO_EXTRAS: ExtraClassRow[] = [];
+const NO_LISTS: SpellLists = { spells: [], bookPrepared: [], cantrips: [] };
+
+// One casting class's spell desk (backlog F9, phase 2): what it casts at its
+// own level, its counts, its lists and the picks it has made, under the same
+// names the lead's carry on the derived object, so the spell step, its gate
+// and the fill read any class's the way they read the lead's.
+export type CasterDesk = {
+  classId: string;
+  klass: ClassOption;
+  // The class whose lists are the builder's own spell fields.
+  lead: boolean;
+  casterKlass: ClassOption;
+  casterSubclass: string;
+  casterLevel: number;
+  casts: boolean;
+  spellSearchClass: string;
+  maxSpellLevel: number;
+  spellWider: { spells: string[]; lists: string[] };
+  cantripAdvice: number | null;
+  spellAdvice: ReturnType<typeof builderSpellAdvice>;
+  starters: ReturnType<typeof starterSpellsFor> | null;
+  subclassSpells: string[];
+  castingLabel: string;
+  spellStyle: SpellStyle | null;
+  spellbookAdvice: number | null;
+  racialCantrips: string[];
+  featSpells: { cantrips: string[]; spells: string[] };
+  chosenCantrips: string[];
+  chosenSpells: string[];
+  chosenPrepared: string[];
+  spellSupply: ReturnType<typeof bundledSpellSupply> | null;
+  ability: "int" | "wis" | "cha" | null;
+  spellSaveDc: number | null;
+  spellAttack: number | null;
+  lists: SpellLists;
+};
+
+// A casting class's desk worked out from its row, its level and its lists;
+// the lead's comes from the derivation itself.
+function casterDeskOf(
+  row: ClassOption,
+  subclass: string,
+  level: number,
+  lists: SpellLists,
+  abilities: AbilityScores | null,
+  characterLevel: number,
+): CasterDesk {
+  const casting = builderCasting(row, subclass, level);
+  const casts = casting.casts;
+  const subclassSpells = casts ? subclassSpellsFor(row.id, subclass, level) : [];
+  const spellWider = casts
+    ? { spells: subclassExpandedSpellsFor(row.id, subclass, level), lists: subclassSpellListsFor(row.id, subclass) }
+    : { spells: [], lists: [] };
+  const spellStyle: SpellStyle | null = !casts
+    ? null
+    : casting.third
+      ? "known"
+      : row.knownCaster === true
+        ? "known"
+        : row.knownCaster === false && spellStyleFor(row.id) === "known"
+          ? "prepared"
+          : spellStyleFor(row.id);
+  const free = new Set(subclassSpells.map(textKey));
+  const chosenSpells = lists.spells.filter((name) => !free.has(textKey(name)));
+  const book = new Set(lists.spells.map(textKey));
+  const mod = abilities && casting.ability ? abilityMod(abilities[casting.ability]) : null;
+  return {
+    classId: row.id,
+    klass: row,
+    lead: false,
+    casterKlass: row,
+    casterSubclass: subclass,
+    casterLevel: level,
+    casts,
+    spellSearchClass: casting.list,
+    maxSpellLevel: casting.maxSpellLevel,
+    spellWider,
+    cantripAdvice: casting.cantripCap,
+    spellAdvice: casts && abilities ? builderSpellAdvice(casting, row, subclass, level, abilities) : null,
+    starters: casts ? starterSpellsFor(casting.profile ?? row.id) : null,
+    subclassSpells,
+    castingLabel: casts ? row.castingLabel || "spells" : "",
+    spellStyle,
+    spellbookAdvice: spellStyle === "spellbook" ? spellbookAllowance(level) : null,
+    racialCantrips: [],
+    featSpells: { cantrips: [], spells: [] },
+    chosenCantrips: lists.cantrips,
+    chosenSpells,
+    chosenPrepared: spellStyle === "spellbook" ? lists.bookPrepared.filter((name) => book.has(textKey(name))) : chosenSpells,
+    spellSupply:
+      casts && !casting.third
+        ? bundledSpellSupply({ spellClass: casting.list, maxSpellLevel: casting.maxSpellLevel, wider: spellWider, free: subclassSpells })
+        : null,
+    ability: casting.ability,
+    spellSaveDc: mod === null ? null : 8 + proficiencyBonus(characterLevel) + mod,
+    spellAttack: mod === null ? null : proficiencyBonus(characterLevel) + mod,
+    lists,
+  };
+}
 
 export function useBuilderDerived({
   state,
@@ -472,9 +572,10 @@ export function useBuilderDerived({
     });
   }, [shownAbilities, klass, subclass, effectiveLevel, multiclass, classList, extras, race, state.feats, activeAsiChoices, rules?.hpMethod, hpOverride, storedHp]);
 
-  // The class that casts, at its own level: the first class for a single
-  // class, else the one in the list that casts (phase 1 of F9 builds one
-  // casting class; castingIndexOf). Every spell count below is its.
+  // The class that leads the spell lists, at its own level: the first class
+  // for a single class, else the first in the list with something to cast
+  // (castingIndexOf). The derived spell values below are its; each other
+  // casting class has its own desk (casterDesks).
   const caster = useMemo(() => {
     if (!klass) {
       return null;
@@ -938,6 +1039,64 @@ export function useBuilderDerived({
     [casts, casting.third, spellSearchClass, maxSpellLevel, spellWider, racialCantrips, featSpells, subclassSpells],
   );
 
+  // Every casting class's desk (backlog F9, phase 2), in the order the
+  // classes were taken: the lead's from the values above, each other one's
+  // from its own lists (state.casterSpells) at its own level. The race's
+  // and the feats' spells ride with the lead's, as the server writes them.
+  const casterSpellLists = state.casterSpells;
+  const leadIndex = caster?.index ?? -1;
+  const casterDesks = useMemo<CasterDesk[]>(() => {
+    if (!klass) {
+      return [];
+    }
+    const rows = [klass, ...extras.map((entry) => entry.klass)];
+    return classList.flatMap((entry, index): CasterDesk[] => {
+      const row = rows[index];
+      if (index === leadIndex && casterKlass) {
+        return [
+          {
+            classId: casterKlass.id,
+            klass: casterKlass,
+            lead: true,
+            casterKlass,
+            casterSubclass,
+            casterLevel,
+            casts,
+            spellSearchClass,
+            maxSpellLevel,
+            spellWider,
+            cantripAdvice,
+            spellAdvice,
+            starters,
+            subclassSpells,
+            castingLabel,
+            spellStyle,
+            spellbookAdvice,
+            racialCantrips,
+            featSpells,
+            chosenCantrips,
+            chosenSpells,
+            chosenPrepared,
+            spellSupply,
+            ability: casting.ability,
+            spellSaveDc: preview?.derived.spellSaveDc ?? null,
+            spellAttack: preview?.derived.spellAttack ?? null,
+            lists: { spells, bookPrepared, cantrips },
+          },
+        ];
+      }
+      if (!multiclass || !classCasts(row, entry.subclass ?? "", entry.level)) {
+        return [];
+      }
+      return [casterDeskOf(row, entry.subclass ?? "", entry.level, casterSpellLists?.[row.id] ?? NO_LISTS, shownAbilities, effectiveLevel)];
+    });
+  }, [
+    klass, extras, classList, leadIndex, multiclass, casterSpellLists, shownAbilities, effectiveLevel, casterKlass, casterSubclass,
+    casterLevel, casts, spellSearchClass, maxSpellLevel, spellWider, cantripAdvice, spellAdvice, starters, subclassSpells,
+    castingLabel, spellStyle, spellbookAdvice, racialCantrips, featSpells, chosenCantrips, chosenSpells, chosenPrepared,
+    spellSupply, casting.ability, preview, spells, bookPrepared, cantrips,
+  ]);
+
   return {
     effectiveLevel,
     // The class list (backlog F9) and what reads it: the first class's
@@ -953,6 +1112,7 @@ export function useBuilderDerived({
     casterKlass,
     casterSubclass,
     casterLevel,
+    casterDesks,
     pactSlots,
     featuresByClass,
     expertiseSlots,

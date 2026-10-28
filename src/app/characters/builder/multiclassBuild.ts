@@ -22,6 +22,8 @@ import { subclassCastingProfileFor, subclassLevelFor } from "@/lib/srd/features"
 import { MULTICLASS_CAP, canMulticlassInto, describeGrant, describePrereq, meetsPrereq, multiclassGrantsFor } from "@/lib/srd/multiclass";
 import { thirdCasterProfileOf } from "@/lib/srd/third-caster";
 import { findClass } from "@/lib/srd";
+import { spellLevelOf } from "@/lib/srd/spell-lists";
+import { builderCasting } from "./casting";
 import { textKey } from "@/lib/language/text-logic";
 
 // One class taken after the first: its id, its subclass once its level
@@ -156,12 +158,76 @@ export function classCasts(row: ClassRow | undefined, subclass = "", level = 1):
   return profile !== null && level >= 3;
 }
 
-// The place in the class list of the class whose spells the builder's one
-// spell list holds: the first that casts, or -1. Phase 1 of F9 builds one
-// casting class; a stored character with two keeps the second's lists as
-// they were (submit.ts keptSpellcasting).
-export function castingIndexOf(entries: ReadonlyArray<{ row: ClassRow | undefined; subclass: string; level: number }>): number {
-  return entries.findIndex((entry) => classCasts(entry.row, entry.subclass, entry.level));
+export type CasterEntry = { row: ClassRow | undefined; subclass: string; level: number };
+
+// The place in the class list of the class whose spells the builder's own
+// spell fields hold (the lead caster): the first class that has something
+// to cast at its level, else the first casting class, or -1. A paladin of
+// 1st level beside a wizard casts nothing yet, so the wizard leads.
+export function castingIndexOf(entries: ReadonlyArray<CasterEntry>): number {
+  const casting = entries.flatMap((entry, index) => (classCasts(entry.row, entry.subclass, entry.level) ? [index] : []));
+  return casting.find((index) => builderCasting(entries[index].row, entries[index].subclass, entries[index].level).casts) ?? casting[0] ?? -1;
+}
+
+// Which class leads the spell lists and which other classes cast, by id
+// (backlog F9, phase 2). One class leads whether it casts or not, as the
+// single-class builder always has.
+export function castersOf(entries: ReadonlyArray<CasterEntry>): { lead: string | null; others: string[] } {
+  if (entries.length < 2) {
+    return { lead: entries[0]?.row?.id ?? null, others: [] };
+  }
+  const at = castingIndexOf(entries);
+  const lead = at >= 0 ? (entries[at].row?.id ?? null) : null;
+  const others = entries.flatMap((entry, index) =>
+    index !== at && entry.row && classCasts(entry.row, entry.subclass, entry.level) ? [entry.row.id] : [],
+  );
+  return { lead, others };
+}
+
+// One casting class's own lists, the shape the builder's spell fields keep:
+// for a wizard `spells` is the book and `bookPrepared` what is prepared.
+export type SpellLists = { spells: string[]; bookPrepared: string[]; cantrips: string[] };
+
+export const NO_SPELL_LISTS: SpellLists = { spells: [], bookPrepared: [], cantrips: [] };
+
+// The lists keyed again when the class that leads changes: each class keeps
+// its own, whichever field holds them, and a class that no longer casts
+// takes its lists with it.
+export function rekeySpellLists(
+  lead: SpellLists,
+  others: Readonly<Record<string, SpellLists>>,
+  before: string | null,
+  after: { lead: string | null; others: string[] },
+): { lead: SpellLists; others: Record<string, SpellLists> } {
+  const byClass: Record<string, SpellLists> = { ...others };
+  if (before) {
+    byClass[before] = lead;
+  }
+  const nextLead = before === after.lead ? lead : after.lead ? (byClass[after.lead] ?? NO_SPELL_LISTS) : NO_SPELL_LISTS;
+  return {
+    lead: nextLead,
+    others: Object.fromEntries(after.others.map((id) => [id, byClass[id] ?? NO_SPELL_LISTS])),
+  };
+}
+
+// A casting class's own lists held to what it casts at its level, as
+// reconcile.ts holds the lead's: no cantrips where it has none, no spell
+// above the level its slots reach, nothing prepared that is not in the book.
+export function fitSpellLists(lists: SpellLists, entry: CasterEntry): { lists: SpellLists; dropped: string[] } {
+  const { casts, cantripCap, maxSpellLevel } = builderCasting(entry.row, entry.subclass, entry.level);
+  const unique = (names: string[]) => [...new Map(names.filter(Boolean).map((name) => [textKey(name), name])).values()];
+  const cantrips = casts && cantripCap !== null ? unique(lists.cantrips) : [];
+  const spells = casts
+    ? unique(lists.spells).filter((name) => {
+        const level = spellLevelOf(name);
+        return level === null || (level > 0 && level <= maxSpellLevel);
+      })
+    : [];
+  const book = new Set(spells.map(textKey));
+  const bookPrepared = unique(lists.bookPrepared).filter((name) => book.has(textKey(name)));
+  const kept = new Set([...cantrips, ...spells].map(textKey));
+  const dropped = unique([...lists.cantrips, ...lists.spells]).filter((name) => !kept.has(textKey(name)));
+  return { lists: { spells, bookPrepared, cantrips }, dropped };
 }
 
 // Every Ability Score Improvement the class list has earned, by the
@@ -218,9 +284,8 @@ export type MulticlassChoice = {
 // reason it may not where it may not (the level-up dialog's list,
 // LevelUpDialog.tsx). Before the scores are set the prerequisites cannot be
 // judged: every class is offered with what it needs, and the Abilities
-// step holds the build until the scores meet it. Phase 1 holds one casting
-// class: a second beside a class that already casts is offered as not yet
-// available.
+// step holds the build until the scores meet it. `rows` are the classes the
+// class grid offers this table, in its order.
 export function multiclassChoices(input: {
   rows: ReadonlyArray<ClassRow>;
   classList: ReadonlyArray<ClassEntry>;
@@ -228,8 +293,6 @@ export function multiclassChoices(input: {
   rowOf: (id: string) => ClassRow | undefined;
 }): MulticlassChoice[] {
   const held = new Set(input.classList.map((entry) => textKey(entry.id)));
-  const caster = input.classList.find((entry) => classCasts(input.rowOf(entry.id), entry.subclass ?? "", entry.level));
-  const casterName = caster ? (input.rowOf(caster.id)?.name ?? caster.id) : "";
   const [first] = input.classList;
   const choices = input.rows
     .filter((row) => !held.has(textKey(row.id)))
@@ -239,8 +302,6 @@ export function multiclassChoices(input: {
       let reason: string | null = null;
       if (input.classList.length >= MULTICLASS_CAP) {
         reason = `A character holds at most ${MULTICLASS_CAP} classes here.`;
-      } else if (casterName && classCasts(row)) {
-        reason = `Not available yet: the builder holds one spellcasting class for now, and your ${casterName} already casts.`;
       } else if (input.abilities) {
         const check = canMulticlassInto({ class: first?.id ?? "", classes: [...input.classList], abilities: input.abilities }, row.id);
         if (!check.ok) {

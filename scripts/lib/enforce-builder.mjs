@@ -92,6 +92,7 @@ export async function openBuilder() {
       subclass: "",
       // The classes taken after the first (backlog F9): none for one class.
       extraClasses: [],
+      casterSpells: {},
       storedClassCount: 0,
       storedCastingCount: 0,
       spells: [],

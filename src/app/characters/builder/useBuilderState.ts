@@ -31,7 +31,18 @@ import type { AbilityMethod, AbilityState } from "./AbilityEditor";
 import type { PoolEntry, PoolSlots } from "./abilityDice";
 import { reconcilePicks, type BuilderPicks, type DroppedPick } from "./reconcile";
 import { undoOutcome, type BuildUndo, type UndoBecause } from "./buildUndo";
-import { classCasts, fitExtraClasses, shedExtraLevels, splitStoredSkills, storedExtraClasses, type ExtraClass } from "./multiclassBuild";
+import {
+  castersOf,
+  fitExtraClasses,
+  fitSpellLists,
+  rekeySpellLists,
+  shedExtraLevels,
+  splitStoredSkills,
+  storedExtraClasses,
+  type CasterEntry,
+  type ExtraClass,
+  type SpellLists,
+} from "./multiclassBuild";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
 import { keyedFeatChoices, withFeatChoice } from "@/lib/schemas/sheet";
 import { textKey } from "@/lib/language/text-logic";
@@ -61,6 +72,10 @@ export type BuilderDraftFields = {
   // The classes taken after the first (backlog F9), in the order taken;
   // empty for a single class.
   extraClasses: ExtraClass[];
+  // The spell lists of each casting class but the one that leads (backlog
+  // F9, phase 2), by class id; the lead's are `spells`, `bookPrepared` and
+  // `cantrips` below. Empty for a single class.
+  casterSpells: Record<string, SpellLists>;
   backgroundId: string;
   method: AbilityMethod;
   scores: AbilityState;
@@ -173,18 +188,23 @@ export function useBuilderState({
   );
   // Levelled spells and cantrips are two lists, the way the sheet keeps them.
   // For a wizard `spells` is the spellbook and `bookPrepared` the part of it
-  // prepared; every other class leaves `bookPrepared` alone. A stored split
-  // with two casting classes (earned in play) opens on the first's own
-  // lists: the builder holds one casting class's spells, and the other's
-  // are kept as stored (submit.ts keptSpellcasting).
-  const storedLists = storedCasterLists(initial);
-  const [spells, setSpells] = useState<string[]>(() =>
-    storedLists
-      ? [...new Set([...(storedLists.spellbook ?? []), ...storedLists.known, ...storedLists.prepared])]
-      : [],
-  );
-  const [bookPrepared, setBookPrepared] = useState<string[]>(() => storedLists?.prepared ?? []);
-  const [cantrips, setCantrips] = useState<string[]>(() => (storedLists ? [...new Set(storedLists.cantrips ?? [])] : []));
+  // prepared; every other class leaves `bookPrepared` alone. These are the
+  // lead casting class's; a split with more than one casting class keeps
+  // each other one's in `casterSpells`, by class id (storedSpellLists).
+  const [storedSpells] = useState(() => storedSpellLists(initial));
+  const [spells, setSpells] = useState<string[]>(() => storedSpells.lead.spells);
+  const [bookPrepared, setBookPrepared] = useState<string[]>(() => storedSpells.lead.bookPrepared);
+  const [cantrips, setCantrips] = useState<string[]>(() => storedSpells.lead.cantrips);
+  const [casterSpells, setCasterSpells] = useState<Record<string, SpellLists>>(() => storedSpells.others);
+  // One casting class's lists set by the spell step: the lead's fields, or
+  // its entry in casterSpells. A list may be given as a value or an update.
+  function setCasterList(classId: string, key: keyof SpellLists, next: string[] | ((current: string[]) => string[])) {
+    setCasterSpells((current) => {
+      const lists = current[classId] ?? { spells: [], bookPrepared: [], cantrips: [] };
+      const value = typeof next === "function" ? next(lists[key]) : next;
+      return { ...current, [classId]: { ...lists, [key]: value } };
+    });
+  }
   const [equipment, setEquipment] = useState<EquipmentItem[]>(() =>
     (initial?.equipment ?? []).map((item) => ({
       name: item.name,
@@ -349,22 +369,58 @@ export function useBuilderState({
     setBookPrepared(next.bookPrepared);
     setCantrips(next.cantrips);
   }
-  type Selection = { raceId: string; classId: string; backgroundId: string; level: number; extraClasses: ExtraClass[] };
-  const selection: Selection = { raceId, classId, backgroundId, level, extraClasses };
+  type Selection = {
+    raceId: string;
+    classId: string;
+    backgroundId: string;
+    level: number;
+    extraClasses: ExtraClass[];
+    casterSpells: Record<string, SpellLists>;
+  };
+  const selection: Selection = { raceId, classId, backgroundId, level, extraClasses, casterSpells };
+  // The class list as the lists are keyed: the first class with the
+  // subclass given, then each class after it.
+  const casterEntriesOf = (primaryId: string, primarySubclass: string, total: number, extras: ExtraClass[]): CasterEntry[] => {
+    const primary = classes.find((row) => row.id === primaryId);
+    if (!primary) {
+      return [];
+    }
+    const others = extras.reduce((sum, entry) => sum + entry.level, 0);
+    return [
+      { row: primary, subclass: primarySubclass, level: Math.max(1, total - others) },
+      ...extras.map((entry) => ({ row: classes.find((row) => row.id === entry.classId), subclass: entry.subclass, level: entry.level })),
+    ];
+  };
   // The rows the builder shows for these ids. A race, class or background
   // not yet picked is none at all (CharacterBuilder.tsx does the same), so
   // the picks are checked against what is shown.
   // The classes after the first are kept valid against the first class and
   // the level before the picks are checked, since the first class's level
   // is what they leave (multiclassBuild.ts).
+  // The spell lists follow their class (backlog F9, phase 2): when the class
+  // that leads them changes, each class keeps its own lists, and a class no
+  // longer held, or no longer casting, takes its lists with it.
+  // `leadBefore` names the class the lead's fields hold now, where the
+  // render's own reading of it is not the one to trust (a stored character).
   function reconciled(
     next: Partial<Selection>,
     current: BuilderPicks,
-  ): { picks: BuilderPicks; drops: DroppedPick[]; extras: ExtraClass[] } {
+    leadBefore?: string | null,
+  ): { picks: BuilderPicks; drops: DroppedPick[]; extras: ExtraClass[]; casterSpells: Record<string, SpellLists> } {
     const ids = { ...selection, ...next };
     const background = backgrounds.find((entry) => entry.id === ids.backgroundId);
     const total = fixedLevel ?? ids.level;
     const fitted = fitExtraClasses(ids.extraClasses, { primaryId: ids.classId, total });
+    const before = leadBefore !== undefined ? leadBefore : castersOf(casterEntriesOf(classId, subclass, fixedLevel ?? level, extraClasses)).lead;
+    const afterEntries = casterEntriesOf(ids.classId, current.subclass, total, fitted);
+    const after = castersOf(afterEntries);
+    const keyed = rekeySpellLists(
+      { spells: current.spells, bookPrepared: current.bookPrepared, cantrips: current.cantrips },
+      ids.casterSpells,
+      before,
+      after,
+    );
+    current = { ...current, ...keyed.lead };
     const result = reconcilePicks(current, {
       race: findRace(races, ids.raceId),
       klass: classes.find((entry) => entry.id === ids.classId),
@@ -372,11 +428,24 @@ export function useBuilderState({
       level: total,
       extras: fitted.map((entry) => ({ ...entry, klass: classes.find((row) => row.id === entry.classId) })),
     });
-    const { picks, drops } = result;
+    const { picks } = result;
+    const drops = [...result.drops];
     // A class whose row has not arrived yet (a content pack's) keeps its
     // skill pick until it does.
     const extras = fitted.map((entry, index) =>
       classes.some((row) => row.id === entry.classId) ? { ...entry, skills: result.extraSkills[index] ?? [] } : entry,
+    );
+    // Each other casting class's lists held to what it casts at its level.
+    const casterLists = Object.fromEntries(
+      Object.entries(keyed.others).map(([id, lists]) => {
+        const entry = afterEntries.find((held) => held.row?.id === id);
+        if (!entry) {
+          return [id, lists];
+        }
+        const fit = fitSpellLists(lists, entry);
+        drops.push(...fit.dropped.map((value) => ({ label: `${entry.row?.name ?? id} spell`, value, target: "spells" as const })));
+        return [id, fit.lists];
+      }),
     );
     // A stored content-pack background is not in the bundled list the
     // builder opens with; its skill pick, and the skill picked in place of
@@ -387,9 +456,10 @@ export function useBuilderState({
         picks: { ...picks, backgroundSkills: current.backgroundSkills, repeatSkills: current.repeatSkills },
         drops: drops.filter((drop) => drop.target !== "backgroundSkills" && drop.target !== "repeatSkills"),
         extras,
+        casterSpells: casterLists,
       };
     }
-    return { picks, drops, extras };
+    return { picks, drops, extras, casterSpells: casterLists };
   }
   // Apply what still fits and say what did not. A change the player made
   // replaces the notice, so it always describes the last change, and clears
@@ -397,11 +467,17 @@ export function useBuilderState({
   // earlier notice alone unless they dropped something themselves.
   function applyReconciled(
     because: string,
-    { picks, drops, extras }: { picks: BuilderPicks; drops: DroppedPick[]; extras: ExtraClass[] },
+    {
+      picks,
+      drops,
+      extras,
+      casterSpells: lists,
+    }: { picks: BuilderPicks; drops: DroppedPick[]; extras: ExtraClass[]; casterSpells: Record<string, SpellLists> },
     keep = false,
   ) {
     applyPicks(picks);
     setExtraClasses(extras);
+    setCasterSpells(lists);
     if (drops.length) {
       setDropped({ because, drops });
     } else if (!keep) {
@@ -523,6 +599,8 @@ export function useBuilderState({
             expertisePicks: held.expertise ?? [],
             bonusLanguages: held.languages.filter((language) => !spoken.has(language)),
           },
+          // The lead's fields hold the stored first casting class's lists.
+          storedSpells.leadId,
         ),
         true,
       );
@@ -585,11 +663,8 @@ export function useBuilderState({
       keepUndo("class", className(classId), className(id));
     }
     setClassId(id);
-    // The spells stay when a class taken second holds them: they are its,
-    // not the first class's.
-    const spellsKept = extraClasses.some((entry) =>
-      classCasts(classes.find((row) => row.id === entry.classId), entry.subclass, entry.level),
-    );
+    // The old class's spells go with it as the lists are keyed again
+    // (reconciled); a class taken second keeps its own.
     setRemovedAutoNames([]);
     setKitChoices({ options: [], picks: [] });
     applyChange(
@@ -599,7 +674,6 @@ export function useBuilderState({
         ...picks,
         chosenSkills: [],
         subclass: "",
-        ...(spellsKept ? {} : { spells: [], bookPrepared: [], cantrips: [] }),
         optionPicks: [],
         stylePicks: [],
         expertisePicks: [],
@@ -708,6 +782,7 @@ export function useBuilderState({
     subclass: setSubclass,
     // A draft from before F9 has none.
     extraClasses: (value) => setExtraClasses(Array.isArray(value) ? value : []),
+    casterSpells: (value) => setCasterSpells(value && typeof value === "object" ? value : {}),
     backgroundId: setBackgroundId,
     method: setMethod,
     scores: setScores,
@@ -774,6 +849,8 @@ export function useBuilderState({
     if (patch.raceId !== undefined) ids.raceId = patch.raceId;
     if (patch.classId !== undefined) ids.classId = patch.classId;
     if (patch.backgroundId !== undefined) ids.backgroundId = patch.backgroundId;
+    if (patch.casterSpells !== undefined) ids.casterSpells = patch.casterSpells;
+    if (patch.extraClasses !== undefined) ids.extraClasses = patch.extraClasses;
     setFields(patch);
     if (Object.keys(ids).length) {
       const current = Object.fromEntries(
@@ -790,6 +867,7 @@ export function useBuilderState({
     classId,
     subclass,
     extraClasses,
+    casterSpells,
     backgroundId,
     method,
     scores,
@@ -848,11 +926,8 @@ export function useBuilderState({
     keepsStoredGear,
     levelFloor,
     // How many classes the stored character held when it was split, else
-    // 0, and how many of them cast: a split it came with stands at a table
-    // that turns multiclassing off, and a second casting class it earned in
-    // play keeps its own lists (submit.ts).
+    // 0: a split it came with stands at a table that turns multiclassing off.
     storedClassCount: (initial?.classes ?? []).length > 1 ? (initial?.classes ?? []).length : 0,
-    storedCastingCount: initial?.spellcasting?.casters?.length ?? (initial?.spellcasting ? 1 : 0),
     asiRecorded,
     asiReachedLevel,
     primalChampionHeld: initialHoldsPrimalChampion(initial, initialLevel),
@@ -868,6 +943,7 @@ export function useBuilderState({
     classId, changeClass,
     subclass, changeSubclass,
     extraClasses, addExtraClass, removeExtraClass, changeExtraLevel, changeExtraSubclass, changeExtraSkills,
+    casterSpells, setCasterList,
     backgroundId, changeBackground,
     method, setMethod,
     scores, setScores,
@@ -929,24 +1005,38 @@ export function findRace(races: RaceOption[], raceId: string): RaceOption | unde
   );
 }
 
-// The spell lists an edit opens on: the sheet's own, or on a split with
-// more than one casting class the first casting class's entry, in the order
-// the classes were taken.
-function storedCasterLists(initial: CreateSheetInput | undefined) {
+// The spell lists an edit opens on, and the class whose they are: a single
+// class's own lists; on a split, each casting class's own entry, the first
+// (in the order the classes were taken) in the lead's fields and the rest by
+// class id. The lead is keyed again once the class rows are at hand.
+export function storedSpellLists(initial: CreateSheetInput | undefined): {
+  lead: SpellLists;
+  others: Record<string, SpellLists>;
+  leadId: string | null;
+} {
   const casting = initial?.spellcasting;
+  const toLists = (lists: { known: string[]; prepared: string[]; cantrips?: string[]; spellbook?: string[] }): SpellLists => ({
+    spells: [...new Set([...(lists.spellbook ?? []), ...lists.known, ...lists.prepared])],
+    bookPrepared: lists.prepared,
+    cantrips: [...new Set(lists.cantrips ?? [])],
+  });
+  const split = (initial?.classes ?? []).length > 1;
   if (!casting) {
-    return null;
+    return { lead: { spells: [], bookPrepared: [], cantrips: [] }, others: {}, leadId: split ? null : (initial?.class ?? null) };
   }
-  if ((casting.casters?.length ?? 0) < 2) {
-    return casting;
+  if (!split || !casting.casters?.length) {
+    return { lead: toLists(casting), others: {}, leadId: split ? (initial?.classes?.[0]?.id ?? null) : (initial?.class ?? null) };
   }
-  for (const entry of initial?.classes ?? []) {
+  const ordered = (initial?.classes ?? []).flatMap((entry) => {
     const own = casting.casters?.find((caster) => textKey(caster.classId) === textKey(entry.id));
-    if (own) {
-      return own;
-    }
-  }
-  return casting;
+    return own ? [{ id: entry.id, lists: toLists(own) }] : [];
+  });
+  const [first, ...rest] = ordered;
+  return {
+    lead: first?.lists ?? toLists(casting),
+    others: Object.fromEntries(rest.map((entry) => [entry.id, entry.lists])),
+    leadId: first?.id ?? null,
+  };
 }
 
 // A stored barbarian at 20 whose scores carry Primal Champion's +4: what the

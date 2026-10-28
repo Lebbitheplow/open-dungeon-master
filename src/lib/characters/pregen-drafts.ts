@@ -139,6 +139,7 @@ function freshFields(proposal: HeroProposal, level: number, ids: { classId: stri
     subclass: "",
     // The engine drafts one class (backlog F9 leaves it single-class).
     extraClasses: [],
+    casterSpells: {},
     backgroundId: ids.backgroundId,
     method: "standard",
     scores: EMPTY_SCORES,

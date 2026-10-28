@@ -29,6 +29,9 @@ export default {
       await t.shot(name);
       if (extraShots) await page.screenshot({ path: path.join(extraShots, `${t.viewport}-${name}.png`) }).catch(() => {});
     };
+    // The seat's own request, and the confirm sheet a built hero may open.
+    let isSeatPost = () => false;
+    const sheet = page.locator(`${root}[data-join-confirm]`).locator("visible=true").first();
     const seatAt = async (tableId) => (await (await api.get(`${base}/api/campaigns/${tableId}/sheet`)).json()).sheet ?? null;
 
     // The builder at a table, on its class step with a fighter picked.
@@ -147,9 +150,8 @@ export default {
 
     // The hero built here seats as it is saved; a confirm sheet, where one
     // opens, is taken. Both waits start before the press.
-    const isSeatPost = (response) => response.url().endsWith(`/api/campaigns/${tableId}/sheet`) && response.request().method() === "POST";
+    isSeatPost = (response) => response.url().endsWith(`/api/campaigns/${tableId}/sheet`) && response.request().method() === "POST";
     const joined = page.waitForResponse(isSeatPost, { timeout: 45_000 });
-    const sheet = page.locator(`${root}[data-join-confirm]`).locator("visible=true").first();
     await t.tap(visible(page, root, /^Join the party$/).first());
     const first = await Promise.race([
       joined.then(() => "seated"),
@@ -170,10 +172,137 @@ export default {
     check(!seated.proficiencies.saves.includes("dex"), "the rogue adds no saving throw");
     check(seated.proficiencies.skills.includes(skillName.toLowerCase().replace(/\s+/g, "_")), `the rogue's skill is on the sheet (${skillName})`);
 
+    // The seated hero goes back to the lobby; nothing opens over that.
+    await eventually(async () => !/\/character/.test((await t.url()).pathname), { timeoutMs: 20_000, label: "back to the lobby" });
     // Give the seat up again.
     const removed = await api.delete(`${base}/api/campaigns/${tableId}/sheet`);
     check(removed.ok(), "the seat is given up again");
     if (seated.libraryCharacterId) await api.delete(`${base}/api/characters/${seated.libraryCharacterId}`);
+
+    // ---- two casting classes: a cleric 3 / wizard 2 (phase 2) ----
+    // The cleric's scores come from a kept draft (the standard array with
+    // Intelligence 13, so a wizard may be added), resumed as a player would.
+    await t.open(`/campaigns/${tableId}/character`);
+    await page.evaluate((key) => {
+      const fields = {
+        name: "Maren Twofold",
+        alignment: "N",
+        level: 5,
+        classId: "cleric",
+        subclass: "",
+        method: "standard",
+        scores: { str: 10, dex: 12, con: 14, int: 13, wis: 15, cha: 8 },
+      };
+      window.localStorage.setItem(key, JSON.stringify({ v: 2, savedAt: Date.now(), step: "calling", fields }));
+    }, `odm:builder-draft:table:${tableId}`);
+    const chooser = page.locator(`${root}[data-hero-chooser]`).locator("visible=true").first();
+    await eventually(() => chooser.count(), { timeoutMs: 30_000, label: "the hero chooser for the cleric" });
+    await t.tap(chooser.locator('[data-chooser-section="build"]'));
+    const resume = visible(page, root, /^Resume$/);
+    await eventually(() => resume.count(), { timeoutMs: 15_000, label: "the kept cleric draft" });
+    await t.tap(resume.first());
+    const clericCard = page.locator(`${active} .creator-card[aria-label^="Cleric"]`).locator("visible=true").first();
+    await eventually(async () => (await clericCard.getAttribute("aria-pressed")) === "true", { timeoutMs: 15_000, label: "the cleric picked again" });
+    await t.tap(page.locator(`${active} [data-add-class]`).locator("visible=true").first());
+    const wizardChoice = page.locator(`${active} ul[aria-label^="Classes you could add"] button[data-roving-item="wizard"]`).locator("visible=true").first();
+    await eventually(() => wizardChoice.count(), { timeoutMs: 5_000, label: "the wizard in the list" });
+    check((await wizardChoice.getAttribute("aria-disabled")) === null, "a wizard may be added beside a cleric (phase 2)");
+    await t.tap(wizardChoice);
+    const wizardCard = page.locator(`${active} [data-extra-class="wizard"]`).locator("visible=true").first();
+    await eventually(() => wizardCard.count(), { timeoutMs: 5_000, label: "the wizard's card" });
+    await t.tap(wizardCard.locator('button[aria-label="Wizard levels"]'));
+    const twoLevels = page.getByRole("menuitemradio", { name: "2", exact: true }).locator("visible=true").first();
+    await eventually(() => twoLevels.count(), { timeoutMs: 5_000, label: "the wizard's level list" });
+    await t.tap(twoLevels);
+    await eventually(async () => /Cleric 3 \/ Wizard 2/.test(await section.textContent()), { timeoutMs: 5_000, label: "the split at cleric 3 / wizard 2" });
+    // A wizard picks its school at its 2nd level.
+    await t.tap(wizardCard.locator('button[aria-haspopup="listbox"]').first());
+    const school = page.locator(`${root}[role="option"]`).filter({ hasText: /^School of Evocation/ }).locator("visible=true").first();
+    await eventually(() => school.count(), { timeoutMs: 5_000, label: "the wizard's schools" });
+    await t.tap(school);
+    // The fill sets the rest at the split's own levels, so the cleric's
+    // counts are a cleric 3's.
+    await fillRest("the cleric / wizard");
+    for (let step = 1; step < 4; step += 1) {
+      const next = page.locator(`${root}button.wizard-continue`).locator("visible=true").first();
+      await eventually(
+        async () => {
+          if (new RegExp(`^Step ${step + 1}:`).test(await currentStep(page, root))) return true;
+          if (await next.isEnabled()) await t.tap(next);
+          await upTo(async () => new RegExp(`^Step ${step + 1}:`).test(await currentStep(page, root)), 800);
+          return new RegExp(`^Step ${step + 1}:`).test(await currentStep(page, root));
+        },
+        { timeoutMs: 20_000, label: `Continue from step ${step} (cleric / wizard)` },
+      );
+    }
+    // The fill wrote each casting class's own lists: the spell step owes
+    // nothing.
+    await upTo(() => page.locator(`${active} [data-quick-fill]`).locator("visible=true").count(), 1_500);
+    check((await page.locator(`${active} [data-quick-fill]`).locator("visible=true").count()) === 0, "the fill left no spell owed in either class");
+    // The spell step: a tab for each casting class, each its own panel.
+    const tablist = page.locator(`${active} [role="tablist"][aria-label="Spells by class"]`).locator("visible=true").first();
+    await eventually(() => tablist.count(), { timeoutMs: 10_000, label: "the casting classes' tabs" });
+    const tabNames = await tablist.locator('[role="tab"]').allInnerTexts();
+    check(JSON.stringify(tabNames.map((name) => name.trim())) === JSON.stringify(["Cleric 3", "Wizard 2"]), `a tab per casting class (${tabNames})`);
+    const clericTab = tablist.locator('[data-caster-tab="cleric"]');
+    const wizardTab = tablist.locator('[data-caster-tab="wizard"]');
+    check((await clericTab.getAttribute("aria-selected")) === "true", "the first casting class's tab is open");
+    const panelOf = async (tab) => page.locator(`#${await tab.getAttribute("aria-controls")}`);
+    check(await (await panelOf(clericTab)).isVisible(), "the cleric's panel shows");
+    check(!(await (await panelOf(wizardTab)).isVisible()), "the wizard's panel waits behind its tab");
+    await tablist.scrollIntoViewIfNeeded();
+    await review("spell-step-cleric");
+    // The arrows move between the tabs, one tab stop (F16).
+    await clericTab.focus();
+    await page.keyboard.press("ArrowRight");
+    check(await wizardTab.evaluate((node) => node === document.activeElement), "the arrow moves to the wizard's tab");
+    await page.keyboard.press("Enter");
+    await eventually(async () => (await wizardTab.getAttribute("aria-selected")) === "true", { timeoutMs: 5_000, label: "the wizard's tab open" });
+    const wizardPanel = await panelOf(wizardTab);
+    check(await wizardPanel.isVisible(), "the wizard's panel shows");
+    check(/spellbook/i.test(await wizardPanel.innerText()), "the wizard's panel holds its spellbook");
+    await tablist.scrollIntoViewIfNeeded();
+    await review("spell-step-wizard");
+    for (let step = 4; step < 6; step += 1) {
+      const next = page.locator(`${root}button.wizard-continue`).locator("visible=true").first();
+      await eventually(
+        async () => {
+          if (new RegExp(`^Step ${step + 1}:`).test(await currentStep(page, root))) return true;
+          if (await next.isEnabled()) await t.tap(next);
+          await upTo(async () => new RegExp(`^Step ${step + 1}:`).test(await currentStep(page, root)), 800);
+          return new RegExp(`^Step ${step + 1}:`).test(await currentStep(page, root));
+        },
+        { timeoutMs: 20_000, label: `Continue from step ${step} (cleric / wizard)` },
+      );
+    }
+    await eventually(() => summary.count(), { timeoutMs: 10_000, label: "the cleric / wizard summary" });
+    check(/Every step is complete/.test((await page.locator(active).first().textContent()) ?? ""), "the cleric / wizard owes nothing");
+    const twoJoined = page.waitForResponse(isSeatPost, { timeout: 45_000 });
+    await t.tap(visible(page, root, /^Join the party$/).first());
+    const twoFirst = await Promise.race([
+      twoJoined.then(() => "seated"),
+      sheet.waitFor({ state: "visible", timeout: 45_000 }).then(() => "sheet"),
+    ]);
+    if (twoFirst === "sheet") {
+      await eventually(async () => (await sheet.getAttribute("aria-busy")) === "false", { timeoutMs: 20_000, label: "the cleric / wizard check" });
+      await t.tap(sheet.locator("[data-join-take]"));
+    }
+    check((await twoJoined).status() === 201, "the cleric / wizard takes the seat");
+    const caster = await eventually(() => seatAt(tableId), { timeoutMs: 20_000, label: "the cleric / wizard seated" });
+    check(
+      JSON.stringify((caster.classes ?? []).map((entry) => [entry.id, entry.level])) === JSON.stringify([["cleric", 3], ["wizard", 2]]),
+      `the stored sheet holds cleric 3 / wizard 2 (${JSON.stringify(caster.classes)})`,
+    );
+    const casters = caster.spellcasting?.casters ?? [];
+    check(JSON.stringify(casters.map((entry) => [entry.classId, entry.ability])) === JSON.stringify([["cleric", "wis"], ["wizard", "int"]]), `a casters entry per class (${JSON.stringify(casters.map((entry) => entry.classId))})`);
+    const wizardLists = casters.find((entry) => entry.classId === "wizard");
+    check((wizardLists?.spellbook ?? []).length === 8, `the wizard's book holds eight (${(wizardLists?.spellbook ?? []).length})`);
+    check((wizardLists?.cantrips ?? []).length === 3, `the wizard knows three cantrips (${(wizardLists?.cantrips ?? []).length})`);
+    check((casters.find((entry) => entry.classId === "cleric")?.prepared ?? []).length >= 5, "the cleric has its prepared spells");
+    check(caster.spellcasting.slots?.[3]?.max === 2, `the shared table at caster level 5 (${JSON.stringify(caster.spellcasting.slots)})`);
+    await eventually(async () => !/\/character/.test((await t.url()).pathname), { timeoutMs: 20_000, label: "back to the lobby after the cleric" });
+    await api.delete(`${base}/api/campaigns/${tableId}/sheet`);
+    if (caster.libraryCharacterId) await api.delete(`${base}/api/characters/${caster.libraryCharacterId}`);
 
     // ---- a table that turns multiclassing off ----
     await buildAt(ids.singleClassTableId);

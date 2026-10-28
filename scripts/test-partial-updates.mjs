@@ -48,6 +48,9 @@ const { gameSettingsSchema, normalizeGameSettings } = await import(
 const { adaptSheetToLevel } = await import("../src/lib/characters/adapt.ts");
 const { buildBuilderResult } = await import("../src/app/characters/builder/submit.ts");
 const { storedExtraClasses } = await import("../src/app/characters/builder/multiclassBuild.ts");
+const { storedSpellLists } = await import("../src/app/characters/builder/useBuilderState.ts");
+const { extraClassRows } = await import("../src/app/characters/builder/useBuilderDerived.ts");
+const { srdClassOptions } = await import("../src/lib/characters/options.ts");
 
 // A URL, not a template literal: Vitest would read the literal as a one-level
 // glob, which the nested route paths below never match.
@@ -360,12 +363,18 @@ function builderEdit(level, klass) {
     racialTool: "",
     racialCantrips: [],
     backstory: SYNCED.backstory,
-    spells: [],
+    // The stored casting class's lists (backlog F9, phase 2: each casting
+    // class's own, the wizard's here).
+    ...storedSpellLists(SYNCED).lead,
     spellWarningAck: true,
     // The split as the builder opens it at this level (backlog F9): the
     // last class's levels shed first below the stored level.
     extraClasses: storedExtraClasses(SYNCED, level),
   };
+  // The classes after the first with their rows, and the wizard among them
+  // leading the spell lists, as the derivation reads them.
+  const extras = extraClassRows(state.extraClasses, srdClassOptions());
+  const wizard = extras.find((entry) => entry.klass.id === "wizard")?.klass;
   // The Calling step waits for the soldier's gaming set to be named (a
   // character stored before that pick existed names it on its first edit).
   const derived = {
@@ -379,6 +388,8 @@ function builderEdit(level, klass) {
     ac: SYNCED.ac,
     fullEquipment: SYNCED.equipment,
     styleSlots: 0,
+    extras,
+    ...(wizard ? { casterKlass: wizard, spellSlots: { 1: { max: 3, used: 0 } }, casterDesks: [] } : {}),
   };
   return buildBuilderResult({
     state,

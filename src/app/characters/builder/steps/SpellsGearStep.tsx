@@ -1,7 +1,7 @@
 "use client";
 
 import { Star } from "lucide-react";
-import { useRef, useState, useSyncExternalStore } from "react";
+import { useId, useRef, useState, useSyncExternalStore } from "react";
 import { SpellBook, type SpellTile } from "@/components/sheet/SpellBook";
 import { useSpellLookups, useWiderSpellPool } from "@/components/sheet/useSpellPool";
 import { GameTerm } from "@/components/ui/GameTerm";
@@ -20,7 +20,8 @@ import EquipmentSection from "../EquipmentSection";
 import KitChoicesSection from "../KitChoicesSection";
 import type { BackgroundOption, ClassOption } from "../useBuilderOptions";
 import type { TableRulesState } from "../useTableRules";
-import type { BuilderActions, BuilderDerived } from "../useBuilderDerived";
+import type { BuilderActions, BuilderDerived, CasterDesk } from "../useBuilderDerived";
+import { useRovingGroup } from "../roving";
 import type { BuilderState } from "../useBuilderState";
 import { fillSpells } from "../quickBuild";
 import { spellOnSavedList, spellShortageLines, spellSupplyOf } from "../spellSupply";
@@ -61,10 +62,8 @@ export function SpellsGearStep({
   });
   return (
     <div className="space-y-4">
-      {/* The class that casts: the first, or one taken after it (backlog F9). */}
-      {klass && derived.casts ? (
-        <SpellsSection state={state} derived={derived} klass={derived.casterKlass ?? klass} pack={pack} />
-      ) : null}
+      {/* The classes that cast: one desk, or a tab for each (backlog F9). */}
+      {klass ? <CasterSpells state={state} derived={derived} klass={klass} pack={pack} /> : null}
       <div data-builder-target="gear">
       <EquipmentSection
         equipment={derived.fullEquipment}
@@ -98,6 +97,111 @@ export function SpellsGearStep({
         }
       />
       </div>
+    </div>
+  );
+}
+
+// One casting class's desk as the spell desk reads it: its own lists and
+// their setters, its counts, its spellcasting numbers, and the slots it
+// casts from (a warlock's pact slots, on a class list). The lead's desk is
+// the builder's own fields and derived values, unchanged.
+function deskView(state: BuilderState, derived: BuilderDerived, desk: CasterDesk): { state: BuilderState; derived: BuilderDerived } {
+  const pact = desk.klass.casterType === "pact" && derived.pactSlots ? derived.pactSlots : null;
+  const slots = pact ? { [String(pact.level)]: { max: pact.max, used: 0 } } : derived.spellSlots;
+  const numbers = (view: BuilderDerived) =>
+    view.preview
+      ? { ...view.preview, derived: { ...view.preview.derived, spellSaveDc: desk.spellSaveDc, spellAttack: desk.spellAttack } }
+      : view.preview;
+  if (desk.lead) {
+    return { state, derived: pact ? { ...derived, spellSlots: slots } : derived };
+  }
+  const setList = (key: "spells" | "bookPrepared" | "cantrips") => (next: string[] | ((current: string[]) => string[])) =>
+    state.setCasterList(desk.classId, key, next);
+  return {
+    state: {
+      ...state,
+      spells: desk.lists.spells,
+      bookPrepared: desk.lists.bookPrepared,
+      cantrips: desk.lists.cantrips,
+      setSpells: setList("spells"),
+      setBookPrepared: setList("bookPrepared"),
+      setCantrips: setList("cantrips"),
+    } as BuilderState,
+    derived: { ...derived, ...desk, spellSlots: slots, preview: numbers(derived) } as BuilderDerived,
+  };
+}
+
+// The spell step's desks (backlog F9, phase 2): one class that casts keeps
+// the one desk it always had; several get a tab each, real tabs with their
+// panels, one tab stop with the arrows between them (F16). Every panel stays
+// mounted, so a half-made swap or a book phase survives a look at another.
+function CasterSpells({
+  state,
+  derived,
+  klass,
+  pack,
+}: {
+  state: BuilderState;
+  derived: BuilderDerived;
+  klass: ClassOption;
+  pack: WorldPack | null;
+}) {
+  const desks = (derived.casterDesks ?? []).filter((desk) => desk.casts);
+  const keys = desks.map((desk) => desk.classId);
+  const [chosen, setChosen] = useState<string | null>(null);
+  const shown = chosen && keys.includes(chosen) ? chosen : (keys[0] ?? null);
+  const roving = useRovingGroup({ keys, chosen: shown });
+  const baseId = useId();
+  if (desks.length <= 1) {
+    return derived.casts ? <SpellsSection state={state} derived={derived} klass={derived.casterKlass ?? klass} pack={pack} /> : null;
+  }
+  return (
+    <div data-caster-tabs="">
+      <div
+        role="tablist"
+        aria-label="Spells by class"
+        className="mb-3 flex flex-wrap gap-2"
+        onKeyDown={roving.onKeyDown}
+        onFocus={roving.onFocus}
+      >
+        {desks.map((desk) => (
+          <button
+            key={desk.classId}
+            type="button"
+            role="tab"
+            id={`${baseId}-tab-${desk.classId}`}
+            aria-selected={shown === desk.classId}
+            aria-controls={`${baseId}-panel-${desk.classId}`}
+            tabIndex={roving.tabIndex(desk.classId)}
+            data-roving-item={desk.classId}
+            data-caster-tab={desk.classId}
+            onClick={() => setChosen(desk.classId)}
+            className={cn(
+              "inline-flex min-h-11 items-center rounded-lg border px-3 text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400",
+              shown === desk.classId
+                ? "border-amber-500/60 bg-amber-400/10 text-amber-100"
+                : "border-stone-600/60 text-stone-300 hover:border-amber-500/40 hover:bg-stone-900/70",
+            )}
+          >
+            {desk.klass.name} {desk.casterLevel}
+          </button>
+        ))}
+      </div>
+      {desks.map((desk) => {
+        const view = deskView(state, derived, desk);
+        return (
+          <div
+            key={desk.classId}
+            role="tabpanel"
+            id={`${baseId}-panel-${desk.classId}`}
+            aria-labelledby={`${baseId}-tab-${desk.classId}`}
+            hidden={shown !== desk.classId}
+            data-caster-panel={desk.classId}
+          >
+            <SpellsSection state={view.state} derived={view.derived} klass={desk.klass} pack={pack} />
+          </div>
+        );
+      })}
     </div>
   );
 }

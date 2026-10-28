@@ -85,6 +85,10 @@ export type ProgressionRow = {
   // Which class the level went to and that class's level there ("Wizard
   // 2"), on a class list only.
   classLabel?: string;
+  // With more than one casting class so far, each one's own counts at its
+  // own level (backlog F9, phase 2); `cantrips` and `spells` are then the
+  // first's.
+  casters?: Array<{ name: string; cantrips: number | null; spells: ProgressionSpells | null }>;
   cantrips: number | null;
   spells: ProgressionSpells | null;
   mark: "current" | "next" | null;
@@ -214,15 +218,21 @@ function classListRows(input: ProgressionInput, classes: ReadonlyArray<Progressi
       const taken = index < at.index ? held.level : index === at.index ? classLevel : 0;
       return taken > 0 ? [{ ...held, level: taken }] : [];
     });
-    // The class that casts among them, at its own level so far: phase 1
-    // of F9 builds one, a warlock's pact magic included.
-    const casting =
-      soFar
-        .map((held) => ({
-          held,
-          preview: casterPreview({ classId: held.classId, subclass: held.subclass, progression: held.progression, level: held.level, abilitiesAfter: scores }),
-        }))
-        .find((pair) => pair.preview.casts) ?? null;
+    // The classes that cast among them, each at its own level so far, a
+    // warlock's pact magic included.
+    const castingAll = soFar
+      .map((held) => ({
+        held,
+        preview: casterPreview({ classId: held.classId, subclass: held.subclass, progression: held.progression, level: held.level, abilitiesAfter: scores }),
+      }))
+      .filter((pair) => pair.preview.casts);
+    const casting = castingAll[0] ?? null;
+    const spellsOf = (pair: (typeof castingAll)[number]): ProgressionSpells | null => {
+      const own = pair.preview.spellCap;
+      return own && own.count > 0
+        ? { ...own, ...(spellStyleFor(pair.held.classId) === "spellbook" ? { spellbook: spellbookAllowance(pair.held.level) } : {}) }
+        : null;
+    };
     const slots = Object.entries(
       slotTableFor(
         { class: soFar[0].classId, classes: soFar.map((held) => ({ id: held.classId, subclass: held.subclass, level: held.level })) },
@@ -250,6 +260,9 @@ function classListRows(input: ProgressionInput, classes: ReadonlyArray<Progressi
       classLabel: `${entry.name} ${classLevel}`,
       cantrips: casting ? casting.preview.cantripCap : null,
       spells,
+      ...(castingAll.length > 1
+        ? { casters: castingAll.map((pair) => ({ name: pair.held.name, cantrips: pair.preview.cantripCap, spells: spellsOf(pair) })) }
+        : {}),
       mark: level === input.next ? "next" : level === input.current ? "current" : null,
     });
   }

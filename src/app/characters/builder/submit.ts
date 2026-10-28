@@ -18,7 +18,7 @@ import { racialCantripFields } from "@/lib/srd/racial-cantrips";
 import { pickedVariant, variantFeatureNames, withSpeciesVariant } from "@/lib/content/species-variants";
 import { reconcilePicks, type ReconcileContext } from "./reconcile";
 import { builderCasting, builderSpellSlots } from "./casting";
-import { classCasts, fitExtraClasses, primaryLevelOf, unmetPrereqs } from "./multiclassBuild";
+import { fitExtraClasses, fitSpellLists, primaryLevelOf, unmetPrereqs } from "./multiclassBuild";
 import { multiclassGrantsFor } from "@/lib/srd/multiclass";
 import { unmetFeatMessage, type FeatJudge } from "./featPrereqs";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
@@ -67,6 +67,7 @@ export type BlockerTarget =
 export type StepBlock = { message: string; target: BlockerTarget; label?: string };
 
 const block = (target: BlockerTarget, message: string, label?: string): StepBlock => ({ target, message, ...(label ? { label } : {}) });
+const blockOf = block;
 
 type SubmitInput = {
   state: BuilderState;
@@ -353,21 +354,7 @@ function multiclassBlocks(state: BuilderState, derived: BuilderDerived): StepBlo
       owed.push(block("multiclass", `Pick the ${left === 1 ? "skill" : `${left} skills`} your ${name} levels taught you (skill proficiency).`));
     }
   }
-  // Phase 1 of F9 builds one casting class's spells. A second that came
-  // with the stored character keeps its lists as they were (keepUnedited);
-  // a new one waits for the builder that splits the spell lists.
-  const casting = derived.classList.filter((entry, index) =>
-    classCasts(rowOfList(derived, index), entry.subclass ?? "", entry.level),
-  );
-  if (casting.length > 1 && casting.length > (state.storedCastingCount ?? 0)) {
-    owed.push(block("multiclass", "For now a character made here casts spells from one class: take a class that does not cast, or a subclass of your first class that does not."));
-  }
   return owed;
-}
-
-// The class row behind a place in the derived class list.
-function rowOfList(derived: BuilderDerived, index: number) {
-  return index === 0 ? derived.primaryRow : derived.extras[index - 1]?.klass;
 }
 
 // The spells step: a caster leaves with every cantrip and spell the rules
@@ -377,13 +364,29 @@ export function spellsBlocks(
   derived: BuilderDerived,
   firstClass: ClassOption | undefined,
 ): StepBlock[] {
-  if (!firstClass || !derived.casts) {
+  if (!firstClass) {
     return [];
   }
-  // The class whose spells these are: the first class, or the one taken
-  // after it that casts (backlog F9).
-  const klass = derived.casterKlass ?? firstClass;
-  const casterLevel = derived.casterLevel ?? derived.effectiveLevel;
+  // Each casting class's own lists at its own level (backlog F9, phase 2);
+  // with more than one, each message names its class.
+  const desks: DeskCounts[] = derived.casterDesks
+    ? derived.casterDesks.filter((desk) => desk.casts)
+    : derived.casts
+      ? [{ ...derived, klass: derived.casterKlass ?? firstClass, casterLevel: derived.casterLevel ?? derived.effectiveLevel }]
+      : [];
+  return desks.flatMap((desk) => deskBlocks(desk, desks.length > 1 ? `${desk.klass.name}: ` : ""));
+}
+
+// The counts one casting class's spell desk is held to.
+type DeskCounts = Pick<
+  BuilderDerived,
+  "spellSupply" | "cantripAdvice" | "chosenCantrips" | "spellbookAdvice" | "chosenSpells" | "spellAdvice" | "chosenPrepared"
+> & { klass: Pick<ClassOption, "name">; casterLevel: number };
+
+function deskBlocks(desk: DeskCounts, who: string): StepBlock[] {
+  const derived = desk;
+  const { klass, casterLevel } = desk;
+  const block = (target: BlockerTarget, message: string) => blockOf(target, `${who}${message}`);
   const owed: StepBlock[] = [];
   // A pick the bundled list cannot supply is not asked for (spellSupply.ts):
   // the server holds a caster to at most its count, never to at least it.
@@ -824,27 +827,60 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
               ...(isWizard ? { spellbook: finalSpells } : {}),
             },
             multiclass && casterKlass ? casterKlass.id : null,
+            multiclass ? otherCasterEntries(derived, classes) : [],
             derived.pactSlots ?? null,
           )
         : null,
       notes: "",
       backstory: state.backstory.trim(),
-    }, casterKlass?.id ?? null),
+    }),
   };
 }
 
-// On a class list the lists are the casting class's own entry too, the
-// shape the server judges per class (src/lib/srd/legality/spells.ts), with
-// the top-level lists as their mirror; a warlock's pact slots sit apart.
+type CasterEntryOut = NonNullable<NonNullable<Spellcasting>["casters"]>[number];
+
+// Each casting class but the lead, its own lists at its own level (backlog
+// F9, phase 2): checked once more against what it casts, with its
+// subclass's always-prepared spells on top, filed the way its class keeps
+// them (known, prepared, or a wizard's book and what is prepared from it).
+function otherCasterEntries(derived: BuilderDerived, classes: ClassEntry[]): CasterEntryOut[] {
+  return (derived.casterDesks ?? []).flatMap((desk): CasterEntryOut[] => {
+    const entry = classes.find((held) => held.id === desk.classId);
+    if (desk.lead || !entry || !desk.ability) {
+      return [];
+    }
+    const { lists } = fitSpellLists(desk.lists, { row: desk.klass, subclass: entry.subclass ?? "", level: entry.level });
+    const granted = desk.subclassSpells.filter((spell) => !lists.spells.some((name) => textKey(name) === textKey(spell)));
+    const all = [...lists.spells, ...granted];
+    const profile = builderCasting(desk.klass, entry.subclass, entry.level).profile;
+    return [
+      {
+        classId: desk.classId,
+        ability: desk.ability,
+        ...(profile ? { progression: profile } : {}),
+        known: desk.spellStyle === "known" ? all : [],
+        prepared: desk.spellStyle === "known" ? [] : desk.spellStyle === "spellbook" ? lists.bookPrepared : all,
+        cantrips: lists.cantrips,
+        ...(desk.spellStyle === "spellbook" ? { spellbook: all } : {}),
+      },
+    ];
+  });
+}
+
+// On a class list each casting class's lists are its own entry, the shape
+// the server judges per class (src/lib/srd/legality/spells.ts), the lead's
+// first; the top-level lists are their union, the mirror every other reader
+// uses, and a warlock's pact slots sit apart from the shared ones.
 function withCasterEntry(
   casting: NonNullable<Spellcasting>,
   classId: string | null,
+  others: CasterEntryOut[],
   pact: { level: number; max: number; used: number } | null,
 ): NonNullable<Spellcasting> {
   if (!classId) {
     return casting;
   }
-  const entry = {
+  const lead: CasterEntryOut = {
     classId,
     ability: casting.ability,
     ...(casting.progression ? { progression: casting.progression } : {}),
@@ -853,10 +889,25 @@ function withCasterEntry(
     cantrips: casting.cantrips ?? [],
     ...(casting.spellbook ? { spellbook: casting.spellbook } : {}),
   };
-  return {
+  const casters = [lead, ...others];
+  const union = (pick: (entry: CasterEntryOut) => string[] | undefined) => [
+    ...new Map(casters.flatMap((entry) => pick(entry) ?? []).map((name) => [textKey(name), name])).values(),
+  ];
+  const spellbook = union((entry) => entry.spellbook);
+  const merged: NonNullable<Spellcasting> = {
     ...casting,
-    casters: [entry],
+    known: union((entry) => entry.known),
+    prepared: union((entry) => entry.prepared),
+    cantrips: union((entry) => entry.cantrips),
+    casters,
     ...(pact ? { pact } : {}),
+  };
+  delete merged.spellbook;
+  delete merged.progression;
+  return {
+    ...merged,
+    ...(casting.progression && !others.length ? { progression: casting.progression } : {}),
+    ...(spellbook.length ? { spellbook } : {}),
   };
 }
 
@@ -864,14 +915,12 @@ function withCasterEntry(
 // stores it whole, so what the builder has no field for comes from the
 // stored sheet: the notes and small change synced back from play, and what
 // play granted (story boons, feats, the background's feature, an item's
-// attunement). A multiclass split is the builder's own now (backlog F9):
-// the class list it built is the sheet's. Phase 1 holds one casting
-// class's spells, so a second casting class the stored character earned in
-// play keeps its lists as they were.
+// attunement). A multiclass split is the builder's own now (backlog F9),
+// each casting class's spell lists with it: the class list it built and
+// the lists it holds are the sheet's.
 function keepUnedited(
   initial: CreateSheetInput | undefined,
   built: CreateSheetInput,
-  drivenCaster: string | null,
 ): CreateSheetInput {
   if (!initial) {
     return built;
@@ -883,10 +932,7 @@ function keepUnedited(
     features: [...built.features, ...grantedInPlay(initial, built)],
     equipment: keptItemDetails(initial.equipment ?? [], built.equipment),
   };
-  if ((built.classes ?? []).length < 2 || !initial.spellcasting?.casters?.length) {
-    return kept;
-  }
-  return { ...kept, spellcasting: keptSpellcasting(initial.spellcasting, built.spellcasting, drivenCaster, built.classes) };
+  return kept;
 }
 
 // Features the builder has no step for. The server re-grants class and race
@@ -930,58 +976,4 @@ function keptItemDetails(
     const [match] = unused.splice(index, 1);
     return { ...match, ...item };
   });
-}
-
-// The builder knows one casting class's spells: they replace its lists (its
-// per-class entry), while each other casting class the character still
-// holds keeps its stored entry. The server writes the slots afresh.
-function keptSpellcasting(
-  stored: Spellcasting,
-  built: Spellcasting,
-  drivenCaster: string | null,
-  classes: ClassEntry[],
-): Spellcasting {
-  if (!stored?.casters?.length) {
-    return built;
-  }
-  const held = (classId: string) => classes.some((entry) => textKey(entry.id) === textKey(classId));
-  const others = stored.casters.filter(
-    (caster) => held(caster.classId) && textKey(caster.classId) !== textKey(drivenCaster ?? ""),
-  );
-  if (!others.length) {
-    return built;
-  }
-  // Nothing the builder casts with: the stored lists of the casting classes
-  // still held stand as they were.
-  const base = built ?? stored;
-  const casters = [...(built?.casters ?? []), ...others];
-  // The top-level lists stay the union of the per-class ones, the mirror
-  // every other reader uses.
-  const union = (pick: (caster: (typeof casters)[number]) => string[] | undefined) => {
-    const seen = new Set<string>();
-    return casters.flatMap((caster) => pick(caster) ?? []).filter((name) => {
-      const key = textKey(name);
-      if (!key || seen.has(key)) {
-        return false;
-      }
-      seen.add(key);
-      return true;
-    });
-  };
-  const pending = union((caster) => caster.pending);
-  const spellbook = union((caster) => caster.spellbook);
-  const merged = {
-    ...base,
-    known: union((caster) => caster.known),
-    prepared: union((caster) => caster.prepared),
-    cantrips: union((caster) => caster.cantrips),
-    casters,
-  };
-  delete merged.pending;
-  delete merged.spellbook;
-  return {
-    ...merged,
-    ...(pending.length ? { pending } : {}),
-    ...(casters.some((caster) => caster.spellbook) ? { spellbook } : {}),
-  };
 }

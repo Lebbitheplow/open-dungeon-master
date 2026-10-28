@@ -166,9 +166,21 @@ export function LevelProgressionTable({
                 </td>
                 {columns.casting ? (
                   <>
-                    <td className={cn(cell, "font-mono")}>{row.cantrips ?? none}</td>
+                    <td className={cn(cell, "font-mono")}>
+                      {row.casters
+                        ? row.casters.map((caster) => `${caster.name} ${caster.cantrips ?? 0}`).join("; ")
+                        : (row.cantrips ?? none)}
+                    </td>
                     <td className={cell}>
-                      {row.spells ? (
+                      {row.casters ? (
+                        row.casters
+                          .map((caster) =>
+                            caster.spells
+                              ? `${caster.name}: ${caster.spells.count} ${caster.spells.label}${caster.spells.spellbook ? `, ${caster.spells.spellbook} in the spellbook` : ""}`
+                              : `${caster.name}: none yet`,
+                          )
+                          .join("; ")
+                      ) : row.spells ? (
                         <>
                           {row.spells.count} {row.spells.label}
                           {row.spells.spellbook ? `, ${row.spells.spellbook} in the spellbook` : ""}

@@ -26,6 +26,8 @@ const mc = await import("../src/app/characters/builder/multiclassBuild.ts");
 const { reconcilePicks } = await import("../src/app/characters/builder/reconcile.ts");
 const { levelProgressionRows } = await import("../src/app/characters/builder/levelProgression.ts");
 const { builderProgressionInput } = await import("../src/app/characters/builder/LevelProgressionTable.tsx");
+const { storedSpellLists } = await import("../src/app/characters/builder/useBuilderState.ts");
+const { buildMathSections } = await import("../src/app/characters/builder/buildMath.ts");
 
 // Windows CI checks out with CRLF.
 const read = (path) => fs.readFileSync(new URL(`../${path}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
@@ -237,15 +239,15 @@ await test("the classes that may be added come first, each refusal in words", ()
   });
   assert.ok(weakWizard.every((choice) => !choice.ok));
   assert.match(weakWizard.find((choice) => choice.row.id === "fighter").reason, /your Wizard needs Intelligence 13 too/);
-  // Phase 1: one casting class. Beside a cleric, a wizard is not yet offered.
+  // Phase 2: a second casting class beside one that casts is offered.
   const cleric = mc.multiclassChoices({
     rows: classes,
     classList: [{ id: "cleric", subclass: "", level: 3 }],
     abilities: { str: 13, dex: 13, con: 13, int: 13, wis: 13, cha: 13 },
     rowOf,
   });
-  assert.match(cleric.find((choice) => choice.row.id === "wizard").reason, /one spellcasting class for now, and your Cleric already casts/);
-  assert.match(cleric.find((choice) => choice.row.id === "warlock").reason, /Not available yet/);
+  assert.equal(cleric.find((choice) => choice.row.id === "wizard").ok, true);
+  assert.equal(cleric.find((choice) => choice.row.id === "warlock").ok, true);
   assert.equal(cleric.find((choice) => choice.row.id === "fighter").ok, true);
   // Before the scores are set every class is offered with what it needs.
   const unset = mc.multiclassChoices({ rows: classes, classList: fighterList, abilities: null, rowOf });
@@ -382,6 +384,208 @@ await test("a second class owes its subclass and its skill on the class step", (
   const weak = builder.build({ ...FIGHTER_WIZARD, scores: { str: 15, dex: 12, con: 13, int: 8, wis: 10, cha: 14 } });
   const owed = builder.submit.abilitiesBlocks(weak.derived, weak.state);
   assert.ok(owed.some((entry) => /Wizard beside another class needs Intelligence 13/.test(entry.message)));
+});
+
+// ---- phase 2: more than one casting class ----
+
+const { optionFeatureName } = await import("../src/lib/srd/options.ts");
+
+// A rock gnome soldier, cleric 3 (Life Domain) and wizard 2 (Evocation):
+// the cleric leads the builder's own spell fields, the wizard's lists are
+// its own. Wisdom 15, Intelligence 14 + 2.
+const CLERIC_WIZARD = {
+  race: "rock_gnome",
+  class: "cleric",
+  background: "soldier",
+  level: 5,
+  scores: { str: 8, dex: 12, con: 13, int: 14, wis: 15, cha: 10 },
+  subclass: "Life Domain",
+  chosenSkills: ["history", "medicine"],
+  // Cleric 3: three cantrips, Wisdom +2 and level 3 prepared.
+  cantrips: ["Guidance", "Sacred Flame", "Spare the Dying"],
+  spells: ["Guiding Bolt", "Shield of Faith", "Healing Word", "Sanctuary", "Command"],
+  extraClasses: [{ classId: "wizard", subclass: "School of Evocation", level: 2, skills: [] }],
+  casterSpells: {
+    wizard: {
+      cantrips: ["Fire Bolt", "Mage Hand", "Ray of Frost"],
+      spells: ["Magic Missile", "Shield", "Sleep", "Burning Hands", "Detect Magic", "Mage Armor", "Thunderwave", "Feather Fall"],
+      bookPrepared: ["Magic Missile", "Shield", "Sleep", "Mage Armor", "Detect Magic"],
+    },
+  },
+};
+
+// A tiefling soldier, warlock 2 (the Fiend) and sorcerer 3 (Wild Magic):
+// pact slots apart from the sorcerer's own table. Charisma 15 + 2.
+const WARLOCK_SORCERER = {
+  race: "tiefling",
+  class: "warlock",
+  background: "soldier",
+  level: 5,
+  scores: { str: 8, dex: 13, con: 14, int: 10, wis: 12, cha: 15 },
+  subclass: "The Fiend",
+  chosenSkills: ["arcana", "deception"],
+  cantrips: ["Eldritch Blast", "Minor Illusion"],
+  spells: ["Hex", "Charm Person", "Witch Bolt"],
+  optionPicks: [
+    optionFeatureName("invocation", "Armor of Shadows"),
+    optionFeatureName("invocation", "Eldritch Sight"),
+    optionFeatureName("metamagic", "Careful Spell"),
+    optionFeatureName("metamagic", "Quickened Spell"),
+  ],
+  extraClasses: [{ classId: "sorcerer", subclass: "Wild Magic", level: 3, skills: [] }],
+  casterSpells: {
+    sorcerer: {
+      cantrips: ["Fire Bolt", "Light", "Mage Hand", "Prestidigitation"],
+      spells: ["Magic Missile", "Shield", "Sleep", "Misty Step"],
+      bookPrepared: [],
+    },
+  },
+};
+
+const casterOf = (sheet, id) => sheet.spellcasting.casters.find((caster) => caster.classId === id);
+const slotMaxes = (slots) => Object.fromEntries(Object.entries(slots).filter(([, slot]) => slot.max > 0).map(([level, slot]) => [level, slot.max]));
+
+await test("cleric 3 / wizard 2: each casting class's lists and counts, and the shared slots, are the server's", () => {
+  const built = builder.build(CLERIC_WIZARD);
+  assert.equal(built.blocker, null, built.blocker?.message);
+  const { derived, sheet } = built;
+  const desks = derived.casterDesks.filter((desk) => desk.casts);
+  assert.deepEqual(desks.map((desk) => [desk.classId, desk.casterLevel, desk.lead]), [["cleric", 3, true], ["wizard", 2, false]]);
+  const [clericDesk, wizardDesk] = desks;
+  assert.equal(clericDesk.cantripAdvice, 3);
+  assert.equal(clericDesk.spellAdvice.count, 5);
+  assert.equal(wizardDesk.cantripAdvice, 3);
+  assert.equal(wizardDesk.spellbookAdvice, 8);
+  assert.equal(wizardDesk.spellAdvice.count, 5);
+  // Each its own ability, DC and attack: Wisdom +2 and Intelligence +3.
+  assert.equal(clericDesk.ability, "wis");
+  assert.equal(wizardDesk.ability, "int");
+  assert.equal(wizardDesk.spellSaveDc, 8 + 3 + 3);
+  // Two Spellcasting classes share the multiclass table at caster level 5.
+  assert.deepEqual(slotMaxes(derived.spellSlots), { 1: 4, 2: 3, 3: 2 });
+  const out = server(sheet, 5);
+  assert.deepEqual(out.problems, []);
+  assert.deepEqual(slotMaxes(out.sheet.spellcasting.slots), slotMaxes(derived.spellSlots));
+  assert.deepEqual(out.sheet.spellcasting.casters.map((caster) => [caster.classId, caster.ability]), [["cleric", "wis"], ["wizard", "int"]]);
+  const cleric = casterOf(out.sheet, "cleric");
+  // The domain's spells ride on top, free.
+  for (const name of CLERIC_WIZARD.spells) assert.ok(cleric.prepared.includes(name), `the cleric prepares ${name}`);
+  assert.ok(cleric.prepared.includes("Bless"), "Life Domain's bless is prepared");
+  assert.deepEqual(sorted(cleric.cantrips), sorted(CLERIC_WIZARD.cantrips));
+  const wizard = casterOf(out.sheet, "wizard");
+  assert.deepEqual(sorted(wizard.cantrips), sorted(CLERIC_WIZARD.casterSpells.wizard.cantrips));
+  assert.deepEqual(sorted(wizard.spellbook), sorted(CLERIC_WIZARD.casterSpells.wizard.spells));
+  assert.deepEqual(sorted(wizard.prepared), sorted(CLERIC_WIZARD.casterSpells.wizard.bookPrepared));
+  // What the builder sent is what the server kept, class by class.
+  for (const id of ["cleric", "wizard"]) {
+    const sent = casterOf(sheet, id);
+    const kept = casterOf(out.sheet, id);
+    assert.deepEqual(sorted(sent.prepared), sorted(kept.prepared), `${id} prepared`);
+    assert.deepEqual(sorted(sent.cantrips), sorted(kept.cantrips), `${id} cantrips`);
+  }
+});
+
+await test("warlock 2 / sorcerer 3: pact slots apart, the sorcerer's own table, each list judged", () => {
+  const built = builder.build(WARLOCK_SORCERER);
+  assert.equal(built.blocker, null, built.blocker?.message);
+  const { derived, sheet } = built;
+  const desks = derived.casterDesks.filter((desk) => desk.casts);
+  assert.deepEqual(desks.map((desk) => desk.classId), ["warlock", "sorcerer"]);
+  assert.equal(desks[0].spellAdvice.count, 3);
+  assert.equal(desks[1].cantripAdvice, 4);
+  assert.equal(desks[1].spellAdvice.count, 4);
+  // One slot caster keeps its own table; Pact Magic sits apart.
+  assert.deepEqual(slotMaxes(derived.spellSlots), { 1: 4, 2: 2 });
+  assert.deepEqual(derived.pactSlots, { level: 1, max: 2, used: 0 });
+  const out = server(sheet, 5);
+  assert.deepEqual(out.problems, []);
+  assert.deepEqual(slotMaxes(out.sheet.spellcasting.slots), slotMaxes(derived.spellSlots));
+  assert.deepEqual(
+    { level: out.sheet.spellcasting.pact.level, max: out.sheet.spellcasting.pact.max },
+    { level: derived.pactSlots.level, max: derived.pactSlots.max },
+  );
+  assert.deepEqual(sorted(casterOf(out.sheet, "warlock").known.filter((name) => WARLOCK_SORCERER.spells.includes(name))), sorted(WARLOCK_SORCERER.spells));
+  assert.deepEqual(sorted(casterOf(out.sheet, "sorcerer").known), sorted(WARLOCK_SORCERER.casterSpells.sorcerer.spells));
+  assert.deepEqual(sorted(casterOf(out.sheet, "sorcerer").cantrips), sorted(WARLOCK_SORCERER.casterSpells.sorcerer.cantrips));
+  // The tiefling's thaumaturgy rides with the first casting class, free.
+  assert.ok(casterOf(out.sheet, "warlock").cantrips.includes("Thaumaturgy"));
+});
+
+await test("a wrong count in one casting class is held on the spell step, by its name", () => {
+  const short = builder.build({
+    ...CLERIC_WIZARD,
+    casterSpells: { wizard: { ...CLERIC_WIZARD.casterSpells.wizard, spells: CLERIC_WIZARD.casterSpells.wizard.spells.slice(0, 7) } },
+  });
+  assert.equal(short.blocker?.target, "spells");
+  assert.match(short.blocker.message, /^Wizard: Write 1 more spell in your spellbook\./);
+  const over = builder.build({
+    ...WARLOCK_SORCERER,
+    casterSpells: { sorcerer: { ...WARLOCK_SORCERER.casterSpells.sorcerer, spells: [...WARLOCK_SORCERER.casterSpells.sorcerer.spells, "Burning Hands"] } },
+  });
+  assert.match(over.blocker?.message ?? "", /^Sorcerer: Remove 1 spell: the limit is 4/);
+  // The lead's own count reads as it always has, with its class named once
+  // there are two.
+  const lead = builder.build({ ...CLERIC_WIZARD, spells: CLERIC_WIZARD.spells.slice(0, 4) });
+  assert.match(lead.blocker?.message ?? "", /^Cleric: Pick 1 more spell/);
+  // And the server refuses a list too long for its class.
+  const tooMany = server(over.sheet, 5);
+  assert.ok(tooMany.problems.length > 0, "the server refuses a fifth sorcerer spell");
+});
+
+await test("the lists follow their class when the class that leads changes", () => {
+  const lead = { spells: ["Bless"], bookPrepared: [], cantrips: ["Guidance"] };
+  const wizard = { spells: ["Shield"], bookPrepared: ["Shield"], cantrips: ["Fire Bolt"] };
+  // The cleric is taken off: the wizard leads, with its own lists.
+  assert.deepEqual(mc.rekeySpellLists(lead, { wizard }, "cleric", { lead: "wizard", others: [] }), { lead: wizard, others: {} });
+  // A sorcerer joins behind: it starts empty, the lead's lists stand.
+  assert.deepEqual(mc.rekeySpellLists(lead, { wizard }, "cleric", { lead: "cleric", others: ["wizard", "sorcerer"] }), {
+    lead,
+    others: { wizard, sorcerer: mc.NO_SPELL_LISTS },
+  });
+  // A paladin of 1st level casts nothing yet: the wizard beside it leads.
+  const rows = (id) => classRow(id);
+  assert.deepEqual(
+    mc.castersOf([{ row: rows("paladin"), subclass: "", level: 1 }, { row: rows("wizard"), subclass: "", level: 2 }]),
+    { lead: "wizard", others: ["paladin"] },
+  );
+  // A stored split with two casting classes opens with each one's lists.
+  const stored = {
+    class: "cleric",
+    classes: [{ id: "cleric", subclass: "", level: 3 }, { id: "wizard", subclass: "", level: 2 }],
+    spellcasting: {
+      ability: "wis", slots: {}, known: [], prepared: ["Bless", "Shield"], cantrips: ["Guidance", "Fire Bolt"],
+      casters: [
+        { classId: "cleric", ability: "wis", known: [], prepared: ["Bless"], cantrips: ["Guidance"] },
+        { classId: "wizard", ability: "int", known: [], prepared: ["Shield"], cantrips: ["Fire Bolt"], spellbook: ["Shield"] },
+      ],
+    },
+  };
+  assert.deepEqual(storedSpellLists(stored), {
+    lead: { spells: ["Bless"], bookPrepared: ["Bless"], cantrips: ["Guidance"] },
+    others: { wizard: { spells: ["Shield"], bookPrepared: ["Shield"], cantrips: ["Fire Bolt"] } },
+    leadId: "cleric",
+  });
+  // A single caster loads as it always has.
+  const single = { class: "wizard", classes: [], spellcasting: { ability: "int", slots: {}, known: [], prepared: ["Shield"], cantrips: ["Light"], spellbook: ["Shield", "Sleep"] } };
+  assert.deepEqual(storedSpellLists(single), {
+    lead: { spells: ["Shield", "Sleep"], bookPrepared: ["Shield"], cantrips: ["Light"] },
+    others: {},
+    leadId: "wizard",
+  });
+});
+
+await test("the level table and the math table read each casting class", () => {
+  const built = builder.build(CLERIC_WIZARD);
+  const rows = levelProgressionRows(builderProgressionInput(built.state, built.derived, classRow("cleric")));
+  assert.equal(rows[4].casters.length, 2);
+  assert.deepEqual(rows[4].casters.map((caster) => [caster.name, caster.cantrips]), [["Cleric", 3], ["Wizard", 3]]);
+  assert.equal(rows[4].casters[1].spells.spellbook, 8);
+  assert.deepEqual(rows[4].slots, [{ level: 1, count: 4 }, { level: 2, count: 3 }, { level: 3, count: 2 }]);
+  const sections = buildMathSections({ derived: built.derived, scores: built.state.scores, klass: classRow("cleric"), atTable: false });
+  const spellRows = sections.find((section) => section.id === "spells").rows;
+  assert.ok(spellRows.some((row) => row.id === "spell-dc-wizard" && row.value === "14"));
+  assert.ok(spellRows.some((row) => row.id === "spell-dc-cleric"));
+  assert.ok(spellRows.some((row) => row.id === "slots-3" && /multiclass table at caster level 5/.test(row.working)));
 });
 
 console.log(`${passed} passed`);

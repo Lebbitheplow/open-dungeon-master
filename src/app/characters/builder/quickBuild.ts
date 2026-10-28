@@ -634,11 +634,30 @@ export function fillRound(ctx: FillContext): FillRound {
   // Spells: the spell step's own suggestions first, then the class list by
   // how glad an adventurer is to have each one.
   if (derived.casts && wants("spells")) {
-    // For the class that casts: a class taken after the first may be it.
+    // For the class that leads the lists: a class taken after the first
+    // may be it.
     const spellPatch = fillSpells({ ...ctx, klass: derived.casterKlass ?? ctx.klass });
     if (spellPatch) {
       Object.assign(patch, spellPatch.patch);
       note("spells", spellPatch.words);
+    }
+    // Each other casting class's own lists, from its own class list
+    // (backlog F9, phase 2).
+    let casterSpells = fields.casterSpells ?? {};
+    for (const desk of (derived.casterDesks ?? []).filter((entry) => !entry.lead && entry.casts)) {
+      const own = fillSpells({
+        derived: { ...derived, ...desk } as BuilderDerived,
+        klass: desk.klass,
+        spellPool: undefined,
+        fields: desk.lists,
+      });
+      if (own) {
+        casterSpells = { ...casterSpells, [desk.classId]: { ...desk.lists, ...own.patch } as typeof desk.lists };
+        note("spells", `${desk.klass.name}: ${own.words}`);
+      }
+    }
+    if (casterSpells !== (fields.casterSpells ?? {})) {
+      patch.casterSpells = casterSpells;
     }
   }
   return { patch, filled };

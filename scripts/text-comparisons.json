@@ -283,6 +283,7 @@
     "app/characters/builder/AbilityEditor.tsx#toUpperCase": [["display",2,"ability abbreviation shown"]],
     "app/characters/builder/AbilityExplainers.tsx#toLowerCase": [["display",1,"class name in a sentence"]],
     "app/characters/builder/buildMath.ts#toLowerCase": [["display",3,"class name in a sentence (hit point and slot working)"]],
+    "app/characters/builder/buildMath.ts#toUpperCase": [["display",2,"ability abbreviation shown (a casting class's DC and attack working)"]],
     "app/characters/builder/AbilitySummary.tsx#str-list": [["key",2,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
     "app/characters/builder/AbilitySummary.tsx#toUpperCase": [["display",1,"ability abbreviation shown"]],
     "app/characters/builder/AsiFeatEditor.tsx#str-list": [["key",1,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
