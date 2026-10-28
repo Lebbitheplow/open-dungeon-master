@@ -7,11 +7,15 @@ import { toolChoiceOf } from "@/lib/srd/tool-choices";
 import { useEffect, useRef, useState } from "react";
 import type {
   Ability,
+  AbilityScores,
   AsiChoice,
   CreateSheetInput,
   SheetAttachment,
 } from "@/lib/schemas/sheet";
-import { earnedAsiCountFor, removeAsiChoices } from "@/lib/srd/asi";
+import { applyAsiChoices, earnedAsiCountFor, removeAsiChoices } from "@/lib/srd/asi";
+import { featSpellGrants, featSpellNames } from "@/lib/srd/feat-spells";
+import { innateCantripsFor } from "@/lib/srd/racial-grants";
+import { withSpeciesVariant } from "@/lib/content/species-variants";
 import { classListFor } from "@/lib/srd/multiclass";
 import { halfFeatPicks, halfFeatPoints } from "@/lib/srd/legality/half-feats";
 import { withoutFeatPicks, type FeatChoices, type FeatPicks } from "@/lib/srd/feat-grants";
@@ -32,6 +36,7 @@ import type { PoolEntry, PoolSlots } from "./abilityDice";
 import { reconcilePicks, type BuilderPicks, type DroppedPick } from "./reconcile";
 import { undoOutcome, type BuildUndo, type UndoBecause } from "./buildUndo";
 import {
+  builderAsiSlotLevels,
   castersOf,
   fitExtraClasses,
   fitSpellLists,
@@ -39,6 +44,7 @@ import {
   shedExtraLevels,
   splitStoredSkills,
   storedExtraClasses,
+  trimSpellCounts,
   type CasterEntry,
   type ExtraClass,
   type SpellLists,
@@ -406,6 +412,10 @@ export function useBuilderState({
     next: Partial<Selection>,
     current: BuilderPicks,
     leadBefore?: string | null,
+    // A change that moves levels (the total, or between classes) trims every
+    // casting class's lists to its counts at its new level. Opening a stored
+    // character, or the content pack's rows arriving, never does.
+    trimCounts = false,
   ): { picks: BuilderPicks; drops: DroppedPick[]; extras: ExtraClass[]; casterSpells: Record<string, SpellLists> } {
     const ids = { ...selection, ...next };
     const background = backgrounds.find((entry) => entry.id === ids.backgroundId);
@@ -428,7 +438,7 @@ export function useBuilderState({
       level: total,
       extras: fitted.map((entry) => ({ ...entry, klass: classes.find((row) => row.id === entry.classId) })),
     });
-    const { picks } = result;
+    let { picks } = result;
     const drops = [...result.drops];
     // A class whose row has not arrived yet (a content pack's) keeps its
     // skill pick until it does.
@@ -447,6 +457,49 @@ export function useBuilderState({
         return [id, fit.lists];
       }),
     );
+    if (trimCounts) {
+      // A casting class given up takes its lists with it (rekeySpellLists);
+      // they are said, so "Put it back" can return the class with them.
+      const kept = new Set([after.lead, ...after.others].filter(Boolean));
+      const beforeLists: Array<[string, SpellLists]> = [
+        ...(before ? [[before, { spells: current.spells, bookPrepared: current.bookPrepared, cantrips: current.cantrips }] as [string, SpellLists]] : []),
+        ...Object.entries(ids.casterSpells),
+      ];
+      for (const [id, lists] of beforeLists) {
+        if (!kept.has(id)) {
+          const name = classes.find((row) => row.id === id)?.name ?? id;
+          drops.push(
+            ...[...lists.cantrips, ...lists.spells].map((value) => ({ label: `${name} spell`, value, target: "spells" as const })),
+          );
+        }
+      }
+      // Each casting class's lists to its counts, the picks made last first
+      // (multiclassBuild.ts trimSpellCounts). With several casting classes
+      // each drop names its class.
+      const several = Object.keys(casterLists).length > 0;
+      const abilities = countAbilities(ids.raceId, picks, afterEntries);
+      const label = (name: string | undefined, kind: string) => (several && name ? `${name} ${kind}` : kind);
+      const leadEntry = afterEntries.find((held) => held.row?.id === after.lead);
+      if (leadEntry) {
+        const race = findRace(races, ids.raceId);
+        const trimmed = trimSpellCounts(
+          { spells: picks.spells, bookPrepared: picks.bookPrepared, cantrips: picks.cantrips },
+          leadEntry,
+          abilities,
+          { cantrips: [...picks.racialCantrips, ...(race ? innateCantripsFor(race.id, total) : []), ...featCantrips()] },
+        );
+        picks = { ...picks, ...trimmed.lists };
+        drops.push(...trimmed.drops.map((drop) => ({ label: label(leadEntry.row?.name, drop.kind), value: drop.value, target: "spells" as const })));
+      }
+      for (const [id, lists] of Object.entries(casterLists)) {
+        const entry = afterEntries.find((held) => held.row?.id === id);
+        if (entry) {
+          const trimmed = trimSpellCounts(lists, entry, abilities);
+          casterLists[id] = trimmed.lists;
+          drops.push(...trimmed.drops.map((drop) => ({ label: label(entry.row?.name, drop.kind), value: drop.value, target: "spells" as const })));
+        }
+      }
+    }
     // A stored content-pack background is not in the bundled list the
     // builder opens with; its skill pick, and the skill picked in place of
     // one it repeats, wait for the pack's rows rather than being checked
@@ -461,6 +514,40 @@ export function useBuilderState({
     }
     return { picks, drops, extras, casterSpells: casterLists };
   }
+  // The scores the counts are read from after a change: the assigned ones
+  // with the race's increases and the improvements the new split has earned
+  // (a half-feat's point aside). Null until all six are assigned.
+  function countAbilities(raceIdNow: string, now: BuilderPicks, entries: CasterEntry[]): AbilityScores | null {
+    if (Object.values(scores).some((value) => value === null)) {
+      return null;
+    }
+    const race = findRace(races, raceIdNow);
+    const shaped = race ? withSpeciesVariant(race, now.racialVariant) : undefined;
+    const base = { ...(scores as Record<Ability, number>) };
+    for (const [ability, bonus] of Object.entries(shaped?.asi ?? {})) {
+      base[ability as Ability] += bonus ?? 0;
+    }
+    if (shaped?.asiChoice) {
+      for (const ability of now.racialAsi) {
+        if (ability) base[ability] += shaped.asiChoice.amount;
+      }
+    }
+    const slots = builderAsiSlotLevels(entries.map((entry) => ({ id: entry.row?.id ?? "", level: entry.level }))).length;
+    return applyAsiChoices(base, asiChoices.slice(0, slots));
+  }
+  // The cantrips the feats teach, which no class count holds.
+  function featCantrips(): string[] {
+    const named = [...feats, ...asiChoices.flatMap((choice) => (choice?.mode === "feat" ? [choice.feat] : []))];
+    return featSpellNames(
+      featSpellGrants({
+        feats: named.map((name) => ({ name, desc: storedFeatDescOf(name) })),
+        choices: featChoices,
+        raisedAbility: () => null,
+        strict: false,
+      }).grants,
+    ).cantrips;
+  }
+
   // Apply what still fits and say what did not. A change the player made
   // replaces the notice, so it always describes the last change, and clears
   // it when nothing was dropped; the option rows arriving (`keep`) leave an
@@ -704,6 +791,8 @@ export function useBuilderState({
     const result = reconciled(
       { level: next, ...(next < level ? { extraClasses: shedExtraLevels(extraClasses, level - next) } : {}) },
       picks,
+      undefined,
+      true,
     );
     if ((result.drops.length || result.extras.length !== extraClasses.length) && next !== level) {
       keepUndo("level", `level ${level}`, `level ${next}`);
@@ -718,7 +807,7 @@ export function useBuilderState({
   const splitWords = (list: ExtraClass[]) =>
     [className(classId), ...list.map((entry) => className(entry.classId))].join(" / ");
   function changeExtras(because: string, next: ExtraClass[]) {
-    const result = reconciled({ extraClasses: next }, picks);
+    const result = reconciled({ extraClasses: next }, picks, undefined, true);
     if (result.drops.length) {
       keepUndo("class", splitWords(extraClasses), splitWords(result.extras));
     }

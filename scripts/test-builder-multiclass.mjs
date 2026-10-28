@@ -588,4 +588,170 @@ await test("the level table and the math table read each casting class", () => {
   assert.ok(spellRows.some((row) => row.id === "slots-3" && /multiclass table at caster level 5/.test(row.working)));
 });
 
+// ---- lists trimmed to their counts when levels move ----
+
+const { createElement, useState } = await import("react");
+const { renderToStaticMarkup } = await import("react-dom/server");
+const { useBuilderState } = await import("../src/app/characters/builder/useBuilderState.ts");
+
+// The real hook driven through the server renderer, as
+// test-builder-undo.mjs does: each pass takes one step; a `null` step lets
+// the render after a change settle.
+function runBuilder(steps) {
+  let pass = 0;
+  let result = null;
+  function Probe() {
+    const state = useBuilderState({ races, classes, backgrounds });
+    const [, bump] = useState(0);
+    const at = pass;
+    pass += 1;
+    if (at < steps.length) {
+      steps[at]?.(state);
+      bump((count) => count + 1);
+    } else {
+      result = state;
+    }
+    return null;
+  }
+  renderToStaticMarkup(createElement(Probe));
+  assert.ok(result, "the builder never settled");
+  return result;
+}
+
+const WIZARD_BOOK = CLERIC_WIZARD.casterSpells.wizard;
+// A rock gnome cleric 3 (Life Domain) / wizard 2 (Evocation), every list
+// full: the cleric's three cantrips and five prepared, the wizard's three
+// cantrips, eight in the book and five prepared.
+const clericWizard = [
+  (s) => {
+    s.changeRace("rock_gnome");
+    s.changeClass("cleric");
+    s.changeLevel(5);
+    s.setScores(CLERIC_WIZARD.scores);
+  },
+  (s) => s.changeSubclass("Life Domain"),
+  (s) => s.addExtraClass("wizard"),
+  null,
+  (s) => s.changeExtraLevel(0, 2),
+  null,
+  (s) => s.changeExtraSubclass(0, "School of Evocation"),
+  null,
+  (s) => {
+    s.setCantrips(CLERIC_WIZARD.cantrips);
+    s.setSpells(CLERIC_WIZARD.spells);
+    s.setCasterList("wizard", "cantrips", WIZARD_BOOK.cantrips);
+    s.setCasterList("wizard", "spells", WIZARD_BOOK.spells);
+    s.setCasterList("wizard", "bookPrepared", WIZARD_BOOK.bookPrepared);
+  },
+  null,
+];
+const splitOf = (s) => [s.classId, ...s.extraClasses.map((entry) => `${entry.classId} ${entry.level}`)];
+
+await test("a level moved from the wizard to the cleric trims the wizard's book and prepared list, and Put it back returns both", () => {
+  const before = runBuilder(clericWizard);
+  assert.deepEqual(splitOf(before), ["cleric", "wizard 2"]);
+  assert.deepEqual(before.casterSpells.wizard.spells, WIZARD_BOOK.spells);
+  const moved = runBuilder([...clericWizard, (s) => s.changeExtraLevel(0, 1), null]);
+  assert.deepEqual(splitOf(moved), ["cleric", "wizard 1"]);
+  // A wizard 1's book holds six: the last two written go. Intelligence +3
+  // and wizard level 1 prepare four: the last prepared goes.
+  assert.deepEqual(moved.casterSpells.wizard.spells, WIZARD_BOOK.spells.slice(0, 6));
+  assert.deepEqual(moved.casterSpells.wizard.bookPrepared, WIZARD_BOOK.bookPrepared.slice(0, 4));
+  assert.deepEqual(moved.casterSpells.wizard.cantrips, WIZARD_BOOK.cantrips, "a wizard 1 still knows three cantrips");
+  // A cleric 4 holds more than a cleric 3: nothing of its goes.
+  assert.deepEqual(moved.spells, CLERIC_WIZARD.spells);
+  // Said, with the class named, and kept to put back.
+  const said = moved.dropped?.drops.map((drop) => `${drop.label}: ${drop.value}`) ?? [];
+  assert.deepEqual(said, [
+    "Wizard spell: Thunderwave",
+    "Wizard spell: Feather Fall",
+    "Wizard prepared: Detect Magic",
+  ]);
+  assert.equal(moved.undo?.because, "class");
+  const back = runBuilder([...clericWizard, (s) => s.changeExtraLevel(0, 1), null, (s) => s.putBack(), null]);
+  assert.deepEqual(splitOf(back), ["cleric", "wizard 2"]);
+  assert.deepEqual(back.casterSpells.wizard, before.casterSpells.wizard);
+  assert.deepEqual(back.spells, CLERIC_WIZARD.spells);
+  // The server takes the trimmed sheet.
+  const built = builder.build({
+    ...CLERIC_WIZARD,
+    extraClasses: moved.extraClasses,
+    casterSpells: moved.casterSpells,
+    // The cleric's 4th level brings an improvement.
+    asiChoices: [{ mode: "plus2", ability: "wis" }],
+  });
+  const out = server(built.sheet, 5);
+  assert.deepEqual(out.problems, []);
+  assert.deepEqual(sorted(casterOf(out.sheet, "wizard").spellbook), sorted(WIZARD_BOOK.spells.slice(0, 6)));
+});
+
+await test("a level moved from the cleric to the wizard trims the cleric's prepared list", () => {
+  const moved = runBuilder([...clericWizard, (s) => s.changeExtraLevel(0, 3), null]);
+  assert.deepEqual(splitOf(moved), ["cleric", "wizard 3"]);
+  // A cleric 2 with Wisdom +2 prepares four: the last picked goes. Its
+  // domain's spells count for nothing and never go.
+  assert.deepEqual(moved.spells, CLERIC_WIZARD.spells.slice(0, 4));
+  assert.deepEqual(moved.dropped?.drops.map((drop) => `${drop.label}: ${drop.value}`), ["Cleric spell: Command"]);
+  // The wizard 3's book takes more, so nothing of its goes.
+  assert.deepEqual(moved.casterSpells.wizard.spells, WIZARD_BOOK.spells);
+});
+
+await test("removing a casting class sets its lists aside, and Put it back returns the class with them", () => {
+  const removed = runBuilder([...clericWizard, (s) => s.removeExtraClass(0), null]);
+  assert.deepEqual(splitOf(removed), ["cleric"]);
+  assert.deepEqual(removed.casterSpells, {});
+  const said = removed.dropped?.drops.filter((drop) => drop.label === "Wizard spell").map((drop) => drop.value) ?? [];
+  assert.deepEqual(sorted(said), sorted([...WIZARD_BOOK.cantrips, ...WIZARD_BOOK.spells]));
+  // The cleric 5's lists hold more: nothing of its goes.
+  assert.deepEqual(removed.spells, CLERIC_WIZARD.spells);
+  const back = runBuilder([...clericWizard, (s) => s.removeExtraClass(0), null, (s) => s.putBack(), null]);
+  assert.deepEqual(splitOf(back), ["cleric", "wizard 2"]);
+  assert.deepEqual(back.casterSpells.wizard.spells, WIZARD_BOOK.spells);
+  // A lower total level that sheds the wizard does the same.
+  const shed = runBuilder([...clericWizard, (s) => s.changeLevel(3), null]);
+  assert.deepEqual(splitOf(shed), ["cleric"]);
+  assert.ok(shed.dropped?.drops.some((drop) => drop.label === "Wizard spell" && drop.value === "Fire Bolt"));
+  assert.equal(shed.undo?.because, "level");
+});
+
+await test("a single class's lower level trims its lists to the new counts, as a split does", () => {
+  // A wizard 5 elf with a full book of fourteen and Intelligence +3 and 5
+  // prepared (eight); at level 3 the book holds ten and six are prepared.
+  const book = [
+    "Magic Missile", "Shield", "Sleep", "Burning Hands", "Detect Magic", "Mage Armor", "Thunderwave",
+    "Feather Fall", "Misty Step", "Web", "Shatter", "Invisibility", "Fireball", "Counterspell",
+  ];
+  const wizard = [
+    (s) => {
+      s.changeRace("high_elf");
+      s.changeClass("wizard");
+      s.changeLevel(5);
+      s.setScores({ str: 8, dex: 14, con: 13, int: 15, wis: 12, cha: 10 });
+    },
+    null,
+    (s) => {
+      s.setCantrips(["Fire Bolt", "Light", "Mage Hand", "Ray of Frost"]);
+      s.setSpells(book);
+      s.setBookPrepared(book.slice(0, 8));
+    },
+    null,
+  ];
+  const lower = runBuilder([...wizard, (s) => s.changeLevel(3), null]);
+  // The 3rd-level spells go by their level, then the book to ten, the last
+  // written first; prepared to six from what the book still holds.
+  assert.ok(!lower.spells.includes("Fireball") && !lower.spells.includes("Counterspell"));
+  assert.deepEqual(lower.spells, book.slice(0, 10));
+  assert.deepEqual(lower.bookPrepared, book.slice(0, 6));
+  // A wizard 3 knows three cantrips: the last one goes.
+  assert.deepEqual(lower.cantrips, ["Fire Bolt", "Light", "Mage Hand"]);
+  const said = lower.dropped?.drops.map((drop) => `${drop.label}: ${drop.value}`) ?? [];
+  assert.ok(said.includes("cantrip: Ray of Frost"), said.join("; "));
+  assert.ok(said.includes("spell: Invisibility"), "a count drop has no class name with one caster");
+  assert.equal(lower.undo?.because, "level");
+  const back = runBuilder([...wizard, (s) => s.changeLevel(3), null, (s) => s.putBack(), null]);
+  assert.deepEqual(back.spells, book);
+  assert.deepEqual(back.bookPrepared, book.slice(0, 8));
+  assert.deepEqual(back.cantrips, ["Fire Bolt", "Light", "Mage Hand", "Ray of Frost"]);
+});
+
 console.log(`${passed} passed`);

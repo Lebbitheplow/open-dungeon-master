@@ -18,12 +18,13 @@
 import type { ClassMechanics } from "@/lib/content/mechanics";
 import type { AbilityScores, ClassEntry } from "@/lib/schemas/sheet";
 import { asiLevelsFor } from "@/lib/srd/asi";
-import { subclassCastingProfileFor, subclassLevelFor } from "@/lib/srd/features";
+import { subclassCastingProfileFor, subclassLevelFor, subclassSpellsFor } from "@/lib/srd/features";
+import { spellbookAllowance, spellStyleFor, type SpellStyle } from "@/lib/srd/spell-prep";
 import { MULTICLASS_CAP, canMulticlassInto, describeGrant, describePrereq, meetsPrereq, multiclassGrantsFor } from "@/lib/srd/multiclass";
 import { thirdCasterProfileOf } from "@/lib/srd/third-caster";
 import { findClass } from "@/lib/srd";
 import { spellLevelOf } from "@/lib/srd/spell-lists";
-import { builderCasting } from "./casting";
+import { builderCasting, builderSpellAdvice } from "./casting";
 import { textKey } from "@/lib/language/text-logic";
 
 // One class taken after the first: its id, its subclass once its level
@@ -208,6 +209,86 @@ export function rekeySpellLists(
     lead: nextLead,
     others: Object.fromEntries(after.others.map((id) => [id, byClass[id] ?? NO_SPELL_LISTS])),
   };
+}
+
+// How a class holds its spells (useBuilderDerived reads the same): known,
+// prepared from the class list, or a wizard's book and what is prepared
+// from it. A content-pack class says whether it is a known caster.
+export function spellStyleOfRow(
+  row: ClassRow & { knownCaster?: boolean },
+  casting: { casts: boolean; third: boolean },
+): SpellStyle | null {
+  if (!casting.casts) {
+    return null;
+  }
+  if (casting.third || row.knownCaster === true) {
+    return "known";
+  }
+  return row.knownCaster === false && spellStyleFor(row.id) === "known" ? "prepared" : spellStyleFor(row.id);
+}
+
+export type CountDrop = { kind: "cantrip" | "spell" | "prepared"; value: string };
+
+// A casting class's lists trimmed to its counts at its level, after a level
+// moves (backlog F9): cantrips to its cantrip count, a known or prepared
+// list to its count, a wizard's book to its allowance and what is prepared
+// to its count from what the book still holds. The picks made last go
+// first: the lists keep the order the picks were made in. What its
+// subclass grants, and the race's and the feats' cantrips (`free`), count
+// for nothing. A prepared count waits on the scores (`abilities` null): a
+// list is never trimmed by a count the builder cannot yet work out.
+export function trimSpellCounts(
+  lists: SpellLists,
+  entry: CasterEntry & { row: (ClassRow & { knownCaster?: boolean }) | undefined },
+  abilities: AbilityScores | null,
+  free: { cantrips: string[] } = { cantrips: [] },
+): { lists: SpellLists; drops: CountDrop[] } {
+  const row = entry.row;
+  const drops: CountDrop[] = [];
+  if (!row) {
+    return { lists, drops };
+  }
+  const casting = builderCasting(row, entry.subclass, entry.level);
+  if (!casting.casts) {
+    return { lists, drops };
+  }
+  // Keep the first `count` of the counted names, and every free one.
+  const keepFirst = (names: string[], count: number, isFree: (name: string) => boolean, kind: CountDrop["kind"]) => {
+    let left = Math.max(0, count);
+    return names.filter((name) => {
+      if (isFree(name)) {
+        return true;
+      }
+      if (left > 0) {
+        left -= 1;
+        return true;
+      }
+      drops.push({ kind, value: name });
+      return false;
+    });
+  };
+  const freeCantrips = new Set(free.cantrips.map(textKey));
+  const cantrips =
+    casting.cantripCap === null ? lists.cantrips : keepFirst(lists.cantrips, casting.cantripCap, (name) => freeCantrips.has(textKey(name)), "cantrip");
+  const granted = new Set(subclassSpellsFor(row.id, entry.subclass, entry.level).map(textKey));
+  const isGranted = (name: string) => granted.has(textKey(name));
+  const style = spellStyleOfRow(row, casting);
+  // A known caster's count is its table's; a prepared one's needs the score.
+  const advice =
+    style === "known" || abilities
+      ? builderSpellAdvice(casting, row, entry.subclass, entry.level, abilities ?? { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 })
+      : null;
+  let spells = lists.spells;
+  let bookPrepared = lists.bookPrepared;
+  if (style === "spellbook") {
+    spells = keepFirst(lists.spells, spellbookAllowance(entry.level), isGranted, "spell");
+    const book = new Set(spells.map(textKey));
+    const inBook = lists.bookPrepared.filter((name) => book.has(textKey(name)));
+    bookPrepared = advice ? keepFirst(inBook, advice.count, () => false, "prepared") : inBook;
+  } else if (advice) {
+    spells = keepFirst(lists.spells, advice.count, isGranted, "spell");
+  }
+  return { lists: { spells, bookPrepared, cantrips }, drops };
 }
 
 // A casting class's own lists held to what it casts at its level, as
