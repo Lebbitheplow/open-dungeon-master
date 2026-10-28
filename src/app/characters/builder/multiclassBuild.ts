@@ -465,5 +465,9 @@ export function splitStoredSkills(
     const grant = multiclassGrantsFor(entry.classId).skillChoice;
     return grant ? take(grant.count, grant.from) : [];
   });
-  return { chosen: [...chosen, ...left], extraSkills };
+  // What is left is added as a statement of its own: the production build
+  // folded a `[...chosen, ...left]` in the return into one object literal
+  // that read `left` before the classes after the first took from it.
+  chosen.push(...left);
+  return { chosen, extraSkills };
 }

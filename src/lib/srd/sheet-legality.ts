@@ -128,10 +128,13 @@ function classListOf(
   // A character already played keeps what it earned (the setting's own
   // promise, src/lib/schemas/game-settings.ts); one made at this table
   // follows its rule. A seated player rebuilding the character they have
-  // keeps its split, or part of it: no class the seat does not hold.
+  // keeps its split, or part of it: no class the seat does not hold. The
+  // table's rule also holds an in-place edit made at that table, which
+  // comes through the library door; a stored hero entering play keeps all.
   const held = new Set((context.heldClasses ?? []).map((entry) => textKey(entry.id)));
   const keepsHeld = held.size > 1 && sent.every((entry) => held.has(textKey(entry.id)));
-  if (context.door === "table" && context.multiclassAllowed === false && !keepsHeld) {
+  const makesHere = context.door === "table" || context.door === "library";
+  if (makesHere && context.multiclassAllowed === false && !keepsHeld) {
     problems.push("This table turns multiclassing off; a character made here holds one class.");
     return single;
   }

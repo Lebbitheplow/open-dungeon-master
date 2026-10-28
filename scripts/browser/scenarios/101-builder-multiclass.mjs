@@ -4,7 +4,9 @@
 // cannot reach is listed with its reason and refused), adds a rogue, gives
 // it two of the five levels and its skill, fills what the rogue's levels
 // owe, and takes the seat: the stored sheet holds fighter 3 / rogue 2. At a
-// table that turns multiclassing off the builder offers no second class.
+// table that turns multiclassing off the hero is let in with a note, and an
+// in-place edit there keeps its split and offers no new class; a hero made
+// there is offered no second class.
 // The seat and the hero it saved are given up again, so the table is
 // empty for the next viewport.
 //
@@ -61,10 +63,12 @@ export default {
     // ---- a table that allows a second class ----
     const tableId = ids.multiclassTableId;
     // A seat a stopped run left behind is given up first.
-    const left = await seatAt(tableId);
-    if (left) {
-      await api.delete(`${base}/api/campaigns/${tableId}/sheet`);
-      if (left.libraryCharacterId) await api.delete(`${base}/api/characters/${left.libraryCharacterId}`);
+    for (const leftAt of [tableId, ids.singleClassTableId]) {
+      const left = await seatAt(leftAt);
+      if (left) {
+        await api.delete(`${base}/api/campaigns/${leftAt}/sheet`);
+        if (left.libraryCharacterId) await api.delete(`${base}/api/characters/${left.libraryCharacterId}`);
+      }
     }
     check((await seatAt(tableId)) === null, "the two-path table starts with no hero for the lead");
     await buildAt(tableId);
@@ -187,8 +191,60 @@ export default {
       check(/turns multiclassing off\. Your character keeps the classes it has, but can't take a new class here\./.test(note), `the confirm sheet says the split is kept (${note})`);
       check((await sheet.locator('[data-join-rules="pass"]').count()) === 1, "the split hero is let in");
       await review("join-note-single-class-table");
-      await t.tap(page.locator(`${root}button`).filter({ hasText: /^Cancel$/ }).locator("visible=true").first());
-      await eventually(async () => (await page.locator(`${root}[data-join-confirm]`).count()) === 0, { label: "the sheet closes" });
+      // Seated there, the player edits the hero in place: the builder shows
+      // the split it holds with no class to add and no warning, and saving
+      // keeps fighter 3 / rogue 2 (the in-place edit, PUT shape 2).
+      const offId = ids.singleClassTableId;
+      const offSeat = page.waitForResponse(
+        (response) => response.url().endsWith(`/api/campaigns/${offId}/sheet`) && response.request().method() === "POST",
+        { timeout: 45_000 },
+      );
+      await t.tap(sheet.locator("[data-join-take]"));
+      check((await offSeat).status() === 201, "the split hero takes a seat at the single-class table");
+      await eventually(async () => !/\/character/.test((await t.url()).pathname), { timeoutMs: 20_000, label: "back to the single-class lobby" });
+      await t.open(`/campaigns/${offId}/character?mode=edit`);
+      // The edit opens on its summary, every step done: nothing the stored
+      // split holds is said to be off offer (the rogue's skill was, when the
+      // build read the stored skills out of order).
+      const editSummary = page.locator(`${active} [data-finish-summary]`).locator("visible=true");
+      await eventually(() => editSummary.count(), { timeoutMs: 30_000, label: "the edit's summary" });
+      await upTo(() => page.getByText(/no longer on offer/).locator("visible=true").count(), 1_500);
+      const offOffer = await page.getByText(/no longer on offer/).locator("visible=true").allInnerTexts();
+      check(offOffer.length === 0, `the stored split opens with nothing off offer (${offOffer.join(" ")})`);
+      check(/Every step is complete/.test((await page.locator(active).first().textContent()) ?? ""), "the stored split owes nothing");
+      await t.tap(page.locator(`${active} [data-summary-edit="calling"]`).locator("visible=true").first());
+      const kept = page.locator(`${active} [data-builder-target="multiclass"]`).locator("visible=true").first();
+      await eventually(() => kept.count(), { timeoutMs: 30_000, label: "the held split in the edit" });
+      await eventually(async () => /Fighter 3 \/ Rogue 2/.test(await kept.textContent()), { timeoutMs: 10_000, label: "the split named in the edit" });
+      check((await kept.locator("[data-add-class]").count()) === 0, "the edit offers no new class at the single-class table");
+      check(!/Remove the classes below/.test(await kept.textContent()), "the held split is not warned off");
+      await kept.scrollIntoViewIfNeeded();
+      await review("edit-held-split-single-class-table");
+      for (let step = 1; step < 6; step += 1) {
+        const next = page.locator(`${root}button.wizard-continue`).locator("visible=true").first();
+        await eventually(
+          async () => {
+            if (new RegExp(`^Step ${step + 1}:`).test(await currentStep(page, root))) return true;
+            if (await next.isEnabled()) await t.tap(next);
+            await upTo(async () => new RegExp(`^Step ${step + 1}:`).test(await currentStep(page, root)), 800);
+            return new RegExp(`^Step ${step + 1}:`).test(await currentStep(page, root));
+          },
+          { timeoutMs: 20_000, label: `Continue from step ${step} (the edit)` },
+        );
+      }
+      await eventually(() => page.locator(`${active} [data-finish-summary]`).locator("visible=true").count(), { timeoutMs: 10_000, label: "the edit's summary" });
+      const saved = page.waitForResponse(
+        (response) => response.url().endsWith(`/api/campaigns/${offId}/sheet`) && response.request().method() === "PUT",
+        { timeout: 45_000 },
+      );
+      await t.tap(visible(page, root, /^Save changes$/).first());
+      const savedStatus = (await saved).status();
+      check(savedStatus < 400, `the edit is saved (${savedStatus} ${await page.locator(`${root}[role="alert"]`).allInnerTexts().catch(() => [])})`);
+      const edited = await eventually(() => seatAt(offId), { timeoutMs: 20_000, label: "the edited seat" });
+      const editedClasses = (edited.classes ?? []).map((entry) => [entry.id, entry.level]);
+      check(JSON.stringify(editedClasses) === JSON.stringify([["fighter", 3], ["rogue", 2]]), `the edit keeps fighter 3 / rogue 2 (${JSON.stringify(editedClasses)})`);
+      await eventually(async () => !/\/character/.test((await t.url()).pathname), { timeoutMs: 20_000, label: "back to the lobby after the edit" });
+      check((await api.delete(`${base}/api/campaigns/${offId}/sheet`)).ok(), "the single-class seat is given up again");
     }
     // Give the seat up again.
     const removed = await api.delete(`${base}/api/campaigns/${tableId}/sheet`);

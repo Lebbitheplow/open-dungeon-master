@@ -305,6 +305,32 @@ await test("a seated split is rebuilt with the same classes at a table without m
   assert.match(JSON.stringify(made.body.problems), /turns multiclassing off/);
 });
 
+await test("an in-place edit at a table without multiclassing keeps the split and takes no new class", async () => {
+  const off = tableWithout();
+  const stored = splitInLibrary();
+  const joined = await send("sheet", "POST", { libraryCharacterId: stored.id }, { campaignId: off.id });
+  assert.equal(joined.status, 201, joined.error);
+  // The edit (PUT with the library id) keeps the classes it holds.
+  const kept = await send("sheet", "PUT", { editLibraryCharacterId: stored.id, sheet: splitInput({ name: "Split Edited" }) }, { campaignId: off.id });
+  assert.ok(kept.status < 400, `the edit was refused: ${JSON.stringify(kept.body.problems ?? kept.error)}`);
+  assert.deepEqual(classLevels(kept.sheet), [["fighter", 2], ["rogue", 1]]);
+  // A wizard level added through the edit is refused there.
+  const wider = await send(
+    "sheet",
+    "PUT",
+    {
+      editLibraryCharacterId: stored.id,
+      sheet: splitInput({
+        abilities: all13,
+        classes: [{ id: "fighter", subclass: "", level: 1 }, { id: "rogue", subclass: "", level: 1 }, { id: "wizard", subclass: "", level: 1 }],
+      }),
+    },
+    { campaignId: off.id },
+  );
+  assert.ok(wider.status >= 400, `a wizard was added by an edit at a table without multiclassing: ${JSON.stringify(wider.sheet && classLevels(wider.sheet))}`);
+  assert.match(JSON.stringify(wider.body.problems), /turns multiclassing off/);
+});
+
 // ---- not enforced today ----
 
 await test(
