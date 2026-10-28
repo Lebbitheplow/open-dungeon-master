@@ -85,7 +85,7 @@ function worldContext(campaignId: string): string {
   const party = listSheets(campaignId)
     .map(
       (sheet) =>
-        `- ${sheet.name}: level ${sheet.level} ${raceWords(sheet)} ${classWords(sheet.class)}${sheet.subclass ? ` (${sheet.subclass})` : ""}, background ${backgroundWords(sheet) || "unknown"}, ${sheet.spellcasting ? "casts spells" : "casts nothing at all"}${sheet.backstory ? `\n  backstory: ${sheet.backstory}` : ""}`,
+        `- ${sheet.name}: level ${sheet.level} ${raceWords(sheet)} ${classWords(sheet.class)}${sheet.subclass ? ` (${sheet.subclass})` : ""}, background ${backgroundWords(sheet) || "unknown"}, ${sheet.spellcasting ? "casts spells" : "casts nothing at all"}${sheet.backstory ? `\n  backstory: ${sheet.backstory}` : ""}${sheet.hopes ? `\n  their player hopes the story holds: ${sheet.hopes}` : ""}`,
     )
     .join("\n");
   return [

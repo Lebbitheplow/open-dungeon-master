@@ -796,12 +796,18 @@ export function describeSheet(
     // #429: the first 400 characters of 2,000 used to be all the DM saw).
     lines.push(`  Backstory: ${options.compact ? cutForRoom(sheet.backstory, COMPACT_TEXT_CHARS.backstory) : sheet.backstory}`);
   }
+  if (sheet.hopes) {
+    // What the player would love to see happen (a romance, a rival, a
+    // redemption), said out of character: a direction to steer toward when
+    // the story allows, never a script, and never quoted at the table.
+    lines.push(`  Their player hopes the story holds (out of character; work toward it when it fits, never announce it): ${options.compact ? cutForRoom(sheet.hopes, COMPACT_TEXT_CHARS.hopes) : sheet.hopes}`);
+  }
   return lines.join("\n");
 }
 
 // What a compact call keeps of the text the table wrote for the DM, and
 // what each notes list carries whole before its notes keep only their start.
-const COMPACT_TEXT_CHARS = { backstory: 400, note: 300 } as const;
+const COMPACT_TEXT_CHARS = { backstory: 400, hopes: 200, note: 300 } as const;
 const NOTES_SHARE_CHARS = 4_000;
 
 // The start of a text cut at a word, saying it was cut, so the model never

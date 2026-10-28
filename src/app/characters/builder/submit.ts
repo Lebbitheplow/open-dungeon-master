@@ -722,6 +722,9 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
         : null,
       notes: "",
       backstory: state.backstory.trim(),
+      // A state written before the field (a saved draft, a test's double)
+      // has none.
+      hopes: (state.hopes ?? "").trim(),
     }, effectiveLevel),
   };
 }

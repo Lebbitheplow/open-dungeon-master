@@ -87,6 +87,8 @@ export type BuilderDraftFields = {
   backgroundGearPicks: string[];
   optionPicks: string[];
   backstory: string;
+  // The player's hopes for the story (src/lib/schemas/sheet.ts HOPES_MAX).
+  hopes: string;
   gender: Gender;
   attraction: Attraction;
   appearance: string;
@@ -279,6 +281,7 @@ export function useBuilderState({
   // One-shot acknowledgement for the "caster with no spells" warning.
   const [spellWarningAck, setSpellWarningAck] = useState(false);
   const [backstory, setBackstory] = useState(initial?.backstory ?? "");
+  const [hopes, setHopes] = useState(initial?.hopes ?? "");
   const [gender, setGender] = useState<Gender>(initial?.gender ?? "");
   // Who they are drawn to (issue 501), kept through an edit like the gender.
   const [attraction, setAttraction] = useState<Attraction>(() => normalizeAttraction(initial?.attraction));
@@ -671,6 +674,7 @@ export function useBuilderState({
     backgroundGearPicks: setBackgroundGearPicks,
     optionPicks: setOptionPicks,
     backstory: setBackstory,
+    hopes: setHopes,
     gender: setGender,
     attraction: setAttraction,
     appearance: setAppearance,
@@ -752,6 +756,7 @@ export function useBuilderState({
     backgroundGearPicks,
     optionPicks,
     backstory,
+    hopes,
     gender,
     attraction,
     appearance,
@@ -825,6 +830,7 @@ export function useBuilderState({
     optionPicks, setOptionPicks,
     spellWarningAck, setSpellWarningAck,
     backstory, setBackstory,
+    hopes, setHopes,
     gender, setGender,
     attraction, setAttraction,
     appearance, setAppearance,

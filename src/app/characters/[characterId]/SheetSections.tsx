@@ -160,6 +160,14 @@ export function SheetSections({ sheet, level = 1 }: { sheet: CreateSheetInput; l
           </p>
         </SheetPanel>
       ) : null}
+
+      {/* What each new table starts from; a table's own copy is changed on
+          the sheet in play and stays at that table. */}
+      {sheet.hopes ? (
+        <SheetPanel title="Hopes for the story">
+          <p className="whitespace-pre-wrap font-serif text-sm leading-relaxed text-stone-300">{sheet.hopes}</p>
+        </SheetPanel>
+      ) : null}
     </div>
   );
 }

@@ -25,7 +25,7 @@ export async function runStorySetup(campaignId: string) {
   const preset = presetFor(campaign.gameSettings);
   const sheets = listSheets(campaignId);
   const party = sheets
-    .map((sheet) => `- ${sheet.name}: level ${sheet.level} ${raceWords(sheet)} ${classWords(sheet.class)}${sheet.subclass ? ` (${sheet.subclass})` : ""}, background ${backgroundWords(sheet) || "unknown"}`)
+    .map((sheet) => `- ${sheet.name}: level ${sheet.level} ${raceWords(sheet)} ${classWords(sheet.class)}${sheet.subclass ? ` (${sheet.subclass})` : ""}, background ${backgroundWords(sheet) || "unknown"}${sheet.hopes ? `; their player hopes the story holds: ${sheet.hopes}` : ""}`)
     .join("\n");
 
   const worldHints = [

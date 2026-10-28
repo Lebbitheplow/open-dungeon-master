@@ -16,8 +16,11 @@ import { rollHeroName } from "../heroNames";
 import type { BuilderState } from "../useBuilderState";
 import { Field, StepPanel, inputClass } from "./shared";
 
-// The sheet schema's own limit on a backstory (src/lib/schemas/sheet.ts).
+// The sheet schema's own limits on a backstory and on the hopes for the story
+// (src/lib/schemas/sheet.ts HOPES_MAX, checked equal by
+// scripts/test-story-hopes.mjs).
 const BACKSTORY_MAX = 2000;
+const HOPES_MAX = 500;
 
 // The last step before the summary (backlog F4): who the hero is, once the
 // player knows what they made. The name (its dice roll a name that fits the
@@ -50,6 +53,7 @@ export function IdentityStep({
   const appearanceId = useId();
   const alignmentId = useId();
   const backstoryId = useId();
+  const hopesId = useId();
   const keptSaved = Boolean(initial?.portrait && portrait?.url === initial.portrait.url);
 
   return (
@@ -203,6 +207,23 @@ export function IdentityStep({
           aria-describedby={`${backstoryId}-length`}
         />
         <LengthNote id={`${backstoryId}-length`} length={state.backstory.length} max={BACKSTORY_MAX} from={0.75} />
+      </StepPanel>
+
+      <StepPanel
+        title="Hopes for this story (optional)"
+        help="What would you love to see happen? A romance, a rival, a redemption, an old debt paid. Only you and the GM see this. The GM reads it every turn and steers toward it when the story allows. You can change it later from your character sheet."
+      >
+        <textarea
+          value={state.hopes}
+          onChange={(event) => state.setHopes(event.target.value)}
+          rows={3}
+          maxLength={HOPES_MAX}
+          placeholder="A romance with the companion who travels with us, and a reckoning with the knight who betrayed me..."
+          className={cn(inputClass, "resize-y")}
+          aria-label="Hopes for this story"
+          aria-describedby={`${hopesId}-length`}
+        />
+        <LengthNote id={`${hopesId}-length`} length={state.hopes.length} max={HOPES_MAX} from={0.75} />
       </StepPanel>
     </div>
   );

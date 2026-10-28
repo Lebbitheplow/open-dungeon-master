@@ -364,7 +364,7 @@ const ROWS = {
   },
 };
 
-const COSMETIC = ["portrait", "notes", "backstory"];
+const COSMETIC = ["portrait", "notes", "backstory", "hopes"];
 
 await test("every key of the player's patch schema has a row here", () => {
   for (const key of Object.keys(patchSheetSchema.shape)) {
