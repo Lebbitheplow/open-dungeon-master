@@ -3,7 +3,7 @@ import path from "node:path";
 import { imagesAvailable } from "@/lib/capabilities";
 import { generateStoryImage } from "@/lib/image-generate";
 import type { LibraryCharacter } from "@/lib/db/characters";
-import { updateCharacterPortrait } from "@/lib/db/characters";
+import { getCharacter, updateCharacterPortrait } from "@/lib/db/characters";
 import { listSheetsForLibraryCharacter, patchSheet } from "@/lib/db/sheets";
 import { setNpcPortrait } from "@/lib/db/npcs";
 import { publishPersisted } from "@/lib/events";
@@ -153,6 +153,12 @@ export function queueCompanionPortrait(
       const updated = patchSheet(sheet.id, { portrait });
       if (updated) {
         publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
+      }
+      // A companion kept in its builder's library wears the same face there,
+      // until somebody gives the entry one of its own.
+      const kept = sheet.libraryCharacterId ? getCharacter(sheet.libraryCharacterId) : null;
+      if (kept && !kept.sheet.portrait) {
+        updateCharacterPortrait(kept.userId, kept.id, portrait);
       }
       map.delete(sheet.id);
     } catch (error) {

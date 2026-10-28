@@ -118,8 +118,10 @@ export function CompanionBuilderDialog({
     }
   }
 
+  // One opened from the library joins tied to that entry; one built here is
+  // kept as a new entry (companions/create).
   async function submit(result: BuilderResult) {
-    await post({ sheet: result.sheet });
+    await post(tweaking ? { sheet: result.sheet, fromLibraryCharacterId: tweaking.id } : { sheet: result.sheet });
   }
 
   return (
@@ -160,7 +162,8 @@ export function CompanionBuilderDialog({
           <p className="mb-3 text-xs text-stone-500">
             {humanDm
               ? "This ally joins the party as a character you play from the GM console. In combat their turn waits for you: act for them, then end the turn. They start at the party's level."
-              : "This ally joins the party as an AI companion the GM plays. They start at the party's level."}
+              : "This ally joins the party as an AI companion the GM plays. They start at the party's level."}{" "}
+            They are kept in your characters too, so another campaign can bring them along.
           </p>
 
           {library.length && !tweaking ? (
@@ -222,7 +225,8 @@ export function CompanionBuilderDialog({
               ) : null}
               <p className="text-[10px] text-stone-600">
                 They arrive at level {level}, adapted the same way a player character is. Change first
-                opens one in the builder; your library copy stays as it is.
+                opens one in the builder; your library copy stays as it is until you save them from the
+                party.
               </p>
             </div>
           ) : null}

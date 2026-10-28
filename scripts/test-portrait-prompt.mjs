@@ -140,7 +140,7 @@ await test("a companion's portrait can be painted again by whoever runs the stor
   assert.match(source, /requireStoryAuthority\(campaignId\)/);
   assert.match(source, /!sheet\.isCompanion/);
   assert.match(source, /imagesAvailable\(\)/);
-  assert.match(source, /queueCompanionPortrait\(context\.campaign, cleared, \{ personality: cleared\.personality \}\)/);
+  assert.match(source, /queueCompanionPortrait\(context\.campaign, cleared, \{\n\s+personality: cleared\.personality,/);
   const panel = read("src/app/campaigns/[campaignId]/PartyPanel.tsx");
   assert.match(panel, /sheet\.isCompanion && steersStory && canPaint \? \(\n\s+<CompanionPaintButton/);
 });

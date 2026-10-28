@@ -570,6 +570,17 @@ export function listSheetsForLibraryCharacter(libraryCharacterId: string): Chara
   return rows.map(mapSheet);
 }
 
+// A campaign sheet tied to the library entry it is now kept as: a companion
+// the GM wrote in, saved to its keeper's characters
+// (src/lib/characters/keep-companion.ts). "Save to my characters" then
+// writes its progress back there, as a player's own sheet does.
+export function linkSheetToLibrary(sheetId: string, libraryCharacterId: string): CharacterSheet | null {
+  getDatabase()
+    .prepare(`UPDATE character_sheets SET library_character_id = ?, updated_at = ? WHERE id = ?`)
+    .run(libraryCharacterId, nowIso(), sheetId);
+  return getSheetById(sheetId);
+}
+
 // The name of the character this user plays in each of their campaigns,
 // keyed by campaign id. One query for the whole roster, because the home
 // screen lists every campaign at once and a per-campaign lookup would cost

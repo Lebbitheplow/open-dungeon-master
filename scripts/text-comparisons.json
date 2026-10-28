@@ -127,6 +127,7 @@
     "app/campaigns/[campaignId]/CinematicParts.tsx#re-word": [["key",1,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
     "app/campaigns/[campaignId]/CinematicParts.tsx#str-eq": [["key",1,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
     "app/campaigns/[campaignId]/CinematicParts.tsx#str-key": [["key",1,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
+    "app/campaigns/[campaignId]/CompanionKeepButton.tsx#str-eq": [["key",1,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
     "app/campaigns/[campaignId]/CompanionPaintButton.tsx#str-eq": [["key",1,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
     "app/campaigns/[campaignId]/Composer.tsx#str-eq": [["key",1,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],
     "app/campaigns/[campaignId]/Composer.tsx#str-list": [["key",3,"UI: ids, fixed choices, DOM and keyboard names, stored values"]],

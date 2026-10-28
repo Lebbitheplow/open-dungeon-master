@@ -28,6 +28,7 @@ import { TradeDialog } from "@/app/campaigns/[campaignId]/TradeDialog";
 import { CompanionBuilderDialog } from "@/app/campaigns/[campaignId]/CompanionBuilderDialog";
 import { CompanionCommand } from "@/app/campaigns/[campaignId]/CompanionCommand";
 import { CompanionPaintButton } from "@/app/campaigns/[campaignId]/CompanionPaintButton";
+import { CompanionKeepButton } from "@/app/campaigns/[campaignId]/CompanionKeepButton";
 import { hostOffers, offersImages, useCapabilities } from "@/lib/use-capabilities";
 import { offSide, SideBadge } from "@/app/campaigns/[campaignId]/SideBadge";
 import { DiceSourcesButton } from "@/app/campaigns/[campaignId]/DiceSourcesDialog";
@@ -922,6 +923,9 @@ export function PartyPanel({
                 </KitButton>
                 {campaignId && sheet.isCompanion && steersStory && canPaint ? (
                   <CompanionPaintButton campaignId={campaignId} sheet={sheet} />
+                ) : null}
+                {campaignId && sheet.isCompanion && steersStory && sheet.companionKind === "party" && !sheet.summon ? (
+                  <CompanionKeepButton campaignId={campaignId} sheet={sheet} />
                 ) : null}
                 {mine ? <DiceLookButton /> : null}
                 {mine && realDiceAllowed && myMember ? (

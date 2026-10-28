@@ -1,5 +1,6 @@
 import { isErrorResponse, requireMember, requireStoryAuthority } from "@/lib/campaign-api";
 import { imagesAvailable } from "@/lib/capabilities";
+import { getCharacter, updateCharacterPortrait } from "@/lib/db/characters";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { publishPersisted } from "@/lib/events";
 import { portraitStatus, queueCompanionPortrait } from "@/lib/portrait";
@@ -37,9 +38,20 @@ export async function POST(
   if (state === "queued" || state === "generating") {
     return Response.json({ ok: true, status: state }, { status: 202 });
   }
+  // A companion kept in the library is painted from its entry too: the
+  // appearance and the dragon the campaign sheet does not keep. An entry
+  // wearing the same face gives it up, and takes the new one when it lands.
+  const kept = sheet.libraryCharacterId ? getCharacter(sheet.libraryCharacterId) : null;
+  if (kept && sheet.portrait && kept.sheet.portrait?.url === sheet.portrait.url) {
+    updateCharacterPortrait(kept.userId, kept.id, null);
+  }
   const cleared = patchSheet(sheet.id, { portrait: null }) ?? sheet;
   publishPersisted(campaignId, "sheet_updated", { sheet: cleared });
-  queueCompanionPortrait(context.campaign, cleared, { personality: cleared.personality });
+  queueCompanionPortrait(context.campaign, cleared, {
+    personality: cleared.personality,
+    appearance: kept?.sheet.appearance,
+    ancestry: kept?.sheet.racialChoices?.ancestry,
+  });
   return Response.json({ ok: true, status: "queued" }, { status: 202 });
 }
 
