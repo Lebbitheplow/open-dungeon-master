@@ -145,4 +145,15 @@ await test("a companion's portrait can be painted again by whoever runs the stor
   assert.match(panel, /sheet\.isCompanion && steersStory && canPaint \? \(\n\s+<CompanionPaintButton/);
 });
 
+await test("an older host, with no route for it, shows no Paint a portrait, and keeps the app's screens", async () => {
+  const { hostOffers } = await import("../src/lib/use-capabilities.ts");
+  const { SERVER_FEATURES } = await import("../src/lib/capabilities.ts");
+  assert.equal(SERVER_FEATURES.companionPortrait, true, "this server says it has the route");
+  const older = { story: { configured: true, reachable: true }, utility: { configured: true }, images: { configured: true, reachable: true, backend: "comfyui" }, tts: { configured: false, reachable: false }, stt: { configured: false }, voice: { enabled: false, mode: "off" } };
+  assert.equal(hostOffers(older, "companionPortrait"), false, "a host that sends no flag lacks the route");
+  assert.equal(hostOffers({ ...older, features: { companionPortrait: true } }, "companionPortrait"), true);
+  assert.equal(hostOffers(null, "companionPortrait"), true, "unknown offers it, as every capability does");
+  assert.match(read("src/app/campaigns/[campaignId]/PartyPanel.tsx"), /const canPaint = offersImages\(capabilities\) && hostOffers\(capabilities, "companionPortrait"\);/);
+});
+
 console.log(`\n${passed} portrait prompt checks passed`);
