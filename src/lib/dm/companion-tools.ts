@@ -524,14 +524,13 @@ export function finalizeNewCompanion(
   // Guests are transient and the render queue shares the one iGPU with the DM
   // model, so only lasting party members are worth a portrait; a sheet built
   // with its own portrait already (manual build) keeps it.
+  // The sheet as built carries what the campaign sheet does not keep: a
+  // manual build's appearance and a dragonborn's ancestry.
   if (kind === "party" && !sheet.portrait) {
-    queueCompanionPortrait(campaign, {
-      id: sheet.id,
-      name: sheet.name,
-      race: sheet.race,
-      class: sheet.class,
-      background: sheet.background,
+    queueCompanionPortrait(campaign, sheet, {
       personality,
+      appearance: input.appearance,
+      ancestry: input.racialChoices?.ancestry,
     });
   }
 

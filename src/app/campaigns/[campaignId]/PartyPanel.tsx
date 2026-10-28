@@ -27,6 +27,8 @@ import { CharacterSheetDialog } from "@/app/campaigns/[campaignId]/CharacterShee
 import { TradeDialog } from "@/app/campaigns/[campaignId]/TradeDialog";
 import { CompanionBuilderDialog } from "@/app/campaigns/[campaignId]/CompanionBuilderDialog";
 import { CompanionCommand } from "@/app/campaigns/[campaignId]/CompanionCommand";
+import { CompanionPaintButton } from "@/app/campaigns/[campaignId]/CompanionPaintButton";
+import { offersImages, useCapabilities } from "@/lib/use-capabilities";
 import { offSide, SideBadge } from "@/app/campaigns/[campaignId]/SideBadge";
 import { DiceSourcesButton } from "@/app/campaigns/[campaignId]/DiceSourcesDialog";
 import { DiceLookButton } from "@/components/DiceLookEditor";
@@ -405,6 +407,8 @@ export function PartyPanel({
   multiCharacter?: "off" | "one_active" | "all_active";
 }) {
   const packArt = usePackArt(worldPack);
+  // A companion's "Paint a portrait" only where the server can paint.
+  const canPaint = offersImages(useCapabilities());
   const [editingSheetId, setEditingSheetId] = useState("");
   const [viewingSheetId, setViewingSheetId] = useState("");
   const [croppingSheetId, setCroppingSheetId] = useState("");
@@ -914,6 +918,9 @@ export function PartyPanel({
                   <ImagePlus className="size-3.5" />
                   {sheet.portrait ? "Change portrait" : "Add portrait"}
                 </KitButton>
+                {campaignId && sheet.isCompanion && steersStory && canPaint ? (
+                  <CompanionPaintButton campaignId={campaignId} sheet={sheet} />
+                ) : null}
                 {mine ? <DiceLookButton /> : null}
                 {mine && realDiceAllowed && myMember ? (
                   <>

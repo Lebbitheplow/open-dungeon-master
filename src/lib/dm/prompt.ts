@@ -15,6 +15,7 @@ import { attackSummary } from "@/lib/srd/creature-attacks";
 import { encumbranceFor } from "@/lib/srd/encumbrance";
 import { wearingIsExplicit } from "@/lib/srd/armor";
 import { classFeatureDescription, findCustomClass } from "@/lib/classes";
+import { backgroundWords, classWords, raceWords } from "@/lib/sheet-words";
 // The genre catalogs' rules text, all of it: the model reads it beside a
 // custom feature (src/lib/classes/feature-text.ts).
 import "@/lib/classes/feature-text-all";
@@ -590,16 +591,18 @@ export function describeSheet(
         ? " | STABLE at 0 HP (unconscious)"
         : ` | DYING: ${sheet.deathSaves.successes} death-save successes, ${sheet.deathSaves.failures} failures`
     : "";
-  // Multiclass header: "barbarian 3 [Berserker] / rogue 2 (level 5)".
+  // Multiclass header: "barbarian 3 [Berserker] / rogue 2 (level 5)". A
+  // workshop class goes by its name: its id ("homebrew-<id>") tells the GM
+  // nothing (issue 569).
   const classLabel =
     (sheet.classes?.length ?? 0) > 1
       ? `${sheet.classes
           .map(
             (entry) =>
-              `${entry.id}${entry.subclass ? ` [${entry.subclass}]` : ""} ${entry.level}`,
+              `${classWords(entry.id)}${entry.subclass ? ` [${entry.subclass}]` : ""} ${entry.level}`,
           )
           .join(" / ")} (level ${sheet.level})`
-      : `${sheet.class}${sheet.subclass ? ` [${sheet.subclass}]` : ""} ${sheet.level}`;
+      : `${classWords(sheet.class)}${sheet.subclass ? ` [${sheet.subclass}]` : ""} ${sheet.level}`;
   const hitDiceLabel = sheet.hitDicePools?.length
     ? sheet.hitDicePools
         .map((pool) => `${Math.max(0, pool.total - pool.spent)}/${pool.total} ${pool.die}`)
@@ -617,7 +620,7 @@ export function describeSheet(
     ? `  Carrying ${load.carriedLb} lb of a ${load.capacityLb} lb capacity${load.unweighed ? ` (${load.unweighed} item${load.unweighed === 1 ? "" : "s"} of unknown weight, so the total is a floor)` : ""}${load.note ? `: ${load.note}` : ""}${load.overCapacity ? ". OVER CAPACITY: they cannot pick up anything more." : ""}`
     : null;
   const lines = [
-    `- ${sheet.name} (${sizeForRace(sheet.race)} ${sheet.race.replaceAll("_", " ")} ${classLabel}) characterId=${sheet.id} played by ${playedBy}${realDice ? " (rolls PHYSICAL dice)" : ""}`,
+    `- ${sheet.name} (${sizeForRace(sheet.race)} ${raceWords(sheet)} ${classLabel}) characterId=${sheet.id} played by ${playedBy}${realDice ? " (rolls PHYSICAL dice)" : ""}`,
     `  HP ${sheet.currentHp}/${sheet.maxHp}${sheet.tempHp ? ` (+${sheet.tempHp} temp)` : ""}${deathNote} | AC ${sheet.ac} | Speed ${speedFor(sheet, { encumbrance: options.encumbrance })} | Passive Perception ${derived.passivePerception} | Initiative ${formatModifier(derived.initiative)} | Hit Dice ${hitDiceLabel}`,
     `  ${abilities} | Save proficiencies: ${sheet.proficiencies.saves.map((save) => save.toUpperCase()).join(", ") || "none"}`,
     `  Skill proficiencies: ${proficientSkills || "none"}`,
@@ -774,7 +777,7 @@ export function describeSheet(
     lines.push(`  Worn and in hand: ${worn.length ? worn.join(", ") : "nothing"} (everything else is packed away)`);
   }
   if (sheet.background || sheet.alignment) {
-    lines.push(`  Background: ${sheet.background || "unknown"} | Alignment: ${sheet.alignment || "unstated"}`);
+    lines.push(`  Background: ${backgroundWords(sheet) || "unknown"} | Alignment: ${sheet.alignment || "unstated"}`);
   }
   // Who they are (issue 501): the gender always, and at a romance table who
   // they are drawn to and whether their player opened them to advances.

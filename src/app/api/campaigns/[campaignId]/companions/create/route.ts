@@ -11,6 +11,7 @@ import { admitSheet, refusal } from "@/lib/characters/admit";
 import { olderBuilderOf } from "@/lib/srd/legality/older-builder";
 import { createSheetSchema } from "@/lib/schemas/sheet";
 import { publishWithSeq } from "@/lib/events";
+import { classWords, raceWords } from "@/lib/sheet-words";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -120,7 +121,7 @@ export async function POST(
       seq,
       authorType: "system",
       glyph: "system-party",
-      content: `${context.user.username} brings a companion into the party: ${sheet.name}, a ${sheet.race.replaceAll("_", " ")} ${sheet.class}. Introduce them into the scene at the next natural moment.`,
+      content: `${context.user.username} brings a companion into the party: ${sheet.name}, a ${raceWords(sheet)} ${classWords(sheet.class)}. Introduce them into the scene at the next natural moment.`,
     });
     publishWithSeq(campaignId, seq, "message_added", { message });
     requestDmTurn(campaignId);

@@ -25,7 +25,10 @@ type ReadyCharacter = {
   name: string;
   role?: "pc" | "companion";
   race: string;
+  // A homebrew race's and a workshop class's names (the fields hold ids).
+  raceLabel?: string;
   class: string;
+  className?: string;
   subclass: string;
   level: number;
   portraitStatus?: "queued" | "generating" | "failed" | null;
@@ -145,8 +148,8 @@ export default function HeroReadyPage({ params }: { params: Promise<{ characterI
   }
 
   const portraitUrl = character.sheet.portrait?.url;
-  const ancestry = spaced(character.race);
-  const calling = `${spaced(character.class)}${character.subclass ? ` (${spaced(character.subclass)})` : ""}`;
+  const ancestry = character.raceLabel ?? spaced(character.race);
+  const calling = `${character.className ?? spaced(character.class)}${character.subclass ? ` (${spaced(character.subclass)})` : ""}`;
   const motion = lowEffects ? "" : "reveal";
 
   return (

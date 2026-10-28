@@ -12,6 +12,7 @@ import { publishPersisted } from "@/lib/events";
 import { stripReasoningArtifacts } from "@/lib/story-prompt";
 import { requestDmMessage } from "@/lib/dm/model";
 import { partyStoryOf, partyStorySetupLines } from "@/lib/dm/party-story";
+import { backgroundWords, classWords, raceWords } from "@/lib/sheet-words";
 
 // Pre-session story setup: one model call that invents a premise, opening
 // scene, and a SECRET outline the DM steers by. Runs on the campaign's DM
@@ -24,7 +25,7 @@ export async function runStorySetup(campaignId: string) {
   const preset = presetFor(campaign.gameSettings);
   const sheets = listSheets(campaignId);
   const party = sheets
-    .map((sheet) => `- ${sheet.name}: level ${sheet.level} ${sheet.race} ${sheet.class}${sheet.subclass ? ` (${sheet.subclass})` : ""}, background ${sheet.background || "unknown"}`)
+    .map((sheet) => `- ${sheet.name}: level ${sheet.level} ${raceWords(sheet)} ${classWords(sheet.class)}${sheet.subclass ? ` (${sheet.subclass})` : ""}, background ${backgroundWords(sheet) || "unknown"}`)
     .join("\n");
 
   const worldHints = [

@@ -9,7 +9,7 @@ import { settleLevelChange, withoutDuplicateClasses } from "@/lib/srd/level-chan
 import { normalizeSpellcasting } from "@/lib/srd/spell-lists";
 import { settleAttunement, type Wearer } from "@/lib/srd/magic-items";
 import { itemWeightByName, repairedWeight } from "@/lib/content";
-import { homebrewRaceLabel, hydrateHomebrewGear } from "@/lib/db/homebrew";
+import { homebrewLabel, homebrewRaceLabel, hydrateHomebrewGear } from "@/lib/db/homebrew";
 import { subclassExtrasForTable } from "@/lib/db/subclass-extras";
 import { storedGender } from "@/lib/gender";
 import { attractionJson, normalizeAttraction } from "@/lib/attraction";
@@ -111,6 +111,7 @@ function mapSheet(row: SheetRow): CharacterSheet {
   // Sheets from before the cantrip list kept cantrips in prepared/known.
   const spellcasting = normalizeSpellcasting(parsedCasting);
   const raceLabel = homebrewRaceLabel(row.user_id, row.race, row.campaign_id);
+  const backgroundLabel = homebrewLabel(row.user_id, row.background, "background", row.campaign_id);
   return {
     id: row.id,
     campaignId: row.campaign_id,
@@ -122,6 +123,7 @@ function mapSheet(row: SheetRow): CharacterSheet {
     class: row.class,
     subclass: row.subclass ?? "",
     background: row.background,
+    ...(backgroundLabel ? { backgroundLabel } : {}),
     alignment: row.alignment,
     gender: storedGender(row.gender),
     attraction: normalizeAttraction(row.attraction_json ?? ""),

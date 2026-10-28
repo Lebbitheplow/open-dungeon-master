@@ -715,6 +715,8 @@ export type CharacterSheet = {
   class: string;
   subclass: string;
   background: string;
+  // A homebrew background's name, derived like raceLabel.
+  backgroundLabel?: string;
   alignment: string;
   // The builder's choice, or "" (src/lib/gender.ts): read by the portrait
   // prompt, the placeholder face, the voice cast and the speech reader.

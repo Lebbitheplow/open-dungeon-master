@@ -22,6 +22,8 @@ export type ChooserCharacter = {
   name: string;
   role?: "pc" | "companion";
   race: string;
+  // A homebrew race's name (GET /api/characters).
+  raceLabel?: string;
   class: string;
   subclass: string;
   level: number;
@@ -165,7 +167,7 @@ export function HeroChooser({
             ) : null}
           </div>
           <p className="mt-1 text-sm text-stone-400">
-            Level {character.level} {titleCase(character.race)} {workshopClassName(character.class) ?? titleCase(character.class)}
+            Level {character.level} {character.raceLabel ?? titleCase(character.race)} {workshopClassName(character.class) ?? titleCase(character.class)}
             {character.subclass ? ` (${character.subclass})` : ""}
           </p>
           {from ? <p className="mt-0.5 text-xs text-stone-500">From {from}</p> : null}

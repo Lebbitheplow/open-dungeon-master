@@ -6,6 +6,7 @@ import { draftPartyBackstory } from "@/lib/dm/party-draft";
 import { mayWritePartyBackstory, PARTY_BACKSTORY_MAX, PARTY_BACKSTORY_REFUSAL } from "@/lib/dm/party-story";
 import { publishPersisted } from "@/lib/events";
 import { isWorkshop } from "@/lib/workshop/kind";
+import { backgroundWords, classWords, raceWords } from "@/lib/sheet-words";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -83,9 +84,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ cam
     context.campaign,
     characters.map((sheet) => ({
       name: sheet.name,
-      race: sheet.race,
-      className: sheet.class,
-      background: sheet.background,
+      race: raceWords(sheet),
+      className: classWords(sheet.class),
+      background: backgroundWords(sheet),
       backstory: sheet.backstory || (sheet.isCompanion ? sheet.personality : ""),
     })),
     body.current ?? "",

@@ -11,6 +11,7 @@ import { listChapters } from "@/lib/db/chapters";
 import { hasHumanDm, narratorIsAi } from "@/lib/dm/viewer";
 import { listMessagesInSeqRange } from "@/lib/db/messages";
 import { listSheets } from "@/lib/db/sheets";
+import { backgroundWords, classWords, raceWords } from "@/lib/sheet-words";
 import { presetFor, packWorldHints } from "@/lib/worlds/preset";
 import { nameRegisterHint } from "@/lib/genres";
 import {
@@ -84,7 +85,7 @@ function worldContext(campaignId: string): string {
   const party = listSheets(campaignId)
     .map(
       (sheet) =>
-        `- ${sheet.name}: level ${sheet.level} ${sheet.race} ${sheet.class}${sheet.subclass ? ` (${sheet.subclass})` : ""}, background ${sheet.background || "unknown"}, ${sheet.spellcasting ? "casts spells" : "casts nothing at all"}${sheet.backstory ? `\n  backstory: ${sheet.backstory}` : ""}`,
+        `- ${sheet.name}: level ${sheet.level} ${raceWords(sheet)} ${classWords(sheet.class)}${sheet.subclass ? ` (${sheet.subclass})` : ""}, background ${backgroundWords(sheet) || "unknown"}, ${sheet.spellcasting ? "casts spells" : "casts nothing at all"}${sheet.backstory ? `\n  backstory: ${sheet.backstory}` : ""}`,
     )
     .join("\n");
   return [
@@ -145,7 +146,7 @@ function partyCompositionContext(campaignId: string): string {
       );
       continue;
     }
-    const build = `${sheet.subclass ? `${sheet.subclass} ` : ""}${sheet.class}`;
+    const build = `${sheet.subclass ? `${sheet.subclass} ` : ""}${classWords(sheet.class)}`;
     for (const pet of sheet.pets ?? []) {
       lines.push(
         `- ${sheet.name} is a ${build} with a ${pet.kind.replace("_", " ")} ("${pet.name}", ${pet.form}): ${PET_PLANNING[pet.kind] ?? PET_PLANNING.other}.`,
@@ -175,7 +176,7 @@ function partyCompositionContext(campaignId: string): string {
 function partyCapabilityContext(campaignId: string): string {
   const lines = listSheets(campaignId).map(
     (sheet) =>
-      `- ${sheet.name}: level ${sheet.level} ${sheet.subclass ? `${sheet.subclass} ` : ""}${sheet.class}${sheet.isCompanion ? " (AI companion)" : ""}, ${sheet.spellcasting ? "casts spells" : "casts nothing at all"}.`,
+      `- ${sheet.name}: level ${sheet.level} ${sheet.subclass ? `${sheet.subclass} ` : ""}${classWords(sheet.class)}${sheet.isCompanion ? " (AI companion)" : ""}, ${sheet.spellcasting ? "casts spells" : "casts nothing at all"}.`,
   );
   if (!lines.length) {
     return "";

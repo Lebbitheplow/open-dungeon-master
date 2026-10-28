@@ -4,6 +4,7 @@ import { allocateSeq } from "@/lib/db/campaigns";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { publishWithSeq } from "@/lib/events";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { classWords, raceWords } from "@/lib/sheet-words";
 
 // A character arriving after the adventure started gets a table note so the
 // DM writes them into the story on its next turn. Every door that seats a
@@ -22,7 +23,7 @@ export function announceMidGameJoin(context: MemberContext, sheet: CharacterShee
     seq,
     authorType: "system",
     glyph: "system-party",
-    content: `${JOIN_NOTE_PREFIX}${context.user.username} has joined the party as ${sheet.name}, a ${sheet.race.replaceAll("_", " ")} ${sheet.class}.${backstoryHint} Introduce them into the scene at the next natural moment.`,
+    content: `${JOIN_NOTE_PREFIX}${context.user.username} has joined the party as ${sheet.name}, a ${raceWords(sheet)} ${classWords(sheet.class)}.${backstoryHint} Introduce them into the scene at the next natural moment.`,
   });
   publishWithSeq(campaignId, seq, "message_added", { message });
 }

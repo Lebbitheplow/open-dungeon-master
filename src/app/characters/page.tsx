@@ -42,11 +42,14 @@ type LibraryCharacter = {
   id: string;
   name: string;
   race: string;
+  // A homebrew race's name (the race holds its id).
+  raceLabel?: string;
   class: string;
   // A workshop class's name (the class holds its id).
   className?: string;
   subclass: string;
   background: string;
+  backgroundLabel?: string;
   level: number;
   updatedAt: string;
   portraitStatus?: "queued" | "generating" | "failed" | null;
@@ -512,11 +515,11 @@ function CharacterCard({
           </div>
         </div>
         <p className="mt-2 text-sm text-stone-400">
-          {titleCase(character.race)}
+          {character.raceLabel ?? titleCase(character.race)}
           {character.subclass ? ` (${character.subclass})` : ""}
         </p>
         {character.background ? (
-          <p className="reveal text-xs text-stone-500">{titleCase(character.background)}</p>
+          <p className="reveal text-xs text-stone-500">{character.backgroundLabel ?? titleCase(character.background)}</p>
         ) : null}
       </Link>
       <RosterPortraitStatus
