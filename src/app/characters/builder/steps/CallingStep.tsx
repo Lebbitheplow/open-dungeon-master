@@ -359,6 +359,7 @@ export function CallingStep({
           derived={derived}
           klass={klass}
           classes={classes}
+          classGroups={classGroups}
           allowed={multiclassAllowed}
           numbers={numbers}
         />

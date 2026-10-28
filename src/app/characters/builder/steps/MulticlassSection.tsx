@@ -32,6 +32,7 @@ export function MulticlassSection({
   derived,
   klass,
   classes,
+  classGroups,
   allowed,
   numbers,
 }: {
@@ -39,28 +40,41 @@ export function MulticlassSection({
   derived: BuilderDerived;
   klass: ClassOption;
   classes: ClassOption[];
+  // The class grid's own groups for this table (usePickerGroups): the list
+  // offers the same classes in the same order, the grid's first group up
+  // front and the rest (other books, other settings) folded, as the level-up
+  // dialog folds them.
+  classGroups: PickerGroup[];
   // The table's multiclassing setting (useTableRules); true in the library.
   allowed: boolean;
   // "Show rules and numbers" (backlog F11): the hit die joins its words.
   numbers: boolean;
 }) {
   const [adding, setAdding] = useState(false);
+  const [othersOpen, setOthersOpen] = useState(false);
   const listId = useId();
   const { extras, classList, primaryLevel, effectiveLevel } = derived;
   const nameOf = (id: string) => classes.find((entry) => entry.id === id)?.name ?? id;
-  const choices = useMemo(
-    () =>
-      multiclassChoices({
-        rows: classes,
+  const { choices, first } = useMemo(() => {
+    const ids = [...new Set(classGroups.flatMap((group) => group.options.map((option) => option.id)).filter(Boolean))];
+    const rows = ids.flatMap((id) => classes.filter((row) => row.id === id).slice(0, 1));
+    const up = new Set(classGroups.length > 1 ? classGroups[0].options.map((option) => option.id) : ids);
+    return {
+      choices: multiclassChoices({
+        rows: rows.length ? rows : classes,
         classList,
         abilities: derived.shownAbilities,
         rowOf: (id) => classes.find((entry) => entry.id === id),
       }),
-    [classes, classList, derived.shownAbilities],
-  );
+      first: up,
+    };
+  }, [classGroups, classes, classList, derived.shownAbilities]);
+  const upFront = choices.filter((choice) => first.has(choice.row.id));
+  const folded = choices.filter((choice) => !first.has(choice.row.id));
   // One tab stop for the list, the arrows between its classes (F16). A
   // class that may not be added still takes focus, so its reason is read.
-  const roving = useRovingGroup({ keys: choices.map((choice) => choice.row.id) });
+  const shown = othersOpen ? [...upFront, ...folded] : upFront;
+  const roving = useRovingGroup({ keys: shown.map((choice) => choice.row.id) });
   // A stored split shows at a table that turns multiclassing off (it keeps
   // what it has); a new class is offered only where the table allows it.
   const canAdd = allowed && extras.length < MULTICLASS_CAP - 1 && primaryLevel >= 2;
@@ -124,7 +138,7 @@ export function MulticlassSection({
               onKeyDown={roving.onKeyDown}
               onFocus={roving.onFocus}
             >
-              {choices.map((choice) => (
+              {shown.map((choice) => (
                 <li key={choice.row.id}>
                   <button
                     type="button"
@@ -158,6 +172,17 @@ export function MulticlassSection({
                 </li>
               ))}
             </ul>
+            {folded.length ? (
+              <button
+                type="button"
+                aria-expanded={othersOpen}
+                onClick={() => setOthersOpen((open) => !open)}
+                data-add-class-more=""
+                className="mt-2 inline-flex min-h-11 items-center rounded-md px-2 text-sm text-sky-300 transition-colors hover:bg-stone-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-400"
+              >
+                {othersOpen ? "Show fewer classes" : `Show ${folded.length} more from other books and settings`}
+              </button>
+            ) : null}
           </div>
         </div>
       ) : allowed && extras.length < MULTICLASS_CAP - 1 && extras.length ? (

@@ -942,7 +942,15 @@ function CharacterBuilderForm({
         aside={
           race || klass
             ? [
-                [race?.name, klass?.name].filter(Boolean).join(" "),
+                // A split names each class's levels (backlog F9).
+                [
+                  race?.name,
+                  derived.multiclass
+                    ? classSplitWords(derived.classList, (id) => classes.find((entry) => entry.id === id)?.name ?? id)
+                    : klass?.name,
+                ]
+                  .filter(Boolean)
+                  .join(" "),
                 `level ${derived.effectiveLevel}`,
                 ...(klass ? [hitDieChip(klass.hitDie, numbers)] : []),
               ].map((part, index) => (

@@ -9,6 +9,13 @@ import { UserAvatar, ui } from "@/lib/ui";
 import type { CampaignMember } from "@/lib/campaign-types";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
+// A hero's class and level as the party row says it: "fighter 5", or each
+// class's levels on a split, "fighter 3 / rogue 2" (backlog F9).
+function classWords(sheet: Pick<CharacterSheet, "class" | "level" | "classes">): string {
+  const split = sheet.classes ?? [];
+  return split.length > 1 ? split.map((entry) => `${entry.id} ${entry.level}`).join(" / ") : `${sheet.class} ${sheet.level}`;
+}
+
 // Small gold badge on a party row: DM, co-DM, party lead, owner, real dice.
 function SeatBadge({ children, tip }: { children: ReactNode; tip?: string }) {
   const badge = (
@@ -169,7 +176,7 @@ export function LobbyParty({
                     </p>
                     <p className="truncate text-sm text-stone-400">
                       {sheet
-                        ? `${sheet.name} · ${sheet.raceLabel ?? sheet.race.replaceAll("_", " ")} ${sheet.class} ${sheet.level}`
+                        ? `${sheet.name} · ${sheet.raceLabel ?? sheet.race.replaceAll("_", " ")} ${classWords(sheet)}`
                         : "No character yet"}
                     </p>
                   </div>
