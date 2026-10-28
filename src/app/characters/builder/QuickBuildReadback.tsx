@@ -44,7 +44,7 @@ export function QuickBuildReadback({
       <ul className="max-h-40 space-y-1 overflow-y-auto pr-1">
         {readback.filled.map((pick, index) => (
           <li key={`${pick.target}-${index}`} className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-            <span className="shrink-0 rounded-full border border-sky-400/40 bg-sky-400/10 px-1.5 py-0.5 text-[10px] text-sky-200">
+            <span className="shrink-0 rounded-full border border-sky-400/40 bg-sky-400/10 px-1.5 py-0.5 text-[0.875rem] text-sky-200">
               Picked for you
             </span>
             <span className="min-w-0 flex-1">

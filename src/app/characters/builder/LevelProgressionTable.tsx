@@ -140,7 +140,7 @@ export function LevelProgressionTable({
                   {row.mark ? (
                     <span
                       className={cn(
-                        "ml-1.5 rounded-full border px-1.5 py-0.5 font-sans text-[11px]",
+                        "ml-1.5 rounded-full border px-1.5 py-0.5 font-sans text-[0.875rem]",
                         row.mark === "next" ? "border-amber-500/50 text-amber-200" : "border-stone-600 text-stone-300",
                       )}
                     >

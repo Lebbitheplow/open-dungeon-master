@@ -2,7 +2,7 @@
 
 import { ContentScopeProvider } from "@/lib/content-scope";
 import { Loader2 } from "lucide-react";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import { AvatarCropDialog } from "@/app/settings/AvatarCropDialog";
 import { Wizard, type WizardNotice, type WizardStep } from "@/components/ui/Wizard";
 import { cn } from "@/lib/cn";
@@ -64,6 +64,8 @@ import { QuickBuildQuiz, type QuizVoice } from "./QuickBuildQuiz";
 import { QuickBuildReadback } from "./QuickBuildReadback";
 import { useQuickFill, type FillRequest } from "./useQuickFill";
 import { useTableRules } from "./useTableRules";
+import { hitDieChip } from "./lineage";
+import { useShowNumbers } from "./numbersPref";
 
 export type { BuilderResult } from "./submit";
 
@@ -295,6 +297,8 @@ function CharacterBuilderForm({
   ]);
   const featDescs = featTexts.descs;
   const derived = useBuilderDerived({ state, race, klass, background, fixedLevel, rules: table.rules, featDescs, genre });
+  // The header's hit die in words, its die with "Show rules and numbers" on (backlog F11).
+  const numbers = useShowNumbers();
   // Each feat's prerequisite judged as the save judges it, against the
   // character as built so far (featPrereqs.ts): the feat pickers read it,
   // and the gates below flag a picked feat a later choice broke.
@@ -926,13 +930,20 @@ function CharacterBuilderForm({
         jumpAhead
         finishFromAnyStep={Boolean(initial)}
         notice={notice}
+        // Each part holds together when the line wraps under the name
+        // (creator.css): "High HP, d10" never splits across two lines.
         aside={
           race || klass
             ? [
                 [race?.name, klass?.name].filter(Boolean).join(" "),
                 `level ${derived.effectiveLevel}`,
-                ...(klass ? [`d${klass.hitDie}`] : []),
-              ].join(" · ")
+                ...(klass ? [hitDieChip(klass.hitDie, numbers)] : []),
+              ].map((part, index) => (
+                <Fragment key={part}>
+                  {index ? " · " : ""}
+                  <span className="whitespace-nowrap">{part}</span>
+                </Fragment>
+              ))
             : undefined
         }
         steps={flow}

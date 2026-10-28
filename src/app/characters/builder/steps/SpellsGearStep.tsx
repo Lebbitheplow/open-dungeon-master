@@ -571,7 +571,7 @@ export function SpellsSection({
               )}
             >
               <span className="block font-display tracking-wide">{label}</span>
-              <span className="font-mono text-[11px] text-stone-500">{count}</span>
+              <span className="font-mono text-[0.875rem] text-stone-500">{count}</span>
             </button>
           ))}
         </div>
@@ -693,7 +693,7 @@ function SpellDeskHeader({
         <div data-chosen-spells="" className="grid gap-2 sm:grid-cols-2">
           {lists.map((list) => (
             <section key={list.id} aria-label={`${list.title}, ${list.count}`} className="rounded-lg border border-stone-800 px-3 py-2">
-              <h4 className="eyebrow text-[11px] text-stone-400">
+              <h4 className="eyebrow text-[0.875rem] text-stone-400">
                 {list.title} <span className="font-mono">{list.count}</span>
               </h4>
               {list.names.length ? (

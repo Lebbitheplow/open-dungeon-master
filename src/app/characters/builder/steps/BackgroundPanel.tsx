@@ -59,7 +59,7 @@ export function BackgroundPanel({
                 type="button"
                 onClick={() => state.changeBackground(entry.id)}
                 aria-pressed={background?.id === entry.id}
-                className="rounded-md border border-stone-700/70 px-1.5 py-0.5 text-[11px] text-stone-300 transition-colors hover:border-amber-500/40 hover:text-amber-100 aria-pressed:border-amber-400/60 aria-pressed:text-amber-100"
+                className="rounded-md border border-stone-700/70 px-1.5 py-0.5 text-sm text-stone-300 transition-colors hover:border-amber-500/40 hover:text-amber-100 aria-pressed:border-amber-400/60 aria-pressed:text-amber-100"
               >
                 {entry.name}
               </button>

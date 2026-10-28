@@ -88,7 +88,7 @@ export function IdentityStep({
                 key={seed}
                 type="button"
                 onClick={() => state.setName(seed)}
-                className="rounded-md border border-stone-700/70 px-1.5 py-0.5 text-[11px] text-stone-400 transition-colors hover:border-amber-500/40 hover:text-amber-100"
+                className="rounded-md border border-stone-700/70 px-1.5 py-0.5 text-sm text-stone-400 transition-colors hover:border-amber-500/40 hover:text-amber-100"
               >
                 {seed}
               </button>

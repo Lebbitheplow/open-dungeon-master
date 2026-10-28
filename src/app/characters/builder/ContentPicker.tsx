@@ -91,7 +91,7 @@ export default function ContentPicker({
         </p>
       ) : null}
       {unadmitted.length ? (
-        <p className="mt-1 text-[11px] text-stone-500">
+        <p className="mt-1 text-sm text-stone-500">
           Your own {unadmitted.join(", ")} {unadmitted.length === 1 ? "is" : "are"} not offered at this table: whoever runs it (the owner, the
           GM or the assistant GM) keeps a copy in their workshop to admit one.
         </p>
@@ -160,7 +160,7 @@ export default function ContentPicker({
 // button's description.
 export function PrerequisiteLine({ id, blocked, note }: { id: string; blocked: boolean; note: string }) {
   return (
-    <span id={id} aria-hidden="true" className={cn("pl-5 text-[11px]", blocked ? "text-red-300" : "text-stone-500")}>
+    <span id={id} aria-hidden="true" className={cn("pl-5 text-sm", blocked ? "text-red-300" : "text-stone-500")}>
       {note}
     </span>
   );

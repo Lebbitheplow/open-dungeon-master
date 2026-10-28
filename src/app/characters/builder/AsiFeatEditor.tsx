@@ -88,11 +88,11 @@ export default function AsiFeatEditor({
             : "Ability score improvements"}
         </h2>
         {unresolved > 0 ? (
-          <span className="rounded-full border border-amber-700 bg-amber-950/50 px-2 py-0.5 text-[11px] text-amber-200">
+          <span className="rounded-full border border-amber-700 bg-amber-950/50 px-2 py-0.5 text-[0.875rem] text-amber-200">
             {unresolved} to pick
           </span>
         ) : (
-          <span className="rounded-full border border-stone-700 bg-stone-900 px-2 py-0.5 text-[11px] text-stone-400">
+          <span className="rounded-full border border-stone-700 bg-stone-900 px-2 py-0.5 text-[0.875rem] text-stone-400">
             All picked
           </span>
         )}
@@ -121,7 +121,7 @@ export default function AsiFeatEditor({
                 >
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-stone-300">Level {slotLevel} improvement</span>
-                    <span className="rounded-full border border-stone-700 bg-stone-900 px-2 py-0.5 text-[11px] text-stone-400">
+                    <span className="rounded-full border border-stone-700 bg-stone-900 px-2 py-0.5 text-[0.875rem] text-stone-400">
                       Taken in play
                     </span>
                   </div>
