@@ -193,10 +193,10 @@ await test("leftover sessions are deleted at the start, and one already gone, or
   // A folder that is still there: ODM was killed, and nothing removed it.
   const kept = fs.mkdtempSync(path.join(os.tmpdir(), "odm-harness-"));
   const sessions = [
-    { id: "ses_gone", title: "Open Dungeon Master", metadata: tag, location: { directory: path.join(tmp, "odm-harness-gone0") }, time: { created: 1, updated: Date.now() } },
-    { id: "ses_old", title: "Open Dungeon Master", metadata: tag, location: { directory: kept }, time: { created: 1, updated: Date.now() - 45 * 60_000 } },
-    { id: "ses_live", title: "Open Dungeon Master", metadata: tag, location: { directory: kept }, time: { created: 1, updated: Date.now() - 60_000 } },
-    { id: "ses_admin", title: "Open Dungeon Master", location: { directory: path.join(tmp, "odm-harness-gone1") }, time: { created: 1, updated: 1 } },
+    { id: "ses_gone", title: "Open Game Master", metadata: tag, location: { directory: path.join(tmp, "odm-harness-gone0") }, time: { created: 1, updated: Date.now() } },
+    { id: "ses_old", title: "Open Game Master", metadata: tag, location: { directory: kept }, time: { created: 1, updated: Date.now() - 45 * 60_000 } },
+    { id: "ses_live", title: "Open Game Master", metadata: tag, location: { directory: kept }, time: { created: 1, updated: Date.now() - 60_000 } },
+    { id: "ses_admin", title: "Open Game Master", location: { directory: path.join(tmp, "odm-harness-gone1") }, time: { created: 1, updated: 1 } },
   ];
   const deleted = () => requests().filter((entry) => entry.method === "DELETE").map((entry) => entry.url);
   for (const deleteStatus of [200, 404, 500]) {

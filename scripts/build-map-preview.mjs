@@ -202,7 +202,7 @@ const html = `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Open Dungeon Master: map art preview</title>
+<title>Open Game Master: map art preview</title>
 <style>
 :root { color-scheme: dark; --ink:#e8e3d9; --dim:#9a9387; --line:#2c2925; --bg:#100f0d; --card:#181613; --gold:#d9a84a; }
 * { box-sizing:border-box }

@@ -30,7 +30,7 @@ falls through to the env var.
 | `OPEN_DUNGEON_ROCM` | auto-detect | `0` disables / `1` forces the AMD ROCm path on Windows |
 | `SQLITE_DB_PATH` | `data/local-roleplay.sqlite` | Database location |
 
-## Multiplayer (Open Dungeon Master) variables
+## Multiplayer (Open Game Master) variables
 
 | Variable | Default | Purpose |
 |---|---|---|
@@ -71,7 +71,7 @@ falls through to the env var.
 | `APP_PUBLIC_URL` | forwarded headers / request origin | Public URL players use (e.g. `https://dungeon.example.org`); needed for OAuth redirect URIs when the reverse proxy doesn't send `X-Forwarded-Host`/`X-Forwarded-Proto` |
 | `WORLD_REGISTRY_URL` | none | https JSON index of downloadable campaign plugins, browsable under Admin, Campaign plugins (or set there; the Admin field wins, and `off` there browses none). No registry is built in. The packs any registry lists are third-party content this project neither ships nor vets, and nothing installs without an admin doing it. See [worlds.md](worlds.md) |
 | `WORLD_PACKS_DIR` | `data/worlds` | Where installed campaign plugins are written. Gitignored, and not covered by the app's MIT license |
-| `ADDON_REGISTRY_URL` | the Open Dungeon Master list | https address of the addon list browsed under Admin, Addons (or set there). `off` browses none. See [addons.md](addons.md) |
+| `ADDON_REGISTRY_URL` | the Open Game Master list | https address of the addon list browsed under Admin, Addons (or set there). `off` browses none. See [addons.md](addons.md) |
 | `ADDON_GITHUB_API_BASE`, `ADDON_GITHUB_RAW_BASE` | `https://api.github.com`, `https://raw.githubusercontent.com` | Where an addon's files are listed and fetched from, for trying a list without GitHub. Leave unset |
 | `ADDONS_DIR` | `data/addons` | Where addon packages, their data folders and their working files live |
 | `ODM_ADDONS` | on | `off` switches addons off on this server |

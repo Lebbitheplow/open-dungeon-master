@@ -157,7 +157,7 @@ await test("wrong kind and version are refused by name", async () => {
   const bundle = await buildCharacterBundle(character(), fakeReader);
   const kind = parseCharacterBundle({ ...bundle, kind: "odm.workshop" });
   assert.equal(kind.ok, false);
-  assert.match(kind.error, /Not an Open Dungeon Master character file/);
+  assert.match(kind.error, /Not an Open Game Master character file/);
   const version = parseCharacterBundle({ ...bundle, version: 2 });
   assert.equal(version.ok, false);
   assert.match(version.error, /version \(2\)/);

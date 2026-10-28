@@ -128,7 +128,7 @@ export function AgentConnectLines({
         <li>
           <span className="su-step-n">3</span>
           <span className="min-w-0 flex-1">
-            Ask it something about this server, for example <em className="text-amber-100">&ldquo;list my Open Dungeon Master campaigns&rdquo;</em>.
+            Ask it something about this server, for example <em className="text-amber-100">&ldquo;list my Open Game Master campaigns&rdquo;</em>.
           </span>
         </li>
       </ol>

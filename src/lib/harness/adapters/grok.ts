@@ -35,7 +35,7 @@ export function grokAgentProfile(system: string, images: boolean): string {
   return [
     "---",
     "name: odm-dm",
-    "description: Open Dungeon Master",
+    "description: Open Game Master",
     `tools: [${tools.map((tool) => JSON.stringify(tool)).join(", ")}]`,
     "---",
     "",

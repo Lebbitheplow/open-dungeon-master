@@ -253,7 +253,7 @@ export function AdminWorldsPanel() {
         </p>
         <p className="mt-2 text-xs leading-5 text-stone-500">
           Packs based on an existing universe are community works. They are not distributed with
-          Open Dungeon Master, are not covered by its MIT license, and are not endorsed by the
+          Open Game Master, are not covered by its MIT license, and are not endorsed by the
           rights holders of the settings they reference. Installing one is your decision as the
           operator of this server.
         </p>

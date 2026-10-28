@@ -361,7 +361,7 @@ calling your tools by hand with test arguments.
 An addon is installed from its GitHub repository at one commit: the server
 fetches the addon's folder file by file, so the rest of a bigger repository is
 never downloaded. On the downloader list, that commit is the one that was
-audited; open a pull request to the Open Dungeon Master repository adding your
+audited; open a pull request to the Open Game Master repository adding your
 addon's entry ([guidelines.md](guidelines.md#submitting-an-addon)). An admin
 can also paste a link to your repository (its newest release's tag, else its
 default branch), a release, or a folder at a branch. For trying an addon on

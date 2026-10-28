@@ -290,7 +290,7 @@ await test("catalog entries come from the manifest, and the list is held to its 
   const manifest = addonManifestSchema.parse(example);
   const entry = catalogEntry(manifest, { ...pinned, path: "examples/addons/hello-dungeon" }, { contentSha256: "d".repeat(64), bytes: 4096 }, "tools");
   assert.equal(entry.name, "Hello Dungeon");
-  assert.equal(entry.author, "Open Dungeon Master");
+  assert.equal(entry.author, "Open Game Master");
   assert.deepEqual(entry.contributes.boardViews, ["Isometric", "Isometric session"]);
   assert.deepEqual(entry.permissions, ["ai.text"]);
   assert.equal(entry.setupMB, 1);

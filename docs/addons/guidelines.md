@@ -2,7 +2,7 @@
 
 What the downloader list accepts, how an addon gets on it, and how it is
 audited. Addons are their authors' own projects, in their authors' own GitHub
-repositories: Open Dungeon Master does not write, ship or update them. It
+repositories: Open Game Master does not write, ship or update them. It
 provides the framework, and it keeps one list of addons that have been
 audited, [`addons/catalog.json`](../../addons/catalog.json) in this
 repository, which every server shows under **Admin > Addons** unless its
@@ -79,7 +79,7 @@ anything whose main purpose is to fetch content the user has no right to.
 
 ## Content and rights
 
-Open Dungeon Master runs the D&D 5e SRD 5.1 under its open license. Material
+Open Game Master runs the D&D 5e SRD 5.1 under its open license. Material
 outside it belongs to its publishers.
 
 - **An addon ships no copyrighted game content.** No rulebook text, stat

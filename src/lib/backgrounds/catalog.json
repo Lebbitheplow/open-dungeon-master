@@ -1,5 +1,5 @@
 {
-  "_note": "Original setting-specific backgrounds for Open Dungeon Master. Not SRD-derived content. Skills are ids from src/lib/srd/skills.json.",
+  "_note": "Original setting-specific backgrounds for Open Game Master. Not SRD-derived content. Skills are ids from src/lib/srd/skills.json.",
   "backgrounds": [
     {
       "id": "corpo_dropout",

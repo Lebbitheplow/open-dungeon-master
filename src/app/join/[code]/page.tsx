@@ -151,7 +151,7 @@ export default function JoinPage({ params }: { params: Promise<{ code: string }>
                 {error}
               </p>
               <Link href="/" className={ui.btnSecondary}>
-                Back to Open Dungeon Master
+                Back to Open Game Master
               </Link>
             </div>
           ) : (
@@ -162,7 +162,7 @@ export default function JoinPage({ params }: { params: Promise<{ code: string }>
                   installed app does not have. */}
               <p className="mt-4 text-center">
                 <Link href="/" className="text-xs text-stone-500 hover:text-amber-200">
-                  Not now, back to Open Dungeon Master
+                  Not now, back to Open Game Master
                 </Link>
               </p>
             </>

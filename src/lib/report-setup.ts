@@ -102,7 +102,7 @@ function modelLine(model: ReportModel | null | undefined): string {
 function appLines(app: ShellReportFacts): string[] {
   const where = [app.platform, app.arch].filter(Boolean).join(" ");
   const line = [
-    `App: Open Dungeon Master ${app.version || "(version unknown)"}${app.installKind ? ` (${app.installKind})` : ""}${where ? ` on ${where}` : ""}`,
+    `App: Open Game Master ${app.version || "(version unknown)"}${app.installKind ? ` (${app.installKind})` : ""}${where ? ` on ${where}` : ""}`,
     app.os,
     app.runtime,
     app.screens ? `${app.screens} screens` : "",

@@ -1,5 +1,5 @@
 // WorldForge in the workshop. WorldForge is Smoebo's world-building app,
-// brought into Open Dungeon Master with their blessing: its model of a world
+// brought into Open Game Master with their blessing: its model of a world
 // (typed entries with their own fields, a web of links that can be hidden or
 // false, calendars and a timeline, nested maps with pins and regions, secrets
 // and who knows them, names still to be written) now lives inside every

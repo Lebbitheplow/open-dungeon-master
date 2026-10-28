@@ -116,7 +116,7 @@ export async function renderStoryDocx(doc: StoryDocument): Promise<Uint8Array> {
   }
 
   const document = new Document({
-    creator: "Open Dungeon Master",
+    creator: "Open Game Master",
     title: `${doc.title} — Story`,
     description: doc.premise.slice(0, 500),
     features: { updateFields: true },

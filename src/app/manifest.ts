@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Open Dungeon Master",
-    short_name: "Open DM",
+    name: "Open Game Master",
+    short_name: "Open GM",
     description: "Multiplayer D&D 5e campaigns with an AI Dungeon Master.",
     start_url: "/",
     id: "/",

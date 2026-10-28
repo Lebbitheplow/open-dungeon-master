@@ -457,7 +457,7 @@ export function RulebookReader({
 function Frontispiece({ onBegin }: { onBegin: () => void }) {
   return (
     <div className="rb-frontis">
-      <p className="rb-running">Open Dungeon Master</p>
+      <p className="rb-running">Open Game Master</p>
       <h1 className="rb-frontis-title">The Rulebook</h1>
       <p className="rb-frontis-sub">Fifth Edition &middot; System Reference Document 5.1</p>
       {/* eslint-disable-next-line @next/next/no-img-element */}

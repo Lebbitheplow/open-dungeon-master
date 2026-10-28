@@ -1,5 +1,5 @@
 {
-  "_license": "Original content for Open Dungeon Master. Suggested opening spell lists for players who do not know 5e. These are editorial recommendations plus one line on why each pick is useful; no publisher's text is reproduced.",
+  "_license": "Original content for Open Game Master. Suggested opening spell lists for players who do not know 5e. These are editorial recommendations plus one line on why each pick is useful; no publisher's text is reproduced.",
   "_note": "A new player facing an empty search box does not know that a druid wants Goodberry or that a wizard wants Shield, so they pick nothing and their character is weaker for it. The builder offers these as one-tap picks alongside the full searchable list, and nothing here is forced: they are a starting point, not a restriction.",
   "_shape": "classes[classId] = { why: one line on how the class casts, cantrips: [{ n: name, d: why it is a good pick }], spells: [...] }. Custom genre casters borrow a list through spellClassFor().",
   "classes": {

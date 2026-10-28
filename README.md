@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/banner.png" alt="Open Dungeon Master" width="100%">
+<img src="docs/banner.png" alt="Open Game Master" width="100%">
 
 <br>
 
@@ -20,7 +20,12 @@
 
 </div>
 
-**Open Dungeon Master** runs multiplayer (and solo) Dungeons &amp; Dragons 5e
+> [!NOTE]
+> Open Game Master was called Open Dungeon Master until October 2026. The apps,
+> worlds and accounts carry over unchanged; only the name and the website
+> (now [opengamemaster.com](https://opengamemaster.com)) moved.
+
+**Open Game Master** runs multiplayer (and solo) Dungeons &amp; Dragons 5e
 campaigns with an AI Dungeon Master, on your own machine. The narrator is whichever
 AI you already have: **a local model** (llama.cpp, Ollama, LM Studio, vLLM), **an
 API key** (OpenAI, OpenRouter, or any OpenAI-compatible endpoint), or **a CLI agent

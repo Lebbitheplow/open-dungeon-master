@@ -233,7 +233,7 @@ export function Dashboard({ user, onLogout }: { user: SessionUser; onLogout: () 
             <AppBrand className="ts-brand">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/assets/ui/book-closed.webp" alt="" className="ts-brand-book" />
-              <span className="ts-wordmark">Open Dungeon Master</span>
+              <span className="ts-wordmark">Open Game Master</span>
             </AppBrand>
             <div className="ts-cluster">
               <AppHomeButton />

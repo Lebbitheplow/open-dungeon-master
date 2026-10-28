@@ -546,7 +546,7 @@ export function HelpDialog({
 
       <Section icon={BookOpen} title="About">
         <p>
-          Open Dungeon Master is a self-hosted, multiplayer Dungeons &amp; Dragons 5e platform run
+          Open Game Master is a self-hosted, multiplayer Dungeons &amp; Dragons 5e platform run
           by an AI Dungeon Master. Server admins manage users, models, images, voice and campaign
           plugins from the Admin panel. Game content comes from the SRD 5.1 and Open5e; see{" "}
           <Link href="/licenses" className="text-amber-300 underline-offset-2 hover:underline">

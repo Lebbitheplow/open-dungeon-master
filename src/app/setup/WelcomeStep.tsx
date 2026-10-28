@@ -46,7 +46,7 @@ export function WelcomeStep({
           value={draft.serverName}
           maxLength={100}
           onChange={(event) => update((current) => ({ ...current, serverName: event.target.value }))}
-          placeholder="Open Dungeon Master"
+          placeholder="Open Game Master"
         />
         <span className="mt-1 block text-[11px] text-stone-500">Shown on the sign-in page and in the apps&apos; server lists.</span>
       </label>

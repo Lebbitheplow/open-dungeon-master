@@ -501,7 +501,7 @@ export function finishBundle<T extends ReportBundle>(bundle: T): T {
 }
 
 function readableLines(bundle: ReportBundle): string[] {
-  const lines = [`Open Dungeon Master report, made ${bundle.createdAt} from ${bundle.madeFrom === "table" ? "a table" : "Admin"}.`];
+  const lines = [`Open Game Master report, made ${bundle.createdAt} from ${bundle.madeFrom === "table" ? "a table" : "Admin"}.`];
   const setup = bundle.setup;
   if (setup) {
     lines.push(...setupLines(setup).map((line) => `${line}.`));

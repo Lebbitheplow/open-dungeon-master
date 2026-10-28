@@ -1,6 +1,6 @@
 # Backup and restore
 
-Open Dungeon Master keeps campaign state in an encrypted SQLite database and stores uploaded/generated media on disk. A useful backup therefore needs both the state tree and the database encryption key.
+Open Game Master keeps campaign state in an encrypted SQLite database and stores uploaded/generated media on disk. A useful backup therefore needs both the state tree and the database encryption key.
 
 ## Create a backup
 

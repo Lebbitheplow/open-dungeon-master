@@ -1,4 +1,4 @@
-# qwen3.6-dm: the default DM model for Open Dungeon Master.
+# qwen3.6-dm: the default DM model for Open Game Master.
 #
 # Ollama's default context window is tiny and silently truncates the DM
 # prompt (party sheets, scene, story summary), which makes the model loop.

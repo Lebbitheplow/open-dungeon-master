@@ -1,4 +1,4 @@
-# Open Dungeon Master. One container, one process. The app uses a synchronous
+# Open Game Master. One container, one process. The app uses a synchronous
 # SQLite writer, an in-process event bus and an in-process media queue, so it
 # must never be scaled past a single replica.
 #

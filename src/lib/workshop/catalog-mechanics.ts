@@ -249,7 +249,7 @@ export function bundledBackgroundRows(q: string, results: Array<{ slug: string }
       name: option.name,
       source: "bundled",
       documentSlug: "odm",
-      document: "Open Dungeon Master",
+      document: "Open Game Master",
       data: { desc: option.blurb ?? "", feature: option.feature ?? "", feature_desc: option.featureDesc ?? "" },
       table: {
         grants: {

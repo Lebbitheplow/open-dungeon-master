@@ -55,7 +55,7 @@ function reportText(about: About): string {
   const { build, update } = about;
   const inApp = shellHost() ? "yes" : "no";
   return [
-    `Open Dungeon Master ${build.label}`,
+    `Open Game Master ${build.label}`,
     `Commit: ${build.commit || "unknown"}${build.dirty ? " (with uncommitted changes)" : ""}`,
     `Built: ${build.builtAt || "unknown"}`,
     `Latest release: ${"latest" in update ? update.latest.version : update.state === "off" ? "not checked" : "could not check"}`,
@@ -177,10 +177,10 @@ export function AboutDialog({ open, onOpenChange, isAdmin = false }: { open: boo
       ) : (
         <div className="reveal space-y-4">
           <div>
-            <p className="gold-title font-display text-xl tracking-wide">Open Dungeon Master</p>
+            <p className="gold-title font-display text-xl tracking-wide">Open Game Master</p>
             <p className="mt-0.5 text-sm text-stone-300">
               Version <span className="font-mono text-amber-100">{build.version}</span>
-              {about.serverName && about.serverName !== "Open Dungeon Master" ? <span className="text-stone-500"> on {about.serverName}</span> : null}
+              {about.serverName && about.serverName !== "Open Game Master" ? <span className="text-stone-500"> on {about.serverName}</span> : null}
             </p>
           </div>
 

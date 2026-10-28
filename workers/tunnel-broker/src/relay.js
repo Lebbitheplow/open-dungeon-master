@@ -100,7 +100,7 @@ export function createRelay({ lookup, fetch: fetchImpl = (...args) => fetch(...a
 
   return async function relay(request, env) {
     const target = parseRelayPath(new URL(request.url).pathname);
-    if (!target) return json({ error: "That is not an Open Dungeon Master assistant link." }, 404);
+    if (!target) return json({ error: "That is not an Open Game Master assistant link." }, 404);
     if (!METHODS.has(request.method)) {
       return json({ error: "Method not allowed." }, 405, { allow: "POST, GET, DELETE" });
     }

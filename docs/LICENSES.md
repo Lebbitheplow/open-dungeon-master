@@ -2,7 +2,7 @@
 
 ## Application
 
-Open Dungeon Master is a fork of
+Open Game Master is a fork of
 [Open Dungeon](https://github.com/newideas99/open-dungeon) by Jacob Ferrari,
 released under the MIT license. This fork keeps the MIT license; see
 [LICENSE](../LICENSE).
