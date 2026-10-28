@@ -1,7 +1,7 @@
 // The /j invite redirector.
 //
 // An ODM invite is really two facts: which server, and which room code. A
-// link like  https://opendungeonmaster.com/j?s=https://host&c=CODE  carries
+// link like  https://opengamemaster.com/j?s=https://host&c=CODE  carries
 // both through one stable domain, which buys three things:
 //
 //   1. The client apps can register ONE domain for deep links (Android App
@@ -13,13 +13,23 @@
 //
 // SECURITY: this is deliberately an interstitial, not a redirect. A blind
 // redirector on a trusted domain is a phishing primitive (the link reads as
-// opendungeonmaster.com but lands anywhere), so the page always shows the
+// the project's domain but lands anywhere), so the page always shows the
 // real destination host and makes the person click it. The server URL is
 // parsed, allowlisted to http/https, and re-serialized; the code is
 // uppercased and checked against the invite alphabet before either is
 // echoed into HTML, and everything is escaped on the way out anyway.
 
-const DOWNLOAD_URL = "https://opendungeonmaster.com";
+// Hosts whose pages now live on the site: the domain the project moved off,
+// and both www names. Their invite links (/j) and App Link check are still
+// answered where they are, so links already shared and the Android apps
+// already installed keep working until the old domain lapses.
+const MOVED_HOSTS = new Set(["opendungeonmaster.com", "www.opendungeonmaster.com", "www.opengamemaster.com"]);
+
+// The project's site (SITE_URL in wrangler.toml): the downloads every page
+// points at, and where a moved host's pages go.
+function siteUrl(env) {
+  return parseServer(env?.SITE_URL ?? "") || "https://opengamemaster.com";
+}
 
 // Campaign room codes: 4 to 12 chars from the unambiguous alphabet
 // (src/lib/db/campaigns.ts). Account invite codes never appear in /j links.
@@ -129,9 +139,16 @@ const worker = {
     if (url.pathname === "/.well-known/assetlinks.json") {
       return assetLinks(env);
     }
-    if (!url.pathname.startsWith("/j")) {
-      return Response.redirect(DOWNLOAD_URL, 302);
+    const site = siteUrl(env);
+    if (url.pathname !== "/j" && !url.pathname.startsWith("/j/")) {
+      // A moved host's page goes to the same path on the site, for good. On
+      // the site's own host only /j* reaches this Worker; the rest goes home.
+      if (MOVED_HOSTS.has(url.hostname) && url.origin !== site) {
+        return Response.redirect(`${site}${url.pathname}${url.search}`, 301);
+      }
+      return Response.redirect(site, 302);
     }
+    const siteLink = `<a href="${escapeHtml(site)}" style="color:#fcd34d">${escapeHtml(new URL(site).host)}</a>`;
 
     // Both shapes are accepted: /j?s=...&c=CODE and /j/CODE?s=...
     const pathCode = url.pathname.split("/")[2] ?? "";
@@ -143,7 +160,7 @@ const worker = {
         "Open Dungeon Master",
         `<h1>That invite link is incomplete</h1>
          <p>Ask whoever sent it to share it again from their campaign.</p>
-         <a class="btn secondary" href="${DOWNLOAD_URL}">About Open Dungeon Master</a>`,
+         <a class="btn secondary" href="${escapeHtml(site)}">About Open Dungeon Master</a>`,
       );
     }
 
@@ -159,7 +176,7 @@ const worker = {
        <a class="btn primary" href="${escapeHtml(browserLink)}">Join in your browser</a>
        <a class="btn secondary" href="${escapeHtml(appLink)}">Open in the app</a>
        <p class="fine">No app yet? The browser works fully. Downloads live at
-         <a href="${DOWNLOAD_URL}" style="color:#fcd34d">opendungeonmaster.com</a>.</p>
+         ${siteLink}.</p>
        <p class="fine">Only continue if you expected this invite. This game server is run by
          whoever shared the link, not by Open Dungeon Master.</p>`,
     );

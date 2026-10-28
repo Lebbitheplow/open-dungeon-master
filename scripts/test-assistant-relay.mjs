@@ -28,7 +28,7 @@ async function test(name, fn) {
   console.log(`ok: ${name}`);
 }
 
-const PLAY = "https://play-abcd2345.opendungeonmaster.com";
+const PLAY = "https://play-abcd2345.opengamemaster.com";
 const DAY = 24 * 60 * 60 * 1000;
 
 // A broker that records what it was asked and answers like the real one.
@@ -37,7 +37,7 @@ function fakeBroker(status = 200) {
   const fetchImpl = async (url, init = {}) => {
     calls.push({ url: String(url), method: init.method, headers: init.headers, body: init.body ? JSON.parse(init.body) : null });
     const key = String(url).split("/").pop();
-    return new Response(JSON.stringify({ key, relayUrl: `https://agents.opendungeonmaster.com/w/${key}` }), { status });
+    return new Response(JSON.stringify({ key, relayUrl: `https://agents.opengamemaster.com/w/${key}` }), { status });
   };
   return { calls, fetchImpl };
 }
@@ -86,7 +86,7 @@ await test("a device world registers its shared address with its own key and sec
   assert.equal(broker.calls[0].url, `https://broker.test/world/${state.key}`);
   assert.equal(broker.calls[0].headers["x-world-secret"], state.secret);
   assert.deepEqual(broker.calls[0].body, { url: PLAY, instanceId: getInstanceId() });
-  assert.equal(assistantRelayUrl(), `https://agents.opendungeonmaster.com/w/${state.key}`);
+  assert.equal(assistantRelayUrl(), `https://agents.opengamemaster.com/w/${state.key}`);
   assert.equal(await syncAssistantRelay(2000, broker.fetchImpl), "none");
   assert.equal(broker.calls.length, 1, "an unchanged address costs nothing");
 });
@@ -102,7 +102,7 @@ await test("a re-share at a new address re-points the same key, and stopping dro
   assert.equal(await syncAssistantRelay(4000, broker.fetchImpl), "drop");
   assert.equal(broker.calls[1].method, "DELETE");
   assert.equal(getAppSetting("assistant_relay", null).url, "");
-  assert.equal(assistantRelayUrl(), `https://agents.opendungeonmaster.com/w/${key}`, "links keep their address");
+  assert.equal(assistantRelayUrl(), `https://agents.opengamemaster.com/w/${key}`, "links keep their address");
 });
 
 await test("an unreachable broker is asked again ten minutes later, not every tick", async () => {

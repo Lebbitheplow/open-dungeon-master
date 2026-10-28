@@ -53,7 +53,7 @@ function entry(overrides = {}) {
 
 await test("the plugin browser links to the guide for making a plugin, and to no Drive registry", () => {
   const panel = fs.readFileSync(new URL("../src/app/admin/AdminWorldsPanel.tsx", import.meta.url), "utf8");
-  assert.match(panel, /https:\/\/opendungeonmaster\.com\/guide\/dm\/make-a-campaign-plugin\//);
+  assert.match(panel, /https:\/\/opengamemaster\.com\/guide\/dm\/make-a-campaign-plugin\//);
   assert.match(panel, /rel="noopener noreferrer"/);
   for (const file of ["../src/lib/worlds/install.ts", "../src/app/admin/AdminWorldsPanel.tsx"]) {
     assert.ok(!/drive\.google\.com/.test(fs.readFileSync(new URL(file, import.meta.url), "utf8")), `${file} still names a Drive registry`);

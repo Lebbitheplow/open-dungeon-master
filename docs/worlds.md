@@ -278,7 +278,7 @@ press Install, and every pack with a `rightsHolder` carries the unofficial
 notice wherever it appears.
 
 The plugin browser links to the player-facing guide,
-[How to make a campaign plugin](https://opendungeonmaster.com/guide/dm/make-a-campaign-plugin/),
+[How to make a campaign plugin](https://opengamemaster.com/guide/dm/make-a-campaign-plugin/),
 which walks through the workshop's Plugin tool, building from WorldForge, and
 this format by hand.
 

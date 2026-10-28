@@ -253,7 +253,7 @@ export async function meshIceServers(): Promise<unknown[]> {
   }
   // "off" opts a self-hosted server out of the phone-home entirely: mesh
   // then runs on public STUN alone, which still connects most tables.
-  const broker = serverEnv("ODM_ICE_BROKER_URL", "https://broker.opendungeonmaster.com");
+  const broker = serverEnv("ODM_ICE_BROKER_URL", "https://broker.opengamemaster.com");
   if (!broker || broker === "off") {
     return FALLBACK_ICE;
   }

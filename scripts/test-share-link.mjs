@@ -20,7 +20,7 @@ test("publicOrigin wins over the visitor's address", () => {
   assert.equal(links.joinUrl, "https://abc.trycloudflare.com/join/WXYZ2345");
   assert.equal(
     links.appUrl,
-    "https://opendungeonmaster.com/j?s=https%3A%2F%2Fabc.trycloudflare.com&c=WXYZ2345",
+    "https://opengamemaster.com/j?s=https%3A%2F%2Fabc.trycloudflare.com&c=WXYZ2345",
   );
 });
 
@@ -42,7 +42,7 @@ test("trailing slashes never leak into links", () => {
   assert.equal(links.joinUrl, "https://odm.example.com/join/WXYZ2345");
   assert.equal(
     links.appUrl,
-    "https://opendungeonmaster.com/j?s=https%3A%2F%2Fodm.example.com&c=WXYZ2345",
+    "https://opengamemaster.com/j?s=https%3A%2F%2Fodm.example.com&c=WXYZ2345",
   );
 });
 
@@ -68,7 +68,7 @@ test("the /j link round-trips through the redirector's parsers", () => {
     fallbackOrigin: "",
   });
   const url = new URL(appUrl);
-  assert.equal(url.origin, "https://opendungeonmaster.com");
+  assert.equal(url.origin, "https://opengamemaster.com");
   assert.equal(url.pathname, "/j");
   assert.equal(parseServer(url.searchParams.get("s")), "https://abc.trycloudflare.com");
   assert.equal(parseCode(url.searchParams.get("c")), "WXYZ2345");
@@ -76,12 +76,19 @@ test("the /j link round-trips through the redirector's parsers", () => {
 
 test("a brokered address turns into a typeable room code", () => {
   const links = buildShareLinks({
-    publicOrigin: "https://play-abcd2345.opendungeonmaster.com",
+    publicOrigin: "https://play-abcd2345.opengamemaster.com",
     inviteCode: "WXYZ2345",
     fallbackOrigin: "",
   });
   assert.equal(links.roomCode, "ABCD2345-WXYZ2345");
+  assert.equal(hostCodeFromOrigin("https://play-abcd2345.opengamemaster.com"), "ABCD2345");
+});
+
+test("an address on the old domain still turns into a room code until it lapses", () => {
+  // Apps from before the move share at the old domain; the broker names
+  // every session in both, so the same room code reaches the host either way.
   assert.equal(hostCodeFromOrigin("https://play-abcd2345.opendungeonmaster.com"), "ABCD2345");
+  assert.equal(hostCodeFromOrigin("https://play-abcd2345.opendungeonmaster.com.evil.com"), "");
 });
 
 test("any other address has no room code to show", () => {
@@ -99,8 +106,8 @@ test("any other address has no room code to show", () => {
 
 test("a host code the broker could not have minted is not shown", () => {
   // L is missing from the broker's alphabet, and codes are always eight.
-  assert.equal(hostCodeFromOrigin("https://play-abcl2345.opendungeonmaster.com"), "");
-  assert.equal(hostCodeFromOrigin("https://play-abcd234.opendungeonmaster.com"), "");
+  assert.equal(hostCodeFromOrigin("https://play-abcl2345.opengamemaster.com"), "");
+  assert.equal(hostCodeFromOrigin("https://play-abcd234.opengamemaster.com"), "");
 });
 
 console.log(`test-share-link: ${passed} tests passed.`);
