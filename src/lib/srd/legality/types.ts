@@ -49,6 +49,9 @@ export type LegalityContext = {
   // then held to what the dice could have given.
   hpMethod: HpMethod | null;
   startingWealth: StartingWealthMethod;
+  // Whether the table lets a character it makes hold more than one class.
+  // Absent or true where no table is in sight.
+  multiclassAllowed?: boolean;
   // Resolves a class id, the sheet's own and those of a multiclass list.
   classOf: (classId: string) => ClassGrants | null;
   race: RaceGrants | null;

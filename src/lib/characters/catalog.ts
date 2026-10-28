@@ -304,6 +304,7 @@ export function legalityContextFor(input: ContextInput): LegalityContext {
     level: input.level,
     hpMethod: settings ? (settings.hpMethod ?? "average") : null,
     startingWealth: settings?.startingWealth ?? "equipment",
+    multiclassAllowed: settings?.multiclassingEnabled !== false,
     classOf: (classId) => classGrantsFor(classId, owner),
     race: raceGrantsFor(input.sheet.race, owner),
     background: backgroundGrantsFor(input.sheet.background, owner),

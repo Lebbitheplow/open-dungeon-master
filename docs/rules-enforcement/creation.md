@@ -93,7 +93,7 @@ against where they were thrown. Racial bonuses are added after; level improvemen
 | Starting gear is a fixed loadout per class plus the background kit, plus anything the player adds | `srd/weapons.ts defaultLoadout`, `srd/armor.ts defaultArmor`, `useBuilderDerived.ts` |
 | Unknown class or race accepted, granted nothing | homebrew and pack rows; `features.ts` |
 | "story", "feat", "background" features survive every regrant | `features.ts populateFeaturesForClasses` header |
-| Characters created single-class | rules-coverage.md |
+| Characters created multiclassed only within the table's level and setting (backlog F9) | rules-coverage.md |
 | ASIs at 4/8/12/16/19 for every class | rules-coverage.md |
 | Artificer offered beside the SRD twelve | `classes.json` |
 | Tool choices stored as one line ("three musical instruments of your choice") | `classes.json`, `mechanics.ts backgroundTools` comment |

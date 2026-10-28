@@ -11,8 +11,9 @@
 //   LAST class taken first, and what is left is a legal character of that
 //   level: features, hit dice, resources and spell slots are those of the
 //   classes it still has.
-// - Characters are created single-class; a second class is only ever taken
-//   at a level-up, where the prerequisites are checked.
+// - A character made at a table keeps the class list the builder sent
+//   (backlog F9), held to the table's level, each class's prerequisite and
+//   the table's multiclassing setting.
 // - The lead's edits to class, subclass and level fold into the FIRST class
 //   (ODM's documented simplification), and the mirrors still agree.
 import assert from "node:assert/strict";
@@ -188,27 +189,64 @@ await test("the lead's scalar edits fold into the first class and the mirrors ag
   assert.equal(now().level, 9);
 });
 
-// ---- not enforced today ----
+// ---- made multiclass (backlog F9) ----
 
-await test(
-  "Characters are created single-class; a second class is taken at a level-up, where its prerequisites are checked.",
-  async () => {
-    sheetsDb.deleteSheetForUser(world.campaignId, world.owner.id);
-    const out = await send("sheet", "POST", heroInput({
-      name: "Forged", class: "fighter", level: 3, portrait, abilities: scores(),
-      classes: [{ id: "fighter", subclass: "Champion", level: 11 }, { id: "wizard", subclass: "", level: 9 }],
-      hitDicePools: [
-        { classId: "fighter", die: "d12", total: 20, spent: 0 },
-        { classId: "wizard", die: "d12", total: 20, spent: 0 },
-      ],
-    }));
-    const made = out.sheet;
-    assert.ok(
-      out.status >= 400 || (made.classes.length === 0 && !made.features.some((feature) => feature.name === "Extra Attack (2)")),
-      `a level 3 table took ${JSON.stringify(classLevels(made))} with ${made.hitDicePools?.map((pool) => `${pool.total}${pool.die}`).join(" and ")}`,
-    );
-  },
-);
+// A fighter 2 / rogue 1, as the builder sends one, at a level 3 table.
+const splitInput = (overrides = {}) =>
+  heroInput({
+    name: "Split", class: "fighter", level: 3, portrait,
+    abilities: scores({ str: 15, dex: 13, con: 12 }),
+    proficiencies: {
+      ...fighterTraining,
+      skills: ["athletics", "perception", "stealth"],
+      expertise: [],
+      armor: [...fighterTraining.armor],
+      tools: ["thieves' tools"],
+    },
+    classes: [{ id: "fighter", subclass: "", level: 2 }, { id: "rogue", subclass: "", level: 1 }],
+    ...overrides,
+  });
+
+await test("a character made at a table keeps the class list it was built with", async () => {
+  sheetsDb.deleteSheetForUser(world.campaignId, world.owner.id);
+  const out = await send("sheet", "POST", splitInput());
+  assert.ok(out.status < 400, `the split was refused: ${JSON.stringify(out.body.problems ?? out.error)}`);
+  assert.deepEqual(classLevels(out.sheet), [["fighter", 2], ["rogue", 1]]);
+  assert.deepEqual(
+    (out.sheet.hitDicePools ?? []).map((pool) => [pool.classId, pool.die, pool.total]),
+    [["fighter", "d10", 2], ["rogue", "d8", 1]],
+  );
+  assertCoherent(out.sheet);
+});
+
+await test("a class list made at a table is held to the table's level", async () => {
+  sheetsDb.deleteSheetForUser(world.campaignId, world.owner.id);
+  const out = await send("sheet", "POST", heroInput({
+    name: "Forged", class: "fighter", level: 3, portrait, abilities: scores(),
+    classes: [{ id: "fighter", subclass: "Champion", level: 11 }, { id: "wizard", subclass: "", level: 9 }],
+  }));
+  assert.ok(out.status >= 400, `a level 3 table took ${JSON.stringify(out.sheet && classLevels(out.sheet))}`);
+  assert.match(JSON.stringify(out.body.problems), /add up to 20/);
+});
+
+await test("a second class made at a table meets its prerequisite", async () => {
+  sheetsDb.deleteSheetForUser(world.campaignId, world.owner.id);
+  const out = await send("sheet", "POST", splitInput({ abilities: scores({ str: 15, dex: 10, con: 12 }) }));
+  assert.ok(out.status >= 400, "a rogue level was made with Dexterity 10");
+  assert.match(JSON.stringify(out.body.problems), /Holding levels in Rogue/);
+});
+
+await test("a table that turns multiclassing off makes one class", async () => {
+  const off = campaigns.createCampaign(world.owner.id, {
+    title: "Single", description: "", theme: "high-fantasy", maxPlayers: 6,
+    startingLevel: 3, difficulty: "normal", gameSettings: { multiclassingEnabled: false },
+  });
+  const out = await send("sheet", "POST", splitInput(), { campaignId: off.id });
+  assert.ok(out.status >= 400, `a table with multiclassing off took ${JSON.stringify(out.sheet && classLevels(out.sheet))}`);
+  assert.match(JSON.stringify(out.body.problems), /turns multiclassing off/);
+});
+
+// ---- not enforced today ----
 
 await test(
   "A character stripped of its only spellcasting class has that class's spell slots no longer.",

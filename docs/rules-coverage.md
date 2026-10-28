@@ -354,8 +354,9 @@ fighter's seven, the rogue's six, five for the rest; `srd/asi.ts`), and a
 character stored under the old single table is owed what the new one adds
 (`srd/asi-ledger.ts`; `test-asi`, `test-sheet-legality`). Kept simplifications:
 the lead edits multiclass sheets through the scalar class/subclass/level
-fields, which fold into the primary class entry; characters are always created
-single-class (multiclassing happens at level-up).
+fields, which fold into the primary class entry. A character may be created
+multiclassed (backlog F9): the builder lists the first class's levels first, and
+each class's prerequisite is checked on the final scores.
 
 ## Cross-cutting engines (Phase 8)
 
