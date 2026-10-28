@@ -174,6 +174,22 @@ export default {
 
     // The seated hero goes back to the lobby; nothing opens over that.
     await eventually(async () => !/\/character/.test((await t.url()).pathname), { timeoutMs: 20_000, label: "back to the lobby" });
+    // The same hero, now in the library, offered at the table that turns
+    // multiclassing off: let in by its stored door with its split, and the
+    // confirm sheet says it keeps its classes and takes no new one there.
+    if (seated.libraryCharacterId) {
+      await t.open(`/campaigns/${ids.singleClassTableId}/character`);
+      const offChooser = page.locator(`${root}[data-hero-chooser]`).locator("visible=true").first();
+      await eventually(() => offChooser.count(), { timeoutMs: 30_000, label: "the hero chooser at the single-class table" });
+      await t.tap(offChooser.locator(`[data-hero-pick="${seated.libraryCharacterId}"]`));
+      await eventually(async () => (await sheet.count()) && (await sheet.getAttribute("aria-busy")) === "false", { timeoutMs: 20_000, label: "the split hero's check there" });
+      const note = (await sheet.locator("[data-join-note]").allInnerTexts()).join(" ");
+      check(/turns multiclassing off\. Your character keeps the classes it has, but can't take a new class here\./.test(note), `the confirm sheet says the split is kept (${note})`);
+      check((await sheet.locator('[data-join-rules="pass"]').count()) === 1, "the split hero is let in");
+      await review("join-note-single-class-table");
+      await t.tap(page.locator(`${root}button`).filter({ hasText: /^Cancel$/ }).locator("visible=true").first());
+      await eventually(async () => (await page.locator(`${root}[data-join-confirm]`).count()) === 0, { label: "the sheet closes" });
+    }
     // Give the seat up again.
     const removed = await api.delete(`${base}/api/campaigns/${tableId}/sheet`);
     check(removed.ok(), "the seat is given up again");

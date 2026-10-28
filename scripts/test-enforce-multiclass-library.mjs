@@ -246,6 +246,37 @@ await test("a table that turns multiclassing off makes one class", async () => {
   assert.match(JSON.stringify(out.body.problems), /turns multiclassing off/);
 });
 
+// A level 3 table that turns multiclassing off, and the owner's split
+// fighter 2 / rogue 1 kept in the library, for the cases below.
+function tableWithout() {
+  return campaigns.createCampaign(world.owner.id, {
+    title: "One Path", description: "", theme: "high-fantasy", maxPlayers: 6,
+    startingLevel: 3, difficulty: "normal", gameSettings: { multiclassingEnabled: false },
+  });
+}
+const splitInLibrary = () => characters.createCharacter(world.owner.id, 3, splitInput());
+const KEEPS_NOTE = "This table turns multiclassing off. Your character keeps the classes it has, but can't take a new class here.";
+
+await test("a split hero joining a table without multiclassing is told it keeps its classes", async () => {
+  const off = tableWithout();
+  const stored = splitInLibrary();
+  const out = await send("preview", "POST", { libraryCharacterId: stored.id }, { campaignId: off.id });
+  assert.equal(out.status, 200, out.error);
+  assert.equal(out.body.preview.ok, true, JSON.stringify(out.body.preview.problems));
+  assert.deepEqual(out.body.preview.notes, [KEEPS_NOTE]);
+  // At a table that allows it, nothing to say.
+  const on = campaigns.createCampaign(world.owner.id, {
+    title: "Two Paths", description: "", theme: "high-fantasy", maxPlayers: 6,
+    startingLevel: 3, difficulty: "normal", gameSettings: {},
+  });
+  const there = await send("preview", "POST", { libraryCharacterId: stored.id }, { campaignId: on.id });
+  assert.equal(there.body.preview.notes, undefined);
+  // A single-class hero at the table without it is told nothing either.
+  const single = characters.createCharacter(world.owner.id, 3, heroInput({ class: "fighter", level: 3, abilities: all13, maxHp: 28, proficiencies: fighterTraining, portrait }));
+  const plain = await send("preview", "POST", { libraryCharacterId: single.id }, { campaignId: off.id });
+  assert.equal(plain.body.preview.notes, undefined);
+});
+
 // ---- not enforced today ----
 
 await test(
