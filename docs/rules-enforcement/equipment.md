@@ -134,7 +134,7 @@ Severity high
    line 87 (the snapshot beats the SRD table). Same path for armour and magic effects.
    `homebrew/gear.ts normalizeWeapon` puts no bound on the dice.
    Fix: hydrate only rows that carry a `homebrew:` slug, require the campaign to have admitted
-   the entry (DM approval or campaign-scoped homebrew), and bound weapon dice.
+   the entry (GM approval or campaign-scoped homebrew), and bound weapon dice.
 
 5. homebrew-snapshot-from-the-client (test-enforce-magic-items)
    Rule: the gear snapshot on an equipment row is the server's to write.
@@ -312,7 +312,7 @@ Severity low
 ## Could not test, and why
 
 - pack-priced half-list sale through the player route without the content pack: the route
-  passes no priceCp, so it is covered by the DM tool with priceCp and, beside the pack, by the
+  passes no priceCp, so it is covered by the GM tool with priceCp and, beside the pack, by the
   Longsword case (guarded by an actual pack lookup).
 - Library sync as a separate write path for the attunement cap: it lands in the same
   createSheet the creation gap covers; not given its own case.

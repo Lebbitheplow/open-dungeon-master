@@ -33,7 +33,7 @@ export function SelectionBar({
     { action: "move", label: moving ? "Tap the new tile" : "Move", icon: Move },
     { action: "duplicate", label: "Duplicate", icon: Copy },
     { action: "link", label: "Link", icon: Link2 },
-    { action: "dmOnly", label: "DM only", icon: Link2 },
+    { action: "dmOnly", label: "GM only", icon: Link2 },
     { action: "delete", label: "Delete", icon: Trash2, tone: "danger" },
   ];
   return (

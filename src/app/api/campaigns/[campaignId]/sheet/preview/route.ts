@@ -47,7 +47,7 @@ export async function POST(
     return context;
   }
   if (!capsFor(context).needsCharacter) {
-    return Response.json({ error: "The DM seat plays no character." }, { status: 400 });
+    return Response.json({ error: "The GM seat plays no character." }, { status: 400 });
   }
   const raw = await request.json().catch(() => ({}));
   const parsed = previewSchema.safeParse(raw);
@@ -91,7 +91,7 @@ export async function POST(
     }
     preview = previewLibraryJoin(offer.character, context.campaign, context.user.id, picks);
     const refusals = [
-      ...(flow !== "join" ? ["A pregen the DM offers takes a first seat; a lobby switch is to one of your own heroes."] : []),
+      ...(flow !== "join" ? ["A pregen the GM offers takes a first seat; a lobby switch is to one of your own heroes."] : []),
       ...[claimRefusal(offer, context.user.id)].filter((line): line is string => Boolean(line)),
     ];
     if (refusals.length) {

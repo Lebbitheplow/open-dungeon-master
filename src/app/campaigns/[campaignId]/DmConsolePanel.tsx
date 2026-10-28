@@ -300,7 +300,7 @@ export function DmConsolePanel({
       <div className="flex items-center gap-2">
         <Ribbon tone="gold" className="min-w-0 flex-1">Only you</Ribbon>
         <CommandPalette
-          title="DM console commands"
+          title="GM console commands"
           placeholder="Find an action or a tab"
           commands={commands}
         />

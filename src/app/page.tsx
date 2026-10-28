@@ -137,7 +137,7 @@ function AuthScreen({ onAuthed }: { onAuthed: (user: SessionUser) => void }) {
                 Open Game Master
               </h1>
               <p className="mt-2 text-pretty font-serif text-sm leading-6 text-stone-400">
-                Gather your party. An AI Dungeon Master runs the table; the dice
+                Gather your party. An AI Game Master runs the table; the dice
                 are honest and the story is yours.
               </p>
             </div>

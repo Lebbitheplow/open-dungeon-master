@@ -87,7 +87,7 @@ export function buildStoryDocument(campaignId: string): StoryDocument | null {
         kind: message.authorType === "dm" ? "dm" : "player",
         speaker:
           message.authorType === "dm"
-            ? "Dungeon Master"
+            ? "Game Master"
             : (message.characterId && sheetNames.get(message.characterId)) ||
               (message.userId && memberNames.get(message.userId)) ||
               "Adventurer",

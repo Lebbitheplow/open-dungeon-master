@@ -67,7 +67,7 @@ export default {
       await eventually(() => card.count(), { timeoutMs: 30_000, label: "the Draft pregens card" });
       const reason = card.locator("[data-pregen-draft-reason]");
       await eventually(() => reason.count(), { timeoutMs: 20_000, label: "the reason Draft pregens is off" });
-      check(/No AI DM is set up/.test(await reason.innerText()), `the reason says why (${await reason.innerText()})`);
+      check(/No AI GM is set up/.test(await reason.innerText()), `the reason says why (${await reason.innerText()})`);
       const go = card.locator("[data-pregen-draft-go]");
       check(await go.isDisabled(), "Draft pregens is pressable with no AI DM");
       await card.scrollIntoViewIfNeeded();

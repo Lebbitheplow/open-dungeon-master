@@ -319,7 +319,7 @@ export function summarizeCompile(
     );
   }
   if (compiled.notes.length) {
-    lines.push(`${compiled.notes.length} DM-only note${compiled.notes.length === 1 ? "" : "s"}`);
+    lines.push(`${compiled.notes.length} GM-only note${compiled.notes.length === 1 ? "" : "s"}`);
   }
   if (compiled.moments.length) {
     lines.push(

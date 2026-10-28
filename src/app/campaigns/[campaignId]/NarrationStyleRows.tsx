@@ -43,7 +43,7 @@ export function NarrationStyleRows({
     <>
       <div data-settings-row="narration-length" className="reveal flex flex-wrap items-center gap-2">
         <span className="pk-rowlabel">Length</span>
-        <Tooltip content="How long the DM's narration runs. Short suits a model that runs long and flowery; Rich gives a terse model room. Standard leaves it to the model.">
+        <Tooltip content="How long the GM's narration runs. Short suits a model that runs long and flowery; Rich gives a terse model room. Standard leaves it to the model.">
           <span className="inline-flex min-w-0 max-w-full">
             <Select<NarrationLength>
               size="sm"
@@ -64,7 +64,7 @@ export function NarrationStyleRows({
       </div>
       <div data-settings-row="combat-pace" className="reveal flex flex-wrap items-center gap-2">
         <span className="pk-rowlabel">Fights</span>
-        <Tooltip content="How often the AI DM's world brings a fight: how soon trouble finds the party on its own, whether that trouble wants a fight, and how the story plans its acts. Balanced leaves it to the story.">
+        <Tooltip content="How often the AI GM's world brings a fight: how soon trouble finds the party on its own, whether that trouble wants a fight, and how the story plans its acts. Balanced leaves it to the story.">
           <span className="inline-flex min-w-0 max-w-full">
             <Select<CombatPace>
               size="sm"
@@ -99,7 +99,7 @@ export function NarrationStyleRows({
               patch({ styleNotes: next });
             }
           }}
-          placeholder='How the DM should write for this table, e.g. "Keep the pacing slow. Never decide what my character does next. Less purple prose."'
+          placeholder='How the GM should write for this table, e.g. "Keep the pacing slow. Never decide what my character does next. Less purple prose."'
           aria-describedby={`${notesId}-length`}
           className={cn(panelField, "w-full resize-y")}
         />

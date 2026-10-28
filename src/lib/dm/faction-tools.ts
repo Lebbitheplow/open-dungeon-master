@@ -48,7 +48,7 @@ export const factionTools: ToolDef[] = [
         properties: {
           faction: { type: "string", description: "The faction's name or id from GAME STATE." },
           note: { type: "string", description: "The fact, in one line." },
-          secret: { type: "boolean", description: "True when only the DM should know it yet." },
+          secret: { type: "boolean", description: "True when only the GM should know it yet." },
         },
         required: ["faction", "note"],
       },

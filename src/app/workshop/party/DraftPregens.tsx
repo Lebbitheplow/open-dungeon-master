@@ -49,11 +49,11 @@ function useDraftReadiness(workshopId: string): DraftReadiness | null {
         setReadiness(
           response.ok
             ? { ready: Boolean(payload.ready), reason: payload.reason ?? "" }
-            : { ready: false, reason: payload.error ?? "Could not ask whether the AI DM can draft." },
+            : { ready: false, reason: payload.error ?? "Could not ask whether the AI GM can draft." },
         );
       })
       .catch(() => {
-        if (!cancelled) setReadiness({ ready: false, reason: "Could not reach the server to ask whether the AI DM can draft." });
+        if (!cancelled) setReadiness({ ready: false, reason: "Could not reach the server to ask whether the AI GM can draft." });
       });
     return () => {
       cancelled = true;
@@ -118,9 +118,9 @@ export function DraftPregensCard({
   const off = !readiness?.ready;
   return (
     <div className={cn(ui.card, "space-y-2 p-3")} data-pregen-draft data-tour="party-draft">
-      <SectionHead title="Draft pregens with the AI DM" glyph="system-party" className="mb-0" />
+      <SectionHead title="Draft pregens with the AI GM" glyph="system-party" className="mb-0" />
       <p className="text-xs text-stone-400">
-        The AI DM reads this adventure and proposes a balanced party of {heroes}, one for each seat of the party
+        The AI GM reads this adventure and proposes a balanced party of {heroes}, one for each seat of the party
         set above, each with a backstory tied to it. The builder&apos;s own rules make every sheet at level{" "}
         {targetParty.level}. Drafts are not offered to players until you tick Offer to players.
       </p>
@@ -130,14 +130,14 @@ export function DraftPregensCard({
           {count === 1 ? "pregen" : "pregens"}
         </button>
       </div>
-      {readiness === null ? <p className="text-xs text-stone-500">Asking whether the AI DM can draft...</p> : null}
+      {readiness === null ? <p className="text-xs text-stone-500">Asking whether the AI GM can draft...</p> : null}
       {readiness && !readiness.ready ? (
         <p className="text-xs text-amber-200/90" data-pregen-draft-reason>
           {readiness.reason}
         </p>
       ) : null}
       <div aria-live="polite" className="space-y-1">
-        {busy ? <p className="text-xs text-stone-300">The AI DM is drafting {heroes}. This can take a minute.</p> : null}
+        {busy ? <p className="text-xs text-stone-300">The AI GM is drafting {heroes}. This can take a minute.</p> : null}
         {done ? (
           <div className="reveal space-y-1 text-xs text-stone-300" data-pregen-draft-done>
             <p>

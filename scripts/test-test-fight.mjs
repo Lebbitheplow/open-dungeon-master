@@ -195,7 +195,7 @@ await test("what a test fight refuses, before any table is made", async () => {
   const ally = createCharacter(author.id, 1, { ...LEGAL_FIGHTER, name: "Pip", portrait: PORTRAIT }, "companion");
   const companion = await call(route.test, "POST", { templateId: keep.fight.id, party: { kind: "characters", characterIds: [ally.id] } }, at);
   assert.equal(companion.status, 422);
-  assert.match(companion.json.error, /ally the DM plays/);
+  assert.match(companion.json.error, /ally the GM plays/);
   const stranger = world.addUser("stranger");
   const theirs = createCharacter(stranger.id, 1, { ...LEGAL_FIGHTER, name: "Not yours", portrait: PORTRAIT }, "pc");
   world.signIn(author);

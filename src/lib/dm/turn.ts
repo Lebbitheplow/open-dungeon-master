@@ -1068,7 +1068,7 @@ async function advance(context: TurnContext, turn: DmTurn) {
       return;
     }
     if (turn.status === "running") {
-      finalize(context, turn, stopped ?? "The Dungeon Master hit an internal error and had to stop this turn.", []);
+      finalize(context, turn, stopped ?? "The Game Master hit an internal error and had to stop this turn.", []);
     } else {
       setDmStatus(context.campaign.id, "idle");
     }
@@ -1595,7 +1595,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     if (error) {
       batcher.flush();
       const payload = (await error.json().catch(() => null)) as { error?: string; detail?: string } | null;
-      failed = payload?.error || "The Dungeon Master could not reach the model backend.";
+      failed = payload?.error || "The Game Master could not reach the model backend.";
       noteTurnCall(turn, callTask, tools, reply, failed);
       // The table reads one line; the server log keeps the status and what
       // the backend itself said (out of memory, a crash), so an operator can

@@ -183,7 +183,7 @@ export function gearPatch(
   if (!options.corrects && Object.values(gear).some((entry) => entry.layered)) {
     return {
       status: 403,
-      error: `Wearing two of a kind at once is the DM's exception to make: the DM or the party lead can let ${sheet.name} wear both.`,
+      error: `Wearing two of a kind at once is the GM's exception to make: the GM or the party lead can let ${sheet.name} wear both.`,
     };
   }
   const wasExplicit = wearingIsExplicit(sheet.equipment);

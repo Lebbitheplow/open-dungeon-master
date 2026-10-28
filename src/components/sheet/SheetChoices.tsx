@@ -112,7 +112,7 @@ export function FeatureChoicePicker({
                           : inCombat
                             ? "Chosen outside a fight."
                             : waiting
-                              ? "Sent. The DM resolves it."
+                              ? "Sent. The GM resolves it."
                               : `Choose ${titleCase(option)}`
                       }
                       className={cn(

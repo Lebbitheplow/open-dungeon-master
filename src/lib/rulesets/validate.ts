@@ -300,7 +300,7 @@ function magicFindings(item: ItemDraft): Finding[] {
     findings.push({
       page: "magic-items",
       level: "note",
-      text: "Cursed: the engine holds the attunement until remove curse ends it (magic-gear.ts). What the curse does beyond that is in the description, for the DM to run.",
+      text: "Cursed: the engine holds the attunement until remove curse ends it (magic-gear.ts). What the curse does beyond that is in the description, for the GM to run.",
     });
   }
   return findings;
@@ -320,7 +320,7 @@ export function itemEngineSummary(item: ItemDraft): string | null {
   if (item.spells?.length) runs.push(`casts ${item.spells.map((entry) => entry.spell).join(", ")}`);
   if (item.checks) runs.push("its check bonuses");
   if (item.requiresAttunement) runs.push("attunement");
-  return runs.length ? `The engine runs ${runs.join(", ")}. Anything else the description says is the DM's to run.` : null;
+  return runs.length ? `The engine runs ${runs.join(", ")}. Anything else the description says is the GM's to run.` : null;
 }
 
 function spellFindings(spell: SpellDraft, rules: Partial<VariantRules>): Finding[] {

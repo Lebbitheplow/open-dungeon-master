@@ -15,8 +15,8 @@ import type { RulebookPageResponse } from "@/lib/rulebook/types";
 const SUPPORT_LABEL: Record<NonNullable<RulebookPageResponse["crosswalk"]>["support"], string> = {
   engine: "The table runs this",
   structured: "Prepared in a workshop tool the table runs",
-  editable: "Prepared as words the DM runs",
-  reference: "Read here; the DM runs it",
+  editable: "Prepared as words the GM runs",
+  reference: "Read here; the GM runs it",
 };
 
 export function PagePrep({ data, canStart = true }: { data: RulebookPageResponse; canStart?: boolean }) {

@@ -64,7 +64,7 @@ export function YourAgentStep({
     <div className="space-y-4">
       <p className="text-sm text-stone-300">
         If you use Claude Code, Codex, opencode or another MCP client, it can work here as you: read your campaigns, play your
-        character, or run a table from the DM seat. It gets only what you tick, never your password or this server&apos;s
+        character, or run a table from the GM seat. It gets only what you tick, never your password or this server&apos;s
         settings. Skip this if you do not use one.
       </p>
       <label className="block">

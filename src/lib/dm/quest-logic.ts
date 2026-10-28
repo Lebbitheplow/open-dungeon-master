@@ -95,7 +95,7 @@ export function tickObjective(objectives: QuestObjective[], objectiveId: string,
   return objectives.map((objective) => (objective.id === objectiveId ? { ...objective, done } : objective));
 }
 
-export const DM_ONLY_MARK = "[DM only] ";
+export const DM_ONLY_MARK = "[GM only] ";
 
 // The quest block the model reads: active party quests with their ticks,
 // then the DM's own with a mark. Bounded so it never crowds the turn.

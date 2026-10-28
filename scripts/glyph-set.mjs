@@ -35,7 +35,7 @@ export const GLYPH_NEGATIVE =
 // public/assets/icons/glyph without the group's prefix.
 export const UI_GLYPHS = {
   tab: [
-    ["dm", "Dungeon master", "a golden royal crown with three red gems"],
+    ["dm", "Game master", "a golden royal crown with three red gems"],
     ["lead", "Story lead", "a brass lantern held up, glowing warm yellow"],
     ["party", "Party", "the heads and shoulders of three adventurers side by side, a shining gold helmed knight, a mage in a bright sky blue hood and a ranger in a bright leaf green hood, faces lit warmly"],
     ["battle", "Battle", "two crossed swords with bright polished silver blades that shine white and gold hilts"],

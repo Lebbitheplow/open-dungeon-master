@@ -58,7 +58,7 @@ export default {
       await eventually(() => where.isVisible(), { timeoutMs: 10_000, label: "where it is offered" });
       const said = (await where.textContent()) ?? "";
       check(/under Fighter in the character builder from level 3/.test(said), `the editor names the class and level: ${said}`);
-      check(/owner, DM or assistant DM/.test(said), "the editor says whose tables offer it");
+      check(/owner, GM or assistant GM/.test(said), "the editor says whose tables offer it");
       await untilStill(page);
       await t.shot("subclass-kept");
       for (let attempt = 0; attempt < 3 && (await page.getByRole("dialog").count()); attempt += 1) {

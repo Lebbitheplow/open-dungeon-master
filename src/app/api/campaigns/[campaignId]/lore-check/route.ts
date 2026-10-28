@@ -62,7 +62,7 @@ export async function POST(
     }
     if (message.authorType !== "dm") {
       return Response.json(
-        { error: "Only DM narration can be rewritten." },
+        { error: "Only GM narration can be rewritten." },
         { status: 400 },
       );
     }

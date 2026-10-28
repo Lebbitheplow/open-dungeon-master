@@ -115,7 +115,7 @@ function title(id: TableGroupId, settings: GameSettings): string {
     case "players":
       return "Players and permissions";
     case "console":
-      return "DM reminders";
+      return "GM reminders";
     case "board":
       return "Battle board";
     case "voiceChat":
@@ -204,7 +204,7 @@ export function tableGroupSummary(id: TableGroupId, settings: GameSettings, cont
       return [
         `joining mid-game ${settings.midGameJoinOpen ? "open" : "closed"}`,
         settings.holdSubmissions ? "held responses" : null,
-        settings.waitForTable ? "DM waits for the table" : null,
+        settings.waitForTable ? "GM waits for the table" : null,
         settings.inventoryApprovals || settings.vitalsApprovals ? "players confirm changes" : "changes apply at once",
       ]
         .filter(Boolean)
@@ -239,7 +239,7 @@ const KEYWORDS: Record<TableGroupId, string> = {
   memory: "memory history compaction recall retrieval rules lore chapter summaries stages model advanced",
   bonds: "bonds relationships standing romance conscience companions values deeds ultimatum leave turn",
   players: "players permissions mid-game joining invite held responses floor item offers loot gold vitals damage healing approvals confirm",
-  console: "dm reminders remind nudge beats record",
+  console: "gm dm reminders remind nudge beats record",
   board: "battle board draw drawing enemy intent",
   voiceChat: "voice chat call microphone mic talk proximity hearing whisper shout walls downed deaf transcription transcribe turns",
 };

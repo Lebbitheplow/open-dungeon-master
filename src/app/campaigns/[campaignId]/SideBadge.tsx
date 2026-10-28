@@ -105,7 +105,7 @@ export function SideNotice({ encounter, sheets, meUserId }: { encounter: PublicE
       {held.map((sheet) => (
         <p key={sheet.id} data-side-notice="foe" className="side-badge rounded-lg border border-red-500/60 bg-red-950/70 px-3 py-1.5 text-xs text-red-100">
           {dominatorOf(sheet.conditions, sheet.conditionMeta as Record<string, { spell?: unknown; source?: unknown }>)
-            ? `${sheet.name} is dominated: the DM plays ${sheet.name} until the charm ends.`
+            ? `${sheet.name} is dominated: the GM plays ${sheet.name} until the charm ends.`
             : `${sheet.name} fights ${sideWords("foe")}.`}
         </p>
       ))}

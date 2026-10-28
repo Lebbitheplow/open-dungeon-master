@@ -26,7 +26,7 @@ const TARGET_MAX = 1200;
 const MIN_FRAGMENT = 200;
 
 function lineFor(message: ChunkableMessage): string {
-  const speaker = message.authorType === "dm" ? "DM" : "Player";
+  const speaker = message.authorType === "dm" ? "GM" : "Player";
   return `${speaker}: ${message.content}`;
 }
 

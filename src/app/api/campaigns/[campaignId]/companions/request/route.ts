@@ -32,7 +32,7 @@ export async function POST(
   // (/companions/create), which is the door this whole route stands beside.
   if (hasHumanDm(campaignSeats(context.campaign))) {
     return Response.json(
-      { error: "This table has its own Dungeon Master. Build the companion instead." },
+      { error: "This table has its own Game Master. Build the companion instead." },
       { status: 409 },
     );
   }
@@ -60,7 +60,7 @@ export async function POST(
     authorType: "system",
     glyph: "system-party",
     userId: context.user.id,
-    content: `${who}'s player asks the DM to write ${mode === "guests" ? "a temporary ally" : "a companion"} into the story at the next natural moment.`,
+    content: `${who}'s player asks the GM to write ${mode === "guests" ? "a temporary ally" : "a companion"} into the story at the next natural moment.`,
   });
   publishWithSeq(campaignId, seq, "message_added", { message });
   requestDmTurn(campaignId);

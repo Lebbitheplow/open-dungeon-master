@@ -254,7 +254,7 @@ export function quickStatblock(
 // ---- roll table generation ----
 
 const TABLE_SYSTEM =
-  "You write random tables for a tabletop RPG session. Output ONLY the rows, one per line, each beginning with its number and a full stop, like '1. A cart has thrown a wheel across the road.' No heading, no commentary, no blank lines. Each row is one concrete thing a Dungeon Master can drop straight into play, under 25 words, in the tone of the setting you are given.";
+  "You write random tables for a tabletop RPG session. Output ONLY the rows, one per line, each beginning with its number and a full stop, like '1. A cart has thrown a wheel across the road.' No heading, no commentary, no blank lines. Each row is one concrete thing a Game Master can drop straight into play, under 25 words, in the tone of the setting you are given.";
 
 export async function generateRollTable(
   campaign: Campaign,

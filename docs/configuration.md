@@ -38,7 +38,7 @@ falls through to the env var.
 | `STT_URL` | `http://127.0.0.1:8870` | Whisper service for push-to-talk (odm-stt.service). Also set in Admin > Speech, which wins; `off` says there is none. The voice-chat transcript uses the same service, but only at an address named there or here, never the default one |
 | `STT_MODEL` | — | Model push-to-talk and the voice-chat transcript ask the Whisper service for. Also picked in Admin > Speech, which wins. Without one, the service's only model when it lists one; otherwise the Whisper service is skipped |
 | `STT_OPENAI_MODEL` | — | OpenAI transcription model for dictation when nothing free listens. Also picked in Admin > Speech, which wins. Without one OpenAI never listens |
-| `KOKORO_URL` | `http://127.0.0.1:8880` | Kokoro-FastAPI TTS service for DM narration |
+| `KOKORO_URL` | `http://127.0.0.1:8880` | Kokoro-FastAPI TTS service for GM narration |
 | `TTS_PROVIDER` | `kokoro` | Kind of narration server: `kokoro`, `openai` (any server with OpenAI's `/v1/audio/speech`), or `off`. Also set in Admin > Speech, which wins |
 | `TTS_BASE_URL` | `https://api.openai.com/v1` | Address of the `openai` kind of narration server |
 | `TTS_MODEL` | `kokoro` on Kokoro | Model name sent with each narration request. The `openai` kind has no default: pick one from the server's list in Admin > Speech, or set it here. Without one, a server that is not OpenAI itself and lists exactly one model runs it; otherwise no passage is read aloud |
@@ -49,8 +49,8 @@ falls through to the env var.
 | `ODM_UPDATE_CHANNEL` | `stable` | `beta` has the About dialog compare against the newest release of any kind, the nightly betas included, instead of the latest stable release ([releases.md](releases.md)) |
 | `ODM_MODEL_CATALOG` | on | `off` stops the server fetching the model catalog from [models.dev](https://models.dev) (one anonymous request a day at most). The bundled snapshot and the cached copy still serve the model pickers; see [text-backends.md](text-backends.md#choosing-a-model-the-catalog-and-discovery) |
 | `ODM_MODEL_CATALOG_PATH` | `data/model-catalog.json` (beside the database) | Where the fetched catalog is cached |
-| `DM_DEBUG` | — | `1` logs DM model content and tool calls |
-| `DM_TOOL_PROFILE` | per model | Which tool set the DM is offered: `full`, `lean` (trimmed) or `compact` (the core actions for exploring or fighting, groups the table state or the player's words call for, and a `more_tools` call that opens the rest, each group's rules arriving with it). Unset, the full set is used when it leaves at least 32K tokens of the window for the story, the trimmed set when that leaves at least 24K, and compact below that (the Context panel says which). Wins over `DM_LEAN_TOOLS` |
+| `DM_DEBUG` | — | `1` logs GM model content and tool calls |
+| `DM_TOOL_PROFILE` | per model | Which tool set the GM is offered: `full`, `lean` (trimmed) or `compact` (the core actions for exploring or fighting, groups the table state or the player's words call for, and a `more_tools` call that opens the rest, each group's rules arriving with it). Unset, the full set is used when it leaves at least 32K tokens of the window for the story, the trimmed set when that leaves at least 24K, and compact below that (the Context panel says which). Wins over `DM_LEAN_TOOLS` |
 | `DM_LEAN_TOOLS` | per model | Unset, the profile is chosen as `DM_TOOL_PROFILE` describes, and the trimmed set is also used when the model catalog says the model takes no tool calls. `1` always trims, `0` never does |
 | `DM_HISTORY_MAX_TOKENS` | `8192` | The most transcript a turn's prompt carries, however large the window (at least 512). The shares the rules, state and chapters leave unused pass to the transcript up to this ceiling; older play is what the chapter summaries and `recall_story` are for |
 | `DM_THINKING` | per model | Unset, tool-deciding calls ask for thinking unless the model catalog says the model does not reason. `0` never asks, `1` always does |
@@ -132,7 +132,7 @@ A server one person runs for friends has two questions the admin panel answers u
 - **Who may start campaigns and workshops.** "Everyone with an account" is how every server behaved before. "Administrators only" keeps the New campaign door for admins; everyone else joins by room code, and the import, clone and workshop routes refuse the same way. A campaign that cannot be started cannot spend anything, which is the plainest way to keep a paid key for the host's own tables.
 - **Paid AI backends.** "Paid" means a text, picture or speech backend on a public host that takes this server's key (OpenAI, OpenRouter, a hosted vLLM) and the agent program, which runs on the admin's plan. "Only campaigns an administrator leads" refuses them, with a plain message at the table, for any campaign whose party lead is not an admin. A backend on this machine or the local network (loopback, 10/8, 172.16/12, 192.168/16, link-local, `.local` and `.lan` names, a bare hostname) is the host's own, keyed or not: llama-server behind a key, Ollama, ComfyUI, the FLUX workers, Kokoro and the local Whisper stay open to every table. A player who wants a paid model at their own table brings their own key in the client app, which is what the apps are for. The agent panel's own "only campaigns an administrator leads" says the same thing for the agent alone.
 
-The **Usage** tab shows, per account and per campaign, what has been spent: text and agent tokens in and out, split into paid and local; pictures painted; speech characters rendered; dictation clips; agent turns; plus campaigns owned, led and joined, characters, DM turns, active days, last activity and the bytes on disk the campaign's or the account's own pictures take. Everything is counted from what each backend reports; no prompt, transcript or picture is kept for it, and an erased account's rows lose their name. Costs are not estimated, since they depend on the model: read the tokens and apply the prices of the backend you pay for. Streaming replies carry their counts only when the backend honours `stream_options.include_usage` (OpenAI, llama-server, vLLM, LM Studio and OpenRouter do); a backend that rejects the field is retried without it and its calls are counted with no tokens.
+The **Usage** tab shows, per account and per campaign, what has been spent: text and agent tokens in and out, split into paid and local; pictures painted; speech characters rendered; dictation clips; agent turns; plus campaigns owned, led and joined, characters, GM turns, active days, last activity and the bytes on disk the campaign's or the account's own pictures take. Everything is counted from what each backend reports; no prompt, transcript or picture is kept for it, and an erased account's rows lose their name. Costs are not estimated, since they depend on the model: read the tokens and apply the prices of the backend you pay for. Streaming replies carry their counts only when the backend honours `stream_options.include_usage` (OpenAI, llama-server, vLLM, LM Studio and OpenRouter do); a backend that rejects the field is retried without it and its calls are counted with no tokens.
 
 ## Playing from your phone
 
@@ -150,7 +150,7 @@ browser requests go through the Next.js server.
 
 ### Live voice chat
 
-Players and the DM can talk at the table over WebRTC. The server runs its own
+Players and the GM can talk at the table over WebRTC. The server runs its own
 SFU (mediasoup) in-process, so there is no third-party service and no account.
 
 Voice is **off by default**. Set `VOICE_ENABLED=1` to turn it on; it stays off
@@ -259,9 +259,9 @@ campaign settings under Voice:
 | Turns: shown | The panel says whose turn it is; nobody is muted (default) |
 | Turns: enforced | Players off the floor are muted on the server |
 
-The DM is never muted by any of these, and a player who cannot speak gets a
+The GM is never muted by any of these, and a player who cannot speak gets a
 Raise hand button. A raised hand is only a request: it never moves the floor by
-itself, so the DM grants it with the floor controls they already have, and the
+itself, so the GM grants it with the floor controls they already have, and the
 hand lowers itself once granted.
 
 **Who hears whom** is a list of rules, all off by default, all in campaign
@@ -273,15 +273,15 @@ settings:
 | Range | How far a normal voice carries. 30 ft by default |
 | Whisper/shout | Each player picks whisper (5 ft), normal, or shout (120 ft). The range is the speaker's |
 | Walls muffle | A wall between two characters quietens rather than silences. Fog of war never affects audio |
-| Downed go deaf | A character at 0 hit points stops hearing the table, but still hears the DM and is still heard |
+| Downed go deaf | A character at 0 hit points stops hearing the table, but still hears the GM and is still heard |
 
-The DM always hears everyone and is always heard, at any distance, through any
+The GM always hears everyone and is always heard, at any distance, through any
 wall, in any side room.
 
-**Side rooms.** The DM can open extra voice rooms and move people between them:
-a private word with one player, splitting the party, or table talk while the DM
+**Side rooms.** The GM can open extra voice rooms and move people between them:
+a private word with one player, splitting the party, or table talk while the GM
 sets up. Everyone can see the room list and who is in each, because a side room
-nobody can see reads as a bug rather than a secret, but only the DM moves
+nobody can see reads as a bug rather than a secret, but only the GM moves
 people. Closing a room returns its occupants to the table rather than hanging up
 on them. Moves take effect immediately with no gap in audio.
 
@@ -393,9 +393,9 @@ default. "Follows the scene" lets the engine pick a room from each new place
 and switch to combat music when initiative starts. The speaker in the table
 header opens the sound panel: what is playing and which take, a level each
 for the room and the music (per listener, synced to the account like the
-other audio preferences), Next, and, for whoever steers the story (the DM, or
+other audio preferences), Next, and, for whoever steers the story (the GM, or
 the party lead at an AI table), the pickers for the room, the music and the
-sounds with a hold per layer. The AI DM, the DM console and the panel all
+sounds with a hold per layer. The AI GM, the GM console and the panel all
 reach the same two engine actions, `set_ambience` and `play_sting`. Sound
 ducks automatically while narration is being read aloud, and a cue with no
 file on the server is silence, named as such in the panel.
@@ -408,7 +408,7 @@ player opts in (Party tab, next to the real-dice toggle).
 
 For each die shape (d4 through d20, plus the d100) a player picks one of:
 
-- **Typed**: roll a physical die and enter the number; the DM turn stays
+- **Typed**: roll a physical die and enter the number; the GM turn stays
   parked until the table's dice are in.
 - **Server-rolled**: the server draws that die with a cryptographic RNG when
   the roll is submitted, so a request mixing your d20 with automatic damage
@@ -478,7 +478,7 @@ start the new server with the same key, and the tables come back exactly as
 they were. `public/generated*` holds scene art and narration caches that can
 be copied too but are not required.
 
-Players and DMs who do not run the server have per-item exports instead:
+Players and GMs who do not run the server have per-item exports instead:
 
 - A character exports as a `.odm-character.json` from its library page and
   imports on any server through the library's Import button; the portrait

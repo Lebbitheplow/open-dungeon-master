@@ -192,7 +192,7 @@ const listOf = (names: string[]) =>
 export function wearConflictText(conflict: WearConflict, who: string): string {
   const kind = oneOfKind(conflict.slot) ?? "one of those";
   const them = conflict.wearing.length > 1 ? "them" : "it";
-  return `${who} already wears ${listOf(conflict.wearing)}, and a character wears ${kind} at a time: take ${them} off first, or the DM may allow both.`;
+  return `${who} already wears ${listOf(conflict.wearing)}, and a character wears ${kind} at a time: take ${them} off first, or the GM may allow both.`;
 }
 
 // The question the sheet asks before a swap: "Grey Cloak goes where Cloak of

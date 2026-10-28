@@ -32,7 +32,7 @@ export const PREP_ROLE_LABELS: Record<PrepRole, string> = {
   lore: "a lore entry",
   quest: "a quest",
   fight: "a prepared fight",
-  secret: "a DM-only note",
+  secret: "a GM-only note",
   unplaced: "kept on the shelf: the arc had no room for it as a planned event",
 };
 
@@ -101,6 +101,6 @@ export function renderPrepCard(card: PrepCard, placement: PrepPlacement): Record
     ...(card.cues ? { involves: card.cues } : {}),
     text: card.body,
     ...(card.sourceTitle ? { from: card.sourceTitle } : {}),
-    note: "DM-only prep. An opportunity, not a script: play it when the fiction reaches it, adapt it, or let it go; never reveal or quote it.",
+    note: "GM-only prep. An opportunity, not a script: play it when the fiction reaches it, adapt it, or let it go; never reveal or quote it.",
   };
 }

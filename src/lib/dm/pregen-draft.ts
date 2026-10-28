@@ -27,7 +27,7 @@ import { stripReasoningArtifacts } from "@/lib/story-prompt";
 // players read.
 
 export const NO_AI_DRAFT_REASON =
-  "No AI DM is set up on this server, so it cannot draft pregens. Set up a text model in Admin, or build the pregens yourself.";
+  "No AI GM is set up on this server, so it cannot draft pregens. Set up a text model in Admin, or build the pregens yourself.";
 
 export async function draftReadiness(workshop: Campaign): Promise<{ ready: boolean; reason: string }> {
   const ready = storyConfigured(workshop.settings) || (await storytellerConfigured());
@@ -80,7 +80,7 @@ export async function draftPregens(input: {
     { meta: { task: "draft_pregens" }, timeoutMs: arcTextTimeoutMs(), thinking: false, maxOutputTokens: draftReplyTokens(count) },
   );
   if (error) {
-    return { ok: false, status: 502, error: "The AI DM could not be reached, so nothing was drafted. Try again in a moment." };
+    return { ok: false, status: 502, error: "The AI GM could not be reached, so nothing was drafted. Try again in a moment." };
   }
   const parsed = parseDraftReply(stripReasoningArtifacts(String(message?.content ?? "")), count);
   if (!parsed.ok) {

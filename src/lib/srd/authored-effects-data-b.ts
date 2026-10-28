@@ -90,7 +90,7 @@ export const AUTHORED_DATA_A2: Record<string, AuthoredEntry> = {
         damageTypes: ["fire"],
         healing: true,
         gate: { condition: "wildfire spirit" },
-        note: "Casting from the spirit's space is the DM's to place.",
+        note: "Casting from the spirit's space is the GM's to place.",
       },
     ],
   },
@@ -129,7 +129,7 @@ export const AUTHORED_DATA_A2: Record<string, AuthoredEntry> = {
   // ---- fighter ----
   "fighter::Know Your Enemy": {
     subclass: "Battle Master",
-    narrated: "Information the DM gives after a minute of watching: nothing on a sheet changes.",
+    narrated: "Information the GM gives after a minute of watching: nothing on a sheet changes.",
   },
   "fighter::Relentless": {
     subclass: "Battle Master",
@@ -187,7 +187,7 @@ export const AUTHORED_DATA_A2: Record<string, AuthoredEntry> = {
   },
   "fighter::Rapid Strike": {
     subclass: "Samurai",
-    effects: [{ kind: "rapid_strike", note: "The extra attack's target is the same creature; the DM keeps to that." }],
+    effects: [{ kind: "rapid_strike", note: "The extra attack's target is the same creature; the GM keeps to that." }],
   },
   "fighter::Manifest Echo": {
     subclass: "Echo Knight",

@@ -242,7 +242,7 @@ export function TestFightSheet({
               "test-fight-runner",
               runner === "ai",
               () => setRunner("ai"),
-              "The AI DM",
+              "The AI GM",
               "It opens the fight and runs the enemies by their plan, as at a table the AI runs.",
             )}
             {radio(
@@ -250,7 +250,7 @@ export function TestFightSheet({
               runner === "person",
               () => setRunner("person"),
               "You",
-              "You run the enemies with their cards and the party with theirs, as a DM at a table you run. No AI is called.",
+              "You run the enemies with their cards and the party with theirs, as a GM at a table you run. No AI is called.",
             )}
           </fieldset>
         ) : info ? (

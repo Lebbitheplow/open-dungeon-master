@@ -94,7 +94,7 @@ export function PartyStory({
       if (data) {
         setText(text.trim());
         setOvertaken(false);
-        setNote(text.trim() ? "Saved. The DM reads it from the next turn." : "Cleared.");
+        setNote(text.trim() ? "Saved. The GM reads it from the next turn." : "Cleared.");
       }
     } catch {
       setError("Could not reach the server.");
@@ -187,9 +187,9 @@ export function PartyStory({
         <p className="mt-1 text-xs text-stone-500">
           {savedBy ? `Last saved by ${savedBy}${savedAt && !Number.isNaN(savedAt.getTime()) ? ` on ${savedAt.toLocaleDateString()}` : ""}. ` : ""}
           {inPlay
-            ? "Optional. The DM reads it from the next turn; the story plan takes it in when the lead regenerates the arc. "
-            : "Optional. The DM reads it every turn and the story plan is built around it when the adventure begins. "}
-          The lead, the DM and anyone with a character here can edit it; the latest save wins.
+            ? "Optional. The GM reads it from the next turn; the story plan takes it in when the lead regenerates the arc. "
+            : "Optional. The GM reads it every turn and the story plan is built around it when the adventure begins. "}
+          The lead, the GM and anyone with a character here can edit it; the latest save wins.
         </p>
       </div>
     </div>

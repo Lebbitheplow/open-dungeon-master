@@ -74,7 +74,7 @@ export function planLongJump(input: {
   if (feet > reach) {
     return {
       ok: false,
-      error: `${name} can long jump ${reach} feet ${input.runningStart ? "with a running start" : "from a standing start (a 10-foot run first doubles it)"}, not ${feet}. The DM may call for a Strength (Athletics) check to jump farther.`,
+      error: `${name} can long jump ${reach} feet ${input.runningStart ? "with a running start" : "from a standing start (a 10-foot run first doubles it)"}, not ${feet}. The GM may call for a Strength (Athletics) check to jump farther.`,
     };
   }
   if (tiles > input.budgetTiles) {

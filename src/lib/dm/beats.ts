@@ -90,7 +90,7 @@ export function storyCutoffAt(campaignId: string): string {
 }
 
 const DRAFT_SYSTEM =
-  "You are the scribe for a tabletop D&D session. The Dungeon Master ran the last stretch of play out loud, so only the mechanical record was typed: what the players said, what the dice did, and what changed on the sheets. Write that stretch up as 2 to 4 past-tense sentences the table would recognise: who did what, what they found out, what changed. Use only what the record supports. Never invent a name, a place, a motive or an outcome that is not in it. Output only the summary, with no heading and no quotes.";
+  "You are the scribe for a tabletop D&D session. The Game Master ran the last stretch of play out loud, so only the mechanical record was typed: what the players said, what the dice did, and what changed on the sheets. Write that stretch up as 2 to 4 past-tense sentences the table would recognise: who did what, what they found out, what changed. Use only what the record supports. Never invent a name, a place, a motive or an outcome that is not in it. Output only the summary, with no heading and no quotes.";
 
 // Everything typed during the uncaptured stretch, as lines a model can read.
 // Rolls and sheet changes are in here because they are often the ONLY record
@@ -105,7 +105,7 @@ export function beatSourceLines(campaignId: string, since: string): BeatSourceLi
     }
     const who =
       message.authorType === "dm"
-        ? "DM"
+        ? "GM"
         : (message.characterId && names.get(message.characterId)) || "A player";
     lines.push({ at: message.createdAt, text: `${who}: ${message.content}` });
   }

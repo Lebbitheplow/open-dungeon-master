@@ -28,7 +28,7 @@ test("short exchanges stay in one chunk with correct seq range", () => {
   assert.equal(chunks.length, 1);
   assert.equal(chunks[0].seqStart, 3);
   assert.equal(chunks[0].seqEnd, 5);
-  assert.ok(chunks[0].text.includes("DM: The gate creaks open."));
+  assert.ok(chunks[0].text.includes("GM: The gate creaks open."));
   assert.ok(chunks[0].text.includes("Player: I step through."));
 });
 

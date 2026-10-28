@@ -21,7 +21,7 @@ import { SectionHead } from "@/components/ui/SectionHead";
 import { cn } from "@/lib/cn";
 import { encodeImageForUpload } from "@/lib/image-encode";
 import { ui } from "@/lib/ui";
-import { DM_HALTED_PREFIX, type CampaignMember } from "@/lib/campaign-types";
+import { haltedTurnPrefix, type CampaignMember } from "@/lib/campaign-types";
 import { isOocAnswer } from "@/lib/dm/ooc-question";
 import type { CastMember } from "@/lib/dm/cast";
 import type { CampaignMessage } from "@/lib/db/messages";
@@ -194,7 +194,7 @@ export const MessageItem = memo(function MessageItem({
     // A halted turn whose dm_turns row is still retryable. Both halves of the
     // test matter: the link is cleared once a retry is claimed, and the
     // prefix keeps any other turn-linked message out of this branch.
-    if (message.dmTurnId && message.content.startsWith(DM_HALTED_PREFIX)) {
+    if (message.dmTurnId && haltedTurnPrefix(message.content)) {
       return (
         <HaltedTurnBanner
           campaignId={campaignId}
@@ -221,10 +221,10 @@ export const MessageItem = memo(function MessageItem({
       asideActions.push(reportAction(message, onReport, true));
     }
     return (
-      <ContextMenu items={toContextItems(asideActions)} label="Dungeon Master" className="session-dm-aside group max-w-[92%] animate-fade-up sm:max-w-2xl">
+      <ContextMenu items={toContextItems(asideActions)} label="Game Master" className="session-dm-aside group max-w-[92%] animate-fade-up sm:max-w-2xl">
         <p className="mb-1 flex items-center gap-1.5">
-          <span className="session-speaker truncate">Dungeon Master, out of character</span>
-          <MessageActions actions={asideActions} menuLabel="Dungeon Master: message actions" quiet />
+          <span className="session-speaker truncate">Game Master, out of character</span>
+          <MessageActions actions={asideActions} menuLabel="Game Master: message actions" quiet />
         </p>
         <div className="session-bubble session-bubble-ooc session-bubble-dm">
           <p className="whitespace-pre-wrap text-pretty">{message.content}</p>
@@ -239,7 +239,7 @@ export const MessageItem = memo(function MessageItem({
         id: "reroll",
         name: "Reroll",
         label: "Reroll this narration",
-        hint: "Reroll: have the DM write this moment again, with the same dice and outcome",
+        hint: "Reroll: have the GM write this moment again, with the same dice and outcome",
         glyph: "die-d20",
         icon: <RefreshCw className="size-3.5" />,
         onSelect: () => onRenarrate(message),
@@ -250,7 +250,7 @@ export const MessageItem = memo(function MessageItem({
         id: "continue",
         name: "Continue the scene",
         label: "Continue this scene",
-        hint: "Continue: have the DM keep writing from where this stopped, without moving the story on",
+        hint: "Continue: have the GM keep writing from where this stopped, without moving the story on",
         glyph: "ui-skip",
         icon: <FastForward className="size-3.5" />,
         onSelect: () => onContinueScene(message),
@@ -261,7 +261,7 @@ export const MessageItem = memo(function MessageItem({
         id: "edit",
         name: "Edit",
         label: "Edit this narration",
-        hint: "Edit: fix what the DM said. Mechanics are untouched, and every dice marker must survive",
+        hint: "Edit: fix what the GM said. Mechanics are untouched, and every dice marker must survive",
         glyph: "tab-log",
         icon: <Pencil className="size-3.5" />,
         onSelect: () => setEditing(true),
@@ -271,8 +271,8 @@ export const MessageItem = memo(function MessageItem({
       actions.push({
         id: "remember",
         name: "Remember",
-        label: "Pin this to the DM's memory",
-        hint: "Remember: keep your selected text (or this whole message) in front of the DM every turn",
+        label: "Pin this to the GM's memory",
+        hint: "Remember: keep your selected text (or this whole message) in front of the GM every turn",
         glyph: "ui-pin",
         icon: <Bookmark className="size-3.5" />,
         onSelect: () => onPinMemory(message),
@@ -294,7 +294,7 @@ export const MessageItem = memo(function MessageItem({
         id: "canon",
         name: "Pin as canon",
         label: "Pin this passage as canon",
-        hint: "Pin as canon: keep this passage (or your selected text) in front of the DM permanently",
+        hint: "Pin as canon: keep this passage (or your selected text) in front of the GM permanently",
         glyph: "tab-facts",
         icon: <Pin className="size-3.5" />,
         onSelect: () => onPinCanon(message),
@@ -353,7 +353,7 @@ export const MessageItem = memo(function MessageItem({
     // Reroll takes: the counter only appears once a second one exists.
     const variants = message.variants ?? [];
     const variantIndex = message.variantIndex ?? 0;
-    const title = message.speaker ? `${message.speaker.name}, through the DM` : "Dungeon Master";
+    const title = message.speaker ? `${message.speaker.name}, through the GM` : "Game Master";
     return (
       <div
         className="session-dm group animate-fade-up"

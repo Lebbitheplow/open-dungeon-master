@@ -152,7 +152,7 @@ function Features({ data, set }: { data: Data; set: (patch: Data) => void }) {
                   className={cn(ui.input, "w-full text-sm sm:w-56")}
                 />
                 {tag ? (
-                  <span className="reveal-pop rounded-full border border-emerald-500/40 px-2 py-0.5 text-[10px] text-emerald-200" title="A feature of this name is run by the server, not just read by the DM.">
+                  <span className="reveal-pop rounded-full border border-emerald-500/40 px-2 py-0.5 text-[10px] text-emerald-200" title="A feature of this name is run by the server, not just read by the GM.">
                     The engine runs it {tag}
                   </span>
                 ) : null}
@@ -190,7 +190,7 @@ function Features({ data, set }: { data: Data; set: (patch: Data) => void }) {
         ))}
       <BorrowFeature taken={taken} full={full} onPick={(entry) => write([...flat, { level: entry.level, feature: { n: entry.name, d: entry.text } }])} />
       <p className="text-[11px] text-stone-500">
-        Granted by name as the character reaches each level. A borrowed feature keeps its name so the engine runs it; renaming it makes it words for the DM.
+        Granted by name as the character reaches each level. A borrowed feature keeps its name so the engine runs it; renaming it makes it words for the GM.
         Ability Score Improvements are counted by name, so keep them where the class should take them.
       </p>
     </div>

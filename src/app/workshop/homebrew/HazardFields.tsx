@@ -203,7 +203,7 @@ export function HazardFields({ data, onChange }: Props) {
         {kind === "poison" ? <PoisonBlock block={block} put={put} /> : null}
         {kind === "disease" ? <DiseaseBlock block={block} put={put} /> : null}
       </div>
-      <TextArea label="What the table is told" value={String(block.summary ?? "")} onChange={(summary) => put({ summary })} rows={2} maxLength={600} hint="One sentence of the rules, given to the DM with the hazard's name." />
+      <TextArea label="What the table is told" value={String(block.summary ?? "")} onChange={(summary) => put({ summary })} rows={2} maxLength={600} hint="One sentence of the rules, given to the GM with the hazard's name." />
     </div>
   );
 }

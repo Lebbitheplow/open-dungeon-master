@@ -60,7 +60,7 @@ every check the server does, including the ones a JSON Schema cannot express.
 | Field | |
 |---|---|
 | `id` | Lowercase words joined by hyphens, 3 to 50 characters (`pdf-rulebook-reader`). It is the folder name and part of URLs, so it never changes |
-| `name`, `description` | What the admin sees in the catalog and on the addon's card. Plain words: say what it does for a DM, not how |
+| `name`, `description` | What the admin sees in the catalog and on the addon's card. Plain words: say what it does for a GM, not how |
 | `version` | `1.2.0`. The catalog offers an update whenever its version differs from the installed one |
 | `apiVersion` | The addon contract it was written against: `1`. A server refuses a contract it does not know rather than guess |
 | `author`, `license`, `homepage` | `license` is the addon's own (an SPDX id such as `MIT`) |
@@ -218,15 +218,15 @@ Calls to one addon run one at a time, in order. A heavy addon (Blender, a PDF
 pipeline) never competes with itself.
 
 **Progress.** Send `notifications/progress` with the call's token as you work:
-`{ progressToken, progress, total, message }`. The message is shown to the DM
+`{ progressToken, progress, total, message }`. The message is shown to the GM
 ("Reading page 112 of 320"). A call that reports nothing for five minutes is
 cancelled, and no call runs longer than an hour.
 
-**Cancellation.** When the DM presses Stop, the server sends
+**Cancellation.** When the GM presses Stop, the server sends
 `notifications/cancelled` with the call's id. Stop work and return.
 
 **Errors.** Return a result with `isError: true` and a text block saying what
-went wrong in words a DM can act on ("No stat blocks were found on those
+went wrong in words a GM can act on ("No stat blocks were found on those
 pages"). Throwing inside a tool is the same to the server; a crash shows the
 end of your stderr instead.
 

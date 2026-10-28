@@ -44,7 +44,7 @@ export async function runResumeRecap(campaignId: string) {
     .at(-1);
   const location = getCurrentLocation(campaignId);
   const recent = listRecentMessages(campaignId, 12)
-    .map((message) => `${message.authorType === "dm" ? "DM" : "Player"}: ${message.content}`)
+    .map((message) => `${message.authorType === "dm" ? "GM" : "Player"}: ${message.content}`)
     .join("\n")
     .slice(-6_000);
   const events = [...listRecentEventsForCampaign(campaignId, 2).values()]
@@ -105,7 +105,7 @@ export async function runResumeRecap(campaignId: string) {
   if (hasHumanDm(seats) && seats.humanDmUserId) {
     const dmTrack = renderRecapMaterial(recapMaterial(material, true));
     if (dmTrack) {
-      insertWhisper(campaignId, null, [{ userId: seats.humanDmUserId, characterId: "", characterName: "the DM" }], `Previously, for your eyes: what the party does not know and where the world stands.\n\n${dmTrack.slice(0, 2_000)}`);
+      insertWhisper(campaignId, null, [{ userId: seats.humanDmUserId, characterId: "", characterName: "the GM" }], `Previously, for your eyes: what the party does not know and where the world stands.\n\n${dmTrack.slice(0, 2_000)}`);
       publishEphemeral(campaignId, "whisper_activity", {});
     }
   }

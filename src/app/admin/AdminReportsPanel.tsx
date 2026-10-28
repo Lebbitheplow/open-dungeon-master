@@ -104,7 +104,7 @@ export function AdminReportsPanel() {
         }
       />
       <p className="mb-3 text-sm leading-6 text-stone-400">
-        Players flag Dungeon Master passages, messages and other players from the table.
+        Players flag Game Master passages, messages and other players from the table.
         Reports come to this server only; there is no central moderation behind the app.
       </p>
 
@@ -131,7 +131,7 @@ export function AdminReportsPanel() {
                 <span className="plate-chip">{REASON_LABEL[report.reason] ?? report.reason}</span>
                 <span>
                   {report.authorType === "dm"
-                    ? "Dungeon Master passage"
+                    ? "Game Master passage"
                     : report.reportedUsername
                       ? `Player ${report.reportedUsername}`
                       : "Player (account deleted)"}

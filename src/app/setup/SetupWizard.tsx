@@ -336,7 +336,7 @@ export function SetupWizard({ config: initialConfig, env, info }: { config: Mask
       key: "story",
       label: "Storyteller",
       title: title("The storyteller", "Who tells the story?", "story"),
-      blurb: "The Dungeon Master's words. The server always rolls the dice and keeps the rules; this only chooses who tells the story. Reading it aloud is a later step.",
+      blurb: "The Game Master's words. The server always rolls the dice and keeps the rules; this only chooses who tells the story. Reading it aloud is a later step.",
       content: (
         <StorytellerStep
           draft={draft}

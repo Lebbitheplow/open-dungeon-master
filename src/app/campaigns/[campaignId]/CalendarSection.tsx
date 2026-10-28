@@ -31,7 +31,7 @@ const REPEAT_OPTIONS: Array<{ value: EventDraft["repeat"]; label: string }> = [
 ];
 const VISIBILITY_OPTIONS: Array<{ value: EventDraft["visibility"]; label: string }> = [
   { value: "party", label: "party" },
-  { value: "dm", label: "DM only" },
+  { value: "dm", label: "GM only" },
 ];
 
 function blankEvent(): EventDraft {
@@ -241,7 +241,7 @@ export function CalendarSection({ campaignId }: { campaignId: string }) {
                   <span className={cn("font-medium", event.fired ? "text-stone-500 line-through" : "text-stone-200")}>{event.title}</span>
                   <span className="text-stone-500"> {event.when}</span>
                   {event.repeat !== "none" ? <span className="pk-chip ml-1 px-1.5">{event.repeat}</span> : null}
-                  {event.visibility === "dm" ? <span className="pk-chip ml-1 border-violet-500/40 px-1.5 text-violet-300">DM only</span> : null}
+                  {event.visibility === "dm" ? <span className="pk-chip ml-1 border-violet-500/40 px-1.5 text-violet-300">GM only</span> : null}
                 </span>
                 <KitButton tone="iconDanger" always aria-label={`Remove ${event.title}`} onClick={() => void removeEvent(event.id)}>
                   <Trash2 className="size-3.5" />

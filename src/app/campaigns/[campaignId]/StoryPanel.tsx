@@ -421,7 +421,7 @@ function ArcCard({ campaignId }: { campaignId: string }) {
         )}
         <span className="flex items-center gap-1.5">
           <GameIcon icon={{ kind: "glyph", key: "system-storyboard" }} size="size-6" />
-          <span className="section-head-title">DM story arc (secret)</span>
+          <span className="section-head-title">GM story arc (secret)</span>
         </span>
       </button>
       {expanded ? (
@@ -787,7 +787,7 @@ function ArcCard({ campaignId }: { campaignId: string }) {
             <EmptyState size="sm" art="scrolls" title={canPlot ? "No story arc yet. It is written when the adventure begins, or generate one now." : "No story arc yet."} />
           )}
           {!loading && canPlot ? (
-            <KitButton onClick={regenerate} disabled={regenerating} title="Discard the current arc and have the DM plot a fresh one from the premise">
+            <KitButton onClick={regenerate} disabled={regenerating} title="Discard the current arc and have the GM plot a fresh one from the premise">
               {regenerating ? (
                 <>
                   <Loader2 className="size-3 animate-spin" /> Plotting a new arc...
@@ -948,7 +948,7 @@ export function StoryPanel({
           className="mb-0"
         />
         {steersStory ? (
-          <KitButton onClick={closeChapter} disabled={closing} title="Seal this chapter; the DM writes its title and summary" className="mt-2 w-full justify-center">
+          <KitButton onClick={closeChapter} disabled={closing} title="Seal this chapter; the GM writes its title and summary" className="mt-2 w-full justify-center">
             {closing ? (
               <>
                 <Loader2 className="size-3 animate-spin" /> Writing the chapter...

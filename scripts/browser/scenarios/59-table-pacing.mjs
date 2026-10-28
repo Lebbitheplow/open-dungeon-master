@@ -22,7 +22,7 @@ export default {
     await t.tap(players.locator(".cc-group-toggle"));
     await eventually(async () => (await players.getAttribute("data-open")) !== null, { label: "Players and permissions open" });
 
-    const picker = players.locator('button[aria-label="When the AI DM answers"]');
+    const picker = players.locator('button[aria-label="When the AI GM answers"]');
     await eventually(() => picker.count(), { label: "the pacing picker" });
     check(/Waits for everyone, up to 5 min/.test((await picker.textContent()) ?? ""), "it starts at the default, waiting up to five minutes");
     check((await players.getByRole("button", { name: "What does waiting for everyone do?" }).count()) === 1, "an info button explains it");

@@ -14,7 +14,7 @@ export function CharacterGate({ campaignId }: { campaignId: string }) {
         <UserPlus className="size-6 text-amber-300" />
         <div>
           <p className="font-serif text-base text-stone-100">The adventure is underway.</p>
-          <p className="mt-1 text-sm text-stone-400">Pick a hero to step into the scene. The DM writes them in.</p>
+          <p className="mt-1 text-sm text-stone-400">Pick a hero to step into the scene. The GM writes them in.</p>
         </div>
         <HeroRoutes campaignId={campaignId} className="w-full text-left" />
       </div>

@@ -147,7 +147,7 @@ export function rollbackWarnings(scope: RollbackScope): string[] {
     warnings.push("The active combat encounter will be discarded.");
   }
   if (scope.inFlightTurn) {
-    warnings.push("A DM turn is in progress; it will be cancelled.");
+    warnings.push("A GM turn is in progress; it will be cancelled.");
   }
   if (scope.pendingRolls > 0) {
     warnings.push("Pending dice rolls will be cancelled.");

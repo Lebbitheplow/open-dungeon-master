@@ -160,7 +160,7 @@ export function castPrismaticSpray(input: PrismaticCast): Array<Record<string, u
         if (color === "violet") {
           markSheet(campaign, sheet.id, VIOLET_MARK, { spell, source: caster.id });
         }
-        notes.push(color === "indigo" ? "indigo: restrained (a character's CON saves at the end of each turn are the DM's to call)" : "violet: blinded (WIS save at the start of the caster's next turn)");
+        notes.push(color === "indigo" ? "indigo: restrained (a character's CON saves at the end of each turn are the GM's to call)" : "violet: blinded (WIS save at the start of the caster's next turn)");
       } else {
         notes.push(`${color}: resisted`);
       }

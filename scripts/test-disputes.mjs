@@ -39,7 +39,7 @@ test("only a narrated passage at an AI table can be disputed, and only once at a
   assert.equal(disputeRefusal({ narratorIsAi: true, message: dm, raiserSteersStory: false, alreadyOpen: false }), null);
   assert.match(disputeRefusal({ narratorIsAi: false, message: dm, raiserSteersStory: false, alreadyOpen: false }), /A person runs this table/);
   assert.match(disputeRefusal({ narratorIsAi: true, message: null, raiserSteersStory: false, alreadyOpen: false }), /not in the transcript/);
-  assert.match(disputeRefusal({ narratorIsAi: true, message: { authorType: "player" }, raiserSteersStory: false, alreadyOpen: false }), /Only a passage the Dungeon Master/);
+  assert.match(disputeRefusal({ narratorIsAi: true, message: { authorType: "player" }, raiserSteersStory: false, alreadyOpen: false }), /Only a passage the Game Master/);
   assert.match(disputeRefusal({ narratorIsAi: true, message: dm, raiserSteersStory: true, alreadyOpen: false }), /You steer this story/);
   assert.match(disputeRefusal({ narratorIsAi: true, message: dm, raiserSteersStory: false, alreadyOpen: true }), /already under dispute/);
 });

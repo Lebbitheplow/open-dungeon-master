@@ -128,7 +128,7 @@ export default function TermsPage() {
         </ul>
         <p className="mt-3 text-sm leading-6 text-stone-400">
           If something at the table breaks these rules, whether a player wrote it or the AI
-          Dungeon Master generated it, report it from the message or the party list. Reports go
+          Game Master generated it, report it from the message or the party list. Reports go
           to the admins of the server you are on, who can mute, remove, or delete accounts, and
           you can block a player yourself at any time. Because the app has no central service,
           there is no one else to report to.
@@ -141,7 +141,7 @@ export default function TermsPage() {
 
       <PageSection heading="AI generated content">
         <p className="text-sm leading-6 text-stone-400">
-          The Dungeon Master is a language model. Its narration is fiction produced by software,
+          The Game Master is a language model. Its narration is fiction produced by software,
           and it can be wrong, inconsistent, unfair, or upsetting. It is not advice of any kind,
           and nothing it says should be relied on outside the game.
         </p>
@@ -157,7 +157,7 @@ export default function TermsPage() {
             and this project makes no claim either way.
           </li>
           <li>
-            Agree on the limits for your table before you play, and treat the AI DM as a tool the
+            Agree on the limits for your table before you play, and treat the AI GM as a tool the
             table steers rather than an authority.
           </li>
         </ul>

@@ -76,7 +76,7 @@ export function SheetGearRow({
           not in effect
         </span>
       ) : item.layered && worn ? (
-        <span className="motion-pop shrink-0 rounded-full border border-amber-800/60 px-1.5 text-[10px] text-amber-300" title="Worn beside another of its kind, on the DM's say.">
+        <span className="motion-pop shrink-0 rounded-full border border-amber-800/60 px-1.5 text-[10px] text-amber-300" title="Worn beside another of its kind, on the GM's say.">
           beside another
         </span>
       ) : null}
@@ -161,8 +161,8 @@ export function SheetGearRow({
             Take off {conflict.wearing.join(" and ")}, wear {item.name}
           </button>
           {canLayer ? (
-            <button type="button" disabled={busy} onClick={onLayer} title="The SRD's exception, the DM's call: a circlet under a helmet, two cloaks layered." className="motion-press rounded border border-stone-600 px-1.5 py-0.5 text-stone-200 disabled:opacity-40">
-              Wear both (DM&apos;s call)
+            <button type="button" disabled={busy} onClick={onLayer} title="The SRD's exception, the GM's call: a circlet under a helmet, two cloaks layered." className="motion-press rounded border border-stone-600 px-1.5 py-0.5 text-stone-200 disabled:opacity-40">
+              Wear both (GM&apos;s call)
             </button>
           ) : null}
           <button type="button" onClick={onDismiss} className="motion-press rounded border border-stone-700 px-1.5 py-0.5 text-stone-400">

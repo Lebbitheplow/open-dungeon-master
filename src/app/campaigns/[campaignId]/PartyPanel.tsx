@@ -118,11 +118,11 @@ function RequestCompanionButton({ campaignId }: { campaignId: string }) {
       onClick={request}
       disabled={state !== "idle"}
       busy={state === "sending"}
-      title="Ask the DM to write an ally with a real character sheet into the story"
+      title="Ask the GM to write an ally with a real character sheet into the story"
       className="w-full disabled:opacity-60"
     >
       {state === "sending" ? null : <GameIcon icon={{ kind: "glyph", key: "system-party" }} size="size-5" />}
-      {state === "sent" ? "The DM has been asked" : "Request a companion"}
+      {state === "sent" ? "The GM has been asked" : "Request a companion"}
     </KitButton>
   );
 }
@@ -182,7 +182,7 @@ function HandToDmButton({
       });
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
-        setError(data.error || "Could not hand the character to the DM.");
+        setError(data.error || "Could not hand the character to the GM.");
       }
     } catch {
       setError("Could not reach the server.");
@@ -193,7 +193,7 @@ function HandToDmButton({
   return (
     <div className="reveal mt-2 space-y-1">
       <p className="text-[11px] leading-4 text-amber-200">
-        {sheet.name} is filed in the library as an ally the DM plays, but sits here as a player&apos;s character, so the DM takes no turns for them.
+        {sheet.name} is filed in the library as an ally the GM plays, but sits here as a player&apos;s character, so the GM takes no turns for them.
       </p>
       {blocked ? (
         <div
@@ -226,11 +226,11 @@ function HandToDmButton({
         title={
           blocked
             ? blocked.reason
-            : "Make this character a party companion: the sheet and its progress stay, the DM plays it from here"
+            : "Make this character a party companion: the sheet and its progress stay, the GM plays it from here"
         }
         className="w-full justify-center"
       >
-        {state === "sending" ? null : <Bot className="size-3.5" />} Hand to the DM
+        {state === "sending" ? null : <Bot className="size-3.5" />} Hand to the GM
       </KitButton>
       {error ? (
         <p role="alert" className="motion-shake text-[11px] text-red-400">

@@ -38,7 +38,7 @@ export function connectionInstructions(grant: ConnectionGrant): string {
     return base;
   }
   const records = grant.scopes.includes("play") ? "odm_ask, odm_timeline, odm_lore and odm_get_facts" : "odm_timeline, odm_lore and odm_get_facts";
-  return `${base} For what is happening at a table now, read odm_get_campaign (turn state and the newest messages) and odm_get_whispers (what the DM told you alone). ${records} answer from records and background, not the live table.`;
+  return `${base} For what is happening at a table now, read odm_get_campaign (turn state and the newest messages) and odm_get_whispers (what the GM told you alone). ${records} answer from records and background, not the live table.`;
 }
 
 function serverFor(grant: Grant): Server {

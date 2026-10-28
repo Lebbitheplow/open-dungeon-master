@@ -69,7 +69,7 @@ export const REQUEST_ROLL_ADJUDICATION: CatalogEntry = {
         label: "Why",
         kind: "text",
         placeholder: "the rope is slick with rain",
-        help: "Kept with the roll as your ruling. Your pick stands either way; the AI DM's needs a circumstance the server cannot see.",
+        help: "Kept with the roll as your ruling. Your pick stands either way; the AI GM's needs a circumstance the server cannot see.",
       },
       {
         name: "visibility",

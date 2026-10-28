@@ -463,7 +463,7 @@ export function DmStoryboardPanel({
           <p className="text-[11px] leading-snug text-stone-400">
             {data.compiled.summary.lines.length
               ? `Imported into a campaign, this board becomes ${data.compiled.summary.lines.join(", ")}.`
-              : "Nothing yet. Cards become lore, quests, prepared fights, DM notes and the story arc."}
+              : "Nothing yet. Cards become lore, quests, prepared fights, GM notes and the story arc."}
           </p>
           {data.compiled.summary.arcRefusal ? (
             <p className="reveal text-[10px] text-amber-300/70">{data.compiled.summary.arcRefusal}</p>

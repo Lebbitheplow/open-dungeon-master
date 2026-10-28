@@ -115,7 +115,7 @@ export function createDmTurn(
     .run(id, campaignId, actor, JSON.stringify(conversation), now, now);
   const turn = getDmTurn(id);
   if (!turn) {
-    throw new Error("Failed to create DM turn.");
+    throw new Error("Failed to create GM turn.");
   }
   return turn;
 }

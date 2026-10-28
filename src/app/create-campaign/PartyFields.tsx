@@ -31,12 +31,12 @@ import {
 import { FieldLabel, ToggleCard } from "@/app/create-campaign/fields";
 import type { StepProps } from "@/app/create-campaign/draft";
 
-const DIFFICULTY_INFO = `Difficulty is guidance to the Dungeon Master, not a damage multiplier: every rule underneath stays 5e. It steers how hard encounters are built and how often a bad roll is allowed to really cost you.\n\n${CAMPAIGN_DIFFICULTIES.map(
+const DIFFICULTY_INFO = `Difficulty is guidance to the Game Master, not a damage multiplier: every rule underneath stays 5e. It steers how hard encounters are built and how often a bad roll is allowed to really cost you.\n\n${CAMPAIGN_DIFFICULTIES.map(
   (value) => `**${value}**: ${CAMPAIGN_DIFFICULTY_HINTS[value]}`,
 ).join("\n\n")}\n\nThe party lead can change it later from the table's settings.`;
 
 const LENGTH_INFO =
-  "How far ahead the DM plans the secret story: how many acts the arc spans, and how many villains and threads it seeds at the start.\n\n**Short**: three acts, one focused adventure. A handful of sessions.\n\n**Standard**: four or five acts. The default shape of a campaign.\n\n**Epic**: six to eight acts, several threads running at once.\n\nNo length ever cuts you off. Play past the finale and a sequel saga picks up where the last one ended.";
+  "How far ahead the GM plans the secret story: how many acts the arc spans, and how many villains and threads it seeds at the start.\n\n**Short**: three acts, one focused adventure. A handful of sessions.\n\n**Standard**: four or five acts. The default shape of a campaign.\n\n**Epic**: six to eight acts, several threads running at once.\n\nNo length ever cuts you off. Play past the finale and a sequel saga picks up where the last one ended.";
 
 // How many, how strong, how hard. A solo table has no player count
 // (maxPlayers is pinned to 1 in the payload, from the solo entry point, never
@@ -180,7 +180,7 @@ export function CampaignLengthField({ draft, patch, gates }: StepProps) {
         options={CAMPAIGN_LENGTHS.map((value) => ({ value, label: CAMPAIGN_LENGTH_LABELS[value] }))}
       />
       <p className="mt-1 text-xs text-stone-500">
-        How far the DM plans the story ahead. Any length keeps going if you play past the finale: a sequel saga
+        How far the GM plans the story ahead. Any length keeps going if you play past the finale: a sequel saga
         picks up where the last one ended.
       </p>
     </label>

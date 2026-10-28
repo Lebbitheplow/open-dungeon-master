@@ -153,7 +153,7 @@ export function FinishStep({
             onChange={role.onChange}
             options={[
               { value: "pc", label: "A character I play" },
-              { value: "companion", label: "An ally the DM plays" },
+              { value: "companion", label: "An ally the GM plays" },
             ]}
             className="w-full sm:max-w-md"
           />

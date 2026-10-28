@@ -322,7 +322,7 @@ export function LoreEditorForm({
             </button>
           </>
         ) : null}
-        <span className="text-[11px] text-stone-500">Tag it &quot;rules&quot; and the DM can quote it.</span>
+        <span className="text-[11px] text-stone-500">Tag it &quot;rules&quot; and the GM can quote it.</span>
         {pdfError ? <span className="motion-shake inline-block text-[11px] text-red-400">{pdfError}</span> : null}
       </div>
       <SectionHead title="Tags" glyph="tab-facts" className="mb-0 pt-1" />

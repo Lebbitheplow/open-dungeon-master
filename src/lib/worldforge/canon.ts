@@ -95,5 +95,5 @@ export function eventLine(event: WorldEvent, calendars: Calendar[], conversions 
 
 // Where a secret stands with the party, in the words a model reads.
 export function secretStanding(secret: Pick<Secret, "partyKnows">): string {
-  return secret.partyKnows ? "the party has learned this; it is established for them" : "DM only: the party has not learned this";
+  return secret.partyKnows ? "the party has learned this; it is established for them" : "GM only: the party has not learned this";
 }

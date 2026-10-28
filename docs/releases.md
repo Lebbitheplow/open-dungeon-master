@@ -78,7 +78,7 @@ Promote a beta when all of these hold:
   report), and each tool-and-reason pair that keeps coming back became a scripted turn
   (`scripts/lib/enforce-narrator.mjs`) with either an engine check or a `gap()` in
   `docs/rules-enforcement-ledger.md`. Compare rates only within one kind of backend and
-  DM mode, and remember they count only the mistakes someone noticed.
+  GM mode, and remember they count only the mistakes someone noticed.
 
 Then clear the flag on the server release and on the client release that bundles it
 (the client release names its server):

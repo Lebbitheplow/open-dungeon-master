@@ -338,12 +338,12 @@ function DmStatusLine({ capabilities }: { capabilities: ClientCapabilities | nul
   const tone = !capabilities ? "wait" : !story?.configured ? "off" : story.reachable ? "awake" : "dozing";
   const words =
     tone === "wait"
-      ? "Waking the DM"
+      ? "Waking the GM"
       : tone === "off"
         ? "No AI storyteller · human-run tables"
         : tone === "awake"
-          ? "The DM is awake"
-          : "The DM is not answering";
+          ? "The GM is awake"
+          : "The GM is not answering";
   const bits = [words];
   if (story?.model && tone !== "off") bits.push(story.model);
   if (version) bits.push(`v${version}`);

@@ -74,11 +74,11 @@ export const GENRE_AUTHORED: GenreRow[] = [
   // ---- actions ----
   {
     feature: "Scent of Corruption",
-    entry: { subclass: "genre", spends: [{ name: "Scent of Corruption", action: "action", does: note("The DM says whether the creature within 30 feet is a fiend, undead or shapechanger, or under a curse or a charm.") }] },
+    entry: { subclass: "genre", spends: [{ name: "Scent of Corruption", action: "action", does: note("The GM says whether the creature within 30 feet is a fiend, undead or shapechanger, or under a curse or a charm.") }] },
   },
   {
     feature: "Field Instruments",
-    entry: { subclass: "genre", spends: [{ name: "Field Instruments", action: "action", does: note("The DM says whether the supernatural is present within 60 feet, and its rough direction.") }] },
+    entry: { subclass: "genre", spends: [{ name: "Field Instruments", action: "action", does: note("The GM says whether the supernatural is present within 60 feet, and its rough direction.") }] },
   },
   // ---- reactions ----
   { feature: "ICE Pick", entry: { subclass: "genre", reactions: [{ name: "ICE Pick", does: { kind: "ac_vs_hit", amount: 2 } }] } },

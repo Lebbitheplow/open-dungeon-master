@@ -167,7 +167,7 @@ export function rollFeatureRiders(
   // Inspiration the DM awarded, spent for advantage when the roll asks.
   if (args.useInspiration && derivationKind && sheet && !heldInspiration(sheet)) {
     return {
-      error: `${sheet.name} holds no Inspiration to spend. The DM awards it with set_condition condition "inspiration"; roll without useInspiration.`,
+      error: `${sheet.name} holds no Inspiration to spend. The GM awards it with set_condition condition "inspiration"; roll without useInspiration.`,
       retry: true,
     };
   }

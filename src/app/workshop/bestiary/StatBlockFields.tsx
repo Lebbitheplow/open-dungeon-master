@@ -317,7 +317,7 @@ export function LanguagesAndHabitat({ draft, onChange }: { draft: MonsterDraft; 
           }}
         />
         <span className="text-[11px] text-stone-500">
-          The DM running it sees the list. Put a round of casting into extra damage so the rating counts it.
+          The GM running it sees the list. Put a round of casting into extra damage so the rating counts it.
         </span>
       </div>
       )}

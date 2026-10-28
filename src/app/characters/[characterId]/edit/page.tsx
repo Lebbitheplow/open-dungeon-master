@@ -205,7 +205,7 @@ function EditCharacterInner({ characterId }: { characterId: string }) {
             The copies already at {tables.map((table) => table.title).join(", ")} keep their own sheets; this edit does not
             reach them. When one of those tables saves its progress to your library (Save to library, or the end of its
             campaign), what it carries back is written over this edit. While a table holds a copy, they stay{" "}
-            {character.role === "companion" ? "an ally the DM plays" : "a character you play"}.
+            {character.role === "companion" ? "an ally the GM plays" : "a character you play"}.
           </p>
         ) : null}
       </header>

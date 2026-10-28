@@ -39,7 +39,7 @@ const FIELD_PROMPTS: Record<GeneratableField, string> = {
 };
 
 const SYSTEM =
-  "You write one small piece of a non-player character for a tabletop RPG, for a Dungeon Master who will accept it or throw it away. Answer with the piece itself and nothing else: no preamble, no quotation marks, no explanation, no options to choose between. Concrete and specific beats evocative and vague every time.";
+  "You write one small piece of a non-player character for a tabletop RPG, for a Game Master who will accept it or throw it away. Answer with the piece itself and nothing else: no preamble, no quotation marks, no explanation, no options to choose between. Concrete and specific beats evocative and vague every time.";
 
 export type SuggestInput = {
   field: GeneratableField;
@@ -78,7 +78,7 @@ export async function suggestNpcField(
           `Setting: ${campaign.theme || campaign.gameSettings.genre.replace(/_/g, " ")}`,
           ...known,
           input.field === "personality" ? `The list: ${input.vocabulary}` : "",
-          input.hint ? `The DM asks for: ${input.hint}` : "",
+          input.hint ? `The GM asks for: ${input.hint}` : "",
           FIELD_PROMPTS[input.field],
         ]
           .filter(Boolean)

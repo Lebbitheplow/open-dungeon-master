@@ -959,7 +959,7 @@
    "uses": 1,
    "ability": null,
    "recharge": "long",
-   "guidance": "Advantage on one attack, ability check or saving throw. The DM may trigger a Wild Magic Surge afterwards to restore the use."
+   "guidance": "Advantage on one attack, ability check or saving throw. The GM may trigger a Wild Magic Surge afterwards to restore the use."
   },
   {
    "id": "sub_favored_by_the_gods",

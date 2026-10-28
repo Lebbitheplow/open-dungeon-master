@@ -47,7 +47,7 @@ export function TableScopeNote({
           <Info className="mt-0.5 size-3.5 shrink-0 text-sky-300/70" aria-hidden="true" />
           <span>
             Your own {unadmitted.join(", ")} {unadmitted.length === 1 ? "is" : "are"} not offered at this table. Homebrew
-            counts at a table when whoever runs it (the owner, the DM or the assistant DM) keeps it: send them a Workshop
+            counts at a table when whoever runs it (the owner, the GM or the assistant GM) keeps it: send them a Workshop
             bundle with your Homebrew ticked, and it is offered here once they bring it in. In your own library it is
             offered as it is.
           </span>

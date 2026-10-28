@@ -127,7 +127,7 @@ export function setupLines(setup: ReportSetup): string[] {
     `Server: ${setup.platform} ${setup.arch}, Node ${setup.node}${setup.deviceWorld ? ", a world hosted by the app" : ""}${setup.machine ? `; ${setup.machine}` : ""}`,
   );
   if (setup.app) lines.push(...appLines(setup.app));
-  if (setup.dmMode) lines.push(`DM mode: ${setup.dmMode}. Reporter's seat: ${setup.role ?? "unknown"}`);
+  if (setup.dmMode) lines.push(`GM mode: ${setup.dmMode}. Reporter's seat: ${setup.role ?? "unknown"}`);
   lines.push(`Narrator: ${modelLine(setup.narrator)}`);
   if (setup.helper !== undefined) lines.push(`Helper model: ${modelLine(setup.helper)}`);
   const agent = setup.agentProgram;

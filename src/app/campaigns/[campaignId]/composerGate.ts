@@ -63,7 +63,7 @@ export function composerGate({
   const narrationBlocked = openingNarrationPlaying && kind !== "ooc";
   const inputBlocked = floorBlocked || holdBlocked || initiativeBlocked || narrationBlocked;
   const placeholder = narrationBlocked
-    ? "The Dungeon Master is setting the scene... (OOC still open)"
+    ? "The Game Master is setting the scene... (OOC still open)"
     : holdBlocked
       ? floor.mode === "hold" && floor.next.mode === "initiative" && enemyTurns
         ? "The enemies are taking their turns... (OOC still open)"
@@ -81,7 +81,7 @@ export function composerGate({
                 : kind === "ooc"
                   ? "Out-of-character note to the table"
                   : leadPrivate
-                    ? "Tell the DM privately what to do with the next turn"
-                    : "Steer the story: a direction the DM must weave in";
+                    ? "Tell the GM privately what to do with the next turn"
+                    : "Steer the story: a direction the GM must weave in";
   return { inputBlocked, placeholder, spotlighted, heldSpotlightNames };
 }

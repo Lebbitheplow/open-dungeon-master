@@ -170,7 +170,7 @@ function parseRescue(line) {
 }
 
 // ---- what a player must never read -------------------------------------------
-const EMPTY_PREFIXES = [EMPTY_TURN_LINE, RESOLVED_TURN_LINE, "The DM had no answer", "The DM could not"];
+const EMPTY_PREFIXES = [EMPTY_TURN_LINE, RESOLVED_TURN_LINE, "The GM had no answer", "The GM could not"];
 const isEmptyTurn = (text) => EMPTY_PREFIXES.some((prefix) => text.startsWith(prefix));
 const ROLL_MARKER = /\[roll:[0-9a-f-]{36}\]\s*/g;
 

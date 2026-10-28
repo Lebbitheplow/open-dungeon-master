@@ -49,7 +49,7 @@ export function VisibilitySelect({
       </button>
       <span className="text-[11px] text-stone-500">
         {value === "dm"
-          ? "A secret: the DM prompt knows it, the players never see it."
+          ? "A secret: the GM prompt knows it, the players never see it."
           : "Part of the world bible players can open, unless WorldForge marks it as not canon yet. With a picture, a handout."}
       </span>
     </div>

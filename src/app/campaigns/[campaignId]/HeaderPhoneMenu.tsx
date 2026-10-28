@@ -142,7 +142,7 @@ export function HeaderPhoneMenu({
                   <HeaderGlyph glyph="ui-speech" off={narrationQuiet} />
                   <span>
                     {narrationState}
-                    {hint("The DM's words read aloud, on this device only")}
+                    {hint("The GM's words read aloud, on this device only")}
                   </span>
                 </DropdownMenu.Item>
                 {narration.unlocked && !narration.muted ? (

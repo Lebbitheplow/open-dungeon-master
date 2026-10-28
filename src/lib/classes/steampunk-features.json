@@ -120,13 +120,13 @@
         "7": [{ "n": "Spring Heels", "d": "Your jump distance triples; ignore the first 20 ft of any fall." }],
         "9": [{ "n": "Smoke Discipline", "d": "Your smoke bombs fill a 15-ft radius and you see through your own smoke." }],
         "10": [{ "n": "Fourth Gadget", "d": "Learn a fourth gadget; Overclock has 2 uses per rest." }],
-        "11": [{ "n": "Sabotage", "d": "1/rest, a touched machine, trap, or construct malfunctions at the worst moment for its owner (DM adjudicates)." }],
+        "11": [{ "n": "Sabotage", "d": "1/rest, a touched machine, trap, or construct malfunctions at the worst moment for its owner (GM adjudicates)." }],
         "13": [{ "n": "Backup Rig", "d": "When an effect would destroy or disable a held gadget, it survives; 1/long rest, ignore being disarmed." }],
         "14": [{ "n": "Fifth Gadget", "d": "Learn a fifth gadget." }],
         "15": [{ "n": "Chain Deployment", "d": "Use two different gadgets with the same bonus action." }],
-        "17": [{ "n": "Signature Invention", "d": "Design one custom gadget with the DM; it is yours alone and recharges per short rest." }],
+        "17": [{ "n": "Signature Invention", "d": "Design one custom gadget with the GM; it is yours alone and recharges per short rest." }],
         "18": [{ "n": "Perpetual Toolkit", "d": "All gadget uses recharge on a short rest." }],
-        "20": [{ "n": "One Gadget for Everything", "d": "1/long rest, declare you prepared exactly the right device for this situation; the DM makes it work once." }]
+        "20": [{ "n": "One Gadget for Everything", "d": "1/long rest, declare you prepared exactly the right device for this situation; the GM makes it work once." }]
       },
       "subclass": {
         "name": "Tinker Prodigy",

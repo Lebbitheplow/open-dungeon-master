@@ -24,7 +24,7 @@ export const FACTION_ADJUDICATIONS: CatalogEntry[] = [
     fields: [
       { name: "faction", label: "Faction", kind: "text", required: true },
       { name: "note", label: "The fact", kind: "text", required: true },
-      { name: "secret", label: "DM only for now", kind: "boolean" },
+      { name: "secret", label: "GM only for now", kind: "boolean" },
     ],
   },
 ];

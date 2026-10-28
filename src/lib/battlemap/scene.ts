@@ -483,7 +483,7 @@ export function describeScene(input: { doors: DoorStates; labels: MapLabel[] }):
   }
   if (input.labels.length) {
     lines.push(
-      `Labels: ${input.labels.map((label) => `(${label.x},${label.y}) ${label.text}${label.dmOnly ? " [DM only]" : ""}`).join("; ")}.`,
+      `Labels: ${input.labels.map((label) => `(${label.x},${label.y}) ${label.text}${label.dmOnly ? " [GM only]" : ""}`).join("; ")}.`,
     );
   }
   return lines;

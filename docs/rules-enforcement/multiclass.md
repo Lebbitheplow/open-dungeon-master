@@ -92,7 +92,7 @@ Deliberate deviations from SRD 5.1, each pinned as a test() with a comment:
    - Rule: a level adds that class's hit die (or its fixed value) plus the CON modifier.
    - Observed: `maxHp: 500` on a wizard level is stored (28 to 500).
    - Root cause: route.ts buildMulticlassLevelUp lines 352 to 353 copy
-     `data.maxHp` and `data.currentHp`. The DM tool has a cap
+     `data.maxHp` and `data.currentHp`. The GM tool has a cap
      (`mutation-math.ts` sheetBuffViolation line 38); the player route has none.
    - Fix: compute the legal range from the class being levelled
      (1 to die, plus CON modifier, per level gained) and refuse outside it.

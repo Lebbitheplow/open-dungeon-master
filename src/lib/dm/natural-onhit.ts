@@ -96,10 +96,10 @@ export function landNaturalOnHit(campaign: Campaign, hit: NaturalHit): string[] 
     lines.push(...layConditions(campaign, hit, failedBy, total));
   }
   if (onHit.drainMaxHp && !saved) {
-    lines.push(`${label}: ${enemy.displayName}'s hit point maximum is reduced by the damage taken until it finishes a long rest; the DM keeps that count.`);
+    lines.push(`${label}: ${enemy.displayName}'s hit point maximum is reduced by the damage taken until it finishes a long rest; the GM keeps that count.`);
   }
   if (onHit.manual?.length) {
-    lines.push(`${label}, for the DM to resolve: ${onHit.manual.join(" ")}`);
+    lines.push(`${label}, for the GM to resolve: ${onHit.manual.join(" ")}`);
   }
   return lines;
 }
@@ -118,7 +118,7 @@ function layConditions(campaign: Campaign, hit: NaturalHit, failedBy: number, to
   }
   const grapple = onHit.condition === "grappled";
   if (grapple && !hit.holderId) {
-    return [`${hit.attack}: the hit grapples ${fresh.displayName} (escape DC ${onHit.escapeDc})${onHit.alsoCondition ? ` and it is ${onHit.alsoCondition} until the grapple ends` : ""}; the DM keeps the hold, as no sheet of its own can.`];
+    return [`${hit.attack}: the hit grapples ${fresh.displayName} (escape DC ${onHit.escapeDc})${onHit.alsoCondition ? ` and it is ${onHit.alsoCondition} until the grapple ends` : ""}; the GM keeps the hold, as no sheet of its own can.`];
   }
   const unconscious =
     (onHit.unconsciousFailBy !== undefined && failedBy >= onHit.unconsciousFailBy) ||

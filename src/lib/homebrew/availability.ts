@@ -14,7 +14,7 @@ const WHERE: Partial<Record<HomebrewKind, string>> = {
   feat: "wherever a character takes a feat",
   spell: "in the spell lists of the classes it names",
   item: "in starting gear, shops and inventories",
-  hazard: "to the traps, hazards and afflictions a DM sets at the table",
+  hazard: "to the traps, hazards and afflictions a GM sets at the table",
 };
 
 export function homebrewAvailability(kind: HomebrewKind, parent?: { name: string; subclassLevel: number | null }): string {
@@ -24,5 +24,5 @@ export function homebrewAvailability(kind: HomebrewKind, parent?: { name: string
         ? `under ${parent.name} in the character builder${parent.subclassLevel ? ` from level ${parent.subclassLevel}, the level that class picks a subclass, and at that level-up` : ""}`
         : "under its class in the character builder"
       : (WHERE[kind] ?? "where the books' own are");
-  return `Offered ${where}: for your own characters, and at every table you run as its owner, DM or assistant DM. At someone else's table it is offered once that table's owner or DM keeps a copy, from a Workshop bundle with your Homebrew in it.`;
+  return `Offered ${where}: for your own characters, and at every table you run as its owner, GM or assistant GM. At someone else's table it is offered once that table's owner or GM keeps a copy, from a Workshop bundle with your Homebrew in it.`;
 }

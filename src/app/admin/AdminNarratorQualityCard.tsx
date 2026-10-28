@@ -25,9 +25,9 @@ const BACKEND_LABELS: Record<QualityGroup["backendClass"], string> = {
 };
 
 const MODE_LABELS: Record<DmMode, string> = {
-  ai: "AI DM",
+  ai: "AI GM",
   steered: "Steered",
-  human: "Human DM",
+  human: "Human GM",
   assisted: "Assisted",
 };
 
@@ -97,7 +97,7 @@ export function AdminNarratorQualityCard() {
         aside={<span className="count-pop tabular-nums">{overview?.turns ?? 0}</span>}
       />
       <p className="mb-3 text-xs text-stone-400">
-        How the AI&rsquo;s turns ended and what tables fixed, one row per kind of backend and DM mode. Compare rates
+        How the AI&rsquo;s turns ended and what tables fixed, one row per kind of backend and GM mode. Compare rates
         within a row, never across: it counts only the mistakes someone noticed.
       </p>
       {error ? <p role="alert" className="mb-2 text-sm text-red-400">{error}</p> : null}

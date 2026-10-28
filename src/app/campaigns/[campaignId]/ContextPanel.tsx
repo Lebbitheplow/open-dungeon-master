@@ -102,7 +102,7 @@ export function ContextPanel({ campaignId }: { campaignId: string }) {
   return (
     <div className="space-y-3 p-3">
       <SectionHead
-        title="What the DM was sent"
+        title="What the GM was sent"
         glyph="tab-context"
         aside={
           <button type="button" onClick={load} className={cn(ui.iconAction, "pk-tap pk-always -my-1 inline-flex items-center justify-center")} aria-label="Refresh">
@@ -117,7 +117,7 @@ export function ContextPanel({ campaignId }: { campaignId: string }) {
       {error ? <p className="motion-shake text-xs text-red-400">{error}</p> : null}
 
       {!error && !loading && !trace ? (
-        <EmptyState size="sm" art="scrolls" title="No turn has been taken yet. Play a round and this will show every block the DM received, what it cost, and anything the budget cut." />
+        <EmptyState size="sm" art="scrolls" title="No turn has been taken yet. Play a round and this will show every block the GM received, what it cost, and anything the budget cut." />
       ) : null}
 
       {trace ? (
@@ -207,7 +207,7 @@ export function ContextPanel({ campaignId }: { campaignId: string }) {
                 {trace.houseRules.shown.length ? `Shown: ${trace.houseRules.shown.join("; ")}.` : "None shown."}
               </p>
               {trace.houseRules.omitted.length ? (
-                <p className="mt-0.5 text-[11px] text-red-300/90">Left out for room (named to the DM): {trace.houseRules.omitted.join("; ")}.</p>
+                <p className="mt-0.5 text-[11px] text-red-300/90">Left out for room (named to the GM): {trace.houseRules.omitted.join("; ")}.</p>
               ) : null}
             </div>
           ) : null}

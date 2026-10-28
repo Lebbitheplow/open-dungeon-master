@@ -9,7 +9,7 @@ What each setup needs from the machine:
 
 | Setup | Machine |
 |---|---|
-| A human DM, an API key or an agent program | Any machine that runs Node or Docker; 2 GB of memory is comfortable. No graphics card. |
+| A human GM, an API key or an agent program | Any machine that runs Node or Docker; 2 GB of memory is comfortable. No graphics card. |
 | A local model, the minimum | 16 GB of graphics memory (a 16 GB card, or 24 GB of memory on a Mac) for gpt-oss-20b: 90 to 160 seconds a turn on an AMD BC-250 |
 | A local model, recommended | About 28 GB for Qwen3.6-35B-A3B at Q4, 45 GB at Q8: a median of 90 seconds a turn on a Framework Desktop (Ryzen AI Max+ 395, 128 GB shared) |
 | Local pictures (ComfyUI) | 8 GB of graphics memory or more for an SDXL-class model, on top of a local model's share ([image-generation.md](image-generation.md)) |
@@ -26,7 +26,7 @@ Software:
   - [llama.cpp](https://github.com/ggml-org/llama.cpp) `llama-server` at
     `http://127.0.0.1:8001`, the address the app looks at first. The recommended
     model is Qwen3.6-35B-A3B
-    ([text-backends.md](text-backends.md#the-recommended-dm-model-qwen36-35b-on-llamacpp)),
+    ([text-backends.md](text-backends.md#the-recommended-gm-model-qwen36-35b-on-llamacpp)),
     or gpt-oss-20b on a 16 GB card.
     A server that lists exactly one chat model runs it with no model chosen;
     with several, pick one in the guided setup. Or:
@@ -52,7 +52,7 @@ Software:
   - [ComfyUI](https://github.com/comfyanonymous/ComfyUI) at `:8188` for character
     portraits, inline scene art, and battle maps
     ([image-generation.md](image-generation.md))
-  - [Kokoro-FastAPI](https://github.com/remsky/Kokoro-FastAPI) at `:8880` for DM
+  - [Kokoro-FastAPI](https://github.com/remsky/Kokoro-FastAPI) at `:8880` for GM
     voice narration
   - a faster-whisper server at `:8870` for push-to-talk
     ([configuration.md](configuration.md))
@@ -146,8 +146,8 @@ Only 384-dim models are supported; any other fails with an error naming it.
 You can switch on an existing install: see
 [Changing the embedding model](storage.md#changing-the-embedding-model).
 
-Then start the DM model with llama.cpp's `llama-server`. See
-[The recommended DM model](text-backends.md#the-recommended-dm-model-qwen36-35b-on-llamacpp)
+Then start the GM model with llama.cpp's `llama-server`. See
+[The recommended GM model](text-backends.md#the-recommended-gm-model-qwen36-35b-on-llamacpp)
 for the exact command and settings.
 
 **The first account registered becomes the server admin, and creating it takes a
@@ -163,7 +163,7 @@ existing install: `node scripts/make-admin.mjs <username>`.
 
 `node scripts/import-open5e.mjs` builds `data/content/open5e.sqlite`, the read-only
 pack holding every spell, feat, item, subclass, lineage and monster the character
-builder and the DM can reach. Raw API pages are cached under `data/content/raw/`, so
+builder and the GM can reach. Raw API pages are cached under `data/content/raw/`, so
 later runs need no network; `--refresh` re-downloads them, and `CONTENT_DB_PATH`
 points the app at a pack somewhere else.
 

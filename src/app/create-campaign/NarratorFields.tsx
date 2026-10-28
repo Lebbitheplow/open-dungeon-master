@@ -117,7 +117,7 @@ export function AlliesFields({ draft, patch, gates }: StepProps) {
       <p className="mt-1 text-xs text-stone-500">
         {solo
           ? "Party members travel with you until dismissed; guests are allies who show up for a scene or a battle and then leave."
-          : "Guests are friendly NPCs the DM brings in for a scene or a battle; they fight with real stats and leave when the fight ends. Party members stay until dismissed."}
+          : "Guests are friendly NPCs the GM brings in for a scene or a battle; they fight with real stats and leave when the fight ends. Party members stay until dismissed."}
       </p>
       {draft.companions !== "off" ? (
         <div className="mt-2 grid grid-cols-2 gap-3">

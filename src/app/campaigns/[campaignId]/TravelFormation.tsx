@@ -78,7 +78,7 @@ export function TravelFormation({
     length < 2 ? "" : index === 0 ? "Front" : index === length - 1 ? "Rear" : "Middle";
   const who = (id: string) => {
     const sheet = byId.get(id);
-    return sheet?.isCompanion ? "ally the DM plays" : sheet?.userId === meUserId ? "yours" : "";
+    return sheet?.isCompanion ? "ally the GM plays" : sheet?.userId === meUserId ? "yours" : "";
   };
 
   const list = (ids: string[], tone: "active" | "proposed") => (
@@ -202,7 +202,7 @@ export function TravelFormation({
       </p>
       {editing ? (
         <div className="formation-editor space-y-2 rounded-xl border border-amber-500/30 bg-stone-900/60 p-2.5">
-          <p className="text-xs text-stone-400">Front first. The DM reads this order on every turn; it places the party and grants no bonus.</p>
+          <p className="text-xs text-stone-400">Front first. The GM reads this order on every turn; it places the party and grants no bonus.</p>
           <ol className="flex flex-col gap-1">
             {draft.map((id, index) => (
               <li
@@ -271,12 +271,12 @@ export function TravelFormation({
           ) : (
             <p className="text-xs text-stone-500">
               No travel formation yet.{" "}
-              {arranges ? "Arrange one so the DM knows who walks first." : "The party lead arranges it."}
+              {arranges ? "Arrange one so the GM knows who walks first." : "The party lead arranges it."}
             </p>
           )}
           {unplaced.length ? (
             <p className="text-xs text-stone-400">
-              Not placed yet: {unplaced.map(nameOf).join(", ")}. The DM places them where the story has them until the party does.
+              Not placed yet: {unplaced.map(nameOf).join(", ")}. The GM places them where the story has them until the party does.
             </p>
           ) : null}
           {change?.status === "proposed" ? (

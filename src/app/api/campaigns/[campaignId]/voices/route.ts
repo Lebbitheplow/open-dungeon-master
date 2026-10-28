@@ -71,7 +71,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ camp
     return Response.json({ error: "No one by that name at this table." }, { status: 404 });
   }
   if (!all && entry.ownerUserId !== context.user.id) {
-    return Response.json({ error: "Only the Dungeon Master can choose that voice." }, { status: 403 });
+    return Response.json({ error: "Only the Game Master can choose that voice." }, { status: 403 });
   }
   if (!setRosterVoice(campaignId, entry, voice)) {
     return Response.json({ error: "No one by that name at this table." }, { status: 404 });
@@ -90,7 +90,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ ca
     return context;
   }
   if (!runsTheTable(context)) {
-    return Response.json({ error: "Only the Dungeon Master can cast the table." }, { status: 403 });
+    return Response.json({ error: "Only the Game Master can cast the table." }, { status: 403 });
   }
   const cast = await castUnvoiced(campaignId, voiceRoster(campaignId), context.campaign.gameSettings.ttsVoice);
   return Response.json({ roster: visibleRoster(context), cast });

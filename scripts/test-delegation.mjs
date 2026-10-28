@@ -139,7 +139,7 @@ test("the table is told plainly, in the singular and the plural", () => {
   );
   assert.equal(
     describeCover({ turnsLeft: 0, brief: "", byUserId: "u", startedAt: "t" }),
-    "The DM has the table back.",
+    "The GM has the table back.",
   );
   assert.equal(describeCover(null), "");
 });

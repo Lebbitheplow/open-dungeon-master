@@ -156,7 +156,7 @@ await test("A DM-only lore entry and a draft faction stay out of the pack, and a
   const report = compiled();
   assert.ok(!report.draft.factions.some((entry) => entry.name === "The Gull Court"));
   assert.ok(!report.draft.glossary.some((entry) => entry.term === "The Warden's bargain"));
-  assert.deepEqual(omission(report, "held").assets.sort(), ["The Gull Court (draft)", "The Warden's bargain (DM only)"]);
+  assert.deepEqual(omission(report, "held").assets.sort(), ["The Gull Court (draft)", "The Warden's bargain (GM only)"]);
 });
 
 await test("The omission report names every kind the pack leaves out, each with its exact entry.", () => {

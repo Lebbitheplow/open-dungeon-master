@@ -155,11 +155,11 @@ export function describeCover(cover: DmCover | null): string {
     return "";
   }
   if (cover.turnsLeft <= 0) {
-    return "The DM has the table back.";
+    return "The GM has the table back.";
   }
   return cover.turnsLeft === 1
-    ? "The DM stepped away; the AI is answering one more time."
-    : `The DM stepped away; the AI is answering the next ${cover.turnsLeft} times.`;
+    ? "The GM stepped away; the AI is answering one more time."
+    : `The GM stepped away; the AI is answering the next ${cover.turnsLeft} times.`;
 }
 
 // The block appended to the DM system prompt while a cover is running. It is
@@ -171,13 +171,13 @@ export function coverPromptBlock(cover: DmCover | null): string {
     return "";
   }
   const lines = [
-    "Covering for the Dungeon Master: a person runs this table and has stepped away, leaving you the next few answers. Keep the game moving and keep it theirs.",
-    "Follow the DM's outline. Play the scene that is already in front of the party, run the NPCs and monsters in it, and resolve what the players attempt through the rules engine exactly as always.",
+    "Covering for the Game Master: a person runs this table and has stepped away, leaving you the next few answers. Keep the game moving and keep it theirs.",
+    "Follow the GM's outline. Play the scene that is already in front of the party, run the NPCs and monsters in it, and resolve what the players attempt through the rules engine exactly as always.",
     "Do not spend the story while they are out. Do not end the chapter, resolve the campaign's central question, kill or permanently remove a named NPC, destroy a location, or introduce a twist the outline does not already contain. If the party heads somewhere the outline does not cover, play the journey and stop short of the arrival.",
-    `You have ${cover.turnsLeft} ${cover.turnsLeft === 1 ? "answer" : "answers"} left before the DM takes the table back.`,
+    `You have ${cover.turnsLeft} ${cover.turnsLeft === 1 ? "answer" : "answers"} left before the GM takes the table back.`,
   ];
   if (cover.brief) {
-    lines.push(`What the DM asked for on their way out: ${cover.brief}`);
+    lines.push(`What the GM asked for on their way out: ${cover.brief}`);
   }
   return lines.join("\n");
 }

@@ -1322,7 +1322,7 @@ export function BattleMapPanel({
       {cam.locked ? (
         <div className="absolute bottom-2 left-2 z-10 flex items-center gap-2 rounded-md border border-amber-800/60 bg-stone-950/90 px-2 py-1 text-[11px] text-amber-200 shadow-elev-1">
           <Lock className="size-3" />
-          The DM is steering the view
+          The GM is steering the view
           {cam.canRelease ? (
             <button type="button" onClick={() => { cam.release(); if (addonViewport) postTo(addonFrame(), { type: "camera", mode: "free", x: null, y: null, zoom: null }); }} className="ml-1 text-stone-300 underline">
               look around anyway

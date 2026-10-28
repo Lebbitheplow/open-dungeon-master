@@ -174,7 +174,7 @@ export function PropDial({
         />
       ) : null}
       <FinePrint>
-        Furniture and bystanders go on the table with the map as the DM&apos;s own tokens; nothing in the
+        Furniture and bystanders go on the table with the map as the GM&apos;s own tokens; nothing in the
         rules can target them. {count ? `${count} placed.` : ""} Up to {SCENE_LIMITS.props}.
       </FinePrint>
     </div>

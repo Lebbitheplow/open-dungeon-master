@@ -40,7 +40,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ cam
   // A handout is the DM seat's to put up, as "Show this now" is (dm/invoke).
   const show = raw.show === true;
   if (show && !isDm(context)) {
-    return Response.json({ error: "Only the Dungeon Master can put a handout on every screen." }, { status: 403 });
+    return Response.json({ error: "Only the Game Master can put a handout on every screen." }, { status: 403 });
   }
   const outcome = revealSecret(campaignId, secretId, told);
   if ("error" in outcome) {

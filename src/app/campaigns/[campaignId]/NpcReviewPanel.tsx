@@ -106,7 +106,7 @@ export function NpcReviewPanel({ campaignId }: { campaignId: string }) {
     <div className="space-y-3">
       {/* No heading: the card that owns this panel already titles it. */}
       <p className="text-[11px] leading-4 text-stone-500">
-        The DM rarely spells a name the same way twice over fifty turns. Close matches are
+        The GM rarely spells a name the same way twice over fifty turns. Close matches are
         flagged here rather than merged for you, because two similar names are often two
         people. Merging keeps the old spelling as an alias, so nothing already written stops
         resolving.
@@ -181,7 +181,7 @@ export function NpcReviewPanel({ campaignId }: { campaignId: string }) {
         </div>
       ) : (
         <p className="text-[11px] leading-4 text-stone-600">
-          No close matches to review. New ones appear here as the DM names people.
+          No close matches to review. New ones appear here as the GM names people.
         </p>
       )}
 

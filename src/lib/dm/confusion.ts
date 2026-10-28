@@ -56,7 +56,7 @@ export function lashOut(campaign: Campaign, encounter: Encounter, kind: "sheet" 
   const map = getBattleMapForEncounter(encounter.id);
   const me = map ? getTokenByRef(map.id, id) : null;
   if (!map || !me) {
-    return `${name} lashes out at a creature within its reach, if one is (no board to pick one on: the DM picks at random).`;
+    return `${name} lashes out at a creature within its reach, if one is (no board to pick one on: the GM picks at random).`;
   }
   const reach = reachOf(kind, id);
   const mine = kind === "enemy" ? footprintForSize(getEnemy(id)?.stats.size) : 1;

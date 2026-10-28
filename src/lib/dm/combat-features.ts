@@ -355,7 +355,7 @@ function divineIntervention(campaign: Campaign, turnId: string, stale: Character
     ...(rolled !== null ? { rolled } : {}),
     intervenes,
     note: intervenes
-      ? `The deity intervenes${rolled !== null ? ` (${rolled} at or under ${level})` : ""}. The DM chooses its nature (the effect of any cleric or domain spell fits it) and narrates it; healing it brings goes through heal, harm to enemies through apply_damage with source environment. Divine Intervention cannot be called again for 7 days.`
+      ? `The deity intervenes${rolled !== null ? ` (${rolled} at or under ${level})` : ""}. The GM chooses its nature (the effect of any cleric or domain spell fits it) and narrates it; healing it brings goes through heal, harm to enemies through apply_damage with source environment. Divine Intervention cannot be called again for 7 days.`
       : `No answer (${rolled} is over ${level}). Narrate the silence; ${sheet.name} can call again after a long rest.`,
   };
 }

@@ -122,7 +122,7 @@ export function WorldFields({
             <span className="cc-eyebrow mb-1 block">Describe it yourself</span>
             <p className="cc-prose mb-2 text-[13px] leading-relaxed text-stone-300">
               Custom writes nothing for you. The theme and premise boxes stay yours, and what you describe here goes
-              to the DM in place of a preset tone.
+              to the GM in place of a preset tone.
             </p>
             <span className="cc-serif block">
               <textarea
@@ -216,7 +216,7 @@ export function WorldDetailsFields({
     <div className="space-y-4">
       <div className="cc-field">
         <div className="cc-field-head">
-          <span className="cc-eyebrow">How the DM will talk</span>
+          <span className="cc-eyebrow">How the GM will talk</span>
           <span className="cc-note">{selectedPack ? `${selectedPack.name} adds its own voice on top` : "read-only"}</span>
         </div>
         <p key={draft.genre} className="cc-flavor cc-prose text-[13px] leading-relaxed text-stone-300">

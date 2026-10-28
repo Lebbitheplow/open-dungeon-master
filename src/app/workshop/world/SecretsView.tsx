@@ -139,7 +139,7 @@ export function SecretsView({
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="min-w-0 flex-1 basis-[14rem] text-sm text-stone-400">
-          {open.length} secret{open.length === 1 ? "" : "s"} the party does not know{learned.length ? `, ${learned.length} learned` : ""}. The AI DM is told the ones not yet learned, and who keeps each.
+          {open.length} secret{open.length === 1 ? "" : "s"} the party does not know{learned.length ? `, ${learned.length} learned` : ""}. The AI GM is told the ones not yet learned, and who keeps each.
         </p>
         <KitButton tone="primary" onClick={() => setEditing(blank())} data-tour="world-new-secret">
           <Plus className="size-3.5" /> New secret

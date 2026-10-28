@@ -6,5 +6,5 @@ export function secretAudience(seat: { dmSeat: boolean; steersStory: boolean; ai
       ? "Only you and the AI storyteller see it."
       : "Only you, the AI storyteller and the party lead see it.";
   }
-  return "Only you and the DM see it. The rest of the table is not told.";
+  return "Only you and the GM see it. The rest of the table is not told.";
 }

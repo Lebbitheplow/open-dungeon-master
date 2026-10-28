@@ -140,8 +140,8 @@ export function MapEditorShell({
       <ToggleChip active={grid} onClick={() => onGrid(!grid)} title="The grid lines over the map">
         Grid
       </ToggleChip>
-      <ToggleChip active={dmView} onClick={() => onDmView(!dmView)} title="Off shows the map as a player finds it: no DM-only labels, door states or overlay">
-        DM view
+      <ToggleChip active={dmView} onClick={() => onDmView(!dmView)} title="Off shows the map as a player finds it: no GM-only labels, door states or overlay">
+        GM view
       </ToggleChip>
     </>
   );

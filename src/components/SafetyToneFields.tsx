@@ -146,8 +146,8 @@ export function SafetyToneFields({
       {showPresets && presets.length ? (
         <div>
           <p className="mb-1 flex items-center gap-1 text-xs uppercase tracking-wide text-stone-500">
-            Or pick a DM personality
-            <InfoButton label="DM personalities" text={personalitiesInfo(presets, Boolean(onVoice))} />
+            Or pick a GM personality
+            <InfoButton label="GM personalities" text={personalitiesInfo(presets, Boolean(onVoice))} />
           </p>
           <div className="stagger-pop flex flex-wrap items-center gap-1.5">
             {presets.map((preset) => {

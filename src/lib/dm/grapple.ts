@@ -105,7 +105,7 @@ export function characterEscape(
   const sheetHolder = held.source && !enemyHolder ? getSheetById(held.source) : null;
   if (!enemyHolder && !sheetHolder) {
     return {
-      error: `${sheet.name}'s grapple names no grappler the server can find, so there is no contest to roll. The DM or the party lead ends it with clear_condition.`,
+      error: `${sheet.name}'s grapple names no grappler the server can find, so there is no contest to roll. The GM or the party lead ends it with clear_condition.`,
       retry: true,
     };
   }

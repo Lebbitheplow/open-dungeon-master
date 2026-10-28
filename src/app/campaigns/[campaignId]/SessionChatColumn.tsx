@@ -117,7 +117,7 @@ export function SessionChatColumn({
         onDispute={narratedByAi && !steersStory ? (message) => setDisputeMessageId(message.id) : undefined}
         onReport={(message) => {
           if (message.authorType === "dm") {
-            setReportTarget({ messageId: message.id, authorType: "dm", label: "the Dungeon Master" });
+            setReportTarget({ messageId: message.id, authorType: "dm", label: "the Game Master" });
             return;
           }
           const sheet =

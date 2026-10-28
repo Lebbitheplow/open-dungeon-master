@@ -35,12 +35,12 @@ export function CompanionCommand({
   const commander = players.some((member) => member.userId === sheet.commandedBy) ? sheet.commandedBy ?? null : null;
   const nameOf = (userId: string) => (userId === meUserId ? "You" : members.find((member) => member.userId === userId)?.username ?? "A player");
   const options: Array<{ id: string | null; label: string }> = [
-    { id: null, label: "The DM" },
+    { id: null, label: "The GM" },
     ...players.map((member) => ({ id: member.userId, label: nameOf(member.userId) })),
   ];
   const hint = commander
-    ? `${commander === meUserId ? "You take" : `${nameOf(commander)} takes`} ${sheet.name}'s turns in fights. Out of fights the DM plays ${sheet.name}.`
-    : `The DM plays ${sheet.name}'s turns in fights, as everywhere else.`;
+    ? `${commander === meUserId ? "You take" : `${nameOf(commander)} takes`} ${sheet.name}'s turns in fights. Out of fights the GM plays ${sheet.name}.`
+    : `The GM plays ${sheet.name}'s turns in fights, as everywhere else.`;
 
   async function choose(next: string | null) {
     if (next === commander || sending !== null) {

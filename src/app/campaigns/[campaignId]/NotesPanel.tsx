@@ -154,7 +154,7 @@ function NoteCard({
                   type="button"
                   disabled={busy} aria-busy={busy}
                   onClick={() => patch({ pinned: !note.pinned })}
-                  title={note.pinned ? "Unpin" : "Pin to the top (the DM treats pinned notes as key canon)"}
+                  title={note.pinned ? "Unpin" : "Pin to the top (the GM treats pinned notes as key canon)"}
                   className="text-stone-500 hover:text-amber-300"
                 >
                   {note.pinned ? <PinOff className="size-3" /> : <Pin className="size-3" />}
@@ -341,7 +341,7 @@ export function PendingNotesList({
           key={note.id}
           campaignId={campaignId}
           note={note}
-          authorName={note.authorKind === "dm" ? "The DM" : nameFor(note.authorUserId)}
+          authorName={note.authorKind === "dm" ? "The GM" : nameFor(note.authorUserId)}
           canEdit={note.authorUserId === meUserId}
           canDelete
           canPin={false}
@@ -450,7 +450,7 @@ export function NotesPanel({
         ) : (
           <p className="px-1 text-[11px] text-stone-600">
             {steersStory
-              ? "Pin key events and facts here; the DM treats them as canon."
+              ? "Pin key events and facts here; the GM treats them as canon."
               : "Nothing recorded yet. Suggest a note and the party lead can publish it."}
           </p>
         )}

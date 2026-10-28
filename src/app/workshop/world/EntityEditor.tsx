@@ -281,7 +281,7 @@ export function EntityEditor({
                 ? undefined
                 : entity.shelf === "lore"
                   ? "Not canon yet: kept from what players read until it is."
-                  : "Not canon yet: the AI DM treats it as uncertain.",
+                  : "Not canon yet: the AI GM treats it as uncertain.",
         )}
       </div>
 
@@ -291,7 +291,7 @@ export function EntityEditor({
             <input className={ui.input} maxLength={LINE_LIMIT[entity.shelf as "npc" | "faction"]} value={draft.tagline} onChange={(event) => set("tagline", event.target.value)} />,
           )
         : field(
-            entity.shelf === "location" ? "On arrival (what the DM reads when the party arrives)" : "The entry",
+            entity.shelf === "location" ? "On arrival (what the GM reads when the party arrives)" : "The entry",
             <textarea className={cn(ui.input, "min-h-28")} maxLength={TEXT_LIMIT[entity.shelf as "location" | "lore"]} value={draft.text} onChange={(event) => set("text", event.target.value)} />,
             `${draft.text.length.toLocaleString("en")} of ${TEXT_LIMIT[entity.shelf as "location" | "lore"].toLocaleString("en")} characters${entity.shelf === "lore" ? ". Players read this one when the entry is theirs to read." : ""}`,
           )}
@@ -349,7 +349,7 @@ export function EntityEditor({
         {field(
           "Hidden truth (kept from players)",
           <textarea className={cn(ui.input, "min-h-20 border-red-900/50")} maxLength={4_000} value={draft.hiddenTruth} onChange={(event) => set("hiddenTruth", event.target.value)} />,
-          "True in the world, unknown to it. The DM may let it surface; players never read it here.",
+          "True in the world, unknown to it. The GM may let it surface; players never read it here.",
         )}
         {field(
           "Author's notes",

@@ -5,13 +5,13 @@
       "subclassLevel": 3,
       "levels": {
         "1": [
-          { "n": "Keen Deduction", "d": "1/short rest, after examining a scene, person, or object, ask the DM one pointed question; the answer is a true, useful clue." },
+          { "n": "Keen Deduction", "d": "1/short rest, after examining a scene, person, or object, ask the GM one pointed question; the answer is a true, useful clue." },
           { "n": "Case Notes", "d": "You recall any clue, name, date, or conversation from the current case verbatim." }
         ],
         "2": [{ "n": "Expertise", "d": "Double proficiency bonus in two skills you are proficient with." }],
         "3": [{ "n": "Method", "d": "Chooses an investigative method (subclass)." }],
         "5": [{ "n": "Reading People", "d": "After 1 minute of conversation, learn whether a creature has lied to you during it." }],
-        "6": [{ "n": "Connect the Threads", "d": "1/long rest, the DM tells you how two clues you hold relate, or that they do not." }],
+        "6": [{ "n": "Connect the Threads", "d": "1/long rest, the GM tells you how two clues you hold relate, or that they do not." }],
         "7": [{ "n": "Practiced Composure", "d": "Advantage on saves against fear and charm; con artists find you a hard mark." }],
         "9": [{ "n": "Anticipate Violence", "d": "You cannot be surprised while conscious; +2 initiative." }],
         "10": [{ "n": "Expertise (2 more skills)", "d": "Double proficiency bonus in two more proficient skills." }],
@@ -20,15 +20,15 @@
         "14": [{ "n": "Web of Informants", "d": "In any settlement, an hour and a few coins buy you the local word on a person, place, or event." }],
         "15": [{ "n": "Deductive Counter", "d": "Reaction when attacked: your read of the attacker imposes disadvantage, INT-mod uses per long rest." }],
         "17": [{ "n": "The Scene Speaks", "d": "Keen Deduction has 3 uses per short rest." }],
-        "18": [{ "n": "Mind Palace", "d": "1/long rest, reconstruct a past scene you visited in perfect detail; the DM answers three questions about it." }],
-        "20": [{ "n": "Elementary", "d": "1/long rest, name the culprit mechanism or motive; the DM confirms which parts of your theory are right." }]
+        "18": [{ "n": "Mind Palace", "d": "1/long rest, reconstruct a past scene you visited in perfect detail; the GM answers three questions about it." }],
+        "20": [{ "n": "Elementary", "d": "1/long rest, name the culprit mechanism or motive; the GM confirms which parts of your theory are right." }]
       },
       "subclass": {
         "name": "Consulting Detective",
         "levels": {
           "3": [
             { "n": "Cold Read", "d": "On meeting a creature, learn its profession, recent whereabouts, or emotional state (pick one)." },
-            { "n": "Irregulars", "d": "Street contacts in any city fetch, watch, or tail for you (DM adjudicates scope)." }
+            { "n": "Irregulars", "d": "Street contacts in any city fetch, watch, or tail for you (GM adjudicates scope)." }
           ],
           "7": [{ "n": "Sharpened Logic", "d": "Add half your proficiency bonus to INT and WIS checks you are not proficient in." }],
           "11": [{ "n": "The Game Afoot", "d": "1/rest, grant yourself and allies within 30 ft advantage on the next check made in pursuit of a suspect." }],
@@ -47,7 +47,7 @@
           { "n": "Clinical Practice", "d": "Casts wizard-list spells as psychological treatments using INT." },
           { "n": "School of Thought", "d": "Chooses a school of thought (subclass)." }
         ],
-        "3": [{ "n": "Trauma Map", "d": "After 10 minutes with a patient, learn their deepest current fear or fixation (the DM answers truthfully)." }],
+        "3": [{ "n": "Trauma Map", "d": "After 10 minutes with a patient, learn their deepest current fear or fixation (the GM answers truthfully)." }],
         "5": [{ "n": "Steadying Presence", "d": "Allies within 10 ft add +1d4 to saves against fear and madness." }],
         "6": [{ "n": "Hypnotic Induction", "d": "1/long rest, a willing or restrained creature answers three questions truthfully under trance (WIS save resists if unwilling)." }],
         "7": [{ "n": "Professional Detachment", "d": "Advantage on saves against fear, charm, and madness." }],
@@ -86,15 +86,15 @@
         "5": [{ "n": "Uncanny Dodge", "d": "Reaction: halve the damage of one attack that hits you." }],
         "6": [{ "n": "Cold Read the Mark", "d": "After 1 minute of talk, learn what a creature most desires or most fears (pick one)." }],
         "7": [{ "n": "Slippery", "d": "Disengage or Hide as a bonus action; escape grapples with advantage." }],
-        "9": [{ "n": "The Long Game", "d": "Maintain up to three full false identities with papers and reputations the DM treats as established." }],
+        "9": [{ "n": "The Long Game", "d": "Maintain up to three full false identities with papers and reputations the GM treats as established." }],
         "10": [{ "n": "Expertise (2 more skills)", "d": "Double proficiency bonus in two more proficient skills." }],
         "11": [{ "n": "Twist the Knife", "d": "1/turn, +2d6 damage against a creature that is charmed, deceived by you, or unaware you are a threat." }],
-        "13": [{ "n": "Contingency Exit", "d": "1/long rest, when things go wrong, narrate a prepared escape (a bribed guard, a loose window); the DM makes it viable." }],
+        "13": [{ "n": "Contingency Exit", "d": "1/long rest, when things go wrong, narrate a prepared escape (a bribed guard, a loose window); the GM makes it viable." }],
         "14": [{ "n": "Mirror Talk", "d": "Advantage on saves against charm and against magic that would read your thoughts or force truth." }],
         "15": [{ "n": "Silver Tongue (3 uses)", "d": "Silver Tongue recharges to 3 uses per short rest." }],
         "17": [{ "n": "Everybody's Friend", "d": "1/long rest, a creature that can hear you treats you as a trusted friend for 10 minutes (WIS save negates)." }],
         "18": [{ "n": "Vanish", "d": "Hide as a bonus action even in plain sight, 3/long rest." }],
-        "20": [{ "n": "The Perfect Con", "d": "1/long rest, declare a con you have been running this session; the DM retroactively honors the setup within reason." }]
+        "20": [{ "n": "The Perfect Con", "d": "1/long rest, declare a con you have been running this session; the GM retroactively honors the setup within reason." }]
       },
       "subclass": {
         "name": "The Long Con",
@@ -148,8 +148,8 @@
       "subclassLevel": 3,
       "levels": {
         "1": [
-          { "n": "Press Credentials", "d": "Plausible papers and patter get you into crime scenes, offices, and functions ordinary citizens cannot enter (DM adjudicates)." },
-          { "n": "Headline Instinct", "d": "1/rest, ask the DM who in the current scene knows something about your story; you get a true pointer." }
+          { "n": "Press Credentials", "d": "Plausible papers and patter get you into crime scenes, offices, and functions ordinary citizens cannot enter (GM adjudicates)." },
+          { "n": "Headline Instinct", "d": "1/rest, ask the GM who in the current scene knows something about your story; you get a true pointer." }
         ],
         "2": [{ "n": "Shorthand", "d": "You record conversations verbatim while appearing to doodle; double proficiency bonus on Investigation." }],
         "3": [{ "n": "The Beat", "d": "Chooses a journalistic beat (subclass)." }],
@@ -157,7 +157,7 @@
         "6": [{ "n": "Morgue File", "d": "Archives and old contacts yield the paper trail on any person or company within a day." }],
         "7": [{ "n": "Duck the Consequences", "d": "Reaction: impose disadvantage on one attack against you, CHA-mod uses per long rest." }],
         "9": [{ "n": "Byline Armor", "d": "Public figures hesitate: creatures who know you are press have disadvantage on Intimidation against you and think twice before violence." }],
-        "10": [{ "n": "Follow the Money", "d": "Given a name or ledger, the DM tells you where the money actually went." }],
+        "10": [{ "n": "Follow the Money", "d": "Given a name or ledger, the GM tells you where the money actually went." }],
         "11": [{ "n": "Front Page Pressure", "d": "1/long rest, publish or threaten to: a named organization must respond publicly within a day, opening a door for the party." }],
         "13": [{ "n": "Source Protection", "d": "Magic and interrogation cannot pull your sources or notes from you unless you allow it." }],
         "14": [{ "n": "Two Steps Ahead", "d": "Advantage on initiative; you cannot be surprised by creatures you have investigated." }],
@@ -192,7 +192,7 @@
         "6": [{ "n": "Cold Spots", "d": "You automatically detect spirits, possession, and haunted objects within 30 ft." }],
         "7": [{ "n": "Between Worlds", "d": "Resistance to necrotic damage; spirits cannot possess you unless you allow it." }],
         "9": [{ "n": "Séance Circle", "d": "Your Speak with the Departed can include the whole party as witnesses, and the spirit can manifest visibly." }],
-        "10": [{ "n": "Unquiet Testimony", "d": "1/long rest, compel a spirit witness to relive its last hour aloud; the DM narrates what it saw." }],
+        "10": [{ "n": "Unquiet Testimony", "d": "1/long rest, compel a spirit witness to relive its last hour aloud; the GM narrates what it saw." }],
         "11": [{ "n": "Guardian Shade", "d": "A bound protective spirit follows you: 1/rest, it negates one attack that would hit you." }],
         "13": [{ "n": "Ferrywoman's Due", "d": "1/long rest, lay a spirit to rest or release a possession without a contest; hostile entities get a CHA save." }],
         "14": [{ "n": "The Veil Thins", "d": "See into the Ethereal Plane within 60 ft at will." }],

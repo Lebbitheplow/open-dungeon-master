@@ -92,7 +92,7 @@ test("an arc names a faction by its whole name as whole words, at every table; n
 
 test("the prompt block keeps goal and power for the DM alone", () => {
   const dm = renderFactionsForPrompt(factions, { f1: -2 }, true);
-  assert.match(dm, /GOAL \(DM-only\): Own the ferry/);
+  assert.match(dm, /GOAL \(GM-only\): Own the ferry/);
   assert.match(dm, /power 2\/5/);
   assert.match(dm, /the party is .* to them, -2/);
   const player = renderFactionsForPrompt(factions, { f1: -2 }, false);

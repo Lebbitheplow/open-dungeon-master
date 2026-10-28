@@ -14,7 +14,7 @@ export const readCardTool = {
   function: {
     name: "read_card",
     description:
-      "Read the full prep card behind a story beat or a planned event: everything the author wrote on the storyboard, kept whole. Give a planned event's id ([evN]), a main beat's number, or the card's title. DM-only; use it when the scene reaches that beat or event, before narrating it.",
+      "Read the full prep card behind a story beat or a planned event: everything the author wrote on the storyboard, kept whole. Give a planned event's id ([evN]), a main beat's number, or the card's title. GM-only; use it when the scene reaches that beat or event, before narrating it.",
     parameters: {
       type: "object",
       additionalProperties: false,

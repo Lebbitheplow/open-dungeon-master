@@ -1,7 +1,7 @@
 # Campaign plugins (world packs)
 
 A world pack is a pre-configured universe a table can pick at campaign creation
-instead of a bare genre. Picking one renames what everybody sees, steers the DM,
+instead of a bare genre. Picking one renames what everybody sees, steers the GM,
 and nudges the character builder. It does not change a single rule.
 
 A pack is one JSON file. That is the whole plugin format.
@@ -50,7 +50,7 @@ sheet would quietly break. Keeping the canonical value on the sheet also means a
 character built in a pack campaign can be pulled into a plain campaign and simply
 renders under its ordinary names.
 
-The DM is told about the mapping through the world primer
+The GM is told about the mapping through the world primer
 (`src/lib/worlds/primer-logic.ts`), which prints an alias table and instructs it
 to narrate the world's word but call every tool with the canonical one.
 
@@ -180,8 +180,8 @@ every phone; the test enforces an empty `art` map there.
 | `rightsHolder` | who owns the referenced setting, or empty for an original world. See above |
 | `franchise` / `edition` / `editionOrder` | grouping, see above |
 | `baseGenre` | one of the eight genres, never `custom`. Selecting the pack also sets the campaign's genre to this, so every existing genre consumer keeps working |
-| `dmFlavor` | appended to the genre's own flavor in the DM system prompt. The highest-leverage field: tone, what magic feels like, what the stakes are, what the DM should never do. At least 200 chars |
-| `mapStyle` / `portraitStyle` / `sceneStyle` | art-style fragments for maps, portraits and scene illustrations. `sceneStyle` leads every scene picture the DM asks for, so keep it to the look (medium, palette, light) and leave subjects out. A campaign can pick another look for its maps and scenes in Story AI, which then wins |
+| `dmFlavor` | appended to the genre's own flavor in the GM system prompt. The highest-leverage field: tone, what magic feels like, what the stakes are, what the GM should never do. At least 200 chars |
+| `mapStyle` / `portraitStyle` / `sceneStyle` | art-style fragments for maps, portraits and scene illustrations. `sceneStyle` leads every scene picture the GM asks for, so keep it to the look (medium, palette, light) and leave subjects out. A campaign can pick another look for its maps and scenes in Story AI, which then wins |
 | `nameHints` / `raceHint` | one line each, steering the story-setup pass and the companion tools |
 | `companionRaces` | SRD race ids AI companions may use; empty means no restriction |
 | `theme` | seeds `campaigns.theme`, max 120 chars |
@@ -191,7 +191,7 @@ every phone; the test enforces an empty `art` map there.
 | `monsters` | `{ slug, name, cr, type, blurb }`, the same shape as a bestiary entry. `slug` must be a real Open5e slug and `cr` must match it. `type` is the SRD creature type in lowercase (`undead`) and picks the thumbnail; it may be left out for a slug the base genre's roster already lists, which supplies it |
 | `alignments` | codes this world leans on, from LG NG CG LN N CN LE NE CE. The other nine stay pickable |
 | `nameSeeds` | `people` and `places`, offered as clickable suggestions in the builder |
-| `factions` / `locations` / `hooks` / `glossary` | story elements, rendered into the DM's game-state block |
+| `factions` / `locations` / `hooks` / `glossary` | story elements, rendered into the GM's game-state block |
 | `art` | thumbnails as image data URLs, keyed as described under Art. Optional |
 
 Empty string or empty array on `dmFlavor`, `mapStyle`, `portraitStyle`,
@@ -387,7 +387,7 @@ overwrites, so an entry written by hand survives a second pull.
   it reads any other.
 - A place's line and a glossary meaning are the entry's account (a place's
   article, a lore entry's body), cut where a sentence ends.
-- A lore entry kept for the DM and an entry that is not canon stay out: a pack
+- A lore entry kept for the GM and an entry that is not canon stay out: a pack
   has no private part and no way to mark a line as unsettled.
 
 **What the pack leaves out.** The Publish tab lists, before anything is

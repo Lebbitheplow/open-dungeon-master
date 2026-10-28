@@ -47,7 +47,7 @@ Deliberate deviations from SRD 5.1, each pinned by a test() that says so:
 | Every sheet at the table rests, companions included (invoke.ts and turn.ts pass listSheets, not fieldedSheets) | n/a | behaviour only |
 | Player may mark uses SPENT at any time; in a fight nothing may come back | n/a | usage route header |
 
-Inspiration (item 5 of the brief): ODM has no DM-awarded Inspiration at all. There is no field on the sheet or the campaign and no tool. The only "inspiration" is Bardic Inspiration, modelled as the die condition from resource-tools.ts inspirationCondition, consumed in rolls.ts resolveRollExpression. It cannot stack (a second die on the same holder is refused and costs the bard nothing). Pinned in test-enforce-resource-spend.mjs.
+Inspiration (item 5 of the brief): ODM has no GM-awarded Inspiration at all. There is no field on the sheet or the campaign and no tool. The only "inspiration" is Bardic Inspiration, modelled as the die condition from resource-tools.ts inspirationCondition, consumed in rolls.ts resolveRollExpression. It cannot stack (a second die on the same holder is refused and costs the bard nothing). Pinned in test-enforce-resource-spend.mjs.
 
 ## Findings
 
@@ -121,7 +121,7 @@ Inspiration (item 5 of the brief): ODM has no DM-awarded Inspiration at all. The
 
 ## Not modelled (no gap recorded: the player gains nothing, or no mechanic exists to test)
 
-- DM-awarded Inspiration.
+- GM-awarded Inspiration.
 - Tiefling Infernal Legacy spells (Hellish Rebuke at 3, Darkness at 5) and drow Drow Magic spells (Faerie Fire at 3, Darkness at 5): only the cantrip is granted, no spell and no once-per-long-rest counter.
 - Font of Inspiration (short-rest Bardic Inspiration from bard 5): documented simplification.
 - Food and drink as a condition of removing exhaustion on a long rest.

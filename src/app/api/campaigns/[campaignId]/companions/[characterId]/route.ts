@@ -77,7 +77,7 @@ export async function PATCH(
   }
   const parsed = commandSchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {
-    return Response.json({ error: "Say who commands them in fights: a player, or nobody for the DM." }, { status: 400 });
+    return Response.json({ error: "Say who commands them in fights: a player, or nobody for the GM." }, { status: 400 });
   }
   const sheet = getSheetById(characterId);
   if (!sheet || sheet.campaignId !== campaignId || !commandable(sheet)) {

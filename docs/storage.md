@@ -16,7 +16,7 @@ not run `npm run dev` and a production service against the same `data/` director
 point dev at a scratch database with `SQLITE_DB_PATH`.
 
 The single-process assumption goes beyond the database: the live event bus, the
-DM turn queue, and the voice-chat rooms are all in-process state. Running two
+GM turn queue, and the voice-chat rooms are all in-process state. Running two
 instances behind a load balancer would split the table across processes, and a
 restart ends any voice call in progress (players simply rejoin). One instance is
 the supported shape.

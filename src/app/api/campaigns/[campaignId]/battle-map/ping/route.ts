@@ -41,7 +41,7 @@ export async function POST(
     y: parsed.data.y,
     // A ping is signed with the character the table knows, falling back to
     // the seat when the pinger runs nobody.
-    byName: sheet?.name ?? (caps.role === "dm" ? "The DM" : context.user.username),
+    byName: sheet?.name ?? (caps.role === "dm" ? "The GM" : context.user.username),
     focus: parsed.data.focus === true && caps.steersStory,
   });
   return Response.json({ ok: true });

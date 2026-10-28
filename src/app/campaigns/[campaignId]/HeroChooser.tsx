@@ -199,8 +199,8 @@ export function HeroChooser({
 
       {offered.length ? (
         <div className="space-y-3" data-chooser-section="offered">
-          <SectionHead title="Pregens your DM offers" glyph="tab-characters" level="h2" aside={<span className="text-xs text-stone-400">{offered.length}</span>} />
-          <p className="text-xs text-stone-400">Heroes the DM wrote for this adventure. Take one and you play your own copy, at this table&apos;s level. One player each.</p>
+          <SectionHead title="Pregens your GM offers" glyph="tab-characters" level="h2" aside={<span className="text-xs text-stone-400">{offered.length}</span>} />
+          <p className="text-xs text-stone-400">Heroes the GM wrote for this adventure. Take one and you play your own copy, at this table&apos;s level. One player each.</p>
           <ul className="stagger-up grid grid-cols-1 gap-3 sm:grid-cols-2">
             {offered.map((pregen) => (
               <li key={pregen.id}>

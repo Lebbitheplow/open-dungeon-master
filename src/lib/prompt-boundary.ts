@@ -26,7 +26,7 @@ export const THIS_MOMENT_HEADING = "=== GAME STATE, THIS MOMENT (authoritative; 
 // found with no dice. An agent program's opening message ends on the same
 // instruction (src/lib/harness/render.ts renderTurn).
 export const MOMENT_INSTRUCTION =
-  "It is your turn as the Dungeon Master. Resolve what the players just did with your tools, then write the narration.";
+  "It is your turn as the Game Master. Resolve what the players just did with your tools, then write the narration.";
 
 // A system prompt cut at THIS_MOMENT_HEADING: the text before it, and the
 // turn-to-turn part from the heading on ("" when the prompt has none).

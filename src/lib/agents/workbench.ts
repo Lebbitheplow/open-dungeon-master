@@ -100,7 +100,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
   {
     name: "odm_get_campaign",
     scope: "read",
-    description: "The live table, current to the newest message: call this first to see what is happening now and what you may do. Read one campaign as you see it at the table (secrets only if you hold the DM seat or steer the story). First the state that decides what you may do now: safety pause, table break, DM status, floor, your caps, pending rolls, encounter, disputes; then the party (with campaign.party.backstory, the table's shared party backstory, which may be empty), then the newest messages that fit, then recent rolls, notes and chapters. history.olderBefore pages back with odm_get_messages. Whispers the DM sent you alone are not here: odm_get_whispers reads them. To read less: view 'status' (may I act, and the newest message), 'recent' (status and the newest messages), 'sheet' (status and your sheets whole) or 'encounter' (status and the fight); sinceSeq returns only messages after a seq you have read (latestSeq from your last read); maxChars caps the reply. Every view keeps the state that decides whether you may act.",
+    description: "The live table, current to the newest message: call this first to see what is happening now and what you may do. Read one campaign as you see it at the table (secrets only if you hold the GM seat or steer the story). First the state that decides what you may do now: safety pause, table break, GM status, floor, your caps, pending rolls, encounter, disputes; then the party (with campaign.party.backstory, the table's shared party backstory, which may be empty), then the newest messages that fit, then recent rolls, notes and chapters. history.olderBefore pages back with odm_get_messages. Whispers the GM sent you alone are not here: odm_get_whispers reads them. To read less: view 'status' (may I act, and the newest message), 'recent' (status and the newest messages), 'sheet' (status and your sheets whole) or 'encounter' (status and the fight); sinceSeq returns only messages after a seq you have read (latestSeq from your last read); maxChars caps the reply. Every view keeps the state that decides whether you may act.",
     properties: {
       ...campaignIdProp,
       view: { type: "string", enum: [...CAMPAIGN_VIEWS], description: "How much to read (default full)." },
@@ -176,7 +176,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
   {
     name: "odm_get_whispers",
     scope: "read",
-    description: "Read your private line with the Dungeon Master, oldest first: whispers the DM sent you alone (to_player) and your own private messages to the DM (to_dm, answered once a DM turn has read them). The transcript never carries these, so odm_get_campaign does not show them. In the DM seat of a game a person runs, inbox holds the players' private messages.",
+    description: "Read your private line with the Game Master, oldest first: whispers the GM sent you alone (to_player) and your own private messages to the GM (to_dm, answered once a GM turn has read them). The transcript never carries these, so odm_get_campaign does not show them. In the GM seat of a game a person runs, inbox holds the players' private messages.",
     properties: campaignIdProp,
     required: ["campaignId"],
     method: "GET",
@@ -212,8 +212,8 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
   {
     name: "odm_get_facts",
     scope: "read",
-    description: "Read a campaign's tracked fact register - what the table has established as true. Party-visible facts unless secrets: true, which needs the DM seat or story authority.",
-    properties: { ...campaignIdProp, secrets: { type: "boolean", description: "Include DM-only facts (needs the DM seat or story authority)." } },
+    description: "Read a campaign's tracked fact register - what the table has established as true. Party-visible facts unless secrets: true, which needs the GM seat or story authority.",
+    properties: { ...campaignIdProp, secrets: { type: "boolean", description: "Include GM-only facts (needs the GM seat or story authority)." } },
     required: ["campaignId"],
     method: "GET",
     path: (a) => `/api/campaigns/${seg(a.campaignId)}/facts${a.secrets === true ? "?secrets=1" : ""}`,
@@ -248,7 +248,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
   {
     name: "odm_take_action",
     scope: "play",
-    description: "Act at the table as your character, exactly as typing in the chat box: 'do' is an action, 'say' is speech, 'ooc' is out of character. The Dungeon Master answers in the campaign. A cast that would end your character's running concentration spell is refused with confirmConcentration naming both spells; ask your player, and if they agree send the same action again with concentrationAck set to that object.",
+    description: "Act at the table as your character, exactly as typing in the chat box: 'do' is an action, 'say' is speech, 'ooc' is out of character. The Game Master answers in the campaign. A cast that would end your character's running concentration spell is refused with confirmConcentration naming both spells; ask your player, and if they agree send the same action again with concentrationAck set to that object.",
     properties: {
       ...campaignIdProp,
       ...WEBHOOK_GUARD_PROPS,
@@ -292,7 +292,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
   {
     name: "odm_whisper_dm",
     scope: "play",
-    description: "Send the Dungeon Master a private message as your character (slipping away, a secret plan, a reply to a whisper). The rest of the table does not see it; the DM answers in a whisper you read with odm_get_whispers. At most two may wait unanswered.",
+    description: "Send the Game Master a private message as your character (slipping away, a secret plan, a reply to a whisper). The rest of the table does not see it; the GM answers in a whisper you read with odm_get_whispers. At most two may wait unanswered.",
     properties: { ...campaignIdProp, message: { type: "string", maxLength: 500 } },
     required: ["campaignId", "message"],
     method: "POST",
@@ -338,7 +338,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
   {
     name: "odm_answer_roll",
     scope: "play",
-    description: "Enter the dice you rolled at the table for a roll the Dungeon Master is waiting on (the faces, one number per die), or ask the server to roll it with fallback: 'digital'.",
+    description: "Enter the dice you rolled at the table for a roll the Game Master is waiting on (the faces, one number per die), or ask the server to roll it with fallback: 'digital'.",
     properties: {
       ...campaignIdProp,
       ...WEBHOOK_GUARD_PROPS,
@@ -364,7 +364,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
   {
     name: "odm_pass",
     scope: "play",
-    description: "Pass this beat at a table that waits for everyone (tableWait in odm_get_campaign lists who the DM is waiting on): you have nothing to add, so the DM stops waiting on you. Nothing is posted. Refused where the table does not wait, or once you have acted or passed since the last narration.",
+    description: "Pass this beat at a table that waits for everyone (tableWait in odm_get_campaign lists who the GM is waiting on): you have nothing to add, so the GM stops waiting on you. Nothing is posted. Refused where the table does not wait, or once you have acted or passed since the last narration.",
     properties: { ...campaignIdProp, ...WEBHOOK_GUARD_PROPS },
     required: ["campaignId"],
     method: "POST",
@@ -491,7 +491,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
       body: { type: "string", maxLength: 4000 },
       tags: { type: "array", items: { type: "string" } },
       visibility: { type: "string", enum: ["party", "dm"] },
-      pinned: { type: "boolean", description: "Patch only. Pinned entries skip retrieval and ride every DM prompt." },
+      pinned: { type: "boolean", description: "Patch only. Pinned entries skip retrieval and ride every GM prompt." },
       confirm: { type: "boolean" },
     },
     required: ["campaignId", "action"],
@@ -529,7 +529,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
   {
     name: "odm_dm_catalog",
     scope: "dm",
-    description: "List the rules-engine actions the Dungeon Master can take (only in a campaign where you hold the DM seat).",
+    description: "List the rules-engine actions the Game Master can take (only in a campaign where you hold the GM seat).",
     properties: campaignIdProp,
     required: ["campaignId"],
     method: "GET",
@@ -538,7 +538,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
   {
     name: "odm_dm_invoke",
     scope: "dm",
-    description: "Take one rules-engine action as the Dungeon Master (damage, conditions, encounters, rolls...). The engine resolves it exactly as the DM console does.",
+    description: "Take one rules-engine action as the Game Master (damage, conditions, encounters, rolls...). The engine resolves it exactly as the GM console does.",
     properties: { ...campaignIdProp, name: { type: "string" }, args: { type: "object" } },
     required: ["campaignId", "name"],
     method: "POST",
@@ -548,7 +548,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
   {
     name: "odm_dm_narrate",
     scope: "dm",
-    description: "Post narration to the table as the Dungeon Master.",
+    description: "Post narration to the table as the Game Master.",
     properties: { ...campaignIdProp, content: { type: "string", maxLength: 8000 }, speaker: { type: "object" } },
     required: ["campaignId", "content"],
     method: "POST",

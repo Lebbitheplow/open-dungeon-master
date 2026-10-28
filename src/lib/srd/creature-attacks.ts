@@ -215,10 +215,10 @@ export function creatureAttackOf(attack: EnemyAttack): CreatureAttack {
 function creatureRider(onHit: OnHitRider): CreatureOnHit | undefined {
   const manual = [...(onHit.manual ?? [])];
   if (onHit.swallow) {
-    manual.unshift("The target is swallowed whole: the DM resolves it.");
+    manual.unshift("The target is swallowed whole: the GM resolves it.");
   }
   if (onHit.drainMaxHp === "necrotic") {
-    manual.unshift("Its hit point maximum falls by the necrotic damage taken: the DM applies it.");
+    manual.unshift("Its hit point maximum falls by the necrotic damage taken: the GM applies it.");
   }
   if (onHit.untilLongRest || onHit.lasting) {
     manual.push("The condition lasts until a long rest or a cure ends it.");
