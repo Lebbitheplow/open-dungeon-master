@@ -61,6 +61,10 @@ export const SERVER_FEATURES = {
   // "Paint a portrait" on a companion's card (issue 569):
   // POST /api/campaigns/[id]/companions/[characterId]/portrait.
   companionPortrait: true,
+  // "Save to my characters" on a companion's card, and a companion built at
+  // the table kept in its builder's characters (the builder says so):
+  // POST /api/campaigns/[id]/companions/[characterId]/keep.
+  keepCompanion: true,
 } as const;
 export type ServerFeatures = { [K in keyof typeof SERVER_FEATURES]: boolean };
 

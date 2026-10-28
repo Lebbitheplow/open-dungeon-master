@@ -14,6 +14,7 @@ import type { Genre } from "@/lib/schemas/game-settings";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
 import { refusalText } from "@/app/characters/builder/refusal";
 import { builderDraftKey, clearBuilderDraft } from "@/app/characters/builder/builderDraft";
+import { hostOffers, useCapabilities } from "@/lib/use-capabilities";
 
 // Whoever steers the story (the party lead in an AI campaign, the DM in a
 // human-run one) builds a lasting companion with the full character creator.
@@ -42,6 +43,7 @@ export function CompanionBuilderDialog({
   onCreated?: () => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const keepsCompanions = hostOffers(useCapabilities(), "keepCompanion");
   const [error, setError] = useState("");
   // Companions filed in this user's own library. An ally worth writing once
   // is worth using twice, and the level adaptation that makes that safe is
@@ -162,8 +164,10 @@ export function CompanionBuilderDialog({
           <p className="mb-3 text-xs text-stone-500">
             {humanDm
               ? "This ally joins the party as a character you play from the GM console. In combat their turn waits for you: act for them, then end the turn. They start at the party's level."
-              : "This ally joins the party as an AI companion the GM plays. They start at the party's level."}{" "}
-            They are kept in your characters too, so another campaign can bring them along.
+              : "This ally joins the party as an AI companion the GM plays. They start at the party's level."}
+            {/* Said only where the host keeps them (an app's screens may be
+                newer than the host they are opened on). */}
+            {keepsCompanions ? " They are kept in your characters too, so another campaign can bring them along." : null}
           </p>
 
           {library.length && !tweaking ? (

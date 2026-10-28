@@ -412,6 +412,7 @@ export function PartyPanel({
   // where the host has the route (an app's screens may be newer than it).
   const capabilities = useCapabilities();
   const canPaint = offersImages(capabilities) && hostOffers(capabilities, "companionPortrait");
+  const canKeep = hostOffers(capabilities, "keepCompanion");
   const [editingSheetId, setEditingSheetId] = useState("");
   const [viewingSheetId, setViewingSheetId] = useState("");
   const [croppingSheetId, setCroppingSheetId] = useState("");
@@ -924,7 +925,7 @@ export function PartyPanel({
                 {campaignId && sheet.isCompanion && steersStory && canPaint ? (
                   <CompanionPaintButton campaignId={campaignId} sheet={sheet} />
                 ) : null}
-                {campaignId && sheet.isCompanion && steersStory && sheet.companionKind === "party" && !sheet.summon ? (
+                {campaignId && sheet.isCompanion && steersStory && canKeep && sheet.companionKind === "party" && !sheet.summon ? (
                   <CompanionKeepButton campaignId={campaignId} sheet={sheet} />
                 ) : null}
                 {mine ? <DiceLookButton /> : null}

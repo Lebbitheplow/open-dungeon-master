@@ -160,10 +160,21 @@ await test("a second keeper of a kept companion gets a copy of their own, and th
 
 await test("the card offers it to whoever runs the story, and a repaint reads the kept entry's look", () => {
   const panel = read("src/app/campaigns/[campaignId]/PartyPanel.tsx");
-  assert.match(panel, /sheet\.isCompanion && steersStory && sheet\.companionKind === "party" && !sheet\.summon \? \(\n\s+<CompanionKeepButton/);
+  assert.match(panel, /sheet\.isCompanion && steersStory && canKeep && sheet\.companionKind === "party" && !sheet\.summon \? \(\n\s+<CompanionKeepButton/);
   const paint = read("src/app/api/campaigns/[campaignId]/companions/[characterId]/portrait/route.ts");
   assert.match(paint, /appearance: kept\?\.sheet\.appearance,\n\s+ancestry: kept\?\.sheet\.racialChoices\?\.ancestry,/);
   assert.match(read("src/app/campaigns/[campaignId]/CompanionBuilderDialog.tsx"), /fromLibraryCharacterId: tweaking\.id/);
+});
+
+await test("an older host, with no keep route, offers no Save to my characters and promises no keeping", async () => {
+  const { hostOffers } = await import("../src/lib/use-capabilities.ts");
+  const { SERVER_FEATURES } = await import("../src/lib/capabilities.ts");
+  assert.equal(SERVER_FEATURES.keepCompanion, true, "this server says it has the route");
+  const older = { story: { configured: true, reachable: true }, utility: { configured: true }, images: { configured: false, reachable: false, backend: "comfyui" }, tts: { configured: false, reachable: false }, stt: { configured: false }, voice: { enabled: false, mode: "off" } };
+  assert.equal(hostOffers(older, "keepCompanion"), false);
+  assert.equal(hostOffers({ ...older, features: { keepCompanion: true } }, "keepCompanion"), true);
+  assert.match(read("src/app/campaigns/[campaignId]/PartyPanel.tsx"), /const canKeep = hostOffers\(capabilities, "keepCompanion"\);/);
+  assert.match(read("src/app/campaigns/[campaignId]/CompanionBuilderDialog.tsx"), /const keepsCompanions = hostOffers\(useCapabilities\(\), "keepCompanion"\);[\s\S]*\{keepsCompanions \? " They are kept in your characters too/);
 });
 
 finish();

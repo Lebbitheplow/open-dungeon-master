@@ -4,7 +4,11 @@
 // characters". Pressing it files Pip in the lead's characters as an ally the
 // GM plays, tied to the sheet; viewports share one world, so a later press
 // saves Pip's progress instead. The button is named, passes axe by night and
-// by day, and is a finger's height on a phone.
+// by day, and is a finger's height on a phone. Answered as a host from before
+// the route (no `features`), Pip's card offers no such button and the table
+// still works: an older host keeps the app's screens without it. That pass
+// runs on the website only, where every open is a fresh page; the app keeps
+// one page and its capabilities for 30 seconds.
 import { axeViolations, check, eventually, untilStill } from "../lib.mjs";
 
 export default {
@@ -58,5 +62,26 @@ export default {
     const table = await (await api.get(`${base}/api/campaigns/${ids.commandTableId}`)).json();
     const pip = (table.sheets ?? []).find((sheet) => sheet.id === ids.pip);
     check(pip?.libraryCharacterId === kept?.id, "and Pip's sheet is tied to that entry");
+
+    if (t.app) return;
+    await page.route("**/api/capabilities**", async (route) => {
+      const response = await route.fetch();
+      const body = await response.json().catch(() => ({}));
+      delete body.features;
+      await route.fulfill({ response, json: body });
+    });
+    await t.open(`/campaigns/${ids.commandTableId}`);
+    for (const selector of [`${root}[data-tour="tab-party"]`, `${root}.cine-party button`]) {
+      if (await card.count()) break;
+      const door = page.locator(selector).locator("visible=true").first();
+      if (await door.count()) {
+        await t.tap(door);
+        await eventually(() => card.count(), { timeoutMs: 800 }).catch(() => 0);
+      }
+    }
+    await eventually(() => card.count(), { timeoutMs: 30_000, label: "Pip's party card on an older host" });
+    await eventually(() => card.getByRole("button", { name: /^(Add|Change) portrait$/ }).count(), { label: "the upload still offered" });
+    await untilStill(page);
+    check((await card.getByRole("button", { name: "Save to my characters" }).count()) === 0, "an older host's card offers no Save to my characters");
   },
 };
