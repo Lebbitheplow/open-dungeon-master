@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# Open Dungeon Master as a single image. Everything the app needs is baked in:
+# Open Game Master as a single image. Everything the app needs is baked in:
 # the Next.js build, the Open5e content pack, and the embedding model.
 # Only the AI services stay outside (llama.cpp, ComfyUI, Kokoro TTS, STT).
 #

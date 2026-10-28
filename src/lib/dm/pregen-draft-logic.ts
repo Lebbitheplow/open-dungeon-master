@@ -77,7 +77,7 @@ const clip = (text: string, max: number) => {
 
 export function draftSystemPrompt(count: number, options: DraftOptionNames): string {
   return [
-    `You are the Dungeon Master preparing ${count} pregenerated player characters for the adventure the user describes. Propose a balanced party: between them someone holds the line, someone heals, someone deals damage, and someone scouts or solves problems; give each hero a different class where you can.`,
+    `You are the Game Master preparing ${count} pregenerated player characters for the adventure the user describes. Propose a balanced party: between them someone holds the line, someone heals, someone deals damage, and someone scouts or solves problems; give each hero a different class where you can.`,
     'Return STRICT JSON only, no code fences, shaped: {"heroes": [{"name": string, "concept": string, "class": string, "race": string, "background": string, "role": "tank" | "dps" | "healer" | "support" | "utility", "backstory": string}]}',
     `There are exactly ${count} heroes. class is one of: ${options.classes.join(", ")}. race is one of: ${options.races.join(", ")}. background is one of: ${options.backgrounds.join(", ")}.`,
     "name fits the setting, and no two heroes share one. concept is one short line. backstory is two or three sentences, and one of them ties the hero to something the adventure names: a place, a person or a hook. Use only what the adventure says; invent no secret of it.",
@@ -152,12 +152,12 @@ export function parseDraftReply(raw: string, count: number): ParsedDraft {
       ? (parsed as { heroes: unknown[] }).heroes
       : null;
   if (!list) {
-    return { ok: false, error: "The AI DM's reply was not a list of heroes, so nothing was drafted. Try again." };
+    return { ok: false, error: "The AI GM's reply was not a list of heroes, so nothing was drafted. Try again." };
   }
   if (list.length < count) {
     return {
       ok: false,
-      error: `The AI DM proposed ${list.length} ${list.length === 1 ? "hero" : "heroes"}, not ${count}, so nothing was drafted. Try again.`,
+      error: `The AI GM proposed ${list.length} ${list.length === 1 ? "hero" : "heroes"}, not ${count}, so nothing was drafted. Try again.`,
     };
   }
   const heroes: HeroProposal[] = [];
@@ -175,7 +175,7 @@ export function parseDraftReply(raw: string, count: number): ParsedDraft {
     const missing = (["name", "className", "race", "background", "backstory"] as const).find((key) => !proposal[key]);
     if (missing) {
       const words = { name: "a name", className: "a class", race: "a race", background: "a background", backstory: "a backstory" }[missing];
-      return { ok: false, error: `The AI DM's hero ${index + 1} came without ${words}, so nothing was drafted. Try again.` };
+      return { ok: false, error: `The AI GM's hero ${index + 1} came without ${words}, so nothing was drafted. Try again.` };
     }
     heroes.push(proposal);
   }
@@ -186,7 +186,7 @@ export function parseDraftReply(raw: string, count: number): ParsedDraft {
 // and what the engine changed to build it.
 export function draftNotes(proposal: HeroProposal, changes: string[]): string {
   return [
-    "Drafted by the AI DM.",
+    "Drafted by the AI GM.",
     proposal.concept ? `Concept: ${proposal.concept}` : "",
     proposal.role ? `Role: ${roleWords(proposal.role)}.` : "",
     ...changes,

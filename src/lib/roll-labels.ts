@@ -48,7 +48,7 @@ export function rollCardLabel(roll: Worded, sheetName: string | undefined): stri
 export function rollToastLead(roll: Worded & Pick<StoredRoll, "requestedBy">, sheetName: string | undefined): string {
   const who = rollerName(roll, sheetName);
   const what = roll.detail.trim() || ROLL_KIND_LABELS[roll.kind] || "Roll";
-  return `${who ? `${who} · ` : roll.requestedBy === "dm" ? "The DM · " : ""}${what}`;
+  return `${who ? `${who} · ` : roll.requestedBy === "dm" ? "The GM · " : ""}${what}`;
 }
 
 // Cinematic mode's chronicle line, up to the dice. A roll without an

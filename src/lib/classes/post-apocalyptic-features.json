@@ -5,7 +5,7 @@
       "subclassLevel": 3,
       "levels": {
         "1": [
-          { "n": "Scrap Sense", "d": "1/short rest, search any ruin or wreck for 10 minutes and find one genuinely useful item (the DM decides what plausibly exists)." },
+          { "n": "Scrap Sense", "d": "1/short rest, search any ruin or wreck for 10 minutes and find one genuinely useful item (the GM decides what plausibly exists)." },
           { "n": "Improvised Weapon Mastery", "d": "Improvised weapons count as proficient simple weapons dealing 1d6, or 1d8 two-handed." }
         ],
         "2": [{ "n": "Packrat", "d": "Carry capacity doubles; you always have basic supplies (rope, tape, wire, a light source)." }],
@@ -19,7 +19,7 @@
         "13": [{ "n": "Escape Artist", "d": "Disengage or Hide as a bonus action; escape grapples and restraints with advantage." }],
         "14": [{ "n": "Scrap Sense (2 uses)", "d": "Scrap Sense has 2 uses per short rest and takes only 1 minute." }],
         "15": [{ "n": "Built From Salvage", "d": "Your rigged devices from Make It Work last a day and can be handed to allies." }],
-        "17": [{ "n": "The Good Stuff", "d": "1/long rest, your search turns up something rare: old-world tech, ammo cache, or medicine (DM picks the form)." }],
+        "17": [{ "n": "The Good Stuff", "d": "1/long rest, your search turns up something rare: old-world tech, ammo cache, or medicine (GM picks the form)." }],
         "18": [{ "n": "Never Unarmed", "d": "When disarmed or emptied, you always find another weapon within reach this turn." }],
         "20": [{ "n": "King of the Heap", "d": "Scrap Sense always finds two items; 1/day one of them is exactly what you ask for." }]
       },
@@ -119,7 +119,7 @@
         "14": [{ "n": "Power Cell Cache (3rd)", "d": "Power Cell Cache works for tech effects up to 3rd level." }],
         "15": [{ "n": "Machine Empathy", "d": "Constructs and automated defenses must save (WIS) to target you over other creatures." }],
         "17": [{ "n": "Prototype Rig", "d": "Choose one 5th-level tech effect; cast it 1/long rest without a slot." }],
-        "18": [{ "n": "The Old World Answers", "d": "1/long rest, ask the DM one question answerable from pre-Fall records; you recall the answer." }],
+        "18": [{ "n": "The Old World Answers", "d": "1/long rest, ask the GM one question answerable from pre-Fall records; you recall the answer." }],
         "20": [{ "n": "Reactor Heart", "d": "1/long rest, for 1 minute your tech effects of 4th level or lower cost no slots; you glow visibly." }]
       },
       "subclass": {

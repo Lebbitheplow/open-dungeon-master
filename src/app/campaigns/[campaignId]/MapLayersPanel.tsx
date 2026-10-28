@@ -77,7 +77,7 @@ export function MapLayersPanel({
             <Trash2 className="size-3" /> Delete
           </button>
           <button type="button" onClick={() => onDmOnly(refs, true)} className="flex min-h-7 items-center gap-1 rounded-md border border-stone-700 px-2">
-            <EyeOff className="size-3" /> DM only
+            <EyeOff className="size-3" /> GM only
           </button>
           <button type="button" onClick={() => onDmOnly(refs, false)} className="flex min-h-7 items-center gap-1 rounded-md border border-stone-700 px-2">
             <Eye className="size-3" /> Shown
@@ -182,7 +182,7 @@ export function MapLayersPanel({
                             >
                               {entry.name}
                               <span className="ml-1 text-[9px] text-stone-500">{entry.detail}</span>
-                              {entry.dmOnly ? <span className="ml-1 text-[9px] text-violet-300">DM</span> : null}
+                              {entry.dmOnly ? <span className="ml-1 text-[9px] text-violet-300">GM</span> : null}
                             </button>
                             {canEdit && entry.ref.kind !== "doors" ? (
                               <button

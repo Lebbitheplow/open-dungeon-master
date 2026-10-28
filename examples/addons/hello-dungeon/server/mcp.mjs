@@ -1,5 +1,5 @@
 // A minimal MCP server over stdio, with no dependencies, so this example runs
-// on the Node that Open Dungeon Master already has (the desktop app's, too).
+// on the Node that Open Game Master already has (the desktop app's, too).
 //
 // It covers what an addon needs: the initialize handshake, tools/list,
 // tools/call with progress notifications and cancellation, logging, and

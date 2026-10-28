@@ -46,7 +46,7 @@ test("a database from a newer revision is refused, and left as it was", () => {
   db.pragma("wal_checkpoint(TRUNCATE)");
   closeDatabaseForRestore();
   const before = fs.readFileSync(dbFile);
-  const refusal = `newer version of Open Dungeon Master (database revision ${SCHEMA_REVISION + 1}; this version reads up to ${SCHEMA_REVISION})`;
+  const refusal = `newer version of Open Game Master (database revision ${SCHEMA_REVISION + 1}; this version reads up to ${SCHEMA_REVISION})`;
   assert.throws(() => getDatabase(), (error) => error.message.includes(refusal));
   assert.ok(before.equals(fs.readFileSync(dbFile)), "the file was not written");
   // Still refused on the next request, not half open.

@@ -2,27 +2,31 @@ name = "odm-tunnel-broker"
 main = "src/index.js"
 compatibility_date = "2026-08-01"
 
-# Served at both addresses. The zone hostname is the one the apps use from
-# client 0.14.7 / server 0.23.9 on, and is where the zone's free WAF rate
-# limiting rule and bot protection apply; workers.dev stays for the apps
-# already installed.
-#   https://broker.opendungeonmaster.com
+# Served at every address below. The zone hostnames are the ones the apps
+# use from client 0.14.7 / server 0.23.9 on, and are where a zone's free WAF
+# rate limiting rule and bot protection apply; workers.dev stays for the
+# apps installed before that.
+#   https://broker.opengamemaster.com
+#   https://broker.opendungeonmaster.com (the old domain, until it lapses)
 #   https://odm-tunnel-broker.<your-subdomain>.workers.dev
 workers_dev = true
 routes = [
+  { pattern = "broker.opengamemaster.com", custom_domain = true },
+  { pattern = "agents.opengamemaster.com", custom_domain = true },
   { pattern = "broker.opendungeonmaster.com", custom_domain = true },
   { pattern = "agents.opendungeonmaster.com", custom_domain = true },
 ]
-# agents.opendungeonmaster.com serves assistant links only (src/relay.js):
-# the address ChatGPT, Claude, Grok or Muse saves for a world, which keeps
-# working when the world is shared again at a new tunnel hostname.
+# agents.* serves assistant links only (src/relay.js): the address ChatGPT,
+# Claude, Grok or Muse saves for a world, which keeps working when the world
+# is shared again at a new tunnel hostname.
 
 # Secrets, set with `wrangler secret put`:
 #   ACCOUNT_ID       required. The Cloudflare account id (kept out of the
 #                    committed file; it is not abusable alone, but there is
 #                    no reason to publish it either).
 #   CF_API_TOKEN     required. Scoped to exactly: Account > Cloudflare
-#                    Tunnel > Edit, Zone > DNS > Edit (this zone only).
+#                    Tunnel > Edit, Zone > DNS > Edit (ZONE_NAME and every
+#                    SECONDARY_ZONE_NAMES zone, no others).
 #                    NEVER the Global API Key. Optionally add Account >
 #                    Account Analytics > Read so the hourly cron can meter
 #                    TURN egress and pause minting near the free tier.
@@ -89,8 +93,14 @@ id = "47fe1069128549d199527670da4b7dd5"
 crons = ["17 * * * *", "*/10 * * * *"]
 
 [vars]
+# Every session is named play-CODE in each of these zones (src/util.js,
+# playZones), and the app hears back the one in the domain it called the
+# broker on. ZONE_NAME stays the old domain while installed apps build room
+# codes on it; when it lapses, ZONE_NAME becomes opengamemaster.com and the
+# secondary list empties.
 ZONE_NAME = "opendungeonmaster.com"
-AGENTS_ORIGIN = "https://agents.opendungeonmaster.com"
+SECONDARY_ZONE_NAMES = "opengamemaster.com"
+AGENTS_ORIGIN = "https://agents.opengamemaster.com"
 # Account-wide requests in a UTC day past which assistant links stop
 # forwarding until midnight (default 50000, half the free plan).
 RELAY_DAILY_REQUEST_CAP = "50000"

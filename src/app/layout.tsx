@@ -38,12 +38,12 @@ const cinzel = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "Open Dungeon Master",
-  description: "Multiplayer D&D 5e campaigns with an AI Dungeon Master.",
-  applicationName: "Open Dungeon Master",
+  title: "Open Game Master",
+  description: "Multiplayer D&D 5e campaigns with an AI Game Master.",
+  applicationName: "Open Game Master",
   appleWebApp: {
     capable: true,
-    title: "Open DM",
+    title: "Open GM",
     statusBarStyle: "black-translucent",
   },
 };

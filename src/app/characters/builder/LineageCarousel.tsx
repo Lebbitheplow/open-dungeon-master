@@ -7,6 +7,7 @@ import { InfoButton, renderRules, type ContentRef } from "@/components/ui/InfoDi
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { lineageFits } from "./lineageFits";
+import { AbilityText } from "./AbilityText";
 import {
   asiChips,
   lineageChoices,
@@ -40,7 +41,7 @@ export type LineageSlide = LineageEntry & {
   info: { text?: string | null; reference?: ContentRef };
 };
 
-const sectionLabel = "mb-1.5 block font-display text-[0.6875rem] font-semibold uppercase tracking-[0.2em] text-amber-500/80";
+const sectionLabel = "mb-1.5 block font-display text-[0.875rem] font-semibold uppercase tracking-[0.2em] text-amber-500/80";
 
 function Traits({ slide }: { slide: LineageSlide }) {
   const baseId = useId();
@@ -53,7 +54,7 @@ function Traits({ slide }: { slide: LineageSlide }) {
   });
   if (!lines.length) {
     return slide.info.text ? (
-      <div className="space-y-2 font-serif text-[13px] leading-normal text-stone-300">{renderRules(slide.info.text)}</div>
+      <div className="space-y-2 font-serif text-base leading-normal text-stone-300">{renderRules(slide.info.text)}</div>
     ) : null;
   }
   return (
@@ -65,12 +66,12 @@ function Traits({ slide }: { slide: LineageSlide }) {
         const head = (
           <span className="flex w-full items-center gap-2.5 px-3 py-2">
             <span
-              className="flex size-[22px] shrink-0 items-center justify-center rounded-full border border-amber-500/40 bg-amber-950/50 font-mono text-[0.6875rem] text-amber-300"
+              className="flex size-[1.5rem] shrink-0 items-center justify-center rounded-full border border-amber-500/40 bg-amber-950/50 font-mono text-[0.875rem] text-amber-300"
               aria-hidden="true"
             >
               {index + 1}
             </span>
-            <span className="min-w-0 flex-1 font-display text-[12.5px] font-semibold text-amber-200">{parsed.head}</span>
+            <span className="min-w-0 flex-1 font-display text-base font-semibold text-amber-200">{parsed.head}</span>
             {parsed.body ? <ChevronDown className="creator-chevron size-3.5 shrink-0 text-stone-500" aria-hidden="true" /> : null}
           </span>
         );
@@ -97,7 +98,7 @@ function Traits({ slide }: { slide: LineageSlide }) {
               head
             )}
             {open ? (
-              <div id={bodyId} className="creator-trait-body pb-2.5 pl-[42px] pr-3 font-serif text-[12.5px] leading-normal text-stone-300">
+              <div id={bodyId} className="creator-trait-body pb-2.5 pl-[42px] pr-3 font-serif text-base leading-normal text-stone-300">
                 {parsed.body}
               </div>
             ) : null}
@@ -133,13 +134,13 @@ export function LineageDetails({ slide }: { slide: LineageSlide }) {
           <div className="flex flex-wrap gap-1">
             {asiChips(slide.asi).map((chip) => (
               <span key={chip.label} className="creator-chip" data-size="md">
-                {chip.ability} <span className="font-display text-[11px] font-bold text-amber-100">{chip.bonus}</span>
+                <AbilityText text={chip.ability} /> <span className="font-display text-[0.875rem] font-bold text-amber-100">{chip.bonus}</span>
               </span>
             ))}
           </div>
           <dl className="flex flex-col gap-[3px]">
             {facts.map((fact) => (
-              <div key={fact.key} className="flex items-baseline justify-between gap-2 font-mono text-[0.6875rem] text-stone-500">
+              <div key={fact.key} className="flex items-baseline justify-between gap-2 font-mono text-[0.875rem] text-stone-500">
                 <dt>{fact.key}</dt>
                 <dd className="text-stone-200">{fact.value}</dd>
               </div>
@@ -160,11 +161,11 @@ export function LineageDetails({ slide }: { slide: LineageSlide }) {
           </p>
         ) : null}
         {slide.packBlurb ? (
-          <p className="font-serif text-[13px] italic leading-normal text-stone-300">{slide.packBlurb}</p>
+          <p className="font-serif text-base italic leading-normal text-stone-300">{slide.packBlurb}</p>
         ) : null}
         <div className="rounded-[10px] border border-stone-700/60 bg-stone-950/60 px-3 py-2.5">
           <span className={sectionLabel}>Tongues</span>
-          <span className="font-serif text-[13px] leading-normal text-stone-300">{slide.languages.join(", ")}</span>
+          <span className="font-serif text-base leading-normal text-stone-300">{slide.languages.join(", ")}</span>
         </div>
         {choices.length ? (
           <div className="rounded-[10px] border border-amber-500/30 bg-amber-950/20 px-3 py-2.5">
@@ -254,7 +255,7 @@ export function LineageCarousel({
         <span className="flex min-w-0 flex-col">
           <span className="truncate uppercase tracking-[0.14em]">{slide.name}</span>
           {slide.canonical ? (
-            <span className="font-mono text-[0.6875rem] normal-case tracking-normal text-stone-500">
+            <span className="font-mono text-[0.875rem] normal-case tracking-normal text-stone-500">
               {slide.canonical} in the rules
             </span>
           ) : null}
@@ -277,19 +278,19 @@ export function LineageCarousel({
             {/* The count is for the eye; a step says which lineage it reached
                 ("Tiefling, 3 of 40, recommended") while focus stays on the
                 button that paged. */}
-            <span className="font-mono text-[0.6875rem] text-stone-500" aria-hidden="true">
+            <span className="font-mono text-[0.875rem] text-stone-500" aria-hidden="true">
               {index + 1} / {slides.length}
             </span>
             <span className="sr-only" aria-live="polite" aria-atomic="true">
               {slidePosition(slide, index, slides.length)}
             </span>
             {slide.recommended ? (
-              <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/50 bg-amber-400/10 px-1.5 py-px font-display text-[0.6875rem] font-bold uppercase tracking-[0.12em] text-amber-300">
+              <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/50 bg-amber-400/10 px-1.5 py-px font-display text-[0.875rem] font-bold uppercase tracking-[0.12em] text-amber-300">
                 <Star className="size-2.5 fill-current" aria-hidden="true" />
                 Recommended
               </span>
             ) : null}
-            {slide.group ? <span className="truncate font-mono text-[0.6875rem] text-stone-500">{slide.group}</span> : null}
+            {slide.group ? <span className="truncate font-mono text-[0.875rem] text-stone-500">{slide.group}</span> : null}
           </span>
           <button type="button" onClick={() => step(1)} className={navButton} aria-label={`Next: ${next.name}`}>
             <span className="truncate">{next.name}</span>

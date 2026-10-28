@@ -1,7 +1,7 @@
 blank_issues_enabled: false
 contact_links:
   - name: Help installing or setting up a server
-    url: https://github.com/Lebbitheplow/open-dungeon-master/discussions/categories/q-a
+    url: https://github.com/Lebbitheplow/open-game-master/discussions/categories/q-a
     about: Questions about installing, models, backends and settings. Other players can help there; issues are only for bugs and feature requests.
   - name: Chat on Discord
     url: https://discord.gg/B2tQFr3TYD

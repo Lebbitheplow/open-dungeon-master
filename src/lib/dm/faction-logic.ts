@@ -120,7 +120,7 @@ export function renderFactionsForPrompt(
     if (!dmView) {
       return `${base}${faction.blurb ? `: ${faction.blurb}` : ""}`;
     }
-    return `${base}: ${faction.blurb}${faction.goal ? ` | GOAL (DM-only): ${faction.goal}` : ""} | power ${faction.power}/5`;
+    return `${base}: ${faction.blurb}${faction.goal ? ` | GOAL (GM-only): ${faction.goal}` : ""} | power ${faction.power}/5`;
   });
   return `FACTIONS (standing shifts through adjust_reputation; a member's social checks lean on it):\n${lines.join("\n")}`;
 }

@@ -130,7 +130,7 @@ export function handleShowHandout(campaign: Campaign, turn: DmTurn | null, rawAr
       return entry;
     }
     if (entry.visibility === "dm" && !human) {
-      return { error: "That entry is the DM's secret; it cannot be shown to the table.", retry: true };
+      return { error: "That entry is the GM's secret; it cannot be shown to the table.", retry: true };
     }
     if (entry.unpublished && !human) {
       return { error: "That entry is not canon yet; it cannot be shown to the table.", retry: true };

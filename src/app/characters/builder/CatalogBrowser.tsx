@@ -230,11 +230,11 @@ export default function CatalogBrowser({
 
           {recommended?.entries.length ? (
             <div className="mb-2">
-              <p className="eyebrow px-1 pb-1 text-[0.6875rem] text-amber-300/80">
+              <p className="eyebrow px-1 pb-1 text-[0.875rem] text-amber-300/80">
                 {recommended.label}
               </p>
               {recommended.note ? (
-                <p className="px-1 pb-1.5 text-[11px] text-stone-500">{recommended.note}</p>
+                <p className="px-1 pb-1.5 text-sm text-stone-500">{recommended.note}</p>
               ) : null}
               <ul>
                 {recommended.entries
@@ -267,7 +267,7 @@ export default function CatalogBrowser({
                             )}
                             <span className={cn(on && "text-amber-200")}>{entry.name}</span>
                           </span>
-                          <span className="shrink-0 text-[11px] text-stone-500">
+                          <span className="shrink-0 text-[0.875rem] text-stone-500">
                             {entry.note ?? ""}
                           </span>
                         </button>
@@ -305,16 +305,16 @@ export default function CatalogBrowser({
                   <span className="grow">{section.label}</span>
                   {isLoading ? <Loader2 className="size-3.5 animate-spin text-stone-500" /> : null}
                   {!isLoading && loaded[section.key] ? (
-                    <span className="text-[11px] text-stone-500">{rows.length}</span>
+                    <span className="text-[0.875rem] text-stone-500">{rows.length}</span>
                   ) : null}
                 </button>
                 {isOpen ? (
                   <div className="pb-2">
                     {section.note ? (
-                      <p className="px-1 pb-1 text-[11px] text-stone-500">{section.note}</p>
+                      <p className="px-1 pb-1 text-sm text-stone-500">{section.note}</p>
                     ) : null}
                     {!isLoading && !rows.length ? (
-                      <p className="px-1 py-1 text-[11px] text-stone-500" role={failedKeys.includes(section.key) ? "alert" : undefined}>
+                      <p className="px-1 py-1 text-sm text-stone-500" role={failedKeys.includes(section.key) ? "alert" : undefined}>
                         {failedKeys.includes(section.key)
                           ? "Could not reach the server to list these. Close and open this section to try again."
                           : unavailable
@@ -326,7 +326,7 @@ export default function CatalogBrowser({
                       {groupRows(visible, section.bucketOf ?? bucketOf).map((bucket) => (
                         <li key={bucket.key}>
                           {bucket.label ? (
-                            <p className="eyebrow sticky top-0 bg-stone-950/95 px-1 py-1 text-[0.6875rem] text-amber-300/70">
+                            <p className="eyebrow sticky top-0 bg-stone-950/95 px-1 py-1 text-[0.875rem] text-amber-300/70">
                               {bucket.label}
                             </p>
                           ) : null}
@@ -370,7 +370,7 @@ export default function CatalogBrowser({
                                       </span>
                                       {verdict ? <PrerequisiteLine id={describedBy} {...verdict} /> : null}
                                     </span>
-                                    <span className="shrink-0 text-[11px] text-stone-500">
+                                    <span className="shrink-0 text-[0.875rem] text-stone-500">
                                       {entry.source === "homebrew"
                                         ? "homebrew"
                                         : (metaOf?.(entry) ?? "")}
@@ -396,7 +396,7 @@ export default function CatalogBrowser({
                       ))}
                     </ul>
                     {loaded[section.key]?.truncated ? (
-                      <p className="px-1 pt-1 text-[11px] text-stone-500">
+                      <p className="px-1 pt-1 text-sm text-stone-500">
                         Showing the first {rows.length}. Search by name above for the rest.
                       </p>
                     ) : null}

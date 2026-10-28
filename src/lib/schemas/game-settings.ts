@@ -407,7 +407,7 @@ export function lastingCompanionBlock(
   humanDm = false,
 ): LastingCompanionBlock | null {
   const mode = resolveCompanionMode(settings, partySize, humanDm);
-  const allow = `To allow one, set AI companions to "Party members and guests" (${ALLIES_ROW}). That setting lets the DM keep other lasting companions at this table too.`;
+  const allow = `To allow one, set AI companions to "Party members and guests" (${ALLIES_ROW}). That setting lets the GM keep other lasting companions at this table too.`;
   if (mode === "off") {
     return { code: "off", reason: "AI companions is set to Off at this table, so no companion can join the party.", remedy: allow };
   }

@@ -274,7 +274,7 @@ export async function PATCH(
   // the same two, LobbyActions.tsx).
   const seats = campaignSeats(campaign);
   if (campaign.ownerUserId !== user.id && !isPrimaryDm(seats, user.id)) {
-    return Response.json({ error: "Only the campaign owner or the DM can do that." }, { status: 403 });
+    return Response.json({ error: "Only the campaign owner or the GM can do that." }, { status: 403 });
   }
   if (nextStatus === "active") {
     if (campaign.status !== "lobby") {
@@ -330,7 +330,7 @@ export async function PATCH(
       glyph: "cue-bell",
       // The AI's instruction for the opening is the prompt's, not the
       // table's (OPENING_SCENE_CUE in src/lib/dm/prompt.ts).
-      content: humanDm ? `${ADVENTURE_BEGINS_NOTE} The Dungeon Master opens the scene.` : ADVENTURE_BEGINS_NOTE,
+      content: humanDm ? `${ADVENTURE_BEGINS_NOTE} The Game Master opens the scene.` : ADVENTURE_BEGINS_NOTE,
     });
     publishWithSeq(campaignId, seq, "message_added", { message });
     // An assisted table asked for this in the wizard ("the AI fills this in

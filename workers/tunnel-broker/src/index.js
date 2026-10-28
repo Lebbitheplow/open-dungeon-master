@@ -59,8 +59,9 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (isRelayPath(url.pathname)) return relay(request, env);
-    // The assistants' hostname carries assistant links and nothing else.
-    if (env.AGENTS_ORIGIN && url.origin === new URL(env.AGENTS_ORIGIN).origin) {
+    // The assistants' hostnames (agents. on the old domain and the new)
+    // carry assistant links and nothing else.
+    if (url.hostname.startsWith("agents.") || (env.AGENTS_ORIGIN && url.origin === new URL(env.AGENTS_ORIGIN).origin)) {
       return new Response(JSON.stringify({ error: "Not found." }), {
         status: 404,
         headers: { "content-type": "application/json" },

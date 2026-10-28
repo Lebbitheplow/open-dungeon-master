@@ -184,7 +184,7 @@ export function RulebookContents({
   return (
     <div className="rb-contents" data-no-motion>
       <header className="rb-contents-head">
-        <p className="rb-running">Open Dungeon Master</p>
+        <p className="rb-running">Open Game Master</p>
         <h2 className="rb-book-title">The Rulebook</h2>
         <p className="rb-book-sub">Fifth Edition &middot; System Reference Document 5.1</p>
       </header>

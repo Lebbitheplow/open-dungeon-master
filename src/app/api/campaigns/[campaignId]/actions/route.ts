@@ -139,8 +139,8 @@ export async function POST(
       return Response.json(
         {
           error: enemiesDue
-            ? "The enemies are taking their turns; the DM hands the turn on. Use OOC for table talk."
-            : `The ${campaign.dmUserId ? "DM" : "party lead"} has not opened responses yet. Use OOC for table talk.`,
+            ? "The enemies are taking their turns; the GM hands the turn on. Use OOC for table talk."
+            : `The ${campaign.dmUserId ? "GM" : "party lead"} has not opened responses yet. Use OOC for table talk.`,
           floor,
         },
         { status: 409 },
@@ -169,7 +169,7 @@ export async function POST(
     return Response.json(
       {
         error: waitingOn
-          ? `The DM is waiting on ${waitingOn}. Use OOC for table talk.`
+          ? `The GM is waiting on ${waitingOn}. Use OOC for table talk.`
           : "It is not your moment to act.",
         floor,
       },

@@ -416,7 +416,7 @@ export function addonFit(
       ok: false,
       reason:
         manifest.apiVersion > ADDON_API_VERSION
-          ? `Written for a newer Open Dungeon Master (addon contract ${manifest.apiVersion}). Update this server first.`
+          ? `Written for a newer Open Game Master (addon contract ${manifest.apiVersion}). Update this server first.`
           : `Written for addon contract ${manifest.apiVersion}, which this server no longer reads.`,
     };
   }
@@ -427,7 +427,7 @@ export function addonFit(
     return { ok: false, reason: `Ships no program for ${platformName(host.platform)} (${host.arch}).` };
   }
   if (manifest.minServerVersion && compareVersions(host.serverVersion, manifest.minServerVersion) < 0) {
-    return { ok: false, reason: `Needs Open Dungeon Master ${manifest.minServerVersion} or later.` };
+    return { ok: false, reason: `Needs Open Game Master ${manifest.minServerVersion} or later.` };
   }
   return { ok: true };
 }

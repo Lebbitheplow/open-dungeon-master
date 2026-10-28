@@ -251,11 +251,11 @@ export function passTable(campaignId: string, userId: string): PassResult {
     return { ok: false, status: 409, error: "Only an open table waits for passes." };
   }
   if (getDmStatus(campaignId) !== "idle") {
-    return { ok: false, status: 409, error: "The DM is answering now. Pass after the narration if you have nothing to add." };
+    return { ok: false, status: 409, error: "The GM is answering now. Pass after the narration if you have nothing to add." };
   }
   const decision = decisionFor(campaignId, Date.now());
   if (!decision) {
-    return { ok: false, status: 409, error: "The DM is not waiting on the table yet." };
+    return { ok: false, status: 409, error: "The GM is not waiting on the table yet." };
   }
   if (!decision.gathering) {
     return { ok: false, status: 409, error: "Nobody else is at the table to wait for: your post is answered as it lands." };

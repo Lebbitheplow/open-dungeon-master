@@ -81,7 +81,7 @@ export default function KitChoicesSection({
               <div key={`${lineIndex}-${chosen}`} className="reveal grid gap-1.5 sm:grid-cols-2">
                 {slots.map((slot, at) => (
                   <div key={at}>
-                    <span id={`${captionId}-${start + at}`} className="mb-1 block text-[11px] text-stone-400">{capital(describeSlot(slot))}</span>
+                    <span id={`${captionId}-${start + at}`} className="mb-1 block text-sm text-stone-400">{capital(describeSlot(slot))}</span>
                     <OptionPicker
                       labelledBy={`${captionId}-${start + at}`}
                       value={choices.picks[start + at] ?? slot.default}
@@ -113,7 +113,7 @@ export default function KitChoicesSection({
           {armorClass.value}
         </span>
       </div>
-      <p className="text-[11px] text-stone-500">{armorClass.reason}</p>
+      <p className="text-sm text-stone-500">{armorClass.reason}</p>
     </div>
   );
 }

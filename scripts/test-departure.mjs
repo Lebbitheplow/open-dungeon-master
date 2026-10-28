@@ -302,4 +302,36 @@ test("the record reads back what was written, and anything else as nothing", () 
   assert.deepEqual(logic.parseDeparture(JSON.stringify({ intent: { response: "confront" }, gone: { response: "fly" } })), logic.NO_DEPARTURE, "a plan is only one that waits, a response only one of the five");
 });
 
+// ---- issue 563 ----
+
+test("a split is an opening to slip away, never to strike: a fight takes the whole party", () => {
+  assert.equal(logic.opensAt("slip_away", "against", "split"), true);
+  assert.equal(logic.opensAt("bide_strike", "good", "split"), false);
+  assert.equal(logic.opensAt("bide_strike", "good", "long_rest"), true);
+  assert.equal(logic.opensAt("bide_strike", "even", "own_turn"), false);
+  assert.equal(logic.departureHow("slip_away", "split"), "Slipped away while the party was split up");
+  assert.match(logic.INTENT_WORDS.slip_away, /splitting up/);
+});
+
+test("a departure keeps who they still cared for", () => {
+  const raw = { response: "walk_out", how: "Walked out on the party", at: 1, reportedTo: "", hostile: false, caresFor: ["Mira", 4, "Tobin"], leftLevel: 3 };
+  assert.deepEqual(logic.parseDeparture(JSON.stringify({ intent: null, gone: raw })).gone.caresFor, ["Mira", "Tobin"]);
+  assert.deepEqual(logic.parseDeparture(JSON.stringify({ intent: null, gone: { ...raw, caresFor: undefined } })).gone.caresFor, [], "a record from before keeps nobody");
+});
+
+test("at a Turn table the return comes at its own full strength; elsewhere it answers to the ceiling (issue 563)", () => {
+  // A solo third-level character against an equal: past the ceiling alone.
+  const input = { partyLevels: [3], difficulty: "normal", companionCr: 5, hostile: true, candidates: [{ slug: "thug", name: "Thug", cr: 0.5 }], wearSteps: wear.wearSteps(40, []), rateWorn: () => 3 };
+  const held = logic.planReturn(input);
+  assert.ok(held.wear || held.standoff, "held to the ceiling, it comes worn or stands off");
+  const whole = logic.planReturn({ ...input, ceilingHolds: false });
+  assert.equal(whole.standoff, false);
+  assert.equal(whole.wear, null, "never worn");
+  assert.deepEqual(whole.allies, [], "nothing added beside it past the ceiling");
+  assert.ok(whole.adjustedXp > whole.ceiling);
+  // Inside the ceiling, allies still answer to it either way.
+  const small = { ...input, companionCr: 1, partyLevels: [5, 5, 5, 5] };
+  assert.deepEqual(logic.planReturn({ ...small, ceilingHolds: false }).allies, logic.planReturn(small).allies);
+});
+
 console.log(`test-departure: ${passed} passed`);

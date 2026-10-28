@@ -57,14 +57,43 @@ await test("markup in inputs never lands unescaped", async () => {
   assert.ok(!html.includes("<script"), "a script tag appeared");
 });
 
-await test("anything off /j goes to the downloads", () => {
-  const response = worker.fetch(new Request("https://opendungeonmaster.com/other"));
+await test("a page on the old domain or a www name moves to the same path on the site", () => {
+  for (const host of ["opendungeonmaster.com", "www.opendungeonmaster.com", "www.opengamemaster.com"]) {
+    const response = worker.fetch(new Request(`https://${host}/guide/start/?from=x`));
+    assert.equal(response.status, 301, host);
+    assert.equal(response.headers.get("location"), "https://opengamemaster.com/guide/start/?from=x", host);
+  }
+  const jobs = worker.fetch(new Request("https://opendungeonmaster.com/jobs"));
+  assert.equal(jobs.headers.get("location"), "https://opengamemaster.com/jobs", "/jobs is not an invite");
+});
+
+await test("anything off /j on the site's own host goes home, never round in a loop", () => {
+  const response = worker.fetch(new Request("https://opengamemaster.com/jobs"));
   assert.equal(response.status, 302);
-  assert.equal(response.headers.get("location"), "https://opendungeonmaster.com/");
+  assert.equal(response.headers.get("location"), "https://opengamemaster.com/");
+  const same = worker.fetch(new Request("https://opendungeonmaster.com/other"), { SITE_URL: "https://opendungeonmaster.com" });
+  assert.equal(same.status, 302);
+  assert.equal(same.headers.get("location"), "https://opendungeonmaster.com/");
+});
+
+await test("invites are answered on every host, pointing at the site's downloads", async () => {
+  for (const host of ["opengamemaster.com", "opendungeonmaster.com", "www.opendungeonmaster.com"]) {
+    const response = worker.fetch(new Request(`https://${host}/j?s=https%3A%2F%2Fexample.org&c=B63DBZQD`));
+    assert.equal(response.status, 200, host);
+    const html = await response.text();
+    assert.ok(html.includes('href="https://opengamemaster.com"'), host);
+    assert.ok(html.includes(">opengamemaster.com</a>"), host);
+  }
+  const incomplete = await worker.fetch(new Request("https://opengamemaster.com/j")).text();
+  assert.ok(incomplete.includes('href="https://opengamemaster.com"'));
 });
 
 await test("assetlinks serves the configured fingerprints for the app package", async () => {
   const fp = "AA:" + Array(31).fill("BB").join(":");
+  for (const host of ["opendungeonmaster.com", "opengamemaster.com"]) {
+    const served = worker.fetch(new Request(`https://${host}/.well-known/assetlinks.json`), { ANDROID_CERT_SHA256: fp });
+    assert.equal(served.status, 200, `${host} must answer the check itself, not redirect`);
+  }
   const response = worker.fetch(
     new Request("https://opendungeonmaster.com/.well-known/assetlinks.json"),
     { ANDROID_CERT_SHA256: ` ${fp.toLowerCase()} ` },

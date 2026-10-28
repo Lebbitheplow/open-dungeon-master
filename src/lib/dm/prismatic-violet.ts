@@ -68,7 +68,7 @@ export function violetRayTurnStart(campaign: Campaign, combatantIds: string[]): 
         if (updated) {
           publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
         }
-        lines.push(save.success ? `${sheet.name}'s sight returns.` : `${sheet.name} is sent to another plane by the violet ray (the DM decides which).`);
+        lines.push(save.success ? `${sheet.name}'s sight returns.` : `${sheet.name} is sent to another plane by the violet ray (the GM decides which).`);
       }
     }
   } finally {

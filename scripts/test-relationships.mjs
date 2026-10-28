@@ -18,6 +18,7 @@ import {
   beatOutcome,
   beatSpec,
   bumpBeatCount,
+  bystanderShare,
   canAdvanceRomance,
   consentCheck,
   decayBeatCounts,
@@ -304,6 +305,14 @@ test("the roster line is readable and bounded", () => {
   });
   assert.match(soured, /close to walking/);
   assert.equal(ROMANCE_STAGES[0], "none");
+});
+
+test("standing by while another does a deed costs a third of it, never credit (issue 563)", () => {
+  assert.equal(bystanderShare(-15), -5);
+  assert.equal(bystanderShare(-1), -1, "at least a point");
+  assert.equal(bystanderShare(-2), -1);
+  assert.equal(bystanderShare(0), 0);
+  assert.equal(bystanderShare(9), 0, "a deed that won regard shares none of it");
 });
 
 console.log(`\ntest-relationships: ${passed} passed`);

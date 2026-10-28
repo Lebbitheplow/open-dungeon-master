@@ -4,15 +4,21 @@ import { Search, Star } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
 import { GameIcon } from "@/components/ui/GameIcon";
 import { Select } from "@/components/ui/Select";
+import { Switch } from "@/components/ui/Switch";
 import { Ribbon } from "@/components/ui/Ribbon";
 import { cn } from "@/lib/cn";
 import type { IconRef } from "@/lib/icons";
 import { ui } from "@/lib/ui";
+import { AbilityText } from "./AbilityText";
 import { filterGroups, foldGroups } from "./lineage";
+import { useShowNumbers, writeNumbers } from "./numbersPref";
 import { useRovingGroup } from "./roving";
 
 // One painted card in a lineage or class grid. `meta` is the canonical name
-// behind a world pack's reskin, searched along with the name.
+// behind a world pack's reskin, searched along with the name. `keywords`
+// are searched and never printed: what a card says another way, the die
+// "Show rules and numbers" holds back and the names behind ability codes
+// (backlog F11).
 export type OptionCardView = {
   id: string;
   name: string;
@@ -20,6 +26,7 @@ export type OptionCardView = {
   art: string;
   tagline: string;
   chips: string[];
+  keywords?: string[];
   icon?: IconRef;
 };
 
@@ -70,6 +77,7 @@ export function OptionCardGrid({
   noun,
   compact = false,
   facets = [],
+  numbersSwitch = false,
 }: {
   groups: OptionCardGroup[];
   value: string;
@@ -80,9 +88,13 @@ export function OptionCardGrid({
   compact?: boolean;
   // The filters offered above the grid; none, no bar.
   facets?: CardFacet[];
+  // Offer "Show rules and numbers" above the cards: only where it changes
+  // them, which today is the class cards' hit die.
+  numbersSwitch?: boolean;
 }) {
   const gridId = useId();
   const searchRef = useRef<HTMLInputElement>(null);
+  const numbers = useShowNumbers();
   const [query, setQuery] = useState("");
   const total = groups.reduce((sum, group) => sum + group.options.length, 0);
   const [expanded, setExpanded] = useState(false);
@@ -223,6 +235,20 @@ export function OptionCardGrid({
         </div>
       ) : null}
 
+      {/* The cards say a class's hit points in words ("High HP"); this adds
+          the hit die behind them (backlog F11), on the class cards and the
+          builder's header, and stays as the player leaves it
+          (numbersPref.ts). */}
+      {numbersSwitch ? (
+        <label className="mb-3 flex min-h-10 w-fit cursor-pointer items-center gap-3 text-stone-300">
+          <Switch label="Show rules and numbers" on={numbers} onChange={writeNumbers} />
+          <span>
+            Show rules and numbers
+            <span className="block text-stone-400">Adds the hit die after HP, as in &ldquo;High HP, d10&rdquo;.</span>
+          </span>
+        </label>
+      ) : null}
+
       {shown.length ? null : (
         <p className="py-6 text-center text-xs text-stone-500">
           No {noun} matches that. Clear the {filtering ? "filters" : "search"} to see all {total}.
@@ -230,8 +256,10 @@ export function OptionCardGrid({
       )}
 
       {/* Room on the left and top for the Selected pill, which overhangs its
-          card and would otherwise be clipped by the step's scroll pane. */}
-      <div className="space-y-4 px-2 pt-2.5 pb-1" onKeyDown={roving.onKeyDown} onFocus={roving.onFocus}>
+          card and would otherwise be clipped by the step's scroll pane. The
+          box is the cards' container: where two cards side by side could
+          not hold their text, they become a list (creator.css, backlog F17). */}
+      <div className="creator-cards space-y-4 px-2 pt-2.5 pb-1" onKeyDown={roving.onKeyDown} onFocus={roving.onFocus}>
         {shown.map((group, groupIndex) => (
           <section key={group.label ?? `group-${groupIndex}`}>
             {group.label ? (
@@ -245,8 +273,8 @@ export function OptionCardGrid({
             <div className="creator-grid" data-compact={compact || undefined}>
               {group.options.map((option, optionIndex) => {
                 const chosen = option.id === value;
-                // What the card shows besides its name (source, saves, hit
-                // die, ability bumps), read after the name: the label alone
+                // What the card shows besides its name (what it plays like,
+                // its HP, what it raises), read after the name: the label alone
                 // made two same-name cards from different books sound alike.
                 const descId = `${gridId}-${groupIndex}-${optionIndex}`;
                 const style = {
@@ -290,7 +318,7 @@ export function OptionCardGrid({
                         <span id={`${descId}-chips`} className="flex min-w-0 gap-1 overflow-hidden">
                           {option.chips.map((chip) => (
                             <span key={chip} className="creator-chip">
-                              {chip}
+                              <AbilityText text={chip} />
                             </span>
                           ))}
                         </span>

@@ -4,7 +4,8 @@
 // walked four times: at default settings, with reduced motion, with forced
 // colours (Windows High Contrast), and at 200% zoom (half the window, the
 // reflow WCAG asks for), and each step change must put focus on the new
-// step's heading. The unit suites
+// step's heading. On the class step it also reads the card faces and text
+// sizes (backlog F11 and F17: plainAndReadable, forcedMarks). The unit suites
 // render static markup and never see a missing label, a name a screen reader
 // cannot hear or a contrast below 4.5:1; the next art pass could add any of
 // them unseen.
@@ -175,6 +176,120 @@ async function gridKeys(page) {
   return problems;
 }
 
+// Plain card faces (backlog F11) and enlarged text (F17) on the class step:
+// no bare die on a card with "Show rules and numbers" off, an ability's code
+// only as "INT caster" or a signed bonus and heard as its name, the die after
+// the HP words with the switch on and kept on the device, the header's name
+// and HP line whole, and the app's 125% interface scale turning the cards
+// into a list where two side by side could not hold their text, with the
+// footer's buttons whole and room left for the step.
+const BARE_DIE = /\bd(?:4|6|8|10|12|20)\b/i;
+const LOOSE_CODE = /\b(?:STR|DEX|CON|INT|WIS|CHA)\b(?! (?:[+−-]\d|caster\b))/;
+async function plainAndReadable(page, t, viewport) {
+  const problems = [];
+  const step = "[data-builder-root] section[data-active]";
+  const toggle = page.locator(`${step} [role="switch"][aria-label="Show rules and numbers"]`).locator("visible=true").first();
+  if (!(await toggle.count())) return ["no Show rules and numbers switch on the class step"];
+  if ((await toggle.getAttribute("aria-checked")) !== "false") problems.push("the numbers switch starts on");
+  // What the eye reads (the screen-reader-only names left out), and what a
+  // screen reader hears (the hidden codes left out).
+  const faces = (heard = false) =>
+    page.locator(`${step} .creator-card`).evaluateAll((cards, heard) => cards.map((card) => {
+      const copy = card.cloneNode(true);
+      copy.querySelectorAll(heard ? "[aria-hidden='true']" : ".sr-only").forEach((node) => node.remove());
+      // A space after each element, as the eye sees the chips apart.
+      copy.querySelectorAll("*").forEach((node) => node.append(" "));
+      return copy.textContent.replace(/\s+/g, " ").trim();
+    }), heard);
+  const off = await faces();
+  for (const face of off) {
+    if (BARE_DIE.test(face)) problems.push(`a card face shows a bare die with the numbers off: ${face}`);
+    if (LOOSE_CODE.test(face)) problems.push(`a card face shows a loose ability code: ${face}`);
+  }
+  if (!off.some((face) => /\b(?:Very low|Low|Medium|High|Very high) HP\b/.test(face))) problems.push("no class card says its HP in words");
+  for (const face of await faces(true)) {
+    if (/\b(?:STR|DEX|CON|INT|WIS|CHA)\b/.test(face)) problems.push(`a screen reader hears a bare ability code: ${face}`);
+  }
+  await t.tap(toggle);
+  await upTo(async () => (await toggle.getAttribute("aria-checked")) === "true", 2_000);
+  const shown = await faces();
+  if (!shown.some((face) => /\bHP, d\d+/.test(face))) problems.push("with the numbers on, no card shows its hit die after its HP");
+  // The header keeps the hero's name and the HP line whole, die and all.
+  const header = await page.evaluate(() => {
+    const cut = (node) => (node ? node.scrollWidth > node.clientWidth + 1 || getComputedStyle(node).display === "none" : true);
+    const title = document.querySelector("[data-builder-root] [data-wizard-title]");
+    const aside = document.querySelector("[data-builder-root] [data-wizard-aside]");
+    return { title: cut(title), aside: cut(aside), line: aside?.textContent ?? "" };
+  });
+  if (header.title) problems.push("the header cuts the hero's name short");
+  if (header.aside || !/HP, d\d+/.test(header.line)) problems.push(`the header's HP line is cut or hidden (${header.line})`);
+  if ((await page.evaluate(() => localStorage.getItem("odm:builder-numbers"))) !== "1") problems.push("the numbers switch is not kept on the device");
+
+  // The app's interface scale at its largest (Settings, 125%) sets the root size.
+  await page.evaluate(() => (document.documentElement.style.fontSize = "125%"));
+  await untilStill(page);
+  const layout = await page.evaluate((step) => {
+    const grid = document.querySelector(`${step} .creator-grid`);
+    const card = grid?.querySelector(".creator-card");
+    const img = card?.querySelector(".creator-plate img");
+    const footer = [...document.querySelectorAll("[data-builder-root] footer button")].filter((button) => button.getClientRects().length);
+    return {
+      columns: grid ? getComputedStyle(grid).gridTemplateColumns.split(" ").length : 0,
+      thumb: card && img ? img.getBoundingClientRect().width / card.getBoundingClientRect().width : 1,
+      clipped: footer.filter((button) => button.scrollWidth > button.clientWidth + 1).map((button) => button.textContent.trim()),
+      room: document.querySelector(step).getBoundingClientRect().height / document.querySelector("[data-builder-root]").getBoundingClientRect().height,
+    };
+  }, step);
+  if (layout.clipped.length) problems.push(`at 125% text the footer cuts ${layout.clipped.join(", ")}`);
+  // The step keeps a fair share of the builder: on a phone the header,
+  // stepper, footer and details bar once left it under a third.
+  if (layout.room < 0.4) problems.push(`at 125% text the step has ${Math.round(layout.room * 100)}% of the builder's height`);
+  await page.evaluate(() => (document.documentElement.style.fontSize = ""));
+  if (viewport === "phone" && (layout.columns !== 1 || layout.thumb > 0.5)) problems.push(`at 125% text on a phone the cards are not a list (${layout.columns} columns)`);
+  if (viewport !== "phone" && layout.columns < 2) problems.push(`at 125% text on a wide screen the cards became a list (${layout.columns} column)`);
+  return problems;
+}
+
+// Text sizes on the open step (F17): nothing visible under the 13px badges,
+// and no paragraph of body text under 16px.
+async function textSizes(page) {
+  const sizes = await page.evaluate(() => {
+    const step = "[data-builder-root] section[data-active]";
+    const visible = (node) => node.getClientRects().length && node.closest("[aria-hidden='true'], .sr-only") === null;
+    const ownText = (node) => [...node.childNodes].some((child) => child.nodeType === 3 && child.textContent.trim());
+    const nodes = [...document.querySelectorAll(`${step} *, [data-builder-root] header *`)].filter((node) => visible(node) && ownText(node));
+    const size = (node) => parseFloat(getComputedStyle(node).fontSize);
+    const name = (node) => `${node.tagName.toLowerCase()} "${node.textContent.trim().slice(0, 30)}" ${getComputedStyle(node).fontSize}`;
+    return {
+      small: nodes.filter((node) => size(node) < 13).map(name),
+      body: nodes.filter((node) => node.tagName === "P" && !node.classList.contains("eyebrow") && node.textContent.trim().length > 40 && size(node) < 16).map(name),
+    };
+  });
+  return [...sizes.small.map((text) => `text under 13px: ${text}`), ...sizes.body.map((text) => `body text under 16px: ${text}`)];
+}
+
+// Forced colours: the chosen card and the current step keep a mark that is
+// not a colour the theme chose.
+async function forcedMarks(page) {
+  const marks = await page.evaluate(() => {
+    const chosen = document.querySelector("[data-builder-root] section[data-active] .creator-card[aria-pressed='true']");
+    const current = document.querySelector("[data-builder-root] .diamond-step[data-state='current'] .diamond-core");
+    const later = document.querySelector("[data-builder-root] .diamond-step:not([data-state='current']):not([data-state='done']) .diamond-core");
+    const style = chosen ? getComputedStyle(chosen) : null;
+    return {
+      chosen: Boolean(chosen),
+      outline: style ? `${style.outlineStyle} ${style.outlineWidth}` : "",
+      current: current ? getComputedStyle(current).backgroundColor : "",
+      later: later ? getComputedStyle(later).backgroundColor : "",
+    };
+  });
+  const problems = [];
+  if (!marks.chosen) problems.push("no chosen class card to check");
+  else if (!marks.outline.startsWith("solid") || parseFloat(marks.outline.split(" ")[1]) < 2) problems.push(`the chosen card has no outline in forced colours (${marks.outline})`);
+  if (marks.later && marks.current === marks.later) problems.push(`the current step looks like a later one in forced colours (${marks.current})`);
+  return problems;
+}
+
 function report(where, violations) {
   return violations.map((violation) => `${where}: ${violation.id} (${violation.impact}) ${violation.help} at ${violation.nodes.join(", ")}`);
 }
@@ -183,7 +298,7 @@ export default {
   name: "builder-a11y",
   viewports: ["desktop", "phone"],
   async run(t) {
-    const { page, root, ids } = t;
+    const { page, root, ids, viewport } = t;
     const found = [];
     let pickerChecked = false;
     let arrayChecked = false;
@@ -243,6 +358,20 @@ export default {
         }
         found.push(...report(where, await axeViolations(page, "[data-builder-root]")));
         found.push(...(await semantics(page)).map((problem) => `${where}: ${problem}`));
+        if (condition.label === "default") {
+          found.push(...(await textSizes(page)).map((problem) => `${where}: ${problem}`));
+          if (step === 1) found.push(...(await plainAndReadable(page, t, viewport)).map((problem) => `${where}: ${problem}`));
+        }
+        // The switch was left on under "default"; this condition opened the
+        // builder afresh, so it must still be on. It is put back off here.
+        if (step === 1 && condition.label === "reduced motion") {
+          const toggle = page.locator(`${root}section[data-active] [role="switch"][aria-label="Show rules and numbers"]`).locator("visible=true").first();
+          if ((await toggle.getAttribute("aria-checked")) !== "true") found.push(`${where}: the numbers switch did not stay on across a fresh load`);
+          else await t.tap(toggle);
+        }
+        if (step === 1 && condition.label === "forced colors") {
+          found.push(...(await forcedMarks(page)).map((problem) => `${where}: ${problem}`));
+        }
         if (!pickerChecked) {
           const trigger = page.locator(`${root}[data-builder-root] button[aria-haspopup="listbox"]`).locator("visible=true");
           if (await trigger.count()) {
@@ -294,6 +423,10 @@ export default {
     await t.tap(page.locator(`${root}button`).filter({ hasText: /^Continue/ }).locator("visible=true").first());
     await eventually(() => page.locator(`${root}section[data-active] .creator-card`).locator("visible=true").count(), { timeoutMs: 15_000, label: "the lineage cards" });
     await untilStill(page);
+    // The switch adds the class cards' hit die; the lineage cards have none to add.
+    if (await page.locator(`${root}section[data-active] [role="switch"][aria-label="Show rules and numbers"]`).count()) {
+      found.push("lineage grid: offers Show rules and numbers, which changes nothing there");
+    }
     found.push(...(await gridKeys(page)).map((problem) => `lineage grid: ${problem}`));
     const details = page.locator(`${root}section[data-active] button[aria-label^="About "], ${root}section[data-active] .creator-help`).locator("visible=true");
     await eventually(() => details.count(), { timeoutMs: 15_000, label: "a lineage card's details button" });

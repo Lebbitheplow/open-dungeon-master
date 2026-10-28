@@ -76,9 +76,13 @@ test("every bundled race has a tagline", () => {
   }
 });
 
+// The card prints the ability's code; a screen reader hears its name
+// (AbilityText.tsx), which `spoken` carries for the search (backlog F11).
 test("chips: one per bump, six equal bumps as one", () => {
   assert.deepEqual(asiChips({ dex: 2, int: 1 }).map((chip) => chip.label), ["DEX +2", "INT +1"]);
-  assert.deepEqual(asiChips({ str: 1, dex: 1, con: 1, int: 1, wis: 1, cha: 1 }).map((chip) => chip.label), ["ALL +1"]);
+  assert.deepEqual(asiChips({ dex: 2, int: 1 }).map((chip) => chip.spoken), ["Dexterity +2", "Intelligence +1"]);
+  assert.deepEqual(asiChips({ str: -2 }).map((chip) => chip.label), ["STR -2"]);
+  assert.deepEqual(asiChips({ str: 1, dex: 1, con: 1, int: 1, wis: 1, cha: 1 }).map((chip) => chip.label), ["All +1"]);
   assert.deepEqual(asiChips({}), []);
 });
 

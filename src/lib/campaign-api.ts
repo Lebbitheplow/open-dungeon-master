@@ -102,7 +102,7 @@ export async function requireDm(campaignId: string): Promise<MemberContext | Res
     return context;
   }
   if (!isDm(context)) {
-    return Response.json({ error: "Only the Dungeon Master can do that." }, { status: 403 });
+    return Response.json({ error: "Only the Game Master can do that." }, { status: 403 });
   }
   return context;
 }
@@ -123,7 +123,7 @@ export async function requirePrepAuthority(campaignId: string): Promise<MemberCo
     return Response.json(
       {
         error: context.campaign.dmUserId
-          ? "Only the Dungeon Master can do that."
+          ? "Only the Game Master can do that."
           : "Only the party lead can do that.",
       },
       { status: 403 },
@@ -154,7 +154,7 @@ export async function requireStoryAuthority(
     return Response.json(
       {
         error: context.campaign.dmUserId
-          ? "Only the Dungeon Master can do that."
+          ? "Only the Game Master can do that."
           : "Only the party lead can do that.",
       },
       { status: 403 },

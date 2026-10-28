@@ -136,7 +136,7 @@ export function OptionList({
                 <li
                   id={headingId}
                   role="presentation"
-                  className="px-3 pt-2 pb-1 text-[11px] uppercase tracking-wide text-amber-200/70"
+                  className="px-3 pt-2 pb-1 text-[0.875rem] uppercase tracking-wide text-amber-200/70"
                 >
                   {group.label}
                 </li>
@@ -171,7 +171,7 @@ export function OptionList({
                         )}
                         {option.name}
                         {option.source ? (
-                          <span className="truncate font-mono text-[0.6875rem] text-stone-500">{option.source}</span>
+                          <span className="truncate font-mono text-[0.875rem] text-stone-500">{option.source}</span>
                         ) : null}
                         {/* A star, not a word: these rows sit in half-width
                             columns, and the group heading says the rest. */}
@@ -214,7 +214,7 @@ export function OptionList({
       {anyDetails ? (
         // Read with the list, and shown while the keyboard drives it, so
         // the details key is no secret; a mouse user sees no new text.
-        <p id={hintId} className={keyboard ? "mt-1 px-1 text-[11px] text-stone-500" : "sr-only"}>
+        <p id={hintId} className={keyboard ? "mt-1 px-1 text-sm text-stone-500" : "sr-only"}>
           Press {DETAILS_KEY} for details on the highlighted option.
         </p>
       ) : null}

@@ -88,7 +88,7 @@ export function IdentityStep({
                 key={seed}
                 type="button"
                 onClick={() => state.setName(seed)}
-                className="rounded-md border border-stone-700/70 px-1.5 py-0.5 text-[11px] text-stone-400 transition-colors hover:border-amber-500/40 hover:text-amber-100"
+                className="rounded-md border border-stone-700/70 px-1.5 py-0.5 text-sm text-stone-400 transition-colors hover:border-amber-500/40 hover:text-amber-100"
               >
                 {seed}
               </button>
@@ -173,7 +173,7 @@ export function IdentityStep({
           <p id={`${appearanceId}-help`} className="mb-2 text-xs text-stone-500">
             {paintsPortraits
               ? "Used to paint your character's portrait if you don't upload a photo."
-              : "How your character looks, for the party and the DM to picture."}
+              : "How your character looks, for the party and the GM to picture."}
           </p>
           <textarea
             value={state.appearance}
@@ -190,7 +190,7 @@ export function IdentityStep({
 
       <StepPanel
         title="Backstory (optional)"
-        help="Who were they before the adventure, and whom do they serve: a god, a patron, a cause? The party can read this, and the DM reads all of it and weaves it into the story."
+        help="Who were they before the adventure, and whom do they serve: a god, a patron, a cause? The party can read this, and the GM reads all of it and weaves it into the story."
       >
         <textarea
           value={state.backstory}

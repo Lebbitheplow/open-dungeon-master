@@ -51,7 +51,7 @@ export function TableWaitBanner({
     <SessionBanner
       glyph="tab-party"
       tone="quiet"
-      title={wait.waitingOn.length ? "The DM is waiting on" : "Everyone has answered"}
+      title={wait.waitingOn.length ? "The GM is waiting on" : "Everyone has answered"}
       actions={
         mine || (steersStory && wait.deadline && onGoOn) ? (
           <>
@@ -61,7 +61,7 @@ export function TableWaitBanner({
                 onClick={pass}
                 disabled={passing}
                 className={bannerButtonClass(true)}
-                title="Nothing to add this beat: the DM stops waiting on you."
+                title="Nothing to add this beat: the GM stops waiting on you."
               >
                 Pass
               </button>
@@ -71,7 +71,7 @@ export function TableWaitBanner({
                 type="button"
                 onClick={onGoOn}
                 className={bannerButtonClass()}
-                title="Stop waiting: the DM answers whoever has acted."
+                title="Stop waiting: the GM answers whoever has acted."
               >
                 Go on now
               </button>
@@ -95,9 +95,9 @@ export function TableWaitBanner({
           </span>
         ))}
         {left !== null ? (
-          <span className="opacity-80"> · the DM goes on in {formatLeft(left)}</span>
+          <span className="opacity-80"> · the GM goes on in {formatLeft(left)}</span>
         ) : (
-          <span className="opacity-80"> · the DM answers once everyone has acted or passed</span>
+          <span className="opacity-80"> · the GM answers once everyone has acted or passed</span>
         )}
       </span>
       {refusal ? (

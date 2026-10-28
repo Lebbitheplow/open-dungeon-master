@@ -37,5 +37,5 @@ export function aiSheetFieldRefusal(fields: readonly string[]): ToolError | null
   if (!owned) {
     return null;
   }
-  return { error: `update_sheet from the DM cannot set ${owned}: ${ENGINE_OWNED[owned]}. Send only the story fields (name, race, background, alignment, speed, abilities, feats, story features).`, retry: true };
+  return { error: `update_sheet from the GM cannot set ${owned}: ${ENGINE_OWNED[owned]}. Send only the story fields (name, race, background, alignment, speed, abilities, feats, story features).`, retry: true };
 }

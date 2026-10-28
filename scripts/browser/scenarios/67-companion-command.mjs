@@ -36,10 +36,10 @@ export default {
     const group = card.getByRole("radiogroup", { name: "Who takes Pip Thistle's turns in fights" });
     check((await group.count()) === 1, "the picker is a named radio group");
     const you = group.getByRole("radio", { name: "You" });
-    const dm = group.getByRole("radio", { name: "The DM" });
+    const dm = group.getByRole("radio", { name: "The GM" });
     check((await you.getAttribute("aria-checked")) === "true", "You is picked");
     const hint = card.locator("p").first();
-    check(/^You take Pip Thistle's turns in fights\. Out of fights the DM plays Pip Thistle\.$/.test((await hint.textContent()) ?? ""), `the line says who and when (${await hint.textContent()})`);
+    check(/^You take Pip Thistle's turns in fights\. Out of fights the GM plays Pip Thistle\.$/.test((await hint.textContent()) ?? ""), `the line says who and when (${await hint.textContent()})`);
     if (viewport === "phone") {
       const box = await dm.boundingBox();
       check(Boolean(box && box.height >= 39.5), `a finger's height on a phone (${box?.height})`);
@@ -61,7 +61,7 @@ export default {
     await t.tap(dm);
     await eventually(async () => (await commander()) === null, { label: "Pip's fights handed back to the DM" });
     await eventually(async () => (await dm.getAttribute("aria-checked")) === "true", { label: "The DM picked" });
-    await eventually(async () => /^The DM plays Pip Thistle's turns in fights, as everywhere else\.$/.test((await hint.textContent()) ?? ""), { label: "the line saying the DM plays Pip" });
+    await eventually(async () => /^The GM plays Pip Thistle's turns in fights, as everywhere else\.$/.test((await hint.textContent()) ?? ""), { label: "the line saying the DM plays Pip" });
     const sliding = await group.evaluate((node) => node.getAnimations({ subtree: true }).length);
     check(sliding > 0 || (await dm.evaluate((node) => getComputedStyle(node).transitionDuration)) !== "0s", "the pick moves, it does not blink");
     await t.shot("dm");

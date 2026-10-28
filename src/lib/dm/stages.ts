@@ -42,8 +42,8 @@ export const STAGES: readonly StageDef[] = [
     label: "Semantic recall",
     callsModel: false,
     description:
-      "Lets the DM search sealed chapters and scenes for something the party references.",
-    cost: "Off, the DM can only work from what is already in the prompt and will not find old events.",
+      "Lets the GM search sealed chapters and scenes for something the party references.",
+    cost: "Off, the GM can only work from what is already in the prompt and will not find old events.",
   },
   {
     id: "retrieval",
@@ -51,7 +51,7 @@ export const STAGES: readonly StageDef[] = [
     callsModel: false,
     description:
       "Pulls the house rules and world lore that match this moment into the prompt.",
-    cost: "Off, only pinned rules and lore are sent; everything else is invisible to the DM.",
+    cost: "Off, only pinned rules and lore are sent; everything else is invisible to the GM.",
   },
   {
     id: "chapterSummary",

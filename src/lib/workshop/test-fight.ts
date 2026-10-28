@@ -54,7 +54,7 @@ export type TestFightRunner = "ai" | "person";
 export type TestFightOutcome = { ok: true; campaignId: string } | { ok: false; status: number; error: string };
 
 export const NO_AI_TEST_REASON =
-  "No AI DM is set up on this server, so you run the test: the enemies' cards on their turns, the party's on each hero's.";
+  "No AI GM is set up on this server, so you run the test: the enemies' cards on their turns, the party's on each hero's.";
 
 // How the test table plays. The workshop's own settings ride under these:
 // its setting, rules and variant rules are the fight's.
@@ -73,7 +73,7 @@ const TEST_FIGHT_SETTINGS = {
 
 // The narrator's secret outline: what this table is for.
 const TEST_FIGHT_OUTLINE = [
-  "This table is a test of one prepared fight from the DM's workshop, played by the person who wrote it.",
+  "This table is a test of one prepared fight from the GM's workshop, played by the person who wrote it.",
   "The fight is already on the board, with its map, its opening positions and its plan.",
   "Narrate it briefly and run every enemy by the rules and by its plan, as you would at any table.",
   "Do not start a story, a new scene, a quest or another fight.",
@@ -193,7 +193,7 @@ export async function openTestFight(input: {
     return { ok: false, status: 409, error: "That fight has nobody in it yet. Give it a roster, then test it." };
   }
   if (runner === "ai" && !(await testFightReadiness(workshop)).ready) {
-    return { ok: false, status: 409, error: "No AI DM is set up on this server to run it. Run the test yourself." };
+    return { ok: false, status: 409, error: "No AI GM is set up on this server to run it. Run the test yourself." };
   }
   const party = seatsFor(workshop, userId, input.party);
   if (!party.ok) {
@@ -243,7 +243,7 @@ export async function openTestFight(input: {
       seq,
       authorType: "system",
       glyph: "cue-battle",
-      content: `Test fight: ${template.name}, from the workshop "${workshop.title}". ${listed(names)} ${names.length === 1 ? "fights" : "fight"} it; ${runner === "ai" ? "the AI DM runs the enemies" : "you run the enemies"}.`,
+      content: `Test fight: ${template.name}, from the workshop "${workshop.title}". ${listed(names)} ${names.length === 1 ? "fights" : "fight"} it; ${runner === "ai" ? "the AI GM runs the enemies" : "you run the enemies"}.`,
     });
     publishWithSeq(campaign.id, seq, "message_added", { message: note });
 

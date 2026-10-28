@@ -59,7 +59,7 @@ export function worldFacts(genre: string): WorldFact[] {
 }
 
 const CUSTOM_FLAVOR =
-  "Nothing is added to the briefing for a custom world: what you type in the box above is the whole tone the Dungeon Master is given.";
+  "Nothing is added to the briefing for a custom world: what you type in the box above is the whole tone the Game Master is given.";
 
 export function dmFlavorText(genre: string): string {
   return genrePreset(genre).dmFlavor || CUSTOM_FLAVOR;

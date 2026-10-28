@@ -1,5 +1,5 @@
 {
-  "_license": "Original content for Open Dungeon Master. These are the widely played 5e spells that no openly licensed dataset carries. Every description here is written from scratch to state the spell's mechanics; no publisher's descriptive text is reproduced. Game mechanics are not copyrightable, expression is. Keep it that way when adding entries.",
+  "_license": "Original content for Open Game Master. These are the widely played 5e spells that no openly licensed dataset carries. Every description here is written from scratch to state the spell's mechanics; no publisher's descriptive text is reproduced. Game mechanics are not copyrightable, expression is. Keep it that way when adding entries.",
   "_shape": "spells[] = { name, level (0 = cantrip), school, classes[], casting_time, range, components, duration, ritual?, concentration?, desc, higher_level? }. Imported as document_slug 'odm-expanded' by scripts/import-open5e.mjs.",
   "spells": [
     {

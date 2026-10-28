@@ -60,7 +60,7 @@ function describeEntry(entry: AuditEntry, name: string): string {
         : `${name} learns the spell ${delta.spell}`;
     case "update_sheet": {
       const changed = Object.keys(delta);
-      return `The DM rewrites ${name}'s sheet${changed.length ? ` (${changed.join(", ")})` : ""}`;
+      return `The GM rewrites ${name}'s sheet${changed.length ? ` (${changed.join(", ")})` : ""}`;
     }
     case "undo":
       return `Party lead undid a change to ${name}`;
@@ -233,7 +233,7 @@ export function EventLog({
 
   if (!feed.length) {
     return (
-      <EmptyState size="sm" art="scrolls" title="No stat changes yet. Damage, loot, XP, conditions, and milestones the DM applies will show here." />
+      <EmptyState size="sm" art="scrolls" title="No stat changes yet. Damage, loot, XP, conditions, and milestones the GM applies will show here." />
     );
   }
 
@@ -282,7 +282,7 @@ export function EventLog({
                   type="button"
                   disabled={busyId === `turn:${turnId}`}
                   onClick={() => revertTurn(turnId)}
-                  title="Undo every sheet change from this DM turn (stats only)"
+                  title="Undo every sheet change from this GM turn (stats only)"
                   className="flex w-full items-center justify-center gap-1 rounded border border-dashed border-stone-700 py-0.5 text-[10px] text-stone-500 hover:bg-stone-900 hover:text-amber-300"
                 >
                   {busyId === `turn:${turnId}` ? (

@@ -2,7 +2,7 @@
 
 ## Application
 
-Open Dungeon Master is a fork of
+Open Game Master is a fork of
 [Open Dungeon](https://github.com/newideas99/open-dungeon) by Jacob Ferrari,
 released under the MIT license. This fork keeps the MIT license; see
 [LICENSE](../LICENSE).
@@ -143,7 +143,7 @@ still find it. Spell aliases live in `src/lib/srd/manifest/spells.json` as
 The workshop's WorldForge tool is ported from WorldForge, Smoebo's
 world-building app. Its code is here with Smoebo's permission, given to this
 project's maintainer on 2026-10-08, and WorldForge now continues inside Open
-Dungeon Master. Smoebo is credited as a co-author of the commits that brought
+Game Master. Smoebo is credited as a co-author of the commits that brought
 it in.
 
 - `src/lib/worldforge/model.ts`: the world document (types and fields,

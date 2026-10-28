@@ -219,7 +219,7 @@ export function Markdown({
         }
         return (
           <div key={key} className="rounded-md border border-dashed border-violet-700/70 bg-violet-950/30 px-2 py-1.5">
-            <p className="mb-1 text-[10px] uppercase tracking-wide text-violet-300">Only the DM reads this</p>
+            <p className="mb-1 text-[10px] uppercase tracking-wide text-violet-300">Only the GM reads this</p>
             <div className="space-y-1.5">{renderBlocks(block.blocks, `${key}-`)}</div>
           </div>
         );

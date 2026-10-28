@@ -106,7 +106,7 @@
       "subclassLevel": 3,
       "levels": {
         "1": [
-          { "n": "Street Contacts", "d": "1/long rest, call in a favor: gear, a ride, a name, or entry somewhere (DM adjudicates scope)." },
+          { "n": "Street Contacts", "d": "1/long rest, call in a favor: gear, a ride, a name, or entry somewhere (GM adjudicates scope)." },
           { "n": "Grease the Wheels", "d": "1/short rest, reroll a failed CHA-based check." }
         ],
         "2": [
@@ -123,7 +123,7 @@
         "13": [{ "n": "Neutral Ground", "d": "A creature that accepts your parley cannot attack you until your next turn." }],
         "14": [{ "n": "Grease the Wheels (3 uses)", "d": "Grease the Wheels recharges to 3 uses per short rest." }],
         "15": [{ "n": "Shadow Network", "d": "Street Contacts has 3 uses; favors arrive in half the usual time." }],
-        "17": [{ "n": "Everyone Owes You", "d": "1/long rest, the DM tells you one useful secret about a person you converse with." }],
+        "17": [{ "n": "Everyone Owes You", "d": "1/long rest, the GM tells you one useful secret about a person you converse with." }],
         "18": [{ "n": "Master of the Board", "d": "You and allies within 30 ft add +1d4 to CHA-based checks." }],
         "20": [{ "n": "Kingpin", "d": "1/long rest, declare a contact anywhere; one favor within reason simply succeeds." }]
       },
@@ -136,7 +136,7 @@
           ],
           "7": [{ "n": "Blackmail Files", "d": "Advantage on CHA checks against anyone whose secret you know." }],
           "11": [{ "n": "Web of Whispers", "d": "You always learn when someone in the city asks about you or your crew." }],
-          "15": [{ "n": "Oracle of the Streets", "d": "1/long rest, ask the DM three questions about local people, places, or events; get brief true answers." }]
+          "15": [{ "n": "Oracle of the Streets", "d": "1/long rest, ask the GM three questions about local people, places, or events; get brief true answers." }]
         }
       }
     },

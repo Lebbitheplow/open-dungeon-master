@@ -13,8 +13,9 @@
 
 const OOC_PREFIX = "(ooc)";
 
-// "@DM" as a word, anywhere in the line, any case.
-const AT_DM = /(?:^|[\s(,;:])@dm\b/i;
+// "@GM" (or "@DM", the older name players still type) as a word, anywhere in
+// the line, any case.
+const AT_DM = /(?:^|[\s(,;:])@[gd]m\b/i;
 
 export function addressesDm(text: string): boolean {
   return AT_DM.test(text);
@@ -24,7 +25,13 @@ type Line = { authorType: string; content: string };
 
 // The table note left when the answer could not be had. It is not a move,
 // so asking again is still only a question.
-export const OOC_UNANSWERED_PREFIX = "The Dungeon Master could not answer that out of character";
+export const OOC_UNANSWERED_PREFIX = "The Game Master could not answer that out of character";
+// The same note as it was worded before the role was called the Game Master.
+const LEGACY_OOC_UNANSWERED_PREFIX = "The Dungeon Master could not answer that out of character";
+
+function isUnansweredNote(line: Line): boolean {
+  return line.authorType === "system" && [OOC_UNANSWERED_PREFIX, LEGACY_OOC_UNANSWERED_PREFIX].some((prefix) => line.content.startsWith(prefix));
+}
 
 // Whether the turn about to run is only an answer to table talk put to the
 // DM: everything since the DM last spoke is a player's out-of-character line,
@@ -43,7 +50,7 @@ export function oocQuestionPending(history: readonly Line[], { heldMoves = false
   }
   const since = history
     .slice(lastDm + 1)
-    .filter((line) => !(line.authorType === "system" && line.content.startsWith(OOC_UNANSWERED_PREFIX)));
+    .filter((line) => !isUnansweredNote(line));
   return (
     since.some((line) => line.authorType === "player" && line.content.startsWith(OOC_PREFIX) && addressesDm(line.content)) &&
     since.every((line) => line.authorType === "player" && (heldMoves || line.content.startsWith(OOC_PREFIX)))
@@ -71,4 +78,4 @@ export function isOocAnswer(content: string): boolean {
 }
 
 export const OOC_ANSWER_INSTRUCTION =
-  "[System] The newest table talk asks you, the DM, a question out of character. Answer it out of character, as a person running the table would: a ruling, a judgment call, what the characters can tell, how a rule applies here. Be brief, two or three sentences. Keep to what the players may know; never reveal a secret, a hidden motive or what lies ahead, and say so plainly if the answer is something their characters would have to find out. Do not narrate, move the story, pass time or resolve any action, and do not ask for rolls: if the answer depends on a roll, say which roll the player could ask for when they act.";
+  "[System] The newest table talk asks you, the GM, a question out of character. Answer it out of character, as a person running the table would: a ruling, a judgment call, what the characters can tell, how a rule applies here. Be brief, two or three sentences. Keep to what the players may know; never reveal a secret, a hidden motive or what lies ahead, and say so plainly if the answer is something their characters would have to find out. Do not narrate, move the story, pass time or resolve any action, and do not ask for rolls: if the answer depends on a roll, say which roll the player could ask for when they act.";

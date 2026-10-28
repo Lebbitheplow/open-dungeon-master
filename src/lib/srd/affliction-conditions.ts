@@ -72,7 +72,7 @@ export const AFFLICTION_CONDITION_EFFECTS: ConditionEffectRow[] = [
   { id: "madness_hunger", match: ["madness: strange hunger"], summary: "Madness: an overpowering urge to eat something strange." },
   { id: "madness_compulsion", match: ["madness: compulsion"], summary: "Madness: compelled to repeat one activity over and over." },
   { id: "madness_revulsion", match: ["madness: revulsion"], summary: "Madness: intense revulsion toward something, as the antipathy effect of antipathy/sympathy." },
-  { id: "madness_delusion", match: ["madness: delusion"], summary: "Madness: believes they are under the effects of a potion of the DM's choice." },
+  { id: "madness_delusion", match: ["madness: delusion"], summary: "Madness: believes they are under the effects of a potion of the GM's choice." },
   { id: "madness_lucky_charm", match: ["madness: lucky charm"], summary: "Madness: disadvantage on attack rolls, ability checks and saving throws while more than 30 feet from their lucky charm." },
   { id: "madness_amnesia", match: ["madness: amnesia"], summary: "Madness: partial amnesia, recognizes no one and remembers nothing from before." },
   { id: "madness_confusion", match: ["madness: confusion on damage"], summary: "Madness: whenever they take damage, a DC 15 Wisdom save or confused for 1 minute (the server rolls it)." },

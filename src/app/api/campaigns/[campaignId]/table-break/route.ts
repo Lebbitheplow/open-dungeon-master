@@ -56,7 +56,7 @@ export async function DELETE(
   const viewer = { userId: context.user.id, isLead: isLead(context), isDm: capsFor(context).role === "dm" };
   if (!mayResumeBreak(current, viewer)) {
     return Response.json(
-      { error: `${current.name} paused the table. Only they, the party lead or the DM can resume it.` },
+      { error: `${current.name} paused the table. Only they, the party lead or the GM can resume it.` },
       { status: 403 },
     );
   }

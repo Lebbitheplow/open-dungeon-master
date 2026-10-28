@@ -1569,6 +1569,6 @@
     "license",
     "runtime"
   ],
-  "$id": "https://github.com/Lebbitheplow/open-dungeon-master/blob/main/docs/addons/addon.schema.json",
-  "title": "Open Dungeon Master addon manifest (addon contract 1)"
+  "$id": "https://github.com/Lebbitheplow/open-game-master/blob/main/docs/addons/addon.schema.json",
+  "title": "Open Game Master addon manifest (addon contract 1)"
 }

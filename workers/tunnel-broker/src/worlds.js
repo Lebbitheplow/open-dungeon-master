@@ -14,7 +14,7 @@
 // squat. It is claimed on first write with a secret that never leaves the
 // world's server, the rule a table code follows, so a player holding a link
 // can call through it but never re-point it.
-import { API, json, rateLimited, sha256Hex } from "./util.js";
+import { API, json, playZones, rateLimited, sha256Hex } from "./util.js";
 
 const WORLD_TTL_S = 400 * 86_400;
 const WORLD_REFRESH_MS = 86_400 * 1000;
@@ -36,10 +36,10 @@ export function parseWorldKey(raw) {
 }
 
 // Only the addresses a device world is shared at: a broker hostname one
-// label under the zone, or a quick tunnel. A server with an address of its
-// own does not need the relay, and an entry that could name any host would
-// make the relay an open proxy.
-export function parseWorldUrl(raw, zone) {
+// label under one of the zones (a name or a list), or a quick tunnel. A
+// server with an address of its own does not need the relay, and an entry
+// that could name any host would make the relay an open proxy.
+export function parseWorldUrl(raw, zones) {
   if (typeof raw !== "string" || raw.length > 300) return null;
   let url;
   try {
@@ -49,8 +49,10 @@ export function parseWorldUrl(raw, zone) {
   }
   if (url.protocol !== "https:" || url.username || url.password || url.port) return null;
   const host = url.hostname.toLowerCase();
-  const suffix = `.${String(zone || "").toLowerCase()}`;
-  const play = Boolean(zone) && host.endsWith(suffix) && /^play-[a-z0-9]+$/.test(host.slice(0, -suffix.length));
+  const play = [zones].flat().some((zone) => {
+    const suffix = `.${String(zone || "").toLowerCase()}`;
+    return Boolean(zone) && host.endsWith(suffix) && /^play-[a-z0-9]+$/.test(host.slice(0, -suffix.length));
+  });
   const quick = /^[a-z0-9-]+\.trycloudflare\.com$/.test(host);
   return play || quick ? url.origin : null;
 }
@@ -85,7 +87,7 @@ export async function putWorld(env, request, rawKey) {
     return json({ error: "Bad world secret." }, 400);
   }
   const body = await request.json().catch(() => ({}));
-  const url = parseWorldUrl(body?.url, env.ZONE_NAME);
+  const url = parseWorldUrl(body?.url, playZones(env));
   if (!url) return json({ error: "Send the tunnel address the world is shared at." }, 400);
   const instanceId = typeof body?.instanceId === "string" ? body.instanceId : "";
   if (!INSTANCE_SHAPE.test(instanceId)) return json({ error: "Send the world's instance id." }, 400);

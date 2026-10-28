@@ -313,7 +313,7 @@ export function EquipmentChips({
   const wornNote = (item: (typeof equipment)[number]) => {
     const idle = explicit ? wornButIdle(item, equipment) : null;
     if (idle) return `worn, not in effect: ${oneOfKind(idle) ?? "one of its kind"} at a time`;
-    if (item.equipped && item.layered) return "worn beside another, on the DM's say";
+    if (item.equipped && item.layered) return "worn beside another, on the GM's say";
     return item.equipped ? "worn" : null;
   };
   return (

@@ -78,7 +78,7 @@ How to reproduce any finding: run its file; the gap's body is the reproduction, 
 
 | id | File | Rule | Observed | Root cause | Fix |
 |---|---|---|---|---|---|
-| usage-route-refills-spell-slots | spell-slots | Slots come back at a rest; a player cannot lower their own used count | POST `{slots:{3:0,1:0}}` by a plain member answers 200 and the slots are back | `src/app/api/campaigns/[campaignId]/sheet/usage/route.ts` POST: the recovery check (lines 74 to 94) runs only inside an active encounter | Refuse any `used` lower than the stored one for slots, hit dice and resources unless the caller is the DM or party lead |
+| usage-route-refills-spell-slots | spell-slots | Slots come back at a rest; a player cannot lower their own used count | POST `{slots:{3:0,1:0}}` by a plain member answers 200 and the slots are back | `src/app/api/campaigns/[campaignId]/sheet/usage/route.ts` POST: the recovery check (lines 74 to 94) runs only inside an active encounter | Refuse any `used` lower than the stored one for slots, hit dice and resources unless the caller is the GM or party lead |
 | slots-creation-trusts-client | spell-slots | A new character's slots are the class table's | A 1st level wizard is stored with nine 1st level and four 9th level slots | sheet route POST: `spellListProblems` checks lists, nothing checks `slots`. Same finding as creation-spell-slots in the creation report | Derive slots server side from `slotTableFor` and ignore the client's |
 | slots-levelup-trusts-client | spell-slots | A level-up cannot grant more slots than the new row | A wizard reaching 6th level writes itself four 9th level slots | sheet route PATCH, single class path, `patchSheet(sheet.id, parsed.data)` | As above, at level-up |
 | cast-levelled-spell-without-a-slot | casting-components | A spell of 1st level or higher expends a slot | `cast_at_enemy` with Hold Person or Burning Hands and no `level` resolves in full, no slot, no concentration | `src/lib/dm/cast-tools.ts` handleCastAtEnemy line 295: `if (args.level) {spend} else {cantrip path}`; the spell's level is never asked | When `level` is missing use `resolvedMech.spellLevel` (as handleCastBuff does) or the checklist's `spellLevelOf`; take the cantrip path only for level 0 |
@@ -205,7 +205,7 @@ Bane on a character, Haste, Mage Armor, Shield: dice, AC, advantage, expiry by r
 
 ## Could not test, and why
 
-- The AI DM's own turn loop (turn.ts) and its narration guard: needs a model. The handlers were
+- The AI GM's own turn loop (turn.ts) and its narration guard: needs a model. The handlers were
   reached through invokeEngine, which is the same dispatch.
 - The Hand (src/lib/battlemap/hand-spells.ts) greys out cards for several rules above; it is
   client side guidance and not an enforcement point, so it was not tested.

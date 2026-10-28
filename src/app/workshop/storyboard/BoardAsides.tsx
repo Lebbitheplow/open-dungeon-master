@@ -180,7 +180,7 @@ export function CompileCard({ summary }: { summary: CompileSummary }) {
       <p className="text-xs text-stone-400">
         {summary.lines.length
           ? `Imported into a campaign, this board becomes ${summary.lines.join(", ")}.`
-          : "Nothing yet. Cards become lore, quests, prepared fights, DM notes and the story arc."}
+          : "Nothing yet. Cards become lore, quests, prepared fights, GM notes and the story arc."}
       </p>
       {summary.arcRefusal ? (
         <p className="reveal text-[11px] text-amber-300/70">{summary.arcRefusal}</p>

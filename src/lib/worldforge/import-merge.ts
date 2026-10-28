@@ -61,7 +61,7 @@ const VALUE_WORDS: Record<string, string> = {
   epochOffset: "start year",
   color: "colour",
   source: "origin",
-  dmOnly: "setting for whether only the DM sees it",
+  dmOnly: "setting for whether only the GM sees it",
 };
 // What a value is called in a report. A type field by its name when known.
 export const valueWords = (key: string, fieldName?: (id: string) => string | undefined) =>

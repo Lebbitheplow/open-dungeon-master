@@ -20,7 +20,7 @@ export function SafetyFields({ draft, patch, gates }: StepProps) {
         onVoice={(ttsVoice) => patch({ ttsVoice })}
       />
       <p className="text-xs text-stone-500">
-        A DM personality also sets the narrator&apos;s voice{gates.ttsAvailable && draft.ttsEnabled ? "" : ", kept for when narration is on"}.
+        A GM personality also sets the narrator&apos;s voice{gates.ttsAvailable && draft.ttsEnabled ? "" : ", kept for when narration is on"}.
         Lines and veils are separated by commas.
       </p>
     </div>

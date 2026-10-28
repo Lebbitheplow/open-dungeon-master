@@ -1,7 +1,7 @@
 # Plan: agent harnesses as a story backend, and a proper MCP surface
 
 Written 2026-09-20 against server 0.21.3 and client 0.12.9. It answers
-[PR 10](https://github.com/Lebbitheplow/open-dungeon-master/pull/10)
+[PR 10](https://github.com/Lebbitheplow/open-game-master/pull/10)
 ("authenticated MCP game control plane") and the ask behind it: let an admin's
 Claude Code, Codex, opencode or Grok Build install run the table on the plan
 they already pay for, held to the same rules as the built-in DM, with pictures

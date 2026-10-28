@@ -20,7 +20,7 @@
     "examples/addons/*/ui/*.js",
     // The trailer's recording scripts, run by hand (trailer/README.md).
     "trailer/*.mjs",
-    // The desktop and Android apps (Lebbitheplow/open-dungeon-master-client) build this repo's src into their renderer:
+    // The desktop and Android apps (Lebbitheplow/open-game-master-client) build this repo's src into their renderer:
     // besides the pages, src/renderer/game/index.tsx imports DeviceSettings for the apps' own Settings screen, and
     // scripts/build-renderer.mjs folds this sheet into theirs.
     "src/components/DeviceSettings.tsx",

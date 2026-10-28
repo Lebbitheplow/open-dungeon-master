@@ -309,8 +309,8 @@ async function turn(label) {
       `  roll: ${roll.kind} ${roll.detail || ""} -> ${roll.total}${roll.dc !== null && roll.dc !== undefined ? ` vs DC ${roll.dc}` : ""}`,
     );
   }
-  note(`  DM: ${text.replace(/\s+/g, " ").slice(0, 400)}`);
-  assert.ok(text.trim().length > 40, `[${label}] the DM wrote nothing`);
+  note(`  GM: ${text.replace(/\s+/g, " ").slice(0, 400)}`);
+  assert.ok(text.trim().length > 40, `[${label}] the GM wrote nothing`);
   return text;
 }
 
@@ -321,7 +321,7 @@ const seeded = getCampaignById(campaign.id);
 assert.ok(seeded.dmOutline, "story setup produced no secret outline");
 note(`  outline: ${seeded.dmOutline.replace(/\s+/g, " ").slice(0, 260)}`);
 
-note("\n=== story arc: the spine the DM steers by ===");
+note("\n=== story arc: the spine the GM steers by ===");
 await generateStoryArc(campaign.id);
 const arced = getCampaignById(campaign.id);
 assert.ok(arced.storyArc, "the arc planner produced nothing");
@@ -338,7 +338,7 @@ note("\n=== turn 1: kickoff narration ===");
 say(avery, lead.id, "I check the ford for tracks before we bring the wagons across.");
 await turn("kickoff");
 
-note("\n=== turn 2: a skill check the DM has to ask for ===");
+note("\n=== turn 2: a skill check the GM has to ask for ===");
 say(
   avery,
   lead.id,
@@ -392,7 +392,7 @@ await turn("quest");
 
 note("\n=== scene image, on the borrowed key ===");
 const dmMessage = getLatestDmMessage(campaign.id);
-assert.ok(dmMessage, "no DM passage to hang a picture on");
+assert.ok(dmMessage, "no GM passage to hang a picture on");
 const asked = handleGenerateImage(
   getCampaignById(campaign.id),
   JSON.stringify({
@@ -436,7 +436,7 @@ const strict = await requestCustomMessage(
   process.env.ODM_STRICT_MODEL || "gpt-5.5",
   KEY,
   [
-    { role: "system", content: "You are a D&D 5e Dungeon Master. Use the tool for dice." },
+    { role: "system", content: "You are a D&D 5e Game Master. Use the tool for dice." },
     { role: "user", content: "Avery picks the crypt lock. One sentence, then ask for the roll." },
   ],
   {

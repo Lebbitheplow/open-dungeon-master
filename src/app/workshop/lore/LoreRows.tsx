@@ -88,7 +88,7 @@ export function LoreRows({
                   {entry.pinned ? (
                     <Pin
                       className="size-3.5 shrink-0 text-amber-400"
-                      aria-label="Pinned: included in every DM turn"
+                      aria-label="Pinned: included in every GM turn"
                     />
                   ) : null}
                   <span className="font-display tracking-wide text-amber-50">{entry.title}</span>
@@ -148,7 +148,7 @@ export function LoreRows({
         <EmptyState
           size="md"
           art="scrolls"
-          title={steersStory ? "No lore yet. Write your world's places, factions, and history; the DM treats it as canon." : "The party lead has not written any world lore yet."}
+          title={steersStory ? "No lore yet. Write your world's places, factions, and history; the GM treats it as canon." : "The party lead has not written any world lore yet."}
           hint={steersStory ? "Each entry is read by players or kept from them, as you choose. Pinned ones reach the narrator every turn." : undefined}
         />
       ) : shown.length === 0 ? (

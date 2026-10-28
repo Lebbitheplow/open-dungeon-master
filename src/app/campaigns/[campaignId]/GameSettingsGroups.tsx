@@ -156,7 +156,7 @@ export function WorldGroup({
       {aiNarrates ? (
         <div className="reveal flex flex-wrap items-center gap-2">
           <span className="pk-rowlabel">Length</span>
-          <Tooltip content="How far the DM plans the story ahead (acts, bosses, side quests). Changing it mid-campaign applies when the next saga is planned; any length continues with a sequel saga if you play past the finale.">
+          <Tooltip content="How far the GM plans the story ahead (acts, bosses, side quests). Changing it mid-campaign applies when the next saga is planned; any length continues with a sequel saga if you play past the finale.">
             <span className="inline-flex min-w-0 max-w-full">
               <Select<CampaignLengthSetting>
                 size="sm"
@@ -322,9 +322,9 @@ export function AtmosphereGroup({
           {settings.ambienceEnabled ? "On" : "Off"}
         </SettingToggle>
         {settings.ambienceEnabled ? (
-          <Tooltip content="Pick a bed from each new place and switch to combat music when a fight starts. Off leaves every change to the DM.">
+          <Tooltip content="Pick a bed from each new place and switch to combat music when a fight starts. Off leaves every change to the GM.">
             <SettingToggle on={settings.ambienceAuto} onToggle={() => patch({ ambienceAuto: !settings.ambienceAuto })}>
-              {settings.ambienceAuto ? "Follows the scene" : "DM sets it"}
+              {settings.ambienceAuto ? "Follows the scene" : "GM sets it"}
             </SettingToggle>
           </Tooltip>
         ) : null}
@@ -366,7 +366,7 @@ export function SafetyGroup({ settings, patch }: Base) {
 export const LIVING_WORLD_INFO = [
   "On: the world moves without you. Off-screen storylines advance on background dice each turn, so rival factions, threats, and distant events keep developing while you play.",
   "NPCs pursue their own goals between chapters and during rests and travel. Schemes progress, pressure builds, and rivals can collide with each other.",
-  "The DM quietly records what happened off-screen and weaves it into future scenes, ambushes, and rumors. These simulation notes are DM-only until the party discovers them in play.",
+  "The GM quietly records what happened off-screen and weaves it into future scenes, ambushes, and rumors. These simulation notes are GM-only until the party discovers them in play.",
   "Off: all of that pauses. The world changes only when your party acts or the story arc calls for it. Your main story arc, chapters, quests, and XP work exactly the same either way.",
   "You can switch this at any time. Turning it back on resumes from the world as it currently stands.",
 ].join("\n\n");
@@ -400,14 +400,14 @@ export function AiGroup({ settings, patch }: Base) {
             AI story setup {settings.aiStorySetup ? "on" : "off"}
           </SettingToggle>
           <span className="text-stone-500">
-            {settings.aiStorySetup ? "The DM invents the plot before the first scene." : "The story starts from your premise and prep alone."}
+            {settings.aiStorySetup ? "The GM invents the plot before the first scene." : "The story starts from your premise and prep alone."}
           </span>
         </div>
       ) : null}
       {aiNarrates ? (
         <div className="flex flex-wrap items-center gap-2">
           <span className="pk-rowlabel">Prose</span>
-          <Tooltip content="After each turn the server compares the DM's narration against what the dice and tools actually resolved: a hit written on a miss, a death the hit points deny, a damage number no die rolled. A contradiction is sent back to the DM once for a rewrite. Nothing on any sheet changes either way.">
+          <Tooltip content="After each turn the server compares the GM's narration against what the dice and tools actually resolved: a hit written on a miss, a death the hit points deny, a damage number no die rolled. A contradiction is sent back to the GM once for a rewrite. Nothing on any sheet changes either way.">
             <SettingToggle on={settings.narrationGuard} onToggle={() => patch({ narrationGuard: !settings.narrationGuard })}>
               Outcome check {settings.narrationGuard ? "on" : "off"}
             </SettingToggle>
@@ -415,7 +415,7 @@ export function AiGroup({ settings, patch }: Base) {
           <span className="text-stone-500">
             {settings.narrationGuard
               ? "Narration that contradicts the dice goes back for one rewrite."
-              : "The DM's narration is persisted exactly as written."}
+              : "The GM's narration is persisted exactly as written."}
           </span>
         </div>
       ) : null}
@@ -444,7 +444,7 @@ export function AiGroup({ settings, patch }: Base) {
       {alliesShown(settings) ? (
         <div data-settings-row="allies" className="reveal flex flex-wrap items-center gap-2">
           <span className="pk-rowlabel">Allies</span>
-          <Tooltip content="AI companions the DM plays: 'party members' travel with the party until dismissed; 'guests' are temporary allies for one scene or battle (a town soldier helping defend) and leave automatically when the fight ends. Auto picks full for solo play, guests only for multiplayer.">
+          <Tooltip content="AI companions the GM plays: 'party members' travel with the party until dismissed; 'guests' are temporary allies for one scene or battle (a town soldier helping defend) and leave automatically when the fight ends. Auto picks full for solo play, guests only for multiplayer.">
             <span className="inline-flex min-w-0 max-w-full">
               <Select<GameSettings["companions"]>
                 size="sm"
@@ -520,8 +520,8 @@ export function MemoryGroup({ settings, patch }: Base) {
 // creator-free settings it lives in (issue 503).
 export const CONSCIENCE_INFO = [
   "Each lasting AI companion holds a few values from its class and alignment, some of them red lines it will not see crossed.",
-  "Deeds the party commits in front of them move a ladder the server keeps: content, uneasy, warning, ultimatum, breaking point. Their Bonds row shows where they stand and any ultimatum they set, with the time left on the campaign's clock. Making amends, or doing what they hold dear, climbs it back.",
-  "Off: companions judge by standing alone. Talk: they object, warn and set ultimatums, and stay whatever happens. Leave (the default): past their breaking point they walk out, slip away or report the party. Turn: as Leave, and they may turn on the party in a fight; a player's command over a companion ends once it warns the party.",
+  "Deeds the party commits in front of them move a ladder the server keeps: content, uneasy, warning, ultimatum, breaking point. Their Bonds row shows where they stand and any ultimatum they set, with the time left on the campaign's clock. Making amends, or doing what they hold dear, climbs it back, a rung a day at most. A character who stands by while another does it bears a little of it; one who speaks against it bears none.",
+  "Off: companions judge by standing alone. Talk: they object, warn and set ultimatums, and stay whatever happens. Leave (the default): past their breaking point they walk out, slip away or report the party. Turn: as Leave, and they may turn on the party in a fight, at their full strength whatever the table's difficulty; a player's command over a companion ends once it warns the party.",
 ].join("\n\n");
 
 export function BondsGroup({ settings, patch, lastingCompanions = false }: Base & { lastingCompanions?: boolean }) {
@@ -529,7 +529,7 @@ export function BondsGroup({ settings, patch, lastingCompanions = false }: Base 
     <>
     <div className="flex flex-wrap items-center gap-2">
       <span className="pk-rowlabel">Bonds</span>
-      <Tooltip content="How each NPC and AI companion feels about each character, tracked by the server on one meter from hostile through neutral to devoted. Deeds move it, and the same deed lands differently on different people: mercy wins over a kind healer and irritates a hard-bitten mercenary. Standing shows in the Bonds tab and colors how the DM plays them.">
+      <Tooltip content="How each NPC and AI companion feels about each character, tracked by the server on one meter from hostile through neutral to devoted. Deeds move it, and the same deed lands differently on different people: mercy wins over a kind healer and irritates a hard-bitten mercenary. Standing shows in the Bonds tab and colors how the GM plays them.">
         <SettingToggle on={settings.relationships !== "off"} onToggle={() => patch({ relationships: settings.relationships === "off" ? "on" : "off" })}>
           Bonds {settings.relationships !== "off" ? "on" : "off"}
         </SettingToggle>
@@ -543,7 +543,7 @@ export function BondsGroup({ settings, patch, lastingCompanions = false }: Base 
       ) : null}
       <span className="text-stone-500">
         {settings.relationships === "off"
-          ? "The DM tracks no personal standing; NPCs react to the party as a whole."
+          ? "The GM tracks no personal standing; NPCs react to the party as a whole."
           : settings.romance !== "off"
             ? "Standing is tracked per character, and romance can grow from it."
             : "Standing is tracked per character; romance is off."}
@@ -585,7 +585,7 @@ function waitLabel(seconds: number) {
   return `Waits for everyone, up to ${seconds % 60 ? `${seconds}s` : `${seconds / 60} min`}`;
 }
 const PACING_INFO =
-  "Answers the first post: the AI DM narrates as soon as anyone acts, so the quickest player sets the pace.\n\nWaits for everyone: after each narration the AI DM waits until every player who has the table open (or plays through a connected agent) has acted or pressed Pass, then answers them all in one turn. The clock starts with the first answer and restarts with every post or pass, so only a quiet table runs it out. The lead can say Go on now at any time. A spotlight, a fight's turn order and table talk never wait.";
+  "Answers the first post: the AI GM narrates as soon as anyone acts, so the quickest player sets the pace.\n\nWaits for everyone: after each narration the AI GM waits until every player who has the table open (or plays through a connected agent) has acted or pressed Pass, then answers them all in one turn. The clock starts with the first answer and restarts with every post or pass, so only a quiet table runs it out. The lead can say Go on now at any time. A spotlight, a fight's turn order and table talk never wait.";
 function pacingOptions(seconds: number) {
   const lengths = WAIT_CHOICES.includes(seconds) ? WAIT_CHOICES : [...WAIT_CHOICES, seconds].sort((a, b) => a - b);
   // "0": no wait, the first post wakes the DM.
@@ -603,7 +603,7 @@ export function PlayersGroup({ settings, patch, solo = false }: Base & { solo?: 
             Mid-game joining {settings.midGameJoinOpen ? "open" : "closed"}
           </SettingToggle>
         </Tooltip>
-        <Tooltip content="After each DM narration, players cannot act until you allow responses. OOC stays open.">
+        <Tooltip content="After each GM narration, players cannot act until you allow responses. OOC stays open.">
           <SettingToggle on={settings.holdSubmissions} onToggle={() => patch({ holdSubmissions: !settings.holdSubmissions })}>
             Held responses {settings.holdSubmissions ? "on" : "off"}
           </SettingToggle>
@@ -616,7 +616,7 @@ export function PlayersGroup({ settings, patch, solo = false }: Base & { solo?: 
           <span className="pk-rowlabel">Pacing</span>
           <Select
             size="sm"
-            label="When the AI DM answers"
+            label="When the AI GM answers"
             value={settings.waitForTable ? String(settings.waitForTableSeconds) : "0"}
             onChange={(value) => patch(Number(value) ? { waitForTable: true, waitForTableSeconds: Number(value) } : { waitForTable: false })}
             options={pacingOptions(settings.waitForTableSeconds)}
@@ -627,28 +627,28 @@ export function PlayersGroup({ settings, patch, solo = false }: Base & { solo?: 
       ) : null}
       <div className="flex flex-wrap items-center gap-2">
         <span className="pk-rowlabel">Items</span>
-        <Tooltip content="When on, DM-granted loot, item removals, and gold changes become offers the owning player accepts or declines before they land on the sheet. Damage, healing and conditions have their own switch.">
+        <Tooltip content="When on, GM-granted loot, item removals, and gold changes become offers the owning player accepts or declines before they land on the sheet. Damage, healing and conditions have their own switch.">
           <SettingToggle on={settings.inventoryApprovals} onToggle={() => patch({ inventoryApprovals: !settings.inventoryApprovals })}>
             Item offers {settings.inventoryApprovals ? "on" : "off"}
           </SettingToggle>
         </Tooltip>
         <span className="text-stone-500">
           {settings.inventoryApprovals
-            ? "Players confirm DM item and gold changes before they apply."
-            : "DM item and gold changes apply immediately (lead can undo)."}
+            ? "Players confirm GM item and gold changes before they apply."
+            : "GM item and gold changes apply immediately (lead can undo)."}
         </span>
       </div>
       <div className="pk-row">
         <span className="pk-rowlabel">Vitals</span>
-        <Tooltip content="When on, damage, healing and conditions the AI DM or a connected agent aims at a player character wait for that player (or the lead) to confirm before they land, so a wrong target, a doubled hit or a misread rule never sticks unseen. The engine's own dice, an enemy's attack or a fall, apply as always. A slower table; off by default.">
+        <Tooltip content="When on, damage, healing and conditions the AI GM or a connected agent aims at a player character wait for that player (or the lead) to confirm before they land, so a wrong target, a doubled hit or a misread rule never sticks unseen. The engine's own dice, an enemy's attack or a fall, apply as always. A slower table; off by default.">
           <SettingToggle on={settings.vitalsApprovals} onToggle={() => patch({ vitalsApprovals: !settings.vitalsApprovals })}>
             Vitals changes {settings.vitalsApprovals ? "need confirming" : "auto-apply"}
           </SettingToggle>
         </Tooltip>
         <span className="text-stone-500">
           {settings.vitalsApprovals
-            ? "Players confirm DM damage, healing and conditions before they apply."
-            : "DM damage, healing and conditions apply immediately (lead can undo)."}
+            ? "Players confirm GM damage, healing and conditions before they apply."
+            : "GM damage, healing and conditions apply immediately (lead can undo)."}
         </span>
       </div>
     </>
@@ -661,7 +661,7 @@ export function ConsoleGroup({ settings, patch }: Base) {
   return (
     <div className="flex flex-wrap items-center gap-2">
       <span className="pk-rowlabel">Remind</span>
-      <Tooltip content="How much play may pass with nothing written down before the console nudges you to record what happened. Your own typed narration counts, so a DM who writes their scenes is never nudged.">
+      <Tooltip content="How much play may pass with nothing written down before the console nudges you to record what happened. Your own typed narration counts, so a GM who writes their scenes is never nudged.">
         <span className="inline-flex min-w-0 max-w-full">
           <Select
             size="sm"
@@ -691,9 +691,9 @@ export function BoardGroup({ settings, patch }: Base) {
   return (
     <div className="flex flex-wrap items-center gap-2">
       <span className="pk-rowlabel">Board</span>
-      <Tooltip content="Players may draw on the live board: a plan of attack, a circle round a door. The DM always may.">
+      <Tooltip content="Players may draw on the live board: a plan of attack, a circle round a door. The GM always may.">
         <SettingToggle on={settings.boardDrawing} onToggle={() => patch({ boardDrawing: !settings.boardDrawing })}>
-          {settings.boardDrawing ? "Players may draw" : "Only the DM draws"}
+          {settings.boardDrawing ? "Players may draw" : "Only the GM draws"}
         </SettingToggle>
       </Tooltip>
       <Tooltip content="Show what enemies look likely to do next">
@@ -726,7 +726,7 @@ export function VoiceChatGroup({ settings, patch, transcribes }: Base & { transc
         </Tooltip>
         {settings.voice.enabled ? (
           <>
-            <Tooltip content="How hard the floor is enforced on microphones. Soft shows whose turn it is without muting anyone. Strict pauses a player's microphone on the server, so the mute is real rather than a greyed-out button. Off ignores the floor entirely. The DM is never muted by any of these.">
+            <Tooltip content="How hard the floor is enforced on microphones. Soft shows whose turn it is without muting anyone. Strict pauses a player's microphone on the server, so the mute is real rather than a greyed-out button. Off ignores the floor entirely. The GM is never muted by any of these.">
               <span className="inline-flex min-w-0 max-w-full">
                 <Select<"off" | "soft" | "strict">
                   size="sm"
@@ -745,7 +745,7 @@ export function VoiceChatGroup({ settings, patch, transcribes }: Base & { transc
             <Tooltip
               content={
                 transcribes
-                  ? "Transcription: each speaker's microphone is written down with their name, for the beat drafter and the chapter summary. Never read by the DM prompt. The lobby says out loud that the table is being transcribed while this is on."
+                  ? "Transcription: each speaker's microphone is written down with their name, for the beat drafter and the chapter summary. Never read by the GM prompt. The lobby says out loud that the table is being transcribed while this is on."
                   : "This server has no transcription service, so nothing said on the call can be written down. An admin sets up a Whisper service (STT_URL, or Admin > Speech) to switch it on."
               }
             >
@@ -757,7 +757,7 @@ export function VoiceChatGroup({ settings, patch, transcribes }: Base & { transc
                 Transcription {!transcribes ? "off on this server" : settings.voice.transcribe ? "on" : "off"}
               </SettingToggle>
             </Tooltip>
-            <Tooltip content="Distance decides who hears whom, using the battle map. Outside combat, or with no map, everyone hears everyone as usual. The DM always hears everyone and is always heard.">
+            <Tooltip content="Distance decides who hears whom, using the battle map. Outside combat, or with no map, everyone hears everyone as usual. The GM always hears everyone and is always heard.">
               <SettingToggle on={rules.proximity} onToggle={() => setRule({ proximity: !rules.proximity })}>
                 Proximity {rules.proximity ? "on" : "off"}
               </SettingToggle>
@@ -786,7 +786,7 @@ export function VoiceChatGroup({ settings, patch, transcribes }: Base & { transc
                 </Tooltip>
               </>
             ) : null}
-            <Tooltip content="A character at 0 hit points stops hearing the table. They still hear the DM, and they are still heard.">
+            <Tooltip content="A character at 0 hit points stops hearing the table. They still hear the GM, and they are still heard.">
               <SettingToggle on={rules.downedGoDeaf} onToggle={() => setRule({ downedGoDeaf: !rules.downedGoDeaf })}>
                 Downed go deaf {rules.downedGoDeaf ? "on" : "off"}
               </SettingToggle>

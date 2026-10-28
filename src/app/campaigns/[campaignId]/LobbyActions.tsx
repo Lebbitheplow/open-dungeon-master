@@ -68,7 +68,7 @@ function StartBlock({
   if (!canStart) {
     return (
       <p className="text-center text-sm text-stone-500">
-        The owner or the DM starts the adventure once everyone is ready.
+        The owner or the GM starts the adventure once everyone is ready.
       </p>
     );
   }

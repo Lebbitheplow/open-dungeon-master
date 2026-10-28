@@ -15,6 +15,7 @@ import { passiveScore } from "@/lib/dm/check-tools";
 import { sheetStatBlock, sheetVitals } from "@/lib/dm/companion-statblock";
 import type { CompanionValue } from "@/lib/dm/companion-values-logic";
 import { conscienceSetting, consciousCompanions, settleCompanion, worstApproval } from "@/lib/dm/conscience";
+import { fightingParty } from "@/lib/dm/party-budget";
 import { effectiveRung, standingRung } from "@/lib/dm/conscience-logic";
 import { sideFitness, verdictFor } from "@/lib/dm/departure-logic";
 import {
@@ -137,11 +138,13 @@ function approvalToward(campaignId: string, companionName: string, characterId: 
 
 // The odds the pact reads together: every companion in it and every player
 // who joined it, rated as one band of foes for the rest of the party,
-// shifted by how whole each side is.
-export function pactOdds(pact: Pact, sheets: readonly CharacterSheet[]): PactOdds {
+// shifted by how whole each side is. The rest of the party is the one every
+// fight is measured against (party-budget.ts fightingParty, issue 563):
+// loyal companions stand with it, the dead and benched characters do not.
+export function pactOdds(campaign: Campaign, pact: Pact, sheets: readonly CharacterSheet[]): PactOdds {
   const ours = new Set([...companionMembers(pact).map((member) => member.sheetId), ...playerMembers(pact).filter((member) => member.stance === "joined").map((member) => member.characterId)]);
   const band = sheets.filter((sheet) => ours.has(sheet.id) && standing(sheet));
-  const party = playerCharacters(sheets).filter((sheet) => !ours.has(sheet.id) && !sheet.deathSaves?.dead);
+  const party = fightingParty(campaign, [...sheets]).filter((sheet) => !ours.has(sheet.id));
   if (!band.length) {
     return "against";
   }
@@ -161,7 +164,7 @@ export function replan(campaign: Campaign, pact: Pact, sheets: readonly Characte
   const { plan, tactic } = choosePlan({
     leader: leader.npc.agency.personality,
     tactics: companions.map((entry) => tacticFor(entry.sheet.class)),
-    odds: pactOdds(pact, sheets),
+    odds: pactOdds(campaign, pact, sheets),
     setting: conscienceSetting(campaign),
   });
   return { ...pact, leaderNpcId: leader.npc.id, plan, tactic, trigger: triggerFor(plan, tactic) };

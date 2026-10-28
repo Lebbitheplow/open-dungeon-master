@@ -109,19 +109,19 @@ export function FinishStep({
               <span key={hpLine?.value} className="reveal font-mono text-base text-amber-100">
                 {hpLine?.value}
               </span>
-              <span className="mt-1 block text-[11px] text-stone-500">{hpLine?.reason}</span>
+              <span className="mt-1 block text-sm text-stone-500">{hpLine?.reason}</span>
             </Field>
             <Field label="AC">
               <span key={acLine.value} className="reveal font-mono text-base text-amber-100">
                 {acLine.value}
               </span>
-              <span className="mt-1 block text-[11px] text-stone-500">{acLine.reason}</span>
+              <span className="mt-1 block text-sm text-stone-500">{acLine.reason}</span>
             </Field>
             <Field label="Gold" className="col-span-2">
               <span key={`${purse.gold}-${purse.copper}`} className="reveal font-mono text-base text-amber-100">
                 {purse.gold} gp{purse.copper ? ` ${purse.copper} cp` : ""}
               </span>
-              <span className="mt-1 block text-[11px] text-stone-500">
+              <span className="mt-1 block text-sm text-stone-500">
                 {purse.wealth?.rolled
                   ? `Rolled by the server: ${purse.wealth.rolled.gold} gp on ${purse.wealth.dice}. `
                   : ""}
@@ -153,7 +153,7 @@ export function FinishStep({
             onChange={role.onChange}
             options={[
               { value: "pc", label: "A character I play" },
-              { value: "companion", label: "An ally the DM plays" },
+              { value: "companion", label: "An ally the GM plays" },
             ]}
             className="w-full sm:max-w-md"
           />

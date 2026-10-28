@@ -24,8 +24,8 @@ export const WORN_PLACE_LABELS: Record<WornPlace, string> = {
 // What the place means at the table, for the picker's glossary (SRD 5.1,
 // Magic Items, Multiple Items of the Same Kind).
 export const WORN_PLACE_BLURBS: Record<WornPlace, string> = {
-  cloak: "One cloak counts at a time; a second one worn there adds nothing unless the DM allows both.",
-  head: "One item of headwear counts at a time; the DM may allow a circlet under a helmet.",
+  cloak: "One cloak counts at a time; a second one worn there adds nothing unless the GM allows both.",
+  head: "One item of headwear counts at a time; the GM may allow a circlet under a helmet.",
   feet: "One pair of footwear counts at a time.",
   hands: "One pair of gloves or gauntlets counts at a time.",
   wrists: "One pair of bracers counts at a time.",

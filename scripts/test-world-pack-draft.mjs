@@ -199,7 +199,7 @@ test("the checks are the validator's checks", () => {
 test("the DM brief floor is advice, not a problem", () => {
   const check = checkDraft(fullDraft({ dmFlavor: "short" }));
   assert.deepEqual(check.problems, []);
-  assert.ok(check.advice.some((line) => line.includes("DM brief")));
+  assert.ok(check.advice.some((line) => line.includes("GM brief")));
 });
 
 // ---- the catalogs ----

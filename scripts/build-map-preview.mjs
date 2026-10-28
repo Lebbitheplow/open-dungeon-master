@@ -202,7 +202,7 @@ const html = `<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Open Dungeon Master: map art preview</title>
+<title>Open Game Master: map art preview</title>
 <style>
 :root { color-scheme: dark; --ink:#e8e3d9; --dim:#9a9387; --line:#2c2925; --bg:#100f0d; --card:#181613; --gold:#d9a84a; }
 * { box-sizing:border-box }
@@ -304,7 +304,7 @@ Seed for the generated maps: <code>${SEED}</code>. Built ${new Date().toISOStrin
 
 <h2>The same room, every skin</h2>
 <p>The identical ${ROOM[0].length}&times;${ROOM.length} terrain string in every skin. Two lights sit where the generator
-would put braziers; three placed stamps (a long table, a rug, an altar) show what a DM's own props look like beside the
+would put braziers; three placed stamps (a long table, a rug, an altar) show what a GM's own props look like beside the
 automatic dressing. The first panel is what the app draws today. Toggle the grid in the bar to see that every boundary
 still sits on the squares the rules use.</p>
 <div class="rooms">
@@ -382,7 +382,7 @@ renderer rotates them to the wall run. These do not wrap and are not scored.</p>
 <h2>Objects</h2>
 <p>${propManifest.objects.length} cut-outs on transparency. The renderer draws every shadow and outline, so a barrel against a
 north wall and one in open floor shade differently. <code>wall</code> objects sit against walls, <code>scatter</code> objects
-land in open ground, <code>feature</code> objects are only ever placed by the DM.</p>
+land in open ground, <code>feature</code> objects are only ever placed by the GM.</p>
 <div class="objs">
   ${sheetObjects.map((o) => `<div class="obj"><div class="im"><img src="${o.uri}" alt=""></div><div class="nm">${esc(o.label)}<br>${esc(o.kind)} &middot; ${o.span} sq</div></div>`).join("\n  ")}
 </div>

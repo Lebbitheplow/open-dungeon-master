@@ -67,7 +67,7 @@ export async function POST(
 
   const sheet = getSheetForUser(campaignId, user.id);
   if (!sheet) {
-    return Response.json({ error: "You need a character to whisper to the DM." }, { status: 400 });
+    return Response.json({ error: "You need a character to whisper to the GM." }, { status: 400 });
   }
 
   const raw = await request.json().catch(() => ({}));
@@ -78,7 +78,7 @@ export async function POST(
 
   if (countPendingPlayerWhispers(campaignId, user.id) >= PENDING_PLAYER_WHISPER_CAP) {
     return Response.json(
-      { error: "The DM has not answered your last private messages yet." },
+      { error: "The GM has not answered your last private messages yet." },
       { status: 429 },
     );
   }

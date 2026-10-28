@@ -31,7 +31,7 @@ export async function POST(
   }
   const job = runningDmJob(campaignId);
   if (!job || job.id !== parsed.data.jobId) {
-    return Response.json({ error: "The DM already finished that." }, { status: 409 });
+    return Response.json({ error: "The GM already finished that." }, { status: 409 });
   }
   if (job.stopping) {
     return Response.json({ ok: true, stopping: true });

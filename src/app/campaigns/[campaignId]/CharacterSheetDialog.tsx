@@ -436,9 +436,9 @@ export function CharacterSheetDialog({
                     available, empty ones are spent. They all come back after a long rest
                     {sheet.class === "warlock" || sheet.spellcasting.pact ? " (a warlock's pact slots after a short rest too)" : ""}.
                     {corrects
-                      ? " The DM marks them as spells are cast; the buttons correct the count."
+                      ? " The GM marks them as spells are cast; the buttons correct the count."
                       : mine
-                        ? " The DM marks them as you cast; the button marks one the count missed."
+                        ? " The GM marks them as you cast; the button marks one the count missed."
                         : ""}
                   </p>
                 </div>
@@ -504,7 +504,7 @@ export function CharacterSheetDialog({
                 <p className="reveal mt-1.5 text-[11px] text-stone-500">
                   {corrects
                     ? "Minus spends, plus hands a use back as a correction."
-                    : "Minus marks a use spent. Uses come back at rests; the DM or the party lead corrects a wrong count."}{" "}
+                    : "Minus marks a use spent. Uses come back at rests; the GM or the party lead corrects a wrong count."}{" "}
                   Changes are logged to the session event log.
                 </p>
               ) : null}

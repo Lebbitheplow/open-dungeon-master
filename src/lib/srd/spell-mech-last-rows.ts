@@ -47,11 +47,11 @@ export const SRD_LAST_ROWS: Record<string, SpellMech> = {
   // itself is cast with use_spell_slot at atX/atY.
   forcecage: {
     resolution: "utility",
-    note: "The cage is laid on the battle map at atX/atY (else around the nearest creatures): no creature inside walks out, none outside walks in. Teleporting out takes a CHA save (the DM's to call).",
+    note: "The cage is laid on the battle map at atX/atY (else around the nearest creatures): no creature inside walks out, none outside walks in. Teleporting out takes a CHA save (the GM's to call).",
   },
   "contact other plane": {
     resolution: "utility",
-    note: "The server rolls the caster's DC 15 INT save as the casting is paid: a failure is 6d6 psychic and insanity until a long rest. The five answers are the DM's.",
+    note: "The server rolls the caster's DC 15 INT save as the casting is paid: a failure is 6d6 psychic and insanity until a long rest. The five answers are the GM's.",
   },
   "antimagic field": {
     resolution: "utility",

@@ -36,7 +36,7 @@ export const AUTHORED_DATA_B2: Record<string, AuthoredEntry> = {
   },
   "rogue::Master of Tactics": {
     subclass: "Mastermind",
-    effects: [{ kind: "bonus_route", action: "help", note: "Helping at up to 30 feet is the DM's to allow." }],
+    effects: [{ kind: "bonus_route", action: "help", note: "Helping at up to 30 feet is the GM's to allow." }],
   },
   "rogue::Misdirection": {
     subclass: "Mastermind",
@@ -67,7 +67,7 @@ export const AUTHORED_DATA_B2: Record<string, AuthoredEntry> = {
   "rogue::Steady Eye": {
     subclass: "Inquisitive",
     effects: [
-      { kind: "check_adv", skills: ["perception", "investigation"], note: "The engine does not measure the half-speed move; the DM withholds it after a longer one." },
+      { kind: "check_adv", skills: ["perception", "investigation"], note: "The engine does not measure the half-speed move; the GM withholds it after a longer one." },
     ],
   },
   "rogue::Eye for Weakness": {
@@ -91,7 +91,7 @@ export const AUTHORED_DATA_B2: Record<string, AuthoredEntry> = {
   },
   "rogue::Sudden Strike": {
     subclass: "Scout",
-    effects: [{ kind: "bonus_attack", after: "attack", note: "A second Sneak Attack on another creature is the DM's to allow." }],
+    effects: [{ kind: "bonus_attack", after: "attack", note: "A second Sneak Attack on another creature is the GM's to allow." }],
   },
   // A soul trinket held: advantage on Constitution saves and on death saves
   // (the "soul trinket" condition row), no resistance.
@@ -245,9 +245,9 @@ export const AUTHORED_DATA_B2: Record<string, AuthoredEntry> = {
         kind: "check_adv",
         skills: ["investigation", "perception"],
         gate: { choiceOf: { feature: "Lunar Embodiment", value: "full moon" } },
-        note: "Only within the bright light the sorcerer sheds; the DM keeps to that.",
+        note: "Only within the bright light the sorcerer sheds; the GM keeps to that.",
       },
-      { kind: "check_adv", skills: ["stealth"], gate: { choiceOf: { feature: "Lunar Embodiment", value: "new moon" } }, note: "Attack rolls against them in total darkness are at disadvantage; the DM keeps to that." },
+      { kind: "check_adv", skills: ["stealth"], gate: { choiceOf: { feature: "Lunar Embodiment", value: "new moon" } }, note: "Attack rolls against them in total darkness are at disadvantage; the GM keeps to that." },
       { kind: "resist", types: ["necrotic", "radiant"], gate: { choiceOf: { feature: "Lunar Embodiment", value: "crescent moon" } } },
     ],
   },
@@ -305,7 +305,7 @@ export const AUTHORED_DATA_B2: Record<string, AuthoredEntry> = {
       when: "weapon" as const,
       oncePerTurn: true,
       gate: { choice: kind },
-      note: "Genie's Wrath rides any attack roll that hits, a spell attack too; the DM adds it to a spell's.",
+      note: "Genie's Wrath rides any attack roll that hits, a spell attack too; the GM adds it to a spell's.",
     })),
   },
   "warlock::Elemental Gift": {
@@ -333,7 +333,7 @@ export const AUTHORED_DATA_B2: Record<string, AuthoredEntry> = {
   "warlock::Among the Dead": {
     subclass: "The Undying",
     effects: [
-      { kind: "ward_vs", types: ["undead"], save: "wis", note: "Area effects get through, and an undead that saved or that the warlock attacked is immune for 24 hours; the DM keeps to that." },
+      { kind: "ward_vs", types: ["undead"], save: "wis", note: "Area effects get through, and an undead that saved or that the warlock attacked is immune for 24 hours; the GM keeps to that." },
       { kind: "save_adv", against: ["disease"] },
     ],
   },
@@ -364,7 +364,7 @@ export const AUTHORED_DATA_B2: Record<string, AuthoredEntry> = {
   "warlock::Hex Warrior": {
     subclass: "The Hexblade",
     spends: [{ name: "Hex Warrior Weapon", aliases: ["Hex Warrior"], fight: "out", does: { kind: "choose", options: HEX_WEAPONS } }],
-    effects: [{ kind: "weapon_ability", ability: "cha", note: "With Pact of the Blade, every pact weapon too; the DM names it as the hex weapon." }],
+    effects: [{ kind: "weapon_ability", ability: "cha", note: "With Pact of the Blade, every pact weapon too; the GM names it as the hex weapon." }],
   },
   "warlock::Armor of Hexes": {
     subclass: "The Hexblade",
@@ -393,7 +393,7 @@ export const AUTHORED_DATA_B2: Record<string, AuthoredEntry> = {
     subclass: "The Undead",
     effects: [
       { kind: "resist", types: ["bludgeoning", "piercing", "slashing"], gate: { condition: "spirit projection" } },
-      { kind: "move", fly: "walk", gate: { condition: "spirit projection" }, note: "Passing through creatures and objects, the healing in Form of Dread and the spells without components are the DM's to apply." },
+      { kind: "move", fly: "walk", gate: { condition: "spirit projection" }, note: "Passing through creatures and objects, the healing in Form of Dread and the spells without components are the GM's to apply." },
     ],
   },
 
@@ -445,7 +445,7 @@ export const AUTHORED_DATA_B2: Record<string, AuthoredEntry> = {
   },
   "wizard::Illusory Reality": {
     subclass: "School of Illusion",
-    narrated: "Making an illusory object real is the DM's narration of the illusion.",
+    narrated: "Making an illusory object real is the GM's narration of the illusion.",
   },
   "wizard::Transmuter's Stone": {
     subclass: "School of Transmutation",

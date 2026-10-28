@@ -55,7 +55,7 @@ export function NewAdventurerBanner({
             disabled={sending}
             className={bannerButtonClass()}
           >
-            Let the DM do it
+            Let the GM do it
           </button>
           <button
             type="button"

@@ -1,5 +1,5 @@
 {
-  "_license": "Original content for Open Dungeon Master. Plain-language explanations of core 5e concepts for players who have never played, written from scratch. Mechanics only; no publisher's descriptive text is reproduced. See docs/LICENSES.md.",
+  "_license": "Original content for Open Game Master. Plain-language explanations of core 5e concepts for players who have never played, written from scratch. Mechanics only; no publisher's descriptive text is reproduced. See docs/LICENSES.md.",
   "_shape": "terms[] = { id, term, short, long? }. `short` is one sentence for a tooltip-sized read; `long` adds the detail a first-timer needs. Look up with glossaryTerm(id) from src/lib/help.",
   "terms": [
     {
@@ -78,7 +78,7 @@
       "id": "ability_check",
       "term": "Ability check",
       "short": "A d20 roll plus a modifier, made when the outcome of something is uncertain.",
-      "long": "The DM sets a difficulty number and you try to meet or beat it. Climbing a wall is a Strength check, spotting an ambush is a Wisdom check. If you are proficient in a relevant skill you add your proficiency bonus too."
+      "long": "The GM sets a difficulty number and you try to meet or beat it. Climbing a wall is a Strength check, spotting an ambush is a Wisdom check. If you are proficient in a relevant skill you add your proficiency bonus too."
     },
     {
       "id": "saving_throw",
@@ -234,7 +234,7 @@
       "id": "passive_perception",
       "term": "Passive Perception",
       "short": "A standing score for what you notice without looking. 10 plus your Perception bonus.",
-      "long": "The DM checks it against hidden things so nobody has to keep rolling. A higher passive Perception means traps and ambushes are spotted before they matter."
+      "long": "The GM checks it against hidden things so nobody has to keep rolling. A higher passive Perception means traps and ambushes are spotted before they matter."
     },
     {
       "id": "skill",
@@ -264,7 +264,7 @@
       "id": "magic_item_prices",
       "term": "Magic item prices",
       "short": "What a magic item costs under the 2014 rules this server plays.",
-      "long": "The rules give few magic items a price, so the server uses the top of each rarity’s value in the 2014 rules: common 100 gp, uncommon 500 gp, rare 5,000 gp, very rare 50,000 gp. A potion, a scroll or anything else used up once is worth half. Legendary items and artifacts are never for sale. A shop stocks only common magic items unless the DM puts something rarer on its shelf, and buys back only potions and scrolls, at half their value; anything else needs a wealthy buyer the story provides."
+      "long": "The rules give few magic items a price, so the server uses the top of each rarity’s value in the 2014 rules: common 100 gp, uncommon 500 gp, rare 5,000 gp, very rare 50,000 gp. A potion, a scroll or anything else used up once is worth half. Legendary items and artifacts are never for sale. A shop stocks only common magic items unless the GM puts something rarer on its shelf, and buys back only potions and scrolls, at half their value; anything else needs a wealthy buyer the story provides."
     }
   ]
 }

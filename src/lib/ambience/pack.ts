@@ -29,7 +29,7 @@ const TRACK_MAX_BYTES = 40 * 1024 * 1024;
 export type PackEntry = { file: string; data: Buffer; credit: TrackCredit };
 
 export function packAssetUrl(version: string): string {
-  return `https://github.com/Lebbitheplow/open-dungeon-master/releases/download/v${version}/${PACK_FILE}`;
+  return `https://github.com/Lebbitheplow/open-game-master/releases/download/v${version}/${PACK_FILE}`;
 }
 
 export async function buildPack(entries: PackEntry[]): Promise<Buffer> {

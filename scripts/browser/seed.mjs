@@ -61,7 +61,7 @@ for (let index = 1; index <= 44; index += 1) {
 }
 // Table talk put to the DM and its out-of-character answer (PR 314): the
 // chronicle reads the answer as a line, never as a passage.
-const oocQuestion = "@DM can Tavi see the dog from the east wall?";
+const oocQuestion = "@GM can Tavi see the dog from the east wall?";
 const oocAnswer = "Not from there: the dog sleeps under the cart, out of sight until you round the corner.";
 say(`(ooc) ${oocQuestion}`, { authorType: "player", userId: world.owner.id, characterId: tavi.id });
 say(`(ooc) ${oocAnswer}`, { authorType: "dm", speech: [] });
@@ -1098,13 +1098,17 @@ for (const viewport of ["desktop", "phone"]) {
 // scenario walks a companion out), run by the lead as its DM. The player's
 // Kael travels with Seren Vale, a timid paladin who walks out at a red-line
 // atrocity; Tam Hollis, a timid fighter, already walked out earlier, so the
-// Gone list stands before the scenario moves anyone.
+// Gone list stands before the scenario moves anyone. Ilse Marrow, another
+// player's character, was close to Tam, and the Gone list says he still
+// cares for her (issue 563).
 const GONE_TITLE = "Gone Table";
 const gone = {};
 {
   const { invokeEngine } = await import("../../src/lib/dm/invoke.ts");
   const { companionNpcFor } = await import("../../src/lib/db/companion-npcs.ts");
   const { patchNpcAgency } = await import("../../src/lib/db/npcs.ts");
+  const goneBonds = await import("../../src/lib/db/relationships.ts");
+  const friend = world.addUser("friend");
   for (const viewport of ["desktop", "phone"]) {
     const table = campaigns.createCampaign(world.owner.id, {
       title: `${GONE_TITLE} (${viewport})`,
@@ -1128,6 +1132,10 @@ const gone = {};
     };
     const tam = companion("Tam Hollis", "fighter", "LG");
     const seren = companion("Seren Vale", "paladin", "LG");
+    campaigns.joinByInviteCode(friend.id, campaigns.getCampaignById(table.id).inviteCode);
+    const ilse = sheets.createSheet(table.id, friend.id, 3, heroInput({ name: "Ilse Marrow", class: "cleric", level: 3 }));
+    const close = goneBonds.ensureRelationship({ campaignId: table.id, characterId: ilse.id, characterName: ilse.name, subjectKind: "companion", subjectName: tam.name });
+    goneBonds.patchRelationship(close.id, { approval: 70 });
     const left = await invokeEngine(campaigns.getCampaignById(table.id), { kind: "human", userId: world.owner.id }, {
       name: "relationship_beat",
       args: { characterId: kael.id, subject: tam.name, beat: "slaving", severity: "atrocity", note: "Kael sold the captives to the slaver's barge." },
@@ -1466,7 +1474,7 @@ const { setPregenOffered } = await import("../../src/lib/db/characters.ts");
 const OFFER_TITLE = "Offer Table";
 const offerTable = campaigns.createCampaign(player.id, {
   title: OFFER_TITLE,
-  description: "A table its DM made from a workshop with pregens.",
+  description: "A table its GM made from a workshop with pregens.",
   theme: "high-fantasy",
   maxPlayers: 6,
   startingLevel: 4,

@@ -84,7 +84,7 @@ export async function POST(
       .map((message) => {
         const who =
           message.authorType === "dm"
-            ? "DM"
+            ? "GM"
             : (message.characterId && names.get(message.characterId)) || "A player";
         return `${who}: ${message.content}`;
       });

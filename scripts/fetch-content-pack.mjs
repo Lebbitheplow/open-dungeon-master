@@ -26,7 +26,7 @@ const packPath = path.join(contentDir, "open5e.sqlite");
 const pkg = JSON.parse(fs.readFileSync(path.join(repo, "package.json"), "utf8"));
 const assetUrl =
   process.env.CONTENT_PACK_URL ??
-  `https://github.com/Lebbitheplow/open-dungeon-master/releases/download/v${pkg.version}/open5e.sqlite.gz`;
+  `https://github.com/Lebbitheplow/open-game-master/releases/download/v${pkg.version}/open5e.sqlite.gz`;
 
 // A release's assets land a few seconds after the release itself, and the
 // Docker publish starts on the release event, so a 404 is retried for a

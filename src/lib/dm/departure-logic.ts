@@ -185,18 +185,25 @@ export function allowedResponse(response: DepartureResponse, setting: "leave" | 
 
 // ---- openings ----
 
-export type OpeningHook = "own_turn" | "long_rest";
+// A companion's own turn in a fight, the night watch of a long rest, and
+// the party splitting up (move_party naming who goes, issue 563).
+export type OpeningHook = "own_turn" | "long_rest" | "split";
 
 // Whether a held plan acts at this hook: slipping away takes any moment the
-// party is not watching (its own turn in a fight, the night watch); biding
-// to strike waits for one when the odds have turned its way.
-export function opensAt(response: IntentResponse, odds: Odds): boolean {
-  return response === "slip_away" || odds === "good";
+// party is not watching (its own turn in a fight, the night watch, the
+// party split up); biding to strike waits for one when the odds have turned
+// its way, and a split is not one: a fight takes the whole party, so it
+// waits for the next moment it can fight it.
+export function opensAt(response: IntentResponse, odds: Odds, hook: OpeningHook = "own_turn"): boolean {
+  if (response === "slip_away") {
+    return true;
+  }
+  return hook !== "split" && odds === "good";
 }
 
 // ---- what the table sees ----
 
-export type DepartureWhere = "fight" | "night" | "scene";
+export type DepartureWhere = "fight" | "night" | "scene" | "split";
 
 // The public face of a departure: what the party saw, for the table's line
 // and the Gone list. Never the plan it held before it went.
@@ -205,7 +212,13 @@ export function departureHow(response: DepartureResponse, where: DepartureWhere,
     case "walk_out":
       return "Walked out on the party";
     case "slip_away":
-      return where === "fight" ? "Broke off from the fight and fled the field" : where === "night" ? "Slipped away in the night" : "Slipped away";
+      return where === "fight"
+        ? "Broke off from the fight and fled the field"
+        : where === "night"
+          ? "Slipped away in the night"
+          : where === "split"
+            ? "Slipped away while the party was split up"
+            : "Slipped away";
     case "report":
       return faction ? `Left to report the party to ${faction}` : "Left to report the party";
     case "confront":
@@ -226,7 +239,7 @@ export function turnHow(response: DepartureResponse, where: DepartureWhere): str
 // What the DM is told the plan is, in the storyteller's section, so it can
 // foreshadow it without ever saying it.
 export const INTENT_WORDS: Record<IntentResponse, string> = {
-  slip_away: "means to slip away at the first moment the party is not watching (its own turn in a fight, or the night watch)",
+  slip_away: "means to slip away at the first moment the party is not watching (its own turn in a fight, the night watch, or the party splitting up)",
   bide_strike: "means to turn on the party the moment it is weak enough to beat (its own turn in a fight, or the night watch)",
 };
 
@@ -243,6 +256,10 @@ export type Gone = {
   at: number;
   reportedTo: string;
   hostile: boolean;
+  // The characters they still cared for as they went (close, or devoted;
+  // issue 563): the rest of the party drove them off, not these. Names as
+  // the table knew them.
+  caresFor: string[];
   // The level and experience they left at, and what the party earned since
   // (shadow levelling, applied when the sheet is taken up again).
   leftLevel: number;
@@ -298,6 +315,7 @@ export function parseDeparture(raw: string): Departure {
             at: Math.max(0, num(source.at)),
             reportedTo: str(source.reportedTo, 80),
             hostile: source.hostile === true,
+            caresFor: Array.isArray(source.caresFor) ? source.caresFor.filter((name): name is string => typeof name === "string").map((name) => name.slice(0, 80)).slice(0, 8) : [],
             leftLevel: Math.max(1, Math.min(20, num(source.leftLevel, 1))),
             xpSince: Math.max(0, num(source.xpSince)),
             avenging: source.avenging === true,
@@ -374,7 +392,9 @@ const MAX_COMBATANTS = 8;
 // the gentlest of `wearSteps` whose rating (`rateWorn`, the same derive-cr
 // path as its whole rating) brings the fight inside the target's band under
 // the ceiling (deadly at most for one who hates them, hard otherwise). None
-// does, even at the floor: a standoff.
+// does, even at the floor: a standoff. Where the ceiling does not hold the
+// companion itself (`ceilingHolds` false: a table that chose Turn,
+// conscience-logic.ts ceilingHoldsCompanion), it comes whole and alone.
 export function planReturn(input: {
   partyLevels: readonly number[];
   difficulty: CampaignDifficulty;
@@ -383,6 +403,7 @@ export function planReturn(input: {
   candidates: readonly AllyChoice[];
   wearSteps?: readonly Wear[];
   rateWorn?: (wear: Wear) => number;
+  ceilingHolds?: boolean;
 }): ReturnPlan {
   const target = input.hostile ? "deadly" : "hard";
   const levels = [...input.partyLevels];
@@ -390,6 +411,9 @@ export function planReturn(input: {
   const alone = evaluate([input.companionCr]);
   const ceiling = encounterCeiling(input.difficulty, alone.thresholds.deadly);
   const cap = Math.min(ceiling, target === "deadly" ? Math.round(alone.thresholds.deadly * 1.5) : alone.thresholds.deadly - 1);
+  if (alone.adjustedXp > ceiling && input.ceilingHolds === false) {
+    return { allies: [], target, adjustedXp: alone.adjustedXp, verdict: alone.verdict, ceiling, wear: null, wornCr: null, standoff: false };
+  }
   if (alone.adjustedXp > ceiling) {
     const whole = { allies: [], target, ceiling } as const;
     for (const wear of input.wearSteps ?? []) {

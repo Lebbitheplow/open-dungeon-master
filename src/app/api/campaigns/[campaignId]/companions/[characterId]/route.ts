@@ -9,7 +9,7 @@ import { insertCampaignMessage } from "@/lib/db/messages";
 import { getSheetById, listSheets, setCompanionCommander } from "@/lib/db/sheets";
 import { commandable, commandingPlayers } from "@/lib/dm/companion-command";
 import { sheetForViewer } from "@/lib/dm/sheet-view";
-import { handleDismissCompanion } from "@/lib/dm/companion-tools";
+import { dismissCompanion } from "@/lib/dm/companion-dismissal";
 import { setInitiativeFloor, settleTurn, turnHolder } from "@/lib/dm/encounter-tools";
 import { requestDmTurn } from "@/lib/dm/loop";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
@@ -36,25 +36,31 @@ export async function DELETE(
   }
   const holder = turnHolder(campaignId);
 
-  const result = handleDismissCompanion(
+  // A person's call: a companion whose conscience stands at a warning or
+  // worse goes as a departure, kept on the record (issue 563).
+  const result = dismissCompanion(
     context.campaign,
     JSON.stringify({ characterId, reason: "the party lead sent them on their way" }),
     listSheets(campaignId),
+    "person",
   );
   // A companion dismissed on their own turn takes no turn with them.
   settleTurn(context.campaign, holder);
   if ("error" in result) {
     return Response.json({ error: result.error }, { status: 400 });
   }
-  const seq = allocateSeq(campaignId);
-  const message = insertCampaignMessage({
-    campaignId,
-    seq,
-    authorType: "system",
-    glyph: "system-party",
-    content: `The party lead sends ${String(result.dismissed)} on their way; they leave the party.`,
-  });
-  publishWithSeq(campaignId, seq, "message_added", { message });
+  // A departure tells the table itself.
+  if (!result.departed) {
+    const seq = allocateSeq(campaignId);
+    const message = insertCampaignMessage({
+      campaignId,
+      seq,
+      authorType: "system",
+      glyph: "system-party",
+      content: `The party lead sends ${String(result.dismissed)} on their way; they leave the party.`,
+    });
+    publishWithSeq(campaignId, seq, "message_added", { message });
+  }
   requestDmTurn(campaignId);
   return Response.json({ ok: true });
 }
@@ -77,7 +83,7 @@ export async function PATCH(
   }
   const parsed = commandSchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {
-    return Response.json({ error: "Say who commands them in fights: a player, or nobody for the DM." }, { status: 400 });
+    return Response.json({ error: "Say who commands them in fights: a player, or nobody for the GM." }, { status: 400 });
   }
   const sheet = getSheetById(characterId);
   if (!sheet || sheet.campaignId !== campaignId || !commandable(sheet)) {

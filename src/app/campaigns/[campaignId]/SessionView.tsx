@@ -1396,13 +1396,13 @@ export function SessionView({
         tours={[
           {
             label: "Tour the table",
-            detail: "How a player takes a turn, asks the DM, and finds the party, the story and the maps.",
+            detail: "How a player takes a turn, asks the GM, and finds the party, the story and the maps.",
             onStart: () => startTour("player"),
           },
           ...(caps.adjudicates
             ? [
                 {
-                  label: "Tour the DM console",
+                  label: "Tour the GM console",
                   detail: "The floor, story beats, hand-over switches, the queue and the tools.",
                   onStart: () => startTour("dm"),
                 },

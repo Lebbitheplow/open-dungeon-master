@@ -34,7 +34,7 @@ export const VARIANT_TOGGLES: Array<{
   {
     key: "criticalFumbles",
     label: "Critical fumbles (narrated)",
-    tip: "A natural 1 on an attack roll comes with a minor mishap the DM describes. Narration only: the server changes no numbers.",
+    tip: "A natural 1 on an attack roll comes with a minor mishap the GM describes. Narration only: the server changes no numbers.",
   },
   {
     key: "encumbrance",
@@ -44,7 +44,7 @@ export const VARIANT_TOGGLES: Array<{
   {
     key: "lingeringInjuries",
     label: "Lingering injuries (narrated)",
-    tip: "A critical hit or dropping to 0 HP can leave a lasting injury the DM describes. Narration only: the server tracks no injury and changes no numbers.",
+    tip: "A critical hit or dropping to 0 HP can leave a lasting injury the GM describes. Narration only: the server tracks no injury and changes no numbers.",
   },
   {
     key: "powerfulCritical",
@@ -237,7 +237,7 @@ export function RulesPanel({
             {VARIANT_TOGGLES.map((toggle) => (
               <VariantSwitch key={toggle.key} label={toggle.label} tip={toggle.tip} on={Boolean(variant[toggle.key])} onChange={(next) => patchVariant({ [toggle.key]: next })} />
             ))}
-            <Tooltip content="How long short and long rests take at this table. The DM's rest tool follows it.">
+            <Tooltip content="How long short and long rests take at this table. The GM's rest tool follows it.">
               <span className="block pt-1.5">
                 <Select<RestVariant>
                   size="sm"
@@ -279,7 +279,7 @@ export function RulesPanel({
               rows={8}
               maxLength={20_000}
               placeholder={
-                "Write your table's house rules. Use headings to group them, e.g.\n\nDrinking potions:\nDrinking a potion is a bonus action at this table.\n\nThe DM retrieves only the relevant rules each turn."
+                "Write your table's house rules. Use headings to group them, e.g.\n\nDrinking potions:\nDrinking a potion is a bonus action at this table.\n\nThe GM retrieves only the relevant rules each turn."
               }
               aria-label="House rules"
               className={cn(panelField, "leading-5")}
@@ -316,7 +316,7 @@ export function RulesPanel({
         <div className="panel reveal rounded-lg p-3">
           <SectionHead title="Rule sections" glyph="system-rulesets" aside={chunks.length} />
           <p className="mb-2 text-xs leading-5 text-stone-500">
-            The DM sees only the sections relevant to each turn. Pin one to include it every turn;
+            The GM sees only the sections relevant to each turn. Pin one to include it every turn;
             switch one off to silence it without deleting the text.
           </p>
           <ul className="stagger space-y-1.5">
@@ -333,8 +333,8 @@ export function RulesPanel({
                   always
                   onClick={() => patchChunk(chunk.id, { pinned: !chunk.pinned })}
                   aria-pressed={chunk.pinned}
-                  aria-label={chunk.pinned ? "Unpin: retrieved only when relevant" : "Pin: included in every DM turn"}
-                  title={chunk.pinned ? "Unpin: retrieved only when relevant" : "Pin: included in every DM turn"}
+                  aria-label={chunk.pinned ? "Unpin: retrieved only when relevant" : "Pin: included in every GM turn"}
+                  title={chunk.pinned ? "Unpin: retrieved only when relevant" : "Pin: included in every GM turn"}
                   className={cn("shrink-0", chunk.pinned && "text-amber-300")}
                 >
                   <Pin className={cn("size-3.5", chunk.pinned && "fill-current")} />

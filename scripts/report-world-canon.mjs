@@ -47,5 +47,5 @@ if (process.argv.includes("--json")) {
 } else {
   const list = (items) => (items.length ? items.map((item) => `  ${item.campaign} · ${item.title} (${item.canon})`).join("\n") : "  none");
   console.log(`Now held back from players (not canon, written for the table): ${heldBack.length}\n${list(heldBack)}\n`);
-  console.log(`Canon, DM-only, from a WorldForge file (check the author meant it): ${keptByImport.length}\n${list(keptByImport)}`);
+  console.log(`Canon, GM-only, from a WorldForge file (check the author meant it): ${keptByImport.length}\n${list(keptByImport)}`);
 }

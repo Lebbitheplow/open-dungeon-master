@@ -169,7 +169,7 @@ export default {
     if (await tableTab.count()) await t.tap(tableTab);
     const held = visible('[data-side-notice="foe"]').first();
     await eventually(() => held.isVisible(), { timeoutMs: 20_000, label: "the dominated notice" });
-    check((await held.textContent()) === `${tamsin.name} is dominated: the DM plays ${tamsin.name} until the charm ends.`, `the player is told (${await held.textContent()})`);
+    check((await held.textContent()) === `${tamsin.name} is dominated: the GM plays ${tamsin.name} until the charm ends.`, `the player is told (${await held.textContent()})`);
     check((await held.evaluate((node) => node.parentElement?.getAttribute("role"))) === "status", "the notice is a status a screen reader announces");
     await untilStill(page);
     await t.shot("held");

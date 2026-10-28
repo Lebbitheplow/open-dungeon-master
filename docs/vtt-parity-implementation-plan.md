@@ -993,7 +993,7 @@ Each phase closes only when:
 
 The desktop and Android apps are not a browser onto the server. Since
 client 0.8.0 they render the game as their own screens: the renderer's
-game bundle (`src/renderer/game/index.tsx` in `open-dungeon-master-client`)
+game bundle (`src/renderer/game/index.tsx` in `open-game-master-client`)
 compiles the server's page components through the `@/` alias with Preact,
 `runtime.ts` patches `fetch`, `EventSource` and media sources so
 root-relative requests reach the host with a bearer token, and

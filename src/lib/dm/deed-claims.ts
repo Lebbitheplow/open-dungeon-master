@@ -72,5 +72,5 @@ export function chapterDeedInstructions(campaign: Campaign, sheets: readonly Cha
   if (campaign.gameSettings.narrationGuard || !conscienceOn(campaign) || !consciousCompanions(sheets).length) {
     return "";
   }
-  return `For each deed a party character committed this chapter that a companion would judge (killing someone helpless, torture, robbing people with little, necromancy, desecration, slaving, cruelty, betraying an ally, breaking their word, sparing a beaten foe), add a fact with category "party" and subject "${DEED_FACT_SUBJECT}: <the character's name>" saying what they did and who saw it.`;
+  return `For each deed a party character committed this chapter that a companion would judge (killing someone helpless, torture, robbing people with little, necromancy, desecration, slaving, cruelty, betraying an ally, breaking their word, sparing a beaten foe, burying the dead, freeing captives, handing a wrongdoer to the law), add a fact with category "party" and subject "${DEED_FACT_SUBJECT}: <the character's name>" saying what they did and who saw it.`;
 }

@@ -123,7 +123,7 @@ export function AdminStorageSection() {
   return (
     <div className="space-y-3">
       <p className="text-xs leading-5 text-stone-500">
-        The story is kept forever: every message, roll, note, sheet, chapter snapshot and DM conversation. Once a day
+        The story is kept forever: every message, roll, note, sheet, chapter snapshot and GM conversation. Once a day
         the server clears what nothing reads back (live updates older than a reconnecting page replays, prompt traces
         past a week, usage rows past 90 days merged by month with the same totals) and hands the space to the disk.
       </p>

@@ -134,10 +134,10 @@ function AuthScreen({ onAuthed }: { onAuthed: (user: SessionUser) => void }) {
             <img src="/assets/ui/book-closed.webp" alt="" className="auth-mark" />
             <div>
               <h1 className="gold-title text-balance font-display text-3xl tracking-wide sm:text-4xl">
-                Open Dungeon Master
+                Open Game Master
               </h1>
               <p className="mt-2 text-pretty font-serif text-sm leading-6 text-stone-400">
-                Gather your party. An AI Dungeon Master runs the table; the dice
+                Gather your party. An AI Game Master runs the table; the dice
                 are honest and the story is yours.
               </p>
             </div>

@@ -374,7 +374,7 @@ export async function gatherSetup(settings: StorySettings, table?: ReportTable):
     first.push(`A newer release is out (${update.latest.version}); this server runs ${build.version}. Update first: the problem may already be fixed.`);
   }
   if (table && settings.textProvider === "none" && table.dmMode !== "human") {
-    first.push(`No narrator is set up, but this table's DM mode (${table.dmMode}) needs one.`);
+    first.push(`No narrator is set up, but this table's GM mode (${table.dmMode}) needs one.`);
   }
   const [narrator, helper, agentProgram, narration, dictation] = await Promise.all([
     narratorFacts(settings, here, narratorChecks),

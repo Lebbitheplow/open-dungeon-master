@@ -71,7 +71,7 @@ export function TimelineView({ api, world, onOpen }: { api: WorldApi; world: Wor
       {calendar ? <CalendarForm calendar={calendar} onSave={saveCalendar} onCancel={() => setCalendar(null)} /> : null}
       <p className="text-[11px] text-stone-500">
         These calendars date the world&apos;s history. The table&apos;s own clock (the day and hour in play) runs on its own and is set from the
-        session; nothing here moves it. The DM reads an event when the people or places it names are in play.
+        session; nothing here moves it. The GM reads an event when the people or places it names are in play.
       </p>
 
       <div className="flex justify-between">

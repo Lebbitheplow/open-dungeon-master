@@ -48,7 +48,7 @@ try {
     const result = await requestHarnessMessage(messages, {}, { role: "utility" });
     const took = Date.now() - started;
     assert.equal(result.error, undefined, `call ${call} failed: ${result.error ? await result.error.text() : ""}`);
-    assert.equal(result.message.content, "The fake Dungeon Master narrates.");
+    assert.equal(result.message.content, "The fake Game Master narrates.");
     assert.ok(took < 5_000, `call ${call} waited ${took} ms for a slot`);
   }
   assert.ok(refusedFolders.length >= 4, "every run tried to remove its folder");

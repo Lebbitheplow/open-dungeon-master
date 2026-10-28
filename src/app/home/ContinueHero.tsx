@@ -104,7 +104,7 @@ export function RecapPanel({ campaign }: { campaign: HomeCampaign }) {
       ? "The table is set and the seats are filling. The tale begins when the party is gathered."
       : campaign.status === "ended"
         ? "This tale has been told to its end. The chronicle keeps every page."
-        : "The Dungeon Master has not spoken yet. Step in and the first scene is yours.";
+        : "The Game Master has not spoken yet. Step in and the first scene is yours.";
   return (
     <aside className="ts-recap ts-panel ts-reveal" style={{ animationDelay: "720ms" }} aria-label="When last we left">
       <span className="ts-bracket ts-bracket-tl" aria-hidden="true" />

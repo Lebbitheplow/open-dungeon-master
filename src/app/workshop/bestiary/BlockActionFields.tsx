@@ -155,7 +155,7 @@ export function AbilitiesEditor({ draft, onChange }: Props) {
         </button>
       ) : null}
       <span className="text-[11px] text-stone-500">
-        The DM spends these through the monster&apos;s turn: the server rolls the save, the dice and the recharge, and a legendary one costs its actions.
+        The GM spends these through the monster&apos;s turn: the server rolls the save, the dice and the recharge, and a legendary one costs its actions.
       </span>
     </div>
   );

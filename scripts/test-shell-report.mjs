@@ -43,8 +43,8 @@ function bundle(withSetup = true) {
         }
       : {}),
     readable: withSetup
-      ? ["Open Dungeon Master report, made now from a table.", "Version 0.30.0 on linux x64, Node v22.", "Narrator: openai, model m."]
-      : ["Open Dungeon Master report, made now from a table."],
+      ? ["Open Game Master report, made now from a table.", "Version 0.30.0 on linux x64, Node v22.", "Narrator: openai, model m."]
+      : ["Open Game Master report, made now from a table."],
   };
 }
 
@@ -61,7 +61,7 @@ await test("The app's facts go under Version and setup, with a line after the se
   assert.deepEqual(made.setup.app, FACTS);
   assert.equal(made.setup.version, "0.30.0");
   const app = made.readable.findIndex((line) => line.startsWith("App: "));
-  assert.match(made.readable[app], /^App: Open Dungeon Master 0\.22\.0 \(android\) on android, .*native screens, at a server elsewhere\.$/);
+  assert.match(made.readable[app], /^App: Open Game Master 0\.22\.0 \(android\) on android, .*native screens, at a server elsewhere\.$/);
   assert.match(made.readable[app - 1], /^Server: linux x64/);
   assert.equal(made.readable[app + 1], "Narrator: openai, model m.");
 });

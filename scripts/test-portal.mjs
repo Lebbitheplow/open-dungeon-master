@@ -29,7 +29,7 @@ const HOST = "https://host.example";
 const SIG = portalSignature(SECRET, HOST, TOKEN);
 
 test("portalOrigin accepts a bare http or https origin and nothing more", () => {
-  assert.equal(portalOrigin("https://play-abcd.opendungeonmaster.com"), "https://play-abcd.opendungeonmaster.com");
+  assert.equal(portalOrigin("https://play-abcd.opengamemaster.com"), "https://play-abcd.opengamemaster.com");
   assert.equal(portalOrigin("http://192.168.1.50:3005/"), "http://192.168.1.50:3005");
   assert.equal(portalOrigin("https://Example.com"), "https://example.com");
   assert.equal(portalOrigin("https://example.com/path"), null);

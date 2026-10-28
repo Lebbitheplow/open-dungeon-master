@@ -398,7 +398,7 @@ async function start(options: HarnessStartOptions) {
   );
 
   await peer.request("initialize", {
-    clientInfo: { name: "open_dungeon_master", title: "Open Dungeon Master", version: "1" },
+    clientInfo: { name: "open_dungeon_master", title: "Open Game Master", version: "1" },
     capabilities: { experimentalApi: true },
   });
   peer.notify("initialized", {});
@@ -532,7 +532,7 @@ async function probeAppServer(binary: string, env: Record<string, string>, cwd: 
   });
   try {
     await peer.request("initialize", {
-      clientInfo: { name: "open_dungeon_master", title: "Open Dungeon Master", version: "1" },
+      clientInfo: { name: "open_dungeon_master", title: "Open Game Master", version: "1" },
       capabilities: { experimentalApi: true },
     }, 20_000);
     peer.notify("initialized", {});
@@ -622,7 +622,7 @@ export const codexAdapter: HarnessAdapter = {
     }
     if (ignored.length > 0) {
       notes.push(
-        `This Codex ignores ${ignored.length === 1 ? "a setting" : "settings"} the lockdown relies on (${ignored.map((key) => `\`${key}\``).join(", ")}). Update Open Dungeon Master, or hold Codex at a version it supports.`,
+        `This Codex ignores ${ignored.length === 1 ? "a setting" : "settings"} the lockdown relies on (${ignored.map((key) => `\`${key}\``).join(", ")}). Update Open Game Master, or hold Codex at a version it supports.`,
       );
     }
     return {

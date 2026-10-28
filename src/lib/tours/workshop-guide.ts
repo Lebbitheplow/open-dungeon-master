@@ -38,8 +38,8 @@ export const WORKSHOP_GUIDES: ToolGuide[] = [
     atTable: "A campaign that brings the world in gets its own copy in its World tab, which only whoever runs the story sees. There, Reveal to the party turns a secret into lore the players read, and an Atlas map reaches the players' Map tab once you show it to the party.",
     tips: [
       "Every entry is the same row the Cast, Region, Factions and Lore tools edit: change it in either place.",
-      "Canon says what is settled. The AI DM is told a draft or an alternate telling as unsettled and leaves a retired entry out, and a lore entry that is not canon is kept from what players read until it is.",
-      "Players never read a hidden truth. The AI DM is told the hidden truths of people, places and factions, their ties, and the secrets the party has not learned, and never to state them outright.",
+      "Canon says what is settled. The AI GM is told a draft or an alternate telling as unsettled and leaves a retired entry out, and a lore entry that is not canon is kept from what players read until it is.",
+      "Players never read a hidden truth. The AI GM is told the hidden truths of people, places and factions, their ties, and the secrets the party has not learned, and never to state them outright.",
       "Calendars date the world's history. A campaign keeps its own clock, and an event here schedules nothing at the table.",
       "Choose What people believe in the web to see the world as the players will hear it.",
       "Without a text model, Outline, Forge, Ask and Draft are not offered, and without an image backend Paint is not; everything else works the same. An admin adds them under Admin > Text model defaults and Admin > Image generation.",
@@ -56,7 +56,7 @@ export const WORKSHOP_GUIDES: ToolGuide[] = [
       "Read What this board is missing and add the cards it suggests.",
       "Check What this becomes: it is what the board turns into when imported into a campaign.",
     ],
-    atTable: "A campaign that brings the board in gets its lore, quests, prepared fights, DM notes and story arc. A card that came from a WorldForge file says so, and opening that file again updates the card rather than adding another.",
+    atTable: "A campaign that brings the board in gets its lore, quests, prepared fights, GM notes and story arc. A card that came from a WorldForge file says so, and opening that file again updates the card rather than adding another.",
     tips: [
       "Links are dropdowns over the other tools, so build the NPC or the map first and the card can point at it.",
       "The missing list is counted, never guessed by a model.",
@@ -69,14 +69,14 @@ export const WORKSHOP_GUIDES: ToolGuide[] = [
     steps: [
       "Set the size and level in the bar at the top of the workshop and Save.",
       "Pick a character from your library and Add it, or Build a new one.",
-      "Or press Draft pregens: the AI DM proposes a hero for each seat of the party set above, and the builder's rules make each sheet at that party's level. Drafts are not offered to players until you tick them.",
+      "Or press Draft pregens: the AI GM proposes a hero for each seat of the party set above, and the builder's rules make each sheet at that party's level. Drafts are not offered to players until you tick them.",
       "Take one off with the cross; it stays in your library.",
     ],
     atTable: "The pregens are sheets ready for anyone who sits down without a character.",
     tips: [
       "A pregen whose level differs from the stand-in party is flagged on its card.",
       "Pregens ride along inside the bundle when you share the workshop.",
-      "A drafted pregen is marked Drafted by the AI DM until you edit it. Without a text model, Draft pregens is off and says why.",
+      "A drafted pregen is marked Drafted by the AI GM until you edit it. Without a text model, Draft pregens is off and says why.",
     ],
   },
   {
@@ -125,7 +125,7 @@ export const WORKSHOP_GUIDES: ToolGuide[] = [
       "Choose the map it opens on, then place each creature and the party's entrance on it.",
       "Write the plan: what the fight is worth, and what happens when.",
       "Prepare it. At the table the fight is one press of Deploy.",
-      "Press Test fight to play it now on a table only you can see: pick the stand-in party or your own characters, and who runs the enemies, the AI DM or you. With no AI DM set up, you do.",
+      "Press Test fight to play it now on a table only you can see: pick the stand-in party or your own characters, and who runs the enemies, the AI GM or you. With no AI GM set up, you do.",
     ],
     atTable: "Deploy lays the fight down on its map with its plan. A hand-built monster in its roster is copied into the campaign that brings the fight in.",
     tips: [
@@ -144,7 +144,7 @@ export const WORKSHOP_GUIDES: ToolGuide[] = [
       "Fill in who they are underneath, what they want, and how they feel about the others.",
       "Save them, then add a face: upload one or have one painted.",
     ],
-    atTable: "The AI DM plays them by their personality and what they want, and a human DM finds them in the Cast.",
+    atTable: "The AI GM plays them by their personality and what they want, and a human GM finds them in the Cast.",
     tips: [
       "Suggest fills a single field from a text model, when the server has one; an admin adds one under Admin > Text model defaults.",
       "Set aside hides someone without deleting them; the cast also fills itself in as the party meets people.",
@@ -161,7 +161,7 @@ export const WORKSHOP_GUIDES: ToolGuide[] = [
       "Set where the party stands with the pips on its row.",
       "Edit it and open its World entry to write its members, seat and ties in WorldForge.",
     ],
-    atTable: "The AI DM is told each faction, the party's standing with it and what it wants, and in a campaign a goal moves on in the background as chapters close.",
+    atTable: "The AI GM is told each faction, the party's standing with it and what it wants, and in a campaign a goal moves on in the background as chapters close.",
     tips: [
       "A faction is the same record as its WorldForge entry: change it in either place.",
       "A world pack's Pull from this workshop takes these factions, with where each is based and who belongs.",
@@ -197,7 +197,7 @@ export const WORKSHOP_GUIDES: ToolGuide[] = [
       "Keep it. The character builder and the engine read it like the books' own; the editor then says where it is offered.",
       "Give an item a World entry from its editor, to tie it to your setting.",
     ],
-    atTable: "The character builder, shops and inventories offer it beside the books' own, for your own characters and at every table you run as its owner, DM or assistant DM; the engine reads it the same way. At someone else's table it counts once that table's owner or DM keeps a copy, from a Workshop bundle with your Homebrew in it. Bring in prep does not copy Homebrew: it is yours already.",
+    atTable: "The character builder, shops and inventories offer it beside the books' own, for your own characters and at every table you run as its owner, GM or assistant GM; the engine reads it the same way. At someone else's table it counts once that table's owner or GM keeps a copy, from a Workshop bundle with your Homebrew in it. Bring in prep does not copy Homebrew: it is yours already.",
     tips: [
       "An item a World entry links to is copied into a campaign that brings that world in, and the workshop's bundle can carry your whole shelf or only what the workshop uses.",
       "A class of your own is a class to every engine: the builder offers it under From Homebrew, and its subclasses are made under it here.",
@@ -218,7 +218,7 @@ export const WORKSHOP_GUIDES: ToolGuide[] = [
       "Attach a picture to make it a handout, add tags, and Add.",
       "Pin the entries the narrator should see every turn.",
     ],
-    atTable: "Pinned entries reach the narrator every turn and the rest are found when relevant. Players read the entries that are theirs in the Story tab; one kept for the DM, or not canon yet in WorldForge, they do not.",
+    atTable: "Pinned entries reach the narrator every turn and the rest are found when relevant. Players read the entries that are theirs in the Story tab; one kept for the GM, or not canon yet in WorldForge, they do not.",
     tips: [
       "Unpinned entries are retrieved by relevance, so a long bible costs nothing until it is needed.",
       "Tags already in use are offered beside the tag field.",

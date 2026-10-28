@@ -82,7 +82,7 @@ await test("the join door refuses an ally the DM plays and names the companion p
   const before = world.sheets().length;
   const { status, json } = await call(world, SHEET, "POST", player, { libraryCharacterId: ally.id });
   assert.equal(status, 400);
-  assert.match(json.error, /ally the DM plays/);
+  assert.match(json.error, /ally the GM plays/);
   assert.match(json.error, /Build a companion/);
   assert.equal(world.sheets().length, before, "no sheet was made");
 });
@@ -208,7 +208,7 @@ const guestSpare = createCharacter(guest.id, 1, libraryInput("Lobby Spare"), "pc
 await test("a lobby switch to an ally the DM plays is refused with the old sheet intact", async () => {
   const { status, json } = await call(lobby, SHEET, "PUT", guest, { libraryCharacterId: guestAlly.id });
   assert.equal(status, 400);
-  assert.match(json.error, /ally the DM plays/);
+  assert.match(json.error, /ally the GM plays/);
   const kept = sheetsDb.getSheetForUser(lobby.campaignId, guest.id);
   assert.equal(kept?.id, guestHero.id, "the player still has the character they had");
 });
@@ -219,7 +219,7 @@ await test("a lobby edit under an ally's library id is refused with the old shee
     sheet: libraryInput("Lobby Wren"),
   });
   assert.equal(status, 400);
-  assert.match(json.error, /ally the DM plays/);
+  assert.match(json.error, /ally the GM plays/);
   assert.equal(sheetsDb.getSheetForUser(lobby.campaignId, guest.id)?.id, guestHero.id);
 });
 
@@ -264,7 +264,7 @@ await test("at a multiplayer AI table on Auto the handoff names Auto, guests onl
   const refused = await call(autoTable, ADOPT, "POST", autoTable.owner, { sheetId: wrenCopy.id });
   assert.equal(refused.status, 409);
   assert.equal(refused.json.code, "auto-guests");
-  assert.match(refused.json.error, /^Wren cannot be handed to the DM yet\. AI companions is on Auto/);
+  assert.match(refused.json.error, /^Wren cannot be handed to the GM yet\. AI companions is on Auto/);
   assert.match(refused.json.error, /"Party members and guests" \(Settings tab, Table settings, Allies\)/);
   assert.equal(autoTable.sheet(wrenCopy.id).userId, autoPlayer.id, "unchanged when refused");
   // The library's "Join the party" hears the same.

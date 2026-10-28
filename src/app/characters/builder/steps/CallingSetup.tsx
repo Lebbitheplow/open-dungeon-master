@@ -47,7 +47,7 @@ export function ContentNotices({ pack, packInstalled }: { pack: WorldPack | null
           <p className="text-xs text-amber-100">
             <span className="font-medium">{pack.name}</span> · {pack.blurb}
           </p>
-          <p className="mt-1 text-[11px] text-stone-400">
+          <p className="mt-1 text-sm text-stone-400">
             Names only. Every race, class, spell and item below plays by the same 5e rules.
           </p>
           <UnofficialPackNotice

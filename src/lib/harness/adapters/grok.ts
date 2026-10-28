@@ -35,7 +35,7 @@ export function grokAgentProfile(system: string, images: boolean): string {
   return [
     "---",
     "name: odm-dm",
-    "description: Open Dungeon Master",
+    "description: Open Game Master",
     `tools: [${tools.map((tool) => JSON.stringify(tool)).join(", ")}]`,
     "---",
     "",
@@ -139,7 +139,7 @@ async function start(options: HarnessStartOptions) {
   await peer.request("initialize", {
     protocolVersion: 1,
     clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false },
-    clientInfo: { name: "open-dungeon-master", version: "1" },
+    clientInfo: { name: "open-game-master", version: "1" },
   });
   await peer
     .request("authenticate", { methodId: options.env.XAI_API_KEY ? "xai.api_key" : "cached_token" })

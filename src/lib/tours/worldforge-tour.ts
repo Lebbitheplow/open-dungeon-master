@@ -83,7 +83,7 @@ export const WORLD_TOUR_STEPS: TourStep[] = [
   {
     id: "secrets",
     title: "Secrets",
-    body: "What the secret is, whom it is about and who keeps it. The AI DM is told the ones the party has not learned, so a keeper can let one slip. In a campaign's World tab, Reveal to the party writes it into the players' lore as they learn it and marks it learned.",
+    body: "What the secret is, whom it is about and who keeps it. The AI GM is told the ones the party has not learned, so a keeper can let one slip. In a campaign's World tab, Reveal to the party writes it into the players' lore as they learn it and marks it learned.",
     anchors: ["world-new-secret"],
     prepare: "world-view-secrets",
     lazy: true,

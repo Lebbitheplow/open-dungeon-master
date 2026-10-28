@@ -61,7 +61,7 @@ export async function runStorySetup(campaignId: string) {
       {
         role: "system",
         content: withLanguage(
-          `You design the seed of a D&D 5e campaign. Reply with ONLY a JSON object, no code fences, shaped exactly: {"premise": string, "openingScene": string, "secretOutline": string}. premise: 2-3 sentences the players will read. openingScene: one sentence naming where the story opens. secretOutline: 6-10 numbered beats for the DM only, with a central antagonist, two twists, and a finale; players never see this.${
+          `You design the seed of a D&D 5e campaign. Reply with ONLY a JSON object, no code fences, shaped exactly: {"premise": string, "openingScene": string, "secretOutline": string}. premise: 2-3 sentences the players will read. openingScene: one sentence naming where the story opens. secretOutline: 6-10 numbered beats for the GM only, with a central antagonist, two twists, and a finale; players never see this.${
             prepared
               ? " The table has prepared a story arc: the premise restates it, the opening scene is where its first beat begins, and the secret outline follows its beats in their order, adding detail rather than a different plot."
               : ""

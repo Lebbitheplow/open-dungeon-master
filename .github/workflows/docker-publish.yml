@@ -39,7 +39,12 @@ on:
         type: string
 
 env:
-  DOCKERHUB_IMAGE: lebbi/open-dungeon-master
+  DOCKERHUB_IMAGE: lebbi/open-game-master
+  # The image's names from before the rename to Open Game Master. Every release
+  # still goes to them too, so an install whose compose file or `docker pull`
+  # names them keeps updating; delete these two once those installs have moved.
+  LEGACY_GHCR_IMAGE: ghcr.io/lebbitheplow/open-dungeon-master
+  LEGACY_DOCKERHUB_IMAGE: lebbi/open-dungeon-master
 
 # A beta promoted while its own image is still building waits for that build,
 # then finds the image and retags it instead of building it a second time.
@@ -68,8 +73,14 @@ jobs:
         run: |
           # GHCR rejects uppercase in a repository path; the owner may have it.
           images="ghcr.io/$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')"
+          if [ -n "$LEGACY_GHCR_IMAGE" ]; then
+            images="$(printf '%s\n%s' "$images" "$LEGACY_GHCR_IMAGE")"
+          fi
           if [ "$HAS_DOCKERHUB" = "true" ]; then
             images="$(printf '%s\n%s' "$images" "$DOCKERHUB_IMAGE")"
+            if [ -n "$LEGACY_DOCKERHUB_IMAGE" ]; then
+              images="$(printf '%s\n%s' "$images" "$LEGACY_DOCKERHUB_IMAGE")"
+            fi
           else
             echo "::notice::DOCKERHUB_USERNAME/DOCKERHUB_TOKEN not set; publishing to GHCR only."
           fi
@@ -149,8 +160,8 @@ jobs:
           flavor: |
             latest=${{ github.event.action == 'released' }}
           labels: |
-            org.opencontainers.image.title=Open Dungeon Master
-            org.opencontainers.image.description=Self-hosted multiplayer D&D 5e platform with an AI Dungeon Master
+            org.opencontainers.image.title=Open Game Master
+            org.opencontainers.image.description=Self-hosted multiplayer D&D 5e platform with an AI Game Master
 
       - name: Promote the beta's image
         if: ${{ steps.channel.outputs.mode == 'retag' }}

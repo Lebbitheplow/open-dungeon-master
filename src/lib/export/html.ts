@@ -78,7 +78,7 @@ export function renderStoryHtml(doc: StoryDocument): string {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="description" content="${escapeXml(doc.premise).slice(0, 300)}" />
-<meta name="generator" content="Open Dungeon Master" />
+<meta name="generator" content="Open Game Master" />
 <title>${escapeXml(doc.title)} — Story</title>
 <style>
   :root { color-scheme: dark; }
@@ -128,7 +128,7 @@ ${toc}
   </nav>
   ${questLog}
   ${chapters}
-  <p class="footer">Exported from Open Dungeon Master on ${escapeXml(exportedDate)}.</p>
+  <p class="footer">Exported from Open Game Master on ${escapeXml(exportedDate)}.</p>
 </div>
 </body>
 </html>`;

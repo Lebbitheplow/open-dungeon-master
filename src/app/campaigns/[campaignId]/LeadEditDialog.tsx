@@ -472,7 +472,7 @@ export function LeadEditDialog({
               value={reason}
               onChange={(event) => setReason(event.target.value)}
               maxLength={300}
-              placeholder="DM double-counted the goblin's hit"
+              placeholder="GM double-counted the goblin's hit"
               className={field}
             />
           </label>

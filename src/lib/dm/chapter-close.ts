@@ -181,7 +181,7 @@ function chapterPlay(campaignId: string, chapter: Chapter, seqEnd: number, fromS
   );
   const lines = messages
     .filter((message) => message.seq >= fromSeq)
-    .map((message) => `${message.authorType === "dm" ? "DM" : "Player"}: ${message.content}`);
+    .map((message) => `${message.authorType === "dm" ? "GM" : "Player"}: ${message.content}`);
   const openedAt = messages[0]?.createdAt ?? "";
   const spoken = openedAt ? renderTranscript(listTranscriptSince(campaignId, openedAt, 400), 12_000) : "";
   if (spoken) {

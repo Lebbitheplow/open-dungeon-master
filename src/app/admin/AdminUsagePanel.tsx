@@ -210,7 +210,7 @@ export function AdminUsagePanel() {
                 <th className={th}>Lead</th>
                 <th className={th}>Members</th>
                 <th className={th}>Characters</th>
-                <th className={th}>DM turns</th>
+                <th className={th}>GM turns</th>
                 <th className={th}>Active days</th>
                 <th className={th}>Last activity</th>
                 <th className={th}>Storage</th>
@@ -244,7 +244,7 @@ export function AdminUsagePanel() {
           </table>
         </div>
         <p className="mt-2 text-[11px] text-stone-500">
-          Active days are days with at least one DM turn, which is a count of play rather than hours. Storage is every
+          Active days are days with at least one GM turn, which is a count of play rather than hours. Storage is every
           picture and file the campaign&rsquo;s rows name, with the resized copies beside each.
         </p>
       </section>
@@ -296,7 +296,7 @@ export function AdminUsagePanel() {
             </table>
           </div>
           <p className="mt-2 text-[11px] text-stone-500">
-            One row per kind of call: the DM&rsquo;s turns, the reader, summaries, Ask and the rest. Times are medians and
+            One row per kind of call: the GM&rsquo;s turns, the reader, summaries, Ask and the rest. Times are medians and
             the 95th percentile; input, output and reasoning are averages of what the backends reported; cached is the
             share of input a backend said it served from its prompt cache, where it says. A dash is a figure no backend
             reported. Kept 30 days, with no prompt or reply text.

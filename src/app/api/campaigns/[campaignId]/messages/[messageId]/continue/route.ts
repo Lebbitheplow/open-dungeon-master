@@ -27,14 +27,14 @@ export async function POST(
   const latest = getLatestDmMessage(campaignId);
   if (!latest || latest.id !== messageId) {
     return Response.json(
-      { error: "Only the DM's most recent message can be continued." },
+      { error: "Only the GM's most recent message can be continued." },
       { status: 400 },
     );
   }
   // A turn in flight is about to write past this narration, and the continue
   // would queue behind it and extend a message the story has moved on from.
   if (getDmStatus(campaignId) !== "idle") {
-    return Response.json({ error: "The DM is mid-turn; try again after." }, { status: 409 });
+    return Response.json({ error: "The GM is mid-turn; try again after." }, { status: 409 });
   }
   // Narration, which would wait at the DM queue's gate with this request
   // held open for the whole break: refused at once instead.

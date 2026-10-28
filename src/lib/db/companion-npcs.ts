@@ -166,6 +166,8 @@ export type GoneCompanion = {
   race: string;
   class: string;
   gender: string;
+  // The characters they still cared for as they went (issue 563).
+  caresFor: string[];
 };
 
 export function goneCompanions(campaignId: string): GoneCompanion[] {
@@ -184,7 +186,8 @@ export function goneCompanions(campaignId: string): GoneCompanion[] {
       continue;
     }
     const sheet = departed.sheet as { portrait?: { url?: unknown }; race?: unknown; class?: unknown; gender?: unknown; deathSaves?: { dead?: unknown } };
-    const how = companionDeparture(npc.id).gone?.how ?? (sheet.deathSaves?.dead === true ? "Fell" : "Left the party");
+    const record = companionDeparture(npc.id).gone;
+    const how = record?.how ?? (sheet.deathSaves?.dead === true ? "Fell" : "Left the party");
     gone.push({
       name: npc.name,
       how,
@@ -193,6 +196,7 @@ export function goneCompanions(campaignId: string): GoneCompanion[] {
       race: typeof sheet.race === "string" ? sheet.race : "",
       class: typeof sheet.class === "string" ? sheet.class : "",
       gender: typeof sheet.gender === "string" ? sheet.gender : "",
+      caresFor: record?.caresFor ?? [],
     });
   }
   return gone.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));

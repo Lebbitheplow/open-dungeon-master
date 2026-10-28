@@ -25,7 +25,7 @@ const { getDmTurn, getLatestDmTurnId } = await import("../src/lib/db/dm-turns.ts
 const { insertPlayerWhisper } = await import("../src/lib/db/dm-whispers.ts");
 const { getDatabase } = await import("../src/lib/db/core.ts");
 const { getDmStatus } = await import("../src/lib/dm/status.ts");
-const { DM_HALTED_PREFIX } = await import("../src/lib/campaign-types.ts");
+const { DM_HALTED_PREFIX, haltedTurnPrefix } = await import("../src/lib/campaign-types.ts");
 const { RESTART_HALT } = await import("../src/lib/dm/restart-recovery.ts");
 const { register } = await import("../src/instrumentation.ts");
 const { requestDmTurn } = await import("../src/lib/dm/loop.ts");
@@ -127,6 +127,12 @@ async function table() {
   model.pointAt(world);
   return { world, kara, model };
 }
+
+await test("A halted notice is known by its mark in either wording: the GM's, or the DM's an older transcript kept.", () => {
+  assert.equal(haltedTurnPrefix(`${DM_HALTED_PREFIX}the backend did not answer.`), DM_HALTED_PREFIX);
+  assert.equal(haltedTurnPrefix("The DM ran into a problem: the backend did not answer."), "The DM ran into a problem: ");
+  assert.equal(haltedTurnPrefix("Kara ends their turn."), "");
+});
 
 await test("A backend error after the turn granted gold parks it as failed with a notice the lead can retry; Retry narrates once and never grants the gold again.", async () => {
   const { world, kara, model } = await table();

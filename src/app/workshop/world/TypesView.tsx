@@ -127,7 +127,7 @@ function TypeForm({ type, isNew, onSave, onCancel }: { type: WorldType; isNew: b
             ) : (
               <span />
             )}
-            <label className="flex items-center gap-1 text-[11px] text-stone-400" title="Never shown outside the DM's own view">
+            <label className="flex items-center gap-1 text-[11px] text-stone-400" title="Never shown outside the GM's own view">
               <input type="checkbox" checked={field.authorOnly} onChange={(event) => setField(field.id, { authorOnly: event.target.checked })} className="accent-red-400" />
               Author only
             </label>

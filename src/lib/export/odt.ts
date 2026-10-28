@@ -183,9 +183,9 @@ function buildMetaXml(doc: StoryDocument): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <office:document-meta ${OFFICE_NS} office:version="1.3">
   <office:meta>
-    <meta:generator>Open Dungeon Master</meta:generator>
+    <meta:generator>Open Game Master</meta:generator>
     <dc:title>${escapeXml(doc.title)} — Story</dc:title>
-    <dc:creator>Open Dungeon Master</dc:creator>
+    <dc:creator>Open Game Master</dc:creator>
     <meta:creation-date>${escapeXml(doc.meta.exportedAt)}</meta:creation-date>
     <dc:date>${escapeXml(doc.meta.exportedAt)}</dc:date>
   </office:meta>

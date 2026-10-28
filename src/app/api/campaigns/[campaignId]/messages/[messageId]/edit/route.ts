@@ -42,7 +42,7 @@ export async function POST(
   // DM narration only. A player's own words are theirs, and a system notice
   // is a record of something the server did.
   if (message.authorType !== "dm") {
-    return Response.json({ error: "Only DM narration can be edited." }, { status: 400 });
+    return Response.json({ error: "Only GM narration can be edited." }, { status: 400 });
   }
 
   const check = checkEdit(message.content, parsed.data.content);

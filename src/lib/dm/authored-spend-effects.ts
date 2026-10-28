@@ -364,7 +364,7 @@ export function resolveSpendEffect(ctx: SpendContext, does: SpendDoes): Resoluti
           result: { ...result, applied: `${condition}: +${rolled} AC until ${sheet.name}'s next turn.` },
         };
       }
-      return { result: { ...result, note: "A slashing or mobile flourish's second target or push is the DM's to resolve with its own tool." } };
+      return { result: { ...result, note: "A slashing or mobile flourish's second target or push is the GM's to resolve with its own tool." } };
     }
     case "storm_aura":
       return stormAura(ctx);

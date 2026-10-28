@@ -1,14 +1,14 @@
 <div align="center">
 
-<img src="docs/banner.png" alt="Open Dungeon Master" width="100%">
+<img src="docs/banner.png" alt="Open Game Master" width="100%">
 
 <br>
 
-[![Docker pulls](https://img.shields.io/docker/pulls/lebbi/open-dungeon-master?label=docker%20pulls&logo=docker&logoColor=d4ab3a&color=d4ab3a&labelColor=151229&style=flat-square)](https://hub.docker.com/r/lebbi/open-dungeon-master)
-[![App downloads](https://img.shields.io/github/downloads/Lebbitheplow/open-dungeon-master-client/total?label=app%20downloads&logo=github&logoColor=d4ab3a&color=d4ab3a&labelColor=151229&style=flat-square)](https://github.com/Lebbitheplow/open-dungeon-master-client/releases)
-[![Server downloads](https://img.shields.io/github/downloads/Lebbitheplow/open-dungeon-master/total?label=server%20downloads&logo=github&logoColor=d4ab3a&color=d4ab3a&labelColor=151229&style=flat-square)](https://github.com/Lebbitheplow/open-dungeon-master/releases)
-[![Latest release](https://img.shields.io/github/v/release/Lebbitheplow/open-dungeon-master?label=release&color=d4ab3a&labelColor=151229&style=flat-square)](https://github.com/Lebbitheplow/open-dungeon-master/releases/latest)
-[![GitHub stars](https://img.shields.io/github/stars/Lebbitheplow/open-dungeon-master?logo=github&logoColor=d4ab3a&color=d4ab3a&labelColor=151229&style=flat-square)](https://github.com/Lebbitheplow/open-dungeon-master/stargazers)
+[![Docker pulls](https://img.shields.io/docker/pulls/lebbi/open-dungeon-master?label=docker%20pulls&logo=docker&logoColor=d4ab3a&color=d4ab3a&labelColor=151229&style=flat-square)](https://hub.docker.com/r/lebbi/open-game-master)
+[![App downloads](https://img.shields.io/github/downloads/Lebbitheplow/open-game-master-client/total?label=app%20downloads&logo=github&logoColor=d4ab3a&color=d4ab3a&labelColor=151229&style=flat-square)](https://github.com/Lebbitheplow/open-game-master-client/releases)
+[![Server downloads](https://img.shields.io/github/downloads/Lebbitheplow/open-game-master/total?label=server%20downloads&logo=github&logoColor=d4ab3a&color=d4ab3a&labelColor=151229&style=flat-square)](https://github.com/Lebbitheplow/open-game-master/releases)
+[![Latest release](https://img.shields.io/github/v/release/Lebbitheplow/open-game-master?label=release&color=d4ab3a&labelColor=151229&style=flat-square)](https://github.com/Lebbitheplow/open-game-master/releases/latest)
+[![GitHub stars](https://img.shields.io/github/stars/Lebbitheplow/open-game-master?logo=github&logoColor=d4ab3a&color=d4ab3a&labelColor=151229&style=flat-square)](https://github.com/Lebbitheplow/open-game-master/stargazers)
 [![Discord](https://img.shields.io/badge/chat-Discord-e0703a?logo=discord&logoColor=e0703a&labelColor=151229&style=flat-square)](https://discord.gg/B2tQFr3TYD)
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-d4ab3a?labelColor=151229&style=flat-square)](LICENSE)
@@ -20,15 +20,20 @@
 
 </div>
 
-**Open Dungeon Master** runs multiplayer (and solo) Dungeons &amp; Dragons 5e
-campaigns with an AI Dungeon Master, on your own machine. The narrator is whichever
+> [!NOTE]
+> Open Game Master was called Open Dungeon Master until October 2026. The apps,
+> worlds and accounts carry over unchanged; only the name and the website
+> (now [opengamemaster.com](https://opengamemaster.com)) moved.
+
+**Open Game Master** runs multiplayer (and solo) Dungeons &amp; Dragons 5e
+campaigns with an AI Game Master, on your own machine. The narrator is whichever
 AI you already have: **a local model** (llama.cpp, Ollama, LM Studio, vLLM), **an
 API key** (OpenAI, OpenRouter, or any OpenAI-compatible endpoint), or **a CLI agent
 you already pay for** (Codex, Grok Build, Claude Code, opencode), which narrates on
 its own subscription with no API key handed over; Codex and Grok Build paint the
 pictures too. The model is the creative mind
 and narrator; a stack of server-side engines enforces the 5e rules for both the
-players and the DM. **The narrator never owns the numbers**: dice, hit points, spell slots, conditions, and the death track are computed and
+players and the GM. **The narrator never owns the numbers**: dice, hit points, spell slots, conditions, and the death track are computed and
 clamped by the backend, and the model changes game state only through tools the
 server validates.
 
@@ -36,13 +41,13 @@ The AI drives the session, requesting rolls, starting encounters, and playing NP
 and companions, following a secret story arc it regenerates as the campaign moves.
 
 > [!TIP]
-> **New here? Start with the [knowledge base](https://opendungeonmaster.com/guide/)
+> **New here? Start with the [knowledge base](https://opengamemaster.com/guide/)
 > on the website.** It covers choosing a setup, the
-> [system requirements](https://opendungeonmaster.com/guide/start/system-requirements/),
+> [system requirements](https://opengamemaster.com/guide/start/system-requirements/),
 > installing the desktop and Android apps or this server, playing, leading a table,
-> running one as a human Dungeon Master and every setting, and it is checked against
+> running one as a human Game Master and every setting, and it is checked against
 > each release. Most players never need a server: the
-> [apps](https://opendungeonmaster.com/download/) host a world themselves. This README
+> [apps](https://opengamemaster.com/download/) host a world themselves. This README
 > and [docs/](docs) are the reference for people running and changing the server.
 
 <div align="center">
@@ -64,7 +69,7 @@ and companions, following a secret story arc it regenerates as the campaign move
 </tr>
 </table>
 
-<img src="docs/screenshot-phone.png" alt="The same table on a phone: DM narration above the hand of cards, the turn order and the table's tab bar" width="240">
+<img src="docs/screenshot-phone.png" alt="The same table on a phone: GM narration above the hand of cards, the turn order and the table's tab bar" width="240">
 
 <sub><i>The same table on a phone. The apps compile these pages into native screens.</i></sub>
 
@@ -81,7 +86,7 @@ and companions, following a secret story arc it regenerates as the campaign move
 </td>
 <td width="50%" valign="top" align="center">
 <img src="public/sidebar-icons/text-model.webp" width="56"><br>
-<b>Your AI Dungeon Master, your choice</b><br>
+<b>Your AI Game Master, your choice</b><br>
 <sub>A local model (llama.cpp, Ollama, LM Studio, vLLM; gpt-oss-20b on a 16 GB gaming card), an API key (OpenAI, OpenRouter, any OpenAI-compatible endpoint with tool calling), or a CLI agent subscription you already have: Codex or Grok Build, which also paint the pictures, Claude Code or opencode. Whichever narrates, it makes the creative calls and never states a roll or edits its own numbers.</sub>
 </td>
 </tr>
@@ -125,7 +130,7 @@ and companions, following a secret story arc it regenerates as the campaign move
 <td width="50%" valign="top" align="center">
 <img src="public/sidebar-icons/support.webp" width="56"><br>
 <b>Run the table yourself</b><br>
-<sub>A human-DM mode where a person narrates (usually over the voice chat) and the app keeps sheets, dice, maps and the record straight, with a DM console, story-beat capture, and an assisted mode that delegates monsters, read-alouds or a covered absence to the AI.</sub>
+<sub>A human-GM mode where a person narrates (usually over the voice chat) and the app keeps sheets, dice, maps and the record straight, with a GM console, story-beat capture, and an assisted mode that delegates monsters, read-alouds or a covered absence to the AI.</sub>
 </td>
 <td width="50%" valign="top" align="center">
 <img src="public/sidebar-icons/story.webp" width="56"><br>
@@ -168,9 +173,9 @@ RTX 4060 Ti 16 GB, 4070 Ti Super, 4080, 5060 Ti 16 GB, 5070 Ti or 5080, or a Rad
 RX 7600 XT, 7800 XT, 9060 XT 16 GB or 9070) runs **gpt-oss-20b** whole on the card,
 the pick for that card, and about 28 GB runs the recommended Qwen3.6-35B-A3B
 ([what each size of card runs](docs/text-backends.md#hardware-for-a-local-model),
-and the [system requirements](https://opendungeonmaster.com/guide/start/system-requirements/)).
+and the [system requirements](https://opengamemaster.com/guide/start/system-requirements/)).
 Below 16 GB a local model is not supported; use an API key, an agent program or
-a human Dungeon Master. Run it on llama.cpp, with a **context window of at
+a human Game Master. Run it on llama.cpp, with a **context window of at
 least 16K tokens to narrate and 24K to run fights; 32K or more is
 recommended**. The default storyteller runs at 64K, and the guided setup's
 **Test backend** reads the window a server runs
@@ -178,8 +183,8 @@ recommended**. The default storyteller runs at 64K, and the guided setup's
 and agent programs have far more.
 
 ```bash
-git clone --depth 1 -b stable https://github.com/Lebbitheplow/open-dungeon-master.git
-cd open-dungeon-master
+git clone --depth 1 -b stable https://github.com/Lebbitheplow/open-game-master.git
+cd open-game-master
 npm install
 npm run setup        # database key, content pack, memory model, production build
 npm run start:lan    # 0.0.0.0:3005 so your party can reach it on the LAN
@@ -193,7 +198,7 @@ players and your own agent, one question at a time.
 With Docker instead:
 
 ```bash
-curl -O https://raw.githubusercontent.com/Lebbitheplow/open-dungeon-master/stable/docker-compose.yml
+curl -O https://raw.githubusercontent.com/Lebbitheplow/open-game-master/stable/docker-compose.yml
 docker compose up -d        # http://localhost:3005
 ```
 
@@ -203,9 +208,9 @@ Both follow the stable releases. Nightly betas, and how a beta becomes stable:
 ## Documentation
 
 Playing, hosting from the apps, leading a table and every setting are in the
-**[knowledge base](https://opendungeonmaster.com/guide/)** on opendungeonmaster.com,
-with a [FAQ](https://opendungeonmaster.com/guide/reference/faq/) and
-[what changed in each release](https://opendungeonmaster.com/guide/reference/whats-new/).
+**[knowledge base](https://opengamemaster.com/guide/)** on opengamemaster.com,
+with a [FAQ](https://opengamemaster.com/guide/reference/faq/) and
+[what changed in each release](https://opengamemaster.com/guide/reference/whats-new/).
 The documents below are the server's own reference.
 
 - **Getting started**
@@ -214,8 +219,8 @@ The documents below are the server's own reference.
   - [Backups and moving to another server](docs/backup-restore.md)
   - [Releases and update channels](docs/releases.md): stable, the nightly betas, and how a beta is promoted
 - **The storyteller**
-  - [Text backends](docs/text-backends.md): the recommended DM model and its settings, the hardware each model needs (16 GB and gpt-oss-20b at the least, the BC-250), Ollama, choosing a model (the models.dev catalog, no model named in code), OpenAI and other APIs, long-story memory
-  - [Agent programs as the DM](docs/agent-harness.md): Claude Code, Codex, opencode and Grok Build on their own sign-in
+  - [Text backends](docs/text-backends.md): the recommended GM model and its settings, the hardware each model needs (16 GB and gpt-oss-20b at the least, the BC-250), Ollama, choosing a model (the models.dev catalog, no model named in code), OpenAI and other APIs, long-story memory
+  - [Agent programs as the GM](docs/agent-harness.md): Claude Code, Codex, opencode and Grok Build on their own sign-in
 - **Pictures, voice and sound**
   - [Setting up pictures, narration and dictation](docs/media-setup.md): ComfyUI, an OpenAI key, Kokoro, Whisper
   - [Image generation](docs/image-generation.md): the image models, measured hardware, AMD GPUs
@@ -235,7 +240,7 @@ The documents below are the server's own reference.
   - [Writing an addon](docs/addons/authoring.md), [the extension points](docs/addons/extension-points.md) and [the catalog guidelines](docs/addons/guidelines.md)
   - [Working on the addon framework](docs/addons/framework.md): the code map, the rules it keeps, how to add a field, a message or an extension point
 - **How it works**
-  - [The engines](docs/engines.md): combat, sheets, world simulation, narrative, memory, AI integration, the human DM and the workshop
+  - [The engines](docs/engines.md): combat, sheets, world simulation, narrative, memory, AI integration, the human GM and the workshop
   - [Rules coverage](docs/rules-coverage.md): what is enforced, what is guidance, what is out of scope
   - [Roadmap](docs/ROADMAP.md)
 

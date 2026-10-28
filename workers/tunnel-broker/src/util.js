@@ -10,6 +10,17 @@ export async function sha256Hex(text) {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+// Every zone a session is named in. ZONE_NAME is the one the apps build room
+// codes on; SECONDARY_ZONE_NAMES (comma separated) are named too while the
+// apps move from one domain to another, so a host and a player on app
+// versions from either side of the move still find each other.
+export function playZones(env) {
+  const zones = [env.ZONE_NAME, ...String(env.SECONDARY_ZONE_NAMES || "").split(",")]
+    .map((zone) => String(zone || "").trim().toLowerCase())
+    .filter(Boolean);
+  return [...new Set(zones)];
+}
+
 export function json(body, status = 200, headers = {}) {
   return new Response(JSON.stringify(body), {
     status,

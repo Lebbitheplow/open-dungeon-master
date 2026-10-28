@@ -38,7 +38,7 @@ export function readBundleWorld(bundle: WorkshopBundle): BundleWorld {
   const row = (shelf: Shelf, index: number, name: string, text: string, dmOnly = false): WorldRow => {
     const ref = refOf(shelf, `#${index}`);
     const entry = doc.entries[ref] ?? blank;
-    return { shelf, ref, name, text, entry, held: dmOnly ? "DM only" : entry.canon === "canon" ? "" : entry.canon };
+    return { shelf, ref, name, text, entry, held: dmOnly ? "GM only" : entry.canon === "canon" ? "" : entry.canon };
   };
   const rows: Record<Shelf, WorldRow[]> = {
     npc: bundle.npcs.map((npc, index) => row("npc", index, npc.name, npc.trait)),

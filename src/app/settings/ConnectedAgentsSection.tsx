@@ -31,7 +31,7 @@ export const AGENT_SCOPE_CHOICES: Array<{ id: string; label: string; hint: strin
   { id: "play", label: "Play", hint: "Act, speak and roll at a table as your character." },
   { id: "characters", label: "Characters", hint: "Create, edit and delete your library characters." },
   { id: "campaigns", label: "Campaigns", hint: "Create campaigns and change the ones you lead." },
-  { id: "dm", label: "Dungeon Master", hint: "Run the rules engine and narrate, only where you hold the DM seat." },
+  { id: "dm", label: "Game Master", hint: "Run the rules engine and narrate, only where you hold the GM seat." },
 ];
 
 function when(iso: string | null): string {
@@ -125,7 +125,7 @@ export function ConnectedAgentsSection() {
     <PageSection
       heading="Connected agents"
       glyph="system-share"
-      intro={`Let your own Claude Code, Codex or other MCP client act as you here: read your campaigns, play your character, or run a table where you are the Dungeon Master.${assistantUrl ? " ChatGPT, Claude, Grok and Meta Muse can too, through the link shown when you connect." : ""} It gets exactly the access your account has, only the parts you tick, and never your password or the server's settings.`}
+      intro={`Let your own Claude Code, Codex or other MCP client act as you here: read your campaigns, play your character, or run a table where you are the Game Master.${assistantUrl ? " ChatGPT, Claude, Grok and Meta Muse can too, through the link shown when you connect." : ""} It gets exactly the access your account has, only the parts you tick, and never your password or the server's settings.`}
     >
       {fresh ? (
         <div className="hx-token mb-4 space-y-2 rounded-xl border border-amber-600/40 bg-amber-950/20 p-3">

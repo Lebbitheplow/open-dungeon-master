@@ -43,7 +43,7 @@ export const AUTHORED_DATA_B: Record<string, AuthoredEntry> = {
   },
   "monk::Intoxicated Frenzy": {
     subclass: "Way of the Drunken Master",
-    effects: [{ kind: "flurry", strikes: 5, note: "Each extra strike is meant for a different creature; the DM keeps to that." }],
+    effects: [{ kind: "flurry", strikes: 5, note: "Each extra strike is meant for a different creature; the GM keeps to that." }],
   },
   // Agile Parry: after an unarmed strike in the Attack action while holding a
   // kensei melee weapon, +2 AC until the monk's next turn, for no action.
@@ -72,7 +72,7 @@ export const AUTHORED_DATA_B: Record<string, AuthoredEntry> = {
       {
         kind: "natural_weapon",
         weapon: { name: "Radiant Sun Bolt", aliases: ["sun bolt"], dice: [[1, "1d4"], [5, "1d6"], [11, "1d8"], [17, "1d10"]], type: "radiant", ranged: true, rangeFt: 30 },
-        note: "Its bonus-action pair of bolts for 1 ki after the Attack action is Flurry of Blows' place; the DM allows it.",
+        note: "Its bonus-action pair of bolts for 1 ki after the Attack action is Flurry of Blows' place; the GM allows it.",
       },
     ],
   },
@@ -365,7 +365,7 @@ export const AUTHORED_DATA_B: Record<string, AuthoredEntry> = {
   "ranger::Ranger's Companion": {
     subclass: "Beast Master",
     narrated:
-      "The beast is a companion sheet the DM fields (pet-tools); its proficiency bonus and hit points are set when it is made.",
+      "The beast is a companion sheet the GM fields (pet-tools); its proficiency bonus and hit points are set when it is made.",
   },
   "ranger::Shadowy Dodge": {
     subclass: "Gloom Stalker",
@@ -394,7 +394,7 @@ export const AUTHORED_DATA_B: Record<string, AuthoredEntry> = {
   },
   "ranger::Supernatural Defense": {
     subclass: "Monster Slayer",
-    effects: [{ kind: "save_die_vs", die: "1d6", mark: "slayer's prey (marked)", note: "Its 1d6 on a check to escape the prey's grapple is the DM's to add." }],
+    effects: [{ kind: "save_die_vs", die: "1d6", mark: "slayer's prey (marked)", note: "Its 1d6 on a check to escape the prey's grapple is the GM's to add." }],
   },
   "ranger::Slayer's Counter": {
     subclass: "Monster Slayer",
@@ -417,7 +417,7 @@ export const AUTHORED_DATA_B: Record<string, AuthoredEntry> = {
   },
   "ranger::Mighty Swarm": {
     subclass: "Swarmkeeper",
-    effects: [{ kind: "swarm_prone", note: "Its damage step is Gathered Swarm's 1d8 from 11th level; the half cover when the swarm moves the ranger is the DM's." }],
+    effects: [{ kind: "swarm_prone", note: "Its damage step is Gathered Swarm's 1d8 from 11th level; the half cover when the swarm moves the ranger is the GM's." }],
   },
   "ranger::Perfected Bond": {
     subclass: "Drakewarden",

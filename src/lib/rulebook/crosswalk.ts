@@ -69,7 +69,7 @@ const RULES: Record<string, { support: PrepSupport; where: string }> = {
   multiclassing: { support: "engine", where: "Level-up, where the table allows multiclassing: prerequisites, proficiencies, slots" },
   alignment: { support: "editable", where: "Sheet and Cast fields; no rule reads it" },
   languages: { support: "structured", where: "Builder: languages from species, background and feats" },
-  inspiration: { support: "engine", where: "The DM awards it (set_condition); a roll spends it for advantage" },
+  inspiration: { support: "engine", where: "The GM awards it (set_condition); a roll spends it for advantage" },
   backgrounds: { support: "structured", where: "Workshop: Backgrounds; the builder grants skills, tools, languages, kit and coin" },
   coinage: { support: "engine", where: "Purses: purchase, modify_gold" },
   "selling-treasure": { support: "engine", where: "purchase at the table's prices, at a shop or not" },
@@ -92,8 +92,8 @@ const RULES: Record<string, { support: PrepSupport; where: string }> = {
   objects: { support: "engine", where: "damage_object: AC by material, hit points by size, damage threshold" },
   poisons: { support: "structured", where: "Workshop: Hazards (poisons), run by afflict" },
   "magic-items": { support: "structured", where: "Workshop: Items (attunement, effects, riders, charges, spells)" },
-  "sentient-magic-items": { support: "structured", where: "Workshop: Items (It is sentient); a conflict is the DM's Charisma contest" },
-  artifacts: { support: "editable", where: "Workshop: Items for what it does; its destruction and properties are the DM's" },
+  "sentient-magic-items": { support: "structured", where: "Workshop: Items (It is sentient); a conflict is the GM's Charisma contest" },
+  artifacts: { support: "editable", where: "Workshop: Items for what it does; its destruction and properties are the GM's" },
   "monster-statistics": { support: "engine", where: "Bestiary editor, rated against the DMG table" },
   "nonplayer-characters": { support: "structured", where: "The Cast, with stat blocks from the bestiary" },
   conditions: { support: "engine", where: "The condition engine" },
@@ -119,7 +119,7 @@ function itemSupport(name: string): { support: PrepSupport; where: string } {
   if (Array.isArray(gear.effects) && gear.effects.length) runs.unshift("effects");
   return runs.length
     ? { support: "engine", where: `Workshop: Items; the engine runs its ${runs.join(", ").replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase()}` }
-    : { support: "editable", where: "Workshop: Items; attunement and weight are tracked, what it does is the DM's to run" };
+    : { support: "editable", where: "Workshop: Items; attunement and weight are tracked, what it does is the GM's to run" };
 }
 
 export function crosswalkFor(page: RulebookPage): Crosswalk {

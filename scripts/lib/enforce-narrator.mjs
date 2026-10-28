@@ -79,7 +79,7 @@ export async function settleQueue(campaignId, ms = 30_000) {
   const until = Date.now() + ms;
   while (dmQueueDepth(campaignId) > 0) {
     if (Date.now() > until) {
-      throw new Error(`the DM queue for ${campaignId} never ran dry`);
+      throw new Error(`the GM queue for ${campaignId} never ran dry`);
     }
     await new Promise((resolve) => setTimeout(resolve, 25));
   }

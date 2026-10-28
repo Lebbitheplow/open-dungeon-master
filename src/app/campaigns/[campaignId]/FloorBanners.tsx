@@ -193,7 +193,7 @@ export function FloorBanners({
           }
         >
           <span>
-            The enemies act before {floor.next.currentName || "the next turn"}; the DM hands on the turn.
+            The enemies act before {floor.next.currentName || "the next turn"}; the GM hands on the turn.
           </span>
         </SessionBanner>
       ) : floor.mode === "hold" ? (

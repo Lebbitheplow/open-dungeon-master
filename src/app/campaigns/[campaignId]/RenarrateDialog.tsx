@@ -90,7 +90,7 @@ export function RenarrateDialog({
           </div>
 
           <p className="mb-3 text-xs leading-5 text-stone-400">
-            The DM says the same moment in different words. Nothing else moves: the
+            The GM says the same moment in different words. Nothing else moves: the
             same rolls, the same damage, the same outcome. Take {taken} of{" "}
             {MAX_VARIANTS}.
             {capped ? " That is every take; browse them and pick one." : ""}

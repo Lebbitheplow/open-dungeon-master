@@ -6,7 +6,7 @@ backend is llama.cpp's `llama-server` (the app's defaults point at it); the
 legacy Ollama-native "Local" provider and any OpenAI-compatible server keep
 working.
 
-## The recommended DM model: Qwen3.6-35B on llama.cpp
+## The recommended GM model: Qwen3.6-35B on llama.cpp
 
 The app looks for llama-server (llama.cpp) on `http://127.0.0.1:8001/v1`
 first. No model is named in the code: a server that lists exactly one chat
@@ -16,7 +16,7 @@ settings are tuned for is base Qwen3.6-35B-A3B Q8 with a 64K context and
 Qwen's recommended non-thinking samplers; it needs about 28 GB of graphics
 memory at Q4, and a 16 GB card runs gpt-oss-20b instead
 ([Hardware for a local model](#hardware-for-a-local-model)). A short default context silently
-truncates the long DM prompt (party sheets, scene, story summary), which
+truncates the long GM prompt (party sheets, scene, story summary), which
 makes the model loop; the 64K window is what fixes that. Direct llama-server
 run:
 
@@ -66,7 +66,7 @@ ollama create qwen3.6-dm -f models/qwen3.6-dm.Modelfile
 ### Context window
 
 The storyteller needs a context window of at least 16K tokens to narrate and
-24K to run fights; 32K or more is recommended. The DM's instructions and the
+24K to run fights; 32K or more is recommended. The GM's instructions and the
 compact tool set come to about 15K tokens before any story is told, and every
 request is fitted to the window the backend really has
 ([request-fit.ts](../src/lib/dm/request-fit.ts)):
@@ -92,7 +92,7 @@ leave out a model whose window is too small to narrate.
 ### Tool calls need thinking mode
 
 This is the setting that matters most for a working table, and it is not obvious.
-Under the long DM prompt, qwen3.6-35b in non-thinking mode surfaces tool calls only
+Under the long GM prompt, qwen3.6-35b in non-thinking mode surfaces tool calls only
 about one turn in five: it narrates fights instead of starting an encounter, asks a
 player to roll in prose instead of calling `request_roll`, and generally stops
 driving the engines. With reasoning enabled it calls tools reliably.
@@ -149,7 +149,7 @@ rules; every turn of the fight after that reuses them.
 
 ### presence_penalty
 
-Keep `presence_penalty` at 0 for the DM. A meaningful presence penalty under the long
+Keep `presence_penalty` at 0 for the GM. A meaningful presence penalty under the long
 prompt suppresses tool calls (the model paraphrases the tool in prose instead of
 emitting it). The app pins `presence_penalty: 0` in every request so a server-side
 preset penalty cannot break tool calling; if you drive the model from somewhere else,
@@ -179,7 +179,7 @@ itself. gpt-oss-20b fits a 16 GB card whole.
 Below the minimum is not supported, and problems there are not treated as bugs. A
 smaller model may limp through a scene on the short rules (below), but it skips
 rolls, attacks out of turn and narrates past the dice often enough that the table
-stops trusting it. Use an API key, an agent program or a human Dungeon Master on a
+stops trusting it. Use an API key, an agent program or a human Game Master on a
 smaller machine instead.
 
 ### The 16 GB minimum: gpt-oss-20b
@@ -227,14 +227,14 @@ six misses were replies llama.cpp threw away whole: when the reasoning budget
 ends gpt-oss's thought and it writes on without opening its answer, llama.cpp's
 parser refuses the reply (every build from the app's b10621 to the newest), and
 the app now asks for it once more. Two of its town misses were a player acting
-on another character's turn, which the DM rightly answered without an attack.
+on another character's turn, which the GM rightly answered without an attack.
 The town runs had no content pack, so the inn's shop opened bare; a general
 store now always stocks everyday gear such as torches, rations and rope. One
 run of the default model narrated a hit after the fight had ended, on a goblin
 already dead; an attack roll with no fight running is now refused. No other run
 narrated a blow that no tool landed. One gpt-oss skirmish run narrated an
 ambush with no fight started, which began a turn late; an attack begun on the
-party in prose is now read as a fight starting, and the DM is asked to start
+party in prose is now read as a fight starting, and the GM is asked to start
 it or to say that nobody attacked, so a misread threat costs a call, not a
 fight.
 
@@ -302,7 +302,7 @@ llama-server -m gpt-oss-20b-MXFP4.gguf --alias gpt-oss-20b \
 ```
 
 - With `--kv-unified` the `-c` is shared by both slots, while `/props` reports it
-  whole for each: a DM turn and the app's helper call running at once must fit in
+  whole for each: a GM turn and the app's helper call running at once must fit in
   it together. A fight on the full rules runs to about 52K tokens.
 - `--cache-ram 0` keeps llama-server from holding extra prompt cache in system
   memory, which on this box is the memory the model needs.
@@ -508,7 +508,7 @@ applies to any OpenAI-compatible proxy that relays those errors.
 
 The Responses route (`src/lib/openai-responses.ts`) translates the table's
 transcript and tool definitions on the way out and the reply on the way
-back, so the DM loop never learns which transport answered. Nothing is
+back, so the GM loop never learns which transport answered. Nothing is
 stored on OpenAI's side (`store: false`); the model reasons afresh over each
 tool result, which OpenAI allows.
 
@@ -524,7 +524,7 @@ Two of those rows are why a paid key works. Reasoning models dropped
 and vLLM for thinking mode, and a vendor API has no chat template to pass it
 to. The thinking request is simply not made against OpenAI, which costs
 nothing there: it exists because Qwen is an unreliable tool caller without it,
-not because the DM needs it.
+not because the GM needs it.
 
 Anything ODM does not recognise by host is treated as a permissive local
 server. If such a backend turns out to be strict, the first 400 that names a
@@ -533,7 +533,7 @@ the request is retried, up to three times, and the drop is logged. Tool
 support is deliberately excluded from that path, because a backend without
 function calling is already handled by the retry-without-tools fallback.
 
-Note that the DM leans on tools heavily, so a model with weak function
+Note that the GM leans on tools heavily, so a model with weak function
 calling will narrate past its dice no matter which backend serves it.
 
 You can enter everything in-app and store it locally with the story. The Mac

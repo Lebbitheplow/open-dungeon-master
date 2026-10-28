@@ -120,8 +120,8 @@ export function ServerAddressButton() {
   async function share() {
     if (!sheet || !picked) return;
     await sheet({
-      title: serverName || "Open Dungeon Master",
-      text: `Join me on ${serverName || "Open Dungeon Master"}: ${picked}`,
+      title: serverName || "Open Game Master",
+      text: `Join me on ${serverName || "Open Game Master"}: ${picked}`,
       url: picked,
     });
   }
@@ -146,7 +146,7 @@ export function ServerAddressButton() {
               <div className="min-w-0">
                 <p className={ui.sectionEyebrow}>This server</p>
                 <p className="truncate font-display text-sm tracking-wide text-amber-50">
-                  {serverName || "Open Dungeon Master"}
+                  {serverName || "Open Game Master"}
                 </p>
               </div>
               <button
@@ -193,7 +193,7 @@ export function ServerAddressButton() {
               ) : null}
             </div>
             <p className="mt-2 text-[11px] leading-4 text-stone-500">
-              Scan with the Open Dungeon Master app to add this server, or with a phone camera
+              Scan with the Open Game Master app to add this server, or with a phone camera
               to open it in a browser.
             </p>
           </div>

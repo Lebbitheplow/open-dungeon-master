@@ -168,11 +168,11 @@ export function worldForPrompt(campaignId: string, context: WorldPromptContext =
   const legend = canonLegend(tagged);
   if (legend) add(legend);
   if (inPlay.length) {
-    add("From the world's WorldForge, about who and what is in play now (the article is what the world knows and may surface as the party learns it; anything marked secretly is the DM's):");
+    add("From the world's WorldForge, about who and what is in play now (the article is what the world knows and may surface as the party learns it; anything marked secretly is the GM's):");
     for (const line of inPlay) if (!add(line)) break;
   }
   if (lines.length) {
-    add("From the world's WorldForge (DM-only; the party has not learned these, so let them surface through play and never state them outright):");
+    add("From the world's WorldForge (GM-only; the party has not learned these, so let them surface through play and never state them outright):");
     for (const line of lines) if (!add(line)) break;
   }
   if (known.length) {

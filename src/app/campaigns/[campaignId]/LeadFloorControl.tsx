@@ -267,7 +267,7 @@ export function LeadFloorControl({
                 type="button"
                 disabled={busy} aria-busy={busy}
                 onClick={() => post({})}
-                title="Open the floor now; whatever has been answered goes to the DM"
+                title="Open the floor now; whatever has been answered goes to the GM"
                 className={cn(chip, chipOff, "mt-1.5")}
               >
                 Release
@@ -342,7 +342,7 @@ export function LeadFloorControl({
             aside={planned.length ? `${planned.length} picked` : "whole party"}
           />
           <p className="mb-1.5 text-xs text-stone-500">
-            Each player stages what their characters do in the same moment, edits it until ready or passes, and the DM
+            Each player stages what their characters do in the same moment, edits it until ready or passes, and the GM
             resolves the whole plan as one beat. Companions join without holding it up. Set an order when one move has to
             come before another.
           </p>
@@ -402,7 +402,7 @@ export function LeadFloorControl({
               type="button"
               disabled={busy || !sheets.some((sheet) => !sheet.isCompanion)}
               onClick={() => void coordinate()}
-              title="Open a shared plan; nothing reaches the DM until the players are ready"
+              title="Open a shared plan; nothing reaches the GM until the players are ready"
               className={kitButtonClass("primary", "shrink-0")}
               data-coordinate-start
             >

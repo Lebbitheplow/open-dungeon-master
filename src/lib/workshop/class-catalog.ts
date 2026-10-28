@@ -94,7 +94,7 @@ export function bundledClassRows(q: string, results: Array<{ name: string }>): A
             name: klass.name,
             source: "bundled",
             documentSlug: findCustomClass(klass.id) ? "odm" : "wotc-srd",
-            document: findCustomClass(klass.id) ? "Open Dungeon Master" : "SRD 5.1 (bundled)",
+            document: findCustomClass(klass.id) ? "Open Game Master" : "SRD 5.1 (bundled)",
             data: { desc: klass.blurb ?? "" },
             table,
           },

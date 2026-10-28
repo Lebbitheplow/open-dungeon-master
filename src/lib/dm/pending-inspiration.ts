@@ -28,7 +28,7 @@ export function inspiredRoll(
     return { error: "Inspiration gives advantage on an attack roll, a saving throw or an ability check; this roll is none of those." };
   }
   if (!heldInspiration(sheet)) {
-    return { error: `${sheet.name} holds no Inspiration to spend. The DM awards it.` };
+    return { error: `${sheet.name} holds no Inspiration to spend. The GM awards it.` };
   }
   if (pending.advantage === "advantage") {
     return { error: "This roll already has advantage, so Inspiration would add nothing. Keep it for another roll." };

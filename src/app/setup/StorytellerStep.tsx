@@ -128,8 +128,8 @@ export function StorytellerStep({
         </div>
       ) : draft.story === "none" ? (
         <p key="none" className="reveal su-note">
-          Tables on this server will have a person in the Dungeon Master&apos;s seat. The app still rolls the dice, keeps
-          every sheet and map, and can step in for the monsters or a read-aloud when the DM asks. You can add an AI
+          Tables on this server will have a person in the Game Master&apos;s seat. The app still rolls the dice, keeps
+          every sheet and map, and can step in for the monsters or a read-aloud when the GM asks. You can add an AI
           storyteller here later.
         </p>
       ) : null}

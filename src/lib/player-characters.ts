@@ -45,7 +45,7 @@ export function resolveActionCharacter({ sheets, userId, selectedId, characterId
   if (sheet.isCompanion) {
     return !reaction && initiativeId === sheet.id
       ? { sheet }
-      : { error: `${sheet.name} follows your orders on their own turn in a fight; the DM plays them otherwise.`, status: 409 };
+      : { error: `${sheet.name} follows your orders on their own turn in a fight; the GM plays them otherwise.`, status: 409 };
   }
   if (multiCharacter !== "all_active" && sheet.id !== selected?.id) {
     return { error: "Select that character before acting as them.", status: 409 };

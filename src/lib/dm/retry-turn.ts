@@ -167,7 +167,7 @@ export function requestTurnRetry(request: RetryRequest): RetryResult {
         resolvedRollResult(claimed, pendings, toolCallId) ??
         JSON.stringify({
           error:
-            "The DM hit an internal error before this call finished. Do not call it again; continue from what you already have.",
+            "The GM hit an internal error before this call finished. Do not call it again; continue from what you already have.",
         }),
     });
   }

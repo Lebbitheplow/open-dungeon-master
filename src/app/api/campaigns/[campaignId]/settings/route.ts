@@ -50,7 +50,7 @@ export async function PATCH(
       campaign.ownerUserId !== user.id
     ) {
       return Response.json(
-        { error: "Only the Dungeon Master can hand the game to someone else or to the AI." },
+        { error: "Only the Game Master can hand the game to someone else or to the AI." },
         { status: 403 },
       );
     }

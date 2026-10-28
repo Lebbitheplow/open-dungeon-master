@@ -457,7 +457,7 @@ export function RulebookReader({
 function Frontispiece({ onBegin }: { onBegin: () => void }) {
   return (
     <div className="rb-frontis">
-      <p className="rb-running">Open Dungeon Master</p>
+      <p className="rb-running">Open Game Master</p>
       <h1 className="rb-frontis-title">The Rulebook</h1>
       <p className="rb-frontis-sub">Fifth Edition &middot; System Reference Document 5.1</p>
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -467,7 +467,7 @@ function Frontispiece({ onBegin }: { onBegin: () => void }) {
         adventuring, combat, spellcasting, every spell, magic item and monster, and the conditions they inflict.
       </p>
       <p className="rb-frontis-text">
-        Three books are bound here: the players&apos;, the Dungeon Master&apos;s and the monsters&apos;, each
+        Three books are bound here: the players&apos;, the Game Master&apos;s and the monsters&apos;, each
         holding all that the reference document opens of the Player&apos;s Handbook, the Dungeon Master&apos;s
         Guide and the Monster Manual.
       </p>

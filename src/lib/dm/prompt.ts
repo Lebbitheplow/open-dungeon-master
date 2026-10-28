@@ -448,7 +448,7 @@ export function relationshipRules(romance: boolean, openNames: readonly string[]
         ? "A COMPANION who cannot stand a character says so plainly and stays: this table keeps its companions, so never dismiss_companion one over standing."
         : "A COMPANION who cannot stand a character says so plainly; whether they leave is the server's, so never dismiss_companion one over standing or deeds."
   } Never keep narrating a warm companion whose meter says otherwise.
-- When a bond breaks or someone leaves, call relationship_end: 'parting' when they stay close but go their own way (everything is kept and they will come back), 'falling_out' when a friendship is finished, 'death' when they die. Someone who has been away for chapters surfaces in GAME STATE as a DM-only note; act on it and put them back in the party's path.${
+- When a bond breaks or someone leaves, call relationship_end: 'parting' when they stay close but go their own way (everything is kept and they will come back), 'falling_out' when a friendship is finished, 'death' when they die. Someone who has been away for chapters surfaces in GAME STATE as a GM-only note; act on it and put them back in the party's path.${
     romance
       ? `
 - Romance sits on TOP of that meter and never replaces it. Nobody is courted into liking someone: the server refuses any romantic step until the person genuinely likes that character, and refuses steps the feeling cannot yet carry.
@@ -910,7 +910,7 @@ export function buildGameStateBlock(state: DmGameState): string {
     }
   } else if (campaign.dmOutline) {
     sections.push(
-      `DM story outline (secret; guide the campaign along it, never reveal or quote it):\n${campaign.dmOutline}`,
+      `GM story outline (secret; guide the campaign along it, never reveal or quote it):\n${campaign.dmOutline}`,
     );
   }
   // The party as a whole: where they are, what they are doing, the common
@@ -1046,7 +1046,7 @@ export function buildGameStateBlock(state: DmGameState): string {
       );
     }
     lines.push(
-      "Enemies (DM-SECRET numbers, never revealed to players; HP and AC are server-authoritative and change only through tool results: pc_attack and the spell tools for the party's blows, enemy_attack for theirs, apply_damage only for harm that is neither an attack nor a spell):",
+      "Enemies (GM-SECRET numbers, never revealed to players; HP and AC are server-authoritative and change only through tool results: pc_attack and the spell tools for the party's blows, enemy_attack for theirs, apply_damage only for harm that is neither an attack nor a spell):",
     );
     for (const enemy of encounter.enemies) {
       if (enemy.status !== "alive") {
@@ -1158,7 +1158,7 @@ export function buildGameStateBlock(state: DmGameState): string {
   if (state.dmPrepNotes?.length) {
     const bodies = fitNoteBodies(state.dmPrepNotes, compact);
     sections.push(
-      `DM prep notes (secret; the table's own preparation for you: let them shape what happens, never read them out or hint that they exist):\n${state.dmPrepNotes
+      `GM prep notes (secret; the table's own preparation for you: let them shape what happens, never read them out or hint that they exist):\n${state.dmPrepNotes
         .map((note, index) => `- ${note.title ? `${note.title}: ` : ""}${bodies[index]}`)
         .join("\n")}`,
     );
@@ -1172,7 +1172,7 @@ export function buildGameStateBlock(state: DmGameState): string {
     }
     if (rendered.dmOnly) {
       sections.push(
-        `DM-only facts (players do not know these; never state them outright):\n${rendered.dmOnly}`,
+        `GM-only facts (players do not know these; never state them outright):\n${rendered.dmOnly}`,
       );
     }
   }
@@ -1188,7 +1188,7 @@ export function buildGameStateBlock(state: DmGameState): string {
         .slice(0, NPC_PROMPT_MAX)
         .map(
           (npc) =>
-            `- ${npc.name}: ${npc.attitude}${npc.location ? `, at ${npc.location}` : ""}${npc.identity ? `, ${npc.identity}` : ""}${npc.trait ? ` (${npc.trait.slice(0, 120)})` : ""}${npc.aliases?.length ? ` [also called: ${npc.aliases.slice(0, 4).join(", ")}]` : ""}${npc.witnessNote ? ` | ${npc.witnessNote}` : ""}${npc.agency ? ` | ${npc.agency}` : ""}${npc.statBlock ? ` | fights as ${npc.statBlock.startsWith("homebrew:") ? "the DM's own stat block" : npc.statBlock.replace(/-/g, " ")} (start_encounter or add_enemies with monster set to their name)` : ""}${npc.world ? ` | ${npc.world}` : ""}`,
+            `- ${npc.name}: ${npc.attitude}${npc.location ? `, at ${npc.location}` : ""}${npc.identity ? `, ${npc.identity}` : ""}${npc.trait ? ` (${npc.trait.slice(0, 120)})` : ""}${npc.aliases?.length ? ` [also called: ${npc.aliases.slice(0, 4).join(", ")}]` : ""}${npc.witnessNote ? ` | ${npc.witnessNote}` : ""}${npc.agency ? ` | ${npc.agency}` : ""}${npc.statBlock ? ` | fights as ${npc.statBlock.startsWith("homebrew:") ? "the GM's own stat block" : npc.statBlock.replace(/-/g, " ")} (start_encounter or add_enemies with monster set to their name)` : ""}${npc.world ? ` | ${npc.world}` : ""}`,
         )
         .join("\n")}${left > 0 ? `\n(${left} more tracked NPC${left === 1 ? "" : "s"} elsewhere, not listed here; naming one brings their entry back, and recall_story finds what happened with them.)` : ""}`,
     );
@@ -1587,6 +1587,11 @@ export const movePartyTool = {
           description: "Which way a new place lies from where the party set out, for the region map.",
         },
         distance: { type: "string", enum: PLACE_DISTANCES, description: "How far it lies from there." },
+        characterIds: {
+          type: "array",
+          items: { type: "string" },
+          description: "Only when the party splits up: exact characterIds of who goes; the rest stay behind.",
+        },
       },
       required: ["name", "visionClear"],
     },
@@ -1595,11 +1600,12 @@ export const movePartyTool = {
 
 // move_party before the table has any place: no partOf, direction or
 // distance (issue 548), since a direction reads from where the party set out
-// and partOf files the next room of where they are. The first scene of a 16K
+// and partOf files the next room of where they are, and no characterIds: a
+// party that has not set out yet has not split. The first scene of a 16K
 // table has no room to spare for them (scripts/test-tool-profiles.mjs).
 const firstMoveProperties = Object.fromEntries(
   Object.entries(movePartyTool.function.parameters.properties).filter(
-    ([key]) => !["partOf", "direction", "distance"].includes(key),
+    ([key]) => !["partOf", "direction", "distance", "characterIds"].includes(key),
   ),
 );
 export const firstMovePartyTool = {

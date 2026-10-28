@@ -248,19 +248,19 @@ export default function EquipmentSection({
             </span>
           </div>
         )}
-        <p className="text-[11px] text-stone-500">
+        <p className="text-sm text-stone-500">
           {purse.wealth?.rolled
             ? `The server rolled ${purse.wealth.rolled.faces.join(", ")} on ${purse.wealth.dice}: ${purse.wealth.rolled.gold} gp. `
             : ""}
           {purse.source}
         </p>
         {purse.wealth?.error ? (
-          <p role="alert" className="reveal motion-shake text-[11px] text-red-400">
+          <p role="alert" className="reveal motion-shake text-sm text-red-400">
             {purse.wealth.error}
           </p>
         ) : null}
         {purse.problems.length ? (
-          <p className={cn("reveal text-[11px] text-amber-300")}>
+          <p className={cn("reveal text-sm text-amber-300")}>
             {purse.problems.length === 1 ? "One item above" : `${purse.problems.length} items above`} cannot be paid for; the
             Continue button waits on that.
           </p>

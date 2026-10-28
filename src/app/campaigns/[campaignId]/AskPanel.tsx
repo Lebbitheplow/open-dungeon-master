@@ -67,7 +67,7 @@ function AskEntry({ ask, meUserId }: { ask: CampaignAsk; meUserId: string }) {
       </div>
       <p className="mb-1.5 text-xs font-medium leading-5 text-stone-200">{ask.question}</p>
       {ask.status === "failed" ? (
-        <p className="live-in text-xs italic text-red-400">The DM could not answer this one.</p>
+        <p className="live-in text-xs italic text-red-400">The GM could not answer this one.</p>
       ) : (
         <p className="whitespace-pre-wrap font-serif text-xs leading-5 text-stone-300">
           <Prose text={ask.answer} />
@@ -160,7 +160,7 @@ function AskDockInner({
         });
         if (!response.ok) {
           const data = await response.json().catch(() => ({}));
-          setError(data.error || "The DM could not answer.");
+          setError(data.error || "The GM could not answer.");
           return;
         }
         setQuestion("");
@@ -186,7 +186,7 @@ function AskDockInner({
         className="pk-tap flex w-full items-center gap-1.5 px-3 py-1.5 text-xs text-stone-400 transition-colors hover:text-amber-100 motion-press"
       >
         <GameIcon icon={{ kind: "glyph", key: "tab-reference" }} size="size-5" />
-        <span className="eyebrow text-[11px] text-amber-300/90">Ask the DM</span>
+        <span className="eyebrow text-[11px] text-amber-300/90">Ask the GM</span>
         {answered ? <span key={answered} className="count-pop text-stone-500">({answered})</span> : null}
         {pendingQuestion && !open ? (
           <Loader2 className="size-3 animate-spin text-stone-500" />
@@ -208,7 +208,7 @@ function AskDockInner({
           {!loaded ? (
             <PanelLoading label="Loading..." rows={2} />
           ) : !asks.length && !pendingQuestion ? (
-            <EmptyState size="sm" art="scrolls" title="Nothing asked yet. Put a question to the DM below." />
+            <EmptyState size="sm" art="scrolls" title="Nothing asked yet. Put a question to the GM below." />
           ) : (
             <ul className="stagger space-y-2">
               {asks.map((ask) => (
@@ -221,7 +221,7 @@ function AskDockInner({
                   </p>
                   <p className="flex items-center gap-2 text-xs text-stone-500">
                     <Loader2 className="size-3.5 animate-spin" />
-                    Checking the record (queued behind the DM)...
+                    Checking the record (queued behind the GM)...
                   </p>
                 </li>
               ) : null}
@@ -282,8 +282,8 @@ function AskDockInner({
                 }
               }}
               rows={2}
-              placeholder="Ask the DM about the story, the world, the rules, or your sheet"
-              aria-label="Ask the DM about the story, the world, the rules, or your sheet"
+              placeholder="Ask the GM about the story, the world, the rules, or your sheet"
+              aria-label="Ask the GM about the story, the world, the rules, or your sheet"
               aria-describedby={noteId}
               aria-invalid={tooLong || undefined}
               className={cn(ui.input, "resize-none text-xs leading-5", tooLong && "border-red-500/60")}

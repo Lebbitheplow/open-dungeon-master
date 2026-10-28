@@ -31,7 +31,7 @@ export async function POST(
     return context;
   }
   if (!capsFor(context).needsCharacter) {
-    return Response.json({ error: "The DM seat plays no character." }, { status: 400 });
+    return Response.json({ error: "The GM seat plays no character." }, { status: 400 });
   }
   // The same door rule as a built character (POST /sheet): a table that
   // allows several characters per player lets a ready-made hero in beside

@@ -30,7 +30,7 @@ import { PluginThumb } from "./PluginThumb";
 //
 // The guide on the project site walks through making one in the workshop's
 // Plugin tool, from a world built in WorldForge, or by hand.
-const PLUGIN_GUIDE_URL = "https://opendungeonmaster.com/guide/dm/make-a-campaign-plugin/";
+const PLUGIN_GUIDE_URL = "https://opengamemaster.com/guide/dm/make-a-campaign-plugin/";
 // The same ceiling as MAX_MANIFEST_BYTES in src/lib/worlds/install.ts, which
 // this client component cannot import: a pack with its thumbnails aboard is a
 // few megabytes, and anything near this is not one.
@@ -248,12 +248,12 @@ export function AdminWorldsPanel() {
         <SectionHead level="h2" title="Campaign plugins" glyph="system-plugin" />
         <p className="text-xs leading-5 text-stone-400">
           A world pack renames the rules into a setting: its own races, classes, spells, gear,
-          monsters, factions and lore, plus a brief telling the DM how that world sounds. Every
+          monsters, factions and lore, plus a brief telling the GM how that world sounds. Every
           mechanic stays 5e, so a character built in one still works anywhere.
         </p>
         <p className="mt-2 text-xs leading-5 text-stone-500">
           Packs based on an existing universe are community works. They are not distributed with
-          Open Dungeon Master, are not covered by its MIT license, and are not endorsed by the
+          Open Game Master, are not covered by its MIT license, and are not endorsed by the
           rights holders of the settings they reference. Installing one is your decision as the
           operator of this server.
         </p>
@@ -267,7 +267,7 @@ export function AdminWorldsPanel() {
           >
             how to make a campaign plugin
           </a>{" "}
-          on opendungeonmaster.com.
+          on opengamemaster.com.
         </p>
       </section>
 

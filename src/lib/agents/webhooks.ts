@@ -489,7 +489,7 @@ function eventText(sub: Subscription, grant: ConnectionGrant, event: Omit<Player
     : event.type === "response_requested" ? `the table in ${at} may want your response.`
     : event.type === "level_up_available" ? `your experience in ${at} has earned level ${event.level}. Answer any roll or turn first, then read odm_level_up_options and take it with odm_level_up.`
     : event.type === "offer_received" ? `an offer in ${at} waits on your answer alone. Read it in odm_get_campaign (itemProposals, id ${event.proposalId}) and answer it with odm_answer_offer.`
-    : event.type === "whisper_received" ? `the Dungeon Master whispered to you in ${at}. Read it with odm_get_whispers.`
+    : event.type === "whisper_received" ? `the Game Master whispered to you in ${at}. Read it with odm_get_whispers.`
     : event.type === "campaign_paused" ? `${at} is paused.`
     : event.type === "campaign_resumed" ? `${at} has resumed.`
     : `${at} has ended.`;

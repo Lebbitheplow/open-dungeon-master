@@ -1183,7 +1183,7 @@ async function requestCustomMessageNow(
         ...(isOpenRouter
           ? {
               "HTTP-Referer": serverEnv("OPENROUTER_APP_URL", "http://localhost:3000"),
-              "X-Title": serverEnv("OPENROUTER_APP_TITLE", "Open Dungeon Master"),
+              "X-Title": serverEnv("OPENROUTER_APP_TITLE", "Open Game Master"),
             }
           : {}),
       },

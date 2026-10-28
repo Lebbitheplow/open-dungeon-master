@@ -19,7 +19,7 @@ import {
 // Nothing here installs on its own: browsing it is a GET, installing is an
 // admin's act.
 export const DEFAULT_ADDON_REGISTRY_URL =
-  "https://raw.githubusercontent.com/Lebbitheplow/open-dungeon-master/main/addons/catalog.json";
+  "https://raw.githubusercontent.com/Lebbitheplow/open-game-master/main/addons/catalog.json";
 
 
 export const REGISTRY_OFF = "off";
@@ -109,7 +109,7 @@ export type RegistryRead =
 export function readRegistry(value: unknown): RegistryRead {
   const record = value && typeof value === "object" ? (value as Record<string, unknown>) : null;
   if (!record || record.kind !== ADDON_REGISTRY_KIND || record.version !== ADDON_REGISTRY_VERSION || !Array.isArray(record.addons)) {
-    return { ok: false, error: "That address is not an Open Dungeon Master addon catalog." };
+    return { ok: false, error: "That address is not an Open Game Master addon catalog." };
   }
   const addons: RegistryAddon[] = [];
   const ids = new Set<string>();
@@ -147,4 +147,4 @@ export async function fetchAddonRegistry(url: string): Promise<RegistryRead> {
   return read;
 }
 
-const AGENT = { "user-agent": "open-dungeon-master" };
+const AGENT = { "user-agent": "open-game-master" };

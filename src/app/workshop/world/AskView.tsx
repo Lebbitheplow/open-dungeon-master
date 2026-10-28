@@ -164,7 +164,7 @@ function PassageCard({ passage, onOpen }: { passage: AskPassage; onOpen: (ref: s
             <span className="sr-only">: {meaning.slice(passage.canon.length + 2)}</span>
           </span>
         ) : null}
-        {passage.dmOnly ? <span className="rounded-md border border-rose-500/40 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-rose-300">DM only</span> : null}
+        {passage.dmOnly ? <span className="rounded-md border border-rose-500/40 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-rose-300">GM only</span> : null}
       </div>
       <blockquote className="border-l-2 border-stone-700 pl-2 text-xs leading-5 text-stone-300">{passage.text}</blockquote>
     </div>

@@ -353,10 +353,10 @@ function insertAuthoredContent(db) {
     [
       {
         slug: AUTHORED_DOC,
-        name: "Open Dungeon Master Expanded Options",
-        title: "Open Dungeon Master Expanded Options",
+        name: "Open Game Master Expanded Options",
+        title: "Open Game Master Expanded Options",
         license: "Original content, mechanics only",
-        author: "Open Dungeon Master",
+        author: "Open Game Master",
         url: "",
         data: {
           desc: "Class options, spells, feats and lineages widely played at 5e tables that no openly licensed dataset carries. The rules are described in original wording; no publisher's descriptive text is reproduced.",

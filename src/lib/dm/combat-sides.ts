@@ -130,7 +130,7 @@ function tableNote(campaign: Campaign, content: string) {
 // (set-condition.ts): the table, its player among them, is told the DM plays
 // it until the charm ends, and every client re-rims it. Returns the line.
 export function announceDominated(campaign: Campaign, name: string): string {
-  const line = `${name} is dominated: the DM plays ${name} until the charm ends.`;
+  const line = `${name} is dominated: the GM plays ${name} until the charm ends.`;
   tableNote(campaign, line);
   publishSides(campaign.id);
   return line;

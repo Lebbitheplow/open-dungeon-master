@@ -142,7 +142,7 @@ export function TimelinePanel({ campaignId, refreshKey }: { campaignId: string; 
                   <GameIcon icon={{ kind: "glyph", key: KIND_GLYPH[row.kind] }} size="size-5" className="shrink-0" />
                   <span className="min-w-0 flex-1 truncate">{row.title}</span>
                   {row.when ? <span className="text-[11px] font-normal text-stone-500">{row.when}</span> : null}
-                  {row.secret ? <span className="text-[11px] font-normal text-violet-300">DM</span> : null}
+                  {row.secret ? <span className="text-[11px] font-normal text-violet-300">GM</span> : null}
                 </p>
                 {row.detail ? <p className="reveal mt-0.5 text-xs leading-5 text-stone-400">{row.detail}</p> : null}
               </article>

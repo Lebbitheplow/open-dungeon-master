@@ -327,14 +327,14 @@ export function AdminSettingsPanel() {
           <div className="mb-3">
             <Field
               label="Server name"
-              hint="Shown on the login screen and in client apps' server pickers. Blank = Open Dungeon Master."
+              hint="Shown on the login screen and in client apps' server pickers. Blank = Open Game Master."
             >
               <input
                 className={ui.input}
                 value={config.serverName}
                 maxLength={100}
                 onChange={(event) => setConfig({ ...config, serverName: event.target.value })}
-                placeholder="Open Dungeon Master"
+                placeholder="Open Game Master"
               />
             </Field>
           </div>

@@ -99,7 +99,7 @@ function toolCallsOf(message: RenderMessage): Array<{ id: string; name: string; 
 // what its tools are for. Everything after it is the same prompt the
 // built-in storyteller gets.
 export const HARNESS_PREAMBLE = [
-  "You are running as the Dungeon Master of an Open Dungeon Master table.",
+  "You are running as the Game Master of an Open Game Master table.",
   "Your tools are the table's rules engine. They are the only way anything happens in the game: every roll, hit, point of damage, item, condition and scene change comes from calling them, never from your own prose.",
   "Tool names in the rules below are written without the prefix your tool list shows (request_roll is the same tool as mcp__odm__request_roll or odm_request_roll).",
   "Your final reply text is the narration the players read, exactly as you write it. Do not describe your tool calls, do not mention tools, the engine, prompts or being an AI, and do not add headings or commentary around the narration.",
@@ -149,7 +149,7 @@ export function renderTurn(messages: readonly RenderMessage[], options: RenderTu
     }
     if (message.role === "assistant") {
       if (text) {
-        lines.push(`[Dungeon Master] ${text}`);
+        lines.push(`[Game Master] ${text}`);
       }
       for (const call of toolCallsOf(message)) {
         toolNamesById.set(call.id, call.name);
@@ -187,10 +187,10 @@ export function renderTurn(messages: readonly RenderMessage[], options: RenderTu
     : "The table has not spoken yet.";
   const resumed = messages.some((message) => message.role === "tool");
   const instruction = resumed
-    ? "The dice above have landed. Continue your turn as the Dungeon Master from exactly where it paused: call any further tools you need, then write the narration."
+    ? "The dice above have landed. Continue your turn as the Game Master from exactly where it paused: call any further tools you need, then write the narration."
     : lastUser
-      ? "It is your turn as the Dungeon Master. Resolve what the players just did with your tools, then write the narration."
-      : "It is your turn as the Dungeon Master. Open the scene: use your tools for anything mechanical, then write the narration.";
+      ? "It is your turn as the Game Master. Resolve what the players just did with your tools, then write the narration."
+      : "It is your turn as the Game Master. Open the scene: use your tools for anything mechanical, then write the narration.";
   return { system: `${standing}${earlier}`, prompt: [transcript, moment, instruction].filter(Boolean).join("\n\n") };
 }
 

@@ -167,7 +167,7 @@ export function LoreCheckDialog({
               {running ? (
                 <p role="status" className="reveal flex items-center gap-2 text-xs text-stone-500">
                   <Loader2 className="size-3.5 animate-spin" />
-                  Cross-referencing the record (queued behind the DM)...
+                  Cross-referencing the record (queued behind the GM)...
                 </p>
               ) : null}
             </div>
@@ -220,7 +220,7 @@ export function LoreCheckDialog({
                     <p className="text-xs text-stone-500">
                       {message.authorType === "dm"
                         ? "The party lead can accept this rewrite."
-                        : "Only DM narration can be rewritten."}
+                        : "Only GM narration can be rewritten."}
                     </p>
                   )}
                 </div>

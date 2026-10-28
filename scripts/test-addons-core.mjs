@@ -290,7 +290,7 @@ await test("catalog entries come from the manifest, and the list is held to its 
   const manifest = addonManifestSchema.parse(example);
   const entry = catalogEntry(manifest, { ...pinned, path: "examples/addons/hello-dungeon" }, { contentSha256: "d".repeat(64), bytes: 4096 }, "tools");
   assert.equal(entry.name, "Hello Dungeon");
-  assert.equal(entry.author, "Open Dungeon Master");
+  assert.equal(entry.author, "Open Game Master");
   assert.deepEqual(entry.contributes.boardViews, ["Isometric", "Isometric session"]);
   assert.deepEqual(entry.permissions, ["ai.text"]);
   assert.equal(entry.setupMB, 1);
@@ -308,7 +308,7 @@ await test("addons/catalog.json, the list this build ships with, reads", () => {
   const shipped = JSON.parse(readFileSync(new URL("../addons/catalog.json", import.meta.url), "utf8"));
   assert.deepEqual(catalogProblems(shipped), []);
   assert.equal(readRegistry(shipped).ok, true);
-  assert.match(DEFAULT_ADDON_REGISTRY_URL, /^https:\/\/raw\.githubusercontent\.com\/Lebbitheplow\/open-dungeon-master\/main\/addons\/catalog\.json$/);
+  assert.match(DEFAULT_ADDON_REGISTRY_URL, /^https:\/\/raw\.githubusercontent\.com\/Lebbitheplow\/open-game-master\/main\/addons\/catalog\.json$/);
 });
 
 await test("GitHub links: owner/repo, the repository, a release, a folder at a branch", () => {

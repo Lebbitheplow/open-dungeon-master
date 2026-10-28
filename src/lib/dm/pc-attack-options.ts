@@ -320,5 +320,5 @@ export function claimedAdvantage(input: {
         : `the ${requested} claimed was set aside: name a circumstance the server cannot see, advantageSource "other" with it in advantageReason (the server already applies conditions, cover, light, range, Help, flanking, spells and features)`,
     };
   }
-  return { requested, note: `DM ruling: ${requested} (${reason.slice(0, 80)})` };
+  return { requested, note: `GM ruling: ${requested} (${reason.slice(0, 80)})` };
 }

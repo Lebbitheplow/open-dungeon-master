@@ -224,7 +224,7 @@ await test("No address says where anything lives: hosts, IPs, emails and home fo
 });
 
 await test("The bug report form opens with nothing from the report in the address but Your setup, cut by whole lines.", () => {
-  assert.equal(bundle.BUG_REPORT_URL, "https://github.com/Lebbitheplow/open-dungeon-master/issues/new?template=bug_report.yml");
+  assert.equal(bundle.BUG_REPORT_URL, "https://github.com/Lebbitheplow/open-game-master/issues/new?template=bug_report.yml");
   assert.equal(bundle.bugReportUrl(), bundle.BUG_REPORT_URL);
   assert.equal(bundle.bugReportUrl({}), bundle.BUG_REPORT_URL, "a report without its setup filled the form");
   const setup = { version: "1.0.0", build: "1.0.0", commit: "", platform: "linux", arch: "x64", node: "22", deviceWorld: false, narrator: { backend: "none", model: "", off: true }, checkFirst: Array.from({ length: 400 }, (_, index) => `check number ${index}`) };

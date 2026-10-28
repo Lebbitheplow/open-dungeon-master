@@ -33,22 +33,22 @@ function textResult(text: string, isError = false) {
 // agent that read the records instead of the table kept missing the newest
 // narration; each tool's description says the same thing for that tool.
 export function connectionInstructions(grant: ConnectionGrant): string {
-  const base = "Open Dungeon Master: act on this server as the signed-in player, with that player's permissions.";
+  const base = "Open Game Master: act on this server as the signed-in player, with that player's permissions.";
   if (!grant.scopes.includes("read")) {
     return base;
   }
   const records = grant.scopes.includes("play") ? "odm_ask, odm_timeline, odm_lore and odm_get_facts" : "odm_timeline, odm_lore and odm_get_facts";
-  return `${base} For what is happening at a table now, read odm_get_campaign (turn state and the newest messages) and odm_get_whispers (what the DM told you alone). ${records} answer from records and background, not the live table.`;
+  return `${base} For what is happening at a table now, read odm_get_campaign (turn state and the newest messages) and odm_get_whispers (what the GM told you alone). ${records} answer from records and background, not the live table.`;
 }
 
 function serverFor(grant: Grant): Server {
   const server = new Server(
-    { name: "open-dungeon-master", version: VERSION },
+    { name: "open-game-master", version: VERSION },
     {
       capabilities: { tools: {} },
       instructions:
         grant.kind === "turn"
-          ? "These tools are the Open Dungeon Master rules engine for the turn you are narrating."
+          ? "These tools are the Open Game Master rules engine for the turn you are narrating."
           : connectionInstructions(grant.grant),
     },
   );
@@ -150,7 +150,7 @@ export async function handleMcpRequest(request: Request): Promise<Response> {
   }
   const token = bearerOf(request);
   if (!token) {
-    return refuse(401, "Missing bearer token.", { "WWW-Authenticate": 'Bearer realm="open-dungeon-master"' });
+    return refuse(401, "Missing bearer token.", { "WWW-Authenticate": 'Bearer realm="open-game-master"' });
   }
   let grant: Grant | null = null;
   const session = bridgeSessionForToken(token);
@@ -169,7 +169,7 @@ export async function handleMcpRequest(request: Request): Promise<Response> {
     }
   }
   if (!grant) {
-    return refuse(401, "Unknown or expired token.", { "WWW-Authenticate": 'Bearer realm="open-dungeon-master", error="invalid_token"' });
+    return refuse(401, "Unknown or expired token.", { "WWW-Authenticate": 'Bearer realm="open-game-master", error="invalid_token"' });
   }
   const response = await handler().fetch(request, {
     authInfo: {

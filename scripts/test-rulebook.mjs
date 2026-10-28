@@ -77,13 +77,13 @@ try {
     assert.ok(count("monsters") + count("creatures") + count("npcs") >= 318);
   });
 
-  await test("the contents bind the chapters as the players', the Dungeon Master's and the monsters' books", () => {
+  await test("the contents bind the chapters as the players', the Game Master's and the monsters' books", () => {
     const { parts, chapters } = rulebookContents();
     assert.deepEqual(
       parts.map((part) => [part.numeral, part.title, part.chapters]),
       [
         ["I", "Players", chapters.slice(0, 11).map((chapter) => chapter.id)],
-        ["II", "The Dungeon Master", ["running-the-game", "magic-items"]],
+        ["II", "The Game Master", ["running-the-game", "magic-items"]],
         ["III", "Monsters", ["monsters", "creatures", "npcs"]],
       ],
     );

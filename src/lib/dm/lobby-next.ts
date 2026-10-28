@@ -51,5 +51,5 @@ export function lobbyNext(input: LobbyNextInput): LobbyNext {
   }
   return input.canStart
     ? { text: "Everyone is ready. Begin the adventure.", tone: "go" }
-    : { text: "Everyone is ready. The owner or the DM opens the adventure.", tone: "wait" };
+    : { text: "Everyone is ready. The owner or the GM opens the adventure.", tone: "wait" };
 }

@@ -359,7 +359,7 @@ export function LeadPanel({
       {directsAi ? (
         <Card glyph="system-cast" title="Direct the story">
           <p className="mb-2 text-xs text-stone-500">
-            Pick Direct in the composer, then Private for a note only the DM sees.
+            Pick Direct in the composer, then Private for a note only the GM sees.
           </p>
           <DirectorArmedBanner campaignId={campaignId} steersStory armed={directorArm} />
           <div className="flex flex-wrap gap-1.5">

@@ -3,7 +3,7 @@ import { PIXEL_ICONS } from "@/lib/ui";
 import { PageSection, PageShell } from "@/components/PageShell";
 
 export const metadata = {
-  title: "Privacy Policy | Open Dungeon Master",
+  title: "Privacy Policy | Open Game Master",
 };
 
 export default function PrivacyPage() {
@@ -15,15 +15,15 @@ export default function PrivacyPage() {
       blurb="What this server stores, what it never does, and who is responsible for it."
       actions={
         <Link href="/" className="text-sm text-amber-200 hover:text-amber-100">
-          Back to Open Dungeon Master
+          Back to Open Game Master
         </Link>
       }
     >
       <PageSection bodyClassName="space-y-4">
         <p className="text-sm leading-6 text-stone-400">
-          Open Dungeon Master is an open source (MIT licensed), self-hosted application. You run
+          Open Game Master is an open source (MIT licensed), self-hosted application. You run
           it on your own server, or on your own phone or computer, and your data stays there. The
-          creator of Open Dungeon Master does not collect, sell, or share any user data, and has
+          creator of Open Game Master does not collect, sell, or share any user data, and has
           no access to the data on any server or device running the app. The one exception is
           described under &quot;Sharing a world from your device&quot; below.
         </p>
@@ -38,7 +38,7 @@ export default function PrivacyPage() {
 
       <PageSection heading="What data is stored">
         <p className="text-sm leading-6 text-stone-400">
-          Open Dungeon Master stores only the information needed to run your server, in a local
+          Open Game Master stores only the information needed to run your server, in a local
           database on your machine:
         </p>
         <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-stone-400">
@@ -60,7 +60,7 @@ export default function PrivacyPage() {
           <li>No advertising or third-party services.</li>
           <li>
             No data is sold or shared with any third party, including the creator of Open
-            Dungeon Master. The only things that ever leave your server or device are the
+            Game Master. The only things that ever leave your server or device are the
             optional integrations and the sharing tunnel described below, each of which you or
             your operator switches on.
           </li>
@@ -69,7 +69,7 @@ export default function PrivacyPage() {
 
       <PageSection heading="The desktop and Android apps">
         <p className="text-sm leading-6 text-stone-400">
-          The Open Dungeon Master apps are a shell around this same server. They can run a
+          The Open Game Master apps are a shell around this same server. They can run a
           world on your own device, share it with friends, or connect to a server somebody
           else runs. Everything a world stores stays in the app&apos;s private storage on that
           device, and is excluded from Android and desktop cloud backups. The apps ask for
@@ -113,7 +113,7 @@ export default function PrivacyPage() {
           <li>
             <span className="text-stone-200">The tunnel broker</span> is a small service that
             hands your device a temporary address such as{" "}
-            <span className="font-mono text-xs">play-CODE.opendungeonmaster.com</span>. It sees
+            <span className="font-mono text-xs">play-CODE.opengamemaster.com</span>. It sees
             the port your world listens on and the IP address the request comes from. The IP
             address is used only to limit how many addresses one network can request per day,
             and it is stored only as a salted hash that expires within 24 hours. No account,
@@ -136,13 +136,13 @@ export default function PrivacyPage() {
         </ul>
         <p className="mt-3 text-sm leading-6 text-stone-400">
           Stop sharing, and both end. Nothing about the session is kept by the creator of Open
-          Dungeon Master once the temporary address expires.
+          Game Master once the temporary address expires.
         </p>
       </PageSection>
 
       <PageSection heading="Optional integrations configured by your server operator">
         <p className="text-sm leading-6 text-stone-400">
-          By default the AI Dungeon Master runs on your own hardware and nothing leaves your
+          By default the AI Game Master runs on your own hardware and nothing leaves your
           server. A server operator may optionally enable additional integrations, in which case
           the relevant data flows to the corresponding provider:
         </p>
@@ -203,7 +203,7 @@ export default function PrivacyPage() {
 
       <PageSection heading="Reports and blocks">
         <p className="text-sm leading-6 text-stone-400">
-          You can report a Dungeon Master passage, a message, or a player from the table, and
+          You can report a Game Master passage, a message, or a player from the table, and
           block a player so their messages are hidden from you and neither of you can contact
           the other. Reports are stored on this server with a copy of the reported text and go
           to this server&apos;s admins, who are the only moderators: there is no central
@@ -237,12 +237,12 @@ export default function PrivacyPage() {
           <li>
             <span className="text-stone-200">Canonical policy:</span>{" "}
             <a
-              href="https://opendungeonmaster.com/privacy/"
+              href="https://opengamemaster.com/privacy/"
               target="_blank"
               rel="noopener noreferrer"
               className="text-amber-200 hover:text-amber-400"
             >
-              opendungeonmaster.com/privacy
+              opengamemaster.com/privacy
             </a>
             , which also covers the desktop and Android apps.
           </li>
@@ -254,12 +254,12 @@ export default function PrivacyPage() {
         </p>
         <p className="mt-2 text-sm leading-6">
           <a
-            href="https://github.com/Lebbitheplow/open-dungeon-master"
+            href="https://github.com/Lebbitheplow/open-game-master"
             target="_blank"
             rel="noopener noreferrer"
             className="text-amber-200 hover:text-amber-400"
           >
-            github.com/Lebbitheplow/open-dungeon-master
+            github.com/Lebbitheplow/open-game-master
           </a>
         </p>
       </PageSection>

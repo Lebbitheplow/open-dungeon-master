@@ -66,7 +66,7 @@
             { "n": "Guild Dues", "d": "Advantage on checks to source rare reagents, poisons, and cadavers in any settlement." }
           ],
           "7": [{ "n": "Murder of Crows", "d": "1/long rest, a wheeling flock blinds enemies in a 20-ft radius for 1 minute (CON save each turn)." }],
-          "11": [{ "n": "Crowsight Network", "d": "The guild's birds watch every district; ask the DM once per day where a named person was seen." }],
+          "11": [{ "n": "Crowsight Network", "d": "The guild's birds watch every district; ask the GM once per day where a named person was seen." }],
           "15": [{ "n": "The Flock Remembers", "d": "1/long rest, when you drop to 0 HP, the flock carries you 60 ft to safety and you stabilize." }]
         }
       }
@@ -188,7 +188,7 @@
         "5": [{ "n": "Rat Tide", "d": "1/rest, a swarm floods a 15-ft cube: difficult terrain, and creatures inside save (DEX) or take 2d6 piercing and are distracted (disadvantage on their next attack)." }],
         "6": [{ "n": "Plaguebearer's Immunity", "d": "Immune to disease; resistance to poison damage." }],
         "7": [{ "n": "Nimble Escape", "d": "Dash, Disengage, or Hide as a bonus action." }],
-        "9": [{ "n": "Ten Thousand Eyes", "d": "Your Swarm Sense covers the whole district; ask the DM once per short rest what the rats have seen." }],
+        "9": [{ "n": "Ten Thousand Eyes", "d": "Your Swarm Sense covers the whole district; ask the GM once per short rest what the rats have seen." }],
         "10": [{ "n": "Gutter King's Word", "d": "Beggars, urchins, and rat-folk treat you as royalty; one favor per day within their power." }],
         "11": [{ "n": "Greater Gutter Fighting", "d": "Gutter Fighting damage rises to +2d6 and also applies to creatures adjacent to your swarm." }],
         "13": [{ "n": "Vanish Below", "d": "1/rest, drop through a grate, crack, or shadow as a reaction when targeted; the attack misses and you move 15 ft." }],

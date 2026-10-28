@@ -222,7 +222,7 @@ export function InviteShareDialog({
     const title = campaignTitle || "my campaign";
     await sheet({
       title: `Join ${title}`,
-      text: `Join ${campaignTitle ? `"${campaignTitle}"` : "my campaign"} on Open Dungeon Master`,
+      text: `Join ${campaignTitle ? `"${campaignTitle}"` : "my campaign"} on Open Game Master`,
       url: appUrl,
     });
   }

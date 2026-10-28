@@ -71,4 +71,4 @@ export const CHARACTER_ATTRACTION_HINT =
   "Who your character could fall for. Leave it blank and nothing changes; it only matters at a table with romance on, where an NPC who courts your character is one this fits.";
 
 export const NPC_ATTRACTION_HINT =
-  "Who they could fall for. Blank means not decided yet: the DM settles it the first time it matters, and it then stays.";
+  "Who they could fall for. Blank means not decided yet: the GM settles it the first time it matters, and it then stays.";

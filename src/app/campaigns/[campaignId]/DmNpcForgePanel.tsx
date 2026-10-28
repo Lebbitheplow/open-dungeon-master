@@ -453,8 +453,8 @@ export function DmNpcForgePanel({
               disabled={busy} aria-busy={busy}
               title={
                 selected.archived
-                  ? "Put them back in the DM's prompt"
-                  : "Keep them, but take them out of the DM's prompt"
+                  ? "Put them back in the GM's prompt"
+                  : "Keep them, but take them out of the GM's prompt"
               }
               onClick={() => void patch({ archived: !selected.archived })}
               className={cn(ui.btnSmall, "min-h-9 gap-1 px-2 py-1 text-xs")}

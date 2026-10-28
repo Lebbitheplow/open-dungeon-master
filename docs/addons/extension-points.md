@@ -34,7 +34,7 @@ Every tool call carries:
 - `options` are the contribution's option fields, normalized (see
   [authoring.md](authoring.md#settings-and-options)).
 - Results: `structuredContent`, or a text block holding JSON. `isError: true`
-  with a text block is a failure shown to the DM in your words.
+  with a text block is a failure shown to the GM in your words.
 - Report progress (`notifications/progress`) at least every few minutes.
 
 ## Workshop importers
@@ -96,7 +96,7 @@ the file. What a rulebook importer typically fills:
 
 The server fills in `kind` and `version`, then reads the bundle with the same
 reader a bundle file goes through (every field, length and array size), and
-shows the DM the preview: counts, warnings, your `notes`, and ticks for each
+shows the GM the preview: counts, warnings, your `notes`, and ticks for each
 kind. Nothing is created until they press Import.
 
 **Building a rulebook importer.** Read text and layout locally (pdf.js,
@@ -112,7 +112,7 @@ addon must never ship any book's content itself ([guidelines](guidelines.md#cont
 ## Map generators
 
 **Where:** Build a map with an addon, in the map library (a workshop's Maps,
-and the DM's map drawer at the table). **Who:** whoever has prep authority
+and the GM's map drawer at the table). **Who:** whoever has prep authority
 over the campaign or workshop. **Result:** a new prepared map in that library.
 
 ```json
@@ -136,7 +136,7 @@ Arguments:
 
 `theme` is one of `cave`, `forest`, `swamp`, `riverside`, `interior`, `field`;
 `ambient` is `bright`, `dim` or `dark`; `width` and `height` are squares (5 feet
-each), 4 to 200; `summary` is the DM's own words and may be empty.
+each), 4 to 200; `summary` is the GM's own words and may be empty.
 
 Result:
 
@@ -166,7 +166,7 @@ Result:
   | `#` | wall | blocks movement and sight |
   | `~` | water | swimming (doubled cost without a swim speed) |
   | `,` | difficult | doubled cost |
-  | `+` | door | a door the DM can open, lock or hide |
+  | `+` | door | a door the GM can open, lock or hide |
   | `\|` | low wall | blocks movement, not sight; half cover behind it |
   | `^` | climb | climbing (doubled cost without a climb speed) |
 
@@ -181,13 +181,13 @@ Result:
   view sees.
 - **view** is for your own board view: `data` up to 256 KB as JSON, and up to
   8 `files`, each `.glb` (binary glTF, up to 64 MB) or a picture. They are
-  stored with the map, carried onto the table when the DM deploys it, copied
+  stored with the map, carried onto the table when the GM deploys it, copied
   with the library into a campaign, carried inside workshop bundles, and
   handed only to your addon's board view.
 
 The server checks the terrain (alphabet and length), the lights (on the map),
 the size of the view's data, each picture by its bytes and each model by its
-glTF header, then adds the map to the library, where the DM can edit it,
+glTF header, then adds the map to the library, where the GM can edit it,
 deploy it to the table, or open it as a scene. A result that fails any check
 fails the run with the reason, and nothing is added.
 
@@ -210,8 +210,8 @@ grid.
 A board view may declare `"sessionLayout": "stage"`. On a docked desktop
 session, selecting that view uses a host-owned layout: Party above Chronicle
 at left, board in the center, native side controls at right, the native hand
-under the board, and the composer under Chronicle. The existing live DM status
-occupies a fixed row above Chronicle while the DM is busy (or stays beside
+under the board, and the composer under Chronicle. The existing live GM status
+occupies a fixed row above Chronicle while the GM is busy (or stays beside
 the composer on browsers without CSS anchor positioning). The same form,
 hand, status and input components stay mounted; only CSS placement changes.
 Addon code, stylesheets and assets remain in its sandbox. A stage view can
@@ -248,12 +248,12 @@ have separate anchors. Ordinary board-only addons retain the flat camera.
 The snapshot message includes `sessionLayout: "stage"` only for session views;
 pages shared with a board-only contribution must leave its camera to the host.
 Handle `camera-control` for the host's zoom, fit and arrow keys, and report
-`camera-state` after rendering/camera changes so DM steering uses your current
+`camera-state` after rendering/camera changes so GM steering uses your current
 view. State coordinates are fractional tile coordinates at the view center;
 zoom is relative to your fitted view (1). The host validates finite values,
-in-map centers and zoom 0.25–8, and normalizes to the existing DM route's
-integer coordinates (clamped within the map)/zoom 0.5–3 when the DM explicitly pulls/locks the view.
-Reporting camera state never moves tokens or grants DM authority.
+in-map centers and zoom 0.25–8, and normalizes to the existing GM route's
+integer coordinates (clamped within the map)/zoom 0.5–3 when the GM explicitly pulls/locks the view.
+Reporting camera state never moves tokens or grants GM authority.
 
 The native transcript, Chronicle, composer and mapped renderer remain mounted
 while switching story/board within this presentation. Removing a map or
@@ -385,7 +385,7 @@ From the table to your page:
 { odm: 1, type: "file", requestId, ok: false, name, error }
 { odm: 1, type: "fx", events }                                      // effects as they land, each once
 { odm: 1, type: "ping", x, y, focus, at }                           // somebody pointed at a square
-{ odm: 1, type: "camera", mode: "pull" | "lock" | "free", x, y, zoom } // the DM steering everyone's view
+{ odm: 1, type: "camera", mode: "pull" | "lock" | "free", x, y, zoom } // the GM steering everyone's view
 { odm: 1, type: "camera-control", action }                          // session view: zoom-in, zoom-out, fit, left, right, up, down
 ```
 
@@ -419,7 +419,7 @@ table.
 
 A tap is exactly a tap on the flat board: the table decides what it means
 from what the viewer is doing (moving, aiming a spell, targeting, pointing,
-the DM placing or teleporting) and the server decides whether it is allowed.
+the GM placing or teleporting) and the server decides whether it is allowed.
 Your view cannot do anything a click on the grid could not. What a tap opens
 (a figure's ring of actions, its plate) is the table's own and appears over
 your frame. Tell the table where you drew each figure, as fractions of your
@@ -449,7 +449,7 @@ table hides its own over a board view.
   skin, genre,      // optional public skin binding and campaign setting
   visible,          // square indexes this viewer sees now
   explored,         // square indexes this viewer has seen
-  fullVision,       // true for the DM's view (no fog)
+  fullVision,       // true for the GM's view (no fog)
   tokens: [{
     id, kind: "pc" | "enemy" | "npc" | "prop", name, x, y, size, mine, down, hidden, elevation, health, conditions, stamp,
     creature,       // a monster's { type: "undead", slug: "ghoul", cr: 1 }, or null
@@ -468,7 +468,7 @@ table hides its own over a board view.
   marks,            // what people drew: [{ id, kind: "stroke" | "arrow" | "rect" | "ellipse", tone, points: [{ x, y }] }]
   intents,          // what each enemy means to do: [{ tokenId, verb, targetTokenId, expected, stale }]
   targets,          // who attacked whom this round: { tokenId: [tokenId, ...] }
-  doors,            // the DM's view only: { "x,y": "locked" | "secret" }, else null
+  doors,            // the GM's view only: { "x,y": "locked" | "secret" }, else null
   hasBackdrop,
   view,             // { data, files: [{ name, type, bytes }] } from your own generator, or null
   assetsUrl,        // where your asset library is served, ending in "/"
@@ -521,7 +521,7 @@ It shows each message in use.
 ## Asking for a new extension point
 
 Addons cannot reach anything that is not on this page, by design. If an addon
-needs to change something else (the AI DM's tools, the character builder,
+needs to change something else (the AI GM's tools, the character builder,
 encounters, narration), open an issue on the server repository describing what
 the addon would do, what it would read, and what it would hand back. A new
 extension point is added to the server with its own contract, checks and tests,

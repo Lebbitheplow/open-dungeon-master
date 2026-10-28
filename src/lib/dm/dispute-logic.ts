@@ -29,7 +29,7 @@ export function disputeRefusal(input: {
     return "That passage is not in the transcript.";
   }
   if (input.message.authorType !== "dm") {
-    return "Only a passage the Dungeon Master narrated can be disputed.";
+    return "Only a passage the Game Master narrated can be disputed.";
   }
   if (input.raiserSteersStory) {
     return "You steer this story: revert the turn or direct the AI instead of disputing yourself.";

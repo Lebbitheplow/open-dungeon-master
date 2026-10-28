@@ -18,7 +18,7 @@ export const WHISPER_CAP_PER_TURN = 5;
 // Fallback whisper text when the model produced no reply to a private player
 // message even after a nudge: the player is never left in silence.
 export const FALLBACK_WHISPER_MESSAGE =
-  "The DM takes in your words quietly and will weave them into the story.";
+  "The GM takes in your words quietly and will weave them into the story.";
 
 // Inserts a DM->players whisper and pings recipients with the contentless
 // "whisper_activity" event. Shared by handleSendWhisper and the reply

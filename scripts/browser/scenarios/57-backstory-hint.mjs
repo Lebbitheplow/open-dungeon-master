@@ -16,7 +16,7 @@ export default {
     await backstory.scrollIntoViewIfNeeded();
     const said = (await page.locator("body").textContent()) ?? "";
     check(/whom do they serve/.test(said), "the backstory asks whom the character serves");
-    check(/the DM reads all of it/.test(said), "and says the DM reads all of it");
+    check(/the GM reads all of it/.test(said), "and says the DM reads all of it");
     check((await backstory.getAttribute("maxlength")) === "2000", "the backstory is held to 2000 characters");
     await t.shot("backstory");
   },

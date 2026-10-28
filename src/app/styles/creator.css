@@ -300,12 +300,15 @@ html[data-theme="light"] .step-wipe-ring {
 }
 
 /* ---- lineage and class cards ---- */
+/* Columns in rem, so text the device enlarges takes fewer, wider cards
+   (backlog F17); two always fit side by side, and below that the cards
+   become a list (the container query after the card rules). */
 .creator-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(140px, 46%), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(10rem, 46%), 1fr));
   gap: 10px;
 }
-.creator-grid[data-compact] { grid-template-columns: repeat(auto-fill, minmax(min(122px, 46%), 1fr)); }
+.creator-grid[data-compact] { grid-template-columns: repeat(auto-fill, minmax(min(9rem, 46%), 1fr)); }
 .creator-card-wrap { position: relative; }
 .creator-card {
   position: relative;
@@ -361,6 +364,9 @@ html[data-theme="light"] .step-wipe-ring {
   inset: 0;
   background: linear-gradient(180deg, transparent 45%, rgba(10, 8, 23, 0.88));
 }
+/* The text keeps a dark ground of its own under the plate's fade, so a
+   bright painting never sits behind it: 0.85 opacity puts the tagline at
+   6:1 even over white (backlog F17). */
 .creator-plate-text {
   position: absolute;
   left: 0;
@@ -369,22 +375,24 @@ html[data-theme="light"] .step-wipe-ring {
   z-index: 1;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
   padding: 8px 9px;
+  background: linear-gradient(180deg, rgba(10, 8, 23, 0), rgba(10, 8, 23, 0.85) 0.75rem);
 }
 /* Keeps the name clear of the class emblem in the plate's corner. */
 .creator-plate-text[data-icon] { padding-right: 38px; }
 .creator-plate-name {
   font-family: var(--font-display), Georgia, serif;
-  font-size: 13px;
+  font-size: 1rem;
   font-weight: 700;
   line-height: 1.15;
   color: #f9ecc8;
 }
+/* Plain words now ("Fighter/Cleric mix · Tome of Heroes"), so the body
+   face rather than the code face, at the caption size. */
 .creator-plate-tag {
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 0.6875rem;
-  letter-spacing: 0.04em;
+  font-size: 0.875rem;
+  line-height: 1.3;
   color: #aeaac6;
 }
 .creator-plate-tag,
@@ -392,13 +400,14 @@ html[data-theme="light"] .step-wipe-ring {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* At the text floor a tagline ("Tome of Heroes · Saves STR CON") no longer
-   fits one line of a card; it wraps to two rather than hide what it says. */
+/* A tagline ("Fighter/Cleric mix · Marshal · Tome of Heroes") no
+   longer fits one line of a card; it wraps to three rather than hide what
+   it says. */
 .creator-plate-tag {
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
   white-space: normal;
 }
 /* The chips wrap under each other for the same reason, instead of the last
@@ -414,20 +423,23 @@ html[data-theme="light"] .step-wipe-ring {
   padding: 6px 9px;
   border-top: 1px solid color-mix(in srgb, var(--color-stone-700) 50%, transparent);
 }
+/* A chip is words now ("High HP", "INT caster", "Choose +1 / +1"), in the
+   body face; a long one ("Very high HP, d12") wraps inside the card instead
+   of being cut. */
 .creator-chip {
-  border-radius: 9999px;
+  max-width: 100%;
+  border-radius: 0.75rem;
   border: 1px solid color-mix(in srgb, var(--color-amber-500) 35%, transparent);
   background: color-mix(in srgb, var(--color-amber-950) 35%, transparent);
-  padding: 1px 5px;
-  font-family: var(--font-geist-mono), monospace;
-  font-size: 0.6875rem;
-  white-space: nowrap;
+  padding: 1px 7px;
+  font-size: 0.875rem;
+  line-height: 1.3;
   color: var(--color-amber-300);
 }
-.creator-chip[data-size="md"] { padding: 2px 8px; font-size: 0.75rem; }
+.creator-chip[data-size="md"] { padding: 2px 9px; font-size: 0.875rem; }
 .creator-cta {
   font-family: var(--font-geist-mono), monospace;
-  font-size: 0.6875rem;
+  font-size: 0.875rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   white-space: nowrap;
@@ -455,15 +467,15 @@ html[data-theme="light"] .step-wipe-ring {
 }
 .creator-help > span {
   display: flex;
-  width: 22px;
-  height: 22px;
+  width: 1.375rem;
+  height: 1.375rem;
   align-items: center;
   justify-content: center;
   border: 1px solid rgba(212, 171, 58, 0.4);
   border-radius: 9999px;
   background: rgba(8, 6, 18, 0.82);
   font-family: var(--font-geist-mono), monospace;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   color: #ecd287;
   transition: border-color var(--dur-quick) var(--ease-snap);
 }
@@ -492,8 +504,11 @@ html[data-theme="light"] .step-wipe-ring {
   box-shadow: 0 2px 10px rgba(212, 171, 58, 0.5);
   font-family: var(--font-display), Georgia, serif;
   text-transform: uppercase;
-  letter-spacing: 0.14em;
-  font-size: 0.6875rem;
+  letter-spacing: 0.1em;
+  /* Under the caption size on purpose: capitals, a badge that repeats what
+     the card's "Chosen" and its pressed state already say, and it must
+     clear the help button across a 9rem card. */
+  font-size: 0.8125rem;
   font-weight: 700;
   color: #2b2008;
   rotate: -6deg;
@@ -516,8 +531,9 @@ html[data-theme="light"] .step-wipe-ring {
   background: rgba(8, 6, 18, 0.82);
   font-family: var(--font-display), Georgia, serif;
   text-transform: uppercase;
-  letter-spacing: 0.12em;
-  font-size: 0.6875rem;
+  letter-spacing: 0.1em;
+  /* The same size as the Selected pill, for the same reasons. */
+  font-size: 0.8125rem;
   font-weight: 700;
   color: #f4e0a6;
   pointer-events: none;
@@ -527,7 +543,6 @@ html[data-theme="light"] .step-wipe-ring {
 .creator-grid[data-compact] .creator-recommended {
   padding: 2px 5px 2px 3px;
   letter-spacing: 0.04em;
-  font-size: 0.6875rem;
 }
 .creator-emblem {
   position: absolute;
@@ -614,7 +629,7 @@ html[data-theme="light"] .step-wipe-ring {
   background: color-mix(in srgb, var(--color-stone-950) 80%, transparent);
   box-shadow: var(--shadow-glow-gold);
   font-family: var(--font-geist-mono), monospace;
-  font-size: 0.6875rem;
+  font-size: 0.875rem;
   letter-spacing: 0.04em;
   color: var(--color-amber-300);
 }
@@ -662,6 +677,8 @@ html[data-theme="light"] .step-wipe-ring {
   background: rgba(8, 6, 18, 0.94);
   border: 1px solid rgba(220, 38, 38, 0.6);
   font-family: var(--font-geist-mono), monospace;
+  /* One glyph in a 16 px badge on the die; the total and the note say
+     which die was dropped in words. */
   font-size: 0.6875rem;
   line-height: 1;
   color: #f87171;
@@ -705,7 +722,8 @@ html[data-theme="light"] .roll-tier-5 { color: #6d28d9; text-shadow: none; }
   border: 0;
   border-radius: 8px;
   background: transparent;
-  font-size: 0.75rem;
+  /* A control label that keeps the three ways on one row on a phone. */
+  font-size: 0.875rem;
   font-weight: 500;
   white-space: nowrap;
   color: var(--color-stone-500);
@@ -745,7 +763,7 @@ html[data-theme="light"] .roll-tier-5 { color: #6d28d9; text-shadow: none; }
   border-radius: 7px;
   background: color-mix(in srgb, var(--color-stone-950) 60%, transparent);
   font-family: var(--font-geist-mono), monospace;
-  font-size: 11px;
+  font-size: 1rem;
   color: var(--color-stone-400);
   cursor: pointer;
   transition:
@@ -755,7 +773,7 @@ html[data-theme="light"] .roll-tier-5 { color: #6d28d9; text-shadow: none; }
     color var(--dur-quick) var(--ease-snap);
 }
 .slot-button { flex: 1 1 0; min-width: 0; }
-.step-button { width: 34px; height: 34px; flex: none; font-size: 14px; }
+.step-button { width: 34px; height: 34px; flex: none; font-size: 1rem; }
 .slot-button:active,
 .step-button:not(:disabled):active { transform: scale(0.9); }
 .slot-button:hover,
@@ -819,7 +837,7 @@ html[data-theme="light"] .roll-tier-5 { color: #6d28d9; text-shadow: none; }
   background: linear-gradient(180deg, #f9ecc8, #e3c15c);
   box-shadow: 0 0 18px rgba(212, 171, 58, 0.3);
   font-family: var(--font-display), Georgia, serif;
-  font-size: 12px;
+  font-size: 0.875rem;
   font-weight: 700;
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -881,7 +899,7 @@ html[data-theme="light"] .roll-tier-5 { color: #6d28d9; text-shadow: none; }
   height: 24px;
   align-items: center;
   font-family: var(--font-geist-mono), monospace;
-  font-size: 0.6875rem;
+  font-size: 0.875rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--color-stone-400);
@@ -891,7 +909,7 @@ html[data-theme="light"] .roll-tier-5 { color: #6d28d9; text-shadow: none; }
 .pool-tier {
   margin-top: -3px;
   font-family: var(--font-geist-mono), monospace;
-  font-size: 0.6875rem;
+  font-size: 0.875rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   text-shadow: none;
@@ -900,13 +918,13 @@ html[data-theme="light"] .roll-tier-5 { color: #6d28d9; text-shadow: none; }
 .pool-highlight {
   margin-bottom: 2px;
   font-family: var(--font-display), Georgia, serif;
-  font-size: 14px;
+  font-size: 1rem;
   color: var(--color-amber-200);
   text-shadow: 0 0 12px color-mix(in srgb, var(--color-amber-400) 55%, transparent);
 }
 .pool-tag {
   font-family: var(--font-geist-mono), monospace;
-  font-size: 0.6875rem;
+  font-size: 0.875rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--color-stone-400);
@@ -916,7 +934,7 @@ html[data-theme="light"] .roll-tier-5 { color: #6d28d9; text-shadow: none; }
 .pool-note {
   margin-top: 9px;
   text-align: center;
-  font-size: 12px;
+  font-size: 1rem;
   line-height: 1.5;
   color: var(--color-stone-400);
 }
@@ -969,7 +987,7 @@ html[data-theme="light"] .roll-tier-5 { color: #6d28d9; text-shadow: none; }
 }
 .pool-socket-hint {
   font-family: var(--font-geist-mono), monospace;
-  font-size: 0.6875rem;
+  font-size: 0.875rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
   color: var(--color-stone-400);
@@ -1051,4 +1069,166 @@ html[data-theme="light"] .roll-tier-5 { color: #6d28d9; text-shadow: none; }
    itself folds under the steps wherever the builder stays narrow. */
 @media (min-width: 64rem) {
   main:has([data-build-math]) { max-width: 76rem; }
+}
+
+/* ---- readable at any size (backlog F17) ---- */
+/* Body text in the builder is at least 1rem, and every size is in rem, so
+   the device's text setting and the app's interface scale reach all of it.
+   Tailwind's text-xs and text-sm read their size from these variables, so
+   inside the builder both are body size: every help line, note, field and
+   button there, the step's own and the kit's (Field, Select, InfoButton,
+   the wizard's header), from 16px up. Only captions stay under 1rem, at
+   0.875rem: a card's tagline and chips, mono labels and counts, capitals,
+   badges, and glyphs inside a fixed box (each says why where it is set). */
+[data-builder-root] {
+  --text-xs: 1rem;
+  --text-xs--line-height: 1.5;
+  --text-sm: 1rem;
+  --text-sm--line-height: 1.5;
+}
+/* The night theme's quiet grey (#8f8aab) measured 4.45:1 at the top of a
+   step panel and 3.73:1 in an amber callout, under the 4.5:1 body text
+   needs. In the builder it is lifted to 5.5:1 and 4.6:1, still a step below
+   stone-400 (6.5:1). The day theme's ink already passes, so it keeps its
+   own. Written as the night value with a day rule after it, never as
+   :root:not([data-theme="light"]): the apps confine this sheet to their game
+   root (client scripts/scope-css.mjs), which carries no theme, so a negated
+   theme test there always held and the night grey reached the day theme's
+   parchment at 2.2:1. */
+[data-builder-root] {
+  --color-stone-500: #a09bbb;
+}
+html[data-theme="light"] [data-builder-root] {
+  --color-stone-500: inherit;
+}
+/* Section ribbons, the wizard's step counter and other small capitals come
+   from shared components sized for denser screens (9-11px); in the builder
+   they read at the caption size, tracked less so a heading still fits a
+   phone. */
+[data-builder-root] .eyebrow {
+  font-size: 0.875rem;
+  line-height: 1.2;
+  letter-spacing: 0.12em;
+}
+[data-builder-root] [data-diamond-name] { font-size: 0.875rem; }
+/* Kit controls sized for denser screens: the playstyle pills, the grid's
+   filter selects and segmented switches label at the caption size here. */
+[data-builder-root] :is(.session-subtab, .kit-select-sm, .seg-control > button) { font-size: 0.875rem; }
+/* The header: the hero's name, then the character line ("Hill Dwarf Cleric
+   · level 3 · Medium HP, d8") on a row of its own under it, on a phone too.
+   Side by side they cut each other short ("BRANN ST...", "High health,...")
+   once the hit die was words, so both wrap to a second line rather than end
+   in an ellipsis. The line starts under the name, past the back button. */
+[data-builder-root] [data-wizard-head] { flex-wrap: wrap; row-gap: 2px; }
+[data-builder-root] [data-wizard-title] { white-space: normal; text-overflow: clip; overflow-wrap: break-word; }
+[data-builder-root] [data-wizard-aside] {
+  display: block;
+  order: 1;
+  flex: 1 0 100%;
+  margin: 0;
+  white-space: normal;
+  text-overflow: clip;
+  font-size: 0.875rem;
+}
+[data-builder-root] [data-wizard-head]:has(> button:first-child) > [data-wizard-aside] { padding-left: 2.5rem; }
+/* The names at that size need about 28rem side by side; narrower, only the
+   current step's is printed (as the stepper's own rule above does at 22rem). */
+@container (width < 28rem) {
+  [data-builder-root] .diamond-step:not([data-state="current"]) [data-diamond-name] { visibility: hidden; }
+}
+/* A phone's room goes to the step. There the diamonds say how far along the
+   player is, so "Step 1 / 6" is said to a screen reader only and the name
+   gets the row (it wrapped to two lines beside it at 125%), and the line
+   under it starts at the edge. Narrower still, which on a phone means
+   enlarged text, the current step's name under its diamond goes too: the
+   step's own gold title says it just below. Together they gave the step a
+   half again as much room on a phone at 125%. */
+@container (width < 28rem) {
+  [data-builder-root] [data-wizard-head] > .eyebrow {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  [data-builder-root] [data-wizard-head]:has(> button:first-child) > [data-wizard-aside] { padding-left: 0; }
+}
+@container (width < 22rem) {
+  [data-builder-root] .diamond-stepper[data-named] { padding-bottom: 0; }
+  [data-builder-root] [data-diamond-name] { display: none; }
+}
+
+/* Enlarged text makes the cards a list. The grid's columns are rem wide and
+   two always fit side by side (46%), so a column narrower than a card's
+   9-10rem means the text is too large for the room: a phone with its text
+   turned up, or the app's interface scale at 125% there. The query is on
+   the cards' box in rem, so it follows the text setting, the interface scale
+   and the zoom alike, at any width. A list row is the painting as a
+   thumbnail, then the name and tagline at full width, then the chips. */
+.creator-cards { container: creator-cards / inline-size; }
+@container creator-cards (width < 19.5rem) {
+  .creator-grid,
+  .creator-grid[data-compact] { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .creator-plate,
+  .creator-plate[data-short] { display: flex; aspect-ratio: auto; min-height: 5.5rem; }
+  .creator-plate img { position: static; width: 4rem; height: auto; flex: none; align-self: stretch; }
+  .creator-plate::after { display: none; }
+  .creator-plate-text,
+  .creator-plate-text[data-icon] {
+    position: static;
+    flex: 1 1 auto;
+    min-width: 0;
+    justify-content: center;
+    padding: 10px 46px 10px 12px;
+    background: none;
+  }
+  .creator-card-wrap:has(.creator-recommended) .creator-plate-text { padding-top: 2.25rem; }
+  .creator-emblem { display: none; }
+  .creator-recommended,
+  .creator-grid[data-compact] .creator-recommended,
+  .creator-card-wrap[data-chosen] .creator-recommended { left: auto; right: 40px; top: 8px; }
+  .creator-grid[data-compact] .creator-card-foot:has(.creator-chip + .creator-chip) .creator-cta { display: inline; }
+}
+
+/* Forced colours (Windows contrast themes): the browser paints every
+   background its own colour and drops gradients and shadows, which carried
+   the chosen card, a pressed toggle, the current step and focus. Each gets a
+   system-colour mark instead, so no state rests on colour alone. The words
+   stay too: "Chosen", "Selected", the step's name. */
+@media (forced-colors: active) {
+  [data-builder-root] :is([aria-pressed="true"], [aria-checked="true"], [aria-selected="true"], [data-held]) {
+    outline: 3px solid Highlight;
+    outline-offset: -3px;
+  }
+  [data-builder-root] .creator-card[aria-pressed="true"] { border-color: Highlight; }
+  [data-builder-root] :is(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+    outline: 2px solid CanvasText;
+    outline-offset: 2px;
+  }
+  .diamond-core { forced-color-adjust: none; border-color: CanvasText; }
+  .diamond-step[data-state="done"] .diamond-core { background: CanvasText; }
+  .diamond-step[data-state="current"] .diamond-core { border-color: Highlight; background: Highlight; }
+  .diamond-rule { forced-color-adjust: none; background: GrayText; }
+  .slot-button[data-taken] { color: GrayText; }
+  /* Continue is a gold fill with no border, which forced colours erase. */
+  [data-builder-root] .wizard-continue { border: 1px solid ButtonText; }
+}
+
+/* More contrast asked for (an OS setting short of forced colours): the
+   quiet greys take the next tone up, in both themes, and the hairline
+   borders on cards, chips and panels become solid. Each theme's own
+   selector from above, so this outranks both the night lift and the day
+   rule. */
+@media (prefers-contrast: more) {
+  [data-builder-root],
+  html[data-theme="light"] [data-builder-root] {
+    --color-stone-500: var(--color-stone-300);
+    --color-stone-400: var(--color-stone-200);
+  }
+  [data-builder-root] :is(.panel, .creator-card, .dice-row, .pool-token, .method-switch, .slot-button) {
+    border-color: var(--color-stone-400);
+  }
+  [data-builder-root] .creator-chip { border-color: var(--color-amber-400); }
+  [data-builder-root] .creator-plate-text { background: linear-gradient(180deg, rgba(10, 8, 23, 0.6), rgba(10, 8, 23, 0.95) 0.75rem); }
 }

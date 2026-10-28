@@ -402,7 +402,7 @@ export default function SettingsPage() {
             {about.serverName} <span className="text-stone-500">v{about.version}</span>
           </p>
         ) : (
-          <p className="text-sm text-stone-500">Open Dungeon Master</p>
+          <p className="text-sm text-stone-500">Open Game Master</p>
         )}
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
           <Link href="/rulebook" className={ui.btnSmall}>
@@ -421,7 +421,7 @@ export default function SettingsPage() {
             Licenses and attribution
           </Link>
           <a
-            href="https://github.com/Lebbitheplow/open-dungeon-master"
+            href="https://github.com/Lebbitheplow/open-game-master"
             target="_blank"
             rel="noopener noreferrer"
             className={ui.btnSmall}

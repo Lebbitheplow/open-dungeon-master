@@ -94,7 +94,7 @@ export function assistantRelayUrl(): string {
 
 function brokerBase(): string {
   // The broker the voice mesh already asks for ICE servers (src/lib/voice/mesh.ts).
-  return serverEnv("ODM_ICE_BROKER_URL", "https://broker.opendungeonmaster.com").replace(/\/+$/, "");
+  return serverEnv("ODM_ICE_BROKER_URL", "https://broker.opengamemaster.com").replace(/\/+$/, "");
 }
 
 declare global {

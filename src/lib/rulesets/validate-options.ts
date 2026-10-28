@@ -35,7 +35,7 @@ export function featFindings(name: string, data: Data): Finding[] {
   } else if (desc && !data.runsAs) {
     out.push({
       level: "note",
-      text: "Nothing in its words is a grant the builder hands out, so the DM runs it. Written as the books write them (\"Increase your Dexterity by 1\", \"You gain proficiency in the Stealth skill\", \"You learn two languages of your choice\"), the builder grants them; or pick a published feat it runs as.",
+      text: "Nothing in its words is a grant the builder hands out, so the GM runs it. Written as the books write them (\"Increase your Dexterity by 1\", \"You gain proficiency in the Stealth skill\", \"You learn two languages of your choice\"), the builder grants them; or pick a published feat it runs as.",
     });
   }
   if (/\b(?:increase|raise)s?\b[^.]*\bby 2\b/i.test(desc) && featAbilityIncreaseFrom(desc) === null) {

@@ -203,7 +203,7 @@ function QuestRow({
     <ContextMenu as="li" items={items} label={quest.title} className={cn(panelRow, quest.status !== "active" && "opacity-70")}>
       <div className="flex flex-wrap items-center gap-1.5">
         <GameIcon icon={{ kind: "glyph", key: STATUS_GLYPH[quest.status] }} size="size-6" className="shrink-0" />
-        {quest.visibility === "dm" ? <EyeOff className="size-3.5 shrink-0 text-violet-300" aria-label="DM only" /> : null}
+        {quest.visibility === "dm" ? <EyeOff className="size-3.5 shrink-0 text-violet-300" aria-label="GM only" /> : null}
         <span className="min-w-[9rem] flex-1 text-sm font-medium leading-5 text-stone-100">{quest.title}</span>
         {quest.objectives.length ? (
           <span key={done} className="count-pop text-[11px] tabular-nums text-stone-400">

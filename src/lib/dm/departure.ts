@@ -11,7 +11,7 @@ import { getNpcById, patchNpcAgency, setNpcAttitude } from "@/lib/db/npcs";
 import { listSheets } from "@/lib/db/sheets";
 import { departCompanion } from "@/lib/dm/companion-tools";
 import type { CompanionValue } from "@/lib/dm/companion-values-logic";
-import { conscienceSetting, consciousCompanions, worstApproval } from "@/lib/dm/conscience";
+import { conscienceSetting, consciousCompanions, friendsAtLeast, worstApproval } from "@/lib/dm/conscience";
 import { BREAKING, effectiveRung } from "@/lib/dm/conscience-logic";
 import { companionOdds, intentOpensNow } from "@/lib/dm/departure-opening";
 import {
@@ -67,6 +67,8 @@ export type DepartureOutcome = {
   turned?: boolean;
   fight?: string;
   mercy?: boolean;
+  // Who it still cared for as it went (issue 563).
+  caresFor?: string[];
 };
 
 
@@ -223,7 +225,11 @@ export function departNow(
     }
   }
   const npc = companionNpcFor(companion);
-  const worst = worstApproval(campaign.id, companion.name, listSheets(campaign.id));
+  const sheets = listSheets(campaign.id);
+  const worst = worstApproval(campaign.id, companion.name, sheets);
+  // Read before the bonds are parted: the friends it still has among the
+  // ones it leaves (issue 563).
+  const caresFor = friendsAtLeast(campaign.id, companion.name, sheets, "close");
   const how = options.how ?? departureHow(response, where, faction?.name ?? "");
   const hostile = options.hostile ?? turnsOnParty(response);
   let standing = "";
@@ -244,6 +250,7 @@ export function departNow(
         at: clockNow(campaign),
         reportedTo: response === "report" ? (faction?.name ?? "") : "",
         hostile,
+        caresFor,
         leftLevel: companion.level,
         xpSince: 0,
         avenging,
@@ -282,14 +289,27 @@ export function departNow(
     departed: true,
     ...(response === "report" && faction ? { reportedTo: faction.name, ...(standing ? { standing } : {}) } : {}),
     avenging,
+    ...(caresFor.length ? { caresFor } : {}),
   };
+}
+
+// A person running the table (the party lead from the companion's card, or
+// whoever runs the console) sends away a lasting companion who stands at a
+// warning or worse, at a table where companions leave (issue 563): it goes
+// as a departure, so the record of how it went is kept and, if it hates the
+// party, it can come back. The AI cannot do this: its dismiss_companion is
+// refused there (companion-dismissal.ts).
+export function sendAway(campaign: Campaign, companion: CharacterSheet): DepartureOutcome {
+  return departNow(campaign, companion, "walk_out", "scene", null, { how: "Was sent away by the party" });
 }
 
 // A held plan's openings: the companion's own turn in a fight (`own_turn`,
 // whoever commanded it; src/lib/dm/initiative-floor.ts hands that turn back
-// to the DM), and the night watch of a long rest. Slipping away goes at
-// either; biding to strike only when the party has fallen low enough that
-// the odds have turned. Returns what departed.
+// to the DM), the night watch of a long rest, and the party splitting up
+// (`split`, move_party naming who goes; issue 563). Slipping away goes at
+// any; biding to strike only at a turn or the watch, when the party has
+// fallen low enough that the odds have turned (departure-logic.ts opensAt).
+// Returns what departed.
 export function departureOpenings(campaign: Campaign, hook: OpeningHook): DepartureOutcome[] {
   if (!leaves(campaign)) {
     return [];
@@ -311,10 +331,11 @@ export function departureOpenings(campaign: Campaign, hook: OpeningHook): Depart
     const current = encounter?.orderReady ? encounter.order[encounter.turnIndex] : undefined;
     holders = current?.kind === "pc" ? holders.filter((sheet) => sheet.id === current.characterId) : [];
   }
+  const where: DepartureWhere = hook === "own_turn" ? "fight" : hook === "split" ? "split" : "night";
   for (const companion of holders) {
-    const response = intentOpensNow(campaign, companion, sheets);
+    const response = intentOpensNow(campaign, companion, sheets, hook);
     if (response) {
-      outcomes.push(departNow(campaign, companion, response, hook === "own_turn" ? "fight" : "night", null));
+      outcomes.push(departNow(campaign, companion, response, where, null));
     }
   }
   return outcomes;
@@ -337,6 +358,7 @@ export function departureNote(outcome: DepartureOutcome): string {
   return [
     `${outcome.companion} ${lowerFirst(outcome.how)}: the server has taken them out of the party (their sheet is kept). Narrate it as it happened, in their own voice; never call dismiss_companion for it.`,
     outcome.reportedTo ? `The party's standing with ${outcome.reportedTo} fell${outcome.standing ? ` (now ${outcome.standing})` : ""}.` : "",
+    outcome.caresFor?.length ? `They still care for ${outcome.caresFor.join(" and ")}: let it show as they go (a word, a look back). It was the rest of the party they could not stand.` : "",
     outcome.avenging ? `They mean to come back with help; the server tracks it.` : "",
   ]
     .filter(Boolean)

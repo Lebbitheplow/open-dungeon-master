@@ -67,7 +67,7 @@ function log(kind: string, detail: unknown) {
 function loadScript(): Step[][] {
   const file = process.env.HARNESS_FAKE_SCRIPT;
   if (!file) {
-    return [[{ text: "The fake Dungeon Master narrates." }]];
+    return [[{ text: "The fake Game Master narrates." }]];
   }
   return JSON.parse(readFileSync(file, "utf8")) as Step[][];
 }

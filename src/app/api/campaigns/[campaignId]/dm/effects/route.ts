@@ -49,7 +49,7 @@ export async function POST(
     return context;
   }
   if (!capsFor(context).adjudicates) {
-    return Response.json({ error: "Only the Dungeon Master can lift an effect." }, { status: 403 });
+    return Response.json({ error: "Only the Game Master can lift an effect." }, { status: 403 });
   }
   const parsed = removeSchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {

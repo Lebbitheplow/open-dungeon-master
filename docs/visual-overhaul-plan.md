@@ -1621,7 +1621,7 @@ job; the review of its contact sheets is the bulk of its human time.
 ## 10. Carrying every change into the client apps
 
 The apps draw the server's pages as their own screens (client 0.8.0 and later;
-`src/renderer/game/index.tsx` in `open-dungeon-master-client` compiles
+`src/renderer/game/index.tsx` in `open-game-master-client` compiles
 `src/app` components with Preact; `runtime.ts` patches fetch, EventSource and
 media). Everything in this plan is built once in `src/app`, `src/components`
 and `src/lib` as client components, and reaches the apps at their next bundle.

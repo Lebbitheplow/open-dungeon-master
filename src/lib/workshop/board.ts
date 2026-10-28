@@ -45,7 +45,7 @@ export const BEAT_HINTS: Record<BeatKind, string> = {
   encounter:
     "A fight worth preparing. Becomes a prepared encounter, or the one it picks, and a beat when the arrows run through it.",
   hook: "Why the party would walk toward any of this. Becomes a quest.",
-  secret: "What the party is not told. Becomes a DM-only note.",
+  secret: "What the party is not told. Becomes a GM-only note.",
   npc_moment: "The scene somebody has been waiting for. Becomes an arc beat.",
 };
 

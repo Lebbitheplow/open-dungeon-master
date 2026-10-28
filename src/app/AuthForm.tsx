@@ -268,7 +268,7 @@ export default function AuthForm({
   if (deviceWorld && needsSetup && !seatJoin) {
     return (
       <p className="reveal text-sm text-stone-400" role="status">
-        This world runs inside the Open Dungeon Master app on this device, and the app makes its
+        This world runs inside the Open Game Master app on this device, and the app makes its
         first account itself. Open the app and choose Enter my world; there is no code to type.
       </p>
     );

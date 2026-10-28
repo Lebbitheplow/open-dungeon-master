@@ -363,7 +363,7 @@ function parseManifest(text: string): Manifest {
     throw new WorldArchiveError("This is not a world archive: its manifest is not readable.");
   }
   if (parsed?.format !== FORMAT || !Array.isArray(parsed.files)) {
-    throw new WorldArchiveError("This is not an Open Dungeon Master world archive.");
+    throw new WorldArchiveError("This is not an Open Game Master world archive.");
   }
   if (!READABLE_VERSIONS.has(parsed.version)) {
     throw new WorldArchiveError("This world archive was made by a different version of the format. Update the app, then try again.");
@@ -439,7 +439,7 @@ async function runCheck(job: WorldJob, name: string): Promise<WorldPreview> {
     for await (const entry of readTarGz(archive)) {
       if (!manifest) {
         if (entry.name !== "manifest.json" || entry.size > MANIFEST_MAX_BYTES) {
-          throw new WorldArchiveError("This is not an Open Dungeon Master world archive.");
+          throw new WorldArchiveError("This is not an Open Game Master world archive.");
         }
         const chunks: Buffer[] = [];
         for await (const chunk of entry.stream) chunks.push(chunk as Buffer);
@@ -475,12 +475,12 @@ async function runCheck(job: WorldJob, name: string): Promise<WorldPreview> {
       seen.add(entry.name);
       job.phase = `Checking ${seen.size} of ${expected.size} files`;
     }
-    if (!manifest) throw new WorldArchiveError("This is not an Open Dungeon Master world archive.");
+    if (!manifest) throw new WorldArchiveError("This is not an Open Game Master world archive.");
     if (seen.size !== expected.size) throw new WorldArchiveError("The archive is missing files its manifest lists.");
     const ours = currentBuild().version;
     if (manifest.serverVersion && ours && compareVersions(manifest.serverVersion, ours) > 0) {
       throw new WorldArchiveError(
-        `This world was saved by a newer Open Dungeon Master (${manifest.serverVersion}). Update the app, then import it.`,
+        `This world was saved by a newer Open Game Master (${manifest.serverVersion}). Update the app, then import it.`,
         409,
       );
     }

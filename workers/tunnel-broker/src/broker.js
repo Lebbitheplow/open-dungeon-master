@@ -1,5 +1,5 @@
 // The tunnel broker: gives a desktop app hosting a session a pretty, stable
-// address (play-CODE.opendungeonmaster.com) instead of a random
+// address (play-CODE under the project's domain) instead of a random
 // trycloudflare.com name.
 //
 // This module is the whole of the broker's behaviour and runs under plain
@@ -22,12 +22,12 @@
 // after MAX_AGE_MS, so abandoned tunnels and DNS records never pile up.
 //
 // SECURITY: the API token lives in a Worker secret, scoped to Tunnel:Edit
-// and this zone's DNS:Edit only. Creation is open but rate limited per IP;
+// and DNS:Edit on the broker's zones only. Creation is open but rate limited per IP;
 // a session can only be torn down early with the secret returned at
 // creation (stored hashed). Codes use the invite alphabet, so a hostname
 // never collides with meaningful subdomains.
 
-import { API, json, rateLimited, sha256Hex } from "./util.js";
+import { API, json, playZones, rateLimited, sha256Hex } from "./util.js";
 import { checkRelayUsage, dropWorld, putWorld, RELAY_CRON } from "./worlds.js";
 
 const CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -80,16 +80,28 @@ async function cfDelete(env, path) {
   }
 }
 
-// The zone id is looked up once from the zone's name (the scoped token can
-// list the zone it edits) and cached forever.
-async function zoneId(env) {
-  const cached = await env.SESSIONS.get("zone-id");
+// A zone's id is looked up once from its name (the scoped token can list
+// the zones it edits) and cached forever. Ids cached before sessions were
+// named in more than one zone sit under the bare "zone-id" key, which only
+// destroySession still reads.
+async function zoneId(env, name) {
+  const key = `zone-id:${name}`;
+  const cached = await env.SESSIONS.get(key);
   if (cached) return cached;
-  const zones = await cfApi(env, "GET", `/zones?name=${env.ZONE_NAME}`);
+  const zones = await cfApi(env, "GET", `/zones?name=${encodeURIComponent(name)}`);
   const id = Array.isArray(zones) ? zones[0]?.id : undefined;
-  if (!id) throw new Error(`Zone ${env.ZONE_NAME} is not visible to the API token.`);
-  await env.SESSIONS.put("zone-id", id);
+  if (!id) throw new Error(`Zone ${name} is not visible to the API token.`);
+  await env.SESSIONS.put(key, id);
   return id;
+}
+
+// The app hears back the name in the domain it called the broker on: an app
+// that knows only the old domain builds room codes on it, one that calls the
+// new broker builds them on the new one. Anything else (the workers.dev
+// address the oldest apps use) gets ZONE_NAME, which is always named first.
+function replyZone(request, named) {
+  const host = new URL(request.url).hostname.toLowerCase();
+  return named.find((zone) => host === zone || host.endsWith(`.${zone}`)) || named[0];
 }
 
 // ---------- the table registry ----------
@@ -291,11 +303,11 @@ async function createSession(env, request) {
   }
 
   const code = randomCode();
-  // One label deep on purpose: the zone's free Universal SSL wildcard covers
-  // *.opendungeonmaster.com but not *.play.opendungeonmaster.com, so the
-  // prettier CODE.play form would fail every TLS handshake without a paid
-  // Advanced Certificate Manager wildcard.
-  const hostname = `play-${code.toLowerCase()}.${env.ZONE_NAME}`;
+  // One label deep on purpose: a zone's free Universal SSL wildcard covers
+  // *.zone but not *.play.zone, so the prettier CODE.play form would fail
+  // every TLS handshake without a paid Advanced Certificate Manager wildcard.
+  const label = `play-${code.toLowerCase()}`;
+  const zones = playZones(env);
   const secret = [...crypto.getRandomValues(new Uint8Array(24))]
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
@@ -309,6 +321,7 @@ async function createSession(env, request) {
     tunnelId: tunnel.id,
     secretHash,
     createdAt: Date.now(),
+    records: [],
   };
   try {
     const tunnelToken = await cfApi(
@@ -316,24 +329,38 @@ async function createSession(env, request) {
       "GET",
       `/accounts/${env.ACCOUNT_ID}/cfd_tunnel/${tunnel.id}/token`,
     );
+    const service = `http://127.0.0.1:${port}`;
     await cfApi(env, "PUT", `/accounts/${env.ACCOUNT_ID}/cfd_tunnel/${tunnel.id}/configurations`, {
       config: {
         ingress: [
-          { hostname, service: `http://127.0.0.1:${port}` },
+          ...zones.map((zone) => ({ hostname: `${label}.${zone}`, service })),
           { service: "http_status:404" },
         ],
       },
     });
-    const record = await cfApi(env, "POST", `/zones/${await zoneId(env)}/dns_records`, {
-      type: "CNAME",
-      name: hostname,
-      content: `${tunnel.id}.cfargotunnel.com`,
-      proxied: true,
-    });
-    session.dnsRecordId = record.id;
+    // ZONE_NAME must take the name. A secondary zone the token cannot edit
+    // (yet) is skipped, and the session still answers on the first.
+    const named = [];
+    for (const zone of zones) {
+      try {
+        const id = await zoneId(env, zone);
+        const record = await cfApi(env, "POST", `/zones/${id}/dns_records`, {
+          type: "CNAME",
+          name: `${label}.${zone}`,
+          content: `${tunnel.id}.cfargotunnel.com`,
+          proxied: true,
+        });
+        session.records.push({ zoneId: id, id: record.id });
+        named.push(zone);
+      } catch (error) {
+        if (zone === zones[0]) throw error;
+        console.error(`Session ${code} has no ${zone} name`, error);
+      }
+    }
     // The cron is responsible for expiry. A storage TTL would eventually
     // erase the only cleanup intent if Cloudflare stayed unavailable.
     await env.SESSIONS.put(`session:${code}`, JSON.stringify(session));
+    const hostname = `${label}.${replyZone(request, named)}`;
     return json({ code, hostname, url: `https://${hostname}`, tunnelToken, secret });
   } catch (err) {
     // The tunnel already exists, even if token/config/DNS setup failed.
@@ -357,16 +384,28 @@ async function destroySession(env, code, session) {
   }
 
   let cleanupError;
-  // Order matters: DNS first so the name dies even if tunnel cleanup fails.
+  // Order matters: DNS first so the names die even if tunnel cleanup fails.
+  // A row from before sessions had a name per zone holds one record id, in
+  // the zone whose id was cached under the bare key then.
   if (pending.dnsRecordId) {
     try {
-      const zone = await zoneId(env);
+      const zone = (await env.SESSIONS.get("zone-id")) || (await zoneId(env, env.ZONE_NAME));
       await cfDelete(env, `/zones/${zone}/dns_records/${pending.dnsRecordId}`);
       delete pending.dnsRecordId;
     } catch (error) {
       cleanupError = error;
     }
   }
+  const left = [];
+  for (const record of pending.records || []) {
+    try {
+      await cfDelete(env, `/zones/${record.zoneId}/dns_records/${record.id}`);
+    } catch (error) {
+      cleanupError ??= error;
+      left.push(record);
+    }
+  }
+  pending.records = left;
   if (pending.tunnelId) {
     await cfApi(
       env,
@@ -381,7 +420,7 @@ async function destroySession(env, code, session) {
     }
   }
 
-  if (pending.dnsRecordId || pending.tunnelId) {
+  if (pending.dnsRecordId || pending.records.length || pending.tunnelId) {
     try {
       await env.SESSIONS.put(key, JSON.stringify(pending));
     } catch (error) {

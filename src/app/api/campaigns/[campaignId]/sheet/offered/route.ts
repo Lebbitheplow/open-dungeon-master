@@ -39,7 +39,7 @@ export async function POST(
     return context;
   }
   if (!capsFor(context).needsCharacter) {
-    return Response.json({ error: "The DM seat plays no character." }, { status: 400 });
+    return Response.json({ error: "The GM seat plays no character." }, { status: 400 });
   }
   if (getSheetForUser(campaignId, context.user.id) && context.campaign.gameSettings.multiCharacter === "off") {
     return Response.json({ error: "You already have a character in this campaign." }, { status: 409 });

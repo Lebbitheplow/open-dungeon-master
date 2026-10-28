@@ -203,7 +203,7 @@ export function MapPanel({
 
   if (!locations.length) {
     return (
-      <EmptyState size="sm" art="map" title={canPaint ? "No areas charted yet. Maps appear as the party explores." : "No areas charted yet. Areas appear as the party explores, and the DM can upload a map for each."} />
+      <EmptyState size="sm" art="map" title={canPaint ? "No areas charted yet. Maps appear as the party explores." : "No areas charted yet. Areas appear as the party explores, and the GM can upload a map for each."} />
     );
   }
 

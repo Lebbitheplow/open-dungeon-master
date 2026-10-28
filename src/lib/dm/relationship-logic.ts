@@ -202,6 +202,11 @@ export const RELATIONSHIP_BEATS = {
   necromancy: { base: -6, track: "social", label: "worked necromancy in front of" },
   desecration: { base: -6, track: "social", label: "desecrated the dead or the holy in front of" },
   slaving: { base: -14, axis: "empathy", axisSign: -1, track: "social", label: "dealt in slaves in front of" },
+  // Deeds that honour what a companion holds (issue 563), so a value with a
+  // red line has a way back besides amends.
+  laid_to_rest: { base: 5, axis: "empathy", axisSign: 1, track: "social", label: "laid the dead to rest in front of" },
+  freed_captives: { base: 8, axis: "empathy", axisSign: 1, track: "social", label: "freed captives in front of" },
+  upheld_law: { base: 5, axis: "diligence", axisSign: 1, track: "social", label: "handed a wrongdoer to the law in front of" },
   // Romance. flirt is how the romantic track opens; the rest need it open.
   flirt: { base: 4, skill: "persuasion", track: "romantic", label: "flirted with" },
   compliment: {
@@ -229,6 +234,13 @@ export const RELATIONSHIP_BEAT_NAMES = Object.keys(RELATIONSHIP_BEATS) as Relati
 
 export function beatSpec(beat: string): BeatSpec | null {
   return (RELATIONSHIP_BEATS as Record<string, BeatSpec>)[beat] ?? null;
+}
+
+// What standing by while someone else did a deed costs (issue 563): a third
+// of what it cost the doer with that witness, at least a point. Only a cost
+// is shared.
+export function bystanderShare(delta: number): number {
+  return delta < 0 ? Math.min(-1, Math.round(delta / 3)) : 0;
 }
 
 export type BeatOutcome = "strong" | "good" | "weak" | "miss";

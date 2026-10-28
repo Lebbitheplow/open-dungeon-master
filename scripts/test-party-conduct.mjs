@@ -88,4 +88,23 @@ test("the record round-trips, and a broken one reads as nothing", () => {
   assert.equal(logic.parseConduct(JSON.stringify({ demand: { amount: 0 } })).demand, null, "a share of nothing is none");
 });
 
+// ---- issue 563 ----
+
+test("a devoted companion spends on its dying friend first", () => {
+  const base = { companion: "Brakka", target: "Tobin", targetDying: false, dyingFriends: ["Mira"], spend: "slot" };
+  assert.match(logic.devotedFirstRefusal(base), /while Mira lies dying/);
+  assert.equal(logic.devotedFirstRefusal({ ...base, target: "Mira" }), null, "the friend itself");
+  assert.equal(logic.devotedFirstRefusal({ ...base, targetDying: true }), null, "another who is dying too");
+  assert.equal(logic.devotedFirstRefusal({ ...base, dyingFriends: [] }), null, "no friend down");
+  assert.match(logic.devotedFirstRefusal({ ...base, spend: "potion" }), /a potion/);
+});
+
+test("a wary companion will not walk into an area laid on the board on its commander's word", () => {
+  const order = { companion: "Brakka", commander: "Tobin", approval: -10, provokers: [], areas: ["Wall of Fire"] };
+  assert.match(logic.riskyOrderRefusal(order), /walk into the Wall of Fire/);
+  assert.equal(logic.riskyOrderRefusal({ ...order, approval: 40 }), null, "a friendly one goes");
+  assert.equal(logic.riskyOrderRefusal({ ...order, areas: [] }), null, "nothing in the way");
+  assert.match(logic.riskyOrderRefusal({ ...order, provokers: ["the ogre"] }), /reach/, "a foe's reach is named first");
+});
+
 console.log(`test-party-conduct: ${passed} passed`);

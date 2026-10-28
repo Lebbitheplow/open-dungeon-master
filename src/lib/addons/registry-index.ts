@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ADDON_PERMISSION_IDS, addonIdSchema, type AddonPermission } from "@/lib/addons/manifest";
 
-// The addon catalog: addons/catalog.json in the Open Dungeon Master
+// The addon catalog: addons/catalog.json in the Open Game Master
 // repository, the downloader list under Admin > Addons. Addons live in their
 // authors' own GitHub repositories; an author adds theirs with a pull
 // request to this repository, which is audited before it is merged

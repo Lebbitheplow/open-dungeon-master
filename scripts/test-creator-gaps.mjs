@@ -34,7 +34,7 @@ const srdDrow = {
   slug: "odm-drow",
   name: "Elf (Drow)",
   documentSlug: "odm-expanded",
-  document: "Open Dungeon Master Expanded Options",
+  document: "Open Game Master Expanded Options",
   data: { asi: [{ attributes: ["Dexterity"], value: 2 }, { attributes: ["Charisma"], value: 1 }], speed: { walk: 30 }, languages: "Common and Elvish." },
 };
 const tohDrow = {
@@ -50,7 +50,7 @@ const tohDrow = {
   },
 };
 const highElf = { slug: "high-elf", name: "High Elf", documentSlug: "wotc-srd", document: "5e Core Rules", data: { asi: [{ attributes: ["Intelligence"], value: 1 }], parent_slug: "elf" } };
-const odmHighElf = { slug: "odm-high-elf", name: "Elf (High)", documentSlug: "odm-expanded", document: "Open Dungeon Master Expanded Options", data: { asi: [{ attributes: ["Dexterity"], value: 2 }, { attributes: ["Intelligence"], value: 1 }], speed: { walk: 30 } } };
+const odmHighElf = { slug: "odm-high-elf", name: "Elf (High)", documentSlug: "odm-expanded", document: "Open Game Master Expanded Options", data: { asi: [{ attributes: ["Dexterity"], value: 2 }, { attributes: ["Intelligence"], value: 1 }], speed: { walk: 30 } } };
 const elf = { slug: "elf", name: "Elf", documentSlug: "wotc-srd", document: "5e Core Rules", data: { asi: [{ attributes: ["Dexterity"], value: 2 }], speed: { walk: 30 }, languages: "Common and Elvish." } };
 
 await test("a third-party race under a bundled slug is its own race, under an id no SRD reader matches (issue 115)", () => {
@@ -74,7 +74,7 @@ await test("a third-party race under a bundled slug is its own race, under an id
   const srd = options.find((entry) => entry.id === "odm-drow");
   assert.deepEqual(srd.asi, { dex: 2, cha: 1 });
   assert.deepEqual(innateCantripsFor("odm-drow", 1), ["Dancing Lights"]);
-  assert.equal(srd.source, "Open Dungeon Master Expanded Options");
+  assert.equal(srd.source, "Open Game Master Expanded Options");
 });
 
 await test("a stored Tome of Heroes drow keeps its row in an edit, under whichever id it was saved", () => {

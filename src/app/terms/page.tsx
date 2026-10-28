@@ -3,7 +3,7 @@ import { PIXEL_ICONS } from "@/lib/ui";
 import { PageSection, PageShell } from "@/components/PageShell";
 
 export const metadata = {
-  title: "Terms of Service | Open Dungeon Master",
+  title: "Terms of Service | Open Game Master",
 };
 
 export default function TermsPage() {
@@ -15,19 +15,19 @@ export default function TermsPage() {
       blurb="What the software is, what it is not, and who is responsible for what."
       actions={
         <Link href="/" className="text-sm text-amber-200 hover:text-amber-100">
-          Back to Open Dungeon Master
+          Back to Open Game Master
         </Link>
       }
     >
       <PageSection bodyClassName="space-y-4">
         <p className="text-sm leading-6 text-stone-400">
-          Open Dungeon Master is open source (MIT licensed), self-hosted software. There is no
+          Open Game Master is open source (MIT licensed), self-hosted software. There is no
           hosted service to sign up for, no company behind it, and no account with the project
           itself. You download the code and run it on hardware you control. These terms explain
           what the software is, what it is not, and who is responsible for what.
         </p>
         <p className="text-sm leading-6 text-stone-400">
-          By installing, running, or playing on an install of Open Dungeon Master, you accept
+          By installing, running, or playing on an install of Open Game Master, you accept
           these terms. If you do not accept them, do not use the software.
         </p>
       </PageSection>
@@ -38,7 +38,7 @@ export default function TermsPage() {
             <span className="text-stone-200">If you run the server.</span> Your relationship with
             this project is the{" "}
             <a
-              href="https://github.com/Lebbitheplow/open-dungeon-master/blob/main/LICENSE"
+              href="https://github.com/Lebbitheplow/open-game-master/blob/main/LICENSE"
               target="_blank"
               rel="noopener noreferrer"
               className="text-amber-200 hover:text-amber-400"
@@ -52,7 +52,7 @@ export default function TermsPage() {
             <span className="text-stone-200">If you play on someone else&apos;s server.</span> The
             person or group operating that server is who you are actually dealing with. They
             control the accounts, the data, the rules of the table, and whether the server keeps
-            running. The creator of Open Dungeon Master is not a party to that arrangement, has no
+            running. The creator of Open Game Master is not a party to that arrangement, has no
             access to that server, and cannot moderate, recover, or delete anything on it.
           </li>
         </ul>
@@ -108,7 +108,7 @@ export default function TermsPage() {
 
       <PageSection heading="Acceptable use">
         <p className="text-sm leading-6 text-stone-400">
-          Whether you are the operator or a player, do not use Open Dungeon Master to:
+          Whether you are the operator or a player, do not use Open Game Master to:
         </p>
         <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-stone-400">
           <li>break the law, or to create, store, or share material that is illegal where you are;</li>
@@ -128,7 +128,7 @@ export default function TermsPage() {
         </ul>
         <p className="mt-3 text-sm leading-6 text-stone-400">
           If something at the table breaks these rules, whether a player wrote it or the AI
-          Dungeon Master generated it, report it from the message or the party list. Reports go
+          Game Master generated it, report it from the message or the party list. Reports go
           to the admins of the server you are on, who can mute, remove, or delete accounts, and
           you can block a player yourself at any time. Because the app has no central service,
           there is no one else to report to.
@@ -141,7 +141,7 @@ export default function TermsPage() {
 
       <PageSection heading="AI generated content">
         <p className="text-sm leading-6 text-stone-400">
-          The Dungeon Master is a language model. Its narration is fiction produced by software,
+          The Game Master is a language model. Its narration is fiction produced by software,
           and it can be wrong, inconsistent, unfair, or upsetting. It is not advice of any kind,
           and nothing it says should be relied on outside the game.
         </p>
@@ -157,7 +157,7 @@ export default function TermsPage() {
             and this project makes no claim either way.
           </li>
           <li>
-            Agree on the limits for your table before you play, and treat the AI DM as a tool the
+            Agree on the limits for your table before you play, and treat the AI GM as a tool the
             table steers rather than an authority.
           </li>
         </ul>
@@ -251,12 +251,12 @@ export default function TermsPage() {
         </p>
         <p className="mt-2 text-sm leading-6">
           <a
-            href="https://github.com/Lebbitheplow/open-dungeon-master"
+            href="https://github.com/Lebbitheplow/open-game-master"
             target="_blank"
             rel="noopener noreferrer"
             className="text-amber-200 hover:text-amber-400"
           >
-            github.com/Lebbitheplow/open-dungeon-master
+            github.com/Lebbitheplow/open-game-master
           </a>
         </p>
       </PageSection>

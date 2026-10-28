@@ -54,7 +54,7 @@ export function SheetBetween({ sheet, className }: { sheet: CharacterSheet; clas
             <span aria-hidden="true" className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", line.kind === "affliction" ? "bg-red-400/80" : "bg-amber-400/70")} />
             <span>
               {line.text}
-              {line.secret ? <span className="ml-1 text-[10px] uppercase tracking-wide text-stone-500">(DM only)</span> : null}
+              {line.secret ? <span className="ml-1 text-[10px] uppercase tracking-wide text-stone-500">(GM only)</span> : null}
             </span>
           </li>
         ))}

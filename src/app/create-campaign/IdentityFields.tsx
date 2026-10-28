@@ -11,7 +11,7 @@ import type { StepProps } from "@/app/create-campaign/draft";
 import { rollCampaignTitle } from "@/app/create-campaign/titles";
 
 const NO_PACK_INFO =
-  "A pre-built world is a coat of paint over the same 5e rules. It renames the races, classes, spells and monsters to fit its setting, tells the Dungeon Master how the place sounds, and floats the peoples and callings that belong there to the top of every picker in the character builder. Nothing is locked: you can still play a wizard in a world that calls them something else.\n\nWithout one you get the plain setting your genre implies, with the whole catalog offered in its own words.";
+  "A pre-built world is a coat of paint over the same 5e rules. It renames the races, classes, spells and monsters to fit its setting, tells the Game Master how the place sounds, and floats the peoples and callings that belong there to the top of every picker in the character builder. Nothing is locked: you can still play a wizard in a world that calls them something else.\n\nWithout one you get the plain setting your genre implies, with the whole catalog offered in its own words.";
 
 // The campaign's name. The essentials step will not go on without one, and
 // its held Continue brings the cursor back here.
@@ -53,10 +53,10 @@ export function TitleField({ draft, patch, inputRef }: Pick<StepProps, "draft" |
 
 // Each way to run a table, said from the seat the person creating it takes.
 const DM_MODE_ROLES: Record<(typeof DM_MODES)[number], string> = {
-  ai: "You play a hero. The AI is the Dungeon Master.",
+  ai: "You play a hero. The AI is the Game Master.",
   steered: "You direct the AI narrator, without a hero of your own.",
-  human: "You are the Dungeon Master.",
-  assisted: "You are the Dungeon Master, and the AI helps.",
+  human: "You are the Game Master.",
+  assisted: "You are the Game Master, and the AI helps.",
 };
 
 // Who holds the DM seat. A server that positively has no AI storyteller
@@ -103,7 +103,7 @@ export function DmModeField({ draft, patch, gates }: StepProps) {
         </p>
       ) : draft.dmMode !== "ai" ? (
         <p className="mt-1.5 text-xs text-stone-500">
-          You take the Dungeon Master seat: no character, no party slot, and you see the sheets, the stat blocks
+          You take the Game Master seat: no character, no party slot, and you see the sheets, the stat blocks
           and the whole map. The server still rolls every die and holds every number.
         </p>
       ) : null}
@@ -186,7 +186,7 @@ export function WorldPackField({
         </>
       ) : (
         <p className="mt-1 text-xs text-stone-500">
-          A pre-built world renames the races, classes, spells and monsters to fit it, and tells the DM how it
+          A pre-built world renames the races, classes, spells and monsters to fit it, and tells the GM how it
           sounds. Every rule stays 5e.
         </p>
       )}

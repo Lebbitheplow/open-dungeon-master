@@ -268,7 +268,7 @@ export async function invokeEngine(
   const turn =
     actor.kind === "ai" ? getDmTurn(actor.turnId) : humanTurnFor(campaign.id);
   if (!turn) {
-    return { ok: false, error: "That DM turn no longer exists." };
+    return { ok: false, error: "That GM turn no longer exists." };
   }
 
   // The rails on the model, for the model only.

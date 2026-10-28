@@ -137,7 +137,7 @@ await test("A roll without an attacker reads exactly as it did before.", () => {
   assert.equal(rollChronicleLead({ ...check, detail: "" }, "Aria"), "Aria · Skill check");
   // One table names a roll kind, on the cards and in cinematic mode alike.
   assert.equal(rollChronicleLead({ ...legacy, detail: "" }, "Aria"), "Aria · Attack roll");
-  assert.equal(rollToastLead({ ...check, characterId: null, detail: "" }, undefined), "The DM · Skill check");
+  assert.equal(rollToastLead({ ...check, characterId: null, detail: "" }, undefined), "The GM · Skill check");
   assert.deepEqual(gameState([legacy, check]), ["- Aria: attack (Goblin: Club) rolled 24 (natural 20)", "- Aria: skill check (Aria: Perception) rolled 13"]);
   const beats = beatSourceLines(world.campaignId, "").map((line) => line.text).filter((text) => text.startsWith("Roll:"));
   assert.deepEqual(beats.slice(-2), ["Roll: Aria rolled Goblin: Club for 24.", "Roll: Aria rolled Aria: Perception for 13."]);

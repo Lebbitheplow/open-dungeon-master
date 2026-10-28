@@ -92,7 +92,7 @@ export function useHandPending(signature: string) {
 // The card just sent is the DM's to resolve; the same cost waits for it.
 export function holdPendingCards(all: HandCard[], waiting: HandPending | null): HandCard[] {
   if (!waiting) return all;
-  const reason = `Sent. Waiting for the DM to resolve ${waiting.name}.`;
+  const reason = `Sent. Waiting for the GM to resolve ${waiting.name}.`;
   // A free card (a drop, Stand up, Dismount) spends no part of the turn the
   // engine counts, so its count never moves to release a hold: it holds
   // only itself, and the interaction cards when it was the interaction. End

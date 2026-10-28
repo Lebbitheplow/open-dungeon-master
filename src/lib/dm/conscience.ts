@@ -19,6 +19,7 @@ import {
   minutesLeft,
   rungGuidance,
   rungName,
+  settingOf,
   settleConscience,
   withUltimatum,
   type Conscience,
@@ -27,7 +28,7 @@ import {
 } from "@/lib/dm/conscience-logic";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { textKey } from "@/lib/language/text-logic";
-import { friendshipTier, type SouredLeaving } from "@/lib/dm/relationship-logic";
+import { friendshipTier, tierIndex, type FriendshipTier, type SouredLeaving } from "@/lib/dm/relationship-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // A lasting companion's conscience (issue 503 Phase 1), the rim around
@@ -45,10 +46,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 // initiative-floor.ts.
 
 export function conscienceSetting(campaign: Pick<Campaign, "gameSettings">): ConscienceSetting {
-  if (campaign.gameSettings.relationships === "off") {
-    return "off";
-  }
-  return campaign.gameSettings.companionConscience ?? "leave";
+  return settingOf(campaign.gameSettings);
 }
 
 export function conscienceOn(campaign: Pick<Campaign, "gameSettings">): boolean {
@@ -86,13 +84,23 @@ export function worstApproval(campaignId: string, companionName: string, sheets:
   return approvals.length ? Math.min(...approvals) : null;
 }
 
-// The characters at the table this companion is devoted to.
-function devotedFriends(campaignId: string, companionName: string, sheets: readonly CharacterSheet[]): string[] {
+// The characters at the table this companion stands with at `tier` or
+// better: devoted, for its reactions; close, for whom it still cares for as
+// it leaves (issue 563).
+export function friendsAtLeast(campaignId: string, companionName: string, sheets: readonly CharacterSheet[], tier: FriendshipTier): string[] {
   const names = new Map(sheets.filter((sheet) => !sheet.isCompanion).map((sheet) => [sheet.id, sheet.name]));
   const key = textKey(companionName);
   return listRelationships(campaignId)
-    .filter((entry) => entry.status === "active" && names.has(entry.characterId) && textKey(entry.subjectName) === key && friendshipTier(entry.approval) === "devoted")
+    .filter((entry) => entry.status === "active" && names.has(entry.characterId) && textKey(entry.subjectName) === key && tierIndex(friendshipTier(entry.approval)) >= tierIndex(tier))
     .map((entry) => names.get(entry.characterId)!);
+}
+
+// Where a lasting companion stands now, at a table that runs a conscience:
+// null for anyone else (another kind of companion, one set against the
+// party, or no conscience at the table).
+export function companionRung(campaign: Campaign, companion: CharacterSheet, sheets: readonly CharacterSheet[] = listSheets(campaign.id)): number | null {
+  const npc = conscienceOn(campaign) && consciousCompanions([companion]).length ? companionNpcFor(companion) : null;
+  return npc ? effectiveRung(companionConscience(npc.id), worstApproval(campaign.id, companion.name, sheets)) : null;
 }
 
 export type ConscienceMove = {
@@ -186,7 +194,7 @@ function endCommand(campaign: Campaign, companion: CharacterSheet): string | nul
     seq,
     authorType: "system",
     glyph: "system-party",
-    content: `${companion.name} no longer takes ${name}'s orders in a fight: what the party has done stands between them. The DM plays their turns now.`,
+    content: `${companion.name} no longer takes ${name}'s orders in a fight: what the party has done stands between them. The GM plays their turns now.`,
   });
   publishWithSeq(campaign.id, seq, "message_added", { message });
   // On their own turn, that turn is the DM's now, as the companion's card
@@ -274,9 +282,9 @@ export function conscienceBlockForPrompt(campaign: Campaign, sheets: readonly Ch
       );
     }
     // Issue 503 Phase 4: a devoted companion's reaction (devoted-guard.ts).
-    const devoted = devotedFriends(campaign.id, companion.name, sheets);
+    const devoted = friendsAtLeast(campaign.id, companion.name, sheets, "devoted");
     if (devoted.length) {
-      parts.push(`devoted to ${devoted.join(", ")}: may take a blow meant for them once a fight (use_reaction "Take the Blow", targetCharacterId)`);
+      parts.push(`devoted to ${devoted.join(", ")}: may take a blow meant for them once a fight (use_reaction "Take the Blow", targetCharacterId), and heals them first while they lie dying`);
     }
     return [parts.join("; ")];
   });

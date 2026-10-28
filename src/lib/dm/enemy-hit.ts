@@ -246,7 +246,7 @@ export function resolveOnHit(
         out.riderCondition = [...((out.riderCondition as string[] | undefined) ?? []), condition];
       }
     }
-    out.swallowed = `${target.name} is swallowed: blinded and restrained inside ${enemy.displayName}, with total cover from everything outside it. Its stomach's damage each turn and the way out are the DM's to resolve from the block.`;
+    out.swallowed = `${target.name} is swallowed: blinded and restrained inside ${enemy.displayName}, with total cover from everything outside it. Its stomach's damage each turn and the way out are the GM's to resolve from the block.`;
   }
   if (rider.manual?.length) {
     out.manual = `The server does not model this part of ${attack.name}; resolve it by hand: ${rider.manual.join(" ")}`;
