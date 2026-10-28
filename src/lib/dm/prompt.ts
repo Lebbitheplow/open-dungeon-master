@@ -98,6 +98,7 @@ import { CREATURE_TYPES } from "@/lib/bestiary/creature-type";
 import { CHECK_KEY_PROPERTIES, NONE, SAVE_AGAINST } from "@/lib/dm/roll-about";
 import { stopWordsFor } from "@/lib/language/language";
 import { textKey } from "@/lib/language/text-logic";
+import { conversationNote, type Conversation } from "@/lib/dm/conversation-logic";
 import { ADVANTAGE_SOURCES } from "@/lib/dm/pc-attack-options";
 import { PLACE_DIRECTIONS, PLACE_DISTANCES } from "@/lib/overworld/places";
 
@@ -276,6 +277,9 @@ export type DmGameState = {
   facts?: FactLike[];
   // Sparks from the world-simulation tick, consumed into this turn.
   directorNotes?: string[];
+  // A player answering someone who just spoke to them
+  // (src/lib/dm/conversation-logic.ts): that person answers first.
+  conversation?: Conversation | null;
   // Tracked NPCs and how they currently feel about the party, plus a
   // bounded agency fragment (personality leans, bonds, goals, pressure).
   npcs?: Array<{
@@ -974,6 +978,9 @@ export function buildGameStateBlock(state: DmGameState): string {
         .map((note) => `- ${note}`)
         .join("\n")}`,
     );
+  }
+  if (state.conversation) {
+    moment.push(conversationNote(state.conversation));
   }
   if (campaign.scene) {
     sections.push(`Current scene: ${campaign.scene}`);

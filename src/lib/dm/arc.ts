@@ -212,7 +212,7 @@ const BEAT_RULE = `Each beat is a turning point that takes a stretch of play to 
 // or its own check of play, and complete_beat is refused until all are
 // done, so a beat can no longer land in the reply that reaches its place.
 const BEAT_PLAN_SHAPE = `{"text": string, "waypoints": [{"kind": "place"|"npc"|"item"|"objective"|"fight"|"narrative", "text": string}]}`;
-const WAYPOINT_RULE = `Each beat carries 2 to 4 waypoints: concrete steps the party must take before the beat can land, each one short line with a kind. place is a named location reached, npc a named person spoken with, item a named thing obtained, objective a quest objective completed, fight a named foe defeated, narrative anything else. Name places, people, items and foes exactly as the arc and cast name them, and make the steps different places or people from the beat before, so a beat takes a stretch of play to reach.`;
+const WAYPOINT_RULE = `Each beat carries 2 to 4 waypoints: concrete steps the party must take before the beat can land, each one short line with a kind. place is a named location reached, npc a named person spoken with, item a named thing obtained, objective a quest objective completed, fight a named foe defeated, narrative anything else. Name places, people, items and foes exactly as the arc and cast name them, and make the steps different places or people from the beat before, so a beat takes a stretch of play to reach. List a fight after the beat's places and people, and save the act's boss for its last beat, never its first. When someone in a beat knows what the party needs, hearing it from them is a narrative step.`;
 
 // The full saga JSON shape, shared by initial generation and sequel
 // chaining (the chain adds one extra field in front).

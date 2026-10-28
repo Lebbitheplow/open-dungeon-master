@@ -2537,6 +2537,7 @@
     "lib/content/species-variants.ts#str-list": [["key",2,"the field names an option holds"]],
     "lib/content/species-variants.ts#toLowerCase": [["key",4,"damage types and skill ids an option names"]],
     "lib/content/species-variants.ts#toUpperCase": [["display",2,"ability abbreviations, capitalised words"]],
+    "lib/dm/conversation-logic.ts#str-eq": [["key",4,"a message's author type and an attributed speaker's kind (stored enums)"]],
     "lib/srd/legality/species-variant.ts#toLowerCase": [["display",1,"a species choice's label in a sentence"]],
     "lib/homebrew/species-choice-server.ts#re-word": [["english-source",2,"ODM's own feature-name words two engine readers find anywhere in a feature's name (\"see invisibility\", \"true seeing\", \"multiattack defense\"), refused in a species choice's label and option names on the server"]]
   }

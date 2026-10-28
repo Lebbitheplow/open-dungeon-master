@@ -28,6 +28,28 @@ await test("A scene that is not a bed is refused with the list of beds.", async 
   assert.match(error, /one of: .*forest/);
 });
 
+// The model's own call, past the console's select: a refused arrival once
+// left a table's narration in a village the map never reached. The kind of
+// place is only its sound, so a wrong one costs the sound, never the move.
+await test("The model's move_party with a scene off the list still moves the party, keeps the sound, and names the beds.", async () => {
+  const { handleLocationCall } = await import("../src/lib/dm/turn.ts");
+  const { getCampaignById } = await import("../src/lib/db/campaigns.ts");
+  const moved = handleLocationCall(
+    getCampaignById(world.campaignId),
+    "move_party",
+    JSON.stringify({ name: "Il Villaggio", layoutDescription: "Case di legno intorno a un pozzo.", scene: "village" }),
+    false,
+  );
+  assert.equal(moved.error, undefined, String(moved.error));
+  assert.equal(getCurrentLocation(world.campaignId)?.name, "Il Villaggio");
+  assert.equal(getAmbience(world.campaignId).bed, "crypt");
+  assert.match(String(moved.note), /the sounds are: .*town/);
+  // Back to the crypt, which keeps its own kind, for the checks below.
+  const back = await world.invoke("move_party", { name: "La Cripta di Vael" });
+  assert.ok(back.ok, back.error);
+  assert.equal(getCurrentLocation(world.campaignId)?.ambience?.bed, "crypt");
+});
+
 await test("The sky and the clock are not kinds of place: they stay sounds, the weather's own.", async () => {
   const { cueIds, sceneIds } = await import("../src/lib/ambience/catalog.ts");
   for (const bed of ["rain", "storm", "wind", "night"]) {

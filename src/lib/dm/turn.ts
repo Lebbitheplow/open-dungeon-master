@@ -161,7 +161,9 @@ import {
 import { listChapters } from "@/lib/db/chapters";
 import { listDmPrepNotes, listPublicCampaignNotes } from "@/lib/db/notes";
 import { listActiveFacts } from "@/lib/db/facts";
-import { consumePendingSparks, tickWorldState } from "@/lib/dm/world-tick";
+import { consumePendingSparks, storyMarkFor, tickWorldState } from "@/lib/dm/world-tick";
+import { storyMoved } from "@/lib/dm/world-tick-logic";
+import { conversationInFlight } from "@/lib/dm/conversation-logic";
 import { advanceDirectorNotes, advanceWindowOpen, tickAdvances } from "@/lib/dm/advance-tick";
 import { storytellerLinesForPrompt } from "@/lib/dm/scheme-tools";
 import { isStorytellerFact } from "@/lib/dm/fact-logic";
@@ -650,6 +652,18 @@ async function openTurn(
   // the DM sees them on the very turn the party asks after them rather than
   // one turn late.
   restoreMentionedNpcs(campaignId, history.slice(-4).map((entry) => entry.content).join("\n"));
+  // A player answering someone who just spoke to them
+  // (src/lib/dm/conversation-logic.ts): the reply is that person's answer,
+  // and nothing cuts in. The world's sparks stay in the tick state until
+  // the talk pauses.
+  const talk = oocOnly
+    ? null
+    : conversationInFlight({
+        history,
+        inEncounter: Boolean(getActiveEncounter(campaignId)),
+        companionIds: new Set(context.sheets.filter((sheet) => sheet.isCompanion).map((sheet) => sheet.id)),
+        names: new Map(context.sheets.map((sheet) => [sheet.id, sheet.name])),
+      });
 
   // Optional stages (src/lib/dm/stages.ts): all default on, so this changes
   // nothing until an operator opts out.
@@ -857,8 +871,12 @@ async function openTurn(
           knownBy: fact.knownBy,
         })),
       // The world's sparks, and a departed companion's return once it is
-      // cued (issue 503).
-      directorNotes: oocOnly ? [] : [...consumePendingSparks(campaignId).map((spark) => spark.text), ...returnDirectorNotes(campaign)],
+      // cued (issue 503); both wait out a conversation.
+      directorNotes:
+        oocOnly || talk
+          ? []
+          : [...consumePendingSparks(campaignId).map((spark) => spark.text), ...returnDirectorNotes(campaign)],
+      conversation: talk,
       // The storyteller's section: who is open to advances, an NPC ready to
       // make a move (issue 501, said while its window is open), an NPC's act,
       // and a companion's plan to leave (issue 503).
@@ -1423,6 +1441,8 @@ function resetDraftIfWithheld(campaignId: string, turn: DmTurn, shown: string, k
 async function runAdvance(context: TurnContext, turn: DmTurn) {
   const { campaign, sheets, sheetsById } = context;
   const campaignId = campaign.id;
+  // Where the story stood when this run began, for the stall clock.
+  const markBefore = storyMarkFor(campaignId);
   let failed = "";
   let spotlightSet = false;
 
@@ -1802,6 +1822,8 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     const worldCalls = runnable.filter((toolCall) => WORLD_RUN_NAMES.has(toolCall.name));
 
     const accepted = new Set<(typeof toolCalls)[number]>();
+    // The calls the engine ran and turned down, which tick no waypoint.
+    const refused = new Set<(typeof toolCalls)[number]>();
     // Location bookkeeping is synchronous and cheap; maps render async on
     // the media queue when vision allows.
     const locationResults = new Map<string, Record<string, unknown>>();
@@ -1828,6 +1850,8 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       locationResults.set(locationCall.id ?? locationCall.name, result);
       if (!("error" in result)) {
         accepted.add(locationCall);
+      } else {
+        refused.add(locationCall);
       }
     }
     const moreToolsResults = new Map<string, ToolResult>();
@@ -1889,12 +1913,14 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       setNpcResults.set(npcCall.id ?? "set_npc", result);
       if (!("error" in result)) {
         accepted.add(npcCall);
+      } else {
+        refused.add(npcCall);
       }
     }
     // Waypoints tick before the beat is judged, so an arrival and the beat
     // it lands in the same reply resolve in order (issue #31). The location
     // calls above already ran; the rest of the tools tick again below.
-    await tickWaypointsFromCalls(campaignId, toolCalls, { enemyNames: foesBefore, accepted });
+    await tickWaypointsFromCalls(campaignId, toolCalls, { enemyNames: foesBefore, accepted, refused });
     const beatResults = new Map<string, Record<string, unknown>>();
     for (const beatCall of beatCalls) {
       const outcome = handleCompleteBeat(campaignId, beatCall.rawArguments, beatCompleted);
@@ -2246,6 +2272,8 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       }
       if (!("error" in outcome)) {
         accepted.add(toolCall);
+      } else {
+        refused.add(toolCall);
       }
       const told = narration && UNSEEN_CHECKS.has(toolCall.name) && !("error" in outcome) ? { ...outcome, table: UNSEEN_CHECK_NOTE } : outcome;
       turn.conversation.push({
@@ -2258,7 +2286,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     // The NPC, item, objective and combat tools ran after the beat check:
     // their waypoints tick now, for the next reply's checklist, and before
     // a park so a resumed turn does not lose them.
-    await tickWaypointsFromCalls(campaignId, toolCalls, { enemyNames: foesBefore, accepted });
+    await tickWaypointsFromCalls(campaignId, toolCalls, { enemyNames: foesBefore, accepted, refused });
 
     if (parkedAny) {
       // Park: the queue job ends here. Submissions resume the turn.
@@ -2330,8 +2358,9 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       compactHistoryInBackground(campaignId, undefined, Date.now(), { evicted: turn.contextTrace?.historyEvicted ?? 0 });
     }
     // The world-simulation heartbeat: pure dice, sparks land in the NEXT
-    // turn's prompt, so background clocks never trigger model calls.
-    tickWorldState(campaignId);
+    // turn's prompt, so background clocks never trigger model calls. A turn
+    // that moved the story restarts the stall clock.
+    tickWorldState(campaignId, { moved: storyMoved(markBefore, storyMarkFor(campaignId)) });
     // NPC advances (issue 501) count AI turns whether or not world
     // simulation is on, and roll beside the world tick, not inside it.
     tickAdvances(context.campaign, bumpAiTurns(campaignId), turn.narrationParts.join("\n\n"));
@@ -2866,11 +2895,15 @@ export function handleLocationCall(
   const partOf = typeof args.partOf === "string" ? args.partOf.trim().slice(0, 80) : "";
   const direction = normalizeDirection(args.direction);
   const distance = normalizeDistance(args.distance);
+  // A kind of place off the sound list is no sound rather than a refusal,
+  // for the same reason: a refused move_party left a table's narration in a
+  // village the map never reached. The note names the list for next time.
   const beds = sceneIds();
-  if (args.scene !== undefined && !beds.includes(String(args.scene))) {
-    return { error: `Unknown scene "${String(args.scene)}"; use one of: ${beds.join(", ")}.`, retry: true };
-  }
-  const scene = args.scene === undefined ? undefined : String(args.scene);
+  const sceneOffList = args.scene !== undefined && !beds.includes(String(args.scene));
+  const scene = args.scene === undefined || sceneOffList ? undefined : String(args.scene);
+  const sceneNote = sceneOffList
+    ? ` The scene "${String(args.scene)}" is not one of the sounds, so the sound was left as it was; the sounds are: ${beds.join(", ")}.`
+    : "";
   const layoutDescription =
     typeof args.layoutDescription === "string" ? args.layoutDescription : undefined;
   const connections = Array.isArray(args.connections)
@@ -3011,7 +3044,8 @@ export function handleLocationCall(
           ? `Recorded. ${peopled} Continue the scene.`
           : "Recorded. Continue the scene.") +
       filedNote +
-      (split ? ` ${split}` : ""),
+      (split ? ` ${split}` : "") +
+      sceneNote,
     // Consumed by advance() as the chapter-break and inline-map signals,
     // then stripped before the result reaches the model.
     ...(movedToNewLocation
