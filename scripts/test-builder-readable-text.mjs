@@ -91,9 +91,13 @@ const contrast = (a, b) => {
 };
 
 test("the night theme's quiet grey reads at 4.5:1 on the builder's panels", () => {
-  const night = ruleBody(':root:not([data-theme="light"]) [data-builder-root]');
-  const grey = night.match(/--color-stone-500:\s*(#[0-9a-f]{6})/i)?.[1];
+  const grey = css.match(/\n\[data-builder-root\] \{\s*--color-stone-500:\s*(#[0-9a-f]{6});\s*\}/i)?.[1];
   assert.ok(grey, "the builder lifts stone-500 at night");
+  // The day theme keeps its own grey. A negated theme test
+  // (:root:not([data-theme="light"])) always holds in the apps, whose
+  // scoped sheet asks their game root, which carries no theme.
+  assert.match(css, /\nhtml\[data-theme="light"\] \[data-builder-root\] \{\s*--color-stone-500: inherit;\s*\}/, "the day theme keeps its own grey");
+  assert.ok(!/:not\(\[data-theme/.test(css.replace(/\/\*[\s\S]*?\*\//g, "")), "no negated theme test, which the apps cannot read");
   // The lightest a step panel gets (its top under the page's glow) and an
   // amber callout on it, composited from globals.css (.panel, body).
   for (const [surface, hex] of [["a step panel's top", "#2a2348"], ["an amber callout", "#3b3147"], ["a card", "#2d254d"]]) {

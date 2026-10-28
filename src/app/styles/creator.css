@@ -1089,9 +1089,17 @@ html[data-theme="light"] .roll-tier-5 { color: #6d28d9; text-shadow: none; }
 /* The night theme's quiet grey (#8f8aab) measured 4.45:1 at the top of a
    step panel and 3.73:1 in an amber callout, under the 4.5:1 body text
    needs. In the builder it is lifted to 5.5:1 and 4.6:1, still a step below
-   stone-400 (6.5:1). The day theme's ink already passes. */
-:root:not([data-theme="light"]) [data-builder-root] {
+   stone-400 (6.5:1). The day theme's ink already passes, so it keeps its
+   own. Written as the night value with a day rule after it, never as
+   :root:not([data-theme="light"]): the apps confine this sheet to their game
+   root (client scripts/scope-css.mjs), which carries no theme, so a negated
+   theme test there always held and the night grey reached the day theme's
+   parchment at 2.2:1. */
+[data-builder-root] {
   --color-stone-500: #a09bbb;
+}
+html[data-theme="light"] [data-builder-root] {
+  --color-stone-500: inherit;
 }
 /* Section ribbons, the wizard's step counter and other small capitals come
    from shared components sized for denser screens (9-11px); in the builder
@@ -1209,10 +1217,12 @@ html[data-theme="light"] .roll-tier-5 { color: #6d28d9; text-shadow: none; }
 
 /* More contrast asked for (an OS setting short of forced colours): the
    quiet greys take the next tone up, in both themes, and the hairline
-   borders on cards, chips and panels become solid. */
+   borders on cards, chips and panels become solid. Each theme's own
+   selector from above, so this outranks both the night lift and the day
+   rule. */
 @media (prefers-contrast: more) {
-  :root:not([data-theme="light"]) [data-builder-root],
-  :root[data-theme="light"] [data-builder-root] {
+  [data-builder-root],
+  html[data-theme="light"] [data-builder-root] {
     --color-stone-500: var(--color-stone-300);
     --color-stone-400: var(--color-stone-200);
   }
