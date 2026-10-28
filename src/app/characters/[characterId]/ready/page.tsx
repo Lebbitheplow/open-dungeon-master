@@ -10,6 +10,7 @@ import { cn } from "@/lib/cn";
 import { useLowEffects } from "@/lib/effects-mode";
 import { freshPlaySheet, revealLine, threeThingsToTry } from "@/lib/characters/hero-tips";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
+import { classWordsAfterLevel } from "@/lib/characters/class-words";
 import { CharacterPortrait, ui } from "@/lib/ui";
 import { UseInCampaignDialog } from "../UseInCampaignDialog";
 
@@ -146,7 +147,8 @@ export default function HeroReadyPage({ params }: { params: Promise<{ characterI
 
   const portraitUrl = character.sheet.portrait?.url;
   const ancestry = spaced(character.race);
-  const calling = `${spaced(character.class)}${character.subclass ? ` (${spaced(character.subclass)})` : ""}`;
+  // A split names each class's levels (backlog F9).
+  const calling = `${classWordsAfterLevel({ ...character, classes: character.sheet.classes }, spaced)}${character.subclass ? ` (${spaced(character.subclass)})` : ""}`;
   const motion = lowEffects ? "" : "reveal";
 
   return (

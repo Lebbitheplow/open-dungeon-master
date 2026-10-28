@@ -26,6 +26,7 @@ import { findClass } from "@/lib/srd";
 import { spellLevelOf } from "@/lib/srd/spell-lists";
 import { builderCasting, builderSpellAdvice } from "./casting";
 import { textKey } from "@/lib/language/text-logic";
+import { classLevelWords } from "@/lib/characters/class-words";
 
 // One class taken after the first: its id, its subclass once its level
 // reaches the pick, its levels, and the skill (or skills) its multiclass
@@ -346,9 +347,11 @@ export function classAtLevel<T extends { id: string; level: number }>(
   return null;
 }
 
-// "Fighter 3 / Wizard 2", for the summary and the header.
+// "Fighter 3 / Wizard 2", for the summary and the header: the words every
+// card and row uses for a split (src/lib/characters/class-words.ts).
 export function classSplitWords(classList: ReadonlyArray<{ id: string; level: number }>, nameOf: (id: string) => string): string {
-  return classList.map((entry) => `${nameOf(entry.id)} ${entry.level}`).join(" / ");
+  const [first] = classList;
+  return first ? classLevelWords({ class: first.id, level: first.level, classes: classList }, nameOf) : "";
 }
 
 export type MulticlassChoice = {

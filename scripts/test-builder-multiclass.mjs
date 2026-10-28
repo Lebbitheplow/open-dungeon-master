@@ -588,6 +588,30 @@ await test("the level table and the math table read each casting class", () => {
   assert.ok(spellRows.some((row) => row.id === "slots-3" && /multiclass table at caster level 5/.test(row.working)));
 });
 
+await test("one set of words names a split wherever a class and level are shown", async () => {
+  const { classLevelWords, classWordsAfterLevel } = await import("../src/lib/characters/class-words.ts");
+  const split = { class: "fighter", level: 5, classes: [{ id: "fighter", level: 3 }, { id: "rogue", level: 2 }] };
+  assert.equal(classLevelWords(split), "fighter 3 / rogue 2");
+  assert.equal(classLevelWords({ class: "fighter", level: 5, classes: [] }), "fighter 5");
+  const title = (id) => id[0].toUpperCase() + id.slice(1);
+  assert.equal(classWordsAfterLevel(split, title), "Fighter 3 / Rogue 2");
+  assert.equal(classWordsAfterLevel({ class: "wizard", level: 4 }, title), "Wizard");
+  assert.equal(mc.classSplitWords(split.classes, title), "Fighter 3 / Rogue 2");
+  // Every card and row that names a seated or library hero's class reads it.
+  for (const file of [
+    "src/app/campaigns/[campaignId]/LobbyParty.tsx",
+    "src/app/campaigns/[campaignId]/CinematicParts.tsx",
+    "src/app/campaigns/[campaignId]/HeroChooser.tsx",
+    "src/app/campaigns/[campaignId]/CharacterSheetDialog.tsx",
+    "src/app/characters/page.tsx",
+    "src/app/characters/[characterId]/page.tsx",
+    "src/app/characters/[characterId]/ready/page.tsx",
+  ]) {
+    assert.match(read(file), /@\/lib\/characters\/class-words/, `${file} names a split with the shared words`);
+  }
+  assert.match(read("src/app/campaigns/[campaignId]/LobbyParty.tsx"), /title=\{classLevelWords\(sheet\)\}/, "the medallion's title names the split");
+});
+
 // ---- lists trimmed to their counts when levels move ----
 
 const { createElement, useState } = await import("react");

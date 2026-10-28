@@ -1329,7 +1329,8 @@ html[data-theme="light"] .ts-below .ts-ghost:hover { background: rgba(255, 252, 
 .cine-party-bar { display: block; height: 5px; border-radius: 9px; background: rgba(4, 2, 12, 0.8); overflow: hidden; }
 .cine-party-fill { display: block; height: 100%; border-radius: 9px; background: linear-gradient(90deg, #b8922a, #f4e0a6); transition: width var(--dur-beat) var(--ease-settle), background var(--dur-beat) var(--ease-snap); }
 .cine-party-fill[data-low="true"] { background: linear-gradient(90deg, #c65a24, #ff9d5c); }
-.cine-party-class { font-size: 11px; color: var(--cine-ink-dim); text-transform: capitalize; }
+/* A split ("fighter 3 / rogue 2") wraps inside the card on a narrow phone. */
+.cine-party-class { font-size: 11px; color: var(--cine-ink-dim); text-transform: capitalize; overflow-wrap: anywhere; }
 
 /* ---- the transcript: the narrator's heading between hairlines ---- */
 
