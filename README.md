@@ -4,11 +4,11 @@
 
 <br>
 
-[![Docker pulls](https://img.shields.io/docker/pulls/lebbi/open-dungeon-master?label=docker%20pulls&logo=docker&logoColor=d4ab3a&color=d4ab3a&labelColor=151229&style=flat-square)](https://hub.docker.com/r/lebbi/open-dungeon-master)
-[![App downloads](https://img.shields.io/github/downloads/Lebbitheplow/open-dungeon-master-client/total?label=app%20downloads&logo=github&logoColor=d4ab3a&color=d4ab3a&labelColor=151229&style=flat-square)](https://github.com/Lebbitheplow/open-dungeon-master-client/releases)
-[![Server downloads](https://img.shields.io/github/downloads/Lebbitheplow/open-dungeon-master/total?label=server%20downloads&logo=github&logoColor=d4ab3a&color=d4ab3a&labelColor=151229&style=flat-square)](https://github.com/Lebbitheplow/open-dungeon-master/releases)
-[![Latest release](https://img.shields.io/github/v/release/Lebbitheplow/open-dungeon-master?label=release&color=d4ab3a&labelColor=151229&style=flat-square)](https://github.com/Lebbitheplow/open-dungeon-master/releases/latest)
-[![GitHub stars](https://img.shields.io/github/stars/Lebbitheplow/open-dungeon-master?logo=github&logoColor=d4ab3a&color=d4ab3a&labelColor=151229&style=flat-square)](https://github.com/Lebbitheplow/open-dungeon-master/stargazers)
+[![Docker pulls](https://img.shields.io/docker/pulls/lebbi/open-dungeon-master?label=docker%20pulls&logo=docker&logoColor=d4ab3a&color=d4ab3a&labelColor=151229&style=flat-square)](https://hub.docker.com/r/lebbi/open-game-master)
+[![App downloads](https://img.shields.io/github/downloads/Lebbitheplow/open-game-master-client/total?label=app%20downloads&logo=github&logoColor=d4ab3a&color=d4ab3a&labelColor=151229&style=flat-square)](https://github.com/Lebbitheplow/open-game-master-client/releases)
+[![Server downloads](https://img.shields.io/github/downloads/Lebbitheplow/open-game-master/total?label=server%20downloads&logo=github&logoColor=d4ab3a&color=d4ab3a&labelColor=151229&style=flat-square)](https://github.com/Lebbitheplow/open-game-master/releases)
+[![Latest release](https://img.shields.io/github/v/release/Lebbitheplow/open-game-master?label=release&color=d4ab3a&labelColor=151229&style=flat-square)](https://github.com/Lebbitheplow/open-game-master/releases/latest)
+[![GitHub stars](https://img.shields.io/github/stars/Lebbitheplow/open-game-master?logo=github&logoColor=d4ab3a&color=d4ab3a&labelColor=151229&style=flat-square)](https://github.com/Lebbitheplow/open-game-master/stargazers)
 [![Discord](https://img.shields.io/badge/chat-Discord-e0703a?logo=discord&logoColor=e0703a&labelColor=151229&style=flat-square)](https://discord.gg/B2tQFr3TYD)
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-d4ab3a?labelColor=151229&style=flat-square)](LICENSE)
@@ -183,8 +183,8 @@ recommended**. The default storyteller runs at 64K, and the guided setup's
 and agent programs have far more.
 
 ```bash
-git clone --depth 1 -b stable https://github.com/Lebbitheplow/open-dungeon-master.git
-cd open-dungeon-master
+git clone --depth 1 -b stable https://github.com/Lebbitheplow/open-game-master.git
+cd open-game-master
 npm install
 npm run setup        # database key, content pack, memory model, production build
 npm run start:lan    # 0.0.0.0:3005 so your party can reach it on the LAN
@@ -198,7 +198,7 @@ players and your own agent, one question at a time.
 With Docker instead:
 
 ```bash
-curl -O https://raw.githubusercontent.com/Lebbitheplow/open-dungeon-master/stable/docker-compose.yml
+curl -O https://raw.githubusercontent.com/Lebbitheplow/open-game-master/stable/docker-compose.yml
 docker compose up -d        # http://localhost:3005
 ```
 

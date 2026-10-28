@@ -254,12 +254,12 @@ export default function PrivacyPage() {
         </p>
         <p className="mt-2 text-sm leading-6">
           <a
-            href="https://github.com/Lebbitheplow/open-dungeon-master"
+            href="https://github.com/Lebbitheplow/open-game-master"
             target="_blank"
             rel="noopener noreferrer"
             className="text-amber-200 hover:text-amber-400"
           >
-            github.com/Lebbitheplow/open-dungeon-master
+            github.com/Lebbitheplow/open-game-master
           </a>
         </p>
       </PageSection>

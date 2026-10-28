@@ -139,7 +139,7 @@ export function modelCatalog(): ModelCatalog {
 async function fetchLive(): Promise<ModelCatalog> {
   const response = await fetch(MODELS_DEV_URL, {
     cache: "no-store",
-    headers: { accept: "application/json", "user-agent": "open-dungeon-master" },
+    headers: { accept: "application/json", "user-agent": "open-game-master" },
     signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
   });
   if (!response.ok) {

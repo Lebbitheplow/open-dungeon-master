@@ -36,7 +36,7 @@ const severalListed = (choices: ModelChoices) => choices.models.filter((model) =
 
 type Update = (change: (draft: Draft) => Draft) => void;
 
-const MEDIA_GUIDE = "https://github.com/Lebbitheplow/open-dungeon-master/blob/main/docs/media-setup.md";
+const MEDIA_GUIDE = "https://github.com/Lebbitheplow/open-game-master/blob/main/docs/media-setup.md";
 type SetupComfyModels = NonNullable<ScanResult["comfyui"]> & { error: string | null };
 
 const sameComfyAddress = (left: string, right: string) => left.replace(/\/+$/, "") === right.replace(/\/+$/, "");

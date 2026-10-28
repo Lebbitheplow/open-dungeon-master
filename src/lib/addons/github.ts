@@ -16,7 +16,7 @@ export { parseGitHubLink, type GitHubLink };
 // same admin switch as installing a .zip by hand.
 
 // GitHub refuses API requests without a user agent.
-const AGENT = { "user-agent": "open-dungeon-master" };
+const AGENT = { "user-agent": "open-game-master" };
 const HEADERS = { ...AGENT, accept: "application/vnd.github+json", "x-github-api-version": "2022-11-28" };
 async function api(path: string): Promise<{ ok: true; value: Record<string, unknown> } | { ok: false; status: number; error: string }> {
   const base = (serverEnv("ADDON_GITHUB_API_BASE") || "https://api.github.com").replace(/\/+$/, "");

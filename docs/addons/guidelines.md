@@ -221,7 +221,7 @@ the last audited commit is what the review reads.
 ## How the list works
 
 - **Where servers read it.** From the `main` branch of this repository
-  (`https://raw.githubusercontent.com/Lebbitheplow/open-dungeon-master/main/addons/catalog.json`),
+  (`https://raw.githubusercontent.com/Lebbitheplow/open-game-master/main/addons/catalog.json`),
   so an addon is offered as soon as its pull request is merged, without
   waiting for a release. When GitHub cannot be reached, a server shows the
   copy of the list its own version shipped with. That copy is only the list:

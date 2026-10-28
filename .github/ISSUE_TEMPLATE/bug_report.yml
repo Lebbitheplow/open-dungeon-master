@@ -5,7 +5,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        This form is for bugs in Open Game Master itself. Questions about installing it, choosing a model or setting up a backend go to [Q&A in Discussions](https://github.com/Lebbitheplow/open-dungeon-master/discussions/categories/q-a) or [Discord](https://discord.gg/B2tQFr3TYD), where other players can help.
+        This form is for bugs in Open Game Master itself. Questions about installing it, choosing a model or setting up a backend go to [Q&A in Discussions](https://github.com/Lebbitheplow/open-game-master/discussions/categories/q-a) or [Discord](https://discord.gg/B2tQFr3TYD), where other players can help.
 
         **Playing on someone else's server?** Tell whoever runs it first. Most problems come from how a server is set up, and they can check that.
 

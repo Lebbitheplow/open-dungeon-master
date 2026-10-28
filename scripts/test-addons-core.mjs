@@ -308,7 +308,7 @@ await test("addons/catalog.json, the list this build ships with, reads", () => {
   const shipped = JSON.parse(readFileSync(new URL("../addons/catalog.json", import.meta.url), "utf8"));
   assert.deepEqual(catalogProblems(shipped), []);
   assert.equal(readRegistry(shipped).ok, true);
-  assert.match(DEFAULT_ADDON_REGISTRY_URL, /^https:\/\/raw\.githubusercontent\.com\/Lebbitheplow\/open-dungeon-master\/main\/addons\/catalog\.json$/);
+  assert.match(DEFAULT_ADDON_REGISTRY_URL, /^https:\/\/raw\.githubusercontent\.com\/Lebbitheplow\/open-game-master\/main\/addons\/catalog\.json$/);
 });
 
 await test("GitHub links: owner/repo, the repository, a release, a folder at a branch", () => {

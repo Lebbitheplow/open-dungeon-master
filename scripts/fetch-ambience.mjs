@@ -95,7 +95,7 @@ const DELAY_MS = 400;
 // Commons answers a burst of searches with 429; waiting it out beats
 // reporting "nothing found" for a cue it simply had not answered yet.
 const RETRY_MS = [3000, 8000, 20000];
-const AGENT = "open-dungeon-master/ambience (local install; https://github.com/Lebbitheplow/open-dungeon-master)";
+const AGENT = "open-game-master/ambience (local install; https://github.com/Lebbitheplow/open-game-master)";
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(`--${name}`);

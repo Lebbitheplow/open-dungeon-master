@@ -43,7 +43,7 @@ export function connectionInstructions(grant: ConnectionGrant): string {
 
 function serverFor(grant: Grant): Server {
   const server = new Server(
-    { name: "open-dungeon-master", version: VERSION },
+    { name: "open-game-master", version: VERSION },
     {
       capabilities: { tools: {} },
       instructions:
@@ -150,7 +150,7 @@ export async function handleMcpRequest(request: Request): Promise<Response> {
   }
   const token = bearerOf(request);
   if (!token) {
-    return refuse(401, "Missing bearer token.", { "WWW-Authenticate": 'Bearer realm="open-dungeon-master"' });
+    return refuse(401, "Missing bearer token.", { "WWW-Authenticate": 'Bearer realm="open-game-master"' });
   }
   let grant: Grant | null = null;
   const session = bridgeSessionForToken(token);
@@ -169,7 +169,7 @@ export async function handleMcpRequest(request: Request): Promise<Response> {
     }
   }
   if (!grant) {
-    return refuse(401, "Unknown or expired token.", { "WWW-Authenticate": 'Bearer realm="open-dungeon-master", error="invalid_token"' });
+    return refuse(401, "Unknown or expired token.", { "WWW-Authenticate": 'Bearer realm="open-game-master", error="invalid_token"' });
   }
   const response = await handler().fetch(request, {
     authInfo: {

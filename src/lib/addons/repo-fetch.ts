@@ -32,7 +32,7 @@ export type RepoReader = {
   open(relative: string, signal?: AbortSignal): Promise<AsyncIterable<Uint8Array>>;
 };
 
-const AGENT = { "user-agent": "open-dungeon-master" };
+const AGENT = { "user-agent": "open-game-master" };
 
 function trimBase(value: string | undefined, fallback: string): string {
   return (value || fallback).replace(/\/+$/, "");

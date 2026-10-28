@@ -4,7 +4,7 @@ import { CopyLine } from "@/components/CopyLine";
 import type { ScanResult } from "@/app/setup/SetupParts";
 import { RECOMMENDED_WINDOW, STORY_WINDOW_NEEDS, windowFlag } from "@/lib/story-window";
 
-const HARDWARE_GUIDE = "https://github.com/Lebbitheplow/open-dungeon-master/blob/main/docs/text-backends.md#hardware-for-a-local-model";
+const HARDWARE_GUIDE = "https://github.com/Lebbitheplow/open-game-master/blob/main/docs/text-backends.md#hardware-for-a-local-model";
 
 // What the scan found this machine can run, as the desktop app's Story AI
 // screen says it (src/lib/model-registry/hardware.ts storytellerFit).

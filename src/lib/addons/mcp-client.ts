@@ -194,7 +194,7 @@ export class McpClient {
       {
         protocolVersion: MCP_PROTOCOL_VERSIONS[0],
         capabilities,
-        clientInfo: { name: "open-dungeon-master", version: clientVersion },
+        clientInfo: { name: "open-game-master", version: clientVersion },
       },
       { timeoutMs },
     );
