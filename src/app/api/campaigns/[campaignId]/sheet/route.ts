@@ -440,6 +440,9 @@ export async function PUT(
     userId: context.user.id,
     campaign: context.campaign,
     olderBuilder: olderBuilderOf(raw),
+    // The split the seat holds now stands at a table that turns
+    // multiclassing off; the rebuild may keep it, or part of it (F9).
+    ...(existing?.classes?.length ? { heldClasses: existing.classes } : {}),
   });
   if (!replaced.ok) {
     return refusal(replaced.problems);

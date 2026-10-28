@@ -277,6 +277,34 @@ await test("a split hero joining a table without multiclassing is told it keeps 
   assert.equal(plain.body.preview.notes, undefined);
 });
 
+await test("a seated split is rebuilt with the same classes at a table without multiclassing, and no new class", async () => {
+  const off = tableWithout();
+  const joined = await send("sheet", "POST", { libraryCharacterId: splitInLibrary().id }, { campaignId: off.id });
+  assert.equal(joined.status, 201, joined.error);
+  assert.deepEqual(classLevels(joined.sheet), [["fighter", 2], ["rogue", 1]]);
+  // The rebuild (PUT, a brand-new sheet) keeps the split it holds.
+  const rebuilt = await send("sheet", "PUT", splitInput({ name: "Split Again" }), { campaignId: off.id });
+  assert.ok(rebuilt.status < 400, `the same split was refused: ${JSON.stringify(rebuilt.body.problems ?? rebuilt.error)}`);
+  assert.deepEqual(classLevels(rebuilt.sheet), [["fighter", 2], ["rogue", 1]]);
+  // A class the seat does not hold is refused there.
+  const wider = await send(
+    "sheet",
+    "PUT",
+    splitInput({
+      abilities: all13,
+      classes: [{ id: "fighter", subclass: "", level: 1 }, { id: "rogue", subclass: "", level: 1 }, { id: "wizard", subclass: "", level: 1 }],
+    }),
+    { campaignId: off.id },
+  );
+  assert.ok(wider.status >= 400, `a wizard was added at a table without multiclassing: ${JSON.stringify(wider.sheet && classLevels(wider.sheet))}`);
+  assert.match(JSON.stringify(wider.body.problems), /turns multiclassing off/);
+  // A new character made there is still held to one class.
+  sheetsDb.deleteSheetForUser(off.id, world.owner.id);
+  const made = await send("sheet", "POST", splitInput(), { campaignId: off.id });
+  assert.ok(made.status >= 400, "a new split was made at a table without multiclassing");
+  assert.match(JSON.stringify(made.body.problems), /turns multiclassing off/);
+});
+
 // ---- not enforced today ----
 
 await test(

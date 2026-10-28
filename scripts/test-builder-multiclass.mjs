@@ -350,6 +350,13 @@ await test("a table that turns multiclassing off holds a new character to one cl
   const built = builder.build({ ...FIGHTER_ROGUE });
   const blocks = builder.submit.callingBlocks(classRow("fighter"), built.state, { ...built.derived, multiclassAllowed: false });
   assert.ok(blocks.some((entry) => entry.target === "multiclass" && /turns multiclassing off/.test(entry.message)));
+  // A stored split the seat already holds is kept there, so its rebuild owes
+  // nothing for it; a class it did not hold is still held back.
+  const off = { ...built.derived, multiclassAllowed: false };
+  const kept = builder.submit.callingBlocks(classRow("fighter"), { ...built.state, storedClassIds: ["fighter", "rogue"] }, off);
+  assert.ok(!kept.some((entry) => /turns multiclassing off/.test(entry.message)), "a kept split was blocked");
+  const other = builder.submit.callingBlocks(classRow("fighter"), { ...built.state, storedClassIds: ["fighter", "wizard"] }, off);
+  assert.ok(other.some((entry) => /turns multiclassing off/.test(entry.message)), "a class the seat did not hold was let through");
   // The table rule reaches the builder from the table's settings.
   const rules = read("src/app/characters/builder/useTableRules.ts");
   assert.match(rules, /multiclassingEnabled: stored\?\.multiclassingEnabled !== false/);

@@ -2070,7 +2070,7 @@
     "lib/srd/shape-rules.ts#keyed": [["identity",1,"SRD, spell, feature, subclass, hazard and magic rows by textKey (or armorKey/gearKey/rowKey/featureKey/priceKey, textKey-based); row tables keyed by the row's own name; the workshop's tables"]],
     "lib/srd/shape-rules.ts#partial": [["key",1,"a form's creature type against the types a spell bars (engine vocabulary)"]],
     "lib/srd/sheet-legality.ts#first": [["key",2,"a class by position (the primary class)"]],
-    "lib/srd/sheet-legality.ts#partial": [["identity",3,"feats and features by whole name"],["key",1,"ODM's own \"Draconic Ancestry: \" feature name"]],
+    "lib/srd/sheet-legality.ts#partial": [["identity",3,"feats and features by whole name"],["key",1,"ODM's own \"Draconic Ancestry: \" feature name"],["key",1,"a rebuilt class list against the class ids the seat holds, textKey on both sides"]],
     "lib/srd/sheet-legality.ts#whole": [["identity",1,"feats and features by whole name"]],
     "lib/srd/sheet-legality.ts#whole-single": [["identity",1,"gate choices, feat twins, third-caster subclasses by textKey; dice parts"]],
     "lib/srd/spell-damage-riders.ts#keyed": [["identity",1,"SRD, spell, feature, subclass, hazard and magic rows by textKey (or armorKey/gearKey/rowKey/featureKey/priceKey, textKey-based); row tables keyed by the row's own name; the workshop's tables"]],

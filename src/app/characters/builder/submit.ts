@@ -338,8 +338,11 @@ function multiclassBlocks(state: BuilderState, derived: BuilderDerived): StepBlo
   }
   const owed: StepBlock[] = [];
   // A table that turns multiclassing off takes a new character with one
-  // class; one already split keeps what it has, as the setting promises.
-  if (derived.multiclassAllowed === false && !state.storedClassCount) {
+  // class; one already split keeps what it has, or part of it, as the
+  // setting promises, and takes no class it did not hold.
+  const held = new Set(state.storedClassIds ?? []);
+  const keepsHeld = held.size > 1 && derived.classList.every((entry) => held.has(entry.id));
+  if (derived.multiclassAllowed === false && !keepsHeld) {
     owed.push(block("multiclass", "This table turns multiclassing off: remove the second class to make the character here."));
   }
   for (const entry of extras) {

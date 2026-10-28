@@ -273,6 +273,8 @@ export type ContextInput = {
   // What the page that built the sheet had no field for, read off the
   // request (src/lib/srd/legality/older-builder.ts olderBuilderOf).
   olderBuilder?: OlderBuilder | null;
+  // The seat's own classes, on a seated player's rebuild (LegalityContext).
+  heldClasses?: ReadonlyArray<{ id: string; level: number }>;
 };
 
 // Whose homebrew a character is judged against: the same scope the pickers
@@ -305,6 +307,7 @@ export function legalityContextFor(input: ContextInput): LegalityContext {
     hpMethod: settings ? (settings.hpMethod ?? "average") : null,
     startingWealth: settings?.startingWealth ?? "equipment",
     multiclassAllowed: settings?.multiclassingEnabled !== false,
+    ...(input.heldClasses ? { heldClasses: input.heldClasses } : {}),
     classOf: (classId) => classGrantsFor(classId, owner),
     race: raceGrantsFor(input.sheet.race, owner),
     background: backgroundGrantsFor(input.sheet.background, owner),

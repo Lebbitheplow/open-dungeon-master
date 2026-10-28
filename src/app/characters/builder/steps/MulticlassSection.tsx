@@ -96,7 +96,7 @@ export function MulticlassSection({
         </>
       }
     >
-      {!allowed && extras.length && !state.storedClassCount ? (
+      {!allowed && extras.length && !classList.every((entry) => (state.storedClassIds ?? []).includes(entry.id)) ? (
         <p className="mb-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
           This table turns multiclassing off. Remove the classes below to make the character here.
         </p>

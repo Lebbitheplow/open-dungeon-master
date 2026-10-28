@@ -94,6 +94,7 @@ export async function openBuilder() {
       extraClasses: [],
       casterSpells: {},
       storedClassCount: 0,
+      storedClassIds: [],
       storedCastingCount: 0,
       spells: [],
       bookPrepared: [],

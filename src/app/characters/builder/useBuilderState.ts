@@ -1015,8 +1015,11 @@ export function useBuilderState({
     keepsStoredGear,
     levelFloor,
     // How many classes the stored character held when it was split, else
-    // 0: a split it came with stands at a table that turns multiclassing off.
+    // 0, and which: a split it came with stands at a table that turns
+    // multiclassing off, or any part of it (the server's table door holds
+    // a seated player's rebuild to the same, sheet-legality.ts classListOf).
     storedClassCount: (initial?.classes ?? []).length > 1 ? (initial?.classes ?? []).length : 0,
+    storedClassIds: (initial?.classes ?? []).length > 1 ? (initial?.classes ?? []).map((entry) => entry.id) : [],
     asiRecorded,
     asiReachedLevel,
     primalChampionHeld: initialHoldsPrimalChampion(initial, initialLevel),
