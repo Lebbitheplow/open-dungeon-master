@@ -127,4 +127,15 @@ await test("the builder asks for them, labelled and counted, and sends them", ()
   assert.match(read("src/app/campaigns/[campaignId]/CharacterSheetDialog.tsx"), /sheet\.isCompanion \? null : <StoryHopes sheet=\{sheet\} mine=\{mine\} \/>/);
 });
 
+await test("an older host, which drops the field, is never asked for hopes", async () => {
+  const { hostOffers } = await import("../src/lib/use-capabilities.ts");
+  const { SERVER_FEATURES } = await import("../src/lib/capabilities.ts");
+  assert.equal(SERVER_FEATURES.storyHopes, true, "this server says it keeps them");
+  const older = { story: { configured: true, reachable: true }, utility: { configured: true }, images: { configured: false, reachable: false, backend: "comfyui" }, tts: { configured: false, reachable: false }, stt: { configured: false }, voice: { enabled: false, mode: "off" } };
+  assert.equal(hostOffers(older, "storyHopes"), false);
+  assert.equal(hostOffers({ ...older, features: { storyHopes: true } }, "storyHopes"), true);
+  assert.match(read("src/app/characters/builder/steps/IdentityStep.tsx"), /const asksHopes = hostOffers\(useCapabilities\(\), "storyHopes"\);[\s\S]*\{asksHopes \? \(\n\s+<StepPanel\n\s+title="Hopes for this story \(optional\)"/);
+  assert.match(read("src/app/campaigns/[campaignId]/StoryHopes.tsx"), /const kept = hostOffers\(useCapabilities\(\), "storyHopes"\);\n\s+if \(!kept\) \{\n\s+return null;/);
+});
+
 finish();

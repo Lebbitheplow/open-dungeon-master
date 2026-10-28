@@ -6,6 +6,7 @@ import { LengthNote } from "@/components/ui/LengthNote";
 import { cn } from "@/lib/cn";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { ui } from "@/lib/ui";
+import { hostOffers, useCapabilities } from "@/lib/use-capabilities";
 import { KitButton } from "./PanelKit";
 
 // The sheet schema's limit (src/lib/schemas/sheet.ts HOPES_MAX, checked equal
@@ -24,6 +25,12 @@ export function StoryHopes({ sheet, mine }: { sheet: CharacterSheet; mine: boole
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const fieldId = useId();
+  // A host from before the field drops it while answering the save as done
+  // (an app's screens may be newer than the host they are opened on).
+  const kept = hostOffers(useCapabilities(), "storyHopes");
+  if (!kept) {
+    return null;
+  }
 
   // Someone else's hopes reach this viewer only at a DM seat: read, not edit.
   if (!mine) {

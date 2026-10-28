@@ -65,6 +65,10 @@ export const SERVER_FEATURES = {
   // the table kept in its builder's characters (the builder says so):
   // POST /api/campaigns/[id]/companions/[characterId]/keep.
   keepCompanion: true,
+  // "Hopes for this story" on a character (the builder's Hero step and the
+  // sheet in play): the `hopes` field an older host drops while answering
+  // the save as done.
+  storyHopes: true,
 } as const;
 export type ServerFeatures = { [K in keyof typeof SERVER_FEATURES]: boolean };
 

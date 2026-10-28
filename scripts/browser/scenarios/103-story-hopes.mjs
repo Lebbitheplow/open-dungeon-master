@@ -2,7 +2,11 @@
 // Table the lead opens Kell's sheet, writes what they hope the story holds,
 // saves it and reads it back, and the table has it on Kell's sheet. The
 // field and its buttons are named, pass axe, and are a finger's height on a
-// phone. (The builder's own field is walked by 32-builder-a11y.)
+// phone. (The builder's own field is walked by 32-builder-a11y.) Answered as
+// a host from before the field (no `features`), the sheet has no hopes to
+// lose: it asks for none. That pass runs on the website only, where every
+// open is a fresh page; the app keeps one page and its capabilities for 30
+// seconds.
 import { axeViolations, check, eventually } from "../lib.mjs";
 
 export default {
@@ -49,5 +53,27 @@ export default {
     const table = await (await api.get(`${base}/api/campaigns/${ids.commandTableId}`)).json();
     const kell = (table.sheets ?? []).find((entry) => entry.name === "Kell Brand");
     check(kell?.hopes === text, `the hopes were saved (${kell?.hopes})`);
+
+    if (t.app) return;
+    await page.route("**/api/capabilities**", async (route) => {
+      const response = await route.fetch();
+      const body = await response.json().catch(() => ({}));
+      delete body.features;
+      await route.fulfill({ response, json: body });
+    });
+    await t.open(`/campaigns/${ids.commandTableId}`);
+    for (const selector of [`${root}[data-tour="tab-party"]`, `${root}.cine-party button`]) {
+      if (await card.count()) break;
+      const door = page.locator(selector).locator("visible=true").first();
+      if (await door.count()) {
+        await t.tap(door);
+        await eventually(() => card.count(), { timeoutMs: 800 }).catch(() => 0);
+      }
+    }
+    await eventually(() => card.count(), { timeoutMs: 30_000, label: "Kell's party card on an older host" });
+    await t.tap(card);
+    const older = page.locator(`${root}[role="dialog"]`).filter({ hasText: "Features and traits" }).first();
+    await eventually(() => older.count(), { timeoutMs: 20_000, label: "Kell's sheet on an older host" });
+    check(((await older.textContent()) ?? "").includes("Hopes for this story") === false, "an older host's sheet asks for no hopes");
   },
 };

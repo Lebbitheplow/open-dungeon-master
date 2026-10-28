@@ -10,6 +10,7 @@ import { cn } from "@/lib/cn";
 import { GENDERS, type Gender } from "@/lib/gender";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
 import { ui } from "@/lib/ui";
+import { hostOffers, useCapabilities } from "@/lib/use-capabilities";
 import type { WorldPack } from "@/lib/worlds/types";
 import OptionPicker, { type PickerGroup } from "../OptionPicker";
 import { rollHeroName } from "../heroNames";
@@ -54,6 +55,9 @@ export function IdentityStep({
   const alignmentId = useId();
   const backstoryId = useId();
   const hopesId = useId();
+  // Asked only where the host keeps it: an older host drops the field (an
+  // app's screens may be newer than the host they are opened on).
+  const asksHopes = hostOffers(useCapabilities(), "storyHopes");
   const keptSaved = Boolean(initial?.portrait && portrait?.url === initial.portrait.url);
 
   return (
@@ -209,22 +213,24 @@ export function IdentityStep({
         <LengthNote id={`${backstoryId}-length`} length={state.backstory.length} max={BACKSTORY_MAX} from={0.75} />
       </StepPanel>
 
-      <StepPanel
-        title="Hopes for this story (optional)"
-        help="What would you love to see happen? A romance, a rival, a redemption, an old debt paid. Only you and the GM see this. The GM reads it every turn and steers toward it when the story allows. You can change it later from your character sheet."
-      >
-        <textarea
-          value={state.hopes}
-          onChange={(event) => state.setHopes(event.target.value)}
-          rows={3}
-          maxLength={HOPES_MAX}
-          placeholder="A romance with the companion who travels with us, and a reckoning with the knight who betrayed me..."
-          className={cn(inputClass, "resize-y")}
-          aria-label="Hopes for this story"
-          aria-describedby={`${hopesId}-length`}
-        />
-        <LengthNote id={`${hopesId}-length`} length={state.hopes.length} max={HOPES_MAX} from={0.75} />
-      </StepPanel>
+      {asksHopes ? (
+        <StepPanel
+          title="Hopes for this story (optional)"
+          help="What would you love to see happen? A romance, a rival, a redemption, an old debt paid. Only you and the GM see this. The GM reads it every turn and steers toward it when the story allows. You can change it later from your character sheet."
+        >
+          <textarea
+            value={state.hopes}
+            onChange={(event) => state.setHopes(event.target.value)}
+            rows={3}
+            maxLength={HOPES_MAX}
+            placeholder="A romance with the companion who travels with us, and a reckoning with the knight who betrayed me..."
+            className={cn(inputClass, "resize-y")}
+            aria-label="Hopes for this story"
+            aria-describedby={`${hopesId}-length`}
+          />
+          <LengthNote id={`${hopesId}-length`} length={state.hopes.length} max={HOPES_MAX} from={0.75} />
+        </StepPanel>
+      ) : null}
     </div>
   );
 }
