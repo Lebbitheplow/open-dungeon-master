@@ -20,8 +20,12 @@ export function hitPointsLine(input: {
   kept: boolean;
   // Built in the library, where no table has chosen a method yet.
   atTable: boolean;
+  // A class list's dice (backlog F9), the first class's first: each later
+  // level counts its own class's die.
+  dice?: number[];
 }): DerivedLine {
   const { hitDie, level, maxHp, range, method } = input;
+  const mixed = new Set(input.dice ?? []).size > 1;
   if (input.kept) {
     return {
       value: String(maxHp),
@@ -31,6 +35,13 @@ export function hitPointsLine(input: {
   const first = `1st level is the d${hitDie}'s maximum plus Constitution`;
   if (level <= 1) {
     return { value: String(maxHp), reason: `${first}.` };
+  }
+  if (mixed) {
+    const dice = [...new Set(input.dice)].map((die) => `d${die}`).join(", ");
+    return {
+      value: method === "rolled" ? `${range.min} to ${range.max}` : String(maxHp),
+      reason: `${first}; each later level its own class's die (${dice}), ${method === "rolled" ? "rolled by the server when you save" : method === "max" ? "at its highest face" : "at the table's average"}, plus Constitution (at least 1).`,
+    };
   }
   if (method === "rolled") {
     return {

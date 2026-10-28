@@ -22,6 +22,7 @@ export const TARGET_WORDS: Record<BlockerTarget, string> = {
   variant: "Species choice",
   repeatSkills: "Replacement skill",
   class: "Class",
+  multiclass: "Second class",
   classSkills: "Class skills",
   tools: "Tools",
   subclass: "Subclass",

@@ -1,6 +1,5 @@
 import { backgroundFeatureFor } from "@/lib/backgrounds";
-import { adaptSheetToLevel } from "@/lib/characters/adapt";
-import type { Ability, AsiChoice, CreateSheetInput, Spellcasting } from "@/lib/schemas/sheet";
+import type { Ability, AsiChoice, ClassEntry, CreateSheetInput, Spellcasting } from "@/lib/schemas/sheet";
 import { SRD_CLASSES } from "@/lib/srd";
 import { expertiseAllowed, expertiseSlotsFor, racialTraitsFor, subclassLevelFor, subclassSpellsFor } from "@/lib/srd/features";
 import { fightingStyleFeatureName } from "@/lib/srd/feature-effects";
@@ -17,8 +16,10 @@ import {
 import { findDraconicAncestry, innateCantripsFor, repeatedGrants, takesDraconicAncestry } from "@/lib/srd/racial-grants";
 import { racialCantripFields } from "@/lib/srd/racial-cantrips";
 import { pickedVariant, variantFeatureNames, withSpeciesVariant } from "@/lib/content/species-variants";
-import { reconcilePicks } from "./reconcile";
+import { reconcilePicks, type ReconcileContext } from "./reconcile";
 import { builderCasting, builderSpellSlots } from "./casting";
+import { classCasts, fitExtraClasses, primaryLevelOf, unmetPrereqs } from "./multiclassBuild";
+import { multiclassGrantsFor } from "@/lib/srd/multiclass";
 import { unmetFeatMessage, type FeatJudge } from "./featPrereqs";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
 import type { BuilderDerived } from "./useBuilderDerived";
@@ -48,6 +49,8 @@ export type BlockerTarget =
   | "variant"
   | "repeatSkills"
   | "class"
+  // The classes taken after the first (backlog F9).
+  | "multiclass"
   | "classSkills"
   | "tools"
   | "subclass"
@@ -278,10 +281,13 @@ export function callingBlocks(
     owed.push(block("classSkills", `Pick ${skillsLeft} more ${skillsLeft === 1 ? "skill" : "skills"} your training taught you (class skills).`));
   }
   // Open tool grants are asked with the background (backgroundBlocks).
+  // The first class's subclass comes at its own level, not the character's.
+  const primaryLevel = derived.primaryLevel ?? derived.effectiveLevel;
   const pickLevel = subclassLevelFor(klass.id);
-  if (pickLevel !== null && derived.effectiveLevel >= pickLevel && !state.subclass.trim()) {
+  if (pickLevel !== null && primaryLevel >= pickLevel && !state.subclass.trim()) {
     owed.push(block("subclass", `Choose your ${klass.name.toLowerCase()}'s path (subclass): a ${klass.name.toLowerCase()} chooses one at level ${pickLevel}.`));
   }
+  owed.push(...multiclassBlocks(state, derived));
   // What the subclass's training leaves to the player: a Lore bard's three
   // skills, a Knowledge cleric's languages and skills (issue 251).
   for (const grant of derived.subclassTraining ?? []) {
@@ -295,12 +301,14 @@ export function callingBlocks(
   if (stylesLeft > 0) {
     owed.push(block("styles", `Pick how you like to fight (${stylesLeft === 1 ? "fighting style" : `${stylesLeft} fighting styles`}).`));
   }
-  const expertiseSlots = expertiseSlotsFor(klass.id, derived.effectiveLevel);
+  // Each class's own, at its own level (a rogue taken second brings two).
+  const expertiseSlots = derived.expertiseSlots ?? expertiseSlotsFor(klass.id, derived.effectiveLevel);
+  const classIds = derived.classList?.length ? derived.classList.map((entry) => entry.id) : [klass.id];
   // Counted against the skills the character still has, the same list the
   // panel draws: a pick in a dropped skill is not a pick.
   const expertiseLeft =
     expertiseSlots -
-    state.expertisePicks.filter((skillId) => expertiseAllowed(skillId, derived.proficientSkills, [klass.id])).length;
+    state.expertisePicks.filter((skillId) => expertiseAllowed(skillId, derived.proficientSkills, classIds)).length;
   if (expertiseLeft > 0) {
     owed.push(block("expertise", `Pick ${expertiseLeft} more ${expertiseLeft === 1 ? "skill" : "skills"} you are especially good at (expertise).`));
   }
@@ -319,16 +327,63 @@ export function callingBlocker(
   return callingBlocks(klass, state, derived)[0] ?? null;
 }
 
+// What the classes taken after the first still owe (backlog F9): each one's
+// subclass once its own level reaches the pick, the skill its multiclass
+// grant lets the player choose, and the two rules a split is held to here.
+function multiclassBlocks(state: BuilderState, derived: BuilderDerived): StepBlock[] {
+  const extras = derived.extras ?? [];
+  if (!extras.length) {
+    return [];
+  }
+  const owed: StepBlock[] = [];
+  // A table that turns multiclassing off takes a new character with one
+  // class; one already split keeps what it has, as the setting promises.
+  if (derived.multiclassAllowed === false && !state.storedClassCount) {
+    owed.push(block("multiclass", "This table turns multiclassing off: remove the second class to make the character here."));
+  }
+  for (const entry of extras) {
+    const name = entry.klass.name.toLowerCase();
+    const pickLevel = subclassLevelFor(entry.klass.id);
+    if (pickLevel !== null && entry.level >= pickLevel && !entry.subclass.trim()) {
+      owed.push(block("multiclass", `Choose your ${name}'s path (subclass): a ${name} chooses one at its level ${pickLevel}.`));
+    }
+    const grant = multiclassGrantsFor(entry.klass.id).skillChoice;
+    const left = grant ? grant.count - entry.skills.filter(Boolean).length : 0;
+    if (left > 0) {
+      owed.push(block("multiclass", `Pick the ${left === 1 ? "skill" : `${left} skills`} your ${name} levels taught you (skill proficiency).`));
+    }
+  }
+  // Phase 1 of F9 builds one casting class's spells. A second that came
+  // with the stored character keeps its lists as they were (keepUnedited);
+  // a new one waits for the builder that splits the spell lists.
+  const casting = derived.classList.filter((entry, index) =>
+    classCasts(rowOfList(derived, index), entry.subclass ?? "", entry.level),
+  );
+  if (casting.length > 1 && casting.length > (state.storedCastingCount ?? 0)) {
+    owed.push(block("multiclass", "For now a character made here casts spells from one class: take a class that does not cast, or a subclass of your first class that does not."));
+  }
+  return owed;
+}
+
+// The class row behind a place in the derived class list.
+function rowOfList(derived: BuilderDerived, index: number) {
+  return index === 0 ? derived.primaryRow : derived.extras[index - 1]?.klass;
+}
+
 // The spells step: a caster leaves with every cantrip and spell the rules
 // give them at this level. A setting class borrows an SRD class's list and
 // its counts with it, the same counts the server holds a level-up to.
 export function spellsBlocks(
   derived: BuilderDerived,
-  klass: ClassOption | undefined,
+  firstClass: ClassOption | undefined,
 ): StepBlock[] {
-  if (!klass || !derived.casts) {
+  if (!firstClass || !derived.casts) {
     return [];
   }
+  // The class whose spells these are: the first class, or the one taken
+  // after it that casts (backlog F9).
+  const klass = derived.casterKlass ?? firstClass;
+  const casterLevel = derived.casterLevel ?? derived.effectiveLevel;
   const owed: StepBlock[] = [];
   // A pick the bundled list cannot supply is not asked for (spellSupply.ts):
   // the server holds a caster to at most its count, never to at least it.
@@ -349,7 +404,7 @@ export function spellsBlocks(
     }
     const bookOver = derived.chosenSpells.length - derived.spellbookAdvice;
     if (bookOver > 0) {
-      owed.push(block("spells", `Remove ${bookOver} ${bookOver === 1 ? "spell" : "spells"} from your spellbook: a level ${derived.effectiveLevel} wizard starts with ${derived.spellbookAdvice}.`));
+      owed.push(block("spells", `Remove ${bookOver} ${bookOver === 1 ? "spell" : "spells"} from your spellbook: a level ${casterLevel} wizard starts with ${derived.spellbookAdvice}.`));
     }
   }
   if (derived.spellAdvice) {
@@ -419,6 +474,12 @@ export function abilitiesBlocks(
       owed.push(block("scores", "Rolled scores are the six totals thrown, each placed on one ability. Roll the dice, then place all six."));
     }
   }
+  // Each class's prerequisite, on the final scores as the server reads
+  // them (the plan's decision 1): never dropped, the player chooses what
+  // to change.
+  for (const line of unmetPrereqs(derived.classList ?? [], derived.abilities, (id) => classNameOf(derived, id))) {
+    owed.push(block("scores", `${line} Raise that score, or change the classes.`));
+  }
   const unresolvedSlot = derived.activeAsiChoices.findIndex(
     (choice, index) => choice === null && !derived.asiTakenInPlay[index],
   );
@@ -437,6 +498,13 @@ export function abilitiesBlocks(
     owed.push(block("asi", asiUnmet));
   }
   return owed;
+}
+
+function classNameOf(derived: BuilderDerived, id: string): string {
+  if (derived.primaryRow?.id === id) {
+    return derived.primaryRow.name;
+  }
+  return derived.extras?.find((entry) => entry.klass.id === id)?.klass.name ?? id;
 }
 
 export function abilitiesBlocker(
@@ -491,7 +559,7 @@ export function validateBuilder(
   // #124). In the wizard the state is already reconciled, so this changes
   // nothing it shows; a caller that fills the fields directly is held to
   // the same sheet.
-  const { picks } = reconcilePicks(input.state, { race, klass, background, level: derived.effectiveLevel });
+  const { picks } = reconcilePicks(input.state, reconcileContextOf(input, race));
   const state: BuilderState = { ...input.state, ...picks };
   // In the wizard's order, so the save names the earliest step's pick; the
   // name is last, as the wizard asks it.
@@ -515,6 +583,18 @@ export function validateBuilder(
     };
   }
   return null;
+}
+
+// What the picks are checked against as the sheet is built: the classes,
+// race, background and level, and the classes taken after the first.
+function reconcileContextOf(input: SubmitInput, race: RaceOption | undefined): ReconcileContext {
+  return {
+    race,
+    klass: input.klass,
+    background: input.background,
+    level: input.derived.effectiveLevel,
+    extras: input.derived.extras ?? [],
+  };
 }
 
 // The sheet exactly as the single-page builder used to submit it. Call only
@@ -544,15 +624,34 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
   const asiFeats = resolvedAsiChoices.flatMap((choice) =>
     choice.mode === "feat" ? [choice.feat] : [],
   );
-  // How the class casts at this level: an Eldritch Knight or Arcane
-  // Trickster with Intelligence and a third caster's slots (./casting.ts).
-  const casting = builderCasting(klass, state.subclass, effectiveLevel);
-  const slots = builderSpellSlots(klass, state.subclass, effectiveLevel);
-  const isKnownCaster = derived.spellStyle === "known";
-  const isWizard = derived.spellStyle === "spellbook";
   // The picks were checked against every change as it was made; checked
   // once more here so the sheet can never carry what the rules do not allow.
-  const { picks } = reconcilePicks(state, { race, klass, background, level: effectiveLevel });
+  const reconciled = reconcilePicks(state, reconcileContextOf(input, race));
+  const { picks } = reconciled;
+  // The classes taken after the first (backlog F9), as the server keeps
+  // them: the first class first, at the levels the others leave it.
+  const extras = fitExtraClasses(state.extraClasses ?? [], { primaryId: klass.id, total: effectiveLevel });
+  const multiclass = extras.length > 0;
+  const classes: ClassEntry[] = multiclass
+    ? [
+        { id: klass.id, subclass: picks.subclass, level: primaryLevelOf(effectiveLevel, extras) },
+        ...extras.map((entry) => ({ id: entry.classId, subclass: entry.subclass, level: entry.level })),
+      ]
+    : [];
+  // The class whose spells the builder holds, at its own level: the first
+  // class, or the one after it that casts.
+  const casterKlass = derived.casterKlass ?? (multiclass ? undefined : klass);
+  const casterAt = casterKlass ? classes.findIndex((entry) => entry.id === casterKlass.id) : -1;
+  const casterSubclass = multiclass ? (casterAt >= 0 ? (classes[casterAt].subclass ?? "") : "") : picks.subclass;
+  const casterLevel = multiclass ? (casterAt >= 0 ? classes[casterAt].level : effectiveLevel) : effectiveLevel;
+  // How the class casts at this level: an Eldritch Knight or Arcane
+  // Trickster with Intelligence and a third caster's slots (./casting.ts).
+  const casting = builderCasting(casterKlass, casterSubclass, casterLevel);
+  const slots = multiclass ? derived.spellSlots : builderSpellSlots(klass, state.subclass, effectiveLevel);
+  const isKnownCaster = derived.spellStyle === "known";
+  const isWizard = derived.spellStyle === "spellbook";
+  // The skill each class taken second let the player pick, as checked.
+  const extraSkills = reconciled.extraSkills.flat();
   // The racial cantrips (a high elf's one) join the cantrip list for
   // casters. A non-caster has nowhere to put them, so each rides along as a
   // feature instead, which populateFeatures keeps and the DM prompt can see.
@@ -568,18 +667,22 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
       ...(race.skills ?? []),
       ...picks.racialSkills.filter(Boolean),
       ...picks.repeatSkills.filter(Boolean),
+      ...extraSkills,
     ]),
   ];
   const proficiencies = {
     ...preview.proficiencies,
     skills,
-    expertise: picks.expertisePicks.filter((skill) => expertiseAllowed(skill, skills, [klass.id])),
+    expertise: picks.expertisePicks.filter((skill) =>
+      expertiseAllowed(skill, skills, multiclass ? classes.map((entry) => entry.id) : [klass.id]),
+    ),
     languages: [
       ...new Set([
         ...(race.languages ?? []),
         ...(background.knownLanguages ?? []),
         ...picks.bonusLanguages.filter(Boolean),
         ...(klass.languages ?? []),
+        ...(derived.extras ?? []).flatMap((entry) => entry.klass.languages ?? []),
       ]),
     ],
   };
@@ -593,7 +696,7 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
   ];
   // Domain, circle, oath and patron spells are always prepared and free:
   // they ride onto the list on top of whatever the player picked.
-  const grantedSpells = subclassSpellsFor(klass.id, picks.subclass, effectiveLevel).filter(
+  const grantedSpells = (casterKlass ? subclassSpellsFor(casterKlass.id, casterSubclass, casterLevel) : []).filter(
     (spell) => !spells.some((entry) => textKey(entry) === textKey(spell)),
   );
   const finalSpells = casting.ability ? [...spells, ...grantedSpells] : spells;
@@ -654,9 +757,9 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
         total: effectiveLevel,
         spent: 0,
       },
-      // Characters are always built single-class; multiclassing happens
-      // at level-up in play.
-      classes: [],
+      // A split's class list, the first class first (backlog F9); empty for
+      // one class. The server builds the hit dice of each class itself.
+      classes,
       hitDicePools: null,
       proficiencies,
       // The catalog price and magic mark rode along for the purse; the
@@ -710,36 +813,65 @@ export function buildBuilderResult(input: SubmitInput): BuilderResult {
       // The class kit's either-or choices, which the server hands out free.
       ...(derived.kitChoices ? { kitChoices: derived.kitChoices } : {}),
       spellcasting: casting.ability
-        ? {
-            ability: casting.ability,
-            ...(casting.profile ? { progression: casting.profile } : {}),
-            slots,
-            prepared: isKnownCaster ? [] : isWizard ? picks.bookPrepared : finalSpells,
-            known: isKnownCaster ? finalSpells : [],
-            cantrips: finalCantrips,
-            ...(isWizard ? { spellbook: finalSpells } : {}),
-          }
+        ? withCasterEntry(
+            {
+              ability: casting.ability,
+              ...(casting.profile ? { progression: casting.profile } : {}),
+              slots,
+              prepared: isKnownCaster ? [] : isWizard ? picks.bookPrepared : finalSpells,
+              known: isKnownCaster ? finalSpells : [],
+              cantrips: finalCantrips,
+              ...(isWizard ? { spellbook: finalSpells } : {}),
+            },
+            multiclass && casterKlass ? casterKlass.id : null,
+            derived.pactSlots ?? null,
+          )
         : null,
       notes: "",
       backstory: state.backstory.trim(),
-    }, effectiveLevel),
+    }, casterKlass?.id ?? null),
+  };
+}
+
+// On a class list the lists are the casting class's own entry too, the
+// shape the server judges per class (src/lib/srd/legality/spells.ts), with
+// the top-level lists as their mirror; a warlock's pact slots sit apart.
+function withCasterEntry(
+  casting: NonNullable<Spellcasting>,
+  classId: string | null,
+  pact: { level: number; max: number; used: number } | null,
+): NonNullable<Spellcasting> {
+  if (!classId) {
+    return casting;
+  }
+  const entry = {
+    classId,
+    ability: casting.ability,
+    ...(casting.progression ? { progression: casting.progression } : {}),
+    known: casting.known,
+    prepared: casting.prepared,
+    cantrips: casting.cantrips ?? [],
+    ...(casting.spellbook ? { spellbook: casting.spellbook } : {}),
+  };
+  return {
+    ...casting,
+    casters: [entry],
+    ...(pact ? { pact } : {}),
   };
 }
 
 // An edit rebuilds the whole sheet from the builder's fields and the server
 // stores it whole, so what the builder has no field for comes from the
-// stored sheet: the notes and small change synced back from play, what play
-// granted (story boons, feats, the background's feature, an item's
-// attunement), and a multiclass split. The split survives only under the
-// same primary class, adapted to the edited level exactly as joining a
-// campaign at that level adapts it (src/lib/characters/adapt.ts); a new
-// primary class starts over single-class, since re-splitting levels is not
-// something the builder does. A library sheet is stored as it was written,
-// so one from before multiclassing has no classes array at all.
+// stored sheet: the notes and small change synced back from play, and what
+// play granted (story boons, feats, the background's feature, an item's
+// attunement). A multiclass split is the builder's own now (backlog F9):
+// the class list it built is the sheet's. Phase 1 holds one casting
+// class's spells, so a second casting class the stored character earned in
+// play keeps its lists as they were.
 function keepUnedited(
   initial: CreateSheetInput | undefined,
   built: CreateSheetInput,
-  level: number,
+  drivenCaster: string | null,
 ): CreateSheetInput {
   if (!initial) {
     return built;
@@ -751,19 +883,10 @@ function keepUnedited(
     features: [...built.features, ...grantedInPlay(initial, built)],
     equipment: keptItemDetails(initial.equipment ?? [], built.equipment),
   };
-  const storedClasses = initial.classes ?? [];
-  if (storedClasses.length < 2 || initial.class !== built.class) {
+  if ((built.classes ?? []).length < 2 || !initial.spellcasting?.casters?.length) {
     return kept;
   }
-  const storedLevel = storedClasses.reduce((sum, entry) => sum + entry.level, 0);
-  const adapted = adaptSheetToLevel(initial, storedLevel, level);
-  const [primary, ...others] = adapted.classes;
-  return {
-    ...kept,
-    classes: [{ ...primary, subclass: built.subclass }, ...others],
-    hitDicePools: adapted.hitDicePools,
-    spellcasting: keptSpellcasting(adapted.spellcasting, built.spellcasting, built.class),
-  };
+  return { ...kept, spellcasting: keptSpellcasting(initial.spellcasting, built.spellcasting, drivenCaster, built.classes) };
 }
 
 // Features the builder has no step for. The server re-grants class and race
@@ -809,42 +932,29 @@ function keptItemDetails(
   });
 }
 
-// The builder only knows the primary class's spells: they replace its lists
-// (and its per-class entry), while the shared slot pool, the other classes'
-// casting and pact magic stay as stored. A non-caster primary has no spell
-// step, so the stored casting is kept whole.
+// The builder knows one casting class's spells: they replace its lists (its
+// per-class entry), while each other casting class the character still
+// holds keeps its stored entry. The server writes the slots afresh.
 function keptSpellcasting(
   stored: Spellcasting,
   built: Spellcasting,
-  primaryClass: string,
+  drivenCaster: string | null,
+  classes: ClassEntry[],
 ): Spellcasting {
-  if (!stored || !built) {
-    return stored ?? built;
+  if (!stored?.casters?.length) {
+    return built;
   }
-  const primaryLists = {
-    ability: built.ability,
-    known: built.known,
-    prepared: built.prepared,
-    cantrips: built.cantrips ?? [],
-    ...(built.spellbook ? { spellbook: built.spellbook } : {}),
-  };
-  if (!stored.casters?.length) {
-    const next = { ...stored, ...primaryLists };
-    // The edit chose the prepared list afresh; nothing waits for a rest.
-    delete next.pending;
-    return next;
+  const held = (classId: string) => classes.some((entry) => textKey(entry.id) === textKey(classId));
+  const others = stored.casters.filter(
+    (caster) => held(caster.classId) && textKey(caster.classId) !== textKey(drivenCaster ?? ""),
+  );
+  if (!others.length) {
+    return built;
   }
-  const casters = stored.casters.map((caster) => {
-    if (caster.classId.toLowerCase() !== primaryClass.toLowerCase()) {
-      return caster;
-    }
-    const next = { ...caster, ...primaryLists };
-    delete next.pending;
-    if (!built.spellbook) {
-      delete next.spellbook;
-    }
-    return next;
-  });
+  // Nothing the builder casts with: the stored lists of the casting classes
+  // still held stand as they were.
+  const base = built ?? stored;
+  const casters = [...(built?.casters ?? []), ...others];
   // The top-level lists stay the union of the per-class ones, the mirror
   // every other reader uses.
   const union = (pick: (caster: (typeof casters)[number]) => string[] | undefined) => {
@@ -861,8 +971,7 @@ function keptSpellcasting(
   const pending = union((caster) => caster.pending);
   const spellbook = union((caster) => caster.spellbook);
   const merged = {
-    ...stored,
-    ability: built.ability,
+    ...base,
     known: union((caster) => caster.known),
     prepared: union((caster) => caster.prepared),
     cantrips: union((caster) => caster.cantrips),

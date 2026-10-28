@@ -543,7 +543,9 @@ export function fillRound(ctx: FillContext): FillRound {
     }
   }
   const pickLevel = subclassLevelFor(klass.id);
-  if (pickLevel !== null && derived.effectiveLevel >= pickLevel && !fields.subclass.trim() && wants("subclass")) {
+  // At the first class's own levels; a class taken after it picks its own
+  // subclass by hand (the quick build stays single-class, backlog F9).
+  if (pickLevel !== null && (derived.primaryLevel ?? derived.effectiveLevel) >= pickLevel && !fields.subclass.trim() && wants("subclass")) {
     const pick = (ctx.subclasses ?? []).find(Boolean) ?? subclassNamesFor(klass.id)[0];
     if (pick) {
       patch.subclass = pick;
@@ -578,8 +580,9 @@ export function fillRound(ctx: FillContext): FillRound {
       note("styles", add.map((id) => FIGHTING_STYLES.find((style) => style.id === id)?.name ?? id).join(", "));
     }
   }
-  const expertiseSlots = expertiseSlotsFor(klass.id, derived.effectiveLevel);
-  const expertiseHeld = fields.expertisePicks.filter((skill) => expertiseAllowed(skill, [...proficient], [klass!.id]));
+  const expertiseSlots = derived.expertiseSlots ?? expertiseSlotsFor(klass.id, derived.effectiveLevel);
+  const expertiseClasses = derived.classList?.length ? derived.classList.map((entry) => entry.id) : [klass.id];
+  const expertiseHeld = fields.expertisePicks.filter((skill) => expertiseAllowed(skill, [...proficient], expertiseClasses));
   if (expertiseSlots > expertiseHeld.length && wants("expertise")) {
     const candidates = skillOrder(ctx, new Set(), [...proficient]).filter((skill) => !expertiseHeld.includes(skill));
     const add = candidates.slice(0, expertiseSlots - expertiseHeld.length);
@@ -631,7 +634,8 @@ export function fillRound(ctx: FillContext): FillRound {
   // Spells: the spell step's own suggestions first, then the class list by
   // how glad an adventurer is to have each one.
   if (derived.casts && wants("spells")) {
-    const spellPatch = fillSpells(ctx);
+    // For the class that casts: a class taken after the first may be it.
+    const spellPatch = fillSpells({ ...ctx, klass: derived.casterKlass ?? ctx.klass });
     if (spellPatch) {
       Object.assign(patch, spellPatch.patch);
       note("spells", spellPatch.words);

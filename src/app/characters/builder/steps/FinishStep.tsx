@@ -72,6 +72,7 @@ export function FinishStep({
           method: preview.hpMethod,
           kept: preview.hpKept,
           atTable: Boolean(table.rules),
+          ...(derived.multiclass ? { dice: [klass.hitDie, ...derived.extras.map((entry) => entry.klass.hitDie)] } : {}),
         })
       : null;
   const acLine = armorClassLine(acInfo?.ac ?? ac, acInfo?.parts);

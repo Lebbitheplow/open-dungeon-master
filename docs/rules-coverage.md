@@ -348,6 +348,7 @@ also proves it does not rot (every acknowledged name is a real granted name).
 | Per-class hit-die pools; long-rest recovery and short-rest spends biggest die first | `hitDicePools`; `rest-logic.ts recoverPools/shortRestDicePlan`, mirror sync in `db/sheets.ts` | `test-enforce-multiclass-features`, `test-enforce-short-rest` |
 | Level-up flow: class step with prereq gating, per-class HP die, subclass/expertise/spells at class levels | `LevelUpDialog.tsx` + server validation in the sheet PATCH route | `test-enforce-multiclass-levelup` |
 | Library round-trip: multiclass sync-back, lower-level instantiation strips the last class first | `db/characters.ts` | `test-enforce-multiclass-library` |
+| Builder: a second and third class at creation, eligible-first with each refusal in words, levels that add up, each class's subclass at its own level, the second class's skill pick, and HP, improvements, training, slots and the level table from the class list; one casting class for now (phase 1), hidden at a table that turns multiclassing off | `builder/multiclassBuild.ts`, `useBuilderDerived.ts`, `steps/MulticlassSection.tsx`, `submit.ts` | `test-builder-multiclass` |
 
 Ability Score Improvements follow each class's own table by class level (the
 fighter's seven, the rogue's six, five for the rest; `srd/asi.ts`), and a

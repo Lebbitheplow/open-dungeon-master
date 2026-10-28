@@ -70,7 +70,10 @@ type BuilderFacts = {
   derived: Pick<
     BuilderDerived,
     "abilities" | "racialBonus" | "effectiveLevel" | "training" | "kitTraining" | "toolGrants" | "activeAsiChoices" | "asiTakenInPlay"
-  >;
+  > &
+    // A class list (backlog F9): the first class's levels and the class
+    // that casts, at its own level.
+    Partial<Pick<BuilderDerived, "primaryLevel" | "multiclass" | "casterKlass" | "casterSubclass" | "casterLevel">>;
   race: RaceOption | undefined;
   klass: ClassOption | undefined;
   background: BackgroundOption | undefined;
@@ -104,7 +107,7 @@ export function builderFeatCandidate({ state, derived, race, klass, background }
     }),
   ) as Record<Ability, number>;
   const subclassOpen = Boolean(
-    klass && !state.subclass && derived.effectiveLevel >= (subclassLevelFor(klass.id) ?? Infinity),
+    klass && !state.subclass && (derived.primaryLevel ?? derived.effectiveLevel) >= (subclassLevelFor(klass.id) ?? Infinity),
   );
   const skillsOpen =
     !klass ||
@@ -116,7 +119,13 @@ export function builderFeatCandidate({ state, derived, race, klass, background }
     who: {
       abilities,
       armor: derived.kitTraining.armor,
-      casts: Boolean(builderCasting(klass, state.subclass, derived.effectiveLevel).ability),
+      casts: Boolean(
+        builderCasting(
+          derived.multiclass ? derived.casterKlass : klass,
+          derived.multiclass ? derived.casterSubclass : state.subclass,
+          derived.multiclass ? (derived.casterLevel ?? derived.effectiveLevel) : derived.effectiveLevel,
+        ).ability,
+      ),
       raceId: race?.id ?? "",
       raceName: race?.name ?? "",
       skills: derived.training.skills,

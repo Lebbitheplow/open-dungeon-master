@@ -12,6 +12,8 @@
 import { casterPreview } from "@/app/campaigns/[campaignId]/level-up-preview";
 import type { AbilityScores, AsiChoice } from "@/lib/schemas/sheet";
 import { proficiencyBonus, spellSlotsFor } from "@/lib/srd";
+import { pactSlotsFor, slotTableFor } from "@/lib/srd/multiclass";
+import { classAtLevel } from "./multiclassBuild";
 import { applyChoices } from "@/lib/srd/level-up";
 import { fightingStyleSlots } from "@/lib/srd/feature-effects";
 import { classFeaturesFor, subclassLevelFor } from "@/lib/srd/features";
@@ -41,6 +43,21 @@ export type ProgressionInput = {
   // The rows marked: the level held now and the one being taken.
   current?: number;
   next?: number;
+  // A character with levels in more than one class (backlog F9): each
+  // class with its name, subclass and levels, the first class first. Its
+  // levels are read as taken in that order, so each row says which class
+  // the level went to. Absent, or one class, for a single class.
+  classes?: ReadonlyArray<ProgressionClass>;
+};
+
+export type ProgressionClass = {
+  classId: string;
+  name: string;
+  subclass: string;
+  level: number;
+  progression?: ThirdCasterSetting;
+  // A warlock's pact magic, apart from the shared slots.
+  pact?: boolean;
 };
 
 export type ProgressionSpells = {
@@ -63,6 +80,11 @@ export type ProgressionRow = {
   // it is still to choose).
   improvement: { pick: string | null; takenInPlay: boolean } | null;
   slots: Array<{ level: number; count: number }>;
+  // A warlock's pact slots on a class list, which sit apart (backlog F9).
+  pact?: { level: number; count: number } | null;
+  // Which class the level went to and that class's level there ("Wizard
+  // 2"), on a class list only.
+  classLabel?: string;
   cantrips: number | null;
   spells: ProgressionSpells | null;
   mark: "current" | "next" | null;
@@ -92,6 +114,9 @@ export function improvementWords(choice: AsiChoice): string {
 const TEN: AbilityScores = { str: 10, dex: 10, con: 10, int: 10, wis: 10, cha: 10 };
 
 export function levelProgressionRows(input: ProgressionInput): ProgressionRow[] {
+  if ((input.classes?.length ?? 0) > 1) {
+    return classListRows(input, input.classes ?? []);
+  }
   const last = Math.max(1, Math.min(20, Math.floor(input.level)));
   const pickLevel = subclassLevelFor(input.classId);
   const styles = [...(input.styles ?? [])];
@@ -151,12 +176,94 @@ export function levelProgressionRows(input: ProgressionInput): ProgressionRow[] 
   return rows;
 }
 
+// The rows of a class list: each level goes to the class the order gives
+// it (the first class's levels first), with that class's features and
+// subclass pick at its own level, the improvement wherever the slot falls,
+// and the casting of the levels taken so far: the shared slots as the
+// server works them, a warlock's pact slots apart, and the casting class's
+// counts at its own level.
+function classListRows(input: ProgressionInput, classes: ReadonlyArray<ProgressionClass>): ProgressionRow[] {
+  const last = Math.max(1, Math.min(20, Math.floor(input.level)));
+  const styles = [...(input.styles ?? [])];
+  const list = classes.map((entry) => ({ ...entry, id: entry.classId }));
+  const rows: ProgressionRow[] = [];
+  for (let level = 1; level <= last; level += 1) {
+    const at = classAtLevel(list, level);
+    if (!at) {
+      break;
+    }
+    const { entry, classLevel } = at;
+    const features = classFeaturesFor(entry.classId, entry.subclass, classLevel)
+      .filter((feature) => feature.level === classLevel)
+      .map((feature) => {
+        if (fightingStyleSlots([feature]) === 0) {
+          return feature.name;
+        }
+        const style = styles.shift();
+        return style ? `${feature.name} (${style})` : feature.name;
+      });
+    const slotIndex = input.asiSlotLevels.indexOf(level);
+    const choice = slotIndex >= 0 ? (input.asiChoices[slotIndex] ?? null) : null;
+    const takenInPlay = slotIndex >= 0 ? Boolean(input.asiTakenInPlay?.[slotIndex]) : false;
+    const before = input.asiSlotLevels
+      .map((slotLevel, index) => (slotLevel <= level ? input.asiChoices[index] : null))
+      .filter((pick): pick is AsiChoice => pick !== null && pick !== undefined);
+    const scores = applyChoices(input.baseAbilities ?? TEN, before);
+    // The classes as they stand at this level: every level so far.
+    const soFar = list.flatMap((held, index) => {
+      const taken = index < at.index ? held.level : index === at.index ? classLevel : 0;
+      return taken > 0 ? [{ ...held, level: taken }] : [];
+    });
+    // The class that casts among them, at its own level so far: phase 1
+    // of F9 builds one, a warlock's pact magic included.
+    const casting =
+      soFar
+        .map((held) => ({
+          held,
+          preview: casterPreview({ classId: held.classId, subclass: held.subclass, progression: held.progression, level: held.level, abilitiesAfter: scores }),
+        }))
+        .find((pair) => pair.preview.casts) ?? null;
+    const slots = Object.entries(
+      slotTableFor(
+        { class: soFar[0].classId, classes: soFar.map((held) => ({ id: held.classId, subclass: held.subclass, level: held.level })) },
+        (held) => soFar.find((row) => row.classId === held.id)?.progression,
+      ),
+    )
+      .map(([slotLevel, count]) => ({ level: Number(slotLevel), count }))
+      .filter((slot) => slot.count > 0)
+      .sort((a, b) => a.level - b.level);
+    const warlock = soFar.find((held) => held.pact);
+    const pactRow = warlock ? pactSlotsFor(warlock.level) : null;
+    const wizard = casting ? spellStyleFor(casting.held.classId) === "spellbook" : false;
+    const cap = casting?.preview.spellCap ?? null;
+    const spells: ProgressionSpells | null =
+      cap && cap.count > 0 ? { ...cap, ...(wizard && casting ? { spellbook: spellbookAllowance(casting.held.level) } : {}) } : null;
+    rows.push({
+      level,
+      proficiency: proficiencyBonus(level),
+      features,
+      subclass: subclassLevelFor(entry.classId) === classLevel ? { pick: entry.subclass.trim() || null } : null,
+      improvement:
+        slotIndex >= 0 ? { pick: choice ? improvementWords(choice) : null, takenInPlay: takenInPlay && !choice } : null,
+      slots,
+      pact: pactRow ? { level: pactRow.level, count: pactRow.max } : null,
+      classLabel: `${entry.name} ${classLevel}`,
+      cantrips: casting ? casting.preview.cantripCap : null,
+      spells,
+      mark: level === input.next ? "next" : level === input.current ? "current" : null,
+    });
+  }
+  return rows;
+}
+
 // Which columns the table needs: a class with no subclass level has no
 // Subclass column, and one that never casts by this level no spell columns.
-export function progressionColumns(rows: readonly ProgressionRow[]): { subclass: boolean; casting: boolean } {
+export function progressionColumns(rows: readonly ProgressionRow[]): { subclass: boolean; casting: boolean; classes: boolean } {
   return {
     subclass: rows.some((row) => row.subclass !== null),
-    casting: rows.some((row) => row.slots.length > 0 || row.cantrips !== null || row.spells !== null),
+    casting: rows.some((row) => row.slots.length > 0 || Boolean(row.pact) || row.cantrips !== null || row.spells !== null),
+    // A class list says which class each level went to.
+    classes: rows.some((row) => Boolean(row.classLabel)),
   };
 }
 

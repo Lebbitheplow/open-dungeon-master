@@ -11,7 +11,8 @@ import type {
   CreateSheetInput,
   SheetAttachment,
 } from "@/lib/schemas/sheet";
-import { earnedAsiCount, removeAsiChoices } from "@/lib/srd/asi";
+import { earnedAsiCountFor, removeAsiChoices } from "@/lib/srd/asi";
+import { classListFor } from "@/lib/srd/multiclass";
 import { halfFeatPicks, halfFeatPoints } from "@/lib/srd/legality/half-feats";
 import { withoutFeatPicks, type FeatChoices, type FeatPicks } from "@/lib/srd/feat-grants";
 import { racialFeatCount } from "@/lib/srd/race-id";
@@ -30,6 +31,7 @@ import type { AbilityMethod, AbilityState } from "./AbilityEditor";
 import type { PoolEntry, PoolSlots } from "./abilityDice";
 import { reconcilePicks, type BuilderPicks, type DroppedPick } from "./reconcile";
 import { undoOutcome, type BuildUndo, type UndoBecause } from "./buildUndo";
+import { classCasts, fitExtraClasses, shedExtraLevels, splitStoredSkills, storedExtraClasses, type ExtraClass } from "./multiclassBuild";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
 import { keyedFeatChoices, withFeatChoice } from "@/lib/schemas/sheet";
 import { textKey } from "@/lib/language/text-logic";
@@ -56,6 +58,9 @@ export type BuilderDraftFields = {
   raceId: string;
   classId: string;
   subclass: string;
+  // The classes taken after the first (backlog F9), in the order taken;
+  // empty for a single class.
+  extraClasses: ExtraClass[];
   backgroundId: string;
   method: AbilityMethod;
   scores: AbilityState;
@@ -119,25 +124,30 @@ export function useBuilderState({
   initialLevel?: number;
   fixedLevel?: number;
   // "Level up" from the library: the stored character opens one level up,
-  // and each step asks for what the new level brings. Ignored for a
-  // multiclass split, whose level the builder does not move. A new
-  // character opens at it when the door that opened the builder knows its
-  // level (door.ts), and can still change it.
+  // and each step asks for what the new level brings. A new character
+  // opens at it when the door that opened the builder knows its level
+  // (door.ts), and can still change it.
   startLevel?: number;
   races: RaceOption[];
   classes: ClassOption[];
   backgrounds: BackgroundOption[];
 }) {
-  const { storedLevel, levelFloor, levelLocked } = storedLevelRange(initial, initialLevel);
+  const { storedLevel, levelFloor } = storedLevelRange(initial, initialLevel);
   const [name, setName] = useState(initial?.name ?? "");
   const [alignment, setAlignment] = useState(initial?.alignment ?? "N");
   // A stored character opens at its own level, never at 1.
   const [level, setLevel] = useState(
-    fixedLevel ?? (initial ? (startLevel && !levelLocked ? Math.max(storedLevel, startLevel) : storedLevel) : (startLevel ?? 1)),
+    fixedLevel ?? (initial ? (startLevel ? Math.max(storedLevel, startLevel) : storedLevel) : (startLevel ?? 1)),
   );
   const [raceId, setRaceId] = useState(initial?.race ?? "");
   const [classId, setClassId] = useState(initial?.class ?? "");
   const [subclass, setSubclass] = useState(initial?.subclass ?? "");
+  // A stored split comes back as it was: a split made in the library is
+  // edited like any other pick (the plan's decision 4). At a table below
+  // its level the last class's levels go first, as joining sheds them. The
+  // skill each added class let the player pick is sorted out of the stored
+  // skills once the class rows are at hand (below).
+  const [extraClasses, setExtraClasses] = useState<ExtraClass[]>(() => storedExtraClasses(initial, level));
   const [backgroundId, setBackgroundId] = useState(initial?.background ?? "");
   const [method, setMethod] = useState<AbilityMethod>(initial ? "roll" : "standard");
   const [scores, setScores] = useState<AbilityState>({
@@ -163,24 +173,18 @@ export function useBuilderState({
   );
   // Levelled spells and cantrips are two lists, the way the sheet keeps them.
   // For a wizard `spells` is the spellbook and `bookPrepared` the part of it
-  // prepared; every other class leaves `bookPrepared` alone.
+  // prepared; every other class leaves `bookPrepared` alone. A stored split
+  // with two casting classes (earned in play) opens on the first's own
+  // lists: the builder holds one casting class's spells, and the other's
+  // are kept as stored (submit.ts keptSpellcasting).
+  const storedLists = storedCasterLists(initial);
   const [spells, setSpells] = useState<string[]>(() =>
-    initial?.spellcasting
-      ? [
-          ...new Set([
-            ...(initial.spellcasting.spellbook ?? []),
-            ...initial.spellcasting.known,
-            ...initial.spellcasting.prepared,
-          ]),
-        ]
+    storedLists
+      ? [...new Set([...(storedLists.spellbook ?? []), ...storedLists.known, ...storedLists.prepared])]
       : [],
   );
-  const [bookPrepared, setBookPrepared] = useState<string[]>(
-    () => initial?.spellcasting?.prepared ?? [],
-  );
-  const [cantrips, setCantrips] = useState<string[]>(() =>
-    initial?.spellcasting ? [...new Set(initial.spellcasting.cantrips ?? [])] : [],
-  );
+  const [bookPrepared, setBookPrepared] = useState<string[]>(() => storedLists?.prepared ?? []);
+  const [cantrips, setCantrips] = useState<string[]>(() => (storedLists ? [...new Set(storedLists.cantrips ?? [])] : []));
   const [equipment, setEquipment] = useState<EquipmentItem[]>(() =>
     (initial?.equipment ?? []).map((item) => ({
       name: item.name,
@@ -345,23 +349,35 @@ export function useBuilderState({
     setBookPrepared(next.bookPrepared);
     setCantrips(next.cantrips);
   }
-  type Selection = { raceId: string; classId: string; backgroundId: string; level: number };
-  const selection: Selection = { raceId, classId, backgroundId, level };
+  type Selection = { raceId: string; classId: string; backgroundId: string; level: number; extraClasses: ExtraClass[] };
+  const selection: Selection = { raceId, classId, backgroundId, level, extraClasses };
   // The rows the builder shows for these ids. A race, class or background
   // not yet picked is none at all (CharacterBuilder.tsx does the same), so
   // the picks are checked against what is shown.
+  // The classes after the first are kept valid against the first class and
+  // the level before the picks are checked, since the first class's level
+  // is what they leave (multiclassBuild.ts).
   function reconciled(
     next: Partial<Selection>,
     current: BuilderPicks,
-  ): { picks: BuilderPicks; drops: DroppedPick[] } {
+  ): { picks: BuilderPicks; drops: DroppedPick[]; extras: ExtraClass[] } {
     const ids = { ...selection, ...next };
     const background = backgrounds.find((entry) => entry.id === ids.backgroundId);
-    const { picks, drops } = reconcilePicks(current, {
+    const total = fixedLevel ?? ids.level;
+    const fitted = fitExtraClasses(ids.extraClasses, { primaryId: ids.classId, total });
+    const result = reconcilePicks(current, {
       race: findRace(races, ids.raceId),
       klass: classes.find((entry) => entry.id === ids.classId),
       background,
-      level: fixedLevel ?? ids.level,
+      level: total,
+      extras: fitted.map((entry) => ({ ...entry, klass: classes.find((row) => row.id === entry.classId) })),
     });
+    const { picks, drops } = result;
+    // A class whose row has not arrived yet (a content pack's) keeps its
+    // skill pick until it does.
+    const extras = fitted.map((entry, index) =>
+      classes.some((row) => row.id === entry.classId) ? { ...entry, skills: result.extraSkills[index] ?? [] } : entry,
+    );
     // A stored content-pack background is not in the bundled list the
     // builder opens with; its skill pick, and the skill picked in place of
     // one it repeats, wait for the pack's rows rather than being checked
@@ -370,9 +386,10 @@ export function useBuilderState({
       return {
         picks: { ...picks, backgroundSkills: current.backgroundSkills, repeatSkills: current.repeatSkills },
         drops: drops.filter((drop) => drop.target !== "backgroundSkills" && drop.target !== "repeatSkills"),
+        extras,
       };
     }
-    return { picks, drops };
+    return { picks, drops, extras };
   }
   // Apply what still fits and say what did not. A change the player made
   // replaces the notice, so it always describes the last change, and clears
@@ -380,10 +397,11 @@ export function useBuilderState({
   // earlier notice alone unless they dropped something themselves.
   function applyReconciled(
     because: string,
-    { picks, drops }: { picks: BuilderPicks; drops: DroppedPick[] },
+    { picks, drops, extras }: { picks: BuilderPicks; drops: DroppedPick[]; extras: ExtraClass[] },
     keep = false,
   ) {
     applyPicks(picks);
+    setExtraClasses(extras);
     if (drops.length) {
       setDropped({ because, drops });
     } else if (!keep) {
@@ -478,6 +496,7 @@ export function useBuilderState({
       const spoken = new Set([
         ...(initialRace?.languages ?? []),
         ...(initialClass?.languages ?? []),
+        ...ids.extraClasses.flatMap((entry) => classes.find((row) => row.id === entry.classId)?.languages ?? []),
         ...(initialBackground?.knownLanguages ?? []),
       ]);
       // What the feats' own picks added (a Linguist's three languages,
@@ -485,16 +504,26 @@ export function useBuilderState({
       // bonus language or a class skill it overflowed the slots and was
       // reported as no longer on offer.
       const held = withoutFeatPicks(initial.proficiencies, initial.featChoices);
+      // The skills picked for each class: the first class's own, then the
+      // one a class taken second let the player pick.
+      const stored = splitStoredSkills(
+        held.skills.filter((skill) => !grantedSkills.has(skill)),
+        initialClass,
+        ids.extraClasses,
+      );
       // A stored pick the rows no longer offer is said so, like any other
       // drop; the gates then ask for it again on its step.
       applyReconciled(
         "stored character",
-        reconciled(ids, {
-          ...picks,
-          chosenSkills: held.skills.filter((skill) => !grantedSkills.has(skill)),
-          expertisePicks: held.expertise ?? [],
-          bonusLanguages: held.languages.filter((language) => !spoken.has(language)),
-        }),
+        reconciled(
+          { ...ids, extraClasses: ids.extraClasses.map((entry, index) => ({ ...entry, skills: stored.extraSkills[index] ?? [] })) },
+          {
+            ...picks,
+            chosenSkills: stored.chosen,
+            expertisePicks: held.expertise ?? [],
+            bonusLanguages: held.languages.filter((language) => !spoken.has(language)),
+          },
+        ),
         true,
       );
       return;
@@ -556,6 +585,11 @@ export function useBuilderState({
       keepUndo("class", className(classId), className(id));
     }
     setClassId(id);
+    // The spells stay when a class taken second holds them: they are its,
+    // not the first class's.
+    const spellsKept = extraClasses.some((entry) =>
+      classCasts(classes.find((row) => row.id === entry.classId), entry.subclass, entry.level),
+    );
     setRemovedAutoNames([]);
     setKitChoices({ options: [], picks: [] });
     applyChange(
@@ -565,9 +599,7 @@ export function useBuilderState({
         ...picks,
         chosenSkills: [],
         subclass: "",
-        spells: [],
-        bookPrepared: [],
-        cantrips: [],
+        ...(spellsKept ? {} : { spells: [], bookPrepared: [], cantrips: [] }),
         optionPicks: [],
         stylePicks: [],
         expertisePicks: [],
@@ -591,14 +623,48 @@ export function useBuilderState({
     applyChange("subclass", {}, { ...picks, subclass: name });
   }
   // A level change keeps every pick that still fits, so only one that sets
-  // some aside (a 3rd-level spell at level 1) is kept to put back.
+  // some aside (a 3rd-level spell at level 1) is kept to put back. A lower
+  // level takes its levels from the last class taken first; a higher one
+  // goes to the first class.
   function changeLevel(next: number) {
-    const result = reconciled({ level: next }, picks);
-    if (result.drops.length && next !== level) {
+    const result = reconciled(
+      { level: next, ...(next < level ? { extraClasses: shedExtraLevels(extraClasses, level - next) } : {}) },
+      picks,
+    );
+    if ((result.drops.length || result.extras.length !== extraClasses.length) && next !== level) {
       keepUndo("level", `level ${level}`, `level ${next}`);
     }
     setLevel(next);
     applyReconciled("level", result);
+  }
+
+  // The classes after the first (backlog F9). Each change moves levels away
+  // from the first class or back to it, so every pick is checked again, and
+  // one that sets picks aside is kept to put back.
+  const splitWords = (list: ExtraClass[]) =>
+    [className(classId), ...list.map((entry) => className(entry.classId))].join(" / ");
+  function changeExtras(because: string, next: ExtraClass[]) {
+    const result = reconciled({ extraClasses: next }, picks);
+    if (result.drops.length) {
+      keepUndo("class", splitWords(extraClasses), splitWords(result.extras));
+    }
+    applyReconciled(because, result);
+  }
+  // A class added takes one level from the first class.
+  function addExtraClass(id: string) {
+    changeExtras("class", [...extraClasses, { classId: id, subclass: "", level: 1, skills: [] }]);
+  }
+  function removeExtraClass(index: number) {
+    changeExtras("class", extraClasses.filter((_, at) => at !== index));
+  }
+  function changeExtraLevel(index: number, next: number) {
+    changeExtras("level", extraClasses.map((entry, at) => (at === index ? { ...entry, level: next } : entry)));
+  }
+  function changeExtraSubclass(index: number, name: string) {
+    changeExtras("subclass", extraClasses.map((entry, at) => (at === index ? { ...entry, subclass: name } : entry)));
+  }
+  function changeExtraSkills(index: number, skills: string[]) {
+    changeExtras("class", extraClasses.map((entry, at) => (at === index ? { ...entry, skills } : entry)));
   }
   // "Put it back": the old choice and every pick that went with it, set as
   // they were (no reconcile: they were checked against each other then),
@@ -640,6 +706,8 @@ export function useBuilderState({
     raceId: setRaceId,
     classId: setClassId,
     subclass: setSubclass,
+    // A draft from before F9 has none.
+    extraClasses: (value) => setExtraClasses(Array.isArray(value) ? value : []),
     backgroundId: setBackgroundId,
     method: setMethod,
     scores: setScores,
@@ -721,6 +789,7 @@ export function useBuilderState({
     raceId,
     classId,
     subclass,
+    extraClasses,
     backgroundId,
     method,
     scores,
@@ -778,7 +847,12 @@ export function useBuilderState({
     applyFill,
     keepsStoredGear,
     levelFloor,
-    levelLocked,
+    // How many classes the stored character held when it was split, else
+    // 0, and how many of them cast: a split it came with stands at a table
+    // that turns multiclassing off, and a second casting class it earned in
+    // play keeps its own lists (submit.ts).
+    storedClassCount: (initial?.classes ?? []).length > 1 ? (initial?.classes ?? []).length : 0,
+    storedCastingCount: initial?.spellcasting?.casters?.length ?? (initial?.spellcasting ? 1 : 0),
     asiRecorded,
     asiReachedLevel,
     primalChampionHeld: initialHoldsPrimalChampion(initial, initialLevel),
@@ -793,6 +867,7 @@ export function useBuilderState({
     raceId, changeRace,
     classId, changeClass,
     subclass, changeSubclass,
+    extraClasses, addExtraClass, removeExtraClass, changeExtraLevel, changeExtraSubclass, changeExtraSkills,
     backgroundId, changeBackground,
     method, setMethod,
     scores, setScores,
@@ -854,6 +929,26 @@ export function findRace(races: RaceOption[], raceId: string): RaceOption | unde
   );
 }
 
+// The spell lists an edit opens on: the sheet's own, or on a split with
+// more than one casting class the first casting class's entry, in the order
+// the classes were taken.
+function storedCasterLists(initial: CreateSheetInput | undefined) {
+  const casting = initial?.spellcasting;
+  if (!casting) {
+    return null;
+  }
+  if ((casting.casters?.length ?? 0) < 2) {
+    return casting;
+  }
+  for (const entry of initial?.classes ?? []) {
+    const own = casting.casters?.find((caster) => textKey(caster.classId) === textKey(entry.id));
+    if (own) {
+      return own;
+    }
+  }
+  return casting;
+}
+
 // A stored barbarian at 20 whose scores carry Primal Champion's +4: what the
 // edit takes off on loading and puts back after the improvements.
 function initialHoldsPrimalChampion(initial: CreateSheetInput | undefined, initialLevel: number | undefined): boolean {
@@ -870,17 +965,20 @@ function initialHoldsPrimalChampion(initial: CreateSheetInput | undefined, initi
 // The level a stored character reached, and how far an edit outside a table
 // may move it (issue 229). Improvements taken in play sit in its scores with
 // no recorded pick to give back, so it may not go below the level it earned
-// them at; a split between classes is play's to change, so a character
-// holding more than one keeps its level. A new character ranges freely.
+// them at, each class's counted at its own level. A split between classes
+// is edited like any other pick (backlog F9): a lower level comes off the
+// last class taken. A new character ranges freely.
 export function storedLevelRange(
   initial: CreateSheetInput | undefined,
   initialLevel: number | undefined,
-): { storedLevel: number; levelFloor: number; levelLocked: boolean } {
+): { storedLevel: number; levelFloor: number } {
   if (!initial) {
-    return { storedLevel: 1, levelFloor: 1, levelLocked: false };
+    return { storedLevel: 1, levelFloor: 1 };
   }
   const storedLevel = Math.max(1, Math.min(20, initialLevel ?? initial.hitDice?.total ?? 1));
-  const levelLocked = (initial.classes ?? []).length > 1;
-  const takenInPlay = earnedAsiCount(storedLevel, initial.class) > (initial.asiChoices?.length ?? 0);
-  return { storedLevel, levelFloor: levelLocked || takenInPlay ? storedLevel : 1, levelLocked };
+  const earned = earnedAsiCountFor(
+    classListFor({ class: initial.class, subclass: initial.subclass, level: storedLevel, classes: initial.classes }),
+  );
+  const takenInPlay = earned > (initial.asiChoices?.length ?? 0);
+  return { storedLevel, levelFloor: takenInPlay ? storedLevel : 1 };
 }

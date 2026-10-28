@@ -6,6 +6,8 @@ import { innateCantripsFor, repeatedGrants } from "@/lib/srd/racial-grants";
 import { withSpeciesVariant } from "@/lib/content/species-variants";
 import { spellLevelOf } from "@/lib/srd/spell-lists";
 import { builderCasting } from "./casting";
+import { castingIndexOf } from "./multiclassBuild";
+import { multiclassGrantsFor } from "@/lib/srd/multiclass";
 import { bonusLanguageCount, type BlockerTarget } from "./submit";
 import type { BackgroundOption, ClassOption, RaceOption } from "./useBuilderOptions";
 import { textKey } from "@/lib/language/text-logic";
@@ -52,8 +54,15 @@ export type ReconcileContext = {
   race?: RaceOption;
   klass?: ClassOption;
   background?: BackgroundOption;
+  // The character's level. With classes after the first (backlog F9) the
+  // first class holds what they leave of it.
   level: number;
+  // The classes taken after the first, each with its row, its levels, its
+  // subclass and the skills its multiclass grant let the player pick.
+  extras?: ReadonlyArray<ReconcileExtra>;
 };
+
+export type ReconcileExtra = { klass?: ClassOption; subclass: string; level: number; skills?: string[] };
 
 // A pick that no longer fits, named for the player: what kind of pick it
 // was ("bonus language"), which one ("Dwarvish"), and the block on the step
@@ -137,8 +146,12 @@ export function grantingTrait(raceId: string, skillName: string): string | null 
 export function reconcilePicks(
   input: Partial<BuilderPicks>,
   context: ReconcileContext,
-): { picks: BuilderPicks; dropped: string[]; drops: DroppedPick[] } {
+): { picks: BuilderPicks; dropped: string[]; drops: DroppedPick[]; extraSkills: string[][] } {
   const { klass, background, level } = context;
+  const extras = context.extras ?? [];
+  // The first class's own levels: its subclass, expertise, styles and
+  // options are read at them, never at the character's level.
+  const primaryLevel = Math.max(1, level - extras.reduce((sum, entry) => sum + entry.level, 0));
   // A caller may hold only some of the lists (an edit stub, an older state
   // shape); a missing list is an empty one.
   const picks: BuilderPicks = {
@@ -225,6 +238,30 @@ export function reconcilePicks(
   );
   note("replacement skill", "repeatSkills", picks.repeatSkills, repeatSkills);
 
+  // The skill a class taken second lets the player pick (a rogue's one from
+  // the rogue list): never one the character already has from elsewhere.
+  const repeatPicked = new Set(repeatSkills.filter(Boolean).map(textKey));
+  const extraPicked = new Set<string>();
+  const extraSkills = extras.map((entry) => {
+    const grant = entry.klass ? multiclassGrantsFor(entry.klass.id).skillChoice : undefined;
+    const before = entry.skills ?? [];
+    const pool = grant?.from.length ? new Set(grant.from.map(textKey)) : null;
+    const kept = grant
+      ? unique(before)
+          .filter((skill) => {
+            const key = textKey(skill);
+            return (
+              !granted.has(key) && !classPicked.has(key) && !backgroundPicked.has(key) && !racialPicked.has(key) &&
+              !repeatPicked.has(key) && !extraPicked.has(key) && (!pool || pool.has(key))
+            );
+          })
+          .slice(0, grant.count)
+      : [];
+    kept.forEach((skill) => extraPicked.add(textKey(skill)));
+    note("second class skill", "classSkills", before, kept);
+    return kept;
+  });
+
   const fixedAsi = new Set(
     Object.entries(race?.asi ?? {})
       .filter(([, bonus]) => (bonus ?? 0) !== 0)
@@ -256,7 +293,12 @@ export function reconcilePicks(
   // Undercommon") only from it; no more slots than the race and background
   // offer together.
   const spoken = new Set(
-    [...(race?.languages ?? []), ...(klass?.languages ?? []), ...(background?.knownLanguages ?? [])].map(textKey),
+    [
+      ...(race?.languages ?? []),
+      ...(klass?.languages ?? []),
+      ...extras.flatMap((entry) => entry.klass?.languages ?? []),
+      ...(background?.knownLanguages ?? []),
+    ].map(textKey),
   );
   const choice = race?.languageChoice;
   const bonusLanguages = slotted(
@@ -269,16 +311,26 @@ export function reconcilePicks(
   note("bonus language", "languages", picks.bonusLanguages, bonusLanguages);
 
   const pickLevel = klass ? subclassLevelFor(klass.id) : null;
-  const subclass = klass && (pickLevel === null || level >= pickLevel) ? picks.subclass : "";
+  const subclass = klass && (pickLevel === null || primaryLevel >= pickLevel) ? picks.subclass : "";
   note("subclass", "subclass", [picks.subclass], [subclass]);
 
-  const proficient = new Set([...chosenSkills, ...racialSkills, ...backgroundSkills, ...granted].filter(Boolean).map(textKey));
+  const proficient = new Set(
+    [...chosenSkills, ...racialSkills, ...backgroundSkills, ...extraSkills.flat(), ...granted].filter(Boolean).map(textKey),
+  );
+  // Each class at its own levels: a rogue taken second brings its two
+  // expertise picks at its 1st level.
+  const classes = [
+    ...(klass ? [{ klass, subclass, level: primaryLevel }] : []),
+    ...extras.flatMap((entry) => (entry.klass ? [{ klass: entry.klass, subclass: entry.subclass, level: entry.level }] : [])),
+  ];
+  const expertiseSlots = classes.reduce((sum, entry) => sum + expertiseSlotsFor(entry.klass.id, entry.level), 0);
   const expertisePicks = klass
-    ? unique(picks.expertisePicks.filter((skill) => proficient.has(textKey(skill)))).slice(0, expertiseSlotsFor(klass.id, level))
+    ? unique(picks.expertisePicks.filter((skill) => proficient.has(textKey(skill)))).slice(0, expertiseSlots)
     : [];
   note("expertise", "expertise", picks.expertisePicks, expertisePicks);
 
-  const features = klass ? classFeaturesFor(klass.id, subclass, level) : [];
+  const featuresOf = classes.map((entry) => classFeaturesFor(entry.klass.id, entry.subclass, entry.level));
+  const features = featuresOf.flat();
   // Only the styles the slots allow (a Swords bard: Dueling or Two-Weapon
   // Fighting); a pick may name the style rather than its id.
   const allowedStyles = new Set(fightingStyleChoices(features).flatMap((style) => [style.id, textKey(style.name)]));
@@ -292,7 +344,11 @@ export function reconcilePicks(
       return false;
     }
     const taken = perKind.get(option.k) ?? 0;
-    if (taken >= optionSlotsFor(klass.id, subclass, level, option.k, features)) {
+    const slots = classes.reduce(
+      (sum, entry, index) => sum + optionSlotsFor(entry.klass.id, entry.subclass, entry.level, option.k, featuresOf[index]),
+      0,
+    );
+    if (taken >= slots) {
       return false;
     }
     perKind.set(option.k, taken + 1);
@@ -304,7 +360,11 @@ export function reconcilePicks(
   // its slots reach. A spell above that is one the spell book cannot show, so
   // it has to go here or the player is asked to remove what they cannot see.
   // An Eldritch Knight or Arcane Trickster casts too (./casting.ts).
-  const { maxSpellLevel, cantripCap, casts } = builderCasting(klass, subclass, level);
+  // With classes after the first, the class that casts holds the list, at
+  // its own level (phase 1 of F9 builds one casting class).
+  const casterAt = classes.length > 1 ? castingIndexOf(classes.map((entry) => ({ row: entry.klass, subclass: entry.subclass, level: entry.level }))) : 0;
+  const caster = casterAt >= 0 ? classes[casterAt] : undefined;
+  const { maxSpellLevel, cantripCap, casts } = builderCasting(caster?.klass, caster?.subclass, caster?.level ?? level);
   // The race's cantrips are not class picks: a stored sheet lists them with
   // the class's (submit.ts finalCantrips), and read back they would count
   // against the class's allowance (issue #118).
@@ -346,5 +406,6 @@ export function reconcilePicks(
     },
     dropped: drops.map((drop) => `${drop.label}: ${drop.value}`),
     drops,
+    extraSkills,
   };
 }

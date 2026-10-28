@@ -43,7 +43,9 @@ export type BuildMathInput = {
     | "purse"
     | "racialBonus"
     | "abilityGains"
-  >;
+  > &
+    // A character with levels in more than one class (backlog F9).
+    Partial<Pick<BuilderDerived, "extras" | "casterKlass" | "casterLevel" | "pactSlots" | "multiclass">>;
   // The scores as assigned, before the race's bonus.
   scores: Record<Ability, number | null>;
   klass: { name: string; hitDie: number } | undefined;
@@ -80,11 +82,28 @@ export function buildMathSections({ derived, scores, klass, atTable }: BuildMath
     method: preview.hpMethod,
     kept: preview.hpKept,
     atTable,
+    ...(derived.multiclass ? { dice: [klass.hitDie, ...(derived.extras ?? []).map((entry) => entry.klass.hitDie)] } : {}),
   });
   const parts = hp.parts;
+  // A class list's later levels, class by class: each its own die.
+  const split = hp.split ?? null;
+  const nameOf = (id: string) =>
+    derived.extras?.find((entry) => entry.klass.id === id)?.klass.name ?? klass.name;
   const hpWorking = preview.hpKept
     ? hpLine.reason
-    : [
+    : split
+      ? [
+          `level 1: d${parts.hitDie} ${parts.hitDie}, Con ${formatModifier(parts.conMod)}${parts.bonusPerLevel ? `, bonus ${formatModifier(parts.bonusPerLevel)}` : ""} = ${parts.firstLevel}`,
+          ...split
+            .filter((entry) => entry.levels > 0)
+            .map((entry) =>
+              preview.hpMethod === "rolled"
+                ? `${entry.levels} ${nameOf(entry.id).toLowerCase()} ${entry.levels === 1 ? "level" : "levels"} rolled on a d${entry.hitDie} by the server when you save`
+                : `${entry.levels} ${entry === split[0] ? "more " : ""}${nameOf(entry.id).toLowerCase()} ${entry.levels === 1 ? "level" : "levels"} at ${entry.perLevel} each (d${entry.hitDie}) = ${entry.levels * entry.perLevel}`,
+            ),
+          ...(parts.featureHp ? [`features ${formatModifier(parts.featureHp)}`] : []),
+        ].join("; ")
+      : [
         `level 1: d${parts.hitDie} ${parts.hitDie}, Con ${formatModifier(parts.conMod)}${parts.bonusPerLevel ? `, bonus ${formatModifier(parts.bonusPerLevel)}` : ""} = ${parts.firstLevel}`,
         ...(effectiveLevel > 1
           ? [
@@ -161,12 +180,30 @@ export function buildMathSections({ derived, scores, klass, atTable }: BuildMath
     })),
   });
 
-  const slotRows = SLOT_LEVELS.flatMap(([level, ordinal]) => {
-    const slot = derived.spellSlots[level];
-    return slot && slot.max > 0
-      ? [{ id: `slots-${level}`, label: `${ordinal}-level slots`, value: String(slot.max), working: `${klass.name} table at level ${effectiveLevel}` }]
-      : [];
-  });
+  // The table the slots are read from: the casting class's at its own
+  // level, the first class's for a single class.
+  const slotTable = derived.multiclass && derived.casterKlass
+    ? `${derived.casterKlass.name} table at ${derived.casterKlass.name.toLowerCase()} level ${derived.casterLevel ?? effectiveLevel}`
+    : `${klass.name} table at level ${effectiveLevel}`;
+  const slotRows = [
+    ...SLOT_LEVELS.flatMap(([level, ordinal]) => {
+      const slot = derived.spellSlots[level];
+      return slot && slot.max > 0
+        ? [{ id: `slots-${level}`, label: `${ordinal}-level slots`, value: String(slot.max), working: slotTable }]
+        : [];
+    }),
+    // A warlock's pact slots on a class list sit apart from the rest.
+    ...(derived.pactSlots
+      ? [
+          {
+            id: "slots-pact",
+            label: "Pact magic slots",
+            value: `${derived.pactSlots.max} at ${SLOT_LEVELS[derived.pactSlots.level - 1]?.[1] ?? derived.pactSlots.level} level`,
+            working: "warlock levels, recovered on a short rest",
+          },
+        ]
+      : []),
+  ];
   if (sheet.spellSaveDc !== null || slotRows.length) {
     sections.push({
       id: "spells",

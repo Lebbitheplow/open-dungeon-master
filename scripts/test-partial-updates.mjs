@@ -47,6 +47,7 @@ const { gameSettingsSchema, normalizeGameSettings } = await import(
 );
 const { adaptSheetToLevel } = await import("../src/lib/characters/adapt.ts");
 const { buildBuilderResult } = await import("../src/app/characters/builder/submit.ts");
+const { storedExtraClasses } = await import("../src/app/characters/builder/multiclassBuild.ts");
 
 // A URL, not a template literal: Vitest would read the literal as a one-level
 // glob, which the nested route paths below never match.
@@ -361,6 +362,9 @@ function builderEdit(level, klass) {
     backstory: SYNCED.backstory,
     spells: [],
     spellWarningAck: true,
+    // The split as the builder opens it at this level (backlog F9): the
+    // last class's levels shed first below the stored level.
+    extraClasses: storedExtraClasses(SYNCED, level),
   };
   // The Calling step waits for the soldier's gaming set to be named (a
   // character stored before that pick existed names it on its first edit).

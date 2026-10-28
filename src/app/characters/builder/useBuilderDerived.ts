@@ -1,8 +1,9 @@
 import type { Genre } from "@/lib/schemas/game-settings";
-import { expertiseAllowed, subclassExpandedSpellsFor, subclassSpellListsFor } from "@/lib/srd/features";
+import { expertiseAllowed, expertiseSlotsFor, subclassExpandedSpellsFor, subclassSpellListsFor } from "@/lib/srd/features";
+import { multiclassGrantsFor, type MulticlassGrant } from "@/lib/srd/multiclass";
 import { useMemo as useReactMemo, type DependencyList } from "react";
 import { starterSpellsFor } from "@/lib/help";
-import type { Ability, AbilityScores, AsiChoice, EquipmentItem } from "@/lib/schemas/sheet";
+import type { Ability, AbilityScores, AsiChoice, ClassEntry, EquipmentItem } from "@/lib/schemas/sheet";
 import { acBreakdownFor, computeSheetDerived } from "@/lib/srd";
 import { applyAsiChoices, asiLevelsFor, asiSlotsTakenInPlay } from "@/lib/srd/asi";
 import type { HpMethod } from "@/lib/srd/hit-points";
@@ -34,7 +35,8 @@ import {
 } from "@/lib/srd/starting-kit";
 import { suggestWeapons } from "@/lib/srd/weapons";
 import { abilityGains } from "./abilityGains";
-import { builderCasting, builderSpellAdvice, builderSpellSlots } from "./casting";
+import { builderCasting, builderClassListSlots, builderSpellAdvice, builderSpellSlots } from "./casting";
+import { builderAsiSlotLevels, castingIndexOf, primaryLevelOf, type ExtraClass } from "./multiclassBuild";
 import { grantedSkillSources } from "./reconcile";
 import { authoredFeatDesc } from "@/lib/srd/feat-effects";
 import { applyFeatGrants, featGrantSpec, type FeatGrantSpec } from "@/lib/srd/feat-grants";
@@ -72,6 +74,8 @@ export type TableRules = {
   // Gold the server rolled for this class, at a table that rolls wealth;
   // null until it has.
   wealthRoll?: number | null;
+  // False at a table that turns multiclassing off (backlog F9).
+  multiclassAllowed?: boolean;
 };
 
 // The class's and background's tool grants with the player's picks placed on
@@ -101,11 +105,29 @@ export function resolveToolPicks(
   return { fixed, choices, chosen, left };
 }
 
+// A class taken after the first (backlog F9) with the row it was picked
+// from: what the derivation reads for its levels, hit die, training,
+// features and casting.
+export type ExtraClassRow = ExtraClass & { klass: ClassOption };
+
+// The classes after the first with their rows, in the order taken. A class
+// whose row is not offered (a content pack's not yet arrived) is left out
+// of the numbers until it is; the save still sends it (submit.ts).
+export function extraClassRows(extras: ReadonlyArray<ExtraClass> | undefined, classes: ReadonlyArray<ClassOption>): ExtraClassRow[] {
+  return (extras ?? []).flatMap((entry) => {
+    const klass = classes.find((row) => row.id === entry.classId);
+    return klass ? [{ ...entry, klass }] : [];
+  });
+}
+
+const NO_EXTRAS: ExtraClassRow[] = [];
+
 export function useBuilderDerived({
   state,
   race,
   klass,
   background,
+  extras = NO_EXTRAS,
   fixedLevel,
   rules,
   featDescs,
@@ -115,6 +137,10 @@ export function useBuilderDerived({
   race: RaceOption | undefined;
   klass: ClassOption | undefined;
   background: BackgroundOption | undefined;
+  // The classes taken after the first (extraClassRows). Absent for a single
+  // class, and for the doors that build one (the library's Level up, the AI
+  // DM's drafted pregens).
+  extras?: ExtraClassRow[];
   fixedLevel?: number;
   rules?: TableRules;
   // The table's genre, when the character is made for one: its setting's
@@ -134,11 +160,28 @@ export function useBuilderDerived({
   } = state;
 
   const effectiveLevel = fixedLevel ?? level;
-  // Improvements are the class's own: a fighter's seven, a rogue's six.
+  // The class list (backlog F9): the first class at the levels the others
+  // leave it, then each class taken after it. One class is a list of one.
+  const primaryLevel = primaryLevelOf(effectiveLevel, extras);
+  const classList = useMemo<ClassEntry[]>(
+    () =>
+      klass
+        ? [
+            { id: klass.id, subclass: subclass ?? "", level: primaryLevel },
+            ...extras.map((entry) => ({ id: entry.klass.id, subclass: entry.subclass, level: entry.level })),
+          ]
+        : [],
+    [klass, subclass, primaryLevel, extras],
+  );
+  const multiclass = classList.length > 1;
+  // What each class taken second adds: the multiclass rows, never a save.
+  const grants = useMemo<MulticlassGrant[]>(() => extras.map((entry) => multiclassGrantsFor(entry.klass.id)), [extras]);
+  // Improvements are each class's own: a fighter's seven, a rogue's six,
+  // counted at that class's levels, the first class's levels first.
   const classId = klass?.id;
   const asiSlotLevels = useMemo(
-    () => asiLevelsFor(classId).filter((threshold) => effectiveLevel >= threshold),
-    [effectiveLevel, classId],
+    () => (classList.length ? builderAsiSlotLevels(classList) : asiLevelsFor(classId).filter((threshold) => effectiveLevel >= threshold)),
+    [classList, effectiveLevel, classId],
   );
   const activeAsiChoices = useMemo(
     () => asiSlotLevels.map((_, index) => asiChoices[index] ?? null),
@@ -186,8 +229,8 @@ export function useBuilderDerived({
   // Primal Champion's +4 Strength and Constitution, at barbarian 20. The
   // server adds it after the half-feats (src/lib/srd/sheet-legality.ts).
   const primalChampion = useMemo(
-    () => (klass ? reachesPrimalChampion({ class: klass.id, level: effectiveLevel }) : false),
-    [klass, effectiveLevel],
+    () => (klass ? reachesPrimalChampion({ class: klass.id, level: effectiveLevel, ...(multiclass ? { classes: classList } : {}) }) : false),
+    [klass, effectiveLevel, multiclass, classList],
   );
   // The scores the builder SENDS: the improvements in, the half-feats' points
   // not (the server adds those, src/lib/srd/legality/half-feats.ts). An edit
@@ -286,14 +329,32 @@ export function useBuilderDerived({
         ...(race?.skills ?? []),
         ...racialSkills.filter(Boolean),
         ...repeatSkills.filter(Boolean),
+        // The skill a class taken second let the player pick.
+        ...extras.flatMap((entry) => entry.skills.filter(Boolean)),
       ]),
     ],
-    [chosenSkills, background, backgroundSkills, race, racialSkills, repeatSkills],
+    [chosenSkills, background, backgroundSkills, race, racialSkills, repeatSkills, extras],
   );
 
+  // The class's, the background's, then each class taken second's: a
+  // rogue's thieves' tools, a bard's one musical instrument to name.
   const toolGrants = useMemo(
-    () => resolveToolPicks([...(klass?.tools ?? []), ...(background?.tools ?? [])], toolPicks, [...(race?.tools ?? []), racialTool]),
-    [klass, background, toolPicks, race, racialTool],
+    () =>
+      resolveToolPicks(
+        [...(klass?.tools ?? []), ...(background?.tools ?? []), ...grants.flatMap((grant) => grant.tools)],
+        toolPicks,
+        [...(race?.tools ?? []), racialTool],
+      ),
+    [klass, background, grants, toolPicks, race, racialTool],
+  );
+  // Whose open grant each of those choices is, in words for its panel.
+  const toolSources = useMemo(
+    () => [
+      ...splitToolGrants(klass?.tools ?? []).choices.map(() => (klass ? `your ${klass.name} class` : "")),
+      ...splitToolGrants(background?.tools ?? []).choices.map(() => (background ? `your ${background.name} background` : "")),
+      ...extras.flatMap((entry, index) => splitToolGrants(grants[index]?.tools ?? []).choices.map(() => `your ${entry.klass.name} levels`)),
+    ],
+    [klass, background, extras, grants],
   );
   // Every tool the character is trained with, the list the sheet carries;
   // the background's kit fills its "of your choice" lines from it.
@@ -328,23 +389,29 @@ export function useBuilderDerived({
   // with the feat pickers (src/lib/srd/subclass-training.ts).
   // A skill or language the character already has becomes a pick (Royal
   // Envoy's Persuasion, Draconic Disciple's Draconic).
+  // A class's own secret tongue (Druidic, Thieves' Cant), each class's.
+  const classLanguages = useMemo(
+    () => [...(klass?.languages ?? []), ...extras.flatMap((entry) => entry.klass.languages ?? [])],
+    [klass, extras],
+  );
   const subclassTraining = useMemo(
     () =>
-      klass && subclass
-        ? grantsForHeldTraining(subclassGrants([{ id: klass.id, level: effectiveLevel, subclass }]), {
+      klass && classList.some((entry) => entry.subclass)
+        ? grantsForHeldTraining(subclassGrants(classList), {
             skills: proficientSkills,
-            languages: [...(race?.languages ?? []), ...(background?.knownLanguages ?? []), ...bonusLanguages.filter(Boolean), ...(klass.languages ?? [])],
+            languages: [...(race?.languages ?? []), ...(background?.knownLanguages ?? []), ...bonusLanguages.filter(Boolean), ...classLanguages],
           })
         : [],
-    [klass, subclass, effectiveLevel, proficientSkills, race, background, bonusLanguages],
+    [klass, classList, proficientSkills, race, background, bonusLanguages, classLanguages],
   );
   const training = useMemo(() => {
     const skills = proficientSkills;
     const proficiencies = {
+      // The first class's saves only: a class taken second gives none.
       saves: klass?.saves ?? [],
       skills,
       // Expertise picks only count while still proficient in the skill.
-      expertise: expertisePicks.filter((skillId) => expertiseAllowed(skillId, skills, klass ? [klass.id] : [])),
+      expertise: expertisePicks.filter((skillId) => expertiseAllowed(skillId, skills, classList.map((entry) => entry.id))),
       // A class teaches its own secret tongue: Druidic to a druid, Thieves'
       // Cant to a rogue. Without this a druid could never speak Druidic even
       // though the feature says they do.
@@ -353,14 +420,14 @@ export function useBuilderDerived({
           ...(race?.languages ?? []),
           ...(background?.knownLanguages ?? []),
           ...bonusLanguages.filter(Boolean),
-          ...(klass?.languages ?? []),
+          ...classLanguages,
         ]),
       ],
       tools: trainedTools,
       // Races can teach combat training too: mountain dwarf armor, drow
-      // and wood elf weapons.
-      armor: [...new Set([...(klass?.armor ?? []), ...(race?.armor ?? [])])],
-      weapons: [...new Set([...(klass?.weapons ?? []), ...(race?.weapons ?? [])])],
+      // and wood elf weapons. A class taken second adds its multiclass row.
+      armor: [...new Set([...(klass?.armor ?? []), ...(race?.armor ?? []), ...grants.flatMap((grant) => grant.armor)])],
+      weapons: [...new Set([...(klass?.weapons ?? []), ...(race?.weapons ?? []), ...grants.flatMap((grant) => grant.weapons)])],
     };
     const withFeats = applyFeatGrants({
       proficiencies,
@@ -371,7 +438,7 @@ export function useBuilderDerived({
     // And the subclass's training (issue 251): a Life Domain's heavy armor,
     // a Lore bard's three skills as picked on the class step.
     return applySubclassTraining({ proficiencies: withFeats, grants: subclassTraining, choices: featChoices, strict: false }).proficiencies;
-  }, [proficientSkills, klass, race, background, expertisePicks, bonusLanguages, trainedTools, featNames, featDescOf, featChoices, subclassTraining]);
+  }, [proficientSkills, klass, classList, grants, classLanguages, race, background, expertisePicks, bonusLanguages, trainedTools, featNames, featDescOf, featChoices, subclassTraining]);
 
   // Hit points as the server will work them out (builderHp.ts): lineage,
   // feats, Draconic Resilience and the table's method. A table that rolls
@@ -389,6 +456,11 @@ export function useBuilderDerived({
       classId: klass.id,
       subclass: subclass ?? "",
       level: effectiveLevel,
+      // Each class's die for its own levels, the first class's 1st level at
+      // its maximum.
+      ...(multiclass
+        ? { split: classList.map((entry, index) => ({ ...entry, hitDie: index === 0 ? klass.hitDie : extras[index - 1].klass.hitDie })) }
+        : {}),
       con: shownAbilities.con,
       raceId: race?.id ?? null,
       feats: [
@@ -398,11 +470,61 @@ export function useBuilderDerived({
       method: rules?.hpMethod ?? null,
       stored: hpOverride !== null && storedHp ? { maxHp: hpOverride, ...storedHp } : null,
     });
-  }, [shownAbilities, klass, subclass, effectiveLevel, race, state.feats, activeAsiChoices, rules?.hpMethod, hpOverride, storedHp]);
+  }, [shownAbilities, klass, subclass, effectiveLevel, multiclass, classList, extras, race, state.feats, activeAsiChoices, rules?.hpMethod, hpOverride, storedHp]);
+
+  // The class that casts, at its own level: the first class for a single
+  // class, else the one in the list that casts (phase 1 of F9 builds one
+  // casting class; castingIndexOf). Every spell count below is its.
+  const caster = useMemo(() => {
+    if (!klass) {
+      return null;
+    }
+    const entries = [
+      { row: klass, subclass: subclass ?? "", level: primaryLevel },
+      ...extras.map((entry) => ({ row: entry.klass, subclass: entry.subclass, level: entry.level })),
+    ];
+    const index = entries.length > 1 ? castingIndexOf(entries) : 0;
+    return index >= 0 ? { klass: entries[index].row, subclass: entries[index].subclass, level: entries[index].level, index } : null;
+  }, [klass, subclass, primaryLevel, extras]);
+  const casterKlass = caster?.klass;
+  const casterSubclass = caster?.subclass ?? subclass ?? "";
+  const casterLevel = caster?.level ?? effectiveLevel;
 
   // The slots the save stores (casting.ts), so the preview and the build
-  // math table show them rather than an empty book.
-  const spellSlots = useMemo(() => builderSpellSlots(klass, subclass, effectiveLevel), [klass, subclass, effectiveLevel]);
+  // math table show them rather than an empty book. A class list shares its
+  // table as the server works it, with a warlock's pact slots apart.
+  const listSlots = useMemo(
+    () => (multiclass ? builderClassListSlots(classList, (id) => (id === klass?.id ? klass : extras.find((entry) => entry.klass.id === id)?.klass)) : null),
+    [multiclass, classList, klass, extras],
+  );
+  const spellSlots = useMemo(
+    () => listSlots?.slots ?? builderSpellSlots(klass, subclass, effectiveLevel),
+    [listSlots, klass, subclass, effectiveLevel],
+  );
+  const pactSlots = listSlots?.pact ?? null;
+
+  // What this class and subclass actually hand the character at this level.
+  // Showing them turns a blind dropdown choice into an informed one. With a
+  // class list, each class's at its own level, marked with the class that
+  // grants it (the attack riders and option slots read it).
+  const featuresByClass = useMemo(
+    () =>
+      classList.map((entry, index) => ({
+        classId: entry.id,
+        name: index === 0 ? (klass?.name ?? entry.id) : extras[index - 1].klass.name,
+        level: entry.level,
+        subclass: entry.subclass ?? "",
+        features: classFeaturesFor(entry.id, entry.subclass ?? "", entry.level),
+      })),
+    [classList, klass, extras],
+  );
+  const grantedFeatures = useMemo(
+    () =>
+      multiclass
+        ? featuresByClass.flatMap((entry) => entry.features.map((feature) => ({ ...feature, classId: entry.classId })))
+        : featuresByClass[0]?.features ?? [],
+    [multiclass, featuresByClass],
+  );
 
   const preview = useMemo(() => {
     if (!shownAbilities || !race || !klass || !background || !hp) {
@@ -410,7 +532,7 @@ export function useBuilderDerived({
     }
     const trained = training;
     // A third caster's Intelligence counts as a spellcasting ability too.
-    const castingAbility = builderCasting(klass, subclass, effectiveLevel).ability;
+    const castingAbility = builderCasting(casterKlass, casterSubclass, casterLevel).ability;
     // Resilient's save counts in what is shown; the server writes it itself,
     // so the proficiencies sent stay the class's.
     const saves = [...new Set([...klass.saves, ...(halfFeats?.saves ?? [])])];
@@ -420,7 +542,7 @@ export function useBuilderDerived({
       abilities: shownAbilities,
       level: effectiveLevel,
       class: klass.id,
-      features: classFeaturesFor(klass.id, subclass, effectiveLevel),
+      features: grantedFeatures,
       feats: [
         ...state.feats,
         ...activeAsiChoices.flatMap((choice) => (choice?.mode === "feat" ? [choice.feat] : [])),
@@ -433,7 +555,7 @@ export function useBuilderDerived({
     // Hit points are the server's to derive; `hp` is the same arithmetic,
     // shown, and the explainer reads it too.
     return { proficiencies: trained, derived, maxHp: hp.maxHp, hpMethod: hp.method, hpRange: hp.range, hpKept: hp.kept };
-  }, [shownAbilities, halfFeats, race, klass, subclass, background, training, effectiveLevel, hp, state.feats, activeAsiChoices, spellSlots]);
+  }, [shownAbilities, halfFeats, race, klass, casterKlass, casterSubclass, casterLevel, grantedFeatures, background, training, effectiveLevel, hp, state.feats, activeAsiChoices, spellSlots]);
 
   // The class's starting equipment rides along automatically (removable
   // chips): the book's list with the either-or choices the player made on
@@ -442,13 +564,25 @@ export function useBuilderDerived({
   // its armor class is its Unarmored Defense.
   const kitChoicesState = state.kitChoices;
   // The training a kit's "(if proficient)" options ask about.
+  // The kit is the first class's (the server's rule), its "(if proficient)"
+  // options read against all the training, as the server reads them.
   const kitTraining = useMemo<KitTraining>(
     () => ({
-      armor: [...(klass?.armor ?? []), ...(race?.armor ?? []), ...subclassTraining.flatMap((grant) => grant.spec.armor)],
-      weapons: [...(klass?.weapons ?? []), ...(race?.weapons ?? []), ...subclassTraining.flatMap((grant) => grant.spec.fixedWeapons)],
+      armor: [
+        ...(klass?.armor ?? []),
+        ...(race?.armor ?? []),
+        ...grants.flatMap((grant) => grant.armor),
+        ...subclassTraining.flatMap((grant) => grant.spec.armor),
+      ],
+      weapons: [
+        ...(klass?.weapons ?? []),
+        ...(race?.weapons ?? []),
+        ...grants.flatMap((grant) => grant.weapons),
+        ...subclassTraining.flatMap((grant) => grant.spec.fixedWeapons),
+      ],
       subclass,
     }),
-    [klass, race, subclass, subclassTraining],
+    [klass, race, grants, subclass, subclassTraining],
   );
   const startingKit = useMemo(
     () =>
@@ -478,14 +612,16 @@ export function useBuilderDerived({
     if (!klass) {
       return [];
     }
+    const weapons = [...new Set([...klass.weapons, ...grants.flatMap((grant) => grant.weapons)])];
+    const armorTraining = [...new Set([...klass.armor, ...grants.flatMap((grant) => grant.armor)])];
     return [
-      ...suggestWeapons(klass.weapons).map((weapon) => ({ name: weapon.name, note: weapon.damage })),
-      ...suggestArmor(klass.armor, [...(klass.genres ?? []), ...(genre ? [genre] : [])]).map((armor) => ({
+      ...suggestWeapons(weapons).map((weapon) => ({ name: weapon.name, note: weapon.damage })),
+      ...suggestArmor(armorTraining, [...(klass.genres ?? []), ...(genre ? [genre] : [])]).map((armor) => ({
         name: armor.name,
         note: armor.category === "shield" ? `+${armor.baseAc} AC` : `AC ${armor.baseAc}`,
       })),
     ];
-  }, [klass, genre]);
+  }, [klass, grants, genre]);
   const fullEquipment = useMemo(() => {
     if (keepsStoredGear) {
       return equipment;
@@ -582,12 +718,13 @@ export function useBuilderDerived({
     return acBreakdownFor({
       class: klass.id,
       level: effectiveLevel,
+      ...(multiclass ? { classes: classList } : {}),
       abilities: shownAbilities,
       proficiencies: preview.proficiencies,
       equipment: fullEquipment,
-      features: classFeaturesFor(klass.id, subclass, effectiveLevel),
+      features: grantedFeatures,
     });
-  }, [klass, preview, shownAbilities, fullEquipment, subclass, effectiveLevel]);
+  }, [klass, preview, shownAbilities, fullEquipment, grantedFeatures, multiclass, classList, effectiveLevel]);
   const ac = acInfo?.ac ?? acOverride ?? 10;
 
   // The receipt the gear step shows (src/app/characters/builder/
@@ -600,8 +737,9 @@ export function useBuilderDerived({
       ? combatRiders({
           class: klass.id,
           level: effectiveLevel,
+          ...(multiclass ? { classes: classList } : {}),
           features: [
-            ...classFeaturesFor(klass.id, subclass, effectiveLevel),
+            ...grantedFeatures,
             ...stylePicks.map((id) => ({ name: fightingStyleFeatureName(id) })),
           ],
         })
@@ -627,17 +765,11 @@ export function useBuilderDerived({
       }
     };
     return { ...purse.receipt, rows, setQty };
-  }, [purse.receipt, fullEquipment, preview, klass, subclass, effectiveLevel, stylePicks, acInfo, setEquipment, setRemovedAutoNames]);
+  }, [purse.receipt, fullEquipment, preview, klass, grantedFeatures, multiclass, classList, effectiveLevel, stylePicks, acInfo, setEquipment, setRemovedAutoNames]);
   // The purse the steps read carries the finished receipt, so the gear step
   // shows it through the purse view it already builds.
   const shownPurse = useMemo(() => ({ ...purse, receipt: gearReceipt }), [purse, gearReceipt]);
 
-  // What this class and subclass actually hand the character at this level.
-  // Showing them turns a blind dropdown choice into an informed one.
-  const grantedFeatures = useMemo(
-    () => (klass ? classFeaturesFor(klass.id, subclass, effectiveLevel) : []),
-    [klass, subclass, effectiveLevel],
-  );
   // Fighting styles the class has earned by this level. Stored on the sheet
   // as "choice"-sourced features so the level-up regrant preserves them.
   const styleSlots = useMemo(() => fightingStyleSlots(grantedFeatures), [grantedFeatures]);
@@ -648,37 +780,53 @@ export function useBuilderDerived({
   // elemental disciplines: the pick-lists that used to be feature names with
   // no way to choose them. Stored like fighting styles, as prefixed
   // "choice" features that survive level-ups.
-  const optionSlots = useMemo(
-    () =>
-      klass
-        ? openOptionSlots({
-            classId: klass.id,
-            subclass,
-            level: effectiveLevel,
-            // The class's own features too: a workshop subclass that
-            // borrowed Combat Superiority opens maneuvers by it.
-            features: [...grantedFeatures, ...optionPicks.map((optionName) => ({ name: optionName }))],
-            feats: featNames,
-          })
-        : [],
-    [klass, subclass, effectiveLevel, grantedFeatures, optionPicks, featNames],
+  // With a class list each class opens its own (a warlock taken second
+  // its invocations), and slots of one kind add up.
+  const optionSlots = useMemo(() => {
+    const features = [...grantedFeatures, ...optionPicks.map((optionName) => ({ name: optionName }))];
+    const slots = classList.flatMap((entry, index) =>
+      openOptionSlots({
+        classId: entry.id,
+        subclass: entry.subclass ?? "",
+        level: entry.level,
+        // The class's own features too: a workshop subclass that
+        // borrowed Combat Superiority opens maneuvers by it.
+        features,
+        // A feat's own picks are counted once, with the first class.
+        feats: index === 0 ? featNames : [],
+      }),
+    );
+    return slots.reduce<typeof slots>((merged, slot) => {
+      const held = merged.find((entry) => entry.kind === slot.kind);
+      if (!held) {
+        return [...merged, slot];
+      }
+      const total = held.total + slot.total;
+      return merged.map((entry) => (entry === held ? { ...held, total, remaining: Math.max(0, total - held.chosen.length) } : entry));
+    }, []);
+  }, [classList, grantedFeatures, optionPicks, featNames]);
+  // Expertise each class has earned at its own level: a rogue's two at its
+  // 1st, a bard's at its 3rd.
+  const expertiseSlots = useMemo(
+    () => classList.reduce((sum, entry) => sum + expertiseSlotsFor(entry.id, entry.level), 0),
+    [classList],
   );
 
   // Spell lists and advice go through the borrowed SRD list for catalog
   // casters (a Netrunner searches wizard spells).
   // An Eldritch Knight or Arcane Trickster searches the wizard's list
   // (src/app/characters/builder/casting.ts).
-  const casting = useMemo(() => builderCasting(klass, subclass, effectiveLevel), [klass, subclass, effectiveLevel]);
+  const casting = useMemo(() => builderCasting(casterKlass, casterSubclass, casterLevel), [casterKlass, casterSubclass, casterLevel]);
   const spellSearchClass = casting.list;
   const maxSpellLevel = casting.maxSpellLevel;
   // What the subclass adds to that list: a warlock patron's expanded spells,
   // a Divine Soul's cleric list (src/lib/srd/spell-prep.ts widerListOf).
   const spellWider = useMemo(
     () =>
-      klass && casting.casts
-        ? { spells: subclassExpandedSpellsFor(klass.id, subclass, effectiveLevel), lists: subclassSpellListsFor(klass.id, subclass) }
+      casterKlass && casting.casts
+        ? { spells: subclassExpandedSpellsFor(casterKlass.id, casterSubclass, casterLevel), lists: subclassSpellListsFor(casterKlass.id, casterSubclass) }
         : { spells: [], lists: [] },
-    [klass, subclass, effectiveLevel, casting.casts],
+    [casterKlass, casterSubclass, casterLevel, casting.casts],
   );
   // A class that casts, and has something to cast at this level. A level 1
   // paladin or ranger has a spellcasting ability and no spells, no cantrips
@@ -687,41 +835,41 @@ export function useBuilderDerived({
   const casts = casting.casts;
   const cantripAdvice = casting.cantripCap;
   const spellAdvice =
-    casts && klass && shownAbilities
-      ? builderSpellAdvice(casting, klass, subclass, effectiveLevel, shownAbilities)
+    casts && casterKlass && shownAbilities
+      ? builderSpellAdvice(casting, casterKlass, casterSubclass, casterLevel, shownAbilities)
       : null;
   // Opening suggestions, so a player who has never seen a 5e spell list is
   // not left staring at an empty search box. A third caster gets picks from
   // its own two schools, not the wizard's, which its school rule would refuse.
   const starters = useMemo(
     () =>
-      casts && klass
-        ? starterSpellsFor(casting.profile ?? klass.id)
+      casts && casterKlass
+        ? starterSpellsFor(casting.profile ?? casterKlass.id)
         : null,
-    [klass, casts, casting],
+    [casterKlass, casts, casting],
   );
   // Domain, circle, oath and patron spells: always prepared, free, and worth
   // showing at the top of the list so a cleric knows what their domain gives.
   const subclassSpells = useMemo(
-    () => (casts && klass ? subclassSpellsFor(klass.id, subclass, effectiveLevel) : []),
-    [klass, subclass, effectiveLevel, casts],
+    () => (casts && casterKlass ? subclassSpellsFor(casterKlass.id, casterSubclass, casterLevel) : []),
+    [casterKlass, casterSubclass, casterLevel, casts],
   );
   // What this class calls its spells, used in the empty-spell-list warning.
-  const castingLabel = casts && klass ? (klass.castingLabel || "spells") : "";
+  const castingLabel = casts && casterKlass ? (casterKlass.castingLabel || "spells") : "";
   // How this class holds its spells: known, prepared from the class list, or
   // (a wizard) written in a spellbook and prepared from it. A content-pack
   // class says whether it is a known caster; the rest follow the SRD.
-  const spellStyle: SpellStyle | null = !casts || !klass
+  const spellStyle: SpellStyle | null = !casts || !casterKlass
     ? null
     : casting.third
       ? "known"
-      : klass.knownCaster === true
+      : casterKlass.knownCaster === true
       ? "known"
-      : klass.knownCaster === false && spellStyleFor(klass.id) === "known"
+      : casterKlass.knownCaster === false && spellStyleFor(casterKlass.id) === "known"
         ? "prepared"
-        : spellStyleFor(klass.id);
-  // A wizard's book: six spells at 1st level, two more every level.
-  const spellbookAdvice = spellStyle === "spellbook" ? spellbookAllowance(effectiveLevel) : null;
+        : spellStyleFor(casterKlass.id);
+  // A wizard's book: six spells at 1st level, two more every wizard level.
+  const spellbookAdvice = spellStyle === "spellbook" ? spellbookAllowance(casterLevel) : null;
   // Cantrips are their own list. Levelled spells count against the class's
   // allowance except the subclass's always-prepared ones, which are free. For
   // a wizard `chosenSpells` is the book and `chosenPrepared` what is
@@ -792,6 +940,23 @@ export function useBuilderDerived({
 
   return {
     effectiveLevel,
+    // The class list (backlog F9) and what reads it: the first class's
+    // levels, the classes taken after it with their rows, and the class
+    // whose spells the spell step holds, at its own level.
+    primaryLevel,
+    classList,
+    multiclass,
+    extras,
+    // The first class's row, for the readers that walk the class list.
+    primaryRow: klass,
+    multiclassAllowed: rules?.multiclassAllowed !== false,
+    casterKlass,
+    casterSubclass,
+    casterLevel,
+    pactSlots,
+    featuresByClass,
+    expertiseSlots,
+    toolSources,
     asiSlotLevels,
     activeAsiChoices,
     asiTakenInPlay,

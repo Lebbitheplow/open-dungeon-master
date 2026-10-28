@@ -61,8 +61,9 @@ export function SpellsGearStep({
   });
   return (
     <div className="space-y-4">
+      {/* The class that casts: the first, or one taken after it (backlog F9). */}
       {klass && derived.casts ? (
-        <SpellsSection state={state} derived={derived} klass={klass} pack={pack} />
+        <SpellsSection state={state} derived={derived} klass={derived.casterKlass ?? klass} pack={pack} />
       ) : null}
       <div data-builder-target="gear">
       <EquipmentSection
@@ -179,9 +180,9 @@ export function SpellsSection({
   const offSchool = (name: string, without?: string) =>
     thirdCasterSchoolProblem({
       classId: klass.id,
-      subclass: state.subclass,
-      profile: subclassCastingProfileFor(klass.id, state.subclass),
-      level: state.level,
+      subclass: derived.casterSubclass ?? state.subclass,
+      profile: subclassCastingProfileFor(klass.id, derived.casterSubclass ?? state.subclass),
+      level: derived.casterLevel ?? state.level,
       spells: [
         ...spells.filter((entry) => !isGranted(entry) && (without === undefined || textKey(entry) !== textKey(without))),
         name,
@@ -475,7 +476,7 @@ export function SpellsSection({
   });
   const caps = capLines({
     className: klass.name,
-    level: derived.effectiveLevel,
+    level: derived.casterLevel ?? derived.effectiveLevel,
     cantripCap,
     spellbookCap: wizard ? bookCap : null,
     spellCap: spellAdvice,
