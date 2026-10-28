@@ -1,8 +1,8 @@
 // Issue 503 Phases 2 and 3: a companion leaving, where the table meets it.
 // The lead runs the Gone Table as its DM; the player's Kael travels with
 // Seren Vale, a timid paladin. Tam Hollis already walked out, so the Party
-// panel's Gone list stands: named, at a phone's width, clean under axe by
-// night and by day.
+// panel's Gone list stands: named, saying whom he still cares for (issue
+// 563), at a phone's width, clean under axe by night and by day.
 //
 // The departure: the console records an atrocity against Seren's red line,
 // and the server walks her out (never the narration). Her card leaves the
@@ -43,6 +43,9 @@ export default {
     const tam = goneList.locator(`[data-gone-entry="Tam Hollis"]`);
     await eventually(() => tam.count(), { label: "Tam under Gone" });
     check(/Walked out on the party/.test((await tam.textContent()) ?? ""), "how he went, in words");
+    // Issue 563: who he still cares for, among the party he left.
+    const cares = tam.locator("[data-gone-cares]");
+    check(/Still cares for Ilse Marrow/.test((await cares.textContent().catch(() => "")) ?? ""), "who he still cares for, in words");
     check((await goneList.getByRole("heading", { name: /Gone/ }).count()) > 0, "the list is headed for screen readers");
     const card = page.locator(`${root}[data-party-card="${table.seren}"]`).locator("visible=true").first();
     await eventually(() => card.count(), { label: "Seren's card in the party" });

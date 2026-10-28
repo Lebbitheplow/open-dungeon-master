@@ -9,7 +9,8 @@ import { enqueueDmJob } from "@/lib/dm/queue";
 import { handleCompleteBeat } from "@/lib/dm/arc";
 import { handleCastBuff } from "@/lib/dm/cast-tools";
 import { handleCheckNotice, handleGroupCheck } from "@/lib/dm/check-tools";
-import { handleAddCompanion, handleDismissCompanion } from "@/lib/dm/companion-tools";
+import { handleAddCompanion } from "@/lib/dm/companion-tools";
+import { dismissCompanion } from "@/lib/dm/companion-dismissal";
 import { applyEncounterCall, ENCOUNTER_TOOL_NAMES } from "@/lib/dm/encounter-tools";
 import { handleApplyHazard } from "@/lib/dm/hazard-tools";
 import { handleSearchLore } from "@/lib/dm/lore-search";
@@ -230,7 +231,7 @@ export async function dispatchAdjudication(
     case "add_companion":
       return handleAddCompanion(campaign, rawArguments, sheets);
     case "dismiss_companion":
-      return handleDismissCompanion(campaign, rawArguments, sheets);
+      return dismissCompanion(campaign, rawArguments, sheets, turn.actor === "ai" ? "ai" : "person");
     case "move_party":
     case "update_location": {
       const pictures =

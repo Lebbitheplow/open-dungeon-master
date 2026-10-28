@@ -520,8 +520,8 @@ export function MemoryGroup({ settings, patch }: Base) {
 // creator-free settings it lives in (issue 503).
 export const CONSCIENCE_INFO = [
   "Each lasting AI companion holds a few values from its class and alignment, some of them red lines it will not see crossed.",
-  "Deeds the party commits in front of them move a ladder the server keeps: content, uneasy, warning, ultimatum, breaking point. Their Bonds row shows where they stand and any ultimatum they set, with the time left on the campaign's clock. Making amends, or doing what they hold dear, climbs it back.",
-  "Off: companions judge by standing alone. Talk: they object, warn and set ultimatums, and stay whatever happens. Leave (the default): past their breaking point they walk out, slip away or report the party. Turn: as Leave, and they may turn on the party in a fight; a player's command over a companion ends once it warns the party.",
+  "Deeds the party commits in front of them move a ladder the server keeps: content, uneasy, warning, ultimatum, breaking point. Their Bonds row shows where they stand and any ultimatum they set, with the time left on the campaign's clock. Making amends, or doing what they hold dear, climbs it back, a rung a day at most. A character who stands by while another does it bears a little of it; one who speaks against it bears none.",
+  "Off: companions judge by standing alone. Talk: they object, warn and set ultimatums, and stay whatever happens. Leave (the default): past their breaking point they walk out, slip away or report the party. Turn: as Leave, and they may turn on the party in a fight, at their full strength whatever the table's difficulty; a player's command over a companion ends once it warns the party.",
 ].join("\n\n");
 
 export function BondsGroup({ settings, patch, lastingCompanions = false }: Base & { lastingCompanions?: boolean }) {

@@ -6,6 +6,7 @@ import type { ResolvedEnemyRequest } from "@/lib/dm/encounter-spawn";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { encounterCeiling, evaluateEncounter, type EncounterEvaluation } from "@/lib/srd/encounter-math";
 import { isWorkshop, targetPartyLevels } from "@/lib/workshop/kind";
+import { ceilingHoldsCompanion, settingOf } from "@/lib/dm/conscience-logic";
 
 // The party every difficulty number is measured against, in one place.
 //
@@ -50,8 +51,10 @@ export const MAX_COMBATANTS = 8;
 export type RosterBudget = {
   evaluation: EncounterEvaluation;
   // The adjusted XP the table's difficulty allows, and what the roster
-  // spends of it: a companion that turned on the party chose its fight, so
-  // only what the DM adds to it answers to the ceiling.
+  // spends of it. A companion that fights the party where the table chose
+  // Turn, turned on the spot or come back for it, is never held to the
+  // ceiling; only what is added beside it answers to it (conscience-logic.ts
+  // ceilingHoldsCompanion, issue 563).
   ceiling: number;
   stagedXp: number;
   tooMany: boolean;
@@ -62,10 +65,11 @@ export type RosterBudget = {
 // no more than MAX_COMBATANTS, and no more adjusted XP than the table's
 // difficulty allows. The fight itself, the prep readout and a prepared
 // fight scaled to the party all ask here.
-export function rosterBudget(campaign: Pick<Campaign, "difficulty">, partyLevels: number[], resolved: Array<Pick<ResolvedEnemyRequest, "stats" | "sheetFoe">>): RosterBudget {
+export function rosterBudget(campaign: Pick<Campaign, "difficulty" | "gameSettings">, partyLevels: number[], resolved: Array<Pick<ResolvedEnemyRequest, "stats" | "sheetFoe">>): RosterBudget {
   const evaluation = evaluateEncounter(partyLevels, resolved.map((entry) => entry.stats.cr));
   const ceiling = encounterCeiling(campaign.difficulty, evaluation.thresholds.deadly);
-  const staged = resolved.filter((entry) => entry.sheetFoe?.kind !== "turned");
+  const companionsWhole = !ceilingHoldsCompanion(settingOf(campaign.gameSettings));
+  const staged = resolved.filter((entry) => !(entry.sheetFoe?.kind === "turned" || (entry.sheetFoe?.kind === "returning" && companionsWhole)));
   const stagedXp = staged.length === resolved.length ? evaluation.adjustedXp : evaluateEncounter(partyLevels, staged.map((entry) => entry.stats.cr)).adjustedXp;
   return { evaluation, ceiling, stagedXp, tooMany: resolved.length > MAX_COMBATANTS, tooDeadly: stagedXp > ceiling };
 }

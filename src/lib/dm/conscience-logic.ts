@@ -13,7 +13,7 @@
 //     down one rung from where they stand, an atrocity against one takes
 //     them straight to the breaking point, and a deed that honours what they
 //     hold (or amends for what was done) steps them back up one, at most once
-//     an exchange.
+//     a day on the campaign's clock.
 // An ultimatum is the third rung: a condition and a deadline on the
 // campaign's clock. Climbing back above it meets it; the deadline passing
 // with the companion still there takes them to the breaking point.
@@ -25,6 +25,25 @@ import { friendshipTier } from "./relationship-logic.ts";
 import type { ConscienceSetting } from "../schemas/game-settings-options.ts";
 
 export type { ConscienceSetting };
+
+// The table's setting, from its game settings: with relationships off there
+// is no conscience to run (src/lib/dm/conscience.ts conscienceSetting).
+export function settingOf(settings: { relationships: string; companionConscience?: ConscienceSetting }): ConscienceSetting {
+  return settings.relationships === "off" ? "off" : (settings.companionConscience ?? "leave");
+}
+
+// How strong a companion that fights the party may come, one rule for every
+// road to that fight (issue 563). Where the table chose Turn, the companion
+// itself is never held to the table's difficulty ceiling, whether it turns
+// where it stands or comes back later: the table asked for companions to
+// fight it, solo or not. What the story adds beside it (the allies a return
+// brings, anything the DM stages in the same fight) always answers to the
+// ceiling. Anywhere else a companion fights the party only on its return,
+// and that return answers to the ceiling whole: worn down to fit, or a
+// standoff in words (departure-logic.ts planReturn).
+export function ceilingHoldsCompanion(setting: ConscienceSetting): boolean {
+  return setting !== "turn";
+}
 
 export const CONSCIENCE_RUNGS = ["content", "uneasy", "warning", "ultimatum", "breaking"] as const;
 export type ConscienceRung = (typeof CONSCIENCE_RUNGS)[number];
@@ -70,14 +89,21 @@ export type Conscience = {
   // The rung the table last saw, so a move is reported once.
   shown: number;
   ultimatum: Ultimatum | null;
-  // The exchange that last stepped them up: once per exchange, so one
-  // apology repeated does not walk them to content.
-  climbedTurn: string;
+  // The day of the campaign's clock (clockDay) that last stepped them up, -1
+  // for never: once a day, so amends repeated exchange after exchange do not
+  // walk them back to content in an afternoon (issue 563).
+  climbedDay: number;
   // What last moved them, for the DM's line.
   cause: string;
 };
 
-export const CONTENT: Conscience = { held: 0, shown: 0, ultimatum: null, climbedTurn: "", cause: "" };
+export const CONTENT: Conscience = { held: 0, shown: 0, ultimatum: null, climbedDay: -1, cause: "" };
+
+// The day an instant on the campaign's clock (minutes) falls on, the same
+// cut the calendar makes (src/lib/dm/calendar.ts breakDown).
+export function clockDay(instant: number): number {
+  return Math.floor(Math.max(0, instant) / (24 * 60));
+}
 
 export function rungName(index: number): ConscienceRung {
   return CONSCIENCE_RUNGS[Math.max(0, Math.min(TOP, Math.round(index)))];
@@ -102,12 +128,13 @@ export type LadderStep = "atrocity" | "breach" | "honour";
 // One deed's step. A breach steps down from where they stand now (so a
 // companion the party's standing already holds at a warning goes to an
 // ultimatum); honouring steps back up from what the deeds left, never past
-// what their standing allows, once an exchange.
+// what their standing allows, once a day of the campaign's clock (`day`,
+// clockDay of now).
 export function stepLadder(
   conscience: Conscience,
   step: LadderStep | null,
   worstApproval: number | null,
-  turnId: string,
+  day: number,
   cause: string,
 ): Conscience {
   if (!step) {
@@ -120,11 +147,11 @@ export function stepLadder(
   if (step === "breach") {
     return { ...conscience, held: Math.min(TOP, now + 1), cause };
   }
-  if (conscience.climbedTurn === turnId || conscience.held === 0) {
+  if (conscience.climbedDay === day || conscience.held === 0) {
     return conscience;
   }
   const held = Math.max(0, Math.min(conscience.held, now - 1));
-  return held === conscience.held ? conscience : { ...conscience, held, climbedTurn: turnId, cause };
+  return held === conscience.held ? conscience : { ...conscience, held, climbedDay: day, cause };
 }
 
 export type Settled = {
@@ -214,7 +241,7 @@ export function parseConscience(raw: string): Conscience {
     return CONTENT;
   }
   try {
-    const parsed = JSON.parse(raw) as Partial<Conscience> & { ultimatum?: Partial<Ultimatum> | null };
+    const parsed = JSON.parse(raw) as Partial<Omit<Conscience, "climbedDay">> & { ultimatum?: Partial<Ultimatum> | null; climbedDay?: unknown };
     const rung = (value: unknown) => Math.max(0, Math.min(TOP, Math.round(Number(value) || 0)));
     const ultimatum =
       parsed.ultimatum && typeof parsed.ultimatum.condition === "string" && Number.isFinite(Number(parsed.ultimatum.due))
@@ -229,7 +256,9 @@ export function parseConscience(raw: string): Conscience {
       held: rung(parsed.held),
       shown: rung(parsed.shown),
       ultimatum,
-      climbedTurn: typeof parsed.climbedTurn === "string" ? parsed.climbedTurn : "",
+      // A row from before issue 563 kept the exchange instead: it reads as
+      // never, so the next honouring deed climbs.
+      climbedDay: Number.isFinite(Number(parsed.climbedDay)) ? Math.max(-1, Math.round(Number(parsed.climbedDay))) : -1,
       cause: typeof parsed.cause === "string" ? parsed.cause.slice(0, 160) : "",
     };
   } catch {
@@ -271,6 +300,7 @@ export function commandEnds(setting: ConscienceSetting, rung: number): boolean {
 export function conscienceRules(setting: ConscienceSetting, companions: boolean, deeds: readonly string[]): string {
   const lines = [
     `Deeds (${deeds.join(", ")}): record one with relationship_beat the moment a character commits it, in a fight too (deeds are the only beats offered mid-fight). Name the subject and every other tracked NPC or companion who saw it or will hear of it in witnesses, and say how grave in severity (minor, serious, atrocity). Each witness takes it by their own nature and what they hold to. amends records a character making up for what they did.`,
+    "Other player characters present when a deed is done: put those who stood by in witnesses (each bears a smaller share of what it costs) and those who spoke against it or tried to stop it in objected (they bear none). No NPC or companion knows anyone's alignment; a sheet's Alignment is its player's own note. They judge what they see done and hear of.",
   ];
   if (setting !== "off" && companions) {
     lines.push(
@@ -281,6 +311,11 @@ export function conscienceRules(setting: ConscienceSetting, companions: boolean,
         ? "This table keeps its companions: none leaves over what the party does, whatever their rung. Never dismiss_companion one over it."
         : "Whether a companion leaves is the server's: at its breaking point it walks out, slips away, reports the party or turns on it, and a result or GAME STATE says so. Narrate exactly that; never dismiss_companion one over conscience or standing. One who left may come back, and GAME STATE says how.",
     );
+    if (setting !== "talk") {
+      lines.push(
+        "A companion's chance to slip away comes only through the tools: a rest is take_rest and the party splitting up is move_party naming who goes (characterIds), never narration alone.",
+      );
+    }
   }
   return lines.map((line) => `- ${line}`).join("\n");
 }

@@ -78,8 +78,10 @@ export function turnOnTheSpot(campaign: Campaign, companion: CharacterSheet, res
       return null;
     }
   } else {
-    // A fight of its own: the companion alone against the party, by its own
-    // choice, so the table's ceiling does not refuse it.
+    // A fight of its own: the companion alone against the party, at a table
+    // that chose Turn, so the table's ceiling does not hold it back
+    // (conscience-logic.ts ceilingHoldsCompanion, the rule its return
+    // follows too).
     const started = fightStarter ? fightStarter(campaign, companion.name, `${companion.name} turns on the party`) : null;
     if (!started || "error" in started) {
       saveDeparture(npc.id, before);

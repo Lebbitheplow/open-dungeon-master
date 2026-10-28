@@ -1098,13 +1098,17 @@ for (const viewport of ["desktop", "phone"]) {
 // scenario walks a companion out), run by the lead as its DM. The player's
 // Kael travels with Seren Vale, a timid paladin who walks out at a red-line
 // atrocity; Tam Hollis, a timid fighter, already walked out earlier, so the
-// Gone list stands before the scenario moves anyone.
+// Gone list stands before the scenario moves anyone. Ilse Marrow, another
+// player's character, was close to Tam, and the Gone list says he still
+// cares for her (issue 563).
 const GONE_TITLE = "Gone Table";
 const gone = {};
 {
   const { invokeEngine } = await import("../../src/lib/dm/invoke.ts");
   const { companionNpcFor } = await import("../../src/lib/db/companion-npcs.ts");
   const { patchNpcAgency } = await import("../../src/lib/db/npcs.ts");
+  const goneBonds = await import("../../src/lib/db/relationships.ts");
+  const friend = world.addUser("friend");
   for (const viewport of ["desktop", "phone"]) {
     const table = campaigns.createCampaign(world.owner.id, {
       title: `${GONE_TITLE} (${viewport})`,
@@ -1128,6 +1132,10 @@ const gone = {};
     };
     const tam = companion("Tam Hollis", "fighter", "LG");
     const seren = companion("Seren Vale", "paladin", "LG");
+    campaigns.joinByInviteCode(friend.id, campaigns.getCampaignById(table.id).inviteCode);
+    const ilse = sheets.createSheet(table.id, friend.id, 3, heroInput({ name: "Ilse Marrow", class: "cleric", level: 3 }));
+    const close = goneBonds.ensureRelationship({ campaignId: table.id, characterId: ilse.id, characterName: ilse.name, subjectKind: "companion", subjectName: tam.name });
+    goneBonds.patchRelationship(close.id, { approval: 70 });
     const left = await invokeEngine(campaigns.getCampaignById(table.id), { kind: "human", userId: world.owner.id }, {
       name: "relationship_beat",
       args: { characterId: kael.id, subject: tam.name, beat: "slaving", severity: "atrocity", note: "Kael sold the captives to the slaver's barge." },

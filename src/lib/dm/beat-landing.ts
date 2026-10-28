@@ -1,5 +1,4 @@
-import type { Campaign } from "@/lib/db/campaigns";
-import type { DmTurn } from "@/lib/db/dm-turns";
+import { getCampaignById, type Campaign } from "@/lib/db/campaigns";
 import { companionConscience, companionValues, saveConscience } from "@/lib/db/companion-conscience";
 import { listActiveFacts, setFactStatus } from "@/lib/db/facts";
 import { normalizeSubject } from "@/lib/dm/fact-logic";
@@ -7,9 +6,9 @@ import { getSheetById, listSheets } from "@/lib/db/sheets";
 import { patchRelationship, type Relationship } from "@/lib/db/relationships";
 import { conscienceOn, settleCompanion, worstApproval, type ConscienceMove } from "@/lib/dm/conscience";
 import { departureNote, settleBreakingPoint, type DepartureOutcome } from "@/lib/dm/departure";
-import { RUNG_WORD, stepLadder, type LadderStep } from "@/lib/dm/conscience-logic";
+import { clockDay, RUNG_WORD, stepLadder, type LadderStep } from "@/lib/dm/conscience-logic";
 import { deedVerdict, SEVERITY_FACTOR, type DeedSeverity, type DeedVerdict } from "@/lib/dm/companion-values-logic";
-import type { Subject } from "@/lib/dm/relationship-subject";
+import { openLedger, type Subject } from "@/lib/dm/relationship-subject";
 import { actAfterBeat, actFaceValue, actRunning, outwardApproval } from "@/lib/dm/scheme-logic";
 import {
   addFlag,
@@ -18,7 +17,10 @@ import {
   beatAlignment,
   beatDelta,
   beatSpec,
+  bystanderShare,
   demoteRomance,
+  friendshipTier,
+  TIER_LABEL,
   type BeatOutcome,
   type RelationshipBeat,
 } from "@/lib/dm/relationship-logic";
@@ -67,6 +69,9 @@ const CAUSE: Partial<Record<RelationshipBeat, string>> = {
   necromancy: "necromancy",
   desecration: "desecration",
   slaving: "slaving",
+  laid_to_rest: "the dead laid to rest",
+  freed_captives: "captives set free",
+  upheld_law: "a wrongdoer handed to the law",
   kept_word: "a word kept",
   defended: "standing up for someone",
   greed: "profit taken",
@@ -89,7 +94,6 @@ function liveCompanion(subject: Subject): CharacterSheet | null {
 
 export function landBeat(
   campaign: Campaign,
-  turn: Pick<DmTurn, "id">,
   sheet: CharacterSheet,
   subject: Subject,
   relationship: Relationship,
@@ -139,7 +143,8 @@ export function landBeat(
   let departure: DepartureOutcome | null = null;
   if (companion && subject.npc) {
     const step: LadderStep | null = beat === "amends" ? "honour" : (values?.ladder ?? null);
-    const next = stepLadder(companionConscience(subject.npc.id), step, worstBefore, turn.id, causeOf(beat, sheet.name));
+    const day = clockDay((getCampaignById(campaign.id) ?? campaign).clock.instant);
+    const next = stepLadder(companionConscience(subject.npc.id), step, worstBefore, day, causeOf(beat, sheet.name));
     saveConscience(subject.npc.id, next);
     conscience = settleCompanion(campaign, companion, next, deed ? { demand: deed.demand, hours: deed.hours } : {}, listSheets(campaign.id));
     // At the breaking point the server decides what they do, now (issue 503
@@ -147,6 +152,39 @@ export function landBeat(
     departure = settleBreakingPoint(campaign, getSheetById(companion.id) ?? companion);
   }
   return { subject, before: relationship, updated, delta, alignment, values, conscience, departure };
+}
+
+// The other player characters who stood by while a deed was done (issue
+// 563): each bears a smaller share of what it cost with everyone who saw it
+// (relationship-logic.ts bystanderShare), on their own bond with that person.
+// One who spoke against it or tried to stop it is not a bystander and bears
+// none; the caller leaves them out. A deed that won regard shares none of it:
+// standing by is no credit. Returns the table's words for each share.
+export function landBystanders(campaign: Campaign, landings: readonly Landing[], bystanders: readonly CharacterSheet[]): string[] {
+  const lines: string[] = [];
+  for (const sheet of bystanders) {
+    const moved: string[] = [];
+    for (const landing of landings) {
+      const share = bystanderShare(landing.delta);
+      if (!share) {
+        continue;
+      }
+      const ledger = openLedger(campaign, sheet, landing.subject);
+      if (ledger.status === "ended") {
+        continue;
+      }
+      const approval = applyApproval(ledger.approval, share);
+      // An act an NPC keeps up shows the same warmth (scheme-logic.ts), so the
+      // romance it carries holds by that, as landBeat's does.
+      const running = actRunning(ledger.pretense) ? ledger.pretense : null;
+      const updated = patchRelationship(ledger.id, { approval, romance: demoteRomance(ledger.romance, running ? running.shown : approval) }) ?? ledger;
+      moved.push(`${landing.subject.name} (${TIER_LABEL[friendshipTier(updated.approval)]})`);
+    }
+    if (moved.length) {
+      lines.push(`${sheet.name} stood by and bears a share of it with ${moved.join(", ")}.`);
+    }
+  }
+  return lines;
 }
 
 // A deed recorded settles the note the outcome check left when the
