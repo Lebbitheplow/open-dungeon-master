@@ -115,6 +115,10 @@ test("forced colours mark every state without colour, and the switch draws its k
   const globals = read("src/app/globals.css");
   const kit = globals.slice(globals.indexOf("@media (forced-colors: active)"));
   assert.match(kit, /\.kit-switch\[aria-checked="true"\] \.kit-switch-knob \{[^}]*Highlight/, "the switch's knob shows on");
+  // The day theme's knob rules weigh html[data-theme="light"]; :root alone
+  // never outranked them.
+  assert.match(kit, /html\[data-theme="light"\] \.kit-switch \.kit-switch-knob \{[^}]*ButtonText/, "the day theme's knob is drawn too");
+  assert.match(kit, /html\[data-theme="light"\] \.kit-switch\[aria-checked="true"\] \.kit-switch-knob \{[^}]*Highlight/, "and shows on");
   assert.match(kit, /\.kit-switch:focus-visible \{[^}]*outline/, "and its focus");
 });
 
