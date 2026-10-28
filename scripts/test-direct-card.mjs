@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { openWorld } from "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
 import { combatKit, TRAINED } from "./lib/enforce-combat.mjs";
-import { fakeModel, reply } from "./lib/enforce-narrator.mjs";
+import { call, fakeModel, reply } from "./lib/enforce-narrator.mjs";
 
 const { test, finish } = suite("test-direct-card");
 const world = await openWorld({ gameSettings: { ttsEnabled: false } });
@@ -82,6 +82,37 @@ await test("A spell card is left to the model: its choices are its own.", async 
     intent: { card: "spell", spell: "Fire Bolt", slotLevel: null, targetKind: "enemy", targetId: enemy.id },
   });
   assert.equal(toolCalls(model.requests[0]).length, 0);
+});
+
+// Issue 570: matching the tool's name was enough, so a use_spell_slot passed
+// for an attack-roll spell the engine never rolled.
+const corrected = () => model.requests.some((request) => request.messages.some((message) => message.role === "user" && /nothing resolved it/.test(String(message.content))));
+
+await test("A spell card answered only by spending a slot is sent back to the spell's tool once.", async () => {
+  const enemy = await stage();
+  model.script([
+    reply({ calls: [call("use_spell_slot", { characterId: kara.id, spell: "Fire Bolt" })] }),
+    reply({ text: "Kara mutters a word." }),
+    reply({ text: "The bolt goes wide." }),
+  ]);
+  await model.turn(world, "Kara casts Fire Bolt at the dummy.", kara.id, kara.userId, {
+    intent: { card: "spell", spell: "Fire Bolt", slotLevel: null, targetKind: "enemy", targetId: enemy.id, targetName: enemy.displayName },
+  });
+  assert.ok(corrected(), "the corrective call was made");
+  const correction = model.requests.flatMap((request) => request.messages).find((message) => /nothing resolved it/.test(String(message.content)));
+  assert.match(String(correction.content), /use_spell_slot does not cast it/);
+});
+
+await test("A spell card the spell's own tool answered, for the card's caster and target, is not sent back.", async () => {
+  const enemy = await stage();
+  model.script([
+    reply({ calls: [call("pc_attack", { characterId: kara.id, targetEnemyId: enemy.id, spell: "Fire Bolt" })] }),
+    reply({ text: "Kara mutters a word." }),
+  ]);
+  await model.turn(world, "Kara casts Fire Bolt at the dummy.", kara.id, kara.userId, {
+    intent: { card: "spell", spell: "Fire Bolt", slotLevel: null, targetKind: "enemy", targetId: enemy.id, targetName: enemy.displayName },
+  });
+  assert.equal(corrected(), false);
 });
 
 await test("Out of a fight an attack card is not resolved ahead of the model.", async () => {
