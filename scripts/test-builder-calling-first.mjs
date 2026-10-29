@@ -1,9 +1,10 @@
 // Backlog F4: the builder asks how you want to play first and the name
 // last. The class step leads with the playstyle question, "Help me build",
-// the setting's notices and the level; the background sits beside the
-// ancestry with every open tool grant; the name, gender, alignment, looks
-// and story are the last step before the summary, and nothing before it
-// waits on a name. A draft kept on the device under the old order resumes
+// the setting's notices, the gender the cards' art follows
+// (scripts/test-builder-gender-first.mjs) and the level; the background
+// sits beside the ancestry with every open tool grant; the name, alignment,
+// looks and story are the last step before the summary, and nothing before
+// it waits on a name. A draft kept on the device under the old order resumes
 // on the same step, not a shifted one. The clicks are walked in
 // scripts/browser/scenarios (builder-draft, builder-jump-ahead and others).
 import assert from "node:assert/strict";
@@ -92,13 +93,13 @@ await test("nothing before the identity step needs a name", () => {
   assert.match(builder, /title=\{state\.name\.trim\(\) \|\| "Your hero"\}/);
 });
 
-await test("the name, gender, alignment, looks and story are the last step before the summary", () => {
+await test("the name, alignment, looks and story are the last step before the summary", () => {
   const identity = stepOf("identity");
   assert.match(identity, /label: "Hero",\n\s+title: "Name your hero and tell their story",/);
   assert.match(identity, /alignmentGroups=\{pickers\.alignmentGroups\}/);
   assert.match(identity, /onUploadPortrait=\{\(\) => setCropping\(true\)\}/);
   const step = read("src/app/characters/builder/steps/IdentityStep.tsx");
-  for (const field of ['aria-label="Name"', 'label="Gender"', "<AttractionPicker", '<span id={alignmentId}>Alignment</span>', '<Field label="Appearance"', 'aria-label="Backstory"']) {
+  for (const field of ['aria-label="Name"', "<AttractionPicker", '<span id={alignmentId}>Alignment</span>', '<Field label="Appearance"', 'aria-label="Backstory"']) {
     assert.ok(step.includes(field), `the identity step holds ${field}`);
   }
   // Who plays them changes nothing earlier, so the toggle stays on Finish.

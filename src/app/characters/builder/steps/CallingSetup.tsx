@@ -3,15 +3,17 @@
 import { useEffect, useState } from "react";
 import { UnofficialPackNotice } from "@/components/UnofficialPackNotice";
 import { Select } from "@/components/ui/Select";
+import { GENDERS, type Gender } from "@/lib/gender";
 import type { WorldPack } from "@/lib/worlds/types";
 import type { BuilderState } from "../useBuilderState";
 import { Field } from "./shared";
 
 // What the first step says and asks before the class (backlog F4): the
 // setting notices, so the first thing a player sees under a world pack is
-// whose words they are about to choose from, and the level, which decides
-// what every later step offers (features, subclass, spells, improvements),
-// so it is set before any of them.
+// whose words they are about to choose from, the gender, which every card's
+// art follows, and the level, which decides what every later step offers
+// (features, subclass, spells, improvements), so it is set before any of
+// them.
 
 export function ContentNotices({ pack, packInstalled }: { pack: WorldPack | null; packInstalled: boolean }) {
   // The install command is for whoever runs the server. A player can do
@@ -106,6 +108,33 @@ export function LevelField({
           ) : null}
         </>
       )}
+    </Field>
+  );
+}
+
+// The gender, asked above the class cards because their art follows it, as
+// the ancestry cards' does after them. Asked with the name on the last step,
+// it left every card before it in a look the player had not chosen. It has
+// no default: a default would be saved to the sheet and steer the GM's
+// pronouns for a choice nobody made. Until it is chosen the cards show a mix
+// of looks (lineage.ts previewGender), and nothing of that mix is saved.
+export function GenderField({ state, className }: { state: BuilderState; className?: string }) {
+  return (
+    <Field label="Gender" className={className} anchor="gender">
+      <div className="sm:max-w-xs">
+        <Select<Gender>
+          value={state.gender}
+          onChange={state.setGender}
+          label="Gender"
+          className="w-full"
+          options={[{ value: "", label: "Not chosen" }, ...GENDERS.map((value) => ({ value, label: value }))]}
+        />
+      </div>
+      <span className="mt-1 block text-xs text-stone-500">
+        {state.gender
+          ? "The cards show your choice, and the GM uses it for pronouns."
+          : "Optional. The cards show a mix of looks until you choose."}
+      </span>
     </Field>
   );
 }
