@@ -28,6 +28,14 @@ export function hoardGoldDice(tier: TreasureTier): { dice: string; mult: number 
   return HOARD_GP[tier];
 }
 
+// The gold roll as the table sees it: one foe's pocket takes its tenth off
+// the multiplier, so the card's label names the sum that is paid.
+export function treasureGoldRoll(tier: TreasureTier, individual: boolean): { dice: string; mult: number; label: string } {
+  const { dice, mult: hoardMult } = HOARD_GP[tier];
+  const mult = individual ? hoardMult / 10 : hoardMult;
+  return { dice, mult, label: mult === 1 ? `Treasure: gold (${dice})` : `Treasure: gold (${dice} × ${mult})` };
+}
+
 // How many magic items a hoard of this tier tends to carry (a hint for the
 // model's grant_item calls, not a hard rule).
 const HOARD_ITEMS: Record<TreasureTier, number> = { 1: 0, 2: 1, 3: 2, 4: 3 };
