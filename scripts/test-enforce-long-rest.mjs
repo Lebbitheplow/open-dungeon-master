@@ -341,9 +341,13 @@ await test("the rest goes ahead for those who can take it, and the others are na
   assert.deepEqual(woken.conditions, ["prone"]);
   assert.equal(woken.resources.second_wind.used, 1);
   assert.equal(table.campaign().clock.longRests[stable.id], undefined);
-  // The dying are not helped by time.
-  assert.equal(table.sheet(dying.id).currentHp, 0);
-  assert.deepEqual(table.sheet(dying.id).deathSaves, DYING);
+  // The dying gain nothing from the rest, but eight hours settle their
+  // death saves, one every six seconds (src/lib/dm/death.ts settleDying):
+  // stable, dead, or up at 1 hit point from a natural 20.
+  const fell = table.sheet(dying.id);
+  assert.ok(fell.currentHp <= 1, `a dying character gained ${fell.currentHp} hit points from the rest`);
+  assert.ok(fell.deathSaves === null || fell.deathSaves.stable || fell.deathSaves.dead, JSON.stringify(fell.deathSaves));
+  assert.equal(table.campaign().clock.longRests?.[dying.id], undefined);
 });
 
 await test("a long rest nobody can gain from still happens: the hours pass, a stable creature wakes, and nobody is restored", async () => {
