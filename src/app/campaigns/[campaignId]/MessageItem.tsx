@@ -27,6 +27,7 @@ import type { CastMember } from "@/lib/dm/cast";
 import type { CampaignMessage } from "@/lib/db/messages";
 import type { StoredRoll } from "@/lib/db/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import type { TranscriptSheet } from "@/app/campaigns/[campaignId]/departing";
 import { HaltedTurnBanner } from "@/app/campaigns/[campaignId]/HaltedTurnBanner";
 import { InlineMessageEditor } from "@/app/campaigns/[campaignId]/InlineMessageEditor";
 import { DmContent, MediaPlaceholder } from "@/app/campaigns/[campaignId]/MessageContent";
@@ -102,7 +103,7 @@ export const MessageItem = memo(function MessageItem({
   // Whoever runs the story may put a picture of their own under a passage.
   canIllustrate: boolean;
   rollsById: Map<string, StoredRoll>;
-  sheetsById: Map<string, CharacterSheet>;
+  sheetsById: ReadonlyMap<string, TranscriptSheet>;
   membersById: Map<string, CampaignMember>;
   locationsById: Map<string, CampaignLocation>;
   sheets: CharacterSheet[];

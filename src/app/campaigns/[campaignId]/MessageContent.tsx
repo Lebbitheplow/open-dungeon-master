@@ -10,7 +10,7 @@ import { SpeechLine } from "@/app/campaigns/[campaignId]/SpeechLine";
 import { Prose } from "@/app/campaigns/[campaignId]/Prose";
 import { RollCard } from "@/app/campaigns/[campaignId]/RollCard";
 import type { StoredRoll } from "@/lib/db/rolls";
-import type { CharacterSheet } from "@/lib/schemas/sheet";
+import type { TranscriptSheet } from "@/app/campaigns/[campaignId]/departing";
 import type { MediaStatus } from "@/app/campaigns/[campaignId]/useCampaignStream";
 
 // What a DM passage is made of: the prose (with its inline roll cards and
@@ -74,7 +74,7 @@ const ROLL_MARKER = /\[roll:([0-9a-f-]{36})\]/g;
 export function DmContent({ content, rollsById, sheetsById, cast = [], lines, speaker }: {
   content: string;
   rollsById: Map<string, StoredRoll>;
-  sheetsById: Map<string, CharacterSheet>;
+  sheetsById: ReadonlyMap<string, TranscriptSheet>;
   // The cast, for the faces of the people who speak
   // (docs/vtt-parity-implementation-plan.md 8.1).
   cast?: CastMember[];

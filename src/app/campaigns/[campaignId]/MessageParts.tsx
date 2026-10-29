@@ -13,6 +13,7 @@ import { playerFaces } from "@/lib/speaker-faces";
 import { JOIN_NOTE_PREFIX, LEAD_NOTE_PREFIX, systemNoteWords, type CampaignMember } from "@/lib/campaign-types";
 import type { CampaignMessage } from "@/lib/db/messages";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import type { TranscriptSheet } from "@/app/campaigns/[campaignId]/departing";
 import {
   MessageActions,
   toContextItems,
@@ -143,15 +144,20 @@ export function PlayerMessage({
   message: CampaignMessage;
   mine: boolean;
   sheets: CharacterSheet[];
-  sheetsById: Map<string, CharacterSheet>;
+  sheetsById: ReadonlyMap<string, TranscriptSheet>;
   membersById: Map<string, CampaignMember>;
   onReport?: (message: CampaignMessage) => void;
 }) {
   // Older messages predate characterId, so fall back to the author's
-  // sheet in this campaign before giving up on a character identity.
-  const sheet =
-    (message.characterId ? sheetsById.get(message.characterId) : undefined) ??
-    (message.userId ? sheets.find((candidate) => candidate.userId === message.userId) : undefined);
+  // sheet in this campaign before giving up on a character identity. A line
+  // that names its character never borrows the author's: a card the player
+  // played for a companion who has since left read as the player's own
+  // (0.31.1 playtest).
+  const sheet: TranscriptSheet | undefined = message.characterId
+    ? sheetsById.get(message.characterId)
+    : message.userId
+      ? sheets.find((candidate) => candidate.userId === message.userId)
+      : undefined;
   // Character portrait first, then the player's own avatar, then a stand-in
   // (playerFaces); one that fails to load gives way to the next.
   const [portraitUrl, onFaceError] = useFaceChain(

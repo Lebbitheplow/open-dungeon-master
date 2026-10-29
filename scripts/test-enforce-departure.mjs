@@ -83,7 +83,7 @@ async function get(world, user, route, query = "") {
 const lastLine = (world) => messages.listRecentMessages(world.campaignId, 4).map((message) => message.content).join("\n");
 
 await test("a red-line atrocity walks a timid companion out at once at a Leave table, and her sheet is kept", async () => {
-  const { world, row, atrocity, departure, still } = await table({ axes: { boldness: -2 } });
+  const { world, row, atrocity, departure, still, sheet } = await table({ axes: { boldness: -2 } });
   const done = await atrocity();
   assert.equal(done.ok, true, done.error);
   assert.equal(done.result.departed, "Walked out on the party");
@@ -97,6 +97,8 @@ await test("a red-line atrocity walks a timid companion out at once at a Leave t
   const gone = await get(world, world.owner, "campaigns/[campaignId]/companions/gone");
   assert.equal(gone.status, 200);
   assert.deepEqual(gone.body.gone.map((entry) => [entry.name, entry.how]), [["Seren", "Walked out on the party"]]);
+  // The sheet she had in the party: the story log keeps her lines hers.
+  assert.equal(gone.body.gone[0].sheetId, sheet.id);
 });
 
 await test("a composed companion holds a plan, says nothing of it, and slips away at the night watch", async () => {
