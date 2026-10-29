@@ -1983,7 +1983,7 @@
     "lib/placeholders.ts#re-word": [["key",1,"SRD race, class and genre ids, plate ids and the builder's gender choices"]],
     "lib/placeholders.ts#str-eq": [["key",4,"SRD race, class and genre ids, plate ids and the builder's gender choices"]],
     "lib/placeholders.ts#str-key": [["key",5,"SRD race, class and genre ids, plate ids and the builder's gender choices"],["english-source",1,"SRD monster names and slugs: art reference rows, matched as whole names"]],
-    "lib/placeholders.ts#str-list": [["key",15,"SRD race, class and genre ids, plate ids and the builder's gender choices"],["english-source",26,"genre bestiary monster names: art reference rows, matched as whole names"]],
+    "lib/placeholders.ts#str-list": [["key",16,"SRD race, class and genre ids, plate ids and the builder's gender choices"],["english-source",26,"genre bestiary monster names: art reference rows, matched as whole names"]],
     "lib/placeholders.ts#toLowerCase": [["key",8,"race, class, genre, role and room ids; file name; race, class, genre, role and room ids; file name; race, class, genre, role and room ids; file name; race, class, genre, role and room ids; file name; race, class, genre, role and room ids; file name; race, class, genre, role and room ids; file name; race, class, genre, role and room ids; file name; race, class, genre, role and room ids; file name"]],
     "lib/portal.ts#[a-z]": [["key",1,"HTTP header names, token format"]],
     "lib/portal.ts#str-list": [["key",1,"HTTP header names (protocol)"]],
