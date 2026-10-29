@@ -1,5 +1,6 @@
 // Pure 5e death-save bookkeeping, database-free like mutation-math.ts so
 // scripts/test-death-logic.mjs can exercise every branch.
+import { textKey } from "@/lib/language/text-logic";
 
 export type DeathTrack = {
   successes: number;
@@ -98,7 +99,7 @@ export function dyingLeftAlone<T extends { currentHp: number; deathSaves?: Death
     (sheet) =>
       sheet.currentHp > 0 &&
       !sheet.deathSaves?.dead &&
-      !sheet.conditions.some((entry) => entry.toLowerCase() === "unconscious"),
+      !sheet.conditions.some((entry) => textKey(entry) === textKey("unconscious")),
   );
   return standing ? [] : party.filter((sheet) => isDying(sheet));
 }
