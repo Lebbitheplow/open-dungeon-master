@@ -271,6 +271,20 @@ async function textSizes(page) {
 // Forced colours: the chosen card and the current step keep a mark that is
 // not a colour the theme chose.
 async function forcedMarks(page) {
+  // The step diamonds ease their colours over 500ms (creator.css): read them
+  // once the change to forced colours has settled, or a reading taken on the
+  // way can match a later step's. Transitions only: the ping pulses forever.
+  await page.evaluate(() =>
+    Promise.race([
+      Promise.all(
+        document
+          .getAnimations()
+          .filter((animation) => "transitionProperty" in animation && animation.effect?.target?.closest?.(".diamond-step"))
+          .map((animation) => animation.finished.catch(() => null)),
+      ),
+      new Promise((resolve) => setTimeout(resolve, 3_000)),
+    ]),
+  );
   const marks = await page.evaluate(() => {
     const chosen = document.querySelector("[data-builder-root] section[data-active] .creator-card[aria-pressed='true']");
     const current = document.querySelector("[data-builder-root] .diamond-step[data-state='current'] .diamond-core");
