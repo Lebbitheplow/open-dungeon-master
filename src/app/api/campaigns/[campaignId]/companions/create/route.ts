@@ -9,6 +9,7 @@ import { finalizeNewCompanion, lastingCompanionProblem } from "@/lib/dm/companio
 import { requestDmTurn } from "@/lib/dm/loop";
 import { admitSheet, refusal } from "@/lib/characters/admit";
 import { olderBuilderOf } from "@/lib/srd/legality/older-builder";
+import { multiclassEntryProblem } from "@/lib/srd/sheet-legality";
 import { createSheetSchema } from "@/lib/schemas/sheet";
 import { publishWithSeq } from "@/lib/events";
 import { classWords, raceWords } from "@/lib/sheet-words";
@@ -101,10 +102,15 @@ export async function POST(
   }
   let admitted;
   if ("libraryCharacterId" in parsed.data && from) {
+    const adapted = adaptSheetToLevel(from.sheet, from.level, level);
+    const split = multiclassEntryProblem(from.name, adapted.classes, campaign.gameSettings?.multiclassingEnabled !== false);
+    if (split) {
+      return refusal([split]);
+    }
     admitted = admitSheet({
       door: "stored",
       level,
-      sheet: adaptSheetToLevel(from.sheet, from.level, level),
+      sheet: adapted,
       userId: context.user.id,
       campaign,
     });

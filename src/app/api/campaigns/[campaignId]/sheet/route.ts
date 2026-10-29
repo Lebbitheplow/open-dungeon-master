@@ -16,6 +16,7 @@ import { announceMidGameJoin } from "@/lib/characters/mid-game-join";
 import { listMembers, setMemberReady } from "@/lib/db/campaigns";
 import { pregenSeatRefusal, recordPregenSeat } from "@/lib/db/pregen-offers";
 import {
+  admitLibraryCharacter,
   companionRoleRefusal,
   createCharacter,
   getCharacterForUser,
@@ -409,11 +410,14 @@ export async function PUT(
       return Response.json({ error: "Could not update the character." }, { status: 400 });
     }
     deleteSheetById(campaignId, context.user.id, replaced.id);
+    // The seat's classes stand at a table that turned multiclassing off
+    // after it sat down (multiclassEntryProblem).
     const result = instantiateIntoCampaign(
       character.id,
       campaignId,
       context.user.id,
       context.campaign.startingLevel,
+      (entry, table, user, level) => admitLibraryCharacter(entry, table, user, level, replaced.classes ?? []),
     );
     if ("error" in result) {
       publishPersisted(campaignId, "sheet_deleted", {

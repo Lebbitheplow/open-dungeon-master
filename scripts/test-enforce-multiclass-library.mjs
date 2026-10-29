@@ -34,6 +34,7 @@ const { world, send, hero, adopt, now, levelInto } = table;
 const characters = await import("../src/lib/db/characters.ts");
 const campaigns = await import("../src/lib/db/campaigns.ts");
 const sheetsDb = await import("../src/lib/db/sheets.ts");
+const { multiclassEntryProblem } = await import("../src/lib/srd/sheet-legality.ts");
 
 const all13 = scores({ str: 13, dex: 13, con: 10, int: 13, wis: 13, cha: 13 });
 const fighterTraining = {
@@ -248,40 +249,63 @@ await test("a table that turns multiclassing off makes one class", async () => {
 
 // A level 3 table that turns multiclassing off, and the owner's split
 // fighter 2 / rogue 1 kept in the library, for the cases below.
-function tableWithout() {
+function tableWithout(gameSettings = { multiclassingEnabled: false }) {
   return campaigns.createCampaign(world.owner.id, {
     title: "One Path", description: "", theme: "high-fantasy", maxPlayers: 6,
-    startingLevel: 3, difficulty: "normal", gameSettings: { multiclassingEnabled: false },
+    startingLevel: 3, difficulty: "normal", gameSettings,
   });
 }
 const splitInLibrary = () => characters.createCharacter(world.owner.id, 3, splitInput());
-const KEEPS_NOTE = "This table turns multiclassing off. Your character keeps the classes it has, but can't take a new class here.";
+// A table where the split sat down while multiclassing was allowed, then
+// the GM turned it off: the seat keeps the classes it holds.
+async function seatedThenTurnedOff(stored) {
+  const table = tableWithout({});
+  const joined = await send("sheet", "POST", { libraryCharacterId: stored.id }, { campaignId: table.id });
+  assert.equal(joined.status, 201, joined.error);
+  assert.deepEqual(classLevels(joined.sheet), [["fighter", 2], ["rogue", 1]]);
+  campaigns.updateGameSettings(table.id, { multiclassingEnabled: false });
+  return table;
+}
+const REFUSED = /holds levels in more than one class, and this table turns multiclassing off\. Bring a character with one class, or build one here\./;
 
-await test("a split hero joining a table without multiclassing is told it keeps its classes", async () => {
+await test("a split hero is not let in at a table that turns multiclassing off", async () => {
+  // SRD 5.1: multiclassing is an optional rule the table decides on.
   const off = tableWithout();
   const stored = splitInLibrary();
   const out = await send("preview", "POST", { libraryCharacterId: stored.id }, { campaignId: off.id });
   assert.equal(out.status, 200, out.error);
-  assert.equal(out.body.preview.ok, true, JSON.stringify(out.body.preview.problems));
-  assert.deepEqual(out.body.preview.notes, [KEEPS_NOTE]);
-  // At a table that allows it, nothing to say.
-  const on = campaigns.createCampaign(world.owner.id, {
-    title: "Two Paths", description: "", theme: "high-fantasy", maxPlayers: 6,
-    startingLevel: 3, difficulty: "normal", gameSettings: {},
-  });
+  assert.equal(out.body.preview.ok, false, "the confirm sheet let the split in");
+  assert.match(JSON.stringify(out.body.preview.problems), REFUSED);
+  const joined = await send("sheet", "POST", { libraryCharacterId: stored.id }, { campaignId: off.id });
+  assert.ok(joined.status >= 400, `the split took a seat: ${JSON.stringify(joined.sheet && classLevels(joined.sheet))}`);
+  assert.match(JSON.stringify(joined.body), REFUSED);
+  // At a table that allows it, the same hero comes in.
+  const on = tableWithout({});
   const there = await send("preview", "POST", { libraryCharacterId: stored.id }, { campaignId: on.id });
-  assert.equal(there.body.preview.notes, undefined);
-  // A single-class hero at the table without it is told nothing either.
+  assert.equal(there.body.preview.ok, true, JSON.stringify(there.body.preview.problems));
+  // A single-class hero comes in at the table without it.
   const single = characters.createCharacter(world.owner.id, 3, heroInput({ class: "fighter", level: 3, abilities: all13, maxHp: 28, proficiencies: fighterTraining, portrait }));
   const plain = await send("preview", "POST", { libraryCharacterId: single.id }, { campaignId: off.id });
-  assert.equal(plain.body.preview.notes, undefined);
+  assert.equal(plain.body.preview.ok, true, JSON.stringify(plain.body.preview.problems));
+  // A table low enough to strip the split to one class takes it as that.
+  const low = campaigns.createCampaign(world.owner.id, {
+    title: "Low Path", description: "", theme: "high-fantasy", maxPlayers: 6,
+    startingLevel: 2, difficulty: "normal", gameSettings: { multiclassingEnabled: false },
+  });
+  const stripped = await send("preview", "POST", { libraryCharacterId: stored.id }, { campaignId: low.id });
+  assert.equal(stripped.body.preview.ok, true, JSON.stringify(stripped.body.preview.problems));
 });
 
-await test("a seated split is rebuilt with the same classes at a table without multiclassing, and no new class", async () => {
-  const off = tableWithout();
-  const joined = await send("sheet", "POST", { libraryCharacterId: splitInLibrary().id }, { campaignId: off.id });
-  assert.equal(joined.status, 201, joined.error);
-  assert.deepEqual(classLevels(joined.sheet), [["fighter", 2], ["rogue", 1]]);
+await test("the rule holds the door alone, and a seat keeps what it holds", () => {
+  assert.equal(multiclassEntryProblem("Ash", [{ id: "fighter" }], false), null, "one class");
+  assert.equal(multiclassEntryProblem("Ash", [{ id: "fighter" }, { id: "rogue" }], true), null, "the table allows it");
+  assert.match(multiclassEntryProblem("Ash", [{ id: "fighter" }, { id: "rogue" }], false), /^Ash holds levels in more than one class/);
+  assert.equal(multiclassEntryProblem("Ash", [{ id: "fighter" }, { id: "rogue" }], false, [{ id: "Fighter" }, { id: "rogue" }]), null, "the seat holds both");
+  assert.match(multiclassEntryProblem("Ash", [{ id: "fighter" }, { id: "rogue" }], false, [{ id: "fighter" }]), /turns multiclassing off/, "the seat holds one");
+});
+
+await test("a seated split is rebuilt with the same classes once the table turns multiclassing off, and no new class", async () => {
+  const off = await seatedThenTurnedOff(splitInLibrary());
   // The rebuild (PUT, a brand-new sheet) keeps the split it holds.
   const rebuilt = await send("sheet", "PUT", splitInput({ name: "Split Again" }), { campaignId: off.id });
   assert.ok(rebuilt.status < 400, `the same split was refused: ${JSON.stringify(rebuilt.body.problems ?? rebuilt.error)}`);
@@ -305,11 +329,9 @@ await test("a seated split is rebuilt with the same classes at a table without m
   assert.match(JSON.stringify(made.body.problems), /turns multiclassing off/);
 });
 
-await test("an in-place edit at a table without multiclassing keeps the split and takes no new class", async () => {
-  const off = tableWithout();
+await test("an in-place edit once the table turns multiclassing off keeps the split and takes no new class", async () => {
   const stored = splitInLibrary();
-  const joined = await send("sheet", "POST", { libraryCharacterId: stored.id }, { campaignId: off.id });
-  assert.equal(joined.status, 201, joined.error);
+  const off = await seatedThenTurnedOff(stored);
   // The edit (PUT with the library id) keeps the classes it holds.
   const kept = await send("sheet", "PUT", { editLibraryCharacterId: stored.id, sheet: splitInput({ name: "Split Edited" }) }, { campaignId: off.id });
   assert.ok(kept.status < 400, `the edit was refused: ${JSON.stringify(kept.body.problems ?? kept.error)}`);

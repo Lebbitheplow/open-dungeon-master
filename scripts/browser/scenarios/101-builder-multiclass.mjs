@@ -3,11 +3,12 @@
 // quick fill set the rest, opens "Add a second class" (a class the scores
 // cannot reach is listed with its reason and refused), adds a rogue, gives
 // it two of the five levels and its skill, fills what the rogue's levels
-// owe, and takes the seat: the stored sheet holds fighter 3 / rogue 2. At a
-// table that turns multiclassing off the hero is let in with a note, and an
-// in-place edit there keeps its split and offers no new class; a hero made
-// there is offered no second class, and so is one on an older host (no
-// builderMulticlass flag), which would fold the split into one class.
+// owe, and takes the seat: the stored sheet holds fighter 3 / rogue 2. A
+// table that turns multiclassing off does not let that hero in; once the GM
+// turns it off where the hero already sits, an in-place edit keeps the split
+// and offers no new class. A hero made at such a table is offered no second
+// class, and so is one on an older host (no builderMulticlass flag), which
+// would fold the split into one class.
 // The seat and the hero it saved are given up again, so the table is
 // empty for the next viewport.
 //
@@ -180,33 +181,34 @@ export default {
     // The seated hero goes back to the lobby; nothing opens over that.
     await eventually(async () => !/\/character/.test((await t.url()).pathname), { timeoutMs: 20_000, label: "back to the lobby" });
     // The same hero, now in the library, offered at the table that turns
-    // multiclassing off: let in by its stored door with its split, and the
-    // confirm sheet says it keeps its classes and takes no new one there.
+    // multiclassing off: refused there, as the rules make multiclassing the
+    // table's choice, and the confirm sheet says so and takes no seat.
     if (seated.libraryCharacterId) {
       await t.open(`/campaigns/${ids.singleClassTableId}/character`);
       const offChooser = page.locator(`${root}[data-hero-chooser]`).locator("visible=true").first();
       await eventually(() => offChooser.count(), { timeoutMs: 30_000, label: "the hero chooser at the single-class table" });
       await t.tap(offChooser.locator(`[data-hero-pick="${seated.libraryCharacterId}"]`));
       await eventually(async () => (await sheet.count()) && (await sheet.getAttribute("aria-busy")) === "false", { timeoutMs: 20_000, label: "the split hero's check there" });
-      const note = (await sheet.locator("[data-join-note]").allInnerTexts()).join(" ");
-      check(/turns multiclassing off\. Your character keeps the classes it has, but can't take a new class here\./.test(note), `the confirm sheet says the split is kept (${note})`);
-      check((await sheet.locator('[data-join-rules="pass"]').count()) === 1, "the split hero is let in");
-      await review("join-note-single-class-table");
-      // Seated there, the player edits the hero in place: the builder shows
-      // the split it holds with no class to add and no warning, and saving
-      // keeps fighter 3 / rogue 2 (the in-place edit, PUT shape 2).
-      const offId = ids.singleClassTableId;
-      const offSeat = page.waitForResponse(
-        (response) => response.url().endsWith(`/api/campaigns/${offId}/sheet`) && response.request().method() === "POST",
-        { timeout: 45_000 },
-      );
-      await t.tap(sheet.locator("[data-join-take]"));
-      check((await offSeat).status() === 201, "the split hero takes a seat at the single-class table");
-      await eventually(async () => !/\/character/.test((await t.url()).pathname), { timeoutMs: 20_000, label: "back to the single-class lobby" });
+      const refused = sheet.locator('[data-join-rules="fail"]');
+      check((await refused.count()) === 1, "the split hero is not let in at the single-class table");
+      check(/turns multiclassing off\. Bring a character with one class, or build one here\./.test(await refused.innerText()), `the confirm sheet says why (${await refused.innerText()})`);
+      check(await sheet.locator("[data-join-take]").isDisabled(), "and offers no seat");
+      await review("join-refused-single-class-table");
+      await page.keyboard.press("Escape");
+      await eventually(async () => (await sheet.count()) === 0 || !(await sheet.isVisible()), { timeoutMs: 10_000, label: "the confirm sheet closing" });
+
+      // The GM turns multiclassing off at the table the hero already sits
+      // at: the hero keeps the classes it holds (the setting's promise), and
+      // an edit in place shows the split with no class to add and no
+      // warning, and saving keeps fighter 3 / rogue 2 (PUT shape 2).
+      const offId = tableId;
+      const switched = await api.patch(`${base}/api/campaigns/${offId}/settings`, { data: { multiclassingEnabled: false } });
+      check(switched.ok(), `the GM turns multiclassing off (${switched.status()})`);
       await t.open(`/campaigns/${offId}/character?mode=edit`);
       // The edit opens on its summary, every step done: nothing the stored
       // split holds is said to be off offer (the rogue's skill was, when the
-      // build read the stored skills out of order).
+      // build read the stored skills out of order, and a pack species' own
+      // tongue was, when it was read against the bundled rows).
       const editSummary = page.locator(`${active} [data-finish-summary]`).locator("visible=true");
       await eventually(() => editSummary.count(), { timeoutMs: 30_000, label: "the edit's summary" });
       await upTo(() => page.getByText(/no longer on offer/).locator("visible=true").count(), 1_500);
@@ -217,7 +219,7 @@ export default {
       const kept = page.locator(`${active} [data-builder-target="multiclass"]`).locator("visible=true").first();
       await eventually(() => kept.count(), { timeoutMs: 30_000, label: "the held split in the edit" });
       await eventually(async () => /Fighter 3 \/ Rogue 2/.test(await kept.textContent()), { timeoutMs: 10_000, label: "the split named in the edit" });
-      check((await kept.locator("[data-add-class]").count()) === 0, "the edit offers no new class at the single-class table");
+      check((await kept.locator("[data-add-class]").count()) === 0, "the edit offers no new class once multiclassing is off");
       check(!/Remove the classes below/.test(await kept.textContent()), "the held split is not warned off");
       await kept.scrollIntoViewIfNeeded();
       await review("edit-held-split-single-class-table");
@@ -245,7 +247,8 @@ export default {
       const editedClasses = (edited.classes ?? []).map((entry) => [entry.id, entry.level]);
       check(JSON.stringify(editedClasses) === JSON.stringify([["fighter", 3], ["rogue", 2]]), `the edit keeps fighter 3 / rogue 2 (${JSON.stringify(editedClasses)})`);
       await eventually(async () => !/\/character/.test((await t.url()).pathname), { timeoutMs: 20_000, label: "back to the lobby after the edit" });
-      check((await api.delete(`${base}/api/campaigns/${offId}/sheet`)).ok(), "the single-class seat is given up again");
+      const restored = await api.patch(`${base}/api/campaigns/${offId}/settings`, { data: { multiclassingEnabled: true } });
+      check(restored.ok(), "multiclassing is turned on again for the casters below");
     }
     // Give the seat up again.
     const removed = await api.delete(`${base}/api/campaigns/${tableId}/sheet`);

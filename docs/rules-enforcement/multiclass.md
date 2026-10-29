@@ -67,7 +67,7 @@ Deliberate deviations from SRD 5.1, each pinned as a test() with a comment:
 | A character can be created multiclassed (backlog F9): the levels add up to the table's level, each class meets its prerequisite on the final scores, and the first class's levels come first. A table with multiclassing off makes one class | `classListOf` in `src/lib/srd/sheet-legality.ts` |
 | Custom genre classes: prerequisite is 13 in the casting ability, else the first save; grants are armor capped at medium plus tools | docs/rules-coverage.md, `multiclassPrereq` |
 | Artificer (not SRD 5.1) counts half its levels rounded UP | `casterLevelFor` comment |
-| A table can turn multiclassing off: no new class at level-up, and no split made at that table. A character already multiclassed keeps its classes | route comment, `classListOf` |
+| A table can turn multiclassing off (SRD 5.1: an optional rule the table decides on): no new class at level-up, no split made at that table, and no library hero or companion with more than one class let in. A character already seated when it is turned off keeps its classes | route comment, `classListOf`, `multiclassEntryProblem` |
 
 ## Findings
 
