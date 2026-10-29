@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { cn } from "@/lib/cn";
 import { campaignPlaceholder, miscPlaceholder } from "@/lib/placeholders";
-import { agoLabel, chapterLine, seatLine, type HomeCampaign } from "@/app/home/types";
+import { agoLabel, chapterLine, nextSessionLine, seatLine, type HomeCampaign } from "@/app/home/types";
 
 // The title screen's painting: the table you were last at fills the whole
 // screen, the way a game's main menu shows the world behind its Continue.
@@ -52,7 +52,7 @@ export function ContinueHero({ campaign, userId }: { campaign: HomeCampaign; use
   return (
     <div className="ts-title-block">
       <span className="ts-eyebrow ts-reveal" style={{ animationDelay: "140ms" }}>
-        {ended ? "A finished tale" : lobby ? "The table is set" : "Continue your tale"}
+        {ended ? "A finished tale" : lobby ? "The table is set" : campaign.glance?.session?.between ? "Between sessions" : "Continue your tale"}
       </span>
       <h1 className="ts-title ts-reveal" style={{ animationDelay: "220ms" }}>
         <span className="ts-title-face">{campaign.title}</span>
@@ -99,6 +99,10 @@ export function RecapPanel({ campaign }: { campaign: HomeCampaign }) {
   }
   const ago = agoLabel(glance?.recapAt ?? campaign.updatedAt);
   if (ago) bits.push(ago);
+  // When the table meets next (issue 586), so the title screen answers
+  // "when do we play" without opening the table.
+  const next = nextSessionLine(campaign);
+  if (next) bits.push(next);
   const fallback =
     campaign.status === "lobby"
       ? "The table is set and the seats are filling. The tale begins when the party is gathered."

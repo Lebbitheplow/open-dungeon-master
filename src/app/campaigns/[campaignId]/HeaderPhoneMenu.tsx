@@ -9,6 +9,7 @@ import { SoundDialog, soundSummary, type SoundSteering } from "@/app/campaigns/[
 import type { AmbienceAudio } from "@/app/campaigns/[campaignId]/useAmbienceAudio";
 import type { NarrationAudio } from "@/app/campaigns/[campaignId]/useNarrationAudio";
 import type { TableBreakControl } from "@/app/campaigns/[campaignId]/TableBreakBanner";
+import type { SessionControl } from "@/app/campaigns/[campaignId]/SessionHoldBanner";
 import type { PrepControl } from "@/app/campaigns/[campaignId]/SessionHeader";
 import { RulebookDialog } from "@/components/rulebook/RulebookDialog";
 import { Slider } from "@/components/ui/Slider";
@@ -28,6 +29,7 @@ export function HeaderPhoneMenu({
   onHelp,
   tableBreak,
   prep,
+  session,
 }: {
   narrates: boolean;
   narration: NarrationAudio;
@@ -38,6 +40,9 @@ export function HeaderPhoneMenu({
   tableBreak?: TableBreakControl;
   // Campaign prep and back (issue 530), for whoever steers the story.
   prep?: PrepControl;
+  // End the session or start the next (issue 586), for whoever steers the
+  // story or the party lead.
+  session?: SessionControl;
 }) {
   const [soundOpen, setSoundOpen] = useState(false);
   const [rulebookOpen, setRulebookOpen] = useState(false);
@@ -57,6 +62,8 @@ export function HeaderPhoneMenu({
   // moment the prep took it (CampaignPrep.tsx), then hand it to nobody as
   // it closed. Nor does the menu return focus to its button behind the prep.
   const prepPending = useRef(false);
+  // The same for ending the session: its confirm is a dialog of its own.
+  const sessionPending = useRef(false);
   const notePress = () => {
     enablingRef.current = !narration.unlocked && !narration.muted;
   };
@@ -84,6 +91,14 @@ export function HeaderPhoneMenu({
             sideOffset={4}
             className="panel z-50 w-[min(18rem,calc(100vw-1.5rem))] rounded-lg p-1"
             onCloseAutoFocus={(event) => {
+              if (sessionPending.current) {
+                sessionPending.current = false;
+                // Ending opens its confirm, which takes the focus; starting
+                // opens nothing, so the menu's button gets it back.
+                if (session && !session.held) event.preventDefault();
+                if (session) (session.held ? session.onStart : session.onEnd)();
+                return;
+              }
               if (!prepPending.current) return;
               prepPending.current = false;
               if (!prep?.open) event.preventDefault();
@@ -103,6 +118,24 @@ export function HeaderPhoneMenu({
                   <span>
                     {prep.open ? "Back to the table" : "Campaign prep"}
                     {hint(prep.open ? "Play is where you left it" : "Party, rules, lore and Bring in prep, without ending play")}
+                  </span>
+                </DropdownMenu.Item>
+                <DropdownMenu.Separator className="my-1 h-px bg-stone-700/60" />
+              </>
+            ) : null}
+            {session ? (
+              <>
+                <DropdownMenu.Item
+                  className={row}
+                  onSelect={() => {
+                    sessionPending.current = true;
+                  }}
+                  data-session-row=""
+                >
+                  <HeaderGlyph glyph={session.held ? "tab-session" : "rest-long"} />
+                  <span>
+                    {session.held ? `Start session ${session.next}` : "End the session"}
+                    {hint(session.held ? "Pick the story up where it stopped" : "Stop for tonight: play waits until the next session")}
                   </span>
                 </DropdownMenu.Item>
                 <DropdownMenu.Separator className="my-1 h-px bg-stone-700/60" />

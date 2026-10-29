@@ -174,6 +174,10 @@ export const EVENT_AUDIENCE: Readonly<Record<string, Audience>> = {
   // A table break names who paused: everyone is told, as at a real table.
   table_paused: TABLE,
   table_resumed: TABLE,
+  // A session ended and the next one started (issue 586): every seat leaves
+  // play together and comes back together.
+  session_ended: TABLE,
+  session_started: TABLE,
   // Media and sound.
   image_ready: TABLE,
   media_status: TABLE,

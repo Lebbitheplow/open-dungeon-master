@@ -40,7 +40,7 @@ import { getDatabase } from "@/lib/db/core";
 import { requestDmTurn } from "@/lib/dm/loop";
 import { hasHumanDm, isPrimaryDm, lobbyBlocker, narratorIsAi } from "@/lib/dm/viewer";
 import { auditEntryForViewer, sheetForViewer } from "@/lib/dm/sheet-view";
-import { enqueueDmJob, runningDmJob } from "@/lib/dm/queue";
+import { enqueueDmJob, resumeDmQueue, runningDmJob } from "@/lib/dm/queue";
 import { runStorySetup } from "@/lib/dm/setup";
 import { generateStoryArc } from "@/lib/dm/arc";
 import { getDmStatus } from "@/lib/dm/status";
@@ -48,12 +48,14 @@ import { listUtilityCalls } from "@/lib/dm/call-tracker";
 import { listBlockedUserIds } from "@/lib/db/moderation";
 import { xCardRaised } from "@/lib/dm/safety";
 import { tableBreakOn } from "@/lib/dm/table-break";
+import { sessionHoldOn } from "@/lib/dm/session-hold";
 import { latestEventOfType, publishPersisted, publishWithSeq } from "@/lib/events";
 import type { HandoutShown, TitleCard } from "@/lib/scene/state";
 import { narrationAudioFor } from "@/lib/tts";
 import { tableAuthors, workshopClassesFor } from "@/lib/db/homebrew";
 import { testFightSource } from "@/lib/db/test-fights";
 import { isPlaytest } from "@/lib/workshop/kind";
+import { SESSION_REASON } from "@/lib/dm/session-hold-logic";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -197,6 +199,9 @@ export async function GET(
     safetyPause: safetyPauseOnTable(campaignId),
     // A table break: who paused and since when (src/lib/dm/table-break.ts).
     tableBreak: tableBreakOn(campaignId),
+    // Between sessions: which one ended, when and by whom
+    // (src/lib/dm/session-hold.ts); null while the table plays.
+    sessionHold: sessionHoldOn(campaignId),
     titleCard: (latestEventOfType(campaignId, ["title_card"])?.payload as TitleCard | null) ?? null,
     // What this seat may see and do, so the client never re-derives it from
     // ids and never shows a control the server would refuse.
@@ -304,6 +309,9 @@ export async function PATCH(
   // Campaign over: write durable progression back to each player's library
   // character (level, XP, gold, gear, spells; never HP or conditions).
   if (nextStatus === "ended") {
+    // Ended between sessions: nothing waits for a next one, so the queue
+    // is let go (src/lib/dm/session-hold.ts).
+    resumeDmQueue(campaignId, SESSION_REASON);
     for (const sheet of listSheets(campaignId)) {
       if (sheet.libraryCharacterId) {
         syncProgressToLibrary(sheet.id);

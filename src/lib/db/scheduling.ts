@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { getDatabase, nowIso } from "@/lib/db/core";
+import { pickNextSession, type NextSession } from "@/lib/dm/session-hold-logic";
 
 // Real-world session planning: dates the humans agree to sit down, with
 // RSVPs. Times are stored as ISO UTC and rendered in each player's locale;
@@ -207,4 +208,69 @@ export function setRsvp(
          responded_at = excluded.responded_at`,
     )
     .run(sessionId, userId, response, nowIso());
+}
+
+// The next time each table meets, for the home screen's whole list in two
+// queries and the idle nudge (src/lib/dm/session-hold-logic.ts
+// pickNextSession): the sessions from the last day on, judged against their
+// own length, with only their yes count read rather than every RSVP.
+export function nextScheduledSessions(campaignIds: string[], now = Date.now()): Map<string, NextSession> {
+  const found = new Map<string, NextSession>();
+  if (campaignIds.length === 0) {
+    return found;
+  }
+  const db = getDatabase();
+  const marks = campaignIds.map(() => "?").join(", ");
+  const rows = db
+    .prepare(
+      `SELECT id, campaign_id, title, starts_at, duration_min, cancelled_at FROM scheduled_sessions
+       WHERE campaign_id IN (${marks}) AND cancelled_at IS NULL AND starts_at >= ?
+       ORDER BY starts_at ASC`,
+    )
+    .all(...campaignIds, new Date(now - 24 * 60 * 60 * 1000).toISOString()) as Array<{
+    id: string;
+    campaign_id: string;
+    title: string;
+    starts_at: string;
+    duration_min: number;
+    cancelled_at: string | null;
+  }>;
+  if (rows.length === 0) {
+    return found;
+  }
+  const yes = new Map(
+    (
+      db
+        .prepare(
+          `SELECT session_id, COUNT(*) AS n FROM session_rsvps
+           WHERE response = 'yes' AND session_id IN (${rows.map(() => "?").join(", ")}) GROUP BY session_id`,
+        )
+        .all(...rows.map((row) => row.id)) as Array<{ session_id: string; n: number }>
+    ).map((row) => [row.session_id, row.n]),
+  );
+  const byCampaign = new Map<string, typeof rows>();
+  for (const row of rows) {
+    byCampaign.set(row.campaign_id, [...(byCampaign.get(row.campaign_id) ?? []), row]);
+  }
+  for (const [campaignId, list] of byCampaign) {
+    const next = pickNextSession(
+      list.map((row) => ({
+        id: row.id,
+        title: row.title,
+        startsAt: row.starts_at,
+        durationMin: row.duration_min,
+        cancelledAt: row.cancelled_at,
+        coming: yes.get(row.id) ?? 0,
+      })),
+      now,
+    );
+    if (next) {
+      found.set(campaignId, next);
+    }
+  }
+  return found;
+}
+
+export function nextScheduledSession(campaignId: string, now = Date.now()): NextSession | null {
+  return nextScheduledSessions([campaignId], now).get(campaignId) ?? null;
 }

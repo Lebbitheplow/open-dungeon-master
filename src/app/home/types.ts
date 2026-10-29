@@ -1,4 +1,5 @@
 import type { CampaignSummary, HomeGlance } from "@/lib/campaign-types";
+import { sessionWhenLocal } from "@/lib/dm/session-hold-logic";
 
 // What GET /api/campaigns hands the home screen: the summary row plus the
 // name of the character this user plays there, or null when they have no
@@ -127,6 +128,23 @@ export function chapterLine(campaign: HomeCampaign): string {
   return campaign.description.trim();
 }
 
+// The slot's badge: where the table stands. A campaign in play between
+// sessions (issue 586) says so, rather than "active" all week.
+export function statusLabel(campaign: HomeCampaign): string {
+  if (campaign.status === "active" && campaign.glance?.session?.between) {
+    return "between sessions";
+  }
+  return campaign.status;
+}
+
+// When the table meets next, in the reader's own time: "Next session Fri,
+// Nov 6, 7:00 PM". Empty when nothing is set, or from an older host.
+export function nextSessionLine(campaign: HomeCampaign): string {
+  const next = campaign.status === "ended" ? null : campaign.glance?.session?.next;
+  const when = next ? sessionWhenLocal(next.startsAt) : "";
+  return when ? `Next session ${when}` : "";
+}
+
 // The save slot's one line: what state the table is in, in a few words.
 export function slotLine(campaign: HomeCampaign, userId: string): string {
   if (campaign.status === "lobby") {
@@ -135,6 +153,13 @@ export function slotLine(campaign: HomeCampaign, userId: string): string {
   if (campaign.status === "ended") {
     const ago = agoLabel(campaign.updatedAt);
     return ago ? `Finished ${ago}` : "Finished";
+  }
+  const next = nextSessionLine(campaign);
+  if (next) {
+    return next;
+  }
+  if (campaign.glance?.session?.between) {
+    return "Between sessions";
   }
   if (holdsDmSeat(campaign, userId)) {
     return "Running the table";

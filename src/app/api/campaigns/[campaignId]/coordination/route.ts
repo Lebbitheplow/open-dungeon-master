@@ -10,6 +10,8 @@ import {
   stageCoordination,
 } from "@/lib/dm/coordination";
 import { PLAN_MAX_CHARS } from "@/lib/dm/coordination-logic";
+import { sessionHoldOn } from "@/lib/dm/session-hold";
+import { sessionRefusal } from "@/lib/dm/session-hold-logic";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -77,6 +79,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ cam
   const body = parsed.data;
   const answer = (result: { phase: unknown } | { error: string; status: number }) =>
     "error" in result ? Response.json({ error: result.error }, { status: result.status }) : Response.json({ phase: result.phase });
+
+  // Between sessions a plan neither opens, moves nor resolves: resolving
+  // writes the party's lines into the story and wakes the storyteller
+  // (src/lib/dm/session-hold.ts). Setting one aside still works.
+  const between = body.action === "cancel" ? null : sessionHoldOn(campaignId);
+  if (between) {
+    return Response.json({ error: sessionRefusal(between), sessionHold: between }, { status: 409 });
+  }
 
   switch (body.action) {
     case "open":

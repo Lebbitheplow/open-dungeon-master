@@ -46,6 +46,7 @@ import { registerBrowserSpecies } from "@/lib/srd/race-id";
 import { registerBrowserSubclassExtras, type SubclassExtras } from "@/lib/srd/subclass-tables";
 import { registerBrowserTableFeats } from "@/lib/srd/feat-effects";
 import type { TableBreak } from "@/lib/dm/table-break-logic";
+import { sessionHoldFrom, type SessionHold } from "@/lib/dm/session-hold-logic";
 import { registerWorkshopClasses } from "@/lib/classes/workshop-registry";
 import type { WorkshopClass } from "@/lib/homebrew/class-data";
 
@@ -291,6 +292,9 @@ export type CampaignState = {
   safetyPause: { at: number; reason: "x_card" } | null;
   // A table break: who paused and since when (src/lib/dm/table-break.ts).
   tableBreak: TableBreak | null;
+  // Between sessions: which one ended, when and by whom
+  // (src/lib/dm/session-hold.ts); null while the table plays.
+  sessionHold: SessionHold | null;
   narrationAudio: Record<string, string>;
   // `live` marks a passage offered while it is still being rendered
   // (tts_stream): heard now, by whoever is at the table now.
@@ -409,6 +413,7 @@ const initialState: CampaignState = {
   handout: null,
   safetyPause: null,
   tableBreak: null,
+  sessionHold: null,
   narrationAudio: {},
   latestTts: null,
   latestRoll: null,
@@ -733,6 +738,12 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
           return next;
         case "table_resumed":
           next.tableBreak = null;
+          return next;
+        case "session_ended":
+          next.sessionHold = sessionHoldFrom(payload);
+          return next;
+        case "session_started":
+          next.sessionHold = null;
           return next;
         case "location_map_ready":
           next.locations = state.locations.map((location) =>
@@ -1124,6 +1135,8 @@ const PERSISTED_EVENTS = [
   "safety_resumed",
   "table_paused",
   "table_resumed",
+  "session_ended",
+  "session_started",
   // Each of these has a case above and was published for the table, but was
   // never listened for, so it only showed after a reload: the party record
   // (purse, pack, travel formation), a painted NPC portrait, the Director's
@@ -1362,6 +1375,7 @@ export function useCampaignStream(campaignId: string) {
           handout: data.handout ?? null,
           safetyPause: data.safetyPause ?? null,
           tableBreak: data.tableBreak ?? null,
+          sessionHold: data.sessionHold ?? null,
           titleCard: data.titleCard ?? null,
           titleCardQueue: [],
           lastSeq,

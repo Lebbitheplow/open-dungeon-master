@@ -190,7 +190,8 @@ const sheetInput = (name) =>
 
 test("a fresh table has no recap, no chapter, no painting and no faces", () => {
   const glance = homeGlanceFor(campaign.id, []);
-  assert.deepEqual(glance, { chapter: null, recap: "", recapAt: null, sceneImage: null, faces: [] });
+  // Playing, with no session ended and none scheduled (issue 586).
+  assert.deepEqual(glance, { chapter: null, recap: "", recapAt: null, sceneImage: null, faces: [], session: { between: false, next: null } });
 });
 
 test("the glance carries the last narration that said something, the newest painting and the party's faces", () => {

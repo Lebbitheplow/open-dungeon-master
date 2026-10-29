@@ -137,7 +137,8 @@ try {
     assert.ok(outcome.text.length <= MAX_RESULT_CHARS, `${outcome.text.length} characters`);
     view = JSON.parse(outcome.text);
     const keys = Object.keys(view);
-    assert.deepEqual(keys.slice(0, 10), ["campaign", "me", "activeSheetId", "safetyPause", "tableBreak", "dmStatus", "floor", "tableWait", "caps", "pendingRolls"]);
+    // sessionHold: between sessions (issue 586), which an agent's seat waits out like a break.
+    assert.deepEqual(keys.slice(0, 11), ["campaign", "me", "activeSheetId", "safetyPause", "tableBreak", "sessionHold", "dmStatus", "floor", "tableWait", "caps", "pendingRolls"]);
     assert.equal(view.safetyPause.reason, "x_card");
     assert.ok(view.dmStatus !== undefined && view.caps && typeof view.caps === "object");
     assert.equal(view.activeSheetId, playerSheet.id);
