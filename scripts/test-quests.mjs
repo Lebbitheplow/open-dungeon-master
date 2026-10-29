@@ -266,6 +266,49 @@ test("a regenerated arc's threads start their own quests; the old arc's open one
   assert.ok(!rows.some((quest) => quest.title === "The Ferryman's Toll"), "an open quest of the thrown-away arc goes");
 });
 
+test("a job that read the arc before a quest was reopened keeps the reopen, and its own changes", () => {
+  const table = createCampaign(dm.id, { title: "Stale", description: "", theme: "", maxPlayers: 4, startingLevel: 1, difficulty: "normal" });
+  setStoryArc(table.id, storyArc([{ ...waystone, status: "resolved" }, { ...ferry, status: "active" }]));
+  // A chapter-close refresh reads the arc and waits on the model...
+  const read = getCampaignById(table.id).storyArc;
+  // ...meanwhile the GM reopens the finished quest...
+  editQuest(listQuests(table.id).find((quest) => quest.sourceRef === "sa1").id, { status: "active" });
+  // ...and the refresh writes back what it read, having closed the ferry.
+  const written = { ...read, subArcs: read.subArcs.map((subArc) => (subArc.id === "sa2" ? { ...subArc, status: "resolved" } : subArc)) };
+  setStoryArc(table.id, written, read);
+  const rows = listQuests(table.id);
+  assert.equal(rows.find((quest) => quest.sourceRef === "sa1").status, "active", "the reopen stands");
+  assert.equal(rows.find((quest) => quest.sourceRef === "sa2").status, "done", "and so does what the refresh decided");
+});
+
+test("a sequel's thread that reuses an id with a goal of its own does not take the old quest", () => {
+  const table = createCampaign(dm.id, { title: "Sequel", description: "", theme: "", maxPlayers: 4, startingLevel: 1, difficulty: "normal" });
+  setStoryArc(table.id, storyArc([{ ...waystone, status: "resolved" }, { ...ferry, status: "active" }]));
+  // A chained saga numbers its threads from sa1 again.
+  setStoryArc(table.id, storyArc([{ id: "sa1", name: "The Drowned Bell", goal: "Raise the bell.", hook: "", beats: [], status: "active" }, { ...ferry, id: "sa3" }]));
+  const rows = listQuests(table.id);
+  const bell = rows.find((quest) => quest.sourceRef === "sa1");
+  assert.equal(bell.title, "The Drowned Bell");
+  assert.equal(bell.status, "active");
+  assert.equal(getCampaignById(table.id).storyArc.subArcs[0].name, "The Drowned Bell", "the new thread keeps its name in the arc");
+  assert.ok(rows.some((quest) => quest.title === "Light for Brackenford" && quest.status === "done" && !quest.sourceRef), "the old quest stays as history");
+});
+
+test("a hidden arc quest shown again after its thread closed shows as the story left it, and outlives the thread", () => {
+  const table = createCampaign(dm.id, { title: "Hidden", description: "", theme: "", maxPlayers: 4, startingLevel: 1, difficulty: "normal" });
+  setStoryArc(table.id, storyArc([{ ...waystone, status: "active" }]));
+  const row = () => listQuests(table.id).find((quest) => quest.title === "Light for Brackenford");
+  editQuest(row().id, { status: "hidden" });
+  setStoryArc(table.id, storyArc([{ ...waystone, status: "resolved" }]));
+  assert.equal(row().status, "hidden", "still the GM's");
+  editQuest(row().id, { status: "active" });
+  assert.equal(row().status, "done", "shown, it is done, not reopened");
+  assert.equal(getCampaignById(table.id).storyArc.subArcs[0].status, "resolved");
+  editQuest(row().id, { status: "hidden" });
+  setStoryArc(table.id, storyArc([]));
+  assert.equal(row()?.status, "hidden", "a hidden quest stays when its thread is shed");
+});
+
 test("the status rules: a settled or hidden row keeps its own word, an open one follows the arc", () => {
   assert.equal(arcQuestStatus("active", "done"), "done");
   assert.equal(arcQuestStatus("abandoned", "done"), "done");
@@ -295,7 +338,7 @@ test("the glance shows the oldest open party quest and its next step, and nothin
   assert.deepEqual(questLogForExport(quests), ["Old (done)", "Light", "Later"]);
 });
 
-test("the campaign payload's questLog is the live log, so an older app's glance lets a finished quest go (issue 581)", () => {
+test("the campaign payload's questLog is the live log, so an older app's glance shows the live quest when it loads (issue 581)", () => {
   for (const quest of listQuests(arcTable.id)) {
     editQuest(quest.id, { status: "done" });
   }

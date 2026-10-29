@@ -282,7 +282,9 @@ export function SidePanelRouter({
   }
   // The glance says it opens the quests, and it opened whichever section
   // was last up, the chapters as often as not (issue 581).
-  const [seenQuestsAt, setSeenQuestsAt] = useState(0);
+  // A press made long before this panel mounted (a pane opened later) is not
+  // for it; one that mounted it is.
+  const [seenQuestsAt, setSeenQuestsAt] = useState(() => (questsRequest && questsRequest < Date.now() - 2_000 ? questsRequest : 0));
   if (questsRequest && questsRequest !== seenQuestsAt) {
     setSeenQuestsAt(questsRequest);
     setStorySection("quests");

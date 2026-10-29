@@ -10,16 +10,20 @@ import { subArcAfterQuestEdit, type Quest } from "@/lib/dm/quest-logic";
 // Every edit comes here: the Quests panel, set_quest and tick_objective.
 //
 // Not queued behind the turn the way an arc edit is: a quest edit must not
-// wait out a long reply. A job holding an older copy of the arc that writes
-// it later loses nothing, since setStoryArc takes a settled or renamed row's
-// word over its copy (quest-logic.ts reconcileSubArcs).
+// wait out a long reply. A job that read the arc before the edit and writes
+// it back after (a chapter-close refresh waits on the model) passes what it
+// read, and setStoryArc keeps what the table changed meanwhile.
 export function editQuest(questId: string, patch: Parameters<typeof updateQuest>[1]): Quest | null {
-  const updated = updateQuest(questId, patch);
-  if (!updated || updated.source !== "arc") {
-    return updated;
+  const before = getQuest(questId);
+  const arc = before?.source === "arc" && before.sourceRef ? getCampaignById(before.campaignId)?.storyArc : null;
+  const thread = arc?.subArcs.find((subArc) => subArc.id === before?.sourceRef);
+  // Hidden is about who reads a quest, not the story: shown again after its
+  // thread closed, it shows as the story left it rather than reopening it.
+  if (before?.status === "hidden" && patch.status === "active" && thread && (thread.status === "resolved" || thread.status === "abandoned")) {
+    patch = { ...patch, status: thread.status === "resolved" ? "done" : "failed" };
   }
-  const arc = getCampaignById(updated.campaignId)?.storyArc;
-  if (!arc) {
+  const updated = updateQuest(questId, patch);
+  if (!updated || !arc) {
     return updated;
   }
   let touched = false;

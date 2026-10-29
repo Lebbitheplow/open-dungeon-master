@@ -14,8 +14,8 @@ import type {
 import { isUploadedImagePath } from "@/lib/uploads";
 import type { StorySettings } from "@/lib/types";
 import { normalizeStoryArc, type StoryArc } from "@/lib/dm/arc-logic";
-import { listQuests, reconcileArcQuests, syncArcQuests } from "@/lib/db/quests";
-import { questLogLines } from "@/lib/dm/quest-logic";
+import { detachArcQuests, listQuests, reconcileArcQuests, syncArcQuests } from "@/lib/db/quests";
+import { questLogLines, rebaseSubArcs, sameThread } from "@/lib/dm/quest-logic";
 import { normalizeCover, type DmCover } from "@/lib/dm/delegation";
 import { MINUTES_PER_DAY, daysPerYear, defaultClock, normalizeCalendarDefinition, normalizeClock, type CampaignClock } from "@/lib/dm/calendar";
 import { packFor } from "@/lib/worlds/preset";
@@ -715,7 +715,16 @@ export function setDmOutline(campaignId: string, outline: string) {
 // (corrupt) JSON. Pending plans and the beat spine are never dropped here.
 const STORY_ARC_CHAR_CAP = 32_000;
 
-export function setStoryArc(campaignId: string, arc: StoryArc) {
+// The sub-arcs as stored now, read raw: the threads a write compares itself
+// against.
+function storedSubArcs(campaignId: string): StoryArc["subArcs"] {
+  const row = getDatabase().prepare(`SELECT story_arc_json FROM campaigns WHERE id = ?`).get(campaignId) as { story_arc_json: string } | undefined;
+  return parseJson<{ subArcs?: StoryArc["subArcs"] } | null>(row?.story_arc_json ?? "", null)?.subArcs ?? [];
+}
+
+// `base` is the arc a job read before it awaited the model, so what the table
+// changed meanwhile survives the write (quest-logic.ts rebaseSubArcs).
+export function setStoryArc(campaignId: string, arc: StoryArc, base: StoryArc | null = null) {
   // Defensive spreads: every in-app caller passes a normalized arc, but a
   // hand-written or legacy-shaped object must not throw here.
   const trimmed: StoryArc = {
@@ -730,9 +739,18 @@ export function setStoryArc(campaignId: string, arc: StoryArc) {
         }
       : (arc.saga ?? null),
   };
-  // A quest the table settled or renamed comes back into the arc as they
-  // left it (issue 581); a failure there must not lose the arc.
+  // A quest the table settled, renamed or reopened comes back into the arc
+  // as they left it (issue 581), and a thread that reuses an old one's id
+  // starts a quest of its own; a failure there must not lose the arc.
   try {
+    const stored = storedSubArcs(campaignId);
+    if (base) {
+      trimmed.subArcs = rebaseSubArcs(trimmed.subArcs, base.subArcs ?? [], stored);
+    }
+    const reused = new Set(trimmed.subArcs.filter((subArc) => stored.some((old) => old.id === subArc.id && !sameThread(old, subArc))).map((subArc) => subArc.id));
+    if (reused.size) {
+      detachArcQuests(campaignId, reused);
+    }
     trimmed.subArcs = reconcileArcQuests(campaignId, trimmed.subArcs);
   } catch (error) {
     console.error("[quests] arc reconcile failed", error);

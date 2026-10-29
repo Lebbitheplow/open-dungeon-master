@@ -158,7 +158,9 @@ export function syncArcQuests<T extends ArcThread>(campaignId: string, subArcs: 
       if (seen.has(quest.sourceRef)) {
         continue;
       }
-      if (quest.status === "active" || quest.status === "hidden") {
+      // An open quest goes with its thread; a settled or hidden one (the
+      // GM's own, ticks and all) stays.
+      if (quest.status === "active") {
         db.prepare(`DELETE FROM quests WHERE id = ?`).run(quest.id);
       } else {
         db.prepare(`UPDATE quests SET source_ref = '', updated_at = ? WHERE id = ?`).run(now, quest.id);
@@ -169,16 +171,15 @@ export function syncArcQuests<T extends ArcThread>(campaignId: string, subArcs: 
   return changed;
 }
 
-// A fresh arc in place of the old one (the lead's regenerate): the old
-// threads are gone, so their open quests go and their settled ones stay as
-// history, answering to no id. The new arc numbers its threads from sa1
-// again, and every one of them would have taken an old quest's row.
-export function retireArcQuests(campaignId: string): boolean {
+// The quests of threads that are gone though their ids live on in another
+// thread (a sequel saga, a regenerated arc): open ones go, settled ones stay
+// as history, answering to no id. `refs` null is every arc quest.
+export function detachArcQuests(campaignId: string, refs: ReadonlySet<string> | null): boolean {
   const db = getDatabase();
   const now = nowIso();
   let changed = false;
   for (const quest of listQuests(campaignId)) {
-    if (quest.source !== "arc" || !quest.sourceRef) {
+    if (quest.source !== "arc" || !quest.sourceRef || (refs && !refs.has(quest.sourceRef))) {
       continue;
     }
     if (quest.status === "active" || quest.status === "hidden") {
@@ -189,6 +190,13 @@ export function retireArcQuests(campaignId: string): boolean {
     changed = true;
   }
   return changed;
+}
+
+// A fresh arc in place of the old one (the lead's regenerate): the old
+// threads are gone. The new arc numbers its threads from sa1 again, and
+// every one of them would have taken an old quest's row.
+export function retireArcQuests(campaignId: string): boolean {
+  return detachArcQuests(campaignId, null);
 }
 
 // A campaign clone's quest log (src/lib/db/campaign-clone.ts): every quest as

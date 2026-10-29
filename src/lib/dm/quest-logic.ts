@@ -136,7 +136,7 @@ export function questsVisibleTo(quests: Quest[], steersStory: boolean): Quest[] 
 // A sub-arc's status, as arc-logic.ts SubArc has it (kept here so this
 // module stays free of the arc's imports).
 type SubArcStatus = "pending" | "active" | "resolved" | "abandoned";
-type SubArcLike = { id: string; name: string; status: SubArcStatus };
+type SubArcLike = { id: string; name: string; status: SubArcStatus; goal?: string };
 
 function settled(status: SubArcStatus): boolean {
   return status === "resolved" || status === "abandoned";
@@ -182,6 +182,34 @@ export function reconcileSubArcs<T extends SubArcLike>(subArcs: readonly T[], ro
       return subArc;
     }
     return subArcAfterQuestEdit(subArc, { title: row.title, status: row.status === "done" || row.status === "failed" ? row.status : null });
+  });
+}
+
+// A sub-arc is the same thread across two copies of the arc while its id
+// and its goal match: ids are numbered from the arc's highest, so a sequel
+// saga, a regenerated arc or a thread given a shed id reuses one, and the
+// goal is what tells the new thread from the old.
+export function sameThread(a: SubArcLike, b: SubArcLike): boolean {
+  return a.id === b.id && (a.goal === undefined || b.goal === undefined || a.goal === b.goal);
+}
+
+// The arc a job writes back after awaiting the model (a chapter-close
+// refresh, the beat judge), rebased on the arc as stored now: a sub-arc's
+// status or name the job did not change is taken from the stored arc, so a
+// quest the table reopened, settled or renamed meanwhile is kept, and one
+// the job did change is the job's. `base` is the copy the job read.
+export function rebaseSubArcs<T extends SubArcLike>(next: readonly T[], base: readonly SubArcLike[], current: readonly SubArcLike[]): T[] {
+  const read = new Map(base.map((subArc) => [subArc.id, subArc]));
+  const stored = new Map(current.map((subArc) => [subArc.id, subArc]));
+  return next.map((subArc) => {
+    const was = read.get(subArc.id);
+    const now = stored.get(subArc.id);
+    if (!was || !now || !sameThread(was, subArc) || !sameThread(now, subArc)) {
+      return subArc;
+    }
+    const status = subArc.status !== was.status ? subArc.status : now.status;
+    const name = subArc.name !== was.name ? subArc.name : now.name;
+    return status === subArc.status && name === subArc.name ? subArc : { ...subArc, status, name };
   });
 }
 

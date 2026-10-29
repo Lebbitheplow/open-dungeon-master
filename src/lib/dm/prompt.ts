@@ -1135,7 +1135,9 @@ export function buildGameStateBlock(state: DmGameState): string {
   // the DM's hand-written quests and the objectives ticked under both.
   const quests = listQuests(campaign.id);
   const questBlock = renderQuestsForPrompt(
-    quests.filter((quest) => quest.source === "dm" || quest.objectives.some((objective) => objective.done)),
+    // An arc quest whose thread left the arc is in no arc render, so it is
+    // listed like the GM's own.
+    quests.filter((quest) => quest.source === "dm" || !quest.sourceRef || quest.objectives.some((objective) => objective.done)),
   );
   if (questBlock) {
     state.questsBlock = questBlock;

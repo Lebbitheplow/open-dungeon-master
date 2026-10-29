@@ -57,8 +57,9 @@ export async function DELETE(
     return quest;
   }
   // A quest from the story comes back with the next write of the arc it
-  // mirrors; it is settled, not taken off (the panel offers no remove).
-  if (quest.source === "arc") {
+  // mirrors; it is settled, not taken off (the panel offers no remove). One
+  // whose thread has left the arc answers to nothing and can go.
+  if (quest.source === "arc" && quest.sourceRef) {
     return Response.json({ error: "This quest comes from the story. Mark it done or failed instead." }, { status: 409 });
   }
   deleteQuest(questId);

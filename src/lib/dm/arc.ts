@@ -251,8 +251,10 @@ ${SAGA_STYLE_RULES}`;
 
 // A planned or refreshed arc brings its sub-arcs' quests with it; the quest
 // log and the table's glance refetch when they changed (issue 581).
-function storeArc(campaignId: string, arc: StoryArc): boolean {
-  const changed = setStoryArc(campaignId, arc);
+// `base`: the arc the job read before it awaited the model, so the table's
+// edits made meanwhile survive (db/campaigns.ts setStoryArc).
+function storeArc(campaignId: string, arc: StoryArc, base: StoryArc | null = null): boolean {
+  const changed = setStoryArc(campaignId, arc, base);
   if (changed) {
     publishEphemeral(campaignId, "quests_updated", { at: Date.now() });
   }
@@ -324,7 +326,7 @@ export async function generateStoryArc(
     // retries at the next chapter close (ensureWorldArcs is self-healing).
     const withWorld = await ensureWorldArcs(campaignId, arc);
     if (withWorld !== arc) {
-      setStoryArc(campaignId, withWorld);
+      storeArc(campaignId, withWorld, arc);
     }
   } catch (error) {
     // Always logged: a plan that silently never arrived is what an operator
@@ -535,7 +537,7 @@ export async function judgeBeatCompleted(campaignId: string, sinceSeq: number): 
     if (!advanced) {
       return false;
     }
-    setStoryArc(campaignId, advanced.arc);
+    storeArc(campaignId, advanced.arc, campaign.storyArc);
     return true;
   } catch {
     return false;
@@ -907,7 +909,7 @@ export async function refreshStoryArc(
       next = await ensureWorldArcs(campaignId, next);
     }
     if (next !== campaign.storyArc) {
-      storeArc(campaignId, next);
+      storeArc(campaignId, next, campaign.storyArc);
     }
   } catch (error) {
     console.error(`[arc] campaign ${campaignId}: the story arc could not be refreshed`, error);
@@ -957,7 +959,7 @@ export async function planExhaustedArc(campaignId: string): Promise<boolean> {
       return false;
     }
     next = await announceActs(campaignId, campaign.storyArc, next, true);
-    storeArc(campaignId, next);
+    storeArc(campaignId, next, campaign.storyArc);
     return true;
   } catch (error) {
     console.error(`[arc] campaign ${campaignId}: the next stretch of the arc could not be planned`, error);
