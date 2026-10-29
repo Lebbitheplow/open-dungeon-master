@@ -242,9 +242,11 @@ await test("where companions may turn, a player's command ends at a warning, the
   const warned = await deed("broke_word");
   assert.equal(warned.result.conscience, "uneasy -> warning");
   assert.equal(world.sheet(sheet.id).commandedBy, null, "command ends");
-  assert.match(warned.result.note, /no longer takes .+'s orders in a fight/);
+  assert.match(warned.result.note, /no longer takes Kael's orders in a fight/, "the GM is told the character, not the account");
   const told = messages.listRecentMessages(world.campaignId, 3).find((message) => message.content.includes("no longer takes"));
   assert.ok(told, "the table is told");
+  assert.match(told.content, /no longer takes Kael's orders in a fight/, "the table reads the player's character");
+  assert.ok(!told.content.includes(`${world.owner.username}'s`), "never the account name");
   const route = await world.route("campaigns/[campaignId]/companions/[characterId]");
   world.signIn(world.owner);
   const response = await route.PATCH(
