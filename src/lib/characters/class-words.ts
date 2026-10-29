@@ -5,6 +5,8 @@
 // all say a split the same way, and scripts/test-builder-multiclass.mjs
 // reads it directly.
 
+import { workshopClassName } from "@/lib/classes/workshop-registry";
+
 export type ClassWordsSource = {
   class: string;
   level: number;
@@ -32,4 +34,37 @@ export function classLevelWords(source: ClassWordsSource, nameOf: (id: string) =
 // ("Level 5 Hill Dwarf Fighter 3 / Rogue 2").
 export function classWordsAfterLevel(source: ClassWordsSource, nameOf: (id: string) => string = asIs): string {
   return isSplit(source) ? classLevelWords(source, nameOf) : nameOf(source.class);
+}
+
+// ---- names on a card ----
+//
+// A sheet keeps its species and classes as ids ("bhain-kwai", "plague_doctor"),
+// and a card that printed them showed the id to the table (the lobby's
+// companion card, the party roster). Every card reads its words here instead,
+// so the roster says what the sheet dialog and the library already say.
+
+// An id as a name: "bhain-kwai" is "Bhain Kwai", "plague_doctor" "Plague
+// Doctor". A homebrew id names nothing a reader can use, so it is "".
+export function idAsName(id: string): string {
+  const value = String(id ?? "").trim();
+  if (/^homebrew[:-]/.test(value)) {
+    return "";
+  }
+  return value.replace(/[-_]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()).trim();
+}
+
+// A class's name: a workshop class's own name, else its id as a name.
+export function className(id: string): string {
+  return workshopClassName(id) ?? idAsName(id);
+}
+
+// A species' name: the homebrew name the server derived, else its id as a name.
+export function speciesName(source: { race: string; raceLabel?: string | null }): string {
+  return source.raceLabel || idAsName(source.race);
+}
+
+// "Bhain Kwai Fighter 3 / Rogue 2": the species and each class with its levels,
+// as a card's second line reads.
+export function speciesAndClassWords(source: ClassWordsSource & { race: string; raceLabel?: string | null }): string {
+  return [speciesName(source), classLevelWords(source, className)].filter(Boolean).join(" ");
 }
