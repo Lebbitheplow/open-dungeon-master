@@ -1,7 +1,15 @@
 <!--
 What this changes and why. Link each issue it fixes with its own keyword:
 "Fixes #123. Fixes #124." (a comma list links only the first).
+The conventions and the checks are in .github/CONTRIBUTING.md. Written with
+a coding agent? Point it at that file and AGENTS.md before it starts.
 -->
+
+### Checks
+
+- [ ] `npm run lint`, `npm test` and `npm run build` pass, and the change has a test that fails without it.
+- [ ] Anything a player sees has screenshots below: the website and the app, day and night themes, phone width.
+- [ ] No hostnames, IP addresses, logs, keys, `.env` files or players' names in the code, the tests or this description.
 
 ### Settings, options and controls
 

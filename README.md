@@ -243,6 +243,8 @@ The documents below are the server's own reference.
   - [The engines](docs/engines.md): combat, sheets, world simulation, narrative, memory, AI integration, the human GM and the workshop
   - [Rules coverage](docs/rules-coverage.md): what is enforced, what is guidance, what is out of scope
   - [Roadmap](docs/ROADMAP.md)
+- **Contributing**
+  - [Contributing guide](.github/CONTRIBUTING.md): the conventions, the checks, a new DM tool, route or test suite, and what a pull request carries
 
 ## Credits and licenses
 
