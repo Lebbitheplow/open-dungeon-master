@@ -425,31 +425,6 @@ for (const viewport of ["desktop", "laptop", "phone"]) {
   closing[viewport] = table.id;
 }
 
-// A table per viewport for the DM's Stop (issue 383): its turn runs against
-// a model the scenario starts and never lets answer.
-const stopTables = {};
-for (const viewport of ["desktop", "phone"]) {
-  const table = campaigns.createCampaign(world.owner.id, {
-    title: `Stop Table (${viewport})`,
-    description: "A table whose storyteller never answers.",
-    theme: "high-fantasy",
-    maxPlayers: 6,
-    startingLevel: 3,
-    difficulty: "normal",
-    gameSettings: { ttsEnabled: false },
-  });
-  campaigns.setCampaignStatus(table.id, "active");
-  sheets.createSheet(table.id, world.owner.id, 3, heroInput({ name: "Ilse Marr", class: "fighter", level: 3 }));
-  messages.insertCampaignMessage({
-    campaignId: table.id,
-    seq: campaigns.allocateSeq(table.id),
-    authorType: "dm",
-    speech: [],
-    content: "The ferry waits at the pier, its lantern hissing in the fog.",
-  });
-  stopTables[viewport] = table.id;
-}
-
 // A table per viewport for the Bonds a party has with whoever travels with
 // it (issue 580): the lead runs it as its GM, two players' characters sit
 // at it, and a patron prepared as friendly has not been met yet.
@@ -475,6 +450,31 @@ const bondTables = {};
     npcs.upsertNpc({ campaignId: table.id, name: "Mira Vell", attitude: "friendly", gender: "Female" });
     bondTables[viewport] = { id: table.id, kael: kael.id, lyra: lyra.id };
   }
+}
+
+// A table per viewport for the DM's Stop (issue 383): its turn runs against
+// a model the scenario starts and never lets answer.
+const stopTables = {};
+for (const viewport of ["desktop", "phone"]) {
+  const table = campaigns.createCampaign(world.owner.id, {
+    title: `Stop Table (${viewport})`,
+    description: "A table whose storyteller never answers.",
+    theme: "high-fantasy",
+    maxPlayers: 6,
+    startingLevel: 3,
+    difficulty: "normal",
+    gameSettings: { ttsEnabled: false },
+  });
+  campaigns.setCampaignStatus(table.id, "active");
+  sheets.createSheet(table.id, world.owner.id, 3, heroInput({ name: "Ilse Marr", class: "fighter", level: 3 }));
+  messages.insertCampaignMessage({
+    campaignId: table.id,
+    seq: campaigns.allocateSeq(table.id),
+    authorType: "dm",
+    speech: [],
+    content: "The ferry waits at the pier, its lantern hissing in the fog.",
+  });
+  stopTables[viewport] = table.id;
 }
 
 // A table per viewport for the wardrobe (issues 411 and 412): the lead's
@@ -1880,7 +1880,6 @@ const ids = {
   prepSourceTitle: PREP_SOURCE_TITLE,
   closing,
   stopTables,
-  bondTables,
   wardrobe,
   directed,
   enemyTurns,
@@ -1896,6 +1895,7 @@ const ids = {
   gone,
   dominate,
   conduct,
+  bondTables,
   pacts: pactTables,
   pip: pip.id,
   // Issue 548's made-up world, one table per viewport.
@@ -1927,8 +1927,8 @@ const ids = {
     [prepSource.id]: PREP_SOURCE_TITLE,
     [offerTable.id]: OFFER_TITLE,
     ...Object.fromEntries(Object.entries(closing).map(([viewport, id]) => [id, `Closing Table (${viewport})`])),
-    ...Object.fromEntries(Object.entries(stopTables).map(([viewport, id]) => [id, `Stop Table (${viewport})`])),
     ...Object.fromEntries(Object.entries(bondTables).map(([viewport, table]) => [table.id, `Bonds Table (${viewport})`])),
+    ...Object.fromEntries(Object.entries(stopTables).map(([viewport, id]) => [id, `Stop Table (${viewport})`])),
     ...Object.fromEntries(Object.entries(wardrobe).map(([viewport, id]) => [id, `Wardrobe (${viewport})`])),
     ...Object.fromEntries(Object.entries(directed).map(([viewport, table]) => [table.id, `Directed Table (${viewport})`])),
     ...Object.fromEntries(Object.entries(enemyTurns).map(([viewport, table]) => [table.id, `Enemy Turn Table (${viewport})`])),
