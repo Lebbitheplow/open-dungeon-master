@@ -533,4 +533,26 @@ await test("at a table a person runs, that person reads the plan on the Bonds ta
   assert.doesNotMatch(player.text, PLAN, "its lead plays a character: never theirs");
 });
 
+await test("two companions gathering help against the party are no rivals: the agency dice write no rivalry between them", async () => {
+  const world = await openWorld();
+  world.addHero({ name: "Kael" });
+  const { avengeGoal } = await import("../src/lib/dm/departure-logic.ts");
+  const gone = [];
+  for (const name of ["Brother Aldous Penn", "Dame Seraphine Vale"]) {
+    assert.equal((await world.invoke("set_npc", { name })).ok, true);
+    const npc = npcs.getNpcByName(world.campaignId, name);
+    npcs.patchNpcAgency(npc.id, { goals: { session: { text: avengeGoal(name), progress: 0, target: 3 } } });
+    gone.push(npc.id);
+  }
+  // A step on each goal, then a contest a rivalry would settle.
+  world.dice(1, 1, 5, 15);
+  advanceNpcAgency(world.campaignId, "", { tickPressureCounters: false });
+  world.clearDice();
+  const rivalries = listActiveFacts(world.campaignId).filter((fact) => /rivalry/.test(fact.fact));
+  assert.deepEqual(rivalries.map((fact) => fact.fact), []);
+  for (const id of gone) {
+    assert.deepEqual(npcs.getNpcById(id).agency.relations, [], "neither resents the other");
+  }
+});
+
 finish();

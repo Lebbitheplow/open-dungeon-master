@@ -28,6 +28,10 @@ function goalTerms(text: string, language: TableLanguage): Map<string, string> {
 // in more than half of `pool` (every goal its NPCs have) is what all its
 // goals say ("wants", "the party"), while one only two goals share always
 // counts, so a small campaign still sees its rivalries.
+// A word a third goal uses too is often where the story stands, not what
+// anyone is after: "get the cart out of the ford" and "leave the ford with
+// the strongbox" are two people at one ford, not rivals for it. Such a word
+// names a prize only beside a second word the two goals share.
 export function detectGoalCollisions(
   npcs: Array<{ name: string; goalText: string }>,
   language: TableLanguage,
@@ -47,9 +51,12 @@ export function detectGoalCollisions(
   const collisions: GoalCollision[] = [];
   for (let indexA = 0; indexA < npcs.length; indexA += 1) {
     for (let indexB = indexA + 1; indexB < npcs.length; indexB += 1) {
-      const shared = [...terms[indexA]].find(([stem]) => terms[indexB].has(stem) && !common(stem));
-      if (shared) {
-        collisions.push({ a: npcs[indexA].name, b: npcs[indexB].name, over: shared[1] });
+      const shared = [...terms[indexA]]
+        .filter(([stem]) => terms[indexB].has(stem) && !common(stem))
+        .sort(([one], [other]) => (frequency.get(one) ?? 0) - (frequency.get(other) ?? 0));
+      const [rarest] = shared;
+      if (rarest && (shared.length > 1 || (frequency.get(rarest[0]) ?? 0) <= 2)) {
+        collisions.push({ a: npcs[indexA].name, b: npcs[indexB].name, over: rarest[1] });
       }
     }
   }
