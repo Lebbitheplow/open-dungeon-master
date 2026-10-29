@@ -10,6 +10,8 @@ import { cn } from "@/lib/cn";
 import { useLowEffects } from "@/lib/effects-mode";
 import { freshPlaySheet, revealLine, threeThingsToTry } from "@/lib/characters/hero-tips";
 import type { CreateSheetInput } from "@/lib/schemas/sheet";
+import { classLevelWords, isSplit } from "@/lib/characters/class-words";
+import { workshopClassName } from "@/lib/classes/workshop-registry";
 import { CharacterPortrait, ui } from "@/lib/ui";
 import { UseInCampaignDialog } from "../UseInCampaignDialog";
 
@@ -25,7 +27,10 @@ type ReadyCharacter = {
   name: string;
   role?: "pc" | "companion";
   race: string;
+  // A homebrew race's and a workshop class's names (the fields hold ids).
+  raceLabel?: string;
   class: string;
+  className?: string;
   subclass: string;
   level: number;
   portraitStatus?: "queued" | "generating" | "failed" | null;
@@ -145,8 +150,14 @@ export default function HeroReadyPage({ params }: { params: Promise<{ characterI
   }
 
   const portraitUrl = character.sheet.portrait?.url;
-  const ancestry = spaced(character.race);
-  const calling = `${spaced(character.class)}${character.subclass ? ` (${spaced(character.subclass)})` : ""}`;
+  const ancestry = character.raceLabel ?? spaced(character.race);
+  // A split names each class's levels (backlog F9); one class reads the
+  // server's name for it, a workshop class's included.
+  const split = { ...character, classes: character.sheet.classes };
+  const classWords = isSplit(split)
+    ? classLevelWords(split, (id) => workshopClassName(id) ?? spaced(id))
+    : (character.className ?? spaced(character.class));
+  const calling = `${classWords}${character.subclass ? ` (${spaced(character.subclass)})` : ""}`;
   const motion = lowEffects ? "" : "reveal";
 
   return (

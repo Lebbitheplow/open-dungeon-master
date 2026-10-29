@@ -3,7 +3,7 @@ import { getContentDb } from "@/lib/content/db";
 import { repairedWeight } from "@/lib/content/item-weights";
 import { gearFromHomebrewData } from "@/lib/homebrew/gear";
 import { workshopClassFrom, type WorkshopClass } from "@/lib/homebrew/class-data";
-import { registerWorkshopClasses } from "@/lib/classes/workshop-registry";
+import { registerWorkshopClasses, workshopClassName } from "@/lib/classes/workshop-registry";
 import { SRD_ARMOR } from "@/lib/srd/armor";
 import { magicItemNamed } from "@/lib/srd/magic-items";
 import { matchGear } from "@/lib/srd/adventuring-gear";
@@ -287,15 +287,46 @@ export function tableAuthors(campaignId: string): string[] {
   ];
 }
 
-export function homebrewRaceLabel(userId: string, race: string, campaignId?: string): string | undefined {
-  // Keep the admitted ID for rules and edits; resolve only its display name.
-  if (!race.startsWith("homebrew:")) return undefined;
-  const authors = campaignId ? tableAuthors(campaignId) : [userId];
+// The name a homebrew race or background on a sheet was given ("homebrew:<id>"
+// is all the sheet holds). Keep the admitted ID for rules and edits; resolve
+// only its display name: what the sheet shows, what the AI GM reads and what
+// a portrait is painted from (issue 569). The table's authors brew for it; a
+// player may have brewed their own.
+export function homebrewLabel(
+  userId: string,
+  ref: string,
+  kind: "race" | "background",
+  campaignId?: string,
+): string | undefined {
+  if (!ref.startsWith("homebrew:")) return undefined;
+  const authors = [...new Set([...(campaignId ? tableAuthors(campaignId) : []), userId])];
   for (const author of authors) {
-    const entry = getHomebrew(author, race.slice("homebrew:".length));
-    if (entry?.kind === "race") return entry.name;
+    const entry = getHomebrew(author, ref.slice("homebrew:".length));
+    if (entry?.kind === kind) return entry.name;
   }
   return undefined;
+}
+
+export function homebrewRaceLabel(userId: string, race: string, campaignId?: string): string | undefined {
+  return homebrewLabel(userId, race, "race", campaignId);
+}
+
+// A library character's homebrew and workshop names, for the pages that show
+// it: the raceLabel and backgroundLabel a campaign sheet carries
+// (src/lib/db/sheets.ts), and a workshop class's name.
+export function libraryLabels(character: { userId: string; race: string; class: string; background: string }): {
+  raceLabel?: string;
+  className?: string;
+  backgroundLabel?: string;
+} {
+  const raceLabel = homebrewLabel(character.userId, character.race, "race");
+  const className = workshopClassName(character.class);
+  const backgroundLabel = homebrewLabel(character.userId, character.background, "background");
+  return {
+    ...(raceLabel ? { raceLabel } : {}),
+    ...(className ? { className } : {}),
+    ...(backgroundLabel ? { backgroundLabel } : {}),
+  };
 }
 
 // A sheet's equipment with every homebrew item's mechanics snapshotted onto

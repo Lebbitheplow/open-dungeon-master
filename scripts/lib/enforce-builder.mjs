@@ -39,7 +39,7 @@ export function standardScores(order = ["str", "dex", "con", "int", "wis", "cha"
 export async function openBuilder() {
   const src = (file) => import(new URL(`../../src/${file}`, import.meta.url).href);
   const options = await src("app/characters/builder/useBuilderOptions.ts");
-  const { useBuilderDerived } = await src("app/characters/builder/useBuilderDerived.ts");
+  const { useBuilderDerived, extraClassRows } = await src("app/characters/builder/useBuilderDerived.ts");
   const submit = await src("app/characters/builder/submit.ts");
   const { splitToolGrants } = await src("lib/srd/tool-choices.ts");
 
@@ -90,6 +90,12 @@ export async function openBuilder() {
       stylePicks: [],
       optionPicks: [],
       subclass: "",
+      // The classes taken after the first (backlog F9): none for one class.
+      extraClasses: [],
+      casterSpells: {},
+      storedClassCount: 0,
+      storedClassIds: [],
+      storedCastingCount: 0,
       spells: [],
       bookPrepared: [],
       cantrips: [],
@@ -132,8 +138,10 @@ export async function openBuilder() {
         ? { toolPicks: firstToolPicks([...(klass.tools ?? []), ...(backgroundRow.tools ?? [])]) }
         : {};
     const state = stateOf({ ...thrown, ...picked, ...fields });
+    // The classes after the first with their rows, as the wizard passes them.
+    const extras = extraClassRows(state.extraClasses, classes);
     const derived = withoutReact(() =>
-      useBuilderDerived({ state, race: raceRow, klass, background: backgroundRow, featDescs }),
+      useBuilderDerived({ state, race: raceRow, klass, background: backgroundRow, extras, featDescs }),
     );
     const input = { state, derived, race: raceRow, klass, background: backgroundRow };
     const blocker = submit.validateBuilder(input);

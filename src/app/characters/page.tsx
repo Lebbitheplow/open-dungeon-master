@@ -42,16 +42,19 @@ type LibraryCharacter = {
   id: string;
   name: string;
   race: string;
+  // A homebrew race's name (the race holds its id).
+  raceLabel?: string;
   class: string;
   // A workshop class's name (the class holds its id).
   className?: string;
   subclass: string;
   background: string;
+  backgroundLabel?: string;
   level: number;
   updatedAt: string;
   portraitStatus?: "queued" | "generating" | "failed" | null;
   campaigns?: CharacterAssignment[];
-  sheet?: { portrait?: { url: string } | null; gender?: string };
+  sheet?: { portrait?: { url: string } | null; gender?: string; classes?: Array<{ id: string; level: number }> };
 };
 
 function portraitPending(character: LibraryCharacter) {
@@ -61,6 +64,8 @@ function portraitPending(character: LibraryCharacter) {
 // Matches the ComfyUI generation timeout; polling stops even if the server
 // never resolves the job.
 const PORTRAIT_POLL_LIMIT = 240;
+
+import { classWordsAfterLevel } from "@/lib/characters/class-words";
 
 function titleCase(value: string) {
   return value.replace(/[-_]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -507,16 +512,19 @@ function CharacterCard({
               {character.name}
             </span>
             <span className="inline-flex rounded-full border border-amber-500/30 bg-amber-400/10 px-2 py-0.5 text-[11px] text-amber-200">
-              Level {character.level} {character.className ?? titleCase(character.class)}
+              Level {character.level}{" "}
+              {classWordsAfterLevel({ ...character, classes: character.sheet?.classes }, (id) =>
+                id === character.class ? (character.className ?? titleCase(id)) : titleCase(id),
+              )}
             </span>
           </div>
         </div>
         <p className="mt-2 text-sm text-stone-400">
-          {titleCase(character.race)}
+          {character.raceLabel ?? titleCase(character.race)}
           {character.subclass ? ` (${character.subclass})` : ""}
         </p>
         {character.background ? (
-          <p className="reveal text-xs text-stone-500">{titleCase(character.background)}</p>
+          <p className="reveal text-xs text-stone-500">{character.backgroundLabel ?? titleCase(character.background)}</p>
         ) : null}
       </Link>
       <RosterPortraitStatus

@@ -219,6 +219,11 @@ export function JoinConfirmDialog({
                   ))}
                 </ul>
               )}
+              {(preview.notes ?? []).map((note) => (
+                <p key={note} className="text-xs text-amber-200" data-join-note>
+                  {note}
+                </p>
+              ))}
               {preview.rollsHp ? (
                 <p className="text-xs text-stone-400">
                   This table rolls hit points, so they are rolled {hero?.kind === "built" ? "" : "again "}when {name} takes the seat.

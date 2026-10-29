@@ -16,12 +16,15 @@ import { genrePreset } from "@/lib/genres";
 import type { Genre } from "@/lib/schemas/game-settings";
 import { findClass } from "@/lib/srd";
 import { workshopClassName } from "@/lib/classes/workshop-registry";
+import { classWordsAfterLevel } from "@/lib/characters/class-words";
 
 export type ChooserCharacter = {
   id: string;
   name: string;
   role?: "pc" | "companion";
   race: string;
+  // A homebrew race's name (GET /api/characters).
+  raceLabel?: string;
   class: string;
   subclass: string;
   level: number;
@@ -165,7 +168,8 @@ export function HeroChooser({
             ) : null}
           </div>
           <p className="mt-1 text-sm text-stone-400">
-            Level {character.level} {titleCase(character.race)} {workshopClassName(character.class) ?? titleCase(character.class)}
+            Level {character.level} {character.raceLabel ?? titleCase(character.race)}{" "}
+            {classWordsAfterLevel({ ...character, classes: character.sheet?.classes }, (id) => workshopClassName(id) ?? titleCase(id))}
             {character.subclass ? ` (${character.subclass})` : ""}
           </p>
           {from ? <p className="mt-0.5 text-xs text-stone-500">From {from}</p> : null}

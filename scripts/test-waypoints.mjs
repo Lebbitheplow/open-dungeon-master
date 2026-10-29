@@ -196,6 +196,101 @@ test("the planners' beats parse with or without waypoints, and land on the new a
   assert.equal(saga.beats[1].waypoints, undefined);
 });
 
+// A table met act 1's boss three messages in: the planner had put the boss
+// fight on the act's first beat, listed after the village and the elder, and
+// the DM fought it the moment the elder was asked a question.
+test("a planner's fight comes after the beat's talk, and the act's boss waits for the act's last beat", () => {
+  const profile = { minActs: 2, maxActs: 3, actsText: "2", subArcsText: "2" };
+  const saga = parseSagaJson(
+    JSON.stringify({
+      title: "The Ashen Grove",
+      premise: "The Old Grove is dying.",
+      actPlan: [{ milestone: "m1", boss: { name: "The Rot-Crowned Stag", detail: "d" } }, { milestone: "m2" }],
+      act1Beats: [
+        {
+          text: "Return to Hollowmere and see the blight.",
+          waypoints: [
+            { kind: "fight", text: "The Rot-Crowned Stag" },
+            { kind: "place", text: "The Village of Hollowmere" },
+            { kind: "npc", text: "Elder Osric" },
+          ],
+        },
+        { text: "Decipher the texts.", waypoints: [{ kind: "fight", text: "Drive off the looters" }, { kind: "objective", text: "Decipher the Elder Texts" }] },
+        { text: "Leave for the frontier.", waypoints: [{ kind: "place", text: "The Edge of the Wild Frontier" }] },
+      ],
+    }),
+    profile,
+  );
+  assert.deepEqual(
+    saga.beats[0].waypoints.map((w) => w.text),
+    ["The Village of Hollowmere", "Elder Osric"],
+    "the boss left the opening beat",
+  );
+  assert.deepEqual(
+    saga.beats[1].waypoints.map((w) => w.kind),
+    ["objective", "fight"],
+    "a fight that is not the boss stays, after the beat's other steps",
+  );
+  assert.deepEqual(
+    saga.beats[2].waypoints.map((w) => `${w.kind}:${w.text}`),
+    ["place:The Edge of the Wild Frontier", "fight:The Rot-Crowned Stag"],
+    "the boss is fought on the act's last beat",
+  );
+  assert.ok(saga.beats[2].waypoints.every((w) => !w.done));
+
+  // A boss named a little differently still moves, and a last beat that
+  // already fights it keeps one step, not two.
+  const repeat = parseSagaJson(
+    JSON.stringify({
+      title: "T",
+      premise: "p",
+      actPlan: [{ milestone: "m1", boss: { name: "The Rot-Crowned Stag", detail: "d" } }, { milestone: "m2" }],
+      act1Beats: [
+        { text: "one", waypoints: [{ kind: "fight", text: "Rot-Crowned Stag" }] },
+        { text: "two", waypoints: [{ kind: "fight", text: "Defeat the Rot-Crowned Stag" }] },
+      ],
+    }),
+    profile,
+  );
+  assert.equal(repeat.beats[0].waypoints, undefined, "a beat whose only step was the boss gates nothing");
+  assert.deepEqual(repeat.beats[1].waypoints.map((w) => w.text), ["Defeat the Rot-Crowned Stag"]);
+
+  // The act a refresh details later follows the same rule, by its boss event.
+  const before = normalizeStoryArc({
+    premise: "p",
+    beats: [
+      { text: "a", status: "done", act: 1 },
+      { text: "b", status: "done", act: 1 },
+    ],
+    saga: {
+      title: "S",
+      plannedActs: 2,
+      sketches: [
+        { act: 1, milestone: "m", status: "detailed" },
+        { act: 2, milestone: "m2", status: "sketch" },
+      ],
+      finaleBoss: null,
+      sagaIndex: 1,
+      priorSagas: [],
+    },
+  });
+  const detail = parseActDetailJson(
+    JSON.stringify({
+      beats: [
+        { text: "Reach the tower.", waypoints: [{ kind: "fight", text: "The Drowned Warden" }, { kind: "place", text: "The Drowned Tower" }] },
+        { text: "Climb it.", waypoints: [{ kind: "place", text: "The broken stair" }] },
+      ],
+      finale: "f",
+      bossEvent: { kind: "setpiece", name: "The Drowned Warden", detail: "d", trigger: "When the party enters the tower." },
+      newEvents: [],
+      newCast: [],
+    }),
+  );
+  const after = applyActDetail(before, detail);
+  assert.deepEqual(after.beats[2].waypoints.map((w) => w.text), ["The Drowned Tower"]);
+  assert.deepEqual(after.beats[3].waypoints.map((w) => w.text), ["The broken stair", "The Drowned Warden"]);
+});
+
 test("only the beat in play shows its checklist to the DM", () => {
   const arc = tickWaypoints(gatedArc(), 2, [1]);
   const rendered = renderArcForPrompt(arc);

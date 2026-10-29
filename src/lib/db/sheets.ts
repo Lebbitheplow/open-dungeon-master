@@ -9,7 +9,7 @@ import { settleLevelChange, withoutDuplicateClasses } from "@/lib/srd/level-chan
 import { normalizeSpellcasting } from "@/lib/srd/spell-lists";
 import { settleAttunement, type Wearer } from "@/lib/srd/magic-items";
 import { itemWeightByName, repairedWeight } from "@/lib/content";
-import { homebrewRaceLabel, hydrateHomebrewGear } from "@/lib/db/homebrew";
+import { homebrewLabel, homebrewRaceLabel, hydrateHomebrewGear } from "@/lib/db/homebrew";
 import { subclassExtrasForTable } from "@/lib/db/subclass-extras";
 import { storedGender } from "@/lib/gender";
 import { attractionJson, normalizeAttraction } from "@/lib/attraction";
@@ -79,6 +79,7 @@ type SheetRow = {
   portrait_json: string | null;
   notes: string;
   backstory: string | null;
+  hopes?: string | null;
   is_companion: number | null;
   companion_kind: string | null;
   commanded_by?: string | null;
@@ -111,6 +112,7 @@ function mapSheet(row: SheetRow): CharacterSheet {
   // Sheets from before the cantrip list kept cantrips in prepared/known.
   const spellcasting = normalizeSpellcasting(parsedCasting);
   const raceLabel = homebrewRaceLabel(row.user_id, row.race, row.campaign_id);
+  const backgroundLabel = homebrewLabel(row.user_id, row.background, "background", row.campaign_id);
   return {
     id: row.id,
     campaignId: row.campaign_id,
@@ -122,6 +124,7 @@ function mapSheet(row: SheetRow): CharacterSheet {
     class: row.class,
     subclass: row.subclass ?? "",
     background: row.background,
+    ...(backgroundLabel ? { backgroundLabel } : {}),
     alignment: row.alignment,
     gender: storedGender(row.gender),
     attraction: normalizeAttraction(row.attraction_json ?? ""),
@@ -172,6 +175,7 @@ function mapSheet(row: SheetRow): CharacterSheet {
     portrait: parseJson<CharacterSheet["portrait"]>(row.portrait_json, null),
     notes: row.notes,
     backstory: row.backstory ?? "",
+    hopes: row.hopes ?? "",
     isCompanion: row.is_companion === 1,
     companionKind:
       row.companion_kind === "party" || row.companion_kind === "guest"
@@ -221,7 +225,7 @@ const SHEET_COLUMNS = `
   classes_json, hit_dice_pools_json,
   proficiencies_json, equipment_json, gold, copper, feats_json, features_json,
   spellcasting_json, conditions_json, condition_meta_json, resources_json, wild_shape_json, pets_json, summon_json, exhaustion, death_saves_json, concentrating_on, concentration_rounds,
-  portrait_json, notes, backstory, is_companion, companion_kind, commanded_by, personality, hand_layout_json, feat_choices_json,
+  portrait_json, notes, backstory, hopes, is_companion, companion_kind, commanded_by, personality, hand_layout_json, feat_choices_json,
   attraction_json, open_to_advances, open_to_pacts, created_at, updated_at
 `;
 
@@ -429,9 +433,9 @@ export function createSheet(
         level, xp, abilities_json, max_hp, current_hp, temp_hp, ac, ac_override, speed,
         hit_dice_json, classes_json, hit_dice_pools_json, proficiencies_json, equipment_json, gold, copper, feats_json,
         features_json, resources_json, spellcasting_json, conditions_json, portrait_json,
-        notes, backstory, feat_choices_json, attraction_json, created_at, updated_at
+        notes, backstory, hopes, feat_choices_json, attraction_json, created_at, updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]', ?, ?, ?, ?, ?, ?, ?, ?)
     `,
   ).run(
     id,
@@ -478,6 +482,7 @@ export function createSheet(
     input.notes,
     // Older library sheet_json blobs predate the field.
     input.backstory ?? "",
+    input.hopes ?? "",
     featChoicesJson(input.featChoices),
     // Older library sheet_json blobs and companion drafts predate the field.
     attractionJson(input.attraction),
@@ -566,6 +571,17 @@ export function listSheetsForLibraryCharacter(libraryCharacterId: string): Chara
     .prepare(`SELECT ${SHEET_COLUMNS} FROM character_sheets WHERE library_character_id = ?`)
     .all(libraryCharacterId) as SheetRow[];
   return rows.map(mapSheet);
+}
+
+// A campaign sheet tied to the library entry it is now kept as: a companion
+// the GM wrote in, saved to its keeper's characters
+// (src/lib/characters/keep-companion.ts). "Save to my characters" then
+// writes its progress back there, as a player's own sheet does.
+export function linkSheetToLibrary(sheetId: string, libraryCharacterId: string): CharacterSheet | null {
+  getDatabase()
+    .prepare(`UPDATE character_sheets SET library_character_id = ?, updated_at = ? WHERE id = ?`)
+    .run(libraryCharacterId, nowIso(), sheetId);
+  return getSheetById(sheetId);
 }
 
 // The name of the character this user plays in each of their campaigns,
@@ -775,6 +791,7 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
     portrait: patch.portrait !== undefined ? patch.portrait : existing.portrait,
     notes: patch.notes ?? existing.notes,
     backstory: patch.backstory ?? existing.backstory,
+    hopes: patch.hopes ?? existing.hopes ?? "",
     featChoices: patch.featChoices ?? existing.featChoices,
   };
 
@@ -904,7 +921,7 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
           spellcasting_json = ?, wild_shape_json = ?, pets_json = ?, exhaustion = ?, death_saves_json = ?, concentrating_on = ?, concentration_rounds = ?,
           feats_json = ?, features_json = ?, subclass = ?,
           classes_json = ?, hit_dice_pools_json = ?,
-          portrait_json = ?, notes = ?, backstory = ?, feat_choices_json = ?, updated_at = ?
+          portrait_json = ?, notes = ?, backstory = ?, hopes = ?, feat_choices_json = ?, updated_at = ?
         WHERE id = ?
       `,
     )
@@ -948,6 +965,7 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
       next.portrait ? JSON.stringify(next.portrait) : null,
       next.notes,
       next.backstory,
+      next.hopes ?? "",
       featChoicesJson(next.featChoices),
       nowIso(),
       sheetId,

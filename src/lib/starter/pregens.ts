@@ -36,7 +36,7 @@ const PRIEST = pack([
 const base: Pick<
   CreateSheetInput,
   | "subclass" | "alignment" | "gender" | "appearance" | "speed" | "classes" | "hitDicePools" | "gold" | "copper"
-  | "feats" | "features" | "asiChoices" | "spellcasting" | "portrait" | "notes" | "backstory"
+  | "feats" | "features" | "asiChoices" | "spellcasting" | "portrait" | "notes" | "backstory" | "hopes"
 > = {
   subclass: "",
   alignment: "",
@@ -54,6 +54,7 @@ const base: Pick<
   portrait: null,
   notes: "",
   backstory: "",
+  hopes: "",
 };
 
 export const PREGENS: Pregen[] = [

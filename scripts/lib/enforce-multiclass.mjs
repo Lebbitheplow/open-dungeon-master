@@ -144,6 +144,7 @@ export async function openTable(options = {}) {
     sheet: await world.route("campaigns/[campaignId]/sheet"),
     usage: await world.route("campaigns/[campaignId]/sheet/usage"),
     sync: await world.route("campaigns/[campaignId]/sheet/sync"),
+    preview: await world.route("campaigns/[campaignId]/sheet/preview"),
   };
 
   // One request, as the signed-in player's client sends it.

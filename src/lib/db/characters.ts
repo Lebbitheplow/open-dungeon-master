@@ -515,7 +515,13 @@ export function syncProgressToLibrary(sheetId: string): LibraryCharacter | null 
     return null;
   }
   const character = getCharacter(sheet.libraryCharacterId);
-  if (!character || character.userId !== sheet.userId) {
+  // A companion's sheet belongs to its bot, so the owners never match: the
+  // entry it came from, or was kept as, is its keeper's, filed as an ally
+  // the GM plays (src/lib/characters/keep-companion.ts).
+  const keeps = character
+    ? character.userId === sheet.userId || (sheet.isCompanion && character.role === "companion")
+    : false;
+  if (!character || !keeps) {
     return null;
   }
   if (keepsLibraryLevel(sheet.level, character.level)) {

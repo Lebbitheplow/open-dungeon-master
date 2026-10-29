@@ -324,14 +324,19 @@ test("a new character's gear is the kit, or bought from the purse", () => {
   assert.deepEqual(splitPurse(["a belt pouch containing 10 gp"]), { equipment: ["Pouch"], purse: 10 });
 });
 
-test("a character is made single-class, and a played one keeps a split it could have", () => {
+test("a character made at a table keeps the split the builder sent, and a played one keeps a split it could have", () => {
   const split = {
     ...FIGHTER, maxHp: 30,
     abilities: { str: 16, dex: 15, con: 10, int: 14, wis: 11, cha: 9 },
     classes: [{ id: "fighter", subclass: "Champion", level: 3 }, { id: "wizard", subclass: "", level: 2 }],
   };
+  // Backlog F9: the table door keeps a class list it may hold.
   const made = taken({ ...split, abilities: FIGHTER.abilities }, { level: 5 });
-  assert.deepEqual(made.classes, []);
+  assert.deepEqual(made.classes.map((entry) => [entry.id, entry.level]), [["fighter", 3], ["wizard", 2]]);
+  // A table that turns multiclassing off makes one class, and says so.
+  refused({ ...split, abilities: FIGHTER.abilities }, { level: 5, multiclassAllowed: false }, "a split at a table without multiclassing");
+  // The AI DM's engine builds one class.
+  assert.deepEqual(judge({ ...split, abilities: FIGHTER.abilities }, { level: 5, door: "engine" }).sheet.classes, []);
   const stored = { door: "stored", level: 5 };
   const entered = taken(split, stored);
   assert.deepEqual(entered.classes.map((entry) => [entry.id, entry.level]), [["fighter", 3], ["wizard", 2]]);

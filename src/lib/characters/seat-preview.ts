@@ -162,7 +162,19 @@ function preview(
     rollsHp: Boolean(admitted.rolledHp),
     ...joinChanges(stored, fromLevel, admitted.sheet, toLevel),
     ...(picks ? { picks } : {}),
+    ...joinNotes(admitted.sheet, campaign),
   };
+}
+
+export const KEEPS_SPLIT_NOTE =
+  "This table turns multiclassing off. Your character keeps the classes it has, but can't take a new class here.";
+
+// A hero already split between classes keeps its classes at a table that
+// turns multiclassing off (the setting's own promise); the sheet says so,
+// and that it takes no new class there (backlog F9, the plan's decision 3).
+function joinNotes(sheet: CreateSheetInput, campaign: Campaign): { notes?: string[] } {
+  const keepsSplit = campaign.gameSettings?.multiclassingEnabled === false && (sheet.classes ?? []).length > 1;
+  return keepsSplit ? { notes: [KEEPS_SPLIT_NOTE] } : {};
 }
 
 export function previewLibraryJoin(character: LibraryCharacter, campaign: Campaign, userId: string, picks?: SeatPicks | null): JoinPreview {

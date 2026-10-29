@@ -8,6 +8,14 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
+## Contributing
+
+Before writing code here, read [.github/CONTRIBUTING.md](.github/CONTRIBUTING.md):
+the conventions the code keeps (pure `*-logic.ts` modules, zod at every
+route, tool errors that say retry or refused, comments that say why), the
+checks to run, and short guides for a new DM tool, route or test suite. The
+sections below cover the areas with rules of their own.
+
 ## Token artwork
 
 Before creating or replacing monster, NPC or character artwork, read

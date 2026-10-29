@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
 import { allocateSeq } from "@/lib/db/campaigns";
-import { getCharacterForUser } from "@/lib/db/characters";
+import { createCharacter, getCharacterForUser } from "@/lib/db/characters";
 import { adaptSheetToLevel } from "@/lib/characters/adapt";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { listSheets } from "@/lib/db/sheets";
@@ -11,6 +11,7 @@ import { admitSheet, refusal } from "@/lib/characters/admit";
 import { olderBuilderOf } from "@/lib/srd/legality/older-builder";
 import { createSheetSchema } from "@/lib/schemas/sheet";
 import { publishWithSeq } from "@/lib/events";
+import { classWords, raceWords } from "@/lib/sheet-words";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,8 +22,10 @@ export const dynamic = "force-dynamic";
 // adapt.ts), which is exactly why the library gained a role column instead
 // of a second table.
 const bodySchema = z.union([
-  z.object({ sheet: createSheetSchema }),
-  z.object({ libraryCharacterId: z.string().min(1) }),
+  // `fromLibraryCharacterId`: a library companion opened with "Change first";
+  // the changed sheet joins tied to that entry, which stays as it was.
+  z.object({ sheet: createSheetSchema, fromLibraryCharacterId: z.string().min(1).max(80).optional() }),
+  z.object({ libraryCharacterId: z.string().min(1).max(80) }),
 ]);
 
 // The party lead (or solo player) builds a lasting party companion from the
@@ -80,20 +83,32 @@ export async function POST(
   // every sheet comes through (src/lib/characters/admit.ts): one built here
   // is held to the rules a player's new character is, and one out of the
   // library enters as a stored character does.
+  //
+  // Either way the companion is kept in its builder's library: one from the
+  // library (or opened from it with "Change first") stays tied to that entry,
+  // and one built here gets an entry of its own, so the next campaign can
+  // bring them without building them again. Its progress goes back there
+  // with "Save to my characters" and at the campaign's end.
+  const fromId = "libraryCharacterId" in parsed.data ? parsed.data.libraryCharacterId : parsed.data.fromLibraryCharacterId;
+  const from = fromId ? getCharacterForUser(context.user.id, fromId) : null;
+  if (fromId && (!from || from.role !== "companion")) {
+    return Response.json({ error: "That companion is not in your library." }, { status: 404 });
+  }
+  // One copy of a kept companion per table: two of the same person in one
+  // party would share a name every lookup reads.
+  if (from && listSheets(campaignId).some((entry) => entry.libraryCharacterId === from.id)) {
+    return Response.json({ error: `${from.name} is already at this table.` }, { status: 409 });
+  }
   let admitted;
-  if ("libraryCharacterId" in parsed.data) {
-    const character = getCharacterForUser(context.user.id, parsed.data.libraryCharacterId);
-    if (!character || character.role !== "companion") {
-      return Response.json({ error: "That companion is not in your library." }, { status: 404 });
-    }
+  if ("libraryCharacterId" in parsed.data && from) {
     admitted = admitSheet({
       door: "stored",
       level,
-      sheet: adaptSheetToLevel(character.sheet, character.level, level),
+      sheet: adaptSheetToLevel(from.sheet, from.level, level),
       userId: context.user.id,
       campaign,
     });
-  } else {
+  } else if ("sheet" in parsed.data) {
     admitted = admitSheet({
       door: "table",
       level,
@@ -102,14 +117,17 @@ export async function POST(
       campaign,
       olderBuilder: olderBuilderOf((raw as { sheet?: unknown } | null)?.sheet),
     });
+  } else {
+    return Response.json({ error: "Invalid companion sheet." }, { status: 400 });
   }
   if (!admitted.ok) {
     return refusal(admitted.problems);
   }
   const input = admitted.sheet;
+  const kept = from ?? createCharacter(context.user.id, level, input, "companion");
   admitted.settle();
 
-  const { sheet } = finalizeNewCompanion(campaign, level, input, "party", input.backstory ?? "");
+  const { sheet } = finalizeNewCompanion(campaign, level, input, "party", input.backstory ?? "", kept.id);
 
   // Active session: a table note so the DM writes them into the scene next
   // turn. In the lobby the opening narration already reads every party sheet.
@@ -120,7 +138,7 @@ export async function POST(
       seq,
       authorType: "system",
       glyph: "system-party",
-      content: `${context.user.username} brings a companion into the party: ${sheet.name}, a ${sheet.race.replaceAll("_", " ")} ${sheet.class}. Introduce them into the scene at the next natural moment.`,
+      content: `${context.user.username} brings a companion into the party: ${sheet.name}, a ${raceWords(sheet)} ${classWords(sheet.class)}. Introduce them into the scene at the next natural moment.`,
     });
     publishWithSeq(campaignId, seq, "message_added", { message });
     requestDmTurn(campaignId);

@@ -36,14 +36,14 @@ export function ClassChoices({
   klass: ClassOption | undefined;
 }) {
   const { effectiveLevel, proficientSkills, styleSlots, styleChoices, optionSlots } = derived;
-  const expertiseSlots = klass ? expertiseSlotsFor(klass.id, effectiveLevel) : 0;
+  // Each class's own at its own level: a rogue taken second brings two.
+  const expertiseSlots = klass ? (derived.expertiseSlots ?? expertiseSlotsFor(klass.id, effectiveLevel)) : 0;
+  const classIds = derived.classList?.length ? derived.classList.map((entry) => entry.id) : klass ? [klass.id] : [];
   // Only picks in a skill the character still has count: dropping a class
   // skill takes its expertise with it, here and in the step's gate.
-  const expertiseChosen = state.expertisePicks.filter((skillId) =>
-    expertiseAllowed(skillId, proficientSkills, klass ? [klass.id] : []),
-  );
+  const expertiseChosen = state.expertisePicks.filter((skillId) => expertiseAllowed(skillId, proficientSkills, classIds));
   // A rogue may take thieves' tools in place of a skill.
-  const expertiseOptions = klass?.id === "rogue" ? [...proficientSkills, THIEVES_TOOLS] : proficientSkills;
+  const expertiseOptions = classIds.includes("rogue") ? [...proficientSkills, THIEVES_TOOLS] : proficientSkills;
   return (
     <>
       {/* Drawn from the skills alone, never from the sheet preview: that waits
@@ -216,7 +216,11 @@ export function ToolGrantPanels({
       {toolGrants.choices.map((choice, index) => {
         const mine = toolGrants.chosen.filter((tool) => choice.from.includes(tool));
         const left = toolGrants.left[index] ?? 0;
-        const source = index < fromClass ? (className ? `your ${className} class` : "") : backgroundName ? `your ${backgroundName} background` : "";
+        // Whose grant it is; a class taken second names its own levels
+        // (derived.toolSources, backlog F9).
+        const source =
+          derived.toolSources?.[index] ??
+          (index < fromClass ? (className ? `your ${className} class` : "") : backgroundName ? `your ${backgroundName} background` : "");
         return (
           <StepPanel
             key={`${choice.label}-${index}`}

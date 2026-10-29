@@ -45,6 +45,8 @@ import { LoadBreakdown } from "@/components/sheet/LoadBreakdown";
 import { ResourceRow, SlotRow, STEP_BUTTON } from "@/components/sheet/SheetCounters";
 import { namesLookup } from "@/lib/battlemap/condition-notes";
 import { workshopClassName } from "@/lib/classes/workshop-registry";
+import { StoryHopes } from "@/app/campaigns/[campaignId]/StoryHopes";
+import { classWordsAfterLevel, isSplit } from "@/lib/characters/class-words";
 
 function titleCase(value: string) {
   return value.replace(/[-_]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -232,12 +234,10 @@ export function CharacterSheetDialog({
                 </Dialog.Title>
                 <p className="text-xs text-stone-400">
                   Level {sheet.level} {sheet.raceLabel ?? titleCase(sheet.race)}{" "}
-                  {(sheet.classes?.length ?? 0) > 1
-                    ? (sheet.classes ?? [])
-                        .map((entry) => `${workshopClassName(entry.id) ?? titleCase(entry.id)} ${entry.level}`)
-                        .join(" / ")
+                  {isSplit(sheet)
+                    ? classWordsAfterLevel(sheet, (id) => workshopClassName(id) ?? titleCase(id))
                     : `${workshopClassName(sheet.class) ?? titleCase(sheet.class)}${sheet.subclass ? ` (${titleCase(sheet.subclass)})` : ""}`}
-                  {sheet.background ? ` · ${titleCase(sheet.background)}` : ""}
+                  {sheet.background ? ` · ${sheet.backgroundLabel ?? titleCase(sheet.background)}` : ""}
                   {sheet.alignment ? ` · ${sheet.alignment}` : ""}
                 </p>
               </div>
@@ -599,6 +599,8 @@ export function CharacterSheetDialog({
               <p className="whitespace-pre-wrap font-serif text-sm leading-relaxed text-stone-300">{sheet.backstory}</p>
             </SheetBlock>
           ) : null}
+
+          {sheet.isCompanion ? null : <StoryHopes sheet={sheet} mine={mine} />}
 
           {mine && sheet.notes ? (
             <SheetBlock className="mt-4" title="Notes" aside="only you see these">

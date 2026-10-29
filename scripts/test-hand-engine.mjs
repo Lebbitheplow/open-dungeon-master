@@ -21,7 +21,7 @@ const { turnFromEncounter, turnPips, turnHudBudget, playingSheet } = await impor
 const { hudGates } = await import("../src/lib/battlemap/hand-hud.ts");
 const { conditionNote, conditionNoteLine, namesLookup } = await import("../src/lib/battlemap/condition-notes.ts");
 const { characterStageRows, enemyStageRows } = await import("../src/lib/battlemap/view-stage.ts");
-const { messageIntentSchema, describeIntent, intentCorrection, intentTools } = await import("../src/lib/dm/intent-logic.ts");
+const { messageIntentSchema, describeIntent, intentAnswered, intentCorrection, intentTools } = await import("../src/lib/dm/intent-logic.ts");
 const { maxHpView, speedView, hitDiceRows, hitDiceLine, itemStatus, stateTags } = await import(
   "../src/components/sheet/sheet-state.ts"
 );
@@ -360,6 +360,39 @@ test("the message schema keeps the Hand's new fields and names them as tool argu
   assert.match(intentCorrection(attack, "s1", "Kael"), /bonusAttack=martial arts, stunningStrike=true/);
   assert.equal(messageIntentSchema.parse({ card: "basic", action: "search", skill: "investigation" }).skill, "investigation");
   assert.equal(messageIntentSchema.parse({ card: "basic", action: "ready", trigger: "it moves" }).trigger, "it moves");
+});
+
+test("a card counts as resolved only by a call for its character, at its target, casting its spell, that did not come back for a retry (issue 570)", () => {
+  const call = (name, args, result = { ok: true }) => ({ name, args, result });
+  const attack = { intent: messageIntentSchema.parse({ card: "attack", weapon: "Longsword", targetId: "e1", targetKind: "enemy", targetName: "Goblin 1" }), characterId: "s1", name: "Kael" };
+  assert.equal(intentAnswered(attack, [call("pc_attack", { characterId: "s1", targetEnemyId: "e1" })]), true);
+  // The tools take a name as well as an id.
+  assert.equal(intentAnswered(attack, [call("pc_attack", { characterId: "Kael", targetEnemyId: "goblin 1" })]), true);
+  assert.equal(intentAnswered(attack, [call("pc_attack", { characterId: "s2", targetEnemyId: "e1" })]), false, "another character's swing");
+  assert.equal(intentAnswered(attack, [call("pc_attack", { characterId: "s1", targetEnemyId: "e2" })]), false, "another target");
+  assert.equal(intentAnswered(attack, [call("pc_attack", { characterId: "s1", targetEnemyId: "e1" }, { error: "No enemy e1.", retry: true })]), false, "a call sent back");
+  assert.equal(intentAnswered(attack, [call("pc_attack", { characterId: "s1", targetEnemyId: "e1" }, { error: "Not their turn.", refused: "rules" })]), true, "the engine's refusal is its answer");
+  assert.equal(intentAnswered(attack, [call("pc_attack", { characterId: "s1", targetEnemyId: "e1" }, null)]), true, "a swing waiting on the table's dice");
+  assert.equal(intentAnswered(attack, [call("pc_attack", { characterId: "s2", targetEnemyId: "e2" }), call("pc_attack", { characterId: "s1", targetEnemyId: "e1" })]), true, "any call of the turn");
+
+  const fireball = { intent: messageIntentSchema.parse({ card: "spell", spell: "Fireball", slotLevel: 3 }), characterId: "s1", name: "Kael", resolution: "save" };
+  assert.equal(intentAnswered(fireball, [call("use_spell_slot", { characterId: "s1", level: 3, spell: "Fireball" })]), false, "a slot spent is not a Fireball cast");
+  assert.equal(intentAnswered(fireball, [call("aoe_damage", { casterCharacterId: "s1", spell: "Fireball", enemyIds: ["e1", "e2"] })]), true);
+  assert.equal(intentAnswered(fireball, [call("aoe_damage", { casterCharacterId: "s1", spell: "Lightning Bolt", enemyIds: ["e1"] })]), false, "another spell");
+  assert.match(intentCorrection(fireball.intent, "s1", "Kael", "save"), /use_spell_slot does not cast it/);
+  // A utility spell, or one the content does not know, has only the slot to spend.
+  const light = { intent: messageIntentSchema.parse({ card: "spell", spell: "Detect Magic", slotLevel: 1 }), characterId: "s1", name: "Kael", resolution: "utility" };
+  assert.equal(intentAnswered(light, [call("use_spell_slot", { characterId: "s1", level: 1, spell: "Detect Magic" })]), true);
+  assert.equal(intentAnswered({ ...light, resolution: null }, [call("use_spell_slot", { characterId: "s1", level: 1 })]), true);
+  assert.doesNotMatch(intentCorrection(light.intent, "s1", "Kael", "utility"), /use_spell_slot does not cast it/);
+
+  // heal names the one healed characterId and the caster casterId.
+  const cure = { intent: messageIntentSchema.parse({ card: "spell", spell: "Cure Wounds", slotLevel: 1, targetId: "s2", targetKind: "ally", targetName: "Mira" }), characterId: "s1", name: "Kael", resolution: "heal" };
+  assert.equal(intentAnswered(cure, [call("heal", { characterId: "s2", casterId: "s1", spell: "Cure Wounds", level: 1 })]), true);
+  assert.equal(intentAnswered(cure, [call("heal", { characterId: "s3", casterId: "s1", spell: "Cure Wounds", level: 1 })]), false, "healed someone else");
+  // use_reaction's spell is the spell it counters.
+  const counter = { intent: messageIntentSchema.parse({ card: "reaction", spell: "Counterspell" }), characterId: "s1", name: "Kael" };
+  assert.equal(intentAnswered(counter, [call("use_reaction", { characterId: "s1", spell: "Hold Person", level: 3 })]), true);
 });
 
 // ---- U:UA10 cover and flanking in the preview ----
