@@ -23,6 +23,7 @@ import { getSheetById } from "@/lib/db/sheets";
 import { addConditionInstance, isIncapacitated, type ConditionMeta, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { meetEnemyPart } from "@/lib/dm/enemy-defenses";
 import { settleEnemyIncapacitation } from "@/lib/dm/enemy-incapacitation";
+import { getFoe } from "@/lib/dm/sheet-foe";
 import { breakConcentration, clearSpellConditionsByName } from "@/lib/dm/concentration";
 import { applyEnemyDamage, publishEncounter } from "@/lib/dm/enemy-damage";
 import { rollCharacterSave, rollEnemySave } from "@/lib/dm/forced-save";
@@ -168,9 +169,12 @@ export function turnEndMark(condition: SpellCondition | undefined, source: Spell
 }
 
 // Lays conditions (each with its own meta) on a living enemy, leaving the
-// ones it is immune to or already holds. Returns what landed.
+// ones it is immune to or already holds. Returns what landed. A character
+// fighting on the other side is read as its foe view, so a failed save
+// against a sheet-to-sheet spell binds that sheet (patchEnemyConditions
+// writes it there) instead of finding no enemy row and laying nothing.
 export function layOnEnemy(enemyId: string, entries: Array<[string, ConditionMeta]>): string[] {
-  const enemy = getEnemy(enemyId);
+  const enemy = getFoe(enemyId);
   if (!enemy || enemy.status !== "alive") {
     return [];
   }

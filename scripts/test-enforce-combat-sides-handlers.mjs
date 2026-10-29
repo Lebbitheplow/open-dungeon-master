@@ -116,6 +116,94 @@ await test("cast_at_player with a sheet caster named by casterEnemyId: the turnc
   assert.equal(world.sheet(hero.id).currentHp, 40 - 5);
 });
 
+// A cleric companion turned on the party, Hold Person and Blindness/Deafness
+// prepared, a 2nd-level slot to spend.
+const TURNCOAT_CLERIC = {
+  class: "cleric",
+  spellcasting: { ability: "wis", slots: { 1: { max: 2, used: 0 }, 2: { max: 2, used: 0 } }, known: [], prepared: ["Hold Person", "Blindness/Deafness"], cantrips: ["Sacred Flame"] },
+  abilities: { ...BODY, wis: 16 },
+  equipment: [{ name: "Component pouch", qty: 1 }],
+};
+
+async function turncoatCasting() {
+  const { turncoat } = await stage(1, TURNCOAT_CLERIC);
+  moveToSide(world.campaign(), turncoat.id, "foe");
+  kit.place(turncoat.id, 3, 3);
+  kit.giveTurn(turncoat.id);
+  return turncoat;
+}
+
+await test("A turncoat's Hold Person at a party member who fails the save paralyzes them, tied to the caster's concentration, with a save at the end of each of their turns", async () => {
+  const turncoat = await turncoatCasting();
+  // Mira's WIS save: a d20 of 2 (+0) against the turncoat's DC 13.
+  world.dice(2);
+  const out = await world.invoke("cast_at_player", { characterId: hero.id, casterEnemyId: turncoat.id, spell: "Hold Person", saveAbility: "wis" });
+  world.clearDice();
+  assert.equal(out.ok, true, out.error);
+  assert.equal(out.result.saved, false, JSON.stringify(out.result));
+  assert.match(String(out.result.conditionApplied), /paralyzed/, JSON.stringify(out.result));
+  const held = world.sheet(hero.id);
+  assert.ok(held.conditions.includes("paralyzed"), JSON.stringify(held.conditions));
+  assert.equal(held.conditionMeta.paralyzed?.spell, "Hold Person");
+  assert.equal(held.conditionMeta.paralyzed?.source, turncoat.id);
+  assert.equal(world.sheet(turncoat.id).concentratingOn, "Hold Person");
+  // The end of Mira's turn: a failed WIS save keeps the hold, a made one ends it.
+  const { endTurnSaves } = await import("../src/lib/dm/condition-tick.ts");
+  world.dice(3);
+  endTurnSaves(world.campaign(), world.encounter(), [hero.id]);
+  world.clearDice();
+  assert.ok(world.sheet(hero.id).conditions.includes("paralyzed"), "a failed repeat save keeps the hold");
+  world.dice(19);
+  endTurnSaves(world.campaign(), world.encounter(), [hero.id]);
+  world.clearDice();
+  assert.ok(!world.sheet(hero.id).conditions.includes("paralyzed"), "a made repeat save ends the hold");
+});
+
+await test("A turncoat's broken concentration ends the Hold Person on the party member it held", async () => {
+  const turncoat = await turncoatCasting();
+  world.dice(2);
+  const out = await world.invoke("cast_at_player", { characterId: hero.id, casterEnemyId: turncoat.id, spell: "Hold Person" });
+  world.clearDice();
+  assert.equal(out.ok, true, out.error);
+  assert.ok(world.sheet(hero.id).conditions.includes("paralyzed"), JSON.stringify(out.result));
+  const { breakConcentration } = await import("../src/lib/dm/concentration.ts");
+  breakConcentration(world.campaign(), null, turncoat.id, "struck");
+  assert.ok(!world.sheet(hero.id).conditions.includes("paralyzed"), "the hold ends with the caster's concentration");
+});
+
+await test("A turncoat's Blindness/Deafness at a party member who fails the save blinds them", async () => {
+  const turncoat = await turncoatCasting();
+  // Mira's CON save: a d20 of 2 (+2) against DC 13.
+  world.dice(2);
+  const out = await world.invoke("cast_at_player", { characterId: hero.id, casterEnemyId: turncoat.id, spell: "Blindness/Deafness", condition: "blinded" });
+  world.clearDice();
+  assert.equal(out.ok, true, out.error);
+  assert.equal(out.result.saved, false, JSON.stringify(out.result));
+  const blind = world.sheet(hero.id);
+  assert.ok(blind.conditions.includes("blinded"), JSON.stringify(out.result));
+  assert.equal(blind.conditionMeta.blinded?.source, turncoat.id);
+});
+
+await test("A party cleric's Hold Person at a turncoat who fails the save paralyzes the turncoat's sheet", async () => {
+  const { turncoat } = await stage();
+  moveToSide(world.campaign(), turncoat.id, "foe");
+  kit.place(turncoat.id, 5, 2);
+  // Concentrating on a spell of its own, which a paralyzed creature cannot keep.
+  world.patch(turncoat.id, { concentratingOn: "Bless" });
+  kit.giveTurn(priest.id);
+  // The turncoat's WIS save: a d20 of 2 (+0) against Oren's DC 15.
+  world.dice(2);
+  const out = await world.invoke("cast_at_enemy", { characterId: priest.id, targetEnemyId: turncoat.id, spell: "Hold Person" });
+  world.clearDice();
+  assert.equal(out.ok, true, out.error);
+  assert.equal(out.result.saved, false, JSON.stringify(out.result));
+  assert.match(String(out.result.conditionApplied), /paralyzed/, JSON.stringify(out.result));
+  const held = world.sheet(turncoat.id);
+  assert.ok(held.conditions.includes("paralyzed"), JSON.stringify(held.conditions));
+  assert.equal(held.conditionMeta.paralyzed?.source, priest.id);
+  assert.equal(held.concentratingOn ?? null, null, "a paralyzed turncoat loses its concentration");
+});
+
 await test("A grapple holds a turncoat when the party member's Athletics beats the character's own check", async () => {
   const { turncoat } = await stage();
   moveToSide(world.campaign(), turncoat.id, "foe");
