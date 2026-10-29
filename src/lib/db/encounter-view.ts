@@ -164,6 +164,8 @@ export type PublicTurn = {
   // Flurry of Blows strikes bought and not yet made.
   flurryStrikes?: number;
   dashed?: boolean;
+  // How many Dashes the turn has taken, when more than one.
+  dashes?: number;
   disengaged?: boolean;
   // A levelled spell already cast this turn with this kind of action.
   castThisAction?: boolean;
@@ -215,6 +217,7 @@ function turnView(encounter: Encounter): { turn?: PublicTurn } {
       ...(budget.oncePerTurn.length ? { marks: budget.oncePerTurn } : {}),
       ...(budget.flurryStrikes ? { flurryStrikes: budget.flurryStrikes } : {}),
       ...(budget.dashed ? { dashed: true } : {}),
+      ...((budget.dashes ?? 0) > 1 ? { dashes: budget.dashes } : {}),
       ...(budget.disengaged ? { disengaged: true } : {}),
       ...(budget.castThisAction ? { castThisAction: true } : {}),
       lightMeleeAttack: Boolean(budget.lightMeleeAttack),
