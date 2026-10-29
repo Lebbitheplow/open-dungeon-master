@@ -137,6 +137,7 @@ export function useBuilderState({
   races,
   classes,
   backgrounds,
+  rowsLoaded = true,
 }: {
   initial?: CreateSheetInput;
   // The text of the stored character's feats, by lower-case name, as
@@ -154,6 +155,12 @@ export function useBuilderState({
   races: RaceOption[];
   classes: ClassOption[];
   backgrounds: BackgroundOption[];
+  // Whether the server's option rows have come (useBuilderOptions loaded).
+  // Until then the bundled lists stand in, and a stored character read
+  // against them falls back to their first race when its own is a pack
+  // species: that race's tongues stood in for the species' own, and a
+  // minotaur's Minotaur came back as a bonus language no longer on offer.
+  rowsLoaded?: boolean;
 }) {
   const { storedLevel, levelFloor } = storedLevelRange(initial, initialLevel);
   const [name, setName] = useState(initial?.name ?? "");
@@ -605,6 +612,11 @@ export function useBuilderState({
     if (!races.length || !classes.length || !backgrounds.length || !storedFeatsKnown) {
       return;
     }
+    // A stored character is read once, against the rows that hold its race,
+    // class and background, not the bundled stand-ins.
+    if (initial && !hydratedInitial.current && !rowsLoaded) {
+      return;
+    }
     const rows = [races, classes, backgrounds];
     if (checkedRows.current && rows.every((row, index) => row === checkedRows.current![index])) {
       return;
@@ -702,7 +714,7 @@ export function useBuilderState({
     applyReconciled("content pack", reconciled(ids, picks), true);
     // Runs when the option rows change; the picks it reads are this render's.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initial, storedFeatsKnown, races, classes, backgrounds]);
+  }, [initial, storedFeatsKnown, races, classes, backgrounds, rowsLoaded]);
 
   // Choosing a different race throws away every race-specific pick, since
   // none of them make sense for the new one, and re-checks the rest (a class

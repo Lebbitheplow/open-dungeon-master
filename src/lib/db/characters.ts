@@ -2,6 +2,7 @@ import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { byName, textKey } from "@/lib/language/text-logic";
 import { createSheet, getSheetById, getSheetForUser, listSheetsForUser } from "@/lib/db/sheets";
 import { adaptSheetToLevel } from "@/lib/characters/adapt";
+import { multiclassEntryProblem } from "@/lib/srd/sheet-legality";
 import { admitSheet } from "@/lib/characters/admit";
 import { getCampaignById, type Campaign } from "@/lib/db/campaigns";
 import { XP_THRESHOLDS, levelForXp } from "@/lib/srd";
@@ -446,11 +447,23 @@ export function admitLibraryCharacter(
   campaign: Campaign | null,
   userId: string,
   level: number,
+  // The classes the seat this character replaces holds: its own edit at a
+  // table that turned multiclassing off after it sat down.
+  held?: ReadonlyArray<{ id: string }>,
 ): { ok: true; sheet: CreateSheetInput } | { ok: false; error: string; problems: string[] } {
   // The adaptation itself lives in src/lib/characters/adapt.ts, pure, so a
   // companion coming out of this same library gets exactly the work done to
   // it and a test can drive every branch without a database.
   const adapted = adaptSheetToLevel(character.sheet, character.level, level);
+  const split = multiclassEntryProblem(
+    character.name,
+    adapted.classes,
+    campaign?.gameSettings?.multiclassingEnabled !== false,
+    held,
+  );
+  if (split) {
+    return { ok: false, error: split, problems: [split] };
+  }
   const admitted = admitSheet({
     door: "stored",
     level,

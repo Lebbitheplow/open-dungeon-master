@@ -172,6 +172,29 @@ function classListOf(
   return sent.map((entry) => ({ ...entry }));
 }
 
+// SRD 5.1 makes multiclassing the table's choice, so a table that turns it
+// off takes in no character from outside that holds levels in more than one
+// class: a library hero or companion joining it is refused, and told what
+// will do. One seated there before the switch went off keeps the classes it
+// holds (the setting's own promise), so its own edit passes them as `held`.
+// A character a lower table's level strips to one class comes in as that.
+export function multiclassEntryProblem(
+  name: string,
+  classes: ReadonlyArray<{ id: string }> | null | undefined,
+  multiclassAllowed: boolean,
+  held: ReadonlyArray<{ id: string }> = [],
+): string | null {
+  const list = classes ?? [];
+  if (multiclassAllowed || list.length < 2) {
+    return null;
+  }
+  const seat = new Set(held.map((entry) => textKey(entry.id)));
+  if (list.every((entry) => seat.has(textKey(entry.id)))) {
+    return null;
+  }
+  return `${name} holds levels in more than one class, and this table turns multiclassing off. Bring a character with one class, or build one here.`;
+}
+
 function subclassesOf(
   classes: ClassEntry[],
   context: LegalityContext,

@@ -124,7 +124,7 @@ await test("Level up opens the sheet; Edit the whole build opens the full builde
 
 await test("The sheet builds the result the builder would and fills only its own empty picks", () => {
   const sheet = read("src/app/characters/builder/LevelUpSheet.tsx");
-  assert.ok(sheet.includes("useBuilderState({ initial, initialFeatDescs, initialLevel, startLevel: nextLevel, races, classes, backgrounds })"));
+  assert.ok(sheet.includes("useBuilderState({ initial, initialFeatDescs, initialLevel, startLevel: nextLevel, races, classes, backgrounds, rowsLoaded: loaded })"));
   assert.ok(sheet.includes("const check = validateBuilder(input);"));
   assert.ok(sheet.includes("onSubmit(buildBuilderResult(input));"));
   assert.ok(sheet.includes("fill.start({ only: [...SHEET_TARGETS] });"), "Choose for me runs the builder's fill on the sheet's picks");

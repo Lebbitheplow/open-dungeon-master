@@ -357,7 +357,9 @@ character stored under the old single table is owed what the new one adds
 the lead edits multiclass sheets through the scalar class/subclass/level
 fields, which fold into the primary class entry. A character may be created
 multiclassed (backlog F9): the builder lists the first class's levels first, and
-each class's prerequisite is checked on the final scores.
+each class's prerequisite is checked on the final scores. A table that turns
+multiclassing off lets in no character holding levels in more than one class;
+one seated before the switch went off keeps its classes.
 
 ## Cross-cutting engines (Phase 8)
 
