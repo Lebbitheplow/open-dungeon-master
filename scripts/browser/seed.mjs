@@ -450,6 +450,33 @@ for (const viewport of ["desktop", "phone"]) {
   stopTables[viewport] = table.id;
 }
 
+// A table per viewport for the Bonds a party has with whoever travels with
+// it (issue 580): the lead runs it as its GM, two players' characters sit
+// at it, and a patron prepared as friendly has not been met yet.
+const bondTables = {};
+{
+  const npcs = await import("../../src/lib/db/npcs.ts");
+  for (const viewport of ["desktop", "phone"]) {
+    const table = campaigns.createCampaign(world.owner.id, {
+      title: `Bonds Table (${viewport})`,
+      description: "A road with company on it.",
+      theme: "high-fantasy",
+      maxPlayers: 6,
+      startingLevel: 3,
+      difficulty: "normal",
+      gameSettings: { ttsEnabled: false, dmMode: "human", companions: "full" },
+    });
+    campaigns.setCampaignStatus(table.id, "active");
+    campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+    const kael = sheets.createSheet(table.id, player.id, 3, heroInput({ name: "Kael Ashvale", class: "rogue", level: 3 }));
+    const other = world.addUser("bonds");
+    campaigns.joinByInviteCode(other.id, campaigns.getCampaignById(table.id).inviteCode);
+    const lyra = sheets.createSheet(table.id, other.id, 3, heroInput({ name: "Lyra Venn", class: "wizard", level: 3 }));
+    npcs.upsertNpc({ campaignId: table.id, name: "Mira Vell", attitude: "friendly", gender: "Female" });
+    bondTables[viewport] = { id: table.id, kael: kael.id, lyra: lyra.id };
+  }
+}
+
 // A table per viewport for the wardrobe (issues 411 and 412): the lead's
 // netrunner, a genre class whose features explain themselves only once the
 // cyberpunk catalog has been fetched, wears one magic cloak and carries a
@@ -1853,6 +1880,7 @@ const ids = {
   prepSourceTitle: PREP_SOURCE_TITLE,
   closing,
   stopTables,
+  bondTables,
   wardrobe,
   directed,
   enemyTurns,
@@ -1900,6 +1928,7 @@ const ids = {
     [offerTable.id]: OFFER_TITLE,
     ...Object.fromEntries(Object.entries(closing).map(([viewport, id]) => [id, `Closing Table (${viewport})`])),
     ...Object.fromEntries(Object.entries(stopTables).map(([viewport, id]) => [id, `Stop Table (${viewport})`])),
+    ...Object.fromEntries(Object.entries(bondTables).map(([viewport, table]) => [table.id, `Bonds Table (${viewport})`])),
     ...Object.fromEntries(Object.entries(wardrobe).map(([viewport, id]) => [id, `Wardrobe (${viewport})`])),
     ...Object.fromEntries(Object.entries(directed).map(([viewport, table]) => [table.id, `Directed Table (${viewport})`])),
     ...Object.fromEntries(Object.entries(enemyTurns).map(([viewport, table]) => [table.id, `Enemy Turn Table (${viewport})`])),
