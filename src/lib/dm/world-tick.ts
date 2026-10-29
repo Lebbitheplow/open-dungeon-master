@@ -5,6 +5,7 @@ import {
   setWorldTickJson,
 } from "@/lib/db/campaigns";
 import { getActiveEncounter } from "@/lib/db/encounters";
+import { getCurrentLocation } from "@/lib/db/locations";
 import { recordExtractedFacts } from "@/lib/db/facts";
 import { publishEphemeral } from "@/lib/events";
 import { advanceNpcAgency } from "@/lib/dm/npc-agency";
@@ -19,6 +20,7 @@ import {
   tickWorld,
   tickWorldQuietly,
   type Spark,
+  type StoryMark,
   type TickConfig,
   type TickResult,
 } from "@/lib/dm/world-tick-logic";
@@ -50,6 +52,21 @@ function tickConfig(): TickConfig {
     },
     worldArcSlope: envNumber("DM_TICK_ARC_SLOPE", defaults.worldArcSlope),
     worldArcCap: envNumber("DM_TICK_ARC_CAP", defaults.worldArcCap),
+    stallTurns: envNumber("DM_TICK_STALL_TURNS", defaults.stallTurns),
+  };
+}
+
+// Where the story stands now, for the stall clock (world-tick-logic.ts
+// storyMoved): taken when a turn starts and again when it ends.
+export function storyMarkFor(campaignId: string): StoryMark {
+  const arc = getCampaignById(campaignId)?.storyArc ?? null;
+  const beat = arc ? arc.beats.findIndex((entry) => entry.status === "active") : -1;
+  return {
+    beat,
+    ticked: beat >= 0 ? (arc!.beats[beat].waypoints ?? []).filter((waypoint) => waypoint.done).length : 0,
+    settled: arc ? arc.beats.filter((entry) => entry.status === "done" || entry.status === "skipped").length : 0,
+    place: getCurrentLocation(campaignId)?.id ?? "",
+    fight: getActiveEncounter(campaignId)?.id ?? "",
   };
 }
 
@@ -89,8 +106,9 @@ function persistTickResult(campaignId: string, result: TickResult) {
 }
 
 // The per-turn tick: one d1000 roll per engine, sparks queued for the next
-// player-driven turn. Never throws (heartbeat callers must not wedge).
-export function tickWorldState(campaignId: string) {
+// player-driven turn. `moved` is whether the turn moved the story, which
+// restarts the stall clock. Never throws (heartbeat callers must not wedge).
+export function tickWorldState(campaignId: string, options: { moved?: boolean } = {}) {
   try {
     const campaign = getCampaignById(campaignId);
     if (!campaign?.gameSettings.worldSimulation) {
@@ -99,7 +117,7 @@ export function tickWorldState(campaignId: string) {
     const result = tickWorld(
       parseTickState(getWorldTickJson(campaignId)),
       campaign.storyArc?.worldArcs ?? [],
-      { inEncounter: Boolean(getActiveEncounter(campaignId)) },
+      { inEncounter: Boolean(getActiveEncounter(campaignId)), moved: options.moved },
       Math.random,
       // The table's combat pace moves the encounter dice (issue #432).
       pacedTickConfig(tickConfig(), campaign.gameSettings.combatPace),

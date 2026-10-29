@@ -9,6 +9,7 @@ import {
   encounterChance,
   pacedTickConfig,
   parseTickState,
+  storyMoved,
   surpriseChance,
   tickWorld,
   tickWorldQuietly,
@@ -60,8 +61,9 @@ test("state round-trips and tolerates garbage", () => {
     turnCount: 7,
     sinceSurprise: 3,
     sinceEncounter: 5,
+    sinceMoved: 2,
     arcWaits: { wa1: 4 },
-    sparks: [{ kind: "surprise", text: "x" }],
+    sparks: [{ kind: "surprise", text: "x" }, { kind: "stall", text: "z" }],
   };
   const parsed = parseTickState(JSON.stringify(state));
   assert.deepEqual(parsed, state);
@@ -96,6 +98,53 @@ test("combat suppresses the encounter engine and freezes its clock", () => {
   const result = tickWorld(state, [], { inEncounter: true }, () => 0);
   assert.equal(result.state.sinceEncounter, 50);
   assert.ok(!result.state.sparks.some((spark) => spark.kind === "encounter"));
+});
+
+// The stall clock: the DM follows the players while the story moves, and is
+// asked to bring the [NOW] beat closer only when it has stood still.
+const still = { inEncounter: false };
+test("the stall clock counts turns the story stood still and sends one note when it runs out", () => {
+  let state = emptyTickState();
+  for (let turn = 1; turn < config.stallTurns; turn += 1) {
+    state = tickWorld(state, [], still, () => 0.999).state;
+    assert.equal(state.sinceMoved, turn);
+    assert.ok(!state.sparks.some((spark) => spark.kind === "stall"), `no stall note after ${turn} quiet turns`);
+  }
+  state = tickWorld(state, [], still, () => 0.999).state;
+  const stall = state.sparks.filter((spark) => spark.kind === "stall");
+  assert.equal(stall.length, 1, "the note goes out on the turn the clock runs out");
+  assert.ok(stall[0].text.includes("[NOW] beat"), "it asks for the [NOW] beat, not a fight");
+  assert.equal(state.sinceMoved, 0, "and the clock starts again");
+});
+
+test("a turn that moved the story, a fight, or something finding the party restarts the stall clock", () => {
+  const waiting = { ...emptyTickState(), sinceMoved: config.stallTurns - 1 };
+  const moved = tickWorld(waiting, [], { inEncounter: false, moved: true }, () => 0.999).state;
+  assert.equal(moved.sinceMoved, 0);
+  assert.ok(!moved.sparks.some((spark) => spark.kind === "stall"));
+  const fighting = tickWorld(waiting, [], { inEncounter: true }, () => 0.999).state;
+  assert.equal(fighting.sinceMoved, 0);
+  const found = tickWorld({ ...waiting, sinceEncounter: 1000 }, [], still, () => 0).state;
+  assert.ok(found.sparks.some((spark) => spark.kind === "encounter"));
+  assert.ok(!found.sparks.some((spark) => spark.kind === "stall"), "an encounter is the story moving, no stall note beside it");
+});
+
+test("a stall clock of 0 never sends the note", () => {
+  const off = { ...config, stallTurns: 0 };
+  let state = emptyTickState();
+  for (let turn = 0; turn < 50; turn += 1) {
+    state = tickWorld(state, [], still, () => 0.999, off).state;
+  }
+  assert.ok(!state.sparks.some((spark) => spark.kind === "stall"));
+});
+
+test("the story moves with a ticked waypoint, a settled beat, a new place or a fight", () => {
+  const mark = { beat: 0, ticked: 1, settled: 0, place: "oakhaven", fight: "" };
+  assert.equal(storyMoved(mark, { ...mark }), false, "talk that changed nothing is not movement");
+  assert.equal(storyMoved(mark, { ...mark, ticked: 2 }), true);
+  assert.equal(storyMoved(mark, { ...mark, beat: 1, settled: 1 }), true);
+  assert.equal(storyMoved(mark, { ...mark, place: "the road" }), true);
+  assert.equal(storyMoved(mark, { ...mark, fight: "stag" }), true);
 });
 
 test("sparks replace per kind and the queue stays bounded", () => {

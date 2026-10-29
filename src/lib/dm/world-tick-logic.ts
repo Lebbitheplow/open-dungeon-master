@@ -15,8 +15,12 @@ import {
 // - world arcs: each off-screen clock's next rung (see world-arc-logic.ts)
 // A fired engine pushes a "spark": a DIRECTOR NOTE the NEXT player-driven
 // turn weaves in, so background dice never trigger model calls themselves.
+// One more spark is no dice at all: a story that has not moved for a set
+// number of turns (no waypoint, beat, new place or fight) gets a "stall"
+// note asking the DM to bring the [NOW] beat closer. The DM follows the
+// players while they are busy, and pushes only when play stands still.
 
-export type SparkKind = "surprise" | "encounter" | "world";
+export type SparkKind = "surprise" | "encounter" | "world" | "stall";
 
 export type Spark = {
   kind: SparkKind;
@@ -29,6 +33,8 @@ export type WorldTickState = {
   turnCount: number;
   sinceSurprise: number;
   sinceEncounter: number;
+  // Turns since the story last moved (see storyMoved below).
+  sinceMoved: number;
   // Turns each world arc has waited since it last advanced, by arc id.
   arcWaits: Record<string, number>;
   sparks: Spark[];
@@ -39,6 +45,8 @@ export type TickConfig = {
   encounter: { grace: number; slope: number; cap: number };
   worldArcSlope: number;
   worldArcCap: number;
+  // Turns without the story moving before the stall note; 0 never sends it.
+  stallTurns: number;
   // What an encounter spark asks of the DM; the balanced wording when unset.
   encounterText?: string;
 };
@@ -51,12 +59,13 @@ export const DEFAULT_TICK_CONFIG: TickConfig = {
   encounter: { grace: 10, slope: 3, cap: 100 },
   worldArcSlope: 2,
   worldArcCap: 100,
+  stallTurns: 6,
 };
 
 const MAX_SPARKS = 3;
 
 export function emptyTickState(): WorldTickState {
-  return { turnCount: 0, sinceSurprise: 0, sinceEncounter: 0, arcWaits: {}, sparks: [] };
+  return { turnCount: 0, sinceSurprise: 0, sinceEncounter: 0, sinceMoved: 0, arcWaits: {}, sparks: [] };
 }
 
 export function parseTickState(raw: string): WorldTickState {
@@ -76,12 +85,13 @@ export function parseTickState(raw: string): WorldTickState {
       turnCount: count(parsed.turnCount),
       sinceSurprise: count(parsed.sinceSurprise),
       sinceEncounter: count(parsed.sinceEncounter),
+      sinceMoved: count(parsed.sinceMoved),
       arcWaits,
       sparks: (Array.isArray(parsed.sparks) ? parsed.sparks : [])
         .filter(
           (spark): spark is Spark =>
             Boolean(spark) &&
-            (spark.kind === "surprise" || spark.kind === "encounter" || spark.kind === "world") &&
+            (spark.kind === "surprise" || spark.kind === "encounter" || spark.kind === "world" || spark.kind === "stall") &&
             typeof spark.text === "string" &&
             Boolean(spark.text),
         )
@@ -113,6 +123,24 @@ const SURPRISE_SPARK =
   "Work a small surprise into the next scene: a reversal, an odd discovery, an unexpected arrival, or a complication in whatever the party is doing. Keep it proportionate; not every surprise is a threat.";
 const ENCOUNTER_SPARK =
   "Something finds the party: an encounter fitting the current location and hour arrives on its own (a patrol, a beast, a traveler, trouble). It need not be hostile; if violence breaks out, use start_encounter.";
+const STALL_SPARK =
+  "The story has stood still for a while. Unless the players are busy with something of their own, bring it a step closer to the [NOW] beat in this scene: a lead turns up, someone arrives with news, or a complication asks for a choice.";
+
+// Where the story stands, as far as the stall clock cares: the [NOW] beat
+// and how many of its waypoints are ticked, how many beats are settled, the
+// place the party is in and the fight it is in. Any change between the start
+// and the end of a turn is the story moving.
+export type StoryMark = { beat: number; ticked: number; settled: number; place: string; fight: string };
+
+export function storyMoved(before: StoryMark, after: StoryMark): boolean {
+  return (
+    before.beat !== after.beat ||
+    before.ticked !== after.ticked ||
+    before.settled !== after.settled ||
+    before.place !== after.place ||
+    before.fight !== after.fight
+  );
+}
 
 // A table's combat pace (issue #432, the campaign's combatPace): the
 // encounter dice relative to the server's own (so the DM_TICK_* knobs still
@@ -159,11 +187,12 @@ export type TickResult = {
   reachedRungs: Array<{ arc: WorldArc; rung: string }>;
 };
 
-// One post-turn tick. Pure: dice come from the injected rng.
+// One post-turn tick. Pure: dice come from the injected rng. `moved` is
+// whether the turn just played moved the story (storyMoved).
 export function tickWorld(
   state: WorldTickState,
   worldArcs: WorldArc[],
-  options: { inEncounter: boolean },
+  options: { inEncounter: boolean; moved?: boolean },
   rng: Rng,
   config: TickConfig = DEFAULT_TICK_CONFIG,
 ): TickResult {
@@ -173,6 +202,8 @@ export function tickWorld(
     turnCount: state.turnCount + 1,
     sinceSurprise: state.sinceSurprise + 1,
     sinceEncounter: state.sinceEncounter + 1,
+    // A fight is the story moving; so is anything the turn changed.
+    sinceMoved: options.moved || options.inEncounter ? 0 : state.sinceMoved + 1,
     arcWaits: { ...state.arcWaits },
     sparks,
   };
@@ -187,6 +218,12 @@ export function tickWorld(
   } else if (roll() < encounterChance(next.sinceEncounter, config)) {
     sparks = pushSpark(sparks, { kind: "encounter", text: config.encounterText ?? ENCOUNTER_SPARK });
     next.sinceEncounter = 0;
+    // Something finding the party moves the story too.
+    next.sinceMoved = 0;
+  }
+  if (config.stallTurns > 0 && next.sinceMoved >= config.stallTurns) {
+    sparks = pushSpark(sparks, { kind: "stall", text: STALL_SPARK });
+    next.sinceMoved = 0;
   }
 
   const reachedRungs: Array<{ arc: WorldArc; rung: string }> = [];

@@ -170,6 +170,17 @@ try {
     });
   })();
 
+  // A move_party the engine refused once ticked the place it named by name,
+  // and the DM narrated an arrival the map never made.
+  await (async () => {
+    const named = { name: "move_party", rawArguments: '{"name":"Reach the Drowned Cathedral of Vael","scene":"village"}' };
+    const none = await tickWaypointsFromCalls(campaign.id, [named], { accepted: new Set(), refused: new Set([named]) });
+    test("a refused call ticks nothing, even under the step's own name", () => {
+      assert.deepEqual(none, []);
+      assert.equal(open().length, 2);
+    });
+  })();
+
   await (async () => {
     const ticked = await tickWaypointsFromCalls(campaign.id, [tagged], { accepted: new Set([tagged]) });
     test("an accepted call tagged with its step ticks it, whatever the name", () => {
