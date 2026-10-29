@@ -2,7 +2,7 @@ import { getActiveBattleMap } from "@/lib/battlemap/view";
 import { hasLineOfSight } from "@/lib/battlemap/los";
 import { listTokens } from "@/lib/db/battle-maps";
 import { capsFor, getCampaignById } from "@/lib/db/campaigns";
-import { listSheets } from "@/lib/db/sheets";
+import { getSheetForUser, listSheets } from "@/lib/db/sheets";
 import { publishEphemeral } from "@/lib/events";
 import {
   computeAudibility,
@@ -10,6 +10,7 @@ import {
   type AudibilitySeat,
 } from "@/lib/voice/audibility";
 import { getRoom } from "@/lib/voice/room";
+import { heroFell } from "@/lib/characters/fallen-logic";
 
 // The side-effecting half of the audibility engine. The rules are pure and
 // live in src/lib/voice/audibility.ts; this gathers the snapshot they need,
@@ -52,7 +53,11 @@ export function buildSeats(
     // A peer's position is their character's token, if they have one on the
     // active map. Outside combat there is no map and every position is null,
     // which the rules read as "no geometry to apply".
-    const sheet = sheets.find((entry) => entry.userId === peer.userId && !entry.isCompanion);
+    // The hero they play: the one in their seat, else a living one, so a
+    // player whose first hero fell is heard from their replacement's token.
+    const own = sheets.filter((entry) => entry.userId === peer.userId && !entry.isCompanion);
+    const seated = getSheetForUser(campaignId, peer.userId);
+    const sheet = own.find((entry) => entry.id === seated?.id) ?? own.find((entry) => !heroFell(entry)) ?? own[0];
     const token = sheet ? tokens.find((entry) => entry.refId === sheet.id) : undefined;
     return {
       userId: peer.userId,

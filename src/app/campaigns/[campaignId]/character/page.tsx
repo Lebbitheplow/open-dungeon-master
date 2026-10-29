@@ -53,6 +53,12 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
   // The linked library character's level, from a host that keeps an edit at
   // a table of another level to that table; null from one that does not.
   const [libraryLevel, setLibraryLevel] = useState<number | null>(null);
+  // The hero this one replaces when all of the player's have fallen
+  // (src/lib/characters/hero-door.ts): the build is at the level they
+  // reached, and the header says so.
+  const [fallen, setFallen] = useState<{ name: string; level: number } | null>(null);
+  // Where Back goes: the table once the adventure is under way.
+  const [inPlay, setInPlay] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   // The ready-made heroes, opened from above the builder.
@@ -77,7 +83,12 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
         if (cancelled) {
           return;
         }
-        setLevel(campaignData?.campaign?.startingLevel ?? 1);
+        // The server's join level (GET /sheet): the table's start, or a fallen
+        // hero's level for their replacement. An older host sends none.
+        const joinLevel = flow === "join" && typeof sheetData?.joinLevel === "number" ? sheetData.joinLevel : null;
+        setLevel(joinLevel ?? campaignData?.campaign?.startingLevel ?? 1);
+        setFallen(flow === "join" && sheetData?.fallen?.name ? { name: String(sheetData.fallen.name), level: Number(sheetData.fallen.level) || 1 } : null);
+        setInPlay(campaignData?.campaign?.status === "active");
         setGenre(campaignData?.campaign?.gameSettings?.genre ?? undefined);
         setWorldPackId(campaignData?.campaign?.gameSettings?.worldPack ?? "");
         const all: LibraryCharacter[] = charactersData?.characters ?? [];
@@ -87,7 +98,9 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
         const characters = all.filter((character) => character.role !== "companion");
         setLibrary(characters);
         setCompanionCount(all.length - characters.length);
-        setCurrentLibraryId(sheetData?.sheet?.libraryCharacterId ?? null);
+        // A fallen hero is nobody's current character: the chooser does not
+        // mark them, and picking them again is refused.
+        setCurrentLibraryId(flow === "join" && sheetData?.fallen ? null : (sheetData?.sheet?.libraryCharacterId ?? null));
         setLibraryLevel(typeof sheetData?.libraryLevel === "number" ? sheetData.libraryLevel : null);
         // An empty library still opens on the chooser when joining: the
         // ready-made heroes are there (backlog F5). A switch has nothing to
@@ -161,7 +174,7 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
     <main className="mx-auto w-full max-w-3xl flex-1 p-4 sm:p-6">
       <header className="mb-5">
         <a href={`/campaigns/${campaignId}`} className={cn(ui.btnSmall, "text-xs")}>
-          <ChevronLeft className="size-3.5" /> Back to the lobby
+          <ChevronLeft className="size-3.5" /> {inPlay ? "Back to the table" : "Back to the lobby"}
         </a>
         <div className="mt-2 flex items-center gap-3">
           <PixelTile src={PIXEL_ICONS.characters} />
@@ -176,7 +189,9 @@ function CampaignCharacterPageInner({ campaignId }: { campaignId: string }) {
                     : "Create your character"}
             </h1>
             <p className="text-sm text-stone-400">
-              This campaign starts at level {level}.
+              {fallen
+                ? `${fallen.name} has fallen. Your new hero joins at level ${level}, the level ${fallen.name} reached.`
+                : `This campaign starts at level ${level}.`}
               {flow !== "join" ? " Changing your character clears your ready status." : ""}
             </p>
             {flow === "edit" && editCharacter && libraryLevel !== null && libraryLevel !== level ? (

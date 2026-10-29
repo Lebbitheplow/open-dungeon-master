@@ -102,6 +102,7 @@ import { textKey } from "@/lib/language/text-logic";
 import { conversationNote, type Conversation } from "@/lib/dm/conversation-logic";
 import { ADVANTAGE_SOURCES } from "@/lib/dm/pc-attack-options";
 import { PLACE_DIRECTIONS, PLACE_DISTANCES } from "@/lib/overworld/places";
+import { heroFell } from "@/lib/characters/fallen-logic";
 
 export { DM_SYSTEM, dmSystemText, ENCOUNTER_RULES, encounterRulesText } from "@/lib/dm/prompt-rules";
 
@@ -1270,7 +1271,9 @@ export function buildGameStateBlock(state: DmGameState): string {
   const severalOwned = members
     .map((member) => ({
       member,
-      owned: sheets.filter((sheet) => sheet.userId === member.userId && !sheet.isCompanion),
+      // A hero who has fallen is controlled by nobody: a player who brought
+      // in a replacement does not run "several characters".
+      owned: sheets.filter((sheet) => sheet.userId === member.userId && !sheet.isCompanion && !heroFell(sheet)),
     }))
     .filter((entry) => entry.owned.length > 1);
   if (severalOwned.length) {

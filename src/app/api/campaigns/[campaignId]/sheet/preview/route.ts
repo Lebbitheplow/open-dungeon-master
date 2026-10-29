@@ -2,6 +2,8 @@ import { z } from "zod";
 import { capsFor, isErrorResponse, requireMember } from "@/lib/campaign-api";
 import { previewBuiltJoin, previewLibraryJoin, previewPregenJoin, type JoinPreview } from "@/lib/characters/seat-preview";
 import { companionRoleRefusal, getCharacterForUser } from "@/lib/db/characters";
+import { heroFell } from "@/lib/characters/fallen-logic";
+import { HERO_DOOR_SHUT, heroDoorFor } from "@/lib/characters/hero-door";
 import { getSheetForUser, listSheetsForUser } from "@/lib/db/sheets";
 import { createSheetSchema } from "@/lib/schemas/sheet";
 import { olderBuilderOf } from "@/lib/srd/legality/older-builder";
@@ -55,6 +57,12 @@ export async function POST(
     return Response.json({ error: parsed.error.issues[0]?.message || "Pick a hero." }, { status: 400 });
   }
   const { libraryCharacterId, pregenId, offeredPregenId, sheet, flow, picks } = parsed.data;
+  // A first seat is judged at the level it joins at: a fallen hero's
+  // replacement at the level they reached (src/lib/characters/hero-door.ts).
+  // A lobby switch is the table's own level, as PUT /sheet seats it.
+  const door = heroDoorFor(context.campaign, context.user.id);
+  const seatCampaign = flow === "join" ? door.campaign : context.campaign;
+  let fallenPick = "";
 
   let preview: JoinPreview;
   let alreadyHere = false;
@@ -66,12 +74,16 @@ export async function POST(
     if (character.role === "companion") {
       return Response.json({ error: companionRoleRefusal(character) }, { status: 400 });
     }
-    preview = previewLibraryJoin(character, context.campaign, context.user.id, picks);
+    preview = previewLibraryJoin(character, seatCampaign, context.user.id, picks);
     // A hero already at this table is selected again, not copied twice
     // (instantiateIntoCampaign), so a join changes nothing about it.
-    alreadyHere = listSheetsForUser(campaignId, context.user.id).some(
+    const here = listSheetsForUser(campaignId, context.user.id).find(
       (sheet) => sheet.libraryCharacterId === character.id && !sheet.isCompanion,
     );
+    alreadyHere = Boolean(here);
+    if (here && heroFell(here)) {
+      fallenPick = `${here.name} fell at this table. Bring in someone else.`;
+    }
     // A copy of a DM's offered pregen does not sit where another sheet plays
     // that pregen (src/lib/db/pregen-offers.ts), as the join will say. A lobby
     // switch gives up the current sheet first, which holds nothing then.
@@ -81,7 +93,7 @@ export async function POST(
       preview = { ...preview, ok: false, problems: [held, ...preview.problems] };
     }
   } else if (sheet) {
-    preview = previewBuiltJoin(sheet, context.campaign, context.user.id, olderBuilderOf((raw as { sheet?: unknown } | null)?.sheet));
+    preview = previewBuiltJoin(sheet, seatCampaign, context.user.id, olderBuilderOf((raw as { sheet?: unknown } | null)?.sheet));
   } else if (offeredPregenId) {
     // Unticked, another table's, or not a pregen at all: no such hero. The
     // DM's own pregens are in their library already.
@@ -89,7 +101,7 @@ export async function POST(
     if (!offer || offer.character.userId === context.user.id) {
       return Response.json({ error: "No such hero." }, { status: 404 });
     }
-    preview = previewLibraryJoin(offer.character, context.campaign, context.user.id, picks);
+    preview = previewLibraryJoin(offer.character, seatCampaign, context.user.id, picks);
     const refusals = [
       ...(flow !== "join" ? ["A pregen the GM offers takes a first seat; a lobby switch is to one of your own heroes."] : []),
       ...[claimRefusal(offer, context.user.id)].filter((line): line is string => Boolean(line)),
@@ -102,14 +114,14 @@ export async function POST(
     if (!pregen) {
       return Response.json({ error: "No such hero." }, { status: 404 });
     }
-    preview = previewPregenJoin(pregen, context.campaign, context.user.id, picks);
+    preview = previewPregenJoin(pregen, seatCampaign, context.user.id, picks);
   }
 
   // The door rules the join answers with before it reads the sheet, so the
   // sheet does not offer a seat the join will refuse.
-  const doorProblems: string[] = [];
-  if (flow === "join" && !alreadyHere && getSheetForUser(campaignId, context.user.id) && context.campaign.gameSettings.multiCharacter === "off") {
-    doorProblems.push("You already have a character in this campaign.");
+  const doorProblems: string[] = fallenPick ? [fallenPick] : [];
+  if (flow === "join" && !alreadyHere && !door.open) {
+    doorProblems.push(HERO_DOOR_SHUT);
   }
   if (flow === "replace" && context.campaign.status !== "lobby") {
     doorProblems.push("Characters can only be changed in the lobby.");

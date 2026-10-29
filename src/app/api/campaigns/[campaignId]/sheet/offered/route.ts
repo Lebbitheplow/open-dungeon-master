@@ -4,10 +4,11 @@ import { refusal } from "@/lib/characters/admit";
 import { seatPicksSchema } from "@/lib/characters/seat-picks";
 import { admitLibraryForSeat } from "@/lib/characters/seat-preview";
 import { announceMidGameJoin } from "@/lib/characters/mid-game-join";
+import { HERO_DOOR_SHUT, heroDoorFor } from "@/lib/characters/hero-door";
 import { seatAddedSheet } from "@/lib/character-seat";
 import { createCharacter, setPregenOrigin } from "@/lib/db/characters";
 import { claimPregen, claimRefusal, offeredPregenFor } from "@/lib/db/pregen-offers";
-import { createSheet, getSheetForUser } from "@/lib/db/sheets";
+import { createSheet } from "@/lib/db/sheets";
 import { publishPersisted } from "@/lib/events";
 import { queueLibraryPortrait } from "@/lib/portrait";
 
@@ -41,8 +42,9 @@ export async function POST(
   if (!capsFor(context).needsCharacter) {
     return Response.json({ error: "The GM seat plays no character." }, { status: 400 });
   }
-  if (getSheetForUser(campaignId, context.user.id) && context.campaign.gameSettings.multiCharacter === "off") {
-    return Response.json({ error: "You already have a character in this campaign." }, { status: 409 });
+  const door = heroDoorFor(context.campaign, context.user.id);
+  if (!door.open) {
+    return Response.json({ error: HERO_DOOR_SHUT }, { status: 409 });
   }
   const parsed = bodySchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {
@@ -61,8 +63,8 @@ export async function POST(
   if (taken) {
     return Response.json({ error: taken }, { status: 409 });
   }
-  const level = Math.max(1, Math.min(20, context.campaign.startingLevel));
-  const admitted = admitLibraryForSeat(offer.character, context.campaign, context.user.id, level, parsed.data.picks);
+  const level = door.level;
+  const admitted = admitLibraryForSeat(offer.character, door.campaign, context.user.id, level, parsed.data.picks);
   if (!admitted.ok) {
     return refusal(admitted.problems);
   }
@@ -76,6 +78,6 @@ export async function POST(
   queueLibraryPortrait(libraryCharacter);
   seatAddedSheet(context.campaign, context.user.id, sheet.id);
   publishPersisted(campaignId, "sheet_updated", { sheet });
-  announceMidGameJoin(context, sheet);
+  announceMidGameJoin(context, sheet, door.fallen?.name);
   return Response.json({ sheet }, { status: 201 });
 }

@@ -76,6 +76,11 @@ export const SERVER_FEATURES = {
   // /api/campaigns/[id]/session, `sessionHold` in the table's snapshot, and
   // `nextSession` on the home list.
   sessions: true,
+  // "Bring in a new hero" for a player whose heroes have all fallen: the
+  // seat doors let them in at a table that plays one character each, and
+  // GET /sheet answers the level the replacement joins at
+  // (src/lib/characters/hero-door.ts). An older host refuses the seat.
+  fallenHeroes: true,
 } as const;
 export type ServerFeatures = { [K in keyof typeof SERVER_FEATURES]: boolean };
 

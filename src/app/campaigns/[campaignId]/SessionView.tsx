@@ -9,6 +9,7 @@ import { CorrectionReasonChips } from "@/components/CorrectionReasonChips";
 import { haptic, useEffectsRoot, useTurnChime } from "@/lib/effects-mode";
 import { levelForXp } from "@/lib/srd";
 import { hostOffers, transcribesVoice, useCapabilities } from "@/lib/use-capabilities";
+import { fallenHero, heroJoinLevel } from "@/lib/characters/fallen-logic";
 import { SceneTitle } from "@/components/SceneTitle";
 import { askConcentrationSwap, isConcentrationQuestion } from "@/components/concentration-prompt";
 import { HandoutStage } from "@/components/HandoutStage";
@@ -126,6 +127,7 @@ const tablePieces = {
   HelpDialog: preloadable(() => import("@/components/HelpDialog").then((module) => module.HelpDialog)),
   GuidedTour: preloadable(() => import("@/components/ui/GuidedTour").then((module) => module.GuidedTour)),
   CharacterGate: preloadable(() => import("@/app/campaigns/[campaignId]/CharacterGate").then((module) => module.CharacterGate)),
+  FallenHeroBanner: preloadable(() => import("@/app/campaigns/[campaignId]/CharacterGate").then((module) => module.FallenHeroBanner)),
   DiceLookDialog: preloadable(() => import("@/components/DiceLookEditor").then((module) => module.DiceLookDialog)),
   DiceTrayDialog: preloadable(() => import("@/app/campaigns/[campaignId]/DiceTrayDialog").then((module) => module.DiceTrayDialog)),
   LoreCheckDialog: preloadable(() => import("@/app/campaigns/[campaignId]/LoreCheckDialog").then((module) => module.LoreCheckDialog)),
@@ -133,7 +135,7 @@ const tablePieces = {
   LabelSheet: preloadable(() => import("@/app/campaigns/[campaignId]/LabelSheet").then((module) => module.LabelSheet)),
   ReportProblemDialog: preloadable(() => import("@/components/ReportProblemDialog").then((module) => module.ReportProblemDialog)),
 };
-const { HelpDialog, GuidedTour, CharacterGate, DiceLookDialog, DiceTrayDialog, LoreCheckDialog, RenarrateDialog, LabelSheet, ReportProblemDialog } = tablePieces;
+const { HelpDialog, GuidedTour, CharacterGate, FallenHeroBanner, DiceLookDialog, DiceTrayDialog, LoreCheckDialog, RenarrateDialog, LabelSheet, ReportProblemDialog } = tablePieces;
 const { BattleMapPanel } = panels;
 
 // True from the first time `open` is true: a dialog mounts then and stays.
@@ -733,6 +735,21 @@ export function SessionView({
   // What a move reads between sessions: only table talk goes through.
   const heldPlaceholder =
     sessionHold && kind !== "ooc" ? `Session ${sessionHold.number} is over: use OOC for table talk until the next one starts.` : null;
+  // A player whose heroes have all fallen keeps the table and is offered a
+  // new hero above the composer (src/lib/characters/fallen-logic.ts), once
+  // the host has said its seat doors let them in; an older one refuses the seat.
+  const offersFallen = caps.needsCharacter && campaign?.status === "active" && capabilities !== null && hostOffers(capabilities, "fallenHeroes");
+  const tableStartLevel = campaign?.startingLevel ?? 1;
+  const fallen = useMemo(() => {
+    if (!offersFallen) {
+      return null;
+    }
+    const own = sheets.filter((sheet) => sheet.userId === meId);
+    const hero = fallenHero(own);
+    return hero ? { name: hero.name, level: heroJoinLevel(own, tableStartLevel) } : null;
+  }, [offersFallen, sheets, meId, tableStartLevel]);
+  // The fallen hero cannot act: the box says what it is for until the new one joins.
+  const fallenPlaceholder = fallen && kind !== "ooc" ? `${fallen.name} has fallen. Use OOC for table talk until your new hero joins.` : null;
   const floorUserIds =
     floor.mode === "spotlight" || floor.mode === "initiative" ? floor.userIds : EMPTY_IDS;
   const voice = useMemo(
@@ -1019,7 +1036,7 @@ export function SessionView({
       setInput={setInput}
       sending={sending}
       inputBlocked={gate.inputBlocked || silenced}
-      placeholder={silenced ? silencedPlaceholder : (heldPlaceholder ?? gate.placeholder)}
+      placeholder={silenced ? silencedPlaceholder : (heldPlaceholder ?? fallenPlaceholder ?? gate.placeholder)}
       onSubmit={submit}
       maxChars={composerLimit(kind, leadPrivate)}
       // The stage's copy opens the story for what its window leaves out;
@@ -1309,6 +1326,11 @@ export function SessionView({
                       here to read.
                     </SessionBanner>
                   ) : null}
+                  {fallen ? (
+                    <Suspense fallback={null}>
+                      <FallenHeroBanner campaignId={campaign.id} name={fallen.name} level={fallen.level} />
+                    </Suspense>
+                  ) : null}
                   {/* The plan the party is coordinating (issue 254), above the
                       box its players would otherwise type their moves into. */}
                   {state.coordination ? (
@@ -1333,7 +1355,7 @@ export function SessionView({
                     sending={sending}
                     error={error}
                     inputBlocked={gate.inputBlocked || silenced}
-                    placeholder={silenced ? silencedPlaceholder : (heldPlaceholder ?? gate.placeholder)}
+                    placeholder={silenced ? silencedPlaceholder : (heldPlaceholder ?? fallenPlaceholder ?? gate.placeholder)}
                     dmStatus={dmStatus}
                     dmJob={state.dmJob}
                     pendingRolls={pendingRolls}
