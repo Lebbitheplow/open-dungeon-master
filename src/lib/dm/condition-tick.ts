@@ -27,7 +27,8 @@ import {
   type ConditionMetaMap,
 } from "@/lib/dm/condition-logic";
 import { tickConcentrationClocks } from "@/lib/dm/concentration-clock";
-import { wakeStable } from "@/lib/dm/death";
+import { settleDying, wakeStable } from "@/lib/dm/death";
+import { deathSavesInMinutes, isDying } from "@/lib/dm/death-logic";
 import { breakConcentration, lethargyMeta, withLethargy } from "@/lib/dm/concentration";
 import { endConcentrationOnFadedSummons, endSpentConcentration } from "@/lib/dm/concentration-upkeep";
 import { STABLE_SOURCE, STABLE_WAKE_HOURS_MAX, UNCONSCIOUS } from "@/lib/dm/vitals-logic";
@@ -107,11 +108,19 @@ export function tickEncounterConditions(campaign: Campaign, encounter: Encounter
 // one save per passage of time rather than one per elapsed round: ten
 // minutes of walking is not a hundred saving throws, and one honest roll
 // per stretch is how a human DM plays "you can try to shake it off again".
-export function tickClockConditions(campaign: Campaign, minutes: number) {
+// Returns the death saves the stretch rolled, already shown to the table.
+export function tickClockConditions(campaign: Campaign, minutes: number): string[] {
   const rounds = Math.floor(Math.max(0, minutes) * ROUNDS_PER_MINUTE);
   if (rounds <= 0) {
-    return;
+    return [];
   }
+  // Death saves are not save-ends conditions: a dying creature rolls every
+  // six seconds until the fall is settled, so a minute decides it. They go
+  // first so a creature that turns stable spends the rest of the stretch
+  // waiting out its 1d4 hours.
+  const deathSaves = listSheets(campaign.id)
+    .filter((sheet) => isDying(sheet))
+    .flatMap((sheet) => settleDying(campaign, sheet.id, deathSavesInMinutes(minutes)));
   const lines: string[] = [];
   tickSheetConditions(campaign, rounds, lines, { endTurnBound: true });
   rollEffectSaves(campaign, null, () => true, lines);
@@ -145,6 +154,7 @@ export function tickClockConditions(campaign: Campaign, minutes: number) {
   if (lines.length) {
     noteAtTable(campaign.id, lines);
   }
+  return deathSaves;
 }
 
 // Whether this sheet's unconscious is the wait of a stabilized creature.

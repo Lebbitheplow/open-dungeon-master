@@ -4,7 +4,9 @@ import { getFloor, setFloor, type Campaign } from "@/lib/db/campaigns";
 import { burnWebUnder } from "@/lib/dm/zone-cast";
 import { endEncounter, getActiveEncounter, getEnemy, listEnemies, patchEnemyHp, setEnemyConcentration, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
 import { activePublicEncounter } from "@/lib/db/encounter-view";
-import { getSheetById, patchSheet } from "@/lib/db/sheets";
+import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
+import { settleDying } from "@/lib/dm/death";
+import { dyingLeftAlone, isDying, MOST_SAVES_TO_SETTLE } from "@/lib/dm/death-logic";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { patchEnemyConditions } from "@/lib/db/encounters";
 import { restoreOwnForm } from "@/lib/db/enemy-form";
@@ -179,9 +181,22 @@ export function finishEncounter(
   // A lasting companion that fought against the party leaves, fell, or lies
   // at the party's mercy (issue 503, src/lib/dm/turncoat.ts).
   const turncoats = turncoatsAfterTheFight(campaign, encounter);
+  // The end of initiative is not the end of dying. With nobody on the
+  // party's side left conscious, no one can stabilize the fallen, so their
+  // saves are rolled out now, in order, as the pointer would have rolled
+  // them (death.ts settleDying).
+  const party = listSheets(campaign.id).filter((sheet) => sheetSide(encounter, sheet.id) === "party");
+  const deathSaves = dyingLeftAlone(party).flatMap((sheet) => settleDying(campaign, sheet.id, MOST_SAVES_TO_SETTLE, turn.id));
+  const stillDying = party.filter((sheet) => isDying(getSheetById(sheet.id) ?? sheet)).map((sheet) => sheet.name);
 
   return {
     encounterOver: true,
+    ...(deathSaves.length ? { deathSaves } : {}),
+    ...(stillDying.length
+      ? {
+          dying: `${stillDying.join(", ")} still dying at 0 HP: the server rolls a death save for each every 6 seconds of game time until they are stable or dead. A standing ally can stabilize them now (stabilize, which rolls the DC 10 Medicine check) or heal them.`,
+        }
+      : {}),
     ...(Object.keys(ammoRecovered).length ? { ammoRecovered } : {}),
     ...(itemsLeft.length
       ? { itemsLeft: `On the ground after the fight: ${itemsLeft.join("; ")}. The party can collect them (handle_item pick_up).` }

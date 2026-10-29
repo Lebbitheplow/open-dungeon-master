@@ -26,6 +26,7 @@ import { allSpellNames } from "@/lib/srd/spell-lists";
 import { spendAction } from "@/lib/dm/action-budget";
 import { canAct } from "@/lib/dm/can-act";
 import { rollStableTimer } from "@/lib/dm/death";
+import { tableNote } from "@/lib/dm/between-io";
 import { getBattleMapForEncounter, getTokenByRef } from "@/lib/db/battle-maps";
 import { chebyshev } from "@/lib/battlemap/types";
 import { findCarriedItem } from "@/lib/dm/item-logic";
@@ -259,6 +260,7 @@ export function handleStabilize(
       conditions: woken.conditions,
       conditionMeta: woken.meta,
     });
+    tableNote(campaign, `${how}: ${sheet.name} is stable and regains 1 hit point.`, "cue-heal");
     return {
       ok: true,
       stabilized: true,
@@ -274,6 +276,9 @@ export function handleStabilize(
     conditions: wait.conditions,
     conditionMeta: wait.conditionMeta,
   });
+  // A kit or Spare the Dying throws no die, so without this line the table
+  // would see the sheet turn stable with nothing to say how.
+  tableNote(campaign, `${how}: ${sheet.name} is stable (unconscious at 0 HP).`, "cue-heal");
   return {
     ok: true,
     stabilized: true,

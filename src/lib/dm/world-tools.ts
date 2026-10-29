@@ -519,6 +519,8 @@ export function handlePassTime(
     now: describeInstant(moved.clock.calendar, moved.clock.instant),
     ...(sky?.summary ? { weather: sky.summary } : {}),
     ...(living.length ? { lifestyle: living } : {}),
+    // Rolled by the server as the time passed; narrate what they decided.
+    ...(moved.deathSaves.length ? { deathSaves: moved.deathSaves } : {}),
   };
 }
 
