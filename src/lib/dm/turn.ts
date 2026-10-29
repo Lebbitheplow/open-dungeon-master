@@ -5,7 +5,7 @@ import { combatantsOf } from "@/lib/dm/combatant";
 import { manualTraits } from "@/lib/dm/monster-traits";
 import { coordinationForPrompt } from "@/lib/dm/coordination";
 import { clipKeepingEnds } from "@/lib/dm/ask-logic";
-import { findSpellByName } from "@/lib/content";
+import { findSpellByName, spellMechanicsFor } from "@/lib/content";
 import { allSpellNames, spellLevelOf } from "@/lib/srd/spell-lists";
 import { notReadyReason } from "@/lib/srd/spell-prep";
 import {
@@ -85,6 +85,7 @@ import { getDmStatus, setDmStatus } from "@/lib/dm/status";
 import {
   extractToolCalls,
   resolveSheetRef,
+  type ParsedToolCall,
   rollAsksFromClaims,
   salvageTextualToolCalls,
   salvageXmlToolCalls,
@@ -119,7 +120,7 @@ import { gateAiCall } from "@/lib/dm/ai-gate";
 import { characterAwaitingPlayer } from "@/lib/dm/player-word";
 import { enemiesDue, enemiesOwedTurn, personRunsTable } from "@/lib/dm/enemies-due";
 import { noteTurnHead, settleTurnWarmup, turnHeadKey, warmNextTurn } from "@/lib/dm/turn-warmup";
-import { directCardCall, intentAnswered, intentCorrection, intentNeedsTool, type MessageIntent } from "@/lib/dm/intent-logic";
+import { directCardCall, intentAnswered, intentCorrection, intentNeedsTool, type PlayedCard, type TurnCall } from "@/lib/dm/intent-logic";
 import { handleCompleteBeat } from "@/lib/dm/arc";
 import { tickWaypointsFromCalls } from "@/lib/dm/waypoint-tick";
 import { enforceEngineBoundary } from "@/lib/dm/narration-guard";
@@ -2147,7 +2148,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
         !finalCall &&
         !intentNudged &&
         card &&
-        !intentAnswered(card.intent, [...calledToolNames(turn.conversation), ...toolCalls.map((toolCall) => toolCall.name)])
+        !intentAnswered(card, turnCalls(turn.conversation, toolCalls))
       ) {
         intentNudged = true;
         if (narration && turn.narrationParts[turn.narrationParts.length - 1] === narration) {
@@ -2162,7 +2163,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
         answerRanAbove(fightOwnsFloor(campaignId), false);
         turn.conversation.push({
           role: "user",
-          content: intentCorrection(card.intent, card.characterId, card.name),
+          content: intentCorrection(card.intent, card.characterId, card.name, card.resolution),
         });
         saveDmTurn(turn);
         continue;
@@ -2452,11 +2453,30 @@ function calledToolNames(conversation: DmTurn["conversation"]): string[] {
   return collectExchanges(conversation).map((exchange) => exchange.name).filter(Boolean);
 }
 
+function argsObject(raw: string): Record<string, unknown> {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+// The calls the turn has made, with their arguments and the engine's
+// answers, and the calls of the reply being read, which have not run yet.
+function turnCalls(conversation: DmTurn["conversation"], pending: readonly ParsedToolCall[]): TurnCall[] {
+  return [
+    ...collectExchanges(conversation)
+      .filter((exchange) => exchange.name)
+      .map((exchange) => ({ name: exchange.name, args: argsObject(exchange.arguments), result: exchange.result })),
+    ...pending.map((call) => ({ name: call.name, args: argsObject(call.rawArguments), result: null })),
+  ];
+}
+
 // The card behind the action this turn answers: the last player message,
-// when it came from the Hand as an attack or a cast.
-function cardPlayed(
-  context: TurnContext,
-): { intent: MessageIntent; characterId: string | null; name: string } | null {
+// when it came from the Hand as an attack or a cast, with how its spell
+// resolves when the content knows it.
+function cardPlayed(context: TurnContext): PlayedCard | null {
   const last = [...listRecentMessages(context.campaign.id, 20)]
     .reverse()
     .find((message) => message.authorType !== "system");
@@ -2464,7 +2484,9 @@ function cardPlayed(
     return null;
   }
   const sheet = last.characterId ? context.sheetsById.get(last.characterId) : undefined;
-  return { intent: last.intent, characterId: last.characterId, name: sheet?.name ?? "The player" };
+  const spell = last.intent.card === "spell" ? last.intent.spell : undefined;
+  const resolution = spell ? (spellMechanicsFor({ spell, userIds: spellAuthorsFor(context.campaign) })?.mech.resolution ?? null) : null;
+  return { intent: last.intent, characterId: last.characterId, name: sheet?.name ?? "The player", resolution };
 }
 
 // A card the engine resolves before the narrator is asked: the last player
