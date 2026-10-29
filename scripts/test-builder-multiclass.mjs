@@ -785,4 +785,16 @@ await test("a single class's lower level trims its lists to the new counts, as a
   assert.deepEqual(back.cantrips, ["Fire Bolt", "Light", "Mage Hand", "Ray of Frost"]);
 });
 
+await test("an older host, which folds a new split into one class, is offered no second class", async () => {
+  const { hostOffers } = await import("../src/lib/use-capabilities.ts");
+  const { SERVER_FEATURES } = await import("../src/lib/capabilities.ts");
+  assert.equal(SERVER_FEATURES.builderMulticlass, true, "this server says it keeps a class list it is sent");
+  const older = { story: { configured: true, reachable: true }, utility: { configured: true }, images: { configured: false, reachable: false, backend: "comfyui" }, tts: { configured: false, reachable: false }, stt: { configured: false }, voice: { enabled: false, mode: "off" } };
+  assert.equal(hostOffers(older, "builderMulticlass"), false);
+  assert.equal(hostOffers({ ...older, features: { builderMulticlass: true } }, "builderMulticlass"), true);
+  const builder = read("src/app/characters/builder/CharacterBuilder.tsx");
+  assert.match(builder, /const addsClasses = hostOffers\(capabilities, "builderMulticlass"\);/);
+  assert.match(builder, /multiclassAllowed=\{table\.multiclassAllowed && addsClasses\}/);
+});
+
 console.log(`${passed} passed`);

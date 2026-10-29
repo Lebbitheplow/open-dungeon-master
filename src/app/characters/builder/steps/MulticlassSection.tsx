@@ -26,7 +26,8 @@ import { Field, PickPill, StepPanel, inputClass } from "./shared";
 // and a way to take it off; then "Add a second class", which lists every
 // class the character could add, the ones it may first, each refusal in
 // words (the level-up dialog's list, LevelUpDialog.tsx). Offered from level
-// 2 at a table that allows it, and always in the library.
+// 2 at a table that allows it, and always in the library, on a host that
+// keeps a split made there (SERVER_FEATURES builderMulticlass).
 export function MulticlassSection({
   state,
   derived,
@@ -46,6 +47,7 @@ export function MulticlassSection({
   // dialog folds them.
   classGroups: PickerGroup[];
   // The table's multiclassing setting (useTableRules); true in the library.
+  // False on a host that has no builderMulticlass flag.
   allowed: boolean;
   // "Show rules and numbers" (backlog F11): the hit die joins its words.
   numbers: boolean;

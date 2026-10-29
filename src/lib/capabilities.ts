@@ -69,6 +69,9 @@ export const SERVER_FEATURES = {
   // sheet in play): the `hopes` field an older host drops while answering
   // the save as done.
   storyHopes: true,
+  // "Add a second class" in the builder (backlog F9): a class list on a new
+  // character, which an older host folds into one class.
+  builderMulticlass: true,
 } as const;
 export type ServerFeatures = { [K in keyof typeof SERVER_FEATURES]: boolean };
 

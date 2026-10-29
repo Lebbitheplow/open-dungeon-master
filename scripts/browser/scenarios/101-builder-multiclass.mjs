@@ -6,7 +6,8 @@
 // owe, and takes the seat: the stored sheet holds fighter 3 / rogue 2. At a
 // table that turns multiclassing off the hero is let in with a note, and an
 // in-place edit there keeps its split and offers no new class; a hero made
-// there is offered no second class.
+// there is offered no second class, and so is one on an older host (no
+// builderMulticlass flag), which would fold the split into one class.
 // The seat and the hero it saved are given up again, so the table is
 // empty for the next viewport.
 //
@@ -384,5 +385,19 @@ export default {
     await upTo(async () => (await page.locator(`${active} [data-add-class]`).count()) > 0, 2_000);
     check((await page.locator(`${active} [data-add-class]`).count()) === 0, "a table without multiclassing offers no second class");
     check((await page.locator(`${active} [data-builder-target="multiclass"]`).count()) === 0, "nor the section for one");
+
+    // ---- an older host, which folds a new split into one class ----
+    // The app caches the capabilities answer, so only the website is asked.
+    if (t.app) return;
+    await page.route("**/api/capabilities**", async (route) => {
+      const response = await route.fetch();
+      const body = await response.json().catch(() => ({}));
+      delete body.features;
+      await route.fulfill({ response, json: body });
+    });
+    await buildAt(tableId);
+    await eventually(() => page.locator(`${active} [data-quick-fill]`).locator("visible=true").count(), { timeoutMs: 10_000, label: "the class step on an older host" });
+    await upTo(async () => (await page.locator(`${active} [data-add-class]`).count()) > 0, 2_000);
+    check((await page.locator(`${active} [data-add-class]`).count()) === 0, "an older host's builder offers no second class");
   },
 };

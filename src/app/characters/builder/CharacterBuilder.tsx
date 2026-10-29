@@ -12,7 +12,7 @@ import type { Genre } from "@/lib/schemas/game-settings";
 import type { Ability, CreateSheetInput } from "@/lib/schemas/sheet";
 import { SRD_SKILLS } from "@/lib/srd";
 import { FIGHTING_STYLES } from "@/lib/srd/feature-effects";
-import { offersImages, useCapabilities } from "@/lib/use-capabilities";
+import { hostOffers, offersImages, useCapabilities } from "@/lib/use-capabilities";
 import { applyClassReskins, applyIdReskins } from "@/lib/worlds/reskin-logic";
 import { ABILITY_LABELS } from "./AbilityEditor";
 import type { DroppedPick } from "./reconcile";
@@ -323,7 +323,12 @@ function CharacterBuilderForm({
     archetypes,
   });
 
-  const paintsPortraits = offersImages(useCapabilities());
+  const capabilities = useCapabilities();
+  const paintsPortraits = offersImages(capabilities);
+  // A host older than multiclassing at creation keeps one class of a new
+  // character's split, so it is offered no second class (a stored split
+  // still shows, and keeps its classes there).
+  const addsClasses = hostOffers(capabilities, "builderMulticlass");
   const [cropping, setCropping] = useState(false);
   // This builder's own root, so the footer's "Show me" looks inside it and
   // not in another builder on the page.
@@ -659,7 +664,7 @@ function CharacterBuilderForm({
             offersSubclass={pickers.offersSubclass}
             subclassLockedAt={pickers.subclassLockedAt}
             chosenArchetype={pickers.chosenArchetype}
-            multiclassAllowed={table.multiclassAllowed}
+            multiclassAllowed={table.multiclassAllowed && addsClasses}
             classNote={scopeNote("classes", "classes")}
             subclassNote={<TableScopeNote noun="subclasses" unadmitted={subclassOptions.unadmitted} failed={subclassOptions.failed} onRetry={subclassOptions.retry} />}
             playstyle={
