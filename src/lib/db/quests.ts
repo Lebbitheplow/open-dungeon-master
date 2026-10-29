@@ -110,27 +110,33 @@ export function deleteQuest(questId: string): void {
   getDatabase().prepare(`DELETE FROM quests WHERE id = ?`).run(questId);
 }
 
+type ArcThread = { id: string; name: string; goal: string; status: "pending" | "active" | "resolved" | "abandoned" };
+
+// The sub-arcs as their quest rows have them (quest-logic.ts
+// reconcileSubArcs), for setStoryArc to store: a quest the table settled or
+// renamed stands against an older copy of the arc.
+export function reconcileArcQuests<T extends ArcThread>(campaignId: string, subArcs: readonly T[]): T[] {
+  return reconcileSubArcs(subArcs, listQuests(campaignId).filter((quest) => quest.source === "arc"));
+}
+
 // Mirrors the arc's sub-arcs: one arc row per sub-arc, matched by id, with
 // the DM's ticks kept. A row's own status and title stand (quest-logic.ts
-// arcQuestStatus), and the sub-arcs come back as the rows have them
-// (reconcileSubArcs) for setStoryArc to store. A sub-arc that left the arc
-// takes its row with it while the quest is open; a settled quest stays on
-// the log as what the party did, since the arc sheds settled threads once
-// it grows long. Hand-written rows are never touched. `changed` says
-// whether any row did, so the caller can tell the table.
-export function syncArcQuests<T extends { id: string; name: string; goal: string; status: "pending" | "active" | "resolved" | "abandoned" }>(
-  campaignId: string,
-  subArcs: readonly T[],
-): { subArcs: T[]; changed: boolean } {
+// arcQuestStatus). A sub-arc that left the arc takes its row with it while
+// the quest is open; a settled quest stays on the log as what the party did,
+// since the arc sheds settled threads once it grows long, but no longer
+// answers to the sub-arc's id: ids are numbered from the arc's highest, so a
+// later thread can be given a shed one, and it would have taken the old
+// quest's title, mark and ticks. Hand-written rows are never touched.
+// `changed` says whether any row did, so the caller can tell the table.
+export function syncArcQuests<T extends ArcThread>(campaignId: string, subArcs: readonly T[]): boolean {
   const db = getDatabase();
-  const existing = listQuests(campaignId).filter((quest) => quest.source === "arc");
+  const existing = listQuests(campaignId).filter((quest) => quest.source === "arc" && quest.sourceRef);
   const byRef = new Map(existing.map((quest) => [quest.sourceRef, quest]));
-  const reconciled = reconcileSubArcs(subArcs, existing);
   const now = nowIso();
   let changed = false;
   db.transaction(() => {
     const seen = new Set<string>();
-    for (const subArc of reconciled) {
+    for (const subArc of subArcs) {
       seen.add(subArc.id);
       const current = byRef.get(subArc.id);
       const status = arcQuestStatus(subArc.status, current?.status);
@@ -149,13 +155,40 @@ export function syncArcQuests<T extends { id: string; name: string; goal: string
       }
     }
     for (const quest of existing) {
-      if (!seen.has(quest.sourceRef) && (quest.status === "active" || quest.status === "hidden")) {
-        db.prepare(`DELETE FROM quests WHERE id = ?`).run(quest.id);
-        changed = true;
+      if (seen.has(quest.sourceRef)) {
+        continue;
       }
+      if (quest.status === "active" || quest.status === "hidden") {
+        db.prepare(`DELETE FROM quests WHERE id = ?`).run(quest.id);
+      } else {
+        db.prepare(`UPDATE quests SET source_ref = '', updated_at = ? WHERE id = ?`).run(now, quest.id);
+      }
+      changed = true;
     }
   })();
-  return { subArcs: reconciled, changed };
+  return changed;
+}
+
+// A fresh arc in place of the old one (the lead's regenerate): the old
+// threads are gone, so their open quests go and their settled ones stay as
+// history, answering to no id. The new arc numbers its threads from sa1
+// again, and every one of them would have taken an old quest's row.
+export function retireArcQuests(campaignId: string): boolean {
+  const db = getDatabase();
+  const now = nowIso();
+  let changed = false;
+  for (const quest of listQuests(campaignId)) {
+    if (quest.source !== "arc" || !quest.sourceRef) {
+      continue;
+    }
+    if (quest.status === "active" || quest.status === "hidden") {
+      db.prepare(`DELETE FROM quests WHERE id = ?`).run(quest.id);
+    } else {
+      db.prepare(`UPDATE quests SET source_ref = '', updated_at = ? WHERE id = ?`).run(now, quest.id);
+    }
+    changed = true;
+  }
+  return changed;
 }
 
 // A campaign clone's quest log (src/lib/db/campaign-clone.ts): every quest as

@@ -7,6 +7,7 @@ import {
   setStoryArc,
 } from "@/lib/db/campaigns";
 import { listChapters } from "@/lib/db/chapters";
+import { retireArcQuests } from "@/lib/db/quests";
 import { hasHumanDm, narratorIsAi } from "@/lib/dm/viewer";
 import { listMessagesInSeqRange } from "@/lib/db/messages";
 import { listSheets } from "@/lib/db/sheets";
@@ -250,10 +251,12 @@ ${SAGA_STYLE_RULES}`;
 
 // A planned or refreshed arc brings its sub-arcs' quests with it; the quest
 // log and the table's glance refetch when they changed (issue 581).
-function storeArc(campaignId: string, arc: StoryArc) {
-  if (setStoryArc(campaignId, arc)) {
+function storeArc(campaignId: string, arc: StoryArc): boolean {
+  const changed = setStoryArc(campaignId, arc);
+  if (changed) {
     publishEphemeral(campaignId, "quests_updated", { at: Date.now() });
   }
+  return changed;
 }
 
 // Runs on the campaign's DM queue at activation (after runStorySetup, so a
@@ -312,7 +315,11 @@ export async function generateStoryArc(
       }
       return;
     }
-    storeArc(campaignId, arc);
+    // A regenerated arc numbers its threads from the start again.
+    const retired = retireArcQuests(campaignId);
+    if (!storeArc(campaignId, arc) && retired) {
+      publishEphemeral(campaignId, "quests_updated", { at: Date.now() });
+    }
     // The off-screen clocks orbit the fresh arc; a failure here simply
     // retries at the next chapter close (ensureWorldArcs is self-healing).
     const withWorld = await ensureWorldArcs(campaignId, arc);

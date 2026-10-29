@@ -19,7 +19,7 @@ register("./lib/register-alias.mjs", import.meta.url);
 
 const { createUser } = await import("../src/lib/db/users.ts");
 const { createCampaign, getCampaignById, publicCampaign, setStoryArc } = await import("../src/lib/db/campaigns.ts");
-const { copyQuests, listQuests, syncArcQuests, insertQuest } = await import("../src/lib/db/quests.ts");
+const { copyQuests, listQuests, retireArcQuests, syncArcQuests, insertQuest } = await import("../src/lib/db/quests.ts");
 const { editQuest } = await import("../src/lib/db/quest-arc.ts");
 const { handleSetQuest, handleTickObjective } = await import("../src/lib/dm/binder-tools.ts");
 const { subscribe } = await import("../src/lib/events.ts");
@@ -76,7 +76,9 @@ test("the arc mirrors into quests and a re-sync keeps the DM's ticks", () => {
   assert.ok(!after.some((quest) => quest.sourceRef === "sa9"), "an open quest whose sub-arc left takes its row");
   // A long arc sheds its settled threads (setStoryArc's size cap); the quest
   // the party finished stays on the log as what they did (issue 581).
-  assert.equal(after.find((quest) => quest.sourceRef === "sa2")?.status, "done", "a settled quest outlives its sub-arc");
+  const settled = after.find((quest) => quest.title === "Old Debts");
+  assert.equal(settled?.status, "done", "a settled quest outlives its sub-arc");
+  assert.equal(settled.sourceRef, "", "and no longer answers to its id");
   assert.equal(after.find((quest) => quest.sourceRef === "sa1").objectives[0].done, true, "the tick survives the re-sync");
 });
 
@@ -235,6 +237,33 @@ test("ticking an arc quest's last step closes the thread too", () => {
   assert.equal(ticked.complete, true, ticked.error);
   assert.ok(heard.includes("quests_updated"));
   assert.equal(subArcOf("sa1").status, "resolved");
+});
+
+test("a thread given a shed sub-arc's id is a quest of its own, not the old one (issue 581)", () => {
+  // The arc numbers threads from its highest id, so once the cap sheds the
+  // last settled thread its id can be handed out again.
+  const table = createCampaign(dm.id, { title: "Ids", description: "", theme: "", maxPlayers: 4, startingLevel: 1, difficulty: "normal" });
+  setStoryArc(table.id, storyArc([{ ...waystone, status: "resolved" }]));
+  setStoryArc(table.id, storyArc([]));
+  setStoryArc(table.id, storyArc([{ ...ferry, id: "sa1", status: "active" }]));
+  const rows = listQuests(table.id);
+  const fresh = rows.find((quest) => quest.sourceRef === "sa1");
+  assert.equal(fresh.title, "The Ferryman's Toll", "the new thread keeps its own name");
+  assert.equal(fresh.status, "active", "and is open");
+  assert.equal(fresh.objectives[0].text, "Pay or outwit the ferryman.", "with its own step");
+  assert.equal(getCampaignById(table.id).storyArc.subArcs[0].name, "The Ferryman's Toll", "the arc was not renamed after the old quest");
+  assert.ok(rows.some((quest) => quest.title === "Light for Brackenford" && quest.status === "done"), "the old quest stays as what the party did");
+});
+
+test("a regenerated arc's threads start their own quests; the old arc's open ones go and its settled ones stay", () => {
+  const table = createCampaign(dm.id, { title: "Regenerate", description: "", theme: "", maxPlayers: 4, startingLevel: 1, difficulty: "normal" });
+  setStoryArc(table.id, storyArc([{ ...waystone, status: "resolved" }, { ...ferry, status: "active" }]));
+  assert.equal(retireArcQuests(table.id), true);
+  setStoryArc(table.id, storyArc([{ id: "sa1", name: "The Drowned Bell", goal: "Raise the bell.", hook: "", beats: [], status: "active" }]));
+  const rows = listQuests(table.id);
+  assert.deepEqual(rows.filter((quest) => quest.sourceRef).map((quest) => [quest.sourceRef, quest.title, quest.status]), [["sa1", "The Drowned Bell", "active"]]);
+  assert.ok(rows.some((quest) => quest.title === "Light for Brackenford" && quest.status === "done" && !quest.sourceRef));
+  assert.ok(!rows.some((quest) => quest.title === "The Ferryman's Toll"), "an open quest of the thrown-away arc goes");
 });
 
 test("the status rules: a settled or hidden row keeps its own word, an open one follows the arc", () => {

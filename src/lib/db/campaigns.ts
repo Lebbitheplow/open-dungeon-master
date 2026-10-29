@@ -14,7 +14,7 @@ import type {
 import { isUploadedImagePath } from "@/lib/uploads";
 import type { StorySettings } from "@/lib/types";
 import { normalizeStoryArc, type StoryArc } from "@/lib/dm/arc-logic";
-import { listQuests, syncArcQuests } from "@/lib/db/quests";
+import { listQuests, reconcileArcQuests, syncArcQuests } from "@/lib/db/quests";
 import { questLogLines } from "@/lib/dm/quest-logic";
 import { normalizeCover, type DmCover } from "@/lib/dm/delegation";
 import { MINUTES_PER_DAY, daysPerYear, defaultClock, normalizeCalendarDefinition, normalizeClock, type CampaignClock } from "@/lib/dm/calendar";
@@ -730,17 +730,12 @@ export function setStoryArc(campaignId: string, arc: StoryArc) {
         }
       : (arc.saga ?? null),
   };
-  // The quest log mirrors the sub-arcs (docs/vtt-parity-implementation-
-  // plan.md section 5.7), and a quest the table settled or renamed comes
-  // back into the arc as they left it (issue 581); a failure there must not
-  // lose the arc.
-  let questsChanged = false;
+  // A quest the table settled or renamed comes back into the arc as they
+  // left it (issue 581); a failure there must not lose the arc.
   try {
-    const synced = syncArcQuests(campaignId, trimmed.subArcs);
-    trimmed.subArcs = synced.subArcs;
-    questsChanged = synced.changed;
+    trimmed.subArcs = reconcileArcQuests(campaignId, trimmed.subArcs);
   } catch (error) {
-    console.error("[quests] arc sync failed", error);
+    console.error("[quests] arc reconcile failed", error);
   }
   let serialized = JSON.stringify(trimmed);
   while (serialized.length > STORY_ARC_CHAR_CAP) {
@@ -781,10 +776,17 @@ export function setStoryArc(campaignId: string, arc: StoryArc) {
   getDatabase()
     .prepare(`UPDATE campaigns SET story_arc_json = ?, updated_at = ? WHERE id = ?`)
     .run(serialized, nowIso(), campaignId);
-  // Whether the quest log changed with it, for a caller to publish
-  // quests_updated (this module cannot import the event bus, which imports
-  // it).
-  return questsChanged;
+  // The quest log mirrors the sub-arcs as stored (docs/vtt-parity-
+  // implementation-plan.md section 5.7), after the cap above, so a thread it
+  // shed lets go of its id in the same write; a failure there must not lose
+  // the arc. Whether the log changed, for a caller to publish quests_updated
+  // (this module cannot import the event bus, which imports it).
+  try {
+    return syncArcQuests(campaignId, trimmed.subArcs);
+  } catch (error) {
+    console.error("[quests] arc sync failed", error);
+    return false;
+  }
 }
 
 // The per-turn world-simulation counters and pending sparks
