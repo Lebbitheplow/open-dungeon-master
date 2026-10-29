@@ -27,6 +27,9 @@ import { CharacterSheetDialog } from "@/app/campaigns/[campaignId]/CharacterShee
 import { TradeDialog } from "@/app/campaigns/[campaignId]/TradeDialog";
 import { CompanionBuilderDialog } from "@/app/campaigns/[campaignId]/CompanionBuilderDialog";
 import { CompanionCommand } from "@/app/campaigns/[campaignId]/CompanionCommand";
+import { CompanionPaintButton } from "@/app/campaigns/[campaignId]/CompanionPaintButton";
+import { CompanionKeepButton } from "@/app/campaigns/[campaignId]/CompanionKeepButton";
+import { hostOffers, offersImages, useCapabilities } from "@/lib/use-capabilities";
 import { offSide, SideBadge } from "@/app/campaigns/[campaignId]/SideBadge";
 import { DiceSourcesButton } from "@/app/campaigns/[campaignId]/DiceSourcesDialog";
 import { DiceLookButton } from "@/components/DiceLookEditor";
@@ -405,6 +408,11 @@ export function PartyPanel({
   multiCharacter?: "off" | "one_active" | "all_active";
 }) {
   const packArt = usePackArt(worldPack);
+  // A companion's "Paint a portrait" only where the server can paint, and
+  // where the host has the route (an app's screens may be newer than it).
+  const capabilities = useCapabilities();
+  const canPaint = offersImages(capabilities) && hostOffers(capabilities, "companionPortrait");
+  const canKeep = hostOffers(capabilities, "keepCompanion");
   const [editingSheetId, setEditingSheetId] = useState("");
   const [viewingSheetId, setViewingSheetId] = useState("");
   const [croppingSheetId, setCroppingSheetId] = useState("");
@@ -914,6 +922,12 @@ export function PartyPanel({
                   <ImagePlus className="size-3.5" />
                   {sheet.portrait ? "Change portrait" : "Add portrait"}
                 </KitButton>
+                {campaignId && sheet.isCompanion && steersStory && canPaint ? (
+                  <CompanionPaintButton campaignId={campaignId} sheet={sheet} />
+                ) : null}
+                {campaignId && sheet.isCompanion && steersStory && canKeep && sheet.companionKind === "party" && !sheet.summon ? (
+                  <CompanionKeepButton campaignId={campaignId} sheet={sheet} />
+                ) : null}
                 {mine ? <DiceLookButton /> : null}
                 {mine && realDiceAllowed && myMember ? (
                   <>

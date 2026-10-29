@@ -45,6 +45,7 @@ import { LoadBreakdown } from "@/components/sheet/LoadBreakdown";
 import { ResourceRow, SlotRow, STEP_BUTTON } from "@/components/sheet/SheetCounters";
 import { namesLookup } from "@/lib/battlemap/condition-notes";
 import { workshopClassName } from "@/lib/classes/workshop-registry";
+import { StoryHopes } from "@/app/campaigns/[campaignId]/StoryHopes";
 
 function titleCase(value: string) {
   return value.replace(/[-_]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -237,7 +238,7 @@ export function CharacterSheetDialog({
                         .map((entry) => `${workshopClassName(entry.id) ?? titleCase(entry.id)} ${entry.level}`)
                         .join(" / ")
                     : `${workshopClassName(sheet.class) ?? titleCase(sheet.class)}${sheet.subclass ? ` (${titleCase(sheet.subclass)})` : ""}`}
-                  {sheet.background ? ` · ${titleCase(sheet.background)}` : ""}
+                  {sheet.background ? ` · ${sheet.backgroundLabel ?? titleCase(sheet.background)}` : ""}
                   {sheet.alignment ? ` · ${sheet.alignment}` : ""}
                 </p>
               </div>
@@ -599,6 +600,8 @@ export function CharacterSheetDialog({
               <p className="whitespace-pre-wrap font-serif text-sm leading-relaxed text-stone-300">{sheet.backstory}</p>
             </SheetBlock>
           ) : null}
+
+          {sheet.isCompanion ? null : <StoryHopes sheet={sheet} mine={mine} />}
 
           {mine && sheet.notes ? (
             <SheetBlock className="mt-4" title="Notes" aside="only you see these">

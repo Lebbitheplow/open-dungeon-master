@@ -8,22 +8,25 @@
 // what" rules in viewer.ts, and every event and the snapshot ask it. The
 // same goes for whether the owner opened the character to advances from
 // NPCs (issue 501): consent is the player's own business, not the table's.
+// And for the player's hopes for the story: what they would love to happen
+// is theirs to tell the GM, not the party.
 //
 // Pure by design: no "@/" value imports and no I/O.
 import { isDmSeat, type DmSeats } from "./viewer";
 
-type SheetLike = { id: string; userId: string; notes?: string; openToAdvances?: boolean; openToPacts?: boolean };
+type SheetLike = { id: string; userId: string; notes?: string; hopes?: string; openToAdvances?: boolean; openToPacts?: boolean };
 
 // The notes are blanked rather than removed: a client reads `sheet.notes` as
 // a string, and a sheet stored or sent before this rule has the same shape.
 // The opt-in reads as off, which is what everyone else assumes anyway.
 export function publicSheet<T extends SheetLike>(sheet: T): T {
-  if (!sheet.notes && !sheet.openToAdvances && !sheet.openToPacts) {
+  if (!sheet.notes && !sheet.hopes && !sheet.openToAdvances && !sheet.openToPacts) {
     return sheet;
   }
   return {
     ...sheet,
     ...(sheet.notes ? { notes: "" } : {}),
+    ...(sheet.hopes ? { hopes: "" } : {}),
     ...(sheet.openToAdvances ? { openToAdvances: false } : {}),
     // So is whether a pact may approach them (issue 503 Phase 7).
     ...(sheet.openToPacts ? { openToPacts: false } : {}),
@@ -46,7 +49,7 @@ export function sheetForViewer<T extends SheetLike>(sheet: T, seats: DmSeats, us
 // listed them in full a few lines below. The delta is blanked the same way,
 // field for field, so the log still says which fields changed. The whole row
 // stays in the database, for the undo and for the seats that may read it.
-const PRIVATE_SHEET_FIELDS = { notes: "", openToAdvances: false, openToPacts: false } as const;
+const PRIVATE_SHEET_FIELDS = { notes: "", hopes: "", openToAdvances: false, openToPacts: false } as const;
 
 type AuditLike = { characterId: string; delta: Record<string, unknown> };
 

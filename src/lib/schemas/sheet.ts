@@ -66,6 +66,10 @@ export const deathSavesSchema = z
   .nullable();
 export type DeathSaves = z.infer<typeof deathSavesSchema>;
 
+// The longest "Hopes for this story" (createSheetSchema): a few wishes, not a
+// second backstory, since the GM reads every player's each turn.
+export const HOPES_MAX = 500;
+
 // The longest language, tool, and armor or weapon name a sheet holds.
 export const LANGUAGE_NAME_MAX = 40;
 export const TOOL_NAME_MAX = 60;
@@ -487,6 +491,11 @@ export const createSheetSchema = z.object({
   // Player-authored backstory, visible to the whole party and woven into
   // the DM prompt (unlike notes, which stay private to the owner).
   backstory: z.string().trim().max(2000).default(""),
+  // What the player hopes this story holds for the character: a romance, a
+  // rival, a redemption. Out of character and private like the notes (only
+  // the owner and a DM seat read it, src/lib/dm/sheet-view.ts); the GM reads
+  // it every turn and steers toward it (src/lib/dm/prompt.ts describeSheet).
+  hopes: z.string().trim().max(HOPES_MAX).default(""),
 });
 export type CreateSheetInput = z.infer<typeof createSheetSchema>;
 
@@ -563,6 +572,7 @@ export const patchSheetSchema = z.object({
   portrait: attachmentSchema.nullable().optional(),
   notes: z.string().max(4000).optional(),
   backstory: z.string().trim().max(2000).optional(),
+  hopes: z.string().trim().max(HOPES_MAX).optional(),
 });
 export type PatchSheetInput = z.infer<typeof patchSheetSchema>;
 
@@ -715,6 +725,8 @@ export type CharacterSheet = {
   class: string;
   subclass: string;
   background: string;
+  // A homebrew background's name, derived like raceLabel.
+  backgroundLabel?: string;
   alignment: string;
   // The builder's choice, or "" (src/lib/gender.ts): read by the portrait
   // prompt, the placeholder face, the voice cast and the speech reader.
@@ -776,6 +788,10 @@ export type CharacterSheet = {
   portrait: SheetAttachment | null;
   notes: string;
   backstory: string;
+  // The player's hopes for this story (createSheetSchema). Blanked like the
+  // notes for anyone but the owner and a DM seat; optional only for test
+  // doubles, every stored sheet reads one.
+  hopes?: string;
   // AI companion party member: the sheet belongs to an unloginable bot user
   // and the DM drives it (src/lib/dm/companion-tools.ts). 'party' travels
   // with the party until dismissed; 'guest' is a scene-scoped ally.

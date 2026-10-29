@@ -11,7 +11,7 @@ import { portraitStatus, queueLibraryPortrait } from "@/lib/portrait";
 import { admitSheet, refusal } from "@/lib/characters/admit";
 import { olderBuilderOf } from "@/lib/srd/legality/older-builder";
 import { createSheetSchema } from "@/lib/schemas/sheet";
-import { workshopClassName } from "@/lib/classes/workshop-registry";
+import { libraryLabels } from "@/lib/db/homebrew";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -42,8 +42,9 @@ export async function GET(request: Request) {
       ...character,
       portraitStatus: portraitStatus(character.id),
       campaigns: assignments.get(character.id) ?? [],
-      // A workshop class shows by its name, not its id.
-      ...(workshopClassName(character.class) ? { className: workshopClassName(character.class) } : {}),
+      // A workshop class, a homebrew race and a homebrew background show by
+      // their names, not their ids.
+      ...libraryLabels(character),
     })),
   });
 }

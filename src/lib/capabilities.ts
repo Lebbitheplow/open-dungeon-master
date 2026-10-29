@@ -46,7 +46,31 @@ export type Capabilities = {
   // transcribes: whether voice-chat transcription can write anything down
   // (the transcript route's own check, src/lib/stt.ts sttAvailable).
   voice: { enabled: boolean; mode: VoiceMode; transcribes: boolean };
+  // What this server's routes offer beyond its backends, one flag per
+  // control an older host lacks (SERVER_FEATURES below).
+  features: ServerFeatures;
 };
+
+// The apps' own screens can be newer than the host they are opened on. A
+// control that needs a route or a field the host may not have waits for its
+// flag here (src/lib/use-capabilities.ts hostOffers), so an older host keeps
+// the app's screens and simply shows no such control, rather than the app
+// dropping it to its own pages over one button. Constant per release: a flag
+// only ever says this server's code has the thing.
+export const SERVER_FEATURES = {
+  // "Paint a portrait" on a companion's card (issue 569):
+  // POST /api/campaigns/[id]/companions/[characterId]/portrait.
+  companionPortrait: true,
+  // "Save to my characters" on a companion's card, and a companion built at
+  // the table kept in its builder's characters (the builder says so):
+  // POST /api/campaigns/[id]/companions/[characterId]/keep.
+  keepCompanion: true,
+  // "Hopes for this story" on a character (the builder's Hero step and the
+  // sheet in play): the `hopes` field an older host drops while answering
+  // the save as done.
+  storyHopes: true,
+} as const;
+export type ServerFeatures = { [K in keyof typeof SERVER_FEATURES]: boolean };
 
 export const PROBE_TIMEOUT_MS = 2_500;
 
@@ -518,5 +542,6 @@ export async function capabilitiesSnapshot(): Promise<Capabilities> {
     // from the same probe-gated inputs, so a named box that does not answer
     // costs nothing here.
     voice: { enabled: voice.enabled, mode: voice.mode, transcribes: Boolean(dictation.explicitWhisperUrl && dictation.whisperModel) },
+    features: { ...SERVER_FEATURES },
   };
 }

@@ -86,6 +86,8 @@ export async function POST(
   if (parsed.data.portrait) {
     queueNpcPortrait(context.campaign, {
       id: npc.id,
+      gender: npc.gender,
+      role: npc.role,
       trait: npc.trait,
       // The axes as adjectives, which is what a render prompt can use;
       // "warmth: -2" would mean nothing to it.

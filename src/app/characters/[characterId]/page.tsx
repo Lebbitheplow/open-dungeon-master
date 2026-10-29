@@ -37,9 +37,12 @@ type LibraryCharacter = {
   // A character somebody plays, or an ally the DM plays.
   role?: "pc" | "companion";
   race: string;
+  // A homebrew race's and background's names (the fields hold their ids).
+  raceLabel?: string;
   class: string;
   subclass: string;
   background: string;
+  backgroundLabel?: string;
   level: number;
   xp: number;
   portraitStatus?: "queued" | "generating" | "failed" | null;
@@ -390,9 +393,9 @@ export default function CharacterDetailPage({
                 <GameIcon icon={{ kind: "glyph", key: "rest-level-up" }} size="size-5" />
                 Level {character.level}
               </span>
-              {titleCase(character.race)} {workshopClassName(character.class) ?? titleCase(character.class)}
+              {character.raceLabel ?? titleCase(character.race)} {workshopClassName(character.class) ?? titleCase(character.class)}
               {character.subclass ? ` (${character.subclass})` : ""}
-              {character.background ? ` · ${titleCase(character.background)}` : ""}
+              {character.background ? ` · ${character.backgroundLabel ?? titleCase(character.background)}` : ""}
             </p>
             {!sheet.portrait && character.portraitStatus === "failed" ? (
               <p className="reveal mt-1 text-xs text-stone-500">Portrait couldn&apos;t be generated.</p>

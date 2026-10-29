@@ -14,6 +14,7 @@ import { admitSheet, refusal } from "@/lib/characters/admit";
 import { olderBuilderOf } from "@/lib/srd/legality/older-builder";
 import { attachmentSchema, createSheetSchema } from "@/lib/schemas/sheet";
 import { workshopClassDefs } from "@/lib/classes/workshop-registry";
+import { libraryLabels } from "@/lib/db/homebrew";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -46,6 +47,7 @@ export async function GET(
   return Response.json({
     character: {
       ...character,
+      ...libraryLabels(character),
       portraitStatus: portraitStatus(character.id),
       campaigns: listAssignmentsForCharacter(user.id, characterId),
     },
@@ -131,6 +133,7 @@ export async function PATCH(
   return Response.json({
     character: {
       ...character,
+      ...libraryLabels(character),
       portraitStatus: portraitStatus(character.id),
       campaigns: listAssignmentsForCharacter(user.id, characterId),
     },

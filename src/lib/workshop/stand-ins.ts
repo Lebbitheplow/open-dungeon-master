@@ -64,7 +64,7 @@ export function buildStandIns(
       name = rollHeroName({ raceName: slot.race, rng });
     }
     const built = buildDraft(
-      { name, concept: `A ${slot.className} stand-in`, className: slot.className, race: slot.race, background: slot.background, backstory: "", role: slot.role },
+      { name, concept: `A ${slot.className} stand-in`, className: slot.className, race: slot.race, background: slot.background, backstory: "", role: slot.role, gender: "" },
       level,
       offered,
       rng,

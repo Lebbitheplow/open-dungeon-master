@@ -1,5 +1,6 @@
 import type { PlaystyleId } from "@/app/characters/builder/playstyles";
 import { textKey } from "@/lib/language/text-logic";
+import { GENDERS, type Gender } from "@/lib/gender";
 
 // AI-drafted pregens: what the AI DM is asked, and how its answer is read.
 // The model only proposes (a concept, a class, a race, a background, a name,
@@ -55,6 +56,10 @@ export type HeroProposal = {
   // The job at the table, in the playstyle picker's words (playstyles.ts);
   // null when the model named none the picker has.
   role: PlaystyleId | null;
+  // One of the builder's genders, or "" when the model named none. The
+  // backstory it writes says "she" or "he"; the sheet's portrait, voice and
+  // pronouns read this (issue 569: drafted heroes had none at all).
+  gender: Gender;
 };
 
 const ROLES: readonly PlaystyleId[] = ["tank", "dps", "healer", "support", "utility"];
@@ -78,7 +83,7 @@ const clip = (text: string, max: number) => {
 export function draftSystemPrompt(count: number, options: DraftOptionNames): string {
   return [
     `You are the Game Master preparing ${count} pregenerated player characters for the adventure the user describes. Propose a balanced party: between them someone holds the line, someone heals, someone deals damage, and someone scouts or solves problems; give each hero a different class where you can.`,
-    'Return STRICT JSON only, no code fences, shaped: {"heroes": [{"name": string, "concept": string, "class": string, "race": string, "background": string, "role": "tank" | "dps" | "healer" | "support" | "utility", "backstory": string}]}',
+    'Return STRICT JSON only, no code fences, shaped: {"heroes": [{"name": string, "concept": string, "class": string, "race": string, "background": string, "gender": "Female" | "Male" | "Nonbinary", "role": "tank" | "dps" | "healer" | "support" | "utility", "backstory": string}]}',
     `There are exactly ${count} heroes. class is one of: ${options.classes.join(", ")}. race is one of: ${options.races.join(", ")}. background is one of: ${options.backgrounds.join(", ")}.`,
     "name fits the setting, and no two heroes share one. concept is one short line. backstory is two or three sentences, and one of them ties the hero to something the adventure names: a place, a person or a hook. Use only what the adventure says; invent no secret of it.",
   ].join("\n");
@@ -171,6 +176,7 @@ export function parseDraftReply(raw: string, count: number): ParsedDraft {
       background: field(hero.background, 60),
       backstory: field(hero.backstory, 1200),
       role: ROLES.find((role) => role === textKey(field(hero.role, 20))) ?? null,
+      gender: GENDERS.find((gender) => textKey(gender) === textKey(field(hero.gender, 20))) ?? "",
     };
     const missing = (["name", "className", "race", "background", "backstory"] as const).find((key) => !proposal[key]);
     if (missing) {
