@@ -1775,7 +1775,32 @@ messages.insertCampaignMessage({
   content: "Rain taps on the shutters. Somewhere below, a fiddler starts a slow tune.",
 });
 
+// Backlog F9: two lobbies at level 5 for the multiclass build (scenario
+// builder-multiclass), one that allows a second class and one that turns
+// multiclassing off. The lead builds a hero at each; the scenario gives up
+// the seat again.
+const multiclassTable = campaigns.createCampaign(world.owner.id, {
+  title: "Two Paths",
+  description: "A level 5 table where a hero may split their levels.",
+  theme: "high-fantasy",
+  maxPlayers: 4,
+  startingLevel: 5,
+  difficulty: "normal",
+  gameSettings: { ttsEnabled: false },
+});
+const singleClassTable = campaigns.createCampaign(world.owner.id, {
+  title: "One Path",
+  description: "A level 5 table that turns multiclassing off.",
+  theme: "high-fantasy",
+  maxPlayers: 4,
+  startingLevel: 5,
+  difficulty: "normal",
+  gameSettings: { ttsEnabled: false, multiclassingEnabled: false },
+});
+
 const ids = {
+  multiclassTableId: multiclassTable.id,
+  singleClassTableId: singleClassTable.id,
   qualityTurnIds,
   spellbook,
   prepReturn,

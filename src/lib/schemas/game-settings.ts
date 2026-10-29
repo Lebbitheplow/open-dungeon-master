@@ -116,7 +116,8 @@ export const gameSettingsSchema = z.object({
   mapsEnabled: z.boolean().default(true),
   // Whether characters may take levels in a second (or third) class at
   // level-up. On by default; turning it off keeps the level-up flow
-  // single-class (already-multiclassed characters keep what they have).
+  // single-class (characters already seated keep what they have) and lets
+  // in no library hero or companion with more than one class.
   multiclassingEnabled: z.boolean().default(true),
   // How hit points are counted after 1st level, at creation and at every
   // level-up. The server derives the number (or rolls the die); a player

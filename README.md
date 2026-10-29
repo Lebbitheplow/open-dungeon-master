@@ -13,7 +13,7 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-d4ab3a?labelColor=151229&style=flat-square)](LICENSE)
 [![Node 22+](https://img.shields.io/badge/node-22%2B-d4ab3a?labelColor=151229&style=flat-square)](package.json)
-[![Ruleset: D&D 5e SRD 5.1](https://img.shields.io/badge/ruleset-D%26D%205e%20SRD%205.1-d4ab3a?labelColor=151229&style=flat-square)](docs/rules-coverage.md)
+[![Ruleset: 5e SRD 5.1](https://img.shields.io/badge/ruleset-5e%20SRD%205.1-d4ab3a?labelColor=151229&style=flat-square)](docs/rules-coverage.md)
 [![Runs: fully on-device](https://img.shields.io/badge/runs-fully%20on--device-d4ab3a?labelColor=151229&style=flat-square)](docs/install.md#requirements)
 [![AI: local, API or CLI agent](https://img.shields.io/badge/AI-local%20%C2%B7%20API%20%C2%B7%20CLI%20agent-d4ab3a?labelColor=151229&style=flat-square)](docs/install.md#requirements)
 [![PRs welcome](https://img.shields.io/badge/PRs-welcome-e0703a?labelColor=151229&style=flat-square)](#)
@@ -25,7 +25,7 @@
 > worlds and accounts carry over unchanged; only the name and the website
 > (now [opengamemaster.com](https://opengamemaster.com)) moved.
 
-**Open Game Master** runs multiplayer (and solo) Dungeons &amp; Dragons 5e
+**Open Game Master** runs multiplayer (and solo) 5e
 campaigns with an AI Game Master, on your own machine. The narrator is whichever
 AI you already have: **a local model** (llama.cpp, Ollama, LM Studio, vLLM), **an
 API key** (OpenAI, OpenRouter, or any OpenAI-compatible endpoint), or **a CLI agent
@@ -243,6 +243,8 @@ The documents below are the server's own reference.
   - [The engines](docs/engines.md): combat, sheets, world simulation, narrative, memory, AI integration, the human GM and the workshop
   - [Rules coverage](docs/rules-coverage.md): what is enforced, what is guidance, what is out of scope
   - [Roadmap](docs/ROADMAP.md)
+- **Contributing**
+  - [Contributing guide](.github/CONTRIBUTING.md): the conventions, the checks, a new DM tool, route or test suite, and what a pull request carries
 
 ## Credits and licenses
 
@@ -264,5 +266,4 @@ wherever it appears. Only original works are bundled in this repository.
   open dataset carries) are original content: the mechanics are stated in our own
   wording, and no publisher's descriptive text is reproduced.
 
-<sub>Dungeons &amp; Dragons and D&amp;D are trademarks of Wizards of the Coast LLC. This
-project is not affiliated with, endorsed, or sponsored by Wizards of the Coast.</sub>
+<sub>This project is not affiliated with, endorsed, or sponsored by Wizards of the Coast.</sub>

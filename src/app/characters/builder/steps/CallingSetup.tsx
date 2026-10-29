@@ -62,10 +62,11 @@ export function ContentNotices({ pack, packInstalled }: { pack: WorldPack | null
   );
 }
 
-// The level select: fixed by a campaign, kept for a character whose levels
-// are split between classes, otherwise open from the lowest level the
-// stored character's improvements allow. The library door's level (door.ts)
-// opens it, with its note beside it.
+// The level select: fixed by a campaign, otherwise open from the lowest
+// level the stored character's improvements allow. A character whose
+// levels are split between classes moves too (backlog F9): a lower level
+// comes off the last class taken. The library door's level (door.ts) opens
+// it, with its note beside it.
 export function LevelField({
   state,
   fixedLevel,
@@ -84,15 +85,6 @@ export function LevelField({
         <span className="block rounded-lg border border-stone-700/70 bg-stone-950/60 px-3 py-2 text-sm text-stone-400">
           {fixedLevel} (campaign)
         </span>
-      ) : state.levelLocked ? (
-        <>
-          <span className="block rounded-lg border border-stone-700/70 bg-stone-950/60 px-3 py-2 text-sm text-stone-400">
-            {state.level} (kept)
-          </span>
-          <span className="mt-1 block text-xs text-stone-500">
-            Their levels are split between classes, which only a level-up in play changes. The split stays as it is.
-          </span>
-        </>
       ) : (
         <>
           <Select<string>

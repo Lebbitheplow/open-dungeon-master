@@ -22,6 +22,9 @@ export type ClientCapabilities = {
   stt: { configured: boolean; backend?: "whisper" | "builtin" | "openai" | "none"; wantsWav?: boolean };
   // transcribes arrives from servers newer than 0.26.4.
   voice: { enabled: boolean; mode: string; transcribes?: boolean };
+  // features arrives from servers newer than 0.31.0 (src/lib/capabilities.ts
+  // SERVER_FEATURES); an older host sends none.
+  features?: { companionPortrait?: boolean; keepCompanion?: boolean; storyHopes?: boolean; builderMulticlass?: boolean };
 };
 
 let cached: ClientCapabilities | null = null;
@@ -83,6 +86,16 @@ export function subscribeCapabilities(listener: (value: ClientCapabilities | nul
 
 // The two questions the builders ask. Both read "unknown" as "offered" so a
 // paint button only disappears on a positive answer from the server.
+
+// Does the host have the route or field a control needs? The apps' own
+// screens can be newer than the host they are opened on, and a host from
+// before a control sends no flag for it: the control stays hidden there
+// rather than failing, and the app keeps its own screens (no host gate in the
+// apps). Unknown (null) offers it, as everything here does.
+export type HostFeature = keyof NonNullable<ClientCapabilities["features"]>;
+export function hostOffers(capabilities: ClientCapabilities | null, feature: HostFeature): boolean {
+  return capabilities === null || capabilities.features?.[feature] === true;
+}
 
 // Is there an image backend to paint portraits, maps and scenes with?
 export function offersImages(capabilities: ClientCapabilities | null): boolean {

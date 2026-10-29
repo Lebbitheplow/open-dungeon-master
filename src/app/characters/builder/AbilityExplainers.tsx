@@ -156,8 +156,12 @@ export function HpExplainerDialog({
   const later = hp.level > 1;
   const signed = (value: number) => `${value >= 0 ? "+" : "-"} ${Math.abs(value)}`;
   const extra = parts.featureHp ? ` + ${parts.featureHp}` : "";
+  // A class list (backlog F9): each class's later levels on its own die.
+  const split = hp.hp.split?.filter((entry) => entry.levels > 0) ?? null;
+  const laterTerms = split ? split.map((entry) => `${entry.levels} x ${entry.perLevel}`).join(" + ") : `${hp.level - 1} x ${parts.perLevel}`;
+  const laterTotal = split ? split.reduce((total, entry) => total + entry.levels * entry.perLevel, 0) : parts.laterLevels;
   const sum = later
-    ? `${parts.firstLevel} + ${hp.level - 1} x ${parts.perLevel}${extra} = ${parts.total}`
+    ? `${parts.firstLevel} + ${laterTerms}${extra} = ${parts.total}`
     : `${parts.hitDie} ${signed(parts.conMod)}${parts.bonusPerLevel ? ` + ${parts.bonusPerLevel}` : ""}${extra} = ${parts.total}`;
   const laterDie =
     method === "max"
@@ -168,7 +172,9 @@ export function HpExplainerDialog({
   const steps = [
     `A ${klass} rolls a d${parts.hitDie} for health. At first level you do not roll it: you take the best it can give.`,
     `Your Constitution of ${hp.con} is worth ${formatModifier(parts.conMod)}, and that applies to every level you gain.`,
-    later
+    later && split
+      ? `Each level after the first adds its own class's die (${split.map((entry) => `d${entry.hitDie}`).join(", ")}), ${method === "max" ? "at its highest face" : method === "rolled" ? "rolled when you save, counted at its average until then" : "at its average"}, plus that modifier, so ${hp.level - 1} more levels add ${laterTotal}. You begin on ${parts.total}.`
+      : later
       ? `Each level after the first adds ${laterDie} plus that modifier, so ${hp.level - 1} more ${hp.level === 2 ? "level adds" : "levels add"} ${parts.laterLevels}. You begin on ${parts.total}.`
       : `So you begin on ${parts.total}. Rest fully and you are back to it.`,
     ...(kept
@@ -191,8 +197,8 @@ export function HpExplainerDialog({
             <FormulaChip
               index={2}
               label={`Levels 2 to ${hp.level}`}
-              value={String(parts.laterLevels)}
-              note={`${hp.level - 1} x ${parts.perLevel}`}
+              value={String(laterTotal)}
+              note={laterTerms}
             />
           </>
         ) : null}

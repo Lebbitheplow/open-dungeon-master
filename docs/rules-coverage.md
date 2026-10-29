@@ -348,14 +348,18 @@ also proves it does not rot (every acknowledged name is a real granted name).
 | Per-class hit-die pools; long-rest recovery and short-rest spends biggest die first | `hitDicePools`; `rest-logic.ts recoverPools/shortRestDicePlan`, mirror sync in `db/sheets.ts` | `test-enforce-multiclass-features`, `test-enforce-short-rest` |
 | Level-up flow: class step with prereq gating, per-class HP die, subclass/expertise/spells at class levels | `LevelUpDialog.tsx` + server validation in the sheet PATCH route | `test-enforce-multiclass-levelup` |
 | Library round-trip: multiclass sync-back, lower-level instantiation strips the last class first | `db/characters.ts` | `test-enforce-multiclass-library` |
+| Builder: a second and third class at creation, eligible-first with each refusal in words, levels that add up, each class's subclass at its own level, the second class's skill pick, and HP, improvements, training, slots and the level table from the class list; each casting class its own spell lists, counts, DC and attack on a tab of the spell step, the shared slots and pact slots apart (phase 2); hidden at a table that turns multiclassing off | `builder/multiclassBuild.ts`, `useBuilderDerived.ts`, `steps/MulticlassSection.tsx`, `submit.ts` | `test-builder-multiclass` |
 
 Ability Score Improvements follow each class's own table by class level (the
 fighter's seven, the rogue's six, five for the rest; `srd/asi.ts`), and a
 character stored under the old single table is owed what the new one adds
 (`srd/asi-ledger.ts`; `test-asi`, `test-sheet-legality`). Kept simplifications:
 the lead edits multiclass sheets through the scalar class/subclass/level
-fields, which fold into the primary class entry; characters are always created
-single-class (multiclassing happens at level-up).
+fields, which fold into the primary class entry. A character may be created
+multiclassed (backlog F9): the builder lists the first class's levels first, and
+each class's prerequisite is checked on the final scores. A table that turns
+multiclassing off lets in no character holding levels in more than one class;
+one seated before the switch went off keeps its classes.
 
 ## Cross-cutting engines (Phase 8)
 

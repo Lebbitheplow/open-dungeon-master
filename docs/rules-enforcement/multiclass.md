@@ -64,17 +64,18 @@ Deliberate deviations from SRD 5.1, each pinned as a test() with a comment:
 | At most 3 classes (SRD: no limit) | `multiclass.ts` MULTICLASS_CAP comment, docs/rules-coverage.md |
 | ASIs at CHARACTER levels 4/8/12/16/19. SRD grants by class level, plus fighter 6 and 14, rogue 10. A fighter 3 / rogue 1 earns one under ODM, none under the SRD. Self-consistent: each threshold is crossed exactly once from 1 to 20 | docs/rules-coverage.md "Kept simplifications" |
 | Lead edits to class, subclass, level fold into the first class entry | same |
-| Characters are created single-class | same (but see finding 1) |
+| A character can be created multiclassed (backlog F9): the levels add up to the table's level, each class meets its prerequisite on the final scores, and the first class's levels come first. A table with multiclassing off makes one class | `classListOf` in `src/lib/srd/sheet-legality.ts` |
 | Custom genre classes: prerequisite is 13 in the casting ability, else the first save; grants are armor capped at medium plus tools | docs/rules-coverage.md, `multiclassPrereq` |
 | Artificer (not SRD 5.1) counts half its levels rounded UP | `casterLevelFor` comment |
-| A table can turn multiclassing off (new classes only) | route comment |
+| A table can turn multiclassing off (SRD 5.1: an optional rule the table decides on): no new class at level-up, no split made at that table, and no library hero or companion with more than one class let in. A character already seated when it is turned off keeps its classes | route comment, `classListOf`, `multiclassEntryProblem` |
 
 ## Findings
 
 ### High
 
 1. `multiclass-created-multiclassed`
-   - Rule: characters are created single-class; a second class is taken at a level-up.
+   - Fixed by `classListOf`: a class list made at a table or in the library is held to the level, each class's prerequisite and the table's setting (backlog F9). The rest of this finding is kept as found.
+   - Rule at the time: characters are created single-class; a second class is taken at a level-up.
    - Observed: POST /sheet at a level 3 table with `classes: [fighter 11, wizard 9]`
      and `hitDicePools` of 20d12 twice is accepted (201). Features for fighter 11
      and wizard 9 are granted (Extra Attack (2)), no prerequisite is checked, the

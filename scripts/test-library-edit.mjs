@@ -132,6 +132,11 @@ function builderEdit(initial, level, overrides = {}) {
     backstory: initial.backstory,
     spells: [],
     spellWarningAck: true,
+    // A stored split opens as the builder holds it (backlog F9): the
+    // classes after the first beside the first class's own fields.
+    extraClasses: (initial.classes ?? []).length > 1
+      ? initial.classes.slice(1).map((entry) => ({ classId: entry.id, subclass: entry.subclass ?? "", level: entry.level, skills: [] }))
+      : [],
     ...overrides,
   };
   const derived = {
@@ -172,15 +177,20 @@ async function join(characterId, startingLevel) {
 }
 
 await test("a stored character opens at its own level, not at 1", () => {
-  assert.deepEqual(storedLevelRange(undefined, undefined), { storedLevel: 1, levelFloor: 1, levelLocked: false });
+  assert.deepEqual(storedLevelRange(undefined, undefined), { storedLevel: 1, levelFloor: 1 });
   // Made in the library at 5 with its improvement recorded: free to move.
   const recorded = { ...FIGHTER, asiChoices: [{ mode: "asi", abilities: { str: 2 } }] };
-  assert.deepEqual(storedLevelRange(recorded, 5), { storedLevel: 5, levelFloor: 1, levelLocked: false });
+  assert.deepEqual(storedLevelRange(recorded, 5), { storedLevel: 5, levelFloor: 1 });
   // Levelled in play to 8: two improvements in its scores and none recorded.
-  assert.deepEqual(storedLevelRange(FIGHTER, 8), { storedLevel: 8, levelFloor: 8, levelLocked: false });
-  // Split between classes: the level stays.
+  assert.deepEqual(storedLevelRange(FIGHTER, 8), { storedLevel: 8, levelFloor: 8 });
+  // Split between classes (backlog F9): the split moves like any other
+  // pick, and each class's improvements count at its own level. Fighter 3
+  // and wizard 2 have earned none.
   const split = { ...FIGHTER, classes: [{ id: "fighter", subclass: "", level: 3 }, { id: "wizard", subclass: "", level: 2 }] };
-  assert.deepEqual(storedLevelRange(split, 5), { storedLevel: 5, levelFloor: 5, levelLocked: true });
+  assert.deepEqual(storedLevelRange(split, 5), { storedLevel: 5, levelFloor: 1 });
+  // Fighter 4 and wizard 1 earned the fighter's 4th-level one in play.
+  const earned = { ...FIGHTER, classes: [{ id: "fighter", subclass: "", level: 4 }, { id: "wizard", subclass: "", level: 1 }] };
+  assert.deepEqual(storedLevelRange(earned, 5), { storedLevel: 5, levelFloor: 5 });
 });
 
 await test("a race, class or background the builder cannot offer is named, never swapped in silence", () => {
@@ -282,6 +292,11 @@ await test("a multiclass split and what play granted survive an edit at the same
   assert.deepEqual(after.sheet.classes.map((entry) => [entry.id, entry.level]), [["fighter", 3], ["wizard", 2]]);
   assert.equal(after.level, 5);
   assert.equal(after.xp, stored.xp);
+  // A split made in the library is edited like any other pick (the plan's
+  // decision 4): a level moved from the wizard to the fighter.
+  const moved = builderEdit(after.sheet, 5, { extraClasses: [{ classId: "wizard", subclass: "", level: 1, skills: [] }] });
+  succeeded(await save(library.id, moved));
+  assert.deepEqual(getCharacter(library.id).sheet.classes.map((entry) => [entry.id, entry.level]), [["fighter", 4], ["wizard", 1]]);
 });
 
 await test("a refused or unauthorized save leaves the stored character as it was", async () => {
@@ -333,6 +348,18 @@ await test("who plays them changes only while no table holds a copy", async () =
   // Sent unchanged, it is no change at all.
   succeeded(await save(library.id, builderEdit(before.sheet, 1, { backstory: "Changed." }), { role: "pc" }));
   assert.equal(getCharacter(library.id).sheet.backstory, "Changed.");
+});
+
+await test("a stored character is read against the server's rows, not the bundled stand-ins", () => {
+  // Read against the bundled list, a pack species fell back to its first
+  // race: that race's tongues stood in for the species' own, and a
+  // minotaur's Minotaur came back as a bonus language no longer on offer.
+  const src = (path) => fs.readFileSync(new URL(`../${path}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
+  const state = src("src/app/characters/builder/useBuilderState.ts");
+  assert.match(state, /if \(initial && !hydratedInitial\.current && !rowsLoaded\) \{\n\s+return;\n\s+\}/);
+  assert.match(state, /\}, \[initial, storedFeatsKnown, races, classes, backgrounds, rowsLoaded\]\);/);
+  assert.match(src("src/app/characters/builder/CharacterBuilder.tsx"), /useBuilderState\(\{[^}]*rowsLoaded: loaded \}\)/);
+  assert.match(src("src/app/characters/builder/LevelUpSheet.tsx"), /useBuilderState\(\{[^}]*rowsLoaded: loaded \}\)/);
 });
 
 console.log(`${passed} library edit checks passed`);

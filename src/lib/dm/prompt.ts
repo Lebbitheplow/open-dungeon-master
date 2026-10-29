@@ -15,6 +15,7 @@ import { attackSummary } from "@/lib/srd/creature-attacks";
 import { encumbranceFor } from "@/lib/srd/encumbrance";
 import { wearingIsExplicit } from "@/lib/srd/armor";
 import { classFeatureDescription, findCustomClass } from "@/lib/classes";
+import { backgroundWords, classWords, raceWords } from "@/lib/sheet-words";
 // The genre catalogs' rules text, all of it: the model reads it beside a
 // custom feature (src/lib/classes/feature-text.ts).
 import "@/lib/classes/feature-text-all";
@@ -98,6 +99,7 @@ import { CREATURE_TYPES } from "@/lib/bestiary/creature-type";
 import { CHECK_KEY_PROPERTIES, NONE, SAVE_AGAINST } from "@/lib/dm/roll-about";
 import { stopWordsFor } from "@/lib/language/language";
 import { textKey } from "@/lib/language/text-logic";
+import { conversationNote, type Conversation } from "@/lib/dm/conversation-logic";
 import { ADVANTAGE_SOURCES } from "@/lib/dm/pc-attack-options";
 import { PLACE_DIRECTIONS, PLACE_DISTANCES } from "@/lib/overworld/places";
 
@@ -276,6 +278,9 @@ export type DmGameState = {
   facts?: FactLike[];
   // Sparks from the world-simulation tick, consumed into this turn.
   directorNotes?: string[];
+  // A player answering someone who just spoke to them
+  // (src/lib/dm/conversation-logic.ts): that person answers first.
+  conversation?: Conversation | null;
   // Tracked NPCs and how they currently feel about the party, plus a
   // bounded agency fragment (personality leans, bonds, goals, pressure).
   npcs?: Array<{
@@ -590,16 +595,18 @@ export function describeSheet(
         ? " | STABLE at 0 HP (unconscious)"
         : ` | DYING: ${sheet.deathSaves.successes} death-save successes, ${sheet.deathSaves.failures} failures`
     : "";
-  // Multiclass header: "barbarian 3 [Berserker] / rogue 2 (level 5)".
+  // Multiclass header: "barbarian 3 [Berserker] / rogue 2 (level 5)". A
+  // workshop class goes by its name: its id ("homebrew-<id>") tells the GM
+  // nothing (issue 569).
   const classLabel =
     (sheet.classes?.length ?? 0) > 1
       ? `${sheet.classes
           .map(
             (entry) =>
-              `${entry.id}${entry.subclass ? ` [${entry.subclass}]` : ""} ${entry.level}`,
+              `${classWords(entry.id)}${entry.subclass ? ` [${entry.subclass}]` : ""} ${entry.level}`,
           )
           .join(" / ")} (level ${sheet.level})`
-      : `${sheet.class}${sheet.subclass ? ` [${sheet.subclass}]` : ""} ${sheet.level}`;
+      : `${classWords(sheet.class)}${sheet.subclass ? ` [${sheet.subclass}]` : ""} ${sheet.level}`;
   const hitDiceLabel = sheet.hitDicePools?.length
     ? sheet.hitDicePools
         .map((pool) => `${Math.max(0, pool.total - pool.spent)}/${pool.total} ${pool.die}`)
@@ -617,7 +624,7 @@ export function describeSheet(
     ? `  Carrying ${load.carriedLb} lb of a ${load.capacityLb} lb capacity${load.unweighed ? ` (${load.unweighed} item${load.unweighed === 1 ? "" : "s"} of unknown weight, so the total is a floor)` : ""}${load.note ? `: ${load.note}` : ""}${load.overCapacity ? ". OVER CAPACITY: they cannot pick up anything more." : ""}`
     : null;
   const lines = [
-    `- ${sheet.name} (${sizeForRace(sheet.race)} ${sheet.race.replaceAll("_", " ")} ${classLabel}) characterId=${sheet.id} played by ${playedBy}${realDice ? " (rolls PHYSICAL dice)" : ""}`,
+    `- ${sheet.name} (${sizeForRace(sheet.race)} ${raceWords(sheet)} ${classLabel}) characterId=${sheet.id} played by ${playedBy}${realDice ? " (rolls PHYSICAL dice)" : ""}`,
     `  HP ${sheet.currentHp}/${sheet.maxHp}${sheet.tempHp ? ` (+${sheet.tempHp} temp)` : ""}${deathNote} | AC ${sheet.ac} | Speed ${speedFor(sheet, { encumbrance: options.encumbrance })} | Passive Perception ${derived.passivePerception} | Initiative ${formatModifier(derived.initiative)} | Hit Dice ${hitDiceLabel}`,
     `  ${abilities} | Save proficiencies: ${sheet.proficiencies.saves.map((save) => save.toUpperCase()).join(", ") || "none"}`,
     `  Skill proficiencies: ${proficientSkills || "none"}`,
@@ -774,7 +781,7 @@ export function describeSheet(
     lines.push(`  Worn and in hand: ${worn.length ? worn.join(", ") : "nothing"} (everything else is packed away)`);
   }
   if (sheet.background || sheet.alignment) {
-    lines.push(`  Background: ${sheet.background || "unknown"} | Alignment: ${sheet.alignment || "unstated"}`);
+    lines.push(`  Background: ${backgroundWords(sheet) || "unknown"} | Alignment: ${sheet.alignment || "unstated"}`);
   }
   // Who they are (issue 501): the gender always, and at a romance table who
   // they are drawn to and whether their player opened them to advances.
@@ -793,12 +800,18 @@ export function describeSheet(
     // #429: the first 400 characters of 2,000 used to be all the DM saw).
     lines.push(`  Backstory: ${options.compact ? cutForRoom(sheet.backstory, COMPACT_TEXT_CHARS.backstory) : sheet.backstory}`);
   }
+  if (sheet.hopes) {
+    // What the player would love to see happen (a romance, a rival, a
+    // redemption), said out of character: a direction to steer toward when
+    // the story allows, never a script, and never quoted at the table.
+    lines.push(`  Their player hopes the story holds (out of character; work toward it when it fits, never announce it): ${options.compact ? cutForRoom(sheet.hopes, COMPACT_TEXT_CHARS.hopes) : sheet.hopes}`);
+  }
   return lines.join("\n");
 }
 
 // What a compact call keeps of the text the table wrote for the DM, and
 // what each notes list carries whole before its notes keep only their start.
-const COMPACT_TEXT_CHARS = { backstory: 400, note: 300 } as const;
+const COMPACT_TEXT_CHARS = { backstory: 400, hopes: 200, note: 300 } as const;
 const NOTES_SHARE_CHARS = 4_000;
 
 // The start of a text cut at a word, saying it was cut, so the model never
@@ -974,6 +987,9 @@ export function buildGameStateBlock(state: DmGameState): string {
         .map((note) => `- ${note}`)
         .join("\n")}`,
     );
+  }
+  if (state.conversation) {
+    moment.push(conversationNote(state.conversation));
   }
   if (campaign.scene) {
     sections.push(`Current scene: ${campaign.scene}`);

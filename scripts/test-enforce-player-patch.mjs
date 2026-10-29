@@ -7,7 +7,8 @@
 // runs the story: PATCH /sheets/[sheetId], the correction dialog.
 //
 // The rules held here:
-//   outside a level-up a player writes portrait, notes and backstory and
+//   outside a level-up a player writes portrait, notes, backstory and their
+//   hopes for the story, and
 //   nothing else, whatever the patch schema would parse. The list of fields
 //   is read from patchSheetSchema itself, so a field added to the schema is
 //   refused here until somebody decides otherwise;
@@ -60,7 +61,9 @@ const patch = (body, user = who.player) => {
 
 // ---- outside a level-up ----
 
-const COSMETIC = ["portrait", "notes", "backstory"];
+// The hopes for the story are the player's to change any time, like the
+// backstory (scripts/test-story-hopes.mjs).
+const COSMETIC = ["portrait", "notes", "backstory", "hopes"];
 
 // A value the schema accepts for each field, so the refusal is the route's
 // and not the parser's.
@@ -118,6 +121,7 @@ await test("the cosmetic fields keep their bounds", async () => {
   for (const body of [
     { notes: "x".repeat(4001) },
     { backstory: "x".repeat(2001) },
+    { hopes: "x".repeat(501) },
     { portrait: { url: "https://example.com/face.png" } },
     { portrait: { url: "//example.com/face.png" } },
     { portrait: { url: "uploads/face.png" } },

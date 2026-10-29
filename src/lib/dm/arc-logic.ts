@@ -6,7 +6,7 @@ import {
   type WorldArcUpdate,
 } from "./world-arc-logic.ts";
 import { RENDER_EVENT_CHARS, selectPendingEvents, type ArcTrace, type SceneCues } from "./arc-relevance.ts";
-import { textKey } from "../language/text-logic.ts";
+import { containsPhrase, textKey } from "../language/text-logic.ts";
 
 // Pure story-arc logic, kept free of alias imports so node test scripts
 // (scripts/test-arc.mjs) can load it directly. The arc is the DM's secret
@@ -375,6 +375,48 @@ export function normalizeWaypoints(raw: unknown): Waypoint[] {
   return out;
 }
 
+// A planner's fight steps come after its places and people: the DM reads the
+// checklist in order, and a fight listed first got fought before anyone in
+// the scene had spoken.
+function fightsLast(waypoints: Waypoint[]): Waypoint[] {
+  return [...waypoints.filter((waypoint) => waypoint.kind !== "fight"), ...waypoints.filter((waypoint) => waypoint.kind === "fight")];
+}
+
+// An act's boss is its climax, not its opening scene (a table met act 1's
+// boss three messages into the campaign, over a question to the village
+// elder). A fight step naming the boss on an earlier beat of the act moves
+// to the act's last beat, or goes when that beat already fights it or is
+// full. Runs on beats a planner just wrote, never on a lead's or a board's.
+export function bossFoughtLast(beats: ArcBeat[], act: number, boss: string): void {
+  if (!textKey(boss)) {
+    return;
+  }
+  const isBoss = (waypoint: Waypoint) =>
+    waypoint.kind === "fight" &&
+    (containsPhrase(waypoint.text, boss) || containsPhrase(boss, waypoint.text));
+  const actBeats = beats.filter((beat) => beat.act === act && beat.status !== "done" && beat.status !== "skipped");
+  const last = actBeats.at(-1);
+  if (!last || actBeats.length < 2) {
+    return;
+  }
+  for (const beat of actBeats.slice(0, -1)) {
+    const moving = (beat.waypoints ?? []).filter(isBoss);
+    if (!moving.length) {
+      continue;
+    }
+    const kept = beat.waypoints!.filter((waypoint) => !isBoss(waypoint));
+    if (kept.length) {
+      beat.waypoints = kept;
+    } else {
+      delete beat.waypoints;
+    }
+    const lastSteps = last.waypoints ?? [];
+    if (!lastSteps.some(isBoss) && lastSteps.length < MAX_WAYPOINTS_PER_BEAT) {
+      last.waypoints = [...lastSteps, { ...moving[0], done: false }];
+    }
+  }
+}
+
 function beatPlans(value: unknown, max: number): BeatPlan[] {
   const out: BeatPlan[] = [];
   for (const entry of Array.isArray(value) ? value : []) {
@@ -384,7 +426,7 @@ function beatPlans(value: unknown, max: number): BeatPlan[] {
     if (!text) {
       continue;
     }
-    out.push({ text, waypoints: normalizeWaypoints(fields?.waypoints) });
+    out.push({ text, waypoints: fightsLast(normalizeWaypoints(fields?.waypoints)) });
     if (out.length >= max) {
       break;
     }
@@ -851,7 +893,7 @@ export function parseWaypointFillJson(raw: string): Array<{ beat: number; waypoi
   for (const entry of entries) {
     const fields = entry as Record<string, unknown> | null;
     const beat = posInt(fields?.beat);
-    const waypoints = normalizeWaypoints(fields?.waypoints);
+    const waypoints = fightsLast(normalizeWaypoints(fields?.waypoints));
     if (beat !== null && waypoints.length) {
       out.push({ beat, waypoints });
     }
@@ -1075,6 +1117,10 @@ export function parseSagaJson(raw: string, profile: LengthProfile): StoryArc | n
       if (sketch.act <= arc.acts && sketch.status === "sketch") {
         sketch.status = "detailed";
       }
+    }
+    const boss = arc.saga.sketches.find((sketch) => sketch.act === 1)?.boss?.name;
+    if (boss) {
+      bossFoughtLast(arc.beats, 1, boss);
     }
   }
   for (const subArc of arc.subArcs) {
@@ -1800,6 +1846,10 @@ export function applyActDetail(arc: StoryArc, detail: ActDetail): StoryArc {
     const waypoints = detail.beatWaypoints?.[index] ?? [];
     next.beats.push({ text, status: "pending", act, ...(waypoints.length ? { waypoints } : {}) });
   });
+  const boss = detail.bossEvent?.name || sketch.boss?.name;
+  if (boss) {
+    bossFoughtLast(next.beats, act, boss);
+  }
   next.acts = act;
   if (next.saga) {
     for (const entry of next.saga.sketches) {
@@ -2010,7 +2060,7 @@ export function renderArcForPrompt(arc: StoryArc, cues?: SceneCues): string {
 export function renderArcPrompt(arc: StoryArc, cues?: SceneCues): { text: string; trace: ArcTrace } {
   const trace: ArcTrace = { events: [], beats: { shown: 0, total: arc.beats.length }, chars: 0, budgetChars: 0 };
   const lines = [
-    "GM story arc (secret; steer scenes toward the [NOW] beat while improvising freely on the way there; never reveal, quote, or rush it). When your narration actually accomplishes the [NOW] beat, call complete_beat in that same reply. A beat listed with waypoints cannot complete until every one is ticked; the server ticks them from your move_party, update_location, set_npc, npc_reaction, social_check, grant_item, purchase, tick_objective and end_encounter calls, so use those tools when the party reaches a place, meets a person, gains a thing, finishes an objective or wins a fight, and pass the step's number as `waypoint` on the call that accomplishes it, whatever you call the place, person or thing:",
+    "GM story arc (secret; steer scenes toward the [NOW] beat while improvising freely on the way there; never reveal, quote, or rush it). When your narration actually accomplishes the [NOW] beat, call complete_beat in that same reply. A beat listed with waypoints cannot complete until every one is ticked, but they are a checklist, not a schedule: play reaches each in its own time. The server ticks them from your move_party, update_location, set_npc, npc_reaction, social_check, grant_item, purchase, tick_objective and end_encounter calls when the party reaches a place, meets a person, gains a thing, finishes an objective or wins a fight; pass the step's number as `waypoint` on that call, whatever you call the place, person or thing:",
     `Premise: ${arc.premise}`,
   ];
   if (arc.stakes) {

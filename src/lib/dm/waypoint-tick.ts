@@ -37,11 +37,14 @@ type ToolCall = { name: string; rawArguments: string };
 // of the encounter as it stood BEFORE the calls ran, since end_encounter
 // has no names of its own. `accepted` holds the calls the engine has run
 // without an error: a step a call's tag names ticks only for one of those,
-// so a refused move_party cannot claim an arrival.
+// so a refused move_party cannot claim an arrival. `refused` holds the calls
+// the engine ran and turned down: they tick nothing by name either (a
+// move_party refused for its scene once ticked the place it named, and the
+// DM narrated an arrival the map never made).
 export async function tickWaypointsFromCalls(
   campaignId: string,
   calls: ToolCall[],
-  extra: { enemyNames?: string[]; accepted?: ReadonlySet<ToolCall> } = {},
+  extra: { enemyNames?: string[]; accepted?: ReadonlySet<ToolCall>; refused?: ReadonlySet<ToolCall> } = {},
 ): Promise<string[]> {
   const campaign = getCampaignById(campaignId);
   if (!campaign?.storyArc || !narratorIsAi(campaign.gameSettings.dmMode) || !calls.length) {
@@ -53,6 +56,9 @@ export async function tickWaypointsFromCalls(
   }
   const matched = new Set<number>();
   for (const call of calls) {
+    if (extra.refused?.has(call)) {
+      continue;
+    }
     // Read under the names it ran by: a retired tool, an older argument name.
     const ran = mergedCallText(call.name, call.rawArguments);
     const tagged = extra.accepted?.has(call) ? taggedWaypoint(active.beat, ran.name, ran.rawArguments) : null;

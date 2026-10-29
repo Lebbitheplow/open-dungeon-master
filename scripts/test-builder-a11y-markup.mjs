@@ -68,8 +68,15 @@ const read = (path) => fs.readFileSync(new URL(`../${path}`, import.meta.url), "
   assert.ok(buttons.length, "the row has level buttons");
   for (const button of buttons) assert.ok(button.includes('aria-pressed="false"'), `a level is a toggle button: ${button}`);
 
+  // The spellbook step switch is no tab strip. The one tab strip the step
+  // has is the casting classes' (backlog F9, phase 2): real tabs, each
+  // controlling its own panel.
   const step = read("src/app/characters/builder/steps/SpellsGearStep.tsx");
-  assert.ok(!step.includes('role="tab'), "the spellbook step switch is no tab strip");
+  const tabs = [...step.matchAll(/role="tab"/g)].length;
+  assert.equal(tabs, 1, "one tab strip on the spell step, the casting classes'");
+  assert.ok(step.includes('role="tablist"') && step.includes('role="tabpanel"'), "the classes' tabs have a tablist and their panels");
+  assert.ok(step.includes("aria-controls={") && step.includes("aria-labelledby={"), "each tab controls its panel, and each panel is named by its tab");
+  assert.ok(!/phase === "book"[^\n]*role="tab/.test(step), "the spellbook switch itself is no tab");
   assert.ok(step.includes('role="group" aria-label="Spellbook step"'), "the step switch is a labelled group");
   assert.ok(step.includes("aria-pressed={mounted && phase === key}"), "each step button says whether it is on");
   console.log("ok: spell levels and spellbook steps are toggle-button groups (B10)");

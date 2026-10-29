@@ -100,7 +100,7 @@ function LevelUpSheetForm({
 }) {
   useEffectsRoot();
   const nextLevel = Math.min(20, initialLevel + 1);
-  const { races: rawRaces, classes: rawClasses, backgrounds: rawBackgrounds } = useBuilderOptions(initial.race);
+  const { races: rawRaces, classes: rawClasses, backgrounds: rawBackgrounds, loaded } = useBuilderOptions(initial.race);
   // The library builds with no world pack: names as the rows hold them.
   const races = useMemo(() => applyIdReskins(rawRaces, []), [rawRaces]);
   const classes = useMemo(() => applyClassReskins(rawClasses, null), [rawClasses]);
@@ -109,7 +109,7 @@ function LevelUpSheetForm({
     ...(initial.feats ?? []),
     ...(initial.asiChoices ?? []).flatMap((choice) => (choice.mode === "feat" ? [choice.feat] : [])),
   ]);
-  const state = useBuilderState({ initial, initialFeatDescs, initialLevel, startLevel: nextLevel, races, classes, backgrounds });
+  const state = useBuilderState({ initial, initialFeatDescs, initialLevel, startLevel: nextLevel, races, classes, backgrounds, rowsLoaded: loaded });
   // With the species option the character holds, as the whole build reads it.
   const pickedRace = findRace(races, state.raceId);
   const race = useMemo(() => pickedRace && withSpeciesVariant(pickedRace, state.racialVariant), [pickedRace, state.racialVariant]);

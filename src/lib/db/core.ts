@@ -1695,6 +1695,11 @@ function ensureSchema(db: SqliteDatabase) {
     // the advances opt-in: never synced, and only the owner and a DM seat
     // read it.
     ["open_to_pacts", `INTEGER NOT NULL DEFAULT 0`],
+    // The player's hopes for this story at this table (src/lib/schemas/
+    // sheet.ts): out of character, read by the GM every turn, and like the
+    // notes only by the owner and a DM seat at the table. Per table: an edit
+    // here never syncs to the library.
+    ["hopes", `TEXT NOT NULL DEFAULT ''`],
   ]);
 
   if (sheetsNeedAcOverride) {

@@ -3,7 +3,7 @@ import path from "node:path";
 import { imagesAvailable } from "@/lib/capabilities";
 import { generateStoryImage } from "@/lib/image-generate";
 import type { LibraryCharacter } from "@/lib/db/characters";
-import { updateCharacterPortrait } from "@/lib/db/characters";
+import { getCharacter, updateCharacterPortrait } from "@/lib/db/characters";
 import { listSheetsForLibraryCharacter, patchSheet } from "@/lib/db/sheets";
 import { setNpcPortrait } from "@/lib/db/npcs";
 import { publishPersisted } from "@/lib/events";
@@ -12,8 +12,13 @@ import { toEnglishForImage } from "@/lib/image-english";
 import type { Campaign } from "@/lib/db/campaigns";
 import { presetFor } from "@/lib/worlds/preset";
 import { configuredDefaultStorySettings } from "@/lib/runtime-defaults";
-import type { CreateSheetInput, SheetAttachment } from "@/lib/schemas/sheet";
+import type { CharacterSheet, SheetAttachment } from "@/lib/schemas/sheet";
 import { recordMediaFile } from "@/lib/media-access";
+import { homebrewLabel } from "@/lib/db/homebrew";
+import { workshopClassName } from "@/lib/classes/workshop-registry";
+import { ancestryOf, findDraconicAncestry } from "@/lib/srd/racial-grants";
+import { npcRoleLabel } from "@/lib/placeholders";
+import { characterPortraitPrompt, idWords, npcPortraitPrompt, type CharacterLook } from "@/lib/portrait-prompt";
 
 // One-shot portrait render at character creation. Status lives in memory
 // only: a restart mid-job simply drops the entry and the UI falls back to
@@ -35,27 +40,50 @@ export function portraitStatus(characterId: string): PortraitState | null {
   return statusMap().get(characterId) ?? null;
 }
 
-function deslug(value: string) {
-  return value.replace(/[-_]/g, " ").trim();
+// A dragonborn's dragon in a word: the builder's choice, or on a campaign
+// sheet (which keeps no racial choices) the race feature that choice wrote.
+function dragonOf(choice: string | undefined, features: ReadonlyArray<{ name: string }> = []): string | undefined {
+  return (findDraconicAncestry(choice) ?? ancestryOf([...features]))?.id;
 }
 
-// Deterministic prompt from the sheet's identity fields. Genre-neutral by
-// default because classes span all six genre catalogs; callers that know the
-// campaign's genre pass its art style so the render matches the world.
-function buildPortraitPrompt(sheet: CreateSheetInput, style = ""): string {
-  const identity = [sheet.gender, deslug(sheet.race), deslug(sheet.class)]
-    .filter(Boolean)
-    .join(" ");
-  const parts = [
-    "Tabletop RPG character portrait, head and shoulders, centered, looking at viewer",
-    identity,
-    style,
-    sheet.background ? `${deslug(sheet.background)} background` : "",
-    sheet.appearance,
-    (sheet.backstory || "").slice(0, 200),
-    "Detailed digital painting, dramatic lighting, plain dark background",
-  ];
-  return parts.filter(Boolean).join(". ");
+// A library character as a face: the names its homebrew race, background and
+// workshop class were given, never their ids (src/lib/portrait-prompt.ts).
+export function libraryLook(character: LibraryCharacter): CharacterLook {
+  const sheet = character.sheet;
+  return {
+    gender: sheet.gender ?? "",
+    race: homebrewLabel(character.userId, sheet.race, "race") ?? idWords(sheet.race),
+    ancestry: dragonOf(sheet.racialChoices?.ancestry),
+    className: workshopClassName(sheet.class) ?? idWords(sheet.class),
+    background: homebrewLabel(character.userId, sheet.background, "background") ?? idWords(sheet.background),
+    appearance: sheet.appearance ?? "",
+    backstory: sheet.backstory ?? "",
+  };
+}
+
+// What a companion's face is painted from beyond its campaign sheet, which
+// keeps no appearance and no racial choices: the builder's or the library's
+// sheet when it came through one, else only the personality the GM wrote.
+export type CompanionPortraitSource = {
+  personality: string;
+  appearance?: string;
+  ancestry?: string;
+};
+
+// A companion as a face: the same fields a player's character is painted
+// from (issue 569: the gender used to be left out). Its appearance stands
+// in the appearance's place, or its personality when it has none.
+export function companionLook(sheet: CharacterSheet, source: CompanionPortraitSource): CharacterLook {
+  const appearance = source.appearance?.trim() ? source.appearance.trim().slice(0, 300) : source.personality.slice(0, 160);
+  return {
+    gender: sheet.gender ?? "",
+    race: sheet.raceLabel ?? idWords(sheet.race),
+    ancestry: dragonOf(source.ancestry, sheet.features),
+    className: workshopClassName(sheet.class) ?? idWords(sheet.class),
+    background: sheet.backgroundLabel ?? idWords(sheet.background),
+    appearance,
+    backstory: "",
+  };
 }
 
 // Copy the render into public/uploads/: attachmentSchema pins portrait urls
@@ -97,33 +125,18 @@ export function queueCompanionPortrait(
   // The table: its world pack paints the companion in the world's own style
   // rather than its base genre's, and its language is rewritten to English.
   campaign: Pick<Campaign, "id" | "settings" | "gameSettings">,
-  sheet: {
-    id: string;
-    name: string;
-    race: string;
-    class: string;
-    background: string;
-    personality: string;
-  },
+  sheet: CharacterSheet,
+  source: CompanionPortraitSource,
 ): void {
   const map = statusMap();
+  const look = companionLook(sheet, source);
   void whenImagesAvailable(() => {
     map.set(sheet.id, "queued");
     return enqueueMediaJob(`portrait ${sheet.id}`, async () => {
     map.set(sheet.id, "generating");
     try {
-      const { personality } = await toEnglishForImage(campaign, { personality: sheet.personality.slice(0, 160) });
-      const prompt = buildPortraitPrompt(
-        {
-          gender: "",
-          race: sheet.race,
-          class: sheet.class,
-          background: sheet.background,
-          appearance: personality,
-          backstory: "",
-        } as CreateSheetInput,
-        presetFor(campaign.gameSettings).portraitStyle,
-      );
+      const { appearance } = await toEnglishForImage(campaign, { appearance: look.appearance });
+      const prompt = characterPortraitPrompt({ ...look, appearance }, presetFor(campaign.gameSettings).portraitStyle);
       const settings = configuredDefaultStorySettings();
       const image = await generateStoryImage(settings, {
         prompt,
@@ -140,6 +153,12 @@ export function queueCompanionPortrait(
       const updated = patchSheet(sheet.id, { portrait });
       if (updated) {
         publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
+      }
+      // A companion kept in its builder's library wears the same face there,
+      // until somebody gives the entry one of its own.
+      const kept = sheet.libraryCharacterId ? getCharacter(sheet.libraryCharacterId) : null;
+      if (kept && !kept.sheet.portrait) {
+        updateCharacterPortrait(kept.userId, kept.id, portrait);
       }
       map.delete(sheet.id);
     } catch (error) {
@@ -161,9 +180,13 @@ export function queueNpcPortrait(
   campaign: Pick<Campaign, "id" | "settings" | "gameSettings">,
   npc: {
     id: string;
-    // Their distinguishing trait and their personality in words, which is all
-    // a face needs. The name is deliberately absent: a render prompt is not
+    // Who they are at a glance (issue 569: both used to be left out), their
+    // distinguishing trait and their personality in words, which is all a
+    // face needs. The name is deliberately absent: a render prompt is not
     // improved by a proper noun the model has never seen.
+    gender: string;
+    // The stored role: a catalog id or the author's own words.
+    role: string;
     trait: string;
     // The engine's own English adjectives (describePersonality).
     personality: string;
@@ -173,16 +196,8 @@ export function queueNpcPortrait(
   void whenImagesAvailable(() =>
     enqueueMediaJob(`npc portrait ${npc.id}`, async () => {
       try {
-        const { trait } = await toEnglishForImage(campaign, { trait: npc.trait });
-        const prompt = [
-          "Tabletop RPG character portrait, head and shoulders, centered, looking at viewer",
-          style,
-          trait,
-          npc.personality,
-          "Detailed digital painting, dramatic lighting, plain dark background",
-        ]
-          .filter(Boolean)
-          .join(". ");
+        const { trait, role } = await toEnglishForImage(campaign, { trait: npc.trait, role: npcRoleLabel(npc.role) });
+        const prompt = npcPortraitPrompt({ gender: npc.gender, role, trait, personality: npc.personality }, style);
         const settings = configuredDefaultStorySettings();
         const image = await generateStoryImage(settings, {
           prompt,
@@ -208,7 +223,7 @@ export function queueLibraryPortrait(character: LibraryCharacter): void {
     return;
   }
   const map = statusMap();
-  const prompt = buildPortraitPrompt(character.sheet);
+  const prompt = characterPortraitPrompt(libraryLook(character));
   void whenImagesAvailable(() => {
     map.set(character.id, "queued");
     return enqueueMediaJob(`portrait ${character.id}`, async () => {

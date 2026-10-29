@@ -35,7 +35,7 @@ import { abilityMod, findClass, findRace, suggestedStartingHp, type SrdClass } f
 import { abilityPriority } from "@/lib/srd/companion-build";
 import { startingKitFor } from "@/lib/srd/starting-kit";
 import { legalCompanionSheet } from "@/lib/dm/companion-level";
-import { queueCompanionPortrait } from "@/lib/portrait";
+import { portraitStatus, queueCompanionPortrait } from "@/lib/portrait";
 import { settingClassIds } from "@/lib/classes";
 import { TOLD_GENDER_HELP, TOLD_GENDERS, toldGender } from "@/lib/gender";
 import { attractionFromTold, TOLD_ATTRACTION } from "@/lib/attraction";
@@ -497,9 +497,13 @@ export function finalizeNewCompanion(
   input: CreateSheetInput,
   kind: "party" | "guest",
   personality: string,
+  // The library entry this companion is kept as: its builder's, or the one
+  // it was brought from. "Save to my characters" and the campaign's end
+  // write its progress back there (src/lib/characters/keep-companion.ts).
+  libraryCharacterId: string | null = null,
 ): { sheet: CharacterSheet; hadEncounter: boolean } {
   const botUser = createCompanionUser(input.name);
-  const created = createSheet(campaign.id, botUser.id, level, input);
+  const created = createSheet(campaign.id, botUser.id, level, input, libraryCharacterId);
   const marked = markSheetAsCompanion(created.id, kind, personality) ?? created;
   // At a one-player table the AI runs, a party companion follows that player
   // in fights (src/lib/dm/companion-command.ts).
@@ -514,7 +518,7 @@ export function finalizeNewCompanion(
     companionNpcFor(sheet);
   }
   insertCharacterEvent({
-    libraryCharacterId: null,
+    libraryCharacterId,
     campaignCharacterId: sheet.id,
     campaignId: campaign.id,
     seq: allocateSeq(campaign.id),
@@ -524,14 +528,16 @@ export function finalizeNewCompanion(
   // Guests are transient and the render queue shares the one iGPU with the DM
   // model, so only lasting party members are worth a portrait; a sheet built
   // with its own portrait already (manual build) keeps it.
-  if (kind === "party" && !sheet.portrait) {
-    queueCompanionPortrait(campaign, {
-      id: sheet.id,
-      name: sheet.name,
-      race: sheet.race,
-      class: sheet.class,
-      background: sheet.background,
+  // The sheet as built carries what the campaign sheet does not keep: a
+  // manual build's appearance and a dragonborn's ancestry. A library entry
+  // still painting its own face lands it here when it finishes (portrait.ts
+  // mirrors to its campaign copies), so a second render would only race it.
+  const libraryPainting = libraryCharacterId ? portraitStatus(libraryCharacterId) : null;
+  if (kind === "party" && !sheet.portrait && libraryPainting !== "queued" && libraryPainting !== "generating") {
+    queueCompanionPortrait(campaign, sheet, {
       personality,
+      appearance: input.appearance,
+      ancestry: input.racialChoices?.ancestry,
     });
   }
 
