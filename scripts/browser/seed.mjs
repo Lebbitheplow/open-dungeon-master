@@ -450,6 +450,38 @@ for (const viewport of ["desktop", "phone"]) {
   stopTables[viewport] = table.id;
 }
 
+// A table per viewport for the quest card (issue 581): two open quests on
+// the log, the oldest with a step ticked, so the card shows its next step;
+// the scenario finishes them one by one.
+const questTables = {};
+{
+  const { insertQuest } = await import("../../src/lib/db/quests.ts");
+  for (const viewport of ["desktop", "phone"]) {
+    const table = campaigns.createCampaign(world.owner.id, {
+      title: `Quest Table (${viewport})`,
+      description: "A waystone that is going out.",
+      theme: "high-fantasy",
+      maxPlayers: 6,
+      startingLevel: 3,
+      difficulty: "normal",
+      gameSettings: { ttsEnabled: false },
+    });
+    campaigns.setCampaignStatus(table.id, "active");
+    sheets.createSheet(table.id, world.owner.id, 3, heroInput({ name: "Ilse Marr", class: "fighter", level: 3 }));
+    const light = insertQuest({
+      campaignId: table.id,
+      title: "Light for Brackenford",
+      objectives: [
+        { id: "o1", text: "Find the shard", done: true },
+        { id: "o2", text: "Restore the Crimson Waystone's protection", done: false },
+      ],
+    });
+    const ferry = insertQuest({ campaignId: table.id, title: "The Ferryman's Toll", objectives: [{ id: "o1", text: "Pay or outwit the ferryman", done: false }] });
+    insertQuest({ campaignId: table.id, title: "The Abbot's Secret", visibility: "dm" });
+    questTables[viewport] = { id: table.id, light: light.id, ferry: ferry.id };
+  }
+}
+
 // A table per viewport for the wardrobe (issues 411 and 412): the lead's
 // netrunner, a genre class whose features explain themselves only once the
 // cyberpunk catalog has been fetched, wears one magic cloak and carries a
@@ -1853,6 +1885,7 @@ const ids = {
   prepSourceTitle: PREP_SOURCE_TITLE,
   closing,
   stopTables,
+  questTables,
   wardrobe,
   directed,
   enemyTurns,
@@ -1900,6 +1933,7 @@ const ids = {
     [offerTable.id]: OFFER_TITLE,
     ...Object.fromEntries(Object.entries(closing).map(([viewport, id]) => [id, `Closing Table (${viewport})`])),
     ...Object.fromEntries(Object.entries(stopTables).map(([viewport, id]) => [id, `Stop Table (${viewport})`])),
+    ...Object.fromEntries(Object.entries(questTables).map(([viewport, table]) => [table.id, `Quest Table (${viewport})`])),
     ...Object.fromEntries(Object.entries(wardrobe).map(([viewport, id]) => [id, `Wardrobe (${viewport})`])),
     ...Object.fromEntries(Object.entries(directed).map(([viewport, table]) => [table.id, `Directed Table (${viewport})`])),
     ...Object.fromEntries(Object.entries(enemyTurns).map(([viewport, table]) => [table.id, `Enemy Turn Table (${viewport})`])),
