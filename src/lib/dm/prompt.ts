@@ -453,7 +453,7 @@ export function relationshipRules(romance: boolean, openNames: readonly string[]
         ? "A COMPANION who cannot stand a character says so plainly and stays: this table keeps its companions, so never dismiss_companion one over standing."
         : "A COMPANION who cannot stand a character says so plainly; whether they leave is the server's, so never dismiss_companion one over standing or deeds."
   } Never keep narrating a warm companion whose meter says otherwise.
-- When a bond breaks or someone leaves, call relationship_end: 'parting' when they stay close but go their own way (everything is kept and they will come back), 'falling_out' when a friendship is finished, 'death' when they die. Someone who has been away for chapters surfaces in GAME STATE as a GM-only note; act on it and put them back in the party's path.${
+- When a bond breaks or someone leaves, call relationship_end: 'parting' when they stay close but go their own way (everything is kept and they will come back), 'falling_out' when a friendship is finished, 'death' only when they are killed (it closes every character's bond with them; someone left to die but still alive is a deed done to them). Someone who has been away for chapters surfaces in GAME STATE as a GM-only note; act on it and put them back in the party's path.${
     romance
       ? `
 - Romance sits on TOP of that meter and never replaces it. Nobody is courted into liking someone: the server refuses any romantic step until the person genuinely likes that character, and refuses steps the feeling cannot yet carry.

@@ -1,3 +1,4 @@
+import { moveRelationshipsToSubject } from "@/lib/db/relationships";
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { byName } from "@/lib/language/text-logic";
 import { matchEntity, mergeAliases, normalizeName, type EntityMatch } from "@/lib/dm/entity-logic";
@@ -495,6 +496,8 @@ export function renameNpc(npcId: string, name: string, aliases: string[]): Npc |
     `UPDATE world_facts SET subject = ?, updated_at = ?
      WHERE campaign_id = ? AND category = 'npc' AND subject = ?`,
   ).run(name, nowIso(), npc.campaignId, npc.name);
+  // Bonds are kept by name too, for the same reason (issue 580).
+  moveRelationshipsToSubject(npc.campaignId, npc.name, name, npc.id);
   return getNpcById(npcId);
 }
 
@@ -536,6 +539,9 @@ export function mergeNpcs(
       `UPDATE world_facts SET subject = ?, updated_at = ?
        WHERE campaign_id = ? AND category = 'npc' AND subject = ?`,
     ).run(keep.name, now, campaignId, merge.name);
+    // What each character felt for the absorbed row is what they felt for
+    // this person (issue 580); a bond the keeper already has stands.
+    moveRelationshipsToSubject(campaignId, merge.name, keep.name, keep.id);
     db.prepare(`DELETE FROM npcs WHERE id = ?`).run(mergeId);
   });
   apply();

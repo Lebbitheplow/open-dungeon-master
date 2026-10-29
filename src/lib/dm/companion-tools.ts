@@ -5,6 +5,7 @@ import { createSheet, listSheets, markSheetAsCompanion, setCompanionCommander } 
 import { defaultCommander } from "@/lib/dm/companion-command";
 import { createCompanionUser, deleteCompanionUser } from "@/lib/db/users";
 import {
+  endRelationshipsWithSubject,
   partRelationshipsWithSubject,
   rejoinRelationshipsWithSubject,
 } from "@/lib/db/relationships";
@@ -22,7 +23,8 @@ import { occupiedTiles } from "@/lib/battlemap/view";
 import { spliceIntoOrder } from "@/lib/dm/encounter-logic";
 import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
 import { insertCampaignMessage } from "@/lib/db/messages";
-import { publishPersisted, publishWithSeq } from "@/lib/events";
+import { publishEphemeral, publishPersisted, publishWithSeq } from "@/lib/events";
+import { openPartyBonds } from "@/lib/dm/party-bonds";
 import { defaultRng } from "@/lib/dice";
 import { characterInitiativeExpression } from "@/lib/dm/contest-roll";
 import {
@@ -511,11 +513,17 @@ export function finalizeNewCompanion(
   publishPersisted(campaign.id, "sheet_updated", { sheet });
   // A companion the party once travelled with can be written back in; every
   // standing with them picks up exactly where it stopped.
-  rejoinRelationshipsWithSubject(campaign.id, sheet.name, sheet.id);
+  let bondsMoved = rejoinRelationshipsWithSubject(campaign.id, sheet.name, sheet.id).length;
   // A lasting companion has a person behind the sheet: personality axes a
-  // deed weighs against, and who they are drawn to (#503 Phase 0.1).
+  // deed weighs against, and who they are drawn to (#503 Phase 0.1). They
+  // travel with everyone, so every character's bond with them opens now
+  // rather than at the first roll or moment that named one (issue 580).
   if (kind === "party") {
     companionNpcFor(sheet);
+    bondsMoved += openPartyBonds(campaign, { kind: "companion", name: sheet.name, id: sheet.id });
+  }
+  if (bondsMoved) {
+    publishEphemeral(campaign.id, "relationships_updated", {});
   }
   insertCharacterEvent({
     libraryCharacterId,
@@ -677,9 +685,17 @@ function removeCompanion(campaign: Campaign, sheet: CharacterSheet, reason?: str
   // a departing companion is parted, not ended, so it comes back whole if
   // the story brings them back (src/lib/db/relationships.ts). Nor does who
   // they were: a lasting companion's sheet is kept on the row behind them
-  // (#503 Phase 0.4), so a return is the same person.
+  // (#503 Phase 0.4), so a return is the same person. One who fell is dead,
+  // not away: a parted bond counted the chapters they were gone and asked
+  // the GM to bring them back into the story (issue 580). Their bonds close
+  // on the death, and open again if they are brought back to life.
   rememberDepartingSheet(sheet);
-  partRelationshipsWithSubject(campaign.id, sheet.name);
+  const bonds = sheet.deathSaves?.dead
+    ? endRelationshipsWithSubject(campaign.id, sheet.name, (bond) => `${sheet.name}, who travelled with ${bond.characterName}, fell`)
+    : partRelationshipsWithSubject(campaign.id, sheet.name);
+  if (bonds.length) {
+    publishEphemeral(campaign.id, "relationships_updated", {});
+  }
   const lasting = lastingCompanion(sheet);
   publishPersisted(campaign.id, "sheet_deleted", {
     sheetId: sheet.id,

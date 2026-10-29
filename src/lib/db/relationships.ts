@@ -1,6 +1,9 @@
 import { compareNames, textKey } from "@/lib/language/text-logic";
 import { getDatabase, nowIso } from "@/lib/db/core";
 import {
+  addMemory,
+  endedByDeath,
+  foldMemories,
   parseBeatCounts,
   parseFlags,
   parseMemories,
@@ -274,7 +277,9 @@ export function partRelationshipsWithSubject(
   return parted;
 }
 
-// The reverse: someone the party lost is back in reach.
+// The reverse: someone the party lost is back in reach. A companion who died
+// and is written back in was brought back to life, so a bond the death
+// closed opens again too; any other ending stays ended.
 export function rejoinRelationshipsWithSubject(
   campaignId: string,
   subjectName: string,
@@ -282,7 +287,7 @@ export function rejoinRelationshipsWithSubject(
 ): Relationship[] {
   const rejoined: Relationship[] = [];
   for (const relationship of listRelationshipsForSubject(campaignId, subjectName)) {
-    if (relationship.status !== "parted") {
+    if (relationship.status !== "parted" && !endedByDeath(relationship)) {
       continue;
     }
     const updated = patchRelationship(relationship.id, {
@@ -295,4 +300,64 @@ export function rejoinRelationshipsWithSubject(
     }
   }
   return rejoined;
+}
+
+// Someone died (issue 580): every character's bond with them closes, not only
+// the one pair a relationship_end named. A bond left open went on counting
+// the chapters they were away, and three chapters on the GM was told to bring
+// the dead back into the story; a companion who fell was only parted, the
+// same way. `memory` words the death for each character's own record. A
+// bond that ended otherwise before still takes the death as its last word.
+export function endRelationshipsWithSubject(
+  campaignId: string,
+  subjectName: string,
+  memory: (relationship: Relationship) => string,
+): Relationship[] {
+  const ended: Relationship[] = [];
+  for (const relationship of listRelationshipsForSubject(campaignId, subjectName)) {
+    if (endedByDeath(relationship)) {
+      continue;
+    }
+    const updated = patchRelationship(relationship.id, {
+      status: "ended",
+      apartChapters: 0,
+      memories: addMemory(relationship.memories, { kind: "death", text: memory(relationship), at: new Date().toISOString() }),
+    });
+    if (updated) {
+      ended.push(updated);
+    }
+  }
+  return ended;
+}
+
+// An NPC renamed or merged into another (src/lib/db/npcs.ts): their bonds
+// follow them. Bonds are kept by the subject's name, so a rename left every
+// bond under a name nobody answers to any more, and the next moment opened a
+// fresh one at neutral beside it. Where a character already has a bond under
+// the new name, that one is kept as it stands (the lead judged it the real
+// one) and the other's memories join it.
+export function moveRelationshipsToSubject(
+  campaignId: string,
+  fromName: string,
+  toName: string,
+  subjectId: string,
+): void {
+  if (textKey(fromName) === textKey(toName)) {
+    return;
+  }
+  const db = getDatabase();
+  for (const relationship of listRelationshipsForSubject(campaignId, fromName)) {
+    const keeper = getRelationship(campaignId, relationship.characterId, toName);
+    if (keeper) {
+      patchRelationship(keeper.id, { memories: foldMemories(keeper.memories, relationship.memories) });
+      db.prepare(`DELETE FROM relationships WHERE id = ?`).run(relationship.id);
+      continue;
+    }
+    db.prepare(`UPDATE relationships SET subject_name = ?, subject_id = ?, updated_at = ? WHERE id = ?`).run(
+      toName.trim(),
+      subjectId || relationship.subjectId,
+      nowIso(),
+      relationship.id,
+    );
+  }
 }

@@ -520,6 +520,20 @@ export function addMemory(
   );
 }
 
+// A bond a death closed (relationship_end "death", or a companion who fell
+// and was dismissed): its last memory is the death, since nothing lands on a
+// closed bond after it. The Bonds panel says "died" for it, and a companion
+// brought back to life picks it up again (db/relationships.ts).
+export function endedByDeath(relationship: { status: RelationshipStatus; memories: RelationshipMemory[] }): boolean {
+  return relationship.status === "ended" && relationship.memories[relationship.memories.length - 1]?.kind === "death";
+}
+
+// Two records of one pair folded into one (an NPC merged into another): both
+// rows' memories, oldest first, as many as a bond keeps.
+export function foldMemories(keep: RelationshipMemory[], absorbed: RelationshipMemory[]): RelationshipMemory[] {
+  return [...keep, ...absorbed].sort((a, b) => (Date.parse(a.at) || 0) - (Date.parse(b.at) || 0)).slice(-MEMORY_LIMIT);
+}
+
 export function parseFlags(raw: string): string[] {
   if (!raw) {
     return [];

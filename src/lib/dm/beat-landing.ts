@@ -7,7 +7,7 @@ import { patchRelationship, type Relationship } from "@/lib/db/relationships";
 import { conscienceOn, settleCompanion, worstApproval, type ConscienceMove } from "@/lib/dm/conscience";
 import { departureNote, settleBreakingPoint, type DepartureOutcome } from "@/lib/dm/departure";
 import { clockDay, RUNG_WORD, stepLadder, type LadderStep } from "@/lib/dm/conscience-logic";
-import { deedVerdict, SEVERITY_FACTOR, type DeedSeverity, type DeedVerdict } from "@/lib/dm/companion-values-logic";
+import { deedVerdict, doneToDelta, SEVERITY_FACTOR, type DeedKind, type DeedSeverity, type DeedVerdict } from "@/lib/dm/companion-values-logic";
 import { openLedger, type Subject } from "@/lib/dm/relationship-subject";
 import { actAfterBeat, actFaceValue, actRunning, outwardApproval } from "@/lib/dm/scheme-logic";
 import {
@@ -152,6 +152,36 @@ export function landBeat(
     departure = settleBreakingPoint(campaign, getSheetById(companion.id) ?? companion);
   }
   return { subject, before: relationship, updated, delta, alignment, values, conscience, departure };
+}
+
+// A deed landing on whoever it was done to (issue 580): the captive harmed,
+// the foe spared, the prisoner set free. Their regard moves at face value and
+// a step graver than a witness's (companion-values-logic.ts doneToDelta),
+// since being harmed or spared is not a matter of taste. What it does to a
+// companion's conscience follows from the standing it leaves, which
+// publishRelationshipsUpdated settles. null when it lands on nobody: a deed
+// done to the dead.
+export function landOnVictim(
+  subject: Subject,
+  relationship: Relationship,
+  beat: DeedKind,
+  note: string | undefined,
+  severity: DeedSeverity,
+): Landing | null {
+  const delta = doneToDelta(beat, beatSpec(beat)!.base, severity);
+  if (!delta) {
+    return null;
+  }
+  const approval = applyApproval(relationship.approval, delta);
+  const running = actRunning(relationship.pretense) ? relationship.pretense : null;
+  const updated =
+    patchRelationship(relationship.id, {
+      approval,
+      romance: demoteRomance(relationship.romance, running ? running.shown : approval),
+      beats: { ...relationship.beats, [beat]: (relationship.beats[beat] ?? 0) + 1 },
+      ...(note?.trim() ? { memories: addMemory(relationship.memories, { kind: beat, text: note.trim(), at: new Date().toISOString() }) } : {}),
+    }) ?? relationship;
+  return { subject, before: relationship, updated, delta, alignment: 0, values: null, conscience: null, departure: null };
 }
 
 // The other player characters who stood by while a deed was done (issue

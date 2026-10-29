@@ -44,6 +44,8 @@ type RelationshipView = {
   tierLabel: string;
   romance: RomanceStage;
   status: "active" | "parted" | "ended";
+  // Ended by their death (issue 580); an older host never says.
+  died?: boolean;
   apartChapters: number;
   history: string[];
   approval?: number;
@@ -181,7 +183,7 @@ function BondRow({ bond }: { bond: RelationshipView }) {
             </span>
           ) : null}
           {bond.status === "ended" ? (
-            <span className="ml-1.5 text-[11px] text-stone-500">ended</span>
+            <span className="ml-1.5 text-[11px] text-stone-500">{bond.died ? "died" : "ended"}</span>
           ) : null}
         </span>
         <span

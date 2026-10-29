@@ -299,7 +299,7 @@ export function commandEnds(setting: ConscienceSetting, rung: number): boolean {
 // sits in the cached prefix; the rungs themselves are in the moment.
 export function conscienceRules(setting: ConscienceSetting, companions: boolean, deeds: readonly string[]): string {
   const lines = [
-    `Deeds (${deeds.join(", ")}): record one with relationship_beat the moment a character commits it, in a fight too (deeds are the only beats offered mid-fight). Name the subject and every other tracked NPC or companion who saw it or will hear of it in witnesses, and say how grave in severity (minor, serious, atrocity). Each witness takes it by their own nature and what they hold to. amends records a character making up for what they did.`,
+    `Deeds (${deeds.join(", ")}): record one with relationship_beat the moment a character commits it, in a fight too (deeds are the only beats offered mid-fight). Name the subject and every other tracked NPC or companion who saw it or will hear of it in witnesses, whoever it was done to in victims (the captive harmed, the foe spared), and say how grave in severity (minor, serious, atrocity). Each witness takes it by their own nature and what they hold to; a victim takes it harder. amends records a character making up for what they did.`,
     "Other player characters present when a deed is done: put those who stood by in witnesses (each bears a smaller share of what it costs) and those who spoke against it or tried to stop it in objected (they bear none). No NPC or companion knows anyone's alignment; a sheet's Alignment is its player's own note. They judge what they see done and hear of.",
   ];
   if (setting !== "off" && companions) {
