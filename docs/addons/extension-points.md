@@ -205,6 +205,14 @@ grid.
 
 ## Board views
 
+A view may declare `"combatOnly": true` (default `false`). The host offers and
+activates it only while the viewer's encounter status is `active`, including
+any declared session layout and theme. Ending combat, removing the encounter,
+or loading a session without an active encounter restores the native view.
+The saved device choice remains available for the next active encounter.
+This is based on authoritative encounter state, not narration or a token's HP;
+a downed character does not end an encounter that is still active.
+
 ### Optional session stage layout
 
 A board view may declare `"sessionLayout": "stage"`. On a docked desktop
@@ -381,6 +389,7 @@ From the table to your page:
 
 ```js
 { odm: 1, type: "snapshot", snapshot }                              // on load and on every change
+{ odm: 1, type: "rendering", active: false }                        // optional: suspend drawing while a device-native view is ready; true resumes
 { odm: 1, type: "file", requestId, ok: true, name, mime, bytes }    // bytes is an ArrayBuffer
 { odm: 1, type: "file", requestId, ok: false, name, error }
 { odm: 1, type: "fx", events }                                      // effects as they land, each once
@@ -401,10 +410,11 @@ the result.
 From your page to the table:
 
 ```js
-{ odm: 1, type: "ready" }                          // send once your listener is attached
+{ odm: 1, type: "ready" }                          // send once your listener is attached; native-only views add nativeOnly: true
 { odm: 1, type: "tile", x, y }                     // a tap on a square
-{ odm: 1, type: "token", tokenId }                 // a tap on a figure
+{ odm: 1, type: "token", tokenId, menu: false }    // select/target only; omit menu (or true) to open its actions
 { odm: 1, type: "hover", x, y }                    // or { x: null, y: null } when the pointer leaves
+{ odm: 1, type: "cancel" }                        // Escape: drop the native board's pending aim/target; no game action
 { odm: 1, type: "file", requestId, name }          // "backdrop", or one of snapshot.view.files[].name
 { odm: 1, type: "face", requestId, tokenId }       // the picture the figure wears on the flat board
 { odm: 1, type: "anchors", tokens }                // where you drew each figure (below)
@@ -437,7 +447,77 @@ the camera moves is fine. Without anchors they open where the figure
 stands on the flat grid. The enemies' intent arrows are yours to draw: the
 table hides its own over a board view.
 
+### Native action menus
+
+A native renderer can additionally advertise `battlefieldUi: true` in its ready
+message. The host sends `{ type: "battlefield-ui", mapId, revision, hud }` over
+the native transport. `hud` contains the selected visible figure's display
+lines, turn/status, notices, errors, pending state, optional bounded input
+prompt, and offered controls. It carries no callbacks or additional game
+authority. The matching HTML HUD is suspended only while that native
+capability is active; the ordinary Board and older views keep their UI.
+
+Named board controls reply with `{ odm: 1, type: "board-control", mapId,
+revision, actionId }`. The finite `BOARD_VALUE_CONTROLS` may include a `value`
+string, capped at 200 characters. IDs are the finite `BOARD_CONTROL_IDS` in
+`board-bridge.ts`. A control may offer exact enabled `options` or a bounded
+text `input`; the host validates the value against that current offer.
+The host checks the current map, turn/viewer and HUD contents, revision,
+offered/enabled control and pending state, and consumes each offer once before
+calling the existing handler. Repeated equivalent renders keep the same
+offer; a changed selection, turn, availability or pending state invalidates it.
+These messages are not accepted from sandboxed iframe views.
+
+`battlefieldTools: true` additionally replaces the battlefield's tools,
+movement/view selectors, initiative and action-choice dialogs. The HUD may
+contain one native `panel` with a title, display lines and offered controls.
+Only that panel's controls are actionable while it is open. Its `boardInput`
+flag permits the existing target/area picks; otherwise map input is blocked.
+Weapon/spell choices and concentration confirmation reuse the Hand's current
+state and submission. Chat, ordinary cards, sheets and campaign panels remain
+HTML. Capability ownership follows the active native view, including enlarged
+view transitions; detach/failure restores the existing HTML battlefield.
+
+While the host offers drawing mode, the native view may send
+`{ odm: 1, type: "board-draw", mapId, revision, points: [{ x, y }] }`.
+There must be 2–64 finite points inside the current map. The same current-offer,
+pending and one-use checks apply before the host calls its existing draw route.
+Confirmed marks arrive in the snapshot; measurement/area cells arrive as HUD
+`tiles`. Neither drawing nor any native control bypasses server permissions,
+turn budgets or validation.
+
+Native portrait requests reuse `face` and the same visible-token checks.
+The host requests its existing 256px variants, caps each response at 1 MiB,
+and sends `bytesBase64` through the native JSON pipe. Iframes keep their
+normal `ArrayBuffer` file replies. The native HUD matches request ID and
+selected token, dropping late replies after selection changes. Missing or
+unsupported art uses the figure's initial.
+
+A trusted desktop-native renderer may opt in with `{ odm: 1, type: "ready", actions: true }`. The host then sends only the current viewer’s existing figure-menu choices over the native transport:
+
+```js
+{ odm: 1, type: "action-menu", revision, menu: { tokenId, hint, actions: [{ id, label, disabled }] } }
+{ odm: 1, type: "action-menu", revision, menu: null } // clear the menu
+```
+
+Draw these labels as native controls; a nonempty disabled reason disables the button and explains why. Return `{ odm: 1, type: "action", revision, tokenId, actionId }` when an enabled choice is pressed. The host accepts only a current offered choice for the still-visible figure and current map, once per revision, then calls its existing menu handler. It never accepts arbitrary commands or gameplay mutations from this message. Menus contain at most 16 actions; labels, disabled reasons and hints are bounded to 80, 300 and 200 characters.
+
+The HTML figure menu remains available without this native capability, including after native detach/failure. These messages do not grant iframe pages action access or add manifest fields. Existing targeting, prompts, permissions and server validation remain in ODM.
+
 ### The snapshot
+
+An optional desktop-native board transport can reuse these messages when the
+device has explicitly registered a trusted local addon. It does not change the
+iframe sandbox, snapshot filtering or action validation. Older apps and ordinary
+browsers use the existing iframe. A view may send `ready` with `nativeOnly: true`
+when it has no browser renderer. Missing native support, a missing registration,
+or native startup/runtime failure then follows the host's normal view-failure
+path back to its built-in Board. The flag does not authorize executable paths or
+remote native launches. A native-only entry can be a static loading page and must
+not load a browser renderer. Other views keep their iframe mounted and resume it
+on native failure. The additive `rendering` message is a resource hint: keep
+the latest snapshot while suspended, stop the browser draw loop, and draw the
+latest state when `active` becomes true. Older views may ignore the hint.
 
 ```js
 {
@@ -527,3 +607,11 @@ the addon would do, what it would read, and what it would hand back. A new
 extension point is added to the server with its own contract, checks and tests,
 in a release, and documented here; the contract version goes up only when an
 existing contract has to change.
+
+### Remaining movement and the native ruler
+
+A board snapshot's optional budgetLeft is remaining movement in squares. The authoritative reachable list is already filtered by the native movement mode; use it for movement shading instead of calculating another range. A zero budget hides movement shading. Older hosts omit budgetLeft.
+
+A separate host message { odm: 1, type: "ruler", mapId, ruler } carries the normal board's current hover or first-tap preview. ruler is null to clear it, otherwise { path: [{ x, y }, ...], label, overBudget }. Paths contain only in-bounds known terrain from this viewer's projection. Draw over-budget previews distinctly. The path is an existing native estimate from the same ruler the normal board uses; it is not movement authority. Continue forwarding tile taps to the host for normal aim/confirmation and server validation.
+
+Ruler updates are separate from snapshots so hovering does not require rebuilding terrain, figures or other expensive scene resources. Ignore messages for other map IDs. This additive message retains bridge version 1; older views may ignore it and older hosts do not send it.

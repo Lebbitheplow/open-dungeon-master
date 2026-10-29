@@ -184,6 +184,7 @@ function attackCards(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders
       dice: `${damage} ${profile.damageType}`.trim(),
       roll: `${signed(profile.toHit)} to hit`,
       rules: notes.slice(0, 2).join(" "),
+      description: notes.join(" "),
       resource: ammoKind ? (ammo ? `${AMMO_LABELS[ammoKind]} ${ammo.count}` : `No ${AMMO_LABELS[ammoKind]}`) : "",
       icon: natural
         ? beastAttackIcon("", name)

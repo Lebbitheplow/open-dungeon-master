@@ -65,10 +65,11 @@ export function useBoardViewChoice(): [string, (next: string) => void] {
 }
 
 // The session and the board resolve the same live, compatible selection.
-export function useBoardView(mapAddonId?: string) {
+export function useBoardView(mapAddonId?: string, inCombat = false) {
   const { boardViews } = useAddons();
   const [choice, choose] = useBoardViewChoice();
-  const views = boardViews.filter((view) => !view.needsViewData || view.addonId === mapAddonId);
+  // Suspend the view without erasing this device's choice for the next fight.
+  const views = boardViews.filter((view) => (!view.combatOnly || inCombat) && (!view.needsViewData || view.addonId === mapAddonId));
   return { views, choose, active: views.find((view) => boardViewKey(view) === choice) ?? null };
 }
 

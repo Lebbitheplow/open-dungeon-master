@@ -27,12 +27,21 @@ import { HAND_FAN_CAP, arrangeHand, isUrgentCard, seatPicked, startingLayout } f
 import { groupHand, isGroup, type HandGroup } from "@/lib/battlemap/hand-groups";
 import {
   HAND_TARGET_EVENT,
+  HAND_BOARD_ACTION_EVENT,
+  HAND_BOARD_STATUS_EVENT,
+  HAND_BOARD_CONTROL_EVENT,
+  HAND_BOARD_SURFACE_EVENT,
+  handReady,
+  type HandBoardActionDetail,
+  type HandBoardControlDetail,
   composeSentence,
   intentBody,
   previewRows,
   targetFromComposedText,
   type HandTargetDetail,
 } from "@/lib/battlemap/hand-play";
+import { offeredBoardControl, type BoardPanel } from "@/lib/addons/board-bridge";
+import { describePick, hasPick, pickHint } from "@/lib/battlemap/hand-area";
 import { reactionAim, reactionCards, withReactions } from "@/lib/battlemap/hand-react";
 import { turnCharacterId, turnFromEncounter, turnPips, turnSignature } from "@/lib/battlemap/hand-table";
 
@@ -197,6 +206,15 @@ function HandInner({
   const [folding, setFolding] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [sending, setSending] = useState(false);
+  const commitBusy = useRef(false);
+  const [boardChoices, setBoardChoices] = useState<"attack" | "cast" | null>(null);
+  const [boardNative, setBoardNative] = useState(false);
+  const [boardSwap, setBoardSwap] = useState<ConcentrationSwap | null>(null);
+  const swapReply = useRef<((value: ConcentrationSwap | null) => void) | null>(null);
+  const swapTurn = useRef("");
+  const boardTarget = useRef<string | null>(null);
+  const boardRequest = useRef(false);
+  const [boardCommit, setBoardCommit] = useState<{ id: string; signature: string; campaignId: string; characterId: string } | null>(null);
   const [notice, setNotice] = useState("");
   const noticeRef = useRef<HTMLParagraphElement>(null);
 
@@ -205,7 +223,7 @@ function HandInner({
   // finished" from the account shows it unasked.
   const tutorialFinished = useTourFinished(HAND_TUTORIAL_ID);
   const [tutorialAsked, setTutorialAsked] = useState(false);
-  const showTutorial = !collapsed && (tutorialAsked || (tutorialFinished === false && myTurn));
+  const showTutorial = !boardNative && !collapsed && (tutorialAsked || (tutorialFinished === false && myTurn));
 
   // A card that stopped being playable (the turn moved on) drops out of aim.
   const picked = cards.find((card) => card.id === pickedId && !card.disabled) ?? null;
@@ -224,18 +242,18 @@ function HandInner({
   // A tap on the board while a card is raised arrives as the HUD's own
   // sentence in the message box; it is read here rather than stored, so the
   // board needs to know nothing about the Hand.
-  const boardName = picked?.target === "enemy" ? targetFromComposedText(input, enemyTargets.map((target) => target.name)) : null;
+  const boardName = !boardNative && picked?.target === "enemy" ? targetFromComposedText(input, enemyTargets.map((target) => target.name)) : null;
   // A reaction answers one recorded attack: its target is fixed by it (the
   // attacker for Hellish Rebuke, the ally for Cutting Words), not picked.
   const fixed = picked?.intent.card === "reaction" && sheet ? reactionAim(picked, hits ?? [], sheet.id, sheets) : null;
-  const fixedChip = fixed ? targets.find((target) => target.id === fixed.id) ?? { ...fixed, note: "" } : null;
-  const offered = fixedChip
+  const fixedChip = useMemo(() => fixed ? targets.find((target) => target.id === fixed.id) ?? { ...fixed, note: "" } : null, [fixed, targets]);
+  const offered = useMemo(() => fixedChip
     ? [fixedChip]
     : picked?.target === "enemy"
       ? enemyTargets
       : picked?.target === "ally"
         ? partyTargets
-        : [];
+        : [], [fixedChip, picked?.target, enemyTargets, partyTargets]);
   const self = partyTargets.find((target) => target.kind === "self") ?? null;
   const aim =
     picked?.target === "self"
@@ -317,12 +335,13 @@ function HandInner({
   }, [notice]);
 
   const pick = useCallback(
-    (card: HandCard) => {
+    (card: HandCard, native = false) => {
       if (card.disabled) {
         say(card.disabled);
         return;
       }
       setNotice("");
+      setBoardNative(native);
       setMoreOpen(false);
       if (card.type === "rider") {
         setRiderIds((current) => (current.includes(card.id) ? current.filter((id) => id !== card.id) : [...current, card.id]));
@@ -330,9 +349,11 @@ function HandInner({
         setOpenGroupId(null);
         return;
       }
-      setTargetId(null);
+      setTargetId(boardTarget.current);
+      boardTarget.current = null;
+      setBoardChoices(null);
       resetChoices();
-      setPickedId((current) => (current === card.id ? null : card.id));
+      setPickedId((current) => (!native && current === card.id ? null : card.id));
     },
     [say, resetChoices],
   );
@@ -356,11 +377,14 @@ function HandInner({
   );
 
   const commit = useCallback(async () => {
-    if (!picked || !sheet || sending) return;
+    if (!picked || !sheet || sending || commitBusy.current) return;
+    if (inputBlocked && picked.cost !== "reaction") { say(blockedReason); return; }
+    if (!handReady(picked, aim, choices)) { say(picked.asks === "trigger" && !choices.trigger?.trim() ? "Name the trigger first." : "Pick a target or an area first."); return; }
     if (picked.compose) {
       toComposer(sentence);
       return;
     }
+    commitBusy.current = true;
     setSending(true);
     setNotice("");
     try {
@@ -389,7 +413,10 @@ function HandInner({
         // A cast that ends the spell held now is asked about first (issue
         // 252); a no keeps it, spending nothing.
         if (isConcentrationQuestion(response.status, data)) {
-          const ack = await askConcentrationSwap(data);
+          const swap = (data as { confirmConcentration?: ConcentrationSwap }).confirmConcentration;
+          const ack = boardNative && swap?.characterId && swap.current && swap.next
+            ? await new Promise<ConcentrationSwap | null>(resolve => { swapReply.current = resolve; swapTurn.current = `${campaignId}:${sheet.id}:${signature}`; setBoardSwap(swap); })
+            : await askConcentrationSwap(data);
           if (!ack) {
             say(`Kept ${(data as { confirmConcentration?: { current?: string } }).confirmConcentration?.current ?? "your spell"}; nothing was spent.`);
             return;
@@ -432,9 +459,127 @@ function HandInner({
     } catch {
       say("Could not reach the server.");
     } finally {
+      commitBusy.current = false;
       setSending(false);
     }
-  }, [picked, sheet, sending, sentence, campaignId, aim, attachedRiders, choices, signature, setPending, boardName, setInput, clearAim, say, toComposer]);
+  }, [picked, sheet, sending, sentence, campaignId, aim, attachedRiders, choices, signature, setPending, boardName, setInput, clearAim, say, toComposer, inputBlocked, blockedReason, boardNative]);
+
+  const nativePanel = useMemo<BoardPanel | null>(() => {
+    if (!boardNative) return null;
+    const close = { id: "panel-close" as const, label: "Close", disabled: null };
+    if (boardSwap) return { title: `Replace ${boardSwap.current}?`, lines: [`Casting ${boardSwap.next} ends concentration on ${boardSwap.current} and its effects. Keep it to spend nothing.`], controls: [{ id: "hand-confirm", label: `Cast ${boardSwap.next}`, disabled: null }, { id: "hand-keep", label: `Keep ${boardSwap.current}`, disabled: null }, close] };
+    if (boardChoices) {
+      const matches = cards.filter(card => card.intent.card === (boardChoices === "attack" ? "attack" : "spell"));
+      return { title: boardChoices === "attack" ? "Choose a weapon" : "Choose a spell", lines: ["Choose the action, then its target and options. Nothing is sent until you play it.", ...(!matches.length ? ["No matching cards are available yet; spell details may still be loading."] : []), ...(notice ? [notice] : [])], controls: [{ id: "hand-card", label: boardChoices === "attack" ? "Weapon" : "Spell", disabled: null, options: matches.map(card => ({ value: card.id, label: `${card.name} · ${card.cost}${card.resource ? ` · ${card.resource}` : ""}${card.dice ? ` · ${card.dice}` : ""}`, disabled: card.disabled })) }, close] };
+    }
+    if (!picked) return null;
+    const option = (value: string, label: string, disabled: string | null = null) => ({ value, label, disabled });
+    return { title: picked.name, boardInput: true, lines: [picked.description ?? picked.rules, ...rows.map(row => `${row.key}: ${row.value}`), ...(picked.area ? [pickHint(picked.area, barProps.areaPick), ...(hasPick(picked.area, barProps.areaPick) ? [describePick(picked.area, barProps.areaPick)] : [])] : []), `Sends: ${sentence}`, ...(notice ? [notice] : [])], controls: [
+      ...(offered.length ? [{ id: "hand-target" as const, label: "Target", value: aim?.id, disabled: null, options: offered.map(target => option(target.id, `${target.name}${target.note ? ` · ${target.note}` : ""}`)) }] : []),
+      ...(barProps.options.length ? [{ id: "hand-option" as const, label: "Attack options (choose to toggle)", disabled: null, options: barProps.options.map(entry => option(entry.id, `${barProps.chosen.includes(entry.id) ? "✓ " : ""}${entry.label}`, entry.disabled ?? null)) }] : []),
+      ...(picked.intent.card === "attack" && cards.some(card => card.type === "rider") ? [{ id: "hand-rider" as const, label: "Riders (choose to toggle)", disabled: null, options: cards.filter(card => card.type === "rider").map(card => option(card.id, `${attachedRiders.some(rider => rider.id === card.id) ? "✓ " : ""}${card.name}`, card.disabled)) }] : []),
+      ...(picked.choice ? [{ id: "hand-choice" as const, label: picked.choice.label, value: barProps.choice ?? picked.choice.fallback ?? picked.choice.options[0]?.value, disabled: null, options: picked.choice.options.map(entry => option(entry.value, entry.label)) }] : []),
+      ...(barProps.trigger !== null ? [{ id: "hand-trigger" as const, label: "Trigger", disabled: null, input: { value: barProps.trigger } }] : []),
+      ...(picked.area && hasPick(picked.area, barProps.areaPick) ? [{ id: "hand-area-clear" as const, label: "Clear area", disabled: null }] : []),
+      { id: "hand-play", label: picked.compose ? "Write in chat" : `Play ${picked.name}`, disabled: inputBlocked && picked.cost !== "reaction" ? blockedReason : handReady(picked, aim, { trigger: barProps.trigger ?? "", area: barProps.areaPick }) ? null : "Choose a target, area or trigger first." },
+      { id: "hand-edit", label: "Edit in chat", disabled: null }, { id: "hand-back", label: "Back", disabled: null }, close,
+    ] };
+  }, [boardNative, boardSwap, boardChoices, cards, picked, rows, sentence, offered, aim, attachedRiders, barProps.options, barProps.chosen, barProps.choice, barProps.trigger, barProps.areaPick, notice, inputBlocked, blockedReason]);
+  const nativeSignature = JSON.stringify([campaignId, sheet?.id, signature, nativePanel, sending && !boardSwap]);
+  useEffect(() => {
+    if (swapReply.current && swapTurn.current !== `${campaignId}:${sheet?.id}:${signature}`) {
+      swapReply.current(null); swapReply.current = null; setBoardSwap(null);
+    }
+  }, [campaignId, sheet?.id, signature]);
+
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent(HAND_BOARD_STATUS_EVENT, { detail: { campaignId, sending: sending && !boardSwap, notice: notice || (waiting ? `Waiting for the DM to resolve ${waiting.name}.` : ""), panel: nativePanel, signature: nativeSignature } }));
+  }, [campaignId, sending, boardSwap, notice, waiting, nativePanel, nativeSignature]);
+
+  useEffect(() => {
+    const receive = (event: Event) => {
+      const detail = (event as CustomEvent<HandBoardControlDetail>).detail;
+      if (!detail || detail.campaignId !== campaignId || detail.signature !== nativeSignature || !nativePanel || !offeredBoardControl({ panel: nativePanel, controls: [], pending: sending && !boardSwap }, detail.actionId, detail.value)) return;
+      const value = detail.value ?? "";
+      if (detail.actionId === "hand-confirm" || detail.actionId === "hand-keep" || (boardSwap && detail.actionId === "panel-close")) {
+        const resolve = swapReply.current; swapReply.current = null; setBoardSwap(null);
+        resolve?.(detail.actionId === "hand-confirm" ? boardSwap : null); return;
+      }
+      switch (detail.actionId) {
+        case "hand-card": { const card = cards.find(entry => entry.id === value); if (card) pick(card, true); break; }
+        case "hand-target": setTargetId(value); break;
+        case "hand-option": { const option = barProps.options.find(entry => entry.id === value); if (option && !option.disabled) barProps.onToggleOption(option.id); break; }
+        case "hand-rider": { const card = cards.find(entry => entry.id === value && entry.type === "rider"); if (card) pick(card, true); break; }
+        case "hand-choice": barProps.onChoice(value); break;
+        case "hand-trigger": barProps.onTrigger(value); break;
+        case "hand-area-clear": barProps.onClearArea(); break;
+        case "hand-play": void commit(); break;
+        case "hand-edit": toComposer(sentence); setBoardNative(false); break;
+        case "hand-back": {
+          boardTarget.current = aim?.id ?? null;
+          setBoardChoices(picked?.intent.card === "attack" ? "attack" : picked?.intent.card === "spell" ? "cast" : null);
+          clearAim(); break;
+        }
+        case "panel-close": setMoreOpen(false); setBoardChoices(null); if (!boardChoices) clearAim(); setBoardNative(false); break;
+      }
+    };
+    window.addEventListener(HAND_BOARD_CONTROL_EVENT, receive);
+    return () => window.removeEventListener(HAND_BOARD_CONTROL_EVENT, receive);
+  }, [campaignId, nativeSignature, nativePanel, sending, boardSwap, cards, pick, barProps, commit, toComposer, sentence, aim, picked, clearAim, boardChoices]);
+
+  useEffect(() => {
+    const leave = (event: Event) => {
+      const detail = (event as CustomEvent<{ campaignId: string; active: boolean }>).detail;
+      if (detail?.campaignId === campaignId && !detail.active) { setBoardNative(false); swapReply.current?.(null); swapReply.current = null; setBoardSwap(null); }
+    };
+    window.addEventListener(HAND_BOARD_SURFACE_EVENT, leave);
+    return () => { window.removeEventListener(HAND_BOARD_SURFACE_EVENT, leave); swapReply.current?.(null); swapReply.current = null; };
+  }, [campaignId]);
+
+  useEffect(() => {
+    const receive = (event: Event) => {
+      const detail = (event as CustomEvent<HandBoardActionDetail>).detail;
+      if (!detail || detail.campaignId !== campaignId) return;
+      if (sending || commitBusy.current || boardRequest.current) { say("Please wait for the current action."); return; }
+      if (inputBlocked) { say(blockedReason); return; }
+      setBoardNative(detail.nativeChoices === true);
+      boardTarget.current = targets.some(target => target.id === detail.targetId) ? detail.targetId! : null;
+      writeFlag(COLLAPSED_KEY, false);
+      setArranging(false);
+      setNotice("");
+      if (detail.action === "attack" || detail.action === "cast") {
+        if (!detail.nativeChoices && !cards.some(card => card.intent.card === (detail.action === "attack" ? "attack" : "spell"))) { say("No matching cards are available in your hand."); return; }
+        setBoardChoices(detail.action);
+        setMoreOpen(true);
+        return;
+      }
+      const card = cards.find(card => card.intent.card === "basic" && card.intent.action === detail.action && card.cost === "action");
+      if (!card) { say("That action is not available in your hand."); return; }
+      if (card.disabled) { say(card.disabled); return; }
+      setRiderIds([]);
+      resetChoices();
+      setPickedId(card.id);
+      setTargetId(boardTarget.current);
+      boardTarget.current = null;
+      if (detail.action !== "help") {
+        boardRequest.current = true;
+        setBoardCommit({ id: card.id, signature, campaignId, characterId: sheet?.id ?? "" });
+      }
+    };
+    window.addEventListener(HAND_BOARD_ACTION_EVENT, receive);
+    return () => window.removeEventListener(HAND_BOARD_ACTION_EVENT, receive);
+  }, [campaignId, sending, inputBlocked, blockedReason, targets, cards, signature, resetChoices, say, sheet?.id]);
+
+  useEffect(() => {
+    if (!boardCommit) return;
+    // Submit through the existing handler after the card and choices have rendered.
+    const timer = window.setTimeout(() => {
+      setBoardCommit(null);
+      if (boardCommit.campaignId !== campaignId || boardCommit.characterId !== sheet?.id || boardCommit.signature !== signature || picked?.id !== boardCommit.id) { boardRequest.current = false; return; }
+      void commit().finally(() => { boardRequest.current = false; });
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [boardCommit, picked, signature, commit, campaignId, sheet?.id]);
 
   if (!sheet || !turn) return null;
 
@@ -659,7 +804,7 @@ function HandInner({
           </div>
           )}
           {played ? <HandPlayedCard key={played.seq} card={played.card} /> : null}
-          {picked ? (
+          {picked && !boardNative ? (
             <HandAimBar
               card={picked}
               targets={offered}
@@ -695,10 +840,10 @@ function HandInner({
         {notice}
       </p>
       <HandMoreSheet
-        open={moreOpen}
+        open={moreOpen && !boardNative}
         onOpenChange={(open) => {
           setMoreOpen(open);
-          if (!open) setArranging(false);
+          if (!open) { setArranging(false); setBoardChoices(null); boardTarget.current = null; }
         }}
         arranging={arranging}
         onArrange={setArranging}
@@ -725,7 +870,7 @@ function HandInner({
             />
           ) : null
         }
-        units={more}
+        units={boardChoices ? cards.filter(card => card.intent.card === (boardChoices === "attack" ? "attack" : "spell")) : more}
         onPick={pick}
         waitingNote={waitingOn?.note ?? null}
         isWaiting={isWaiting}

@@ -19,6 +19,7 @@ import {
 } from "@/lib/battlemap/hand-core";
 import { areaArgs, describePick, hasPick, type AreaPick, type HandArea } from "@/lib/battlemap/hand-area";
 import { textKey } from "@/lib/language/text-logic";
+import type { BoardControlId, BoardPanel } from "@/lib/addons/board-bridge";
 
 // Who a card is aimed at. `ac` only ever arrives in the DM's projection; a
 // player's preview works from the challenge rating, which they can see.
@@ -44,6 +45,11 @@ export type HandChoices = {
   // Where an area spell is laid (HandCard.area), picked on the board.
   area?: AreaPick;
 };
+
+export function handReady(card: HandCard, aim: HandAim | null, choices: HandChoices = {}): boolean {
+  return (!(card.target === "enemy" || card.target === "ally") || aim !== null || hasPick(card.area, choices.area ?? {}))
+    && (card.asks !== "trigger" || Boolean(choices.trigger?.trim()));
+}
 
 // The value a card's pick sends: the player's, else the card's fallback,
 // else its first option.
@@ -454,6 +460,14 @@ export function targetFromComposedText(text: string, names: string[]): string | 
 // announces the aim, and listens for a pick by tracker id or by name.
 export const HAND_AIM_EVENT = "odm:hand-aim";
 export const HAND_TARGET_EVENT = "odm:hand-target";
+export const HAND_BOARD_ACTION_EVENT = "odm:hand-board-action";
+export const HAND_BOARD_STATUS_EVENT = "odm:hand-board-status";
+export type HandBoardAction = "attack" | "cast" | "dodge" | "dash" | "disengage" | "help";
+export const HAND_BOARD_CONTROL_EVENT = "odm-hand-board-control";
+export const HAND_BOARD_SURFACE_EVENT = "odm-hand-board-surface";
+export type HandBoardActionDetail = { campaignId: string; action: HandBoardAction; targetId?: string; nativeChoices?: boolean };
+export type HandBoardControlDetail = { campaignId: string; signature: string; actionId: BoardControlId; value?: string };
+export type HandBoardStatus = { campaignId: string; sending: boolean; notice: string; panel?: BoardPanel | null; signature?: string };
 export type HandAimDetail = {
   active: boolean;
   cardId: string | null;

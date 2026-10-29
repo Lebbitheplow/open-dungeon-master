@@ -1304,6 +1304,10 @@
                 "default": false,
                 "type": "boolean"
               },
+              "combatOnly": {
+                "default": false,
+                "type": "boolean"
+              },
               "sessionLayout": {
                 "type": "string",
                 "const": "stage"

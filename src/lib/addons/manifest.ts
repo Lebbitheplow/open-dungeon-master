@@ -179,6 +179,8 @@ export const boardViewSchema = z.object({
   // Offered only on maps that carry this addon's view data (a map one of its
   // generators made), rather than on every board.
   needsViewData: z.boolean().default(false),
+  // Keep this view and its session presentation inside active encounters.
+  combatOnly: z.boolean().default(false),
   // A host-owned layout of native regions, never addon CSS or React code.
   sessionLayout: z.literal("stage").optional(),
   // Opaque dark surfaces keep native light text readable; accent is decorative.

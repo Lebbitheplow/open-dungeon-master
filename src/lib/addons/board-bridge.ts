@@ -4,6 +4,7 @@ import type { FxEvent } from "@/lib/battlemap/fx-plan";
 import type { TokenIntent } from "@/lib/battlemap/intent";
 import type { PlayerMapView } from "@/lib/battlemap/view-types";
 import type { Gender } from "@/lib/gender";
+import type { Ruler } from "@/lib/battlemap/board-move";
 
 // The board view contract: what the table page posts into an addon's
 // sandboxed frame, and what it accepts back (docs/addons/extension-points.md,
@@ -85,6 +86,8 @@ export type BoardSnapshot = {
   board: "fight" | "scene";
   myTokenId: string | null;
   reachable: number[];
+  // Remaining movement in squares; absent from older hosts.
+  budgetLeft?: number;
   // The square a first tap aimed this viewer's walk at, or null: a second
   // tap there makes the walk (the flat board holds its ruler on it).
   moveAim: { x: number; y: number } | null;
@@ -183,6 +186,7 @@ export function boardSnapshot(
     board: view.board,
     myTokenId: view.myTokenId,
     reachable: view.reachable,
+    budgetLeft: view.budgetLeft,
     moveAim: options.moveAim ?? null,
     hasBackdrop: Boolean(view.backdrop),
     view: own ? { data: own.data, files: own.files.map(({ name, type, bytes }) => ({ name, type, bytes })) } : null,
@@ -240,12 +244,52 @@ export function boardFx(events: FxEvent[]): BoardFx[] {
 
 // What the page sends the frame. Effects, pings and the camera are moments:
 // each arrives once, as it happens.
+export function boardRuler(view: PlayerMapView, ruler: Ruler | null): Ruler | null {
+  if (!ruler || ruler.path.length < 2 || ruler.path.length > view.width * view.height + 1) return null;
+  return ruler.path.every(({ x, y }) => Number.isInteger(x) && Number.isInteger(y)
+    && x >= 0 && y >= 0 && x < view.width && y < view.height
+    && view.terrain[y * view.width + x] !== " ") ? ruler : null;
+}
+
 export type CameraControl = "zoom-in" | "zoom-out" | "fit" | "left" | "right" | "up" | "down";
 export type ViewCameraState = { x: number; y: number; zoom: number };
 
+// Host-owned presentation only; callbacks and gameplay rules never cross the bridge.
+export type BoardActionMenu = { tokenId: string; hint?: string; actions: Array<{ id: string; label: string; disabled: string | null }> };
+export const BOARD_VALUE_CONTROLS = ["prompt-submit", "move-mode", "view", "play-as", "tool", "place-kind", "place-name", "measure-shape", "measure-size", "draw-kind", "draw-tone", "hand-card", "hand-target", "hand-option", "hand-rider", "hand-choice", "hand-trigger", "order-entry", "order-name", "order-score"] as const;
+export const BOARD_CONTROL_IDS = ["end-turn", "undo-move", "zoom-in", "zoom-out", "fit", "follow-turn", "camera-pull", "camera-lock", "camera-free", "camera-release", "cancel", "prompt-cancel", "order", "panel-close", "tools", "enlarge", "point", "draw", "draw-ttl", "draw-erase", "measure-clear", "measure-copy", "hand-back", "hand-play", "hand-edit", "hand-area-clear", "hand-confirm", "hand-keep", "order-up", "order-down", "order-delay", "order-remove", "order-take", "order-back", "order-forward", "order-reset", "order-insert", "order-enemies-play", "order-enemies-pass", "order-companion", "confirm", ...BOARD_VALUE_CONTROLS] as const;
+export type BoardControlId = typeof BOARD_CONTROL_IDS[number];
+export type BoardControl = { id: BoardControlId; label: string; disabled: string | null; value?: string; options?: Array<{ value: string; label: string; disabled: string | null }>; input?: { value: string; numeric?: boolean } };
+export type BoardPanel = { title: string; lines: string[]; controls: BoardControl[]; boardInput?: boolean };
+export type BoardHud = {
+  selection: { tokenId: string; name: string; lines: string[] } | null;
+  turn: string;
+  stats: string[];
+  hint: string;
+  notices: string[];
+  error: string;
+  pending: boolean;
+  controls: BoardControl[];
+  panel?: BoardPanel | null;
+  drawing?: { kind: string; tone: string } | null;
+  tiles?: number[];
+  prompt: { title: string; label: string; numeric: boolean } | null;
+};
+
+export function offeredBoardControl(hud: Pick<BoardHud, "controls" | "panel" | "pending">, id: BoardControlId, value?: string): BoardControl | null {
+  const control = (hud.panel ? hud.panel.controls : hud.controls).find(entry => entry.id === id);
+  if (!control || control.disabled !== null || hud.pending) return null;
+  if (control.options && !control.options.some(option => option.value === value && option.disabled === null)) return null;
+  if (control.input && (typeof value !== "string" || value.length > 200)) return null;
+  return control;
+}
 export type HostMessage =
+  | { odm: number; type: "battlefield-ui"; mapId: string; revision: number; hud: BoardHud }
+  | { odm: number; type: "action-menu"; revision: number; menu: BoardActionMenu | null }
+  | { odm: number; type: "rendering"; active: boolean }
   | { odm: number; type: "snapshot"; snapshot: BoardSnapshot; sessionLayout?: "stage" }
   | { odm: number; type: "scene"; genre: string | null; appearance: BoardSnapshot["appearance"]; options: BoardSnapshot["options"]; assetsUrl: string }
+  | { odm: number; type: "ruler"; mapId: string; ruler: Ruler | null }
   | { odm: number; type: "fx"; events: BoardFx[] }
   | { odm: number; type: "ping"; x: number; y: number; focus: boolean; at: number }
   | { odm: number; type: "camera"; mode: "pull" | "lock" | "free"; x: number | null; y: number | null; zoom: number | null }
@@ -258,10 +302,14 @@ export type HostMessageBody = HostMessage extends infer T ? (T extends unknown ?
 
 // What the frame may send the page.
 export type ViewMessage =
-  | { type: "ready" }
+  | { type: "ready"; nativeOnly?: boolean; actions?: boolean; battlefieldUi?: boolean; battlefieldTools?: boolean }
+  | { type: "board-control"; revision: number; mapId: string; actionId: BoardControlId; value?: string }
+  | { type: "board-draw"; revision: number; mapId: string; points: BoardPoint[] }
+  | { type: "action"; revision: number; tokenId: string; actionId: string }
+  | { type: "cancel" }
   | ({ type: "camera-state" } & ViewCameraState)
   | { type: "tile"; x: number; y: number }
-  | { type: "token"; tokenId: string }
+  | { type: "token"; tokenId: string; menu?: boolean }
   | { type: "hover"; x: number; y: number }
   | { type: "hover"; x: null; y: null }
   | { type: "file"; requestId: string; name: string }
@@ -342,7 +390,30 @@ export function readViewMessage(raw: unknown): ViewMessage | null {
   const int = (value: unknown) => (typeof value === "number" && Number.isInteger(value) ? value : null);
   switch (message.type) {
     case "ready":
-      return { type: "ready" };
+      if (message.battlefieldTools !== undefined && typeof message.battlefieldTools !== "boolean") return null;
+      if (message.battlefieldUi !== undefined && typeof message.battlefieldUi !== "boolean") return null;
+      if (message.nativeOnly !== undefined && typeof message.nativeOnly !== "boolean") return null;
+      if (message.actions !== undefined && typeof message.actions !== "boolean") return null;
+      return { type: "ready", ...(message.nativeOnly === undefined ? {} : { nativeOnly: message.nativeOnly }), ...(message.actions === undefined ? {} : { actions: message.actions }), ...(message.battlefieldUi === undefined ? {} : { battlefieldUi: message.battlefieldUi }), ...(message.battlefieldTools === undefined ? {} : { battlefieldTools: message.battlefieldTools }) };
+    case "board-control":
+      if (!Number.isSafeInteger(message.revision) || (message.revision as number) < 1
+        || typeof message.mapId !== "string" || !SHORT.test(message.mapId)
+        || !BOARD_CONTROL_IDS.includes(message.actionId as BoardControlId)
+        || (BOARD_VALUE_CONTROLS.includes(message.actionId as typeof BOARD_VALUE_CONTROLS[number]) ? typeof message.value !== "string" || message.value.length > 200 : message.value !== undefined)) return null;
+      return { type: "board-control", revision: message.revision as number, mapId: message.mapId, actionId: message.actionId as BoardControlId,
+        ...(typeof message.value === "string" ? { value: message.value } : {}) };
+    case "board-draw":
+      if (!Number.isSafeInteger(message.revision) || (message.revision as number) < 1 || typeof message.mapId !== "string" || !SHORT.test(message.mapId)
+        || !Array.isArray(message.points) || message.points.length < 2 || message.points.length > 64
+        || !message.points.every(point => point && typeof point === "object" && [point.x, point.y].every(value => typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 4096))) return null;
+      return { type: "board-draw", revision: message.revision as number, mapId: message.mapId, points: message.points.map(point => ({ x: point.x, y: point.y })) };
+    case "action":
+      return Number.isSafeInteger(message.revision) && (message.revision as number) > 0
+        && typeof message.tokenId === "string" && SHORT.test(message.tokenId)
+        && typeof message.actionId === "string" && SHORT.test(message.actionId)
+        ? { type: "action", revision: message.revision as number, tokenId: message.tokenId, actionId: message.actionId } : null;
+    case "cancel":
+      return { type: "cancel" };
     case "camera-state":
       return [message.x, message.y, message.zoom].every(value => typeof value === "number" && Number.isFinite(value)) && (message.zoom as number) >= 0.25 && (message.zoom as number) <= 8
         ? { type: "camera-state", x: message.x as number, y: message.y as number, zoom: message.zoom as number }
@@ -359,7 +430,9 @@ export function readViewMessage(raw: unknown): ViewMessage | null {
       return x === null || y === null ? null : { type: "hover", x, y };
     }
     case "token":
-      return typeof message.tokenId === "string" && SHORT.test(message.tokenId) ? { type: "token", tokenId: message.tokenId } : null;
+      return typeof message.tokenId === "string" && SHORT.test(message.tokenId)
+        && (message.menu === undefined || typeof message.menu === "boolean")
+        ? { type: "token", tokenId: message.tokenId, ...(message.menu === undefined ? {} : { menu: message.menu }) } : null;
     case "file":
       return typeof message.requestId === "string" && SHORT.test(message.requestId) && typeof message.name === "string" && SHORT.test(message.name)
         ? { type: "file", requestId: message.requestId, name: message.name }
