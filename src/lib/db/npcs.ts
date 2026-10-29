@@ -1,4 +1,5 @@
 import { moveRelationshipsToSubject } from "@/lib/db/relationships";
+import { publishEphemeral } from "@/lib/events";
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { byName } from "@/lib/language/text-logic";
 import { matchEntity, mergeAliases, normalizeName, type EntityMatch } from "@/lib/dm/entity-logic";
@@ -365,6 +366,8 @@ export function updateNpcFromDraft(campaignId: string, npcId: string, draft: Npc
     nowIso(),
     npcId,
   );
+  // Renamed in the NPC editor: their bonds follow, as renameNpc's do.
+  followBonds(mapNpc(row), draft.name);
   return mapNpc(db.prepare(`SELECT * FROM npcs WHERE id = ?`).get(npcId) as NpcRow);
 }
 
@@ -497,8 +500,20 @@ export function renameNpc(npcId: string, name: string, aliases: string[]): Npc |
      WHERE campaign_id = ? AND category = 'npc' AND subject = ?`,
   ).run(name, nowIso(), npc.campaignId, npc.name);
   // Bonds are kept by name too, for the same reason (issue 580).
-  moveRelationshipsToSubject(npc.campaignId, npc.name, name, npc.id);
+  followBonds(npc, name);
   return getNpcById(npcId);
+}
+
+// An NPC's bonds follow a new name (issue 580), and the Bonds panel hears of
+// it. Not the row behind a companion still in the party: that companion's
+// bonds are kept under its sheet's name, which a rename here leaves as it is.
+function followBonds(npc: Npc, name: string, keeperId = npc.id) {
+  if (standsBehindLiveCompanion(npc)) {
+    return;
+  }
+  if (moveRelationshipsToSubject(npc.campaignId, npc.name, name, keeperId)) {
+    publishEphemeral(npc.campaignId, "relationships_updated", {});
+  }
 }
 
 // Party lead: fold one NPC row into another. The keeper's attitude, trait,
@@ -541,7 +556,7 @@ export function mergeNpcs(
     ).run(keep.name, now, campaignId, merge.name);
     // What each character felt for the absorbed row is what they felt for
     // this person (issue 580); a bond the keeper already has stands.
-    moveRelationshipsToSubject(campaignId, merge.name, keep.name, keep.id);
+    followBonds(merge, keep.name, keep.id);
     db.prepare(`DELETE FROM npcs WHERE id = ?`).run(mergeId);
   });
   apply();

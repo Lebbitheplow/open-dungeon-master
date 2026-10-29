@@ -264,7 +264,10 @@ export function handleSetNpc(campaign: Campaign, rawArguments: string): ToolResu
   // always said an attitude the story shifted would, and every character's
   // bond with them opens. Never on the first registration, which is also how
   // the GM notes a villain or a patron the party has only heard of.
-  const shifted = Boolean(before && args.attitude && (args.attitude !== before.attitude || !before.metAt));
+  // A restated "indifferent" is the default, which says nothing about the
+  // scene, so it alone is not a meeting: a stranger stays one for the
+  // reaction roll.
+  const shifted = Boolean(before && args.attitude && (args.attitude !== before.attitude || (!before.metAt && args.attitude !== "indifferent")));
   const met = shifted ? meetNpc(campaign, registered, true) : { npc: registered, opened: 0 };
   if (met.opened) {
     publishRelationshipsUpdated(campaign.id);

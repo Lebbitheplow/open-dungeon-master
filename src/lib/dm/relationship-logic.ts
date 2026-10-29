@@ -521,11 +521,29 @@ export function addMemory(
 }
 
 // A bond a death closed (relationship_end "death", or a companion who fell
-// and was dismissed): its last memory is the death, since nothing lands on a
-// closed bond after it. The Bonds panel says "died" for it, and a companion
-// brought back to life picks it up again (db/relationships.ts).
-export function endedByDeath(relationship: { status: RelationshipStatus; memories: RelationshipMemory[] }): boolean {
-  return relationship.status === "ended" && relationship.memories[relationship.memories.length - 1]?.kind === "death";
+// and was dismissed), marked with the DIED flag rather than read from its
+// memories, which a merge re-sorts. The Bonds panel says "died" for it, and a
+// companion brought back to life picks it up again (db/relationships.ts); a
+// bond that ended any other way first stays ended.
+export const DIED_FLAG = "died";
+
+export function endedByDeath(relationship: { status: RelationshipStatus; flags: string[] }): boolean {
+  return relationship.status === "ended" && relationship.flags.includes(DIED_FLAG);
+}
+
+// Whether a bond holds anything yet. One opened at neutral when the party met
+// someone (issue 580) and never moved says nothing about how they feel, so
+// whatever reads standing across a party (a pact's regard, a companion's
+// worst standing, how a departed one returns) reads it as no bond, as it read
+// the missing row before bonds opened on meeting.
+export function hasStanding(relationship: { approval: number; romance: RomanceStage; memories: RelationshipMemory[]; beats: BeatCounts; pretense?: unknown }): boolean {
+  return (
+    relationship.approval !== 0 ||
+    relationship.romance !== "none" ||
+    relationship.memories.length > 0 ||
+    Boolean(relationship.pretense) ||
+    Object.values(relationship.beats).some((count) => count > 0)
+  );
 }
 
 // Two records of one pair folded into one (an NPC merged into another): both

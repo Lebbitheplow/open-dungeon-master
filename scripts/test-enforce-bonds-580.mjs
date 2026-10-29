@@ -229,6 +229,101 @@ await test("a person narrating at a human GM's table meets whoever speaks in it"
   assert.ok(bond(kael, "Captain Rhee"), "the captain who spoke has met them");
 });
 
+// ---- found reviewing the change ----
+
+await test("a companion a deed is done to still weighs it on its conscience, as a witness would", async () => {
+  const { world, kael, bond } = await table({ gameSettings: { companionConscience: "talk" } });
+  await world.invoke("add_companion", { name: "Seren", class: "paladin", gender: "Female", personality: "Stern and devout.", kind: "party" });
+  const { companionNpcFor } = await import("../src/lib/db/companion-npcs.ts");
+  const { setCompanionValues, companionConscience } = await import("../src/lib/db/companion-conscience.ts");
+  const row = companionNpcFor(world.sheets().find((entry) => entry.name === "Seren"));
+  setCompanionValues(row.id, [{ value: "protects_innocent", strength: "red_line", faction: "" }]);
+  const deed = await world.invoke("relationship_beat", { characterId: kael.id, subject: "Seren", beat: "torture", victims: ["Seren"] });
+  assert.equal(deed.ok, true, deed.error);
+  assert.ok(companionConscience(row.id).held > 0, "the red line the deed crossed moved her conscience");
+  assert.ok(bond(kael, "Seren").approval < 0, "and her regard is the victim's");
+});
+
+await test("a person named by an old name they answer to is landed on once, as a victim", async () => {
+  const { world, kael, bond, prepare } = await table();
+  const stranger = prepare("Hooded Stranger", "indifferent");
+  npcs.renameNpc(stranger.id, "Vesna", ["Hooded Stranger"]);
+  prepare("Witness C", "indifferent");
+  const deed = await world.invoke("relationship_beat", { characterId: kael.id, subject: "Vesna", beat: "cruelty", victims: ["Hooded Stranger"], witnesses: ["Vesna", "Witness C", "Hooded Stranger"] });
+  assert.equal(deed.ok, true, deed.error);
+  assert.equal(bond(kael, "Vesna").approval, doneToDelta("cruelty", -10, "serious"), "one landing, the victim's");
+  assert.deepEqual(deed.result.witnesses.map((entry) => entry.subject), ["Witness C"], "a victim is not also a witness, by any of their names");
+  assert.ok(!deed.result.victims, "and is not counted twice among the victims");
+});
+
+await test("an NPC merged in keeps the bond that holds something over one opened at neutral", async () => {
+  const { world, kael, bond, prepare } = await table();
+  const stranger = prepare("Hooded Stranger", "indifferent");
+  const keep = prepare("Vesna", "indifferent");
+  const real = relationships.ensureRelationship({ campaignId: world.campaignId, characterId: kael.id, characterName: kael.name, subjectKind: "npc", subjectName: "Hooded Stranger" });
+  relationships.patchRelationship(real.id, { approval: 40, romance: "courting" });
+  relationships.ensureRelationship({ campaignId: world.campaignId, characterId: kael.id, characterName: kael.name, subjectKind: "npc", subjectName: "Vesna" });
+  npcs.mergeNpcs(world.campaignId, keep.id, stranger.id, ["Hooded Stranger"]);
+  assert.equal(bond(kael, "Vesna").approval, 40, "the courting bond survived the merge");
+  assert.equal(bond(kael, "Vesna").romance, "courting");
+});
+
+await test("a bond that ended in a falling-out stays ended through a death and a return", async () => {
+  const { world, kael, lyra, bond } = await table();
+  await world.invoke("add_companion", { name: "Seren", class: "paladin", gender: "Female", personality: "Stern and devout.", kind: "party" });
+  const fell = await world.invoke("relationship_end", { characterId: kael.id, subject: "Seren", reason: "falling_out" });
+  assert.equal(fell.ok, true, fell.error);
+  const sheet = world.sheets().find((entry) => entry.name === "Seren");
+  world.patch(sheet.id, { deathSaves: { successes: 0, failures: 3, stable: false, dead: true } });
+  await world.invoke("dismiss_companion", { characterId: sheet.id, reason: "she fell" });
+  await world.invoke("add_companion", { name: "Seren", class: "paladin", gender: "Female", personality: "Stern and devout.", kind: "party" });
+  assert.equal(bond(kael, "Seren").status, "ended", "the falling-out stands");
+  assert.equal(bond(lyra, "Seren").status, "active", "the bond the death closed opens again");
+});
+
+await test("a rename in the NPC editor moves the bonds, and the Bonds panel hears of it", async () => {
+  const { world, kael, bond, prepare } = await table();
+  const npc = prepare("Osric", "indifferent");
+  const early = relationships.ensureRelationship({ campaignId: world.campaignId, characterId: kael.id, characterName: kael.name, subjectKind: "npc", subjectName: "Osric" });
+  relationships.patchRelationship(early.id, { approval: 15 });
+  const { subscribe } = await import("../src/lib/events.ts");
+  const heard = [];
+  const stop = subscribe(world.campaignId, (chunk) => heard.push(/^event: (.+)$/m.exec(chunk)?.[1] ?? ""));
+  const { blankDraft } = await import("../src/lib/npcs/forge.ts");
+  npcs.updateNpcFromDraft(world.campaignId, npc.id, { ...blankDraft(), name: "Osric the Elder", attitude: "indifferent" });
+  stop();
+  assert.equal(bond(kael, "Osric the Elder")?.approval, 15);
+  assert.ok(heard.includes("relationships_updated"));
+});
+
+await test("a companion's bonds stay under its sheet's name when its row is renamed", async () => {
+  const { world, kael, bond } = await table();
+  await world.invoke("add_companion", { name: "Seren", class: "paladin", gender: "Female", personality: "Stern and devout.", kind: "party" });
+  const row = npcs.listNpcs(world.campaignId).find((npc) => npc.name === "Seren");
+  npcs.renameNpc(row.id, "Seren the Grey", ["Seren"]);
+  assert.ok(bond(kael, "Seren"), "the bond stays with the sheet");
+});
+
+await test("a bond opened at neutral reads as no bond to whatever weighs a party's standing", async () => {
+  const { world, kael, lyra, bond } = await table();
+  await world.invoke("add_companion", { name: "Seren", class: "paladin", gender: "Female", personality: "Stern and devout.", kind: "party" });
+  relationships.patchRelationship(bond(kael, "Seren").id, { approval: 60 });
+  assert.equal(bond(lyra, "Seren").approval, 0);
+  const { worstApproval } = await import("../src/lib/dm/conscience.ts");
+  assert.equal(worstApproval(world.campaignId, "Seren", world.sheets()), 60, "Lyra's untouched bond is not a 0 standing");
+  const { hasStanding } = await import("../src/lib/dm/relationship-logic.ts");
+  assert.equal(hasStanding(bond(lyra, "Seren")), false);
+  assert.equal(hasStanding(bond(kael, "Seren")), true);
+});
+
+await test("restating the default attitude is not meeting a stranger, so the reaction roll still happens", async () => {
+  const { world, kael, bond, prepare } = await table();
+  prepare("Tamsin", "indifferent");
+  await world.invoke("set_npc", { name: "Tamsin", attitude: "indifferent", location: "The mill" });
+  assert.equal(npcs.getNpcByName(world.campaignId, "Tamsin").metAt, "");
+  assert.equal(bond(kael, "Tamsin"), null);
+});
+
 await test("with bonds off nothing opens", async () => {
   const { world, kael, bond } = await table({ gameSettings: { relationships: "off" } });
   await world.invoke("add_companion", { name: "Seren", class: "paladin", gender: "Female", personality: "Stern and devout.", kind: "party" });

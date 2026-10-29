@@ -139,39 +139,62 @@ export function landBeat(
         : {}),
     }) ?? relationship;
 
-  let conscience: ConscienceMove | null = null;
-  let departure: DepartureOutcome | null = null;
-  if (companion && subject.npc) {
-    const step: LadderStep | null = beat === "amends" ? "honour" : (values?.ladder ?? null);
-    const day = clockDay((getCampaignById(campaign.id) ?? campaign).clock.instant);
-    const next = stepLadder(companionConscience(subject.npc.id), step, worstBefore, day, causeOf(beat, sheet.name));
-    saveConscience(subject.npc.id, next);
-    conscience = settleCompanion(campaign, companion, next, deed ? { demand: deed.demand, hours: deed.hours } : {}, listSheets(campaign.id));
-    // At the breaking point the server decides what they do, now (issue 503
-    // Phase 2); climbed back off it, any plan they held is dropped.
-    departure = settleBreakingPoint(campaign, getSheetById(companion.id) ?? companion);
-  }
+  const { conscience, departure } = stepConscience(campaign, sheet, subject, companion, beat, values, deed, worstBefore);
   return { subject, before: relationship, updated, delta, alignment, values, conscience, departure };
+}
+
+// What a beat does to a lasting companion's conscience (issue 503): the step
+// its values take on the ladder, the rung settled against the standing it
+// now has, and at the breaking point what the server has it do. Shared by a
+// witness's landing and a victim's.
+function stepConscience(
+  campaign: Campaign,
+  sheet: CharacterSheet,
+  subject: Subject,
+  companion: CharacterSheet | null,
+  beat: RelationshipBeat,
+  values: DeedVerdict | null,
+  deed: DeedOptions | null,
+  worstBefore: number | null,
+): { conscience: ConscienceMove | null; departure: DepartureOutcome | null } {
+  if (!companion || !subject.npc) {
+    return { conscience: null, departure: null };
+  }
+  const step: LadderStep | null = beat === "amends" ? "honour" : (values?.ladder ?? null);
+  const day = clockDay((getCampaignById(campaign.id) ?? campaign).clock.instant);
+  const next = stepLadder(companionConscience(subject.npc.id), step, worstBefore, day, causeOf(beat, sheet.name));
+  saveConscience(subject.npc.id, next);
+  const conscience = settleCompanion(campaign, companion, next, deed ? { demand: deed.demand, hours: deed.hours } : {}, listSheets(campaign.id));
+  // At the breaking point the server decides what they do, now (issue 503
+  // Phase 2); climbed back off it, any plan they held is dropped.
+  const departure = settleBreakingPoint(campaign, getSheetById(companion.id) ?? companion);
+  return { conscience, departure };
 }
 
 // A deed landing on whoever it was done to (issue 580): the captive harmed,
 // the foe spared, the prisoner set free. Their regard moves at face value and
 // a step graver than a witness's (companion-values-logic.ts doneToDelta),
-// since being harmed or spared is not a matter of taste. What it does to a
-// companion's conscience follows from the standing it leaves, which
-// publishRelationshipsUpdated settles. null when it lands on nobody: a deed
-// done to the dead.
+// since being harmed or spared is not a matter of taste. A lasting companion
+// it was done to still weighs the deed by what it holds to, on its
+// conscience, as a witness would (the ladder, an ultimatum's demand); only
+// its regard is the victim's. null when it lands on nobody: a deed done to
+// the dead.
 export function landOnVictim(
+  campaign: Campaign,
+  sheet: CharacterSheet,
   subject: Subject,
   relationship: Relationship,
   beat: DeedKind,
   note: string | undefined,
-  severity: DeedSeverity,
+  deed: DeedOptions,
 ): Landing | null {
-  const delta = doneToDelta(beat, beatSpec(beat)!.base, severity);
+  const delta = doneToDelta(beat, beatSpec(beat)!.base, deed.severity);
   if (!delta) {
     return null;
   }
+  const companion = conscienceOn(campaign) ? liveCompanion(subject) : null;
+  const values = companion && subject.npc ? deedVerdict(companionValues(subject.npc.id), beat, deed.severity, deed.faction) : null;
+  const worstBefore = companion ? worstApproval(campaign.id, companion.name, listSheets(campaign.id)) : null;
   const approval = applyApproval(relationship.approval, delta);
   const running = actRunning(relationship.pretense) ? relationship.pretense : null;
   const updated =
@@ -181,7 +204,8 @@ export function landOnVictim(
       beats: { ...relationship.beats, [beat]: (relationship.beats[beat] ?? 0) + 1 },
       ...(note?.trim() ? { memories: addMemory(relationship.memories, { kind: beat, text: note.trim(), at: new Date().toISOString() }) } : {}),
     }) ?? relationship;
-  return { subject, before: relationship, updated, delta, alignment: 0, values: null, conscience: null, departure: null };
+  const { conscience, departure } = stepConscience(campaign, sheet, subject, companion, beat, values, deed, worstBefore);
+  return { subject, before: relationship, updated, delta, alignment: 0, values, conscience, departure };
 }
 
 // The other player characters who stood by while a deed was done (issue

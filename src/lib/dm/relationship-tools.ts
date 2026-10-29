@@ -369,13 +369,13 @@ export function handleRelationshipBeat(
       }
     : null;
   const beat = args.beat as RelationshipBeat;
-  // Whoever it was done to (issue 580). A name in both lists, the subject's
-  // included, counts once, as a victim: being harmed is not watching.
+  // Whoever it was done to (issue 580). A person in both lists, the
+  // subject included, counts once, as a victim: being harmed is not
+  // watching. Compared by who each name resolves to, so a person named by an
+  // old name they still answer to is not landed on twice.
   const victimNames = deedKind ? (args.victims ?? []) : [];
-  const victimKeys = new Set(victimNames.map((name) => textKey(name)));
-  const others = deedKind
-    ? landWitnesses(campaign, sheet, subject, (args.witnesses ?? []).filter((name) => !victimKeys.has(textKey(name))), sheets, beat, args.note, deed!)
-    : null;
+  const victimKeys = new Set(victimNames.map((name) => personKey(campaign, name, sheets)));
+  const others = deedKind ? landWitnesses(campaign, sheet, subject, args.witnesses ?? [], sheets, beat, args.note, deed!, victimKeys) : null;
   const harmed = deedKind ? landVictims(campaign, sheet, subject, victimNames, sheets, beat as DeedKind, args.note, deed!) : null;
   if (ended && !others?.landed.length && !harmed?.landed.length) {
     return {
@@ -383,7 +383,7 @@ export function handleRelationshipBeat(
       refused: "rules",
     };
   }
-  const subjectHarmed = !ended && victimKeys.has(textKey(subject.name)) ? landOnVictim(subject, relationship, beat as DeedKind, args.note, deed!.severity) : null;
+  const subjectHarmed = !ended && victimKeys.has(textKey(subject.name)) ? landOnVictim(campaign, sheet, subject, relationship, beat as DeedKind, args.note, deed!) : null;
   const landing = ended ? null : (subjectHarmed ?? landBeat(campaign, sheet, subject, relationship, beat, outcome, args.note, deed));
   const landings = [...(landing ? [landing] : []), ...(others?.landed ?? []), ...(harmed?.landed ?? [])];
   // The party's own who were there (issue 563): those who stood by bear a
@@ -500,17 +500,26 @@ function landWitnesses(
   beat: RelationshipBeat,
   note: string | undefined,
   deed: DeedOptions,
+  victims: ReadonlySet<string> = new Set(),
 ): { landed: Landing[]; unknown: string[]; bystanders: CharacterSheet[] } {
   const seen = new Set([textKey(sheet.name), textKey(subject.name)]);
+  // Who has been landed on, by the person each name resolves to.
+  const people = new Set([textKey(sheet.name), textKey(subject.name), ...victims]);
   const landed: Landing[] = [];
   const unknown: string[] = [];
   const bystanders: CharacterSheet[] = [];
   for (const name of names) {
-    if (seen.has(textKey(name))) {
+    if (seen.has(textKey(name)) || victims.has(textKey(name))) {
       continue;
     }
     seen.add(textKey(name));
     const witness = resolveSubject(campaign, name, sheets);
+    if (!("error" in witness)) {
+      if (people.has(textKey(witness.name))) {
+        continue;
+      }
+      people.add(textKey(witness.name));
+    }
     if ("error" in witness) {
       // Another player's character keeps their own counsel, and stood by
       // (issue 563); anyone else is simply not tracked.
@@ -553,12 +562,20 @@ function landVictims(
     return { ...out, dead: true };
   }
   const seen = new Set([textKey(sheet.name), textKey(subject.name)]);
+  // Who has been landed on, by the person each name resolves to.
+  const people = new Set(seen);
   for (const name of names) {
     if (seen.has(textKey(name))) {
       continue;
     }
     seen.add(textKey(name));
     const victim = resolveSubject(campaign, name, sheets);
+    if (!("error" in victim)) {
+      if (people.has(textKey(victim.name))) {
+        continue;
+      }
+      people.add(textKey(victim.name));
+    }
     if ("error" in victim) {
       const character = sheets.find((candidate) => !candidate.isCompanion && (candidate.id === name || textKey(candidate.name) === textKey(name)));
       if (character) {
@@ -572,12 +589,19 @@ function landVictims(
     if (ledger.status === "ended") {
       continue;
     }
-    const landed = landOnVictim(victim, ledger, beat, note, deed.severity);
+    const landed = landOnVictim(campaign, sheet, victim, ledger, beat, note, deed);
     if (landed) {
       out.landed.push(landed);
     }
   }
   return out;
+}
+
+// The person a name resolves to, as a key: a tracked NPC or companion by the
+// name they are kept under, anyone else by the name as given.
+function personKey(campaign: Campaign, name: string, sheets: CharacterSheet[]): string {
+  const found = resolveSubject(campaign, name, sheets);
+  return textKey("error" in found ? name : found.name);
 }
 
 function victimNote(character: string, landing: Landing): string {

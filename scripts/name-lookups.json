@@ -1507,7 +1507,7 @@
     "lib/dm/relationship-subject.ts#whole": [["identity",1,"a sheet by whole name"]],
     "lib/dm/relationship-tick.ts#partial": [["search",1,"a relationship's subject named in the transcript"]],
     "lib/dm/relationship-tools.ts#keyed": [["identity",1,"whether a deed's subject is among its victims, by whole name (textKey) (issue 580)"]],
-    "lib/dm/relationship-tools.ts#partial": [["identity",1,"a deed's witnesses taken once each, by whole name (textKey)"],["identity",2,"a deed's victims taken once each and kept out of its witnesses, by whole name (textKey) (issue 580)"]],
+    "lib/dm/relationship-tools.ts#partial": [["identity",1,"a deed's witnesses taken once each, by whole name (textKey)"],["identity",4,"a deed's victims taken once each and kept out of its witnesses, by the name written and by the person it resolves to (textKey) (issue 580)"]],
     "lib/dm/relationship-tools.ts#whole": [["identity",2,"a player's character named among a deed's witnesses, by id or whole name (textKey)"],["identity",2,"a player's character named among those who objected to a deed, by id or whole name (textKey) (issue 563)"],["identity",2,"a player's character named among a deed's victims, by id or whole name (textKey) (issue 580)"]],
     "lib/dm/relationship-tools.ts#whole-single": [["identity",1,"concentration, spells, downtime subjects, relationships, trade lines and zones by textKey (zoneKey is textKey plus ODM's English spell aliases) or normalizeName; turn and order keys"]],
     "lib/dm/renarrate-logic.ts#partial": [["parse",1,"a take's prefix"]],

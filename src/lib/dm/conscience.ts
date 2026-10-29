@@ -28,7 +28,7 @@ import {
 } from "@/lib/dm/conscience-logic";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { textKey } from "@/lib/language/text-logic";
-import { friendshipTier, tierIndex, type FriendshipTier, type SouredLeaving } from "@/lib/dm/relationship-logic";
+import { friendshipTier, hasStanding, tierIndex, type FriendshipTier, type SouredLeaving } from "@/lib/dm/relationship-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // A lasting companion's conscience (issue 503 Phase 1), the rim around
@@ -79,7 +79,7 @@ export function worstApproval(campaignId: string, companionName: string, sheets:
   const party = new Set(sheets.filter((sheet) => !sheet.isCompanion).map((sheet) => sheet.id));
   const key = textKey(companionName);
   const approvals = listRelationships(campaignId)
-    .filter((relationship) => relationship.status === "active" && party.has(relationship.characterId) && textKey(relationship.subjectName) === key)
+    .filter((relationship) => relationship.status === "active" && party.has(relationship.characterId) && textKey(relationship.subjectName) === key && hasStanding(relationship))
     .map((relationship) => relationship.approval);
   return approvals.length ? Math.min(...approvals) : null;
 }
