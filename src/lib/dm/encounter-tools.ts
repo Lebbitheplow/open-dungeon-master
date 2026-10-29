@@ -1,5 +1,6 @@
 import { dominationOrderOf, otherSide } from "@/lib/dm/combat-sides-logic";
 import { resolveCombatant, sheetsOnSide, sideOf, standingOn } from "@/lib/dm/combatant";
+import { attacksLeft, budgetApplies, type TurnBudget } from "@/lib/dm/action-budget";
 import { resolveTargetFoe, sheetFoeView } from "@/lib/dm/sheet-foe";
 import { lashOutTarget } from "@/lib/dm/confusion";
 import type { SystemGlyph } from "@/lib/system-glyphs";
@@ -951,6 +952,10 @@ function markTurnResolved(turn: DmTurn, sheetId: string) {
 // the player's own button) advances past them. Companions are the
 // exception: the model plays their whole turn in one go, and marking them
 // resolved here keeps the auto-act backstop from swinging a second time.
+// Not while the Attack action still has swings in it (Extra Attack): a
+// turn ended there loses them. A commanded companion's turn then waits for
+// its commander, as a player's own does, and one the DM plays is finished
+// by the backstop (companionAutoAct), which takes only the swings left.
 function markResolvedFromArgs(
   turn: DmTurn,
   rawArguments: string,
@@ -969,7 +974,8 @@ function markResolvedFromArgs(
     return;
   }
   const sheet = characterId ? resolveSheetRef(characterId, sheets, sheetsById) : null;
-  if (sheet?.isCompanion) {
+  const swingsLeft = typeof result.attacksRemaining === "number" && result.attacksRemaining > 0;
+  if (sheet?.isCompanion && !swingsLeft) {
     markTurnResolved(turn, sheet.id);
   }
 }
@@ -1909,7 +1915,10 @@ function partyCanRise(encounter: Encounter): boolean {
 // basic attack through the full pc_attack engine (range checks, conditions,
 // advantage, damage application), outcome posted as a table note. The turn
 // counts as resolved even when the attack is out of reach, so initiative
-// always moves on.
+// always moves on. A companion with Extra Attack makes every swing of its
+// Attack action, the ones the model left included, or the turn would end
+// with attacks still owed. A swing after the first stays on the creature
+// the last one struck while it stands.
 function companionAutoAct(
   campaign: Campaign,
   turn: DmTurn,
@@ -1926,23 +1935,84 @@ function companionAutoAct(
   // (src/lib/dm/combatant.ts).
   const mySide = sideOf(encounter, "sheet", sheet.id);
   // Confusion's lash-out (confusion.ts): the creature its d10 picked, and no
-  // other, whichever side it is on.
+  // other, whichever side it is on, struck once.
   const lash = lashOutTarget(sheet, encounter.round);
   const picked = lash ? resolveTargetFoe(campaign.id, encounter, lash) : null;
-  const enemies = picked
-    ? [picked]
-    : standingOn(campaign.id, encounter, otherSide(mySide)).map((foe) => (foe.kind === "enemy" ? foe.enemy : sheetFoeView(encounter.id, foe.sheet)));
-  if (!enemies.length) {
-    return;
-  }
+  const foes = () =>
+    picked
+      ? [picked]
+      : standingOn(campaign.id, encounter, otherSide(mySide)).map((foe) => (foe.kind === "enemy" ? foe.enemy : sheetFoeView(encounter.id, foe.sheet)));
+  // This companion's budget for the turn, read fresh after each swing.
+  const budgetNow = (): TurnBudget | null => {
+    const live = getActiveEncounter(campaign.id);
+    const budget = live?.turnBudget ?? null;
+    return live && budgetApplies(budget, sheet.id, live.round) ? budget : null;
+  };
+  const swingsLeft = (budget: TurnBudget | null) => Boolean(budget && budget.attacksMade > 0 && attacksLeft(budget) > 0);
   // A companion whose action this turn already went on something (a spell,
-  // a potion, a Dash) is not given a second one; its turn simply ends.
-  const live = getActiveEncounter(campaign.id) ?? encounter;
-  if (live.turnBudget?.ownerId === sheet.id && live.turnBudget.round === live.round && live.turnBudget.actionUsed) {
+  // a potion, a Dash) is not given a second one; its turn simply ends. One
+  // part way through its Attack action still has the rest of it.
+  const opening = budgetNow();
+  if (opening?.actionUsed && !swingsLeft(opening)) {
     return;
   }
-  const map = getBattleMapForEncounter(encounter.id);
-  const myToken = map ? getTokenByRef(map.id, sheet.id) : null;
+  let lastTarget = opening?.struck?.at(-1)?.target ?? null;
+  const notes: string[] = [];
+  // Bounded by the most attacks one Attack action holds (a 20th-level
+  // fighter's four), so a budget that never fills cannot spin here.
+  for (let swing = 0; swing < 4; swing += 1) {
+    const enemies = foes();
+    if (!enemies.length) {
+      break;
+    }
+    const target = enemies.find((enemy) => enemy.displayName === lastTarget) ?? nearestTo(sheet.id, encounter.id, enemies);
+    // Out of reach: it walks to the target first, as the enemies the server
+    // plays do (src/lib/dm/companion-approach.ts).
+    const walked = approachForCompanion(campaign, getActiveEncounter(campaign.id) ?? encounter, sheet, target);
+    const mover = walked ? getSheetById(sheet.id) ?? sheet : sheet;
+    const result = handlePcAttack(
+      campaign,
+      turn,
+      JSON.stringify({ characterId: mover.id, targetEnemyId: target.id }),
+      [mover],
+      new Map([[mover.id, mover]]),
+      new Set<string>(),
+      null,
+      { anySide: Boolean(picked) },
+    );
+    notes.push(
+      (walked ? `${walked} ` : "") +
+        ("error" in result
+          ? `${sheet.name} does not attack: ${String(result.error)}`
+          : result.hit
+            ? `${sheet.name} attacks ${target.displayName} with ${String(result.weapon ?? "their weapon")} and hits for ${String(result.damage)} damage${result.dead ? `, slaying ${target.displayName}!` : "."}`
+            : `${sheet.name} attacks ${target.displayName} but misses.`),
+    );
+    lastTarget = target.displayName;
+    if ("error" in result || picked || !swingsLeft(budgetNow())) {
+      break;
+    }
+  }
+  if (!notes.length) {
+    return;
+  }
+  const seq = allocateSeq(campaign.id);
+  const message = insertCampaignMessage({
+    campaignId: campaign.id,
+    seq,
+    authorType: "system",
+    glyph: "cue-battle",
+    content: `${sheet.name}'s turn resolves automatically: ${notes.join(" ")}`,
+  });
+  publishWithSeq(campaign.id, seq, "message_added", { message });
+  saveDmTurn(turn);
+}
+
+// The foe whose token stands nearest this character's on the board, or the
+// first one when there is no board to measure on.
+function nearestTo(sheetId: string, encounterId: string, enemies: EncounterEnemy[]): EncounterEnemy {
+  const map = getBattleMapForEncounter(encounterId);
+  const myToken = map ? getTokenByRef(map.id, sheetId) : null;
   let target = enemies[0];
   if (map && myToken) {
     let best = Number.POSITIVE_INFINITY;
@@ -1953,43 +2023,12 @@ function companionAutoAct(
       }
       const distance = tilesApart(token, myToken);
       if (distance < best) {
-
         best = distance;
         target = enemy;
       }
     }
   }
-  // Out of reach: it walks to the target first, as the enemies the server
-  // plays do (src/lib/dm/companion-approach.ts).
-  const walked = approachForCompanion(campaign, live, sheet, target);
-  const mover = walked ? getSheetById(sheet.id) ?? sheet : sheet;
-  const result = handlePcAttack(
-    campaign,
-    turn,
-    JSON.stringify({ characterId: mover.id, targetEnemyId: target.id }),
-    [mover],
-    new Map([[mover.id, mover]]),
-    new Set<string>(),
-    null,
-    { anySide: Boolean(picked) },
-  );
-  const note =
-    (walked ? `${walked} ` : "") +
-    ("error" in result
-      ? `${sheet.name} does not attack: ${String(result.error)}`
-      : result.hit
-        ? `${sheet.name} attacks ${target.displayName} with ${String(result.weapon ?? "their weapon")} and hits for ${String(result.damage)} damage${result.dead ? `, slaying ${target.displayName}!` : "."}`
-        : `${sheet.name} attacks ${target.displayName} but misses.`);
-  const seq = allocateSeq(campaign.id);
-  const message = insertCampaignMessage({
-    campaignId: campaign.id,
-    seq,
-    authorType: "system",
-    glyph: "cue-battle",
-    content: `${sheet.name}'s turn resolves automatically: ${note}`,
-  });
-  publishWithSeq(campaign.id, seq, "message_added", { message });
-  saveDmTurn(turn);
+  return target;
 }
 
 // Self-service turn end: the current player declares their combat turn done
