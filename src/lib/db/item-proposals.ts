@@ -5,8 +5,8 @@ import { getSheetById } from "@/lib/db/sheets";
 import { OFFER_NOTE_PREFIX, proposalExpired, resolutionNote, type ProposalStatus } from "@/lib/dm/proposal-logic";
 import { ADVANCE_TOOL, advanceResolutionNote } from "@/lib/dm/advance-logic";
 import { advanceArgs, settleAdvanceRelationship } from "@/lib/db/advances";
-import { publishWithSeq } from "@/lib/events";
-import { mapProposalRow as mapProposal, type ProposalRow } from "@/lib/dm/proposal-view";
+import { publishPersisted, publishWithSeq } from "@/lib/events";
+import { mapProposalRow as mapProposal, publicItemProposal, type ProposalRow } from "@/lib/dm/proposal-view";
 import { APPROACH_TOOL } from "@/lib/dm/pact-logic";
 import { approachLapsed } from "@/lib/db/pacts";
 
@@ -102,6 +102,12 @@ export function listOpenItemProposals(campaignId: string): ItemProposal[] {
   for (const row of rows) {
     if (proposalExpired(row.created_at, now)) {
       expire.run(nowIso(), row.id);
+      // Every open seat drops the card, as for any other settlement; it
+      // stayed up with a live Accept that answered "already resolved".
+      const lapsed = getItemProposal(row.id);
+      if (lapsed) {
+        publishPersisted(campaignId, "item_proposal_resolved", { proposal: publicItemProposal(lapsed) });
+      }
       announceLapsed(mapProposal(row));
     } else {
       open.push(mapProposal(row));

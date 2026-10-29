@@ -390,7 +390,7 @@ export function SidePanelRouter({
       <>
         {/* With the board on the stage the Battle tab shows the party: a
             fight the console just started leaves its result here. */}
-        {rawTab === "battle" && adjudicates ? <ConsoleOutcomeBanner campaignId={campaignId} /> : null}
+        {rawTab === "battle" && adjudicates ? <ConsoleOutcomeBanner campaignId={campaignId} encounterId={encounter?.id ?? null} /> : null}
         {partySubTabs.length > 1 ? (
           <SubTabs tabs={partySubTabs} value={partySection} onChange={setPartySection} />
         ) : null}
@@ -533,7 +533,7 @@ export function SidePanelRouter({
       // board-dock: the side panel and the phone hold the board in a fixed
       // window too, so its header and footer stay on screen (issue 87).
       <div className="board-dock">
-      {adjudicates ? <ConsoleOutcomeBanner campaignId={campaignId} /> : null}
+      {adjudicates ? <ConsoleOutcomeBanner campaignId={campaignId} encounterId={encounter?.id ?? null} /> : null}
       <Suspense fallback={<PanelLoading />}>
       <BattleMapPanel
         campaignId={campaignId}
@@ -625,7 +625,7 @@ export function SidePanelRouter({
           ) : storySection === "quests" ? (
             <QuestsPanel campaignId={campaignId} steersStory={steersStory} refreshKey={questsVersion} />
           ) : storySection === "timeline" ? (
-            <TimelinePanel campaignId={campaignId} refreshKey={chapters.length} />
+            <TimelinePanel campaignId={campaignId} refreshKey={`${chapters.length}:${facts.length}:${questsVersion}`} />
           ) : storySection === "log" ? (
             <EventLog
               campaignId={campaignId}

@@ -983,7 +983,7 @@ export function SessionView({
   const routerProps = {
     levelUpLevel: myLevelUp && !levelUpShown ? myLevelUp.level : null,
     onLevelUp: () => setLevelUpByHand(true),
-    pinsVersion,
+    pinsVersion: pinsVersion + state.pinsVersion,
     campaignId: campaign.id,
     sheets,
     members: state.members,
