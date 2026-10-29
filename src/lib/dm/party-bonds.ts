@@ -4,6 +4,7 @@ import { ensureRelationship, getRelationship, type RelationshipSubjectKind } fro
 import { getSheetById, listSheets } from "@/lib/db/sheets";
 import { fieldedSheets } from "@/lib/dm/roster";
 import { textKey } from "@/lib/language/text-logic";
+import type { Speaker, SpokenLine } from "@/lib/dm/speech";
 
 // The bonds the party has with someone it travels with or has met (issue
 // 580). A bond used to open only when a roll or a moment happened to name
@@ -66,4 +67,31 @@ export function meetNpc(campaign: Campaign, npc: Npc, always = false): { npc: Np
   const met = markNpcMet(npc.id) ?? getNpcById(npc.id) ?? npc;
   const opened = first || always ? openPartyBonds(campaign, npcBondSubject(met)) : 0;
   return { npc: met, opened };
+}
+
+// Someone registered who speaks to the party in a narration has met it: the
+// engine's one sure sign that a person is in the scene, read from the
+// speakers the narration's lines are already tagged with (speech-lines.ts),
+// or the person a GM narrates as. The patron a bundle prepared, whom the story
+// brings in without any tool call naming her gets her bonds this way: in a
+// live check the default model narrated that meeting without set_npc.
+// Nothing when bonds are off, so a reaction roll reads the table as before.
+// Returns how many bonds it opened, for the caller to tell the table.
+export function meetSpeakers(campaign: Campaign, lines: readonly SpokenLine[], speaker: Speaker | null = null): number {
+  if (campaign.gameSettings.relationships === "off") {
+    return 0;
+  }
+  const ids = new Set(
+    [...lines.map((entry) => entry.speaker), ...(speaker ? [speaker] : [])]
+      .filter((entry) => entry.kind === "npc" && entry.id)
+      .map((entry) => entry.id),
+  );
+  let opened = 0;
+  for (const id of ids) {
+    const npc = getNpcById(id);
+    if (npc && npc.campaignId === campaign.id && !npc.metAt) {
+      opened += meetNpc(campaign, npc).opened;
+    }
+  }
+  return opened;
 }

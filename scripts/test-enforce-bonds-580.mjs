@@ -203,6 +203,32 @@ await test("the chapter's close opens a companion's missing bonds: one who joine
   assert.ok(bond(kael, "Seren") && bond(late, "Seren"));
 });
 
+await test("an NPC who speaks to the party in the narration has met it, a person's narration as well as the AI's", async () => {
+  const { world, kael, lyra, bond, prepare } = await table();
+  const { meetSpeakers } = await import("../src/lib/dm/party-bonds.ts");
+  const mira = prepare("Mira Vell", "friendly");
+  const line = { line: "You made it back.", speaker: { kind: "npc", id: mira.id, name: "Mira Vell" } };
+  assert.equal(meetSpeakers(world.campaign(), [line]), 2);
+  assert.ok(bond(kael, "Mira Vell") && bond(lyra, "Mira Vell"));
+  assert.notEqual(npcs.getNpcByName(world.campaignId, "Mira Vell").metAt, "");
+  assert.equal(meetSpeakers(world.campaign(), [line]), 0, "a second line is not a second meeting");
+  const abbot = prepare("The Ashen Abbot", "hostile");
+  assert.equal(meetSpeakers(world.campaign(), [], { kind: "npc", id: abbot.id, name: "The Ashen Abbot" }), 2, "the person a GM narrates as");
+});
+
+await test("a person narrating at a human GM's table meets whoever speaks in it", async () => {
+  const { world, kael, bond, prepare } = await table({ gameSettings: { dmMode: "human" } });
+  prepare("Captain Rhee", "indifferent");
+  world.signIn(world.owner);
+  const route = await world.route("campaigns/[campaignId]/dm/narrate");
+  const response = await route.POST(
+    new Request("http://test/", { method: "POST", body: JSON.stringify({ content: 'Captain Rhee steps out of the gatehouse. "State your business," says Captain Rhee.' }) }),
+    { params: Promise.resolve({ campaignId: world.campaignId }) },
+  );
+  assert.ok(response.ok, await response.clone().text());
+  assert.ok(bond(kael, "Captain Rhee"), "the captain who spoke has met them");
+});
+
 await test("with bonds off nothing opens", async () => {
   const { world, kael, bond } = await table({ gameSettings: { relationships: "off" } });
   await world.invoke("add_companion", { name: "Seren", class: "paladin", gender: "Female", personality: "Stern and devout.", kind: "party" });

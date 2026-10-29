@@ -885,9 +885,13 @@ function endOnDeath(campaign: Campaign, sheet: CharacterSheet, subject: string, 
     return { error: `No tracked relationship with ${subject}.`, retry: true };
   }
   const told = note?.trim() || endText(sheet.name, subject, "death");
-  // The named character's record says what they lost; everyone else's that
-  // they died, since a bond at neutral was no great loss.
-  const ended = endRelationshipsWithSubject(campaign.id, subject, (bond) => (bond.characterId === sheet.id ? told : `${subject} died`));
+  // Each record says what that character lost: someone who mattered to them,
+  // when the bond had any warmth or romance, or simply that they died, since
+  // a bond opened at neutral on meeting was no great loss.
+  const mattered = (bond: Relationship) => bond.approval >= 10 || bond.romance !== "none";
+  const ended = endRelationshipsWithSubject(campaign.id, subject, (bond) =>
+    bond.characterId === sheet.id && note?.trim() ? told : mattered(bond) ? endText(bond.characterName, subject, "death") : `${subject} died`,
+  );
   recordRelationshipEvent(campaign, sheet, told);
   publishRelationshipsUpdated(campaign.id);
   return {
