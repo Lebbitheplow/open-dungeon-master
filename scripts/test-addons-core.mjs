@@ -25,13 +25,32 @@ const os = await import("node:os");
 const fsp = await import("node:fs/promises");
 const nodePath = (await import("node:path")).default;
 const { cleanSettings, effectiveSettings, missingRequiredSettings, setupSettingKeys, downloadApplies } = await import("../src/lib/addons/settings.ts");
-const { boardSnapshot, boardRuler, boardFx, readViewMessage, fileForRequest, createAnchorStore, offeredBoardControl } = await import("../src/lib/addons/board-bridge.ts");
+const { boardSnapshot, boardRuler, boardFx, readViewMessage, fileForRequest, createAnchorStore, offeredBoardControl, nativeBoardHud } = await import("../src/lib/addons/board-bridge.ts");
 const { nativeFilePacket } = await import("../src/lib/addons/native-board-client.ts");
 const { normalizeMapAddonView } = await import("../src/lib/addons/map-view.ts");
 const { withManifestDefaults } = await import("../src/lib/addons/import-defaults.ts");
 const { sniffImage } = await import("../src/lib/addons/sniff.ts");
 
 let passed = 0;
+await test("native controls accept only the bounded offer sent to the renderer", () => {
+  assert.equal(typeof nativeBoardHud, "function", "the native offer needs a shared bounded projection");
+  const choice = { id: "move-mode", label: "Move", disabled: null,
+    options: Array.from({ length: 2049 }, (_, i) => ({ value: `choice-${i}`, label: `Choice ${i}`, disabled: null })) };
+  const hidden = { id: "end-turn", label: "End turn", disabled: null };
+  const source = { selection: null, turn: "", stats: [], hint: "", notices: [], error: "", pending: false, prompt: null,
+    controls: [...Array(20).fill(choice), hidden] };
+  const sent = nativeBoardHud(source);
+  assert.equal(sent.controls.length, 20);
+  assert.equal(offeredBoardControl(sent, "end-turn"), null);
+  assert.ok(offeredBoardControl(sent, "move-mode", "choice-2047"));
+  assert.equal(offeredBoardControl(sent, "move-mode", "choice-2048"), null);
+  const panel = nativeBoardHud({ ...source, panel: { title: "", lines: [], controls: [...Array(64).fill(choice), hidden] } });
+  assert.equal(panel.panel.controls.length, 64);
+  assert.equal(offeredBoardControl(panel, "end-turn"), null);
+  assert.equal(offeredBoardControl(panel, "move-mode", "choice-2048"), null);
+  assert.equal(source.controls.length, 21, "projection must not mutate the host's controls");
+  assert.equal(choice.options.length, 2049);
+});
 await test("native portrait bytes survive JSON and reject oversized transfers", () => {
   const packet={type:"file",requestId:"face-1",ok:true,name:"pc",mime:"image/png",bytes:Uint8Array.from([0,1,127,255]).buffer};
   const encoded=JSON.parse(JSON.stringify(nativeFilePacket(packet)));

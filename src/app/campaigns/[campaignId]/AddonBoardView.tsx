@@ -9,12 +9,12 @@ import {
   fileForRequest,
   readViewMessage,
   offeredBoardControl,
+  nativeBoardHud,
   type Anchor,
   type AnchorStore,
   type BoardActionMenu,
   type BoardHud,
   type BoardControlId,
-  type BoardControl,
   type BoardLook,
   type HostMessageBody,
   type ViewCameraState,
@@ -242,24 +242,13 @@ export function AddonBoardView({
     if (!hudSupported || !nativeActive || !battlefieldHud || !view) { activeHud.current = null; return; }
     if (activeHud.current?.signature === hudSignature) return;
     const revision = ++hudRevision.current;
-    activeHud.current = { revision, source: battlefieldHud, signature: hudSignature, mapId: view.mapId };
-    const text = (value: string) => value.slice(0, 300);
-    const lines = (values: string[]) => values.slice(0, 12).map(text);
-    const control = (entry: BoardControl): BoardControl => ({
-      id: entry.id, label: entry.label.slice(0, 80), disabled: entry.disabled === null ? null : text(entry.disabled),
-      ...(entry.value !== undefined ? { value: entry.value.slice(0, 200) } : {}),
-      ...(entry.options ? { options: entry.options.slice(0, 2048).map(option => ({ value: option.value.slice(0, 200), label: option.label.slice(0, 200), disabled: option.disabled === null ? null : text(option.disabled) })) } : {}),
-      ...(entry.input ? { input: { ...entry.input, value: entry.input.value.slice(0, 200) } } : {}),
-    });
     const selected = battlefieldHud.selection;
-    postNativeBoard(frame.current, { type: "battlefield-ui", revision, mapId: view.mapId, hud: {
+    const hud = nativeBoardHud({
       ...battlefieldHud,
-      selection: selected && view.tokens.some(token => token.id === selected.tokenId) ? { tokenId: selected.tokenId, name: text(selected.name), lines: lines(selected.lines) } : null,
-      turn: text(battlefieldHud.turn), stats: lines(battlefieldHud.stats), hint: text(battlefieldHud.hint), error: text(battlefieldHud.error), notices: lines(battlefieldHud.notices),
-      controls: battlefieldHud.controls.slice(0, 20).map(control),
-      panel: battlefieldHud.panel ? { ...battlefieldHud.panel, title: text(battlefieldHud.panel.title), lines: battlefieldHud.panel.lines.slice(0, 512).map(line => line.slice(0, 1000)), controls: battlefieldHud.panel.controls.slice(0, 64).map(control) } : null,
-      prompt: battlefieldHud.prompt ? { ...battlefieldHud.prompt, title: text(battlefieldHud.prompt.title), label: text(battlefieldHud.prompt.label) } : null,
-    } });
+      selection: selected && view.tokens.some(token => token.id === selected.tokenId) ? selected : null,
+    });
+    activeHud.current = { revision, source: hud, signature: hudSignature, mapId: view.mapId };
+    postNativeBoard(frame.current, { type: "battlefield-ui", revision, mapId: view.mapId, hud });
   }, [readyAt, battlefieldHud, view, hudSupported, nativeActive, hudRequest, hudSignature]);
 
   // Pointer previews change without rebuilding an addon\'s terrain and figures.

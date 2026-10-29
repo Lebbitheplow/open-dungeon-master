@@ -276,6 +276,26 @@ export type BoardHud = {
   prompt: { title: string; label: string; numeric: boolean } | null;
 };
 
+// The sent projection is also the offer checked when the renderer replies.
+export function nativeBoardHud(hud: BoardHud): BoardHud {
+  const text = (value: string) => value.slice(0, 300);
+  const lines = (values: string[]) => values.slice(0, 12).map(text);
+  const control = (entry: BoardControl): BoardControl => ({
+    id: entry.id, label: entry.label.slice(0, 80), disabled: entry.disabled === null ? null : text(entry.disabled),
+    ...(entry.value !== undefined ? { value: entry.value.slice(0, 200) } : {}),
+    ...(entry.options ? { options: entry.options.slice(0, 2048).map(option => ({ value: option.value.slice(0, 200), label: option.label.slice(0, 200), disabled: option.disabled === null ? null : text(option.disabled) })) } : {}),
+    ...(entry.input ? { input: { ...entry.input, value: entry.input.value.slice(0, 200) } } : {}),
+  });
+  return {
+    ...hud,
+    selection: hud.selection ? { tokenId: hud.selection.tokenId, name: text(hud.selection.name), lines: lines(hud.selection.lines) } : null,
+    turn: text(hud.turn), stats: lines(hud.stats), hint: text(hud.hint), error: text(hud.error), notices: lines(hud.notices),
+    controls: hud.controls.slice(0, 20).map(control),
+    panel: hud.panel ? { ...hud.panel, title: text(hud.panel.title), lines: hud.panel.lines.slice(0, 512).map(line => line.slice(0, 1000)), controls: hud.panel.controls.slice(0, 64).map(control) } : null,
+    prompt: hud.prompt ? { ...hud.prompt, title: text(hud.prompt.title), label: text(hud.prompt.label) } : null,
+  };
+}
+
 export function offeredBoardControl(hud: Pick<BoardHud, "controls" | "panel" | "pending">, id: BoardControlId, value?: string): BoardControl | null {
   const control = (hud.panel ? hud.panel.controls : hud.controls).find(entry => entry.id === id);
   if (!control || control.disabled !== null || hud.pending) return null;
