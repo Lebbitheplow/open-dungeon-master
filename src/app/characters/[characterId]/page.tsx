@@ -21,6 +21,7 @@ import { currentQuery, navigateTo, workshopReturnPath } from "@/lib/navigation";
 import { UseInCampaignDialog } from "./UseInCampaignDialog";
 import { slugOf } from "@/lib/language/text-logic";
 import { registerWorkshopClasses, workshopClassName } from "@/lib/classes/workshop-registry";
+import { classWordsAfterLevel } from "@/lib/characters/class-words";
 import type { WorkshopClass } from "@/lib/homebrew/class-data";
 
 // Where this character is playing; see src/lib/db/characters.ts.
@@ -393,7 +394,8 @@ export default function CharacterDetailPage({
                 <GameIcon icon={{ kind: "glyph", key: "rest-level-up" }} size="size-5" />
                 Level {character.level}
               </span>
-              {character.raceLabel ?? titleCase(character.race)} {workshopClassName(character.class) ?? titleCase(character.class)}
+              {character.raceLabel ?? titleCase(character.race)}{" "}
+              {classWordsAfterLevel({ ...character, classes: character.sheet?.classes }, (id) => workshopClassName(id) ?? titleCase(id))}
               {character.subclass ? ` (${character.subclass})` : ""}
               {character.background ? ` · ${character.backgroundLabel ?? titleCase(character.background)}` : ""}
             </p>

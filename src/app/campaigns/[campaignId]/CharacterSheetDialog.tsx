@@ -46,6 +46,7 @@ import { ResourceRow, SlotRow, STEP_BUTTON } from "@/components/sheet/SheetCount
 import { namesLookup } from "@/lib/battlemap/condition-notes";
 import { workshopClassName } from "@/lib/classes/workshop-registry";
 import { StoryHopes } from "@/app/campaigns/[campaignId]/StoryHopes";
+import { classWordsAfterLevel, isSplit } from "@/lib/characters/class-words";
 
 function titleCase(value: string) {
   return value.replace(/[-_]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -233,10 +234,8 @@ export function CharacterSheetDialog({
                 </Dialog.Title>
                 <p className="text-xs text-stone-400">
                   Level {sheet.level} {sheet.raceLabel ?? titleCase(sheet.race)}{" "}
-                  {(sheet.classes?.length ?? 0) > 1
-                    ? (sheet.classes ?? [])
-                        .map((entry) => `${workshopClassName(entry.id) ?? titleCase(entry.id)} ${entry.level}`)
-                        .join(" / ")
+                  {isSplit(sheet)
+                    ? classWordsAfterLevel(sheet, (id) => workshopClassName(id) ?? titleCase(id))
                     : `${workshopClassName(sheet.class) ?? titleCase(sheet.class)}${sheet.subclass ? ` (${titleCase(sheet.subclass)})` : ""}`}
                   {sheet.background ? ` · ${sheet.backgroundLabel ?? titleCase(sheet.background)}` : ""}
                   {sheet.alignment ? ` · ${sheet.alignment}` : ""}

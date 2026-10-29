@@ -8,6 +8,8 @@ import { Tooltip } from "@/components/ui/Tooltip";
 import { UserAvatar, ui } from "@/lib/ui";
 import type { CampaignMember } from "@/lib/campaign-types";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { classLevelWords } from "@/lib/characters/class-words";
+
 
 // Small gold badge on a party row: DM, co-DM, party lead, owner, real dice.
 function SeatBadge({ children, tip }: { children: ReactNode; tip?: string }) {
@@ -142,7 +144,7 @@ export function LobbyParty({
                       <UserAvatar url={member.avatar?.url} userId={member.userId} size="size-full" />
                     </span>
                     {sheet ? (
-                      <span className="lobby-medallion-emblem" title={sheet.class}>
+                      <span className="lobby-medallion-emblem" title={classLevelWords(sheet)}>
                         <GameIcon
                           icon={{ kind: "family", key: `class-${sheet.class.toLowerCase()}` }}
                           size="size-6"
@@ -169,7 +171,7 @@ export function LobbyParty({
                     </p>
                     <p className="truncate text-sm text-stone-400">
                       {sheet
-                        ? `${sheet.name} · ${sheet.raceLabel ?? sheet.race.replaceAll("_", " ")} ${sheet.class} ${sheet.level}`
+                        ? `${sheet.name} · ${sheet.raceLabel ?? sheet.race.replaceAll("_", " ")} ${classLevelWords(sheet)}`
                         : "No character yet"}
                     </p>
                   </div>

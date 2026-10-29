@@ -126,6 +126,10 @@ export type TableRulesState = {
   // they were this table's (U:UB7).
   rulesError: string;
   retryRules: () => void;
+  // Whether a character made here may take a second class (backlog F9):
+  // the table's multiclassing setting, on unless the table turned it off,
+  // and always in the library, where no table has a say.
+  multiclassAllowed: boolean;
 };
 
 // What the table has set for the numbers the server derives, and the
@@ -137,6 +141,7 @@ export function useTableRules(
   const [settings, setSettings] = useState<{
     hpMethod: HpMethod;
     startingWealth: StartingWealthMethod;
+    multiclassingEnabled: boolean;
   } | null>(null);
   const [wealth, setWealth] = useState<WealthRoll | null>(null);
   const [wealthBusy, setWealthBusy] = useState(false);
@@ -169,6 +174,7 @@ export function useTableRules(
         setSettings({
           hpMethod: stored?.hpMethod ?? "average",
           startingWealth: stored?.startingWealth ?? "equipment",
+          multiclassingEnabled: stored?.multiclassingEnabled !== false,
         });
       })
       .catch(() => {
@@ -243,6 +249,7 @@ export function useTableRules(
           hpMethod: settings.hpMethod,
           startingWealth: settings.startingWealth,
           wealthRoll: rolled ? (mine?.gold ?? null) : null,
+          multiclassAllowed: settings.multiclassingEnabled,
         }
       : undefined,
     wealth: rolled ? mine : null,
@@ -251,5 +258,6 @@ export function useTableRules(
     rollWealth,
     rulesError,
     retryRules,
+    multiclassAllowed: !campaignId || (settings?.multiclassingEnabled ?? true),
   };
 }

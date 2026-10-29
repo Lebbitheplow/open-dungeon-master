@@ -398,9 +398,8 @@ export const createSheetSchema = z.object({
   acOverride: z.boolean().optional(),
   speed: z.number().int().min(0).max(120).default(30),
   hitDice: hitDiceSchema,
-  // Multiclass state carried through the library round-trip. Characters are
-  // always CREATED single-class (multiclassing happens at level-up); these
-  // only hold values when a campaign sheet that multiclassed synced back.
+  // Multiclass state: a split the builder made (backlog F9), or one a
+  // campaign sheet earned at level-up and synced back. Empty for one class.
   classes: z.array(classEntrySchema).max(3).default([]),
   hitDicePools: z.array(hitDicePoolSchema).max(3).nullable().default(null),
   proficiencies: proficienciesSchema,

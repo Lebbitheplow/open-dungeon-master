@@ -5,7 +5,7 @@ import { useId, useState } from "react";
 import { cn } from "@/lib/cn";
 import { formatModifier } from "@/lib/srd";
 import { FIGHTING_STYLES } from "@/lib/srd/feature-effects";
-import { levelProgressionRows, progressionColumns, slotWords, type ProgressionInput, type ProgressionRow } from "./levelProgression";
+import { levelProgressionRows, ordinal, progressionColumns, slotWords, type ProgressionInput, type ProgressionRow } from "./levelProgression";
 import type { ClassOption } from "./useBuilderOptions";
 import type { BuilderDerived } from "./useBuilderDerived";
 import type { BuilderState } from "./useBuilderState";
@@ -85,6 +85,11 @@ export function LevelProgressionTable({
               <th scope="col" className={cn(head, "sticky left-0 bg-stone-950")}>
                 Level
               </th>
+              {columns.classes ? (
+                <th scope="col" className={head}>
+                  Class
+                </th>
+              ) : null}
               <th scope="col" className={head}>
                 Proficiency bonus
               </th>
@@ -148,6 +153,7 @@ export function LevelProgressionTable({
                     </span>
                   ) : null}
                 </th>
+                {columns.classes ? <td className={cn(cell, "whitespace-nowrap")}>{row.classLabel ?? none}</td> : null}
                 <td className={cn(cell, "font-mono")}>{formatModifier(row.proficiency)}</td>
                 <td className={cell}>{row.features.length ? row.features.join(", ") : none}</td>
                 {columns.subclass ? (
@@ -160,9 +166,21 @@ export function LevelProgressionTable({
                 </td>
                 {columns.casting ? (
                   <>
-                    <td className={cn(cell, "font-mono")}>{row.cantrips ?? none}</td>
+                    <td className={cn(cell, "font-mono")}>
+                      {row.casters
+                        ? row.casters.map((caster) => `${caster.name} ${caster.cantrips ?? 0}`).join("; ")
+                        : (row.cantrips ?? none)}
+                    </td>
                     <td className={cell}>
-                      {row.spells ? (
+                      {row.casters ? (
+                        row.casters
+                          .map((caster) =>
+                            caster.spells
+                              ? `${caster.name}: ${caster.spells.count} ${caster.spells.label}${caster.spells.spellbook ? `, ${caster.spells.spellbook} in the spellbook` : ""}`
+                              : `${caster.name}: none yet`,
+                          )
+                          .join("; ")
+                      ) : row.spells ? (
                         <>
                           {row.spells.count} {row.spells.label}
                           {row.spells.spellbook ? `, ${row.spells.spellbook} in the spellbook` : ""}
@@ -171,7 +189,16 @@ export function LevelProgressionTable({
                         none
                       )}
                     </td>
-                    <td className={cn(cell, "whitespace-nowrap")}>{row.slots.length ? slotWords(row.slots) : none}</td>
+                    <td className={cn(cell, "whitespace-nowrap")}>
+                      {row.slots.length || row.pact ? (
+                        <>
+                          {row.slots.length ? slotWords(row.slots) : null}
+                          {row.pact ? `${row.slots.length ? "; " : ""}pact ${row.pact.count} at ${ordinal(row.pact.level)}` : null}
+                        </>
+                      ) : (
+                        none
+                      )}
+                    </td>
                   </>
                 ) : null}
               </tr>
@@ -184,14 +211,29 @@ export function LevelProgressionTable({
 }
 
 // The table as the builder holds the character: its class, subclass and
-// level, its improvement cards and its fighting styles.
+// level, its improvement cards and its fighting styles, and with classes
+// after the first (backlog F9) the class each level went to.
 export function builderProgressionInput(
   state: Pick<BuilderState, "subclass" | "stylePicks">,
-  derived: Pick<BuilderDerived, "effectiveLevel" | "asiBaseAbilities" | "asiSlotLevels" | "activeAsiChoices" | "asiTakenInPlay" | "styleSlots">,
-  klass: Pick<ClassOption, "id">,
+  derived: Pick<BuilderDerived, "effectiveLevel" | "asiBaseAbilities" | "asiSlotLevels" | "activeAsiChoices" | "asiTakenInPlay" | "styleSlots"> &
+    Partial<Pick<BuilderDerived, "classList" | "extras">>,
+  klass: Pick<ClassOption, "id"> & Partial<Pick<ClassOption, "name" | "casterType">>,
   marks: Pick<ProgressionInput, "current" | "next"> = {},
 ): ProgressionInput {
+  const list = derived.classList ?? [];
+  const rowAt = (index: number) => (index === 0 ? klass : derived.extras?.[index - 1]?.klass);
   return {
+    ...(list.length > 1
+      ? {
+          classes: list.map((entry, index) => ({
+            classId: entry.id,
+            name: rowAt(index)?.name ?? entry.id,
+            subclass: entry.subclass ?? "",
+            level: entry.level,
+            pact: rowAt(index)?.casterType === "pact",
+          })),
+        }
+      : {}),
     classId: klass.id,
     subclass: state.subclass,
     level: derived.effectiveLevel,

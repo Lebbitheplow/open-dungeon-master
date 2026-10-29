@@ -35,6 +35,10 @@ export type JoinPreview = JoinChanges & {
   // seats (src/lib/characters/seat-picks.ts): read off the hero as it seats
   // with nothing picked, so the pickers stay put while picks are made.
   picks?: OwedPicks;
+  // What the table's rules mean for this hero beyond the check, said on the
+  // confirm sheet as it is (a split kept at a table that turns
+  // multiclassing off, backlog F9). Absent when there is nothing to say.
+  notes?: string[];
 };
 
 type Sheet = Pick<

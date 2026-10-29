@@ -94,7 +94,7 @@ await test("The level held now and the one being taken are marked", () => {
 });
 
 await test("A non-caster has no spell columns; a caster's slots and counts follow the class tables", () => {
-  assert.deepEqual(progressionColumns(levelProgressionRows(brann)), { subclass: true, casting: false });
+  assert.deepEqual(progressionColumns(levelProgressionRows(brann)), { subclass: true, casting: false, classes: false });
   const wizard = levelProgressionRows({
     classId: "wizard",
     subclass: "",
@@ -103,7 +103,7 @@ await test("A non-caster has no spell columns; a caster's slots and counts follo
     asiSlotLevels: [],
     asiChoices: [],
   });
-  assert.deepEqual(progressionColumns(wizard), { subclass: true, casting: true });
+  assert.deepEqual(progressionColumns(wizard), { subclass: true, casting: true, classes: false });
   assert.equal(slotWords(wizard[0].slots), "1st 2");
   assert.equal(slotWords(wizard[2].slots), "1st 4, 2nd 2");
   assert.equal(wizard[0].cantrips, 3);

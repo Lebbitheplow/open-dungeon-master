@@ -49,6 +49,14 @@ export type LegalityContext = {
   // then held to what the dice could have given.
   hpMethod: HpMethod | null;
   startingWealth: StartingWealthMethod;
+  // Whether the table lets a character it makes hold more than one class.
+  // Absent or true where no table is in sight.
+  multiclassAllowed?: boolean;
+  // The classes the player's character holds now, set only when a seated
+  // player rebuilds or edits the character they already have (the PUT
+  // replace and in-place edit): a split it already holds is kept at a table
+  // that turns multiclassing off, as the setting promises (backlog F9).
+  heldClasses?: ReadonlyArray<{ id: string; level: number }>;
   // Resolves a class id, the sheet's own and those of a multiclass list.
   classOf: (classId: string) => ClassGrants | null;
   race: RaceGrants | null;

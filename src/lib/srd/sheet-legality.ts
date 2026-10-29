@@ -100,8 +100,10 @@ function policyFor(context: LegalityContext) {
     made,
     // Scores held to a method, or only to what dice can give.
     scores: door === "import" || door === "stored" ? ("bounds" as const) : ("method" as const),
-    // Multiclass state is a played character's; one made here has none.
-    keepsClasses: !made,
+    // A class list the builder sent is kept (backlog F9); the AI's engine
+    // builds one class, and a table that turns multiclassing off is asked
+    // in classListOf.
+    keepsClasses: door !== "engine",
     // A stored character's picks were settled where the server saw them.
     judgesPicks: door !== "stored",
     // A file may be older than the rule that asks for a pick: one it left
@@ -121,6 +123,19 @@ function classListOf(
   const sent = input.classes ?? [];
   const single = [{ id: input.class, subclass: input.subclass ?? "", level: context.level }];
   if (!keeps || sent.length < 2) {
+    return single;
+  }
+  // A character already played keeps what it earned (the setting's own
+  // promise, src/lib/schemas/game-settings.ts); one made at this table
+  // follows its rule. A seated player rebuilding the character they have
+  // keeps its split, or part of it: no class the seat does not hold. The
+  // table's rule also holds an in-place edit made at that table, which
+  // comes through the library door; a stored hero entering play keeps all.
+  const held = new Set((context.heldClasses ?? []).map((entry) => textKey(entry.id)));
+  const keepsHeld = held.size > 1 && sent.every((entry) => held.has(textKey(entry.id)));
+  const makesHere = context.door === "table" || context.door === "library";
+  if (makesHere && context.multiclassAllowed === false && !keepsHeld) {
+    problems.push("This table turns multiclassing off; a character made here holds one class.");
     return single;
   }
   const ids = new Set(sent.map((entry) => textKey(entry.id)));
@@ -143,20 +158,10 @@ function classListOf(
     );
     return single;
   }
-  const baseline = context.baseline?.sheet.classes ?? [];
   for (const entry of sent) {
     if (!context.classOf(entry.id)) {
       problems.push(`"${entry.id}" is not a class this server knows.`);
       continue;
-    }
-    if (context.door === "library") {
-      // An edit keeps the split the character earned and adds nothing to it.
-      const earned = baseline.find((held) => textKey(held.id) === textKey(entry.id));
-      if (!earned || (entry !== sent[0] && entry.level > earned.level)) {
-        problems.push(
-          `A second class is taken at a level-up in play; ${entry.id} ${entry.level} is more than this character earned there.`,
-        );
-      }
     }
     if (!meetsPrereq(input.abilities, entry.id)) {
       problems.push(
@@ -357,7 +362,12 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
           raceName: race.name,
           skills: input.proficiencies.skills,
           tools: input.proficiencies.tools,
-          weapons: [...klass.weapons, ...input.proficiencies.weapons, ...subclassFixed.weapons],
+          weapons: [
+            ...klass.weapons,
+            ...input.proficiencies.weapons,
+            ...secondClassTraining.flatMap((grant) => grant.weapons),
+            ...subclassFixed.weapons,
+          ],
           level,
         },
       });

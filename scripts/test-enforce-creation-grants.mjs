@@ -262,7 +262,7 @@ await test("A character has the features its class, race and background grant at
   );
 });
 
-await test("Class levels add up to the character's level, and a character is created single-class.", async () => {
+await test("Class levels add up to the character's level.", async () => {
   const outcome = await atTable({
     ...LEGAL_FIGHTER,
     classes: [{ id: "fighter", subclass: "Champion", level: 20 }, { id: "wizard", subclass: "", level: 20 }],

@@ -10,7 +10,8 @@
 // (src/lib/srd/third-caster.ts through spell-prep.ts and spellSlotsFor).
 import { spellClassFor } from "@/lib/classes";
 import { suggestedCantripCount, suggestedSpellCount } from "@/lib/content/mechanics";
-import type { AbilityScores } from "@/lib/schemas/sheet";
+import type { AbilityScores, ClassEntry } from "@/lib/schemas/sheet";
+import { pactSlotsFor, slotTableFor } from "@/lib/srd/multiclass";
 import { abilityMod, formatModifier, spellSlotsFor } from "@/lib/srd";
 import { ABILITY_NAMES } from "@/lib/srd/legality/types";
 import { cantripCapOf, spellCapOf } from "@/lib/srd/spell-prep";
@@ -142,6 +143,28 @@ export function preparedFormula(ability: "int" | "wis" | "cha", mod: number, lis
   const levelWords = levelPart === level ? `level (${level})` : `half your level, rounded down (${levelPart})`;
   const sum = `${ABILITY_NAMES[ability]} modifier (${formatModifier(mod)}) + ${levelWords}`;
   return mod + levelPart < 1 ? `${sum}, and never fewer than 1` : sum;
+}
+
+// The slots a class list is saved with (backlog F9), as the server works
+// them (src/lib/srd/legality/spells.ts derivedSlots): one class that casts
+// keeps its own table at its own level, two share the multiclass table, and
+// a warlock's pact slots sit apart.
+export function builderClassListSlots(
+  classList: ClassEntry[],
+  rowOf: (classId: string) => CastingClass | undefined,
+): { slots: Record<string, { max: number; used: number }>; pact: { level: number; max: number; used: number } | null } {
+  const [first] = classList;
+  if (!first) {
+    return { slots: {}, pact: null };
+  }
+  const profileFor = (entry: ClassEntry) => builderCasting(rowOf(entry.id), entry.subclass, entry.level).profile ?? undefined;
+  const table = slotTableFor({ class: first.id, classes: classList }, profileFor);
+  const warlock = classList.find((entry) => rowOf(entry.id)?.casterType === "pact");
+  const pact = warlock ? pactSlotsFor(warlock.level) : null;
+  return {
+    slots: Object.fromEntries(Object.entries(table).map(([slotLevel, max]) => [slotLevel, { max, used: 0 }])),
+    pact: pact ? { level: pact.level, max: pact.max, used: 0 } : null,
+  };
 }
 
 // The slots the sheet is saved with, {level: {max, used}}: the preview, the

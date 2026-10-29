@@ -137,6 +137,9 @@ function freshFields(proposal: HeroProposal, level: number, ids: { classId: stri
     raceId: ids.raceId,
     classId: ids.classId,
     subclass: "",
+    // The engine drafts one class (backlog F9 leaves it single-class).
+    extraClasses: [],
+    casterSpells: {},
     backgroundId: ids.backgroundId,
     method: "standard",
     scores: EMPTY_SCORES,
@@ -193,7 +196,6 @@ function asState(fields: BuilderDraftFields): BuilderState {
     revisedSpecies: null,
     storedHp: null,
     levelFloor: 1,
-    levelLocked: false,
   } as unknown as BuilderState;
 }
 

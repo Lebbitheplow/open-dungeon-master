@@ -43,7 +43,8 @@ import {
   type StepBlock,
 } from "./submit";
 import { clearBuilderDraft, readBuilderDraft, writeBuilderDraft, type BuilderDraft } from "./builderDraft";
-import { builderActions, useBuilderDerived } from "./useBuilderDerived";
+import { builderActions, extraClassRows, useBuilderDerived } from "./useBuilderDerived";
+import { classSplitWords } from "./multiclassBuild";
 import { BuildMathPanel } from "./BuildMathPanel";
 import { useArchetypeOptions, useBuilderOptions, useWorldPack, type OptionListKind } from "./useBuilderOptions";
 import { TableScopeNote } from "./TableScopeNote";
@@ -89,6 +90,7 @@ const STEP_OF_TARGET: Record<BlockerTarget, string> = {
   variant: "ancestry",
   repeatSkills: "ancestry",
   class: "calling",
+  multiclass: "calling",
   classSkills: "calling",
   subclass: "calling",
   styles: "calling",
@@ -296,7 +298,9 @@ function CharacterBuilderForm({
     ...state.asiChoices.flatMap((choice) => (choice?.mode === "feat" ? [choice.feat] : [])),
   ]);
   const featDescs = featTexts.descs;
-  const derived = useBuilderDerived({ state, race, klass, background, fixedLevel, rules: table.rules, featDescs, genre });
+  // The classes taken after the first (backlog F9), with their rows.
+  const extras = useMemo(() => extraClassRows(state.extraClasses, classes), [state.extraClasses, classes]);
+  const derived = useBuilderDerived({ state, race, klass, background, extras, fixedLevel, rules: table.rules, featDescs, genre });
   // The header's hit die in words, its die with "Show rules and numbers" on (backlog F11).
   const numbers = useShowNumbers();
   // Each feat's prerequisite judged as the save judges it, against the
@@ -314,7 +318,8 @@ function CharacterBuilderForm({
     genre,
     klass,
     subclass: state.subclass,
-    effectiveLevel: derived.effectiveLevel,
+    // The first class's own levels open its subclass pick (backlog F9).
+    effectiveLevel: derived.primaryLevel,
     archetypes,
   });
 
@@ -608,7 +613,8 @@ function CharacterBuilderForm({
     name: state.name,
     background: background?.name,
     race: race?.name,
-    klass: klass?.name,
+    // A split reads "Fighter 3 / Wizard 2" (backlog F9).
+    klass: derived.multiclass ? classSplitWords(derived.classList, (id) => classes.find((entry) => entry.id === id)?.name ?? id) : klass?.name,
     subclass: state.subclass || undefined,
     level: derived.effectiveLevel,
     abilities: derived.shownAbilities,
@@ -653,6 +659,7 @@ function CharacterBuilderForm({
             offersSubclass={pickers.offersSubclass}
             subclassLockedAt={pickers.subclassLockedAt}
             chosenArchetype={pickers.chosenArchetype}
+            multiclassAllowed={table.multiclassAllowed}
             classNote={scopeNote("classes", "classes")}
             subclassNote={<TableScopeNote noun="subclasses" unadmitted={subclassOptions.unadmitted} failed={subclassOptions.failed} onRetry={subclassOptions.retry} />}
             playstyle={
@@ -935,7 +942,15 @@ function CharacterBuilderForm({
         aside={
           race || klass
             ? [
-                [race?.name, klass?.name].filter(Boolean).join(" "),
+                // A split names each class's levels (backlog F9).
+                [
+                  race?.name,
+                  derived.multiclass
+                    ? classSplitWords(derived.classList, (id) => classes.find((entry) => entry.id === id)?.name ?? id)
+                    : klass?.name,
+                ]
+                  .filter(Boolean)
+                  .join(" "),
                 `level ${derived.effectiveLevel}`,
                 ...(klass ? [hitDieChip(klass.hitDie, numbers)] : []),
               ].map((part, index) => (

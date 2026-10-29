@@ -373,6 +373,9 @@ export async function PUT(
       campaign: context.campaign,
       baseline: { sheet: character.sheet, level: character.level },
       olderBuilder: olderBuilderOf((raw as { sheet?: unknown } | null)?.sheet),
+      // At a table that turns multiclassing off, the edit keeps the split
+      // the character holds and takes no new class (F9).
+      ...(character.sheet.classes?.length ? { heldClasses: character.sheet.classes } : {}),
     });
     if (!edited.ok) {
       return refusal(edited.problems);
@@ -440,6 +443,9 @@ export async function PUT(
     userId: context.user.id,
     campaign: context.campaign,
     olderBuilder: olderBuilderOf(raw),
+    // The split the seat holds now stands at a table that turns
+    // multiclassing off; the rebuild may keep it, or part of it (F9).
+    ...(existing?.classes?.length ? { heldClasses: existing.classes } : {}),
   });
   if (!replaced.ok) {
     return refusal(replaced.problems);
