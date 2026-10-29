@@ -271,7 +271,7 @@ function CharacterBuilderForm({
     ...(initial?.feats ?? []),
     ...(initial?.asiChoices ?? []).flatMap((choice) => (choice.mode === "feat" ? [choice.feat] : [])),
   ]);
-  const state = useBuilderState({ initial, initialFeatDescs, initialLevel, fixedLevel, startLevel, races, classes, backgrounds });
+  const state = useBuilderState({ initial, initialFeatDescs, initialLevel, fixedLevel, startLevel, races, classes, backgrounds, rowsLoaded: loaded });
   // No stand-in for a race, class or background the player has not chosen:
   // the first row used to be shown as if picked ("Continue as Aarakocra"),
   // so the step's own race gate could never hold, and an untouched

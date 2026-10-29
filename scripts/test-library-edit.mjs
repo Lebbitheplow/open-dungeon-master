@@ -350,5 +350,17 @@ await test("who plays them changes only while no table holds a copy", async () =
   assert.equal(getCharacter(library.id).sheet.backstory, "Changed.");
 });
 
+await test("a stored character is read against the server's rows, not the bundled stand-ins", () => {
+  // Read against the bundled list, a pack species fell back to its first
+  // race: that race's tongues stood in for the species' own, and a
+  // minotaur's Minotaur came back as a bonus language no longer on offer.
+  const src = (path) => fs.readFileSync(new URL(`../${path}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
+  const state = src("src/app/characters/builder/useBuilderState.ts");
+  assert.match(state, /if \(initial && !hydratedInitial\.current && !rowsLoaded\) \{\n\s+return;\n\s+\}/);
+  assert.match(state, /\}, \[initial, storedFeatsKnown, races, classes, backgrounds, rowsLoaded\]\);/);
+  assert.match(src("src/app/characters/builder/CharacterBuilder.tsx"), /useBuilderState\(\{[^}]*rowsLoaded: loaded \}\)/);
+  assert.match(src("src/app/characters/builder/LevelUpSheet.tsx"), /useBuilderState\(\{[^}]*rowsLoaded: loaded \}\)/);
+});
+
 console.log(`${passed} library edit checks passed`);
 removeTempDir(dir);
