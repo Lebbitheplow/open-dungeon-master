@@ -81,7 +81,8 @@ export function SessionChatColumn({
   // Blocks made from this table, hidden at once; the snapshot carries them
   // on the next load.
   const [justBlocked, setJustBlocked] = useState<string[]>([]);
-  const [dismissedSummary, setDismissedSummary] = useState(false);
+  // The card dismissed here, so the next fight's own card still shows.
+  const [dismissedSummary, setDismissedSummary] = useState<CampaignState["fightSummary"]>(null);
   const blockedUserIds = useMemo(
     () => [...new Set([...state.blockedUserIds, ...justBlocked])],
     [state.blockedUserIds, justBlocked],
@@ -291,8 +292,8 @@ export function SessionChatColumn({
 
       {/* Directly above the composer, so the answer to "why is nothing
           happening" sits where the player is already looking. */}
-      {state.fightSummary && !dismissedSummary ? (
-        <FightSummaryCard summary={state.fightSummary} onDismiss={() => setDismissedSummary(true)} className="mx-3 mb-2" />
+      {state.fightSummary && state.fightSummary !== dismissedSummary ? (
+        <FightSummaryCard summary={state.fightSummary} onDismiss={() => setDismissedSummary(state.fightSummary)} className="mx-3 mb-2" />
       ) : null}
       <UtilityCallStrip calls={visibleUtilityCalls} />
 

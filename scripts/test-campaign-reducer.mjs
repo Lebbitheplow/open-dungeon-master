@@ -267,4 +267,29 @@ test("a change of who holds authority reads the snapshot again (audit WA-11)", (
   assert.equal(next.lastSeq, loaded.lastSeq + 1, "persisted: its seq is recorded");
 });
 
+// The 0.31.1 playtest: "After the fight: Party Defeated" stayed over the
+// whole of the next encounter, because only the next fight's own card
+// replaced it.
+test("the last fight's card comes down when another fight is on the board", () => {
+  const defeated = { outcome: "party_defeated", rounds: 5, seconds: 1140, kills: 1, fled: 0, fighters: [], totals: { dealt: 26, taken: 57, healed: 7, nat20s: 0, nat1s: 0 } };
+  let seq = loaded.lastSeq;
+  const ended = campaignReducer(loaded, event("encounter_summary", { encounterId: "fight-1", summary: defeated }, ++seq));
+  assert.equal(ended.fightSummary, defeated);
+  const sameFight = campaignReducer(ended, event("encounter_updated", { encounter: { id: "fight-1", status: "ended" } }, ++seq));
+  assert.equal(sameFight.fightSummary, defeated, "the fight it sums up keeps it");
+  const cleared = campaignReducer(sameFight, event("encounter_updated", { encounter: null }, ++seq));
+  assert.equal(cleared.fightSummary, defeated, "an empty board keeps it");
+  const next = campaignReducer(cleared, event("encounter_updated", { encounter: { id: "fight-2", status: "active" } }, ++seq));
+  assert.equal(next.fightSummary, null, "the next fight takes it down");
+  const fetched = campaignReducer(ended, { type: "encounter", encounter: { id: "fight-2", status: "active" } });
+  assert.equal(fetched.fightSummary, null, "so does a GM's own read of the next fight");
+  const second = campaignReducer(next, event("encounter_summary", { encounterId: "fight-2", summary: { ...defeated, outcome: "victory" } }, ++seq));
+  assert.equal(second.fightSummary.outcome, "victory", "and its own card shows when it ends");
+});
+
+test("a card dismissed at this seat does not hide the next fight's card", () => {
+  const source = readFileSync(new URL("../src/app/campaigns/[campaignId]/SessionChatColumn.tsx", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+  assert.match(source, /state\.fightSummary !== dismissedSummary/, "dismissal names the card, not every card after it");
+});
+
 console.log(`\n${passed} campaign reducer tests passed.`);
