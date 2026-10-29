@@ -171,6 +171,9 @@ export type SidePanelRouterProps = {
   shopsVersion?: number;
   // A Browse wares pressed in the chat: open the Market on that shop.
   marketRequest?: MarketRequest | null;
+  // The quest glance pressed (CinematicParts.tsx QuestGlance): when, so the
+  // Story tab turns to its Quests once per press.
+  questsRequest?: number;
   coins?: { characterId: string; direction: "in" | "out"; amountCp: number; at: number } | null;
   activeSheetId?: string;
   questsVersion: number;
@@ -250,6 +253,7 @@ export function SidePanelRouter({
   loreVersion = 0,
   shopsVersion = 0,
   marketRequest = null,
+  questsRequest = 0,
   coins = null,
   activeSheetId = "",
   questsVersion,
@@ -275,6 +279,13 @@ export function SidePanelRouter({
   if (marketRequest && marketRequest.at !== seenMarketAt) {
     setSeenMarketAt(marketRequest.at);
     setPartySection("market");
+  }
+  // The glance says it opens the quests, and it opened whichever section
+  // was last up, the chapters as often as not (issue 581).
+  const [seenQuestsAt, setSeenQuestsAt] = useState(0);
+  if (questsRequest && questsRequest !== seenQuestsAt) {
+    setSeenQuestsAt(questsRequest);
+    setStorySection("quests");
   }
 
   const partySubTabs: SubTabDef<PartySection>[] = [

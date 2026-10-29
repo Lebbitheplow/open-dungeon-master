@@ -2,7 +2,6 @@
 import assert from "node:assert/strict";
 import {
   activeBeatNumber,
-  activeQuestLines,
   applyArcDelta,
   applyArcEnrichment,
   applyArcExtension,
@@ -167,23 +166,8 @@ test("prompt render is bounded and marks the NOW beat", () => {
   assert.ok(rendered.length < 4000);
 });
 
-test("quest lines are player-safe: no hooks or expected beats leak", () => {
-  const arc = parseArcJson(validArcJson);
-  const lines = activeQuestLines(arc);
-  assert.equal(lines.length, 2);
-  assert.ok(lines[0].startsWith("The Missing Sexton:"));
-  const joined = lines.join("\n");
-  assert.ok(!joined.includes("Osseth's face"));
-  assert.ok(!joined.includes("Reliquary heist"));
-});
-
-test("resolved sub-arcs drop out of the quest log", () => {
-  const arc = parseArcJson(validArcJson);
-  arc.subArcs[0].status = "resolved";
-  const lines = activeQuestLines(arc);
-  assert.equal(lines.length, 1);
-  assert.ok(lines[0].startsWith("The Broken Seal:"));
-});
+// The quest log the party reads is the quests table the arc mirrors into
+// (scripts/test-quests.mjs checks it keeps hooks and beats out).
 
 // --- v2: acts, cast, planned events, player-driven enrichment ---
 
@@ -481,15 +465,6 @@ test("finished acts collapse in the render and it stays bounded", () => {
   assert.ok(rendered.includes("Recurring cast"));
   assert.ok(rendered.includes("Planned events"));
   assert.ok(rendered.length < 4000);
-});
-
-test("quest log never leaks cast agendas or planned events", () => {
-  const arc = parseArcJson(v2ArcJson);
-  const joined = activeQuestLines(arc).join("\n");
-  assert.ok(joined.includes("The Missing Sexton"));
-  assert.ok(!joined.includes("Ivry"));
-  assert.ok(!joined.includes("takes Osseth's coin"));
-  assert.ok(!joined.includes("keep the district sealed"));
 });
 
 // --- beat-driven chapter pacing ---

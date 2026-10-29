@@ -1,8 +1,10 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import {
+  arcQuestStatus,
   normalizeObjectives,
   normalizeQuestStatus,
   QUEST_TITLE_MAX,
+  reconcileSubArcs,
   type Quest,
   type QuestObjective,
   type QuestStatus,
@@ -109,46 +111,78 @@ export function deleteQuest(questId: string): void {
 }
 
 // Mirrors the arc's sub-arcs: one arc row per sub-arc, matched by id, with
-// the DM's ticks kept when the goal is unchanged. Sub-arcs that left the
-// arc take their rows with them; hand-written rows are never touched.
-export function syncArcQuests(
+// the DM's ticks kept. A row's own status and title stand (quest-logic.ts
+// arcQuestStatus), and the sub-arcs come back as the rows have them
+// (reconcileSubArcs) for setStoryArc to store. A sub-arc that left the arc
+// takes its row with it while the quest is open; a settled quest stays on
+// the log as what the party did, since the arc sheds settled threads once
+// it grows long. Hand-written rows are never touched. `changed` says
+// whether any row did, so the caller can tell the table.
+export function syncArcQuests<T extends { id: string; name: string; goal: string; status: "pending" | "active" | "resolved" | "abandoned" }>(
   campaignId: string,
-  subArcs: Array<{ id: string; name: string; goal: string; status: string }>,
-): Quest[] {
+  subArcs: readonly T[],
+): { subArcs: T[]; changed: boolean } {
   const db = getDatabase();
   const existing = listQuests(campaignId).filter((quest) => quest.source === "arc");
   const byRef = new Map(existing.map((quest) => [quest.sourceRef, quest]));
+  const reconciled = reconcileSubArcs(subArcs, existing);
   const now = nowIso();
+  let changed = false;
   db.transaction(() => {
     const seen = new Set<string>();
-    for (const subArc of subArcs) {
+    for (const subArc of reconciled) {
       seen.add(subArc.id);
-      const status: QuestStatus =
-        subArc.status === "resolved" ? "done" : subArc.status === "abandoned" ? "failed" : "active";
       const current = byRef.get(subArc.id);
-      const objectives = current?.objectives.length
-        ? current.objectives
-        : [{ id: "goal", text: subArc.goal.slice(0, 240), done: status === "done" }];
+      const status = arcQuestStatus(subArc.status, current?.status);
       if (current) {
-        db.prepare(`UPDATE quests SET title = ?, status = ?, objectives_json = ?, updated_at = ? WHERE id = ?`).run(
-          subArc.name.slice(0, QUEST_TITLE_MAX),
-          status,
-          JSON.stringify(objectives),
-          now,
-          current.id,
-        );
+        if (current.status !== status) {
+          db.prepare(`UPDATE quests SET status = ?, updated_at = ? WHERE id = ?`).run(status, now, current.id);
+          changed = true;
+        }
       } else {
+        const objectives = [{ id: "goal", text: subArc.goal.slice(0, 240), done: status === "done" }];
         db.prepare(
           `INSERT INTO quests (id, campaign_id, title, status, objectives_json, source, source_ref, visibility, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, 'arc', ?, 'party', ?, ?)`,
         ).run(crypto.randomUUID(), campaignId, subArc.name.slice(0, QUEST_TITLE_MAX), status, JSON.stringify(objectives), subArc.id, now, now);
+        changed = true;
       }
     }
     for (const quest of existing) {
-      if (!seen.has(quest.sourceRef)) {
+      if (!seen.has(quest.sourceRef) && (quest.status === "active" || quest.status === "hidden")) {
         db.prepare(`DELETE FROM quests WHERE id = ?`).run(quest.id);
+        changed = true;
       }
     }
   })();
-  return listQuests(campaignId);
+  return { subArcs: reconciled, changed };
+}
+
+// A campaign clone's quest log (src/lib/db/campaign-clone.ts): every quest as
+// it stands, ticks and all. The copy keeps the source's arc with the same
+// sub-arc ids, so an arc row still points at its own thread. Before this a
+// copy started with an empty log, its written quests gone for good.
+export function copyQuests(fromCampaignId: string, toCampaignId: string): void {
+  const db = getDatabase();
+  const now = nowIso();
+  const insert = db.prepare(
+    `INSERT INTO quests (id, campaign_id, title, status, objectives_json, source, source_ref, visibility, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  );
+  db.transaction(() => {
+    for (const quest of listQuests(fromCampaignId)) {
+      insert.run(
+        crypto.randomUUID(),
+        toCampaignId,
+        quest.title,
+        quest.status,
+        JSON.stringify(quest.objectives),
+        quest.source,
+        quest.sourceRef,
+        quest.visibility,
+        quest.createdAt,
+        now,
+      );
+    }
+  })();
 }

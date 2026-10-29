@@ -1442,6 +1442,16 @@ html[data-theme="light"] .ts-below .ts-ghost:hover { background: rgba(255, 252, 
   transition: border-color var(--dur-quick) var(--ease-snap), box-shadow var(--dur-move) var(--ease-snap);
 }
 .cine-quest:hover { border-color: rgba(212, 171, 58, 0.55); box-shadow: 0 0 16px rgba(212, 171, 58, 0.18); }
+/* The next quest or step settles in; a finished quest with none after it
+   lifts away (issue 581). */
+.cine-quest { animation: cine-quest-in var(--dur-move) var(--ease-settle) backwards; }
+.cine-quest[data-leaving] { animation: cine-quest-out 300ms var(--ease-snap) forwards; pointer-events: none; }
+@keyframes cine-quest-in {
+  from { opacity: 0; transform: translateY(-6px); }
+}
+@keyframes cine-quest-out {
+  to { opacity: 0; transform: translateY(-6px); }
+}
 .cine-quest:focus-visible { outline: 2px solid var(--cine-gold-pale); outline-offset: 2px; }
 .cine-quest-eyebrow {
   font-family: var(--font-display);
@@ -1776,7 +1786,7 @@ html[data-theme="light"] .ts-below .ts-ghost:hover { background: rgba(255, 252, 
   .cine-art, .cine-art-in { animation: none; }
   .cine-party-card, .cine-tabletop { animation: none; }
   .cine-ribbon-seat[data-current="true"] .cine-ribbon-face { animation: none; }
-  .cine-roll { animation: none; }
+  .cine-roll, .cine-quest, .cine-quest[data-leaving] { animation: none; }
   .cine-ribbon-face, .cine-party-card, .cine-party-fill, .cine-quest, .cine-order-row { transition: none; }
 }
 html[data-effects="low"] .cine-art,

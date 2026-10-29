@@ -955,7 +955,7 @@
     "lib/db/moderation.ts#str-list": [["key",1,"report reasons (fixed choice)"]],
     "lib/db/overworld.ts#localeCompare": [["key",1,"createdAt"]],
     "lib/db/prepared-maps.ts#toLowerCase": [["key",1,"a map tag's stored form (lower case, as upstream stores it); deduped by textKey"]],
-    "lib/db/quests.ts#str-eq": [["key",4,"stored quest source, visibility and status values"]],
+    "lib/db/quests.ts#str-eq": [["key",2,"stored quest source, visibility and status values"]],
     "lib/db/rolls.ts#str-list": [["key",1,"roll visibilities"]],
     "lib/db/rules.ts#str-eq": [["key",2,"rule chunk sources"]],
     "lib/db/settings.ts#str-eq": [["key",1,"provider ids"]],

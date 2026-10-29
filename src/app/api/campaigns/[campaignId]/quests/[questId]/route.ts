@@ -1,5 +1,6 @@
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
 import { deleteQuest, getQuest, updateQuest } from "@/lib/db/quests";
+import { editQuest } from "@/lib/db/quest-arc";
 import { normalizeObjectives, normalizeQuestStatus, QUEST_STATUSES, type QuestStatus } from "@/lib/dm/quest-logic";
 import { publishEphemeral } from "@/lib/events";
 
@@ -41,7 +42,7 @@ export async function PATCH(
   if (raw.visibility === "dm" || raw.visibility === "party") {
     patch.visibility = raw.visibility;
   }
-  const updated = updateQuest(questId, patch);
+  const updated = editQuest(questId, patch);
   publishEphemeral(campaignId, "quests_updated", { at: Date.now() });
   return Response.json({ quest: updated });
 }
@@ -54,6 +55,11 @@ export async function DELETE(
   const quest = await requireQuest(campaignId, questId);
   if (quest instanceof Response) {
     return quest;
+  }
+  // A quest from the story comes back with the next write of the arc it
+  // mirrors; it is settled, not taken off (the panel offers no remove).
+  if (quest.source === "arc") {
+    return Response.json({ error: "This quest comes from the story. Mark it done or failed instead." }, { status: 409 });
   }
   deleteQuest(questId);
   publishEphemeral(campaignId, "quests_updated", { at: Date.now() });

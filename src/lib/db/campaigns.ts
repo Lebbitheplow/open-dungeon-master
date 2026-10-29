@@ -14,7 +14,8 @@ import type {
 import { isUploadedImagePath } from "@/lib/uploads";
 import type { StorySettings } from "@/lib/types";
 import { normalizeStoryArc, type StoryArc } from "@/lib/dm/arc-logic";
-import { syncArcQuests } from "@/lib/db/quests";
+import { listQuests, syncArcQuests } from "@/lib/db/quests";
+import { questLogLines } from "@/lib/dm/quest-logic";
 import { normalizeCover, type DmCover } from "@/lib/dm/delegation";
 import { MINUTES_PER_DAY, daysPerYear, defaultClock, normalizeCalendarDefinition, normalizeClock, type CampaignClock } from "@/lib/dm/calendar";
 import { packFor } from "@/lib/worlds/preset";
@@ -730,9 +731,14 @@ export function setStoryArc(campaignId: string, arc: StoryArc) {
       : (arc.saga ?? null),
   };
   // The quest log mirrors the sub-arcs (docs/vtt-parity-implementation-
-  // plan.md section 5.7); a failure there must not lose the arc.
+  // plan.md section 5.7), and a quest the table settled or renamed comes
+  // back into the arc as they left it (issue 581); a failure there must not
+  // lose the arc.
+  let questsChanged = false;
   try {
-    syncArcQuests(campaignId, trimmed.subArcs);
+    const synced = syncArcQuests(campaignId, trimmed.subArcs);
+    trimmed.subArcs = synced.subArcs;
+    questsChanged = synced.changed;
   } catch (error) {
     console.error("[quests] arc sync failed", error);
   }
@@ -775,12 +781,10 @@ export function setStoryArc(campaignId: string, arc: StoryArc) {
   getDatabase()
     .prepare(`UPDATE campaigns SET story_arc_json = ?, updated_at = ? WHERE id = ?`)
     .run(serialized, nowIso(), campaignId);
-}
-
-export function setQuestLog(campaignId: string, quests: string[]) {
-  getDatabase()
-    .prepare(`UPDATE campaigns SET quest_log_json = ?, updated_at = ? WHERE id = ?`)
-    .run(JSON.stringify(quests.slice(0, 20)), nowIso(), campaignId);
+  // Whether the quest log changed with it, for a caller to publish
+  // quests_updated (this module cannot import the event bus, which imports
+  // it).
+  return questsChanged;
 }
 
 // The per-turn world-simulation counters and pending sparks
@@ -984,6 +988,11 @@ export function publicCampaign(campaign: Campaign): Omit<Campaign, "dmOutline" |
   // ever read them back; clients get an existence boolean from the
   // story-settings route instead.
   rest.settings = scrubStorySettings(campaign.settings);
+  // The open quests from the quest log itself. The questLog column was a
+  // copy written only when the arc was planned, and an app built before the
+  // glance read the quest log still reads this field: a stale copy kept a
+  // finished quest on its screen for good (issue 581).
+  rest.questLog = questLogLines(listQuests(campaign.id));
   return rest as Omit<Campaign, "dmOutline" | "storyArc">;
 }
 

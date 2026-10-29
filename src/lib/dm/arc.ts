@@ -4,7 +4,6 @@ import {
   campaignSeats,
   getCampaignById,
   latestSeq,
-  setQuestLog,
   setStoryArc,
 } from "@/lib/db/campaigns";
 import { listChapters } from "@/lib/db/chapters";
@@ -16,7 +15,6 @@ import { presetFor, packWorldHints } from "@/lib/worlds/preset";
 import { nameRegisterHint } from "@/lib/genres";
 import {
   activeBeatNumber,
-  activeQuestLines,
   applyActDetail,
   applyArcDelta,
   applyArcUpgrade,
@@ -51,7 +49,7 @@ import {
 import { activeBeat, beatGated, openWaypoints } from "@/lib/dm/waypoint-logic";
 import { publishTitleCard } from "@/lib/dm/scene-state";
 import { insertCampaignMessage } from "@/lib/db/messages";
-import { publishWithSeq } from "@/lib/events";
+import { publishEphemeral, publishWithSeq } from "@/lib/events";
 import { requestUtilityMessage } from "@/lib/dm/model";
 import { trackUtilityCall } from "@/lib/dm/call-tracker";
 import { isStageEnabled } from "@/lib/dm/stages";
@@ -250,6 +248,14 @@ ${SOLVABLE_RULE}
 ${SAGA_STYLE_RULES}`;
 }
 
+// A planned or refreshed arc brings its sub-arcs' quests with it; the quest
+// log and the table's glance refetch when they changed (issue 581).
+function storeArc(campaignId: string, arc: StoryArc) {
+  if (setStoryArc(campaignId, arc)) {
+    publishEphemeral(campaignId, "quests_updated", { at: Date.now() });
+  }
+}
+
 // Runs on the campaign's DM queue at activation (after runStorySetup, so a
 // freshly invented premise/outline is already in place) and from the lead's
 // regenerate action.
@@ -306,8 +312,7 @@ export async function generateStoryArc(
       }
       return;
     }
-    setStoryArc(campaignId, arc);
-    setQuestLog(campaignId, activeQuestLines(arc));
+    storeArc(campaignId, arc);
     // The off-screen clocks orbit the fresh arc; a failure here simply
     // retries at the next chapter close (ensureWorldArcs is self-healing).
     const withWorld = await ensureWorldArcs(campaignId, arc);
@@ -895,8 +900,7 @@ export async function refreshStoryArc(
       next = await ensureWorldArcs(campaignId, next);
     }
     if (next !== campaign.storyArc) {
-      setStoryArc(campaignId, next);
-      setQuestLog(campaignId, activeQuestLines(next));
+      storeArc(campaignId, next);
     }
   } catch (error) {
     console.error(`[arc] campaign ${campaignId}: the story arc could not be refreshed`, error);
@@ -946,8 +950,7 @@ export async function planExhaustedArc(campaignId: string): Promise<boolean> {
       return false;
     }
     next = await announceActs(campaignId, campaign.storyArc, next, true);
-    setStoryArc(campaignId, next);
-    setQuestLog(campaignId, activeQuestLines(next));
+    storeArc(campaignId, next);
     return true;
   } catch (error) {
     console.error(`[arc] campaign ${campaignId}: the next stretch of the arc could not be planned`, error);
