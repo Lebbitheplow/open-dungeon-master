@@ -55,8 +55,15 @@ export type PublicEnemyAbility = {
   refusal: string | null;
 };
 
+// How far it may still walk this turn, as its own walks count it
+// (src/lib/dm/enemy-speed.ts enemyMoveBudget, issue #621): the roster's
+// "25 ft left · Dashed" and the Dash card's line. Absent with no board, and
+// from a server older than the enemyActions feature.
+export type PublicEnemyMovement = { speedFeet: number; leftFeet: number; dashes: number; disengaged: boolean };
+
 export type PublicEnemyActions = {
   speed: string;
+  movement?: PublicEnemyMovement;
   attacks: PublicEnemyAttack[];
   abilities: PublicEnemyAbility[];
   // The engine's own reason it may not take an action now (dead,
@@ -139,7 +146,7 @@ function abilitiesOf(enemy: EncounterEnemy): MonsterAbility[] {
   });
 }
 
-export function enemyActionsView(encounter: ActingEncounter, enemy: EncounterEnemy): PublicEnemyActions {
+export function enemyActionsView(encounter: ActingEncounter, enemy: EncounterEnemy, movement?: PublicEnemyMovement): PublicEnemyActions {
   const stats = enemy.stats;
   // The same fallback enemy_attack makes for a block with no attack lines.
   const attacks = stats.attacks?.length ? stats.attacks : synthesizeStats(enemy.cr).attacks;
@@ -186,6 +193,7 @@ export function enemyActionsView(encounter: ActingEncounter, enemy: EncounterEne
   const allowed = canEnemyAct({ enemy, encounter, kind: "action" });
   return {
     speed: stats.speed || "30 ft.",
+    ...(movement ? { movement } : {}),
     attacks: attackViews,
     abilities: abilityViews,
     refusal: allowed.ok ? null : allowed.error,

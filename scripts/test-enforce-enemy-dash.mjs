@@ -19,6 +19,7 @@ const { createDmTurn } = await import("../src/lib/db/dm-turns.ts");
 const { listSheets } = await import("../src/lib/db/sheets.ts");
 const { dispatchAdjudication } = await import("../src/lib/dm/invoke-dispatch.ts");
 const { autoActSkippedEnemies } = await import("../src/lib/dm/encounter-tools.ts");
+const { publicEncounter } = await import("../src/lib/db/encounter-view.ts");
 
 const hero = world.addHero({
   name: "Kara", class: "fighter", level: 5, maxHp: 80, proficiencies: TRAINED,
@@ -470,6 +471,18 @@ await test("A bonus-action attack on a creature fighting for the other side spen
   assert.equal(shiv.ok, true, shiv.error);
   assert.equal(acted(goblin), false, "the bonus swing spent its action");
   assert.equal(world.encounter().legendary.bonus.ids.includes(goblin.id), true);
+});
+
+// ---- the GM's view ----
+
+await test("The GM's view of an enemy says how far it may still walk and that it Dashed.", async () => {
+  const goblin = await stage();
+  assert.equal((await act(goblin, "dash")).ok, true);
+  assert.equal((await walk(goblin, 6, 7)).ok, true);
+  const view = publicEncounter(world.encounter(), world.enemies(), { enemyNumbers: true });
+  assert.deepEqual(view.enemies[0].actions.movement, { speedFeet: 30, leftFeet: 40, dashes: 1, disengaged: false });
+  const players = publicEncounter(world.encounter(), world.enemies(), {});
+  assert.equal(players.enemies[0].actions, undefined, "a player was shown the enemy's movement");
 });
 
 await finish();

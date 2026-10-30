@@ -387,11 +387,17 @@ export const COMBAT_ADJUDICATIONS: CatalogEntry[] = [
         ],
       },
       { name: "item", label: "Object", kind: "text" },
+      // An older host reads it as the escaping enemy it always named there
+      // (issue #621 turned it into the enemy taking any of its actions).
       {
         name: "enemyId",
         label: "Enemy acting",
         kind: "enemy",
         help: "Instead of a character: an enemy taking Dash, Disengage, Dodge, or Escape from a grapple or a spell's hold (Web, Entangle, Maze, Irresistible Dance). It spends the enemy's action; move it afterward with Move a token.",
+        host: {
+          feature: "enemyActions",
+          older: { label: "Enemy escaping", help: "Escape only, with no character: an enemy breaking a character's grapple, or the spell that holds it (Web, Entangle, Maze's INT check against 20, Irresistible Dance's WIS save)." },
+        },
       },
       {
         name: "shove",

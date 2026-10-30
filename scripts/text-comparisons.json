@@ -727,7 +727,7 @@
     "lib/battlemap/hand.ts#toLowerCase": [["key",3,"SRD weapon name as a proficiency key; condition labels (engine vocabulary)"]],
     "lib/battlemap/intent.ts#str-list": [["key",1,"intent kinds (a fixed choice)"]],
     "lib/battlemap/los.ts#re-word": [["table-language",2,"meaning reader: \"darkvision\" and its range read in feature and trait text (SRD species traits, and homebrew species' free-text vision and traits)"]],
-    "lib/battlemap/monster-hand.ts#str-eq": [["key",1,"ability ids and enemy status"]],
+    "lib/battlemap/monster-hand.ts#str-eq": [["key",2,"ability ids and enemy status"]],
     "lib/battlemap/monster-hand.ts#str-key": [["key",1,"ability ids and enemy status"]],
     "lib/battlemap/monster-hand.ts#toLowerCase": [["key",2,"save ability code; card id from a stat-block action name"]],
     "lib/battlemap/monster-hand.ts#toUpperCase": [["display",1,"ability abbreviation shown"]],

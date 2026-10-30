@@ -350,6 +350,19 @@ check("the admin config accepts the none provider", () => {
   assert.match(adminRoute, /z\.enum\(\["", "local", "custom", "none"(, "harness")?\]\)/);
 });
 
+// Issue #621: an enemy's Dash, Disengage and Dodge are a server feature, so
+// the console compiled into the apps hides their cards and reads the enemy
+// field as the escape it was on an older host.
+check("the server flags an enemy's actions, and the apps' type and hand ask for the flag", () => {
+  assert.match(source, /^\s*enemyActions: true,$/m);
+  const client = readFileSync(path.join(root, "src/lib/use-capabilities.ts"), "utf8");
+  assert.match(client, /features\?: \{[^}]*enemyActions\?: boolean/);
+  const hand = readFileSync(path.join(root, "src/app/campaigns/[campaignId]/MonsterHand.tsx"), "utf8");
+  assert.match(hand, /hostOffers\(capabilities, "enemyActions"\)/);
+  const form = readFileSync(path.join(root, "src/app/campaigns/[campaignId]/DmActionForm.tsx"), "utf8");
+  assert.match(form, /fieldForHost\(field, \(feature\) => hostOffers\(capabilities, feature as HostFeature\)\)/);
+});
+
 if (failures) {
   console.error(`\n${failures} capability check(s) failed.`);
   process.exit(1);

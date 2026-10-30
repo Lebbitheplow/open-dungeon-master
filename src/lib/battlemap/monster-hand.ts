@@ -1,4 +1,4 @@
-import { signed, type HandCard, type MonsterAbilityUse } from "@/lib/battlemap/hand-core";
+import { signed, type HandCard, type MonsterAbilityUse, type MonsterMove } from "@/lib/battlemap/hand-core";
 import type { PublicEnemyAbility, PublicEnemyActions, PublicEnemyAttack } from "@/lib/dm/enemy-actions-view";
 import { monsterAttackIcon } from "@/lib/battlemap/attack-art";
 
@@ -143,10 +143,59 @@ function fleeCard(enemy: MonsterHandEnemy): HandCard {
   };
 }
 
-// The cards one enemy holds: its attacks, its save abilities, and breaking
-// off. Empty for an enemy the projection carries no actions for (a player's
-// view, or an older server).
-export function deriveMonsterHand(enemy: MonsterHandEnemy): HandCard[] {
+const MOVE_CARDS: Array<{ move: MonsterMove; name: string; rules: (left: number) => string }> = [
+  { move: "dash", name: "Dash", rules: (left) => `Adds its speed to its movement this turn (${left} ft left now). Then move its token.` },
+  { move: "disengage", name: "Disengage", rules: () => "Its moves this turn draw no opportunity attacks. A bonus action with Nimble Escape." },
+  { move: "dodge", name: "Dodge", rules: () => "Attacks against it have disadvantage and it has advantage on DEX saves until its next turn." },
+];
+
+// Dash, Disengage and Dodge (issue #621): its action, played with no target,
+// as take_action with its enemyId. Only from a host that resolves them and
+// says how far the creature may still walk.
+function moveCards(enemy: MonsterHandEnemy, actions: PublicEnemyActions): HandCard[] {
+  const movement = actions.movement;
+  if (!movement) {
+    return [];
+  }
+  return MOVE_CARDS.map(({ move, name, rules }) => {
+    const disabled =
+      move === "dash" && movement.speedFeet === 0
+        ? `${enemy.name}'s speed is 0 right now.`
+        : move === "disengage" && movement.disengaged
+          ? `${enemy.name} already Disengaged this turn.`
+          : move === "disengage"
+            ? null
+            : actions.refusal;
+    return {
+      ...BASE,
+      id: `monster:${enemy.id}:${move}`,
+      type: "basic",
+      name,
+      range: "",
+      dice: "",
+      roll: "no roll",
+      rules: rules(movement.leftFeet),
+      icon: { kind: "action", key: move },
+      target: "none",
+      toHit: null,
+      damage: null,
+      damageType: "",
+      save: null,
+      melee: false,
+      // Disengage may still be its bonus action (Nimble Escape): the server
+      // says no if neither is left.
+      disabled: enemy.status === "alive" ? disabled : `${enemy.name} is ${enemy.status}.`,
+      spent: move !== "disengage" && actions.acted,
+      intent: { card: "monster", enemyId: enemy.id, action: move },
+    };
+  });
+}
+
+// The cards one enemy holds: its attacks, its save abilities, Dash, Disengage
+// and Dodge when the host resolves them (`enemyActions`), and breaking off.
+// Empty for an enemy the projection carries no actions for (a player's view,
+// or an older server).
+export function deriveMonsterHand(enemy: MonsterHandEnemy, options: { enemyActions?: boolean } = {}): HandCard[] {
   const actions = enemy.actions;
   if (!actions) {
     return [];
@@ -154,6 +203,7 @@ export function deriveMonsterHand(enemy: MonsterHandEnemy): HandCard[] {
   return [
     ...actions.attacks.map((attack) => attackCard(enemy, actions, attack)),
     ...actions.abilities.map((ability) => abilityCard(enemy, actions, ability)),
+    ...(options.enemyActions ? moveCards(enemy, actions) : []),
     fleeCard(enemy),
   ];
 }
@@ -184,6 +234,15 @@ export function monsterSentence(enemyName: string, card: HandCard, targetNames: 
   if (intent.action === "ability") {
     return who ? `${enemyName} uses ${card.name} on ${who}.` : `${enemyName} uses ${card.name}.`;
   }
+  if (intent.action === "dash") {
+    return `${enemyName} takes the Dash action.`;
+  }
+  if (intent.action === "disengage") {
+    return `${enemyName} disengages.`;
+  }
+  if (intent.action === "dodge") {
+    return `${enemyName} takes the Dodge action.`;
+  }
   return `${enemyName} breaks off and flees.`;
 }
 
@@ -203,6 +262,9 @@ export function monsterInvoke(
   }
   if (intent.action === "flee") {
     return { name: "enemy_flees", args: { enemyId: intent.enemyId, reason: "Breaks off and runs." } };
+  }
+  if (intent.action === "dash" || intent.action === "disengage" || intent.action === "dodge") {
+    return { name: "take_action", args: { enemyId: intent.enemyId, action: intent.action } };
   }
   if (!targetIds.length) {
     return null;

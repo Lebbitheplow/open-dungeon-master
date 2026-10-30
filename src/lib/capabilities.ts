@@ -81,6 +81,11 @@ export const SERVER_FEATURES = {
   // GET /sheet answers the level the replacement joins at
   // (src/lib/characters/hero-door.ts). An older host refuses the seat.
   fallenHeroes: true,
+  // An enemy's Dash, Disengage and Dodge (issue #621): take_action with
+  // enemyId for any of them, the Monster Hand's cards for them, and
+  // `movement` on an enemy's actions in the GM's view of the fight. An older
+  // host reads enemyId as the escaping enemy only.
+  enemyActions: true,
 } as const;
 export type ServerFeatures = { [K in keyof typeof SERVER_FEATURES]: boolean };
 
