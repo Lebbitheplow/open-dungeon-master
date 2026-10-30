@@ -73,6 +73,11 @@ function backstop(turn, enemy) {
   const sheets = listSheets(world.campaignId);
   autoActSkippedEnemies(world.campaign(), turn, world.encounter(), [enemy.id], sheets, new Map(sheets.map((sheet) => [sheet.id, sheet])));
 }
+function enemyTurnEntryOf(enemy) {
+  const encounter = world.encounter();
+  const turns = encounter.legendary.turns;
+  return turns && turns.round === encounter.round ? (turns.byId[enemy.id] ?? {}) : {};
+}
 function nextRound() {
   const encounter = world.encounter();
   kit.saveEncounter({ ...encounter, round: encounter.round + 1 });
@@ -461,14 +466,45 @@ await test("A hasted enemy's extra action Dashes, or makes one weapon attack, on
   assert.equal((await attack(goblin, hero)).refused, "rules");
 });
 
+const AGGRESSIVE = "Aggressive: As a bonus action, the orc can move up to its speed toward a hostile creature that it can see.";
+
 await test("An orc's Aggressive is a bonus-action Dash that leaves its action for the attack.", async () => {
-  const orc = await stage({ traits: ["Aggressive: As a bonus action, the orc can move up to its speed toward a hostile creature that it can see."] });
+  const orc = await stage({ traits: [AGGRESSIVE] });
   const rush = await act(orc, "dash", { bonus: true });
   assert.equal(rush.ok, true, rush.error);
   assert.match(rush.result.cost, /bonus action \(Aggressive\)/);
   assert.equal(acted(orc), false);
   const plain = await stage();
   assert.equal((await act(plain, "dash", { bonus: true })).refused, "rules", "a bonus-action Dash with no trait for it");
+});
+
+await test("Aggressive's speed carries the orc only toward a hostile it can see: its own speed goes anywhere, the rest only closer.", async () => {
+  const orc = await stage({ traits: [AGGRESSIVE] });
+  kit.place(orc.id, 8, 7);
+  kit.place(hero.id, 15, 7);
+  kit.place(priest.id, 15, 8);
+  assert.equal((await act(orc, "dash", { bonus: true })).ok, true);
+  // Eight squares away from the fighter: its own six, then Aggressive's
+  // speed would carry it farther, so the walk stops.
+  const back = await walk(orc, 0, 7);
+  assert.equal(back.ok, true, back.error);
+  assert.deepEqual(at(orc), { x: 2, y: 7 });
+  assert.match(back.result.note, /Aggressive carries .* only toward a hostile creature it can see/);
+  const farther = await walk(orc, 1, 7);
+  assert.equal(farther.refused, "rules");
+  assert.match(farther.error, /Aggressive carries it only toward a hostile creature it can see/);
+  // Toward the fighter it runs its whole Aggressive speed.
+  const rush = await walk(orc, 8, 7);
+  assert.equal(rush.ok, true, rush.error);
+  assert.deepEqual(at(orc), { x: 8, y: 7 });
+});
+
+await test("A blinded orc sees no hostile to rush: its Aggressive Dash is refused, nothing spent.", async () => {
+  const orc = await stage({ traits: [AGGRESSIVE] }, { conditions: ["blinded"] });
+  const rush = await act(orc, "dash", { bonus: true });
+  assert.equal(rush.refused, "rules");
+  assert.match(rush.error, /sees no hostile creature/);
+  assert.equal(world.encounter().legendary.bonus?.ids?.includes(orc.id) ?? false, false);
 });
 
 await test("A bonus-action attack on a creature fighting for the other side spends the bonus action, not the action.", async () => {
@@ -487,6 +523,29 @@ await test("A bonus-action attack on a creature fighting for the other side spen
   assert.equal(shiv.ok, true, shiv.error);
   assert.equal(acted(goblin), false, "the bonus swing spent its action");
   assert.equal(world.encounter().legendary.bonus.ids.includes(goblin.id), true);
+});
+
+await test("Haste's extra swing at a creature fighting for the other side is a weapon attack too: a spell attack is refused, nothing spent.", async () => {
+  const { moveToSide } = await import("../src/lib/dm/combat-sides.ts");
+  await kit.endFight();
+  await kit.fight(2, { heroFaces: { [hero.id]: 20, [priest.id]: 18 } });
+  const [mage, thrall] = world.enemies();
+  kit.setEnemy(mage.id, { stats: { ...DUMMY, attacks: [...DUMMY.attacks, { name: "Fire Bolt", toHit: 5, damage: "1d10", type: "fire", spellAttack: true, mode: "ranged", range: { normal: 120, long: 120 } }] }, maxHp: 400, conditions: ["hasted"] });
+  kit.setEnemy(thrall.id, { stats: { ...DUMMY }, maxHp: 400 });
+  moveToSide(world.campaign(), thrall.id, "party");
+  kit.place(mage.id, 2, 7);
+  kit.place(thrall.id, 3, 7);
+  kit.dice(18, 2);
+  assert.equal((await attack(kit.enemy(mage.id), kit.enemy(thrall.id), { attack: "Club" })).ok, true, "its own action");
+  world.clearDice();
+  const bolt = await attack(kit.enemy(mage.id), kit.enemy(thrall.id), { attack: "Fire Bolt" });
+  assert.equal(bolt.refused, "rules", JSON.stringify(bolt));
+  assert.match(bolt.error, /one weapon attack/);
+  assert.equal(enemyTurnEntryOf(mage).hasteUsed, undefined, "the refused bolt spent the extra action");
+  kit.dice(18, 2);
+  assert.equal((await attack(kit.enemy(mage.id), kit.enemy(thrall.id), { attack: "Club" })).ok, true, "the extra action's weapon swing");
+  world.clearDice();
+  assert.equal(enemyTurnEntryOf(mage).hasteUsed, true);
 });
 
 // ---- the GM's view ----

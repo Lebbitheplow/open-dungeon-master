@@ -93,6 +93,17 @@ test("a Dash closing an owed turn carries what that turn left, so the two turns 
   assert.equal(turns.enemyTilesLeft(6, disengaged, 0), 12);
 });
 
+test("Aggressive's speed takes only steps that do not end farther from the nearest hostile", () => {
+  const foe = { x: 10, y: 0 };
+  const nearest = (at) => Math.max(Math.abs(at.x - foe.x), Math.abs(at.y - foe.y));
+  const west = [{ x: 4, y: 0 }, { x: 3, y: 0 }, { x: 2, y: 0 }];
+  // Its own movement pays for the first two steps; the third is Aggressive's and leads away.
+  assert.deepEqual(turns.towardSteps({ x: 5, y: 0 }, west, 2, nearest), west.slice(0, 2));
+  assert.deepEqual(turns.towardSteps({ x: 5, y: 0 }, west, 0, nearest), []);
+  const east = [{ x: 6, y: 0 }, { x: 7, y: 1 }, { x: 8, y: 1 }];
+  assert.deepEqual(turns.towardSteps({ x: 5, y: 0 }, east, 0, nearest), east, "sideways at the same distance is still toward");
+});
+
 test("only Dash, Disengage, Dodge and Escape are an enemy's take_action", () => {
   assert.deepEqual([...turns.ENEMY_TAKE_ACTIONS], ["dash", "disengage", "dodge", "escape"]);
   assert.equal(turns.isEnemyTakeAction("dash"), true);

@@ -61,6 +61,7 @@ import { enemyMoveBudget } from "@/lib/dm/enemy-speed";
 import { movementLeft, spendEnemyDisengage } from "@/lib/dm/enemy-actions";
 import { forgetEnemyTurns, enemyTurnEntry, speedWords } from "@/lib/dm/enemy-turn-logic";
 import { nearerSquares } from "@/lib/dm/flee-logic";
+import { aggressiveSteps } from "@/lib/dm/enemy-aggressive";
 import { enemyTurnRefusal } from "@/lib/dm/enemy-turn-order";
 import { declaredThisTurn } from "@/lib/dm/player-word";
 import { featureTeleportFeet } from "@/lib/dm/feature-teleport";
@@ -593,12 +594,14 @@ export function handleMoveToken(
   const move = resolved.kind === "enemy" && resolved.enemy ? enemyMoveBudget(encounter, resolved.enemy, resolved.token) : null;
   const walking = move !== null && !args.forced;
   let standCost = 0;
+  let aggressiveCut = false;
   if (resolved.kind === "enemy") {
     // Walking on its own: a prone creature stands first for half its speed,
     // and a frightened one never steps closer to what it fears. Standing is
     // worked out here and made only once the walk and its Disengage hold:
     // a refused walk stood the creature up all the same.
     let steps = path;
+    let fearCut = false;
     if (walking && resolved.enemy) {
       standCost = standUpCost(encounter.id, resolved.enemy) ?? 0;
       steps = awayFromFear(
@@ -606,19 +609,25 @@ export function handleMoveToken(
         path,
         fearSourceAt(map.id, resolved.enemy.conditions, resolved.enemy.conditionMeta as Record<string, { source?: string }>),
       );
+      fearCut = steps.length < path.length;
+      // Aggressive's speed goes only toward a hostile it can see (enemy-aggressive.ts).
+      const rushed = aggressiveSteps(encounter, map, resolved.enemy, resolved.token, steps, traits);
+      steps = rushed.steps;
+      aggressiveCut = rushed.cut;
     }
     const budget = Math.floor(Math.max(0, (move?.tilesLeft ?? 0) - standCost) / (drag?.factor ?? 1));
     const walk = walkPathWithBudget(map.terrain, map.width, steps, budget, traits, resolved.token);
     if (!walk.at) {
       const words = move && resolved.enemy ? speedWords(move.speedTiles, enemyTurnEntry(encounter, resolved.enemy.id)) : "speed 0 ft";
+      const why = aggressiveCut ? ", and Aggressive carries it only toward a hostile creature it can see" : fearCut ? ", and it will not move closer to what it fears" : "";
       return {
-        error: `${resolved.token.name} has no movement left this turn (${words})${steps.length < path.length ? ", and it will not move closer to what it fears" : ""}.${stillAt(tokens, resolved.token)}`,
+        error: `${resolved.token.name} has no movement left this turn (${words})${why}.${stillAt(tokens, resolved.token)}`,
         refused: "rules",
       };
     }
     landing = walk.at;
     spent = walk.spent * (drag?.factor ?? 1);
-    clamped = !walk.reachedEnd;
+    clamped = !walk.reachedEnd || aggressiveCut;
   }
   const origin = { x: resolved.token.x, y: resolved.token.y };
   const carried = drag ? dragLandings({ map, tokens, mover: resolved.token, landing, walked: [origin, ...walkedPart(path, landing)], held: drag.held, footprintOf: footprints }) : [];
@@ -702,7 +711,9 @@ export function handleMoveToken(
       : {}),
     ...(clamped
       ? {
-          note: `Speed limited the move: ${resolved.token.name} stopped at (${landing.x},${landing.y}) short of (${args.x},${args.y}).`,
+          note: aggressiveCut
+            ? `Aggressive carries ${resolved.token.name} only toward a hostile creature it can see: it stopped at (${landing.x},${landing.y}) short of (${args.x},${args.y}).`
+            : `Speed limited the move: ${resolved.token.name} stopped at (${landing.x},${landing.y}) short of (${args.x},${args.y}).`,
         }
       : {}),
     ...(disengaged ? { disengaged: `Disengaged with ${disengaged}: no opportunity attacks.` } : {}),

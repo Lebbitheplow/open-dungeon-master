@@ -34,6 +34,7 @@ import {
   type EnemyTakeAction,
 } from "@/lib/dm/enemy-turn-logic";
 import { enemyEscape } from "@/lib/dm/grapple";
+import { hostilesInSight } from "@/lib/dm/enemy-aggressive";
 import { hasTrait } from "@/lib/dm/monster-abilities";
 import { conditionTurnShape } from "@/lib/srd/condition-effects";
 import { toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
@@ -199,10 +200,15 @@ function dash(campaign: Campaign, enemy: EncounterEnemy, encounter: Encounter, b
   if (speed <= 0) {
     return { error: `${enemy.displayName}'s speed is 0 right now, so a Dash gains it nothing. Nothing was spent.`, refused: "rules" };
   }
+  // Aggressive moves it toward a hostile creature it can see: with none in
+  // sight it has nowhere to rush (enemy-aggressive.ts).
+  if (route === "bonus" && map && token && !hostilesInSight(encounter, map, enemy, token).length) {
+    return { error: `${enemy.displayName} sees no hostile creature, and Aggressive moves it only toward one it can see. Nothing was spent.`, refused: "rules" };
+  }
   const live = getActiveEncounter(campaign.id) ?? encounter;
   const { closesOwedTurn } = pay(live, enemy.id, route);
   if (!closesOwedTurn) {
-    recordEnemyTurn(live, enemy.id, { dashes: dashesOf(enemyTurnEntry(live, enemy.id)) + 1 });
+    recordEnemyTurn(live, enemy.id, { dashes: dashesOf(enemyTurnEntry(live, enemy.id)) + 1, ...(route === "bonus" ? { aggressive: true } : {}) });
     noteSpent(live, enemy.id, route, "dash");
   }
   saveEncounter(live);

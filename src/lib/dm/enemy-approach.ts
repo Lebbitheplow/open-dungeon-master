@@ -22,6 +22,7 @@ import { enemyMoveBudget, enemySpeedTiles } from "@/lib/dm/enemy-speed";
 import { endsOwedTurn, markEnemyActed } from "@/lib/dm/can-act";
 import { forgetEnemyTurns } from "@/lib/dm/enemy-turn-logic";
 import { FLEEING, TURNED } from "@/lib/dm/flee-logic";
+import { aggressiveSteps } from "@/lib/dm/enemy-aggressive";
 import { missileDeflection, zoneStepsFor } from "@/lib/dm/zone-rules";
 import { zonesAfterMove } from "@/lib/dm/zone-triggers";
 import type { ToolError } from "@/lib/dm/tool-errors";
@@ -213,7 +214,10 @@ export function approachTarget(
     const path = findPath(map.terrain, map.width, map.height, occupied, attacker, target, 1, false, swims);
     const approach = path ? path.slice(0, -1) : [];
     const stopAt = approach.findIndex((step) => reachesFrom(step));
-    const wanted = awayFromFear(origin, stopAt >= 0 ? approach.slice(0, stopAt + 1) : approach, fear);
+    const unafraid = awayFromFear(origin, stopAt >= 0 ? approach.slice(0, stopAt + 1) : approach, fear);
+    // Aggressive's speed goes only toward a hostile it can see (enemy-aggressive.ts).
+    const live = getEncounter(encounterId);
+    const wanted = live ? aggressiveSteps(live, map, enemy, attacker, unafraid, swims).steps : unafraid;
     const walk = walkPathWithBudget(map.terrain, map.width, wanted, budget, swims, origin);
     if (walk.at) {
       landing = walk.at;
@@ -227,10 +231,14 @@ export function approachTarget(
       bestFiringPosition(map.terrain, map.width, map.height, occupied, attacker, target, budget, profile.longRangeTiles);
     const allowed =
       spot && (!fear || chebyshev(spot.at.x, spot.at.y, fear.x, fear.y) >= chebyshev(origin.x, origin.y, fear.x, fear.y));
-    if (spot && allowed) {
+    const route = spot && allowed ? (findPath(map.terrain, map.width, map.height, occupied, attacker, spot.at) ?? []) : [];
+    // A firing position Aggressive's speed would carry it away from a hostile to is not taken.
+    const live = getEncounter(encounterId);
+    const rushed = live && route.length ? aggressiveSteps(live, map, enemy, attacker, route, enemyMoveTraits(map.width, listTokens(map.id), attacker, enemy.encounterId)) : null;
+    if (spot && allowed && !rushed?.cut) {
       landing = spot.at;
       cost = spot.cost;
-      walked = findPath(map.terrain, map.width, map.height, occupied, attacker, spot.at) ?? [];
+      walked = route;
     }
   }
   let provoked: string[] = [];

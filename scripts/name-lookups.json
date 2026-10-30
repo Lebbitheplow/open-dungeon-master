@@ -1271,6 +1271,7 @@
     "lib/dm/enemy-reactions.ts#number": [["key",1,"digits a regex already captured, ids, headers, stored and form numbers (number inputs), dice parts, the pack's English text (\"1,000 feet\", a purse); src/: every site read"]],
     "lib/dm/enemy-reactions.ts#partial": [["identity",1,"invisible or hidden by whole name (anchored)"],["authoring",1,"a Parry reaction line read"]],
     "lib/dm/enemy-strike.ts#partial": [["key",2,"damage types"]],
+    "lib/dm/enemy-strike.ts#first": [["key",1,"the one swing Haste's extra action plans, named in its refusal"]],
     "lib/dm/enemy-swing-odds.ts#keyed": [["key",1,"ids, refs, slugs, tool names, field names, env names, event kinds, UI keys, caches, door and map keys; a sheet's conditionMeta by the condition key it was written under; the usage route's gear map by the sheet's own stored item names (src/: every site read)"]],
     "lib/dm/enemy-swing-odds.ts#partial": [["key",2,"the SRD type and ODM's own feature names"]],
     "lib/dm/enemy-swing-odds.ts#whole": [["identity",1,"condition instances by whole name or key"]],

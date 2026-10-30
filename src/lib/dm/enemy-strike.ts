@@ -91,6 +91,11 @@ export function enemyStrikesEnemy(
     return { error: `${attacker.displayName} has no attack to make; narrate a different action.`, retry: true };
   }
   const planned = plannedSwings(attacker.stats, pool.length ? pool : attacks, asked, { single: input.single });
+  // Haste's extra action is one weapon attack (SRD 5.1), on a creature's row
+  // as on a character (enemy-attack.ts).
+  if (input.haste && planned.some((attack) => attack.spellAttack)) {
+    return { error: `Haste's extra action is one weapon attack, and ${attacker.displayName}'s ${planned[0].name} is a spell attack. Nothing was spent.`, refused: "rules" };
+  }
   const profiles = planned.map((attack) => enemyAttackProfile(attack, attacker.stats.traits ?? []));
   // A prone creature stands first, then walks into reach.
   const { enemy, stood } = standUpIfProne(encounter.id, attacker);

@@ -41,6 +41,9 @@ export type EnemyTurnEntry = {
   // Haste's extra action is taken (one weapon attack, Dash, Disengage, Hide
   // or Use an Object, SRD 5.1).
   hasteUsed?: boolean;
+  // One of its Dashes is Aggressive's bonus action (the SRD orc): that
+  // speed carries it only toward a hostile creature it can see.
+  aggressive?: boolean;
 };
 
 export type EnemyTurns = { round: number; byId: Record<string, EnemyTurnEntry> };
@@ -62,6 +65,7 @@ function cleanEntry(raw: unknown): EnemyTurnEntry {
     ...(spent ? { spentOn: spent } : {}),
     ...(count(record.carried) ? { carried: count(record.carried) } : {}),
     ...(record.hasteUsed === true ? { hasteUsed: true } : {}),
+    ...(record.aggressive === true ? { aggressive: true } : {}),
   };
 }
 
@@ -149,6 +153,26 @@ export function owedTurnCarry(speedTiles: number, entry: EnemyTurnEntry, movedTi
     carried: enemyTilesLeft(speedTiles, entry, movedTiles),
     ...(entry.disengaged ? { disengaged: true } : {}),
   };
+}
+
+type Square = { x: number; y: number };
+
+// The squares of a walk an Aggressive creature may take: what its own
+// movement pays for (the first `ownTiles` of cost, spent first) goes
+// anywhere; the speed Aggressive added carries it only toward a hostile
+// creature it can see, so from there each step must not end farther from
+// the nearest of them than the square before it (SRD 5.1 orc). `paidFrom`
+// is the index of the first step the Aggressive speed pays for; `nearest`
+// the squares from a square to the nearest hostile it saw.
+export function towardSteps<T extends Square>(from: Square, steps: readonly T[], paidFrom: number, nearest: (at: Square) => number): T[] {
+  let previous = paidFrom > 0 ? steps[paidFrom - 1] : from;
+  for (let index = Math.max(0, paidFrom); index < steps.length; index += 1) {
+    if (nearest(steps[index]) > nearest(previous)) {
+      return steps.slice(0, index);
+    }
+    previous = steps[index];
+  }
+  return [...steps];
 }
 
 // The board's count, said the way a character's Dash reply says it
