@@ -249,8 +249,10 @@ export type CampaignState = {
   shopsVersion: number;
   // The last coin movement, for the purse FX.
   coins: { characterId: string; direction: "in" | "out"; amountCp: number; at: number } | null;
-  // The last fight's card (docs/vtt-parity-implementation-plan.md 4.2).
+  // The last fight's card (docs/vtt-parity-implementation-plan.md 4.2), and
+  // the encounter it sums up: a different fight on the board takes it down.
   fightSummary: EncounterSummary | null;
+  fightSummaryEncounterId: string;
   characterEvents: CharacterEvent[];
   encounter: PublicEncounter | null;
   // Open DM item/gold offers (inventoryApprovals).
@@ -401,6 +403,7 @@ const initialState: CampaignState = {
   questsVersion: 0,
   pinsVersion: 0,
   fightSummary: null,
+  fightSummaryEncounterId: "",
   characterEvents: [],
   encounter: null,
   itemProposals: [],
@@ -486,6 +489,18 @@ function placeBySeq<T extends { seq: number }>(list: T[]): T[] {
   return list;
 }
 
+// The last fight's card stays until it is dismissed or another fight is on
+// the board. It used to wait for the next fight's own card, so "Party
+// Defeated" sat over the whole of the next encounter (0.31.1 playtest).
+function summaryAfter(
+  state: CampaignState,
+  encounter: { id: string } | null,
+): Pick<CampaignState, "fightSummary" | "fightSummaryEncounterId"> | Record<string, never> {
+  return state.fightSummary && encounter && encounter.id !== state.fightSummaryEncounterId
+    ? { fightSummary: null, fightSummaryEncounterId: "" }
+    : {};
+}
+
 // Exported for the reducer tests (scripts/test-campaign-reducer.mjs); the
 // page only ever reaches it through useCampaignStream.
 export function campaignReducer(state: CampaignState, action: Action): CampaignState {
@@ -497,7 +512,7 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
     case "sideThreads":
       return { ...state, sideThreads: action.sideThreads, sideChatLoaded: true };
     case "encounter":
-      return { ...state, encounter: action.encounter };
+      return { ...state, encounter: action.encounter, ...summaryAfter(state, action.encounter) };
     // The seat-visible list, whole, so a wholesale replace is right.
     case "rolls":
       return { ...state, rolls: action.rolls };
@@ -730,9 +745,11 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
           return next;
         case "encounter_summary":
           next.fightSummary = (payload.summary as EncounterSummary | undefined) ?? null;
+          next.fightSummaryEncounterId = typeof payload.encounterId === "string" ? payload.encounterId : "";
           return next;
         case "fight_summary_dismissed":
           next.fightSummary = null;
+          next.fightSummaryEncounterId = "";
           return next;
         case "x_card":
           next.safetyPause = { at: Number(payload.at ?? Date.now()), reason: "x_card" };
@@ -981,6 +998,7 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
           // mid-fight; they keep what they have until their own fetch lands.
           // The fight ending is not a downgrade, so null always applies.
           next.encounter = state.caps.enemyNumbers && shared ? state.encounter : shared;
+          Object.assign(next, summaryAfter(state, shared));
           return next;
         }
         case "dm_intent_queued":
