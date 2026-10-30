@@ -5,6 +5,7 @@ import { createCharacter, getCharacterForUser } from "@/lib/db/characters";
 import { adaptSheetToLevel } from "@/lib/characters/adapt";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { listSheets } from "@/lib/db/sheets";
+import { storyNameOf } from "@/lib/characters/story-name";
 import { finalizeNewCompanion, lastingCompanionProblem } from "@/lib/dm/companion-tools";
 import { requestDmTurn } from "@/lib/dm/loop";
 import { admitSheet, refusal } from "@/lib/characters/admit";
@@ -137,14 +138,17 @@ export async function POST(
 
   // Active session: a table note so the DM writes them into the scene next
   // turn. In the lobby the opening narration already reads every party sheet.
+  // It names the hero who brings them, not the account (#658): the GM reads
+  // the line. Whoever runs the story with no hero of their own says no name.
   if (campaign.status === "active") {
+    const bringer = storyNameOf(campaignId, context.user.id);
     const seq = allocateSeq(campaignId);
     const message = insertCampaignMessage({
       campaignId,
       seq,
       authorType: "system",
       glyph: "system-party",
-      content: `${context.user.username} brings a companion into the party: ${sheet.name}, a ${raceWords(sheet)} ${classWords(sheet.class)}. Introduce them into the scene at the next natural moment.`,
+      content: `${bringer ? `${bringer} brings a companion into the party` : "A companion joins the party"}: ${sheet.name}, a ${raceWords(sheet)} ${classWords(sheet.class)}. Introduce them into the scene at the next natural moment.`,
     });
     publishWithSeq(campaignId, seq, "message_added", { message });
     requestDmTurn(campaignId);

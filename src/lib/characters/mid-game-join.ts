@@ -13,26 +13,22 @@ import { classWords, raceWords } from "@/lib/sheet-words";
 // take from the composer's gate. A hero who replaces one that fell
 // (src/lib/characters/hero-door.ts) says so, so the GM brings them in as
 // a new member of the party rather than a stranger with no reason to be there.
-export function announceMidGameJoin(
-  context: MemberContext,
-  sheet: CharacterSheet,
-  replaces?: string,
-  // Whose hero it is: the caller's, unless the owner seated it for them.
-  username: string = context.user.username,
-) {
+// The note names the hero, not the player's account: the GM reads it, and an
+// account name reached the story (#658, as #594 did for the fight notice).
+export function announceMidGameJoin(context: MemberContext, sheet: CharacterSheet, replaces?: string) {
   if (context.campaign.status !== "active") {
     return;
   }
   const campaignId = context.campaign.id;
   const seq = allocateSeq(campaignId);
   const backstoryHint = sheet.backstory ? ` Their backstory: ${sheet.backstory.slice(0, 200)}` : "";
-  const fallenHint = replaces ? ` They take the place of ${replaces}, who fell.` : "";
+  const fallenHint = replaces ? `, taking the place of ${replaces}, who fell` : "";
   const message = insertCampaignMessage({
     campaignId,
     seq,
     authorType: "system",
     glyph: "system-party",
-    content: `${JOIN_NOTE_PREFIX}${username} has joined the party as ${sheet.name}, a ${raceWords(sheet)} ${classWords(sheet.class)}.${fallenHint}${backstoryHint} Introduce them into the scene at the next natural moment.`,
+    content: `${JOIN_NOTE_PREFIX}${sheet.name}, a ${raceWords(sheet)} ${classWords(sheet.class)}, joins the party${fallenHint}.${backstoryHint} Introduce them into the scene at the next natural moment.`,
   });
   publishWithSeq(campaignId, seq, "message_added", { message });
 }

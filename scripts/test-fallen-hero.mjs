@@ -85,7 +85,7 @@ await test("a ready-made hero takes the fallen hero's place at level 5, and the 
   // The fallen sheet stays on the record; the new one is the one in play.
   assert.deepEqual(table.own().map((sheet) => sheet.name).sort(), ["Kara", "Mira Vale"].sort());
   assert.equal(sheets.getSheetForUser(table.world.campaignId, table.player.id)?.id, seated.json.sheet.id);
-  assert.match(table.note(), /take the place of Mira Vale, who fell/);
+  assert.match(table.note(), /taking the place of Mira Vale, who fell/);
   table.world.close();
 });
 

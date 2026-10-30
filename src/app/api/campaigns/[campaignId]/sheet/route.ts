@@ -264,12 +264,7 @@ export async function POST(
   queueLibraryPortrait(libraryCharacter);
   seatAddedSheet(context.campaign, targetUserId, sheet.id);
   publishPersisted(campaignId, "sheet_updated", { sheet });
-  announceMidGameJoin(
-    context,
-    sheet,
-    door.fallen?.name,
-    listMembers(campaignId).find((member) => member.userId === targetUserId)?.username ?? context.user.username,
-  );
+  announceMidGameJoin(context, sheet, door.fallen?.name);
 
   return Response.json(
     { sheet, ...(admitted.rolledHp ? { rolled: { hp: admitted.rolledHp } } : {}) },
