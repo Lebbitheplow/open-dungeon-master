@@ -188,12 +188,8 @@ await test("CMB-03", async () => {
   assert.equal(swing.kept, 13, "the attack was not rolled with advantage");
 });
 
-await gap("CMB-04", {
-  rule: "conditions, Invisible: 'For the purpose of hiding, the creature is heavily obscured.' (combat, Hide: you make a Dexterity (Stealth) check in an attempt to hide)",
-  where: "src/lib/dm/hide-traits.ts seenClearlyDespiteTraits (an invisible hider counts as seen clearly by any enemy with a sight line)",
-  severity: "low",
-  note: "An invisible character standing in the open is refused the Hide action as 'seen clearly' by an enemy that cannot see invisible creatures.",
-}, async () => {
+// conditions, Invisible: 'For the purpose of hiding, the creature is heavily obscured.' (combat, Hide: you make a Dexterity (Stealth) check in an attempt to hide)
+await test("CMB-04", async () => {
   const [enemy] = await stage(fighter);
   kit.place(fighter.id, 5, 5);
   kit.place(enemy.id, 5, 9);

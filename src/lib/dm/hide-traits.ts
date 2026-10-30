@@ -18,9 +18,12 @@ import { getBattleMapForEncounter, getTokenByRef, listTokens } from "@/lib/db/ba
 import { listEnemies } from "@/lib/db/encounters";
 import { getSheetById } from "@/lib/db/sheets";
 import { coverBetween, hasLineOfSight } from "@/lib/battlemap/los";
+import { chebyshev } from "@/lib/battlemap/types";
+import { conditionSeesInvisible } from "@/lib/srd/condition-effect-queries";
 import { normalizeClock } from "@/lib/dm/calendar";
 import { sizeForRace } from "@/lib/srd";
 import { holdsFeature } from "@/lib/srd/trait-rules";
+import { isConditionNamed } from "@/lib/srd/feature-names";
 import { weatherPerceptionRider } from "@/lib/srd/weather";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
@@ -90,6 +93,10 @@ export function seenClearlyDespiteTraits(
         return rank(size) > mySize;
       }),
     );
+  // "For the purpose of hiding, the creature is heavily obscured" (SRD 5.1,
+  // Conditions, Invisible): only a watcher that sees the invisible (See
+  // Invisibility, truesight) or needs no sight (blindsight) in range sees it.
+  const invisible = sheet.conditions.some((name) => isConditionNamed(name, "invisible"));
   for (const enemy of listEnemies(encounterId)) {
     if (enemy.status !== "alive" || enemy.conditions.some((name) => name.toLowerCase() === "blinded")) {
       continue;
@@ -97,6 +104,13 @@ export function seenClearlyDespiteTraits(
     const token = getTokenByRef(map.id, enemy.id);
     if (!token) {
       continue;
+    }
+    if (invisible && !conditionSeesInvisible(enemy.conditions)) {
+      const senses = enemySenses(enemy);
+      const apart = chebyshev(token.x, token.y, hider.x, hider.y);
+      if (apart > senses.truesight && apart > senses.blindsight) {
+        continue;
+      }
     }
     const sighted = hasLineOfSight(map.terrain, map.width, token.x, token.y, hider.x, hider.y);
     const cover = coverBetween(map.terrain, map.width, map.height, token.x, token.y, hider.x, hider.y);
