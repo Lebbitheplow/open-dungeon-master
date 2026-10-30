@@ -902,5 +902,24 @@ await test("A dead character makes no ability checks or saving throws.", async (
   assert.equal(out.outcome.ok, false, `a dead character rolled ${out.dice.join(" ")}`);
 });
 
+// Issue #622: the snapshot's log is the newest fifty real changes, with the
+// rounds' time-only ticks among them riding along. A plain "last fifty rows"
+// let a long fight's ticks push every change out of the log.
+await test("the table's log keeps its newest fifty changes, however many ticks the rounds wrote after them", async () => {
+  const snapshotRoute = await world.route("campaigns/[campaignId]");
+  const { insertSheetAudit } = await import("../src/lib/db/sheet-audit.ts");
+  const { allocateSeq } = await import("../src/lib/db/campaigns.ts");
+  const write = (kind, delta, reason) =>
+    insertSheetAudit({ campaignId: world.campaignId, characterId: hero.id, kind, delta, reason, seq: allocateSeq(world.campaignId) });
+  for (let n = 1; n <= 55; n += 1) write("apply_damage", { amount: n }, `blow ${n}`);
+  for (let n = 0; n < 200; n += 1) write("condition_clock", { ended: [], added: [] }, "time counted down on their conditions");
+  world.signIn(world.owner);
+  const snapshot = await (await snapshotRoute.GET(new Request("http://test/"), { params: Promise.resolve({ campaignId: world.campaignId }) })).json();
+  const changes = snapshot.auditLog.filter((entry) => entry.kind === "apply_damage" && /^blow /.test(entry.reason));
+  assert.equal(changes.length, 50, `the log holds ${changes.length} of the newest changes`);
+  assert.equal(changes[0].reason, "blow 6");
+  assert.equal(snapshot.auditLog.filter((entry) => entry.kind === "condition_clock" && entry.reason === "time counted down on their conditions").length, 200);
+});
+
 world.close();
 finish();

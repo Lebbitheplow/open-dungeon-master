@@ -22,6 +22,7 @@ import type { Campaign } from "@/lib/db/campaigns";
 import type { Chapter } from "@/lib/db/chapters";
 import type { CharacterEvent } from "@/lib/db/character-events";
 import type { ClockTurn } from "@/lib/db/clock-moves";
+import { changesWindow } from "@/lib/sheet-audit-logic";
 import type { PublicEncounter } from "@/lib/db/encounter-view";
 import type { CampaignMessage } from "@/lib/db/messages";
 import type { DmBeat } from "@/lib/db/dm-beats";
@@ -635,10 +636,11 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
           if (entry) {
             // The same row again is the row as it now reads: a turn that took
             // in what its job wrote before the turn existed (issue #622).
-            next.auditLog = upsertBy(
-              state.auditLog.slice(-80),
-              { ...entry, characterName: payload.characterName as string | undefined },
-              (row) => row.id,
+            // The window keeps eighty real changes; the rounds' time-only
+            // ticks among them do not count toward it (issue #622).
+            next.auditLog = changesWindow(
+              upsertBy(state.auditLog, { ...entry, characterName: payload.characterName as string | undefined }, (row) => row.id),
+              80,
             );
           }
           return next;

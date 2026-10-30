@@ -1,6 +1,7 @@
 import type { AuditEntry } from "@/app/campaigns/[campaignId]/useCampaignStream";
 import type { CharacterEvent } from "@/lib/db/character-events";
 import type { ClockTurn } from "@/lib/db/clock-moves";
+import { quietTick } from "@/lib/sheet-audit-logic";
 
 // What the event log lists and which turns it offers to revert. Pure, so a
 // suite reads it without a browser (scripts/test-event-log-logic.mjs). The
@@ -15,23 +16,10 @@ export type FeedItem =
   | { type: "time"; seq: number; move: ClockTurn }
   | { type: "milestone"; seq: number; event: CharacterEvent };
 
-// A change that only counted time down: a condition's rounds, a spell's
-// minutes, a mark a turn's start sets. A fight writes several each round,
-// one per character, and each is a real change the turn's revert puts back
-// (issue #622), so they are listed, folded into one line per turn.
-export function quietTick(entry: AuditEntry): boolean {
-  if (entry.kind === "concentration") {
-    return true;
-  }
-  if (entry.kind !== "condition_clock") {
-    return false;
-  }
-  const none = (value: unknown) => !Array.isArray(value) || !value.length;
-  return none(entry.delta.ended) && none(entry.delta.added);
-}
-
 // Newest first: the sheet changes, the milestones and the time the turns
-// moved on, with each run of one turn's quiet ticks folded into one item.
+// moved on, with each run of one turn's quiet ticks (src/lib/
+// sheet-audit-logic.ts) folded into one item: the turn's revert puts them
+// back, but none is news.
 export function buildFeed(auditLog: AuditEntry[], characterEvents: CharacterEvent[], clockTurns: ClockTurn[] = []): FeedItem[] {
   const items: FeedItem[] = [
     ...auditLog.map((entry) => ({ type: "audit" as const, seq: entry.seq, entry })),

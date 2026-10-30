@@ -1,5 +1,6 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { awaitTurnBinding, currentTurnId, owningTurnOf } from "@/lib/dm/job-control";
+import { changesWindow } from "@/lib/sheet-audit-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // Audit trail for every DM-driven sheet change: what changed, why, and in
@@ -173,6 +174,25 @@ export function listRecentAudit(campaignId: string, limit = 50): SheetAuditEntry
     )
     .all(campaignId, limit) as AuditRow[];
   return rows.map(mapEntry);
+}
+
+// The newest `keep` real changes, oldest first, with the rows that only
+// counted time down among them (src/lib/sheet-audit-logic.ts). A fight's
+// rounds write those every round, and in a plain "last 50 rows" they pushed
+// the changes a lead reads out of the log (issue #622). Read from the newest
+// thousand rows, without the sheet snapshots (before_json) undo alone needs.
+export function listRecentAuditChanges(campaignId: string, keep = 50): SheetAuditEntry[] {
+  const rows = getDatabase()
+    .prepare(
+      `
+        SELECT id, campaign_id, character_id, turn_id, actor, kind, delta_json, reason, seq, created_at,
+          CASE WHEN before_json IS NULL THEN NULL ELSE '' END AS before_json,
+          patch_json, reverted_by, reverted_at
+        FROM sheet_audit WHERE campaign_id = ? ORDER BY seq DESC LIMIT 1000
+      `,
+    )
+    .all(campaignId) as AuditRow[];
+  return changesWindow(rows.reverse().map(mapEntry), keep);
 }
 
 export function listAuditForTurn(campaignId: string, turnId: string): SheetAuditEntry[] {

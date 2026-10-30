@@ -29,7 +29,7 @@ import { offerVisibleTo } from "@/lib/dm/proposal-view";
 import { listOpenDisputes, publicDispute } from "@/lib/db/disputes";
 import { publicItemProposal } from "@/lib/dm/proposal-intercept";
 import { listLocations } from "@/lib/db/locations";
-import { listRecentAudit } from "@/lib/db/sheet-audit";
+import { listRecentAuditChanges } from "@/lib/db/sheet-audit";
 import { listLiveClockTurns } from "@/lib/db/clock-moves";
 import { insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
 import { listRollsVisibleTo } from "@/lib/db/rolls";
@@ -163,7 +163,9 @@ export async function GET(
     pendingRolls: listOpenPendingRolls(campaignId).map(publicPendingRoll),
     // A correction of someone's notes is listed without them, as their sheet
     // is (src/lib/dm/sheet-view.ts).
-    auditLog: listRecentAudit(campaignId, 50).map((entry) =>
+    // The newest fifty changes; the rounds' time-only ticks among them ride
+    // along without taking a change's place (issue #622).
+    auditLog: listRecentAuditChanges(campaignId, 50).map((entry) =>
       auditEntryForViewer(entry, campaignSeats(campaign), user.id, ownedCharacterIds),
     ),
     locations: listLocations(campaignId),
