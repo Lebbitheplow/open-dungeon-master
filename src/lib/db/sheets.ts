@@ -16,7 +16,7 @@ import { attractionJson, normalizeAttraction } from "@/lib/attraction";
 import { backgroundFeatureFor } from "@/lib/backgrounds";
 import { registerSpeciesReader } from "@/lib/srd/race-id";
 import { featsAsRun } from "@/lib/srd/feat-effects";
-import { serverSpeciesRules } from "@/lib/characters/species-rules";
+import { serverSpeciesName, serverSpeciesRules } from "@/lib/characters/species-rules";
 import {
   keyedFeatChoices,
   type CharacterSheet,
@@ -111,7 +111,9 @@ function mapSheet(row: SheetRow): CharacterSheet {
   }
   // Sheets from before the cantrip list kept cantrips in prepared/known.
   const spellcasting = normalizeSpellcasting(parsedCasting);
-  const raceLabel = homebrewRaceLabel(row.user_id, row.race, row.campaign_id);
+  // A homebrew species by its author's name, a content-pack one by the
+  // builder's ("Minotaur (Bhain Kwai)"); a bundled id reads as its words.
+  const raceLabel = homebrewRaceLabel(row.user_id, row.race, row.campaign_id) ?? serverSpeciesName(row.race) ?? undefined;
   const backgroundLabel = homebrewLabel(row.user_id, row.background, "background", row.campaign_id);
   return {
     id: row.id,

@@ -841,7 +841,7 @@
     "lib/characters/seat-picks.ts#whole": [["identity",3,"a class, a feat and thieves' tools by textKey"]],
     "lib/characters/species-rules.ts#fallback": [["key",1,"a workshop species' one option, by its id"]],
     "lib/characters/species-rules.ts#first": [["key",1,"the option of the row already found"]],
-    "lib/characters/species-rules.ts#partial": [["pattern",1,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"]],
+    "lib/characters/species-rules.ts#partial": [["pattern",1,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"],["key",1,"the homebrew id prefix on a species id, whose name is its author's to give"]],
     "lib/chat-roles-logic.ts#partial": [["parse",1,"the chat template's own English error message (protocol)"]],
     "lib/chronicle-logic.ts#partial": [["pattern",1,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"]],
     "lib/classes/feature-text.ts#fallback": [["key",1,"a class's feature text by its id: the bundled table's, else the workshop class's"]],

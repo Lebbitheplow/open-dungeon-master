@@ -1,6 +1,7 @@
 import { getDatabase, parseJson } from "@/lib/db/core";
 import { listRaces } from "@/lib/content";
 import { packRaceOptions, srdRaceFor } from "@/lib/content/race-options";
+import { libraryLabels } from "@/lib/db/homebrew";
 import type { SpeciesRules } from "@/lib/srd/race-id";
 
 // The server's reader for src/lib/srd/race-id.ts speciesRulesFor: the size,
@@ -10,10 +11,12 @@ import type { SpeciesRules } from "@/lib/srd/race-id";
 // which no other author shares, so no owner is needed to find it.
 //
 // Kept for a minute: the rules ask on every derivation, and a DM's edit to
-// their species reaches the table within that.
+// their species reaches the table within that. The row's name rides along
+// (serverSpeciesName), read in the same pass.
 
 const TTL_MS = 60_000;
-const cache = new Map<string, { at: number; rules: SpeciesRules | null }>();
+type Read = { rules: SpeciesRules | null; name: string | null };
+const cache = new Map<string, { at: number } & Read>();
 
 function workshopRow(id: string) {
   const row = getDatabase()
@@ -24,11 +27,10 @@ function workshopRow(id: string) {
     : null;
 }
 
-function read(raceId: string): SpeciesRules | null {
+function optionFor(raceId: string) {
   if (raceId.startsWith("homebrew:")) {
     const row = workshopRow(raceId);
-    const option = row ? packRaceOptions([row], [raceId])[0] : undefined;
-    return option ? { size: option.size, heavyArmorSpeed: option.heavyArmorSpeed, traitNames: option.traitNames } : null;
+    return row ? packRaceOptions([row], [raceId])[0] : undefined;
   }
   const rows = listRaces({ limit: 500 }).map((row) => ({
     slug: row.slug,
@@ -37,8 +39,20 @@ function read(raceId: string): SpeciesRules | null {
     document: row.document,
     data: row.data,
   }));
-  const option = rows.length ? packRaceOptions(rows, [raceId]).find((entry) => entry.id === raceId) : undefined;
-  return option ? { size: option.size, heavyArmorSpeed: option.heavyArmorSpeed, traitNames: option.traitNames } : null;
+  return rows.length ? packRaceOptions(rows, [raceId]).find((entry) => entry.id === raceId) : undefined;
+}
+
+function read(raceId: string): Read {
+  const held = cache.get(raceId);
+  if (held && Date.now() - held.at < TTL_MS) {
+    return held;
+  }
+  const option = optionFor(raceId);
+  const fresh: Read = option
+    ? { rules: { size: option.size, heavyArmorSpeed: option.heavyArmorSpeed, traitNames: option.traitNames }, name: option.name || null }
+    : { rules: null, name: null };
+  cache.set(raceId, { at: Date.now(), ...fresh });
+  return fresh;
 }
 
 export function serverSpeciesRules(raceId: string): SpeciesRules | null {
@@ -47,13 +61,29 @@ export function serverSpeciesRules(raceId: string): SpeciesRules | null {
   if (!id || srdRaceFor(id)) {
     return null;
   }
-  const held = cache.get(id);
-  if (held && Date.now() - held.at < TTL_MS) {
-    return held.rules;
+  return read(id).rules;
+}
+
+// A content-pack species by the name the builder offered it under
+// ("Minotaur (Bhain Kwai)", not "bhain-kwai"): the raceLabel a sheet and a
+// library character carry, so the cards, the sheet dialog, the GM and the
+// portrait painter all read what the player picked. Null for a bundled id
+// ("hill_dwarf" reads as its own words) and for a workshop species, whose
+// name comes from its author's shelf (src/lib/db/homebrew.ts homebrewLabel).
+export function serverSpeciesName(raceId: string): string | null {
+  const id = raceId.trim();
+  if (!id || id.startsWith("homebrew:") || srdRaceFor(id)?.id === id) {
+    return null;
   }
-  const rules = read(id);
-  cache.set(id, { at: Date.now(), rules });
-  return rules;
+  return read(id).name;
+}
+
+// libraryLabels with a content-pack species named as well; kept here, not in
+// homebrew.ts, because the content reader this needs already reads homebrew.
+export function libraryWords(character: Parameters<typeof libraryLabels>[0]): ReturnType<typeof libraryLabels> {
+  const labels = libraryLabels(character);
+  const packName = labels.raceLabel ? null : serverSpeciesName(character.race);
+  return packName ? { ...labels, raceLabel: packName } : labels;
 }
 
 // The rules of every species at a table the bundled list does not carry,

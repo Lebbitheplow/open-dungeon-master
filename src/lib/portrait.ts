@@ -15,6 +15,7 @@ import { configuredDefaultStorySettings } from "@/lib/runtime-defaults";
 import type { CharacterSheet, SheetAttachment } from "@/lib/schemas/sheet";
 import { recordMediaFile } from "@/lib/media-access";
 import { homebrewLabel } from "@/lib/db/homebrew";
+import { serverSpeciesName } from "@/lib/characters/species-rules";
 import { workshopClassName } from "@/lib/classes/workshop-registry";
 import { ancestryOf, findDraconicAncestry } from "@/lib/srd/racial-grants";
 import { npcRoleLabel } from "@/lib/placeholders";
@@ -47,12 +48,14 @@ function dragonOf(choice: string | undefined, features: ReadonlyArray<{ name: st
 }
 
 // A library character as a face: the names its homebrew race, background and
-// workshop class were given, never their ids (src/lib/portrait-prompt.ts).
+// workshop class were given, never their ids (src/lib/portrait-prompt.ts). A
+// content-pack species is painted from the builder's name for it: "bhain
+// kwai" tells the painter nothing, "Minotaur (Bhain Kwai)" draws a minotaur.
 export function libraryLook(character: LibraryCharacter): CharacterLook {
   const sheet = character.sheet;
   return {
     gender: sheet.gender ?? "",
-    race: homebrewLabel(character.userId, sheet.race, "race") ?? idWords(sheet.race),
+    race: homebrewLabel(character.userId, sheet.race, "race") ?? serverSpeciesName(sheet.race) ?? idWords(sheet.race),
     ancestry: dragonOf(sheet.racialChoices?.ancestry),
     className: workshopClassName(sheet.class) ?? idWords(sheet.class),
     background: homebrewLabel(character.userId, sheet.background, "background") ?? idWords(sheet.background),

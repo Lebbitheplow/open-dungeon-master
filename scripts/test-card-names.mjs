@@ -73,6 +73,25 @@ try {
     assert.ok(party.includes("Human Plague Doctor 1"), "the companion's card");
     assert.ok(!party.includes("plague_doctor 1") && !party.includes("bhain-kwai fighter"), "no ids on the cards");
   });
+
+  // The builder offers the content pack's row as "Minotaur (Bhain Kwai)";
+  // the server now names a pack species on the sheet the same way, so the
+  // cards, the sheet dialog, the library and the GM read what was picked.
+  await test("a content-pack species reads as the builder named it, on a sheet and in the library", async () => {
+    const { serverSpeciesName, libraryWords } = await import("../src/lib/characters/species-rules.ts");
+    assert.equal(serverSpeciesName("hill_dwarf"), null, "a bundled id reads as its own words");
+    assert.equal(serverSpeciesName("homebrew:abc"), null, "a workshop species is named by its author's shelf");
+    if (!world.hasPack) {
+      console.log("  (no content pack: the pack's names are not checked)");
+      return;
+    }
+    const hero = world.addHero({ name: "Kell", race: "bhain-kwai" });
+    const stored = world.sheet(hero.id);
+    assert.equal(stored.raceLabel, "Minotaur (Bhain Kwai)");
+    assert.equal(words.speciesAndClassWords(stored), "Minotaur (Bhain Kwai) Fighter 1");
+    assert.equal(serverSpeciesName("odm-hill-dwarf"), "Dwarf (Hill)", "the pack's copy of a bundled row");
+    assert.equal(libraryWords({ userId: hero.userId, race: "bhain-kwai", class: "fighter", background: "soldier" }).raceLabel, "Minotaur (Bhain Kwai)");
+  });
 } finally {
   world.close();
 }

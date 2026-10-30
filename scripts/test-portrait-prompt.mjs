@@ -106,6 +106,19 @@ await test("a homebrew race and background read as their names: on the sheet, to
   assert.equal(classWords("fighter"), "fighter");
 });
 
+await test("a content-pack species is painted from the builder's name for it, not its id", () => {
+  if (!world.hasPack) {
+    console.log("  (no content pack: skipped)");
+    return;
+  }
+  // "bhain kwai" tells the painter nothing; the 0.31.1 playtest's minotaur
+  // was given a human face.
+  const library = { userId: world.owner.id, race: "bhain-kwai", class: "fighter", background: "soldier" };
+  assert.equal(libraryLook({ ...library, sheet: { ...library, gender: "Male", appearance: "", backstory: "" } }).race, "Minotaur (Bhain Kwai)");
+  const hero = world.addHero({ class: "fighter", race: "bhain-kwai", gender: "Male" });
+  assert.match(characterPortraitPrompt(companionLook(world.sheet(hero.id), { personality: "" })), /Male Minotaur \(Bhain Kwai\) fighter/);
+});
+
 await test("a drafted hero keeps the gender the GM gave them, and none when it named none", () => {
   assert.match(draftSystemPrompt(1, { classes: ["fighter"], races: ["human"], backgrounds: ["soldier"] }), /"gender": "Female" \| "Male" \| "Nonbinary"/);
   const hero = { name: "Mira", concept: "a scout", class: "fighter", race: "human", background: "soldier", backstory: "She ran.", role: "tank" };
