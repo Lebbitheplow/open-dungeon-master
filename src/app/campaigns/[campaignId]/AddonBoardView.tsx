@@ -448,7 +448,14 @@ export function AddonBoardView({
       setHudSupported(false);
       activeMenu.current = null;
       setActionsSupported(false);
-      if (nativeOnly) nativeReceiver.current({ type: "error", message: "Native tabletop unavailable. Returning to the Board." });
+      // Only a view laid out over the session has a way back on its own
+      // (BattleMapPanel's onFailure); any other view says where the way back is.
+      if (nativeOnly) {
+        const message = latest.current.onFailure
+          ? "Native tabletop unavailable. Returning to the Board."
+          : "Native tabletop unavailable here. Choose Board under the map to keep playing.";
+        nativeReceiver.current({ type: "error", message });
+      }
     };
     if (!api) { unavailable?.(); return; }
     const detach = attachNativeBoard(frame.current, api, { addonId: boardView.addonId, viewId: boardView.id }, message => nativeReceiver.current(message), unavailable);
