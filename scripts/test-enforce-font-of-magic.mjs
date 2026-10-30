@@ -44,6 +44,12 @@ const convert = (id, level) =>
     amount: level,
   });
 const points = (id) => world.sheet(id).resources.sorcery_points;
+// SRD 5.1 sorcerer, Metamagic: "You gain two of the following Metamagic
+// options of your choice"; only a learned option is spent, so the Twinned
+// Spell spends below are by a sorcerer who picked it (filed as the builder
+// files it).
+const learnTwinned = (id) =>
+  world.patch(id, { features: [...world.sheet(id).features, { name: "Metamagic: Twinned Spell", source: "choice", description: "" }] });
 const slot = (id, level) => world.sheet(id).spellcasting.slots[String(level)];
 
 await test("a variant off the list spends nothing and names the listed ones; a Metamagic option by its name is a plain spend", async () => {
@@ -55,6 +61,7 @@ await test("a variant off the list spends nothing and names the listed ones; a M
     assert.deepEqual(points(hero.id), { max: 5, used: 0 }, `${variant} spent points`);
   }
   const twinner = sorcerer(5, { 1: [4, 0], 2: [3, 0], 3: [2, 0] });
+  learnTwinned(twinner.id);
   const twinned = await world.invoke("use_resource", { characterId: twinner.id, resource: "Sorcery Points", variant: "Twinned Spell", amount: 2 });
   assert.equal(twinned.ok, true, twinned.error);
   assert.deepEqual(points(twinner.id), { max: 5, used: 2 });
@@ -163,6 +170,7 @@ await test("ODM's rule: with a spent slot of that level, creating one hands the 
 
 await test("Metamagic spends points without touching a slot", async () => {
   const hero = sorcerer(5, { 1: [4, 1], 2: [3, 0], 3: [2, 0] });
+  learnTwinned(hero.id);
   const before = world.sheet(hero.id).spellcasting;
   const outcome = await world.invoke("use_resource", {
     characterId: hero.id,
