@@ -119,13 +119,18 @@ export function resetInitiative(campaign: Campaign): InitiativeResult {
   if (!encounter) {
     return { error: "No fight is running." };
   }
-  // The monsters roll again too, quietly, as they did when the fight began.
+  // The monsters roll again too, quietly, as they did when the fight began:
+  // a group of identical creatures that acted together keeps one roll
+  // (SRD 5.1, Initiative), the kind and the old count naming the group.
+  const regrouped = new Map<string, number>();
   for (const enemy of listEnemies(encounter.id)) {
     if (enemy.status === "alive") {
-      setEnemyInitiative(
-        enemy.id,
-        dmRoll(campaign.id, null, "initiative", `${enemy.displayName}: initiative`, d20Expression(enemy.stats.dexMod)).total,
-      );
+      const group = `${enemy.slug}@${enemy.initiative ?? enemy.id}`;
+      const total =
+        regrouped.get(group) ??
+        dmRoll(campaign.id, null, "initiative", `${enemy.displayName}: initiative`, d20Expression(enemy.stats.dexMod)).total;
+      regrouped.set(group, total);
+      setEnemyInitiative(enemy.id, total);
     }
   }
   encounter.order = [];

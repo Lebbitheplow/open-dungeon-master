@@ -363,12 +363,8 @@ await gap("CMB-10", {
 
 // ---- Initiative ----
 
-await gap("CMB-11", {
-  rule: "combat, Initiative: 'The GM makes one roll for an entire group of identical creatures, so each member of the group acts at the same time.'",
-  where: "src/lib/dm/encounter-open.ts (and initiative-ask.ts): every enemy of a group rolls its own initiative",
-  severity: "low",
-  note: "Two goblins of one group take places 15 counts apart in the order; the SRD puts them on one roll.",
-}, async () => {
+// combat, Initiative: 'The GM makes one roll for an entire group of identical creatures, so each member of the group acts at the same time.'
+await test("CMB-11", async () => {
   await kit.endFight();
   world.clearDice();
   const seated = world.sheets().filter((sheet) => !sheet.deathSaves?.dead).length;

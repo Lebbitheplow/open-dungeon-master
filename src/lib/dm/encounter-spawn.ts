@@ -50,7 +50,32 @@ export type ResolvedEnemyRequest = {
   // enemy row is made for it; `stats` is what the fight is budgeted on
   // (src/lib/dm/sheet-foes.ts).
   sheetFoe?: SheetFoe;
+  // Which entry of the request it came from: a monster and its count are
+  // one group of identical creatures, on one initiative roll.
+  group?: number;
 };
+
+// One initiative roll for each group of identical creatures: "The GM makes
+// one roll for an entire group of identical creatures, so each member of
+// the group acts at the same time" (SRD 5.1, Initiative). A group is one
+// entry of the enemies list, a monster with its count. Rolled silently, a
+// record for the DM alone, as an enemy's save is.
+export function groupInitiatives(campaignId: string, rows: ResolvedEnemyRequest[], names: string[]): number[] {
+  const rolled = new Map<number, number>();
+  return rows.map((entry, index) => {
+    const held = entry.group === undefined ? undefined : rolled.get(entry.group);
+    if (held !== undefined) {
+      return held;
+    }
+    const size = entry.group === undefined ? 1 : rows.filter((row) => row.group === entry.group).length;
+    const label = size > 1 ? `${entry.name} (${size}): initiative` : `${names[index]}: initiative`;
+    const total = dmRoll(campaignId, null, "initiative", label, d20Expression(entry.stats.dexMod)).total;
+    if (entry.group !== undefined) {
+      rolled.set(entry.group, total);
+    }
+    return total;
+  });
+}
 
 // Resolves every requested enemy before anything is created. Returns the
 // flat per-individual list, or the first unresolvable monster reference.
@@ -74,7 +99,7 @@ export function resolveEnemyRequests(
   // A companion who left the party and comes back against it, or one that
   // turned on it, fights as themselves: once, whatever the count.
   const sheetFoes = campaignId ? sheetFoesByName(campaignId) : new Map<string, SheetFoeEntry>();
-  for (const request of requests) {
+  for (const [group, request] of requests.entries()) {
     const count = request.count ?? 1;
     const wanted = textKey(request.monster);
     const foe = sheetFoes.get(wanted);
@@ -98,7 +123,7 @@ export function resolveEnemyRequests(
     const displayName =
       request.name?.trim() || match?.reskinName || match?.baseName || request.monster.trim();
     for (let index = 0; index < count; index += 1) {
-      resolved.push({ slug: match?.slug ?? "custom", name: displayName, stats });
+      resolved.push({ slug: match?.slug ?? "custom", name: displayName, stats, group });
     }
   }
   return { resolved };
@@ -245,15 +270,16 @@ export function handleAddEnemies(
       }
     }
   }
+  // Enemy initiative rolls silently at spawn, like start_encounter: once
+  // for each group of identical creatures.
+  const initiatives = groupInitiatives(campaign.id, rows, names);
   const inserted = rows.map((entry, index) =>
     insertEnemy({
       encounterId: encounter.id,
       campaignId: campaign.id,
       slug: entry.slug,
       displayName: names[index],
-      // Enemy initiative rolls silently at spawn, like start_encounter.
-      // A record for the DM alone, as an enemy's save is.
-      initiative: dmRoll(campaign.id, null, "initiative", `${names[index]}: initiative`, d20Expression(entry.stats.dexMod)).total,
+      initiative: initiatives[index],
       stats: entry.stats,
     }),
   );
