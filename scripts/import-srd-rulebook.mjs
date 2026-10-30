@@ -216,6 +216,10 @@ const ERRATA = [
   ["spellcasting", "later in the this chapter", "later in this chapter"],
   ["salamander", "**Sense**s", "**Senses**"],
   ["satyr", "**Sense**s", "**Senses**"],
+  // The Travel Pace table's Day column has Normal and Slow swapped; SRD 5.1
+  // prints Normal 24 miles and Slow 18 (3 and 2 miles an hour).
+  ["adventuring", "| Normal | 300 feet | 3 miles | 18 miles |", "| Normal | 300 feet | 3 miles | 24 miles |"],
+  ["adventuring", "| Slow   | 200 feet | 2 miles | 24 miles |", "| Slow   | 200 feet | 2 miles | 18 miles |"],
   // Hyphens the PDF broke across a line, which kept the space.
   ["elf", "self- expression", "self-expression"],
   ["monk", "two- handed", "two-handed"],
