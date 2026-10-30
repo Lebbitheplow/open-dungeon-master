@@ -201,6 +201,7 @@ The suites that hold all of this are `scripts/test-enforce-*.mjs`; see
 | Warlock pact slots refill on short rest | enforced | `dm/rest-logic.ts` (was a live bug) | `test-rest-logic`, `test-enforce-multiclass-slots` |
 | Font of Magic (sorcery points <-> spell slots, created slots vanish on long rest) | enforced | `dm/resource-tools.ts parseFontOfMagic`, `dm/rest-logic.ts` clawback | `test-enforce-font-of-magic` |
 | No casting while transformed (Wild Shape below 18 / Polymorph) | enforced | `dm/cast-guard.ts` | `test-enforce-casting-limits` |
+| Spells of a minute or more (Longer Casting Times): out of a fight the clock moves on by the casting time; in a fight the cast is refused with the rule named, because the server holds no casting across turns (the action on each turn, the concentration it needs, the slot spent only when it completes) | partial | `dm/cast-rules.ts longCastingProblem` | `test-enforce-casting-limits`, `test-enforce-srd-spells` (gap SPL-10) |
 | Cantrip level scaling, upcast scaling | enforced | `srd/spell-scaling.ts` | `test-spell-scaling`, `test-enforce-casting-numbers` |
 | Save DC, spell attack bonus | enforced | `srd/index.ts` | `test-enforce-casting-numbers` |
 | Healing spells rolled server-side (Heal's 70, the mass heals across six creatures, Mass Heal's pool, Disciple of Life, Supreme Healing, Blessed Healer, Beacon of Hope) | enforced | `dm/heal-spell.ts`, `dm/mutations.ts heal` | `test-enforce-spell-engine`, `test-enforce-spell-riders`, `test-enforce-final-features` |

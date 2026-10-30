@@ -246,10 +246,18 @@ await test("a reaction spell must be held and costs its slot", async () => {
   assert.equal(castingState(world.sheet(hero.id)), before);
 });
 
+// SRD 5.1, Longer Casting Times, allows such a spell over several turns:
+// "you must spend your action each turn casting the spell, and you must
+// maintain your concentration while you do so". The server holds no casting
+// across turns yet (test-enforce-srd-spells.mjs gap SPL-10), so it refuses,
+// naming that rule, and spends nothing.
 await test("a spell with a casting time of a minute or more is not cast in a fight", async () => {
   const { world, sheets: [hero] } = await table([wizard(5, { spellcasting: { prepared: ["Identify"] } })]);
+  const before = castingState(world.sheet(hero.id));
   const out = await world.invoke("use_spell_slot", { characterId: hero.id, level: 1, spell: "Identify" });
   assert.equal(out.ok, false, "Identify was cast in the middle of a fight");
+  assert.match(String(out.error), /spend their action on each of those turns and keep concentration/);
+  assert.equal(castingState(world.sheet(hero.id)), before);
 });
 
 // ---- components ----

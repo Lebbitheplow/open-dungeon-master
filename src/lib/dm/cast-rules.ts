@@ -479,11 +479,21 @@ export function ritualProblem(
   return null;
 }
 
+// SRD 5.1, Longer Casting Times: a spell of a minute or more takes the
+// caster's action on every turn of it, with their concentration held the
+// whole time; a broken concentration loses the spell and no slot is spent.
+// The server holds no casting across turns yet (issue #570, SPL-10), so in a
+// fight such a spell is refused, and the refusal names the rule the table
+// would play by.
 export function longCastingProblem(facts: SpellFacts | null, inFight: boolean): ToolError | null {
   if (!facts || typeof facts.castingTime !== "number" || !inFight) {
     return null;
   }
-  return { error: `${facts.name} takes ${describeCastingTime(facts.castingTime)} to cast, far longer than a turn; it cannot be cast in the middle of a fight. It can be cast once the fight is over.`, refused: "rules" };
+  const rounds = facts.castingTime * 10;
+  return {
+    error: `${facts.name} takes ${describeCastingTime(facts.castingTime)} to cast, ${rounds} rounds of a fight. The rules have the caster spend their action on each of those turns and keep concentration throughout; if it breaks, the spell fails and no slot is spent. The server does not hold a casting across turns, so ${facts.name} cannot be begun in the middle of a fight. Cast it once the fight is over. Nothing was spent.`,
+    refused: "rules",
+  };
 }
 
 // ---- the turn ----

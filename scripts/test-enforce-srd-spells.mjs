@@ -455,7 +455,7 @@ await gap("SPL-10", {
   rule: "SRD 5.1 spellcasting, 'Longer Casting Times': 'When you cast a spell with a casting time longer than a single action or reaction, you must spend your action each turn casting the spell, and you must maintain your concentration while you do so... If your concentration is broken, the spell fails, but you don't expend a spell slot.'",
   where: "src/lib/dm/cast-rules.ts longCastingProblem (refuses any casting time in minutes during a fight)",
   severity: "low",
-  note: "scripts/test-enforce-casting-limits.mjs 'a spell with a casting time of a minute or more is not cast in a fight' asserts the refusal. Rituals are a separate rule (ten minutes longer) and stay out of this.",
+  note: "Not built: holding a casting across turns (the action taken on each, concentration that loses the spell when it breaks, the slot and materials spent on completion, the effect then resolved through its own tool) is a subsystem of its own across the cast guard, the turn budget and the concentration engine. The refusal names the rule; docs/rules-coverage.md records it, and test-enforce-casting-limits.mjs holds it. Rituals are a separate rule (ten minutes longer) and stay out of this.",
 }, async () => {
   const { world, sheets: [mage] } = await table([caster("wizard", "int", ["Identify"], [], 5)]);
   const cast = await world.invoke("use_spell_slot", { characterId: mage.id, spell: "Identify", level: 1 });
