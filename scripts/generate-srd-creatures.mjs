@@ -19,12 +19,15 @@
 // sometimes wrong, so they are never read). Every block is then held to the
 // SRD 5.1 text in src/lib/rulebook/srd-5.1.json: a difference the overlay's
 // corrections do not settle stops the run, and so does a correction the
-// pack no longer needs.
+// pack no longer needs. A row is read with the corrections the enemy reader
+// lays over it (src/lib/bestiary/pack-corrections.ts), so the numbers a
+// misprinted row gets right are written once, for both.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3-multiple-ciphers";
 import { CHAIN_FORMS, CORRECTIONS, FAMILIARS, inRoster, PACK_KEEPS, RULEBOOK_PAGE, sidebarEntry, TRAITS_FROM } from "./lib/srd-creature-overlay.mjs";
+import { correctedMonsterData } from "../src/lib/bestiary/pack-corrections.ts";
 import { attacksPerTurn, defenseWords, packSpeeds, parseAttack, parseRoutines, parseRulebookPage, parseSenses, plain } from "./lib/srd-creature-text.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -73,7 +76,7 @@ function fromPack(row, data) {
     slug: row.slug,
     type: String(row.type).toLowerCase(),
     size: data.size,
-    cr: row.cr,
+    cr: typeof data.cr === "number" ? data.cr : row.cr,
     ac: Number(data.armor_class),
     hp: Number(data.hit_points),
     speeds: packSpeeds(data.speed),
@@ -223,7 +226,7 @@ function collect() {
   const stale = [];
   const creatures = [];
   for (const row of rows) {
-    const data = JSON.parse(row.data_json);
+    const data = correctedMonsterData(JSON.parse(row.data_json));
     if (!inRoster(row, data)) {
       continue;
     }
@@ -231,7 +234,7 @@ function collect() {
     const borrowed = TRAITS_FROM[row.name];
     if (borrowed) {
       const from = byName.get(borrowed);
-      block.specials = [...fromPack(from, JSON.parse(from.data_json)).specials, ...block.specials];
+      block.specials = [...fromPack(from, correctedMonsterData(JSON.parse(from.data_json))).specials, ...block.specials];
     }
     if (CORRECTIONS[row.name]) {
       block = corrected(block, CORRECTIONS[row.name], stale);

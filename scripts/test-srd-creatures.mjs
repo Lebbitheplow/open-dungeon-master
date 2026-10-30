@@ -21,6 +21,7 @@ const { SUMMON_FORMS, findSummonForm } = await import("../src/lib/srd/summon-for
 const { SUMMON_SPELLS, summonPlan } = await import("../src/lib/srd/summon-spells.ts");
 const { FAMILIAR_FORMS, findFamiliarForm } = await import("../src/lib/srd/familiar-forms.ts");
 const { isValidExpression } = await import("../src/lib/dice.ts");
+const { correctedMonsterData } = await import("../src/lib/bestiary/pack-corrections.ts");
 const { summonAttackSchema } = await import("../src/lib/schemas/summon.ts");
 const names = JSON.parse(readFileSync(join(root, "src/lib/srd/srd-creature-names.json"), "utf8"));
 const book = JSON.parse(readFileSync(join(root, "src/lib/rulebook/srd-5.1.json"), "utf8"));
@@ -198,14 +199,16 @@ test("with the content pack: the committed table is what the generator writes, a
   for (const creature of SRD_CREATURES) {
     const row = rows.get(creature.name);
     assert.ok(row, `${creature.name}: no pack row`);
-    const data = JSON.parse(row.data_json);
+    // The row as both readers take it, with src/lib/bestiary/pack-corrections.ts
+    // laid over it; the overlay's own corrections are names.
+    const data = correctedMonsterData(JSON.parse(row.data_json));
     const fix = CORRECTIONS[creature.name] ?? {};
     assert.deepEqual(
       [creature.ac, creature.hp, creature.cr, creature.speeds, creature.senses ?? {}, creature.abilities],
       [
         fix.ac ?? data.armor_class,
         fix.hp ?? data.hit_points,
-        fix.cr ?? row.cr,
+        fix.cr ?? data.cr ?? row.cr,
         fix.speeds ?? packSpeeds(data.speed),
         fix.senses ?? parseSenses(data.senses),
         { str: data.strength, dex: data.dexterity, con: data.constitution, int: data.intelligence, wis: data.wisdom, cha: data.charisma },

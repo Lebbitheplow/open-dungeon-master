@@ -10,15 +10,40 @@
 // misprinted ("it:" for "Hit:", "escaped DC" for "escape DC", "reach 5.
 // ft."), and Tome of Beasts 3's spell lists, printed with no commas between
 // the spells ("At will: minor illusion silent image"), which no reader can
-// split. `legendary_desc` and `legendary_actions` replace the row's own, for
+// split. `action_fields` replaces the numbers stored beside an action's line
+// (its damage_bonus), where the line is right and the field is not.
+// `legendary_desc` and `legendary_actions` replace the row's own, for
 // legendary actions printed run together into one entry or filed under the
 // description.
+//
+// The SRD rows' corrections are the creature table's too: scripts/
+// generate-srd-creatures.mjs reads each wotc-srd row through
+// correctedMonsterData, so a basilisk fought and a basilisk shaped into
+// share one list, and test-enforce-srd-bestiary.mjs holds both to the SRD
+// 5.1 text.
+type ActionFields = Partial<{ attack_bonus: number; damage_dice: string; damage_bonus: number }>;
+
 type Correction = Partial<{
+  armor_class: number;
+  hit_points: number;
+  hit_dice: string;
+  cr: number;
+  challenge_rating: string;
+  strength_save: number;
+  dexterity_save: number;
+  constitution_save: number;
+  intelligence_save: number;
+  wisdom_save: number;
+  charisma_save: number;
+  speed: Record<string, number>;
+  senses: string;
+  skills: Record<string, number>;
   damage_immunities: string;
   damage_resistances: string;
   damage_vulnerabilities: string;
   condition_immunities: string;
   actions: Record<string, string>;
+  action_fields: Record<string, ActionFields>;
   special_abilities: Record<string, string>;
   legendary_desc: string;
   legendary_actions: Array<{ name: string; desc: string }>;
@@ -31,6 +56,83 @@ const CORRECTIONS: Record<string, Correction> = {
   // SRD 5.1 Zombie: immune to poison (the row leaves immunities empty).
   "wotc-srd/zombie": { damage_immunities: "poison" },
   "wotc-srd/purple-worm": { actions: { Multiattack: "The worm makes two attacks: one with its bite and one with its tail stinger." } },
+  // SRD 5.1 Basilisk: Armor Class 15 (natural armor); the row has 12.
+  "wotc-srd/basilisk": { armor_class: 15 },
+  // SRD 5.1 Giant Elk: Armor Class 14 (natural armor); the row has 15.
+  "wotc-srd/giant-elk": { armor_class: 14 },
+  // SRD 5.1 Cult Fanatic: Hit Points 33 (6d8 + 6); the row has 22.
+  "wotc-srd/cult-fanatic": { hit_points: 33 },
+  // SRD 5.1 Horned Devil: Hit Points 148 (17d10+55); the row has the Monster
+  // Manual's 178.
+  "wotc-srd/horned-devil": { hit_points: 148, hit_dice: "17d10+55" },
+  // SRD 5.1 Chain Devil: Challenge 8 (3,900 XP), Saving Throws Con +7, Wis
+  // +4, Cha +5, passive Perception 11; the row has the Monster Manual's 11,
+  // no saves and 8.
+  "wotc-srd/chain-devil": {
+    cr: 8,
+    challenge_rating: "8",
+    constitution_save: 7,
+    wisdom_save: 4,
+    charisma_save: 5,
+    senses: "darkvision 120 ft., passive Perception 11",
+  },
+  // SRD 5.1 Kraken: Bite and Tentacle "+17 to hit" (Strength 30 and a
+  // proficiency bonus of 7); the row prints +7.
+  "wotc-srd/kraken": {
+    actions: {
+      Bite:
+        "Melee Weapon Attack: +17 to hit, reach 5 ft., one target. Hit: 23 (3d8 + 10) piercing damage. If the target is a Large or smaller creature grappled by the kraken, that creature is swallowed, and the grapple ends. While swallowed, the creature is blinded and restrained, it has total cover against attacks and other effects outside the kraken, and it takes 42 (12d6) acid damage at the start of each of the kraken's turns. If the kraken takes 50 damage or more on a single turn from a creature inside it, the kraken must succeed on a DC 25 Constitution saving throw at the end of that turn or regurgitate all swallowed creatures, which fall prone in a space within 10 feet of the kraken. If the kraken dies, a swallowed creature is no longer restrained by it and can escape from the corpse using 15 feet of movement, exiting prone.",
+      Tentacle:
+        "Melee Weapon Attack: +17 to hit, reach 30 ft., one target. Hit: 20 (3d6 + 10) bludgeoning damage, and the target is grappled (escape DC 18). Until this grapple ends, the target is restrained. The kraken has ten tentacles, each of which can grapple one target.",
+    },
+    action_fields: { Bite: { attack_bonus: 17 }, Tentacle: { attack_bonus: 17 } },
+  },
+  // SRD 5.1 Ancient Green Dragon: Bite "19 (2d10 + 8) piercing damage plus
+  // 10 (3d6) poison damage"; the row's damage_bonus is 9, within a point of
+  // the printed average, so the reader keeps it.
+  "wotc-srd/ancient-green-dragon": { action_fields: { Bite: { damage_bonus: 8 } } },
+  // SRD 5.1 Wight: resistant to necrotic and to nonmagical weapons, immune to
+  // poison, and to exhaustion as well as poison; the row moves the
+  // resistances into immunities and drops exhaustion.
+  "wotc-srd/wight": {
+    damage_resistances: "necrotic; bludgeoning, piercing, and slashing from nonmagical attacks that aren't silvered",
+    damage_immunities: "poison",
+    condition_immunities: "exhaustion, poisoned",
+  },
+  // SRD 5.1 Imp: the same rule as the row's shorthand, in the SRD's words.
+  "wotc-srd/imp": { damage_resistances: "cold; bludgeoning, piercing, and slashing from nonmagical attacks that aren't silvered" },
+  // SRD 5.1 Archmage: damage from spells and, from its stoneskin, nonmagical
+  // weapons; the row's "non magical" splits the word the damage rules read.
+  "wotc-srd/archmage": { damage_resistances: "damage from spells; nonmagical bludgeoning, piercing, and slashing (from stoneskin)" },
+  // SRD 5.1 Ice Devil: Damage Immunities cold, fire, poison; the row drops cold.
+  "wotc-srd/ice-devil": { damage_immunities: "cold, fire, poison" },
+  // SRD 5.1 Mummy Lord: Damage Vulnerabilities fire; the row has bludgeoning.
+  "wotc-srd/mummy-lord": { damage_vulnerabilities: "fire" },
+  // SRD 5.1 Crocodile: Speed 20 ft., swim 30 ft.; the row has swim 20.
+  "wotc-srd/crocodile": { speed: { walk: 20, swim: 30 } },
+  // SRD 5.1 Adult Brass Dragon: Speed 40 ft., burrow 30 ft., fly 80 ft.; the
+  // row has burrow 40.
+  "wotc-srd/adult-brass-dragon": { speed: { walk: 40, burrow: 30, fly: 80 } },
+  // SRD 5.1 Young Blue Dragon: Speed 40 ft., burrow 20 ft., fly 80 ft.; the
+  // row has burrow 40.
+  "wotc-srd/young-blue-dragon": { speed: { walk: 40, burrow: 20, fly: 80 } },
+  // SRD 5.1 Priest: Speed 30 ft.; the row has 25.
+  "wotc-srd/priest": { speed: { walk: 30 } },
+  // SRD 5.1 Hunter Shark: Senses blindsight 30 ft.; the row has darkvision 30.
+  "wotc-srd/hunter-shark": { senses: "blindsight 30 ft., passive Perception 12" },
+  // The passive Perception each SRD 5.1 block prints, which Hide and an
+  // ambush are held to (src/lib/bestiary/enemy-numbers.ts); the rows have
+  // 10, 9 and 12.
+  "wotc-srd/blink-dog": { senses: "passive Perception 13" },
+  "wotc-srd/bone-devil": { senses: "darkvision 120 ft., passive Perception 12" },
+  "wotc-srd/spider": { senses: "darkvision 30 ft., passive Perception 10" },
+  // The skills each SRD 5.1 block prints and the row drops, which an opposed
+  // check rolls in place of the bare ability modifier.
+  "wotc-srd/black-bear": { skills: { perception: 3 } },
+  "wotc-srd/spy": { skills: { deception: 5, insight: 4, investigation: 5, perception: 6, persuasion: 5, "sleight of hand": 4, stealth: 4 } },
+  "wotc-srd/swarm-of-ravens": { skills: { perception: 5 } },
+  "wotc-srd/werewolf": { skills: { perception: 4, stealth: 3 } },
+  "wotc-srd/half-red-dragon-veteran": { skills: { athletics: 5, perception: 2 } },
   "blackflag/archdruid_bf": {
     actions: {
       "Thorned Staff":
@@ -236,12 +338,14 @@ export function hasPackCorrection(document: string, slug: string): boolean {
 
 export function correctedMonsterData(data: Record<string, unknown>): Record<string, unknown> {
   const document = String(data.document__slug ?? data.document_slug ?? "wotc-srd");
-  const { actions: texts = {}, special_abilities: traitTexts = {}, ...fields } = CORRECTIONS[`${document}/${String(data.slug ?? "")}`] ?? {};
+  const { actions: texts = {}, action_fields: actionFields = {}, special_abilities: traitTexts = {}, ...fields } = CORRECTIONS[`${document}/${String(data.slug ?? "")}`] ?? {};
   const base: Record<string, unknown> = { ...data, ...fields };
   const sections = SECTIONS.filter((section) => Array.isArray(base[section])).map((section) => [
     section,
-    (base[section] as Array<Record<string, unknown>>).map((entry) => {
+    (base[section] as Array<Record<string, unknown>>).map((raw) => {
       const rewrites = section === "actions" ? texts : section === "special_abilities" ? traitTexts : {};
+      const numbers = section === "actions" && Object.hasOwn(actionFields, String(raw.name)) ? actionFields[String(raw.name)] : null;
+      const entry = numbers ? { ...raw, ...numbers } : raw;
       const desc = Object.hasOwn(rewrites, String(entry.name)) ? rewrites[String(entry.name)] : entry.desc;
       return typeof desc === "string" ? { ...entry, desc: spelledOut(desc, document) } : entry;
     }),

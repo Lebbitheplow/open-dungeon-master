@@ -92,14 +92,8 @@ const listed = (entries) => `${entries.length}: ${entries.join("; ")}`;
 // ---- the enemy path, with the pack ----
 
 if (world.hasPack) {
-  await gap(
-    "MON-01",
-    {
-      rule: "Monster Statistics (monster-statistics): Armor Class, Hit Points, Challenge and its XP, Saving Throws and each attack's bonus and damage are the block's; e.g. Basilisk 'Armor Class 15', Cult Fanatic 'Hit Points 33 (6d8+6)', Chain Devil 'Challenge 8 (3,900 XP)' and 'Saving Throws Con +7, Wis +4, Cha +5', Kraken Bite '+17 to hit'",
-      where: "src/lib/bestiary/pack-corrections.ts CORRECTIONS (only the skeleton, zombie and purple worm are corrected for enemies; scripts/lib/srd-creature-overlay.mjs CORRECTIONS fixes the rest for the creature table only)",
-      severity: "high",
-      note: "The pack's SRD rows misprint these numbers; the creature table's overlay already holds the SRD values, the enemy reader does not.",
-    },
+  await test(
+    "MON-01: the enemy path fights each SRD row with its block's Armor Class, hit points, challenge and XP, saving throws and attack numbers",
     () => {
       const wrong = [];
       for (const { name, block, stats } of ENEMIES) {
@@ -127,14 +121,8 @@ if (world.hasPack) {
     },
   );
 
-  await gap(
-    "MON-02",
-    {
-      rule: "Monster Statistics, Vulnerabilities, Resistances, and Immunities: the block's lines decide the damage it takes; Wight 'Damage Resistances necrotic; bludgeoning, piercing, and slashing from nonmagical attacks that aren't silvered / Damage Immunities poison / Condition Immunities exhaustion, poisoned', Ice Devil 'Damage Immunities cold, fire, poison', Mummy Lord 'Damage Vulnerabilities fire'",
-      where: "src/lib/bestiary/pack-corrections.ts CORRECTIONS (no wotc-srd/wight, ice-devil or mummy-lord entry); read by src/lib/bestiary/defences.ts readDefences",
-      severity: "high",
-      note: "A wight is immune, not resistant, to necrotic and nonmagical weapons, and takes poison damage; an ice devil takes cold; a mummy lord takes double bludgeoning and normal fire.",
-    },
+  await test(
+    "MON-02: the enemy path reads each SRD row's damage and condition defences as printed: the wight resists necrotic and is immune to poison and exhaustion, the ice devil is immune to cold, the mummy lord is vulnerable to fire",
     () => {
       const wrong = [];
       for (const { name, block, stats } of ENEMIES) {
@@ -146,13 +134,8 @@ if (world.hasPack) {
     },
   );
 
-  await gap(
-    "MON-03",
-    {
-      rule: "Monster Statistics, Speed and Senses: the block's speeds and special senses are the creature's; Crocodile 'Speed 20 ft., swim 30 ft.', Adult Brass Dragon 'burrow 30 ft.', Young Blue Dragon 'burrow 20 ft.', Priest 'Speed 30 ft.', Hunter Shark 'Senses blindsight 30 ft.'",
-      where: "src/lib/bestiary/pack-corrections.ts CORRECTIONS (the speed and senses fields are not correctable there at all); src/lib/bestiary/block-fields.ts formatSpeed, parseBlockExtras",
-      severity: "medium",
-    },
+  await test(
+    "MON-03: the enemy path reads each SRD row's speeds and special senses as printed: the crocodile swims 30 ft., the priest walks 30 ft., the hunter shark has blindsight 30 ft.",
     () => {
       const wrong = [];
       for (const { name, block, stats } of ENEMIES) {
@@ -166,14 +149,8 @@ if (world.hasPack) {
     },
   );
 
-  await gap(
-    "MON-04",
-    {
-      rule: "Monster Statistics, Skills ('A monster's skill bonus ... is its relevant ability modifier plus its proficiency bonus') and Senses (the block's passive Perception); e.g. Blink Dog 'Skills Perception +3 ... passive Perception 13', Black Bear 'Skills Perception +3', Spy 'Sleight of Hand +4', Spider 'passive Perception 10'",
-      where: "src/lib/bestiary/block-fields.ts parseBlockExtras (the pack row's skills and senses taken as they are); src/lib/bestiary/enemy-numbers.ts passivePerceptionFor reads them for Hide and the opposed checks",
-      severity: "medium",
-      note: "A hider is held to the wrong passive Perception, and a contest rolls the bare ability modifier where the block prints a skill.",
-    },
+  await test(
+    "MON-04: the enemy path holds each SRD row's skills and passive Perception as printed: the blink dog's passive Perception 13, the black bear's Perception +3, the spy's Sleight of Hand +4",
     () => {
       const wrong = [];
       for (const { name, block, stats } of ENEMIES) {

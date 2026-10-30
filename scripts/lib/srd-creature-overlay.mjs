@@ -2,9 +2,11 @@
 // creature table scripts/generate-srd-creatures.mjs writes
 // (src/lib/srd/srd-creatures.json): which creatures the table holds and
 // why, the familiar forms the spells name, and each place where the pack's
-// row disagrees with the SRD 5.1 text (src/lib/rulebook/srd-5.1.json).
-// The generator stops on any disagreement this file does not settle, and on
-// a correction the pack no longer needs, so every entry here stays true.
+// row names a thing otherwise than the SRD 5.1 text (src/lib/rulebook/
+// srd-5.1.json); the rows' misprinted numbers are corrected in
+// src/lib/bestiary/pack-corrections.ts, for the enemy reader and the table
+// at once. The generator stops on any disagreement neither settles, and on
+// a correction here the pack no longer needs, so every entry stays true.
 
 // Pact of the Chain's four special forms (SRD 5.1, Eldritch Invocations).
 export const CHAIN_FORMS = ["Imp", "Pseudodragon", "Quasit", "Sprite"];
@@ -63,60 +65,21 @@ export const TRAITS_FROM = {
   "Giant Rat (Diseased)": "Giant Rat",
 };
 
-// Where the pack's row says otherwise than the SRD 5.1 text, the SRD's
-// value. Wording that means the same is set to the SRD's own words too, so
-// the block reads as the book prints it.
+// Where the pack's row names an attack or a trait otherwise than the SRD 5.1
+// text, the SRD's name, so the block reads as the book prints it. A number,
+// a speed, a sense, a save or a defence the row misprints is corrected in
+// src/lib/bestiary/pack-corrections.ts instead, which the generator reads
+// every row through: the enemy reader lays the same list over the row, so a
+// creature fought and the same creature summoned or shaped into agree.
 export const CORRECTIONS = {
-  // Speed 20 ft., swim 30 ft.; the row has swim 20.
-  Crocodile: { speeds: { walk: 20, swim: 30 } },
-  // Armor Class 14 (natural armor); the row has 15.
-  "Giant Elk": { ac: 14 },
-  // Senses blindsight 30 ft.; the row has darkvision 30.
-  "Hunter Shark": { senses: { blindsight: 30 } },
-  // Damage Immunities poison; the row files it under resistances.
-  Skeleton: { resist: "", immune: "poison" },
-  // Damage Immunities poison; the row has none.
-  Zombie: { immune: "poison" },
-  // The row moves the resistances into immunities and drops exhaustion.
-  Wight: {
-    resist: "necrotic; bludgeoning, piercing, and slashing from nonmagical attacks that aren't silvered",
-    immune: "poison",
-    conditionImmune: "exhaustion, poisoned",
-  },
-  // The same rule in the row's own shorthand; the SRD's words are kept.
-  Imp: { resist: "cold; bludgeoning, piercing, and slashing from nonmagical attacks that aren't silvered" },
   // Claws (Bite in Beast Form); the row says Claw.
   Quasit: { attackNames: { "Claw (Bite in Beast Form)": "Claws (Bite in Beast Form)" } },
   // Turning Defiance; the row says Turn Defiance.
   Ghast: { traitNames: { "Turn Defiance": "Turning Defiance" } },
-  // Speed 40 ft., burrow 30 ft., fly 80 ft.; the row has burrow 40.
-  "Adult Brass Dragon": { speeds: { walk: 40, fly: 80, burrow: 30 } },
-  // Speed 40 ft., burrow 20 ft., fly 80 ft.; the row has burrow 40.
-  "Young Blue Dragon": { speeds: { walk: 40, fly: 80, burrow: 20 } },
-  // Archmage: damage from spells and, from its stoneskin, nonmagical
-  // weapons; the row's "non magical" splits the word the damage rules read.
-  Archmage: { resist: "damage from spells; nonmagical bludgeoning, piercing, and slashing (from stoneskin)" },
   // Sneak Attack, as the SRD names it; the row says Sneak Attack (1/Turn).
   Assassin: { traitNames: { "Sneak Attack (1/Turn)": "Sneak Attack" } },
-  // Armor Class 15 (natural armor); the row has 12.
-  Basilisk: { ac: 15 },
-  // Challenge 8 (3,900 XP) and Saving Throws Con +7, Wis +4, Cha +5; the row
-  // has the Monster Manual's 11 and no saves.
-  "Chain Devil": { cr: 8, saves: ["con", "wis", "cha"] },
-  // Hit Points 33 (6d8 + 6); the row has 22.
-  "Cult Fanatic": { hp: 33 },
   // Claw; the row says Claws.
   Hezrou: { attackNames: { Claws: "Claw" } },
-  // Hit Points 148 (17d10+55); the row has the Monster Manual's 178.
-  "Horned Devil": { hp: 148 },
-  // Damage Immunities cold, fire, poison; the row drops cold.
-  "Ice Devil": { immune: "cold, fire, poison" },
-  // +17 to hit (Strength 30 and a proficiency bonus of 7); the row has +7.
-  Kraken: { attackFields: { Bite: { toHit: 17 }, Tentacle: { toHit: 17 } } },
-  // Damage Vulnerabilities fire; the row has bludgeoning.
-  "Mummy Lord": { vulnerable: "fire" },
-  // Speed 30 ft.; the row has 25.
-  Priest: { speeds: { walk: 30 } },
 };
 
 // Where the SRD text in the repository is the one that slipped and the
