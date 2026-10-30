@@ -1,4 +1,5 @@
 import { campaignLanguage } from "@/lib/db/campaigns";
+import { listLocations } from "@/lib/db/locations";
 import { listNpcs, patchNpcAgency, setNpcArchived, type Npc } from "@/lib/db/npcs";
 import { listRelationships } from "@/lib/db/relationships";
 import { shouldArchive } from "@/lib/dm/npc-archive-logic";
@@ -117,10 +118,16 @@ export function advanceNpcAgency(
     const { scene, session, ambition } = npc.agency.goals;
     return [scene, session?.text, ambition].filter((goal): goal is string => Boolean(goal));
   });
+  // Where the story stands, so two NPCs at one ford are not rivals over it.
+  const places = [
+    ...listLocations(campaignId).flatMap((location) => [location.name, location.parentName ?? ""]),
+    ...npcs.map((npc) => npc.location),
+  ].filter(Boolean);
   const collisions = detectGoalCollisions(
     holders.map((holder) => ({ name: holder.npc.name, goalText: holder.goalText })),
     campaignLanguage(campaignId),
     pool,
+    places,
   ).slice(0, 2);
   for (const collision of collisions) {
     const a = holders.find((holder) => holder.npc.name === collision.a);

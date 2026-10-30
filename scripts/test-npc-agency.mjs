@@ -159,9 +159,9 @@ test("what most of the campaign's goals say is no rivalry; a word only two goals
   assert.ok(["Dunfall", "mill"].includes(collision.over), collision.over);
 });
 
-test("a place a third goal names too is where two NPCs stand, not their prize, unless they share another word", () => {
+test("a place the campaign knows is where two NPCs stand, not their prize, unless they share another word", () => {
   // The goals of a playtest's chapter close, where the ford made two
-  // strangers rivals.
+  // strangers rivals. The party stood at the Lower Ford.
   const pool = [
     "gather enough help to bring down the party Dame Seraphine Vale left",
     "gather enough help to bring down the party Brother Aldous Penn left",
@@ -171,18 +171,37 @@ test("a place a third goal names too is where two NPCs stand, not their prize, u
     "Get her family and their stuck cart safely out of the ford.",
     "Leave the ford with the stolen strongbox.",
   ];
+  const places = ["Lower Ford", "Briar Road"];
   const atTheFord = [
     { name: "Mara Fen", goalText: pool[5] },
     { name: "Briar-road Raider Captain", goalText: pool[6] },
   ];
-  assert.deepEqual(detectGoalCollisions(atTheFord, "english", pool), []);
+  assert.deepEqual(detectGoalCollisions(atTheFord, "english", pool, places), []);
+  // Two goals alone at the ford are no rivals either.
+  assert.deepEqual(detectGoalCollisions(atTheFord, "english", [pool[5], pool[6]], places), []);
   const strongbox = [...pool, "Take the strongbox from the raiders at the ford."];
   const rivals = [
     { name: "Briar-road Raider Captain", goalText: strongbox[6] },
     { name: "Osric Fen", goalText: strongbox[7] },
   ];
-  const [collision] = detectGoalCollisions(rivals, "english", strongbox);
-  assert.equal(collision?.over, "strongbox", "named by the word only these two goals share");
+  const [collision] = detectGoalCollisions(rivals, "english", strongbox, places);
+  assert.equal(collision?.over, "strongbox", "named by the prize, not the place");
+});
+
+test("three NPCs after one prize are rivals for it, however many goals name it", () => {
+  const pool = [
+    "Steal the strongbox before the caravan leaves.",
+    "Guard the strongbox until the reeve comes.",
+    "Recover the strongbox for her guild.",
+    "Shelter the stranded pilgrims.",
+    "Win the archery contest.",
+    "Find a cure for the river fever.",
+    "Marry into the Thorne family.",
+  ];
+  const after = pool.slice(0, 3).map((goalText, index) => ({ name: `Rival ${index}`, goalText }));
+  const found = detectGoalCollisions(after, "english", pool, ["Lower Ford"]);
+  assert.equal(found.length, 3, JSON.stringify(found));
+  assert.ok(found.every((entry) => entry.over === "strongbox"), JSON.stringify(found));
 });
 
 test("pressure ticks, resets on engagement, and caps", () => {

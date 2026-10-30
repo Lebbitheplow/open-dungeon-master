@@ -557,4 +557,24 @@ await test("two companions gathering help against the party are no rivals: the a
   }
 });
 
+await test("two strangers at the ford the party stands at are no rivals over it: the agency dice write no rivalry", async () => {
+  const world = await openWorld();
+  world.addHero({ name: "Kael" });
+  assert.equal((await world.invoke("move_party", { name: "Lower Ford", visionClear: false })).ok, true);
+  const goals = {
+    "Mara Fen": "Get her family and their stuck cart safely out of the ford.",
+    "Briar-road Raider Captain": "Leave the ford with the stolen strongbox.",
+  };
+  for (const [name, text] of Object.entries(goals)) {
+    assert.equal((await world.invoke("set_npc", { name })).ok, true);
+    const npc = npcs.getNpcByName(world.campaignId, name);
+    npcs.patchNpcAgency(npc.id, { goals: { session: { text, progress: 0, target: 3 } } });
+  }
+  // A step on each goal, then a contest a rivalry would settle.
+  world.dice(1, 1, 5, 15);
+  advanceNpcAgency(world.campaignId, "", { tickPressureCounters: false });
+  world.clearDice();
+  assert.deepEqual(listActiveFacts(world.campaignId).filter((fact) => /rivalry/.test(fact.fact)).map((fact) => fact.fact), []);
+});
+
 finish();

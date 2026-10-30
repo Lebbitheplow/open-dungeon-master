@@ -28,14 +28,18 @@ function goalTerms(text: string, language: TableLanguage): Map<string, string> {
 // in more than half of `pool` (every goal its NPCs have) is what all its
 // goals say ("wants", "the party"), while one only two goals share always
 // counts, so a small campaign still sees its rivalries.
-// A word a third goal uses too is often where the story stands, not what
-// anyone is after: "get the cart out of the ford" and "leave the ford with
-// the strongbox" are two people at one ford, not rivals for it. Such a word
-// names a prize only beside a second word the two goals share.
+// A place is where the story stands, not what anyone is after: "get the
+// cart out of the ford" and "leave the ford with the strongbox" are two
+// people at one ford, not rivals for it. So a word of a place the campaign
+// knows (`places`: its locations and where its NPCs are found) names no
+// prize, and two goals that share only such words are no rivals. How many
+// goals share a word does not decide it: three NPCs after one strongbox are
+// rivals for it, whoever else mentions it.
 export function detectGoalCollisions(
   npcs: Array<{ name: string; goalText: string }>,
   language: TableLanguage,
   pool: readonly string[],
+  places: readonly string[] = [],
 ): GoalCollision[] {
   const frequency = new Map<string, number>();
   for (const goal of pool) {
@@ -47,16 +51,17 @@ export function detectGoalCollisions(
     const count = frequency.get(stem) ?? 0;
     return count > 2 && count > pool.length / 2;
   };
+  const placeStems = new Set(places.flatMap((place) => [...goalTerms(place, language).keys()]));
   const terms = npcs.map((npc) => goalTerms(npc.goalText, language));
   const collisions: GoalCollision[] = [];
   for (let indexA = 0; indexA < npcs.length; indexA += 1) {
     for (let indexB = indexA + 1; indexB < npcs.length; indexB += 1) {
-      const shared = [...terms[indexA]]
-        .filter(([stem]) => terms[indexB].has(stem) && !common(stem))
+      // Reported by the rarest word the two goals share.
+      const [prize] = [...terms[indexA]]
+        .filter(([stem]) => terms[indexB].has(stem) && !common(stem) && !placeStems.has(stem))
         .sort(([one], [other]) => (frequency.get(one) ?? 0) - (frequency.get(other) ?? 0));
-      const [rarest] = shared;
-      if (rarest && (shared.length > 1 || (frequency.get(rarest[0]) ?? 0) <= 2)) {
-        collisions.push({ a: npcs[indexA].name, b: npcs[indexB].name, over: rarest[1] });
+      if (prize) {
+        collisions.push({ a: npcs[indexA].name, b: npcs[indexB].name, over: prize[1] });
       }
     }
   }
