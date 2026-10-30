@@ -123,12 +123,11 @@ await test("Adventuring Gear, Tools and Mounts tables: every priced row costs an
   }
 });
 
-await gap("EQP-02", {
-  rule: "adventuring-gear, Adventuring Gear table: each focus is its own row: an orb 20 gp and 3 lb., a rod 10 gp and 2 lb., a staff 5 gp and 4 lb., a yew wand 10 gp, a wooden staff 5 gp and 4 lb., a reliquary 2 lb., an emblem weightless.",
-  where: "src/lib/srd/adventuring-gear.ts SRD_GEAR (one Arcane Focus, Druidic Focus and Holy Symbol row each, the variants as aliases)",
-  severity: "low",
-  note: "The builder's purse, the encumbrance fallback and a shop with no pack read these numbers.",
-}, () => {
+// adventuring-gear, Adventuring Gear table: each focus is its own row: an orb
+// 20 gp and 3 lb., a rod 10 gp and 2 lb., a staff 5 gp and 4 lb., a yew wand
+// 10 gp, a wooden staff 5 gp and 4 lb., a reliquary 2 lb., an emblem
+// weightless.
+await test("EQP-02", () => {
   const wanted = { Orb: [2000, 3], Rod: [1000, 2], Staff: [500, 4], "Yew wand": [1000, 1], "Wooden staff": [500, 4], Reliquary: [500, 2], Emblem: [500, null] };
   const odm = Object.fromEntries(Object.keys(wanted).map((name) => [name, [gearPriceCopper(name), gearWeightLb(name)]]));
   assert.deepEqual(odm, wanted, `[copper, pounds] by focus: ${JSON.stringify(odm)}`);
