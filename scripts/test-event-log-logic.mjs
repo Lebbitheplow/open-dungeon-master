@@ -16,7 +16,7 @@ register("./lib/register-alias.mjs", import.meta.url);
 const { BOOKKEEPING_KINDS, buildFeed, describeAuditEntry, describeKnownEntry, revertableTurns, turnOfItem } = await import(
   "../src/app/campaigns/[campaignId]/event-log-logic.ts"
 );
-const { changesWindow, quietTick } = await import("../src/lib/sheet-audit-logic.ts");
+const { changesWindow, quietTick, undoConflictLine, fieldWords } = await import("../src/lib/sheet-audit-logic.ts");
 
 let passed = 0;
 function test(name, fn) {
@@ -361,6 +361,17 @@ test("the moment a hero died is bookkeeping for revival, not a change, and stays
   const log = [entry("t1", "death_moment", { instant: 1, encounterId: null, round: null }), entry("t1", "death_state", { deathSaves: { successes: 0, failures: 3, stable: false, dead: true } })];
   assert.ok(BOOKKEEPING_KINDS.has("death_moment"));
   assert.deepEqual(buildFeed(log, []).map((item) => item.entry?.kind), ["death_state"]);
+});
+
+// The undo's conflict warning, shown where the lead decides whether to
+// revert anyway, names the character and the fields in words (issue #622).
+test("an undo's conflict warning names the character and the fields in words, never a kind or a key", () => {
+  const line = undoConflictLine("Corra Venn", "The table recounts the saves", ["deathSaves", "currentHp", "conditionMeta", "conditions"]);
+  assert.equal(line, "A later change to Corra Venn (The table recounts the saves) also changed their death saves, hit points, conditions.");
+  assert.doesNotMatch(line, /[a-z][A-Z]|_/, line);
+  assert.equal(undoConflictLine("Kara", "  ", ["gold"]), "A later change to Kara (no reason given) also changed their gold.");
+  assert.equal(fieldWords("hitDiceRemaining"), "hit dice");
+  assert.equal(fieldWords("featureUses"), "feature uses");
 });
 
 console.log(`\n${passed} event-log tests passed.`);

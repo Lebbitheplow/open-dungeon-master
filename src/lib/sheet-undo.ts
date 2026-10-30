@@ -8,6 +8,7 @@ import {
   type SheetAuditEntry,
 } from "@/lib/db/sheet-audit";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
+import { undoConflictLine } from "@/lib/sheet-audit-logic";
 import { forgetLongRest } from "@/lib/db/clock";
 import { forgetDeath } from "@/lib/dm/revival";
 import { recordTurnCorrection } from "@/lib/db/turn-ledger";
@@ -43,9 +44,7 @@ export function undoConflictWarnings(
     }
     const overlap = other.patchKeys.filter((key) => entry.patchKeys.includes(key));
     if (overlap.length) {
-      warnings.push(
-        `A newer ${other.kind} change (${other.reason || "no reason"}) also touched: ${overlap.join(", ")}.`,
-      );
+      warnings.push(undoConflictLine(getSheetById(entry.characterId)?.name ?? "this character", other.reason, overlap));
     }
   }
   return warnings;

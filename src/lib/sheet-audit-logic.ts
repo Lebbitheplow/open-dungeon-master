@@ -39,3 +39,29 @@ export function changesWindow<T extends AuditRow>(entries: T[], keep: number, ma
   }
   return entries.slice(Math.max(start, entries.length - maxRows));
 }
+
+// The field names a sheet change writes, as a lead reads them. The undo's
+// conflict warning named the raw kind and keys ("A newer lead_edit change
+// ... also touched: deathSaves"), right where the lead decides whether to
+// revert anyway (issue #622).
+const FIELD_WORDS: Record<string, string> = {
+  currentHp: "hit points",
+  maxHp: "hit point maximum",
+  tempHp: "temporary hit points",
+  deathSaves: "death saves",
+  conditionMeta: "conditions",
+  spellSlots: "spell slots",
+  hitDiceRemaining: "hit dice",
+  wildShape: "Wild Shape",
+};
+
+export function fieldWords(key: string): string {
+  return FIELD_WORDS[key] ?? key.replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase();
+}
+
+// Why an undo would overwrite a later change: who it was to, the later
+// change's own reason, and the fields both wrote, in words.
+export function undoConflictLine(name: string, reason: string, keys: readonly string[]): string {
+  const fields = [...new Set(keys.map(fieldWords))].join(", ");
+  return `A later change to ${name} (${reason.trim() || "no reason given"}) also changed their ${fields}.`;
+}

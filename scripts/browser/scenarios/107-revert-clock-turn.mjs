@@ -84,7 +84,7 @@ export default {
     check(/Revert this turn anyway\?/.test(words), `the dialog is not the turn's: ${words}`);
     check(/character sheets and the clock back/.test(words), `the dialog does not say the sheets and the clock come back: ${words}`);
     check(/World events and companions who left stay/.test(words), `the dialog does not say what stays: ${words}`);
-    check(/also touched: .*deathSaves/.test(words), `the dialog does not name the newer change: ${words}`);
+    check(/also changed their .*death saves/.test(words), `the dialog does not name the newer change in words: ${words}`);
     await t.shot("confirm");
     const confirmed = reverted();
     confirmed.catch(() => {});
