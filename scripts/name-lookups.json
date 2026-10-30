@@ -1237,6 +1237,7 @@
     "lib/dm/encounter-tools-extra.ts#partial": [["key",1,"the SRD row's English condition-immunity line"]],
     "lib/dm/encounter-tools-extra.ts#switch": [["key",1,"switches on tool names, event kinds, key names and kinds"]],
     "lib/dm/encounter-tools-extra.ts#whole-single": [["identity",1,"a held condition by its stored key or its whole name (isConditionNamed)"]],
+    "lib/dm/encounter-tools.ts#fallback": [["key",1,"the foe the last swing struck, by the display name the server stored for it on the turn, else the nearest"]],
     "lib/dm/encounter-tools.ts#partial": [["key",1,"ODM's own pointer ids"]],
     "lib/dm/encounter-tools.ts#switch": [["key",1,"switches on tool names, event kinds, key names and kinds"]],
     "lib/dm/encounter-workbench.ts#partial": [["pattern",1,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"]],
