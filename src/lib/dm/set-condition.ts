@@ -32,6 +32,7 @@ import {
   type ConditionMetaMap,
   type SaveAbilityId,
 } from "@/lib/dm/condition-logic";
+import { petrifiedRefusal } from "@/lib/dm/damage-logic";
 import { exhaustionPatch, namesExhaustion } from "@/lib/dm/vitals-logic";
 import { spellEffectRefusal } from "@/lib/dm/spell-effects";
 import { allyConditionAura } from "@/lib/dm/aura";
@@ -227,6 +228,11 @@ export function conditionImmunity(
   sourceEnemyId?: string,
 ): string | null {
   const wanted = condition.trim().toLowerCase();
+  // SRD 5.1, Conditions, Petrified: "immune to poison and disease".
+  const stone = petrifiedRefusal(sheet.conditions, wanted);
+  if (stone) {
+    return stone;
+  }
   const source = sourceEnemyId ? getEnemy(sourceEnemyId.trim()) : null;
   const sourced = sourcedConditionImmunity(sheet, wanted, source ? String(source.stats.type ?? "") : undefined);
   if (sourced) {

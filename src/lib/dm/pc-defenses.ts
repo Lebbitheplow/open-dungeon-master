@@ -9,7 +9,7 @@ import { defenseRiders } from "@/lib/srd/feature-effects";
 import { chosenResistances, featureDamageImmunities } from "@/lib/srd/trait-rules";
 import { authoredResistances } from "@/lib/srd/authored-effects";
 import { magicItemRiders } from "@/lib/srd/magic-items";
-import { DAMAGE_TYPES, PHYSICAL_TYPES, rageApplies, resistsAllDamage } from "@/lib/dm/damage-logic";
+import { DAMAGE_TYPES, PHYSICAL_TYPES, petrifiedImmunities, rageApplies, resistsAllDamage } from "@/lib/dm/damage-logic";
 import { formSees } from "@/lib/srd/form-sees";
 import { holdsFeature } from "@/lib/srd/feature-names";
 import { isDwarf, srdRaceId } from "@/lib/srd/race-id";
@@ -19,8 +19,12 @@ import { isDwarf, srdRaceId } from "@/lib/srd/race-id";
 export function pcImmunities(input: { features: Array<{ name: string }>; conditions?: string[]; wildShape?: WildShapeView }): string {
   // A Polymorph's beast has none of the character's own (shape-rules.ts).
   const sheet = formSees(input);
-  // A spell's immunity too (Heroes' Feast: poison).
-  return [...featureDamageImmunities(sheet), ...conditionDamageImmunities(sheet.conditions ?? [])].join(", ");
+  // A spell's immunity too (Heroes' Feast: poison), and petrified's poison.
+  return [
+    ...featureDamageImmunities(sheet),
+    ...conditionDamageImmunities(sheet.conditions ?? []),
+    ...petrifiedImmunities(input.conditions ?? sheet.conditions),
+  ].join(", ");
 }
 
 type WildShapeView = { kind?: "wildshape" | "polymorph"; keepsTraining?: boolean } | null;

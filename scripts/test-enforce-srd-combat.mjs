@@ -427,12 +427,8 @@ await gap("CMB-13", {
   assert.equal(d20Faces(swing.toHit).length, 1, "the attack was at disadvantage though the source of the fear is out of sight behind a wall");
 });
 
-await gap("CMB-14", {
-  rule: "conditions, Petrified: 'The creature is immune to poison and disease, although a poison or disease already in its system is suspended, not neutralized.'",
-  where: "src/lib/dm/damage-logic.ts damageAdjust (petrified gives resistance to every type and nothing more) and src/lib/dm/set-condition.ts (poisoned is laid on a petrified creature)",
-  severity: "low",
-  note: "10 poison damage to a petrified creature is halved to 5 instead of 0, and the poisoned condition lands on it.",
-}, async () => {
+// conditions, Petrified: 'The creature is immune to poison and disease, although a poison or disease already in its system is suspended, not neutralized.'
+await test("CMB-14", async () => {
   const [enemy] = await stage(fighter);
   // The call that lays the condition, on a creature that is not petrified.
   const laid = await world.invoke("set_condition", { enemyId: enemy.id, condition: "poisoned", rounds: 10 });

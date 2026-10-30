@@ -1255,7 +1255,7 @@
     "lib/dm/cure-spell.ts#toLowerCase": [["key",2,"condition labels (engine vocabulary)"]],
     "lib/dm/damage-logic.ts#[a-z]": [["english-source",4,"reference: damage types (values the schema lists) found as whole words"]],
     "lib/dm/damage-logic.ts#str-includes": [["english-source",2,"a block's resistance line (pack rows; the workshop writes it from its toggles)"]],
-    "lib/dm/damage-logic.ts#str-list": [["key",2,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
+    "lib/dm/damage-logic.ts#str-list": [["key",3,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/damage-logic.ts#toLowerCase": [["key",1,"condition labels (engine vocabulary)"],["english-source",2,"reference: damage types (values the schema lists) and a block's resistance line"]],
     "lib/dm/damage-logic.ts#\\b": [["english-source",10,"a block's resistance line (pack rows; the workshop writes it from its toggles)"]],
     "lib/dm/damage-logic.ts#re-word": [["english-source",6,"a block's resistance line (pack rows; the workshop writes it from its toggles)"]],

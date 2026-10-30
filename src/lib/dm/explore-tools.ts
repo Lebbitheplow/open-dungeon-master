@@ -23,6 +23,7 @@ import { srdNameFor } from "@/lib/dm/item-logic";
 import { infectDisease, infectWorkshopDisease, inflictMadness } from "@/lib/dm/afflictions";
 import { diseaseAt, hazardNamesAt, poisonAt } from "@/lib/srd/table-hazards";
 import { applyPoison } from "@/lib/dm/affliction-poisons";
+import { petrifiedRefusal } from "@/lib/dm/damage-logic";
 import { DISEASES, MADNESS_KINDS, POISONS, findDisease } from "@/lib/srd/afflictions";
 import { formatPrice } from "@/lib/srd/currency";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -336,6 +337,11 @@ export function handleExploreCall(
     }
     if (sheet.deathSaves?.dead) {
       return { error: `${sheet.name} is dead; nothing more takes hold.`, retry: true };
+    }
+    // SRD 5.1, Conditions, Petrified: "immune to poison and disease".
+    const stone = petrifiedRefusal(sheet.conditions, args.kind);
+    if (stone) {
+      return { error: `${sheet.name} cannot take a new ${args.kind}: ${stone}.`, refused: "rules" };
     }
     if (args.kind === "madness") {
       if (!args.duration) {
