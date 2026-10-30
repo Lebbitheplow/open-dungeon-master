@@ -305,6 +305,9 @@ const hourNow = () => {
   return breakDown(now.calendar, now.instant).hour;
 };
 await world.invoke("pass_time", { amount: (22 - hourNow() + 24) % 24 || 24, unit: "hours" });
+// The hours just passed rolled fresh weather; rain or wind would put the
+// checks below at disadvantage for a reason of their own.
+await world.invoke("set_weather", { sky: "clear", temperature: "mild", wind: "calm" });
 
 await test("adventuring / Vision and Light: darkness blocks vision, not hearing; a Perception check by ear in the dark rolls as usual.", async () => {
   const { out, d20s } = await rolled({ characterId: scout.id, kind: "skill_check", skill: "perception", by: "hearing", dc: 10 }, [15]);
