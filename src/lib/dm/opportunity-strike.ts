@@ -28,7 +28,7 @@ import { d20Expression, rollExpression, type Advantage } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { healthState } from "@/lib/bestiary/health";
 import { enemyAcWithEffects } from "@/lib/dm/ac-effects";
-import { attackSight, characterSenses, enemySenses, lightOnAttack } from "@/lib/dm/attack-light";
+import { attackSight, characterSenses, enemySenses, fearAsRolled, lightOnAttack } from "@/lib/dm/attack-light";
 import { adjudicateHit, weaponAttackProfile, type ResolvedWeapon } from "@/lib/dm/attack-logic";
 import { endInvisibilityOnCast, planMarks, writeMarks } from "@/lib/dm/attack-marks";
 import {
@@ -130,17 +130,18 @@ export function pcOpportunitySwing(input: {
   profile = gear.profile;
   const typedRiders = [...folded.typedRiders, ...gear.typed];
 
+  // Fear only with its source in sight, a Dodge only against an attacker
+  // the dodger sees (attack-light.ts), as on pc_attack.
+  const sight = opportunitySight({ campaignId: campaign.id, encounterId: encounter.id, enemy, sheet, enemyReacts: false });
   const context = attackContext({
-    attackerConditions: sheet.conditions,
+    attackerConditions: fearAsRolled(encounter.id, sheet.id, sheet.conditions, sheet.conditionMeta),
     targetConditions: input.targetConditions,
     melee: true,
     adjacent: input.adjacent,
     requested: "none",
+    targetSeesAttacker: sight?.targetSees !== false,
   });
-  const light = lightOnAttack(
-    opportunitySight({ campaignId: campaign.id, encounterId: encounter.id, enemy, sheet, enemyReacts: false }),
-    { attacker: sheet.name, target: enemy.displayName },
-  );
+  const light = lightOnAttack(sight, { attacker: sheet.name, target: enemy.displayName });
   const attackRiders = conditionRollRiders(sheet.conditions, "attack");
   const advantage: Advantage = mergeAdvantage([
     ...context.sources,

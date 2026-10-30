@@ -238,6 +238,79 @@ await test("CMB-03", async () => {
   assert.equal(swing.kept, 13, "the attack was not rolled with advantage");
 });
 
+// combat, Dodge: 'any attack roll made against you has disadvantage if you can see the attacker'; conditions, Frightened: 'while the source of its fear is within line of sight'. Both held on pc_attack and enemy_attack; here on the opportunity attacks, either way.
+await test("CMB-03 and CMB-13 on opportunity attacks: a Dodge against an attacker in the dark, and a fear whose source is out of sight, count for nothing", async () => {
+  const wrong = [];
+  const darken = () => getDatabase().prepare("UPDATE battle_maps SET ambient = 'dark', outdoors = 0 WHERE id = ?").run(kit.map().id);
+  const wall = () => kit.openField(Array.from({ length: kit.map().width }, (_, x) => [x, 8, "#"]));
+  const attackBy = (refId) => kit.lastRolls(8).filter((roll) => roll.kind === "attack" && (roll.characterId === refId || roll.attacker?.id === refId)).at(-1);
+  const kept = world.sheet(fighter.id);
+  try {
+    // An enemy with darkvision swings at a dodging fighter who cannot see it.
+    let [enemy] = await stage(fighter);
+    darken();
+    kit.setEnemy(enemy.id, { stats: { senses: { darkvision: 60, passivePerception: 10 } } });
+    kit.place(fighter.id, 5, 5);
+    kit.place(enemy.id, 5, 6);
+    world.patch(fighter.id, { conditions: ["dodging"], conditionMeta: { dodging: { untilTurnOf: fighter.id } } });
+    world.clearDice();
+    world.dice(7, 13, 1);
+    await walk(fighter, 5, 2);
+    world.clearDice();
+    if (d20Faces(attackBy(enemy.id)).length !== 2) {
+      wrong.push("an enemy's opportunity attack still met a Dodge from a fighter who could not see it");
+    }
+    world.patch(fighter.id, { conditions: [], conditionMeta: {} });
+    // The fighter, with darkvision, swings at a dodging enemy that cannot see them.
+    [enemy] = await stage(fighter);
+    darken();
+    world.patch(fighter.id, { features: [...kept.features, { name: "Darkvision", description: "" }] });
+    kit.place(fighter.id, 5, 5);
+    kit.place(enemy.id, 5, 6);
+    kit.setEnemy(enemy.id, { conditions: ["dodging"], conditionMeta: { dodging: { untilTurnOf: enemy.id } } });
+    world.clearDice();
+    world.dice(7, 13, 1);
+    await world.invoke("move_token", { token: enemy.id, x: 8, y: 6 });
+    world.clearDice();
+    if (d20Faces(attackBy(fighter.id)).length !== 2) {
+      wrong.push("a character's opportunity attack still met a Dodge from an enemy that could not see them");
+    }
+    world.patch(fighter.id, { features: kept.features });
+    // A frightened enemy swings at the leaver, its fear's source behind a wall.
+    let source;
+    [enemy, source] = await stage(fighter, 2);
+    wall();
+    kit.place(fighter.id, 5, 5);
+    kit.place(enemy.id, 5, 6);
+    kit.place(source.id, 5, 11);
+    kit.setEnemy(enemy.id, { conditions: ["frightened"], conditionMeta: { frightened: { source: source.id } } });
+    world.clearDice();
+    world.dice(7, 13, 1);
+    await walk(fighter, 5, 2);
+    world.clearDice();
+    if (d20Faces(attackBy(enemy.id)).length !== 1) {
+      wrong.push("a frightened enemy's opportunity attack was at disadvantage with its fear's source out of sight");
+    }
+    // A frightened fighter swings at an enemy leaving, the source behind a wall.
+    [enemy, source] = await stage(fighter, 2);
+    wall();
+    kit.place(fighter.id, 5, 5);
+    kit.place(enemy.id, 5, 6);
+    kit.place(source.id, 5, 11);
+    world.patch(fighter.id, { conditions: ["frightened"], conditionMeta: { frightened: { source: source.id } } });
+    world.clearDice();
+    world.dice(7, 13, 1);
+    await world.invoke("move_token", { token: enemy.id, x: 8, y: 6 });
+    world.clearDice();
+    if (d20Faces(attackBy(fighter.id)).length !== 1) {
+      wrong.push("a frightened character's opportunity attack was at disadvantage with the fear's source out of sight");
+    }
+  } finally {
+    world.patch(fighter.id, { features: kept.features, conditions: [], conditionMeta: {} });
+  }
+  assert.deepEqual(wrong, [], wrong.join("; "));
+});
+
 // conditions, Invisible: 'For the purpose of hiding, the creature is heavily obscured.' (combat, Hide: you make a Dexterity (Stealth) check in an attempt to hide)
 await test("CMB-04", async () => {
   const [enemy] = await stage(fighter);

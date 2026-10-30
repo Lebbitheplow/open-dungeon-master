@@ -43,7 +43,7 @@ import { acWithEffects } from "@/lib/dm/ac-effects";
 import { canAct, canEnemyAct } from "@/lib/dm/can-act";
 import { opportunityReactionKey } from "@/lib/srd/authored-effects-more";
 import { conditionsOf } from "@/lib/dm/vitals-logic";
-import { lightOnAttack } from "@/lib/dm/attack-light";
+import { fearAsRolled, lightOnAttack } from "@/lib/dm/attack-light";
 import { opportunityWeapon } from "@/lib/dm/enemy-profile";
 import { opportunitySight, pcOpportunitySwing, withOpportunityTurn } from "@/lib/dm/opportunity-strike";
 import { martialArtsApplies } from "@/lib/dm/pc-attack-options";
@@ -196,13 +196,17 @@ export function resolveOpportunityAttacks(
     encounter.reactionsUsed = [...encounter.reactionsUsed, enemy.id];
     saveEncounter(encounter);
 
-    // An attack roll like any other: both sides' conditions decide it.
+    // An attack roll like any other: both sides' conditions decide it. Its
+    // fear weighs only with the source in sight, and the leaver's Dodge
+    // only against an attacker they can see (attack-light.ts), as on
+    // enemy_attack: an opportunity attack read neither.
     const context = attackContext({
-      attackerConditions: enemy.conditions,
+      attackerConditions: fearAsRolled(encounter.id, enemy.id, enemy.conditions, enemy.conditionMeta),
       targetConditions: withLiveDodge(conditionsOf(sheet)),
       melee: true,
       adjacent: reach <= 1,
       requested: "none",
+      targetSeesAttacker: sight?.targetSees !== false,
     });
     const light = lightOnAttack(sight, { attacker: enemy.displayName, target: sheet.name });
     // Escape the Horde (a Hunter ranger's Defensive Tactics): opportunity
