@@ -98,7 +98,9 @@ export function facesFor(
   if (entry.kind === "pc" || entry.kind === "npc") {
     const sheet = sheets.find((candidate) => candidate.id === entry.id);
     if (sheet) {
-      return [sheet.portrait?.url, characterPlaceholder({ race: sheet.race, class: sheet.class, genre })];
+      // The gender too, so the cinematic table draws the face the Party tab,
+      // the board and the chronicle draw (src/lib/speaker-faces.ts).
+      return [sheet.portrait?.url, characterPlaceholder({ race: sheet.race, class: sheet.class, gender: sheet.gender, genre })];
     }
     return [npcPlaceholder(null, entry.name)];
   }
@@ -255,7 +257,7 @@ export function PartyRail({
           >
             <span key={`pulse-${hp}`} className="cine-party-pulse" data-dir={dir} aria-hidden="true" />
             <TokenFace
-              candidates={[sheet.portrait?.url, characterPlaceholder({ race: sheet.race, class: sheet.class, genre })]}
+              candidates={[sheet.portrait?.url, characterPlaceholder({ race: sheet.race, class: sheet.class, gender: sheet.gender, genre })]}
               name={sheet.name}
               className="cine-party-face"
             />

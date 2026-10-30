@@ -127,4 +127,15 @@ test("a card played for a companion stays hers after she leaves, never the autho
   assert.match(old, /session-speaker[^>]*>Krag</);
 });
 
+// The cinematic table's initiative strip and party rail drew the plate
+// without the sheet's gender, so a woman's face on the Party tab was the
+// neutral one there.
+const { facesFor } = await import("../src/app/campaigns/[campaignId]/CinematicParts.tsx");
+test("the cinematic table draws the same face as the Party tab and the chronicle", () => {
+  const seraphine = sheet("Seraphine", { race: "bhain-kwai", class: "paladin", gender: "Female" });
+  const [, drawn] = facesFor({ id: seraphine.id, kind: "pc", name: seraphine.name }, [seraphine], [], null);
+  assert.equal(drawn, plate(seraphine));
+  assert.match(drawn, /feminine/);
+});
+
 console.log(`test-speaker-faces: ${passed} tests passed.`);
