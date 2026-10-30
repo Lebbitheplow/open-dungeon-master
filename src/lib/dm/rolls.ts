@@ -313,6 +313,8 @@ export function resolveRollExpression(
     // The light the roller sees by off the board (src/lib/dm/place-light.ts),
     // read by a check that names `by: "sight"`.
     light?: Light | null;
+    // Who gave the held Help (src/lib/dm/forced-save.ts helperOf).
+    helper?: Pick<CharacterSheet, "name" | "proficiencies"> | null;
     // The roller moved no more than half their speed this turn (Supreme
     // Sneak, src/lib/srd/check-traits.ts); the caller reads the board.
     movedLittle?: boolean;
@@ -383,10 +385,19 @@ export function resolveRollExpression(
   // check, and is spent by taking it (src/lib/dm/action-tools.ts).
   // Help is for an ability check or an attack roll, never a saving throw,
   // which leaves the held Help where it is for the roll it was given for.
-  const helped =
+  const heldForCheck =
     sheet && derivationKind && derivationKind !== "initiative" && derivationKind !== "saving_throw"
       ? heldHelp(sheet, { check: true })
       : null;
+  // A tool check is helped only by one trained with the tool (SRD 5.1,
+  // Working Together: "trying to open a lock requires proficiency with
+  // thieves' tools, so a character who lacks that proficiency can't help
+  // another character in that task"). The Help stays for a check they can.
+  const untrainedHelper =
+    heldForCheck && args.kind === "ability_check" && args.tool && extras?.helper && !toolProficiencyBonus(extras.helper, args.tool, 0)
+      ? extras.helper.name
+      : null;
+  const helped = untrainedHelper ? null : heldForCheck;
   // Feature-driven roll riders: Reliable Talent floors a proficient check,
   // Jack of All Trades adds half proficiency.
   const defense =
@@ -499,6 +510,7 @@ export function resolveRollExpression(
     ...riders.inspirationNotes,
     ...effects.notes,
     ...(helped ? ["spends the Help their ally gave them: advantage"] : []),
+    ...(untrainedHelper ? [`${untrainedHelper}'s Help gives nothing here: they are not trained with ${args.tool}`] : []),
     ...riders.notes,
     ...(armorUntrained
       ? ["wearing armor they are not trained in: disadvantage on STR and DEX rolls"]

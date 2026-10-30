@@ -188,23 +188,21 @@ await test(
 
 // ---- Using Ability Scores: Working Together ----
 
-await gap(
-  "ADV-09",
-  {
-    rule:
-      "using-ability-scores / Working Together: \"A character can only provide help if the task is one that he or she could attempt alone. For example, trying to open a lock requires proficiency with thieves' tools, so a character who lacks that proficiency can't help another character in that task.\"",
-    where: "src/lib/dm/combat-actions.ts help and src/lib/dm/help-logic.ts heldHelp (the held Help is stored as source \"check\", with no helper and no task, and rides any next check)",
-    severity: "low",
-    note: "The roll names the tool (request_roll tool), so the engine could hold the helper to it once the Help records who gave it.",
-  },
+await test(
+  "ADV-09: using-ability-scores / Working Together: \"A character can only provide help if the task is one that he or she could attempt alone. For example, trying to open a lock requires proficiency with thieves' tools, so a character who lacks that proficiency can't help another character in that task.\"",
   async () => {
     world.patch(scout.id, { conditions: [] });
     const helped = await world.invoke("take_action", { characterId: helper.id, action: "help", targetCharacterId: scout.id });
     need(helped.ok, `Help was refused: ${helped.error}`);
     need((world.sheet(helper.id).proficiencies.tools ?? []).length === 0, "the helper holds a tool proficiency");
     const { d20s } = await rolled({ characterId: scout.id, kind: "ability_check", ability: "dex", tool: "thieves' tools" }, [15, 4]);
-    world.patch(scout.id, { conditions: [], conditionMeta: {} });
     assert.equal(d20s.length, 1, "a helper with no thieves' tools proficiency gave advantage on picking a lock");
+    // Trained with the tools, the same helper's Help gives the advantage.
+    world.patch(helper.id, { proficiencies: profs({ tools: ["thieves' tools"] }) });
+    const trained = await rolled({ characterId: scout.id, kind: "ability_check", ability: "dex", tool: "thieves' tools" }, [15, 4]);
+    world.patch(helper.id, { proficiencies: profs() });
+    world.patch(scout.id, { conditions: [], conditionMeta: {} });
+    assert.equal(trained.d20s.length, 2, "a helper trained with thieves' tools gave no advantage on picking a lock");
   },
 );
 
