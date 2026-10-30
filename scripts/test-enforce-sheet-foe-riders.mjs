@@ -17,6 +17,9 @@ const kit = await combatKit(world);
 const { moveToSide } = await import("../src/lib/dm/combat-sides.ts");
 const { tickClockConditions } = await import("../src/lib/dm/condition-tick.ts");
 const { beginTurns, endTurns } = await import("../src/lib/dm/turn-end.ts");
+const { minutesSinceDeath } = await import("../src/lib/dm/revival.ts");
+const { listRecentAudit } = await import("../src/lib/db/sheet-audit.ts");
+const { revertAuditEntry } = await import("../src/lib/sheet-undo.ts");
 
 const BODY = { str: 16, dex: 12, con: 14, int: 10, wis: 10, cha: 10 };
 const mage = world.addHero({ name: "Sable", ...caster("wizard", "int", ["Thunderwave", "Stinking Cloud", "Phantasmal Killer"], [], 9), maxHp: 40, ac: 12, acOverride: true });
@@ -128,6 +131,14 @@ await test("Divine Word blinds, deafens and stuns a turncoat at 30 hit points or
   world.clearDice();
   assert.equal(out.ok, true, out.error);
   assert.equal(world.sheet(turncoat.id).deathSaves?.dead, true, JSON.stringify(out.result));
+  // The death is the death engine's: dated for a revival spell, and on the
+  // audit trail, where taking it back returns the 18 hit points.
+  assert.equal(minutesSinceDeath(world.campaignId, turncoat.id), 0, "no moment of death was recorded");
+  const entry = listRecentAudit(world.campaignId, 50).filter((row) => row.kind === "death_state" && row.characterId === turncoat.id).sort((a, b) => b.seq - a.seq)[0];
+  assert.ok(entry, "the death left nothing on the audit trail to undo");
+  assert.equal(revertAuditEntry(world.campaign(), entry).ok, true);
+  assert.equal(world.sheet(turncoat.id).currentHp, 18);
+  assert.notEqual(world.sheet(turncoat.id).deathSaves?.dead, true);
 });
 
 await test("A party wizard's Thunderwave cast as an area pushes the turncoat it catches 10 feet away", async () => {

@@ -83,6 +83,17 @@ function recordDeath(campaign: Campaign, sheet: CharacterSheet, cause: string, a
   });
 }
 
+// Death outright on a character (Divine Word's lowest tier, Power Word Kill
+// through a foe path): the same audited death state and death record failed
+// saves write, so the audit trail can take it back, a revival spell reads
+// when it happened, and the character's story keeps it. A bare sheet patch
+// left none of the three.
+export function killOutright(campaign: Campaign, turnId: string | null, sheet: CharacterSheet, cause: string): CharacterSheet | null {
+  writeDeathState(campaign, turnId, sheet, { successes: 0, failures: 3, stable: false, dead: true }, "death_state", cause, { currentHp: 0 });
+  recordDeath(campaign, sheet, cause);
+  return getSheetById(sheet.id);
+}
+
 function tableNote(campaign: Campaign, content: string, glyph: SystemGlyph) {
   const seq = allocateSeq(campaign.id);
   const message = insertCampaignMessage({
