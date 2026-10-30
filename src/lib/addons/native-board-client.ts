@@ -1,11 +1,23 @@
 import type { ShellNativeBoard, NativeBoardRect } from "@/lib/shell-host";
 import { readViewMessage, type HostMessageBody, type ViewMessage } from "./board-bridge";
+import { variantUrl } from "@/lib/image-format";
 
 const bindings = new WeakMap<HTMLIFrameElement, (packet: HostMessageBody) => void>();
 const snapshots = new WeakMap<HTMLIFrameElement, HostMessageBody>();
 const openings = new WeakMap<ShellNativeBoard, Promise<void>>();
 const owners = new WeakMap<ShellNativeBoard, () => void>();
 export const NATIVE_IMAGE_MAX_BYTES = 1024 * 1024;
+
+// What a native request fetches, best first. A portrait is drawn as a small
+// figure, so its 256px variant is enough. A map's own file (the backdrop, a
+// view's model) was fetched as that 256px variant too, a backdrop too coarse
+// to lay under a board: it keeps its full size when it fits the pipe, and a
+// picture too large for it falls back to the 1024px variant.
+export function nativeFileUrls(path: string, face: boolean): string[] {
+  if (face) return [variantUrl(path, 256)];
+  const smaller = variantUrl(path, 1024);
+  return smaller === path ? [path] : [path, smaller];
+}
 
 export function nativeFilePacket(packet: HostMessageBody) {
   if (packet.type !== "file" || !packet.ok) return packet;

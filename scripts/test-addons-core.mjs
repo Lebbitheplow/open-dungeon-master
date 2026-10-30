@@ -26,7 +26,7 @@ const fsp = await import("node:fs/promises");
 const nodePath = (await import("node:path")).default;
 const { cleanSettings, effectiveSettings, missingRequiredSettings, setupSettingKeys, downloadApplies } = await import("../src/lib/addons/settings.ts");
 const { boardSnapshot, boardRuler, boardFx, readViewMessage, fileForRequest, createAnchorStore, offeredBoardControl, nativeBoardHud } = await import("../src/lib/addons/board-bridge.ts");
-const { nativeFilePacket } = await import("../src/lib/addons/native-board-client.ts");
+const { nativeFilePacket, nativeFileUrls } = await import("../src/lib/addons/native-board-client.ts");
 const { normalizeMapAddonView } = await import("../src/lib/addons/map-view.ts");
 const { withManifestDefaults } = await import("../src/lib/addons/import-defaults.ts");
 const { sniffImage } = await import("../src/lib/addons/sniff.ts");
@@ -58,6 +58,12 @@ await test("native portrait bytes survive JSON and reject oversized transfers", 
   assert.equal(encoded.bytes,undefined);
   assert.equal(nativeFilePacket({...packet,bytes:new ArrayBuffer(1024*1024+1)}).ok,false);
   assert.deepEqual(nativeFilePacket({type:"file",requestId:"face-1",ok:false,name:"pc",error:"Missing"}),{type:"file",requestId:"face-1",ok:false,name:"pc",error:"Missing"});
+});
+await test("a native backdrop keeps its size; only portraits use the small variant", () => {
+  assert.equal(typeof nativeFileUrls, "function", "file and face requests need their own fetch order");
+  assert.deepEqual(nativeFileUrls("/generated/hero.png", true), ["/generated/hero.png?w=256"]);
+  assert.deepEqual(nativeFileUrls("/generated/backdrop.png", false), ["/generated/backdrop.png", "/generated/backdrop.png?w=1024"], "a backdrop is never fetched at 256px");
+  assert.deepEqual(nativeFileUrls("/api/addons/hello-dungeon/assets/model.glb", false), ["/api/addons/hello-dungeon/assets/model.glb"]);
 });
 await test("native battlefield controls have a bounded explicit contract", () => {
   assert.deepEqual(readViewMessage({odm:1,type:"ready",battlefieldUi:true}), {type:"ready",battlefieldUi:true});

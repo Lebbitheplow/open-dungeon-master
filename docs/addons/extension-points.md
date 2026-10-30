@@ -488,7 +488,9 @@ turn budgets or validation.
 
 Native portrait requests reuse `face` and the same visible-token checks.
 The host requests its existing 256px variants, caps each response at 1 MiB,
-and sends `bytesBase64` through the native JSON pipe. Iframes keep their
+and sends `bytesBase64` through the native JSON pipe. A native `file`
+request (the backdrop or the view's own files) is fetched at full size, and
+a picture over the cap is retried as its 1024px variant. Iframes keep their
 normal `ArrayBuffer` file replies. The native HUD matches request ID and
 selected token, dropping late replies after selection changes. Missing or
 unsupported art uses the figure's initial.

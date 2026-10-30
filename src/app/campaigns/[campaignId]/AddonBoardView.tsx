@@ -32,8 +32,7 @@ import { prefersReducedMotion, useLowEffects } from "@/lib/effects-mode";
 import { AUDIO_PREF_FIELDS } from "@/lib/audio-prefs";
 import { pageOrigin } from "@/lib/navigation";
 import { shellHost } from "@/lib/shell-host";
-import { attachNativeBoard, postNativeBoard, NATIVE_IMAGE_MAX_BYTES } from "@/lib/addons/native-board-client";
-import { variantUrl } from "@/lib/image-format";
+import { attachNativeBoard, nativeFileUrls, postNativeBoard, NATIVE_IMAGE_MAX_BYTES } from "@/lib/addons/native-board-client";
 import { useThemePrefs } from "@/lib/theme-mode";
 
 // An addon's board view: its own page in a sandboxed frame where the grid
@@ -282,12 +281,12 @@ export function AddonBoardView({
   }, [readyAt, camera, view]);
 
   useLayoutEffect(() => {
-    async function sendFile(requestId: string, name: string, paths: Array<string | null | undefined>, native = false) {
+    async function sendFile(requestId: string, name: string, paths: Array<string | null | undefined>, native = false, face = false) {
       const send = native ? postNativeBoard : postTo;
-      for (const path of paths) {
-        if (!path) continue;
+      const urls = paths.flatMap((path) => (!path ? [] : native ? nativeFileUrls(path, face) : [path]));
+      for (const url of urls) {
         try {
-          const response = await fetch(native ? variantUrl(path, 256) : path);
+          const response = await fetch(url);
           if (!response.ok) continue;
           let bytes: ArrayBuffer;
           if (native) {
@@ -413,6 +412,7 @@ export function AddonBoardView({
             message.tokenId,
             current.view?.tokens.some((token) => token.id === message.tokenId) ? current.faceFor?.(message.tokenId) ?? [] : [],
             native,
+            true,
           );
           break;
         case "anchors":
