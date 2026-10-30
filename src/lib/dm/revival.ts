@@ -18,10 +18,14 @@ const KIND = "death_moment";
 
 type Moment = { instant: number; encounterId: string | null; round: number | null };
 
-export function noteDeathMoment(campaignId: string, characterId: string) {
+// `at` is the instant it happened when that was not now: a death save
+// rolled while a rest or a journey moved the clock came seconds into that
+// stretch, not at its end (death.ts settleDying), so Revivify's minute is
+// counted from then.
+export function noteDeathMoment(campaignId: string, characterId: string, at?: number) {
   const encounter = getActiveEncounter(campaignId);
   const moment: Moment = {
-    instant: getClock(campaignId).instant,
+    instant: at ?? getClock(campaignId).instant,
     encounterId: encounter?.id ?? null,
     round: encounter?.round ?? null,
   };

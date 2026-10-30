@@ -109,7 +109,9 @@ export function tickEncounterConditions(campaign: Campaign, encounter: Encounter
 // minutes of walking is not a hundred saving throws, and one honest roll
 // per stretch is how a human DM plays "you can try to shake it off again".
 // Returns the death saves the stretch rolled, already shown to the table.
-export function tickClockConditions(campaign: Campaign, minutes: number): string[] {
+// `startedAt` is the in-world instant the stretch began (the clock has
+// already moved to its end), which dates a death those saves bring.
+export function tickClockConditions(campaign: Campaign, minutes: number, startedAt?: number): string[] {
   const rounds = Math.floor(Math.max(0, minutes) * ROUNDS_PER_MINUTE);
   if (rounds <= 0) {
     return [];
@@ -120,7 +122,7 @@ export function tickClockConditions(campaign: Campaign, minutes: number): string
   // waiting out its 1d4 hours.
   const deathSaves = listSheets(campaign.id)
     .filter((sheet) => isDying(sheet))
-    .flatMap((sheet) => settleDying(campaign, sheet.id, deathSavesInMinutes(minutes)));
+    .flatMap((sheet) => settleDying(campaign, sheet.id, deathSavesInMinutes(minutes), null, startedAt));
   const lines: string[] = [];
   tickSheetConditions(campaign, rounds, lines, { endTurnBound: true });
   rollEffectSaves(campaign, null, () => true, lines);

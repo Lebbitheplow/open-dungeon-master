@@ -39,6 +39,7 @@ const { test, finish } = suite("test-enforce-death");
 const world = await openWorld();
 const kit = conditionsKit(world);
 const messages = await import("../src/lib/db/messages.ts");
+const { minutesSinceDeath } = await import("../src/lib/dm/revival.ts");
 
 const hero = world.addHero(FIGHTER);
 const ally = world.addHero(FIGHTER);
@@ -476,6 +477,10 @@ await test("a dying character left alone on the clock can die of it", async () =
   assert.deepEqual(out.dice, ["d20:3", "d20:18", "d20:5"]);
   assert.deepEqual(track(), { successes: 1, failures: 3, stable: false, dead: true });
   assert.match(out.result.deathSaves.at(-1), /dies/);
+  // The third save came 18 seconds into the eight hours: that is when they
+  // died, so the record holds the hours since and Revivify's minute is gone.
+  const since = minutesSinceDeath(world.campaignId, hero.id);
+  assert.ok(since !== null && Math.abs(since - (8 * 60 - 0.3)) < 0.01, `died ${since} minutes ago by the record`);
 });
 
 await test("a natural 20 on the clock brings the character round at 1 hit point", async () => {

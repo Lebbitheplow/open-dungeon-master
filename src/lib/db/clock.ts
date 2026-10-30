@@ -94,7 +94,7 @@ export function advanceClock(
     tickEffectMinutes(campaignId, moved.minutes);
     const campaign = getCampaignById(campaignId);
     if (campaign) {
-      deathSaves = tickClockConditions(campaign, moved.minutes);
+      deathSaves = tickClockConditions(campaign, moved.minutes, current.instant);
     }
   }
   // The same clock burns torches down and brings the calendar's days round
