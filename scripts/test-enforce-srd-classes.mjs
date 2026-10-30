@@ -236,12 +236,9 @@ const surger = world.addHero({
   equipment: [{ name: "Longsword", qty: 1, equipped: true }],
 });
 
-await gap("CLS-01", {
-  rule: "SRD 5.1 fighter, Action Surge: \"Starting at 17th level, you can use it twice before a rest, but only once on the same turn.\"",
-  where: "src/lib/dm/resource-turn.ts (the action_surge branch) and src/lib/dm/turn-budget.ts grantActionSurge",
-  severity: "medium",
-  note: "A 17th level fighter spends both surges on one turn and has three actions.",
-}, async () => {
+// SRD 5.1 fighter, Action Surge: "Starting at 17th level, you can use it
+// twice before a rest, but only once on the same turn."
+await test("CLS-01", async () => {
   await duel(surger);
   world.patch(surger.id, { resources: { ...world.sheet(surger.id).resources, action_surge: { max: 2, used: 0 } } });
   const first = await world.invoke("use_resource", { characterId: surger.id, resource: "Action Surge" });

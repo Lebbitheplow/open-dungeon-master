@@ -170,10 +170,20 @@ function spendGrantedAction(budget: TurnBudget, what: string, who: string): Spen
   };
 }
 
+// The turn's mark that Action Surge was used on it. SRD 5.1 fighter, Action
+// Surge: "you can use it twice before a rest, but only once on the same
+// turn", so the 17th level fighter's second use waits for another turn
+// (resource-turn.ts refuses it, the Hand greys its card).
+export const ACTION_SURGED = "action surge";
+
 // Grants one more action this turn. Called when Action Surge is spent
 // (src/lib/dm/action-tools.ts grantActionSurge).
 export function grantAction(budget: TurnBudget): TurnBudget {
-  return { ...budget, grantedActions: (budget.grantedActions ?? 0) + 1 };
+  return {
+    ...budget,
+    grantedActions: (budget.grantedActions ?? 0) + 1,
+    oncePerTurn: budget.oncePerTurn.includes(ACTION_SURGED) ? budget.oncePerTurn : [...budget.oncePerTurn, ACTION_SURGED],
+  };
 }
 
 // The Haste extra action, spent when the normal slot is gone. Null when

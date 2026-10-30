@@ -7,6 +7,7 @@ import { bonusCastOf, casterStateProblem, componentProblem, focusProblem, materi
 import { computeSheetDerived, spellAttackFor, spellSaveDcFor } from "@/lib/srd";
 import { resourceDef, resourceLevel, type ResourceDef } from "@/lib/srd/class-resources";
 import { psionicOptions } from "@/lib/dm/option-costs";
+import { ACTION_SURGED } from "@/lib/dm/action-budget";
 import { BONUS_ATTACK_COUNTERS } from "@/lib/dm/feature-bonus-attacks";
 import { isMeleeSpellAttack } from "@/lib/srd/melee-spell";
 import { bundledSpellFacts, type CastingTime, type SpellRange } from "@/lib/srd/spell-facts";
@@ -481,6 +482,10 @@ export function featureCards(sheet: CharacterSheet, turn: HandTurn): HandCard[] 
         card,
         standingGate(sheet, turn, cost === "reaction" ? "reaction" : cost === "bonus" ? "bonus" : cost === "free" ? "free" : "action"),
         left > 0 ? null : { reason: `${def.displayName} is spent until a ${def.recharge} rest.`, spent: true },
+        // SRD 5.1 fighter, Action Surge: "only once on the same turn".
+        id === "action_surge" && (turn.marks ?? []).includes(ACTION_SURGED)
+          ? { reason: "Action Surge is used once a turn; the other use waits for a later turn.", spent: true }
+          : null,
         costGate(cost, turn, sheet, def.displayName),
       ),
     );

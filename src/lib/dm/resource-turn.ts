@@ -16,7 +16,7 @@ import { getActiveEncounter } from "@/lib/db/encounters";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { conditionTurnShape } from "@/lib/srd/condition-effects";
 import { matchResource, type ResourceAction } from "@/lib/srd/class-resources";
-import { spendAction } from "@/lib/dm/action-budget";
+import { ACTION_SURGED, spendAction } from "@/lib/dm/action-budget";
 import { canAct } from "@/lib/dm/can-act";
 import { readiedReleaseFor } from "@/lib/dm/readied-release";
 import { EMBODIMENT_MARK, LEVELLED_SPELL, SURGE_MARK } from "@/lib/dm/cast-rules";
@@ -86,6 +86,15 @@ export function prepareResourceCharge(
     return toolError(able);
   }
   if (def.id === "action_surge") {
+    // SRD 5.1 fighter, Action Surge: "only once on the same turn", whatever
+    // uses are left. Refused before the use is spent.
+    const turn = budgetFor(encounter, sheet.id, attacksAllowedFor(sheet), conditionTurnShape(sheet.conditions));
+    if (turn?.oncePerTurn.includes(ACTION_SURGED)) {
+      return {
+        error: `${sheet.name} has already used Action Surge this turn, and it can be used only once on the same turn. The use is not spent; it is there on a later turn.`,
+        refused: "rules",
+      };
+    }
     return {
       commit: () => {
         const granted = grantActionSurge(campaign.id, sheet);
