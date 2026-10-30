@@ -1040,7 +1040,7 @@
     "lib/dm/action-tools.ts#toLowerCase": [["key",1,"condition label (engine vocabulary)"]],
     "lib/dm/advance-logic.ts#re-word": [["english-extra",1,"the romance word list (romance, romantic, flirt, seduction, love interest) read in a table's safety lines and veils: an extra beside the family boundary and each player's own opt-in, which serve every language; a table in another language still has both"]],
     "lib/dm/advance-logic.ts#str-eq": [["key",3,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
-    "lib/dm/affliction-poisons.ts#str-eq": [["key",3,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
+    "lib/dm/affliction-poisons.ts#str-eq": [["key",2,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/affliction-poisons.ts#toLowerCase": [["key",1,"condition label (engine vocabulary)"]],
     "lib/dm/afflictions.ts#str-eq": [["key",5,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/afflictions.ts#toUpperCase": [["display",6,"ability abbreviation shown in a roll note"]],

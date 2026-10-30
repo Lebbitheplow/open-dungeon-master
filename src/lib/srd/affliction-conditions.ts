@@ -81,6 +81,7 @@ export const AFFLICTION_CONDITION_EFFECTS: ConditionEffectRow[] = [
   // The marks the thrown flasks leave (src/lib/dm/gear-weapon-hit.ts), with
   // the poisons' rows as harm a creature carries.
   { id: "burning", match: ["burning"], summary: "Alchemist's fire: 1d4 fire damage at the start of each of its turns, until it uses its action on a DC 10 Dexterity check to put the flames out." },
+  { id: "antitoxin", match: ["antitoxin"], summary: "Antitoxin: advantage on saving throws against poison for 1 hour." },
   { id: "covered_in_oil", match: ["covered in oil"], summary: "Covered in oil: the next fire damage within a minute deals 5 more fire damage." },
   { id: "recuperated", match: ["recuperated"], summary: "Recuperating: advantage on saving throws against a disease or poison for 24 hours." },
   { id: "eyebright_ointment", match: ["eyebright ointment"], summary: "Eyebright ointment on the eyes: sight rot does not worsen after the next long rest." },

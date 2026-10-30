@@ -14,7 +14,7 @@
 import { getCampaignById, type Campaign } from "@/lib/db/campaigns";
 import { getClock } from "@/lib/db/clock";
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
-import { removeConditions, type ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { effectiveMaxHp, removeConditions, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { settleOnDamage } from "@/lib/dm/spell-effects";
 import { applyPcDamage } from "@/lib/dm/pc-damage";
 import { handleSetCondition } from "@/lib/dm/set-condition";
@@ -388,10 +388,23 @@ export function afflictionClockTick(campaignId: string, to: number) {
 // What a disease does to the long rest itself, before it is written: sewer
 // plague restores no hit points, and cackle fever's level of exhaustion
 // stays.
+// The highest healing brings a character: their maximum, less the damage
+// Pale Tincture has dealt while it lasts (SRD 5.1 Poisons: "the damage the
+// poison deals can't be healed by any means"; issue #570, EQP-17). It never
+// takes away hit points they already have.
+export function healCeiling(campaignId: string, sheet: CharacterSheet, max = effectiveMaxHp(sheet)): number {
+  const unhealable = afflictionsOf(campaignId, sheet.id).reduce((sum, entry) => sum + (entry.kind === "poison" ? (entry.unhealable ?? 0) : 0), 0);
+  return unhealable ? Math.max(Math.min(sheet.currentHp, max), max - unhealable) : max;
+}
+
 export function afflictedRestPatch(sheet: CharacterSheet, patch: FullPatchSheetInput): FullPatchSheetInput {
   const next = { ...patch };
   if (holds(sheet, "sewer plague")) {
     delete next.currentHp;
+  }
+  // The rest's own maximum (exhaustion it lowered) less Pale Tincture's damage.
+  if (next.currentHp !== undefined) {
+    next.currentHp = healCeiling(sheet.campaignId, sheet, next.currentHp);
   }
   if (holds(sheet, "cackle fever") && (next.exhaustion ?? sheet.exhaustion ?? 0) < 1) {
     next.exhaustion = 1;

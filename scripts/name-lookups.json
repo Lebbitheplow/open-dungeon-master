@@ -1197,7 +1197,7 @@
     "lib/dm/condition-logic.ts#whole-single": [["identity",1,"concentration, spells, downtime subjects, relationships, trade lines and zones by textKey (zoneKey is textKey plus ODM's English spell aliases) or normalizeName; turn and order keys"]],
     "lib/dm/condition-tick.ts#keyed": [["key",1,"ids, refs, slugs, tool names, field names, env names, event kinds, UI keys, caches, door and map keys; a sheet's conditionMeta by the condition key it was written under; the usage route's gear map by the sheet's own stored item names (src/: every site read)"]],
     "lib/dm/condition-tick.ts#partial": [["identity",1,"spells and condition instances by whole name or key"]],
-    "lib/dm/condition-tick.ts#whole": [["identity",3,"spells and condition instances by whole name or key"],["identity",2,"condition instances by whole name or key"]],
+    "lib/dm/condition-tick.ts#whole": [["identity",3,"spells and condition instances by whole name or key"],["identity",3,"condition instances by whole name or key"]],
     "lib/dm/conscience.ts#whole": [["identity",1,"a companion's standing with each character by its whole name (textKey)"],["identity",1,"a companion's devoted friends, by its whole name (textKey) (issue 503 Phase 4)"]],
     "lib/dm/consumables.ts#keyed": [["key",2,"ids, refs, slugs, tool names, field names, env names, event kinds, UI keys, caches, door and map keys; a sheet's conditionMeta by the condition key it was written under; the usage route's gear map by the sheet's own stored item names (src/: every site read)"]],
     "lib/dm/consumables.ts#number": [["key",1,"digits a regex already captured, ids, headers, stored and form numbers (number inputs), dice parts, the pack's English text (\"1,000 feet\", a purse); src/: every site read"]],

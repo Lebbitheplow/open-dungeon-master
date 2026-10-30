@@ -41,6 +41,9 @@ export type Affliction = {
   successes?: number;
   penalty?: number;
   doses?: number;
+  // Pale Tincture: the damage it has dealt, which no healing reaches until
+  // the poison ends (afflictions.ts healCeiling).
+  unhealable?: number;
   // An indefinite madness's flaw, for the narrator.
   flaw?: string;
   // A workshop poison or disease, as it stood when it took hold, so an edit
@@ -100,6 +103,7 @@ function normalizeAffliction(raw: unknown): Affliction | null {
     ...optional("successes", 10),
     ...optional("penalty", 5),
     ...optional("doses", 10),
+    ...optional("unhealable", 9999),
     ...(typeof entry.flaw === "string" ? { flaw: text(entry.flaw, 200) } : {}),
   };
 }

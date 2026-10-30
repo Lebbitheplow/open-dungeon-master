@@ -73,8 +73,9 @@ export function applyPoison(
       return { ok: true, poison: poison.name, resisted: true, note: lines.join(" ") };
     }
   } else {
+    let dealt = 0;
     if (poison.damage) {
-      const dealt = damage(campaign, turnId, sheet.id, poison.damage, false, poison);
+      dealt = damage(campaign, turnId, sheet.id, poison.damage, false, poison);
       lines.push(`${sheet.name} fails the save against ${poison.name} and takes ${dealt} poison damage.`);
     } else {
       lines.push(`${sheet.name} fails the save against ${poison.name}.`);
@@ -86,11 +87,17 @@ export function applyPoison(
     }
     const lingers = poison.repeat?.every === "day";
     const held: string[] = [];
+    // Crawler Mucus: "poisoned for 1 minute. The poisoned creature is
+    // paralyzed. The creature can repeat the saving throw at the end of each
+    // of its turns, ending the effect on itself on a success." Both
+    // conditions are the one effect: the minute as 10 rounds (not a minute
+    // and 10 rounds more), and one save at the turn's end ends them together
+    // (condition-tick.ts; issue #570, EQP-15).
+    const turnEnds = poison.repeat?.every === "turn_end";
     for (const condition of conditions) {
       const endsOnDamage = poison.wakesOnDamage === true && condition === "unconscious";
-      const turnEnds = poison.repeat?.every === "turn_end" && condition === "paralyzed";
       if (afflictCondition(campaign, turnId, sheet.id, condition, {
-        ...(minutes && !lingers ? { minutes } : {}),
+        ...(minutes && !lingers && !turnEnds ? { minutes } : {}),
         ...(turnEnds ? { rounds: 10, saveAbility: "con", saveDc: poison.dc } : {}),
         endsOnDamage,
         source: poison.name,
@@ -104,9 +111,13 @@ export function applyPoison(
     if (lingers) {
       writeAfflictions(campaign.id, sheet.id, [
         ...afflictionsOf(campaign.id, sheet.id),
-        { kind: "poison", id: poison.id, conditions: held, nextAt: clock.instant + MINUTES_PER_DAY, successes: 0, ...workshopSnapshot(poison) },
+        // Pale Tincture: "Until this poison ends, the damage the poison deals
+        // can't be healed by any means." The damage rides the record, and
+        // every heal and rest stops short of it (afflictions.ts healCeiling;
+        // issue #570, EQP-17).
+        { kind: "poison", id: poison.id, conditions: held, nextAt: clock.instant + MINUTES_PER_DAY, successes: 0, unhealable: dealt, ...workshopSnapshot(poison) },
       ]);
-      lines.push(`Every 24 hours the server rolls the save again (1d6 on a failure) until ${poison.repeat?.successes} successes. Until it ends, the damage this poison deals cannot be healed by any means: do not heal it.`);
+      lines.push(`Every 24 hours the server rolls the save again (1d6 on a failure) until ${poison.repeat?.successes} successes. Until it ends, the damage this poison deals cannot be healed by any means; the server holds every heal short of it.`);
     }
   }
   // Burnt Othur Fumes: the save again at the start of each turn, 1d6 on a
@@ -168,10 +179,8 @@ export function poisonClockTick(campaignId: string, to: number) {
         }
         const save = characterSave(campaign, fresh, { ability: "con", dc: poison.dc, detail: `${fresh.name}: daily CON save vs ${poison.name}`, against: "poison" });
         const successes = (current.successes ?? 0) + (save.success ? 1 : 0);
-        if (!save.success && poison.repeat?.damage) {
-          damage(campaign, "clock", fresh.id, poison.repeat.damage, false, poison);
-        }
-        current = { ...current, successes, nextAt: current.nextAt + MINUTES_PER_DAY };
+        const dealt = !save.success && poison.repeat?.damage ? damage(campaign, "clock", fresh.id, poison.repeat.damage, false, poison) : 0;
+        current = { ...current, successes, nextAt: current.nextAt + MINUTES_PER_DAY, ...(dealt ? { unhealable: (current.unhealable ?? 0) + dealt } : {}) };
         if (successes >= (poison.repeat?.successes ?? 1)) {
           dropConditions(campaignId, fresh.id, current.conditions);
           tableNote(campaign, `${fresh.name} is free of ${poison.name}.`, "cue-heal");

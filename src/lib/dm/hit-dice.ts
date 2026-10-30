@@ -20,11 +20,10 @@ import { rollExpression } from "@/lib/dice";
 import { onlineUserIds, publishPersisted, publishWithSeq } from "@/lib/events";
 import { computeSheetDerived } from "@/lib/srd";
 import { songOfRestDieFor } from "@/lib/srd/feature-effects";
-import { effectiveMaxHp } from "@/lib/dm/condition-logic";
 import { healMath } from "@/lib/dm/mutation-math";
 import { hitDiceHealing, hitDicePlanExpression, shortRestDicePlan } from "@/lib/dm/rest-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import { hitDiceHealingFactor } from "@/lib/dm/afflictions";
+import { healCeiling, hitDiceHealingFactor } from "@/lib/dm/afflictions";
 import type { ToolError } from "@/lib/dm/tool-errors";
 
 export type HitDiceOutcome =
@@ -89,7 +88,8 @@ export function spendHitDice(input: {
   const floored = hitDieHealingFloor(sheet, conMod);
   const withFeat = floored ? Math.max(rolled, count * floored.floor) + count * floored.extra : rolled;
   const healed = Math.floor(withFeat * hitDiceHealingFactor(sheet));
-  const ceiling = effectiveMaxHp(sheet);
+  // Pale Tincture's damage is beyond what hit dice heal (afflictions.ts).
+  const ceiling = healCeiling(campaign.id, sheet);
   const math = healMath(Math.min(sheet.currentHp, ceiling), ceiling, healed);
   const patch = {
     currentHp: math.currentHp,

@@ -444,11 +444,11 @@ await gap("EQP-14", {
   }
 });
 
-await gap("EQP-15", {
-  rule: "poisons, Crawler Mucus: \"must succeed on a DC 13 Constitution saving throw or be poisoned for 1 minute. The poisoned creature is paralyzed. The creature can repeat the saving throw at the end of each of its turns, ending the effect on itself on a success.\"",
-  where: "src/lib/dm/affliction-poisons.ts applyPoison (the paralysis gets the minute and 10 more rounds, and the save ends the paralysis alone)",
-  severity: "medium",
-}, async () => {
+// poisons, Crawler Mucus: "must succeed on a DC 13 Constitution saving throw
+// or be poisoned for 1 minute. The poisoned creature is paralyzed. The
+// creature can repeat the saving throw at the end of each of its turns, ending
+// the effect on itself on a success."
+await test("EQP-15", async () => {
   try {
     const out = await world.invoke("afflict", { characterId: near.id, kind: "poison", name: "Crawler Mucus", save: false });
     must(out.ok, `afflict refused: ${out.error}`);
@@ -469,12 +469,9 @@ await kit.endFight();
 
 // ---- out of a fight: antitoxin, poisons, diseases, gear used up ----
 
-await gap("EQP-16", {
-  rule: "adventuring-gear, Antitoxin: \"A creature that drinks this vial of liquid gains advantage on saving throws against poison for 1 hour.\"",
-  where: "src/lib/dm/consumables.ts applyConsumable (no antitoxin plan), src/lib/dm/affliction-poisons.ts applyPoison (advantage only from recuperating)",
-  severity: "medium",
-  note: "A hill dwarf's Dwarven Resilience rolls two d20s on the same save, so the path carries advantage; the vial gives none.",
-}, async () => {
+// adventuring-gear, Antitoxin: "A creature that drinks this vial of liquid
+// gains advantage on saving throws against poison for 1 hour."
+await test("EQP-16", async () => {
   const sipper = world.addHero({ class: "fighter", level: 5, maxHp: 44, equipment: [{ name: "Antitoxin (vial)", qty: 1 }] });
   const drunk = await world.invoke("use_item", { characterId: sipper.id, item: "Antitoxin (vial)" });
   must(drunk.ok, `use_item refused: ${drunk.error}`);
@@ -488,11 +485,9 @@ await gap("EQP-16", {
   assert.equal(d20sIn(rolled), 2, `the save against Serpent Venom an hour inside the antitoxin rolled ${d20sIn(rolled)} d20`);
 });
 
-await gap("EQP-17", {
-  rule: "poisons, Pale Tincture: \"Until this poison ends, the damage the poison deals can't be healed by any means.\"",
-  where: "src/lib/dm/affliction-poisons.ts applyPoison (only a line telling the model not to heal), the heal path in src/lib/dm/mutations.ts",
-  severity: "medium",
-}, async () => {
+// poisons, Pale Tincture: "Until this poison ends, the damage the poison deals
+// can't be healed by any means."
+await test("EQP-17", async () => {
   const victim = world.addHero({ class: "fighter", level: 5, maxHp: 44 });
   world.patch(victim.id, { currentHp: 44 });
   world.clearDice();

@@ -110,6 +110,7 @@ import { ITEM_TAGS } from "@/lib/schemas/item-tags";
 import { holdsFeature, isConditionNamed, isNamed } from "@/lib/srd/feature-names";
 import { unknownSheetRef } from "@/lib/dm/rolls";
 import { classWords } from "@/lib/sheet-words";
+import { healCeiling } from "@/lib/dm/afflictions";
 
 // DM stat authority: the model changes sheets ONLY through these tools.
 // Every mutation is server-clamped, audit-logged, and published live.
@@ -888,8 +889,9 @@ export function applyDmMutation(
           },
         };
       }
-      // Exhaustion level 4 halves the maximum healing can reach.
-      const ceiling = effectiveMaxHp(sheet);
+      // Exhaustion level 4 halves the maximum healing can reach; Pale
+      // Tincture's damage is beyond it (afflictions.ts healCeiling).
+      const ceiling = healCeiling(campaign.id, sheet);
       const math = healMath(Math.min(sheet.currentHp, ceiling), ceiling, Math.min(amount, 200));
       patchSheet(sheet.id, { currentHp: math.currentHp });
       audit(campaign, turnId, sheet, "heal", { amount, newHp: math.currentHp }, reason, {

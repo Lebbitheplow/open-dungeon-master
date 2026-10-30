@@ -463,8 +463,25 @@ function tickSheetConditions(
     for (const name of tick.expired) {
       lines.push(`${sheet.name} is no longer ${name} (the effect ran its course).`);
     }
+    // One effect, one save: conditions one source laid together with the
+    // same save to end them (Crawler Mucus's poison and its paralysis) end
+    // together on one roll, "ending the effect on itself on a success" (SRD
+    // 5.1 Poisons; issue #570, EQP-15). A hold with no source is its own.
+    const effectSaves = new Map<string, boolean>();
+    const effectOf = (due: (typeof tick.savesDue)[number]) => (due.key === "|" ? null : `${due.key}|${due.ability}|${due.dc}`);
     for (const due of tick.savesDue) {
       if (!conditions.includes(due.name)) {
+        continue;
+      }
+      const effect = effectOf(due);
+      const settled = effect ? effectSaves.get(effect) : undefined;
+      if (settled !== undefined) {
+        if (settled) {
+          const removed = removeConditionInstances(conditions, meta, due.name, (instance) => instanceIdentity(instance) === due.key && instance.saveEnds?.dc === due.dc);
+          conditions = removed.conditions;
+          meta = removed.meta;
+          lines.push(`${sheet.name} is no longer ${due.name}: the same save ended it.`);
+        }
         continue;
       }
       // The save every other save is (src/lib/dm/forced-save.ts): a
@@ -491,6 +508,9 @@ function tickSheetConditions(
         meta = cleared.meta;
       }
       const shown = save.total ?? "failed";
+      if (effect) {
+        effectSaves.set(effect, save.success);
+      }
       if (save.success) {
         // This source's hold goes; another source's keeps the condition.
         const removed = removeConditionInstances(
