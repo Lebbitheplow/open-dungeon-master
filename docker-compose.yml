@@ -2,11 +2,12 @@
 # SQLite writer, an in-process event bus and an in-process media queue, so it
 # must never be scaled past a single replica.
 #
-#   docker compose pull && docker compose up -d   ->  http://localhost:3005
+#   docker compose up -d     starts it on http://localhost:3005
+#   docker compose logs      prints the link that creates the admin account
 #
-# `pull` fetches the published image from Docker Hub. Set ODM_IMAGE in .env to
-# pull from GHCR instead, or ODM_IMAGE_TAG=0.10.1 to pin a release. To build it
-# yourself from a clone, use `docker compose up -d --build`.
+# The image comes from Docker Hub. Set ODM_IMAGE in .env to pull from GHCR
+# instead, or ODM_IMAGE_TAG=0.10.1 to pin a release. To build it yourself from
+# a clone, use `docker compose up -d --build`. Full guide: docs/docker.md.
 #
 # The AI services stay on the host. The defaults below reach them through
 # host.docker.internal; override any of them in a .env file next to this file,
@@ -51,6 +52,9 @@ services:
       # Leave empty to have one generated and printed in the logs at every
       # start until that account exists.
       ODM_SETUP_CODE: ${ODM_SETUP_CODE:-}
+      # The host port above, so the setup link in the log opens the right
+      # address when ODM_PORT moves it off 3005.
+      ODM_HOST_PORT: ${ODM_PORT:-3005}
 
       # Text backend: llama.cpp, or any OpenAI-compatible server. No model is
       # named by default: a server that lists one model runs it, and one that

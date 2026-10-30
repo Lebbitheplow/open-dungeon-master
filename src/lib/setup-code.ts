@@ -12,6 +12,7 @@
 // it back with that first registration, so nobody on the same Wi-Fi can get
 // there first. A device world started without one keeps the old behaviour.
 import { createHash, randomInt, timingSafeEqual } from "node:crypto";
+import { existsSync } from "node:fs";
 import { getAppSetting } from "@/lib/db/app-settings";
 import { getDatabase, nowIso } from "@/lib/db/core";
 import { countUsers, createUser, type User } from "@/lib/db/users";
@@ -123,8 +124,18 @@ export function announceSetupCode(log: (line: string) => void = console.log) {
   );
 }
 
-// The address that claims the server: this machine, the port it listens on
-// (Next sets PORT once it is listening; the Docker image sets it outright).
-export function setupLink(code: string, port = process.env.PORT || "3000"): string {
+// Whether the server runs in a Docker container, where "the server log" is
+// what `docker compose logs` prints. The sign-up form says so, since someone
+// who has just typed `docker compose up -d` has never seen that log.
+export function setupCodeInDockerLog(marker = "/.dockerenv"): boolean {
+  return !isDeviceWorld() && existsSync(marker);
+}
+
+// The address that claims the server: this machine, on the port a browser
+// there reaches it on. In Docker that is the host port the compose file
+// publishes (passed in as ODM_HOST_PORT), which differs from the 3005 inside
+// the container once ODM_PORT moves it; otherwise the port the server
+// listens on (Next sets PORT once it is listening).
+export function setupLink(code: string, port = process.env.ODM_HOST_PORT || process.env.PORT || "3000"): string {
   return `http://localhost:${port}/${code ? `?setup=${encodeURIComponent(code)}` : ""}`;
 }

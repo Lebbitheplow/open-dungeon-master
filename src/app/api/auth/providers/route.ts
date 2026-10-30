@@ -5,7 +5,7 @@ import { discordCredentials } from "@/lib/discord-oauth";
 import { resolveSignupMode } from "@/lib/schemas/global-config";
 import { livePublicUrl } from "@/lib/server-address";
 import { isDeviceWorld } from "@/lib/server-env";
-import { needsSetup } from "@/lib/setup-code";
+import { needsSetup, setupCodeInDockerLog } from "@/lib/setup-code";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,6 +16,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const config = getGlobalConfig();
   const deviceWorld = isDeviceWorld();
+  const setup = needsSetup();
   return Response.json({
     discord: discordCredentials() !== null,
     password: true,
@@ -28,7 +29,10 @@ export async function GET() {
     deviceWorld,
     // No accounts yet: the first one (the admin) needs the one-time setup
     // code from the server log, so the form asks for it. Never the code.
-    needsSetup: needsSetup(),
+    needsSetup: setup,
+    // Where that log is, while it matters: a Docker install's operator is
+    // told the command that prints it.
+    setupCodeInDockerLog: setup && setupCodeInDockerLog(),
     serverName: config.serverName || "Open Game Master",
     version: packageJson.version,
     // How long a deleted account lingers before the purge, so confirmation
