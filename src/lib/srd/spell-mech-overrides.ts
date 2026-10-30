@@ -34,11 +34,19 @@ const UTILITY: Record<string, SpellMech> = Object.fromEntries(
 export const MECH_OVERRIDES: Record<string, SpellMech> = {
   ...UTILITY,
   // Attacks that deal no damage: what a hit does is a disease or a journey.
+  // SRD 5.1 contagion: "On a hit, the target is poisoned. At the end of each
+  // of the poisoned target's turns, the target must make a Constitution
+  // saving throw": three successes end it, three failures end the poison and
+  // give the disease the caster chooses, for the spell's seven days. The hit
+  // lays the poison (src/lib/dm/spell-attack-riders.ts) and the saves are
+  // counted at the end of its turns (src/lib/dm/spell-turn-end.ts).
   contagion: {
     resolution: "attack",
     attack: "melee",
     noDamage: true,
-    note: "On a hit the creature is afflicted with the disease the caster picks (afflict); it deals no damage of its own.",
+    save: "con",
+    condition: { name: "poisoned", rounds: 7 * DAY, turnEnd: { baseLevel: 5, tally: { fails: 3, becomes: "diseased" } } },
+    note: "On a hit the creature is poisoned; it makes a CON save at the end of each of its turns (the server rolls). Three successes end the spell; three failures end the poison and the creature is diseased for seven days with the disease the caster picks (Blinding Sickness, Filth Fever, Flesh Rot, Mindfire, Seizure or Slimy Doom), the GM's to narrate.",
   },
   "plane shift": {
     resolution: "attack",
@@ -197,9 +205,13 @@ export const MECH_OVERRIDES: Record<string, SpellMech> = {
     resolution: "buff",
     buff: { condition: "stoneskin", target: "ally", rounds: HOUR },
   },
+  // SRD 5.1 longstrider, heroism and invisibility, "At Higher Levels": "you
+  // can target one additional creature for each slot level above" the
+  // spell's own.
   longstrider: {
     resolution: "buff",
     buff: { condition: "longstrider", target: "ally", rounds: HOUR },
+    targets: { count: 1, perSlotLevel: 1 },
   },
   guidance: {
     resolution: "buff",
@@ -232,6 +244,7 @@ export const MECH_OVERRIDES: Record<string, SpellMech> = {
   heroism: {
     resolution: "buff",
     buff: { condition: "heroism", target: "ally", rounds: MINUTE, tempHpEachTurn: true },
+    targets: { count: 1, perSlotLevel: 1 },
     note: "The server grants the temporary hit points at the start of each of the target's turns.",
   },
   "enlarge/reduce": {
@@ -246,6 +259,7 @@ export const MECH_OVERRIDES: Record<string, SpellMech> = {
   invisibility: {
     resolution: "buff",
     buff: { condition: "invisible", target: "ally", rounds: HOUR },
+    targets: { count: 1, perSlotLevel: 1 },
     note: "Ends when the target attacks or casts a spell.",
   },
   "greater invisibility": {

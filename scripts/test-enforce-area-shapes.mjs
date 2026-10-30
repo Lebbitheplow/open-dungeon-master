@@ -43,7 +43,10 @@ await test("Shatter placed beyond its 60-foot range is refused; within it, cast.
   // (20, 4) is 100 feet from the caster in the corner.
   const far = await world.invoke("aoe_damage", { casterCharacterId: mage.id, spell: "Shatter", level: 2, enemyIds: [a.id], atX: 20, atY: 4 });
   assert.equal(far.ok, false, "a point 100 feet off took a 60-foot spell");
-  assert.match(String(far.error), /range/);
+  // Shatter is an area spell (its 10-foot sphere), so the creature's own
+  // distance, past the 60-foot range plus the 10-foot radius, refuses it
+  // before the point does (src/lib/dm/aoe-spell.ts).
+  assert.match(String(far.error), /range|reaches 60 ft/);
   assert.equal(slots(world, mage.id, 2), 0);
   const { world: near, sheets: [caster2], enemies: [b] } = await board([WIZARD], { 0: { x: 0, y: 0 }, e0: { x: 10, y: 4 } });
   near.dice(1, 1, 1, 20);

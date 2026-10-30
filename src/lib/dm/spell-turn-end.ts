@@ -7,6 +7,9 @@
 //     spell for it.
 //   Flesh to Stone: the restrained creature saves at the end of each of its
 //     turns; three failures petrify it, three successes free it.
+//   Contagion: the poisoned creature saves at the end of each of its turns;
+//     three successes end the spell, three failures end the poison and leave
+//     the disease the caster chooses.
 //
 // Each leaves a mark named for the spell with `untilTurnEndOf` the target
 // (src/lib/dm/spell-riders.ts turnEndMark, src/lib/dm/spell-attack-riders.ts);
@@ -153,6 +156,7 @@ const HOOKS: Record<string, TurnEndHook> = {
   "phantasmal killer": saveAtTurnEnd,
   weird: saveAtTurnEnd,
   "flesh to stone": saveAtTurnEnd,
+  contagion: saveAtTurnEnd,
   // Prismatic Spray's indigo ray (src/lib/dm/prismatic.ts).
   "indigo ray": saveAtTurnEnd,
 };

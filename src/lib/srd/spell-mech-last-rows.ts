@@ -142,4 +142,39 @@ export const SRD_LAST_ROWS: Record<string, SpellMech> = {
     condition: { name: "frightened", rounds: MINUTE, also: ["fleeing"] },
     note: "A frightened creature drops what it holds and must Dash away each turn; it saves again only when it ends a turn out of the caster's sight.",
   },
+
+  // Areas whose text the prose parser does not read as one (issue #570,
+  // SPL-02). SRD 5.1, Areas of Effect: an area spell "affects multiple
+  // creatures at once", so one casting holds everyone it catches. The pack
+  // prints Shatter's "10-foot-radius" with soft hyphens and Lightning Bolt's
+  // line as "a line 100 feet long"; the walls catch "each creature within its
+  // area" and the storm "each creature under the cloud".
+  shatter: { resolution: "save", save: "con", halfOnSave: true, damageType: "thunder", area: true, areaFeet: 10 },
+  "lightning bolt": { resolution: "save", save: "dex", halfOnSave: true, damageType: "lightning", area: true, areaFeet: 100 },
+  "wind wall": { resolution: "save", save: "str", halfOnSave: true, damageType: "bludgeoning", area: true, areaFeet: 50 },
+  // "When the wall appears ... 7d8 piercing damage, or half as much damage on
+  // a successful save"; "both types of damage increase by 1d8 for each slot
+  // level above 6th" (SPL-04). Entering it later is the zone's 7d8 slashing
+  // (src/lib/battlemap/zones-spells.ts).
+  "wall of thorns": {
+    resolution: "save", save: "dex", halfOnSave: true, damageType: "piercing", area: true, areaFeet: 60,
+    dice: { base: "7d8", perSlotLevel: "1d8", baseLevel: 6 },
+  },
+  // "On a failed save, a creature takes 2d6 thunder damage and becomes
+  // deafened for 5 minutes" (SPL-06): no half on a success (the half the text
+  // prints is round 3's lightning), and five minutes, not the spell's one.
+  "storm of vengeance": {
+    resolution: "save", save: "con", halfOnSave: false, damageType: "thunder", area: true, areaFeet: 360,
+    condition: { name: "deafened", rounds: 5 * MINUTE },
+    note: "The cloud's first round. On each later turn of the caster's concentration: round 2, 1d6 acid to each creature under it; round 3, six bolts, DEX save against 10d6 lightning (half on a success); round 4, 2d6 bludgeoning hail to each; rounds 5 to 10, 1d6 cold to each, difficult terrain, heavily obscured. The GM rolls the later rounds; no slot.",
+  },
+  // A creature that moves within 20 feet of the wall or starts its turn
+  // there "must succeed on a Constitution saving throw or become blinded for
+  // 1 minute" (SPL-06, SPL-07): no damage and no repeat save. The layers'
+  // DEX saves, each with its own effect, are for a creature passing through.
+  "prismatic wall": {
+    resolution: "save", save: "con", noDamage: true, area: true, areaFeet: 20,
+    condition: { name: "blinded", rounds: MINUTE },
+    note: "The CON save is for a creature that moves within 20 feet of the wall or starts its turn there. One reaching into or passing through it makes a DEX save at each layer, red to violet: 10d6 fire, acid, lightning, poison, cold (half on a success), indigo restrained then petrified, violet blinded and sent to another plane. The GM runs the layers.",
+  },
 };

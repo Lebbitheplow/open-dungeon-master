@@ -1698,7 +1698,7 @@
     "lib/dm/speech-prose.ts#\\b": [["english-extra",5,"English pronouns followed back to a speaker, read only at an English table (ENGLISH_PRONOUN and ENGLISH_OWN, gated by speech-lines.ts englishPronouns); every language is attributed by names and quote structure, and languages that drop the subject pronoun or have no gendered one give a pronoun reading nothing to hold on to"]],
     "lib/dm/speech-prose.ts#re-word": [["english-extra",3,"English pronouns followed back to a speaker, read only at an English table (ENGLISH_PRONOUN and ENGLISH_OWN, gated by speech-lines.ts englishPronouns); every language is attributed by names and quote structure, and languages that drop the subject pronoun or have no gendered one give a pronoun reading nothing to hold on to"]],
     "lib/dm/speech.ts#str-eq": [["key",6,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
-    "lib/dm/spell-attack-riders.ts#re-word": [["english-source",8,"reference: SRD spell names matched whole"]],
+    "lib/dm/spell-attack-riders.ts#re-word": [["english-source",9,"reference: SRD spell names matched whole"]],
     "lib/dm/spell-attack-riders.ts#str-eq": [["english-source",1,"reference: SRD spell names matched whole"]],
     "lib/dm/spell-aura.ts#str-eq": [["key",2,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/spell-aura.ts#str-includes": [["key",3,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],

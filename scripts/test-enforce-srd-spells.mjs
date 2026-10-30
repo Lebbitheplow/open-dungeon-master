@@ -25,6 +25,7 @@ import { suite } from "./lib/enforce-harness.mjs";
 import { caster, closeTables, enemyOf, FIGHTER, table } from "./lib/enforce-spell-kit.mjs";
 import { onTurnOf } from "./lib/enforce-spells.mjs";
 import { board } from "./lib/enforce-zones.mjs";
+import { nextTurn } from "./lib/enforce-spell-tail.mjs";
 import { CONDITIONS, readSpellLists, readSpellPage } from "./lib/enforce-srd-spells-text.mjs";
 
 const { test, gap, finish } = suite("test-enforce-srd-spells");
@@ -169,6 +170,10 @@ const FIRST_SAVE_IS_NOT_THE_SPELLS = {
   Earthquake: "the first save named is a concentrating creature's CON; the prone save is DEX",
   "Irresistible Dance": "the first is the dancer's disadvantage on DEX saves; the way out is a WIS save",
 };
+// The page's "half as much" belongs to a later round: Storm of Vengeance's
+// first save is "2d6 thunder damage ... on a failed save", and the half is
+// round 3's lightning.
+const HALF_LATER = new Set(["Storm of Vengeance"]);
 const ATTACK_LATER = new Set(["Flame Blade", "Spiritual Weapon", "Dispel Evil and Good"]); // a buff whose attacks come on later turns
 const DICE_ELSEWHERE = {
   Web: "the burning strands are the web zone's (src/lib/battlemap/zones-spells.ts)",
@@ -177,6 +182,7 @@ const DICE_ELSEWHERE = {
   Weird: "the 4d10 comes at the end of each of the target's turns, from the condition",
   Geas: "the 5d10 for disobeying is the GM's (src/lib/srd/spell-support.ts)",
   "Prismatic Spray": "each ray rolls its own (src/lib/dm/prismatic.ts)",
+  "Prismatic Wall": "the 10d6 belong to the layers a creature passes through; the save near the wall only blinds",
   Symbol: "a glyph, cast in a minute and set off later; it is never cast in a fight",
   Earthquake: "a collapsing structure's 5d6 is the GM's terrain",
   "Magic Missile": "three darts of 1d4 + 1 roll as 3d4+3, held in test-enforce-casting-numbers",
@@ -198,7 +204,7 @@ await test("every save spell rolls the save its page names, and halves where the
     if (!(page.name in FIRST_SAVE_IS_NOT_THE_SPELLS) && mech.save !== page.save && !mech.condition?.noInitialSave) {
       problems.push(`${page.name}: ${mech.save}, the page ${page.save}`);
     }
-    if (page.dice && !(page.name in DICE_ELSEWHERE) && Boolean(mech.halfOnSave) !== page.half) {
+    if (page.dice && !(page.name in DICE_ELSEWHERE) && !HALF_LATER.has(page.name) && Boolean(mech.halfOnSave) !== page.half) {
       problems.push(`${page.name}: half ${Boolean(mech.halfOnSave)}, the page ${page.half}`);
     }
   }
@@ -216,7 +222,7 @@ await test("every damaging spell deals the type its page prints", () => {
 await test("every damaging spell rolls its printed dice at its own level, and its printed step from each slot above", () => {
   const problems = [];
   for (const { page, mech } of SPELLS) {
-    if (!page.dice || !["save", "attack", "auto"].includes(mech?.resolution) || page.name in DICE_ELSEWHERE || page.name === "Wall of Thorns") {
+    if (!page.dice || !["save", "attack", "auto"].includes(mech?.resolution) || page.name in DICE_ELSEWHERE) {
       continue;
     }
     const base = page.level === 0 ? diceAt(page.name, 1) : diceAt(page.name, 20, page.level);
@@ -266,12 +272,11 @@ await test("every SRD condition a spell lays on a failed save is one its page na
 
 // SRD 5.1, Areas of Effect: "Spells such as burning hands and cone of cold
 // cover an area, allowing them to affect multiple creatures at once."
-await gap("SPL-02", {
-  rule: "SRD 5.1 spellcasting, 'Areas of Effect': an area spell affects multiple creatures at once; shatter: 'Each creature in a 10-foot-radius sphere centered on that point must make a Constitution saving throw'; lightning-bolt: 'Each creature in the line must make a Dexterity saving throw'",
-  where: "src/lib/srd/spell-mechanics.ts parseSpellMech/areaOf (no `area` for these rows) read by castShares in src/lib/dm/cast-guard.ts",
-  severity: "medium",
-  note: "aoe_damage still catches the area in one call; cast_at_enemy, the per-creature path the cast tools offer for an area spell, holds one creature and asks a second action for the next. The pack's Shatter row prints its 10-foot radius with soft hyphens; Lightning Bolt prints a line with no 'N-foot line'.",
-}, async () => {
+// SRD 5.1 shatter: "Each creature in a 10-foot-radius sphere centered on
+// that point must make a Constitution saving throw"; lightning-bolt: "Each
+// creature in the line must make a Dexterity saving throw". One casting
+// holds every creature its area catches.
+await test("SPL-02", async () => {
   const single = SPELLS
     .filter(({ page, mech }) => page.area && mech?.resolution === "save")
     .filter(({ mech, resolved }) => castShares(mech, { spellLevel: resolved.spellLevel, slotLevel: null, casterLevel: 20 }) < 2)
@@ -292,12 +297,11 @@ await gap("SPL-02", {
   assert.ok(single.length === 0 && second.ok, `one casting holds one creature: ${listOf(single)}; Shatter's second creature: ${second.error}`);
 });
 
-await gap("SPL-03", {
-  rule: "SRD 5.1 invisibility, 'At Higher Levels': 'When you cast this spell using a spell slot of 3rd level or higher, you can target one additional creature for each slot level above 2nd' (heroism and longstrider: above 1st)",
-  where: "src/lib/srd/spell-mech-overrides.ts (these buff rows carry no `targets`), read by src/lib/dm/cast-buff.ts (`most` is 1 for an ally buff without it)",
-  severity: "medium",
-  note: "Fly, Enhance Ability, Hold Person and the rest that say the same carry targets.perSlotLevel and hold it.",
-}, async () => {
+// SRD 5.1 invisibility, "At Higher Levels": "When you cast this spell using
+// a spell slot of 3rd level or higher, you can target one additional
+// creature for each slot level above 2nd" (heroism and longstrider: above
+// 1st).
+await test("SPL-03", async () => {
   const short = SPELLS
     .filter(({ page }) => page.moreTargets)
     .filter(({ page, mech, resolved }) => castShares(mech, { spellLevel: resolved.spellLevel, slotLevel: page.level + 1, casterLevel: 20 }) < 2)
@@ -327,12 +331,12 @@ await test("SPL-01", async () => {
 
 // ---- dice, conditions and riders a page prints ----
 
-await gap("SPL-04", {
-  rule: "SRD 5.1 wall-of-thorns: 'When the wall appears, each creature within its area must make a Dexterity saving throw. On a failed save, a creature takes 7d8 piercing damage, or half as much damage on a successful save'; 'At Higher Levels': 'both types of damage increase by 1d8 for each slot level above 6th'",
-  where: "src/lib/srd/spell-scaling.ts upcastStep (reads only 'increases by') and upcastDamage, so spellDamageFor in src/lib/content/index.ts answers null",
-  severity: "medium",
-  note: "A null answer for a published spell falls back to the caller's dice. The wall's own zone (zones-spells.ts) holds the 7d8 slashing for entering it; the 7d8 piercing on appearing is the caller's.",
-}, async () => {
+// SRD 5.1 wall-of-thorns: "When the wall appears, each creature within its
+// area must make a Dexterity saving throw. On a failed save, a creature
+// takes 7d8 piercing damage, or half as much damage on a successful save";
+// "both types of damage increase by 1d8 for each slot level above 6th".
+// The spell's own dice, never the caller's.
+await test("SPL-04", async () => {
   const { world, sheets: [druid], enemies: [enemy] } = await table([caster("druid", "wis", ["Wall of Thorns"], [], 13)]);
   world.diceLog();
   world.dice(...new Array(8).fill(1), 20);
@@ -347,12 +351,13 @@ await gap("SPL-04", {
   assert.ok(d8 === 7 && d4 === 0, `rolled ${d8}d8 and ${d4}d4 (the caller sent 1d4); spellDamageFor answers ${diceAt("Wall of Thorns", 20, 6)}`);
 });
 
-await gap("SPL-05", {
-  rule: "SRD 5.1 contagion: 'Make a melee spell attack against a creature within your reach. On a hit, the target is poisoned. At the end of each of the poisoned target's turns, the target must make a Constitution saving throw. If the target succeeds on three of these saves, it is no longer poisoned... If the target fails three of these saves... choose one of the diseases below'",
-  where: "src/lib/srd/spell-mech-overrides.ts contagion (noDamage, a note to afflict at once), read by src/lib/dm/pc-attack.ts",
-  severity: "medium",
-  note: "The row follows the older printing (the disease at once). The turn-end tally Flesh to Stone uses (condition.turnEnd.tally) would hold the SRD's three saves.",
-}, async () => {
+// SRD 5.1 contagion: "Make a melee spell attack against a creature within
+// your reach. On a hit, the target is poisoned. At the end of each of the
+// poisoned target's turns, the target must make a Constitution saving
+// throw. If the target succeeds on three of these saves, it is no longer
+// poisoned... If the target fails three of these saves... choose one of the
+// diseases below."
+await test("SPL-05", async () => {
   const { world, sheets: [priest], enemies: [enemy] } = await table([caster("cleric", "wis", ["Contagion"], [], 9)]);
   world.dice(19);
   const hit = await world.invoke("pc_attack", { characterId: priest.id, targetEnemyId: enemy.id, spell: "Contagion", level: 5 });
@@ -362,14 +367,23 @@ await gap("SPL-05", {
   }
   const after = enemyOf(world, enemy.id);
   assert.ok(after.conditions.includes("poisoned"), `a hit left ${JSON.stringify(after.conditions)}; the row says: ${spellMechanicsFor({ spell: "Contagion" }).mech.note}`);
+  // Three failed saves at the end of its turns: the poison ends, the disease
+  // takes hold (Flesh to Stone's count, test-enforce-spell-hooks.mjs).
+  nextTurn(world);
+  for (let count = 0; count < 3; count += 1) {
+    world.dice(1);
+    nextTurn(world);
+    world.clearDice();
+  }
+  const sick = enemyOf(world, enemy.id).conditions;
+  assert.ok(sick.includes("diseased") && !sick.includes("poisoned"), `after three failed saves: ${JSON.stringify(sick)}`);
 });
 
-await gap("SPL-06", {
-  rule: "SRD 5.1 storm-of-vengeance: 'On a failed save, a creature takes 2d6 thunder damage and becomes deafened for 5 minutes'; prismatic-wall: 'the creature must succeed on a Constitution saving throw or become blinded for 1 minute'",
-  where: "src/lib/srd/spell-mechanics.ts parsedCondition (the spell's duration, or a repeat save found anywhere in the text, in place of the sentence's own)",
-  severity: "low",
-  note: "Storm of Vengeance's deafness lasts the spell's minute, not five; Prismatic Wall's blindness takes the indigo layer's repeat save and the wall's ten minutes.",
-}, async () => {
+// SRD 5.1 storm-of-vengeance: "On a failed save, a creature takes 2d6
+// thunder damage and becomes deafened for 5 minutes"; prismatic-wall: "the
+// creature must succeed on a Constitution saving throw or become blinded for
+// 1 minute". A condition's own printed lifetime, not the spell's.
+await test("SPL-06", async () => {
   const { world, sheets: [druid], enemies: [enemy] } = await table([caster("druid", "wis", ["Storm of Vengeance"], [], 17)]);
   world.dice(1, 1, 1);
   const storm = await world.invoke("aoe_damage", { casterCharacterId: druid.id, spell: "Storm of Vengeance", level: 9, enemyIds: [enemy.id] });
@@ -386,12 +400,11 @@ await gap("SPL-06", {
   assert.deepEqual(wrong, [], listOf(wrong));
 });
 
-await gap("SPL-07", {
-  rule: "SRD 5.1 prismatic-wall: approaching it is 'a Constitution saving throw or become blinded for 1 minute'; passing through, 'the creature must make a Dexterity saving throw or be affected by that layer's properties' (Red: 10d6 fire, half on a success)",
-  where: "src/lib/srd/spell-mechanics.ts parseSpellMech (the first save named joined to the first damage named), no row in src/lib/srd/spell-mech-*.ts",
-  severity: "low",
-  note: "aoe_damage on Prismatic Wall rolls the red layer's 10d6 fire against the approach's CON save.",
-}, async () => {
+// SRD 5.1 prismatic-wall: approaching it is "a Constitution saving throw or
+// become blinded for 1 minute"; passing through, "the creature must make a
+// Dexterity saving throw or be affected by that layer's properties" (Red:
+// 10d6 fire, half on a success). The approach rolls no fire.
+await test("SPL-07", async () => {
   const { world, sheets: [mage], enemies: [enemy] } = await table([caster("wizard", "int", ["Prismatic Wall"], [], 17)]);
   world.dice(...new Array(10).fill(1), 1);
   const cast = await world.invoke("aoe_damage", { casterCharacterId: mage.id, spell: "Prismatic Wall", level: 9, enemyIds: [enemy.id] });
