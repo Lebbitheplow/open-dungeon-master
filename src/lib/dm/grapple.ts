@@ -46,6 +46,7 @@ import { publishEncounter, resolveEnemyRef, unknownEnemyRef } from "@/lib/dm/ene
 import { enemyAttackProfile } from "@/lib/dm/enemy-profile";
 import { characterSpellEscape, characterSpellHold, enemySpellEscape, enemySpellHold } from "@/lib/dm/spell-escape";
 import { toolError, type ToolResult } from "@/lib/dm/tool-errors";
+import { releaseLostPins } from "@/lib/dm/grappler-pin";
 
 const GRAPPLED = "grappled";
 
@@ -221,6 +222,8 @@ export function enemyEscape(
     // The restraint the same hold brought ends with it.
     const cleared = withoutGrapple(enemy.conditions, enemy.conditionMeta, held);
     patchEnemyConditions(enemy.id, cleared.conditions, cleared.meta);
+    // A Grappler who had it pinned is no longer restrained either.
+    releaseLostPins(campaign);
     publishEncounter(campaign.id);
   }
   return {
@@ -300,6 +303,7 @@ export function releaseGrapplesOutOfReach(campaign: Campaign): string[] {
     }
   }
   if (released.length) {
+    releaseLostPins(campaign);
     publishEncounter(campaign.id);
   }
   return released;

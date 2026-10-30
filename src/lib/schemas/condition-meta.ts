@@ -64,6 +64,10 @@ const conditionInstanceSchema = z.object({
     // A monster's grapple prints its escape DC, which the escape is rolled
     // against instead of a contest (src/lib/dm/grapple.ts).
     escapeDc: z.number().int().min(1).max(40).optional(),
+    // The Grappler feat's pin: on the grappler's own restraint, the creature
+    // they hold pinned; it lasts while that grapple does
+    // (src/lib/dm/grappler-pin.ts).
+    pinning: z.string().trim().min(1).max(80).optional(),
     // Ends when the creature finishes a long rest (Life Drain, Draining Kiss).
     untilLongRest: z.boolean().optional(),
     // The temporary hit points the effect granted, gone when it ends.

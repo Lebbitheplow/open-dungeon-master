@@ -4,11 +4,11 @@
 // read from the bundled src/lib/rulebook/srd-5.1.json (page id and heading
 // named on each row) and held against the engine.
 //
-// Each gap() is a finding of the #570 SRD text audit: the engine does
-// something other than the quoted sentence says, reproduced here against the
-// real code. Each test() is a row of the same pages the audit found held and
-// that no other suite stated. The rows other suites already hold are listed
-// in the audit's report, not repeated here.
+// Each test() labelled ADV-nn was a finding of the #570 SRD text audit (the
+// engine did something other than the quoted sentence says), reproduced
+// against the real code and now held. Each other test() is a row of the same
+// pages the audit found held and that no other suite stated. The rows other
+// suites already hold are listed in the audit's report, not repeated here.
 //
 // Needs no content pack: every check runs on the SRD fallback in src/lib/srd/,
 // so the suite reads the same with CONTENT_DB_PATH pointed at nothing.
@@ -17,7 +17,7 @@ import { openTable, storedSlots } from "./lib/enforce-multiclass.mjs";
 import { combatKit, d20Faces, TRAINED } from "./lib/enforce-combat.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
 
-const { test, gap, finish } = suite("test-enforce-srd-adventuring");
+const { test, finish } = suite("test-enforce-srd-adventuring");
 // Seven seats: the owner's hero and six more, each at a seat of its own.
 const table = await openTable({ campaign: { maxPlayers: 8 } });
 const { world, hero, now, levelInto } = table;
@@ -346,15 +346,8 @@ await test(
   },
 );
 
-await gap(
-  "ADV-07",
-  {
-    rule:
-      "feats / Grappler: \"You can use your action to try to pin a creature grappled by you. To do so, make another grapple check. If you succeed, you and the creature are both restrained until the grapple ends.\"",
-    where: "src/lib/dm/action-tools.ts take_action (no pin: its actions are dodge, dash, disengage, hide, help, grapple, shove, ready, search, use_object and escape)",
-    severity: "low",
-    note: "The grapple contest, the grappler's restraint ending with the grapple (dm/grapple.ts) and the Grappler advantage all exist; the pin is the missing action. The asserted shape is take_action action \"pin\".",
-  },
+await test(
+  "ADV-07: feats / Grappler: \"You can use your action to try to pin a creature grappled by you. To do so, make another grapple check. If you succeed, you and the creature are both restrained until the grapple ends.\"",
   async () => {
     world.patch(grappler.id, { abilities: { str: 16, dex: 12, con: 10, int: 10, wis: 10, cha: 10 } });
     const enemy = await grapplingFight();
@@ -367,6 +360,11 @@ await gap(
     const held = kit.enemy(enemy.id).conditions.map((name) => name.toLowerCase());
     const self = world.sheet(grappler.id).conditions.map((name) => name.toLowerCase());
     assert.ok(held.includes("restrained") && self.includes("restrained"), `after the pin the creature holds [${held}] and the grappler [${self}]`);
+    // "Until the grapple ends": the grapple let go, the grappler's own restraint goes with it.
+    const letGo = await world.invoke("clear_enemy_condition", { enemyId: enemy.id, condition: "grappled", reason: "lets go" });
+    assert.equal(letGo.ok, true, letGo.error);
+    const after = world.sheet(grappler.id).conditions.map((name) => name.toLowerCase());
+    assert.ok(!after.includes("restrained"), `the grapple ended and the grappler is still [${after}]`);
   },
 );
 

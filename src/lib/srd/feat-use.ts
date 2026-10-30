@@ -17,6 +17,12 @@ const SRD_FEAT_PREREQUISITES: Record<string, string> = {
   grappler: "Strength 13 or higher",
 };
 
+// Whether the sheet lists the feat, by its whole name.
+export function holdsFeat(sheet: Pick<CharacterSheet, "feats">, feat: string): boolean {
+  const key = textKey(feat);
+  return (sheet.feats ?? []).some((held) => textKey(held) === key);
+}
+
 // True when the sheet holds the feat and its prerequisite holds at these
 // scores. What play cannot take away (a race, the ability to cast) is not
 // asked again here; the feat was checked for it when it was taken.
@@ -25,11 +31,10 @@ export function featUsable(
   feat: string,
   scores: Record<Ability, number>,
 ): boolean {
-  const key = textKey(feat);
-  if (!(sheet.feats ?? []).some((held) => textKey(held) === key)) {
+  if (!holdsFeat(sheet, feat)) {
     return false;
   }
-  const prerequisite = SRD_FEAT_PREREQUISITES[key];
+  const prerequisite = SRD_FEAT_PREREQUISITES[textKey(feat)];
   if (!prerequisite) {
     return true;
   }

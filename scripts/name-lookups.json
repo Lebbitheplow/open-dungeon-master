@@ -1323,6 +1323,8 @@
     "lib/dm/gear-hands.ts#bypass": [["identity",3,"a carried line by its whole own name (two copies of one sheet's lines)"]],
     "lib/dm/gear-hands.ts#whole": [["identity",2,"a carried line by its whole own name (two copies of one sheet's lines)"]],
     "lib/dm/gear-tool.ts#bypass": [["identity",4,"moving a line by its own name"]],
+    "lib/dm/grappler-pin.ts#keyed": [["key",2,"ids, refs, slugs, tool names, field names, env names, event kinds, UI keys, caches, door and map keys; a sheet's conditionMeta by the condition key it was written under; the usage route's gear map by the sheet's own stored item names (src/: every site read)"]],
+    "lib/dm/grappler-pin.ts#partial": [["key",1,"the SRD row's English condition-immunity line"]],
     "lib/dm/hazard-tools.ts#partial": [["key",1,"cold or fire in the resistance list ODM writes"]],
     "lib/dm/heal-spell.ts#number": [["key",2,"digits a regex already captured, ids, headers, stored and form numbers (number inputs), dice parts, the pack's English text (\"1,000 feet\", a purse); src/: every site read"]],
     "lib/dm/heal-spell.ts#partial": [["pattern",2,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"],["parse",1,"dice"],["parse",1,"a dice term's sign"]],

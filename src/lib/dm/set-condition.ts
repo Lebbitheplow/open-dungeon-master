@@ -40,6 +40,8 @@ import { exhaustionPatch, namesExhaustion } from "@/lib/dm/vitals-logic";
 import { spellEffectRefusal } from "@/lib/dm/spell-effects";
 import { allyConditionAura } from "@/lib/dm/aura";
 import { awardInspirationCounter, heldInspiration, spendInspirationCounter } from "@/lib/dm/roll-riders";
+import { withoutGrapple } from "@/lib/dm/grapple";
+import { releaseLostPins } from "@/lib/dm/grappler-pin";
 import { featureConditionImmunities, sourcedConditionImmunity } from "@/lib/srd/trait-rules";
 import { magicItemRiders } from "@/lib/srd/magic-items";
 import { conditionGrantedImmunity } from "@/lib/srd/condition-effect-queries";
@@ -161,12 +163,17 @@ export function releaseGrapplesHeldBy(campaign: Campaign, holderId: string): str
     if (!names.length) {
       continue;
     }
-    const cleared = removeConditions(enemy.conditions, enemy.conditionMeta, names);
+    // The restraint a Grappler's pin laid on it ends with the grapple too.
+    const cleared = names.reduce(
+      (state, name) => withoutGrapple(state.conditions, state.meta, { name, source: holderId }),
+      { conditions: enemy.conditions, meta: enemy.conditionMeta as ConditionMetaMap },
+    );
     patchEnemyConditions(enemy.id, cleared.conditions, cleared.meta);
     released.push(enemy.displayName);
     enemiesChanged = true;
   }
   if (enemiesChanged) {
+    releaseLostPins(campaign);
     publishPersisted(campaign.id, "encounter_updated", {
       encounter: activePublicEncounter(campaign.id),
     });

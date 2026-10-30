@@ -1373,6 +1373,7 @@
     "lib/dm/gear-tool.ts#str-list": [["key",2,"handle_item's tool name and action ids (tool schema enum)"]],
     "lib/dm/grapple.ts#str-eq": [["key",1,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/grapple.ts#toLowerCase": [["key",6,"condition labels (engine vocabulary)"]],
+    "lib/dm/grappler-pin.ts#toLowerCase": [["key",1,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/hazard-tools.ts#str-eq": [["key",1,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/hazard-tools.ts#str-list": [["key",4,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/hazard-tools.ts#toLowerCase": [["key",1,"condition label (engine vocabulary)"]],
