@@ -69,6 +69,7 @@ export function modelLine(model: RegistryModel | undefined): string {
             !model.tested.stages.streaming && "no stream",
             !model.tested.stages.toolCall && "no tool call",
             !model.tested.stages.toolContinuation && "no continuation",
+            model.tested.stages.turn === false && "failed the test turn",
           ]
             .filter(Boolean)
             .join(", ")}).`,

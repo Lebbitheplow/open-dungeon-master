@@ -561,6 +561,7 @@
     "lib/addons/archive.ts#[a-z]": [["key",1,"a drive letter in a path"]],
     "lib/addons/board-bridge.ts#[a-z]": [["key",1,"a short id"]],
     "lib/addons/store.ts#str-includes": [["key",1,"a permission id"]],
+    "lib/backend-trial.ts#str-eq": [["key",2,"provider ids and the backend finish_reason"]],
     "lib/battlemap/hand-groups.ts#re-word": [["key",1,"a subclass counter's id prefix (sub_) dropped for its shown name"]],
     "lib/battlemap/hand-groups.ts#str-eq": [["key",4,"card ids, card types, costs and a route id"]],
     "lib/battlemap/hand-groups.ts#str-key": [["key",1,"a counter's id or a cost read in a fixed table"]],
