@@ -15,6 +15,8 @@
 //
 // Client-safe on purpose: no fs, no Buffer, no database.
 
+import { raceShowsOwnFace } from "@/lib/placeholders";
+
 export const PACK_ART_KEY = /^[a-z0-9][a-z0-9-]{0,79}$/;
 
 // A thumbnail, not a poster. 256 KB of WebP is a 700 px landscape at high
@@ -115,12 +117,16 @@ export function packArtSlots(pack: ArtNamedPack): PackArtSlot[] {
 
 // The art a look resolves to, or null when the pack carries none for it. The
 // same precedence as characterPlaceholder (src/lib/placeholders.ts): the class
-// is what a player recognises their character by, so it wins over the race.
+// is what a player recognises their character by, so it wins over the race,
+// except for a species with a face of its own (a minotaur, a tortle): a
+// pack's class picture draws someone else, so only the pack's own picture of
+// that species stands, and without one the bundled species plate does.
 export function packCharacterArtKey(
   artKeys: readonly string[],
   look: { race?: string | null; class?: string | null },
 ): string | null {
-  const byClass = look.class ? packArtKey("class", look.class) : "";
+  const ownFace = raceShowsOwnFace(look.race);
+  const byClass = look.class && !ownFace ? packArtKey("class", look.class) : "";
   if (byClass && artKeys.includes(byClass)) {
     return byClass;
   }
