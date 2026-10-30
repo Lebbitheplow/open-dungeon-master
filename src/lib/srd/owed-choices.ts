@@ -12,6 +12,7 @@ import { expertiseAllowed, expertiseSlotsFor, subclassLevelFor, THIEVES_TOOLS } 
 import { classListFor } from "@/lib/srd/multiclass";
 import { SRD_CLASSES } from "@/lib/srd";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { classWords } from "@/lib/sheet-words";
 
 type Owing = Pick<CharacterSheet, "class" | "subclass" | "level" | "classes" | "features" | "proficiencies">;
 
@@ -42,7 +43,9 @@ export function owedChoices(sheet: Owing): string[] {
   }
   for (const entry of classes) {
     if (subclassOwed(entry, entry.level)) {
-      out.push(`a subclass for ${entry.id} (due at ${entry.id} level ${subclassLevelFor(entry.id)})`);
+      // The class by its words: the sheet dialog and the join confirmation
+      // read this line, and printed "a subclass for plague_doctor".
+      out.push(`a subclass for ${classWords(entry.id)} (due at ${classWords(entry.id)} level ${subclassLevelFor(entry.id)})`);
     }
   }
   return out;

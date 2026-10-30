@@ -16,6 +16,7 @@ import { LoadFailed, PanelError } from "@/app/campaigns/[campaignId]/PanelKit";
 import { readLoad, readWrite, useLoadStatus } from "@/lib/load-state";
 import { DraftPregensCard } from "@/app/workshop/party/DraftPregens";
 import type { TargetParty } from "@/lib/workshop/kind";
+import { className, speciesName } from "@/lib/characters/class-words";
 
 // The Party system (docs/workshop-parity-audit.md phase 15): the party a
 // workshop is built for, already declared in the pinned bar above, and the
@@ -52,8 +53,10 @@ const faceOf = (character: Pregen) => ({
   key: `class-${character.class}`,
 });
 
-function describe(character: Pregen): string {
-  const parts = [character.race, character.class];
+// "Level 5 Bhain Kwai Paladin (Oath of Devotion)": the species and class by
+// name, as the table's cards read them; the row printed their ids.
+export function describePregen(character: Pick<Pregen, "level" | "race" | "class" | "subclass">): string {
+  const parts = [speciesName(character), className(character.class)];
   if (character.subclass) {
     parts.push(`(${character.subclass})`);
   }
@@ -182,7 +185,7 @@ export function PartyPanel({
                   >
                     {character.name}
                   </Link>
-                  <span className="block text-sm text-stone-400">{describe(character)}</span>
+                  <span className="block text-sm text-stone-400">{describePregen(character)}</span>
                   <span className="mt-1 flex flex-wrap gap-1">
                     {character.role === "companion" ? (
                       <span className={cn(chip, "border-stone-700 text-stone-400")}>Companion</span>
@@ -256,7 +259,7 @@ export function PartyPanel({
             options={available.map((character) => ({
               value: character.id,
               label: character.name,
-              hint: `${describe(character)}${character.workshopId && character.workshopId !== workshopId ? " (in another workshop)" : ""}`,
+              hint: `${describePregen(character)}${character.workshopId && character.workshopId !== workshopId ? " (in another workshop)" : ""}`,
               icon: character.class ? faceOf(character) : { kind: "glyph" as const, key: "system-party" },
             }))}
           />

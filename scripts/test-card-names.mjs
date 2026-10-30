@@ -36,6 +36,13 @@ await test("a card's line names the species and each class", () => {
   assert.equal(arrivalDetail({ race: "bhain-kwai", class: "paladin" }), "Bhain Kwai · Paladin");
 });
 
+await test("a workshop's pregen row names its species and class, not their ids", async () => {
+  // The author's party list read "Level 5 bhain-kwai paladin".
+  const { describePregen } = await import("../src/app/workshop/party/PartyPanel.tsx");
+  assert.equal(describePregen({ level: 5, race: "bhain-kwai", class: "plague_doctor", subclass: "" }), "Level 5 Bhain Kwai Plague Doctor");
+  assert.equal(describePregen({ level: 3, race: "homebrew:abc", class: "fighter", subclass: "Champion" }), "Level 3 Fighter (Champion)");
+});
+
 const sheet = (id, userId, name, more = {}) => ({ id, userId, name, race: "human", class: "fighter", level: 1, ...more });
 
 await test("the lobby's seat and companion cards print names, not ids", () => {

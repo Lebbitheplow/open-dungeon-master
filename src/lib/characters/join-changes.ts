@@ -2,6 +2,8 @@ import type { CreateSheetInput } from "@/lib/schemas/sheet";
 import { owedChoices } from "@/lib/srd/owed-choices";
 import { textKey } from "@/lib/language/text-logic";
 import type { OwedPicks } from "@/lib/characters/seat-picks";
+import { classLevelWords } from "@/lib/characters/class-words";
+import { classWords } from "@/lib/sheet-words";
 
 // What taking a seat does to a hero, in words, for the confirm sheet a
 // player reads before joining (backlog F6, JoinConfirmDialog.tsx). It
@@ -78,12 +80,10 @@ function slotLine(sheet: Sheet): string {
   return slots.join(", ");
 }
 
+// "fighter 3 / plague doctor 2": the classes in words, as the rest of the
+// confirmation reads them (src/lib/sheet-words.ts); the line printed ids.
 function classLine(sheet: Sheet, level: number): string {
-  const classes = sheet.classes ?? [];
-  if (classes.length > 1) {
-    return classes.map((entry) => `${entry.id} ${entry.level}`).join(" / ");
-  }
-  return `${sheet.class} ${level}`;
+  return classLevelWords({ class: sheet.class, level, classes: sheet.classes }, classWords);
 }
 
 export function joinChanges(
