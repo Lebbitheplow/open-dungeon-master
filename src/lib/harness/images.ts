@@ -10,7 +10,7 @@
 // wrote as text, and they are checked before anything is written.
 
 import { randomUUID } from "node:crypto";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { imageSize, sniffImage as sniffImageFormat } from "@/lib/image-format";
@@ -20,6 +20,7 @@ import { buildChildEnv } from "./child-env.ts";
 import { childPath } from "./discover.ts";
 import { adapterFor, ADAPTERS, harnessConfig, resolveHarnessBinary } from "./status.ts";
 import { isHarnessId } from "./types.ts";
+import { makeRunDir, removeRunDir } from "./run-dir.ts";
 import { recordMediaFile } from "@/lib/media-access";
 import { asciiSlugOf } from "@/lib/language/text-logic";
 
@@ -122,7 +123,7 @@ export async function generateHarnessImage(options: {
     throw new Error("The server's agent program was not found.");
   }
   const started = Date.now();
-  const cwd = mkdtempSync(path.join(os.tmpdir(), "odm-harness-img-"));
+  const cwd = makeRunDir("odm-harness-img-");
   const env = buildChildEnv(process.env, config.id, await childPath(binary), { HOME: os.homedir() });
   const adapter = adapterFor(config.id);
   let captured: Buffer | null = null;
@@ -195,13 +196,11 @@ export async function generateHarnessImage(options: {
         .catch((error) => finish(null, error instanceof Error ? error : new Error(String(error))));
     });
   } finally {
-    try {
-      rmSync(cwd, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
-    } catch {
-      // On Windows the agent can briefly keep its working directory locked
-      // after close(). A leftover scratch folder is reclaimed by the OS; it
-      // must not turn an image we already received into a failed paint.
-    }
+    // On Windows the agent can briefly keep its working directory locked
+    // after close(). removeRunDir never throws, so a held folder cannot turn
+    // an image we already received into a failed paint; it is tried again
+    // later instead (run-dir.ts).
+    removeRunDir(cwd);
   }
   const accepted = acceptImage(captured);
   if (!accepted) {

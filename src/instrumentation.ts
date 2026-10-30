@@ -57,6 +57,16 @@ export async function register() {
         console.error("[dm] could not re-arm the tables waiting for everyone", error);
       }
 
+      // Agent run folders an earlier server left in the temp folder, with
+      // their links to the admin's Codex sign-in (src/lib/harness/run-dir.ts).
+      // A failure must not stop the server.
+      try {
+        const { sweepStaleRunDirs } = await import("@/lib/harness/run-dir");
+        sweepStaleRunDirs();
+      } catch (error) {
+        console.error("[harness] could not sweep old run folders", error);
+      }
+
       // Event loop delay for the admin's metrics (src/lib/metrics.ts).
       const { startProcessMetrics } = await import("@/lib/metrics");
       startProcessMetrics();

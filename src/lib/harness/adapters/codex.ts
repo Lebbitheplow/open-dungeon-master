@@ -27,13 +27,15 @@
 // for it and the admin card shows the key, so the next rename is seen rather
 // than silently ignored.
 
-import { existsSync, linkSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, linkSync, mkdirSync, readFileSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { noteSpeed } from "@/lib/speed-status";
 import os from "node:os";
 import path from "node:path";
 import { onWindows } from "../../host-platform.ts";
 import { startJsonRpc } from "../jsonrpc-stdio.ts";
 import { runProgram } from "../process.ts";
+import { makeRunDir, removeRunDir } from "../run-dir.ts";
+import { CODEX_HOME_DIR, LINKED_SIGN_IN_FILES } from "../run-dir-logic.ts";
 import { isHarnessEffort } from "../types.ts";
 import type { HarnessAdapter, HarnessConfig, HarnessModel, HarnessStartOptions, HarnessStatus, HarnessUsage } from "../types.ts";
 
@@ -46,8 +48,8 @@ export function codexHome(env: Record<string, string | undefined>): string {
 // What a run's own Codex home holds of the admin's: the sign-in, their
 // config (a provider or an API-key setup lives there) and the installation id.
 // Their AGENTS.md, skills and plugins stay behind, and the stores Codex keeps
-// go with the run folder.
-const LINKED_FROM_ADMIN_HOME = ["auth.json", "config.toml", "installation_id"] as const;
+// go with the run folder, whose removal unlinks these first (run-dir.ts).
+const LINKED_FROM_ADMIN_HOME = LINKED_SIGN_IN_FILES;
 
 // Codex rewrites auth.json in place when it refreshes the sign-in, so through
 // a link the refreshed tokens land in the admin's own file. Windows needs a
@@ -237,7 +239,7 @@ async function codexCatalogText(binary: string, adminHome: string, env: Record<s
 
 async function start(options: HarnessStartOptions) {
   const adminHome = codexHome(options.env);
-  const runHome = path.join(options.cwd, "codex-home");
+  const runHome = path.join(options.cwd, CODEX_HOME_DIR);
   try {
     prepareCodexHome(adminHome, runHome);
   } catch (error) {
@@ -594,7 +596,7 @@ export const codexAdapter: HarnessAdapter = {
       return { installed: false, auth: { state: "unknown" }, models: [] };
     }
     // The same kind of home a run gets, so the card shows what a run will see.
-    const cwd = mkdtempSync(path.join(os.tmpdir(), "odm-codex-probe-"));
+    const cwd = makeRunDir("odm-codex-probe-");
     const notes: string[] = [];
     let probed: { auth: HarnessStatus["auth"]; models: HarnessModel[]; defaultEfforts?: HarnessModel["efforts"]; ignored: string[] } = {
       auth: { state: "unknown" },
@@ -602,19 +604,16 @@ export const codexAdapter: HarnessAdapter = {
       ignored: [],
     };
     try {
-      const runHome = path.join(cwd, "codex-home");
+      const runHome = path.join(cwd, CODEX_HOME_DIR);
       prepareCodexHome(codexHome(env), runHome);
       probed = await probeAppServer(binary, { ...env, CODEX_HOME: runHome }, cwd).catch(() => probed);
     } catch (error) {
       notes.push(codexHomeTrouble(error));
     } finally {
-      // Best effort, as the bridge's own run folders: on Windows Codex may
-      // still hold it while going down.
-      try {
-        rmSync(cwd, { recursive: true, force: true });
-      } catch {
-        // A temp folder.
-      }
+      // As the bridge's own run folders: on Windows Codex may still hold it
+      // while going down, so the sign-in links go first and the folder is
+      // tried again later.
+      removeRunDir(cwd);
     }
     const { auth, models, defaultEfforts, ignored } = probed;
     if (auth.state === "signed-out") {

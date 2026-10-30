@@ -25,9 +25,7 @@
 import { agentSpeedEligibility } from "@/lib/speed-tier";
 import { acceptsCall } from "@/lib/dm/tool-merge-logic";
 import { randomBytes, createHash } from "node:crypto";
-import { mkdtempSync, rmSync } from "node:fs";
 import os from "node:os";
-import path from "node:path";
 import type { ChatMessage, ChatRequestOptions, UpstreamResult } from "@/lib/model-client";
 import { createStreamRepetitionGuard, firstCopyOf, streamRepetitionResponse } from "@/lib/stream-repetition";
 import { buildChildEnv, leaksServerSecret } from "./child-env.ts";
@@ -35,6 +33,7 @@ import { childPath } from "./discover.ts";
 import { renderCompletion, renderFollowUp, renderTurn, toMcpTools, toolNames } from "./render.ts";
 import { adapterFor, harnessConfig, probeHarness, resolveHarnessBinary } from "./status.ts";
 import { harnessOfferFor } from "./policy.ts";
+import { makeRunDir, removeRunDir } from "./run-dir.ts";
 import { getCampaignById } from "@/lib/db/campaigns";
 import type { HarnessErrorKind, HarnessEvent, HarnessSession, McpToolDefinition } from "./types.ts";
 import { HARNESS_MAX_RUN_MS, isHarnessId } from "./types.ts";
@@ -446,18 +445,6 @@ export class BridgeSession {
   }
 }
 
-// The run folder is the program's working directory. On Windows it cannot
-// be removed while the program is still going down, and a throw from here
-// must never carry a concurrency slot away with it (issue 16: two leaked
-// slots and every later summary waited out the whole timeout).
-function removeRunDir(cwd: string) {
-  try {
-    rmSync(cwd, { recursive: true, force: true });
-  } catch {
-    // Best effort; it is a temp folder.
-  }
-}
-
 // --- registry -------------------------------------------------------------
 
 type BridgeState = {
@@ -649,7 +636,7 @@ async function prepareRun(context: HarnessRequestContext) {
   if (!binary) {
     return { error: harnessError(`${config.id} was not found on this machine.`, "missing") } as const;
   }
-  const cwd = mkdtempSync(path.join(os.tmpdir(), "odm-harness-"));
+  const cwd = makeRunDir("odm-harness-");
   const env = buildChildEnv(process.env, config.id, await childPath(binary), { HOME: os.homedir() });
   const leak = leaksServerSecret(env, process.env);
   if (leak) {
