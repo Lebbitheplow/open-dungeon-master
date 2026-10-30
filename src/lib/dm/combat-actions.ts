@@ -14,6 +14,7 @@ import { sizeRank, watchfulPassivePerception } from "@/lib/bestiary/enemy-number
 import type { TurnBudget } from "@/lib/dm/action-budget";
 import { addSheetCondition, rollEnemyContest } from "@/lib/dm/action-common";
 import { handsBusy } from "@/lib/dm/cast-rules";
+import { incapacitatedBy } from "@/lib/dm/condition-logic";
 import { tilesBetween, wallBetween } from "@/lib/dm/attack-spatial";
 import { seenClearlyDespiteTraits } from "@/lib/dm/hide-traits";
 import { rollCharacterCheck } from "@/lib/dm/contest-roll";
@@ -197,29 +198,34 @@ export function contest(
       retry: true,
     };
   }
-  const bought = checkDie?.();
+  // "You succeed automatically if the target is incapacitated" (SRD 5.1,
+  // Grappling and Shoving a Creature): no check on either side, and no
+  // Superiority Die bought for a check that is not rolled.
+  const helpless = incapacitatedBy(enemy.conditions);
+  const bought = helpless ? undefined : checkDie?.();
   if (bought && "error" in bought) {
     return toolError(bought);
   }
   spend();
   // SRD contest: the attacker's Athletics, a check like any other
   // (src/lib/dm/contest-roll.ts), against the target's better of Athletics
-  // (STR) and Acrobatics (DEX).
-  const checked = rollCharacterCheck(campaign, sheet, { skill: "athletics" }, `${sheet.name}: Athletics to ${action} ${enemy.displayName}`);
-  if (checked.rollId) {
-    turn.rollIds.push(checked.rollId);
-  }
-  const extra = bought ? rollCard(campaign, turn, sheet.id, "custom", `${sheet.name}: ${bought.label}`, `1${bought.die.replace(/^1/, "")}`, null).total : 0;
-  const mine = extra ? { ...checked, total: checked.total + extra } : checked;
-  if (bought) {
-    costs.superiorityDie = `${bought.label}: +${extra} on the Athletics check (one Superiority Die)`;
-  }
-  const theirs = rollEnemyContest(campaign, turn, enemy, "either", `${enemy.displayName}: contest against the ${action}`);
-  const contested = `${mine.total} vs ${theirs}`;
-
-  // Ties go to the defender, per the SRD contest rule.
-  const won = !mine.autoFailed && mine.total > theirs;
-  if (!won) {
+  // (STR) and Acrobatics (DEX). Ties go to the defender.
+  const rollContest = (die: { die: string; label: string } | undefined): { text: string; won: boolean } => {
+    const checked = rollCharacterCheck(campaign, sheet, { skill: "athletics" }, `${sheet.name}: Athletics to ${action} ${enemy.displayName}`);
+    if (checked.rollId) {
+      turn.rollIds.push(checked.rollId);
+    }
+    const extra = die ? rollCard(campaign, turn, sheet.id, "custom", `${sheet.name}: ${die.label}`, `1${die.die.replace(/^1/, "")}`, null).total : 0;
+    const mine = extra ? { ...checked, total: checked.total + extra } : checked;
+    if (die) {
+      costs.superiorityDie = `${die.label}: +${extra} on the Athletics check (one Superiority Die)`;
+    }
+    const theirs = rollEnemyContest(campaign, turn, enemy, "either", `${enemy.displayName}: contest against the ${action}`);
+    return { text: `${mine.total} vs ${theirs}`, won: !mine.autoFailed && mine.total > theirs };
+  };
+  const outcome = helpless ? { text: `no contest: ${enemy.displayName} is ${helpless}`, won: true } : rollContest(bought);
+  const contested = outcome.text;
+  if (!outcome.won) {
     return {
       ok: true,
       action,

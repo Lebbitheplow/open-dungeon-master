@@ -242,12 +242,8 @@ await test("Two-weapon fighting with daggers: 'If either weapon has the thrown p
 
 // ---- Grappling and Shoving a Creature ----
 
-await gap("CMB-05", {
-  rule: "combat, Grappling and Shoving a Creature: 'You succeed automatically if the target is incapacitated.'",
-  where: "src/lib/dm/combat-actions.ts contest (always rolls rollEnemyContest, src/lib/dm/action-common.ts, whatever the target's conditions)",
-  severity: "medium",
-  note: "A stunned, paralyzed or unconscious creature still rolls its Athletics or Acrobatics and can win the contest.",
-}, async () => {
+// combat, Grappling and Shoving a Creature: 'You succeed automatically if the target is incapacitated.'
+await test("CMB-05", async () => {
   const [enemy] = await stage(fighter);
   kit.place(fighter.id, 5, 5);
   kit.place(enemy.id, 5, 6);
