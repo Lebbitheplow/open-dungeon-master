@@ -2313,7 +2313,7 @@
     "lib/srd/spell-mech-last-rows.ts#str-list": [["english-source",3,"ODM's spell mechanics rows (bundled data)"]],
     "lib/srd/spell-mech-overrides.ts#str-list": [["english-source",3,"ODM's spell mechanics rows (bundled data)"]],
     "lib/srd/spell-mech-rows.ts#str-list": [["english-source",1,"ODM's spell mechanics rows (bundled data)"]],
-    "lib/srd/spell-mech-tail-rows.ts#str-list": [["english-source",9,"ODM's spell mechanics rows (bundled data)"]],
+    "lib/srd/spell-mech-tail-rows.ts#str-list": [["english-source",10,"ODM's spell mechanics rows (bundled data)"]],
     "lib/srd/spell-mechanics.ts#\\b": [["table-language",8,"meaning reader: a spell's description and duration (content-pack rows, and homebrew spells' free text) parsed for repeat saves, rounds, areas and self-damage"]],
     "lib/srd/spell-mechanics.ts#re-word": [["table-language",9,"meaning reader: a spell's description and duration (content-pack rows, and homebrew spells' free text) parsed for repeat saves, rounds, areas and self-damage"]],
     "lib/srd/spell-mechanics.ts#str-eq": [["key",1,"condition label"],["table-language",3,"meaning reader: a spell's description and duration (content-pack rows, and homebrew spells' free text) parsed for repeat saves, rounds, areas and self-damage"]],

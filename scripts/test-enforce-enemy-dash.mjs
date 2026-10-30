@@ -372,22 +372,75 @@ await test("A turned undead with nowhere farther to run takes the Dodge.", async
   assert.equal(kit.enemy(zombie.id).conditions.includes("dodging"), true);
 });
 
-await test("Command's flee lays fleeing beside commanded, and the creature's turn runs it from the caster.", async () => {
-  const goblin = await stage();
-  kit.place(priest.id, 4, 7);
+// The priest's Command at the goblin, its WIS save failed.
+async function command(goblin, word) {
   const casting = world.sheet(priest.id).spellcasting;
   world.patch(priest.id, { spellcasting: { ...casting, ability: "wis", prepared: [...new Set([...(casting?.prepared ?? []), "Command"])], slots: { ...(casting?.slots ?? {}), 1: { max: 3, used: 0 } } } });
   kit.giveTurn(priest.id);
-  world.say("player", "I command it to flee.", world.sheet(priest.id));
+  world.say("player", `I command it: ${word}.`, world.sheet(priest.id));
   kit.dice(1, 1);
-  const cast = await world.invoke("cast_at_enemy", { characterId: priest.id, spell: "Command", targetEnemyId: goblin.id, condition: "flee", saveAbility: "wis" });
+  const cast = await world.invoke("cast_at_enemy", { characterId: priest.id, spell: "Command", targetEnemyId: goblin.id, condition: word, saveAbility: "wis" });
   world.clearDice();
   assert.equal(cast.ok, true, cast.error);
-  assert.equal(kit.enemy(goblin.id).conditions.includes("fleeing"), true, JSON.stringify(kit.enemy(goblin.id).conditions));
+  return kit.enemy(goblin.id);
+}
+
+await test("Command's flee lays fleeing beside commanded, and the creature's turn runs it from the caster.", async () => {
+  const goblin = await stage();
+  kit.place(priest.id, 4, 7);
+  assert.equal((await command(goblin, "flee")).conditions.includes("fleeing"), true);
   const turn = aiTurn();
   handTo(turn, goblin);
   backstop(turn, goblin);
   assert.ok(apart(at(goblin), { x: 4, y: 7 }) >= 2 + 6, "it did not run from the caster");
+});
+
+await test("Command's grovel drops the creature prone and ends its turn: no walk, no attack.", async () => {
+  const goblin = await stage();
+  kit.place(priest.id, 3, 7);
+  const commanded = await command(goblin, "grovel");
+  assert.equal(commanded.conditions.includes("prone"), true);
+  assert.equal(commanded.conditions.includes("groveling"), true);
+  assert.equal((await attack(goblin, priest)).refused, "rules");
+  assert.equal((await walk(goblin, 0, 7)).refused, "rules");
+  assert.equal(kit.enemy(goblin.id).conditions.includes("prone"), true, "it stood up on the turn grovel ended");
+});
+
+await test("Command's halt keeps the creature where it is with no action.", async () => {
+  const goblin = await stage();
+  kit.place(priest.id, 3, 7);
+  assert.equal((await command(goblin, "halt")).conditions.includes("halted"), true);
+  assert.equal((await attack(goblin, priest)).refused, "rules");
+  assert.equal((await walk(goblin, 0, 7)).refused, "rules");
+  assert.deepEqual(at(goblin), { x: 2, y: 7 });
+});
+
+await test("Command's approach walks the creature to its caster; once within 5 feet its turn ends, and no walk takes it away.", async () => {
+  const goblin = await stage();
+  kit.place(goblin.id, 6, 7);
+  kit.place(priest.id, 2, 7);
+  assert.equal((await command(goblin, "approach")).conditions.includes("approaching"), true);
+  const away = await walk(goblin, 10, 7);
+  assert.equal(away.refused, "rules");
+  assert.match(away.error, /Command draws it only toward its caster/);
+  const hp = world.sheet(priest.id).currentHp;
+  const turn = aiTurn();
+  handTo(turn, goblin);
+  backstop(turn, goblin);
+  assert.equal(apart(at(goblin), { x: 2, y: 7 }), 1, "it did not walk to its caster");
+  assert.equal(acted(goblin), true, "its turn did not end beside the caster");
+  assert.equal(world.sheet(priest.id).currentHp, hp, "it attacked after its turn ended");
+});
+
+await test("Commanded to approach from too far to arrive, it walks its speed toward the caster and its turn goes on.", async () => {
+  const goblin = await stage();
+  kit.place(goblin.id, 14, 7);
+  kit.place(priest.id, 2, 7);
+  await command(goblin, "approach");
+  const turn = aiTurn();
+  handTo(turn, goblin);
+  backstop(turn, goblin);
+  assert.deepEqual(at(goblin), { x: 8, y: 7 });
 });
 
 await test("A calmed creature's turn played by the server holds; it neither attacks nor runs.", async () => {

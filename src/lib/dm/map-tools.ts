@@ -61,7 +61,7 @@ import { enemyMoveBudget } from "@/lib/dm/enemy-speed";
 import { movementLeft, spendEnemyDisengage } from "@/lib/dm/enemy-actions";
 import { forgetEnemyTurns, enemyTurnEntry, speedWords } from "@/lib/dm/enemy-turn-logic";
 import { nearerSquares } from "@/lib/dm/flee-logic";
-import { aggressiveSteps } from "@/lib/dm/enemy-aggressive";
+import { aggressiveSteps, approachSteps } from "@/lib/dm/enemy-aggressive";
 import { enemyTurnRefusal } from "@/lib/dm/enemy-turn-order";
 import { declaredThisTurn } from "@/lib/dm/player-word";
 import { featureTeleportFeet } from "@/lib/dm/feature-teleport";
@@ -595,6 +595,7 @@ export function handleMoveToken(
   const walking = move !== null && !args.forced;
   let standCost = 0;
   let aggressiveCut = false;
+  let approachCut = false;
   if (resolved.kind === "enemy") {
     // Walking on its own: a prone creature stands first for half its speed,
     // and a frightened one never steps closer to what it fears. Standing is
@@ -610,16 +611,25 @@ export function handleMoveToken(
         fearSourceAt(map.id, resolved.enemy.conditions, resolved.enemy.conditionMeta as Record<string, { source?: string }>),
       );
       fearCut = steps.length < path.length;
-      // Aggressive's speed goes only toward a hostile it can see (enemy-aggressive.ts).
+      // Aggressive's speed goes only toward a hostile it can see, and
+      // Command's Approach only toward the caster (enemy-aggressive.ts).
       const rushed = aggressiveSteps(encounter, map, resolved.enemy, resolved.token, steps, traits);
-      steps = rushed.steps;
+      const drawn = approachSteps(map, resolved.enemy, resolved.token, rushed.steps);
+      steps = drawn.steps;
       aggressiveCut = rushed.cut;
+      approachCut = drawn.cut;
     }
     const budget = Math.floor(Math.max(0, (move?.tilesLeft ?? 0) - standCost) / (drag?.factor ?? 1));
     const walk = walkPathWithBudget(map.terrain, map.width, steps, budget, traits, resolved.token);
     if (!walk.at) {
       const words = move && resolved.enemy ? speedWords(move.speedTiles, enemyTurnEntry(encounter, resolved.enemy.id)) : "speed 0 ft";
-      const why = aggressiveCut ? ", and Aggressive carries it only toward a hostile creature it can see" : fearCut ? ", and it will not move closer to what it fears" : "";
+      const why = approachCut
+        ? ", and Command draws it only toward its caster"
+        : aggressiveCut
+          ? ", and Aggressive carries it only toward a hostile creature it can see"
+          : fearCut
+            ? ", and it will not move closer to what it fears"
+            : "";
       return {
         error: `${resolved.token.name} has no movement left this turn (${words})${why}.${stillAt(tokens, resolved.token)}`,
         refused: "rules",
@@ -627,7 +637,7 @@ export function handleMoveToken(
     }
     landing = walk.at;
     spent = walk.spent * (drag?.factor ?? 1);
-    clamped = !walk.reachedEnd || aggressiveCut;
+    clamped = !walk.reachedEnd || aggressiveCut || approachCut;
   }
   const origin = { x: resolved.token.x, y: resolved.token.y };
   const carried = drag ? dragLandings({ map, tokens, mover: resolved.token, landing, walked: [origin, ...walkedPart(path, landing)], held: drag.held, footprintOf: footprints }) : [];
@@ -711,9 +721,11 @@ export function handleMoveToken(
       : {}),
     ...(clamped
       ? {
-          note: aggressiveCut
-            ? `Aggressive carries ${resolved.token.name} only toward a hostile creature it can see: it stopped at (${landing.x},${landing.y}) short of (${args.x},${args.y}).`
-            : `Speed limited the move: ${resolved.token.name} stopped at (${landing.x},${landing.y}) short of (${args.x},${args.y}).`,
+          note: approachCut
+            ? `Command draws ${resolved.token.name} only toward its caster: it stopped at (${landing.x},${landing.y}) short of (${args.x},${args.y}).`
+            : aggressiveCut
+              ? `Aggressive carries ${resolved.token.name} only toward a hostile creature it can see: it stopped at (${landing.x},${landing.y}) short of (${args.x},${args.y}).`
+              : `Speed limited the move: ${resolved.token.name} stopped at (${landing.x},${landing.y}) short of (${args.x},${args.y}).`,
         }
       : {}),
     ...(disengaged ? { disengaged: `Disengaged with ${disengaged}: no opportunity attacks.` } : {}),

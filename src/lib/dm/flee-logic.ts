@@ -16,12 +16,19 @@ export const TURNED = "turned";
 export const FLEEING = "fleeing";
 // Calm Emotions: indifferent, so a calmed creature on its turn holds.
 export const CALMED = "calmed";
+// Command's Approach: it walks to the caster, its turn over once within 5 feet.
+export const APPROACHING = "approaching";
 
 const has = (conditions: readonly string[], name: string) => conditions.some((entry) => entry.trim().toLowerCase() === name);
 
 // The condition that makes it spend its turn running, or null.
 export function fleeHold(conditions: readonly string[]): string | null {
   return [TURNED, FLEEING].find((name) => has(conditions, name)) ?? null;
+}
+
+// Whether Command's Approach draws it to its caster.
+export function approachHold(conditions: readonly string[]): boolean {
+  return has(conditions, APPROACHING);
 }
 
 // Whether it holds where it is on a turn played for it: calmed, and not

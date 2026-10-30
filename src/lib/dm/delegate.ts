@@ -6,7 +6,7 @@ import {
   listEnemies,
   type EncounterEnemy,
 } from "@/lib/db/encounters";
-import { runAway } from "@/lib/dm/enemy-flight";
+import { approachTurn, runAway } from "@/lib/dm/enemy-flight";
 import { fleeHold, holdsCalm } from "@/lib/dm/flee-logic";
 import { getBattleMapForEncounter } from "@/lib/db/battle-maps";
 import { getTokenByRef } from "@/lib/db/battle-maps";
@@ -198,6 +198,14 @@ export async function playMonsterTurns(campaign: Campaign): Promise<MonsterTurnO
         if (holdsCalm(fresh.conditions)) {
           notes.push(`${enemy.displayName} is calmed and holds.`);
           continue;
+        }
+        // Command's Approach walks it to its caster first; within 5 feet its turn ends.
+        const drawn = approachTurn(campaign, turn, fresh, listSheets(campaign.id), new Map(listSheets(campaign.id).map((sheet) => [sheet.id, sheet])));
+        if (drawn) {
+          notes.push(drawn.line);
+          if (drawn.ended) {
+            continue;
+          }
         }
         const decision = await decideMonsterTurn(
           campaign,

@@ -12,15 +12,17 @@
 
 import type { Campaign } from "@/lib/db/campaigns";
 import type { DmTurn } from "@/lib/db/dm-turns";
-import { getActiveEncounter, getEnemy, listEnemies, type EncounterEnemy } from "@/lib/db/encounters";
+import { getActiveEncounter, getEnemy, listEnemies, saveEncounter, type EncounterEnemy } from "@/lib/db/encounters";
 import { getBattleMapForEncounter, getTokenByRef, listTokens } from "@/lib/db/battle-maps";
-import { reachableTiles } from "@/lib/battlemap/movement";
+import { findPath, reachableTiles } from "@/lib/battlemap/movement";
 import { footprintLookup, occupiedTiles } from "@/lib/battlemap/view";
 import { chebyshev } from "@/lib/battlemap/types";
 import { enemyMoveTraits, fearSourceAt } from "@/lib/dm/enemy-approach";
 import { handleEnemyTakeAction } from "@/lib/dm/enemy-actions";
 import { enemyMoveBudget } from "@/lib/dm/enemy-speed";
-import { farthestFrom, fleeHold, nearerSquares, TURNED } from "@/lib/dm/flee-logic";
+import { approachHold, farthestFrom, fleeHold, nearerSquares, TURNED } from "@/lib/dm/flee-logic";
+import { approachSourceAt } from "@/lib/dm/enemy-aggressive";
+import { canEnemyAct, markEnemyActed } from "@/lib/dm/can-act";
 import { handleMoveToken } from "@/lib/dm/map-tools";
 import { otherSide } from "@/lib/dm/combat-sides-logic";
 import { sideOf, standingOn } from "@/lib/dm/combatant";
@@ -132,4 +134,43 @@ export function fleeTurn(
 ): string | null {
   const hold = fleeHold(enemy.conditions);
   return hold ? runAway(campaign, turn, enemy, sheets, sheetsById, hold) : null;
+}
+
+// Command's Approach (SRD 5.1: "moves toward you by the shortest and most
+// direct route, ending its turn if it moves within 5 feet of you"), played
+// for a creature on its turn: it walks toward the caster as far as its
+// movement goes, and once within 5 feet its turn is over (its action
+// spent). The line for the table and whether its turn ended there; null for
+// a creature not commanded to approach, or with no caster on the board.
+export function approachTurn(
+  campaign: Campaign,
+  turn: DmTurn,
+  enemy: EncounterEnemy,
+  sheets: CharacterSheet[],
+  sheetsById: Map<string, CharacterSheet>,
+): { line: string; ended: boolean } | null {
+  const encounter = getActiveEncounter(campaign.id);
+  const map = encounter ? getBattleMapForEncounter(encounter.id) : null;
+  const token = map ? getTokenByRef(map.id, enemy.id) : null;
+  const caster = map && approachHold(enemy.conditions) ? approachSourceAt(map, enemy) : null;
+  if (!encounter || !map || !token || !caster) {
+    return null;
+  }
+  let line = `${enemy.displayName} obeys Command and comes toward its caster`;
+  if (chebyshev(token.x, token.y, caster.x, caster.y) > 1) {
+    const tokens = listTokens(map.id);
+    const footprints = footprintLookup(new Map(listEnemies(encounter.id).map((entry) => [entry.id, entry])));
+    const path = findPath(map.terrain, map.width, map.height, occupiedTiles(map, tokens, token, footprints), token, caster, footprints(token), token.movement === "fly", enemyMoveTraits(map.width, tokens, token, encounter.id));
+    const to = path && path.length > 1 ? path[path.length - 2] : null;
+    const walked: Record<string, unknown> = to ? handleMoveToken(campaign, JSON.stringify({ token: enemy.id, x: to.x, y: to.y }), sheets, sheetsById, turn) : { error: "no way through to its caster" };
+    line = typeof walked.error === "string" ? `${line} but cannot move: ${outcome(walked)}` : `${line}, walking to ${String(walked.at)}`;
+  }
+  const now = getTokenByRef(map.id, enemy.id);
+  const live = getActiveEncounter(campaign.id);
+  const beside = Boolean(now && chebyshev(now.x, now.y, caster.x, caster.y) <= 1);
+  if (beside && live && canEnemyAct({ enemy: getEnemy(enemy.id) ?? enemy, encounter: live, kind: "action" }).ok) {
+    markEnemyActed(live, enemy.id);
+    saveEncounter(live);
+  }
+  return { line: `${line}${beside ? ": within 5 feet of them, its turn ends." : "."}`, ended: beside };
 }

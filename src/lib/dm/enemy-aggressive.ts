@@ -1,4 +1,4 @@
-// Aggressive (the SRD orc: "As a bonus action, the orc can move up to its
+// The walks a creature is driven along: Aggressive (the SRD orc: "As a bonus action, the orc can move up to its
 // speed toward a hostile creature that it can see"), held on the walk that
 // bonus action pays for (issue #621). The Dash it buys is counted like any
 // other (enemy-actions.ts), but its speed may only carry the orc toward a
@@ -8,7 +8,8 @@
 // walk-up both ask here. Must not import map-tools or enemy-approach.
 
 import type { Encounter, EncounterEnemy } from "@/lib/db/encounters";
-import { listHiddenRefIds, listTokens, type BattleMap } from "@/lib/db/battle-maps";
+import { getTokenByRef, listHiddenRefIds, listTokens, type BattleMap } from "@/lib/db/battle-maps";
+import { APPROACHING } from "@/lib/dm/flee-logic";
 import { walkPathWithBudget } from "@/lib/battlemap/movement";
 import { hasLineOfSight } from "@/lib/battlemap/los";
 import { chebyshev, type BattleToken, type MoveTraits } from "@/lib/battlemap/types";
@@ -61,5 +62,26 @@ export function aggressiveSteps<T extends XY>(
   const nearest = (at: XY) => (seen.length ? Math.min(...seen.map((foe) => chebyshev(at.x, at.y, foe.x, foe.y))) : Number.POSITIVE_INFINITY);
   // With nobody in sight, no step of Aggressive's speed is toward anyone.
   const allowed = seen.length ? towardSteps(mover, steps, paidFrom, nearest) : steps.slice(0, paidFrom);
+  return { steps: allowed, cut: allowed.length < steps.length };
+}
+
+// Where the caster of Command's Approach stands, when the creature has to
+// walk to them and they are on the board.
+export function approachSourceAt(map: BattleMap, enemy: Pick<EncounterEnemy, "conditions" | "conditionMeta">): XY | null {
+  const held = enemy.conditions.find((entry) => isConditionNamed(entry, APPROACHING));
+  const source = held ? (enemy.conditionMeta as Record<string, { source?: string } | undefined>)[held]?.source : undefined;
+  const token = source ? getTokenByRef(map.id, source) : null;
+  return token ? { x: token.x, y: token.y } : null;
+}
+
+// The steps of a walk Command's Approach allows: none that ends farther
+// from the caster than the square before it (SRD 5.1: "toward you by the
+// shortest and most direct route"). Unchanged for a creature not commanded.
+export function approachSteps<T extends XY>(map: BattleMap, enemy: Pick<EncounterEnemy, "conditions" | "conditionMeta">, mover: XY, steps: T[]): { steps: T[]; cut: boolean } {
+  const caster = approachSourceAt(map, enemy);
+  if (!caster) {
+    return { steps, cut: false };
+  }
+  const allowed = towardSteps(mover, steps, 0, (at) => chebyshev(at.x, at.y, caster.x, caster.y));
   return { steps: allowed, cut: allowed.length < steps.length };
 }

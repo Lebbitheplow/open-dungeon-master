@@ -91,7 +91,7 @@ import {
 import { enemyFalls } from "@/lib/dm/enemy-fall";
 import { enemyCallOutOfTurn } from "@/lib/dm/enemy-turn-order";
 import { forgetEnemyTurns } from "@/lib/dm/enemy-turn-logic";
-import { fleeTurn } from "@/lib/dm/enemy-flight";
+import { approachTurn, fleeTurn } from "@/lib/dm/enemy-flight";
 import { characterCallUnasked } from "@/lib/dm/player-word";
 import {
   applyExtraEncounterCall,
@@ -1550,6 +1550,14 @@ export function autoActSkippedEnemies(
     if (fled) {
       notes.push(fled);
       continue;
+    }
+    // Command's Approach walks it to its caster; within 5 feet its turn ends.
+    const drawn = approachTurn(campaign, turn, enemy, sheets, sheetsById);
+    if (drawn) {
+      notes.push(drawn.line);
+      if (drawn.ended) {
+        continue;
+      }
     }
     // Its foes are whoever stands on the other side from it now
     // (src/lib/dm/combatant.ts): the party for an enemy, the enemies for a
