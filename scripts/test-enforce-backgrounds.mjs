@@ -10,7 +10,8 @@
 //
 // Hit points: the hit die's maximum plus the Constitution modifier at 1st
 // level; each level after adds the die's fixed value (half plus one) plus the
-// modifier, and never less than 1.
+// modifier (SRD 5.1, Beyond 1st Level). The floor of 1 a level is ODM's own:
+// the SRD text sets none, and it shows only at Constitution 3 or lower.
 //
 // ODM's own rules, pinned: the twelve other Player's Handbook backgrounds are
 // bundled under the SRD's name, and 36 setting backgrounds of ODM's writing
@@ -403,7 +404,7 @@ await test("a character has at least 1 hit point", () => {
   assert.equal(buildBackground("sage", { method: "roll", scores: { str: 8, dex: 14, con: 3, int: 15, wis: 12, cha: 10 } }).sheet.maxHp, 2);
 });
 
-await test("Each level gained adds the hit die's value plus the Constitution modifier, and never less than 1 hit point (SRD 5.1, Beyond 1st Level).", () => {
+await test("Each level gained adds the hit die's value plus the Constitution modifier (SRD 5.1, Beyond 1st Level), and never less than 1 hit point (ODM's own floor; the SRD sets none).", () => {
   for (const [classId, die, fixed] of [["wizard", 6, 4], ["rogue", 8, 5]]) {
     for (const con of [1, 3]) {
       for (const level of [2, 5, 20]) {
