@@ -96,6 +96,18 @@ await test("the Superiority Die is a d8, a d10 from 10th level and a d12 from 18
   }
 });
 
+// combat, Flying Movement: 'If a flying creature is knocked prone, has its speed reduced to 0, or is otherwise deprived of the ability to move, the creature falls, unless it has the ability to hover or it is being held aloft by magic.'
+await test("Trip Attack on a flyer that cannot hover: it falls as it is knocked prone, not at its next turn", async () => {
+  const enemy = await stage();
+  kit.setEnemy(enemy.id, { stats: { speed: "20 ft., fly 40 ft." } });
+  const up = await world.invoke("set_movement", { token: enemy.id, movement: "fly" });
+  assert.equal(up.ok, true, up.error);
+  const out = await swing(enemy, [15, 4, 5, DC - DUMMY.saveMods.str - 1], { maneuver: "Trip Attack" });
+  assert.equal(out.ok, true, out.error);
+  assert.ok(kit.enemy(enemy.id).conditions.includes("prone"), "setup: the trip did not land");
+  assert.equal(kit.token(enemy.id).movement, "walk", "a flyer tripped prone stayed aloft");
+});
+
 await test("Trip Attack: a Strength save against 8 + proficiency + Strength, prone on a failure", async () => {
   // The dummy saves at +1: a 12 comes to 13, one short of DC 14.
   let enemy = await stage();

@@ -170,6 +170,59 @@ await test("CMB-02", async () => {
   assert.equal(kit.token(harpy.id).movement, "walk", "a flying creature knocked prone is still aloft on the board");
 });
 
+// combat, Flying Movement: the same sentence, on the paths that lay the condition without a shove: a spell's save, a spell's area, a blow that drops a winged character to 0 hit points.
+await test("CMB-02 on every path: a flyer held by a spell, caught in an area or dropped to 0 falls as the condition lands", async () => {
+  const [harpy] = await stage(mage);
+  const spells = world.sheet(mage.id).spellcasting;
+  const kept = world.sheet(fighter.id);
+  world.patch(mage.id, { spellcasting: { ...spells, prepared: ["Hold Person", "Web"] } });
+  const stillUp = [];
+  const takeWing = async (refId) => {
+    const up = await world.invoke("set_movement", { token: refId, movement: "fly" });
+    assert.equal(up.ok, true, up.error);
+  };
+  const aloftHarpy = async () => {
+    kit.setEnemy(harpy.id, { stats: { speed: "20 ft., fly 40 ft." }, conditions: [], conditionMeta: {} });
+    await takeWing(harpy.id);
+  };
+  try {
+    kit.place(mage.id, 5, 2);
+    kit.place(harpy.id, 5, 5);
+    await aloftHarpy();
+    // Hold Person: a WIS save of 1, paralyzed.
+    const held = await forced([1], "cast_at_enemy", { characterId: mage.id, targetEnemyId: harpy.id, spell: "Hold Person", level: 2 });
+    assert.equal(held.out.ok, true, held.out.error);
+    if (kit.token(harpy.id).movement === "fly") {
+      stillUp.push(`a spell's save (${kit.enemy(harpy.id).conditions.join(", ")})`);
+    }
+    await aloftHarpy();
+    kit.freshTurn();
+    // Web over it: a DEX save of 1, restrained.
+    const web = await forced([1], "aoe_damage", { casterCharacterId: mage.id, spell: "Web", level: 2, enemyIds: [harpy.id], atX: 5, atY: 5 });
+    assert.equal(web.out.ok, true, web.out.error);
+    if (kit.token(harpy.id).movement === "fly") {
+      stillUp.push(`a spell's area (${kit.enemy(harpy.id).conditions.join(", ")})`);
+    }
+    // A winged fighter (Dragon Wings: no magic holds them up) dropped to 0.
+    world.patch(fighter.id, { features: [...kept.features, { name: "Dragon Wings", description: "" }], currentHp: 3, ac: 10, acOverride: true });
+    kit.place(fighter.id, 5, 7);
+    kit.place(harpy.id, 5, 8);
+    kit.setEnemy(harpy.id, { conditions: [], conditionMeta: {} });
+    await takeWing(fighter.id);
+    kit.freshRound();
+    const blow = await forced([15, 6], "enemy_attack", { enemyId: harpy.id, targetCharacterId: fighter.id });
+    assert.equal(blow.out.ok, true, blow.out.error);
+    assert.equal(world.sheet(fighter.id).currentHp, 0, "setup: the blow did not drop the fighter");
+    if (kit.token(fighter.id).movement === "fly") {
+      stillUp.push("a drop to 0 hit points");
+    }
+  } finally {
+    world.patch(mage.id, { spellcasting: spells });
+    world.patch(fighter.id, { features: kept.features, currentHp: 44, deathSaves: null, conditions: [], conditionMeta: {}, ac: kept.ac, acOverride: kept.acOverride ?? false });
+  }
+  assert.deepEqual(stillUp, [], `a flyer stayed aloft after ${stillUp.join("; ")}`);
+});
+
 // ---- Actions in Combat: Dodge, Hide ----
 
 // combat, Dodge: 'Until the start of your next turn, any attack roll made against you has disadvantage if you can see the attacker.'

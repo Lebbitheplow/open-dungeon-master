@@ -25,6 +25,7 @@ import {
 } from "@/lib/schemas/sheet";
 import { textKey } from "@/lib/language/text-logic";
 import { noteDominationShift } from "@/lib/db/side-watch";
+import { noteGrounding } from "@/lib/db/flight-watch";
 import { repairedPets } from "@/lib/srd/familiar-forms";
 import { rowName } from "@/lib/srd/item-row";
 
@@ -893,6 +894,9 @@ export function patchSheet(sheetId: string, patch: FullPatchSheetInput): Charact
     // A Dominate starting or ending moves the character's side (side-watch.ts).
     noteDominationShift(existing.campaignId, existing, next);
   }
+  // A flyer knocked prone, or held or exhausted to a speed of 0, falls
+  // (flight-watch.ts).
+  noteGrounding(existing.campaignId, existing, next);
 
   // Temporary hit points a spell granted for its duration go when it ends
   // (False Life, Heroism): the instance that granted them carries the claim.

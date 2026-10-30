@@ -8,8 +8,10 @@
 //
 // This module must not import mutations.ts (which imports it).
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
-import { getActiveBoard, getActiveEncounter, getEnemy, listEnemies, patchEnemyConditions } from "@/lib/db/encounters";
-import { landTheFlightless } from "@/lib/dm/token-state";
+import { getActiveEncounter, getEnemy, listEnemies, patchEnemyConditions } from "@/lib/db/encounters";
+// Registers the board's landing for a flyer the condition grounds
+// (db/flight-watch.ts), which this module's writes call on.
+import "@/lib/dm/token-state";
 import { activePublicEncounter } from "@/lib/db/encounter-view";
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
 import { dominatedByFoe } from "@/lib/dm/companion-command";
@@ -412,11 +414,6 @@ export function handleSetCondition(
     conditionMeta: nextMeta,
   });
   publishSheet(campaign, sheet.id);
-  // A flyer knocked prone or held to a speed of 0 falls (token-state.ts).
-  const board = getActiveBoard(campaign.id);
-  if (board) {
-    landTheFlightless(campaign, board.id);
-  }
   // A Dominate spell from the other side takes the character: the DM plays
   // it until the charm ends, and the table is told (combat-sides.ts).
   const held = getSheetById(sheet.id);
