@@ -195,12 +195,17 @@ computer, create the admin account, and the **guided setup** finds what is
 running on the machine and walks through the storyteller, pictures, voice,
 players and your own agent, one question at a time.
 
-With Docker instead:
+With Docker instead, in a folder of its own:
 
 ```bash
+mkdir open-game-master && cd open-game-master
 curl -O https://raw.githubusercontent.com/Lebbitheplow/open-game-master/stable/docker-compose.yml
-docker compose up -d        # http://localhost:3005
+docker compose up -d
+docker compose logs         # open the setup link it prints
 ```
+
+The link creates the admin account and starts the same guided setup
+([Run with Docker](docs/docker.md): Windows, your model server, backing up the key).
 
 Both follow the stable releases. Nightly betas, and how a beta becomes stable:
 [docs/releases.md](docs/releases.md).

@@ -192,6 +192,39 @@ test("a device world's register door sends a stranger to the app, never to a log
   }
 });
 
+test("a Docker install is told where its log is, and its link names the host port it is published on", () => {
+  const fresh = fs.mkdtempSync(path.join(os.tmpdir(), "odm-setup-code-docker-"));
+  try {
+    const marker = path.join(fresh, ".dockerenv");
+    fs.writeFileSync(marker, "");
+    const script = `
+      const { register } = await import("node:module");
+      register("./lib/register-alias.mjs", ${JSON.stringify(new URL(".", import.meta.url).href)});
+      const m = await import(${JSON.stringify(new URL("../src/lib/setup-code.ts", import.meta.url).href)});
+      const { GET } = await import(${JSON.stringify(new URL("../src/app/api/auth/providers/route.ts", import.meta.url).href)});
+      const lines = [];
+      m.announceSetupCode((line) => lines.push(line));
+      const code = m.currentSetupCode();
+      const providers = await (await GET()).json();
+      console.log(JSON.stringify({
+        link: lines.join("\\n").includes("http://localhost:8080/?setup=" + code),
+        inDocker: m.setupCodeInDockerLog(${JSON.stringify(marker)}),
+        notDocker: m.setupCodeInDockerLog(${JSON.stringify(path.join(fresh, "missing"))}),
+        sent: typeof providers.setupCodeInDockerLog === "boolean" && providers.needsSetup === true,
+      }));
+    `;
+    const output = spawnNode(script, {
+      SQLITE_DB_PATH: path.join(fresh, "docker.sqlite"),
+      DB_ENCRYPTION_KEY: randomBytes(32).toString("hex"),
+      PORT: "3005",
+      ODM_HOST_PORT: "8080",
+    });
+    assert.deepEqual(JSON.parse(output), { link: true, inDocker: true, notDocker: false, sent: true });
+  } finally {
+    removeTempDir(fresh);
+  }
+});
+
 // A second process for each environment, since the database path and the
 // device-world flag are read once per process.
 function spawnNode(script, env) {

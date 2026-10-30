@@ -18,3 +18,5 @@ services:
       COMFYUI_URL: ${COMFYUI_URL:-http://127.0.0.1:8188}
       KOKORO_URL: ${KOKORO_URL:-http://127.0.0.1:8880}
       STT_URL: ${STT_URL:-http://127.0.0.1:8870}
+      # No published port here: the server answers on its own 3005.
+      ODM_HOST_PORT: "3005"
