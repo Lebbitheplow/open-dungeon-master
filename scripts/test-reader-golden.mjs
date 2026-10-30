@@ -31,6 +31,7 @@ const WRITE = process.argv.includes("--write");
 const { readEntry } = await import("../src/lib/content/entry-reading.ts");
 const { READING_KINDS, reading, readingId, readingIsBestEffort } = await import("../src/lib/content/reading-logic.ts");
 const { getContentDb } = await import("../src/lib/content/db.ts");
+const { readingRowOf } = await import("./lib/pack-readings.mjs");
 
 const fixture = (kind) => new URL(`./fixtures/reader-golden/${kind}.json`, import.meta.url);
 const checkedFile = new URL("../src/lib/content/checked-readings.json", import.meta.url);
@@ -44,15 +45,9 @@ function countPack(db) {
   for (const kind of READING_KINDS) {
     const tally = { entries: 0, "hand-written": 0, parsed: 0, missing: 0, "with unread": 0, unread: {} };
     for (const raw of db.prepare(`SELECT * FROM ${TABLES[kind]} ORDER BY document_slug, slug`).all()) {
-      const entry = readEntry(kind, {
-        slug: raw.slug,
-        name: raw.name,
-        documentSlug: raw.document_slug,
-        data: JSON.parse(raw.data_json),
-        aliases: raw.aliases_csv ? String(raw.aliases_csv).split(/[|,]/).filter(Boolean) : [],
-        cr: raw.cr ?? null,
-        classSlug: raw.class_slug ?? null,
-      });
+      // Each row as the pack build reads it (a Level Up spell's terms in
+      // 2014 words), so the count is the stored readings'.
+      const entry = readEntry(kind, readingRowOf(kind, raw));
       tally.entries += 1;
       tally[entry.source] += 1;
       if (entry.unread.length) {

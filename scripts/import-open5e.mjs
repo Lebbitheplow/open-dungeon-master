@@ -720,6 +720,14 @@ async function main() {
   if (leaked.length) {
     throw new Error(`2024 rows reached the pack (${leaked.join(", ")})`);
   }
+  // Every reader run once over every row, its answer stored beside the row
+  // (issue #570): what the server plays, lists and compares between packs.
+  console.log("\nreadings...");
+  const { writeReadings } = await import("./lib/pack-readings.mjs");
+  for (const [kind, tally] of Object.entries(writeReadings(db))) {
+    const read = kind === "item" ? "" : `, ${tally["hand-written"]} hand-written, ${tally.parsed} parsed, ${tally.missing} missing`;
+    console.log(`  ${kind}: ${tally.rows} rows${read}, ${tally.needs} needing rules the engine lacks`);
+  }
   db.pragma(`user_version = ${PACK_REVISION}`);
 
   console.log("\nImport complete:");
