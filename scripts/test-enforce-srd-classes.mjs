@@ -541,12 +541,8 @@ const archdruid = world.addHero({
 // material with no cost.
 world.patch(archdruid.id, { equipment: [] });
 
-await gap("CLS-27", {
-  rule: "SRD 5.1 druid, Archdruid: \"you can ignore the verbal and somatic components of your druid spells, as well as any material components that lack a cost and aren't consumed by a spell.\"",
-  where: "src/lib/dm/cast-materials.ts focusProblem and src/lib/dm/cast-rules.ts (no reader of Archdruid's component part)",
-  severity: "low",
-  note: "Goodberry's sprig of mistletoe has no cost and is not consumed.",
-}, async () => {
+// SRD 5.1 druid, Archdruid: "you can ignore the verbal and somatic components of your druid spells, as well as any material components that lack a cost and aren't consumed by a spell."
+await test("CLS-27", async () => {
   await kit.endFight();
   const out = await world.invoke("use_spell_slot", { characterId: archdruid.id, spell: "Goodberry", level: 1 });
   assert.equal(out.ok, true, `a 20th level druid with no focus was refused goodberry: ${out.error}`);
@@ -566,26 +562,31 @@ const chainlock = world.addHero({
 pick(chainlock, ["Invocation: Armor of Shadows", "Invocation: Thief of Five Fates"]);
 world.patch(chainlock.id, { xp: 355000 });
 
-await gap("CLS-17", {
-  rule: "SRD 5.1 warlock, Eldritch Invocations, Armor of Shadows: \"You can cast mage armor on yourself at will, without expending a spell slot or material components.\" (and the other at-will invocations: Fiendish Vigor, Mask of Many Faces, Misty Visions, Beast Speech, Eldritch Sight, Ascendant Step, Otherworldly Leap...)",
-  where: "src/lib/dm/cast-guard.ts (the known-spell check) and src/lib/srd/feat-spells.ts (free casts exist for feats only)",
-  severity: "medium",
-}, async () => {
+// SRD 5.1 warlock, Eldritch Invocations, Armor of Shadows: "You can cast mage armor on yourself at will, without expending a spell slot or material components." (and the other at-will invocations: Fiendish Vigor, Mask of Many Faces, Misty Visions, Beast Speech, Eldritch Sight, Ascendant Step, Otherworldly Leap...)
+await test("CLS-17", async () => {
   await kit.endFight();
   world.patch(tomelock.id, { spellcasting: { ...world.sheet(tomelock.id).spellcasting, slots: { 1: { max: 2, used: 2 } } } });
+  // On an ally it is refused: the invocation casts it on the warlock alone.
+  const onAlly = await world.invoke("cast_buff", { characterId: tomelock.id, spell: "Mage Armor", targetCharacterIds: [smiter.id] });
   const out = await world.invoke("cast_buff", { characterId: tomelock.id, spell: "Mage Armor", targetCharacterId: tomelock.id });
+  const after = world.sheet(tomelock.id);
   world.patch(tomelock.id, { spellcasting: { ...world.sheet(tomelock.id).spellcasting, slots: slotsOf("warlock", 2) } });
   assert.equal(out.ok, true, `mage armor at will was refused: ${out.error}`);
+  assert.equal(after.spellcasting.slots["1"].used, 2, "the at-will mage armor spent a slot");
+  assert.ok(after.conditions.some((name) => /mage armor/i.test(name)), `mage armor did not land: ${after.conditions.join(", ")}`);
+  assert.match(String(onAlly.error), /on themselves only/, `Armor of Shadows on an ally: ${onAlly.error ?? "cast"}`);
+  assert.ok(!world.sheet(smiter.id).conditions.some((name) => /mage armor/i.test(name)), "the ally holds the warlock's mage armor");
 });
 
-await gap("CLS-18", {
-  rule: "SRD 5.1 warlock, Eldritch Invocations, Thief of Five Fates: \"You can cast bane once using a warlock spell slot. You can't do so again until you finish a long rest.\" (and Bewitching Whispers, Dreadful Word, Minions of Chaos, Mire the Mind, Sculptor of Flesh, Sign of Ill Omen)",
-  where: "src/lib/dm/cast-guard.ts (the known-spell check) and src/lib/srd/class-resources.ts (no once-a-day counter for these invocations)",
-  severity: "medium",
-}, async () => {
+// SRD 5.1 warlock, Eldritch Invocations, Thief of Five Fates: "You can cast bane once using a warlock spell slot. You can't do so again until you finish a long rest." (and Bewitching Whispers, Dreadful Word, Minions of Chaos, Mire the Mind, Sculptor of Flesh, Sign of Ill Omen)
+await test("CLS-18", async () => {
   await kit.endFight();
   const out = await world.invoke("use_spell_slot", { characterId: tomelock.id, spell: "Bane", level: 1 });
   assert.equal(out.ok, true, `bane through Thief of Five Fates was refused: ${out.error}`);
+  assert.equal(world.sheet(tomelock.id).spellcasting.slots["1"].used, 1, "the warlock slot was not spent");
+  const again = await world.invoke("use_spell_slot", { characterId: tomelock.id, spell: "Bane", level: 1 });
+  world.patch(tomelock.id, { spellcasting: { ...world.sheet(tomelock.id).spellcasting, slots: slotsOf("warlock", 2) } });
+  assert.equal(again.refused, "rules", "bane was cast twice through Thief of Five Fates before a long rest");
 });
 
 // SRD 5.1 warlock, Pact Boon, Pact of the Tome: "choose three cantrips from any class's spell list ... They don't count against your number of cantrips known. If they don't appear on the warlock spell list, they are nonetheless warlock spells for you."
@@ -654,12 +655,8 @@ const highElf = world.addHero({
   spellcasting: { ability: "wis", slots: slotsOf("cleric", 1), prepared: [], known: [], cantrips: ["Sacred Flame", "Guidance", "Light", "Fire Bolt"] },
 });
 
-await gap("CLS-23", {
-  rule: "SRD 5.1 tiefling, Infernal Legacy: \"When you reach 3rd level, you can cast the hellish rebuke spell as a 2nd-level spell once with this trait and regain the ability to do so when you finish a long rest. ... Charisma is your spellcasting ability for these spells.\"",
-  where: "src/lib/dm/reaction-tools.ts and src/lib/dm/cast-guard.ts (no reader of the racial_hellish_rebuke counter; src/lib/srd/racial-grants.ts innateSpellAbility is unused)",
-  severity: "medium",
-  note: "The sheet carries the racial_hellish_rebuke counter, but a tiefling fighter is refused: no Spellcasting feature.",
-}, async () => {
+// SRD 5.1 tiefling, Infernal Legacy: "When you reach 3rd level, you can cast the hellish rebuke spell as a 2nd-level spell once with this trait and regain the ability to do so when you finish a long rest. ... Charisma is your spellcasting ability for these spells."
+await test("CLS-23", async () => {
   const enemy = await duel(smiter);
   kit.place(tiefling.id, 5, 5);
   kit.place(enemy.id, 5, 6);
@@ -672,14 +669,13 @@ await gap("CLS-23", {
   const out = await world.invoke("use_reaction", { characterId: tiefling.id, feature: "Hellish Rebuke", targetEnemyId: enemy.id });
   world.clearDice();
   assert.equal(out.ok, true, `the tiefling's Infernal Legacy rebuke was refused: ${out.error}`);
+  // As a 2nd-level spell: 3d10 (5 + 5 + 5) on the failed save.
+  assert.equal(200 - kit.enemy(enemy.id).currentHp, 15, `the rebuke dealt ${200 - kit.enemy(enemy.id).currentHp}, not 3d10`);
+  assert.deepEqual(world.sheet(tiefling.id).resources.racial_hellish_rebuke, { max: 1, used: 1 }, "the racial use was not spent");
 });
 
-await gap("CLS-24", {
-  rule: "SRD 5.1 elf, High Elf, Cantrip: \"You know one cantrip of your choice from the wizard spell list. Intelligence is your spellcasting ability for it.\"",
-  where: "src/lib/dm/pc-attack-profile.ts (a spell attack takes the sheet's spellcasting ability) and src/lib/srd/racial-grants.ts",
-  severity: "medium",
-  note: "A high elf cleric with Intelligence 18 and Wisdom 10 rolls the racial Fire Bolt at +2, not +6.",
-}, async () => {
+// SRD 5.1 elf, High Elf, Cantrip: "You know one cantrip of your choice from the wizard spell list. Intelligence is your spellcasting ability for it."
+await test("CLS-24", async () => {
   const enemy = await duel(highElf);
   // Out of reach, so the ranged spell attack has no disadvantage.
   kit.place(enemy.id, 4, 9);

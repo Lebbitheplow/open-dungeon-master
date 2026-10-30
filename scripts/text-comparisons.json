@@ -1176,7 +1176,7 @@
     "lib/dm/cast-materials.ts#toLowerCase": [["key",1,"class id"],["table-language",1,"meaning reader: a material line (pack rows, homebrew spells' free text) and inventory item names compared word by word, in English"]],
     "lib/dm/cast-materials.ts#toUpperCase": [["display",1,"capitalised word"]],
     "lib/dm/cast-rules.ts#re-word": [["key",1,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
-    "lib/dm/cast-rules.ts#str-eq": [["key",15,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
+    "lib/dm/cast-rules.ts#str-eq": [["key",16,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/cast-rules.ts#str-list": [["key",4,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/cast-rules.ts#toLowerCase": [["key",7,"class id; condition label (engine vocabulary)"]],
     "lib/dm/cast-slot-choice.ts#\\b": [["key",2,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],

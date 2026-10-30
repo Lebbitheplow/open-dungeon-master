@@ -9,6 +9,7 @@ import { COMBAT_RESOURCE_DEFS } from "@/lib/srd/combat-rows";
 import customResourcesJson from "@/lib/classes/resources.json";
 import authoredResourcesJson from "@/lib/srd/authored-resources.json";
 import { innateSpellCounterRows } from "@/lib/srd/racial-grants";
+import { INVOCATION_COUNTER_PREFIX, invocationCounters, invocationOfCounter } from "@/lib/srd/granted-casts";
 import { freeCastOf, freeCastResourceId, freeCastSpellOf, isFreeCastResource } from "@/lib/srd/feat-spells";
 import { LATE_RESOURCE_DEFS } from "@/lib/srd/class-resources-late";
 import { UNLIMITED_USES } from "@/lib/srd/resource-limits";
@@ -775,6 +776,12 @@ export function resourceDef(id: string): ResourceDef | null {
   if (isFreeCastResource(id)) {
     return freeCastDef(id);
   }
+  if (id.startsWith(INVOCATION_COUNTER_PREFIX)) {
+    const row = invocationOfCounter(id);
+    if (row) {
+      return invocationCastDef(id, row.invocation, row.spell);
+    }
+  }
   return RESOURCE_DEFS.find((def) => def.id === id) ?? null;
 }
 
@@ -790,6 +797,20 @@ function freeCastDef(id: string): ResourceDef {
     recharge: "long",
     effect: { kind: "narrative" },
     guidance: `${spell} once without a spell slot, at its own level, and again after a long rest; the cast tool spends this use itself when the spell is cast, so use_resource is not needed. With a slot of its level or higher it can also be cast as usual.`,
+  };
+}
+
+// The counter of an invocation that casts its spell once a long rest with a
+// warlock slot (Thief of Five Fates' bane, src/lib/srd/granted-casts.ts).
+function invocationCastDef(id: string, invocation: string, spell: string): ResourceDef {
+  return {
+    id,
+    match: [],
+    displayName: `${spell} (${invocation})`,
+    maxFor: () => 1,
+    recharge: "long",
+    effect: { kind: "narrative" },
+    guidance: `${spell} once through ${invocation} with a warlock spell slot, and again after a long rest; the cast tool spends this use itself when the spell is cast, so use_resource is not needed.`,
   };
 }
 
@@ -959,6 +980,10 @@ export function populateResources(
       const id = freeCastResourceId(free.spell);
       out[id] = { max: 1, used: Math.min(existing?.[id]?.used ?? 0, 1) };
     }
+  }
+  // An invocation that casts its spell once a long rest (granted-casts.ts).
+  for (const counter of invocationCounters(features)) {
+    out[counter.id] = { max: 1, used: Math.min(existing?.[counter.id]?.used ?? 0, 1) };
   }
   // Inspiration belongs to no feature: the DM awarded it, and it stays until
   // it is spent.

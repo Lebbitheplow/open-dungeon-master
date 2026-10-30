@@ -17,6 +17,7 @@ import { effectiveAbilities, magicItemRiders } from "@/lib/srd/magic-items";
 import { encumbranceFor } from "@/lib/srd/encumbrance";
 import { allSpellNames } from "@/lib/srd/spell-lists";
 import { hpBonusPerLevel, speciesRulesFor, type SpeciesRules } from "@/lib/srd/race-id";
+import { racialSpellAbility } from "@/lib/srd/racial-grants";
 import { isThirdCaster, thirdCasterSlots } from "@/lib/srd/third-caster";
 import type {
   Ability,
@@ -588,6 +589,17 @@ function casterEntryForSpell(
 }
 
 type DerivedSheet = Parameters<typeof computeSheetDerived>[0];
+// The fields a race's spell reads, which a full sheet carries.
+type RacialSheet = Parameters<typeof racialSpellAbility>[0];
+
+// Whether the class's levelled lists hold the spell (a race's cantrips sit
+// on the cantrip list, and are the race's).
+function classListsHold(casting: DerivedSheet["spellcasting"], spell: string): boolean {
+  const wanted = textKey(spell);
+  return [casting, ...(casting?.casters ?? [])].some((entry) =>
+    [...(entry?.known ?? []), ...(entry?.prepared ?? [])].some((name) => textKey(name) === wanted),
+  );
+}
 export type CastingSheet<T extends DerivedSheet = DerivedSheet> = T & { spellcasting: NonNullable<T["spellcasting"]> };
 
 // A sheet with spellcasting, which always has a save DC (its ability is
@@ -612,6 +624,12 @@ export function spellSaveDcFor(
     return fromItem;
   }
   const derived = computeSheetDerived(sheet);
+  // A race's spell is cast with the ability the race names, caster or not
+  // (SRD 5.1, Infernal Legacy; High Elf, Cantrip).
+  const racial = racialSpellAbility(sheet as RacialSheet, spellName, classListsHold(sheet.spellcasting, spellName));
+  if (racial) {
+    return 8 + derived.proficiencyBonus + derived.abilityMods[racial];
+  }
   if (!sheet.spellcasting) {
     return derived.spellSaveDc;
   }
@@ -634,6 +652,10 @@ export function spellAttackFor(
     return fromItem;
   }
   const derived = computeSheetDerived(sheet);
+  const racial = racialSpellAbility(sheet as RacialSheet, spellName, classListsHold(sheet.spellcasting, spellName));
+  if (racial) {
+    return derived.proficiencyBonus + derived.abilityMods[racial];
+  }
   if (!sheet.spellcasting) {
     return derived.spellAttack;
   }

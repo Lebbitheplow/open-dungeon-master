@@ -26,6 +26,8 @@ import { textKey } from "@/lib/language/text-logic";
 import { hasItemTag } from "@/lib/srd/item-tags";
 import { holdsFeature, isConditionNamed } from "@/lib/srd/feature-names";
 import { pactRitualOf } from "@/lib/srd/class-spell-grants";
+import { grantedCastFor, type GrantedCast } from "@/lib/srd/granted-casts";
+import type { RacialCantripChoices } from "@/lib/srd/racial-cantrips";
 
 export type CastRefusal = ToolError;
 
@@ -46,7 +48,13 @@ type Caster = Pick<
   | "wildShape"
   | "gold"
   | "copper"
->;
+> & {
+  // An invocation's or a race's cast (src/lib/srd/granted-casts.ts) reads
+  // these; a sheet always carries them.
+  race?: string;
+  racialChoices?: RacialCantripChoices;
+  resources?: CharacterSheet["resources"];
+};
 
 // A spell's names, compared whole: as written, the content's name and its
 // aliases.
@@ -84,10 +92,15 @@ export function spellHeldProblem(
   options: { ritual?: boolean; extras?: SubclassExtras } = {},
 ): ToolError | null {
   const casting = sheet.spellcasting;
-  if (!casting) {
-    return { error: `${sheet.name} has no Spellcasting feature and cannot cast spells.`, refused: "rules" };
-  }
   const names = namesOf(spell, facts);
+  if (!casting) {
+    // A tiefling fighter's Infernal Legacy is cast with no Spellcasting
+    // feature at all (granted-casts.ts).
+    const grant = options.ritual ? null : grantedCastFor(grantSheet(sheet), names);
+    return grant
+      ? grantUseProblem(sheet, grant, facts?.name ?? spell)
+      : { error: `${sheet.name} has no Spellcasting feature and cannot cast spells.`, refused: "rules" };
+  }
   const views = casterViewsOf(sheet);
   // A ritual is cast through the class (or book) that holds it, and only a
   // ritual caster's hold counts: a sorcerer's known ritual on a
@@ -106,6 +119,12 @@ export function spellHeldProblem(
   if (views.some((view) => hasName(subclassSpellsFor(view.classId, view.subclass, view.level, options.extras, view.features), names))) {
     return null;
   }
+  // An invocation's spell (Armor of Shadows' mage armor) or a race's
+  // (Infernal Legacy's hellish rebuke), which no list holds.
+  const grant = options.ritual ? null : grantedCastFor(grantSheet(sheet), names);
+  if (grant) {
+    return grantUseProblem(sheet, grant, facts?.name ?? spell);
+  }
   const ready = [...new Set(lists.flatMap((entry) => [...(entry.cantrips ?? []), ...entry.known, ...entry.prepared]))];
   // A spell the rules know that the caster lacks is the game saying no; a
   // name nobody knows (a typo, another language) is the call's to fix.
@@ -121,6 +140,67 @@ export function spellHeldProblem(
           error: `No spell called "${spell}" is known. ${sheet.name} knows or has prepared ${ready.join(", ") || "no spells"}: send the one meant, by the name on the sheet.`,
           retry: true,
         })
+  );
+}
+
+// ---- a spell an invocation or a race casts ----
+
+function grantSheet(sheet: Caster) {
+  return { race: sheet.race ?? "", level: sheet.level, features: sheet.features, racialChoices: sheet.racialChoices };
+}
+
+// Whether the class's own lists (or its subclass's always-prepared spells)
+// hold the spell: then it is cast as a class spell, with a slot.
+function classHolds(sheet: Caster, names: Set<string>, extras?: SubclassExtras): boolean {
+  const casting = sheet.spellcasting;
+  if (!casting) {
+    return false;
+  }
+  if ([casting, ...(casting.casters ?? [])].some((entry) => hasName([...(entry.cantrips ?? []), ...entry.known, ...entry.prepared], names))) {
+    return true;
+  }
+  return casterViewsOf(sheet).some((view) => hasName(subclassSpellsFor(view.classId, view.subclass, view.level, extras, view.features), names));
+}
+
+// The invocation or racial trait the spell is cast through, when the class's
+// lists do not hold it (src/lib/srd/granted-casts.ts), or null.
+export function grantedCastOf(sheet: Caster, spell: string, facts: SpellFacts | null, extras?: SubclassExtras): GrantedCast | null {
+  const names = namesOf(spell, facts);
+  return classHolds(sheet, names, extras) ? null : grantedCastFor(grantSheet(sheet), names);
+}
+
+// A once-a-long-rest grant whose use is spent: Infernal Legacy's hellish
+// rebuke cast today, Thief of Five Fates' bane. A counter the sheet does not
+// carry yet has its use.
+function grantUseProblem(sheet: Caster, grant: GrantedCast, spell: string): ToolError | null {
+  const state = grant.counter ? sheet.resources?.[grant.counter] : undefined;
+  if (state && state.used >= state.max) {
+    return { error: `${sheet.name} casts ${spell} through ${grant.source} once, and again after a long rest; that use is spent.`, refused: "rules" };
+  }
+  return null;
+}
+
+// The components as this caster casts the spell: an invocation that casts
+// "without ... material components" needs none, and an Archdruid ignores
+// the verbal and somatic components of their druid spells and a material
+// that has no cost and is not consumed (SRD 5.1, druid, Archdruid).
+export function componentsAsCast(sheet: Caster, facts: SpellFacts | null, grant: GrantedCast | null, extras?: SubclassExtras): SpellFacts | null {
+  if (!facts) {
+    return facts;
+  }
+  let cast = grant?.noMaterial ? { ...facts, material: false } : facts;
+  if (!grant && holdsFeature(sheet, "Archdruid") && druidHolds(sheet, namesOf(facts.name, facts), extras)) {
+    cast = { ...cast, verbal: false, somatic: false, material: cast.material && (Boolean(cast.materialCostGp) || cast.materialConsumed) };
+  }
+  return cast;
+}
+
+// The druid's own lists hold the spell (a druid spell of theirs).
+function druidHolds(sheet: Caster, names: Set<string>, extras?: SubclassExtras): boolean {
+  return casterViewsOf(sheet).some(
+    (view) =>
+      textKey(view.classId) === "druid" &&
+      hasName([...view.cantrips, ...view.known, ...view.prepared, ...subclassSpellsFor(view.classId, view.subclass, view.level, extras, view.features)], names),
   );
 }
 
@@ -298,9 +378,11 @@ export function slotPlan(
   // slots are the fallback in both directions.
   const pact = casting?.pact;
   const warlock = casting?.casters?.find((caster) => caster.classId.trim().toLowerCase() === "warlock");
+  // An invocation's once-a-rest spell is cast "using a warlock spell slot".
   const onWarlockList =
     !spell ||
-    Boolean(warlock && hasName([...(warlock.cantrips ?? []), ...warlock.known, ...warlock.prepared], names));
+    Boolean(warlock && hasName([...(warlock.cantrips ?? []), ...warlock.known, ...warlock.prepared], names)) ||
+    grantedCastFor(grantSheet(sheet), names)?.slot === "slot";
   const pactFree = Boolean(pact && pact.level === level && pact.used < pact.max);
   if (pact && pactFree && onWarlockList) {
     return { kind: "pact", level, state: { max: pact.max, used: pact.used + 1 } };

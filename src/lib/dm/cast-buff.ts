@@ -47,6 +47,7 @@ import { holdingHint, noneNamed, type ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
 import { nameChoice } from "@/lib/srd/feature-names";
 import { castsSpells } from "@/lib/srd";
+import { grantedCastOf } from "@/lib/dm/cast-rules";
 
 // Temporary hit points a chosen variant grants on top of its condition.
 const VARIANT_TEMP_HP: Record<string, string> = {
@@ -260,6 +261,15 @@ export function handleCastBuff(
     if (!targetSheets.length && !targetRows.length) {
       targetSheets.push(sheet);
     }
+  }
+  // SRD 5.1, Armor of Shadows: "You can cast mage armor on yourself at
+  // will": an invocation's self-only spell lands on the warlock alone.
+  const selfOnly = grantedCastOf(sheet, args.spell, spellFactsFor(args.spell, authors))?.selfOnly;
+  if (selfOnly && (targetRows.length || targetSheets.some((target) => target.id !== sheet.id))) {
+    return {
+      error: `${sheet.name} casts ${resolvedMech.name} through an invocation on themselves only; another creature takes it from a slot of a spell they know. Nothing was spent.`,
+      refused: "rules",
+    };
   }
   // How many creatures one casting touches: Bless three, one more for each
   // slot level above 1st; Aid three; a single-target buff one, or one more

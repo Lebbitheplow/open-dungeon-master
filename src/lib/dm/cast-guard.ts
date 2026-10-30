@@ -56,6 +56,8 @@ import {
   turnCharge,
   withOpenCast,
   bonusCastOf,
+  componentsAsCast,
+  grantedCastOf,
   MANTLE_OF_MAJESTY,
   type BonusCast,
   type SlotPlan,
@@ -351,18 +353,26 @@ export function castSpell(
       return toolError(able);
     }
   }
+  const extras = subclassExtrasForTable(campaign.id, sheet.userId);
   const held = spellHeldProblem(sheet, spell, facts, {
     ritual: input.ritual,
-    extras: subclassExtrasForTable(campaign.id, sheet.userId),
+    extras,
   });
   if (held) {
     return held;
   }
+  // A spell an invocation or the race casts, which no class list holds
+  // (src/lib/srd/granted-casts.ts): its own slot rule, level and counter.
+  const grant = input.ritual ? null : grantedCastOf(sheet, spell, facts, extras);
+  // The components as this caster makes them: none of the material for an
+  // invocation that says so, an Archdruid's druid spells without the voice,
+  // the gestures or a free material (cast-rules.ts componentsAsCast).
+  const castFacts = componentsAsCast(sheet, facts, grant, extras);
   const state = casterStateProblem(sheet);
   if (state) {
     return state;
   }
-  const voice = componentProblem(sheet, facts) ?? focusProblem(sheet, facts) ?? silenceProblem(campaign.id, sheet.id, sheet.name, facts) ?? antimagicProblem(campaign.id, sheet.id, sheet.name);
+  const voice = componentProblem(sheet, castFacts) ?? focusProblem(sheet, castFacts) ?? silenceProblem(campaign.id, sheet.id, sheet.name, castFacts) ?? antimagicProblem(campaign.id, sheet.id, sheet.name);
   if (voice) {
     return voice;
   }
@@ -377,7 +387,7 @@ export function castSpell(
       return long;
     }
   }
-  const material = materialPlan(sheet, facts, { inFight, units: input.units, slotLevel: input.level ?? facts?.level ?? null });
+  const material = materialPlan(sheet, castFacts, { inFight, units: input.units, slotLevel: input.level ?? facts?.level ?? null });
   if ("error" in material) {
     return material;
   }
@@ -430,6 +440,8 @@ export function castSpell(
       ? { kind: "none", note: `${name} is a Signature Spell: cast at 3rd level with no slot, once until a short rest.` }
       : freeCast
         ? { kind: "none", note: `${name} is cast without a slot (a feat's free cast): once until a long rest.` }
+        : grant?.slot === "free"
+          ? { kind: "none", note: `${name} is cast through ${grant.source} with no spell slot${grant.counter ? ": once, and again after a long rest" : ", at will"}${grant.castAt ? `, as a level ${grant.castAt} spell` : ""}.` }
         : mantled
           ? { kind: "none", note: `${name} is cast through Mantle of Majesty: no slot spent.` }
         : // A slot the player marked spent by hand for this cast pays for it.
@@ -440,7 +452,8 @@ export function castSpell(
     const barred = planTurn(sheet, encounter, facts, spell, input.level ?? facts?.level ?? null, via);
     return barred && "error" in barred ? barred : slot;
   }
-  const slotLevel = slowHeld ? slowHeld.slotLevel : slot.kind === "none" ? null : slot.level;
+  // Infernal Legacy's hellish rebuke is cast as a 2nd-level spell, with no slot.
+  const slotLevel = slowHeld ? slowHeld.slotLevel : slot.kind === "none" ? (grant?.slot === "free" ? grant.castAt ?? null : null) : slot.level;
   const turn = input.ritual ? ({ kind: "free" } as const) : planTurn(sheet, encounter, facts, spell, slotLevel, via);
   if ("error" in turn) {
     return turn;
@@ -467,6 +480,13 @@ export function castSpell(
   if (freeCast) {
     patch.resources = spendSignature(sheet.resources, freeCast);
   }
+  // The grant's once-a-long-rest use (Thief of Five Fates, Infernal Legacy).
+  if (grant?.counter) {
+    patch.resources = spendSignature(patch.resources ?? sheet.resources, grant.counter);
+  }
+  if (grant) {
+    result.granted = `${name} is cast through ${grant.source}.${grant.note ? ` ${grant.note}` : ""}`;
+  }
   // Expert Divination (School of Divination 6): a divination spell of 2nd
   // level or higher cast with a slot gives back one spent slot of a lower
   // level, 5th at most.
@@ -487,6 +507,7 @@ export function castSpell(
         ...(input.ritual ? { ritual: true } : {}),
         ...(signature ? { signature, level: 3 } : {}),
         ...(freeCast ? { freeCast } : {}),
+        ...(grant ? { granted: grant.source } : {}),
       },
       patch,
     );
