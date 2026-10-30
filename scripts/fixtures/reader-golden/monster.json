@@ -302,7 +302,7 @@
     },
     {
       "id": "monster:wotc-srd/frog",
-      "why": "a block with no attacks is still read: armor, hit points, scores",
+      "why": "a block with no attacks is still read: armor, hit points, scores; and a CR 0 creature with no attack is worth 0 XP, as the SRD's Experience Points table allows (MON-09)",
       "row": {
         "slug": "frog",
         "name": "Frog",
@@ -389,7 +389,7 @@
           "vulnerable": "",
           "conditionImmune": "",
           "cr": 0,
-          "xp": 10,
+          "xp": 0,
           "attacksPerTurn": 1,
           "size": "Tiny",
           "type": "beast",
