@@ -155,7 +155,8 @@ function authoredRow(spell: AuthoredSpell): RawSpellRow {
 function srdRange(row: RawSpellRow, listed: ReturnType<typeof checklistSpell>): Record<string, unknown> {
   const printed = typeof listed?.range === "string" ? listed.range : "";
   const own = rangeFrom(row.data.range);
-  return own.kind === "self" && !own.areaFeet && rangeFrom(printed).areaFeet ? { range: printed } : {};
+  const listedRange = rangeFrom(printed);
+  return own.kind === "self" && !own.areaFeet && listedRange.kind === "self" && listedRange.areaFeet ? { range: printed } : {};
 }
 
 function corrected(row: RawSpellRow): RawSpellRow {
