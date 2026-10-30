@@ -113,12 +113,19 @@ function ContentBody({ reference }: { reference: ContentRef }) {
     async function load() {
       try {
         const { describeContentEntry } = await import("@/lib/help");
+        const { needsNote } = await import("@/lib/content/levelup-logic");
+        // An entry built on rules this game does not play says so first
+        // (issue #570).
+        const withNote = (entry: { needs?: Parameters<typeof needsNote>[0] } | undefined, text: string | null) => {
+          const note = needsNote(entry?.needs ?? []);
+          return text && note ? `${note}\n\n${text}` : text;
+        };
         const response = await fetch(
           `/api/content/${reference.kind}/${encodeURIComponent(reference.slug)}${scopeQuery(campaignId)}`,
         );
         if (response.ok) {
           const data = await response.json();
-          const text = describeContentEntry(data?.entry?.data);
+          const text = withNote(data?.entry, describeContentEntry(data?.entry?.data));
           if (text) {
             if (!cancelled) {
               setState({ text, loading: false });
@@ -137,7 +144,7 @@ function ContentBody({ reference }: { reference: ContentRef }) {
           (entry: { name: string }) => textKey(entry.name) === wanted,
         );
         if (!cancelled) {
-          setState({ text: describeContentEntry(hit?.data), loading: false });
+          setState({ text: withNote(hit, describeContentEntry(hit?.data)), loading: false });
         }
       } catch {
         if (!cancelled) {

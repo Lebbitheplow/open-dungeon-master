@@ -1,5 +1,7 @@
 "use client";
 
+import { needsLabel, offeredInPlay } from "@/lib/content/levelup-logic";
+import type { Need } from "@/lib/content/needs-logic";
 import { GameIcon } from "@/components/ui/GameIcon";
 
 // What a reference result is, at a glance: its kind, its level or rarity or
@@ -10,6 +12,8 @@ import { GameIcon } from "@/components/ui/GameIcon";
 export type BadgeRow = {
   source: string;
   documentSlug?: string;
+  // Rules the entry uses that this game does not play (issue #570).
+  needs?: Need[];
   data: Record<string, unknown>;
   level?: number;
   school?: string;
@@ -71,6 +75,12 @@ export function badgesFor(category: string, row: BadgeRow): Badge[] {
     if (cr) badges.push({ key: "cr", text: `CR ${cr}`, tone: "red" });
     const type = text(row.data.type);
     if (type) badges.push({ key: "type", text: type.toLowerCase(), tone: "neutral" });
+  }
+  const needs = needsLabel(row.needs ?? []);
+  if (needs) {
+    // Orange where it is not offered for play, neutral where the GM plays
+    // the part this game lacks (src/lib/content/levelup-logic.ts).
+    badges.push({ key: "needs", text: needs, tone: offeredInPlay(row.needs ?? []) ? "neutral" : "orange" });
   }
   if (row.source === "homebrew") {
     badges.push({ key: "source", text: "homebrew", tone: "gold" });

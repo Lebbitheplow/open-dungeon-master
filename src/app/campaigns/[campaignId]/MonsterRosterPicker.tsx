@@ -51,7 +51,9 @@ export function MonsterRosterPicker({
         return;
       }
       setLoading(true);
-      fetch(`/api/campaigns/${campaignId}/dm/bestiary?q=${encodeURIComponent(term)}`)
+      // play=1: the roster puts monsters into a fight, so it is not offered
+      // the ones built on rules this game does not play (issue #570).
+      fetch(`/api/campaigns/${campaignId}/dm/bestiary?q=${encodeURIComponent(term)}&play=1`)
         .then((response) => (response.ok ? response.json() : null))
         .then(
           (
