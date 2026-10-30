@@ -237,15 +237,8 @@ await test("inspiration / Gaining Inspiration: you either have inspiration or yo
   assert.equal(held.max - held.used, 1, `two awards hold ${held.max - held.used}`);
 });
 
-await gap(
-  "ADV-10",
-  {
-    rule:
-      "inspiration / Using Inspiration: \"if you have inspiration, you can reward another player ... you can give up your inspiration to give that character inspiration.\" Passing it spends the giver's and gives the other character one",
-    where: "src/lib/dm/set-condition.ts awardInspiration (an award from sourceCharacterId leaves the giver holding theirs; no route or tool passes one on)",
-    severity: "low",
-    note: "The shape asserted here, set_condition inspiration with sourceCharacterId as the giver, uses an argument the tool already has; any route that spends the giver's and awards the receiver closes it.",
-  },
+await test(
+  "ADV-10: inspiration / Using Inspiration: \"if you have inspiration, you can reward another player ... you can give up your inspiration to give that character inspiration.\" Passing it spends the giver's and gives the other character one",
   async () => {
     need(world.sheet(scout.id).resources.inspiration.used === 0, "the giver holds no Inspiration");
     const passed = await world.invoke("set_condition", { characterId: helper.id, condition: "inspiration", sourceCharacterId: scout.id, reason: "for the rescue" });
@@ -255,6 +248,11 @@ await gap(
     assert.equal(passed.ok, true, passed.error);
     assert.equal(receiver ? receiver.max - receiver.used : 0, 1, "the receiver holds no Inspiration");
     assert.equal(giver.max - giver.used, 0, "the giver kept their Inspiration after giving it away");
+    // Only one who has it can give it up.
+    world.patch(helper.id, { resources: { ...world.sheet(helper.id).resources, inspiration: { max: 1, used: 1 } } });
+    const empty = await world.invoke("set_condition", { characterId: helper.id, condition: "inspiration", sourceCharacterId: scout.id, reason: "again" });
+    assert.equal(empty.ok, false, "a giver with no Inspiration passed one on");
+    assert.equal(world.sheet(helper.id).resources.inspiration.used, 1, "a refused pass still gave the receiver Inspiration");
   },
 );
 
