@@ -11,7 +11,7 @@
 // The cast guard calls casterCost once the spend has gone through.
 
 import type { Campaign } from "@/lib/db/campaigns";
-import { createDmTurn, saveDmTurn } from "@/lib/db/dm-turns";
+import { closeStandInTurn, openStandInTurn } from "@/lib/db/dm-turns";
 import { getSheetById } from "@/lib/db/sheets";
 import { rollCharacterSave } from "@/lib/dm/forced-save";
 import { applyPcDamage } from "@/lib/dm/pc-damage";
@@ -29,7 +29,7 @@ export function casterCost(campaign: Campaign, sheet: CharacterSheet, spell: str
   if (textKey(spell) !== "contact other plane") {
     return {};
   }
-  const turn = createDmTurn(campaign.id, [], "human_dm");
+  const turn = openStandInTurn(campaign.id);
   try {
     const save = rollCharacterSave(campaign, turn, sheet, "int", 15, `INT save against ${named}`);
     if (save.success) {
@@ -43,7 +43,6 @@ export function casterCost(campaign: Campaign, sheet: CharacterSheet, spell: str
     }
     return { casterCost: `${sheet.name} fails the INT save (${save.total} against DC 15), takes ${amount} psychic damage and is insane until a long rest: no actions, no understanding, only gibberish.` };
   } finally {
-    turn.status = "done";
-    saveDmTurn(turn);
+    closeStandInTurn(turn);
   }
 }

@@ -13,7 +13,7 @@ import { fakeModel, reply, settleQueue } from "./lib/enforce-narrator.mjs";
 
 const { getDatabase } = await import("../src/lib/db/core.ts");
 const { createDmTurn, getDmTurn, saveDmTurn } = await import("../src/lib/db/dm-turns.ts");
-const { insertSheetAudit } = await import("../src/lib/db/sheet-audit.ts");
+const { insertSheetAudit, listRecentAudit } = await import("../src/lib/db/sheet-audit.ts");
 const campaigns = await import("../src/lib/db/campaigns.ts");
 const messages = await import("../src/lib/db/messages.ts");
 const ledger = await import("../src/lib/db/turn-ledger.ts");
@@ -149,6 +149,39 @@ await test("revert-turn refuses a turn this table never played: the made-up \"cl
   assert.equal(world.sheet(hero.id).currentHp, 6, "a made-up turn was reverted");
   assert.equal(world.sheet(hero.id).gold, 4, "a made-up turn was reverted");
   assert.equal(rows(world.campaignId).length, before);
+});
+
+// Issue #622: the die a roll spends is written down in the hands that threw
+// it. Every spend once read as the GM's, a player's own roll included.
+await test("a die spent on a player's own roll is the player's, and its undo is nobody's AI fix; one the AI's turn spends is the AI's", async () => {
+  const { invokeEngine } = await import("../src/lib/dm/invoke.ts");
+  const rollsRoute = await world.route("campaigns/[campaignId]/rolls");
+  const spentRow = () => listRecentAudit(world.campaignId, 10).filter((row) => row.kind === "use_resource").at(-1);
+  world.patch(hero.id, { conditions: ["bardic inspiration (d6)"], conditionMeta: {} });
+  world.signIn(world.owner);
+  const rolled = await call(rollsRoute, "POST", { campaignId: world.campaignId }, { kind: "ability_check", ability: "str", characterId: hero.id });
+  assert.ok(rolled.status < 300, await rolled.clone().text());
+  const own = spentRow();
+  assert.ok(own, "the spent die was not written down");
+  assert.deepEqual({ actor: own.actor, turnId: own.turnId }, { actor: "player", turnId: null });
+  const before = rows(world.campaignId).length;
+  const undone = await call(undoRoute, "POST", { campaignId: world.campaignId, entryId: own.id }, {});
+  assert.equal(undone.status, 200, await undone.clone().text());
+  assert.equal(rows(world.campaignId).length, before, "a player's own spend, undone, was counted as fixing the AI");
+
+  world.patch(hero.id, { conditions: ["bardic inspiration (d6)"], conditionMeta: {} });
+  const turn = createDmTurn(world.campaignId, [], "ai");
+  const asked = await invokeEngine(world.campaign(), { kind: "ai", turnId: turn.id }, {
+    name: "request_roll",
+    args: { characterId: hero.id, kind: "ability_check", ability: "str", reason: "the stuck door" },
+  });
+  assert.equal(asked.ok, true, asked.error);
+  const ai = spentRow();
+  assert.notEqual(ai.id, own.id, "the AI's roll spent no die");
+  assert.deepEqual({ actor: ai.actor, turnId: ai.turnId }, { actor: "dm", turnId: turn.id });
+  const fixed = await call(undoRoute, "POST", { campaignId: world.campaignId, entryId: ai.id }, {});
+  assert.equal(fixed.status, 200, await fixed.clone().text());
+  assert.equal(rows(world.campaignId).length, before + 1, "the AI's spend, undone, is one fix of the AI's");
 });
 
 await test("a sheet edit is tied to the newest AI change that wrote the same field, and only once", async () => {

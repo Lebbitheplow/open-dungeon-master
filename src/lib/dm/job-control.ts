@@ -165,6 +165,36 @@ export function awaitTurnBinding(auditId: string): void {
   }
 }
 
+// Stand-in turns (src/lib/db/dm-turns.ts openStandInTurn): a person's turn
+// the engine opens for rolls it makes on its own, often inside another turn
+// (a hold's damage as the pointer starts a turn, a zone's save). What they
+// record on a sheet belongs to the turn they were opened in, so that turn's
+// revert takes it back (issue #622). Kept by stand-in id while it is open.
+declare global {
+  var __odmStandInTurns: Map<string, string> | undefined;
+}
+
+function standIns() {
+  return (globalThis.__odmStandInTurns ??= new Map<string, string>());
+}
+
+export function standInFor(standInId: string): void {
+  const owner = currentTurnId();
+  if (owner) {
+    standIns().set(standInId, owner);
+  }
+}
+
+export function releaseStandIn(standInId: string): void {
+  standIns().delete(standInId);
+}
+
+// The turn a named turn's sheet changes are filed under: the one an open
+// stand-in stands in for, or the turn itself.
+export function owningTurnOf(turnId: string): string {
+  return standIns().get(turnId) ?? turnId;
+}
+
 // Timers, intervals and fire-and-forget work started inside a turn that may
 // run long after it: they must never write under a turn that is over (or
 // still running, but not theirs).

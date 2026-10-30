@@ -25,6 +25,7 @@ import { getActiveEncounter, listEnemies, patchEnemyConditions, type Encounter, 
 import { insertRoll } from "@/lib/db/rolls";
 import { insertSheetAudit } from "@/lib/db/sheet-audit";
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
+import { patchSheetAudited } from "@/lib/dm/audited-patch";
 import { rollExpression } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { tilesApart } from "@/lib/dm/board-reach";
@@ -238,8 +239,8 @@ function holyNimbus(campaign: Campaign, turnId: string, stale: CharacterSheet): 
   const fresh = getSheetById(sheet.id) ?? sheet;
   const meta = { ...(fresh.conditionMeta as ConditionMetaMap), [HOLY_NIMBUS]: { rounds: 10, source: sheet.id } };
   const conditions = fresh.conditions.includes(HOLY_NIMBUS) ? fresh.conditions : [...fresh.conditions, HOLY_NIMBUS];
-  patchSheet(sheet.id, { conditions, conditionMeta: meta });
-  publishSheet(campaign, sheet.id);
+  // Audited, so the turn's revert puts the light out again (issue #622).
+  patchSheetAudited(campaign.id, sheet.id, { conditions, conditionMeta: meta }, { kind: "set_condition", reason: "Holy Nimbus", delta: { condition: HOLY_NIMBUS } });
   price.commit();
   return {
     ok: true,

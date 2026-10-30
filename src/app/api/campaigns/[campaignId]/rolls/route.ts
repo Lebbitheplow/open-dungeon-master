@@ -171,12 +171,13 @@ export async function POST(
     );
   }
 
-  // A held die rode this roll, so this roll spends it.
-  if (sheet && spent) {
-    spendRollCarriers(campaignId, sheet.id, spent);
-  }
-
   const dmSeat = capsFor(context).adjudicates;
+  // A held die rode this roll, so this roll spends it, in the hands of
+  // whoever threw it: the GM's seat, the character's own player, or the lead
+  // rolling for them, as the sheet routes name them (issue #622).
+  if (sheet && spent) {
+    spendRollCarriers(campaignId, sheet.id, spent, dmSeat ? "dm" : sheet.userId === context.user.id ? "player" : "lead");
+  }
   const roll = insertRoll({
     campaignId,
     characterId: sheet?.id ?? null,

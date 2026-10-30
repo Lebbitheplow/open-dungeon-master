@@ -19,7 +19,7 @@ import { openLastHit } from "@/lib/dm/last-hit";
 import { hasSentinel } from "@/lib/srd/feat-combat";
 import { tryParry } from "@/lib/dm/enemy-reactions";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
-import { createDmTurn, saveDmTurn, type DmTurn } from "@/lib/db/dm-turns";
+import { closeStandInTurn, openStandInTurn, type DmTurn } from "@/lib/db/dm-turns";
 import { patchEnemyConditions, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
 import { insertRoll, markRollApplied } from "@/lib/db/rolls";
 import { rollAgainst } from "@/lib/roll-labels";
@@ -54,12 +54,11 @@ import { markOpportunityHit } from "@/lib/dm/authored-reactions-more";
 // A turn for the swing's rolls and audit rows, closed as soon as it is used
 // so nothing waits on it.
 export function withOpportunityTurn<T>(campaignId: string, run: (turn: DmTurn) => T): T {
-  const turn = createDmTurn(campaignId, [], "human_dm");
+  const turn = openStandInTurn(campaignId);
   try {
     return run(turn);
   } finally {
-    turn.status = "done";
-    saveDmTurn(turn);
+    closeStandInTurn(turn);
   }
 }
 

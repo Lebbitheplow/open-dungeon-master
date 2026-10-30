@@ -10,7 +10,7 @@ import {
 } from "@/lib/db/encounters";
 import { RAGING } from "@/lib/srd/class-resources";
 import { activePublicEncounter } from "@/lib/db/encounter-view";
-import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
+import { getSheetById, listSheets } from "@/lib/db/sheets";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { computeSheetDerived } from "@/lib/srd";
@@ -129,7 +129,7 @@ export function tickClockConditions(campaign: Campaign, minutes: number, started
   rollEffectSaves(campaign, null, () => true, lines);
   // A concentration spell lasts no longer than its duration on the road
   // either (src/lib/dm/concentration-clock.ts).
-  lines.push(...tickConcentrationClocks(campaign, rounds, () => true, true));
+  lines.push(...tickConcentrationClocks(campaign, rounds, () => true));
   // A creature stabilized before the wait was kept on the sheet has no
   // timer to run out. Four hours in one stretch is the longest 1d4 asks for,
   // so that much time wakes it.
@@ -208,13 +208,13 @@ export function startTurnConditions(
     if (lostSpell && textKey(sheet.concentratingOn ?? "") === textKey(lostSpell)) {
       breakConcentration(campaign, null, sheet.id, "the readied spell was never released");
     }
-    const updated = patchSheet(sheet.id, {
-      conditions: ended.conditions,
-      conditionMeta: ended.meta,
+    // Audited, as everything the pointer writes to a sheet is: the turn that
+    // moved it gives back what it ended when it is reverted (issue #622).
+    patchSheetAudited(campaign.id, sheet.id, { conditions: ended.conditions, conditionMeta: ended.meta }, {
+      kind: "condition_clock",
+      reason: ending.length ? `no longer ${ending.join(" or ")} as their turn starts` : "a hold that lasted until their turn ended",
+      delta: { ended: ending, added: [] },
     });
-    if (updated) {
-      publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
-    }
   }
   // A count that belongs to these turns runs down now: "for 1 minute" from
   // a caster's (or a monster's) turn ends ten of its turns later, where it
@@ -267,10 +267,11 @@ function startTurnFeatures(campaign: Campaign, combatantIds: string[]) {
     if (currentHp === sheet.currentHp) {
       continue;
     }
-    const updated = patchSheet(sheet.id, { currentHp });
-    if (updated) {
-      publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
-    }
+    patchSheetAudited(campaign.id, sheet.id, { currentHp }, {
+      kind: "heal",
+      reason: "Survivor, as their turn starts",
+      delta: { amount: currentHp - sheet.currentHp, newHp: currentHp },
+    });
     lines.push(`${sheet.name} regains ${currentHp - sheet.currentHp} hit points (Survivor).`);
   }
   if (lines.length) {
@@ -317,18 +318,20 @@ function endTurnRage(
     if (meta[ragingAs]?.stoked) {
       const rest = { ...meta[ragingAs] };
       delete rest.stoked;
-      patchSheet(sheet.id, { conditionMeta: { ...meta, [ragingAs]: rest } });
+      patchSheetAudited(campaign.id, sheet.id, { conditionMeta: { ...meta, [ragingAs]: rest } }, {
+        kind: "condition_clock",
+        reason: "their rage was fed this turn",
+        delta: { ended: [], added: [] },
+      });
     }
     return;
   }
   const cleared = removeConditions(sheet.conditions, sheet.conditionMeta, [ragingAs]);
-  const updated = patchSheet(sheet.id, {
-    conditions: cleared.conditions,
-    conditionMeta: cleared.meta,
+  patchSheetAudited(campaign.id, sheet.id, { conditions: cleared.conditions, conditionMeta: cleared.meta }, {
+    kind: "clear_condition",
+    reason: "their turn passed with no attack made and no damage taken",
+    delta: { condition: ragingAs },
   });
-  if (updated) {
-    publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
-  }
   noteAtTable(campaign.id, [
     `${sheet.name}'s rage ends: their turn passed with no attack made and no damage taken.`,
   ]);
@@ -531,21 +534,17 @@ function tickSheetConditions(
         conditionMeta: meta,
         ...(polymorphEnded ? { wildShape: null } : {}),
       };
-      if (options?.encounter) {
-        const updated = patchSheet(sheet.id, patch);
-        if (updated) {
-          publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
-        }
-      } else {
-        // On the clock the change is the time's: audited, so the turn that
-        // moved the clock takes it back with the hours (issue #622).
-        const ended = sheet.conditions.filter((name) => !conditions.includes(name));
-        patchSheetAudited(campaign.id, sheet.id, patch, {
-          kind: "condition_clock",
-          reason: ended.length ? `no longer ${ended.join(" or ")} as time passed` : "time counted down on their conditions",
-          delta: { ended, added: conditions.filter((name) => !sheet.conditions.includes(name)) },
-        });
-      }
+      // Audited, on the clock and in a fight alike: the turn that moved the
+      // clock or the initiative pointer takes back what the time ended, the
+      // saves that shook a condition off and the counts it ran down
+      // (issue #622). The event log folds the bare counts into one line.
+      const ended = sheet.conditions.filter((name) => !conditions.includes(name));
+      const when = options?.encounter ? "" : " as time passed";
+      patchSheetAudited(campaign.id, sheet.id, patch, {
+        kind: "condition_clock",
+        reason: ended.length ? `no longer ${ended.join(" or ")}${when}` : "time counted down on their conditions",
+        delta: { ended, added: conditions.filter((name) => !sheet.conditions.includes(name)) },
+      });
     }
   }
 }

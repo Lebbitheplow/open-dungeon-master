@@ -4,6 +4,10 @@ import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { publishPersisted } from "@/lib/events";
 import type { CharacterSheet, FullPatchSheetInput } from "@/lib/schemas/sheet";
 
+// The hands an audit row names: the GM (the AI's engine, or a person in the
+// GM's seat), the party lead correcting, or the character's own player.
+export type AuditActor = "dm" | "lead" | "player";
+
 // A sheet change the engine makes on its own, as time passes (a condition
 // running out, a torch burning down, a day's rations eaten, a Wild Shape's
 // hours ending), written with its audit row the way a GM tool's change is:
@@ -17,7 +21,9 @@ export function patchSheetAudited(
   campaignId: string,
   sheetId: string,
   patch: FullPatchSheetInput,
-  record: { kind: string; reason: string; delta?: Record<string, unknown> },
+  // `actor`: who made the change, as the audit trail names it ("dm" unless
+  // said: the engine on the GM's behalf).
+  record: { kind: string; reason: string; delta?: Record<string, unknown>; actor?: AuditActor },
 ): CharacterSheet | null {
   // Read here, not handed in: a caller's copy may predate a write made since
   // (a carrier a save spent), and the undo restores from this.
@@ -38,6 +44,7 @@ export function patchSheetAudited(
     seq: allocateSeq(campaignId),
     before,
     patch: patch as Record<string, unknown>,
+    ...(record.actor ? { actor: record.actor } : {}),
   });
   publishPersisted(campaignId, "sheet_audit", { entry, characterName: before.name });
   publishPersisted(campaignId, "sheet_updated", { sheet: updated });

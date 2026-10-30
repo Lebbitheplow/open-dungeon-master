@@ -38,7 +38,7 @@ import {
 import { getSheetById, listSheets } from "@/lib/db/sheets";
 import { getRoll, insertRoll } from "@/lib/db/rolls";
 import { getLatestDmMessage, insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
-import { createDmTurn, listOpenPendingRolls, saveDmTurn, type DmTurn } from "@/lib/db/dm-turns";
+import { closeStandInTurn, listOpenPendingRolls, openStandInTurn, saveDmTurn, type DmTurn } from "@/lib/db/dm-turns";
 import { d20Expression, rollExpression } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { computeSheetDerived } from "@/lib/srd";
@@ -1886,12 +1886,11 @@ function partyFallen(campaign: Campaign, couldRise: boolean) {
     const sheets = listSheets(campaign.id);
     // A turn for the fight's end and its records, closed as soon as it is
     // used, as an opportunity attack's is (src/lib/dm/opportunity-strike.ts).
-    const turn = createDmTurn(campaign.id, [], "human_dm");
+    const turn = openStandInTurn(campaign.id);
     try {
       finishEncounter(campaign, turn, encounter, "party_defeated", sheets, new Map(sheets.map((sheet) => [sheet.id, sheet])));
     } finally {
-      turn.status = "done";
-      saveDmTurn(turn);
+      closeStandInTurn(turn);
     }
     tableNote(campaign, "Every character has fallen: the fight is lost.", "cue-death");
   } else if (couldRise) {

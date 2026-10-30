@@ -2,7 +2,7 @@
 
 import { EmptyState } from "@/components/EmptyState";
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
-import { Loader2, RotateCcw, ScrollText, Star } from "lucide-react";
+import { Hourglass, Loader2, RotateCcw, ScrollText, Star } from "lucide-react";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import { offerCorrectionReason } from "@/lib/correction-offer";
@@ -10,6 +10,8 @@ import { ui } from "@/lib/ui";
 import type { CharacterEvent } from "@/lib/db/character-events";
 import type { AuditEntry } from "@/app/campaigns/[campaignId]/useCampaignStream";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import type { ClockTurn } from "@/lib/db/clock-moves";
+import { buildFeed, revertableTurns, turnOfItem } from "@/app/campaigns/[campaignId]/event-log-logic";
 
 function describeEntry(entry: AuditEntry, name: string): string {
   const delta = entry.delta;
@@ -148,10 +150,6 @@ function ConfirmUndoDialog({
   );
 }
 
-type FeedItem =
-  | { type: "audit"; seq: number; entry: AuditEntry }
-  | { type: "milestone"; seq: number; event: CharacterEvent };
-
 // Chronological feed of DM-driven sheet changes and character milestones.
 // The party lead can undo individual sheet changes, or revert every change
 // from one DM turn. Undo restores sheet stats; a turn's revert also puts
@@ -161,12 +159,15 @@ export function EventLog({
   auditLog,
   sheets,
   characterEvents = [],
+  clockTurns = [],
   steersStory = false,
 }: {
   campaignId: string;
   auditLog: AuditEntry[];
   sheets: CharacterSheet[];
   characterEvents?: CharacterEvent[];
+  // The GM turns whose time is not back yet (an older host sends none).
+  clockTurns?: ClockTurn[];
   steersStory?: boolean;
 }) {
   const [busyId, setBusyId] = useState("");
@@ -252,10 +253,7 @@ export function EventLog({
   const revertTurn = (turnId: string) =>
     post(`/api/campaigns/${campaignId}/audit/revert-turn`, { turnId }, `turn:${turnId}`, true);
 
-  const feed: FeedItem[] = [
-    ...auditLog.map((entry) => ({ type: "audit" as const, seq: entry.seq, entry })),
-    ...characterEvents.map((event) => ({ type: "milestone" as const, seq: event.seq, event })),
-  ].sort((a, b) => b.seq - a.seq);
+  const feed = buildFeed(auditLog, characterEvents, clockTurns);
 
   if (!feed.length) {
     return (
@@ -263,14 +261,40 @@ export function EventLog({
     );
   }
 
-  // Live (still undoable) audit entries per DM turn, for the group revert.
-  const liveByTurn = new Map<string, number>();
-  for (const entry of auditLog) {
-    if (entry.turnId && entry.undoable && !entry.revertedAt && entry.kind !== "undo") {
-      liveByTurn.set(entry.turnId, (liveByTurn.get(entry.turnId) ?? 0) + 1);
-    }
-  }
+  // The turns the lead may revert from here, with their live change counts
+  // (src/app/campaigns/[campaignId]/event-log-logic.ts).
+  const revertable = revertableTurns(auditLog, clockTurns);
   const revertShownForTurn = new Set<string>();
+
+  // The turn's revert, above the newest row of that turn.
+  function turnRevert(turnId: string | null) {
+    if (!steersStory || !turnId || !revertable.has(turnId) || revertShownForTurn.has(turnId)) {
+      return null;
+    }
+    revertShownForTurn.add(turnId);
+    const changes = revertable.get(turnId) ?? 0;
+    return (
+      <>
+        <button
+          type="button"
+          disabled={busyId === `turn:${turnId}`}
+          onClick={() => revertTurn(turnId)}
+          title="Put the character sheets and the clock back as they were before this GM turn. World events and companions who left stay; rewinding the chapter takes those back."
+          className="flex w-full items-center justify-center gap-1 rounded border border-dashed border-stone-700 py-0.5 text-[10px] text-stone-500 hover:bg-stone-900 hover:text-amber-300"
+        >
+          {busyId === `turn:${turnId}` ? (
+            <Loader2 className="size-3 animate-spin" />
+          ) : (
+            <RotateCcw className="size-3" />
+          )}
+          {changes ? `Revert this turn (${changes})` : "Revert this turn"}
+        </button>
+        {errors[`turn:${turnId}`] ? (
+          <p role="alert" className="motion-shake text-[11px] text-red-300">{errors[`turn:${turnId}`]}</p>
+        ) : null}
+      </>
+    );
+  }
 
   return (
     <>
@@ -287,41 +311,51 @@ export function EventLog({
               </li>
             );
           }
+          if (item.type === "time") {
+            // The time a GM turn moved the clock on, while it can still be
+            // put back with the turn (issue #622).
+            return (
+              <li key={`t-${item.move.turnId}`} className="check-log space-y-1">
+                {turnRevert(turnOfItem(item))}
+                <div className="rounded-md border border-stone-800 bg-stone-950/40 px-2.5 py-1.5 text-xs text-stone-300">
+                  <Hourglass className="mr-1.5 inline size-3 text-amber-600" />
+                  Time passes: {item.move.passed}
+                </div>
+              </li>
+            );
+          }
+          if (item.type === "ticks") {
+            // A turn's run of counts that only ran time down, as one line:
+            // the turn's revert puts them back, so they carry no undo of
+            // their own.
+            const names = [...new Set(item.entries.map(nameFor))];
+            const reverted = item.entries.every((entry) => entry.revertedAt);
+            return (
+              <li key={`k-${item.entries[0].id}`} className="check-log space-y-1">
+                {turnRevert(turnOfItem(item))}
+                <div
+                  className={cn(
+                    "rounded-md border border-stone-800 bg-stone-950/40 px-2.5 py-1.5 text-xs text-stone-300 transition-opacity duration-[260ms] ease-settle",
+                    reverted && "opacity-60",
+                  )}
+                >
+                  <span className={cn(reverted && "line-through text-stone-500")}>
+                    <ScrollText className="mr-1.5 inline size-3 text-amber-600" />
+                    Time counts down for {names.join(", ")}
+                    {item.entries.length > 1 ? ` (${item.entries.length} changes)` : ""}
+                  </span>
+                </div>
+              </li>
+            );
+          }
           const entry = item.entry;
           const reverted = Boolean(entry.revertedAt);
           const canUndo = steersStory && entry.undoable && !reverted;
-          const turnId = entry.turnId ?? "";
-          const showRevertTurn =
-            steersStory &&
-            turnId &&
-            (liveByTurn.get(turnId) ?? 0) >= 2 &&
-            !revertShownForTurn.has(turnId);
-          if (showRevertTurn) {
-            revertShownForTurn.add(turnId);
-          }
           return (
             // check-log: a row written by a roll or a change rises into the
             // log (the mockups' log-in) instead of appearing in place.
             <li key={entry.id} className="check-log space-y-1">
-              {showRevertTurn ? (
-                <button
-                  type="button"
-                  disabled={busyId === `turn:${turnId}`}
-                  onClick={() => revertTurn(turnId)}
-                  title="Put the character sheets and the clock back as they were before this GM turn. World events and companions who left stay; rewinding the chapter takes those back."
-                  className="flex w-full items-center justify-center gap-1 rounded border border-dashed border-stone-700 py-0.5 text-[10px] text-stone-500 hover:bg-stone-900 hover:text-amber-300"
-                >
-                  {busyId === `turn:${turnId}` ? (
-                    <Loader2 className="size-3 animate-spin" />
-                  ) : (
-                    <RotateCcw className="size-3" />
-                  )}
-                  Revert this turn ({liveByTurn.get(turnId)})
-                </button>
-              ) : null}
-              {showRevertTurn && errors[`turn:${turnId}`] ? (
-                <p role="alert" className="motion-shake text-[11px] text-red-300">{errors[`turn:${turnId}`]}</p>
-              ) : null}
+              {turnRevert(turnOfItem(item))}
               <div
                 className={cn(
                   "rounded-md border border-stone-800 bg-stone-950/40 px-2.5 py-1.5 text-xs text-stone-300 transition-opacity duration-[260ms] ease-settle",

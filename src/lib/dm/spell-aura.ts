@@ -25,7 +25,8 @@ import { sheetSpellAuthors } from "@/lib/dm/spell-authors";
 import { dmRoll, rollCard, sheetAttacker } from "@/lib/dm/roll-card";
 import type { Campaign } from "@/lib/db/campaigns";
 import { getEnemy, listEnemies, patchEnemyConditions, patchEnemyHp, setEnemyConcentration, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
-import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
+import { getSheetById, listSheets } from "@/lib/db/sheets";
+import { patchSheetAudited } from "@/lib/dm/audited-patch";
 import { restoreOwnForm } from "@/lib/db/enemy-form";
 import { getBattleMapForEncounter, removeTokenByRef } from "@/lib/db/battle-maps";
 import { publishPersisted } from "@/lib/events";
@@ -38,7 +39,7 @@ import { rollCharacterSave, rollEnemySave } from "@/lib/dm/forced-save";
 import { instancesOf, removeConditionInstances, withTempHpClaim, type ConditionMetaMap, type SaveAbilityId } from "@/lib/dm/condition-logic";
 import { meetEnemyPart } from "@/lib/dm/enemy-defenses";
 import { enemyHpCap } from "@/lib/dm/monster-abilities";
-import { createDmTurn, saveDmTurn } from "@/lib/db/dm-turns";
+import { closeStandInTurn, openStandInTurn } from "@/lib/db/dm-turns";
 import type { RollAttacker } from "@/lib/db/rolls";
 import { applyPcDamage } from "@/lib/dm/pc-damage";
 import { healDeathHook } from "@/lib/dm/death";
@@ -168,7 +169,7 @@ function characterAuraHits(campaign: Campaign, encounter: Encounter, target: Cha
       const dc = spellSaveDcFor(caster, aura.name) ?? 13;
       const slot = meta[condition]?.slotLevel ?? ring.baseLevel;
       const dice = ring.perSlotLevel ? addDice(ring.dice, ring.perSlotLevel, Math.max(0, slot - ring.baseLevel)) : ring.dice;
-      const turn = createDmTurn(campaign.id, [], "human_dm");
+      const turn = openStandInTurn(campaign.id);
       try {
         const save = rollCharacterSave(campaign, turn, live, ring.save, dc, `${ring.save.toUpperCase()} save against ${aura.name}`, { magical: true });
         const rolled = rollCard(campaign, turn, live.id, "damage", rollAgainst(aura.name, live.name), dice, sheetAttacker(caster)).total;
@@ -178,8 +179,7 @@ function characterAuraHits(campaign: Campaign, encounter: Encounter, target: Cha
           applyPcDamage(campaign, turn.id, live, { amount, type: ring.type, magical: true, spell: true, reason: aura.name });
         }
       } finally {
-        turn.status = "done";
-        saveDmTurn(turn);
+        closeStandInTurn(turn);
       }
     }
   }
@@ -284,7 +284,7 @@ function characterTurnStartDamage(campaign: Campaign, sheet: CharacterSheet, lin
   if (!holds.length) {
     return;
   }
-  const turn = createDmTurn(campaign.id, [], "human_dm");
+  const turn = openStandInTurn(campaign.id);
   try {
     for (const hold of holds) {
       const live = getSheetById(sheet.id);
@@ -295,10 +295,11 @@ function characterTurnStartDamage(campaign: Campaign, sheet: CharacterSheet, lin
         const save = rollCharacterSave(campaign, turn, live, hold.save, hold.dc, `${hold.save.toUpperCase()} save against ${hold.spell}`, { magical: true });
         if (save.success) {
           const cleared = withoutHold(live.conditions, live.conditionMeta as ConditionMetaMap, hold.tag);
-          const updated = patchSheet(live.id, { conditions: cleared.conditions, conditionMeta: cleared.meta });
-          if (updated) {
-            publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
-          }
+          patchSheetAudited(campaign.id, live.id, { conditions: cleared.conditions, conditionMeta: cleared.meta }, {
+            kind: "clear_condition",
+            reason: `a save broke the hold as their turn started`,
+            delta: { condition: hold.spell },
+          });
           lines.push(`${live.name} breaks ${hold.spell}'s hold (${hold.save.toUpperCase()} save vs DC ${hold.dc}).`);
           continue;
         }
@@ -308,8 +309,7 @@ function characterTurnStartDamage(campaign: Campaign, sheet: CharacterSheet, lin
       lines.push(`${live.name} takes ${amount} ${hold.type} damage from ${hold.spell}.`);
     }
   } finally {
-    turn.status = "done";
-    saveDmTurn(turn);
+    closeStandInTurn(turn);
   }
 }
 
@@ -334,14 +334,17 @@ function heroism(campaign: Campaign, sheet: CharacterSheet) {
     }
   }
   if (best > sheet.tempHp && owner) {
-    patchSheet(sheet.id, { tempHp: best });
+    // Audited, as the pointer's every sheet write is: reverting the turn that
+    // moved it takes the pool back (issue #622).
+    patchSheetAudited(campaign.id, sheet.id, { tempHp: best }, { kind: "grant_temp_hp", reason: `${owner.spell}, as their turn starts`, delta: { tempHp: best } });
     // Heroism's pool goes when Heroism does (SRD 5.1; sheets.ts).
     const granted = getSheetById(sheet.id);
-    const updated = granted
-      ? patchSheet(sheet.id, { conditionMeta: withTempHpClaim(granted.conditionMeta as ConditionMetaMap, owner.name, owner, best) })
-      : null;
-    if (updated) {
-      publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
+    if (granted) {
+      patchSheetAudited(campaign.id, sheet.id, { conditionMeta: withTempHpClaim(granted.conditionMeta as ConditionMetaMap, owner.name, owner, best) }, {
+        kind: "condition_clock",
+        reason: `${owner.spell} holds the temporary hit points it gave`,
+        delta: { ended: [], added: [] },
+      });
     }
   }
 }
@@ -371,10 +374,11 @@ function confusionRoll(campaign: Campaign, encounter: Encounter, who: { kind: "s
     if (who.kind === "enemy") {
       patchEnemyConditions(who.id, [...holder.conditions, lost], next);
     } else {
-      const updated = patchSheet(who.id, { conditions: [...holder.conditions, lost], conditionMeta: next });
-      if (updated) {
-        publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
-      }
+      patchSheetAudited(campaign.id, who.id, { conditions: [...holder.conditions, lost], conditionMeta: next }, {
+        kind: "set_condition",
+        reason: "Confusion, as their turn starts",
+        delta: { condition: lost },
+      });
     }
   }
   lines.push(
@@ -422,9 +426,13 @@ function regenerate(campaign: Campaign, sheet: CharacterSheet) {
   const each = spellMechanicsFor({ spell: entry.spell, userIds: spellAuthorsFor(campaign) })?.mech.regainEachTurn ?? 0;
   const currentHp = Math.min(effectiveMaxHp(sheet), Math.max(0, sheet.currentHp) + each);
   if (currentHp > sheet.currentHp) {
-    const updated = patchSheet(sheet.id, { currentHp });
+    patchSheetAudited(campaign.id, sheet.id, { currentHp }, {
+      kind: "heal",
+      reason: `${entry.spell}, as their turn starts`,
+      delta: { amount: currentHp - sheet.currentHp, newHp: currentHp },
+    });
     healDeathHook(campaign, null, sheet);
-    const now = getSheetById(sheet.id) ?? updated;
+    const now = getSheetById(sheet.id);
     if (now) {
       publishPersisted(campaign.id, "sheet_updated", { sheet: now });
     }

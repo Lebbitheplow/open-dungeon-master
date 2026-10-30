@@ -45,6 +45,7 @@ const { advanceClock, getClock } = await import("../src/lib/db/clock.ts");
 const { getDatabase } = await import("../src/lib/db/core.ts");
 const { listRecentCampaignEvents } = await import("../src/lib/db/character-events.ts");
 const { afflictionsOf, writeAfflictions } = await import("../src/lib/dm/between-io.ts");
+const { latestEventOfType } = await import("../src/lib/events.ts");
 
 const hero = world.addHero(FIGHTER);
 const ally = world.addHero(FIGHTER);
@@ -680,6 +681,34 @@ await test("a turn whose hours the clock has since moved past is reverted with t
   assert.equal(done.status, 200, JSON.stringify(done.json));
   assert.equal(done.json.clock, "kept");
   assert.equal(instant(), moved);
+});
+
+await test("a turn that only moved the clock is listed for the event log with its time, told live, offered back without a sheet change, and gone from the list once reverted", async () => {
+  kit.reset(hero.id);
+  const snapshotRoute = await world.route("campaigns/[campaignId]");
+  const snapshot = async () => {
+    world.signIn(world.owner);
+    const response = await snapshotRoute.GET(new Request("http://test/"), { params: Promise.resolve({ campaignId: world.campaignId }) });
+    return response.json();
+  };
+  const at = instant();
+  const out = await world.invoke("pass_time", { amount: 3, unit: "hours" });
+  assert.equal(out.ok, true, out.error);
+  assert.deepEqual(listAuditForTurn(world.campaignId, out.turnId), [], "the quiet hours changed a sheet");
+  const listed = (await snapshot()).clockTurns?.find((move) => move.turnId === out.turnId);
+  assert.ok(listed, "the snapshot does not list the turn's time");
+  assert.equal(listed.passed, "3 hours");
+  assert.ok(listed.seq > 0, "the time has no place in the log");
+  const told = latestEventOfType(world.campaignId, ["clock_changed"]);
+  assert.deepEqual(told?.payload?.move, listed, "the table was not told the turn moved the clock");
+
+  const back = await revertTurn(out.turnId);
+  assert.equal(back.status, 200, JSON.stringify(back.json));
+  assert.equal(back.json.reverted, 0);
+  assert.equal(back.json.clock, "restored");
+  assert.equal(instant(), at);
+  assert.equal((await snapshot()).clockTurns.some((move) => move.turnId === out.turnId), false, "the time was offered back twice");
+  assert.equal(latestEventOfType(world.campaignId, ["clock_changed"])?.payload?.reverted, out.turnId);
 });
 
 await test("a player's own armor change moves the clock in no turn: the saves it brings are nobody's turn, and no move is kept to take back", async () => {

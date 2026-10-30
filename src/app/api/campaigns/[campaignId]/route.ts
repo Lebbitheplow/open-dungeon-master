@@ -30,6 +30,7 @@ import { listOpenDisputes, publicDispute } from "@/lib/db/disputes";
 import { publicItemProposal } from "@/lib/dm/proposal-intercept";
 import { listLocations } from "@/lib/db/locations";
 import { listRecentAudit } from "@/lib/db/sheet-audit";
+import { listLiveClockTurns } from "@/lib/db/clock-moves";
 import { insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
 import { listRollsVisibleTo } from "@/lib/db/rolls";
 import { getSheetForUser, listSheets } from "@/lib/db/sheets";
@@ -169,6 +170,9 @@ export async function GET(
     chapters: listChaptersForSnapshot(campaignId),
     notes: listNotesVisibleTo(campaignId, user.id, caps.steersStory),
     characterEvents: listRecentCampaignEvents(campaignId, 30),
+    // The turns whose time the event log can still put back (issue #622);
+    // an app reading an older host gets none and keeps its old rule.
+    clockTurns: listLiveClockTurns(campaignId),
     encounter: activePublicEncounter(campaignId, { enemyNumbers: caps.enemyNumbers }),
     // An owner-only offer (a pact's approach, issue 503) only to its player
     // and the storyteller.

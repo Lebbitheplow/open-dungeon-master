@@ -6,8 +6,8 @@
 
 import type { Campaign } from "@/lib/db/campaigns";
 import { getEnemy, type Encounter } from "@/lib/db/encounters";
-import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
-import { publishPersisted } from "@/lib/events";
+import { getSheetById, listSheets } from "@/lib/db/sheets";
+import { patchSheetAudited } from "@/lib/dm/audited-patch";
 import { computeSheetDerived } from "@/lib/srd";
 import { activeAuthored, resolveFormula } from "@/lib/srd/authored-effects";
 import { effectiveMaxHp, type ConditionMetaMap } from "@/lib/dm/condition-logic";
@@ -41,21 +41,18 @@ function reach(range: number | Array<[number, number]>, level: number): number {
   return feet;
 }
 
-function publishSheet(campaign: Campaign, sheetId: string) {
-  const updated = patchSheet(sheetId, {});
-  if (updated) {
-    publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
-  }
-}
-
 function heal(campaign: Campaign, sheet: CharacterSheet, amount: number): number {
   const max = effectiveMaxHp(sheet);
   const currentHp = Math.min(max, sheet.currentHp + Math.max(0, amount));
   if (currentHp === sheet.currentHp) {
     return 0;
   }
-  patchSheet(sheet.id, { currentHp });
-  publishSheet(campaign, sheet.id);
+  // Audited: the turn that moved the pointer takes it back (issue #622).
+  patchSheetAudited(campaign.id, sheet.id, { currentHp }, {
+    kind: "heal",
+    reason: "a feature, as their turn starts",
+    delta: { amount: currentHp - sheet.currentHp, newHp: currentHp },
+  });
   return currentHp - sheet.currentHp;
 }
 
@@ -63,8 +60,7 @@ function setTempHp(campaign: Campaign, sheet: CharacterSheet, amount: number): b
   if (amount <= sheet.tempHp) {
     return false;
   }
-  patchSheet(sheet.id, { tempHp: amount });
-  publishSheet(campaign, sheet.id);
+  patchSheetAudited(campaign.id, sheet.id, { tempHp: amount }, { kind: "grant_temp_hp", reason: "a feature, as their turn starts", delta: { tempHp: amount } });
   return true;
 }
 

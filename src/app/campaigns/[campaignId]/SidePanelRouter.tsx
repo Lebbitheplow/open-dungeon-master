@@ -34,6 +34,7 @@ import type { Floor } from "@/lib/db/campaigns";
 import type { Chapter } from "@/lib/db/chapters";
 import type { PublicEncounter } from "@/lib/db/encounter-view";
 import type { CharacterEvent } from "@/lib/db/character-events";
+import type { ClockTurn } from "@/lib/db/clock-moves";
 import type { Note } from "@/lib/db/notes";
 import type { WorldFact } from "@/lib/db/facts";
 import type { DmWhisper, InboxWhisper } from "@/lib/db/dm-whispers";
@@ -105,6 +106,8 @@ export type SidePanelRouterProps = {
   notes: Note[];
   facts: WorldFact[];
   characterEvents: CharacterEvent[];
+  // The GM turns whose time the event log can still put back (issue #622).
+  clockTurns?: ClockTurn[];
   refreshNotes: () => Promise<void>;
   refreshFacts: () => Promise<void>;
   // Bumped by SessionView on pin/unpin so the pins list refetches.
@@ -214,6 +217,7 @@ export function SidePanelRouter({
   notes,
   facts,
   characterEvents,
+  clockTurns,
   refreshNotes,
   refreshFacts,
   pinsVersion,
@@ -634,6 +638,7 @@ export function SidePanelRouter({
               auditLog={auditLog}
               sheets={sheets}
               characterEvents={characterEvents}
+              clockTurns={clockTurns}
               steersStory={steersStory}
             />
           ) : (

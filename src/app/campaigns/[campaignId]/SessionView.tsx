@@ -1094,6 +1094,7 @@ export function SessionView({
     notes: state.notes,
     facts: state.facts,
     characterEvents: state.characterEvents,
+    clockTurns: state.clockTurns,
     refreshNotes,
     refreshFacts,
     sideThreads: state.sideThreads,

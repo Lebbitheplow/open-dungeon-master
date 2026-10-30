@@ -10,11 +10,11 @@ import { fireCalendarEvents } from "@/lib/dm/calendar-fire";
 import { tickClockConditions } from "@/lib/dm/condition-tick";
 import { getDatabase, parseJson } from "@/lib/db/core";
 import { getSheetById } from "@/lib/db/sheets";
-import { publishEphemeral } from "@/lib/events";
+import { publishEphemeral, publishPersisted } from "@/lib/events";
 import { conscienceClockTick } from "@/lib/dm/conscience";
 import { currentTurnId } from "@/lib/dm/job-control";
 import { patchSheetAudited } from "@/lib/dm/audited-patch";
-import { liveClockMoves, markClockMovesReverted, recordClockMove } from "@/lib/db/clock-moves";
+import { clockTurnOf, liveClockMoves, markClockMovesReverted, recordClockMove } from "@/lib/db/clock-moves";
 import { rewindClock, type ClockRewind } from "@/lib/dm/clock-rewind-logic";
 import {
   advance,
@@ -128,7 +128,13 @@ export function advanceClock(
   if (conscienceClockTick(campaignId)) {
     publishEphemeral(campaignId, "relationships_updated", {});
   }
-  return { clock: getClock(campaignId), minutes: moved.minutes, deathSaves };
+  const after = getClock(campaignId);
+  // The event log lists the time a turn moved on and offers that turn's
+  // revert, a clock-only turn's too (issue #622).
+  if (turnId) {
+    publishPersisted(campaignId, "clock_changed", { clock: after, move: clockTurnOf(campaignId, turnId) });
+  }
+  return { clock: after, minutes: moved.minutes, deathSaves };
 }
 
 // What reverting this turn would do to the clock (src/lib/dm/

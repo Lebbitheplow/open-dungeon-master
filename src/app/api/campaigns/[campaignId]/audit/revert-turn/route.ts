@@ -88,7 +88,8 @@ export async function POST(
   const rewound = rewindTurnClock(campaignId, turnId);
   if (rewound) {
     const now = "restored" in rewound ? rewound.restored : rewound.kept;
-    publishPersisted(campaignId, "clock_changed", { clock: now });
+    // `reverted`: the event log stops offering this turn's time back.
+    publishPersisted(campaignId, "clock_changed", { clock: now, reverted: turnId });
     // The status bar's hour and the sky read the scene state.
     const campaign = getCampaignById(campaignId);
     if (campaign) {

@@ -18,8 +18,8 @@ import type { Campaign } from "@/lib/db/campaigns";
 import type { Encounter } from "@/lib/db/encounters";
 import { markReactionUsed } from "@/lib/dm/turn-budget";
 import type { DmTurn } from "@/lib/db/dm-turns";
-import { getSheetById, patchSheet } from "@/lib/db/sheets";
-import { publishPersisted } from "@/lib/events";
+import { getSheetById } from "@/lib/db/sheets";
+import { patchSheetAudited } from "@/lib/dm/audited-patch";
 import { spellFactsFor } from "@/lib/content";
 import { actingCombatantId, canAct } from "@/lib/dm/can-act";
 import { breakConcentration, setConcentration } from "@/lib/dm/concentration";
@@ -85,10 +85,8 @@ export function readySpell(
     [READIED]: { untilTurnOf: sheet.id, source: trigger.slice(0, 80), spell: name, ...(slotLevel !== null ? { slotLevel } : {}) },
   };
   const conditions = fresh.conditions.some((entry) => entry.trim().toLowerCase() === READIED) ? fresh.conditions : [...fresh.conditions, READIED];
-  const updated = patchSheet(sheet.id, { conditions, conditionMeta: meta });
-  if (updated) {
-    publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
-  }
+  // Audited, so the turn's revert takes the readied spell back (#622).
+  patchSheetAudited(campaign.id, sheet.id, { conditions, conditionMeta: meta }, { kind: "set_condition", reason: `readied ${name}`, delta: { condition: READIED } });
   return {
     ok: true,
     action: "Ready",
@@ -158,8 +156,9 @@ function dropReadied(campaign: Campaign, sheetId: string) {
     return;
   }
   const cleared = removeConditions(sheet.conditions, sheet.conditionMeta, [READIED]);
-  const updated = patchSheet(sheet.id, { conditions: cleared.conditions, conditionMeta: cleared.meta });
-  if (updated) {
-    publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
-  }
+  patchSheetAudited(campaign.id, sheet.id, { conditions: cleared.conditions, conditionMeta: cleared.meta }, {
+    kind: "clear_condition",
+    reason: "the readied spell is gone",
+    delta: { condition: READIED },
+  });
 }

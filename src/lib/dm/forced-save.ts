@@ -16,7 +16,8 @@ import type { DmTurn } from "@/lib/db/dm-turns";
 import type { EncounterEnemy } from "@/lib/db/encounters";
 import { insertRoll } from "@/lib/db/rolls";
 import { getSheetById } from "@/lib/db/sheets";
-import { patchSheetAudited } from "@/lib/dm/audited-patch";
+import { patchSheetAudited, type AuditActor } from "@/lib/dm/audited-patch";
+import { currentTurnId } from "@/lib/dm/job-control";
 import { d20Expression, rollExpression } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { saveModFor } from "@/lib/bestiary/enemy-numbers";
@@ -76,8 +77,11 @@ function movedLittle(campaignId: string, sheet: CharacterSheet): boolean {
 }
 
 // Clears what a roll spent: an inspiration die, a held Help, a one-shot
-// rider. `spent` is resolveRollExpression's spendInspiration.
-export function spendRollCarriers(campaignId: string, sheetId: string, spent: string | undefined) {
+// rider. `spent` is resolveRollExpression's spendInspiration. `actor` is who
+// threw the roll when the caller knows (the rolls route); otherwise a roll
+// inside a GM turn is the GM's, and one outside every turn is the player's
+// own, never counted as the AI's to correct (issue #622).
+export function spendRollCarriers(campaignId: string, sheetId: string, spent: string | undefined, actor?: AuditActor) {
   if (!spent) {
     return;
   }
@@ -103,6 +107,7 @@ export function spendRollCarriers(campaignId: string, sheetId: string, spent: st
     kind: "use_resource",
     reason: "spent on a roll",
     delta: { resource: carriers.map(carrierWords).join(" and "), spent: 1 },
+    actor: actor ?? (currentTurnId() ? "dm" : "player"),
   });
 }
 

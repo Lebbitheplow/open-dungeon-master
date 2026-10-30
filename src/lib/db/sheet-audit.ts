@@ -1,5 +1,5 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
-import { awaitTurnBinding, currentTurnId } from "@/lib/dm/job-control";
+import { awaitTurnBinding, currentTurnId, owningTurnOf } from "@/lib/dm/job-control";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // Audit trail for every DM-driven sheet change: what changed, why, and in
@@ -97,7 +97,8 @@ export function insertSheetAudit(input: {
   patch?: Record<string, unknown>;
 }): SheetAuditEntry {
   const id = crypto.randomUUID();
-  const turnId = input.turnId || currentTurnId();
+  // A stand-in turn opened inside another turn files under that one.
+  const turnId = (input.turnId ? owningTurnOf(input.turnId) : "") || currentTurnId();
   getDatabase()
     .prepare(
       `
