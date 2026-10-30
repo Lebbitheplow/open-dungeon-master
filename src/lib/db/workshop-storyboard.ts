@@ -1,7 +1,7 @@
 import { resolveMonster } from "@/lib/bestiary";
 import { getDatabase, parseJson } from "@/lib/db/core";
 import { tableAuthors } from "@/lib/db/homebrew";
-import { setQuestLog, setStoryArc, type Campaign } from "@/lib/db/campaigns";
+import { setStoryArc, type Campaign } from "@/lib/db/campaigns";
 import { insertQuest, listQuests } from "@/lib/db/quests";
 import { appendBoardAct, normalizeStoryArc, type ArcEvent, type ArcEventKind, type Waypoint } from "@/lib/dm/arc-logic";
 import { upsertPrepCards } from "@/lib/db/prep-cards";
@@ -369,23 +369,21 @@ export function writeStoryboardColumns(
   // on the log is not added twice, which is what makes a second import of
   // the same board harmless.
   //
-  // Into the quest log the Quests panel shows and the storyteller reads
-  // (the quests table, src/lib/db/quests.ts) as well as the older one-line
-  // log on the campaign row. The old log alone was read by the storyteller
-  // only while a campaign had no arc, so a board that also wrote an arc
-  // delivered hooks nobody at the table, model or person, ever saw.
-  const logged = new Set(campaign.questLog.map((quest) => textKey(quest)));
-  const quests = compiled.quests.filter((quest) => !logged.has(textKey(quest)));
-  if (quests.length) {
-    setQuestLog(campaign.id, [...campaign.questLog, ...quests]);
-    written += 1;
-  }
+  // Into the quest log the Quests panel shows and the storyteller reads (the
+  // quests table, src/lib/db/quests.ts), and only there. The older one-line
+  // log on the campaign row was a copy nothing kept up to date, and the
+  // table's glance read it after the quest was done (issue 581).
   const listed = new Set(listQuests(campaign.id).map((quest) => textKey(quest.title)));
+  let quested = false;
   for (const title of compiled.quests) {
     if (!listed.has(textKey(title))) {
       insertQuest({ campaignId: campaign.id, title, source: "dm", visibility: "party" });
       listed.add(textKey(title));
+      quested = true;
     }
+  }
+  if (quested) {
+    written += 1;
   }
 
   const beats = compiled.arcPlan.map((beat) => {

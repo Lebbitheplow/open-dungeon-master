@@ -171,6 +171,9 @@ export type SidePanelRouterProps = {
   shopsVersion?: number;
   // A Browse wares pressed in the chat: open the Market on that shop.
   marketRequest?: MarketRequest | null;
+  // The quest glance pressed (CinematicParts.tsx QuestGlance): when, so the
+  // Story tab turns to its Quests once per press.
+  questsRequest?: number;
   coins?: { characterId: string; direction: "in" | "out"; amountCp: number; at: number } | null;
   activeSheetId?: string;
   questsVersion: number;
@@ -250,6 +253,7 @@ export function SidePanelRouter({
   loreVersion = 0,
   shopsVersion = 0,
   marketRequest = null,
+  questsRequest = 0,
   coins = null,
   activeSheetId = "",
   questsVersion,
@@ -275,6 +279,15 @@ export function SidePanelRouter({
   if (marketRequest && marketRequest.at !== seenMarketAt) {
     setSeenMarketAt(marketRequest.at);
     setPartySection("market");
+  }
+  // The glance says it opens the quests, and it opened whichever section
+  // was last up, the chapters as often as not (issue 581).
+  // A press made long before this panel mounted (a pane opened later) is not
+  // for it; one that mounted it is.
+  const [seenQuestsAt, setSeenQuestsAt] = useState(() => (questsRequest && questsRequest < Date.now() - 2_000 ? questsRequest : 0));
+  if (questsRequest && questsRequest !== seenQuestsAt) {
+    setSeenQuestsAt(questsRequest);
+    setStorySection("quests");
   }
 
   const partySubTabs: SubTabDef<PartySection>[] = [
@@ -379,7 +392,7 @@ export function SidePanelRouter({
       <>
         {/* With the board on the stage the Battle tab shows the party: a
             fight the console just started leaves its result here. */}
-        {rawTab === "battle" && adjudicates ? <ConsoleOutcomeBanner campaignId={campaignId} /> : null}
+        {rawTab === "battle" && adjudicates ? <ConsoleOutcomeBanner campaignId={campaignId} encounterId={encounter?.id ?? null} /> : null}
         {partySubTabs.length > 1 ? (
           <SubTabs tabs={partySubTabs} value={partySection} onChange={setPartySection} />
         ) : null}
@@ -522,7 +535,7 @@ export function SidePanelRouter({
       // board-dock: the side panel and the phone hold the board in a fixed
       // window too, so its header and footer stay on screen (issue 87).
       <div className="board-dock">
-      {adjudicates ? <ConsoleOutcomeBanner campaignId={campaignId} /> : null}
+      {adjudicates ? <ConsoleOutcomeBanner campaignId={campaignId} encounterId={encounter?.id ?? null} /> : null}
       <Suspense fallback={<PanelLoading />}>
       <BattleMapPanel
         campaignId={campaignId}
@@ -614,7 +627,7 @@ export function SidePanelRouter({
           ) : storySection === "quests" ? (
             <QuestsPanel campaignId={campaignId} steersStory={steersStory} refreshKey={questsVersion} />
           ) : storySection === "timeline" ? (
-            <TimelinePanel campaignId={campaignId} refreshKey={chapters.length} />
+            <TimelinePanel campaignId={campaignId} refreshKey={`${chapters.length}:${facts.length}:${questsVersion}`} />
           ) : storySection === "log" ? (
             <EventLog
               campaignId={campaignId}

@@ -1,5 +1,6 @@
 import { getDatabase, nowIso } from "@/lib/db/core";
 import { copyPrepCards } from "@/lib/db/prep-cards";
+import { copyQuests } from "@/lib/db/quests";
 import { createCampaign, listCampaignsForUser, type Campaign } from "@/lib/db/campaigns";
 import { createWorkshop, listWorkshopsForUser } from "@/lib/db/workshops";
 import { getImportSourceForUser } from "@/lib/db/import-sources";
@@ -92,6 +93,7 @@ export function cloneCampaign(
     // The prep cards the arc's beats and planned events point at (issues
     // #301 and #302): without them the copy's read_card would answer nothing.
     copyPrepCards(source.id, created.id);
+    copyQuests(source.id, created.id);
   }
 
   const result = runContentImport({

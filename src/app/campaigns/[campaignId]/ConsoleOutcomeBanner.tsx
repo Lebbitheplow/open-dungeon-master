@@ -1,7 +1,7 @@
 "use client";
 
 import { X } from "lucide-react";
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { cn } from "@/lib/cn";
 import type { ResultLine } from "@/lib/dm/catalog-result";
 
@@ -11,7 +11,11 @@ import type { ResultLine } from "@/lib/dm/catalog-result";
 // before anyone could read it; the result now waits on the board until it
 // is dismissed.
 
-type Held = { campaignId: string; title: string; lines: ResultLine[]; seq: number };
+// `encounterId`: the fight it started, bound the first time it shows beside
+// one. It goes when that fight is over: kept until dismissed by hand, fight
+// one's surprise rolls sat on top of fight two when the AI or prep started
+// that one.
+type Held = { campaignId: string; title: string; lines: ResultLine[]; seq: number; encounterId?: string };
 
 let held: Held | null = null;
 const listeners = new Set<() => void>();
@@ -31,8 +35,17 @@ function dismiss() {
   for (const listener of listeners) listener();
 }
 
-export function ConsoleOutcomeBanner({ campaignId }: { campaignId: string }) {
+export function ConsoleOutcomeBanner({ campaignId, encounterId = null }: { campaignId: string; encounterId?: string | null }) {
   const shown = useSyncExternalStore(subscribe, () => held, () => null);
+  useEffect(() => {
+    if (!shown || shown.campaignId !== campaignId) return;
+    if (!shown.encounterId && encounterId) {
+      held = { ...shown, encounterId };
+      for (const listener of listeners) listener();
+    } else if (shown.encounterId && shown.encounterId !== encounterId) {
+      dismiss();
+    }
+  }, [shown, campaignId, encounterId]);
   if (!shown || shown.campaignId !== campaignId || !shown.lines.length) return null;
   return (
     <div

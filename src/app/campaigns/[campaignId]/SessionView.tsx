@@ -914,6 +914,12 @@ export function SessionView({
   // A shop's Browse wares in the chat: the Market on that shop, in the side
   // panel at a desk and in place of the table on a phone.
   const [marketRequest, setMarketRequest] = useState<MarketRequest | null>(null);
+  // The quest glance opens the Story tab on its Quests.
+  const [questsRequest, setQuestsRequest] = useState(0);
+  const openQuests = useCallback(() => {
+    setQuestsRequest(Date.now());
+    openTab("story");
+  }, [openTab]);
   const browseShop = useCallback(
     (shopId: string) => {
       const target = browseWares(shopId, Date.now());
@@ -1053,7 +1059,7 @@ export function SessionView({
   const routerProps = {
     levelUpLevel: myLevelUp && !levelUpShown ? myLevelUp.level : null,
     onLevelUp: () => setLevelUpByHand(true),
-    pinsVersion,
+    pinsVersion: pinsVersion + state.pinsVersion,
     campaignId: campaign.id,
     sheets,
     members: state.members,
@@ -1122,6 +1128,7 @@ export function SessionView({
     loreVersion: state.loreVersion,
     shopsVersion: state.shopsVersion,
     marketRequest,
+    questsRequest,
     coins: state.coins,
     activeSheetId: state.activeSheetId,
     questsVersion: state.questsVersion,
@@ -1401,7 +1408,7 @@ export function SessionView({
                 chatUnread={chatUnreadTotal}
                 mobileVisible={mobileView === "panel"}
                 storyDue={storyDue}
-                glance={<QuestGlance quests={campaign.questLog ?? []} onOpen={() => openTab("story")} />}
+                glance={<QuestGlance campaignId={campaign.id} refreshKey={state.questsVersion} initial={campaign.questLog ?? []} onOpen={openQuests} />}
               />
             ),
           },

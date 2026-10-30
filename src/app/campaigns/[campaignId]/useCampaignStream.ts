@@ -233,6 +233,9 @@ export type CampaignState = {
   departingSheets: DepartingSheet[];
   // Bumped on quests_updated so the quest log refetches.
   questsVersion: number;
+  // Bumped on pins_updated, so another seat's pin or unpin reaches this
+  // one's Pins list and its budget gauge, not only the pinner's own tab.
+  pinsVersion: number;
   // Bumped on factions_updated so the Factions panel refetches.
   factionsVersion: number;
   // Bumped when the campaign's world or a record it describes changed
@@ -396,6 +399,7 @@ const initialState: CampaignState = {
   shopsVersion: 0,
   coins: null,
   questsVersion: 0,
+  pinsVersion: 0,
   fightSummary: null,
   characterEvents: [],
   encounter: null,
@@ -637,6 +641,10 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
           }
           return next;
         }
+        // A place removed in the World tab leaves every seat's map.
+        case "location_removed":
+          next.locations = state.locations.filter((location) => location.id !== String(payload.locationId ?? ""));
+          return next;
         case "tts_ready": {
           const messageId = String(payload.messageId ?? "");
           const url = String(payload.url ?? "");
@@ -716,6 +724,9 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
         // Contentless: the log refetches its own filtered view.
         case "quests_updated":
           next.questsVersion = state.questsVersion + 1;
+          return next;
+        case "pins_updated":
+          next.pinsVersion = state.pinsVersion + 1;
           return next;
         case "encounter_summary":
           next.fightSummary = (payload.summary as EncounterSummary | undefined) ?? null;
@@ -1104,7 +1115,9 @@ const PERSISTED_EVENTS = [
   "floor_changed",
   "image_ready",
   "location_updated",
+  "location_removed",
   "location_map_ready",
+  "pins_updated",
   "tts_ready",
   "ambience_changed",
   "campaign_rewound",

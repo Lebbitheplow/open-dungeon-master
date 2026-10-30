@@ -147,6 +147,7 @@ export const EVENT_AUDIENCE: Readonly<Record<string, Audience>> = {
   pins_updated: TABLE,
   npc_updated: TABLE,
   location_updated: TABLE,
+  location_removed: TABLE,
   location_map_ready: TABLE,
   calendar_updated: TABLE,
   schedule_updated: TABLE,

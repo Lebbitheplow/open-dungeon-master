@@ -1134,13 +1134,20 @@ export function buildGameStateBlock(state: DmGameState): string {
   // The quest log with its ticks (docs/vtt-parity-implementation-plan.md
   // section 5.7). The arc's own sub-arcs are in the arc render; this adds
   // the DM's hand-written quests and the objectives ticked under both.
+  const quests = listQuests(campaign.id);
   const questBlock = renderQuestsForPrompt(
-    listQuests(campaign.id).filter((quest) => quest.source === "dm" || quest.objectives.some((objective) => objective.done)),
+    // An arc quest whose thread left the arc is in no arc render, so it is
+    // listed like the GM's own.
+    quests.filter((quest) => quest.source === "dm" || !quest.sourceRef || quest.objectives.some((objective) => objective.done)),
   );
   if (questBlock) {
     state.questsBlock = questBlock;
     sections.push(questBlock);
-  } else if (campaign.questLog.length && !campaign.storyArc) {
+  } else if (!quests.length && campaign.questLog.length && !campaign.storyArc) {
+    // The one-line log on the campaign row, for a campaign from before the
+    // quest log. Once there is a quest log it is the record: the row's copy
+    // was never kept up to date, and read after every quest was done it told
+    // the GM finished quests were open.
     state.questsBlock = `Quests:\n${campaign.questLog.map((quest) => `- ${quest}`).join("\n")}`;
     sections.push(state.questsBlock);
   }

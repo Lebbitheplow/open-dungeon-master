@@ -194,7 +194,7 @@ function QuestRow({
           disabled: quest.status === status,
           onSelect: () => onPatch({ status }),
         })),
-        ...(quest.source === "dm"
+        ...((quest.source === "dm" || !quest.sourceRef)
           ? [{ id: "remove", label: "Take it off the log", glyph: "ui-delete", tone: "danger" as const, separated: true, onSelect: onRemove }]
           : []),
       ]
@@ -223,7 +223,7 @@ function QuestRow({
         ) : (
           <GlyphChip glyph={STATUS_GLYPH[quest.status]}>{STATUS_LABEL[quest.status]}</GlyphChip>
         )}
-        {steersStory && quest.source === "dm" ? (
+        {steersStory && (quest.source === "dm" || !quest.sourceRef) ? (
           <KitButton tone="iconDanger" always onClick={onRemove} aria-label="Take it off the log">
             <Trash2 className="size-3.5" />
           </KitButton>
@@ -251,7 +251,7 @@ function QuestRow({
           ))}
         </ul>
       ) : null}
-      {quest.source === "arc" ? <p className="reveal mt-1 text-[11px] text-stone-500">From the story</p> : null}
+      {quest.source === "arc" && quest.sourceRef ? <p className="reveal mt-1 text-[11px] text-stone-500">From the story</p> : null}
     </ContextMenu>
   );
 }

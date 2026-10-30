@@ -2992,6 +2992,10 @@ export function handleLocationCall(
       }
     }
     setCampaignScene(campaign.id, location.name);
+    // The scene line under the title reads the campaign's scene, which only
+    // the opening ever told the table; it named the first place for the
+    // whole campaign.
+    publishPersisted(campaign.id, "campaign_updated", { scene: location.name });
     // Some of the party went and the rest stayed (issue 563): a moment a
     // companion may slip away.
     split = partySplit(campaign, args.characterIds, location.name);

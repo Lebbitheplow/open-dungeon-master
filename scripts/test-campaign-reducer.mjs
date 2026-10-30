@@ -267,4 +267,16 @@ test("a change of who holds authority reads the snapshot again (audit WA-11)", (
   assert.equal(next.lastSeq, loaded.lastSeq + 1, "persisted: its seq is recorded");
 });
 
+test("another seat's pin reaches this one, and a place removed in the World tab leaves the map (found auditing issue 581)", () => {
+  for (const type of ["pins_updated", "location_removed"]) {
+    assert.ok(STREAMED_EVENTS.includes(type), `${type} is not streamed`);
+    assert.deepEqual(EVENT_AUDIENCE[type], { kind: "table" }, `${type} reaches every seat`);
+  }
+  const pinned = campaignReducer(loaded, event("pins_updated", { pinId: "p1" }, 11));
+  assert.equal(pinned.pinsVersion, loaded.pinsVersion + 1);
+  const mapped = { ...loaded, locations: [{ id: "a", name: "Thornhollow" }, { id: "b", name: "The Mill" }] };
+  const removed = campaignReducer(mapped, event("location_removed", { locationId: "a" }, 12));
+  assert.deepEqual(removed.locations.map((location) => location.id), ["b"]);
+});
+
 console.log(`\n${passed} campaign reducer tests passed.`);

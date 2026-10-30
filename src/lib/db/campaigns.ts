@@ -14,7 +14,8 @@ import type {
 import { isUploadedImagePath } from "@/lib/uploads";
 import type { StorySettings } from "@/lib/types";
 import { normalizeStoryArc, type StoryArc } from "@/lib/dm/arc-logic";
-import { syncArcQuests } from "@/lib/db/quests";
+import { detachArcQuests, listQuests, reconcileArcQuests, syncArcQuests } from "@/lib/db/quests";
+import { questLogLines, rebaseSubArcs, sameThread } from "@/lib/dm/quest-logic";
 import { normalizeCover, type DmCover } from "@/lib/dm/delegation";
 import { MINUTES_PER_DAY, daysPerYear, defaultClock, normalizeCalendarDefinition, normalizeClock, type CampaignClock } from "@/lib/dm/calendar";
 import { packFor } from "@/lib/worlds/preset";
@@ -714,7 +715,16 @@ export function setDmOutline(campaignId: string, outline: string) {
 // (corrupt) JSON. Pending plans and the beat spine are never dropped here.
 const STORY_ARC_CHAR_CAP = 32_000;
 
-export function setStoryArc(campaignId: string, arc: StoryArc) {
+// The sub-arcs as stored now, read raw: the threads a write compares itself
+// against.
+function storedSubArcs(campaignId: string): StoryArc["subArcs"] {
+  const row = getDatabase().prepare(`SELECT story_arc_json FROM campaigns WHERE id = ?`).get(campaignId) as { story_arc_json: string } | undefined;
+  return parseJson<{ subArcs?: StoryArc["subArcs"] } | null>(row?.story_arc_json ?? "", null)?.subArcs ?? [];
+}
+
+// `base` is the arc a job read before it awaited the model, so what the table
+// changed meanwhile survives the write (quest-logic.ts rebaseSubArcs).
+export function setStoryArc(campaignId: string, arc: StoryArc, base: StoryArc | null = null) {
   // Defensive spreads: every in-app caller passes a normalized arc, but a
   // hand-written or legacy-shaped object must not throw here.
   const trimmed: StoryArc = {
@@ -729,12 +739,21 @@ export function setStoryArc(campaignId: string, arc: StoryArc) {
         }
       : (arc.saga ?? null),
   };
-  // The quest log mirrors the sub-arcs (docs/vtt-parity-implementation-
-  // plan.md section 5.7); a failure there must not lose the arc.
+  // A quest the table settled, renamed or reopened comes back into the arc
+  // as they left it (issue 581), and a thread that reuses an old one's id
+  // starts a quest of its own; a failure there must not lose the arc.
   try {
-    syncArcQuests(campaignId, trimmed.subArcs);
+    const stored = storedSubArcs(campaignId);
+    if (base) {
+      trimmed.subArcs = rebaseSubArcs(trimmed.subArcs, base.subArcs ?? [], stored);
+    }
+    const reused = new Set(trimmed.subArcs.filter((subArc) => stored.some((old) => old.id === subArc.id && !sameThread(old, subArc))).map((subArc) => subArc.id));
+    if (reused.size) {
+      detachArcQuests(campaignId, reused);
+    }
+    trimmed.subArcs = reconcileArcQuests(campaignId, trimmed.subArcs);
   } catch (error) {
-    console.error("[quests] arc sync failed", error);
+    console.error("[quests] arc reconcile failed", error);
   }
   let serialized = JSON.stringify(trimmed);
   while (serialized.length > STORY_ARC_CHAR_CAP) {
@@ -775,12 +794,17 @@ export function setStoryArc(campaignId: string, arc: StoryArc) {
   getDatabase()
     .prepare(`UPDATE campaigns SET story_arc_json = ?, updated_at = ? WHERE id = ?`)
     .run(serialized, nowIso(), campaignId);
-}
-
-export function setQuestLog(campaignId: string, quests: string[]) {
-  getDatabase()
-    .prepare(`UPDATE campaigns SET quest_log_json = ?, updated_at = ? WHERE id = ?`)
-    .run(JSON.stringify(quests.slice(0, 20)), nowIso(), campaignId);
+  // The quest log mirrors the sub-arcs as stored (docs/vtt-parity-
+  // implementation-plan.md section 5.7), after the cap above, so a thread it
+  // shed lets go of its id in the same write; a failure there must not lose
+  // the arc. Whether the log changed, for a caller to publish quests_updated
+  // (this module cannot import the event bus, which imports it).
+  try {
+    return syncArcQuests(campaignId, trimmed.subArcs);
+  } catch (error) {
+    console.error("[quests] arc sync failed", error);
+    return false;
+  }
 }
 
 // The per-turn world-simulation counters and pending sparks
@@ -984,6 +1008,11 @@ export function publicCampaign(campaign: Campaign): Omit<Campaign, "dmOutline" |
   // ever read them back; clients get an existence boolean from the
   // story-settings route instead.
   rest.settings = scrubStorySettings(campaign.settings);
+  // The open quests from the quest log itself. The questLog column was a
+  // copy written only when the arc was planned, and an app built before the
+  // glance read the quest log still reads this field: a stale copy kept a
+  // finished quest on its screen for good (issue 581).
+  rest.questLog = questLogLines(listQuests(campaign.id));
   return rest as Omit<Campaign, "dmOutline" | "storyArc">;
 }
 

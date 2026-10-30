@@ -3,7 +3,7 @@ import { deleteWorldEntity, updateWorldEntity } from "@/lib/db/world-forge";
 import { forgetPaintJobs } from "@/lib/db/world-paint-jobs";
 import { publishEphemeral } from "@/lib/events";
 import { parseRef } from "@/lib/worldforge/model";
-import { recordsChanged } from "@/lib/workshop/record-events";
+import { recordsChanged, worldEntryChanged } from "@/lib/workshop/record-events";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,6 +38,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ca
   }
   publishEphemeral(campaignId, result.entity.shelf === "faction" ? "factions_updated" : "world_updated", { at: Date.now() });
   recordsChanged(campaignId, result.entity.shelf, "world");
+  worldEntryChanged(campaignId, ref);
   return Response.json(result);
 }
 
@@ -54,5 +55,6 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   forgetPaintJobs(campaignId, ref);
   publishEphemeral(campaignId, "world_updated", { at: Date.now() });
   recordsChanged(campaignId, parseRef(ref)!.shelf, "world");
+  worldEntryChanged(campaignId, ref, true);
   return Response.json({ ok: true });
 }
