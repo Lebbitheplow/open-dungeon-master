@@ -574,6 +574,7 @@
     "lib/characters/class-words.ts#re-word": [["key",1,"the homebrew id prefix"]],
     "lib/characters/class-words.ts#toUpperCase": [["display",1,"an id shown title-cased"]],
     "lib/compressed-json.ts#str-includes": [["key",2,"HTTP Accept-Encoding content codings (protocol)"]],
+    "lib/content/entry-labels.ts#str-key": [["key",1,"content kinds, sources and document slugs as stored"]],
     "lib/content/feat-reading-logic.ts#\\b": [["english-source",20,"content-pack text read for what its reader left unread (the pack's English rows), so the misses are counted and listed"]],
     "lib/content/feat-reading-logic.ts#re-word": [["english-source",4,"content-pack text read for what its reader left unread (the pack's English rows), so the misses are counted and listed"]],
     "lib/content/feat-reading-logic.ts#str-eq": [["english-source",1,"content-pack text read for what its reader left unread (the pack's English rows), so the misses are counted and listed"]],

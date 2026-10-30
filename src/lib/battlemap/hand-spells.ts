@@ -1,6 +1,7 @@
 // Spell and class-feature cards for the Hand (docs/visual-overhaul-plan.md
 // 5.2): what a prepared spell or a limited-use feature costs, rolls and
 // spends, read from the same tables the cast and use_resource tools read.
+import { BEST_EFFORT_NOTE } from "@/lib/content/reading-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { bonusCastOf, casterStateProblem, componentProblem, focusProblem, materialPlan, slotPlan, turnCharge } from "@/lib/dm/cast-rules";
 import { computeSheetDerived, spellAttackFor, spellSaveDcFor } from "@/lib/srd";
@@ -253,6 +254,9 @@ function spellCard(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders, 
   }
   if (mech.note) notes.push(mech.note);
   if (slot && slot.level > fact.level) notes.push(`Cast with a level ${slot.level} slot.`);
+  // Mechanics the app read from the spell's text that nobody checked
+  // (issue #570): the card's details say so.
+  if (fact.bestEffort) notes.push(BEST_EFFORT_NOTE);
   // Every refusal below is the cast guard's own (src/lib/dm/cast-rules.ts),
   // asked of the same sheet: raging, a beast form without Beast Spells,
   // untrained armor, a verbal component while silenced, no free hand, a

@@ -1,4 +1,5 @@
 import { currentUser, unauthorized } from "@/lib/auth";
+import { withBestEffort } from "@/lib/content/entry-labels";
 import { catalogPrices } from "@/lib/characters/catalog";
 import { contentPackInstalled } from "@/lib/content/db";
 import { contentScopeFor, unadmittedNames } from "@/lib/content/scope";
@@ -197,5 +198,9 @@ export async function GET(
       results = [...results, ...bundledClassRows(q, results as Array<{ name: string }>)];
     }
   }
+  // A row the engine plays from mechanics it read and nobody checked says
+  // so (issue #570).
+  const classSlug = url.searchParams.get("class") ?? undefined;
+  results = results.map((row) => withBestEffort(kind, row, { classSlug }));
   return Response.json({ results, packInstalled, unadmitted: unadmittedNames(scope, user.id, kind, q, url.searchParams.get("class") ?? "") });
 }

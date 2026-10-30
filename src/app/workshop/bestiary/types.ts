@@ -15,7 +15,8 @@ export type Monster = {
 };
 
 // A content-pack monster the search turned up, to start from. `needs`: the
-// rules its block uses that this game does not play (issue #570).
-export type Found = { slug: string; name: string; source: string; cr: number; type: string; needs?: Need[] };
+// rules its block uses that this game does not play; `bestEffort`: its block
+// is the reader's, and nobody checked it (issue #570).
+export type Found = { slug: string; name: string; source: string; cr: number; type: string; needs?: Need[]; bestEffort?: boolean };
 
 export const CR_CHOICES = [0, 0.125, 0.25, 0.5, 1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 17, 20, 24, 30];

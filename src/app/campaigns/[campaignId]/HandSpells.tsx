@@ -27,6 +27,8 @@ type SpellResult = {
   source?: string;
   documentSlug?: string;
   data: Record<string, unknown>;
+  // Played from mechanics the app read and nobody checked (issue #570).
+  bestEffort?: boolean;
 };
 
 // null = looked up and not found, so it is not asked for again.
@@ -45,6 +47,7 @@ function toFact(entry: SpellResult): SpellFact {
     desc: text(entry.data.desc),
     higherLevel: text(entry.data.higher_level),
     concentration: entry.concentration,
+    ...(entry.bestEffort ? { bestEffort: true } : {}),
     ...(mech ? { mech } : {}),
     ...(runsAs ? { runsAs } : {}),
     // The bundled data knows no workshop spell, so its card reads the

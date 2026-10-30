@@ -114,11 +114,13 @@ function ContentBody({ reference }: { reference: ContentRef }) {
       try {
         const { describeContentEntry } = await import("@/lib/help");
         const { needsNote } = await import("@/lib/content/levelup-logic");
-        // An entry built on rules this game does not play says so first
-        // (issue #570).
-        const withNote = (entry: { needs?: Parameters<typeof needsNote>[0] } | undefined, text: string | null) => {
-          const note = needsNote(entry?.needs ?? []);
-          return text && note ? `${note}\n\n${text}` : text;
+        const { BEST_EFFORT_NOTE } = await import("@/lib/content/reading-logic");
+        // An entry built on rules this game does not play, or played from
+        // mechanics the app read and nobody checked, says so first (issue
+        // #570).
+        const withNote = (entry: { needs?: Parameters<typeof needsNote>[0]; bestEffort?: boolean } | undefined, text: string | null) => {
+          const notes = [needsNote(entry?.needs ?? []), entry?.bestEffort ? BEST_EFFORT_NOTE : null].filter(Boolean);
+          return text && notes.length ? `${notes.join("\n\n")}\n\n${text}` : text;
         };
         const response = await fetch(
           `/api/content/${reference.kind}/${encodeURIComponent(reference.slug)}${scopeQuery(campaignId)}`,
