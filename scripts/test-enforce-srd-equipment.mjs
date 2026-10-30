@@ -183,11 +183,9 @@ await test("EQP-04", () => {
 
 // ---- armor (equipment page "armor") ----
 
-await gap("EQP-05", {
-  rule: "armor, Getting Into and Out of Armor (Doff): \"This is the time it takes to take off armor. If you have help, reduce this time by half.\"",
-  where: "src/lib/dm/don-doff.ts armorChangeMinutes (no helper), the sheet usage route",
-  severity: "low",
-}, () => {
+// armor, Getting Into and Out of Armor (Doff): "This is the time it takes to
+// take off armor. If you have help, reduce this time by half."
+await test("EQP-05", () => {
   const taken = armorChangeMinutes([{ name: "Plate", qty: 1, equipped: true }], { Plate: { equipped: false } }, { helped: true });
   assert.equal(taken.minutes, 2.5, `taking off plate with help takes ${taken.minutes} minutes`);
 });
