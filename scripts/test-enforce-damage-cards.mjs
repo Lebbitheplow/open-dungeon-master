@@ -294,6 +294,17 @@ await test("Treasure's gold card names the sum that is paid: a hoard's multiplie
   assert.equal(card.detail, "Treasure: gold (4d6)");
   assert.equal(card.total, 18);
   assert.equal(purse() - held, 18, "the card's total is the gold paid");
+  // A pocket is coin, at any CR: the hoard's magic items are not suggested.
+  world.dice(3, 3, 3);
+  const purse5 = await world.invoke("roll_treasure", { cr: 5, characterIds: [wizard.id], reason: "the captain's purse", individual: true });
+  world.clearDice();
+  assert.equal(purse5.ok, true, purse5.error);
+  assert.equal(purse5.result.suggestedMagicItems, 0);
+  assert.doesNotMatch(purse5.result.note, /magic item/);
+  world.dice(3, 3, 3);
+  const hoard5 = await world.invoke("roll_treasure", { cr: 5, characterIds: [wizard.id], reason: "the captain's chest" });
+  world.clearDice();
+  assert.equal(hoard5.result.suggestedMagicItems, 1, "a hoard still suggests its items");
 });
 
 await test("Mirror Image: the d20 that decides whether a duplicate is struck is a card about the caster.", async () => {

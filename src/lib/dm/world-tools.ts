@@ -395,7 +395,9 @@ export function handleRollTreasure(
       paid.push({ name: sheet.name, gold: share });
     }
   }
-  const items = hoardItemCount(tier);
+  // One foe's pocket is coin; the magic items are a hoard's (the reference
+  // calculator says the same). A CR 5 purse used to suggest a magic item.
+  const items = args.individual ? 0 : hoardItemCount(tier);
   const result = {
     ok: true,
     tier,
