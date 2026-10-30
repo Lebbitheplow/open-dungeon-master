@@ -434,6 +434,38 @@ await test("CMB-14", async () => {
   assert.ok(took === 0 && !poisoned, `a petrified creature took ${took} poison damage and was ${poisoned ? "" : "not "}poisoned`);
 });
 
+// conditions, Petrified: 'The creature is immune to poison and disease' on the paths that read a stat block's immunities themselves: a spell's condition, an area's, Stinking Cloud's retching.
+await test("CMB-14 on every path: a spell, an area or Stinking Cloud cannot poison a petrified creature", async () => {
+  const [enemy] = await stage(mage);
+  const before = world.sheet(mage.id).spellcasting;
+  world.patch(mage.id, { spellcasting: { ...before, cantrips: ["Poison Spray"], prepared: ["Stinking Cloud"] } });
+  const poisonedBy = [];
+  // Each path from fresh stone; what it left that poison would lay.
+  const onStone = async (path, faces, tool, args) => {
+    kit.setEnemy(enemy.id, { conditions: ["petrified"], conditionMeta: {} });
+    const { out } = await forced(faces, tool, args);
+    assert.equal(out.ok, true, `${path}: ${out.error}`);
+    const sick = kit.enemy(enemy.id).conditions.filter((name) => name === "poisoned" || name === "retching");
+    if (sick.length) {
+      poisonedBy.push(`${path} (${sick.join(", ")})`);
+    }
+  };
+  try {
+    kit.place(mage.id, 5, 2);
+    kit.place(enemy.id, 5, 4);
+    // Poison Spray with the condition the caller names: a CON save of 1.
+    await onStone("cast_at_enemy", [1, 6, 6], "cast_at_enemy", { characterId: mage.id, targetEnemyId: enemy.id, spell: "Poison Spray", condition: "poisoned" });
+    // A poison gas with no spell: its damage, then a CON save of 1.
+    await onStone("an area's condition", [3, 3, 1], "aoe_damage", { damage: "2d6", type: "poison", saveAbility: "con", dc: 15, halfOnSave: false, condition: "poisoned", rounds: 10, enemyIds: [enemy.id] });
+    // "Creatures that ... are immune to poison automatically succeed" (SRD 5.1, Stinking Cloud).
+    kit.freshTurn();
+    await onStone("Stinking Cloud", [1], "aoe_damage", { casterCharacterId: mage.id, spell: "Stinking Cloud", level: 3, enemyIds: [enemy.id], atX: 5, atY: 5 });
+  } finally {
+    world.patch(mage.id, { spellcasting: before });
+  }
+  assert.deepEqual(poisonedBy, [], `a petrified creature was poisoned by: ${poisonedBy.join("; ")}`);
+});
+
 // conditions, Exhaustion: 'Also, being raised from the dead reduces a creature's exhaustion level by 1.'
 await test("CMB-15", async () => {
   await kit.endFight();

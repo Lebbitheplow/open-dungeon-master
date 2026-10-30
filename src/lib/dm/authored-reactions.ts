@@ -26,6 +26,7 @@ import {
 } from "@/lib/srd/authored-effects";
 import { addSheetCondition, rollCard } from "@/lib/dm/action-common";
 import { pcResistances, removeConditions, type ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { immuneToCondition } from "@/lib/dm/damage-logic";
 import { applyEnemyDamage, publishEncounter } from "@/lib/dm/enemy-damage";
 import { rollEnemySave } from "@/lib/dm/forced-save";
 import { bindsWorthResisting } from "@/lib/dm/legendary-logic";
@@ -415,7 +416,8 @@ function resolve(ctx: Ctx, found: Found): ToolResult | ToolError {
       }
       if (does.onHitCondition && result.hit) {
         const fresh = getEnemy(enemy.id);
-        if (fresh && fresh.status === "alive") {
+        // Not on a creature immune to it, a petrified one's poison included.
+        if (fresh && fresh.status === "alive" && !immuneToCondition(fresh, does.onHitCondition.name)) {
           patchEnemyConditions(fresh.id, [...fresh.conditions, does.onHitCondition.name], {
             ...(fresh.conditionMeta as ConditionMetaMap),
             [does.onHitCondition.name]: { rounds: does.onHitCondition.rounds, source: ctx.sheet.id },
@@ -448,6 +450,10 @@ function resolve(ctx: Ctx, found: Found): ToolResult | ToolError {
       });
       if (save.success) {
         return { applied: `${enemy.displayName} resists (${does.save.toUpperCase()} ${save.total} vs DC ${dc}).` };
+      }
+      // Its own immunities, and a petrified creature's to poison.
+      if (immuneToCondition(enemy, condition)) {
+        return { applied: `${enemy.displayName} fails the ${does.save.toUpperCase()} save but cannot be ${condition}.` };
       }
       patchEnemyConditions(enemy.id, [...enemy.conditions.filter((entry) => textKey(entry) !== condition), condition], {
         ...(enemy.conditionMeta as ConditionMetaMap),

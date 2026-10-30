@@ -17,6 +17,7 @@
 import { getDatabase, parseJson } from "@/lib/db/core";
 import { getEnemy, patchEnemyConditions } from "@/lib/db/encounters";
 import { addConditionInstance, instancesOf, isIncapacitated, removeConditionInstances, removeConditions, type ConditionMeta, type ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { immuneToCondition } from "@/lib/dm/damage-logic";
 import { settleEnemyIncapacitation } from "@/lib/dm/enemy-incapacitation";
 import { findSpellByName, spellMechanicsFor } from "@/lib/content";
 import { bakedSpellDuration } from "@/lib/content/baked-spells";
@@ -116,8 +117,8 @@ export function laySpellConditionsOnEnemy(enemyId: string, names: string[], meta
   if (!enemy || enemy.status !== "alive") {
     return [];
   }
-  const immune = (enemy.stats.conditionImmune ?? "").toLowerCase();
-  const landing = names.filter((name) => !immune.includes(name));
+  // Its own immunities, and a petrified creature's to poison.
+  const landing = names.filter((name) => !immuneToCondition(enemy, name));
   if (!landing.length) {
     return [];
   }

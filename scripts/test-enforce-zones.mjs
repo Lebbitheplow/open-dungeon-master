@@ -197,6 +197,30 @@ await test("Stinking Cloud: a creature starting its turn in the cloud makes a CO
   assert.ok(enemyOf(world, goblin.id).conditions.includes("retching"));
 });
 
+// conditions, Petrified: 'The creature is immune to poison and disease'; Stinking Cloud: 'Creatures that don't need to breathe or are immune to poison automatically succeed on this saving throw.'
+await test("Stinking Cloud cannot touch a petrified creature, enemy or character: stone is immune to poison.", async () => {
+  const { world, sheets: [wizard, fighter], enemies: [goblin] } = await board([caster("wizard", "int", ["Stinking Cloud"]), FIGHTER], { 0: { x: 2, y: 4 }, 1: { x: 15, y: 5 }, e0: { x: 14, y: 4 } });
+  const cast = await world.invoke("use_spell_slot", { characterId: wizard.id, spell: "Stinking Cloud", level: 3, atX: 14, atY: 4 });
+  assert.equal(cast.ok, true, cast.error);
+  encounters.patchEnemyConditions(goblin.id, ["petrified"], {});
+  world.patch(fighter.id, { conditions: ["petrified"], conditionMeta: {} });
+  // Each one's turn starts in the cloud, with a CON save of 1 if one is
+  // rolled: the die left unused is the automatic success.
+  const startTurnOf = (refId) => {
+    const encounter = world.encounter();
+    const at = encounter.order.findIndex((entry) => (entry.kind === "pc" ? entry.characterId : entry.enemyId) === refId);
+    encounters.saveEncounter({ ...encounter, turnIndex: (at - 1 + encounter.order.length) % encounter.order.length, turnBudget: null });
+    world.dice(1);
+    nextTurn(world);
+    return world.clearDice() === 1;
+  };
+  const touched = [
+    ...(startTurnOf(goblin.id) && !enemyOf(world, goblin.id).conditions.includes("retching") ? [] : ["the goblin"]),
+    ...(startTurnOf(fighter.id) && !world.sheet(fighter.id).conditions.includes("retching") ? [] : ["the fighter"]),
+  ];
+  assert.deepEqual(touched, [], `stone saved against the cloud, or retched in it: ${touched.join(" and ")}`);
+});
+
 await test("Sleet Storm: a creature starting its turn in the storm makes a DEX save or falls prone.", async () => {
   const { world, sheets: [wizard, fighter], enemies: [goblin] } = await board([caster("wizard", "int", ["Sleet Storm"]), FIGHTER], { 0: { x: 2, y: 4 }, 1: { x: 4, y: 8 }, e0: { x: 16, y: 4 } });
   const cast = await world.invoke("use_spell_slot", { characterId: wizard.id, spell: "Sleet Storm", level: 3, atX: 16, atY: 4 });

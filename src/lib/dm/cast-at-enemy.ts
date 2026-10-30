@@ -9,6 +9,7 @@
 
 import { magicImmunityNote } from "@/lib/dm/monster-traits";
 import { describeConditionDuration } from "@/lib/dm/condition-logic";
+import { immuneToCondition } from "@/lib/dm/damage-logic";
 import { z } from "zod";
 import { placeSpellZone } from "@/lib/dm/zone-cast";
 import { coverFor } from "@/lib/dm/attack-spatial";
@@ -272,9 +273,10 @@ export function handleCastAtEnemy(
     );
   }
   const main = conditions[0] ?? null;
-  // Suggestion and Irresistible Dance hold nothing that cannot be charmed.
+  // Suggestion and Irresistible Dance hold nothing that cannot be charmed,
+  // and stone takes no poisoning (damage-logic.ts immuneToCondition).
   const immuneTo = [main, mech?.immuneIfImmuneTo].find(
-    (name): name is string => Boolean(name && enemy.stats.conditionImmune.toLowerCase().includes(name)),
+    (name): name is string => Boolean(name && immuneToCondition(enemy, name)),
   );
   // A spell that only lays the condition is cast, and spent, and does
   // nothing; one that also deals damage deals it, the condition dropped

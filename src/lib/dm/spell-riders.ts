@@ -21,6 +21,7 @@ import type { DmTurn } from "@/lib/db/dm-turns";
 import { getActiveEncounter, getEnemy, patchEnemyConditions, setEnemyConcentration, type EncounterEnemy } from "@/lib/db/encounters";
 import { getSheetById } from "@/lib/db/sheets";
 import { addConditionInstance, isIncapacitated, type ConditionMeta, type ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { immuneToCondition, shrugsOffPoison } from "@/lib/dm/damage-logic";
 import { meetEnemyPart } from "@/lib/dm/enemy-defenses";
 import { settleEnemyIncapacitation } from "@/lib/dm/enemy-incapacitation";
 import { getFoe } from "@/lib/dm/sheet-foe";
@@ -64,13 +65,14 @@ export function spellSaveOptions(mech: SpellMech | null, enemy: EncounterEnemy):
 }
 
 // Why the creature succeeds with no roll, or null (Stinking Cloud: poison
-// cannot touch it).
+// cannot touch it, a petrified creature's included).
 export function spellAutoSave(mech: SpellMech | null, enemy: EncounterEnemy): string | null {
   if (!mech?.riders?.losesAction) {
     return null;
   }
-  const immune = `${enemy.stats.immune ?? ""} ${enemy.stats.conditionImmune ?? ""}`.toLowerCase();
-  return /poison/.test(immune) ? `${enemy.displayName} is immune to poison: the cloud cannot touch it.` : null;
+  return shrugsOffPoison(`${enemy.stats.immune ?? ""} ${enemy.stats.conditionImmune ?? ""}`, enemy.conditions)
+    ? `${enemy.displayName} is immune to poison: the cloud cannot touch it.`
+    : null;
 }
 
 // ---- the damage ----
@@ -182,14 +184,13 @@ export function layOnEnemy(enemyId: string, entries: Array<[string, ConditionMet
   if (!enemy || enemy.status !== "alive") {
     return [];
   }
-  const immune = (enemy.stats.conditionImmune ?? "").toLowerCase();
   // A character's immunities are its features and effects, not a stat-block
   // line (a foe view's is empty): Aura of Courage, Heroism or Mindless Rage
   // keep a turncoat's Phantasmal Killer off a party member, as they keep an
-  // enemy's off through set_condition.
+  // enemy's off through set_condition. Stone takes no poisoning either way.
   const sheet = isSheetFoe(enemy) ? getSheetById(enemy.id) : null;
   const campaign = sheet ? getCampaignById(sheet.campaignId) : null;
-  const landing = entries.filter(([name]) => !immune.includes(name) && !(sheet && campaign && conditionImmunity(campaign, sheet, name, true)));
+  const landing = entries.filter(([name]) => !immuneToCondition(enemy, name) && !(sheet && campaign && conditionImmunity(campaign, sheet, name, true)));
   if (!landing.length) {
     return [];
   }

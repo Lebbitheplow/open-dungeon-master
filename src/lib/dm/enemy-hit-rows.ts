@@ -17,6 +17,7 @@ import { isValidExpression, rollExpression } from "@/lib/dice";
 import { publishWithSeq } from "@/lib/events";
 import { rollAgainst } from "@/lib/roll-labels";
 import type { ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { immuneToCondition } from "@/lib/dm/damage-logic";
 import { applyEnemyDamage } from "@/lib/dm/enemy-damage";
 import { rollEnemySave } from "@/lib/dm/forced-save";
 import { enemyHpCap } from "@/lib/dm/monster-abilities";
@@ -75,6 +76,11 @@ export function resolveRowOnHit(
   for (const condition of conditions) {
     const now = getEnemy(targetId);
     if (!now || now.status !== "alive" || (now.currentHp <= 0 && condition === "prone")) {
+      continue;
+    }
+    // Its own immunities, and a petrified creature's to poison.
+    if (immuneToCondition(now, condition)) {
+      out.riderRefused = `${now.displayName} cannot be ${condition}.`;
       continue;
     }
     const meta: ConditionMetaMap = {

@@ -8,6 +8,7 @@ import { spellFactsFor } from "@/lib/content";
 import { bindsWorthResisting } from "@/lib/dm/legendary-logic";
 import { elementalAdeptApplies, floorDamageDice } from "@/lib/srd/feat-combat";
 import { z } from "zod";
+import { immuneToCondition } from "@/lib/dm/damage-logic";
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter, getEnemy, type EncounterEnemy } from "@/lib/db/encounters";
 import { insertRoll, type RollAttacker } from "@/lib/db/rolls";
@@ -478,7 +479,8 @@ export function handleAoeDamage(
       }
     }
     if (!success && laysCondition) {
-      if (enemy.stats.conditionImmune.toLowerCase().includes(laysCondition)) {
+      // Its own immunities, and a petrified creature's to poison.
+      if (immuneToCondition(enemy, laysCondition)) {
         row.conditionRefused = `${enemy.displayName} is immune to ${laysCondition}.`;
       } else {
         const incoming = {

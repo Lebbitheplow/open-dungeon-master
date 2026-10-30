@@ -41,6 +41,8 @@ import { handleSetCondition } from "@/lib/dm/set-condition";
 import { breakConcentration, clearSpellConditionsByName } from "@/lib/dm/concentration";
 import { laySpellConditionsOnEnemy } from "@/lib/dm/spell-effects";
 import { instancesOf, type ConditionMetaMap } from "@/lib/dm/condition-logic";
+import { petrifiedImmunities } from "@/lib/dm/damage-logic";
+import { pcImmunities } from "@/lib/dm/pc-defenses";
 import { liveZones, publishZones, saveZones } from "@/lib/dm/zone-store";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { saveAgainst } from "@/lib/dm/roll-about";
@@ -150,7 +152,7 @@ function strike(
     if (held && !trigger.concentrationSave) {
       return [];
     }
-    const immune = trigger.immuneSucceeds && new RegExp(`\\b${trigger.immuneSucceeds}\\b`, "i").test(enemy.stats.immune ?? "");
+    const immune = immuneSucceeds(trigger, [enemy.stats.immune ?? "", ...petrifiedImmunities(enemy.conditions)].join(", "));
     const save = trigger.save && !immune && !held
       ? rollEnemySave(campaign.id, enemy, trigger.save, dc, { magical: true, resist: Boolean(trigger.condition) && bindsWorthResisting([trigger.condition ?? ""]), against: trigger.condition ?? [], record: { detail: `${enemy.displayName}: ${trigger.save.toUpperCase()} save against ${zone.spell}` } })
       : null;
@@ -194,11 +196,14 @@ function strike(
   if (held && !trigger.concentrationSave) {
     return [];
   }
+  // A character's own immunities as damage reads them, petrified's poison
+  // included (pc-defenses.ts).
+  const immune = immuneSucceeds(trigger, pcImmunities(sheet));
   return withZoneTurn(campaign.id, (turn) => {
-    const save = trigger.save && !held
+    const save = trigger.save && !held && !immune
       ? rollCharacterSave(campaign, turn, sheet, trigger.save, dc, `${trigger.save.toUpperCase()} save against ${zone.spell}`, saveAgainst({ damageType: trigger.type, magical: true }))
       : null;
-    const failed = !held && (trigger.save ? !save?.success : true);
+    const failed = !held && (trigger.save ? !immune && !save?.success : true);
     if (trigger.save && !held) {
       lines.push(`${sheet.name} ${failed ? "fails" : "makes"} the ${trigger.save.toUpperCase()} save against ${zone.spell} (DC ${dc}).`);
     }
@@ -242,6 +247,14 @@ function strike(
     }
     return lines;
   });
+}
+
+// "Creatures that ... are immune to poison automatically succeed on this
+// saving throw" (Stinking Cloud): read against the creature's immunities as
+// damage takes them, so a petrified creature, "immune to poison and
+// disease" (SRD 5.1, Conditions, Petrified), is not touched either.
+function immuneSucceeds(trigger: ZoneTrigger, immunities: string): boolean {
+  return Boolean(trigger.immuneSucceeds) && new RegExp(`\\b${trigger.immuneSucceeds}\\b`, "i").test(immunities);
 }
 
 // What a failed save lays on an enemy: a condition (restrained is the
