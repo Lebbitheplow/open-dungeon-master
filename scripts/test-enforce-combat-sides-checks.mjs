@@ -11,7 +11,7 @@
 import assert from "node:assert/strict";
 import { openWorld } from "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
-import { combatKit, TRAINED } from "./lib/enforce-combat.mjs";
+import { combatKit, d20Faces, TRAINED } from "./lib/enforce-combat.mjs";
 
 const { test, finish } = suite("test-enforce-combat-sides-checks");
 const world = await openWorld();
@@ -71,6 +71,39 @@ await test("A lie told to a turncoat meets its own Insight, at the disadvantage 
   const dice = world.diceLog().filter((die) => die.sides === 20);
   assert.ok(dice.length >= 3, "two d20s for the turncoat's disadvantage, one for the liar");
   assert.equal(rolls.listRecentRolls(world.campaignId, 20).find((roll) => roll.characterId === liar.id && roll.kind === "skill_check")?.dc, 16, "a tie leaves things as they were: 15 + 1");
+});
+
+// conditions, Charmed: 'The charmer has advantage on any ability check to interact socially with the creature.'
+await test("A character who charmed the turncoat persuades it with advantage, and a turncoat that charmed a character lies to them with advantage", async () => {
+  const missed = [];
+  // The bard charmed the turncoat: the bard's Persuasion, against its Insight.
+  let turncoat = await stage({ conditions: ["charmed"], conditionMeta: { charmed: { source: liar.id } } });
+  world.clearDice();
+  world.dice(10, 7, 13);
+  const plea = await world.invoke("request_roll", { characterId: liar.id, kind: "skill_check", skill: "persuasion", againstEnemyId: turncoat.id, reason: "a plea to a charmed friend" });
+  world.clearDice();
+  assert.equal(plea.ok, true, plea.error);
+  // The newest of the bard's checks (the list runs oldest first).
+  const pleaded = rolls.listRecentRolls(world.campaignId, 20).filter((roll) => roll.characterId === liar.id && roll.kind === "skill_check").at(-1);
+  if (d20Faces(pleaded).length !== 2) {
+    missed.push("the charmer's own check against the turncoat");
+  }
+  // The turncoat charmed the lookout: its Deception, against her Insight.
+  turncoat = await stage({});
+  world.patch(lookout.id, { conditions: ["charmed"], conditionMeta: { charmed: { source: turncoat.id } } });
+  try {
+    world.clearDice();
+    world.dice(7, 13, 10);
+    const read = await world.invoke("request_roll", { characterId: lookout.id, kind: "skill_check", skill: "insight", againstEnemyId: turncoat.id, reason: "is the friend lying" });
+    world.clearDice();
+    assert.equal(read.ok, true, read.error);
+    if (d20Faces(contestRollOf(turncoat)).length !== 2) {
+      missed.push("the turncoat's side of the contest against the character it charmed");
+    }
+  } finally {
+    world.patch(lookout.id, { conditions: [], conditionMeta: {} });
+  }
+  assert.deepEqual(missed, [], `no advantage for the charmer on ${missed.join("; ")}`);
 });
 
 await kit.endFight();

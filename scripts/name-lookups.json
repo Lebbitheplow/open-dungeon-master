@@ -1153,6 +1153,8 @@
     "lib/dm/chapter-close.ts#first": [["key",2,"a message by position"]],
     "lib/dm/chapter-lod.ts#partial": [["pattern",1,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"]],
     "lib/dm/chapter-logic.ts#partial": [["pattern",2,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"]],
+    "lib/dm/check-tools.ts#fallback": [["key",1,"the one character tested, or none when several are (no text names one)"]],
+    "lib/dm/check-tools.ts#first": [["key",1,"the one character tested, when only one is (no text names it)"]],
     "lib/dm/claims-logic.ts#first": [["search",1,"a speaker's one line in prose"],["parse",1,"a regex match's text"]],
     "lib/dm/claims-logic.ts#partial": [["pattern",8,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"],["search",12,"quotes and speakers in narration (squash: checked clean)"]],
     "lib/dm/claims.ts#keyed": [["key",1,"ids, refs, slugs, tool names, field names, env names, event kinds, UI keys, caches, door and map keys; a sheet's conditionMeta by the condition key it was written under; the usage route's gear map by the sheet's own stored item names (src/: every site read)"]],

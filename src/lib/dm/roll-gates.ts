@@ -16,6 +16,7 @@
 import { resolveTargetFoe } from "@/lib/dm/sheet-foe";
 import { isSheetFoe } from "@/lib/dm/combat-sides-logic";
 import { rollCharacterCheck } from "@/lib/dm/contest-roll";
+import { charmedBy } from "@/lib/dm/enemy-profile";
 import { getSheetById } from "@/lib/db/sheets";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { enemyExhaustion } from "@/lib/dm/monster-abilities";
@@ -119,6 +120,10 @@ export function contestOpponent(
 
 export type ContestRoll = { name: string; skill: string; total: number; dc: number; answering: boolean };
 
+// The character a contest is against, as charm reads them.
+export type Charmable = { name: string; conditions: string[]; conditionMeta?: unknown };
+type CharmMeta = Parameters<typeof charmedBy>[1];
+
 // Rolls the opponent's side of a contest and returns the DC the character's
 // check must reach: the opponent's total, plus one when the character is
 // the one trying to change things (a tie leaves them as they were).
@@ -126,16 +131,29 @@ export function rollContest(
   campaign: Campaign,
   turn: DmTurn | null,
   opponent: Opponent,
-  input: { skill?: string; ability?: SaveAbility; contestSkill?: string; hiding?: boolean },
+  // `roller`: the character on the other side of the contest, whose charm
+  // by the opponent gives the opponent's social check advantage.
+  input: { skill?: string; ability?: SaveAbility; contestSkill?: string; hiding?: boolean; roller?: Charmable | null },
 ): ContestRoll {
   const mine = skillId(input.skill) || null;
   const theirs = skillId(input.contestSkill) || (input.hiding ? "stealth" : mine ? OPPOSED[mine] ?? mine : null);
   const ability = ((theirs ? findSkill(theirs)?.ability : null) ?? input.ability ?? "str") as SaveAbility;
   const label = theirs ? (findSkill(theirs)?.name ?? theirs) : ability.toUpperCase();
   const answering = input.hiding ? true : mine ? ANSWERING.has(mine) : false;
+  // "The charmer has advantage on any ability check to interact socially
+  // with the creature" (SRD 5.1, Charmed): the opponent's Charisma side of
+  // the contest, when it charmed the character it contests. Before, only
+  // the character's own check against a creature they charmed counted.
+  const opponentRef = opponent.sheetId ?? opponent.enemyId;
+  const charmer = Boolean(input.roller && opponentRef && charmedBy(input.roller.conditions, input.roller.conditionMeta as CharmMeta, opponentRef));
   const asSheet = opponent.sheetId ? getSheetById(opponent.sheetId) : null;
   if (asSheet) {
-    const checked = rollCharacterCheck(campaign, asSheet, theirs ? { skill: theirs } : { ability }, `${opponent.name}: ${label} (contest)`);
+    const checked = rollCharacterCheck(
+      campaign,
+      asSheet,
+      { ...(theirs ? { skill: theirs } : { ability }), ...(charmer && input.roller ? { charmedTarget: input.roller.name } : {}) },
+      `${opponent.name}: ${label} (contest)`,
+    );
     if (checked.rollId) {
       turn?.rollIds.push(checked.rollId);
     }
@@ -150,6 +168,7 @@ export function rollContest(
   const effect = opponent.enemyId ? effectOutcome(campaign.id, { kind: "enemy", id: opponent.enemyId }, "check") : null;
   const advantage = mergeAdvantage([
     ...derivation.sources,
+    ...(charmer && ability === "cha" ? ["advantage" as const] : []),
     ...(worn ? ["disadvantage" as const] : []),
     ...(effect?.advantage ? ["advantage" as const] : []),
     ...(effect?.disadvantage ? ["disadvantage" as const] : []),
@@ -188,6 +207,8 @@ export function applyRollGates<A extends {
   campaign: Campaign,
   turn: DmTurn | null,
   args: A,
+  // The character rolling, for the charm the opponent may hold over them.
+  roller: Charmable | null = null,
 ): { args: A; contest?: ContestRoll } | ToolError {
   if (args.kind === "skill_check") {
     const marching = marchStealthProblem(campaign.id, args.skill);
@@ -209,6 +230,7 @@ export function applyRollGates<A extends {
     skill: args.kind === "skill_check" ? args.skill : undefined,
     ability: args.ability,
     contestSkill: args.contestSkill,
+    roller,
   });
   return { args: { ...args, dc: contest.dc }, contest };
 }

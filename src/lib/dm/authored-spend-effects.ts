@@ -16,6 +16,8 @@ import { STORM_AURA } from "@/lib/srd/authored-effects-data";
 import { effectiveMaxHp, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { immuneToCondition } from "@/lib/dm/damage-logic";
 import { rollCharacterCheck } from "@/lib/dm/contest-roll";
+import { charmedBy } from "@/lib/dm/enemy-profile";
+import { d20Expression } from "@/lib/dice";
 import { healDeathHook } from "@/lib/dm/death";
 import { applyEnemyDamage, publishEncounter } from "@/lib/dm/enemy-damage";
 import { rollEnemySave } from "@/lib/dm/forced-save";
@@ -425,8 +427,11 @@ export function resolveSpendEffect(ctx: SpendContext, does: SpendDoes): Resoluti
       const insight = rollCharacterCheck(campaign, sheet, { skill: "insight" }, `${sheet.name}: Insight against ${enemy.displayName}'s Deception`);
       const skills = enemy.stats.skills as Record<string, number> | undefined;
       const deceptionMod = Number(skills?.deception ?? Math.floor(((enemy.stats.abilities?.cha ?? 10) - 10) / 2));
-      // A contest the table sees, as every enemy's contest roll is (action-common.ts).
-      const deception = rollCard(ctx.campaign, ctx.turn, null, "skill_check", `${enemy.displayName}: Deception against ${sheet.name}'s Insight`, `1d20${deceptionMod >= 0 ? "+" : ""}${deceptionMod}`, null).total;
+      // A contest the table sees, as every enemy's contest roll is
+      // (action-common.ts). An enemy that charmed the character lies to them
+      // with advantage (SRD 5.1, Charmed: the charmer's social checks).
+      const charmer = charmedBy(sheet.conditions, sheet.conditionMeta as Parameters<typeof charmedBy>[1], enemy.id);
+      const deception = rollCard(ctx.campaign, ctx.turn, null, "skill_check", `${enemy.displayName}: Deception against ${sheet.name}'s Insight`, d20Expression(deceptionMod, charmer ? "advantage" : "none"), null).total;
       if (insight.total <= deception) {
         return { result: { insight: insight.total, deception, read: `${enemy.displayName} gives nothing away; no Sneak Attack edge.` } };
       }

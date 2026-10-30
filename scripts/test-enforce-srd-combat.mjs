@@ -217,7 +217,8 @@ await test("CMB-02 on every path: a flyer held by a spell, caught in an area or 
       stillUp.push("a drop to 0 hit points");
     }
   } finally {
-    world.patch(mage.id, { spellcasting: spells });
+    // Web's concentration ends with the test, or the next blow asks a CON save.
+    world.patch(mage.id, { spellcasting: spells, concentratingOn: null });
     world.patch(fighter.id, { features: kept.features, currentHp: 44, deathSaves: null, conditions: [], conditionMeta: {}, ac: kept.ac, acOverride: kept.acOverride ?? false });
   }
   assert.deepEqual(stillUp, [], `a flyer stayed aloft after ${stillUp.join("; ")}`);
@@ -334,8 +335,9 @@ await test("Cover counts on a DEX save against an area from its point of origin:
 await test("CMB-06 on every path: a trap's, an attack rider's and an area's DEX save take the cover from where each starts", async () => {
   const uncovered = [];
   // The wizard's DEX save is +2 (DEX 14, no proficiency): a 10 is 12 against
-  // DC 13, and half cover makes it 14.
+  // DC 13, and half cover makes it 14. No concentration to save for when hit.
   await stage(mage);
+  world.patch(mage.id, { concentratingOn: null });
   kit.openField([[5, 7, "|"]]);
   kit.place(mage.id, 5, 8);
   // A dart fired from the far side of a low wall.
@@ -353,8 +355,10 @@ await test("CMB-06 on every path: a trap's, an attack rider's and an area's DEX 
   kit.place(thrower.id, 5, 2);
   const bola = await forced([19, 2, 10], "enemy_attack", { enemyId: thrower.id, targetCharacterId: mage.id });
   assert.equal(bola.out.ok, true, bola.out.error);
+  const riderSave = bola.out.result?.swings?.[0]?.riderSave;
+  assert.equal(bola.unused, 0, `setup: the bola's dice were not all used (${bola.rolled.join(", ")}; ${riderSave})`);
   if (world.sheet(mage.id).conditions.includes("prone")) {
-    uncovered.push(`an attack's rider (${JSON.stringify(bola.out.result?.riderSave ?? bola.out.result).slice(0, 120)})`);
+    uncovered.push(`an attack's rider (${riderSave})`);
   }
   world.patch(mage.id, { currentHp: 28, conditions: [], conditionMeta: {} });
   // A Fireball's point with one dummy standing between it and another: a
@@ -501,6 +505,31 @@ await test("CMB-12", async () => {
   const mine = kit.lastRolls(4).find((roll) => roll.characterId === fighter.id);
   assert.ok(mine, "no roll was stored for the charmer");
   assert.equal(d20Faces(mine).length, 2, "the charmer's social check against the creature they charmed was not rolled with advantage");
+});
+
+// conditions, Charmed: the same sentence, from the other side of a contest: an enemy that charmed a character lies to them with advantage, whether a check asks or the GM tests one character's Insight against it.
+await test("CMB-12 on every path: an enemy's Deception against the character it charmed rolls with advantage", async () => {
+  const missed = [];
+  const lieOf = () => kit.lastRolls(6).find((roll) => /Deception \(contest\)/.test(roll.detail ?? ""));
+  const [enemy] = await stage(fighter);
+  world.patch(fighter.id, { conditions: ["charmed"], conditionMeta: { charmed: { source: enemy.id } } });
+  try {
+    // request_roll: the fighter's Insight, against the charmer's Deception.
+    const asked = await forced([7, 13, 10], "request_roll", { characterId: fighter.id, kind: "skill_check", skill: "insight", againstEnemyId: enemy.id, reason: "is the charmer lying" });
+    assert.equal(asked.out.ok, true, asked.out.error);
+    if (d20Faces(lieOf()).length !== 2) {
+      missed.push("request_roll's contest");
+    }
+    // check_notice: one character's Insight against the charmer's lie.
+    const noticed = await forced([7, 13], "check_notice", { characterIds: [fighter.id], sense: "insight", againstEnemyId: enemy.id, difficulty: "moderate", reason: "a charming lie" });
+    assert.equal(noticed.out.ok, true, noticed.out.error);
+    if (d20Faces(lieOf()).length !== 2) {
+      missed.push("check_notice's contest");
+    }
+  } finally {
+    world.patch(fighter.id, { conditions: [], conditionMeta: {} });
+  }
+  assert.deepEqual(missed, [], `the charmer's lie was rolled on one d20 in ${missed.join(" and ")}`);
 });
 
 // conditions, Frightened: 'A frightened creature has disadvantage on ability checks and attack rolls while the source of its fear is within line of sight.'

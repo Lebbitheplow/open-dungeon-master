@@ -13,7 +13,8 @@
 import { claimedAdvantage } from "@/lib/dm/pc-attack-options";
 import { askedFields, unnamedTraitFields } from "@/lib/dm/roll-feature-riders";
 import { rollExpression } from "@/lib/dice";
-import { getActiveEncounter, getEnemy } from "@/lib/db/encounters";
+import { getActiveEncounter } from "@/lib/db/encounters";
+import { getFoe } from "@/lib/dm/sheet-foe";
 import { charmedBy } from "@/lib/dm/enemy-profile";
 import { insertRoll } from "@/lib/db/rolls";
 import { createPendingRoll, publicPendingRoll, type DmTurn } from "@/lib/db/dm-turns";
@@ -90,7 +91,7 @@ export function handleRequestRoll(
   }
   // No stealth on a normal or fast march, and a contest rolls the
   // creature's own check for the DC (src/lib/dm/roll-gates.ts).
-  const gated = applyRollGates(campaign, turn, args);
+  const gated = applyRollGates(campaign, turn, args, sheet ? (getSheetById(sheet.id) ?? sheet) : null);
   if ("error" in gated) {
     return toolError(gated);
   }
@@ -139,8 +140,9 @@ export function handleRequestRoll(
     }
   }
 
-  // A check aimed at a creature the roller charmed (SRD 5.1, Charmed).
-  const aimedAt = sheet && args.againstEnemyId ? getEnemy(args.againstEnemyId.trim()) : null;
+  // A check aimed at a creature the roller charmed (SRD 5.1, Charmed): an
+  // enemy row, or a character fighting on the other side (sheet-foe.ts).
+  const aimedAt = sheet && args.againstEnemyId ? getFoe(args.againstEnemyId.trim()) : null;
   const charmedTarget = sheet && aimedAt && charmedBy(aimedAt.conditions, aimedAt.conditionMeta, sheet.id) ? aimedAt.displayName : undefined;
   const extras = sheet
     ? { ...rollExtrasFor(campaign, sheet, args.kind), ...(charmedTarget ? { charmedTarget } : {}) }
