@@ -219,13 +219,8 @@ await test(
   },
 );
 
-await gap(
-  "MON-08",
-  {
-    rule: "Monster Statistics, Multiattack: the creature makes the attacks the action lists; Gibbering Mouther 'makes one bite attack and, if it can, uses its Blinding Spittle'; Violet Fungus 'makes 1d4 Rotting Touch attacks'; Vampire, Vampire Spawn, Wererat 'two attacks, only one of which can be a bite', Wereboar 'only one of which can be with its tusks'; Lizardfolk 'two melee attacks, each one with a different weapon'",
-    where: "src/lib/dm/enemy-profile.ts plannedSwings (with no routine it repeats the asked attack attacksPerTurn times); src/lib/bestiary/multiattack-text.ts parseRoutines (reads no limit on one attack)",
-    severity: "medium",
-  },
+await test(
+  "MON-08: a Multiattack's limits hold: the gibbering mouther bites once beside its Blinding Spittle, the violet fungus rolls its 1d4 Rotting Touches, a vampire, vampire spawn, wererat or wereboar makes only one bite (or tusks) of its two attacks, and a lizardfolk's two attacks use different weapons",
   () => {
     const wrong = [];
     const swings = (name, asked) => {
@@ -372,31 +367,31 @@ await test("A block's printed XP is its challenge's in the SRD table, for every 
 
 // ---- the creature table: forms and summons (no pack needed) ----
 
-await gap(
-  "MON-11",
-  {
-    rule: "Monster Statistics, Multiattack: 'A creature that can make multiple attacks on its turn has the Multiattack action'; every adult and ancient dragon 'can use its Frightful Presence. It then makes three attacks', the marilith 'makes seven attacks', the tarrasque five, the nalfeshnee three, the hydra one per head. A Shapechange or True Polymorph form takes the form's statistics (shapechange, true-polymorph)",
-    where: "scripts/lib/srd-creature-text.mjs attacksPerTurn (reads no count after a lead-in sentence, none above six), so src/lib/srd/srd-creatures.json and src/lib/srd/beast-forms.ts SHAPE_FORMS give these forms one attack; scripts/test-srd-creatures.mjs compares the table with the page through the same reader",
-    severity: "medium",
-  },
+await test(
+  "MON-11: a Shapechange or True Polymorph form attacks as its Multiattack says: three for every adult and ancient dragon, seven for the marilith, five for the tarrasque and the hydra, two for a vampire, and one for the gibbering mouther and the mummies, which act otherwise beside it",
   () => {
     const wrong = [];
     for (const creature of SRD_CREATURES) {
       const block = blockOf(creature.name);
       const multi = block?.actions.find((entry) => /^Multiattack/.test(entry.name));
-      if (multi && !((findShapeForm(creature.name)?.attacksPerTurn ?? 1) > 1)) wrong.push(creature.name);
+      // The audit's first reading held every Multiattack to two attacks or
+      // more; a few make one attack beside another action, and hold one: the
+      // gibbering mouther "makes one bite attack and, if it can, uses its
+      // Blinding Spittle", a mummy "can use its Dreadful Glare and makes one
+      // attack with its rotting fist" (the grick's "can make one beak attack"
+      // after a hit is its second, the roper's "makes one attack with its
+      // bite" its fifth).
+      const counts = multi ? [...multi.text.matchAll(/\bmakes? (\w+) (?:\w+ )?attacks?\b/gi)].map((match) => match[1].toLowerCase()) : [];
+      const one = counts.length === 1 && counts[0] === "one" && !/\bcan make\b/i.test(multi.text);
+      const perTurn = findShapeForm(creature.name)?.attacksPerTurn ?? 1;
+      if (multi && (one ? perTurn !== 1 : !(perTurn > 1))) wrong.push(`${creature.name} ${perTurn}`);
     }
     assert.equal(wrong.length, 0, `forms whose Multiattack is lost, ${listed(wrong)}`);
   },
 );
 
-await gap(
-  "MON-12",
-  {
-    rule: "A ranged spell attack printed with one range is still an attack: Horned Devil 'Hurl Flame. Ranged Spell Attack: +7 to hit, range 150 ft., one target. Hit: 14 (4d6) fire damage'; Barbed Devil and Efreeti likewise",
-    where: "scripts/lib/srd-creature-text.mjs HEADER (reads 'range N/M ft.' only), so src/lib/srd/srd-creatures.json drops the attack from the form",
-    severity: "low",
-  },
+await test(
+  "MON-12: a ranged spell attack printed with one range is still a form's attack: the horned devil's, barbed devil's and efreeti's Hurl Flame",
   () => {
     const missing = [];
     for (const creature of SRD_CREATURES) {

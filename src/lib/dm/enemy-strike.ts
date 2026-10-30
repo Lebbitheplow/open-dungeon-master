@@ -87,7 +87,7 @@ export function enemyStrikesEnemy(
   if (!pool.length && !asked) {
     return { error: `${attacker.displayName} has no attack to make; narrate a different action.`, retry: true };
   }
-  const planned = plannedSwings(attacker.stats, pool.length ? pool : attacks, asked, { single: input.single });
+  const planned = plannedSwings(attacker.stats, pool.length ? pool : attacks, asked, { single: input.single, rollCount: (dice) => rollExpression(dice).total });
   const profiles = planned.map((attack) => enemyAttackProfile(attack, attacker.stats.traits ?? []));
   // A prone creature stands first, then walks into reach.
   const { enemy, stood } = standUpIfProne(encounter.id, attacker);

@@ -23,12 +23,17 @@
 // lays over it (src/lib/bestiary/pack-corrections.ts), so the numbers a
 // misprinted row gets right are written once, for both.
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { register } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3-multiple-ciphers";
 import { CHAIN_FORMS, CORRECTIONS, FAMILIARS, inRoster, PACK_KEEPS, RULEBOOK_PAGE, sidebarEntry, TRAITS_FROM } from "./lib/srd-creature-overlay.mjs";
 import { correctedMonsterData } from "../src/lib/bestiary/pack-corrections.ts";
-import { attacksPerTurn, defenseWords, packSpeeds, parseAttack, parseRoutines, parseRulebookPage, parseSenses, plain } from "./lib/srd-creature-text.mjs";
+
+// The Multiattack reader is the enemy reader's (src/lib/bestiary/
+// multiattack-text.ts), whose "@/" imports need the alias loader.
+register("./lib/register-alias.mjs", import.meta.url);
+const { attacksPerTurn, defenseWords, packSpeeds, parseAttack, parseRoutines, parseRulebookPage, parseSenses, plain } = await import("./lib/srd-creature-text.mjs");
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const contentDb = process.env.CONTENT_DB_PATH || join(root, "data", "content", "open5e.sqlite");
@@ -42,6 +47,11 @@ const DEFENSES = ["resist", "immune", "vulnerable", "conditionImmune"];
 // An action with a recharge or a daily count is no attack the engine rolls
 // every turn (a giant spider's Web): it stays a line for whoever runs it.
 const LIMITED = /\((?:recharge|\d+\/day)/i;
+
+// "Multiattack (Vampire Form Only)", "Multiattack (Humanoid or Hybrid Form
+// Only)": the form's Multiattack all the same, as the form a spell gives is
+// the creature's own.
+const MULTIATTACK = /^Multiattack\b/i;
 
 // "Sting (Bite in Beast Form)": the attack is the sting, and the note is
 // the Shapechanger trait's to tell.
@@ -61,8 +71,8 @@ function fromPack(row, data) {
   const actionLines = [];
   let multiattack = null;
   for (const action of actions) {
-    const parsed = action.name === "Multiattack" || LIMITED.test(action.name) ? null : parseAttack(action.name, action.desc);
-    if (action.name === "Multiattack") {
+    const parsed = MULTIATTACK.test(action.name) || LIMITED.test(action.name) ? null : parseAttack(action.name, action.desc);
+    if (MULTIATTACK.test(action.name)) {
       multiattack = action;
     }
     if (parsed) {
@@ -173,10 +183,14 @@ function differences(block, page, keeps = {}) {
   for (const field of DEFENSES) {
     same(field, block[field].toLowerCase(), page[field].toLowerCase());
   }
-  const theirs = page.actions.filter((action) => !sidebarEntry(action.name) && action.name !== "Multiattack" && !LIMITED.test(action.name)).map((action) => parseAttack(action.name, action.desc)).filter(Boolean);
+  const theirs = page.actions.filter((action) => !sidebarEntry(action.name) && !MULTIATTACK.test(action.name) && !LIMITED.test(action.name)).map((action) => parseAttack(action.name, action.desc)).filter(Boolean);
   same("attacks", block.attacks.map(attackNumbers).sort(), theirs.map(attackNumbers).sort());
-  const multiattack = page.actions.find((action) => action.name === "Multiattack");
-  same("attacksPerTurn", block.multiattack ? attacksPerTurn(block.multiattack.desc) : 1, multiattack ? attacksPerTurn(multiattack.desc) : 1);
+  const multiattack = page.actions.find((action) => MULTIATTACK.test(action.name));
+  same(
+    "attacksPerTurn",
+    block.multiattack ? attacksPerTurn(block.multiattack.desc, block.attacks.map((attack) => attackName(attack.name))) : 1,
+    multiattack ? attacksPerTurn(multiattack.desc, theirs.map((attack) => attackName(attack.name))) : 1,
+  );
   same(
     "trait names",
     block.specials.map((entry) => entry.slice(0, entry.indexOf(":"))),
@@ -194,7 +208,7 @@ function differences(block, page, keeps = {}) {
 function finished(block) {
   const attacks = block.attacks.map((attack) => ({ ...attack, name: attackName(attack.name) }));
   const routines = block.multiattack ? parseRoutines(block.multiattack.desc, attacks.map((attack) => attack.name)) : null;
-  const perTurn = block.multiattack ? attacksPerTurn(block.multiattack.desc) : 1;
+  const perTurn = block.multiattack ? attacksPerTurn(block.multiattack.desc, attacks.map((attack) => attack.name)) : 1;
   return {
     name: block.name,
     slug: block.slug,

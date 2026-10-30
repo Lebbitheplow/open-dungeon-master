@@ -4,7 +4,7 @@ import { correctedMonsterData } from "@/lib/bestiary/pack-corrections";
 import { readDefences } from "@/lib/bestiary/defences";
 import { normalizeCreatureType } from "@/lib/bestiary/creature-type";
 import type { AttackAlternative, OnHitRider, TypedDice } from "@/lib/bestiary/attack-text";
-import { parseMultiattackCount, parseRoutines, type RoutineStep } from "@/lib/bestiary/multiattack-text";
+import { multiattackOf, parseMultiattackCount, type RoutineStep } from "@/lib/bestiary/multiattack-text";
 import { asNumber, asString, formatSpeed, lairOptionsOf, parseBlockExtras, sizeOf, subtypeOf } from "@/lib/bestiary/block-fields";
 import { parseAttack } from "@/lib/bestiary/attack-parse";
 import {
@@ -243,15 +243,13 @@ export function parseMonster(raw: Record<string, unknown>, crFromRow: number): E
   const attacks: EnemyAttack[] = [];
   const nonAttackActions: RawAction[] = [];
   const nonAttackBonus: RawAction[] = [];
-  let attacksPerTurn = 1;
-  let multiattack = "";
+  let multiattack: string | null = null;
   for (const action of actions) {
     const attack = parseAttack(action);
     if (attack && attacks.length < MAX_ATTACKS) {
       attacks.push(attack);
     } else if (!attack) {
       if (/multiattack/i.test(String(action.name ?? ""))) {
-        attacksPerTurn = parseMultiattackCount(String(action.desc ?? "")) ?? 2;
         multiattack = asString(action.desc);
       }
       nonAttackActions.push(action);
@@ -267,7 +265,9 @@ export function parseMonster(raw: Record<string, unknown>, crFromRow: number): E
   }
   // A Multiattack routine is the action's: a bonus action's attack is never
   // one of its steps.
-  const routines = multiattack ? parseRoutines(multiattack, attacks.filter((attack) => !attack.bonusAction).map((attack) => attack.name)) : null;
+  const read = multiattack !== null ? multiattackOf(multiattack, attacks.filter((attack) => !attack.bonusAction).map((attack) => attack.name)) : null;
+  const routines = read?.routines ?? null;
+  const attacksPerTurn = read?.perTurn ?? 1;
 
   // The lines the engine reads come first, so the cap on the rest never
   // drops a Legendary Resistance or a Magic Resistance.

@@ -101,12 +101,16 @@ export function attackNamed(attacks: EnemyAttack[], wanted: string): EnemyAttack
 }
 
 // A step that follows only a hit (the grick's beak) is marked on the swing,
-// and enemy-attack.ts skips it after a miss.
-function expand(routine: RoutineStep[], attacks: EnemyAttack[]): EnemyAttack[] {
+// and enemy-attack.ts skips it after a miss. A step whose count is rolled
+// (a violet fungus's 1d4 Rotting Touches) is rolled by `rollCount` when the
+// caller makes the swings, and is its average count for a caller that only
+// shows them.
+function expand(routine: RoutineStep[], attacks: EnemyAttack[], rollCount?: (dice: string) => number): EnemyAttack[] {
   return routine.flatMap((step) => {
     const found = attackNamed(attacks, step.attack);
     const attack = found && step.ifHit ? { ...found, onlyIfHit: true } : found;
-    return attack ? new Array<EnemyAttack>(Math.max(1, Math.min(10, step.count))).fill(attack) : [];
+    const count = step.dice && rollCount ? rollCount(step.dice) : step.count;
+    return attack ? new Array<EnemyAttack>(Math.max(1, Math.min(10, count))).fill(attack) : [];
   });
 }
 
@@ -142,7 +146,7 @@ export function plannedSwings(
   stats: Pick<EnemyStats, "attacks" | "attacksPerTurn" | "routines">,
   attacks: EnemyAttack[],
   asked: EnemyAttack | null,
-  options: { single?: boolean } = {},
+  options: { single?: boolean; rollCount?: (dice: string) => number } = {},
 ): EnemyAttack[] {
   if (!attacks.length) {
     return [];
@@ -150,7 +154,7 @@ export function plannedSwings(
   if (options.single) {
     return [asked ?? attacks[0]];
   }
-  const routines = (stats.routines ?? []).map((routine) => expand(routine, attacks)).filter((swings) => swings.length);
+  const routines = (stats.routines ?? []).map((routine) => expand(routine, attacks, options.rollCount)).filter((swings) => swings.length);
   if (routines.length) {
     if (!asked) {
       return routines[0];

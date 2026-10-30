@@ -10,7 +10,9 @@ import { pluralForms } from "@/lib/srd/name-forms";
 
 // `ifHit`: the step is made only when the swing before it hit ("If that
 // attack hits, the grick can make one beak attack against the same target").
-export type RoutineStep = { attack: string; count: number; ifHit?: boolean };
+// `dice`: the count is rolled each turn ("makes 1d4 Rotting Touch attacks",
+// a violet fungus); `count` is then its average, for whatever only plans.
+export type RoutineStep = { attack: string; count: number; ifHit?: boolean; dice?: string };
 
 const COUNTS: Record<string, number> = {
   a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
@@ -120,8 +122,10 @@ function listedRoutines(clause: string, names: string[]): RoutineStep[][] {
 // Presence"), split into its alternatives at an "or" that opens another
 // count ("two claw attacks or one claw and one bite attack").
 export function multiattackAlternatives(clause: string): string[] {
+  // "makes one bite attack and, if it can, uses its Blinding Spittle" (a
+  // gibbering mouther) lists the bite alone.
   const listed = clause
-    .split(/,?\s*(?:(?:and|or)\s+)?(?:then\s+)?\b(?:uses?|can|casts?)\b/i)[0]
+    .split(/,?\s*(?:(?:and|or),?\s+)?(?:if (?:it|he|she|they) can,\s+)?(?:then\s+)?\b(?:uses?|can|casts?)\b/i)[0]
     .replace(new RegExp(`(\\battacks?)\\s+or\\s+(?!${COUNT_WORD}\\s).*$`, "i"), "$1");
   return listed.split(new RegExp(`\\s+or\\s+(?=${COUNT_WORD}\\s)`, "i"));
 }
@@ -197,6 +201,42 @@ export function multiattackSentences(desc: string): string[] {
     .split(/(?<=[.;])\s+/);
 }
 
+// The routines of a Multiattack that limits its attacks rather than listing
+// them (SRD 5.1): "makes two attacks, only one of which can be a bite" (a
+// vampire, a wererat; "with its tusks", a wereboar) is two of any other
+// attack, or one fewer and the bite; "makes two melee attacks, each one
+// with a different weapon" (a lizardfolk) is two attacks of different
+// names; "makes 1d4 Rotting Touch attacks" (a violet fungus) rolls its count.
+// Null when the part says none of these, empty when it names no attack of
+// the block.
+function limitedRoutines(part: string, attackNames: string[]): RoutineStep[][] | null {
+  const onlyOne = new RegExp(`makes?\\s+(${COUNT_WORD})\\s+(?:\\w+\\s+)?attacks?,?\\s+only one of which can be (?:an?\\s+|with\\s+(?:its|his|her|their)\\s+)?([\\w ]+?)(?:\\s+attack)?\\.?$`, "i").exec(part);
+  if (onlyOne) {
+    const count = countOf(onlyOne[1]);
+    const once = matchAttack(onlyOne[2], attackNames);
+    const others = attackNames.filter((name) => name !== once);
+    if (!once || !others.length || count < 2) {
+      return [];
+    }
+    return [...others.map((other) => [{ attack: other, count }]), ...others.map((other) => [{ attack: other, count: count - 1 }, { attack: once, count: 1 }])];
+  }
+  const different = new RegExp(`makes?\\s+(${COUNT_WORD})\\s+(?:\\w+\\s+)?attacks?,?\\s+each(?:\\s+one)?\\s+with\\s+a\\s+different\\s+weapon\\.?$`, "i").exec(part);
+  if (different) {
+    const count = countOf(different[1]);
+    if (count < 2 || attackNames.length < count) {
+      return [];
+    }
+    return attackNames.map((_, start) => Array.from({ length: count }, (__, step) => ({ attack: attackNames[(start + step) % attackNames.length], count: 1 })));
+  }
+  const rolled = /makes?\s+(\d{1,2})d(\d{1,2})\s+(.+?)\s+attacks?\.?$/i.exec(part);
+  if (rolled) {
+    const attack = matchAttack(rolled[3], attackNames);
+    const [dice, faces] = [Number(rolled[1]), Number(rolled[2])];
+    return attack ? [[{ attack, count: Math.max(1, Math.floor((dice * (faces + 1)) / 2)), dice: `${dice}d${faces}` }]] : [];
+  }
+  return null;
+}
+
 // The routines a Multiattack line names, first the main one, then any "Or
 // it makes..." alternative. Null when a group it lists names no attack of
 // the block ("makes two melee attacks", "two Necrotic Blast attacks" beside
@@ -225,6 +265,12 @@ export function parseRoutines(desc: string, attackNames: string[]): RoutineStep[
       continue;
     }
     for (const part of multiattackParts(sentence)) {
+      const limits = limitedRoutines(part, attackNames);
+      if (limits) {
+        unread ||= !limits.length;
+        routines.push(...limits);
+        continue;
+      }
       const listed = new RegExp(`makes?\\s+${COUNT_WORD}\\s+(?:\\w+\\s+)?attacks?\\s*:\\s*(.+)$`, "i").exec(part);
       const either = new RegExp(
         `makes?\\s+(${COUNT_WORD})\\s+(?:\\w+\\s+)?attacks?,?\\s+either\\s+with\\s+(?:its|his|her|their)\\s+([\\w ]+?)\\s+or\\s+(?:with\\s+)?(?:its|his|her|their)\\s+([\\w ]+?)\\.?$`,
@@ -329,4 +375,17 @@ export function parseMultiattackCount(description: string): number | null {
     count += also ? countOf(also[1]) : 0;
   }
   return count >= 2 ? Math.min(MAX_MULTIATTACK, count) : null;
+}
+
+// The swings one Attack action holds and the routines that spend them, as
+// the enemy reader stores a block (statblock.ts) and the creature table
+// writes a form (scripts/generate-srd-creatures.mjs), so a creature fought
+// and the same creature shaped into attack alike: the count the line
+// prints, else its first routine's swings (a gibbering mouther's one bite
+// beside its Blinding Spittle, a violet fungus's 1d4 at their average), else
+// two.
+export function multiattackOf(desc: string, attackNames: string[]): { perTurn: number; routines: RoutineStep[][] | null } {
+  const routines = parseRoutines(desc, attackNames);
+  const perTurn = parseMultiattackCount(desc) ?? (routines ? Math.max(1, routines[0].reduce((sum, step) => sum + step.count, 0)) : 2);
+  return { perTurn, routines };
 }

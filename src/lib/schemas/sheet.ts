@@ -631,8 +631,9 @@ export const wildShapeSchema = z
     // An empty list is a form with no attack at all (a frog), which leaves
     // the character nothing to attack with.
     attacks: z.array(summonAttackSchema).max(4).optional(),
-    // The form's Multiattack: attacks one Attack action holds.
-    attacksPerTurn: z.number().int().min(1).max(4).optional(),
+    // The form's Multiattack: attacks one Attack action holds, up to the
+    // marilith's seven (SRD 5.1) under the enemy reader's ceiling of ten.
+    attacksPerTurn: z.number().int().min(1).max(10).optional(),
     // What the creature is: its type ("elemental"), challenge rating, the
     // saving throws its block lists, and the damage and conditions it
     // shrugs off. Rows stored before these fields lack them and read as a

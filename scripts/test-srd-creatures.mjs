@@ -36,6 +36,8 @@ function test(name, fn) {
 }
 
 const LIMITED = /\((?:recharge|\d+\/day)/i;
+// "Multiattack (Vampire Form Only)" is the vampire's Multiattack.
+const MULTIATTACK = /^Multiattack\b/i;
 // The numbers an attack's two readings share; its manual notes are left
 // out, as a rulebook page runs on into the creature's lore.
 const numbers = (attack) => {
@@ -102,18 +104,17 @@ test("every block holds the numbers the SRD 5.1 prints, with no content pack", (
       attacks: creature.attacks.map(numbers).sort(),
       attacksPerTurn: creature.attacksPerTurn ?? 1,
     };
-    const multiattack = page.actions.find((action) => action.name === "Multiattack");
+    const multiattack = page.actions.find((action) => MULTIATTACK.test(action.name));
+    const pageAttacks = page.actions
+      .filter((action) => !sidebarEntry(action.name) && !MULTIATTACK.test(action.name) && !LIMITED.test(action.name))
+      .map((action) => parseAttack(action.name, action.desc))
+      .filter(Boolean);
     const theirs = {
       size: page.size, type: page.type, cr: page.cr, ac: page.ac, hp: page.hp,
       speeds: page.speeds, abilities: page.abilities, saves: page.saves, senses: page.senses,
       defenses: ["resist", "immune", "vulnerable", "conditionImmune"].map((field) => page[field].toLowerCase()),
-      attacks: page.actions
-        .filter((action) => !sidebarEntry(action.name) && action.name !== "Multiattack" && !LIMITED.test(action.name))
-        .map((action) => parseAttack(action.name, action.desc))
-        .filter(Boolean)
-        .map(numbers)
-        .sort(),
-      attacksPerTurn: multiattack ? attacksPerTurn(multiattack.desc) : 1,
+      attacks: pageAttacks.map(numbers).sort(),
+      attacksPerTurn: multiattack ? attacksPerTurn(multiattack.desc, pageAttacks.map((attack) => attack.name.replace(/\s*\(Bite in Beast Form\)$/i, ""))) : 1,
     };
     // A field the overlay leaves to the pack row, where the SRD text in the
     // repository slipped (srd-creature-overlay.mjs PACK_KEEPS).
@@ -216,7 +217,7 @@ test("with the content pack: the committed table is what the generator writes, a
       creature.name,
     );
     const theirs = (data.actions ?? [])
-      .filter((action) => !sidebarEntry(action.name) && action.name !== "Multiattack" && !LIMITED.test(action.name))
+      .filter((action) => !sidebarEntry(action.name) && !MULTIATTACK.test(action.name) && !LIMITED.test(action.name))
       .map((action) => parseAttack(fix.attackNames?.[action.name] ?? action.name, action.desc))
       .filter(Boolean)
       .map((attack) => ({ ...attack, ...(fix.attackFields?.[attack.name] ?? {}) }));

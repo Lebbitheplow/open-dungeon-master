@@ -430,7 +430,10 @@ export function checkRoutines(raw: unknown, attacks: EnemyAttack[]): RoutineStep
       if (!attack || !names.has(textKey(attack))) {
         continue;
       }
-      steps.push({ attack, count: clamp(source.count, 1, 10) ?? 1, ...(source.ifHit === true ? { ifHit: true } : {}) });
+      // A rolled count ("1d4 Rotting Touch attacks") is kept, so a copy of a
+      // violet fungus still rolls it.
+      const dice = typeof source.dice === "string" && isValidExpression(source.dice) ? source.dice.slice(0, 12) : "";
+      steps.push({ attack, count: clamp(source.count, 1, 10) ?? 1, ...(source.ifHit === true ? { ifHit: true } : {}), ...(dice ? { dice } : {}) });
     }
     if (steps.length) {
       out.push(steps);
