@@ -1,4 +1,5 @@
 import { allocateSeq, type Campaign } from "@/lib/db/campaigns";
+import { shadowInvisibility, shadowLightProblem } from "@/lib/dm/one-with-shadows";
 import { insertRoll } from "@/lib/db/rolls";
 import { getSheetById } from "@/lib/db/sheets";
 import { breakConcentration } from "@/lib/dm/concentration";
@@ -7,7 +8,7 @@ import { rollExpression } from "@/lib/dice";
 import { publishWithSeq } from "@/lib/events";
 import { computeSheetDerived } from "@/lib/srd";
 import { ELEMENTAL_WILD_SHAPE_COST, elementalWildShape, wildShapeUse, type WildShapeAsk } from "@/lib/dm/wild-shape-use";
-import { isUnlimited, matchResource, RAGING, recoveringPrefix, resourceLevel, type ResourceDef } from "@/lib/srd/class-resources";
+import { heldUnlimitedState, isUnlimited, matchResource, RAGING, recoveringPrefix, resourceLevel, type ResourceDef } from "@/lib/srd/class-resources";
 import { effectiveMaxHp, incapacitatedBy, wearsHeavyArmor } from "@/lib/dm/condition-logic";
 import { conditionEffectsFor } from "@/lib/srd/condition-effects";
 import { consumableEffect, findCarriedItem, notCarried } from "@/lib/dm/item-logic";
@@ -301,7 +302,7 @@ export function computeUseResource(
   reacting?: { beforeDrop?: boolean },
 ): Outcome | ToolError {
   const def = matchResource(resourceName);
-  const state = def ? sheet.resources[def.id] : undefined;
+  const state = def ? (sheet.resources[def.id] ?? heldUnlimitedState(def, sheet) ?? undefined) : undefined;
   if (!def || !state) {
     const available = Object.keys(sheet.resources);
     const theirs = available.length ? ` Their resources: ${available.join(", ")}.` : " They have no limited-use resources.";
@@ -455,6 +456,18 @@ export function computeUseResource(
       effect: def.guidance,
     },
   };
+
+  // One with Shadows: dim light or darkness, then invisible until the warlock
+  // moves or acts (src/lib/dm/one-with-shadows.ts).
+  if (def.id === "one_with_shadows") {
+    const bright = shadowLightProblem(campaign.id, sheet);
+    if (bright) {
+      return bright;
+    }
+    Object.assign(outcome.patch, shadowInvisibility(sheet));
+    outcome.result.invisible = `${sheet.name} is invisible until they move or take an action or a reaction.`;
+    return outcome;
+  }
 
   const derived = computeSheetDerived(sheet);
   // Multiclass: an effect's level-scaled dice read the owning class's level

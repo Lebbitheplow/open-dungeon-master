@@ -1,4 +1,5 @@
 import { acBreakdownFor } from "@/lib/srd";
+import { endShadowInvisibility } from "@/lib/dm/one-with-shadows";
 import { z } from "zod";
 import type { Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter } from "@/lib/db/encounters";
@@ -416,6 +417,12 @@ export function handleTakeAction(
   }
   const costs: Record<string, unknown> = {};
   const spend = (flags: Partial<Pick<TurnBudget, "dashed" | "dashes" | "disengaged">> = {}) => {
+    // An action, or the reaction a readied one is released with, ends One
+    // with Shadows' invisibility (one-with-shadows.ts); a bonus action does not.
+    const shadow = readied || !args.bonus ? endShadowInvisibility(campaign.id, sheet.id, readied ? "takes a reaction" : "takes an action") : null;
+    if (shadow) {
+      costs.oneWithShadows = shadow;
+    }
     if (readied) {
       Object.assign(costs, readied.release());
       return;

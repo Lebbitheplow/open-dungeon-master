@@ -5,6 +5,7 @@
 // (resource-tools grants Action Surge through here) without pulling in the
 // handlers.
 
+import { endShadowInvisibility } from "@/lib/dm/one-with-shadows";
 import { thirstingBladeAttacks } from "@/lib/srd/pact-weapon";
 import { getActiveEncounter, orderEntryId, saveEncounter, type Encounter } from "@/lib/db/encounters";
 import { activePublicEncounter } from "@/lib/db/encounter-view";
@@ -119,6 +120,8 @@ function publishTurnCount(campaignId: string) {
 export function markReactionUsed(encounter: Encounter, characterId: string) {
   encounter.reactionsUsed = [...encounter.reactionsUsed, characterId];
   saveEncounter(encounter);
+  // A reaction ends One with Shadows' invisibility (one-with-shadows.ts).
+  endShadowInvisibility(encounter.campaignId, characterId, "takes a reaction");
   publishTurnCount(encounter.campaignId);
 }
 

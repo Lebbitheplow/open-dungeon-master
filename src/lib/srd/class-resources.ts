@@ -738,12 +738,30 @@ const INNATE_RESOURCE_DEFS: ResourceDef[] = [
   };
 });
 
+// One with Shadows (SRD 5.1, a warlock invocation): an action, as often as
+// the warlock likes, in dim light or darkness (src/lib/dm/one-with-shadows.ts).
+const INVOCATION_ACTION_DEFS: ResourceDef[] = [
+  {
+    id: "one_with_shadows",
+    match: ["invocation: one with shadows"],
+    exact: true,
+    displayName: "One with Shadows",
+    maxFor: () => UNLIMITED_USES,
+    recharge: "long",
+    action: "action",
+    effect: { kind: "narrative" },
+    guidance:
+      "One with Shadows: an action in dim light or darkness makes the warlock invisible until they move or take an action or a reaction. The server checks the light on the battle map, applies the invisibility and ends it when they move, act or react.",
+  },
+];
+
 export const RESOURCE_DEFS: ResourceDef[] = [
   ...SRD_RESOURCE_DEFS,
   ...CUSTOM_RESOURCE_DEFS,
   ...SUBCLASS_RESOURCE_DEFS,
   ...INNATE_RESOURCE_DEFS,
   ...COMBAT_RESOURCE_DEFS,
+  ...INVOCATION_ACTION_DEFS,
 ];
 
 // The marker a counter that returns after several long rests leaves on the
@@ -897,6 +915,17 @@ function featureHolds(def: ResourceDef, feature: { name: string; classId?: strin
     // "Channel Divinity: Turn Undead" is spent from Channel Divinity.
     return !def.exact && (isNamed(unquoted(feature.name), unquoted(fragment)) || choiceIn(feature.name, fragment) !== null);
   });
+}
+
+// A feature with no limit on its uses that the sheet holds but whose counter
+// was never written (a pick added by hand): its state, so the use is not
+// refused for a counter that only says "unlimited". Null otherwise.
+export function heldUnlimitedState(
+  def: ResourceDef,
+  sheet: { level: number; features: Array<{ name: string; classId?: string }> },
+): ResourceState | null {
+  const holds = sheet.features.some((feature) => featureHolds(def, feature));
+  return holds && def.maxFor(sheet.level, {}) === UNLIMITED_USES ? { max: UNLIMITED_USES, used: 0 } : null;
 }
 
 // The "(N uses)" a feature's own name states, which is the count its class

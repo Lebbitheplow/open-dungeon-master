@@ -502,15 +502,26 @@ const shadowlock = world.addHero({
 });
 pick(shadowlock, ["Invocation: One with Shadows", "Invocation: Agonizing Blast", "Invocation: Devil's Sight"]);
 
-await gap("CLS-26", {
-  rule: "SRD 5.1 warlock, Eldritch Invocations, One with Shadows: \"When you are in an area of dim light or darkness, you can use your action to become invisible until you move or take an action or a reaction.\"",
-  where: "src/lib/srd/class-resources.ts and src/lib/dm/resource-tools.ts (no spend or action reads the invocation)",
-  severity: "low",
-}, async () => {
+// SRD 5.1 warlock, Eldritch Invocations, One with Shadows: "When you are in an area of dim light or darkness, you can use your action to become invisible until you move or take an action or a reaction."
+await test("CLS-26", async () => {
   await duel(shadowlock);
+  kit.openField();
+  kit.place(shadowlock.id, 4, 4);
+  // The light the board is lit with, indoors so the clock's sky does not
+  // answer for it.
+  const { getDatabase } = await import("../src/lib/db/core.ts");
+  const light = (ambient) => getDatabase().prepare("UPDATE battle_maps SET ambient = ?, outdoors = 0 WHERE id = ?").run(ambient, kit.map().id);
+  light("bright");
+  const bright = await world.invoke("use_resource", { characterId: shadowlock.id, resource: "One with Shadows" });
+  assert.equal(bright.refused, "rules", "One with Shadows worked in bright light");
+  light("dim");
   const out = await world.invoke("use_resource", { characterId: shadowlock.id, resource: "One with Shadows" });
   assert.equal(out.ok, true, `One with Shadows could not be used: ${out.error}`);
   assert.ok(world.sheet(shadowlock.id).conditions.map((name) => name.toLowerCase()).includes("invisible"), "One with Shadows left the warlock visible");
+  // Moving ends it.
+  const moved = await walk(shadowlock, { x: 4, y: 5 });
+  assert.equal(moved.status, 200, moved.body.error);
+  assert.ok(!world.sheet(shadowlock.id).conditions.map((name) => name.toLowerCase()).includes("invisible"), "the warlock moved and stayed invisible");
 });
 
 // Druid, Archdruid.

@@ -1,4 +1,5 @@
 import { readiedReleaseFor } from "@/lib/dm/readied-release";
+import { endShadowInvisibility } from "@/lib/dm/one-with-shadows";
 import { tokenSides } from "@/lib/dm/combatant";
 import { z } from "zod";
 import { actingSheetFor } from "@/lib/character-seat";
@@ -340,6 +341,10 @@ export async function POST(
     carried = placed;
   }
   moveToken(token.id, x, y, scene ? 0 : token.movedThisRound + (readied ? 0 : spend));
+  // Moving ends One with Shadows' invisibility (src/lib/dm/one-with-shadows.ts).
+  if (!scene) {
+    endShadowInvisibility(campaignId, sheet.id, "moves");
+  }
   for (const entry of carried) {
     moveToken(entry.token.id, entry.at.x, entry.at.y, entry.token.movedThisRound);
   }

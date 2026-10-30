@@ -270,7 +270,9 @@ await test("every counter id is unique, so no definition hides another", () => {
   // And the feats' five (issue #147): Lucky's points, Inspiring Leader's
   // uses, and Inner Resilience's, Martial Adept's and Metamagic Adept's
   // pour-ins to the class counters (src/lib/srd/feat-combat.ts).
-  assert.equal(RESOURCE_DEFS.length, 32 + AUTHORED.length + GENRE.length + 3 + 5);
+  // And the warlock's One with Shadows, an action with no limit
+  // (src/lib/dm/one-with-shadows.ts, issue #570).
+  assert.equal(RESOURCE_DEFS.length, 32 + AUTHORED.length + GENRE.length + 3 + 5 + 1);
 });
 
 await test("every authored and genre row is structurally legal", () => {

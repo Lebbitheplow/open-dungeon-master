@@ -1,4 +1,5 @@
 import { readiedReleaseFor } from "@/lib/dm/readied-release";
+import { endShadowInvisibility } from "@/lib/dm/one-with-shadows";
 import { tokenSides } from "@/lib/dm/combatant";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { DmTurn } from "@/lib/db/dm-turns";
@@ -294,6 +295,8 @@ export function walkCharacter(
   }
   const spent = walk.spent * factor + standCost;
   moveToken(token.id, walk.at.x, walk.at.y, token.movedThisRound + (readied ? 0 : spent));
+  // Moving ends One with Shadows' invisibility (one-with-shadows.ts).
+  endShadowInvisibility(campaign.id, sheet.id, "moves");
   for (const entry of carried) {
     moveToken(entry.token.id, entry.at.x, entry.at.y, entry.token.movedThisRound);
   }
