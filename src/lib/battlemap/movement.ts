@@ -1,6 +1,7 @@
 import { footprintTiles, type Footprint } from "@/lib/battlemap/footprint";
 import {
   blocksMoveFor,
+  crawlExtra,
   moveCost,
   passableOf,
   tileAt,
@@ -165,7 +166,7 @@ export function reachableTiles(
       if (!step) {
         continue;
       }
-      const cost = current.cost + step.cost;
+      const cost = current.cost + step.cost + crawlExtra(swims);
       if (cost > budget || cost >= (best.get(idx) ?? Infinity)) {
         continue;
       }
@@ -232,7 +233,7 @@ export function findPath(
       if (!step || (idx === goalIdx && !step.stop)) {
         continue;
       }
-      const cost = current.cost + step.cost;
+      const cost = current.cost + step.cost + crawlExtra(swims);
       if (cost >= (best.get(idx) ?? Infinity)) {
         continue;
       }

@@ -38,7 +38,7 @@ import { cachedLitTiles } from "@/lib/battlemap/lit-cache";
 import { sensesFromText, type Senses } from "@/lib/srd/senses";
 import { reachableTiles, speedToTiles } from "@/lib/battlemap/movement";
 import { pcMoveTraits } from "@/lib/battlemap/passage";
-import { flyingSpeedOf, tileIndex, type BattleToken, type TokenMovement } from "@/lib/battlemap/types";
+import { crawlingTraits, flyingSpeedOf, tileIndex, type BattleToken, type TokenMovement } from "@/lib/battlemap/types";
 import { drawingsFor, labelsFor } from "@/lib/battlemap/scene";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { projectIntents } from "@/lib/dm/intent";
@@ -48,7 +48,7 @@ import { targetEdges } from "@/lib/battlemap/view-tactics";
 import { lightsWithZones, sightTerrainFor, withZoneSteps } from "@/lib/dm/zone-rules";
 import { viewZones } from "@/lib/dm/zone-view";
 import { standUpTiles } from "@/lib/srd/authored-effects-more";
-import { addSilenceChips, viewerMoves } from "@/lib/battlemap/view-moves";
+import { addSilenceChips, movesProne, viewerMoves } from "@/lib/battlemap/view-moves";
 import { undoableMove, undoOffer } from "@/lib/battlemap/move-undo";
 import type { AuraTone, PlayerMapView } from "@/lib/battlemap/view-types";
 import { ENEMY_TURN_NAME, turnOwner } from "@/lib/dm/turn-owner";
@@ -363,27 +363,23 @@ export function buildPlayerMapView(
     budgetLeft = budget.tiles;
     if (budgetLeft > 0) {
       const occupied = occupiedTiles(map, tokens, myToken, footprintLookup(enemiesById));
-      const costs = [
-        ...reachableTiles(
-          map.terrain,
-          map.width,
-          map.height,
-          occupied,
-          myToken,
-          budgetLeft,
-          1,
-          myToken.movement === "fly",
-          // The same passage the move route allows (src/lib/battlemap/passage.ts).
-          withZoneSteps(pcMoveTraits({ width: map.width, tokens, mover: myToken, sheet, footprintOf: footprintLookup(enemiesById), enemySize: (refId) => enemiesById.get(refId)?.stats.size, sideOf: tokenSides(encounter) }), map, "pc"),
-        ).entries(),
-      ];
+      // The same passage the move route allows (src/lib/battlemap/passage.ts).
+      const traits = withZoneSteps(pcMoveTraits({ width: map.width, tokens, mover: myToken, sheet, footprintOf: footprintLookup(enemiesById), enemySize: (refId) => enemiesById.get(refId)?.stats.size, sideOf: tokenSides(encounter) }), map, "pc");
+      const reach = (limit: number, moveTraits: typeof traits) =>
+        [...reachableTiles(map.terrain, map.width, map.height, occupied, myToken, limit, 1, myToken.movement === "fly", moveTraits).entries()];
+      const costs = reach(budgetLeft, traits);
+      // A prone character's crawl, every square one extra, priced on the
+      // movement in hand as the move route prices it (SRD 5.1, Being Prone).
+      const scene = encounter.kind === "scene";
+      const crawlCosts = movesProne(sheet, scene) ? reach(budget.fullTiles, crawlingTraits(traits)) : undefined;
       // What the move route will charge for each square, and what the move
       // may carry this turn (src/lib/battlemap/view-moves.ts).
       ({ reachable, reachableCost, moves } = viewerMoves({
         costs,
+        crawlCosts,
         sheet,
         token: myToken,
-        scene: encounter.kind === "scene",
+        scene,
         budget,
         enemies: [...enemiesById.values()],
       }));

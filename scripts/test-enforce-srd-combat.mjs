@@ -91,12 +91,8 @@ async function enemySwing(enemy, target, faces = [7, 13, 1]) {
 
 // ---- Movement and Position: Being Prone, Difficult Terrain ----
 
-await gap("CMB-01", {
-  rule: "combat, Being Prone: 'Every foot of movement while crawling costs 1 extra foot. Crawling 1 foot in difficult terrain, therefore, costs 3 feet of movement.'",
-  where: "src/lib/battlemap/board-move.ts proneCharge (doubles the step's whole cost, so a difficult square crawled costs 4 squares)",
-  severity: "low",
-  note: "A prone character with 4 squares of movement left crawls one square of rough ground: the SRD charges 3 squares, the engine 4.",
-}, async () => {
+// combat, Being Prone: 'Every foot of movement while crawling costs 1 extra foot. Crawling 1 foot in difficult terrain, therefore, costs 3 feet of movement.'
+await test("CMB-01", async () => {
   await stage(fighter);
   kit.openField([[6, 5, ","]]);
   kit.place(fighter.id, 5, 5, 2);

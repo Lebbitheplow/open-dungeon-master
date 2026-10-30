@@ -179,10 +179,16 @@ test("a square the server does not light is out of reach, whatever the terrain s
   assert.equal(rulerFor(VIEW, "me", { x: 9, y: 1 }, false).overBudget, false);
 });
 
-test("a prone character pays to stand or crawls at double, as the move route charges", () => {
-  assert.deepEqual(proneCharge(2, 3, 6), { cost: 5, stands: true });
-  assert.deepEqual(proneCharge(3, 4, 6), { cost: 6, stands: false });
-  assert.equal(proneCharge(4, 3, 6), null);
+test("a prone character pays to stand or crawls at one extra a square, as the move route charges", () => {
+  // (walk, crawl, stand, movement in hand)
+  assert.deepEqual(proneCharge(2, 4, 3, 6), { cost: 5, stands: true });
+  assert.deepEqual(proneCharge(3, 6, 4, 6), { cost: 6, stands: false });
+  assert.equal(proneCharge(4, 8, 3, 6), null);
+  // "Crawling 1 foot in difficult terrain, therefore, costs 3 feet of
+  // movement" (SRD 5.1, Being Prone): one rough square crawled is 3, not 4.
+  assert.deepEqual(proneCharge(2, 3, 3, 3), { cost: 3, stands: false });
+  // A square only a crawl reaches (past the walk's lit half) is still priced.
+  assert.deepEqual(proneCharge(undefined, 6, 3, 6), { cost: 6, stands: false });
 });
 
 test("the notes after a move are the route's own lines, the attacks first", () => {
