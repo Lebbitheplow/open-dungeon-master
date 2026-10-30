@@ -92,7 +92,7 @@ export const SPELL_TABLE = [
   { name: "Spirit Guardians", level: 3, school: "conjuration", time: A, range: "self", comp: "VSM", material: ["holy symbol"], duration: "10 minutes", conc: true, how: "buff", dice: "3d8", up: "1d8" },
   { name: "Haste", level: 3, school: "transmutation", time: A, range: "30 feet", comp: "VSM", material: ["licorice"], duration: "1 minute", conc: true },
   { name: "Slow", level: 3, school: "transmutation", time: A, range: "120 feet", comp: "VSM", material: ["molasses"], duration: "1 minute", conc: true, how: "save", save: "wis" },
-  { name: "Revivify", level: 3, time: A, range: "touch", comp: "VSM", material: ["diamond", "300 gp", "consume"], duration: "instantaneous", conc: false },
+  { name: "Revivify", level: 3, school: "necromancy", time: A, range: "touch", comp: "VSM", material: ["diamond", "300 gp", "consume"], duration: "instantaneous", conc: false },
   { name: "Dispel Magic", level: 3, school: "abjuration", time: A, range: "120 feet", comp: "VS", duration: "instantaneous", conc: false },
   { name: "Fly", level: 3, school: "transmutation", time: A, range: "touch", comp: "VSM", duration: "10 minutes", conc: true },
   { name: "Call Lightning", level: 3, school: "conjuration", time: A, range: "120 feet", comp: "VS", duration: "10 minutes", conc: true, how: "save", save: "dex", half: true, dice: "3d10", type: "lightning", up: "1d10" },

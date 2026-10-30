@@ -23,12 +23,11 @@ import assert from "node:assert/strict";
 import "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
 import { caster, closeTables, enemyOf, FIGHTER, table } from "./lib/enforce-spell-kit.mjs";
-import { onTurnOf, packAnswers } from "./lib/enforce-spells.mjs";
+import { onTurnOf } from "./lib/enforce-spells.mjs";
 import { board } from "./lib/enforce-zones.mjs";
 import { CONDITIONS, readSpellLists, readSpellPage } from "./lib/enforce-srd-spells-text.mjs";
 
 const { test, gap, finish } = suite("test-enforce-srd-spells");
-const pack = await packAnswers();
 const { default: book } = await import("../src/lib/rulebook/srd-5.1.json", { with: { type: "json" } });
 const { spellDamageFor, spellFactsFor, spellMechanicsFor, spellSchoolFor } = await import("../src/lib/content/index.ts");
 const { castShares } = await import("../src/lib/srd/spell-mechanics.ts");
@@ -100,16 +99,13 @@ await test("every priced material is the page's total, and consumed where the pa
   assert.deepEqual(problems, [], listOf(problems));
 });
 
+// A Self spell's cone, line or radius is part of its range ("Self (15-foot
+// cone)"), with the pack and without it (SPL-01).
 await test("every spell's range is the page's: feet, touch, sight, unlimited, special or self", () => {
-  // With the content pack a Self spell loses the size of its area (SPL-01).
-  const kindOnly = (range) => (range.kind === "self" ? { kind: "self" } : range);
   const problems = SPELLS
-    .filter(({ page, facts }) => JSON.stringify(kindOnly(facts.range)) !== JSON.stringify(kindOnly(page.range)))
+    .filter(({ page, facts }) => JSON.stringify(facts.range) !== JSON.stringify(page.range))
     .map(({ page, facts }) => `${page.name}: ${JSON.stringify(facts.range)}, the page ${page.rangeText}`);
   assert.deepEqual(problems, [], listOf(problems));
-  if (!pack) {
-    assert.deepEqual(differing("range", (facts) => facts.range), []);
-  }
 });
 
 // SRD 5.1, Duration. Heroes' Feast and Sunburst print "Instantaneous" but
@@ -122,12 +118,12 @@ await test("every spell that prints how long it lasts lasts that many rounds", (
   assert.deepEqual(problems, [], listOf(problems));
 });
 
-await gap("SPL-08", {
-  rule: "SRD 5.1 spell pages (chapter spells): each page's level line names its school, e.g. revivify '3rd-level necromancy', mass-cure-wounds '5th-level evocation', mass-heal '9th-level evocation'; Spellcasting, 'The Schools of Magic': some rules refer to the schools",
-  where: "src/lib/content/index.ts spellSchoolFor (pack row school) and src/lib/srd/manifest/spells.json (bundled `s`)",
-  severity: "low",
-  note: "The pack's SRD rows and the checklist both say conjuration; the bundled rulebook text says otherwise. One of ODM's two SRD sources is wrong: the school feeds Evocation, Abjuration and Necromancy features and the Hand's school filter.",
-}, () => {
+// SRD 5.1 spell pages: each page's level line names its school (revivify
+// "3rd-level necromancy", mass-cure-wounds "5th-level evocation", mass-heal
+// "9th-level evocation"); Spellcasting, "The Schools of Magic": some rules
+// refer to the schools. Open5e's SRD rows print those three as conjuration;
+// the checklist carries the SRD's school and the pack's rows take it.
+await test("SPL-08", () => {
   const problems = SPELLS
     .filter(({ page }) => spellSchoolFor(page.name) !== page.school)
     .map(({ page }) => `${page.name}: ${spellSchoolFor(page.name)}, the page ${page.school}`);
@@ -152,12 +148,10 @@ await test("the engine puts no spell on a class list the Spell Lists page leaves
   assert.deepEqual(Object.keys(LISTS).sort(), ["bard", "cleric", "druid", "paladin", "ranger", "sorcerer", "warlock", "wizard"]);
 });
 
-await gap("SPL-09", {
-  rule: "SRD 5.1 spell-lists, 'Druid Spells', '7th Level': Fire Storm, Mirage Arcane, Plane Shift, Regenerate, Reverse Gravity",
-  where: "src/lib/srd/manifest/spells.json (Plane Shift `c`) and the pack's classes_csv, read by src/lib/srd/legality/spells.ts spellNameProblems",
-  severity: "low",
-  note: "Every other entry of all eight lists, 778 rows, is on the engine's class list at its level.",
-}, () => {
+// SRD 5.1 spell-lists, "Druid Spells", "7th Level": Fire Storm, Mirage
+// Arcane, Plane Shift, Regenerate, Reverse Gravity. Every entry of all eight
+// lists is on the engine's class list at its level.
+await test("SPL-09", () => {
   const missing = Object.entries(LISTS).flatMap(([klass, rows]) =>
     rows.filter((row) => !classesOf(row.name).includes(klass) || spellFactsFor(row.name)?.level !== row.level).map((row) => `${row.name} (${klass})`));
   const druid = { class: "druid", level: 13, subclass: "", features: [], spellcasting: { ability: "wis", known: [], prepared: ["Fire Storm", "Plane Shift"], cantrips: [] } };
@@ -313,30 +307,23 @@ await gap("SPL-03", {
   assert.ok(short.length === 0 && cast.ok, `one creature from a higher slot: ${listOf(short)}; Invisibility from a 3rd-level slot on two: ${cast.error}`);
 });
 
-if (pack) {
-  await gap("SPL-01", {
-    rule: "SRD 5.1 spellcasting, 'Spell Range': 'Spells that create cones or lines of effect that originate from you also have a range of self'; burning-hands, Range 'Self (15-foot cone)': 'Each creature in a 15-foot cone must make a Dexterity saving throw'",
-    where: "src/lib/srd/spell-facts.ts factsFromRow/rangeFrom (the pack row's range is plain 'Self'), read by src/lib/dm/cast-reach.ts spellReachProblem",
-    severity: "high",
-    note: "With the content pack only. Without it the checklist's 'self:15' answers and the cast is refused. aoe_damage still refuses through the area's shape; cast_at_enemy does not.",
-  }, async () => {
-    const lost = SPELLS
-      .filter(({ page, facts }) => page.range.areaFeet && facts.range.areaFeet !== page.range.areaFeet)
-      .map(({ page }) => page.name);
-    const { world, sheets: [mage], enemies: [far] } = await board([caster("wizard", "int", ["Burning Hands"], [], 9)], { 0: { x: 2, y: 4 }, e0: { x: 22, y: 4 } });
-    world.dice(1, 1, 1, 20);
-    const cast = await world.invoke("cast_at_enemy", { characterId: mage.id, targetEnemyId: far.id, spell: "Burning Hands", level: 1 });
-    world.clearDice();
-    assert.ok(lost.length === 0 && !cast.ok, `a Self spell's area size is lost: ${listOf(lost)}; Burning Hands at a creature 100 feet away was ${cast.ok ? "cast" : "refused"}`);
-  });
-} else {
-  await test("without the pack a Self spell keeps its area's size and reaches no farther", async () => {
-    const { world, sheets: [mage], enemies: [far] } = await board([caster("wizard", "int", ["Burning Hands"], [], 9)], { 0: { x: 2, y: 4 }, e0: { x: 22, y: 4 } });
-    const cast = await world.invoke("cast_at_enemy", { characterId: mage.id, targetEnemyId: far.id, spell: "Burning Hands", level: 1 });
-    assert.equal(cast.ok, false);
-    assert.match(String(cast.error), /reach of 15 ft/);
-  });
-}
+// SRD 5.1 spellcasting, "Spell Range": "Spells that create cones or lines of
+// effect that originate from you also have a range of self"; burning-hands,
+// Range "Self (15-foot cone)": "Each creature in a 15-foot cone must make a
+// Dexterity saving throw". The pack's rows print a bare "Self"; the size
+// survives with the pack and without it, and is the spell's reach.
+await test("SPL-01", async () => {
+  const lost = SPELLS
+    .filter(({ page, facts }) => page.range.areaFeet && facts.range.areaFeet !== page.range.areaFeet)
+    .map(({ page }) => page.name);
+  assert.deepEqual(lost, [], `a Self spell's area size is lost: ${listOf(lost)}`);
+  const { world, sheets: [mage], enemies: [far] } = await board([caster("wizard", "int", ["Burning Hands"], [], 9)], { 0: { x: 2, y: 4 }, e0: { x: 22, y: 4 } });
+  world.dice(1, 1, 1, 20);
+  const cast = await world.invoke("cast_at_enemy", { characterId: mage.id, targetEnemyId: far.id, spell: "Burning Hands", level: 1 });
+  world.clearDice();
+  assert.equal(cast.ok, false, "Burning Hands at a creature 100 feet away was cast");
+  assert.match(String(cast.error), /reach of 15 ft/);
+});
 
 // ---- dice, conditions and riders a page prints ----
 
