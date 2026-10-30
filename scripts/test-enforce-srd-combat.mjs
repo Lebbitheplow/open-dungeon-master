@@ -176,12 +176,8 @@ await gap("CMB-02", {
 
 // ---- Actions in Combat: Dodge, Hide ----
 
-await gap("CMB-03", {
-  rule: "combat, Dodge: 'Until the start of your next turn, any attack roll made against you has disadvantage if you can see the attacker.'",
-  where: "src/lib/dm/condition-logic.ts attackContext (the dodging branch checks only that the dodger is not incapacitated)",
-  severity: "low",
-  note: "A blinded dodger still imposes disadvantage, so a blinded target's advantage cancels to a straight roll instead of standing.",
-}, async () => {
+// combat, Dodge: 'Until the start of your next turn, any attack roll made against you has disadvantage if you can see the attacker.'
+await test("CMB-03", async () => {
   const [enemy] = await stage(fighter);
   kit.place(fighter.id, 5, 5);
   kit.place(enemy.id, 5, 6);

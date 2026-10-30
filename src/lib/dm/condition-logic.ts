@@ -345,6 +345,9 @@ export function attackContext(input: {
   requested: AdvantageState;
   // An enemy attacker's creature type (Protection from Evil and Good).
   attackerType?: string;
+  // False when the board's light keeps the target from seeing the attacker
+  // (src/lib/dm/attack-light.ts attackSight): a Dodge then does nothing.
+  targetSeesAttacker?: boolean;
 }): { advantage: AdvantageState; sources: AdvantageState[]; autoCrit: boolean; notes: string[] } {
   // Every source is kept for the caller to merge with its own: advantage
   // and disadvantage cancel once, over all of them (SRD 5.1), so a
@@ -393,8 +396,16 @@ export function attackContext(input: {
     notes.push("target is hidden: disadvantage");
   }
   // Dodge only helps a target who can actually see it coming: an
-  // incapacitated dodger gets nothing, per the SRD.
-  if (has(input.targetConditions, [DODGING]) && !isIncapacitated(input.targetConditions)) {
+  // incapacitated dodger gets nothing, per the SRD, and "any attack roll
+  // made against you has disadvantage if you can see the attacker" (SRD
+  // 5.1, Dodge): not while blinded, nor against an invisible attacker it
+  // cannot see through or a hidden one, nor one the dark hides.
+  const dodgerSees =
+    !has(input.targetConditions, ["blinded"]) &&
+    !(has(input.attackerConditions, ["invisible"]) && !conditionSeesInvisible(input.targetConditions)) &&
+    !has(input.attackerConditions, ["hidden"]) &&
+    input.targetSeesAttacker !== false;
+  if (has(input.targetConditions, [DODGING]) && !isIncapacitated(input.targetConditions) && dodgerSees) {
     sources.push("disadvantage");
     notes.push("target is dodging: disadvantage");
   }

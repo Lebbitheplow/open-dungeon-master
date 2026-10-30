@@ -64,6 +64,13 @@ export function enemySwingOdds(input: {
   const effect = effectOutcome(campaign.id, { kind: "enemy", id: standing.id }, "attack");
   // Conditions on both sides drive advantage and auto-crits; the model's
   // situational claim merges in as one more source.
+  // Light on a mapped fight: who can see whom (src/lib/dm/attack-light.ts).
+  const sight = attackSight({
+    campaignId: campaign.id,
+    encounterId,
+    attacker: { refId: standing.id, senses: enemySenses(standing) },
+    target: { refId: target.id, senses: characterSenses(target) },
+  });
   const conditionContext = attackContext({
     attackerConditions: standing.conditions,
     attackerType: standing.stats.type,
@@ -74,6 +81,7 @@ export function enemySwingOdds(input: {
     adjacent: distance === null ? !ranged : distance <= 1,
     // The AI names a circumstance the engine does not decide (pc-attack-options.ts).
     requested: claimedAdvantage({ requested: requested.advantage, source: requested.advantageSource, reason: requested.advantageReason, byAi: turn.actor === "ai" }).requested,
+    targetSeesAttacker: sight?.targetSees !== false,
   });
   // A gale over an outdoor board: disadvantage on ranged attacks past 30
   // ft, for the monsters exactly as for the party.
@@ -91,16 +99,7 @@ export function enemySwingOdds(input: {
   const worn = enemyExhaustion(standing.conditions) >= 3;
   // Sunlight Sensitivity: disadvantage in direct sunlight (sunlight.ts).
   const sunlit = hasTrait(standing.stats, "sunlightSensitivity") && inDirectSunlight(campaign.id);
-  // Light on a mapped fight: who can see whom (src/lib/dm/attack-light.ts).
-  const light = lightOnAttack(
-    attackSight({
-      campaignId: campaign.id,
-      encounterId,
-      attacker: { refId: standing.id, senses: enemySenses(standing) },
-      target: { refId: target.id, senses: characterSenses(target) },
-    }),
-    { attacker: standing.displayName, target: target.name },
-  );
+  const light = lightOnAttack(sight, { attacker: standing.displayName, target: target.name });
   // Chill Touch: an undead the caster struck attacks the caster at
   // disadvantage until the end of the caster's next turn (CHILL_TOUCH_DREAD,
   // src/lib/dm/spell-attack-riders.ts; an older row carries only the spell).
@@ -176,6 +175,12 @@ export function enemyRowSwingOdds(input: {
 }): { advantage: Advantage; notes: string[]; autoCrit: boolean; attackBonus: number } {
   const { campaign, encounterId, standing, target, ranged, distance } = input;
   const effect = effectOutcome(campaign.id, { kind: "enemy", id: standing.id }, "attack");
+  const sight = attackSight({
+    campaignId: campaign.id,
+    encounterId,
+    attacker: { refId: standing.id, senses: enemySenses(standing) },
+    target: { refId: target.id, senses: enemySenses(target) },
+  });
   const conditionContext = attackContext({
     attackerConditions: standing.conditions,
     attackerType: standing.stats.type,
@@ -183,6 +188,7 @@ export function enemyRowSwingOdds(input: {
     melee: !ranged,
     adjacent: distance === null ? !ranged : distance <= 1,
     requested: input.requested,
+    targetSeesAttacker: sight?.targetSees !== false,
   });
   const gale = input.outdoorsOnMap ? weatherRangedRider(normalizeClock(campaign.clock).weather, ranged, distance ?? 0) : { disadvantage: false, note: null };
   const crowded = ranged && enemyShootsInMelee(encounterId, standing.id, standing.conditions);
@@ -191,12 +197,7 @@ export function enemyRowSwingOdds(input: {
   const worn = enemyExhaustion(standing.conditions) >= 3;
   const sunlit = hasTrait(standing.stats, "sunlightSensitivity") && inDirectSunlight(campaign.id);
   const light = lightOnAttack(
-    attackSight({
-      campaignId: campaign.id,
-      encounterId,
-      attacker: { refId: standing.id, senses: enemySenses(standing) },
-      target: { refId: target.id, senses: enemySenses(target) },
-    }),
+    sight,
     { attacker: standing.displayName, target: target.displayName },
   );
   const marks: Array<[boolean, Advantage, string]> = [
