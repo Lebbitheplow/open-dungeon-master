@@ -42,6 +42,7 @@ import {
 import { grantsForHeldTraining, subclassGrants } from "@/lib/srd/subclass-training";
 import type { SubclassExtras } from "@/lib/srd/subclass-tables";
 import { textKey } from "@/lib/language/text-logic";
+import { classSpellGrants } from "@/lib/srd/class-spell-grants";
 
 export type LevelUpOptionsContext = {
   hpMethod: HpMethod;
@@ -307,8 +308,11 @@ export function levelUpOptions(sheet: CharacterSheet, context: LevelUpOptionsCon
   });
   if (caster.casts && caster.ability) {
     const view = casterViewsOf(sheet, context.subclassExtras).find((entry) => entry.classId.toLowerCase() === klass.id);
+    // Magical Secrets, the Book of Shadows: picks from any list, some on top
+    // of the class's counts (src/lib/srd/class-spell-grants.ts).
+    const grants = classSpellGrants({ classId: klass.id, level: classLevelAfter, subclass: subclassNow, features: sheet.features });
     const cantripsHeld = view ? dedupeNames(view.cantrips).length - context.freeCantrips : 0;
-    const newCantrips = caster.cantripCap === null ? 0 : Math.max(0, caster.cantripCap - Math.max(0, cantripsHeld));
+    const newCantrips = caster.cantripCap === null ? 0 : Math.max(0, caster.cantripCap + grants.extraCantrips - Math.max(0, cantripsHeld));
     let newSpells = 0;
     if (caster.style === "spellbook") {
       newSpells = view && spellbookOf(view).length ? 2 : spellbookAllowance(classLevelAfter);
@@ -319,7 +323,7 @@ export function levelUpOptions(sheet: CharacterSheet, context: LevelUpOptionsCon
         : caster.style === "known"
           ? dedupeNames(view.known.length ? view.known : view.prepared).filter((name) => !granted.has(textKey(name))).length
           : preparedCount(view);
-      newSpells = Math.max(0, caster.spellCap.count - holding);
+      newSpells = Math.max(0, caster.spellCap.count + grants.extraSpells - holding);
     }
     const knownBefore = view ? (view.known.length ? view.known : view.prepared) : [];
     choices.spells = {
@@ -329,7 +333,9 @@ export function levelUpOptions(sheet: CharacterSheet, context: LevelUpOptionsCon
       newSpells,
       style: caster.style,
       mayReplaceOne: caster.style === "known" && knownBefore.length > 0,
-      note: STYLE_NOTE[caster.style],
+      note: grants.anyList
+        ? `${STYLE_NOTE[caster.style]} ${grants.feature}: ${grants.anyList} of the ${grants.anyListSpells ? "spells" : "cantrips"} held may come from any class's spell list.`
+        : STYLE_NOTE[caster.style],
     };
   }
 

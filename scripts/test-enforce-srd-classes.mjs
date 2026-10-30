@@ -588,12 +588,8 @@ await gap("CLS-18", {
   assert.equal(out.ok, true, `bane through Thief of Five Fates was refused: ${out.error}`);
 });
 
-await gap("CLS-19", {
-  rule: "SRD 5.1 warlock, Pact Boon, Pact of the Tome: \"choose three cantrips from any class's spell list ... They don't count against your number of cantrips known. If they don't appear on the warlock spell list, they are nonetheless warlock spells for you.\"",
-  where: "src/lib/srd/legality/spells.ts (the warlock list check) and src/lib/srd/spell-prep.ts spellListProblems (the cantrip cap)",
-  severity: "medium",
-  note: "Taken at 3rd level through the level-up route, the Book of Shadows' Guidance is refused as no warlock cantrip; the cap also counts the three.",
-}, async () => {
+// SRD 5.1 warlock, Pact Boon, Pact of the Tome: "choose three cantrips from any class's spell list ... They don't count against your number of cantrips known. If they don't appear on the warlock spell list, they are nonetheless warlock spells for you."
+await test("CLS-19", async () => {
   const sheet = world.sheet(tomelock.id);
   const cantrips = [...sheet.spellcasting.cantrips, "Guidance", "Sacred Flame", "Shillelagh"];
   const leveled = await levelUp(tomelock, 3, {
@@ -608,17 +604,15 @@ await gap("CLS-19", {
   );
 });
 
-await gap("CLS-20", {
-  rule: "SRD 5.1 warlock, Pact Boon, Pact of the Chain: \"You learn the find familiar spell and can cast it as a ritual. The spell doesn't count against your number of spells known.\"",
-  where: "src/lib/srd/legality/spells.ts (the warlock list check) and src/lib/srd/spell-prep.ts (the known count)",
-  severity: "medium",
-}, async () => {
+// SRD 5.1 warlock, Pact Boon, Pact of the Chain: "You learn the find familiar spell and can cast it as a ritual. The spell doesn't count against your number of spells known."
+await test("CLS-20", async () => {
   const sheet = world.sheet(chainlock.id);
   const leveled = await levelUp(chainlock, 3, {
     features: [{ name: "Pact Boon: Pact of the Chain", source: "choice", description: "" }],
     spellcasting: { known: [...sheet.spellcasting.known, "Misty Step", "Find Familiar"] },
   });
   assert.equal(leveled.status, 200, `the level-up with find familiar was refused: ${leveled.json.error}`);
+  assert.ok(world.sheet(chainlock.id).spellcasting.known.includes("Find Familiar"), "find familiar did not land on the sheet");
 });
 
 // Bard, Magical Secrets and the College of Lore's Additional Magical Secrets.
@@ -634,23 +628,18 @@ const loreBard = world.addHero({
 });
 world.patch(loreBard.id, { xp: 355000 });
 
-await gap("CLS-21", {
-  rule: "SRD 5.1 bard, Magical Secrets: \"By 10th level ... Choose two spells from any classes, including this one. ... The chosen spells count as bard spells for you and are included in the number in the Spells Known column of the Bard table.\"",
-  where: "src/lib/srd/legality/spells.ts spellNameProblems (the bard list check) and src/lib/srd/spell-prep.ts widerListOf",
-  severity: "high",
-  note: "docs/rules-coverage.md says the Magical Secrets spells land on the sheet; the level-up route refuses them.",
-}, async () => {
+// SRD 5.1 bard, Magical Secrets: "By 10th level ... Choose two spells from any classes, including this one. ... The chosen spells count as bard spells for you and are included in the number in the Spells Known column of the Bard table."
+await test("CLS-21", async () => {
   const leveled = await levelUp(secretBard, 10, {
     spellcasting: { known: [...BARD_SPELLS.slice(0, 12), "Fireball", "Counterspell"], cantrips: ["Vicious Mockery", "Minor Illusion", "Light", "Mage Hand"] },
   });
   assert.equal(leveled.status, 200, `the bard's Magical Secrets were refused: ${leveled.json.error}`);
+  const known = world.sheet(secretBard.id).spellcasting.known;
+  assert.ok(known.includes("Fireball") && known.includes("Counterspell"), `the Magical Secrets did not land on the sheet: ${known.join(", ")}`);
 });
 
-await gap("CLS-22", {
-  rule: "SRD 5.1 bard, College of Lore, Additional Magical Secrets: \"At 6th level, you learn two spells of your choice from any class. ... The chosen spells count as bard spells for you but don't count against the number of bard spells you know.\"",
-  where: "src/lib/srd/legality/spells.ts spellNameProblems and src/lib/srd/spell-prep.ts spellListProblems",
-  severity: "medium",
-}, async () => {
+// SRD 5.1 bard, College of Lore, Additional Magical Secrets: "At 6th level, you learn two spells of your choice from any class. ... The chosen spells count as bard spells for you but don't count against the number of bard spells you know."
+await test("CLS-22", async () => {
   const leveled = await levelUp(loreBard, 6, {
     spellcasting: { known: [...BARD_SPELLS.slice(0, 9), "Fireball", "Counterspell"] },
   });

@@ -306,8 +306,13 @@ acknowledged name must be a real granted name that the engine does not hold.
 
 - **Subclass markers** ("Arcane Tradition", "Divine Domain"): the pick has
   mechanics, the marker does not.
-- **Spell-list grants** ("Magical Secrets", "Circle Spells"): the spells land
-  on the sheet; the feature itself does nothing extra.
+- **Spell-list grants** ("Magical Secrets", "Additional Magical Secrets",
+  "Circle Spells", Pact of the Tome's cantrips, Pact of the Chain's find
+  familiar): the spells land on the sheet through the level-up and the
+  creation check, off the class's list as far as the feature's number reaches
+  and outside the counts where the feature says so
+  (`srd/class-spell-grants.ts`, `test-enforce-srd-classes`); the feature
+  itself does nothing extra.
 - **Passive / roleplay features** ("Druidic", "Timeless Body", "Thieves' Cant",
   "Tongue of the Sun and Moon"): narrated from the sheet.
 

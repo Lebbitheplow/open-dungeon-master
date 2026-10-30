@@ -649,6 +649,8 @@ export function legalizeSheet(input: CreateSheetInput, context: LegalityContext)
     innateCantrips: innateCantripsFor(race.id, level),
     featSpells: taught.grants,
     held: held?.spellcasting ?? null,
+    // A pact boon picked on the sheet widens its lists (class-spell-grants.ts).
+    features: input.features ?? held?.features,
     judgeLists: policy.judgesPicks && context.door !== "engine",
     bookAllowance: policy.made,
   });

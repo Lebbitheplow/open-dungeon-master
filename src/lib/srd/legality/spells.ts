@@ -37,6 +37,7 @@ import {
 import { type ClassGrants, type SpellFacts } from "@/lib/srd/legality/types";
 import { textKey } from "@/lib/language/text-logic";
 import { revisedOnlySpellProblem } from "@/lib/content/edition";
+import { classSpellGrants, offListProblems } from "@/lib/srd/class-spell-grants";
 
 type Casting = NonNullable<Spellcasting>;
 type CastingAbility = Casting["ability"];
@@ -113,6 +114,9 @@ export type NameRules = {
   held: Set<string>;
   // Cantrips known from the race, with the list each is drawn from.
   racialCantrips: Array<{ name: string; list: string }>;
+  // Of the held names, the ones a race or feat gives (free, from any list):
+  // not one of the off-list spells a class feature counts.
+  free?: Set<string>;
 };
 
 const labelOf = (view: CasterView) => `level ${view.level} ${view.classId.replace(/[_-]+/g, " ")}`;
@@ -125,6 +129,11 @@ export function spellNameProblems(view: CasterView, list: string, rules: NameRul
   const granted = new Set(grantedSpellsOf(view).map(textKey));
   const racial = new Map(rules.racialCantrips.map((entry) => [textKey(entry.name), entry.list]));
   const top = maxSpellLevelOf(view);
+  // Off the list, a pick Magical Secrets or the Book of Shadows lets in, as
+  // far as their number reaches (src/lib/srd/class-spell-grants.ts); the
+  // held ones already off it count first.
+  const strays: Array<{ name: string; cantrip: boolean }> = [];
+  let keptOff = 0;
   const judge = (name: string, asCantrip: boolean) => {
     const key = textKey(name);
     // A 2024-only spell a sheet held from before they were taken out is
@@ -134,7 +143,14 @@ export function spellNameProblems(view: CasterView, list: string, rules: NameRul
       problems.push(revised);
       return;
     }
-    if (rules.held.has(key) || granted.has(key)) {
+    if (granted.has(key)) {
+      return;
+    }
+    if (rules.held.has(key)) {
+      const heldSpell = rules.free?.has(key) || racial.has(key) ? null : rules.spellOf(name);
+      if (heldSpell && !heldSpell.classes.map(textKey).includes(list) && !onWiderList(view, heldSpell)) {
+        keptOff += 1;
+      }
       return;
     }
     const spell = rules.spellOf(name);
@@ -160,8 +176,7 @@ export function spellNameProblems(view: CasterView, list: string, rules: NameRul
     }
     // A patron's expanded list and a Divine Soul's cleric list widen it.
     if (!lists.includes(list) && !onWiderList(view, spell)) {
-      problems.push(`${spell.name} is not on the ${list} spell list, so a ${labelOf(view)} cannot learn or prepare it.`);
-      return;
+      strays.push({ name: spell.name, cantrip: asCantrip });
     }
     // The counts check (spellListProblems) holds the level ceiling for every
     // spell the bundled checklist names; this is for the ones only the
@@ -176,6 +191,8 @@ export function spellNameProblems(view: CasterView, list: string, rules: NameRul
   for (const name of dedupeNames([...view.known, ...view.prepared, ...view.pending, ...view.spellbook])) {
     judge(name, false);
   }
+  const grants = classSpellGrants(view);
+  problems.push(...offListProblems({ grants, allowedBefore: grants.anyList, kept: keptOff, strays, list, label: labelOf(view) }));
   return problems;
 }
 
@@ -217,6 +234,9 @@ export type SpellcastingInput = {
   featSpells?: FeatSpellGrant[];
   // Lists the stored character already holds, on an edit.
   held?: Spellcasting;
+  // The sheet's features: a pact boon or a subclass option that widens what
+  // the lists may hold (src/lib/srd/class-spell-grants.ts).
+  features?: Array<{ name: string }>;
   // False for a character whose lists were settled where the server saw
   // them: slots and ability are still written, the lists are left alone.
   judgeLists: boolean;
@@ -333,6 +353,7 @@ export function judgeSpellcasting(input: SpellcastingInput): SpellcastingVerdict
     classes: multiclass ? input.classes : [],
     abilities: input.abilities,
     spellcasting: shaped,
+    ...(input.features?.length ? { features: input.features } : {}),
   };
   let views = casterViewsOf(sheetLike, input.subclassExtras);
   // An older sheet filed a known caster's spells under prepared.
@@ -409,6 +430,7 @@ export function judgeSpellcasting(input: SpellcastingInput): SpellcastingVerdict
           spellOf: input.spellOf,
           held,
           racialCantrips: racial,
+          free: new Set(free.map(textKey)),
         }),
         ...spellFilingProblems(view),
       );

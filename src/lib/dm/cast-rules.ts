@@ -25,6 +25,7 @@ import { toolError, type ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
 import { hasItemTag } from "@/lib/srd/item-tags";
 import { holdsFeature, isConditionNamed } from "@/lib/srd/feature-names";
+import { pactRitualOf } from "@/lib/srd/class-spell-grants";
 
 export type CastRefusal = ToolError;
 
@@ -141,6 +142,11 @@ function ritualHolderProblem(
     hasName([...view.known, ...view.prepared, ...subclassSpellsFor(view.classId, view.subclass, view.level, extras, view.features)], names) ||
     (view.style === "spellbook" && hasName(spellbookOf(view), names));
   if (ritualViews.some(holds)) {
+    return null;
+  }
+  // SRD 5.1, Pact of the Chain: "You learn the find familiar spell and can
+  // cast it as a ritual."
+  if (pactRitualOf(sheet, spell) && views.some(holds)) {
     return null;
   }
   const book = holdsFeat(sheet, "ritual caster") || holdsFeat(sheet, "book of ancient secrets");
@@ -382,7 +388,7 @@ export function ritualProblem(
   if (!facts.ritual) {
     return { error: `${facts.name} has no ritual tag; it cannot be cast as a ritual and needs a slot.`, refused: "rules" };
   }
-  if (!canCastRituals(sheet)) {
+  if (!canCastRituals(sheet) && !pactRitualOf(sheet, facts.name)) {
     return { error: `${sheet.name}'s class does not cast rituals (bards, clerics, druids and wizards do); ${facts.name} needs a slot.`, refused: "rules" };
   }
   if (inFight) {

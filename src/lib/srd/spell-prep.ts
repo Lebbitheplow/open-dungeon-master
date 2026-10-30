@@ -15,6 +15,7 @@ import {
 } from "@/lib/srd/third-caster";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
+import { classSpellGrants } from "@/lib/srd/class-spell-grants";
 
 // How a caster's spell list works, and the 5e (SRD 5.1) timing for changing
 // it. Pure and database-free, shared by the sheet, the builder, the server
@@ -222,8 +223,12 @@ export function spellbookOf(view: Pick<CasterView, "spellbook" | "prepared" | "p
   );
 }
 
+// A Pact of the Chain warlock's find familiar is learned the same way: free
+// of the list and the count (src/lib/srd/class-spell-grants.ts).
 export function grantedSpellsOf(view: CasterView): string[] {
-  return subclassSpellsFor(view.classId, view.subclass, view.level, view.extras, view.features);
+  const learned = classSpellGrants(view).learned;
+  const subclass = subclassSpellsFor(view.classId, view.subclass, view.level, view.extras, view.features);
+  return learned.length ? dedupeNames([...subclass, ...learned]) : subclass;
 }
 
 // What this caster may learn beyond its class's list: its subclass's
@@ -479,7 +484,11 @@ export function spellListProblems(
   let freeCount = options.freeCantripCount ?? 0;
   for (const view of casterViewsOf(sheet, options.extras)) {
     const label = `level ${view.level} ${view.classId.replace(/[_-]+/g, " ")}`;
-    const cantripCap = cantripCapOf(view);
+    // The Book of Shadows' three cantrips and Additional Magical Secrets' two
+    // spells sit on top of the class's counts (class-spell-grants.ts).
+    const grants = classSpellGrants(view);
+    const baseCantripCap = cantripCapOf(view);
+    const cantripCap = baseCantripCap === null ? null : baseCantripCap + grants.extraCantrips;
     const named = dedupeNames(view.cantrips).filter((name) => !free.has(textKey(name)));
     const cantrips = named.slice(0, Math.max(0, named.length - freeCount));
     freeCount = 0;
@@ -488,7 +497,8 @@ export function spellListProblems(
     }
     const granted = grantedSpellsOf(view);
     const held = dedupeNames([...heldSpells(view), ...view.pending]).filter((name) => !isCantripName(name) && !freeSpells.has(textKey(name)));
-    const cap = spellCapOf(view, sheet.abilities);
+    const tableCap = spellCapOf(view, sheet.abilities);
+    const cap = tableCap ? { ...tableCap, count: tableCap.count + grants.extraSpells } : null;
     const counted = spellsAgainstLimit(held, granted);
     if (cap && counted > cap.count) {
       problems.push(`A ${label} may hold ${cap.count} ${cap.label}; that list has ${counted}.`);

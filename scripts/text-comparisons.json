@@ -2169,6 +2169,8 @@
     "lib/srd/class-roles.ts#str-key": [["english-source",2,"class rows and ODM's role labels (bundled data)"]],
     "lib/srd/class-roles.ts#str-list": [["english-source",1,"class rows and ODM's role labels (bundled data)"]],
     "lib/srd/class-roles.ts#toLowerCase": [["english-source",1,"class rows and ODM's role labels (bundled data)"]],
+    "lib/srd/class-spell-grants.ts#str-eq": [["key",2,"class ids"]],
+    "lib/srd/class-spell-grants.ts#str-includes": [["key",2,"pact boon option names from options.json, compared by textKey"]],
     "lib/srd/companion-build.ts#str-includes": [["english-source",1,"SRD spell names and ability ids (bundled data)"]],
     "lib/srd/companion-build.ts#str-list": [["english-source",1,"SRD spell names and ability ids (bundled data)"]],
     "lib/srd/condition-effect-queries.ts#str-eq": [["key",6,"action kinds"]],
