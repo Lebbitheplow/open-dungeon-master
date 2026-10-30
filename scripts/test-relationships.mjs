@@ -21,6 +21,7 @@ import {
   bystanderShare,
   canAdvanceRomance,
   consentCheck,
+  consentCertainAt,
   decayBeatCounts,
   demoteRomance,
   friendshipTier,
@@ -225,6 +226,26 @@ test("consent is automatic well past the bar and a real question at it", () => {
   // Warmth tips a marginal proposal.
   assert.equal(consentCheck(ROMANCE_THRESHOLD.betrothed, "betrothed", -2, 12).accepted, false);
   assert.equal(consentCheck(ROMANCE_THRESHOLD.betrothed, "betrothed", 2, 12).accepted, true);
+});
+
+test("every rung has a certain yes, marriage included, at full approval", () => {
+  // Issue 635: married's threshold is within the certain-yes margin of the
+  // meter's top, so the bar used to sit past 100 and could never be reached.
+  const vows = consentCheck(APPROVAL_MAX, "married", 0, 1);
+  assert.equal(vows.accepted, true);
+  assert.equal(vows.automatic, true);
+  assert.equal(consentCertainAt("married"), APPROVAL_MAX);
+  // Just under the top, marriage is still a real question.
+  assert.equal(consentCheck(APPROVAL_MAX - 1, "married", 0, 1).automatic, false);
+  // The other rungs keep their bar ten past the threshold.
+  for (const stage of ["interested", "courting", "together", "betrothed"]) {
+    assert.equal(consentCertainAt(stage), ROMANCE_THRESHOLD[stage] + 10);
+    assert.equal(consentCheck(ROMANCE_THRESHOLD[stage] + 9, stage, 0, 1).automatic, false);
+    assert.equal(consentCheck(ROMANCE_THRESHOLD[stage] + 10, stage, 0, 1).automatic, true);
+  }
+  for (const stage of Object.keys(ROMANCE_THRESHOLD)) {
+    assert.ok(consentCertainAt(stage) <= APPROVAL_MAX, `${stage} has a reachable certain yes`);
+  }
 });
 
 test("feelings can slip back a rung, but promises do not", () => {

@@ -407,8 +407,15 @@ export type ConsentResult = {
 };
 
 export const CONSENT_DC = 12;
-// Approval this far past the rung's threshold makes the answer a certainty.
+// Approval this far past the rung's threshold makes the answer a certainty,
+// capped at the meter's maximum so every rung has a certain yes: married's
+// threshold sits within this margin of the top, and a companion at full
+// approval who has just spoken their own vows says yes (issue 635).
 const CONSENT_CERTAIN = 10;
+
+export function consentCertainAt(target: RomanceStage): number {
+  return Math.min(APPROVAL_MAX, ROMANCE_THRESHOLD[target] + CONSENT_CERTAIN);
+}
 
 // Whether the subject says yes. Comfortably past the threshold they simply
 // do; right at it, it is a real question, weighted by how much they feel and
@@ -420,7 +427,7 @@ export function consentCheck(
   d20: number,
 ): ConsentResult {
   const needed = ROMANCE_THRESHOLD[target];
-  if (approval >= needed + CONSENT_CERTAIN) {
+  if (approval >= consentCertainAt(target)) {
     return { accepted: true, automatic: true, total: 0, dc: CONSENT_DC };
   }
   const total = d20 + Math.floor((approval - needed) / 2) + warmth;
