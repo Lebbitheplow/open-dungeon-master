@@ -308,13 +308,14 @@ acknowledged name must be a real granted name that the engine does not hold.
   mechanics, the marker does not.
 - **Spell-list grants** ("Magical Secrets", "Additional Magical Secrets",
   "Circle Spells", Pact of the Tome's cantrips, Pact of the Chain's find
-  familiar): the spells land on the sheet through the level-up route and the
+  familiar): the spells land on the sheet through the level-up and the
   creation check, off the class's list as far as the feature's number reaches
   and outside the counts where the feature says so
-  (`srd/class-spell-grants.ts`, `test-enforce-srd-classes`); the feature
-  itself does nothing extra. The level-up dialog still lists only the
-  class's own spells, so an off-list pick is named in the request (the
-  agent's level-up does).
+  (`srd/class-spell-grants.ts`, `test-enforce-srd-classes`); the level-up
+  dialog and the builder's spell step offer the picks from any class as a
+  group of their own, named for the feature, and show find familiar as
+  granted (`srd/any-list-picks-logic.ts`, `test-any-list-picks`). The feature
+  itself does nothing extra.
 - **Passive / roleplay features** ("Druidic", "Timeless Body", "Thieves' Cant",
   "Tongue of the Sun and Moon"): narrated from the sheet.
 
