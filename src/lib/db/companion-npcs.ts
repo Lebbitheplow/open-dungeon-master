@@ -208,3 +208,33 @@ export function goneCompanions(campaignId: string): GoneCompanion[] {
   }
   return gone.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
 }
+
+// The library companions this campaign has or had, keyed by library entry:
+// "here" for one with a sheet at the table (in the party, or turned against
+// it in a fight), "gone" for one who left or fell, whose sheet is kept on
+// the row behind them for the story to bring back. A table seats each one
+// once (companions/create), and the Add a companion dialog offers only the
+// rest (issue 661): a second copy of one who walked out would take over the
+// row their return is waiting on.
+export function libraryCompanionsOfCampaign(campaignId: string): Map<string, "here" | "gone"> {
+  const sheets = getDatabase()
+    .prepare(`SELECT id, library_character_id FROM character_sheets WHERE campaign_id = ?`)
+    .all(campaignId) as Array<{ id: string; library_character_id: string | null }>;
+  const found = new Map<string, "here" | "gone">();
+  for (const sheet of sheets) {
+    if (sheet.library_character_id) {
+      found.set(sheet.library_character_id, "here");
+    }
+  }
+  const live = new Set(sheets.map((sheet) => sheet.id));
+  for (const npc of listNpcs(campaignId)) {
+    if (!npc.companionSheetId || live.has(npc.companionSheetId)) {
+      continue;
+    }
+    const entry = departedSheet(npc.id)?.sheet.libraryCharacterId;
+    if (typeof entry === "string" && entry && !found.has(entry)) {
+      found.set(entry, "gone");
+    }
+  }
+  return found;
+}
