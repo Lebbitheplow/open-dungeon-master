@@ -15,6 +15,7 @@ import {
 import { countMessages, insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
 import { getSheetById, getSheetForUser, listSheets } from "@/lib/db/sheets";
 import { dominatedRefusal } from "@/lib/dm/companion-command";
+import { heroFell } from "@/lib/characters/fallen-logic";
 import { answerSpotlight } from "@/lib/dm/spotlight-answer";
 import { requestDmTurn } from "@/lib/dm/loop";
 import { settleTableWait, waitsForTable } from "@/lib/dm/table-wait";
@@ -161,7 +162,8 @@ export async function POST(
             .filter(
               (entry) =>
                 floor.userIds.includes(entry.userId) &&
-                !floor.respondedUserIds.includes(entry.userId),
+                !floor.respondedUserIds.includes(entry.userId) &&
+                !heroFell(entry),
             )
             .map((entry) => entry.name)
             .join(", ")

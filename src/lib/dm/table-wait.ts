@@ -64,19 +64,30 @@ export function waitsForTable(campaign: Campaign): boolean {
 // The player seats, one per person, named by their first character, or by
 // the first one still alive once that one has fallen: a player who brought
 // in a new hero (src/lib/characters/hero-door.ts) is waited on by the new
-// hero's name, not the dead one's.
-function playerSeats(campaign: Campaign): TableSeat[] {
-  const seats = new Map<string, { name: string; fell: boolean }>();
+// hero's name, not the dead one's. A seat whose every hero has fallen is
+// kept, marked, so the table can leave it out: the dead answer nothing.
+// joinedAt is when the seat's hero sat down, so an answer from before a
+// new hero arrived (a pass made while the old one lay dead) is not theirs.
+type PlayerSeat = TableSeat & { fell: boolean; joinedAt: number };
+
+function playerSeats(campaign: Campaign): PlayerSeat[] {
+  const seats = new Map<string, PlayerSeat>();
   for (const sheet of listSheets(campaign.id)) {
     if (sheet.isCompanion || !sheet.userId || sheet.userId === campaign.dmUserId) {
       continue;
     }
     const held = seats.get(sheet.userId);
     if (!held || (held.fell && !heroFell(sheet))) {
-      seats.set(sheet.userId, { name: sheet.name, fell: heroFell(sheet) });
+      const joinedAt = Date.parse(sheet.createdAt);
+      seats.set(sheet.userId, {
+        userId: sheet.userId,
+        name: sheet.name,
+        fell: heroFell(sheet),
+        joinedAt: Number.isFinite(joinedAt) ? joinedAt : 0,
+      });
     }
   }
-  return [...seats].map(([userId, seat]) => ({ userId, name: seat.name }));
+  return [...seats.values()];
 }
 
 // Players reached through a live agent subscription (a webhook or a poll
@@ -118,8 +129,17 @@ function decisionFor(campaignId: string, now: number): TableWaitDecision | null 
     return null;
   }
   const db = getDatabase();
-  const seats = playerSeats(campaign);
+  const allSeats = playerSeats(campaign);
+  const seatOf = new Map(allSeats.map((seat) => [seat.userId, seat]));
+  const seats: TableSeat[] = allSeats.filter((seat) => !seat.fell).map(({ userId, name }) => ({ userId, name }));
   const names = new Map(seats.map((seat) => [seat.userId, seat.name]));
+  // An answer counts for the seat's living hero only: not from a player
+  // whose heroes have all fallen, and not from before their new hero sat
+  // down, so a replacement starts the beat unanswered.
+  const counts = (answer: { userId: string; at: number }) => {
+    const seat = seatOf.get(answer.userId);
+    return !seat || (!seat.fell && answer.at >= seat.joinedAt);
+  };
   const sheetNames = new Map(listSheets(campaignId).map((sheet) => [sheet.id, sheet.name]));
   const posts = (
     db
@@ -133,7 +153,7 @@ function decisionFor(campaignId: string, now: number): TableWaitDecision | null 
     userId: row.userId,
     name: names.get(row.userId) ?? sheetNames.get(row.characterId ?? "") ?? "A player",
     at: new Date(row.createdAt).getTime(),
-  }));
+  })).filter(counts);
   const passes = (
     db
       .prepare(`SELECT payload_json AS payload, created_at AS createdAt FROM campaign_events WHERE campaign_id = ? AND type = 'table_pass' AND seq > ? ORDER BY seq ASC`)
@@ -143,7 +163,7 @@ function decisionFor(campaignId: string, now: number): TableWaitDecision | null 
       userId: String((JSON.parse(row.payload) as { userId?: unknown }).userId ?? ""),
       at: new Date(row.createdAt).getTime(),
     }))
-    .filter((pass) => pass.userId)
+    .filter((pass) => pass.userId && counts(pass))
     .map((pass) => ({ ...pass, name: names.get(pass.userId) ?? "A player" }));
   const here = new Set([...onlineUserIds(campaignId), ...agentUserIds(campaignId)]);
   return decideTableWait({
@@ -277,8 +297,12 @@ export function passTable(campaignId: string, userId: string): PassResult {
   if (decision.view.answered.some((seat) => seat.userId === userId)) {
     return { ok: false, status: 409, error: "You have already answered this beat." };
   }
-  if (!playerSeats(campaign).some((seat) => seat.userId === userId)) {
+  const seat = playerSeats(campaign).find((held) => held.userId === userId);
+  if (!seat) {
     return { ok: false, status: 400, error: "You need a character to pass." };
+  }
+  if (seat.fell) {
+    return { ok: false, status: 409, error: `${seat.name} has fallen, so the GM is not waiting on you. Bring in a new hero to rejoin the table.` };
   }
   publishPersisted(campaignId, "table_pass", { userId });
   return { ok: true, fire: settleTableWait(campaignId) };
