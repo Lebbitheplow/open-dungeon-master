@@ -64,6 +64,7 @@ import { unknownSheetRef } from "@/lib/dm/rolls";
 import { ALIGNMENT_CODES, VALUES_PARAMETER, valuesArgSchema } from "@/lib/dm/companion-values-logic";
 import { setCompanionValues } from "@/lib/db/companion-conscience";
 import { seedAgenda } from "@/lib/dm/companion-agenda";
+import { classWords } from "@/lib/sheet-words";
 
 // AI companion party members: sheets the DM recruits, plays, and dismisses.
 // A companion is a full character sheet owned by an unloginable bot user,
@@ -343,7 +344,7 @@ export function handleAddCompanion(
         characterId: sheet.id,
         name: sheet.name,
         returned: true,
-        summary: `${sheet.name} returns: the same ${sheet.class} they were when they left, now level ${sheet.level}. HP ${sheet.maxHp}, AC ${sheet.ac}.`,
+        summary: `${sheet.name} returns: the same ${classWords(sheet.class)} they were when they left, now level ${sheet.level}. HP ${sheet.maxHp}, AC ${sheet.ac}.`,
         note: `They are back with the sheet they left with${back.leftAtLevel !== back.level ? `, brought from level ${back.leftAtLevel} to ${back.level}` : ""}, and every bond with them picks up where it stopped. ${hadEncounter ? "They have an initiative slot and a map token. " : ""}Narrate their return in their own voice.`,
       };
     }
