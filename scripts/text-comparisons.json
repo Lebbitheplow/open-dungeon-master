@@ -838,6 +838,8 @@
     "lib/bestiary/half-dragon.ts#str-eq": [["key",2,"creature types, sizes and dragon colours (the workshop's pickers)"]],
     "lib/bestiary/half-dragon.ts#str-list": [["key",2,"creature types, sizes and dragon colours (the workshop's pickers)"]],
     "lib/bestiary/half-dragon.ts#toLowerCase": [["key",2,"creature types, sizes and dragon colours (the workshop's pickers)"]],
+    "lib/bestiary/index.ts#re-word": [["english-source",1,"the section prefix ODM itself writes on the bundled creature table's lines (scripts/generate-srd-creatures.mjs)"]],
+    "lib/bestiary/index.ts#str-key": [["english-source",1,"the section prefix ODM itself writes on the bundled creature table's lines (scripts/generate-srd-creatures.mjs)"]],
     "lib/bestiary/index.ts#toLowerCase": [["key",1,"slug from a monster name"]],
     "lib/bestiary/kit.ts#str-list": [["key",3,"damage types, conditions and movement modes (engine vocabulary)"]],
     "lib/bestiary/kit.ts#toLowerCase": [["key",1,"damage types, conditions and movement modes (engine vocabulary)"]],

@@ -15,17 +15,18 @@
 // apart from the engine's, and where no pack is needed the page's own words
 // are handed to parseMonster as a row, so the suite says the same in CI. The
 // checks sweep every page and group what differs by the kind of error: one
-// gap() per kind, the creatures it touches named in its message.
+// check per kind, the creatures it touches named in its message.
 //
-// Each gap() is a finding from the #570 SRD text audit: it asserts what the
-// SRD 5.1 text says and fails today.
+// Each MON-nn test was a finding of the #570 SRD text audit, a gap() until
+// the engine held what the SRD 5.1 text says; a new finding is a gap() here
+// again (scripts/lib/enforce-harness.mjs).
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { openWorld } from "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
 import { bareName, defenceWords, diceShape, engineAttack, pageAttacks, readPage, rowOfBlock, sameMap, speedsOfEngine, XP_BY_CR } from "./lib/srd-bestiary.mjs";
 
-const { test, gap, finish } = suite("test-enforce-srd-bestiary");
+const { test, finish } = suite("test-enforce-srd-bestiary");
 const world = await openWorld();
 const { parseMonster } = await import("../src/lib/bestiary/statblock.ts");
 const { resolveMonster } = await import("../src/lib/bestiary/index.ts");
@@ -256,14 +257,8 @@ await test(
   },
 );
 
-await gap(
-  "MON-10",
-  {
-    rule: "The stat blocks are SRD 5.1's own: a goblin is 'Armor Class 15 ... Hit Points 7 (2d6) ... Scimitar +4 to hit ... 5 (1d6+2) slashing damage' (goblin), an owlbear 'Armor Class 13 ... Hit Points 59 (7d10+21)' (owlbear). docs/install.md: without the pack the app 'falls back to the much smaller bundled SRD 5.1 data in src/lib/srd/', which holds both blocks",
-    where: "src/lib/bestiary/index.ts resolveMonster (without the content pack a catalog creature gets synthesizeStats(cr) and any other SRD creature resolves to nothing; src/lib/srd/srd-creatures.json is never read for an enemy)",
-    severity: "medium",
-    note: "Reproduced by setting the content pack aside for the call, so it runs the same with the pack and without it.",
-  },
+await test(
+  "MON-10: without the content pack an SRD creature fights with its bundled SRD 5.1 block: a goblin at AC 15 with 7 hit points and a +4 scimitar, an owlbear with 59 hit points and a +7 beak",
   () => {
     const saved = globalThis.__odmContentDb;
     globalThis.__odmContentDb = null;
