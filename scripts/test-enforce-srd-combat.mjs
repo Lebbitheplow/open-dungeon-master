@@ -379,12 +379,8 @@ await test("CMB-11", async () => {
 
 // ---- Conditions ----
 
-await gap("CMB-12", {
-  rule: "conditions, Charmed: 'The charmer has advantage on any ability check to interact socially with the creature.'",
-  where: "src/lib/dm/rolls.ts and src/lib/dm/contest-roll.ts (the roller's check reads no charmed condition on the creature it is aimed at)",
-  severity: "low",
-  note: "A character who charmed an enemy rolls Deception against it on one d20.",
-}, async () => {
+// conditions, Charmed: 'The charmer has advantage on any ability check to interact socially with the creature.'
+await test("CMB-12", async () => {
   const [enemy] = await stage(fighter);
   kit.setEnemy(enemy.id, { conditions: ["charmed"], conditionMeta: { charmed: { source: fighter.id } } });
   const { out } = await forced([7, 13, 10, 10], "request_roll", {

@@ -13,7 +13,8 @@
 import { claimedAdvantage } from "@/lib/dm/pc-attack-options";
 import { askedFields, unnamedTraitFields } from "@/lib/dm/roll-feature-riders";
 import { rollExpression } from "@/lib/dice";
-import { getActiveEncounter } from "@/lib/db/encounters";
+import { getActiveEncounter, getEnemy } from "@/lib/db/encounters";
+import { charmedBy } from "@/lib/dm/enemy-profile";
 import { insertRoll } from "@/lib/db/rolls";
 import { createPendingRoll, publicPendingRoll, type DmTurn } from "@/lib/db/dm-turns";
 import { getSheetById } from "@/lib/db/sheets";
@@ -138,7 +139,12 @@ export function handleRequestRoll(
     }
   }
 
-  const extras = sheet ? rollExtrasFor(campaign, sheet, args.kind) : { encumbrance: campaign.gameSettings.variantRules.encumbrance };
+  // A check aimed at a creature the roller charmed (SRD 5.1, Charmed).
+  const aimedAt = sheet && args.againstEnemyId ? getEnemy(args.againstEnemyId.trim()) : null;
+  const charmedTarget = sheet && aimedAt && charmedBy(aimedAt.conditions, aimedAt.conditionMeta, sheet.id) ? aimedAt.displayName : undefined;
+  const extras = sheet
+    ? { ...rollExtrasFor(campaign, sheet, args.kind), ...(charmedTarget ? { charmedTarget } : {}) }
+    : { encumbrance: campaign.gameSettings.variantRules.encumbrance };
   // A trait of the character's that a field the model left unnamed would
   // call on (src/lib/dm/roll-about.ts): it names the field, or 'none', before
   // anything is rolled, so the trait is never lost to an omission.
