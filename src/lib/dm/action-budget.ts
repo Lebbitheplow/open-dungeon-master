@@ -30,9 +30,14 @@ export type TurnBudget = {
   // Sneak Attack, and anything else limited to once per turn, by key.
   oncePerTurn: string[];
   // Set by the Dash action. Movement itself is NOT tracked here: the battle
-  // map owns it (battle_tokens.moved_this_round), and this flag is what
-  // doubles that allowance for the turn.
+  // map owns it (battle_tokens.moved_this_round), and the Dashes taken are
+  // what grow that allowance for the turn.
   dashed: boolean;
+  // How many times the turn has Dashed. Each Dash (the action, a Cunning
+  // Action bonus action, Action Surge's extra action) adds the speed again,
+  // so one flag was not enough: a second Dash bought nothing. A budget
+  // stored before this field reads as one Dash when `dashed` is set.
+  dashes?: number;
   // Set by the Disengage action: leaving a reach provokes nothing this turn.
   disengaged: boolean;
   // Extra actions still available this turn (Haste grants one, usable for
@@ -96,6 +101,17 @@ export function freshBudget(input: {
     ...(input.extraActions ? { extraActions: input.extraActions, hasteGranted: input.extraActions } : {}),
     ...(input.slowed ? { slowed: true } : {}),
   };
+}
+
+// The Dashes this turn has taken (SRD 5.1, Dash: "an amount equal to your
+// speed" each time it is taken).
+export function dashCount(budget: Pick<TurnBudget, "dashed" | "dashes">): number {
+  return budget.dashes ?? (budget.dashed ? 1 : 0);
+}
+
+// The budget after one more Dash.
+export function withDash(budget: TurnBudget): TurnBudget {
+  return { ...budget, dashed: true, dashes: dashCount(budget) + 1 };
 }
 
 // Slow's refusal of the other half of the turn, or null (SRD 5.1: an action
@@ -390,8 +406,9 @@ export function describeBudget(budget: TurnBudget): string {
   if (!budget.interaction) {
     parts.push("free object interaction");
   }
-  if (budget.dashed) {
-    parts.push("doubled movement (Dash)");
+  const dashes = dashCount(budget);
+  if (dashes > 0) {
+    parts.push(dashes === 1 ? "doubled movement (Dash)" : `movement of ${dashes + 1} times their speed (Dash taken ${dashes} times)`);
   }
   if (budget.disengaged) {
     parts.push("disengaged (provokes nothing)");

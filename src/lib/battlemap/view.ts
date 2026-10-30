@@ -15,7 +15,7 @@ import { tokenFootprint } from "@/lib/dm/board-reach";
 import { speedFor } from "@/lib/srd";
 import { getMounts } from "@/lib/db/mounts";
 import { effectiveMaxHp, effectiveSpeed, exhaustionSpeed } from "@/lib/dm/condition-logic";
-import { budgetApplies } from "@/lib/dm/action-budget";
+import { budgetApplies, dashCount } from "@/lib/dm/action-budget";
 import { listSheets } from "@/lib/db/sheets";
 import { footprintDistance, footprintForSize, footprintIndexes, type Footprint } from "@/lib/battlemap/footprint";
 import { healthWord } from "@/lib/battlemap/health-words";
@@ -142,10 +142,12 @@ export function pcMoveBudget(
   if (encounter.kind === "scene") {
     return { speed, tiles: map.width * map.height, fullTiles: map.width * map.height };
   }
-  const dashed = budgetApplies(encounter.turnBudget, sheet.id, encounter.round)
-    ? Boolean(encounter.turnBudget?.dashed)
-    : false;
-  const fullTiles = Math.max(0, speedToTiles(speed) * (dashed ? 2 : 1) - token.movedThisRound);
+  // Every Dash adds the speed once more: the action, Cunning Action's bonus
+  // action and Action Surge's extra action stack (SRD 5.1, Dash).
+  const dashes = budgetApplies(encounter.turnBudget, sheet.id, encounter.round)
+    ? dashCount(encounter.turnBudget)
+    : 0;
+  const fullTiles = Math.max(0, speedToTiles(speed) * (1 + dashes) - token.movedThisRound);
   // Prone: the character stands for half their speed and walks on what is
   // left, or crawls at double cost, whichever reaches farther. `tiles` is
   // what the board lights; `fullTiles` is the movement actually in hand,
