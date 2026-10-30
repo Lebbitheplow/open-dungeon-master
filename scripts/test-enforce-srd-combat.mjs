@@ -286,12 +286,8 @@ await test("CMB-07", async () => {
 
 // ---- Mounted Combat ----
 
-await gap("CMB-08", {
-  rule: "combat, Mounting and Dismounting: 'If your mount is knocked prone, you can use your reaction to dismount it as it falls and land on your feet. Otherwise, you are dismounted and fall prone in a space within 5 feet it.'",
-  where: "src/lib/srd/mounts.ts dismountSave and src/lib/dm/mount-tools.ts handleDismount (cause mount-prone rolls the DC 10 DEX save the SRD gives only for a forced move or a rider knocked prone)",
-  severity: "low",
-  note: "The rider of a mount knocked prone rolls a DEX save to land on their feet and keeps their reaction; the SRD has no save here, only the reaction.",
-}, async () => {
+// combat, Mounting and Dismounting: 'If your mount is knocked prone, you can use your reaction to dismount it as it falls and land on your feet. Otherwise, you are dismounted and fall prone in a space within 5 feet it.'
+await test("CMB-08", async () => {
   await stage(fighter);
   kit.place(fighter.id, 5, 5);
   const up = await world.invoke("mount_up", { characterId: fighter.id, mount: "Warhorse" });
@@ -308,12 +304,8 @@ await gap("CMB-08", {
   );
 });
 
-await gap("CMB-09", {
-  rule: "combat, Mounting and Dismounting: 'Once during your move, you can mount a creature that is within 5 feet of you or dismount.'",
-  where: "src/lib/dm/mount-tools.ts spendMountingMovement (charges the movement but keeps no record that this move already mounted or dismounted)",
-  severity: "low",
-  note: "A rider with the movement for it mounts and dismounts (or the reverse) in one move.",
-}, async () => {
+// combat, Mounting and Dismounting: 'Once during your move, you can mount a creature that is within 5 feet of you or dismount.'
+await test("CMB-09", async () => {
   await stage(fighter);
   kit.place(fighter.id, 5, 5, 0);
   const up = await world.invoke("mount_up", { characterId: fighter.id, mount: "Warhorse" });

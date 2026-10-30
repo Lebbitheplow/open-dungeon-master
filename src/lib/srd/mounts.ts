@@ -224,13 +224,16 @@ export function mountedSpeed(mount: MountState | null, riderSpeed: number): numb
 // Being knocked off. PHB p.198: if an effect moves the mount against its
 // will, or the rider is knocked prone, the rider must make a DC 10 Dexterity
 // save or fall prone in a space within 5 feet of the mount. A save is not
-// required when the rider dismounts deliberately.
+// required when the rider dismounts deliberately, nor when the mount is
+// knocked prone: "you can use your reaction to dismount it as it falls and
+// land on your feet. Otherwise, you are dismounted and fall prone" (SRD 5.1,
+// Mounting and Dismounting).
 export const DISMOUNT_SAVE_DC = 10;
 
 export type DismountCause = "forced-move" | "mount-prone" | "rider-prone" | "voluntary";
 
 export function dismountSave(cause: DismountCause): { dc: number; ability: "dex" } | null {
-  return cause === "voluntary" ? null : { dc: DISMOUNT_SAVE_DC, ability: "dex" };
+  return cause === "voluntary" || cause === "mount-prone" ? null : { dc: DISMOUNT_SAVE_DC, ability: "dex" };
 }
 
 // PHB p.198: mounting or dismounting costs half the rider's movement.

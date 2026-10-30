@@ -21,6 +21,10 @@ import { speedToTiles } from "@/lib/battlemap/movement";
 import { publishEphemeral } from "@/lib/events";
 import { rollCharacterSave } from "@/lib/dm/forced-save";
 import { applyDmMutation } from "@/lib/dm/mutations";
+import { claimOncePerTurn } from "@/lib/dm/action-budget";
+import { reactionRefusal } from "@/lib/dm/reaction-gate";
+import { attacksAllowedFor, budgetFor, markReactionUsed, storeBudget } from "@/lib/dm/turn-budget";
+import { conditionTurnShape } from "@/lib/srd/condition-effects";
 import type { ToolError, ToolResult } from "@/lib/dm/tool-errors";
 
 // Getting on and off a horse, with the PHB's rules attached.
@@ -63,7 +67,7 @@ export const mountTools: ToolDef[] = [
     type: "function",
     function: {
       name: "dismount",
-      description: `Take a character off their mount. A voluntary dismount costs half their movement (taken from their own turn's movement on the board) and needs no roll. When something threw them, send cause: the server rolls their DC ${DISMOUNT_SAVE_DC} DEX save and lays them prone on a failure; do not roll it or set the condition yourself.`,
+      description: `Take a character off their mount. A voluntary dismount costs half their movement (taken from their own turn's movement on the board) and needs no roll. When something threw them, send cause: the server rolls their DC ${DISMOUNT_SAVE_DC} DEX save and lays them prone on a failure, and a mount that goes down costs their reaction to land standing (prone without one); do not roll it or set the condition yourself.`,
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -171,6 +175,10 @@ export function handleMountUp(
 // done this turn. Off their turn there is no movement of theirs to spend (it
 // would refill as their turn starts); a person at the console keeps a free
 // hand.
+// The turn's once-a-move mark for mounting or dismounting (action-budget.ts
+// oncePerTurn).
+const MOUNTING_KEY = "mount_or_dismount";
+
 function spendMountingMovement(
   campaign: Campaign,
   sheet: CharacterSheet,
@@ -188,12 +196,26 @@ function spendMountingMovement(
   }
   const half = Math.floor(speedToTiles(sheet.speed) / 2);
   const mounted = getMounts(campaign.id)[sheet.id];
+  // "Once during your move, you can mount a creature that is within 5 feet
+  // of you or dismount" (SRD 5.1, Mounting and Dismounting): one or the
+  // other, once, kept on the turn's own record.
+  const budget = budgetFor(encounter, sheet.id, attacksAllowedFor(sheet), conditionTurnShape(sheet.conditions));
+  const claimed = budget ? claimOncePerTurn(budget, MOUNTING_KEY) : null;
+  if (budget && !claimed) {
+    return {
+      error: `${sheet.name} already mounted or dismounted during this move: that is once a move. They ${mounted ? "dismount" : "mount"} on their next turn.`,
+      refused: "rules",
+    };
+  }
   const full = speedToTiles(mounted ? mounted.speed : sheet.speed);
   if (full - token.movedThisRound < half) {
     return {
       error: `${sheet.name} has too little movement left this turn to ${mounted ? "dismount" : "mount"}: it costs half their speed (${half * 5} ft).`,
       refused: "rules",
     };
+  }
+  if (claimed) {
+    storeBudget(encounter, claimed);
   }
   moveToken(token.id, token.x, token.y, token.movedThisRound + half);
   publishEphemeral(campaign.id, "battle_map_updated", {});
@@ -231,6 +253,9 @@ export function handleDismount(
   }
   setMount(campaign.id, sheet.id, null);
   publishPersisted(campaign.id, "mounts_updated", { mounts: getMounts(campaign.id) });
+  if (cause === "mount-prone") {
+    return mountFalls(campaign, sheet, current.name, sheets, sheetsById, turn);
+  }
 
   if (cause === "voluntary") {
     tableNote(campaign, `${sheet.name} dismounts.`);
@@ -264,5 +289,51 @@ export function handleDismount(
     save: save?.total ?? "failed automatically",
     dc: DISMOUNT_SAVE_DC,
     ...(failed ? { landed: "prone, within 5 feet of the mount" } : { landed: "on their feet" }),
+  };
+}
+
+// The mount knocked prone: no save. "You can use your reaction to dismount
+// it as it falls and land on your feet. Otherwise, you are dismounted and
+// fall prone in a space within 5 feet it" (SRD 5.1, Mounting and
+// Dismounting). The reaction is spent when the rider has it; out of a fight
+// there is no reaction to keep track of, so they land standing.
+function mountFalls(
+  campaign: Campaign,
+  sheet: CharacterSheet,
+  mountName: string,
+  sheets: CharacterSheet[],
+  sheetsById: Map<string, CharacterSheet>,
+  turn?: DmTurn,
+): ToolResult {
+  const encounter = getActiveEncounter(campaign.id);
+  const reacts = !encounter || (!encounter.reactionsUsed.includes(sheet.id) && reactionRefusal(campaign.id, sheet, encounter, "Landing on their feet") === null);
+  if (reacts) {
+    if (encounter) {
+      markReactionUsed(encounter, sheet.id);
+    }
+    tableNote(campaign, `${mountName} goes down; ${sheet.name} jumps clear and lands on their feet.`);
+    return {
+      ok: true,
+      dismounted: mountName,
+      landed: "on their feet",
+      ...(encounter ? { reaction: `${sheet.name}'s reaction is spent landing on their feet.` } : {}),
+    };
+  }
+  tableNote(campaign, `${mountName} goes down and ${sheet.name} falls with it.`);
+  if (turn) {
+    applyDmMutation(
+      campaign,
+      turn.id,
+      "set_condition",
+      JSON.stringify({ characterId: sheet.id, condition: "prone", reason: `fell with ${mountName}` }),
+      sheets,
+      sheetsById,
+    );
+  }
+  return {
+    ok: true,
+    dismounted: mountName,
+    landed: "prone, within 5 feet of the mount",
+    note: `${sheet.name} has no reaction left to jump clear, so they fall prone.`,
   };
 }
