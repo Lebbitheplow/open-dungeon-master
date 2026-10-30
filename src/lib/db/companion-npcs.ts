@@ -1,11 +1,12 @@
 import { getDatabase, nowIso } from "@/lib/db/core";
-import { getNpcById, listNpcs, type Npc } from "@/lib/db/npcs";
+import { getNpcById, listNpcs, setNpcPortrait, type Npc } from "@/lib/db/npcs";
 import { attractionBlank, attractionJson, type Attraction } from "@/lib/attraction";
 import { derivePersonality } from "@/lib/dm/npc-logic";
 import { defaultValues } from "@/lib/dm/companion-values-logic";
 import { departedSheet, saveDepartedSheet, seedCompanionValues, type DepartedSheet } from "@/lib/db/companion-conscience";
 import { companionDeparture } from "@/lib/db/companion-departures";
 import { textKey } from "@/lib/language/text-logic";
+import { isUploadedImagePath } from "@/lib/uploads";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // The person behind a lasting AI companion (#503 Phase 0.1, landed with
@@ -121,6 +122,14 @@ export function rememberDepartingSheet(sheet: CharacterSheet) {
     return;
   }
   saveDepartedSheet(npc.id, { level: sheet.level, xp: sheet.xp, sheet: { ...sheet }, at: nowIso() });
+  // From here the row speaks for them: the line they leave on names it, not
+  // the sheet, and the story log finds its face in the cast. It was made
+  // with no portrait, so the parting line showed a letter (issue 660). It
+  // takes the sheet's face; a face the row already has is kept.
+  const url = sheet.portrait?.url;
+  if (!npc.portraitUrl && isUploadedImagePath(url)) {
+    setNpcPortrait(npc.id, url);
+  }
 }
 
 // A companion who left and is being written back in: the row behind them,
