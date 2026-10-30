@@ -42,6 +42,7 @@ import { computeSheetDerived, formatModifier } from "@/lib/srd";
 import { usePackArt } from "@/lib/worlds/use-pack-art";
 import { textKey } from "@/lib/language/text-logic";
 import { heroFell, switchesHeroes } from "@/lib/characters/fallen-logic";
+import { speciesAndClassWords } from "@/lib/characters/class-words";
 
 // The portrait cropper (and its cropping library) loads when a portrait is
 // being cropped, not with the table.
@@ -620,10 +621,7 @@ export function PartyPanel({
                   ) : null}
                 </span>
                 <span className="block text-xs text-stone-400">
-                  {sheet.raceLabel ?? sheet.race.replaceAll("_", " ")}{" "}
-                  {(sheet.classes?.length ?? 0) > 1
-                    ? (sheet.classes ?? []).map((entry) => `${entry.id} ${entry.level}`).join(" / ")
-                    : `${sheet.class} ${sheet.level}`}
+                  {speciesAndClassWords(sheet)}
                 </span>
               </span>
               </button>

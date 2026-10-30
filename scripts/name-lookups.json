@@ -819,6 +819,7 @@
     "lib/characters/catalog.ts#first": [["key",1,"a race by id"]],
     "lib/characters/catalog.ts#keyed": [["key",1,"ids, refs, slugs, tool names, field names, env names, event kinds, UI keys, caches, door and map keys; a sheet's conditionMeta by the condition key it was written under; the usage route's gear map by the sheet's own stored item names (src/: every site read)"]],
     "lib/characters/catalog.ts#partial": [["identity",1,"a feat or subclass by its whole name or slug; a background option by id"]],
+    "lib/characters/class-words.ts#partial": [["key",1,"the homebrew id prefix on a species or class id shown as a name"]],
     "lib/characters/catalog.ts#whole": [["identity",7,"a feat or subclass by its whole name or slug; a background option by id"]],
     "lib/characters/hero-tips.ts#bypass": [["identity",3,"a hand card's weapon by the carried line's whole name (the card carries it)"]],
     "lib/characters/hero-tips.ts#first": [["key",2,"the best-scored card or spell (no text names it)"]],

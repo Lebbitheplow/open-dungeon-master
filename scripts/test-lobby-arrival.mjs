@@ -52,7 +52,7 @@ await test("a player seating a character triggers one arrival", () => {
   assert.equal(seated.queue[0].id, "s2");
   assert.equal(arrival.arrivalLine(seated.queue[0]), "Thornwick takes a seat");
   assert.equal(arrival.arrivalDetail(seated.queue[0]), "Hill dwarf · Fighter", "ancestry and class");
-  assert.equal(arrival.arrivalDetail(sheet("x", "Ash", { race: "half_elf", class: "Rogue" })), "half elf · Rogue", "no label: the id, readable");
+  assert.equal(arrival.arrivalDetail(sheet("x", "Ash", { race: "half_elf", class: "Rogue" })), "Half Elf · Rogue", "no label: the id as a name");
   // The next stream update to the same sheet (an edit, a ready) is not news.
   const edited = arrival.seeSheets(seated, [mara, { ...thornwick, level: 2 }]);
   assert.equal(edited, seated, "the same sheet again does not arrive twice");
