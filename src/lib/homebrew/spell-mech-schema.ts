@@ -108,6 +108,8 @@ export const spellMechSchema = z.object({
   resolution: z.enum(["attack", "save", "auto", "heal", "buff", "summon", "utility"]),
   save: ability.optional(),
   halfOnSave: z.boolean().optional(),
+  // Sacred Flame's "no benefit from cover", kept on a workshop copy.
+  ignoresCover: z.boolean().optional(),
   damageType: word().optional(),
   secondType: word().optional(),
   attack: z.enum(["melee", "ranged"]).optional(),

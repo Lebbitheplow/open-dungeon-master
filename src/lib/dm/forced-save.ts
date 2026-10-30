@@ -178,7 +178,20 @@ export function settleFailedSave(
 export type SaveExtra = {
   die?: string;
   floor?: number;
+  // Half (+2) or three-quarters (+5) cover between the save and the
+  // effect's origin: "a +2 bonus to AC and Dexterity saving throws" (SRD
+  // 5.1, Cover). Counts on a Dexterity save only.
+  cover?: number;
 };
+
+// The cover bonus a save takes: on a Dexterity save only (SRD 5.1, Cover).
+function saveCoverBonus(ability: SaveAbility, cover: number | undefined): number {
+  return ability === "dex" ? Math.max(0, cover ?? 0) : 0;
+}
+
+function coverNote(bonus: number): string[] {
+  return bonus ? [`${bonus >= 5 ? "three-quarters" : "half"} cover: +${bonus} to the Dexterity save`] : [];
+}
 
 // A character's forced save, rolled, published as a dice card and recorded
 // on the turn (when there is one: a save the clock or a damage hook rolls has
@@ -205,6 +218,7 @@ export function rollCharacterSave(
 ): ForcedSave {
   const sheet = getSheetById(stale.id) ?? stale;
   const shieldSave = single && ability === "dex" ? shieldMasterSaveBonus(sheet) : 0;
+  const covered = saveCoverBonus(ability, extra?.cover);
   // Diehard: advantage against what would exhaust them.
   const diehard = diehardSaveAdvantage(sheet, resists?.against);
   const claimed = claim ?? (diehard ? { advantage: "advantage" as const, reason: "Diehard: advantage against exhaustion" } : null);
@@ -229,7 +243,7 @@ export function rollCharacterSave(
   spendRollCarriers(campaign.id, sheet.id, resolved.spendInspiration);
   const versus = authoredSaveDieVs(sheet, sheet.id, from ? { conditions: from.conditions, meta: from.conditionMeta as Record<string, { source?: string }> } : null);
   const outcome = rollExpression(
-    `${resolved.expression}${versus ? `+${versus.die}` : ""}${shieldSave ? `+${shieldSave}` : ""}${extra?.die ? `+${extra.die}` : ""}`,
+    `${resolved.expression}${versus ? `+${versus.die}` : ""}${shieldSave ? `+${shieldSave}` : ""}${covered ? `+${covered}` : ""}${extra?.die ? `+${extra.die}` : ""}`,
   );
   // A floor under the d20 (Starry Form's dragon: a 9 or lower counts as 10).
   if (extra?.floor && outcome.natural !== undefined && outcome.natural < extra.floor) {
@@ -259,6 +273,7 @@ export function rollCharacterSave(
       ...(resolved.conditionNotes ?? []),
       ...(versus ? [`${versus.feature}: +${versus.die} against its prey`] : []),
       ...(shieldSave ? [`Shield Master: +${shieldSave} (the shield) on a Dexterity save against an effect that targets only them`] : []),
+      ...coverNote(covered),
       ...(moteLine ? [moteLine] : []),
     ],
   };
@@ -314,6 +329,8 @@ export function rollEnemySave(
     // resistant to one rolls with advantage, vulnerable to one with
     // disadvantage (Black Flag's condition resistances).
     against?: string | string[];
+    // Cover between the creature and the effect's origin (SaveExtra.cover).
+    cover?: number;
   } = {},
 ): ForcedSave {
   // A character fighting the party, seen as a foe (sheet-foe.ts), saves as
@@ -335,8 +352,11 @@ export function rollEnemySave(
       },
       null,
       options.advantage ? { advantage: "advantage", reason: "the effect's own advantage" } : options.disadvantage ? { advantage: "disadvantage", reason: "the effect's own disadvantage" } : null,
+      undefined,
+      options.cover ? { cover: options.cover } : undefined,
     );
   }
+  const covered = saveCoverBonus(ability, options.cover);
   const derivation = rollDerivation(enemy.conditions, "saving_throw", ability);
   if (derivation.autoFail) {
     // Legendary Resistance answers a save failed outright as well.
@@ -371,7 +391,7 @@ export function rollEnemySave(
     ...authored.sources,
   ]);
   const outcome = rollExpression(
-    `${d20Expression(saveModFor(enemy.stats, ability) + effect.bonus, advantage)}${riders.diceSuffix}`,
+    `${d20Expression(saveModFor(enemy.stats, ability) + effect.bonus + covered, advantage)}${riders.diceSuffix}`,
   );
   if (options.record) {
     const roll = insertRoll({
@@ -404,6 +424,7 @@ export function rollEnemySave(
       ...effect.sources,
       ...(resistsMagic ? ["Magic Resistance: advantage against magic"] : []),
       ...(worn ? ["exhaustion: disadvantage on saving throws"] : []),
+      ...coverNote(covered),
       ...riders.notes,
       ...authored.notes,
     ],

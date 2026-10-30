@@ -1,7 +1,7 @@
 import { canAct } from "@/lib/dm/can-act";
 import { castFromFoeSheet } from "@/lib/dm/sheet-foe-cast";
 import { hasDungeonDelver, shieldMasterSaveBonus, spellSaveAdvantageReach } from "@/lib/srd/feat-combat";
-import { tilesBetween } from "@/lib/dm/attack-spatial";
+import { coverFor, tilesBetween } from "@/lib/dm/attack-spatial";
 import { z } from "zod";
 import { castToNoEffect, spellWardOn } from "@/lib/dm/cast-reach";
 import type { Campaign } from "@/lib/db/campaigns";
@@ -329,6 +329,11 @@ export function handleCastAtPlayer(
     : trapWard
       ? { advantage: "advantage" as const, reason: "Dungeon Delver: a trap" }
       : null;
+  // Cover between the caster and the character counts on a Dexterity save,
+  // unless the spell says it does not (SRD 5.1, Cover; Sacred Flame).
+  const castSpell = use?.spell ?? args.spell;
+  const coverless = castSpell ? spellMechanicsFor({ spell: castSpell, userIds: spellAuthorsFor(campaign) })?.mech.ignoresCover === true : false;
+  const saveCover = use?.enemy && !coverless ? coverFor(use.enemy.encounterId, use.enemy.id, sheet.id) : 0;
   const save = rollCharacterSave(
     campaign,
     turn,
@@ -346,6 +351,7 @@ export function handleCastAtPlayer(
     claim,
     // A spell cast at them alone: Shield Master's shield on a Dexterity save.
     true,
+    { cover: saveCover },
   );
   if (claim) {
     base0.featAdvantage = claim.reason;

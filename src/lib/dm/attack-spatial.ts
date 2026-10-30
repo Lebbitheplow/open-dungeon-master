@@ -185,6 +185,19 @@ export function coverFor(encounterId: string, attackerRef: string, targetRef: st
   return terrain === 5 || blades === 5 ? 5 : creatureCover(encounterId, attackerRef, targetRef) ? 2 : terrain;
 }
 
+// The cover a creature has against an effect that starts at a square (a
+// Fireball's point, a cone's caster): the terrain between them, as a save
+// reads it (SRD 5.1, Cover: "against an attack or effect that originates on
+// the opposite side of the cover"). 0 with no board or no token.
+export function coverFromPoint(encounterId: string, at: { x: number; y: number }, targetRef: string): 0 | 2 | 5 {
+  const map = getBattleMapForEncounter(encounterId);
+  const target = map ? getTokenByRef(map.id, targetRef) : null;
+  if (!map || !target) {
+    return 0;
+  }
+  return coverBetween(map.terrain, map.width, map.height, at.x, at.y, target.x, target.y);
+}
+
 // Every square strictly between two on a straight line (Bresenham), the
 // squares a creature would have to stand on to be in the way.
 export function squaresBetween(

@@ -2023,7 +2023,8 @@
     "resolution": "save",
     "save": "dex",
     "halfOnSave": false,
-    "damageType": "radiant"
+    "damageType": "radiant",
+    "ignoresCover": true
    },
    "x": {
     "c1": "1d8",

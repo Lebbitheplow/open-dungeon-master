@@ -39,6 +39,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { curseBurn } from "@/lib/dm/spell-retort";
 import { holdEnemyAreaConcentration, placeSpellZone } from "@/lib/dm/zone-cast";
 import { zoneArgsSchema, zonePlacement } from "@/lib/dm/zone-args";
+import { coverFor, coverFromPoint } from "@/lib/dm/attack-spatial";
 import { zoneRowFor } from "@/lib/battlemap/zones-spells";
 import { spellEngineName } from "@/lib/content";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
@@ -428,6 +429,14 @@ export function handleAoeDamage(
   const results: Array<Record<string, unknown>> = [];
   let encounterOver: Record<string, unknown> = {};
 
+  // Cover between a creature and the area's origin (its point, or the
+  // caster for a cone, a line or an area sent with no point) counts on a
+  // Dexterity save, unless the spell says it does not (SRD 5.1, Cover).
+  const origin = zonePlacement(args).at;
+  const originRef = plan?.caster.id ?? enemyUse?.enemy.id;
+  const saveCover = (refId: string): number =>
+    plan?.mech?.ignoresCover ? 0 : origin ? coverFromPoint(encounter.id, origin, refId) : originRef ? coverFor(encounter.id, originRef, refId) : 0;
+
   // Enemy saves roll silently from stat blocks; results ride the table.
   for (const enemy of enemyTargets) {
     // The creature's conditions decide the save as a character's would.
@@ -443,6 +452,7 @@ export function handleAoeDamage(
             ? bindsWorthResisting(plan.conditions, Boolean(plan.mech?.condition?.endsWith))
             : Boolean(laysCondition) && bindsWorthResisting([laysCondition ?? ""], false),
           against: plan?.conditions ?? (enemyUse?.condition ? [enemyUse.condition] : laysCondition ? [laysCondition] : []),
+          cover: saveCover(enemy.id),
           ...(plan ? spellSaveOptions(plan.mech, enemy) : {}),
           ...(plan ? { record: { turn, detail: `${enemy.displayName}: ${ability.toUpperCase()} save against ${plan.spell}` } } : {}),
         });
@@ -577,6 +587,7 @@ export function handleAoeDamage(
       reason: args.reason,
       sheets,
       sheetsById,
+      coverOf: saveCover,
     }),
   );
 

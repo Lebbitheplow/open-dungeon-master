@@ -11,6 +11,7 @@ import { magicImmunityNote } from "@/lib/dm/monster-traits";
 import { describeConditionDuration } from "@/lib/dm/condition-logic";
 import { z } from "zod";
 import { placeSpellZone } from "@/lib/dm/zone-cast";
+import { coverFor } from "@/lib/dm/attack-spatial";
 import { zoneArgsSchema, zonePlacement } from "@/lib/dm/zone-args";
 import { bindsWorthResisting } from "@/lib/dm/legendary-logic";
 import type { Campaign } from "@/lib/db/campaigns";
@@ -416,6 +417,9 @@ export function handleCastAtEnemy(
       magical: true,
       resist,
       against: conditions,
+      // Cover between the caster and the target counts on a DEX save,
+      // unless the spell says it does not (Sacred Flame): SRD 5.1, Cover.
+      cover: mech?.ignoresCover ? 0 : coverFor(encounter.id, sheet.id, enemy.id),
       ...spellSaveOptions(mech, enemy),
       record: { turn, detail: `${enemy.displayName}: ${ability.toUpperCase()} save against ${spellName}` },
     });

@@ -248,12 +248,8 @@ await test("CMB-05", async () => {
 
 // ---- Cover ----
 
-await gap("CMB-06", {
-  rule: "combat, Cover: 'A target with half cover has a +2 bonus to AC and Dexterity saving throws.' (three-quarters: +5 to AC and Dexterity saving throws)",
-  where: "src/lib/dm/cast-at-enemy*.ts and src/lib/dm/forced-save.ts rollEnemySave (and the character side, cast-at-player.ts, aoe-damage.ts): the board's cover (battlemap/los.ts coverBetween) reaches only attack rolls",
-  severity: "medium",
-  note: "A dummy behind a low wall (half cover) saves against Acid Splash with no +2: a 12 on the die fails DC 14 where the SRD's 14 succeeds.",
-}, async () => {
+// combat, Cover: 'A target with half cover has a +2 bonus to AC and Dexterity saving throws.' (three-quarters: +5 to AC and Dexterity saving throws)
+await test("CMB-06", async () => {
   const [enemy] = await stage(mage);
   kit.openField([[5, 7, "|"]]);
   kit.place(mage.id, 5, 2);
@@ -262,6 +258,40 @@ await gap("CMB-06", {
   const { out } = await forced([12, 3, 3], "cast_at_enemy", { characterId: mage.id, targetEnemyId: enemy.id, spell: "Acid Splash" });
   assert.equal(out.ok, true, out.error);
   assert.equal(kit.enemy(enemy.id).currentHp, 40, `a creature behind half cover failed a DEX save of 12 + 2 against DC 14: ${JSON.stringify(out.result).slice(0, 300)}`);
+});
+
+await test("Cover counts on a DEX save against an area from its point of origin: a Fireball's 12 behind a low wall is 14, half damage (SRD 5.1, Cover).", async () => {
+  const [enemy] = await stage(mage);
+  const before = world.sheet(mage.id).spellcasting;
+  world.patch(mage.id, { spellcasting: { ...before, prepared: ["Fireball"] } });
+  try {
+    kit.openField([[5, 7, "|"]]);
+    kit.place(mage.id, 5, 0);
+    kit.place(enemy.id, 5, 8);
+    // Eight damage dice of 1, then the dummy's save of 12 (+0) against DC 14.
+    const { out } = await forced([1, 1, 1, 1, 1, 1, 1, 1, 12], "aoe_damage", { casterCharacterId: mage.id, spell: "Fireball", level: 3, enemyIds: [enemy.id], atX: 5, atY: 4 });
+    assert.equal(out.ok, true, out.error);
+    assert.equal(kit.enemy(enemy.id).currentHp, 36, `the low wall between the sphere's point and the dummy gave its DEX save nothing: ${JSON.stringify(out.result).slice(0, 300)}`);
+  } finally {
+    world.patch(mage.id, { spellcasting: before });
+  }
+});
+
+await test("Sacred Flame: 'The target gains no benefit from cover for this saving throw' (SRD 5.1, Sacred Flame).", async () => {
+  const [enemy] = await stage(priest);
+  const before = world.sheet(priest.id).spellcasting;
+  world.patch(priest.id, { spellcasting: { ...before, cantrips: ["Sacred Flame"] } });
+  try {
+    kit.openField([[5, 7, "|"]]);
+    kit.place(priest.id, 5, 2);
+    kit.place(enemy.id, 5, 8);
+    // Cleric 5, WIS 16: DC 14. A 12 fails with the low wall counting for nothing.
+    const { out } = await forced([12, 3, 3], "cast_at_enemy", { characterId: priest.id, targetEnemyId: enemy.id, spell: "Sacred Flame" });
+    assert.equal(out.ok, true, out.error);
+    assert.equal(kit.enemy(enemy.id).currentHp, 34, `cover counted against Sacred Flame: ${JSON.stringify(out.result).slice(0, 300)}`);
+  } finally {
+    world.patch(priest.id, { spellcasting: before });
+  }
 });
 
 // ---- Damage and Healing: Knocking a Creature Out ----

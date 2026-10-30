@@ -2126,7 +2126,7 @@
     "lib/srd/spell-lists.ts#whole": [["key",1,"class slugs"]],
     "lib/srd/spell-mech-last-rows.ts#sql": [["key",1,"slug and id lookups, sqlite_master probes, rules prose (\"CR 4 or lower\"); the schema's name COLLATE NOCASE uniques (locations, battle maps) are weaker than textKey, never stricter, and the app checks by textKey first"]],
     "lib/srd/spell-mechanics.ts#number": [["key",2,"digits a regex already captured, ids, headers, stored and form numbers (number inputs), dice parts, the pack's English text (\"1,000 feet\", a purse); src/: every site read"]],
-    "lib/srd/spell-mechanics.ts#partial": [["pattern",10,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"],["key",3,"the SRD's or pack's English spell text (a homebrew spell's text: authoring)"]],
+    "lib/srd/spell-mechanics.ts#partial": [["pattern",11,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"],["key",3,"the SRD's or pack's English spell text (a homebrew spell's text: authoring)"]],
     "lib/srd/spell-mechanics.ts#whole": [["identity",1,"an authored spell by its whole name"]],
     "lib/srd/spell-prep.ts#normalizer": [["key",2,"slugs, hosts, file names, ids, env values, display text, throttle keys, model ids (src/: every site read)"]],
     "lib/srd/spell-prep.ts#number": [["key",1,"digits a regex already captured, ids, headers, stored and form numbers (number inputs), dice parts, the pack's English text (\"1,000 feet\", a purse); src/: every site read"]],
