@@ -134,12 +134,10 @@ await gap("EQP-02", {
   assert.deepEqual(odm, wanted, `[copper, pounds] by focus: ${JSON.stringify(odm)}`);
 });
 
-await gap("EQP-03", {
-  rule: "adventuring-gear, Lamp: \"A lamp casts bright light in a 15-foot radius and dim light for an additional 30 feet. Once lit, it burns for 6 hours on a flask (1 pint) of oil.\"",
-  where: "src/lib/dm/light-timers.ts SOURCES (no lamp entry; the board draws dim light at twice the bright radius, src/lib/battlemap/los.ts)",
-  severity: "medium",
-  note: "The Diplomat's Pack carries a lamp; lit, it gives no light on the board.",
-}, () => {
+// adventuring-gear, Lamp: "A lamp casts bright light in a 15-foot radius and
+// dim light for an additional 30 feet. Once lit, it burns for 6 hours on a
+// flask (1 pint) of oil."
+await test("EQP-03", () => {
   const light = carriedLight({ equipment: [{ name: "Lamp", qty: 1 }, { name: "Oil (flask)", qty: 1 }] });
   assert.deepEqual(light, { radius: 3, minutes: 360 }, `a lamp with a flask of oil gives ${JSON.stringify(light)} (tiles of bright light, minutes)`);
 });
@@ -581,11 +579,11 @@ await gap("EQP-22", {
   assert.ok(kitLine && (kitLine.charges ?? 10) >= 9, `one use of a healer's kit left the medic with ${kitLine ? `${kitLine.charges} uses` : "no kit"} (${JSON.stringify(out.result ?? out.error)})`);
 });
 
-await gap("EQP-23", {
-  rule: "adventuring-gear: manacles bind a creature (DC 20 Dexterity to escape, DC 20 Strength to break), a hunting trap is set with an action and holds what steps on it, a climber's kit anchors its user; none of them is used up by its use.",
-  where: "src/lib/dm/item-logic.ts itemUseProblem (an untagged item counts as a consumable), src/lib/dm/resource-tools.ts computeUseItem",
-  severity: "low",
-}, async () => {
+// adventuring-gear: manacles bind a creature (DC 20 Dexterity to escape, DC 20
+// Strength to break), a hunting trap is set with an action and holds what
+// steps on it, a climber's kit anchors its user; none of them is used up by
+// its use.
+await test("EQP-23", async () => {
   const jailer = world.addHero({ class: "rogue", level: 3, equipment: [{ name: "Manacles", qty: 1 }, { name: "Hunting Trap", qty: 1 }, { name: "Climber's Kit", qty: 1 }] });
   const gone = [];
   for (const name of ["Manacles", "Hunting Trap", "Climber's Kit"]) {

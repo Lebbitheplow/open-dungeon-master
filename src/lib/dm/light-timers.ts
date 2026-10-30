@@ -27,6 +27,12 @@ const SOURCES: Source[] = [
   { tag: "bullseye_lantern", radius: 12, minutes: 360, fuel: "lamp_oil" },
   { tag: "lantern", radius: 6, minutes: 360, fuel: "lamp_oil" },
   { tag: "torch", radius: 4, minutes: 60 },
+  // SRD 5.1 Adventuring Gear, Lamp: "bright light in a 15-foot radius and
+  // dim light for an additional 30 feet. Once lit, it burns for 6 hours on a
+  // flask (1 pint) of oil." (issue #570, EQP-03). The board draws a carried
+  // light's dim ring at twice its bright radius, so the lamp's dim light
+  // reaches 30 feet there, not 45: a token holds one radius.
+  { tag: "lamp", radius: 3, minutes: 360, fuel: "lamp_oil" },
   { tag: "candle", radius: 1, minutes: 60 },
 ];
 
