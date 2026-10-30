@@ -2451,7 +2451,7 @@ async function resolveModelCall(
     }
     const result =
       maybeProposeItemChange(campaign, turn.id, name, gated.args, sheetsById) ??
-      applyDmMutation(campaign, turn.id, name, gated.args, sheets, sheetsById).result;
+      applyDmMutation(campaign, turn.id, name, gated.args, sheets, sheetsById, turn).result;
     if (!("error" in result)) {
       turn.mutationCount += 1;
     }

@@ -19,6 +19,7 @@ import { removeConditions } from "@/lib/dm/condition-logic";
 import { stableDeathTrack } from "@/lib/dm/death-logic";
 import { insertSheetAudit } from "@/lib/db/sheet-audit";
 import { insertRoll } from "@/lib/db/rolls";
+import type { DmTurn } from "@/lib/db/dm-turns";
 import { rollExpression } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import type { CharacterSheet, EquipmentItem, FullPatchSheetInput } from "@/lib/schemas/sheet";
@@ -109,6 +110,9 @@ export function handleStabilize(
   sheet: CharacterSheet,
   healer: CharacterSheet | null,
   input: { method?: StabilizeMethod; reason?: string },
+  // The GM turn the check is rolled on: the GM's message shows the roll
+  // cards listed in turn.rollIds, as for every other roll the turn makes.
+  turn?: DmTurn | null,
 ): ToolResult {
   const reason = (input.reason ?? "").slice(0, 200);
   const track = sheet.deathSaves;
@@ -230,7 +234,8 @@ export function handleStabilize(
       roll,
       source: "digital",
     });
-    check = { rolled: outcome.total, dc: STABILIZE_DC };
+    turn?.rollIds.push(roll.id);
+    check ={ rolled: outcome.total, dc: STABILIZE_DC };
     if (outcome.total < STABILIZE_DC) {
       return {
         ok: true,
