@@ -31,6 +31,9 @@ export type MountProfile = {
   // Size, which decides who can ride it: a mount must be at least one size
   // larger than its rider.
   size: MountSize;
+  // A flying or aquatic mount, which "An exotic saddle is required for
+  // riding" (SRD 5.1 Mounts and Vehicles, Saddles).
+  exotic?: boolean;
   blurb: string;
 };
 
@@ -132,6 +135,7 @@ export const MOUNTS: MountProfile[] = [
     carry: 540,
     controllable: false,
     size: "large",
+    exotic: true,
     blurb: "Flies at 80 ft. Independent: it decides.",
   },
 ];
@@ -201,6 +205,8 @@ export type MountCheck = { ok: true; state: MountState } | ToolError;
 export function checkMount(input: {
   ref: string;
   riderSize?: MountSize;
+  // The rider carries an exotic saddle (Saddle, Exotic).
+  exoticSaddle?: boolean;
   // A DM writing their own beast: everything is taken on trust except the
   // size rule, which still applies.
   custom?: { name: string; speed: number; controlled: boolean; size: MountSize };
@@ -232,6 +238,14 @@ export function checkMount(input: {
   if (!canCarry(profile.size, riderSize)) {
     return {
       error: `A ${riderSize} rider cannot ride a ${profile.size} ${profile.name}; a mount has to be one size larger.`,
+      refused: "rules",
+    };
+  }
+  // SRD 5.1 Saddles: "An exotic saddle is required for riding any aquatic
+  // or flying mount" (issue #570, EQP-24).
+  if (profile.exotic && !input.exoticSaddle) {
+    return {
+      error: `A ${profile.name} is ridden only in an exotic saddle (SRD 5.1, Saddles), and the rider carries none. They get one (Saddle, Exotic) or ride another mount.`,
       refused: "rules",
     };
   }

@@ -555,14 +555,16 @@ await test("EQP-20", async () => {
   assert.equal(attacks, 4, `one creature alone on the plate faced ${attacks} dart attack${attacks === 1 ? "" : "s"}`);
 });
 
-await gap("EQP-21", {
-  rule: "tools, Herbalism Kit: \"proficiency with this kit is required to create antitoxin and potions of healing.\"",
-  where: "src/lib/dm/lifestyle.ts downtimeProblem (crafting checks only the named tool's proficiency)",
-  severity: "low",
-}, async () => {
+// tools, Herbalism Kit: "proficiency with this kit is required to create
+// antitoxin and potions of healing."
+await test("EQP-21", async () => {
   const smith = world.addHero({ class: "fighter", level: 3, gold: 200, proficiencies: profs({ tools: ["Smith's Tools"] }) });
   const out = await world.invoke("downtime", { characterId: smith.id, activity: "crafting", item: "Potion of Healing", tool: "Smith's Tools", days: 1 });
   assert.equal(out.ok && !out.result?.error, false, `a smith with no herbalism kit crafted: ${JSON.stringify(out.result?.results ?? out.result)}`);
+  // An herbalist proficient with the kit brews it.
+  const herbalist = world.addHero({ class: "druid", level: 3, gold: 200, proficiencies: profs({ tools: ["Herbalism Kit"] }) });
+  const brewed = await world.invoke("downtime", { characterId: herbalist.id, activity: "crafting", item: "Potion of Healing", tool: "Herbalism Kit", days: 1 });
+  assert.equal(brewed.ok && !brewed.result?.error, true, JSON.stringify(brewed.result ?? brewed.error));
 });
 
 // adventuring-gear, Healer's Kit: "The kit has ten uses. As an action, you can
@@ -597,21 +599,21 @@ await test("EQP-23", async () => {
   assert.deepEqual(gone, [], `used once, these left the pack: ${gone.join("; ")}`);
 });
 
-await gap("EQP-24", {
-  rule: "mounts-and-vehicles, Saddles: \"An exotic saddle is required for riding any aquatic or flying mount.\"",
-  where: "src/lib/dm/mount-tools.ts mount_up, src/lib/srd/mounts.ts checkMount",
-  severity: "low",
-}, async () => {
+// mounts-and-vehicles, Saddles: "An exotic saddle is required for riding any
+// aquatic or flying mount."
+await test("EQP-24", async () => {
   const rider = world.addHero({ class: "fighter", level: 3, equipment: [{ name: "Saddle, Riding", qty: 1 }] });
   const out = await world.invoke("mount_up", { characterId: rider.id, mount: "Griffon" });
   assert.equal(out.ok && !out.result?.error, false, `a rider with no exotic saddle mounted a griffon: ${JSON.stringify(out.result)}`);
+  // In an exotic saddle they ride it.
+  world.patch(rider.id, { equipment: [{ name: "Saddle, Exotic", qty: 1 }] });
+  const saddled = await world.invoke("mount_up", { characterId: rider.id, mount: "Griffon" });
+  assert.equal(saddled.ok && !saddled.result?.error, true, JSON.stringify(saddled.result ?? saddled.error));
 });
 
-await gap("EQP-26", {
-  rule: "adventuring-gear, Block and Tackle: \"a block and tackle allows you to hoist up to four times the weight you can normally lift.\"",
-  where: "src/lib/dm/explore-tools.ts lift, src/lib/dm/load-rules.ts liftLimits (no factor for a carried block and tackle)",
-  severity: "low",
-}, async () => {
+// adventuring-gear, Block and Tackle: "a block and tackle allows you to hoist
+// up to four times the weight you can normally lift."
+await test("EQP-26", async () => {
   const hauler = world.addHero({ class: "fighter", level: 3, abilities: { str: 10 }, equipment: [{ name: "Block and Tackle", qty: 1 }] });
   // Strength 10 lifts 300 pounds; with the pulleys, up to 1,200.
   const out = await world.invoke("lift", { characterId: hauler.id, weightLb: 1000, how: "lift", reason: "a portcullis" });

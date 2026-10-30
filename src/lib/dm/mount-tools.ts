@@ -27,6 +27,11 @@ import { attacksAllowedFor, budgetFor, markReactionUsed, storeBudget } from "@/l
 import { conditionTurnShape } from "@/lib/srd/condition-effects";
 import type { ToolError, ToolResult } from "@/lib/dm/tool-errors";
 import { SRD_CREATURES } from "@/lib/srd/srd-creatures";
+import { matchGear } from "@/lib/srd/adventuring-gear";
+import { rowName } from "@/lib/srd/item-row";
+
+// The SRD's exotic saddle row, every spelling of it.
+const EXOTIC_SADDLE = matchGear("Saddle, Exotic");
 
 // Getting on and off a horse, with the PHB's rules attached.
 //
@@ -150,7 +155,7 @@ export function handleMountUp(
           size: args.size ?? "large",
         },
       })
-    : checkMount({ ref: args.mount ?? "", riderSize: riderSize(sheet) });
+    : checkMount({ ref: args.mount ?? "", riderSize: riderSize(sheet), exoticSaddle: sheet.equipment.some((item) => matchGear(rowName(item)) === EXOTIC_SADDLE) });
   if ("error" in checked) {
     return checked;
   }

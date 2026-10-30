@@ -103,7 +103,10 @@ test("a custom beast is taken on trust except for the size rule", () => {
 });
 
 test("an independent mount is marked as one", () => {
-  assert.equal(checkMount({ ref: "griffon", riderSize: "medium" }).state.controlled, false);
+  // SRD 5.1 Saddles: "An exotic saddle is required for riding any aquatic
+  // or flying mount", so the griffon is ridden in one.
+  assert.equal(checkMount({ ref: "griffon", riderSize: "medium", exoticSaddle: true }).state.controlled, false);
+  assert.equal(checkMount({ ref: "griffon", riderSize: "medium" }).refused, "rules");
   assert.equal(checkMount({ ref: "warhorse", riderSize: "medium" }).state.controlled, true);
 });
 

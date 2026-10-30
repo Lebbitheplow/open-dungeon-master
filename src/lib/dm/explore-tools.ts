@@ -28,6 +28,8 @@ import { DISEASES, MADNESS_KINDS, POISONS, findDisease } from "@/lib/srd/afflict
 import { formatPrice } from "@/lib/srd/currency";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolResult } from "@/lib/dm/tool-errors";
+import { matchGear } from "@/lib/srd/adventuring-gear";
+import { rowName } from "@/lib/srd/item-row";
 
 type ToolDef = {
   type: "function";
@@ -151,6 +153,9 @@ function resolveTargets(ids: unknown, sheets: CharacterSheet[], sheetsById: Map<
 
 // ---- lift ----
 
+// The SRD's block and tackle row, every spelling of it.
+const BLOCK_AND_TACKLE = matchGear("Block and Tackle");
+
 const liftSchema = z.object({
   characterId: z.string(),
   weightLb: z.coerce.number().min(1).max(100000),
@@ -166,11 +171,21 @@ function handleLift(args: z.infer<typeof liftSchema>, sheets: CharacterSheet[], 
   }
   const how = args.how ?? "lift";
   const limits = liftLimits(sheet);
-  if (args.weightLb > limits.liftLb) {
+  // SRD 5.1 Adventuring Gear, Block and Tackle: "a block and tackle allows
+  // you to hoist up to four times the weight you can normally lift" (issue
+  // #570, EQP-26).
+  const pulleys = how === "lift" && sheet.equipment.some((item) => matchGear(rowName(item)) === BLOCK_AND_TACKLE);
+  const hoistLb = pulleys ? limits.liftLb * 4 : limits.liftLb;
+  if (args.weightLb > hoistLb) {
     return {
-      error: `${sheet.name} can push, drag or lift at most ${limits.liftLb} lb (30 x Strength); ${args.weightLb} lb does not move. Narrate the strain; more hands (another character's own lift) or a lever are the way.`,
+      error: pulleys
+        ? `${sheet.name} can hoist at most ${hoistLb} lb with a block and tackle (four times their ${limits.liftLb} lb lift); ${args.weightLb} lb does not move. Narrate the strain; more hands (another character's own lift) are the way.`
+        : `${sheet.name} can push, drag or lift at most ${limits.liftLb} lb (30 x Strength); ${args.weightLb} lb does not move. Narrate the strain; more hands (another character's own lift) or a lever are the way.`,
       refused: "rules",
     };
+  }
+  if (pulleys && args.weightLb > limits.liftLb) {
+    return { ok: true, lifted: `${args.weightLb} lb`, limitLb: hoistLb, note: `${sheet.name} hoists ${args.weightLb} lb with a block and tackle, up to four times the ${limits.liftLb} lb they lift by hand. Narrate the haul on the ropes.` };
   }
   const load = encumbranceFor({
     strength: sheet.abilities.str,
