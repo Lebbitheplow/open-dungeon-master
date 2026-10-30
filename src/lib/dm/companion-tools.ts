@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { rollCard } from "@/lib/dm/roll-card";
 import { allocateSeq, campaignSeats, countPartySlots, type Campaign } from "@/lib/db/campaigns";
-import { createSheet, listSheets, markSheetAsCompanion, setCompanionCommander } from "@/lib/db/sheets";
+import { createSheet, listSheets, markSheetAsCompanion, recordFormerSheetIds, setCompanionCommander } from "@/lib/db/sheets";
 import { defaultCommander } from "@/lib/dm/companion-command";
 import { createCompanionUser, deleteCompanionUser } from "@/lib/db/users";
 import {
@@ -337,7 +337,7 @@ export function handleAddCompanion(
   if (kind === "party") {
     const back = returningCompanion(campaign, args.name, args.level ?? partyAverageLevel(sheets));
     if (back) {
-      const { sheet, hadEncounter } = finalizeNewCompanion(campaign, back.level, back.input, kind, args.personality);
+      const { sheet, hadEncounter } = finalizeNewCompanion(campaign, back.level, back.input, kind, args.personality, null, back.formerSheetIds);
       settleReturn(campaign, back);
       return {
         ok: true,
@@ -504,13 +504,17 @@ export function finalizeNewCompanion(
   // it was brought from. "Save to my characters" and the campaign's end
   // write its progress back there (src/lib/characters/keep-companion.ts).
   libraryCharacterId: string | null = null,
+  // A companion coming back: the sheets they held here before
+  // (src/lib/dm/companion-return.ts), recorded on the new one.
+  formerSheetIds: readonly string[] = [],
 ): { sheet: CharacterSheet; hadEncounter: boolean } {
   const botUser = createCompanionUser(input.name);
   const created = createSheet(campaign.id, botUser.id, level, input, libraryCharacterId);
   const marked = markSheetAsCompanion(created.id, kind, personality) ?? created;
   // At a one-player table the AI runs, a party companion follows that player
   // in fights (src/lib/dm/companion-command.ts).
-  const sheet = setCompanionCommander(marked.id, defaultCommander(campaign, kind)) ?? marked;
+  const commanded = setCompanionCommander(marked.id, defaultCommander(campaign, kind)) ?? marked;
+  const sheet = formerSheetIds.length ? (recordFormerSheetIds(commanded.id, formerSheetIds) ?? commanded) : commanded;
   publishPersisted(campaign.id, "sheet_updated", { sheet });
   // A companion the party once travelled with can be written back in; every
   // standing with them picks up exactly where it stopped.

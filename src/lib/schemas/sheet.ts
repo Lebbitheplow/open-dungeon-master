@@ -721,6 +721,10 @@ export type CharacterSheet = {
   race: string;
   // Derived presentation name; never replaces the admitted rules ID.
   raceLabel?: string;
+  // A lasting companion who left and came back: the sheet ids they had in
+  // this party before (src/lib/dm/companion-return.ts), so the chronicle's
+  // earlier lines find them. Server-only: no input schema carries it.
+  formerSheetIds?: string[];
   class: string;
   subclass: string;
   background: string;

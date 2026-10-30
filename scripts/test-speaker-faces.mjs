@@ -127,6 +127,21 @@ test("a card played for a companion stays hers after she leaves, never the autho
   assert.match(old, /session-speaker[^>]*>Krag</);
 });
 
+// A companion who left and came back holds a new sheet; the lines from
+// before she left name the old one, and read as a letter and the player's
+// name again once her Gone row went away.
+test("a returned companion's earlier card and speech find her live sheet by the ids it held", () => {
+  const back = { ...sheet("Tamsin-back", { userId: "u-bot", race: "bhain-kwai", class: "ranger", gender: "Female" }), name: "Tamsin", formerSheetIds: [tamsin.id] };
+  const byId = transcriptSheets([krag, back], [], []);
+  assert.deepEqual(speakerFaces(pc({ ...back, id: tamsin.id }), byId), [plate(back)]);
+  const message = { id: "m3", characterId: tamsin.id, userId: "u-player", authorType: "player", content: "I loose an arrow with my Longbow.", createdAt: new Date().toISOString() };
+  const markup = renderToStaticMarkup(createElement(PlayerMessage, { message, mine: true, sheets: [krag, back], sheetsById: byId, membersById: new Map() }));
+  assert.match(markup, /session-speaker[^>]*>Tamsin</);
+  assert.doesNotMatch(markup, />Krag</);
+  // Her own id still wins over anyone's earlier one.
+  assert.equal(transcriptSheets([krag, back, { ...krag, id: "x", formerSheetIds: [back.id] }], [], []).get(back.id), back);
+});
+
 // The cinematic table's initiative strip and party rail drew the plate
 // without the sheet's gender, so a woman's face on the Party tab was the
 // neutral one there.

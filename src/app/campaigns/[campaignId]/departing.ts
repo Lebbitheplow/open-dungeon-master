@@ -26,6 +26,9 @@ export type GoneEntry = {
   // Who they still cared for as they went (issue 563); an older server
   // sends none.
   caresFor?: string[];
+  // The sheets they held before an earlier return (the sheet's own
+  // formerSheetIds); an older server sends none.
+  formerSheetIds?: string[];
 };
 
 // A character as the story log draws a line of theirs: the name over it and
@@ -36,28 +39,45 @@ export type TranscriptSheet = Pick<CharacterSheet, "id" | "name" | "race" | "cla
 
 // The party's sheets, then the ones who left: a card still dimming carries
 // its whole sheet, and a Gone row what the server kept of it. A sheet still
-// in the party wins over its departed copy.
+// in the party wins over its departed copy. A companion who came back has a
+// new sheet, so each sheet is also found under the ids it held before
+// (formerSheetIds): the lines from before they left stay theirs. A sheet or
+// row without the field (an older server) adds only its own id.
+type WithFormer = { formerSheetIds?: readonly string[] };
+
 export function transcriptSheets(
-  sheets: readonly TranscriptSheet[],
+  sheets: ReadonlyArray<TranscriptSheet & WithFormer>,
   departing: readonly DepartingSheet[] = [],
   gone: readonly GoneEntry[] = [],
 ): Map<string, TranscriptSheet> {
   const byId = new Map<string, TranscriptSheet>();
+  const under = (sheet: TranscriptSheet, ids: readonly string[] | undefined) => {
+    for (const id of ids ?? []) {
+      byId.set(id, sheet);
+    }
+  };
   for (const entry of gone) {
     if (entry.sheetId) {
-      byId.set(entry.sheetId, {
+      const sheet: TranscriptSheet = {
         id: entry.sheetId,
         name: entry.name,
         race: entry.race,
         class: entry.class,
         gender: (entry.gender as CharacterSheet["gender"]) || "",
         portrait: entry.portraitUrl ? ({ url: entry.portraitUrl } as CharacterSheet["portrait"]) : null,
-      });
+      };
+      under(sheet, entry.formerSheetIds);
+      byId.set(entry.sheetId, sheet);
     }
   }
   for (const { sheet } of departing) {
+    under(sheet, sheet.formerSheetIds);
     byId.set(sheet.id, sheet);
   }
+  for (const sheet of sheets) {
+    under(sheet, sheet.formerSheetIds);
+  }
+  // Own ids last, so no sheet's earlier id can stand over a live one.
   for (const sheet of sheets) {
     byId.set(sheet.id, sheet);
   }

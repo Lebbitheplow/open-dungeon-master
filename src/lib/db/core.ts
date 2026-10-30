@@ -1695,6 +1695,11 @@ function ensureSchema(db: SqliteDatabase) {
     // the advances opt-in: never synced, and only the owner and a DM seat
     // read it.
     ["open_to_pacts", `INTEGER NOT NULL DEFAULT 0`],
+    // The sheets a lasting companion had in this party before they left and
+    // came back (src/lib/dm/companion-return.ts): a return builds a new
+    // sheet, and the chronicle's lines name the old one. A JSON list of ids,
+    // '' = none. Written by the server on a return only; no edit writes it.
+    ["former_sheet_ids_json", `TEXT NOT NULL DEFAULT ''`],
     // The player's hopes for this story at this table (src/lib/schemas/
     // sheet.ts): out of character, read by the GM every turn, and like the
     // notes only by the owner and a DM seat at the table. Per table: an edit

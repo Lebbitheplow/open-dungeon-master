@@ -1841,7 +1841,9 @@ export function buildDmMessages(
   state: DmGameState,
   history: CampaignMessage[],
 ): ChatMessage[] {
-  const sheetsById = new Map(state.sheets.map((sheet) => [sheet.id, sheet]));
+  // A companion who came back holds a new sheet: the lines from before they
+  // left name the ids it held then (formerSheetIds), and read "Unknown" here.
+  const sheetsById = new Map(state.sheets.flatMap((sheet) => [...(sheet.formerSheetIds ?? []).map((id) => [id, sheet] as const), [sheet.id, sheet] as const]));
   // A small model reads the server's "[roll:<id>]" markers in its own past
   // narration as something to write: Qwen3.5 9B wrote "[roll:pc_attack]" in
   // place of the attack. The short rules leave them out of the transcript.

@@ -101,6 +101,59 @@ await test("a red-line atrocity walks a timid companion out at once at a Leave t
   assert.equal(gone.body.gone[0].sheetId, sheet.id);
 });
 
+// A companion who comes back is a new sheet (finalizeNewCompanion), and the
+// chronicle's lines from before they left name the sheet they had then: the
+// card the player played for her, her speech, the GM's own history.
+await test("a companion who leaves and comes back keeps the lines from before she left: her card, her speech and the GM's history find her live sheet", async () => {
+  const { world, pc, sheet, atrocity } = await table({ axes: { boldness: -2 } });
+  const { transcriptSheets } = await import("../src/app/campaigns/[campaignId]/departing.ts");
+  const { speakerFaces } = await import("../src/lib/speaker-faces.ts");
+  const card = messages.insertCampaignMessage({
+    campaignId: world.campaignId,
+    seq: campaigns.allocateSeq(world.campaignId),
+    authorType: "player",
+    content: "I loose an arrow at the captain with my Longbow.",
+    userId: pc.userId,
+    characterId: sheet.id,
+  });
+  const done = await atrocity();
+  assert.equal(done.result.departed, "Walked out on the party");
+  assert.equal(world.sheet(sheet.id), null, "her sheet left the party");
+  const back = await world.invoke("add_companion", { name: "Seren", class: "paladin", gender: "Female", personality: "Home.", kind: "party" });
+  assert.equal(back.ok, true, back.error);
+  assert.equal(back.result.returned, true);
+  const live = world.sheets().find((entry) => entry.name === "Seren");
+  assert.notEqual(live.id, sheet.id, "a return builds a new sheet");
+  assert.deepEqual(live.formerSheetIds, [sheet.id], "and records the one she had");
+  // The story log: the card and her speech find the live sheet.
+  const byId = transcriptSheets(world.sheets(), [], []);
+  assert.equal(byId.get(sheet.id)?.id, live.id);
+  assert.equal(byId.get(sheet.id)?.name, "Seren");
+  assert.deepEqual(speakerFaces({ kind: "pc", id: sheet.id, name: "Seren" }, byId), speakerFaces({ kind: "pc", id: live.id, name: "Seren" }, byId));
+  // The GM's history named the old line "Unknown".
+  const history = buildDmMessages({ campaign: world.campaign(), members: campaigns.listMembers(world.campaignId), sheets: world.sheets(), recentRolls: [], storySummary: "", contextLimitTokens: 32_000 }, [card]);
+  const line = history.map((entry) => entry.content).find((content) => content.includes("Longbow")) ?? "";
+  assert.match(line, /Seren/, line);
+  assert.doesNotMatch(line, /Unknown/, line);
+  // Server-only: no sheet edit writes it, and no input schema carries it.
+  const { patchSheet } = await import("../src/lib/db/sheets.ts");
+  const { createSheetSchema, patchSheetSchema, fullPatchSheetSchema } = await import("../src/lib/schemas/sheet.ts");
+  patchSheet(live.id, { formerSheetIds: [], notes: "edited" });
+  assert.deepEqual(world.sheet(live.id).formerSheetIds, [sheet.id], "an edit leaves it");
+  assert.ok(!("formerSheetIds" in (createSheetSchema.safeParse({ ...live }).data ?? {})), "a stored copy drops it");
+  for (const schema of [patchSheetSchema, fullPatchSheetSchema]) {
+    assert.ok(!("formerSheetIds" in (schema.safeParse({ formerSheetIds: ["x"] }).data ?? {})), "a sheet edit drops it");
+  }
+  // Leaving again: the Gone row names both sheets she held.
+  await world.invoke("relationship_beat", { characterId: pc.id, subject: "Seren", beat: "murder_helpless", severity: "atrocity", note: "Again." });
+  const gone = await get(world, world.owner, "campaigns/[campaignId]/companions/gone");
+  const row = gone.body.gone.find((entry) => entry.name === "Seren");
+  assert.ok(row, JSON.stringify(gone.body));
+  assert.equal(row.sheetId, live.id);
+  assert.deepEqual(row.formerSheetIds, [sheet.id]);
+  assert.equal(transcriptSheets([], [], gone.body.gone).get(sheet.id)?.name, "Seren", "the first stint's lines too");
+});
+
 await test("a composed companion holds a plan, says nothing of it, and slips away at the night watch", async () => {
   const { world, atrocity, departure, still } = await table({ axes: { composure: 2 } });
   const done = await atrocity();
