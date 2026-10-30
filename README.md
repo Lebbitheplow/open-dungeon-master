@@ -4,9 +4,9 @@
 
 <br>
 
-[![Docker pulls](https://img.shields.io/docker/pulls/lebbi/open-dungeon-master?label=docker%20pulls&logo=docker&logoColor=d4ab3a&color=d4ab3a&labelColor=151229&style=flat-square)](https://hub.docker.com/r/lebbi/open-game-master)
-[![App downloads](https://img.shields.io/github/downloads/Lebbitheplow/open-game-master-client/total?label=app%20downloads&logo=github&logoColor=d4ab3a&color=d4ab3a&labelColor=151229&style=flat-square)](https://github.com/Lebbitheplow/open-game-master-client/releases)
-[![Server downloads](https://img.shields.io/github/downloads/Lebbitheplow/open-game-master/total?label=server%20downloads&logo=github&logoColor=d4ab3a&color=d4ab3a&labelColor=151229&style=flat-square)](https://github.com/Lebbitheplow/open-game-master/releases)
+[![Docker pulls](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FLebbitheplow%2Fopen-game-master%2Fbadges%2Fdocker-pulls.json)](https://hub.docker.com/r/lebbi/open-game-master)
+[![App downloads](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FLebbitheplow%2Fopen-game-master%2Fbadges%2Fapp-downloads.json)](https://github.com/Lebbitheplow/open-game-master-client/releases)
+[![Server downloads](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2FLebbitheplow%2Fopen-game-master%2Fbadges%2Fserver-downloads.json)](https://github.com/Lebbitheplow/open-game-master/releases)
 [![Latest release](https://img.shields.io/github/v/release/Lebbitheplow/open-game-master?label=release&color=d4ab3a&labelColor=151229&style=flat-square)](https://github.com/Lebbitheplow/open-game-master/releases/latest)
 [![GitHub stars](https://img.shields.io/github/stars/Lebbitheplow/open-game-master?logo=github&logoColor=d4ab3a&color=d4ab3a&labelColor=151229&style=flat-square)](https://github.com/Lebbitheplow/open-game-master/stargazers)
 [![Discord](https://img.shields.io/badge/chat-Discord-e0703a?logo=discord&logoColor=e0703a&labelColor=151229&style=flat-square)](https://discord.gg/B2tQFr3TYD)
@@ -195,12 +195,17 @@ computer, create the admin account, and the **guided setup** finds what is
 running on the machine and walks through the storyteller, pictures, voice,
 players and your own agent, one question at a time.
 
-With Docker instead:
+With Docker instead, in a folder of its own:
 
 ```bash
+mkdir open-game-master && cd open-game-master
 curl -O https://raw.githubusercontent.com/Lebbitheplow/open-game-master/stable/docker-compose.yml
-docker compose up -d        # http://localhost:3005
+docker compose up -d
+docker compose logs         # open the setup link it prints
 ```
+
+The link creates the admin account and starts the same guided setup
+([Run with Docker](docs/docker.md): Windows, your model server, backing up the key).
 
 Both follow the stable releases. Nightly betas, and how a beta becomes stable:
 [docs/releases.md](docs/releases.md).

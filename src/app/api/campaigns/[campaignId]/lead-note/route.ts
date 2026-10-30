@@ -1,6 +1,7 @@
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
 import { LEAD_NOTE_PREFIX } from "@/lib/campaign-types";
-import { allocateSeq } from "@/lib/db/campaigns";
+import { allocateSeq, getFloor } from "@/lib/db/campaigns";
+import { answerSpotlight } from "@/lib/dm/spotlight-answer";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { requestDmTurn } from "@/lib/dm/loop";
 import { publishWithSeq } from "@/lib/events";
@@ -38,6 +39,8 @@ export async function POST(
     );
   }
   const wake = raw?.wake !== false;
+  // A spotlighted lead who sends a direction has answered the spotlight.
+  answerSpotlight(campaignId, getFloor(campaignId), context.user.id);
 
   const seq = allocateSeq(campaignId);
   const message = insertCampaignMessage({

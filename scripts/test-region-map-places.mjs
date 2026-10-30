@@ -29,6 +29,13 @@ const announced = (since) =>
   listEventsSince(world.campaignId, since, 100_000)
     .filter((event) => event.type === "location_updated")
     .map((event) => event.payload.location.name);
+// Open plains under the whole map. A campaign's terrain is rolled from a
+// random seed, so now and then a lake lay where "a day north" points and the
+// place was moved round it, short of a day; these tests are about where the
+// DM said a place lies, not about lakes.
+const { getOverworld, replaceOverworldTerrain } = await import("../src/lib/db/overworld.ts");
+const ground = getOverworld(world.campaignId);
+replaceOverworldTerrain(world.campaignId, { terrain: "p".repeat(ground.width * ground.height), width: ground.width, height: ground.height, paths: [] });
 const hero = world.addHero({ class: "fighter" });
 const player = world.addHero({ class: "rogue" });
 

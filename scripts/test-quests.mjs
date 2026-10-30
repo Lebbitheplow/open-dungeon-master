@@ -1,7 +1,9 @@
 // Quests by hand (docs/vtt-parity-implementation-plan.md section 5.7): the
 // arc mirrors into the log and keeps the DM's ticks, hand-written quests
 // stand beside them, the tools write and tick, and a player's log has no
-// DM-only rows.
+// DM-only rows. Issue 581: what the table does to an arc quest stands
+// against the arc, the table hears of every change, and the glance and the
+// campaign payload read the log itself.
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
@@ -16,10 +18,24 @@ process.env.DB_ENCRYPTION_KEY = randomBytes(32).toString("hex");
 register("./lib/register-alias.mjs", import.meta.url);
 
 const { createUser } = await import("../src/lib/db/users.ts");
-const { createCampaign, getCampaignById } = await import("../src/lib/db/campaigns.ts");
-const { listQuests, syncArcQuests, insertQuest } = await import("../src/lib/db/quests.ts");
+const { createCampaign, getCampaignById, publicCampaign, setStoryArc } = await import("../src/lib/db/campaigns.ts");
+const { copyQuests, listQuests, retireArcQuests, syncArcQuests, insertQuest } = await import("../src/lib/db/quests.ts");
+const { editQuest } = await import("../src/lib/db/quest-arc.ts");
 const { handleSetQuest, handleTickObjective } = await import("../src/lib/dm/binder-tools.ts");
-const { normalizeObjectives, questsVisibleTo, renderQuestsForPrompt, tickObjective } = await import("../src/lib/dm/quest-logic.ts");
+const { subscribe } = await import("../src/lib/events.ts");
+const { normalizeStoryArc } = await import("../src/lib/dm/arc-logic.ts");
+const {
+  arcQuestStatus,
+  normalizeObjectives,
+  questGlanceOf,
+  questLogForExport,
+  questLogLines,
+  questsVisibleTo,
+  reconcileSubArcs,
+  renderQuestsForPrompt,
+  subArcAfterQuestEdit,
+  tickObjective,
+} = await import("../src/lib/dm/quest-logic.ts");
 
 let passed = 0;
 function test(name, fn) {
@@ -54,10 +70,16 @@ test("the arc mirrors into quests and a re-sync keeps the DM's ticks", () => {
   const miller = first.find((q) => q.sourceRef === "sa1");
   const ticked = handleTickObjective(live(), JSON.stringify({ quest: miller.id, objective: "goal" }));
   assert.equal(ticked.complete, true);
+  insertQuest({ campaignId: campaign.id, title: "Gone thread", source: "arc", sourceRef: "sa9" });
   syncArcQuests(campaign.id, [subArcs[0]]);
-  const after = listQuests(campaign.id);
-  assert.equal(after.length, 1, "a sub-arc that left takes its row");
-  assert.equal(after[0].objectives[0].done, true, "the tick survives the re-sync");
+  const after = listQuests(campaign.id).filter((quest) => quest.source === "arc");
+  assert.ok(!after.some((quest) => quest.sourceRef === "sa9"), "an open quest whose sub-arc left takes its row");
+  // A long arc sheds its settled threads (setStoryArc's size cap); the quest
+  // the party finished stays on the log as what they did (issue 581).
+  const settled = after.find((quest) => quest.title === "Old Debts");
+  assert.equal(settled?.status, "done", "a settled quest outlives its sub-arc");
+  assert.equal(settled.sourceRef, "", "and no longer answers to its id");
+  assert.equal(after.find((quest) => quest.sourceRef === "sa1").objectives[0].done, true, "the tick survives the re-sync");
 });
 
 test("set_quest writes a hand quest, edits it, and the console's lines become objectives", () => {
@@ -143,5 +165,195 @@ test("a player's log drops the DM's rows and the prompt block shows the ticks", 
   assert.ok(block.includes("[GM only] Secret errand"));
   assert.ok(!block.includes("Find the daughter"), "a failed quest is out of the block");
 });
+
+// ---- issue 581: the arc's quests, the glance, the payload ----
+
+const arcTable = createCampaign(dm.id, { title: "Brackenford", description: "", theme: "", maxPlayers: 4, startingLevel: 1, difficulty: "normal" });
+const arcLive = () => getCampaignById(arcTable.id);
+const storyArc = (subArcs) =>
+  normalizeStoryArc({
+    premise: "A waystone fails.",
+    stakes: "The town falls.",
+    antagonist: "The Ashen Choir.",
+    beats: [{ text: "The stone dims", status: "active" }, { text: "The Choir comes" }],
+    subArcs,
+  });
+const waystone = { id: "sa1", name: "Light for Brackenford", goal: "Restore the Crimson Waystone's protection.", hook: "The Choir drains it.", beats: ["Find the shard"], status: "active" };
+const ferry = { id: "sa2", name: "The Ferryman's Toll", goal: "Pay or outwit the ferryman.", hook: "He serves the Choir.", beats: [], status: "pending" };
+const heard = [];
+const stopHearing = subscribe(arcTable.id, (chunk) => heard.push(/^event: (.+)$/m.exec(chunk)?.[1] ?? ""));
+const arcRow = (ref) => listQuests(arcTable.id).find((quest) => quest.sourceRef === ref);
+const subArcOf = (ref) => arcLive().storyArc.subArcs.find((subArc) => subArc.id === ref);
+
+test("the arc's quests carry names and goals, never the GM's hooks or beats", () => {
+  setStoryArc(arcTable.id, storyArc([waystone, ferry]));
+  const rows = listQuests(arcTable.id);
+  assert.equal(rows.length, 2);
+  const text = JSON.stringify(rows);
+  assert.ok(text.includes("Restore the Crimson Waystone's protection."));
+  assert.ok(!text.includes("drains it") && !text.includes("Find the shard") && !text.includes("serves the Choir"));
+});
+
+test("a quest the GM marks done stays done through the next write of the arc, and the arc closes the thread (issue 581)", () => {
+  const stale = arcLive().storyArc;
+  heard.length = 0;
+  const done = handleSetQuest(arcLive(), JSON.stringify({ quest: "Light for Brackenford", status: "done" }));
+  assert.equal(done.ok, true, done.error);
+  assert.ok(heard.includes("quests_updated"), "the table is told the log changed");
+  assert.equal(subArcOf("sa1").status, "resolved", "the arc the storyteller steers by closes the thread");
+  // A waypoint tick, a beat, or a chapter close that read the arc before the
+  // edit writes its copy back.
+  setStoryArc(arcTable.id, stale);
+  assert.equal(arcRow("sa1").status, "done", "the quest did not come back");
+  assert.equal(subArcOf("sa1").status, "resolved", "the older copy did not reopen the thread");
+});
+
+test("a renamed or hidden arc quest keeps its name and its mark", () => {
+  handleSetQuest(arcLive(), JSON.stringify({ quest: "The Ferryman's Toll", title: "Cross the Black River" }));
+  assert.equal(subArcOf("sa2").name, "Cross the Black River", "the arc calls it that too");
+  editQuest(arcRow("sa2").id, { status: "hidden" });
+  setStoryArc(arcTable.id, storyArc([{ ...waystone, status: "resolved" }, ferry]));
+  assert.equal(arcRow("sa2").title, "Cross the Black River", "the old name did not come back");
+  assert.equal(arcRow("sa2").status, "hidden", "a hidden quest stays hidden");
+  assert.equal(subArcOf("sa2").name, "Cross the Black River");
+});
+
+test("reopening an arc quest reopens its thread, and the arc's own refresh still closes one", () => {
+  editQuest(arcRow("sa1").id, { status: "active" });
+  assert.equal(subArcOf("sa1").status, "active");
+  assert.equal(arcRow("sa1").status, "active");
+  // The chapter-close refresh settles a thread the table left open.
+  const arc = arcLive().storyArc;
+  const changed = setStoryArc(arcTable.id, { ...arc, subArcs: arc.subArcs.map((subArc) => (subArc.id === "sa1" ? { ...subArc, status: "resolved" } : subArc)) });
+  assert.equal(changed, true, "setStoryArc says the log changed, for the caller to publish");
+  assert.equal(arcRow("sa1").status, "done");
+  assert.equal(setStoryArc(arcTable.id, arcLive().storyArc), false, "a write that changes no quest says so");
+});
+
+test("ticking an arc quest's last step closes the thread too", () => {
+  editQuest(arcRow("sa1").id, { status: "active", objectives: arcRow("sa1").objectives.map((objective) => ({ ...objective, done: false })) });
+  heard.length = 0;
+  const ticked = handleTickObjective(arcLive(), JSON.stringify({ quest: "Light for Brackenford", objective: "Restore the Crimson Waystone's protection." }));
+  assert.equal(ticked.complete, true, ticked.error);
+  assert.ok(heard.includes("quests_updated"));
+  assert.equal(subArcOf("sa1").status, "resolved");
+});
+
+test("a thread given a shed sub-arc's id is a quest of its own, not the old one (issue 581)", () => {
+  // The arc numbers threads from its highest id, so once the cap sheds the
+  // last settled thread its id can be handed out again.
+  const table = createCampaign(dm.id, { title: "Ids", description: "", theme: "", maxPlayers: 4, startingLevel: 1, difficulty: "normal" });
+  setStoryArc(table.id, storyArc([{ ...waystone, status: "resolved" }]));
+  setStoryArc(table.id, storyArc([]));
+  setStoryArc(table.id, storyArc([{ ...ferry, id: "sa1", status: "active" }]));
+  const rows = listQuests(table.id);
+  const fresh = rows.find((quest) => quest.sourceRef === "sa1");
+  assert.equal(fresh.title, "The Ferryman's Toll", "the new thread keeps its own name");
+  assert.equal(fresh.status, "active", "and is open");
+  assert.equal(fresh.objectives[0].text, "Pay or outwit the ferryman.", "with its own step");
+  assert.equal(getCampaignById(table.id).storyArc.subArcs[0].name, "The Ferryman's Toll", "the arc was not renamed after the old quest");
+  assert.ok(rows.some((quest) => quest.title === "Light for Brackenford" && quest.status === "done"), "the old quest stays as what the party did");
+});
+
+test("a regenerated arc's threads start their own quests; the old arc's open ones go and its settled ones stay", () => {
+  const table = createCampaign(dm.id, { title: "Regenerate", description: "", theme: "", maxPlayers: 4, startingLevel: 1, difficulty: "normal" });
+  setStoryArc(table.id, storyArc([{ ...waystone, status: "resolved" }, { ...ferry, status: "active" }]));
+  assert.equal(retireArcQuests(table.id), true);
+  setStoryArc(table.id, storyArc([{ id: "sa1", name: "The Drowned Bell", goal: "Raise the bell.", hook: "", beats: [], status: "active" }]));
+  const rows = listQuests(table.id);
+  assert.deepEqual(rows.filter((quest) => quest.sourceRef).map((quest) => [quest.sourceRef, quest.title, quest.status]), [["sa1", "The Drowned Bell", "active"]]);
+  assert.ok(rows.some((quest) => quest.title === "Light for Brackenford" && quest.status === "done" && !quest.sourceRef));
+  assert.ok(!rows.some((quest) => quest.title === "The Ferryman's Toll"), "an open quest of the thrown-away arc goes");
+});
+
+test("a job that read the arc before a quest was reopened keeps the reopen, and its own changes", () => {
+  const table = createCampaign(dm.id, { title: "Stale", description: "", theme: "", maxPlayers: 4, startingLevel: 1, difficulty: "normal" });
+  setStoryArc(table.id, storyArc([{ ...waystone, status: "resolved" }, { ...ferry, status: "active" }]));
+  // A chapter-close refresh reads the arc and waits on the model...
+  const read = getCampaignById(table.id).storyArc;
+  // ...meanwhile the GM reopens the finished quest...
+  editQuest(listQuests(table.id).find((quest) => quest.sourceRef === "sa1").id, { status: "active" });
+  // ...and the refresh writes back what it read, having closed the ferry.
+  const written = { ...read, subArcs: read.subArcs.map((subArc) => (subArc.id === "sa2" ? { ...subArc, status: "resolved" } : subArc)) };
+  setStoryArc(table.id, written, read);
+  const rows = listQuests(table.id);
+  assert.equal(rows.find((quest) => quest.sourceRef === "sa1").status, "active", "the reopen stands");
+  assert.equal(rows.find((quest) => quest.sourceRef === "sa2").status, "done", "and so does what the refresh decided");
+});
+
+test("a sequel's thread that reuses an id with a goal of its own does not take the old quest", () => {
+  const table = createCampaign(dm.id, { title: "Sequel", description: "", theme: "", maxPlayers: 4, startingLevel: 1, difficulty: "normal" });
+  setStoryArc(table.id, storyArc([{ ...waystone, status: "resolved" }, { ...ferry, status: "active" }]));
+  // A chained saga numbers its threads from sa1 again.
+  setStoryArc(table.id, storyArc([{ id: "sa1", name: "The Drowned Bell", goal: "Raise the bell.", hook: "", beats: [], status: "active" }, { ...ferry, id: "sa3" }]));
+  const rows = listQuests(table.id);
+  const bell = rows.find((quest) => quest.sourceRef === "sa1");
+  assert.equal(bell.title, "The Drowned Bell");
+  assert.equal(bell.status, "active");
+  assert.equal(getCampaignById(table.id).storyArc.subArcs[0].name, "The Drowned Bell", "the new thread keeps its name in the arc");
+  assert.ok(rows.some((quest) => quest.title === "Light for Brackenford" && quest.status === "done" && !quest.sourceRef), "the old quest stays as history");
+});
+
+test("a hidden arc quest shown again after its thread closed shows as the story left it, and outlives the thread", () => {
+  const table = createCampaign(dm.id, { title: "Hidden", description: "", theme: "", maxPlayers: 4, startingLevel: 1, difficulty: "normal" });
+  setStoryArc(table.id, storyArc([{ ...waystone, status: "active" }]));
+  const row = () => listQuests(table.id).find((quest) => quest.title === "Light for Brackenford");
+  editQuest(row().id, { status: "hidden" });
+  setStoryArc(table.id, storyArc([{ ...waystone, status: "resolved" }]));
+  assert.equal(row().status, "hidden", "still the GM's");
+  editQuest(row().id, { status: "active" });
+  assert.equal(row().status, "done", "shown, it is done, not reopened");
+  assert.equal(getCampaignById(table.id).storyArc.subArcs[0].status, "resolved");
+  editQuest(row().id, { status: "hidden" });
+  setStoryArc(table.id, storyArc([]));
+  assert.equal(row()?.status, "hidden", "a hidden quest stays when its thread is shed");
+});
+
+test("the status rules: a settled or hidden row keeps its own word, an open one follows the arc", () => {
+  assert.equal(arcQuestStatus("active", "done"), "done");
+  assert.equal(arcQuestStatus("abandoned", "done"), "done");
+  assert.equal(arcQuestStatus("resolved", "hidden"), "hidden");
+  assert.equal(arcQuestStatus("resolved", "active"), "done");
+  assert.equal(arcQuestStatus("abandoned", undefined), "failed");
+  assert.equal(arcQuestStatus("pending", undefined), "active");
+  const subArc = { id: "x", name: "A", status: "active" };
+  assert.equal(subArcAfterQuestEdit(subArc, { title: "A", status: "hidden" }), subArc, "hiding says nothing about the story");
+  assert.equal(subArcAfterQuestEdit(subArc, { title: "A", status: null }), subArc);
+  assert.equal(subArcAfterQuestEdit({ ...subArc, status: "resolved" }, { title: "A", status: "active" }).status, "active");
+  const rows = [{ source: "arc", sourceRef: "x", title: "A", status: "active" }];
+  assert.equal(reconcileSubArcs([{ ...subArc, status: "resolved" }], rows)[0].status, "resolved", "an open row leaves a closed thread closed");
+});
+
+test("the glance shows the oldest open party quest and its next step, and nothing once all are done (issue 581)", () => {
+  const quests = [
+    { title: "Old", status: "done", visibility: "party", objectives: [] },
+    { title: "Secret", status: "active", visibility: "dm", objectives: [] },
+    { title: "Kept from players", status: "hidden", visibility: "party", objectives: [] },
+    { title: "Light", status: "active", visibility: "party", objectives: [{ id: "a", text: "Find the shard", done: true }, { id: "b", text: "Relight the stone", done: false }] },
+    { title: "Later", status: "active", visibility: "party", objectives: [] },
+  ];
+  assert.deepEqual(questGlanceOf(quests), { title: "Light", step: "Relight the stone" });
+  assert.deepEqual(questGlanceOf(quests.map((quest) => ({ ...quest, status: quest.status === "active" ? "done" : quest.status }))), null);
+  assert.deepEqual(questLogLines(quests), ["Light: Relight the stone", "Later"]);
+  assert.deepEqual(questLogForExport(quests), ["Old (done)", "Light", "Later"]);
+});
+
+test("the campaign payload's questLog is the live log, so an older app's glance shows the live quest when it loads (issue 581)", () => {
+  for (const quest of listQuests(arcTable.id)) {
+    editQuest(quest.id, { status: "done" });
+  }
+  assert.deepEqual(publicCampaign(arcLive()).questLog, []);
+  insertQuest({ campaignId: arcTable.id, title: "Warn the reeve", objectives: normalizeObjectives(["Ride to Holt"]) });
+  assert.deepEqual(publicCampaign(arcLive()).questLog, ["Warn the reeve: Ride to Holt"]);
+});
+
+test("a copied campaign keeps its quest log, ticks and all", () => {
+  const copy = createCampaign(dm.id, { title: "Copy", description: "", theme: "", maxPlayers: 4, startingLevel: 1, difficulty: "normal" });
+  copyQuests(arcTable.id, copy.id);
+  const from = listQuests(arcTable.id).map(({ title, status, objectives, source, sourceRef, visibility }) => ({ title, status, objectives, source, sourceRef, visibility }));
+  const to = listQuests(copy.id).map(({ title, status, objectives, source, sourceRef, visibility }) => ({ title, status, objectives, source, sourceRef, visibility }));
+  assert.deepEqual(to, from);
+});
+stopHearing();
 
 console.log(`test-quests: ${passed} passed`);

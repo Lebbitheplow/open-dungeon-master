@@ -16,6 +16,7 @@ import { encumbranceFor } from "@/lib/srd/encumbrance";
 import { wearingIsExplicit } from "@/lib/srd/armor";
 import { classFeatureDescription, findCustomClass } from "@/lib/classes";
 import { backgroundWords, classWords, raceWords } from "@/lib/sheet-words";
+import { selectedCharacter } from "@/lib/player-characters";
 // The genre catalogs' rules text, all of it: the model reads it beside a
 // custom feature (src/lib/classes/feature-text.ts).
 import "@/lib/classes/feature-text-all";
@@ -102,6 +103,7 @@ import { textKey } from "@/lib/language/text-logic";
 import { conversationNote, type Conversation } from "@/lib/dm/conversation-logic";
 import { ADVANTAGE_SOURCES } from "@/lib/dm/pc-attack-options";
 import { PLACE_DIRECTIONS, PLACE_DISTANCES } from "@/lib/overworld/places";
+import { heroFell } from "@/lib/characters/fallen-logic";
 
 export { DM_SYSTEM, dmSystemText, ENCOUNTER_RULES, encounterRulesText } from "@/lib/dm/prompt-rules";
 
@@ -453,7 +455,7 @@ export function relationshipRules(romance: boolean, openNames: readonly string[]
         ? "A COMPANION who cannot stand a character says so plainly and stays: this table keeps its companions, so never dismiss_companion one over standing."
         : "A COMPANION who cannot stand a character says so plainly; whether they leave is the server's, so never dismiss_companion one over standing or deeds."
   } Never keep narrating a warm companion whose meter says otherwise.
-- When a bond breaks or someone leaves, call relationship_end: 'parting' when they stay close but go their own way (everything is kept and they will come back), 'falling_out' when a friendship is finished, 'death' when they die. Someone who has been away for chapters surfaces in GAME STATE as a GM-only note; act on it and put them back in the party's path.${
+- When a bond breaks or someone leaves, call relationship_end: 'parting' when they stay close but go their own way (everything is kept and they will come back), 'falling_out' when a friendship is finished, 'death' only when they are killed (it closes every character's bond with them; someone left to die but still alive is a deed done to them). Someone who has been away for chapters surfaces in GAME STATE as a GM-only note; act on it and put them back in the party's path.${
     romance
       ? `
 - Romance sits on TOP of that meter and never replaces it. Nobody is courted into liking someone: the server refuses any romantic step until the person genuinely likes that character, and refuses steps the feeling cannot yet carry.
@@ -519,13 +521,15 @@ function spellListLabel(lists: {
 }
 
 // What GAME STATE adds of a companion a player commands in fights
-// (src/lib/dm/companion-command.ts): whose orders its turns follow.
-function companionCommandNote(campaign: Campaign, sheet: CharacterSheet, usernames: Map<string, string>): string {
+// (src/lib/dm/companion-command.ts): whose orders its turns follow, named as
+// the story knows them. The account name went into the GM's narration ("she
+// waits for playtester's orders"), as the fight-control notice did (#594).
+function companionCommandNote(campaign: Campaign, sheet: CharacterSheet, commanderName: (userId: string) => string): string {
   const commander = commanderOf(campaign, sheet);
   if (!commander) {
     return "";
   }
-  const name = usernames.get(commander) ?? "their player";
+  const name = commanderName(commander);
   return `; in fights ${name} commands them: on their turn wait for ${name}'s orders and resolve them as a player's`;
 }
 
@@ -593,7 +597,9 @@ export function describeSheet(
       ? " | DEAD"
       : sheet.deathSaves.stable
         ? " | STABLE at 0 HP (unconscious)"
-        : ` | DYING: ${sheet.deathSaves.successes} death-save successes, ${sheet.deathSaves.failures} failures`
+        // The GM has no tool for these and must not invent them: out of
+        // combat they come from game time passing (condition-tick.ts).
+        : ` | DYING: ${sheet.deathSaves.successes} death-save successes, ${sheet.deathSaves.failures} failures (server-rolled: each of their turns in combat, every 6 seconds of game time outside it)`
     : "";
   // Multiclass header: "barbarian 3 [Berserker] / rogue 2 (level 5)". A
   // workshop class goes by its name: its id ("homebrew-<id>") tells the GM
@@ -843,6 +849,13 @@ export function fitNoteBodies<T extends { body: string }>(notes: T[], compact: b
 export function buildGameStateBlock(state: DmGameState): string {
   const { campaign, members, sheets, recentRolls, storySummary } = state;
   const usernamesById = new Map(members.map((member) => [member.userId, member.username]));
+  // A commanding player's character at this table: the seat's, else their
+  // first; the account only for a player with none (conscience.ts does the
+  // same for the table's notice).
+  const commanderName = (userId: string) =>
+    selectedCharacter(sheets, userId, members.find((member) => member.userId === userId)?.activeCharacterId ?? "")?.name ??
+    usernamesById.get(userId) ??
+    "their player";
   const physicalDiceUsers = realDiceUserIds(campaign, members);
   // Who people are drawn to rides at a romance table (issue 501). Who is
   // open to advances is a storyteller secret, said in that section. Optional
@@ -1133,13 +1146,20 @@ export function buildGameStateBlock(state: DmGameState): string {
   // The quest log with its ticks (docs/vtt-parity-implementation-plan.md
   // section 5.7). The arc's own sub-arcs are in the arc render; this adds
   // the DM's hand-written quests and the objectives ticked under both.
+  const quests = listQuests(campaign.id);
   const questBlock = renderQuestsForPrompt(
-    listQuests(campaign.id).filter((quest) => quest.source === "dm" || quest.objectives.some((objective) => objective.done)),
+    // An arc quest whose thread left the arc is in no arc render, so it is
+    // listed like the GM's own.
+    quests.filter((quest) => quest.source === "dm" || !quest.sourceRef || quest.objectives.some((objective) => objective.done)),
   );
   if (questBlock) {
     state.questsBlock = questBlock;
     sections.push(questBlock);
-  } else if (campaign.questLog.length && !campaign.storyArc) {
+  } else if (!quests.length && campaign.questLog.length && !campaign.storyArc) {
+    // The one-line log on the campaign row, for a campaign from before the
+    // quest log. Once there is a quest log it is the record: the row's copy
+    // was never kept up to date, and read after every quest was done it told
+    // the GM finished quests were open.
     state.questsBlock = `Quests:\n${campaign.questLog.map((quest) => `- ${quest}`).join("\n")}`;
     sections.push(state.questsBlock);
   }
@@ -1270,7 +1290,9 @@ export function buildGameStateBlock(state: DmGameState): string {
   const severalOwned = members
     .map((member) => ({
       member,
-      owned: sheets.filter((sheet) => sheet.userId === member.userId && !sheet.isCompanion),
+      // A hero who has fallen is controlled by nobody: a player who brought
+      // in a replacement does not run "several characters".
+      owned: sheets.filter((sheet) => sheet.userId === member.userId && !sheet.isCompanion && !heroFell(sheet)),
     }))
     .filter((entry) => entry.owned.length > 1);
   if (severalOwned.length) {
@@ -1289,7 +1311,7 @@ export function buildGameStateBlock(state: DmGameState): string {
         const base = describeSheet(
           sheet,
           sheet.isCompanion
-            ? `nobody: AI companion under your control (${sheet.companionKind === "guest" ? "scene-scoped guest ally" : "party member"}; personality: ${sheet.personality || "plain and steady"})${companionCommandNote(state.campaign, sheet, usernamesById)}`
+            ? `nobody: AI companion under your control (${sheet.companionKind === "guest" ? "scene-scoped guest ally" : "party member"}; personality: ${sheet.personality || "plain and steady"})${companionCommandNote(state.campaign, sheet, commanderName)}`
             : usernamesById.get(sheet.userId) ?? "unknown",
           !sheet.isCompanion && physicalDiceUsers.has(sheet.userId),
           // Optional all the way down: test doubles build partial campaigns.
@@ -1819,7 +1841,9 @@ export function buildDmMessages(
   state: DmGameState,
   history: CampaignMessage[],
 ): ChatMessage[] {
-  const sheetsById = new Map(state.sheets.map((sheet) => [sheet.id, sheet]));
+  // A companion who came back holds a new sheet: the lines from before they
+  // left name the ids it held then (formerSheetIds), and read "Unknown" here.
+  const sheetsById = new Map(state.sheets.flatMap((sheet) => [...(sheet.formerSheetIds ?? []).map((id) => [id, sheet] as const), [sheet.id, sheet] as const]));
   // A small model reads the server's "[roll:<id>]" markers in its own past
   // narration as something to write: Qwen3.5 9B wrote "[roll:pc_attack]" in
   // place of the attack. The short rules leave them out of the transcript.

@@ -55,6 +55,7 @@ export function CallingStep({
   classNote = null,
   subclassNote = null,
   notices = null,
+  genderField = null,
   levelField = null,
   multiclassAllowed = true,
 }: {
@@ -83,10 +84,12 @@ export function CallingStep({
     intro?: string;
     onHelpMeBuild?: (style: PlaystyleId | null) => void;
   };
-  // The setting's notices (ContentNotices) and the level (LevelField): the
-  // level decides what this step and every later one offers, so it is set
-  // here, under the class.
+  // The setting's notices (ContentNotices), the gender (GenderField), which
+  // the class cards' art follows, so it is asked above them, and the level
+  // (LevelField): the level decides what this step and every later one
+  // offers, so it is set here, under the class.
   notices?: ReactNode;
+  genderField?: ReactNode;
   levelField?: ReactNode;
   // "Pick for me" on the subclass (quickBuild.ts), offered once the level
   // asks for one.
@@ -229,6 +232,7 @@ export function CallingStep({
           intro={playstyle?.intro}
           onHelpMeBuild={playstyle?.onHelpMeBuild}
         />
+        {genderField}
         <Field label="Class" className="mt-4">
           {klass ? (
             <span className="mb-3 flex flex-wrap items-center gap-x-1 text-xs text-stone-500">

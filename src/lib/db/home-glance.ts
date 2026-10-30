@@ -4,6 +4,8 @@ import { getCampaignById } from "@/lib/db/campaigns";
 import { actTitle, currentAct } from "@/lib/dm/arc-logic";
 import { characterPlaceholder } from "@/lib/placeholders";
 import { clipRecap } from "@/lib/recap";
+import { nextScheduledSessions } from "@/lib/db/scheduling";
+import { sessionHoldOn } from "@/lib/dm/session-hold";
 
 // The clipper lives in src/lib/recap.ts so the table's chronicle can use it
 // without pulling the database layer into the browser bundle.
@@ -94,7 +96,12 @@ export function partyFacesByCampaign(campaignIds: string[], genreById: Map<strin
   return faces;
 }
 
-export function homeGlanceFor(campaignId: string, faces: HomeGlanceFace[]): HomeGlance {
+export function homeGlanceFor(
+  campaignId: string,
+  faces: HomeGlanceFace[],
+  // The list's own reading (sessionGlances); one table alone reads its own.
+  session: HomeGlance["session"] = sessionGlances([{ id: campaignId, status: getCampaignById(campaignId)?.status ?? "" }]).get(campaignId),
+): HomeGlance {
   const chapter = getOpenChapter(campaignId);
   const latest = latestRecap(campaignId);
   // The act comes from the chapter's stamp, or from the arc while the
@@ -110,5 +117,22 @@ export function homeGlanceFor(campaignId: string, faces: HomeGlanceFace[]): Home
     recapAt: latest?.at ?? null,
     sceneImage: latestSceneImage(campaignId),
     faces,
+    session,
   };
+}
+
+// Whether each table is between sessions, and when it meets next, for the
+// whole list at once. A finished campaign meets no more; a lobby's first
+// session can already be set.
+export function sessionGlances(campaigns: Array<{ id: string; status: string }>): Map<string, NonNullable<HomeGlance["session"]>> {
+  const open = campaigns.filter((campaign) => campaign.status !== "ended");
+  const next = nextScheduledSessions(open.map((campaign) => campaign.id));
+  return new Map(
+    campaigns.map((campaign) => [
+      campaign.id,
+      campaign.status === "ended"
+        ? { between: false, next: null }
+        : { between: sessionHoldOn(campaign.id) !== null, next: next.get(campaign.id) ?? null },
+    ]),
+  );
 }

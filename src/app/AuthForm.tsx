@@ -137,6 +137,8 @@ export default function AuthForm({
   // A fresh server: no accounts yet, and the first one (the admin) takes the
   // one-time setup code from the server log.
   const [needsSetup, setNeedsSetup] = useState(false);
+  // A server in Docker: the hint names the command that prints its log.
+  const [setupInDocker, setSetupInDocker] = useState(false);
   // The link the server prints beside the code (?setup=...) fills it in, so
   // the operator clicks instead of copying a code out of a terminal.
   const [urlSetupCode] = useState(() => {
@@ -156,6 +158,7 @@ export default function AuthForm({
         setDeviceWorld(data?.deviceWorld === true);
         if (data?.needsSetup === true) {
           setNeedsSetup(true);
+          setSetupInDocker(data?.setupCodeInDockerLog === true);
           setMode("register");
         }
         if (data?.signupMode === "invite" || data?.signupMode === "closed") {
@@ -340,9 +343,17 @@ export default function AuthForm({
               />
             </FieldLabel>
             <span id="setup-code-hint" className="mt-1.5 block text-xs text-stone-500">
-              {urlSetupCode
-                ? "This server has no accounts yet. The first one becomes its admin; the setup code came with the link from the server log."
-                : "This server has no accounts yet. The first one becomes its admin and needs the one-time setup code printed in the server log, or open the link printed beside it."}
+              {urlSetupCode ? (
+                "This server has no accounts yet. The first one becomes its admin; the setup code came with the link from the server log."
+              ) : setupInDocker ? (
+                <>
+                  This server has no accounts yet. The first one becomes its admin and needs the one-time setup code
+                  from the server log: run <code className="font-mono text-stone-400">docker compose logs</code> in
+                  the server&apos;s folder and open the link it prints.
+                </>
+              ) : (
+                "This server has no accounts yet. The first one becomes its admin and needs the one-time setup code printed in the server log, or open the link printed beside it."
+              )}
             </span>
           </div>
         ) : null}

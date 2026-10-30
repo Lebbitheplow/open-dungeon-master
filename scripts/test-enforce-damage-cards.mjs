@@ -272,6 +272,41 @@ await test("Treasure's gold, a potion's duration and False Life's temporary hit 
   assert.equal(temp.characterId, wizard.id);
 });
 
+await test("Treasure's gold card names the sum that is paid: a hoard's multiplier, and none on one foe's pocket, which is a tenth of it.", async () => {
+  const { world, sheets: [wizard] } = await table([caster("wizard", "int", [])]);
+  const goldCard = (before) => newRolls(world, before).find((roll) => roll.detail.startsWith("Treasure: gold"));
+  const purse = () => world.sheet(wizard.id).gold;
+  let before = snapshot(world);
+  let held = purse();
+  world.dice(6, 5, 4, 3);
+  const hoard = await world.invoke("roll_treasure", { cr: 1, characterIds: [wizard.id], reason: "the chest" });
+  world.clearDice();
+  assert.equal(hoard.ok, true, hoard.error);
+  assert.equal(goldCard(before).detail, "Treasure: gold (4d6 × 10)");
+  assert.equal(purse() - held, 180);
+  before = snapshot(world);
+  held = purse();
+  world.dice(6, 5, 4, 3);
+  const pocket = await world.invoke("roll_treasure", { cr: 1, characterIds: [wizard.id], reason: "the pilgrim's purse", individual: true });
+  world.clearDice();
+  assert.equal(pocket.ok, true, pocket.error);
+  const card = goldCard(before);
+  assert.equal(card.detail, "Treasure: gold (4d6)");
+  assert.equal(card.total, 18);
+  assert.equal(purse() - held, 18, "the card's total is the gold paid");
+  // A pocket is coin, at any CR: the hoard's magic items are not suggested.
+  world.dice(3, 3, 3);
+  const purse5 = await world.invoke("roll_treasure", { cr: 5, characterIds: [wizard.id], reason: "the captain's purse", individual: true });
+  world.clearDice();
+  assert.equal(purse5.ok, true, purse5.error);
+  assert.equal(purse5.result.suggestedMagicItems, 0);
+  assert.doesNotMatch(purse5.result.note, /magic item/);
+  world.dice(3, 3, 3);
+  const hoard5 = await world.invoke("roll_treasure", { cr: 5, characterIds: [wizard.id], reason: "the captain's chest" });
+  world.clearDice();
+  assert.equal(hoard5.result.suggestedMagicItems, 1, "a hoard still suggests its items");
+});
+
 await test("Mirror Image: the d20 that decides whether a duplicate is struck is a card about the caster.", async () => {
   const { world, sheets: [wizard], enemies: [goblin] } = await table([caster("wizard", "int", ["Mirror Image"])]);
   const cast = await world.invoke("cast_buff", { characterId: wizard.id, spell: "Mirror Image", level: 2 });

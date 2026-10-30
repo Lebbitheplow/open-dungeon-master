@@ -1,6 +1,7 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
 import { byName, textKey } from "@/lib/language/text-logic";
-import { createSheet, getSheetById, getSheetForUser, listSheetsForUser } from "@/lib/db/sheets";
+import { createSheet, getSheetById, listSheetsForUser } from "@/lib/db/sheets";
+import { heroDoorOpen } from "@/lib/characters/fallen-logic";
 import { adaptSheetToLevel } from "@/lib/characters/adapt";
 import { multiclassEntryProblem } from "@/lib/srd/sheet-legality";
 import { admitSheet } from "@/lib/characters/admit";
@@ -423,9 +424,10 @@ export function instantiateIntoCampaign(
   if (existing) return existing;
   const campaign = getCampaignById(campaignId);
   // One character each, unless the table allows several: then the new one
-  // waits beside the one in play until its player switches to it.
-  const allowsSeveral = (campaign?.gameSettings.multiCharacter ?? "off") !== "off";
-  if (!allowsSeveral && getSheetForUser(campaignId, userId)) {
+  // waits beside the one in play until its player switches to it. A player
+  // whose heroes have all fallen is let in either way
+  // (src/lib/characters/fallen-logic.ts).
+  if (!heroDoorOpen(listSheetsForUser(campaignId, userId), campaign?.gameSettings.multiCharacter ?? "off")) {
     return { error: "You already have a character in this campaign." };
   }
   const level = Math.max(1, Math.min(20, targetLevel));

@@ -24,7 +24,7 @@ import type { CharacterSheet, FullPatchSheetInput } from "@/lib/schemas/sheet";
 import { conditionTurnShape } from "@/lib/srd/condition-effects";
 import { classLevelFor } from "@/lib/srd/multiclass";
 import { authoredFlurryStrikes } from "@/lib/srd/authored-economy";
-import { spendAction } from "@/lib/dm/action-budget";
+import { dashCount, spendAction } from "@/lib/dm/action-budget";
 import { canAct } from "@/lib/dm/can-act";
 import { DODGING } from "@/lib/dm/condition-logic";
 import { attacksAllowedFor, budgetFor, storeBudget } from "@/lib/dm/turn-budget";
@@ -139,13 +139,13 @@ export function spendKiTechnique(
       retry: true,
     };
   }
-  let flags: { dashed?: boolean; disengaged?: boolean; flurryStrikes?: number } = {};
+  let flags: { dashed?: boolean; dashes?: number; disengaged?: boolean; flurryStrikes?: number } = {};
   const dash = technique === "step of the wind" && (isNamed(variant ?? "", "step of the wind dash") || textKey(nameChoice(variant ?? "") ?? "") === "dash");
   if (technique === "flurry") {
     // Intoxicated Frenzy (Drunken Master 17) raises it to five.
     flags = { flurryStrikes: authoredFlurryStrikes(sheet) ?? 2 };
   } else if (technique === "step of the wind") {
-    flags = dash ? { dashed: true } : { disengaged: true };
+    flags = dash ? { dashed: true, dashes: dashCount(budget ?? { dashed: false }) + 1 } : { disengaged: true };
   }
   if (price?.ok && encounter) {
     storeBudget(encounter, { ...price.budget, ...flags });
@@ -162,7 +162,7 @@ export function spendKiTechnique(
     applied = `${sheet.name} has ${flags.flurryStrikes === 2 ? "two" : flags.flurryStrikes} Flurry of Blows strikes this turn: resolve each with pc_attack using weapon "unarmed strike". The server spends them.`;
   } else {
     applied = dash
-      ? `${sheet.name} Dashes as a bonus action: their movement is doubled this turn, and their jump distance too.`
+      ? `${sheet.name} Dashes as a bonus action: their speed is added to their movement this turn, and their jump distance is doubled.`
       : `${sheet.name} Disengages as a bonus action: leaving an enemy's reach provokes nothing this turn, and their jump distance is doubled.`;
   }
   return {

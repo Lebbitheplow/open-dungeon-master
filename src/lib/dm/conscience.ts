@@ -5,7 +5,7 @@ import { companionNpcFor, lastingCompanion } from "@/lib/db/companion-npcs";
 import { companionDeparture } from "@/lib/db/companion-departures";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { listRelationships } from "@/lib/db/relationships";
-import { listSheets, setCompanionCommander } from "@/lib/db/sheets";
+import { getSheetForUser, listSheets, setCompanionCommander } from "@/lib/db/sheets";
 import { formatDate } from "@/lib/dm/calendar";
 import { commanderOf } from "@/lib/dm/companion-command";
 import { handTurnToDm } from "@/lib/dm/initiative-floor";
@@ -28,7 +28,7 @@ import {
 } from "@/lib/dm/conscience-logic";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { textKey } from "@/lib/language/text-logic";
-import { friendshipTier, tierIndex, type FriendshipTier, type SouredLeaving } from "@/lib/dm/relationship-logic";
+import { friendshipTier, hasStanding, tierIndex, type FriendshipTier, type SouredLeaving } from "@/lib/dm/relationship-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // A lasting companion's conscience (issue 503 Phase 1), the rim around
@@ -79,7 +79,7 @@ export function worstApproval(campaignId: string, companionName: string, sheets:
   const party = new Set(sheets.filter((sheet) => !sheet.isCompanion).map((sheet) => sheet.id));
   const key = textKey(companionName);
   const approvals = listRelationships(campaignId)
-    .filter((relationship) => relationship.status === "active" && party.has(relationship.characterId) && textKey(relationship.subjectName) === key)
+    .filter((relationship) => relationship.status === "active" && party.has(relationship.characterId) && textKey(relationship.subjectName) === key && hasStanding(relationship))
     .map((relationship) => relationship.approval);
   return approvals.length ? Math.min(...approvals) : null;
 }
@@ -177,7 +177,7 @@ export function settleCompanion(
 
 // Where the table lets companions turn, a companion who has warned the party
 // stops taking a player's orders in a fight (the answered open question),
-// and the table is told. Returns the player's name.
+// and the table is told. Returns the name of the character whose orders end.
 function endCommand(campaign: Campaign, companion: CharacterSheet): string | null {
   const commander = commanderOf(campaign, companion);
   if (!commander) {
@@ -187,7 +187,7 @@ function endCommand(campaign: Campaign, companion: CharacterSheet): string | nul
   if (updated) {
     publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
   }
-  const name = listMembers(campaign.id).find((member) => member.userId === commander)?.username ?? "their player";
+  const name = commanderName(campaign.id, commander);
   const seq = allocateSeq(campaign.id);
   const message = insertCampaignMessage({
     campaignId: campaign.id,
@@ -201,6 +201,19 @@ function endCommand(campaign: Campaign, companion: CharacterSheet): string | nul
   // hands it back (src/lib/dm/initiative-floor.ts).
   handTurnToDm(campaign, companion.id);
   return name;
+}
+
+// Who the companion stops following, as the story knows them: the
+// commander's character, not the account (the 0.31.1 playtest read
+// "no longer takes playtester's orders"). The seat's own character first,
+// then any other of theirs that is not a companion; the account name only
+// when they have none.
+function commanderName(campaignId: string, userId: string): string {
+  const seated = getSheetForUser(campaignId, userId);
+  const own = seated && !seated.isCompanion
+    ? seated
+    : listSheets(campaignId).find((sheet) => sheet.userId === userId && !sheet.isCompanion);
+  return own?.name ?? listMembers(campaignId).find((member) => member.userId === userId)?.username ?? "their player";
 }
 
 // Whether a player may be given command over this companion now (the

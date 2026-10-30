@@ -18,6 +18,10 @@
 // ODM's own rules, pinned here as the code documents them:
 //   - The save is rolled by the server when the initiative pointer passes the
 //     dying character, never by the player (src/lib/dm/death.ts rollDeathSave).
+//     Outside a fight the same roll comes every six seconds of game time, in
+//     order until the fall is settled, and a fight that ends with nobody on
+//     the party's side conscious rolls the fallen out at once
+//     (death.ts settleDying).
 //   - stabilize names a healer, whose action it takes, and the server rolls
 //     their DC 10 Wisdom (Medicine) check; a healer's kit use or Spare the
 //     Dying needs no check. A healer's kit is carried as one row whose
@@ -34,6 +38,8 @@ import { kit as conditionsKit, FIGHTER } from "./lib/enforce-conditions.mjs";
 const { test, finish } = suite("test-enforce-death");
 const world = await openWorld();
 const kit = conditionsKit(world);
+const messages = await import("../src/lib/db/messages.ts");
+const { minutesSinceDeath } = await import("../src/lib/dm/revival.ts");
 
 const hero = world.addHero(FIGHTER);
 const ally = world.addHero(FIGHTER);
@@ -443,11 +449,67 @@ await test("a stable creature with no wait of its own wakes once four hours pass
   assert.equal(track(), null);
 });
 
-await test("a dying character waits for help: time alone neither wakes nor kills them", async () => {
-  dying({ ...FRESH, failures: 2 });
-  await world.invoke("pass_time", { amount: 8, unit: "hours" });
+// ---- dying outside a fight ----
+
+// A dying creature makes a death save every six seconds until it is stable,
+// dead or healed, whether or not anyone is counting initiative.
+kit.reset(ally.id);
+kit.reset(orc.id);
+
+await test("a dying character on the clock rolls a death save every six seconds until stable", async () => {
+  dying();
+  const out = await kit.withDice([12, 4, 15, 10, 3, 19], "pass_time", { amount: 1, unit: "minutes" });
+  assert.equal(out.outcome.ok, true, out.outcome.error);
+  // Four saves settle it, then the 1d4 hours of the stable wait; the sixth
+  // die is never thrown.
+  assert.deepEqual(out.dice, ["d20:12", "d20:4", "d20:15", "d20:10", "d4:3"]);
+  assert.equal(out.unused, 1);
+  assert.deepEqual(track(), { successes: 0, failures: 0, stable: true, dead: false });
   assert.equal(hp(), 0);
-  assert.deepEqual(track(), { ...FRESH, failures: 2 });
+  assert.equal(out.result.deathSaves.length, 4, JSON.stringify(out.result));
+  assert.match(out.result.deathSaves.at(-1), /stable/);
+});
+
+await test("a dying character left alone on the clock can die of it", async () => {
+  dying({ ...FRESH, failures: 1 });
+  const out = await kit.withDice([3, 18, 5, 17], "pass_time", { amount: 8, unit: "hours" });
+  assert.equal(out.outcome.ok, true, out.outcome.error);
+  assert.deepEqual(out.dice, ["d20:3", "d20:18", "d20:5"]);
+  assert.deepEqual(track(), { successes: 1, failures: 3, stable: false, dead: true });
+  assert.match(out.result.deathSaves.at(-1), /dies/);
+  // The third save came 18 seconds into the eight hours: that is when they
+  // died, so the record holds the hours since and Revivify's minute is gone.
+  const since = minutesSinceDeath(world.campaignId, hero.id);
+  assert.ok(since !== null && Math.abs(since - (8 * 60 - 0.3)) < 0.01, `died ${since} minutes ago by the record`);
+});
+
+await test("a natural 20 on the clock brings the character round at 1 hit point", async () => {
+  dying({ ...FRESH, failures: 2 });
+  const out = await kit.withDice([20, 1], "pass_time", { amount: 10, unit: "minutes" });
+  assert.deepEqual(out.dice, ["d20:20"]);
+  assert.equal(hp(), 1);
+  assert.equal(track(), null);
+});
+
+await test("a rest or a march that settles a dying character's saves tells the GM how they went", async () => {
+  dying({ ...FRESH, failures: 2 });
+  const rest = await kit.withDice([4], "take_rest", { kind: "short" });
+  assert.equal(rest.outcome.ok, true, rest.outcome.error);
+  assert.match(String(rest.result.deathSaves?.at(-1)), /dies/, JSON.stringify(rest.result));
+  dying({ ...FRESH, failures: 2 });
+  const march = await kit.withDice([4], "travel", { hours: 2, pace: "normal", characterIds: [ally.id] });
+  assert.equal(march.outcome.ok, true, march.outcome.error);
+  assert.match(String(march.result.deathSaves?.at(-1)), /dies/, JSON.stringify(march.result));
+  kit.reset(hero.id);
+});
+
+await test("the stable and the dead roll nothing as time passes", async () => {
+  for (const saves of [{ ...FRESH, stable: true }, DEAD]) {
+    dying(saves);
+    const out = await kit.withDice([5], "pass_time", { amount: 1, unit: "minutes" });
+    assert.deepEqual(out.dice, [], JSON.stringify(saves));
+    assert.deepEqual(track(), saves);
+  }
 });
 
 await test("a short rest spends no hit dice for a character at 0 hit points", async () => {
@@ -475,6 +537,52 @@ await test("Relentless Endurance holds a half-orc at 1 hit point, once a long re
   await world.invoke("pass_time", { amount: 1, unit: "days" });
   await world.invoke("take_rest", { kind: "long" });
   assert.equal(world.sheet(orc.id).resources.relentless_endurance.used, 0);
+});
+
+// ---- the end of a fight ----
+
+await test("a fight lost with nobody standing rolls the fallen's death saves out at once", async () => {
+  for (const id of [hero.id, ally.id, orc.id]) {
+    kit.reset(id);
+  }
+  await world.beginFight([{ monster: "goblin", count: 1 }]);
+  kit.offBoard();
+  dying();
+  kit.reset(ally.id, { currentHp: 0, deathSaves: DEAD });
+  kit.reset(orc.id, { currentHp: 0, deathSaves: DEAD });
+  const out = await kit.withDice([11, 2, 14, 16, 4], "end_encounter", { outcome: "party_defeated" });
+  assert.equal(out.outcome.ok, true, out.outcome.error);
+  assert.equal(world.encounter(), null);
+  assert.deepEqual(out.dice, ["d20:11", "d20:2", "d20:14", "d20:16", "d4:4"]);
+  assert.deepEqual(track(), { successes: 0, failures: 0, stable: true, dead: false });
+  assert.equal(out.result.deathSaves.length, 4, JSON.stringify(out.result));
+});
+
+await test("a fight that ends with an ally standing leaves the fallen to them, and stabilizing still takes the Medicine check", async () => {
+  for (const id of [hero.id, ally.id, orc.id]) {
+    kit.reset(id);
+  }
+  await world.beginFight([{ monster: "goblin", count: 1 }]);
+  kit.offBoard();
+  dying();
+  const out = await kit.withDice([11], "end_encounter", { outcome: "enemies_fled" });
+  assert.equal(out.outcome.ok, true, out.outcome.error);
+  assert.deepEqual(out.dice, []);
+  assert.deepEqual(track(), FRESH);
+  assert.ok(out.result.dying?.includes(world.sheet(hero.id).name), JSON.stringify(out.result));
+  const tended = await kit.withDice([2], "stabilize", { characterId: hero.id, healerId: ally.id });
+  assert.equal(tended.outcome.ok, true, tended.outcome.error);
+  assert.equal(kit.d20s(tended.dice), 1, "stabilizing rolled no Medicine check");
+  assert.equal(tended.result.stabilized, false);
+  assert.deepEqual(track(), FRESH);
+  const again = await kit.withDice([18, 2], "stabilize", { characterId: hero.id, healerId: ally.id });
+  assert.equal(again.result.stabilized, true, JSON.stringify(again.result));
+  // The table is told how, not only the sheet.
+  const line = messages.listRecentMessages(world.campaignId, 1)[0];
+  assert.match(line.content, /Medicine check \(\d+\) meets DC 10: .* is stable/);
+  for (const id of [hero.id, ally.id, orc.id]) {
+    kit.reset(id);
+  }
 });
 
 // ---- gaps ----

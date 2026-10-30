@@ -11,8 +11,8 @@ import { applyDmMutation } from "@/lib/dm/mutations";
 import { resolveSheetRef } from "@/lib/dm/rolls";
 import { hourlyConSaves, type HourSave } from "@/lib/dm/endurance";
 import {
-  hoardGoldDice,
   hoardItemCount,
+  treasureGoldRoll,
   treasureTierForCr,
 } from "@/lib/srd/treasure";
 import type { ObjectMaterial, ObjectSize } from "@/lib/srd/objects";
@@ -377,11 +377,8 @@ export function handleRollTreasure(
     };
   }
   const tier = treasureTierForCr(args.cr);
-  const { dice, mult } = hoardGoldDice(tier);
-  let gold = rollCard(campaign, turn, null, "custom", `Treasure: gold (${dice} × ${mult})`, dice, null).total * mult;
-  if (args.individual) {
-    gold = Math.floor(gold / 10);
-  }
+  const { dice, mult, label } = treasureGoldRoll(tier, Boolean(args.individual));
+  const gold = rollCard(campaign, turn, null, "custom", label, dice, null).total * mult;
   const share = Math.floor(gold / recipients.length);
   const reason = (args.reason ?? "").trim() || "treasure";
   const paid: Array<{ name: string; gold: number }> = [];
@@ -398,7 +395,9 @@ export function handleRollTreasure(
       paid.push({ name: sheet.name, gold: share });
     }
   }
-  const items = hoardItemCount(tier);
+  // One foe's pocket is coin; the magic items are a hoard's (the reference
+  // calculator says the same). A CR 5 purse used to suggest a magic item.
+  const items = args.individual ? 0 : hoardItemCount(tier);
   const result = {
     ok: true,
     tier,
@@ -519,6 +518,8 @@ export function handlePassTime(
     now: describeInstant(moved.clock.calendar, moved.clock.instant),
     ...(sky?.summary ? { weather: sky.summary } : {}),
     ...(living.length ? { lifestyle: living } : {}),
+    // Rolled by the server as the time passed; narrate what they decided.
+    ...(moved.deathSaves.length ? { deathSaves: moved.deathSaves } : {}),
   };
 }
 
@@ -614,6 +615,11 @@ export function handleTravel(
   const pacts = pactMoment(campaign, turn.id, "travel");
   if (pacts.length) {
     weatherOutcome.companions = pacts;
+  }
+  // The death saves the hours on the road rolled for the dying, already at
+  // the table: the GM narrates the march from this result.
+  if (!("error" in moved) && moved.deathSaves.length) {
+    weatherOutcome.deathSaves = moved.deathSaves;
   }
 
   // The pace holds until the party stops: check_notice reads it (a fast

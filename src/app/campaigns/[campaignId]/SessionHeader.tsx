@@ -22,6 +22,7 @@ import { LayoutMenu } from "@/app/campaigns/[campaignId]/TableLayoutParts";
 import { HeaderPhoneMenu } from "@/app/campaigns/[campaignId]/HeaderPhoneMenu";
 import type { LayoutSeat } from "@/app/campaigns/[campaignId]/table-layout-store";
 import type { TableBreakControl } from "@/app/campaigns/[campaignId]/TableBreakBanner";
+import type { SessionControl } from "@/app/campaigns/[campaignId]/SessionHoldBanner";
 
 // The narration group in the header from sm up: the familiar icon button
 // with an inline slider. Below sm the header has no spare width, and the same
@@ -148,6 +149,7 @@ export const SessionHeader = memo(function SessionHeader({
   layoutSeat,
   tableBreak,
   prep,
+  session,
   exit,
 }: {
   title: string;
@@ -190,6 +192,9 @@ export const SessionHeader = memo(function SessionHeader({
   // The campaign's prep while play runs (issue 530): whoever steers the
   // story steps out to it and back. Absent for everyone else.
   prep?: PrepControl;
+  // End the session, or start the next (issue 586): whoever steers the
+  // story or the party lead. Absent for everyone else.
+  session?: SessionControl;
   // Where the way out leads. All campaigns, except at a test fight (issue
   // 553), which no campaign list shows: its way out is its workshop.
   exit?: HeaderExit;
@@ -359,8 +364,10 @@ export const SessionHeader = memo(function SessionHeader({
           onHelp={onHelp}
           tableBreak={tableBreak}
           prep={prep}
+          session={session}
         />
         </div>
+        {session ? <SessionButton control={session} /> : null}
         {prep ? <PrepButton control={prep} /> : null}
         <Tooltip content={out.label} side="bottom">
           <Link
@@ -408,6 +415,35 @@ function PrepButton({ control }: { control: PrepControl }) {
         className={cn(ui.btnSmall, "hidden h-9 gap-1.5 py-0 pl-1 sm:inline-flex", control.open && "border-amber-400/70 text-amber-100")}
       >
         <HeaderGlyph glyph={control.open ? "tab-session" : "tab-journal"} />
+        <span key={label} className="live-in hidden md:inline">{label}</span>
+      </button>
+    </Tooltip>
+  );
+}
+
+// End the session, or between sessions start the next. Beside Campaign
+// prep from sm up, because the two are where a table's evening ends and the
+// next one is readied; a phone has it in its table menu. Lit between
+// sessions, when starting is the thing to do.
+function SessionButton({ control }: { control: SessionControl }) {
+  const label = control.held ? `Start session ${control.next}` : "End the session";
+  return (
+    <Tooltip
+      content={
+        control.held
+          ? "Pick the story up where it stopped. Everyone at the table is back in play."
+          : "Stop for tonight: play waits where it stands until you start the next session. Nothing is lost."
+      }
+      side="bottom"
+    >
+      <button
+        type="button"
+        onClick={control.held ? control.onStart : control.onEnd}
+        aria-label={label}
+        data-session-control={control.held ? "start" : "end"}
+        className={cn(ui.btnSmall, "hidden h-9 gap-1.5 py-0 pl-1 sm:inline-flex", control.held && "border-amber-400/70 text-amber-100")}
+      >
+        <HeaderGlyph glyph={control.held ? "tab-session" : "rest-long"} />
         <span key={label} className="live-in hidden md:inline">{label}</span>
       </button>
     </Tooltip>

@@ -3,6 +3,8 @@ import { listChapters } from "@/lib/db/chapters";
 import { actRecapFor, actTitle, romanNumeral, sagaIndexOf } from "@/lib/dm/arc-logic";
 import { listAllMessages } from "@/lib/db/messages";
 import { listSheets } from "@/lib/db/sheets";
+import { listQuests } from "@/lib/db/quests";
+import { questLogForExport } from "@/lib/dm/quest-logic";
 import { slugOf } from "@/lib/language/text-logic";
 
 // A serializer-independent view of a campaign's story, gathered once from the
@@ -122,7 +124,9 @@ export function buildStoryDocument(campaignId: string): StoryDocument | null {
       status: campaign.status,
       exportedAt: new Date().toISOString(),
     },
-    questLog: campaign.questLog ?? [],
+    // The party's quest log and how each quest ended, not the stale copy on
+    // the campaign row (issue 581); never a GM-only or hidden quest.
+    questLog: questLogForExport(listQuests(campaignId)),
     chapters: storyChapters,
   };
 }

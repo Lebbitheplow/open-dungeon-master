@@ -1,5 +1,6 @@
 // Pure 5e death-save bookkeeping, database-free like mutation-math.ts so
 // scripts/test-death-logic.mjs can exercise every branch.
+import { isConditionNamed } from "@/lib/srd/feature-names";
 
 export type DeathTrack = {
   successes: number;
@@ -67,4 +68,38 @@ export function applyDeathSaveRoll(
   const failures = Math.min(3, track.failures + 1);
   const next = { ...track, failures, dead: failures >= 3 };
   return { track: next, outcome: next.dead ? "dead" : "failure" };
+}
+
+// Whether this sheet still owes death saves: at 0 HP with an open track.
+export function isDying(sheet: { currentHp: number; deathSaves?: DeathTrack | null }): boolean {
+  const track = sheet.deathSaves;
+  return Boolean(track && !track.stable && !track.dead && sheet.currentHp <= 0);
+}
+
+// The most saves one fall can take before it is settled: two successes and
+// two failures leave the fifth to decide. Rolling stops sooner when it
+// settles; this only bounds the loop.
+export const MOST_SAVES_TO_SETTLE = 5;
+
+// How many death saves a stretch of game time holds: one every six seconds
+// (a round), never more than it takes to settle the fall.
+export function deathSavesInMinutes(minutes: number): number {
+  const rounds = Math.floor(Math.max(0, minutes) * 10);
+  return Math.min(MOST_SAVES_TO_SETTLE, rounds);
+}
+
+// The dying a fight leaves behind with nobody to tend them. With no one on
+// the party's side conscious, the saves go on with no hand to stop them, so
+// they are rolled out at once. While somebody stands, the fallen wait for
+// that person's action (stabilize or heal) or for game time to pass.
+export function dyingLeftAlone<T extends { currentHp: number; deathSaves?: DeathTrack | null; conditions: string[] }>(
+  party: T[],
+): T[] {
+  const standing = party.some(
+    (sheet) =>
+      sheet.currentHp > 0 &&
+      !sheet.deathSaves?.dead &&
+      !sheet.conditions.some((entry) => isConditionNamed(entry, "unconscious")),
+  );
+  return standing ? [] : party.filter((sheet) => isDying(sheet));
 }

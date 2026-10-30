@@ -14,15 +14,18 @@ import { campaignSeats, getCampaignById, type Campaign } from "@/lib/db/campaign
 import { getDatabase, nowIso } from "@/lib/db/core";
 import { getLatestDmMessage } from "@/lib/db/messages";
 import { listSheets } from "@/lib/db/sheets";
+import { heroFell } from "@/lib/characters/fallen-logic";
 import { coverInEffect } from "@/lib/dm/delegation";
 import { getDmStatus } from "@/lib/dm/status";
 import { hasHumanDm } from "@/lib/dm/viewer";
 import { wakeDm } from "@/lib/dm/wake";
 import { latestEventOfType, onlineUserIds, publishEphemeral, publishPersisted } from "@/lib/events";
 import { tableBreakOn } from "@/lib/dm/table-break";
+import { sessionHoldOn } from "@/lib/dm/session-hold";
 import { breakRefusal } from "@/lib/dm/table-break-logic";
 import { runsAiTurns } from "@/lib/workshop/kind";
 import { decideTableWait, type TableSeat, type TableWaitDecision, type TableWaitView } from "./table-wait-logic";
+import { sessionRefusal } from "@/lib/dm/session-hold-logic";
 
 export type { TableWaitView } from "./table-wait-logic";
 
@@ -48,25 +51,32 @@ function memory(campaignId: string): WaitMemory {
 //
 // A table break (src/lib/dm/table-break.ts) stands the wait aside: nobody
 // can answer while the table is paused, so no clock runs and nothing fires;
-// Resume settles the table again, with the clock counted from then.
+// Resume settles the table again, with the clock counted from then. The
+// time between sessions (src/lib/dm/session-hold.ts) does the same.
 export function waitsForTable(campaign: Campaign): boolean {
-  if (!campaign.gameSettings.waitForTable || !runsAiTurns(campaign) || campaign.status !== "active" || tableBreakOn(campaign.id)) {
+  if (!campaign.gameSettings.waitForTable || !runsAiTurns(campaign) || campaign.status !== "active" || tableBreakOn(campaign.id) || sessionHoldOn(campaign.id)) {
     return false;
   }
   const covering = coverInEffect(campaign.gameSettings.dmMode, campaign.gameSettings.dmAssist, campaign.dmCover);
   return !hasHumanDm(campaignSeats(campaign)) || covering;
 }
 
-// The player seats, one per person, named by their first character.
+// The player seats, one per person, named by their first character, or by
+// the first one still alive once that one has fallen: a player who brought
+// in a new hero (src/lib/characters/hero-door.ts) is waited on by the new
+// hero's name, not the dead one's.
 function playerSeats(campaign: Campaign): TableSeat[] {
-  const seats = new Map<string, string>();
+  const seats = new Map<string, { name: string; fell: boolean }>();
   for (const sheet of listSheets(campaign.id)) {
-    if (sheet.isCompanion || !sheet.userId || sheet.userId === campaign.dmUserId || seats.has(sheet.userId)) {
+    if (sheet.isCompanion || !sheet.userId || sheet.userId === campaign.dmUserId) {
       continue;
     }
-    seats.set(sheet.userId, sheet.name);
+    const held = seats.get(sheet.userId);
+    if (!held || (held.fell && !heroFell(sheet))) {
+      seats.set(sheet.userId, { name: sheet.name, fell: heroFell(sheet) });
+    }
   }
-  return [...seats].map(([userId, name]) => ({ userId, name }));
+  return [...seats].map(([userId, seat]) => ({ userId, name: seat.name }));
 }
 
 // Players reached through a live agent subscription (a webhook or a poll
@@ -240,6 +250,10 @@ export type PassResult = { ok: true; fire: boolean } | { ok: false; status: numb
 // waiting to pass on, and once the player has already acted or passed.
 export function passTable(campaignId: string, userId: string): PassResult {
   const campaign = getCampaignById(campaignId);
+  const between = sessionHoldOn(campaignId);
+  if (between) {
+    return { ok: false, status: 409, error: sessionRefusal(between) };
+  }
   const paused = tableBreakOn(campaignId);
   if (paused) {
     return { ok: false, status: 409, error: breakRefusal(paused) };

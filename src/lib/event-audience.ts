@@ -147,6 +147,7 @@ export const EVENT_AUDIENCE: Readonly<Record<string, Audience>> = {
   pins_updated: TABLE,
   npc_updated: TABLE,
   location_updated: TABLE,
+  location_removed: TABLE,
   location_map_ready: TABLE,
   calendar_updated: TABLE,
   schedule_updated: TABLE,
@@ -174,6 +175,10 @@ export const EVENT_AUDIENCE: Readonly<Record<string, Audience>> = {
   // A table break names who paused: everyone is told, as at a real table.
   table_paused: TABLE,
   table_resumed: TABLE,
+  // A session ended and the next one started (issue 586): every seat leaves
+  // play together and comes back together.
+  session_ended: TABLE,
+  session_started: TABLE,
   // Media and sound.
   image_ready: TABLE,
   media_status: TABLE,

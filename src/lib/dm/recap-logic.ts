@@ -15,6 +15,13 @@ function dmOnly(knownBy: unknown): boolean {
   return knownBy === "dm";
 }
 
+// The party's recap is read at every seat, so it takes only what the whole
+// party knows. A fact known to some characters (knownBy lists them) was
+// learned apart from the rest, and stays with them and the DM's track.
+function wholeParty(knownBy: unknown): boolean {
+  return knownBy === "party";
+}
+
 // The storyteller's own secrets (src/lib/dm/viewer.ts) never ride a recap:
 // the DM's track is read by the lead who steers an AI table.
 
@@ -23,9 +30,12 @@ export function recapMaterial(
   dmView: boolean,
 ): RecapMaterial {
   const facts = input.facts
-    .filter((fact) => !isStorytellerFact(fact.knownBy) && (dmView || !dmOnly(fact.knownBy)))
+    .filter((fact) => !isStorytellerFact(fact.knownBy) && (dmView || wholeParty(fact.knownBy)))
     .slice(-12)
-    .map((fact) => `${fact.subject ? `${fact.subject}: ` : ""}${fact.fact}${dmView && dmOnly(fact.knownBy) ? " (the party does not know this)" : ""}`);
+    .map((fact) => {
+      const known = !dmView || wholeParty(fact.knownBy) ? "" : dmOnly(fact.knownBy) ? " (the party does not know this)" : " (only some of the party know this)";
+      return `${fact.subject ? `${fact.subject}: ` : ""}${fact.fact}${known}`;
+    });
   const quests = input.quests
     .filter((quest) => dmView || quest.source !== "dm-secret")
     .slice(0, 8)
@@ -47,4 +57,35 @@ export function renderRecapMaterial(material: RecapMaterial): string {
   ]
     .filter(Boolean)
     .join("\n\n");
+}
+
+export type RecapLine = { speaker: string; text: string };
+
+// The last session's story, from its first line to where it stopped, fitted
+// to what a recap prompt can carry (a 16K model reads it beside the chapter
+// and the facts). The end is what the table returns to, so its last lines go
+// whole; the rest of the budget samples the earlier lines evenly, in order,
+// so the session's start and middle are in the recap too and not only its
+// last twelve lines.
+export function sessionTranscript(lines: RecapLine[], budget = 8_000): string {
+  const render = (line: RecapLine, cap: number) => `${line.speaker}: ${line.text.replace(/\s+/g, " ").trim().slice(0, cap)}`;
+  const tail = lines.slice(-10).map((line) => render(line, 600));
+  const tailSize = tail.reduce((sum, line) => sum + line.length + 1, 0);
+  const earlier = lines.slice(0, -10);
+  const room = Math.max(0, budget - tailSize);
+  const picked: string[] = [];
+  if (earlier.length && room > 0) {
+    const each = earlier.map((line) => render(line, 300));
+    const average = each.reduce((sum, line) => sum + line.length + 1, 0) / each.length;
+    const fits = Math.max(1, Math.floor(room / average));
+    const step = Math.max(1, earlier.length / fits);
+    let used = 0;
+    for (let at = 0; at < earlier.length; at += step) {
+      const line = each[Math.floor(at)];
+      if (used + line.length + 1 > room) break;
+      picked.push(line);
+      used += line.length + 1;
+    }
+  }
+  return [...picked, ...tail].join("\n");
 }

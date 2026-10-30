@@ -417,7 +417,10 @@ function stateFor(sub: Subscription, grant: ConnectionGrant) {
   // events say the same across a restart, as the X-card's do.
   const tableBreak = db.prepare(`SELECT seq, type FROM campaign_events WHERE campaign_id = ?
     AND type IN ('table_paused', 'table_resumed') ORDER BY seq DESC LIMIT 1`).get(campaign.id) as { seq: number; type: string } | undefined;
-  const paused = Boolean(dmQueuePaused(campaign.id)) || safety?.type === "x_card" || tableBreak?.type === "table_paused" || campaign.floor.mode === "hold";
+  // Between sessions (src/lib/dm/session-hold.ts), the same.
+  const session = db.prepare(`SELECT seq, type FROM campaign_events WHERE campaign_id = ?
+    AND type IN ('session_ended', 'session_started') ORDER BY seq DESC LIMIT 1`).get(campaign.id) as { seq: number; type: string } | undefined;
+  const paused = Boolean(dmQueuePaused(campaign.id)) || safety?.type === "x_card" || tableBreak?.type === "table_paused" || session?.type === "session_ended" || campaign.floor.mode === "hold";
   const running = db.prepare(`SELECT id FROM dm_turns WHERE campaign_id = ? AND actor = 'ai' AND status = 'running' LIMIT 1`).get(campaign.id);
   const awaiting = db.prepare(`SELECT id FROM dm_turns WHERE campaign_id = ? AND actor = 'ai' AND status = 'awaiting_rolls' LIMIT 1`).get(campaign.id);
   const status = getDmStatus(campaign.id);
@@ -432,7 +435,7 @@ function stateFor(sub: Subscription, grant: ConnectionGrant) {
     .get(campaign.id, grant.userId) as { seq: number | null };
   const held = db.prepare(`SELECT MAX(seq) AS seq FROM campaign_events WHERE campaign_id = ? AND type = 'floor_changed' AND json_extract(payload_json, '$.floor.mode') = 'hold'`)
     .get(campaign.id) as { seq: number | null };
-  const gate = Math.max(held.seq ?? 0, safety?.seq ?? 0, tableBreak?.seq ?? 0);
+  const gate = Math.max(held.seq ?? 0, safety?.seq ?? 0, tableBreak?.seq ?? 0, session?.seq ?? 0);
   const sheet = getSheetForUser(campaign.id, grant.userId);
   const busy = Boolean(running) || !["idle", "awaiting_rolls"].includes(status);
   const opportunities = playerOpportunities({

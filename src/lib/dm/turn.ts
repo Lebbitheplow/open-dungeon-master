@@ -113,6 +113,7 @@ import {
 } from "@/lib/dm/narration-tidy-logic";
 import { liveStateFor, readAsides, readReply, readTurnEndInWords, registeringNames, ruledFor, turnOverFor } from "@/lib/dm/claims";
 import { modelTextLines } from "@/lib/dm/speech-lines";
+import { meetSpeakers } from "@/lib/dm/party-bonds";
 import type { SpokenLine } from "@/lib/dm/speech";
 import type { ToolResult } from "@/lib/dm/tool-errors";
 import { dispatchAdjudication } from "@/lib/dm/invoke-dispatch";
@@ -2992,6 +2993,10 @@ export function handleLocationCall(
       }
     }
     setCampaignScene(campaign.id, location.name);
+    // The scene line under the title reads the campaign's scene, which only
+    // the opening ever told the table; it named the first place for the
+    // whole campaign.
+    publishPersisted(campaign.id, "campaign_updated", { scene: location.name });
     // Some of the party went and the rest stayed (issue 563): a moment a
     // companion may slip away.
     split = partySplit(campaign, args.characterIds, location.name);
@@ -3257,6 +3262,10 @@ function finalize(context: TurnContext, turn: DmTurn, failed: string, spoken: re
   });
   publishWithSeq(campaignId, claimed === null ? seq : allocateSeq(campaignId), "message_added", { message });
   setDmStatus(campaignId, "idle");
+  // Whoever spoke to the party in it has met them (issue 580).
+  if (meetSpeakers(context.campaign, message.speech ?? [])) {
+    publishEphemeral(campaignId, "relationships_updated", {});
+  }
 
   // Combat bookkeeping: if the current PC's turn was adjudicated, hand the
   // initiative pointer to the next living PC now, after the narration

@@ -23,6 +23,7 @@ import { publishPersisted } from "@/lib/events";
 import { HURLED, hurlReturn } from "@/lib/dm/attack-onhit";
 import { HOLDING_ON, downConditions } from "@/lib/dm/vitals-logic";
 import { spellTurnEndHook } from "@/lib/dm/spell-turn-end";
+import { getFoe } from "@/lib/dm/sheet-foe";
 import { authoredTurnEnd } from "@/lib/dm/authored-turns";
 import { zoneTurnEnd } from "@/lib/dm/zone-triggers";
 import { blinkTurnEnd } from "@/lib/dm/spell-planes";
@@ -185,6 +186,19 @@ export function endTurns(
     }
     if (falls) {
       lines.push(`${sheet.name}'s extra turn ends at 0 hit points, and they fall unconscious.`);
+    }
+    // A spell's mark on a character fighting on the other side (cast_at_enemy
+    // and a spell attack lay it through the foe view): its end does to them
+    // what it does to an enemy, read through that view (sheet-foe.ts). Only
+    // the marks stood there before: Phantasmal Killer's dread dealt nothing
+    // and never let go, Acid Arrow never burned again.
+    for (const [name, instance] of removed.gone) {
+      const hook = spellTurnEndHook(name);
+      const view = hook ? getFoe(sheet.id) : null;
+      const line = hook && view ? hook(campaign, view, instance) : null;
+      if (line) {
+        lines.push(line);
+      }
     }
   }
   // What an authored subclass feature does as a turn ends (Protective Spirit): authored-hooks.ts.

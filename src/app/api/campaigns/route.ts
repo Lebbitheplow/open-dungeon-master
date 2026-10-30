@@ -3,7 +3,7 @@ import { campaignCreationRefusal, canCreateCampaigns } from "@/lib/shared-host";
 import { currentUser, unauthorized } from "@/lib/auth";
 import { createCampaign, listCampaignsForUser, publicCampaign, type Campaign } from "@/lib/db/campaigns";
 import { playingAsByCampaign } from "@/lib/db/sheets";
-import { homeGlanceFor, partyFacesByCampaign } from "@/lib/db/home-glance";
+import { homeGlanceFor, partyFacesByCampaign, sessionGlances } from "@/lib/db/home-glance";
 import { gameSettingsSchema } from "@/lib/schemas/game-settings";
 import { capabilitiesSnapshot, narrationAvailable, NO_STORYTELLER_MESSAGE, storytellerConfigured } from "@/lib/capabilities";
 import { narratorIsAi } from "@/lib/dm/viewer";
@@ -55,11 +55,13 @@ export async function GET() {
     campaigns.map((campaign) => campaign.id),
     new Map(campaigns.map((campaign) => [campaign.id, campaign.genre])),
   );
+  // Between sessions and the next meeting, for the whole list in one pass.
+  const sessions = sessionGlances(campaigns);
   return Response.json({
     campaigns: campaigns.map((campaign) => ({
       ...publicCampaign(campaign as Campaign),
       playingAs: playingAs.get(campaign.id) ?? null,
-      glance: homeGlanceFor(campaign.id, faces.get(campaign.id) ?? []),
+      glance: homeGlanceFor(campaign.id, faces.get(campaign.id) ?? [], sessions.get(campaign.id)),
     })),
     // The shells' home menus offer New campaign and Quick start only where
     // this account may start one (src/lib/shared-host.ts).

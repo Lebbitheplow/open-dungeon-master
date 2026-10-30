@@ -10,6 +10,7 @@ import { saveNarrationEdit } from "@/lib/dm/narration-edit";
 import { refreshNarrationAudio } from "@/lib/dm/renarrate";
 import { mergeLines } from "@/lib/dm/speech";
 import { personLines } from "@/lib/dm/speech-lines";
+import { refuseBetweenSessions } from "@/lib/dm/session-hold";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -42,6 +43,12 @@ export async function POST(
   const context = await requireMember(campaignId);
   if (isErrorResponse(context)) {
     return context;
+  }
+  // Between sessions the storyteller's queue runs nothing: answered now
+  // rather than left hanging until the next session (session-hold.ts).
+  const between = refuseBetweenSessions(campaignId);
+  if (between) {
+    return between;
   }
   const raw = await request.json().catch(() => ({}));
 

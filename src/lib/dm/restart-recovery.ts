@@ -11,6 +11,7 @@ import { isAgentTurn } from "@/lib/dm/agent-turn";
 import { enqueueDmJob } from "@/lib/dm/queue";
 import { restoreXCardPauses } from "@/lib/dm/safety";
 import { restoreTableBreaks } from "@/lib/dm/table-break";
+import { restoreSessionHolds } from "@/lib/dm/session-hold";
 import { haltDmTurn, resumeDmTurn } from "@/lib/dm/turn";
 
 // What a restart leaves wrong in the DM's state, put right once when a
@@ -42,6 +43,8 @@ export type RestartRecovery = {
   xCards: number;
   // Tables on a break, paused again.
   breaks: number;
+  // Tables between sessions, held again until the next one starts.
+  sessions: number;
   // Turns the last process was running, now failed with a Retry notice.
   halted: number;
   // Parked turns whose last roll was in, resumed through the queue.
@@ -61,15 +64,17 @@ export function recoverDmAfterRestart(): RestartRecovery | null {
   // First, so anything queued below waits at the gate the table left up.
   const xCards = restoreXCardPauses().length;
   const breaks = restoreTableBreaks().length;
+  const sessions = restoreSessionHolds().length;
   const halted = haltInterruptedTurns();
   const { resumed, closed } = resumeOrphanedParkedTurns();
   // The map queue was in memory too: a place still waiting on a render
   // would chart forever under the narration that introduced it.
   const maps = failPendingLocationMaps(RESTART_MAP_FAILED);
-  const recovery = { xCards, breaks, halted, resumed, closed, maps };
+  const recovery = { xCards, breaks, sessions, halted, resumed, closed, maps };
   const done = [
     xCards ? `${xCards} raised X-card(s) raised again` : "",
     breaks ? `${breaks} table break(s) paused again` : "",
+    sessions ? `${sessions} table(s) between sessions held again` : "",
     halted ? `${halted} interrupted turn(s) halted for Retry` : "",
     resumed ? `${resumed} parked turn(s) resumed with the rolls already in` : "",
     closed ? `${closed} parked turn(s) the story has moved past closed` : "",

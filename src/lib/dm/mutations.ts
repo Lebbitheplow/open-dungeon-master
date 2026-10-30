@@ -109,6 +109,7 @@ import { textKey } from "@/lib/language/text-logic";
 import { ITEM_TAGS } from "@/lib/schemas/item-tags";
 import { holdsFeature, isConditionNamed, isNamed } from "@/lib/srd/feature-names";
 import { unknownSheetRef } from "@/lib/dm/rolls";
+import { classWords } from "@/lib/sheet-words";
 
 // DM stat authority: the model changes sheets ONLY through these tools.
 // Every mutation is server-clamped, audit-logged, and published live.
@@ -1775,7 +1776,7 @@ export function applyDmMutation(
           if (ceiling && current >= ceiling.count) {
             return {
               result: {
-                error: `${sheet.name} already has ${current} ${ceiling.label}, the most a level ${sheet.level} ${sheet.class} may hold. They must give one up first: ask the player which, then call learn_spell with action=remove for the spell they drop.`,
+                error: `${sheet.name} already has ${current} ${ceiling.label}, the most a level ${sheet.level} ${classWords(sheet.class)} may hold. They must give one up first: ask the player which, then call learn_spell with action=remove for the spell they drop.`,
                 retry: true,
               },
             };

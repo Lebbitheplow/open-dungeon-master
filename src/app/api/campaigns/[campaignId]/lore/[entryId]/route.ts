@@ -15,6 +15,7 @@ import {
   type WorldLoreCategory,
 } from "@/lib/dm/world-lore-logic";
 import { isUploadedImagePath, isUploadedPdfPath } from "@/lib/uploads";
+import { publishEphemeral } from "@/lib/events";
 import { recordsChanged } from "@/lib/workshop/record-events";
 
 export const runtime = "nodejs";
@@ -93,6 +94,9 @@ export async function PATCH(
     void ingestLoreAttachment(updated).catch((error) => console.error("[lore] pdf ingest failed", error));
   }
   recordsChanged(campaignId, "lore", "world");
+  // The Lore panel at every seat reads lore_updated; records_changed reaches
+  // only the story's seats, so an entry shown to the party showed to nobody.
+  publishEphemeral(campaignId, "lore_updated", {});
   return Response.json({ entry: updated });
 }
 
@@ -108,5 +112,8 @@ export async function DELETE(
   dropLoreAttachment(campaignId, entryId);
   deleteLoreEntry(entryId);
   recordsChanged(campaignId, "lore", "world");
+  // The Lore panel at every seat reads lore_updated; records_changed reaches
+  // only the story's seats, so an entry shown to the party showed to nobody.
+  publishEphemeral(campaignId, "lore_updated", {});
   return Response.json({ ok: true });
 }

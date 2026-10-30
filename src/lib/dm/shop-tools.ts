@@ -658,12 +658,19 @@ export function shopsBlock(campaign: Campaign): string {
     return "";
   }
   const instant = getClock(campaign.id).instant;
+  let restocked = false;
   const shops = listShopsAt(campaign.id, location.id, location.name).map((shop) => {
     // A shop past its restock day fills its shelves again as the party
     // walks in, at the same prices it opened with.
-    const fresh = restockDue(shop, instant, MINUTES_PER_DAY) ? restockShop(shop, instant) : shop;
+    const due = restockDue(shop, instant, MINUTES_PER_DAY);
+    restocked ||= due;
+    const fresh = due ? restockShop(shop, instant) : shop;
     return { ...fresh, keeperName: fresh.keeperNpcId ? getNpcById(fresh.keeperNpcId)?.name ?? "" : "" };
   });
+  // An open Market shows the full shelf, not the one the party emptied.
+  if (restocked) {
+    publishShops(campaign.id);
+  }
   const names = new Map(listSheets(campaign.id).map((sheet) => [sheet.id, sheet.name]));
   return renderShopsForPrompt(shops, (id) => names.get(id) ?? "someone no longer here");
 }

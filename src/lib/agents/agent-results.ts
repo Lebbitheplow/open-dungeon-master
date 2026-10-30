@@ -266,6 +266,7 @@ export function campaignForAgent(text: string, max = MAX_RESULT_CHARS, options: 
     activeSheetId: snapshot.activeSheetId ?? "",
     safetyPause: snapshot.safetyPause ?? null,
     tableBreak: snapshot.tableBreak ?? null,
+    sessionHold: snapshot.sessionHold ?? null,
     dmStatus: snapshot.dmStatus ?? null,
     floor,
     // Who the DM waits on before its next turn at a table that waits for
@@ -357,6 +358,7 @@ function statusOf(snapshot: JsonObject, campaign: JsonObject): JsonObject {
     activeSheetId: snapshot.activeSheetId ?? "",
     safetyPause: snapshot.safetyPause ?? null,
     tableBreak: snapshot.tableBreak ?? null,
+    sessionHold: snapshot.sessionHold ?? null,
     dmStatus: snapshot.dmStatus ?? null,
     floor: campaign.floor ?? null,
     tableWait: snapshot.tableWait ?? null,
@@ -426,5 +428,5 @@ function narrowCampaignForAgent(text: string, max: number, view: CampaignView, s
       : "odm_get_messages pages older messages: pass before = olderBefore.",
   };
   const textOut = JSON.stringify(out);
-  return textOut.length <= max ? textOut : boundJson(out, max, new Set(["safetyPause", "tableBreak", "dmStatus", "floor", "caps", "pendingRolls"]));
+  return textOut.length <= max ? textOut : boundJson(out, max, new Set(["safetyPause", "tableBreak", "sessionHold", "dmStatus", "floor", "caps", "pendingRolls"]));
 }

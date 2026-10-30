@@ -1,4 +1,5 @@
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { classDisplayName, speciesName } from "@/lib/characters/class-words";
 
 // The lobby's arrival moment (backlog F27): when a player seats a character,
 // everyone in the lobby sees "Thornwick takes a seat". Read off the sheets
@@ -27,7 +28,7 @@ export function arrivalLine(sheet: Pick<CharacterSheet, "name">) {
 
 // "Hill dwarf · Fighter", as the lobby's party list names them.
 export function arrivalDetail(sheet: Pick<CharacterSheet, "race" | "raceLabel" | "class">) {
-  return `${sheet.raceLabel ?? sheet.race.replaceAll("_", " ")} · ${sheet.class}`;
+  return `${speciesName(sheet)} · ${classDisplayName(sheet.class)}`;
 }
 
 // What the banner knows: every player character it has seen, and the

@@ -96,6 +96,40 @@ export type DeedSeverity = (typeof DEED_SEVERITIES)[number];
 // How far a deed's weight carries: a minor one half, an atrocity double.
 export const SEVERITY_FACTOR: Record<DeedSeverity, number> = { minor: 0.5, serious: 1, atrocity: 2 };
 
+// How a deed lands on whoever it was done to (relationship_beat's victims,
+// issue 580): +1 for the one spared or set free, -1 for the one harmed, and
+// nothing for a deed done to the dead, who keep no bond. Handing a wrongdoer
+// to the law is a kindness to everyone but the wrongdoer.
+const DONE_TO: Record<DeedKind, 1 | -1 | 0> = {
+  mercy: 1,
+  freed_captives: 1,
+  cruelty: -1,
+  betrayal: -1,
+  broke_word: -1,
+  murder_helpless: -1,
+  torture: -1,
+  theft_from_poor: -1,
+  slaving: -1,
+  upheld_law: -1,
+  necromancy: 0,
+  desecration: 0,
+  laid_to_rest: 0,
+};
+
+// A step graver than the same deed on a witness (SEVERITY_FACTOR), and a step
+// past an atrocity for the worst of them.
+const DONE_TO_FACTOR: Record<DeedSeverity, number> = { minor: 1, serious: 2, atrocity: 3 };
+
+// The approval it moves with them. At face value: nobody finds it fitting to
+// be harmed, or minds being spared, whatever their nature, so neither the
+// personality that weighs a witness's view nor the wear of a repeated move
+// softens it. Before victims, a cruelty done to a captive moved everyone who
+// watched and left the captive's own regard untouched. 0 for nobody to land
+// on.
+export function doneToDelta(beat: DeedKind, base: number, severity: DeedSeverity): number {
+  return Math.round(DONE_TO[beat] * Math.abs(base) * DONE_TO_FACTOR[severity]);
+}
+
 // A kindness is never an atrocity: the worst of a kindness is a great one.
 export function deedSeverity(beat: string, raw: string | undefined): DeedSeverity {
   const severity = (DEED_SEVERITIES as readonly string[]).includes(raw ?? "") ? (raw as DeedSeverity) : "serious";

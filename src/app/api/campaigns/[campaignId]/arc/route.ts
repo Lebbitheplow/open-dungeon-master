@@ -10,6 +10,7 @@ import {
   type BeatEdit,
   type EditResult,
 } from "@/lib/dm/arc-edit-logic";
+import { refuseBetweenSessions } from "@/lib/dm/session-hold";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -88,6 +89,12 @@ export async function PATCH(
   const context = await requireStoryAuthority(campaignId);
   if (isErrorResponse(context)) {
     return context;
+  }
+  // An arc edit waits on the storyteller's queue, which runs nothing
+  // between sessions (session-hold.ts): answered now instead.
+  const between = refuseBetweenSessions(campaignId);
+  if (between) {
+    return between;
   }
   const campaign = getCampaignById(campaignId);
   if (!campaign) {

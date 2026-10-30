@@ -158,6 +158,8 @@ export function forgetDepartedSheet(npcId: string) {
 // the table saw it (their conscience's words, or a plain parting). Never a
 // plan one still in the party holds; that is not here at all.
 export type GoneCompanion = {
+  // The sheet they had in the party: the story log keeps their lines theirs.
+  sheetId: string;
   name: string;
   how: string;
   // When they went, for ordering.
@@ -168,6 +170,9 @@ export type GoneCompanion = {
   gender: string;
   // The characters they still cared for as they went (issue 563).
   caresFor: string[];
+  // The sheets they held before an earlier return, so the story log finds
+  // those lines too (src/lib/dm/companion-return.ts).
+  formerSheetIds: string[];
 };
 
 export function goneCompanions(campaignId: string): GoneCompanion[] {
@@ -185,10 +190,11 @@ export function goneCompanions(campaignId: string): GoneCompanion[] {
     if (!departed) {
       continue;
     }
-    const sheet = departed.sheet as { portrait?: { url?: unknown }; race?: unknown; class?: unknown; gender?: unknown; deathSaves?: { dead?: unknown } };
+    const sheet = departed.sheet as { portrait?: { url?: unknown }; race?: unknown; class?: unknown; gender?: unknown; deathSaves?: { dead?: unknown }; formerSheetIds?: unknown };
     const record = companionDeparture(npc.id).gone;
     const how = record?.how ?? (sheet.deathSaves?.dead === true ? "Fell" : "Left the party");
     gone.push({
+      sheetId: npc.companionSheetId,
       name: npc.name,
       how,
       at: departed.at,
@@ -197,6 +203,7 @@ export function goneCompanions(campaignId: string): GoneCompanion[] {
       class: typeof sheet.class === "string" ? sheet.class : "",
       gender: typeof sheet.gender === "string" ? sheet.gender : "",
       caresFor: record?.caresFor ?? [],
+      formerSheetIds: Array.isArray(sheet.formerSheetIds) ? sheet.formerSheetIds.filter((id): id is string => typeof id === "string" && id !== npc.companionSheetId) : [],
     });
   }
   return gone.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));

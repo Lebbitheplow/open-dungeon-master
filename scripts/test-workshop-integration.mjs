@@ -77,6 +77,10 @@ const {
   setWorkshopTargetParty,
 } = await import("../src/lib/db/workshops.ts");
 const { insertLoreEntry, listLoreEntries } = await import("../src/lib/db/lore.ts");
+const { insertQuest, listQuests } = await import("../src/lib/db/quests.ts");
+// The hand-written quests of a campaign's log (an arc's mirror rows aside),
+// by title: where a board's hooks land.
+const handQuests = (campaignId) => listQuests(campaignId).filter((quest) => quest.source === "dm").map((quest) => quest.title);
 const { getHouseRulesText, setHouseRules } = await import("../src/lib/db/rules.ts");
 const { planContentImport, runContentImport } = await import(
   "../src/lib/db/content-import.ts"
@@ -908,8 +912,7 @@ test("every kind of card lands somewhere that already existed", () => {
   // The board says a fight belongs here, not what is in it.
   assert.deepEqual(templates[0].enemies, []);
 
-  const after = getCampaignById(boardTarget.id);
-  assert.deepEqual(after.questLog, ["A missing daughter"]);
+  assert.deepEqual(handQuests(boardTarget.id), ["A missing daughter"]);
 });
 
 test("a secret becomes a DM-only note and nothing the party can read", () => {
@@ -920,7 +923,7 @@ test("a secret becomes a DM-only note and nothing the party can read", () => {
   assert.equal(secret.authorKind, "dm");
   // It must not also be readable as lore or as a quest.
   assert.ok(!listLoreEntries(boardTarget.id).some((entry) => entry.title === secret.title));
-  assert.ok(!getCampaignById(boardTarget.id).questLog.includes(secret.title));
+  assert.ok(!listQuests(boardTarget.id).some((quest) => quest.title === secret.title));
 });
 
 test("the board becomes the campaign's spine when it has none", () => {
@@ -959,7 +962,7 @@ test("a second import of the same board keeps what the first one compiled", () =
   assert.ok(titles.includes("The mill"));
   assert.ok(!titles.includes("The mill (2)"));
   assert.equal(listEncounterTemplates(boardTarget.id).length, 1);
-  assert.deepEqual(getCampaignById(boardTarget.id).questLog, ["A missing daughter"]);
+  assert.deepEqual(handQuests(boardTarget.id), ["A missing daughter"]);
 });
 
 test("asked for second copies, a board's collisions are numbered rather than failing", () => {
@@ -1359,7 +1362,6 @@ const { cloneCampaign } = await import("../src/lib/db/campaign-clone.ts");
 const { getImportSourceForUser, listImportSourcesForUser } = await import(
   "../src/lib/db/import-sources.ts"
 );
-const { setQuestLog } = await import("../src/lib/db/campaigns.ts");
 const { duplicateCharacter, instantiateIntoCampaign, listAssignmentsForUser } = await import(
   "../src/lib/db/characters.ts"
 );
@@ -1413,7 +1415,7 @@ test("a cloned workshop keeps its storyboard as a storyboard, arrows and all", (
   assert.ok(!copied.some((beat) => originalIds.has(beat.id)));
 });
 
-setQuestLog(campaign.id, ["Find the miller's daughter"]);
+insertQuest({ campaignId: campaign.id, title: "Find the miller's daughter" });
 const campaignClone = cloneCampaign(userId, campaign.id);
 
 test("cloning a campaign carries the world and the quest log, not the seats", () => {
@@ -1422,7 +1424,8 @@ test("cloning a campaign carries the world and the quest log, not the seats", ()
   assert.equal(copy.kind, "campaign");
   assert.equal(copy.status, "lobby", "a copy starts in the lobby, not mid-game");
   assert.notEqual(copy.inviteCode, campaign.inviteCode, "the room code must be its own");
-  assert.deepEqual(copy.questLog, ["Find the miller's daughter"]);
+  assert.deepEqual(handQuests(copy.id), handQuests(campaign.id), "the copy's quest log is the source's");
+  assert.ok(handQuests(copy.id).includes("Find the miller's daughter"));
   assert.equal(listLoreEntries(copy.id).length, listLoreEntries(campaign.id).length);
   assert.equal(
     db.prepare(`SELECT COUNT(*) AS n FROM campaign_members WHERE campaign_id = ?`).get(copy.id).n,

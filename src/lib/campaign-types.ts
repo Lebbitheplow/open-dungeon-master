@@ -1,3 +1,4 @@
+import type { NextSession } from "@/lib/dm/session-hold-logic";
 import type { CampaignKind } from "@/lib/workshop/kind";
 import { OFFER_NOTE_PREFIX } from "@/lib/dm/proposal-logic";
 import { PACT_REVEAL_PREFIX } from "@/lib/dm/pact-logic";
@@ -87,6 +88,10 @@ export type HomeGlance = {
   recapAt: string | null;
   sceneImage: string | null;
   faces: HomeGlanceFace[];
+  // Between sessions, and when the table meets next (issue 586): the home
+  // says "between sessions" and the date instead of a bare "active". Absent
+  // from a host older than the sessions feature.
+  session?: { between: boolean; next: NextSession | null };
 };
 
 // What a player is doing when they hit send. Shared by the composer and the

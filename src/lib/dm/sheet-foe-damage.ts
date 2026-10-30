@@ -24,6 +24,7 @@ import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { publishPersisted } from "@/lib/events";
 import { effectiveMaxHp } from "@/lib/dm/condition-logic";
 import { stableDeathTrack } from "@/lib/dm/death-logic";
+import { killOutright } from "@/lib/dm/death";
 import { healthState } from "@/lib/bestiary/health";
 import { applyPcDamage } from "@/lib/dm/pc-damage";
 
@@ -57,10 +58,7 @@ export function applySheetFoeDamage(campaign: Campaign, turn: DmTurn, view: Enco
     return { ok: true, name: sheet.name, hp: `0/${max}`, damageApplied: 0, note: `${sheet.name} is already dead.` };
   }
   if (blow.death) {
-    const killed = patchSheet(sheet.id, { currentHp: 0, deathSaves: { successes: 0, failures: 3, stable: false, dead: true } });
-    if (killed) {
-      publishPersisted(campaign.id, "sheet_updated", { sheet: killed });
-    }
+    killOutright(campaign, turn.id, sheet, (blow.reason ?? "").trim().slice(0, 120) || "killed outright");
     return { ok: true, name: sheet.name, hp: `0/${max}`, health: healthState(0, max), dead: true, dropped: true, note: `${sheet.name} dies.` };
   }
   const amount = Math.max(0, Math.floor(blow.amount));

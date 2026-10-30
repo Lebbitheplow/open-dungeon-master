@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { DEPART_MS, DEPARTING_KEPT_MS, type DepartingSheet, type GoneEntry } from "@/app/campaigns/[campaignId]/departing";
+import { DEPART_MS, DEPARTING_KEPT_MS, type DepartingSheet } from "@/app/campaigns/[campaignId]/departing";
+import { useGoneCompanions } from "@/app/campaigns/[campaignId]/useGoneCompanions";
 import { SectionHead } from "@/components/ui/SectionHead";
 import { cn } from "@/lib/cn";
 import { textKey } from "@/lib/language/text-logic";
@@ -29,27 +30,13 @@ export function PartyGone({
   worldPack: string;
 }) {
   const packArt = usePackArt(worldPack);
-  const [gone, setGone] = useState<GoneEntry[]>([]);
   // Departures whose dimming has run: their card is gone and their row is
   // the one that just arrived.
   const [settled, setSettled] = useState<ReadonlySet<string>>(() => new Set());
   const [arrived, setArrived] = useState("");
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
-  useEffect(() => {
-    let live = true;
-    void fetch(`/api/campaigns/${campaignId}/companions/gone`)
-      .then((response) => (response.ok ? response.json() : null))
-      .then((body: { gone?: GoneEntry[] } | null) => {
-        if (live && body?.gone) {
-          setGone(body.gone);
-        }
-      })
-      .catch(() => {});
-    return () => {
-      live = false;
-    };
-  }, [campaignId, refreshKey, settled]);
+  const gone = useGoneCompanions(campaignId, `${refreshKey}:${settled.size}`);
 
   // Read once per render: the moment a card has been leaving for.
   const [now] = useState(() => Date.now());

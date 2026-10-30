@@ -29,6 +29,8 @@ export type SummaryInput = {
   klass?: string;
   subclass?: string;
   level: number;
+  // Asked on the class step, above the cards it changes, so its row says it.
+  gender?: string;
   abilities: AbilityScores | null;
   casts: boolean;
   cantrips: string[];
@@ -83,9 +85,13 @@ export function summaryRows(input: SummaryInput): SummaryRow[] {
     {
       key: "calling",
       label: "Class",
-      lines: input.klass
-        ? [`${input.klass}, level ${input.level}`, ...(input.subclass ? [input.subclass] : [])]
-        : ["No class chosen"],
+      lines: [
+        ...(input.klass
+          ? [`${input.klass}, level ${input.level}`, ...(input.subclass ? [input.subclass] : [])]
+          : ["No class chosen"]),
+        // Said only once chosen: it is optional, and owes nothing unset.
+        ...(input.gender ? [`Gender: ${input.gender}`] : []),
+      ],
       owed: owedPicks(input.owed.calling),
     },
     {

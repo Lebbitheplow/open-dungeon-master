@@ -84,4 +84,19 @@ test("the party recap never sees a secret; the DM recap sees the arcs", () => {
   assert.doesNotMatch(renderRecapMaterial(party), /secret/);
 });
 
+test("the party recap keeps a fact one character learned alone to the DM's track (theembertsongroup-arch on issue 586)", () => {
+  const input = {
+    facts: [
+      { subject: "the ferry", fact: "It runs at dawn.", knownBy: "party" },
+      { subject: "Brann", fact: "His brother sold the gate's key.", knownBy: ["char-brann"] },
+    ],
+    quests: [],
+    arcs: [],
+  };
+  const party = recapMaterial(input, false);
+  assert.deepEqual(party.facts, ["the ferry: It runs at dawn."], "a seat-private fact reached every seat's recap");
+  const dm = recapMaterial(input, true);
+  assert.deepEqual(dm.facts, ["the ferry: It runs at dawn.", "Brann: His brother sold the gate's key. (only some of the party know this)"]);
+});
+
 console.log(`transcript: ${passed} tests passed`);

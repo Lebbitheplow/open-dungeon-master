@@ -36,7 +36,19 @@ import { createSheetSchema, type CharacterSheet, type CreateSheetInput } from "@
 // Null when the name is nobody who left, or their sheet no longer passes
 // (a rule changed, a homebrew row was deleted): the DM's own build stands.
 
-export type Returning = { input: CreateSheetInput; level: number; leftAtLevel: number; npcId: string };
+// `formerSheetIds`: the sheets they held in this party before, the one they
+// left with last. The return builds a new sheet, and the chronicle's earlier
+// lines (a card played for them, their speech) name the old ones.
+export type Returning = { input: CreateSheetInput; level: number; leftAtLevel: number; npcId: string; formerSheetIds: string[] };
+
+// The ids a departed companion's sheet answered to: its own, and any it
+// already carried from an earlier return. Read before the sheet is parsed
+// as input, which keeps neither.
+export function formerIdsOf(departed: Record<string, unknown>, linkedSheetId: string | null): string[] {
+  const carried = Array.isArray(departed.formerSheetIds) ? departed.formerSheetIds.filter((id): id is string => typeof id === "string" && id.length > 0) : [];
+  const own = typeof departed.id === "string" && departed.id ? departed.id : (linkedSheetId ?? "");
+  return [...new Set([...carried, ...(own ? [own] : [])])];
+}
 
 // The level a departed companion comes back at: the experience it left
 // with (at least what its level needs) plus what the party earned since.
@@ -68,7 +80,13 @@ export function returningCompanion(campaign: Campaign, name: string, level: numb
   if (!admitted.ok) {
     return null;
   }
-  return { input: admitted.sheet, level: at, leftAtLevel: found.departed.level, npcId: found.npc.id };
+  return {
+    input: admitted.sheet,
+    level: at,
+    leftAtLevel: found.departed.level,
+    npcId: found.npc.id,
+    formerSheetIds: formerIdsOf(found.departed.sheet, found.npc.companionSheetId),
+  };
 }
 
 // Once they are back, the live sheet is who they are: the copy goes, and the

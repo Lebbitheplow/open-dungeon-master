@@ -106,6 +106,32 @@ await test("a homebrew race and background read as their names: on the sheet, to
   assert.equal(classWords("fighter"), "fighter");
 });
 
+await test("the table's join note and the GM's lines name a species and class in words, never their ids", async () => {
+  // The 0.31.1 playtest: "has joined the party as Mara Fen, a human
+  // plague_doctor"; a hyphenated pack id ("bhain-kwai") kept its hyphen.
+  assert.equal(classWords("plague_doctor"), "plague doctor");
+  assert.equal(raceWords({ race: "bhain-kwai" }), "bhain kwai");
+  assert.equal(raceWords({ race: "half_elf" }), "half elf");
+  const { announceMidGameJoin } = await import("../src/lib/characters/mid-game-join.ts");
+  const { listRecentMessages } = await import("../src/lib/db/messages.ts");
+  announceMidGameJoin({ campaign: world.campaign(), user: world.owner }, { name: "Mara Fen", race: "half_elf", class: "plague_doctor", backstory: "" });
+  const note = listRecentMessages(world.campaignId, 5).find((message) => message.content.includes("Mara Fen"))?.content ?? "";
+  assert.match(note, /as Mara Fen, a half elf plague doctor\./, note);
+});
+
+await test("a content-pack species is painted from the builder's name for it, not its id", () => {
+  if (!world.hasPack) {
+    console.log("  (no content pack: skipped)");
+    return;
+  }
+  // "bhain kwai" tells the painter nothing; the 0.31.1 playtest's minotaur
+  // was given a human face.
+  const library = { userId: world.owner.id, race: "bhain-kwai", class: "fighter", background: "soldier" };
+  assert.equal(libraryLook({ ...library, sheet: { ...library, gender: "Male", appearance: "", backstory: "" } }).race, "Minotaur (Bhain Kwai)");
+  const hero = world.addHero({ class: "fighter", race: "bhain-kwai", gender: "Male" });
+  assert.match(characterPortraitPrompt(companionLook(world.sheet(hero.id), { personality: "" })), /Male Minotaur \(Bhain Kwai\) fighter/);
+});
+
 await test("a drafted hero keeps the gender the GM gave them, and none when it named none", () => {
   assert.match(draftSystemPrompt(1, { classes: ["fighter"], races: ["human"], backgrounds: ["soldier"] }), /"gender": "Female" \| "Male" \| "Nonbinary"/);
   const hero = { name: "Mira", concept: "a scout", class: "fighter", race: "human", background: "soldier", backstory: "She ran.", role: "tank" };

@@ -4,6 +4,8 @@ import { requestDmTurn } from "@/lib/dm/loop";
 import { settleTableWait } from "@/lib/dm/table-wait";
 import { pauseTable, resumeTable, tableBreakOn } from "@/lib/dm/table-break";
 import { mayResumeBreak } from "@/lib/dm/table-break-logic";
+import { sessionHoldOn } from "@/lib/dm/session-hold";
+import { sessionRefusal } from "@/lib/dm/session-hold-logic";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,6 +31,11 @@ export async function POST(
   }
   if (context.campaign.status !== "active") {
     return Response.json({ error: "The adventure is not running, so there is nothing to pause." }, { status: 400 });
+  }
+  // Between sessions play is already held, until the next session starts.
+  const between = sessionHoldOn(campaignId);
+  if (between) {
+    return Response.json({ error: sessionRefusal(between) }, { status: 400 });
   }
   const { tableBreak, already } = pauseTable(campaignId, context.user);
   // A table waiting for everyone stops its clock and drops its banner until

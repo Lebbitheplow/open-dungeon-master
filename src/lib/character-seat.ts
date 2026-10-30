@@ -5,6 +5,7 @@ import { getSheetForUser, listSheets } from "@/lib/db/sheets";
 import { publishEphemeral } from "@/lib/events";
 import { initiativeCharacter, ownedCharacters } from "@/lib/player-characters";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { heroFell } from "@/lib/characters/fallen-logic";
 
 // A player fielding several characters has three different "my character"s
 // (src/lib/player-characters.ts): the ones they own, the one they have
@@ -61,7 +62,9 @@ export function actingSheetFor(
 export function seatAddedSheet(campaign: Campaign, userId: string, sheetId: string): boolean {
   if (campaign.gameSettings.multiCharacter === "one_active" && getActiveEncounter(campaign.id)) {
     const fielded = getSheetForUser(campaign.id, userId);
-    if (fielded && fielded.id !== sheetId) {
+    // A fielded hero who has fallen holds the seat for nobody: their
+    // replacement takes it at once (src/lib/characters/fallen-logic.ts).
+    if (fielded && fielded.id !== sheetId && !heroFell(fielded)) {
       return false;
     }
   }

@@ -1,4 +1,4 @@
-// Issue 501: "Drawn to", beside Gender in the builder's Identity step and in
+// Issue 501: "Drawn to", beside the Gender line in the builder's Identity step and in
 // the NPC editor's "On the surface": three chips (Women, Men, Nonbinary
 // people) and a short note. A labelled group, each chip a pressed-or-not
 // button at a finger's size that works by keyboard, legible by night and by

@@ -12,6 +12,7 @@ import {
   filedScope,
   questionProblem,
 } from "@/lib/dm/ask-logic";
+import { refuseBetweenSessions } from "@/lib/dm/session-hold";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -40,6 +41,12 @@ export async function POST(
   const context = await requireVoice(campaignId);
   if (isErrorResponse(context)) {
     return context;
+  }
+  // Between sessions the storyteller's queue runs nothing: answered now
+  // rather than left hanging until the next session (session-hold.ts).
+  const between = refuseBetweenSessions(campaignId);
+  if (between) {
+    return between;
   }
   const { user } = context;
 

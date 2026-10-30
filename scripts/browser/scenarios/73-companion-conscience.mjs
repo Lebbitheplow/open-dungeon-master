@@ -46,6 +46,9 @@ export default {
     const row = page.locator(`${root}[data-settings-row="conscience"]`).locator("visible=true").first();
     await eventually(() => row.count(), { timeoutMs: 30_000, label: "the Conscience row" });
     await row.scrollIntoViewIfNeeded();
+    // Measured once the group has finished opening: mid-transition the
+    // picker read 38.8px on a phone and failed a run now and then.
+    await untilStill(page);
     check(/Conscience/.test((await row.textContent()) ?? ""), "a visible label");
     const picker = row.locator(`[aria-label="Companion conscience"]`).first();
     check((await picker.count()) > 0, "the picker is named for screen readers");

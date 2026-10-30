@@ -3,6 +3,7 @@
 import { Flag, Loader2, Pencil } from "lucide-react";
 import { useState } from "react";
 import { appConfirm } from "@/components/ui/ConfirmDialog";
+import { hostOffers, useCapabilities } from "@/lib/use-capabilities";
 import type { CampaignDifficulty, CampaignStatus } from "@/lib/campaign-types";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
@@ -178,6 +179,9 @@ export function SessionSettings({
 // shuts the room code; the transcript stays to be read. There is no way back
 // to "active", so the confirm says so plainly.
 function EndCampaign({ campaignId, title, ended }: { campaignId: string; title: string; ended: boolean }) {
+  // End the session is the everyday stop (issue 586); this one is for good.
+  const capabilities = useCapabilities();
+  const sessions = capabilities !== null && hostOffers(capabilities, "sessions");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -229,6 +233,7 @@ function EndCampaign({ campaignId, title, ended }: { campaignId: string; title: 
       <p className="mb-2 text-xs text-stone-500">
         When the story is done: library characters take their progress home, and the table
         closes. The transcript stays readable.
+        {sessions ? " To stop for tonight and play on another day, use End the session at the top of the table instead." : ""}
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <button

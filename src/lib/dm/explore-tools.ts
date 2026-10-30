@@ -321,7 +321,8 @@ export function handleExploreCall(
     const lines = resolved.flatMap((entry) => spendDowntime(campaign, turn.id, entry, args.days));
     const now = describeInstant(moved.clock.calendar, moved.clock.instant);
     tableNote(campaign, `${describeDuration(moved.minutes)} of downtime passes. It is now ${now}.`, "cue-bell");
-    return { ok: true, days: args.days, now, results: lines, note: "Narrate the days from these results." };
+    // The death saves the days rolled for the dying, already at the table.
+    return { ok: true, days: args.days, now, results: lines, ...(moved.deathSaves.length ? { deathSaves: moved.deathSaves } : {}), note: "Narrate the days from these results." };
   }
   if (name === "afflict") {
     const args = parse(afflictSchema, rawArguments);

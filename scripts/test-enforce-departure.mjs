@@ -83,7 +83,7 @@ async function get(world, user, route, query = "") {
 const lastLine = (world) => messages.listRecentMessages(world.campaignId, 4).map((message) => message.content).join("\n");
 
 await test("a red-line atrocity walks a timid companion out at once at a Leave table, and her sheet is kept", async () => {
-  const { world, row, atrocity, departure, still } = await table({ axes: { boldness: -2 } });
+  const { world, row, atrocity, departure, still, sheet } = await table({ axes: { boldness: -2 } });
   const done = await atrocity();
   assert.equal(done.ok, true, done.error);
   assert.equal(done.result.departed, "Walked out on the party");
@@ -97,6 +97,61 @@ await test("a red-line atrocity walks a timid companion out at once at a Leave t
   const gone = await get(world, world.owner, "campaigns/[campaignId]/companions/gone");
   assert.equal(gone.status, 200);
   assert.deepEqual(gone.body.gone.map((entry) => [entry.name, entry.how]), [["Seren", "Walked out on the party"]]);
+  // The sheet she had in the party: the story log keeps her lines hers.
+  assert.equal(gone.body.gone[0].sheetId, sheet.id);
+});
+
+// A companion who comes back is a new sheet (finalizeNewCompanion), and the
+// chronicle's lines from before they left name the sheet they had then: the
+// card the player played for her, her speech, the GM's own history.
+await test("a companion who leaves and comes back keeps the lines from before she left: her card, her speech and the GM's history find her live sheet", async () => {
+  const { world, pc, sheet, atrocity } = await table({ axes: { boldness: -2 } });
+  const { transcriptSheets } = await import("../src/app/campaigns/[campaignId]/departing.ts");
+  const { speakerFaces } = await import("../src/lib/speaker-faces.ts");
+  const card = messages.insertCampaignMessage({
+    campaignId: world.campaignId,
+    seq: campaigns.allocateSeq(world.campaignId),
+    authorType: "player",
+    content: "I loose an arrow at the captain with my Longbow.",
+    userId: pc.userId,
+    characterId: sheet.id,
+  });
+  const done = await atrocity();
+  assert.equal(done.result.departed, "Walked out on the party");
+  assert.equal(world.sheet(sheet.id), null, "her sheet left the party");
+  const back = await world.invoke("add_companion", { name: "Seren", class: "paladin", gender: "Female", personality: "Home.", kind: "party" });
+  assert.equal(back.ok, true, back.error);
+  assert.equal(back.result.returned, true);
+  const live = world.sheets().find((entry) => entry.name === "Seren");
+  assert.notEqual(live.id, sheet.id, "a return builds a new sheet");
+  assert.deepEqual(live.formerSheetIds, [sheet.id], "and records the one she had");
+  // The story log: the card and her speech find the live sheet.
+  const byId = transcriptSheets(world.sheets(), [], []);
+  assert.equal(byId.get(sheet.id)?.id, live.id);
+  assert.equal(byId.get(sheet.id)?.name, "Seren");
+  assert.deepEqual(speakerFaces({ kind: "pc", id: sheet.id, name: "Seren" }, byId), speakerFaces({ kind: "pc", id: live.id, name: "Seren" }, byId));
+  // The GM's history named the old line "Unknown".
+  const history = buildDmMessages({ campaign: world.campaign(), members: campaigns.listMembers(world.campaignId), sheets: world.sheets(), recentRolls: [], storySummary: "", contextLimitTokens: 32_000 }, [card]);
+  const line = history.map((entry) => entry.content).find((content) => content.includes("Longbow")) ?? "";
+  assert.match(line, /Seren/, line);
+  assert.doesNotMatch(line, /Unknown/, line);
+  // Server-only: no sheet edit writes it, and no input schema carries it.
+  const { patchSheet } = await import("../src/lib/db/sheets.ts");
+  const { createSheetSchema, patchSheetSchema, fullPatchSheetSchema } = await import("../src/lib/schemas/sheet.ts");
+  patchSheet(live.id, { formerSheetIds: [], notes: "edited" });
+  assert.deepEqual(world.sheet(live.id).formerSheetIds, [sheet.id], "an edit leaves it");
+  assert.ok(!("formerSheetIds" in (createSheetSchema.safeParse({ ...live }).data ?? {})), "a stored copy drops it");
+  for (const schema of [patchSheetSchema, fullPatchSheetSchema]) {
+    assert.ok(!("formerSheetIds" in (schema.safeParse({ formerSheetIds: ["x"] }).data ?? {})), "a sheet edit drops it");
+  }
+  // Leaving again: the Gone row names both sheets she held.
+  await world.invoke("relationship_beat", { characterId: pc.id, subject: "Seren", beat: "murder_helpless", severity: "atrocity", note: "Again." });
+  const gone = await get(world, world.owner, "campaigns/[campaignId]/companions/gone");
+  const row = gone.body.gone.find((entry) => entry.name === "Seren");
+  assert.ok(row, JSON.stringify(gone.body));
+  assert.equal(row.sheetId, live.id);
+  assert.deepEqual(row.formerSheetIds, [sheet.id]);
+  assert.equal(transcriptSheets([], [], gone.body.gone).get(sheet.id)?.name, "Seren", "the first stint's lines too");
 });
 
 await test("a composed companion holds a plan, says nothing of it, and slips away at the night watch", async () => {
@@ -531,6 +586,48 @@ await test("at a table a person runs, that person reads the plan on the Bonds ta
   assert.match(dm.body.relationships.find((entry) => entry.subjectName === "Seren").conscience.plan, /slip away/);
   const player = await get(world, leadUser, "campaigns/[campaignId]/relationships");
   assert.doesNotMatch(player.text, PLAN, "its lead plays a character: never theirs");
+});
+
+await test("two companions gathering help against the party are no rivals: the agency dice write no rivalry between them", async () => {
+  const world = await openWorld();
+  world.addHero({ name: "Kael" });
+  const { avengeGoal } = await import("../src/lib/dm/departure-logic.ts");
+  const gone = [];
+  for (const name of ["Brother Aldous Penn", "Dame Seraphine Vale"]) {
+    assert.equal((await world.invoke("set_npc", { name })).ok, true);
+    const npc = npcs.getNpcByName(world.campaignId, name);
+    npcs.patchNpcAgency(npc.id, { goals: { session: { text: avengeGoal(name), progress: 0, target: 3 } } });
+    gone.push(npc.id);
+  }
+  // A step on each goal, then a contest a rivalry would settle.
+  world.dice(1, 1, 5, 15);
+  advanceNpcAgency(world.campaignId, "", { tickPressureCounters: false });
+  world.clearDice();
+  const rivalries = listActiveFacts(world.campaignId).filter((fact) => /rivalry/.test(fact.fact));
+  assert.deepEqual(rivalries.map((fact) => fact.fact), []);
+  for (const id of gone) {
+    assert.deepEqual(npcs.getNpcById(id).agency.relations, [], "neither resents the other");
+  }
+});
+
+await test("two strangers at the ford the party stands at are no rivals over it: the agency dice write no rivalry", async () => {
+  const world = await openWorld();
+  world.addHero({ name: "Kael" });
+  assert.equal((await world.invoke("move_party", { name: "Lower Ford", visionClear: false })).ok, true);
+  const goals = {
+    "Mara Fen": "Get her family and their stuck cart safely out of the ford.",
+    "Briar-road Raider Captain": "Leave the ford with the stolen strongbox.",
+  };
+  for (const [name, text] of Object.entries(goals)) {
+    assert.equal((await world.invoke("set_npc", { name })).ok, true);
+    const npc = npcs.getNpcByName(world.campaignId, name);
+    npcs.patchNpcAgency(npc.id, { goals: { session: { text, progress: 0, target: 3 } } });
+  }
+  // A step on each goal, then a contest a rivalry would settle.
+  world.dice(1, 1, 5, 15);
+  advanceNpcAgency(world.campaignId, "", { tickPressureCounters: false });
+  world.clearDice();
+  assert.deepEqual(listActiveFacts(world.campaignId).filter((fact) => /rivalry/.test(fact.fact)).map((fact) => fact.fact), []);
 });
 
 finish();

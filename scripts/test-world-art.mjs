@@ -98,6 +98,16 @@ test("a character resolves to the class picture first, then the race, then nothi
   assert.equal(packCharacterArtKey([], { race: "human", class: "fighter" }), null);
 });
 
+test("a species with a face of its own never wears the pack's class picture", () => {
+  // A pack's class art draws someone else's head (PR #605's rule for the
+  // bundled plates): the pack's own picture of the species, else nothing, so
+  // the bundled species plate draws them.
+  const keys = ["class-fighter", "race-tortle"];
+  assert.equal(packCharacterArtKey(keys, { race: "bhain-kwai", class: "fighter" }), null);
+  assert.equal(packCharacterArtKey(keys, { race: "tortle", class: "fighter" }), "race-tortle");
+  assert.equal(packCharacterArtKey(keys, { race: "hill_dwarf", class: "fighter" }), "class-fighter", "a near-human species keeps its class picture");
+});
+
 test("the schema accepts art as image data URLs and refuses anything else", () => {
   assert.ok(worldPackSchema.safeParse(manifest({ art: { cover: PIXEL_WEBP } })).success);
   for (const bad of [

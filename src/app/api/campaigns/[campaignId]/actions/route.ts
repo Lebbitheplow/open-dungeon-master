@@ -11,13 +11,11 @@ import {
   claimRecap,
   getFloor,
   combatOwnsFloor,
-  setFloor,
-  type Floor,
 } from "@/lib/db/campaigns";
 import { countMessages, insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
 import { getSheetById, getSheetForUser, listSheets } from "@/lib/db/sheets";
 import { dominatedRefusal } from "@/lib/dm/companion-command";
-import { floorAfterRelease } from "@/lib/dm/encounter-tools";
+import { answerSpotlight } from "@/lib/dm/spotlight-answer";
 import { requestDmTurn } from "@/lib/dm/loop";
 import { settleTableWait, waitsForTable } from "@/lib/dm/table-wait";
 import { holdsPostForTable } from "@/lib/dm/table-wait-logic";
@@ -27,6 +25,8 @@ import { invokeEngine } from "@/lib/dm/invoke";
 import { claimNarrationSeq } from "@/lib/dm/narration-slot";
 import { enqueueDmJob } from "@/lib/dm/queue";
 import { runResumeRecap } from "@/lib/dm/recap";
+import { RECAP_AFTER_MS } from "@/lib/dm/session-hold-logic";
+import { sessionHoldOn } from "@/lib/dm/session-hold";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { directCardCall, parseMessageIntent } from "@/lib/dm/intent-logic";
 import { addressesDm } from "@/lib/dm/ooc-question";
@@ -240,24 +240,7 @@ export async function POST(
     }
     return Response.json({ resolved: true });
   }
-  let spotlightStillWaiting = false;
-  if (kind !== "ooc" && floor.mode === "spotlight") {
-    const responded =
-      floor.userIds.includes(user.id) && !floor.respondedUserIds.includes(user.id)
-        ? [...floor.respondedUserIds, user.id]
-        : floor.respondedUserIds;
-    const allAnswered = floor.userIds.every((id) => responded.includes(id));
-    // Everyone answered: back to the fight's floor if one is running, else
-    // the open table.
-    const nextFloor: Floor = allAnswered
-      ? floorAfterRelease(campaignId)
-      : { ...floor, respondedUserIds: responded };
-    if (allAnswered || responded !== floor.respondedUserIds) {
-      setFloor(campaignId, nextFloor);
-      publishPersisted(campaignId, "floor_changed", { floor: nextFloor });
-    }
-    spotlightStillWaiting = !allAnswered;
-  }
+  const spotlightStillWaiting = kind !== "ooc" && answerSpotlight(campaignId, floor, user.id);
 
   const content =
     kind === "say"
@@ -272,7 +255,9 @@ export async function POST(
   // this action's DM turn (claimRecap makes it at most once per gap).
   const lastMessages = listRecentMessages(campaignId, 1);
   const lastMessage = lastMessages[lastMessages.length - 1];
-  const RECAP_IDLE_MS = 6 * 60 * 60 * 1000;
+  // The same gap a session started after a long one is recapped for
+  // (src/lib/dm/session-hold-logic.ts).
+  const RECAP_IDLE_MS = RECAP_AFTER_MS;
   // Assisted mode, DM stepped away: the AI answers for the counted stretch
   // they handed over, so the branch below is the one that already exists for
   // an AI-run table rather than a third path.
@@ -284,8 +269,11 @@ export async function POST(
   const humanDm = hasHumanDm(campaignSeats(campaign)) && !covering;
   // A person's table gets the recap too: it is a utility call that wakes no
   // DM turn, and recap.ts writes the DM's own secret track for exactly them.
+  // Between sessions the recap is the next session's to open with
+  // (src/lib/dm/session-hold.ts startSession), not table talk's.
   if (
     lastMessage &&
+    !sessionHoldOn(campaignId) &&
     Date.now() - new Date(lastMessage.createdAt).getTime() > RECAP_IDLE_MS &&
     claimRecap(campaignId, lastMessage.seq)
   ) {

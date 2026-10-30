@@ -1,10 +1,11 @@
 import { z } from "zod";
 import { rollCard } from "@/lib/dm/roll-card";
 import { allocateSeq, campaignSeats, countPartySlots, type Campaign } from "@/lib/db/campaigns";
-import { createSheet, listSheets, markSheetAsCompanion, setCompanionCommander } from "@/lib/db/sheets";
+import { createSheet, listSheets, markSheetAsCompanion, recordFormerSheetIds, setCompanionCommander } from "@/lib/db/sheets";
 import { defaultCommander } from "@/lib/dm/companion-command";
 import { createCompanionUser, deleteCompanionUser } from "@/lib/db/users";
 import {
+  endRelationshipsWithSubject,
   partRelationshipsWithSubject,
   rejoinRelationshipsWithSubject,
 } from "@/lib/db/relationships";
@@ -22,7 +23,8 @@ import { occupiedTiles } from "@/lib/battlemap/view";
 import { spliceIntoOrder } from "@/lib/dm/encounter-logic";
 import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
 import { insertCampaignMessage } from "@/lib/db/messages";
-import { publishPersisted, publishWithSeq } from "@/lib/events";
+import { publishEphemeral, publishPersisted, publishWithSeq } from "@/lib/events";
+import { openPartyBonds } from "@/lib/dm/party-bonds";
 import { defaultRng } from "@/lib/dice";
 import { characterInitiativeExpression } from "@/lib/dm/contest-roll";
 import {
@@ -62,6 +64,7 @@ import { unknownSheetRef } from "@/lib/dm/rolls";
 import { ALIGNMENT_CODES, VALUES_PARAMETER, valuesArgSchema } from "@/lib/dm/companion-values-logic";
 import { setCompanionValues } from "@/lib/db/companion-conscience";
 import { seedAgenda } from "@/lib/dm/companion-agenda";
+import { classWords } from "@/lib/sheet-words";
 
 // AI companion party members: sheets the DM recruits, plays, and dismisses.
 // A companion is a full character sheet owned by an unloginable bot user,
@@ -334,14 +337,14 @@ export function handleAddCompanion(
   if (kind === "party") {
     const back = returningCompanion(campaign, args.name, args.level ?? partyAverageLevel(sheets));
     if (back) {
-      const { sheet, hadEncounter } = finalizeNewCompanion(campaign, back.level, back.input, kind, args.personality);
+      const { sheet, hadEncounter } = finalizeNewCompanion(campaign, back.level, back.input, kind, args.personality, null, back.formerSheetIds);
       settleReturn(campaign, back);
       return {
         ok: true,
         characterId: sheet.id,
         name: sheet.name,
         returned: true,
-        summary: `${sheet.name} returns: the same ${sheet.class} they were when they left, now level ${sheet.level}. HP ${sheet.maxHp}, AC ${sheet.ac}.`,
+        summary: `${sheet.name} returns: the same ${classWords(sheet.class)} they were when they left, now level ${sheet.level}. HP ${sheet.maxHp}, AC ${sheet.ac}.`,
         note: `They are back with the sheet they left with${back.leftAtLevel !== back.level ? `, brought from level ${back.leftAtLevel} to ${back.level}` : ""}, and every bond with them picks up where it stopped. ${hadEncounter ? "They have an initiative slot and a map token. " : ""}Narrate their return in their own voice.`,
       };
     }
@@ -501,21 +504,31 @@ export function finalizeNewCompanion(
   // it was brought from. "Save to my characters" and the campaign's end
   // write its progress back there (src/lib/characters/keep-companion.ts).
   libraryCharacterId: string | null = null,
+  // A companion coming back: the sheets they held here before
+  // (src/lib/dm/companion-return.ts), recorded on the new one.
+  formerSheetIds: readonly string[] = [],
 ): { sheet: CharacterSheet; hadEncounter: boolean } {
   const botUser = createCompanionUser(input.name);
   const created = createSheet(campaign.id, botUser.id, level, input, libraryCharacterId);
   const marked = markSheetAsCompanion(created.id, kind, personality) ?? created;
   // At a one-player table the AI runs, a party companion follows that player
   // in fights (src/lib/dm/companion-command.ts).
-  const sheet = setCompanionCommander(marked.id, defaultCommander(campaign, kind)) ?? marked;
+  const commanded = setCompanionCommander(marked.id, defaultCommander(campaign, kind)) ?? marked;
+  const sheet = formerSheetIds.length ? (recordFormerSheetIds(commanded.id, formerSheetIds) ?? commanded) : commanded;
   publishPersisted(campaign.id, "sheet_updated", { sheet });
   // A companion the party once travelled with can be written back in; every
   // standing with them picks up exactly where it stopped.
-  rejoinRelationshipsWithSubject(campaign.id, sheet.name, sheet.id);
+  let bondsMoved = rejoinRelationshipsWithSubject(campaign.id, sheet.name, sheet.id).length;
   // A lasting companion has a person behind the sheet: personality axes a
-  // deed weighs against, and who they are drawn to (#503 Phase 0.1).
+  // deed weighs against, and who they are drawn to (#503 Phase 0.1). They
+  // travel with everyone, so every character's bond with them opens now
+  // rather than at the first roll or moment that named one (issue 580).
   if (kind === "party") {
     companionNpcFor(sheet);
+    bondsMoved += openPartyBonds(campaign, { kind: "companion", name: sheet.name, id: sheet.id });
+  }
+  if (bondsMoved) {
+    publishEphemeral(campaign.id, "relationships_updated", {});
   }
   insertCharacterEvent({
     libraryCharacterId,
@@ -677,9 +690,17 @@ function removeCompanion(campaign: Campaign, sheet: CharacterSheet, reason?: str
   // a departing companion is parted, not ended, so it comes back whole if
   // the story brings them back (src/lib/db/relationships.ts). Nor does who
   // they were: a lasting companion's sheet is kept on the row behind them
-  // (#503 Phase 0.4), so a return is the same person.
+  // (#503 Phase 0.4), so a return is the same person. One who fell is dead,
+  // not away: a parted bond counted the chapters they were gone and asked
+  // the GM to bring them back into the story (issue 580). Their bonds close
+  // on the death, and open again if they are brought back to life.
   rememberDepartingSheet(sheet);
-  partRelationshipsWithSubject(campaign.id, sheet.name);
+  const bonds = sheet.deathSaves?.dead
+    ? endRelationshipsWithSubject(campaign.id, sheet.name, (bond) => `${sheet.name}, who travelled with ${bond.characterName}, fell`)
+    : partRelationshipsWithSubject(campaign.id, sheet.name);
+  if (bonds.length) {
+    publishEphemeral(campaign.id, "relationships_updated", {});
+  }
   const lasting = lastingCompanion(sheet);
   publishPersisted(campaign.id, "sheet_deleted", {
     sheetId: sheet.id,

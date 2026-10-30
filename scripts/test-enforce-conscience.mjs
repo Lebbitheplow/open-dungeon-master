@@ -237,14 +237,21 @@ await test("in a fight relationship_beat is offered for deeds alone, and a deed 
 await test("where companions may turn, a player's command ends at a warning, the table is told, and the card cannot give it back", async () => {
   const { world, pc, sheet, deed } = await table({ gameSettings: { companionConscience: "turn" } });
   assert.equal(world.sheet(sheet.id).commandedBy, world.owner.id, "the solo player commands her in fights");
+  // While she still follows them, GAME STATE names whose orders she waits
+  // for by the character too: the account name reached the narration.
+  const party = buildGameStateBlock({ campaign: world.campaign(), members: campaigns.listMembers(world.campaignId), sheets: world.sheets(), recentRolls: [], storySummary: "", contextLimitTokens: 32_000 });
+  assert.match(party, /in fights Kael commands them: on their turn wait for Kael's orders/);
+  assert.ok(!party.includes(`${world.owner.username}'s orders`), "never the account's orders");
   await deed("cruelty");
   assert.equal(world.sheet(sheet.id).commandedBy, world.owner.id, "uneasy is not yet a warning");
   const warned = await deed("broke_word");
   assert.equal(warned.result.conscience, "uneasy -> warning");
   assert.equal(world.sheet(sheet.id).commandedBy, null, "command ends");
-  assert.match(warned.result.note, /no longer takes .+'s orders in a fight/);
+  assert.match(warned.result.note, /no longer takes Kael's orders in a fight/, "the GM is told the character, not the account");
   const told = messages.listRecentMessages(world.campaignId, 3).find((message) => message.content.includes("no longer takes"));
   assert.ok(told, "the table is told");
+  assert.match(told.content, /no longer takes Kael's orders in a fight/, "the table reads the player's character");
+  assert.ok(!told.content.includes(`${world.owner.username}'s`), "never the account name");
   const route = await world.route("campaigns/[campaignId]/companions/[characterId]");
   world.signIn(world.owner);
   const response = await route.PATCH(

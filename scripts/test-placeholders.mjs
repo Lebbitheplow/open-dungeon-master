@@ -101,6 +101,25 @@ for (const gender of GENDER_INPUTS) {
   if (!mutant.includes("post-apocalyptic-mutant")) {
     failures.push(`a wasteland half-orc drew ${mutant}, not the mutant lead`);
   }
+  // A species with a face of its own keeps it in any class: the class plates
+  // are painted human, and a minotaur fighter drew a human fighter (0.31.1
+  // playtest). A near-human species still wears its class's plate.
+  for (const [race, klass, plate] of [
+    ["bhain-kwai", "fighter", "character-race/bhain-kwai-"],
+    ["bhain-kwai", "paladin", "character-race/bhain-kwai-"],
+    ["toh_minotaur", "barbarian", "character-race/minotaur-"],
+    ["dragonborn", "wizard", "character-race/dragonborn-"],
+    ["tortle", "monk", "character-race/tortle-"],
+    ["human", "fighter", "character-class/fighter-"],
+    ["high_elf", "wizard", "character-class/wizard-"],
+    ["hill_dwarf", "cleric", "character-class/cleric-"],
+  ]) {
+    const drawn = R.characterPlaceholder({ race, class: klass, gender });
+    check(drawn, `${race} ${klass}/${gender}`);
+    if (!drawn.includes(plate)) {
+      failures.push(`a ${race} ${klass} drew ${drawn}, not ${plate}*`);
+    }
+  }
 }
 
 // Monsters: every creature type, the swarm alias, junk, and the boss band,

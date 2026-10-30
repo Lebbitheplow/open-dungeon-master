@@ -6,7 +6,9 @@ import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { publishPersisted } from "@/lib/events";
 import { conditionTurnShape } from "@/lib/srd/condition-effects";
-import { spendAction, spendAttack, type SpendResult, type TurnBudget } from "@/lib/dm/action-budget";
+import { dashCount, spendAction, spendAttack, type SpendResult, type TurnBudget } from "@/lib/dm/action-budget";
+import { getBattleMapForEncounter, getTokenByRef } from "@/lib/db/battle-maps";
+import { pcMoveBudget } from "@/lib/battlemap/view";
 import { addSheetCondition } from "@/lib/dm/action-common";
 import { bonusRouteFor, counterSpend, kiSpend, noBonusRoute, type BonusRoute, type MoveAction } from "@/lib/dm/bonus-actions";
 import { authoredBonusRoute } from "@/lib/srd/authored-economy";
@@ -330,6 +332,20 @@ function priceAction(
 
 const RETREAT_DASH = "expeditious-retreat:dash";
 
+// The board's own count of the movement left once the Dash is stored, so the
+// GM narrates the distance the map will let them walk, not a guess.
+function movementLeftAfterDash(campaignId: string, sheet: CharacterSheet): string | null {
+  const encounter = getActiveEncounter(campaignId);
+  const map = encounter ? getBattleMapForEncounter(encounter.id) : null;
+  const token = map ? getTokenByRef(map.id, sheet.id) : null;
+  if (!encounter || !map || !token) {
+    return null;
+  }
+  const live = getSheetById(sheet.id) ?? sheet;
+  const { tiles } = pcMoveBudget(campaignId, encounter, map, live, token);
+  return `Movement left this turn: ${tiles * 5} ft, counted by the board.`;
+}
+
 // Whether Expeditious Retreat was cast on this very turn: a bonus-action
 // spell went on the turn, the spell's minute-count has not ticked yet (the
 // round has not wrapped since), and its casting's Dash is still unclaimed.
@@ -396,7 +412,7 @@ export function handleTakeAction(
     return toolError(price);
   }
   const costs: Record<string, unknown> = {};
-  const spend = (flags: Partial<Pick<TurnBudget, "dashed" | "disengaged">> = {}) => {
+  const spend = (flags: Partial<Pick<TurnBudget, "dashed" | "dashes" | "disengaged">> = {}) => {
     if (readied) {
       Object.assign(costs, readied.release());
       return;
@@ -447,12 +463,15 @@ export function handleTakeAction(
       };
     }
     case "dash": {
-      spend({ dashed: true });
+      // Each Dash adds the speed again, so a second one (Cunning Action,
+      // Action Surge) is never a spend that buys nothing.
+      spend(price.budget ? { dashed: true, dashes: dashCount(price.budget) + 1 } : { dashed: true });
+      const left = movementLeftAfterDash(campaign.id, sheet);
       return {
         ok: true,
         action: "Dash",
         ...costs,
-        applied: `${sheet.name}'s movement is doubled this turn; the battle map allows the extra distance.`,
+        applied: `${sheet.name} adds their speed to their movement this turn; the battle map allows the extra distance.${left ? ` ${left}` : ""}`,
       };
     }
     case "disengage": {

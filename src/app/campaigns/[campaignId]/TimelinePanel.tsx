@@ -44,7 +44,10 @@ const KIND_TONE: Record<TimelineKind, string> = {
   now: "border-amber-400 bg-amber-950/60 text-amber-100 shadow-glow-gold",
 };
 
-export function TimelinePanel({ campaignId, refreshKey }: { campaignId: string; refreshKey: number }) {
+// `refreshKey` changes with what the timeline holds besides chapters: facts,
+// and the calendar (calendar_updated bumps the quests version). Keyed on the
+// chapter count alone, an open timeline missed everything else.
+export function TimelinePanel({ campaignId, refreshKey }: { campaignId: string; refreshKey: number | string }) {
   const [rows, setRows] = useState<TimelineRow[] | null>(null);
   // A refused or failed read is shown in the server's words with a way to
   // ask again, never as "nothing here yet" (issue 140).

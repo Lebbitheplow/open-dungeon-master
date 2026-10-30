@@ -51,7 +51,7 @@ export function advanceClock(
   campaignId: string,
   amount: number,
   unit: AdvanceUnit,
-): { clock: CampaignClock; minutes: number } | ToolError {
+): { clock: CampaignClock; minutes: number; deathSaves: string[] } | ToolError {
   const current = getClock(campaignId);
   const moved = advance(current.instant, amount, unit);
   if ("error" in moved) {
@@ -89,11 +89,12 @@ export function advanceClock(
   // same things. Inside an encounter the round wrap owns them
   // (condition-tick.ts), so a DM nudging the clock mid-fight does not count
   // the same time twice.
+  let deathSaves: string[] = [];
   if (!getActiveEncounter(campaignId)) {
     tickEffectMinutes(campaignId, moved.minutes);
     const campaign = getCampaignById(campaignId);
     if (campaign) {
-      tickClockConditions(campaign, moved.minutes);
+      deathSaves = tickClockConditions(campaign, moved.minutes, current.instant);
     }
   }
   // The same clock burns torches down and brings the calendar's days round
@@ -115,7 +116,7 @@ export function advanceClock(
   if (conscienceClockTick(campaignId)) {
     publishEphemeral(campaignId, "relationships_updated", {});
   }
-  return { clock: getClock(campaignId), minutes: moved.minutes };
+  return { clock: getClock(campaignId), minutes: moved.minutes, deathSaves };
 }
 
 // Setting the date by hand, which only a DM does and only to start a campaign

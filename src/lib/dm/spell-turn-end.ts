@@ -15,8 +15,12 @@
 // turn is laid again.
 
 import type { Campaign } from "@/lib/db/campaigns";
-import { getActiveEncounter, getEnemy, patchEnemyConditions, type EncounterEnemy } from "@/lib/db/encounters";
+import { createDmTurn, saveDmTurn } from "@/lib/db/dm-turns";
+import { getActiveEncounter, patchEnemyConditions, type Encounter, type EncounterEnemy } from "@/lib/db/encounters";
 import { getSheetById } from "@/lib/db/sheets";
+import { isSheetFoe } from "@/lib/dm/combat-sides-logic";
+import { applyPcDamage } from "@/lib/dm/pc-damage";
+import { getFoe } from "@/lib/dm/sheet-foe";
 import { spellSaveDcFor } from "@/lib/srd";
 import { spellMechanicsFor } from "@/lib/content";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
@@ -31,6 +35,30 @@ import { textKey } from "@/lib/language/text-logic";
 
 type TurnEndHook = (campaign: Campaign, enemy: EncounterEnemy, meta: ConditionMeta) => string | null;
 
+// The mark's damage on whoever it holds: an enemy row through hurtEnemy, a
+// character on the other side (its foe view, sheet-foe.ts) through the
+// character's own damage path, with its resistances, concentration and the
+// death engine, the way spell-aura.ts hurts one as its turn starts. An enemy
+// row's writes would find no row for a sheet and land nothing.
+function hurtHeld(campaign: Campaign, encounter: Encounter, enemy: EncounterEnemy, amount: number, type: string, why: string): string {
+  if (!isSheetFoe(enemy)) {
+    return hurtEnemy(campaign, encounter, enemy, amount, type, why);
+  }
+  const sheet = getSheetById(enemy.id);
+  if (!sheet) {
+    return "";
+  }
+  const turn = createDmTurn(campaign.id, [], "human_dm");
+  try {
+    const applied = applyPcDamage(campaign, turn.id, sheet, { amount, type, magical: true, spell: true, reason: why });
+    const dealt = "error" in applied ? 0 : typeof applied.damageApplied === "number" ? applied.damageApplied : amount;
+    return `${sheet.name} takes ${dealt} ${type} damage from ${why}.`;
+  } finally {
+    turn.status = "done";
+    saveDmTurn(turn);
+  }
+}
+
 // Acid Arrow's second burn.
 function acidArrowBurn(campaign: Campaign, enemy: EncounterEnemy, meta: ConditionMeta): string | null {
   const encounter = getActiveEncounter(campaign.id);
@@ -41,12 +69,12 @@ function acidArrowBurn(campaign: Campaign, enemy: EncounterEnemy, meta: Conditio
   const dice = addDice("2d4", "1d4", Math.max(0, slot - 2));
   const caster = meta.source ? getSheetById(meta.source) : null;
   const burn = rollCard(campaign, null, caster?.id ?? null, "damage", rollAgainst("Acid Arrow (second burn)", enemy.displayName), dice, caster ? sheetAttacker(caster) : null).total;
-  return hurtEnemy(campaign, encounter, enemy, burn, "acid", "Acid Arrow's acid");
+  return hurtHeld(campaign, encounter, enemy, burn, "acid", "Acid Arrow's acid");
 }
 
 // The mark goes back on for the next turn's end.
 function rearm(enemyId: string, mark: string, meta: ConditionMeta) {
-  const live = getEnemy(enemyId);
+  const live = getFoe(enemyId);
   if (!live || live.status !== "alive") {
     return;
   }
@@ -117,7 +145,7 @@ function saveAtTurnEnd(campaign: Campaign, enemy: EncounterEnemy, meta: Conditio
     return null;
   }
   const hurt = rollCard(campaign, null, caster?.id ?? null, "damage", rollAgainst(resolved.name, enemy.displayName), dice, caster ? sheetAttacker(caster) : null).total;
-  return hurtEnemy(campaign, encounter, enemy, hurt, edge.type ?? "psychic", resolved.name);
+  return hurtHeld(campaign, encounter, enemy, hurt, edge.type ?? "psychic", resolved.name);
 }
 
 const HOOKS: Record<string, TurnEndHook> = {

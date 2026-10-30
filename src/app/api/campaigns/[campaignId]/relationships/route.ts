@@ -1,7 +1,7 @@
 import { isErrorResponse, seesStorytellerSecrets, steersStory, requireMember } from "@/lib/campaign-api";
 import { listRelationships } from "@/lib/db/relationships";
 import { listSheets } from "@/lib/db/sheets";
-import { friendshipTier, TIER_LABEL } from "@/lib/dm/relationship-logic";
+import { endedByDeath, friendshipTier, TIER_LABEL } from "@/lib/dm/relationship-logic";
 import { bondTruthFor } from "@/lib/dm/scheme-logic";
 import { advancesAllowed } from "@/lib/dm/advance-tick";
 import { conscienceViews } from "@/lib/dm/conscience";
@@ -82,6 +82,8 @@ export async function GET(
         tierLabel: TIER_LABEL[tier],
         romance: relationship.romance,
         status: relationship.status,
+        // A bond a death closed reads "died", not "ended" (issue 580).
+        ...(endedByDeath(relationship) ? { died: true } : {}),
         apartChapters: relationship.apartChapters,
         // The three most recent remembered beats read as a short history.
         history: relationship.memories.slice(-3).map((memory) => memory.text),

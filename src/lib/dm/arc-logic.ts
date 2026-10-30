@@ -308,7 +308,6 @@ const DETAIL_CAP = 200;
 const ACT_TITLE_CAP = 60;
 const ACT_RECAP_CAP = 1_200;
 const MAX_ACT_RECAPS = 40;
-const QUEST_LINE_CAP = 140;
 const SUB_ARC_STATUSES: SubArc["status"][] = ["pending", "active", "resolved", "abandoned"];
 const EVENT_KINDS: ArcEventKind[] = [
   "npc_encounter",
@@ -2273,11 +2272,3 @@ export function renderArcPrompt(arc: StoryArc, cues?: SceneCues): { text: string
   return { text: lines.join("\n"), trace };
 }
 
-// Player-safe quest-log projection: names and goals only, never hooks,
-// expected beats, cast agendas, or planned events.
-export function activeQuestLines(arc: StoryArc): string[] {
-  return arc.subArcs
-    .filter((subArc) => subArc.status === "active" || subArc.status === "pending")
-    .slice(0, 8)
-    .map((subArc) => `${subArc.name}: ${subArc.goal}`.slice(0, QUEST_LINE_CAP));
-}

@@ -15,7 +15,7 @@
 // Must not be imported by enemy-damage.ts or mutations.ts (it imports both
 // through its callers' paths).
 
-import type { Campaign } from "@/lib/db/campaigns";
+import { getCampaignById, type Campaign } from "@/lib/db/campaigns";
 import { getDatabase } from "@/lib/db/core";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { getActiveEncounter, getEnemy, patchEnemyConditions, setEnemyConcentration, type EncounterEnemy } from "@/lib/db/encounters";
@@ -23,6 +23,9 @@ import { getSheetById } from "@/lib/db/sheets";
 import { addConditionInstance, isIncapacitated, type ConditionMeta, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { meetEnemyPart } from "@/lib/dm/enemy-defenses";
 import { settleEnemyIncapacitation } from "@/lib/dm/enemy-incapacitation";
+import { getFoe } from "@/lib/dm/sheet-foe";
+import { isSheetFoe } from "@/lib/dm/combat-sides-logic";
+import { conditionImmunity } from "@/lib/dm/set-condition";
 import { breakConcentration, clearSpellConditionsByName } from "@/lib/dm/concentration";
 import { applyEnemyDamage, publishEncounter } from "@/lib/dm/enemy-damage";
 import { rollCharacterSave, rollEnemySave } from "@/lib/dm/forced-save";
@@ -39,6 +42,8 @@ import { textKey } from "@/lib/language/text-logic";
 import { nameChoice } from "@/lib/srd/feature-names";
 
 const FEET_PER_TILE = 5;
+// Harm's shrunken maximum lasts an hour (SRD 5.1), in rounds.
+const HOUR_ROUNDS = 600;
 
 const typeOf = (enemy: EncounterEnemy) => String(enemy.stats.type ?? "").toLowerCase();
 const isType = (enemy: EncounterEnemy, types: string[] | undefined) =>
@@ -168,14 +173,23 @@ export function turnEndMark(condition: SpellCondition | undefined, source: Spell
 }
 
 // Lays conditions (each with its own meta) on a living enemy, leaving the
-// ones it is immune to or already holds. Returns what landed.
+// ones it is immune to or already holds. Returns what landed. A character
+// fighting on the other side is read as its foe view, so a failed save
+// against a sheet-to-sheet spell binds that sheet (patchEnemyConditions
+// writes it there) instead of finding no enemy row and laying nothing.
 export function layOnEnemy(enemyId: string, entries: Array<[string, ConditionMeta]>): string[] {
-  const enemy = getEnemy(enemyId);
+  const enemy = getFoe(enemyId);
   if (!enemy || enemy.status !== "alive") {
     return [];
   }
   const immune = (enemy.stats.conditionImmune ?? "").toLowerCase();
-  const landing = entries.filter(([name]) => !immune.includes(name));
+  // A character's immunities are its features and effects, not a stat-block
+  // line (a foe view's is empty): Aura of Courage, Heroism or Mindless Rage
+  // keep a turncoat's Phantasmal Killer off a party member, as they keep an
+  // enemy's off through set_condition.
+  const sheet = isSheetFoe(enemy) ? getSheetById(enemy.id) : null;
+  const campaign = sheet ? getCampaignById(sheet.campaignId) : null;
+  const landing = entries.filter(([name]) => !immune.includes(name) && !(sheet && campaign && conditionImmunity(campaign, sheet, name, true)));
   if (!landing.length) {
     return [];
   }
@@ -220,7 +234,11 @@ export function afterEnemySave(input: SaveAftermath): string[] {
     return lines;
   }
   const encounter = getActiveEncounter(input.campaign.id);
-  const standing = getEnemy(input.enemy.id);
+  // A character on the other side is read as its foe view (sheet-foe.ts),
+  // as the save and the damage were: an enemy row alone left a turncoat
+  // unpushed by Thunderwave, its maximum whole after Harm, and Divine Word's
+  // tiers unlaid (issue 588).
+  const standing = getFoe(input.enemy.id);
   if (!encounter || !standing || standing.status !== "alive") {
     return lines;
   }
@@ -238,9 +256,20 @@ export function afterEnemySave(input: SaveAftermath): string[] {
     }
   }
   if (riders.shrinksMaxHp && input.taken > 0) {
-    const max = Math.max(1, standing.maxHp - input.taken);
-    getDatabase().prepare("UPDATE encounter_enemies SET max_hp = ? WHERE id = ?").run(max, standing.id);
-    lines.push(`${standing.displayName}'s hit point maximum drops by ${input.taken} to ${max} for an hour.`);
+    if (isSheetFoe(standing)) {
+      // A sheet's maximum rides its conditions (db/sheets.ts patchSheet,
+      // condition-logic.ts maxHpRiders), so the hour runs on the clock and
+      // the maximum comes back when it ends.
+      const drop = Math.min(input.taken, Math.max(0, standing.maxHp - 1));
+      const meta: ConditionMeta = { spell: input.spell, source: input.caster.id, rounds: HOUR_ROUNDS };
+      if (drop > 0 && layOnEnemy(standing.id, [[`max hp reduced (-${drop})`, meta]]).length) {
+        lines.push(`${standing.displayName}'s hit point maximum drops by ${drop} to ${standing.maxHp - drop} for an hour.`);
+      }
+    } else {
+      const max = Math.max(1, standing.maxHp - input.taken);
+      getDatabase().prepare("UPDATE encounter_enemies SET max_hp = ? WHERE id = ?").run(max, standing.id);
+      lines.push(`${standing.displayName}'s hit point maximum drops by ${input.taken} to ${max} for an hour.`);
+    }
   }
   if (riders.losesAction) {
     const source = { spell: input.spell, casterId: input.caster.id };
@@ -248,8 +277,9 @@ export function afterEnemySave(input: SaveAftermath): string[] {
       lines.push(`${standing.displayName} spends its action retching on its turn.`);
     }
   }
-  // Divine Word sends an extraplanar creature home (spell-planes.ts).
-  const home = riders.returnsHome && !riders.hpTiers?.some((tier) => tier.dies && standing.currentHp <= tier.atMost)
+  // Divine Word sends an extraplanar creature home (spell-planes.ts). A
+  // character is not an enemy row to send away: the tiers below hold them.
+  const home = riders.returnsHome && !isSheetFoe(standing) && !riders.hpTiers?.some((tier) => tier.dies && standing.currentHp <= tier.atMost)
     ? sendHome(input.campaign, input.turn, standing, riders.returnsHome, input.spell, input.sheets, input.sheetsById)
     : null;
   if (home) {
@@ -332,7 +362,9 @@ export function heatMetalGrip(
   worn: boolean,
 ): string | null {
   const ability = mech?.riders?.gripSave;
-  const standing = getEnemy(enemy.id);
+  // A character on the other side holds metal too: its own save, and the
+  // grip's disadvantage on its sheet (sheet-foe.ts).
+  const standing = getFoe(enemy.id);
   if (!ability || !standing || standing.status !== "alive") {
     return null;
   }

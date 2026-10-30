@@ -26,6 +26,16 @@ await test("a hero going up says so and lists what the level owes", () => {
   assert.ok(owed.some((line) => /subclass for fighter/.test(line)), owed.join(" | "));
 });
 
+await test("the confirmation names a split's classes and an owed subclass in words, never their ids", () => {
+  // The join sheet printed "Classes: fighter 3 / plague_doctor 2" and "a
+  // subclass for plague_doctor" (the 0.31.1 playtest's setting class).
+  const split = { ...LEGAL_FIGHTER, level: 5, classes: [{ id: "fighter", subclass: "", level: 3 }, { id: "plague_doctor", subclass: "", level: 2 }] };
+  const { changes } = joinChanges(split, 5, { ...LEGAL_FIGHTER, classes: [{ id: "fighter", subclass: "", level: 1 }] }, 1);
+  assert.ok(changes.includes("Classes: fighter 3 / plague doctor 2 becomes fighter 1."), changes.join(" | "));
+  const owed = owedChoices({ ...LEGAL_FIGHTER, class: "plague_doctor", subclass: "", level: 3, classes: [] });
+  assert.ok(!owed.some((line) => line.includes("plague_doctor")), owed.join(" | "));
+});
+
 await test("a hero at its own level changes nothing but says where it plays", () => {
   const { changes } = joinChanges(LEGAL_FIGHTER, 1, LEGAL_FIGHTER, 1);
   assert.deepEqual(changes, ["Plays at its own level, 1."]);

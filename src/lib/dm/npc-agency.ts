@@ -1,4 +1,5 @@
 import { campaignLanguage } from "@/lib/db/campaigns";
+import { listLocations } from "@/lib/db/locations";
 import { listNpcs, patchNpcAgency, setNpcArchived, type Npc } from "@/lib/db/npcs";
 import { listRelationships } from "@/lib/db/relationships";
 import { shouldArchive } from "@/lib/dm/npc-archive-logic";
@@ -13,6 +14,7 @@ import {
 import { detectGoalCollisions } from "@/lib/dm/npc-goal-logic";
 import { avengingRound } from "@/lib/dm/companion-revenge";
 import { agendaRounds } from "@/lib/dm/companion-agenda";
+import { isAvengeGoal } from "@/lib/dm/departure-logic";
 import type { FactCandidate } from "@/lib/dm/fact-logic";
 import { textKey } from "@/lib/language/text-logic";
 
@@ -103,7 +105,9 @@ export function advanceNpcAgency(
     if (decision.archive) {
       setNpcArchived(npc.id, true);
     }
-    if (goals.session) {
+    // Companions who left to bring down the party share an enemy, not a
+    // prize: two of them on that goal are no rivals, whatever words it has.
+    if (goals.session && !isAvengeGoal(npc.name, goals.session.text)) {
       holders.push({ npc, goalText: goals.session.text });
     }
   }
@@ -114,10 +118,16 @@ export function advanceNpcAgency(
     const { scene, session, ambition } = npc.agency.goals;
     return [scene, session?.text, ambition].filter((goal): goal is string => Boolean(goal));
   });
+  // Where the story stands, so two NPCs at one ford are not rivals over it.
+  const places = [
+    ...listLocations(campaignId).flatMap((location) => [location.name, location.parentName ?? ""]),
+    ...npcs.map((npc) => npc.location),
+  ].filter(Boolean);
   const collisions = detectGoalCollisions(
     holders.map((holder) => ({ name: holder.npc.name, goalText: holder.goalText })),
     campaignLanguage(campaignId),
     pool,
+    places,
   ).slice(0, 2);
   for (const collision of collisions) {
     const a = holders.find((holder) => holder.npc.name === collision.a);

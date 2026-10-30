@@ -16,7 +16,7 @@ import { attractionJson, normalizeAttraction } from "@/lib/attraction";
 import { backgroundFeatureFor } from "@/lib/backgrounds";
 import { registerSpeciesReader } from "@/lib/srd/race-id";
 import { featsAsRun } from "@/lib/srd/feat-effects";
-import { serverSpeciesRules } from "@/lib/characters/species-rules";
+import { serverSpeciesName, serverSpeciesRules } from "@/lib/characters/species-rules";
 import {
   keyedFeatChoices,
   type CharacterSheet,
@@ -87,6 +87,7 @@ type SheetRow = {
   hand_layout_json?: string | null;
   feat_choices_json?: string | null;
   attraction_json?: string | null;
+  former_sheet_ids_json?: string | null;
   open_to_advances?: number | null;
   open_to_pacts?: number | null;
   created_at: string;
@@ -111,7 +112,9 @@ function mapSheet(row: SheetRow): CharacterSheet {
   }
   // Sheets from before the cantrip list kept cantrips in prepared/known.
   const spellcasting = normalizeSpellcasting(parsedCasting);
-  const raceLabel = homebrewRaceLabel(row.user_id, row.race, row.campaign_id);
+  // A homebrew species by its author's name, a content-pack one by the
+  // builder's ("Minotaur (Bhain Kwai)"); a bundled id reads as its words.
+  const raceLabel = homebrewRaceLabel(row.user_id, row.race, row.campaign_id) ?? serverSpeciesName(row.race) ?? undefined;
   const backgroundLabel = homebrewLabel(row.user_id, row.background, "background", row.campaign_id);
   return {
     id: row.id,
@@ -128,6 +131,7 @@ function mapSheet(row: SheetRow): CharacterSheet {
     alignment: row.alignment,
     gender: storedGender(row.gender),
     attraction: normalizeAttraction(row.attraction_json ?? ""),
+    ...formerSheetIdsOf(row.former_sheet_ids_json),
     openToAdvances: row.open_to_advances === 1,
     openToPacts: row.open_to_pacts === 1,
     level: row.level,
@@ -226,7 +230,7 @@ const SHEET_COLUMNS = `
   proficiencies_json, equipment_json, gold, copper, feats_json, features_json,
   spellcasting_json, conditions_json, condition_meta_json, resources_json, wild_shape_json, pets_json, summon_json, exhaustion, death_saves_json, concentrating_on, concentration_rounds,
   portrait_json, notes, backstory, hopes, is_companion, companion_kind, commanded_by, personality, hand_layout_json, feat_choices_json,
-  attraction_json, open_to_advances, open_to_pacts, created_at, updated_at
+  attraction_json, open_to_advances, open_to_pacts, former_sheet_ids_json, created_at, updated_at
 `;
 
 // The owner's answer to "Open to advances from NPCs" (issue 501), for this
@@ -250,6 +254,25 @@ export function setOpenToPacts(sheetId: string, open: boolean): CharacterSheet |
 
 // Flags a freshly created sheet as an AI companion. Kept out of the main
 // INSERT so every existing creation path stays untouched.
+// A returned companion's earlier sheet ids, as the sheet carries them: only
+// when there are any, so every other sheet reads as it always has.
+function formerSheetIdsOf(json: string | null | undefined): { formerSheetIds?: string[] } {
+  const ids = parseJson<unknown>(json ?? "", []);
+  const list = Array.isArray(ids) ? ids.filter((id): id is string => typeof id === "string" && id.length > 0) : [];
+  return list.length ? { formerSheetIds: [...new Set(list)] } : {};
+}
+
+// The server's record that a companion who came back held these sheets
+// before (src/lib/dm/companion-return.ts). Its own write: patchSheet and every
+// edit route leave the column alone.
+export function recordFormerSheetIds(sheetId: string, ids: readonly string[]): CharacterSheet | null {
+  const list = [...new Set(ids.filter((id) => id && id !== sheetId))];
+  getDatabase()
+    .prepare(`UPDATE character_sheets SET former_sheet_ids_json = ? WHERE id = ?`)
+    .run(list.length ? JSON.stringify(list) : "", sheetId);
+  return getSheetById(sheetId);
+}
+
 export function markSheetAsCompanion(
   sheetId: string,
   kind: "party" | "guest",

@@ -23,13 +23,16 @@ import {
 import {
   applyDeathSaveRoll,
   freshDeathTrack,
+  isDying,
   isMassiveDamage,
+  MOST_SAVES_TO_SETTLE,
   onDamageAtZero,
 } from "@/lib/dm/death-logic";
 
 // The dying engine: a PC dropping to 0 HP gets a server-tracked death-save
-// state, saves roll automatically at the top of their skipped combat turns,
-// and healing or stabilizing clears the track. Every write is audited so
+// state, saves roll automatically at the top of their skipped combat turns
+// (and, outside a fight, as game time passes: settleDying), and healing or
+// stabilizing clears the track. Every write is audited so
 // the party lead can undo it. This module must not import mutations.ts or
 // encounter-tools.ts (both import it).
 //
@@ -67,9 +70,9 @@ function writeDeathState(
   }
 }
 
-function recordDeath(campaign: Campaign, sheet: CharacterSheet, cause: string) {
+function recordDeath(campaign: Campaign, sheet: CharacterSheet, cause: string, at?: number) {
   // When, in the world's time: the window a revival spell holds to.
-  noteDeathMoment(campaign.id, sheet.id);
+  noteDeathMoment(campaign.id, sheet.id, at);
   insertCharacterEvent({
     libraryCharacterId: sheet.libraryCharacterId,
     campaignCharacterId: sheet.id,
@@ -78,6 +81,17 @@ function recordDeath(campaign: Campaign, sheet: CharacterSheet, cause: string) {
     kind: "death",
     summary: `Died: ${cause}.`,
   });
+}
+
+// Death outright on a character (Divine Word's lowest tier, Power Word Kill
+// through a foe path): the same audited death state and death record failed
+// saves write, so the audit trail can take it back, a revival spell reads
+// when it happened, and the character's story keeps it. A bare sheet patch
+// left none of the three.
+export function killOutright(campaign: Campaign, turnId: string | null, sheet: CharacterSheet, cause: string): CharacterSheet | null {
+  writeDeathState(campaign, turnId, sheet, { successes: 0, failures: 3, stable: false, dead: true }, "death_state", cause, { currentHp: 0 });
+  recordDeath(campaign, sheet, cause);
+  return getSheetById(sheet.id);
 }
 
 function tableNote(campaign: Campaign, content: string, glyph: SystemGlyph) {
@@ -175,7 +189,7 @@ export function applyDamageDeathHook(
     );
     return {
       dying: true,
-      note: `${fresh.name} is unconscious and DYING at 0 HP. The server rolls their death saves automatically in combat. Healing any amount revives them; the stabilize tool stops the dying after a successful DC 10 Medicine check or a healer's kit.`,
+      note: `${fresh.name} is unconscious and DYING at 0 HP. The server rolls their death saves automatically: on their turns in combat, and one every 6 seconds of game time outside it. Healing any amount revives them; the stabilize tool stops the dying after a successful DC 10 Medicine check or a healer's kit.`,
     };
   }
   return {};
@@ -257,11 +271,13 @@ export function wakeStable(campaign: Campaign, characterId: string): string | nu
 // One automatic death save, rolled server-side when the initiative pointer
 // passes a dying PC. Publishes the dice card and a table note so both the
 // players and the model (via history) see the result.
-export function rollDeathSave(campaign: Campaign, characterId: string): void {
+// `at`: the in-world instant of this save when the clock has already moved
+// past it (settleDying on the clock), for the moment of a death it brings.
+export function rollDeathSave(campaign: Campaign, characterId: string, turnId: string | null = null, at?: number): string | null {
   const sheet = getSheetById(characterId);
   const track = sheet?.deathSaves;
   if (!sheet || !track || track.stable || track.dead || sheet.currentHp > 0) {
-    return;
+    return null;
   }
   // A death save is a saving throw tied to no ability: it takes what every
   // save takes (exhaustion, Bless and Bane, a paladin's aura, a Ring of
@@ -282,7 +298,7 @@ export function rollDeathSave(campaign: Campaign, characterId: string): void {
     { ...rollExtrasFor(campaign, sheet, "saving_throw"), death: true },
   );
   if ("error" in resolved || "autoFail" in resolved) {
-    return;
+    return null;
   }
   spendRollCarriers(campaign.id, sheet.id, resolved.spendInspiration);
   const outcome = rollExpression(resolved.expression);
@@ -304,37 +320,65 @@ export function rollDeathSave(campaign: Campaign, characterId: string): void {
   });
   const applied = applyDeathSaveRoll(track, outcome.natural ?? outcome.total, outcome.total);
   if (applied.outcome === "revive") {
-    writeDeathState(campaign, null, sheet, null, "death_state", "natural 20 death save", {
+    writeDeathState(campaign, turnId, sheet, null, "death_state", "natural 20 death save", {
       currentHp: 1,
       ...wakeConditions(sheet),
     });
-    tableNote(campaign, `${sheet.name} rolls a natural 20 on their death save and regains 1 HP!`, "cue-heal");
-    return;
+    const line = `${sheet.name} rolls a natural 20 on their death save and regains 1 HP!`;
+    tableNote(campaign, line, "cue-heal");
+    return line;
   }
   if (applied.outcome === "stable") {
     const wait = rollStableTimer(campaign, sheet);
-    writeDeathState(campaign, null, sheet, applied.track, "death_state", "automatic death save", {
+    writeDeathState(campaign, turnId, sheet, applied.track, "death_state", "automatic death save", {
       conditions: wait.conditions,
       conditionMeta: wait.conditionMeta,
     });
-    tableNote(
-      campaign,
-      `${sheet.name} succeeds their third death save and is stable (unconscious at 0 HP). They regain 1 hit point in ${wait.hours} hour${wait.hours === 1 ? "" : "s"}.`,
-      "cue-heal",
-    );
-    return;
+    const line = `${sheet.name} succeeds their third death save and is stable (unconscious at 0 HP). They regain 1 hit point in ${wait.hours} hour${wait.hours === 1 ? "" : "s"}.`;
+    tableNote(campaign, line, "cue-heal");
+    return line;
   }
-  writeDeathState(campaign, null, sheet, applied.track, "death_state", "automatic death save");
+  writeDeathState(campaign, turnId, sheet, applied.track, "death_state", "automatic death save");
   if (applied.outcome === "dead") {
-    recordDeath(campaign, sheet, "failed death saving throws");
-    tableNote(campaign, `${sheet.name} fails their final death save and dies.`, "cue-death");
-    return;
+    recordDeath(campaign, sheet, "failed death saving throws", at);
+    const line = `${sheet.name} fails their final death save and dies.`;
+    tableNote(campaign, line, "cue-death");
+    return line;
   }
-  tableNote(
-    campaign,
-    `${sheet.name} death save: rolled ${outcome.total}, ${
-      applied.outcome === "success" ? "success" : "failure"
-    } (${applied.track.successes} successes, ${applied.track.failures} failures).`,
-    "die-d20",
-  );
+  const line = `${sheet.name} death save: rolled ${outcome.total}, ${
+    applied.outcome === "success" ? "success" : "failure"
+  } (${applied.track.successes} successes, ${applied.track.failures} failures).`;
+  tableNote(campaign, line, "die-d20");
+  return line;
+}
+
+// Death saves outside a fight: the same roll as the initiative pointer's,
+// once per six seconds, in order, until the fall is settled (stable, dead
+// or up at 1 HP) or `rolls` runs out. Returns each roll's line, which the
+// table has already been shown, for the tool result the GM narrates from.
+// `from` is the in-world instant the stretch began when the clock has
+// already moved to its end: each save then falls six seconds after the last,
+// so a death on the third save of an eight-hour rest is dated eight hours
+// back, and Revivify's minute is long gone when the party wakes.
+export function settleDying(
+  campaign: Campaign,
+  characterId: string,
+  rolls: number = MOST_SAVES_TO_SETTLE,
+  turnId: string | null = null,
+  from?: number,
+): string[] {
+  const lines: string[] = [];
+  for (let count = 0; count < rolls; count += 1) {
+    const sheet = getSheetById(characterId);
+    if (!sheet || !isDying(sheet)) {
+      break;
+    }
+    const at = from === undefined ? undefined : from + (count + 1) / 10;
+    const line = rollDeathSave(campaign, characterId, turnId, at);
+    if (!line) {
+      break;
+    }
+    lines.push(line);
+  }
+  return lines;
 }

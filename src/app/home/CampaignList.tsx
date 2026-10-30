@@ -9,7 +9,7 @@ import { CampaignCover } from "@/components/CampaignCover";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { ContextMenu, type ContextMenuItem } from "@/components/ui/ContextMenu";
 import { ExportMenu } from "@/app/campaigns/[campaignId]/ExportMenu";
-import { slotLine, steersStory, type HomeCampaign } from "@/app/home/types";
+import { slotLine, statusLabel, steersStory, type HomeCampaign } from "@/app/home/types";
 
 // "Your tables": every campaign this account sits at, laid out as save
 // slots along the bottom edge, with the same three actions the old tiles
@@ -130,7 +130,7 @@ function SaveSlot({
                 ended && "ts-slot-badge-ended",
               )}
             >
-              {campaign.status}
+              {statusLabel(campaign)}
             </span>
           </span>
           <span className="ts-slot-title">{campaign.title}</span>

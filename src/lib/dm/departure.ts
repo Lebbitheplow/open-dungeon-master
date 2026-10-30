@@ -19,6 +19,7 @@ import {
   avengeTarget,
   chooseResponse,
   departureHow,
+  isAvengeGoal,
   INTENT_WORDS,
   PARLEY_FROM,
   turnsOnParty,
@@ -269,7 +270,7 @@ export function departNow(
   if (npc) {
     const fresh = getNpcById(npc.id) ?? npc;
     const { session, ...rest } = fresh.agency.goals;
-    const avengingNow = session?.text === avengeGoal(companion.name);
+    const avengingNow = isAvengeGoal(companion.name, session?.text ?? "");
     if (avenging || avengingNow) {
       patchNpcAgency(npc.id, {
         goals: avenging ? { ...rest, session: { text: avengeGoal(companion.name), progress: 0, target: avengeTarget(fresh.agency.personality) } } : rest,

@@ -2,7 +2,9 @@ import { z } from "zod";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { getLoreEntry, listLoreEntries } from "@/lib/db/lore";
-import { getQuest, insertQuest, listQuests, updateQuest } from "@/lib/db/quests";
+import { getQuest, insertQuest, listQuests } from "@/lib/db/quests";
+import { editQuest } from "@/lib/db/quest-arc";
+import { publishEphemeral } from "@/lib/events";
 import { DM_ONLY_MARK, normalizeObjectives, tickObjective, type Quest, type QuestObjective, type QuestStatus } from "@/lib/dm/quest-logic";
 import { dismissHandout, publishHandout } from "@/lib/dm/scene-state";
 import { isUploadedImagePath } from "@/lib/uploads";
@@ -211,7 +213,7 @@ export function handleSetQuest(campaign: Campaign, rawArguments: string): ToolRe
     return { error: "Invalid arguments: set_quest takes a title, objectives and a status.", retry: true };
   }
   const update = (quest: Quest, retitle: boolean) =>
-    updateQuest(quest.id, {
+    editQuest(quest.id, {
       ...(args.title && retitle ? { title: args.title } : {}),
       // The steps already ticked stay ticked when the list is restated.
       ...(args.objectives ? { objectives: normalizeObjectives(args.objectives, quest.objectives) } : {}),
@@ -223,7 +225,9 @@ export function handleSetQuest(campaign: Campaign, rawArguments: string): ToolRe
     if ("error" in quest) {
       return quest;
     }
-    return { ok: true, quest: update(quest, true) };
+    const updated = update(quest, true);
+    questsChanged(campaign.id);
+    return { ok: true, quest: updated };
   }
   if (!args.title) {
     return { error: "A new quest needs a title.", retry: true };
@@ -236,9 +240,11 @@ export function handleSetQuest(campaign: Campaign, rawArguments: string): ToolRe
     (quest) => (quest.status === "active" || quest.status === "hidden") && textKey(quest.title) === textKey(args.title ?? ""),
   );
   if (open) {
+    const updated = update(open, false);
+    questsChanged(campaign.id);
     return {
       ok: true,
-      quest: update(open, false),
+      quest: updated,
       note: `"${open.title}" was already in the log, so it was updated rather than added again.`,
     };
   }
@@ -253,6 +259,7 @@ export function handleSetQuest(campaign: Campaign, rawArguments: string): ToolRe
     visibility: args.visibility ?? "party",
     source: "dm",
   });
+  questsChanged(campaign.id);
   return { ok: true, quest: added };
 }
 
@@ -301,6 +308,14 @@ export function handleTickObjective(campaign: Campaign, rawArguments: string): T
   const { quest, objective } = found;
   const objectives = tickObjective(quest.objectives, objective.id, args.done ?? true);
   const allDone = objectives.length > 0 && objectives.every((objective) => objective.done);
-  const updated = updateQuest(quest.id, { objectives, ...(allDone ? { status: "done" as const } : {}) });
+  const updated = editQuest(quest.id, { objectives, ...(allDone ? { status: "done" as const } : {}) });
+  questsChanged(campaign.id);
   return { ok: true, quest: updated, complete: allDone };
+}
+
+// The quest log refetches on this, as it does for the Quests panel's own
+// edits. Without it a quest the GM wrote, ticked or finished stayed as it
+// was on every screen until something else refreshed it (issue 581).
+function questsChanged(campaignId: string) {
+  publishEphemeral(campaignId, "quests_updated", { at: Date.now() });
 }
