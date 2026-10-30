@@ -104,6 +104,19 @@ export const LAST_CONDITION_EFFECTS: ConditionEffectRow[] = [
     summary: "Jump: their jump distance is tripled.",
     jumpMultiplier: 3,
   },
+  // SRD 5.1, Longer Casting Times: a spell of a minute or more takes the
+  // caster's action on each turn of it (src/lib/dm/long-casting-logic.ts).
+  {
+    id: "casting",
+    match: ["casting"],
+    summary: "Casting a spell of a minute or more: their action on each of their turns goes on it, and their concentration holds it. If the concentration breaks, the spell fails and no slot is spent; when the rounds run out it takes effect as their turn starts.",
+    holdsAction: true,
+  },
+  {
+    id: "casting_complete",
+    match: ["casting complete"],
+    summary: "Their casting is complete: the spell is resolved now with its tool, which spends its slot and no action; unresolved by the end of their turn, it is lost and nothing is spent.",
+  },
   {
     id: "wind_walk",
     match: ["wind walk"],

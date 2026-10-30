@@ -120,6 +120,7 @@ import { isIncapacitated } from "@/lib/dm/condition-logic";
 import { endTurnSaves, startTurnConditions, tickEncounterConditions } from "@/lib/dm/condition-tick";
 import { endTurns } from "@/lib/dm/turn-end";
 import { turnStartEffects } from "@/lib/dm/turn-start-effects";
+import { castingTurnBudget } from "@/lib/dm/long-casting";
 import { endEncounterTool, endTurnTool, enemyAttackTool, startEncounterTool, type ToolDef } from "@/lib/dm/encounter-tool-defs";
 import { RUN_PREPARED_ENCOUNTER, runPreparedEncounter } from "@/lib/dm/prepared-encounter-tool";
 import { rollDeathSave } from "@/lib/dm/death";
@@ -1448,6 +1449,10 @@ function advancePointer(
       encounter.legendary.failedSave = stored.legendary.failedSave;
     }
   }
+  // A caster in the middle of a spell of a minute or more starts the turn
+  // with its action already gone to the casting, stored now so the board's
+  // pips and GAME STATE show it before anything is spent (long-casting.ts).
+  encounter.turnBudget = castingTurnBudget(encounter, landingId) ?? encounter.turnBudget;
   encounter.waitingSeq = latestSeq(campaign.id);
   saveEncounter(encounter);
   const landed = { order: [...encounter.order], turnIndex: next.turnIndex };

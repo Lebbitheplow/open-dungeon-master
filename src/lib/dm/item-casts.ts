@@ -18,7 +18,7 @@ import { endInvisibilityOnCast } from "@/lib/dm/attack-marks";
 
 export function castFromItem(
   campaign: Campaign,
-  turnId: string,
+  turnId: string | null,
   sheet: CharacterSheet,
   facts: SpellFacts | null,
   name: string,

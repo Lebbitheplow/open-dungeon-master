@@ -14,7 +14,6 @@ const {
   focusProblem,
   materialComponents,
   handsBusy,
-  longCastingProblem,
   materialPlan,
   openCastOf,
   QUICKENED,
@@ -28,7 +27,8 @@ const {
 const { copyCost, learnProblem } = await import("../src/lib/dm/learn-rules.ts");
 const { textKey } = await import("../src/lib/language/text-logic.ts");
 const { bundledSpellFacts } = await import("../src/lib/srd/spell-facts.ts");
-const { freshBudget } = await import("../src/lib/dm/action-budget.ts");
+const { CASTING_HELD, freshBudget, releaseHeldAction, spendAction, spendAttack } = await import("../src/lib/dm/action-budget.ts");
+const { castingRoundsOf, castingOf, castingInstance, completedCastingOf, completeMark } = await import("../src/lib/dm/long-casting-logic.ts");
 const { spellSupportFor, spellSupportLine } = await import("../src/lib/srd/spell-support.ts");
 
 let passed = 0;
@@ -204,16 +204,17 @@ test("no level named is the spell's own level; below it or a slot not held is re
 
 // ---- rituals and long castings ----
 
-test("a ritual is a named, ritual-tagged spell, cast by a class with Ritual Casting, out of a fight", () => {
+// In a fight a ritual is no refusal: its ten extra minutes are a casting
+// held across the caster's turns (long-casting-logic.ts, below).
+test("a ritual is a named, ritual-tagged spell, cast by a class with Ritual Casting", () => {
   const iris = caster();
   assert.equal(canCastRituals(iris), true);
   assert.equal(canCastRituals(caster({ class: "sorcerer" })), false);
   assert.equal(canCastRituals(caster({ class: "sorcerer", feats: ["Ritual Caster"] })), true);
-  assert.ok(ritualProblem(iris, "", null, false));
-  assert.match(ritualProblem(iris, "Fireball", facts("Fireball"), false)?.error, /no ritual tag/);
-  assert.match(ritualProblem(caster({ class: "sorcerer" }), "Detect Magic", facts("Detect Magic"), false)?.error, /does not cast rituals/);
-  assert.match(ritualProblem(iris, "Detect Magic", facts("Detect Magic"), true)?.error, /fight/);
-  assert.equal(ritualProblem(iris, "Detect Magic", facts("Detect Magic"), false), null);
+  assert.ok(ritualProblem(iris, "", null));
+  assert.match(ritualProblem(iris, "Fireball", facts("Fireball"))?.error, /no ritual tag/);
+  assert.match(ritualProblem(caster({ class: "sorcerer" }), "Detect Magic", facts("Detect Magic"))?.error, /does not cast rituals/);
+  assert.equal(ritualProblem(iris, "Detect Magic", facts("Detect Magic")), null);
 });
 
 // F11 (docs/dnd-rules-audit-2026-10-09-extent.md): a ritual is cast through
@@ -256,10 +257,35 @@ test("a ritual is cast only through a ritual caster's own spells, or the ritual 
   assert.equal(spellHeldProblem(multi([{ classId: "warlock", known: [] }], { ...patron, spellcasting: { spellbook: ["Detect Magic"] } }), "Detect Magic", detect, { ritual: true }), null);
 });
 
-test("a spell of a minute or longer is not cast in a fight", () => {
-  assert.ok(longCastingProblem(facts("Identify"), true));
-  assert.equal(longCastingProblem(facts("Identify"), false), null);
-  assert.equal(longCastingProblem(facts("Fireball"), true), null);
+// SRD 5.1, Longer Casting Times: "you must spend your action each turn
+// casting the spell, and you must maintain your concentration while you do
+// so"; Rituals: "takes 10 minutes longer to cast than normal". Ten rounds to
+// the minute (src/lib/dm/long-casting-logic.ts).
+test("a spell of a minute or more, or a ritual, is held for its rounds", () => {
+  assert.equal(castingRoundsOf(facts("Identify"), false), 10);
+  assert.equal(castingRoundsOf(facts("Identify"), true), 110);
+  assert.equal(castingRoundsOf(facts("Detect Magic"), true), 100);
+  assert.equal(castingRoundsOf(facts("Fireball"), false), null);
+  assert.equal(castingRoundsOf(null, false), null);
+  const sheet = { id: "iris", conditions: ["casting"], conditionMeta: { casting: castingInstance("iris", "Identify", 10, 1, false) } };
+  assert.deepEqual(castingOf(sheet), { label: "casting Identify", spell: "Identify", slotLevel: 1, ritual: false, rounds: 10 });
+  const done = { id: "iris", conditions: ["casting complete"], conditionMeta: { "casting complete": completeMark("iris", castingOf(sheet), true) } };
+  assert.deepEqual(completedCastingOf(done, "identify"), { spell: "Identify", slotLevel: 1, ritual: false });
+  assert.equal(completedCastingOf(done, "Fireball"), null);
+});
+
+test("a casting holds each turn's action, and gives it back if it ends first", () => {
+  const held = freshBudget({ ownerId: "iris", round: 2, actionHeld: true });
+  assert.equal(held.actionUsed, true);
+  assert.ok(held.oncePerTurn.includes(CASTING_HELD));
+  const refused = spendAction(held, "action", "the Dodge action", "Iris");
+  assert.equal(refused.ok, false);
+  assert.match(refused.error, /goes on the spell they are casting/);
+  assert.equal(spendAttack(held, "Iris").ok, false);
+  assert.equal(spendAction(held, "bonus", "Misty Step", "Iris").ok, true, "the bonus action is free");
+  const back = releaseHeldAction(held);
+  assert.equal(back.actionUsed, false);
+  assert.equal(spendAction(back, "action", "the Dodge action", "Iris").ok, true);
 });
 
 // ---- the turn ----

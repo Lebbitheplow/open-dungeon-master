@@ -10,6 +10,10 @@
 // comes before anything is written, and a dry run asks the questions
 // without writing, for a tool that has refusals of its own still to ask.
 //
+// A spell of a minute or more (or a ritual) in a fight is begun here and
+// held across the caster's turns, and completed here when its rounds have
+// run out, the slot spent only then (src/lib/dm/long-casting-logic.ts).
+//
 // A concentration spell already running whose effect comes again on a later
 // turn (Call Lightning's bolt, Heat Metal, Moonbeam) is not a new casting:
 // it costs what the spell says of the turn and no slot, at the slot level
@@ -27,7 +31,10 @@ import { endInvisibilityOnCast } from "@/lib/dm/attack-marks";
 import { endSanctuaryOnHarm } from "@/lib/dm/spell-defenses";
 import type { Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter, type Encounter } from "@/lib/db/encounters";
-import { patchSheet } from "@/lib/db/sheets";
+import { getSheetById, patchSheet } from "@/lib/db/sheets";
+import { insertSheetAudit } from "@/lib/db/sheet-audit";
+import { allocateSeq } from "@/lib/db/campaigns";
+import { publishPersisted } from "@/lib/events";
 import { advanceClock } from "@/lib/db/clock";
 import type { CharacterSheet, FullPatchSheetInput } from "@/lib/schemas/sheet";
 import { materialPatch } from "@/lib/dm/cast-material";
@@ -42,11 +49,12 @@ import { attacksAllowedFor, budgetFor, markReactionUsed, storeBudget } from "@/l
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
 import { droppedLine, setConcentration } from "@/lib/dm/concentration";
 import { repeatSpell } from "@/lib/dm/cast-repeat";
+import { beginWithSlotTool, castingRoundsOf, castingTimeWords, completedCastingOf, failLine } from "@/lib/dm/long-casting-logic";
+import { beginHeldCasting, clearCompletedCasting, registerCastingCompletion } from "@/lib/dm/long-casting";
 import {
   casterStateProblem,
   componentProblem,
   focusProblem,
-  longCastingProblem,
   materialPlan,
   openCastOf,
   ritualProblem,
@@ -250,16 +258,18 @@ function planTurn(
 // the fresh pre-cast state.
 export function castSpell(
   campaign: Campaign,
-  turnId: string,
+  // Null when the server completes a held casting as a turn starts, outside
+  // any DM turn (long-casting.ts).
+  turnId: string | null,
   sheet: CharacterSheet,
-  input: CastInput,
+  asked: CastInput,
   hooks: CastHooks,
 ): CastResult {
-  const spell = input.spell.trim();
+  const spell = asked.spell.trim();
   // Divine Smite is a paladin's feature under the 2014 rules, not a spell: a
   // slot spent naming it is the nameless slot the feature burns.
   if (!spell || (revisedOnlySpell(spell) === "Divine Smite" && holdsFeature(sheet, "Divine Smite"))) {
-    return namelessSlot(sheet, input, hooks);
+    return namelessSlot(sheet, asked, hooks);
   }
   // A spell only the 2024 rules print, still on a sheet from before they
   // were taken out, is not cast here (src/lib/content/edition.ts).
@@ -267,19 +277,30 @@ export function castSpell(
   if (revised) {
     return { error: `${revised} Nothing was spent.`, refused: "rules" };
   }
-  const via = input.via ?? "slot";
+  const via = asked.via ?? "slot";
   const authors = spellAuthorsFor(campaign);
   const facts = spellFactsFor(spell, authors);
   const name = facts?.name ?? spell;
+  // A casting of a minute or more held across the caster's turns whose
+  // rounds have run out (long-casting-logic.ts): this call completes it, from
+  // the slot it was begun with and as the ritual it was begun as.
+  const completing = completedCastingOf(sheet, name);
+  const input: CastInput = completing
+    ? { ...asked, ...(completing.slotLevel ? { level: completing.slotLevel } : {}), ...(completing.ritual ? { ritual: true } : {}) }
+    : asked;
   // The published spell a table's workshop copy runs as: what every engine
   // that keys a spell by name reads (src/lib/content/index.ts
   // spellEngineName). The copy's own name is what is spent and held.
   const engine = facts?.runsAs ?? name;
   const encounter = getActiveEncounter(campaign.id);
   const inFight = inRunningFight(encounter);
+  // SRD 5.1, Longer Casting Times: in a fight a spell of a minute or more,
+  // or one cast as a ritual, is begun now and held across the caster's turns.
+  const holdRounds = inFight && !completing ? castingRoundsOf(facts, Boolean(input.ritual)) : null;
   const reactionTime = facts?.castingTime === "reaction" || via === "reaction";
-  // A summoning spell's creatures come through cast_buff (summon-cast.ts).
-  const summoning = via === "slot" && !input.dryRun ? summonSlotProblem(engine) : null;
+  // A summoning spell's creatures come through cast_buff (summon-cast.ts),
+  // once its casting is done when that takes a minute in a fight.
+  const summoning = via === "slot" && !input.dryRun && holdRounds === null ? summonSlotProblem(engine) : null;
   if (summoning) {
     return summoning;
   }
@@ -348,7 +369,10 @@ export function castSpell(
       return refused;
     }
   } else {
-    const able = canAct({ sheet, encounter, kind: "cast" });
+    // A held casting was paid for turn by turn, and the server completes it
+    // as the caster's turn starts, before the pointer is saved: only the
+    // caster's own state is asked, not whose turn the stored row says it is.
+    const able = canAct({ sheet, encounter: completing ? null : encounter, kind: "cast" });
     if (!able.ok) {
       return toolError(able);
     }
@@ -376,16 +400,17 @@ export function castSpell(
   if (voice) {
     return voice;
   }
-  if (input.ritual) {
-    const ritual = ritualProblem(sheet, spell, facts, inFight);
+  if (input.ritual && !completing) {
+    const ritual = ritualProblem(sheet, spell, facts);
     if (ritual) {
       return ritual;
     }
-  } else {
-    const long = longCastingProblem(facts, inFight);
-    if (long) {
-      return long;
-    }
+  }
+  // Every other tool resolves a spell's effect at once; a casting held across
+  // turns is begun where the server can hold it, and that tool resolves it
+  // when it is complete.
+  if (holdRounds !== null && via !== "slot") {
+    return { error: beginWithSlotTool(sheet.name, name, castingTimeWords(facts, Boolean(input.ritual))), retry: true };
   }
   const material = materialPlan(sheet, castFacts, { inFight, units: input.units, slotLevel: input.level ?? facts?.level ?? null });
   if ("error" in material) {
@@ -444,22 +469,33 @@ export function castSpell(
           ? { kind: "none", note: `${name} is cast through ${grant.source} with no spell slot${grant.counter ? ": once, and again after a long rest" : ", at will"}${grant.castAt ? `, as a level ${grant.castAt} spell` : ""}.` }
         : mantled
           ? { kind: "none", note: `${name} is cast through Mantle of Majesty: no slot spent.` }
-        : // A slot the player marked spent by hand for this cast pays for it.
-          paidByManualTick(sheet, slotPlan(sheet, spell, facts, input.level), input.level ?? facts?.level, facts?.level, Boolean(input.dryRun));
+        : // A slot the player marked spent by hand for this cast pays for it;
+          // a casting begun now leaves the mark for its completion.
+          paidByManualTick(sheet, slotPlan(sheet, spell, facts, input.level), input.level ?? facts?.level, facts?.level, Boolean(input.dryRun) || holdRounds !== null);
   if ("error" in slot) {
     // A cast the turn cannot pay for is refused for that first: which slot
-    // to spend is moot when the action is gone.
-    const barred = planTurn(sheet, encounter, facts, spell, input.level ?? facts?.level ?? null, via);
+    // to spend is moot when the action is gone. A completing casting paid
+    // for its turns already.
+    const barred = completing ? null : planTurn(sheet, encounter, facts, spell, input.level ?? facts?.level ?? null, via);
     return barred && "error" in barred ? barred : slot;
   }
   // Infernal Legacy's hellish rebuke is cast as a 2nd-level spell, with no slot.
   const slotLevel = slowHeld ? slowHeld.slotLevel : slot.kind === "none" ? (grant?.slot === "free" ? grant.castAt ?? null : null) : slot.level;
-  const turn = input.ritual ? ({ kind: "free" } as const) : planTurn(sheet, encounter, facts, spell, slotLevel, via);
+  // A ritual out of a fight costs no turn; in one it is begun with the
+  // action like any casting held across turns, and a completing casting
+  // costs no action at all.
+  const turn = completing ? ({ kind: "free" } as const) : planTurn(sheet, encounter, facts, spell, slotLevel, via);
   if ("error" in turn) {
     return turn;
   }
   if (input.dryRun) {
     return { ok: true, dryRun: true, spell: name, slotLevel };
+  }
+  // The casting begins with this turn's action and nothing else is spent
+  // (long-casting.ts holds it from here).
+  if (holdRounds !== null && encounter) {
+    const spent = turn.kind === "budget" ? { budget: turn.budget, ...(turn.note ? { note: turn.note } : {}) } : null;
+    return beginHeldCasting(campaign, turnId, sheet, encounter, spent, { name, facts, slotLevel, ritual: Boolean(input.ritual), rounds: holdRounds });
   }
 
   // ---- the spend: nothing below refuses ----
@@ -512,6 +548,10 @@ export function castSpell(
       patch,
     );
     hooks.publish();
+  }
+  if (completing) {
+    clearCompletedCasting(campaign, sheet.id);
+    result.completed = `${name}'s casting is complete and it takes effect now; it costs no action.`;
   }
 
   if (turn.kind === "budget" && encounter) {
@@ -584,12 +624,13 @@ export function castSpell(
     }
   }
 
-  if (input.ritual) {
+  // A completing casting's time went by in the fight's rounds, not on the clock.
+  if (input.ritual && !completing) {
     // Ten minutes longer than the spell's own casting time.
     const minutes = 10 + (typeof facts?.castingTime === "number" ? facts.castingTime : 0);
     advanceClock(campaign.id, minutes, "minutes");
     result.note = `${name} cast as a ritual: ${minutes} minutes of casting, no slot spent. The clock moved on.`;
-  } else if (typeof facts?.castingTime === "number") {
+  } else if (typeof facts?.castingTime === "number" && !completing) {
     advanceClock(campaign.id, facts.castingTime, "minutes");
     result.castingTime = `${describeCastingTime(facts.castingTime)} of casting; the clock moved on.`;
   }
@@ -598,10 +639,10 @@ export function castSpell(
   if (concentrates) {
     // The first spell ends, and with it every effect it held in place: an
     // earlier casting of this same spell too.
-    const { displaced } = setConcentration(campaign, turnId, sheet.id, name, slotLevel);
+    const { displaced, failedCasting } = setConcentration(campaign, turnId, sheet.id, name, slotLevel);
     result.concentration = true;
     if (displaced) {
-      result.droppedConcentration = droppedLine(displaced, name);
+      result.droppedConcentration = failedCasting ? failLine(sheet.name, failedCasting, `${name} took the concentration`) : droppedLine(displaced, name);
     }
   }
   // Contact Other Plane's toll on its caster (spell-self.ts).
@@ -624,3 +665,36 @@ export function castSpell(
   const zone = via === "slot" || via === "buff" ? placeSpellZone(campaign, { spell: name, runsAs: facts?.runsAs, caster: { kind: "pc", id: sheet.id, name: sheet.name }, slotLevel, dc: spellSaveDcFor(sheet, name), at: input.at, toward: input.toward }) : null;
   return zone ? { ...result, area: zone } : result;
 }
+
+// A casting the server held completes through this door as its rounds run
+// out (long-casting.ts finishCasting), written to the audit trail and the
+// sheet's stream as every cast is. Registered, not imported there: the
+// clock reaches long-casting.ts, and this module reaches the clock.
+registerCastingCompletion((campaign, sheetId, spell) => {
+  const sheet = getSheetById(sheetId);
+  if (!sheet) {
+    return { error: "The caster is no longer at the table.", refused: "rules" };
+  }
+  return castSpell(campaign, null, sheet, { spell, via: "slot" }, {
+    record: (delta, patch) => {
+      const entry = insertSheetAudit({
+        campaignId: campaign.id,
+        characterId: sheet.id,
+        turnId: null,
+        kind: "use_spell_slot",
+        delta,
+        reason: `the casting of ${spell} is complete`,
+        seq: allocateSeq(campaign.id),
+        before: sheet,
+        patch,
+      });
+      publishPersisted(campaign.id, "sheet_audit", { entry, characterName: sheet.name });
+    },
+    publish: () => {
+      const updated = patchSheet(sheet.id, {});
+      if (updated) {
+        publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
+      }
+    },
+  });
+});

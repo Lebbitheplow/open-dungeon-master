@@ -15,7 +15,7 @@ import { holdsFeat } from "@/lib/srd/feat-effects";
 import type { CharacterSheet, EquipmentItem } from "@/lib/schemas/sheet";
 import { acBreakdownFor } from "@/lib/srd";
 import { subclassSpellsFor } from "@/lib/srd/features";
-import { describeCastingTime, type SpellFacts } from "@/lib/srd/spell-facts";
+import type { SpellFacts } from "@/lib/srd/spell-facts";
 import { casterViewsOf, notReadyReason, spellbookOf } from "@/lib/srd/spell-prep";
 import { wearsUntrainedArmor } from "@/lib/srd/armor";
 import { matchWeapon } from "@/lib/srd/weapons";
@@ -453,13 +453,14 @@ export function spentSlotRefusal(
   );
 }
 
-// ---- rituals and long castings ----
+// ---- rituals ----
 
+// A ritual in a fight is no refusal: its ten extra minutes make it a casting
+// held across the caster's turns (src/lib/dm/long-casting-logic.ts).
 export function ritualProblem(
   sheet: Caster,
   spell: string,
   facts: SpellFacts | null,
-  inFight: boolean,
 ): ToolError | null {
   if (!spell) {
     return { error: "A ritual is a named spell with the ritual tag; name the spell being cast.", retry: true };
@@ -473,27 +474,7 @@ export function ritualProblem(
   if (!canCastRituals(sheet) && !pactRitualOf(sheet, facts.name)) {
     return { error: `${sheet.name}'s class does not cast rituals (bards, clerics, druids and wizards do); ${facts.name} needs a slot.`, refused: "rules" };
   }
-  if (inFight) {
-    return { error: `A ritual takes ten minutes longer than the spell; ${facts.name} cannot be cast as one in the middle of a fight. It can be cast from a slot, or as a ritual once the fight is over.`, refused: "rules" };
-  }
   return null;
-}
-
-// SRD 5.1, Longer Casting Times: a spell of a minute or more takes the
-// caster's action on every turn of it, with their concentration held the
-// whole time; a broken concentration loses the spell and no slot is spent.
-// The server holds no casting across turns yet (issue #570, SPL-10), so in a
-// fight such a spell is refused, and the refusal names the rule the table
-// would play by.
-export function longCastingProblem(facts: SpellFacts | null, inFight: boolean): ToolError | null {
-  if (!facts || typeof facts.castingTime !== "number" || !inFight) {
-    return null;
-  }
-  const rounds = facts.castingTime * 10;
-  return {
-    error: `${facts.name} takes ${describeCastingTime(facts.castingTime)} to cast, ${rounds} rounds of a fight. The rules have the caster spend their action on each of those turns and keep concentration throughout; if it breaks, the spell fails and no slot is spent. The server does not hold a casting across turns, so ${facts.name} cannot be begun in the middle of a fight. Cast it once the fight is over. Nothing was spent.`,
-    refused: "rules",
-  };
 }
 
 // ---- the turn ----

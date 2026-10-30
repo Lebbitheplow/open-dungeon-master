@@ -1115,11 +1115,15 @@ export function conditionSpeed(conditions: string[], baseSpeed: number): number 
 // Slow's one attack and an action OR a bonus action (SRD 5.1). The turn
 // budget reads it every time it is asked (src/lib/dm/turn-budget.ts), so an
 // effect that lands mid-turn counts on that turn.
-export type TurnShape = { extraActions: number; slowed: boolean };
+// actionHeld: the turn's action is spent before it begins (a spell of a
+// minute or more being cast, src/lib/dm/long-casting-logic.ts).
+export type TurnShape = { extraActions: number; slowed: boolean; actionHeld?: boolean };
 export function conditionTurnShape(conditions: string[]): TurnShape {
+  const rows = activeConditionEffects(conditions);
   return {
     extraActions: conditionExtraActions(conditions),
-    slowed: activeConditionEffects(conditions).some(({ row }) => row.actionOrBonus === true),
+    slowed: rows.some(({ row }) => row.actionOrBonus === true),
+    ...(rows.some(({ row }) => row.holdsAction === true) ? { actionHeld: true } : {}),
   };
 }
 

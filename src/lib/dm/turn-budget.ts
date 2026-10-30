@@ -16,6 +16,7 @@ import {
   budgetApplies,
   freshBudget,
   grantAction,
+  releaseHeldAction,
   type StruckSwing,
   type TurnBudget,
 } from "@/lib/dm/action-budget";
@@ -55,11 +56,14 @@ export function budgetFor(
   if (!encounter || currentCombatantId(encounter) !== ownerId) {
     return null;
   }
-  const { extraActions, slowed } = typeof shape === "number" ? { extraActions: shape, slowed: false } : shape;
+  const { extraActions, slowed, actionHeld } = typeof shape === "number" ? { extraActions: shape, slowed: false, actionHeld: false } : shape;
   // Slow: one attack a turn, whatever Extra Attack would give.
   const allowed = slowed ? 1 : attacksAllowed;
   if (budgetApplies(encounter.turnBudget, ownerId, encounter.round)) {
-    const held = encounter.turnBudget;
+    // A casting that held this turn's action has ended (its concentration
+    // broke, or was let go): the action was never spent on anything else, so
+    // it is the caster's again. Only a caller that read the conditions knows.
+    const held = typeof shape !== "number" && !actionHeld ? releaseHeldAction(encounter.turnBudget) : encounter.turnBudget;
     // Haste landing mid-turn gives its action on this turn; one already
     // given is not given again, and one spent stays spent. (A budget stored
     // before the count was kept was seeded with it if it carries the field.)
@@ -74,7 +78,7 @@ export function budgetFor(
       ...(slowed ? { slowed: true } : {}),
     };
   }
-  return freshBudget({ ownerId, round: encounter.round, attacksAllowed: allowed, extraActions, slowed });
+  return freshBudget({ ownerId, round: encounter.round, attacksAllowed: allowed, extraActions, slowed, actionHeld });
 }
 
 export function storeBudget(encounter: Encounter, budget: TurnBudget) {

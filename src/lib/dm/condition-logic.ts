@@ -54,6 +54,9 @@ export type ConditionMeta = {
   // down and its slot, ending on damage, or a new save on damage.
   spell?: string;
   slotLevel?: number;
+  // A casting of a minute or more held across turns is a ritual: it spends
+  // no slot when it completes (src/lib/dm/long-casting-logic.ts).
+  ritual?: boolean;
   endsOnDamage?: boolean;
   saveOnDamage?: { ability: SaveAbilityId; dc: number; advantage?: boolean };
   // Hunter's Mark and Hex: the enemyId of the marked creature, the only one

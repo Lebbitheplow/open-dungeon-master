@@ -6856,7 +6856,7 @@
    "anchor": "longer-casting-times",
    "heading": "Longer Casting Times",
    "status": "finding",
-   "evidence": "scripts/test-enforce-srd-spells.mjs:454: a spell of a minute or more is refused outright in a fight (src/lib/dm/cast-rules.ts:394 longCastingProblem); scripts/test-enforce-casting-limits.mjs:249 asserts the refusal",
+   "evidence": "Was: a spell of a minute or more refused outright in a fight. Now held across the caster's turns (src/lib/dm/long-casting-logic.ts, src/lib/dm/long-casting.ts): the SPL-10 tests in scripts/test-enforce-srd-spells.mjs walk its action each turn, its concentration, the slot spent only as it takes effect, and the failure that spends none; scripts/test-enforce-casting-limits.mjs and scripts/test-enforce-casting.mjs (a ritual's ten minutes) hold the beginning",
    "finding": "SPL-10"
   },
   {

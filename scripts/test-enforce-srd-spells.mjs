@@ -28,7 +28,7 @@ import { board } from "./lib/enforce-zones.mjs";
 import { nextTurn } from "./lib/enforce-spell-tail.mjs";
 import { CONDITIONS, readSpellLists, readSpellPage } from "./lib/enforce-srd-spells-text.mjs";
 
-const { test, gap, finish } = suite("test-enforce-srd-spells");
+const { test, finish } = suite("test-enforce-srd-spells");
 const { default: book } = await import("../src/lib/rulebook/srd-5.1.json", { with: { type: "json" } });
 const { spellDamageFor, spellFactsFor, spellMechanicsFor, spellSchoolFor } = await import("../src/lib/content/index.ts");
 const { castShares } = await import("../src/lib/srd/spell-mechanics.ts");
@@ -36,6 +36,7 @@ const { materialComponents } = await import("../src/lib/dm/cast-materials.ts");
 const { spellDurationRounds } = await import("../src/lib/dm/spell-effects.ts");
 const { casterViewsOf } = await import("../src/lib/srd/spell-prep.ts");
 const { spellNameProblems } = await import("../src/lib/srd/legality/spells.ts");
+const { listMessagesBefore } = await import("../src/lib/db/messages.ts");
 
 const PAGES = book.pages.filter((page) => page.chapter === "spells").map(readSpellPage);
 const SPELLS = PAGES.map((page) => {
@@ -451,15 +452,136 @@ await test("a levelled spell cast with the action bars a bonus-action spell on t
   assert.match(String(after.error), /levelled spell/);
 });
 
-await gap("SPL-10", {
-  rule: "SRD 5.1 spellcasting, 'Longer Casting Times': 'When you cast a spell with a casting time longer than a single action or reaction, you must spend your action each turn casting the spell, and you must maintain your concentration while you do so... If your concentration is broken, the spell fails, but you don't expend a spell slot.'",
-  where: "src/lib/dm/cast-rules.ts longCastingProblem (refuses any casting time in minutes during a fight)",
-  severity: "low",
-  note: "Not built: holding a casting across turns (the action taken on each, concentration that loses the spell when it breaks, the slot and materials spent on completion, the effect then resolved through its own tool) is a subsystem of its own across the cast guard, the turn budget and the concentration engine. The refusal names the rule; docs/rules-coverage.md records it, and test-enforce-casting-limits.mjs holds it. Rituals are a separate rule (ten minutes longer) and stay out of this.",
-}, async () => {
-  const { world, sheets: [mage] } = await table([caster("wizard", "int", ["Identify"], [], 5)]);
-  const cast = await world.invoke("use_spell_slot", { characterId: mage.id, spell: "Identify", level: 1 });
-  assert.equal(cast.ok, true, `a 1-minute spell begun in a fight: ${cast.error}`);
+// SRD 5.1 spellcasting, Longer Casting Times: "When you cast a spell with a
+// casting time longer than a single action or reaction, you must spend your
+// action each turn casting the spell, and you must maintain your
+// concentration while you do so. If your concentration is broken, the spell
+// fails, but you don't expend a spell slot. If you want to try casting the
+// spell again, you must start over." A minute is ten rounds (Combat,
+// "a round represents about 6 seconds"). The hero is alone in the order, so
+// each nextTurn is one round and lands on their next turn.
+// Identify's pearl is worth 100 gp and Augury's tokens 25 (their pages'
+// material components), so each caster carries one.
+const SAGE = caster("wizard", "int", ["Identify", "Magic Missile"], [], 5, { equipment: [{ name: "Pearl", qty: 1, worth: 100 }] });
+const PRIEST = caster("cleric", "wis", ["Augury", "Shield of Faith"], [], 5, { equipment: [{ name: "Marked bones", qty: 1, worth: 25 }] });
+const slotsUsed = (world, id, level) => world.sheet(id).spellcasting.slots[String(level)].used;
+const castingRounds = (world, id) => world.sheet(id).conditionMeta?.casting?.rounds ?? null;
+const tableLines = (world) => listMessagesBefore(world.campaignId, null, 8).messages.map((entry) => entry.content).join(" ");
+
+await test("SPL-10: a spell of a minute is begun in a fight with the turn's action and the caster's concentration, and no slot is spent", async () => {
+  const { world, sheets: [mage] } = await table([SAGE]);
+  const before = slotsUsed(world, mage.id, 1);
+  const begun = await world.invokeAsIs("use_spell_slot", { characterId: mage.id, spell: "Identify", level: 1 });
+  assert.equal(begun.ok, true, `a 1-minute spell begun in a fight: ${begun.error}`);
+  assert.match(String(begun.result.casting), /10 rounds/);
+  assert.equal(slotsUsed(world, mage.id, 1), before, "the slot was spent as the casting began");
+  assert.equal(world.sheet(mage.id).concentratingOn, "casting Identify");
+  assert.equal(castingRounds(world, mage.id), 10);
+  assert.equal(world.encounter().turnBudget?.actionUsed, true, "beginning the casting took no action");
+});
+
+await test("SPL-10: the casting takes the caster's action on each of their turns", async () => {
+  const { world, sheets: [mage] } = await table([SAGE]);
+  assert.equal((await world.invokeAsIs("use_spell_slot", { characterId: mage.id, spell: "Identify", level: 1 })).ok, true);
+  await nextTurn(world);
+  assert.equal(world.encounter().turnBudget?.actionUsed, true, "the next turn's action was not held for the casting");
+  const other = await world.invokeAsIs("use_spell_slot", { characterId: mage.id, spell: "Magic Missile", level: 1 });
+  assert.equal(other.ok, false, "a second spell took the action the casting holds");
+  assert.match(String(other.error), /goes on the spell they are casting/);
+  assert.equal(castingRounds(world, mage.id), 9);
+});
+
+await test("SPL-10: after ten rounds the spell takes effect as the caster's turn starts, and only then is its slot spent", async () => {
+  const { world, sheets: [mage] } = await table([SAGE]);
+  const before = slotsUsed(world, mage.id, 1);
+  assert.equal((await world.invokeAsIs("use_spell_slot", { characterId: mage.id, spell: "Identify", level: 1 })).ok, true);
+  for (let round = 1; round < 10; round += 1) {
+    await nextTurn(world);
+    assert.equal(slotsUsed(world, mage.id, 1), before, `the slot was spent ${round} rounds in`);
+    assert.equal(world.sheet(mage.id).concentratingOn, "casting Identify", `the casting let go ${round} rounds in`);
+  }
+  await nextTurn(world);
+  assert.equal(slotsUsed(world, mage.id, 1), before + 1, "the slot was not spent as the spell took effect");
+  assert.equal(world.sheet(mage.id).concentratingOn, null, "Identify takes no concentration once cast");
+  assert.equal(castingRounds(world, mage.id), null);
+  assert.ok(!world.sheet(mage.id).conditions.includes("casting complete"), "the completed casting was left waiting");
+  assert.notEqual(world.encounter().turnBudget?.actionUsed, true, "the turn the spell took effect on lost its action");
+  assert.match(tableLines(world), /finishes casting Identify: it takes effect now/);
+});
+
+await test("SPL-10: a concentration broken by damage fails the casting, and no slot is spent", async () => {
+  const { world, sheets: [mage] } = await table([SAGE]);
+  const before = slotsUsed(world, mage.id, 1);
+  assert.equal((await world.invokeAsIs("use_spell_slot", { characterId: mage.id, spell: "Identify", level: 1 })).ok, true);
+  await nextTurn(world);
+  world.dice(1);
+  const hit = await world.invokeAsIs("apply_damage", { characterId: mage.id, amount: 4 });
+  world.clearDice();
+  assert.equal(hit.ok, true, hit.error);
+  assert.equal(hit.result.concentration?.held, false, "the CON save was not failed");
+  assert.equal(world.sheet(mage.id).concentratingOn, null);
+  assert.equal(castingRounds(world, mage.id), null, "the casting outlived its concentration");
+  assert.match(tableLines(world), /casting of Identify fails/);
+  // The action the casting held this turn is the caster's again.
+  assert.notEqual(world.encounter().turnBudget?.actionUsed, true, "the failed casting kept the turn's action");
+  for (let round = 0; round < 10; round += 1) {
+    await nextTurn(world);
+  }
+  assert.equal(slotsUsed(world, mage.id, 1), before, "a failed casting spent its slot");
+});
+
+await test("SPL-10: a concentration spell cast during the casting ends it, and the casting spends no slot", async () => {
+  const { world, sheets: [priest] } = await table([PRIEST]);
+  const before = slotsUsed(world, priest.id, 2);
+  assert.equal((await world.invokeAsIs("use_spell_slot", { characterId: priest.id, spell: "Augury", level: 2 })).ok, true);
+  await nextTurn(world);
+  const faith = await world.invokeAsIs("cast_buff", { characterId: priest.id, spell: "Shield of Faith", level: 1 });
+  assert.equal(faith.ok, true, faith.error);
+  assert.equal(world.sheet(priest.id).concentratingOn, "Shield of Faith");
+  assert.equal(castingRounds(world, priest.id), null, "Augury's casting survived another concentration spell");
+  assert.match(String(faith.result.droppedConcentration), /casting of Augury fails/);
+  assert.equal(slotsUsed(world, priest.id, 2), before);
+});
+
+// A spell another tool resolves (a summoning through cast_buff) takes effect
+// through that tool on the turn its casting finishes: the slot is spent
+// then, and no action. Left unresolved past that turn, it is lost unspent.
+await test("SPL-10: a summoning whose casting is done is resolved by its own tool that turn, the slot spent then, or is lost unspent", async () => {
+  const conjurer = caster("wizard", "int", ["Conjure Elemental"], [], 9);
+  const minute = async (world, mage) => {
+    assert.equal((await world.invokeAsIs("use_spell_slot", { characterId: mage.id, spell: "Conjure Elemental", level: 5 })).ok, true);
+    for (let round = 0; round < 10; round += 1) {
+      await nextTurn(world);
+    }
+  };
+  const { world, sheets: [mage] } = await table([conjurer]);
+  await minute(world, mage);
+  assert.equal(slotsUsed(world, mage.id, 5), 0, "the slot was spent before the spell took effect");
+  assert.match(tableLines(world), /resolve it now with cast_buff/);
+  const called = await world.invokeAsIs("cast_buff", { characterId: mage.id, spell: "Conjure Elemental", level: 5, variant: "Fire Elemental" });
+  assert.equal(called.ok, true, called.error);
+  assert.ok(called.result.summoned?.length, "no elemental came");
+  assert.equal(slotsUsed(world, mage.id, 5), 1);
+  assert.equal(world.sheet(mage.id).concentratingOn, "Conjure Elemental");
+  assert.notEqual(world.encounter().turnBudget?.actionUsed, true, "resolving the finished casting took the turn's action");
+  const { world: idle, sheets: [waiting] } = await table([conjurer]);
+  await minute(idle, waiting);
+  await nextTurn(idle);
+  assert.equal(slotsUsed(idle, waiting.id, 5), 0, "an unresolved casting spent its slot");
+  assert.ok(!idle.sheet(waiting.id).conditions.includes("casting complete"), "the finished casting outlived its turn");
+});
+
+await test("SPL-10: a fight that ends mid-casting lets the spell take effect then, its slot spent as it does", async () => {
+  const { world, sheets: [mage] } = await table([SAGE]);
+  const before = slotsUsed(world, mage.id, 1);
+  assert.equal((await world.invokeAsIs("use_spell_slot", { characterId: mage.id, spell: "Identify", level: 1 })).ok, true);
+  await nextTurn(world);
+  const ended = await world.invokeAsIs("end_encounter", { outcome: "victory" });
+  assert.equal(ended.ok, true, ended.error);
+  assert.match(String(ended.result.castingsFinished), /finishes casting Identify/);
+  assert.equal(slotsUsed(world, mage.id, 1), before + 1);
+  assert.equal(world.sheet(mage.id).concentratingOn, null);
+  assert.equal(castingRounds(world, mage.id), null);
 });
 
 closeTables();

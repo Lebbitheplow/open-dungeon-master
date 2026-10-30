@@ -43,6 +43,7 @@ import { isSheetFoe } from "@/lib/dm/combat-sides-logic";
 import { sheetSide, standingOn } from "@/lib/dm/combatant";
 import { applySheetFoeDamage, type SheetFoeBlow } from "@/lib/dm/sheet-foe-damage";
 import { fallenFoeSheetsXp } from "@/lib/dm/sheet-foe";
+import { finishCastingsAtFightEnd } from "@/lib/dm/long-casting";
 
 // The single server-side path for damage landing on an enemy. Used by the
 // damage_enemy tool AND by damage rolls carrying targetEnemyId, which the
@@ -100,6 +101,9 @@ export function finishEncounter(
   endEncounter(encounter.id, outcome);
   // An effect set "until the fight ends" ends now (active-effects.ts).
   endFightEffects(campaign.id);
+  // A spell of a minute or more still being cast takes effect as the fight
+  // ends, its slot spent then (long-casting.ts finishCastingsAtFightEnd).
+  const castingsFinished = finishCastingsAtFightEnd(campaign);
   // A frenzy outliving its rage costs its level of exhaustion (frenzy.ts).
   settleFrenzies(campaign);
   // What was dropped stays where it fell; what a fallen enemy held lies with
@@ -209,6 +213,7 @@ export function finishEncounter(
         }
       : {}),
     ...(turncoats.length ? { turncoats: turncoats.join(" ") } : {}),
+    ...(castingsFinished.length ? { castingsFinished: castingsFinished.join(" ") } : {}),
     ...(xpEach > 0 ? { xpAwarded: `${xpEach} XP each` } : {}),
     ...(typeof xpResult.levelUpAvailable !== "undefined"
       ? { levelUpAvailable: xpResult.levelUpAvailable }

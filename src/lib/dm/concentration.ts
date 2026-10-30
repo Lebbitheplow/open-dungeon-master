@@ -5,7 +5,10 @@ import {
   getActiveEncounter,
   listEnemies,
   patchEnemyConditions,
+  saveEncounter,
 } from "@/lib/db/encounters";
+import { activePublicEncounter } from "@/lib/db/encounter-view";
+import { CASTING_HELD, releaseHeldAction } from "@/lib/dm/action-budget";
 import { insertSheetAudit } from "@/lib/db/sheet-audit";
 import { spellEngineName, spellMechanicsFor } from "@/lib/content";
 import { spellAuthorsFor } from "@/lib/dm/spell-authors";
@@ -13,7 +16,9 @@ import { conditionConcentrationFloor } from "@/lib/srd/condition-effects";
 import { addConditionInstance, instancesOf, removeConditionInstances, type ConditionMeta, type ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { fullDurationRule } from "@/lib/srd/full-duration";
 import { heldBySpell, spellDurationRounds } from "@/lib/dm/spell-effects";
-import { publishPersisted } from "@/lib/events";
+import { publishPersisted, publishWithSeq } from "@/lib/events";
+import { insertCampaignMessage } from "@/lib/db/messages";
+import { castingHeldBy, failLine } from "@/lib/dm/long-casting-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { endSpellZones } from "@/lib/dm/zone-store";
 import { endSpellSummons } from "@/lib/dm/summon-store";
@@ -75,22 +80,31 @@ export function concentrationRoundsFor(spell: string, authors?: string | string[
 // concentration, and lays the new casting's effects after this.
 export function setConcentration(
   campaign: Campaign,
-  turnId: string,
+  // Null when the server completes a casting as a turn starts, outside any
+  // DM turn (src/lib/dm/long-casting.ts).
+  turnId: string | null,
   sheetId: string,
   spell: string,
   // The slot it was cast from: a higher one can hold it longer (Hex).
   slotLevel?: number | null,
-): { displaced: string | null } {
+): { displaced: string | null; failedCasting: string | null } {
   const sheet = getSheetById(sheetId);
   if (!sheet) {
-    return { displaced: null };
+    return { displaced: null, failedCasting: null };
   }
   const displaced = sheet.concentratingOn ?? null;
+  // SRD 5.1, Longer Casting Times: a spell of a minute or more needs the
+  // concentration all through its casting, so another concentration spell
+  // makes it fail (long-casting-logic.ts).
+  const casting = castingHeldBy(sheet, displaced);
   writeConcentration(campaign, turnId, sheet, spell, `casting ${spell}`, slotLevel);
   if (displaced) {
     clearSpellConditionsByName(campaign, displaced, sheet.userId, sheet.id);
   }
-  return { displaced };
+  if (casting) {
+    castingFailedNote(campaign, sheet.id, failLine(sheet.name, casting.spell, `${spell} was cast, and it takes concentration`));
+  }
+  return { displaced, failedCasting: casting?.spell ?? null };
 }
 
 // The line a cast's result carries for the concentration it ended.
@@ -111,12 +125,36 @@ export function breakConcentration(
     return null;
   }
   const spell = sheet.concentratingOn;
+  // A spell of a minute or more still being cast fails with it, and spends
+  // no slot (long-casting-logic.ts). One whose rounds have run out has left
+  // its "casting" condition already, so its completion is no failure.
+  const casting = castingHeldBy(sheet, spell);
   writeConcentration(campaign, turnId, sheet, null, cause);
   // The spell's lingering effect conditions end with the concentration:
   // Bless's dice, Haste's action, Hold Person's paralysis all stop here
   // instead of waiting for their duration to expire.
   clearSpellConditionsByName(campaign, spell, sheet.userId, sheet.id);
+  if (casting) {
+    castingFailedNote(campaign, sheet.id, failLine(sheet.name, casting.spell, cause));
+  }
   return spell;
+}
+
+// The table hears a casting fail however its concentration ended: the tool
+// that broke it (a hit's CON save, a condition, a rage) reports only the
+// concentration. The action it held on the caster's own turn is theirs again
+// at once, so the board's pips say so (turn-budget.ts budgetFor gives it back
+// to the rules either way).
+function castingFailedNote(campaign: Campaign, casterId: string, line: string) {
+  const seq = allocateSeq(campaign.id);
+  const message = insertCampaignMessage({ campaignId: campaign.id, seq, authorType: "system", glyph: "cue-bell", content: line });
+  publishWithSeq(campaign.id, seq, "message_added", { message });
+  const encounter = getActiveEncounter(campaign.id);
+  const budget = encounter?.turnBudget;
+  if (encounter && budget?.ownerId === casterId && budget.oncePerTurn.includes(CASTING_HELD)) {
+    saveEncounter({ ...encounter, turnBudget: releaseHeldAction(budget) });
+    publishPersisted(campaign.id, "encounter_updated", { encounter: activePublicEncounter(campaign.id) });
+  }
 }
 
 // Haste's lethargy is the incapacitated condition, held until after the

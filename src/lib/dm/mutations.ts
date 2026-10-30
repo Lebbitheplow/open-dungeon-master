@@ -79,6 +79,7 @@ import {
 } from "@/lib/dm/condition-logic";
 import { normalizeAbility } from "@/lib/dm/arg-coerce";
 import { breakConcentration } from "@/lib/dm/concentration";
+import { CASTING, castingHeldBy } from "@/lib/dm/long-casting-logic";
 import {
   computePurchase,
   computeUseItem,
@@ -1430,10 +1431,13 @@ export function applyDmMutation(
       // "concentration" is not a real condition: clearing it ends the
       // tracked spell (a caster dropping concentration voluntarily).
       const rawCondition = (args.condition ?? "").trim().toLowerCase();
-      if (isConditionNamed(rawCondition, "concentration")) {
+      // A casting held across turns is its concentration (long-casting-logic.ts):
+      // letting go of either ends it, and the spell fails with no slot spent.
+      const casting = isConditionNamed(rawCondition, CASTING) ? castingHeldBy(sheet, sheet.concentratingOn) : null;
+      if (isConditionNamed(rawCondition, "concentration") || casting) {
         const ended = breakConcentration(campaign, turnId, sheet.id, "ended voluntarily");
         return ended
-          ? { result: { ok: true, cleared: `concentration (${ended})` } }
+          ? { result: { ok: true, cleared: `concentration (${ended})`, ...(casting ? { failed: `${casting.spell} fails; no slot is spent.` } : {}) } }
           : { result: { error: `${sheet.name} is not concentrating on anything.`, retry: true } };
       }
       // Exhaustion clears one level at a time (greater restoration, a long

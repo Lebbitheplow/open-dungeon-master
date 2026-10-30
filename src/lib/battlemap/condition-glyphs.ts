@@ -129,6 +129,10 @@ export const CONDITION_GLYPHS: Record<string, ConditionGlyph> = {
   "indigo ray": { id: "indigoray", label: "Indigo ray", tone: HARM, path: "M2 13L13 2M9 2h4v4M3 10l3 3" },
   "violet ray": { id: "violetray", label: "Violet ray", tone: HARM, path: "M2 13L13 2M9 2h4v4M2 2l12 12" },
   "flesh to stone": { id: "fleshtostone", label: "Flesh to stone", tone: HARM, path: "M3 13l2-8 3-3 3 3 2 8H3zM6 9h4M6 11h4" },
+  // A spell of a minute or more being cast across turns, and the moment it is
+  // done (src/lib/dm/long-casting-logic.ts): an hourglass, then a spark.
+  casting: { id: "casting", label: "Casting", tone: NEUTRAL, path: "M5 2h6M5 14h6M5.5 2c0 3 5 3.5 5 6s-5 3-5 6M10.5 2c0 3-5 3.5-5 6s5 3 5 6" },
+  "casting complete": { id: "castingdone", label: "Casting complete", tone: BLESS, path: "M8 2l1.5 4.5L14 8l-4.5 1.5L8 14l-1.5-4.5L2 8l4.5-1.5z" },
 };
 
 const DEFAULT_GLYPH: ConditionGlyph = {
@@ -230,6 +234,10 @@ const GLYPH_ICON: Record<string, string> = {
   indigoray: "restrained",
   violetray: "blinded",
   fleshtostone: "petrified",
+  // A casting held across turns is held by its concentration; once done it
+  // is a spell about to take effect.
+  casting: "concentrating",
+  castingdone: "blessed",
 };
 
 // The painted icon a glyph shows: its own painting, or the one it borrows.
