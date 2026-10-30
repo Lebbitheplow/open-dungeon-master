@@ -1014,7 +1014,7 @@
     "lib/dm/action-budget.ts#partial": [["identity",1,"Haste's extra action by its whole name (anchored)"]],
     "lib/dm/action-budget.ts#whole": [["key",1,"once-per-turn keys"]],
     "lib/dm/action-common.ts#whole": [["identity",1,"a condition by its whole name"]],
-    "lib/dm/action-tools.ts#keyed": [["key",1,"ids, refs, slugs, tool names, field names, env names, event kinds, UI keys, caches, door and map keys; a sheet's conditionMeta by the condition key it was written under; the usage route's gear map by the sheet's own stored item names (src/: every site read)"]],
+    "lib/dm/action-price.ts#keyed": [["key",1,"ids, refs, slugs, tool names, field names, env names, event kinds, UI keys, caches, door and map keys; a sheet's conditionMeta by the condition key it was written under; the usage route's gear map by the sheet's own stored item names (src/: every site read)"]],
     "lib/dm/advance-logic.ts#helper": [["search",3,"presence: an NPC's usual place within the party's place, or their name in the narration just told; a miss only skips one roll"]],
     "lib/dm/advance-logic.ts#partial": [["search",1,"the romance word list read in a table's safety lines and veils: an extra guard beside the family boundary and the player's own opt-in"]],
     "lib/dm/afflictions.ts#number": [["key",1,"digits a regex already captured, ids, headers, stored and form numbers (number inputs), dice parts, the pack's English text (\"1,000 feet\", a purse); src/: every site read"]],
