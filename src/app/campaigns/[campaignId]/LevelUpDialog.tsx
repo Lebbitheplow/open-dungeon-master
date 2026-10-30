@@ -72,7 +72,11 @@ import {
   thirdCasterPickRefusal,
 } from "./level-up-preview";
 import { SpellBook, type SpellTile } from "@/components/sheet/SpellBook";
-import { useWiderSpellPool } from "@/components/sheet/useSpellPool";
+import { AnyListSpellGroup } from "@/components/sheet/AnyListSpellGroup";
+import { classSpellGrants } from "@/lib/srd/class-spell-grants";
+import { ANY_SPELL_LIST, useSpellPool, useWiderSpellPool } from "@/components/sheet/useSpellPool";
+import { anyListPickRefusal, anyListTiles, offListHeld, spellPickRooms } from "@/lib/srd/any-list-picks-logic";
+import { spellLevelOf } from "@/lib/srd/spell-lists";
 import AsiFeatEditor from "@/app/characters/builder/AsiFeatEditor";
 import { useFeatDescs } from "@/app/characters/builder/useFeatDescs";
 import { authoredFeatDesc, featAbilityIncrease } from "@/lib/srd/feat-effects";
@@ -187,6 +191,10 @@ export function LevelUpDialog({
   const [spellPicks, setSpellPicks] = useState<string[]>([]);
   // Cantrips picked this level, kept apart: they have their own allowance.
   const [cantripPicks, setCantripPicks] = useState<string[]>([]);
+  // Picks from any class's list (Magical Secrets, the Book of Shadows), in
+  // the order made: their own group, with their own number.
+  const [anyPicks, setAnyPicks] = useState<string[]>([]);
+  const [anyNote, setAnyNote] = useState("");
   const [stylePicks, setStylePicks] = useState<FightingStyleId[]>([]);
   const [spellNote, setSpellNote] = useState("");
   const [stepIndex, setStepIndex] = useState(0);
@@ -289,6 +297,7 @@ export function LevelUpDialog({
     setExpertisePicks([]);
     setSpellPicks([]);
     setCantripPicks([]);
+    setAnyPicks([]);
     setStylePicks([]);
     setOptionPicks([]);
     setSkillPick("");
@@ -421,6 +430,26 @@ export function LevelUpDialog({
     abilitiesAfter: after.abilities,
   });
   const showSpells = caster.casts || (!isMulticlassPath && Boolean(sheet.spellcasting));
+  // Magical Secrets, the Book of Shadows and Pact of the Chain's find
+  // familiar, read from the sheet's features, the class's at its new level
+  // and the picks made here (a pact boon chosen at warlock 3), as the
+  // level-up route reads them (src/lib/srd/class-spell-grants.ts).
+  // One memo over props, state and plain values, as spellWider below is: the
+  // same calls fed by the render's own arrays kept the React Compiler from
+  // keeping the dialog's other memos.
+  const { spellGrants, grantsBefore } = useMemo(() => {
+    const features = [
+      ...sheet.features,
+      ...classFeaturesFor(classChoice, effectiveSubclass, classLevelAfter),
+      ...optionPicks.map((name) => ({ name })),
+    ];
+    // The subclass the class held before this level, as the route reads it.
+    const heldSubclass = classList.find((entry) => textKey(entry.id) === textKey(classChoice))?.subclass ?? "";
+    return {
+      spellGrants: classSpellGrants({ classId: classChoice, level: classLevelAfter, subclass: effectiveSubclass, features }),
+      grantsBefore: classSpellGrants({ classId: classChoice, level: classLevelAfter - 1, subclass: heldSubclass, features }),
+    };
+  }, [sheet.features, classList, classChoice, effectiveSubclass, classLevelAfter, optionPicks]);
   // The hit points, the per-level bonuses and Draconic Resilience included.
   const classesAfter = nextClasses.map((entry) =>
     entry.id.toLowerCase() === classChoice.toLowerCase()
@@ -560,15 +589,18 @@ export function LevelUpDialog({
   );
   // Read with the scores after this level's improvement (U:UB6).
   const allowance = showSpells ? caster.spellCap : null;
-  // The subclass's always-prepared spells never count against the allowance.
+  // The subclass's always-prepared spells never count against the allowance,
+  // nor does a chain warlock's find familiar.
+  const learnedKey = spellGrants.learned.join("|");
   const grantedFree = useMemo(
     () =>
       new Set(
-        subclassSpellsFor(classChoice, effectiveSubclass, classLevelAfter, undefined, sheet.features).map((name) =>
-          textKey(name),
-        ),
+        [
+          ...subclassSpellsFor(classChoice, effectiveSubclass, classLevelAfter, undefined, sheet.features),
+          ...(learnedKey ? learnedKey.split("|") : []),
+        ].map((name) => textKey(name)),
       ),
-    [classChoice, effectiveSubclass, classLevelAfter, sheet.features],
+    [classChoice, effectiveSubclass, classLevelAfter, sheet.features, learnedKey],
   );
   const heldSpells = [...new Set([...knownList, ...pendingList].map((name) => textKey(name)))].filter(
     (name) => !grantedFree.has(name),
@@ -578,18 +610,58 @@ export function LevelUpDialog({
       ? spellbookAllowance(classLevelAfter)
       : 2 * levelsGained
     : null;
-  // A spell given up makes room for one more.
-  const remainingPicks =
-    bookGain ?? (allowance ? Math.max(0, allowance.count - heldSpells) + (forgetPick ? 1 : 0) : null);
-  const cantripAllowance = showSpells ? caster.cantripCap : null;
+  // A spell given up makes room for one more. Additional Magical Secrets'
+  // two spells and the Book of Shadows' three cantrips sit on top of the
+  // counts, as the route counts them.
+  const spellRoom =
+    bookGain ??
+    (allowance ? Math.max(0, allowance.count + spellGrants.extraSpells - heldSpells) + (forgetPick ? 1 : 0) : null);
+  const cantripAllowance =
+    showSpells && caster.cantripCap !== null ? caster.cantripCap + spellGrants.extraCantrips : null;
   // The race's cantrips (a high elf's pick, a tiefling's Thaumaturgy) are
   // known on top of the class's and leave its count alone (U:UB2), as the
   // level-up route counts them.
   const freeCantrips = freeCantripsIn(sheet, cantripList, speciesCantrips);
-  const remainingCantrips =
+  const cantripRoom =
     cantripAllowance !== null
       ? Math.max(0, cantripAllowance - Math.max(0, cantripList.length - freeCantrips))
       : null;
+  // The picks from any class's list (src/lib/srd/any-list-picks-logic.ts):
+  // the spells already held off the class's list use up the features'
+  // number first, the rest are a group of their own, and the class's list
+  // keeps what is left of the room.
+  const anyPoolWanted = step === "spells" && spellGrants.anyList > 0;
+  const { pool: anyPool, loading: anyLoading } = useSpellPool(ANY_SPELL_LIST, maxCastable ?? 0, anyPoolWanted);
+  const onClassList = useMemo(() => new Set(spellPool.map((spell) => textKey(spell.name))), [spellPool]);
+  const keptOff = offListHeld({
+    grants: spellGrants,
+    cantrips: cantripList,
+    spells: [...knownList, ...pendingList].filter((name) => textKey(name) !== textKey(forgetPick)),
+    onList: (name) => onClassList.has(textKey(name)),
+    granted: (name) => grantedFree.has(textKey(name)),
+    freeCantrips,
+  });
+  const anyLevelOf = (name: string) =>
+    anyPool.find((spell) => textKey(spell.name) === textKey(name))?.level ?? spellLevelOf(name);
+  // The class's name in the group's sentences ("the bard list above").
+  const ownListName = (klass?.name ?? classChoice).toLowerCase();
+  const rooms = spellPickRooms({
+    grants: spellGrants,
+    before: grantsBefore,
+    keptOff,
+    spells: spellRoom ?? 0,
+    cantrips: cantripRoom ?? 0,
+    picks: anyPicks.map((name) => anyLevelOf(name) === 0),
+    own: ownListName,
+    maxLevel: maxCastable ?? 0,
+  });
+  // The group waits for the class's list, which says what is held off it.
+  const anyGroup = showSpells && !poolLoading ? rooms.group : null;
+  const anyChosen = anyGroup ? anyPicks.slice(0, rooms.kept) : [];
+  const anyChosenKeys = new Set(anyChosen.map((name) => textKey(name)));
+  const remainingPicks = spellRoom === null || !anyGroup ? spellRoom : rooms.spells;
+  const remainingCantrips = cantripRoom === null || !anyGroup ? cantripRoom : rooms.cantrips;
+  const classPickKeys = new Set([...spellPicks, ...cantripPicks].map((name) => textKey(name)));
   const levelStyle = caster.style;
   // Why a spell not yet picked cannot be picked now: every new spell or
   // cantrip for the level is chosen, or an Eldritch Knight's or Arcane
@@ -599,6 +671,12 @@ export function LevelUpDialog({
   const schoolOf = (name: string) =>
     spellPool.find((spell) => spell.name === name)?.data?.school;
   function pickRefusal(name: string, level: number | null): { short: string; long: string } | null {
+    if (anyGroup && anyChosenKeys.has(textKey(name))) {
+      return {
+        short: "Chosen below",
+        long: `${name} is already chosen under ${anyGroup.feature}, below. Untick it there to choose it here.`,
+      };
+    }
     if (level === 0) {
       return remainingCantrips !== null && cantripPicks.length >= remainingCantrips
         ? { short: "Cantrips full", long: `That is every new cantrip for this level. Untick one to choose ${name}.` }
@@ -622,9 +700,25 @@ export function LevelUpDialog({
     });
     return offSchool ? { short: "Outside your two schools", long: offSchool } : null;
   }
+  function freeNote(name: string): string {
+    return spellGrants.learned.some((entry) => textKey(entry) === textKey(name))
+      ? `Free with ${spellGrants.learnedFrom}`
+      : "Free with your subclass";
+  }
+  function anyRefusal(name: string, cantrip: boolean) {
+    return anyGroup
+      ? anyListPickRefusal({
+          group: anyGroup,
+          picked: anyChosen.length,
+          cantrip,
+          cantripsOpen: (remainingCantrips ?? 0) - cantripPicks.length,
+          name,
+        })
+      : null;
+  }
   // What can still be learned: the class list minus what is already held,
   // cantrips only while there is a cantrip to choose.
-  const levelUpTiles: SpellTile[] = spellPool
+  const classTiles: SpellTile[] = spellPool
     .filter((spell) => !alreadyKnown.has(textKey(spell.name)))
     .filter((spell) => spell.level > 0 || Boolean(remainingCantrips))
     .map((spell) => {
@@ -637,13 +731,52 @@ export function LevelUpDialog({
         name: spell.name,
         level: spell.level,
         state: granted ? ("granted" as const) : picked ? ("ready" as const) : ("available" as const),
-        note: granted ? "Free with your subclass" : picked ? "New" : undefined,
+        note: granted ? freeNote(spell.name) : picked ? "New" : undefined,
         blocked: granted || picked ? undefined : pickRefusal(spell.name, spell.level)?.short,
         data: spell.data,
         slug: spell.slug,
         homebrew: spell.source === "homebrew",
       };
     });
+  // A chain warlock's find familiar is on no warlock list: its tile is
+  // added, locked, as the spell arrives with the pact (SRD 5.1, Pact of the
+  // Chain: "You learn the find familiar spell").
+  const learnedNew = spellGrants.learned.filter((name) => !alreadyKnown.has(textKey(name)));
+  const levelUpTiles: SpellTile[] = [
+    ...classTiles,
+    ...learnedNew
+      .filter((name) => !onClassList.has(textKey(name)))
+      .map((name) => ({ name, level: spellLevelOf(name) ?? 1, state: "granted" as const, note: freeNote(name) })),
+  ];
+  // The group's tiles: every class's spells it takes, less those held.
+  const anyTiles = anyGroup
+    ? anyListTiles({
+        group: anyGroup,
+        pool: anyPool,
+        held: (name) => alreadyKnown.has(textKey(name)) || grantedFree.has(textKey(name)),
+        picks: anyChosen,
+        elsewhere: (name) => (classPickKeys.has(textKey(name)) ? "Chosen above" : null),
+        refusal: anyRefusal,
+      })
+    : [];
+  function toggleAnyPick(tile: SpellTile) {
+    setAnyNote("");
+    const key = textKey(tile.name);
+    if (anyChosenKeys.has(key)) {
+      setAnyPicks(anyChosen.filter((name) => textKey(name) !== key));
+      return;
+    }
+    if (classPickKeys.has(key)) {
+      setAnyNote(`${tile.name} is already chosen from the ${ownListName} list above. Untick it there to choose it here.`);
+      return;
+    }
+    const refusal = anyRefusal(tile.name, tile.level === 0);
+    if (refusal) {
+      setAnyNote(refusal.long);
+      return;
+    }
+    setAnyPicks([...anyChosen, tile.name]);
+  }
 
   function toggleSpell(name: string, level?: number) {
     if (level === 0) {
@@ -678,8 +811,10 @@ export function LevelUpDialog({
             : {}),
           ...(needsSubclass && subclassChoice ? { subclass: subclassChoice } : {}),
           ...(expertisePicks.length ? { expertise: [...currentExpertise, ...expertisePicks] } : {}),
-          ...(spellPicks.length || cantripPicks.length
-            ? { levelUpSpells: [...spellPicks, ...cantripPicks] }
+          // The group's picks go by name with the rest: the route judges each
+          // against the feature's number (src/lib/srd/level-up-spells.ts).
+          ...(spellPicks.length || cantripPicks.length || anyChosen.length
+            ? { levelUpSpells: [...spellPicks, ...cantripPicks, ...anyChosen] }
             : {}),
           ...(forgetPick ? { levelUpForget: forgetPick } : {}),
           ...(stylePicks.length || optionPicks.length
@@ -1370,7 +1505,19 @@ export function LevelUpDialog({
                         )}
                       </li>
                     ) : null}
-                    {!remainingCantrips && !remainingPicks ? (
+                    {anyGroup ? (
+                      <li>
+                        <span className="text-amber-200">{anyGroup.title}.</span> They have their own list,
+                        below your {ownListName} spells.
+                      </li>
+                    ) : null}
+                    {learnedNew.length ? (
+                      <li>
+                        <span className="text-amber-200">{spellGrants.learnedFrom}:</span> you learn{" "}
+                        {learnedNew.join(", ")}, free of your spells known, and can cast it as a ritual.
+                      </li>
+                    ) : null}
+                    {!remainingCantrips && !remainingPicks && !anyGroup ? (
                       <li>Nothing new to choose at this level: your spells stay as they are.</li>
                     ) : null}
                   </ul>
@@ -1441,12 +1588,28 @@ export function LevelUpDialog({
                     }}
                     notice={spellNote || undefined}
                     emptyText={poolLoading ? "Loading the spell list..." : "No new spells at this level."}
+                    searchLabel={anyGroup ? `Find a ${ownListName} spell` : undefined}
                   />
-                  {spellPicks.length || cantripPicks.length ? (
+                  {anyGroup ? (
+                    <AnyListSpellGroup
+                      group={anyGroup}
+                      tiles={anyTiles}
+                      maxLevel={maxCastable ?? 0}
+                      picked={anyChosen.length}
+                      onTile={toggleAnyPick}
+                      notice={anyNote}
+                      loading={anyLoading}
+                    />
+                  ) : null}
+                  {spellPicks.length || cantripPicks.length || anyChosen.length ? (
                     <p className="reveal text-xs text-stone-400">
                       Learning:{" "}
                       <span className="text-amber-200">
-                        {[...cantripPicks.map((name) => `${name} (cantrip)`), ...spellPicks].join(", ")}
+                        {[
+                          ...cantripPicks.map((name) => `${name} (cantrip)`),
+                          ...spellPicks,
+                          ...anyChosen.map((name) => `${name} (${anyGroup?.feature})`),
+                        ].join(", ")}
                       </span>
                     </p>
                   ) : null}

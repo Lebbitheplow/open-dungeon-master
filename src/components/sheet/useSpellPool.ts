@@ -25,6 +25,10 @@ export type PoolSpell = {
 const PAGE = 200;
 const cache = new Map<string, PoolSpell[]>();
 
+// Every class's list at once, for the picks a feature lets come from any
+// class (Magical Secrets, the Book of Shadows: src/lib/srd/any-list-picks-logic.ts).
+export const ANY_SPELL_LIST = "*";
+
 type ManifestSpell = { n: string; l: number; c?: string };
 
 function checklistPool(classSlug: string, maxLevel: number): PoolSpell[] {
@@ -33,7 +37,9 @@ function checklistPool(classSlug: string, maxLevel: number): PoolSpell[] {
     .filter(
       (spell) =>
         spell.l <= maxLevel &&
-        (spell.c ?? "").split(",").some((entry) => entry.trim().toLowerCase() === wanted),
+        (spell.c ?? "")
+          .split(",")
+          .some((entry) => Boolean(entry.trim()) && (wanted === ANY_SPELL_LIST || entry.trim().toLowerCase() === wanted)),
     )
     .map((spell) => ({ name: spell.n, level: spell.l }))
     .sort((a, b) => a.level - b.level || compareNames(a.name, b.name));
@@ -175,9 +181,19 @@ export function useSpellPool(
       // server is asked again. A missing pack is remembered as it is.
       let failed = false;
       try {
-        for (let offset = 0; offset < 2000; offset += PAGE) {
+        // Every class's list together runs past one class's 2000.
+        const most = classSlug === ANY_SPELL_LIST ? 10_000 : 2000;
+        for (let offset = 0; offset < most; offset += PAGE) {
           const params = new URLSearchParams(
-            scopedParams({ class: classSlug, level: String(maxLevel), limit: String(PAGE), offset: String(offset) }, campaignId),
+            scopedParams(
+              {
+                ...(classSlug === ANY_SPELL_LIST ? {} : { class: classSlug }),
+                level: String(maxLevel),
+                limit: String(PAGE),
+                offset: String(offset),
+              },
+              campaignId,
+            ),
           );
           const response = await fetch(`/api/content/spells?${params}`);
           if (!response.ok) {

@@ -130,6 +130,7 @@ export function SpellBook({
   writingBook = false,
   filters = false,
   prompt,
+  searchLabel = "Find a spell",
 }: {
   tiles: SpellTile[];
   // Tabs run from cantrips to this level even when a level is still empty,
@@ -158,6 +159,9 @@ export function SpellBook({
   // A question from the picker about the last tap that waits for an answer
   // (the builder's swap when a list is full), drawn above the tiles.
   prompt?: ReactNode;
+  // The search box's name for a screen reader: a step with a second book
+  // (Magical Secrets' picks from any class) names each one's search.
+  searchLabel?: string;
 }) {
   const [filter, setFilter] = useState("");
   // The last text note, kept to hold the note's room after it clears (see
@@ -317,7 +321,7 @@ export function SpellBook({
           value={filter}
           onChange={(event) => setFilter(event.target.value)}
           placeholder="Find a spell..."
-          aria-label="Find a spell"
+          aria-label={searchLabel}
           className="ml-auto w-36 rounded-md border border-stone-700/70 bg-stone-950 px-2 py-1 text-xs text-stone-200 outline-none focus:border-amber-400/60"
         />
       </div>

@@ -40,11 +40,27 @@ export type ClassSpellGrants = {
   extraCantrips: number;
   // Learned outright, free of the list and the count (find familiar).
   learned: string[];
+  // The feature that teaches them, for the level-up dialog's tile to name.
+  learnedFrom: string;
   // The feature the any-list picks come from, for a refusal to name.
   feature: string;
+  // The any-list picks by the feature that gives them, so the level-up
+  // dialog names the one that arrives with a level (a Lore bard's 10th
+  // brings Magical Secrets, not Additional Magical Secrets again). `onTop`:
+  // held on top of the class's count rather than inside it.
+  sources: Array<{ feature: string; count: number; onTop: boolean }>;
 };
 
-const NONE: ClassSpellGrants = { anyList: 0, anyListSpells: false, extraSpells: 0, extraCantrips: 0, learned: [], feature: "" };
+const NONE: ClassSpellGrants = {
+  anyList: 0,
+  anyListSpells: false,
+  extraSpells: 0,
+  extraCantrips: 0,
+  learned: [],
+  learnedFrom: "",
+  feature: "",
+  sources: [],
+};
 
 type GrantView = {
   classId: string;
@@ -79,6 +95,10 @@ export function classSpellGrants(view: GrantView): ClassSpellGrants {
       anyListSpells: true,
       extraSpells: lore,
       feature: secrets && lore ? "Magical Secrets and Additional Magical Secrets" : secrets ? "Magical Secrets" : "Additional Magical Secrets",
+      sources: [
+        ...(secrets ? [{ feature: "Magical Secrets", count: secrets, onTop: false }] : []),
+        ...(lore ? [{ feature: "Additional Magical Secrets", count: lore, onTop: true }] : []),
+      ],
     };
   }
   if (classId === "warlock" && view.level >= 3) {
@@ -93,7 +113,9 @@ export function classSpellGrants(view: GrantView): ClassSpellGrants {
       anyList: tome ? 3 : 0,
       extraCantrips: tome ? 3 : 0,
       learned: chain ? ["Find Familiar"] : [],
+      learnedFrom: chain ? "Pact of the Chain" : "",
       feature: tome ? "Pact of the Tome" : "",
+      sources: tome ? [{ feature: "Pact of the Tome", count: 3, onTop: true }] : [],
     };
   }
   return NONE;
