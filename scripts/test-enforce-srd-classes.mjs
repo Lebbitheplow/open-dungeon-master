@@ -308,12 +308,9 @@ await test("CLS-04", async () => {
 const bardFour = world.addHero({ class: "bard", level: 4, abilities: { cha: 16 }, proficiencies: TRAINED });
 const bardFive = world.addHero({ class: "bard", level: 5, abilities: { cha: 16 }, proficiencies: TRAINED });
 
-await gap("CLS-05", {
-  rule: "SRD 5.1 bard, Bardic Inspiration: \"A creature can have only one Bardic Inspiration die at a time.\"",
-  where: "src/lib/dm/resource-tools.ts (the inspire case checks only a die of the same size, inspirationCondition)",
-  severity: "low",
-  note: "Two bards of different levels give one ally a d6 and a d8 to hold together.",
-}, async () => {
+// SRD 5.1 bard, Bardic Inspiration: "A creature can have only one Bardic
+// Inspiration die at a time."
+await test("CLS-05", async () => {
   await duel(bardFour);
   kit.place(smiter.id, 4, 5);
   const first = await world.invoke("use_resource", { characterId: bardFour.id, resource: "Bardic Inspiration", targetCharacterId: smiter.id });

@@ -1620,7 +1620,7 @@
     "lib/dm/resource-tools.ts#re-word": [["key",1,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/resource-tools.ts#str-eq": [["key",2,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/resource-tools.ts#str-key": [["key",1,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
-    "lib/dm/resource-tools.ts#toLowerCase": [["key",3,"resource variant (tool argument) against the engine's variant list; condition labels (engine vocabulary)"]],
+    "lib/dm/resource-tools.ts#toLowerCase": [["key",2,"resource variant (tool argument) against the engine's variant list; condition labels (engine vocabulary)"]],
     "lib/dm/rest-logic.ts#str-startsWith": [["key",2,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/rest-logic.ts#toLowerCase": [["key",3,"condition labels (engine vocabulary)"]],
     "lib/dm/rest-logic.ts#re-word": [["key",1,"the engine's own recovery condition label"]],

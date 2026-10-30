@@ -617,8 +617,12 @@ export function computeUseResource(
       }
       const die = def.effect.die(fxLevel);
       const condition = inspirationCondition(die);
-      if (target.conditions.some((entry) => entry.toLowerCase() === condition)) {
-        return { error: `${target.name} already holds an unspent inspiration die.`, refused: "rules" };
+      // SRD 5.1 bard, Bardic Inspiration: "A creature can have only one
+      // Bardic Inspiration die at a time", whatever its size: a d6 from one
+      // bard bars a d8 from another.
+      const held = target.conditions.find((entry) => isConditionNamed(entry, "bardic inspiration"));
+      if (held) {
+        return { error: `${target.name} already holds an unspent inspiration die (${held}), and a creature can have only one at a time.`, refused: "rules" };
       }
       outcome.patchTarget = {
         characterId: target.id,
