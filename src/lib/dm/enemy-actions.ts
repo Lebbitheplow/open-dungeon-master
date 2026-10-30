@@ -35,6 +35,7 @@ import {
 } from "@/lib/dm/enemy-turn-logic";
 import { enemyEscape } from "@/lib/dm/grapple";
 import { hostilesInSight } from "@/lib/dm/enemy-aggressive";
+import { heldTurnRefusal } from "@/lib/dm/flee-logic";
 import { hasTrait } from "@/lib/dm/monster-abilities";
 import { conditionTurnShape } from "@/lib/srd/condition-effects";
 import { toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
@@ -320,6 +321,14 @@ export function handleEnemyTakeAction(
       error: `An enemy's take_action is dash, disengage, dodge or escape; ${args.action.replace(/_/g, " ")} is a character's here. Its attacks are enemy_attack, its spells and abilities cast_at_player or aoe_damage. Nothing was spent.`,
       retry: true,
     };
+  }
+  // A turn spent on Command's word or Fear's flight keeps only the moves it
+  // needs (flee-logic.ts heldTurnRefusal): a Dodge or an action's Disengage
+  // is refused, and halt or grovel refuses everything.
+  const bonusMove = args.action === "disengage" && (bonus || hasTrait(enemy.stats, "nimbleEscape"));
+  const commanded = enemy.status === "alive" ? heldTurnRefusal(enemy, args.action, bonusMove) : null;
+  if (commanded) {
+    return { error: commanded, refused: "rules" };
   }
   switch (args.action) {
     case "dash":

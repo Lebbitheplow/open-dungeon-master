@@ -1295,6 +1295,7 @@
     "lib/dm/feature-spends.ts#partial": [["key",1,"the SRD row's creature type"],["pattern",2,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"],["pattern",1,"the engine's own roll detail string"]],
     "lib/dm/feature-spends.ts#whole": [["identity",1,"condition instances by whole name or key"]],
     "lib/dm/flee-logic.ts#whole": [["key",1,"a condition label among the ones that make a creature run (engine vocabulary)"]],
+    "lib/dm/flee-logic.ts#keyed": [["key",1,"ids, refs, slugs, tool names, field names, env names, event kinds, UI keys, caches, door and map keys; a sheet's conditionMeta by the condition key it was written under; the usage route's gear map by the sheet's own stored item names (src/: every site read)"]],
     "lib/dm/forced-save.ts#partial": [["key",2,"ODM's own \"|\" records"],["key",1,"a block's condition resistances, cut into condition names (engine vocabulary)"]],
     "lib/dm/forced-save.ts#whole": [["key",2,"condition names (engine vocabulary)"]],
     "lib/dm/formation-logic.ts#fallback": [["key",1,"formation tiles"]],

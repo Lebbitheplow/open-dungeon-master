@@ -302,7 +302,9 @@ const FEAR = (source) => ({
 await test("A creature fleeing Fear Dashes and is moved its whole doubled speed away; it makes no attack.", async () => {
   const goblin = await stage({}, FEAR(priest.id));
   kit.place(priest.id, 0, 7);
-  assert.match((await attack(goblin, priest)).error, /fleeing and makes no attacks while it lasts\. It can take another action: take_action with its enemyId/);
+  const fearful = await attack(goblin, priest);
+  assert.equal(fearful.refused, "rules");
+  assert.match(fearful.error, /is fleeing \(Fear\) this turn: it runs from its caster by the fastest means, so it makes no attack\./);
   assert.equal((await act(goblin, "dash")).ok, true);
   const run = await walk(goblin, 14, 7);
   assert.equal(run.ok, true, run.error);
@@ -430,6 +432,53 @@ await test("Command's approach walks the creature to its caster; once within 5 f
   assert.equal(apart(at(goblin), { x: 2, y: 7 }), 1, "it did not walk to its caster");
   assert.equal(acted(goblin), true, "its turn did not end beside the caster");
   assert.equal(world.sheet(priest.id).currentHp, hp, "it attacked after its turn ended");
+});
+
+// The turn Command's word spends (SRD 5.1: "on its next turn"): no attack
+// (by action, bonus action or a legendary strike), no spell or ability, and
+// of take_action only the moves the word needs (a run or a walk in: Dash, an
+// escape); halt and grovel keep nothing.
+const COMMANDED_STATS = {
+  attacks: [...DUMMY.attacks, { name: "Shiv", toHit: 4, damage: "1d4", type: "piercing", bonusAction: true }],
+  specials: [{ name: "Fire Breath", recharge: 5, save: "dex", dc: 12, damage: "2d6", damageType: "fire", halfOnSave: true }],
+};
+for (const [word, moves] of [["approach", true], ["flee", true], ["halt", false], ["grovel", false]]) {
+  await test(`On its Command-ed turn (${word}) a creature makes no attack, no bonus strike, no spell or ability${moves ? ", and no Dodge, but it may Dash" : " and no action at all"}.`, async () => {
+    const goblin = await stage(COMMANDED_STATS);
+    kit.place(priest.id, 3, 7);
+    await command(goblin, word);
+    const named = new RegExp(moves ? `obeys Command \\(${word}\\) this turn` : `${word === "halt" ? "halted" : "groveling"}|obeys Command \\(${word}\\)`);
+    for (const [label, out] of [
+      ["an attack", await attack(goblin, priest)],
+      ["a bonus-action strike", await attack(goblin, priest, { attack: "Shiv" })],
+      ["an ability", await world.invoke("cast_at_player", { characterId: priest.id, casterEnemyId: goblin.id, enemyAbility: "Fire Breath" })],
+      ["a Dodge", await act(goblin, "dodge")],
+    ]) {
+      assert.equal(out.refused, "rules", `${label}: ${JSON.stringify(out)}`);
+      assert.match(out.error, named, label);
+    }
+    assert.equal(world.sheet(priest.id).currentHp, world.sheet(priest.id).maxHp, "something struck the cleric");
+    const dash = await act(goblin, "dash");
+    if (moves) {
+      assert.equal(dash.ok, true, dash.error);
+    } else {
+      assert.equal(dash.refused, "rules");
+      assert.match(dash.error, named);
+    }
+  });
+}
+
+await test("A fleeing creature's own action does not Disengage; Nimble Escape's bonus action still may.", async () => {
+  const goblin = await stage();
+  kit.place(priest.id, 3, 7);
+  await command(goblin, "flee");
+  const off = await act(goblin, "disengage");
+  assert.equal(off.refused, "rules");
+  assert.match(off.error, /obeys Command \(flee\) this turn: .* so it makes no Disengage with its action\./);
+  const nimble = await stage({ traits: [NIMBLE] });
+  kit.place(priest.id, 3, 7);
+  await command(nimble, "flee");
+  assert.equal((await act(nimble, "disengage")).ok, true);
 });
 
 await test("Commanded to approach from too far to arrive, it walks its speed toward the caster and its turn goes on.", async () => {

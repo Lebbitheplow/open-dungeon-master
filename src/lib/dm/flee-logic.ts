@@ -76,3 +76,51 @@ export function farthestFrom(from: XY, source: XY, reachable: ReadonlyArray<XY &
   }
   return best;
 }
+
+// Command's other words (SRD 5.1): Halt ("does not move and takes no
+// actions") and Grovel ("falls prone and then ends its turn").
+export const HALTED = "halted";
+export const GROVELING = "groveling";
+
+// What a creature under one of these may still do on that turn.
+export type HeldAct = "attack" | "use" | "dash" | "disengage" | "dodge" | "escape";
+
+const DUTIES: Record<string, { word: string; duty: string; moves: boolean }> = {
+  [APPROACHING]: { word: "approach", duty: "it moves toward its caster by the most direct route, and its turn ends once within 5 feet", moves: true },
+  [FLEEING]: { word: "flee", duty: "it runs from its caster by the fastest means", moves: true },
+  [HALTED]: { word: "halt", duty: "it does not move and takes no action", moves: false },
+  [GROVELING]: { word: "grovel", duty: "it has fallen prone and its turn is over", moves: false },
+};
+
+const ACT_WORDS: Record<HeldAct, string> = {
+  attack: "attack",
+  use: "spell or ability",
+  dash: "Dash",
+  disengage: "Disengage with its action",
+  dodge: "Dodge",
+  escape: "escape attempt",
+};
+
+// The refusal for an act a creature's turn is spent away from (issue #621):
+// Command's approach, flee, halt or grovel, or Fear's flight, on that turn.
+// A run or a walk to the caster keeps the moves it needs (Dash, an escape
+// from what holds it, Nimble Escape's bonus-action Disengage: `bonusMove`);
+// halt and grovel keep nothing. Null when nothing holds the act.
+export function heldTurnRefusal(
+  creature: { displayName: string; conditions: readonly string[]; conditionMeta?: Record<string, { spell?: string } | undefined> },
+  act: HeldAct,
+  bonusMove = false,
+): string | null {
+  const held = [APPROACHING, FLEEING, HALTED, GROVELING].find((name) => has(creature.conditions, name));
+  if (!held) {
+    return null;
+  }
+  const { word, duty, moves } = DUTIES[held];
+  if (moves && (act === "dash" || act === "escape" || (act === "disengage" && bonusMove))) {
+    return null;
+  }
+  const condition = creature.conditions.find((entry) => entry.trim().toLowerCase() === held) ?? held;
+  const spell = creature.conditionMeta?.[condition]?.spell;
+  const under = !spell || spell === "Command" ? `obeys Command (${word})` : `is ${held} (${spell})`;
+  return `${creature.displayName} ${under} this turn: ${duty}, so it makes no ${ACT_WORDS[act]}.`;
+}

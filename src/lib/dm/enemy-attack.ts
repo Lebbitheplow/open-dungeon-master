@@ -39,6 +39,7 @@ import { acWithEffects } from "@/lib/dm/ac-effects";
 import { coverFor } from "@/lib/dm/attack-spatial";
 import { canEnemyAct, markEnemyActed, markEnemyBonus } from "@/lib/dm/can-act";
 import { hasteActionOpen, slowedOut } from "@/lib/dm/enemy-actions";
+import { heldTurnRefusal } from "@/lib/dm/flee-logic";
 import { recordEnemyTurn } from "@/lib/dm/enemy-turn-logic";
 import { attackHold, spellAttackHold } from "@/lib/dm/spell-planes";
 import { reachThroughProblem } from "@/lib/dm/zone-rules";
@@ -148,6 +149,13 @@ export function handleEnemyAttack(
   const slow = slowedOut(encounter, found, bonus ? "bonus" : "action");
   if (slow) {
     return slow;
+  }
+  // A turn Command (approach, flee, halt, grovel) or Fear spends on running,
+  // walking in or holding still has no attack in it, by action, bonus action
+  // or a legendary strike (flee-logic.ts, issue #621).
+  const commanded = heldTurnRefusal(found, "attack");
+  if (commanded) {
+    return { error: commanded, refused: "rules" };
   }
   // The target is any combatant (src/lib/dm/combatant.ts): a character on
   // either side, or an enemy fighting on the other one (a creature the party
