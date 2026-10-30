@@ -10,7 +10,7 @@ type AuditRow = { kind: string; delta: Record<string, unknown> };
 // (issue #622), but none is news: the log folds them into one line, and
 // they never take a real change's place in a window of recent changes.
 export function quietTick(entry: AuditRow): boolean {
-  if (entry.kind === "concentration") {
+  if (entry.kind === "concentration_clock") {
     return true;
   }
   if (entry.kind !== "condition_clock") {

@@ -11,91 +11,7 @@ import type { CharacterEvent } from "@/lib/db/character-events";
 import type { AuditEntry } from "@/app/campaigns/[campaignId]/useCampaignStream";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ClockTurn } from "@/lib/db/clock-moves";
-import { buildFeed, revertableTurns, turnOfItem } from "@/app/campaigns/[campaignId]/event-log-logic";
-
-function describeEntry(entry: AuditEntry, name: string): string {
-  const delta = entry.delta;
-  switch (entry.kind) {
-    case "apply_damage":
-      // Wild Shape: the blow landed on the beast form, not the druid.
-      if (delta.form) {
-        return delta.reverted
-          ? `${name}'s ${delta.form} form breaks${Number(delta.carryover) > 0 ? `, ${delta.carryover} damage carrying through` : ""}`
-          : `${name}'s ${delta.form} form takes ${delta.amount} damage (${delta.beastHp} beast HP)`;
-      }
-      if (delta.relentlessEndurance) {
-        return `${name} holds on at 1 HP (Relentless Endurance)`;
-      }
-      return `${name} takes ${delta.amount} damage${delta.type ? ` (${delta.type})` : ""} (${delta.currentHp} HP)`;
-    case "heal":
-      return `${name} heals ${delta.amount} (${delta.newHp} HP)`;
-    case "award_xp":
-      return `${name} gains ${delta.amount} XP (${delta.newXp} total)`;
-    case "modify_gold":
-      return `${name} ${Number(delta.delta) >= 0 ? "gains" : "loses"} ${Math.abs(Number(delta.delta))} gold (${delta.gold} gp)`;
-    case "grant_item":
-      return `${name} receives ${delta.name}${Number(delta.qty) > 1 ? ` x${delta.qty}` : ""}`;
-    case "remove_item":
-      return `${name} loses ${delta.name}${Number(delta.removed) > 1 ? ` x${delta.removed}` : ""}`;
-    case "set_condition":
-      return `${name} is ${delta.condition}`;
-    case "clear_condition":
-      return `${name} is no longer ${delta.condition}`;
-    case "use_spell_slot":
-      return `${name} expends a level ${delta.level} spell slot`;
-    case "use_item":
-      return `${name} uses ${delta.item}`;
-    case "purchase":
-      return delta.action === "sell"
-        ? `${name} sells ${delta.item}${Number(delta.qty) > 1 ? ` x${delta.qty}` : ""} for ${Number(delta.price) * Number(delta.qty ?? 1)} gold`
-        : `${name} buys ${delta.item}${Number(delta.qty) > 1 ? ` x${delta.qty}` : ""} for ${Number(delta.price) * Number(delta.qty ?? 1)} gold`;
-    case "use_resource":
-      // The recipient side of a feature aimed at someone else.
-      return delta.from
-        ? `${name} receives ${delta.resource} from ${delta.from}`
-        : `${name} spends ${Number(delta.spent) > 1 ? `${delta.spent} uses of ` : ""}${delta.resource}`;
-    case "grant_temp_hp":
-      return `${name} gains ${delta.tempHp} temporary HP`;
-    case "learn_spell":
-      return delta.action === "remove"
-        ? `${name} loses the spell ${delta.spell}`
-        : `${name} learns the spell ${delta.spell}`;
-    case "update_sheet": {
-      const changed = Object.keys(delta);
-      return `The GM rewrites ${name}'s sheet${changed.length ? ` (${changed.join(", ")})` : ""}`;
-    }
-    case "undo":
-      return `Party lead undid a change to ${name}`;
-    case "lead_edit": {
-      const changed = Object.keys(delta).filter((key) => key !== "reason");
-      return `Party lead corrected ${name}${changed.length ? ` (${changed.join(", ")})` : ""}`;
-    }
-    case "player_adjust": {
-      const changed = Object.keys(delta);
-      return `${name}'s player adjusted their counters${changed.length ? ` (${changed.join(", ")})` : ""}`;
-    }
-    // What passing time did on its own (issue #622): written down so a turn's
-    // revert can put it back with the hours.
-    case "wild_shape":
-      return `${name} returns to their own form`;
-    case "condition_clock":
-      return Array.isArray(delta.ended) && delta.ended.length
-        ? `${name} is no longer ${delta.ended.join(" or ")}`
-        : `Time runs on ${name}'s conditions`;
-    case "concentration":
-      return `Time runs on ${name}'s ${delta.spell}`;
-    case "supplies":
-      return delta.exhaustion !== undefined
-        ? `${name} goes short of food or water (exhaustion ${delta.exhaustion})`
-        : `${name} eats and drinks from the pack`;
-    case "exhaustion":
-      return `${name} is at exhaustion level ${delta.exhaustion}`;
-    case "training":
-      return `${name} learns ${delta.subject}`;
-    default:
-      return `${name}: ${entry.kind}`;
-  }
-}
+import { buildFeed, describeAuditEntry, revertableTurns, turnOfItem } from "@/app/campaigns/[campaignId]/event-log-logic";
 
 // Confirmation for undos that would clobber newer changes to the same
 // fields (the server answered 409 with warnings). A whole turn's revert
@@ -365,7 +281,7 @@ export function EventLog({
                 <div className="flex items-start gap-1.5">
                   <span className={cn("min-w-0 flex-1", reverted && "line-through text-stone-500")}>
                     <ScrollText className="mr-1.5 inline size-3 text-amber-600" />
-                    {describeEntry(entry, nameFor(entry))}
+                    {describeAuditEntry(entry, nameFor(entry))}
                   </span>
                   {reverted ? (
                     <span className="shrink-0 rounded-full border border-stone-800 px-1.5 text-[9px] uppercase tracking-wide text-stone-600">

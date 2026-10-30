@@ -33,7 +33,9 @@ export function tickConcentrationClocks(
     }
     if (left - by > 0) {
       patchSheetAudited(campaign.id, sheet.id, { concentrationRounds: left - by }, {
-        kind: "concentration",
+        // Not "concentration": that kind is a spell taken up or let go
+        // (concentration.ts), a real change; this is only its clock.
+        kind: "concentration_clock",
         reason: `time passed on ${sheet.concentratingOn}`,
         delta: { spell: sheet.concentratingOn, roundsLeft: left - by },
       });
