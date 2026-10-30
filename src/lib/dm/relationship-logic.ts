@@ -18,6 +18,7 @@
 // rolls.
 
 import type { ToolError } from "@/lib/dm/tool-errors";
+import { clipText } from "../language/text-logic.ts";
 
 export const APPROVAL_MIN = -100;
 export const APPROVAL_MAX = 100;
@@ -503,7 +504,7 @@ export function parseMemories(raw: string): RelationshipMemory[] {
       .slice(-MEMORY_LIMIT)
       .map((entry) => ({
         kind: typeof entry.kind === "string" ? entry.kind.slice(0, 40) : "moment",
-        text: String(entry.text).trim().slice(0, MEMORY_CHARS),
+        text: clipText(String(entry.text), MEMORY_CHARS),
         at: typeof entry.at === "string" ? entry.at : "",
       }));
   } catch {
@@ -515,9 +516,26 @@ export function addMemory(
   memories: RelationshipMemory[],
   memory: RelationshipMemory,
 ): RelationshipMemory[] {
-  return [...memories, { ...memory, text: memory.text.trim().slice(0, MEMORY_CHARS) }].slice(
+  return [...memories, { ...memory, text: clipText(memory.text, MEMORY_CHARS) }].slice(
     -MEMORY_LIMIT,
   );
+}
+
+// What a refused step leaves on the Bonds tab, in words rather than the
+// rung's name: "asked for married" read like a form field (issue 644).
+export function refusedStepText(subject: string, character: string, stage: Exclude<RomanceStage, "none">): string {
+  switch (stage) {
+    case "interested":
+      return `${subject} was not ready to return ${character}'s interest`;
+    case "courting":
+      return `${subject} was not ready when ${character} asked to court them`;
+    case "together":
+      return `${subject} was not ready when ${character} asked to be partners`;
+    case "betrothed":
+      return `${subject} was not ready when ${character} asked to be betrothed`;
+    case "married":
+      return `${subject} was not ready when ${character} asked to marry them`;
+  }
 }
 
 // A bond a death closed (relationship_end "death", or a companion who fell

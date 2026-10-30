@@ -6,7 +6,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const { compareNames, words, textKey, containsPhrase } = await import("../src/lib/language/text-logic.ts");
+const { asSentence, clipText, compareNames, words, textKey, containsPhrase, unquoted } = await import("../src/lib/language/text-logic.ts");
 const { stems, stopWordsFor, stemWord } = await import("../src/lib/language/language.ts");
 const { TABLE_LANGUAGES } = await import("../src/lib/schemas/game-settings-options.ts");
 
@@ -21,6 +21,31 @@ test("words are Unicode, and keep the apostrophes and hyphens inside them", () =
   assert.deepEqual(words("Niccolò e José, nell'Église!"), ["Niccolò", "e", "José", "nell'Église"]);
   assert.deepEqual(words("Marla’s sword, t-uisce, don't"), ["Marla's", "sword", "t-uisce", "don't"]);
   assert.deepEqual(words("'quoted' -- dash"), ["quoted", "dash"]);
+});
+
+test("a clipped line ends at a word, with an ellipsis (issue 644)", () => {
+  const line = "so Ned would not be abandoned to the cells";
+  assert.equal(clipText(line, 100), line, "a line that fits is left alone");
+  assert.equal(clipText(line, 24), "so Ned would not be…");
+  assert.ok(clipText(line, 24).length <= 24);
+  assert.equal(clipText("one, two, three four", 17), "one, two, three…", "no comma left before the ellipsis");
+  assert.equal(clipText("x".repeat(30), 10), `${"x".repeat(9)}…`, "one long word is still cut to fit");
+});
+
+test("a quoted line loses only the quote marks round the whole of it (issue 644)", () => {
+  assert.equal(unquoted('"“I\'m afraid I won\'t press you.”"'), "I'm afraid I won't press you.");
+  assert.equal(unquoted("“Walk with me?”"), "Walk with me?");
+  assert.equal(unquoted("Walk with me?"), "Walk with me?");
+  assert.equal(unquoted("“Wait,” she said, “stay.”"), "“Wait,” she said, “stay.”", "two quotes stay two quotes");
+  assert.equal(unquoted('"I said "no" to him"'), '"I said "no" to him"');
+  assert.equal(unquoted("The twins’ boat"), "The twins’ boat");
+});
+
+test("a clause becomes a sentence without a second full stop (issue 644)", () => {
+  assert.equal(asSentence("using the plank and shield."), "using the plank and shield.");
+  assert.equal(asSentence("using the plank and shield"), "using the plank and shield.");
+  assert.equal(asSentence("who knows?"), "who knows?");
+  assert.equal(asSentence('he said "go."'), 'he said "go."');
 });
 
 test("every table language has a stemmer and a stop list", () => {

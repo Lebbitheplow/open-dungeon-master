@@ -36,7 +36,7 @@ import { publishPersisted, publishWithSeq } from "@/lib/events";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolResult } from "@/lib/dm/tool-errors";
-import { textKey } from "@/lib/language/text-logic";
+import { textKey, unquoted } from "@/lib/language/text-logic";
 import { publicItemProposal } from "@/lib/dm/proposal-intercept";
 
 // An NPC's first move toward a character whose player opened them to it
@@ -171,7 +171,8 @@ export function handleNpcAdvance(
     return { error: problem, refused: "rules" };
   }
 
-  const line = args.note?.trim().slice(0, 200) ?? "";
+  // The suitor's own words, bare: the card and the memory quote them.
+  const line = unquoted(args.note ?? "").slice(0, 200);
   const stored: AdvanceArgs & { portraitUrl: string; look: Record<string, string> } = {
     relationshipId: relationship.id,
     subject: subject.name,

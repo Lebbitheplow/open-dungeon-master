@@ -4,7 +4,8 @@
 // gives a prepared patron her attitude as the party meets her: each shows
 // under both characters at once. Then the patron is killed: every bond with
 // her says "died", not only the one the console named. Night and day, clean
-// under axe.
+// under axe. A married companion's long name keeps its "companion" label
+// clear of the standing chip at phone width (issue 644).
 import { axeViolations, check, eventually, openPanelTab, untilStill } from "../lib.mjs";
 
 const scenario = {
@@ -25,6 +26,18 @@ const scenario = {
     await eventually(() => bondsTab.count(), { timeoutMs: 30_000, label: "the Bonds sub-tab" });
     await t.tap(bondsTab);
     const rows = (name) => page.locator(`${root}[data-bond-row="${name}"]`).locator("visible=true");
+
+    // Issue 644: a long companion name keeps its "companion" label clear of
+    // the standing chip; at phone width, with the Married chip beside it,
+    // "Stonebridge" and the label could not break apart and overlapped it.
+    const hollis = rows("Sir Hollis Stonebridge").first();
+    await eventually(() => hollis.count(), { timeoutMs: 20_000, label: "the married companion's row" });
+    await untilStill(page);
+    const label = await hollis.locator("[data-bond-kind]").boundingBox();
+    const chip = await hollis.locator(".bond-truth").boundingBox();
+    const apart = label && chip && (label.x + label.width <= chip.x + 0.5 || label.y + label.height <= chip.y + 0.5 || chip.y + chip.height <= label.y + 0.5);
+    check(apart, `the companion label clears the standing chip (${JSON.stringify({ label, chip })})`);
+    await t.shot("long-name");
 
     await call("add_companion", { name: "Seren Dawnmere", class: "paladin", gender: "Female", personality: "Stern and devout.", kind: "party" });
     await eventually(() => rows("Seren Dawnmere").count().then((count) => count === 2), { timeoutMs: 20_000, label: "the companion under both characters" });

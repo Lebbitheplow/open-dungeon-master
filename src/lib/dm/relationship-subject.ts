@@ -18,7 +18,7 @@ import { publishEphemeral, publishPersisted } from "@/lib/events";
 import { resolveSheetRef } from "@/lib/dm/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolError } from "@/lib/dm/tool-errors";
-import { textKey } from "@/lib/language/text-logic";
+import { asSentence, textKey } from "@/lib/language/text-logic";
 
 // Who a relationship tool is about, and the shared bookkeeping of a
 // romantic step: the pieces relationship_beat, romance_advance and an NPC's
@@ -182,7 +182,7 @@ export function recordMilestone(
       campaignId: campaign.id,
       category: "party",
       subject: `${sheet.name} and ${subject.name}`,
-      fact: `${summary}.`,
+      fact: asSentence(summary),
       knownBy: "party",
       // Vows are not the kind of fact a later chapter quietly supersedes.
       pinned: true,

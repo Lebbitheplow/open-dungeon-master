@@ -170,46 +170,59 @@ function BondRow({ bond }: { bond: RelationshipView }) {
   const { unmasking, shownApproval } = useUnmasking(bond);
   return (
     <li className="panel rounded-lg px-2.5 py-2" data-bond-row={bond.subjectName}>
-      <div className="flex items-center gap-2">
+      {/* The name keeps room for itself and its label, and the chips move
+          to a line of their own when there is not enough: squeezed beside
+          two chips, "Stonebridge companion" ran under the standing chip at
+          phone width (issue 644). A space, not only a margin, before each
+          label, so the label can break away from the name. */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <GameIcon icon={{ kind: "glyph", key: TIER_GLYPH[bond.tier] }} size="size-6" className="shrink-0" />
-        <span className="min-w-0 flex-1 text-sm text-stone-200">
-          {bond.subjectName}
-          <span className="eyebrow ml-1.5 text-[10px] text-amber-400/70">
+        <span className="min-w-[9rem] flex-1 break-words text-sm text-stone-200">
+          {bond.subjectName}{" "}
+          <span className="eyebrow ml-0.5 inline-block text-[10px] text-amber-400/70" data-bond-kind>
             {bond.subjectKind === "companion" ? "companion" : "npc"}
           </span>
           {bond.status === "parted" ? (
-            <span className="ml-1.5 text-[11px] text-stone-500">
-              away{bond.apartChapters > 0 ? ` ${bond.apartChapters}ch` : ""}
-            </span>
+            <>
+              {" "}
+              <span className="ml-0.5 inline-block text-[11px] text-stone-500">
+                away{bond.apartChapters > 0 ? ` ${bond.apartChapters}ch` : ""}
+              </span>
+            </>
           ) : null}
           {bond.status === "ended" ? (
-            <span className="ml-1.5 text-[11px] text-stone-500">{bond.died ? "died" : "ended"}</span>
+            <>
+              {" "}
+              <span className="ml-0.5 inline-block text-[11px] text-stone-500">{bond.died ? "died" : "ended"}</span>
+            </>
           ) : null}
         </span>
-        <span
-          className={cn(
-            "bond-truth shrink-0 rounded-full border px-2 py-0.5 text-[11px]",
-            TIER_STYLES[bond.tier],
-          )}
-          data-unmasking={unmasking || undefined}
-          title={bond.tierLabel}
-        >
-          {TIER_WORD[bond.tier]}
-          {shownApproval === undefined ? "" : ` ${shownApproval > 0 ? "+" : ""}${shownApproval}`}
-        </span>
-        {bond.romance !== "none" ? (
+        <span className="ml-auto flex shrink-0 items-center gap-2">
           <span
-            className="flex shrink-0 items-center gap-1 rounded-full border border-rose-900/60 bg-rose-950/30 px-2 py-0.5 text-[11px] text-rose-200"
-            title={`Romance: ${ROMANCE_WORD[bond.romance]}`}
-          >
-            {bond.status === "ended" ? (
-              <HeartCrack className="size-2.5" />
-            ) : (
-              <Heart className="size-2.5" />
+            className={cn(
+              "bond-truth shrink-0 rounded-full border px-2 py-0.5 text-[11px]",
+              TIER_STYLES[bond.tier],
             )}
-            {ROMANCE_WORD[bond.romance]}
+            data-unmasking={unmasking || undefined}
+            title={bond.tierLabel}
+          >
+            {TIER_WORD[bond.tier]}
+            {shownApproval === undefined ? "" : ` ${shownApproval > 0 ? "+" : ""}${shownApproval}`}
           </span>
-        ) : null}
+          {bond.romance !== "none" ? (
+            <span
+              className="flex shrink-0 items-center gap-1 rounded-full border border-rose-900/60 bg-rose-950/30 px-2 py-0.5 text-[11px] text-rose-200"
+              title={`Romance: ${ROMANCE_WORD[bond.romance]}`}
+            >
+              {bond.status === "ended" ? (
+                <HeartCrack className="size-2.5" />
+              ) : (
+                <Heart className="size-2.5" />
+              )}
+              {ROMANCE_WORD[bond.romance]}
+            </span>
+          ) : null}
+        </span>
       </div>
       {bond.romance !== "none" ? <RomanceRung stage={bond.romance} ended={bond.status === "ended"} /> : null}
       {bond.conscience ? <ConscienceLadder name={bond.subjectName} conscience={bond.conscience} /> : null}

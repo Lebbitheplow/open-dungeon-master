@@ -39,6 +39,7 @@ import {
   ROMANCE_MIN_TIER,
   ROMANCE_STAGES,
   ROMANCE_THRESHOLD,
+  refusedStepText,
   souredNote,
   tierIndex,
 } from "../src/lib/dm/relationship-logic.ts";
@@ -251,6 +252,10 @@ test("memories are bounded, trimmed, and keep the newest", () => {
   assert.equal(memories.length, MEMORY_LIMIT);
   assert.equal(memories.at(-1).text, `beat ${MEMORY_LIMIT + 3}`);
   assert.equal(addMemory([], { kind: "m", text: "x".repeat(500), at: "" })[0].text.length, 160);
+  // Cut at a word with an ellipsis, never mid-word (issue 644).
+  const long = addMemory([], { kind: "m", text: "word ".repeat(60), at: "" })[0].text;
+  assert.ok(long.length <= 160 && long.endsWith("word…"), long);
+  assert.equal(parseMemories(JSON.stringify([{ kind: "m", text: "word ".repeat(60), at: "" }]))[0].text, long);
   assert.deepEqual(addFlag(["married"], "married"), ["married"]);
 });
 
@@ -313,6 +318,17 @@ test("standing by while another does a deed costs a third of it, never credit (i
   assert.equal(bystanderShare(-2), -1);
   assert.equal(bystanderShare(0), 0);
   assert.equal(bystanderShare(9), 0, "a deed that won regard shares none of it");
+});
+
+test("a refused step says what was asked in words (issue 644)", () => {
+  const said = ROMANCE_STAGES.filter((stage) => stage !== "none").map((stage) => refusedStepText("Hollis", "Tamsin", stage));
+  assert.deepEqual(said, [
+    "Hollis was not ready to return Tamsin's interest",
+    "Hollis was not ready when Tamsin asked to court them",
+    "Hollis was not ready when Tamsin asked to be partners",
+    "Hollis was not ready when Tamsin asked to be betrothed",
+    "Hollis was not ready when Tamsin asked to marry them",
+  ]);
 });
 
 console.log(`\ntest-relationships: ${passed} passed`);
