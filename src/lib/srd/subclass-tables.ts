@@ -85,8 +85,9 @@ export function subclassLevelsFromProse(desc: string, defaultLevel = 3): Record<
     // and Spell Slots as headings, which arrived at 10th and 1st level.
     const first = body.split(/(?<=[.!?])\s+/)[0];
     const found = ORDINAL.exec(first) ?? SENTENCE_ORDINAL.exec(body);
-    const fallback = previous ?? (LEVEL_ANYWHERE.exec(first) ? Number(LEVEL_ANYWHERE.exec(first)?.[1]) : null);
-    const level = found ? Math.min(20, Math.max(1, Number(found[1]))) : (fallback ?? defaultLevel);
+    const named = LEVEL_ANYWHERE.exec(first);
+    const fallback: number | null = previous ?? (named ? Number(named[1]) : null);
+    const level: number = found ? Math.min(20, Math.max(1, Number(found[1]))) : (fallback ?? defaultLevel);
     previous = level;
     (levels[String(level)] ??= []).push({ n: name, d: body.slice(0, 500) });
   }
