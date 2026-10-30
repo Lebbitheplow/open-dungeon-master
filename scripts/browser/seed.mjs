@@ -1955,8 +1955,35 @@ for (const viewport of ["desktop", "phone"]) {
   fallenTables[viewport] = table.id;
 }
 
+// Issue #622: a hero lies dying outside a fight at a person's table. The GM
+// passes time from the console, the clock rolls the hero's death saves, and
+// the event log reverts the turn with its hours. One per viewport, since the
+// scenario reverts turns on it.
+const clockTables = {};
+for (const viewport of ["desktop", "phone"]) {
+  const table = campaigns.createCampaign(world.owner.id, {
+    title: `Clock Table (${viewport})`,
+    description: "A hero bleeding out on the moor road while the night wears on.",
+    theme: "high-fantasy",
+    maxPlayers: 4,
+    startingLevel: 3,
+    difficulty: "normal",
+    gameSettings: { ttsEnabled: false, dmMode: "human" },
+  });
+  // Seated in the lobby: a table in play turns a newcomer away.
+  const seated = campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+  if ("error" in seated) {
+    throw new Error(`could not seat the player at the clock table: ${seated.error}`);
+  }
+  campaigns.setCampaignStatus(table.id, "active");
+  const hero = sheets.createSheet(table.id, player.id, 3, heroInput({ name: "Corra Venn", class: "fighter", level: 3 }));
+  sheets.patchSheet(hero.id, { currentHp: 0, deathSaves: { successes: 0, failures: 0, stable: false, dead: false } });
+  clockTables[viewport] = { id: table.id, hero: hero.id, heroName: hero.name };
+}
+
 const ids = {
   fallenTables,
+  clockTables,
   weekly,
   multiclassTableId: multiclassTable.id,
   singleClassTableId: singleClassTable.id,
@@ -2049,6 +2076,7 @@ const ids = {
     ...Object.fromEntries(Object.entries(conduct).map(([viewport, table]) => [table.id, `${CONDUCT_TITLE} (${viewport})`])),
     ...Object.fromEntries(Object.values(weekly).map((table) => [table.id, table.title])),
     ...Object.fromEntries(Object.entries(fallenTables).map(([viewport, id]) => [id, `The Fallen Watch (${viewport})`])),
+    ...Object.fromEntries(Object.entries(clockTables).map(([viewport, table]) => [table.id, `Clock Table (${viewport})`])),
     ...Object.fromEntries(Object.entries(pactTables).flatMap(([kind, tables]) => Object.entries(tables).map(([viewport, table]) => [table.id, `Pact ${kind.charAt(0).toUpperCase()}${kind.slice(1)} (${viewport})`]))),
     ...Object.fromEntries(Object.entries(chipTables).map(([viewport, table]) => [table.id, `Chip Table (${viewport})`])),
     ...Object.fromEntries(Object.entries(spellbook).map(([viewport, table]) => [table.id, `${SPELLBOOK_TITLE} (${viewport})`])),
