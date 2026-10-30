@@ -183,11 +183,15 @@ await test("A mounted rider moves at the mount's speed, and mounting costs half 
   kit.giveTurn(scout.id);
   const mounted = await world.invoke("mount_up", { characterId: scout.id, mount: "Riding horse" });
   assert.equal(mounted.ok, true, mounted.error);
-  // 60 ft is 12 squares, less 3 for mounting.
-  const far = await walk(scout, 1, 11);
-  assert.notEqual(far.status, 200, "mounting cost nothing");
+  // Mounting costs half the rider's own 30 ft: 3 squares of this turn's move.
+  assert.equal(kit.token(scout.id).movedThisRound, 3, "mounting cost nothing");
+  // 60 ft is 12 squares, and the controlled horse's own Dash makes it 24
+  // (SRD 5.1, Controlling a Mount: its options are Dash, Disengage and
+  // Dodge), less 3 for mounting.
   const ride = await walk(scout, 1, 10);
   assert.equal(ride.status, 200, "the rider moved at their own speed, not the horse's");
+  // Mounting and dismounting are once during a move (SRD 5.1): the next turn.
+  kit.freshTurn();
   await world.invoke("dismount", { characterId: scout.id });
 });
 

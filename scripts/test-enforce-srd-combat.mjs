@@ -3,10 +3,10 @@
 // (every condition, exhaustion's six levels), read heading by heading from
 // src/lib/rulebook/srd-5.1.json and held against the engine.
 //
-// Each gap() is a finding of that audit: the engine does something other than
-// what the quoted SRD sentence says, reproduced here against the real tools.
-// Each test() is a row of the same pages the audit found held and no other
-// suite states. Rows other suites already hold are not repeated here; the
+// Each test labelled CMB-NN was a finding of that audit (a gap() until the
+// engine was fixed): the quoted SRD sentence above it, held against the real
+// tools. Each other test() is a row of the same pages the audit found held
+// and no other suite states. Rows other suites already hold are not repeated here; the
 // audit's report lists them with the suite that holds each one.
 //
 // The suite needs no content pack: the fights are against fixed dummies
@@ -16,7 +16,7 @@ import { openWorld } from "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
 import { combatKit, d20Faces, TRAINED } from "./lib/enforce-combat.mjs";
 
-const { test, gap, finish } = suite("test-enforce-srd-combat");
+const { test, finish } = suite("test-enforce-srd-combat");
 const world = await openWorld({ campaign: { maxPlayers: 8 } });
 const kit = await combatKit(world);
 const { getDatabase } = await import("../src/lib/db/core.ts");
@@ -346,12 +346,8 @@ await test("CMB-09", async () => {
   assert.equal(down.ok, false, "the rider mounted and dismounted in the same move");
 });
 
-await gap("CMB-10", {
-  rule: "combat, Controlling a Mount: 'The initiative of a controlled mount changes to match yours when you mount it. It moves as you direct it, and it has only three action options: Dash, Disengage, and Dodge.'",
-  where: "src/lib/dm/mount-tools.ts and src/lib/battlemap/view.ts pcMoveBudget: a mount is a speed written on its rider, with no action of its own; only the rider's own Dash (their action) lengthens the ride",
-  severity: "low",
-  note: "A rider who spends their action cannot have the controlled warhorse Dash with its own: the ride stops at 60 ft. The mount cannot Disengage or Dodge either, and an opportunity attack it provokes can only be aimed at the rider.",
-}, async () => {
+// combat, Controlling a Mount: 'The initiative of a controlled mount changes to match yours when you mount it. It moves as you direct it, and it has only three action options: Dash, Disengage, and Dodge.'
+await test("CMB-10", async () => {
   await stage(fighter);
   kit.place(fighter.id, 2, 5, 0);
   const up = await world.invoke("mount_up", { characterId: fighter.id, mount: "Warhorse" });
