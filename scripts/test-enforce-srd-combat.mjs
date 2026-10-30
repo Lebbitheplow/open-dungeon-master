@@ -154,12 +154,8 @@ await test("Anything that takes away the actions takes away the bonus action: a 
 
 // ---- Flying Movement ----
 
-await gap("CMB-02", {
-  rule: "combat, Flying Movement: 'If a flying creature is knocked prone, has its speed reduced to 0, or is otherwise deprived of the ability to move, the creature falls, unless it has the ability to hover or it is being held aloft by magic.'",
-  where: "src/lib/dm/combat-actions.ts contest (and set-condition.ts): nothing lands a token whose movement is fly when it is knocked prone; token-state.ts landTheFlightless only lands a character whose flying speed is gone",
-  severity: "low",
-  note: "A harpy (fly 40 ft., no hover) shoved prone keeps flying on the board, so it still ignores ground terrain and areas.",
-}, async () => {
+// combat, Flying Movement: 'If a flying creature is knocked prone, has its speed reduced to 0, or is otherwise deprived of the ability to move, the creature falls, unless it has the ability to hover or it is being held aloft by magic.'
+await test("CMB-02", async () => {
   const [harpy] = await stage(fighter);
   kit.setEnemy(harpy.id, { stats: { speed: "20 ft., fly 40 ft." } });
   kit.place(fighter.id, 5, 5);

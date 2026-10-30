@@ -11,6 +11,7 @@ import { onEnemyIncapacitated } from "@/lib/dm/enemy-conditions";
 import { publishEncounter } from "@/lib/dm/enemy-damage";
 import { planConditionFx } from "@/lib/battlemap/fx-plan";
 import { publishFx, tokenPosition } from "@/lib/dm/fx";
+import { landTheFlightless } from "@/lib/dm/token-state";
 
 // Null when the enemy already held it exactly so; else who it let go of.
 export function layEnemyConditionInstance(
@@ -26,6 +27,8 @@ export function layEnemyConditionInstance(
     return null;
   }
   patchEnemyConditions(enemy.id, laid.conditions, laid.meta);
+  // A flyer knocked prone or held to a speed of 0 falls (token-state.ts).
+  landTheFlightless(campaign, enemy.encounterId);
   // An incapacitated creature loses its concentration (and the spell's
   // hold on its targets) and lets go of whoever it grapples.
   const released = isIncapacitated([condition]) ? onEnemyIncapacitated(campaign, enemy) : [];

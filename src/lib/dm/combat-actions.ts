@@ -24,7 +24,7 @@ import { resolveTargetFoe } from "@/lib/dm/sheet-foe";
 import { hostileTo } from "@/lib/dm/combatant";
 import { isSheetFoe } from "@/lib/dm/combat-sides-logic";
 import { HELP_FOR_A_CHECK, HELPED } from "@/lib/dm/help-logic";
-import { pushTokenAway } from "@/lib/dm/map-tools";
+import { landTheFlightless, pushTokenAway } from "@/lib/dm/map-tools";
 import { resolveSheetRef } from "@/lib/dm/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { toolError, type ToolError, type ToolResult } from "@/lib/dm/tool-errors";
@@ -272,12 +272,15 @@ export function contest(
     },
   );
   publishEncounter(campaign.id);
+  // A flyer knocked prone or grappled to a speed of 0 falls (token-state.ts).
+  const fell = landTheFlightless(campaign, encounter.id);
   return {
     ok: true,
     action,
     ...costs,
     contest: contested,
     success: true,
+    ...(fell.length ? { fell: fell.join(" ") } : {}),
     applied: `${enemy.displayName} is ${condition}. The server applied the condition and its mechanics.${
       condition === "grappled" ? " It can try to escape with its action (take_action escape with its escapingEnemyId)." : ""
     }`,
