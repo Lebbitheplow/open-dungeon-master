@@ -174,6 +174,22 @@ await test("A flying enemy aloft moves at its flying speed.", async () => {
   assert.deepEqual(at(hawk), { x: 14, y: 7 }, "it flew at its walking speed");
 });
 
+await test("The board's guess at a flying enemy's next move counts its wings: the claws, not the rock, for a mark ten squares off.", async () => {
+  const { buildPlayerMapView } = await import("../src/lib/battlemap/view.ts");
+  const hawk = await stage({
+    speed: "10 ft., fly 60 ft.",
+    attacks: [
+      { name: "Talons", toHit: 4, damage: "1d6+2", type: "slashing", mode: "melee", reach: 5 },
+      { name: "Dropped Rock", toHit: 4, damage: "1d4", type: "bludgeoning", mode: "ranged", range: { normal: 30, long: 60 } },
+    ],
+  });
+  kit.place(hero.id, 12, 7);
+  const guess = () => buildPlayerMapView(world.campaignId, world.owner.id)?.intents?.find((intent) => intent.actorTokenId === kit.token(hawk.id).id);
+  assert.equal(guess()?.verb, "Dropped Rock", "on foot it walks ten feet");
+  assert.equal((await world.invoke("set_movement", { token: hawk.id, movement: "fly" })).ok, true);
+  assert.equal(guess()?.verb, "Talons", "the board guessed from its walking speed while it flew");
+});
+
 await test("A prone enemy that walked its speed and then Dashed has the movement to stand.", async () => {
   const goblin = await stage({}, { conditions: ["prone"] });
   kit.place(goblin.id, 2, 7, 6);

@@ -99,6 +99,18 @@ test("a mark no move could close brings out the bow", () => {
   assert.equal(intent.verbKind, "ranged");
 });
 
+// Issue #621: the board's guess reads the walk's own count (enemyMoveBudget),
+// so a hawk aloft or a goblin that Dashed closes in, and one that has walked
+// its speed does not.
+test("the walk's own count decides whether a mark is in reach: wings, a Dash, a walk already spent", () => {
+  const actor = { id: "t-wight", x: 0, y: 0 };
+  const far = [{ id: "t-pc", x: 10, y: 0 }];
+  const slow = { ...wightStats, speed: "10 ft." };
+  assert.equal(likelyIntent({ stats: slow, conditions: [] }, actor, far).verb, "Longbow");
+  assert.equal(likelyIntent({ stats: slow, conditions: [], moveTiles: 12 }, actor, far).verb, "Longsword");
+  assert.equal(likelyIntent({ stats: wightStats, conditions: [], moveTiles: 0 }, actor, [{ id: "t-pc", x: 3, y: 0 }]).verb, "Longbow");
+});
+
 test("the move a mark needs is the one the creature has: slowed or grappled, the bow comes out sooner", () => {
   // Seven squares off: a 30-foot walk closes it, half of one does not, and
   // a grappled creature walks nowhere.
