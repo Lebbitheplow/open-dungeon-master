@@ -546,7 +546,8 @@ function maneuverRiderSave(plan: AttackPlan, maneuver: ManeuverPick): Record<str
   // The creature's save as every other is rolled (src/lib/dm/forced-save.ts):
   // its conditions (a paralyzed creature fails a STR or DEX save outright),
   // Bane or Bless on it, its exhaustion, lasting effects, authored features.
-  const save = rollEnemySave(campaign.id, fresh, rider.save, dc, { against: rider.condition });
+  // Cover between the attacker and the target counts on a DEX rider.
+  const save = rollEnemySave(campaign.id, fresh, rider.save, dc, { against: rider.condition, origin: { ref: plan.sheet.id } });
   if (save.result) {
     const saveRoll = insertRoll({
       campaignId: campaign.id,

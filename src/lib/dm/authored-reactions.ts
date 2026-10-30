@@ -380,6 +380,8 @@ function resolve(ctx: Ctx, found: Found): ToolResult | ToolError {
         const dc = saveDc(holder, does.save.dcAbility);
         const save = rollEnemySave(ctx.campaign.id, enemy, does.save.ability, dc, {
           magical: true,
+          // A DEX save takes the cover between the feature's holder and it.
+          origin: { ref: holder.id },
           record: { turn: ctx.turn, detail: `${enemy.displayName}: ${does.save.ability.toUpperCase()} save against ${reaction.name}` },
         });
         out.save = `${save.total ?? "failed"} vs DC ${dc}`;
@@ -446,6 +448,7 @@ function resolve(ctx: Ctx, found: Found): ToolResult | ToolError {
         magical: true,
         resist: bindsWorthResisting([condition]),
         against: condition,
+        origin: { ref: ctx.sheet.id },
         record: { turn: ctx.turn, detail: `${enemy.displayName}: ${does.save.toUpperCase()} save against ${reaction.name}` },
       });
       if (save.success) {
@@ -496,6 +499,7 @@ function resolve(ctx: Ctx, found: Found): ToolResult | ToolError {
           magical: true,
           resist: bindsWorthResisting(["charmed"]),
           against: "charmed",
+          origin: { ref: ctx.sheet.id },
           record: { turn: ctx.turn, detail: `${attacker.displayName}: ${does.save.ability.toUpperCase()} save against ${reaction.name}` },
         });
         if (save.success) {

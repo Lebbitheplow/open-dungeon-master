@@ -142,6 +142,8 @@ export const hazardTools: ToolDef[] = [
             type: "string",
             description: `trap only: an SRD sample trap or one of the table's own workshop traps, by its listed name. SRD traps: ${SAMPLE_TRAPS.map((trap) => trap.name).join(", ")}; workshop traps are named under GAME STATE. A named trap runs by its own numbers instead of the severity table.`,
           },
+          fromX: { type: "integer", description: "trap and generic: x of the square it comes from (a dart wall), for cover on a DEX save." },
+          fromY: { type: "integer", description: "With fromX: its y." },
           reason: { type: "string", description: "Short note on the hazard." },
         },
         required: ["type"],
@@ -178,7 +180,17 @@ const hazardSchema = z.object({
   // A trap by name: one of the SRD's sample traps or the table's own.
   trap: z.string().max(80).optional(),
   reason: z.string().optional(),
+  // The square a trap or hazard comes from: cover between it and a
+  // character counts on a Dexterity save (SRD 5.1, Cover), which the board
+  // cannot know without it.
+  fromX: z.coerce.number().int().min(0).optional(),
+  fromY: z.coerce.number().int().min(0).optional(),
 });
+
+// The square the hazard comes from, as cast_at_player reads it.
+function fromOf(args: z.infer<typeof hazardSchema>): { fromX?: number; fromY?: number } {
+  return args.fromX !== undefined && args.fromY !== undefined ? { fromX: args.fromX, fromY: args.fromY } : {};
+}
 
 // Slow Fall and Feather Fall answer a fall that has landed (use_reaction,
 // src/lib/dm/reaction-tools.ts); a turn out of a fight offers use_reaction
@@ -412,7 +424,7 @@ function resolveHazard(
       ok: true,
       type: "trap",
       trap: found.name,
-      results: targets.map((sheet) => springTrapOn(campaign, turn, sheet, found.name, found.trap, sheets, sheetsById)),
+      results: targets.map((sheet) => springTrapOn(campaign, turn, sheet, found.name, found.trap, sheets, sheetsById, fromOf(args))),
       note: `${found.trap.summary} Rolled and applied by the server; narrate the outcome per character.`,
     };
   }
@@ -450,6 +462,7 @@ function resolveHazard(
         halfOnSave,
         condition: args.condition,
         ...(args.type === "trap" ? { hazard: "trap" } : {}),
+        ...fromOf(args),
       }),
       sheets,
       sheetsById,

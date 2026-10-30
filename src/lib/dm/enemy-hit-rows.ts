@@ -48,6 +48,8 @@ export function resolveRowOnHit(
   if (rider.save && rider.dc) {
     const save = rollEnemySave(campaign.id, target, rider.save, rider.dc, {
       record: { turn, detail: `${target.displayName}: ${rider.save.toUpperCase()} save vs ${attacker.displayName}'s ${attack.name}` },
+      // Cover between the attacker and the target counts on a DEX rider.
+      origin: { ref: attacker.id },
     });
     saved = save.success;
     out.riderSave = `${save.total ?? "failed automatically"} vs DC ${rider.dc}`;

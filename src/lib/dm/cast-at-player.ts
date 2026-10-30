@@ -1,7 +1,7 @@
 import { canAct } from "@/lib/dm/can-act";
 import { castFromFoeSheet } from "@/lib/dm/sheet-foe-cast";
 import { hasDungeonDelver, shieldMasterSaveBonus, spellSaveAdvantageReach } from "@/lib/srd/feat-combat";
-import { coverFor, tilesBetween } from "@/lib/dm/attack-spatial";
+import { tilesBetween } from "@/lib/dm/attack-spatial";
 import { z } from "zod";
 import { castToNoEffect, spellWardOn } from "@/lib/dm/cast-reach";
 import type { Campaign } from "@/lib/db/campaigns";
@@ -19,7 +19,7 @@ import { durationArgsFor, type ConditionMetaMap } from "@/lib/dm/condition-logic
 import { normalizeAbility } from "@/lib/dm/arg-coerce";
 import { resolveEnemyRef } from "@/lib/dm/enemy-damage";
 import { prepareEnemyUse, type EnemyUse } from "@/lib/dm/enemy-casting";
-import { rollCharacterSave } from "@/lib/dm/forced-save";
+import { rollCharacterSave, type SaveOrigin } from "@/lib/dm/forced-save";
 import { rollCard } from "@/lib/dm/action-common";
 import type { RollAttacker } from "@/lib/db/rolls";
 import { rollAgainst } from "@/lib/roll-labels";
@@ -65,6 +65,10 @@ const castAtPlayerSchema = z.object({
   // Set by apply_hazard for a trap: Dungeon Delver saves at advantage and
   // takes half (src/lib/srd/feat-combat.ts).
   hazard: z.enum(["trap"]).optional(),
+  // Set by apply_hazard: the square a trap or hazard comes from, for the
+  // cover between it and the character on a Dexterity save.
+  fromX: z.coerce.number().int().min(0).optional(),
+  fromY: z.coerce.number().int().min(0).optional(),
 });
 
 // Best-effort enemy concentration: when a tool call names the casting enemy
@@ -329,11 +333,16 @@ export function handleCastAtPlayer(
     : trapWard
       ? { advantage: "advantage" as const, reason: "Dungeon Delver: a trap" }
       : null;
-  // Cover between the caster and the character counts on a Dexterity save,
-  // unless the spell says it does not (SRD 5.1, Cover; Sacred Flame).
+  // Cover between the effect's origin (the caster, or the square a trap
+  // fires from) and the character counts on a Dexterity save, unless the
+  // spell says it does not (SRD 5.1, Cover; Sacred Flame).
   const castSpell = use?.spell ?? args.spell;
   const coverless = castSpell ? spellMechanicsFor({ spell: castSpell, userIds: spellAuthorsFor(campaign) })?.mech.ignoresCover === true : false;
-  const saveCover = use?.enemy && !coverless ? coverFor(use.enemy.encounterId, use.enemy.id, sheet.id) : 0;
+  const origin: SaveOrigin | undefined = use?.enemy
+    ? { ref: use.enemy.id }
+    : args.fromX !== undefined && args.fromY !== undefined
+      ? { at: { x: args.fromX, y: args.fromY } }
+      : undefined;
   const save = rollCharacterSave(
     campaign,
     turn,
@@ -351,7 +360,7 @@ export function handleCastAtPlayer(
     claim,
     // A spell cast at them alone: Shield Master's shield on a Dexterity save.
     true,
-    { cover: saveCover },
+    coverless ? { cover: 0 } : { ...(origin ? { origin } : {}) },
   );
   if (claim) {
     base0.featAdvantage = claim.reason;

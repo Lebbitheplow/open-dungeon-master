@@ -1080,7 +1080,6 @@
     "lib/dm/attack-onhit.ts#whole": [["identity",1,"condition instances by whole name or key"]],
     "lib/dm/attack-rules.ts#partial": [["key",2,"the SRD type, and English monster words over the display name and slug (the slug is the English row)"]],
     "lib/dm/attack-rules.ts#whole": [["key",1,"the swung line's own stored name, as resolveAttackWeapon gives it"],["key",2,"a weapon's loading key (textKey of the profile's weapon)"]],
-    "lib/dm/attack-spatial.ts#whole": [["key",2,"token refs"]],
     "lib/dm/attributes-logic.ts#partial": [["pattern",1,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"]],
     "lib/dm/attributes-logic.ts#whole": [["key",3,"attribute keys"]],
     "lib/dm/aura.ts#whole": [["identity",1,"an aura's condition by whole name"]],

@@ -32,6 +32,7 @@ import { obscuredFor } from "@/lib/dm/zone-rules";
 import { hasSunlightSensitivity, holdsFeature } from "@/lib/srd/trait-rules";
 import { getActiveBoard, getActiveEncounter, saveEncounter } from "@/lib/db/encounters";
 import { fearAsRolled } from "@/lib/dm/attack-light";
+import { coverFor, coverFromPoint } from "@/lib/dm/attack-spatial";
 import { activePublicEncounter } from "@/lib/db/encounter-view";
 import { spendResistance } from "@/lib/dm/legendary-logic";
 import { getBattleMapForEncounter, getTokenByRef } from "@/lib/db/battle-maps";
@@ -182,11 +183,32 @@ export type SaveExtra = {
   // effect's origin: "a +2 bonus to AC and Dexterity saving throws" (SRD
   // 5.1, Cover). Counts on a Dexterity save only.
   cover?: number;
+  // Where the effect starts, for the board to measure that cover when the
+  // caller has not: the creature it comes from (an attack's rider, a
+  // cone's caster), or a square (a trap's dart wall).
+  origin?: SaveOrigin;
 };
 
-// The cover bonus a save takes: on a Dexterity save only (SRD 5.1, Cover).
-function saveCoverBonus(ability: SaveAbility, cover: number | undefined): number {
-  return ability === "dex" ? Math.max(0, cover ?? 0) : 0;
+export type SaveOrigin = { ref: string } | { at: { x: number; y: number } };
+
+// The cover bonus a save takes: on a Dexterity save only (SRD 5.1, Cover),
+// the caller's own reading or else the board's between the saver and the
+// effect's origin ("against an attack or effect that originates on the
+// opposite side of the cover"). Before this only a spell cast at one
+// creature and an area counted it; an attack's rider, Prismatic Spray, a
+// trap or a monk's Open Hand did not.
+function saveCoverBonus(campaignId: string, saverRef: string, ability: SaveAbility, extra: { cover?: number; origin?: SaveOrigin } | undefined): number {
+  if (ability !== "dex") {
+    return 0;
+  }
+  if (extra?.cover !== undefined) {
+    return Math.max(0, extra.cover);
+  }
+  const board = extra?.origin ? getActiveBoard(campaignId) : null;
+  if (!extra?.origin || !board) {
+    return 0;
+  }
+  return "ref" in extra.origin ? coverFor(board.id, extra.origin.ref, saverRef) : coverFromPoint(board.id, extra.origin.at, saverRef);
 }
 
 function coverNote(bonus: number): string[] {
@@ -218,7 +240,7 @@ export function rollCharacterSave(
 ): ForcedSave {
   const sheet = getSheetById(stale.id) ?? stale;
   const shieldSave = single && ability === "dex" ? shieldMasterSaveBonus(sheet) : 0;
-  const covered = saveCoverBonus(ability, extra?.cover);
+  const covered = saveCoverBonus(campaign.id, sheet.id, ability, extra);
   // Diehard: advantage against what would exhaust them.
   const diehard = diehardSaveAdvantage(sheet, resists?.against);
   const claimed = claim ?? (diehard ? { advantage: "advantage" as const, reason: "Diehard: advantage against exhaustion" } : null);
@@ -329,8 +351,10 @@ export function rollEnemySave(
     // resistant to one rolls with advantage, vulnerable to one with
     // disadvantage (Black Flag's condition resistances).
     against?: string | string[];
-    // Cover between the creature and the effect's origin (SaveExtra.cover).
+    // Cover between the creature and the effect's origin, or the origin
+    // to measure it from (SaveExtra).
     cover?: number;
+    origin?: SaveOrigin;
   } = {},
 ): ForcedSave {
   // A character fighting the party, seen as a foe (sheet-foe.ts), saves as
@@ -353,10 +377,10 @@ export function rollEnemySave(
       null,
       options.advantage ? { advantage: "advantage", reason: "the effect's own advantage" } : options.disadvantage ? { advantage: "disadvantage", reason: "the effect's own disadvantage" } : null,
       undefined,
-      options.cover ? { cover: options.cover } : undefined,
+      { ...(options.cover !== undefined ? { cover: options.cover } : {}), ...(options.origin ? { origin: options.origin } : {}) },
     );
   }
-  const covered = saveCoverBonus(ability, options.cover);
+  const covered = saveCoverBonus(campaignId, enemy.id, ability, options);
   const derivation = rollDerivation(enemy.conditions, "saving_throw", ability);
   if (derivation.autoFail) {
     // Legendary Resistance answers a save failed outright as well.

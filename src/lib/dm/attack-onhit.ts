@@ -261,7 +261,8 @@ export function openHandOnHit(
     return `Open Hand Technique: ${enemy.displayName} cannot take reactions until the end of the monk's next turn.`;
   }
   const ability = choice === "prone" ? "dex" : "str";
-  const save = rollEnemySave(campaign.id, enemy, ability, dc, { against: choice === "prone" ? "prone" : [] });
+  // The DEX save against the knock-down takes the cover between monk and target.
+  const save = rollEnemySave(campaign.id, enemy, ability, dc, { against: choice === "prone" ? "prone" : [], origin: { ref: monkId } });
   const rolled = save.autoFailed ? "automatic" : String(save.total);
   if (save.success) {
     return `Open Hand Technique: ${enemy.displayName} holds (${ability.toUpperCase()} save ${rolled} vs DC ${dc}).`;

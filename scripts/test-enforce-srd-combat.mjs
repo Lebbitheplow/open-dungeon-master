@@ -330,6 +330,54 @@ await test("Cover counts on a DEX save against an area from its point of origin:
   }
 });
 
+// combat, Cover: 'A target can benefit from cover only when an attack or other effect originates on the opposite side of the cover.' / 'The obstacle might be a low wall, a large piece of furniture, a narrow tree trunk, or a creature, whether that creature is an enemy or a friend.'
+await test("CMB-06 on every path: a trap's, an attack rider's and an area's DEX save take the cover from where each starts", async () => {
+  const uncovered = [];
+  // The wizard's DEX save is +2 (DEX 14, no proficiency): a 10 is 12 against
+  // DC 13, and half cover makes it 14.
+  await stage(mage);
+  kit.openField([[5, 7, "|"]]);
+  kit.place(mage.id, 5, 8);
+  // A dart fired from the far side of a low wall.
+  const dart = await forced([10, 4], "apply_hazard", { type: "generic", characterIds: [mage.id], saveAbility: "dex", dc: 13, damage: "1d4", damageType: "piercing", halfOnSave: false, fromX: 5, fromY: 2 });
+  assert.equal(dart.out.ok, true, dart.out.error);
+  if (world.sheet(mage.id).currentHp < 28) {
+    uncovered.push("a trap fired from behind a low wall");
+  }
+  world.patch(mage.id, { currentHp: 28, conditions: [], conditionMeta: {} });
+  // A bola thrown over the same wall: the hit, then its DEX save or prone.
+  const [thrower] = world.enemies();
+  kit.setEnemy(thrower.id, {
+    stats: { attacks: [{ name: "Bola", toHit: 4, damage: "1d4", type: "bludgeoning", mode: "ranged", range: { normal: 30, long: 120 }, onHit: { save: "dex", dc: 13, condition: "prone" } }] },
+  });
+  kit.place(thrower.id, 5, 2);
+  const bola = await forced([19, 2, 10], "enemy_attack", { enemyId: thrower.id, targetCharacterId: mage.id });
+  assert.equal(bola.out.ok, true, bola.out.error);
+  if (world.sheet(mage.id).conditions.includes("prone")) {
+    uncovered.push(`an attack's rider (${JSON.stringify(bola.out.result?.riderSave ?? bola.out.result).slice(0, 120)})`);
+  }
+  world.patch(mage.id, { currentHp: 28, conditions: [], conditionMeta: {} });
+  // A Fireball's point with one dummy standing between it and another: a
+  // 12 on each DEX save (+0) against DC 14; the far one's is 14 behind the near one.
+  const [near, far] = await stage(mage, 2);
+  const before = world.sheet(mage.id).spellcasting;
+  world.patch(mage.id, { spellcasting: { ...before, prepared: ["Fireball"] } });
+  try {
+    kit.place(mage.id, 2, 0);
+    kit.place(near.id, 5, 6);
+    kit.place(far.id, 5, 8);
+    const blast = await forced([1, 1, 1, 1, 1, 1, 1, 1, 12, 12], "aoe_damage", { casterCharacterId: mage.id, spell: "Fireball", level: 3, enemyIds: [near.id, far.id], atX: 5, atY: 4 });
+    assert.equal(blast.out.ok, true, blast.out.error);
+    assert.equal(kit.enemy(near.id).currentHp, 32, "setup: the near dummy did not fail its save");
+    if (kit.enemy(far.id).currentHp !== 36) {
+      uncovered.push("a creature between a sphere's point and its target");
+    }
+  } finally {
+    world.patch(mage.id, { spellcasting: before });
+  }
+  assert.deepEqual(uncovered, [], `no cover on the DEX save against ${uncovered.join("; ")}`);
+});
+
 await test("Sacred Flame: 'The target gains no benefit from cover for this saving throw' (SRD 5.1, Sacred Flame).", async () => {
   const [enemy] = await stage(priest);
   const before = world.sheet(priest.id).spellcasting;

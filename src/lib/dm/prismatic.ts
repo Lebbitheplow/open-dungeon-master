@@ -103,7 +103,8 @@ export function castPrismaticSpray(input: PrismaticCast): Array<Record<string, u
     if (!encounter || enemy.status !== "alive") {
       continue;
     }
-    const save = rollEnemySave(campaign.id, enemy, "dex", dc, { magical: true, record: { turn, detail: `${enemy.displayName}: DEX save against Prismatic Spray` } });
+    // The cone starts at the caster: cover between them counts (SRD 5.1, Cover).
+    const save = rollEnemySave(campaign.id, enemy, "dex", dc, { magical: true, origin: { ref: caster.id }, record: { turn, detail: `${enemy.displayName}: DEX save against Prismatic Spray` } });
     const rays = rollRays(rayDie(input, caster.id, enemy.displayName));
     const row: Record<string, unknown> = { target: enemy.displayName, save: save.total, success: save.success, rays: rays.map((ray) => RAYS[ray - 1].color) };
     const notes: string[] = [];
@@ -142,7 +143,7 @@ export function castPrismaticSpray(input: PrismaticCast): Array<Record<string, u
     if (sheet.deathSaves?.dead) {
       continue;
     }
-    const save = rollCharacterSave(campaign, turn, sheet, "dex", dc, "DEX save against Prismatic Spray", { magical: true });
+    const save = rollCharacterSave(campaign, turn, sheet, "dex", dc, "DEX save against Prismatic Spray", { magical: true }, undefined, undefined, undefined, { origin: { ref: caster.id } });
     const rays = rollRays(rayDie(input, sheet.id, sheet.name));
     const notes: string[] = [];
     for (const ray of rays) {

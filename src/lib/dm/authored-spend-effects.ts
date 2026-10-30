@@ -275,6 +275,8 @@ export function resolveSpendEffect(ctx: SpendContext, does: SpendDoes): Resoluti
       const save = rollEnemySave(campaign.id, enemy, does.save, dc, {
         resist: Boolean(does.condition) && bindsWorthResisting([does.condition ?? ""]),
         against: does.condition,
+        // A DEX save takes the cover between the character and it.
+        origin: { ref: ctx.sheet.id },
         record: { turn: ctx.turn ?? undefined, detail: `${enemy.displayName}: ${does.save.toUpperCase()} save against ${ctx.spend.name}` },
       });
       const result: Record<string, unknown> = { target: enemy.displayName, save: save.total, dc, saved: save.success };
@@ -457,6 +459,7 @@ function burst(ctx: SpendContext, spec: NonNullable<Extract<SpendDoes, { kind: "
     const save = rollEnemySave(ctx.campaign.id, enemy, spec.save, dc, {
       resist: Boolean(spec.condition) && bindsWorthResisting([spec.condition ?? ""]),
       against: spec.condition,
+      origin: { ref: ctx.sheet.id },
       record: { turn: ctx.turn ?? undefined, detail: `${enemy.displayName}: ${spec.save.toUpperCase()} save against ${ctx.spend.name}` },
     });
     if (save.success) {

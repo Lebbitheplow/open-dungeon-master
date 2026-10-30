@@ -655,6 +655,10 @@ const OMITTED_ON_PURPOSE = {
   // new place where it belongs by dragging it on the region map; the model
   // has neither, so only it says these on the call.
   move_party: ["partOf", "direction", "distance"],
+  // The square a trap or hazard comes from, for the cover on its Dexterity
+  // save (SRD 5.1, Cover). A person sees the board and rules that cover as
+  // they set the DC; the model, which cannot point, names the square.
+  apply_hazard: ["fromX", "fromY"],
 };
 
 function formOmissions(entry) {

@@ -65,6 +65,8 @@ export function landNaturalOnHit(campaign: Campaign, hit: NaturalHit): string[] 
       // A rider that binds the creature asks for its Legendary Resistance.
       resist: Boolean(onHit.condition),
       against: onHit.condition,
+      // Cover between the character's form and its target counts on a DEX rider.
+      ...(hit.attacker.kind === "sheet" ? { origin: { ref: hit.attacker.sheetId } } : {}),
     });
     saved = save.success;
     total = save.total;
