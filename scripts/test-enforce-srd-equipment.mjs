@@ -349,11 +349,10 @@ await test("EQP-11", async () => {
   assert.deepEqual(swing.damageDice, [4], `the thrown longsword rolled d${swing.damageDice.join(", d")}`);
 });
 
-await gap("EQP-12", {
-  rule: "weapons, Special Weapons (Net): \"When you use an action, bonus action, or reaction to attack with a net, you can make only one attack regardless of the number of attacks you can normally make.\"",
-  where: "src/lib/dm/pc-attack-spend.ts (the loading rule's once-per-action check is not applied to the net), src/lib/dm/attack-rules.ts",
-  severity: "medium",
-}, async () => {
+// weapons, Special Weapons (Net): "When you use an action, bonus action, or
+// reaction to attack with a net, you can make only one attack regardless of
+// the number of attacks you can normally make."
+await test("EQP-12", async () => {
   world.patch(anchor.id, { equipment: [{ name: "Net", qty: 2 }, { name: "Longsword", qty: 1 }] });
   kit.stand(anchor.id, 1, 1);
   kit.freshTurn();
