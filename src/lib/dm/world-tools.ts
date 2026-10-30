@@ -124,7 +124,7 @@ export const worldTools: ToolDef[] = [
           damageType: { type: "string", description: "Damage type, for damage you pass yourself." },
           material: { type: "string", enum: MATERIALS, description: "What the object is made of. Default: wood." },
           size: { type: "string", enum: SIZES, description: "Its size class. Default: medium." },
-          fragile: { type: "boolean", description: "True for brittle objects (halves HP)." },
+          fragile: { type: "boolean", description: "True for brittle objects (fewer HP)." },
           damage: { type: "string", description: "The damage dealt by something other than a character's weapon, as dice (2d6) or a number." },
           ac: { type: "integer", description: "Override the material's AC if you know it." },
           hp: { type: "integer", description: "Override the size's HP if you know it." },

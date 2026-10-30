@@ -38,7 +38,11 @@ test("object AC follows material, HP follows size and fragility", () => {
   assert.equal(objectAc("wood"), 15);
   assert.equal(objectAc("adamantine"), 23);
   assert.ok(objectHp("large") > objectHp("tiny"));
-  assert.equal(objectHp("medium", true), Math.floor(objectHp("medium") / 2));
+  // SRD 5.1 Objects, the Object Hit Points table: Medium (barrel,
+  // chandelier) is 4 (1d8) fragile and 18 (4d8) resilient; the fragile
+  // column is its own number, not half the resilient one.
+  assert.equal(objectHp("medium", true), 4);
+  assert.equal(objectHp("medium"), 18);
   const door = objectProfile("wood", "large");
   assert.equal(door.ac, 15);
   assert.ok(door.hp > 0);

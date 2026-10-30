@@ -41,18 +41,20 @@ export function objectAc(material: ObjectMaterial): number {
   return MATERIAL_AC[material] ?? 15;
 }
 
-// DMG hit points by size, for a resilient object; fragile objects take half
-// (rounded down). Given as an average so the table stays deterministic.
-const SIZE_HP: Record<ObjectSize, number> = {
-  tiny: 4, // bottle, lock
-  small: 8, // chest, lute
-  medium: 18, // barrel, chandelier
-  large: 27, // cart, big door
+// SRD 5.1 Objects, Statistics for Objects, the Object Hit Points table:
+// [fragile, resilient], each the average of its dice so the table stays
+// deterministic. Fragile is its own column, not half of resilient (issue
+// #570, EQP-01: halving gave a Small chest 8 and a Medium barrel 9).
+const SIZE_HP: Record<ObjectSize, [number, number]> = {
+  tiny: [2, 5], // bottle, lock: 1d4 / 2d4
+  small: [3, 10], // chest, lute: 1d6 / 3d6
+  medium: [4, 18], // barrel, chandelier: 1d8 / 4d8
+  large: [5, 27], // cart, 10-ft-by-10-ft window: 1d10 / 5d10
 };
 
 export function objectHp(size: ObjectSize, fragile = false): number {
-  const base = SIZE_HP[size] ?? SIZE_HP.medium;
-  return fragile ? Math.floor(base / 2) : base;
+  const [frail, sturdy] = SIZE_HP[size] ?? SIZE_HP.medium;
+  return fragile ? frail : sturdy;
 }
 
 export type ObjectProfile = {

@@ -61,12 +61,10 @@ await test("Objects, Statistics for Objects: the Object Armor Class table, subst
   }
 });
 
-await gap("EQP-01", {
-  rule: "objects, Statistics for Objects (Hit Points): the Object Hit Points table gives Tiny 2 (1d4) fragile / 5 (2d4) resilient, Small 3 (1d6) / 10 (3d6), Medium 4 (1d8) / 18 (4d8), Large 5 (1d10) / 27 (5d10).",
-  where: "src/lib/srd/objects.ts objectHp (SIZE_HP, and fragile as half the resilient value)",
-  severity: "medium",
-  note: "test-world.mjs:41 asserts the halving rule, and test-enforce-objects-terrain.mjs breaks a Small chest and crate with 9 damage, which the SRD's 10 hit points survive.",
-}, () => {
+// objects, Statistics for Objects (Hit Points): the Object Hit Points table
+// gives Tiny 2 (1d4) fragile / 5 (2d4) resilient, Small 3 (1d6) / 10 (3d6),
+// Medium 4 (1d8) / 18 (4d8), Large 5 (1d10) / 27 (5d10).
+await test("EQP-01", () => {
   const table = { tiny: [2, 5], small: [3, 10], medium: [4, 18], large: [5, 27] };
   const odm = Object.fromEntries(Object.keys(table).map((size) => [size, [objectHp(size, true), objectHp(size, false)]]));
   assert.deepEqual(odm, table, `fragile / resilient hit points by size: ${JSON.stringify(odm)}`);
