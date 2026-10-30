@@ -23,6 +23,7 @@ import {
 import {
   applyDeathSaveRoll,
   freshDeathTrack,
+  stableDeathTrack,
   isDying,
   isMassiveDamage,
   MOST_SAVES_TO_SETTLE,
@@ -129,6 +130,8 @@ export function applyDamageDeathHook(
   preSheet: CharacterSheet,
   math: { currentHp: number; dropped: boolean; overkill: number },
   crit: boolean,
+  // The blow that dropped them was a melee attack meant to knock out.
+  nonlethal = false,
 ): Record<string, unknown> {
   if (math.currentHp > 0) {
     return {};
@@ -171,6 +174,21 @@ export function applyDamageDeathHook(
   }
 
   if (math.dropped) {
+    // "The attacker can make this choice the instant the damage is dealt.
+    // The creature falls unconscious and is stable" (SRD 5.1, Knocking a
+    // Creature Out): no death saves, the stable wait for the hit point, and
+    // no instant death, which the attacker chose not to deal.
+    if (nonlethal) {
+      const wait = rollStableTimer(campaign, fresh);
+      writeDeathState(campaign, turnId, fresh, stableDeathTrack(), "death_state", "knocked out", {
+        conditions: wait.conditions,
+        conditionMeta: wait.conditionMeta,
+      });
+      return {
+        knockedOut: true,
+        note: `${fresh.name} is knocked out: unconscious and stable at 0 HP, making no death saves. They regain 1 hit point in ${wait.hours} hour${wait.hours === 1 ? "" : "s"}, or sooner if healed.`,
+      };
+    }
     if (isMassiveDamage(math.overkill, effectiveMaxHp(fresh))) {
       const track = { ...freshDeathTrack(), failures: 3, dead: true };
       writeDeathState(campaign, turnId, fresh, track, "death_state", "massive damage");

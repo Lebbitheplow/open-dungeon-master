@@ -270,12 +270,8 @@ await gap("CMB-06", {
 
 // ---- Damage and Healing: Knocking a Creature Out ----
 
-await gap("CMB-07", {
-  rule: "combat, Knocking a Creature Out: 'When an attacker reduces a creature to 0 hit points with a melee attack, the attacker can knock the creature out... The creature falls unconscious and is stable.'",
-  where: "src/lib/dm/enemy-attack.ts attackArgsSchema (no nonlethal option; only pc_attack has one, dm/knockout.ts)",
-  severity: "medium",
-  note: "An enemy that means to take a character alive cannot: every drop to 0 from enemy_attack leaves the character dying, rolling death saves.",
-}, async () => {
+// combat, Knocking a Creature Out: 'When an attacker reduces a creature to 0 hit points with a melee attack, the attacker can knock the creature out... The creature falls unconscious and is stable.'
+await test("CMB-07", async () => {
   const [enemy] = await stage(fighter);
   kit.place(fighter.id, 5, 5);
   kit.place(enemy.id, 5, 6);

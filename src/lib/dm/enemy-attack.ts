@@ -74,6 +74,9 @@ const attackArgsSchema = z.object({
   advantage: z.enum(["none", "advantage", "disadvantage"]).optional(),
   advantageSource: z.enum(ADVANTAGE_SOURCES).optional(),
   advantageReason: z.string().max(200).optional(),
+  // A melee blow meant to knock the character out (SRD 5.1, Knocking a
+  // Creature Out): dropped to 0, they fall unconscious and stable.
+  nonlethal: z.coerce.boolean().optional(),
 });
 
 // The profile the enemy walks in for: the shortest reach among the melee
@@ -506,6 +509,8 @@ export function handleEnemyAttack(
       ...(hasTrait(standing.stats, "magicWeapons") || attack.spellAttack || attack.magical ? { magical: true } : {}),
       // Crits against a dying target count double death-save failures.
       ...(crit ? { crit: true } : {}),
+      // Only a melee attack knocks out; a ranged one drops them dying.
+      ...(args.nonlethal && !ranged ? { nonlethal: true } : {}),
       // Emissary of Redemption holds nothing against a creature the paladin attacked.
       ...(authored.spurned.length ? { exceptFeatures: authored.spurned } : {}),
       reason: `${enemy.displayName}'s ${attack.name}`,

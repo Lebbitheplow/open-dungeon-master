@@ -119,6 +119,10 @@ export const enemyAttackTool: ToolDef = {
             "Where the advantage or disadvantage comes from; only 'other' counts.",
         },
         advantageReason: { type: "string", description: "The circumstance behind advantage, in a few words." },
+        nonlethal: {
+          type: "boolean",
+          description: "Melee, to take them alive: dropped to 0 HP they are stable, not dying.",
+        },
       },
       required: ["enemyId", "targetCharacterId"],
     },

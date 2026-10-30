@@ -199,6 +199,7 @@ export const COMBAT_ADJUDICATIONS: CatalogEntry[] = [
       { name: "targetCharacterId", label: "Target", kind: "character", required: true },
       { name: "attack", label: "Attack", kind: "text", help: "Blank picks from the stat block." },
       ...advantageFields(),
+      { name: "nonlethal", label: "Knock out", kind: "boolean", help: "Melee only. A player dropped to 0 falls unconscious and stable instead of dying." },
     ],
   },
   {
