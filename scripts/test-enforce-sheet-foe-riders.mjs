@@ -16,9 +16,10 @@ const world = await openWorld();
 const kit = await combatKit(world);
 const { moveToSide } = await import("../src/lib/dm/combat-sides.ts");
 const { tickClockConditions } = await import("../src/lib/dm/condition-tick.ts");
+const { beginTurns, endTurns } = await import("../src/lib/dm/turn-end.ts");
 
 const BODY = { str: 16, dex: 12, con: 14, int: 10, wis: 10, cha: 10 };
-const mage = world.addHero({ name: "Sable", ...caster("wizard", "int", ["Thunderwave", "Stinking Cloud", "Phantasmal Killer", "Melf's Acid Arrow"], [], 9), maxHp: 40, ac: 12, acOverride: true });
+const mage = world.addHero({ name: "Sable", ...caster("wizard", "int", ["Thunderwave", "Stinking Cloud", "Phantasmal Killer"], [], 9), maxHp: 40, ac: 12, acOverride: true });
 const priest = world.addHero({ name: "Thane", ...caster("cleric", "wis", ["Harm", "Divine Word"], [], 13), maxHp: 60, ac: 12, acOverride: true });
 const druid = world.addHero({ name: "Rowan", ...caster("druid", "wis", ["Heat Metal"], [], 9), maxHp: 40, ac: 12, acOverride: true });
 
@@ -127,6 +128,46 @@ await test("Divine Word blinds, deafens and stuns a turncoat at 30 hit points or
   world.clearDice();
   assert.equal(out.ok, true, out.error);
   assert.equal(world.sheet(turncoat.id).deathSaves?.dead, true, JSON.stringify(out.result));
+});
+
+// One whole turn of the turncoat's: what waits on its end is begun, then ended.
+function turncoatTurn(id) {
+  beginTurns(world.campaign(), world.encounter().id, [id]);
+  return endTurns(world.campaign(), world.encounter().id, [id]).lines;
+}
+
+await test("Phantasmal Killer on a turncoat deals its psychic at the end of each of its turns until a save ends it", async () => {
+  const turncoat = await stage();
+  kit.giveTurn(mage.id);
+  // The WIS save at the casting: a d20 of 2 against DC 16.
+  world.dice(2);
+  const out = await world.invoke("cast_at_enemy", { characterId: mage.id, targetEnemyId: turncoat.id, spell: "Phantasmal Killer" });
+  world.clearDice();
+  assert.equal(out.ok, true, out.error);
+  assert.ok(world.sheet(turncoat.id).conditions.includes("frightened"), JSON.stringify(out.result));
+  // The end of its turn: a failed save (3), then 4d10 of 5s.
+  world.dice(3, 5, 5, 5, 5);
+  let lines = turncoatTurn(turncoat.id);
+  world.clearDice();
+  assert.equal(world.sheet(turncoat.id).currentHp, 30 - 20, lines.join(" "));
+  assert.ok(world.sheet(turncoat.id).conditions.includes("frightened"), "a failed save keeps the dread");
+  // The next turn's end: a made save (19) ends the spell for it.
+  world.dice(19);
+  lines = turncoatTurn(turncoat.id);
+  world.clearDice();
+  assert.ok(!world.sheet(turncoat.id).conditions.includes("frightened"), lines.join(" "));
+  assert.equal(world.sheet(turncoat.id).currentHp, 30 - 20, "a made save deals nothing");
+});
+
+await test("Acid Arrow's mark on a turncoat burns again at the end of its next turn", async () => {
+  const turncoat = await stage();
+  // The mark a hit leaves (spell-attack-riders.ts applySpellHitCondition).
+  world.patch(turncoat.id, { conditions: ["acid arrow"], conditionMeta: { "acid arrow": { untilTurnEndOf: turncoat.id, source: mage.id, slotLevel: 2 } } });
+  world.dice(2, 2);
+  const lines = turncoatTurn(turncoat.id);
+  world.clearDice();
+  assert.equal(world.sheet(turncoat.id).currentHp, 30 - 4, lines.join(" "));
+  assert.ok(!world.sheet(turncoat.id).conditions.includes("acid arrow"));
 });
 
 await finish();
