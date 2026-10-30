@@ -117,6 +117,13 @@ export function isDwarf(raceId: string): boolean {
   return DWARVES.has(srdRaceId(raceId));
 }
 
+// The bundled gnomes under every spelling of their ids: SRD 5.1 Cackle
+// Fever "targets humanoids, although gnomes are strangely immune."
+const GNOMES = new Set(["gnome", "rock_gnome", "forest_gnome"]);
+export function isGnome(raceId: string): boolean {
+  return GNOMES.has(srdRaceId(raceId));
+}
+
 // Dwarven Toughness: +1 hit point per level, under every Hill Dwarf id and
 // for any species that carries the trait.
 export function hpBonusPerLevel(raceId: string, rules?: SpeciesRules | null): number {

@@ -16,6 +16,7 @@ import { regenerationTurnStart } from "@/lib/dm/regeneration-turn";
 import { sunlightTurnStart } from "@/lib/dm/sunlight-turn";
 import { beginTurns, endTurns } from "@/lib/dm/turn-end";
 import { burningTurnStart } from "@/lib/dm/gear-weapon-hit";
+import { laughterTurnStart } from "@/lib/dm/afflictions";
 
 export function turnStartEffects(
   campaign: Campaign,
@@ -42,6 +43,8 @@ export function turnStartEffects(
     ...holyNimbusTurnStart(campaign, encounter, starting),
     // A character aloft whose flight has ended comes down.
     ...landTheFlightless(campaign, encounter.id),
+    // Cackle fever's laughter spreads to a character starting beside it.
+    ...laughterTurnStart(campaign, encounter.id, starting.filter((id) => !enemiesById.has(id))),
   ];
   for (const id of starting) {
     const enemy = enemiesById.get(id);

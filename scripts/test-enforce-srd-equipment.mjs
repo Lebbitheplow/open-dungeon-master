@@ -415,11 +415,11 @@ const pointerAt = () => {
   return encounter.order[encounter.turnIndex]?.characterId;
 };
 
-await gap("EQP-14", {
-  rule: "diseases, Cackle Fever: \"Any humanoid creature that starts its turn within 10 feet of an infected creature in the throes of mad laughter must succeed on a DC 10 Constitution saving throw or also become infected with the disease.\"",
-  where: "src/lib/dm/afflictions.ts (no turn-start check), src/lib/dm/turn-start-effects.ts",
-  severity: "low",
-}, async () => {
+// diseases, Cackle Fever: "Any humanoid creature that starts its turn within
+// 10 feet of an infected creature in the throes of mad laughter must succeed
+// on a DC 10 Constitution saving throw or also become infected with the
+// disease."
+await test("EQP-14", async () => {
   try {
     const infected = await world.invoke("afflict", { characterId: sick.id, kind: "disease", name: "Cackle Fever", save: false, symptomsNow: true });
     must(infected.ok, `afflict refused: ${infected.error}`);
@@ -436,9 +436,13 @@ await gap("EQP-14", {
     world.clearDice();
     must(pointerAt() === near.id, "the healthy hero's turn did not start");
     assert.ok(d20sIn(rolled) >= 1, `a humanoid began its turn 5 feet from a laughing infected creature and rolled ${d20sIn(rolled)} saves`);
+    // The 15 makes the DC 10 save: no fever, and that creature's laughter
+    // cannot reach them for 24 hours.
+    assert.ok(conditionsOf(near.id).includes(`immune to ${world.sheet(sick.id).name.toLowerCase()}'s laughter`), JSON.stringify(conditionsOf(near.id)));
   } finally {
     await world.invoke("clear_condition", { characterId: sick.id, condition: "cackle fever" });
     world.patch(sick.id, { conditions: [], conditionMeta: {}, exhaustion: 0, currentHp: 60 });
+    world.patch(near.id, { conditions: [], conditionMeta: {} });
   }
 });
 
@@ -498,11 +502,9 @@ await test("EQP-17", async () => {
   assert.equal(world.sheet(victim.id).currentHp, 39, `10 healing on 5 tincture damage left the hero at ${world.sheet(victim.id).currentHp} of 44`);
 });
 
-await gap("EQP-18", {
-  rule: "diseases, Cackle Fever: \"This disease targets humanoids, although gnomes are strangely immune.\"",
-  where: "src/lib/dm/afflictions.ts infectDisease (no immunity by race)",
-  severity: "low",
-}, async () => {
+// diseases, Cackle Fever: "This disease targets humanoids, although gnomes are
+// strangely immune."
+await test("EQP-18", async () => {
   const gnome = world.addHero({ class: "fighter", level: 5, maxHp: 44, race: "rock_gnome" });
   world.clearDice();
   world.dice(1, 2);
@@ -512,11 +514,11 @@ await gap("EQP-18", {
   assert.equal(out.result.infected, undefined, `a rock gnome was infected: ${out.result.note}`);
 });
 
-await gap("EQP-19", {
-  rule: "diseases, Cackle Fever: \"Any event that causes the infected creature great stress, including entering combat, taking damage, experiencing fear, or having a nightmare, forces the creature to make a DC 13 Constitution saving throw.\"",
-  where: "src/lib/dm/afflictions.ts afflictionStress (cause \"fear\" has no caller), src/lib/dm/set-condition.ts",
-  severity: "low",
-}, async () => {
+// diseases, Cackle Fever: "Any event that causes the infected creature great
+// stress, including entering combat, taking damage, experiencing fear, or
+// having a nightmare, forces the creature to make a DC 13 Constitution saving
+// throw."
+await test("EQP-19", async () => {
   const laugher = world.addHero({ class: "fighter", level: 5, maxHp: 44 });
   try {
     await world.invoke("afflict", { characterId: laugher.id, kind: "disease", name: "Cackle Fever", save: false, symptomsNow: true });

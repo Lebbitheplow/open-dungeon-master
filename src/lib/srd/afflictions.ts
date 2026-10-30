@@ -22,6 +22,8 @@ export type Disease = {
   infectDc: number;
   // How long before symptoms show, as dice of hours or days.
   onset: { dice: string; unit: "hours" | "days" };
+  // Cackle Fever: "gnomes are strangely immune" (issue #570, EQP-18).
+  sparesGnomes?: boolean;
   summary: string;
 };
 
@@ -32,6 +34,7 @@ export const DISEASES: Record<DiseaseId, Disease> = {
     condition: "cackle fever",
     infectDc: 10,
     onset: { dice: "1d4", unit: "hours" },
+    sparesGnomes: true,
     summary:
       "One level of exhaustion that no rest removes while it lasts; great stress (entering combat, taking damage) is a DC 13 CON save or 1d10 psychic and a minute of mad laughter (incapacitated); after each long rest a DC 13 CON save lowers the DC by 1d6, cured at 0; three failed rest saves bring indefinite madness.",
   },
