@@ -12,6 +12,7 @@ import {
   forcedMarchSaveDc,
   NORMAL_TRAVEL_HOURS,
   paceEffect,
+  paceMiles,
   paceSpeed,
   type TravelPace,
 } from "@/lib/srd/travel";
@@ -284,7 +285,8 @@ const travelTime: Calculator = {
     const hours = int(input, "hours", NORMAL_TRAVEL_HOURS, 1, 24);
     const speed = paceSpeed(pace);
     const effect = paceEffect(pace);
-    const perDay = speed.milesPerHour * hours;
+    // The Day column for a full day, the Hour column past it (travel.ts).
+    const perDay = Math.round(paceMiles(pace, hours) * 2) / 2;
     const days = Math.ceil(miles / perDay);
     const forced = forcedMarchHours(hours);
     const parts: CalcPart[] = [
@@ -296,7 +298,12 @@ const travelTime: Calculator = {
       {
         label: "Covered a day",
         value: `${perDay} miles`,
-        detail: `${hours} hours at ${speed.milesPerHour} miles an hour`,
+        detail:
+          hours > NORMAL_TRAVEL_HOURS
+            ? `${speed.milesPerDay} miles in 8 hours, then ${speed.milesPerHour} miles an hour for ${hours - NORMAL_TRAVEL_HOURS} more`
+            : hours === NORMAL_TRAVEL_HOURS
+              ? `${speed.milesPerDay} miles in a full 8-hour day`
+              : `${hours} hours at ${speed.milesPerHour} miles an hour`,
       },
       {
         label: "Watch",

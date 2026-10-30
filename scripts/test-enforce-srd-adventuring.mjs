@@ -267,15 +267,8 @@ await gap(
 
 // ---- Adventuring: Travel Pace ----
 
-await gap(
-  "ADV-11",
-  {
-    rule:
-      "adventuring / Travel Pace, the table's Day column: a day's travel (8 hours) covers 30 miles at a fast pace and 18 at a slow pace, not the hour column times 8 (32 and 16)",
-    where: "src/lib/srd/travel.ts PACE_SPEED / milesCovered (miles a day are milesPerHour x hours by design, so a fast day is 32 and a slow one 16)",
-    severity: "low",
-    note: "The bundled page itself prints the Day column wrong: Normal 18 and Slow 24, the two swapped (SRD 5.1 has Normal 24, Slow 18). That is a data defect in src/lib/rulebook/srd-5.1.json for whoever owns the text; the engine's normal day (24) agrees with the SRD.",
-  },
+await test(
+  "ADV-11: adventuring / Travel Pace, the table's Day column: a day's travel (8 hours) covers 30 miles at a fast pace and 18 at a slow pace, not the hour column times 8 (32 and 16)",
   async () => {
     await world.invoke("set_weather", { sky: "clear", temperature: "mild", wind: "calm" });
     const fast = await world.invoke("travel", { hours: 8, pace: "fast", characterIds: [scout.id] });
@@ -285,6 +278,10 @@ await gap(
     need(slow.ok, slow.error);
     await world.invoke("pass_time", { amount: 10, unit: "minutes" });
     assert.deepEqual([fast.result.miles, slow.result.miles], [30, 18], `a day at a fast pace covers ${fast.result.miles} miles and at a slow pace ${slow.result.miles}`);
+    // Forced March: each hour past 8 adds the Hour column; a day's 18 slow miles take the day.
+    const { milesCovered, travelLeg } = await import("../src/lib/srd/travel.ts");
+    assert.equal(milesCovered({ pace: "fast", hours: 10 }), 38, "two forced-march hours at a fast pace did not add 4 miles each to the 30");
+    assert.equal(travelLeg({ pace: "slow", miles: 18 }).hours, 8, "18 miles at a slow pace did not take a full day");
   },
 );
 

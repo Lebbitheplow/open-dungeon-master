@@ -570,8 +570,9 @@ export function handleTravel(
   });
   const weatherNotes: string[] = [];
   const weatherOutcome: Record<string, unknown> = {};
-  // The ground covered: miles an hour of the pace, halved in difficult
-  // terrain, cut by the weather the party set out in (src/lib/srd/travel.ts).
+  // The ground covered: the pace's Hour column, its Day column for a full
+  // day, halved in difficult terrain, cut by the weather the party set out
+  // in (src/lib/srd/travel.ts).
   weatherOutcome.miles = leg.miles;
   if (terrain === "difficult") {
     weatherNotes.push("Difficult terrain halves the distance.");
