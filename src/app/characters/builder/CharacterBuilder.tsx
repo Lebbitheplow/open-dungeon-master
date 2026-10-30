@@ -20,7 +20,7 @@ import { AbilitiesStep } from "./steps/AbilitiesStep";
 import { AncestryStep } from "./steps/AncestryStep";
 import { BackgroundPanel } from "./steps/BackgroundPanel";
 import { CallingStep } from "./steps/CallingStep";
-import { ContentNotices, LevelField } from "./steps/CallingSetup";
+import { ContentNotices, GenderField, LevelField } from "./steps/CallingSetup";
 import { ToolGrantPanels } from "./steps/ClassChoices";
 import { FinishStep, type BuilderRole } from "./steps/FinishStep";
 import { IdentityStep } from "./steps/IdentityStep";
@@ -466,7 +466,9 @@ function CharacterBuilderForm({
   // Takes the player to the block that holds the missing pick: scrolls the
   // active step to it, lights it for a moment and puts focus on its first
   // control (issue #117).
-  function locate(target: BlockerTarget) {
+  // "gender" is never owed, but the Hero step and the summary go to it as
+  // they go to a pick (GenderField's anchor).
+  function locate(target: BlockerTarget | "gender") {
     const found = document.querySelector<HTMLElement>(
       `[data-builder-root="${rootId}"] [data-active] [data-builder-target="${target}"]`,
     );
@@ -606,8 +608,8 @@ function CharacterBuilderForm({
   const stillOwed = Object.values(owed).reduce((sum, blocks) => sum + owedPicks(blocks).length, 0);
   // A change from the read-back: to the pick's step, then to its block once
   // the step is showing.
-  function changePick(target: BlockerTarget) {
-    const index = STEP_ORDER.indexOf(STEP_OF_TARGET[target]);
+  function changePick(target: BlockerTarget | "gender") {
+    const index = STEP_ORDER.indexOf(target === "gender" ? "calling" : STEP_OF_TARGET[target]);
     if (index >= 0) {
       setStep(index);
     }
@@ -622,6 +624,7 @@ function CharacterBuilderForm({
     klass: derived.multiclass ? classSplitWords(derived.classList, (id) => classes.find((entry) => entry.id === id)?.name ?? id) : klass?.name,
     subclass: state.subclass || undefined,
     level: derived.effectiveLevel,
+    gender: state.gender || undefined,
     abilities: derived.shownAbilities,
     casts,
     cantrips: state.cantrips,
@@ -650,6 +653,7 @@ function CharacterBuilderForm({
           {owedLine(owed.calling)}
           <CallingStep
             notices={<ContentNotices pack={pack} packInstalled={packInstalled} />}
+            genderField={<GenderField state={state} className="mt-4" />}
             levelField={<LevelField state={state} fixedLevel={fixedLevel} levelNote={levelNote} className="mt-3" />}
             state={state}
             derived={derived}
@@ -786,6 +790,7 @@ function CharacterBuilderForm({
             onUploadPortrait={() => setCropping(true)}
             alignmentGroups={pickers.alignmentGroups}
             alignmentInfo={pickers.alignmentInfo}
+            onEditGender={() => changePick("gender")}
           />
         </>
       ),
