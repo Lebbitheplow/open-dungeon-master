@@ -78,14 +78,36 @@ if (!process.env.DEFAULT_TEXT_PROVIDER) {
 const realRandomInt = crypto.randomInt;
 const queue = [];
 const rolled = [];
+// A seeded generator for every die the queue does not name (seedDice), so a
+// scenario run twice rolls the same faces; null rolls for real.
+let seeded = null;
+
+// mulberry32: small, fast, and the same sequence on every machine, which is
+// all a seeded scenario needs. Returns a function giving [0, 1).
+function mulberry32(seed) {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
 
 crypto.randomInt = function forcedRandomInt(min, max, callback) {
-  if (min === 1 && typeof max === "number" && typeof callback !== "function" && queue.length && queue[0] === null) {
+  const die = min === 1 && typeof max === "number" && typeof callback !== "function";
+  if (die && queue.length && queue[0] === null) {
     queue.shift();
-  } else if (min === 1 && typeof max === "number" && typeof callback !== "function" && queue.length) {
+  } else if (die && queue.length) {
     const sides = max - 1;
     const face = Math.max(1, Math.min(sides, queue.shift()));
     rolled.push({ sides, face, forced: true });
+    return face;
+  } else if (die && seeded) {
+    const sides = max - 1;
+    const face = 1 + Math.floor(seeded() * sides);
+    rolled.push({ sides, face, forced: false, seeded: true });
     return face;
   }
   const face = realRandomInt(min, max, callback);
@@ -99,6 +121,13 @@ syncBuiltinESMExports();
 // Queue the next dice, in the order the engine will roll them.
 export function dice(...faces) {
   queue.push(...faces.flat());
+}
+
+// Every die the queue does not name comes from this seed from now on (the
+// card scorer's fixed scenarios, scripts/lib/card-score.mjs); null goes back
+// to real dice. Queued faces still win.
+export function seedDice(seed) {
+  seeded = seed === null || seed === undefined ? null : mulberry32(Number(seed));
 }
 
 // Forget queued dice a call did not use, and say how many there were: a test

@@ -121,7 +121,7 @@ import { gateAiCall } from "@/lib/dm/ai-gate";
 import { characterAwaitingPlayer } from "@/lib/dm/player-word";
 import { enemiesDue, enemiesOwedTurn, personRunsTable } from "@/lib/dm/enemies-due";
 import { noteTurnHead, settleTurnWarmup, turnHeadKey, warmNextTurn } from "@/lib/dm/turn-warmup";
-import { directCardCall, intentAnswered, intentCorrection, intentNeedsTool, type PlayedCard, type TurnCall } from "@/lib/dm/intent-logic";
+import { DIRECT_CALL_ID_PREFIX, directCardCall, intentAnswered, intentCorrection, intentNeedsTool, type PlayedCard, type TurnCall } from "@/lib/dm/intent-logic";
 import { handleCompleteBeat } from "@/lib/dm/arc";
 import { tickWaypointsFromCalls } from "@/lib/dm/waypoint-tick";
 import { enforceEngineBoundary } from "@/lib/dm/narration-guard";
@@ -2549,7 +2549,7 @@ function cardReply(card: DirectCard): DmCallResult {
       content: "",
       tool_calls: [
         {
-          id: `card_${card.messageId.replace(/-/g, "").slice(0, 12)}`,
+          id: `${DIRECT_CALL_ID_PREFIX}${card.messageId.replace(/-/g, "").slice(0, 12)}`,
           type: "function",
           function: { name: card.name, arguments: JSON.stringify(card.args) },
         },
