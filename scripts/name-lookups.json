@@ -2003,6 +2003,8 @@
     "lib/srd/feat-spells.ts#partial": [["pattern",17,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"],["identity",1,"ODM's own \"Free cast: <spell> (<note>)\" feature name, whole"],["identity",1,"spells by whole name"],["authoring",1,"spell names read in a feat's text"]],
     "lib/srd/feat-spells.ts#whole": [["key",4,"class lists and schools by textKey"],["identity",1,"a spell by its whole name"]],
     "lib/srd/feat-text.ts#partial": [["pattern",1,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"]],
+    "lib/srd/feat-use.ts#keyed": [["identity",1,"the SRD feat's prerequisite by its textKey"]],
+    "lib/srd/feat-use.ts#whole": [["identity",1,"a held feat by its whole name"]],
     "lib/srd/feature-effects.ts#fallback": [["parse",1,"the English rules sentence a feature's description prints"]],
     "lib/srd/feature-effects.ts#first": [["key",1,"the guidance of the feature's own row (effectsFor reads whole names)"]],
     "lib/srd/feature-effects.ts#keyed": [["identity",2,"SRD, spell, feature, subclass, hazard and magic rows by textKey (or armorKey/gearKey/rowKey/featureKey/priceKey, textKey-based); row tables keyed by the row's own name; the workshop's tables"]],

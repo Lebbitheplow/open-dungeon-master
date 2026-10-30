@@ -335,15 +335,8 @@ async function grapplingFight() {
   return enemy;
 }
 
-await gap(
-  "ADV-08",
-  {
-    rule:
-      "feats: \"If you ever lose a feat's prerequisite, you can't use that feat until you regain the prerequisite. For example, the Grappler feat requires you to have a Strength of 13 or higher. If your Strength is reduced below 13 ... you can't benefit from the Grappler feat\"",
-    where: "src/lib/dm/pc-attack-situation.ts (the Grappler advantage at line 216 checks the feat and the grapple, never the Strength 13 prerequisite)",
-    severity: "low",
-    note: "A Strength drain is the GM's to apply to the score (bestiary/attack-text.ts), so the lowered score is on the sheet for the rider to read.",
-  },
+await test(
+  "ADV-08: feats: \"If you ever lose a feat's prerequisite, you can't use that feat until you regain the prerequisite. For example, the Grappler feat requires you to have a Strength of 13 or higher. If your Strength is reduced below 13 ... you can't benefit from the Grappler feat\"",
   async () => {
     const enemy = await grapplingFight();
     need(world.sheet(grappler.id).abilities.str === 12, "the grappler's Strength is not 12");
