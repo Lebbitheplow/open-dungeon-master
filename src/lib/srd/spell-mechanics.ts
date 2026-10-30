@@ -24,6 +24,7 @@ import {
   damageTypeFor,
   halfOnSaveFor,
   saveAbilityFor,
+  secondDamageTypeFor,
 } from "@/lib/srd/spell-scaling";
 import { spellNamesOf } from "@/lib/srd/spell-facts";
 import { MECH_OVERRIDES } from "@/lib/srd/spell-mech-overrides";
@@ -89,7 +90,7 @@ export function parseSpellMech(input: { desc: string; higherLevel?: string; dura
   const attack = attackKindFor(desc);
   if (attack) {
     const type = damageTypeFor(desc);
-    return { resolution: "attack", attack, ...(type ? { damageType: type } : {}) };
+    return { resolution: "attack", attack, ...typesOf(desc, type) };
   }
   const save = saveAbilityFor(desc);
   if (save) {
@@ -100,7 +101,7 @@ export function parseSpellMech(input: { desc: string; higherLevel?: string; dura
       resolution: "save",
       save,
       halfOnSave: halfOnSaveFor(desc),
-      ...(type ? { damageType: type } : {}),
+      ...typesOf(desc, type),
       ...(condition ? { condition: parsedCondition(condition, desc, input.duration) } : {}),
       ...(area ? { area: true, areaFeet: area } : {}),
     };
@@ -109,11 +110,23 @@ export function parseSpellMech(input: { desc: string; higherLevel?: string; dura
     return { resolution: "heal" };
   }
   const damage = baseDamageDice(desc);
-  if (damage && !damageIsTheCastersOwn(desc)) {
+  // A spell that has the caster "make a melee weapon attack" rolls the
+  // weapon, not a spell attack, and deals nothing unless that attack hits:
+  // reading it as damage with no roll (Level Up's Air Wave, Deep Magic's
+  // Biting Arrow) hit every time.
+  if (damage && !damageIsTheCastersOwn(desc) && !WEAPON_ATTACK.test(desc)) {
     const type = damageTypeFor(desc);
-    return { resolution: "auto", ...(type ? { damageType: type } : {}) };
+    return { resolution: "auto", ...typesOf(desc, type) };
   }
   return null;
+}
+
+export const WEAPON_ATTACK = /\bmake (?:a|one) (?:melee|ranged) weapon attack/i;
+
+// The damage type a text reads as, and the second when it deals two.
+function typesOf(desc: string, type: string | null): Pick<SpellMech, "damageType" | "secondType"> {
+  const second = type ? secondDamageTypeFor(desc, type) : null;
+  return { ...(type ? { damageType: type } : {}), ...(second ? { secondType: second } : {}) };
 }
 
 // How long a condition read from prose lasts. A repeat save only when the
@@ -154,7 +167,9 @@ export function durationRounds(duration?: string): number | null {
 export function areaOf(desc: string): number | null {
   const match =
     /(\d+)-foot(?:-radius|-diameter)?[\s-]+(?:radius|cube|cone|line|sphere|square|cylinder|emanation)/i.exec(desc) ??
-    /(\d+)-foot[- ]radius/i.exec(desc);
+    /(\d+)-foot[- ]radius/i.exec(desc) ??
+    // Deep Magic: "Each creature within 15 feet of that spot takes 6d8".
+    /\beach creature within (\d+) feet of (?:that|the|a) (?:point|spot)\b/i.exec(desc);
   if (!match) {
     return null;
   }
