@@ -173,6 +173,16 @@ await test("Phantasmal Killer on a turncoat deals its psychic at the end of each
   assert.equal(world.sheet(turncoat.id).currentHp, 30 - 20, "a made save deals nothing");
 });
 
+await test("A turncoat under Heroism shrugs off Phantasmal Killer's fright, as a party member would", async () => {
+  const turncoat = await stage({ conditions: ["heroism"], conditionMeta: { heroism: { spell: "Heroism", source: "someone" } } });
+  kit.giveTurn(mage.id);
+  world.dice(2);
+  const out = await world.invoke("cast_at_enemy", { characterId: mage.id, targetEnemyId: turncoat.id, spell: "Phantasmal Killer" });
+  world.clearDice();
+  assert.equal(out.ok, true, out.error);
+  assert.ok(!world.sheet(turncoat.id).conditions.includes("frightened"), JSON.stringify(out.result));
+});
+
 await test("Acid Arrow's mark on a turncoat burns again at the end of its next turn", async () => {
   const turncoat = await stage();
   // The mark a hit leaves (spell-attack-riders.ts applySpellHitCondition).

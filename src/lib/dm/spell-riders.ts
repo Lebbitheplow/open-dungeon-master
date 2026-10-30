@@ -15,7 +15,7 @@
 // Must not be imported by enemy-damage.ts or mutations.ts (it imports both
 // through its callers' paths).
 
-import type { Campaign } from "@/lib/db/campaigns";
+import { getCampaignById, type Campaign } from "@/lib/db/campaigns";
 import { getDatabase } from "@/lib/db/core";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import { getActiveEncounter, getEnemy, patchEnemyConditions, setEnemyConcentration, type EncounterEnemy } from "@/lib/db/encounters";
@@ -25,6 +25,7 @@ import { meetEnemyPart } from "@/lib/dm/enemy-defenses";
 import { settleEnemyIncapacitation } from "@/lib/dm/enemy-incapacitation";
 import { getFoe } from "@/lib/dm/sheet-foe";
 import { isSheetFoe } from "@/lib/dm/combat-sides-logic";
+import { conditionImmunity } from "@/lib/dm/set-condition";
 import { breakConcentration, clearSpellConditionsByName } from "@/lib/dm/concentration";
 import { applyEnemyDamage, publishEncounter } from "@/lib/dm/enemy-damage";
 import { rollCharacterSave, rollEnemySave } from "@/lib/dm/forced-save";
@@ -182,7 +183,13 @@ export function layOnEnemy(enemyId: string, entries: Array<[string, ConditionMet
     return [];
   }
   const immune = (enemy.stats.conditionImmune ?? "").toLowerCase();
-  const landing = entries.filter(([name]) => !immune.includes(name));
+  // A character's immunities are its features and effects, not a stat-block
+  // line (a foe view's is empty): Aura of Courage, Heroism or Mindless Rage
+  // keep a turncoat's Phantasmal Killer off a party member, as they keep an
+  // enemy's off through set_condition.
+  const sheet = isSheetFoe(enemy) ? getSheetById(enemy.id) : null;
+  const campaign = sheet ? getCampaignById(sheet.campaignId) : null;
+  const landing = entries.filter(([name]) => !immune.includes(name) && !(sheet && campaign && conditionImmunity(campaign, sheet, name, true)));
   if (!landing.length) {
     return [];
   }
