@@ -406,18 +406,24 @@ const sorcerer = world.addHero({
 });
 pick(sorcerer, ["Metamagic: Quickened Spell", "Metamagic: Twinned Spell"]);
 
-await gap("CLS-11", {
-  rule: "SRD 5.1 sorcerer, Metamagic: \"You gain two of the following Metamagic options of your choice.\" Heightened Spell: \"you can spend 3 sorcery points\".",
-  where: "src/lib/dm/resource-tools.ts (the sorcery_points branch takes any listed option by name and the caller's amount)",
-  severity: "medium",
-  note: "A sorcerer who learned Quickened and Twinned buys Heightened Spell, an option they never learned, for 1 point. Only Quickened Spell checks the pick and its price today.",
-}, async () => {
+// SRD 5.1 sorcerer, Metamagic: "You gain two of the following Metamagic
+// options of your choice." Heightened Spell: "you can spend 3 sorcery points".
+await test("CLS-11", async () => {
   await duel(sorcerer);
   world.patch(sorcerer.id, { resources: { ...world.sheet(sorcerer.id).resources, sorcery_points: { max: 5, used: 0 } } });
   const out = await world.invoke("use_resource", { characterId: sorcerer.id, resource: "Sorcery Points", variant: "Heightened Spell", amount: 1 });
   const spent = world.sheet(sorcerer.id).resources.sorcery_points.used;
   assert.ok(!out.ok || spent === 3, `Heightened Spell, never learned, was bought for ${spent} sorcery point(s)`);
   assert.equal(out.ok, false, "Heightened Spell was used by a sorcerer who did not learn it");
+  // Learned, it costs its own 3 points whatever amount the call names; a
+  // Twinned Spell costs the amount given, the spell's level.
+  pick(sorcerer, ["Metamagic: Heightened Spell"]);
+  const heightened = await world.invoke("use_resource", { characterId: sorcerer.id, resource: "Sorcery Points", variant: "Heightened Spell", amount: 1 });
+  assert.equal(heightened.ok, true, heightened.error);
+  assert.equal(world.sheet(sorcerer.id).resources.sorcery_points.used, 3);
+  const twinned = await world.invoke("use_resource", { characterId: sorcerer.id, resource: "Sorcery Points", variant: "Twinned Spell", amount: 2 });
+  assert.equal(twinned.ok, true, twinned.error);
+  assert.equal(world.sheet(sorcerer.id).resources.sorcery_points.used, 5);
 });
 
 // Warlock, Pact Boon and Eldritch Invocations.
