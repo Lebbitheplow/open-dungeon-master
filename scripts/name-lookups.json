@@ -131,7 +131,7 @@
     "app/campaigns/[campaignId]/GameSettingsPanel.tsx#partial": [["key",1,"UI keys, ids, refs, view choices and documented defaults (a palette, a tile, a peer volume, the first sheet)"]],
     "app/campaigns/[campaignId]/Hand.tsx#fallback": [["key",1,"UI keys, ids, refs, view choices and documented defaults (a palette, a tile, a peer volume, the first sheet)"]],
     "app/campaigns/[campaignId]/Hand.tsx#first": [["key",1,"the default aim: the aimed enemy, else the first target on the board"]],
-    "app/campaigns/[campaignId]/Hand.tsx#partial": [["pattern",1,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"]],
+    "app/campaigns/[campaignId]/Hand.tsx#partial": [["pattern",1,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"],["key",1,"a board control's value, \"id:+\" or \"id:-\" for a share (issue 570)"]],
     "app/campaigns/[campaignId]/Hand.tsx#whole": [["identity",1,"a target by whole name"]],
     "app/campaigns/[campaignId]/HandGroups.tsx#fallback": [["key",2,"a group's section by its own id; the first section when the one chosen has gone (a level emptied mid-fight)"]],
     "app/campaigns/[campaignId]/HandSpells.tsx#fallback": [["key",1,"UI keys, ids, refs, view choices and documented defaults (a palette, a tile, a peer volume, the first sheet)"]],
@@ -2338,6 +2338,8 @@
     "lib/battlemap/area-shape.ts#number": [["key",3,"digits a regex already captured, ids, headers, stored and form numbers (number inputs), dice parts, the pack's English text (\"1,000 feet\", a purse); src/: every site read"]],
     "lib/battlemap/area-shape.ts#keyed": [["key",1,"ids, refs, slugs, tool names, field names, env names, event kinds, UI keys, caches, door and map keys; a sheet's conditionMeta by the condition key it was written under; the usage route's gear map by the sheet's own stored item names (src/: every site read)"]],
     "lib/battlemap/hand-area.ts#keyed": [["key",1,"a spell's damage type (engine vocabulary), keying the colour its blast is drawn in"]],
-    "app/campaigns/[campaignId]/BoardAreaAim.tsx#whole-single": [["key",1,"change detection, UI keys, ids, slugs, password confirmation, a saved selection (src/app: every site read)"]]
+    "app/campaigns/[campaignId]/BoardAreaAim.tsx#whole-single": [["key",1,"change detection, UI keys, ids, slugs, password confirmation, a saved selection (src/app: every site read)"]],
+    "lib/dm/intent-logic.ts#switch": [["key",1,"a card's first tool call by name, to share a casting out (issue 570)"]],
+    "lib/battlemap/hand-play.ts#first": [["key",2,"a creature's share of a casting, by its id (issue 570)"]]
   }
 }

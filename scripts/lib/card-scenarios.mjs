@@ -66,9 +66,9 @@ export const HEROES = {
       ability: "int",
       slots: SLOTS_5,
       known: [],
-      prepared: ["Magic Missile", "Shield", "Mage Armor", "Burning Hands", "Hold Person", "Fireball", "Web"],
+      prepared: ["Magic Missile", "Shield", "Mage Armor", "Burning Hands", "Hold Person", "Fireball", "Web", "Scorching Ray"],
       cantrips: ["Fire Bolt", "Ray of Frost"],
-      spellbook: ["Magic Missile", "Shield", "Mage Armor", "Burning Hands", "Hold Person", "Fireball", "Web"],
+      spellbook: ["Magic Missile", "Shield", "Mage Armor", "Burning Hands", "Hold Person", "Fireball", "Web", "Scorching Ray"],
     },
   },
   cleric: {
@@ -112,6 +112,8 @@ export function allyOf(actor) {
 // aim: "enemy" (the first living enemy), "ally", "self" or null.
 // equipped: the only items in the actor's hands for this scenario.
 // choices: the Hand's own picks (an attack option, a chosen item, an area).
+// split: a casting shared out in the Hand, "enemies" (a dart or a ray for
+// each other enemy) or "party" (the actor beside the ally aimed at).
 const S = (id, group, actor, card, extra = {}) => ({ id, group, actor, card, place: "melee", aim: null, ...extra });
 
 export const SCENARIOS = [
@@ -128,6 +130,11 @@ export const SCENARIOS = [
   S("spell-guiding-bolt", "spell", "cleric", "Guiding Bolt", { aim: "enemy", place: "ranged" }),
   S("spell-sacred-flame", "spell", "cleric", "Sacred Flame", { aim: "enemy", place: "ranged" }),
   S("spell-hold-person", "spell", "wizard", "Hold Person", { aim: "enemy", place: "ranged" }),
+  // A casting shared out in the Hand (issue 570): every ray at one goblin,
+  // darts split between two, a Bless on the ally and the caster.
+  S("spell-scorching-ray", "spell", "wizard", "Scorching Ray", { aim: "enemy", place: "ranged" }),
+  S("spell-magic-missile-split", "spell", "wizard", "Magic Missile", { aim: "enemy", place: "ranged", split: "enemies" }),
+  S("spell-bless-split", "spell", "cleric", "Bless", { aim: "ally", split: "party" }),
 
   // Healing and buffs on an ally or oneself.
   S("spell-cure-wounds", "spell", "cleric", "Cure Wounds", { aim: "ally", wounded: { ally: 10 } }),

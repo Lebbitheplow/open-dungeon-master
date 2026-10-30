@@ -29,10 +29,14 @@ export function directContextFor(campaignId: string, intent: MessageIntent, auth
     encounter && spell && shape && rolled && !zoneRowFor({ spell, runsAs: spellEngineName(spell, authors) }) && getBattleMapForEncounter(encounter.id)
       ? blastPickOf(shape)
       : null;
+  // How the casting is shared out, when it can be (castShares).
+  const shareKind = mech?.darts ? "darts" : mech?.attacks ? "attacks" : mech?.targets && !area ? "targets" : null;
   return {
     inFight: Boolean(encounter),
     resolution: mech?.resolution ?? null,
     area,
     ...(blast ? { blast } : {}),
+    ...(shareKind ? { shareKind } : {}),
+    ...(mech?.riders?.clusterFeet ? { cluster: true } : {}),
   };
 }

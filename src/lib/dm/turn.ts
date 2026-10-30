@@ -122,7 +122,7 @@ import { characterAwaitingPlayer } from "@/lib/dm/player-word";
 import { enemiesDue, enemiesOwedTurn, personRunsTable } from "@/lib/dm/enemies-due";
 import { noteTurnHead, settleTurnWarmup, turnHeadKey, warmNextTurn } from "@/lib/dm/turn-warmup";
 import { directContextFor } from "@/lib/dm/direct-context";
-import { DIRECT_CALL_ID_PREFIX, directCardCall, intentAnswered, intentCorrection, intentNeedsTool, type MessageIntent, type PlayedCard, type TurnCall } from "@/lib/dm/intent-logic";
+import { DIRECT_CALL_ID_PREFIX, directCardCalls, intentAnswered, intentCorrection, intentNeedsTool, type MessageIntent, type PlayedCard, type TurnCall } from "@/lib/dm/intent-logic";
 import type { SpellMech } from "@/lib/srd/spell-mech-types";
 import { handleCompleteBeat } from "@/lib/dm/arc";
 import { tickWaypointsFromCalls } from "@/lib/dm/waypoint-tick";
@@ -2551,15 +2551,17 @@ function cardsPlayed(context: TurnContext): PlayedCard[] {
 // card with its own sentence and nothing
 // more, so no free text rides with it that the model would have to weigh
 // ("only if he draws first" is typed, and a typed line carries no card).
-type DirectCard = { messageId: string; name: string; args: Record<string, unknown> };
+// A casting shared out among creatures is one call each (directCardCalls),
+// numbered after the first so every call keeps its own id.
+type DirectCard = { messageId: string; index: number; name: string; args: Record<string, unknown> };
 function directCards(context: TurnContext): DirectCard[] {
   const authors = spellAuthorsFor(context.campaign);
   return playerLinesSinceDm(context.campaign.id).flatMap((message) => {
     if (!message.intent || !message.characterId) {
       return [];
     }
-    const call = directCardCall(message.intent, message.characterId, directContextFor(context.campaign.id, message.intent, authors));
-    return call ? [{ messageId: message.id, ...call }] : [];
+    const calls = directCardCalls(message.intent, message.characterId, directContextFor(context.campaign.id, message.intent, authors));
+    return (calls ?? []).map((call, index) => ({ messageId: message.id, index, ...call }));
   });
 }
 
@@ -2572,7 +2574,7 @@ function cardReply(cards: DirectCard[]): DmCallResult {
     message: {
       content: "",
       tool_calls: cards.map((card) => ({
-        id: `${DIRECT_CALL_ID_PREFIX}${card.messageId.replace(/-/g, "").slice(0, 12)}`,
+        id: `${DIRECT_CALL_ID_PREFIX}${card.messageId.replace(/-/g, "").slice(0, 12)}${card.index ? `_${card.index}` : ""}`,
         type: "function",
         function: { name: card.name, arguments: JSON.stringify(card.args) },
       })),

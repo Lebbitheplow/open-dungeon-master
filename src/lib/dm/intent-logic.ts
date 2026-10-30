@@ -100,6 +100,12 @@ export type DirectContext = {
   // the engine's, which catches everyone standing in them (issue 570).
   // Absent with no board, and for a lasting area or none.
   blast?: "point" | "direction" | "none";
+  // How one casting is shared out among creatures (SpellMech darts, attacks,
+  // targets), so a card's shares become one call each (issue 570), and
+  // whether its creatures must stand together (Acid Splash), which only
+  // aoe_damage checks.
+  shareKind?: "darts" | "attacks" | "targets";
+  cluster?: boolean;
 };
 
 export type DirectCall = { name: string; args: Record<string, unknown> };
@@ -309,6 +315,15 @@ function target(intent: MessageIntent): string {
   return ` ${intent.targetKind === "enemy" ? "at" : "on"} ${intent.targetName ?? "the target"}${id}`;
 }
 
+// A casting shared out, in the card line: "at Goblin 1 (enemyId=g1, 2) and
+// Goblin 2 (enemyId=g2, 1)", the count being that creature's darts, rays or
+// beams (one each for creatures a Bless or a Hold Person takes).
+function sharedTargets(intent: MessageIntent): string {
+  const key = intent.targetKind === "enemy" ? "enemyId" : "characterId";
+  const named = (intent.shares ?? []).map((share) => `${share.name ?? share.id} (${key}=${share.id}, ${share.count})`);
+  return ` ${intent.targetKind === "enemy" ? "at" : "on"} ${named.slice(0, -1).join(", ")} and ${named.at(-1)}, shared out as the counts say`;
+}
+
 function what(intent: MessageIntent): string {
   switch (intent.card) {
     case "attack":
@@ -316,7 +331,7 @@ function what(intent: MessageIntent): string {
     case "rider":
       return `${intent.rider ?? "a rider"} on their next hit`;
     case "spell":
-      return `${intent.spell ?? "a spell"}${intent.slotLevel ? ` from a level ${intent.slotLevel} slot` : ""}${target(intent)}`;
+      return `${intent.spell ?? "a spell"}${intent.slotLevel ? ` from a level ${intent.slotLevel} slot` : ""}${intent.shares && intent.shares.length > 1 ? sharedTargets(intent) : target(intent)}`;
     case "feature":
       return `the feature ${intent.resourceId ?? ""}${target(intent)}`.trim();
     case "basic":
@@ -379,6 +394,49 @@ function slotFallsShort(card: PlayedCard): boolean {
   return card.intent.card === "spell" && Boolean(card.resolution && ROLLED_SPELLS.has(card.resolution));
 }
 
+// The calls a card stands for (issue 570): a casting shared out among
+// several creatures is one call per creature, the way the cast tools take
+// it (the first call spends the slot, the rest draw on the same casting):
+// cast_at_enemy for each creature Magic Missile's darts strike, with how
+// many; pc_attack for every ray or beam; cast_at_enemy for each creature an
+// upcast Hold Person takes, or one aoe_damage when they must stand together
+// (Acid Splash); heal for each creature healed; one cast_buff for every ally
+// a Bless takes. Anything else is directCardCall's one call. Null leaves the
+// card to the model.
+export function directCardCalls(intent: MessageIntent, characterId: string, context: DirectContext = { inFight: true }): DirectCall[] | null {
+  const shares = intent.card === "spell" && intent.spell && context.shareKind ? intent.shares ?? [] : [];
+  if (!shares.length) {
+    const call = directCardCall(intent, characterId, context);
+    return call ? [call] : null;
+  }
+  const first = directCardCall({ ...intent, targetId: shares[0].id, shares: undefined }, characterId, context);
+  if (!first) {
+    return null;
+  }
+  const spell = intent.spell as string;
+  const level = intent.slotLevel ? { level: intent.slotLevel } : {};
+  const enemies = intent.targetKind === "enemy";
+  switch (first.name) {
+    case "pc_attack":
+      return enemies ? shares.flatMap((share) => Array.from({ length: share.count }, () => ({ name: "pc_attack", args: { characterId, targetEnemyId: share.id, spell, ...level } }))) : null;
+    case "cast_at_enemy":
+      if (!enemies) return null;
+      if (context.cluster) {
+        return [{ name: "aoe_damage", args: { casterCharacterId: characterId, spell, ...level, enemyIds: shares.map((share) => share.id) } }];
+      }
+      return shares.map((share) => ({
+        name: "cast_at_enemy",
+        args: { ...first.args, targetEnemyId: share.id, ...(context.shareKind === "darts" ? { darts: share.count } : {}) },
+      }));
+    case "heal":
+      return shares.map((share) => ({ name: "heal", args: { ...first.args, characterId: share.id } }));
+    case "cast_buff":
+      return enemies ? null : [{ name: "cast_buff", args: { ...first.args, targetCharacterIds: shares.map((share) => share.id) } }];
+    default:
+      return [first];
+  }
+}
+
 // The id prefix of the tool call the turn makes for a card the engine
 // resolves itself, before any model call (src/lib/dm/turn.ts cardReply). A
 // scorer reading a stored turn tells the engine's call from the model's by it.
@@ -439,7 +497,9 @@ export function callMismatch(card: PlayedCard, call: TurnCall): CallMismatch | n
   }
   if (intent.targetId && (intent.targetKind === "enemy" || intent.targetKind === "ally")) {
     const aimed = refsOf(call.args, intent.targetKind === "enemy" ? ENEMY_KEYS : call.name === "heal" ? ["characterId"] : ALLY_KEYS);
-    if (aimed.length && !aimed.some((ref) => refMatches(ref, intent.targetId, intent.targetName))) {
+    // A casting shared out may land on any of its creatures.
+    const named = [{ id: intent.targetId, name: intent.targetName }, ...(intent.shares ?? []).map((share) => ({ id: share.id, name: share.name }))];
+    if (aimed.length && !aimed.some((ref) => named.some((entry) => refMatches(ref, entry.id, entry.name)))) {
       return "target";
     }
   }

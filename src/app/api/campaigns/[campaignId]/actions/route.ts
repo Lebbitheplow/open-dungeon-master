@@ -28,7 +28,7 @@ import { runResumeRecap } from "@/lib/dm/recap";
 import { RECAP_AFTER_MS } from "@/lib/dm/session-hold-logic";
 import { sessionHoldOn } from "@/lib/dm/session-hold";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
-import { directCardCall, parseMessageIntent } from "@/lib/dm/intent-logic";
+import { directCardCalls, parseMessageIntent } from "@/lib/dm/intent-logic";
 import { directContextFor } from "@/lib/dm/direct-context";
 import { addressesDm } from "@/lib/dm/ooc-question";
 import { spokenLine } from "@/lib/dm/speech";
@@ -235,12 +235,16 @@ export async function POST(
   const dmSeats = campaignSeats(campaign);
   const direct =
     intent && kind === "do" && hasHumanDm(dmSeats) && isPrimaryDm(dmSeats, user.id)
-      ? directCardCall(intent, sheet.id, directContextFor(campaignId, intent, tableAuthors(campaignId)))
+      ? directCardCalls(intent, sheet.id, directContextFor(campaignId, intent, tableAuthors(campaignId)))
       : null;
   if (direct) {
-    const resolved = await invokeEngine(campaign, { kind: "human", userId: user.id }, direct);
-    if (!resolved.ok) {
-      return Response.json({ error: resolved.error }, { status: 409 });
+    // A casting shared out among creatures is one call each, in order: the
+    // first spends the slot, the rest draw on the same casting.
+    for (const call of direct) {
+      const resolved = await invokeEngine(campaign, { kind: "human", userId: user.id }, call);
+      if (!resolved.ok) {
+        return Response.json({ error: resolved.error }, { status: 409 });
+      }
     }
     return Response.json({ resolved: true });
   }

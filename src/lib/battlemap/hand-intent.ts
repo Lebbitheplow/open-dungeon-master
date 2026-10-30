@@ -6,7 +6,9 @@
 // area is laid on, and the class options
 // pc_attack resolves (Martial Arts', Frenzy's and a subclass's bonus strikes,
 // Stunning Strike, Reckless Attack, a blow that knocks out, Inspiration,
-// Stroke of Luck, Open Hand Technique, Hurl Through Hell).
+// Stroke of Luck, Open Hand Technique, Hurl Through Hell), and a casting
+// shared out among several creatures (Magic Missile's darts, Scorching Ray's
+// rays, the creatures Bless or an upcast Hold Person takes).
 //
 // The message schema itself is the narrator's (src/lib/dm/intent-logic.ts);
 // it spreads these fields in and calls the two describers, so a card that
@@ -60,6 +62,16 @@ export const handIntentExtras = {
   atY: square,
   towardX: square,
   towardY: square,
+  // A casting shared out among several creatures, asked in the Hand (issue
+  // 570): Magic Missile's darts, Scorching Ray's rays and Eldritch Blast's
+  // beams by how many each creature takes, or the creatures Bless or an
+  // upcast Hold Person takes, one each. The card's own target comes first;
+  // the rest are of its kind (targetKind).
+  shares: z
+    .array(z.object({ id: text(120), name: text(120).optional(), count: z.number().int().min(1).max(20) }))
+    .min(1)
+    .max(12)
+    .optional(),
   // pc_attack's class options, under their own argument names.
   attack: z
     .object({
@@ -106,8 +118,11 @@ export type HandIntentExtras = {
   atY?: number;
   towardX?: number;
   towardY?: number;
+  shares?: HandShare[];
   attack?: HandAttackArgs;
 };
+
+export type HandShare = { id: string; name?: string; count: number };
 
 // The tool arguments the extras stand for, as `name=value` pairs the model
 // reads in the card line and in the corrective call.

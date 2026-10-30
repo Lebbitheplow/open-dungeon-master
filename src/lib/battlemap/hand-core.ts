@@ -118,6 +118,11 @@ export type HandCard = {
   // is picked on the board (src/lib/battlemap/hand-area.ts) and sent as the
   // tool's atX/atY/towardX/towardY.
   area?: HandArea;
+  // A casting that can be shared out among several creatures (issue 570):
+  // how many it holds at this slot and level, what one of them is called,
+  // and whether one creature may take several (darts, rays, beams) or each
+  // is taken once (Bless, Hold Person). Absent for a casting that holds one.
+  shares?: HandShares;
   // A spell card's own level (0 for a cantrip) and whether it is held by
   // concentration: the Spells group's sections and its Concentration filter
   // (hand-groups.ts, issue 528).
@@ -127,6 +132,8 @@ export type HandCard = {
   // a Channel Divinity use): cards that share one gather under one card.
   pool?: string;
 };
+
+export type HandShares = { count: number; unit: "dart" | "ray" | "beam" | "creature"; stack: boolean };
 
 export type HandChoice = {
   arg: "condition" | "variant" | "readySpell" | "item";
