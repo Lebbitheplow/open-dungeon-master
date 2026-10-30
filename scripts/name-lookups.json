@@ -1274,7 +1274,7 @@
     "lib/dm/engine-boundary.ts#first": [["key",1,"swing outcomes by position"]],
     "lib/dm/engine-boundary.ts#keyed": [["key",3,"ids, refs, slugs, tool names, field names, env names, event kinds, UI keys, caches, door and map keys; a sheet's conditionMeta by the condition key it was written under; the usage route's gear map by the sheet's own stored item names (src/: every site read)"]],
     "lib/dm/engine-boundary.ts#number": [["key",3,"digits a regex already captured, ids, headers, stored and form numbers (number inputs), dice parts, the pack's English text (\"1,000 feet\", a purse); src/: every site read"]],
-    "lib/dm/engine-boundary.ts#partial": [["pattern",1,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"],["search",9,"what narration says against the turn's tool outcomes (names in prose)"],["search",3,"creature names in the narration guard's prose"],["key",2,"ODM's own prompt headings"]],
+    "lib/dm/engine-boundary.ts#partial": [["pattern",1,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"],["search",10,"what narration says against the turn's tool outcomes (names in prose)"],["search",3,"creature names in the narration guard's prose"],["key",2,"ODM's own prompt headings"]],
     "lib/dm/entity-logic.ts#partial": [["search",1,"entity tokens for similarity"]],
     "lib/dm/entity-review-logic.ts#partial": [["search",2,"rename and duplicate suggestions"]],
     "lib/dm/entity-review-logic.ts#whole": [["search",1,"rename and duplicate suggestions"]],
@@ -1648,7 +1648,7 @@
     "lib/dm/turn-end.ts#keyed": [["key",4,"ids, refs, slugs, tool names, field names, env names, event kinds, UI keys, caches, door and map keys; a sheet's conditionMeta by the condition key it was written under; the usage route's gear map by the sheet's own stored item names (src/: every site read)"]],
     "lib/dm/turn-warmup.ts#whole-single": [["key",1,"hashes of a turn's prompt start, compared to know whether the narrator holds it"]],
     "lib/dm/turn.ts#first": [["key",1,"tool names"],["key",1,"a message by position"]],
-    "lib/dm/turn.ts#keyed": [["key",5,"ids, refs, slugs, tool names, field names, env names, event kinds, UI keys, caches, door and map keys; a sheet's conditionMeta by the condition key it was written under; the usage route's gear map by the sheet's own stored item names (src/: every site read)"]],
+    "lib/dm/turn.ts#keyed": [["key",6,"ids, refs, slugs, tool names, field names, env names, event kinds, UI keys, caches, door and map keys; a sheet's conditionMeta by the condition key it was written under; the usage route's gear map by the sheet's own stored item names (src/: every site read)"]],
     "lib/dm/turn.ts#partial": [["key",15,"tool names and ids"],["key",1,"tool names"]],
     "lib/dm/turn.ts#switch": [["key",2,"switches on tool names, event kinds, key names and kinds"]],
     "lib/dm/turn.ts#whole": [["key",3,"tool names and ids"],["key",7,"tool names"]],
@@ -2341,6 +2341,10 @@
     "app/campaigns/[campaignId]/BoardAreaAim.tsx#whole-single": [["key",1,"change detection, UI keys, ids, slugs, password confirmation, a saved selection (src/app: every site read)"]],
     "lib/dm/intent-logic.ts#switch": [["key",1,"a card's first tool call by name, to share a casting out (issue 570)"]],
     "lib/battlemap/hand-play.ts#first": [["key",2,"a creature's share of a casting, by its id (issue 570)"]],
-    "lib/dm/intent-logic.ts#partial": [["parse",1,"the first sentence of a tool's error, for the line of a card that went back (issue 570)"]]
+    "lib/dm/intent-logic.ts#partial": [["parse",1,"the first sentence of a tool's error, for the line of a card that went back (issue 570)"]],
+    "lib/dm/slotless-cast-logic.ts#whole": [["identity",2,"a card's spell against the cast the prose made, by textKey (issue 570)"]],
+    "lib/dm/slotless-cast-logic.ts#helper": [["search",2,"a spell or a creature named in a player's own words, by containsPhrase (issue 570)"]],
+    "lib/dm/slotless-cast-logic.ts#fallback": [["key",1,"a spell with no mechanics row resolves as utility, the engine's documented default"]],
+    "lib/dm/slotless-cast-logic.ts#first": [["identity",1,"the one creature a player's words name, only when they name exactly one (issue 570)"]]
   }
 }
