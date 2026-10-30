@@ -168,6 +168,7 @@ export default {
       const playerView = async () => {
         const response = await playerApi.get(`${base}/api/campaigns/${table.id}/relationships`);
         const body = await response.json();
+        check(Array.isArray(body.relationships), `the player's Bonds answered ${response.status()}: ${JSON.stringify(body).slice(0, 200)}`);
         return body.relationships.find((entry) => entry.subjectName === table.seren && entry.conscience)?.conscience;
       };
       const before = await playerView();

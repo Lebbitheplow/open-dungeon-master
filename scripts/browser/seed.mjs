@@ -441,8 +441,13 @@ const bondTables = {};
       difficulty: "normal",
       gameSettings: { ttsEnabled: false, dmMode: "human", companions: "full" },
     });
+    // Seated before the table starts: a started table refuses a code
+    // (src/lib/db/campaigns.ts admitsByRow), and the player never sat here.
+    const seated = campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+    if (seated.error) {
+      throw new Error(`the player could not join ${table.title}: ${seated.error}`);
+    }
     campaigns.setCampaignStatus(table.id, "active");
-    campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
     const kael = sheets.createSheet(table.id, player.id, 3, heroInput({ name: "Kael Ashvale", class: "rogue", level: 3 }));
     const other = world.addUser("bonds");
     campaigns.joinByInviteCode(other.id, campaigns.getCampaignById(table.id).inviteCode);
@@ -1099,8 +1104,13 @@ const conscience = {};
       difficulty: "normal",
       gameSettings: { ttsEnabled: false, dmMode: "human" },
     });
+    // Seated before the table starts: a started table refuses a code
+    // (src/lib/db/campaigns.ts admitsByRow), and the player never sat here.
+    const seated = campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+    if (seated.error) {
+      throw new Error(`the player could not join ${table.title}: ${seated.error}`);
+    }
     campaigns.setCampaignStatus(table.id, "active");
-    campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
     const kael = sheets.createSheet(table.id, player.id, 3, heroInput({ name: "Kael Ashvale", class: "rogue", level: 3 }));
     const bot = createCompanionUser("Seren Vale");
     const seren = sheets.createSheet(table.id, bot.id, 3, heroInput({ name: "Seren Vale", class: "paladin", alignment: "LG", level: 3 }));
@@ -1211,8 +1221,13 @@ const gone = {};
       difficulty: "normal",
       gameSettings: { ttsEnabled: false, dmMode: "human", companions: "full" },
     });
+    // Seated before the table starts: a started table refuses a code
+    // (src/lib/db/campaigns.ts admitsByRow), and the player never sat here.
+    const seated = campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+    if (seated.error) {
+      throw new Error(`the player could not join ${table.title}: ${seated.error}`);
+    }
     campaigns.setCampaignStatus(table.id, "active");
-    campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
     const kael = sheets.createSheet(table.id, player.id, 3, heroInput({ name: "Kael Ashvale", class: "rogue", level: 3 }));
     const companion = (name, klass, alignment) => {
       const bot = createCompanionUser(name);
@@ -1273,8 +1288,13 @@ const dominate = {};
       difficulty: "normal",
       gameSettings: { ttsEnabled: false, dmMode: "human" },
     });
+    // Seated before the table starts: a started table refuses a code
+    // (src/lib/db/campaigns.ts admitsByRow), and the player never sat here.
+    const seated = campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+    if (seated.error) {
+      throw new Error(`the player could not join ${table.title}: ${seated.error}`);
+    }
     campaigns.setCampaignStatus(table.id, "active");
-    campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
     const dm = { kind: "human", userId: world.owner.id };
     const casters = [
       [sheets.createSheet(table.id, player.id, 9, conjurer("Ione Vass", "wizard", "int")), "fire elemental"],
@@ -1428,8 +1448,13 @@ const conduct = {};
       difficulty: "normal",
       gameSettings: { ttsEnabled: false, dmMode: "human", companions: "full", companionConscience: "turn" },
     });
+    // Seated before the table starts: a started table refuses a code
+    // (src/lib/db/campaigns.ts admitsByRow), and the player never sat here.
+    const seated = campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+    if (seated.error) {
+      throw new Error(`the player could not join ${table.title}: ${seated.error}`);
+    }
     campaigns.setCampaignStatus(table.id, "active");
-    campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
     const kael = sheets.createSheet(table.id, player.id, 3, heroInput({ name: "Kael Ashvale", class: "rogue", level: 3 }));
     const bot = createCompanionUser("Varn Hale");
     const varn = sheets.createSheet(
@@ -1493,8 +1518,13 @@ const pactTables = { consent: {}, offer: {}, secret: {}, reveal: {} };
       difficulty: "normal",
       gameSettings: { ttsEnabled: false, companions: "full", ...(humanDm ? { dmMode: "human" } : {}) },
     });
+    // Seated before the table starts: a started table refuses a code
+    // (src/lib/db/campaigns.ts admitsByRow), and the player never sat here.
+    const seated = campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+    if (seated.error) {
+      throw new Error(`the player could not join ${table.title}: ${seated.error}`);
+    }
     campaigns.setCampaignStatus(table.id, "active");
-    campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
     const bot = createCompanionUser("Seren Vale");
     const seren = sheets.createSheet(table.id, bot.id, 3, heroInput({ name: "Seren Vale", class: "paladin", alignment: "LG", gender: "Female", level: 3 }));
     sheets.markSheetAsCompanion(seren.id, "party", "Stern, devout, and losing faith in the people she walks with.");
