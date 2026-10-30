@@ -158,6 +158,8 @@ export function forgetDepartedSheet(npcId: string) {
 // the table saw it (their conscience's words, or a plain parting). Never a
 // plan one still in the party holds; that is not here at all.
 export type GoneCompanion = {
+  // The sheet they had in the party: the story log keeps their lines theirs.
+  sheetId: string;
   name: string;
   how: string;
   // When they went, for ordering.
@@ -189,6 +191,7 @@ export function goneCompanions(campaignId: string): GoneCompanion[] {
     const record = companionDeparture(npc.id).gone;
     const how = record?.how ?? (sheet.deathSaves?.dead === true ? "Fell" : "Left the party");
     gone.push({
+      sheetId: npc.companionSheetId,
       name: npc.name,
       how,
       at: departed.at,

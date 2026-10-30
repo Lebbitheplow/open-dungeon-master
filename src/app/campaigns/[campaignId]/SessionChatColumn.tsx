@@ -113,6 +113,8 @@ export function SessionChatColumn({
         canIllustrate={steersStory}
         rolls={rolls}
         sheets={sheets}
+        departing={state.departingSheets}
+        goneRefreshKey={state.relationshipsVersion}
         members={state.members}
         cast={state.cast}
         meUserId={meUserId}

@@ -13,6 +13,9 @@ export const DEPARTING_KEPT_MS = 10_000;
 // One row of the Gone list, as GET /companions/gone sends it
 // (src/lib/db/companion-npcs.ts goneCompanions).
 export type GoneEntry = {
+  // The sheet they had while in the party, so the lines they spoke and the
+  // cards they played stay theirs in the story log; an older server sends none.
+  sheetId?: string;
   name: string;
   how: string;
   at: string;
@@ -24,3 +27,39 @@ export type GoneEntry = {
   // sends none.
   caresFor?: string[];
 };
+
+// A character as the story log draws a line of theirs: the name over it and
+// the face beside it. A companion who has left keeps theirs (0.31.1
+// playtest): with no sheet to read, their speech fell to a letter and a card
+// they had played was put in the player's mouth.
+export type TranscriptSheet = Pick<CharacterSheet, "id" | "name" | "race" | "class" | "gender" | "portrait">;
+
+// The party's sheets, then the ones who left: a card still dimming carries
+// its whole sheet, and a Gone row what the server kept of it. A sheet still
+// in the party wins over its departed copy.
+export function transcriptSheets(
+  sheets: readonly TranscriptSheet[],
+  departing: readonly DepartingSheet[] = [],
+  gone: readonly GoneEntry[] = [],
+): Map<string, TranscriptSheet> {
+  const byId = new Map<string, TranscriptSheet>();
+  for (const entry of gone) {
+    if (entry.sheetId) {
+      byId.set(entry.sheetId, {
+        id: entry.sheetId,
+        name: entry.name,
+        race: entry.race,
+        class: entry.class,
+        gender: (entry.gender as CharacterSheet["gender"]) || "",
+        portrait: entry.portraitUrl ? ({ url: entry.portraitUrl } as CharacterSheet["portrait"]) : null,
+      });
+    }
+  }
+  for (const { sheet } of departing) {
+    byId.set(sheet.id, sheet);
+  }
+  for (const sheet of sheets) {
+    byId.set(sheet.id, sheet);
+  }
+  return byId;
+}

@@ -17,6 +17,7 @@ const { speakerFaces, playerFaces } = await import("../src/lib/speaker-faces.ts"
 const { characterPlaceholder, avatarPlaceholder } = await import("../src/lib/placeholders.ts");
 const { DmContent } = await import("../src/app/campaigns/[campaignId]/MessageContent.tsx");
 const { PlayerMessage } = await import("../src/app/campaigns/[campaignId]/MessageParts.tsx");
+const { transcriptSheets } = await import("../src/app/campaigns/[campaignId]/departing.ts");
 
 let passed = 0;
 function test(name, fn) {
@@ -95,6 +96,35 @@ test("a player's line draws the first of their faces in the medallion", () => {
   const unpainted = { ...brannoc, portrait: null };
   assert.deepEqual(render([unpainted], [{ userId: brannoc.userId, avatar: { url: "/uploads/avatar.webp" } }]), ["/uploads/avatar.webp"]);
   assert.deepEqual(render([unpainted], []), [plate(brannoc)]);
+});
+
+// A companion who left the party (0.31.1 playtest): her sheet is no longer
+// among the party's, and her lines lost their face to a letter, while a card
+// the player had played for her read as the player's own.
+const krag = sheet("Krag", { userId: "u-player", race: "bhain-kwai", class: "fighter" });
+const tamsin = sheet("Tamsin", { userId: "u-player", race: "human", class: "ranger" });
+const goneRow = { sheetId: tamsin.id, name: "Tamsin", how: "Walked out on the party", at: "", portraitUrl: "", race: "human", class: "ranger", gender: "" };
+
+test("the story log keeps a departed companion's sheet: a Gone row, a dimming card, and the party's own first", () => {
+  const byId = transcriptSheets([krag], [], [goneRow]);
+  assert.equal(byId.get(tamsin.id)?.name, "Tamsin");
+  assert.deepEqual(speakerFaces(pc(tamsin), byId), [plate(tamsin)]);
+  assert.equal(transcriptSheets([krag], [{ sheet: tamsin, how: "", at: 0 }], []).get(tamsin.id), tamsin);
+  assert.equal(transcriptSheets([{ ...tamsin, name: "Tamsin, back" }], [], [goneRow]).get(tamsin.id)?.name, "Tamsin, back");
+  assert.equal(transcriptSheets([krag], [], [{ ...goneRow, sheetId: undefined }]).size, 1, "an older server's row names no sheet");
+});
+
+test("a card played for a companion stays hers after she leaves, never the author's other character", () => {
+  const message = { id: "m2", characterId: tamsin.id, userId: "u-player", authorType: "player", content: "I attack the captain with my Longbow.", createdAt: new Date().toISOString() };
+  const render = (byId) =>
+    renderToStaticMarkup(createElement(PlayerMessage, { message, mine: true, sheets: [krag], sheetsById: byId, membersById: new Map() }));
+  const kept = render(transcriptSheets([krag], [], [goneRow]));
+  assert.match(kept, /session-speaker[^>]*>Tamsin</);
+  assert.doesNotMatch(kept, />Krag</);
+  assert.doesNotMatch(render(new Map([[krag.id, krag]])), />Krag</, "an unknown character is not the author's");
+  // A line from before characterId still finds its author's sheet.
+  const old = renderToStaticMarkup(createElement(PlayerMessage, { message: { ...message, characterId: null }, mine: true, sheets: [krag], sheetsById: new Map(), membersById: new Map() }));
+  assert.match(old, /session-speaker[^>]*>Krag</);
 });
 
 console.log(`test-speaker-faces: ${passed} tests passed.`);
