@@ -120,9 +120,10 @@ test("every generated item is well formed", () => {
     names.add(item.match);
     // A row with no effect is in the table for what the engine holds about
     // it: who may attune, the weapon or armor it is built on, its bonus and
-    // riders, its charges.
+    // riders, its charges, or that an SRD item that casts a spell (a Hat of
+    // Disguise) asks for attunement, which use_item asks before the cast.
     assert.ok(
-      item.effects.length > 0 || item.attunedBy || item.base || item.weapon || item.armor || item.charges,
+      item.effects.length > 0 || item.attunedBy || item.base || item.weapon || item.armor || item.charges || item.requiresAttunement,
       item.name,
     );
     assert.equal(typeof item.requiresAttunement, "boolean", item.name);

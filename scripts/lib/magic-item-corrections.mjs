@@ -91,6 +91,15 @@ export const ALIASES = {
     "Wand of the War Mage +2",
     "Wand of the War Mage +3",
   ],
+  // "This ring is linked to one of the four Elemental Planes": the SRD heads
+  // each as a ring of its own, and each holds the ring's 5 charges
+  // (src/lib/srd/item-spells.ts gives each its spells).
+  "ring of elemental command": [
+    "Ring of Air Elemental Command",
+    "Ring of Earth Elemental Command",
+    "Ring of Fire Elemental Command",
+    "Ring of Water Elemental Command",
+  ],
 };
 
 const attuned = (name, effects, aliases = []) => ({
@@ -153,6 +162,14 @@ export const ADDED = [
       [`Dragon Scale Mail (${dragon})`],
     ),
     base: { kind: "armor", name: "Scale Mail" },
+  })),
+  // SRD 5.1, Crystal Ball: "The following crystal ball variants are
+  // legendary items and have additional properties", each attuned as the
+  // ball is. The Telepathy ball's suggestion: "Once used, the suggestion
+  // power of the crystal ball can't be used again until the next dawn."
+  ...["Mind Reading", "Telepathy", "True Seeing"].map((variant) => ({
+    ...attuned(`Crystal Ball of ${variant}`, [], [`Crystal Ball (${variant})`]),
+    ...(variant === "Telepathy" ? { charges: { max: 1, regain: "all", daily: "the suggestion spell" } } : {}),
   })),
   attuned("Ioun Stone of Protection", [{ kind: "ac_bonus", amount: 1 }], ["Ioun Stone (Protection)"]),
   // SRD 5.1, Ioun Stone: "Your <ability> score increases by 2, to a maximum

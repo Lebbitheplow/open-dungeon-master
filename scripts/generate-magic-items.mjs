@@ -315,6 +315,36 @@ function chargesOf(desc, match) {
   return out;
 }
 
+// The spell an item casts in the sentence the SRD writes it in: "cast the
+// _web_ spell", "cast _polymorph_ on yourself", "as if you had cast the
+// _conjure elemental_ spell", "cast one of the following spells from it:
+// _detect evil and good_". The pack sets spell names in italics.
+const CAST = /\bcast (?:the |one of the following spells[^:_]*: )?_([a-z][a-z' /-]*?)_/i;
+
+// A spell cast from the item that waits for the next dawn, from the
+// paragraph that says so: "cast the _scorching ray_ spell with it ... The
+// circlet can't be used this way again until the next dawn" (Circlet of
+// Blasting), "Once used, the _suggestion_ property can't be used again until
+// the next dawn" (Helm of Telepathy). Tracked as one charge that comes back
+// at dawn, so use_item refuses the second cast before it. A paragraph that
+// opens with a variant's own heading ("**_Crystal Ball of Telepathy_**.") is
+// that variant's, not the row's (scripts/lib/magic-item-corrections.mjs
+// adds the variants).
+function dailyCastOf(rawDesc) {
+  for (const paragraph of rawDesc.split(/\n\s*\n|\n(?=\s*[-*] )/)) {
+    const text = paragraph.replace(/\s+/g, " ").trim();
+    if (/^\*\*_|^\*\*\*/.test(text) || !/can['’]t be used (?:this way )?again until the next dawn/i.test(text)) {
+      continue;
+    }
+    // The last spell cast before the dawn sentence is the one it limits.
+    const casts = [...text.matchAll(new RegExp(CAST.source, "gi"))];
+    if (casts.length) {
+      return `the ${casts[casts.length - 1][1].toLowerCase()} spell`;
+    }
+  }
+  return null;
+}
+
 // Who may attune, from the pack's own line: "requires attunement by a
 // sorcerer, warlock, or wizard". Null when anyone may.
 function attunedBy(text) {
@@ -351,7 +381,7 @@ const keyOf = (name) => name.trim().toLowerCase();
 // category, which is the one the SRD wrote; another document's, whose
 // category names none ("weapon", "armor"), is read from its name
 // (scripts/lib/name-base.mjs).
-function gearOf(row, desc, match) {
+function gearOf(row, desc, match, rawDesc) {
   const out = {};
   const category = row.category || "";
   const srd = row.document_slug === "wotc-srd";
@@ -373,10 +403,13 @@ function gearOf(row, desc, match) {
     out.cursed = true;
   }
   const charges = chargesOf(desc, srd ? match : null);
+  const dailyCast = srd && !charges && !DAILY_POWERS[match] ? dailyCastOf(rawDesc) : null;
   if (charges) {
     out.charges = charges;
   } else if (srd && DAILY_POWERS[match]) {
     out.charges = { max: 1, regain: "all", daily: DAILY_POWERS[match] };
+  } else if (dailyCast) {
+    out.charges = { max: 1, regain: "all", daily: dailyCast };
   }
   return out;
 }
@@ -409,19 +442,23 @@ function collect() {
     }
     seen.add(match);
     const data = JSON.parse(row.data_json || "{}");
-    const desc = String(data.desc || "").replace(/\s+/g, " ");
+    const rawDesc = String(data.desc || "");
+    const desc = rawDesc.replace(/\s+/g, " ");
     const attunement = String(data.requires_attunement || "");
     const parsed = parseEffects(desc, row.category || "");
     // The corrections are written against the SRD's own text.
     const srd = row.document_slug === "wotc-srd";
     const effects = DROPPED[match] ? [] : [...(REPLACED[match] ?? parsed.effects), ...(srd ? (EXTRA[match] ?? []) : [])];
     const restriction = attunedBy(attunement);
-    const gear = gearOf(row, desc, match);
+    const gear = gearOf(row, desc, match, rawDesc);
     const aliases = srd ? ALIASES[match] : undefined;
     // A row with no effect is kept only when the engine has something to
     // enforce about it: who may attune, the item a magic weapon or armor is
-    // built on, its bonus, its charges.
-    if (!effects.length && !restriction && !Object.keys(gear).length) {
+    // built on, its bonus, its charges, and for an SRD item that casts a
+    // spell and asks for attunement (a Hat of Disguise, a Crystal Ball), that
+    // use_item must find it attuned before the cast (src/lib/dm/item-use.ts).
+    const castsAttuned = srd && /requires attunement/i.test(attunement) && CAST.test(desc);
+    if (!effects.length && !restriction && !Object.keys(gear).length && !castsAttuned) {
       continue;
     }
     out.push({
@@ -451,6 +488,7 @@ function collect() {
       ...(added.aliases ? { aliases: added.aliases } : {}),
       effects: added.effects,
       ...(added.base ? { base: added.base } : {}),
+      ...(added.charges ? { charges: added.charges } : {}),
     });
   }
   return {

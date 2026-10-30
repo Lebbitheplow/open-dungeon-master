@@ -126,6 +126,14 @@ export const COUNTED_USES = {
   // it to cast magic missile as a 5th-level spell. Daily at dusk, 1d6 removed
   // stars reappear on the robe."
   "robe of stars": { max: 6, regain: "1d6", regainAtDusk: true },
+  // "This necklace has 1d4+2 magic beads ... Once a magic bead's spell is
+  // cast, that bead can't be used again until the next dawn."
+  "necklace of prayer beads": { max: "1d4+2", regain: "all" },
+  // "Once used, the fan shouldn't be used again until the next dawn. Each
+  // time it is used again before then, it has a cumulative 20 percent chance
+  // of not working and tearing into useless, nonmagical tatters." One use a
+  // dawn, and a use past it rolls the tearing (src/lib/dm/item-charges.ts).
+  "wind fan": { max: 1, regain: "all", daily: "the gust of wind spell", overuseRisk: 20 },
 };
 
 // The last charge's d20 where a 1 leaves an item its text describes rather

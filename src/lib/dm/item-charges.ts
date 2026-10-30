@@ -63,12 +63,36 @@ export function spendChargesMath(
   becomes?: string;
   // The charges a 20 on the last charge's d20 brought back.
   regained?: ReturnType<typeof rollExpression>;
+  // A use past the last charge, and its d100 against the risk.
+  overuse?: ReturnType<typeof rollExpression>;
+  // That use did not work: the item tore.
+  failed?: boolean;
 } {
   let initial: ReturnType<typeof rollExpression> | undefined;
   if (typeof item.charges !== "number" && typeof rule.max === "string") {
     initial = rollExpression(rule.max);
   }
   const left = chargesLeft(item, rule, initial?.total);
+  // SRD 5.1, Wind Fan: "Once used, the fan shouldn't be used again until the
+  // next dawn. Each time it is used again before then, it has a cumulative 20
+  // percent chance of not working and tearing into useless, nonmagical
+  // tatters." The row keeps one count and no tally of the uses past it, so
+  // each such use rolls the first of those chances, not the rising ones.
+  if (count > left && rule.overuseRisk && left === 0) {
+    const overuse = rollExpression("1d100");
+    const torn = overuse.total <= rule.overuseRisk;
+    return {
+      charges: 0,
+      destroyed: torn,
+      notes: [
+        torn
+          ? `${item.name} is used again before dawn and the d100 shows ${overuse.total} (${rule.overuseRisk} or less): it does not work and tears into useless, nonmagical tatters.`
+          : `${item.name} is used again before dawn; the d100 shows ${overuse.total}, above ${rule.overuseRisk}, so it holds this time. Every further use before dawn risks it again.`,
+      ],
+      overuse,
+      ...(torn ? { failed: true } : {}),
+    };
+  }
   if (count > left) {
     const regains = rule.regain
       ? rule.regain === "all"

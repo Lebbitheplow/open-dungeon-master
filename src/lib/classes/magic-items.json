@@ -74,6 +74,16 @@
       ]
     },
     {
+      "name": "Amulet of the Planes",
+      "match": "amulet of the planes",
+      "slugs": [
+        "amulet-of-the-planes",
+        "amulet-of-the-planes-a5e"
+      ],
+      "requiresAttunement": true,
+      "effects": []
+    },
+    {
       "name": "Amulet of the Pleasing Bouquet",
       "match": "amulet of the pleasing bouquet",
       "slugs": [
@@ -969,6 +979,16 @@
       }
     },
     {
+      "name": "Boots of Levitation",
+      "match": "boots of levitation",
+      "slugs": [
+        "boots-of-levitation",
+        "boots-of-levitation-a5e"
+      ],
+      "requiresAttunement": true,
+      "effects": []
+    },
+    {
       "name": "Boots of the Winterlands",
       "match": "boots of the winterlands",
       "slugs": [
@@ -995,6 +1015,21 @@
       "effects": [],
       "charges": {
         "max": 4
+      }
+    },
+    {
+      "name": "Bowl of Commanding Water Elementals",
+      "match": "bowl of commanding water elementals",
+      "slugs": [
+        "bowl-of-commanding-water-elementals",
+        "bowl-of-commanding-water-elementals-a5e"
+      ],
+      "requiresAttunement": false,
+      "effects": [],
+      "charges": {
+        "max": 1,
+        "regain": "all",
+        "daily": "the conjure elemental spell"
       }
     },
     {
@@ -1096,6 +1131,21 @@
       "effects": [],
       "armor": {
         "bonus": 1
+      }
+    },
+    {
+      "name": "Brazier of Commanding Fire Elementals",
+      "match": "brazier of commanding fire elementals",
+      "slugs": [
+        "brazier-of-commanding-fire-elementals",
+        "brazier-of-commanding-fire-elementals-a5e"
+      ],
+      "requiresAttunement": false,
+      "effects": [],
+      "charges": {
+        "max": 1,
+        "regain": "all",
+        "daily": "the conjure elemental spell"
       }
     },
     {
@@ -1215,6 +1265,16 @@
       }
     },
     {
+      "name": "Candle of Invocation",
+      "match": "candle of invocation",
+      "slugs": [
+        "candle-of-invocation",
+        "candle-of-invocation-a5e"
+      ],
+      "requiresAttunement": true,
+      "effects": []
+    },
+    {
       "name": "Candle of the Surreptitious Scholar",
       "match": "candle of the surreptitious scholar",
       "slugs": [
@@ -1267,6 +1327,21 @@
         "max": 1,
         "regain": "all",
         "daily": "the dimension door spell, leaving a cloud of smoke behind and arriving in another"
+      }
+    },
+    {
+      "name": "Censer of Controlling Air Elementals",
+      "match": "censer of controlling air elementals",
+      "slugs": [
+        "censer-of-controlling-air-elementals",
+        "censer-of-controlling-air-elementals-a5e"
+      ],
+      "requiresAttunement": false,
+      "effects": [],
+      "charges": {
+        "max": 1,
+        "regain": "all",
+        "daily": "the conjure elemental spell"
       }
     },
     {
@@ -1354,6 +1429,21 @@
       }
     },
     {
+      "name": "Circlet of Blasting",
+      "match": "circlet of blasting",
+      "slugs": [
+        "circlet-of-blasting",
+        "circlet-of-blasting-a5e"
+      ],
+      "requiresAttunement": false,
+      "effects": [],
+      "charges": {
+        "max": 1,
+        "regain": "all",
+        "daily": "the scorching ray spell"
+      }
+    },
+    {
       "name": "Clacking Teeth",
       "match": "clacking teeth",
       "slugs": [
@@ -1385,7 +1475,12 @@
           "mode": "climb",
           "feet": "walk"
         }
-      ]
+      ],
+      "charges": {
+        "max": 1,
+        "regain": "all",
+        "daily": "the web spell"
+      }
     },
     {
       "name": "Cloak of Petals",
@@ -1448,6 +1543,21 @@
       "charges": {
         "max": 3,
         "regain": "all"
+      }
+    },
+    {
+      "name": "Cloak of the Bat",
+      "match": "cloak of the bat",
+      "slugs": [
+        "cloak-of-the-bat",
+        "cloak-of-the-bat-a5e"
+      ],
+      "requiresAttunement": true,
+      "effects": [],
+      "charges": {
+        "max": 1,
+        "regain": "all",
+        "daily": "the polymorph spell"
       }
     },
     {
@@ -1685,6 +1795,51 @@
         "kind": "armor",
         "name": "Shield"
       }
+    },
+    {
+      "name": "Crystal Ball",
+      "match": "crystal ball",
+      "slugs": [
+        "crystal-ball",
+        "crystal-ball-a5e"
+      ],
+      "requiresAttunement": true,
+      "effects": []
+    },
+    {
+      "name": "Crystal Ball of Mind Reading",
+      "match": "crystal ball of mind reading",
+      "slugs": [],
+      "requiresAttunement": true,
+      "aliases": [
+        "Crystal Ball (Mind Reading)"
+      ],
+      "effects": []
+    },
+    {
+      "name": "Crystal Ball of Telepathy",
+      "match": "crystal ball of telepathy",
+      "slugs": [],
+      "requiresAttunement": true,
+      "aliases": [
+        "Crystal Ball (Telepathy)"
+      ],
+      "effects": [],
+      "charges": {
+        "max": 1,
+        "regain": "all",
+        "daily": "the suggestion spell"
+      }
+    },
+    {
+      "name": "Crystal Ball of True Seeing",
+      "match": "crystal ball of true seeing",
+      "slugs": [],
+      "requiresAttunement": true,
+      "aliases": [
+        "Crystal Ball (True Seeing)"
+      ],
+      "effects": []
     },
     {
       "name": "Crystal Staff",
@@ -2921,6 +3076,16 @@
       }
     },
     {
+      "name": "Hat of Disguise",
+      "match": "hat of disguise",
+      "slugs": [
+        "hat-of-disguise",
+        "hat-of-disguise-a5e"
+      ],
+      "requiresAttunement": true,
+      "effects": []
+    },
+    {
       "name": "Hazelwood Wand",
       "match": "hazelwood wand",
       "slugs": [
@@ -2991,6 +3156,21 @@
           ]
         }
       ]
+    },
+    {
+      "name": "Helm of Telepathy",
+      "match": "helm of telepathy",
+      "slugs": [
+        "helm-of-telepathy",
+        "helm-of-telepathy-a5e"
+      ],
+      "requiresAttunement": true,
+      "effects": [],
+      "charges": {
+        "max": 1,
+        "regain": "all",
+        "daily": "the suggestion spell"
+      }
     },
     {
       "name": "Helm of Teleportation",
@@ -3896,7 +4076,11 @@
           "paladin"
         ]
       },
-      "effects": []
+      "effects": [],
+      "charges": {
+        "max": "1d4+2",
+        "regain": "all"
+      }
     },
     {
       "name": "Nine Lives Stealer",
@@ -4397,6 +4581,12 @@
         "ring-of-elemental-command-a5e"
       ],
       "requiresAttunement": true,
+      "aliases": [
+        "Ring of Air Elemental Command",
+        "Ring of Earth Elemental Command",
+        "Ring of Fire Elemental Command",
+        "Ring of Water Elemental Command"
+      ],
       "effects": [],
       "charges": {
         "max": 5,
@@ -4463,6 +4653,16 @@
         "max": 3,
         "regain": "1d3"
       }
+    },
+    {
+      "name": "Ring of Jumping",
+      "match": "ring of jumping",
+      "slugs": [
+        "ring-of-jumping",
+        "ring-of-jumping-a5e"
+      ],
+      "requiresAttunement": true,
+      "effects": []
     },
     {
       "name": "Ring of Lightning Resistance",
@@ -4635,6 +4835,16 @@
           "feet": 40
         }
       ]
+    },
+    {
+      "name": "Ring of Telekinesis",
+      "match": "ring of telekinesis",
+      "slugs": [
+        "ring-of-telekinesis",
+        "ring-of-telekinesis-a5e"
+      ],
+      "requiresAttunement": true,
+      "effects": []
     },
     {
       "name": "Ring of the Dolphin",
@@ -4848,6 +5058,16 @@
           "amount": 2
         }
       ]
+    },
+    {
+      "name": "Rod of Alertness",
+      "match": "rod of alertness",
+      "slugs": [
+        "rod-of-alertness",
+        "rod-of-alertness-a5e"
+      ],
+      "requiresAttunement": true,
+      "effects": []
     },
     {
       "name": "Rod of Bubbles",
@@ -6479,6 +6699,21 @@
       }
     },
     {
+      "name": "Stone of Controlling Earth Elementals",
+      "match": "stone of controlling earth elementals",
+      "slugs": [
+        "stone-of-controlling-earth-elementals",
+        "stone-of-controlling-earth-elementals-a5e"
+      ],
+      "requiresAttunement": false,
+      "effects": [],
+      "charges": {
+        "max": 1,
+        "regain": "all",
+        "daily": "the conjure elemental spell"
+      }
+    },
+    {
       "name": "Stone of Good Luck (Luckstone)",
       "match": "stone of good luck (luckstone)",
       "slugs": [
@@ -7952,6 +8187,22 @@
       "effects": [],
       "charges": {
         "max": 2
+      }
+    },
+    {
+      "name": "Wind Fan",
+      "match": "wind fan",
+      "slugs": [
+        "wind-fan",
+        "wind-fan-a5e"
+      ],
+      "requiresAttunement": false,
+      "effects": [],
+      "charges": {
+        "max": 1,
+        "regain": "all",
+        "daily": "the gust of wind spell",
+        "overuseRisk": 20
       }
     },
     {

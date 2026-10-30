@@ -18,7 +18,7 @@ export const resourceTools: ToolDef[] = [
     function: {
       name: "use_item",
       description:
-        "Resolve a character using up ONE consumable they carry (potion, scroll, thrown flask, ration, torch); one taken in the same action (from a chest, off a fallen foe) is given with grant_item first. In a fight it is the Use an Object action. Kept items (weapons, armor, a ring) are refused. Never narrate a consumable's use without calling it.",
+        "Resolve a character using up ONE consumable they carry (potion, scroll, thrown flask, ration, torch); one taken in the same action (from a chest, off a fallen foe) is given with grant_item first. In a fight it is the Use an Object action. Kept items (weapons, armor) are refused, unless they cast a spell. Never narrate a consumable's use without calling it.",
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -39,7 +39,7 @@ export const resourceTools: ToolDef[] = [
           spell: {
             type: "string",
             description:
-              "The spell a wand or staff casts with these charges (Wand of Fireballs: Fireball). A scroll needs none.",
+              "The spell the item casts (Wand of Fireballs: Fireball; Hat of Disguise: Disguise Self). A scroll needs none.",
           },
           reason: { type: "string", description: "Short in-fiction cause." },
         },

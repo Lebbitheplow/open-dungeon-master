@@ -115,8 +115,10 @@ await test("The spells a wand or staff casts cost the charges its text prints, a
         const level = /(\d)(?:st|nd|rd|th)-level version/.exec(printed[1]);
         if (level) assert.equal(spell.level, Number(level[1]), `${item.name} ${spell.spell} level`);
       }
-      const dc = /save DC (\d+)/.exec(item.text);
-      if (spell.dc) assert.equal(spell.dc, Number(dc[1]), `${item.name} DC`);
+      // "(save DC 13)", or the Ring of Elemental Command's "Spells cast from
+      // the ring have a save DC of 17".
+      const dc = /save DC (?:of )?(\d+)/.exec(item.text);
+      if (spell.dc) assert.equal(spell.dc, Number(dc?.[1]), `${item.name} DC`);
       if (/using your spell save DC/i.test(item.text)) assert.equal(spell.dc, undefined, `${item.name}: the wielder's DC`);
       checked += 1;
     }
@@ -217,6 +219,219 @@ await test("Magic Items, Spells (magic-items): 'Some magic items allow the user 
   const empty = { name: "Staff of the Woodlands", qty: 1, charges: 0 };
   const atWill = spendChargesMath(empty, chargeRuleOf(empty), 0);
   assert.ok(!("error" in atWill) && atWill.charges === 0 && !atWill.d20, "pass without trace from an empty staff");
+});
+
+// The spells the SRD's item pages let their holder cast, read from the
+// pages' own sentences: each sentence with the word "cast", and the spells
+// it names after it. A family's member casts what its own paragraph says
+// (a Crystal Ball of Telepathy, a Ring of Air Elemental Command, the
+// figurine's Silver Raven), as the row a sheet carries for it.
+const SPELL_LEVEL = new Map(
+  book.pages
+    .filter((page) => page.kind === "spell")
+    .map((page) => {
+      const head = plain(page.md.split("\n").find((line) => line.trim()));
+      return [page.title.toLowerCase(), /cantrip/i.test(head) ? 0 : Number(/(\d)(?:st|nd|rd|th)-level/.exec(head)?.[1])];
+    }),
+);
+const SPELL_NAMES = new RegExp(
+  `\\b(${[...SPELL_LEVEL.keys()].sort((a, b) => b.length - a.length).map((name) => name.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&")).join("|")})\\b`,
+  "gi",
+);
+const memberOf = (heading) =>
+  /^(?:Crystal Ball of [\w ]+|Ring of \w+ Elemental Command)$/.test(heading) ? heading : heading === "Silver Raven (Uncommon)" ? "Figurine of Wondrous Power (Silver Raven)" : null;
+function itemCasts() {
+  const out = [];
+  for (const page of book.pages.filter((entry) => entry.chapter === "magic-items" && entry.kind === "item")) {
+    let holder = page.title;
+    for (const paragraph of page.md.split(/\n\s*\n/)) {
+      const heading = /^\*\*\*([^*]+?)\*\*\*/.exec(paragraph.trim())?.[1]?.replace(/\.$/, "");
+      if (heading) holder = memberOf(heading) ?? page.title;
+      const text = plain(paragraph);
+      for (const sentence of text.split(/(?<=[.!?])\s+/)) {
+        const at = sentence.search(/\bcast\b/i);
+        if (at < 0) continue;
+        for (const found of sentence.slice(at).matchAll(SPELL_NAMES)) {
+          out.push({ page: page.title, holder, spell: found[1].toLowerCase(), sentence, paragraph: text });
+        }
+      }
+    }
+  }
+  return out;
+}
+
+// SRD items that name a spell in a sentence about casting, and why use_item
+// does not cast it from them.
+const NOT_CAST_FROM_ITEM = {
+  "Candle of Invocation": "the gate is cast only when the candle is first lit, and every other lighting burns it by the minute, which the server does not track",
+  "Deck of Many Things": "the Moon card grants wishes; the deck casts nothing",
+  "Efreeti Bottle": "the efreeti casts the wish, not the holder",
+  "Helm of Brilliance": "each spell spends a gem of its own kind, four counts one row cannot hold",
+  "Potion of Animal Friendship": "the drinker casts it for an hour after the potion is gone",
+  "Robe of Eyes": "light and daylight cast on the robe blind its wearer",
+  "Wand of Wonder": "the d100 table, not the wielder, picks what the charge does",
+};
+
+await test("Magic Items, Spells (magic-items): every SRD item whose text lets its holder cast a named spell casts it from use_item: Hat of Disguise 'cast the disguise self spell from it at will'; Circlet of Blasting 'cast the scorching ray spell with it'; Rod of Alertness 'cast one of the following spells from it'; Ring of Air Elemental Command 'cast the following spells from the ring, expending the necessary number of charges'; Crystal Ball of Telepathy 'cast the suggestion spell (save DC 17)'", () => {
+  const casts = itemCasts();
+  const missing = [];
+  const wrong = [];
+  for (const { page, holder, spell, sentence, paragraph } of casts) {
+    if (NOT_CAST_FROM_ITEM[page]) continue;
+    const row = itemSpellsOf(holder).find((entry) => entry.spell.toLowerCase() === spell);
+    if (!row) {
+      missing.push(`${holder} (${spell})`);
+      continue;
+    }
+    const where = `${holder} ${spell}`;
+    // The lowest level the spell has, where the item prints none of its own
+    // ("fireball (5th-level version", "magic missile as a 5th-level spell").
+    if (!/\d(?:st|nd|rd|th)[- ]level|spell level/i.test(paragraph) && row.level !== SPELL_LEVEL.get(spell)) wrong.push(`${where}: level ${row.level} (SRD ${SPELL_LEVEL.get(spell)})`);
+    // "at will", "without using any charges": nothing spent.
+    if (/\bat will\b|without using any charges/i.test(sentence) && row.charges !== 0) wrong.push(`${where}: ${row.charges} charges for an at-will cast`);
+    // "expend 2 of the ring's charges to cast", "expend 1 charge and cast".
+    const expend = /expend (\d+) (?:of (?:its|the \w+['\u2019]s) )?charges? (?:and|to) cast/i.exec(sentence);
+    if (expend && row.charges !== Number(expend[1])) wrong.push(`${where}: ${row.charges} charges (SRD ${expend[1]})`);
+    // "(save DC 13)" printed with the spell.
+    const dc = new RegExp(`${spell.replace(/[/]/g, "\\/")}(?: spell)? \\(save DC (\\d+)\\)`, "i").exec(sentence);
+    if (dc && row.dc !== Number(dc[1])) wrong.push(`${where}: DC ${row.dc} (SRD ${dc[1]})`);
+    // A cast that waits for the dawn holds one charge that comes back then.
+    if (/can['\u2019]t be used (?:this way )?again until the next dawn/i.test(paragraph) && !/\bcharges?\b/i.test(paragraph)) {
+      const rule = chargeRuleOf({ name: holder });
+      if (row.charges !== 1 || rule?.max !== 1 || rule?.regain !== "all") wrong.push(`${where}: once a dawn, but costs ${row.charges} of ${JSON.stringify(rule)}`);
+    }
+  }
+  assert.equal(missing.length, 0, `item spells use_item does not know, ${listed(missing)}`);
+  assert.equal(wrong.length, 0, `item spells cast otherwise than their text says, ${listed(wrong)}`);
+  // Every item left out does name a spell it is about, so the list stays true.
+  const named = new Set(casts.map((entry) => entry.page));
+  assert.deepEqual(Object.keys(NOT_CAST_FROM_ITEM).filter((name) => !named.has(name)), []);
+  assert.ok(casts.length >= 100, `${casts.length} item spells read`);
+  // The beads are a table, not a sentence: "Each bead contains a spell that
+  // you can cast from it as a bonus action (using your spell save DC if a
+  // save is necessary)": Bless; Cure wounds (2nd level) or lesser
+  // restoration; Greater restoration; Branding smite; Planar ally; Wind walk.
+  const beads = itemSpellsOf("Necklace of Prayer Beads");
+  assert.deepEqual(beads.map((entry) => [entry.spell, entry.level, entry.charges, entry.bonusAction, entry.dc]), [
+    ["Bless", 1, 1, true, undefined], ["Cure Wounds", 2, 1, true, undefined], ["Lesser Restoration", 2, 1, true, undefined],
+    ["Greater Restoration", 5, 1, true, undefined], ["Branding Smite", 2, 1, true, undefined], ["Planar Ally", 6, 1, true, undefined], ["Wind Walk", 6, 1, true, undefined],
+  ]);
+  // "This necklace has 1d4+2 magic beads ... Once a magic bead's spell is
+  // cast, that bead can't be used again until the next dawn."
+  assert.deepEqual(chargeRuleOf({ name: "Necklace of Prayer Beads" }), { max: "1d4+2", regain: "all" });
+  // A member named in brackets is the member: "Ring of Elemental Command (Fire)".
+  assert.deepEqual(itemSpellCast("Ring of Elemental Command (Fire)", "Fireball", undefined), { spell: "Fireball", charges: 2, level: 3, dc: 17 });
+  assert.equal(chargeRuleOf({ name: "Ring of Air Elemental Command" })?.max, 5);
+  assert.equal(chargeRuleOf({ name: "Crystal Ball" }), null, "the plain ball scries at will");
+  assert.equal(chargeRuleOf({ name: "Crystal Ball (Telepathy)" })?.regain, "all");
+});
+
+await test("An item's at-will spell is cast from use_item for nothing, by someone attuned where the item asks it: Hat of Disguise (hat-of-disguise) 'While wearing this hat, you can use an action to cast the disguise self spell from it at will'; Rod of Alertness 'cast one of the following spells'; Elemental Gem 'an elemental is summoned as if you had cast the conjure elemental spell, and the gem's magic is lost'; Amulet of the Planes 'make a DC 15 Intelligence check. On a successful check, you cast the plane shift spell'", async () => {
+  const { takeItemCast } = await import("../src/lib/srd/item-cast-credit.ts");
+  const use = (characterId, item, extra = {}) => world.invoke("use_item", { characterId, item, ...extra });
+  const hero = world.addHero({ name: "Masked", class: "rogue", level: 5, maxHp: 30, equipment: [{ name: "Hat of Disguise", qty: 1, equipped: true }] });
+  let out = await use(hero.id, "Hat of Disguise", { spell: "Disguise Self" });
+  assert.equal(out.ok, false, "the hat (requires attunement) works only attuned");
+  assert.match(out.error, /attuned/);
+  world.patch(hero.id, { equipment: [{ name: "Hat of Disguise", qty: 1, equipped: true, attuned: true }] });
+  // Its one spell needs no naming.
+  out = await use(hero.id, "Hat of Disguise");
+  assert.equal(out.ok, true, out.error);
+  assert.equal(out.result.spellCast, "Disguise Self");
+  assert.equal(out.result.spellLevel, 1);
+  assert.ok(takeItemCast(hero.id, "Disguise Self", { dryRun: true }), "the cast waits for its spell's tool, slot paid");
+  out = await use(hero.id, "Hat of Disguise", { spell: "Disguise Self" });
+  assert.equal(out.ok, true, "at will: again, and again");
+  assert.deepEqual(world.sheet(hero.id).equipment, [{ name: "Hat of Disguise", qty: 1, equipped: true, attuned: true }], "no count is kept on the hat");
+
+  // The rod casts four: which one is asked.
+  world.patch(hero.id, { equipment: [{ name: "Rod of Alertness", qty: 1, equipped: true, attuned: true }] });
+  out = await use(hero.id, "Rod of Alertness");
+  assert.equal(out.ok, false);
+  assert.match(out.error, /Detect Evil and Good, Detect Magic, Detect Poison and Disease, See Invisibility/);
+  out = await use(hero.id, "Rod of Alertness", { spell: "See Invisibility" });
+  assert.equal(out.ok, true, out.error);
+  assert.equal(out.result.spellLevel, 2);
+
+  // Breaking the gem is the cast, and the gem is gone.
+  world.patch(hero.id, { equipment: [{ name: "Elemental Gem", qty: 2 }] });
+  out = await use(hero.id, "Elemental Gem");
+  assert.equal(out.ok, true, out.error);
+  assert.equal(out.result.spellCast, "Conjure Elemental");
+  assert.equal(out.result.spellLevel, 5);
+  assert.deepEqual(world.sheet(hero.id).equipment, [{ name: "Elemental Gem", qty: 1 }]);
+
+  // The amulet's Intelligence check (Intelligence 10) comes first.
+  world.patch(hero.id, { equipment: [{ name: "Amulet of the Planes", qty: 1, equipped: true, attuned: true }] });
+  world.clearDice();
+  world.dice(4);
+  out = await use(hero.id, "Amulet of the Planes");
+  assert.equal(world.clearDice(), 0, "the check's d20 was rolled");
+  assert.equal(out.ok, true, out.error);
+  assert.equal(out.result.spellCast, false, "4 fails DC 15: no plane shift");
+  assert.equal(takeItemCast(hero.id, "Plane Shift", { dryRun: true }), null);
+  world.dice(17);
+  out = await use(hero.id, "Amulet of the Planes");
+  assert.equal(out.result.spellCast, "Plane Shift");
+  assert.equal(out.result.spellLevel, 7);
+});
+
+await test("A spell an item casts once a dawn waits for the dawn: Circlet of Blasting (circlet-of-blasting) 'cast the scorching ray spell with it. When you make the spell's attacks, you do so with an attack bonus of +5. The circlet can't be used this way again until the next dawn'; Helm of Telepathy 'Once used, the suggestion property can't be used again until the next dawn'; Wind Fan 'Each time it is used again before then, it has a cumulative 20 percent chance of not working and tearing'", async () => {
+  const use = (characterId, item, extra = {}) => world.invoke("use_item", { characterId, item, ...extra });
+  for (const name of ["Circlet of Blasting", "Cloak of Arachnida", "Cloak of the Bat", "Bowl of Commanding Water Elementals", "Brazier of Commanding Fire Elementals", "Censer of Controlling Air Elementals", "Stone of Controlling Earth Elementals", "Helm of Telepathy", "Wind Fan"]) {
+    const rule = chargeRuleOf({ name });
+    assert.ok(rule?.max === 1 && rule.regain === "all", `${name}: one use, back at dawn`);
+  }
+  const blaster = world.addHero({ name: "Blaster", class: "fighter", level: 5, maxHp: 40, equipment: [{ name: "Circlet of Blasting", qty: 1, equipped: true }] });
+  let out = await use(blaster.id, "Circlet of Blasting", { spell: "Scorching Ray" });
+  assert.equal(out.ok, true, out.error);
+  assert.equal(out.result.attackBonus, 5);
+  // A fighter with no spellcasting attacks with the circlet's +5.
+  assert.equal(spellAttackFor(world.sheet(blaster.id), "Scorching Ray"), 5);
+  out = await use(blaster.id, "Circlet of Blasting", { spell: "Scorching Ray" });
+  assert.equal(out.ok, false, "not again before dawn");
+  assert.match(out.error, /dawn/);
+
+  // The helm's detect thoughts is at will; its suggestion once a dawn.
+  world.patch(blaster.id, { equipment: [{ name: "Helm of Telepathy", qty: 1, equipped: true, attuned: true }] });
+  for (const spell of ["Detect Thoughts", "Detect Thoughts", "Suggestion"]) {
+    out = await use(blaster.id, "Helm of Telepathy", { spell });
+    assert.equal(out.ok, true, `${spell}: ${out.error}`);
+    assert.equal(out.result.saveDc, 13);
+  }
+  out = await use(blaster.id, "Helm of Telepathy", { spell: "Suggestion" });
+  assert.equal(out.ok, false, "a second suggestion waits for dawn");
+  out = await use(blaster.id, "Helm of Telepathy", { spell: "Detect Thoughts" });
+  assert.equal(out.ok, true, "detect thoughts still at will");
+
+  // The fan: once safely, then each use before dawn rolls its d100.
+  world.patch(blaster.id, { equipment: [{ name: "Wind Fan", qty: 1 }] });
+  world.clearDice();
+  out = await use(blaster.id, "Wind Fan", { spell: "Gust of Wind" });
+  assert.equal(out.ok, true, out.error);
+  assert.equal(out.result.saveDc, 13);
+  world.dice(50);
+  out = await use(blaster.id, "Wind Fan", { spell: "Gust of Wind" });
+  assert.equal(world.clearDice(), 0, "the tearing d100 was rolled");
+  assert.equal(out.ok, true, out.error);
+  assert.equal(out.result.spellCast, "Gust of Wind", "50 is above 20: it holds");
+  world.dice(20);
+  out = await use(blaster.id, "Wind Fan", { spell: "Gust of Wind" });
+  assert.equal(out.result.spellCast, false, "20 or less: it does not work");
+  assert.deepEqual(world.sheet(blaster.id).equipment, [], "and tears into tatters");
+});
+
+await test("Ring of Jumping (ring-of-jumping): 'you can cast the jump spell from it as a bonus action at will'; in a fight it spends the bonus action and leaves the action", async () => {
+  const { combatKit } = await import("./lib/enforce-combat.mjs");
+  const kit = await combatKit(world);
+  const jumper = world.addHero({ name: "Jumper", class: "fighter", level: 5, maxHp: 40, equipment: [{ name: "Ring of Jumping", qty: 1, equipped: true, attuned: true }] });
+  await kit.fight(1, { heroFaces: { [jumper.id]: 20 } });
+  kit.giveTurn(jumper.id);
+  const out = await world.invoke("use_item", { characterId: jumper.id, item: "Ring of Jumping", spell: "Jump" });
+  const budget = world.encounter()?.turnBudget;
+  await kit.endFight();
+  assert.equal(out.ok, true, out.error);
+  assert.ok(budget?.bonusUsed && !budget.actionUsed, `bonus action ${budget?.bonusUsed ? "spent" : "kept"}, action ${budget?.actionUsed ? "spent" : "kept"}`);
 });
 
 await test("An item's bonus to spell attack rolls and spell save DC is the wielder's: Wand of the War Mage 'you gain a bonus to spell attack rolls determined by the wand's rarity'; Robe of the Archmagi 'Your spell save DC and spell attack bonus each increase by 2'; Staff of Power, the Magi and the Woodlands 'a +2 bonus to spell attack rolls'", () => {

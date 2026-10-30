@@ -82,6 +82,8 @@ export const chargeRuleSchema = z.object({
   regainAtDusk: flag,
   spentAway: flag,
   daily: z.string().trim().min(1).max(200).optional(),
+  // A use past the last charge risks the item (SRD 5.1, Wind Fan).
+  overuseRisk: int(1, 100).optional(),
 });
 
 export const checkRidersSchema = z.object({
@@ -97,6 +99,13 @@ export const itemSpellSchema = z.object({
   perCharge: flag,
   maxLevel: int(1, 9).optional(),
   dc: int(1, 30).optional(),
+  // The rest of a published item's cast (src/lib/srd/item-spells.ts): its
+  // own attack bonus, a bonus action, the cast that uses the item up, and
+  // the check it waits on, kept by a copy.
+  attackBonus: int(-5, 20).optional(),
+  bonusAction: flag,
+  usesUp: flag,
+  check: z.object({ ability: z.enum(["str", "dex", "con", "int", "wis", "cha"]), dc: int(1, 30) }).optional(),
 });
 
 export const attunedBySchema = z.object({

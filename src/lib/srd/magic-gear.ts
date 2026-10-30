@@ -65,6 +65,11 @@ export type ChargeRule = {
   spentAway?: boolean;
   // A once-a-day power tracked as one charge: what it does.
   daily?: string;
+  // The item may still be used with no charge left, at this percent chance
+  // of tearing and not working (SRD 5.1, Wind Fan: "Each time it is used
+  // again before then, it has a cumulative 20 percent chance of not working
+  // and tearing into useless, nonmagical tatters").
+  overuseRisk?: number;
 };
 
 export type GearDef = {
