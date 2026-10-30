@@ -125,6 +125,32 @@ await test("revert-turn writes one row per AI change it reverts", async () => {
   assert.equal(answer.corrections.length, 2);
 });
 
+// Issue #622: diseases and poisons on the clock once filed every change
+// under the made-up turn "clock", so "Revert this turn" on one of them undid
+// the whole campaign's. Only a turn this table played is reverted.
+await test("revert-turn refuses a turn this table never played: the made-up \"clock\", an unknown id, another table's turn", async () => {
+  aiChange(world, hero, { currentHp: 6 }, { turn: { id: "clock" } });
+  aiChange(world, hero, { gold: 4 }, { turn: { id: "clock" }, kind: "modify_gold" });
+  const elsewhere = campaigns.createCampaign(world.owner.id, {
+    title: "Elsewhere",
+    description: "",
+    theme: "high-fantasy",
+    maxPlayers: 4,
+    startingLevel: 1,
+    difficulty: "normal",
+    gameSettings: {},
+  });
+  const foreign = createDmTurn(elsewhere.id, [], "ai");
+  const before = rows(world.campaignId).length;
+  for (const turnId of ["clock", "no-such-turn", foreign.id]) {
+    const response = await call(revertRoute, "POST", { campaignId: world.campaignId }, { turnId, confirm: true });
+    assert.equal(response.status, 400, `${turnId}: ${await response.clone().text()}`);
+  }
+  assert.equal(world.sheet(hero.id).currentHp, 6, "a made-up turn was reverted");
+  assert.equal(world.sheet(hero.id).gold, 4, "a made-up turn was reverted");
+  assert.equal(rows(world.campaignId).length, before);
+});
+
 await test("a sheet edit is tied to the newest AI change that wrote the same field, and only once", async () => {
   const { turn, entry } = aiChange(world, hero, { currentHp: 2 });
   const before = rows(world.campaignId).length;
@@ -461,6 +487,19 @@ await test("an erased account's fixes stay counted without the link to the perso
   assert.equal(after.length, before.length, "the counts stay");
   assert.equal(after.filter((correction) => correction.userId === world.owner.id).length, 0);
   assert.ok(fs.readFileSync(path.join(import.meta.dirname, "../src/lib/account-deletion.ts"), "utf8").includes("forgetCorrectionsBy(userId)"), "purgeAccount forgets them");
+});
+
+// Last: it closes and reopens the database.
+await test("rows filed under the made-up turn \"clock\" are cleared of it once, as the database opens (issue #622)", async () => {
+  const { closeDatabaseForRestore } = await import("../src/lib/db/core.ts");
+  const { entry } = aiChange(world, hero, { currentHp: 5 }, { turn: { id: "clock" } });
+  assert.equal(entry.turnId, "clock");
+  // A database from before the fix: the pass has not run on it.
+  getDatabase().prepare(`DELETE FROM app_settings WHERE key = 'audit_clock_turn_cleared'`).run();
+  closeDatabaseForRestore();
+  assert.equal(getDatabase().prepare(`SELECT turn_id FROM sheet_audit WHERE id = ?`).get(entry.id).turn_id, null);
+  assert.equal(getDatabase().prepare(`SELECT COUNT(*) AS n FROM sheet_audit WHERE turn_id = 'clock'`).get().n, 0);
+  assert.ok(getDatabase().prepare(`SELECT key FROM app_settings WHERE key = 'audit_clock_turn_cleared'`).get(), "the pass left no mark, so it runs on every start");
 });
 
 if (failed) {

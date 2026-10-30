@@ -72,21 +72,42 @@ function describeEntry(entry: AuditEntry, name: string): string {
       const changed = Object.keys(delta);
       return `${name}'s player adjusted their counters${changed.length ? ` (${changed.join(", ")})` : ""}`;
     }
+    // What passing time did on its own (issue #622): written down so a turn's
+    // revert can put it back with the hours.
+    case "wild_shape":
+      return `${name} returns to their own form`;
+    case "condition_clock":
+      return Array.isArray(delta.ended) && delta.ended.length
+        ? `${name} is no longer ${delta.ended.join(" or ")}`
+        : `Time runs on ${name}'s conditions`;
+    case "concentration":
+      return `Time runs on ${name}'s ${delta.spell}`;
+    case "supplies":
+      return delta.exhaustion !== undefined
+        ? `${name} goes short of food or water (exhaustion ${delta.exhaustion})`
+        : `${name} eats and drinks from the pack`;
+    case "exhaustion":
+      return `${name} is at exhaustion level ${delta.exhaustion}`;
+    case "training":
+      return `${name} learns ${delta.subject}`;
     default:
       return `${name}: ${entry.kind}`;
   }
 }
 
 // Confirmation for undos that would clobber newer changes to the same
-// fields (the server answered 409 with warnings).
+// fields (the server answered 409 with warnings). A whole turn's revert
+// says what it puts back and what it leaves (issue #622).
 function ConfirmUndoDialog({
   warnings,
   busy,
+  turn,
   onConfirm,
   onCancel,
 }: {
   warnings: string[];
   busy: boolean;
+  turn: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -101,10 +122,12 @@ function ConfirmUndoDialog({
           )}
         >
           <AlertDialog.Title className="font-display text-lg tracking-wide text-amber-50">
-            Undo anyway?
+            {turn ? "Revert this turn anyway?" : "Undo anyway?"}
           </AlertDialog.Title>
           <AlertDialog.Description className="mt-2 text-xs text-stone-400">
-            Newer changes touched the same fields; undoing will overwrite them.
+            {turn
+              ? "This puts the character sheets and the clock back as they were before the turn. World events and companions who left stay; rewinding the chapter takes those back."
+              : "Newer changes touched the same fields; undoing will overwrite them."}
           </AlertDialog.Description>
           <ul className="mt-2 space-y-1">
             {warnings.slice(0, 5).map((warning, index) => (
@@ -131,7 +154,8 @@ type FeedItem =
 
 // Chronological feed of DM-driven sheet changes and character milestones.
 // The party lead can undo individual sheet changes, or revert every change
-// from one DM turn. Undo restores sheet stats only.
+// from one DM turn. Undo restores sheet stats; a turn's revert also puts
+// the clock back (issue #622). World events stay for the chapter rewind.
 export function EventLog({
   campaignId,
   auditLog,
@@ -152,6 +176,7 @@ export function EventLog({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [confirming, setConfirming] = useState<{
     warnings: string[];
+    turn: boolean;
     run: () => Promise<void>;
   } | null>(null);
 
@@ -189,7 +214,7 @@ export function EventLog({
         ? data.error
         : "That change could not be undone.";
 
-  async function post(url: string, body: Record<string, unknown>, busyKey: string) {
+  async function post(url: string, body: Record<string, unknown>, busyKey: string, wholeTurn = false) {
     setBusyId(busyKey);
     noteError(busyKey, "");
     try {
@@ -199,6 +224,7 @@ export function EventLog({
       if (response?.status === 409 && Array.isArray(data.warnings) && data.warnings.length) {
         setConfirming({
           warnings: data.warnings as string[],
+          turn: wholeTurn,
           run: async () => {
             const retry = await send(url, { ...body, confirm: true });
             setConfirming(null);
@@ -224,7 +250,7 @@ export function EventLog({
   const undoEntry = (entry: AuditEntry) =>
     post(`/api/campaigns/${campaignId}/audit/${entry.id}/undo`, {}, entry.id);
   const revertTurn = (turnId: string) =>
-    post(`/api/campaigns/${campaignId}/audit/revert-turn`, { turnId }, `turn:${turnId}`);
+    post(`/api/campaigns/${campaignId}/audit/revert-turn`, { turnId }, `turn:${turnId}`, true);
 
   const feed: FeedItem[] = [
     ...auditLog.map((entry) => ({ type: "audit" as const, seq: entry.seq, entry })),
@@ -282,7 +308,7 @@ export function EventLog({
                   type="button"
                   disabled={busyId === `turn:${turnId}`}
                   onClick={() => revertTurn(turnId)}
-                  title="Undo every sheet change from this GM turn (stats only)"
+                  title="Put the character sheets and the clock back as they were before this GM turn. World events and companions who left stay; rewinding the chapter takes those back."
                   className="flex w-full items-center justify-center gap-1 rounded border border-dashed border-stone-700 py-0.5 text-[10px] text-stone-500 hover:bg-stone-900 hover:text-amber-300"
                 >
                   {busyId === `turn:${turnId}` ? (
@@ -344,6 +370,7 @@ export function EventLog({
         <ConfirmUndoDialog
           warnings={confirming.warnings}
           busy={false}
+          turn={confirming.turn}
           onConfirm={() => void confirming.run()}
           onCancel={() => setConfirming(null)}
         />

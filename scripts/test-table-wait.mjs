@@ -330,6 +330,30 @@ try {
     assert.deepEqual(passTable(campaign.id, bob.id), { ok: true, fire: true });
     assert.deepEqual(playerWebhookState(grant, sub.id).opportunities, [], "a pass answers the passage like a post");
   });
+
+  // Issue #622: the wait is armed as a narration lands, inside its turn. The
+  // deadline wakes the next turn long after, and must not run as the old one.
+  await test("the wait's timer, armed inside a turn, fires in no turn", async () => {
+    const { currentTurnId, runInTurnScope } = await import("../src/lib/dm/job-control.ts");
+    tableWaitTurnStarted(campaign.id, db.prepare(`SELECT next_seq - 1 AS seq FROM campaigns WHERE id = ?`).get(campaign.id).seq);
+    narrate();
+    post(alice.id, "wait-sheet-a");
+    const realSetTimeout = globalThis.setTimeout;
+    const seen = [];
+    // The timer's callback runs in the context it was set in; this one only
+    // reports which turn that is.
+    globalThis.setTimeout = () => realSetTimeout(() => seen.push(currentTurnId()), 0);
+    try {
+      await runInTurnScope("turn-622", async () => {
+        assert.equal(settleTableWait(campaign.id), false, "the table is still gathering");
+        await new Promise((resolve) => realSetTimeout(resolve, 30));
+      });
+    } finally {
+      globalThis.setTimeout = realSetTimeout;
+    }
+    assert.deepEqual(seen, [null], "the wait's deadline would run inside the turn that armed it");
+    tableWaitTurnStarted(campaign.id, db.prepare(`SELECT next_seq - 1 AS seq FROM campaigns WHERE id = ?`).get(campaign.id).seq);
+  });
 } finally {
   leaveA();
 }

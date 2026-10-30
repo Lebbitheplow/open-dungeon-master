@@ -43,6 +43,7 @@ import { readiedSpellOf } from "@/lib/dm/readied-spell";
 import { sweepSummons } from "@/lib/dm/summon-store";
 import { textKey } from "@/lib/language/text-logic";
 import { listedAgainst } from "@/lib/dm/roll-about";
+import { patchSheetAudited } from "@/lib/dm/audited-patch";
 
 // Condition upkeep: timed conditions count down and expire, save-ends
 // conditions get their re-save rolled server-side (enemy saves from stat
@@ -128,7 +129,7 @@ export function tickClockConditions(campaign: Campaign, minutes: number, started
   rollEffectSaves(campaign, null, () => true, lines);
   // A concentration spell lasts no longer than its duration on the road
   // either (src/lib/dm/concentration-clock.ts).
-  lines.push(...tickConcentrationClocks(campaign, rounds, () => true));
+  lines.push(...tickConcentrationClocks(campaign, rounds, () => true, true));
   // A creature stabilized before the wait was kept on the sheet has no
   // timer to run out. Four hours in one stretch is the longest 1d4 asks for,
   // so that much time wakes it.
@@ -525,13 +526,25 @@ function tickSheetConditions(
       if (polymorphEnded) {
         lines.push(`${sheet.name} reverts to their own body as the polymorph ends.`);
       }
-      const updated = patchSheet(sheet.id, {
+      const patch = {
         conditions,
         conditionMeta: meta,
         ...(polymorphEnded ? { wildShape: null } : {}),
-      });
-      if (updated) {
-        publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
+      };
+      if (options?.encounter) {
+        const updated = patchSheet(sheet.id, patch);
+        if (updated) {
+          publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
+        }
+      } else {
+        // On the clock the change is the time's: audited, so the turn that
+        // moved the clock takes it back with the hours (issue #622).
+        const ended = sheet.conditions.filter((name) => !conditions.includes(name));
+        patchSheetAudited(campaign.id, sheet.id, patch, {
+          kind: "condition_clock",
+          reason: ended.length ? `no longer ${ended.join(" or ")} as time passed` : "time counted down on their conditions",
+          delta: { ended, added: conditions.filter((name) => !sheet.conditions.includes(name)) },
+        });
       }
     }
   }

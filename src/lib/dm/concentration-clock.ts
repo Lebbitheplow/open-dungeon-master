@@ -10,13 +10,18 @@ import type { Campaign } from "@/lib/db/campaigns";
 import { getActiveEncounter, listEnemies, setEnemyConcentration, setEnemyConcentrationRounds } from "@/lib/db/encounters";
 import { getSheetById, listSheets, patchSheet } from "@/lib/db/sheets";
 import { breakConcentration, clearSpellConditionsByName, settleFullDuration } from "@/lib/dm/concentration";
+import { patchSheetAudited } from "@/lib/dm/audited-patch";
 
 // Counts every running concentration clock that `counts` picks down by `by`
-// rounds, ending the ones that run out. Returns the table lines.
+// rounds, ending the ones that run out. Returns the table lines. `onClock`:
+// the in-world clock moved (not a fight's turn), and the count it takes off
+// is audited, so the turn that moved the clock gives the minutes back with
+// the hours (issue #622).
 export function tickConcentrationClocks(
   campaign: Campaign,
   by: number,
   counts: (casterId: string) => boolean,
+  onClock = false,
 ): string[] {
   const lines: string[] = [];
   if (by <= 0) {
@@ -29,7 +34,15 @@ export function tickConcentrationClocks(
       continue;
     }
     if (left - by > 0) {
-      patchSheet(sheet.id, { concentrationRounds: left - by });
+      if (onClock) {
+        patchSheetAudited(campaign.id, sheet.id, { concentrationRounds: left - by }, {
+          kind: "concentration",
+          reason: `time passed on ${sheet.concentratingOn}`,
+          delta: { spell: sheet.concentratingOn, roundsLeft: left - by },
+        });
+      } else {
+        patchSheet(sheet.id, { concentrationRounds: left - by });
+      }
       continue;
     }
     // Held to the end: what the spell leaves for good stays (full-duration.ts).

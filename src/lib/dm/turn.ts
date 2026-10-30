@@ -29,7 +29,7 @@ import {
   type DmTurn,
 } from "@/lib/db/dm-turns";
 import { haltDmTurn, haltUnbuiltTurn } from "@/lib/dm/turn-halt";
-import { assertJobLive, bindJobTurn, DmJobStopped, jobAbandoned, setJobStage } from "@/lib/dm/job-control";
+import { assertJobLive, bindJobTurn, DmJobStopped, jobAbandoned, runInTurnScope, setJobStage } from "@/lib/dm/job-control";
 import { describeStage, unbuiltReason, type DmJobStage } from "@/lib/dm/job-stage-logic";
 import { modelTuningFor } from "@/lib/dm/model-tuning";
 import { noteTurnCall, turnCallFit, turnCallOptions, turnMinOutputTokens } from "@/lib/dm/turn-fit";
@@ -64,7 +64,8 @@ import { strictBooleanArgs } from "@/lib/dm/arg-coerce";
 import { insertCampaignMessage, listMessagesPage, listRecentMessages, type CampaignMessage } from "@/lib/db/messages";
 import { narrationShown, takeNarrationSeq } from "@/lib/dm/narration-slot";
 import { getRoll, listRecentRolls } from "@/lib/db/rolls";
-import { listSheets } from "@/lib/db/sheets";
+import { getSheetById, listSheets } from "@/lib/db/sheets";
+import { adoptTurnAudit } from "@/lib/db/sheet-audit";
 import { describeConditionDuration } from "@/lib/dm/condition-logic";
 import { heldRollUserIds } from "@/lib/dice/held-rolls";
 import { publishEphemeral, publishPersisted, publishWithSeq } from "@/lib/events";
@@ -942,7 +943,7 @@ async function openTurn(
   assertJobLive();
   const turn = createDmTurn(campaignId, conversation);
   opening.turn = turn;
-  bindJobTurn(turn.id);
+  bindTurn(campaignId, turn.id);
   // The narration holds its place from the start, not only once words are on
   // screen: a move posted while the model is still thinking was not in this
   // prompt, so it belongs after this turn's narration, and it is still the
@@ -960,6 +961,16 @@ async function openTurn(
   turn.playerWhisperIds = pendingWhispers.map((whisper) => whisper.id);
   saveDmTurn(turn);
   return { context, turn };
+}
+
+// The turn this job drives, named so every audit row it writes carries it.
+// What the job wrote before the row existed (a companion's leaving, death
+// saves the initiative pointer rolled ahead of the prompt) is filed under
+// it too, and shown again under it in the event log (issue #622).
+function bindTurn(campaignId: string, turnId: string) {
+  for (const entry of adoptTurnAudit(turnId, bindJobTurn(turnId))) {
+    publishPersisted(campaignId, "sheet_audit", { entry, characterName: getSheetById(entry.characterId)?.name });
+  }
 }
 
 // A turn that failed or was stopped before its first model call. A stop
@@ -1075,9 +1086,12 @@ export async function reenterDmTurn(campaign: Campaign, turn: DmTurn) {
 // a DM that never speaks. Any unexpected throw now finalizes the turn at
 // once. Parked turns return with status 'awaiting_rolls' and are left alone.
 async function advance(context: TurnContext, turn: DmTurn) {
-  bindJobTurn(turn.id);
+  bindTurn(context.campaign.id, turn.id);
   try {
-    await runAdvance(context, turn);
+    // The turn's own work, down to the pointer moved after the narration,
+    // is the turn's in its audit rows whether or not a queue job runs it;
+    // what it leaves running afterwards (a picture, a voice) is not (#622).
+    await runInTurnScope(turn.id, () => runAdvance(context, turn));
   } catch (error) {
     // A stop (the lead's button, a rewind, the watchdog) halts the turn in
     // its own words. One the queue already gave up on had its notice

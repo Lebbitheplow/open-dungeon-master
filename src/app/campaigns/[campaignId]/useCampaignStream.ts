@@ -629,10 +629,13 @@ export function campaignReducer(state: CampaignState, action: Action): CampaignS
         case "sheet_audit": {
           const entry = payload.entry as AuditEntry | undefined;
           if (entry) {
-            next.auditLog = [
-              ...state.auditLog.slice(-80),
+            // The same row again is the row as it now reads: a turn that took
+            // in what its job wrote before the turn existed (issue #622).
+            next.auditLog = upsertBy(
+              state.auditLog.slice(-80),
               { ...entry, characterName: payload.characterName as string | undefined },
-            ];
+              (row) => row.id,
+            );
           }
           return next;
         }

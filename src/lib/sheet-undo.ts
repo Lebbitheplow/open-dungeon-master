@@ -9,6 +9,7 @@ import {
 } from "@/lib/db/sheet-audit";
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { forgetLongRest } from "@/lib/db/clock";
+import { forgetDeath } from "@/lib/dm/revival";
 import { recordTurnCorrection } from "@/lib/db/turn-ledger";
 import { publishPersisted } from "@/lib/events";
 import { fullPatchSheetSchema, type CharacterSheet } from "@/lib/schemas/sheet";
@@ -108,6 +109,16 @@ export function revertAuditEntry(campaign: Campaign, entry: SheetAuditEntry, by?
   // back, so the character may rest again (SRD 5.1, one long rest a day).
   if (entry.kind === "rest_long") {
     forgetLongRest(campaign.id, entry.characterId);
+  }
+  // Nor did a death undone: its moment and its line in the character's story
+  // go with it (issue #622).
+  const track = entry.delta.deathSaves as { dead?: unknown } | null | undefined;
+  const moment =
+    entry.kind === "death_state" && track?.dead === true
+      ? forgetDeath(campaign.id, entry.characterId, entry.seq, (compensating as SheetAuditEntry | null)?.id ?? entry.id)
+      : null;
+  if (moment) {
+    publishPersisted(campaign.id, "audit_reverted", { entryId: moment, revertedAt: new Date().toISOString() });
   }
 
   const sheet = getSheetById(entry.characterId)!;

@@ -471,9 +471,11 @@ const passTimeSchema = z.object({
 // storm, a night in an inn, a week of downtime. Travel and rests move it
 // themselves, so this is for the time nothing else accounts for.
 //
-// Time only ever moves forward here. Undoing a passage of time is the audit
-// trail's job (audit/revert-turn), not arithmetic's, because a clock that
-// could run backwards would silently un-expire conditions and rests.
+// Time only ever moves forward here: a clock that could run backwards would
+// silently un-expire conditions and rests. Undoing a passage of time is
+// "Revert this turn" (audit/revert-turn): the turn's moves are kept
+// (src/lib/db/clock-moves.ts), and the revert puts the instant back with the
+// sheet changes the time made, all audited (issue #622).
 export function handlePassTime(
   campaign: Campaign,
   rawArguments: string,

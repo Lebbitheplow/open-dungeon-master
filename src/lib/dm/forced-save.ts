@@ -15,7 +15,8 @@ import { allocateSeq, getCampaignById, type Campaign } from "@/lib/db/campaigns"
 import type { DmTurn } from "@/lib/db/dm-turns";
 import type { EncounterEnemy } from "@/lib/db/encounters";
 import { insertRoll } from "@/lib/db/rolls";
-import { getSheetById, patchSheet } from "@/lib/db/sheets";
+import { getSheetById } from "@/lib/db/sheets";
+import { patchSheetAudited } from "@/lib/dm/audited-patch";
 import { d20Expression, rollExpression } from "@/lib/dice";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { saveModFor } from "@/lib/bestiary/enemy-numbers";
@@ -96,10 +97,18 @@ export function spendRollCarriers(campaignId: string, sheetId: string, spent: st
   if (carriers.includes(LUCK_SPEND)) {
     resources = spendLuckCounter(resources ?? sheet.resources) ?? resources;
   }
-  const updated = patchSheet(sheet.id, { conditions, conditionMeta: meta, ...(resources ? { resources } : {}) });
-  if (updated) {
-    publishPersisted(campaignId, "sheet_updated", { sheet: updated });
-  }
+  // Audited: unaudited, an undo of a death save or a save the clock rolled
+  // brought the death state back but never the die it spent (issue #622).
+  patchSheetAudited(campaignId, sheet.id, { conditions, conditionMeta: meta, ...(resources ? { resources } : {}) }, {
+    kind: "use_resource",
+    reason: "spent on a roll",
+    delta: { resource: carriers.map(carrierWords).join(" and "), spent: 1 },
+  });
+}
+
+// What a spent carrier is called on the event log.
+function carrierWords(carrier: string): string {
+  return carrier === INSPIRATION_SPEND ? "Inspiration" : carrier === LUCK_SPEND ? "a luck point" : carrier;
 }
 
 export type ForcedSave = {

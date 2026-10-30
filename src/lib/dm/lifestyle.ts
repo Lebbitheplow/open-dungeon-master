@@ -23,7 +23,8 @@
 //   Training: a language or a tool, 250 days at 1 gp a day.
 
 import type { Campaign } from "@/lib/db/campaigns";
-import { getSheetById, patchSheet } from "@/lib/db/sheets";
+import { getSheetById } from "@/lib/db/sheets";
+import { patchSheetAudited } from "@/lib/dm/audited-patch";
 import { addCopper, formatCopper, formatPrice } from "@/lib/srd/currency";
 import type { DowntimeProgress, Lifestyle } from "@/lib/dm/between-state";
 import { LIFESTYLES } from "@/lib/dm/between-state";
@@ -31,7 +32,6 @@ import {
   characterSave,
   downtimeOf,
   lifestyleOf,
-  publishSheetOf,
   writeDowntime,
 } from "@/lib/dm/between-io";
 import { afflictCondition, dropConditions, liveAfflictions } from "@/lib/dm/afflictions";
@@ -57,13 +57,19 @@ export const LIFESTYLE_COST_CP: Record<Lifestyle, number> = {
 
 const purseOf = (sheet: Pick<CharacterSheet, "gold" | "copper">) => sheet.gold * 100 + (sheet.copper ?? 0);
 
-function pay(campaignId: string, sheet: CharacterSheet, copper: number) {
+// What the days cost, and what they make, written with their audit rows: the
+// turn whose days were spent gives the coin and the work back when it is
+// reverted (issue #622).
+function pay(campaignId: string, sheet: CharacterSheet, copper: number, why: string) {
   if (copper <= 0) {
     return;
   }
   const paid = addCopper({ gold: sheet.gold, copper: sheet.copper ?? 0 }, -copper).purse;
-  patchSheet(sheet.id, { gold: paid.gold, copper: paid.copper });
-  publishSheetOf(campaignId, sheet.id);
+  patchSheetAudited(campaignId, sheet.id, { gold: paid.gold, copper: paid.copper }, {
+    kind: "modify_gold",
+    reason: `${formatPrice(copper)} for ${why}`,
+    delta: { delta: -copper / 100, gold: paid.gold },
+  });
 }
 
 // `days` of this character's lifestyle, less what their work covers each
@@ -88,7 +94,7 @@ export function chargeLifestyle(
     .reverse()
     .find((lifestyle) => daily(lifestyle) * days <= purse) ?? "wretched";
   const paidCp = daily(affordable) * days;
-  pay(campaign.id, sheet, paidCp);
+  pay(campaign.id, sheet, paidCp, `${days} day${days === 1 ? "" : "s"} of a ${affordable} lifestyle`);
   const covered = coveredCp > 0 ? ` (their work covers ${formatPrice(coveredCp)} a day)` : "";
   const line =
     affordable === chosen
@@ -212,7 +218,7 @@ export function spendDowntime(campaign: Campaign, turnId: string, entry: Downtim
         lines.push(`${sheet.name} sets aside the unfinished ${crafting.item}; its materials are spent.`);
       }
       const materials = Math.floor(valueCp / 2);
-      pay(campaign.id, getSheetById(sheet.id) ?? sheet, materials);
+      pay(campaign.id, getSheetById(sheet.id) ?? sheet, materials, `raw materials for ${item}`);
       lines.push(`${sheet.name} buys ${formatPrice(materials)} of raw materials for ${item}.`);
       crafting = { item, ...(srdName ? { srdName } : {}), valueCp, progressCp: 0, tool: entry.tool.trim() };
     }
@@ -220,8 +226,12 @@ export function spendDowntime(campaign: Campaign, turnId: string, entry: Downtim
     const progressCp = Math.min(crafting.valueCp, crafting.progressCp + 500 * crafters * days);
     if (progressCp >= crafting.valueCp) {
       const fresh = getSheetById(sheet.id) ?? sheet;
-      patchSheet(fresh.id, { equipment: grantItemMath(fresh.equipment, crafting.item, 1, crafting.srdName ? { srdName: crafting.srdName } : {}).equipment });
-      publishSheetOf(campaign.id, fresh.id);
+      patchSheetAudited(
+        campaign.id,
+        fresh.id,
+        { equipment: grantItemMath(fresh.equipment, crafting.item, 1, crafting.srdName ? { srdName: crafting.srdName } : {}).equipment },
+        { kind: "grant_item", reason: "finished crafting it", delta: { name: crafting.item, qty: 1 } },
+      );
       delete progress.crafting;
       lines.push(`${sheet.name} finishes crafting ${crafting.item}. ${alreadyInPack(sheet.name, false)}`);
     } else {
@@ -234,7 +244,7 @@ export function spendDowntime(campaign: Campaign, turnId: string, entry: Downtim
     const kind = entry.kind === "tool" ? "tool" : "language";
     const training = progress.training && textKey(progress.training.subject) === textKey(subject) ? progress.training : { subject, kind, days: 0 };
     const affordable = Math.min(days, Math.floor(purseOf(getSheetById(sheet.id) ?? sheet) / 100));
-    pay(campaign.id, getSheetById(sheet.id) ?? sheet, affordable * 100);
+    pay(campaign.id, getSheetById(sheet.id) ?? sheet, affordable * 100, `training in ${subject}`);
     const total = Math.min(250, training.days + affordable);
     if (affordable < days) {
       lines.push(`${sheet.name} can pay for only ${affordable} of the ${days} days of training (1 gp a day).`);
@@ -244,8 +254,11 @@ export function spendDowntime(campaign: Campaign, turnId: string, entry: Downtim
       const proficiencies = kind === "tool"
         ? { ...fresh.proficiencies, tools: [...(fresh.proficiencies.tools ?? []), subject].slice(0, 12) }
         : { ...fresh.proficiencies, languages: [...(fresh.proficiencies.languages ?? []), subject].slice(0, 12) };
-      patchSheet(fresh.id, { proficiencies });
-      publishSheetOf(campaign.id, fresh.id);
+      patchSheetAudited(campaign.id, fresh.id, { proficiencies }, {
+        kind: "training",
+        reason: "250 days of training",
+        delta: { subject, kind },
+      });
       delete progress.training;
       lines.push(`${sheet.name} completes 250 days of training: they ${kind === "tool" ? "are proficient with" : "speak"} ${subject}.`);
     } else {
@@ -255,8 +268,8 @@ export function spendDowntime(campaign: Campaign, turnId: string, entry: Downtim
   }
   if (entry.activity === "research" && entry.topic) {
     const affordable = Math.min(days, Math.floor(purseOf(getSheetById(sheet.id) ?? sheet) / 100));
-    pay(campaign.id, getSheetById(sheet.id) ?? sheet, affordable * 100);
     const topic = entry.topic.trim();
+    pay(campaign.id, getSheetById(sheet.id) ?? sheet, affordable * 100, `research into ${topic}`);
     const research = progress.research && textKey(progress.research.topic) === textKey(topic) ? progress.research : { topic, days: 0 };
     progress.research = { topic, days: research.days + affordable };
     lines.push(`${sheet.name} researches ${topic}: ${progress.research.days} day${progress.research.days === 1 ? "" : "s"} so far (1 gp a day paid). What they find is yours to say.`);

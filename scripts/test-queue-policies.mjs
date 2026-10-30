@@ -265,4 +265,93 @@ await test("a turn's query goes ahead of re-index batches that have not started"
   assert.equal(seen[1], "query", "then the query, before the rest");
 });
 
+// ---- the turn the work belongs to (issue #622) ----
+//
+// The audit trail files what the engine writes under the turn the work runs
+// in (src/lib/dm/job-control.ts currentTurnId). Work a turn only started (a
+// job it queued, its warm-up, a timer) must not inherit it.
+
+const { bindJobTurn, createDmJobControl, currentTurnId, detachFromTurn, runInDmJob, runInTurnScope } = await import("../src/lib/dm/job-control.ts");
+const { configureDmWatchdog } = await import("../src/lib/dm/queue.ts");
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+await test("a turn's job files its own work under the turn; a job it queues, its warm-up and a timer it sets do not", async () => {
+  const seen = {};
+  let next;
+  await enqueueDmJob(
+    "c-turn",
+    async () => {
+      seen.before = currentTurnId();
+      bindJobTurn("turn-1");
+      seen.bound = currentTurnId();
+      next = enqueueDmJob("c-turn", async () => {
+        seen.queued = currentTurnId();
+      });
+      // The warm-up runs the next turn's first request in a job of its own.
+      await runInDmJob(createDmJobControl("c-turn", "work", () => {}), async () => {
+        seen.warmUp = currentTurnId();
+      });
+      await new Promise((resolve) =>
+        detachFromTurn(() =>
+          setTimeout(() => {
+            seen.detached = currentTurnId();
+            resolve();
+          }, 0),
+        ),
+      );
+      // Fires after the job has settled.
+      setTimeout(() => {
+        seen.late = currentTurnId();
+      }, 30);
+    },
+    { kind: "turn" },
+  );
+  await next;
+  await wait(60);
+  assert.deepEqual(seen, { before: null, bound: "turn-1", queued: null, warmUp: null, detached: null, late: null });
+});
+
+await test("a turn scope opened outside the queue covers its own work only: a job queued from it, and a timer firing after it closed, are no turn's", async () => {
+  const seen = {};
+  await runInTurnScope("turn-2", async () => {
+    seen.inside = currentTurnId();
+    // Awaited while the scope is open: the job still answers for itself.
+    await enqueueDmJob("c-scope", async () => {
+      seen.queued = currentTurnId();
+    });
+    setTimeout(() => {
+      seen.late = currentTurnId();
+    }, 20);
+  });
+  seen.after = currentTurnId();
+  await wait(50);
+  assert.deepEqual(seen, { inside: "turn-2", queued: null, after: null, late: null });
+});
+
+await test("the watchdog made inside a turn's job checks the queue in no turn", async () => {
+  const realSetInterval = globalThis.setInterval;
+  const seen = [];
+  await enqueueDmJob(
+    "c-dog",
+    async () => {
+      bindJobTurn("turn-dog");
+      // Remakes the watchdog's interval from here, inside the turn's job.
+      globalThis.setInterval = (fn, ms) =>
+        realSetInterval(() => {
+          seen.push(currentTurnId());
+        }, ms);
+      try {
+        configureDmWatchdog({ checkMs: 5 });
+      } finally {
+        globalThis.setInterval = realSetInterval;
+      }
+      await wait(40);
+    },
+    { kind: "turn" },
+  );
+  configureDmWatchdog({ checkMs: 5_000 });
+  assert.ok(seen.length > 0, "the interval never ran");
+  assert.deepEqual([...new Set(seen)], [null], "the watchdog ran inside the turn that made it");
+});
+
 console.log(`\n${passed} queue-policy tests passed.`);

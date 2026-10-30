@@ -36,6 +36,8 @@ const GOBLIN = {
 const { listRecentRolls } = await import("../src/lib/db/rolls.ts");
 const { startDmTurn } = await import("../src/lib/dm/turn.ts");
 const { dmQueueDepth } = await import("../src/lib/dm/queue.ts");
+const { getLatestDmTurnId } = await import("../src/lib/db/dm-turns.ts");
+const { listRecentAudit } = await import("../src/lib/db/sheet-audit.ts");
 
 async function settle(campaignId, ms = 30_000) {
   const end = Date.now() + ms;
@@ -152,6 +154,56 @@ await test("Dropped by a goblin, Kara rolls her death save as her turn comes rou
   model.script([reply({ text: "Kara gets her feet under her. What do you do?" })]);
   const back = await act(world, karaUser, "I get up and raise my shield.");
   assert.equal(back.status, 202, JSON.stringify(back.json));
+
+  model.close();
+  world.close();
+});
+
+// Issue #622: the save the pointer rolls as the DM's turn hands the round
+// on was written with no turn, so "Revert this turn" took back the blow that
+// dropped Kara and left her death save standing.
+await test("The death save the pointer rolls on the GM's turn is filed under that turn, and reverting the turn takes it back with the blow", async () => {
+  const world = await openWorld({ campaign: { maxPlayers: 8 }, gameSettings: { ttsEnabled: false } });
+  const kit = await combatKit(world);
+  const model = await fakeModel();
+  model.pointAt(world);
+  const kara = world.addHero({ name: "Kara", class: "fighter", level: 1, abilities: { str: 16, dex: 10, con: 14, wis: 10 } });
+  const bram = world.addHero({ name: "Bram", class: "fighter", level: 1 });
+  const karaUser = world.sheet(kara.id).userId;
+  const bramUser = world.sheet(bram.id).userId;
+  world.patch(kara.id, { currentHp: 4 });
+  await world.beginFight([{ monster: "goblin", count: 1 }], { heroFaces: { [kara.id]: 19, [bram.id]: 15 }, enemyFace: 1 });
+  const [goblin] = world.enemies();
+  kit.setEnemy(goblin.id, { ac: 15, maxHp: 7, currentHp: 7, stats: GOBLIN });
+  kit.place(kara.id, 5, 5);
+  kit.place(bram.id, 5, 6);
+  kit.place(goblin.id, 6, 5);
+  assert.equal(kit.endTurn(karaUser), true);
+  assert.equal(kit.endTurn(bramUser), true);
+
+  world.dice(18, 6, 12);
+  model.script([
+    reply({ calls: [call("enemy_attack", { enemyId: goblin.id, targetCharacterId: kara.id })] }),
+    reply({ text: "The goblin's scimitar opens Kara's side, and she drops." }),
+  ]);
+  await startDmTurn(world.campaignId);
+  assert.equal(world.clearDice(), 0, "a forced die went unrolled on the goblin's turn");
+  assert.equal(world.sheet(kara.id).deathSaves?.successes, 1, "the pointer rolled no save");
+
+  const turnId = getLatestDmTurnId(world.campaignId);
+  const saves = listRecentAudit(world.campaignId, 50).filter((row) => row.kind === "death_state" && row.characterId === kara.id);
+  assert.ok(saves.some((row) => row.reason === "automatic death save"), JSON.stringify(saves.map((row) => row.reason)));
+  assert.deepEqual(saves.map((row) => row.turnId), saves.map(() => turnId), "a death save of the goblin's turn is not the goblin's turn's");
+
+  const revert = await world.route("campaigns/[campaignId]/audit/revert-turn");
+  world.signIn(world.owner);
+  const response = await revert.POST(
+    new Request("http://test/", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ turnId, confirm: true }) }),
+    { params: Promise.resolve({ campaignId: world.campaignId }) },
+  );
+  assert.equal(response.status, 200, JSON.stringify(await response.clone().json()));
+  assert.equal(world.sheet(kara.id).currentHp, 4, "the blow stayed");
+  assert.equal(world.sheet(kara.id).deathSaves, null, "the death save stayed");
 
   model.close();
   world.close();

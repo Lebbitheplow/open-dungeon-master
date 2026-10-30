@@ -1,7 +1,8 @@
 import { expireBurntLights } from "@/lib/db/battle-maps";
-import { getSheetById, patchSheet } from "@/lib/db/sheets";
+import { getSheetById } from "@/lib/db/sheets";
+import { patchSheetAudited } from "@/lib/dm/audited-patch";
 import { publishFx } from "@/lib/dm/fx";
-import { publishEphemeral, publishPersisted } from "@/lib/events";
+import { publishEphemeral } from "@/lib/events";
 import type { CharacterSheet, EquipmentItem } from "@/lib/schemas/sheet";
 import type { ItemTag } from "@/lib/schemas/item-tags";
 import { hasItemTag } from "@/lib/srd/item-tags";
@@ -65,10 +66,13 @@ function burnOne(campaignId: string, sheetId: string) {
   const equipment = sheet.equipment.flatMap((item) =>
     item !== burnt ? [item] : item.qty > 1 ? [{ ...item, qty: item.qty - 1 }] : [],
   );
-  const updated = patchSheet(sheet.id, { equipment });
-  if (updated) {
-    publishPersisted(campaignId, "sheet_updated", { sheet: updated });
-  }
+  // Audited, so the turn that moved the clock puts the torch back in the
+  // pack with the hours it burned (issue #622).
+  patchSheetAudited(campaignId, sheet.id, { equipment }, {
+    kind: "remove_item",
+    reason: `${burnt.name} burned out`,
+    delta: { name: burnt.name, removed: 1 },
+  });
 }
 
 // The token fields for a light lit now, at `instant` on the clock.

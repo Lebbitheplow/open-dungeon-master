@@ -1,4 +1,5 @@
 import { getDatabase, nowIso, parseJson } from "@/lib/db/core";
+import { awaitTurnBinding, currentTurnId } from "@/lib/dm/job-control";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 // Audit trail for every DM-driven sheet change: what changed, why, and in
@@ -80,7 +81,13 @@ export function getAuditPreImage(
 export function insertSheetAudit(input: {
   campaignId: string;
   characterId: string;
-  turnId: string | null;
+  // The turn the change belongs to. Left out (or null), it is the turn the
+  // work is running in, if any (src/lib/dm/job-control.ts currentTurnId):
+  // the death saves the clock rolls, a disease's symptoms and the initiative
+  // pointer's saves had no turn to pass, and "Revert this turn" missed them
+  // (issue #622). Outside every turn (a player's own edit, the console
+  // moving the clock) it stays null.
+  turnId?: string | null;
   kind: string;
   delta: Record<string, unknown>;
   reason: string;
@@ -90,6 +97,7 @@ export function insertSheetAudit(input: {
   patch?: Record<string, unknown>;
 }): SheetAuditEntry {
   const id = crypto.randomUUID();
+  const turnId = input.turnId || currentTurnId();
   getDatabase()
     .prepare(
       `
@@ -104,7 +112,7 @@ export function insertSheetAudit(input: {
       id,
       input.campaignId,
       input.characterId,
-      input.turnId,
+      turnId,
       input.actor ?? "dm",
       input.kind,
       JSON.stringify(input.delta),
@@ -114,7 +122,28 @@ export function insertSheetAudit(input: {
       input.before ? JSON.stringify(input.before) : null,
       input.patch ? JSON.stringify(input.patch) : null,
     );
+  if (!turnId) {
+    awaitTurnBinding(id);
+  }
   return getAuditEntry(id)!;
+}
+
+// A turn job's writes from before its row existed (settling a companion's
+// leaving, the initiative pointer run ahead of the prompt), filed under the
+// turn now that it has one, so its revert takes them too (issue #622).
+// Returns the rows, as they now read, for the event log.
+export function adoptTurnAudit(turnId: string, auditIds: string[]): SheetAuditEntry[] {
+  if (!auditIds.length) {
+    return [];
+  }
+  const db = getDatabase();
+  const adopt = db.prepare(`UPDATE sheet_audit SET turn_id = ? WHERE id = ? AND turn_id IS NULL`);
+  db.transaction(() => {
+    for (const id of auditIds) {
+      adopt.run(turnId, id);
+    }
+  })();
+  return auditIds.map((id) => getAuditEntry(id)).filter((entry): entry is SheetAuditEntry => entry !== null);
 }
 
 export function getAuditEntry(entryId: string): SheetAuditEntry | null {

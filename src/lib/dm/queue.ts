@@ -20,7 +20,7 @@ import { bindUsageScope } from "@/lib/usage/scope";
 import { publishEphemeral } from "@/lib/events";
 import { knownDmStatus, setDmStatus } from "@/lib/dm/status";
 import { latestTurnParkedByAi } from "@/lib/db/dm-turns";
-import { createDmJobControl, jobDeadlineMs, jobStage, runInDmJob, viewOf, type DmJobControl } from "@/lib/dm/job-control";
+import { createDmJobControl, detachFromTurn, jobDeadlineMs, jobStage, runInDmJob, viewOf, type DmJobControl } from "@/lib/dm/job-control";
 import { describeStage, stalledReason, type DmJobKind, type DmJobView } from "@/lib/dm/job-stage-logic";
 import { haltAbandonedJob } from "@/lib/dm/turn-halt";
 
@@ -327,7 +327,9 @@ export function stopDmJob(campaignId: string, reason: string, options: { graceMs
   );
   control.controller.abort();
   publishJob(campaignId);
-  const timer = setTimeout(() => abandonIfStuck(control), options.graceMs ?? watchdog().graceMs);
+  // Started from whatever asked for the stop (a turn's own rewind, the
+  // watchdog): the grace is nobody's turn (issue #622).
+  const timer = detachFromTurn(() => setTimeout(() => abandonIfStuck(control), options.graceMs ?? watchdog().graceMs));
   timer.unref?.();
   return true;
 }
@@ -353,7 +355,11 @@ function ensureWatchdog() {
   if (dog.timer) {
     return;
   }
-  dog.timer = setInterval(checkJobs, dog.checkMs);
+  // Made by whichever job started first, often one enqueued from inside a
+  // turn (a wake, a resume): the interval would carry that turn for the life
+  // of the process, and anything a stop it calls writes would be filed under
+  // a turn long over (issue #622).
+  dog.timer = detachFromTurn(() => setInterval(checkJobs, dog.checkMs));
   dog.timer.unref?.();
 }
 
