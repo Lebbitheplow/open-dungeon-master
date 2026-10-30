@@ -130,6 +130,20 @@ await test("Divine Word blinds, deafens and stuns a turncoat at 30 hit points or
   assert.equal(world.sheet(turncoat.id).deathSaves?.dead, true, JSON.stringify(out.result));
 });
 
+await test("A party wizard's Thunderwave cast as an area pushes the turncoat it catches 10 feet away", async () => {
+  const turncoat = await stage();
+  kit.giveTurn(mage.id);
+  // One 2d8 for the area (3 and 3), then the turncoat's CON save: a 2.
+  world.dice(3, 3, 2);
+  const out = await world.invoke("aoe_damage", { casterCharacterId: mage.id, spell: "Thunderwave", characterIds: [turncoat.id] });
+  world.clearDice();
+  assert.equal(out.ok, true, out.error);
+  const row = out.result.results.find((entry) => entry.target === turncoat.name);
+  assert.equal(row?.success, false, JSON.stringify(out.result));
+  assert.deepEqual([kit.token(turncoat.id).x, kit.token(turncoat.id).y], [7, 2], JSON.stringify(row));
+  assert.match(String(row.effects), /pushed 10 feet/);
+});
+
 // One whole turn of the turncoat's: what waits on its end is begun, then ended.
 function turncoatTurn(id) {
   beginTurns(world.campaign(), world.encounter().id, [id]);

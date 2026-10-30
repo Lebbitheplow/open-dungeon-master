@@ -1,6 +1,6 @@
 // aoe_damage on the characters an area catches: each rolls their own save
 // from the real sheet (a published dice card), a failure lays the player
-// spell's conditions, Evasion and Sculpt Spells apply, and the damage rides
+// spell's conditions and its riders, Evasion and Sculpt Spells apply, and the damage rides
 // apply_damage so audit, undo and the death engine all run. Split from
 // aoe-damage.ts, which rolls the blast once and calls this with it.
 
@@ -14,6 +14,8 @@ import type { EnemyUse } from "@/lib/dm/enemy-casting";
 import { rollCharacterSave } from "@/lib/dm/forced-save";
 import { applyDmMutation } from "@/lib/dm/mutations";
 import { handleSetCondition } from "@/lib/dm/set-condition";
+import { getFoe } from "@/lib/dm/sheet-foe";
+import { afterEnemySave } from "@/lib/dm/spell-riders";
 import type { spellConditionMeta } from "@/lib/dm/spell-effects";
 import { defenseRiders } from "@/lib/srd/feature-effects";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
@@ -106,6 +108,7 @@ export function aoeOnCharacters(input: {
       ...(bound.length ? { conditionApplied: bound.join(", ") } : {}),
       ...(refused.length ? { conditionRefused: refused.join(" ") } : {}),
     };
+    const hpBefore = getSheetById(sheet.id)?.currentHp ?? sheet.currentHp;
     for (const part of taken.filter((entry) => entry.amount > 0)) {
       const applied = applyDmMutation(
         campaign,
@@ -134,6 +137,30 @@ export function aoeOnCharacters(input: {
       }
       if (applied.note) {
         row.note = applied.note;
+      }
+    }
+    // What a failed save leaves beyond the damage and the condition
+    // (Thunderwave's push, Stinking Cloud's lost action, Divine Word's
+    // tiers) lands on a character the area caught as on an enemy, through
+    // the character's foe view (sheet-foe.ts). A turncoat or an ally in the
+    // party's Thunderwave was left standing where it was.
+    const view = plan && !success ? getFoe(sheet.id) : null;
+    if (plan && view) {
+      const effects = afterEnemySave({
+        campaign,
+        turn,
+        mech: plan.mech,
+        spell: plan.spell,
+        caster: plan.caster,
+        enemy: view,
+        saved: false,
+        taken: Math.max(0, hpBefore - (getSheetById(sheet.id)?.currentHp ?? hpBefore)),
+        dc: input.dc,
+        sheets,
+        sheetsById,
+      });
+      if (effects.length) {
+        row.effects = effects;
       }
     }
     results.push(row);
