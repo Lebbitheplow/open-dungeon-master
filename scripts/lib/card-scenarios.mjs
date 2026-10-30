@@ -136,12 +136,15 @@ export const SCENARIOS = [
   S("spell-shield-of-faith", "spell", "cleric", "Shield of Faith", { aim: "ally" }),
   S("spell-mage-armor-self", "spell", "wizard", "Mage Armor", { aim: "self" }),
 
-  // Areas. The Hand lays no square for an instant burst or cone (only for a
-  // zone that stays: Web, a wall), so the model names who stands in it, from
-  // the card's aim at the first enemy and the board (issue 570 lists the
-  // engine working this out itself as a gap).
+  // Areas aimed at one enemy with no square picked (a table off the board,
+  // or a player who only pressed the goblin's chip): the model names who
+  // stands in it, from the card's aim and the board.
   S("spell-fireball-area", "spell", "wizard", "Fireball", { place: "ranged", aim: "enemy", enemies: 3 }),
   S("spell-burning-hands-cone", "spell", "wizard", "Burning Hands", { aim: "enemy", enemies: 2 }),
+  // The same blasts laid on the board, as the Hand lays them when a chip or
+  // a square is pressed (issue 570): the engine catches who stands in them.
+  S("spell-fireball-laid", "spell", "wizard", "Fireball", { place: "ranged", aim: "enemy", area: "enemy", enemies: 3 }),
+  S("spell-burning-hands-laid", "spell", "wizard", "Burning Hands", { aim: "enemy", area: "enemy", enemies: 2 }),
   // A zone that stays is laid on a square picked on the board; the engine
   // leaves a laid area to the model (intent-logic.ts directCardCall).
   S("spell-web-area", "spell", "wizard", "Web", { place: "ranged", area: "enemy", enemies: 2 }),

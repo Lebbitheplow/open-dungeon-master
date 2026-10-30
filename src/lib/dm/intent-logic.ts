@@ -95,6 +95,11 @@ export type DirectContext = {
   // is the model's to place with aoe_damage over everyone in the burst, since
   // cast_at_enemy at the goblin rolls that one creature alone.
   area?: boolean;
+  // An instant blast on a battle map, by what its caster picks
+  // (src/lib/battlemap/area-shape.ts BlastPick): laid on its squares, it is
+  // the engine's, which catches everyone standing in them (issue 570).
+  // Absent with no board, and for a lasting area or none.
+  blast?: "point" | "direction" | "none";
 };
 
 export type DirectCall = { name: string; args: Record<string, unknown> };
@@ -102,6 +107,31 @@ export type DirectCall = { name: string; args: Record<string, unknown> };
 const atEnemy = (intent: MessageIntent): boolean => intent.targetKind === "enemy" && Boolean(intent.targetId);
 const onAlly = (intent: MessageIntent): boolean => (intent.targetKind === "ally" || intent.targetKind === "self") && Boolean(intent.targetId);
 const laysArea = (intent: MessageIntent): boolean => intent.atX !== undefined || intent.towardX !== undefined;
+
+// The squares a card laid its area on, under the tools' own names.
+function placement(intent: MessageIntent): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const key of ["atX", "atY", "towardX", "towardY"] as const) {
+    if (intent[key] !== undefined) out[key] = intent[key];
+  }
+  return out;
+}
+
+// Whether the card laid its blast where the engine can catch creatures: on
+// a point for a burst, a way for a cone or a line, nothing for a burst
+// around the caster.
+function blastLaid(intent: MessageIntent, blast: DirectContext["blast"]): boolean {
+  switch (blast) {
+    case "none":
+      return true;
+    case "point":
+      return intent.atX !== undefined && intent.atY !== undefined;
+    case "direction":
+      return intent.towardX !== undefined && intent.towardY !== undefined;
+    default:
+      return false;
+  }
+}
 
 // The target arguments most tools read: an enemy under targetEnemyId, a
 // character under targetCharacterId.
@@ -124,13 +154,20 @@ function targetArgs(intent: MessageIntent): Record<string, unknown> {
 // the dice land at once and the first model call narrates from the result,
 // and a human DM's own card resolves on the spot (the actions route).
 //
+// An instant blast laid on the battle map (Fireball on a square, Burning
+// Hands toward one) goes to aoe_damage with its squares and nobody named:
+// the engine catches everyone standing in them (aoe-shape.ts
+// creaturesInBlast).
+//
 // Null leaves the card to the model: a rider card (the attack and its rider
-// are one call the model composes), a target the card did not fix, an area
-// spell (laid on the board, or aimed at one creature: the model names who
-// stands in a Fireball), a spell the content has no resolution for, a summon
-// or a utility spell, Ready with no trigger, and anything aimed at an enemy when
-// no fight is on, since the fight has to start first. A card the engine then
-// refuses comes back as the tool's own refusal, which the model narrates.
+// are one call the model composes), a target the card did not fix, a blast
+// with no board or no square picked (aimed at one creature: the model names
+// who stands in it), a lasting area laid on the board (a Web, which bites
+// when its zone row says), a spell the content has no resolution for, a
+// summon or a utility spell, Ready with no trigger, and anything aimed at an
+// enemy when no fight is on, since the fight has to start first. A card the
+// engine then refuses comes back as the tool's own refusal, which the model
+// narrates.
 export function directCardCall(intent: MessageIntent, characterId: string, context: DirectContext = { inFight: true }): DirectCall | null {
   const { inFight } = context;
   const level = intent.slotLevel ? { level: intent.slotLevel } : {};
@@ -151,10 +188,16 @@ export function directCardCall(intent: MessageIntent, characterId: string, conte
         },
       };
     case "spell": {
-      if (!intent.spell || laysArea(intent) || context.area) {
+      if (!intent.spell) {
         return null;
       }
       const spell = intent.spell;
+      if (laysArea(intent) || context.area) {
+        const blasts = context.resolution === "save" || context.resolution === "auto";
+        return inFight && blasts && blastLaid(intent, context.blast)
+          ? { name: "aoe_damage", args: { casterCharacterId: characterId, spell, ...level, ...placement(intent) } }
+          : null;
+      }
       switch (context.resolution) {
         case "attack":
           return inFight && atEnemy(intent) ? { name: "pc_attack", args: { characterId, targetEnemyId: intent.targetId, spell, ...level } } : null;

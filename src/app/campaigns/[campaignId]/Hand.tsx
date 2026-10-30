@@ -22,6 +22,7 @@ import { HandPips } from "@/app/campaigns/[campaignId]/HandPips";
 import { handTargets } from "@/app/campaigns/[campaignId]/handTargets";
 import { holdPendingCards, useHandChoices, useHandPending } from "@/app/campaigns/[campaignId]/useHandChoices";
 import { deriveHand, waitingHand, type HandCard, type HandGearContext } from "@/lib/battlemap/hand";
+import { hostOffers, useCapabilities } from "@/lib/use-capabilities";
 import type { PlayerMapView } from "@/lib/battlemap/view-types";
 import { HAND_FAN_CAP, arrangeHand, isUrgentCard, seatPicked, startingLayout } from "@/lib/battlemap/hand-layout";
 import { groupHand, isGroup, type HandGroup } from "@/lib/battlemap/hand-groups";
@@ -177,10 +178,13 @@ function HandInner({
         : undefined,
     [sheet, sheets, drops, mounts],
   );
+  // A host too old to catch the creatures in a laid blast keeps its blasts
+  // aimed at one enemy (src/lib/capabilities.ts handBlasts).
+  const blasts = hostOffers(useCapabilities(), "handBlasts");
   const cards = useMemo(() => {
     if (!sheet || !turn) return [];
-    return holdPendingCards(withReactions(reactions, deriveHand(sheet, turn, { spells, trackAmmo, gear })), waiting);
-  }, [sheet, turn, reactions, spells, trackAmmo, gear, waiting]);
+    return holdPendingCards(withReactions(reactions, deriveHand(sheet, turn, { spells, trackAmmo, gear, blasts })), waiting);
+  }, [sheet, turn, reactions, spells, trackAmmo, gear, blasts, waiting]);
 
   // Cards that spend one thing (spell slots, ki, superiority dice, gear, the
   // basic actions) gather under one card each (issue 528, hand-groups.ts).
@@ -269,7 +273,7 @@ function HandInner({
   const attachedRiders = picked?.intent.card === "attack" && !picked.intent.offHand ? riders : EMPTY_CARDS;
   // The options, trigger, choice and area the card carries; the board hears
   // of the raised card from here too (useHandChoices.ts).
-  const { choices, resetChoices, barProps } = useHandChoices(picked);
+  const { choices, resetChoices, barProps } = useHandChoices(picked, aim?.id ?? null);
   const sentence = picked ? composeSentence(picked, aim, attachedRiders, choices) : "";
   const rows = useMemo(
     () => (picked ? previewRows(picked, aim ?? (picked.target === "enemy" ? defaultAim : null), conditions, choices) : []),

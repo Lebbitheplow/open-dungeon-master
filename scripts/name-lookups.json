@@ -1031,8 +1031,7 @@
     "lib/dm/aoe-damage.ts#whole": [["key",2,"targets the server listed, by the same stored names"]],
     "lib/dm/aoe-parts.ts#partial": [["pattern",2,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"]],
     "lib/dm/aoe-shape.ts#keyed": [["key",1,"ids, refs, slugs, tool names, field names, env names, event kinds, UI keys, caches, door and map keys; a sheet's conditionMeta by the condition key it was written under; the usage route's gear map by the sheet's own stored item names (src/: every site read)"]],
-    "lib/dm/aoe-shape.ts#number": [["key",3,"digits a regex already captured, ids, headers, stored and form numbers (number inputs), dice parts, the pack's English text (\"1,000 feet\", a purse); src/: every site read"]],
-    "lib/dm/aoe-shape.ts#partial": [["pattern",5,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"],["authoring",1,"a monster's trait lines read"]],
+    "lib/dm/aoe-shape.ts#partial": [["authoring",1,"a monster's trait lines read"]],
     "lib/dm/arc-logic.ts#first": [["key",1,"an act's first beat"],["key",1,"the first of the boss steps a beat carries, all naming the same boss"]],
     "lib/dm/arc-logic.ts#number": [["key",1,"digits a regex already captured, ids, headers, stored and form numbers (number inputs), dice parts, the pack's English text (\"1,000 feet\", a purse); src/: every site read"]],
     "lib/dm/arc-logic.ts#partial": [["identity",1,"arc cast, events, beats and sub-arcs by whole name"],["key",1,"arc ids"],["pattern",3,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"]],
@@ -2334,6 +2333,11 @@
     "lib/srd/legality/older-builder.ts#whole": [["identity",1,"a stored racial cantrip pick against the one an older builder sent, by textKey of its whole name"]],
     "lib/homebrew/species-choice-server.ts#partial": [["identity",2,"a species choice's record against the names the engines run, by textKey of the whole name and of the name before its bracket note, as isNamed reads it"],["pattern",2,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"]],
     "app/campaigns/[campaignId]/BattleMapPanel.tsx#fallback": [["key",1,"native initiative panel defaults a missing or unselected order id to the current turn entry; no text-name lookup"]],
-    "app/campaigns/[campaignId]/BattleMapPanel.tsx#partial": [["parse",1,"native initiative score input checked for an integer before range validation; not a record-name lookup"]]
+    "app/campaigns/[campaignId]/BattleMapPanel.tsx#partial": [["parse",1,"native initiative score input checked for an integer before range validation; not a record-name lookup"]],
+    "lib/battlemap/area-shape.ts#partial": [["pattern",6,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"]],
+    "lib/battlemap/area-shape.ts#number": [["key",3,"digits a regex already captured, ids, headers, stored and form numbers (number inputs), dice parts, the pack's English text (\"1,000 feet\", a purse); src/: every site read"]],
+    "lib/battlemap/area-shape.ts#keyed": [["key",1,"ids, refs, slugs, tool names, field names, env names, event kinds, UI keys, caches, door and map keys; a sheet's conditionMeta by the condition key it was written under; the usage route's gear map by the sheet's own stored item names (src/: every site read)"]],
+    "lib/battlemap/hand-area.ts#keyed": [["key",1,"a spell's damage type (engine vocabulary), keying the colour its blast is drawn in"]],
+    "app/campaigns/[campaignId]/BoardAreaAim.tsx#whole-single": [["key",1,"change detection, UI keys, ids, slugs, password confirmation, a saved selection (src/app: every site read)"]]
   }
 }

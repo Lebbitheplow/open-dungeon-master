@@ -238,6 +238,10 @@ export type HandOptions = {
   trackAmmo?: boolean;
   // What the gear cards need beyond the sheet (hand-gear.ts).
   gear?: HandGearContext;
+  // Whether an instant blast's card is laid on the battle map (issue 570):
+  // false for a host too old to catch the creatures in it, whose blasts are
+  // aimed at one enemy as before. Absent means it is.
+  blasts?: boolean;
 };
 
 // The board and the party as the gear cards read them: what lies on the

@@ -16,7 +16,7 @@ import { baseHealingDice, scaledSpellDice } from "@/lib/srd/spell-scaling";
 import { mechSpellDamage } from "@/lib/srd/spell-dice";
 import { bakedSpellMech } from "@/lib/content/baked-spells";
 import { allSpellNames } from "@/lib/srd/spell-lists";
-import { areaFor } from "@/lib/battlemap/hand-area";
+import { areaFor, blastAreaFor } from "@/lib/battlemap/hand-area";
 import {
   SAVE_LABEL,
   addFlat,
@@ -169,7 +169,7 @@ function castingCost(castingTime: string): HandCost | null {
   return /^1 action\b/.test(text.trim()) || text.trim() === "" ? "action" : null;
 }
 
-function spellCard(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders, name: string, fact: SpellFact): HandCard | null {
+function spellCard(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders, name: string, fact: SpellFact, blasts = true): HandCard | null {
   const cost = castingCost(fact.castingTime);
   if (!cost) return null;
   // The mechanics row the engine reads; the prose is parsed only for what the
@@ -315,8 +315,20 @@ function spellCard(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders, 
   const choice = cost === "reaction" ? undefined : spellChoice(mech);
   if (choice) card.choice = choice;
   // Web, Moonbeam, a wall: the square it is laid on is picked on the board.
-  const area = cost === "reaction" ? null : areaFor({ spell: name, runsAs: fact.runsAs }, slot?.level ?? (fact.level || null));
+  // So is an instant blast's (Fireball, Burning Hands), whose squares the
+  // engine then catches everyone on (issue 570); a blast around the caster
+  // needs no pick and aims at nobody.
+  const zone = cost === "reaction" ? null : areaFor({ spell: name, runsAs: fact.runsAs }, slot?.level ?? (fact.level || null));
+  // Its printed area decides, not the parsed row's flag, which a line "100
+  // feet long" or a "10-foot-radius sphere" can slip past (Lightning Bolt,
+  // Shatter).
+  const blast =
+    cost === "reaction" || zone || !blasts || (mech.resolution !== "save" && mech.resolution !== "auto")
+      ? null
+      : blastAreaFor({ spell: name, runsAs: fact.runsAs }, { desc: fact.desc, range: fact.range }, slot?.level ?? (fact.level || null), mech.damageType ?? "");
+  const area = zone ?? blast;
   if (area) card.area = area;
+  if (blast?.pick === "none") card.target = "none";
   return gated(
     card,
     standingGate(sheet, turn, cost === "reaction" ? "reaction" : "cast"),
@@ -335,7 +347,7 @@ export function spellCards(sheet: CharacterSheet, turn: HandTurn, riders: Combat
   for (const name of spellNames(sheet)) {
     const fact = factFor(name, options);
     if (!fact) continue;
-    const card = spellCard(sheet, turn, riders, name, fact);
+    const card = spellCard(sheet, turn, riders, name, fact, options.blasts !== false);
     if (card) rows.push({ level: fact.level, card });
   }
   // Attacks first inside a level, so the cantrip that hurts leads the hand.

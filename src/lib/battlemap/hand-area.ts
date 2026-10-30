@@ -1,8 +1,9 @@
 // Aiming a spell that leaves an area on the battle map (Web, Moonbeam, a Wall
-// of Fire, Gust of Wind): which squares the caster picks, what the pick sends
-// as the tool's placement arguments (src/lib/dm/zone-args.ts ZONE_ARGS), and
-// the squares the engine will lay for it, drawn on the board while the player
-// or the DM aims.
+// of Fire, Gust of Wind), or blasts one at once (Fireball, Burning Hands,
+// Thunderwave: issue 570): which squares the caster picks, what the pick
+// sends as the tool's placement arguments (src/lib/dm/zone-args.ts
+// ZONE_ARGS), and the squares the engine will lay or catch creatures in for
+// it, drawn on the board while the player or the DM aims.
 //
 // The squares come from the engine's own geometry (src/lib/battlemap/zones.ts
 // layZone) and the spell's own row (zones-spells.ts), laid from the point
@@ -11,11 +12,15 @@
 // from the caster toward the square named, an aura (Spirit Guardians) or a
 // self-centred spell (Globe of Invulnerability) on the caster whatever is
 // named. scripts/test-enforce-zones-ui.mjs casts each shape with the pick's
-// arguments and holds the stored area to this preview.
+// arguments and holds the stored area to this preview. A blast's squares are
+// the template src/lib/battlemap/area-shape.ts places, the same one the
+// engine catches creatures in (src/lib/dm/aoe-shape.ts creaturesInBlast).
 //
 // Pure: the Hand, the board and the console's form all import it.
 import { layZone, type ZoneLayout, type ZoneMap } from "@/lib/battlemap/zones";
 import { zoneRowFor, type ZoneNamed, type ZoneShape, type ZoneTone } from "@/lib/battlemap/zones-spells";
+import { blastPickOf, blastShape, blastSummary, blastTemplate, type AreaShape } from "@/lib/battlemap/area-shape";
+import { templateTiles } from "@/lib/battlemap/template";
 import type { XY } from "@/lib/battlemap/types";
 
 // What the caster picks: a point (a burst's centre), a wall (its first
@@ -33,6 +38,10 @@ export type HandArea = {
   tone: ZoneTone;
   // The spell row's own line, for the aim bar ("difficult terrain; ...").
   summary: string;
+  // An instant blast's template (Fireball's sphere, Burning Hands' cone):
+  // nothing stays on the ground, and the creatures on its squares are the
+  // ones it catches. Absent for a lasting area.
+  blast?: AreaShape;
 };
 
 export type AreaPick = { at?: XY; toward?: XY };
@@ -48,6 +57,46 @@ export function areaFor(named: ZoneNamed, slotLevel: number | null = null): Hand
   const pick: AreaPickKind =
     row.shape === "aura" || row.self ? "none" : row.shape === "line" ? "direction" : row.shape === "wall" ? "wall" : "point";
   return { spell, ...(runsAs ? { runsAs } : {}), slotLevel, pick, shape: row.shape, tone: row.tone, summary: row.summary };
+}
+
+// The colour a blast is drawn in, by what it deals.
+const BLAST_TONES: Record<string, ZoneTone> = {
+  fire: "fire",
+  cold: "frost",
+  lightning: "storm",
+  thunder: "storm",
+  radiant: "radiant",
+  necrotic: "gloom",
+  poison: "poison",
+  acid: "poison",
+  force: "force",
+  psychic: "hush",
+};
+
+// An instant blast's area for its card, read from the spell's own words (or
+// the SRD row of its name); null for a spell with a lasting area or none.
+export function blastAreaFor(
+  named: ZoneNamed,
+  text: { desc?: string; range?: string },
+  slotLevel: number | null = null,
+  damageType = "",
+): HandArea | null {
+  if (zoneRowFor(named)) return null;
+  const spell = typeof named === "string" ? named : named.spell;
+  const runsAs = typeof named === "string" ? undefined : named.runsAs;
+  const blast = blastShape(runsAs ?? spell, runsAs ? undefined : text) ?? (runsAs ? blastShape(spell, text) : null);
+  if (!blast) return null;
+  const shape: ZoneShape = blast.shape === "cube" ? "cube" : blast.shape === "cone" || blast.shape === "line" ? "line" : "sphere";
+  return {
+    spell,
+    ...(runsAs ? { runsAs } : {}),
+    slotLevel,
+    pick: blastPickOf(blast),
+    shape,
+    tone: BLAST_TONES[damageType.toLowerCase()] ?? "force",
+    summary: blastSummary(blast),
+    blast,
+  };
 }
 
 const same = (a: XY | undefined, b: XY | undefined) => Boolean(a && b && a.x === b.x && a.y === b.y);
@@ -96,6 +145,10 @@ export function hoverPick(area: HandArea, pick: AreaPick, hover: XY | null): Are
 // The squares the engine lays for this pick, or null when the pick does not
 // fix them yet (a burst with no centre, a line with no direction).
 export function areaCells(area: HandArea, pick: AreaPick, map: ZoneMap, caster: XY | null): ZoneLayout | null {
+  if (area.blast) {
+    const spec = blastTemplate(area.blast, { caster, ...(pick.at ? { at: pick.at } : {}), ...(pick.toward ? { toward: pick.toward } : {}) });
+    return spec ? { cells: templateTiles(map, spec) } : null;
+  }
   const row = zoneRowFor(area);
   if (!row) return null;
   let origin: XY | null;
@@ -117,7 +170,7 @@ export function areaCells(area: HandArea, pick: AreaPick, map: ZoneMap, caster: 
 // The pick in words, for the aim bar and the sentence the engine reads.
 export function describePick(area: HandArea, pick: AreaPick): string {
   const square = (point: XY) => `(${point.x},${point.y})`;
-  if (area.pick === "none") return "centred on you";
+  if (area.pick === "none") return area.blast ? "around me" : "centred on you";
   if (area.pick === "direction") return pick.toward ? `toward ${square(pick.toward)}` : "";
   if (area.pick === "wall") {
     if (!pick.at) return "";
@@ -132,9 +185,13 @@ export function describePick(area: HandArea, pick: AreaPick): string {
 export function pickHint(area: HandArea, pick: AreaPick): string {
   switch (area.pick) {
     case "none":
-      return "It is laid around you.";
+      return area.blast ? "It bursts around you." : "It is laid around you.";
     case "direction":
-      return pick.toward ? "Tap another square to turn it." : "Tap the board where the line blows toward.";
+      return pick.toward
+        ? "Tap another square to turn it."
+        : area.blast
+          ? `Tap the board where the ${area.blast.shape} points.`
+          : "Tap the board where the line blows toward.";
     case "wall":
       return !pick.at
         ? "Tap the board where the wall begins."

@@ -121,6 +121,7 @@ import { gateAiCall } from "@/lib/dm/ai-gate";
 import { characterAwaitingPlayer } from "@/lib/dm/player-word";
 import { enemiesDue, enemiesOwedTurn, personRunsTable } from "@/lib/dm/enemies-due";
 import { noteTurnHead, settleTurnWarmup, turnHeadKey, warmNextTurn } from "@/lib/dm/turn-warmup";
+import { directContextFor } from "@/lib/dm/direct-context";
 import { DIRECT_CALL_ID_PREFIX, directCardCall, intentAnswered, intentCorrection, intentNeedsTool, type MessageIntent, type PlayedCard, type TurnCall } from "@/lib/dm/intent-logic";
 import type { SpellMech } from "@/lib/srd/spell-mech-types";
 import { handleCompleteBeat } from "@/lib/dm/arc";
@@ -2552,13 +2553,12 @@ function cardsPlayed(context: TurnContext): PlayedCard[] {
 // ("only if he draws first" is typed, and a typed line carries no card).
 type DirectCard = { messageId: string; name: string; args: Record<string, unknown> };
 function directCards(context: TurnContext): DirectCard[] {
-  const inFight = Boolean(getActiveEncounter(context.campaign.id));
+  const authors = spellAuthorsFor(context.campaign);
   return playerLinesSinceDm(context.campaign.id).flatMap((message) => {
     if (!message.intent || !message.characterId) {
       return [];
     }
-    const mech = cardMech(context, message.intent);
-    const call = directCardCall(message.intent, message.characterId, { inFight, resolution: mech?.resolution ?? null, area: Boolean(mech?.area) });
+    const call = directCardCall(message.intent, message.characterId, directContextFor(context.campaign.id, message.intent, authors));
     return call ? [{ messageId: message.id, ...call }] : [];
   });
 }

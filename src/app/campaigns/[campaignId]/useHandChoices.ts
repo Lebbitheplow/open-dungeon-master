@@ -9,7 +9,7 @@ import { HAND_AIM_ASK_EVENT, HAND_AREA_EVENT, type AreaPick, type HandAreaDetail
 // for the swing, Ready's trigger, a card's choice, and the squares an area
 // spell is laid on, picked on the board (BoardAreaAim.tsx). Split from
 // Hand.tsx, which raises the card and sends it.
-export function useHandChoices(picked: HandCard | null) {
+export function useHandChoices(picked: HandCard | null, aimId: string | null = null) {
   const [optionIds, setOptionIds] = useState<HandAttackOptionId[]>([]);
   const [trigger, setTrigger] = useState("");
   const [choice, setChoice] = useState<string | null>(null);
@@ -32,9 +32,9 @@ export function useHandChoices(picked: HandCard | null) {
   const aimingAt = picked?.target ?? null;
   const aimingArea = picked?.area ?? null;
   const announce = useCallback(() => {
-    const detail: HandAimDetail = { active: aimingId !== null, cardId: aimingId, target: aimingAt, area: aimingArea, pick: areaPick };
+    const detail: HandAimDetail = { active: aimingId !== null, cardId: aimingId, target: aimingAt, area: aimingArea, pick: areaPick, aimId };
     window.dispatchEvent(new CustomEvent(HAND_AIM_EVENT, { detail }));
-  }, [aimingId, aimingAt, aimingArea, areaPick]);
+  }, [aimingId, aimingAt, aimingArea, areaPick, aimId]);
   useEffect(() => announce(), [announce]);
   useEffect(() => {
     // A board opened after the card was raised asks for it again.

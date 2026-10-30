@@ -40,6 +40,25 @@ const sefa = world.addHero({
   spellcasting: { ability: "wis", slots: { 1: { max: 4, used: 0 }, 2: { max: 2, used: 0 } }, known: [], prepared: ["Cure Wounds", "Bless"], cantrips: ["Sacred Flame"] },
 });
 
+// A fifth-level evoker for the blasts (issue 570: the engine catches who
+// stands in an area laid on the board).
+const vex = world.addHero({
+  name: "Vex",
+  class: "wizard",
+  level: 5,
+  maxHp: 30,
+  abilities: { int: 17, dex: 14 },
+  equipment: [{ name: "Dagger", qty: 1 }],
+  spellcasting: {
+    ability: "int",
+    slots: { 1: { max: 4, used: 0 }, 2: { max: 3, used: 0 }, 3: { max: 2, used: 0 } },
+    known: [],
+    prepared: ["Fireball", "Burning Hands", "Thunderwave", "Lightning Bolt"],
+    cantrips: ["Fire Bolt"],
+    spellbook: ["Fireball", "Burning Hands", "Thunderwave", "Lightning Bolt"],
+  },
+});
+
 async function stage(whose = kara) {
   await kit.endFight();
   await kit.fight(1);
@@ -292,6 +311,106 @@ await test("Out of a fight an attack card is not resolved ahead of the model.", 
     intent: { card: "attack", targetKind: "enemy", targetId: "nobody", targetName: "the merchant" },
   });
   assert.equal(toolCalls(model.requests[0]).length, 0);
+});
+
+// ---- issue 570: the engine works out who stands in a blast ----
+
+// Three goblins and the party on an open field: two goblins and Kara where a
+// Fireball centred on (10,5) reaches, one goblin far off.
+async function stageBlast() {
+  await kit.endFight();
+  await kit.fight(3);
+  for (const hero of [kara, iris, sefa, vex]) {
+    world.patch(hero.id, { currentHp: hero.maxHp, conditions: [], conditionMeta: {} });
+  }
+  world.patch(vex.id, { spellcasting: { ...world.sheet(vex.id).spellcasting, slots: { 1: { max: 4, used: 0 }, 2: { max: 3, used: 0 }, 3: { max: 2, used: 0 } } } });
+  const [near, close, far] = world.enemies();
+  for (const enemy of [near, close, far]) kit.setEnemy(enemy.id, { maxHp: 200, currentHp: 200 });
+  kit.place(vex.id, 2, 5);
+  kit.place(near.id, 10, 5);
+  kit.place(close.id, 12, 7);
+  kit.place(far.id, 22, 5);
+  kit.place(kara.id, 9, 4);
+  kit.place(iris.id, 2, 9);
+  kit.place(sefa.id, 3, 9);
+  kit.giveTurn(vex.id);
+  return { near, close, far };
+}
+
+await test("A Fireball laid on a square is cast by the engine, which catches every creature standing in the burst, a friend included, and nobody outside it.", async () => {
+  const { near, close, far } = await stageBlast();
+  model.script([reply({ text: "Fire blooms across the clearing." })]);
+  await model.turn(world, "I cast Fireball centred on (10,5) using a level 3 slot.", vex.id, vex.userId, {
+    intent: { card: "spell", spell: "Fireball", slotLevel: 3, atX: 10, atY: 5 },
+  });
+  assert.equal(model.requests.length, 1, "one model call: the narration");
+  const first = firstCall(model.requests[0]);
+  assert.equal(first?.name, "aoe_damage", JSON.stringify(toolCalls(model.requests[0])));
+  assert.equal(first.args.casterCharacterId, vex.id);
+  assert.equal(first.args.atX, 10);
+  assert.equal(first.args.enemyIds, undefined, "the card names nobody: the engine reads the board");
+  const [result] = results(model.requests[0]);
+  assert.ok(result && !result.error, JSON.stringify(result));
+  const told = JSON.stringify(result);
+  assert.ok(told.includes(near.displayName) && told.includes(close.displayName), `both goblins in the burst: ${told.slice(0, 400)}`);
+  assert.ok(told.includes("Kara"), "Kara stands in it too, and burns");
+  assert.ok(!told.includes(far.displayName), "the goblin across the field is untouched");
+  assert.equal(world.enemies().find((enemy) => enemy.id === far.id).currentHp, 200);
+  assert.equal(world.sheet(vex.id).spellcasting.slots[3].used, 1, "one slot for the whole burst");
+});
+
+await test("Burning Hands aimed toward a square fans out from beside its caster and catches the goblin in front of them.", async () => {
+  const { near, far } = await stageBlast();
+  kit.place(near.id, 3, 5);
+  model.script([reply({ text: "Flame sheets from Vex's fingers." })]);
+  await model.turn(world, "I cast Burning Hands toward (6,5) using a level 1 slot.", vex.id, vex.userId, {
+    intent: { card: "spell", spell: "Burning Hands", slotLevel: 1, towardX: 6, towardY: 5 },
+  });
+  const first = firstCall(model.requests[0]);
+  assert.equal(first?.name, "aoe_damage", JSON.stringify(toolCalls(model.requests[0])));
+  const [result] = results(model.requests[0]);
+  const told = JSON.stringify(result);
+  assert.ok(!result.error && told.includes(near.displayName), told.slice(0, 300));
+  assert.deepEqual((result.results ?? []).map((entry) => entry.target), [near.displayName], "nobody behind the cone, and never its caster");
+  assert.equal(world.enemies().find((enemy) => enemy.id === far.id).currentHp, 200);
+});
+
+await test("A blast laid where nobody stands is sent back to be aimed again, and no slot is spent.", async () => {
+  await stageBlast();
+  model.script([reply({ text: "Vex hesitates." }), reply({ text: "Vex hesitates." })]);
+  await model.turn(world, "I cast Fireball centred on (16,0) using a level 3 slot.", vex.id, vex.userId, {
+    intent: { card: "spell", spell: "Fireball", slotLevel: 3, atX: 16, atY: 0 },
+  });
+  const [result] = results(model.requests[0]);
+  assert.match(result.error ?? "", /catches nobody/);
+  assert.equal(result.retry, true);
+  assert.equal(world.sheet(vex.id).spellcasting.slots[3].used, 0, "nothing was spent");
+});
+
+await test("The model may lay a blast itself and name nobody: aoe_damage catches everyone inside the placement.", async () => {
+  const { near, close, far } = await stageBlast();
+  model.script([
+    reply({ calls: [call("aoe_damage", { casterCharacterId: vex.id, spell: "Fireball", level: 3, atX: 11, atY: 6 })] }),
+    reply({ text: "The burst rolls over the goblins." }),
+  ]);
+  await model.turn(world, "I throw a fireball at the goblins!", vex.id, vex.userId);
+  const done = model.requests.at(-1);
+  const result = results(done).find((entry) => entry && (entry.error || /Fireball/.test(JSON.stringify(entry))));
+  const told = JSON.stringify(result);
+  assert.ok(result && !result.error, told);
+  assert.ok(told.includes(near.displayName) && told.includes(close.displayName) && !told.includes(far.displayName), told.slice(0, 400));
+});
+
+await test("Off the battle map, or aimed at one creature with no square, a blast stays with the model; a lasting area laid on a square does too.", () => {
+  const card = { card: "spell", spell: "Fireball", slotLevel: 3, targetKind: "enemy", targetId: "goblin-1" };
+  assert.equal(directCardCall({ ...card, atX: 4, atY: 4 }, vex.id, { inFight: true, resolution: "save", area: true }), null, "no board: the DM's word places it");
+  assert.equal(directCardCall(card, vex.id, { inFight: true, resolution: "save", area: true, blast: "point" }), null, "no square picked");
+  assert.deepEqual(
+    directCardCall({ ...card, atX: 4, atY: 4 }, vex.id, { inFight: true, resolution: "save", area: true, blast: "point" }),
+    { name: "aoe_damage", args: { casterCharacterId: vex.id, spell: "Fireball", level: 3, atX: 4, atY: 4 } },
+  );
+  assert.equal(directCardCall({ card: "spell", spell: "Burning Hands", slotLevel: 1, atX: 4, atY: 4 }, vex.id, { inFight: true, resolution: "save", area: true, blast: "direction" }), null, "a cone needs its direction");
+  assert.equal(directCardCall({ card: "spell", spell: "Web", slotLevel: 2, atX: 5, atY: 6 }, iris.id, { inFight: true, resolution: "save", area: true }), null, "a Web bites when its zone says");
 });
 
 model.close();
