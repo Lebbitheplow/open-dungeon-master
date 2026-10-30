@@ -4,6 +4,7 @@ import { insertCharacterEvent } from "@/lib/db/character-events";
 import { insertFact } from "@/lib/db/facts";
 import { getNpcByName, markNpcMet, nearestNpcName, setNpcAttitude, standsBehindLiveCompanion, type Npc } from "@/lib/db/npcs";
 import { companionNpcFor } from "@/lib/db/companion-npcs";
+import { openPartyBonds } from "@/lib/dm/party-bonds";
 import { settleConsciences } from "@/lib/dm/conscience";
 import {
   ensureRelationship,
@@ -100,8 +101,13 @@ export function resolveActor(
 
 export function openLedger(campaign: Campaign, sheet: CharacterSheet, subject: Subject): Relationship {
   // A moment between a character and an NPC means the party has met them
-  // (Npc.metAt): a reaction roll no longer applies.
+  // (Npc.metAt): a reaction roll no longer applies, and at that first
+  // meeting every character's bond with them opens, not only this one's
+  // (issue 580). The caller tells the table.
   if (subject.npc) {
+    if (!subject.npc.metAt) {
+      openPartyBonds(campaign, subject);
+    }
     markNpcMet(subject.npc.id);
   }
   return (
@@ -182,6 +188,9 @@ export function recordMilestone(
       pinned: true,
       source: "manual",
     });
+    // "The whole table knows": every seat's Facts list reads it now, not on
+    // the next reload.
+    publishEphemeral(campaign.id, "facts_updated", {});
   }
   // Someone who has taken a real step with a character is not indifferent to
   // the party any more.

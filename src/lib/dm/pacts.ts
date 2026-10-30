@@ -54,7 +54,7 @@ import {
 import { firePact } from "@/lib/dm/pact-fire";
 import { publicItemProposal } from "@/lib/dm/proposal-view";
 import { publishRelationshipsUpdated } from "@/lib/dm/relationship-subject";
-import { friendshipTier, tierIndex } from "@/lib/dm/relationship-logic";
+import { friendshipTier, hasStanding, tierIndex } from "@/lib/dm/relationship-logic";
 import { secretRoll } from "@/lib/dm/roll-card";
 import { deliverWhisper } from "@/lib/dm/whispers";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
@@ -126,7 +126,7 @@ function regardOf(campaignId: string, name: string, sheets: readonly CharacterSh
   const key = textKey(name);
   return partyRegard(
     listRelationships(campaignId)
-      .filter((row) => row.status === "active" && party.has(row.characterId) && textKey(row.subjectName) === key)
+      .filter((row) => row.status === "active" && party.has(row.characterId) && textKey(row.subjectName) === key && hasStanding(row))
       .map((row) => row.approval),
   );
 }

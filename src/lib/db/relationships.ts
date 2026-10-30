@@ -1,6 +1,12 @@
 import { compareNames, textKey } from "@/lib/language/text-logic";
 import { getDatabase, nowIso } from "@/lib/db/core";
 import {
+  addFlag,
+  addMemory,
+  DIED_FLAG,
+  endedByDeath,
+  foldMemories,
+  hasStanding,
   parseBeatCounts,
   parseFlags,
   parseMemories,
@@ -274,7 +280,9 @@ export function partRelationshipsWithSubject(
   return parted;
 }
 
-// The reverse: someone the party lost is back in reach.
+// The reverse: someone the party lost is back in reach. A companion who died
+// and is written back in was brought back to life, so a bond the death
+// closed opens again too; any other ending stays ended.
 export function rejoinRelationshipsWithSubject(
   campaignId: string,
   subjectName: string,
@@ -282,17 +290,88 @@ export function rejoinRelationshipsWithSubject(
 ): Relationship[] {
   const rejoined: Relationship[] = [];
   for (const relationship of listRelationshipsForSubject(campaignId, subjectName)) {
-    if (relationship.status !== "parted") {
+    if (relationship.status !== "parted" && !endedByDeath(relationship)) {
       continue;
     }
     const updated = patchRelationship(relationship.id, {
       status: "active",
       apartChapters: 0,
       subjectId,
+      flags: relationship.flags.filter((flag) => flag !== DIED_FLAG),
     });
     if (updated) {
       rejoined.push(updated);
     }
   }
   return rejoined;
+}
+
+// Someone died (issue 580): every character's bond with them closes, not only
+// the one pair a relationship_end named. A bond left open went on counting
+// the chapters they were away, and three chapters on the GM was told to bring
+// the dead back into the story; a companion who fell was only parted, the
+// same way. `memory` words the death for each character's own record. A bond
+// that already ended another way (a falling-out, a betrayal) is left as it
+// ended, so bringing the dead back to life never reopens it.
+export function endRelationshipsWithSubject(
+  campaignId: string,
+  subjectName: string,
+  memory: (relationship: Relationship) => string,
+): Relationship[] {
+  const ended: Relationship[] = [];
+  for (const relationship of listRelationshipsForSubject(campaignId, subjectName)) {
+    if (relationship.status === "ended") {
+      continue;
+    }
+    const updated = patchRelationship(relationship.id, {
+      status: "ended",
+      apartChapters: 0,
+      flags: addFlag(relationship.flags, DIED_FLAG),
+      memories: addMemory(relationship.memories, { kind: "death", text: memory(relationship), at: new Date().toISOString() }),
+    });
+    if (updated) {
+      ended.push(updated);
+    }
+  }
+  return ended;
+}
+
+// An NPC renamed or merged into another (src/lib/db/npcs.ts): their bonds
+// follow them. Bonds are kept by the subject's name, so a rename left every
+// bond under a name nobody answers to any more, and the next moment opened a
+// fresh one at neutral beside it. Where a character already has a bond under
+// the new name that holds something, that one is kept as it stands (the lead
+// judged it the real one) and the other's memories join it; one opened at
+// neutral and never moved gives way to the bond that has history. Returns
+// how many bonds moved, for the caller to tell the table.
+export function moveRelationshipsToSubject(
+  campaignId: string,
+  fromName: string,
+  toName: string,
+  subjectId: string,
+): number {
+  if (textKey(fromName) === textKey(toName)) {
+    return 0;
+  }
+  const db = getDatabase();
+  let moved = 0;
+  for (const relationship of listRelationshipsForSubject(campaignId, fromName)) {
+    moved += 1;
+    const keeper = getRelationship(campaignId, relationship.characterId, toName);
+    if (keeper && (hasStanding(keeper) || !hasStanding(relationship))) {
+      patchRelationship(keeper.id, { memories: foldMemories(keeper.memories, relationship.memories) });
+      db.prepare(`DELETE FROM relationships WHERE id = ?`).run(relationship.id);
+      continue;
+    }
+    if (keeper) {
+      db.prepare(`DELETE FROM relationships WHERE id = ?`).run(keeper.id);
+    }
+    db.prepare(`UPDATE relationships SET subject_name = ?, subject_id = ?, updated_at = ? WHERE id = ?`).run(
+      toName.trim(),
+      subjectId || relationship.subjectId,
+      nowIso(),
+      relationship.id,
+    );
+  }
+  return moved;
 }

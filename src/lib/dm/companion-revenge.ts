@@ -1,3 +1,4 @@
+import { hasStanding } from "@/lib/dm/relationship-logic";
 import { resolveMonster, bestiaryFor } from "@/lib/bestiary";
 import { getCampaignById, type Campaign } from "@/lib/db/campaigns";
 import { deleteCalendarEvent, insertCalendarEvent } from "@/lib/db/calendar-events";
@@ -53,7 +54,7 @@ export function standingWithParty(campaignId: string, name: string): number | nu
   const party = new Set(listSheets(campaignId).filter((sheet) => !sheet.isCompanion).map((sheet) => sheet.id));
   const key = textKey(name);
   const approvals = listRelationships(campaignId)
-    .filter((entry) => entry.status !== "ended" && party.has(entry.characterId) && textKey(entry.subjectName) === key)
+    .filter((entry) => entry.status !== "ended" && party.has(entry.characterId) && textKey(entry.subjectName) === key && hasStanding(entry))
     .map((entry) => entry.approval);
   return approvals.length ? Math.min(...approvals) : null;
 }

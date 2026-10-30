@@ -1,3 +1,4 @@
+import { hasStanding } from "@/lib/dm/relationship-logic";
 import { allocateSeq, getCampaignById, type Campaign } from "@/lib/db/campaigns";
 import { getBattleMapForEncounter, getTokenByRef } from "@/lib/db/battle-maps";
 import { companionConduct, saveConduct } from "@/lib/db/companion-conduct";
@@ -81,7 +82,7 @@ function conscientious(campaign: Campaign, ref: unknown): { sheet: CharacterShee
 export function standingWith(campaignId: string, companionName: string, characterId: string): number | null {
   const key = textKey(companionName);
   const bond = listRelationships(campaignId).find(
-    (entry) => entry.status === "active" && entry.characterId === characterId && textKey(entry.subjectName) === key,
+    (entry) => entry.status === "active" && entry.characterId === characterId && textKey(entry.subjectName) === key && hasStanding(entry),
   );
   return bond ? bond.approval : null;
 }

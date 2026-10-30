@@ -10,7 +10,6 @@ import { renderWitnessNote } from "@/lib/dm/witness-logic";
 import {
   getNpcByName,
   listCastNpcs,
-  markNpcMet,
   nearestNpcName,
   patchNpcAgency,
   setNpcAttitude,
@@ -19,6 +18,7 @@ import {
   type Npc,
 } from "@/lib/db/npcs";
 import { companionNpcFor } from "@/lib/db/companion-npcs";
+import { meetNpc } from "@/lib/dm/party-bonds";
 import { attractionFromTold, attractionWords, TOLD_ATTRACTION } from "@/lib/attraction";
 import { agencyFragment, derivePersonality, driftPersonality, nearestNpcHint } from "@/lib/dm/npc-logic";
 import { ensureRelationship, patchRelationship } from "@/lib/db/relationships";
@@ -82,7 +82,8 @@ export const socialTools: ToolDef[] = [
           attitude: {
             type: "string",
             enum: [...ATTITUDE_ENUM],
-            description: "How they currently feel about the party. Default: 'indifferent'.",
+            description:
+              "How they currently feel about the party. Default: 'indifferent'. On someone already registered it means the party is dealing with them now: they are met, and how they feel about each character is tracked from then on. So give it there only for someone in the scene, never to preset how someone the party has not met feels.",
           },
           trait: {
             type: "string",
@@ -240,8 +241,9 @@ export function handleSetNpc(campaign: Campaign, rawArguments: string): ToolResu
   }
   // gender is optional so an update need not restate it, which leaves a
   // registration free to forget it: the result then asks, never refuses.
-  const untold = !args.gender && !getNpcByName(campaign.id, args.name);
-  const npc = bootstrapAgency(
+  const before = getNpcByName(campaign.id, args.name);
+  const untold = !args.gender && !before;
+  const registered = bootstrapAgency(
     campaign,
     upsertNpc({
       campaignId: campaign.id,
@@ -255,14 +257,30 @@ export function handleSetNpc(campaign: Campaign, rawArguments: string): ToolResu
     }),
     { goal: args.goal, ambition: args.ambition },
   );
+  // The story bringing someone already registered into the party's dealings
+  // (issue 580): an attitude it shifts, or one given for someone the party
+  // has not met yet (the patron a bundle prepared as friendly, now
+  // travelling with them). That is meeting them: marked met, as Npc.metAt
+  // always said an attitude the story shifted would, and every character's
+  // bond with them opens. Never on the first registration, which is also how
+  // the GM notes a villain or a patron the party has only heard of.
+  // A restated "indifferent" is the default, which says nothing about the
+  // scene, so it alone is not a meeting: a stranger stays one for the
+  // reaction roll.
+  const shifted = Boolean(before && args.attitude && (args.attitude !== before.attitude || (!before.metAt && args.attitude !== "indifferent")));
+  const met = shifted ? meetNpc(campaign, registered, true) : { npc: registered, opened: 0 };
+  if (met.opened) {
+    publishRelationshipsUpdated(campaign.id);
+  }
+  const npc = met.npc;
   return {
     ok: true,
     npc: npc.name,
     attitude: npc.attitude,
     ...(npc.agency.goals.session ? { goal: npc.agency.goals.session.text } : {}),
     note: `${npc.name} is tracked as ${npc.attitude}. Their attitude persists until the story or a social_check changes it.${
-      untold ? " Their gender is not recorded: pass gender on a set_npc for them (Unknown if the story has not shown it)." : ""
-    }`,
+      shifted ? ` The party has met them now, and how ${npc.name} feels about each character is tracked from here.` : ""
+    }${untold ? " Their gender is not recorded: pass gender on a set_npc for them (Unknown if the story has not shown it)." : ""}`,
   };
 }
 
@@ -295,9 +313,14 @@ export function handleNpcReaction(
   // how they feel, not refused, since the model asked how to play them.
   const known = getNpcByName(campaign.id, args.name);
   if (known && (known.metAt || known.attitude !== "indifferent")) {
-    const npc = markNpcMet(
-      upsertNpc({ campaignId: campaign.id, name: args.name, trait: args.trait, location: args.location, gender: toldGender(args.gender) }).id,
-    ) ?? known;
+    const met = meetNpc(
+      campaign,
+      upsertNpc({ campaignId: campaign.id, name: args.name, trait: args.trait, location: args.location, gender: toldGender(args.gender) }),
+    );
+    if (met.opened) {
+      publishRelationshipsUpdated(campaign.id);
+    }
+    const npc = met.npc;
     return {
       ok: true,
       npc: npc.name,
@@ -332,8 +355,12 @@ export function handleNpcReaction(
     location: args.location,
     gender: toldGender(args.gender),
   });
-  // The roll is the meeting.
-  const npc = bootstrapAgency(campaign, markNpcMet(registered.id) ?? registered, {});
+  // The roll is the meeting, and every character's bond with them opens.
+  const met = meetNpc(campaign, registered);
+  if (met.opened) {
+    publishRelationshipsUpdated(campaign.id);
+  }
+  const npc = bootstrapAgency(campaign, met.npc, {});
   return {
     ok: true,
     npc: npc.name,
@@ -430,8 +457,11 @@ export function handleSocialCheck(
   });
   publishRoll(campaign.id, roll);
   turn.rollIds.push(roll.id);
-  // Talking someone round, or failing to, is dealing with them.
-  markNpcMet(npc.id);
+  // Talking someone round, or failing to, is dealing with them; the first
+  // time opens every character's bond with them, not only this one's.
+  if (meetNpc(campaign, npc).opened) {
+    publishRelationshipsUpdated(campaign.id);
+  }
 
   const outcome = resolveSocialCheck(rolled.total, npc.attitude);
   // The one-shift-per-exchange guard: an attitude that already moved this
