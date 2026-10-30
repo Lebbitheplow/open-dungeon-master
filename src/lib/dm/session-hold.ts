@@ -2,7 +2,7 @@ import { allocateSeq, claimRecap } from "@/lib/db/campaigns";
 import { getDatabase } from "@/lib/db/core";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { dmQueuePausedFor, enqueueDmJobFirst, pauseDmQueue, resumeDmQueue } from "@/lib/dm/queue";
-import { runResumeRecap } from "@/lib/dm/recap";
+import { runResumeRecap, type RecapSession } from "@/lib/dm/recap";
 import {
   SESSION_REASON,
   heldWorkRefusal,
@@ -87,9 +87,24 @@ export function startSession(campaignId: string, by: { id: string; username: str
   // The claim is the actions route's own, so the first action after the
   // start does not ask for a second recap of the same gap.
   if (recapOnStart(current.at, Date.now()) && claimRecap(campaignId, seq)) {
-    enqueueDmJobFirst(campaignId, () => runResumeRecap(campaignId));
+    const span = lastSessionSpan(campaignId, current.number);
+    enqueueDmJobFirst(campaignId, () => runResumeRecap(campaignId, span ?? undefined));
   }
   return { number };
+}
+
+// Where the session that just ended began and stopped, in the table's own
+// sequence: from the start that opened it (the campaign's first line, for
+// the first session) to the end that closed it.
+function lastSessionSpan(campaignId: string, number: number): RecapSession | null {
+  const ended = latestEventOfType(campaignId, ["session_ended"]);
+  if (!ended) {
+    return null;
+  }
+  const started = getDatabase()
+    .prepare(`SELECT MAX(seq) AS seq FROM campaign_events WHERE campaign_id = ? AND type = 'session_started' AND seq < ?`)
+    .get(campaignId, ended.seq) as { seq: number | null };
+  return { number, fromSeq: (started.seq ?? 0) + 1, toSeq: ended.seq };
 }
 
 // The hold lives in memory, so a restart would start every table's next

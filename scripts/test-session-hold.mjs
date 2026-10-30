@@ -197,6 +197,62 @@ await test("after a long gap the next session opens with a recap, and table talk
   t.world.close();
 });
 
+await test("the rule: a long session's recap keeps its first scene and its last lines whole, within the budget.", async () => {
+  const { sessionTranscript } = await import("../src/lib/dm/recap-logic.ts");
+  const lines = Array.from({ length: 300 }, (_, at) => ({ speaker: at % 2 ? "Player" : "GM", text: `Scene ${at}: ${"the tide comes in ".repeat(12)}` }));
+  const transcript = sessionTranscript(lines);
+  assert.ok(transcript.length <= 8_000, `over the budget: ${transcript.length}`);
+  assert.ok(transcript.startsWith("GM: Scene 0:"), "the session's first scene is in it");
+  const kept = transcript.split("\n");
+  assert.deepEqual(kept.slice(-10).map((line) => line.split(":")[1].trim()), lines.slice(-10).map((line) => line.text.split(":")[0]));
+  const order = kept.map((line) => Number(/Scene (\d+)/.exec(line)?.[1]));
+  assert.deepEqual(order, [...order].sort((a, b) => a - b), "in the order it was played");
+  assert.ok(kept.length > 20, "the middle is sampled, not dropped");
+  assert.equal(sessionTranscript([{ speaker: "GM", text: "One line." }]), "GM: One line.");
+});
+
+await test("each session's recap tells that session from its start, not the one before it (halr9000 on issue 586).", async () => {
+  const t = await table();
+  const model = await fakeModel();
+  await model.pointAt(t.world);
+  const say = (content) => {
+    const seq = campaigns.allocateSeq(t.world.campaignId);
+    messages.insertCampaignMessage({ campaignId: t.world.campaignId, seq, authorType: "dm", content });
+  };
+  const aWeekPasses = () =>
+    getDatabase()
+      .prepare(`UPDATE campaign_events SET payload_json = json_set(payload_json, '$.at', ?) WHERE campaign_id = ? AND type = 'session_ended'`)
+      .run(Date.now() - 7 * 24 * 60 * 60 * 1000, t.world.campaignId);
+  const recapAsked = () => JSON.stringify(model.requests.filter((body) => JSON.stringify(body).includes("Previously, on")).at(-1) ?? {});
+
+  say("You board the ferry at dawn.");
+  for (let at = 0; at < 30; at += 1) say(`The river winds on, bend ${at}.`);
+  say("You reach the drowned gate.");
+  await t.post(t.lead, { action: "end" });
+  aWeekPasses();
+  model.script([reply({ text: "Last time, you rode the ferry to the drowned gate." })]);
+  await t.post(t.lead, { action: "start" });
+  await settleQueue(t.world.campaignId);
+  const first = recapAsked();
+  assert.match(first, /recap of session 1/);
+  assert.ok(first.includes("ferry at dawn"), "the first session's opening scene, thirty lines back");
+  assert.ok(first.includes("drowned gate"), "where it stopped");
+
+  say("Beyond the gate stands a lighthouse with no keeper.");
+  await t.post(t.lead, { action: "end" });
+  aWeekPasses();
+  model.script([reply({ text: "Last time, you found the empty lighthouse." })]);
+  await t.post(t.lead, { action: "start" });
+  await settleQueue(t.world.campaignId);
+  const second = recapAsked();
+  assert.match(second, /recap of session 2/);
+  assert.ok(second.includes("lighthouse with no keeper"), "the second session's story");
+  assert.ok(!second.includes("ferry at dawn"), "the first session's story is not the second's");
+  assert.equal(t.lines().filter((line) => line.startsWith("Previously:")).length, 2);
+  model.close();
+  t.world.close();
+});
+
 await test("a restart holds a table between sessions again, and leaves a started one alone.", async () => {
   const t = await table();
   await t.post(t.lead, { action: "end" });
