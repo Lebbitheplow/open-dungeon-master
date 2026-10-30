@@ -594,7 +594,9 @@ export function describeSheet(
       ? " | DEAD"
       : sheet.deathSaves.stable
         ? " | STABLE at 0 HP (unconscious)"
-        : ` | DYING: ${sheet.deathSaves.successes} death-save successes, ${sheet.deathSaves.failures} failures`
+        // The GM has no tool for these and must not invent them: out of
+        // combat they come from game time passing (condition-tick.ts).
+        : ` | DYING: ${sheet.deathSaves.successes} death-save successes, ${sheet.deathSaves.failures} failures (server-rolled: each of their turns in combat, every 6 seconds of game time outside it)`
     : "";
   // Multiclass header: "barbarian 3 [Berserker] / rogue 2 (level 5)". A
   // workshop class goes by its name: its id ("homebrew-<id>") tells the GM

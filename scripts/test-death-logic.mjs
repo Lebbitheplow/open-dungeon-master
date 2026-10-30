@@ -5,9 +5,16 @@ import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
-const { freshDeathTrack, isMassiveDamage, onDamageAtZero, applyDeathSaveRoll } = await import(
-  "../src/lib/dm/death-logic.ts"
-);
+const {
+  freshDeathTrack,
+  isMassiveDamage,
+  onDamageAtZero,
+  applyDeathSaveRoll,
+  deathSavesInMinutes,
+  dyingLeftAlone,
+  isDying,
+  MOST_SAVES_TO_SETTLE,
+} = await import("../src/lib/dm/death-logic.ts");
 
 let passed = 0;
 function test(name, fn) {
@@ -73,6 +80,35 @@ test("9 or lower fails; three failures kill", () => {
   const fatal = applyDeathSaveRoll({ ...freshDeathTrack(), failures: 2 }, 5);
   assert.equal(fatal.outcome, "dead");
   assert.equal(fatal.track.dead, true);
+});
+
+test("no fall outlasts five saves, so a minute settles any of them", () => {
+  // Every order of results ends by the fifth roll.
+  for (let mask = 0; mask < 32; mask += 1) {
+    let track = freshDeathTrack();
+    let rolls = 0;
+    while (!track.stable && !track.dead && rolls < 10) {
+      track = applyDeathSaveRoll(track, (mask >> rolls) & 1 ? 15 : 5).track;
+      rolls += 1;
+    }
+    assert.ok(rolls <= MOST_SAVES_TO_SETTLE, `mask ${mask} took ${rolls} saves`);
+  }
+  assert.equal(deathSavesInMinutes(0), 0);
+  assert.equal(deathSavesInMinutes(0.25), 2);
+  assert.equal(deathSavesInMinutes(1), MOST_SAVES_TO_SETTLE);
+  assert.equal(deathSavesInMinutes(600), MOST_SAVES_TO_SETTLE);
+});
+
+test("the fallen are left alone only when nobody on the party's side is conscious", () => {
+  const dying = { currentHp: 0, deathSaves: freshDeathTrack(), conditions: ["unconscious", "prone"] };
+  const stable = { currentHp: 0, deathSaves: { ...freshDeathTrack(), stable: true }, conditions: ["unconscious"] };
+  const standing = { currentHp: 9, deathSaves: null, conditions: [] };
+  const asleep = { currentHp: 9, deathSaves: null, conditions: ["Unconscious"] };
+  assert.equal(isDying(dying), true);
+  assert.equal(isDying(stable), false);
+  assert.deepEqual(dyingLeftAlone([dying, stable]), [dying]);
+  assert.deepEqual(dyingLeftAlone([dying, asleep]), [dying]);
+  assert.deepEqual(dyingLeftAlone([dying, standing]), []);
 });
 
 console.log(`test-death-logic: ${passed} tests passed.`);
