@@ -406,11 +406,14 @@ export function resolveRollExpression(
     sheet && sheet.class && Array.isArray(sheet.equipment) && derivationKind
       ? acBreakdownFor(sheet)
       : null;
+  // Initiative is a Dexterity check (SRD 5.1 Using Ability Scores,
+  // Initiative), so the riders keyed to a check's ability read it as one.
+  const physicalAbility = derivationKind === "initiative" ? "dex" : derivationAbility;
   // SRD: armor worn without training = disadvantage on every STR- or
   // DEX-based ability check, skill check, and saving throw.
   const armorUntrained =
     Boolean(wornBreakdown?.unproficient) &&
-    (derivationAbility === "str" || derivationAbility === "dex");
+    (physicalAbility === "str" || physicalAbility === "dex");
   // Variant: Encumbrance. Past 10x Strength in pounds every physical roll
   // is at disadvantage; the pack is weighed from the sheet, and the table's
   // rule switch is the one thing the caller has to supply.
@@ -423,7 +426,7 @@ export function resolveRollExpression(
         })
       : null;
   const overloaded =
-    Boolean(load?.disadvantage) && encumbranceCovers(derivationAbility ?? null);
+    Boolean(load?.disadvantage) && encumbranceCovers(physicalAbility ?? null);
   // Effect conditions (bless, bane, guidance, haste...) add their dice and
   // advantage to the holder's own rolls; one-shot riders land in `spent`.
   const effectKind =

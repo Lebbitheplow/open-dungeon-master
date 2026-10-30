@@ -120,15 +120,8 @@ await test("using-ability-scores / Initiative: initiative is a Dexterity check, 
   world.patch(runner.id, { exhaustion: 0 });
 });
 
-await gap(
-  "ADV-03",
-  {
-    rule:
-      "using-ability-scores / Initiative: \"At the beginning of every combat, you roll initiative by making a Dexterity check.\" A Dexterity check at disadvantage (armor worn without training; heavily encumbered under Variant: Encumbrance, \"disadvantage on ability checks ... that use Strength, Dexterity, or Constitution\") is an initiative roll at disadvantage",
-    where: "src/lib/dm/rolls.ts resolveRollExpression (derivationAbility is unset for initiative, so armorUntrained and the encumbrance disadvantage never apply)",
-    severity: "medium",
-    note: "Conditions and exhaustion already reach initiative (rollDerivation, exhaustionRollState); the two riders keyed to the roll's ability do not, because initiative carries no ability.",
-  },
+await test(
+  "ADV-03: using-ability-scores / Initiative: \"At the beginning of every combat, you roll initiative by making a Dexterity check.\" A Dexterity check at disadvantage (armor worn without training; heavily encumbered under Variant: Encumbrance, \"disadvantage on ability checks ... that use Strength, Dexterity, or Constitution\") is an initiative roll at disadvantage",
   () => {
     world.patch(runner.id, {
       conditions: [],
