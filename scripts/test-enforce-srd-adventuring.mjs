@@ -152,15 +152,8 @@ world.patch(runner.id, { proficiencies: profs(), abilities: { str: 16, dex: 14, 
 
 // ---- Using Ability Scores: Variant: Encumbrance ----
 
-await gap(
-  "ADV-02",
-  {
-    rule:
-      "using-ability-scores / Variant: Encumbrance: \"When you use this variant, ignore the Strength column of the Armor table.\" Plate (Str 15) worn at Strength 13 with nothing else carried (65 lb, not in excess of 5 x 13) leaves the speed at 30",
-    where: "src/lib/srd/index.ts speedFor (subtracts acBreakdownFor's speedPenalty whether options.encumbrance is on or off)",
-    severity: "medium",
-    note: "Under the variant the engine takes both the armor table's -10 and the weight tiers; the board's move budget (battlemap/view.ts) and the prompt's speed both read speedFor with the variant flag.",
-  },
+await test(
+  "ADV-02: using-ability-scores / Variant: Encumbrance: \"When you use this variant, ignore the Strength column of the Armor table.\" Plate (Str 15) worn at Strength 13 with nothing else carried (65 lb, not in excess of 5 x 13) leaves the speed at 30",
   () => {
     world.patch(runner.id, { abilities: { str: 13, dex: 10, con: 10, int: 10, wis: 10, cha: 10 }, equipment: [{ name: "Plate", qty: 1 }], speed: 30, race: "human" });
     const sheet = world.sheet(runner.id);

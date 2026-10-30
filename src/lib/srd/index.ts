@@ -333,7 +333,11 @@ export function speedFor(
       })
     : null;
   const load = options.encumbrance ? (carried?.speedPenalty ?? 0) : 0;
-  const speed = Math.max(0, source.speed + bonus - breakdown.speedPenalty - load);
+  // The weight tiers replace the armor's Strength requirement: SRD 5.1
+  // Using Ability Scores, Variant: Encumbrance, "When you use this variant,
+  // ignore the Strength column of the Armor table."
+  const armorPenalty = options.encumbrance ? 0 : breakdown.speedPenalty;
+  const speed = Math.max(0, source.speed + bonus - armorPenalty - load);
   // Past the carrying capacity (Strength x 15, SRD 5.1 Lifting and
   // Carrying) the load can only be dragged: speed 5 feet, whatever the
   // table's encumbrance rule (src/lib/dm/load-rules.ts).
