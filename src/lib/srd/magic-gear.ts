@@ -51,6 +51,16 @@ export type ChargeRule = {
   regain?: string;
   // Spending the last charge rolls a d20; on a 1 the item is destroyed.
   lastChargeD20?: boolean;
+  // The last charge's d20 where a 1 leaves a lesser item in its place, by
+  // the name that item goes by (SRD 5.1, Staff of Striking: "On a 1, the
+  // staff becomes a nonmagical quarterstaff"; Staff of Power keeps its +2).
+  lastChargeBecomes?: string;
+  // The last charge's d20 where a 20 brings charges back (SRD 5.1, Staff of
+  // Power: "On a 20, the staff regains 1d8+2 charges").
+  lastChargeRegain?: string;
+  // What comes back returns at dusk, not dawn (SRD 5.1, Robe of Stars:
+  // "Daily at dusk, 1d6 removed stars reappear on the robe").
+  regainAtDusk?: boolean;
   // The item is gone (or no longer magic) once the last charge is spent.
   spentAway?: boolean;
   // A once-a-day power tracked as one charge: what it does.

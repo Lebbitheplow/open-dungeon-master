@@ -129,7 +129,10 @@ export function chargedItemUse(
   if (math.d20) {
     publishRoll(campaign, sheet, `${carried.name}: the last charge`, math.d20);
   }
-  const equipment = equipmentAfterSpend(sheet.equipment, carried, math.charges, math.destroyed);
+  if (math.regained) {
+    publishRoll(campaign, sheet, `${carried.name}: charges regained on a 20`, math.regained);
+  }
+  const equipment = equipmentAfterSpend(sheet.equipment, carried, math.charges, math.destroyed, math.becomes);
   writeCharges(campaign.id, sheet, equipment, "use_item", `${carried.name}: ${count} charge${count === 1 ? "" : "s"}`, turnId);
   if (cast) {
     recordItemCast(sheet.id, { spell: cast.spell, level: cast.level, item: carried.name, ...(cast.dc ? { saveDc: cast.dc } : {}) });
@@ -139,15 +142,20 @@ export function chargedItemUse(
     ok: true,
     used: carried.name,
     chargesSpent: count,
-    chargesLeft: math.destroyed ? 0 : math.charges,
+    chargesLeft: math.destroyed || math.becomes ? 0 : math.charges,
     ...(most ? { chargesMax: most } : {}),
     ...(math.destroyed ? { destroyed: true } : {}),
+    ...(math.becomes ? { becomes: math.becomes } : {}),
     ...(rule.daily ? { power: rule.daily } : {}),
     ...(cast ? { spellCast: cast.spell, spellLevel: cast.level, ...(cast.dc ? { saveDc: cast.dc } : {}) } : {}),
     note: [
-      `${count} charge${count === 1 ? "" : "s"} spent; ${math.destroyed ? "the item is gone" : `${math.charges} left`}${
-        rule.regain ? (rule.regain === "all" ? ", all back at dawn" : `, ${rule.regain} back at dawn`) : ""
-      }.`,
+      // A spell the item casts at will (Staff of the Woodlands' pass
+      // without trace) spends no charge.
+      count === 0
+        ? `No charge is spent; ${math.charges} left.`
+        : `${count} charge${count === 1 ? "" : "s"} spent; ${math.destroyed ? "the item is gone" : math.becomes ? `the item is a ${math.becomes} now` : `${math.charges} left`}${
+            rule.regain && !math.destroyed && !math.becomes ? (rule.regain === "all" ? `, all back at ${rule.regainAtDusk ? "dusk" : "dawn"}` : `, ${rule.regain} back at ${rule.regainAtDusk ? "dusk" : "dawn"}`) : ""
+          }.`,
       ...math.notes,
       cast
         ? `${sheet.name} casts ${cast.spell} at level ${cast.level} from ${carried.name}${cast.dc ? ` (save DC ${cast.dc})` : ""}. Resolve it now with the spell's own tool (aoe_damage, cast_at_enemy, heal, cast_buff) naming the spell: that cast spends no slot and uses the item's numbers.`

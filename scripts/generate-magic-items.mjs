@@ -26,11 +26,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3-multiple-ciphers";
 import { ADDED, DROPPED, REPLACED } from "./lib/magic-item-corrections.mjs";
-import { categoryBase, DAILY_POWERS, GEAR_RIDERS } from "./lib/magic-item-riders.mjs";
+import { categoryBase, COUNTED_USES, DAILY_POWERS, GEAR_RIDERS, LAST_CHARGE_BECOMES } from "./lib/magic-item-riders.mjs";
 import { nameBase } from "./lib/name-base.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const contentDb = join(root, "data", "content", "open5e.sqlite");
+const contentDb = process.env.CONTENT_DB_PATH || join(root, "data", "content", "open5e.sqlite");
 const outPath = join(root, "src", "lib", "classes", "magic-items.json");
 
 const ABILITY = {
@@ -229,22 +229,38 @@ function gearBonus(desc, category) {
 
 // An item's charges: how many it holds, what comes back at dawn, and what
 // happens when the last is spent. Read from the sentences every charged item
-// in the SRD is written in.
-function chargesOf(desc) {
+// in the SRD is written in. `match` is an SRD row's key, for the uses its
+// text does not call charges (COUNTED_USES) and the last-charge outcomes it
+// words its own way (LAST_CHARGE_BECOMES).
+function chargesOf(desc, match) {
   const DICE = "\\d+d\\d+(?:\\s*[+-]\\s*\\d+)?";
   const max =
     new RegExp(`\\b(?:has|have|starts with) (${DICE}|\\d+) charges\\b`, "i").exec(desc) ??
     /\bof its (\d+) charges\b/i.exec(desc);
   if (!max) {
-    return null;
+    return match && COUNTED_USES[match] ? { ...COUNTED_USES[match] } : null;
   }
   const regain = new RegExp(`regains? (all|${DICE}|\\d+) (?:of its )?(?:expended )?charges daily at dawn`, "i").exec(desc);
   const out = { max: /d/i.test(max[1]) ? max[1].replace(/\s+/g, "") : Number(max[1]) };
   if (regain) {
     out.regain = regain[1].toLowerCase() === "all" ? "all" : regain[1].replace(/\s+/g, "");
   }
-  if (/last charge, roll a d20\. On a 1,[^.]*destroyed/i.test(desc)) {
+  // The last charge's d20, as each staff and wand words it (SRD 5.1): a 1
+  // destroys it ("crumbles into ashes and is destroyed", "vanishes ... lost
+  // forever", "consumes and destroys the staff") or leaves a nonmagical item
+  // ("becomes a nonmagical quarterstaff"); a 20 brings charges back.
+  const one = /last charge, roll a d20\. On a 1,([^.]*)\./i.exec(desc)?.[1] ?? "";
+  const twenty = new RegExp(`last charge, roll a d20\\.(?: On a 1,[^.]*\\.)? On a 20,[^.]*regains (${DICE}) charges`, "i").exec(desc);
+  const nonmagical = /becomes a nonmagical (\w+)\s*$/i.exec(one);
+  if (match && LAST_CHARGE_BECOMES[match]) {
+    out.lastChargeBecomes = LAST_CHARGE_BECOMES[match];
+  } else if (nonmagical) {
+    out.lastChargeBecomes = nonmagical[1].charAt(0).toUpperCase() + nonmagical[1].slice(1).toLowerCase();
+  } else if (/destroy|lost forever/i.test(one)) {
     out.lastChargeD20 = true;
+  }
+  if (twenty) {
+    out.lastChargeRegain = twenty[1].replace(/\s+/g, "");
   }
   if (/destroyed when its last charge|last charge[^.]*(?:is destroyed|becomes nonmagical)|becomes nonmagical when you use the last charge/i.test(desc)) {
     out.spentAway = true;
@@ -309,7 +325,7 @@ function gearOf(row, desc, match) {
   if (authored?.cursed) {
     out.cursed = true;
   }
-  const charges = chargesOf(desc);
+  const charges = chargesOf(desc, srd ? match : null);
   if (charges) {
     out.charges = charges;
   } else if (srd && DAILY_POWERS[match]) {

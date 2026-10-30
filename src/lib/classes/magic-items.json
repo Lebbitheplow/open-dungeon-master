@@ -1176,6 +1176,21 @@
       ]
     },
     {
+      "name": "Cape of the Mountebank",
+      "match": "cape of the mountebank",
+      "slugs": [
+        "cape-of-the-mountebank",
+        "cape-of-the-mountebank-a5e"
+      ],
+      "requiresAttunement": false,
+      "effects": [],
+      "charges": {
+        "max": 1,
+        "regain": "all",
+        "daily": "the dimension door spell, leaving a cloud of smoke behind and arriving in another"
+      }
+    },
+    {
       "name": "Cephalopod Breastplate",
       "match": "cephalopod breastplate",
       "slugs": [
@@ -1561,7 +1576,8 @@
       "effects": [],
       "charges": {
         "max": 10,
-        "regain": "1d6+4"
+        "regain": "1d6+4",
+        "lastChargeD20": true
       }
     },
     {
@@ -3608,6 +3624,20 @@
       }
     },
     {
+      "name": "Necklace of Fireballs",
+      "match": "necklace of fireballs",
+      "slugs": [
+        "necklace-of-fireballs",
+        "necklace-of-fireballs-a5e"
+      ],
+      "requiresAttunement": false,
+      "effects": [],
+      "charges": {
+        "max": "1d6+3",
+        "spentAway": true
+      }
+    },
+    {
       "name": "Necklace of Prayer Beads",
       "match": "necklace of prayer beads",
       "slugs": [
@@ -4441,7 +4471,12 @@
           "kind": "save_bonus",
           "amount": 1
         }
-      ]
+      ],
+      "charges": {
+        "max": 6,
+        "regain": "1d6",
+        "regainAtDusk": true
+      }
     },
     {
       "name": "Robe of the Archmagi",
@@ -4587,7 +4622,8 @@
       "requiresAttunement": true,
       "effects": [],
       "charges": {
-        "max": 10
+        "max": 10,
+        "lastChargeBecomes": "Quarterstaff"
       }
     },
     {
@@ -4849,7 +4885,8 @@
       ],
       "charges": {
         "max": 10,
-        "regain": "1d6+4"
+        "regain": "1d6+4",
+        "lastChargeD20": true
       }
     },
     {
@@ -5312,7 +5349,8 @@
       "effects": [],
       "charges": {
         "max": 10,
-        "regain": "1d8+2"
+        "regain": "1d8+2",
+        "lastChargeBecomes": "Quarterstaff"
       }
     },
     {
@@ -5454,7 +5492,8 @@
       ],
       "charges": {
         "max": 10,
-        "regain": "1d6+4"
+        "regain": "1d6+4",
+        "lastChargeBecomes": "Quarterstaff"
       }
     },
     {
@@ -5488,7 +5527,8 @@
       "effects": [],
       "charges": {
         "max": 10,
-        "regain": "1d6+4"
+        "regain": "1d6+4",
+        "lastChargeD20": true
       }
     },
     {
@@ -5516,7 +5556,8 @@
       "charges": {
         "max": 12,
         "regain": "1d6",
-        "lastChargeD20": true
+        "lastChargeD20": true,
+        "lastChargeRegain": "1d10+2"
       }
     },
     {
@@ -5554,7 +5595,8 @@
       "requiresAttunement": false,
       "effects": [],
       "charges": {
-        "max": 20
+        "max": 20,
+        "lastChargeRegain": "1d8+2"
       }
     },
     {
@@ -5567,7 +5609,8 @@
       "effects": [],
       "charges": {
         "max": 10,
-        "regain": "1d6+4"
+        "regain": "1d6+4",
+        "lastChargeBecomes": "Quarterstaff"
       }
     },
     {
@@ -5598,7 +5641,9 @@
       ],
       "charges": {
         "max": 20,
-        "regain": "2d8+4"
+        "regain": "2d8+4",
+        "lastChargeBecomes": "+2 Quarterstaff",
+        "lastChargeRegain": "1d8+2"
       }
     },
     {
@@ -5639,7 +5684,8 @@
       "effects": [],
       "charges": {
         "max": 10,
-        "regain": "1d6+4"
+        "regain": "1d6+4",
+        "lastChargeBecomes": "Quarterstaff"
       }
     },
     {
@@ -5664,7 +5710,8 @@
       "effects": [],
       "charges": {
         "max": 10,
-        "regain": "1d6+4"
+        "regain": "1d6+4",
+        "lastChargeD20": true
       }
     },
     {
@@ -5677,7 +5724,8 @@
       "effects": [],
       "charges": {
         "max": 10,
-        "regain": "1d8+2"
+        "regain": "1d8+2",
+        "lastChargeBecomes": "Quarterstaff"
       }
     },
     {
@@ -5690,7 +5738,8 @@
       "effects": [],
       "charges": {
         "max": 10,
-        "regain": "1d6+4"
+        "regain": "1d6+4",
+        "lastChargeD20": true
       }
     },
     {
@@ -5738,7 +5787,8 @@
       "effects": [],
       "charges": {
         "max": 50,
-        "regain": "4d6+2"
+        "regain": "4d6+2",
+        "lastChargeRegain": "1d12+1"
       }
     },
     {
@@ -5866,7 +5916,8 @@
       "effects": [],
       "charges": {
         "max": 10,
-        "regain": "1d6+4"
+        "regain": "1d6+4",
+        "lastChargeBecomes": "Quarterstaff"
       }
     },
     {
@@ -5879,7 +5930,8 @@
       "effects": [],
       "charges": {
         "max": 10,
-        "regain": "1d6+4"
+        "regain": "1d6+4",
+        "lastChargeBecomes": "Quarterstaff"
       }
     },
     {
@@ -5892,7 +5944,8 @@
       "effects": [],
       "charges": {
         "max": 10,
-        "regain": "1d6+4"
+        "regain": "1d6+4",
+        "lastChargeBecomes": "Quarterstaff"
       }
     },
     {
@@ -5912,7 +5965,8 @@
       ],
       "charges": {
         "max": 20,
-        "regain": "2d8+4"
+        "regain": "2d8+4",
+        "lastChargeRegain": "1d8+2"
       }
     },
     {
@@ -6583,7 +6637,8 @@
         }
       ],
       "charges": {
-        "max": 20
+        "max": 20,
+        "lastChargeRegain": "1d8+2"
       }
     },
     {

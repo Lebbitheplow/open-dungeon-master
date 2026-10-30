@@ -27,7 +27,7 @@ const { test, gap, finish } = suite("test-enforce-srd-magic-items");
 const world = await openWorld();
 const { matchMagicItem, magicItemNamed, effectiveAbilities, mayAttune } = await import("../src/lib/srd/magic-items.ts");
 const { chargeRuleOf } = await import("../src/lib/srd/item-charge-rules.ts");
-const { spendChargesMath } = await import("../src/lib/dm/item-charges.ts");
+const { spendChargesMath, equipmentAfterSpend } = await import("../src/lib/dm/item-charges.ts");
 const { itemSpellCast, itemSpellsOf } = await import("../src/lib/srd/item-spells.ts");
 const { itemUseProblem, consumableEffect } = await import("../src/lib/dm/item-logic.ts");
 const { potionPlan } = await import("../src/lib/dm/consumables.ts");
@@ -140,33 +140,42 @@ await test("Worn standing effects the table holds apply only while worn and attu
 
 // ---- findings ----
 
-await gap(
-  "ITM-01",
-  {
-    rule: "A staff's last charge rolls a d20 as its text prints: Staff of Healing (staff-of-healing) 'If you expend the last charge, roll a d20. On a 1, the staff vanishes in a flash of light, lost forever'; Staff of Striking, Swarming Insects and the Woodlands lose their magic or are destroyed on a 1; Staff of Power 'On a 1, the staff retains its +2 bonus ... but loses all other properties. On a 20, the staff regains 1d8+2 charges'; Staff of the Magi 'On a 20, the staff regains 1d12+1 charges'",
-    where: "scripts/generate-magic-items.mjs chargesOf (lastChargeD20 only for text that says 'destroyed'), src/lib/dm/item-charges.ts spendChargesMath (knows only 'destroyed on a 1')",
-    severity: "medium",
-  },
-  () => {
-    const missed = [];
-    for (const name of ["Staff of Healing", "Staff of Striking", "Staff of Swarming Insects", "Staff of the Woodlands", "Staff of Power", "Staff of the Magi"]) {
-      assert.ok(/last charge, roll a d20/i.test(textOf(name)), name);
-      const item = { name, qty: 1, charges: 1 };
-      const spent = spendChargesMath(item, chargeRuleOf(item), 1);
-      if (!spent.d20) missed.push(name);
-    }
-    assert.equal(missed.length, 0, `staffs whose last charge rolls no d20, ${listed(missed)}`);
-  },
-);
+await test("A staff's last charge rolls a d20 as its text prints: Staff of Healing (staff-of-healing) 'If you expend the last charge, roll a d20. On a 1, the staff vanishes in a flash of light, lost forever'; Staff of Striking, Swarming Insects and the Woodlands lose their magic or are destroyed on a 1; Staff of Power 'On a 1, the staff retains its +2 bonus ... but loses all other properties. On a 20, the staff regains 1d8+2 charges'; Staff of the Magi 'On a 20, the staff regains 1d12+1 charges'", () => {
+  const missed = [];
+  for (const name of ["Staff of Healing", "Staff of Striking", "Staff of Swarming Insects", "Staff of the Woodlands", "Staff of Power", "Staff of the Magi"]) {
+    assert.ok(/last charge, roll a d20/i.test(textOf(name)), name);
+    const item = { name, qty: 1, charges: 1 };
+    const spent = spendChargesMath(item, chargeRuleOf(item), 1);
+    if (!spent.d20) missed.push(name);
+  }
+  assert.equal(missed.length, 0, `staffs whose last charge rolls no d20, ${listed(missed)}`);
+  // What each face does, by the item's own words.
+  const onFace = (name, ...faces) => {
+    world.clearDice();
+    world.dice(...faces);
+    const item = { name, qty: 1, charges: 1 };
+    const spent = spendChargesMath(item, chargeRuleOf(item), 1);
+    world.clearDice();
+    return spent;
+  };
+  assert.equal(onFace("Staff of Healing", 1).destroyed, true, "the Staff of Healing vanishes on a 1");
+  assert.equal(onFace("Staff of Swarming Insects", 1).destroyed, true, "the insects destroy the staff on a 1");
+  assert.equal(onFace("Staff of Striking", 1).becomes, "Quarterstaff", "a nonmagical quarterstaff on a 1");
+  assert.equal(onFace("Staff of the Woodlands", 1).becomes, "Quarterstaff", "a nonmagical quarterstaff on a 1");
+  const powerOne = onFace("Staff of Power", 1);
+  assert.equal(powerOne.becomes, "+2 Quarterstaff", "the Staff of Power keeps its +2 and loses the rest on a 1");
+  assert.equal(powerOne.destroyed, false);
+  const powerTwenty = onFace("Staff of Power", 20, 4);
+  assert.equal(powerTwenty.charges, 4 + 2, "1d8+2 charges back on a 20");
+  const magiOne = onFace("Staff of the Magi", 1);
+  assert.ok(!magiOne.destroyed && !magiOne.becomes && magiOne.charges === 0, "the Staff of the Magi's 1 does nothing");
+  assert.equal(onFace("Staff of the Magi", 20, 5).charges, 5 + 1, "1d12+1 charges back on a 20");
+  // The row a staff becomes takes its place in the pack, attuned to nobody.
+  const staff = { name: "Staff of Striking", qty: 1, equipped: true, attuned: true, charges: 1 };
+  assert.deepEqual(equipmentAfterSpend([staff], staff, 0, false, "Quarterstaff"), [{ name: "Quarterstaff", qty: 1, equipped: true }]);
+});
 
-await gap(
-  "ITM-02",
-  {
-    rule: "Magic Items, Spells (magic-items): 'Some magic items allow the user to cast a spell from the item ... doesn't expend any of the user's spell slots'; e.g. Eyes of Charming 'expend 1 charge ... to cast the charm person spell (save DC 13)', Medallion of Thoughts 'detect thoughts (save DC 13)', Necklace of Fireballs 'detonates as a 3rd-level fireball spell (save DC 15)', Orb of Dragonkind (artifacts) 'cure wounds (5th-level version, 3 charges), daylight, death ward, or scrying (save DC 18)'",
-    where: "src/lib/srd/item-spells.ts ROWS (use_item answers 'casts no spell the server knows', so the cast spends the caster's own slot and DC, or cannot be made)",
-    severity: "medium",
-  },
-  () => {
+await test("Magic Items, Spells (magic-items): 'Some magic items allow the user to cast a spell from the item ... doesn't expend any of the user's spell slots'; e.g. Eyes of Charming 'expend 1 charge ... to cast the charm person spell (save DC 13)', Medallion of Thoughts 'detect thoughts (save DC 13)', Necklace of Fireballs 'detonates as a 3rd-level fireball spell (save DC 15)', Orb of Dragonkind (artifacts) 'cure wounds (5th-level version, 3 charges), daylight, death ward, or scrying (save DC 18)'", () => {
     const refused = [];
     for (const [name, spell] of [
       ["Eyes of Charming", "Charm Person"],
@@ -187,8 +196,25 @@ await gap(
       if ("error" in cast) refused.push(`${name} (${spell})`);
     }
     assert.equal(refused.length, 0, `item spells use_item refuses, ${listed(refused)}`);
-  },
-);
+  // The numbers each cast carries: the item's own DC, a bead per level
+  // beyond the first, and nothing spent for an at-will spell.
+  assert.deepEqual(itemSpellCast("Eyes of Charming", "Charm Person", undefined), { spell: "Charm Person", charges: 1, level: 1, dc: 13 });
+  assert.deepEqual(itemSpellCast("Necklace of Fireballs", "Fireball", 3), { spell: "Fireball", charges: 3, level: 5, dc: 15 });
+  assert.deepEqual(itemSpellCast("Robe of Stars", "Magic Missile", undefined), { spell: "Magic Missile", charges: 1, level: 5 });
+  assert.deepEqual(itemSpellCast("Staff of the Woodlands", "Pass without Trace", undefined), { spell: "Pass without Trace", charges: 0, level: 2 });
+  assert.deepEqual(itemSpellCast("Orb of Dragonkind", "Cure Wounds", undefined), { spell: "Cure Wounds", charges: 3, level: 5, dc: 18 });
+  // The necklace's beads and the robe's stars are counted like charges, and
+  // the cape's dimension door comes back at dawn.
+  assert.equal(chargeRuleOf({ name: "Necklace of Fireballs" })?.max, "1d6+3");
+  assert.equal(chargeRuleOf({ name: "Necklace of Fireballs" })?.spentAway, true);
+  assert.deepEqual(chargeRuleOf({ name: "Robe of Stars" }), { max: 6, regain: "1d6", regainAtDusk: true });
+  assert.equal(chargeRuleOf({ name: "Cape of the Mountebank" })?.regain, "all");
+  // An at-will spell spends no charge, so an empty staff casts it and rolls
+  // no last-charge d20.
+  const empty = { name: "Staff of the Woodlands", qty: 1, charges: 0 };
+  const atWill = spendChargesMath(empty, chargeRuleOf(empty), 0);
+  assert.ok(!("error" in atWill) && atWill.charges === 0 && !atWill.d20, "pass without trace from an empty staff");
+});
 
 await gap(
   "ITM-03",
@@ -289,22 +315,17 @@ await gap(
   },
 );
 
-await gap(
-  "ITM-08",
-  {
-    rule: "Magic Items, Consumables: 'Some items are used up when they are activated'; Necklace of Fireballs 'detach a bead and throw it ... the bead detonates' (the bead is gone), Elemental Gem 'When you use an action to break the gem ... the gem's magic is lost'",
-    where: "src/lib/classes/item-tags.json via src/lib/srd/item-tags.ts (the necklace tagged kept, the gem durable) and src/lib/dm/item-logic.ts itemUseProblem, whose refusal says 'a necklace's beads are powers that return at dawn'",
-    severity: "low",
-  },
-  () => {
+await test("Magic Items, Consumables: 'Some items are used up when they are activated'; Necklace of Fireballs 'detach a bead and throw it ... the bead detonates' (the bead is gone), Elemental Gem 'When you use an action to break the gem ... the gem's magic is lost'", () => {
     const refused = [];
     for (const name of ["Necklace of Fireballs", "Elemental Gem"]) {
       const problem = itemUseProblem({ name, qty: 1 });
       if (problem) refused.push(`${name}: "${problem.error}"`);
     }
     assert.equal(refused.length, 0, `single-use items use_item refuses, ${listed(refused)}`);
-  },
-);
+  // A Necklace of Prayer Beads is still kept, and the refusal names no other necklace's rule.
+  assert.match(itemUseProblem({ name: "Necklace of Prayer Beads", qty: 1 })?.error ?? "", /kept, not consumed/);
+  assert.doesNotMatch(itemUseProblem({ name: "Necklace of Prayer Beads", qty: 1 })?.error ?? "", /beads are powers/);
+});
 
 await gap(
   "ITM-09",
