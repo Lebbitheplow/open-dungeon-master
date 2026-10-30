@@ -118,7 +118,7 @@ export const exploreTools: ToolDef[] = [
     function: {
       name: "afflict",
       description:
-        `Lay an SRD disease (${Object.values(DISEASES).map((disease) => disease.name).join(", ")}), a madness or a poison on a character; the server rolls the save and holds the effects from then on. A disease is a CON save against catching it, symptoms after their incubation, then the disease's own saves after each long rest; lesser restoration cures it. For a madness, pass its duration (short, long or indefinite); the server rolls that table and how long it lasts, and applies the conditions; pass saveDc (and saveAbility wis or cha) for an effect that allows a save. The SRD poisons are ${POISONS.filter((poison) => poison.type !== "injury").map((poison) => poison.name).join(", ")}, and the injury poisons when a poisoned blade strikes a character; the server rolls the CON save, the damage and the conditions. The table's own diseases and poisons from the workshop are named under GAME STATE and work the same way. Never narrate a disease, madness or poison taking hold without this call.`,
+        `Lay an SRD disease (${Object.values(DISEASES).map((disease) => disease.name).join(", ")}), a madness or a poison on a character; the server rolls the save and holds the effects from then on (lesser restoration cures a disease). For a madness, pass its duration, and saveDc for an effect that allows a save. The SRD poisons are ${POISONS.filter((poison) => poison.type !== "injury").map((poison) => poison.name).join(", ")}, and the injury poisons when a poisoned blade strikes a character. The table's own diseases and poisons from the workshop are named under GAME STATE and work the same way. Never narrate a disease, madness or poison taking hold without this call.`,
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -127,7 +127,7 @@ export const exploreTools: ToolDef[] = [
           kind: { type: "string", enum: ["disease", "madness", "poison"], description: "What it is." },
           name: { type: "string", description: "Disease or poison only: which, by name." },
           duration: { type: "string", enum: [...MADNESS_KINDS], description: "Madness only: how long it lasts." },
-          save: { type: "boolean", description: "Whether the server rolls the save against it; false when already infected or with no save. Default: true. False for a madness from a failed save you already rolled." },
+          save: { type: "boolean", description: "Whether the server rolls the save against it. False when already infected, with no save, or for a madness from a failed save already rolled. Default: true." },
           saveDc: { type: "integer", minimum: 1, maximum: 30, description: "The save's DC, if the source sets one: a disease's infection, a madness's save. A poison uses its own." },
           saveAbility: { type: "string", enum: ["wis", "cha"], description: "Madness only: the save's ability. Default: 'wis'." },
           symptomsNow: { type: "boolean", description: "Disease only: the symptoms show now rather than after the incubation." },

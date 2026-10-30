@@ -13,7 +13,7 @@ export const aoeDamageTool: ToolDef = {
   function: {
     name: "aoe_damage",
     description:
-      "Resolve a multi-target save-or-damage effect (breath weapon, fireball, collapsing ceiling, Entangle, Hypnotic Pattern, Slow, Sleep) in ONE call. The server rolls the damage once, rolls every target's saving throw from their real stats, and applies full or half damage and the spell's conditions to each. A player's spell needs casterCharacterId: the server spends the slot once for everyone caught. Besides the riders the spell rules list, it applies Earthquake's concentration save and Chain Lightning's four targets. A creature Blink, Etherealness or Maze took away is left out of the area. A spell that stays on the ground (Web, Entangle, Grease, Moonbeam, Sleet Storm, Stinking Cloud, Cloudkill, Insect Plague, Black Tentacles, Wall of Fire, Blade Barrier) is laid on the battle map where it was cast (atX) and the server applies it from then on: its difficult ground, obscurement, and the saves and damage for creatures entering it or starting or ending a turn in it, until the concentration or the duration ends. An enemy's spell that only lays an area (Darkness, Fog Cloud, a Web with nobody in it yet) is casterEnemyId, spell and atX/atY with no targets (saveAbility and dc as its block gives them; nobody rolls): its action and slot are spent and the area laid. Never chain per-target request_roll or apply_damage calls for an area effect.",
+      "Resolve a multi-target save-or-damage effect (breath weapon, fireball, collapsing ceiling, Entangle, Hypnotic Pattern, Slow, Sleep) in ONE call. The server rolls the damage once and each target's save from their real stats, and applies the damage and the spell's conditions to each, its riders too (Earthquake's concentration save, Chain Lightning's four targets). A player's spell needs casterCharacterId: the server spends the slot once for everyone caught. A spell that stays on the ground (Web, Entangle, Grease, Moonbeam, Stinking Cloud, Cloudkill, Wall of Fire) is laid on the battle map where it was cast (atX), and the server applies its ground, obscurement, saves and damage from then on until it ends. An enemy's spell that only lays an area (Darkness, Fog Cloud, a Web with nobody in it yet) is casterEnemyId, spell and atX/atY with no targets. Never chain per-target request_roll or apply_damage calls for an area effect.",
     parameters: {
       type: "object",
       additionalProperties: false,
@@ -27,13 +27,13 @@ export const aoeDamageTool: ToolDef = {
         saveAbility: {
           type: "string",
           enum: ["str", "dex", "con", "int", "wis", "cha"],
-          description: "Required for an effect that names no spell (a trap, a collapsing ceiling). A player's spell (casterCharacterId and spell) or an enemy's ability (casterEnemyId) brings its own; omit it then.",
+          description: "Required for an effect that names no spell (a trap, a collapsing ceiling). A spell or an enemy's ability brings its own.",
         },
         dc: {
           type: "integer",
           minimum: 1,
           maximum: 30,
-          description: "Required with saveAbility for an effect that names no spell. A player's spell uses the caster's own spell save DC; an enemy's uses its block.",
+          description: "Required with saveAbility for an effect that names no spell.",
         },
         halfOnSave: {
           type: "boolean",
@@ -41,7 +41,7 @@ export const aoeDamageTool: ToolDef = {
         },
         condition: {
           type: "string",
-          description: "What a failed save lays (restrained, frightened), for an effect with no spell or enemy. A spell or a block lays its own.",
+          description: "What a failed save lays (restrained, frightened), for an effect with no spell or enemy.",
         },
         rounds: {
           type: "integer",
@@ -71,7 +71,7 @@ export const aoeDamageTool: ToolDef = {
         casterEnemyId: {
           type: "string",
           description:
-            "The ENEMY doing it, if one did: exact enemyId from GAME STATE, with enemyAbility or spell. It is the enemy's action for the round (refused if it already acted, cannot act, or is charmed by a target); the save, DC, dice and condition come from the block or the spell whatever you send, a Recharge ability must have recharged, and a spell spends the enemy's slot. A concentration spell is tracked and ends when the enemy's concentration breaks or it dies.",
+            "The ENEMY doing it, if one did: exact enemyId from GAME STATE, with enemyAbility or spell. It is the enemy's action for the round (refused if it already acted, cannot act, or is charmed by a target); the save, DC, dice and condition come from the block or the spell whatever you send, a Recharge ability must have recharged, and the server spends the spell's slot and tracks its concentration.",
         },
         enemyAbility: {
           type: "string",
@@ -91,13 +91,13 @@ export const aoeDamageTool: ToolDef = {
         overchannel: {
           type: "boolean",
           description:
-            "Evoker's Overchannel (14th level): a 1st to 5th level wizard spell deals its maximum damage. School of Evocation wizards only. The first use each long rest is free; after that the server rolls the necrotic damage it costs the wizard.",
+            "Evoker's Overchannel (14th level): a 1st to 5th level wizard spell deals its maximum damage. The first use each long rest is free; later ones cost the wizard necrotic damage the server rolls.",
         },
         sparedCharacterIds: {
           type: "array",
           items: { type: "string" },
           description:
-            "Sculpt Spells only: up to 1 + spell level characterIds from GAME STATE; omit: all caught, [] none. An evoker's feature: those spared, exact characterIds, succeed on the save and take nothing.",
+            "Sculpt Spells only: up to 1 + spell level characterIds from GAME STATE; omit: all caught, [] none. Those spared succeed on the save and take nothing.",
         },
         reason: { type: "string", description: "Short in-fiction cause." },
         ...ZONE_ARGS,

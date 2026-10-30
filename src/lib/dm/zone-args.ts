@@ -10,10 +10,10 @@ const square = (what: string) => ({ type: "integer", minimum: 0, maximum: 200, d
 
 export const ZONE_ARGS: Record<string, unknown> = {
   atX: square(
-    "Column of the area's centre square (or a wall's first), for a spell that leaves an area on the map. Omit to centre it on the creatures caught (or the caster's own square); an aura (Spirit Guardians) and a line (Gust of Wind) start at the caster.",
+    "Column of the area's centre square (or a wall's first), for a spell that leaves an area on the map. Omit to centre it on the creatures caught or the caster; an aura or a line starts at the caster.",
   ),
   atY: square("The row that goes with atX."),
-  towardX: square("A wall or a line: the column it runs toward from its first square (a line from the caster). Omit for a wall across the caster's view of the point."),
+  towardX: square("A wall or a line: the column it runs toward from its first square. Omit for a wall across the caster's view."),
   towardY: square("The row that goes with towardX."),
 };
 

@@ -118,22 +118,22 @@ export const checkTools: ToolDef[] = [
             type: "string",
             enum: ["sight", "hearing"],
             description:
-              "Perception only: whether the thing is seen or heard. Default: 'sight'. Off the battle map the server applies the light of the place (dim light -5, and in darkness a character with no darkvision and no lit torch or lantern sees nothing) and a fast travel pace -5; a sound ignores the light.",
+              "Perception only: whether the thing is seen or heard. Default: 'sight'. Off the battle map the server applies the light and a fast pace; a sound ignores the light.",
           },
           light: {
             type: "string",
             enum: ["bright", "dim", "dark"],
             description:
-              "Off the battle map, the light where the party is, when you know it. A lamplit hall is bright, a moonlit glade dim, an unlit crypt dark. Omit it and the server reads the current location: underground is dark, a building lit, the open air follows the hour.",
+              "Off the battle map, the light where the party is, when you know it. Omit it and the server reads it from the location and the hour.",
           },
           againstEnemyId: {
             type: "string",
             description:
-              "A creature of the running fight hiding (or lying, for insight): exact enemyId from GAME STATE. The server rolls its own Stealth (or Deception) check from its stat block as the DC. Out of a fight, use againstMonster.",
+              "A creature of the running fight hiding (or lying, for insight): exact enemyId from GAME STATE. The server rolls its Stealth (or Deception) as the DC. Out of a fight, use againstMonster.",
           },
           againstMonster: {
             type: "string",
-            description: "Out of a fight, who hides or lies: a bestiary creature, or for insight a tracked NPC's exact name. It holds SRD creatures and NPC stat blocks (a goblin, a bandit, a spy); for insight an AI companion's exact name works too. The server rolls its Stealth or Deception as the DC.",
+            description: "Out of a fight, who hides or lies: a bestiary creature, or for insight a tracked NPC's exact name. For insight an AI companion's exact name works too. The server rolls its Stealth or Deception as the DC.",
           },
           difficulty: {
             type: "string",
@@ -144,7 +144,7 @@ export const checkTools: ToolDef[] = [
           about: {
             type: "string",
             enum: ["traps_and_secret_doors", NONE],
-            description: "Perception or investigation: 'traps_and_secret_doors' for a trap or a secret door, or 'none'. A character tested with Dungeon Delver notices those more easily; the server asks for it when they are tested.",
+            description: "Perception or investigation: 'traps_and_secret_doors' for a trap or a secret door, or 'none'.",
           },
           characterIds: {
             type: "array",

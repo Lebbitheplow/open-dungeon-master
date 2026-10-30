@@ -47,7 +47,7 @@ export const effectTools: ToolDef[] = [
     function: {
       name: "set_effect",
       description:
-        "Put a lasting modifier on a character or an enemy: a blessing, a curse, a potion, a hex, a wound that has not healed. Call it for anything that changes a number for a while and is not one of the 14 named 5e conditions; for those, use set_condition. Every modifier is applied by the server to the rolls it names, and the effect ends on its own when its duration runs out.",
+        "Put a lasting modifier on a character or an enemy: a blessing, a curse, a potion, a hex, a wound that has not healed. Call it for anything that changes a number for a while and is not a 5e condition (set_condition). The server applies each modifier to the rolls it names and ends the effect when its duration runs out.",
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -76,7 +76,7 @@ export const effectTools: ToolDef[] = [
             description: "How it ends; manual (the default) lasts until clear_effect. rounds and minutes count down remaining; encounter ends with the fight.",
           },
           remaining: { type: "integer", minimum: 1, description: "Rounds or minutes it lasts." },
-          saveAbility: { type: "string", enum: ["str", "dex", "con", "int", "wis", "cha"], description: "A save to shake it off, with saveDc: the target rolls it at the end of each of its turns. Outside a fight it rolls once per stretch of time, and a success ends the effect." },
+          saveAbility: { type: "string", enum: ["str", "dex", "con", "int", "wis", "cha"], description: "A save to shake it off, with saveDc, rolled at the end of each of the target's turns. Out of a fight it rolls once per stretch of time; a success ends it." },
           saveDc: { type: "integer", minimum: 1, maximum: 30, description: "With saveAbility: the save's DC." },
           visible: { type: "boolean", description: "True when the party can tell it is there." },
           auraFeet: {
@@ -84,7 +84,7 @@ export const effectTools: ToolDef[] = [
             minimum: 5,
             maximum: 120,
             description:
-              "Radius in feet when the effect reaches around its target (a haunted shrine's chill 15). The board draws the ring. Spell and class auras are the server's own, never an effect.",
+              "Radius in feet when the effect reaches around its target (a haunted shrine's chill 15). Spell and class auras are the server's own, never an effect.",
           },
           auraTone: {
             type: "string",

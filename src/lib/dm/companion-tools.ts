@@ -165,14 +165,14 @@ function companionToolDefs(campaign: Campaign): ToolDef[] {
     : `SRD race id ('human', 'hill_dwarf', 'high_elf'). ${preset.raceHint}`;
   const kindDescription =
     mode === "full"
-      ? "'party' for a lasting member until dismissed; 'guest' for a scene-scoped ally. A guest leaves when the scene ends, for example a soldier helping defend the town."
+      ? "'party' for a lasting member until dismissed; 'guest' for a scene-scoped ally. A guest leaves when the scene ends."
       : "Only 'guest' is allowed at this table: a scene-scoped ally (a soldier helping defend the town) who leaves when the scene or battle ends. Lasting party companions are disabled.";
   return [
     {
       type: "function",
       function: {
         name: "add_companion",
-        description: `Write a new AI-controlled ally into the story with a REAL character sheet: they get stats, HP, equipment, an initiative slot, and a map token, and you control them fully (dialogue and combat). Call it BEFORE narrating them joining. An ally that never went through add_companion does not exist and cannot act or fight. They must belong in this world (${preset.name.toLowerCase()}): name, race, and class all fit the setting.`,
+        description: `Write a new AI-controlled ally into the story with a REAL character sheet (stats, HP, equipment, initiative, a map token); you play them fully. Call it BEFORE narrating them joining: an ally that never went through add_companion cannot act or fight. Name, race and class fit this world (${preset.name.toLowerCase()}).`,
         parameters: {
           type: "object",
           additionalProperties: false,
