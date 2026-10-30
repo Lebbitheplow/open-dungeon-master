@@ -613,4 +613,24 @@ await test("The GM's view of an enemy says how far it may still walk and that it
   assert.equal(players.enemies[0].actions, undefined, "a player was shown the enemy's movement");
 });
 
+// Last: a DM turn runs the backstop, which plays the enemies it hands over.
+await test("GAME STATE tells the GM an enemy's movement left once it is not its plain speed: walked, Dashed, Disengaged.", async () => {
+  const { fakeModel, reply } = await import("./lib/enforce-narrator.mjs");
+  const model = await fakeModel();
+  model.pointAt(world);
+  const goblin = await stage();
+  kit.giveTurn(hero.id);
+  const gameState = async () => {
+    model.script([reply({ text: "Steel rings across the field." }), reply({ text: "Steel rings across the field." })]);
+    await model.turn(world, "I hold my ground.", hero.id, hero.userId);
+    return JSON.stringify(model.requests[0]?.messages ?? []);
+  };
+  assert.doesNotMatch(await gameState(), /movement: /, "an untouched enemy's plain speed was spelled out");
+  assert.equal((await act(goblin, "dash")).ok, true);
+  assert.equal((await walk(goblin, 4, 7)).ok, true);
+  assert.equal((await act(goblin, "disengage", {})).refused, "rules", "its action is spent on the Dash");
+  assert.match(await gameState(), new RegExp(`${goblin.displayName} \\[enemyId=${goblin.id}\\][^"]*movement: 50 ft left this turn \\(Dashed\\)`));
+  model.close();
+});
+
 await finish();

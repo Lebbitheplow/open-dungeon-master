@@ -209,6 +209,9 @@ export type DmEncounterState = {
     immune: string;
     vulnerable: string;
     concentration: string | null;
+    // Its movement left this turn when that is not its plain speed: Dashed,
+    // already walked, Disengaged (src/lib/dm/enemy-speed.ts enemyMovementNote).
+    moving?: string;
   }>;
   // Combatants fighting on the side their kind does not (issue 503): a
   // character turned against the party, a creature the party dominates.
@@ -1114,6 +1117,9 @@ export function buildGameStateBlock(state: DmGameState): string {
       }
       if (enemy.concentration) {
         parts.push(`CONCENTRATING on ${enemy.concentration} (damage forces its CON save; a break ends the effect)`);
+      }
+      if (enemy.moving) {
+        parts.push(`movement: ${enemy.moving}`);
       }
       lines.push(parts.join(" | "));
     }

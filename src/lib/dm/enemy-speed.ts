@@ -56,3 +56,14 @@ export function enemyMoveBudget(
     disengaged: entry.disengaged === true,
   };
 }
+
+// What GAME STATE says of an enemy's movement, or null while it is its plain
+// speed: the GM read "speed 30 ft." from the block and walked a goblin that
+// had Dashed, or one already spent, as if it had all of it (issue #621).
+export function enemyMovementNote(budget: EnemyMoveBudget): string | null {
+  if (budget.tilesLeft === budget.speedTiles && !budget.disengaged) {
+    return null;
+  }
+  const flags = [budget.dashes ? (budget.dashes === 1 ? "Dashed" : `Dashed ${budget.dashes}x`) : "", budget.disengaged ? "Disengaged" : ""].filter(Boolean);
+  return `${budget.tilesLeft * 5} ft left this turn${flags.length ? ` (${flags.join(", ")})` : ""}`;
+}
