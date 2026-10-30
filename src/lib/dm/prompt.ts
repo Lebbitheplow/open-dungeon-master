@@ -16,6 +16,7 @@ import { encumbranceFor } from "@/lib/srd/encumbrance";
 import { wearingIsExplicit } from "@/lib/srd/armor";
 import { classFeatureDescription, findCustomClass } from "@/lib/classes";
 import { backgroundWords, classWords, raceWords } from "@/lib/sheet-words";
+import { selectedCharacter } from "@/lib/player-characters";
 // The genre catalogs' rules text, all of it: the model reads it beside a
 // custom feature (src/lib/classes/feature-text.ts).
 import "@/lib/classes/feature-text-all";
@@ -520,13 +521,15 @@ function spellListLabel(lists: {
 }
 
 // What GAME STATE adds of a companion a player commands in fights
-// (src/lib/dm/companion-command.ts): whose orders its turns follow.
-function companionCommandNote(campaign: Campaign, sheet: CharacterSheet, usernames: Map<string, string>): string {
+// (src/lib/dm/companion-command.ts): whose orders its turns follow, named as
+// the story knows them. The account name went into the GM's narration ("she
+// waits for playtester's orders"), as the fight-control notice did (#594).
+function companionCommandNote(campaign: Campaign, sheet: CharacterSheet, commanderName: (userId: string) => string): string {
   const commander = commanderOf(campaign, sheet);
   if (!commander) {
     return "";
   }
-  const name = usernames.get(commander) ?? "their player";
+  const name = commanderName(commander);
   return `; in fights ${name} commands them: on their turn wait for ${name}'s orders and resolve them as a player's`;
 }
 
@@ -846,6 +849,13 @@ export function fitNoteBodies<T extends { body: string }>(notes: T[], compact: b
 export function buildGameStateBlock(state: DmGameState): string {
   const { campaign, members, sheets, recentRolls, storySummary } = state;
   const usernamesById = new Map(members.map((member) => [member.userId, member.username]));
+  // A commanding player's character at this table: the seat's, else their
+  // first; the account only for a player with none (conscience.ts does the
+  // same for the table's notice).
+  const commanderName = (userId: string) =>
+    selectedCharacter(sheets, userId, members.find((member) => member.userId === userId)?.activeCharacterId ?? "")?.name ??
+    usernamesById.get(userId) ??
+    "their player";
   const physicalDiceUsers = realDiceUserIds(campaign, members);
   // Who people are drawn to rides at a romance table (issue 501). Who is
   // open to advances is a storyteller secret, said in that section. Optional
@@ -1301,7 +1311,7 @@ export function buildGameStateBlock(state: DmGameState): string {
         const base = describeSheet(
           sheet,
           sheet.isCompanion
-            ? `nobody: AI companion under your control (${sheet.companionKind === "guest" ? "scene-scoped guest ally" : "party member"}; personality: ${sheet.personality || "plain and steady"})${companionCommandNote(state.campaign, sheet, usernamesById)}`
+            ? `nobody: AI companion under your control (${sheet.companionKind === "guest" ? "scene-scoped guest ally" : "party member"}; personality: ${sheet.personality || "plain and steady"})${companionCommandNote(state.campaign, sheet, commanderName)}`
             : usernamesById.get(sheet.userId) ?? "unknown",
           !sheet.isCompanion && physicalDiceUsers.has(sheet.userId),
           // Optional all the way down: test doubles build partial campaigns.

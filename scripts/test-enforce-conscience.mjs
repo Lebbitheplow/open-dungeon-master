@@ -237,6 +237,11 @@ await test("in a fight relationship_beat is offered for deeds alone, and a deed 
 await test("where companions may turn, a player's command ends at a warning, the table is told, and the card cannot give it back", async () => {
   const { world, pc, sheet, deed } = await table({ gameSettings: { companionConscience: "turn" } });
   assert.equal(world.sheet(sheet.id).commandedBy, world.owner.id, "the solo player commands her in fights");
+  // While she still follows them, GAME STATE names whose orders she waits
+  // for by the character too: the account name reached the narration.
+  const party = buildGameStateBlock({ campaign: world.campaign(), members: campaigns.listMembers(world.campaignId), sheets: world.sheets(), recentRolls: [], storySummary: "", contextLimitTokens: 32_000 });
+  assert.match(party, /in fights Kael commands them: on their turn wait for Kael's orders/);
+  assert.ok(!party.includes(`${world.owner.username}'s orders`), "never the account's orders");
   await deed("cruelty");
   assert.equal(world.sheet(sheet.id).commandedBy, world.owner.id, "uneasy is not yet a warning");
   const warned = await deed("broke_word");
