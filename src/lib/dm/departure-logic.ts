@@ -465,6 +465,10 @@ export function avengeGoal(name: string): string {
   return `gather enough help to bring down the party ${name} left`;
 }
 
+export function isAvengeGoal(name: string, goalText: string): boolean {
+  return goalText === avengeGoal(name);
+}
+
 export function avengeTarget(personality: NpcPersonality | null): number {
   return personality && personality.drive >= 2 ? 2 : 3;
 }

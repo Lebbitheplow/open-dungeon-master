@@ -1208,6 +1208,7 @@
     "lib/dm/deed-claims.ts#partial": [["key",2,"a deed kind's underscores in the DM's note, and the turn's recorded deeds by characterId and kind"]],
     "lib/dm/delegation.ts#partial": [["pattern",2,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"]],
     "lib/dm/departure-logic.ts#whole": [["key",1,"a return's allies counted by bestiary slug"]],
+    "lib/dm/departure-logic.ts#whole-single": [["key",1,"a row's own revenge goal, the exact text avengeGoal wrote there, never a person's words"]],
     "lib/dm/departure.ts#first": [["key",1,"the strongest faction by power, a deliberate pick that reads no name"]],
     "lib/dm/departure.ts#normalizer": [["key",1,"slugs, hosts, file names, ids, env values, display text, throttle keys, model ids (src/: every site read)"]],
     "lib/dm/devoted-guard.ts#whole-single": [["identity",1,"the reaction a use_reaction call names (Take the Blow), by whole name (textKey)"]],

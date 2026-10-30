@@ -13,6 +13,7 @@ import {
 import { detectGoalCollisions } from "@/lib/dm/npc-goal-logic";
 import { avengingRound } from "@/lib/dm/companion-revenge";
 import { agendaRounds } from "@/lib/dm/companion-agenda";
+import { isAvengeGoal } from "@/lib/dm/departure-logic";
 import type { FactCandidate } from "@/lib/dm/fact-logic";
 import { textKey } from "@/lib/language/text-logic";
 
@@ -103,7 +104,9 @@ export function advanceNpcAgency(
     if (decision.archive) {
       setNpcArchived(npc.id, true);
     }
-    if (goals.session) {
+    // Companions who left to bring down the party share an enemy, not a
+    // prize: two of them on that goal are no rivals, whatever words it has.
+    if (goals.session && !isAvengeGoal(npc.name, goals.session.text)) {
       holders.push({ npc, goalText: goals.session.text });
     }
   }

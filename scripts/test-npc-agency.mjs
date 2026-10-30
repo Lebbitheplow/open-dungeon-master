@@ -159,6 +159,32 @@ test("what most of the campaign's goals say is no rivalry; a word only two goals
   assert.ok(["Dunfall", "mill"].includes(collision.over), collision.over);
 });
 
+test("a place a third goal names too is where two NPCs stand, not their prize, unless they share another word", () => {
+  // The goals of a playtest's chapter close, where the ford made two
+  // strangers rivals.
+  const pool = [
+    "gather enough help to bring down the party Dame Seraphine Vale left",
+    "gather enough help to bring down the party Brother Aldous Penn left",
+    "gather enough help to bring down the party Tamsin Greybrook left",
+    "Shelter the stranded pilgrims and keep golden briars out of her tavern.",
+    "Find a carter willing to bring Mara Fen and her son back from the high bank above the Lower Ford.",
+    "Get her family and their stuck cart safely out of the ford.",
+    "Leave the ford with the stolen strongbox.",
+  ];
+  const atTheFord = [
+    { name: "Mara Fen", goalText: pool[5] },
+    { name: "Briar-road Raider Captain", goalText: pool[6] },
+  ];
+  assert.deepEqual(detectGoalCollisions(atTheFord, "english", pool), []);
+  const strongbox = [...pool, "Take the strongbox from the raiders at the ford."];
+  const rivals = [
+    { name: "Briar-road Raider Captain", goalText: strongbox[6] },
+    { name: "Osric Fen", goalText: strongbox[7] },
+  ];
+  const [collision] = detectGoalCollisions(rivals, "english", strongbox);
+  assert.equal(collision?.over, "strongbox", "named by the word only these two goals share");
+});
+
 test("pressure ticks, resets on engagement, and caps", () => {
   let pressure = { ignored: 0, engaged: 0 };
   pressure = tickPressure(pressure, false);
