@@ -266,7 +266,7 @@ export function holdEnemyAreaConcentration(campaign: Campaign, enemyId: string, 
 // Light and Continual Flame on the object the caster holds: their token
 // carries the light the board's vision already reads (bright 20 feet, dim
 // 20 more), Light for an hour of the clock, Continual Flame until dispelled.
-function lightTheCaster(campaign: Campaign, cast: ZoneCast, light: { radiusTiles: number; minutes: number }): string | null {
+function lightTheCaster(campaign: Campaign, cast: ZoneCast, light: { radiusTiles: number; dimTiles: number; minutes: number }): string | null {
   const encounter = getActiveBoard(campaign.id);
   const map = encounter ? getBattleMapForEncounter(encounter.id) : null;
   const token = map ? getTokenByRef(map.id, cast.caster.id) : null;
@@ -274,7 +274,7 @@ function lightTheCaster(campaign: Campaign, cast: ZoneCast, light: { radiusTiles
     return null;
   }
   const instant = getClock(campaign.id).instant;
-  setTokenLight(token.id, light.radiusTiles, light.minutes ? instant + light.minutes : 0, light.minutes);
+  setTokenLight(token.id, light.radiusTiles, light.minutes ? instant + light.minutes : 0, light.minutes, light.dimTiles);
   publishZones(campaign.id);
   return `${cast.caster.name}'s ${cast.spell} sheds bright light 20 feet and dim light 20 feet more${light.minutes ? " for an hour" : ""}; the board's light and sight read it.`;
 }

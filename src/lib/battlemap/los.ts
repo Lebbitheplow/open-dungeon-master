@@ -1,5 +1,6 @@
 import {
   blocksSight,
+  carriedDimRadius,
   chebyshev,
   inBounds,
   tileAt,
@@ -166,7 +167,8 @@ export type MapForVision = {
 // light is workable at short range even without darkvision.
 const DIM_SELF_RADIUS = 6;
 
-// Every tile lit by static lights and carried token lights. A light only
+// Every tile lit by static lights and carried token lights, out to where
+// each one's dim light ends (a lamp's 45 feet, a torch's 40). A light only
 // lights tiles it can itself "see" (no glow through walls); light FOVs are
 // computed per call and shared across viewers by the caller when batching.
 export function litTiles(map: MapForVision, tokens: BattleToken[], lights: MapLight[]): Set<number> {
@@ -179,7 +181,7 @@ export function litTiles(map: MapForVision, tokens: BattleToken[], lights: MapLi
         x: token.x,
         y: token.y,
         brightRadius: token.lightRadius,
-        dimRadius: token.lightRadius * 2,
+        dimRadius: carriedDimRadius(token),
       })),
   ];
   for (const source of sources) {

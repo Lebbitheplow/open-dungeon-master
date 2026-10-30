@@ -16,24 +16,28 @@ import { hasItemTag } from "@/lib/srd/item-tags";
 // hours take a flask of oil with them. A lantern with no oil in the pack
 // gives no light.
 
-export type CarriedLight = { radius: number; minutes: number };
+// Bright light and where the dim light ends, both in tiles from the bearer
+// (SRD 5.1 Adventuring Gear: most sources shed dim light for as far again
+// as the bright, a lamp for twice as far again).
+export type CarriedLight = { radius: number; dim: number; minutes: number };
 
 // What an item is decides the light (src/lib/srd/item-tags.ts); a lantern
 // burns lamp oil, never a magic oil.
-type Source = { tag: ItemTag; radius: number; minutes: number; fuel?: ItemTag };
+type Source = { tag: ItemTag; radius: number; dim: number; minutes: number; fuel?: ItemTag };
 
 const SOURCES: Source[] = [
-  { tag: "everburning_light", radius: 4, minutes: 0 },
-  { tag: "bullseye_lantern", radius: 12, minutes: 360, fuel: "lamp_oil" },
-  { tag: "lantern", radius: 6, minutes: 360, fuel: "lamp_oil" },
-  { tag: "torch", radius: 4, minutes: 60 },
-  // SRD 5.1 Adventuring Gear, Lamp: "bright light in a 15-foot radius and
-  // dim light for an additional 30 feet. Once lit, it burns for 6 hours on a
-  // flask (1 pint) of oil." (issue #570, EQP-03). The board draws a carried
-  // light's dim ring at twice its bright radius, so the lamp's dim light
-  // reaches 30 feet there, not 45: a token holds one radius.
-  { tag: "lamp", radius: 3, minutes: 360, fuel: "lamp_oil" },
-  { tag: "candle", radius: 1, minutes: 60 },
+  { tag: "everburning_light", radius: 4, dim: 8, minutes: 0 },
+  // The bullseye's 60-foot cone and 60 feet of dim light beyond it, drawn
+  // as a circle: a token carries no facing.
+  { tag: "bullseye_lantern", radius: 12, dim: 24, minutes: 360, fuel: "lamp_oil" },
+  { tag: "lantern", radius: 6, dim: 12, minutes: 360, fuel: "lamp_oil" },
+  { tag: "torch", radius: 4, dim: 8, minutes: 60 },
+  // SRD 5.1 Adventuring Gear, Lamp: "A lamp casts bright light in a 15-foot
+  // radius and dim light for an additional 30 feet. Once lit, it burns for 6
+  // hours on a flask (1 pint) of oil." Its dim light ends 45 feet out, not
+  // at twice the bright as the others' do (issue #570, EQP-03).
+  { tag: "lamp", radius: 3, dim: 9, minutes: 360, fuel: "lamp_oil" },
+  { tag: "candle", radius: 1, dim: 2, minutes: 60 },
 ];
 
 // The light a pack can give, and what it burns: the source itself, or the
@@ -57,7 +61,7 @@ function burningSource(equipment: EquipmentItem[]): { source: Source; burns: Equ
 
 export function carriedLight(sheet: Pick<CharacterSheet, "equipment">): CarriedLight {
   const found = burningSource(sheet.equipment);
-  return found ? { radius: found.source.radius, minutes: found.source.minutes } : { radius: 0, minutes: 0 };
+  return found ? { radius: found.source.radius, dim: found.source.dim, minutes: found.source.minutes } : { radius: 0, dim: 0, minutes: 0 };
 }
 
 // A light that burned down takes one of what it burned from the pack.
@@ -78,9 +82,10 @@ function burnOne(campaignId: string, sheetId: string) {
 }
 
 // The token fields for a light lit now, at `instant` on the clock.
-export function lightPlacement(light: CarriedLight, instant: number): { lightRadius: number; burnsUntil: number; lightMinutes: number } {
+export function lightPlacement(light: CarriedLight, instant: number): { lightRadius: number; lightDimRadius: number; burnsUntil: number; lightMinutes: number } {
   return {
     lightRadius: light.radius,
+    lightDimRadius: light.radius > 0 ? light.dim : 0,
     burnsUntil: light.radius > 0 && light.minutes > 0 ? instant + light.minutes : 0,
     lightMinutes: light.radius > 0 && light.minutes > 0 ? light.minutes : 0,
   };

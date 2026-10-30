@@ -46,7 +46,7 @@ import { projectIntents } from "@/lib/dm/intent";
 import { namesLookup } from "@/lib/battlemap/condition-notes";
 import { characterHealthWord, characterStageRows, enemyStageRows } from "@/lib/battlemap/view-stage";
 import { targetEdges } from "@/lib/battlemap/view-tactics";
-import { lightsWithZones, sightTerrainFor, withZoneSteps } from "@/lib/dm/zone-rules";
+import { lightSourcesWithZones, lightsWithZones, sightTerrainFor, withZoneSteps } from "@/lib/dm/zone-rules";
 import { viewZones } from "@/lib/dm/zone-view";
 import { standUpTiles } from "@/lib/srd/authored-effects-more";
 import { addSilenceChips, movesProne, viewerMoves } from "@/lib/battlemap/view-moves";
@@ -259,8 +259,10 @@ export function buildPlayerMapView(
     obscureBeyond: map.outdoors ? weatherObscurementTiles(clock.weather) : Infinity,
   };
   // Shared across every member's projection of this board; read only
-  // (src/lib/battlemap/lit-cache.ts).
-  const lit = cachedLitTiles({ ...vision, id: map.id }, tokens, map.lights);
+  // (src/lib/battlemap/lit-cache.ts). Daylight's dim light past its sphere
+  // is a light of its own (zone-rules.ts).
+  const sources = lightSourcesWithZones(map);
+  const lit = cachedLitTiles({ ...vision, id: map.id }, tokens, sources);
   let visible = new Set<number>();
   let explored = new Set<number>();
   let viewer: Viewer | null = null;
@@ -280,7 +282,7 @@ export function buildPlayerMapView(
       truesightTiles: senses.truesight,
       devilsSightTiles: senses.devilsSight,
     };
-    visible = visibleTiles(vision, viewer, tokens, map.lights, lit);
+    visible = visibleTiles(vision, viewer, tokens, sources, lit);
     explored = mergeExplored(map.id, sheet.id, visible, tileCount);
   } else if (sheet) {
     explored = getExplored(map.id, sheet.id, tileCount);

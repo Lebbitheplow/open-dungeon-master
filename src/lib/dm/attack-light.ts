@@ -27,7 +27,7 @@ import { breakDown } from "@/lib/dm/calendar";
 import { sensesFromBlock, sensesFromText, type Senses } from "@/lib/srd/senses";
 import { weatherObscurementTiles } from "@/lib/srd/weather";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import { lightsWithZones, zoneHidesFrom } from "@/lib/dm/zone-rules";
+import { lightSourcesWithZones, lightsWithZones, zoneHidesFrom } from "@/lib/dm/zone-rules";
 import { conditionTruesightFeet } from "@/lib/srd/condition-effect-queries";
 import { authoredDarkvisionFeet } from "@/lib/srd/authored-effects-more";
 import { isConditionNamed } from "@/lib/srd/feature-names";
@@ -99,7 +99,7 @@ export function attackSight(input: {
     zones: patches,
     obscureBeyond: map.outdoors ? weatherObscurementTiles(clock.weather) : Infinity,
   };
-  const lit = cachedLitTiles({ ...vision, id: map.id }, listTokens(map.id), map.lights);
+  const lit = cachedLitTiles({ ...vision, id: map.id }, listTokens(map.id), lightSourcesWithZones(map));
   const sees = (viewer: BattleToken, senses: Senses, subject: BattleToken): boolean => {
     const distance = chebyshev(viewer.x, viewer.y, subject.x, subject.y);
     if (distance <= senses.blindsight) {

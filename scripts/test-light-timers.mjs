@@ -40,19 +40,22 @@ function test(name, fn) {
   passed += 1;
 }
 
+// Bright radius, where the dim light ends (both in squares), and minutes.
 test("a torch burns an hour, a lantern six on a flask of oil, an everburning thing forever", () => {
-  assert.deepEqual(carriedLight({ equipment: [{ name: "Torch" }] }), { radius: 4, minutes: 60 });
+  // SRD 5.1: a torch sheds bright light in a 20-foot radius and dim light
+  // for an additional 20 feet.
+  assert.deepEqual(carriedLight({ equipment: [{ name: "Torch" }] }), { radius: 4, dim: 8, minutes: 60 });
   // SRD 5.1: a lantern burns for 6 hours on a flask of oil; with none it is dark.
-  assert.deepEqual(carriedLight({ equipment: [{ name: "Hooded lantern" }, { name: "Flask of Oil" }] }), { radius: 6, minutes: 360 });
-  assert.deepEqual(carriedLight({ equipment: [{ name: "Hooded lantern" }] }), { radius: 0, minutes: 0 });
-  assert.deepEqual(carriedLight({ equipment: [{ name: "Everburning torch", tags: ["everburning_light"] }] }), { radius: 4, minutes: 0 });
-  assert.deepEqual(carriedLight({ equipment: [{ name: "Rope" }] }), { radius: 0, minutes: 0 });
+  assert.deepEqual(carriedLight({ equipment: [{ name: "Hooded lantern" }, { name: "Flask of Oil" }] }), { radius: 6, dim: 12, minutes: 360 });
+  assert.deepEqual(carriedLight({ equipment: [{ name: "Hooded lantern" }] }), { radius: 0, dim: 0, minutes: 0 });
+  assert.deepEqual(carriedLight({ equipment: [{ name: "Everburning torch", tags: ["everburning_light"] }] }), { radius: 4, dim: 8, minutes: 0 });
+  assert.deepEqual(carriedLight({ equipment: [{ name: "Rope" }] }), { radius: 0, dim: 0, minutes: 0 });
 });
 
 test("lighting now sets when it gutters out", () => {
-  assert.deepEqual(lightPlacement({ radius: 4, minutes: 60 }, 1000), { lightRadius: 4, burnsUntil: 1060, lightMinutes: 60 });
-  assert.deepEqual(lightPlacement({ radius: 4, minutes: 0 }, 1000), { lightRadius: 4, burnsUntil: 0, lightMinutes: 0 });
-  assert.deepEqual(lightPlacement({ radius: 0, minutes: 0 }, 1000), { lightRadius: 0, burnsUntil: 0, lightMinutes: 0 });
+  assert.deepEqual(lightPlacement({ radius: 4, dim: 8, minutes: 60 }, 1000), { lightRadius: 4, lightDimRadius: 8, burnsUntil: 1060, lightMinutes: 60 });
+  assert.deepEqual(lightPlacement({ radius: 4, dim: 8, minutes: 0 }, 1000), { lightRadius: 4, lightDimRadius: 8, burnsUntil: 0, lightMinutes: 0 });
+  assert.deepEqual(lightPlacement({ radius: 0, dim: 0, minutes: 0 }, 1000), { lightRadius: 0, lightDimRadius: 0, burnsUntil: 0, lightMinutes: 0 });
 });
 
 test("the bar reads minutes left of the whole, or nothing", () => {

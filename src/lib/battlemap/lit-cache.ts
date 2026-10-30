@@ -1,5 +1,5 @@
 import { litTiles, type MapForVision } from "@/lib/battlemap/los";
-import type { BattleToken, MapLight } from "@/lib/battlemap/types";
+import { carriedDimRadius, type BattleToken, type MapLight } from "@/lib/battlemap/types";
 
 // The lit set of a board depends on nothing about who is looking: the
 // terrain, its size, the map's fixed lights, and where the carried lights
@@ -32,7 +32,7 @@ export function litTilesKey(
 ): string {
   const carried = tokens
     .filter((token) => token.lightRadius > 0)
-    .map((token) => `${token.x},${token.y},${token.lightRadius}`)
+    .map((token) => `${token.x},${token.y},${token.lightRadius},${carriedDimRadius(token)}`)
     .sort()
     .join(";");
   const fixed = lights

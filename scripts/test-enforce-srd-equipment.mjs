@@ -38,6 +38,8 @@ const { getDatabase } = await import("../src/lib/db/core.ts");
 const { getCampaignById } = await import("../src/lib/db/campaigns.ts");
 const { burningTurnStart } = await import("../src/lib/dm/gear-weapon-hit.ts");
 const { zonesAfterMove } = await import("../src/lib/dm/zone-triggers.ts");
+const maps = await import("../src/lib/db/battle-maps.ts");
+const { litTiles } = await import("../src/lib/battlemap/los.ts");
 
 // A setup step that went wrong is the test breaking, not the rule: a plain
 // Error, which the harness fails the suite on, never an AssertionError that
@@ -136,10 +138,11 @@ await test("EQP-02", () => {
 
 // adventuring-gear, Lamp: "A lamp casts bright light in a 15-foot radius and
 // dim light for an additional 30 feet. Once lit, it burns for 6 hours on a
-// flask (1 pint) of oil."
+// flask (1 pint) of oil." Its dim light ends 45 feet (9 squares) out; the
+// board's lit squares are held at the end of this file.
 await test("EQP-03", () => {
   const light = carriedLight({ equipment: [{ name: "Lamp", qty: 1 }, { name: "Oil (flask)", qty: 1 }] });
-  assert.deepEqual(light, { radius: 3, minutes: 360 }, `a lamp with a flask of oil gives ${JSON.stringify(light)} (tiles of bright light, minutes)`);
+  assert.deepEqual(light, { radius: 3, dim: 9, minutes: 360 }, `a lamp with a flask of oil gives ${JSON.stringify(light)} (tiles of bright light, where its dim light ends, minutes)`);
 });
 
 // ---- traps (running-the-game page "traps") ----
@@ -668,6 +671,31 @@ await test("Madness, Curing Madness: lesser restoration reaches a short- or long
   const sheet = world.sheet(mad.id);
   assert.deepEqual(afflictionConditionsFor(world.campaignId, sheet, "madness"), ["incapacitated"]);
   assert.deepEqual(afflictionConditionsFor(world.campaignId, sheet, "indefinite madness"), ["indefinite madness"]);
+});
+
+// ---- a third fight: a lamp's light on the board ----
+
+// adventuring-gear, Lamp: "A lamp casts bright light in a 15-foot radius and
+// dim light for an additional 30 feet." The board's lit squares (what the
+// fog of war and an attack in the dark read) reach 9 squares from a lit lamp
+// and stop there; a light stored before lights had a dim radius of their own
+// still reaches twice its bright radius.
+await test("Adventuring Gear, Lamp: on the board a lit lamp lights 45 feet around its bearer, and an older stored light still lights twice its bright radius", async () => {
+  const lamplighter = world.addHero({ class: "fighter", level: 3, equipment: [{ name: "Lamp", qty: 1 }, { name: "Oil (flask)", qty: 1 }] });
+  await kit.arena({ first: lamplighter.id });
+  try {
+    const board = kit.board();
+    must(board.width >= 11, `the board is ${board.width} squares wide`);
+    kit.stand(lamplighter.id, 0, 4);
+    const token = () => maps.getTokenByRef(board.id, lamplighter.id);
+    assert.deepEqual([token().lightRadius, token().lightDimRadius], [3, 9], "the lamp's bright radius and where its dim light ends, in squares");
+    const lit = (x) => litTiles(board, [token()], []).has(4 * board.width + x);
+    assert.deepEqual([lit(9), lit(10)], [true, false], "a lamp's light reaches 45 feet and no farther");
+    getDatabase().prepare("UPDATE battle_tokens SET light_dim_radius = 0 WHERE id = ?").run(token().id);
+    assert.deepEqual([lit(6), lit(7)], [true, false], "a light stored with no dim radius reaches twice its bright radius, as before");
+  } finally {
+    await kit.endFight();
+  }
 });
 
 world.close();
