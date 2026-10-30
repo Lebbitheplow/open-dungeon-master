@@ -377,6 +377,9 @@ const TRAIT_FLAGS = {
   magicResistance: /^magic resistance\b/i,
   packTactics: /^pack tactics\b/i,
   nimbleEscape: /^nimble escape\b/i,
+  // A bonus action that moves it up to its speed toward a hostile creature
+  // (the SRD orc): its Dash as a bonus action (enemy-actions.ts, issue #621).
+  aggressive: /^aggressive\b/i,
   // Sunlight Weakness and Hypersensitivity (Black Flag, A5e, the Tomes of
   // Beasts) put its attacks at disadvantage in sunlight as Sensitivity does.
   sunlightSensitivity: /^sunlight (?:sensitivity|weakness|hypersensitivity)\b/i,

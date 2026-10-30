@@ -16,6 +16,7 @@ const {
   markEnemyActed,
   oweEnemiesAnAction,
 } = await import("../src/lib/dm/can-act.ts");
+const { recordEnemyTurn } = await import("../src/lib/dm/enemy-turn-logic.ts");
 
 let passed = 0;
 function test(name, fn) {
@@ -320,6 +321,35 @@ test("no enemy acts before initiative is in", () => {
     reasonOf(canEnemyAct({ enemy: goblin(), encounter: fight({ orderReady: false }), kind: "action" })),
     "no_initiative",
   );
+});
+
+// Issue #621: a spent action is the game saying no, and one spent on a Dash
+// (or a Dodge, a Disengage, an escape) says so.
+test("an enemy's spent action or bonus action is a rules refusal, not a retry", () => {
+  const encounter = fight();
+  markEnemyActed(encounter, "en-1");
+  const action = canEnemyAct({ enemy: goblin(), encounter, kind: "action" });
+  assert.equal(action.refused, "rules");
+  assert.equal(action.retry, undefined);
+  encounter.legendary.bonus = { round: encounter.round, ids: ["en-1"] };
+  const bonus = canEnemyAct({ enemy: goblin(), encounter, kind: "bonus" });
+  assert.equal(bonus.refused, "rules");
+  assert.match(bonus.error, /already taken its bonus action/);
+});
+
+test("an enemy that Dashed is told its Dash spent the action an attack would need", () => {
+  const encounter = fight();
+  markEnemyActed(encounter, "en-1");
+  recordEnemyTurn(encounter, "en-1", { dashes: 1, spentOn: "dash" });
+  const refused = canEnemyAct({ enemy: goblin(), encounter, kind: "action" });
+  assert.equal(reasonOf(refused), "already_acted");
+  assert.match(refused.error, /took the Dash action this turn: its action is spent, so it makes no attack with it\. It can still move, or use a bonus action or reaction\./);
+  // Its bonus action is untouched by the Dash.
+  assert.deepEqual(canEnemyAct({ enemy: goblin(), encounter, kind: "bonus" }), { ok: true });
+  // The next round's refusal (another action spent) does not name the old Dash.
+  encounter.round = 2;
+  markEnemyActed(encounter, "en-1");
+  assert.match(canEnemyAct({ enemy: goblin(), encounter, kind: "action" }).error, /already taken its action this round \(round 2\)/);
 });
 
 console.log(`test-can-act: ${passed} passed`);

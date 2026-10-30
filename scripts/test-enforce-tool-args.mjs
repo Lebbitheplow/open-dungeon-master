@@ -164,7 +164,7 @@ await test("a call with a renamed field's old name is not told to send the old n
     ["move_token", "tokenName", { tokenName: "Echo", x: 0, y: 0 }],
     ["move_token", "casterId", { token: "Echo", x: 0, y: 0, teleport: true, spell: "Misty Step", casterId: pc.id }],
     ["set_movement", "tokenName", { tokenName: "Echo", movement: "fly" }],
-    ["take_action", "enemyId", { action: "escape", enemyId: "no-such" }],
+    ["take_action", "escapingEnemyId", { action: "escape", escapingEnemyId: "no-such" }],
     ["party_award", "amount", { characterIds: [pc.id], amount: 100 }],
     ["party_award", "delta", { characterIds: [pc.id], delta: 10 }],
     ["party_stash", "name", { characterId: pc.id, do: "stow", name: "Rope" }],
@@ -174,7 +174,7 @@ await test("a call with a renamed field's old name is not told to send the old n
     ["tick_objective", "objectiveId", { questId: "No Such Quest", objectiveId: "nothing" }],
     ["show_handout", "loreId", { loreId: "No Such Letter" }],
     // the new name with a value the engine refuses: its own refusals too
-    ["take_action", "enemyId", { action: "escape", escapingEnemyId: "no-such" }],
+    ["take_action", "escapingEnemyId", { action: "escape", enemyId: "no-such" }],
     ["aoe_damage", "casterId", { casterCharacterId: "no-such", spell: "Fireball", level: 3, enemyIds: [goblin.id] }],
     ["aoe_damage", "ability", { casterEnemyId: goblin.id, enemyAbility: "No Such Breath", characterIds: [pc.id] }],
     ["cast_at_player", "ability", { casterEnemyId: goblin.id, enemyAbility: "No Such Gaze", characterId: pc.id }],

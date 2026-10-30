@@ -43,6 +43,7 @@ export { applyInitiativeRefills } from "@/lib/dm/feature-hooks";
 import type { CharacterSheet, FullPatchSheetInput } from "@/lib/schemas/sheet";
 import type { ToolError, ToolResult } from "@/lib/dm/tool-errors";
 import { familyOf, isConditionNamed, isNamed } from "@/lib/srd/feature-names";
+import { TURNED } from "@/lib/dm/flee-logic";
 
 type Ability = "str" | "dex" | "con" | "int" | "wis" | "cha";
 
@@ -59,8 +60,9 @@ export function destroyUndeadCr(clericLevel: number): number | null {
 // The condition a turned undead carries: it spends its turns moving away,
 // takes no reactions, and may only Dash or try to escape. Taking damage ends
 // it. Kept as its own name so a frightened from elsewhere is not confused
-// with it.
-export const TURNED = "turned";
+// with it; its row (condition-effects-last.ts) takes its attacks, spells and
+// reactions, and src/lib/dm/flee-logic.ts runs its turn (issue #621).
+export { TURNED };
 
 const TURN_RANGE_FEET = 30;
 
@@ -307,7 +309,9 @@ function turnUndead(
     const conditions = enemy.conditions.includes(TURNED) ? enemy.conditions : [...enemy.conditions, TURNED];
     const meta: ConditionMetaMap = {
       ...(enemy.conditionMeta as ConditionMetaMap),
-      [TURNED]: { rounds: 10, source: sheet.id },
+      // "If the creature takes any damage" the turning ends (SRD 5.1): the
+      // damage path ends what is marked so (spell-effects.ts settleOnDamage).
+      [TURNED]: { rounds: 10, source: sheet.id, endsOnDamage: true },
     };
     patchEnemyConditions(enemy.id, conditions, meta);
     outcomes.push(`${enemy.displayName} is turned for a minute (WIS ${save.total ?? "failed"} vs DC ${dc}).`);
@@ -316,7 +320,7 @@ function turnUndead(
   return {
     result: {
       turnUndead: outcomes,
-      note: "A turned undead spends its turns moving as far from the cleric as it can, takes no reactions, and may only Dash or try to escape; taking any damage ends it. Narrate these results; do not set frightened by hand.",
+      note: "A turned undead runs from the cleric on its turns: take_action dash with its enemyId, then move_token away (cornered, take_action dodge). It makes no attacks or reactions; any damage ends it. A turn you skip runs it for you. Do not set frightened by hand.",
     },
   };
 }

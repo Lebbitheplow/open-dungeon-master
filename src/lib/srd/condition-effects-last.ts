@@ -78,9 +78,21 @@ export const LAST_CONDITION_EFFECTS: ConditionEffectRow[] = [
   {
     id: "fleeing",
     match: ["fleeing"],
-    summary: "Fear: it drops what it holds and must take the Dash action away from the caster on each of its turns; it makes no attacks and casts no spells.",
+    summary: "Fleeing (Fear, Command's flee): on its turns it takes the Dash action and runs from the caster (take_action dash with its enemyId, then move_token); it makes no attacks and casts no spells.",
     noAttacks: true,
     noCasting: true,
+  },
+  {
+    // Turn Undead (SRD 5.1): it runs from the cleric, its action only a Dash,
+    // an escape, or a Dodge when it is cornered, and it takes no reactions,
+    // so it neither attacks nor makes an opportunity attack (issue #621:
+    // nothing read the condition, and a turned zombie still struck).
+    id: "turned",
+    match: ["turned"],
+    summary: "Turned (Turn Undead): it runs as far from the cleric as it can and never willingly within 30 feet of them; its action is only a Dash, an escape, or a Dodge when cornered; no reactions. Any damage ends it.",
+    noAttacks: true,
+    noCasting: true,
+    noReactions: true,
   },
   {
     id: "freedom_of_movement",

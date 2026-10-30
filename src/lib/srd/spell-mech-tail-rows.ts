@@ -101,11 +101,13 @@ export const SRD_TAIL_ROWS: Record<string, SpellMech> = {
   command: {
     resolution: "save",
     save: "wis",
-    condition: { name: "commanded", rounds: 1, choices: { grovel: ["prone"], halt: ["halted"] } },
+    // Flee lays fleeing beside it: the creature spends its turn running
+    // from the caster, Dash and all (src/lib/dm/flee-logic.ts, issue #621).
+    condition: { name: "commanded", rounds: 1, choices: { grovel: ["prone"], halt: ["halted"], flee: ["fleeing"] } },
     targets: { count: 1, perSlotLevel: 1 },
     immuneTypes: ["undead"],
     noDamage: true,
-    note: "Name the word in condition: grovel lays it prone, halt stops it for its next turn (the server applies both); approach, drop and flee are narrated on its turn. No effect on undead.",
+    note: "Name the word in condition: grovel lays it prone, halt stops it for its next turn, flee runs it from the caster on its next turn (the server applies all three); approach and drop are narrated on its turn. No effect on undead.",
   },
   suggestion: {
     resolution: "save",

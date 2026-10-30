@@ -212,7 +212,7 @@ test("Ready may hold a spell: the pick sends take_action's spell and level besid
 test("a spell with a choice carries a picker that sends cast_at_enemy's condition (Command, Bestow Curse, Heat Metal)", () => {
   const command = spellChoice(spellMechFor(["Command"]));
   assert.equal(command.arg, "condition");
-  assert.deepEqual(command.options.map((entry) => entry.value), ["grovel", "halt"]);
+  assert.deepEqual(command.options.map((entry) => entry.value), ["grovel", "halt", "flee"]);
   const curse = spellChoice(spellMechFor(["Bestow Curse"]));
   assert.deepEqual(curse.options.map((entry) => entry.value), ["str", "dex", "con", "int", "wis", "cha", "attacks", "will", "necrotic"]);
   const eyebite = spellChoice(spellMechFor(["Eyebite"]));

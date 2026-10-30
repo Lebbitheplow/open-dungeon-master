@@ -31,7 +31,8 @@ import { d20Expression, rollExpression } from "@/lib/dice";
 import { publishWithSeq } from "@/lib/events";
 import { rollAgainst } from "@/lib/roll-labels";
 import { enemyAcWithEffects } from "@/lib/dm/ac-effects";
-import { markEnemyActed } from "@/lib/dm/can-act";
+import { markEnemyActed, markEnemyBonus } from "@/lib/dm/can-act";
+import { recordEnemyTurn } from "@/lib/dm/enemy-turn-logic";
 import { coverFor } from "@/lib/dm/attack-spatial";
 import { getBattleMapForEncounter } from "@/lib/db/battle-maps";
 import { effectOutcome } from "@/lib/dm/effect-tools";
@@ -70,6 +71,8 @@ export function enemyStrikesEnemy(
     // attack, Confusion's attack on a random creature).
     single?: boolean;
     bonus?: boolean;
+    // The swing Haste's extra action buys (enemy-actions.ts).
+    haste?: boolean;
     sheets: CharacterSheet[];
     sheetsById: Map<string, CharacterSheet>;
   },
@@ -96,7 +99,14 @@ export function enemyStrikesEnemy(
     return spatial.blocked;
   }
   const live = getActiveEncounter(campaign.id) ?? encounter;
-  if (input.single || input.bonus) {
+  // A bonus action's swing spends the bonus action, not the action: it spent
+  // the action here, so a creature that struck an enemy row with its bonus
+  // attack lost its turn's action (found with issue #621).
+  if (input.bonus) {
+    markEnemyBonus(live, enemy.id);
+  } else if (input.haste) {
+    recordEnemyTurn(live, enemy.id, { hasteUsed: true });
+  } else if (input.single) {
     markEnemyActed(live, enemy.id);
   } else {
     spendEnemyAction(live, enemy.id);

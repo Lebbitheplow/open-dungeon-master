@@ -59,7 +59,10 @@ export type EngineCall = { name: string; args: ToolArgs };
 // program or a model that learned the old names, and an item offer stored
 // before the rename. The new name wins when both are sent; the old one is
 // dropped either way. The last five were never offered, but their handlers
-// read them until the rename.
+// read them until the rename. take_action's escaping enemy went the other way
+// (issue #621): `enemyId` is the enemy taking the action, any action, beside
+// characterId for a character's, so the escape's own name became the
+// old one.
 export const RENAMED_ARGS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   aoe_damage: { casterId: "casterCharacterId", ability: "enemyAbility", sculpt: "sparedCharacterIds" },
   cast_at_player: { ability: "enemyAbility" },
@@ -69,7 +72,7 @@ export const RENAMED_ARGS: Readonly<Record<string, Readonly<Record<string, strin
   party_stash: { amount: "gold", name: "item" },
   haggle: { present: "presentCharacterIds" },
   afflict: { dc: "saveDc" },
-  take_action: { enemyId: "escapingEnemyId" },
+  take_action: { escapingEnemyId: "enemyId" },
   set_quest: { questId: "quest" },
   tick_objective: { questId: "quest", objectiveId: "objective" },
   show_handout: { loreId: "lore" },

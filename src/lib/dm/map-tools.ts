@@ -8,6 +8,7 @@ import {
   getEncounter,
   getEnemy,
   listEnemies,
+  saveEncounter,
   type Encounter,
   type EncounterEnemy,
 } from "@/lib/db/encounters";
@@ -28,7 +29,7 @@ import {
 import { planTeleportFx } from "@/lib/battlemap/fx-plan";
 import { publishFx } from "@/lib/dm/fx";
 import { generateBattleMap, fnv1a } from "@/lib/battlemap/generate";
-import { findPath, speedToTiles, squeezedAt, walkPathWithBudget } from "@/lib/battlemap/movement";
+import { findPath, squeezedAt, walkPathWithBudget } from "@/lib/battlemap/movement";
 import { coverBetween, hasLineOfSight } from "@/lib/battlemap/los";
 import { footprintLookup, occupiedTiles } from "@/lib/battlemap/view";
 import { footprintForSize } from "@/lib/battlemap/footprint";
@@ -55,12 +56,15 @@ import { resolvePcOpportunityAttacks } from "@/lib/dm/opportunity";
 import { releaseGrapplesOutOfReach } from "@/lib/dm/grapple";
 import { isIncapacitated } from "@/lib/dm/condition-logic";
 import { canEnemyAct } from "@/lib/dm/can-act";
-import { awayFromFear, enemyMoveTraits, fearSourceAt, standUpIfProne } from "@/lib/dm/enemy-approach";
-import { enemySpeedTiles } from "@/lib/dm/enemy-speed";
+import { awayFromFear, enemyMoveTraits, fearSourceAt, standUpCost, standUpIfProne } from "@/lib/dm/enemy-approach";
+import { enemyMoveBudget } from "@/lib/dm/enemy-speed";
+import { movementLeft, spendEnemyDisengage } from "@/lib/dm/enemy-actions";
+import { forgetEnemyTurns, enemyTurnEntry, speedWords } from "@/lib/dm/enemy-turn-logic";
+import { nearerSquares } from "@/lib/dm/flee-logic";
 import { enemyTurnRefusal } from "@/lib/dm/enemy-turn-order";
 import { declaredThisTurn } from "@/lib/dm/player-word";
 import { featureTeleportFeet } from "@/lib/dm/feature-teleport";
-import { distancesFrom, payForTeleport, spendEnemyDisengage, stillAt, teleportRangeFeet, walkCharacter } from "@/lib/dm/token-rules";
+import { distancesFrom, payForTeleport, stillAt, teleportRangeFeet, walkCharacter } from "@/lib/dm/token-rules";
 import type { DmTurn } from "@/lib/db/dm-turns";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { z } from "zod";
@@ -387,7 +391,7 @@ export const moveTokenTool: ToolDef = {
         disengage: {
           type: "boolean",
           description:
-            "An enemy Disengages before it walks, so leaving reach draws no opportunity attack. A bonus action for a creature with Nimble Escape (once a round), its action for anyone else.",
+            "An enemy Disengages before it walks, so leaving reach draws no opportunity attack. A bonus action for a creature with Nimble Escape (once a round), its action for anyone else; it holds for the rest of its turn, so later walks need not repeat it.",
         },
         drag: {
           type: "boolean",
@@ -424,12 +428,12 @@ function resolveMoveTarget(
   ref: string,
   sheets: CharacterSheet[],
   sheetsById: Map<string, CharacterSheet>,
-): { token: BattleToken; kind: "pc" | "enemy"; speedTiles: number; enemy?: EncounterEnemy } | null {
+): { token: BattleToken; kind: "pc" | "enemy"; enemy?: EncounterEnemy } | null {
   const trimmed = ref.trim();
   const sheet = resolveSheetRef(trimmed, sheets, sheetsById);
   if (sheet) {
     const token = getTokenByRef(map.id, sheet.id);
-    return token ? { token, kind: "pc", speedTiles: speedToTiles(sheet.speed) } : null;
+    return token ? { token, kind: "pc" } : null;
   }
   const enemies = listEnemies(encounterId);
   // By its whole name only, as resolveAnyToken reads it: "A" (gpt-oss-20b
@@ -443,7 +447,7 @@ function resolveMoveTarget(
   const token = getTokenByRef(map.id, enemy.id);
   // Grappled/restrained/stunned... = speed 0; the budget clamp refuses the
   // move with the standard "no movement left" error.
-  return token ? { token, kind: "enemy", speedTiles: enemySpeedTiles(enemy), enemy } : null;
+  return token ? { token, kind: "enemy", enemy } : null;
 }
 
 // The squares of a path up to and including the one landed on.
@@ -551,17 +555,17 @@ export function handleMoveToken(
     resolved.kind === "enemy" && !args.forced
       ? enemyMoveTraits(map.width, tokens, resolved.token, encounter.id)
       : false;
-  const path = findPath(
-    map.terrain,
-    map.width,
-    map.height,
-    occupied,
-    resolved.token,
-    { x: args.x, y: args.y },
-    moverFootprint,
-    resolved.token.movement === "fly",
-    traits,
-  );
+  // A frightened or turned enemy takes a way that never comes nearer what
+  // it fears, when there is one: the cheapest path stepped closer first, and
+  // the walk stopped there (issue #621, a turned zombie that could not run).
+  const feared = resolved.kind === "enemy" && resolved.enemy && !args.forced
+    ? fearSourceAt(map.id, resolved.enemy.conditions, resolved.enemy.conditionMeta as Record<string, { source?: string }>)
+    : null;
+  const pathAvoiding = (blocked: Set<number>) =>
+    findPath(map.terrain, map.width, map.height, blocked, resolved.token, { x: args.x, y: args.y }, moverFootprint, resolved.token.movement === "fly", traits);
+  const path =
+    (feared ? pathAvoiding(new Set([...occupied, ...nearerSquares(map.width, map.height, resolved.token, feared)])) : null) ??
+    pathAvoiding(occupied);
   if (!path) {
     return {
       error:
@@ -582,26 +586,33 @@ export function handleMoveToken(
   if (drag && "error" in drag) {
     return toolError(drag);
   }
+  // An enemy walking on its own: its movement this turn with its Dashes
+  // counted, and the Disengage it took earlier in the turn (issue #621).
+  // A forced move is clamped by the same count, as it always was, and
+  // stands, fears and Disengages nothing.
+  const move = resolved.kind === "enemy" && resolved.enemy ? enemyMoveBudget(encounter, resolved.enemy, resolved.token) : null;
+  const walking = move !== null && !args.forced;
+  let standCost = 0;
   if (resolved.kind === "enemy") {
     // Walking on its own: a prone creature stands first for half its speed,
-    // and a frightened one never steps closer to what it fears.
-    let standCost = 0;
+    // and a frightened one never steps closer to what it fears. Standing is
+    // worked out here and made only once the walk and its Disengage hold:
+    // a refused walk stood the creature up all the same.
     let steps = path;
-    if (!args.forced && resolved.enemy) {
-      const before = getTokenByRef(map.id, resolved.enemy.id)?.movedThisRound ?? 0;
-      standUpIfProne(encounter.id, resolved.enemy);
-      standCost = (getTokenByRef(map.id, resolved.enemy.id)?.movedThisRound ?? before) - before;
+    if (walking && resolved.enemy) {
+      standCost = standUpCost(encounter.id, resolved.enemy) ?? 0;
       steps = awayFromFear(
         resolved.token,
         path,
         fearSourceAt(map.id, resolved.enemy.conditions, resolved.enemy.conditionMeta as Record<string, { source?: string }>),
       );
     }
-    const budget = Math.floor(Math.max(0, resolved.speedTiles - resolved.token.movedThisRound - standCost) / (drag?.factor ?? 1));
+    const budget = Math.floor(Math.max(0, (move?.tilesLeft ?? 0) - standCost) / (drag?.factor ?? 1));
     const walk = walkPathWithBudget(map.terrain, map.width, steps, budget, traits, resolved.token);
     if (!walk.at) {
+      const words = move && resolved.enemy ? speedWords(move.speedTiles, enemyTurnEntry(encounter, resolved.enemy.id)) : "speed 0 ft";
       return {
-        error: `${resolved.token.name} has no movement left this turn (speed ${resolved.speedTiles * 5} ft)${steps.length < path.length ? ", and it will not move closer to what it fears" : ""}.${stillAt(tokens, resolved.token)}`,
+        error: `${resolved.token.name} has no movement left this turn (${words})${steps.length < path.length ? ", and it will not move closer to what it fears" : ""}.${stillAt(tokens, resolved.token)}`,
         refused: "rules",
       };
     }
@@ -614,17 +625,21 @@ export function handleMoveToken(
   if (!carried) {
     return { error: `There is no room beside (${landing.x},${landing.y}) to set down the character ${resolved.token.name} drags. Choose another square.`, retry: true };
   }
-  // Disengage first, paid for (token-rules.ts): then leaving reach draws
-  // nothing.
-  let disengaged: string | null = null;
+  // Disengage first, paid for (enemy-actions.ts): then leaving reach draws
+  // nothing, on this walk and every later one this turn. Every refusal is
+  // above: nothing has changed until here.
+  let disengaged: string | null = walking && move.disengaged ? "its Disengage earlier this turn" : null;
   let closesOwedTurn = false;
-  if (args.disengage && resolved.kind === "enemy" && resolved.enemy && !args.forced) {
+  if (args.disengage && walking && resolved.enemy && !disengaged) {
     const paid = spendEnemyDisengage(campaign.id, resolved.enemy);
     if ("error" in paid) {
       return toolError(paid);
     }
     disengaged = paid.how;
     closesOwedTurn = Boolean(paid.closesOwedTurn);
+  }
+  if (standCost && resolved.enemy) {
+    standUpIfProne(encounter.id, resolved.enemy);
   }
   moveToken(
     resolved.token.id,
@@ -638,9 +653,15 @@ export function handleMoveToken(
     moveToken(entry.token.id, entry.at.x, entry.at.y, entry.token.movedThisRound);
   }
   // The Disengage and this walk were the turn it was owed; its own turn
-  // follows on fresh movement (token-rules.ts spendEnemyDisengage).
+  // follows on fresh movement, with no Disengage (enemy-actions.ts
+  // spendEnemyDisengage).
   if (closesOwedTurn) {
     resetTurnBudgets(map.id, [resolved.token.refId]);
+    const live = getActiveEncounter(campaign.id);
+    if (live) {
+      forgetEnemyTurns(live, [resolved.token.refId]);
+      saveEncounter(live);
+    }
   }
   publishBattleMapUpdate(campaign.id);
   // Moving two creatures apart ends a grapple between them (src/lib/dm/grapple.ts).
@@ -685,6 +706,7 @@ export function handleMoveToken(
         }
       : {}),
     ...(disengaged ? { disengaged: `Disengaged with ${disengaged}: no opportunity attacks.` } : {}),
+    ...(walking && resolved.enemy ? { movementLeft: movementLeft(campaign.id, resolved.enemy) } : {}),
   };
 }
 

@@ -17,7 +17,8 @@ import { EXPEDITIOUS_RETREAT, hasFastHands } from "@/lib/dm/bonus-routes";
 import { BONUS_SPELL } from "@/lib/dm/cast-rules";
 import { attacksAllowedFor, budgetFor, storeBudget } from "@/lib/dm/turn-budget";
 import { canAct } from "@/lib/dm/can-act";
-import { characterEscape, enemyEscape } from "@/lib/dm/grapple";
+import { characterEscape } from "@/lib/dm/grapple";
+import { handleEnemyTakeAction } from "@/lib/dm/enemy-actions";
 import { readyAction, searchAction, objectAction } from "@/lib/dm/object-actions";
 import { READIABLE } from "@/lib/dm/readied-kinds";
 import { readiedReleaseFor } from "@/lib/dm/readied-release";
@@ -73,7 +74,7 @@ export const actionTools: ToolDef[] = [
     function: {
       name: "take_action",
       description:
-        "Resolve a character taking one of the standard 5e actions that is not an attack or a spell: Dodge, Dash, Disengage, Hide, Help, Grapple, Shove, Ready, Search, Use an Object, or Escape (a grapple). The server spends the action from their turn, rolls any check or contest the action calls for through the same resolver as request_roll, and applies the real effect (Dodge makes attacks against them roll at disadvantage, a won Grapple applies grappled, a won Shove knocks prone or pushes, a won Escape ends the grapple). Grapple and Shove each take the place of ONE attack of the Attack action, so a character with Extra Attack can grapple and still swing. Ready commits to ONE action for the character's reaction until their next turn, named in `readied` (or a spell in `spell`). When you judge the trigger has come, release it off their turn with that action's own tool (pc_attack for an attack): the server spends the reaction and refuses any other action. While a character holds a readied action, enemy_attack does not walk an enemy that is out of reach: move it with move_token first. Hide is for a fight; out of one, use request_roll for Stealth. Call it BEFORE narrating the action; narrate exactly what it reports.",
+        "Resolve a character or an enemy taking a standard 5e action that is not an attack or a spell: Dodge, Dash, Disengage, Hide, Help, Grapple, Shove, Ready, Search, Use an Object, or Escape (a grapple). An enemy (enemyId, no characterId) takes Dash, Disengage, Dodge or Escape on its own turn: its action, so it makes no attack with it; after a Dash, move_token walks it twice its speed. The server spends the action from their turn, rolls any check or contest the action calls for through the same resolver as request_roll, and applies the real effect (Dodge makes attacks against them roll at disadvantage, a won Grapple applies grappled, a won Shove knocks prone or pushes, a won Escape ends the grapple). Grapple and Shove each take the place of ONE attack of the Attack action, so a character with Extra Attack can grapple and still swing. Ready commits to ONE action for the character's reaction until their next turn, named in `readied` (or a spell in `spell`). When you judge the trigger has come, release it off their turn with that action's own tool (pc_attack for an attack): the server spends the reaction and refuses any other action. While a character holds a readied action, enemy_attack does not walk an enemy that is out of reach: move it with move_token first. Hide is for a fight; out of one, use request_roll for Stealth. Call it BEFORE narrating the action; narrate exactly what it reports.",
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -118,9 +119,9 @@ export const actionTools: ToolDef[] = [
             type: "string",
             description: "Use an Object only: the object, when it is one they carry. For consumables, use use_item.",
           },
-          escapingEnemyId: {
+          enemyId: {
             type: "string",
-            description: "Escape only, for an ENEMY escaping a character's grapple: the enemy, exact enemyId from GAME STATE. Omit characterId then.",
+            description: "The enemy taking Dash, Disengage, Dodge or Escape: exact enemyId from GAME STATE. Omit characterId then.",
           },
           spell: {
             type: "string",
@@ -196,7 +197,7 @@ const takeActionSchema = z.object({
   trigger: z.string().max(200).optional(),
   skill: z.enum(["perception", "investigation"]).optional(),
   item: z.string().max(80).optional(),
-  escapingEnemyId: z.string().optional(),
+  enemyId: z.string().optional(),
   spell: z.string().max(80).optional(),
   level: z.coerce.number().int().min(1).max(9).optional(),
   reason: z.string().optional(),
@@ -370,10 +371,15 @@ export function handleTakeAction(
   try {
     args = takeActionSchema.parse(JSON.parse(rawArguments || "{}"));
   } catch {
-    return { error: "Invalid arguments: take_action needs characterId and a known action.", retry: true };
+    return { error: "Invalid arguments: take_action needs characterId (or an enemy's enemyId) and a known action.", retry: true };
   }
-  if (args.action === "escape" && args.escapingEnemyId && !args.characterId) {
-    return enemyEscape(campaign, turn, args.escapingEnemyId);
+  // An enemy's action (src/lib/dm/enemy-actions.ts, issue #621). With both
+  // ids, which creature acts is the model's to say, not the server's to
+  // guess.
+  if (args.enemyId?.trim()) {
+    return args.characterId?.trim()
+      ? { error: "take_action is one creature's action: characterId for a character or enemyId for an enemy, not both. Drop enemyId for the character's action, or characterId for the enemy's. Nothing was spent.", retry: true }
+      : handleEnemyTakeAction(campaign, turn, { enemyId: args.enemyId, action: args.action, bonus: args.bonus });
   }
   const staleSheet = resolveSheetRef(args.characterId, sheets, sheetsById);
   const sheet = staleSheet ? (getSheetById(staleSheet.id) ?? staleSheet) : null;

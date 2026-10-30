@@ -375,8 +375,10 @@ await test("an enemy escapes a character's grapple with its action, and then it 
   assert.equal((await act(fighter, "grapple", { targetEnemyId: enemy.id })).ok, true);
   world.clearDice();
   kit.freshRound();
-  const stray = await world.invoke("take_action", { action: "escape", escapingEnemyId: "no-such-enemy" });
-  assert.match(stray.error, /escapingEnemyId/, "the refusal names the field the call sent");
+  // enemyId is the enemy taking the action (issue #621); the older name
+  // escapingEnemyId still reaches it (tool-merge-logic.ts RENAMED_ARGS).
+  const stray = await world.invoke("take_action", { action: "escape", enemyId: "no-such-enemy" });
+  assert.match(stray.error, /Unknown enemyId/, "the refusal names the field the call sent");
   world.dice(20, 1);
   const out = await world.invoke("take_action", { action: "escape", escapingEnemyId: enemy.id });
   world.clearDice();

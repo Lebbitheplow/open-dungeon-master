@@ -178,11 +178,19 @@ test("every monster action but hold is a real adjudication", () => {
     if (action === "hold") {
       continue;
     }
+    // A retreat is its Dash (issue #621): the adjudication it reaches.
+    const reached = monsterAdjudication("e1", { action, targetCharacterId: "c1", attack: "", condition: "prone", why: "" })?.name;
     assert.ok(
-      ADJUDICATION_NAMES.includes(action),
+      ADJUDICATION_NAMES.includes(action === "retreat" ? reached : action),
       `${action} is offered to the model but is not in the catalog`,
     );
   }
+});
+
+test("a retreat is the enemy's Dash, which the helper follows with the walk away", () => {
+  const call = monsterAdjudication("e1", { action: "retreat", targetCharacterId: "", attack: "", condition: "", why: "wounded" });
+  assert.deepEqual(call, { name: "take_action", args: { enemyId: "e1", action: "dash", reason: "wounded" } });
+  assert.equal(parseMonsterDecision('{"action":"retreat","why":"hurt"}').action, "retreat");
 });
 
 test("a well-formed decision parses", () => {
