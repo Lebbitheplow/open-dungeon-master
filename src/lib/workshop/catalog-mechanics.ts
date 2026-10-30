@@ -72,7 +72,11 @@ export function itemMechanicsOf(row: Row): Record<string, unknown> | null {
   }
   if (magic) {
     out.requiresAttunement = Boolean(worn?.requiresAttunement ?? def?.requiresAttunement ?? checks?.requiresAttunement);
-    out.effects = worn?.effects ?? [];
+    // A Wand of the War Mage's bonus is the +N its name carries; the copy,
+    // renamed, carries the number.
+    out.effects = (worn?.effects ?? []).map((effect) =>
+      effect.kind === "spell_attack_bonus" && effect.amount === "named" ? { ...effect, amount: magicItemBonus(name) } : effect,
+    );
     if (worn?.attunedBy) {
       out.attunedBy = worn.attunedBy;
     }

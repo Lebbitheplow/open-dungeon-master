@@ -75,6 +75,11 @@ export const chargeRuleSchema = z.object({
   max: z.union([int(0, 50), dice]),
   regain: z.union([z.literal("all"), dice]).optional(),
   lastChargeD20: flag,
+  // The last charge's d20: what a 1 leaves (a nonmagical quarterstaff) and
+  // what a 20 brings back (src/lib/srd/magic-gear.ts ChargeRule).
+  lastChargeBecomes: z.string().trim().min(1).max(HOMEBREW_NAME_MAX).optional(),
+  lastChargeRegain: dice.optional(),
+  regainAtDusk: flag,
   spentAway: flag,
   daily: z.string().trim().min(1).max(200).optional(),
 });

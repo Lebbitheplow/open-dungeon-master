@@ -26,6 +26,7 @@ import {
   ToggleChips,
 } from "@/app/workshop/homebrew/fields";
 import { DAMAGE_TYPES } from "@/app/workshop/homebrew/types";
+import { MORE_EFFECT_LABELS, MoreEffectFields, startingEffect } from "@/app/workshop/homebrew/ItemEffectFields";
 import { cn } from "@/lib/cn";
 import { ui } from "@/lib/ui";
 import { NumberStepper } from "@/components/ui/NumberStepper";
@@ -270,6 +271,7 @@ const EFFECT_LABELS: Record<(typeof EFFECT_KINDS)[number], string> = {
   save_bonus: "Saving throw bonus",
   set_ability: "Sets an ability score",
   resistance: "Resistance",
+  ...MORE_EFFECT_LABELS,
 };
 
 function EffectsBlock({
@@ -292,19 +294,10 @@ function EffectsBlock({
             value={effect.kind}
             label="Effect kind"
             options={EFFECT_KINDS.map((kind) => ({ value: kind, label: EFFECT_LABELS[kind] }))}
-            onChange={(kind) => {
-              update(
-                index,
-                kind === "set_ability"
-                  ? { kind, ability: "str", score: 19 }
-                  : kind === "resistance"
-                    ? { kind, types: ["fire"] }
-                    : { kind, amount: 1 },
-              );
-            }}
+            onChange={(kind) => update(index, startingEffect(kind))}
           />
           </span>
-          {"amount" in effect ? (
+          {"amount" in effect && typeof effect.amount === "number" && effect.kind !== "increase_ability" ? (
             <NumberStepper
               label="Amount"
               value={effect.amount}
@@ -337,6 +330,7 @@ function EffectsBlock({
               onChange={(types) => update(index, { ...effect, types })}
             />
           ) : null}
+          <MoreEffectFields effect={effect} update={(next) => update(index, next)} />
           <span className="text-[11px] text-stone-500">{describeEffect(effect)}</span>
           <button
             type="button"

@@ -236,7 +236,15 @@ function engineView(row) {
     // what the suit does on a sheet.
     armor: armor && { ...armor, armor: { ...armor.armor, name: undefined, genres: undefined } },
     critProof: wornArmorTurnsCrits(equipment),
-    worn: { ...riders, sources: riders.sources.length },
+    // The riders that name their item (a save's advantage, an immunity's
+    // "because", a weapon rider's source) name the copy by its own name.
+    worn: {
+      ...riders,
+      sources: riders.sources.length,
+      spellSaveAdvantage: riders.spellSaveAdvantage.length,
+      conditionImmunities: riders.conditionImmunities.map((entry) => entry.condition),
+      weaponRiders: riders.weaponRiders.map((rider) => ({ ...rider, source: "ITEM" })),
+    },
     charges: chargeRuleOf(row),
     checks: SKILLS.map((skill) => {
       const out = itemCheckRiders(equipment, skill);

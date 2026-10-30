@@ -57,13 +57,7 @@ export type MagicItemEffect =
   // (Gauntlets of Ogre Power, Amulet of Health, Headband of Intellect).
   | { kind: "set_ability"; ability: Ability; score: number }
   // Damage resistance keywords (Ring/Armor of Resistance).
-  | { kind: "resistance"; types: string[] };
-
-// The effects above, which a workshop item can carry too, and the ones only
-// the SRD table writes (scripts/generate-magic-items.mjs and its
-// corrections), which the sheet's stored homebrew block never holds.
-export type TableItemEffect =
-  | MagicItemEffect
+  | { kind: "resistance"; types: string[] }
   // Raises a score by `amount`, never past `max` (Belt of Dwarvenkind, the
   // Ioun Stones of Agility to Strength: "increases by 2, to a maximum of 20").
   | { kind: "increase_ability"; ability: Ability; amount: number; max: number }
@@ -107,7 +101,7 @@ export type MagicItemDef = {
   attunedBy?: AttunementRule;
   // Works from the pack: the item's text asks only that it be on the person.
   carried?: boolean;
-  effects: TableItemEffect[];
+  effects: MagicItemEffect[];
 };
 
 // What the engine needs to know about whoever carries the item. Every field

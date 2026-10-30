@@ -10,12 +10,12 @@ import { chargeMax, chargeRuleOf, chargesLeft } from "@/lib/dm/item-charges";
 import { armorOfRow, isWorn } from "@/lib/srd/armor";
 import { oneOfKind, wornButIdle } from "@/lib/srd/wear-slots";
 import { gearDefOfRow } from "@/lib/srd/magic-gear";
-import { matchMagicItem, type TableItemEffect } from "@/lib/srd/magic-items";
+import { matchMagicItem, type MagicItemEffect } from "@/lib/srd/magic-items";
 import type { EquipmentItem } from "@/lib/schemas/sheet";
 import { textKey } from "@/lib/language/text-logic";
 import { magicItemBonus, rowName } from "@/lib/srd/item-row";
 
-function effectWords(effect: TableItemEffect): string {
+function effectWords(effect: MagicItemEffect): string {
   switch (effect.kind) {
     case "ac_bonus":
       return `+${effect.amount} AC`;

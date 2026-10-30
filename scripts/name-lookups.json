@@ -1765,6 +1765,7 @@
     "lib/homebrew/hazard-data.ts#keyed": [["key",1,"hazard kinds"]],
     "lib/homebrew/item-data.ts#number": [["key",3,"digits a regex already captured, ids, headers, stored and form numbers (number inputs), dice parts, the pack's English text (\"1,000 feet\", a purse); src/: every site read"]],
     "lib/homebrew/item-data.ts#partial": [["pattern",2,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"],["parse",1,"a weapon's damage string"]],
+    "lib/homebrew/item-data.ts#whole": [["key",1,"a condition picked from the fixed list an item may keep off its wearer"]],
     "lib/homebrew/item-magic-schema.ts#keyed": [["key",3,"ids, refs, slugs, tool names, field names, env names, event kinds, UI keys, caches, door and map keys; a sheet's conditionMeta by the condition key it was written under; the usage route's gear map by the sheet's own stored item names (src/: every site read)"]],
     "lib/homebrew/item-magic-schema.ts#partial": [["pattern",1,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"]],
     "lib/homebrew/published-names.ts#whole": [["identity",2,"a published homebrew name against SRD rows by whole name"]],
