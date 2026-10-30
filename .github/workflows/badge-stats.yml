@@ -1,0 +1,65 @@
+name: Badge stats
+
+# Counts the server's and the apps' release downloads and the Docker pulls
+# under both image names, and keeps them as shields.io endpoint badges on the
+# `badges` branch for the README (scripts/badge-stats.mjs says why shields
+# cannot count them itself). Runs every six hours, when a release is
+# published, when this file lands on main (which creates the branch), and by
+# hand.
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  release:
+    types: [published]
+  push:
+    branches: [main]
+    paths: [.github/workflows/badge-stats.yml, scripts/badge-stats.mjs]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: badge-stats
+  cancel-in-progress: false
+
+jobs:
+  count:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Check out the badges branch
+        run: |
+          if git fetch --depth 1 origin badges; then
+            git worktree add badges-branch FETCH_HEAD
+          else
+            git worktree add --detach badges-branch
+            git -C badges-branch checkout --orphan badges
+            git -C badges-branch rm -rfq .
+          fi
+
+      - name: Count
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/badge-stats.mjs badges-branch
+
+      - name: Publish
+        working-directory: badges-branch
+        run: |
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No count changed."
+            exit 0
+          fi
+          # One commit, replaced each time: the branch holds today's counts,
+          # not four commits a day of history nobody reads.
+          git checkout -q --orphan fresh
+          git -c user.name="github-actions[bot]" -c user.email="41898296+github-actions[bot]@users.noreply.github.com" \
+            commit -q -m "Badge counts $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push -f origin HEAD:badges
