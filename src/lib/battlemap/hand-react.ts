@@ -76,7 +76,10 @@ function base(
 
 function what(hit: PublicLastHit, whom: string): string {
   if (hit.source === "fall") return `${whom} fell for ${hit.damage}`;
-  return `${hit.attacker}'s ${hit.attack} hit ${whom}${hit.damage ? ` for ${hit.damage}${hit.type ? ` ${hit.type}` : ""}` : ""}`;
+  // The hit named is the one Uncanny Dodge would halve; a multiattack's
+  // other hits are counted, not added to its damage.
+  const others = (hit.hits ?? 1) > 1 ? `, the heaviest of ${hit.hits} hits` : "";
+  return `${hit.attacker}'s ${hit.attack} hit ${whom}${hit.damage ? ` for ${hit.damage}${hit.type ? ` ${hit.type}` : ""}` : ""}${others}`;
 }
 
 // A reaction spell the sheet holds, gated as the cast guard gates it.

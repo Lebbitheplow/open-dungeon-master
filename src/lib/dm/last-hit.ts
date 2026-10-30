@@ -31,6 +31,9 @@ import { spellMechanicsFor } from "@/lib/content";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 
 export type SwingRecord = {
+  // The attack this swing was, when a multiattack swings several (a
+  // scimitar then a dagger); absent reads the record's own.
+  attack?: string;
   // The attack roll's total and the d20 faces it was made of.
   total: number;
   faces: number[];
@@ -109,6 +112,20 @@ export function rerollAttacker(record: LastHit): RollAttacker | null {
 export function attackerFoeId(record: Pick<LastHit, "attacker"> | null | undefined): string | null {
   const attacker = record?.attacker;
   return attacker && (attacker.kind === "enemy" || attacker.kind === "sheet") && attacker.id ? attacker.id : null;
+}
+
+// The hit swing a one-attack reaction answers (Uncanny Dodge, Deflect
+// Missiles): the heaviest one, the first of equals (a multiattack is several
+// attacks; the reaction takes one). -1 when none hit. The reaction prompt
+// (src/lib/db/encounter-view.ts) names this same swing and its damage.
+export function heaviestHit(swings: SwingRecord[], which: (swing: SwingRecord) => boolean = () => true): number {
+  let best = -1;
+  swings.forEach((swing, index) => {
+    if (swing.hit && which(swing) && (best < 0 || swing.raw > swings[best].raw)) {
+      best = index;
+    }
+  });
+  return best;
 }
 
 const db = getDatabase;
@@ -228,9 +245,11 @@ export function openLastHit(campaignId: string, characterId: string) {
         type?: string;
         parts?: Array<{ amount: number; type: string }>;
         ranged?: boolean;
+        attack?: string;
       },
     ) {
       swings.push({
+        ...(result.attack !== undefined ? { attack: result.attack } : {}),
         total: outcome.total,
         faces: d20FacesOf(outcome),
         natural: outcome.natural ?? null,

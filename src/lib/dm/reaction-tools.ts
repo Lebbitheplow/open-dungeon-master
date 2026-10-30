@@ -39,7 +39,7 @@ import { devotedGuard } from "@/lib/dm/devoted-guard";
 import { reactionTimingOf, timingOfDoes, type ReactionTiming } from "@/lib/dm/reaction-kinds";
 import { authoredReactionNamed, heldReaction } from "@/lib/srd/authored-effects";
 import { removeConditions } from "@/lib/dm/condition-logic";
-import { attackerFoeId, freshLastHit, rerollAttacker, type LastHit, type SwingRecord } from "@/lib/dm/last-hit";
+import { attackerFoeId, freshLastHit, heaviestHit, rerollAttacker, type LastHit, type SwingRecord } from "@/lib/dm/last-hit";
 import type { RollAttacker } from "@/lib/db/rolls";
 import { rollAgainst } from "@/lib/roll-labels";
 import { opportunity, reactionSpell } from "@/lib/dm/reaction-spells";
@@ -103,18 +103,6 @@ export function allyOf(ctx: Ctx): CharacterSheet | null {
   return ref ? (getSheetById(ref.id) ?? ref) : null;
 }
 
-// The hit swing a one-attack reaction answers: the heaviest one still
-// standing (a multiattack is several attacks; the reaction takes one).
-function heaviestHit(swings: SwingRecord[], which: (swing: SwingRecord) => boolean = () => true): number {
-  let best = -1;
-  swings.forEach((swing, index) => {
-    if (swing.hit && which(swing) && (best < 0 || swing.raw > swings[best].raw)) {
-      best = index;
-    }
-  });
-  return best;
-}
-
 // A fall reaction sent before the fall: the fall is resolved first, then the
 // reaction answers it, in the same turn.
 export function noFall(who: string, feature: string): ToolError {
@@ -141,14 +129,16 @@ function uncannyDodge(ctx: Ctx): ToolResult {
   if (!record || index < 0) {
     return noHit(sheet.name, "Uncanny Dodge");
   }
-  const corrected = record.swings.map((swing, at) => (at === index ? { ...swing, raw: Math.floor(swing.raw / 2) } : swing));
+  const dodged = record.swings[index];
+  const halved = Math.floor(dodged.raw / 2);
+  const corrected = record.swings.map((swing, at) => (at === index ? { ...swing, raw: halved } : swing));
   spendReaction(ctx);
   const settled = settle(ctx, record, corrected, "uncanny dodge");
   return {
     ok: true,
     reaction: "Uncanny Dodge",
     spent: SPENT(sheet.name),
-    applied: `The ${record.attack} hit's damage is halved: ${settled.given} hit points come back. HP ${settled.hp}.`,
+    applied: `The ${dodged.attack ?? record.attack} hit's damage is halved, ${dodged.raw} to ${halved}: ${settled.given} hit points come back. HP ${settled.hp}.`,
     ...(settled.notes.length ? { notes: settled.notes } : {}),
   };
 }
