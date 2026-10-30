@@ -290,6 +290,31 @@ export function handleStabilize(
 // A creature a Healer has already tended since its last rest.
 export const TENDED = "tended by a healer";
 
+// The SRD's Healer's Kit, by its row (src/lib/srd/adventuring-gear.ts).
+const isHealersKit = (itemName: string) => catalogName(itemName) === "Healer's Kit";
+
+// A healer's kit used without the Healer feat (use_item, the Hand's use
+// card): "The kit has ten uses. As an action, you can expend one use of the
+// kit to stabilize a creature that has 0 hit points" (SRD 5.1 Adventuring
+// Gear). It stabilizes through handleStabilize's kit method, one use of ten, and
+// is never used up whole (issue #570, EQP-22: use_item took the whole kit
+// and did nothing). Null when the item is no healer's kit.
+export function healerKitStabilize(
+  campaign: Campaign,
+  turnId: string,
+  healer: CharacterSheet,
+  target: CharacterSheet,
+  itemName: string,
+): ToolResult | null {
+  if (!isHealersKit(itemName)) {
+    return null;
+  }
+  if (target.currentHp > 0 || target.deathSaves?.dead) {
+    return { error: `A healer's kit stabilizes a creature at 0 hit points, and ${target.name} is ${target.deathSaves?.dead ? "dead" : "not dying"}; it restores no hit points (that takes the Healer feat). Nothing was spent.`, refused: "rules" };
+  }
+  return handleStabilize(campaign, turnId, target, healer, { method: "kit", reason: "a healer's kit" });
+}
+
 // Healer's kit, in a Healer's hands (src/lib/srd/feat-combat.ts): as an
 // action, one use restores 1d6 + 4 hit points plus the creature's Hit Dice
 // count, once per creature per rest. Null when this is not that (the kit
@@ -302,8 +327,7 @@ export function healerKitUse(
   target: CharacterSheet,
   itemName: string,
 ): ToolError | { ok: true; amount: number; note: string } | null {
-  // The SRD's Healer's Kit, by its row (src/lib/srd/adventuring-gear.ts).
-  if (catalogName(itemName) !== "Healer's Kit" || !holdsFeat(healer, "Healer")) {
+  if (!isHealersKit(itemName) || !holdsFeat(healer, "Healer")) {
     return null;
   }
   const kit = findCarriedItem(healer.equipment, itemName);

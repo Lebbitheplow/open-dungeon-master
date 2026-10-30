@@ -566,17 +566,20 @@ await gap("EQP-21", {
   assert.equal(out.ok && !out.result?.error, false, `a smith with no herbalism kit crafted: ${JSON.stringify(out.result?.results ?? out.result)}`);
 });
 
-await gap("EQP-22", {
-  rule: "adventuring-gear, Healer's Kit: \"The kit has ten uses. As an action, you can expend one use of the kit to stabilize a creature that has 0 hit points.\"",
-  where: "src/lib/dm/resource-tools.ts computeUseItem (removes the whole line), src/lib/dm/mutations.ts use_item (healerKitUse answers only for the Healer feat)",
-  severity: "medium",
-  note: "stabilize with method kit spends one use correctly (test-enforce-death); use_item, the Hand's use card, takes the whole kit.",
-}, async () => {
+// adventuring-gear, Healer's Kit: "The kit has ten uses. As an action, you can
+// expend one use of the kit to stabilize a creature that has 0 hit points."
+await test("EQP-22", async () => {
   const medic = world.addHero({ class: "cleric", level: 3, equipment: [{ name: "Healer's Kit", qty: 1 }] });
   const patient = world.addHero({ class: "fighter", level: 3 });
   const out = await world.invoke("use_item", { characterId: medic.id, item: "Healer's Kit", targetCharacterId: patient.id });
   const kitLine = carried(medic.id, "Healer's Kit");
   assert.ok(kitLine && (kitLine.charges ?? 10) >= 9, `one use of a healer's kit left the medic with ${kitLine ? `${kitLine.charges} uses` : "no kit"} (${JSON.stringify(out.result ?? out.error)})`);
+  // On a dying creature it stabilizes, one use of the ten.
+  world.patch(patient.id, { currentHp: 0, deathSaves: { successes: 0, failures: 1, stable: false, dead: false } });
+  const tended = await world.invoke("use_item", { characterId: medic.id, item: "Healer's Kit", targetCharacterId: patient.id });
+  assert.equal(tended.ok && !tended.result?.error, true, JSON.stringify(tended.result ?? tended.error));
+  assert.equal(world.sheet(patient.id).deathSaves?.stable, true);
+  assert.equal(carried(medic.id, "Healer's Kit")?.charges, 9);
 });
 
 // adventuring-gear: manacles bind a creature (DC 20 Dexterity to escape, DC 20

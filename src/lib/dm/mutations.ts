@@ -1,4 +1,4 @@
-import { healerKitUse } from "@/lib/dm/stabilize";
+import { healerKitStabilize, healerKitUse } from "@/lib/dm/stabilize";
 import { conductGate } from "@/lib/dm/party-conduct";
 import { shadowExperience } from "@/lib/db/companion-departures";
 import { ALIGNMENT_CODES } from "@/lib/dm/companion-values-logic";
@@ -1116,6 +1116,12 @@ export function applyDmMutation(
           sheetsById,
         ).result;
         return { result: { ok: true, note: kitHeal.note, ...healed } };
+      }
+      // Without the Healer feat, a healer's kit stabilizes a dying creature
+      // with one of its uses (src/lib/dm/stabilize.ts).
+      const kitStabilize = healerKitStabilize(campaign, turnId, sheet, target, itemName);
+      if (kitStabilize) {
+        return { result: kitStabilize };
       }
       // A charged item (a wand, a staff) spends charges and stays in the
       // pack (src/lib/dm/item-use.ts); null for anything else.
