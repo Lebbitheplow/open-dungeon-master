@@ -16,17 +16,15 @@ import { resolveRollExpression, resolveSheetRef } from "@/lib/dm/rolls";
 import { itemCheckRiders } from "@/lib/srd/item-check-riders";
 import { rollExtrasFor, spendRollCarriers } from "@/lib/dm/forced-save";
 import { rollEffectExtras } from "@/lib/dm/effect-tools";
-import { exhaustionRollState, mergeAdvantage, rollDerivation } from "@/lib/dm/condition-logic";
+import { exhaustionRollState, mergeAdvantage, rollDerivation, type AdvantageState } from "@/lib/dm/condition-logic";
 import { conditionRollRiders } from "@/lib/srd/condition-effects";
 import type { RollArgs } from "@/lib/dm/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import { getActiveBattleMap, sheetDarkvisionTiles } from "@/lib/battlemap/view";
-import { breakDown, normalizeClock } from "@/lib/dm/calendar";
+import { getActiveBattleMap } from "@/lib/battlemap/view";
+import { normalizeClock } from "@/lib/dm/calendar";
 import { getClock } from "@/lib/db/clock";
-import { carriedLight } from "@/lib/dm/light-timers";
-import { cannotNotice, lightSeenBy, offBoardLight, sightPassiveShift } from "@/lib/dm/notice-logic";
-import { getCurrentLocation } from "@/lib/db/locations";
-import { getPreparedMap } from "@/lib/db/prepared-maps";
+import { cannotNotice, sightPassiveShift } from "@/lib/dm/notice-logic";
+import { lightForSheet, offBoardAmbient } from "@/lib/dm/place-light";
 import { contestOpponent, marchStealthProblem, rollContest } from "@/lib/dm/roll-gates";
 import { weatherPerceptionRider } from "@/lib/srd/weather";
 import { obscuredFor, silencedImmunity } from "@/lib/dm/zone-rules";
@@ -343,6 +341,7 @@ export function passiveScore(
   campaign: Campaign,
   sheet: CharacterSheet,
   sense: "perception" | "insight" | "investigation",
+  situational: AdvantageState[] = [],
 ) {
   const derived = computeSheetDerived(sheet);
   const base =
@@ -351,17 +350,21 @@ export function passiveScore(
       : sense === "investigation"
         ? derived.passiveInvestigation
         : 10 + (derived.skills[sense] ?? 0);
-  return base + passiveModifier(campaign, sheet, sense);
+  return base + passiveModifier(campaign, sheet, sense, situational);
 }
 
 // A passive check takes -5 when the character would roll the check at
 // disadvantage and +5 at advantage (SRD 5.1, Passive Checks): the same
 // conditions, exhaustion and lasting effects an active check reads, plus
-// what an effect adds to checks outright.
+// what an effect adds to checks outright. `situational` is what the moment
+// adds (dim light, fog, an obscured zone, Dungeon Delver): merged with the
+// rest, so two disadvantages are still -5, not -10 (SRD 5.1, Advantage and
+// Disadvantage: "you don't roll more than one additional d20").
 function passiveModifier(
   campaign: Campaign,
   sheet: CharacterSheet,
   sense: "perception" | "insight" | "investigation",
+  situational: AdvantageState[],
 ): number {
   const ability = sense === "investigation" ? "int" : "wis";
   const effect = rollEffectExtras(campaign.id, sheet.id, "skill_check");
@@ -374,6 +377,7 @@ function passiveModifier(
     ...(effect.effectAdvantage ? ["advantage" as const] : []),
     ...(effect.effectDisadvantage ? ["disadvantage" as const] : []),
     ...(items.advantage ? ["advantage" as const] : []),
+    ...situational,
   ]);
   const swing = state === "advantage" ? 5 : state === "disadvantage" ? -5 : 0;
   // Sight rot's penalty (src/lib/srd/afflictions.ts); its blindness at -5 is
@@ -442,8 +446,8 @@ export function handleCheckNotice(
     return dc;
   }
 
-  // Rain and fog: minus five to passive Perception by sight when the party
-  // is under the sky (no board, or an outdoor one).
+  // Rain and fog: disadvantage on Perception by sight when the party is
+  // under the sky (no board, or an outdoor one).
   const board = getActiveBattleMap(campaign.id);
   const underSky = !board || board.outdoors;
   const clock = getClock(campaign.id);
@@ -451,24 +455,10 @@ export function handleCheckNotice(
     sense === "perception" && underSky
       ? weatherPerceptionRider(normalizeClock(campaign.clock).weather)
       : { disadvantage: false, passiveMod: 0, note: null };
-  // Off the board the light is the place's: the one the DM names, else the
-  // current location's (an unlit cave is dark at noon, a lit inn is not
-  // dark at midnight), else the sky's by the hour; a lit torch or lantern
-  // and darkvision on top. A board keeps its own light.
-  const place = board ? null : getCurrentLocation(campaign.id);
-  const ambient = !board
-    ? offBoardLight({
-        hour: breakDown(clock.calendar, clock.instant).hour,
-        named: args.light ?? null,
-        place: place
-          ? {
-              name: place.name,
-              description: place.layoutDescription,
-              outdoors: place.preparedMapId ? getPreparedMap(campaign.id, place.preparedMapId)?.outdoors ?? null : null,
-            }
-          : null,
-      })
-    : null;
+  // Off the board the light is the place's, a lit torch or lantern and
+  // darkvision on top (src/lib/dm/place-light.ts, which a rolled check
+  // reads too). A board keeps its own light.
+  const ambient = offBoardAmbient(campaign.id, args.light ?? null);
   const noticedBy: string[] = [];
   const noticers: CharacterSheet[] = [];
   const missedBy: string[] = [];
@@ -492,11 +482,9 @@ export function handleCheckNotice(
         ? sightPassiveShift({
             pace: clock.travelPace,
             byEar: args.by === "hearing",
-            ...(ambient
-              ? { light: lightSeenBy(ambient, carriedLight(fresh).radius > 0, sheetDarkvisionTiles(fresh) > 0) }
-              : {}),
+            ...(ambient ? { light: lightForSheet(ambient, fresh) } : {}),
           })
-        : { shift: 0, blind: false, notes: [] };
+        : { shift: 0, blind: false, disadvantage: false, notes: [] };
     if (sight.notes.length) {
       shifts.push(`${sheet.name}: ${sight.notes.join(", ")}`);
     }
@@ -510,17 +498,23 @@ export function handleCheckNotice(
       missedBy.push(sheet.name);
       continue;
     }
-    // Standing in an obscured spell area: 5 off a passive Perception by sight (zone-rules.ts).
+    // Standing in an obscured spell area: disadvantage on Perception by sight (zone-rules.ts).
     const veiled = sense === "perception" && args.by !== "hearing" ? obscuredFor(campaign.id, fresh.id) : null;
     if (veiled) {
       shifts.push(`${sheet.name}: ${veiled}`);
     }
-    // Dungeon Delver: advantage (+5 passive) to notice a trap or a secret door.
-    const delver = sense !== "insight" && dungeonDelverNotices(fresh, named(args.about)) ? 5 : 0;
+    // Dungeon Delver: advantage to notice a trap or a secret door.
+    const delver = sense !== "insight" && dungeonDelverNotices(fresh, named(args.about));
     if (delver) {
       shifts.push(`${sheet.name}: Dungeon Delver, +5`);
     }
-    const passive = passiveScore(campaign, fresh, sense) + weather.passiveMod + sight.shift - (veiled ? 5 : 0) + delver;
+    const situational: AdvantageState[] = [
+      ...(weather.disadvantage ? ["disadvantage" as const] : []),
+      ...(sight.disadvantage ? ["disadvantage" as const] : []),
+      ...(veiled ? ["disadvantage" as const] : []),
+      ...(delver ? ["advantage" as const] : []),
+    ];
+    const passive = passiveScore(campaign, fresh, sense, situational) + sight.shift;
     if (passive >= dc.dc) {
       noticedBy.push(sheet.name);
       noticers.push(fresh);

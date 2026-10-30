@@ -98,12 +98,15 @@ export function lightSeenBy(ambient: Light, carriesLight: boolean, darkvision: b
 // In darkness a creature that cannot see is effectively blinded, and a
 // blinded creature fails any check that relies on sight (SRD 5.1,
 // Conditions): `blind` says so, and the caller counts the character out.
+// Dim light is `disadvantage`, not a flat -5: the caller merges it with the
+// character's other disadvantages, since two of them are still one (SRD 5.1,
+// Advantage and Disadvantage). The fast pace is a flat penalty and stacks.
 // Something noticed by ear is not touched by the light.
 export function sightPassiveShift(input: {
   pace?: "fast" | "normal" | "slow";
   light?: Light;
   byEar?: boolean;
-}): { shift: number; blind: boolean; notes: string[] } {
+}): { shift: number; blind: boolean; disadvantage: boolean; notes: string[] } {
   let shift = 0;
   const notes: string[] = [];
   if (input.pace === "fast") {
@@ -111,16 +114,16 @@ export function sightPassiveShift(input: {
     notes.push("fast pace: -5");
   }
   if (input.byEar) {
-    return { shift, blind: false, notes };
+    return { shift, blind: false, disadvantage: false, notes };
   }
   if (input.light === "dim") {
-    shift -= 5;
-    notes.push("dim light: -5");
+    notes.push("dim light: disadvantage");
+    return { shift, blind: false, disadvantage: true, notes };
   } else if (input.light === "dark") {
     notes.push("darkness: sees nothing");
-    return { shift, blind: true, notes };
+    return { shift, blind: true, disadvantage: false, notes };
   }
-  return { shift, blind: false, notes };
+  return { shift, blind: false, disadvantage: false, notes };
 }
 
 // An unconscious creature is unaware of its surroundings (SRD 5.1,

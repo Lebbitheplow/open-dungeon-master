@@ -26,6 +26,7 @@ import { DM_TOOL_NAME_PATTERN, toolTextRegex, xmlToolCallRegex } from "@/lib/dm/
 import { acBreakdownFor, computeSheetDerived, findSkill } from "@/lib/srd";
 import { withoutSentences, type NarrationClaim } from "@/lib/dm/claims-logic";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import type { Light } from "@/lib/dm/notice-logic";
 import type { StreamedToolCall } from "@/lib/model-client";
 import { senseCheckFailure } from "@/lib/srd/sense-checks";
 import { sightRotPenalty } from "@/lib/srd/afflictions";
@@ -309,6 +310,9 @@ export function resolveRollExpression(
     sunlight?: boolean;
     // Standing in an obscured spell area (src/lib/dm/zone-rules.ts): the same.
     obscured?: string | null;
+    // The light the roller sees by off the board (src/lib/dm/place-light.ts),
+    // read by a check that names `by: "sight"`.
+    light?: Light | null;
     // The roller moved no more than half their speed this turn (Supreme
     // Sneak, src/lib/srd/check-traits.ts); the caller reads the board.
     movedLittle?: boolean;
@@ -362,6 +366,14 @@ export function resolveRollExpression(
   const senseless = sheet && (derivationKind === "skill_check" || derivationKind === "ability_check") ? senseCheckFailure(sheet.conditions, { by: named(args.by) }) : null;
   if (senseless) {
     return { autoFail: true, detail: args.skill ?? args.ability ?? "", notes: [senseless] };
+  }
+  // Darkness with no light and no darkvision: SRD 5.1 Vision and Light, "A
+  // creature effectively suffers from the blinded condition when trying to
+  // see something in that area", and a blinded creature fails a check that
+  // requires sight. check_notice's passive gate already counts them out.
+  const bySight = named(args.by) === "sight";
+  if (sheet && bySight && extras?.light === "dark" && (derivationKind === "skill_check" || derivationKind === "ability_check")) {
+    return { autoFail: true, detail: args.skill ?? args.ability ?? "", notes: ["darkness: sees nothing without a light or darkvision"] };
   }
   const exhaustion =
     sheet && derivationKind
@@ -525,12 +537,15 @@ export function resolveRollExpression(
     // Skulker: dim light costs their Perception nothing (feat-combat.ts).
     const veiledBy = skill.id === "perception" ? (extras?.obscured ?? null) : null;
     const veiled = veiledBy && hasSkulker(sheet) && /dim light/i.test(veiledBy) ? null : veiledBy;
+    // Dim light: disadvantage on Perception that relies on sight (SRD 5.1,
+    // Vision and Light), which Skulker waives.
+    const dimSight = skill.id === "perception" && bySight && extras?.light === "dim" && !hasSkulker(sheet);
     // The feats' check riders: an expertise die, an advantage, a doubled
     // proficiency (src/lib/srd/feat-combat.ts).
     const featRider = featCheckRider(sheet, skill.id, { about: named(args.about), creature: named(args.creature) });
     const finalAdvantage = mergeAdvantage([
       advantage,
-      ...(armorStealth || sunlit || veiled ? ["disadvantage" as const] : []),
+      ...(armorStealth || sunlit || veiled || dimSight ? ["disadvantage" as const] : []),
       ...(featRider?.advantage ? ["advantage" as const] : []),
     ]);
     // A skill check is an ability check: a lasting effect on checks counts,
@@ -573,6 +588,7 @@ export function resolveRollExpression(
       ...(veiledBy && !veiled ? ["Skulker: dim light costs their Perception nothing"] : []),
       ...(sunlit ? ["Sunlight Sensitivity: disadvantage on Perception in direct sunlight"] : []),
       ...(veiled ? [veiled] : []),
+      ...(dimSight ? ["dim light: disadvantage on Perception by sight"] : []),
       ...(extras?.effectNote ? [extras.effectNote] : []),
     ];
     return {

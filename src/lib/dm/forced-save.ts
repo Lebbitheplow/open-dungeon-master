@@ -29,6 +29,7 @@ import { isSheetFoe } from "@/lib/dm/combat-sides-logic";
 import { INSPIRATION_SPEND, spendInspirationCounter } from "@/lib/dm/roll-riders";
 import { inDirectSunlight } from "@/lib/dm/sunlight";
 import { obscuredFor } from "@/lib/dm/zone-rules";
+import { rollerLight } from "@/lib/dm/place-light";
 import { hasSunlightSensitivity, holdsFeature } from "@/lib/srd/trait-rules";
 import { getActiveBoard, getActiveEncounter, saveEncounter } from "@/lib/db/encounters";
 import { fearAsRolled } from "@/lib/dm/attack-light";
@@ -58,6 +59,8 @@ export function rollExtrasFor(campaign: Campaign, sheet: CharacterSheet, kind: s
     sunlight: hasSunlightSensitivity(sheet) && inDirectSunlight(campaign.id),
     // Standing in a fog cloud, a web, magical darkness (src/lib/dm/zone-rules.ts).
     obscured: obscuredFor(campaign.id, sheet.id),
+    // The place's light off the board, for a check by sight (place-light.ts).
+    light: kind === "skill_check" || kind === "ability_check" ? rollerLight(campaign.id, sheet) : null,
     // Supreme Sneak reads how far the rogue walked this turn.
     movedLittle: holdsFeature(sheet, "supreme sneak") ? movedLittle(campaign.id, sheet) : false,
     // Frightened's disadvantage on checks needs its source in sight, read

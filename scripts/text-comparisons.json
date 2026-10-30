@@ -1651,7 +1651,7 @@
     "lib/dm/rollback-logic.ts#str-list": [["key",1,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/rolls.ts#[a-z]": [["key",2,"key=value argument names"]],
     "lib/dm/rolls.ts#re-word": [["key",5,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
-    "lib/dm/rolls.ts#str-eq": [["key",12,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
+    "lib/dm/rolls.ts#str-eq": [["key",13,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/rolls.ts#str-key": [["key",1,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/rolls.ts#toLowerCase": [["key",3,"skill id"]],
     "lib/dm/rolls.ts#toUpperCase": [["display",3,"ability abbreviations shown"]],

@@ -174,15 +174,8 @@ await test("adventuring / Vision and Light with using-ability-scores / Passive C
   assert.equal(missed.result.anyNoticed, false, "dim light cost nothing off a passive Perception");
 });
 
-await gap(
-  "ADV-04",
-  {
-    rule:
-      "using-ability-scores / Passive Checks: \"If the character has advantage on the check, add 5. For disadvantage, subtract 5.\" with Advantage and Disadvantage: \"you don't roll more than one additional d20\". Poisoned (disadvantage on checks) and dim light (disadvantage on Perception by sight) together are one disadvantage, -5, not -10",
-    where: "src/lib/dm/check-tools.ts check_notice (line 520 adds passiveModifier's -5 and sightPassiveShift's dim-light -5, the weather's -5 and an obscured zone's -5 one after another)",
-    severity: "medium",
-    note: "Every disadvantage source on a passive Perception is summed as its own -5: poisoned + dim light, fog + dim light, exhaustion + an obscured zone all reach -10. The same sum lets two advantages (Dungeon Delver beside an advantage effect) reach +10. Fast pace's -5 is a penalty, not disadvantage, and rightly stacks.",
-  },
+await test(
+  "ADV-04: using-ability-scores / Passive Checks: \"If the character has advantage on the check, add 5. For disadvantage, subtract 5.\" with Advantage and Disadvantage: \"you don't roll more than one additional d20\". Poisoned (disadvantage on checks) and dim light (disadvantage on Perception by sight) together are one disadvantage, -5, not -10",
   async () => {
     world.patch(scout.id, { conditions: ["poisoned"] });
     const score = passive();
@@ -315,15 +308,8 @@ await test("adventuring / Vision and Light: darkness blocks vision, not hearing;
   assert.equal(out.result.success, true);
 });
 
-await gap(
-  "ADV-06",
-  {
-    rule:
-      "adventuring / Vision and Light: \"A heavily obscured area, such as darkness ... blocks vision entirely. A creature effectively suffers from the blinded condition when trying to see something in that area\" (and in dim light \"creatures have disadvantage on Wisdom (Perception) checks that rely on sight\"). A rolled Perception check by sight in the dark, with no darkvision and no light, fails",
-    where: "src/lib/dm/rolls.ts resolveRollExpression with src/lib/dm/forced-save.ts rollExtrasFor (they read conditions, zones and sunlight, never the place's light that check_notice reads through notice-logic.ts offBoardLight)",
-    severity: "medium",
-    note: "The passive gate (check_notice) already says 'darkness: sees nothing' for the same character at the same hour; the rolled check beside it succeeds.",
-  },
+await test(
+  "ADV-06: adventuring / Vision and Light: \"A heavily obscured area, such as darkness ... blocks vision entirely. A creature effectively suffers from the blinded condition when trying to see something in that area\" (and in dim light \"creatures have disadvantage on Wisdom (Perception) checks that rely on sight\"). A rolled Perception check by sight in the dark, with no darkvision and no light, fails",
   async () => {
     need(hourNow() === 22, `the clock reads ${hourNow()}:00, not night`);
     const gate = await world.invoke("check_notice", { sense: "perception", dc: 5, characterIds: [scout.id] });
@@ -332,6 +318,12 @@ await gap(
     assert.equal(out.result.success, false, `a human with no light rolled ${out.result.total} on Perception by sight at night and saw what was there`);
   },
 );
+
+await test("adventuring / Vision and Light: darkvision sees in darkness as if it were dim light, so a rolled Perception by sight at night is at disadvantage, not failed.", async () => {
+  const dwarf = world.addHero({ class: "fighter", level: 1, race: "dwarf", proficiencies: profs(), features: [{ name: "Darkvision", source: "race" }] });
+  const { d20s } = await rolled({ characterId: dwarf.id, kind: "skill_check", skill: "perception", by: "sight", dc: 10 }, [15, 4]);
+  assert.equal(d20s.length, 2, "a dwarf's Perception by sight in the dark rolled one d20, as in bright light");
+});
 
 // ---- Feats: Grappler ----
 
