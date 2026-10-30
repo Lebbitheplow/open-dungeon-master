@@ -28,8 +28,18 @@ const { COUNTER_REACTION_IDS } = await import("../src/lib/dm/reaction-kinds.ts")
 const { BONUS_ATTACK_COUNTERS } = await import("../src/lib/dm/feature-bonus-attacks.ts");
 
 let passed = 0;
+const pending = [];
 function test(name, fn) {
-  fn();
+  // An async check is waited for before the count prints: Vitest drops a
+  // rejection that lands after a file's last line, so an unawaited one
+  // passed under npm test while it failed under node.
+  const result = fn();
+  if (result && typeof result.then === "function") {
+    pending.push(result.then(() => {
+      passed += 1;
+    }));
+    return;
+  }
   passed += 1;
 }
 
@@ -529,4 +539,5 @@ test("the acknowledged set does not rot: every entry is a real granted name", ()
   assert.ok(stale.length <= 3, `acknowledged set has stale entries: ${stale.join(", ")}`);
 });
 
+await Promise.all(pending);
 console.log(`test-feature-coverage: ${passed} passed`);
