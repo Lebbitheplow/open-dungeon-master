@@ -274,12 +274,10 @@ async function turnedUndead() {
   return enemy;
 }
 
-await gap("CLS-02", {
-  rule: "SRD 5.1 cleric, Channel Divinity: Turn Undead: \"If the creature fails its saving throw, it is turned for 1 minute or until it takes any damage.\" (Turn the Unholy on the paladin page: \"or until it takes damage\")",
-  where: "src/lib/dm/feature-spends.ts turnUndead (the turned condition meta has no endsOnDamage) and src/lib/dm/spell-effects.ts settleOnDamage",
-  severity: "high",
-  note: "The party can beat on a turned undead for the whole minute and it stays turned.",
-}, async () => {
+// SRD 5.1 cleric, Channel Divinity: Turn Undead: "If the creature fails its
+// saving throw, it is turned for 1 minute or until it takes any damage." (Turn
+// the Unholy on the paladin page: "or until it takes damage")
+await test("CLS-02", async () => {
   const enemy = await turnedUndead();
   kit.giveTurn(smiter.id);
   const swing = await kit.swing(smiter.id, enemy.id, [18, 5]);
@@ -288,12 +286,10 @@ await gap("CLS-02", {
   assert.equal(kit.enemy(enemy.id).conditions.includes("turned"), false, "the undead took damage and is still turned");
 });
 
-await gap("CLS-03", {
-  rule: "SRD 5.1 cleric, Channel Divinity: Turn Undead: \"For its action, it can use only the Dash action or try to escape from an effect that prevents it from moving. If there's nowhere to move, the creature can use the Dodge action.\"",
-  where: "src/lib/dm/enemy-attack.ts (the attack guard) and src/lib/dm/feature-spends.ts TURNED",
-  severity: "medium",
-  note: "A turned undead attacks the cleric who turned it.",
-}, async () => {
+// SRD 5.1 cleric, Channel Divinity: Turn Undead: "For its action, it can use
+// only the Dash action or try to escape from an effect that prevents it from
+// moving. If there's nowhere to move, the creature can use the Dodge action."
+await test("CLS-03", async () => {
   const enemy = await turnedUndead();
   kit.freshRound();
   world.dice(15, 3);
@@ -302,11 +298,9 @@ await gap("CLS-03", {
   assert.equal(out.ok, false, "a turned undead made an attack");
 });
 
-await gap("CLS-04", {
-  rule: "SRD 5.1 cleric, Channel Divinity: Turn Undead: \"It also can't take reactions.\"",
-  where: "src/lib/srd/condition-effects.ts (no row for \"turned\", so conditionBlocksReactions lets its opportunity attacks through)",
-  severity: "medium",
-}, async () => {
+// SRD 5.1 cleric, Channel Divinity: Turn Undead: "It also can't take
+// reactions."
+await test("CLS-04", async () => {
   assert.equal(conditionBlocksReactions(["turned"]), "turned", "a turned creature keeps its reactions (opportunity attacks included)");
 });
 

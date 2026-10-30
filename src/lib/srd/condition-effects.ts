@@ -46,6 +46,20 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
     paramAttackBonus: true,
   },
   {
+    // SRD 5.1 cleric, Channel Divinity: Turn Undead (and the paladin's Turn
+    // the Unholy): "It also can't take reactions. For its action, it can use
+    // only the Dash action or try to escape from an effect that prevents it
+    // from moving. If there's nowhere to move, the creature can use the
+    // Dodge action." Taking damage ends it (feature-spends.ts turnUndead).
+    id: "turned",
+    match: ["turned"],
+    summary:
+      "Turned: it spends its turns moving as far from the one who turned it as it can and cannot willingly move within 30 feet of them; no reactions, and its action is only Dash, escaping what holds it, or Dodge when it has nowhere to go. Any damage ends it.",
+    noReactions: true,
+    noAttacks: true,
+    noCasting: true,
+  },
+  {
     id: "blessed",
     match: ["blessed", "bless"],
     summary: "Bless: +1d4 on attack rolls and saving throws.",

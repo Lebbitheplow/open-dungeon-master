@@ -42,7 +42,7 @@ export function spellAttackHold(
 ): ToolError | null {
   const held = conditionBlocksAttacks(attacker.conditions);
   if (held) {
-    return { error: `${attacker.name} is ${held} and makes no attacks while it lasts. It may take another action (a calmed or fleeing creature may Dash).`, retry: true };
+    return { error: `${attacker.name} is ${held} and makes no attacks while it lasts. It may take another action (a calmed, fleeing or turned creature may Dash, and a turned one with nowhere to go may Dodge).`, retry: true };
   }
   return outOfReach(target);
 }
