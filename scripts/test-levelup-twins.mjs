@@ -114,8 +114,9 @@ await test("A ley line rider is labeled but still offered: the GM places the ley
 await test("The label says what an entry uses and what that means at this table.", () => {
   assert.equal(logic.needsLabel(["strife"]), "Uses strife");
   assert.equal(logic.needsLabel(["fatigue", "expertise dice", "ley lines"]), "Uses fatigue, expertise dice and ley lines");
-  assert.match(logic.needsNote(["strife"]), /Level Up Advanced 5e, which this game does not play\. It is not offered for play here/);
+  assert.match(logic.needsNote(["strife"]), /^Level Up Advanced 5e's strife is a rule this game does not play\. It is not offered for play here/);
   assert.match(logic.needsNote(["ley lines"]), /Deep Magic: the GM decides where they run\. The GM plays that part\./);
+  assert.match(logic.needsNote(["strife", "fatigue"]), /^Level Up Advanced 5e's strife and fatigue are rules this game does not play/);
   assert.equal(logic.needsLabel([]), null);
   assert.equal(logic.offeredInPlay(["bloodied", "ley lines"]), true);
   assert.equal(logic.offeredInPlay(["bloodied", "rattled"]), false);

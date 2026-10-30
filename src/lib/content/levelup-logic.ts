@@ -45,9 +45,13 @@ export function needsLabel(needs: readonly Need[]): string | null {
   if (!needs.length) {
     return null;
   }
+  return `Uses ${listOf(needs)}`;
+}
+
+// "strife", "strife and fatigue", "strife, fatigue and rattled".
+function listOf(needs: readonly Need[]): string {
   const names = needs.map((need) => NEED_LABELS[need]);
-  const list = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0];
-  return `Uses ${list}`;
+  return names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names[0];
 }
 
 export function needsNote(needs: readonly Need[]): string | null {
@@ -58,7 +62,7 @@ export function needsNote(needs: readonly Need[]): string | null {
   const levelUp = needs.filter((need) => need !== "ley lines");
   const parts: string[] = [];
   if (levelUp.length) {
-    parts.push(`${levelUp.map((need) => NEED_LABELS[need]).join(", ")} ${levelUp.length > 1 ? "are" : "is"} from Level Up Advanced 5e, which this game does not play.`);
+    parts.push(`Level Up Advanced 5e's ${listOf(levelUp)} ${levelUp.length > 1 ? "are rules" : "is a rule"} this game does not play.`);
   }
   if (needs.includes("ley lines")) {
     parts.push("Ley lines are from Deep Magic: the GM decides where they run.");
