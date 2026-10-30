@@ -79,15 +79,8 @@ const withVariant = (name) => {
 // Runs first: openTable's hero() replaces the owner's sheet, and the
 // heroes added after it each sit at a seat of their own.
 
-await gap(
-  "ADV-01",
-  {
-    rule:
-      "multiclassing / Spellcasting: \"If you multiclass but have the Spellcasting feature from only one class, you follow the rules as described in that class.\" A paladin or ranger gains Spellcasting at 2nd level, so a ranger 3 / paladin 1 keeps the ranger's 3 first-level slots and a paladin 5 / ranger 1 the paladin's 4 + 2",
-    where: "src/lib/srd/multiclass.ts castsFromSlots / slotTableFor (a half caster counts as a Spellcasting class at its 1st level)",
-    severity: "medium",
-    note: "The engine counts the 1st-level half caster as a second Spellcasting class and switches to the shared table at the combined caster level, which rounds that level down to 0: ranger 3 / paladin 1 drops to 2 first-level slots, paladin 5 / ranger 1 to 3 first-level slots and no 2nd.",
-  },
+await test(
+  "ADV-01: multiclassing / Spellcasting: \"If you multiclass but have the Spellcasting feature from only one class, you follow the rules as described in that class.\" A paladin or ranger gains Spellcasting at 2nd level, so a ranger 3 / paladin 1 keeps the ranger's 3 first-level slots and a paladin 5 / ranger 1 the paladin's 4 + 2",
   async () => {
     hero({ class: "ranger", level: 3, abilities: all13, spellcasting: { ability: "wis", slots: { 1: { max: 3, used: 0 } }, prepared: [], known: [], cantrips: [] } });
     need(JSON.stringify(storedSlots(now())) === JSON.stringify({ 1: 3 }), `a ranger 3 starts with ${JSON.stringify(storedSlots(now()))}`);

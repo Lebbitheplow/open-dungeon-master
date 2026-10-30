@@ -83,7 +83,11 @@ export function casterLevelFor(classList: ClassEntry[], progressionFor: (entry: 
 }
 
 // Whether this class entry has slots in the shared pool: a Spellcasting
-// class, or one of the two third-caster subclasses once it casts (level 3).
+// class once it has the feature. A paladin or ranger gains Spellcasting at
+// 2nd level and the two third-caster subclasses at 3rd, so a 1st-level
+// paladin is not a second Spellcasting class: SRD 5.1 Multiclassing,
+// Spellcasting, "If you multiclass but have the Spellcasting feature from
+// only one class, you follow the rules as described in that class."
 function castsFromSlots(entry: ClassEntry, progression?: string): boolean {
   const type = findClass(entry.id)?.casterType;
   if (type === undefined || type === "pact") {
@@ -91,6 +95,9 @@ function castsFromSlots(entry: ClassEntry, progression?: string): boolean {
   }
   if (type === "none") {
     return isThirdCaster(entry.id, entry.subclass, progression) && entry.level >= 3;
+  }
+  if (type === "half") {
+    return entry.level >= 2;
   }
   return true;
 }
