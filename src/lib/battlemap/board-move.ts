@@ -113,6 +113,10 @@ export function rulerFor(view: RulerView, fromId: string, hover: XY, spends: boo
 // price) and then walking, or else crawling, whichever fits the movement in
 // hand. "Every foot of movement while crawling costs 1 extra foot", so a
 // square of rough ground crawled costs 3, not 4 (SRD 5.1, Being Prone).
+// A careful move at half speed (caltrops, ball bearings) multiplies the
+// squares moved by `factor` (drag.ts walkCostFactor: 2), the walk after
+// standing and the crawl alike, so a careful crawl over rough ground costs
+// 6; standing up is not movement through the area and stays its own price.
 // Null when neither fits. The move route and the board's lit squares both
 // ask this, so they cannot differ.
 export function proneCharge(
@@ -120,9 +124,10 @@ export function proneCharge(
   crawl: number | undefined,
   standCost: number,
   fullTiles: number,
+  factor: 1 | 2 = 1,
 ): { cost: number; stands: boolean } | null {
-  if (step !== undefined && step + standCost <= fullTiles) return { cost: step + standCost, stands: true };
-  if (crawl !== undefined && crawl <= fullTiles) return { cost: crawl, stands: false };
+  if (step !== undefined && step * factor + standCost <= fullTiles) return { cost: step * factor + standCost, stands: true };
+  if (crawl !== undefined && crawl * factor <= fullTiles) return { cost: crawl * factor, stands: false };
   return null;
 }
 

@@ -45,10 +45,12 @@ export async function POST(
   // latest AI turn is the one corrected, inferred, since the fix names only
   // the enemy. Nothing is recorded at a table a person runs.
   const correctionId = getDatabase().transaction(() => {
-    patchEnemyHp(enemy.id, correction.currentHp, "alive");
+    // Read back after the write: a regained hit point may have ended a
+    // condition there (a caltrops wound, condition-logic.ts endedByRegain).
+    const healed = patchEnemyHp(enemy.id, correction.currentHp, "alive") ?? enemy;
     if (correction.wakes) {
-      const meta = { ...(enemy.conditionMeta as ConditionMetaMap) };
-      const kept = enemy.conditions.filter((entry) => {
+      const meta = { ...(healed.conditionMeta as ConditionMetaMap) };
+      const kept = healed.conditions.filter((entry) => {
         const woke = entry.trim().toLowerCase() === "unconscious";
         if (woke) {
           delete meta[entry];

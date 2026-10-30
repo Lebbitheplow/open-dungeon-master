@@ -334,13 +334,15 @@ function settle(campaign: Campaign, map: BattleMap, zones: SpellZone[]) {
 
 // A creature walked `walked` from `start`: the areas it entered, and the
 // feet it moved inside Spike Growth. A creature an area restrains stops on
-// the square it was caught on.
+// the square it was caught on. `careful` is a walk made at half speed, which
+// enters caltrops and ball bearings with no save (zones-gear.ts).
 export function zonesAfterMove(
   campaign: Campaign,
   encounterId: string,
   mover: { kind: string; refId: string },
   start: XY,
   walked: XY[],
+  options: { careful?: boolean } = {},
 ): string[] {
   const encounter = getActiveEncounter(campaign.id);
   const map = getBattleMapForEncounter(encounterId);
@@ -378,6 +380,13 @@ export function zonesAfterMove(
       lines.push(...strike(campaign, encounter, map, zone, victim, "each5", inside));
     }
     const struckKey = `${victim.id}:enter`;
+    // "A creature moving through the area at half speed doesn't need to make
+    // the saving throw": nothing is rolled and nothing is spent, so the same
+    // creature walking back in at full speed later this turn still saves.
+    if (trigger.on.includes("enter") && enteredAt && options.careful && trigger.carefulSkips) {
+      lines.push(`${victimName(victim)} moves carefully through ${zone.spell} at half speed and needs no save.`);
+      continue;
+    }
     if (trigger.on.includes("enter") && enteredAt && zone.struck?.[struckKey] !== key) {
       zone.struck = { ...(zone.struck ?? {}), [struckKey]: key };
       // Caltrops: a failed save, seen as the condition it newly lays,
@@ -410,6 +419,10 @@ function heldByZone(victim: Victim, zone: SpellZone): boolean {
   const held = holder?.conditions.find((entry) => entry.toLowerCase() === "restrained");
   const spells = [zone.spell, zone.heldBy ?? ""].map((name) => name.toLowerCase()).filter(Boolean);
   return Boolean(held && instancesOf((holder?.conditionMeta as ConditionMetaMap | undefined)?.[held]).some((entry) => entry.source === zone.casterId && spells.includes((entry.spell ?? "").toLowerCase())));
+}
+
+function victimName(victim: Victim): string {
+  return (victim.kind === "enemy" ? getEnemy(victim.id)?.displayName : getSheetById(victim.id)?.name) ?? "The creature";
 }
 
 function victimHolds(victim: Victim, condition: string): boolean {

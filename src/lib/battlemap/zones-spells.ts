@@ -61,6 +61,10 @@ export type ZoneTrigger = {
   // Caltrops: a failed save stops the creature's move on the square it
   // entered (src/lib/battlemap/zones-gear.ts).
   stopsOnFail?: boolean;
+  // Caltrops and ball bearings: "A creature moving through the area at half
+  // speed doesn't need to make the saving throw." A careful move (move_token
+  // careful, the board's move with careful) enters without it.
+  carefulSkips?: boolean;
 };
 
 export type ZoneTone = "fire" | "frost" | "gloom" | "fog" | "storm" | "nature" | "radiant" | "force" | "stone" | "poison" | "hush" | "blade";

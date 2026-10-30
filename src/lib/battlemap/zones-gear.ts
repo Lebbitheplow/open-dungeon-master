@@ -8,7 +8,9 @@
 import type { ZoneRow } from "@/lib/battlemap/zones-spells";
 
 // Caltrops: "Taking this damage reduces the creature's walking speed by 10
-// feet until the creature regains at least 1 hit point."
+// feet until the creature regains at least 1 hit point." Any hit point
+// regained ends it, on an enemy or a character (src/lib/dm/condition-logic.ts
+// endedByRegain).
 export const CALTROPS_WOUND = "caltrops wound";
 
 export const GEAR_ZONE_ROWS: Record<string, ZoneRow> = {
@@ -18,8 +20,8 @@ export const GEAR_ZONE_ROWS: Record<string, ZoneRow> = {
   // piercing damage." (issue #570, EQP-13)
   caltrops: {
     shape: "cube", feet: 5, level: 0, concentration: false, rounds: null, mundane: true, tone: "blade",
-    trigger: { on: ["enter"], save: "dex", dice: "1", type: "piercing", damageOnFail: true, condition: CALTROPS_WOUND, stopsOnFail: true },
-    summary: "caltrops: entering is a DC 15 DEX save or stop moving, 1 piercing and 10 feet less walking speed until healed",
+    trigger: { on: ["enter"], save: "dex", dice: "1", type: "piercing", damageOnFail: true, condition: CALTROPS_WOUND, stopsOnFail: true, carefulSkips: true },
+    summary: "caltrops: entering is a DC 15 DEX save or stop moving, 1 piercing and 10 feet less walking speed until healed; moving carefully at half speed skips the save",
   },
   // "As an action, you can spill these tiny metal balls from their pouch to
   // cover a level, square area that is 10 feet on a side. A creature moving
@@ -27,8 +29,8 @@ export const GEAR_ZONE_ROWS: Record<string, ZoneRow> = {
   // or fall prone."
   "ball bearings": {
     shape: "cube", feet: 10, level: 0, concentration: false, rounds: null, mundane: true, tone: "stone",
-    trigger: { on: ["enter"], save: "dex", condition: "prone" },
-    summary: "ball bearings: entering is a DC 10 DEX save or fall prone",
+    trigger: { on: ["enter"], save: "dex", condition: "prone", carefulSkips: true },
+    summary: "ball bearings: entering is a DC 10 DEX save or fall prone; moving carefully at half speed skips the save",
   },
 };
 

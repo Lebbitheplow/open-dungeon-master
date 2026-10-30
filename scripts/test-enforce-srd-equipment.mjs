@@ -39,7 +39,12 @@ const { getCampaignById } = await import("../src/lib/db/campaigns.ts");
 const { burningTurnStart } = await import("../src/lib/dm/gear-weapon-hit.ts");
 const { zonesAfterMove } = await import("../src/lib/dm/zone-triggers.ts");
 const maps = await import("../src/lib/db/battle-maps.ts");
+const { saveZones } = await import("../src/lib/dm/zone-store.ts");
 const { litTiles } = await import("../src/lib/battlemap/los.ts");
+const moveRoute = await import("../src/app/api/campaigns/[campaignId]/battle-map/move/route.ts");
+const { mintSession } = await import("../src/lib/auth.ts");
+const { listRecentAudit } = await import("../src/lib/db/sheet-audit.ts");
+const { revertAuditEntry } = await import("../src/lib/sheet-undo.ts");
 
 // A setup step that went wrong is the test breaking, not the rule: a plain
 // Error, which the harness fails the suite on, never an AssertionError that
@@ -418,6 +423,105 @@ await test("EQP-13", async () => {
   assert.equal(before - kit.dummy().currentHp, 1);
   assert.ok(kit.dummy().conditions.includes("caltrops wound"), JSON.stringify(kit.dummy().conditions));
   encounters.patchEnemyConditions(kit.dummy().id, [], {});
+});
+
+// The caltrops square from EQP-13, struck by nobody yet this turn, with the
+// dummy back in its corner and the walker `x` squares along the top row.
+const tokenOf = (refId) => maps.getTokenByRef(kit.board().id, refId);
+function freshCaltrops(walkerId, x) {
+  const board = kit.board();
+  saveZones(board.id, liveZones(board, world.encounter()).map((zone) => ({ ...zone, struck: {} })));
+  maps.placeToken(tokenOf(kit.dummy().id).id, 0, 0);
+  if (walkerId !== kit.dummy().id) {
+    kit.stand(walkerId, x);
+  }
+  encounters.patchEnemyConditions(kit.dummy().id, [], {});
+}
+
+// A player's own walk on the board (the move route), on their own turn.
+async function walkOnBoard(heroId, x, y, extra = {}) {
+  globalThis.__odmTestToken = mintSession(world.sheet(heroId).userId).token;
+  return kit.onTurnOf(heroId, async () => {
+    const response = await moveRoute.POST(
+      new Request(`http://odm.test/api/campaigns/${world.campaignId}/battle-map/move`, { method: "POST", body: JSON.stringify({ x, y, ...extra }) }),
+      { params: Promise.resolve({ campaignId: world.campaignId }) },
+    );
+    return { status: response.status, body: await response.json().catch(() => ({})) };
+  });
+}
+
+// adventuring-gear, Caltrops: "A creature moving through the area at half
+// speed doesn't need to make the saving throw." Ball Bearings say the same.
+// A walk with careful pays double for each square and enters with no save,
+// on the board's own move and on move_token, for a character or an enemy.
+await test("EQP-13: a careful walk at half speed through caltrops asks no save", async () => {
+  freshCaltrops(thrower.id, 2);
+  const hp = world.sheet(thrower.id).currentHp;
+  const moved = tokenOf(thrower.id).movedThisRound;
+  world.clearDice();
+  world.diceLog();
+  world.dice(2);
+  const walked = await walkOnBoard(thrower.id, 1, 0, { careful: true });
+  const rolled = world.diceLog();
+  world.clearDice();
+  must(walked.status === 200, `the careful walk was refused: ${JSON.stringify(walked.body)}`);
+  assert.equal(d20sIn(rolled), 0, `a character walking carefully into caltrops rolled ${d20sIn(rolled)} saves`);
+  assert.deepEqual([world.sheet(thrower.id).currentHp, conditionsOf(thrower.id).includes("caltrops wound")], [hp, false]);
+  assert.equal(tokenOf(thrower.id).movedThisRound - moved, 2, "one square at half speed costs two");
+  // An enemy walked carefully by move_token, the same.
+  freshCaltrops(kit.dummy().id, 0);
+  kit.stand(thrower.id, 4, 2);
+  const dummyHp = kit.dummy().currentHp;
+  const dummyMoved = tokenOf(kit.dummy().id).movedThisRound;
+  world.diceLog();
+  world.dice(2);
+  const stepped = await world.invoke("move_token", { token: kit.dummy().id, x: 1, y: 0, careful: true });
+  const enemyRolled = world.diceLog();
+  world.clearDice();
+  must(stepped.ok, `move_token refused: ${stepped.error}`);
+  assert.equal(d20sIn(enemyRolled), 0, `an enemy walking carefully into caltrops rolled ${d20sIn(enemyRolled)} saves`);
+  assert.deepEqual([kit.dummy().currentHp, kit.dummy().conditions.includes("caltrops wound")], [dummyHp, false]);
+  assert.equal(tokenOf(kit.dummy().id).movedThisRound - dummyMoved, 2, "one square at half speed costs two");
+  encounters.patchEnemyConditions(kit.dummy().id, [], {});
+});
+
+// adventuring-gear, Caltrops: "Until the creature regains at least 1 hit
+// point, its walking speed is reduced by 10 feet." Any hit point regained
+// ends it, on an enemy (here a fire-absorbing one, healed by fire) as on a
+// character.
+await test("EQP-13: a creature that regains a hit point is rid of the caltrops wound", async () => {
+  const dummy = kit.dummy();
+  const db = getDatabase();
+  db.prepare("UPDATE encounter_enemies SET current_hp = ?, stat_json = ? WHERE id = ?").run(
+    890,
+    JSON.stringify({ ...dummy.stats, traits: [...(dummy.stats.traits ?? []), "Fire Absorption. Whenever it is subjected to fire damage, it takes no damage and instead regains a number of hit points equal to the fire damage dealt."] }),
+    dummy.id,
+  );
+  encounters.patchEnemyConditions(dummy.id, ["caltrops wound"], {});
+  try {
+    const healed = await world.invoke("apply_damage", { enemyId: dummy.id, amount: 3, type: "fire", reason: "a torch" });
+    must(healed.ok && kit.dummy().currentHp === 893, `the fire did not heal the dummy: ${healed.error ?? kit.dummy().currentHp}`);
+    assert.equal(kit.dummy().conditions.includes("caltrops wound"), false, `an enemy that regained 3 hit points still holds ${JSON.stringify(kit.dummy().conditions)}`);
+    // A character healed by the heal tool, as before.
+    world.patch(thrower.id, { currentHp: world.sheet(thrower.id).maxHp - 10, conditions: ["caltrops wound"], conditionMeta: {} });
+    const mended = await world.invoke("heal", { characterId: thrower.id, amount: 4, reason: "a potion" });
+    must(mended.ok, `heal refused: ${mended.error}`);
+    assert.equal(conditionsOf(thrower.id).includes("caltrops wound"), false);
+    // A blow undone heals nobody: the hit points it gives back were never
+    // lost, so the wound stays.
+    world.patch(thrower.id, { conditions: ["caltrops wound"], conditionMeta: {} });
+    const hurt = await world.invoke("apply_damage", { characterId: thrower.id, amount: 3, type: "slashing", reason: "a goblin's blade" });
+    must(hurt.ok, `apply_damage refused: ${hurt.error}`);
+    const blow = listRecentAudit(world.campaignId, 10).find((entry) => entry.characterId === thrower.id && entry.kind === "apply_damage");
+    must(blow, "the blow left no audit entry");
+    const undone = revertAuditEntry(world.campaign(), blow);
+    must(undone.ok, `the undo was refused: ${undone.error}`);
+    assert.equal(conditionsOf(thrower.id).includes("caltrops wound"), true, "undoing a blow ended the caltrops wound");
+  } finally {
+    db.prepare("UPDATE encounter_enemies SET current_hp = ?, stat_json = ? WHERE id = ?").run(dummy.currentHp, JSON.stringify(dummy.stats), dummy.id);
+    encounters.patchEnemyConditions(dummy.id, [], {});
+    world.patch(thrower.id, { conditions: [], conditionMeta: {}, currentHp: world.sheet(thrower.id).maxHp });
+  }
 });
 
 await kit.endFight();

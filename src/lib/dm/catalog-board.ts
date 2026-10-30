@@ -128,6 +128,12 @@ export const BOARD_ADJUDICATIONS: CatalogEntry[] = [
         kind: "boolean",
         help: "An enemy hauls the character it grapples along at half speed; the grapple holds.",
       },
+      {
+        name: "careful",
+        label: "Moves carefully",
+        kind: "boolean",
+        help: "At half speed, every square costing double: caltrops and ball bearings ask no save.",
+      },
       // Teleport a token's fields (issue #471): no path, no movement spent.
       { name: "teleport", label: "Teleports there", kind: "boolean", help: "No path and no movement: Misty Step, a portal, a trap door." },
       { name: "spell", label: "Spell or feature", kind: "text", placeholder: "Misty Step", help: "With a caster below: the server casts it and refuses a jump past its range." },

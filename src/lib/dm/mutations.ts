@@ -76,7 +76,6 @@ import {
   describeExhaustion,
   effectiveMaxHp,
   pruneMeta,
-  removeConditions,
 } from "@/lib/dm/condition-logic";
 import { normalizeAbility } from "@/lib/dm/arg-coerce";
 import { breakConcentration } from "@/lib/dm/concentration";
@@ -113,7 +112,6 @@ import { unknownSheetRef } from "@/lib/dm/rolls";
 import { classWords } from "@/lib/sheet-words";
 import { healCeiling } from "@/lib/dm/afflictions";
 import { spreadGear } from "@/lib/dm/gear-zones";
-import { CALTROPS_WOUND } from "@/lib/battlemap/zones-gear";
 
 // DM stat authority: the model changes sheets ONLY through these tools.
 // Every mutation is server-clamped, audit-logged, and published live.
@@ -896,12 +894,9 @@ export function applyDmMutation(
       // Tincture's damage is beyond it (afflictions.ts healCeiling).
       const ceiling = healCeiling(campaign.id, sheet);
       const math = healMath(Math.min(sheet.currentHp, ceiling), ceiling, Math.min(amount, 200));
-      // Caltrops: the lost walking speed comes back with a regained hit
-      // point (src/lib/battlemap/zones-gear.ts).
-      const mended = math.currentHp > sheet.currentHp && sheet.conditions.some((entry) => isConditionNamed(entry, CALTROPS_WOUND))
-        ? removeConditions(sheet.conditions, sheet.conditionMeta, [CALTROPS_WOUND])
-        : null;
-      patchSheet(sheet.id, { currentHp: math.currentHp, ...(mended ? { conditions: mended.conditions, conditionMeta: mended.meta } : {}) });
+      // A regained hit point ends a caltrops wound in patchSheet itself
+      // (condition-logic.ts endedByRegain), whichever path healed.
+      patchSheet(sheet.id, { currentHp: math.currentHp });
       audit(campaign, turnId, sheet, "heal", { amount, newHp: math.currentHp }, reason, {
         currentHp: math.currentHp,
       });
