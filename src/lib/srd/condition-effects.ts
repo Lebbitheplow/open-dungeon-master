@@ -42,8 +42,11 @@ export const CONDITION_EFFECTS: ConditionEffectRow[] = [
     id: "sacred_weapon",
     match: ["sacred weapon"],
     summary:
-      "Sacred Weapon: the paladin's Charisma modifier is added to their weapon attack rolls, and the weapon sheds bright light, for a minute.",
+      "Sacred Weapon: the paladin's Charisma modifier is added to their weapon attack rolls, the weapon is magical, and it sheds bright light, for a minute.",
     paramAttackBonus: true,
+    // SRD 5.1 paladin, Oath of Devotion, Sacred Weapon: "If the weapon is not
+    // already magical, it becomes magical for the duration."
+    magicalStrikes: true,
   },
   {
     // SRD 5.1 cleric, Channel Divinity: Turn Undead (and the paladin's Turn

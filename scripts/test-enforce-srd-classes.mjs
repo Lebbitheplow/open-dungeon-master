@@ -343,12 +343,9 @@ await test("CLS-06", async () => {
   assert.equal(track.successes, 0, "a 7 on the d20 became a success: the unconscious paladin's own aura added +3");
 });
 
-await gap("CLS-07", {
-  rule: "SRD 5.1 paladin, Oath of Devotion, Channel Divinity, Sacred Weapon: \"If the weapon is not already magical, it becomes magical for the duration.\"",
-  where: "src/lib/dm/feature-spends.ts sacredWeapon and the sacred weapon row read by src/lib/srd/condition-effect-queries.ts conditionStrikesMagical",
-  severity: "medium",
-  note: "The paladin's longsword stays mundane, so a creature resisting nonmagical attacks halves it.",
-}, async () => {
+// SRD 5.1 paladin, Oath of Devotion, Channel Divinity, Sacred Weapon: "If the
+// weapon is not already magical, it becomes magical for the duration."
+await test("CLS-07", async () => {
   const enemy = await duel(devoted, { resist: "bludgeoning, piercing, and slashing from nonmagical attacks" });
   world.patch(devoted.id, { resources: { ...world.sheet(devoted.id).resources, channel_divinity: { max: 1, used: 0 } } });
   const out = await world.invoke("use_resource", { characterId: devoted.id, resource: "Channel Divinity", variant: "sacred weapon" });
