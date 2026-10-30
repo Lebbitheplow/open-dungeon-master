@@ -15,6 +15,13 @@ function dmOnly(knownBy: unknown): boolean {
   return knownBy === "dm";
 }
 
+// The party's recap is read at every seat, so it takes only what the whole
+// party knows. A fact known to some characters (knownBy lists them) was
+// learned apart from the rest, and stays with them and the DM's track.
+function wholeParty(knownBy: unknown): boolean {
+  return knownBy === "party";
+}
+
 // The storyteller's own secrets (src/lib/dm/viewer.ts) never ride a recap:
 // the DM's track is read by the lead who steers an AI table.
 
@@ -23,9 +30,12 @@ export function recapMaterial(
   dmView: boolean,
 ): RecapMaterial {
   const facts = input.facts
-    .filter((fact) => !isStorytellerFact(fact.knownBy) && (dmView || !dmOnly(fact.knownBy)))
+    .filter((fact) => !isStorytellerFact(fact.knownBy) && (dmView || wholeParty(fact.knownBy)))
     .slice(-12)
-    .map((fact) => `${fact.subject ? `${fact.subject}: ` : ""}${fact.fact}${dmView && dmOnly(fact.knownBy) ? " (the party does not know this)" : ""}`);
+    .map((fact) => {
+      const known = !dmView || wholeParty(fact.knownBy) ? "" : dmOnly(fact.knownBy) ? " (the party does not know this)" : " (only some of the party know this)";
+      return `${fact.subject ? `${fact.subject}: ` : ""}${fact.fact}${known}`;
+    });
   const quests = input.quests
     .filter((quest) => dmView || quest.source !== "dm-secret")
     .slice(0, 8)

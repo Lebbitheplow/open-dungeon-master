@@ -1574,7 +1574,7 @@
     "lib/dm/readied-kinds.ts#toLowerCase": [["key",1,"condition label (engine vocabulary)"]],
     "lib/dm/readied-spell.ts#str-eq": [["key",1,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/readied-spell.ts#toLowerCase": [["key",2,"condition label (engine vocabulary)"]],
-    "lib/dm/recap-logic.ts#str-eq": [["key",3,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
+    "lib/dm/recap-logic.ts#str-eq": [["key",4,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/regeneration-text.ts#RegExp i": [["table-language",2,"meaning reader: a monster's Regeneration trait (pack rows, and the lines a workshop author writes) parsed for what it regains, what stops it and when it works"]],
     "lib/dm/regeneration-text.ts#[a-z]": [["table-language",2,"meaning reader: a monster's Regeneration trait (pack rows, and the lines a workshop author writes) parsed for what it regains, what stops it and when it works"]],
     "lib/dm/regeneration-text.ts#\\b": [["table-language",28,"meaning reader: a monster's Regeneration trait (pack rows, and the lines a workshop author writes) parsed for what it regains, what stops it and when it works"]],
