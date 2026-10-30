@@ -370,12 +370,10 @@ async function runningJump(hero) {
   return walk(hero, { x: 5, y: 5, jump: true });
 }
 
-await gap("CLS-08", {
-  rule: "SRD 5.1 monk, Ki, Step of the Wind: \"You can spend 1 ki point to take the Disengage or Dash action as a bonus action on your turn, and your jump distance is doubled for the turn.\"",
-  where: "src/lib/dm/jump-move.ts (only the Jump spell's multiplier, condition-effect-queries.ts conditionJumpMultiplier)",
-  severity: "low",
-  note: "Strength 8 leaps 8 feet running; doubled it is 16, enough for 15.",
-}, async () => {
+// SRD 5.1 monk, Ki, Step of the Wind: "You can spend 1 ki point to take the
+// Disengage or Dash action as a bonus action on your turn, and your jump
+// distance is doubled for the turn."
+await test("CLS-08", async () => {
   await duel(leaper);
   kit.openField();
   kit.place(leaper.id, 5, 8, 2);
@@ -385,22 +383,18 @@ await gap("CLS-08", {
   assert.equal(jumped.status, 200, `the doubled 16-foot jump was refused: ${jumped.body.error}`);
 });
 
-await gap("CLS-09", {
-  rule: "SRD 5.1 fighter, Champion, Remarkable Athlete: \"In addition, when you make a running long jump, the distance you can cover increases by a number of feet equal to your Strength modifier.\"",
-  where: "src/lib/dm/jump-move.ts jumpMove and src/lib/srd/jump.ts longJumpFeet",
-  severity: "low",
-  note: "Strength 14: 14 feet, plus 2 is 16, enough for 15.",
-}, async () => {
+// SRD 5.1 fighter, Champion, Remarkable Athlete: "In addition, when you make a
+// running long jump, the distance you can cover increases by a number of feet
+// equal to your Strength modifier."
+await test("CLS-09", async () => {
   const jumped = await runningJump(athlete);
   assert.equal(jumped.status, 200, `the 16-foot running jump was refused: ${jumped.body.error}`);
 });
 
-await gap("CLS-10", {
-  rule: "SRD 5.1 rogue, Thief, Second-Story Work: \"In addition, when you make a running jump, the distance you cover increases by a number of feet equal to your Dexterity modifier.\"",
-  where: "src/lib/dm/jump-move.ts jumpMove and src/lib/srd/jump.ts longJumpFeet",
-  severity: "low",
-  note: "Strength 11, Dexterity 18: 11 feet, plus 4 is 15.",
-}, async () => {
+// SRD 5.1 rogue, Thief, Second-Story Work: "In addition, when you make a
+// running jump, the distance you cover increases by a number of feet equal to
+// your Dexterity modifier."
+await test("CLS-10", async () => {
   const jumped = await runningJump(climber);
   assert.equal(jumped.status, 200, `the 15-foot running jump was refused: ${jumped.body.error}`);
 });

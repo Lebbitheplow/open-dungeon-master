@@ -22,12 +22,41 @@ import { resolveOpportunityAttacks, type OpportunityOutcome } from "@/lib/dm/opp
 import { zonesAfterMove } from "@/lib/dm/zone-triggers";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { conditionJumpMultiplier } from "@/lib/srd/condition-effect-queries";
+import { holdsFeature } from "@/lib/srd/feature-names";
+import { WIND_STEP } from "@/lib/dm/action-budget";
+import { budgetFor } from "@/lib/dm/turn-budget";
 
 export type JumpOutcome =
   | { error: string; status: number }
   // `lasting`: the leap rolled a check or let a grapple go, so it cannot be
   // taken back (src/lib/battlemap/move-undo.ts).
   | { ok: true; jump: { feet: number; highJumpFeet: number; landed: string }; opportunity: OpportunityOutcome; zoneEffects: string[]; lasting: boolean };
+
+// Step of the Wind's doubling, while its mark is on the jumper's turn
+// (bonus-actions.ts spendKiTechnique, action-tools.ts take_action's bonus
+// route). SRD 5.1 monk, Step of the Wind: "your jump distance is doubled
+// for the turn."
+function windStepJump(encounter: Encounter, sheetId: string): number {
+  return budgetFor(encounter, sheetId, 1)?.oncePerTurn.includes(WIND_STEP) ? 2 : 1;
+}
+
+// The feet class features add to a running jump, long and high:
+//   - SRD 5.1 fighter, Champion, Remarkable Athlete: "when you make a running
+//     long jump, the distance you can cover increases by a number of feet
+//     equal to your Strength modifier."
+//   - SRD 5.1 rogue, Thief, Second-Story Work: "when you make a running jump,
+//     the distance you cover increases by a number of feet equal to your
+//     Dexterity modifier" (a running high jump too).
+// A negative modifier shortens nothing: "increases by".
+export function runningJumpFeet(sheet: CharacterSheet, runningStart: boolean): { long: number; high: number } {
+  if (!runningStart) {
+    return { long: 0, high: 0 };
+  }
+  const mod = (ability: "str" | "dex") => Math.max(0, Math.floor((computeAbilityScore(sheet, ability) - 10) / 2));
+  const athlete = holdsFeature(sheet, "Remarkable Athlete") ? mod("str") : 0;
+  const climber = holdsFeature(sheet, "Second-Story Work") ? mod("dex") : 0;
+  return { long: athlete + climber, high: climber };
+}
 
 export function jumpMove(input: {
   campaign: Campaign;
@@ -47,11 +76,13 @@ export function jumpMove(input: {
   const enemiesById = new Map(listEnemies(encounter.id).map((enemy) => [enemy.id, enemy]));
   const occupied = occupiedTiles(map, listTokens(map.id), token, footprintLookup(enemiesById));
   const strength = computeAbilityScore(sheet, "str");
-  // The Jump spell triples the distance (condition-effects-last.ts).
-  const leap = conditionJumpMultiplier(sheet.conditions);
+  // The Jump spell triples the distance (condition-effects-last.ts), and
+  // Step of the Wind doubles it for the turn.
+  const leap = conditionJumpMultiplier(sheet.conditions) * (scene ? 1 : windStepJump(encounter, sheet.id));
   // A 10-foot run on foot this turn is the running start; out of a fight
   // there is all the room in the world to take one.
   const runningStart = scene || token.movedThisRound >= RUN_UP_TILES;
+  const extra = runningJumpFeet(sheet, runningStart);
   const plan = planLongJump({
     terrain: map.terrain,
     width: map.width,
@@ -59,7 +90,9 @@ export function jumpMove(input: {
     occupied,
     from: token,
     to,
-    strength: strength * leap,
+    // A running long jump covers the Strength score in feet, so the class
+    // features' extra feet ride on it.
+    strength: (strength + extra.long) * leap,
     runningStart,
     budgetTiles: input.budgetTiles,
     name: sheet.name,
@@ -96,7 +129,7 @@ export function jumpMove(input: {
   }
   return {
     ok: true,
-    jump: { feet: plan.feet, highJumpFeet: highJumpFeet(strength, runningStart) * leap, landed },
+    jump: { feet: plan.feet, highJumpFeet: (highJumpFeet(strength, runningStart) + extra.high) * leap, landed },
     opportunity,
     zoneEffects,
     lasting: plan.landsInDifficult || letGo.length > 0,

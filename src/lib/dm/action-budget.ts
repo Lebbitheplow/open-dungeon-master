@@ -176,6 +176,11 @@ function spendGrantedAction(budget: TurnBudget, what: string, who: string): Spen
 // (resource-turn.ts refuses it, the Hand greys its card).
 export const ACTION_SURGED = "action surge";
 
+// The turn's mark that the monk spent Step of the Wind on it. SRD 5.1 monk,
+// Step of the Wind: "your jump distance is doubled for the turn"
+// (jump-move.ts reads it).
+export const WIND_STEP = "step of the wind";
+
 // Grants one more action this turn. Called when Action Surge is spent
 // (src/lib/dm/action-tools.ts grantActionSurge).
 export function grantAction(budget: TurnBudget): TurnBudget {

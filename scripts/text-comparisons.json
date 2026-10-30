@@ -1035,7 +1035,7 @@
     "lib/dm/ability-entries.ts#toLowerCase": [["table-language",3,"meaning reader: a section of a pack row's entries split into its abilities (options, breaths an entry announces, a second save) and its legendary count"]],
     "lib/dm/action-budget.ts#re-word": [["english-source",1,"the action labels the engine itself writes (Haste's choices)"]],
     "lib/dm/action-common.ts#toLowerCase": [["key",1,"condition label (engine vocabulary)"]],
-    "lib/dm/action-tools.ts#str-eq": [["key",3,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
+    "lib/dm/action-tools.ts#str-eq": [["key",4,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/action-tools.ts#str-list": [["key",5,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/action-tools.ts#toLowerCase": [["key",1,"condition label (engine vocabulary)"]],
     "lib/dm/advance-logic.ts#re-word": [["english-extra",1,"the romance word list (romance, romantic, flirt, seduction, love interest) read in a table's safety lines and veils: an extra beside the family boundary and each player's own opt-in, which serve every language; a table in another language still has both"]],
