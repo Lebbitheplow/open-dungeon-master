@@ -299,24 +299,30 @@ function revive(
   if (typeof paid.error === "string") {
     return toolError(paid);
   }
-  const fresh = getSheetById(target.id) ?? target;
+  const before = getSheetById(target.id) ?? target;
+  // "Being raised from the dead reduces a creature's exhaustion level by 1"
+  // (SRD 5.1, Conditions, Exhaustion), so one who died of the sixth level
+  // comes back at the fifth. The maximum below is read at the new level.
+  const exhaustion = Math.max(0, (before.exhaustion ?? 0) - 1);
+  const fresh = { ...before, exhaustion };
   const woke = wakeConditions(fresh);
   const hp = rule.hp === "all" ? effectiveMaxHp(fresh) : 1;
   // Coming back is an ordeal (Raise Dead, Resurrection): -4 to attack rolls
   // and saving throws, one less after each long rest.
   const ordeal = rule.ordeal ? "returned from death (-4)" : null;
   const conditions = ordeal && !woke.conditions.includes(ordeal) ? [...woke.conditions, ordeal] : woke.conditions;
-  const patch = { deathSaves: null, currentHp: hp, conditions, conditionMeta: woke.conditionMeta };
+  const lifted = (before.exhaustion ?? 0) > exhaustion;
+  const patch = { deathSaves: null, currentHp: hp, conditions, conditionMeta: woke.conditionMeta, ...(lifted ? { exhaustion } : {}) };
   const updated = patchSheet(fresh.id, patch);
   const entry = insertSheetAudit({
     campaignId: campaign.id,
     characterId: fresh.id,
     turnId,
     kind: "death_state",
-    delta: { revived: name, currentHp: hp },
+    delta: { revived: name, currentHp: hp, ...(lifted ? { exhaustion } : {}) },
     reason: `${name} cast by ${input.caster.name}`,
     seq: allocateSeq(campaign.id),
-    before: fresh,
+    before,
     patch,
   });
   publishPersisted(campaign.id, "sheet_audit", { entry, characterName: fresh.name });
@@ -332,6 +338,7 @@ function revive(
       ...(paid.slot ? { slot: paid.slot } : {}),
       ...(paid.material ? { material: paid.material } : {}),
       ...(ordeal ? { ordeal: "-4 to attack rolls and saving throws, one less after each long rest" } : {}),
+      ...(lifted ? { exhaustion: `one level lighter for coming back: now ${exhaustion}` } : {}),
       note: `${target.name} returns to life with ${hp} hit point${hp === 1 ? "" : "s"}; narrate it.`,
     },
   };

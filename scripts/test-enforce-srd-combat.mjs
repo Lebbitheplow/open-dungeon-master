@@ -444,12 +444,8 @@ await test("CMB-14", async () => {
   assert.ok(took === 0 && !poisoned, `a petrified creature took ${took} poison damage and was ${poisoned ? "" : "not "}poisoned`);
 });
 
-await gap("CMB-15", {
-  rule: "conditions, Exhaustion: 'Also, being raised from the dead reduces a creature's exhaustion level by 1.'",
-  where: "src/lib/dm/heal-spell.ts revive (writes hit points, the death track and the conditions; the exhaustion level is untouched)",
-  severity: "medium",
-  note: "A character revived by Revivify keeps every level of exhaustion; one who died of exhaustion 6 comes back at 6.",
-}, async () => {
+// conditions, Exhaustion: 'Also, being raised from the dead reduces a creature's exhaustion level by 1.'
+await test("CMB-15", async () => {
   await kit.endFight();
   const victim = world.addHero({ name: "Tamsin", class: "fighter", level: 5, proficiencies: TRAINED, maxHp: 44 });
   world.patch(victim.id, { currentHp: 0, exhaustion: 2, deathSaves: { successes: 0, failures: 3, stable: false, dead: true } });
