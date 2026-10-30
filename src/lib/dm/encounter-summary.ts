@@ -18,7 +18,7 @@ export type SummaryRoll = {
   characterId: string | null;
   // Who rolled it (src/lib/db/rolls.ts); absent or null, the roll is the
   // characterId sheet's, as every roll was before it was recorded.
-  attacker?: { kind: string; id: string } | null;
+  attacker?: { kind: string; id: string; name?: string } | null;
   kind: string;
   total: number;
   applied?: boolean;
@@ -27,6 +27,40 @@ export type SummaryRoll = {
 };
 
 export type SummaryAudit = { characterId: string; kind: string; delta: Record<string, unknown> };
+
+// The sheet that made a roll: its attacker when one is recorded (none for
+// an enemy's), else the sheet the roll concerns.
+function rollerOf(roll: SummaryRoll): string | null {
+  return roll.attacker ? (roll.attacker.kind === "sheet" ? roll.attacker.id : null) : roll.characterId;
+}
+
+// Who fought and has no sheet now (issue 663): a companion who left the
+// party mid-fight had their sheet deleted, but their rolls and the damage
+// they took are still on record. Each with the name the dice gave them, or
+// an empty name when no roll of theirs carried one. Order of first sight.
+export function absentFighters(
+  sheets: Array<{ id: string }>,
+  rolls: SummaryRoll[],
+  audits: SummaryAudit[],
+): Array<{ id: string; name: string }> {
+  const present = new Set(sheets.map((sheet) => sheet.id));
+  const names = new Map<string, string>();
+  const note = (id: string | null, name = "") => {
+    if (!id || present.has(id)) {
+      return;
+    }
+    if (!names.get(id)) {
+      names.set(id, name.trim());
+    }
+  };
+  for (const roll of rolls) {
+    note(rollerOf(roll), roll.attacker?.name);
+  }
+  for (const audit of audits) {
+    note(audit.characterId);
+  }
+  return [...names].map(([id, name]) => ({ id, name }));
+}
 
 export function computeEncounterSummary(input: {
   outcome: string;
@@ -45,7 +79,7 @@ export function computeEncounterSummary(input: {
   );
   for (const roll of input.rolls) {
     // An enemy's critical hit on a character is not the character's natural 20.
-    const rollerId = roll.attacker ? (roll.attacker.kind === "sheet" ? roll.attacker.id : null) : roll.characterId;
+    const rollerId = rollerOf(roll);
     const line = rollerId ? lines.get(rollerId) : undefined;
     if (!line) {
       continue;
