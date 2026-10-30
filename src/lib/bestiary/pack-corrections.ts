@@ -87,6 +87,14 @@ const CORRECTIONS: Record<string, Correction> = {
     },
     action_fields: { Bite: { attack_bonus: 17 }, Tentacle: { attack_bonus: 17 } },
   },
+  // SRD 5.1 Solar: Slaying Longbow slays "a creature that has 100 hit points
+  // or fewer"; the row has 190.
+  "wotc-srd/solar": {
+    actions: {
+      "Slaying Longbow":
+        "Ranged Weapon Attack: +13 to hit, range 150/600 ft., one target. Hit: 15 (2d8 + 6) piercing damage plus 27 (6d8) radiant damage. If the target is a creature that has 100 hit points or fewer, it must succeed on a DC 15 Constitution saving throw or die.",
+    },
+  },
   // SRD 5.1 Ancient Green Dragon: Bite "19 (2d10 + 8) piercing damage plus
   // 10 (3d6) poison damage"; the row's damage_bonus is 9, within a point of
   // the printed average, so the reader keeps it.

@@ -165,13 +165,8 @@ if (world.hasPack) {
     },
   );
 
-  await gap(
-    "MON-05",
-    {
-      rule: "Rug of Smothering (rug-of-smothering-animated-object-animated-object), Smother: 'Hit: The creature is grappled (escape DC 13) ... In addition, at the start of each of the target's turns, the target takes 10 (2d6+3) bludgeoning damage.' The hit itself deals no damage",
-      where: "src/lib/bestiary/attack-parse.ts parseAttack (damageFromFields takes the pack row's damage_dice and damage_bonus for a hit whose line prints no damage of its own)",
-      severity: "low",
-    },
+  await test(
+    "MON-05: a rug of smothering's Smother deals no damage on the hit; the bludgeoning damage at the start of the target's turns is a note for the GM",
     () => {
       const rug = ENEMIES.find((entry) => entry.name === "Rug of Smothering");
       const smother = rug.stats.attacks.find((attack) => attack.name === "Smother");
@@ -179,13 +174,8 @@ if (world.hasPack) {
     },
   );
 
-  await gap(
-    "MON-06",
-    {
-      rule: "Green Hag (green-hag) prints one Innate Spellcasting: 'At will: dancing lights, minor illusion, vicious mockery'; Night Hag (night-hag) likewise. A lone hag casts nothing else (Monster Statistics, Spellcasting: a monster casts the spells its block lists)",
-      where: "src/lib/bestiary/statblock.ts parseMonster (castingParts reads every special whose name holds 'spellcasting', so the pack's 'Shared Spellcasting (Coven Only)' sidebar becomes the hag's own 12th-level casting); src/lib/dm/enemy-casting.ts lets it cast",
-      severity: "medium",
-    },
+  await test(
+    "MON-06: a lone green or night hag casts only her own Innate Spellcasting, never her coven's shared spells",
     async () => {
       const hero = world.addHero({ name: "Witch Hunter", class: "fighter", level: 5, maxHp: 60 });
       await world.beginFight([{ monster: "green-hag" }]);
@@ -212,13 +202,8 @@ await test("With the pack, the enemy path reads every other field of the SRD row
 
 // ---- the SRD's own words, read by the enemy reader (no pack needed) ----
 
-await gap(
-  "MON-07",
-  {
-    rule: "An attack's hit carries the save its line prints: Clay Golem Slam 'must succeed on a DC 15 Constitution saving throw or have its hit point maximum reduced by an amount equal to the damage taken'; Bearded Devil Glaive (DC 12) and Horned Devil Tail (DC 17) 'or lose ... hit points at the start of each of its turns due to an infernal wound'; Solar Slaying Longbow 'must succeed on a DC 15 Constitution saving throw or die'",
-    where: "src/lib/bestiary/attack-text.ts readAttackText (the drain wording 'have its hit point maximum reduced' and these saves are neither read into onHit nor kept as a manual note, so enemy_attack rolls no save and tells the GM nothing)",
-    severity: "medium",
-  },
+await test(
+  "MON-07: an attack's hit carries the save its line prints: the clay golem's Slam drains the hit point maximum on a failed DC 15 Constitution save, and the devils' infernal wound and the solar's slaying arrow roll their saves and tell the GM the rest",
   () => {
     const dropped = [];
     for (const [name, attackName] of [["Clay Golem", "Slam"], ["Bearded Devil", "Glaive"], ["Horned Devil", "Tail"], ["Solar", "Slaying Longbow"]]) {
@@ -262,13 +247,8 @@ await gap(
   },
 );
 
-await gap(
-  "MON-09",
-  {
-    rule: "Monster Statistics, Challenge: 'Monsters with a challenge rating of 0 ... those with no effective attacks are worth no experience points'; Frog and Sea Horse print 'Challenge 0 (0 XP)'",
-    where: "src/lib/bestiary/statblock.ts parseMonster (xp: xpForCr(cr), never the block's own XP); src/lib/srd/encounter-math.ts xpForCr(0) is 10",
-    severity: "low",
-  },
+await test(
+  "MON-09: a challenge 0 creature with no effective attack (the frog, the sea horse) is worth 0 XP",
   () => {
     const wrong = [];
     for (const [name, block] of BLOCKS) {

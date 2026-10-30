@@ -317,8 +317,11 @@ export function parseMonster(raw: Record<string, unknown>, crFromRow: number): E
   // Every Spellcasting entry, wherever the book filed it (Black Flag and
   // Tome of Beasts 2023 print it as an action), as one; and A5e's spells
   // printed as actions ("Hold Monster (5th-Level; V, S, Concentration)").
+  // A hag's "Shared Spellcasting (Coven Only)" is what three hags together
+  // cast (SRD 5.1, Hag Covens), never a lone hag's own: her block prints one
+  // Innate Spellcasting, and a green hag fought alone casts no Lightning Bolt.
   const castingParts = [...specials, ...actions]
-    .filter((entry) => /spellcasting/i.test(asString(entry.name)))
+    .filter((entry) => /^(?!.*\(coven only\)).*spellcasting/i.test(asString(entry.name)))
     .map((entry) => parseSpellcasting(asString(entry.desc), asString(entry.name)))
     .filter((part): part is MonsterSpellcasting => part !== null);
   const spellActions = [...actions, ...(Array.isArray(data.reactions) ? (data.reactions as RawAction[]) : [])]
@@ -337,6 +340,12 @@ export function parseMonster(raw: Record<string, unknown>, crFromRow: number): E
 
   const dexterity = asNumber(data.dexterity) ?? 10;
   const cr = asNumber(data.cr) ?? crFromRow;
+  // SRD 5.1, Monster Statistics, Challenge: a challenge 0 monster "with no
+  // effective attacks" is worth no experience points (the frog and the sea
+  // horse print "0 (0 XP)"); one that acts at all is worth 10 (the
+  // shrieker, whose only act is its Shriek reaction).
+  const acts = actions.length + bonusActions.length + (Array.isArray(data.reactions) ? data.reactions.length : 0);
+  const xp = cr === 0 && !acts ? 0 : xpForCr(cr);
   const type = normalizeCreatureType(data.type);
 
   // Save modifiers: an explicit *_save field wins; otherwise the ability
@@ -373,7 +382,7 @@ export function parseMonster(raw: Record<string, unknown>, crFromRow: number): E
     ...(fullTraits.length ? { fullTraits } : {}),
     ...defences,
     cr,
-    xp: xpForCr(cr),
+    xp,
     attacksPerTurn,
     ...(routines ? { routines } : {}),
     ...(specialsWithNumbers.length ? { specials: specialsWithNumbers } : {}),

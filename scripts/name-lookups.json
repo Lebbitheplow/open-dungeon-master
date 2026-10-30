@@ -748,7 +748,7 @@
     "lib/battlemap/zones.ts#number": [["key",1,"digits a regex already captured, ids, headers, stored and form numbers (number inputs), dice parts, the pack's English text (\"1,000 feet\", a purse); src/: every site read"]],
     "lib/battlemap/zones.ts#partial": [["key",2,"terrain codes"]],
     "lib/bestiary/attack-parse.ts#number": [["key",1,"digits a regex already captured, ids, headers, stored and form numbers (number inputs), dice parts, the pack's English text (\"1,000 feet\", a purse); src/: every site read"]],
-    "lib/bestiary/attack-parse.ts#partial": [["parse",1,"dice"],["pattern",1,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"]],
+    "lib/bestiary/attack-parse.ts#partial": [["parse",1,"dice"],["pattern",2,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"]],
     "lib/bestiary/attack-parse.ts#whole": [["parse",3,"dice terms of the pack's damage fields"]],
     "lib/bestiary/attack-text.ts#first": [["key",1,"the SRD's English attack and multiattack text parsed (a workshop monster's text: authoring)"]],
     "lib/bestiary/attack-text.ts#number": [["key",10,"digits a regex already captured, ids, headers, stored and form numbers (number inputs), dice parts, the pack's English text (\"1,000 feet\", a purse); src/: every site read"]],

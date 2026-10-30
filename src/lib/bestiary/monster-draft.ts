@@ -210,7 +210,10 @@ export function checkMonsterDraft(raw: unknown): DraftCheck {
     cr,
     // Never taken from the client: XP is a function of CR and a row where
     // they disagree would quietly break every encounter budget it appears in.
-    xp: xpForCr(cr),
+    // The one other value is a challenge 0 block's 0, for a creature "with
+    // no effective attacks" (SRD 5.1, Challenge: the frog, the sea horse),
+    // which statblock.ts parseMonster reads and a copy keeps.
+    xp: cr === 0 && source.xp === 0 ? 0 : xpForCr(cr),
     attacksPerTurn: clamp(source.attacksPerTurn, 1, MAX_SWINGS, 1),
     size,
     type,

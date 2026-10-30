@@ -127,7 +127,10 @@ if (world.hasPack) {
     const unread = [];
     let read = 0;
     for (const row of rows) {
-      if (!entriesOf(row.data, ["special_abilities", "actions"]).some((entry) => /spellcasting/i.test(entry.name))) {
+      // A hag's "Shared Spellcasting (Coven Only)" is cast by three hags
+      // together (SRD 5.1, Hag Covens), never by one block alone, so it
+      // gives the block no spells of its own (statblock.ts castingParts).
+      if (!entriesOf(row.data, ["special_abilities", "actions"]).some((entry) => /spellcasting/i.test(entry.name) && !/\(coven only\)/i.test(entry.name))) {
         continue;
       }
       if (row.stats.spellcasting?.spells.length) {

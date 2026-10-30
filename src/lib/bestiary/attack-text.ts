@@ -378,7 +378,11 @@ function readOnHit(hit: string, effectOnly: boolean): OnHitRider | null {
       rider.alsoCondition = "restrained";
     }
   }
-  const drain = /hit point maximum is reduced by an amount equal to the (necrotic )?damage (?:taken|dealt)/i.exec(hit);
+  // "its hit point maximum is reduced by an amount equal to the damage
+  // taken" (a wight's Life Drain), or the clay golem's Slam: "must succeed
+  // on a DC 15 Constitution saving throw or have its hit point maximum
+  // reduced by an amount equal to the damage taken".
+  const drain = /(?:hit point maximum is reduced|have its hit point maximum reduced) by an amount equal to the (necrotic )?damage (?:taken|dealt)/i.exec(hit);
   if (drain) {
     rider.drainMaxHp = drain[1] ? "necrotic" : "all";
     if (/regains hit points equal to that amount/i.test(hit)) {
@@ -393,7 +397,12 @@ function readOnHit(hit: string, effectOnly: boolean): OnHitRider | null {
   // What a hit (or its save) does that no engine models: a push or a pull,
   // a speed cut, a dropped weapon, lost reactions. The sentence goes to the
   // DM, as the issue-473 audit found some 290 of them dropped.
-  const unmodelled = /\b(?:pushed|pulled|knocked back|flung|hurled|speed (?:is )?(?:halved|reduced)|half (?:its )?speed|drops?\b[^.]*\b(?:weapon|holding|held)|can't take reactions|can't regain hit points|teleport\w*)\b/i;
+  // So is what a failed save costs that no field holds (the bearded and
+  // horned devils' infernal wound, the solar's "or die", a drain that lasts
+  // "until removed by the greater restoration spell"), and damage dealt at
+  // the start of the target's later turns (a rug of smothering's): the save
+  // is still rolled, and the GM is told the rest.
+  const unmodelled = /\b(?:pushed|pulled|knocked back|flung|hurled|speed (?:is )?(?:halved|reduced)|half (?:its )?speed|drops?\b[^.]*\b(?:weapon|holding|held)|can't take reactions|can't regain hit points|teleport\w*|infernal wound|saving throw or die|lasts until removed|at the start of each of the target's turns, the target takes)\b/i;
   manual = [...manual, ...sentences.filter((sentence) => unmodelled.test(sentence) && !manual.includes(sentence))];
   // A hit that only lays an effect: the condition its first sentence names
   // ("The target is restrained by webbing", "it is knocked prone"), and what
