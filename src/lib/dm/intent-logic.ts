@@ -377,6 +377,9 @@ export type PlayedCard = {
   characterId: string | null;
   name: string;
   resolution?: SpellMech["resolution"] | null;
+  // The player message the card came on, so one the turn never carried out
+  // can be given back on it (unresolvedCards).
+  messageId?: string;
 };
 
 // One call the turn made: its name, the arguments it was sent, and the
@@ -521,6 +524,34 @@ export function intentAnswered(card: PlayedCard, calls: Iterable<TurnCall>): boo
     }
   }
   return false;
+}
+
+// The cards no call of the turn carried out, its correction included (issue
+// 570): they did not happen, so they go back to their players rather than
+// leaving the story to tell them. A refusal is an answer (the engine said
+// no, and the narration tells why); a call sent back for a retry is not.
+export function unresolvedCards(cards: readonly PlayedCard[], calls: readonly TurnCall[]): PlayedCard[] {
+  return cards.filter((card) => !intentAnswered(card, calls));
+}
+
+// Why a card came back, as its line shows it: the first sentence of the
+// engine's answer when a call for it was sent back for a retry (a blast that
+// caught nobody), or that nothing carried it out.
+export function returnReason(card: PlayedCard, calls: readonly TurnCall[]): string {
+  for (const call of calls) {
+    const error = call.result?.error;
+    if (typeof error === "string" && callMismatch(card, call) === "retry") {
+      const end = error.indexOf(". ");
+      return (end > 0 ? error.slice(0, end + 1) : error).trim();
+    }
+  }
+  return "Nothing the GM did this turn carried it out.";
+}
+
+// What the guard's rewrite is told about a card given back
+// (src/lib/dm/narration-guard.ts): the story must not tell it happening.
+export function returnedCardNote(card: PlayedCard): string {
+  return `${card.name}'s card (${what(card.intent)}) did not happen: no call this turn carried it out, so it goes back to ${card.name}'s hand to play again. The narration must not tell it happening or give it an outcome; it can show the moment passing`;
 }
 
 // The corrective message for a card whose attack or cast no call carried out.

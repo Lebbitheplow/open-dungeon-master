@@ -159,6 +159,10 @@ export async function enforceEngineBoundary(
   // The tools the turn's calls were sent, kept in the rewrite's prompt so a
   // local narrator's cache holds (src/lib/dm/turn.ts proseOnlyTools).
   tools: readonly unknown[] = [],
+  // The cards from the Hand no call carried out, which go back to their
+  // players (issue 570, intent-logic.ts returnedCardNote): the story must not
+  // tell them happening. Asked whatever the prose says, with the check on.
+  returned: readonly string[] = [],
 ): Promise<GuardedNarration> {
   const narration = turn.narrationParts.join("\n\n").trim();
   if (!narration) {
@@ -169,7 +173,12 @@ export async function enforceEngineBoundary(
   // outcome check is on: safety is not a setting.
   const lines = campaign.gameSettings.safety?.lines ?? [];
   const crossed = lineViolations(narration, lines, campaign.gameSettings.tableLanguage);
-  const { contradictions, lines: spoken, handedOn, deeds, unread } = await readNarration(campaign, turn, sheets, turn.narrationParts, partReads);
+  const read = await readNarration(campaign, turn, sheets, turn.narrationParts, partReads);
+  const { lines: spoken, handedOn, deeds, unread } = read;
+  const contradictions: Contradiction[] = [
+    ...read.contradictions,
+    ...(campaign.gameSettings.narrationGuard ? returned.map((detail) => ({ kind: "card" as const, detail, clause: "" })) : []),
+  ];
   const found = kindsOf(contradictions, crossed);
   const kept = (outcome: GuardOutcome): GuardedNarration => ({ spoken, handedOn, deeds, guard: { outcome, kinds: found } });
   if (!contradictions.length && !crossed.length) {

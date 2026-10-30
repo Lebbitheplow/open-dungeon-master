@@ -1649,7 +1649,7 @@
     "lib/dm/turn-warmup.ts#whole-single": [["key",1,"hashes of a turn's prompt start, compared to know whether the narrator holds it"]],
     "lib/dm/turn.ts#first": [["key",1,"tool names"],["key",1,"a message by position"]],
     "lib/dm/turn.ts#keyed": [["key",5,"ids, refs, slugs, tool names, field names, env names, event kinds, UI keys, caches, door and map keys; a sheet's conditionMeta by the condition key it was written under; the usage route's gear map by the sheet's own stored item names (src/: every site read)"]],
-    "lib/dm/turn.ts#partial": [["key",12,"tool names and ids"],["key",1,"tool names"]],
+    "lib/dm/turn.ts#partial": [["key",15,"tool names and ids"],["key",1,"tool names"]],
     "lib/dm/turn.ts#switch": [["key",2,"switches on tool names, event kinds, key names and kinds"]],
     "lib/dm/turn.ts#whole": [["key",3,"tool names and ids"],["key",7,"tool names"]],
     "lib/dm/underwater.ts#whole": [["key",2,"weapon row names (the line's base)"]],
@@ -2340,6 +2340,7 @@
     "lib/battlemap/hand-area.ts#keyed": [["key",1,"a spell's damage type (engine vocabulary), keying the colour its blast is drawn in"]],
     "app/campaigns/[campaignId]/BoardAreaAim.tsx#whole-single": [["key",1,"change detection, UI keys, ids, slugs, password confirmation, a saved selection (src/app: every site read)"]],
     "lib/dm/intent-logic.ts#switch": [["key",1,"a card's first tool call by name, to share a casting out (issue 570)"]],
-    "lib/battlemap/hand-play.ts#first": [["key",2,"a creature's share of a casting, by its id (issue 570)"]]
+    "lib/battlemap/hand-play.ts#first": [["key",2,"a creature's share of a casting, by its id (issue 570)"]],
+    "lib/dm/intent-logic.ts#partial": [["parse",1,"the first sentence of a tool's error, for the line of a card that went back (issue 570)"]]
   }
 }

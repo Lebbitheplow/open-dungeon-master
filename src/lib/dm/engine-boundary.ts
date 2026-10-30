@@ -554,7 +554,9 @@ export function resolveOutcomes(
 // state alone, which of them contradict it.
 
 export type Contradiction = {
-  kind: "hit" | "miss" | "death" | "number" | "spell";
+  // "card": a card from the Hand no call carried out (issue 570), which goes
+  // back to its player; nothing in the prose is quoted for it.
+  kind: "hit" | "miss" | "death" | "number" | "spell" | "card";
   detail: string;
   clause: string;
 };
@@ -687,7 +689,7 @@ export function guardOutcomes(conversation: readonly GuardMessage[], live: LiveS
 export function buildCorrectionPrompt(contradictions: readonly Contradiction[]): string {
   const lines = contradictions
     .slice(0, 6)
-    .map((entry) => `- ${entry.detail}. You wrote: "${entry.clause}"`)
+    .map((entry) => `- ${entry.detail}.${entry.clause ? ` You wrote: "${entry.clause}"` : ""}`)
     .join("\n");
   return `[System] Your narration contradicts what the dice and tools actually resolved this turn. The tool results are the truth; the prose is what is wrong.
 ${lines}

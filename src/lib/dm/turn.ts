@@ -61,7 +61,7 @@ import { listQuests } from "@/lib/db/quests";
 import { SMALL_MODEL_REASONING_CHARS, type ModelTuning } from "@/lib/dm/model-tuning-logic";
 import { PC_ATTACK_PARKED } from "@/lib/dm/pc-attack";
 import { strictBooleanArgs } from "@/lib/dm/arg-coerce";
-import { insertCampaignMessage, listMessagesPage, listRecentMessages, type CampaignMessage } from "@/lib/db/messages";
+import { insertCampaignMessage, listMessagesPage, listRecentMessages, markCardReturned, type CampaignMessage } from "@/lib/db/messages";
 import { narrationShown, takeNarrationSeq } from "@/lib/dm/narration-slot";
 import { getRoll, listRecentRolls } from "@/lib/db/rolls";
 import { listSheets } from "@/lib/db/sheets";
@@ -122,7 +122,7 @@ import { characterAwaitingPlayer } from "@/lib/dm/player-word";
 import { enemiesDue, enemiesOwedTurn, personRunsTable } from "@/lib/dm/enemies-due";
 import { noteTurnHead, settleTurnWarmup, turnHeadKey, warmNextTurn } from "@/lib/dm/turn-warmup";
 import { directContextFor } from "@/lib/dm/direct-context";
-import { DIRECT_CALL_ID_PREFIX, directCardCalls, intentAnswered, intentCorrection, intentNeedsTool, type MessageIntent, type PlayedCard, type TurnCall } from "@/lib/dm/intent-logic";
+import { DIRECT_CALL_ID_PREFIX, directCardCalls, intentAnswered, intentCorrection, intentNeedsTool, returnedCardNote, returnReason, unresolvedCards, type MessageIntent, type PlayedCard, type TurnCall } from "@/lib/dm/intent-logic";
 import type { SpellMech } from "@/lib/srd/spell-mech-types";
 import { handleCompleteBeat } from "@/lib/dm/arc";
 import { tickWaypointsFromCalls } from "@/lib/dm/waypoint-tick";
@@ -2317,6 +2317,11 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
   ) {
     failed = await narrateAfterToolLeak(context, turn);
   }
+  // A card no call carried out, the correction included, did not happen: it
+  // goes back to its player, and the guard keeps the story from telling it
+  // (issue 570).
+  const callsMade = turnCalls(turn.conversation, []);
+  const unresolved = failed ? [] : unresolvedCards(cardsToSettle(context, turn), callsMade);
   let spoken: SpokenLine[] = [];
   if (!failed) {
     await ensureWhisperReplies(context, turn);
@@ -2325,7 +2330,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     // the encounter as it now stands, and spend the one call held in
     // reserve for it (outside MAX_MODEL_CALLS) on a rewrite when they
     // disagree. Its reads also say who speaks the narration's lines.
-    const guarded = await enforceEngineBoundary(campaign, turn, sheets, partReads, proseOnlyTools(turn.id));
+    const guarded = await enforceEngineBoundary(campaign, turn, sheets, partReads, proseOnlyTools(turn.id), unresolved.map(returnedCardNote));
     spoken = guarded.spoken;
     // What the guard did goes with the turn to its narrator quality row
     // (issue #460), written when finalize() saves it as done.
@@ -2358,6 +2363,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
   }
   finalize(context, turn, failed, spoken);
   if (!failed) {
+    giveCardsBack(campaignId, unresolved, callsMade);
     setJobStage("closing_chapter");
     await maybeCloseChapter(campaignId, { beatCompleted, beatGated, beatClaimed });
     if (isStageEnabled(context.campaign.gameSettings.stages, "compaction")) {
@@ -2532,17 +2538,68 @@ function cardMech(context: TurnContext, intent: MessageIntent): SpellMech | null
   return spell ? (spellMechanicsFor({ spell, userIds: spellAuthorsFor(context.campaign) })?.mech ?? null) : null;
 }
 
+// A player message's card as the turn answers it, with how its spell
+// resolves when the content knows it.
+function playedCard(context: TurnContext, message: CampaignMessage & { intent: MessageIntent }): PlayedCard {
+  const sheet = message.characterId ? context.sheetsById.get(message.characterId) : undefined;
+  return {
+    intent: message.intent,
+    characterId: message.characterId ?? null,
+    name: sheet?.name ?? "The player",
+    resolution: cardMech(context, message.intent)?.resolution ?? null,
+    messageId: message.id,
+  };
+}
+
 // The cards behind the actions this turn answers: the player messages since
-// the DM last spoke that came from the Hand as an attack or a cast, with how
-// each spell resolves when the content knows it.
+// the DM last spoke that came from the Hand as an attack or a cast.
 function cardsPlayed(context: TurnContext): PlayedCard[] {
+  return playerLinesSinceDm(context.campaign.id).flatMap((message) =>
+    message.intent && intentNeedsTool(message.intent) ? [playedCard(context, { ...message, intent: message.intent })] : [],
+  );
+}
+
+// The short form of a message id a direct card's call carries in its own id
+// (cardReply), and the messages whose cards the engine played that way.
+const cardCallKey = (messageId: string) => messageId.replace(/-/g, "").slice(0, 12);
+function directlyPlayed(conversation: DmTurn["conversation"]): Set<string> {
+  const keys = new Set<string>();
+  for (const message of conversation) {
+    for (const raw of Array.isArray(message.tool_calls) ? message.tool_calls : []) {
+      const id = (raw as { id?: unknown }).id;
+      if (typeof id === "string" && id.startsWith(DIRECT_CALL_ID_PREFIX)) {
+        keys.add(id.slice(DIRECT_CALL_ID_PREFIX.length).split("_")[0]);
+      }
+    }
+  }
+  return keys;
+}
+
+// The cards the turn must carry out or give back (issue 570): every attack,
+// spell and reaction card it answers, and any card the engine played
+// straight from the Hand, whose call can come back for a retry. Only lines
+// posted before the turn began: a card played while it narrates is the
+// next turn's.
+function cardsToSettle(context: TurnContext, turn: DmTurn): PlayedCard[] {
+  const direct = directlyPlayed(turn.conversation);
+  const began = Date.parse(turn.createdAt);
   return playerLinesSinceDm(context.campaign.id).flatMap((message) => {
-    if (!message.intent || !intentNeedsTool(message.intent)) {
+    if (!message.intent || Date.parse(message.createdAt) > began) {
       return [];
     }
-    const sheet = message.characterId ? context.sheetsById.get(message.characterId) : undefined;
-    return [{ intent: message.intent, characterId: message.characterId ?? null, name: sheet?.name ?? "The player", resolution: cardMech(context, message.intent)?.resolution ?? null }];
+    return intentNeedsTool(message.intent) || direct.has(cardCallKey(message.id)) ? [playedCard(context, { ...message, intent: message.intent })] : [];
   });
+}
+
+// The cards no call carried out go back to their players: each one's line
+// says why, for every seat at once (issue 570).
+function giveCardsBack(campaignId: string, cards: readonly PlayedCard[], calls: readonly TurnCall[]): void {
+  for (const card of cards) {
+    const updated = card.messageId ? markCardReturned(card.messageId, returnReason(card, calls)) : null;
+    if (updated) {
+      publishPersisted(campaignId, "message_updated", { message: updated });
+    }
+  }
 }
 
 // The cards the engine resolves before the narrator is asked: every player
@@ -2574,7 +2631,7 @@ function cardReply(cards: DirectCard[]): DmCallResult {
     message: {
       content: "",
       tool_calls: cards.map((card) => ({
-        id: `${DIRECT_CALL_ID_PREFIX}${card.messageId.replace(/-/g, "").slice(0, 12)}${card.index ? `_${card.index}` : ""}`,
+        id: `${DIRECT_CALL_ID_PREFIX}${cardCallKey(card.messageId)}${card.index ? `_${card.index}` : ""}`,
         type: "function",
         function: { name: card.name, arguments: JSON.stringify(card.args) },
       })),

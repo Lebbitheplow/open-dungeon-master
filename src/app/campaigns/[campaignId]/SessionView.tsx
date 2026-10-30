@@ -1049,6 +1049,7 @@ export function SessionView({
       // the enlarged board's dialog covers the story, so it only says so.
       onShowStory={composer ? undefined : toggleStage}
       composer={composer}
+      meUserId={meId}
     />
   );
   const chronicle = chronicleFor(false);

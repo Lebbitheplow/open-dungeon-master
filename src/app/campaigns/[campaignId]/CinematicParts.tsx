@@ -1,6 +1,7 @@
 "use client";
 
 import { isOocAnswer } from "@/lib/dm/ooc-question";
+import { CardReturnedNote } from "@/app/campaigns/[campaignId]/CardReturnedNote";
 import { extraTurnTag, litOrderRows, pointerOrderIndex } from "@/lib/battlemap/initiative-rows";
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { EyeOff } from "lucide-react";
@@ -563,6 +564,7 @@ export function TabletopChronicle({
   maxChars,
   onShowStory,
   composer = true,
+  meUserId,
 }: {
   messages: ReadonlyArray<CampaignMessage>;
   rolls: ReadonlyArray<StoredRoll>;
@@ -584,6 +586,8 @@ export function TabletopChronicle({
   onShowStory?: () => void;
   // False on the fight stage, where the desk sits right under the board.
   composer?: boolean;
+  // Who is reading: a card given back offers its own player to play it again.
+  meUserId?: string;
 }) {
   const rollsById = useMemo(() => new Map(rolls.map((roll) => [roll.id, roll])), [rolls]);
   const { recent, earlier } = useMemo(() => chronicleWindow(messages), [messages]);
@@ -652,10 +656,19 @@ export function TabletopChronicle({
               );
             }
             if (message.authorType === "player") {
-              return (
+              const line = (
                 <p key={message.id} className="cine-chronicle-line">
                   {nameOf(message)}: &ldquo;{message.content.trim()}&rdquo;
                 </p>
+              );
+              // A card the GM never carried out says so here too (issue 570).
+              return message.cardReturned ? (
+                <div key={message.id}>
+                  {line}
+                  <CardReturnedNote message={message} mine={Boolean(meUserId) && message.userId === meUserId} name={nameOf(message)} />
+                </div>
+              ) : (
+                line
               );
             }
             return (

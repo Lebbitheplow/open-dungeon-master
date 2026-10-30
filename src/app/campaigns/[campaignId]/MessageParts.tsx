@@ -22,6 +22,7 @@ import {
 import type { SystemGlyph } from "@/lib/system-glyphs";
 import { PACT_REVEAL_PREFIX } from "@/lib/dm/pact-logic";
 import { kitButtonClass } from "@/app/campaigns/[campaignId]/PanelKit";
+import { CardReturnedNote } from "@/app/campaigns/[campaignId]/CardReturnedNote";
 
 // The transcript's smaller voices: the table's own notices and what the
 // players say. The DM's passage, the hero of the screen, is MessageItem.tsx.
@@ -197,6 +198,7 @@ export function PlayerMessage({
         <div className={cn("session-bubble", ooc && "session-bubble-ooc")}>
           <p className="whitespace-pre-wrap text-pretty">{message.content}</p>
         </div>
+        {message.cardReturned ? <CardReturnedNote message={message} mine={mine} name={sheet?.name ?? "the player"} /> : null}
       </div>
     </ContextMenu>
   );
