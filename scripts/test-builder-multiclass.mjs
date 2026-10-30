@@ -598,8 +598,11 @@ await test("the level table and the math table read each casting class", () => {
 await test("one set of words names a split wherever a class and level are shown", async () => {
   const { classLevelWords, classWordsAfterLevel } = await import("../src/lib/characters/class-words.ts");
   const split = { class: "fighter", level: 5, classes: [{ id: "fighter", level: 3 }, { id: "rogue", level: 2 }] };
-  assert.equal(classLevelWords(split), "fighter 3 / rogue 2");
-  assert.equal(classLevelWords({ class: "fighter", level: 5, classes: [] }), "fighter 5");
+  assert.equal(classLevelWords(split), "Fighter 3 / Rogue 2", "by default the classes are named, never printed as ids");
+  assert.equal(classLevelWords({ class: "fighter", level: 5, classes: [] }), "Fighter 5");
+  assert.equal(classLevelWords({ class: "plague_doctor", level: 1 }), "Plague Doctor 1");
+  assert.equal(classWordsAfterLevel({ class: "plague_doctor", level: 1 }), "Plague Doctor");
+  assert.equal(classLevelWords(split, (id) => id), "fighter 3 / rogue 2", "a caller may still ask for its own words");
   const title = (id) => id[0].toUpperCase() + id.slice(1);
   assert.equal(classWordsAfterLevel(split, title), "Fighter 3 / Rogue 2");
   assert.equal(classWordsAfterLevel({ class: "wizard", level: 4 }, title), "Wizard");
@@ -616,7 +619,7 @@ await test("one set of words names a split wherever a class and level are shown"
   ]) {
     assert.match(read(file), /@\/lib\/characters\/class-words/, `${file} names a split with the shared words`);
   }
-  assert.match(read("src/app/campaigns/[campaignId]/LobbyParty.tsx"), /title=\{classLevelWords\(sheet, nameOfClass\)\}/, "the medallion's title names the split, by class name");
+  assert.match(read("src/app/campaigns/[campaignId]/LobbyParty.tsx"), /title=\{classLevelWords\(sheet\)\}/, "the medallion's title names the split");
 });
 
 // ---- lists trimmed to their counts when levels move ----

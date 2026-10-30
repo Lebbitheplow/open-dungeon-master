@@ -17,7 +17,7 @@ import type { PublicEncounter } from "@/lib/db/encounter-view";
 import { effectiveMaxHp } from "@/lib/dm/condition-logic";
 import type { StoredRoll } from "@/lib/db/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import { className, classLevelWords } from "@/lib/characters/class-words";
+import { classLevelWords } from "@/lib/characters/class-words";
 import { TokenFace } from "@/app/campaigns/[campaignId]/BoardChrome";
 import { DictateField } from "@/components/DictateField";
 import { appendDictation } from "@/lib/dictation";
@@ -271,7 +271,7 @@ export function PartyRail({
                 <span className="cine-party-fill" data-low={ratio <= 0.34 ? "true" : undefined} style={{ width: pct }} />
               </span>
               {/* A split names each class's levels (backlog F9). */}
-              <span className="cine-party-class">{classLevelWords(sheet, className)}</span>
+              <span className="cine-party-class">{classLevelWords(sheet)}</span>
             </span>
           </button>
         );

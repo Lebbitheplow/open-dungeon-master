@@ -13,17 +13,17 @@ export type ClassWordsSource = {
   classes?: ReadonlyArray<{ id: string; level: number }> | null;
 };
 
-const asIs = (id: string) => id;
-
 // Whether the character holds more than one class.
 export function isSplit(source: Pick<ClassWordsSource, "classes">): boolean {
   return (source.classes?.length ?? 0) > 1;
 }
 
-// "fighter 5", or "fighter 3 / rogue 2": the class with the level, each
+// "Fighter 5", or "Fighter 3 / Rogue 2": the class with the level, each
 // class with its own levels on a split. `nameOf` turns an id into the
-// words shown (a display name, title case); the id itself by default.
-export function classLevelWords(source: ClassWordsSource, nameOf: (id: string) => string = asIs): string {
+// words shown; by default the class's display name (classDisplayName), never
+// the raw id, which a caller that forgot to pass one put on the screen (the
+// lobby's emblem tooltip read "plague_doctor 1").
+export function classLevelWords(source: ClassWordsSource, nameOf: (id: string) => string = classDisplayName): string {
   return isSplit(source)
     ? (source.classes ?? []).map((entry) => `${nameOf(entry.id)} ${entry.level}`).join(" / ")
     : `${nameOf(source.class)} ${source.level}`;
@@ -32,7 +32,7 @@ export function classLevelWords(source: ClassWordsSource, nameOf: (id: string) =
 // The class part of a line that already says the level ("Level 5 Hill
 // Dwarf Fighter"): the class alone, or each class's levels on a split
 // ("Level 5 Hill Dwarf Fighter 3 / Rogue 2").
-export function classWordsAfterLevel(source: ClassWordsSource, nameOf: (id: string) => string = asIs): string {
+export function classWordsAfterLevel(source: ClassWordsSource, nameOf: (id: string) => string = classDisplayName): string {
   return isSplit(source) ? classLevelWords(source, nameOf) : nameOf(source.class);
 }
 
@@ -53,8 +53,10 @@ export function idAsName(id: string): string {
   return value.replace(/[-_]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase()).trim();
 }
 
-// A class's name: a workshop class's own name, else its id as a name.
-export function className(id: string): string {
+// A class's name: a workshop class's own name, else its id as a name. Not
+// called `className`: a component's `className` prop shadowed that name and
+// the raw id came back.
+export function classDisplayName(id: string): string {
   return workshopClassName(id) ?? idAsName(id);
 }
 
@@ -66,5 +68,5 @@ export function speciesName(source: { race: string; raceLabel?: string | null })
 // "Bhain Kwai Fighter 3 / Rogue 2": the species and each class with its levels,
 // as a card's second line reads.
 export function speciesAndClassWords(source: ClassWordsSource & { race: string; raceLabel?: string | null }): string {
-  return [speciesName(source), classLevelWords(source, className)].filter(Boolean).join(" ");
+  return [speciesName(source), classLevelWords(source)].filter(Boolean).join(" ");
 }

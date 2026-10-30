@@ -16,7 +16,7 @@ import { LoadFailed, PanelError } from "@/app/campaigns/[campaignId]/PanelKit";
 import { readLoad, readWrite, useLoadStatus } from "@/lib/load-state";
 import { DraftPregensCard } from "@/app/workshop/party/DraftPregens";
 import type { TargetParty } from "@/lib/workshop/kind";
-import { className, speciesName } from "@/lib/characters/class-words";
+import { classDisplayName, speciesName } from "@/lib/characters/class-words";
 
 // The Party system (docs/workshop-parity-audit.md phase 15): the party a
 // workshop is built for, already declared in the pinned bar above, and the
@@ -56,7 +56,7 @@ const faceOf = (character: Pregen) => ({
 // "Level 5 Bhain Kwai Paladin (Oath of Devotion)": the species and class by
 // name, as the table's cards read them; the row printed their ids.
 export function describePregen(character: Pick<Pregen, "level" | "race" | "class" | "subclass">): string {
-  const parts = [speciesName(character), className(character.class)];
+  const parts = [speciesName(character), classDisplayName(character.class)];
   if (character.subclass) {
     parts.push(`(${character.subclass})`);
   }
