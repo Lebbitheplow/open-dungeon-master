@@ -58,6 +58,7 @@ import type { RollArgs } from "@/lib/dm/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { toolError, type ToolResult } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
+import { heldStepError, stepTakenThisExchange } from "@/lib/dm/step-exchange";
 
 export { publishRelationshipsUpdated };
 
@@ -707,12 +708,10 @@ export function handleRomanceAdvance(
     };
   }
   // One step per exchange, exactly like an NPC's attitude: no ratcheting a
-  // stranger to married inside a single reply.
-  if (relationship.lastShiftTurn === turn.id) {
-    return {
-      error: `${sheet.name} and ${subject.name} already took a step this exchange. Let the scene breathe before the next one.`,
-      retry: true,
-    };
+  // stranger to married inside a single reply, and no asking a refusal
+  // again at the console until the die says yes (issue 638).
+  if (stepTakenThisExchange(campaign.id, relationship.lastShiftTurn, turn)) {
+    return { error: heldStepError(sheet.name, subject.name, turn), retry: true };
   }
   // An act is played to the letter: the step reads the warmth shown.
   const shown = outwardApproval(relationship);
@@ -763,7 +762,7 @@ export function handleRomanceAdvance(
       requested: to,
       romance: relationship.romance,
       approval,
-      note: `${subject.name} does not take the step: they care, but not enough for ${to} yet. Narrate the gentle refusal in their own voice and leave things where they were. Do not narrate them agreeing anyway, and do not ask again this scene.`,
+      note: `${subject.name} does not take the step: they care, but not enough for ${to} yet. Narrate the gentle refusal in their own voice and leave things where they were. Do not narrate them agreeing anyway, and do not ask again this scene.${turn.actor === "human_dm" ? " You can ask again after your next narration." : ""}`,
     };
   }
 
