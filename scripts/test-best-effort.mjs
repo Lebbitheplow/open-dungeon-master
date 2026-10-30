@@ -15,7 +15,7 @@ register("./lib/register-alias.mjs", import.meta.url);
 const { test, finish } = suite("test-best-effort");
 process.env.CONTENT_DB_PATH = "/nonexistent/open5e.sqlite";
 const { withBestEffort } = await import("../src/lib/content/entry-labels.ts");
-const { BEST_EFFORT_NOTE } = await import("../src/lib/content/reading-logic.ts");
+const { BEST_EFFORT_NOTE, BEST_EFFORT_SHORT } = await import("../src/lib/content/reading-logic.ts");
 const { deriveHand, FRESH_TURN } = await import("../src/lib/battlemap/hand.ts");
 
 const golden = (kind, id) => JSON.parse(fs.readFileSync(new URL(`./fixtures/reader-golden/${kind}.json`, import.meta.url), "utf8")).cases.find((entry) => entry.id === id).row;
@@ -65,8 +65,10 @@ const myTurn = { ...FRESH_TURN, table: { round: 1, orderReady: true, acting: { i
 await test("The Hand's spell card says so in its details.", () => {
   const card = (bestEffort) => deriveHand(wizard, myTurn, { spells: { "steal warmth": { ...fact, ...(bestEffort ? { bestEffort: true } : {}) } } }).find((entry) => /steal warmth/i.test(entry.name));
   assert.ok(card(true), "the card is dealt");
-  assert.ok(card(true).description.includes(BEST_EFFORT_NOTE));
+  assert.ok(card(true).description.includes(BEST_EFFORT_NOTE), "the details carry the whole note");
+  assert.ok(card(true).rules.includes(BEST_EFFORT_SHORT), "the face says it short");
   assert.ok(!card(false).description.includes(BEST_EFFORT_NOTE));
+  assert.ok(!card(false).rules.includes(BEST_EFFORT_SHORT));
 });
 
 finish();
