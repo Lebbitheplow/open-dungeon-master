@@ -6,6 +6,7 @@
 // pc-attack.ts, which decides and rolls the attack these dice belong to.
 // Nothing here refuses the attack.
 
+import { lifedrinkerDamage, pactWeaponAttack } from "@/lib/srd/pact-weapon";
 import { getFoe } from "@/lib/dm/sheet-foe";
 import { poisonerIgnoresResistance } from "@/lib/srd/feat-combat";
 import type { Advantage, RollResult } from "@/lib/dice";
@@ -99,7 +100,7 @@ export function foldDamageRiders(input: {
   const featureRiders: FeatureRider[] =
     kind === "spell" || kind === "granted"
       ? []
-      : [...riders.damageRiders, ...hunterRiders(sheet, input.enemy)].filter((rider) => {
+      : [...riders.damageRiders, ...hunterRiders(sheet, input.enemy), ...pactRiders(sheet, kind, profile)].filter((rider) => {
           if (rider.when === "melee" && profile.ranged) {
             return false;
           }
@@ -167,6 +168,14 @@ function hunterRiders(
     return [];
   }
   return [{ feature: "Colossus Slayer", dice: "1d8", type: "", when: "weapon", oncePerTurn: true }];
+}
+
+// Lifedrinker (SRD 5.1, warlock invocation): a pact weapon hit deals extra
+// necrotic damage equal to the Charisma modifier, at least 1
+// (src/lib/srd/pact-weapon.ts).
+function pactRiders(sheet: CharacterSheet, kind: AttackKind, profile: AttackProfile): FeatureRider[] {
+  const amount = pactWeaponAttack(sheet, kind, profile) ? lifedrinkerDamage(sheet) : null;
+  return amount ? [{ feature: "Lifedrinker", dice: String(amount), type: "necrotic", when: "melee", oncePerTurn: false }] : [];
 }
 
 // A Divine Strike rider's damage type. The domains share the name and the
@@ -361,6 +370,8 @@ export function strikesAsMagic(plan: Pick<AttackPlan, "kind" | "profile" | "ride
     plan.profile.magicWeapon === true ||
     // Magic Weapon and Shillelagh make the weapon itself magical.
     (plan.kind === "weapon" && conditionStrikesMagical(plan.sheet.conditions)) ||
+    // A pact weapon "counts as magical" (SRD 5.1, Pact of the Blade).
+    pactWeaponAttack(plan.sheet, plan.kind, plan.profile) ||
     magicalStrikeApplies(plan)
   );
 }

@@ -5,6 +5,7 @@
 // (resource-tools grants Action Surge through here) without pulling in the
 // handlers.
 
+import { thirstingBladeAttacks } from "@/lib/srd/pact-weapon";
 import { getActiveEncounter, orderEntryId, saveEncounter, type Encounter } from "@/lib/db/encounters";
 import { activePublicEncounter } from "@/lib/db/encounter-view";
 import { publishPersisted } from "@/lib/events";
@@ -165,7 +166,10 @@ export function attacksAllowedFor(sheet: CharacterSheet): number {
   // The record carries the form's Multiattack; one written before it did
   // reads the table's form of that name.
   const shaped = sheet.wildShape ? (sheet.wildShape.attacksPerTurn ?? findBeastForm(sheet.wildShape.form)?.attacksPerTurn ?? 1) : null;
-  const own = 1 + combatRiders(formSees(sheet)).extraAttacks;
+  // Thirsting Blade's second pact weapon attack (pact-weapon.ts); Extra
+  // Attack features do not add together.
+  const seen = formSees(sheet);
+  const own = 1 + Math.max(combatRiders(seen).extraAttacks, thirstingBladeAttacks(seen));
   return shaped !== null ? Math.max(shaped, own) : own;
 }
 

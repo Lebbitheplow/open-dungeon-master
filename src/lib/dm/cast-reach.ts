@@ -9,6 +9,8 @@
 // as its area when the range line prints one, and never through a wall.
 
 import { spellRangeFactor } from "@/lib/srd/feat-combat";
+import { holdsFeature } from "@/lib/srd/feature-names";
+import { textKey } from "@/lib/language/text-logic";
 import type { Campaign } from "@/lib/db/campaigns";
 import { spellDamageFor, spellFactsFor } from "@/lib/content";
 import type { AttackProfile } from "@/lib/dm/attack-logic";
@@ -98,8 +100,11 @@ export function spellAttackReach(
   const facts = spellFactsFor(spell, authors);
   // Spell Sniper doubles an attack-roll spell's range (feat-combat.ts).
   const factor = spellRangeFactor(sheet);
-  const rangeTiles =
-    facts?.range.kind === "feet" ? Math.max(1, Math.floor((facts.range.feet * factor) / FEET_PER_TILE)) : profile.rangeTiles * factor;
+  // SRD 5.1, Eldritch Spear (a warlock invocation): "When you cast eldritch
+  // blast, its range is 300 feet."
+  const spear = holdsFeature(sheet, "Invocation: Eldritch Spear") && textKey(facts?.runsAs ?? facts?.name ?? spell) === textKey("Eldritch Blast");
+  const feet = spear ? 300 : facts?.range.kind === "feet" ? facts.range.feet : null;
+  const rangeTiles = feet !== null ? Math.max(1, Math.floor((feet * factor) / FEET_PER_TILE)) : profile.rangeTiles * factor;
   let damageExpression = profile.damageExpression;
   if (facts && slotLevel && slotLevel > facts.level) {
     const base = spellDamageFor({ spell, userIds: authors, casterLevel: sheet.level, slotLevel: facts.level })?.dice;

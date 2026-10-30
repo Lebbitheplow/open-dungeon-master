@@ -4,6 +4,7 @@
 // module describes. Nothing is spent here and nothing is rolled: every
 // return is either a refusal or a profile.
 
+import { holdsPactOfTheBlade } from "@/lib/srd/pact-weapon";
 import { sheetSpellAuthors } from "@/lib/dm/spell-authors";
 import { brawlerUnarmed } from "@/lib/srd/feat-combat";
 import { getMounts } from "@/lib/db/mounts";
@@ -318,8 +319,11 @@ export function buildAttackProfile(
     // Hex Warrior: the bound weapon swings with Charisma (attack-features.ts).
     const hexed = shillelagh ? null : hexWarriorSwing(sheet, resolved, derived);
     const material = weaponMaterial(sheet.equipment.find((item) => item.name === resolved.displayName));
+    // SRD 5.1, Pact of the Blade: "You are proficient with it while you
+    // wield it" (src/lib/srd/pact-weapon.ts).
+    const pactForm = resolved.srd?.kind === "melee" && holdsPactOfTheBlade(sheet) ? [resolved.srd.name.toLowerCase()] : [];
     const swing = (twoHanded: boolean) => ({
-      ...weaponAttackProfile(shillelagh?.derived ?? hexed?.derived ?? derived, sheet.proficiencies.weapons, shillelagh?.resolved ?? resolved, {
+      ...weaponAttackProfile(shillelagh?.derived ?? hexed?.derived ?? derived, [...sheet.proficiencies.weapons, ...pactForm], shillelagh?.resolved ?? resolved, {
         riders,
         martialArts: martialArtsApplies(sheet),
         brawler: brawlerUnarmed(sheet),

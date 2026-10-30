@@ -434,24 +434,19 @@ const bladelock = world.addHero({
 });
 pick(bladelock, ["Pact Boon: Pact of the Blade", "Invocation: Thirsting Blade", "Invocation: Lifedrinker", "Invocation: Beguiling Influence", "Invocation: Eldritch Spear"]);
 
-await gap("CLS-12", {
-  rule: "SRD 5.1 warlock, Eldritch Invocations, Thirsting Blade: \"You can attack with your pact weapon twice, instead of once, whenever you take the Attack action on your turn.\"",
-  where: "src/lib/dm/turn-budget.ts attacksAllowedFor (reads combatRiders extraAttacks only) and src/lib/srd/feature-effects.ts",
-  severity: "high",
-  note: "No code reads Thirsting Blade; a Pact of the Blade warlock makes one attack a turn at every level.",
-}, async () => {
+// SRD 5.1 warlock, Eldritch Invocations, Thirsting Blade: "You can attack with your pact weapon twice, instead of once, whenever you take the Attack action on your turn."
+await test("CLS-12", async () => {
   const enemy = await duel(bladelock);
   const first = await kit.swing(bladelock.id, enemy.id, [15, 5]);
   assert.equal(first.ok, true, first.error);
   const second = await kit.swing(bladelock.id, enemy.id, [15, 5]);
   assert.equal(second.ok, true, `the second pact weapon attack was refused: ${second.error}`);
+  const third = await kit.swing(bladelock.id, enemy.id, [15, 5]);
+  assert.notEqual(third.ok, true, "Thirsting Blade gave a third attack");
 });
 
-await gap("CLS-13", {
-  rule: "SRD 5.1 warlock, Eldritch Invocations, Lifedrinker: \"When you hit a creature with your pact weapon, the creature takes extra necrotic damage equal to your Charisma modifier (minimum 1).\"",
-  where: "src/lib/srd/feature-effects.ts (no rider for \"Invocation: Lifedrinker\") and src/lib/dm/pc-attack-damage.ts",
-  severity: "medium",
-}, async () => {
+// SRD 5.1 warlock, Eldritch Invocations, Lifedrinker: "When you hit a creature with your pact weapon, the creature takes extra necrotic damage equal to your Charisma modifier (minimum 1)."
+await test("CLS-13", async () => {
   const enemy = await duel(bladelock);
   const swing = await kit.swing(bladelock.id, enemy.id, [15, 5]);
   assert.equal(swing.ok, true, swing.error);
@@ -459,34 +454,24 @@ await gap("CLS-13", {
   assert.equal(swing.result.damage, 11, `the pact weapon hit dealt ${swing.result.damage}, no necrotic rider`);
 });
 
-await gap("CLS-14", {
-  rule: "SRD 5.1 warlock, Pact Boon, Pact of the Blade: \"This weapon counts as magical for the purpose of overcoming resistance and immunity to nonmagical attacks and damage.\"",
-  where: "src/lib/dm/pc-attack-damage.ts strikesAsMagic (no pact weapon is known to the engine)",
-  severity: "medium",
-  note: "The engine has no notion of a pact weapon; the warlock's only weapon here stands for it.",
-}, async () => {
+// SRD 5.1 warlock, Pact Boon, Pact of the Blade: "This weapon counts as magical for the purpose of overcoming resistance and immunity to nonmagical attacks and damage."
+await test("CLS-14", async () => {
   const enemy = await duel(bladelock, { resist: "bludgeoning, piercing, and slashing from nonmagical attacks" });
   const swing = await kit.swing(bladelock.id, enemy.id, [15, 5]);
   assert.equal(swing.ok, true, swing.error);
   assert.equal(200 - kit.enemy(enemy.id).currentHp, swing.result.damage, `the pact weapon's ${swing.result.damage} was halved as a nonmagical attack`);
 });
 
-await gap("CLS-15", {
-  rule: "SRD 5.1 warlock, Eldritch Invocations, Beguiling Influence: \"You gain proficiency in the Deception and Persuasion skills.\"",
-  where: "src/lib/srd/index.ts computeSheetDerived and src/lib/srd/legality/proficiencies.ts (no grant reads the invocation)",
-  severity: "medium",
-}, async () => {
+// SRD 5.1 warlock, Eldritch Invocations, Beguiling Influence: "You gain proficiency in the Deception and Persuasion skills."
+await test("CLS-15", async () => {
   const derived = srd.computeSheetDerived(world.sheet(bladelock.id));
   const proficient = derived.abilityMods.cha + derived.proficiencyBonus;
   assert.equal(derived.skills.deception, proficient, `Deception is +${derived.skills.deception}, no proficiency`);
   assert.equal(derived.skills.persuasion, proficient, `Persuasion is +${derived.skills.persuasion}, no proficiency`);
 });
 
-await gap("CLS-16", {
-  rule: "SRD 5.1 warlock, Eldritch Invocations, Eldritch Spear: \"When you cast eldritch blast, its range is 300 feet.\"",
-  where: "src/lib/dm/cast-reach.ts spellAttackReach (only Spell Sniper's factor)",
-  severity: "low",
-}, async () => {
+// SRD 5.1 warlock, Eldritch Invocations, Eldritch Spear: "When you cast eldritch blast, its range is 300 feet."
+await test("CLS-16", async () => {
   const profile = { rangeTiles: 24, longRangeTiles: 24, damageExpression: "1d10" };
   const reach = spellAttackReach(world.campaign(), world.sheet(bladelock.id), "Eldritch Blast", profile, null);
   assert.equal(reach.rangeTiles, 60, `eldritch blast reaches ${reach.rangeTiles * 5} feet with Eldritch Spear`);
@@ -498,12 +483,8 @@ const blaster = world.addHero({
 });
 pick(blaster, ["Invocation: Repelling Blast", "Invocation: Agonizing Blast"]);
 
-await gap("CLS-25", {
-  rule: "SRD 5.1 warlock, Eldritch Invocations, Repelling Blast: \"When you hit a creature with eldritch blast, you can push the creature up to 10 feet away from you in a straight line.\"",
-  where: "src/lib/dm/pc-attack-resolve.ts (Crusher's push on a hit is the model; nothing reads Repelling Blast)",
-  severity: "low",
-  note: "On a battle map the beam lands and the creature stays where it stood.",
-}, async () => {
+// SRD 5.1 warlock, Eldritch Invocations, Repelling Blast: "When you hit a creature with eldritch blast, you can push the creature up to 10 feet away from you in a straight line."
+await test("CLS-25", async () => {
   const enemy = await duel(blaster);
   kit.openField();
   kit.place(blaster.id, 4, 4);

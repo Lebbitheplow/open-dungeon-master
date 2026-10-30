@@ -11,7 +11,7 @@ import { CUSTOM_CLASSES, findCustomClass } from "@/lib/classes";
 import { computeArmorClass, unarmoredFormulaFor, type AcBreakdown } from "@/lib/srd/armor";
 import { conditionAcRiders } from "@/lib/srd/condition-effects";
 import { auraGranted, combatRiders, defenseRiders, halfProficiencyCovers } from "@/lib/srd/feature-effects";
-import { featureSaveProficiencies } from "@/lib/srd/trait-rules";
+import { featureSaveProficiencies, featureSkillProficiencies } from "@/lib/srd/trait-rules";
 import { authoredAcBonus, authoredSaveModifier, authoredSpeeds } from "@/lib/srd/authored-effects";
 import { effectiveAbilities, magicItemRiders } from "@/lib/srd/magic-items";
 import { encumbranceFor } from "@/lib/srd/encumbrance";
@@ -480,11 +480,13 @@ export function computeSheetDerived(
   const halfScope = defense.halfProficiency ?? null;
   const halfPb = halfScope === "physical" ? Math.ceil(pb / 2) : Math.floor(pb / 2);
   const expertise = sheet.proficiencies.expertise ?? [];
+  // Skills a feature trains (Beguiling Influence), as featureSaves above.
+  const featureSkills = featureSkillProficiencies({ features: riderFeatures });
   const skillParts = Object.fromEntries(
     SRD_SKILLS.map((skill) => {
       const trained = expertise.includes(skill.id)
         ? { label: "expertise", value: pb * 2 }
-        : sheet.proficiencies.skills.includes(skill.id)
+        : sheet.proficiencies.skills.includes(skill.id) || featureSkills.includes(skill.id)
           ? { label: "proficiency", value: pb }
           : halfProficiencyCovers(halfScope, skill.ability)
             ? { label: "half proficiency", value: halfPb }
