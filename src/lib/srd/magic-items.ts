@@ -25,7 +25,7 @@ import { countsAsWorn } from "@/lib/srd/wear-slots";
 import type { Ability } from "@/lib/schemas/sheet";
 import type { ItemTag } from "@/lib/schemas/item-tags";
 import { textKey } from "@/lib/language/text-logic";
-import { rowName, type RowItem } from "@/lib/srd/item-row";
+import { magicItemBonus, rowName, type RowItem } from "@/lib/srd/item-row";
 import { compositeGearNamed } from "@/lib/srd/magic-gear";
 import { isNamed } from "@/lib/srd/feature-names";
 import { alignmentIs } from "@/lib/srd/alignment";
@@ -59,6 +59,35 @@ export type MagicItemEffect =
   // Damage resistance keywords (Ring/Armor of Resistance).
   | { kind: "resistance"; types: string[] };
 
+// The effects above, which a workshop item can carry too, and the ones only
+// the SRD table writes (scripts/generate-magic-items.mjs and its
+// corrections), which the sheet's stored homebrew block never holds.
+export type TableItemEffect =
+  | MagicItemEffect
+  // Raises a score by `amount`, never past `max` (Belt of Dwarvenkind, the
+  // Ioun Stones of Agility to Strength: "increases by 2, to a maximum of 20").
+  | { kind: "increase_ability"; ability: Ability; amount: number; max: number }
+  // A bonus to spell attack rolls (Staff of Power, Wand of the War Mage) and
+  // to the spell save DC (Robe of the Archmagi). "named": the +N the sheet
+  // row's own name carries ("+2 Wand of the War Mage"). `classes`: only for
+  // these classes (a Talisman of Pure Good's good cleric or paladin).
+  | { kind: "spell_attack_bonus"; amount: number | "named"; classes?: string[] }
+  | { kind: "spell_dc_bonus"; amount: number }
+  // Advantage on saving throws against spells (Mantle of Spell Resistance).
+  | { kind: "spell_save_advantage" }
+  // Damage and condition immunities (Periapt of Proof against Poison).
+  | { kind: "immunity"; types: string[] }
+  | { kind: "condition_immunity"; conditions: string[] }
+  // A flying, swimming or climbing speed in feet, or "walk" for one equal to
+  // the walking speed (Winged Boots, Ring of Swimming).
+  | { kind: "speed"; mode: "fly" | "swim" | "climb"; feet: number | "walk" }
+  // Weapon training and damage the item adds to attacks with these weapons,
+  // on a ranged attack only when `ranged` (Bracers of Archery).
+  | { kind: "weapon_rider"; weapons: string[]; ranged?: boolean; damage?: number; proficient?: boolean };
+
+// A worn item's rider on attacks with some weapons, with the item it is from.
+export type WornWeaponRider = { weapons: string[]; ranged?: boolean; damage?: number; proficient?: boolean; source: string };
+
 // Who an item lets attune, read from the pack's "requires attunement by ..."
 // line. `text` is that line's own wording, for the refusal.
 export type AttunementRule = {
@@ -78,7 +107,7 @@ export type MagicItemDef = {
   attunedBy?: AttunementRule;
   // Works from the pack: the item's text asks only that it be on the person.
   carried?: boolean;
-  effects: MagicItemEffect[];
+  effects: TableItemEffect[];
 };
 
 // What the engine needs to know about whoever carries the item. Every field
@@ -150,7 +179,17 @@ export type MagicItemRiders = {
   saveBonus: number;
   // Ability -> the highest score any worn item sets it to.
   abilitySet: Partial<Record<Ability, number>>;
+  // Each raise a worn item gives a score, in the order worn.
+  abilityIncreases: Array<{ ability: Ability; amount: number; max: number }>;
   resistances: string[];
+  immunities: string[];
+  conditionImmunities: Array<{ condition: string; because: string }>;
+  spellAttackBonus: number;
+  spellDcBonus: number;
+  // The items giving advantage on saves against spells.
+  spellSaveAdvantage: string[];
+  speeds: Array<{ mode: "fly" | "swim" | "climb"; feet: number | "walk" }>;
+  weaponRiders: WornWeaponRider[];
   // Names of the items actually contributing, for the sheet breakdown.
   sources: string[];
 };
@@ -218,7 +257,15 @@ export function magicItemRiders(equipment: WornMagicItem[], wearer?: Wearer): Ma
     acUnarmoredBonus: 0,
     saveBonus: 0,
     abilitySet: {},
+    abilityIncreases: [],
     resistances: [],
+    immunities: [],
+    conditionImmunities: [],
+    spellAttackBonus: 0,
+    spellDcBonus: 0,
+    spellSaveAdvantage: [],
+    speeds: [],
+    weaponRiders: [],
     sources: [],
   };
   // One copy of an item is all a creature can be attuned to, and wearing two
@@ -256,6 +303,44 @@ export function magicItemRiders(equipment: WornMagicItem[], wearer?: Wearer): Ma
           riders.resistances.push(...effect.types);
           contributed = true;
           break;
+        case "increase_ability":
+          riders.abilityIncreases.push({ ability: effect.ability, amount: effect.amount, max: effect.max });
+          contributed = true;
+          break;
+        case "spell_attack_bonus": {
+          const held = [textKey(wearer?.class ?? ""), ...(wearer?.classes ?? []).map((entry) => textKey(entry.id))];
+          if (effect.classes && wearer && !effect.classes.some((name) => held.includes(name))) {
+            break;
+          }
+          // A Wand of the War Mage named with no +N gives no number to add.
+          riders.spellAttackBonus += effect.amount === "named" ? magicItemBonus(item.name) : effect.amount;
+          contributed = true;
+          break;
+        }
+        case "spell_dc_bonus":
+          riders.spellDcBonus += effect.amount;
+          contributed = true;
+          break;
+        case "spell_save_advantage":
+          riders.spellSaveAdvantage.push(item.name);
+          contributed = true;
+          break;
+        case "immunity":
+          riders.immunities.push(...effect.types);
+          contributed = true;
+          break;
+        case "condition_immunity":
+          riders.conditionImmunities.push(...effect.conditions.map((condition) => ({ condition, because: item.name })));
+          contributed = true;
+          break;
+        case "speed":
+          riders.speeds.push({ mode: effect.mode, feet: effect.feet });
+          contributed = true;
+          break;
+        case "weapon_rider":
+          riders.weaponRiders.push({ weapons: effect.weapons, ranged: effect.ranged, damage: effect.damage, proficient: effect.proficient, source: item.name });
+          contributed = true;
+          break;
       }
     }
     if (contributed) {
@@ -263,7 +348,24 @@ export function magicItemRiders(equipment: WornMagicItem[], wearer?: Wearer): Ma
     }
   }
   riders.resistances = [...new Set(riders.resistances)];
+  riders.immunities = [...new Set(riders.immunities)];
   return riders;
+}
+
+// The flying, swimming and climbing speeds worn items give, in feet, the
+// best of each; `walking` is the wearer's walking speed, for the items whose
+// speed equals it (SRD 5.1, Winged Boots: "a flying speed equal to your
+// walking speed").
+export function itemSpeeds(
+  equipment: WornMagicItem[],
+  wearer: Wearer | undefined,
+  walking: number,
+): { fly?: number; swim?: number; climb?: number } {
+  const out: { fly?: number; swim?: number; climb?: number } = {};
+  for (const speed of magicItemRiders(equipment, wearer).speeds) {
+    out[speed.mode] = Math.max(out[speed.mode] ?? 0, speed.feet === "walk" ? walking : speed.feet);
+  }
+  return out;
 }
 
 // A character's ability scores after any worn ability-setting item raises
@@ -275,7 +377,19 @@ export function effectiveAbilities(
   equipment: WornMagicItem[],
   wearer?: Wearer,
 ): Record<Ability, number> {
-  const set = { ...magicItemRiders(equipment, wearer).abilitySet };
+  const riders = magicItemRiders(equipment, wearer);
+  const set = { ...riders.abilitySet };
+  // "Your Constitution score increases by 2, to a maximum of 20" (SRD 5.1,
+  // Belt of Dwarvenkind): a score at the maximum already gains nothing. The
+  // raises count from the sheet's own score, and an item that sets the score
+  // (an Amulet of Health's 19) wins only where it is higher still.
+  let raised = abilities;
+  for (const increase of riders.abilityIncreases) {
+    const score = raised[increase.ability];
+    if (score < increase.max) {
+      raised = { ...raised, [increase.ability]: Math.min(increase.max, score + increase.amount) };
+    }
+  }
   // A Potion of Giant Strength sets Strength for an hour, like the belt.
   for (const condition of wearer?.conditions ?? []) {
     const potion = /^giant strength \((\d+)\)$/i.exec(condition.trim());
@@ -284,13 +398,32 @@ export function effectiveAbilities(
     }
   }
   if (!Object.keys(set).length) {
-    return abilities;
+    return raised;
   }
-  const out = { ...abilities };
+  const out = { ...raised };
   for (const [ability, score] of Object.entries(set) as Array<[Ability, number]>) {
     out[ability] = Math.max(out[ability], score);
   }
   return out;
+}
+
+// One score after the worn items alone, for the engines that read a single
+// score off the stored sheet: carrying capacity's Strength, the hit point
+// maximum's Constitution.
+export function itemAbilityScore(
+  ability: Ability,
+  score: number,
+  equipment: WornMagicItem[],
+  wearer?: Wearer,
+): number {
+  const riders = magicItemRiders(equipment, wearer);
+  let out = score;
+  for (const increase of riders.abilityIncreases) {
+    if (increase.ability === ability && out < increase.max) {
+      out = Math.min(increase.max, out + increase.amount);
+    }
+  }
+  return Math.max(out, riders.abilitySet[ability] ?? 0);
 }
 
 // ---- attunement ----

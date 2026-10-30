@@ -206,9 +206,12 @@ test("the rows a person corrected against the item's own text", () => {
   assert.deepEqual(magicItemNamed("Vorpal Sword")?.effects, []);
   assert.deepEqual(magicItemNamed("Defender")?.effects, []);
   assert.equal(magicItemNamed("Asi"), null);
+  // SRD 5.1, Staff of Power: "a +2 bonus to Armor Class, saving throws, and
+  // spell attack rolls" (#570, ITM-03).
   assert.deepEqual(magicItemNamed("Staff of Power").effects, [
     { kind: "ac_bonus", amount: 2 },
     { kind: "save_bonus", amount: 2 },
+    { kind: "spell_attack_bonus", amount: 2 },
   ]);
   assert.deepEqual(magicItemNamed("Belt of Storm Giant Strength").effects, [
     { kind: "set_ability", ability: "str", score: 29 },

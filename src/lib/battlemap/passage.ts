@@ -13,6 +13,7 @@ import { footprintIndexes, type Footprint } from "@/lib/battlemap/footprint";
 import { moveTraitsFrom, tileIndex, type BattleToken, type MoveTraits } from "@/lib/battlemap/types";
 import { sizeForRace } from "@/lib/srd";
 import { holdsFeature } from "@/lib/srd/feature-names";
+import { itemSpeeds, type Wearer, type WornMagicItem } from "@/lib/srd/magic-items";
 
 const SIZES = ["tiny", "small", "medium", "large", "huge", "gargantuan"];
 
@@ -80,7 +81,7 @@ export function pcMoveTraits(input: {
   width: number;
   tokens: BattleToken[];
   mover: BattleToken;
-  sheet: { race: string; features: Array<{ name: string }> };
+  sheet: { race: string; features: Array<{ name: string }>; equipment?: WornMagicItem[]; speed?: number } & Wearer;
   footprintOf: (token: BattleToken) => Footprint;
   enemySize: (refId: string) => string | undefined;
   sideOf?: TokenSide;
@@ -88,7 +89,13 @@ export function pcMoveTraits(input: {
   const moverSize = sizeForRace(input.sheet.race);
   // Athlete: climbing costs no extra movement (src/lib/srd/feat-combat.ts).
   const base = moveTraitsFrom(input.sheet.features);
-  const traits = typeof base === "object" && base !== null && climbsFreely(input.sheet) ? { ...base, climbs: true } : base;
+  const freely = typeof base === "object" && base !== null && climbsFreely(input.sheet) ? { ...base, climbs: true } : base;
+  // A worn item's swimming or climbing speed (SRD 5.1, Ring of Swimming,
+  // Slippers of Spider Climbing) moves through water and up walls at cost.
+  const worn = input.sheet.equipment?.length ? itemSpeeds(input.sheet.equipment, input.sheet, input.sheet.speed ?? 30) : {};
+  const traits = typeof freely === "object" && freely !== null && (worn.swim || worn.climb)
+    ? { ...freely, ...(worn.swim ? { swims: true } : {}), ...(worn.climb ? { climbs: true } : {}) }
+    : freely;
   return {
     ...(typeof traits === "object" ? traits : { swims: traits }),
     passable: passableTiles({

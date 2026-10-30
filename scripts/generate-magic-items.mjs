@@ -25,7 +25,7 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3-multiple-ciphers";
-import { ADDED, DROPPED, REPLACED } from "./lib/magic-item-corrections.mjs";
+import { ADDED, ALIASES, DROPPED, EXTRA, REPLACED } from "./lib/magic-item-corrections.mjs";
 import { categoryBase, COUNTED_USES, DAILY_POWERS, GEAR_RIDERS, LAST_CHARGE_BECOMES } from "./lib/magic-item-riders.mjs";
 import { nameBase } from "./lib/name-base.mjs";
 
@@ -157,6 +157,10 @@ function parseEffects(desc, category) {
   let unarmored = null;
   let save = null;
   let setAbility = null;
+  let raised = null;
+  let spellAttack = null;
+  let spellSaves = false;
+  const speeds = [];
   const resist = [];
   for (const sentence of standing) {
     const bare = /\+(\d) bonus to (?:AC|Armor Class) if you are wearing no armor/i.exec(sentence);
@@ -192,6 +196,39 @@ function parseEffects(desc, category) {
       resist.push(...types);
       note(sentence);
     }
+    // "Your Constitution score increases by 2, to a maximum of 20" (Belt of
+    // Dwarvenkind). A Manual's "as does your maximum for that score" is a
+    // permanent change to the sheet, which the GM makes, not a worn effect.
+    const increase =
+      /your (Strength|Dexterity|Constitution|Intelligence|Wisdom|Charisma) score increases by (\d+), to a maximum of (\d+)/i.exec(
+        sentence,
+      );
+    if (increase && !raised) {
+      raised = { ability: ABILITY[increase[1].toLowerCase()], amount: Number(increase[2]), max: Number(increase[3]) };
+      note(sentence);
+    }
+    // "a +2 bonus to Armor Class, saving throws, and spell attack rolls"
+    // (Staff of Power), "a +2 bonus to spell attack rolls" (Staff of the Magi).
+    const attack = /\+(\d) bonus to [^.]*?\bspell attack rolls/i.exec(sentence);
+    if (attack && spellAttack === null) {
+      spellAttack = Number(attack[1]);
+      note(sentence);
+    }
+    // "You have advantage on saving throws against spells" (Mantle of Spell
+    // Resistance, Scarab of Protection, Staff of the Magi).
+    if (/\badvantage on saving throws against spells\b/i.test(sentence)) {
+      spellSaves = true;
+      note(sentence);
+    }
+    // "you have a flying speed equal to your walking speed" (Winged Boots),
+    // "You have a swimming speed of 40 feet" (Ring of Swimming).
+    for (const speed of sentence.matchAll(/you have a (flying|swimming|climbing) speed (?:of (\d+) feet|equal to your walking speed)/gi)) {
+      const mode = { flying: "fly", swimming: "swim", climbing: "climb" }[speed[1].toLowerCase()];
+      if (!speeds.some((entry) => entry.mode === mode)) {
+        speeds.push({ kind: "speed", mode, feet: speed[2] ? Number(speed[2]) : "walk" });
+        note(sentence);
+      }
+    }
   }
 
   if (unarmored !== null) {
@@ -211,6 +248,16 @@ function parseEffects(desc, category) {
       types: [...new Set(resist.map((type) => (type === "nonmagical" ? NONMAGICAL : type)))],
     });
   }
+  if (raised) {
+    effects.push({ kind: "increase_ability", ...raised });
+  }
+  if (spellAttack !== null) {
+    effects.push({ kind: "spell_attack_bonus", amount: spellAttack });
+  }
+  if (spellSaves) {
+    effects.push({ kind: "spell_save_advantage" });
+  }
+  effects.push(...speeds);
   return { effects, carried, read };
 }
 
@@ -365,9 +412,12 @@ function collect() {
     const desc = String(data.desc || "").replace(/\s+/g, " ");
     const attunement = String(data.requires_attunement || "");
     const parsed = parseEffects(desc, row.category || "");
-    const effects = DROPPED[match] ? [] : (REPLACED[match] ?? parsed.effects);
+    // The corrections are written against the SRD's own text.
+    const srd = row.document_slug === "wotc-srd";
+    const effects = DROPPED[match] ? [] : [...(REPLACED[match] ?? parsed.effects), ...(srd ? (EXTRA[match] ?? []) : [])];
     const restriction = attunedBy(attunement);
     const gear = gearOf(row, desc, match);
+    const aliases = srd ? ALIASES[match] : undefined;
     // A row with no effect is kept only when the engine has something to
     // enforce about it: who may attune, the item a magic weapon or armor is
     // built on, its bonus, its charges.
@@ -379,6 +429,7 @@ function collect() {
       match,
       slugs: slugs.get(match) ?? [],
       requiresAttunement: /requires attunement/i.test(attunement),
+      ...(aliases ? { aliases } : {}),
       ...(restriction ? { attunedBy: restriction } : {}),
       ...(parsed.carried && effects.length ? { carried: true } : {}),
       effects,

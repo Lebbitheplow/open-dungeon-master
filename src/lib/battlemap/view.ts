@@ -40,6 +40,7 @@ import { sensesFromText, type Senses } from "@/lib/srd/senses";
 import { reachableTiles, speedToTiles } from "@/lib/battlemap/movement";
 import { pcMoveTraits } from "@/lib/battlemap/passage";
 import { crawlingTraits, flyingSpeedOf, tileIndex, type BattleToken, type TokenMovement } from "@/lib/battlemap/types";
+import { itemSpeeds } from "@/lib/srd/magic-items";
 import { drawingsFor, labelsFor } from "@/lib/battlemap/scene";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { projectIntents } from "@/lib/dm/intent";
@@ -129,7 +130,7 @@ export function pcMoveBudget(
   // A mounted rider moves at the mount's speed (SRD 5.1, Mounted Combat).
   const mount = getMounts(campaignId)[sheet.id];
   // Aloft, a character moves at their flying speed (the Fly spell's 60 feet).
-  const flying = token.movement === "fly" ? flyingSpeedOf({ conditions: sheet.conditions, features: sheet.features }) : null;
+  const flying = token.movement === "fly" ? flyingSpeedOf({ conditions: sheet.conditions, features: sheet.features, worn: itemSpeeds(sheet.equipment, sheet, sheet.speed).fly }) : null;
   const base = mount
     ? mount.speed
     : flying ?? speedFor(sheet, {

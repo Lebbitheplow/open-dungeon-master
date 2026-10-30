@@ -116,7 +116,13 @@
         "animated-chain-mail"
       ],
       "requiresAttunement": false,
-      "effects": [],
+      "effects": [
+        {
+          "kind": "speed",
+          "mode": "climb",
+          "feet": "walk"
+        }
+      ],
       "base": {
         "kind": "armor",
         "name": "Chain Mail"
@@ -168,6 +174,19 @@
       "weapon": {
         "bonus": 1
       }
+    },
+    {
+      "name": "Arcanaphage Stone",
+      "match": "arcanaphage stone",
+      "slugs": [
+        "arcanaphage-stone"
+      ],
+      "requiresAttunement": true,
+      "effects": [
+        {
+          "kind": "spell_save_advantage"
+        }
+      ]
     },
     {
       "name": "Armor of Acid Resistance",
@@ -594,6 +613,21 @@
       }
     },
     {
+      "name": "Bandana of Brachiation",
+      "match": "bandana of brachiation",
+      "slugs": [
+        "bandana-of-brachiation"
+      ],
+      "requiresAttunement": true,
+      "effects": [
+        {
+          "kind": "speed",
+          "mode": "climb",
+          "feet": 30
+        }
+      ]
+    },
+    {
       "name": "Beads of Contemplation",
       "match": "beads of contemplation",
       "slugs": [
@@ -635,6 +669,12 @@
           "types": [
             "poison"
           ]
+        },
+        {
+          "kind": "increase_ability",
+          "ability": "con",
+          "amount": 2,
+          "max": 20
         }
       ]
     },
@@ -743,7 +783,11 @@
         "bituminous-orb"
       ],
       "requiresAttunement": true,
-      "effects": [],
+      "effects": [
+        {
+          "kind": "spell_save_advantage"
+        }
+      ],
       "charges": {
         "max": 6
       }
@@ -966,6 +1010,27 @@
       }
     },
     {
+      "name": "Bracers of Archery",
+      "match": "bracers of archery",
+      "slugs": [
+        "bracers-of-archery",
+        "bracers-of-archery-a5e"
+      ],
+      "requiresAttunement": true,
+      "effects": [
+        {
+          "kind": "weapon_rider",
+          "weapons": [
+            "longbow",
+            "shortbow"
+          ],
+          "ranged": true,
+          "damage": 2,
+          "proficient": true
+        }
+      ]
+    },
+    {
       "name": "Bracers of Defense",
       "match": "bracers of defense",
       "slugs": [
@@ -1162,6 +1227,20 @@
       }
     },
     {
+      "name": "Cane of Chaos",
+      "match": "cane of chaos",
+      "slugs": [
+        "cane-of-chaos-a5e"
+      ],
+      "requiresAttunement": true,
+      "effects": [
+        {
+          "kind": "spell_attack_bonus",
+          "amount": 2
+        }
+      ]
+    },
+    {
       "name": "Cape of Targeting",
       "match": "cape of targeting",
       "slugs": [
@@ -1300,6 +1379,11 @@
           "types": [
             "poison"
           ]
+        },
+        {
+          "kind": "speed",
+          "mode": "climb",
+          "feet": "walk"
         }
       ]
     },
@@ -1378,6 +1462,37 @@
           "kind": "set_ability",
           "ability": "con",
           "score": 15
+        }
+      ]
+    },
+    {
+      "name": "Cloak of the Eel",
+      "match": "cloak of the eel",
+      "slugs": [
+        "cloak-of-the-eel"
+      ],
+      "requiresAttunement": true,
+      "effects": [
+        {
+          "kind": "speed",
+          "mode": "swim",
+          "feet": 40
+        }
+      ]
+    },
+    {
+      "name": "Cloak of the Manta Ray",
+      "match": "cloak of the manta ray",
+      "slugs": [
+        "cloak-of-the-manta-ray",
+        "cloak-of-the-manta-ray-a5e"
+      ],
+      "requiresAttunement": false,
+      "effects": [
+        {
+          "kind": "speed",
+          "mode": "swim",
+          "feet": 60
         }
       ]
     },
@@ -1550,6 +1665,11 @@
           "kind": "set_ability",
           "ability": "int",
           "score": 25
+        },
+        {
+          "kind": "speed",
+          "mode": "fly",
+          "feet": "walk"
         }
       ]
     },
@@ -1904,7 +2024,11 @@
         "dread-scarab"
       ],
       "requiresAttunement": true,
-      "effects": [],
+      "effects": [
+        {
+          "kind": "spell_save_advantage"
+        }
+      ],
       "charges": {
         "max": 9,
         "spentAway": true
@@ -2717,6 +2841,9 @@
         {
           "kind": "ac_bonus",
           "amount": 2
+        },
+        {
+          "kind": "spell_save_advantage"
         }
       ]
     },
@@ -3021,6 +3148,91 @@
       }
     },
     {
+      "name": "Ioun Stone of Agility",
+      "match": "ioun stone of agility",
+      "slugs": [],
+      "requiresAttunement": true,
+      "aliases": [
+        "Ioun Stone (Agility)"
+      ],
+      "effects": [
+        {
+          "kind": "increase_ability",
+          "ability": "dex",
+          "amount": 2,
+          "max": 20
+        }
+      ]
+    },
+    {
+      "name": "Ioun Stone of Fortitude",
+      "match": "ioun stone of fortitude",
+      "slugs": [],
+      "requiresAttunement": true,
+      "aliases": [
+        "Ioun Stone (Fortitude)"
+      ],
+      "effects": [
+        {
+          "kind": "increase_ability",
+          "ability": "con",
+          "amount": 2,
+          "max": 20
+        }
+      ]
+    },
+    {
+      "name": "Ioun Stone of Insight",
+      "match": "ioun stone of insight",
+      "slugs": [],
+      "requiresAttunement": true,
+      "aliases": [
+        "Ioun Stone (Insight)"
+      ],
+      "effects": [
+        {
+          "kind": "increase_ability",
+          "ability": "wis",
+          "amount": 2,
+          "max": 20
+        }
+      ]
+    },
+    {
+      "name": "Ioun Stone of Intellect",
+      "match": "ioun stone of intellect",
+      "slugs": [],
+      "requiresAttunement": true,
+      "aliases": [
+        "Ioun Stone (Intellect)"
+      ],
+      "effects": [
+        {
+          "kind": "increase_ability",
+          "ability": "int",
+          "amount": 2,
+          "max": 20
+        }
+      ]
+    },
+    {
+      "name": "Ioun Stone of Leadership",
+      "match": "ioun stone of leadership",
+      "slugs": [],
+      "requiresAttunement": true,
+      "aliases": [
+        "Ioun Stone (Leadership)"
+      ],
+      "effects": [
+        {
+          "kind": "increase_ability",
+          "ability": "cha",
+          "amount": 2,
+          "max": 20
+        }
+      ]
+    },
+    {
       "name": "Ioun Stone of Protection",
       "match": "ioun stone of protection",
       "slugs": [],
@@ -3032,6 +3244,23 @@
         {
           "kind": "ac_bonus",
           "amount": 1
+        }
+      ]
+    },
+    {
+      "name": "Ioun Stone of Strength",
+      "match": "ioun stone of strength",
+      "slugs": [],
+      "requiresAttunement": true,
+      "aliases": [
+        "Ioun Stone (Strength)"
+      ],
+      "effects": [
+        {
+          "kind": "increase_ability",
+          "ability": "str",
+          "amount": 2,
+          "max": 20
         }
       ]
     },
@@ -3401,6 +3630,20 @@
         "max": 3,
         "regain": "1d3"
       }
+    },
+    {
+      "name": "Mantle of Spell Resistance",
+      "match": "mantle of spell resistance",
+      "slugs": [
+        "mantle-of-spell-resistance",
+        "mantle-of-spell-resistance-a5e"
+      ],
+      "requiresAttunement": true,
+      "effects": [
+        {
+          "kind": "spell_save_advantage"
+        }
+      ]
     },
     {
       "name": "Mantle of the Void",
@@ -3804,6 +4047,29 @@
       }
     },
     {
+      "name": "Periapt of Proof against Poison",
+      "match": "periapt of proof against poison",
+      "slugs": [
+        "periapt-of-proof-against-poison",
+        "periapt-of-proof-against-poison-a5e"
+      ],
+      "requiresAttunement": false,
+      "effects": [
+        {
+          "kind": "immunity",
+          "types": [
+            "poison"
+          ]
+        },
+        {
+          "kind": "condition_immunity",
+          "conditions": [
+            "poisoned"
+          ]
+        }
+      ]
+    },
+    {
       "name": "Pestilent Spear",
       "match": "pestilent spear",
       "slugs": [
@@ -3920,6 +4186,19 @@
         "regain": "all",
         "daily": "the etherealness spell for 10 minutes"
       }
+    },
+    {
+      "name": "Primordial Scale",
+      "match": "primordial scale",
+      "slugs": [
+        "primordial-scale"
+      ],
+      "requiresAttunement": false,
+      "effects": [
+        {
+          "kind": "spell_save_advantage"
+        }
+      ]
     },
     {
       "name": "Prospector's Pick",
@@ -4342,6 +4621,52 @@
       }
     },
     {
+      "name": "Ring of Swimming",
+      "match": "ring of swimming",
+      "slugs": [
+        "ring-of-swimming",
+        "ring-of-swimming-a5e"
+      ],
+      "requiresAttunement": false,
+      "effects": [
+        {
+          "kind": "speed",
+          "mode": "swim",
+          "feet": 40
+        }
+      ]
+    },
+    {
+      "name": "Ring of the Dolphin",
+      "match": "ring of the dolphin",
+      "slugs": [
+        "ring-of-the-dolphin"
+      ],
+      "requiresAttunement": true,
+      "effects": [
+        {
+          "kind": "speed",
+          "mode": "swim",
+          "feet": 40
+        }
+      ]
+    },
+    {
+      "name": "Ring of the Frog",
+      "match": "ring of the frog",
+      "slugs": [
+        "ring-of-the-frog"
+      ],
+      "requiresAttunement": true,
+      "effects": [
+        {
+          "kind": "speed",
+          "mode": "swim",
+          "feet": 20
+        }
+      ]
+    },
+    {
       "name": "Ring of the Frost Knight",
       "match": "ring of the frost knight",
       "slugs": [
@@ -4412,6 +4737,22 @@
           "types": [
             "thunder"
           ]
+        }
+      ]
+    },
+    {
+      "name": "Ring of Ursa",
+      "match": "ring of ursa",
+      "slugs": [
+        "ring-of-ursa"
+      ],
+      "requiresAttunement": true,
+      "effects": [
+        {
+          "kind": "increase_ability",
+          "ability": "str",
+          "amount": 2,
+          "max": 20
         }
       ]
     },
@@ -4494,7 +4835,19 @@
           "wizard"
         ]
       },
-      "effects": []
+      "effects": [
+        {
+          "kind": "spell_save_advantage"
+        },
+        {
+          "kind": "spell_attack_bonus",
+          "amount": 2
+        },
+        {
+          "kind": "spell_dc_bonus",
+          "amount": 2
+        }
+      ]
     },
     {
       "name": "Rod of Bubbles",
@@ -4587,6 +4940,20 @@
       }
     },
     {
+      "name": "Rod of the Infernal Realms",
+      "match": "rod of the infernal realms",
+      "slugs": [
+        "rod-of-the-infernal-realms"
+      ],
+      "requiresAttunement": true,
+      "effects": [
+        {
+          "kind": "spell_attack_bonus",
+          "amount": 2
+        }
+      ]
+    },
+    {
       "name": "Rod of the Mariner",
       "match": "rod of the mariner",
       "slugs": [
@@ -4620,7 +4987,11 @@
         "rowan-staff"
       ],
       "requiresAttunement": true,
-      "effects": [],
+      "effects": [
+        {
+          "kind": "spell_save_advantage"
+        }
+      ],
       "charges": {
         "max": 10,
         "lastChargeBecomes": "Quarterstaff"
@@ -4734,7 +5105,12 @@
         "scarab-of-protection-a5e"
       ],
       "requiresAttunement": true,
-      "effects": [],
+      "carried": true,
+      "effects": [
+        {
+          "kind": "spell_save_advantage"
+        }
+      ],
       "charges": {
         "max": 12,
         "spentAway": true
@@ -5119,6 +5495,22 @@
       }
     },
     {
+      "name": "Slippers of Spider Climbing",
+      "match": "slippers of spider climbing",
+      "slugs": [
+        "slippers-of-spider-climbing",
+        "slippers-of-spider-climbing-a5e"
+      ],
+      "requiresAttunement": true,
+      "effects": [
+        {
+          "kind": "speed",
+          "mode": "climb",
+          "feet": "walk"
+        }
+      ]
+    },
+    {
       "name": "Smoking Plate of Heithmir",
       "match": "smoking plate of heithmir",
       "slugs": [
@@ -5242,7 +5634,11 @@
         "spellguard-shield-a5e"
       ],
       "requiresAttunement": true,
-      "effects": [],
+      "effects": [
+        {
+          "kind": "spell_save_advantage"
+        }
+      ],
       "base": {
         "kind": "armor",
         "name": "Shield"
@@ -5593,7 +5989,12 @@
         "staff-of-parzelon"
       ],
       "requiresAttunement": false,
-      "effects": [],
+      "effects": [
+        {
+          "kind": "spell_attack_bonus",
+          "amount": 2
+        }
+      ],
       "charges": {
         "max": 20,
         "lastChargeRegain": "1d8+2"
@@ -5636,6 +6037,10 @@
         },
         {
           "kind": "save_bonus",
+          "amount": 2
+        },
+        {
+          "kind": "spell_attack_bonus",
           "amount": 2
         }
       ],
@@ -5749,7 +6154,13 @@
         "staff-of-the-cephalopod"
       ],
       "requiresAttunement": false,
-      "effects": [],
+      "effects": [
+        {
+          "kind": "speed",
+          "mode": "swim",
+          "feet": 30
+        }
+      ],
       "charges": {
         "max": 10,
         "regain": "1d6+4"
@@ -5784,7 +6195,15 @@
           "wizard"
         ]
       },
-      "effects": [],
+      "effects": [
+        {
+          "kind": "spell_attack_bonus",
+          "amount": 2
+        },
+        {
+          "kind": "spell_save_advantage"
+        }
+      ],
       "charges": {
         "max": 50,
         "regain": "4d6+2",
@@ -5798,7 +6217,12 @@
         "staff-of-the-peaks"
       ],
       "requiresAttunement": false,
-      "effects": [],
+      "effects": [
+        {
+          "kind": "spell_attack_bonus",
+          "amount": 2
+        }
+      ],
       "charges": {
         "max": 10,
         "regain": "1d6+4",
@@ -5913,7 +6337,12 @@
           "druid"
         ]
       },
-      "effects": [],
+      "effects": [
+        {
+          "kind": "spell_attack_bonus",
+          "amount": 2
+        }
+      ],
       "charges": {
         "max": 10,
         "regain": "1d6+4",
@@ -6303,7 +6732,16 @@
         "text": "a creature of good alignment",
         "alignment": "good"
       },
-      "effects": [],
+      "effects": [
+        {
+          "kind": "spell_attack_bonus",
+          "amount": 2,
+          "classes": [
+            "cleric",
+            "paladin"
+          ]
+        }
+      ],
       "charges": {
         "max": 7,
         "spentAway": true
@@ -6337,7 +6775,16 @@
         "text": "a creature of evil alignment",
         "alignment": "evil"
       },
-      "effects": [],
+      "effects": [
+        {
+          "kind": "spell_attack_bonus",
+          "amount": 2,
+          "classes": [
+            "cleric",
+            "paladin"
+          ]
+        }
+      ],
       "charges": {
         "max": 6,
         "spentAway": true
@@ -6400,6 +6847,20 @@
           "types": [
             "necrotic"
           ]
+        }
+      ]
+    },
+    {
+      "name": "The Song of Creation",
+      "match": "the song of creation",
+      "slugs": [
+        "the-song-of-creation-a5e"
+      ],
+      "requiresAttunement": true,
+      "effects": [
+        {
+          "kind": "spell_attack_bonus",
+          "amount": 3
         }
       ]
     },
@@ -7252,11 +7713,22 @@
         "wand-of-the-war-mage-1-2-or-3"
       ],
       "requiresAttunement": true,
+      "aliases": [
+        "Wand of the War Mage",
+        "Wand of the War Mage +1",
+        "Wand of the War Mage +2",
+        "Wand of the War Mage +3"
+      ],
       "attunedBy": {
         "text": "a spellcaster",
         "spellcaster": true
       },
-      "effects": []
+      "effects": [
+        {
+          "kind": "spell_attack_bonus",
+          "amount": "named"
+        }
+      ]
     },
     {
       "name": "Wand of Treasure Finding",
@@ -7483,13 +7955,33 @@
       }
     },
     {
+      "name": "Winged Boots",
+      "match": "winged boots",
+      "slugs": [
+        "winged-boots",
+        "winged-boots-a5e"
+      ],
+      "requiresAttunement": true,
+      "effects": [
+        {
+          "kind": "speed",
+          "mode": "fly",
+          "feet": "walk"
+        }
+      ]
+    },
+    {
       "name": "Witch Hunter's Armor",
       "match": "witch hunter's armor",
       "slugs": [
         "witch-hunters-armor"
       ],
       "requiresAttunement": false,
-      "effects": [],
+      "effects": [
+        {
+          "kind": "spell_save_advantage"
+        }
+      ],
       "armor": {
         "bonus": 1
       }

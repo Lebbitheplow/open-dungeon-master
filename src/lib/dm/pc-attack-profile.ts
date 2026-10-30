@@ -41,6 +41,7 @@ import { noneNamed, type ToolError } from "@/lib/dm/tool-errors";
 import { textKey } from "@/lib/language/text-logic";
 import { weaponMaterial } from "@/lib/dm/damage-logic";
 import { hasName, namesOf } from "@/lib/dm/cast-rules";
+import { magicItemRiders } from "@/lib/srd/magic-items";
 
 export type AttackKind = "weapon" | "spell" | "natural" | "granted";
 
@@ -331,6 +332,8 @@ export function buildAttackProfile(
         riders,
         martialArts: martialArtsApplies(sheet),
         brawler: brawlerUnarmed(sheet),
+        // Bracers of Archery's longbow training and +2 damage.
+        worn: magicItemRiders(sheet.equipment, sheet).weaponRiders,
         twoHanded,
         offHand: args.offHand,
         otherWeaponInHand: otherHandArmed({

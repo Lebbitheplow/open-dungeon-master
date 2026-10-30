@@ -18,7 +18,7 @@
 import { itemWeightByName } from "@/lib/content";
 import { carryMultiplier, encumbranceFor, type CarriedItem } from "@/lib/srd/encumbrance";
 import { sizeForRace } from "@/lib/srd";
-import { magicItemRiders, type Wearer } from "@/lib/srd/magic-items";
+import { itemAbilityScore, type Wearer } from "@/lib/srd/magic-items";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { rowName } from "@/lib/srd/item-row";
@@ -65,8 +65,9 @@ export function capacityProblem(
 
 // A character's carrying capacity and push, drag or lift limit, in pounds.
 export function liftLimits(sheet: Carrier & { equipment: CarriedItem[] }): { capacityLb: number; liftLb: number } {
-  const set = magicItemRiders(sheet.equipment ?? [], sheet as Wearer).abilitySet.str ?? 0;
-  const strength = Math.max(1, Math.floor(sheet.abilities.str || 1), set);
+  // A Belt of Giant Strength's score, or an Ioun Stone of Strength's +2.
+  const set = itemAbilityScore("str", Math.floor(sheet.abilities.str || 1), sheet.equipment ?? [], sheet as Wearer);
+  const strength = Math.max(1, set);
   const multiplier = carryMultiplier(sheet.race ? sizeForRace(sheet.race) : undefined);
   return { capacityLb: strength * 15 * multiplier, liftLb: strength * 30 * multiplier };
 }

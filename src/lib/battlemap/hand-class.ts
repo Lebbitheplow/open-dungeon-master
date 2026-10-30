@@ -36,6 +36,7 @@ import {
 } from "@/lib/battlemap/hand-core";
 import { textKey } from "@/lib/language/text-logic";
 import { subclassNamed } from "@/lib/srd/subclass-name";
+import { magicItemRiders } from "@/lib/srd/magic-items";
 
 const holds = (sheet: CharacterSheet, name: string) =>
   sheet.features.some((feature) => [feature.name, feature.name.replace(/\s*\(.*$/, "")].some((held) => textKey(held) === name));
@@ -206,7 +207,7 @@ export function bonusStrikeCards(
       derived,
       profs,
       { displayName: weapon, srd, unarmed: srd === null },
-      { riders, martialArts: martialArtsApplies(sheet) },
+      { riders, martialArts: martialArtsApplies(sheet), worn: magicItemRiders(sheet.equipment, sheet).weaponRiders },
     );
     const refused = optionRefusal(sheet, turn, profile, derived, { bonusAttack });
     const card: HandCard = {

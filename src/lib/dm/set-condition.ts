@@ -41,6 +41,7 @@ import { spellEffectRefusal } from "@/lib/dm/spell-effects";
 import { allyConditionAura } from "@/lib/dm/aura";
 import { awardInspirationCounter, heldInspiration } from "@/lib/dm/roll-riders";
 import { featureConditionImmunities, sourcedConditionImmunity } from "@/lib/srd/trait-rules";
+import { magicItemRiders } from "@/lib/srd/magic-items";
 import { conditionGrantedImmunity } from "@/lib/srd/condition-effect-queries";
 import type { CharacterSheet, FullPatchSheetInput } from "@/lib/schemas/sheet";
 import type { ToolError, ToolResult } from "@/lib/dm/tool-errors";
@@ -249,7 +250,9 @@ export function conditionImmunity(
     return `${warded} makes them immune`;
   }
   const own = featureConditionImmunities(sheet);
-  const held = own.conditions.find((entry) => entry.condition === wanted);
+  // A worn item's too (SRD 5.1, Periapt of Proof against Poison: "You are
+  // immune to the poisoned condition").
+  const held = [...own.conditions, ...magicItemRiders(sheet.equipment, sheet).conditionImmunities].find((entry) => entry.condition === wanted);
   if (held) {
     return `${held.because} makes them immune`;
   }

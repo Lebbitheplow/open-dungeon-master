@@ -13,7 +13,7 @@ import { conditionAcRiders } from "@/lib/srd/condition-effects";
 import { auraGranted, combatRiders, defenseRiders, halfProficiencyCovers } from "@/lib/srd/feature-effects";
 import { featureSaveProficiencies, featureSkillProficiencies } from "@/lib/srd/trait-rules";
 import { authoredAcBonus, authoredSaveModifier, authoredSpeeds } from "@/lib/srd/authored-effects";
-import { effectiveAbilities, magicItemRiders } from "@/lib/srd/magic-items";
+import { effectiveAbilities, itemSpeeds, magicItemRiders, type Wearer, type WornMagicItem } from "@/lib/srd/magic-items";
 import { encumbranceFor } from "@/lib/srd/encumbrance";
 import { allSpellNames } from "@/lib/srd/spell-lists";
 import { hpBonusPerLevel, speciesRulesFor, type SpeciesRules } from "@/lib/srd/race-id";
@@ -367,9 +367,10 @@ export type SheetDerived = {
   passiveInvestigation: number;
   spellSaveDc: number | null;
   spellAttack: number | null;
-  // Flying and swimming speeds the authored subclass features grant
-  // (Stormborn, Wind Soul, Gift of the Sea), in feet; absent when none do.
-  speeds?: { fly?: number; swim?: number };
+  // Flying, swimming and climbing speeds the authored subclass features
+  // (Stormborn, Wind Soul, Gift of the Sea) and worn items (Winged Boots)
+  // grant, in feet; absent when none do.
+  speeds?: { fly?: number; swim?: number; climb?: number };
   parts: DerivedParts;
 };
 
@@ -383,12 +384,25 @@ function sumParts(parts: DerivedPart[]): number {
   return parts.reduce((total, part) => total + part.value, 0);
 }
 
-// Flying and swimming speeds from the authored features, as a spread for the
-// derived numbers; nothing when there are none.
-function otherSpeeds(sheet: { features?: Array<{ name: string }>; speed?: number }): { speeds?: { fly?: number; swim?: number } } {
-  const speeds = authoredSpeeds(sheet, sheet.speed ?? 30);
+// Flying, swimming and climbing speeds from the authored features and the
+// worn items (Winged Boots, Ring of Swimming, Slippers of Spider Climbing),
+// the best of each, as a spread for the derived numbers; nothing when there
+// are none.
+function otherSpeeds(
+  sheet: Parameters<typeof authoredSpeeds>[0] & Wearer & { speed?: number; equipment?: WornMagicItem[] },
+): { speeds?: { fly?: number; swim?: number; climb?: number } } {
+  const walking = sheet.speed ?? 30;
+  const speeds: { fly?: number; swim?: number; climb?: number } = { ...authoredSpeeds(sheet, walking) };
+  for (const [mode, feet] of Object.entries(sheet.equipment ? itemSpeeds(sheet.equipment, sheet, walking) : {}) as Array<["fly" | "swim" | "climb", number]>) {
+    speeds[mode] = Math.max(speeds[mode] ?? 0, feet);
+  }
   return Object.keys(speeds).length ? { speeds } : {};
 }
+
+// The label the derived parts give what worn magic items add, which the
+// per-class numbers below read back.
+const MAGIC_ITEMS_PART = "magic items";
+const itemPart = (parts: DerivedPart[]) => parts.find((part) => part.label === MAGIC_ITEMS_PART)?.value ?? 0;
 
 // All derived numbers come from the sheet + SRD data; the model never
 // invents a modifier.
@@ -426,7 +440,8 @@ export function computeSheetDerived(
   const abilities = sheet.wildShape?.abilities
     ? { ...withItems, ...sheet.wildShape.abilities }
     : withItems;
-  const magicSaveBonus = sheet.equipment ? magicItemRiders(sheet.equipment, sheet).saveBonus : 0;
+  const magic = sheet.equipment ? magicItemRiders(sheet.equipment, sheet) : null;
+  const magicSaveBonus = magic?.saveBonus ?? 0;
   const abilityMods = Object.fromEntries(
     (Object.keys(abilities) as Ability[]).map((ability) => [ability, abilityMod(abilities[ability])]),
   ) as Record<Ability, number>;
@@ -523,17 +538,23 @@ export function computeSheetDerived(
     { label: "Investigation", value: skills.investigation },
     { label: "features", value: defense.passiveBonus },
   ]);
+  // A worn item's bonus to spell attacks and the spell save DC (SRD 5.1,
+  // Robe of the Archmagi: "Your spell save DC and spell attack bonus each
+  // increase by 2"; Staff of Power, Wand of the War Mage).
+  const itemSpellParts = (value: number) => (value ? [{ label: MAGIC_ITEMS_PART, value }] : []);
   const spellSaveParts = spellAbility
     ? [
         { label: "base", value: 8 },
         { label: "proficiency", value: pb },
         { label: `${spellAbility.toUpperCase()} modifier`, value: abilityMods[spellAbility] },
+        ...itemSpellParts(magic?.spellDcBonus ?? 0),
       ]
     : [];
   const spellAttackParts = spellAbility
     ? [
         { label: "proficiency", value: pb },
         { label: `${spellAbility.toUpperCase()} modifier`, value: abilityMods[spellAbility] },
+        ...itemSpellParts(magic?.spellAttackBonus ?? 0),
       ]
     : [];
   return {
@@ -639,7 +660,7 @@ export function spellSaveDcFor(
   if (!owner || owner.ability === sheet.spellcasting.ability) {
     return derived.spellSaveDc;
   }
-  return 8 + derived.proficiencyBonus + derived.abilityMods[owner.ability];
+  return 8 + derived.proficiencyBonus + derived.abilityMods[owner.ability] + itemPart(derived.parts.spellSaveDc);
 }
 
 // The spell-attack bonus for a named spell, same ownership rule as the DC.
@@ -665,7 +686,7 @@ export function spellAttackFor(
   if (!owner || owner.ability === sheet.spellcasting.ability) {
     return derived.spellAttack;
   }
-  return derived.proficiencyBonus + derived.abilityMods[owner.ability];
+  return derived.proficiencyBonus + derived.abilityMods[owner.ability] + itemPart(derived.parts.spellAttack);
 }
 
 // Total XP needed to reach each level (index = level - 1), per the 5e table.

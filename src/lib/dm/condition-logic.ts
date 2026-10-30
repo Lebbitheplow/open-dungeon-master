@@ -7,7 +7,7 @@
 import { RAGING } from "@/lib/srd/class-resources";
 import { conditionIncomingAttackState, conditionSpeed } from "@/lib/srd/condition-effects";
 import { conditionSeesInvisible } from "@/lib/srd/condition-effect-queries";
-import { magicItemRiders, type Wearer } from "@/lib/srd/magic-items";
+import { itemAbilityScore, type Wearer } from "@/lib/srd/magic-items";
 import { textKey } from "@/lib/language/text-logic";
 import { CALTROPS_WOUND } from "@/lib/battlemap/zones-gear";
 
@@ -713,8 +713,9 @@ export function effectiveMaxHp(sheet: {
 }): number {
   let max = sheet.maxHp;
   if (sheet.abilities && sheet.equipment?.length && sheet.level) {
-    const set = magicItemRiders(sheet.equipment, sheet as Wearer).abilitySet.con;
-    if (set && set > sheet.abilities.con) {
+    // An Amulet of Health's 19, or a Belt of Dwarvenkind's +2 to at most 20.
+    const set = itemAbilityScore("con", sheet.abilities.con, sheet.equipment, sheet as Wearer);
+    if (set > sheet.abilities.con) {
       const modOf = (score: number) => Math.floor((score - 10) / 2);
       max += (modOf(set) - modOf(sheet.abilities.con)) * sheet.level;
     }
