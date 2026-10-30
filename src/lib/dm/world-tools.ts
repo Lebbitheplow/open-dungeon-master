@@ -616,6 +616,11 @@ export function handleTravel(
   if (pacts.length) {
     weatherOutcome.companions = pacts;
   }
+  // The death saves the hours on the road rolled for the dying, already at
+  // the table: the GM narrates the march from this result.
+  if (!("error" in moved) && moved.deathSaves.length) {
+    weatherOutcome.deathSaves = moved.deathSaves;
+  }
 
   // The pace holds until the party stops: check_notice reads it (a fast
   // pace is -5 to passive Perception) until a rest or pass_time ends the

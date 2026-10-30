@@ -491,6 +491,18 @@ await test("a natural 20 on the clock brings the character round at 1 hit point"
   assert.equal(track(), null);
 });
 
+await test("a rest or a march that settles a dying character's saves tells the GM how they went", async () => {
+  dying({ ...FRESH, failures: 2 });
+  const rest = await kit.withDice([4], "take_rest", { kind: "short" });
+  assert.equal(rest.outcome.ok, true, rest.outcome.error);
+  assert.match(String(rest.result.deathSaves?.at(-1)), /dies/, JSON.stringify(rest.result));
+  dying({ ...FRESH, failures: 2 });
+  const march = await kit.withDice([4], "travel", { hours: 2, pace: "normal", characterIds: [ally.id] });
+  assert.equal(march.outcome.ok, true, march.outcome.error);
+  assert.match(String(march.result.deathSaves?.at(-1)), /dies/, JSON.stringify(march.result));
+  kit.reset(hero.id);
+});
+
 await test("the stable and the dead roll nothing as time passes", async () => {
   for (const saves of [{ ...FRESH, stable: true }, DEAD]) {
     dying(saves);

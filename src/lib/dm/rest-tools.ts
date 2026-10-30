@@ -233,6 +233,10 @@ export function handleTakeRest(
   // A party at rest is no longer on the march.
   setTravelPace(campaign.id, null);
   const clockAfter = advanceClock(campaign.id, restedMinutes, "minutes");
+  // The death saves those hours rolled for the dying (condition-tick.ts):
+  // the GM narrates the rest from this result, and without them told a
+  // character who died in the night that they still lay dying at dawn.
+  const deathSaves = "error" in clockAfter ? [] : clockAfter.deathSaves;
   const restedFor = describeDuration(restedMinutes);
   const nowReads =
     "error" in clockAfter
@@ -296,6 +300,7 @@ export function handleTakeRest(
       ...(living.length ? { lifestyle: living } : {}),
       ...(leaving.length ? { companionsLeft: leaving } : {}),
       ...(unaffected.length ? { unaffected: unaffected.join("; ") } : {}),
+      ...(deathSaves.length ? { deathSaves } : {}),
       restedFor,
       ...(nowReads ? { now: nowReads } : {}),
       note: rested.length
@@ -399,6 +404,7 @@ export function handleTakeRest(
     ok: true,
     kind: "short",
     restedFor,
+    ...(deathSaves.length ? { deathSaves } : {}),
     ...(nowReads ? { now: nowReads } : {}),
     results: results.length ? results : waiting.length ? "No hit dice spent by the server." : "Nobody needed to spend hit dice.",
     ...(waiting.length
