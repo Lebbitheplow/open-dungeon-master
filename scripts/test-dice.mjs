@@ -169,10 +169,19 @@ test("a rerolled 1 can become a natural 20", () => {
 });
 
 test("the reroll happens before advantage keeps", () => {
-  // 2d20kh1r1: both dice roll a 1, each rerolls once, then keep highest.
+  // 2d20kh1r1: both dice roll a 1, the first rerolls to 18, then keep highest.
   const result = rollExpression("2d20kh1r1", queueRng([1, 18, 1, 4]));
   assert.equal(result.total, 18);
   assert.equal(result.natural, 18);
+});
+
+test("with disadvantage Lucky rerolls only one of the two dice", () => {
+  // SRD 5.1 Advantage and Disadvantage: "you can reroll or replace only one
+  // of the dice". Two 1s at disadvantage: one is rerolled, the other 1 is
+  // still the lower.
+  const result = rollExpression("2d20kl1r1", queueRng([1, 15, 1, 12]));
+  assert.equal(result.total, 1);
+  assert.equal(result.terms[0].dice.filter((die) => die.rerolledFrom !== undefined).length, 1);
 });
 
 test("reroll then floor stack (Lucky halfling with Reliable Talent)", () => {

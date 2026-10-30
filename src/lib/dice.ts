@@ -46,9 +46,10 @@ const MIN_SIDES = 2;
 const MAX_TERMS = 20;
 
 // XdY, optional khN/klN keep, optional rN reroll (Halfling Lucky: "1d20r1"
-// rerolls any die at or below N once and keeps the new face, before the keep
-// picks a survivor), optional fN floor (Reliable Talent: "1d20f10" treats a
-// kept face below N as N), or a flat integer.
+// rerolls a die at or below N once and keeps the new face, before the keep
+// picks a survivor; in a kept term only one die is rerolled), optional fN
+// floor (Reliable Talent: "1d20f10" treats a kept face below N as N), or a
+// flat integer.
 const TERM_PATTERN =
   /^(?:(\d{1,3})d(\d{1,3})(?:k([hl])(\d{1,3}))?(?:r(\d{1,3}))?(?:f(\d{1,3}))?|(\d{1,7}))$/i;
 
@@ -126,16 +127,26 @@ export function rollExpression(
     };
     // The grammar reroll (Halfling Lucky "r1") and the Great Weapon Fighting
     // option (d20-exempt) both reroll a low die once and keep the new face.
-    // They act on disjoint die types in practice, so the larger threshold
-    // wins when a term somehow carries both.
+    // They act on disjoint die types in practice; a die either one catches
+    // is rerolled.
     const grammarReroll = match[5] ? Number(match[5]) : 0;
     if (grammarReroll < 0 || grammarReroll >= sides) {
       throw new Error(`Reroll threshold out of range in: ${rawTerm}`);
     }
-    const rerollAt = Math.max(grammarReroll, sides === 20 ? 0 : (options.rerollBelow ?? 0));
+    const weaponRerollAt = sides === 20 ? 0 : (options.rerollBelow ?? 0);
+    // With advantage or disadvantage the grammar reroll touches one die, the
+    // first low one: SRD 5.1 Advantage and Disadvantage, "When you have
+    // advantage or disadvantage and something in the game, such as the
+    // halfling's Lucky trait, lets you reroll or replace the d20, you can
+    // reroll or replace only one of the dice." At disadvantage two 1s stay 1.
+    let grammarRerollsLeft = keep ? 1 : count;
     const dice: DieResult[] = Array.from({ length: count }, () => {
       const value = roll();
-      if (rerollAt > 0 && value <= rerollAt) {
+      const lucky = grammarReroll > 0 && value <= grammarReroll && grammarRerollsLeft > 0;
+      if (lucky) {
+        grammarRerollsLeft -= 1;
+      }
+      if (lucky || (weaponRerollAt > 0 && value <= weaponRerollAt)) {
         return { sides, value: roll(), kept: true, rerolledFrom: value };
       }
       return { sides, value, kept: true };

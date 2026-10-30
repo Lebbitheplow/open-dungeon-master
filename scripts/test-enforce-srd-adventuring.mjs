@@ -215,15 +215,8 @@ const halfling = world.addHero({
   features: [{ name: "Lucky", source: "race" }],
 });
 
-await gap(
-  "ADV-05",
-  {
-    rule:
-      "using-ability-scores / Advantage and Disadvantage: \"When you have advantage or disadvantage and something in the game, such as the halfling's Lucky trait, lets you reroll or replace the d20, you can reroll or replace only one of the dice.\" At disadvantage two 1s stay a 1: one die is rerolled, the other 1 is the lower",
-    where: "src/lib/dm/rolls.ts resolveRollExpression (the r1 suffix on the whole 2d20 term) with src/lib/dice.ts rollExpression (rerolls every die at or under the threshold)",
-    severity: "low",
-    note: "With advantage the difference cannot show (the higher die is kept); at disadvantage the engine lets both 1s go again, so the halfling keeps the lower of two fresh dice instead of the 1. test-dice.mjs 'the reroll happens before advantage keeps' pins the both-dice reroll, harmlessly for advantage.",
-  },
+await test(
+  "ADV-05: using-ability-scores / Advantage and Disadvantage: \"When you have advantage or disadvantage and something in the game, such as the halfling's Lucky trait, lets you reroll or replace the d20, you can reroll or replace only one of the dice.\" At disadvantage two 1s stay a 1: one die is rerolled, the other 1 is the lower",
   async () => {
     world.patch(halfling.id, { conditions: ["poisoned"] });
     const { out, d20s } = await rolled({ characterId: halfling.id, kind: "ability_check", ability: "dex" }, [1, 15, 1, 12]);
