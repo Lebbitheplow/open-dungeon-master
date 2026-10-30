@@ -257,19 +257,41 @@ export type CharacterLook = {
   genre?: string | null;
 };
 
+// The species whose plate shows a head no human face can stand in for: a
+// bull's, a cat's, a bird's, a reptile's, a mushroom's, a machine's. The class
+// plates are all painted human, so a minotaur fighter drew a human fighter
+// (0.31.1 playtest). An elf, a dwarf or a tiefling still reads true enough in
+// the class's gear, and keeps it.
+const OWN_FACE_FAMILIES = new Set([
+  "acid-cap", "bhain-kwai", "boghaid", "bugbear", "catfolk",
+  "darakhul-dragonborn", "darakhul-kobold", "darakhul-ravenfolk",
+  "dragonborn", "erina", "favored", "gearforged", "gearforged-dwarf",
+  "gearforged-gnome", "gearforged-kobold", "goblin", "kenku", "lizardfolk",
+  "malkin", "minotaur", "morel", "mushroomfolk", "pantheran", "satarre",
+  "tabaxi", "tortle", "warforged",
+]);
+
+// Whether a species' own plate beats the class's (OWN_FACE_FAMILIES).
+export function raceShowsOwnFace(raceId: string | null | undefined): boolean {
+  const family = raceFamily(raceId);
+  return family !== null && OWN_FACE_FAMILIES.has(family);
+}
+
 // Class, then race, then the genre's own lead, then a plain adventurer. Class
 // wins over race because the gear is what a player recognises their character
 // by, and because a wizard reads as a wizard at 44 pixels where a half-elf
-// does not read as a half-elf.
+// does not read as a half-elf. A species with a face of its own
+// (OWN_FACE_FAMILIES) is the exception: a minotaur reads as a minotaur at any
+// size, and as a human in the class plate.
 export function characterPlaceholder(look: CharacterLook): string {
   const gender = normalizeGender(look.gender);
+  const family = raceFamily(look.race);
 
-  const byClass = look.class ? classPlate(look.class, gender) : null;
+  const byClass = look.class && !raceShowsOwnFace(look.race) ? classPlate(look.class, gender) : null;
   if (byClass) {
     return `${BASE}/character-class/${byClass}.webp`;
   }
 
-  const family = raceFamily(look.race);
   const slug = genreSlug(look.genre);
   // The wasteland's raceHint calls a half-orc a mutant (src/lib/genres.ts),
   // and a fantasy half-orc is the wrong picture for that; it has a lead of
