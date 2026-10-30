@@ -8,6 +8,7 @@
 // row corrects the areas already on a board. Pure data: no DB.
 
 import { textKey } from "@/lib/language/text-logic";
+import { GEAR_ZONE_ROWS } from "@/lib/battlemap/zones-gear";
 
 export type ZoneShape =
   // A burst around a point: every square within `feet` of it (a cylinder
@@ -57,6 +58,9 @@ export type ZoneTrigger = {
   immuneSucceeds?: string;
   // Strikes each creature once only (burning webs).
   once?: boolean;
+  // Caltrops: a failed save stops the creature's move on the square it
+  // entered (src/lib/battlemap/zones-gear.ts).
+  stopsOnFail?: boolean;
 };
 
 export type ZoneTone = "fire" | "frost" | "gloom" | "fog" | "storm" | "nature" | "radiant" | "force" | "stone" | "poison" | "hush" | "blade";
@@ -142,6 +146,9 @@ export type ZoneRow = {
   dispelsDarknessUpTo?: number;
   trigger?: ZoneTrigger;
   tone: ZoneTone;
+  // Gear spread on the ground, not a spell (zones-gear.ts): its saves and
+  // damage are not magical.
+  mundane?: boolean;
   // What it does, one line for GAME STATE and the board's label.
   summary: string;
 };
@@ -381,6 +388,10 @@ export const LIGHT_SPELLS: Record<string, { radiusTiles: number; minutes: number
   "continual flame": { radiusTiles: 4, minutes: 0 },
 };
 
+// The spells' areas and the gear spread on the ground (zones-gear.ts), one
+// table.
+const AREA_ROWS: Record<string, ZoneRow> = { ...ZONE_ROWS, ...GEAR_ZONE_ROWS };
+
 export function zoneRowFor(spell: ZoneNamed): ZoneRow | null {
-  return ZONE_ROWS[zoneKey(spell)] ?? null;
+  return AREA_ROWS[zoneKey(spell)] ?? null;
 }

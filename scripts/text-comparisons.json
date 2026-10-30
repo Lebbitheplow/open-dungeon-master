@@ -788,7 +788,7 @@
     "lib/battlemap/zones-movers.ts#\\b": [["english-source",2,"reference: SRD creature types (undead, construct) in a stat block's type"]],
     "lib/battlemap/zones-movers.ts#re-word": [["english-source",1,"reference: SRD creature types (undead, construct) in a stat block's type"],["key",1,"creature sizes (engine vocabulary)"]],
     "lib/battlemap/zones-movers.ts#toLowerCase": [["key",2,"condition labels (engine vocabulary)"]],
-    "lib/battlemap/zones-spells.ts#str-key": [["english-source",2,"reference: SRD spell names (zone rows), matched whole"]],
+    "lib/battlemap/zones-spells.ts#str-key": [["english-source",1,"reference: SRD spell names (zone rows), matched whole"]],
     "lib/battlemap/zones-spells.ts#str-list": [["english-source",1,"reference: SRD spell names (zone rows), matched whole"]],
     "lib/battlemap/zones.ts#str-eq": [["key",2,"caster and mover sides"]],
     "lib/bestiary/attack-parse.ts#[a-z]": [["english-source",1,"content-pack attack text (Open5e rows), parsed when a pack row becomes a stored block"]],

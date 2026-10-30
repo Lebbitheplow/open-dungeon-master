@@ -5,10 +5,10 @@
 // the three diseases, the madness tables, the object tables and the list of
 // poisons (src/lib/rulebook/srd-5.1.json, pages coinage through poisons).
 //
-// Each gap() below is a finding of the issue #570 SRD text audit: the place
-// where the engine does something other than what the quoted sentence says,
-// reproduced through the real tools. Each test() is a row the audit checked
-// and found held that no other suite states. The armor and weapon tables,
+// Each EQP-nn test below was a finding of the issue #570 SRD text audit,
+// where the engine did something other than what the quoted sentence says,
+// reproduced through the real tools and now held. Each other test() is a
+// row the audit checked and found held that no other suite states. The armor and weapon tables,
 // the weapon properties, coin weights, the half-price sale and the three
 // diseases' main rules have suites of their own (test-enforce-armor,
 // test-enforce-weapons, test-enforce-weapon-rules, test-encumbrance,
@@ -19,7 +19,7 @@ import { suite } from "./lib/enforce-harness.mjs";
 import { gearKit, profs } from "./lib/enforce-equipment.mjs";
 import { kit as conditionsKit } from "./lib/enforce-conditions.mjs";
 
-const { test, gap, finish } = suite("test-enforce-srd-equipment");
+const { test, finish } = suite("test-enforce-srd-equipment");
 
 const world = await openWorld({ campaign: { maxPlayers: 40 } });
 const { objectAc, objectHp } = await import("../src/lib/srd/objects.ts");
@@ -37,6 +37,7 @@ const encounters = await import("../src/lib/db/encounters.ts");
 const { getDatabase } = await import("../src/lib/db/core.ts");
 const { getCampaignById } = await import("../src/lib/db/campaigns.ts");
 const { burningTurnStart } = await import("../src/lib/dm/gear-weapon-hit.ts");
+const { zonesAfterMove } = await import("../src/lib/dm/zone-triggers.ts");
 
 // A setup step that went wrong is the test breaking, not the rule: a plain
 // Error, which the harness fails the suite on, never an AssertionError that
@@ -380,17 +381,30 @@ await test("Weapons, Special Weapons (Net): a net has no effect on a creature th
   }
 });
 
-await gap("EQP-13", {
-  rule: "adventuring-gear, Caltrops: \"As an action, you can spread a bag of caltrops to cover a square area that is 5 feet on a side. Any creature that enters the area must succeed on a DC 15 Dexterity saving throw or stop moving this turn and take 1 piercing damage.\" Ball Bearings: a 10-foot square, DC 10 Dexterity save or fall prone.",
-  where: "src/lib/dm/resource-tools.ts computeUseItem (a generic consumable is removed and nothing is placed), src/lib/dm/zone-store.ts",
-  severity: "medium",
-}, async () => {
+// adventuring-gear, Caltrops: "As an action, you can spread a bag of caltrops
+// to cover a square area that is 5 feet on a side. Any creature that enters
+// the area must succeed on a DC 15 Dexterity saving throw or stop moving this
+// turn and take 1 piercing damage." Ball Bearings: a 10-foot square, DC 10
+// Dexterity save or fall prone.
+await test("EQP-13", async () => {
   kit.stand(thrower.id, 2);
   world.patch(thrower.id, { equipment: [{ name: "Caltrops (bag of 20)", qty: 1 }] });
   const used = await kit.onTurnOf(thrower.id, () => world.invoke("use_item", { characterId: thrower.id, item: "Caltrops (bag of 20)" }));
   must(used.ok, `use_item refused: ${used.error}`);
   const zones = liveZones(kit.board(), world.encounter());
   assert.ok(zones.length > 0, `the bag was spent (${JSON.stringify(used.result)}) and nothing lies on the board`);
+  // One square, between the user and the dummy; the dummy walking onto it
+  // fails its DC 15 save (a 2), takes 1 piercing, stops there and is slowed.
+  const board = kit.board();
+  assert.deepEqual(zones[0].cells, [board.width * 0 + 1]);
+  const before = kit.dummy().currentHp;
+  world.clearDice();
+  world.dice(2);
+  zonesAfterMove(getCampaignById(world.campaignId), world.encounter().id, { kind: "enemy", refId: kit.dummy().id }, { x: 0, y: 0 }, [{ x: 1, y: 0 }]);
+  world.clearDice();
+  assert.equal(before - kit.dummy().currentHp, 1);
+  assert.ok(kit.dummy().conditions.includes("caltrops wound"), JSON.stringify(kit.dummy().conditions));
+  encounters.patchEnemyConditions(kit.dummy().id, [], {});
 });
 
 await kit.endFight();

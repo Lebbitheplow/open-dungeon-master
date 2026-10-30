@@ -154,7 +154,7 @@ function strike(
     }
     const immune = immuneSucceeds(trigger, [enemy.stats.immune ?? "", ...petrifiedImmunities(enemy.conditions)].join(", "));
     const save = trigger.save && !immune && !held
-      ? rollEnemySave(campaign.id, enemy, trigger.save, dc, { magical: true, resist: Boolean(trigger.condition) && bindsWorthResisting([trigger.condition ?? ""]), against: trigger.condition ?? [], record: { detail: `${enemy.displayName}: ${trigger.save.toUpperCase()} save against ${zone.spell}` } })
+      ? rollEnemySave(campaign.id, enemy, trigger.save, dc, { magical: !row.mundane, resist: Boolean(trigger.condition) && bindsWorthResisting([trigger.condition ?? ""]), against: trigger.condition ?? [], record: { detail: `${enemy.displayName}: ${trigger.save.toUpperCase()} save against ${zone.spell}` } })
       : null;
     const failed = !held && (trigger.save ? !immune && !save?.success : true);
     if (trigger.save && !held) {
@@ -166,7 +166,7 @@ function strike(
       dealt = failed ? rolled : Math.floor(rolled / 2);
       if (dealt > 0) {
         const before = enemy.currentHp;
-        lines.push(hurtEnemy(campaign, encounter, enemy, dealt, trigger.type ?? "force", why));
+        lines.push(hurtEnemy(campaign, encounter, enemy, dealt, trigger.type ?? "force", why, row.mundane));
         dealt = Math.max(0, before - (getEnemy(enemy.id)?.currentHp ?? before));
       }
     }
@@ -201,7 +201,7 @@ function strike(
   const immune = immuneSucceeds(trigger, pcImmunities(sheet));
   return withZoneTurn(campaign.id, (turn) => {
     const save = trigger.save && !held && !immune
-      ? rollCharacterSave(campaign, turn, sheet, trigger.save, dc, `${trigger.save.toUpperCase()} save against ${zone.spell}`, saveAgainst({ damageType: trigger.type, magical: true }))
+      ? rollCharacterSave(campaign, turn, sheet, trigger.save, dc, `${trigger.save.toUpperCase()} save against ${zone.spell}`, saveAgainst({ damageType: trigger.type, magical: !row.mundane }))
       : null;
     const failed = !held && (trigger.save ? !immune && !save?.success : true);
     if (trigger.save && !held) {
@@ -221,8 +221,8 @@ function strike(
         const hurt = applyPcDamage(campaign, turn.id, getSheetById(sheet.id) ?? sheet, {
           amount,
           type: trigger.type,
-          magical: true,
-          spell: true,
+          magical: !row.mundane,
+          spell: !row.mundane,
           reason: why,
         });
         const taken = typeof hurt.damageApplied === "number" ? hurt.damageApplied : amount;
@@ -380,8 +380,14 @@ export function zonesAfterMove(
     const struckKey = `${victim.id}:enter`;
     if (trigger.on.includes("enter") && enteredAt && zone.struck?.[struckKey] !== key) {
       zone.struck = { ...(zone.struck ?? {}), [struckKey]: key };
+      // Caltrops: a failed save, seen as the condition it newly lays,
+      // stops the move on the square entered (zones-gear.ts).
+      const hadIt = Boolean(trigger.stopsOnFail && trigger.condition && victimHolds(victim, trigger.condition));
       lines.push(...strike(campaign, encounter, map, zone, victim, "enter"));
       if (trigger.condition === "restrained" && stillHeld(victim)) {
+        stopAt = stopAt ?? enteredAt;
+      }
+      if (trigger.stopsOnFail && trigger.condition && !hadIt && victimHolds(victim, trigger.condition)) {
         stopAt = stopAt ?? enteredAt;
       }
     }
@@ -404,6 +410,11 @@ function heldByZone(victim: Victim, zone: SpellZone): boolean {
   const held = holder?.conditions.find((entry) => entry.toLowerCase() === "restrained");
   const spells = [zone.spell, zone.heldBy ?? ""].map((name) => name.toLowerCase()).filter(Boolean);
   return Boolean(held && instancesOf((holder?.conditionMeta as ConditionMetaMap | undefined)?.[held]).some((entry) => entry.source === zone.casterId && spells.includes((entry.spell ?? "").toLowerCase())));
+}
+
+function victimHolds(victim: Victim, condition: string): boolean {
+  const conditions = victim.kind === "enemy" ? getEnemy(victim.id)?.conditions : getSheetById(victim.id)?.conditions;
+  return holds(conditions ?? [], condition);
 }
 
 function stillHeld(victim: Victim): boolean {

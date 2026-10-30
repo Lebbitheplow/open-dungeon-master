@@ -76,6 +76,7 @@ import {
   describeExhaustion,
   effectiveMaxHp,
   pruneMeta,
+  removeConditions,
 } from "@/lib/dm/condition-logic";
 import { normalizeAbility } from "@/lib/dm/arg-coerce";
 import { breakConcentration } from "@/lib/dm/concentration";
@@ -111,6 +112,8 @@ import { holdsFeature, isConditionNamed, isNamed } from "@/lib/srd/feature-names
 import { unknownSheetRef } from "@/lib/dm/rolls";
 import { classWords } from "@/lib/sheet-words";
 import { healCeiling } from "@/lib/dm/afflictions";
+import { spreadGear } from "@/lib/dm/gear-zones";
+import { CALTROPS_WOUND } from "@/lib/battlemap/zones-gear";
 
 // DM stat authority: the model changes sheets ONLY through these tools.
 // Every mutation is server-clamped, audit-logged, and published live.
@@ -893,7 +896,12 @@ export function applyDmMutation(
       // Tincture's damage is beyond it (afflictions.ts healCeiling).
       const ceiling = healCeiling(campaign.id, sheet);
       const math = healMath(Math.min(sheet.currentHp, ceiling), ceiling, Math.min(amount, 200));
-      patchSheet(sheet.id, { currentHp: math.currentHp });
+      // Caltrops: the lost walking speed comes back with a regained hit
+      // point (src/lib/battlemap/zones-gear.ts).
+      const mended = math.currentHp > sheet.currentHp && sheet.conditions.some((entry) => isConditionNamed(entry, CALTROPS_WOUND))
+        ? removeConditions(sheet.conditions, sheet.conditionMeta, [CALTROPS_WOUND])
+        : null;
+      patchSheet(sheet.id, { currentHp: math.currentHp, ...(mended ? { conditions: mended.conditions, conditionMeta: mended.meta } : {}) });
       audit(campaign, turnId, sheet, "heal", { amount, newHp: math.currentHp }, reason, {
         currentHp: math.currentHp,
       });
@@ -1149,6 +1157,11 @@ export function applyDmMutation(
       // What the potion or scroll does, applied by the engine.
       const used = String(outcome.result.used ?? itemName);
       Object.assign(outcome.result, applyConsumable(campaign, turnId, sheet, target, sheet.equipment.find((item) => item.name === used) ?? { name: used }) ?? {});
+      // A bag of caltrops or ball bearings lies on the board (gear-zones.ts).
+      const spread = spreadGear(campaign, sheet, used);
+      if (spread) {
+        outcome.result.spread = spread;
+      }
       audit(campaign, turnId, sheet, "use_item", { item: itemName }, reason, outcome.patch);
       publishSheet(campaign, sheet.id);
       // Potion healing rides the standard heal mutation so the death engine
