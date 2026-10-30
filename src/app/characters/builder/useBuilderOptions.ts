@@ -67,7 +67,9 @@ export function useBuilderOptions(keepRaceId?: string) {
   const [races, setRaces] = useState<RaceOption[]>(srdRaceOptions);
   const [classes, setClasses] = useState<ClassOption[]>(srdClassOptions);
   const [backgrounds, setBackgrounds] = useState<BackgroundOption[]>(srdBackgroundOptions);
-  const [packInstalled, setPackInstalled] = useState(false);
+  // Null until a list answers: the builder must not say the pack is missing
+  // while it is still being asked.
+  const [packInstalled, setPackInstalled] = useState<boolean | null>(null);
   // Whether the rows the server offers have arrived (or failed to): until
   // then the bundled lists stand in, and a stored pick missing from them
   // proves nothing.
@@ -136,7 +138,10 @@ export function useBuilderOptions(keepRaceId?: string) {
     }
     load().catch(() => {
       // Building the options themselves failed: the bundled ones stand.
-      if (!cancelled) setLoaded(true);
+      if (!cancelled) {
+        setPackInstalled((known) => known ?? false);
+        setLoaded(true);
+      }
     });
     return () => {
       cancelled = true;

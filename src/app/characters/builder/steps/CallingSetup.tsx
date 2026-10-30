@@ -13,12 +13,13 @@ import { Field } from "./shared";
 // what every later step offers (features, subclass, spells, improvements),
 // so it is set before any of them.
 
-export function ContentNotices({ pack, packInstalled }: { pack: WorldPack | null; packInstalled: boolean }) {
+// `packInstalled` is null while the option lists are still loading.
+export function ContentNotices({ pack, packInstalled }: { pack: WorldPack | null; packInstalled: boolean | null }) {
   // The install command is for whoever runs the server. A player can do
   // nothing with it, and a first-timer read it as something being broken.
   const [isAdmin, setIsAdmin] = useState(false);
   useEffect(() => {
-    if (packInstalled) {
+    if (packInstalled !== false) {
       return;
     }
     fetch("/api/auth/me")
@@ -29,7 +30,11 @@ export function ContentNotices({ pack, packInstalled }: { pack: WorldPack | null
 
   return (
     <>
-      {!packInstalled ? (
+      {packInstalled === null ? (
+        <p role="status" className="rounded-lg border border-stone-700/60 bg-stone-900/60 p-3 text-xs text-stone-400">
+          Loading the races, classes and backgrounds this server offers…
+        </p>
+      ) : !packInstalled ? (
         <p className="rounded-lg border border-stone-700/60 bg-stone-900/60 p-3 text-xs text-stone-400">
           {isAdmin ? (
             <>
