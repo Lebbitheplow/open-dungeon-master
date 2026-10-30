@@ -169,18 +169,31 @@ const DROPPABLE_PARAMS = new Set([
 // Pulls the offending field name out of a 4xx body so the caller can drop it
 // and retry. OpenAI names it in `error.param` for unsupported_parameter and
 // unsupported_value, but leaves it null for an unrecognised argument and puts
-// the name in the message instead, so both are read. Returns null unless the
-// name is one ODM is willing to give up, which keeps a message that merely
-// mentions "model" or "messages" from stripping the request.
+// the name in the message instead, so both are read. An API that validates
+// its body with zod (Venice) rejects every field it does not know in one
+// issue, `{"issues":[{"code":"unrecognized_keys","keys":[...],"path":[]}]}`,
+// and that is read too, for the request's own top level only: a key nested
+// in a message is no body field to drop. Returns null unless the name is one
+// ODM is willing to give up, which keeps a message that merely mentions
+// "model" or "messages" from stripping the request.
 export function unsupportedParamFromError(body: string): string | null {
   const text = (body || "").slice(0, 4000);
   if (!text) return null;
 
   const candidates: string[] = [];
   try {
-    const parsed = JSON.parse(text) as { error?: { param?: unknown } };
+    const parsed = JSON.parse(text) as { error?: { param?: unknown }; issues?: unknown };
     if (typeof parsed?.error?.param === "string") {
       candidates.push(parsed.error.param);
+    }
+    if (Array.isArray(parsed?.issues)) {
+      for (const issue of parsed.issues as Array<{ code?: unknown; keys?: unknown; path?: unknown }>) {
+        if (issue?.code !== "unrecognized_keys" || !Array.isArray(issue.keys)) continue;
+        if (Array.isArray(issue.path) && issue.path.length > 0) continue;
+        for (const key of issue.keys) {
+          if (typeof key === "string") candidates.push(key);
+        }
+      }
     }
   } catch {
     // Not JSON, or not the shape we expect. The message patterns still apply.
@@ -192,6 +205,7 @@ export function unsupportedParamFromError(body: string): string | null {
     /Unsupported value:\s*'([^']+)'/i,
     /unknown field\s*[`'"]?([A-Za-z_][\w.]*)/i,
     /unexpected keyword argument\s*'([^']+)'/i,
+    /Unrecognized key\(s\) in object:\s*'([^']+)'/i,
   ];
   for (const pattern of patterns) {
     const hit = text.match(pattern);
