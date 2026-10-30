@@ -4,6 +4,7 @@ import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
 import { isErrorResponse, requireMember } from "@/lib/campaign-api";
 import { setMemberActiveCharacter } from "@/lib/db/campaigns";
 import { getSheetForUser, listSheetsForUser } from "@/lib/db/sheets";
+import { heroFell, switchesHeroes } from "@/lib/characters/fallen-logic";
 import { publishEphemeral } from "@/lib/events";
 
 export const runtime = "nodejs";
@@ -19,19 +20,30 @@ export async function POST(request: Request, { params }: { params: Promise<{ cam
   if (isErrorResponse(context)) {
     return context;
   }
-  if (context.campaign.gameSettings.multiCharacter === "off") {
+  const multiCharacter = context.campaign.gameSettings.multiCharacter;
+  const mine = listSheetsForUser(campaignId, context.user.id);
+  // One character each, unless a fallen hero was raised after their
+  // replacement joined: then the player picks which of the two plays on
+  // (src/lib/characters/fallen-logic.ts switchesHeroes).
+  if (!switchesHeroes(mine, multiCharacter)) {
     return Response.json({ error: "This table plays one character each." }, { status: 400 });
   }
   const parsed = bodySchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {
     return Response.json({ error: "Say which character." }, { status: 400 });
   }
-  const own = listSheetsForUser(campaignId, context.user.id).find((sheet) => sheet.id === parsed.data.characterId && !sheet.isCompanion);
+  const own = mine.find((sheet) => sheet.id === parsed.data.characterId && !sheet.isCompanion);
   if (!own) {
     return Response.json({ error: "That is not one of your characters." }, { status: 404 });
   }
+  if (multiCharacter === "off" && heroFell(own)) {
+    return Response.json({ error: `${own.name} has fallen; play on with your living hero.` }, { status: 400 });
+  }
+  // A fielded hero who has fallen holds no seat: the player may field
+  // another mid-fight rather than wait out the fight behind the dead.
   const encounter = getActiveEncounter(campaignId);
-  if (context.campaign.gameSettings.multiCharacter === "one_active" && encounter && encounter.kind !== "scene" && getSheetForUser(campaignId, context.user.id)?.id !== own.id) {
+  const fielded = getSheetForUser(campaignId, context.user.id);
+  if (multiCharacter === "one_active" && encounter && encounter.kind !== "scene" && fielded?.id !== own.id && !(fielded && heroFell(fielded))) {
     return Response.json({ error: "Wait until the fight ends to change your fielded character." }, { status: 409 });
   }
   setMemberActiveCharacter(campaignId, context.user.id, own.id);

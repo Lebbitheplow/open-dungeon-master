@@ -41,6 +41,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { computeSheetDerived, formatModifier } from "@/lib/srd";
 import { usePackArt } from "@/lib/worlds/use-pack-art";
 import { textKey } from "@/lib/language/text-logic";
+import { heroFell, switchesHeroes } from "@/lib/characters/fallen-logic";
 
 // The portrait cropper (and its cropping library) loads when a portrait is
 // being cropped, not with the table.
@@ -576,7 +577,7 @@ export function PartyPanel({
                   <span className="truncate">{sheet.name}</span>
                   <SideBadge side={offSide(encounter, sheet.id, "pc")} />
                   {lights[sheet.id] ? <LightBar light={lights[sheet.id]} /> : null}
-                  {mine && multiCharacter !== "off" && myOwn.length > 1 ? (
+                  {mine && myOwn.length > 1 && switchesHeroes(myOwn, multiCharacter) && (multiCharacter !== "off" || !heroFell(sheet)) ? (
                     mySheet?.id === sheet.id ? (
                       <span className="eyebrow rounded-sm border border-amber-500/50 bg-amber-400/10 px-1 text-[9px] text-amber-300">playing</span>
                     ) : (

@@ -30,6 +30,7 @@ import type { PublicEncounter } from "@/lib/db/encounter-view";
 import type { Note } from "@/lib/db/notes";
 import type { GameSettings } from "@/lib/schemas/game-settings";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import { heroFell } from "@/lib/characters/fallen-logic";
 
 // The lead's desk. Everything the party lead can do to the table, in one
 // tab, rather than an invite block on Party, an approval queue on Notes,
@@ -199,8 +200,10 @@ function LeadSeatCard({
   const candidates = members.filter(
     (member) => member.userId !== leadUserId && !dmUserIds.includes(member.userId),
   );
+  // Named by a living hero once their first has fallen.
   const characterFor = (userId: string) =>
-    sheets.find((sheet) => sheet.userId === userId && !sheet.isCompanion)?.name;
+    (sheets.find((sheet) => sheet.userId === userId && !sheet.isCompanion && !heroFell(sheet)) ??
+      sheets.find((sheet) => sheet.userId === userId && !sheet.isCompanion))?.name;
 
   async function makeLead(member: CampaignMember) {
     if (!await appConfirm(`Make ${member.username} the party lead? You will lose this tab.`)) {

@@ -14,6 +14,7 @@ import { campaignSeats, getCampaignById, type Campaign } from "@/lib/db/campaign
 import { getDatabase, nowIso } from "@/lib/db/core";
 import { getLatestDmMessage } from "@/lib/db/messages";
 import { listSheets } from "@/lib/db/sheets";
+import { heroFell } from "@/lib/characters/fallen-logic";
 import { coverInEffect } from "@/lib/dm/delegation";
 import { getDmStatus } from "@/lib/dm/status";
 import { hasHumanDm } from "@/lib/dm/viewer";
@@ -60,16 +61,22 @@ export function waitsForTable(campaign: Campaign): boolean {
   return !hasHumanDm(campaignSeats(campaign)) || covering;
 }
 
-// The player seats, one per person, named by their first character.
+// The player seats, one per person, named by their first character, or by
+// the first one still alive once that one has fallen: a player who brought
+// in a new hero (src/lib/characters/hero-door.ts) is waited on by the new
+// hero's name, not the dead one's.
 function playerSeats(campaign: Campaign): TableSeat[] {
-  const seats = new Map<string, string>();
+  const seats = new Map<string, { name: string; fell: boolean }>();
   for (const sheet of listSheets(campaign.id)) {
-    if (sheet.isCompanion || !sheet.userId || sheet.userId === campaign.dmUserId || seats.has(sheet.userId)) {
+    if (sheet.isCompanion || !sheet.userId || sheet.userId === campaign.dmUserId) {
       continue;
     }
-    seats.set(sheet.userId, sheet.name);
+    const held = seats.get(sheet.userId);
+    if (!held || (held.fell && !heroFell(sheet))) {
+      seats.set(sheet.userId, { name: sheet.name, fell: heroFell(sheet) });
+    }
   }
-  return [...seats].map(([userId, name]) => ({ userId, name }));
+  return [...seats].map(([userId, seat]) => ({ userId, name: seat.name }));
 }
 
 // Players reached through a live agent subscription (a webhook or a poll

@@ -1830,7 +1830,41 @@ for (const viewport of ["desktop", "phone"]) {
   weekly[viewport] = { id: table.id, title: `The Weekly Road (${viewport})`, rider: rider.id };
 }
 
+// A table that plays one character each, in play, where the lead's level 4
+// hero has died (the fallen-hero scenario): the lead keeps the table and is
+// offered a new hero at level 4 while the other player's hero plays on. One
+// per viewport, since seating the replacement ends the state it checks.
+const fallenTables = {};
+for (const viewport of ["desktop", "phone"]) {
+  const table = campaigns.createCampaign(world.owner.id, {
+    title: `The Fallen Watch (${viewport})`,
+    description: "A barrow road at dusk, one of the party already lost to it.",
+    theme: "high-fantasy",
+    maxPlayers: 4,
+    startingLevel: 1,
+    difficulty: "normal",
+    gameSettings: { ttsEnabled: false, multiCharacter: "off" },
+  });
+  const joinedFallen = campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+  if ("error" in joinedFallen) {
+    throw new Error(`could not seat the player at the fallen table: ${joinedFallen.error}`);
+  }
+  campaigns.setCampaignStatus(table.id, "active");
+  const fallen = sheets.createSheet(table.id, world.owner.id, 4, heroInput({ name: "Ilsa Marr", class: "rogue", level: 4 }));
+  sheets.patchSheet(fallen.id, { currentHp: 0, deathSaves: { successes: 0, failures: 3, stable: false, dead: true } });
+  sheets.createSheet(table.id, player.id, 4, heroInput({ name: "Oren Dusk", class: "fighter", level: 4 }));
+  messages.insertCampaignMessage({
+    campaignId: table.id,
+    seq: campaigns.allocateSeq(table.id),
+    authorType: "dm",
+    speech: [],
+    content: "Ilsa falls on the barrow road, and the wights fall back into the dark. Oren kneels beside her.",
+  });
+  fallenTables[viewport] = table.id;
+}
+
 const ids = {
+  fallenTables,
   weekly,
   multiclassTableId: multiclassTable.id,
   singleClassTableId: singleClassTable.id,
@@ -1919,6 +1953,7 @@ const ids = {
     ...Object.fromEntries(Object.entries(gone).map(([viewport, table]) => [table.id, `${GONE_TITLE} (${viewport})`])),
     ...Object.fromEntries(Object.entries(conduct).map(([viewport, table]) => [table.id, `${CONDUCT_TITLE} (${viewport})`])),
     ...Object.fromEntries(Object.values(weekly).map((table) => [table.id, table.title])),
+    ...Object.fromEntries(Object.entries(fallenTables).map(([viewport, id]) => [id, `The Fallen Watch (${viewport})`])),
     ...Object.fromEntries(Object.entries(pactTables).flatMap(([kind, tables]) => Object.entries(tables).map(([viewport, table]) => [table.id, `Pact ${kind.charAt(0).toUpperCase()}${kind.slice(1)} (${viewport})`]))),
     ...Object.fromEntries(Object.entries(chipTables).map(([viewport, table]) => [table.id, `Chip Table (${viewport})`])),
     ...Object.fromEntries(Object.entries(spellbook).map(([viewport, table]) => [table.id, `${SPELLBOOK_TITLE} (${viewport})`])),
