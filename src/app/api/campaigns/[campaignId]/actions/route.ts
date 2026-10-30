@@ -11,13 +11,11 @@ import {
   claimRecap,
   getFloor,
   combatOwnsFloor,
-  setFloor,
-  type Floor,
 } from "@/lib/db/campaigns";
 import { countMessages, insertCampaignMessage, listRecentMessages } from "@/lib/db/messages";
 import { getSheetById, getSheetForUser, listSheets } from "@/lib/db/sheets";
 import { dominatedRefusal } from "@/lib/dm/companion-command";
-import { floorAfterRelease } from "@/lib/dm/encounter-tools";
+import { answerSpotlight } from "@/lib/dm/spotlight-answer";
 import { requestDmTurn } from "@/lib/dm/loop";
 import { settleTableWait, waitsForTable } from "@/lib/dm/table-wait";
 import { holdsPostForTable } from "@/lib/dm/table-wait-logic";
@@ -242,24 +240,7 @@ export async function POST(
     }
     return Response.json({ resolved: true });
   }
-  let spotlightStillWaiting = false;
-  if (kind !== "ooc" && floor.mode === "spotlight") {
-    const responded =
-      floor.userIds.includes(user.id) && !floor.respondedUserIds.includes(user.id)
-        ? [...floor.respondedUserIds, user.id]
-        : floor.respondedUserIds;
-    const allAnswered = floor.userIds.every((id) => responded.includes(id));
-    // Everyone answered: back to the fight's floor if one is running, else
-    // the open table.
-    const nextFloor: Floor = allAnswered
-      ? floorAfterRelease(campaignId)
-      : { ...floor, respondedUserIds: responded };
-    if (allAnswered || responded !== floor.respondedUserIds) {
-      setFloor(campaignId, nextFloor);
-      publishPersisted(campaignId, "floor_changed", { floor: nextFloor });
-    }
-    spotlightStillWaiting = !allAnswered;
-  }
+  const spotlightStillWaiting = kind !== "ooc" && answerSpotlight(campaignId, floor, user.id);
 
   const content =
     kind === "say"

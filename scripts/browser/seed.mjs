@@ -550,6 +550,39 @@ for (const viewport of ["desktop", "phone"]) {
   wardrobe[viewport] = table.id;
 }
 
+// A table per viewport whose GM has put the lead's character in the
+// spotlight after a short rest, so the lead can answer it with a direction.
+// Its own table, since that direction wakes the GM.
+const SPOTLIGHT_TITLE = "Spotlight Table";
+const spotlightTables = {};
+for (const viewport of ["desktop", "phone"]) {
+  const table = campaigns.createCampaign(world.owner.id, {
+    title: `${SPOTLIGHT_TITLE} (${viewport})`,
+    description: "A roadside camp after a short rest.",
+    theme: "high-fantasy",
+    maxPlayers: 6,
+    startingLevel: 5,
+    difficulty: "normal",
+    gameSettings: { ttsEnabled: false },
+  });
+  campaigns.setCampaignStatus(table.id, "active");
+  sheets.createSheet(table.id, world.owner.id, 5, heroInput({ name: "Krag Ironhorn", class: "fighter", level: 5 }));
+  messages.insertCampaignMessage({
+    campaignId: table.id,
+    seq: campaigns.allocateSeq(table.id),
+    authorType: "dm",
+    speech: [],
+    content: "The hour's rest is over. Krag, spend your remaining Hit Dice on your sheet if you need them.",
+  });
+  campaigns.setFloor(table.id, {
+    mode: "spotlight",
+    userIds: [world.owner.id],
+    prompt: "Spend your remaining Hit Dice on your sheet.",
+    respondedUserIds: [],
+  });
+  spotlightTables[viewport] = table.id;
+}
+
 // A table at a village whose smithy the DM just opened (shops in play):
 // the "is open" line that opening wrote, whose Browse wares opens the
 // Market on the shop. Its own table, so no other scenario's chat or atlas
@@ -1981,6 +2014,7 @@ const ids = {
   stopTables,
   questTables,
   wardrobe,
+  spotlightTables,
   directed,
   enemyTurns,
   levelTableId: levelTable.id,
@@ -2033,6 +2067,7 @@ const ids = {
     ...Object.fromEntries(Object.entries(stopTables).map(([viewport, id]) => [id, `Stop Table (${viewport})`])),
     ...Object.fromEntries(Object.entries(questTables).map(([viewport, table]) => [table.id, `Quest Table (${viewport})`])),
     ...Object.fromEntries(Object.entries(wardrobe).map(([viewport, id]) => [id, `Wardrobe (${viewport})`])),
+    ...Object.fromEntries(Object.entries(spotlightTables).map(([viewport, id]) => [id, `${SPOTLIGHT_TITLE} (${viewport})`])),
     ...Object.fromEntries(Object.entries(directed).map(([viewport, table]) => [table.id, `Directed Table (${viewport})`])),
     ...Object.fromEntries(Object.entries(enemyTurns).map(([viewport, table]) => [table.id, `Enemy Turn Table (${viewport})`])),
     ...Object.fromEntries(Object.entries(dominate).flatMap(([viewport, table]) => [[table.id, `Dominate Table (${viewport})`], [table.heldId, `Held Table (${viewport})`]])),
