@@ -3,6 +3,7 @@ import { endFightEffects } from "@/lib/db/active-effects";
 import { getFloor, setFloor } from "@/lib/db/campaigns";
 import { endEncounter, getActiveEncounter, listEnemies, patchEnemyHp } from "@/lib/db/encounters";
 import { activePublicEncounter } from "@/lib/db/encounter-view";
+import { turncoatsAfterTheFight } from "@/lib/dm/departure";
 import { publishBattleMapUpdate } from "@/lib/dm/map-tools";
 import { publishPersisted } from "@/lib/events";
 
@@ -59,5 +60,10 @@ export async function DELETE(
   }
   publishPersisted(campaignId, "encounter_updated", { encounter: null });
   publishBattleMapUpdate(campaignId);
+  // A companion that fought against the party leaves, fell, or lies at its
+  // mercy, as after any fight's end (enemy-damage.ts finishEncounter), so
+  // the party panel never shows it back among them (issue 664). The table
+  // is told by the server; there is no DM turn here to read the notes.
+  turncoatsAfterTheFight(context.campaign, encounter);
   return Response.json({ ok: true });
 }

@@ -297,6 +297,23 @@ await test("after the fight a turncoat still standing leaves as a departed compa
   void sheet;
 });
 
+await test("the lead's End encounter settles a turncoat as a fight's end does: she leaves, not back among the party", async () => {
+  const { world, row, atrocity, departure, still } = await table({ gameSettings: { companionConscience: "turn" }, axes: { boldness: 3, composure: -1 } });
+  await atrocity();
+  assert.ok(world.encounter());
+  world.signIn(world.owner);
+  const handler = await world.route("campaigns/[campaignId]/encounter");
+  const response = await handler.DELETE(new Request("http://test/"), { params: Promise.resolve({ campaignId: world.campaignId }) });
+  assert.equal(response.status, 200);
+  assert.equal(world.encounter(), null, "the fight is over");
+  assert.equal(still(), false, "out of the party, not back in it");
+  assert.ok(conscienceDb.departedSheet(row().id), "the row keeps her sheet");
+  assert.equal(departure().gone.response, "confront");
+  assert.equal(departure().gone.hostile, true);
+  assert.equal(departure().turned ?? null, null);
+  assert.match(lastLine(world), /Seren turned on the party and left/, "the table is told by the server");
+});
+
 await test("a turncoat beaten to 0 lies at the party's mercy after the fight, out of it and dying, and crawls away at the next long rest", async () => {
   const { world, sheet, row, atrocity, departure, still } = await table({ gameSettings: { companionConscience: "turn" }, axes: { boldness: 3, composure: -1 } });
   await atrocity();
