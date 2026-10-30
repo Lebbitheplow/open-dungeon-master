@@ -40,7 +40,7 @@ const { sideOf } = await import("../src/lib/dm/combatant.ts");
 const { applyWear, slotPools } = await import("../src/lib/dm/companion-statblock.ts");
 const { advanceNpcAgency } = await import("../src/lib/dm/npc-agency.ts");
 const { deployTemplate, templateDifficulty } = await import("../src/lib/dm/encounter-templates.ts");
-const { conscienceViews, STORYTELLER_VIEW } = await import("../src/lib/dm/conscience.ts");
+const { conscienceBlockForPrompt, conscienceSecretLines, conscienceViews, STORYTELLER_VIEW } = await import("../src/lib/dm/conscience.ts");
 const { buildDmMessages } = await import("../src/lib/dm/prompt.ts");
 const { storytellerLinesForPrompt } = await import("../src/lib/dm/scheme-tools.ts");
 
@@ -699,6 +699,78 @@ await test("a move posted while the AI's turn ran is never left looking answered
   } finally {
     model.close();
   }
+});
+
+await test("a held plan's breaking point is the storyteller's: the moment block the lead reads says what the table heard (issue 615)", async () => {
+  const { world, atrocity, departure } = await table({ axes: { composure: 2 }, heroes: 2 });
+  await atrocity();
+  assert.ok(departure().intent, "she holds a plan");
+  const campaign = world.campaign();
+  const sheets = world.sheets();
+  const moment = conscienceBlockForPrompt(campaign, sheets);
+  assert.match(moment, /- Seren: holds [^\n]*; content/, "the moment reads her as the table has heard her");
+  assert.doesNotMatch(moment, /Seren: holds [^\n]*breaking point/, "never the breaking point under the plan");
+  assert.doesNotMatch(moment, PLAN);
+  const secret = conscienceSecretLines(campaign, sheets);
+  assert.match(secret.join("\n"), /Seren is at their breaking point, which the table has not seen \(it has heard only: content\)/, "the truth is the storyteller's");
+  const state = {
+    campaign,
+    members: campaigns.listMembers(world.campaignId),
+    sheets,
+    recentRolls: [],
+    storySummary: "",
+    contextLimitTokens: 32_000,
+    conscienceBlock: moment,
+    storytellerLines: [...intentLinesForPrompt(campaign, sheets), ...secret],
+  };
+  const conversation = buildDmMessages(state, []);
+  assert.match(conversation.map((message) => message.content).join("\n"), /Seren is at their breaking point/, "the AI has it");
+  const turn = turns.createDmTurn(world.campaignId, conversation);
+  turn.contextTrace = state.contextTrace;
+  turns.saveDmTurn(turn);
+  const trace = await get(world, world.owner, "campaigns/[campaignId]/context-trace");
+  assert.equal(trace.status, 200);
+  assert.ok(!trace.body.trace.blocks.some((block) => block.id === "storyteller"), "the truth rides the storyteller's row, cut for the lead");
+  assert.doesNotMatch(trace.text, /Seren is at their breaking point/);
+});
+
+await test("armour put on at a table a person runs moves the clock past an ultimatum, and the departure is settled then; where the AI runs the turns, its next turn does (issue 615)", async () => {
+  const { advanceClock } = await import("../src/lib/db/clock.ts");
+  const setup = async (gameSettings) => {
+    const world = await openWorld({ gameSettings: { companions: "full", ...gameSettings } });
+    const player = world.addUser("player");
+    const pc = world.addHero({ user: player, name: "Kael", gender: "Male" });
+    world.patch(pc.id, { equipment: [{ name: "Chain Mail", qty: 1, equipped: false }] });
+    const added = await world.invoke("add_companion", { name: "Seren", class: "paladin", gender: "Female", alignment: "LG", personality: "Stern.", kind: "party" });
+    assert.equal(added.ok, true, added.error);
+    const row = npcs.listNpcs(world.campaignId).find((npc) => npc.name === "Seren");
+    npcs.patchNpcAgency(row.id, { personality: { drive: 0, diligence: 0, boldness: 0, warmth: 0, empathy: 0, composure: 0 } });
+    const seren = world.sheets().find((entry) => entry.name === "Seren").id;
+    for (const [beat, extra] of [["cruelty", {}], ["broke_word", {}], ["torture", { demand: "Release them", deadlineHours: 1 }]]) {
+      const done = await world.invoke("relationship_beat", { characterId: pc.id, subject: "Seren", beat, ...extra });
+      assert.equal(done.ok, true, done.error);
+    }
+    advanceClock(world.campaignId, 55, "minutes");
+    assert.ok(world.sheet(seren), "the deadline has not passed yet");
+    world.signIn(player);
+    const usage = await world.route("campaigns/[campaignId]/sheet/usage");
+    const response = await usage.POST(new Request("http://test/", { method: "POST", body: JSON.stringify({ gear: { "Chain Mail": { equipped: true } } }) }), {
+      params: Promise.resolve({ campaignId: world.campaignId }),
+    });
+    const body = await response.json();
+    assert.equal(response.status, 200, body.error);
+    assert.match(body.timePassed ?? "", /10 minutes|minutes/, "putting the mail on took the minutes past the deadline");
+    assert.equal(body.companionsLeft, undefined, "the GM's notes never reach a player's answer");
+    return { world, seren, row };
+  };
+  const human = await setup({ dmMode: "human" });
+  assert.equal(human.world.sheet(human.seren), null, "she went as the minutes passed her deadline");
+  assert.ok(departuresDb.companionDeparture(human.row.id).gone);
+  assert.ok(messages.listRecentMessages(human.world.campaignId, 10).some((message) => message.authorType === "system" && /^Seren /.test(message.content)), "the table is told");
+  const ai = await setup({});
+  assert.ok(ai.world.sheet(ai.seren), "where the AI runs the turns, it is left to the turn that narrates it");
+  assert.equal(conscienceViews(ai.world.campaign(), STORYTELLER_VIEW).get("seren").rung, "breaking", "though the deadline has passed");
+  assert.equal(settleDepartures(ai.world.campaign()).length, 1, "and that turn's start settles it");
 });
 
 await test("at a table a person runs, moving the clock past an ultimatum settles the departure then and says so", async () => {

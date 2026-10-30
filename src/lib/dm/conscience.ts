@@ -17,6 +17,7 @@ import {
   durationLabel,
   effectiveRung,
   minutesLeft,
+  RUNG_WORD,
   rungGuidance,
   rungName,
   settingOf,
@@ -298,9 +299,11 @@ export function conscienceClockTick(campaignId: string): boolean {
 // and why, any ultimatum with the time left on the clock, and a rung the
 // table has not heard yet. The lead of an AI table reads this block on the
 // Context tab, so it carries nothing the table could not know (issue 615):
-// unease a composed companion keeps in reads as content here and is said in
-// the storyteller's section (conscienceSecretLines), and a cause that came by
-// a secret road (a hidden employer's order, a pact's talk) is left out.
+// unease a composed companion keeps in, and the breaking point under a plan
+// held in secret (slip away, bide and strike), read as the rung the table
+// has heard and are said in the storyteller's section (conscienceSecretLines);
+// a cause that came by a secret road (a hidden employer's order, a pact's
+// talk) is left out.
 export function conscienceBlockForPrompt(campaign: Campaign, sheets: readonly CharacterSheet[]): string {
   const setting = conscienceSetting(campaign);
   if (setting === "off") {
@@ -315,8 +318,8 @@ export function conscienceBlockForPrompt(campaign: Campaign, sheets: readonly Ch
     const conscience = companionConscience(npc.id);
     const values = companionValues(npc.id);
     const truth = effectiveRung(conscience, worstApproval(campaign.id, companion.name, sheets));
-    const keptIn = Boolean(conscience.concealed) && rungName(truth) === "uneasy";
-    const rung = rungName(keptIn ? Math.min(truth, conscience.told) : truth);
+    const hidden = (Boolean(conscience.concealed) && rungName(truth) === "uneasy") || Boolean(companionDeparture(npc.id).intent);
+    const rung = rungName(hidden ? Math.min(truth, conscience.told) : truth);
     const parts = [
       `- ${companion.name}: holds ${values.length ? values.map(valueLabel).join(", ") : "nothing in particular"}`,
       rungGuidance(rung, setting),
@@ -329,7 +332,7 @@ export function conscienceBlockForPrompt(campaign: Campaign, sheets: readonly Ch
         `their demand: "${conscience.ultimatum.condition}", by ${formatDate(campaign.clock.calendar, conscience.ultimatum.due)} (${durationLabel(minutesLeft(conscience.ultimatum, now))} left)`,
       );
     }
-    if (conscience.owed && !keptIn) {
+    if (conscience.owed && !hidden) {
       parts.push(`not yet heard at the table: voice it this reply in their own words, or the server posts their line after it`);
     }
     // Issue 503 Phase 4: a devoted companion's reaction (devoted-guard.ts).
@@ -346,7 +349,9 @@ export function conscienceBlockForPrompt(campaign: Campaign, sheets: readonly Ch
 
 // The storyteller's own lines (the section tagged STORYTELLER_SECRET, built
 // in src/lib/dm/turn.ts): each companion who keeps unease in, to be played as
-// content, and who has noticed it, to be shown a tell (issue 615).
+// content, and who has noticed it, to be shown a tell; and each one whose
+// breaking point stands under a plan held in secret, played as the rung the
+// table has heard while the plan is only foreshadowed (issue 615).
 export function conscienceSecretLines(campaign: Campaign, sheets: readonly CharacterSheet[]): string[] {
   const setting = conscienceSetting(campaign);
   if (setting === "off") {
@@ -356,7 +361,17 @@ export function conscienceSecretLines(campaign: Campaign, sheets: readonly Chara
   return consciousCompanions(sheets).flatMap((companion) => {
     const npc = companionNpcFor(companion);
     const conscience = npc ? companionConscience(npc.id) : null;
-    if (!conscience?.concealed || rungName(effectiveRung(conscience, worstApproval(campaign.id, companion.name, sheets))) !== "uneasy") {
+    if (!npc || !conscience) {
+      return [];
+    }
+    const truth = effectiveRung(conscience, worstApproval(campaign.id, companion.name, sheets));
+    if (companionDeparture(npc.id).intent) {
+      const heard = RUNG_WORD[rungName(Math.min(truth, conscience.told))];
+      return [
+        `- ${companion.name} is at their ${RUNG_WORD[rungName(truth)]}, which the table has not seen (it has heard only: ${heard}). In the open play them as GAME STATE's conscience line says, and let their plan show only as foreshadowing.`,
+      ];
+    }
+    if (!conscience.concealed || rungName(truth) !== "uneasy") {
       return [];
     }
     const noticed = conscience.concealed.noticedBy.map((id) => names.get(id)).filter((name): name is string => Boolean(name));
