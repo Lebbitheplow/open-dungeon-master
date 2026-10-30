@@ -392,7 +392,7 @@ export const moveTokenTool: ToolDef = {
         disengage: {
           type: "boolean",
           description:
-            "An enemy Disengages before it walks, so leaving reach draws no opportunity attack. A bonus action for a creature with Nimble Escape (once a round), its action for anyone else; it holds for the rest of its turn, so later walks need not repeat it.",
+            "An enemy Disengages before it walks, so leaving reach draws no opportunity attack. A bonus action for a creature with Nimble Escape (once a round), its action for anyone else.",
         },
         drag: {
           type: "boolean",
