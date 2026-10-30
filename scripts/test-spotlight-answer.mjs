@@ -6,6 +6,7 @@
 import assert from "node:assert/strict";
 import { openWorld } from "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
+import { fakeModel, settleQueue } from "./lib/enforce-narrator.mjs";
 
 const { test, finish } = suite("test-spotlight-answer");
 const { getFloor, setFloor } = await import("../src/lib/db/campaigns.ts");
@@ -53,6 +54,22 @@ await test("a lead's direction answers only for the lead: a spotlight on another
   setFloor(world.campaignId, spotlight([bram.userId]));
   assert.equal((await direction(world, world.owner, "Night falls.")).status, 201);
   assert.deepEqual(getFloor(world.campaignId), spotlight([bram.userId]), "the lead answers nothing for Bram");
+});
+
+await test("a plan the party coordinates answers the spotlight for each player whose line it posts", async () => {
+  const world = await openWorld();
+  const model = await fakeModel();
+  model.pointAt(world);
+  const krag = world.addHero({ name: "Krag" });
+  const bram = world.addHero({ name: "Bram" });
+  setFloor(world.campaignId, spotlight([world.owner.id, bram.userId]));
+  const plan = (user, body) => post(world, user, "campaigns/[campaignId]/coordination", body);
+  assert.equal((await plan(world.owner, { action: "open", prompt: "What do you two do?" })).status, 200);
+  assert.equal((await plan(world.owner, { action: "plan", characterId: krag.id, text: "I lift the cart's wheel.", state: "ready" })).status, 200);
+  const resolved = await plan({ id: bram.userId }, { action: "plan", characterId: bram.id, text: "I lead the ox out of the ford.", state: "ready" });
+  assert.equal(resolved.json.phase?.status, "resolved", JSON.stringify(resolved.json));
+  assert.deepEqual(getFloor(world.campaignId), { mode: "open" });
+  await settleQueue(world.campaignId);
 });
 
 finish();

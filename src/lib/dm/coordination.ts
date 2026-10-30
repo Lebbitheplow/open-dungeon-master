@@ -6,6 +6,7 @@ import { nowIso } from "@/lib/db/core";
 import { dmNarratedSince, insertCoordination, latestCoordination, planStillPosted, saveCoordination } from "@/lib/db/coordination";
 import { claimNarrationSeq } from "@/lib/dm/narration-slot";
 import { requestDmTurn } from "@/lib/dm/loop";
+import { answerSpotlight } from "@/lib/dm/spotlight-answer";
 import { hasHumanDm, narratorIsAi } from "@/lib/dm/viewer";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import {
@@ -218,6 +219,10 @@ export function resolveCoordination(phase: CoordinationPhase): CoordinationPhase
       content: entry.text,
     });
     publishWithSeq(phase.campaignId, seq, "message_added", { message });
+    // The line is that player's move, as one posted through the actions
+    // route is, so it answers a spotlight on them: a lead who opens a plan
+    // for the players the GM asked must not leave the GM's question up.
+    answerSpotlight(phase.campaignId, getFloor(phase.campaignId), entry.userId);
   }
   const noteSeq = allocateSeq(phase.campaignId);
   firstSeq ??= noteSeq;
