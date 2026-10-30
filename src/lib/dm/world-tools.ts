@@ -11,8 +11,8 @@ import { applyDmMutation } from "@/lib/dm/mutations";
 import { resolveSheetRef } from "@/lib/dm/rolls";
 import { hourlyConSaves, type HourSave } from "@/lib/dm/endurance";
 import {
-  hoardGoldDice,
   hoardItemCount,
+  treasureGoldRoll,
   treasureTierForCr,
 } from "@/lib/srd/treasure";
 import type { ObjectMaterial, ObjectSize } from "@/lib/srd/objects";
@@ -377,11 +377,8 @@ export function handleRollTreasure(
     };
   }
   const tier = treasureTierForCr(args.cr);
-  const { dice, mult } = hoardGoldDice(tier);
-  let gold = rollCard(campaign, turn, null, "custom", `Treasure: gold (${dice} × ${mult})`, dice, null).total * mult;
-  if (args.individual) {
-    gold = Math.floor(gold / 10);
-  }
+  const { dice, mult, label } = treasureGoldRoll(tier, Boolean(args.individual));
+  const gold = rollCard(campaign, turn, null, "custom", label, dice, null).total * mult;
   const share = Math.floor(gold / recipients.length);
   const reason = (args.reason ?? "").trim() || "treasure";
   const paid: Array<{ name: string; gold: number }> = [];
