@@ -84,18 +84,60 @@ export function intentTools(intent: MessageIntent): string[] {
   }
 }
 
+// What the engine needs to know beyond the card to resolve it itself:
+// whether a fight is on (a card aimed at an enemy outside one is the model's,
+// since a fight has to start first), and how the card's spell resolves when
+// the content knows (SpellMech.resolution), which names the spell's tool.
+export type DirectContext = {
+  inFight: boolean;
+  resolution?: SpellMech["resolution"] | null;
+  // The spell fills an area (SpellMech.area): a Fireball aimed at one goblin
+  // is the model's to place with aoe_damage over everyone in the burst, since
+  // cast_at_enemy at the goblin rolls that one creature alone.
+  area?: boolean;
+};
+
+export type DirectCall = { name: string; args: Record<string, unknown> };
+
+const atEnemy = (intent: MessageIntent): boolean => intent.targetKind === "enemy" && Boolean(intent.targetId);
+const onAlly = (intent: MessageIntent): boolean => (intent.targetKind === "ally" || intent.targetKind === "self") && Boolean(intent.targetId);
+const laysArea = (intent: MessageIntent): boolean => intent.atX !== undefined || intent.towardX !== undefined;
+
+// The target arguments most tools read: an enemy under targetEnemyId, a
+// character under targetCharacterId.
+function targetArgs(intent: MessageIntent): Record<string, unknown> {
+  if (atEnemy(intent)) {
+    return { targetEnemyId: intent.targetId };
+  }
+  if (onAlly(intent)) {
+    return { targetCharacterId: intent.targetId };
+  }
+  return {};
+}
+
 // The tool call a card stands for when every choice the engine needs is on
-// the card: a weapon attack at a named enemy (its class options ride under
-// pc_attack's own names), or Dodge, Dash or Disengage. The turn runs it
-// before the narrator is asked (src/lib/dm/turn.ts directCard), so the
-// dice land at once and the first model call narrates from the result.
-// Null leaves the card to the model: a spell (slot, area and concentration
-// choices), a rider card (the attack and its rider are one call the model
-// composes), a target the card did not fix, or any other card.
-export function directCardCall(intent: MessageIntent, characterId: string): { name: string; args: Record<string, unknown> } | null {
+// the card (issue 570): a weapon attack at a named enemy (its class options
+// ride under pc_attack's own names); a spell at one enemy, on one ally or on
+// oneself whose tool the content names; a class feature; the basic actions;
+// a reaction to a hit; a thing drawn, dropped, handed over or drunk. The turn
+// runs it before the narrator is asked (src/lib/dm/turn.ts directCards), so
+// the dice land at once and the first model call narrates from the result,
+// and a human DM's own card resolves on the spot (the actions route).
+//
+// Null leaves the card to the model: a rider card (the attack and its rider
+// are one call the model composes), a target the card did not fix, an area
+// spell (laid on the board, or aimed at one creature: the model names who
+// stands in a Fireball), a spell the content has no resolution for, a summon
+// or a utility spell, Ready with no trigger, and anything aimed at an enemy when
+// no fight is on, since the fight has to start first. A card the engine then
+// refuses comes back as the tool's own refusal, which the model narrates.
+export function directCardCall(intent: MessageIntent, characterId: string, context: DirectContext = { inFight: true }): DirectCall | null {
+  const { inFight } = context;
+  const level = intent.slotLevel ? { level: intent.slotLevel } : {};
+  const variant = intent.variant ? { variant: intent.variant } : {};
   switch (intent.card) {
     case "attack":
-      if (intent.targetKind !== "enemy" || !intent.targetId || intent.riders?.length) {
+      if (!inFight || !atEnemy(intent) || intent.riders?.length) {
         return null;
       }
       return {
@@ -108,11 +150,95 @@ export function directCardCall(intent: MessageIntent, characterId: string): { na
           ...(intent.attack ?? {}),
         },
       };
-    case "basic":
-      if (intent.action === "dodge" || intent.action === "dash" || intent.action === "disengage") {
-        return { name: "take_action", args: { characterId, action: intent.action, ...(intent.bonus ? { bonus: true } : {}) } };
+    case "spell": {
+      if (!intent.spell || laysArea(intent) || context.area) {
+        return null;
       }
-      return null;
+      const spell = intent.spell;
+      switch (context.resolution) {
+        case "attack":
+          return inFight && atEnemy(intent) ? { name: "pc_attack", args: { characterId, targetEnemyId: intent.targetId, spell, ...level } } : null;
+        case "save":
+        case "auto":
+          return inFight && atEnemy(intent)
+            ? { name: "cast_at_enemy", args: { characterId, targetEnemyId: intent.targetId, spell, ...level, ...variant, ...(intent.condition ? { condition: intent.condition } : {}) } }
+            : null;
+        case "heal":
+          // heal's characterId is the one healed; the caster is casterId.
+          return onAlly(intent) ? { name: "heal", args: { characterId: intent.targetId, casterId: characterId, spell, ...level } } : null;
+        case "buff":
+          if (atEnemy(intent)) {
+            return inFight ? { name: "cast_buff", args: { characterId, spell, targetEnemyId: intent.targetId, ...level, ...variant } } : null;
+          }
+          return onAlly(intent) ? { name: "cast_buff", args: { characterId, spell, targetCharacterIds: [intent.targetId], ...level, ...variant } } : null;
+        default:
+          return null;
+      }
+    }
+    case "feature":
+      // A feature spent by amount (Lay on Hands) is finished in the composer
+      // and posts no card, so a card here carries every choice.
+      return intent.resourceId ? { name: "use_resource", args: { characterId, resource: intent.resourceId, ...variant, ...targetArgs(intent) } } : null;
+    case "basic": {
+      const bonus = intent.bonus ? { bonus: true } : {};
+      switch (intent.action) {
+        case "dodge":
+        case "dash":
+        case "disengage":
+        case "hide":
+          return { name: "take_action", args: { characterId, action: intent.action, ...bonus } };
+        case "search":
+          return { name: "take_action", args: { characterId, action: "search", ...(intent.skill ? { skill: intent.skill } : {}), ...bonus } };
+        case "help":
+          return intent.targetId ? { name: "take_action", args: { characterId, action: "help", ...targetArgs(intent), ...bonus } } : null;
+        case "grapple":
+        case "shove":
+          return inFight && atEnemy(intent) ? { name: "take_action", args: { characterId, action: intent.action, targetEnemyId: intent.targetId, ...bonus } } : null;
+        case "escape":
+          return inFight ? { name: "take_action", args: { characterId, action: "escape" } } : null;
+        case "ready":
+          if (!intent.trigger || (!intent.readyAction && !intent.readySpell)) {
+            return null;
+          }
+          return {
+            name: "take_action",
+            args: {
+              characterId,
+              action: "ready",
+              trigger: intent.trigger,
+              ...(intent.readyAction ? { readied: intent.readyAction } : {}),
+              ...(intent.readySpell ? { spell: intent.readySpell, ...(intent.readyLevel ? { level: intent.readyLevel } : {}) } : {}),
+            },
+          };
+        case "stand-up":
+          return { name: "clear_condition", args: { characterId, condition: "prone" } };
+        case "stabilize":
+          return intent.targetId ? { name: "stabilize", args: { characterId: intent.targetId, healerId: characterId } } : null;
+        case "dismount":
+          return { name: "dismount", args: { characterId } };
+        case "end-turn":
+          return inFight ? { name: "end_turn", args: { characterId } } : null;
+        default:
+          // Use an object is finished in the composer and posts no card.
+          return null;
+      }
+    }
+    case "reaction":
+      return intent.feature
+        ? { name: "use_reaction", args: { characterId, feature: intent.feature, ...(intent.spell ? { spell: intent.spell } : {}), ...level, ...targetArgs(intent) } }
+        : null;
+    case "gear": {
+      if (!intent.item) {
+        return null;
+      }
+      if (intent.action === "use") {
+        return { name: "use_item", args: { characterId, item: intent.item, ...(onAlly(intent) && intent.targetKind === "ally" ? { targetCharacterId: intent.targetId } : {}) } };
+      }
+      if (intent.action === "hand") {
+        return intent.targetId ? { name: "handle_item", args: { characterId, action: "hand", item: intent.item, toCharacterId: intent.targetId } } : null;
+      }
+      return { name: "handle_item", args: { characterId, action: intent.action ?? "equip", item: intent.item } };
+    }
     default:
       return null;
   }
@@ -171,11 +297,19 @@ function what(intent: MessageIntent): string {
   }
 }
 
-// The line the model reads under the player's words.
-export function describeIntent(intent: MessageIntent, characterId: string | null): string {
+// The line the model reads under the player's words. For a card the engine
+// resolved before the model was asked (turn.ts directCards), the line says
+// so instead of asking for the call: the call and its result stand above in
+// the conversation, and a model that called the tool again would cast the
+// spell or swing the sword twice.
+export function describeIntent(intent: MessageIntent, characterId: string | null, options: { resolved?: boolean } = {}): string {
   const tools = intentTools(intent);
   const who = characterId ? ` for characterId=${characterId}` : "";
-  return `[Card played${who}: ${what(intent)}${describeHandExtras(intent)}. Resolve it with ${tools.length > 1 ? `the spell's tool (${tools.join(", ")})` : tools[0]}.]`;
+  const card = `[Card played${who}: ${what(intent)}${describeHandExtras(intent)}.`;
+  if (options.resolved) {
+    return `${card} The engine has resolved it: its call and result are in this conversation. Narrate from that result and do not call the tool again.]`;
+  }
+  return `${card} Resolve it with ${tools.length > 1 ? `the spell's tool (${tools.join(", ")})` : tools[0]}.]`;
 }
 
 // The card a turn answers, with how its spell resolves when the content

@@ -121,7 +121,8 @@ import { gateAiCall } from "@/lib/dm/ai-gate";
 import { characterAwaitingPlayer } from "@/lib/dm/player-word";
 import { enemiesDue, enemiesOwedTurn, personRunsTable } from "@/lib/dm/enemies-due";
 import { noteTurnHead, settleTurnWarmup, turnHeadKey, warmNextTurn } from "@/lib/dm/turn-warmup";
-import { DIRECT_CALL_ID_PREFIX, directCardCall, intentAnswered, intentCorrection, intentNeedsTool, type PlayedCard, type TurnCall } from "@/lib/dm/intent-logic";
+import { DIRECT_CALL_ID_PREFIX, directCardCall, intentAnswered, intentCorrection, intentNeedsTool, type MessageIntent, type PlayedCard, type TurnCall } from "@/lib/dm/intent-logic";
+import type { SpellMech } from "@/lib/srd/spell-mech-types";
 import { handleCompleteBeat } from "@/lib/dm/arc";
 import { tickWaypointsFromCalls } from "@/lib/dm/waypoint-tick";
 import { enforceEngineBoundary } from "@/lib/dm/narration-guard";
@@ -909,6 +910,9 @@ async function openTurn(
       // Each lasting companion's values and conscience, who has left and
       // what the server just had them do (issue 503).
       conscienceBlock: companionMomentBlock(campaign, context.sheets, leavingNotes),
+      // The cards the engine will resolve before the first model call, so
+      // their lines in the transcript ask for no call.
+      engineCardIds: new Set(directCards(context).map((card) => card.messageId)),
   };
   const conversation = buildDmMessages(promptState, history);
   if (oocOnly) {
@@ -1494,13 +1498,15 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
   // The tool list this turn's calls were last sent, and whether it was the
   // list for no fight (keepsToolsThroughFightStart).
   let sentTools = null as { tools: unknown[]; noFight: boolean } | null;
-  // The card the player played, when their action came from the Hand as an
-  // attack or a cast, and whether the one corrective call for it was spent.
-  const card = cardPlayed(context);
+  // The cards the players played since the DM last spoke, when their actions
+  // came from the Hand as an attack or a cast, and whether the one corrective
+  // call for them was spent.
+  const cards = cardsPlayed(context);
   let intentNudged = false;
-  // A complete card from the Hand is resolved by the engine as the turn's
-  // first step, with no model call to choose the tool (directCard).
-  const direct = directCard(context, turn);
+  // Every complete card from the Hand is resolved by the engine as the turn's
+  // first step, with no model call to choose the tool (directCards), on a
+  // turn that has run nothing yet.
+  const direct = turn.callIndex > 0 || calledToolNames(turn.conversation).length ? [] : directCards(context);
   // The last turn's narration said again with no tool is sent back once.
   let repeatNudged = false;
   let lastNarration: string | null = null;
@@ -1558,7 +1564,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       sentTools = { tools, noFight: keptTools ? true : !inEncounter };
       toolsSentByTurn.set(turn.id, tools);
     }
-    const resolvesCard = Boolean(direct) && turn.callIndex === 0;
+    const resolvesCard = direct.length > 0 && turn.callIndex === 0;
     const callTask = resolvesCard ? "card" : toolsClosed ? "turn_without_tools" : "turn";
     if (toolsClosed) {
       console.warn(`[dm-turn] call ${turn.callIndex}: no compact tool set leaves the reply room in this window; this call narrates without tools.`);
@@ -1583,7 +1589,7 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
     // The card's own tool call stands in for the first reply: the engine
     // resolves it below exactly as a call the model made, and the next call
     // narrates from the result (directCard).
-    const reply: DmCallResult = resolvesCard && direct ? cardReply(direct) : await requestDmMessage(campaign.settings, turn.conversation, {
+    const reply: DmCallResult = resolvesCard ? cardReply(direct) : await requestDmMessage(campaign.settings, turn.conversation, {
       tools,
       harness: {
         campaignId,
@@ -2171,12 +2177,9 @@ async function runAdvance(context: TurnContext, turn: DmTurn) {
       // resolved has not happened, however the prose tells it. The prose is
       // held back and the model is sent once to the tool the card names;
       // the follow-up narrates from its result (src/lib/dm/intent-logic.ts).
-      if (
-        !finalCall &&
-        !intentNudged &&
-        card &&
-        !intentAnswered(card, turnCalls(turn.conversation, toolCalls))
-      ) {
+      // The first unanswered card is chased; the correction is one call.
+      const card = finalCall || intentNudged ? null : cards.find((played) => !intentAnswered(played, turnCalls(turn.conversation, toolCalls)));
+      if (card) {
         intentNudged = true;
         if (narration && turn.narrationParts[turn.narrationParts.length - 1] === narration) {
           turn.narrationParts.pop();
@@ -2503,57 +2506,76 @@ function turnCalls(conversation: DmTurn["conversation"], pending: readonly Parse
   ];
 }
 
-// The card behind the action this turn answers: the last player message,
-// when it came from the Hand as an attack or a cast, with how its spell
-// resolves when the content knows it.
-function cardPlayed(context: TurnContext): PlayedCard | null {
-  const last = [...listRecentMessages(context.campaign.id, 20)]
-    .reverse()
-    .find((message) => message.authorType !== "system");
-  if (!last || last.authorType !== "player" || !last.intent || !intentNeedsTool(last.intent)) {
-    return null;
+// The player lines this turn answers: every message since the DM last
+// spoke, oldest first (issue 570: a card posted before a typed line, or two
+// players' cards in a row, were left to the model, which only saw the last
+// as a card). System lines are passed over, so the lines a halted turn left
+// unanswered are still here for the retry.
+function playerLinesSinceDm(campaignId: string): CampaignMessage[] {
+  const recent = listRecentMessages(campaignId, 40);
+  let from = 0;
+  for (let index = recent.length - 1; index >= 0; index -= 1) {
+    if (recent[index].authorType === "dm") {
+      from = index + 1;
+      break;
+    }
   }
-  const sheet = last.characterId ? context.sheetsById.get(last.characterId) : undefined;
-  const spell = last.intent.card === "spell" ? last.intent.spell : undefined;
-  const resolution = spell ? (spellMechanicsFor({ spell, userIds: spellAuthorsFor(context.campaign) })?.mech.resolution ?? null) : null;
-  return { intent: last.intent, characterId: last.characterId, name: sheet?.name ?? "The player", resolution };
+  return recent.slice(from).filter((message) => message.authorType === "player");
 }
 
-// A card the engine resolves before the narrator is asked: the last player
-// message, when it came from the Hand with every choice made
-// (directCardCall) during a fight, on a turn that has run nothing yet. The
-// Hand posts a card with its own sentence and nothing more, so no free text
-// rides with it that the model would have to weigh ("only if he draws
-// first" is typed, and a typed line carries no card).
+// A card's spell mechanics when the content knows them: the resolution names
+// the spell's tool and tells a slot spent from a spell cast; the area keeps a
+// Fireball aimed at one creature with the model.
+function cardMech(context: TurnContext, intent: MessageIntent): SpellMech | null {
+  const spell = intent.card === "spell" || intent.card === "reaction" ? intent.spell : undefined;
+  return spell ? (spellMechanicsFor({ spell, userIds: spellAuthorsFor(context.campaign) })?.mech ?? null) : null;
+}
+
+// The cards behind the actions this turn answers: the player messages since
+// the DM last spoke that came from the Hand as an attack or a cast, with how
+// each spell resolves when the content knows it.
+function cardsPlayed(context: TurnContext): PlayedCard[] {
+  return playerLinesSinceDm(context.campaign.id).flatMap((message) => {
+    if (!message.intent || !intentNeedsTool(message.intent)) {
+      return [];
+    }
+    const sheet = message.characterId ? context.sheetsById.get(message.characterId) : undefined;
+    return [{ intent: message.intent, characterId: message.characterId ?? null, name: sheet?.name ?? "The player", resolution: cardMech(context, message.intent)?.resolution ?? null }];
+  });
+}
+
+// The cards the engine resolves before the narrator is asked: every player
+// message since the DM last spoke that came from the Hand with every choice
+// made (directCardCall), in the order they were played. The Hand posts a
+// card with its own sentence and nothing
+// more, so no free text rides with it that the model would have to weigh
+// ("only if he draws first" is typed, and a typed line carries no card).
 type DirectCard = { messageId: string; name: string; args: Record<string, unknown> };
-function directCard(context: TurnContext, turn: DmTurn): DirectCard | null {
-  if (turn.callIndex > 0 || calledToolNames(turn.conversation).length || !getActiveEncounter(context.campaign.id)) {
-    return null;
-  }
-  const last = [...listRecentMessages(context.campaign.id, 20)]
-    .reverse()
-    .find((message) => message.authorType !== "system");
-  if (!last || last.authorType !== "player" || !last.intent || !last.characterId) {
-    return null;
-  }
-  const call = directCardCall(last.intent, last.characterId);
-  return call ? { messageId: last.id, ...call } : null;
+function directCards(context: TurnContext): DirectCard[] {
+  const inFight = Boolean(getActiveEncounter(context.campaign.id));
+  return playerLinesSinceDm(context.campaign.id).flatMap((message) => {
+    if (!message.intent || !message.characterId) {
+      return [];
+    }
+    const mech = cardMech(context, message.intent);
+    const call = directCardCall(message.intent, message.characterId, { inFight, resolution: mech?.resolution ?? null, area: Boolean(mech?.area) });
+    return call ? [{ messageId: message.id, ...call }] : [];
+  });
 }
 
-// The reply the turn loop reads for a direct card, shaped as the model's
-// own would be: one tool call and no prose, so the engine runs it, echoes
-// it and its result, and the next call narrates from the result.
-function cardReply(card: DirectCard): DmCallResult {
+// The reply the turn loop reads for the direct cards, shaped as the model's
+// own would be: their tool calls and no prose, so the engine runs them in
+// order, echoes each with its result, and the next call narrates from the
+// results.
+function cardReply(cards: DirectCard[]): DmCallResult {
   return {
     message: {
       content: "",
-      tool_calls: [
-        {
-          id: `${DIRECT_CALL_ID_PREFIX}${card.messageId.replace(/-/g, "").slice(0, 12)}`,
-          type: "function",
-          function: { name: card.name, arguments: JSON.stringify(card.args) },
-        },
-      ],
+      tool_calls: cards.map((card) => ({
+        id: `${DIRECT_CALL_ID_PREFIX}${card.messageId.replace(/-/g, "").slice(0, 12)}`,
+        type: "function",
+        function: { name: card.name, arguments: JSON.stringify(card.args) },
+      })),
     },
     finishReason: "tool_calls",
   };

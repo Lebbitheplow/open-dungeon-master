@@ -183,53 +183,67 @@ await test("A Dodge card takes the engine path too.", async () => {
   assert.equal(result.score.path, "engine");
 });
 
-await test("A spell card the model answers with the spell's tool, for the caster and the target, scores resolved by the model.", async () => {
+// The engine resolves every complete card itself (intent-logic.ts
+// directCardCall), so the model's own path is measured on a card it cannot
+// take: Web laid on a square picked on the board.
+
+await test("A laid area the model answers with a spell tool, for the caster, scores resolved by the model.", async () => {
   model.script([
-    reply({ calls: [call("pc_attack", { characterId: "Iris", targetEnemyId: "Goblin 1", spell: "Fire Bolt" })] }),
-    reply({ text: "The bolt strikes true." }),
+    reply({ calls: [call("cast_at_enemy", { characterId: "Iris", targetEnemyId: "Goblin 1", spell: "Web", level: 2, atX: 11, atY: 5 })] }),
+    reply({ text: "Sticky strands fill the ravine." }),
   ]);
-  const result = await playScenario(scenarioById("spell-fire-bolt"), { backend, seed: 13 });
+  const result = await playScenario(scenarioById("spell-web-area"), { backend, seed: 13 });
   assert.equal(result.error, null, result.error ?? "");
   assert.equal(result.score.verdict, "resolved", JSON.stringify(result.score));
   assert.equal(result.score.path, "model");
   assert.equal(result.score.corrected, false);
 });
 
-await test("A spell card cast at another enemy, and still not after the correction, scores missed with the target as the near miss.", async () => {
+await test("A laid area cast as another spell, and still not after the correction, scores missed with the spell as the near miss.", async () => {
   model.script([
-    reply({ calls: [call("pc_attack", { characterId: "Iris", targetEnemyId: "Goblin 2", spell: "Fire Bolt" })] }),
-    reply({ text: "The bolt flies at the other goblin." }),
-    reply({ text: "Smoke curls." }),
+    reply({ calls: [call("cast_at_enemy", { characterId: "Iris", targetEnemyId: "Goblin 1", spell: "Hold Person", level: 2 })] }),
+    reply({ text: "The goblin freezes." }),
+    reply({ text: "Silence." }),
   ]);
-  const result = await playScenario(scenarioById("spell-fire-bolt"), { backend, seed: 14 });
+  const result = await playScenario(scenarioById("spell-web-area"), { backend, seed: 14 });
   assert.equal(result.score.verdict, "missed", JSON.stringify(result.score));
   assert.equal(result.score.corrected, true, "the turn sent the corrective message");
-  assert.ok(result.score.near.includes("target"), result.score.near.join(","));
+  assert.ok(result.score.near.includes("spell"), result.score.near.join(","));
 });
 
-await test("A spell card the model answers by spending the slot and narrating, then casts when corrected, scores resolved by the correction path.", async () => {
+await test("A laid area the model answers by spending the slot and narrating, then casts when corrected, scores resolved by the correction path.", async () => {
   // The correction goes out when a reply would end the turn with the card
   // unanswered: the slot alone, then prose, is that reply.
   model.script([
-    reply({ calls: [call("use_spell_slot", { characterId: "Iris", spell: "Fire Bolt" })] }),
-    reply({ text: "Iris spends the slot and the bolt flies." }),
-    reply({ calls: [call("pc_attack", { characterId: "Iris", targetEnemyId: "Goblin 1", spell: "Fire Bolt" })] }),
-    reply({ text: "Flame leaps from her palm." }),
+    reply({ calls: [call("use_spell_slot", { characterId: "Iris", spell: "Web", level: 2 })] }),
+    reply({ text: "Iris spends the slot and the web spreads." }),
+    reply({ calls: [call("cast_at_enemy", { characterId: "Iris", targetEnemyId: "Goblin 1", spell: "Web", level: 2, atX: 11, atY: 5 })] }),
+    reply({ text: "Strands bind the goblin." }),
   ]);
-  const result = await playScenario(scenarioById("spell-fire-bolt"), { backend, seed: 15 });
+  const result = await playScenario(scenarioById("spell-web-area"), { backend, seed: 15 });
   assert.equal(result.score.verdict, "resolved", JSON.stringify(result.score));
   assert.equal(result.score.path, "correction");
+  assert.ok(result.score.near.length === 0, "a resolved card keeps no near miss");
 });
 
-await test("A card the model only narrates scores missed with no near miss, and the summary counts it by group.", async () => {
-  model.script([reply({ text: "Sefa lays her hands on Kara and the wound closes." }), reply({ text: "Warmth spreads." })]);
-  const result = await playScenario(scenarioById("spell-cure-wounds"), { backend, seed: 16 });
+await test("A laid area the model only narrates scores missed with no near miss, and the summary counts it by group.", async () => {
+  model.script([reply({ text: "A web fills the ravine, or so Iris says." }), reply({ text: "Strands glisten." })]);
+  const result = await playScenario(scenarioById("spell-web-area"), { backend, seed: 16 });
   assert.equal(result.score.verdict, "missed", JSON.stringify(result.score));
   assert.deepEqual(result.score.near, []);
   const summary = await summarize([result]);
   assert.equal(summary.verdict.missed, 1);
   assert.equal(summary.groups.spell.scenarios, 1);
   assert.equal(summary.narratedWhenMissed, result.narrated ? 1 : 0);
+});
+
+await test("A spell at one enemy and a healing spell on an ally are the engine's before any model call.", async () => {
+  model.script([reply({ text: "The bolt lands." })]);
+  const bolt = await playScenario(scenarioById("spell-fire-bolt"), { backend, seed: 17 });
+  assert.equal(`${bolt.score.verdict}/${bolt.score.path}`, "resolved/engine", JSON.stringify(bolt.score));
+  model.script([reply({ text: "The wound closes." })]);
+  const cure = await playScenario(scenarioById("spell-cure-wounds-out-of-fight"), { backend, seed: 18 });
+  assert.equal(`${cure.score.verdict}/${cure.score.path}`, "resolved/engine", JSON.stringify(cure.score));
 });
 
 model.close();
