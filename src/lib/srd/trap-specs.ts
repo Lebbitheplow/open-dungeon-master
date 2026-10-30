@@ -18,6 +18,10 @@ export type TrapSpec = {
   disarm?: { dc: number; how: string };
   // An attack roll against each victim's AC; a miss does nothing.
   attackBonus?: number;
+  // How many missiles one triggering looses, each its own attack, hit and
+  // save against a creature picked at random among those in reach (Poison
+  // Darts: four). Absent, one run per victim.
+  volley?: number;
   // A fall into it (a pit): falling damage and prone, before the rest.
   fallFeet?: number;
   // Damage nobody saves against (a needle's prick, a dart that hit).
@@ -69,6 +73,17 @@ export const SAMPLE_TRAPS: SampleTrap[] = [
     summary: "A lid that swings open: a fall of 10 feet, 1d6 bludgeoning and prone.",
   },
   {
+    // "identical to a hidden pit trap, with one key exception: the trap door
+    // that covers the pit is spring-loaded. After a creature falls into the
+    // pit, the cover snaps shut to trap its victim inside. A successful DC
+    // 20 Strength check is necessary to pry the cover open." (issue #570,
+    // EQP-04)
+    id: "locking_pit", name: "Locking Pit", kind: "mechanical", trigger: "stepping on a spring-loaded false floor over a 10-foot pit",
+    spot: { dc: 15, skill: "perception" }, disarm: { dc: 15, how: "an iron spike wedged between the lid and the floor; from inside, thieves' tools on the spring (DC 15 Dexterity) where it can be reached and seen" }, fallFeet: 10,
+    conditionsAlways: ["shut in the pit"], escape: { ability: "str", dc: 20 },
+    summary: "A hidden pit whose lid snaps shut: a fall of 10 feet, 1d6 bludgeoning and prone, and the victim is shut in until a DC 20 Strength check pries the lid open or the lid is smashed.",
+  },
+  {
     id: "spiked_pit", name: "Spiked Pit", kind: "mechanical", trigger: "falling into a pit lined with spikes",
     spot: { dc: 15, skill: "perception" }, fallFeet: 10, hit: [{ dice: "2d10", type: "piercing" }],
     summary: "A pit with sharpened spikes: the fall, and 2d10 piercing from the spikes.",
@@ -82,9 +97,11 @@ export const SAMPLE_TRAPS: SampleTrap[] = [
   {
     id: "poison_darts", name: "Poison Darts", kind: "mechanical", trigger: "more than 20 pounds on a hidden pressure plate",
     spot: { dc: 15, skill: "perception" }, disarm: { dc: 15, how: "an iron spike under the plate, or the holes stuffed with cloth or wax" },
-    attackBonus: 8, hit: [{ dice: "1d4", type: "piercing" }],
+    // "releasing four darts. Each dart makes a ranged attack with a +8 bonus
+    // against a random target within 10 feet of the pressure plate."
+    attackBonus: 8, volley: 4, hit: [{ dice: "1d4", type: "piercing" }],
     save: { ability: "con", dc: 15, halfOnSave: true }, damage: { dice: "2d10", type: "poison" },
-    summary: "Darts at +8 to hit: 1d4 piercing, then a DC 15 Constitution save against 2d10 poison, half on a success.",
+    summary: "Four darts, each at a random creature within 10 feet of the plate, at +8 to hit: 1d4 piercing, then a DC 15 Constitution save against 2d10 poison, half on a success.",
   },
   {
     id: "poison_needle", name: "Poison Needle", kind: "mechanical", trigger: "opening the lock without its key",
@@ -92,6 +109,17 @@ export const SAMPLE_TRAPS: SampleTrap[] = [
     hit: [{ dice: "1", type: "piercing" }, { dice: "2d10", type: "poison" }],
     save: { ability: "con", dc: 15, halfOnSave: false }, condition: "poisoned", rounds: 600,
     summary: "A needle in the lock: 1 piercing and 2d10 poison, and a DC 15 Constitution save or poisoned for 1 hour.",
+  },
+  {
+    // "A successful DC 20 Intelligence (Arcana) check reveals that the mouth
+    // contains a sphere of annihilation ... A successful dispel magic (DC
+    // 18) removes this enchantment." The sphere's touch is the magic item's
+    // 4d10 force; a creature wholly inside is obliterated, the GM's to
+    // narrate (issue #570, EQP-04).
+    id: "sphere_of_annihilation", name: "Sphere of Annihilation", kind: "magic", trigger: "reaching or crawling into the dark mouth of a carved stone face",
+    spot: { dc: 20, skill: "arcana" }, disarm: { dc: 18, how: "dispel magic (DC 18) removes the enchantment that draws creatures in; the sphere itself stays" },
+    hit: [{ dice: "4d10", type: "force" }],
+    summary: "A sphere of annihilation in a stone face's mouth: touching the darkness deals 4d10 force; a creature that goes wholly inside is obliterated. A DC 20 Arcana check knows it for what it is.",
   },
   {
     id: "rolling_sphere", name: "Rolling Sphere", kind: "mechanical", trigger: "20 or more pounds on a pressure plate",

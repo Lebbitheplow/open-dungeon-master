@@ -30,6 +30,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { rollCard } from "@/lib/dm/roll-card";
 import { rollOn } from "@/lib/roll-labels";
 import { springTrapOn } from "@/lib/dm/trap-run";
+import { rollExpression } from "@/lib/dice";
 import { SAMPLE_TRAPS } from "@/lib/srd/trap-specs";
 import { hazardNamesAt, trapAt } from "@/lib/srd/table-hazards";
 import type { ToolResult } from "@/lib/dm/tool-errors";
@@ -420,11 +421,21 @@ function resolveHazard(
       const own = hazardNamesAt(campaign.id).trap;
       return { error: `No trap is named "${args.trap}". The SRD's sample traps are ${SAMPLE_TRAPS.map((trap) => trap.name).join(", ")}${own.length ? `; this table's are ${own.join(", ")}` : ""}. Leave trap out to use the severity table.`, retry: true };
     }
+    // A volley (Poison Darts' four) is dealt out at random among the
+    // creatures named, each missile its own attack, hit and save (SRD 5.1
+    // Traps; issue #570, EQP-20: one dart per victim was all that flew).
+    const volley = found.trap.volley ?? 0;
+    const results = volley > 0 && targets.length
+      ? Array.from({ length: volley }, (_, dart) => {
+          const pick = targets.length > 1 ? rollExpression(`1d${targets.length}`).total - 1 : 0;
+          return { dart: dart + 1, ...springTrapOn(campaign, turn, targets[pick], found.name, found.trap, sheets, sheetsById, fromOf(args)) };
+        })
+      : targets.map((sheet) => springTrapOn(campaign, turn, sheet, found.name, found.trap, sheets, sheetsById, fromOf(args)));
     return {
       ok: true,
       type: "trap",
       trap: found.name,
-      results: targets.map((sheet) => springTrapOn(campaign, turn, sheet, found.name, found.trap, sheets, sheetsById, fromOf(args))),
+      results,
       note: `${found.trap.summary} Rolled and applied by the server; narrate the outcome per character.`,
     };
   }

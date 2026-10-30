@@ -171,14 +171,17 @@ await test("Traps, Sample Traps: each sample trap the engine holds has the SRD's
   assert.deepEqual([t.spot.dc, t.save, t.damage, t.condition], [15, { ability: "dex", dc: 15, halfOnSave: false }, { dice: "10d10", type: "bludgeoning" }, "prone"]);
 });
 
-await gap("EQP-04", {
-  rule: "traps, Pits (Locking Pit) and Sphere of Annihilation: the SRD's sample traps include a locking pit (a hidden pit whose cover snaps shut: DC 20 Strength to pry it open, DC 15 Dexterity with thieves' tools from inside) and a sphere of annihilation (DC 20 Arcana to recognize it, dispel magic DC 18).",
-  where: "src/lib/srd/trap-specs.ts SAMPLE_TRAPS",
-  severity: "low",
-  note: "apply_hazard refuses trap \"Locking Pit\" as unknown and lists the samples it has.",
-}, () => {
-  assert.ok(findSampleTrap("Locking Pit"), "no Locking Pit among the sample traps");
-  assert.ok(findSampleTrap("Sphere of Annihilation"), "no Sphere of Annihilation among the sample traps");
+// traps, Pits (Locking Pit) and Sphere of Annihilation: the SRD's sample traps
+// include a locking pit (a hidden pit whose cover snaps shut: DC 20 Strength
+// to pry it open, DC 15 Dexterity with thieves' tools from inside) and a
+// sphere of annihilation (DC 20 Arcana to recognize it, dispel magic DC 18).
+await test("EQP-04", () => {
+  const pit = findSampleTrap("Locking Pit");
+  const sphere = findSampleTrap("Sphere of Annihilation");
+  assert.ok(pit, "no Locking Pit among the sample traps");
+  assert.ok(sphere, "no Sphere of Annihilation among the sample traps");
+  assert.deepEqual([pit.spot.dc, pit.fallFeet, pit.escape], [15, 10, { ability: "str", dc: 20 }]);
+  assert.deepEqual([sphere.spot, sphere.disarm.dc, sphere.hit], [{ dc: 20, skill: "arcana" }, 18, [{ dice: "4d10", type: "force" }]]);
 });
 
 // ---- armor (equipment page "armor") ----
@@ -536,11 +539,11 @@ await gap("EQP-19", {
   }
 });
 
-await gap("EQP-20", {
-  rule: "traps, Poison Darts: \"The trap activates when more than 20 pounds of weight is placed on the pressure plate, releasing four darts. Each dart makes a ranged attack with a +8 bonus against a random target within 10 feet of the pressure plate.\"",
-  where: "src/lib/dm/hazard-tools.ts apply_hazard trap path (one springTrapOn per victim), src/lib/dm/trap-run.ts springTrapOn (one attack roll)",
-  severity: "medium",
-}, async () => {
+// traps, Poison Darts: "The trap activates when more than 20 pounds of weight
+// is placed on the pressure plate, releasing four darts. Each dart makes a
+// ranged attack with a +8 bonus against a random target within 10 feet of the
+// pressure plate."
+await test("EQP-20", async () => {
   const walker = world.addHero({ class: "fighter", level: 5, maxHp: 44 });
   world.clearDice();
   world.diceLog();
