@@ -53,7 +53,7 @@ const SIZE_HP: Record<ObjectSize, [number, number]> = {
 };
 
 export function objectHp(size: ObjectSize, fragile = false): number {
-  const [frail, sturdy] = SIZE_HP[size] ?? SIZE_HP.medium;
+  const [frail, sturdy] = SIZE_HP[Object.hasOwn(SIZE_HP, size) ? size : "medium"];
   return fragile ? frail : sturdy;
 }
 

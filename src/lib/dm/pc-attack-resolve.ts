@@ -57,6 +57,7 @@ import { untilTurnEnd } from "@/lib/dm/turn-end";
 import { rollAgainst } from "@/lib/roll-labels";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { markCritRange } from "@/lib/dm/attack-marks";
+import { gearHitWithoutDamage } from "@/lib/dm/gear-weapon-hit";
 
 // The roll the attack makes and the damage it carries, built once the
 // attack is paid for and shared by both dice paths.
@@ -256,6 +257,14 @@ export function rollPcAttack(plan: AttackPlan, strike: Strike): Record<string, u
         ? `The net lands: ${enemy.displayName} is restrained until it is freed (a DC 10 Strength check, or 5 slashing damage to the net). The server applied the condition; a net deals no damage.`
         : `The net lands and slides off: ${held.reason} A net deals no damage.`,
     };
+  }
+
+  // A flask whose hit deals nothing at once (alchemist's fire, oil), or holy
+  // water on a creature neither fiend nor undead (gear-weapon-hit.ts).
+  const markOnly = profile.gearWeapon ? gearHitWithoutDamage(campaign, enemy, profile.gearWeapon) : null;
+  if (markOnly) {
+    emitAttackFx(campaign.id, stage, { hit: true, crit: false, ranged: profile.ranged, damageType: profile.damageType, visibility: hitRoll.visibility });
+    return { ...base, hit: true, damage: 0, ...(profile.damageType ? { damageType: profile.damageType } : {}), note: markOnly };
   }
 
   // A magic weapon's dice on a natural 20 (src/lib/dm/gear-attack.ts).

@@ -23,6 +23,7 @@ import { markReactionUsed, noteSwing, storeBudget } from "@/lib/dm/turn-budget";
 import { spendReadied } from "@/lib/dm/object-actions";
 import { spendGiantKiller } from "@/lib/dm/reaction-attacks";
 import { withAmmoCount } from "@/lib/srd/ammunition";
+import { lineNamed } from "@/lib/srd/item-row";
 import { OPEN_HAND_CHOICES } from "@/lib/dm/attack-choice-rules";
 import { spendInspirationCounter } from "@/lib/dm/roll-riders";
 import { spendLuckCounter } from "@/lib/srd/class-resources";
@@ -480,6 +481,16 @@ function spendPcAttack(plan: AttackPlan): ToolError | null {
     tally[after] = emptied && carried[ammo.index] ? { spent, line: carried[ammo.index] } : spent;
     encounter.ammoSpent = tally;
     saveEncounter(encounter);
+  }
+  // A flask shatters on impact or on the floor: one is spent whatever the
+  // roll (src/lib/srd/gear-weapons.ts). An object picked up is no line.
+  if (plan.profile.gearWeapon?.spent) {
+    const now = getSheetById(sheet.id) ?? sheet;
+    const index = lineNamed(now.equipment, plan.profile.weapon);
+    if (index >= 0) {
+      patchSheet(sheet.id, { equipment: withAmmoCount(now.equipment, index, (now.equipment[index].qty ?? 1) - 1) });
+      context.notes.push(`one ${plan.profile.weapon} spent`);
+    }
   }
   if (plan.maneuver?.precision) {
     // Validated above, so this spend lands; were it to fail the roll simply

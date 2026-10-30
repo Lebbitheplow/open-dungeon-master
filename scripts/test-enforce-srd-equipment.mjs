@@ -35,6 +35,8 @@ const { afflictionConditionsFor } = await import("../src/lib/dm/afflictions.ts")
 const { packListCp } = await import("../src/lib/dm/trade-value.ts");
 const encounters = await import("../src/lib/db/encounters.ts");
 const { getDatabase } = await import("../src/lib/db/core.ts");
+const { getCampaignById } = await import("../src/lib/db/campaigns.ts");
+const { burningTurnStart } = await import("../src/lib/dm/gear-weapon-hit.ts");
 
 // A setup step that went wrong is the test breaking, not the rule: a plain
 // Error, which the harness fails the suite on, never an AssertionError that
@@ -275,11 +277,10 @@ async function throwFlask(name, ...faces) {
   return swing;
 }
 
-await gap("EQP-06", {
-  rule: "adventuring-gear, Acid: \"make a ranged attack against a creature or object, treating the acid as an improvised weapon. On a hit, the target takes 2d6 acid damage.\" The vial shatters on impact.",
-  where: "src/lib/dm/attack-logic.ts weaponAttackProfile (an object that is no weapon is an improvised 1d4 bludgeoning), src/lib/dm/pc-attack-profile.ts",
-  severity: "high",
-}, async () => {
+// adventuring-gear, Acid: "make a ranged attack against a creature or object,
+// treating the acid as an improvised weapon. On a hit, the target takes 2d6
+// acid damage." The vial shatters on impact.
+await test("EQP-06", async () => {
   const swing = await throwFlask("Acid (vial)", 6, 6, 6);
   const shown = `${swing.result.damage} ${swing.result.damageType} from d${swing.damageDice.join(", d")}`;
   assert.equal(swing.result.damageType, "acid", `the acid hit for ${shown}`);
@@ -287,31 +288,38 @@ await gap("EQP-06", {
   assert.equal(carried(thrower.id, "Acid (vial)")?.qty ?? 0, 1, "the thrown vial is still in the pack");
 });
 
-await gap("EQP-07", {
-  rule: "adventuring-gear, Alchemist's Fire: \"On a hit, the target takes 1d4 fire damage at the start of each of its turns. A creature can end this damage by using its action to make a DC 10 Dexterity check to extinguish the flames.\"",
-  where: "src/lib/dm/attack-logic.ts weaponAttackProfile (improvised 1d4 bludgeoning), no burning condition in src/lib/srd/condition-effects.ts",
-  severity: "high",
-}, async () => {
+// adventuring-gear, Alchemist's Fire: "On a hit, the target takes 1d4 fire
+// damage at the start of each of its turns. A creature can end this damage by
+// using its action to make a DC 10 Dexterity check to extinguish the flames."
+await test("EQP-07", async () => {
   const swing = await throwFlask("Alchemist's Fire (flask)", 3, 3);
   assert.equal(swing.result.damageType, "fire", `the flask hit for ${swing.result.damage} ${swing.result.damageType}`);
   assert.ok(kit.dummy().conditions.some((name) => /fire|burn/i.test(name)), `the target holds ${JSON.stringify(kit.dummy().conditions)}: nothing burns at the start of its turns`);
+  // The hit itself deals nothing; the burn comes as the target's turn starts.
+  assert.equal(swing.result.damage, 0);
+  const before = kit.dummy().currentHp;
+  world.clearDice();
+  world.dice(3);
+  const lines = burningTurnStart(getCampaignById(world.campaignId), world.encounter(), kit.dummy().id, kit.dummy());
+  world.clearDice();
+  assert.equal(before - kit.dummy().currentHp, 3, lines.join(" "));
+  encounters.patchEnemyConditions(kit.dummy().id, [], {});
 });
 
-await gap("EQP-08", {
-  rule: "adventuring-gear, Holy Water: \"make a ranged attack against a target creature, treating the holy water as an improvised weapon. If the target is a fiend or undead, it takes 2d6 radiant damage.\" Any other creature takes nothing.",
-  where: "src/lib/dm/attack-logic.ts weaponAttackProfile (improvised 1d4 bludgeoning against any creature)",
-  severity: "medium",
-}, async () => {
+// adventuring-gear, Holy Water: "make a ranged attack against a target
+// creature, treating the holy water as an improvised weapon. If the target is
+// a fiend or undead, it takes 2d6 radiant damage." Any other creature takes
+// nothing.
+await test("EQP-08", async () => {
   const before = kit.dummy().currentHp;
   const swing = await throwFlask("Holy Water (flask)", 3, 3);
   assert.equal(before - kit.dummy().currentHp, 0, `holy water hit a goblin, neither fiend nor undead, for ${swing.result.damage} ${swing.result.damageType}`);
 });
 
-await gap("EQP-09", {
-  rule: "adventuring-gear, Oil: \"On a hit, the target is covered in oil. If the target takes any fire damage before the oil dries (after 1 minute), the target takes an additional 5 fire damage from the burning oil.\"",
-  where: "src/lib/dm/attack-logic.ts weaponAttackProfile (improvised 1d4 bludgeoning, nothing left on the target), src/lib/dm/enemy-damage.ts",
-  severity: "low",
-}, async () => {
+// adventuring-gear, Oil: "On a hit, the target is covered in oil. If the
+// target takes any fire damage before the oil dries (after 1 minute), the
+// target takes an additional 5 fire damage from the burning oil."
+await test("EQP-09", async () => {
   await throwFlask("Oil (flask)", 1);
   const before = kit.dummy().currentHp;
   const burnt = await world.invoke("apply_damage", { enemyId: kit.dummy().id, amount: 3, type: "fire", reason: "a torch put to the oil" });
@@ -319,11 +327,9 @@ await gap("EQP-09", {
   assert.equal(before - kit.dummy().currentHp, 8, `3 fire damage on an oiled target took ${before - kit.dummy().currentHp} hit points`);
 });
 
-await gap("EQP-10", {
-  rule: "adventuring-gear, Torch: \"If you make a melee attack with a burning torch and hit, it deals 1 fire damage.\"",
-  where: "src/lib/dm/attack-logic.ts weaponAttackProfile (a torch swings as an improvised 1d4 bludgeoning)",
-  severity: "low",
-}, async () => {
+// adventuring-gear, Torch: "If you make a melee attack with a burning torch
+// and hit, it deals 1 fire damage."
+await test("EQP-10", async () => {
   kit.stand(thrower.id, 1);
   world.patch(thrower.id, { equipment: [{ name: "Torch", qty: 1 }] });
   const swing = await kit.swing(thrower.id, { weapon: "Torch", improvised: true }, 18, 2);
@@ -331,11 +337,11 @@ await gap("EQP-10", {
   assert.equal(swing.result.damageType, "fire", `the torch hit for ${swing.result.damage} ${swing.result.damageType}`);
 });
 
-await gap("EQP-11", {
-  rule: "weapons, Improvised Weapons: \"If a character uses a ranged weapon to make a melee attack, or throws a melee weapon that does not have the thrown property, it also deals 1d4 damage. An improvised thrown weapon has a normal range of 20 feet and a long range of 60 feet.\"",
-  where: "src/lib/dm/attack-logic.ts resolveAttackWeapon (improvised only for a name that is no weapon), src/lib/dm/map-tools.ts checkPcAttackRange",
-  severity: "low",
-}, async () => {
+// weapons, Improvised Weapons: "If a character uses a ranged weapon to make a
+// melee attack, or throws a melee weapon that does not have the thrown
+// property, it also deals 1d4 damage. An improvised thrown weapon has a normal
+// range of 20 feet and a long range of 60 feet."
+await test("EQP-11", async () => {
   kit.stand(thrower.id, 3);
   world.patch(thrower.id, { equipment: [{ name: "Longsword", qty: 1 }] });
   const swing = await kit.swing(thrower.id, { weapon: "Longsword", improvised: true }, 18, 3);

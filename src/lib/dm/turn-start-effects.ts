@@ -15,6 +15,7 @@ import { landTheFlightless } from "@/lib/dm/map-tools";
 import { regenerationTurnStart } from "@/lib/dm/regeneration-turn";
 import { sunlightTurnStart } from "@/lib/dm/sunlight-turn";
 import { beginTurns, endTurns } from "@/lib/dm/turn-end";
+import { burningTurnStart } from "@/lib/dm/gear-weapon-hit";
 
 export function turnStartEffects(
   campaign: Campaign,
@@ -44,6 +45,8 @@ export function turnStartEffects(
   ];
   for (const id of starting) {
     const enemy = enemiesById.get(id);
+    // Alchemist's fire burns the creature whose turn starts (gear-weapon-hit.ts).
+    turnStartLines.push(...burningTurnStart(campaign, encounter, id, enemy));
     if (enemy?.status === "alive") {
       // A troll down at 0 rises or dies as its turn starts (regeneration-turn.ts).
       turnStartLines.push(...regenerationTurnStart(campaign, encounter, enemy));
