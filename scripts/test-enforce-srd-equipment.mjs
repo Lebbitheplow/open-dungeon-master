@@ -40,6 +40,7 @@ const { burningTurnStart } = await import("../src/lib/dm/gear-weapon-hit.ts");
 const { zonesAfterMove } = await import("../src/lib/dm/zone-triggers.ts");
 const maps = await import("../src/lib/db/battle-maps.ts");
 const { saveZones } = await import("../src/lib/dm/zone-store.ts");
+const { moveToSide } = await import("../src/lib/dm/combat-sides.ts");
 const { litTiles } = await import("../src/lib/battlemap/los.ts");
 const moveRoute = await import("../src/app/api/campaigns/[campaignId]/battle-map/move/route.ts");
 const { mintSession } = await import("../src/lib/auth.ts");
@@ -272,6 +273,8 @@ const ckit = conditionsKit(world);
 const trained = profs({ weapons: ["simple", "martial"], armor: ["light", "medium", "heavy", "shields"] });
 const anchor = world.addHero({ class: "fighter", level: 5, abilities: { str: 16, dex: 14 }, proficiencies: trained });
 const thrower = world.addHero({ class: "fighter", level: 5, abilities: { str: 16, dex: 14 }, proficiencies: trained });
+// A companion who turns on the party mid-fight (src/lib/dm/combat-sides.ts).
+const turned = world.addHero({ class: "fighter", level: 5, maxHp: 60, abilities: { str: 16, dex: 14 }, proficiencies: trained, ac: 10, acOverride: true });
 await kit.arena({ first: anchor.id });
 
 // One flask thrown at the dummy 15 feet off, the hit forced.
@@ -521,6 +524,54 @@ await test("EQP-13: a creature that regains a hit point is rid of the caltrops w
     db.prepare("UPDATE encounter_enemies SET current_hp = ?, stat_json = ? WHERE id = ?").run(dummy.currentHp, JSON.stringify(dummy.stats), dummy.id);
     encounters.patchEnemyConditions(dummy.id, [], {});
     world.patch(thrower.id, { conditions: [], conditionMeta: {}, currentHp: world.sheet(thrower.id).maxHp });
+  }
+});
+
+// adventuring-gear, Oil: "If the target is covered in oil and takes any fire
+// damage before the oil dries (after 1 minute), the target takes an
+// additional 5 fire damage from the burning oil." Alchemist's Fire: "the
+// target takes 1d4 fire damage at the start of each of its turns. A creature
+// can end this damage by using its action to make a DC 10 Dexterity check to
+// extinguish the flames." Both hold on a character as on an enemy row: a
+// companion turned against the party, and a party member that companion's
+// flask strikes.
+await test("Adventuring Gear, Oil and Alchemist's Fire: a character covered in oil or set burning suffers what an enemy does", async () => {
+  moveToSide(world.campaign(), turned.id, "foe", { quiet: true });
+  try {
+    // The thrower's oil on the turncoat, 15 feet off.
+    kit.stand(turned.id, 6, 4);
+    kit.stand(thrower.id, 3, 4);
+    world.patch(thrower.id, { equipment: [{ name: "Oil (flask)", qty: 1 }] });
+    const oiled = await kit.swing(thrower.id, { weapon: "Oil (flask)", improvised: true, enemyId: turned.id, targetEnemyId: turned.id }, 19, 1);
+    must(oiled.ok && oiled.result.hit, `the oil missed the turncoat: ${oiled.error ?? JSON.stringify(oiled.result)}`);
+    assert.equal(world.sheet(turned.id).conditionMeta["covered in oil"]?.rounds, 10, "the oil dries after a minute, as on an enemy");
+    const hp = world.sheet(turned.id).currentHp;
+    const burnt = await world.invoke("apply_damage", { characterId: turned.id, amount: 3, type: "fire", reason: "a torch put to the oil" });
+    must(burnt.ok, `apply_damage refused: ${burnt.error}`);
+    assert.equal(hp - world.sheet(turned.id).currentHp, 8, `3 fire damage on an oiled character took ${hp - world.sheet(turned.id).currentHp} hit points`);
+    assert.equal(conditionsOf(turned.id).includes("covered in oil"), false, "the oil burns once");
+    // The turncoat's alchemist's fire on the thrower: it burns at the start
+    // of the thrower's turn, and the thrower's action puts it out.
+    world.patch(turned.id, { equipment: [{ name: "Alchemist's Fire (flask)", qty: 1 }] });
+    const lit = await kit.swing(turned.id, { weapon: "Alchemist's Fire (flask)", improvised: true, enemyId: thrower.id, targetEnemyId: thrower.id }, 19, 1);
+    must(lit.ok && lit.result.hit, `the flask missed the thrower: ${lit.error ?? JSON.stringify(lit.result)}`);
+    assert.ok(conditionsOf(thrower.id).includes("burning"), `the thrower holds ${JSON.stringify(conditionsOf(thrower.id))}`);
+    const before = world.sheet(thrower.id).currentHp;
+    world.clearDice();
+    world.dice(3);
+    burningTurnStart(getCampaignById(world.campaignId), world.encounter(), thrower.id, undefined);
+    world.clearDice();
+    assert.equal(before - world.sheet(thrower.id).currentHp, 3);
+    world.dice(12);
+    const out = await kit.onTurnOf(thrower.id, () => world.invoke("take_action", { characterId: thrower.id, action: "escape" }));
+    world.clearDice();
+    assert.equal(out.ok && out.result?.success, true, JSON.stringify(out.result ?? out.error));
+    assert.equal(conditionsOf(thrower.id).includes("burning"), false);
+  } finally {
+    moveToSide(world.campaign(), turned.id, "party", { quiet: true });
+    for (const id of [turned.id, thrower.id]) {
+      world.patch(id, { conditions: [], conditionMeta: {}, currentHp: world.sheet(id).maxHp });
+    }
   }
 });
 

@@ -9,6 +9,7 @@
 // leaves.
 
 import { matchGear } from "@/lib/srd/adventuring-gear";
+import { isConditionNamed } from "@/lib/srd/feature-names";
 
 export type GearWeapon = {
   // The catalog row it is (src/lib/srd/adventuring-gear.ts).
@@ -74,3 +75,12 @@ export const BURNING = "burning";
 export const COVERED_IN_OIL = "covered in oil";
 // Oil: "the target takes an additional 5 fire damage from the burning oil."
 export const BURNING_OIL_DAMAGE = 5;
+
+// Whether a blow catches the oil on a creature: it holds the mark and some
+// of the blow is fire (the caller reads its own damage types). One rule for
+// an enemy row and for a character (enemy-damage.ts, pc-damage.ts), so a
+// turncoat or a party member the oil was thrown on burns the same way
+// (issue #570).
+export function oilCatches(conditions: string[], fire: boolean, amount: number): boolean {
+  return fire && amount > 0 && conditions.some((entry) => isConditionNamed(entry, COVERED_IN_OIL));
+}

@@ -44,6 +44,7 @@ import { summonAfterDamage } from "@/lib/dm/summon-store";
 import { absorbByWard } from "@/lib/dm/arcane-ward";
 import { afflictionStress } from "@/lib/dm/afflictions";
 import type { ToolResult } from "@/lib/dm/tool-errors";
+import { BURNING_OIL_DAMAGE, COVERED_IN_OIL, oilCatches } from "@/lib/srd/gear-weapons";
 
 export type PcDamageInput = {
   // What was rolled or sent, before resistance.
@@ -141,6 +142,22 @@ export function applyPcDamage(
   if (sheet.deathSaves?.dead) {
     return { error: `${sheet.name} is already dead.`, retry: true };
   }
+  // Oil (SRD 5.1 Adventuring Gear): "If the target takes any fire damage
+  // before the oil dries (after 1 minute), the target takes an additional 5
+  // fire damage from the burning oil." The coat burns once and is gone, on a
+  // character (a turncoat, or a party member a turncoat's flask struck) as
+  // on an enemy (enemy-damage.ts); the 5 meets their defences with the rest.
+  const fireBlow = /\bfire\b/i.test([input.type ?? "", ...(input.parts ?? []).map((part) => part.type)].join(" "));
+  if (oilCatches(sheet.conditions, fireBlow, amount)) {
+    const dried = removeConditions(sheet.conditions, sheet.conditionMeta, [COVERED_IN_OIL]);
+    const unoiled = patchSheet(sheet.id, { conditions: dried.conditions, conditionMeta: dried.meta }) ?? sheet;
+    const burnt = applyPcDamage(campaign, turnId, unoiled, {
+      ...input,
+      amount: amount + BURNING_OIL_DAMAGE,
+      ...(input.parts?.length ? { parts: [...input.parts, { amount: BURNING_OIL_DAMAGE, type: "fire" }] } : {}),
+    });
+    return burnt.error ? burnt : { ...burnt, burningOil: `The oil on ${sheet.name} catches: ${BURNING_OIL_DAMAGE} more fire damage, and the oil is burnt away.` };
+  }
   // An abjurer's Arcane Ward takes the blow first, as it lands: the ward has
   // none of the wizard's own resistances, immunities or vulnerabilities
   // (Sage Advice Compendium; arcane-ward.ts).
@@ -196,7 +213,7 @@ export function applyPcDamage(
     };
   }
   // Fire burns away the web around them (zone-cast.ts).
-  if (/\bfire\b/i.test([input.type ?? "", ...(input.parts ?? []).map((part) => part.type)].join(" "))) {
+  if (fireBlow) {
     burnWebUnder(campaign, sheet.id);
   }
   // Wild Shape: the beast's hit points take the blow first. While the form

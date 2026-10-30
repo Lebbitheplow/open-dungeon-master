@@ -19,8 +19,7 @@ import { clearSpellConditionsByName } from "@/lib/dm/concentration";
 import { spellEffectsOnEnemyDamage } from "@/lib/dm/spell-effects";
 import { enemyDamageMath } from "@/lib/dm/encounter-logic";
 import { damageAdjust, removeConditions, resistsAllDamage } from "@/lib/dm/condition-logic";
-import { BURNING_OIL_DAMAGE, COVERED_IN_OIL } from "@/lib/srd/gear-weapons";
-import { isConditionNamed } from "@/lib/srd/feature-names";
+import { BURNING_OIL_DAMAGE, COVERED_IN_OIL, oilCatches } from "@/lib/srd/gear-weapons";
 import { enemyDefenseLines } from "@/lib/dm/enemy-defenses";
 import { authoredIgnoresResistance } from "@/lib/dm/authored-saves";
 import { isKnockedOut, knockedOutConditions } from "@/lib/dm/knockout";
@@ -321,7 +320,7 @@ export function applyEnemyDamage(
   // before the oil dries (after 1 minute), the target takes an additional 5
   // fire damage from the burning oil." The coat burns once and is gone
   // (src/lib/dm/gear-weapon-hit.ts lays it).
-  if (fireBlow && amount > 0 && enemy.status === "alive" && enemy.conditions.some((entry) => isConditionNamed(entry, COVERED_IN_OIL))) {
+  if (enemy.status === "alive" && oilCatches(enemy.conditions, fireBlow, amount)) {
     const dried = removeConditions(enemy.conditions, enemy.conditionMeta, [COVERED_IN_OIL]);
     patchEnemyConditions(enemy.id, dried.conditions, dried.meta);
     const burnt = applyEnemyDamage(campaign, turn, encounter, { ...enemy, conditions: dried.conditions, conditionMeta: dried.meta }, amount + BURNING_OIL_DAMAGE, sheets, sheetsById, damageType, options);
