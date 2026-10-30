@@ -7,6 +7,7 @@ import { DEED_SEVERITIES } from "@/lib/dm/companion-values-logic";
 import type { CatalogEntry } from "@/lib/dm/catalog-types";
 import { cueOptions, sceneOptions } from "@/lib/ambience/catalog";
 import { RELATIONSHIP_BEAT_NAMES } from "@/lib/dm/relationship-logic";
+import { NOTE_LIMIT_WORDS } from "@/lib/dm/relationship-note";
 import { TOLD_GENDERS } from "@/lib/gender";
 import {
   ABILITY_OPTIONS as ABILITIES,
@@ -34,6 +35,7 @@ const NOTE = {
   label: "What happened",
   kind: "text" as const,
   placeholder: "One short line for the record",
+  help: NOTE_LIMIT_WORDS,
 };
 
 // The kind of place, from the ambience beds: its sound, battle map and
