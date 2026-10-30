@@ -305,6 +305,16 @@ await test("EQP-07", async () => {
   encounters.patchEnemyConditions(kit.dummy().id, [], {});
 });
 
+await test("Adventuring Gear, Alchemist's Fire: a burning character puts the flames out with their action and a DC 10 Dexterity check (take_action escape).", async () => {
+  world.patch(thrower.id, { conditions: ["burning"], conditionMeta: { burning: { source: "Alchemist's Fire (flask)" } } });
+  world.clearDice();
+  world.dice(12);
+  const out = await kit.onTurnOf(thrower.id, () => world.invoke("take_action", { characterId: thrower.id, action: "escape" }));
+  world.clearDice();
+  assert.equal(out.ok && out.result?.success, true, JSON.stringify(out.result ?? out.error));
+  assert.equal(conditionsOf(thrower.id).includes("burning"), false);
+});
+
 // adventuring-gear, Holy Water: "make a ranged attack against a target
 // creature, treating the holy water as an improvised weapon. If the target is
 // a fiend or undead, it takes 2d6 radiant damage." Any other creature takes
