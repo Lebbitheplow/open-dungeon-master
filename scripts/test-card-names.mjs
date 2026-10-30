@@ -41,8 +41,8 @@ const sheet = (id, userId, name, more = {}) => ({ id, userId, name, race: "human
 await test("the lobby's seat and companion cards print names, not ids", () => {
   const markup = renderToStaticMarkup(createElement(LobbyParty, {
     campaign: { maxPlayers: 6, leadUserId: "a", dmUserId: null, assistantDmUserId: null },
-    members: [{ userId: "a", username: "Player A", activeCharacterId: "krag" }],
-    sheets: [sheet("krag", "a", "Krag", minotaur)],
+    members: [{ userId: "a", username: "Player A", activeCharacterId: "krag" }, { userId: "b", username: "Player B", activeCharacterId: "mara" }],
+    sheets: [sheet("krag", "a", "Krag", minotaur), sheet("mara", "b", "Mara Fen", widow)],
     showParty: true,
     showCompanions: true,
     partyCompanions: [sheet("sera", "bot", "Seraphine", { race: "bhain-kwai", class: "paladin", level: 5, isCompanion: true })],
@@ -50,6 +50,11 @@ await test("the lobby's seat and companion cards print names, not ids", () => {
   assert.ok(markup.includes("Bhain Kwai Fighter 3 / Rogue 2"), "the seat card");
   assert.ok(markup.includes("Bhain Kwai Paladin 5"), "the companion card");
   assert.ok(!/bhain-kwai/.test(markup.replace(/(?:title|alt|src)="[^"]*"/g, "")), "no species id in the text");
+  // The class emblem's tooltip on a seat is read aloud and shown on hover:
+  // it printed "plague_doctor 1" after the card's line was fixed.
+  const tooltips = [...markup.matchAll(/title="([^"]*)"/g)].map((match) => match[1]);
+  assert.ok(tooltips.includes("Fighter 3 / Rogue 2") && tooltips.includes("Plague Doctor 1"), tooltips.join(" | "));
+  assert.ok(!tooltips.some((tip) => /plague_doctor|\bfighter 3/.test(tip)), tooltips.join(" | "));
 });
 
 const { openWorld } = await import("./lib/enforce-world.mjs");

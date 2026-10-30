@@ -616,7 +616,7 @@ await test("one set of words names a split wherever a class and level are shown"
   ]) {
     assert.match(read(file), /@\/lib\/characters\/class-words/, `${file} names a split with the shared words`);
   }
-  assert.match(read("src/app/campaigns/[campaignId]/LobbyParty.tsx"), /title=\{classLevelWords\(sheet\)\}/, "the medallion's title names the split");
+  assert.match(read("src/app/campaigns/[campaignId]/LobbyParty.tsx"), /title=\{classLevelWords\(sheet, nameOfClass\)\}/, "the medallion's title names the split, by class name");
 });
 
 // ---- lists trimmed to their counts when levels move ----

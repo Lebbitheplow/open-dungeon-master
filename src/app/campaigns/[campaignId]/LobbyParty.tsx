@@ -8,7 +8,8 @@ import { Tooltip } from "@/components/ui/Tooltip";
 import { UserAvatar, ui } from "@/lib/ui";
 import type { CampaignMember } from "@/lib/campaign-types";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
-import { classLevelWords, speciesAndClassWords } from "@/lib/characters/class-words";
+// Aliased: this component takes a `className` prop, which would shadow it.
+import { className as nameOfClass, classLevelWords, speciesAndClassWords } from "@/lib/characters/class-words";
 
 
 // Small gold badge on a party row: DM, co-DM, party lead, owner, real dice.
@@ -144,7 +145,7 @@ export function LobbyParty({
                       <UserAvatar url={member.avatar?.url} userId={member.userId} size="size-full" />
                     </span>
                     {sheet ? (
-                      <span className="lobby-medallion-emblem" title={classLevelWords(sheet)}>
+                      <span className="lobby-medallion-emblem" title={classLevelWords(sheet, nameOfClass)}>
                         <GameIcon
                           icon={{ kind: "family", key: `class-${sheet.class.toLowerCase()}` }}
                           size="size-6"
