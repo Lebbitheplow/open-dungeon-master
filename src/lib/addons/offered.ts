@@ -11,7 +11,7 @@ export type OfferedImporter = Owner & Pick<WorkshopImporter, "id" | "title" | "d
 export type OfferedGenerator = Owner & Pick<MapGenerator, "id" | "title" | "description"> & { options: OptionField[] };
 // `threads`: the admin accepted the addon's threads permission, so the table
 // lets its frame be cross-origin isolated (AddonBoardView.tsx).
-export type OfferedBoardView = Owner & Pick<BoardView, "id" | "title" | "description" | "needsViewData" | "sessionLayout" | "sessionTheme"> & { url: string; options: OptionField[]; threads?: boolean };
+export type OfferedBoardView = Owner & Pick<BoardView, "id" | "title" | "description" | "needsViewData" | "combatOnly" | "sessionLayout" | "sessionTheme"> & { url: string; options: OptionField[]; threads?: boolean };
 
 export type OfferedContributions = {
   supported: boolean;
@@ -57,6 +57,7 @@ export function offeredContributions(): OfferedContributions {
         title: view.title,
         description: view.description,
         needsViewData: view.needsViewData,
+        combatOnly: view.combatOnly,
         sessionLayout: view.sessionLayout,
         sessionTheme: view.sessionTheme,
         url: boardViewUrl(addon.id, addon.manifest.version, view.entry),

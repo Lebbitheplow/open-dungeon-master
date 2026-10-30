@@ -11,6 +11,7 @@ import {
 } from "@/lib/dice/dice-box-lifecycle";
 import { hydrateDiceLook, useDiceLook } from "@/lib/dice/dice-look-store";
 import type { StoredRoll } from "@/lib/db/rolls";
+import { shellHost } from "@/lib/shell-host";
 
 // Full-screen 3D dice tray: rolls arriving over SSE replay with baked
 // physics, forced to land on the server's authoritative values
@@ -32,7 +33,30 @@ type DiceBoxInstance = {
 
 // A built tray: the box plus the window listener it registered during
 // initialize(), which the library never removes on its own.
-type Tray = { box: DiceBoxInstance; listeners: CapturedListener[] };
+type Tray = { box: DiceBoxInstance; listeners: CapturedListener[]; overlay: Window | null };
+
+// The native HWND covers web canvases; an owned transparent layer preserves the same renderer.
+function foregroundDice(canvas?: HTMLCanvasElement): Window | null {
+  const frame = document.querySelector("iframe[data-native-board-active]");
+  if (!canvas || shellHost()?.platform !== "desktop" || !frame?.getClientRects().length) return null;
+  let overlay: Window | null = null;
+  const parent = canvas.parentElement;
+  try {
+    overlay = window.open("about:blank", "odm-native-dice-overlay");
+    if (!overlay) return null;
+    overlay.document.title = "ODM dice";
+    overlay.document.documentElement.style.cssText = "width:100%;height:100%;background:transparent";
+    overlay.document.body.style.cssText = "margin:0;width:100%;height:100%;overflow:hidden;background:transparent";
+    canvas.style.background = "transparent";
+    overlay.document.body.appendChild(canvas);
+    overlay.document.body.style.zoom = String(window.devicePixelRatio / overlay.devicePixelRatio);
+    return overlay;
+  } catch {
+    parent?.appendChild(canvas);
+    overlay?.close();
+    return null;
+  }
+}
 
 // Firefox caps live WebGL contexts (~32) and loses the oldest past that, so
 // every orphaned context from an undisposed box brings the tab closer to a
@@ -56,6 +80,7 @@ function disposeTray(tray: Tray | null) {
   } catch {
     // Same: a half-initialized renderer is fine to abandon.
   }
+  try { tray.overlay?.close(); } catch { /* The owner may already have closed. */ }
 }
 
 export function DiceOverlay({
@@ -93,7 +118,13 @@ export function DiceOverlay({
 
   useEffect(() => {
     unmountedRef.current = false;
+    const alignOverlay = () => {
+      const overlay = trayRef.current?.overlay;
+      if (overlay && !overlay.closed) overlay.document.body.style.zoom = String(window.devicePixelRatio / overlay.devicePixelRatio);
+    };
+    window.addEventListener("resize", alignOverlay);
     return () => {
+      window.removeEventListener("resize", alignOverlay);
       unmountedRef.current = true;
       queueRef.current = [];
       window.clearTimeout(idleTimerRef.current);
@@ -117,6 +148,8 @@ export function DiceOverlay({
     try {
       const box = await ensureBox();
       if (box) {
+        const tray = trayRef.current;
+        if (tray && (!tray.overlay || tray.overlay.closed)) tray.overlay = foregroundDice(box.renderer?.domElement);
         const wanted = diceLookKey(lookRef.current);
         if (themedRef.current !== wanted) {
           themedRef.current = wanted;
@@ -170,7 +203,7 @@ export function DiceOverlay({
         // The resize listener is added before initialize()'s first await,
         // so the capture only spans that synchronous stretch.
         const { result: ready, captured } = captureListeners(window, ["resize"], () => box.initialize());
-        const tray: Tray = { box, listeners: captured };
+        const tray: Tray = { box, listeners: captured, overlay: null };
         try {
           await ready;
         } catch (error) {

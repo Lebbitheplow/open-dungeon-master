@@ -72,6 +72,8 @@ export type HandCard = {
   // The roll line under it ("+5 to hit", "no roll", "on a hit").
   roll: string;
   rules: string;
+  // Full hover text when the card face uses a shortened summary.
+  description?: string;
   // Slot, uses or ammunition ("Slot 1 · 3/4"); "" when the card costs nothing.
   resource: string;
   // The condition applied, or "Concentration".

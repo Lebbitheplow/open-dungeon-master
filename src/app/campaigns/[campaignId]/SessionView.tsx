@@ -436,7 +436,7 @@ export function SessionView({
   // than a map in the side panel. The header switch shows the story there
   // instead; the choice is the reader's, kept per browser.
   const docked = useDocked();
-  const { active: addonBoardView, views: addonViews, choose: chooseBoardView } = useBoardView(state.battleMap?.addonView?.addonId);
+  const { active: addonBoardView, views: addonViews, choose: chooseBoardView } = useBoardView(state.battleMap?.addonView?.addonId, state.encounter?.status === "active");
   const [addonOptions, setAddonOption] = useBoardViewOptions();
   const sessionLayout = docked && addonBoardView?.sessionLayout === "stage";
   const { mode: themeMode } = useThemePrefs();

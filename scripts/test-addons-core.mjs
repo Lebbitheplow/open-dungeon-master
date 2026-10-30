@@ -25,12 +25,60 @@ const os = await import("node:os");
 const fsp = await import("node:fs/promises");
 const nodePath = (await import("node:path")).default;
 const { cleanSettings, effectiveSettings, missingRequiredSettings, setupSettingKeys, downloadApplies } = await import("../src/lib/addons/settings.ts");
-const { boardSnapshot, boardFx, readViewMessage, fileForRequest, createAnchorStore } = await import("../src/lib/addons/board-bridge.ts");
+const { boardSnapshot, boardRuler, boardFx, readViewMessage, fileForRequest, createAnchorStore, offeredBoardControl, nativeBoardHud } = await import("../src/lib/addons/board-bridge.ts");
+const { nativeFilePacket } = await import("../src/lib/addons/native-board-client.ts");
 const { normalizeMapAddonView } = await import("../src/lib/addons/map-view.ts");
 const { withManifestDefaults } = await import("../src/lib/addons/import-defaults.ts");
 const { sniffImage } = await import("../src/lib/addons/sniff.ts");
 
 let passed = 0;
+await test("native controls accept only the bounded offer sent to the renderer", () => {
+  assert.equal(typeof nativeBoardHud, "function", "the native offer needs a shared bounded projection");
+  const choice = { id: "move-mode", label: "Move", disabled: null,
+    options: Array.from({ length: 2049 }, (_, i) => ({ value: `choice-${i}`, label: `Choice ${i}`, disabled: null })) };
+  const hidden = { id: "end-turn", label: "End turn", disabled: null };
+  const source = { selection: null, turn: "", stats: [], hint: "", notices: [], error: "", pending: false, prompt: null,
+    controls: [...Array(20).fill(choice), hidden] };
+  const sent = nativeBoardHud(source);
+  assert.equal(sent.controls.length, 20);
+  assert.equal(offeredBoardControl(sent, "end-turn"), null);
+  assert.ok(offeredBoardControl(sent, "move-mode", "choice-2047"));
+  assert.equal(offeredBoardControl(sent, "move-mode", "choice-2048"), null);
+  const panel = nativeBoardHud({ ...source, panel: { title: "", lines: [], controls: [...Array(64).fill(choice), hidden] } });
+  assert.equal(panel.panel.controls.length, 64);
+  assert.equal(offeredBoardControl(panel, "end-turn"), null);
+  assert.equal(offeredBoardControl(panel, "move-mode", "choice-2048"), null);
+  assert.equal(source.controls.length, 21, "projection must not mutate the host's controls");
+  assert.equal(choice.options.length, 2049);
+});
+await test("native portrait bytes survive JSON and reject oversized transfers", () => {
+  const packet={type:"file",requestId:"face-1",ok:true,name:"pc",mime:"image/png",bytes:Uint8Array.from([0,1,127,255]).buffer};
+  const encoded=JSON.parse(JSON.stringify(nativeFilePacket(packet)));
+  assert.equal(encoded.bytesBase64,"AAF//w==");
+  assert.equal(encoded.bytes,undefined);
+  assert.equal(nativeFilePacket({...packet,bytes:new ArrayBuffer(1024*1024+1)}).ok,false);
+  assert.deepEqual(nativeFilePacket({type:"file",requestId:"face-1",ok:false,name:"pc",error:"Missing"}),{type:"file",requestId:"face-1",ok:false,name:"pc",error:"Missing"});
+});
+await test("native battlefield controls have a bounded explicit contract", () => {
+  assert.deepEqual(readViewMessage({odm:1,type:"ready",battlefieldUi:true}), {type:"ready",battlefieldUi:true});
+  const valid={odm:1,type:"board-control",revision:2,mapId:"map-1",actionId:"end-turn"};
+  assert.deepEqual(readViewMessage(valid),{type:"board-control",revision:2,mapId:"map-1",actionId:"end-turn"});
+  for(const patch of [{revision:0},{revision:1.5},{mapId:"../secret"},{actionId:"invoke-anything"},{value:"x".repeat(201)}]) assert.equal(readViewMessage({...valid,...patch}),null);
+  assert.equal(readViewMessage({...valid,value:"2"}),null,"only prompt-submit carries input");
+  assert.deepEqual(readViewMessage({...valid,actionId:"prompt-submit",value:"2"}),{type:"board-control",revision:2,mapId:"map-1",actionId:"prompt-submit",value:"2"});
+  assert.deepEqual(readViewMessage({odm:1,type:"ready",battlefieldTools:true}),{type:"ready",battlefieldTools:true});
+  assert.equal(readViewMessage({...valid,actionId:"move-mode",value:"jump"})?.value,"jump");
+  const control={id:"move-mode",label:"Move",disabled:null,options:[{value:"walk",label:"Walk",disabled:null},{value:"jump",label:"Jump",disabled:"Cannot jump"}]};
+  const hud={pending:false,controls:[control]};
+  assert.equal(offeredBoardControl(hud,"move-mode","walk"),control);
+  assert.equal(offeredBoardControl(hud,"move-mode","jump"),null);
+  assert.equal(offeredBoardControl(hud,"move-mode","teleport"),null);
+  assert.equal(offeredBoardControl({...hud,panel:{controls:[]}},"move-mode","walk"),null,"a native panel blocks controls behind it");
+  assert.equal(offeredBoardControl({...hud,pending:true},"move-mode","walk"),null);
+  const draw={odm:1,type:"board-draw",revision:2,mapId:"map-1",points:[{x:1.2,y:2},{x:2,y:3}]};
+  assert.equal(readViewMessage(draw)?.points.length,2);
+  for(const points of [[{x:1,y:2}],Array(65).fill({x:1,y:2}),[{x:Infinity,y:2},{x:2,y:2}]])assert.equal(readViewMessage({...draw,points}),null);
+});
 async function test(name, fn) {
   await fn();
   passed += 1;
@@ -57,6 +105,14 @@ await test("session layouts are opt-in, bounded, and independent of map data", (
   assert.equal(parse({ sessionLayout: "stage" }).data.contributes.boardViews[0].sessionLayout, "stage");
   assert.equal(parse({ sessionLayout: "custom-css" }).success, false);
   assert.equal(parse({ sessionLayout: "stage", needsViewData: true }).success, false);
+});
+
+await test("combat-only board views are opt-in and require a boolean", () => {
+  const view = { id: "combat", title: "Combat", entry: "ui/board.html" };
+  const parse = (patch) => addonManifestSchema.safeParse({ ...example, contributes: { boardViews: [{ ...view, ...patch }] } });
+  assert.equal(parse({}).data.contributes.boardViews[0].combatOnly, false);
+  assert.equal(parse({ combatOnly: true }).data.contributes.boardViews[0].combatOnly, true);
+  assert.equal(parse({ combatOnly: "true" }).success, false);
 });
 
 await test("session colors are bounded data and require a session layout", () => {
@@ -469,6 +525,18 @@ const view = {
   spellZones: [],
 };
 
+await test("movement previews carry the remaining budget and only known board paths", () => {
+  const appearance = { theme: "night", reducedMotion: false };
+  assert.equal(boardSnapshot(view, "hello-dungeon", { canDirect: false, appearance }).budgetLeft, 6);
+  const spent = boardSnapshot({ ...view, budgetLeft: 0, reachable: [] }, "hello-dungeon", { canDirect: false, appearance });
+  assert.equal(spent.budgetLeft, 0);
+  assert.deepEqual(spent.reachable, []);
+  const ruler = { path: [{ x: 1, y: 0 }, { x: 2, y: 0 }], label: "5 ft", overBudget: false };
+  assert.deepEqual(boardRuler(view, ruler), ruler);
+  assert.equal(boardRuler(view, null), null);
+  assert.equal(boardRuler(view, { ...ruler, path: [{ x: 1, y: 0 }, { x: 0, y: 1 }] }), null, "unexplored geometry never reaches the addon");
+  assert.equal(boardRuler(view, { ...ruler, path: [{ x: 1, y: 0 }, { x: 3, y: 0 }] }), null, "off-map paths are refused");
+});
 await test("a snapshot is the viewer's projection, with only this addon's view data", () => {
   const appearance = { theme: "night", reducedMotion: false };
   const mine = boardSnapshot(view, "hello-dungeon", { canDirect: false, appearance });
@@ -575,13 +643,27 @@ await test("file requests resolve to the map's own files only", () => {
 });
 
 await test("the frame's messages are read strictly", () => {
+  assert.deepEqual(readViewMessage({ odm: 1, type: "ready", actions: true }), { type: "ready", actions: true });
+  assert.equal(readViewMessage({ odm: 1, type: "ready", actions: "true" }), null);
+  assert.deepEqual(readViewMessage({ odm: 1, type: "action", revision: 7, tokenId: "pc", actionId: "dodge" }), { type: "action", revision: 7, tokenId: "pc", actionId: "dodge" });
+  for (const bad of [{revision:-1},{revision:1.5},{revision:Infinity},{revision:9007199254740992},{tokenId:"<script>"},{actionId:"run anything"}]) assert.equal(readViewMessage({ odm:1, type:"action", revision:7, tokenId:"pc", actionId:"dodge", ...bad }), null);
+
+  assert.deepEqual(readViewMessage({ odm: 1, type: "ready", nativeOnly: true }), { type: "ready", nativeOnly: true });
+  assert.deepEqual(readViewMessage({ odm: 1, type: "ready" }), { type: "ready" });
+  assert.deepEqual(readViewMessage({ odm: 1, type: "ready", nativeOnly: false }), { type: "ready", nativeOnly: false });
+  for (const nativeOnly of ["true", 1, null, {}]) assert.equal(readViewMessage({ odm: 1, type: "ready", nativeOnly }), null);
   assert.deepEqual(readViewMessage({ odm: 1, type: "camera-state", x: 2.5, y: 1, zoom: 1.2 }), { type: "camera-state", x: 2.5, y: 1, zoom: 1.2 });
   for (const bad of [{ x: NaN, y: 1, zoom: 1 }, { x: 1, y: Infinity, zoom: 1 }, { x: 1, y: 1, zoom: 0 }, { x: 1, y: 1, zoom: 9 }, { x: "1", y: 1, zoom: 1 }]) assert.equal(readViewMessage({ odm: 1, type: "camera-state", ...bad }), null);
   assert.deepEqual(readViewMessage({ odm: 1, type: "tile", x: 2, y: 1 }), { type: "tile", x: 2, y: 1 });
   assert.equal(readViewMessage({ odm: 1, type: "tile", x: 1.5, y: 1 }), null);
   assert.equal(readViewMessage({ odm: 2, type: "ready" }), null);
+  assert.deepEqual(readViewMessage({ odm: 1, type: "cancel" }), { type: "cancel" });
+  assert.equal(readViewMessage({ odm: 2, type: "cancel" }), null);
   assert.equal(readViewMessage({ odm: 1, type: "eval", code: "x" }), null);
   assert.equal(readViewMessage({ odm: 1, type: "token", tokenId: "<script>" }), null);
+  assert.deepEqual(readViewMessage({ odm: 1, type: "token", tokenId: "pc" }), { type: "token", tokenId: "pc" });
+  for (const menu of [false,true]) assert.deepEqual(readViewMessage({ odm: 1, type: "token", tokenId: "pc", menu }), { type: "token", tokenId: "pc", menu });
+  for (const menu of ["false", 0, null, {}]) assert.equal(readViewMessage({ odm: 1, type: "token", tokenId: "pc", menu }), null);
   assert.deepEqual(readViewMessage({ odm: 1, type: "hover", x: null, y: null }), { type: "hover", x: null, y: null });
 });
 

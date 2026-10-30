@@ -7,7 +7,7 @@ import { replayAnimation } from "@/lib/motion/replay";
 import { ui } from "@/lib/ui";
 import { Tooltip } from "@/components/ui/Tooltip";
 import type { HandAttackOption, HandAttackOptionId, HandCard } from "@/lib/battlemap/hand";
-import type { HandAim, PreviewRow } from "@/lib/battlemap/hand-play";
+import { handReady, type HandAim, type PreviewRow } from "@/lib/battlemap/hand-play";
 import { describePick, hasPick, pickHint, type AreaPick } from "@/lib/battlemap/hand-area";
 import { HandPreviewRows, typeLabel, typeTone } from "@/app/campaigns/[campaignId]/HandCardFace";
 
@@ -130,7 +130,7 @@ export function HandAimBar({
   // An area spell laid on a square picked on the board needs no creature
   // named: the area catches whoever stands in it.
   const areaPicked = hasPick(card.area, areaPick);
-  const ready = (!needsTarget || aim !== null || areaPicked) && !needsTrigger;
+  const ready = handReady(card, aim, { trigger: trigger ?? "", area: areaPick });
   // Once the card can go, its button is brought into view. On a short phone
   // the Hand scrolls in what the message box leaves it (hand.css), and the
   // button sat below the fold after the target was picked.

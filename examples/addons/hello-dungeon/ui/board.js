@@ -376,6 +376,9 @@
     send(tile ? { type: "hover", x: tile.x, y: tile.y } : { type: "hover", x: null, y: null });
     draw();
   });
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") send({ type: "cancel" });
+  });
 
   // The model this map's generator made: asked for once per map, to show the
   // file path works end to end. A real 3D view would parse it (with three.js

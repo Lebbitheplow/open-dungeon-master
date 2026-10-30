@@ -80,6 +80,11 @@ session-region layout when that viewer selects the view. It requires
 `needsViewData: false` and handling the no-map `scene` message. See
 [the session stage contract](extension-points.md#optional-session-stage-layout).
 
+Set `boardViews[].combatOnly: true` for a view that should be offered and active
+only during an active encounter. Outside combat, ODM restores the native view
+and session layout while remembering the device's choice for the next fight.
+Omitting this field keeps the existing behavior on combat and scene boards.
+
 Stage views may also supply `sessionTheme: { "surface": "#17212b", "accent": "#7dd3fc" }`.
 These are opaque six-digit hex colors, not CSS. Surface channels must each be
 0–63 (a dark background for native light text). The accent colors decorative

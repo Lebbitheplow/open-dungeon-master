@@ -12,15 +12,24 @@ register("./lib/register-alias.mjs", import.meta.url);
 const { deriveHand, splitHand, lowestSlot, attacksAllowed, FRESH_TURN, HAND_FAN_CAP } = await import(
   "../src/lib/battlemap/hand.ts"
 );
-const { previewRows, composeSentence, intentBody, afterCommit, targetFromComposedText, typicalAcForCr } =
+const { previewRows, composeSentence, intentBody, afterCommit, targetFromComposedText, typicalAcForCr, handReady } =
   await import("../src/lib/battlemap/hand-play.ts");
 const { attackOdds, asPercent } = await import("../src/lib/srd/odds.ts");
-const { populateResources } = await import("../src/lib/srd/class-resources.ts");
+const { populateResources, resourceDef } = await import("../src/lib/srd/class-resources.ts");
 const { BEAST_FORMS } = await import("../src/lib/srd/beast-forms.ts");
 const { beastAttackIcon } = await import("../src/lib/battlemap/attack-art.ts");
 const { iconCandidates } = await import("../src/lib/icons.ts");
 
 let passed = 0;
+test("HTML and native action confirmation share target, area and trigger gates", () => {
+  const attack={target:"enemy"};
+  assert.equal(handReady(attack,null),false);
+  assert.equal(handReady(attack,{id:"goblin"}),true);
+  assert.equal(handReady({target:"self"},null),true);
+  assert.equal(handReady({...attack,area:{pick:"point"}},null,{area:{at:{x:2,y:3}}}),true);
+  assert.equal(handReady({...attack,asks:"trigger"},{id:"goblin"},{trigger:"   "}),false);
+  assert.equal(handReady({...attack,asks:"trigger"},{id:"goblin"},{trigger:"when it moves"}),true);
+});
 function test(name, fn) {
   fn();
   passed += 1;
@@ -600,6 +609,21 @@ test("Escape and Stand up, dealt only when held or prone, keep a seat in a full 
   // Grappled is speed 0, so Stand up is dealt refused and gives its seat up.
   const prone = deriveHand(caster({ equipment: [item("Quarterstaff"), item("Dagger")], conditions: ["prone"] }), FRESH_TURN, { spells: FACTS });
   assert.ok(splitHand(prone).fan.some((card) => card.id === "basic:stand-up"), "Stand up waited behind the spine");
+});
+
+test("hover text retains full spell prose and higher-level guidance", () => {
+  const desc = FACTS["fire bolt"].desc + "\n\nA final detail that must remain visible.";
+  const facts = { ...FACTS, "fire bolt": { ...FACTS["fire bolt"], desc, higherLevel: "Extra dice at later character levels." } };
+  const card = byId(deriveHand(caster(), FRESH_TURN, { spells: facts }), "spell:fire bolt");
+  assert.ok(card.description?.includes(desc), "full prose survives the compact-card summary");
+  assert.ok(card.description.includes("Extra dice at later character levels."));
+});
+
+test("hover text retains the full feature guidance", () => {
+  const features = [{ name: "Second Wind", source: "class" }];
+  const fighter = sheet({ features, resources: populateResources(features, 4, {}) });
+  const card = byId(deriveHand(fighter, FRESH_TURN), "feature:second_wind");
+  assert.equal(card.description, resourceDef("second_wind").guidance);
 });
 
 console.log(`test-hand: ${passed} passed`);

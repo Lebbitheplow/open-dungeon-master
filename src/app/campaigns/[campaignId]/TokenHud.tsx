@@ -149,6 +149,7 @@ export function TokenHud({
           const Icon = action.icon;
           return (
             <button
+          data-native-board-occluder
               key={action.id}
               type="button"
               role="menuitem"
@@ -186,6 +187,7 @@ export function TokenHud({
           );
         })}
         <button
+              data-native-board-occluder
           type="button"
           onClick={(event) => {
             event.stopPropagation();
@@ -199,6 +201,7 @@ export function TokenHud({
         </button>
         {hint ? (
           <p
+            data-native-board-occluder
             className="fx-pop pointer-events-none absolute -translate-x-1/2 whitespace-nowrap rounded-md border border-[rgba(224,112,58,0.5)] bg-[rgba(13,11,28,0.94)] px-2 py-0.5 text-[11px] text-[#ffbe8f] shadow-elev-1"
             style={{ left: 0, top: flip ? radius + 18 : -radius - 30 }}
           >
@@ -211,6 +214,7 @@ export function TokenHud({
           const y = Math.sin(angle) * (radius + 28);
           return (
             <span
+              data-native-board-occluder
               key={`label-${action.id}`}
               // Each name arrives with its sigil, on the same stagger.
               className="fx-pop pointer-events-none absolute -translate-x-1/2 -translate-y-1/2 whitespace-nowrap font-display text-[9px] font-semibold uppercase tracking-[0.14em] text-[#dedbec] drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]"

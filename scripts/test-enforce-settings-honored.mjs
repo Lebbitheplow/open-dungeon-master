@@ -53,7 +53,7 @@ function sourceFiles(dir, out = []) {
 // panels. A read there is not the engine reading the key.
 const EDITORS = /schemas\/game-settings|schemas\/game-settings-options|GameSettingsPanel|GameSettingsGroups|table-settings-groups|CreateCampaignDialog|settings\/route\.ts|test-/;
 
-const files = sourceFiles(path.join(repo, "src")).filter((file) => !EDITORS.test(file));
+const files = sourceFiles(path.join(repo, "src")).filter((file) => !EDITORS.test(path.relative(repo, file).split(path.sep).join("/")));
 const corpus = files.map((file) => [file, fs.readFileSync(file, "utf8")]);
 
 function readers(key) {

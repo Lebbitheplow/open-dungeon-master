@@ -583,7 +583,7 @@
     "lib/addons/admin-view.ts#keyed": [["key",2,"ids, refs, slugs, tool names, field names, env names, event kinds, UI keys, caches, door and map keys; a sheet's conditionMeta by the condition key it was written under; the usage route's gear map by the sheet's own stored item names (src/: every site read)"]],
     "lib/addons/archive.ts#keyed": [["key",1,"ids, refs, slugs, tool names, field names, env names, event kinds, UI keys, caches, door and map keys; a sheet's conditionMeta by the condition key it was written under; the usage route's gear map by the sheet's own stored item names (src/: every site read)"]],
     "lib/addons/archive.ts#partial": [["key",13,"addon ids, archive paths, manifest fields, protocol messages"]],
-    "lib/addons/board-bridge.ts#partial": [["pattern",5,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"],["key",1,"addon ids, archive paths, manifest fields, protocol messages"]],
+    "lib/addons/board-bridge.ts#partial": [["pattern",5,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"],["key",5,"addon ids, paths, offered native control/option ids, MIME and protocol keys"]],
     "lib/addons/board-bridge.ts#whole": [["key",1,"addon ids, archive paths, manifest fields, protocol messages"]],
     "lib/addons/catalog-entry.ts#whole": [["key",1,"addon ids, archive paths, manifest fields, protocol messages"]],
     "lib/addons/contracts.ts#first": [["key",1,"an addon option's first allowed value (protocol)"]],
@@ -2330,6 +2330,8 @@
     "lib/srd/legality/older-builder.ts#first": [["key",1,"the first stored racial cantrip, by position: the one the older builder shows and sends back"]],
     "lib/srd/legality/older-builder.ts#whole-single": [["identity",2,"an edit's stored character on the same species, by textKey of its whole name"]],
     "lib/srd/legality/older-builder.ts#whole": [["identity",1,"a stored racial cantrip pick against the one an older builder sent, by textKey of its whole name"]],
-    "lib/homebrew/species-choice-server.ts#partial": [["identity",2,"a species choice's record against the names the engines run, by textKey of the whole name and of the name before its bracket note, as isNamed reads it"],["pattern",2,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"]]
+    "lib/homebrew/species-choice-server.ts#partial": [["identity",2,"a species choice's record against the names the engines run, by textKey of the whole name and of the name before its bracket note, as isNamed reads it"],["pattern",2,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"]],
+    "app/campaigns/[campaignId]/BattleMapPanel.tsx#fallback": [["key",1,"native initiative panel defaults a missing or unselected order id to the current turn entry; no text-name lookup"]],
+    "app/campaigns/[campaignId]/BattleMapPanel.tsx#partial": [["parse",1,"native initiative score input checked for an integer before range validation; not a record-name lookup"]]
   }
 }
