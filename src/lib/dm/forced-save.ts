@@ -30,7 +30,8 @@ import { INSPIRATION_SPEND, spendInspirationCounter } from "@/lib/dm/roll-riders
 import { inDirectSunlight } from "@/lib/dm/sunlight";
 import { obscuredFor } from "@/lib/dm/zone-rules";
 import { hasSunlightSensitivity, holdsFeature } from "@/lib/srd/trait-rules";
-import { getActiveEncounter, saveEncounter } from "@/lib/db/encounters";
+import { getActiveBoard, getActiveEncounter, saveEncounter } from "@/lib/db/encounters";
+import { fearAsRolled } from "@/lib/dm/attack-light";
 import { activePublicEncounter } from "@/lib/db/encounter-view";
 import { spendResistance } from "@/lib/dm/legendary-logic";
 import { getBattleMapForEncounter, getTokenByRef } from "@/lib/db/battle-maps";
@@ -58,6 +59,11 @@ export function rollExtrasFor(campaign: Campaign, sheet: CharacterSheet, kind: s
     obscured: obscuredFor(campaign.id, sheet.id),
     // Supreme Sneak reads how far the rogue walked this turn.
     movedLittle: holdsFeature(sheet, "supreme sneak") ? movedLittle(campaign.id, sheet) : false,
+    // Frightened's disadvantage on checks needs its source in sight, read
+    // from the board (attack-light.ts fearAsRolled).
+    fearOutOfSight:
+      kind !== "saving_throw" &&
+      fearAsRolled(getActiveBoard(campaign.id)?.id ?? null, sheet.id, sheet.conditions, sheet.conditionMeta).length < sheet.conditions.length,
   };
 }
 

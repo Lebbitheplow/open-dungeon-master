@@ -9,6 +9,7 @@ import {
   rollDerivation,
   wearsHeavyArmor,
 } from "@/lib/dm/condition-logic";
+import { isConditionNamed } from "@/lib/srd/feature-names";
 import { heldHelp } from "@/lib/dm/help-logic";
 import { encumbranceCovers, encumbranceFor } from "@/lib/srd/encumbrance";
 import { conditionRollRiders } from "@/lib/srd/condition-effects";

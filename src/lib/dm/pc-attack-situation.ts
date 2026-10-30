@@ -15,7 +15,7 @@ import type { Advantage } from "@/lib/dice";
 import { enemyAcWithEffects } from "@/lib/dm/ac-effects";
 import type { AttackProfile } from "@/lib/dm/attack-logic";
 import { thrownAtRange } from "@/lib/dm/attack-rules";
-import { attackSight, characterSenses, enemySenses, lightOnAttack } from "@/lib/dm/attack-light";
+import { attackSight, characterSenses, enemySenses, fearAsRolled, lightOnAttack } from "@/lib/dm/attack-light";
 import {
   characterFlanks,
   characterShootsInMelee,
@@ -131,7 +131,8 @@ export function attackSituation(input: {
     target: { refId: enemy.id, senses: enemySenses(enemy) },
   });
   const conditionContext = attackContext({
-    attackerConditions: sheet.conditions,
+    // Frightened weighs on the roll only with its source in sight.
+    attackerConditions: fearAsRolled(encounter.id, sheet.id, sheet.conditions, sheet.conditionMeta),
     targetConditions: seenTargetConditions(sheet, enemy.conditions),
     melee: !atRange,
     adjacent: geometry.withinFiveFeet,

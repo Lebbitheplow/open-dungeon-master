@@ -12,7 +12,7 @@ import type { EncounterEnemy } from "@/lib/db/encounters";
 import { getSheetById } from "@/lib/db/sheets";
 import type { Advantage } from "@/lib/dice";
 import { enemyFlanks, enemyShootsInMelee } from "@/lib/dm/attack-spatial";
-import { attackSight, characterSenses, enemySenses, lightOnAttack } from "@/lib/dm/attack-light";
+import { attackSight, characterSenses, enemySenses, fearAsRolled, lightOnAttack } from "@/lib/dm/attack-light";
 import { authoredIncomingAttack } from "@/lib/dm/authored-hooks";
 import { normalizeClock } from "@/lib/dm/calendar";
 import { attackContext, isIncapacitated, mergeAdvantage } from "@/lib/dm/condition-logic";
@@ -72,7 +72,8 @@ export function enemySwingOdds(input: {
     target: { refId: target.id, senses: characterSenses(target) },
   });
   const conditionContext = attackContext({
-    attackerConditions: standing.conditions,
+    // Frightened weighs on the roll only with its source in sight.
+    attackerConditions: fearAsRolled(encounterId, standing.id, standing.conditions, standing.conditionMeta),
     attackerType: standing.stats.type,
     // Dodge is lost with the dodger's speed, and a character at 0 hit
     // points is unconscious and prone whatever wrote the 0.
@@ -182,7 +183,8 @@ export function enemyRowSwingOdds(input: {
     target: { refId: target.id, senses: enemySenses(target) },
   });
   const conditionContext = attackContext({
-    attackerConditions: standing.conditions,
+    // Frightened weighs on the roll only with its source in sight.
+    attackerConditions: fearAsRolled(encounterId, standing.id, standing.conditions, standing.conditionMeta),
     attackerType: standing.stats.type,
     targetConditions: withLiveDodge(target.conditions),
     melee: !ranged,

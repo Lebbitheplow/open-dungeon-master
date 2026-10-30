@@ -392,12 +392,8 @@ await test("CMB-12", async () => {
   assert.equal(d20Faces(mine).length, 2, "the charmer's social check against the creature they charmed was not rolled with advantage");
 });
 
-await gap("CMB-13", {
-  rule: "conditions, Frightened: 'A frightened creature has disadvantage on ability checks and attack rolls while the source of its fear is within line of sight.'",
-  where: "src/lib/dm/condition-logic.ts attackContext and rollDerivation (frightened is in ATTACKER_DISADVANTAGE and CHECK_DISADVANTAGE with no sight line to its source)",
-  severity: "medium",
-  note: "On a mapped fight a character frightened of a creature behind a solid wall still attacks another creature at disadvantage.",
-}, async () => {
+// conditions, Frightened: 'A frightened creature has disadvantage on ability checks and attack rolls while the source of its fear is within line of sight.'
+await test("CMB-13", async () => {
   const [near, source] = await stage(fighter, 2);
   const width = kit.map().width;
   kit.openField(Array.from({ length: width }, (_, x) => [x, 8, "#"]));
