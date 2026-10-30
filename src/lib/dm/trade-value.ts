@@ -81,14 +81,17 @@ function isPricedGear(name: string): boolean {
 
 // Whether a thing is treasure that keeps its value: a gem, a piece of
 // jewelry or art, a trade good (src/lib/srd/item-tags.ts), and not a magic
-// item or priced gear.
+// item or priced gear. A trade good is priced by definition (the pack lists
+// a pound of saffron at 15 gp), so the priced-gear test, kept for a gem
+// that is also gear, never takes it: SRD 5.1 Selling Treasure, "trade
+// goods ... retain their full value in the market" (issue #570, EQP-25).
 const TREASURE: ItemTag[] = ["gem", "art_object", "trade_good"];
 function isTreasure(item: TradedItem): boolean {
   if (!TREASURE.some((tag) => hasItemTag(item, tag))) {
     return false;
   }
   const listed = rowName(item);
-  return !isMagicItem(listed) && !isPricedGear(listed);
+  return !isMagicItem(listed) && (hasItemTag(item, "trade_good") || !isPricedGear(listed));
 }
 
 // Gems, jewelry, art objects and trade goods keep their full value.

@@ -620,12 +620,10 @@ await gap("EQP-26", {
 });
 
 if (world.hasPack) {
-  await gap("EQP-25", {
-    rule: "selling-treasure, Trade Goods: \"trade goods (bars of iron, bags of salt, livestock, and so on) retain their full value in the market and can be used as currency.\"",
-    where: "src/lib/dm/trade-value.ts isTreasure (a trade good the pack prices counts as priced gear, so keepsFullValue is false)",
-    severity: "medium",
-    note: "Content pack only: with no pack nothing prices a trade good and the given worth is paid in full. docs/rules-coverage.md (Commerce) claims full value for trade goods.",
-  }, async () => {
+  // selling-treasure, Trade Goods: "trade goods (bars of iron, bags of salt,
+  // livestock, and so on) retain their full value in the market and can be
+  // used as currency."
+  await test("EQP-25", async () => {
     const trader = world.addHero({ class: "fighter", level: 3, gold: 0, equipment: [{ name: "Saffron", qty: 1 }] });
     const sold = await world.invoke("purchase", { characterId: trader.id, item: "Saffron", action: "sell" });
     must(sold.ok && sold.result?.ok, `the sale was refused: ${sold.error ?? sold.result?.error}`);
