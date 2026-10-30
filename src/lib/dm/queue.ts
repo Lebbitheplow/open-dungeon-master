@@ -49,8 +49,10 @@ function running() {
   return (globalThis.__odmDmRunning ??= new Map<string, DmJobControl>());
 }
 
+export const DM_WATCHDOG_DEFAULTS = { checkMs: 5_000, graceMs: 15_000, scale: 1 };
+
 function watchdog() {
-  return (globalThis.__odmDmWatchdog ??= { timer: null, checkMs: 5_000, graceMs: 15_000, scale: 1 });
+  return (globalThis.__odmDmWatchdog ??= { timer: null, ...DM_WATCHDOG_DEFAULTS });
 }
 
 // When the job a campaign runs now has settled, whichever way it ends.

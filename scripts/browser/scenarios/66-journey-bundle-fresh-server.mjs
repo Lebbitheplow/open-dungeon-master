@@ -252,15 +252,9 @@ async function importBundle(page, base, file, { before } = {}) {
   await eventually(() => page.getByRole("button", { name: "Open a bundle" }).locator("visible=true").count(), { timeoutMs: 30_000, label: "the shelf's Open a bundle" });
   await page.locator("body").focus();
   await tabTo(page, (element) => element.tag === "BUTTON" && element.text.includes("Open a bundle"), "Open a bundle", 80);
-  // On a shelf that already holds workshops the first press or two can open
-  // nothing (seen on the third import, as the shelf's list settles); the
-  // button keeps focus, so Enter is pressed again, a few times at most.
-  let chooser = null;
-  for (let attempt = 0; attempt < 4 && !chooser; attempt += 1) {
-    const waiting = page.waitForEvent("filechooser", { timeout: 7_500 }).catch(() => null);
-    await page.keyboard.press("Enter");
-    chooser = await waiting;
-  }
+  const waiting = page.waitForEvent("filechooser", { timeout: 7_500 }).catch(() => null);
+  await page.keyboard.press("Enter");
+  const chooser = await waiting;
   check(Boolean(chooser), `Enter on Open a bundle opens the file picker (focus: ${JSON.stringify(await focused(page))})`);
   await chooser.setFiles(file);
   const confirm = page.getByRole("button", { name: /^\s*Import it\s*$/ }).locator("visible=true").first();

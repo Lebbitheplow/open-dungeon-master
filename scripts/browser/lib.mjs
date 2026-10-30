@@ -184,6 +184,12 @@ export async function newContext(browser, viewport, { app, toursSeen = true }) {
       // A page with no storage shows its tour, and settle() closes it.
     }
   }, keys);
+  // Playwright starts catching file choosers when a page.waitForEvent
+  // ("filechooser") begins, without waiting for the browser to agree: a key
+  // pressed straight after it (Enter on "Add a picture") could open the
+  // chooser first, and it was never seen. Every page catches them from the
+  // start, so a waiting scenario finds them on.
+  context.on("page", (page) => page.on("filechooser", () => {}));
   return context;
 }
 

@@ -73,9 +73,26 @@ export default {
     check(from, "the goblin's token on the board");
     await pick("Teleport");
     await eventually(() => board.getByText("Tap the tile it appears on").count(), { label: "the teleport hint" });
-    const box = await figure.boundingBox();
-    check(box, "the goblin's figure has a box");
-    await page.mouse.click(box.x + box.width / 2 - box.width * 2, box.y + box.height / 2);
+    // The action ring stays open while it waits for the tile, and on a phone
+    // its buttons cover the squares beside the goblin: a tap there lands on
+    // the ring once its buttons have popped in. The first square along the
+    // row that is on top where the pointer lands is the one tapped.
+    await untilStill(page);
+    let destination = null;
+    for (const dx of [-2, -3, -4, 2, 3, 4]) {
+      const square = frame.locator(`[data-tile-x="${from.x + dx}"][data-tile-y="${from.y}"]`);
+      const open = (await square.count()) > 0 && (await square.evaluate((node) => {
+        const box = node.getBoundingClientRect();
+        return document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2) === node;
+      }));
+      if (open) {
+        destination = square;
+        break;
+      }
+    }
+    check(destination, "a square along the goblin's row is clear of the action ring");
+    const box = await destination.boundingBox();
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
     await eventually(async () => {
       const now = await token();
       return now && now.x !== from.x && now.y === from.y;
