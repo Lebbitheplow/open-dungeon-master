@@ -350,14 +350,23 @@ export function BattleMapPanel({
   const [drawKind, setDrawKind] = useState<DrawingKind>("stroke");
   const [drawTone, setDrawTone] = useState<DrawingTone>("gold");
   const [drawTtl, setDrawTtl] = useState(false);
+  // Whether the view in charge last offered the native battlefield's tools.
+  const nativeToolsOffered = useRef(false);
   const handleCapabilities = useCallback((capabilities: { hud: boolean; tools: boolean; actions: boolean } | null, owner: object) => {
     // A closing enlarged view must not revoke its replacement's capabilities.
     if (!capabilities && capabilityOwner.current !== owner) return;
     capabilityOwner.current = capabilities ? owner : null;
+    const hadTools = nativeToolsOffered.current;
+    nativeToolsOffered.current = capabilities?.tools ?? false;
     setNativeBattlefieldSupported(capabilities?.tools ?? false);
     setNativeHudSupported(capabilities?.hud ?? false);
     setNativeActionsSupported(capabilities?.actions ?? false);
-    if (!capabilities?.tools) { setDrawing(false); setTool(current => current === "draw" ? "handle" : current); }
+    // Drawing on the native battlefield ends with its tools. Drawing on the
+    // flat board does not: under a view that never offered tools, the pencil
+    // hides the view to bring the grid back, and the view's own unmount
+    // reports no capabilities, which turned the drawing it had just started
+    // off again, so the pencil did nothing.
+    if (hadTools && !capabilities?.tools) { setDrawing(false); setTool(current => current === "draw" ? "handle" : current); }
   }, []);
   const [sketch, setSketch] = useState<Array<{ x: number; y: number }> | null>(null);
   const sketchRef = useRef<Array<{ x: number; y: number }> | null>(null);
