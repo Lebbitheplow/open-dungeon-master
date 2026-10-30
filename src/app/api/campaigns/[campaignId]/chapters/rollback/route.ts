@@ -2,6 +2,7 @@ import { z } from "zod";
 import { isErrorResponse, requireStoryAuthority } from "@/lib/campaign-api";
 import { correctionsField } from "@/lib/correction-reasons";
 import { computeRollbackScope, performRollback, warningsForRollback } from "@/lib/dm/rollback";
+import { refuseBetweenSessions } from "@/lib/dm/session-hold";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,6 +23,12 @@ export async function POST(
   const context = await requireStoryAuthority(campaignId);
   if (isErrorResponse(context)) {
     return context;
+  }
+  // Between sessions the storyteller's queue runs nothing: answered now
+  // rather than left hanging until the next session (session-hold.ts).
+  const between = refuseBetweenSessions(campaignId);
+  if (between) {
+    return between;
   }
   const parsed = bodySchema.safeParse(await request.json().catch(() => ({})));
   if (!parsed.success) {

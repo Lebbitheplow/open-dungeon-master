@@ -4,7 +4,7 @@
 import { campaignSeats, getCampaignById, latestSeq } from "@/lib/db/campaigns";
 import { consumeDmCoverTurn } from "@/lib/db/dm-cover";
 import { coverInEffect } from "@/lib/dm/delegation";
-import { enqueueDmJob } from "@/lib/dm/queue";
+import { dmQueuePausedFor, enqueueDmJob } from "@/lib/dm/queue";
 import { listRecentMessages } from "@/lib/db/messages";
 import { getDmStatus, setDmStatus } from "@/lib/dm/status";
 import { tableWaitTurnStarted } from "@/lib/dm/table-wait";
@@ -13,6 +13,7 @@ import { hasHumanDm } from "@/lib/dm/viewer";
 import { registerDmWaker } from "@/lib/dm/wake";
 import { publishPersisted } from "@/lib/events";
 import { runsAiTurns } from "@/lib/workshop/kind";
+import { SESSION_REASON } from "@/lib/dm/session-hold-logic";
 
 declare global {
   var __odmTurnRequested: Set<string> | undefined;
@@ -53,6 +54,13 @@ export function requestDmTurn(campaignId: string): boolean {
     ? coverInEffect(campaign.gameSettings.dmMode, campaign.gameSettings.dmAssist, campaign.dmCover)
     : false;
   if (campaign && hasHumanDm(campaignSeats(campaign)) && !covering) {
+    return false;
+  }
+  // Between sessions no turn is asked for (src/lib/dm/session-hold.ts): a
+  // question or a whisper left then waits in the transcript, rather than
+  // showing the storyteller "thinking" for days and answering it, stale,
+  // when the next session starts. That session's first post wakes it.
+  if (dmQueuePausedFor(campaignId, SESSION_REASON)) {
     return false;
   }
   requested().add(campaignId);

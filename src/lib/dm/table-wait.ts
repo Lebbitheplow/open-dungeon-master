@@ -20,9 +20,11 @@ import { hasHumanDm } from "@/lib/dm/viewer";
 import { wakeDm } from "@/lib/dm/wake";
 import { latestEventOfType, onlineUserIds, publishEphemeral, publishPersisted } from "@/lib/events";
 import { tableBreakOn } from "@/lib/dm/table-break";
+import { sessionHoldOn } from "@/lib/dm/session-hold";
 import { breakRefusal } from "@/lib/dm/table-break-logic";
 import { runsAiTurns } from "@/lib/workshop/kind";
 import { decideTableWait, type TableSeat, type TableWaitDecision, type TableWaitView } from "./table-wait-logic";
+import { sessionRefusal } from "@/lib/dm/session-hold-logic";
 
 export type { TableWaitView } from "./table-wait-logic";
 
@@ -48,9 +50,10 @@ function memory(campaignId: string): WaitMemory {
 //
 // A table break (src/lib/dm/table-break.ts) stands the wait aside: nobody
 // can answer while the table is paused, so no clock runs and nothing fires;
-// Resume settles the table again, with the clock counted from then.
+// Resume settles the table again, with the clock counted from then. The
+// time between sessions (src/lib/dm/session-hold.ts) does the same.
 export function waitsForTable(campaign: Campaign): boolean {
-  if (!campaign.gameSettings.waitForTable || !runsAiTurns(campaign) || campaign.status !== "active" || tableBreakOn(campaign.id)) {
+  if (!campaign.gameSettings.waitForTable || !runsAiTurns(campaign) || campaign.status !== "active" || tableBreakOn(campaign.id) || sessionHoldOn(campaign.id)) {
     return false;
   }
   const covering = coverInEffect(campaign.gameSettings.dmMode, campaign.gameSettings.dmAssist, campaign.dmCover);
@@ -240,6 +243,10 @@ export type PassResult = { ok: true; fire: boolean } | { ok: false; status: numb
 // waiting to pass on, and once the player has already acted or passed.
 export function passTable(campaignId: string, userId: string): PassResult {
   const campaign = getCampaignById(campaignId);
+  const between = sessionHoldOn(campaignId);
+  if (between) {
+    return { ok: false, status: 409, error: sessionRefusal(between) };
+  }
   const paused = tableBreakOn(campaignId);
   if (paused) {
     return { ok: false, status: 409, error: breakRefusal(paused) };

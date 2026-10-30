@@ -8,12 +8,15 @@ import { CoordinationPanel } from "@/app/campaigns/[campaignId]/CoordinationPane
 import { CorrectionReasonChips } from "@/components/CorrectionReasonChips";
 import { haptic, useEffectsRoot, useTurnChime } from "@/lib/effects-mode";
 import { levelForXp } from "@/lib/srd";
-import { transcribesVoice, useCapabilities } from "@/lib/use-capabilities";
+import { hostOffers, transcribesVoice, useCapabilities } from "@/lib/use-capabilities";
 import { SceneTitle } from "@/components/SceneTitle";
 import { askConcentrationSwap, isConcentrationQuestion } from "@/components/concentration-prompt";
 import { HandoutStage } from "@/components/HandoutStage";
 import { SafetyPause } from "@/app/campaigns/[campaignId]/SafetyPause";
 import { TableBreakBanner, type TableBreakControl } from "@/app/campaigns/[campaignId]/TableBreakBanner";
+import { SessionHoldBanner, type SessionControl } from "@/app/campaigns/[campaignId]/SessionHoldBanner";
+import { maySteerSessions } from "@/lib/dm/session-hold-logic";
+import { appConfirm } from "@/components/ui/ConfirmDialog";
 import { mayResumeBreak } from "@/lib/dm/table-break-logic";
 import type { Speaker } from "@/lib/dm/speech";
 import type { MapLabel } from "@/lib/battlemap/scene";
@@ -527,9 +530,12 @@ export function SessionView({
   // cannot call one (the route checks its voice), so it is not offered one.
   const breakMembers = state.members;
   const breakOffered = breakMembers.length > 1 && !breakMembers.some((member) => member.userId === me?.id && member.muted);
+  // Between sessions play is already held (SessionHoldBanner.tsx): there is
+  // no break to call until the next session starts.
+  const betweenSessions = state.sessionHold !== null;
   const breakControl = useMemo<TableBreakControl | undefined>(
     () =>
-      campaign?.status === "active" && (tableBreak !== null || breakOffered)
+      campaign?.status === "active" && !betweenSessions && (tableBreak !== null || breakOffered)
         ? {
             paused: tableBreak !== null,
             mayResume: mayResumeTable,
@@ -537,7 +543,7 @@ export function SessionView({
             onResume: () => void sendBreak("DELETE"),
           }
         : undefined,
-    [campaign?.status, tableBreak, breakOffered, mayResumeTable, sendBreak],
+    [campaign?.status, betweenSessions, tableBreak, breakOffered, mayResumeTable, sendBreak],
   );
   if (isDm && !seenDmSeat) {
     setSeenDmSeat(true);
@@ -674,6 +680,59 @@ export function SessionView({
   // Nothing records or announces a transcript the server cannot write.
   const capabilities = useCapabilities();
   const transcribe = Boolean(voiceSettings?.transcribe) && transcribesVoice(capabilities);
+  // End the session, or start the next (issue 586), for whoever steers the
+  // story or the party lead, at a campaign in play on a host that has it.
+  // A test fight is its author's prep, not a table that meets.
+  const sessionHold = state.sessionHold;
+  const sessionCampaignId = campaign?.id ?? "";
+  const sendSession = useCallback(
+    async (action: "end" | "start") => {
+      const response = await fetch(`/api/campaigns/${sessionCampaignId}/session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      }).catch(() => null);
+      if (!response?.ok) {
+        const body = (await response?.json().catch(() => null)) as { error?: string } | null;
+        setError(body?.error || (action === "end" ? "Could not end the session." : "Could not start the session."));
+      }
+    },
+    [sessionCampaignId],
+  );
+  const endSession = useCallback(async () => {
+    const ok = await appConfirm(
+      "Play stops for everyone where it stands, and waits for the next session. Nothing is lost: the story, every sheet, the board and any fight under way stay exactly as they are, and table talk stays open. To finish the campaign for good, use End the campaign in the settings instead.",
+      // Nothing is lost, so the action is gold, not the ember of End the campaign.
+      { title: "End the session", actionLabel: "End the session", tone: "plain" },
+    );
+    if (ok) {
+      await sendSession("end");
+    }
+  }, [sendSession]);
+  const startSession = useCallback(() => sendSession("start"), [sendSession]);
+  const maySteerSession = maySteerSessions({ steersStory, isLead });
+  const offersSessions =
+    campaign?.status === "active" &&
+    !state.testFight &&
+    maySteerSession &&
+    // Only once the host has said it has sessions: an older one has no route.
+    capabilities !== null &&
+    hostOffers(capabilities, "sessions");
+  const sessionControl = useMemo<SessionControl | undefined>(
+    () =>
+      offersSessions
+        ? {
+            held: sessionHold !== null,
+            next: (sessionHold?.number ?? 0) + 1,
+            onEnd: () => void endSession(),
+            onStart: () => void startSession(),
+          }
+        : undefined,
+    [offersSessions, sessionHold, endSession, startSession],
+  );
+  // What a move reads between sessions: only table talk goes through.
+  const heldPlaceholder =
+    sessionHold && kind !== "ooc" ? `Session ${sessionHold.number} is over: use OOC for table talk until the next one starts.` : null;
   const floorUserIds =
     floor.mode === "spotlight" || floor.mode === "initiative" ? floor.userIds : EMPTY_IDS;
   const voice = useMemo(
@@ -960,7 +1019,7 @@ export function SessionView({
       setInput={setInput}
       sending={sending}
       inputBlocked={gate.inputBlocked || silenced}
-      placeholder={silenced ? silencedPlaceholder : gate.placeholder}
+      placeholder={silenced ? silencedPlaceholder : (heldPlaceholder ?? gate.placeholder)}
       onSubmit={submit}
       maxChars={composerLimit(kind, leadPrivate)}
       // The stage's copy opens the story for what its window leaves out;
@@ -1092,6 +1151,7 @@ export function SessionView({
         layoutSeat={sessionLayout ? undefined : layoutSeat}
         tableBreak={breakControl}
         prep={headerPrep}
+        session={sessionControl}
         exit={headerExit}
         ribbon={
           state.encounter?.status === "active" ? (
@@ -1273,7 +1333,7 @@ export function SessionView({
                     sending={sending}
                     error={error}
                     inputBlocked={gate.inputBlocked || silenced}
-                    placeholder={silenced ? silencedPlaceholder : gate.placeholder}
+                    placeholder={silenced ? silencedPlaceholder : (heldPlaceholder ?? gate.placeholder)}
                     dmStatus={dmStatus}
                     dmJob={state.dmJob}
                     pendingRolls={pendingRolls}
@@ -1355,6 +1415,16 @@ export function SessionView({
       {dice3d ? <DiceOverlay latestRoll={state.latestRoll} enabled /> : null}
       <SceneTitle card={state.titleCard} onShown={markTitleCardShown} />
       <TableBreakBanner tableBreak={tableBreak} meUserId={me.id} mayResume={mayResumeTable} onResume={resumeTable} />
+      <SessionHoldBanner
+        hold={campaign.status === "active" ? sessionHold : null}
+        campaignId={campaign.id}
+        meUserId={me.id}
+        isLead={isLead}
+        members={state.members}
+        scheduleVersion={state.scheduleVersion}
+        mayStart={Boolean(sessionControl?.held)}
+        onStart={startSession}
+      />
       <SafetyPause campaignId={campaign.id} paused={state.safetyPause !== null} steersStory={steersStory} />
       <HandoutStage
         campaignId={campaign.id}

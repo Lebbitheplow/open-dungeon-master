@@ -11,6 +11,7 @@ import { retentionDue, runRetention } from "@/lib/ops/retention";
 import { pruneExpiredSessions } from "@/lib/db/users";
 import {
   listSessionsAwaitingReminder,
+  nextScheduledSession,
   sessionWhen,
   setSessionReminderStage,
 } from "@/lib/db/scheduling";
@@ -114,6 +115,14 @@ function idleCampaignJob(now: number) {
   const cutoff = new Date(now - IDLE_AFTER_MS).toISOString();
   for (const campaign of listIdleActiveCampaigns(cutoff)) {
     if (!idleNudgeDue(campaign, now)) {
+      continue;
+    }
+    // A table with its next session booked is not idle, only between
+    // sessions: a weekly group was told it was missed every week (issue
+    // 586). The session's own reminders speak for it. One already under way
+    // has had its "starting now" note, so a table still quiet through it is.
+    const next = nextScheduledSession(campaign.id, now);
+    if (next && Date.parse(next.startsAt) > now) {
       continue;
     }
     markCampaignNudged(campaign.id);

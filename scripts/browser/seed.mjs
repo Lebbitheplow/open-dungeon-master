@@ -1798,7 +1798,40 @@ const singleClassTable = campaigns.createCampaign(world.owner.id, {
   gameSettings: { ttsEnabled: false, multiclassingEnabled: false },
 });
 
+// A table that meets weekly (the session-hold scenario, issue 586): the lead
+// ends tonight's session from the header, every seat waits between sessions
+// with the next date and its RSVP in a banner, and the lead starts the next
+// one where play stopped. One per viewport so each run starts in play.
+const weekly = {};
+for (const viewport of ["desktop", "phone"]) {
+  const table = campaigns.createCampaign(world.owner.id, {
+    title: `The Weekly Road (${viewport})`,
+    description: "A caravan road the party travels one evening a week.",
+    theme: "high-fantasy",
+    maxPlayers: 4,
+    startingLevel: 2,
+    difficulty: "normal",
+    gameSettings: { ttsEnabled: false },
+  });
+  const joinedWeekly = campaigns.joinByInviteCode(player.id, campaigns.getCampaignById(table.id).inviteCode);
+  if ("error" in joinedWeekly) {
+    throw new Error(`could not seat the player at the weekly table: ${joinedWeekly.error}`);
+  }
+  campaigns.setCampaignStatus(table.id, "active");
+  sheets.createSheet(table.id, world.owner.id, 2, heroInput({ name: "Wren Ashby", class: "ranger", level: 2 }));
+  const rider = sheets.createSheet(table.id, player.id, 2, heroInput({ name: "Tamsin Holt", class: "fighter", level: 2 }));
+  messages.insertCampaignMessage({
+    campaignId: table.id,
+    seq: campaigns.allocateSeq(table.id),
+    authorType: "dm",
+    speech: [],
+    content: "The caravan stops at the toll bridge as the sun goes down. The bridge-warden wants a word.",
+  });
+  weekly[viewport] = { id: table.id, title: `The Weekly Road (${viewport})`, rider: rider.id };
+}
+
 const ids = {
+  weekly,
   multiclassTableId: multiclassTable.id,
   singleClassTableId: singleClassTable.id,
   qualityTurnIds,
@@ -1885,6 +1918,7 @@ const ids = {
     ...Object.fromEntries(Object.entries(turncoat).map(([viewport, table]) => [table.id, `${TURNCOAT_TITLE} (${viewport})`])),
     ...Object.fromEntries(Object.entries(gone).map(([viewport, table]) => [table.id, `${GONE_TITLE} (${viewport})`])),
     ...Object.fromEntries(Object.entries(conduct).map(([viewport, table]) => [table.id, `${CONDUCT_TITLE} (${viewport})`])),
+    ...Object.fromEntries(Object.values(weekly).map((table) => [table.id, table.title])),
     ...Object.fromEntries(Object.entries(pactTables).flatMap(([kind, tables]) => Object.entries(tables).map(([viewport, table]) => [table.id, `Pact ${kind.charAt(0).toUpperCase()}${kind.slice(1)} (${viewport})`]))),
     ...Object.fromEntries(Object.entries(chipTables).map(([viewport, table]) => [table.id, `Chip Table (${viewport})`])),
     ...Object.fromEntries(Object.entries(spellbook).map(([viewport, table]) => [table.id, `${SPELLBOOK_TITLE} (${viewport})`])),

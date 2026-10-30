@@ -43,7 +43,12 @@ export async function runResumeRecap(campaignId: string) {
     .filter((chapter) => chapter.status === "closed")
     .at(-1);
   const location = getCurrentLocation(campaignId);
-  const recent = listRecentMessages(campaignId, 12)
+  // The story's own lines: table talk and the table's notes ("Session 2
+  // ends.") say nothing about where the party stands, and after a chatty
+  // week between sessions they were all the recap had to read.
+  const recent = listRecentMessages(campaignId, 60)
+    .filter((message) => message.authorType !== "system" && !message.content.startsWith("(ooc)"))
+    .slice(-12)
     .map((message) => `${message.authorType === "dm" ? "GM" : "Player"}: ${message.content}`)
     .join("\n")
     .slice(-6_000);
