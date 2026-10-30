@@ -46,6 +46,7 @@ import { handleNpcAdvance } from "@/lib/dm/npc-advance";
 import { conscienceNotes, landBeat, landBystanders, landOnVictim, settleUnrecordedDeeds, type DeedOptions, type Landing } from "@/lib/dm/beat-landing";
 import { DEED_KINDS, DEED_SEVERITIES, deedSeverity, doneToDelta, isDeedKind, valueLabel, type DeedKind } from "@/lib/dm/companion-values-logic";
 import { MAX_DEADLINE_HOURS } from "@/lib/dm/conscience-logic";
+import { readUneaseTells } from "@/lib/dm/conscience-voice";
 import { getActiveEncounter } from "@/lib/db/encounters";
 import { actNote, outwardApproval } from "@/lib/dm/scheme-logic";
 import { revealAct, runningAct, schemesPossible, schemeTool } from "@/lib/dm/scheme-tools";
@@ -395,6 +396,9 @@ export function handleRelationshipBeat(
     settleUnrecordedDeeds(campaign.id, sheet);
   }
   publishRelationshipsUpdated(campaign.id);
+  // A composed companion the deed left uneasy keeps it in, and the party
+  // reads them now (issue 615): whoever's Insight beats it is told alone.
+  readUneaseTells(campaign, turn.id, "fresh");
 
   const notes = [
     subjectHarmed
@@ -436,7 +440,7 @@ export function handleRelationshipBeat(
             approvalChange: other.delta,
             standing: friendshipTier(other.updated.approval),
             ...valuesResult(other),
-            ...(other.conscience ? { conscience: `${other.conscience.from} -> ${other.conscience.to}` } : {}),
+            ...(other.conscience && !other.conscience.concealed ? { conscience: `${other.conscience.from} -> ${other.conscience.to}` } : {}),
             ...(other.departure?.departed ? { departed: other.departure.how } : other.departure?.turned ? { turned: other.departure.how } : {}),
           })),
         }
@@ -457,7 +461,9 @@ function subjectResult(landing: Landing, before: Relationship, roll: Record<stri
     standing: friendshipTier(updated.approval),
     ...(alignment !== 0 ? { suitsThem: alignment > 0 ? "yes" : "no", alignment } : {}),
     ...valuesResult(landing),
-    ...(landing.conscience ? { conscience: `${landing.conscience.from} -> ${landing.conscience.to}` } : {}),
+    // Unease kept in is the storyteller's (issue 615): a console call's
+    // result is read by whoever made it.
+    ...(landing.conscience && !landing.conscience.concealed ? { conscience: `${landing.conscience.from} -> ${landing.conscience.to}` } : {}),
     ...(landing.departure?.departed ? { departed: landing.departure.how } : landing.departure?.turned ? { turned: landing.departure.how } : {}),
     ...(updated.romance !== "none" ? { romance: updated.romance } : {}),
     ...(updated.romance !== before.romance ? { romanceSlipped: `${before.romance} -> ${updated.romance}` } : {}),

@@ -40,7 +40,7 @@ const { sideOf } = await import("../src/lib/dm/combatant.ts");
 const { applyWear, slotPools } = await import("../src/lib/dm/companion-statblock.ts");
 const { advanceNpcAgency } = await import("../src/lib/dm/npc-agency.ts");
 const { deployTemplate, templateDifficulty } = await import("../src/lib/dm/encounter-templates.ts");
-const { conscienceViews } = await import("../src/lib/dm/conscience.ts");
+const { conscienceViews, STORYTELLER_VIEW } = await import("../src/lib/dm/conscience.ts");
 const { buildDmMessages } = await import("../src/lib/dm/prompt.ts");
 const { storytellerLinesForPrompt } = await import("../src/lib/dm/scheme-tools.ts");
 
@@ -238,7 +238,7 @@ await test("at a Turn table a bold, rash companion confronts the party: she turn
   assert.equal(departure().gone, null);
   assert.equal(row().attitude, "hostile");
   assert.match(lastLine(world), /Seren turns against the party\./);
-  assert.ok(!conscienceViews(world.campaign()).has("seren"), "past her conscience: no ladder while she fights them");
+  assert.ok(!conscienceViews(world.campaign(), STORYTELLER_VIEW).has("seren"), "past her conscience: no ladder while she fights them");
 });
 
 await test("biding to strike waits until the party has fallen low, then turns in the night: the fight starts at the watch", async () => {
@@ -403,7 +403,7 @@ await test("a companion whose standing has climbed back comes to parley, and rej
   assert.equal(now.class, "paladin");
   assert.equal(now.level, sheet.level + 1, "the level she kept pace to, not the one the call named");
   assert.deepEqual(departure(), departuresDb.companionDeparture("none"), "her leaving is behind her");
-  assert.equal(conscienceViews(world.campaign()).get("seren").rung, "content", "she starts afresh");
+  assert.equal(conscienceViews(world.campaign(), STORYTELLER_VIEW).get("seren").rung, "content", "she starts afresh");
   const gone = await get(world, world.owner, "campaigns/[campaignId]/companions/gone");
   assert.deepEqual(gone.body.gone, [], "off the Gone list");
 });
@@ -586,6 +586,9 @@ await test("at a table a person runs, that person reads the plan on the Bonds ta
   assert.match(dm.body.relationships.find((entry) => entry.subjectName === "Seren").conscience.plan, /slip away/);
   const player = await get(world, leadUser, "campaigns/[campaignId]/relationships");
   assert.doesNotMatch(player.text, PLAN, "its lead plays a character: never theirs");
+  // Nor the breaking point the plan stands on: nobody has said it (issue 615).
+  assert.equal(player.body.relationships.find((entry) => entry.subjectName === "Seren" && entry.conscience)?.conscience.rung, "content", "the player's Bonds tab shows what the table heard");
+  assert.equal(dm.body.relationships.find((entry) => entry.subjectName === "Seren").conscience.rung, "breaking", "whoever runs it, the truth");
 });
 
 await test("two companions gathering help against the party are no rivals: the agency dice write no rivalry between them", async () => {
@@ -628,6 +631,99 @@ await test("two strangers at the ford the party stands at are no rivals over it:
   advanceNpcAgency(world.campaignId, "", { tickPressureCounters: false });
   world.clearDice();
   assert.deepEqual(listActiveFacts(world.campaignId).filter((fact) => /rivalry/.test(fact.fact)).map((fact) => fact.fact), []);
+});
+
+// ---- said at the table (issue 615) ----
+
+await test("on the AI's turn, a warning its narration left out is posted as her line after that narration", async () => {
+  const { fakeModel, reply } = await import("./lib/enforce-narrator.mjs");
+  const model = await fakeModel();
+  try {
+    const { world, pc, sheet } = await table();
+    model.pointAt(world);
+    await world.invoke("relationship_beat", { characterId: pc.id, subject: "Seren", beat: "cruelty" });
+    await world.invoke("relationship_beat", { characterId: pc.id, subject: "Seren", beat: "broke_word" });
+    model.script([reply({ text: "The road bends toward the river, and the party walks on." })]);
+    await model.turn(world, "We keep walking.", pc.id);
+    const recent = messages.listRecentMessages(world.campaignId, 20);
+    const narration = recent.find((message) => message.authorType === "dm" && message.content.includes("The road bends toward the river"));
+    assert.ok(narration, "the narration landed");
+    const hers = recent.filter((message) => message.authorType === "dm" && message.speech.some((line) => line.speaker.kind === "pc" && line.speaker.id === sheet.id));
+    assert.equal(hers.length, 1, "one line of hers");
+    assert.ok(hers[0].seq > narration.seq, `after the narration (${hers[0].seq} > ${narration.seq})`);
+    assert.match(hers[0].content, /^Seren: ".+That stops now\."$/);
+    assert.equal(messages.getLatestDmMessage(world.campaignId).id, narration.id, "the narration stays the one a reroll or a continue works on");
+    assert.ok(narration.dmTurnId, "and it carries its turn to replay");
+    assert.equal(conscienceDb.companionConscience(npcs.listNpcs(world.campaignId).find((npc) => npc.name === "Seren").id).owed, null, "owed once");
+  } finally {
+    model.close();
+  }
+});
+
+await test("a move posted while the AI's turn ran is never left looking answered: her line waits for the narration that answers it", async () => {
+  const { fakeModel, reply, held } = await import("./lib/enforce-narrator.mjs");
+  const { startDmTurn } = await import("../src/lib/dm/turn.ts");
+  const { claimNarrationSeq } = await import("../src/lib/dm/narration-slot.ts");
+  const model = await fakeModel();
+  try {
+    const { world, pc, sheet } = await table();
+    model.pointAt(world);
+    await world.invoke("relationship_beat", { characterId: pc.id, subject: "Seren", beat: "cruelty" });
+    await world.invoke("relationship_beat", { characterId: pc.id, subject: "Seren", beat: "broke_word" });
+    const post = (content) => {
+      // What POST /actions does: claim, then take a seq.
+      claimNarrationSeq(world.campaignId);
+      return messages.insertCampaignMessage({ campaignId: world.campaignId, seq: campaigns.allocateSeq(world.campaignId), authorType: "player", userId: world.owner.id, characterId: pc.id, content });
+    };
+    const slow = held(reply({ text: "The road bends toward the river." }));
+    model.script([slow.entry]);
+    post("We keep walking.");
+    const running = startDmTurn(world.campaignId);
+    const until = Date.now() + 20_000;
+    while (!model.requests.length) {
+      assert.ok(Date.now() < until, "the turn reached the model");
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    const mid = post("Kael asks Seren what is wrong.");
+    slow.release();
+    await running;
+    const hers = () => messages.listRecentMessages(world.campaignId, 30).filter((message) => message.authorType === "dm" && message.speech.some((line) => line.speaker.kind === "pc" && line.speaker.id === sheet.id));
+    assert.equal(hers().length, 0, "nothing posted below the move that came in mid-turn");
+    const last = messages.listRecentMessages(world.campaignId, 5).filter((message) => message.authorType !== "system").at(-1);
+    assert.equal(last.id, mid.id, "the move is still the last word, waiting for the GM");
+    model.script([reply({ text: "Seren's jaw tightens, and the river runs on beside them." })]);
+    await startDmTurn(world.campaignId);
+    const [line] = hers();
+    assert.ok(line, "the narration that answers it brings her line");
+    assert.ok(line.seq > mid.seq, "after the move it follows");
+  } finally {
+    model.close();
+  }
+});
+
+await test("at a table a person runs, moving the clock past an ultimatum settles the departure then and says so", async () => {
+  const world = await openWorld({ gameSettings: { dmMode: "human", companions: "full" } });
+  const player = world.addUser("player");
+  const pc = world.addHero({ user: player, name: "Kael", gender: "Male" });
+  const added = await world.invoke("add_companion", { name: "Seren", class: "paladin", gender: "Female", alignment: "LG", personality: "Stern.", kind: "party" });
+  assert.equal(added.ok, true, added.error);
+  const row = npcs.listNpcs(world.campaignId).find((npc) => npc.name === "Seren");
+  npcs.patchNpcAgency(row.id, { personality: { drive: 0, diligence: 0, boldness: 0, warmth: 0, empathy: 0, composure: 0 } });
+  const sheetId = world.sheets().find((entry) => entry.name === "Seren").id;
+  for (const [beat, extra] of [["cruelty", {}], ["broke_word", {}], ["torture", { demand: "Release them", deadlineHours: 2 }]]) {
+    const done = await world.invoke("relationship_beat", { characterId: pc.id, subject: "Seren", beat, ...extra });
+    assert.equal(done.ok, true, done.error);
+  }
+  world.signIn(world.owner);
+  const route = await world.route("campaigns/[campaignId]/dm/clock");
+  const response = await route.POST(new Request("http://test/", { method: "POST", body: JSON.stringify({ do: "advance", amount: 3, unit: "hours" }) }), {
+    params: Promise.resolve({ campaignId: world.campaignId }),
+  });
+  assert.equal(response.status, 200, await response.clone().text());
+  const body = await response.json();
+  assert.equal(world.sheet(sheetId), null, "she went as the clock passed her deadline, not at the next console call");
+  assert.match((body.companionsLeft ?? []).join(" "), /Seren .+the server has taken them out of the party/, "the GM is told, as a console call tells them");
+  assert.ok(departuresDb.companionDeparture(row.id).gone);
 });
 
 finish();

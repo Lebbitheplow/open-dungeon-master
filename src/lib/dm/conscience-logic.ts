@@ -84,9 +84,23 @@ export type Ultimatum = {
   eventId: string;
 };
 
+// A rung the table is owed (issue 615): reached, and not yet said in the
+// story. The server posts the companion's own line after the next narration
+// that does not say it (src/lib/dm/conscience-voice.ts). `condition` and
+// `due` are an ultimatum's terms (or, on a Talk table's breaking point, the
+// demand that lapsed); `cause` is what moved them, left out when it is a
+// storyteller secret.
+export type Owed = { rung: ConscienceRung; condition?: string; due?: number; cause?: string };
+
+// Unease a composed companion keeps in (issue 615): the table sees nothing
+// unless a character's passive Insight beat their Deception. `noticedBy` are
+// those characters' sheet ids; `pending` is the first read, owed as the
+// unease sets in.
+export type Concealed = { noticedBy: string[]; pending: boolean };
+
 export type Conscience = {
   held: number;
-  // The rung the table last saw, so a move is reported once.
+  // The rung last settled, so a move is reported once.
   shown: number;
   ultimatum: Ultimatum | null;
   // The day of the campaign's clock (clockDay) that last stepped them up, -1
@@ -95,9 +109,28 @@ export type Conscience = {
   climbedDay: number;
   // What last moved them, for the DM's line.
   cause: string;
+  // The highest rung the table has heard (issue 615): a player's Bonds tab
+  // shows no more than this, since the characters know only what was said.
+  told: number;
+  owed: Owed | null;
+  concealed: Concealed | null;
+  // The cause came by a road the table never saw (a hidden employer's
+  // order, a pact's talk by the fire): no line the table or the moment part
+  // of GAME STATE reads names it.
+  causeSecret: boolean;
 };
 
-export const CONTENT: Conscience = { held: 0, shown: 0, ultimatum: null, climbedDay: -1, cause: "" };
+export const CONTENT: Conscience = {
+  held: 0,
+  shown: 0,
+  ultimatum: null,
+  climbedDay: -1,
+  cause: "",
+  told: 0,
+  owed: null,
+  concealed: null,
+  causeSecret: false,
+};
 
 // The day an instant on the campaign's clock (minutes) falls on, the same
 // cut the calendar makes (src/lib/dm/calendar.ts breakDown).
@@ -141,17 +174,18 @@ export function stepLadder(
     return conscience;
   }
   const now = effectiveRung(conscience, worstApproval);
+  // A deed the table saw is a cause anyone may name (issue 615).
   if (step === "atrocity") {
-    return { ...conscience, held: BREAKING, cause };
+    return { ...conscience, held: BREAKING, cause, causeSecret: false };
   }
   if (step === "breach") {
-    return { ...conscience, held: Math.min(TOP, now + 1), cause };
+    return { ...conscience, held: Math.min(TOP, now + 1), cause, causeSecret: false };
   }
   if (conscience.climbedDay === day || conscience.held === 0) {
     return conscience;
   }
   const held = Math.max(0, Math.min(conscience.held, now - 1));
-  return held === conscience.held ? conscience : { ...conscience, held, climbedDay: day, cause };
+  return held === conscience.held ? conscience : { ...conscience, held, climbedDay: day, cause, causeSecret: false };
 }
 
 export type Settled = {
@@ -179,7 +213,7 @@ export function settleConscience(conscience: Conscience, worstApproval: number |
   let rung = effectiveRung(next, worstApproval);
   if (next.ultimatum && rung === ULTIMATUM && now >= next.ultimatum.due) {
     ultimatumLapsed = next.ultimatum;
-    next = { ...next, held: BREAKING, ultimatum: null, cause: "the deadline passed unmet" };
+    next = { ...next, held: BREAKING, ultimatum: null, cause: "the deadline passed unmet", causeSecret: false };
     rung = BREAKING;
   } else if (next.ultimatum && rung < ULTIMATUM) {
     ultimatumMet = next.ultimatum;
@@ -208,9 +242,11 @@ export function withUltimatum(conscience: Conscience, condition: string, now: nu
   return { ...conscience, ultimatum: { condition: condition.trim().slice(0, 160), set: now, due: now + hours * 60, eventId: "" } };
 }
 
-// The plain demand when the DM named none: amends for what moved them.
-export function defaultCondition(cause: string): string {
-  return cause ? `Make amends for ${cause}, and never again` : "Make amends, and never again";
+// The plain demand when the DM named none: amends for what moved them. A
+// secret cause is never said aloud (issue 615): the table would hear of a
+// pact's talk by the fire in the companion's own demand.
+export function defaultCondition(cause: string, secret = false): string {
+  return cause && !secret ? `Make amends for ${cause}, and never again` : "Make amends, and never again";
 }
 
 // Minutes left on an ultimatum, never below zero.
@@ -241,7 +277,13 @@ export function parseConscience(raw: string): Conscience {
     return CONTENT;
   }
   try {
-    const parsed = JSON.parse(raw) as Partial<Omit<Conscience, "climbedDay">> & { ultimatum?: Partial<Ultimatum> | null; climbedDay?: unknown };
+    const parsed = JSON.parse(raw) as Partial<Omit<Conscience, "climbedDay" | "told" | "owed" | "concealed">> & {
+      ultimatum?: Partial<Ultimatum> | null;
+      climbedDay?: unknown;
+      told?: unknown;
+      owed?: unknown;
+      concealed?: unknown;
+    };
     const rung = (value: unknown) => Math.max(0, Math.min(TOP, Math.round(Number(value) || 0)));
     const ultimatum =
       parsed.ultimatum && typeof parsed.ultimatum.condition === "string" && Number.isFinite(Number(parsed.ultimatum.due))
@@ -260,22 +302,58 @@ export function parseConscience(raw: string): Conscience {
       // never, so the next honouring deed climbs.
       climbedDay: Number.isFinite(Number(parsed.climbedDay)) ? Math.max(-1, Math.round(Number(parsed.climbedDay))) : -1,
       cause: typeof parsed.cause === "string" ? parsed.cause.slice(0, 160) : "",
+      // A row from before issue 615 had every rung on the Bonds tab of every
+      // seat, so the table has heard as far as it last settled.
+      told: parsed.told === undefined ? rung(parsed.shown) : rung(parsed.told),
+      owed: parseOwed(parsed.owed),
+      concealed: parseConcealed(parsed.concealed),
+      causeSecret: parsed.causeSecret === true,
     };
   } catch {
     return CONTENT;
   }
 }
 
+function parseOwed(raw: unknown): Owed | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  const record = raw as Record<string, unknown>;
+  if (typeof record.rung !== "string" || !(CONSCIENCE_RUNGS as readonly string[]).includes(record.rung)) {
+    return null;
+  }
+  return {
+    rung: record.rung as ConscienceRung,
+    ...(typeof record.condition === "string" ? { condition: record.condition.slice(0, 160) } : {}),
+    ...(Number.isFinite(Number(record.due)) && record.due !== undefined && record.due !== null ? { due: Math.max(0, Math.round(Number(record.due))) } : {}),
+    ...(typeof record.cause === "string" ? { cause: record.cause.slice(0, 160) } : {}),
+  };
+}
+
+function parseConcealed(raw: unknown): Concealed | null {
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  const record = raw as Record<string, unknown>;
+  const noticedBy = Array.isArray(record.noticedBy) ? record.noticedBy.filter((id): id is string => typeof id === "string").slice(0, 24) : [];
+  return { noticedBy, pending: record.pending === true };
+}
+
 // ---- what the DM is told ----
 
 // How each rung is played, said to the DM beside the companion's values in
-// the moment part of GAME STATE.
-export function rungGuidance(rung: ConscienceRung, setting: ConscienceSetting): string {
+// the moment part of GAME STATE. Unease goes by temperament (issue 615): an
+// open one shows it, a composed one keeps it in, and that one is said only in
+// the storyteller's section (conscience.ts conscienceSecretLines), so the
+// lead reading the Context tab never learns it.
+export function rungGuidance(rung: ConscienceRung, setting: ConscienceSetting, kept = false): string {
   switch (rung) {
     case "content":
       return "content";
     case "uneasy":
-      return "uneasy: they voice objections and let their discomfort show";
+      return kept
+        ? "uneasy, but they keep it in: play them as content; only a character who noticed catches a tell"
+        : "uneasy: they voice objections and let their discomfort show";
     case "warning":
       return "warning: they confront the party and name plainly what must stop";
     case "ultimatum":
@@ -306,6 +384,7 @@ export function conscienceRules(setting: ConscienceSetting, companions: boolean,
     lines.push(
       "Companion conscience: each lasting companion holds values (GAME STATE lists them; a red line is one they will not see crossed) and stands on a rung the server moves: content, uneasy, warning, ultimatum, breaking point. You never set a rung: deeds and standing do, and a deed that honours what they hold, or amends, steps them back up. Narrating a deed that crosses a companion's red line in front of them without relationship_beat is a missed tool call, like narrating damage without its tool.",
       "Play the rung GAME STATE gives each companion: objections when uneasy; at a warning a confrontation naming what must stop; at an ultimatum their condition and deadline, held to every turn. Against a companion at a warning, a further breach brings an ultimatum: pass demand (what they demand, in their words) and deadlineHours with that relationship_beat, and voice it when the result says it is set.",
+      "A rung GAME STATE marks not yet heard is said in your next narration, in the companion's own words; if it is not, the server posts their line after it.",
       "A GM-only fact headed 'Unrecorded deed' or 'Deed' names a deed the story showed that nothing recorded: if a tracked NPC or companion saw it, record it with relationship_beat now.",
       setting === "talk"
         ? "This table keeps its companions: none leaves over what the party does, whatever their rung. Never dismiss_companion one over it."

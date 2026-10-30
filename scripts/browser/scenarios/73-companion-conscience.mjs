@@ -14,6 +14,12 @@
 // count down as the clock moves; amends climb her back and the ultimatum
 // goes. Reduced motion keeps the colour and drops the slide. Every move
 // here comes from a server outcome, never from narration.
+//
+// Said at the table (issue 615): the row this DM reads marks a move the
+// story has not said yet; the player's Bonds tab shows only what was said.
+// A narration that leaves the ultimatum out is followed by Seren's own line
+// in the transcript, and then the player knows it too.
+import { request } from "playwright-core";
 import { axeViolations, check, eventually, openPanelTab, openSettingsGroup, sleep, untilStill } from "../lib.mjs";
 
 async function axeClean(page, selector, where) {
@@ -89,6 +95,9 @@ export default {
     const ladder = page.locator(`${root}[data-conscience-ladder="${table.seren}"]`).locator("visible=true").first();
     await eventually(() => ladder.count(), { timeoutMs: 20_000, label: "Seren's conscience ladder" });
     check((await ladder.getAttribute("data-rung")) === "uneasy", "the seed left her uneasy");
+    // Nobody narrated since the seed's deed: whoever runs the story reads
+    // that the table has not heard it.
+    await eventually(() => ladder.locator("[data-conscience-unheard]").count(), { label: "the storyteller reads what is still unsaid" });
     check(
       (await ladder.getByRole("img", { name: /Seren Vale's conscience: Uneasy, step 2 of 5/ }).count()) > 0,
       "the ladder is named for screen readers",
@@ -149,6 +158,35 @@ export default {
     await axeClean(page, `${root}[data-bond-row="${table.seren}"]`, "Seren's row by day");
     await t.shot("ultimatum-day");
     await inTheme(page, "dark");
+
+    // ---- said at the table (issue 615) ----
+    check((await ladder.locator("[data-conscience-unheard]").count()) > 0, "the ultimatum is not yet said");
+    const playerApi = await request.newContext();
+    try {
+      const signed = await playerApi.post(`${base}/api/auth/login`, { data: { username: ids.player, password: ids.password } });
+      check(signed.ok(), `the player's sign-in answered ${signed.status()}`);
+      const playerView = async () => {
+        const response = await playerApi.get(`${base}/api/campaigns/${table.id}/relationships`);
+        const body = await response.json();
+        return body.relationships.find((entry) => entry.subjectName === table.seren && entry.conscience)?.conscience;
+      };
+      const before = await playerView();
+      check(before?.rung === "content" && !before.ultimatum, `the player has heard nothing yet (${JSON.stringify(before)})`);
+      const narrated = await api.post(`${base}/api/campaigns/${table.id}/dm/narrate`, { data: { content: "The cellar door creaks in the wind, and nobody speaks." } });
+      check(narrated.ok(), `the narration answered ${narrated.status()}`);
+      // Her own line follows the narration, with her face and name.
+      await eventually(() => page.getByText(/or I am done with this company/).count(), { timeoutMs: 20_000, label: "Seren's line in the transcript" });
+      const recent = await (await api.get(`${base}/api/campaigns/${table.id}/messages?limit=5`)).json();
+      const hers = recent.messages.filter((message) => message.speech?.some((line) => line.speaker.name === table.seren));
+      check(hers.length === 1 && /Free the captive in the cellar/.test(hers[0].content), `one line of hers, saying the demand (${JSON.stringify(hers.map((m) => m.content))})`);
+      check(hers[0].seq > recent.messages.find((message) => /cellar door creaks/.test(message.content)).seq, "after the narration");
+      await eventually(async () => (await ladder.locator("[data-conscience-unheard]").count()) === 0, { label: "nothing left unsaid" });
+      const after = await playerView();
+      check(after?.rung === "ultimatum" && /Free the captive in the cellar/.test(after.ultimatum?.condition ?? ""), `once said, the player knows it (${JSON.stringify(after)})`);
+      await t.shot("ultimatum-said");
+    } finally {
+      await playerApi.dispose();
+    }
 
     // The clock moves: the countdown follows it.
     await invoke("pass_time", { amount: 2, unit: "hours" });

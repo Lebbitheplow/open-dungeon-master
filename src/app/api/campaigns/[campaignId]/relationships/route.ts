@@ -40,23 +40,24 @@ export async function GET(
   if (context.campaign.gameSettings.relationships === "off") {
     return Response.json({ enabled: false, relationships: [] });
   }
-  // Each lasting companion's conscience rung and any ultimatum (issue 503):
-  // shown to every seat, since the companion says them aloud.
-  const conscience = conscienceViews(context.campaign);
-  // What each refused today and the share it wants (Phase 4): said aloud too.
-  const conduct = conductViews(context.campaign);
   const storyteller = seesStorytellerSecrets(context);
+  const sheets = listSheets(campaignId);
+  const ownedCharacterIds = sheets.filter((sheet) => sheet.userId === context.user.id).map((sheet) => sheet.id);
+  // Each lasting companion's conscience rung and any ultimatum (issue 503),
+  // as far as this seat's characters know them (issue 615): a rung once the
+  // story said it, unease a companion keeps in only to the character who
+  // noticed it, and the whole of it, with what is still unsaid, to whoever
+  // runs the story.
+  const conscience = conscienceViews(context.campaign, { storyteller, characterIds: ownedCharacterIds });
+  // What each refused today and the share it wants (Phase 4): said aloud.
+  const conduct = conductViews(context.campaign);
   // A companion's plan to leave (issue 503) is a storyteller secret: only a
   // person running the table reads it here; at an AI table nobody does, the
   // lead included (the AI has it in its own prompt).
   const plans = storyteller ? heldIntents(context.campaign) : new Map<string, string>();
   // So is a hidden employer (Phase 8).
   const agendas = storyteller ? heldAgendas(context.campaign) : new Map<string, string>();
-  const sheets = listSheets(campaignId);
-  const viewer = {
-    storyteller,
-    ownedCharacterIds: sheets.filter((sheet) => sheet.userId === context.user.id).map((sheet) => sheet.id),
-  };
+  const viewer = { storyteller, ownedCharacterIds };
   const names = new Map(sheets.map((sheet) => [sheet.id, sheet.name]));
   return Response.json({
     enabled: true,

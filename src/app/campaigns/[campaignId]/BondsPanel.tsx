@@ -26,8 +26,10 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 // pact reads it, and acts in secret for it, at the top (PactPanel.tsx).
 //
 // A lasting companion's row also carries its conscience (issue 503): the
-// ladder from content to the breaking point and any ultimatum, which every
-// seat sees, since the companion says them aloud.
+// ladder from content to the breaking point and any ultimatum, as far as the
+// story has said them (issue 615). Unease a companion keeps in shows only to
+// a player whose character noticed it; whoever runs the story sees all of it,
+// with what the table has not heard yet.
 // An NPC's act (issue 501, src/lib/dm/scheme-logic.ts) reads as the warmth
 // it shows until the server says otherwise: an Insight that beat it, told to
 // that player alone ("Seen through"), or the truth out to everyone

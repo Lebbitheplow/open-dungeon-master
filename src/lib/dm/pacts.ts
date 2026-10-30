@@ -1,6 +1,6 @@
 import { allocateSeq, getCampaignById, type Campaign } from "@/lib/db/campaigns";
 import { getClock } from "@/lib/db/clock";
-import { companionConscience, companionValues, saveConscience } from "@/lib/db/companion-conscience";
+import { companionConscience, companionValues } from "@/lib/db/companion-conscience";
 import { companionDeparture, saveDeparture } from "@/lib/db/companion-departures";
 import { companionNpcFor } from "@/lib/db/companion-npcs";
 import { insertItemProposal } from "@/lib/db/item-proposals";
@@ -333,8 +333,9 @@ function recruitCompanion(
     const conscience = companionConscience(target.npc.id);
     const held = recruitedRung(conscience.held, standingRung(worstApproval(campaign.id, target.sheet.name, sheets)));
     if (held !== conscience.held) {
-      saveConscience(target.npc.id, { ...conscience, held, cause: `talk with ${recruiter.sheet.name} by the fire` });
-      settleCompanion(campaign, target.sheet, undefined, {}, sheets);
+      // The pact's talk is a storyteller secret (issue 615): the move is said
+      // at the table like any other, but never what caused it.
+      settleCompanion(campaign, target.sheet, { ...conscience, held, cause: `talk with ${recruiter.sheet.name} by the fire`, causeSecret: true }, {}, sheets);
     }
     publishRelationshipsUpdated(campaign.id);
   } else if (style === "secret") {

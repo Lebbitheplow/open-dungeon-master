@@ -349,4 +349,19 @@ await test("Talk tables never recruit; a companion talked back to content leaves
   assert.deepEqual(pactsDb.getPact(pact.id).members.map((member) => member.name), ["Seren"], "Thorne left it");
 });
 
+await test("a companion a pact talked a rung down shows the move, never the talk by the fire (issue 615)", async () => {
+  const t = await table();
+  t.rung("Seren", 1);
+  await longRest(t.world, [20, 20, 20]);
+  const thorne = conscienceDb.companionConscience(t.row("Thorne").id);
+  assert.equal(thorne.held, 1);
+  assert.equal(thorne.causeSecret, true, "the cause is kept a secret");
+  const { conscienceBlockForPrompt } = await import("../src/lib/dm/conscience.ts");
+  const moment = conscienceBlockForPrompt(t.world.campaign(), t.world.sheets());
+  assert.match(moment, /Thorne: holds .+; uneasy/, "the move itself is the table's to see");
+  assert.doesNotMatch(moment, /by the fire|talk with/, "what moved them is not");
+  assert.equal(thorne.owed?.rung, "uneasy");
+  assert.equal(thorne.owed?.cause, undefined, "and her line will not say it either");
+});
+
 finish();

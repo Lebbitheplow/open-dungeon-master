@@ -65,6 +65,21 @@ export function isNarration(line: Line): boolean {
   return line.authorType === "dm" && !isOocAnswer(line.content);
 }
 
+// A companion's line the server posts after a narration that left out what
+// the table was owed (src/lib/dm/conscience-voice.ts, issue 615): story, but
+// written by neither the AI's turn nor a person, so it carries no turn and
+// no author, and its one line is the companion's. The newest passage a
+// reroll or a continue works on is the one before it (src/lib/db/messages.ts
+// getLatestDmMessage reads it the same way).
+export function voicedByServer(line: {
+  authorType: "player" | "dm" | "system";
+  userId?: string | null;
+  dmTurnId?: string;
+  speech?: readonly { speaker: { kind: "narrator" | "npc" | "monster" | "pc" } }[];
+}): boolean {
+  return line.authorType === "dm" && !line.userId && !line.dmTurnId && line.speech?.length === 1 && line.speech[0].speaker.kind === "pc";
+}
+
 // The DM's answer is stored as table talk too, so the transcript, the prompt
 // and the page all read it as an aside. A model that labels its own answer
 // ("OOC: ...", seen from Codex) does not get the label twice.

@@ -298,11 +298,17 @@ export function updateMessageContent(messageId: string, content: string, speech:
 
 // The newest DM narration in the campaign. Rerolls are offered on this
 // message only: an older one has already been read, reacted to, and built on.
-// An out-of-character answer is not narration (src/lib/dm/ooc-question.ts).
+// An out-of-character answer is not narration (src/lib/dm/ooc-question.ts),
+// and neither is a companion's line the server posts after a narration that
+// left out what the table was owed (issue 615, ooc-question.ts
+// voicedByServer): a reroll, a continue, an X-card's withdrawal and a picture
+// all mean the passage before it.
 export function getLatestDmMessage(campaignId: string): CampaignMessage | null {
   const row = getDatabase()
     .prepare(
-      `SELECT * FROM campaign_messages WHERE campaign_id = ? AND author_type = 'dm' AND content NOT LIKE '(ooc)%' ORDER BY seq DESC LIMIT 1`,
+      `SELECT * FROM campaign_messages WHERE campaign_id = ? AND author_type = 'dm' AND content NOT LIKE '(ooc)%'
+         AND NOT COALESCE(user_id IS NULL AND dm_turn_id IS NULL AND json_array_length(speech_json) = 1 AND json_extract(speech_json, '$[0].speaker.kind') = 'pc', 0)
+       ORDER BY seq DESC LIMIT 1`,
     )
     .get(campaignId) as MessageRow | undefined;
   return row ? mapMessage(row) : null;

@@ -1,6 +1,6 @@
 import { getCampaignById, setStoryArc, type Campaign } from "@/lib/db/campaigns";
 import { companionAgenda, saveAgenda } from "@/lib/db/companion-agenda";
-import { companionConscience, saveConscience } from "@/lib/db/companion-conscience";
+import { companionConscience } from "@/lib/db/companion-conscience";
 import { companionNpcFor } from "@/lib/db/companion-npcs";
 import { findFactionByName } from "@/lib/db/factions";
 import type { Npc } from "@/lib/db/npcs";
@@ -15,7 +15,7 @@ import {
   orderCause,
   type Agenda,
 } from "@/lib/dm/agenda-logic";
-import { conscienceSetting, consciousCompanions } from "@/lib/dm/conscience";
+import { conscienceSetting, consciousCompanions, settleCompanion } from "@/lib/dm/conscience";
 import { BREAKING } from "@/lib/dm/conscience-logic";
 import { settleBreakingPoint } from "@/lib/dm/departure";
 import { advanceSessionGoal } from "@/lib/dm/npc-logic";
@@ -89,9 +89,14 @@ export function deliverOrder(campaign: Campaign, npcId: string) {
   markBetrayalFired(campaign, agenda);
   const sheet = listSheets(campaign.id).find((entry) => companionNpcFor(entry)?.id === npcId);
   if (sheet && conscienceSetting(campaign) !== "off") {
-    saveConscience(npcId, { ...companionConscience(npcId), held: BREAKING, cause: orderCause(agenda) });
+    // Through the ladder like every other road (issue 615), so the move is
+    // settled where the table's view of it is kept: a player's Bonds tab
+    // shows only what was said, and the order, a storyteller secret, is a
+    // cause no line the table or the moment part of GAME STATE reads names.
+    const current = getSheetById(sheet.id) ?? sheet;
+    settleCompanion(campaign, current, { ...companionConscience(npcId), held: BREAKING, cause: orderCause(agenda), causeSecret: true });
     const employer = agenda.employer ? findFactionByName(campaign.id, agenda.employer) : null;
-    settleBreakingPoint(campaign, getSheetById(sheet.id) ?? sheet, listSheets(campaign.id), employer);
+    settleBreakingPoint(campaign, getSheetById(sheet.id) ?? current, listSheets(campaign.id), employer);
   }
   publishEphemeral(campaign.id, "relationships_updated", {});
 }

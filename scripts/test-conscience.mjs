@@ -13,6 +13,8 @@ register("./lib/register-alias.mjs", import.meta.url);
 const values = await import("../src/lib/dm/companion-values-logic.ts");
 const ladder = await import("../src/lib/dm/conscience-logic.ts");
 const claims = await import("../src/lib/dm/claims-logic.ts");
+const voice = await import("../src/lib/dm/conscience-voice-logic.ts");
+const { voicedByServer } = await import("../src/lib/dm/ooc-question.ts");
 const { RELATIONSHIP_BEATS } = await import("../src/lib/dm/relationship-logic.ts");
 
 let passed = 0;
@@ -331,6 +333,148 @@ test("the claims reader knows the honouring deeds", () => {
   for (const deed of ["laid_to_rest", "freed_captives", "upheld_law"]) {
     assert.match(claims.readerSystem([], false), new RegExp(deed));
   }
+});
+
+// ---- said at the table (issue 615) ----
+
+const SEREN = { name: "Seren Vale", ids: ["sheet-seren", "npc-seren"] };
+const said = (content, speech = [], speaker = null) => ({ content, speech, speaker });
+const by = (line, speaker = { kind: "pc", id: "sheet-seren", name: "Seren Vale" }) => ({ line, speaker });
+const STOP = new Set(["the", "you", "and", "before", "with"]);
+const DEMAND = { rung: "ultimatum", condition: "Free the captives you took", due: 1140 };
+
+test("an ultimatum is said when the companion speaks most of its key words, or a paragraph naming them holds two thirds", () => {
+  assert.deepEqual(voice.keyWords("Free the captives you took", STOP), ["free", "captives", "took"]);
+  const spoken = said('Seren rounds on Kael. "Free those captives, or I go," she says.', [by("Free those captives, or I go")]);
+  assert.equal(voice.voicedIn(DEMAND, SEREN, spoken, STOP), true, "two of three key words in her own line");
+  const byId = said('"Free the captives."', [by("Free the captives.", { kind: "pc", id: "sheet-seren", name: "someone" })]);
+  assert.equal(voice.voicedIn(DEMAND, SEREN, byId, STOP), true, "her line by her sheet's id");
+  const narrated = said("Seren demands that the captives Kael took go free by nightfall.");
+  assert.equal(voice.voicedIn(DEMAND, SEREN, narrated, STOP), true, "a paragraph naming her with the demand in it");
+  const shortName = said("Vale demands the captives you took go free.");
+  assert.equal(voice.voicedIn(DEMAND, SEREN, shortName, STOP), true, "one word of a longer name, written as a name");
+});
+
+test("an ultimatum is not said by silence, by another's line, by an unattributed quote, or by her speaking of something else", () => {
+  assert.equal(voice.voicedIn(DEMAND, SEREN, said("The cellar door creaks in the wind."), STOP), false, "silent");
+  assert.equal(voice.voicedIn(DEMAND, SEREN, said('A voice in the dark: "Free the captives you took."'), STOP), false, "a quote nobody is tagged with");
+  const other = said('"Free the captives you took," Kael mutters.', [by("Free the captives you took", { kind: "pc", id: "sheet-kael", name: "Kael" })]);
+  assert.equal(voice.voicedIn(DEMAND, SEREN, other, STOP), false, "someone else's line");
+  const elsewhere = said('"The road is long," Seren says.', [by("The road is long")]);
+  assert.equal(voice.voicedIn(DEMAND, SEREN, elsewhere, STOP), false, "she spoke, but not of it");
+  const thin = said("Seren looks at the captives.");
+  assert.equal(voice.voicedIn(DEMAND, SEREN, thin, STOP), false, "a paragraph naming her with too little of it");
+});
+
+test("the rule reads stored speech, so another table language is read alike", () => {
+  const italian = { rung: "ultimatum", condition: "Liberate i prigionieri entro il tramonto" };
+  const stop = new Set(["il", "i", "prima", "del", "entro"]);
+  const line = said("«Liberate i prigionieri prima del tramonto», dice Seren.", [by("Liberate i prigionieri prima del tramonto")]);
+  assert.equal(voice.voicedIn(italian, SEREN, line, stop), true);
+  assert.equal(voice.voicedIn(italian, SEREN, said("La porta della cantina scricchiola."), stop), false);
+});
+
+test("a demand with no key word to read is said when she speaks; a warning when she speaks; open unease when she speaks or is named", () => {
+  const bare = { rung: "ultimatum", condition: "Do it now" };
+  assert.deepEqual(voice.keyWords("Do it now", STOP), []);
+  assert.equal(voice.voicedIn(bare, SEREN, said('"Now," Seren says.', [by("Now")]), STOP), true);
+  assert.equal(voice.voicedIn(bare, SEREN, said("Seren waits."), STOP), false);
+  const warning = { rung: "warning" };
+  assert.equal(voice.voicedIn(warning, SEREN, said("Seren glares."), STOP), false, "a warning is said aloud");
+  assert.equal(voice.voicedIn(warning, SEREN, said('"Enough."', [by("Enough.")]), STOP), true);
+  assert.equal(voice.voicedIn(warning, SEREN, said("Enough.", [], { kind: "pc", id: "sheet-seren", name: "Seren Vale" }), STOP), true, "the whole message spoken as her");
+  assert.equal(voice.voicedIn({ rung: "uneasy" }, SEREN, said("Seren looks away from the fire."), STOP), true, "open unease shown");
+  assert.equal(voice.voicedIn({ rung: "uneasy" }, SEREN, said("The fire burns low."), STOP), false);
+});
+
+test("temperament decides unease: composure 1 or more keeps it in", () => {
+  assert.equal(voice.concealsUnease({ composure: 1 }), true);
+  assert.equal(voice.concealsUnease({ composure: 3 }), true);
+  assert.equal(voice.concealsUnease({ composure: 0 }), false);
+  assert.equal(voice.concealsUnease({ composure: -2 }), false);
+  assert.equal(voice.concealsUnease(null), false);
+  assert.match(ladder.rungGuidance("uneasy", "leave", true), /keep it in: play them as content/);
+  assert.match(ladder.rungGuidance("uneasy", "leave"), /let their discomfort show/);
+});
+
+test("what a move owes the table: unease by temperament, a warning and an ultimatum always, the breaking point only at Talk", () => {
+  const base = { ...ladder.CONTENT, cause: "cruelty by Kael" };
+  const open = voice.afterMove(base, 0, 1, "leave", { keepsItIn: false, ultimatumSet: false });
+  assert.deepEqual(open.owed, { rung: "uneasy", cause: "cruelty by Kael" });
+  const kept = voice.afterMove(base, 0, 1, "leave", { keepsItIn: true, ultimatumSet: false });
+  assert.equal(kept.owed, null);
+  assert.deepEqual(kept.concealed, { noticedBy: [], pending: true });
+  assert.equal(voice.afterMove(kept, 0, 2, "leave", { keepsItIn: true, ultimatumSet: false }).owed.rung, "warning", "a warning is said whatever the temper");
+  assert.equal(voice.afterMove(kept, 0, 2, "leave", { keepsItIn: true, ultimatumSet: false }).concealed, null);
+  const terms = { ...base, ultimatum: { condition: "Free them", set: 0, due: 600, eventId: "" } };
+  assert.deepEqual(voice.afterMove(terms, 2, 3, "turn", { keepsItIn: false, ultimatumSet: true }).owed, { rung: "ultimatum", condition: "Free them", due: 600, cause: "cruelty by Kael" });
+  assert.deepEqual(voice.afterMove(base, 3, 4, "talk", { keepsItIn: false, ultimatumSet: false, lapsed: "Free them" }).owed, { rung: "breaking", condition: "Free them", cause: "cruelty by Kael" });
+  assert.equal(voice.afterMove(base, 3, 4, "leave", { keepsItIn: false, ultimatumSet: false }).owed, null, "the server's departure line says it");
+  const secret = voice.afterMove({ ...base, causeSecret: true }, 0, 2, "leave", { keepsItIn: false, ultimatumSet: false });
+  assert.deepEqual(secret.owed, { rung: "warning" }, "a secret cause is never carried into the line");
+  const heard = voice.heard({ ...terms, told: 2, owed: { rung: "ultimatum" } });
+  assert.equal(heard.told, 3);
+  assert.equal(heard.owed, null);
+  const down = voice.afterMove({ ...heard, owed: { rung: "warning" } }, 3, 1, "leave", { keepsItIn: false, ultimatumSet: false });
+  assert.equal(down.told, 1, "what the table heard follows the rung down");
+  assert.equal(down.owed, null, "nothing is owed on the way back up");
+  assert.equal(ladder.defaultCondition("talk with Thorne by the fire", true), "Make amends, and never again");
+});
+
+test("the companion's own line: the issue's shape for an ultimatum, a plain line for the rest", () => {
+  assert.equal(voice.fallbackLine({ rung: "ultimatum", condition: "Free the prisoners" }, "by nightfall"), "Free the prisoners. By nightfall, or I am done with this company.");
+  assert.equal(voice.fallbackLine({ rung: "ultimatum", condition: 'Swear off the "knife".' }, "within 3 days"), "Swear off the 'knife'. Within 3 days, or I am done with this company.", "quotation marks never break the line");
+  assert.match(voice.fallbackLine({ rung: "warning", cause: "torture by Kael" }, ""), /^Torture by Kael: I will not stand for it again\./);
+  assert.match(voice.fallbackLine({ rung: "warning" }, ""), /It stops now\.$/);
+  assert.match(voice.fallbackLine({ rung: "breaking", condition: "Free them" }, ""), /^The time I gave you is gone\. I can no longer stand with this company\. I stay/);
+  assert.match(voice.fallbackLine({ rung: "uneasy", cause: "cruelty by Kael" }, ""), /^Cruelty by Kael\. I do not like it/);
+  for (const owed of [{ rung: "ultimatum", condition: "x" }, { rung: "warning" }, { rung: "breaking" }, { rung: "uneasy" }]) {
+    assert.doesNotMatch(voice.fallbackLine(owed, "by nightfall"), /[\u2013\u2014"]/, "no dashes of that kind, no quotation marks");
+  }
+  const morning = 600; // day 0, 10:00
+  assert.equal(voice.dueSpoken(morning, 19 * 60), "by nightfall");
+  assert.equal(voice.dueSpoken(morning, 1440 + 9 * 60), "by tomorrow morning");
+  assert.equal(voice.dueSpoken(22 * 60, 1440 + 2 * 60), "before this night is out", "past midnight is still tonight");
+  assert.equal(voice.dueSpoken(morning, morning + 3 * 1440), "within 3 days");
+  assert.equal(voice.dueSpoken(morning, morning), "now");
+});
+
+test("each seat sees what its characters know: the truth for the storyteller, what was said for a player, unease kept in to whoever noticed", () => {
+  const storyteller = { storyteller: true, characterIds: [] };
+  const kael = { storyteller: false, characterIds: ["kael"] };
+  const brin = { storyteller: false, characterIds: ["brin"] };
+  const unsaid = { ...ladder.CONTENT, held: 3, told: 1, owed: { rung: "ultimatum" }, ultimatum: { condition: "Free them", set: 0, due: 600, eventId: "" } };
+  assert.deepEqual(voice.viewFor(storyteller, unsaid, 3), { rung: "ultimatum", terms: true, unheard: true, hidden: false, noticedBy: [], noticed: false });
+  assert.deepEqual(voice.viewFor(kael, unsaid, 3), { rung: "uneasy", terms: false, unheard: false, hidden: false, noticedBy: [], noticed: false }, "the table heard unease and nothing since");
+  assert.equal(voice.viewFor(kael, { ...unsaid, told: 3, owed: null }, 3).terms, true, "the terms once they were said");
+  const keptIn = { ...ladder.CONTENT, held: 1, concealed: { noticedBy: ["kael"], pending: false } };
+  assert.deepEqual(voice.viewFor(storyteller, keptIn, 1), { rung: "uneasy", terms: false, unheard: false, hidden: true, noticedBy: ["kael"], noticed: false });
+  assert.deepEqual(voice.viewFor(kael, keptIn, 1), { rung: "uneasy", terms: false, unheard: false, hidden: false, noticedBy: [], noticed: true });
+  assert.equal(voice.viewFor(brin, keptIn, 1).rung, "content", "one who did not notice sees nothing");
+  const plan = { ...ladder.CONTENT, held: 4, told: 2 };
+  assert.equal(voice.viewFor(kael, plan, 4).rung, "warning", "a breaking point held as a plan was never said");
+});
+
+test("a row from before issue 615 reads as heard as far as it settled, owing nothing", () => {
+  const old = ladder.parseConscience(JSON.stringify({ held: 2, shown: 2, ultimatum: null, climbedDay: 3, cause: "cruelty by Kael" }));
+  assert.equal(old.told, 2);
+  assert.equal(old.owed, null);
+  assert.equal(old.concealed, null);
+  assert.equal(old.causeSecret, false);
+  const round = ladder.parseConscience(JSON.stringify({ ...ladder.CONTENT, held: 3, shown: 3, told: 1, owed: { rung: "ultimatum", condition: "Free them", due: 99 }, concealed: { noticedBy: ["a", 7], pending: true }, causeSecret: true }));
+  assert.equal(round.told, 1);
+  assert.deepEqual(round.owed, { rung: "ultimatum", condition: "Free them", due: 99 });
+  assert.deepEqual(round.concealed, { noticedBy: ["a"], pending: true });
+  assert.equal(round.causeSecret, true);
+  assert.equal(ladder.parseConscience(JSON.stringify({ held: 1, owed: { rung: "shouting" } })).owed, null, "an unknown rung owes nothing");
+});
+
+test("a companion's line the server posted is not the narration a reroll, a continue or an X-card means", () => {
+  const line = [{ line: "Enough.", speaker: { kind: "pc", id: "s", name: "Seren" } }];
+  assert.equal(voicedByServer({ authorType: "dm", userId: null, speech: line }), true);
+  assert.equal(voicedByServer({ authorType: "dm", userId: null, dmTurnId: "t1", speech: line }), false, "the AI's own passage");
+  assert.equal(voicedByServer({ authorType: "dm", userId: "gm", speech: line }), false, "a person's passage");
+  assert.equal(voicedByServer({ authorType: "dm", userId: null, speech: [] }), false, "a passage nobody speaks in");
 });
 
 console.log(`test-conscience: ${passed} passed`);
