@@ -2114,7 +2114,7 @@
     "lib/srd/adventuring-gear.ts#re-word": [["english-source",9,"SRD gear rows and their aliases (reference data); background kit lines from bundled and content-pack backgrounds (workshop backgrounds carry their picks written out)"]],
     "lib/srd/adventuring-gear.ts#str-eq": [["english-source",1,"SRD gear rows and their aliases (reference data); background kit lines from bundled and content-pack backgrounds (workshop backgrounds carry their picks written out)"]],
     "lib/srd/adventuring-gear.ts#str-key": [["english-source",1,"SRD gear rows and their aliases (reference data); background kit lines from bundled and content-pack backgrounds (workshop backgrounds carry their picks written out)"],["key",1,"an equipment pack's SRD 5.1 price by its id"]],
-    "lib/srd/adventuring-gear.ts#str-list": [["english-source",40,"SRD gear rows and their aliases (reference data); background kit lines from bundled and content-pack backgrounds (workshop backgrounds carry their picks written out)"]],
+    "lib/srd/adventuring-gear.ts#str-list": [["english-source",38,"SRD gear rows and their aliases (reference data); background kit lines from bundled and content-pack backgrounds (workshop backgrounds carry their picks written out)"]],
     "lib/srd/adventuring-gear.ts#toLowerCase": [["english-source",3,"SRD gear rows and their aliases (reference data); background kit lines from bundled and content-pack backgrounds (workshop backgrounds carry their picks written out)"]],
     "lib/srd/adventuring-gear.ts#toUpperCase": [["display",1,"capitalised item line"],["display",1,"an equipment pack's printed name from its id"]],
     "lib/srd/afflictions.ts#re-word": [["english-source",1,"the condition label the engine writes (\"sight rot (-N)\")"]],
