@@ -10,7 +10,7 @@ import spellSlotsJson from "@/lib/srd/spell-slots.json";
 import { CUSTOM_CLASSES, findCustomClass } from "@/lib/classes";
 import { computeArmorClass, unarmoredFormulaFor, type AcBreakdown } from "@/lib/srd/armor";
 import { conditionAcRiders } from "@/lib/srd/condition-effects";
-import { combatRiders, defenseRiders, halfProficiencyCovers } from "@/lib/srd/feature-effects";
+import { auraGranted, combatRiders, defenseRiders, halfProficiencyCovers } from "@/lib/srd/feature-effects";
 import { featureSaveProficiencies } from "@/lib/srd/trait-rules";
 import { authoredAcBonus, authoredSaveModifier, authoredSpeeds } from "@/lib/srd/authored-effects";
 import { effectiveAbilities, magicItemRiders } from "@/lib/srd/magic-items";
@@ -403,6 +403,9 @@ export function computeSheetDerived(
     wildShape?: CharacterSheet["wildShape"];
     // The table, for its workshop feats.
     campaignId?: string;
+    // Whether the character is awake, for Aura of Protection (auraGranted).
+    currentHp?: number;
+    conditions?: string[];
   },
 ): SheetDerived {
   // A Polymorph's beast is its own creature: none of the character's
@@ -454,7 +457,9 @@ export function computeSheetDerived(
           value:
             sheet.proficiencies.saves.includes(ability) || featureSaves.includes(ability) ? pb : 0,
         },
-        { label: "features", value: defense.saveBonus },
+        // Aura of Protection, the one feature save bonus: an unconscious
+        // paladin grants it to nobody, themselves included.
+        { label: "features", value: auraGranted(sheet) ? defense.saveBonus : 0 },
         // Durable Magic's +2, Elegant Courtier's Charisma (authored-effects.ts).
         { label: "subclass features", value: authoredSaveModifier(sheet, ability, abilityMods) },
         { label: "magic items", value: magicSaveBonus },

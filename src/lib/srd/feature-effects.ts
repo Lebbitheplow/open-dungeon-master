@@ -20,7 +20,7 @@ import authoredFeatsJson from "@/lib/srd/authored-feats.json";
 import { authoredFeatureDefs } from "@/lib/srd/authored-feature-defs";
 import { tableFeat } from "@/lib/srd/feat-effects";
 import { textKey } from "@/lib/language/text-logic";
-import { choiceIn, isNamed } from "@/lib/srd/feature-names";
+import { choiceIn, isConditionNamed, isNamed } from "@/lib/srd/feature-names";
 
 export type FightingStyleId =
   | "archery"
@@ -1001,6 +1001,17 @@ export type DefenseRiders = {
   // broader scope wins when a sheet somehow carries both.
   halfProficiency: "all" | "physical" | null;
 };
+
+// SRD 5.1 paladin, Aura of Protection: "You must be conscious to grant this
+// bonus." A paladin at 0 hit points, or holding unconscious, grants it to
+// nobody, their own saves included (a dying paladin's death saves). A sheet
+// with no hit points recorded (the builder's draft) is taken as awake.
+export function auraGranted(sheet: { currentHp?: number; conditions?: readonly string[] }): boolean {
+  if (typeof sheet.currentHp === "number" && sheet.currentHp <= 0) {
+    return false;
+  }
+  return !(sheet.conditions ?? []).some((name) => isConditionNamed(name, "unconscious"));
+}
 
 export function defenseRiders(
   sheet: { class: string; level: number; features: Array<{ name: string }>; campaignId?: string },

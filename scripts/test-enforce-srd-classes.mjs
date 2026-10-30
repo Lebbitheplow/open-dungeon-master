@@ -328,12 +328,10 @@ const devoted = world.addHero({
   spellcasting: { ability: "cha", slots: slotsOf("paladin", 6), prepared: [], known: [], cantrips: [] },
 });
 
-await gap("CLS-06", {
-  rule: "SRD 5.1 paladin, Aura of Protection: \"the creature gains a bonus to the saving throw equal to your Charisma modifier (with a minimum bonus of +1). You must be conscious to grant this bonus.\"",
-  where: "src/lib/dm/rolls.ts (the death save branch adds the sheet's own \"features\" save part) and src/lib/srd/index.ts computeSheetDerived",
-  severity: "medium",
-  note: "A dying paladin adds their own Charisma to every death save.",
-}, async () => {
+// SRD 5.1 paladin, Aura of Protection: "the creature gains a bonus to the
+// saving throw equal to your Charisma modifier (with a minimum bonus of +1).
+// You must be conscious to grant this bonus."
+await test("CLS-06", async () => {
   await kit.endFight();
   world.patch(devoted.id, { currentHp: 0, conditions: ["unconscious"], deathSaves: { successes: 0, failures: 0, stable: false, dead: false } });
   world.clearDice();
