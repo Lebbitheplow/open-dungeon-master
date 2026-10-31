@@ -318,4 +318,17 @@ await test("A Cast NPC fights as one person whatever the count, and comes back f
   assert.match(out.error, /Snik died/);
 });
 
+await test("From the console a GM fields an invented foe by its challenge rating, and a renamed one under its name", async () => {
+  await kit.endFight();
+  world.clearDice();
+  world.dice(1, 1, 19);
+  const out = await world.invoke("start_encounter", { enemies: "Sludge Wraith cr 1/2\ngoblin as Snik" });
+  world.clearDice();
+  assert.equal(out.ok, true, out.error);
+  const [wraith, snik] = world.enemies();
+  assert.equal(wraith.displayName, "Sludge Wraith");
+  assert.equal(wraith.cr, 0.5);
+  assert.equal(snik.displayName, "Snik");
+});
+
 finish();

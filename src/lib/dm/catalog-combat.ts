@@ -70,7 +70,7 @@ export const COMBAT_ADJUDICATIONS: CatalogEntry[] = [
         kind: "longtext",
         required: true,
         placeholder: "goblin x4\nhobgoblin",
-        help: "One per line, name or SRD slug, optional xN for a count. Stat blocks come from the content pack. A foe still about from the last fight comes back as it was left when named as the tracker showed it (Raider 2).",
+        help: "One per line, name or SRD slug, optional xN for a count. Stat blocks come from the content pack. A foe of your own making takes its challenge rating (Sludge Wraith cr 2), a renamed one its name (bandit as Raider). A foe still about from the last fight comes back as it was left when named as the tracker showed it (Raider 2).",
       },
       { name: "summary", label: "Opening", kind: "text" },
       {
@@ -140,7 +140,7 @@ export const COMBAT_ADJUDICATIONS: CatalogEntry[] = [
         kind: "longtext",
         required: true,
         placeholder: "wolf x2",
-        help: "One per line, name or SRD slug, optional xN for a count. A foe still about from the last fight comes back as it was left when named as the tracker showed it (Raider 2).",
+        help: "One per line, name or SRD slug, optional xN for a count. A foe of your own making takes its challenge rating (Sludge Wraith cr 2), a renamed one its name (bandit as Raider). A foe still about from the last fight comes back as it was left when named as the tracker showed it (Raider 2).",
       },
       REASON,
     ],

@@ -984,4 +984,22 @@ test("Correct a sheet turns a named field and its value into the sheet's own key
   }
 });
 
+// A human GM fields an invented foe by its challenge rating and renames a
+// monster from the console's "Start a fight" box: the form used to keep the
+// monster and count alone, so "pass cr" in the refusal could not be done.
+test("the console's enemy lines carry an invented foe's challenge rating, a reskin's name and an earlier fight's enemyId", () => {
+  const start = normalizeArgs(adjudication("start_encounter"), { enemies: "Sludge Wraith cr 2 x3\nbandit as Raider\n2 Mire Imp (CR 1/2)\ngoblin x2" });
+  assert.deepEqual(start.enemies, [
+    { monster: "Sludge Wraith", count: 3, cr: 2 },
+    { monster: "bandit", count: 1, name: "Raider" },
+    { monster: "Mire Imp", count: 2, cr: 0.5 },
+    { monster: "goblin", count: 2 },
+  ]);
+  const listed = normalizeArgs(adjudication("add_enemies"), { enemies: [{ monster: "goblin", returning: "e1" }, { monster: "Bog Thing", cr: 3, name: "The Bog" }] });
+  assert.deepEqual(listed.enemies, [
+    { monster: "goblin", count: 1, returning: "e1" },
+    { monster: "Bog Thing", count: 1, cr: 3, name: "The Bog" },
+  ]);
+});
+
 console.log(`invoke-catalog: ${passed} tests passed`);
