@@ -16,7 +16,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { openWorld } from "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
-import { combatKit } from "./lib/enforce-combat.mjs";
+import { combatKit, TRAINED } from "./lib/enforce-combat.mjs";
 
 const { test, finish } = suite("test-off-turn-hand");
 
@@ -28,6 +28,8 @@ const { gmCompanionTurn } = await import("../src/lib/dm/companion-command.ts");
 const { gmTurnCompanion, offTurnReactors } = await import("../src/lib/player-characters.ts");
 const { offTurnReactionCards, reactionAim, reactionCards } = await import("../src/lib/battlemap/hand-react.ts");
 const { turnFromEncounter } = await import("../src/lib/battlemap/hand-table.ts");
+const { characterAwaitingPlayer, declaredThisTurn } = await import("../src/lib/dm/player-word.ts");
+const { turnOverFor } = await import("../src/lib/dm/claims.ts");
 
 const read = (file) => fs.readFileSync(new URL(`../src/${file}`, import.meta.url), "utf8").replace(/\r\n/g, "\n");
 
@@ -98,6 +100,13 @@ await test("A hit hero who is not the one acting is offered their reaction, name
   const posted = await route(world, "actions", { kind: "do", content: "Poppy twists away from the blow.", characterId: poppy.id, intent: dodge.intent }, world.owner);
   assert.equal(posted.status, 202, JSON.stringify(posted.body));
   assert.equal(current(world).characterId, hild.id, "Hild's turn is still Hild's");
+  // Sent as Poppy, the answer is no word of Hild's: a narration that hands
+  // the turn on cannot end Hild's turn for it (claims.ts turnOverFor), and
+  // the AI still waits on Hild (the bench's answer typed in Hild's box was
+  // read as Hild's move, and her turn ended with the reply).
+  assert.equal(declaredThisTurn(world.campaignId, hild.id), false);
+  assert.equal(turnOverFor(world.campaignId, { resolvedCharacterIds: [] }), null);
+  assert.equal(characterAwaitingPlayer(world.campaignId)?.id, hild.id);
 });
 
 await test("Another hero's reaction card aims where its own hero's would", () => {
@@ -161,6 +170,35 @@ await test("A companion a player commands stays theirs, and a player cannot take
   assert.notEqual(asKara.status, 200, "a card without the companion's id is not played as the companion");
 });
 
+await test("In the GM seat, a reaction card for a hero the GM plays is resolved at once, on the enemies' turn", async () => {
+  const world = await openWorld({ gameSettings: { multiCharacter: "all_active" }, campaign: { maxPlayers: 8 } });
+  const kit = await combatKit(world);
+  const kara = world.addHero({ name: "Kara", proficiencies: TRAINED });
+  const poppy = world.addHero({ name: "Poppy", class: "rogue", level: 5, user: world.owner, maxHp: 30, ac: 12, acOverride: true });
+  world.patch(poppy.id, { features: [{ name: "Uncanny Dodge", source: "class" }] });
+  setDmMode(world.campaignId, "human", world.owner.id);
+  await kit.fight(1, { heroFaces: { [kara.id]: 19, [poppy.id]: 5 }, enemyFace: 18 });
+  assert.equal(current(world).characterId, kara.id);
+  assert.equal((await route(world, "encounter/end-turn", {}, world.owner)).status, 200);
+  const [goblin] = world.enemies();
+  world.dice(15, 6);
+  const swing = await world.invoke("enemy_attack", { enemyId: goblin.id, targetCharacterId: poppy.id });
+  assert.equal(swing.ok, true, swing.error);
+  const hurt = world.sheet(poppy.id).currentHp;
+  assert.ok(hurt < 30, "the goblin hit Poppy");
+  const encounter = activePublicEncounter(world.campaignId);
+  const [dodge] = offTurnReactionCards(
+    [{ sheet: world.sheet(poppy.id), turn: turnFromEncounter(encounter, world.sheet(poppy.id), { myTurn: false }) }],
+    encounter.lastHits ?? [],
+    world.sheets(),
+  );
+  assert.equal(dodge?.name, "Uncanny Dodge");
+  const played = await route(world, "actions", { kind: "do", content: "Poppy twists away.", characterId: poppy.id, intent: dodge.intent }, world.owner);
+  assert.equal(played.status, 200, JSON.stringify(played.body));
+  assert.equal(played.body.resolved, true);
+  assert.ok(world.sheet(poppy.id).currentHp > hurt, "Uncanny Dodge gave back half the hit");
+});
+
 await test("An AI-run table keeps a companion's turn the AI's", async () => {
   const world = await openWorld({ campaign: { maxPlayers: 8 } });
   const kit = await combatKit(world);
@@ -186,6 +224,15 @@ await test("The screens wire it: the Hand offers the other heroes' reactions, an
   assert.match(composer, /multiCharacter=\{multiCharacter\}/);
   const view = read("app/campaigns/[campaignId]/SessionView.tsx");
   assert.match(view, /gmTurnCompanion\(sheets, turnCharacterId\(state\.encounter\)\)/);
+  assert.match(view, /playsTurn: gmPlaysTurn/);
+});
+
+await test("The GM's box and cards are open on the companion's turn they play, and closed on another's", async () => {
+  const { composerGate } = await import("../src/app/campaigns/[campaignId]/composerGate.ts");
+  const floor = { mode: "initiative", encounterId: "e", userIds: ["companion-user"], currentName: "Pip", round: 1 };
+  const gate = (playsTurn) => composerGate({ floor, sheets: [], meUserId: "gm", kind: "do", myName: "Pip", leadPrivate: false, openingNarrationPlaying: false, playsTurn });
+  assert.equal(gate(true).inputBlocked, false);
+  assert.equal(gate(false).inputBlocked, true);
 });
 
 finish();

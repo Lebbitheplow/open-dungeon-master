@@ -483,6 +483,8 @@ export function SessionView({
     initiativeCharacter(sheets, me?.id ?? "", turnCharacterId(state.encounter)) ??
     (caps.role === "dm" && !state.encounter?.enemyTurns ? gmTurnCompanion(sheets, turnCharacterId(state.encounter)) : null);
   const actingSheet = turnSheet ?? mySheet;
+  // The GM seat holds a companion's turn the floor names the companion for.
+  const gmPlaysTurn = Boolean(turnSheet?.isCompanion && caps.role === "dm");
   // The server's notice opens the level-up dialog once, when the experience
   // lands. Closing it only puts it off: the sheet's experience still earns
   // the level, so the party card offers a Level up button until it is done.
@@ -607,8 +609,8 @@ export function SessionView({
   const enemyTurns = state.encounter?.enemyTurns === true;
   const gate = useMemo(
     () =>
-      composerGate({ floor, sheets, meUserId: meId, kind, myName, leadPrivate, openingNarrationPlaying, enemyTurns }),
-    [floor, sheets, meId, kind, myName, leadPrivate, openingNarrationPlaying, enemyTurns],
+      composerGate({ floor, sheets, meUserId: meId, kind, myName, leadPrivate, openingNarrationPlaying, enemyTurns, playsTurn: gmPlaysTurn }),
+    [floor, sheets, meId, kind, myName, leadPrivate, openingNarrationPlaying, enemyTurns, gmPlaysTurn],
   );
   // A mid-game joiner without a character is gated to creation first. The DM
   // runs no character, so the gate must never catch them.

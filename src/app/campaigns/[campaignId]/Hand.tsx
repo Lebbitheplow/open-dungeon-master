@@ -176,8 +176,9 @@ function HandInner({
 
   const hits = encounter.lastHits;
   const reactions = useMemo(
-    () => (sheet && turn ? reactionCards(sheet, turn, hits ?? [], sheets) : []),
-    [sheet, turn, hits, sheets],
+    // Under the monsters' hand the hero hit is named, as the others are.
+    () => (sheet && turn ? reactionCards(sheet, turn, hits ?? [], sheets, reactionsOnly ? sheet.name : "you") : []),
+    [sheet, turn, hits, sheets, reactionsOnly],
   );
   // A player's other characters hit while this one acts (a person playing
   // several heroes): their reactions too, each card naming its hero.
