@@ -6,6 +6,7 @@ import { adaptSheetToLevel } from "@/lib/characters/adapt";
 import { insertCampaignMessage } from "@/lib/db/messages";
 import { listSheets } from "@/lib/db/sheets";
 import { storyNameOf } from "@/lib/characters/story-name";
+import { libraryCompanionsOfCampaign } from "@/lib/db/companion-npcs";
 import { finalizeNewCompanion, lastingCompanionProblem } from "@/lib/dm/companion-tools";
 import { requestDmTurn } from "@/lib/dm/loop";
 import { admitSheet, refusal } from "@/lib/characters/admit";
@@ -97,9 +98,18 @@ export async function POST(
     return Response.json({ error: "That companion is not in your library." }, { status: 404 });
   }
   // One copy of a kept companion per table: two of the same person in one
-  // party would share a name every lookup reads.
-  if (from && listSheets(campaignId).some((entry) => entry.libraryCharacterId === from.id)) {
+  // party would share a name every lookup reads. One who left or fell here
+  // is still this table's: the story brings them back, not the library
+  // (issue 661), since a fresh copy would take over the row they left.
+  const seen = from ? libraryCompanionsOfCampaign(campaignId).get(from.id) : undefined;
+  if (from && seen === "here") {
     return Response.json({ error: `${from.name} is already at this table.` }, { status: 409 });
+  }
+  if (from && seen === "gone") {
+    return Response.json(
+      { error: `${from.name} has left this party. Only the story can bring them back to this table.` },
+      { status: 409 },
+    );
   }
   let admitted;
   if ("libraryCharacterId" in parsed.data && from) {

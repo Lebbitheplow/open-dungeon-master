@@ -74,6 +74,50 @@ await test("a library companion brought in is tied to its entry, and a table sea
   assert.match(again.json.error, /Wren is already at this table/);
 });
 
+// Issue 661: the Add a companion dialog's "From your library" strip offered
+// companions already in the party, and ones who had just walked out. It now
+// asks for the ones that could still join, and the server refuses the rest:
+// one at the table, and one who left, whose return is the story's.
+await test("the dialog's library strip offers only companions this campaign never had, and the server agrees", async () => {
+  const { table } = await freshTable();
+  const owner = table.owner;
+  const hollis = characters.createCharacter(owner.id, 1, built("Hollis"), "companion");
+  const rowan = characters.createCharacter(owner.id, 1, built("Rowan"), "companion");
+  characters.createCharacter(owner.id, 1, built("Ivo"), "companion");
+  for (const entry of [hollis, rowan]) {
+    const joined = await call(CREATE, "POST", owner, { libraryCharacterId: entry.id }, {}, table);
+    assert.equal(joined.status, 201, JSON.stringify(joined.json));
+  }
+  const left = await table.invoke("dismiss_companion", { characterId: seated("Rowan", table).id, reason: "walked out" });
+  assert.ok(left.ok, JSON.stringify(left));
+  assert.equal(seated("Rowan", table), undefined, "Rowan's sheet has gone");
+
+  const library = await table.route("characters");
+  const offered = async (query) => {
+    table.signIn(owner);
+    const response = await library.GET(new Request(`http://test/api/characters?role=companion${query}`));
+    return (await response.json()).characters.map((character) => character.name).sort();
+  };
+  assert.deepEqual(await offered(`&joinable=${table.campaignId}`), ["Ivo"], "only the one this campaign never had");
+  // The character list everywhere else still shows all of them.
+  assert.deepEqual(await offered(""), ["Hollis", "Ivo", "Rowan"]);
+
+  const here = await call(CREATE, "POST", owner, { libraryCharacterId: hollis.id }, {}, table);
+  assert.equal(here.status, 409);
+  assert.match(here.json.error, /Hollis is already at this table/);
+  const gone = await call(CREATE, "POST", owner, { libraryCharacterId: rowan.id }, {}, table);
+  assert.equal(gone.status, 409, "one who left is not brought back from the library");
+  assert.match(gone.json.error, /Rowan has left this party/);
+  const changed = await call(CREATE, "POST", owner, { sheet: built("Rowan"), fromLibraryCharacterId: rowan.id }, {}, table);
+  assert.equal(changed.status, 409, "nor through Change first");
+  assert.equal(table.sheets().filter((sheet) => sheet.name === "Rowan").length, 0);
+
+  assert.match(
+    read("src/app/campaigns/[campaignId]/CompanionBuilderDialog.tsx"),
+    /fetch\(`\/api\/characters\?role=companion&joinable=\$\{encodeURIComponent\(campaignId\)\}`\)/,
+  );
+});
+
 await test("Change first joins tied to the entry it was opened from, which stays as it was", async () => {
   const { table } = await freshTable();
   const tam = characters.createCharacter(table.owner.id, 1, built("Tam", { backstory: "A ferryman." }), "companion");

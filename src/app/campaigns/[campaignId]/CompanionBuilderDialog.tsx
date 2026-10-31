@@ -83,13 +83,15 @@ export function CompanionBuilderDialog({
   // effect linter, which is what it is.
   const loadLibrary = useCallback(
     () =>
-      fetch("/api/characters?role=companion")
+      // Only the ones that could still join: none this campaign has or had
+      // (issue 661), which the server would refuse.
+      fetch(`/api/characters?role=companion&joinable=${encodeURIComponent(campaignId)}`)
         .then((response) => (response.ok ? response.json() : null))
         .then((data) => setLibrary(data?.characters ?? []))
         .catch(() => {
           // An empty library is a valid state; the section explains itself.
         }),
-    [],
+    [campaignId],
   );
 
   useEffect(() => {
