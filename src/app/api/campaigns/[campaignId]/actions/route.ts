@@ -66,6 +66,10 @@ const actionSchema = z.object({
     .optional(),
 });
 
+function fallenRefusal(name: string): string {
+  return `${name} has fallen. Use OOC for table talk until your new hero joins.`;
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ campaignId: string }> },
@@ -99,6 +103,9 @@ export async function POST(
   if (isSecretActionBody(raw)) {
     if (!owned) {
       return Response.json({ error: "You need a character to act." }, { status: 400 });
+    }
+    if (heroFell(owned)) {
+      return Response.json({ error: fallenRefusal(owned.name) }, { status: 409 });
     }
     return secretActionResponse(campaign, user.id, owned, raw);
   }
@@ -212,6 +219,12 @@ export async function POST(
     return Response.json({ error: actor.error, floor }, { status: actor.status });
   }
   const { sheet } = actor;
+  // A hero who fell acts no more (issue 655): the composer says so, and a
+  // connected agent or an older screen posting for them is told the same,
+  // rather than the GM narrating the dead. Table talk stays open.
+  if (kind !== "ooc" && !playsCompanion && heroFell(sheet)) {
+    return Response.json({ error: fallenRefusal(sheet.name), floor }, { status: 409 });
+  }
   // A card the engine would refuse is refused here, with the engine's own
   // reason and before anything is posted, so the Hand never marks spent a
   // card that was never going to resolve (src/lib/dm/intent-check.ts).

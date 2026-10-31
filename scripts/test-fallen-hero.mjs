@@ -182,6 +182,26 @@ await test("a player outside the spotlight is told who it waits on, and the fall
   table.world.close();
 });
 
+// Issue 655: the composer told a fallen hero's player to use OOC, but the
+// route took a move for the dead all the same, from an agent or an older
+// screen, and the GM narrated it.
+await test("a hero who fell acts and speaks no more; their player's table talk still goes through.", async () => {
+  const table = await fallenTable({ level: 2 });
+  const move = await table.call("campaigns/[campaignId]/actions", "POST", { content: "I get up and swing.", kind: "do" });
+  assert.equal(move.status, 409, JSON.stringify(move.json));
+  assert.equal(move.json.error, "Mira Vale has fallen. Use OOC for table talk until your new hero joins.");
+  const line = await table.call("campaigns/[campaignId]/actions", "POST", { content: "\"Avenge me.\"", kind: "say" });
+  assert.equal(line.status, 409, JSON.stringify(line.json));
+  const talk = await table.call("campaigns/[campaignId]/actions", "POST", { content: "brb, rolling a new one", kind: "ooc" });
+  assert.ok(talk.status < 300, JSON.stringify(talk.json));
+  // Their new hero acts as any hero does.
+  const kara = await table.call("campaigns/[campaignId]/sheet/pregen", "POST", { id: "kara" });
+  assert.equal(kara.status, 201, JSON.stringify(kara.json));
+  const again = await table.call("campaigns/[campaignId]/actions", "POST", { content: "I step in.", kind: "do" });
+  assert.ok(again.status < 300, JSON.stringify(again.json));
+  table.world.close();
+});
+
 // Issue 655: the floor itself was handed to the dead. The GM (the AI's
 // request_player_input or the console's) and the lead's Give the floor
 // named a fallen hero, and the table waited on a player whose hero could not
