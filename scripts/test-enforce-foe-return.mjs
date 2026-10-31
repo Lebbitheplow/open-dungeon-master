@@ -140,6 +140,10 @@ await test("A truce leaves a foe lying knocked out where it fell, not fled; the 
   assert.equal(encounters.getEnemy(down.id).status, "alive");
   assert.equal(isKnockedOut(encounters.getEnemy(down.id)), true);
   assert.equal(encounters.getEnemy(hurt.id).status, "fled");
+  // The after-the-fight card counts the spared, and the fled of a truce.
+  const card = encounters.getEncounter(down.encounterId).summaryCard;
+  assert.equal(card.spared, 1);
+  assert.equal(card.fled, 1);
   const [back] = await aiBegin([{ monster: "goblin", returning: hurt.id }]);
   assert.equal(back.currentHp, 10);
   assert.equal(back.xp, Math.round(xp / 2), "a truce paid half; the rest is still owed");
@@ -222,6 +226,8 @@ await test("Reinforcements: one back from an earlier fight carries its state, on
   const row = world.enemies().find((enemy) => enemy.carriedFrom === earlier.id);
   assert.equal(row.currentHp, 7);
   assert.match(back.result.added[0].returning, /as the last fight left them/);
+  // A prepared fight's rename keeps the damage a creature carries.
+  assert.equal(encounters.patchEnemyIdentity(row.id, { displayName: "Snik" }).currentHp, 7);
 });
 
 await test("A foe lying knocked out cannot flee, and when the last one standing runs the fight ends with the knocked out still lying there", async () => {
