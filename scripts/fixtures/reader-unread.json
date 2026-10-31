@@ -3,8 +3,8 @@
   "counts": {
     "spell": {
       "entries": 1795,
-      "hand-written": 437,
-      "parsed": 769,
+      "hand-written": 449,
+      "parsed": 757,
       "missing": 589,
       "with unread": 208,
       "unread": {
