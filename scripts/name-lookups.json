@@ -1768,6 +1768,8 @@
     "lib/harness/images.ts#partial": [["key",1,"CLI output, tool names, model slugs, env names, file names"],["pattern",1,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"]],
     "lib/harness/process.ts#partial": [["pattern",3,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"]],
     "lib/harness/render.ts#partial": [["key",1,"CLI output, tool names, model slugs, env names, file names"]],
+    "lib/harness/run-dir-logic.ts#partial": [["key",2,"CLI output, tool names, model slugs, env names, file names"]],
+    "lib/harness/run-dir.ts#whole": [["key",1,"folder paths compared with the temp folder"]],
     "lib/harness/status.ts#partial": [["pattern",1,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"]],
     "lib/harness/test-run.ts#partial": [["pattern",1,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"]],
     "lib/help/index.ts#fallback": [["key",1,"a starter-spell list by class id"]],

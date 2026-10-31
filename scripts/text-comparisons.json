@@ -1858,6 +1858,7 @@
     "lib/harness/picture-test.ts#toUpperCase": [["display",1,"file kind shown"]],
     "lib/harness/process.ts#str-list": [["key",2,"process stdio modes"]],
     "lib/harness/render.ts#str-eq": [["key",12,"chat message roles and content types (protocol)"]],
+    "lib/harness/run-dir-logic.ts#str-list": [["key",1,"run folder name prefixes and the sign-in file names Codex keeps (file names)"]],
     "lib/harness/test-run.ts#toLowerCase": [["key",1,"a fixed test secret in a reply"]],
     "lib/harness/types.ts#str-list": [["key",1,"effort levels (fixed choice)"]],
     "lib/help/index.ts#[a-z]": [["key",1,"anchor id from a help title"]],
