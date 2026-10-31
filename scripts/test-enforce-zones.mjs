@@ -112,6 +112,19 @@ await test("Wall of Thorns: moving through it costs 4 feet per foot, and enterin
 
 // ---- entering ----
 
+// Issue 659: nothing held a named square to the spell's range, so a Web or
+// a Wall could be laid anywhere on the board (SRD 5.1, Range: a point
+// within range with a clear path to it).
+await test("A spell's area named beyond its range is refused before the slot is spent.", async () => {
+  const { world, sheets: [wizard] } = await board([caster("wizard", "int", ["Web"])], { 0: { x: 2, y: 8 }, e0: { x: 18, y: 2 } });
+  const slots = JSON.stringify(world.sheet(wizard.id).spellcasting.slots);
+  const far = await world.invoke("use_spell_slot", { characterId: wizard.id, spell: "Web", level: 2, atX: 16, atY: 8 });
+  assert.notEqual(far.ok, true);
+  assert.match(far.error ?? "", /within 60 feet/);
+  assert.equal(JSON.stringify(world.sheet(wizard.id).spellcasting.slots), slots, "a slot was spent on a refused Web");
+  assert.equal(zonesOf(world).length, 0);
+});
+
 await test("Web: a creature that enters the webs during its turn makes a DEX save or is restrained.", async () => {
   const { world, sheets: [wizard], enemies: [goblin] } = await board([caster("wizard", "int", ["Web"])], { 0: { x: 2, y: 8 }, e0: { x: 18, y: 2 } });
   const cast = await world.invoke("use_spell_slot", { characterId: wizard.id, spell: "Web", level: 2, atX: 12, atY: 2 });
@@ -148,7 +161,8 @@ await test("Black Tentacles: a creature entering the area makes a DEX save or ta
 });
 
 await test("Guardian of Faith: a hostile creature moving within 10 feet makes a DEX save against 20 radiant; the guardian vanishes after dealing 60 damage.", async () => {
-  const { world, sheets: [cleric], enemies } = await board([caster("cleric", "wis", ["Guardian of Faith"], [], 9)], { 0: { x: 2, y: 8 }, e0: { x: 20, y: 1 }, e1: { x: 20, y: 4 }, e2: { x: 20, y: 7 } }, { count: 3 });
+  // Within the spell's 30 feet of (12,4): an area is laid in range (issue 659).
+  const { world, sheets: [cleric], enemies } = await board([caster("cleric", "wis", ["Guardian of Faith"], [], 9)], { 0: { x: 8, y: 6 }, e0: { x: 20, y: 1 }, e1: { x: 20, y: 4 }, e2: { x: 20, y: 7 } }, { count: 3 });
   const cast = await world.invoke("use_spell_slot", { characterId: cleric.id, spell: "Guardian of Faith", level: 4, atX: 12, atY: 4 });
   assert.equal(cast.ok, true, cast.error);
   for (const [index, enemy] of enemies.entries()) {
@@ -572,7 +586,7 @@ await test("A Wall of Stone blocks sight: an arrow cannot be shot at a creature 
 });
 
 await test("Guardian of Faith strikes only creatures hostile to its caster: an ally walking by takes nothing.", async () => {
-  const { world, sheets: [cleric, fighter] } = await board([caster("cleric", "wis", ["Guardian of Faith"], [], 9), FIGHTER], [{ x: 2, y: 8 }, { x: 8, y: 4 }]);
+  const { world, sheets: [cleric, fighter] } = await board([caster("cleric", "wis", ["Guardian of Faith"], [], 9), FIGHTER], [{ x: 6, y: 8 }, { x: 8, y: 4 }]);
   const cast = await world.invoke("use_spell_slot", { characterId: cleric.id, spell: "Guardian of Faith", level: 4, atX: 12, atY: 4 });
   assert.equal(cast.ok, true, cast.error);
   assert.ok(zonesOf(world).some((zone) => zone.spell === "Guardian of Faith"));
@@ -591,13 +605,18 @@ await test("The rules and tools the model reads say where a spell's area is laid
     assert.ok(rules.includes(phrase), `the rules never mention ${phrase}`);
   }
   const { aoeDamageTool } = await import("../src/lib/dm/aoe-damage-tool.ts");
-  const { castAtEnemyTool } = await import("../src/lib/dm/cast-tools.ts");
+  const { castAtEnemyTool, castBuffTool } = await import("../src/lib/dm/cast-tools.ts");
   const { mutationTools } = await import("../src/lib/dm/mutations.ts");
   const slotTool = mutationTools.find((tool) => tool.function.name === "use_spell_slot");
   for (const tool of [aoeDamageTool, castAtEnemyTool, slotTool]) {
     for (const key of ["atX", "atY", "towardX", "towardY"]) {
       assert.ok(tool.function.parameters.properties[key], `${tool.function.name} offers no ${key}`);
     }
+  }
+  // cast_buff names a square only: Spiritual Weapon's and Arcane Sword's
+  // weapon appears where it is named (issue 659).
+  for (const key of ["atX", "atY"]) {
+    assert.ok(castBuffTool.function.parameters.properties[key], `cast_buff offers no ${key}`);
   }
 });
 
@@ -646,7 +665,8 @@ await test("A creature standing in a lightly obscured area (Web) makes Wisdom (P
 });
 
 await test("Passwall opens a passage through a wall: a creature walks through where the rock was.", async () => {
-  const { world, sheets: [wizard, fighter] } = await board([caster("wizard", "int", ["Passwall"]), FIGHTER], [{ x: 2, y: 8 }, { x: 10, y: 4 }]);
+  // Within Passwall's 30 feet of the wall it opens (issue 659).
+  const { world, sheets: [wizard, fighter] } = await board([caster("wizard", "int", ["Passwall"]), FIGHTER], [{ x: 7, y: 6 }, { x: 10, y: 4 }]);
   const kit = await combatKit(world);
   kit.openField(Array.from({ length: 9 }, (_, y) => [12, y, "#"]));
   const blocked = await walk(world, fighter.id, 14, 4);

@@ -10,6 +10,7 @@ import { register } from "node:module";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
+const { forPlayers } = await import("../src/lib/language/player-text.ts");
 const { deriveHand, FRESH_TURN } = await import("../src/lib/battlemap/hand.ts");
 const { composeSentence, intentBody } = await import("../src/lib/battlemap/hand-play.ts");
 const area = await import("../src/lib/battlemap/hand-area.ts");
@@ -312,7 +313,9 @@ test("every disease, madness, remedy and late spell condition has its own glyph 
   for (const name of names) {
     assert.notEqual(glyphFor(name).id, "effect", `${name} falls back to the plain effect glyph`);
     const row = rows.find((entry) => entry.match.includes(name));
-    assert.ok(conditionNoteLine(conditionNote(name, undefined, () => null)).startsWith(row.summary.trim().replace(/\.$/, "")),`${name}'s chip does not say what it does`);
+    // The summary as players read it, without the GM's tool directions (issue 659).
+    assert.ok(conditionNoteLine(conditionNote(name, undefined, () => null)).startsWith(forPlayers(row.summary.trim()).replace(/\.$/, "")),`${name}'s chip does not say what it does`);
+    assert.ok(!/\b[a-z]+_[a-z]+\b/.test(conditionNoteLine(conditionNote(name, undefined, () => null))), `${name}'s chip names a GM tool`);
   }
 });
 

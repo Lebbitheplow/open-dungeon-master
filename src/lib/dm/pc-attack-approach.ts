@@ -67,7 +67,9 @@ export function approachForAttack(
     return null;
   }
   const built = buildAttackProfile(campaign.id, sheet, args, { apart: tilesBetween(encounter.id, sheet.id, enemy.id) });
-  if ("error" in built || built.profile.ranged) {
+  // A weapon a spell made moves itself to strike (issue 659): its caster
+  // never walks for it.
+  if ("error" in built || built.profile.ranged || built.conjured) {
     return null;
   }
   const { profile } = built;

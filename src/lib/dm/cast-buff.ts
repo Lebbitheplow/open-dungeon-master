@@ -43,7 +43,8 @@ import { castFindFamiliar, isFindFamiliar } from "@/lib/dm/familiar-cast";
 import { castShapeAtEnemy, enemyShapeSpellFor } from "@/lib/dm/enemy-polymorph";
 import { allyRowRefusal, allyRowsOf, layBuffOnRows } from "@/lib/dm/cast-buff-allies";
 import { unwillingResist } from "@/lib/dm/hostile-buffs";
-import { holdingHint, noneNamed, type ToolResult } from "@/lib/dm/tool-errors";
+import { holdingHint, invalidArguments, noneNamed, type ToolResult } from "@/lib/dm/tool-errors";
+import { zoneArgsSchema } from "@/lib/dm/zone-args";
 import { textKey } from "@/lib/language/text-logic";
 import { nameChoice } from "@/lib/srd/feature-names";
 import { castsSpells } from "@/lib/srd";
@@ -69,7 +70,17 @@ const castBuffSchema = z.object({
   // A summoning spell: fewer creatures than the slot allows.
   count: z.coerce.number().int().min(1).max(40).optional(),
   reason: z.string().optional(),
+  // Where a buff that leaves something on the board appears (Spiritual
+  // Weapon's weapon, issue 659): the Hand's board pick carried these, and
+  // the schema dropped them, so the weapon appeared beside its caster.
+  ...zoneArgsSchema,
 });
+
+// The four placement arguments the call named, passed on to the cast
+// guard, which lays the area (src/lib/dm/zone-cast.ts).
+function placementArgs(args: { atX?: number; atY?: number; towardX?: number; towardY?: number }) {
+  return Object.fromEntries((["atX", "atY", "towardX", "towardY"] as const).flatMap((key) => (args[key] === undefined ? [] : [[key, args[key]]])));
+}
 
 export function handleCastBuff(
   campaign: Campaign,
@@ -78,12 +89,20 @@ export function handleCastBuff(
   sheets: CharacterSheet[],
   sheetsById: Map<string, CharacterSheet>,
 ): ToolResult {
-  let args: z.infer<typeof castBuffSchema>;
+  // Each bad field is named with zod's reason: one error for every mistake
+  // ("needs characterId and spell") sent the model back to resend the same
+  // call.
+  let raw: unknown;
   try {
-    args = castBuffSchema.parse(JSON.parse(rawArguments || "{}"));
+    raw = JSON.parse(rawArguments || "{}");
   } catch {
     return { error: "Invalid arguments: cast_buff needs characterId and spell.", retry: true };
   }
+  const parsed = castBuffSchema.safeParse(raw);
+  if (!parsed.success) {
+    return invalidArguments("Invalid arguments: cast_buff needs characterId and spell.", parsed.error);
+  }
+  let args: z.infer<typeof castBuffSchema> = parsed.data;
   const staleSheet = resolveSheetRef(args.characterId, sheets, sheetsById);
   const sheet = staleSheet ? (getSheetById(staleSheet.id) ?? staleSheet) : null;
   if (!sheet) {
@@ -333,6 +352,7 @@ export function handleCastBuff(
       ...(args.level ? { level: args.level } : {}),
       via: "buff",
       reason: (args.reason ?? "").slice(0, 200),
+      ...placementArgs(args),
     }),
     sheets,
     sheetsById,

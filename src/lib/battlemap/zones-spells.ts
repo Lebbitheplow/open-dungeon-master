@@ -141,6 +141,17 @@ export type ZoneRow = {
   disperses?: string[];
   dispelsDarknessUpTo?: number;
   trigger?: ZoneTrigger;
+  // The area lasts while its caster holds this condition (Spiritual
+  // Weapon's square goes with the "spiritual weapon" condition the casting
+  // laid: Dispel Magic, its minute running out, or a GM clearing it removes
+  // the weapon from the board too).
+  whileCondition?: string;
+  // Laid with no square named, it appears beside the nearest foe within
+  // the spell's range rather than on its caster (a weapon that strikes).
+  besideFoe?: boolean;
+  // How far from its caster it may be laid, in feet (src/lib/dm/zone-cast.ts
+  // besideFoe; the cast guard reads the spell's own range for a named one).
+  rangeFeet?: number;
   tone: ZoneTone;
   // What it does, one line for GAME STATE and the board's label.
   summary: string;
@@ -343,6 +354,15 @@ export const ZONE_ROWS: Record<string, ZoneRow> = {
     shape: "cube", feet: 5, level: 2, concentration: false, rounds: 2, tone: "fire",
     trigger: { on: ["start"], dice: "2d4", type: "fire", once: true },
     summary: "burning webs: a creature starting its turn here takes 2d4 fire",
+  },
+  // Spiritual Weapon's floating weapon (issue 659): one square, marking where
+  // the weapon is. It does nothing to the ground; pc_attack measures the
+  // weapon's reach from it and moves it with each strike
+  // (src/lib/dm/conjured-strike.ts). Not concentration in SRD 5.1.
+  "spiritual weapon": {
+    shape: "cube", feet: 5, level: 2, concentration: false, rounds: MINUTE,
+    whileCondition: "spiritual weapon", besideFoe: true, rangeFeet: 60, tone: "force",
+    summary: "the floating spectral weapon: each bonus-action strike first moves it up to 20 feet, then hits a creature within 5 feet of it",
   },
   "incendiary cloud": {
     shape: "sphere", feet: 20, level: 8, concentration: true, rounds: MINUTE,

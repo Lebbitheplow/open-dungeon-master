@@ -10,11 +10,19 @@ const square = (what: string) => ({ type: "integer", minimum: 0, maximum: 200, d
 
 export const ZONE_ARGS: Record<string, unknown> = {
   atX: square(
-    "Column of the area's centre square (or a wall's first), for a spell that leaves an area on the map. Omit to centre it on the creatures caught (or the caster's own square); an aura (Spirit Guardians) and a line (Gust of Wind) start at the caster.",
+    "Column of the area's centre square (or a wall's first), for a spell that leaves an area on the map. Omit to centre it on the creatures caught, else the caster; an aura or line starts at the caster.",
   ),
   atY: square("The row that goes with atX."),
-  towardX: square("A wall or a line: the column it runs toward from its first square (a line from the caster). Omit for a wall across the caster's view of the point."),
+  towardX: square("A wall or a line: the column it runs toward from its first square. Omit for a wall across the caster's view."),
   towardY: square("The row that goes with towardX."),
+};
+
+// cast_buff's two: a buff lays no wall or line, only Spiritual Weapon's
+// or Arcane Sword's square (issue 659). Short, as every word of the
+// trimmed tool set is paid on each turn of a 48K table.
+export const BUFF_ZONE_ARGS: Record<string, unknown> = {
+  atX: square("Spiritual Weapon, Arcane Sword: the weapon's column; omitted, beside the nearest foe."),
+  atY: square("The row that goes with atX."),
 };
 
 export const zoneArgsSchema = {

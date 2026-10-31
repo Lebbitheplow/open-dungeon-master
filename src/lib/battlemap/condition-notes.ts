@@ -10,6 +10,7 @@
 // drives it.
 import { describeConditionDuration } from "@/lib/dm/condition-logic";
 import { conditionEffectsFor } from "@/lib/srd/condition-effects";
+import { forPlayers } from "@/lib/language/player-text";
 
 export type ConditionMetaLike = {
   rounds?: number;
@@ -35,7 +36,9 @@ const SRD_CONDITIONS = new Set([
 function meaningOf(name: string): string | null {
   const key = name.trim().toLowerCase();
   if (SRD_CONDITIONS.has(key) || /^exhaustion\b/.test(key)) return null;
-  const summary = conditionEffectsFor(key)?.summary?.trim();
+  // The summary is the model's too: the tool it names is not the player's
+  // to read (src/lib/language/player-text.ts).
+  const summary = forPlayers(conditionEffectsFor(key)?.summary?.trim() ?? "");
   return summary ? summary.replace(/\.$/, "") : null;
 }
 

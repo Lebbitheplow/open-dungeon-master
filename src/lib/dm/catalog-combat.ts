@@ -14,6 +14,7 @@ import { SAMPLE_TRAPS } from "@/lib/srd/trap-specs";
 import {
   ABILITY_OPTIONS as ABILITIES,
   AREA_PLACEMENT_FIELDS,
+  WEAPON_SQUARE_FIELDS,
   REASON_FIELD as REASON,
   TRAP_SEVERITY_OPTIONS,
   advantageFields,
@@ -280,6 +281,9 @@ export const COMBAT_ADJUDICATIONS: CatalogEntry[] = [
       },
       { name: "count", label: "How many", kind: "number", min: 1, max: 40, help: "A summoning spell: fewer creatures than the slot allows; empty for the most." },
       { name: "endSpell", label: "Dispel Magic ends", kind: "text", help: "The one spell to end when the target holds several; empty ends them all." },
+      // Where Spiritual Weapon's weapon appears, as the AI GM can say it
+      // (issue 659).
+      ...WEAPON_SQUARE_FIELDS,
       REASON,
     ],
   },

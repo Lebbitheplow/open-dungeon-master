@@ -31,7 +31,7 @@ export function describeZones(zones: SpellZone[], width: number): string[] {
       : zone.untilRound === null
         ? "the rest of the fight"
         : `through round ${zone.untilRound}`;
-    lines.push(`- ${zone.spell} (${zone.casterName || "unknown caster"}; lasts ${lasting}) covering ${span(zone, width)}, ${zone.cells.length} squares: ${row.summary}.`);
+    lines.push(`- ${zone.spell} (${zone.casterName || "unknown caster"}; lasts ${lasting}) covering ${span(zone, width)}, ${zone.cells.length} square${zone.cells.length === 1 ? "" : "s"}: ${row.summary}.`);
   }
   return lines;
 }

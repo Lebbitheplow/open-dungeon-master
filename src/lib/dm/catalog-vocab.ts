@@ -192,3 +192,19 @@ export const AREA_PLACEMENT_FIELDS: CatalogField[] = [
   },
   { name: "towardY", label: "Runs toward, row", kind: "number", min: 0, max: 200 },
 ];
+
+// cast_buff's square: where Spiritual Weapon's or Arcane Sword's weapon
+// appears (issue 659), picked on the board like an area's. A buff lays no
+// wall or line, so the form, like the tool, has no "runs toward" pair.
+export const WEAPON_SQUARE_FIELDS: CatalogField[] = [
+  {
+    name: "atX",
+    label: "Weapon's square, column",
+    kind: "number",
+    min: 0,
+    max: 200,
+    square: { row: "atY", role: "at" },
+    help: "Spiritual Weapon or Arcane Sword: the square the weapon appears on. Empty sets it beside the nearest foe.",
+  },
+  { name: "atY", label: "Weapon's square, row", kind: "number", min: 0, max: 200 },
+];

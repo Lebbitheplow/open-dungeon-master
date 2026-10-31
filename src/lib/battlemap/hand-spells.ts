@@ -43,6 +43,7 @@ import {
 } from "@/lib/battlemap/hand-core";
 import type { ToolError } from "@/lib/dm/tool-errors";
 import { compareNames, textKey } from "@/lib/language/text-logic";
+import { forPlayers } from "@/lib/language/player-text";
 
 // ---- spells ----
 
@@ -265,7 +266,10 @@ function spellCard(sheet: CharacterSheet, turn: HandTurn, riders: CombatRiders, 
   if (fact.concentration && sheet.concentratingOn && textKey(sheet.concentratingOn) !== textKey(name)) {
     notes.push(`Ends your concentration on ${sheet.concentratingOn}.`);
   }
-  if (mech.note) notes.push(mech.note);
+  // A note the model reads too: its tool directions are not the player's
+  // (src/lib/language/player-text.ts).
+  const note = mech.note ? forPlayers(mech.note) : "";
+  if (note) notes.push(note);
   if (slot && slot.level > fact.level) notes.push(`Cast with a level ${slot.level} slot.`);
   // Mechanics the app read from the spell's text that nobody checked
   // (issue #570): the card's details say so.

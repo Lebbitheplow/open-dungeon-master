@@ -250,6 +250,7 @@ export const AUTHORED_CONDITION_ROWS: ConditionEffectRow[] = [
       abilityToDamage: false,
       ranged: true,
       bonusAction: true,
+      rangeFeet: 120,
     },
   },
   // The genre classes' marks (authored-effects-genre.ts): the condition names

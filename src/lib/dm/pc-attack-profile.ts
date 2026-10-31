@@ -8,7 +8,7 @@ import { sheetSpellAuthors } from "@/lib/dm/spell-authors";
 import { brawlerUnarmed } from "@/lib/srd/feat-combat";
 import { getMounts } from "@/lib/db/mounts";
 import { isValidExpression } from "@/lib/dice";
-import { acBreakdownFor, computeSheetDerived, spellAttackFor, type SheetDerived, castsSpells } from "@/lib/srd";
+import { acBreakdownFor, computeSheetDerived, spellAbilityFor, spellAttackFor, type SheetDerived, castsSpells } from "@/lib/srd";
 import { spellDamageFor, spellEngineName, spellFactsFor, spellMechanicsFor, spellSchoolFor } from "@/lib/content";
 import { spellDamageRiders } from "@/lib/srd/spell-damage-riders";
 import { isMeleeSpellAttack } from "@/lib/dm/spell-attack-riders";
@@ -31,6 +31,7 @@ import { racialNaturalWeapon } from "@/lib/srd/racial-weapons";
 import { allSpellNames } from "@/lib/srd/spell-lists";
 import { matchWeapon, SPECIAL_WEAPONS } from "@/lib/srd/weapons";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
+import type { GrantedAttack } from "@/lib/srd/condition-effect-types";
 import { summonAttackProfile } from "@/lib/dm/summon-rules";
 import { naturalAttackProfile, pickNaturalAttack } from "@/lib/dm/natural-attack";
 import { findBeastForm } from "@/lib/srd/beast-forms";
@@ -57,6 +58,12 @@ export type BuiltAttack = {
   kind: AttackKind;
   // The two SRD weapons with a rule of their own.
   special: "net" | "lance" | null;
+  // A granted strike from something the spell made (Spiritual Weapon's
+  // weapon): its reach is measured from that, not the holder (issue 659).
+  conjured: NonNullable<GrantedAttack["from"]> | null;
+  // The spell a granted attack comes from, when one does: a Globe of
+  // Invulnerability or an Antimagic Field turns it as it turns the spell.
+  grantedSpell: string | null;
 };
 
 export function buildAttackProfile(
@@ -87,6 +94,8 @@ export function buildAttackProfile(
   const granted = grantedAttackFor(sheet.conditions, args.weapon ?? "", args.spell ?? "");
   let grantedBonusAction = false;
   let grantedWithActivation: string | null = null;
+  let conjured: BuiltAttack["conjured"] = null;
+  let grantedSpell: string | null = null;
   const natural = !granted && !args.spell?.trim() ? authoredNaturalWeapon(sheet, weaponName, derived.abilityMods) : null;
   // A beast form's natural attacks (an empty list for a form with none), or
   // null for a form the table does not know.
@@ -97,27 +106,37 @@ export function buildAttackProfile(
     if (derived.spellAttack === null) {
       return { error: `${sheet.name}'s sheet has no spell attack bonus (no spellcasting ability), so ${granted.attack.name} cannot be rolled.`, refused: "rules" };
     }
+    const grantedMeta = (sheet.conditionMeta as ConditionMetaMap)[granted.condition];
+    // The spell the attack comes from: the one the casting recorded on the
+    // condition, else a spell of the attack's own name (Spiritual Weapon).
+    // A feature's attack (Starry Form) has none.
+    grantedSpell = grantedMeta?.spell ?? (spellFactsFor(granted.attack.name, sheetSpellAuthors(sheet)) ? granted.attack.name : null);
     // Cast from a higher slot, a scaling attack (Spiritual Weapon) rolls the
     // slot's dice: the level the condition carries, else the caster's last
     // casting of the spell on the audit trail.
     const slotLevel =
-      (sheet.conditionMeta as ConditionMetaMap)[granted.condition]?.slotLevel ??
+      grantedMeta?.slotLevel ??
       (granted.attack.upcast ? lastCastSlot(sheet.id, granted.attack.name) : null);
     const dice = grantedAttackDice(granted.attack, sheet.level, slotLevel);
-    const abilityMod =
-      granted.attack.abilityToDamage && sheet.spellcasting
-        ? derived.abilityMods[sheet.spellcasting.ability]
-        : 0;
+    // A multiclass caster's spell attack and modifier are those of the class
+    // whose list carries the spell (a cleric and wizard's Spiritual Weapon
+    // rolls with Wisdom), as a cast spell's are.
+    const ability = grantedSpell ? spellAbilityFor(sheet, grantedSpell) : (sheet.spellcasting?.ability ?? null);
+    const abilityMod = granted.attack.abilityToDamage && ability ? derived.abilityMods[ability] : 0;
+    // A ranged one reaches its own range and no farther: a spell attack has
+    // no long range (SRD 5.1, Range), so Crown of Stars' 120 feet is all of it.
+    const rangeTiles = Math.max(1, Math.round((granted.attack.rangeFeet ?? 60) / 5));
     profile = {
       weapon: granted.attack.name,
-      toHit: derived.spellAttack,
+      toHit: grantedSpell ? (spellAttackFor(sheet, grantedSpell) ?? derived.spellAttack) : derived.spellAttack,
       damageExpression:
         abilityMod > 0 ? `${dice}+${abilityMod}` : abilityMod < 0 ? `${dice}${abilityMod}` : dice,
       damageType: granted.attack.type,
       ranged: granted.attack.ranged,
       thrown: false,
       reachTiles: 1,
-      rangeTiles: 12,
+      rangeTiles,
+      longRangeTiles: rangeTiles,
       proficient: true,
       improvised: false,
       ability: "dex",
@@ -132,6 +151,7 @@ export function buildAttackProfile(
       ],
     };
     grantedBonusAction = granted.attack.bonusAction;
+    conjured = granted.attack.from ?? null;
     // The attack that comes with the activation (its condition still at its
     // full duration, so laid this turn) rides the activation's own bonus
     // action; pc-attack-spend.ts decides once it sees the turn.
@@ -363,7 +383,7 @@ export function buildAttackProfile(
   if (reach) {
     profile = { ...profile, reachTiles: profile.reachTiles + reach.tiles, riderNotes: [...profile.riderNotes, `${reach.feature}: ${reach.tiles * 5} more feet of reach`] };
   }
-  return { profile, derived, riders, scalingNote, grantedBonusAction, grantedWithActivation, kind, special };
+  return { profile, derived, riders, scalingNote, grantedBonusAction, grantedWithActivation, kind, special, conjured, grantedSpell };
 }
 
 // The natural attacks a beast form fights with: the record's own, or for a
