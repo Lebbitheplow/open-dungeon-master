@@ -10,6 +10,7 @@
 // a person behind their sheet (#503 Phase 0.1), court but are never courted,
 // guests never court, and a romanced NPC is never rostered out.
 import assert from "node:assert/strict";
+import { setTimeout as wait } from "node:timers/promises";
 import { openWorld } from "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
 
@@ -301,8 +302,12 @@ await test("romance switched off withdraws what waits, and a yes after it takes 
   assert.equal(late.status, 409, "no step at a table without romance");
   assert.equal(proposals.getItemProposal(row.id).status, "cancelled");
   assert.equal(pair(kael, "Corin").romance, "none");
-  // And the next AI turn withdraws anything still waiting.
+  // And the next AI turn withdraws anything still waiting. The suite plays
+  // through the console, where Corin's next move waits on the GM's next
+  // narration (src/lib/dm/step-exchange.ts).
   campaigns.updateGameSettings(world.campaignId, { ...world.campaign().gameSettings, romance: "on" });
+  await wait(5);
+  world.say("dm", "The talk at the inn turns to other things.");
   relationships.patchRelationship(pair(kael, "Corin").id, { advanceReadyUntil: advances.getAiTurns(world.campaignId) + 3 });
   assert.equal((await npcMove(kael, "Corin")).ok, true);
   const [again] = pendingAdvances();

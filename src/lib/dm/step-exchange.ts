@@ -1,8 +1,11 @@
 import { getDmTurn, type DmTurn } from "@/lib/db/dm-turns";
 import { getLatestDmMessage } from "@/lib/db/messages";
 
-// One romance step per exchange (src/lib/dm/relationship-tools.ts): what
-// "the same exchange" means at each kind of table.
+// One step per exchange, for each guard that holds a moment to one move: a
+// romance step (src/lib/dm/relationship-tools.ts), an NPC's first move
+// (src/lib/dm/npc-advance.ts) and an attitude a social check moved
+// (src/lib/dm/social-tools.ts). What "the same exchange" means at each kind
+// of table.
 //
 // At an AI table an exchange is one AI turn, so the step's own turn id is
 // the whole test. A person's console makes a fresh turn for each call
@@ -38,4 +41,13 @@ export function heldStepError(characterName: string, subjectName: string, turn: 
   return turn.actor === "human_dm"
     ? `${subjectName} already answered ${characterName} this scene, so a second ask is refused. Post your next narration to move the scene on; then you can ask again.`
     : `${characterName} and ${subjectName} already took a step this exchange. Let the scene breathe before the next one.`;
+}
+
+// The same hold on an NPC's first move. The moment between the two was spent
+// this scene, by either side's step, so the console names neither as the one
+// who answered; the model reads the line it always read.
+export function heldMoveError(characterName: string, subjectName: string, turn: DmTurn): string {
+  return turn.actor === "human_dm"
+    ? `${characterName} and ${subjectName} already had their moment this scene, so another move is refused. Post your next narration to move the scene on; then ${subjectName} can try again.`
+    : heldStepError(characterName, subjectName, turn);
 }

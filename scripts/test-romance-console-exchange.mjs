@@ -3,6 +3,8 @@
 // for every call, so the one-step-per-exchange guard, keyed on the turn,
 // never held there: a refused consent roll could be run again at once until
 // the die said yes. The person's exchange ends with their next narration.
+// An NPC's first move and an attitude a social check moved stood on the same
+// guard, and hold the same way.
 import assert from "node:assert/strict";
 import { setTimeout as wait } from "node:timers/promises";
 import { openWorld } from "./lib/enforce-world.mjs";
@@ -13,6 +15,8 @@ const relationships = await import("../src/lib/db/relationships.ts");
 const npcs = await import("../src/lib/db/npcs.ts");
 const turns = await import("../src/lib/db/dm-turns.ts");
 const { invokeEngine } = await import("../src/lib/dm/invoke.ts");
+const { setOpenToAdvances } = await import("../src/lib/db/sheets.ts");
+const proposals = await import("../src/lib/db/item-proposals.ts");
 
 // A courting pair a little past the bar for "together", where the answer is
 // a real roll: d20 + 0 + warmth 0 against DC 12.
@@ -95,6 +99,47 @@ await test("an AI table keeps its guard on the turn: the same turn is held, the 
   assert.equal(reply.ok, true, reply.error);
   assert.equal(reply.result.accepted, true, "a new AI turn is a new exchange, as before");
   assert.equal(pair().romance, "together");
+});
+
+await test("at the console an NPC's first move turned down is not made again until the GM's next narration", async () => {
+  const table = await openWorld({ gameSettings: { dmMode: "human" } });
+  const player = table.addUser("lio");
+  const hero = table.addHero({ user: player, name: "Lio", gender: "Male" });
+  const set = await table.invoke("set_npc", { name: "Senna", gender: "Female", drawnTo: ["men"] });
+  assert.equal(set.ok, true, set.error);
+  const row = relationships.ensureRelationship({ campaignId: table.campaignId, characterId: hero.id, characterName: "Lio", subjectKind: "npc", subjectName: "Senna" });
+  relationships.patchRelationship(row.id, { approval: 70 });
+  setOpenToAdvances(hero.id, true);
+  const move = { characterId: hero.id, subject: "Senna", to: "courting", initiator: "npc", note: "Walk with me?" };
+  const offers = () => proposals.listOpenItemProposals(table.campaignId).filter((offer) => offer.toolName === "romance_advance");
+
+  const first = await table.invoke("romance_advance", move);
+  assert.equal(first.ok, true, first.error);
+  const [offer] = offers();
+  assert.ok(offer, "the move waits on Lio's player");
+  const answers = await table.route("campaigns/[campaignId]/item-proposals/[proposalId]");
+  table.signIn(player);
+  const declined = await answers.POST(
+    new Request("http://test/", { method: "POST", body: JSON.stringify({ action: "decline" }) }),
+    { params: Promise.resolve({ campaignId: table.campaignId, proposalId: offer.id }) },
+  );
+  assert.equal(declined.status, 200);
+
+  // Run the form again straight away: the moment was spent this scene.
+  const again = await table.invoke("romance_advance", move);
+  assert.equal(again.ok, false, "a second move in the same scene is refused");
+  assert.equal(
+    again.error,
+    "Lio and Senna already had their moment this scene, so another move is refused. Post your next narration to move the scene on; then Senna can try again.",
+  );
+  assert.equal(offers().length, 0, "no second offer reached the player");
+
+  // The GM narrates; the scene has moved on and Senna may try again.
+  await wait(5);
+  table.say("dm", "Days pass in the river town.");
+  const later = await table.invoke("romance_advance", move);
+  assert.equal(later.ok, true, later.error);
+  assert.equal(offers().length, 1);
 });
 
 finish();

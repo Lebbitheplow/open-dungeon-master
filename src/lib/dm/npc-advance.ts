@@ -38,6 +38,7 @@ import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolResult } from "@/lib/dm/tool-errors";
 import { textKey, unquoted } from "@/lib/language/text-logic";
 import { publicItemProposal } from "@/lib/dm/proposal-intercept";
+import { heldMoveError, stepTakenThisExchange } from "@/lib/dm/step-exchange";
 
 // An NPC's first move toward a character whose player opened them to it
 // (issue 501): romance_advance with initiator "npc", one tool per intent
@@ -149,11 +150,11 @@ export function handleNpcAdvance(
     return subject;
   }
   const relationship = openLedger(campaign, sheet, subject);
-  if (relationship.lastShiftTurn === turn.id) {
-    return {
-      error: `${sheet.name} and ${subject.name} already took a step this exchange. Let the scene breathe before the next one.`,
-      retry: true,
-    };
+  // One move per exchange, as for the player's own step: the console makes a
+  // fresh turn per call, so a move turned down could be made again at once,
+  // before the scene had moved on (issue 638's guard).
+  if (stepTakenThisExchange(campaign.id, relationship.lastShiftTurn, turn)) {
+    return { error: heldMoveError(sheet.name, subject.name, turn), retry: true };
   }
   const context = suitorContext(campaign.id);
   const who = suitorIdentity(campaign, subject, sheets);
