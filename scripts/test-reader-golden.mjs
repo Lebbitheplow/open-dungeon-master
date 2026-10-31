@@ -119,7 +119,9 @@ await test("The checked list is exactly the golden cases.", () => {
 });
 
 await test("A parsed reading nobody checked is best effort; a hand-written one, or one with nothing to play, is not.", () => {
-  const parsed = goldenOf("spell").cases.find((entry) => entry.expect.source === "parsed");
+  // A third-party spell: the SRD's own entries read as checked (the SRD 5.1
+  // text audit held each against the book).
+  const parsed = goldenOf("spell").cases.find((entry) => entry.expect.source === "parsed" && entry.row.documentSlug !== "wotc-srd");
   assert.equal(readingIsBestEffort(readEntry("spell", parsed.row)), false, "checked");
   assert.equal(readingIsBestEffort(readEntry("spell", { ...parsed.row, slug: `${parsed.row.slug}-copy` })), true, "the same text unchecked");
   assert.equal(readingIsBestEffort(reading({ handWritten: { resolution: "buff" }, parsed: null, unread: [], checked: false })), false);

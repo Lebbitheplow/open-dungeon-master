@@ -28,7 +28,8 @@ export const READING_KINDS = ["spell", "monster", "feat", "race", "class", "back
 // changes: a pack whose readings an older revision wrote is read live
 // (src/lib/content/pack-readings.ts), and scripts/test-pack-readings.mjs
 // fails while an installed pack's stored readings differ from the readers'.
-export const READER_REVISION = 1;
+//   2: an SRD entry reads as checked (the SRD 5.1 text audit).
+export const READER_REVISION = 2;
 export type ReadingKind = (typeof READING_KINDS)[number];
 export type ReadingSource = "hand-written" | "parsed" | "missing";
 
@@ -60,11 +61,17 @@ export function readingId(kind: ReadingKind, row: Pick<ReadingRow, "documentSlug
 
 const CHECKED = new Set((checkedJson as { ids: string[] }).ids);
 
+// The SRD's own documents in the pack. Every SRD spell, creature and item
+// was held up against the SRD 5.1 text the app bundles by issue #570's audit
+// (scripts/test-enforce-srd-*.mjs, docs/srd-text-audit.md), which fails
+// where the engine reads one differently.
+const SRD_DOCUMENTS = new Set(["wotc-srd", "srd-2014"]);
+
 // Whether a person has checked this entry's parsed reading against its
-// text. The golden sets are the list (test-reader-golden.mjs keeps
-// checked-readings.json equal to their ids).
+// text: an SRD entry (the audit above), or one in a reader's golden set
+// (test-reader-golden.mjs keeps checked-readings.json equal to their ids).
 export function readingChecked(kind: ReadingKind, row: Pick<ReadingRow, "documentSlug" | "slug">): boolean {
-  return CHECKED.has(readingId(kind, row));
+  return SRD_DOCUMENTS.has(row.documentSlug) || CHECKED.has(readingId(kind, row));
 }
 
 // A reading from its parts: the source follows from what answered, and
@@ -86,6 +93,16 @@ export function reading(input: {
     checked: input.checked,
   };
 }
+
+// What the table reads beside such a reading.
+export const BEST_EFFORT_LABEL = "Best effort";
+// The same, as a chip beside the other lowercase chips (the reference's
+// "ritual", the forge's "CR 2").
+export const BEST_EFFORT_CHIP = "best effort";
+// Short enough for a card's face; the details carry the note.
+export const BEST_EFFORT_SHORT = "Best effort: read from its text, not yet checked.";
+export const BEST_EFFORT_NOTE =
+  "Best effort: the app read this entry's rules from its text, and nobody has checked that reading yet. If it plays differently from what the text says, the text and the GM win, and a workshop copy can fix it for your table.";
 
 // Whether the table should be told a reading is the parser's best effort:
 // read from prose (or tried and missed something the text holds), and

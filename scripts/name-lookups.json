@@ -887,7 +887,7 @@
     "lib/content/race-options.ts#partial": [["pattern",4,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"],["key",3,"pack race rows by slug and their English labels"]],
     "lib/content/race-options.ts#whole": [["key",3,"document slugs; one pack row's own trait lists"],["key",2,"pack race rows by slug and their English labels"]],
     "lib/content/race-options.ts#whole-single": [["identity",1,"spell and subrace names by textKey"]],
-    "lib/content/reading-logic.ts#keyed": [["key",1,"ids, slugs and the checked list's reading ids"]],
+    "lib/content/reading-logic.ts#keyed": [["key",2,"ids, slugs and the checked list's reading ids"]],
     "lib/content/scope.ts#keyed": [["key",1,"the pack's English ability and proficiency labels; baked spells by textKey"]],
     "lib/content/scope.ts#partial": [["search",2,"unadmitted names under a filter"]],
     "lib/content/scope.ts#whole-single": [["key",1,"a subclass's class id compared as stored"]],

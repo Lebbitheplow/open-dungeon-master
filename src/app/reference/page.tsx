@@ -23,6 +23,7 @@ import { DeskPanel } from "@/app/reference/DeskPanel";
 import { CategoryRail } from "@/app/reference/CategoryRail";
 import { ResultBadges, type BadgeRow } from "@/app/reference/ResultBadges";
 import { needsNote } from "@/lib/content/levelup-logic";
+import { BEST_EFFORT_NOTE } from "@/lib/content/reading-logic";
 import { MAX_COMPARE, type CompareKind } from "@/lib/reference/compare";
 import { textKey } from "@/lib/language/text-logic";
 
@@ -235,12 +236,12 @@ export default function ReferencePage() {
   function openRow(row: Row) {
     // What an entry built on rules this game does not play means at the
     // table comes first (issue #570).
-    const note = needsNote(row.needs ?? []);
+    const notes = [needsNote(row.needs ?? []), row.bestEffort ? BEST_EFFORT_NOTE : null].filter(Boolean);
     const text = describeContentEntry(row.data) ?? "No description available for this entry.";
     setOpen({
       title: row.name,
       meta: kind === "spells" ? spellSummary(row.data) : undefined,
-      text: note ? `${note}\n\n${text}` : text,
+      text: notes.length ? `${notes.join("\n\n")}\n\n${text}` : text,
     });
   }
 

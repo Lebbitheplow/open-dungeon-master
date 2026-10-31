@@ -2,6 +2,7 @@
 
 import { needsLabel, offeredInPlay } from "@/lib/content/levelup-logic";
 import type { Need } from "@/lib/content/needs-logic";
+import { BEST_EFFORT_CHIP } from "@/lib/content/reading-logic";
 import { GameIcon } from "@/components/ui/GameIcon";
 
 // What a reference result is, at a glance: its kind, its level or rarity or
@@ -12,8 +13,11 @@ import { GameIcon } from "@/components/ui/GameIcon";
 export type BadgeRow = {
   source: string;
   documentSlug?: string;
-  // Rules the entry uses that this game does not play (issue #570).
+  // Rules the entry uses that this game does not play, and whether the
+  // engine plays mechanics it read from the text that nobody checked (issue
+  // #570).
   needs?: Need[];
+  bestEffort?: boolean;
   data: Record<string, unknown>;
   level?: number;
   school?: string;
@@ -81,6 +85,9 @@ export function badgesFor(category: string, row: BadgeRow): Badge[] {
     // Orange where it is not offered for play, neutral where the GM plays
     // the part this game lacks (src/lib/content/levelup-logic.ts).
     badges.push({ key: "needs", text: needs, tone: offeredInPlay(row.needs ?? []) ? "neutral" : "orange" });
+  }
+  if (row.bestEffort) {
+    badges.push({ key: "best-effort", text: BEST_EFFORT_CHIP, tone: "blue" });
   }
   if (row.source === "homebrew") {
     badges.push({ key: "source", text: "homebrew", tone: "gold" });

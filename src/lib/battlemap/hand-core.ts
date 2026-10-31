@@ -239,6 +239,9 @@ export type SpellFact = {
   mech?: SpellMech;
   runsAs?: string;
   facts?: SpellFacts;
+  // The engine plays this spell from mechanics it read from the text that
+  // nobody checked (src/lib/content/reading-logic.ts): its card says so.
+  bestEffort?: boolean;
 };
 
 export type HandOptions = {
