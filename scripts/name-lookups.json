@@ -1542,7 +1542,6 @@
     "lib/dm/reaction-spells.ts#first": [["key",1,"Counterspell's ability by class id"]],
     "lib/dm/reaction-spells.ts#partial": [["key",1,"damage types"],["pattern",2,"a fixed pattern over text that reads no record's name: its English words are scripts/text-comparisons.json's to classify"]],
     "lib/dm/reaction-spells.ts#whole": [["identity",1,"a reaction spell by its whole name"],["key",1,"damage types"],["identity",1,"an innate spell by whole name"]],
-    "lib/dm/reaction-tools.ts#fallback": [["key",1,"the attack record's first swing"]],
     "lib/dm/reaction-tools.ts#whole": [["key",1,"answered reaction labels"]],
     "lib/dm/readied-kinds.ts#keyed": [["key",1,"ids, refs, slugs, tool names, field names, env names, event kinds, UI keys, caches, door and map keys; a sheet's conditionMeta by the condition key it was written under; the usage route's gear map by the sheet's own stored item names (src/: every site read)"]],
     "lib/dm/readied-spell.ts#keyed": [["key",1,"ids, refs, slugs, tool names, field names, env names, event kinds, UI keys, caches, door and map keys; a sheet's conditionMeta by the condition key it was written under; the usage route's gear map by the sheet's own stored item names (src/: every site read)"]],
