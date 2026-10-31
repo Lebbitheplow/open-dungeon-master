@@ -18,6 +18,7 @@ import os from "node:os";
 import path from "node:path";
 import { register } from "node:module";
 import { suite } from "./lib/enforce-harness.mjs";
+import { removeTempDir } from "./lib/remove-temp-dir.mjs";
 
 register("./lib/register-alias.mjs", import.meta.url);
 
@@ -232,5 +233,5 @@ if (fs.existsSync(realPack)) {
   pack.close();
 }
 
-fs.rmSync(dir, { recursive: true, force: true });
+removeTempDir(dir);
 finish();
