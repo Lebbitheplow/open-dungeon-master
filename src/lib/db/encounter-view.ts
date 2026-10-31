@@ -274,7 +274,10 @@ function lastHitView(record: LastHit, hidden: Set<string>, showNumbers: boolean)
     attackerId: attackerId && (showNumbers || !hidden.has(attackerId)) ? attackerId : null,
     attack: answered?.attack ?? record.attack,
     type: answered?.type || record.type,
-    ranged: record.ranged,
+    // That hit's own reach: the record's is its last swing's, so a routine
+    // that shot first and stabbed last offered no Deflect Missiles against
+    // the arrow it named.
+    ranged: answered?.ranged ?? record.ranged,
     source: record.source,
     hit: record.source === "fall" || record.swings.some((swing) => swing.hit),
     hits: record.swings.filter((swing) => swing.hit).length,

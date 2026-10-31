@@ -55,6 +55,8 @@ const warlock = world.addHero({
 // The style is a choice made at level 1; written straight to the sheet so
 // the test does not depend on the builder's pick list.
 world.patch(guard.id, { features: [...world.sheet(guard.id).features, { name: "Fighting Style: Protection", source: "class", level: 1 }] });
+// The guard knows Parry too (maneuver-reactions.ts): the table is full.
+world.patch(guard.id, { features: [...world.sheet(guard.id).features, { name: "Maneuver: Parry", source: "choice" }] });
 const heroes = [wizard, rogue, monk, bard, guard, warlock];
 
 // A fight with every hero at full health and AC 12, and the one dummy set up
@@ -71,6 +73,7 @@ async function stage() {
     spellcasting: { ...world.sheet(wizard.id).spellcasting, slots: { 1: { max: 4, used: 0 }, 3: { max: 2, used: 0 } } },
   });
   world.patch(monk.id, { resources: { ...world.sheet(monk.id).resources, ki: { max: 5, used: 0 } } });
+  world.patch(guard.id, { resources: { ...world.sheet(guard.id).resources, sub_superiority_dice: { max: 4, used: 0 } } });
   const [enemy] = world.enemies();
   kit.setEnemy(enemy.id, { maxHp: 200 });
   kit.place(enemy.id, 5, 6);
@@ -218,6 +221,38 @@ await test("Protection after a multiattack whose first swing missed rolls the hi
   assert.equal(out.ok, true, out.error);
   assert.match(out.result.applied, /misses/);
   assert.equal(hp(rogue), 30);
+});
+
+await test("A routine that shoots and stabs offers Deflect Missiles or Parry by the hit it names, not by its last swing", async () => {
+  const enemy = await stage();
+  const BLADE = { name: "Glaive", toHit: 4, damage: "1d6+2", type: "slashing", mode: "melee", reach: 10 };
+  const BOW = { name: "Shortbow", toHit: 4, damage: "1d6+2", type: "piercing", mode: "ranged", range: { normal: 80, long: 320 } };
+  // Ten feet apart: the glaive reaches, the bow shoots with nobody beside it.
+  const volley = async (first, second, target, faces) => {
+    kit.setEnemy(enemy.id, { stats: { attacks: [first, second], routines: [[{ attack: first.name, count: 1 }, { attack: second.name, count: 1 }]] } });
+    kit.freshRound();
+    kit.place(enemy.id, 14, 14);
+    kit.place(target.id, 14, 12);
+    world.dice(...faces);
+    const out = await world.invoke("enemy_attack", { enemyId: enemy.id, targetCharacterId: target.id });
+    world.clearDice();
+    assert.equal(out.ok, true, out.error);
+    assert.deepEqual(out.result.swings.map((swing) => [swing.attack, swing.damage]), [[first.name, 6], [second.name, 3]]);
+  };
+  // The arrow hits for 6, then the glaive for 3: the arrow is the hit named,
+  // and it is a ranged one.
+  await volley(BOW, BLADE, monk, [15, 4, 15, 1]);
+  assert.deepEqual(offered(monk), { attack: "Shortbow", damage: 6, ranged: true });
+  // The glaive for 6, then the arrow for 3: Parry takes the glaive's blow.
+  await volley(BLADE, BOW, guard, [15, 4, 15, 1]);
+  assert.deepEqual(offered(guard), { attack: "Glaive", damage: 6, ranged: false });
+  assert.equal(hp(guard), 21);
+  world.dice(5);
+  const parried = await react(guard, "Parry");
+  world.clearDice();
+  assert.equal(parried.ok, true, parried.error);
+  // 1d8 (5) + DEX 0 off the glaive's 6.
+  assert.equal(hp(guard), 26);
 });
 
 await test("Deflect Missiles reduces a ranged weapon attack's damage by 1d10 + DEX + monk level.", async () => {

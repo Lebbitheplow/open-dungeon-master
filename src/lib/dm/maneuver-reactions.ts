@@ -112,8 +112,10 @@ export function maneuverReaction(ctx: Ctx): Record<string, unknown> | null {
 function parry(ctx: Ctx): ToolResult {
   const { campaign, sheet } = ctx;
   const record = freshLastHit(campaign.id, sheet.id);
-  const index = record && record.source === "attack" && !record.ranged && attackerFoeId(record) !== null && !record.answered.includes("parry")
-    ? heaviest(record.swings)
+  // The heaviest melee hit, read swing by swing: a routine's last swing
+  // (record.ranged) may be a shot while a blade hit before it.
+  const index = record && record.source === "attack" && attackerFoeId(record) !== null && !record.answered.includes("parry")
+    ? heaviest(record.swings, (swing) => !(swing.ranged ?? record.ranged))
     : -1;
   if (!record || index < 0) {
     return noHit(sheet.name, "Parry", "damage from a melee attack");
@@ -137,8 +139,8 @@ function parry(ctx: Ctx): ToolResult {
   };
 }
 
-function heaviest(swings: SwingRecord[]): number {
-  return swings.reduce((best, swing, at) => (swing.hit && swing.raw > 0 && (best < 0 || swing.raw > swings[best].raw) ? at : best), -1);
+function heaviest(swings: SwingRecord[], which: (swing: SwingRecord) => boolean): number {
+  return swings.reduce((best, swing, at) => (swing.hit && swing.raw > 0 && which(swing) && (best < 0 || swing.raw > swings[best].raw) ? at : best), -1);
 }
 
 // Riposte and Brace: one melee attack with the reaction, the die on its hit.
