@@ -246,10 +246,28 @@ await test("a reaction spell must be held and costs its slot", async () => {
   assert.equal(castingState(world.sheet(hero.id)), before);
 });
 
-await test("a spell with a casting time of a minute or more is not cast in a fight", async () => {
-  const { world, sheets: [hero] } = await table([wizard(5, { spellcasting: { prepared: ["Identify"] } })]);
+// SRD 5.1, Longer Casting Times: "When you cast a spell with a casting time
+// longer than a single action or reaction, you must spend your action each
+// turn casting the spell, and you must maintain your concentration while you
+// do so. If your concentration is broken, the spell fails, but you don't
+// expend a spell slot." So in a fight such a spell is begun with the turn's
+// action and held across the caster's turns, and its slot waits for it to
+// take effect (src/lib/dm/long-casting-logic.ts; test-enforce-srd-spells.mjs
+// SPL-10 walks the rounds). It was refused outright before. A tool that
+// resolves the effect at once sends it to use_spell_slot, spending nothing.
+await test("a spell with a casting time of a minute or more is begun in a fight with the action, and its slot waits", async () => {
+  const { world, sheets: [hero] } = await table([wizard(5, { spellcasting: { prepared: ["Identify"] }, equipment: [{ name: "Pearl", qty: 1, worth: 100 }] })]);
+  const before = castingState(world.sheet(hero.id));
+  const elsewhere = await world.invoke("cast_buff", { characterId: hero.id, spell: "Identify", level: 1 });
+  assert.equal(elsewhere.ok, false, "Identify was resolved at once by cast_buff in a fight");
+  assert.match(String(elsewhere.error), /begun with use_spell_slot/);
+  assert.equal(castingState(world.sheet(hero.id)), before, "the redirect spent something");
   const out = await world.invoke("use_spell_slot", { characterId: hero.id, level: 1, spell: "Identify" });
-  assert.equal(out.ok, false, "Identify was cast in the middle of a fight");
+  assert.equal(out.ok, true, out.error);
+  const sheet = world.sheet(hero.id);
+  assert.deepEqual(sheet.spellcasting.slots, JSON.parse(before).slots, "the slot was spent as the casting began");
+  assert.equal(sheet.concentratingOn, "casting Identify");
+  assert.equal(world.encounter().turnBudget?.actionUsed, true, "beginning the casting took no action");
 });
 
 // ---- components ----

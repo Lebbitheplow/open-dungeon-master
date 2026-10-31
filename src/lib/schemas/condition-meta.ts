@@ -42,6 +42,9 @@ const conditionInstanceSchema = z.object({
     // that spell's conditions, and an aura rolls the slot's dice.
     spell: z.string().trim().min(1).max(80).optional(),
     slotLevel: z.number().int().min(0).max(9).optional(),
+    // A casting held across turns cast as a ritual, which spends no slot
+    // when it completes (src/lib/dm/long-casting-logic.ts).
+    ritual: z.boolean().optional(),
     // Ends when the creature takes damage (Sleep, Hypnotic Pattern), or
     // gives it a new save when it does (Hideous Laughter, Dominate Person).
     endsOnDamage: z.boolean().optional(),

@@ -23,12 +23,12 @@ import assert from "node:assert/strict";
 import "./lib/enforce-world.mjs";
 import { suite } from "./lib/enforce-harness.mjs";
 import { caster, closeTables, enemyOf, FIGHTER, table } from "./lib/enforce-spell-kit.mjs";
-import { onTurnOf, packAnswers } from "./lib/enforce-spells.mjs";
+import { onTurnOf } from "./lib/enforce-spells.mjs";
 import { board } from "./lib/enforce-zones.mjs";
+import { nextTurn } from "./lib/enforce-spell-tail.mjs";
 import { CONDITIONS, readSpellLists, readSpellPage } from "./lib/enforce-srd-spells-text.mjs";
 
-const { test, gap, finish } = suite("test-enforce-srd-spells");
-const pack = await packAnswers();
+const { test, finish } = suite("test-enforce-srd-spells");
 const { default: book } = await import("../src/lib/rulebook/srd-5.1.json", { with: { type: "json" } });
 const { spellDamageFor, spellFactsFor, spellMechanicsFor, spellSchoolFor } = await import("../src/lib/content/index.ts");
 const { castShares } = await import("../src/lib/srd/spell-mechanics.ts");
@@ -36,6 +36,7 @@ const { materialComponents } = await import("../src/lib/dm/cast-materials.ts");
 const { spellDurationRounds } = await import("../src/lib/dm/spell-effects.ts");
 const { casterViewsOf } = await import("../src/lib/srd/spell-prep.ts");
 const { spellNameProblems } = await import("../src/lib/srd/legality/spells.ts");
+const { listMessagesBefore } = await import("../src/lib/db/messages.ts");
 
 const PAGES = book.pages.filter((page) => page.chapter === "spells").map(readSpellPage);
 const SPELLS = PAGES.map((page) => {
@@ -100,16 +101,13 @@ await test("every priced material is the page's total, and consumed where the pa
   assert.deepEqual(problems, [], listOf(problems));
 });
 
+// A Self spell's cone, line or radius is part of its range ("Self (15-foot
+// cone)"), with the pack and without it (SPL-01).
 await test("every spell's range is the page's: feet, touch, sight, unlimited, special or self", () => {
-  // With the content pack a Self spell loses the size of its area (SPL-01).
-  const kindOnly = (range) => (range.kind === "self" ? { kind: "self" } : range);
   const problems = SPELLS
-    .filter(({ page, facts }) => JSON.stringify(kindOnly(facts.range)) !== JSON.stringify(kindOnly(page.range)))
+    .filter(({ page, facts }) => JSON.stringify(facts.range) !== JSON.stringify(page.range))
     .map(({ page, facts }) => `${page.name}: ${JSON.stringify(facts.range)}, the page ${page.rangeText}`);
   assert.deepEqual(problems, [], listOf(problems));
-  if (!pack) {
-    assert.deepEqual(differing("range", (facts) => facts.range), []);
-  }
 });
 
 // SRD 5.1, Duration. Heroes' Feast and Sunburst print "Instantaneous" but
@@ -122,12 +120,12 @@ await test("every spell that prints how long it lasts lasts that many rounds", (
   assert.deepEqual(problems, [], listOf(problems));
 });
 
-await gap("SPL-08", {
-  rule: "SRD 5.1 spell pages (chapter spells): each page's level line names its school, e.g. revivify '3rd-level necromancy', mass-cure-wounds '5th-level evocation', mass-heal '9th-level evocation'; Spellcasting, 'The Schools of Magic': some rules refer to the schools",
-  where: "src/lib/content/index.ts spellSchoolFor (pack row school) and src/lib/srd/manifest/spells.json (bundled `s`)",
-  severity: "low",
-  note: "The pack's SRD rows and the checklist both say conjuration; the bundled rulebook text says otherwise. One of ODM's two SRD sources is wrong: the school feeds Evocation, Abjuration and Necromancy features and the Hand's school filter.",
-}, () => {
+// SRD 5.1 spell pages: each page's level line names its school (revivify
+// "3rd-level necromancy", mass-cure-wounds "5th-level evocation", mass-heal
+// "9th-level evocation"); Spellcasting, "The Schools of Magic": some rules
+// refer to the schools. Open5e's SRD rows print those three as conjuration;
+// the checklist carries the SRD's school and the pack's rows take it.
+await test("SPL-08", () => {
   const problems = SPELLS
     .filter(({ page }) => spellSchoolFor(page.name) !== page.school)
     .map(({ page }) => `${page.name}: ${spellSchoolFor(page.name)}, the page ${page.school}`);
@@ -152,12 +150,10 @@ await test("the engine puts no spell on a class list the Spell Lists page leaves
   assert.deepEqual(Object.keys(LISTS).sort(), ["bard", "cleric", "druid", "paladin", "ranger", "sorcerer", "warlock", "wizard"]);
 });
 
-await gap("SPL-09", {
-  rule: "SRD 5.1 spell-lists, 'Druid Spells', '7th Level': Fire Storm, Mirage Arcane, Plane Shift, Regenerate, Reverse Gravity",
-  where: "src/lib/srd/manifest/spells.json (Plane Shift `c`) and the pack's classes_csv, read by src/lib/srd/legality/spells.ts spellNameProblems",
-  severity: "low",
-  note: "Every other entry of all eight lists, 778 rows, is on the engine's class list at its level.",
-}, () => {
+// SRD 5.1 spell-lists, "Druid Spells", "7th Level": Fire Storm, Mirage
+// Arcane, Plane Shift, Regenerate, Reverse Gravity. Every entry of all eight
+// lists is on the engine's class list at its level.
+await test("SPL-09", () => {
   const missing = Object.entries(LISTS).flatMap(([klass, rows]) =>
     rows.filter((row) => !classesOf(row.name).includes(klass) || spellFactsFor(row.name)?.level !== row.level).map((row) => `${row.name} (${klass})`));
   const druid = { class: "druid", level: 13, subclass: "", features: [], spellcasting: { ability: "wis", known: [], prepared: ["Fire Storm", "Plane Shift"], cantrips: [] } };
@@ -175,6 +171,10 @@ const FIRST_SAVE_IS_NOT_THE_SPELLS = {
   Earthquake: "the first save named is a concentrating creature's CON; the prone save is DEX",
   "Irresistible Dance": "the first is the dancer's disadvantage on DEX saves; the way out is a WIS save",
 };
+// The page's "half as much" belongs to a later round: Storm of Vengeance's
+// first save is "2d6 thunder damage ... on a failed save", and the half is
+// round 3's lightning.
+const HALF_LATER = new Set(["Storm of Vengeance"]);
 const ATTACK_LATER = new Set(["Flame Blade", "Spiritual Weapon", "Dispel Evil and Good"]); // a buff whose attacks come on later turns
 const DICE_ELSEWHERE = {
   Web: "the burning strands are the web zone's (src/lib/battlemap/zones-spells.ts)",
@@ -183,6 +183,7 @@ const DICE_ELSEWHERE = {
   Weird: "the 4d10 comes at the end of each of the target's turns, from the condition",
   Geas: "the 5d10 for disobeying is the GM's (src/lib/srd/spell-support.ts)",
   "Prismatic Spray": "each ray rolls its own (src/lib/dm/prismatic.ts)",
+  "Prismatic Wall": "the 10d6 belong to the layers a creature passes through; the save near the wall only blinds",
   Symbol: "a glyph, cast in a minute and set off later; it is never cast in a fight",
   Earthquake: "a collapsing structure's 5d6 is the GM's terrain",
   "Magic Missile": "three darts of 1d4 + 1 roll as 3d4+3, held in test-enforce-casting-numbers",
@@ -204,7 +205,7 @@ await test("every save spell rolls the save its page names, and halves where the
     if (!(page.name in FIRST_SAVE_IS_NOT_THE_SPELLS) && mech.save !== page.save && !mech.condition?.noInitialSave) {
       problems.push(`${page.name}: ${mech.save}, the page ${page.save}`);
     }
-    if (page.dice && !(page.name in DICE_ELSEWHERE) && Boolean(mech.halfOnSave) !== page.half) {
+    if (page.dice && !(page.name in DICE_ELSEWHERE) && !HALF_LATER.has(page.name) && Boolean(mech.halfOnSave) !== page.half) {
       problems.push(`${page.name}: half ${Boolean(mech.halfOnSave)}, the page ${page.half}`);
     }
   }
@@ -222,7 +223,7 @@ await test("every damaging spell deals the type its page prints", () => {
 await test("every damaging spell rolls its printed dice at its own level, and its printed step from each slot above", () => {
   const problems = [];
   for (const { page, mech } of SPELLS) {
-    if (!page.dice || !["save", "attack", "auto"].includes(mech?.resolution) || page.name in DICE_ELSEWHERE || page.name === "Wall of Thorns") {
+    if (!page.dice || !["save", "attack", "auto"].includes(mech?.resolution) || page.name in DICE_ELSEWHERE) {
       continue;
     }
     const base = page.level === 0 ? diceAt(page.name, 1) : diceAt(page.name, 20, page.level);
@@ -272,12 +273,11 @@ await test("every SRD condition a spell lays on a failed save is one its page na
 
 // SRD 5.1, Areas of Effect: "Spells such as burning hands and cone of cold
 // cover an area, allowing them to affect multiple creatures at once."
-await gap("SPL-02", {
-  rule: "SRD 5.1 spellcasting, 'Areas of Effect': an area spell affects multiple creatures at once; shatter: 'Each creature in a 10-foot-radius sphere centered on that point must make a Constitution saving throw'; lightning-bolt: 'Each creature in the line must make a Dexterity saving throw'",
-  where: "src/lib/srd/spell-mechanics.ts parseSpellMech/areaOf (no `area` for these rows) read by castShares in src/lib/dm/cast-guard.ts",
-  severity: "medium",
-  note: "aoe_damage still catches the area in one call; cast_at_enemy, the per-creature path the cast tools offer for an area spell, holds one creature and asks a second action for the next. The pack's Shatter row prints its 10-foot radius with soft hyphens; Lightning Bolt prints a line with no 'N-foot line'.",
-}, async () => {
+// SRD 5.1 shatter: "Each creature in a 10-foot-radius sphere centered on
+// that point must make a Constitution saving throw"; lightning-bolt: "Each
+// creature in the line must make a Dexterity saving throw". One casting
+// holds every creature its area catches.
+await test("SPL-02", async () => {
   const single = SPELLS
     .filter(({ page, mech }) => page.area && mech?.resolution === "save")
     .filter(({ mech, resolved }) => castShares(mech, { spellLevel: resolved.spellLevel, slotLevel: null, casterLevel: 20 }) < 2)
@@ -298,12 +298,11 @@ await gap("SPL-02", {
   assert.ok(single.length === 0 && second.ok, `one casting holds one creature: ${listOf(single)}; Shatter's second creature: ${second.error}`);
 });
 
-await gap("SPL-03", {
-  rule: "SRD 5.1 invisibility, 'At Higher Levels': 'When you cast this spell using a spell slot of 3rd level or higher, you can target one additional creature for each slot level above 2nd' (heroism and longstrider: above 1st)",
-  where: "src/lib/srd/spell-mech-overrides.ts (these buff rows carry no `targets`), read by src/lib/dm/cast-buff.ts (`most` is 1 for an ally buff without it)",
-  severity: "medium",
-  note: "Fly, Enhance Ability, Hold Person and the rest that say the same carry targets.perSlotLevel and hold it.",
-}, async () => {
+// SRD 5.1 invisibility, "At Higher Levels": "When you cast this spell using
+// a spell slot of 3rd level or higher, you can target one additional
+// creature for each slot level above 2nd" (heroism and longstrider: above
+// 1st).
+await test("SPL-03", async () => {
   const short = SPELLS
     .filter(({ page }) => page.moreTargets)
     .filter(({ page, mech, resolved }) => castShares(mech, { spellLevel: resolved.spellLevel, slotLevel: page.level + 1, casterLevel: 20 }) < 2)
@@ -313,39 +312,32 @@ await gap("SPL-03", {
   assert.ok(short.length === 0 && cast.ok, `one creature from a higher slot: ${listOf(short)}; Invisibility from a 3rd-level slot on two: ${cast.error}`);
 });
 
-if (pack) {
-  await gap("SPL-01", {
-    rule: "SRD 5.1 spellcasting, 'Spell Range': 'Spells that create cones or lines of effect that originate from you also have a range of self'; burning-hands, Range 'Self (15-foot cone)': 'Each creature in a 15-foot cone must make a Dexterity saving throw'",
-    where: "src/lib/srd/spell-facts.ts factsFromRow/rangeFrom (the pack row's range is plain 'Self'), read by src/lib/dm/cast-reach.ts spellReachProblem",
-    severity: "high",
-    note: "With the content pack only. Without it the checklist's 'self:15' answers and the cast is refused. aoe_damage still refuses through the area's shape; cast_at_enemy does not.",
-  }, async () => {
-    const lost = SPELLS
-      .filter(({ page, facts }) => page.range.areaFeet && facts.range.areaFeet !== page.range.areaFeet)
-      .map(({ page }) => page.name);
-    const { world, sheets: [mage], enemies: [far] } = await board([caster("wizard", "int", ["Burning Hands"], [], 9)], { 0: { x: 2, y: 4 }, e0: { x: 22, y: 4 } });
-    world.dice(1, 1, 1, 20);
-    const cast = await world.invoke("cast_at_enemy", { characterId: mage.id, targetEnemyId: far.id, spell: "Burning Hands", level: 1 });
-    world.clearDice();
-    assert.ok(lost.length === 0 && !cast.ok, `a Self spell's area size is lost: ${listOf(lost)}; Burning Hands at a creature 100 feet away was ${cast.ok ? "cast" : "refused"}`);
-  });
-} else {
-  await test("without the pack a Self spell keeps its area's size and reaches no farther", async () => {
-    const { world, sheets: [mage], enemies: [far] } = await board([caster("wizard", "int", ["Burning Hands"], [], 9)], { 0: { x: 2, y: 4 }, e0: { x: 22, y: 4 } });
-    const cast = await world.invoke("cast_at_enemy", { characterId: mage.id, targetEnemyId: far.id, spell: "Burning Hands", level: 1 });
-    assert.equal(cast.ok, false);
-    assert.match(String(cast.error), /reach of 15 ft/);
-  });
-}
+// SRD 5.1 spellcasting, "Spell Range": "Spells that create cones or lines of
+// effect that originate from you also have a range of self"; burning-hands,
+// Range "Self (15-foot cone)": "Each creature in a 15-foot cone must make a
+// Dexterity saving throw". The pack's rows print a bare "Self"; the size
+// survives with the pack and without it, and is the spell's reach.
+await test("SPL-01", async () => {
+  const lost = SPELLS
+    .filter(({ page, facts }) => page.range.areaFeet && facts.range.areaFeet !== page.range.areaFeet)
+    .map(({ page }) => page.name);
+  assert.deepEqual(lost, [], `a Self spell's area size is lost: ${listOf(lost)}`);
+  const { world, sheets: [mage], enemies: [far] } = await board([caster("wizard", "int", ["Burning Hands"], [], 9)], { 0: { x: 2, y: 4 }, e0: { x: 22, y: 4 } });
+  world.dice(1, 1, 1, 20);
+  const cast = await world.invoke("cast_at_enemy", { characterId: mage.id, targetEnemyId: far.id, spell: "Burning Hands", level: 1 });
+  world.clearDice();
+  assert.equal(cast.ok, false, "Burning Hands at a creature 100 feet away was cast");
+  assert.match(String(cast.error), /reach of 15 ft/);
+});
 
 // ---- dice, conditions and riders a page prints ----
 
-await gap("SPL-04", {
-  rule: "SRD 5.1 wall-of-thorns: 'When the wall appears, each creature within its area must make a Dexterity saving throw. On a failed save, a creature takes 7d8 piercing damage, or half as much damage on a successful save'; 'At Higher Levels': 'both types of damage increase by 1d8 for each slot level above 6th'",
-  where: "src/lib/srd/spell-scaling.ts upcastStep (reads only 'increases by') and upcastDamage, so spellDamageFor in src/lib/content/index.ts answers null",
-  severity: "medium",
-  note: "A null answer for a published spell falls back to the caller's dice. The wall's own zone (zones-spells.ts) holds the 7d8 slashing for entering it; the 7d8 piercing on appearing is the caller's.",
-}, async () => {
+// SRD 5.1 wall-of-thorns: "When the wall appears, each creature within its
+// area must make a Dexterity saving throw. On a failed save, a creature
+// takes 7d8 piercing damage, or half as much damage on a successful save";
+// "both types of damage increase by 1d8 for each slot level above 6th".
+// The spell's own dice, never the caller's.
+await test("SPL-04", async () => {
   const { world, sheets: [druid], enemies: [enemy] } = await table([caster("druid", "wis", ["Wall of Thorns"], [], 13)]);
   world.diceLog();
   world.dice(...new Array(8).fill(1), 20);
@@ -360,12 +352,13 @@ await gap("SPL-04", {
   assert.ok(d8 === 7 && d4 === 0, `rolled ${d8}d8 and ${d4}d4 (the caller sent 1d4); spellDamageFor answers ${diceAt("Wall of Thorns", 20, 6)}`);
 });
 
-await gap("SPL-05", {
-  rule: "SRD 5.1 contagion: 'Make a melee spell attack against a creature within your reach. On a hit, the target is poisoned. At the end of each of the poisoned target's turns, the target must make a Constitution saving throw. If the target succeeds on three of these saves, it is no longer poisoned... If the target fails three of these saves... choose one of the diseases below'",
-  where: "src/lib/srd/spell-mech-overrides.ts contagion (noDamage, a note to afflict at once), read by src/lib/dm/pc-attack.ts",
-  severity: "medium",
-  note: "The row follows the older printing (the disease at once). The turn-end tally Flesh to Stone uses (condition.turnEnd.tally) would hold the SRD's three saves.",
-}, async () => {
+// SRD 5.1 contagion: "Make a melee spell attack against a creature within
+// your reach. On a hit, the target is poisoned. At the end of each of the
+// poisoned target's turns, the target must make a Constitution saving
+// throw. If the target succeeds on three of these saves, it is no longer
+// poisoned... If the target fails three of these saves... choose one of the
+// diseases below."
+await test("SPL-05", async () => {
   const { world, sheets: [priest], enemies: [enemy] } = await table([caster("cleric", "wis", ["Contagion"], [], 9)]);
   world.dice(19);
   const hit = await world.invoke("pc_attack", { characterId: priest.id, targetEnemyId: enemy.id, spell: "Contagion", level: 5 });
@@ -375,14 +368,23 @@ await gap("SPL-05", {
   }
   const after = enemyOf(world, enemy.id);
   assert.ok(after.conditions.includes("poisoned"), `a hit left ${JSON.stringify(after.conditions)}; the row says: ${spellMechanicsFor({ spell: "Contagion" }).mech.note}`);
+  // Three failed saves at the end of its turns: the poison ends, the disease
+  // takes hold (Flesh to Stone's count, test-enforce-spell-hooks.mjs).
+  nextTurn(world);
+  for (let count = 0; count < 3; count += 1) {
+    world.dice(1);
+    nextTurn(world);
+    world.clearDice();
+  }
+  const sick = enemyOf(world, enemy.id).conditions;
+  assert.ok(sick.includes("diseased") && !sick.includes("poisoned"), `after three failed saves: ${JSON.stringify(sick)}`);
 });
 
-await gap("SPL-06", {
-  rule: "SRD 5.1 storm-of-vengeance: 'On a failed save, a creature takes 2d6 thunder damage and becomes deafened for 5 minutes'; prismatic-wall: 'the creature must succeed on a Constitution saving throw or become blinded for 1 minute'",
-  where: "src/lib/srd/spell-mechanics.ts parsedCondition (the spell's duration, or a repeat save found anywhere in the text, in place of the sentence's own)",
-  severity: "low",
-  note: "Storm of Vengeance's deafness lasts the spell's minute, not five; Prismatic Wall's blindness takes the indigo layer's repeat save and the wall's ten minutes.",
-}, async () => {
+// SRD 5.1 storm-of-vengeance: "On a failed save, a creature takes 2d6
+// thunder damage and becomes deafened for 5 minutes"; prismatic-wall: "the
+// creature must succeed on a Constitution saving throw or become blinded for
+// 1 minute". A condition's own printed lifetime, not the spell's.
+await test("SPL-06", async () => {
   const { world, sheets: [druid], enemies: [enemy] } = await table([caster("druid", "wis", ["Storm of Vengeance"], [], 17)]);
   world.dice(1, 1, 1);
   const storm = await world.invoke("aoe_damage", { casterCharacterId: druid.id, spell: "Storm of Vengeance", level: 9, enemyIds: [enemy.id] });
@@ -399,12 +401,11 @@ await gap("SPL-06", {
   assert.deepEqual(wrong, [], listOf(wrong));
 });
 
-await gap("SPL-07", {
-  rule: "SRD 5.1 prismatic-wall: approaching it is 'a Constitution saving throw or become blinded for 1 minute'; passing through, 'the creature must make a Dexterity saving throw or be affected by that layer's properties' (Red: 10d6 fire, half on a success)",
-  where: "src/lib/srd/spell-mechanics.ts parseSpellMech (the first save named joined to the first damage named), no row in src/lib/srd/spell-mech-*.ts",
-  severity: "low",
-  note: "aoe_damage on Prismatic Wall rolls the red layer's 10d6 fire against the approach's CON save.",
-}, async () => {
+// SRD 5.1 prismatic-wall: approaching it is "a Constitution saving throw or
+// become blinded for 1 minute"; passing through, "the creature must make a
+// Dexterity saving throw or be affected by that layer's properties" (Red:
+// 10d6 fire, half on a success). The approach rolls no fire.
+await test("SPL-07", async () => {
   const { world, sheets: [mage], enemies: [enemy] } = await table([caster("wizard", "int", ["Prismatic Wall"], [], 17)]);
   world.dice(...new Array(10).fill(1), 1);
   const cast = await world.invoke("aoe_damage", { casterCharacterId: mage.id, spell: "Prismatic Wall", level: 9, enemyIds: [enemy.id] });
@@ -451,15 +452,136 @@ await test("a levelled spell cast with the action bars a bonus-action spell on t
   assert.match(String(after.error), /levelled spell/);
 });
 
-await gap("SPL-10", {
-  rule: "SRD 5.1 spellcasting, 'Longer Casting Times': 'When you cast a spell with a casting time longer than a single action or reaction, you must spend your action each turn casting the spell, and you must maintain your concentration while you do so... If your concentration is broken, the spell fails, but you don't expend a spell slot.'",
-  where: "src/lib/dm/cast-rules.ts longCastingProblem (refuses any casting time in minutes during a fight)",
-  severity: "low",
-  note: "scripts/test-enforce-casting-limits.mjs 'a spell with a casting time of a minute or more is not cast in a fight' asserts the refusal. Rituals are a separate rule (ten minutes longer) and stay out of this.",
-}, async () => {
-  const { world, sheets: [mage] } = await table([caster("wizard", "int", ["Identify"], [], 5)]);
-  const cast = await world.invoke("use_spell_slot", { characterId: mage.id, spell: "Identify", level: 1 });
-  assert.equal(cast.ok, true, `a 1-minute spell begun in a fight: ${cast.error}`);
+// SRD 5.1 spellcasting, Longer Casting Times: "When you cast a spell with a
+// casting time longer than a single action or reaction, you must spend your
+// action each turn casting the spell, and you must maintain your
+// concentration while you do so. If your concentration is broken, the spell
+// fails, but you don't expend a spell slot. If you want to try casting the
+// spell again, you must start over." A minute is ten rounds (Combat,
+// "a round represents about 6 seconds"). The hero is alone in the order, so
+// each nextTurn is one round and lands on their next turn.
+// Identify's pearl is worth 100 gp and Augury's tokens 25 (their pages'
+// material components), so each caster carries one.
+const SAGE = caster("wizard", "int", ["Identify", "Magic Missile"], [], 5, { equipment: [{ name: "Pearl", qty: 1, worth: 100 }] });
+const PRIEST = caster("cleric", "wis", ["Augury", "Shield of Faith"], [], 5, { equipment: [{ name: "Marked bones", qty: 1, worth: 25 }] });
+const slotsUsed = (world, id, level) => world.sheet(id).spellcasting.slots[String(level)].used;
+const castingRounds = (world, id) => world.sheet(id).conditionMeta?.casting?.rounds ?? null;
+const tableLines = (world) => listMessagesBefore(world.campaignId, null, 8).messages.map((entry) => entry.content).join(" ");
+
+await test("SPL-10: a spell of a minute is begun in a fight with the turn's action and the caster's concentration, and no slot is spent", async () => {
+  const { world, sheets: [mage] } = await table([SAGE]);
+  const before = slotsUsed(world, mage.id, 1);
+  const begun = await world.invokeAsIs("use_spell_slot", { characterId: mage.id, spell: "Identify", level: 1 });
+  assert.equal(begun.ok, true, `a 1-minute spell begun in a fight: ${begun.error}`);
+  assert.match(String(begun.result.casting), /10 rounds/);
+  assert.equal(slotsUsed(world, mage.id, 1), before, "the slot was spent as the casting began");
+  assert.equal(world.sheet(mage.id).concentratingOn, "casting Identify");
+  assert.equal(castingRounds(world, mage.id), 10);
+  assert.equal(world.encounter().turnBudget?.actionUsed, true, "beginning the casting took no action");
+});
+
+await test("SPL-10: the casting takes the caster's action on each of their turns", async () => {
+  const { world, sheets: [mage] } = await table([SAGE]);
+  assert.equal((await world.invokeAsIs("use_spell_slot", { characterId: mage.id, spell: "Identify", level: 1 })).ok, true);
+  await nextTurn(world);
+  assert.equal(world.encounter().turnBudget?.actionUsed, true, "the next turn's action was not held for the casting");
+  const other = await world.invokeAsIs("use_spell_slot", { characterId: mage.id, spell: "Magic Missile", level: 1 });
+  assert.equal(other.ok, false, "a second spell took the action the casting holds");
+  assert.match(String(other.error), /goes on the spell they are casting/);
+  assert.equal(castingRounds(world, mage.id), 9);
+});
+
+await test("SPL-10: after ten rounds the spell takes effect as the caster's turn starts, and only then is its slot spent", async () => {
+  const { world, sheets: [mage] } = await table([SAGE]);
+  const before = slotsUsed(world, mage.id, 1);
+  assert.equal((await world.invokeAsIs("use_spell_slot", { characterId: mage.id, spell: "Identify", level: 1 })).ok, true);
+  for (let round = 1; round < 10; round += 1) {
+    await nextTurn(world);
+    assert.equal(slotsUsed(world, mage.id, 1), before, `the slot was spent ${round} rounds in`);
+    assert.equal(world.sheet(mage.id).concentratingOn, "casting Identify", `the casting let go ${round} rounds in`);
+  }
+  await nextTurn(world);
+  assert.equal(slotsUsed(world, mage.id, 1), before + 1, "the slot was not spent as the spell took effect");
+  assert.equal(world.sheet(mage.id).concentratingOn, null, "Identify takes no concentration once cast");
+  assert.equal(castingRounds(world, mage.id), null);
+  assert.ok(!world.sheet(mage.id).conditions.includes("casting complete"), "the completed casting was left waiting");
+  assert.notEqual(world.encounter().turnBudget?.actionUsed, true, "the turn the spell took effect on lost its action");
+  assert.match(tableLines(world), /finishes casting Identify: it takes effect now/);
+});
+
+await test("SPL-10: a concentration broken by damage fails the casting, and no slot is spent", async () => {
+  const { world, sheets: [mage] } = await table([SAGE]);
+  const before = slotsUsed(world, mage.id, 1);
+  assert.equal((await world.invokeAsIs("use_spell_slot", { characterId: mage.id, spell: "Identify", level: 1 })).ok, true);
+  await nextTurn(world);
+  world.dice(1);
+  const hit = await world.invokeAsIs("apply_damage", { characterId: mage.id, amount: 4 });
+  world.clearDice();
+  assert.equal(hit.ok, true, hit.error);
+  assert.equal(hit.result.concentration?.held, false, "the CON save was not failed");
+  assert.equal(world.sheet(mage.id).concentratingOn, null);
+  assert.equal(castingRounds(world, mage.id), null, "the casting outlived its concentration");
+  assert.match(tableLines(world), /casting of Identify fails/);
+  // The action the casting held this turn is the caster's again.
+  assert.notEqual(world.encounter().turnBudget?.actionUsed, true, "the failed casting kept the turn's action");
+  for (let round = 0; round < 10; round += 1) {
+    await nextTurn(world);
+  }
+  assert.equal(slotsUsed(world, mage.id, 1), before, "a failed casting spent its slot");
+});
+
+await test("SPL-10: a concentration spell cast during the casting ends it, and the casting spends no slot", async () => {
+  const { world, sheets: [priest] } = await table([PRIEST]);
+  const before = slotsUsed(world, priest.id, 2);
+  assert.equal((await world.invokeAsIs("use_spell_slot", { characterId: priest.id, spell: "Augury", level: 2 })).ok, true);
+  await nextTurn(world);
+  const faith = await world.invokeAsIs("cast_buff", { characterId: priest.id, spell: "Shield of Faith", level: 1 });
+  assert.equal(faith.ok, true, faith.error);
+  assert.equal(world.sheet(priest.id).concentratingOn, "Shield of Faith");
+  assert.equal(castingRounds(world, priest.id), null, "Augury's casting survived another concentration spell");
+  assert.match(String(faith.result.droppedConcentration), /casting of Augury fails/);
+  assert.equal(slotsUsed(world, priest.id, 2), before);
+});
+
+// A spell another tool resolves (a summoning through cast_buff) takes effect
+// through that tool on the turn its casting finishes: the slot is spent
+// then, and no action. Left unresolved past that turn, it is lost unspent.
+await test("SPL-10: a summoning whose casting is done is resolved by its own tool that turn, the slot spent then, or is lost unspent", async () => {
+  const conjurer = caster("wizard", "int", ["Conjure Elemental"], [], 9);
+  const minute = async (world, mage) => {
+    assert.equal((await world.invokeAsIs("use_spell_slot", { characterId: mage.id, spell: "Conjure Elemental", level: 5 })).ok, true);
+    for (let round = 0; round < 10; round += 1) {
+      await nextTurn(world);
+    }
+  };
+  const { world, sheets: [mage] } = await table([conjurer]);
+  await minute(world, mage);
+  assert.equal(slotsUsed(world, mage.id, 5), 0, "the slot was spent before the spell took effect");
+  assert.match(tableLines(world), /resolve it now with cast_buff/);
+  const called = await world.invokeAsIs("cast_buff", { characterId: mage.id, spell: "Conjure Elemental", level: 5, variant: "Fire Elemental" });
+  assert.equal(called.ok, true, called.error);
+  assert.ok(called.result.summoned?.length, "no elemental came");
+  assert.equal(slotsUsed(world, mage.id, 5), 1);
+  assert.equal(world.sheet(mage.id).concentratingOn, "Conjure Elemental");
+  assert.notEqual(world.encounter().turnBudget?.actionUsed, true, "resolving the finished casting took the turn's action");
+  const { world: idle, sheets: [waiting] } = await table([conjurer]);
+  await minute(idle, waiting);
+  await nextTurn(idle);
+  assert.equal(slotsUsed(idle, waiting.id, 5), 0, "an unresolved casting spent its slot");
+  assert.ok(!idle.sheet(waiting.id).conditions.includes("casting complete"), "the finished casting outlived its turn");
+});
+
+await test("SPL-10: a fight that ends mid-casting lets the spell take effect then, its slot spent as it does", async () => {
+  const { world, sheets: [mage] } = await table([SAGE]);
+  const before = slotsUsed(world, mage.id, 1);
+  assert.equal((await world.invokeAsIs("use_spell_slot", { characterId: mage.id, spell: "Identify", level: 1 })).ok, true);
+  await nextTurn(world);
+  const ended = await world.invokeAsIs("end_encounter", { outcome: "victory" });
+  assert.equal(ended.ok, true, ended.error);
+  assert.match(String(ended.result.castingsFinished), /finishes casting Identify/);
+  assert.equal(slotsUsed(world, mage.id, 1), before + 1);
+  assert.equal(world.sheet(mage.id).concentratingOn, null);
+  assert.equal(castingRounds(world, mage.id), null);
 });
 
 closeTables();

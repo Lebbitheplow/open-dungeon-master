@@ -13,14 +13,16 @@
 //     src/lib/srd/authored-spells.json;
 //   - ODM's authored spells are read from the bundled file, so a correction
 //     to it does not wait for the pack to be rebuilt;
-//   - a school is one of the eight;
+//   - a school is one of the eight, and an SRD row's is the checklist's;
 //   - a class list is the checklist's (src/lib/srd/manifest/spells.json),
 //     where the checklist carries the spell;
+//   - an SRD row's bare "Self" range takes the cone, line or radius the
+//     checklist prints for it;
 //   - the few fields the SRD row gets wrong are patched by name below.
 //
 // Pure: rows in, rows out.
 
-import { authoredSpells, type AuthoredSpell } from "@/lib/srd/spell-facts";
+import { authoredSpells, rangeFrom, type AuthoredSpell } from "@/lib/srd/spell-facts";
 import { checklistSpell } from "@/lib/srd/spell-lists";
 import { compareNames, textKey } from "@/lib/language/text-logic";
 
@@ -145,17 +147,33 @@ function authoredRow(spell: AuthoredSpell): RawSpellRow {
   };
 }
 
+// The SRD's range line where the pack's row prints less of it. Open5e's
+// wotc-srd rows print a cone's or a radius's range as a bare "Self"; SRD 5.1
+// prints "Self (15-foot cone)" ("Spell Range": a cone or line that starts
+// from you has a range of self), and the size is the spell's reach
+// (src/lib/dm/cast-reach.ts). The checklist keeps the printed line.
+function srdRange(row: RawSpellRow, listed: ReturnType<typeof checklistSpell>): Record<string, unknown> {
+  const printed = typeof listed?.range === "string" ? listed.range : "";
+  const own = rangeFrom(row.data.range);
+  const listedRange = rangeFrom(printed);
+  return own.kind === "self" && !own.areaFeet && listedRange.kind === "self" && listedRange.areaFeet ? { range: printed } : {};
+}
+
 function corrected(row: RawSpellRow): RawSpellRow {
   const listed = checklistSpell(row.name);
-  const published = row.documentSlug === SRD_DOCUMENT || row.documentSlug === AUTHORED_DOCUMENT;
-  const fixes = row.documentSlug === SRD_DOCUMENT ? FIELD_FIXES[textKey(row.name)] : undefined;
+  const srd = row.documentSlug === SRD_DOCUMENT;
+  const published = srd || row.documentSlug === AUTHORED_DOCUMENT;
+  const fixes = srd ? { ...srdRange(row, listed), ...FIELD_FIXES[textKey(row.name)] } : {};
   return {
     ...row,
-    school: normalizeSchool(row.school),
+    // Open5e's SRD rows print Revivify, Mass Cure Wounds and Mass Heal as
+    // conjuration; SRD 5.1's pages print necromancy and evocation, and the
+    // checklist carries the SRD's school.
+    school: normalizeSchool(srd && listed?.school ? listed.school : row.school),
     // The checklist speaks for the spells it names; a third party row of a
     // name it does not carry keeps its own list.
     classes: published && listed ? listed.classes : row.classes.map((entry) => textKey(entry)),
-    data: fixes ? { ...row.data, ...fixes } : row.data,
+    data: Object.keys(fixes).length ? { ...row.data, ...fixes } : row.data,
   };
 }
 

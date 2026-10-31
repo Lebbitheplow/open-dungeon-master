@@ -80,26 +80,62 @@ export type TurnBudget = {
 
 export type StruckSwing = { target: string; hit: boolean; damage?: number };
 
+// The turn's action went on a spell of a minute or more being cast before
+// the turn began (SRD 5.1, Longer Casting Times: "you must spend your action
+// each turn casting the spell"; src/lib/dm/long-casting-logic.ts). Kept in
+// the once-per-turn list, so the action comes back if the casting ends on
+// this turn before anything else spends it (turn-budget.ts budgetFor).
+export const CASTING_HELD = "casting:held";
+
 export function freshBudget(input: {
   ownerId: string;
   round: number;
   attacksAllowed?: number;
   extraActions?: number;
   slowed?: boolean;
+  actionHeld?: boolean;
 }): TurnBudget {
   return {
     ownerId: input.ownerId,
     round: input.round,
-    actionUsed: false,
+    actionUsed: Boolean(input.actionHeld),
     bonusUsed: false,
     reactionUsed: false,
     attacksMade: 0,
     attacksAllowed: Math.max(1, input.attacksAllowed ?? 1),
-    oncePerTurn: [],
+    oncePerTurn: input.actionHeld ? [CASTING_HELD] : [],
     dashed: false,
     disengaged: false,
     ...(input.extraActions ? { extraActions: input.extraActions, hasteGranted: input.extraActions } : {}),
     ...(input.slowed ? { slowed: true } : {}),
+    ...(input.actionHeld ? { castThisAction: true } : {}),
+  };
+}
+
+// The action a casting held, given back: the casting ended on this turn
+// before the turn spent the action on anything else.
+export function releaseHeldAction(budget: TurnBudget): TurnBudget {
+  if (!budget.oncePerTurn.includes(CASTING_HELD)) {
+    return budget;
+  }
+  return {
+    ...budget,
+    actionUsed: false,
+    castThisAction: false,
+    oncePerTurn: budget.oncePerTurn.filter((entry) => entry !== CASTING_HELD),
+  };
+}
+
+// The refusal of an action a casting holds: what it went on, and how to get
+// it back. Null when the casting does not hold this turn's action.
+function heldActionRefusal(budget: TurnBudget, what: string, who: string): ({ ok: false } & ToolError) | null {
+  if (!budget.oncePerTurn.includes(CASTING_HELD)) {
+    return null;
+  }
+  return {
+    ok: false,
+    error: `${who}'s action this turn goes on the spell they are casting (a spell of a minute or more takes their action on each of their turns), so ${what} cannot have it. To act otherwise they stop casting first (clear_condition "concentration"): the spell fails, no slot is spent, and the action is theirs again. They can still move${budget.bonusUsed ? "" : " or take a bonus action"}.`,
+    refused: "rules",
   };
 }
 
@@ -222,6 +258,10 @@ export function spendAction(
     if (extra) {
       return extra;
     }
+    const casting = heldActionRefusal(budget, what, who);
+    if (casting) {
+      return casting;
+    }
     const hasted = (budget.extraActions ?? 0) > 0;
     return {
       ok: false,
@@ -317,7 +357,7 @@ export function spendAttack(
     }
   }
   if (budget.castThisAction) {
-    return {
+    return heldActionRefusal(budget, "the Attack action", who) ?? {
       ok: false,
       error: `${who} spent this turn's action casting a spell, so they cannot also take the Attack action. Extra Attack belongs to the Attack action.`,
       refused: "rules",
@@ -369,7 +409,7 @@ export function spendCastAttack(budget: TurnBudget, spell: string, who: string):
         },
       };
     }
-    return {
+    return heldActionRefusal(budget, `casting ${spell}`, who) ?? {
       ok: false,
       error: `${who} has already used their action this turn; casting ${spell} needs one. Extra Attack gives more weapon attacks, not a second casting.`,
       refused: "rules",

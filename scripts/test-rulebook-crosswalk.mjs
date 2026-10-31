@@ -29,7 +29,7 @@ const { bundledSpellRows, bundledItemRows } = await import("../src/lib/rulebook/
 const { withMechanics } = await import("../src/lib/workshop/catalog-mechanics.ts");
 const { draftFromCatalog } = await import("../src/app/workshop/homebrew/draft.ts");
 const { normalizeHomebrewData, normalizeSpellMech } = await import("../src/lib/homebrew/gear.ts");
-const { spellFactsFor } = await import("../src/lib/content/index.ts");
+const { allPackSpells, spellFactsFor } = await import("../src/lib/content/index.ts");
 const { factsFromRow, engineSpellNamed } = await import("../src/lib/srd/spell-facts.ts");
 const { getContentDb } = await import("../src/lib/content/db.ts");
 const { parseMonster } = await import("../src/lib/bestiary/statblock.ts");
@@ -116,7 +116,11 @@ const ledger = [];
 const FACT_KEYS = ["level", "castingTime", "verbal", "somatic", "material", "materialCostGp", "materialConsumed", "ritual", "concentration", "range"];
 
 await test("F20: every SRD spell's copy keeps its casting facts, its block and the spell it runs as.", () => {
-  const spells = hasPack ? [...packRows("spells").values()] : bundledSpellRows();
+  // The SRD rows as the content route serves them to the workshop, which
+  // copies from these and never from the pack's own row: the pack prints
+  // Burning Hands' range as a bare "Self", the served row as SRD 5.1's
+  // "Self (15-foot cone)" (spell-overrides.ts, issue #570 SPL-01).
+  const spells = hasPack ? allPackSpells().filter((row) => row.documentSlug === "wotc-srd") : bundledSpellRows();
   const rows = withMechanics("spells", spells);
   const lost = [];
   let block = 0;

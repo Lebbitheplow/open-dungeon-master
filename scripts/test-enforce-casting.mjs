@@ -42,9 +42,9 @@ const hexer = world.addHero(warlock(5));
 
 const [ogre, other] = await fightDummies(world, 2, { heroFaces: { [mage.id]: 20 } });
 
-// A ritual takes ten minutes more than the spell and is never cast in the
-// middle of a fight, so the rituals that should go through are cast at a
-// table with no fight on.
+// A ritual takes ten minutes more than the spell, which in a fight is a
+// casting held across the caster's turns (test below), so the rituals whose
+// effect a test reads are cast at a table with no fight on.
 const calm = castOnOwnTurn(await openWorld());
 const calmPriest = calm.addHero(cleric(5));
 const calmMage = calm.addHero(
@@ -249,14 +249,27 @@ await test("a ritual names its spell", async () => {
   await refused(mage, "use_spell_slot", { characterId: mage.id, level: 3, ritual: true });
 });
 
-await test("a ritual is not cast in the middle of a fight", async () => {
+// SRD 5.1, Rituals: "The ritual version of a spell takes 10 minutes longer
+// to cast than normal." In a fight that is a spell of a minute or more
+// (Longer Casting Times: "you must spend your action each turn casting the
+// spell, and you must maintain your concentration while you do so"): begun
+// with the action and held across the caster's turns, a hundred rounds for
+// Detect Magic, spending no slot. The rounds pass in the fight, not on the
+// clock. It was refused outright before.
+await test("a ritual in the middle of a fight is begun as a casting ten minutes long, spending no slot", async () => {
   const { getClock } = await import("../src/lib/db/clock.ts");
   const before = JSON.stringify(getClock(world.campaignId));
+  const slots = JSON.stringify(world.sheet(priest.id).spellcasting.slots);
   const out = await world.invoke("use_spell_slot", { characterId: priest.id, level: 1, spell: "Detect Magic", ritual: true });
-  assert.ok(
-    out.ok === false || JSON.stringify(getClock(world.campaignId)) !== before,
-    "a ritual was cast mid-fight and the in-world clock did not move",
-  );
+  assert.equal(out.ok, true, out.error);
+  const held = world.sheet(priest.id).conditionMeta?.casting;
+  assert.deepEqual({ rounds: held?.rounds, ritual: held?.ritual }, { rounds: 100, ritual: true });
+  assert.equal(world.sheet(priest.id).concentratingOn, "casting Detect Magic");
+  assert.equal(JSON.stringify(world.sheet(priest.id).spellcasting.slots), slots, "the ritual spent a slot");
+  assert.equal(JSON.stringify(getClock(world.campaignId)), before, "the clock moved for a ritual begun in a fight");
+  // Letting go ends it, and the priest is as the later tests expect.
+  assert.equal((await world.invoke("clear_condition", { characterId: priest.id, condition: "concentration" })).ok, true);
+  assert.equal(world.sheet(priest.id).conditionMeta?.casting, undefined);
 });
 
 // ---- after the rest ----

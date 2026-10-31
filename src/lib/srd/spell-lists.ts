@@ -38,7 +38,7 @@ export function spellLevelOf(name: string): number | null {
 }
 
 const CHECKLIST = new Map(
-  (spellManifest as { spells: Array<ManifestSpell & { c?: string }> }).spells.flatMap((spell) =>
+  (spellManifest as { spells: Array<ManifestSpell & { c?: string; s?: string; d?: number | string }> }).spells.flatMap((spell) =>
     [spell.n, ...(spell.a ?? [])].map((name) => [textKey(name), spell] as const),
   ),
 );
@@ -108,16 +108,18 @@ function classesOf(spell: ManifestSpell & { c?: string }): string[] {
   return [...new Set([...listed, ...more])];
 }
 
-// What the checklist says of a spell by name: its canonical name, its level
-// and the class lists it is on. Null for a name it does not carry.
+// What the checklist says of a spell by name: its canonical name, its level,
+// the class lists it is on, its school and its range as the checklist keeps
+// it (feet, a word, or the SRD's own "Self (15-foot cone)"). Null for a name
+// it does not carry.
 export function checklistSpell(
   name: string,
-): { name: string; level: number; classes: string[] } | null {
+): { name: string; level: number; classes: string[]; school: string | null; range: number | string | null } | null {
   const spell = CHECKLIST.get(textKey(name));
   if (!spell) {
     return null;
   }
-  return { name: spell.n, level: spell.l, classes: classesOf(spell) };
+  return { name: spell.n, level: spell.l, classes: classesOf(spell), school: spell.s ?? null, range: spell.d ?? null };
 }
 
 // Every spell the checklist puts on one class's list, cantrips included, by

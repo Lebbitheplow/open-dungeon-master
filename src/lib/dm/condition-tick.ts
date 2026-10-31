@@ -40,6 +40,8 @@ import { zoneTurnStart } from "@/lib/dm/zone-triggers";
 import { violetRayTurnStart } from "@/lib/dm/prismatic-violet";
 import { authoredTurnStart } from "@/lib/dm/authored-turns";
 import { readiedSpellOf } from "@/lib/dm/readied-spell";
+import { finishCasting } from "@/lib/dm/long-casting";
+import { CASTING, castingOf } from "@/lib/dm/long-casting-logic";
 import { sweepSummons } from "@/lib/dm/summon-store";
 import { textKey } from "@/lib/language/text-logic";
 import { listedAgainst } from "@/lib/dm/roll-about";
@@ -460,7 +462,14 @@ function tickSheetConditions(
         tick.expired.splice(tick.expired.indexOf(UNCONSCIOUS), 1);
       }
     }
+    // A spell of a minute or more whose rounds have run out, as its caster's
+    // turn starts: it takes effect now (long-casting.ts), once the tick is
+    // written below.
+    const finishing = tick.expired.some((name) => name.toLowerCase() === CASTING) ? castingOf(sheet) : null;
     for (const name of tick.expired) {
+      if (finishing && name.toLowerCase() === CASTING) {
+        continue;
+      }
       lines.push(`${sheet.name} is no longer ${name} (the effect ran its course).`);
     }
     // One effect, one save: conditions one source laid together with the
@@ -553,6 +562,10 @@ function tickSheetConditions(
       if (updated) {
         publishPersisted(campaign.id, "sheet_updated", { sheet: updated });
       }
+    }
+    const finished = finishing ? finishCasting(campaign, sheet.id, finishing, Boolean(options?.encounter)) : null;
+    if (finished) {
+      lines.push(finished);
     }
   }
 }

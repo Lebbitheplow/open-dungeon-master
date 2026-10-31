@@ -168,6 +168,22 @@ await test("F02: a material named in brackets after the M (Chromatic Orb) keeps 
   world.close();
 });
 
+// SRD 5.1 burning-hands: "Range: Self (15-foot cone)"; Spell Range: a cone
+// that starts from you has a range of self, and its size is how far the spell
+// reaches (src/lib/dm/cast-reach.ts). The pack prints the range as a bare
+// "Self"; the row the catalog serves prints the page's (issue #570 SPL-01),
+// and the copy keeps it.
+await test("SPL-01: a renamed copy of Burning Hands keeps its 15-foot cone and reaches no farther, as the original does.", async () => {
+  const { world, sheets: [mage], enemies: [far] } = await board([caster("wizard", "int", ["Fan of Flames"], [], 9)], { 0: { x: 2, y: 4 }, e0: { x: 22, y: 4 } });
+  await copyOf(world, "spells", "Burning Hands", "Fan of Flames");
+  assert.deepEqual(spellFactsFor("Fan of Flames", world.owner.id).range, { kind: "self", areaFeet: 15 });
+  world.dice(1, 1, 1, 20);
+  const cast = await world.invoke("cast_at_enemy", { characterId: mage.id, targetEnemyId: far.id, spell: "Fan of Flames", level: 1 });
+  world.clearDice();
+  assert.equal(cast.ok, false, "the copy reached a creature 100 feet away");
+  assert.match(String(cast.error), /reach of 15 ft/);
+});
+
 await test("F10: the preview says what the saved copy rolls: a copy of Eldritch Blast whose words say 20d6 still rolls the block's 1d10, and the preview says so and names the conflict.", async () => {
   const world = await openWorld();
   const draft = draftFromCatalog("spell", await catalogRow(world, "spells", "Eldritch Blast"));
