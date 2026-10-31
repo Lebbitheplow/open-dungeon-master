@@ -25,6 +25,7 @@ const { createWorkshop } = await import("../src/lib/db/workshops.ts");
 const { AGENT_SCOPES, createConnectionGrant } = await import("../src/lib/agents/grants.ts");
 const { workbenchCall, workbenchTools } = await import("../src/lib/agents/workbench.ts");
 const campaignsRoute = await import("../src/app/api/campaigns/route.ts");
+const campaignRoute = await import("../src/app/api/campaigns/[campaignId]/route.ts");
 
 let passed = 0;
 async function test(name, fn) {
@@ -50,9 +51,14 @@ const grant = createConnectionGrant({ userId: author.id, name: "author's agent",
 const originalFetch = globalThis.fetch;
 globalThis.fetch = async (url, init = {}) => {
   const target = new URL(url);
-  assert.equal(target.pathname, "/api/campaigns", `unexpected path ${target.pathname}`);
   globalThis.__odmTestToken = (new Headers(init.headers).get("authorization") ?? "").replace(/^Bearer\s+/i, "");
-  return campaignsRoute.GET(new Request(target, { method: init.method ?? "GET", headers: init.headers }));
+  const request = new Request(target, { method: init.method ?? "GET", headers: init.headers });
+  const one = /^\/api\/campaigns\/([^/]+)$/.exec(target.pathname);
+  if (one && request.method === "GET") {
+    return campaignRoute.GET(request, { params: Promise.resolve({ campaignId: decodeURIComponent(one[1]) }) });
+  }
+  assert.equal(target.pathname, "/api/campaigns", `unexpected path ${target.pathname}`);
+  return campaignsRoute.GET(request);
 };
 
 try {
@@ -69,6 +75,16 @@ try {
     assert.ok(tool, "odm_list_campaigns is offered on the read scope");
     assert.ok(!/campaigns and workshops/i.test(tool.description), `still promises workshops: ${tool.description}`);
     assert.match(tool.description, /workshops[^.]* not listed/i);
+  });
+
+  // The invite route only rotates the code (POST): the tool's GET there was
+  // a 405 on every call.
+  await test("odm_get_invite reads the campaign's invite code", async () => {
+    const lead = createConnectionGrant({ userId: author.id, name: "lead's agent", scopes: ["campaigns"] }).grant;
+    const outcome = await workbenchCall(lead, "odm_get_invite", { campaignId: campaign.id });
+    assert.equal(outcome.isError, false, outcome.text.slice(0, 300));
+    assert.equal(JSON.parse(outcome.text).inviteCode, campaign.inviteCode);
+    assert.ok(campaign.inviteCode, "the campaign has a code to read");
   });
 
   // The other tools held to their routes the same way: each promise below

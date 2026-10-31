@@ -524,11 +524,21 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
   {
     name: "odm_get_invite",
     scope: "campaigns",
-    description: "Read a campaign's invite code and link (party lead only).",
+    description: "Read a campaign's invite code, which every member sees and may share.",
     properties: campaignIdProp,
     required: ["campaignId"],
     method: "GET",
-    path: (a) => `/api/campaigns/${seg(a.campaignId)}/invite`,
+    // The invite route only rotates the code (POST), so a GET there answered
+    // 405 every time; the campaign itself carries the code to every member.
+    path: (a) => `/api/campaigns/${seg(a.campaignId)}`,
+    shape: (text) => {
+      try {
+        const read = JSON.parse(text) as { campaign?: { inviteCode?: unknown } };
+        return JSON.stringify({ inviteCode: typeof read.campaign?.inviteCode === "string" ? read.campaign.inviteCode : null });
+      } catch {
+        return JSON.stringify({ inviteCode: null });
+      }
+    },
   },
   // dm (only works for the person in the DM seat of a human or assisted game)
   {
