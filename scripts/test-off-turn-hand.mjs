@@ -177,10 +177,14 @@ await test("In the GM seat, a reaction card for a hero the GM plays is resolved 
   const poppy = world.addHero({ name: "Poppy", class: "rogue", level: 5, user: world.owner, maxHp: 30, ac: 12, acOverride: true });
   world.patch(poppy.id, { features: [{ name: "Uncanny Dodge", source: "class" }] });
   setDmMode(world.campaignId, "human", world.owner.id);
-  await kit.fight(1, { heroFaces: { [kara.id]: 19, [poppy.id]: 5 }, enemyFace: 18 });
-  assert.equal(current(world).characterId, kara.id);
-  assert.equal((await route(world, "encounter/end-turn", {}, world.owner)).status, 200);
+  // The goblin's 20 and up beats both heroes whatever its Dexterity, so at a
+  // table a person runs the fight opens on its turn, owed before Kara's
+  // (enemies-due.ts). Kara on 19 against a goblin's 18 + 2 left her turn
+  // waiting behind it, and ending it was refused.
+  await kit.fight(1, { heroFaces: { [kara.id]: 10, [poppy.id]: 5 }, enemyFace: 20 });
   const [goblin] = world.enemies();
+  assert.deepEqual(world.encounter().legendary.due, [goblin.id], "the fight opens on the goblin's turn");
+  assert.notEqual(current(world).characterId, poppy.id, "Poppy is hit on a turn not hers");
   world.dice(15, 6);
   const swing = await world.invoke("enemy_attack", { enemyId: goblin.id, targetCharacterId: poppy.id });
   assert.equal(swing.ok, true, swing.error);
