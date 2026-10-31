@@ -21,8 +21,19 @@ const { classGenres } = await import("../src/lib/classes/index.ts");
 const { acBreakdownFor } = await import("../src/lib/srd/index.ts");
 
 let passed = 0;
+const pending = [];
 function test(name, fn) {
-  fn();
+  // An async check is waited for before the count prints: Vitest drops a
+  // rejection that lands after a file's last line, so an unawaited one
+  // passed under npm test while it failed under node.
+  const result = fn();
+  if (result && typeof result.then === "function") {
+    pending.push(result.then(() => {
+      passed += 1;
+      console.log(`ok - ${name}`);
+    }));
+    return;
+  }
   passed += 1;
   console.log(`ok - ${name}`);
 }
@@ -267,9 +278,13 @@ test("a name the pack files as both a magic item and priced gear is offered as t
   const { contentPackInstalled } = await import("../src/lib/content/db.ts");
   if (contentPackInstalled()) {
     const { catalogPrices } = await import("../src/lib/characters/catalog.ts");
-    assert.deepEqual(catalogPrices("Spell Scroll"), { copper: 3000, magic: false });
+    // SRD 5.1 prints the spell scroll only as a magic item, never on the
+    // Adventuring Gear table (the 30 gp row was 2024's, and the pack keeps
+    // no 2024 rows), so it has no gear price.
+    assert.deepEqual(catalogPrices("Spell Scroll"), { copper: null, magic: true });
     assert.deepEqual(catalogPrices("Potion of Healing"), { copper: 5000, magic: false });
   }
 });
 
+await Promise.all(pending);
 console.log(`\n${passed} adventuring gear checks passed`);

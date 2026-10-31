@@ -83,7 +83,7 @@ export const socialTools: ToolDef[] = [
             type: "string",
             enum: [...ATTITUDE_ENUM],
             description:
-              "How they currently feel about the party. Default: 'indifferent'. On someone already registered it means the party is dealing with them now: they are met, and how they feel about each character is tracked from then on. So give it there only for someone in the scene, never to preset how someone the party has not met feels.",
+              "How they currently feel about the party. Default: 'indifferent'. On someone already registered it marks them met, their feelings tracked per character from then on: give it only for someone in the scene, never to preset how an unmet NPC feels.",
           },
           trait: {
             type: "string",
@@ -98,12 +98,12 @@ export const socialTools: ToolDef[] = [
           drawnTo: {
             type: "array",
             items: { type: "string", enum: TOLD_ATTRACTION },
-            description: "Who they could fall for, once the story shows it. The server keeps the first value it is given, so it never changes between characters.",
+            description: "Who they could fall for, once the story shows it. The first value given is kept.",
           },
           goal: {
             type: "string",
             description:
-              "What they are working toward right now (a scheme, an errand, a hunt). The server advances it in the background between chapters, so give real NPCs real goals.",
+              "What they are working toward right now (a scheme, an errand, a hunt). The server advances it between chapters.",
           },
           ambition: {
             type: "string",
@@ -119,7 +119,7 @@ export const socialTools: ToolDef[] = [
     function: {
       name: "npc_reaction",
       description:
-        "Roll a first-meeting reaction for a new NPC when it is uncertain how they take the party. The server rolls 2d6 (plus any modifier for the party's approach or reputation) and turns it into a starting attitude (hostile, indifferent, or friendly), registering the NPC with it. Call it instead of simply deciding how a stranger feels. Skip it when the story already fixes the NPC's stance (a sworn enemy, a hired ally). Someone the party has already dealt with, or whose attitude is already set, is not rolled again: the result reports how they feel.",
+        "Roll a first-meeting reaction for a new NPC when it is uncertain how they take the party. The server rolls 2d6 plus modifier into a starting attitude and registers the NPC with it. Call it instead of simply deciding how a stranger feels; skip it when the story already fixes their stance (a sworn enemy, a hired ally). Someone already met or set is not rolled again: the result reports how they feel.",
       parameters: {
         type: "object",
         additionalProperties: false,

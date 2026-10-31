@@ -149,21 +149,21 @@ const characterProperty = {
 const ITEM_SRD_NAME_PROPERTY = {
   type: "string",
   description:
-    "English SRD or pack name ('Potion of Healing') when item is the table's own; omit for invented loot. E.g. 'Longsword' for item 'Spada lunga': the server reads what it does from that item. A magic weapon or armor built on a chosen base is named with it as the SRD writes it ('Flame Tongue Scimitar', 'Vicious Rapier', 'Mithral Half Plate', 'Chain Mail of Fire Resistance'). Also omit when item already is that English name, and while it is unidentified.",
+    "English SRD or pack name ('Potion of Healing') when item is the table's own; omit for invented loot. The server reads what it does from that name. A magic weapon or armor names its base as the SRD writes it ('Flame Tongue Scimitar', 'Mithral Half Plate'). Also omit when item already is that English name, and while it is unidentified.",
 };
 
 const ITEM_TAGS_PROPERTY = {
   type: "array",
   items: { type: "string", enum: [...ITEM_TAGS] },
   description:
-    "What the item is beyond its SRD or pack row; all of it for invented loot, [] when none fits. The server reads these for potions, scrolls, rations and water, light, foci, ammunition, silvered or adamantine weapons, and treasure. For an SRD or pack item, only what it adds to its row: a silvered longsword is srdName 'Longsword' with tags ['silvered']; omit them otherwise. Omit while it is unidentified.",
+    "What the item is beyond its SRD or pack row; all of it for invented loot, [] when none fits. For an SRD or pack item, only what it adds to its row: a silvered longsword is srdName 'Longsword' with tags ['silvered']; omit them otherwise. Omit while it is unidentified.",
 };
 
 // The spell a spell scroll holds (src/lib/dm/consumables.ts).
 const ITEM_SPELL_PROPERTY = {
   type: "string",
   description:
-    "A spell scroll only (tags with scroll): the spell it holds, as the spell lists name it ('Fireball'). Use the spell's name whatever the scroll is called. Reading it casts that spell. Omit while it is unidentified.",
+    "A spell scroll only (tags with scroll): the spell it holds, as the spell lists name it ('Fireball'). Use the spell's name whatever the scroll is called. Omit while it is unidentified.",
 };
 
 // What one is worth, for a thing the content pack does not price
@@ -173,7 +173,7 @@ const ITEM_WORTH_PROPERTY = {
   minimum: 0.01,
   maximum: 100000,
   description:
-    "Gold pieces one is worth, for a thing no SRD or pack row prices: a gem, a trade good, invented loot. A gem is 10 to 5,000 gp, an art object 25 to 7,500 gp. The server prices its sale by it (full for treasure, half for anything else) and a spell's costly material by it. Write item without its worth. Omit for an SRD item, and while it is unidentified.",
+    "Gold pieces one is worth, for a thing no SRD or pack row prices: a gem, a trade good, invented loot. A gem is 10 to 5,000 gp, an art object 25 to 7,500 gp; the server prices a sale and a spell's costly material by it. Write item without its worth. Omit for an SRD item, and while it is unidentified.",
 };
 
 function tool(name: string, description: string, extra: Record<string, unknown>, required: string[]): ToolDef {
@@ -194,7 +194,7 @@ function tool(name: string, description: string, extra: Record<string, unknown>,
 
 export const mutationTools: ToolDef[] = [
   applyDamageTool,
-  tool("heal", "Restore a character's HP, capped at their max, from plain healing or a HEALING SPELL. For a spell the server casts it (the caster must have the spell; the slot and the action are spent), rolls the spell's real dice, adds the caster's ability modifier, and shows the dice card.", {
+  tool("heal", "Restore a character's HP, capped at their max, from plain healing or a HEALING SPELL. For a spell the server casts it (the slot and the action are spent) and rolls its real dice.", {
     amount: { type: "integer", minimum: 1, maximum: 200, description: "Hit points the server rolled this turn, for healing that is not a spell." },
     dice: { type: "string", description: "Dice the server rolls for healing that is not a spell ('2d4+2'). Instead of amount." },
     spell: {
@@ -218,7 +218,7 @@ export const mutationTools: ToolDef[] = [
   }, []),
   tool(
     "stabilize",
-    "Stabilize a DYING character at 0 HP without healing. It takes the healer's action: with method 'check' the server rolls their DC 10 Wisdom (Medicine) check; 'kit' (one of the ten uses of the healer's kit they carry) and 'spell' (Spare the Dying) need no check. On a battle map the healer must be within 5 feet. A stable character stops making death saves, stays unconscious at 0 HP, and regains 1 HP after 1d4 hours.",
+    "Stabilize a DYING character at 0 HP without healing. It takes the healer's action, within 5 feet on a battle map: 'check' rolls their DC 10 Medicine check; 'kit' (a use of a healer's kit they carry) and 'spell' (Spare the Dying) need none. A stable character stops making death saves and stays unconscious at 0 HP.",
     {
       healerId: { type: "string", description: "Whoever tends them: exact characterId from GAME STATE." },
       method: {
@@ -291,7 +291,7 @@ export const mutationTools: ToolDef[] = [
   ...resourceTools,
   setConditionTool,
   clearConditionTool,
-  tool("use_spell_slot", "Cast a spell that no other tool resolves (a utility spell, a summoning, a ritual): the server spends the slot and tracks concentration. It checks the caster holds the spell and can cast it now, and spends the slot of the spell's level (or the higher one named), its casting time from the turn and any costly material; a new concentration spell ends the previous one and its effects. A spell that leaves an area on the battle map with nobody caught in it yet (Fog Cloud, Darkness, Silence, Spike Growth, Web, Moonbeam, Daylight, a Wall of Stone, Force, Ice, Fire or Thorns, Guardian of Faith) is laid there (atX); the server applies the area from then on (movement, sight, Silence, the saves and damage of creatures entering it or starting or ending a turn in it) and removes it when the concentration or the duration ends.", {
+  tool("use_spell_slot", "Cast a spell that no other tool resolves (a utility spell, a summoning, a ritual): the server spends the slot and tracks concentration. It checks the caster can cast it now and spends the slot, the casting time and any costly material; a new concentration spell ends the previous one. A spell that leaves an area on the battle map with nobody caught in it yet (Fog Cloud, Darkness, Silence, Spike Growth, Web, a Wall of Stone or Fire) is laid there (atX), and the server applies the area from then on until it ends.", {
     level: { type: "integer", minimum: 1, maximum: 9, description: "The slot level it is cast from, for a higher one; omit for the spell's own (a warlock's pact slot)." },
     spell: { type: "string", description: "Exact name of the spell being cast, from the character's spell list." },
     ritual: {
@@ -312,7 +312,7 @@ export const mutationTools: ToolDef[] = [
   }, ["spell"]),
   tool(
     "learn_spell",
-    "Permanently add or remove ONE spell on a character's spell list, only when the story genuinely teaches or strips it: a scroll copied into a spellbook, a mentor's training, a granted boon, a curse. For a wizard the spell is written in the spellbook and can be prepared after a long rest. Players choose their own prepared spells from their sheet; never use this to swap what is prepared. Never use this to let a character cast something in the moment; casting requires the spell to already be on their sheet.",
+    "Permanently add or remove ONE spell on a character's spell list, only when the story genuinely teaches or strips it: a scroll copied into a spellbook, a mentor's training, a granted boon, a curse. For a wizard it is written in the spellbook, to prepare after a long rest. Never use it to swap prepared spells (players choose those) or to let a character cast something in the moment.",
     {
       action: { type: "string", enum: ["add", "remove"] },
       spell: { type: "string", description: "Exact spell name." },

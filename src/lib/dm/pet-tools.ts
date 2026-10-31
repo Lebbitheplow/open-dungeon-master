@@ -50,7 +50,7 @@ export const petTools: ToolDef[] = [
     function: {
       name: "summon_pet",
       description:
-        "Summon or bond a creature a feature grants: kind familiar (Find Familiar), beast_companion (Beast Master), drake (Drakewarden, its essence) or other (a story pet: a stat block's name, or hp and ac). A story pet with no stat block cannot attack. A Find Familiar form is bat, cat, crab, frog, hawk, lizard, octopus, owl, poisonous snake, quipper, rat, raven, sea horse, spider or weasel, or imp, quasit, pseudodragon or sprite with Pact of the Chain. A Beast Master companion is a Medium or smaller beast of CR 1/4 or lower. A story pet named for an SRD creature (mastiff, wolf, riding horse) or a monster the table made in the workshop takes that stat block, and fights with it when its CR is no higher than a druid of the owner's level could become (1/4, 1/2 from 4th level, 1 from 8th). The server validates the feature, loads the stat block, and attaches the pet to their sheet. Call it BEFORE narrating the summon.",
+        "Summon or bond a creature a feature grants: kind familiar (Find Familiar), beast_companion (Beast Master), drake (Drakewarden, its essence) or other (a story pet: a stat block's name, or hp and ac). A story pet with no stat block cannot attack. A familiar takes a Find Familiar form (an owl, a cat, a raven; an imp, quasit, pseudodragon or sprite with Pact of the Chain); a Beast Master companion is a Medium or smaller beast of CR 1/4 or lower. A story pet named for an SRD or workshop creature (mastiff, wolf) takes that stat block, and fights with it when its CR is within what a druid of the owner's level could become. The server checks the feature and attaches the pet to their sheet. Call it BEFORE narrating the summon.",
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -62,7 +62,7 @@ export const petTools: ToolDef[] = [
           essence: {
             type: "string",
             enum: [...DRAKE_ESSENCES],
-            description: "kind=drake only: its Draconic Essence, the damage type it is immune to. The player chooses it at each summon.",
+            description: "kind=drake only: its Draconic Essence, the damage type it is immune to, as the player chooses.",
           },
           hp: { type: "integer", minimum: 1, maximum: 300, description: "kind=other with no stat block only, and required for it: the pet's HP." },
           ac: { type: "integer", minimum: 1, maximum: 30, description: "kind=other with no stat block only, and required for it: the pet's armor class." },
@@ -77,7 +77,7 @@ export const petTools: ToolDef[] = [
     function: {
       name: "pet_attack",
       description:
-        "Resolve a character's pet attacking an enemy; in a fight it happens on the owner's own turn, and the server rolls and applies it with the pet's real numbers. The server checks the pet may attack at all (plain familiars cannot; Pact of the Chain forms, companions and drakes can) and rolls to-hit against the enemy's real AC. In a fight the owner must be able to act, and the server charges the attack: a Beast Master companion costs the ranger's action, a drake the bonus action, a Pact of the Chain familiar one of the warlock's attacks of the Attack action (once a turn), a story pet the owner's action. A refusal spends nothing.",
+        "Resolve a character's pet attacking an enemy; in a fight it happens on the owner's own turn, and the server rolls and applies it with the pet's real numbers. The server checks the pet may attack at all (plain familiars cannot) and, in a fight, that the owner can act, and charges the owner's action, bonus action or attack the pet's kind costs. A refusal spends nothing.",
       parameters: {
         type: "object",
         additionalProperties: false,

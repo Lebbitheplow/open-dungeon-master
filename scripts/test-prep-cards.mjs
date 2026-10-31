@@ -37,8 +37,18 @@ const { ARC_LIMITS } = await import("../src/lib/dm/arc-logic.ts");
 getDatabase();
 
 let passed = 0;
+const pending = [];
 function test(name, fn) {
-  fn();
+  // An async check is waited for before the count prints: Vitest drops a
+  // rejection that lands after a file's last line, so an unawaited one
+  // passed under npm test while it failed under node.
+  const result = fn();
+  if (result && typeof result.then === "function") {
+    pending.push(result.then(() => {
+      passed += 1;
+    }));
+    return;
+  }
   passed += 1;
 }
 
@@ -265,5 +275,6 @@ test("a campaign clone carries the prep cards with the arc", async () => {
   assert.match(handleReadCard(copy, JSON.stringify({ ref: event.id })).text, /lamp oil/);
 });
 
+await Promise.all(pending);
 console.log(`prep cards: ${passed} tests passed`);
 removeTempDir(dir);

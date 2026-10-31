@@ -20,7 +20,7 @@ export const applyDamageTool: ToolDef = {
   function: {
     name: "apply_damage",
     description:
-      "Deal damage no attack or spell resolves (a hazard, the environment, a falling chandelier) to a character, an enemy, a character's pet, or several at their share of one total. Temp HP absorbs first, HP floors at 0, resistances and death saves resolve themselves. An enemy takes it only from a hazard or the environment (a blow is pc_attack, a spell cast_at_enemy or aoe_damage), and dies only when the result says dead: true.",
+      "Deal damage no attack or spell resolves (a hazard, the environment, a falling chandelier) to a character, an enemy, a character's pet, or several at their share of one total. The server applies temp HP, resistances and death saves. An enemy takes it only from a hazard or the environment (a blow is pc_attack, a spell cast_at_enemy or aoe_damage), and dies only when the result says dead: true.",
     parameters: {
       type: "object",
       additionalProperties: false,
@@ -43,7 +43,7 @@ export const applyDamageTool: ToolDef = {
               share: { type: "string", enum: ["none", "half", "full", "double"] },
             },
           },
-          description: "Several targets from ONE total, each at its share, for a reason no save covers. Such as cover, an immunity, diving clear. Instead of characterId or enemyId.",
+          description: "Several targets from ONE total, each at its share for a reason no save covers (cover, immunity). Instead of characterId or enemyId.",
         },
         amount: { type: "integer", minimum: 1, maximum: 200, description: "A damage total the server rolled this turn (request_roll kind=damage)." },
         dice: { type: "string", description: "Dice the server rolls instead ('2d6')." },
@@ -75,7 +75,7 @@ export const setConditionTool: ToolDef = {
   function: {
     name: "set_condition",
     description:
-      "Apply a condition to a character or an enemy; always give a duration the fiction has, since only timed conditions expire on their own. The 5e names are blinded, charmed, deafened, frightened, grappled, incapacitated, invisible, paralyzed, petrified, poisoned, prone, restrained, stunned, unconscious and exhaustion. Custom names are allowed for story effects. A duration is rounds for combat-scale effects, minutes, hours or days for longer ones (a poison, a curse, a potion), or saveAbility + saveDc for save-ends effects the server re-rolls. In combat the countdown runs by round; outside it the in-world clock runs it down as the party travels, rests, or passes time.",
+      "Apply a condition to a character or an enemy; always give a duration the fiction has, since only timed conditions expire on their own. The 5e names are blinded, charmed, deafened, frightened, grappled, incapacitated, invisible, paralyzed, petrified, poisoned, prone, restrained, stunned, unconscious and exhaustion. Any other name is a story effect. A duration is rounds, minutes, hours or days, or saveAbility + saveDc for a save-ends effect the server re-rolls; out of a fight the in-world clock runs it down.",
     parameters: {
       type: "object",
       additionalProperties: false,
@@ -116,12 +116,12 @@ export const setConditionTool: ToolDef = {
         saveDc: { type: "integer", minimum: 1, maximum: 30, description: "Save-ends DC." },
         magical: {
           type: "boolean",
-          description: "True when the condition comes from magic, so traits that resist magic apply (Fey Ancestry vs sleep). E.g. a creature's magical sleep, an enchanted trap.",
+          description: "True when the condition comes from magic, so traits that resist magic apply (Fey Ancestry vs sleep).",
         },
         sourceEnemyId: {
           type: "string",
           description:
-            "The enemy that caused it: exact enemyId from GAME STATE. E.g. the charmer, the grappler, the source of the fear.",
+            "The enemy that caused it: exact enemyId from GAME STATE. The charmer, the grappler, the source of the fear.",
         },
         sourceCharacterId: {
           type: "string",

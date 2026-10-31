@@ -368,7 +368,7 @@ export const moveTokenTool: ToolDef = {
   function: {
     name: "move_token",
     description:
-      "Move a combatant on the battle map. A walk (no forced): an enemy taking its movement, or a character on their own turn, either an AI companion or a player character walking the move their player just declared; it spends their speed, stands them from prone for what standing costs, and draws opportunity attacks. A forced move (forced:true): a character pushed, pulled, or carried. A teleport (teleport:true): to a tile WITHOUT walking (Misty Step, a portal, a trap door), by spell with casterCharacterId for a character's (the server casts it and refuses a jump past its range), or casterEnemyId with enemyAbility (or spell) for an enemy's, or cause 'hazard'; the tile must be open and empty. The server enforces walls, occupancy, speed, and that a frightened creature never walks closer to what it fears; moves clamp to the farthest legal tile toward the target. A walking enemy passes through its allies' spaces and a character's two sizes apart at double cost (never stopping in one), and a Large or bigger one squeezes through a gap one size too small at double cost and is squeezing there (attacks against it have advantage).",
+      "Move a combatant on the battle map. A walk (no forced): an enemy taking its movement, or a character on their own turn, either an AI companion or a player character walking the move their player just declared; it spends their speed (standing from prone too) and draws opportunity attacks. A forced move (forced:true): a character pushed, pulled, or carried. A teleport (teleport:true): to an open, empty tile WITHOUT walking (Misty Step, a portal, a trap door), by spell with casterCharacterId for a character's (the server casts it and refuses a jump past its range), casterEnemyId with enemyAbility or spell for an enemy's, or cause 'hazard'. The server enforces walls, occupancy, speed, fear and squeezing, and clamps a move to the farthest legal tile toward the target.",
     parameters: {
       type: "object",
       additionalProperties: false,
@@ -387,12 +387,12 @@ export const moveTokenTool: ToolDef = {
         disengage: {
           type: "boolean",
           description:
-            "An enemy Disengages before it walks, so leaving reach draws no opportunity attack. A bonus action for a creature with Nimble Escape (once a round), its action for anyone else.",
+            "An enemy Disengages before it walks, so leaving reach draws no opportunity attack. Its action, or a bonus action with Nimble Escape.",
         },
         drag: {
           type: "boolean",
           description:
-            "An enemy drags the character it grapples, keeping the grapple; without drag, leaving reach lets go. Its speed is halved unless the character is two sizes smaller, and the server sets the character down beside it.",
+            "An enemy drags the character it grapples, keeping the grapple; without drag, leaving reach lets go. The server halves its speed as the rules say.",
         },
         teleport: { type: "boolean", description: "No walking and no movement spent." },
         spell: { type: "string", description: "A teleport's spell (Misty Step), or the feature a character spent on it." },

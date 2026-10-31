@@ -11,7 +11,10 @@
 //    trace names the tool definitions;
 // 2. an empty reply with finish_reason "length": the turn logs the cause;
 // 3. an agent program, handed the whole catalogue at once, is charged for
-//    all of it, and a chat table still for the larger of its two sets.
+//    all of it, and a chat table still for the larger of its two sets;
+// 4. the trimmed set keeps room to spare on a 48K window and the full set on
+//    a 64K one, so a longer tool description fails here, naming the biggest
+//    tools, before it tips those tables into a smaller profile.
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 import fs from "node:fs";
@@ -202,6 +205,59 @@ server.close();
     "the harness window is smaller by exactly the difference",
   );
   console.log(`ok: an agent program is charged ${harnessTokens} tool tokens, a chat table ${chatTokens}`);
+}
+
+// ---- 4. the tool sets keep room to spare ----------------------------------------
+// The trimmed set in a fight once left a 48K window 48 tokens above the
+// trimmed profile's floor (src/lib/dm/model-tuning-logic.ts), so each SRD
+// rules fix that added a line to a combat tool silently moved those tables to
+// the compact set, and the full set left the default model's 64K window little
+// more. These floors keep room for the next fix, and say where to trim first.
+{
+  const { MIN_LEAN_ROOM_TOKENS, MIN_STORY_ROOM_TOKENS } = await import("../src/lib/dm/model-tuning-logic.ts");
+  const LEAN_WINDOW = 48_000;
+  const FULL_WINDOW = 64_000;
+  const LEAN_SPARE = 1_500;
+  const FULL_SPARE = 3_000;
+  const chat = table("Tool headroom", 1);
+  const imageEnabled = chat.settings.imageGenerationEnabled && chat.settings.autoImages;
+  const cost = (tools) => estimateTokens(JSON.stringify(tools));
+  const biggest = (tools) =>
+    tools
+      .map((tool) => ({ name: tool.function.name, tokens: cost(tool) }))
+      .sort((a, b) => b.tokens - a.tokens)
+      .slice(0, 8)
+      .map((tool) => `${tool.name} ${tool.tokens}`)
+      .join(", ");
+  // The larger of each profile's two sets is what the turn charges and judges
+  // (turn.ts toolSetTokens); a fight's is the larger today.
+  const larger = (lean) => {
+    const sets = [dmTurnTools(chat, true, imageEnabled, lean), dmTurnTools(chat, false, imageEnabled, lean)];
+    return sets.reduce((most, set) => (cost(set) > cost(most) ? set : most));
+  };
+  const leanSet = larger(true);
+  const leanTokens = cost(leanSet);
+  const leanSpare = LEAN_WINDOW - leanTokens - MIN_LEAN_ROOM_TOKENS;
+  assert.ok(
+    leanSpare >= LEAN_SPARE,
+    `the trimmed tool set is ${leanTokens} tokens, leaving a 48K window only ${leanSpare} above the ${MIN_LEAN_ROOM_TOKENS} the trimmed profile needs (keep ${LEAN_SPARE} spare, or 48K tables fall to the compact set). Trim the descriptions of the biggest tools first: ${biggest(leanSet)}`,
+  );
+  const fullSet = larger(false);
+  const fullTokens = cost(fullSet);
+  const fullSpare = FULL_WINDOW - fullTokens - MIN_STORY_ROOM_TOKENS;
+  assert.ok(
+    fullSpare >= FULL_SPARE,
+    `the full tool set is ${fullTokens} tokens, leaving a 64K window only ${fullSpare} above the ${MIN_STORY_ROOM_TOKENS} the full profile needs (keep ${FULL_SPARE} spare, or 64K tables fall to the trimmed set). Trim the descriptions of the biggest tools first: ${biggest(fullSet)}`,
+  );
+  // And the turn picks those profiles on those windows.
+  assert.equal(dmTurnTuning(chat).toolProfile, "lean", "a 48K window plays on the trimmed set");
+  process.env.OPENAI_COMPAT_CONTEXT = String(FULL_WINDOW);
+  try {
+    assert.equal(dmTurnTuning(chat).toolProfile, "full", "a 64K window plays on the full set");
+  } finally {
+    process.env.OPENAI_COMPAT_CONTEXT = String(WINDOW);
+  }
+  console.log(`ok: the trimmed set (${leanTokens}) leaves a 48K window ${leanSpare} spare, the full set (${fullTokens}) a 64K window ${fullSpare}`);
 }
 
 removeTempDir(dir);

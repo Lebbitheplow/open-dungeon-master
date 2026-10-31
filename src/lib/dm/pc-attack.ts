@@ -62,7 +62,7 @@ export const pcAttackTool: ToolDef = {
   function: {
     name: "pc_attack",
     description:
-      "Resolve a character's attack on a foe. The server derives their attack bonus and damage from their sheet, rolls to-hit against the target's real AC, applies damage on a hit, and reports the outcome for you to narrate. Call it for EVERY weapon attack and attack-roll spell a player makes; never adjudicate a player's attack yourself. Off their own turn a character attacks only with a readied attack or spell, or Giant Killer's reaction against a Large or larger creature within 5 feet that just attacked them; the server checks which and spends the reaction.",
+      "Resolve a character's attack on a foe. The server rolls it from their sheet against the target's real AC, applies damage on a hit and reports the outcome to narrate. Call it for EVERY weapon attack and attack-roll spell a player makes; never adjudicate one yourself. Off their own turn a character attacks only with a readied attack or spell, or Giant Killer's reaction (a Large or larger creature within 5 feet that just attacked them); the server checks which and spends the reaction.",
     parameters: {
       type: "object",
       additionalProperties: false,
@@ -72,17 +72,17 @@ export const pcAttackTool: ToolDef = {
         weapon: {
           type: "string",
           description:
-            "The weapon from their equipment, or 'unarmed strike' for a punch or kick in any language. Omit to use their best carried weapon. A weapon a subclass feature makes is named here too: a raging Path of the Beast barbarian's 'bite', 'claws' or 'tail', a Soulknife's 'psychic blade' (offHand for the second blade), a Sun Soul monk's 'radiant sun bolt'.",
+            "The weapon from their equipment, or 'unarmed strike' for a punch or kick in any language. Omit for their best carried weapon. Also a subclass feature's weapon: a raging Path of the Beast's 'bite', 'claws' or 'tail', a Soulknife's 'psychic blade' (offHand for the second), a Sun Soul monk's 'radiant sun bolt'.",
         },
         approach: {
           type: "boolean",
           description:
-            "True when the player said their character moves to the target first and it is out of melee reach. Closing in, charging and rushing it all count. The server walks them to the nearest open square beside it out of their movement, drawing any opportunity attacks, then attacks. Too far to reach this turn, they close in as far as they can and nothing is attacked.",
+            "True when the player said their character moves to the target first and it is out of melee reach. Closing in or charging counts. The server walks them beside it out of their movement, drawing opportunity attacks, then attacks; too far to reach this turn, they close in as far as they can and nothing is attacked.",
         },
         endTurn: {
           type: "boolean",
           description:
-            "True when the player ends their turn after this attack: the server ends it; never call end_turn too. A player says \"...then I end my turn\". It ends once the attack resolves, as end_turn does, and the result names who acts next. Send it only on the last attack they declared.",
+            "True when the player ends their turn after this attack: the server ends it; never call end_turn too. A player says \"...then I end my turn\". It ends once the attack resolves and the result names who acts next. Send it only on the last attack they declared.",
         },
         spell: {
           type: "string",
@@ -98,7 +98,7 @@ export const pcAttackTool: ToolDef = {
           type: "string",
           enum: ["none", "advantage", "disadvantage"],
           description:
-            "Situational advantage or disadvantage from the fiction that the server cannot see. It counts only with advantageSource 'other' and advantageReason. The server already applies conditions (prone, invisible, hidden, restrained...), cover, light and darkness, range, Help, flanking, spells, Reckless Attack and every feature: never claim those.",
+            "Situational advantage or disadvantage from the fiction that the server cannot see. It counts only with advantageSource 'other' and advantageReason. The server already applies conditions, cover, light, range, Help, flanking, spells and every feature: never claim those.",
         },
         advantageSource: {
           type: "string",
@@ -114,47 +114,47 @@ export const pcAttackTool: ToolDef = {
           type: "string",
           enum: ["martial arts", "frenzy", "feature"],
           description:
-            "A feature's bonus attack: 'martial arts' (weapon 'unarmed strike'), 'frenzy' or 'feature'. The server spends the bonus action. Martial arts is a monk's unarmed strike after taking the Attack action with an unarmed strike or monk weapon; frenzy is a raging Berserker's melee weapon attack; feature is a subclass's bonus weapon attack (Battle Magic or War Magic after casting with the action, Sudden Strike or Curving Shot after attacking, Telekinetic Master while concentrating on telekinesis) or a feat's (Great Weapon Master after a melee crit or kill, Polearm Master's butt-end strike after an Attack action with a polearm (1d4 bludgeoning), Crossbow Expert's hand crossbow shot after an Attack action with a one-handed weapon, Charger's melee attack after a Dash). The server checks the feature and the turn.",
+            "A feature's bonus attack: 'martial arts' (weapon 'unarmed strike'), 'frenzy' or 'feature'. Martial arts: a monk's, after the Attack action with an unarmed strike or monk weapon; frenzy: a raging Berserker's melee attack; feature: any other subclass's or feat's bonus weapon attack (Battle Magic, War Magic, Sudden Strike, Curving Shot, Telekinetic Master, Great Weapon Master after a melee crit or kill, Polearm Master, Crossbow Expert, Charger after a Dash). The server checks the feature and the turn and spends the bonus action.",
         },
         stunningStrike: {
           type: "boolean",
           description:
-            "Monk 5+: Stunning Strike on this melee weapon hit. The server spends 1 ki on a hit and rolls the target's CON save against the ki DC; a failed save stuns it.",
+            "Monk 5+: Stunning Strike on this melee weapon hit. The server spends 1 ki on a hit and rolls the target's CON save.",
         },
         luck: {
           type: "boolean",
           description:
-            "Lucky: spend a luck point for an extra d20 on this attack roll, the best kept. The server checks the feat and spends the point; ignored without one left.",
+            "Lucky: spend a luck point for an extra d20 on this roll, the best kept. The server checks the feat and spends the point.",
         },
         stunShot: {
           type: "boolean",
           description:
-            "Stunning Sniper (Tome of Heroes feat): stun on a ranged critical hit instead of doubling the damage. The target is stunned until the start of the shooter's next turn. The player's choice before the roll; the server checks the feat.",
+            "Stunning Sniper feat: stun on a ranged critical hit instead of doubling the damage. The player's choice before the roll; the server checks the feat.",
         },
         charged: {
           type: "boolean",
           description:
-            "Charger's attack: true when they moved 10+ feet straight at the target first, for +5 damage. It goes with the bonus-action attack after a Dash (bonusAttack 'feature').",
+            "Charger: true when they moved 10+ feet straight at the target first, for +5 damage. It goes with bonusAttack 'feature' after a Dash.",
         },
         powerAttack: {
           type: "boolean",
           description:
-            "The accuracy-for-damage trade: -5 to hit for +10 damage (Great Weapon Master, Sharpshooter). Great Weapon Master: a heavy melee weapon; Sharpshooter: a ranged weapon. Level Up's Powerful Attacker rolls a heavy weapon attack at disadvantage for +10; Deadeye drops the proficiency bonus from a ranged attack roll for twice it on the damage. The player's choice before the roll; the server checks the feat and the weapon.",
+            "The accuracy-for-damage trade: -5 to hit for +10 damage (Great Weapon Master, Sharpshooter). Great Weapon Master takes a heavy melee weapon, Sharpshooter a ranged one; Level Up's Powerful Attacker and Deadeye too. The player's choice before the roll; the server checks the feat and the weapon.",
         },
         reckless: {
           type: "boolean",
           description:
-            "Barbarian 2+: Reckless Attack, declared on the first attack of their turn. Advantage on melee Strength weapon attacks this turn; attacks against them have advantage until their next turn. The server tracks both.",
+            "Barbarian 2+: Reckless Attack, declared on the first attack of their turn. The server applies the advantage both ways.",
         },
         nonlethal: {
           type: "boolean",
           description:
-            "A melee attack meant to knock out: a creature it drops to 0 HP falls unconscious, not dying. That creature is out of the fight.",
+            "A melee attack meant to knock out: a creature it drops to 0 HP falls unconscious, not dying. It is out of the fight.",
         },
         hordeBreaker: {
           type: "boolean",
           description:
-            "Horde Breaker: once a turn, an extra weapon attack on another creature within 5 feet of the first. It is a Hunter ranger's feature, and the extra attack uses none of their action's attacks.",
+            "Horde Breaker: once a turn, an extra weapon attack on another creature within 5 feet of the first. A Hunter's feature, using none of their action's attacks.",
         },
         useInspiration: {
           type: "boolean",
@@ -163,33 +163,33 @@ export const pcAttackTool: ToolDef = {
         strokeOfLuck: {
           type: "boolean",
           description:
-            "Rogue 20: Stroke of Luck. If this attack misses, the server turns it into a hit and spends the use (once a short rest); a hit spends nothing.",
+            "Rogue 20: Stroke of Luck. A miss becomes a hit; the server spends the use only on a miss.",
         },
         openHand: {
           type: "string",
           enum: ["prone", "push", "no reactions"],
           description:
-            "Way of the Open Hand monk: Open Hand Technique on this Flurry of Blows strike. On a hit the server rolls the target's DEX save (prone) or STR save (pushed 15 feet) against the ki DC, or takes its reactions until the end of the monk's next turn.",
+            "Way of the Open Hand monk: Open Hand Technique on this Flurry of Blows strike. On a hit the server rolls the target's save or takes its reactions.",
         },
         hurlThroughHell: {
           type: "boolean",
           description:
-            "Fiend warlock 14: Hurl Through Hell on this hit. The server spends the use (once a long rest); the creature is gone until the end of the warlock's next turn and then takes 10d10 psychic unless it is a fiend.",
+            "Fiend warlock 14: Hurl Through Hell on this hit; the server spends the use and resolves it.",
         },
         rapidStrike: {
           type: "boolean",
           description:
-            "Samurai 15: Rapid Strike. This attack has advantage and the fighter forgoes it for one more attack of the Attack action, once a turn; the server refuses it when the attack has no advantage.",
+            "Samurai 15: Rapid Strike, once a turn. The fighter forgoes this attack's advantage for one more attack of the Attack action; refused when the attack has no advantage.",
         },
         whirlwind: {
           type: "boolean",
           description:
-            "Whirlwind Attack: call pc_attack once per creature within 5 feet, each with whirlwind true. It is a Hunter ranger's feature: each call is one melee weapon attack, and the first spends the whole action.",
+            "Whirlwind Attack: call pc_attack once per creature within 5 feet, each with whirlwind true. A Hunter's feature: each call is one melee weapon attack, and the first spends the action.",
         },
         volley: {
           type: "boolean",
           description:
-            "Volley: call pc_attack once per creature within 10 feet of the first target, each with volley true. It is a Hunter ranger's feature: each call is one ranged weapon attack, and the first spends the whole action.",
+            "Volley: call pc_attack once per creature within 10 feet of the first target, each with volley true. A Hunter's feature: each call is one ranged weapon attack, and the first spends the action.",
         },
         improvised: {
           type: "boolean",
@@ -199,7 +199,7 @@ export const pcAttackTool: ToolDef = {
         twoHanded: {
           type: "boolean",
           description:
-            "They swing a versatile weapon in both hands (bigger damage die). Ignore for other weapons. Not for an off-hand attack.",
+            "A versatile weapon swung in both hands (bigger damage die); not for an off-hand attack.",
         },
         offHand: {
           type: "boolean",
@@ -218,12 +218,12 @@ export const pcAttackTool: ToolDef = {
           minimum: 1,
           maximum: 9,
           description:
-            "Attack-roll spells of 1st level or higher (Guiding Bolt, Scorching Ray): the slot level cast from. Omit for the spell's own level; the server spends the slot. Eldritch Blast's beams and Scorching Ray's rays are one pc_attack call each, all from one casting.",
+            "An attack-roll spell's slot level (Guiding Bolt, Scorching Ray); omit for the spell's own level. The server spends the slot. Each Eldritch Blast beam or Scorching Ray ray is its own pc_attack call, all from one casting.",
         },
         maneuver: {
           type: "string",
           description:
-            "A Battle Master maneuver riding this weapon attack, by name ('Trip Attack', 'Precision Attack'). Also 'Menacing Attack'. The server spends a Superiority Die, adds it to the damage (Precision: to the attack roll), and rolls the target's save against the maneuver's rider. Feinting Attack (a creature within 5 feet, advantage) and Quick Toss (a thrown weapon) take the bonus action; Grappling Strike saves the die for the grapple that may follow as a bonus action; Maneuvering Attack lets an ally move with its reaction. Parry, Riposte, Brace, Rally and Commander's Strike are not named here.",
+            "A Battle Master maneuver riding this weapon attack, by name ('Trip Attack', 'Precision Attack'). Also 'Menacing Attack'. The server spends a Superiority Die and applies the die and the rider's save. Feinting Attack and Quick Toss take the bonus action; Grappling Strike keeps the die for the grapple after it. Parry, Riposte, Brace, Rally and Commander's Strike are not named here.",
         },
       },
       required: ["characterId", "targetEnemyId"],
