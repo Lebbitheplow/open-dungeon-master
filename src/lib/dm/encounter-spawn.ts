@@ -192,11 +192,7 @@ export const addEnemiesTool: ToolDef = {
                 description:
                   "Only for an invented enemy with no matching monster: its challenge rating.",
               },
-              returning: {
-                type: "string",
-                description:
-                  "Only for a creature from an earlier fight: its enemyId there, from GAME STATE's list of who is still about. It comes back as that fight left it: hurt, knocked out, or rested whole if time has passed.",
-              },
+              returning: { type: "string", description: "An earlier fight's enemyId, to bring that creature back as it was left." },
             },
             required: ["monster"],
           },

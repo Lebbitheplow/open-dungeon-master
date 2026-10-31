@@ -11,6 +11,7 @@ import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { noteDominationShift } from "@/lib/db/side-watch";
 import { publishPersisted } from "@/lib/events";
 import { isKnockedOut } from "@/lib/dm/knockout";
+import { isConditionNamed } from "@/lib/srd/feature-names";
 
 // Server-authoritative combat state. Enemy HP lives here and changes ONLY
 // through the encounter tools; the AI DM narrates from tool results, never
@@ -587,7 +588,7 @@ export function patchEnemyHp(
   // refund, a drain, an aura (issue #667: they left it unconscious with hit
   // points, out of the fight and never waking).
   if (before && isKnockedOut(before)) {
-    const conditions = before.conditions.filter((entry) => entry.trim().toLowerCase() !== "unconscious");
+    const conditions = before.conditions.filter((entry) => !isConditionNamed(entry, "unconscious"));
     const meta = { ...before.conditionMeta };
     delete meta.unconscious;
     patchEnemyConditions(enemyId, conditions, meta);

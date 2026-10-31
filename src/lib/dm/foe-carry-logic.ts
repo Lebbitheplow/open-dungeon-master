@@ -18,7 +18,9 @@ import type { ConditionMeta, ConditionMetaMap } from "@/lib/dm/condition-logic";
 import { ROUNDS_PER_MINUTE } from "@/lib/dm/condition-logic";
 import { KNOCKED_OUT } from "@/lib/dm/knockout";
 import { regenerationOf, type Regeneration } from "@/lib/dm/regeneration-text";
-import { STABLE_WAKE_HOURS_MAX } from "@/lib/dm/vitals-logic";
+import { namesExhaustion, STABLE_WAKE_HOURS_MAX } from "@/lib/dm/vitals-logic";
+import { enemyExhaustion, enemyHpCap } from "@/lib/dm/monster-abilities";
+import { isConditionNamed } from "@/lib/srd/feature-names";
 import { healthState } from "@/lib/bestiary/health";
 
 export const LONG_REST_MINUTES = 8 * 60;
@@ -71,9 +73,7 @@ export function lyingKnockedOut(source: Pick<CarrySource, "status" | "currentHp"
   if (source.status === "dead" || source.currentHp > 0) {
     return false;
   }
-  return source.conditions.some(
-    (entry) => entry.trim().toLowerCase() === "unconscious" && source.conditionMeta?.[entry]?.source === KNOCKED_OUT,
-  );
+  return source.conditions.some((entry) => isConditionNamed(entry, "unconscious") && source.conditionMeta?.[entry]?.source === KNOCKED_OUT);
 }
 
 // The hours 1d4 gave a knocked-out creature to come to, as the blow wrote
@@ -92,8 +92,6 @@ export function longRestsIn(minutes: number): number {
   }
   return 1 + Math.floor((minutes - LONG_REST_MINUTES) / DAY_MINUTES);
 }
-
-const EXHAUSTION = /^exhaustion(?:\s+(\d))?$/i;
 
 // One instance of a condition, as time passes outside a fight: a duration
 // counts down (ten rounds to the minute) and ends when it runs out; one
@@ -129,10 +127,9 @@ export function carryConditions(
   const kept: string[] = [];
   const keptMeta: ConditionMetaMap = {};
   for (const name of conditions) {
-    const level = EXHAUSTION.exec(name.trim());
-    if (level) {
+    if (namesExhaustion(name)) {
       // A level of exhaustion goes with each long rest.
-      const left = Number(level[1] ?? 1) - rests;
+      const left = enemyExhaustion([name]) - rests;
       if (left > 0) {
         kept.push(`exhaustion ${left}`);
       }
@@ -160,16 +157,9 @@ export function carryConditions(
 }
 
 // The hit points a creature's own exhaustion lets it hold (level 4 halves
-// the maximum), as monster-abilities.ts enemyHpCap reads it.
+// the maximum).
 function hpCap(maxHp: number, conditions: string[]): number {
-  let level = 0;
-  for (const entry of conditions) {
-    const match = EXHAUSTION.exec(entry.trim());
-    if (match) {
-      level = Math.max(level, Number(match[1] ?? 1));
-    }
-  }
-  return level >= 4 ? Math.floor(maxHp / 2) : maxHp;
+  return enemyHpCap({ maxHp, conditions });
 }
 
 function plural(count: number, word: string): string {
@@ -186,7 +176,7 @@ export function carriedState(source: CarrySource, elapsedMinutes: number): Carri
   const regeneration = regenerationOf(source.stats);
   if (lyingKnockedOut(source)) {
     const wakeMinutes = wakeHoursOf(source.conditionMeta) * 60;
-    const others = source.conditions.filter((entry) => !["unconscious", "prone"].includes(entry.trim().toLowerCase()));
+    const others = source.conditions.filter((entry) => !isConditionNamed(entry, "unconscious", "prone"));
     if (minutes < wakeMinutes) {
       // Still out: unconscious (and prone with it) and stable, the hours to
       // coming to counted down from the blow.
