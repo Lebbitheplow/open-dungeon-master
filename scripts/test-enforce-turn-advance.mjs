@@ -1325,7 +1325,7 @@ await test("Every goblin the backstop plays gets a line: an attack, or why it ma
   kit.place(unseen.id, 1, 1);
   setTokenHidden(kit.token(unseen.id).id, true);
   assert.equal(kit.endTurn(userOf(world, kara.id)), true);
-  assert.equal(lastTurnNote(world), `Kara ends their turn. It is now Kara's turn. ${near.displayName} and ${beside.displayName} and ${far.displayName} and ${stunned.displayName} and someone unseen act before Kara.`);
+  assert.equal(lastTurnNote(world), `Kara ends their turn. It is Kara's turn again. ${near.displayName} and ${beside.displayName} and ${far.displayName} and ${stunned.displayName} and someone unseen act before Kara.`);
   // Stunned after the pass named them (a reaction, a held spell's save).
   kit.setEnemy(stunned.id, { conditions: ["stunned"] });
   kit.setEnemy(unseen.id, { conditions: ["stunned"] });
@@ -1356,7 +1356,7 @@ await test("A goblin stunned when the turn passes it is not named among those wh
   kit.place(stunned.id, 6, 6);
   kit.setEnemy(stunned.id, { conditions: ["stunned"] });
   assert.equal(kit.endTurn(userOf(world, kara.id)), true);
-  assert.equal(lastTurnNote(world), `Kara ends their turn. It is now Kara's turn. ${awake.displayName} acts before Kara.`);
+  assert.equal(lastTurnNote(world), `Kara ends their turn. It is Kara's turn again. ${awake.displayName} acts before Kara.`);
   await wokenTurn(world);
   const [note] = backstopNotes(world).map((message) => message.content);
   assert.ok(note?.includes(`${stunned.displayName} is stunned and loses its turn.`), note);
