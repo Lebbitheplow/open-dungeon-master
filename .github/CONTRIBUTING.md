@@ -12,12 +12,17 @@ code really does.
 
 ## Before you start
 
-- **Open an issue first** for anything bigger than a small fix, with the bug
-  or feature template, so the approach can be agreed before the work. Setup
-  and hosting questions go to
+- **A pull request needs no issue.** If you are making the change, open the
+  pull request and let its description say what changes and why. An issue
+  that only repeats a pull request doubles what there is to read, and makes
+  it harder to see what still needs work.
+- **Open an issue when it needs someone else**: a question, a decision or an
+  approach to agree before a large change, something that needs discussion,
+  or a bug or idea you are not fixing yourself. Use the bug or feature
+  template. Setup and hosting questions go to
   [Discussions](https://github.com/Lebbitheplow/open-game-master/discussions/categories/q-a)
   or [Discord](https://discord.gg/B2tQFr3TYD).
-- **One issue per pull request**, against `main`. A pull request built on
+- **One change per pull request**, against `main`. A pull request built on
   another one says so at the top. Small pull requests merge sooner: releases
   are frequent, and a large change collides with every open branch.
 - **The rules are SRD 5.1.** No 5.2 or 2024 rules. Content outside the SRD
@@ -147,9 +152,9 @@ artwork, the addon framework, settings and controls, releases.
 
 The [template](pull_request_template.md) asks for these:
 
-- **What changes and why**, in plain words. Link each issue it fixes with
-  its own keyword: `Fixes #123. Fixes #124.` (a comma list links only the
-  first).
+- **What changes and why**, in plain words, so the pull request stands on
+  its own. If it fixes an open issue, link each with its own keyword:
+  `Fixes #123. Fixes #124.` (a comma list links only the first).
 - **Screenshots** of anything a player sees, on the website and in the app,
   in the day and night themes and at phone width.
 - **A new setting, option or control** carries the justification

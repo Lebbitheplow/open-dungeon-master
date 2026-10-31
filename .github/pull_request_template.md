@@ -1,6 +1,7 @@
 <!--
-What this changes and why. Link each issue it fixes with its own keyword:
-"Fixes #123. Fixes #124." (a comma list links only the first).
+What this changes and why. No issue is needed first. If it fixes an open
+issue, link each with its own keyword: "Fixes #123. Fixes #124." (a comma
+list links only the first).
 The conventions and the checks are in .github/CONTRIBUTING.md. Written with
 a coding agent? Point it at that file and AGENTS.md before it starts.
 -->
