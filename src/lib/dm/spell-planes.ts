@@ -14,6 +14,7 @@
 // The characters' own acts are guarded by can-act.ts (spellTurnHold); these
 // are the refusals the enemy side and the targeting paths meet.
 
+import type { AttackStop } from "@/lib/dm/turn-lines-logic";
 import { rollCard } from "@/lib/dm/roll-card";
 import type { Campaign } from "@/lib/db/campaigns";
 import type { DmTurn } from "@/lib/db/dm-turns";
@@ -38,10 +39,12 @@ export const BLINKED = "blinked";
 // Emotions, Fear's flight, Turn Undead), whoever it aims at, or null. The
 // game saying no, and the way it can still act: the Dash it was pointed at
 // did not exist for an enemy before issue #621.
-export function attackHold(attacker: { name: string; conditions: string[] }): ToolError | null {
+// Tagged with what holds it (turn-lines-logic.ts), so a turn the server plays
+// says so at the table instead of passing in silence (issue #666).
+export function attackHold(attacker: { name: string; conditions: string[] }): (ToolError & { stop: AttackStop; stopBy: string }) | null {
   const held = conditionBlocksAttacks(attacker.conditions);
   return held
-    ? { error: `${attacker.name} is ${held} and makes no attacks while it lasts. It can take another action: take_action with its enemyId (dash, disengage or dodge), then move_token.`, refused: "rules" }
+    ? { error: `${attacker.name} is ${held} and makes no attacks while it lasts. It can take another action: take_action with its enemyId (dash, disengage or dodge), then move_token.`, refused: "rules", stop: "calmed", stopBy: held }
     : null;
 }
 
@@ -50,16 +53,16 @@ export function attackHold(attacker: { name: string; conditions: string[] }): To
 export function spellAttackHold(
   attacker: { name: string; conditions: string[] },
   target: { name: string; conditions: string[] },
-): ToolError | null {
+): (ToolError & { stop: AttackStop }) | null {
   return attackHold(attacker) ?? outOfReach(target);
 }
 
 // The refusal a spell cast at `target` meets when a spell has put it out of
-// reach, or null.
-export function outOfReach(target: { name: string; conditions: string[] }): ToolError | null {
+// reach, or null. Another target may still be attacked ("target").
+export function outOfReach(target: { name: string; conditions: string[] }): (ToolError & { stop: AttackStop }) | null {
   const gone = conditionUntargetable(target.conditions);
   return gone
-    ? { error: `${target.name} is ${gone}: out of reach of attacks and spells from the Material Plane until it ends. Choose another target.`, refused: "rules" }
+    ? { error: `${target.name} is ${gone}: out of reach of attacks and spells from the Material Plane until it ends. Choose another target.`, refused: "rules", stop: "target" }
     : null;
 }
 

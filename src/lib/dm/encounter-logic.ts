@@ -139,8 +139,19 @@ export function pickEnemyTarget(
   attackerPosition: { x: number; y: number } | null,
   candidates: Array<{ characterId: string; ac: number; position: { x: number; y: number } | null; unseen?: boolean }>,
 ): string | null {
+  return rankEnemyTargets(attackerPosition, candidates)[0] ?? null;
+}
+
+// The same choice as a ranked list, best first: when the first cannot be
+// attacked (Sanctuary turns the creature away, it is charmed by them, they
+// stand on another plane), a turn the server plays takes the next, as the
+// rules tell it to choose a new target (issue #666).
+export function rankEnemyTargets(
+  attackerPosition: { x: number; y: number } | null,
+  candidates: Array<{ characterId: string; ac: number; position: { x: number; y: number } | null; unseen?: boolean }>,
+): string[] {
   if (!candidates.length) {
-    return null;
+    return [];
   }
   const seen = candidates.filter((candidate) => !candidate.unseen);
   const scored = (seen.length ? seen : candidates).map((candidate) => ({
@@ -155,7 +166,7 @@ export function pickEnemyTarget(
         : Number.MAX_SAFE_INTEGER,
   }));
   scored.sort((a, b) => a.distance - b.distance || a.ac - b.ac);
-  return scored[0].characterId;
+  return scored.map((entry) => entry.characterId);
 }
 
 export const ENCOUNTER_OUTCOMES = ["victory", "enemies_fled", "party_fled", "party_defeated", "truce"] as const;
