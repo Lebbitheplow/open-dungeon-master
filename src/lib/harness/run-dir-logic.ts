@@ -31,20 +31,25 @@ export function isRunDirName(name: string): boolean {
   return RUN_DIR_PREFIXES.some((prefix) => name.startsWith(prefix) && name.length > prefix.length);
 }
 
-export type TempEntry = { name: string; isDirectory: boolean; modifiedMs: number };
+// ownerUid is the folder's owner where the system has one (not on Windows,
+// whose temp folder is the user's own).
+export type TempEntry = { name: string; isDirectory: boolean; modifiedMs: number; ownerUid?: number };
 
 // The names of the run folders that may go: a real folder (not a link to
-// one), named as a run folder, not in use by a live run of this server, and
-// older than any run can be.
+// one), named as a run folder, owned by the user this server runs as, not in
+// use by a live run of this server, and older than any run can be. A shared
+// temp folder (/tmp) lets anyone make a folder with a run folder's name, and
+// one with a link inside it would have the sweep remove files elsewhere.
 export function staleRunDirNames(
   entries: readonly TempEntry[],
-  options: { now: number; live: ReadonlySet<string> },
+  options: { now: number; live: ReadonlySet<string>; uid?: number },
 ): string[] {
   return entries
     .filter(
       (entry) =>
         entry.isDirectory &&
         isRunDirName(entry.name) &&
+        (options.uid === undefined || entry.ownerUid === undefined || entry.ownerUid === options.uid) &&
         !options.live.has(entry.name) &&
         options.now - entry.modifiedMs > RUN_DIR_STALE_AFTER_MS,
     )

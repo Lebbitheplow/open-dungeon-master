@@ -59,11 +59,31 @@ try {
         { name: "odm-harness-file", isDirectory: false, modifiedMs: old },
         { name: "odm-harness-", isDirectory: true, modifiedMs: old },
         { name: "odm-opencode-probe-old", isDirectory: true, modifiedMs: old },
+        { name: "odm-harness-owned", isDirectory: true, modifiedMs: old, ownerUid: 1000 },
+        { name: "odm-harness-not-ours", isDirectory: true, modifiedMs: old, ownerUid: 1001 },
         { name: "someone-else", isDirectory: true, modifiedMs: old },
       ],
-      { now, live: new Set(["odm-harness-live"]) },
+      { now, live: new Set(["odm-harness-live"]), uid: 1000 },
     );
-    assert.deepEqual(names, ["odm-harness-old", "odm-harness-img-old", "odm-codex-probe-old"]);
+    // One another user made in a shared /tmp is theirs, whatever its name.
+    assert.deepEqual(names, ["odm-harness-old", "odm-harness-img-old", "odm-codex-probe-old", "odm-harness-owned"]);
+  });
+
+  await test("a codex-home that is a link is not followed to the admin's own sign-in", () => {
+    const tmpdir = path.join(scratch, "linked-home");
+    fs.mkdirSync(tmpdir);
+    // A folder named as a run folder whose codex-home points at the admin's
+    // real Codex home (anyone can make one in a shared /tmp).
+    const planted = path.join(tmpdir, "odm-harness-planted");
+    fs.mkdirSync(planted);
+    fs.symlinkSync(adminHome, path.join(planted, "codex-home"), "junction");
+    age(planted, RUN_DIR_STALE_AFTER_MS + 60_000);
+    const before = fs.statSync(adminAuth).nlink;
+    sweepStaleRunDirs({ tmpdir });
+    assert.equal(fs.readFileSync(adminAuth, "utf8"), '{"signed":"in"}', "the admin's auth.json is still there");
+    assert.equal(fs.statSync(adminAuth).nlink, before);
+    assert.equal(fs.existsSync(planted), false, "the folder itself went, its link with it and not what it points to");
+    removeRunDir(path.join(tmpdir, "missing"));
   });
 
   await test("a held folder loses its sign-in links at once and is removed on a later try", async () => {

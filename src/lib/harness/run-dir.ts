@@ -72,12 +72,27 @@ export function makeRunDir(prefix: string, options: { tmpdir?: string; now?: num
   return dir;
 }
 
+function realFolder(target: string): boolean {
+  try {
+    const stat = lstatSync(target);
+    return stat.isDirectory() && !stat.isSymbolicLink();
+  } catch {
+    return false;
+  }
+}
+
 // Unlinks the admin's sign-in files from a Codex run folder. Each is a link,
 // so the admin's own file stays; only a file or a link is removed here,
-// never a folder.
+// never a folder. The run folder and its codex-home must be real folders:
+// through a codex-home that is itself a link, the "link" below would be the
+// admin's own auth.json.
 export function dropSignInLinks(dir: string): void {
+  const home = path.join(dir, CODEX_HOME_DIR);
+  if (!realFolder(dir) || !realFolder(home)) {
+    return;
+  }
   for (const name of LINKED_SIGN_IN_FILES) {
-    const file = path.join(dir, CODEX_HOME_DIR, name);
+    const file = path.join(home, name);
     try {
       const stat = lstatSync(file);
       if (stat.isFile() || stat.isSymbolicLink()) {
@@ -129,12 +144,20 @@ export function sweepStaleRunDirs(options: { tmpdir?: string; now?: number } = {
   } catch {
     return 0;
   }
+  // The user this server runs as, where the system has users that own
+  // files (not Windows: process.getuid is absent there).
+  const ownUid = process.getuid?.();
   const entries: TempEntry[] = [];
   for (const name of names) {
     try {
       // lstat: a link named like a run folder is not one, and is not followed.
       const stat = lstatSync(path.join(tmpdir, name));
-      entries.push({ name, isDirectory: stat.isDirectory() && !stat.isSymbolicLink(), modifiedMs: stat.mtimeMs });
+      entries.push({
+        name,
+        isDirectory: stat.isDirectory() && !stat.isSymbolicLink(),
+        modifiedMs: stat.mtimeMs,
+        ...(ownUid === undefined ? {} : { ownerUid: stat.uid }),
+      });
     } catch {
       // Gone already.
     }
@@ -143,7 +166,7 @@ export function sweepStaleRunDirs(options: { tmpdir?: string; now?: number } = {
     [...state().live].filter((dir) => path.dirname(dir) === path.resolve(tmpdir)).map((dir) => path.basename(dir)),
   );
   let removed = 0;
-  for (const name of staleRunDirNames(entries, { now, live })) {
+  for (const name of staleRunDirNames(entries, { now, live, uid: ownUid })) {
     // One attempt each; what is still held now is tried at the next sweep.
     if (removeRunDir(path.join(tmpdir, name), { retryMs: [] })) {
       removed += 1;
