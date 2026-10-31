@@ -142,4 +142,45 @@ await test("at the console an NPC's first move turned down is not made again unt
   assert.equal(offers().length, 1);
 });
 
+await test("at the console an attitude a social check moved holds until the GM's next narration", async () => {
+  const world = await openWorld();
+  const hero = world.addHero({ name: "Vex", gender: "Female" });
+  const set = await world.invoke("set_npc", { name: "Bryn", gender: "Male", attitude: "friendly" });
+  assert.equal(set.ok, true, set.error);
+  const attitude = () => npcs.getNpcByName(world.campaignId, "Bryn").attitude;
+  // The lowest die misses by five or more, which moves Bryn a step colder.
+  const sway = async (asActor) => {
+    world.dice(1);
+    const out = asActor
+      ? await invokeEngine(world.campaign(), asActor, { name: "social_check", args: { characterId: hero.id, npc: "Bryn", approach: "intimidate" } })
+      : await world.invoke("social_check", { characterId: hero.id, npc: "Bryn", approach: "intimidate" });
+    world.clearDice();
+    assert.equal(out.ok, true, out.error);
+    return out.result;
+  };
+
+  assert.equal((await sway()).attitudeShifted, "down");
+  assert.equal(attitude(), "indifferent");
+  // Run the check again straight away: it rolls, but the attitude holds.
+  const again = await sway();
+  assert.equal(again.attitudeShifted, null, "no second shift in the same scene");
+  assert.equal(attitude(), "indifferent");
+  assert.match(again.note, /already moved this scene, so it holds at indifferent until your next narration\./);
+
+  await wait(5);
+  world.say("dm", "The crowd thins and Bryn's jaw tightens.");
+  assert.equal((await sway()).attitudeShifted, "down", "after the GM narrates, a new exchange");
+  assert.equal(attitude(), "hostile");
+
+  // An AI turn keeps its guard on the turn and the words the model read.
+  npcs.setNpcAttitude(npcs.getNpcByName(world.campaignId, "Bryn").id, "friendly", "");
+  const turn = turns.createDmTurn(world.campaignId, [], "ai");
+  assert.equal((await sway({ kind: "ai", turnId: turn.id })).attitudeShifted, "down");
+  const same = await sway({ kind: "ai", turnId: turn.id });
+  assert.equal(same.attitudeShifted, null);
+  assert.match(same.note, /already moved this exchange, so it holds at indifferent\./);
+  const next = turns.createDmTurn(world.campaignId, [], "ai");
+  assert.equal((await sway({ kind: "ai", turnId: next.id })).attitudeShifted, "down", "a new AI turn is a new exchange");
+});
+
 finish();
