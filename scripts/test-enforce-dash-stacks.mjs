@@ -190,4 +190,23 @@ await test("A destination the call cannot use is refused with nothing spent; a D
   assert.match(String(plain.result.moveOwed), /their player moves their own token/);
 });
 
+// The console's Move beside field shows for every actor (a field cannot hide
+// itself by the actor's kind): for a player character it is refused before
+// the Dash is spent, in words that say why, instead of the walk failing
+// after it.
+await test("A person at the console Dashing a player character toward someone is told their player moves their own token, and nothing is spent", async () => {
+  await stage();
+  kit.place(vesper.id, 11, 1);
+  const refused = await act("dash", { toward: "Vesper" });
+  assert.equal(refused.ok, false);
+  assert.equal(refused.error, "Krag is a player character, and their player moves their own token: take the dash without someone to move beside, and they walk it on the board. Nothing was spent.");
+  assert.equal(world.encounter().turnBudget?.actionUsed ?? false, false, "the action is still Krag's");
+  assert.deepEqual([kit.token(krag.id).x, kit.token(krag.id).y], [1, 1]);
+  // The AI GM's Dash with no word from Krag's player since the last
+  // narration is refused the same way.
+  world.say("dm", "The torches gutter.");
+  const unasked = await aiAct("dash", { toward: "Vesper" });
+  assert.equal(unasked.ok, false);
+});
+
 finish();

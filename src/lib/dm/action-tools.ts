@@ -257,7 +257,7 @@ function enemyActionAndWalk(
   // The act's own gates first (tool-errors.ts): a dead or spent enemy hears
   // that, not a word about the square it named.
   const gate = enemy && encounter ? canEnemyAct({ enemy, encounter, kind: args.bonus ? "bonus" : "action" }) : null;
-  const plan = enemy && gate?.ok ? planActionWalk(campaign.id, { id: enemy.id, name: enemy.displayName }, args.action, args, false) : null;
+  const plan = enemy && gate?.ok ? planActionWalk(campaign, turn, { id: enemy.id, name: enemy.displayName }, args.action, args, false) : null;
   if (plan && "error" in plan) {
     return toolError(plan);
   }
@@ -267,7 +267,7 @@ function enemyActionAndWalk(
   }
   // A bonus route (Nimble Escape, Aggressive) the gate above did not see:
   // the destination is checked now, and a bad one leaves the walk owed.
-  const late = plan ?? planActionWalk(campaign.id, { id: enemy.id, name: enemy.displayName }, args.action, args, false, true);
+  const late = plan ?? planActionWalk(campaign, turn, { id: enemy.id, name: enemy.displayName }, args.action, args, false, true);
   if (!late || "error" in late) {
     return { ...acted, ...(late ? { moveOwed: late.error } : {}) };
   }
@@ -334,7 +334,7 @@ export function handleTakeAction(
   }
   // Where a Dash or Disengage goes (action-walk.ts, issue #666): checked
   // once the action can be paid for, before anything is spent.
-  const plan = planActionWalk(campaign.id, sheet, args.action, args, Boolean(readied));
+  const plan = planActionWalk(campaign, turn, sheet, args.action, args, Boolean(readied));
   if (plan && "error" in plan) {
     return toolError(plan);
   }

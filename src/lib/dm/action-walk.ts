@@ -7,6 +7,9 @@ import { tokenFootprint } from "@/lib/dm/board-reach";
 import { openSquaresBeside } from "@/lib/dm/companion-approach";
 import { handleMoveToken } from "@/lib/dm/map-tools";
 import { textKey } from "@/lib/language/text-logic";
+import { getSheetById } from "@/lib/db/sheets";
+import { aiPlaysSheet } from "@/lib/dm/companion-command";
+import { declaredThisTurn } from "@/lib/dm/player-word";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import type { ToolError } from "@/lib/dm/tool-errors";
 
@@ -33,7 +36,10 @@ export function hasDestination(args: Destination): boolean {
 // names no destination, a refusal when it names one that cannot be walked.
 // Every refusal is a mistake in the call (retry), and nothing was spent.
 export function planActionWalk(
-  campaignId: string,
+  campaign: Campaign,
+  // Who is asking: the AI GM may walk a player's token for the move their
+  // player just declared, as move_token does; a person at the console may not.
+  actor: Pick<DmTurn, "actor">,
   mover: { id: string; name: string },
   action: string,
   args: Destination,
@@ -53,7 +59,21 @@ export function planActionWalk(
     return { error: `A readied ${action} is released here without a walk: release it, then walk ${mover.name} with move_token.${tail}`, retry: true };
   }
   const toward = (args.toward ?? "").trim();
-  const encounter = getActiveEncounter(campaignId);
+  // A player character's token is their player's to move (move_token's own
+  // rule): refused here, before the Dash is spent, instead of the walk
+  // failing after it with the move left owed. The console's Move beside
+  // field cannot hide itself by the actor's kind, so this is where it says
+  // why (issue #666).
+  const sheet = getSheetById(mover.id);
+  if (sheet && !aiPlaysSheet(campaign, sheet) && !(actor.actor === "ai" && declaredThisTurn(campaign.id, sheet.id))) {
+    return {
+      error: sheet.isCompanion
+        ? `${mover.name} follows their player's orders, and that player moves them: take the ${action} without someone to move beside, and they walk ${mover.name} on the board.${tail}`
+        : `${mover.name} is a player character, and their player moves their own token: take the ${action} without someone to move beside, and they walk it on the board.${tail}`,
+      retry: true,
+    };
+  }
+  const encounter = getActiveEncounter(campaign.id);
   const map = encounter ? getBattleMapForEncounter(encounter.id) : null;
   const me = map ? getTokenByRef(map.id, mover.id) : null;
   if (!encounter || !map || !me) {
