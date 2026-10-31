@@ -152,6 +152,11 @@ export type ZoneRow = {
   // How far from its caster it may be laid, in feet (src/lib/dm/zone-cast.ts
   // besideFoe; the cast guard reads the spell's own range for a named one).
   rangeFeet?: number;
+  // The spell moves its area on a later turn (src/lib/dm/zone-move.ts):
+  // this far, for this part of the caster's turn; `rams` rolls it up beside
+  // the creature it strikes (Flaming Sphere), otherwise it moves onto the
+  // creature or point named (Moonbeam). Moved, it keeps its duration.
+  moves?: { feet: number; cost: "action" | "bonus"; rams?: boolean };
   tone: ZoneTone;
   // What it does, one line for GAME STATE and the board's label.
   summary: string;
@@ -198,8 +203,12 @@ export const ZONE_ROWS: Record<string, ZoneRow> = {
     trigger: { on: ["enter", "start"], save: "dex", condition: "restrained" },
     summary: "difficult terrain, lightly obscured; entering or starting a turn there: DEX save or restrained",
   },
+  // SRD 5.1: "On each of your turns after you cast this spell, you can use
+  // an action to move the beam 60 feet in any direction" (issue 659: the
+  // beam moved for nothing, anywhere, and its minute began again).
   moonbeam: {
     shape: "sphere", feet: 5, level: 2, concentration: true, rounds: MINUTE, tone: "radiant",
+    moves: { feet: 60, cost: "action" },
     trigger: { on: ["enter", "start"], save: "con", dice: "2d10", perSlot: "1d10", type: "radiant", half: true },
     summary: "entering or starting a turn there: CON save, 2d10 radiant (half on a success)",
   },
@@ -354,6 +363,18 @@ export const ZONE_ROWS: Record<string, ZoneRow> = {
     shape: "cube", feet: 5, level: 2, concentration: false, rounds: 2, tone: "fire",
     trigger: { on: ["start"], dice: "2d4", type: "fire", once: true },
     summary: "burning webs: a creature starting its turn here takes 2d4 fire",
+  },
+  // Flaming Sphere (SRD 5.1): it appears in an unoccupied space within 60
+  // feet; a creature ending its turn within 5 feet of it saves against its
+  // fire; a bonus action rolls it up to 30 feet, and a creature it rams
+  // saves. It was a save spell at its target, with no sphere and its ram
+  // measured from the caster (issue 659).
+  "flaming sphere": {
+    shape: "sphere", feet: 5, level: 2, concentration: true, rounds: MINUTE,
+    besideFoe: true, rangeFeet: 60, tone: "fire",
+    moves: { feet: 30, cost: "bonus", rams: true },
+    trigger: { on: ["end"], save: "dex", dice: "2d6", perSlot: "1d6", type: "fire", half: true },
+    summary: "a sphere of fire: a creature ending its turn within 5 feet of it makes a DEX save, 2d6 fire (half on a success); a bonus action rolls it up to 30 feet to ram a creature",
   },
   // Spiritual Weapon's floating weapon (issue 659): one square, marking where
   // the weapon is. It does nothing to the ground; pc_attack measures the

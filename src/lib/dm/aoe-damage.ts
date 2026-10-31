@@ -38,6 +38,7 @@ import { resolveSheetRef } from "@/lib/dm/rolls";
 import type { CharacterSheet } from "@/lib/schemas/sheet";
 import { curseBurn } from "@/lib/dm/spell-retort";
 import { holdEnemyAreaConcentration, placeSpellZone } from "@/lib/dm/zone-cast";
+import { commitZoneMove, planZoneMove } from "@/lib/dm/zone-move";
 import { zoneArgsSchema, zonePlacement } from "@/lib/dm/zone-args";
 import { zoneRowFor } from "@/lib/battlemap/zones-spells";
 import { spellEngineName } from "@/lib/content";
@@ -245,6 +246,16 @@ export function handleAoeDamage(
     : null;
   if (struck) {
     return struck;
+  }
+  // A held area that moves (Moonbeam's beam) goes onto the creature or the
+  // square the call names, within its own move and for its own part of the
+  // turn (src/lib/dm/zone-move.ts, issue 659).
+  const firstRef = enemyTargets[0]?.id ?? pcTargets[0]?.id;
+  const zoneMove = repeating && charmedCaster
+    ? planZoneMove({ encounter, caster: charmedCaster, spell: repeating, repeatCost: "free", toward: { ...(args.atX !== undefined && args.atY !== undefined ? { at: { x: args.atX, y: args.atY } } : {}), ...(firstRef ? { refId: firstRef } : {}) } })
+    : null;
+  if (zoneMove && "refused" in zoneMove) {
+    return zoneMove.refused;
   }
   if (args.spell && !args.casterEnemyId) {
     const planned = planAoeSpell(campaign, turn, sheets, sheetsById, {
@@ -652,7 +663,11 @@ export function handleAoeDamage(
     (enemyUse && args.spell ? holdEnemyAreaConcentration(campaign, enemyUse.enemy.id, enemyUse.name) : null);
   // The spell's area on the board, where it was cast (src/lib/dm/zone-cast.ts).
   const areaCaster = plan ? { kind: "pc" as const, id: plan.caster.id, name: plan.caster.name } : enemyUse && args.spell ? { kind: "enemy" as const, id: enemyUse.enemy.id, name: enemyUse.enemy.displayName } : null;
-  const area = areaCaster ? placeSpellZone(campaign, { spell: plan?.spell ?? enemyUse?.name ?? "", runsAs: plan?.runsAs, caster: areaCaster, slotLevel: plan?.slotLevel, dc: saveDc, caught: [...enemyTargets.map((enemy) => enemy.id), ...pcTargets.map((sheet) => sheet.id)], ...zonePlacement(args) }) : null;
+  // A held area coming again stays where it is, or moves as its spell
+  // moves it; it is laid around the creatures caught only when it is cast.
+  const area = zoneMove && "move" in zoneMove && charmedCaster
+    ? commitZoneMove(encounter, charmedCaster, zoneMove.move)
+    : areaCaster ? placeSpellZone(campaign, { spell: plan?.spell ?? enemyUse?.name ?? "", runsAs: plan?.runsAs, caster: areaCaster, slotLevel: plan?.slotLevel, dc: saveDc, caught: [...enemyTargets.map((enemy) => enemy.id), ...pcTargets.map((sheet) => sheet.id)], repeat: Boolean(repeating), ...zonePlacement(args) }) : null;
   // This turn's strike of a recurring area, cast or come again.
   if (plan?.mech?.repeat === "free") {
     markRepeatStruck(campaign, plan.spell, plan.caster.id, [...enemyTargets.map((enemy) => enemy.id), ...pcTargets.map((sheet) => sheet.id)]);
