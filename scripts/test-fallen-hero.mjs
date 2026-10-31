@@ -206,4 +206,28 @@ await test("the host says it lets a fallen hero's player back in, so the apps sh
   assert.equal(hostOffers({ features: {} }, "fallenHeroes"), false, "an older host hides it");
 });
 
+// Issue 654: a player's poll link made for the hero who fell wakes the
+// agent for the hero who takes their place, through the same door.
+await test("a poll link made for the fallen hero follows the hero who takes their place.", async () => {
+  const table = await fallenTable({ level: 5 });
+  const { createConnectionGrant } = await import("../src/lib/agents/grants.ts");
+  const { createPlayerPollLink, pollLinkAnswer, setPollLinksAllowed, POLL_MIN_INTERVAL_MS } = await import("../src/lib/agents/webhooks.ts");
+  setPollLinksAllowed(true);
+  try {
+    const grant = createConnectionGrant({ userId: table.player.id, name: "Agent", scopes: ["read", "play"], campaignId: table.world.campaignId }).grant;
+    const token = createPlayerPollLink(grant, { campaignId: table.world.campaignId, characterId: table.fallen.id }).pollPath.split("/").pop();
+    let clock = Date.now();
+    const poll = () => pollLinkAnswer(token, (clock += POLL_MIN_INTERVAL_MS));
+    assert.equal(poll().body.characterId, table.fallen.id, "waiting on the fallen hero until someone takes the seat");
+    const seated = await table.call("campaigns/[campaignId]/sheet/pregen", "POST", { id: "kara" });
+    assert.equal(seated.status, 201, JSON.stringify(seated.json));
+    const answer = poll();
+    assert.equal(answer.status, 200, "no longer a 404 like a mistyped link");
+    assert.equal(answer.body.characterId, seated.json.sheet.id);
+  } finally {
+    setPollLinksAllowed(false);
+    table.world.close();
+  }
+});
+
 finish();

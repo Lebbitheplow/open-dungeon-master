@@ -527,7 +527,11 @@ try {
     const inbox = new PlayerInbox(path.join(directory, "inbox"));
     const config = { ...sub, path: "/odm" };
     assert.ok(validateEvent(event, config));
-    assert.ok(!validateEvent({ ...event, characterId: "another" }, config));
+    // A subscription follows its player to a new hero (issue 654), so the
+    // character may change; the subscription and campaign may not.
+    assert.ok(validateEvent({ ...event, characterId: "another" }, config));
+    assert.ok(!validateEvent({ ...event, subscriptionId: "another" }, config));
+    assert.ok(!validateEvent({ ...event, campaignId: "another" }, config));
     assert.ok(!validateEvent({ ...event, content: "malicious prompt" }, config));
     const server = receiverServer(config, inbox);
     await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -824,6 +828,144 @@ try {
     assert.equal(poll(pollToken).status, 404);
     assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM player_webhooks WHERE grant_id = ?`).get(pollGrant.id).n, 0, "a dead link's row goes");
     setPollLinksAllowed(false);
+  });
+
+  // Issue 654: a link follows its player's seat to a new hero, and one that
+  // stops on its own says why, to the agent and on the player's page.
+  const { seatVerdict, stopWordsForAgent, stopWordsForPlayer } = await import("../src/lib/agents/webhook-seat-logic.ts");
+  const { listPlayerWebhookStops } = await import("../src/lib/agents/webhooks.ts");
+  const { endSession } = await import("../src/lib/dm/session-hold.ts");
+  const { resumeDmQueue } = await import("../src/lib/dm/queue.ts");
+  const { SESSION_REASON } = await import("../src/lib/dm/session-hold-logic.ts");
+
+  await test("the seat rules: a link keeps its hero, follows the new one, or stops with a reason", () => {
+    const alive = (id) => ({ id });
+    const dead = (id) => ({ id, deathSaves: { dead: true } });
+    const v = (over) => seatVerdict({ member: true, multiCharacter: "off", subscribed: alive("a"), current: alive("a"), currentClaimed: false, ...over });
+    assert.deepEqual(v({}), { kind: "keep" });
+    assert.deepEqual(v({ subscribed: dead("a"), current: dead("a") }), { kind: "keep" }, "a fallen hero with nobody in the seat yet waits");
+    assert.deepEqual(v({ subscribed: dead("a"), current: alive("b") }), { kind: "follow", characterId: "b" });
+    assert.deepEqual(v({ subscribed: null, current: alive("b") }), { kind: "follow", characterId: "b" }, "a lobby sheet rebuilt under a new id");
+    assert.deepEqual(v({ multiCharacter: "one_active", current: alive("b") }), { kind: "follow", characterId: "b" }, "a switch at a table of one hero at a time");
+    assert.deepEqual(v({ multiCharacter: "all_active", current: alive("b") }), { kind: "keep" }, "picking another to type as does not move it");
+    assert.deepEqual(v({ multiCharacter: "all_active", subscribed: dead("a"), current: alive("b") }), { kind: "follow", characterId: "b" });
+    assert.deepEqual(v({ multiCharacter: "all_active", subscribed: dead("a"), current: dead("a") }), { kind: "keep" });
+    assert.deepEqual(v({ multiCharacter: "one_active", current: alive("b"), currentClaimed: true }), { kind: "stop", reason: "character_changed" });
+    assert.deepEqual(v({ subscribed: null, current: null }), { kind: "stop", reason: "character_changed" });
+    assert.deepEqual(v({ subscribed: { id: "a", isCompanion: true }, current: { id: "a", isCompanion: true } }), { kind: "stop", reason: "character_changed" }, "a character handed to the GM");
+    assert.deepEqual(v({ member: false }), { kind: "stop", reason: "left_campaign" });
+    assert.match(stopWordsForAgent("character_changed", "poll"), /^This poll link stopped: the character it woke is no longer one its player plays/);
+    assert.match(stopWordsForPlayer("character_changed", "poll", { character: "Mira", date: "Oct 30" }), /stopped on Oct 30: Mira is no longer the character you play there\. Make a new one with Poll link\./);
+    assert.match(stopWordsForPlayer("expired", "push", { character: "Mira", date: "Oct 30" }), /this connection expired\. Connect the agent again/);
+  });
+
+  setPollLinksAllowed(true);
+  const seatPlayer = createUser("seat-player", "not-a-password");
+  const seatTable = createCampaign(seatPlayer.id, { title: "Seat test", description: "", theme: "", difficulty: "normal", startingLevel: 1, maxPlayers: 4 });
+  setCampaignStatus(seatTable.id, "active");
+  const addHero = (id, name) => db.prepare(`INSERT INTO character_sheets (id, campaign_id, user_id, name, race, class, abilities_json, max_hp, current_hp, ac, hit_dice_json, proficiencies_json, created_at, updated_at)
+    VALUES (?, ?, ?, ?, 'human', 'fighter', '{}', 10, 10, 12, '{}', '{}', ?, ?)`).run(id, seatTable.id, seatPlayer.id, name, nowIso(), nowIso());
+  const seatOn = (id) => db.prepare(`UPDATE campaign_members SET active_character_id = ? WHERE campaign_id = ? AND user_id = ?`).run(id, seatTable.id, seatPlayer.id);
+  const tableRule = (rule) => db.prepare(`UPDATE campaigns SET game_settings_json = json_set(game_settings_json, '$.multiCharacter', ?) WHERE id = ?`).run(rule, seatTable.id);
+  addHero("seat-hero-1", "First"); seatOn("seat-hero-1");
+  let seatGrant = createConnectionGrant({ userId: seatPlayer.id, name: "Seat agent", scopes: ["read", "play"], campaignId: seatTable.id }).grant;
+  let seatToken = createPlayerPollLink(seatGrant, { campaignId: seatTable.id, characterId: "seat-hero-1" }).pollPath.split("/").pop();
+
+  await test("a poll link follows its player to the new hero when theirs falls (issue 654)", () => {
+    assert.equal(poll(seatToken).body.characterId, "seat-hero-1");
+    db.prepare(`UPDATE character_sheets SET death_saves_json = ? WHERE id = ?`).run(JSON.stringify({ successes: 0, failures: 3, stable: false, dead: true }), "seat-hero-1");
+    const waiting = poll(seatToken);
+    assert.equal(waiting.status, 200, "a fallen hero's link waits for whoever takes the seat");
+    assert.equal(waiting.body.characterId, "seat-hero-1");
+    addHero("seat-hero-2", "Second"); seatOn("seat-hero-2");
+    const answer = poll(seatToken);
+    assert.equal(answer.status, 200);
+    assert.equal(answer.body.characterId, "seat-hero-2");
+    assert.equal(listPlayerWebhooks(seatGrant.id)[0].characterId, "seat-hero-2");
+  });
+
+  await test("a guarded write acts as the link's own character", async () => {
+    insertCampaignMessage({ campaignId: seatTable.id, seq: allocateSeq(seatTable.id), authorType: "dm", content: "A door creaks." });
+    const subId = listPlayerWebhooks(seatGrant.id)[0].id;
+    const o = playerWebhookState(seatGrant, subId).opportunities[0];
+    const originalFetch = globalThis.fetch; const bodies = [];
+    try {
+      globalThis.fetch = async (_url, init) => { bodies.push(JSON.parse(init.body)); return Response.json({ messageId: "m" }, { status: 202 }); };
+      const result = await workbenchCall(seatGrant, "odm_take_action", { campaignId: seatTable.id, content: "I listen at the door.", subscriptionId: subId, opportunityId: o.opportunityId });
+      assert.equal(result.isError, false, result.text);
+      assert.equal(bodies[0].characterId, "seat-hero-2");
+    } finally { globalThis.fetch = originalFetch; }
+  });
+
+  await test("between sessions a poll link reads paused, for the session, even after a restart (issue 654)", () => {
+    endSession(seatTable.id, { id: seatPlayer.id, username: "seat-player" });
+    let body = poll(seatToken).body;
+    assert.equal(body.lifecycle, "paused"); assert.equal(body.pausedFor, "session"); assert.equal(body.wake, false);
+    globalThis.__odmDmPauses?.clear();
+    body = poll(seatToken).body;
+    assert.equal(body.lifecycle, "paused", "the event says so without the in-memory hold");
+    assert.equal(body.pausedFor, "session");
+    publishPersisted(seatTable.id, "session_started", { at: Date.now(), userId: seatPlayer.id, name: "seat-player", number: 2 });
+    resumeDmQueue(seatTable.id, SESSION_REASON);
+    body = poll(seatToken).body;
+    assert.equal(body.lifecycle, "active");
+    assert.equal(body.pausedFor, undefined);
+  });
+
+  await test("at a table of several characters each, a link stays on its own while its player picks another", () => {
+    tableRule("all_active");
+    addHero("seat-hero-3", "Third"); seatOn("seat-hero-3");
+    const answer = poll(seatToken);
+    assert.equal(answer.status, 200);
+    assert.equal(answer.body.characterId, "seat-hero-2");
+    tableRule("off");
+  });
+
+  await test("a link whose seat moves to a hero another link wakes stops, and says why (issue 654)", () => {
+    const subId = listPlayerWebhooks(seatGrant.id)[0].id;
+    // The seat is on the third hero now; a second agent wakes that one.
+    const otherGrant = createConnectionGrant({ userId: seatPlayer.id, name: "Second agent", scopes: ["read", "play"], campaignId: seatTable.id }).grant;
+    createPlayerPollLink(otherGrant, { campaignId: seatTable.id, characterId: "seat-hero-3" });
+    const stopped = poll(seatToken);
+    assert.equal(stopped.status, 410, "not a 404 like a mistyped link");
+    assert.equal(stopped.stopped.reason, "character_changed");
+    assert.equal(stopped.stopped.characterId, "seat-hero-2");
+    assert.match(stopped.error, /no longer one its player plays/);
+    assert.ok(!/Second|Third|Seat test/.test(stopped.error), "the agent's words name nobody");
+    assert.equal(poll(seatToken).status, 410, "it stays stopped");
+    assert.deepEqual(listPlayerWebhooks(seatGrant.id), []);
+    assert.throws(() => playerWebhookState(seatGrant, subId), /no longer one its player plays/);
+    const [stop] = listPlayerWebhookStops([seatGrant.id]);
+    assert.equal(stop.reason, "character_changed"); assert.equal(stop.delivery, "poll");
+    assert.match(webhookToolCall(seatGrant, "odm_list_player_webhooks", {}).text, /"stopped":\[\{[^\]]*character_changed/);
+    // The player makes a new link once the other agent is gone: the notice clears.
+    revokeConnectionGrant(seatPlayer.id, otherGrant.id);
+    seatToken = createPlayerPollLink(seatGrant, { campaignId: seatTable.id, characterId: "seat-hero-3" }).pollPath.split("/").pop();
+    assert.deepEqual(listPlayerWebhookStops([seatGrant.id]), []);
+    assert.equal(poll(seatToken).status, 200);
+  });
+
+  await test("a new link replaces the connection's old one at the table whichever hero it woke", () => {
+    const before = seatToken;
+    db.prepare(`UPDATE player_webhooks SET character_id = 'seat-hero-2' WHERE grant_id = ?`).run(seatGrant.id);
+    seatToken = createPlayerPollLink(seatGrant, { campaignId: seatTable.id, characterId: "seat-hero-3" }).pollPath.split("/").pop();
+    assert.equal(poll(before).status, 404, "replaced, not stopped");
+    assert.equal(listPlayerWebhooks(seatGrant.id).length, 1, "no old hero's link lingers");
+  });
+
+  await test("a link stops with a reason when its connection expires or its player leaves the table", () => {
+    db.prepare(`UPDATE agent_grants SET expires_at = '2000-01-01T00:00:00.000Z' WHERE id = ?`).run(seatGrant.id);
+    const expired = poll(seatToken);
+    assert.equal(expired.status, 410); assert.equal(expired.stopped.reason, "expired");
+    assert.match(expired.error, /connection it belongs to has expired/);
+    seatGrant = createConnectionGrant({ userId: seatPlayer.id, name: "Seat agent again", scopes: ["read", "play"], campaignId: seatTable.id }).grant;
+    seatToken = createPlayerPollLink(seatGrant, { campaignId: seatTable.id, characterId: "seat-hero-3" }).pollPath.split("/").pop();
+    db.prepare(`DELETE FROM campaign_members WHERE campaign_id = ? AND user_id = ?`).run(seatTable.id, seatPlayer.id);
+    const left = poll(seatToken);
+    assert.equal(left.status, 410); assert.equal(left.stopped.reason, "left_campaign");
+    setPollLinksAllowed(false);
+    assert.equal(poll(seatToken).status, 404, "switching links off ends every link, notices included");
+    assert.equal(db.prepare(`SELECT COUNT(*) AS n FROM player_webhook_stops WHERE delivery = 'poll'`).get().n, 0);
   });
   console.log(`${passed} player webhook tests passed`);
 } finally {

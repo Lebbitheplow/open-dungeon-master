@@ -2,17 +2,20 @@ import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { getAppSetting, setAppSetting } from "@/lib/db/app-settings";
 import { getDatabase, nowIso } from "@/lib/db/core";
 import { getCampaignForUser, latestSeq } from "@/lib/db/campaigns";
-import { getSheetForUser } from "@/lib/db/sheets";
+import { getSheetById, getSheetForUser } from "@/lib/db/sheets";
 import { listOpenPendingRolls } from "@/lib/db/dm-turns";
 import { getActiveEncounter, turnKey } from "@/lib/db/encounters";
 import { getLatestDmMessage } from "@/lib/db/messages";
 import { listOpenItemProposals } from "@/lib/db/item-proposals";
 import { getDmStatus } from "@/lib/dm/status";
-import { dmQueuePaused } from "@/lib/dm/queue";
+import { dmQueuePaused, dmQueuePausedFor } from "@/lib/dm/queue";
+import { SESSION_REASON } from "@/lib/dm/session-hold-logic";
+import { BREAK_REASON } from "@/lib/dm/table-break-logic";
 import { levelForXp } from "@/lib/srd";
 import { grantUser, type ConnectionGrant } from "@/lib/agents/grants";
 import { playerOpportunities, turnIdentity, type OpportunityState, type PlayerOpportunity } from "./webhook-opportunities";
 import { AGAIN_SUFFIX, baseOpportunityId, GUARDED_TOOLS, guardVerdict, type GuardedTool, type GuardVerdict } from "./webhook-guard-logic";
+import { seatVerdict, stopWordsForAgent, type StopReason } from "./webhook-seat-logic";
 
 const MAX_SUBSCRIPTIONS = 5;
 const MAX_ATTEMPTS = 8;
@@ -101,7 +104,11 @@ export function pollLinksAllowed(): boolean {
 
 export function setPollLinksAllowed(on: boolean) {
   setAppSetting(POLL_LINKS_SETTING, on);
-  if (!on) getDatabase().prepare(`DELETE FROM player_webhooks WHERE poll_token_hash IS NOT NULL`).run();
+  if (!on) {
+    getDatabase().prepare(`DELETE FROM player_webhooks WHERE poll_token_hash IS NOT NULL`).run();
+    // Nor does a stopped link's notice outlive the switch: off means gone.
+    getDatabase().prepare(`DELETE FROM player_webhook_stops WHERE delivery = 'poll'`).run();
+  }
 }
 
 // Whether connected players see the webhook tools and the guard fields on
@@ -198,8 +205,12 @@ function claimCharacter(grant: ConnectionGrant, campaignId: string, characterId:
   const existing = db.prepare(`SELECT * FROM player_webhooks WHERE campaign_id = ? AND character_id = ?`)
     .get(campaignId, characterId) as Subscription | undefined;
   if (existing) {
-    if (liveGrant(existing)) throw new Error("This character already has a webhook receiver or poll link. Unsubscribe it before connecting another.");
-    deletePlayerWebhook(existing.grant_id, existing.id);
+    const live = liveSubscription(existing);
+    if ("grant" in live && live.sub.character_id === characterId) {
+      throw new Error("This character already has a webhook receiver or poll link. Unsubscribe it before connecting another.");
+    }
+    if ("stopped" in live) stopPlayerWebhook(existing, live.stopped);
+    else if ("gone" in live) deletePlayerWebhook(existing.grant_id, existing.id);
   }
   const count = db.prepare(`SELECT COUNT(*) AS n FROM player_webhooks WHERE grant_id = ?`).get(grant.id) as { n: number };
   if (count.n >= MAX_SUBSCRIPTIONS) throw new Error("Remove an existing webhook first (maximum five per connection).");
@@ -212,6 +223,7 @@ export function createPlayerWebhook(grant: ConnectionGrant, input: { campaignId:
   const extra = webhookHeaders(input.headers);
   const db = getDatabase();
   claimCharacter(grant, input.campaignId, input.characterId);
+  clearStops(grant.id, input.campaignId);
   const id = randomUUID();
   const signingSecret = randomBytes(32).toString("base64url");
   db.prepare(`INSERT INTO player_webhooks (id, grant_id, campaign_id, character_id, url, secret, authorization_header, extra_headers, created_at)
@@ -228,18 +240,24 @@ function hashPollToken(token: string): string {
 }
 
 // A poll link for the grant's own character. The link is the secret: it is
-// returned once, only its hash is kept, and it stops when the subscription is
-// removed, the connection is revoked or expires, the character changes, or
-// an admin turns poll links off. The caller puts the server's address in
-// front of pollPath.
+// returned once, only its hash is kept. It follows the player's seat to a
+// new hero (src/lib/agents/webhook-seat-logic.ts), and stops when the
+// subscription is removed or replaced, the connection is revoked or
+// expires, the player leaves the table or the seat leaves it with no hero
+// to follow, or an admin turns poll links off. The caller puts the server's
+// address in front of pollPath.
+export class PollLinksOff extends Error {}
+
 export function createPlayerPollLink(grant: ConnectionGrant, input: { campaignId: string; characterId: string }) {
-  if (!pollLinksAllowed()) throw new Error("This server's admin has not turned poll links on (Admin > Player agents).");
+  if (!pollLinksAllowed()) throw new PollLinksOff("This server's admin has not turned poll links on (Admin > Player agents).");
   if (grant.revokedAt || grant.expiresAt <= nowIso()) throw new Error("This connection has expired or been revoked.");
-  // A new link for the same connection and character replaces its old one,
-  // so a lost link is not a dead end.
-  getDatabase().prepare(`DELETE FROM player_webhooks WHERE grant_id = ? AND campaign_id = ? AND character_id = ? AND poll_token_hash IS NOT NULL`)
-    .run(grant.id, input.campaignId, input.characterId);
+  // A new link from the same connection at the same table replaces its old
+  // one, whichever character that one was made for, so a lost link is not a
+  // dead end and an old hero's link does not linger beside the new one.
+  getDatabase().prepare(`DELETE FROM player_webhooks WHERE grant_id = ? AND campaign_id = ? AND poll_token_hash IS NOT NULL`)
+    .run(grant.id, input.campaignId);
   claimCharacter(grant, input.campaignId, input.characterId);
+  clearStops(grant.id, input.campaignId);
   const id = randomUUID();
   const token = `odmpoll_${randomBytes(32).toString("base64url")}`;
   getDatabase().prepare(`INSERT INTO player_webhooks (id, grant_id, campaign_id, character_id, url, secret, poll_token_hash, created_at)
@@ -252,14 +270,20 @@ export function createPlayerPollLink(grant: ConnectionGrant, input: { campaignId
 export const POLL_MIN_INTERVAL_MS = 2_000;
 const lastPoll = new Map<string, number>();
 
+export type StoppedLink = { reason: StopReason; stoppedAt: string; subscriptionId: string; campaignId: string; characterId: string };
+
 export type PollAnswer =
   | { status: 200; body: PollBody }
   | { status: 404 }
+  | { status: 410; stopped: StoppedLink; error: string }
   | { status: 429; retryAfterSec: number };
 
 type PollBody = {
   subscriptionId: string; campaignId: string; characterId: string;
   lifecycle: string; busy: boolean; wake: boolean; fingerprint: string;
+  // Why a paused table is paused, so a poller can tell a session's end from
+  // a break or a safety pause (issue 654).
+  pausedFor?: PausedFor;
   opportunities: Array<{ opportunityId: string; type: PlayerOpportunity["type"]; phase?: "act" | "finish"; pendingRollId?: string; level?: number }>;
 };
 
@@ -272,16 +296,24 @@ type PollBody = {
 // Each resolved step of a combat turn is a new decision, and a refused write
 // re-lists its decision once as "<id>:again" (issue 653), so neither leaves a
 // poller asleep. An unknown, revoked or switched-off link reads as not found.
+// A link that stopped on its own answers 410 with why (issue 654); one its
+// owner removed, replaced or revoked still reads as not found.
 export function pollLinkAnswer(token: string, now = Date.now()): PollAnswer {
   if (!POLL_TOKEN.test(token) || !pollLinksAllowed()) return { status: 404 };
-  const sub = getDatabase().prepare(`SELECT * FROM player_webhooks WHERE poll_token_hash = ?`)
-    .get(hashPollToken(token)) as Subscription | undefined;
-  if (!sub) return { status: 404 };
-  const grant = liveGrant(sub);
-  if (!grant) {
-    deletePlayerWebhook(sub.grant_id, sub.id);
+  const hash = hashPollToken(token);
+  const found = getDatabase().prepare(`SELECT * FROM player_webhooks WHERE poll_token_hash = ?`)
+    .get(hash) as Subscription | undefined;
+  if (!found) return stoppedAnswer(hash);
+  const live = liveSubscription(found);
+  if ("gone" in live) {
+    deletePlayerWebhook(found.grant_id, found.id);
     return { status: 404 };
   }
+  if ("stopped" in live) {
+    stopPlayerWebhook(found, live.stopped);
+    return stoppedAnswer(hash);
+  }
+  const { sub, grant } = live;
   const last = lastPoll.get(sub.id) ?? 0;
   if (now - last < POLL_MIN_INTERVAL_MS) return { status: 429, retryAfterSec: Math.ceil((POLL_MIN_INTERVAL_MS - (now - last)) / 1000) };
   lastPoll.set(sub.id, now);
@@ -301,13 +333,61 @@ export function pollLinkAnswer(token: string, now = Date.now()): PollAnswer {
     body: {
       subscriptionId: sub.id, campaignId: sub.campaign_id, characterId: sub.character_id,
       lifecycle: state.lifecycle, busy: state.busy,
+      ...(state.pausedFor ? { pausedFor: state.pausedFor } : {}),
       wake: state.lifecycle === "active" && opportunities.length > 0,
       fingerprint, opportunities,
     },
   };
 }
 
-export function listPlayerWebhooks(grantId: string) {
+function stoppedAnswer(hash: string): PollAnswer {
+  const row = getDatabase().prepare(`SELECT * FROM player_webhook_stops WHERE poll_token_hash = ?`).get(hash) as StopRow | undefined;
+  if (!row) return { status: 404 };
+  return { status: 410, stopped: stoppedLink(row), error: stopWordsForAgent(row.reason as StopReason, "poll") };
+}
+
+type StopRow = { id: string; grant_id: string; campaign_id: string; character_id: string; delivery: "poll" | "push"; poll_token_hash: string | null; reason: string; stopped_at: string };
+
+function stoppedLink(row: StopRow): StoppedLink {
+  return { reason: row.reason as StopReason, stoppedAt: row.stopped_at, subscriptionId: row.id, campaignId: row.campaign_id, characterId: row.character_id };
+}
+
+// Records why a subscription stopped and removes it, so the character is
+// free for a new link and the old one is answered with the reason.
+function stopPlayerWebhook(sub: Subscription, reason: StopReason) {
+  const db = getDatabase();
+  db.transaction(() => {
+    db.prepare(`INSERT OR REPLACE INTO player_webhook_stops (id, grant_id, campaign_id, character_id, delivery, poll_token_hash, reason, stopped_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).run(sub.id, sub.grant_id, sub.campaign_id, sub.character_id, sub.poll_token_hash ? "poll" : "push", sub.poll_token_hash, reason, nowIso());
+    db.prepare(`DELETE FROM player_webhooks WHERE id = ?`).run(sub.id);
+  })();
+}
+
+// A new link or receiver from the same connection at the same table answers
+// what the old notice said.
+function clearStops(grantId: string, campaignId: string) {
+  getDatabase().prepare(`DELETE FROM player_webhook_stops WHERE grant_id = ? AND campaign_id = ?`).run(grantId, campaignId);
+}
+
+// A stop is kept 30 days, for Settings > Connected agents and for an agent
+// still polling its old link; older ones are dropped whenever stops are read.
+export const STOP_NOTICE_DAYS = 30;
+
+export function listPlayerWebhookStops(grantIds: readonly string[]): Array<StoppedLink & { grantId: string; delivery: "poll" | "push" }> {
+  if (!grantIds.length) return [];
+  const since = new Date(Date.now() - STOP_NOTICE_DAYS * 86_400_000).toISOString();
+  getDatabase().prepare(`DELETE FROM player_webhook_stops WHERE stopped_at <= ?`).run(since);
+  const rows = getDatabase().prepare(`SELECT * FROM player_webhook_stops WHERE grant_id IN (${grantIds.map(() => "?").join(", ")}) AND stopped_at > ? ORDER BY stopped_at DESC`)
+    .all(...grantIds, since) as StopRow[];
+  return rows.map((row) => ({ ...stoppedLink(row), grantId: row.grant_id, delivery: row.delivery }));
+}
+
+export type ListedWebhook = {
+  id: string; campaignId: string; characterId: string; url: string; createdAt: string;
+  pending: number; failed: number; delivery: "poll" | "push"; hasAuthorizationHeader: boolean; headerNames: string[];
+};
+
+export function listPlayerWebhooks(grantId: string): ListedWebhook[] {
   return getDatabase().prepare(`SELECT w.id, w.campaign_id AS campaignId, w.character_id AS characterId,
     w.url, w.poll_token_hash IS NOT NULL AS poll, w.authorization_header IS NOT NULL AS hasAuthorizationHeader, w.extra_headers AS extraHeaders, w.created_at AS createdAt,
     (SELECT COUNT(*) FROM player_webhook_deliveries d WHERE d.subscription_id = w.id AND d.state = 'pending') AS pending,
@@ -315,7 +395,7 @@ export function listPlayerWebhooks(grantId: string) {
     FROM player_webhooks w WHERE w.grant_id = ?`).all(grantId)
     .map((row) => {
       const { extraHeaders, poll, ...rest } = row as Record<string, unknown> & { extraHeaders: string | null; poll: number };
-      return { ...rest, delivery: poll ? "poll" : "push", hasAuthorizationHeader: Boolean(rest.hasAuthorizationHeader), headerNames: Object.keys(parseHeaders(extraHeaders)) };
+      return { ...rest, delivery: poll ? "poll" : "push", hasAuthorizationHeader: Boolean(rest.hasAuthorizationHeader), headerNames: Object.keys(parseHeaders(extraHeaders)) } as ListedWebhook;
     });
 }
 
@@ -324,9 +404,26 @@ export function deletePlayerWebhook(grantId: string, id: string): boolean {
 }
 
 function liveState(grant: ConnectionGrant, id: string) {
-  const sub = getDatabase().prepare(`SELECT * FROM player_webhooks WHERE id = ? AND grant_id = ?`).get(id, grant.id) as Subscription | undefined;
-  if (!sub || !liveGrant(sub)) throw new Error("This subscription is no longer active for your character.");
-  return { ...stateFor(sub, grant), campaignId: sub.campaign_id, characterId: sub.character_id, seq: latestSeq(sub.campaign_id) };
+  const found = getDatabase().prepare(`SELECT * FROM player_webhooks WHERE id = ? AND grant_id = ?`).get(id, grant.id) as Subscription | undefined;
+  if (!found) {
+    const stop = getDatabase().prepare(`SELECT reason, delivery FROM player_webhook_stops WHERE id = ? AND grant_id = ?`).get(id, grant.id) as { reason: StopReason; delivery: "poll" | "push" } | undefined;
+    throw new Error(stop ? stopWordsForAgent(stop.reason, stop.delivery) : "This subscription was removed: unsubscribed, replaced by a new one, or its connection revoked.");
+  }
+  const live = liveSubscription(found);
+  if ("stopped" in live) {
+    stopPlayerWebhook(found, live.stopped);
+    throw new Error(stopWordsForAgent(live.stopped, found.poll_token_hash ? "poll" : "push"));
+  }
+  if ("gone" in live) throw new Error("This subscription is no longer active: its connection was revoked or its account cannot play now.");
+  const { sub } = live;
+  return { ...stateFor(sub, live.grant), campaignId: sub.campaign_id, characterId: sub.character_id, seq: latestSeq(sub.campaign_id) };
+}
+
+// The character a guarded write acts as: the subscription's own, which at a
+// table of several characters each need not be the one its player has
+// selected (issue 654).
+export function subscriptionCharacter(grantId: string, subscriptionId: string): string | null {
+  return (getDatabase().prepare(`SELECT character_id FROM player_webhooks WHERE id = ? AND grant_id = ?`).get(subscriptionId, grantId) as { character_id: string } | undefined)?.character_id ?? null;
 }
 
 // What odm_get_player_webhook_opportunities answers. The turn identity and
@@ -431,16 +528,46 @@ export function releaseWebhookWrite(subscriptionId: string, opportunityId: strin
     .run(subscriptionId, baseOpportunityId(opportunityId), tool);
 }
 
-function liveGrant(sub: Subscription): ConnectionGrant | null {
-  const row = getDatabase().prepare(`SELECT * FROM agent_grants WHERE id = ? AND revoked_at IS NULL AND expires_at > ?`)
-    .get(sub.grant_id, nowIso()) as { id: string; user_id: string; name: string; scopes_json: string; campaign_id: string | null; created_at: string; expires_at: string } | undefined;
-  if (!row) return null;
+type Live = { grant: ConnectionGrant; sub: Subscription } | { stopped: StopReason } | { gone: true };
+
+// Whether a subscription still plays, and as which character (issue 654).
+// What its owner did (revoked the connection, or an account that cannot
+// play now) is gone without a word, as before. What happened at the table
+// (the seat moved to another hero, the player left) follows the seat or
+// stops with a reason the poll link and Settings show. Following updates the
+// row and drops deliveries queued for the old character.
+function liveSubscription(sub: Subscription): Live {
+  const db = getDatabase();
+  const row = db.prepare(`SELECT * FROM agent_grants WHERE id = ?`)
+    .get(sub.grant_id) as { id: string; user_id: string; name: string; scopes_json: string; campaign_id: string | null; created_at: string; expires_at: string; revoked_at: string | null } | undefined;
+  if (!row || row.revoked_at) return { gone: true };
   const grant: ConnectionGrant = {
     id: row.id, userId: row.user_id, name: row.name, scopes: JSON.parse(row.scopes_json), campaignId: row.campaign_id,
     createdAt: row.created_at, expiresAt: row.expires_at, lastUsedAt: null, revokedAt: null,
   };
+  if (row.expires_at <= nowIso()) return { stopped: "expired" };
   const user = grantUser(grant);
-  return user && !user.mustChangePassword && !user.deletionRequestedAt && maySubscribe(grant, sub.campaign_id, sub.character_id) ? grant : null;
+  if (!user || user.mustChangePassword || user.deletionRequestedAt) return { gone: true };
+  if (!grant.scopes.includes("read") || !grant.scopes.includes("play") || (grant.campaignId && grant.campaignId !== sub.campaign_id)) return { gone: true };
+  const campaign = getCampaignForUser(sub.campaign_id, grant.userId);
+  const sheet = getSheetById(sub.character_id);
+  const subscribed = sheet && sheet.campaignId === sub.campaign_id && sheet.userId === grant.userId ? sheet : null;
+  const current = campaign ? getSheetForUser(sub.campaign_id, grant.userId) : null;
+  const currentClaimed = Boolean(current && current.id !== sub.character_id &&
+    db.prepare(`SELECT 1 FROM player_webhooks WHERE campaign_id = ? AND character_id = ? AND id <> ?`).get(sub.campaign_id, current.id, sub.id));
+  const verdict = seatVerdict({ member: Boolean(campaign), multiCharacter: campaign?.gameSettings.multiCharacter ?? "off", subscribed, current, currentClaimed });
+  if (verdict.kind === "stop") return { stopped: verdict.reason };
+  if (verdict.kind === "keep") return { grant, sub };
+  try {
+    db.transaction(() => {
+      db.prepare(`UPDATE player_webhooks SET character_id = ? WHERE id = ?`).run(verdict.characterId, sub.id);
+      db.prepare(`UPDATE player_webhook_deliveries SET state = 'cancelled' WHERE subscription_id = ? AND state = 'pending'`).run(sub.id);
+    })();
+  } catch {
+    // Another link took the hero in the meantime (one per character).
+    return { stopped: "character_changed" };
+  }
+  return { grant, sub: { ...sub, character_id: verdict.characterId } };
 }
 
 // Responses update the spotlight's floor event. Walk back through that same
@@ -475,6 +602,14 @@ function stateFor(sub: Subscription, grant: ConnectionGrant) {
   const session = db.prepare(`SELECT seq, type FROM campaign_events WHERE campaign_id = ?
     AND type IN ('session_ended', 'session_started') ORDER BY seq DESC LIMIT 1`).get(campaign.id) as { seq: number; type: string } | undefined;
   const paused = Boolean(dmQueuePaused(campaign.id)) || safety?.type === "x_card" || tableBreak?.type === "table_paused" || session?.type === "session_ended" || campaign.floor.mode === "hold";
+  // Read from the same events and the same in-memory gate the routes' 409s
+  // come from (src/lib/dm/table-break.ts), so a poll and a refused action
+  // name one reason (issue 654).
+  const pausedFor: PausedFor | undefined = !paused ? undefined
+    : session?.type === "session_ended" || dmQueuePausedFor(campaign.id, SESSION_REASON) ? "session"
+    : tableBreak?.type === "table_paused" || dmQueuePausedFor(campaign.id, BREAK_REASON) ? "break"
+    : safety?.type === "x_card" ? "safety"
+    : campaign.floor.mode === "hold" ? "hold" : "pause";
   const running = db.prepare(`SELECT id FROM dm_turns WHERE campaign_id = ? AND actor = 'ai' AND status = 'running' LIMIT 1`).get(campaign.id);
   const awaiting = db.prepare(`SELECT id FROM dm_turns WHERE campaign_id = ? AND actor = 'ai' AND status = 'awaiting_rolls' LIMIT 1`).get(campaign.id);
   const status = getDmStatus(campaign.id);
@@ -531,8 +666,11 @@ function stateFor(sub: Subscription, grant: ConnectionGrant) {
     // so an End turn can be taken while the GM resolves the last one.
     turnId: turnIdentity(input), gate,
     lifecycle: campaign.status === "ended" ? "ended" : campaign.status !== "active" || paused ? "paused" : "active",
+    pausedFor: campaign.status === "active" ? pausedFor : undefined,
   };
 }
+
+export type PausedFor = "session" | "break" | "safety" | "hold" | "pause";
 
 function enqueue(sub: Subscription, grant: ConnectionGrant, opportunity: { type: PlayerWebhookEvent["type"]; opportunityId: string; pendingRollId?: string; phase?: "act" | "finish"; level?: number; proposalId?: string }, now: number) {
   // Every tick offers every open opportunity again. Only a new or cancelled
@@ -557,8 +695,8 @@ function enqueue(sub: Subscription, grant: ConnectionGrant, opportunity: { type:
 // Names and IDs only: no prose, dice or notes, the same as the event itself.
 function eventText(sub: Subscription, grant: ConnectionGrant, event: Omit<PlayerWebhookEvent, "text">): string {
   const title = (getCampaignForUser(sub.campaign_id, grant.userId)?.title ?? "your campaign").slice(0, 200);
-  const sheet = getSheetForUser(sub.campaign_id, grant.userId);
-  const who = sheet?.id === sub.character_id ? sheet.name.slice(0, 100) : "Your character";
+  const sheet = getSheetById(sub.character_id);
+  const who = sheet && sheet.userId === grant.userId ? sheet.name.slice(0, 100) : "Your character";
   const at = `"${title}"`;
   const what = event.type === "roll_requested" ? `a roll is waiting for you in ${at}.`
     : event.type === "turn_started" ? (event.phase === "finish"
@@ -587,12 +725,17 @@ export async function runPlayerWebhooksOnce(now = Date.now(), send: typeof fetch
   const db = getDatabase();
   // A poll link is asked, never sent to: nothing to deliver.
   const subs = db.prepare(`SELECT * FROM player_webhooks WHERE poll_token_hash IS NULL`).all() as Subscription[];
-  for (const sub of subs) {
-    const grant = liveGrant(sub);
-    if (!grant) {
-      deletePlayerWebhook(sub.grant_id, sub.id);
+  for (const found of subs) {
+    const live = liveSubscription(found);
+    if ("gone" in live) {
+      deletePlayerWebhook(found.grant_id, found.id);
       continue;
     }
+    if ("stopped" in live) {
+      stopPlayerWebhook(found, live.stopped);
+      continue;
+    }
+    const { sub, grant } = live;
     let state: ReturnType<typeof stateFor>;
     try { webhookUrl(sub.url); state = stateFor(sub, grant); } catch { continue; }
     db.transaction(() => {
@@ -611,8 +754,8 @@ export async function runPlayerWebhooksOnce(now = Date.now(), send: typeof fetch
       const claimed = db.prepare(`UPDATE player_webhook_deliveries SET available_at = ?, attempts = attempts + 1
         WHERE id = ? AND state = 'pending' AND available_at <= ?`).run(now + LEASE_MS, delivery.id, now).changes;
       if (!claimed) continue;
-      const freshGrant = liveGrant(sub);
-      const fresh = freshGrant ? stateFor(sub, freshGrant) : null;
+      const again = liveSubscription(sub);
+      const fresh = "grant" in again && again.sub.character_id === sub.character_id ? stateFor(again.sub, again.grant) : null;
       const event = JSON.parse(delivery.body) as PlayerWebhookEvent;
       const lifecycle = event.opportunityId.startsWith("lifecycle:");
       const valid = fresh && (lifecycle

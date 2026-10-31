@@ -29,7 +29,11 @@ export function validateEvent(event, config) {
   if (event.phase !== undefined && !["act", "finish"].includes(event.phase)) return false;
   if (event.type === "level_up_available" && !(Number.isSafeInteger(event.level) && event.level >= 2 && event.level <= 20)) return false;
   if (event.text !== undefined && (typeof event.text !== "string" || event.text.length > 4000)) return false;
-  return event.subscriptionId === config.id && event.campaignId === config.campaignId && event.characterId === config.characterId;
+  // The character is not pinned: the server moves a subscription to its
+  // player's new hero when theirs falls or they switch at a table of one
+  // hero each (issue 654), and the events then name the new one. The
+  // subscription and campaign still have to be this receiver's own.
+  return event.subscriptionId === config.id && event.campaignId === config.campaignId;
 }
 
 // Whether a queued event is still a decision, from the opportunities the

@@ -1,6 +1,6 @@
 import { currentUser, unauthorized } from "@/lib/auth";
 import { listConnectionGrants } from "@/lib/agents/grants";
-import { createPlayerPollLink } from "@/lib/agents/webhooks";
+import { createPlayerPollLink, PollLinksOff } from "@/lib/agents/webhooks";
 import { getSheetForUser } from "@/lib/db/sheets";
 import { publicOrigin } from "@/lib/discord-oauth";
 
@@ -39,6 +39,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ gra
     const created = createPlayerPollLink(grant, { campaignId: grant.campaignId, characterId: sheet.id });
     return Response.json({ subscriptionId: created.id, url: `${publicOrigin(request)}${created.pollPath}` });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Could not make a poll link." }, { status: 409 });
+    // Links switched off is the admin's call, not a clash with another link.
+    const status = error instanceof PollLinksOff ? 403 : 409;
+    return Response.json({ error: error instanceof Error ? error.message : "Could not make a poll link." }, { status });
   }
 }

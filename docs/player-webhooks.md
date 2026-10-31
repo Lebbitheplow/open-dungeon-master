@@ -304,10 +304,22 @@ the current `opportunityId` in every `odm_take_action`, `odm_answer_roll`,
   decision waiting (a combat turn, a roll, a response, an earned level with
   its number, an offer or a whisper waiting on this player). Never the story,
   names, sheets or anything another player sees.
-* It stops when the subscription is removed (`odm_unsubscribe_player_webhook`)
-  or replaced by a new link, the connection is revoked or expires, the
-  character is no longer the one the player plays, or an admin turns poll
-  links off. An unknown or stopped link answers `404`.
+* It follows the player to a new hero. When their hero falls and they bring
+  in another, when a lobby character is rebuilt, or when they switch heroes
+  at a table where each plays one at a time, the link wakes the hero they
+  play now, unless another link already wakes that one. At a table where
+  everyone plays several characters at once it stays on its own character
+  while that character plays. The answer's `characterId` says which.
+* It stops on its own when the player leaves the table, the connection
+  expires, or the seat moves to a hero another link already wakes. It then
+  answers `410` with `error` in plain words and `stopped`
+  (`reason`: `character_changed`, `left_campaign` or `expired`, and
+  `stoppedAt`), and **Settings > Connected agents** says on the
+  connection's row that it stopped and why. Make a new one there with
+  **Poll link**.
+* An unknown link, one removed (`odm_unsubscribe_player_webhook`) or
+  replaced by a new link, one whose connection was revoked, and every link
+  once an admin turns poll links off answer `404`.
 * One answer per link every two seconds per server process; a faster check
   gets `429` with `Retry-After`.
 * A character has one subscription: a poll link or a receiver, not both.
@@ -439,10 +451,14 @@ Sources: [Claude Code routines](https://code.claude.com/docs/en/routines.md),
 
 ## Pause and stop
 
-Lobby, held floor, safety pause, a table break, narration in progress and
-another player's turn suppress play opportunities, and a table break reports
-the lifecycle `paused` (`campaign_paused`, then `campaign_resumed`) like the
-X-card. A pending roll wakes only the owner of the subscribed active
+Lobby, held floor, safety pause, a table break, the time between sessions,
+narration in progress and another player's turn suppress play
+opportunities. A table break and the time between sessions report the
+lifecycle `paused` (`campaign_paused`, then `campaign_resumed`) like the
+X-card, and a poll link's answer adds `pausedFor`: `session`, `break`,
+`safety`, `hold` or `pause`. It reads the same events and the same server
+gate the table's own routes refuse with, so a poll and a refused action name
+one reason. A pending roll wakes only the owner of the subscribed active
 character. After a safety, break or floor pause, fresh opportunity IDs let an
 unfinished decision resume. An agent can never pause or resume a table
 break: only the people at the table can. An open-floor narration
@@ -462,10 +478,17 @@ and delete the server subscription too:
 node scripts/player-webhook-receiver.mjs --unsubscribe C:/private/receiver.json
 ```
 
-Then stop the tunnel. Revoking or expiring the player grant also removes
-its subscriptions at the next server pass. Leaving the campaign or changing
-the active character removes the subscription; create a new one to play
-the new character. Disconnect the polling automation for that character
+Then stop the tunnel. Revoking the player grant also removes its
+subscriptions at the next server pass. A subscription follows its player
+to a new hero, as a poll link does: the events then carry the new
+`characterId`, and the bundled receiver accepts them for the same
+subscription and campaign. One stops by itself when the grant expires, the
+player leaves the campaign, or the seat moves to a hero another
+subscription already wakes; `odm_list_player_webhooks` then lists it under
+`stopped` with the reason, and Settings > Connected agents says so. A copy
+of the bundled receiver from before this answers events for the new hero
+with 400; the server stops after eight attempts and the connection's row
+shows the undelivered wake-ups. Update the receiver. Disconnect the polling automation for that character
 when enabling this receiver, so two agents do not drive it concurrently.
 
 ## If something fails
@@ -488,9 +511,12 @@ when enabling this receiver, so two agents do not drive it concurrently.
   is quarantined as `uncertain`. It is not replayed automatically because
   an action may already have landed. Do not delete the ledger to retry it.
   Resume play manually after verifying the table, or wait for a new decision.
-* **A grant was revoked or a character switched:** remove any old local
-  subscription record after confirming the old server subscription is gone,
-  then register for the new grant/character. Keep the inbox history for review.
+* **A grant was revoked, or a subscription stopped:** Settings > Connected
+  agents says on the connection's row when a link or receiver stopped by
+  itself and why. Remove any old local subscription record after confirming
+  the old server subscription is gone, then register again. Keep the inbox
+  history for review. A hero who falls and is replaced needs nothing: the
+  subscription follows the new one.
 
 ## Event and submission contract
 

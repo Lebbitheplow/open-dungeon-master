@@ -2494,6 +2494,25 @@ function ensureSchema(db: SqliteDatabase) {
       result TEXT,
       PRIMARY KEY (subscription_id, opportunity_id, tool)
     );
+    -- A player webhook or poll link that stopped on its own (issue 654):
+    -- its character left the player's seat with no hero to follow, its
+    -- player left the table, or its connection expired. Kept apart from
+    -- player_webhooks, whose one-per-character rule would block the new
+    -- link, so the agent's poll is answered 410 with the reason instead of
+    -- a 404 like a mistyped link, and Settings > Connected agents says why.
+    -- A link the owner removed, replaced or revoked leaves no notice.
+    CREATE TABLE IF NOT EXISTS player_webhook_stops (
+      id TEXT PRIMARY KEY,
+      grant_id TEXT NOT NULL REFERENCES agent_grants(id) ON DELETE CASCADE,
+      campaign_id TEXT NOT NULL REFERENCES campaigns(id) ON DELETE CASCADE,
+      character_id TEXT NOT NULL,
+      delivery TEXT NOT NULL CHECK (delivery IN ('poll', 'push')),
+      poll_token_hash TEXT,
+      reason TEXT NOT NULL,
+      stopped_at TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_player_webhook_stops_poll ON player_webhook_stops(poll_token_hash) WHERE poll_token_hash IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_player_webhook_stops_grant ON player_webhook_stops(grant_id, campaign_id);
 
     -- Every call an agent made, from either door: a program narrating a turn
     -- (grant_kind 'turn') or a player's connected session ('connection').

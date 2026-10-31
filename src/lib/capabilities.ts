@@ -81,6 +81,10 @@ export const SERVER_FEATURES = {
   // GET /sheet answers the level the replacement joins at
   // (src/lib/characters/hero-door.ts). An older host refuses the seat.
   fallenHeroes: true,
+  // What each connected agent's receiver or poll link wakes, and a link
+  // that stopped and why, on Settings > Connected agents (issue 654): the
+  // `links` and `stoppedLinks` fields of GET /api/profile/agents.
+  agentLinks: true,
 } as const;
 export type ServerFeatures = { [K in keyof typeof SERVER_FEATURES]: boolean };
 

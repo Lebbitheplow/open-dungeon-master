@@ -27,7 +27,7 @@ import {
   MIN_RESULT_CHARS,
   type CampaignView,
 } from "@/lib/agents/agent-results";
-import { finishWebhookWrite, markWebhookRefusal, playerSignalsEnabled, releaseWebhookWrite, reserveWebhookWrite } from "@/lib/agents/webhooks";
+import { finishWebhookWrite, markWebhookRefusal, playerSignalsEnabled, releaseWebhookWrite, reserveWebhookWrite, subscriptionCharacter } from "@/lib/agents/webhooks";
 import { baseOpportunityId, GUARDED_TOOLS } from "@/lib/agents/webhook-guard-logic";
 import { isWebhookTool, WEBHOOK_GUARD_PROPS, webhookToolCall, webhookTools } from "@/lib/agents/webhook-tools";
 import { ASK_SCOPES, ASK_VISIBILITIES, QUESTION_MAX_CHARS } from "@/lib/dm/ask-logic";
@@ -649,7 +649,7 @@ export async function workbenchCall(grant: ConnectionGrant, name: string, args: 
   } catch (error) {
     return { text: error instanceof Error ? error.message : "Bad arguments.", isError: true, campaignId };
   }
-  const body = tool.body?.(args);
+  let body = tool.body?.(args);
   let guarded = false;
   // Table talk is not acting (the opportunities never count it as an
   // answer), so an out-of-character line keeps a reservation of its own and
@@ -658,6 +658,11 @@ export async function workbenchCall(grant: ConnectionGrant, name: string, args: 
   if ((GUARDED_TOOLS as readonly string[]).includes(name) && (args.subscriptionId !== undefined || args.opportunityId !== undefined)) {
     try {
       if (typeof args.subscriptionId !== "string" || typeof args.opportunityId !== "string" || !campaignId) throw new Error("Supply both subscriptionId and opportunityId.");
+      // The subscription's own character acts. At a table where everyone
+      // plays several at once that need not be the one its player has
+      // selected, and the link stays on its character (issue 654).
+      const own = path.endsWith("/actions") && body && typeof body === "object" ? subscriptionCharacter(grant.id, args.subscriptionId) : null;
+      if (own) body = { ...(body as Args), characterId: own };
       const cached = reserveWebhookWrite(grant, { subscriptionId: args.subscriptionId, opportunityId: args.opportunityId,
         campaignId, tool: name, key, pendingRollId: typeof args.pendingRollId === "string" ? args.pendingRollId : undefined,
         fingerprint: createHash("sha256").update(JSON.stringify([path, body])).digest("hex") });

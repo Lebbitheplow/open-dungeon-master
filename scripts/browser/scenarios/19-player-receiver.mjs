@@ -3,8 +3,11 @@
 // player's character there; the address check says whether this server
 // sends to it, and an admin's "Allow it" link lands on Admin > Player
 // agents (by a ?section= query, which the apps' router carries where it
-// drops a #hash), where the address is allowed live. The rig puts the
-// receiver list back and revokes the connection on the way out.
+// drops a #hash), where the address is allowed live. A poll link made for
+// the connection is named on its row with the character it wakes (issue
+// 654), and an older host that sends no agentLinks flag shows no such line.
+// The rig puts the receiver list back, turns poll links off and revokes the
+// connection on the way out.
 import { check, eventually } from "../lib.mjs";
 
 const ADDRESS = "https://my-pc.example.ts.net:8443";
@@ -78,8 +81,38 @@ export default {
       check(asked.allowed === true && asked.url === `${ADDRESS}/odm-player`, "the receiver check now says yes, at the receiver's path");
       await t.tap(section.locator("button").filter({ hasText: /Remove/ }).first());
       await eventually(async () => /No receiver addresses yet, so no player agent is sent a webhook/.test(await section.innerText()), { label: "removed again" });
+
+      // Issue 654: the connection's row says what its poll link wakes, so a
+      // link that stops (it says why there too) is never a silent one.
+      const on = await api.put(`${base}/api/admin/player-webhooks`, { data: { pollLinks: true } });
+      check(on.ok(), `turning poll links on answered ${on.status()}`);
+      const mine = ((await (await api.get(`${base}/api/profile/agents`)).json()).grants ?? []).find((grant) => grant.name === agentName);
+      check(Boolean(mine), "the connection is listed");
+      const made = await api.post(`${base}/api/profile/agents/${mine.id}/poll-link`);
+      check(made.ok(), `making a poll link answered ${made.status()}`);
+      await t.open("/settings");
+      const row = page.locator(`${root}li`).filter({ hasText: agentName }).locator("visible=true").first();
+      await eventually(async () => /Poll link: wakes the agent for \S/.test((await row.innerText().catch(() => "")) ?? ""), {
+        timeoutMs: 30_000,
+        label: "the row naming the character its poll link wakes",
+      });
+      await t.shot("poll-link-row");
+      if (!t.app) {
+        // An older host sends no agentLinks flag: the row shows no such line.
+        await page.route("**/api/capabilities**", async (route) => {
+          const response = await route.fetch();
+          const body = await response.json().catch(() => ({}));
+          delete body.features;
+          await route.fulfill({ response, json: body });
+        });
+        await t.open("/settings");
+        const older = page.locator(`${root}li`).filter({ hasText: agentName }).locator("visible=true").first();
+        await eventually(() => older.count(), { timeoutMs: 30_000, label: "the row on an older host" });
+        check(!/Poll link: wakes the agent/.test(await older.innerText()), "an older host shows no link line");
+        await page.unroute("**/api/capabilities**");
+      }
     } finally {
-      await api.put(`${base}/api/admin/player-webhooks`, { data: { origins: [] } }).catch(() => undefined);
+      await api.put(`${base}/api/admin/player-webhooks`, { data: { origins: [], pollLinks: false } }).catch(() => undefined);
       const listed = await (await api.get(`${base}/api/profile/agents`)).json().catch(() => ({}));
       for (const grant of listed.grants ?? []) {
         if (grant.name === agentName) await api.delete(`${base}/api/profile/agents/${grant.id}`).catch(() => undefined);
