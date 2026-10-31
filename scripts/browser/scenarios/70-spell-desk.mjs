@@ -38,6 +38,9 @@ export default {
     // desk keeps the compact sizes.
     const tall = async (locator, what) => {
       if (t.viewport !== "phone") return;
+      // Measured once its entrance has finished: mid-pop a loaded run read
+      // the swap's Cancel a fraction under 40px.
+      await locator.evaluate((node) => Promise.all(node.getAnimations({ subtree: true }).map((animation) => animation.finished))).catch(() => undefined);
       const box = await locator.boundingBox();
       if (!box || box.height < 40) found.push(`${what} is ${Math.round(box?.height ?? 0)}px tall on a phone, under 40px`);
     };
