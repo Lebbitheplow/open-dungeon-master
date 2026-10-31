@@ -59,7 +59,7 @@ export const actionTools: ToolDef[] = [
     function: {
       name: "take_action",
       description:
-        "Resolve a character or an enemy taking a standard 5e action that is not an attack or a spell: Dodge, Dash, Disengage, Hide, Help, Grapple, Shove, Ready, Search, Use an Object, or Escape (a grapple). The server spends the action from their turn, rolls any check or contest the action calls for through the same resolver as request_roll, and applies the real effect (Dodge makes attacks against them roll at disadvantage, a won Grapple applies grappled, a won Shove knocks prone or pushes, a won Escape ends the grapple). Grapple and Shove each take the place of ONE attack of the Attack action, so a character with Extra Attack can grapple and still swing. Ready commits to ONE action for the character's reaction until their next turn, named in `readied` (or a spell in `spell`). When you judge the trigger has come, release it off their turn with that action's own tool (pc_attack for an attack): the server spends the reaction and refuses any other action. While a character holds a readied action, enemy_attack does not walk an enemy that is out of reach: move it with move_token first. Hide is for a fight; out of one, use request_roll for Stealth. Call it BEFORE narrating the action; narrate exactly what it reports.",
+        "Resolve a character or an enemy taking a standard 5e action that is not an attack or a spell: Dodge, Dash, Disengage, Hide, Help, Grapple, Shove, Ready, Search, Use an Object, or Escape (a grapple). The server spends the action from their turn, rolls any check or contest the action calls for through the same resolver as request_roll, and applies the real effect (Dodge makes attacks against them roll at disadvantage, a won Grapple applies grappled, a won Shove knocks prone or pushes, a won Escape ends the grapple). Grapple and Shove each take the place of ONE attack of the Attack action, so a character with Extra Attack can grapple and still swing. Ready commits to ONE action for the character's reaction until their next turn, named in `readied` (or a spell in `spell`). When you judge the trigger has come, release it off their turn with that action's own tool (pc_attack for an attack): the server spends the reaction and refuses any other action. Hide is for a fight; out of one, use request_roll for Stealth. Call it BEFORE narrating the action; narrate exactly what it reports.",
       parameters: {
         type: "object",
         additionalProperties: false,
@@ -108,7 +108,7 @@ export const actionTools: ToolDef[] = [
             type: "string",
             description: "The enemy taking Dash, Disengage, Dodge or Escape: exact enemyId from GAME STATE. Omit characterId then.",
           },
-          toward: { type: "string", description: "Dash or Disengage only: who they move beside (id or name); the server walks them there in this call." },
+          toward: { type: "string", description: "Dash or Disengage: who to move beside (id or name); the server walks them there." },
           spell: {
             type: "string",
             description:
