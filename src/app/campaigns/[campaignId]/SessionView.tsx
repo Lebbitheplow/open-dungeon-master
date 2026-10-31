@@ -1,7 +1,7 @@
 "use client";
 
 import { romanceCueAllowed } from "@/lib/dm/director-logic";
-import { initiativeCharacter, selectedCharacter } from "@/lib/player-characters";
+import { gmTurnCompanion, initiativeCharacter, selectedCharacter } from "@/lib/player-characters";
 import { useThemePrefs } from "@/lib/theme-mode";
 import { LevelUpMoment, LootMoment, MomentVeil, RestMoment, TravelBanner } from "@/app/campaigns/[campaignId]/Moments";
 import { CoordinationPanel } from "@/app/campaigns/[campaignId]/CoordinationPanel";
@@ -477,8 +477,14 @@ export function SessionView({
     () => selectedCharacter(sheets, me?.id ?? "", state.activeSheetId) ?? sheets.find((sheet) => sheet.userId === me?.id) ?? null,
     [sheets, me?.id, state.activeSheetId],
   );
-  const turnSheet = initiativeCharacter(sheets, me?.id ?? "", turnCharacterId(state.encounter));
+  // In the GM seat, the turn of a companion nobody commands is the GM's to
+  // play (player-characters.ts gmTurnCompanion), with its Hand and its Do.
+  const turnSheet =
+    initiativeCharacter(sheets, me?.id ?? "", turnCharacterId(state.encounter)) ??
+    (caps.role === "dm" && !state.encounter?.enemyTurns ? gmTurnCompanion(sheets, turnCharacterId(state.encounter)) : null);
   const actingSheet = turnSheet ?? mySheet;
+  // The GM seat holds a companion's turn the floor names the companion for.
+  const gmPlaysTurn = Boolean(turnSheet?.isCompanion && caps.role === "dm");
   // The server's notice opens the level-up dialog once, when the experience
   // lands. Closing it only puts it off: the sheet's experience still earns
   // the level, so the party card offers a Level up button until it is done.
@@ -603,8 +609,8 @@ export function SessionView({
   const enemyTurns = state.encounter?.enemyTurns === true;
   const gate = useMemo(
     () =>
-      composerGate({ floor, sheets, meUserId: meId, kind, myName, leadPrivate, openingNarrationPlaying, enemyTurns }),
-    [floor, sheets, meId, kind, myName, leadPrivate, openingNarrationPlaying, enemyTurns],
+      composerGate({ floor, sheets, meUserId: meId, kind, myName, leadPrivate, openingNarrationPlaying, enemyTurns, playsTurn: gmPlaysTurn }),
+    [floor, sheets, meId, kind, myName, leadPrivate, openingNarrationPlaying, enemyTurns, gmPlaysTurn],
   );
   // A mid-game joiner without a character is gated to creation first. The DM
   // runs no character, so the gate must never catch them.
@@ -1349,6 +1355,7 @@ export function SessionView({
                     campaignId={campaign.id}
                     genre={campaign.gameSettings?.genre ?? null}
                     trackAmmo={campaign.gameSettings?.variantRules?.ammunition ?? false}
+                    multiCharacter={campaign.gameSettings?.multiCharacter}
                     romanceCue={romanceCueAllowed(campaign.gameSettings)}
                     edges={state.battleMap?.edges}
                     drops={state.battleMap?.drops}

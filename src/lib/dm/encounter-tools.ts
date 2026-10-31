@@ -104,7 +104,7 @@ import { handlePcAttack, PC_ATTACK_PARKED, pcAttackTool } from "@/lib/dm/pc-atta
 import { endTurnAsked } from "@/lib/dm/pc-attack-approach";
 import { handleEnemyAttack } from "@/lib/dm/enemy-attack";
 import { isCompanionUserId } from "@/lib/db/users";
-import { commanderOf, dmPlaysTurn, dominatedRefusal, turnUserId } from "@/lib/dm/companion-command";
+import { commanderOf, dmPlaysTurn, dominatedRefusal, turnUserId, gmCompanionTurn } from "@/lib/dm/companion-command";
 import { setInitiativeFloor } from "@/lib/dm/initiative-floor";
 import { wakeDm } from "@/lib/dm/wake";
 import { resolveSheetRef, unknownSheetRef } from "@/lib/dm/rolls";
@@ -2268,7 +2268,11 @@ export function endOwnTurn(campaignId: string, userId: string): boolean {
     return false;
   }
   const current = encounter.order[encounter.turnIndex];
-  if (!current || current.kind !== "pc" || turnUserId(campaign, current) !== userId) {
+  // A companion nobody commands is the GM's to play at a table a person
+  // runs, and the GM ends its turn as they would a hero's.
+  const companion = gmCompanionTurn(campaign, userId);
+  const gmPlays = Boolean(companion && current?.kind === "pc" && companion.id === current.characterId);
+  if (!current || current.kind !== "pc" || (turnUserId(campaign, current) !== userId && !gmPlays)) {
     return false;
   }
   // The enemies before this turn have not had theirs yet: a second pass

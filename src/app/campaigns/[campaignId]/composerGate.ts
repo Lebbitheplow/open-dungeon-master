@@ -22,6 +22,7 @@ export function composerGate({
   leadPrivate,
   openingNarrationPlaying,
   enemyTurns = false,
+  playsTurn = false,
 }: {
   floor: Floor;
   sheets: CharacterSheet[];
@@ -34,6 +35,10 @@ export function composerGate({
   // The fight's floor is held for the enemies' turns (PublicEncounter
   // enemyTurns), not for table talk.
   enemyTurns?: boolean;
+  // The GM seat plays the turn the floor is on, though the floor names
+  // someone else: a companion nobody commands at a table a person runs
+  // (src/lib/player-characters.ts gmTurnCompanion).
+  playsTurn?: boolean;
 }) {
   const exempt = isFloorExempt(kind);
   // A hero who fell answers nothing: the spotlight names the living, so a
@@ -49,7 +54,7 @@ export function composerGate({
   const holdBlocked = floor.mode === "hold" && !exempt;
   // Combat: only the current-turn player acts; everyone else waits.
   const initiativeBlocked =
-    floor.mode === "initiative" && !floor.userIds.includes(meUserId) && !exempt;
+    floor.mode === "initiative" && !floor.userIds.includes(meUserId) && !playsTurn && !exempt;
   const heldSpotlightNames =
     floor.mode === "hold" && floor.next.mode === "spotlight"
       ? living

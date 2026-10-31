@@ -293,6 +293,33 @@ export function directCardCall(intent: MessageIntent, characterId: string, conte
   }
 }
 
+// A reaction card played by the person who runs the table, for a character
+// they play (a test fight a person runs): use_reaction answers the hit the
+// engine recorded, as the GM console's Reaction does, and the ally or
+// attacker it names is the one the card aimed at. Not one of directCardCall's
+// cards, which an AI turn also resolves before it narrates: at a table the AI
+// runs, a reaction stays the model's to rule on.
+export function reactionCardCall(intent: MessageIntent, characterId: string): { name: string; args: Record<string, unknown> } | null {
+  switch (intent.card) {
+    case "reaction":
+      if (!intent.feature) {
+        return null;
+      }
+      return {
+        name: "use_reaction",
+        args: {
+          characterId,
+          feature: intent.feature,
+          ...(intent.targetId && intent.targetKind === "enemy" ? { targetEnemyId: intent.targetId } : {}),
+          ...(intent.targetId && intent.targetKind === "ally" ? { targetCharacterId: intent.targetId } : {}),
+          ...(intent.spell && intent.slotLevel ? { level: intent.slotLevel } : {}),
+        },
+      };
+    default:
+      return null;
+  }
+}
+
 // Only a card that resolves an attack or a cast is chased with a
 // corrective call: those are the ones whose outcome a model most often
 // narrates instead of rolling.

@@ -131,6 +131,25 @@ export function dmPlaysTurn(campaign: Campaign, entry: { characterId: string; us
   return holder === DOMINATED_TURN || (isCompanionUserId(entry.userId) && holder === entry.userId);
 }
 
+// The companion a person in the GM seat plays now: the fight's pointer rests
+// on a companion nobody commands, at a table a person runs. That person
+// plays its turn with its Hand and ends it with End turn, as they would a
+// hero's (src/lib/player-characters.ts gmTurnCompanion is the Hand's view of
+// it). Null on any other turn, at a table the AI runs, and for a player.
+export function gmCompanionTurn(campaign: Campaign, userId: string): CharacterSheet | null {
+  const seats = campaignSeats(campaign);
+  if (!hasHumanDm(seats) || !isDmSeat(seats, userId)) {
+    return null;
+  }
+  const encounter = getActiveEncounter(campaign.id);
+  const current = encounter?.orderReady ? encounter.order[encounter.turnIndex] : undefined;
+  if (current?.kind !== "pc" || !current.characterId || !isCompanionUserId(current.userId)) {
+    return null;
+  }
+  const sheet = getSheetById(current.characterId);
+  return sheet?.isCompanion && dmPlaysTurn(campaign, current) ? sheet : null;
+}
+
 // The player a companion joining this table follows in fights: the one
 // player at a table the AI runs. Nobody (the DM) when a person narrates,
 // when several players share the table, and for a guest who comes for one
