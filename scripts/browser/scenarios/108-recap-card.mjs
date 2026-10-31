@@ -18,7 +18,9 @@ export default {
     const card = page.locator(`${root}section[aria-label="Previously"]`).locator("visible=true").last();
     await eventually(() => card.count(), { timeoutMs: 30_000, label: "the recap card" });
     await card.scrollIntoViewIfNeeded();
-    const words = await card.innerText();
+    // textContent, not innerText: the heading is uppercased by CSS, and
+    // innerText reads it as the screen shows it ("PREVIOUSLY").
+    const words = (await card.textContent()) ?? "";
     check(/Previously/.test(words), `headed Previously: ${words}`);
     check(/followed her lantern's tracks/.test(words), `it carries the recap: ${words}`);
     check(!/Previously: You reached/.test(words), "the prefix is the heading, not printed twice");

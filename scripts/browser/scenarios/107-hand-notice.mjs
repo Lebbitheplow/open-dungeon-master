@@ -31,14 +31,19 @@ export default {
       await eventually(() => hand.isVisible(), { timeoutMs: 30_000, label: "the fighter's Hand" });
 
       await invoke("take_action", { characterId: table.hero, action: "dodge" });
-      const spent = hand.locator('[aria-disabled="true"][aria-label*=", Action."]').first();
+      // The first one on show: a group's folded cards are in the page too,
+      // hidden. It is pressed from the keyboard, as a player who tabs to it
+      // would; on a desktop the fanned cards overlap, so a pointer aimed at
+      // the card's middle lands on its neighbour.
+      const spent = hand.locator('[aria-disabled="true"][aria-label*=", Action."]').locator("visible=true").first();
       await eventually(() => spent.count(), { timeoutMs: 15_000, label: "an action card spent by the Dodge" });
-      await t.tap(spent);
+      await spent.focus();
+      await page.keyboard.press("Enter");
       const notice = hand.locator('p[role="status"]');
       await eventually(async () => (await notice.isVisible()) && /action/i.test(await notice.innerText()), { timeoutMs: 10_000, label: "the spent card saying why" });
       await t.shot("hand-notice-raised");
 
-      await invoke("end_turn", {});
+      await invoke("end_turn", { characterId: table.hero });
       await eventually(async () => !(await notice.isVisible()), { timeoutMs: 15_000, label: "the notice gone once the turn moved on" });
       check(await hand.isVisible(), "the Hand stays on the table off the fighter's turn");
       await t.shot("hand-notice-gone");
