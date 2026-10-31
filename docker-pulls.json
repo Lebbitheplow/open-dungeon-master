@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "label": "docker pulls",
+  "message": "9.4k",
+  "color": "d4ab3a",
+  "labelColor": "151229",
+  "namedLogo": "docker",
+  "logoColor": "d4ab3a",
+  "style": "flat-square"
+}
