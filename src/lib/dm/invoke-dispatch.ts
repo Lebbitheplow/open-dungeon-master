@@ -109,7 +109,7 @@ export async function dispatchAdjudication(
     // as from the AI's turn (turn.ts).
     return (
       maybeProposeItemChange(campaign, turn.id, name, rawArguments, sheetsById) ??
-      applyDmMutation(campaign, turn.id, name, rawArguments, sheets, sheetsById).result
+      applyDmMutation(campaign, turn.id, name, rawArguments, sheets, sheetsById, turn).result
     );
   }
   if (ENCOUNTERS.has(name)) {

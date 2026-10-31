@@ -46,6 +46,15 @@ const { getDatabase } = await import("../src/lib/db/core.ts");
 const { listRecentCampaignEvents } = await import("../src/lib/db/character-events.ts");
 const { afflictionsOf, writeAfflictions } = await import("../src/lib/dm/between-io.ts");
 const { latestEventOfType } = await import("../src/lib/events.ts");
+const { getDmTurn } = await import("../src/lib/db/dm-turns.ts");
+const { getRoll } = await import("../src/lib/db/rolls.ts");
+
+// The Medicine checks on the turn's roll list, which is where the GM's
+// message takes its roll cards from (turn.ts).
+const medicineOnTurn = (outcome) =>
+  getDmTurn(outcome.turnId).rollIds
+    .map((id) => getRoll(id))
+    .filter((roll) => roll?.detail.startsWith("medicine, to stabilize"));
 
 const hero = world.addHero(FIGHTER);
 const ally = world.addHero(FIGHTER);
@@ -259,6 +268,8 @@ await test("stabilize stops the saves and leaves the character at 0", async () =
   assert.deepEqual(track(), { successes: 0, failures: 0, stable: true, dead: false });
   assert.equal(hp(), 0);
   assert.deepEqual(pass(), []);
+  // The check shows as a roll card on the GM's message (issue 665).
+  assert.deepEqual(medicineOnTurn(out).map((roll) => roll.total), [10]);
   const swing = await kit.swing([17, 4], hero.id, goblin.id);
   assert.equal(swing.outcome.ok, false);
 });
@@ -277,6 +288,8 @@ await test("a failed Medicine check leaves the character dying and still costs t
   const out = await kit.withDice([9], "stabilize", { characterId: hero.id, healerId: ally.id });
   assert.equal(out.outcome.ok, true, out.outcome.error);
   assert.deepEqual(out.dice, ["d20:9"]);
+  // A miss is shown too, so the table sees why the hero is still dying.
+  assert.deepEqual(medicineOnTurn(out.outcome).map((roll) => roll.total), [9]);
   assert.deepEqual(track(), { ...FRESH, failures: 1 });
   assert.equal(world.encounter().turnBudget.actionUsed, true);
   // The action is gone, so a second try this turn is refused and rolls nothing.
