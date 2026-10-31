@@ -1,11 +1,16 @@
+import type { StorySettings } from "@/lib/types";
 import { checkTools } from "@/lib/dm/check-tools";
 import { effectTools } from "@/lib/dm/effect-tools";
 import { encounterTools } from "@/lib/dm/encounter-tools";
 import { handleItemTool } from "@/lib/dm/gear-tool";
 import { hazardTools } from "@/lib/dm/hazard-tools";
 import { salvageJsonToolCalls } from "@/lib/dm/json-salvage";
+import { requestDmMessage, type DmCallOptions } from "@/lib/dm/model";
+import { storyModelTuning } from "@/lib/dm/model-tuning";
+import { MIN_LEAN_ROOM_TOKENS, SMALL_MODEL_REASONING_CHARS, type ModelTuning } from "@/lib/dm/model-tuning-logic";
 import {
   DM_SYSTEM,
+  dmSystemText,
   firstMovePartyTool,
   recordEventTool,
   requestPlayerInputTool,
@@ -17,14 +22,9 @@ import { restTools } from "@/lib/dm/rest-tools";
 import { extractToolCalls, salvageXmlToolCalls, type ParsedToolCall } from "@/lib/dm/rolls";
 import { shopTools } from "@/lib/dm/shop-tools";
 import { socialTools } from "@/lib/dm/social-tools";
+import { compactTool, type ToolDefLike } from "@/lib/dm/tool-profiles";
 import { worldTools } from "@/lib/dm/world-tools";
-import {
-  requestCustomMessage,
-  requestLocalMessage,
-  type ChatMessage,
-  type ChatRequestOptions,
-  type UpstreamResult,
-} from "@/lib/model-client";
+import { storyContextTokens, type ChatMessage, type UpstreamResult } from "@/lib/model-client";
 import { extractReplyText, extractStoryText } from "@/lib/story-prompt";
 
 // The quick probe (scripts/lib/provider-capability-probe.mjs) asks for one
@@ -34,15 +34,18 @@ import { extractReplyText, extractStoryText } from "@/lib/story-prompt";
 // backend can pass the probe and still fail all of that (an OpenAI-compatible
 // host whose streamed tool calls arrive broken, a model that loses its tools
 // under a long prompt), and the table found out only once a campaign began.
-// This plays one turn of that shape through the client a campaign uses, with
-// its retries and route switches, so a pass here is a pass at the table.
+// This plays one turn of that shape through the call a campaign's turn makes
+// (requestDmMessage: the window fitted, the reply sized to what it leaves,
+// the parameter retries and route switches), with the tools, rules and
+// thinking a campaign on this backend would send, so a pass here is a pass
+// at the table. It never sends more than that table's first call would.
 
 type ToolDef = { function: { name: string } };
 
 // What a turn on a small or unreported window carries, and what one with room
 // carries. A server that does not report its window is planned at 16K
 // (DEFAULT_CUSTOM_CONTEXT_TOKENS), and the larger set would overflow it.
-const CORE_TOOLS = [
+const CORE_TOOLS: ToolDefLike[] = [
   requestRollTool,
   requestPlayerInputTool,
   firstMovePartyTool,
@@ -53,21 +56,59 @@ const CORE_TOOLS = [
 ];
 const ROOMY_WINDOW = 32_768;
 
-export function trialTools(windowTokens: number): unknown[] {
-  if (windowTokens < ROOMY_WINDOW) {
-    return CORE_TOOLS;
-  }
-  return [
-    ...CORE_TOOLS,
-    ...socialTools,
-    ...hazardTools,
-    ...effectTools,
-    ...encounterTools(false),
-    ...worldTools,
-    ...shopTools,
-    ...restTools,
-    handleItemTool,
-  ];
+// The short rules as a small model's first call reads them: out of a fight,
+// no group opened yet, the rest one more_tools call away. Lines a group or a
+// class needs stay out, as they would on a table that has none of them.
+const BRIEF_CONTEXT = {
+  inEncounter: false,
+  groups: new Set<string>(),
+  caster: false,
+  features: false,
+  classFeatures: false,
+  featSpells: false,
+  dying: false,
+  arc: false,
+  recall: false,
+  map: false,
+  legendary: false,
+  moreTools: true,
+  classes: null,
+  brief: true,
+};
+
+export type TrialShape = { tools: ToolDefLike[]; rules: string; tuning: ModelTuning };
+
+// What the test turn sends for these settings. The profile, the short rules
+// and thinking are the campaign's own answer (storyModelTuning). The trial
+// does not tell the full profile from the trimmed one (both carry whole
+// descriptions, and its set is smaller than either), so only where the
+// compact profile begins matters: where the trimmed set leaves less than
+// MIN_LEAN_ROOM_TOKENS, and the trimmed set is held to that size
+// (scripts/test-tool-profiles.mjs keeps a 48K table on it). Below that a
+// campaign sends first sentences only (compactTool), and so does the trial:
+// whole descriptions there were 2,400 tokens more than a 32K table sends.
+export function trialShape(settings: StorySettings): TrialShape {
+  const windowTokens = storyContextTokens(settings);
+  const tuning = storyModelTuning(settings, MIN_LEAN_ROOM_TOKENS, MIN_LEAN_ROOM_TOKENS);
+  const set: ToolDefLike[] =
+    windowTokens < ROOMY_WINDOW
+      ? CORE_TOOLS
+      : [
+          ...CORE_TOOLS,
+          ...socialTools,
+          ...hazardTools,
+          ...effectTools,
+          ...encounterTools(false),
+          ...worldTools,
+          ...shopTools,
+          ...restTools,
+          handleItemTool,
+        ];
+  return {
+    tools: tuning.toolProfile === "compact" ? set.map(compactTool) : set,
+    rules: tuning.briefRules ? dmSystemText(false, BRIEF_CONTEXT) : DM_SYSTEM,
+    tuning,
+  };
 }
 
 const TRIAL_STATE = `GAME STATE
@@ -96,8 +137,6 @@ export type TrialResult = {
   error?: string;
 };
 
-type Send = (messages: ChatMessage[], options: ChatRequestOptions) => Promise<UpstreamResult>;
-
 async function errorText(result: UpstreamResult): Promise<string> {
   const payload = (await result.error?.json().catch(() => null)) as { error?: string } | null;
   return payload?.error || `The backend answered ${result.error?.status ?? "with an error"}.`;
@@ -124,28 +163,17 @@ function argsObject(raw: string): Record<string, unknown> | null {
   }
 }
 
-export async function runBackendTrial(input: {
-  provider: "local" | "custom";
-  baseUrl: string;
-  model: string;
-  apiKey: string;
-  role: "story" | "utility";
-  windowTokens: number;
-  timeoutMs?: number;
-}): Promise<TrialResult> {
-  const tools = trialTools(input.windowTokens);
+export async function runBackendTrial(input: { settings: StorySettings; timeoutMs?: number }): Promise<TrialResult> {
+  const { tools, rules, tuning } = trialShape(input.settings);
   const offered = new Set((tools as ToolDef[]).map((tool) => tool.function.name));
-  const send: Send = (messages, options) =>
-    input.provider === "local"
-      ? requestLocalMessage(input.model, messages, { ...options, role: input.role })
-      : requestCustomMessage(input.baseUrl, input.model, input.apiKey, messages, { ...options, role: input.role });
-  const common: ChatRequestOptions = {
+  const send = (messages: ChatMessage[], options: DmCallOptions) => requestDmMessage(input.settings, messages, options);
+  const common: DmCallOptions = {
     timeoutMs: input.timeoutMs ?? 120_000,
-    reasoningEffort: "low",
+    ...(tuning.outputCap ? { maxOutputTokens: tuning.outputCap } : {}),
     meta: { task: "backend_trial" },
   };
   const conversation: ChatMessage[] = [
-    { role: "system", content: `${DM_SYSTEM}\n\n${TRIAL_STATE}` },
+    { role: "system", content: `${rules}\n\n${TRIAL_STATE}` },
     { role: "user", content: TRIAL_ACTION },
   ];
   const result = (toolTurn: TrialStage, narration: TrialStage, error?: string): TrialResult => ({
@@ -156,8 +184,18 @@ export async function runBackendTrial(input: {
   });
   const skipped: TrialStage = { ok: false, detail: "Not tried: the tool call before it failed." };
 
-  // A turn's first call: streamed, every tool offered, the model's choice.
-  const first = await send(conversation, { ...common, tools, toolChoice: "auto", onDelta: () => {} });
+  // A turn's first call: streamed, every tool offered, the model's choice,
+  // thinking where a campaign's tool-deciding calls think (without it a
+  // model a table plays well can narrate past its tools), and a small
+  // model's thought cut as a turn cuts it.
+  const first = await send(conversation, {
+    ...common,
+    tools,
+    toolChoice: "auto",
+    thinking: tuning.thinking,
+    ...(tuning.briefRules ? { reasoningBudgetChars: SMALL_MODEL_REASONING_CHARS } : {}),
+    onDelta: () => {},
+  });
   if (first.error) {
     const error = await errorText(first);
     return result({ ok: false, detail: error }, skipped, error);
@@ -201,7 +239,7 @@ export async function runBackendTrial(input: {
     { role: "tool", tool_call_id: callId, content: JSON.stringify(TRIAL_ROLL_RESULT) },
   ];
   let narrated = "";
-  const narrate = (options: ChatRequestOptions) => {
+  const narrate = (options: DmCallOptions) => {
     narrated = "";
     return send(answered, { ...common, ...options, thinking: false, onDelta: (text) => (narrated += text) });
   };

@@ -118,11 +118,15 @@ export async function POST(request: Request) {
     // server named no size and the conservative stand-in is all there is.
     let window: { tokens: number; reported: boolean } | undefined;
     if (which === "story" && result.ok) {
+      // The story settings a campaign on this backend would hold, as the
+      // test turn below reads them too.
       const settings = {
-        textProvider: local ? "local" : "custom",
+        ...DEFAULT_STORY_SETTINGS,
+        textProvider: local ? ("local" as const) : ("custom" as const),
         localTextModel: resolvedModel,
         customBaseUrl: resolvedBaseUrl,
         customModel: resolvedModel,
+        customApiKey: resolvedKey,
       };
       // Ollama's own word on the model's window, which caps what it is asked for.
       if (local) await ollamaModelInfo(resolvedModel, ollamaBaseUrl);
@@ -133,14 +137,7 @@ export async function POST(request: Request) {
       // The storyteller's only: a utility model never plays a turn (its
       // calls carry no game tools), so the turn would only spend its tokens
       // and could fail a model that does its own work well.
-      const trial = await runBackendTrial({
-        provider: local ? "local" : "custom",
-        baseUrl: resolvedBaseUrl,
-        model: resolvedModel,
-        apiKey: resolvedKey,
-        role: "story",
-        windowTokens: window.tokens,
-      });
+      const trial = await runBackendTrial({ settings });
       const played = { ...result, ok: trial.ok, trial };
       remember(played as unknown as Parameters<typeof recordModelProbe>[2]);
       return Response.json({ ...played, window });
