@@ -93,7 +93,7 @@ export const WORKBENCH_TOOLS: WorkbenchTool[] = [
   {
     name: "odm_list_campaigns",
     scope: "read",
-    description: "List the campaigns and workshops you belong to.",
+    description: "List the campaigns you belong to. Workshops and test tables are not listed.",
     properties: {},
     method: "GET",
     path: () => "/api/campaigns",
