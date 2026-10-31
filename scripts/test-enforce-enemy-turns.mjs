@@ -161,6 +161,19 @@ await test("Played for the lead, an enemy that can walk into melee still does, w
   assert.deepEqual([kit.token(enemy.id).x, kit.token(enemy.id).y], [3, 2], "it walked in");
 });
 
+await test("Played for the lead, a prone enemy that could walk into melee standing but not after standing up shoots its bow instead.", async () => {
+  const [enemy] = await stage();
+  await world.invoke("set_enemy_condition", { enemyId: enemy.id, condition: "prone" });
+  const before = enemyRolls(enemy).length;
+  // 30 ft away: its 30 ft would carry it beside Scout, but standing costs 15.
+  await playTheRest(enemy, [8, 2]);
+  const made = enemyRolls(enemy).slice(0, enemyRolls(enemy).length - before);
+  assert.equal(made.length, 1, "the enemy stood, walked short and made no attack");
+  assert.match(made[0].detail, /Shortbow/);
+  assert.ok(!kit.enemy(enemy.id).conditions.includes("prone"), "it stood to shoot");
+  assert.deepEqual([kit.token(enemy.id).x, kit.token(enemy.id).y], [8, 2]);
+});
+
 // ---- initiative at the start (N:S15, N:T12) ----
 
 await test("When the AI opens a fight, the server rolls initiative for every character whose dice it rolls, so the fight starts in the same call.", async () => {

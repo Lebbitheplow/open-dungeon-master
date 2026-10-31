@@ -207,7 +207,12 @@ export function approachTarget(
   // Its movement this turn, its Dashes counted, and whether it Disengaged
   // (src/lib/dm/enemy-speed.ts enemyMoveBudget, issue #621).
   const move = enemyMoveBudget(getEncounter(encounterId), enemy, attacker);
-  const budget = move.tilesLeft;
+  // A dry run asks before the turn is played, while a prone creature still
+  // lies there: it will stand first (standUpIfProne), paying half its speed,
+  // and only the rest walks. Uncounted, a prone goblin picked its scimitar,
+  // stood, fell short and never drew its bow.
+  const standing = options.dryRun ? (standUpCost(encounterId, enemy) ?? 0) : 0;
+  const budget = Math.max(0, move.tilesLeft - standing);
   const fear = fearSourceAt(map.id, enemy.conditions, enemy.conditionMeta as Record<string, { source?: string }>);
   const occupied = occupiedTiles(map, listTokens(map.id), attacker);
   let landing: XY = origin;
