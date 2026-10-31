@@ -1945,6 +1945,10 @@ function ensureSchema(db: SqliteDatabase) {
   ]);
 
   addColumns("encounters", [
+    // The world clock's instant (minutes) the fight ended at: a foe who comes
+    // back to a later fight has had the time since to come to and to rest
+    // (issue #667, src/lib/dm/foe-return.ts). NULL while it runs.
+    ["ended_instant", `INTEGER`],
     // Legendary pools per enemy and the lair flag (docs/vtt-parity-
     // implementation-plan.md 4.1), and the after-the-fight card (4.2).
     ["legendary_json", `TEXT NOT NULL DEFAULT '{}'`],
@@ -2064,7 +2068,18 @@ function ensureSchema(db: SqliteDatabase) {
     // Rounds the enemy's concentration has left (the spell's duration);
     // NULL = no clock (src/lib/dm/concentration-clock.ts).
     ["concentration_rounds", `INTEGER`],
+    // Issue #667: a foe hurt or knocked out in one fight came into the next
+    // at full hit points, because nothing tied the two rows together. The
+    // Cast NPC this enemy is ('' for a bestiary creature), and the row of
+    // the earlier fight it came back from ('' for one that arrived fresh)
+    // (src/lib/dm/foe-return.ts).
+    ["npc_id", `TEXT NOT NULL DEFAULT ''`],
+    ["carried_from", `TEXT NOT NULL DEFAULT ''`],
   ]);
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_encounter_enemies_npc ON encounter_enemies(campaign_id, npc_id);
+    CREATE INDEX IF NOT EXISTS idx_encounter_enemies_carried ON encounter_enemies(carried_from);
+  `);
 
   addColumns("pending_rolls", [
     // Damage rolls aimed at an enemy: the server applies the result to this

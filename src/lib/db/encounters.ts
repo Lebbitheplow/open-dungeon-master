@@ -10,6 +10,7 @@ import { normalizeSides, type SideExceptions } from "@/lib/dm/combat-sides-logic
 import { getSheetById, patchSheet } from "@/lib/db/sheets";
 import { noteDominationShift } from "@/lib/db/side-watch";
 import { publishPersisted } from "@/lib/events";
+import { isKnockedOut } from "@/lib/dm/knockout";
 
 // Server-authoritative combat state. Enemy HP lives here and changes ONLY
 // through the encounter tools; the AI DM narrates from tool results, never
@@ -108,6 +109,11 @@ export type Encounter = {
   summary: string;
   // The after-the-fight card, once the fight has ended.
   summaryCard: EncounterSummary | null;
+  // The world clock's instant (minutes) when the fight ended, so a foe who
+  // comes back to a later one has had the time since to come to and rest
+  // (src/lib/dm/foe-return.ts, issue #667). Null while it runs, and on a
+  // fight that ended before it was kept.
+  endedInstant: number | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -134,6 +140,14 @@ export type EncounterEnemy = {
   // null = no clock.
   concentrationRounds?: number | null;
   stats: EnemyStats;
+  // The Cast NPC this enemy is (src/lib/db/npcs.ts), so their next fight
+  // finds them by who they are rather than by a name (issue #667). Empty
+  // for a bestiary creature.
+  npcId?: string;
+  // The enemy row of the fight this creature last fought in, when it came
+  // back from it as that fight left it (src/lib/dm/foe-return.ts). Empty
+  // for a creature that arrived fresh.
+  carriedFrom?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -159,6 +173,7 @@ type EncounterRow = {
   summary: string;
   legendary_json: string | null;
   summary_json: string | null;
+  ended_instant?: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -181,6 +196,8 @@ type EnemyRow = {
   concentration: string | null;
   concentration_rounds?: number | null;
   stat_json: string;
+  npc_id?: string | null;
+  carried_from?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -251,6 +268,7 @@ function mapEncounter(row: EncounterRow): Encounter {
     outcome: row.outcome,
     summary: row.summary,
     summaryCard: parseJson<EncounterSummary | null>(row.summary_json ?? "null", null),
+    endedInstant: typeof row.ended_instant === "number" ? row.ended_instant : null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -288,6 +306,8 @@ function mapEnemy(row: EnemyRow): EncounterEnemy {
       cr: row.cr,
       xp: row.xp,
     }),
+    ...(row.npc_id ? { npcId: row.npc_id } : {}),
+    ...(row.carried_from ? { carriedFrom: row.carried_from } : {}),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -413,10 +433,12 @@ export function setEncounterSummary(encounterId: string, summary: EncounterSumma
     .run(JSON.stringify(summary), line.slice(0, 600), nowIso(), encounterId);
 }
 
-export function endEncounter(id: string, outcome: string) {
+// `endedInstant`: the world clock's instant the fight ended at, for a foe
+// who comes back to a later one (issue #667). A scene closing passes none.
+export function endEncounter(id: string, outcome: string, endedInstant?: number) {
   getDatabase()
-    .prepare(`UPDATE encounters SET status = 'ended', outcome = ?, updated_at = ? WHERE id = ?`)
-    .run(outcome.slice(0, 60), nowIso(), id);
+    .prepare(`UPDATE encounters SET status = 'ended', outcome = ?, ended_instant = COALESCE(?, ended_instant), updated_at = ? WHERE id = ?`)
+    .run(outcome.slice(0, 60), endedInstant ?? null, nowIso(), id);
 }
 
 export function insertEnemy(input: {
@@ -426,18 +448,36 @@ export function insertEnemy(input: {
   displayName: string;
   initiative: number;
   stats: EnemyStats;
-  // Hit points it arrives with when below its maximum (a companion come back
-  // worn, src/lib/dm/companion-return.ts); absent, it arrives whole.
-  currentHp?: number;
+  // The Cast NPC this enemy is, so their next fight finds them (issue #667).
+  npcId?: string;
+  // A creature come back from an earlier fight as it left them
+  // (src/lib/dm/foe-return.ts): its hit points, its conditions, the XP the
+  // earlier fight did not already pay, and the row it came from. Absent, it
+  // arrives whole and fresh.
+  arrives?: {
+    currentHp: number;
+    conditions: string[];
+    conditionMeta: ConditionMetaMap;
+    xp: number;
+    carriedFrom: string;
+  };
 }): EncounterEnemy {
   const id = crypto.randomUUID();
   const now = nowIso();
+  const arrives = input.arrives;
+  // Only a creature still knocked out arrives at 0: anyone else standing in
+  // the fight has at least 1 hit point.
+  const down = arrives ? isKnockedOut({ status: "alive", currentHp: arrives.currentHp, conditions: arrives.conditions, conditionMeta: arrives.conditionMeta }) : false;
+  const currentHp = arrives
+    ? Math.min(input.stats.maxHp, Math.max(down ? 0 : 1, Math.round(arrives.currentHp)))
+    : input.stats.maxHp;
   getDatabase()
     .prepare(
       `INSERT INTO encounter_enemies (
         id, encounter_id, campaign_id, slug, display_name, max_hp, current_hp,
-        ac, initiative, status, cr, xp, stat_json, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'alive', ?, ?, ?, ?, ?)`,
+        ac, initiative, status, cr, xp, stat_json, conditions_json, condition_meta_json,
+        npc_id, carried_from, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'alive', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       id,
@@ -446,12 +486,16 @@ export function insertEnemy(input: {
       input.slug,
       input.displayName.slice(0, 80),
       input.stats.maxHp,
-      input.currentHp === undefined ? input.stats.maxHp : Math.max(1, Math.min(input.stats.maxHp, Math.round(input.currentHp))),
+      currentHp,
       input.stats.ac,
       input.initiative,
       input.stats.cr,
-      input.stats.xp,
+      arrives ? Math.max(0, Math.round(arrives.xp)) : input.stats.xp,
       JSON.stringify(input.stats),
+      JSON.stringify(arrives ? arrives.conditions.slice(0, 10) : []),
+      JSON.stringify(arrives ? arrives.conditionMeta : {}),
+      input.npcId ?? "",
+      arrives?.carriedFrom ?? "",
       now,
       now,
     );
@@ -477,8 +521,10 @@ export function listEnemies(encounterId: string): EncounterEnemy[] {
 }
 
 // A prepared encounter's overrides: this one is called Snik, that one has
-// 3 hit points. Written before anybody has acted, so max and current move
-// together and the stat snapshot keeps the printed block.
+// 3 hit points. Written before anybody has acted, so the stat snapshot
+// keeps the printed block. The damage a creature already carries stays
+// taken (issue #667: one come back hurt from an earlier fight was healed
+// by a rename): the new maximum less what it had lost.
 export function patchEnemyIdentity(
   enemyId: string,
   patch: { displayName?: string; maxHp?: number },
@@ -489,12 +535,14 @@ export function patchEnemyIdentity(
   }
   const displayName = patch.displayName?.trim().slice(0, 80) || existing.displayName;
   const maxHp = patch.maxHp && patch.maxHp > 0 ? Math.round(patch.maxHp) : existing.maxHp;
+  const lost = Math.max(0, existing.maxHp - existing.currentHp);
+  const currentHp = isKnockedOut(existing) ? 0 : Math.max(1, maxHp - lost);
   getDatabase()
     .prepare(
       `UPDATE encounter_enemies SET display_name = ?, max_hp = ?, current_hp = ?, updated_at = ?
        WHERE id = ?`,
     )
-    .run(displayName, maxHp, maxHp, nowIso(), enemyId);
+    .run(displayName, maxHp, currentHp, nowIso(), enemyId);
   return getEnemy(enemyId);
 }
 
@@ -515,7 +563,7 @@ export function shiftEnemyMaxHp(enemyId: string, delta: number): EncounterEnemy 
 
 // A new name and nothing else, mid-fight: hit points, conditions and the
 // stat snapshot stay exactly as the fight left them (patchEnemyIdentity
-// above resets hit points, which is right only before anybody has acted).
+// above may set a new maximum, which is right only before anybody has acted).
 export function renameEnemy(enemyId: string, displayName: string) {
   getDatabase()
     .prepare(`UPDATE encounter_enemies SET display_name = ?, updated_at = ? WHERE id = ?`)
@@ -527,11 +575,23 @@ export function patchEnemyHp(
   currentHp: number,
   status: EnemyStatus,
 ): EncounterEnemy | null {
+  const before = currentHp > 0 && status === "alive" ? getEnemy(enemyId) : null;
   getDatabase()
     .prepare(
       `UPDATE encounter_enemies SET current_hp = ?, status = ?, updated_at = ? WHERE id = ?`,
     )
     .run(currentHp, status, nowIso(), enemyId);
+  // A creature knocked out comes to the moment it regains a hit point (SRD
+  // 5.1: unconscious ends then; it stays prone until it stands). Every heal
+  // of an enemy lands here: a golem's Absorption, a legendary resistance's
+  // refund, a drain, an aura (issue #667: they left it unconscious with hit
+  // points, out of the fight and never waking).
+  if (before && isKnockedOut(before)) {
+    const conditions = before.conditions.filter((entry) => entry.trim().toLowerCase() !== "unconscious");
+    const meta = { ...before.conditionMeta };
+    delete meta.unconscious;
+    patchEnemyConditions(enemyId, conditions, meta);
+  }
   return getEnemy(enemyId);
 }
 

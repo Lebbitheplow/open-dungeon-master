@@ -68,6 +68,11 @@ export type ConditionMeta = {
   // Ends when the creature finishes a long rest (a succubus's Draining Kiss,
   // a wight's Life Drain): src/lib/dm/rest-logic.ts.
   untilLongRest?: boolean;
+  // A knocked-out creature's 1d4 hours to coming to with 1 hit point (SRD
+  // 5.1, Knocking a Creature Out), on its unconscious: counted against the
+  // world clock between fights (foe-carry-logic.ts, issue #667). Not a count
+  // of rounds, which the fight would tick away and the tracker would show.
+  wakeAfterHours?: number;
   // The temporary hit points this effect granted, which go when it ends
   // (False Life, Heroism): src/lib/db/sheets.ts patchSheet.
   tempHp?: number;
