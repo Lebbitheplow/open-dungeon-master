@@ -222,6 +222,9 @@ export type DmEncounterState = {
 };
 
 export type DmGameState = {
+  // The player messages whose cards the engine resolves before the model is
+  // asked (src/lib/dm/turn.ts directCards): their card lines say so.
+  engineCardIds?: ReadonlySet<string>;
   campaign: Campaign;
   members: CampaignMember[];
   sheets: CharacterSheet[];
@@ -1878,7 +1881,7 @@ export function buildDmMessages(
     // parsing the sentence (src/lib/dm/intent-logic.ts).
     const card =
       message.authorType === "player" && message.intent
-        ? `\n${describeIntent(message.intent, message.characterId)}`
+        ? `\n${describeIntent(message.intent, message.characterId, { resolved: state.engineCardIds?.has(message.id) ?? false })}`
         : "";
     return { message, id: message.id, seq: message.seq, text: `${content}${card}` };
   });
