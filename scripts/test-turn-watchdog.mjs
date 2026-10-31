@@ -13,7 +13,7 @@ const { test, finish } = suite("test-turn-watchdog");
 
 const { requestDmTurn } = await import("../src/lib/dm/loop.ts");
 const { getDmStatus, setDmStatus } = await import("../src/lib/dm/status.ts");
-const { configureDmWatchdog, enqueueDmJob, runningDmJob } = await import("../src/lib/dm/queue.ts");
+const { configureDmWatchdog, DM_WATCHDOG_DEFAULTS, enqueueDmJob, runningDmJob } = await import("../src/lib/dm/queue.ts");
 const { configureEmbedTimeouts } = await import("../src/lib/embeddings.ts");
 const { getDmTurn, getLatestDmTurnId } = await import("../src/lib/db/dm-turns.ts");
 const { listRecentMessages } = await import("../src/lib/db/messages.ts");
@@ -24,9 +24,10 @@ const { DM_HALTED_PREFIX } = await import("../src/lib/campaign-types.ts");
 const { stalledReason, LEAD_STOPPED_REASON, DM_JOB_STAGE_DEADLINES_MS } = await import("../src/lib/dm/job-stage-logic.ts");
 const { isUnbuiltTurn } = await import("../src/lib/dm/turn-halt.ts");
 
-// The watchdog at test speed: deadlines scaled to a few hundred
-// milliseconds, checked every 20.
-configureDmWatchdog({ checkMs: 20, graceMs: 150, scale: 0.005 });
+// The watchdog at its own deadlines, except where a test waits for it to
+// fire: scaled to a few hundred milliseconds there, every turn on a loaded
+// runner would be stopped for building its prompt too slowly.
+const fastWatchdog = { checkMs: 20, graceMs: 150, scale: 0.005 };
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const model = await fakeModel();
@@ -121,6 +122,7 @@ await test("A turn stuck on something that never answers is stopped by the watch
   // The embedder hangs and the foreground deadline is out of reach, so only
   // the queue's watchdog can end the wait.
   configureEmbedTimeouts({ foregroundMs: 60_000 });
+  configureDmWatchdog(fastWatchdog);
   let wake = () => {};
   const resumed = new Promise((resolve) => {
     wake = resolve;
@@ -157,6 +159,7 @@ await test("A turn stuck on something that never answers is stopped by the watch
     globalThis.__odmEmbedderFailure = undefined;
     globalThis.__odmEmbedTasks = undefined;
     configureEmbedTimeouts({ foregroundMs: 20_000 });
+    configureDmWatchdog(DM_WATCHDOG_DEFAULTS);
   }
 });
 

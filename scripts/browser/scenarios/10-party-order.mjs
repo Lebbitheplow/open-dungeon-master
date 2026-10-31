@@ -66,16 +66,20 @@ export default {
     // middle: Tavi is first again.
     const taviGrip = page.locator(`${root}[data-party-card="${ids.tavi}"] .party-grip`).locator("visible=true").first();
     const breeCard = page.locator(`${root}[data-party-card="${ids.bree}"]`).locator("visible=true").first();
-    const grip = await taviGrip.boundingBox();
-    const target = await breeCard.boundingBox();
-    check(Boolean(grip && target), "the grip and the other card are on screen");
     // On a slow runner a redraw mid-drag can swallow the moves that draw the
     // line. So the pointer keeps nudging while the test looks, and a drag
     // that never took is let go over Tavi's own card (which moves nothing)
-    // and made again, up to three times.
+    // and made again, up to three times. Each try measures the cards again:
+    // after the arrow the panel can still be moving (a dozen pixels on
+    // desktop), and a drag pressed where the grip had been never took.
     const dropLine = page.locator(`${root}[data-party-card="${ids.bree}"][data-drop="before"]`);
     let lineShown = false;
+    let grip = null;
+    let target = null;
     for (let attempt = 0; attempt < 3 && !lineShown; attempt += 1) {
+      grip = await taviGrip.boundingBox();
+      target = await breeCard.boundingBox();
+      check(Boolean(grip && target), "the grip and the other card are on screen");
       await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
       await page.mouse.down();
       await page.mouse.move(grip.x + grip.width / 2, target.y + 8, { steps: 6 });

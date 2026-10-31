@@ -8,6 +8,13 @@ on:
 permissions:
   contents: read
 
+# onnxruntime-node's install script downloads its CUDA and TensorRT
+# providers from api.nuget.org on every Linux npm ci, and a download that
+# timed out failed the whole job. The app embeds on the CPU only (the
+# Dockerfile deletes those providers), so no job here needs them.
+env:
+  ONNXRUNTIME_NODE_INSTALL: skip
+
 # A newer push to a pull request replaces its run still going; every commit
 # on main keeps its own.
 concurrency:

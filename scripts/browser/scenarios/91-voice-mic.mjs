@@ -239,6 +239,11 @@ export default {
       }
       await eventually(async () => !(await panel.count()), { timeoutMs: 30_000, label: "the lobby left" });
       check(await page.evaluate(() => Boolean(window.__voiceRig)), "the page stayed the same document");
+      // The panel leaves the page a frame before the call's own cleanup runs
+      // (an effect's, after paint); a prompt answered in between still
+      // joined. Answered once the page has had a moment to itself, as
+      // hydrated() waits: by then that cleanup has run.
+      await page.evaluate(() => new Promise((resolve) => requestIdleCallback(() => resolve(), { timeout: 2_000 })));
       await page.evaluate(() => window.__voiceRig.hold.release());
       await sleep(1_500);
       s = await state();

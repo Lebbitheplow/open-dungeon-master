@@ -71,20 +71,11 @@ async function tabTo(page, target, label, max = 80) {
 }
 
 // Presses `key` on the focused control that opens a file picker, and picks
-// `file`. Now and then Chrome lets the file input's click by without a
-// picker (about one run in five here; the click reached the input each
-// time), so the key is pressed again, as a person would press it again.
+// `file`.
 async function pressForFile(page, key, file) {
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const waiting = page.waitForEvent("filechooser", { timeout: 10_000 }).catch(() => null);
-    await page.keyboard.press(key);
-    const chooser = await waiting;
-    if (chooser) {
-      await chooser.setFiles(file);
-      return;
-    }
-  }
-  throw new Error(`no file picker opened from ${key} in three tries`);
+  const chooser = page.waitForEvent("filechooser", { timeout: 10_000 });
+  await page.keyboard.press(key);
+  await (await chooser).setFiles(file);
 }
 
 export default {
