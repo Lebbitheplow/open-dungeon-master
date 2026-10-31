@@ -237,9 +237,11 @@ function cuttingWords(ctx: Ctx): ToolResult {
   }
   const target = allyOf(ctx) ?? sheet;
   const record = freshLastHit(campaign.id, target.id);
+  // The hit the prompt names (heaviestHit): the die once went off a
+  // multiattack's last hit while the card offered its heaviest.
   const index =
     record && record.source === "attack" && attackerFoeId(record) !== null && !record.answered.includes("cutting words")
-      ? record.swings.map((swing) => swing.hit).lastIndexOf(true)
+      ? heaviestHit(record.swings)
       : -1;
   if (!record || index < 0) {
     return noHit(target.name, "Cutting Words", `an attack that hit ${target.name}`);
@@ -306,7 +308,11 @@ function protection(ctx: Ctx): ToolResult {
   // a roll with advantage becomes a straight one (its first die); one
   // already at disadvantage is unchanged.
   const record = freshLastHit(campaign.id, ally.id);
-  const first = record && record.source === "attack" && !record.answered.includes("protection") ? record.swings[0] : null;
+  // The hit the prompt names (heaviestHit), not the routine's first swing:
+  // after a multiattack whose first swing missed, Protection rolled nothing
+  // again and the hit that landed stood.
+  const index = record && record.source === "attack" && !record.answered.includes("protection") ? heaviestHit(record.swings) : -1;
+  const first = record && index >= 0 ? record.swings[index] : null;
   let reread = "";
   if (record && first?.hit && first.natural !== null && first.faces.length) {
     const kept =
@@ -314,11 +320,11 @@ function protection(ctx: Ctx): ToolResult {
         ? first.natural
         : first.advantage === "advantage"
           ? first.faces[0]
-          : Math.min(first.natural, rollCard(campaign, ctx.turn, null, "attack", rollAgainst(`${record.attack} again, at disadvantage (Protection)`, ally.name), "1d20", rerollAttacker(record)).total);
+          : Math.min(first.natural, rollCard(campaign, ctx.turn, null, "attack", rollAgainst(`${first.attack ?? record.attack} again, at disadvantage (Protection)`, ally.name), "1d20", rerollAttacker(record)).total);
     const total = first.total - first.natural + kept;
     const missed = kept !== 20 && (kept === 1 || total < first.vsAc);
     if (missed) {
-      const settled = settle(ctx, record, record.swings.map((swing, at) => (at === 0 ? { ...swing, hit: false, raw: 0 } : swing)), "protection");
+      const settled = settle(ctx, record, record.swings.map((swing, at) => (at === index ? { ...swing, hit: false, raw: 0 } : swing)), "protection");
       reread = ` The attack is rolled again at disadvantage: ${total} against AC ${first.vsAc} misses, and ${settled.given} hit points come back to ${ally.name}.`;
     } else {
       reread = ` The attack is rolled again at disadvantage: ${total} against AC ${first.vsAc} still hits.`;

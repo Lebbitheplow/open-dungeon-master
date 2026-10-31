@@ -115,9 +115,10 @@ export function attackerFoeId(record: Pick<LastHit, "attacker"> | null | undefin
 }
 
 // The hit swing a one-attack reaction answers (Uncanny Dodge, Deflect
-// Missiles): the heaviest one, the first of equals (a multiattack is several
-// attacks; the reaction takes one). -1 when none hit. The reaction prompt
-// (src/lib/db/encounter-view.ts) names this same swing and its damage.
+// Missiles, Cutting Words, Protection): the heaviest one, the first of
+// equals (a multiattack is several attacks; the reaction takes one). -1 when
+// none hit. The reaction prompt (src/lib/db/encounter-view.ts) names this
+// same swing and its damage.
 export function heaviestHit(swings: SwingRecord[], which: (swing: SwingRecord) => boolean = () => true): number {
   let best = -1;
   swings.forEach((swing, index) => {

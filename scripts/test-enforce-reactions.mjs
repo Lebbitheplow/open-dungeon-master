@@ -171,6 +171,55 @@ await test("A multiattack's reaction prompt names the hit Uncanny Dodge halves a
   assert.equal(hp(rogue), 23);
 });
 
+// The other one-hit reactions answer the hit the prompt names, the heaviest
+// (issue 662's follow-up): Cutting Words took a multiattack's last hit and
+// Protection its first swing, hit or miss.
+const SLASH_THEN_STAB = {
+  attacks: [
+    { name: "Scimitar", toHit: 4, damage: "1d6+2", type: "slashing" },
+    { name: "Dagger", toHit: 4, damage: "1d4+2", type: "piercing" },
+  ],
+  routines: [[{ attack: "Scimitar", count: 1 }, { attack: "Dagger", count: 1 }]],
+};
+const offered = (hero) => {
+  const view = activePublicEncounterView(world.campaignId).lastHits?.find((hit) => hit.characterId === hero.id);
+  return view && { attack: view.attack, damage: view.damage, ranged: view.ranged };
+};
+const { activePublicEncounter: activePublicEncounterView } = await import("../src/lib/db/encounter-view.ts");
+
+await test("Cutting Words after a multiattack takes its die off the hit the prompt names, the heaviest, not the last", async () => {
+  const enemy = await stage();
+  kit.setEnemy(enemy.id, { stats: SLASH_THEN_STAB });
+  kit.place(bard.id, 4, 4);
+  // The scimitar: 10 + 4 = 14 hits for 4 + 2. The dagger: 15 + 4 = 19 for 1 + 2.
+  await enemyHits(enemy, guard, [10, 4, 15, 1]);
+  assert.equal(hp(guard), 21);
+  assert.deepEqual(offered(guard), { attack: "Scimitar", damage: 6, ranged: false });
+  // A 6 takes the scimitar's 14 to 8: a miss, its 6 back. Off the dagger's
+  // 19 it still hit, and only its 3 came back.
+  world.dice(6);
+  const out = await react(bard, "Cutting Words", { targetCharacterId: guard.id });
+  world.clearDice();
+  assert.equal(out.ok, true, out.error);
+  assert.equal(hp(guard), 27);
+});
+
+await test("Protection after a multiattack whose first swing missed rolls the hit again, not the miss", async () => {
+  const enemy = await stage();
+  kit.setEnemy(enemy.id, { stats: SLASH_THEN_STAB });
+  // The scimitar misses (2 + 4 = 6); the dagger hits (10 + 4 = 14) for 4 + 2.
+  await enemyHits(enemy, rogue, [2, 10, 4]);
+  kit.place(guard.id, 5, 4);
+  assert.equal(hp(rogue), 24);
+  // Again at disadvantage, a 2: 6 against AC 12 misses.
+  world.dice(2);
+  const out = await react(guard, "Protection", { targetCharacterId: rogue.id });
+  world.clearDice();
+  assert.equal(out.ok, true, out.error);
+  assert.match(out.result.applied, /misses/);
+  assert.equal(hp(rogue), 30);
+});
+
 await test("Deflect Missiles reduces a ranged weapon attack's damage by 1d10 + DEX + monk level.", async () => {
   const enemy = await stage();
   kit.setEnemy(enemy.id, { stats: { attacks: [{ name: "Shortbow", toHit: 4, damage: "1d6+2", type: "piercing" }] } });
