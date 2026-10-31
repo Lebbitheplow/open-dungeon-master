@@ -578,7 +578,7 @@
     "lib/dm/action-price.ts#str-eq": [["key",1,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/action-price.ts#str-list": [["key",2,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/action-price.ts#toLowerCase": [["key",1,"condition label (engine vocabulary)"]],
-    "lib/dm/intent-logic.ts#str-list": [["key",2,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
+    "lib/dm/intent-logic.ts#str-list": [["key",3,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/intent-logic.ts#str-eq": [["key",2,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/session-hold-logic.ts#str-eq": [["key",1,"an RSVP's stored answer"]],
     "lib/dm/sheet-view.ts#str-key": [["key",1,"a sheet's private field names (the notes and the opt-ins) the audit delta blanks (engine vocabulary)"]],
@@ -1035,12 +1035,7 @@
     "lib/dm/aoe-damage.ts#toLowerCase": [["key",1,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/aoe-damage.ts#toUpperCase": [["display",1,"ability abbreviation shown in a roll note"]],
     "lib/dm/aoe-shape.ts#[a-z]": [["key",1,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
-    "lib/dm/aoe-shape.ts#\\b": [["table-language",5,"meaning reader: an ability's range and area read from its text (pack rows, and the traits a workshop author writes)"]],
-    "lib/dm/aoe-shape.ts#\\w": [["table-language",1,"meaning reader: an ability's range and area read from its text (pack rows, and the traits a workshop author writes)"]],
-    "lib/dm/aoe-shape.ts#re-word": [["table-language",5,"meaning reader: an ability's range and area read from its text (pack rows, and the traits a workshop author writes)"]],
-    "lib/dm/aoe-shape.ts#str-eq": [["table-language",1,"meaning reader: an ability's range and area read from its text (pack rows, and the traits a workshop author writes)"]],
-    "lib/dm/aoe-shape.ts#str-key": [["english-source",1,"reference: SRD spell and ability names with their areas"]],
-    "lib/dm/aoe-shape.ts#toLowerCase": [["table-language",3,"meaning reader: an ability's range and area read from its text (pack rows, and the traits a workshop author writes)"],["key",2,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
+    "lib/dm/aoe-shape.ts#toLowerCase": [["key",2,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
     "lib/dm/aoe-spell.ts#toUpperCase": [["display",1,"ability abbreviation shown in a correction note"]],
     "lib/dm/arc-logic.ts#[a-z]": [["key",1,"code-fence language tag"]],
     "lib/dm/arc-logic.ts#re-word": [["key",1,"tool schema enums and field names, statuses, condition labels and ids (engine vocabulary)"]],
@@ -2570,6 +2565,14 @@
     "lib/addons/native-board-client.ts#str-eq": [["key",3,"fixed DOM menu role and CSS pointer-events/visibility values used for native occlusion"]],
     "lib/addons/native-board-client.ts#str-list": [["key",1,"fixed DOM mutation attributes observed for native layout and occlusion updates"]],
     "app/campaigns/[campaignId]/AddonBoardView.tsx#str-list": [["key",1,"native input message kinds gated while a native panel or dialog is active"]],
-    "app/campaigns/[campaignId]/AddonBoardView.tsx#str-eq": [["key",1,"fixed CSS visibility value gates native input behind an open visible dialog"]]
+    "app/campaigns/[campaignId]/AddonBoardView.tsx#str-eq": [["key",1,"fixed CSS visibility value gates native input behind an open visible dialog"]],
+    "lib/battlemap/area-shape.ts#\\b": [["table-language",5,"meaning reader: an ability's range and area read from its text (pack rows, and the traits a workshop author writes)"],["english-source",2,"the content pack's spell text: whether a blast lets its caster choose the creatures it catches (\"of your choice\", \"you choose\"), issue 570"]],
+    "lib/battlemap/area-shape.ts#\\w": [["table-language",1,"meaning reader: an ability's range and area read from its text (pack rows, and the traits a workshop author writes)"]],
+    "lib/battlemap/area-shape.ts#re-word": [["table-language",5,"meaning reader: an ability's range and area read from its text (pack rows, and the traits a workshop author writes)"],["english-source",1,"the content pack's spell text: whether a blast lets its caster choose the creatures it catches (\"of your choice\", \"you choose\"), issue 570"]],
+    "lib/battlemap/area-shape.ts#str-eq": [["table-language",1,"meaning reader: an ability's range and area read from its text (pack rows, and the traits a workshop author writes)"]],
+    "lib/battlemap/area-shape.ts#toLowerCase": [["table-language",3,"meaning reader: an ability's range and area read from its text (pack rows, and the traits a workshop author writes)"]],
+    "lib/battlemap/area-shape.ts#str-key": [["english-source",1,"reference: SRD spell and ability names with their areas"]],
+    "lib/battlemap/hand-area.ts#toLowerCase": [["key",1,"a spell's damage type (engine vocabulary), keying the colour its blast is drawn in"]],
+    "lib/battlemap/hand-area.ts#str-key": [["key",1,"a spell's damage type (engine vocabulary), keying the colour its blast is drawn in"]]
   }
 }

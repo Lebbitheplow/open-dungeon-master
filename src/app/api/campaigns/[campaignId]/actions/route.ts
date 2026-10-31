@@ -29,7 +29,7 @@ import { RECAP_AFTER_MS } from "@/lib/dm/session-hold-logic";
 import { sessionHoldOn } from "@/lib/dm/session-hold";
 import { publishPersisted, publishWithSeq } from "@/lib/events";
 import { directCardCall, parseMessageIntent } from "@/lib/dm/intent-logic";
-import { spellMechanicsFor } from "@/lib/content";
+import { directContextFor } from "@/lib/dm/direct-context";
 import { addressesDm } from "@/lib/dm/ooc-question";
 import { spokenLine } from "@/lib/dm/speech";
 import { intentRefusal } from "@/lib/dm/intent-check";
@@ -235,13 +235,7 @@ export async function POST(
   const dmSeats = campaignSeats(campaign);
   const direct =
     intent && kind === "do" && hasHumanDm(dmSeats) && isPrimaryDm(dmSeats, user.id)
-      ? directCardCall(intent, sheet.id, {
-          inFight: Boolean(getActiveEncounter(campaignId)),
-          ...(() => {
-            const mech = intent.spell ? spellMechanicsFor({ spell: intent.spell, userIds: tableAuthors(campaignId) })?.mech : null;
-            return { resolution: mech?.resolution ?? null, area: Boolean(mech?.area) };
-          })(),
-        })
+      ? directCardCall(intent, sheet.id, directContextFor(campaignId, intent, tableAuthors(campaignId)))
       : null;
   if (direct) {
     const resolved = await invokeEngine(campaign, { kind: "human", userId: user.id }, direct);

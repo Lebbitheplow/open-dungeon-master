@@ -476,5 +476,8 @@ export type HandAimDetail = {
   // can take the taps and draw the area (src/lib/battlemap/hand-area.ts).
   area?: HandArea | null;
   pick?: AreaPick;
+  // The creature the card is aimed at, by id: the board centres an area on
+  // it (or points one at it) until a square is tapped.
+  aimId?: string | null;
 };
 export type HandTargetDetail = { id?: string; name?: string };

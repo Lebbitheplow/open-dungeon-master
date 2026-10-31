@@ -86,6 +86,10 @@ export const SERVER_FEATURES = {
   // `movement` on an enemy's actions in the GM's view of the fight. An older
   // host reads enemyId as the escaping enemy only.
   enemyActions: true,
+  // An instant blast's card laid on the battle map (issue 570): the Hand
+  // sends a Fireball's square, which an older host could not catch anyone
+  // in, so its blasts stay aimed at one enemy there.
+  handBlasts: true,
 } as const;
 export type ServerFeatures = { [K in keyof typeof SERVER_FEATURES]: boolean };
 
