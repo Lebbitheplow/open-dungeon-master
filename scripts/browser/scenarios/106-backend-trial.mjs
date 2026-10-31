@@ -84,6 +84,9 @@ export default {
       check(saved.ok(), `pointing the story backend at ${customModel} answered ${saved.status()}`);
     };
     const testOnce = async (label) => {
+      // Leave first: in the app, opening the page already shown keeps its
+      // form, which still holds the model saved before this one.
+      await t.open("/");
       await t.open("/admin");
       const storyBlock = page.locator(`${root}#admin-text`).first();
       const button = storyBlock.getByRole("button", { name: "Test backend" }).locator("visible=true").first();
