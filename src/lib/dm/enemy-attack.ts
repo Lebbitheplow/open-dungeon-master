@@ -91,17 +91,17 @@ function leadProfile(profiles: EnemyAttackProfile[]): EnemyAttackProfile {
 }
 
 // A legendary action that buys one attack (legendary-tools.ts) is exactly
-// one swing, whatever the Multiattack says. Consumed here.
-function takeLegendaryStrike(campaignId: string, enemyId: string): boolean {
-  const encounter = getActiveEncounter(campaignId);
-  const strikes = encounter?.legendary.strikes ?? [];
-  if (!encounter || !strikes.includes(enemyId)) {
-    return false;
-  }
+// one swing, whatever the Multiattack says. Consumed when the swing is paid
+// for, on the encounter about to be saved: taken before the refusals after
+// it (name the attack, Antilife Shell, out of reach), a retry lost the
+// legendary-only attacks and, no longer a single swing, made the whole
+// Multiattack (issue #666).
+function spendLegendaryStrike(encounter: { legendary: { strikes?: string[] } }, enemyId: string) {
+  const strikes = encounter.legendary.strikes ?? [];
   const at = strikes.indexOf(enemyId);
-  encounter.legendary.strikes = [...strikes.slice(0, at), ...strikes.slice(at + 1)];
-  saveEncounter(encounter);
-  return true;
+  if (at >= 0) {
+    encounter.legendary.strikes = [...strikes.slice(0, at), ...strikes.slice(at + 1)];
+  }
 }
 
 export function handleEnemyAttack(
@@ -111,8 +111,12 @@ export function handleEnemyAttack(
   sheets: CharacterSheet[],
   sheetsById: Map<string, CharacterSheet>,
   // The engine's own attacks (Confusion's random creature): `anySide` lets
-  // the target be on the attacker's own side.
-  engine: { anySide?: boolean } = {},
+  // the target be on the attacker's own side. `pickAttack`: the server plays
+  // the turn and names no attack, so a creature held to one swing (Slow,
+  // Confusion's lash-out, a legendary strike) makes its first one instead of
+  // being refused for want of a name (issue #666: a confused goblin with a
+  // scimitar and a shortbow never lashed out).
+  engine: { anySide?: boolean; pickAttack?: boolean } = {},
 ): ToolResult {
   const encounter = getActiveEncounter(campaign.id);
   if (!encounter) {
@@ -155,7 +159,7 @@ export function handleEnemyAttack(
   // or a legendary strike (flee-logic.ts, issue #621).
   const commanded = heldTurnRefusal(found, "attack");
   if (commanded) {
-    return { error: commanded, refused: "rules" };
+    return { error: commanded, refused: "rules", stop: "commanded" };
   }
   // The target is any combatant (src/lib/dm/combatant.ts): a character on
   // either side, or an enemy fighting on the other one (a creature the party
@@ -192,7 +196,7 @@ export function handleEnemyAttack(
       return held;
     }
     if (charmedBy(found.conditions, found.conditionMeta, aimed.id)) {
-      return { error: `${found.displayName} is charmed by ${aimed.name} and cannot attack it.`, retry: true };
+      return { error: `${found.displayName} is charmed by ${aimed.name} and cannot attack it.`, retry: true, stop: "target" };
     }
     return enemyStrikesEnemy(campaign, turn, found, aimed.enemy, {
       ...(args.attack ? { attack: args.attack } : {}),
@@ -214,6 +218,7 @@ export function handleEnemyAttack(
     return {
       error: `${found.displayName} is charmed by ${target.name} and cannot attack them. It may attack someone else or take another action.`,
       retry: true,
+      stop: "target",
     };
   }
   // Calm Emotions, Fear's flight; a target Blink or Etherealness took away (spell-planes.ts).
@@ -223,14 +228,16 @@ export function handleEnemyAttack(
   }
   // Sanctuary turns the attacker away on a failed WIS save (spell-defenses.ts),
   // and a failure holds for the rest of its turn (enemy-conditions.ts).
+  // SRD 5.1: it "must choose a new target or lose the attack", so the turn
+  // the server plays tries the next one (stop "target").
   const sanctuary = sanctuaryWard(campaign.id, found, target, sanctuaryRefusal);
   if (sanctuary) {
-    return sanctuary;
+    return { ...sanctuary, stop: "target" };
   }
   // Nature's Sanctuary turns a beast or plant away the same way (srd-defenses.ts).
   const natures = sanctuaryWard(campaign.id, found, target, naturesSanctuaryRefusal);
   if (natures) {
-    return natures;
+    return { ...natures, stop: "target" };
   }
   // A legendary action that bought an attack printed only among the legendary
   // actions (an ankheg queen's Acid Glob) may swing it, and only then.
@@ -242,19 +249,27 @@ export function handleEnemyAttack(
   if (!attacks.length) {
     return { error: `${found.displayName} has no usable attacks; narrate a different action.`, retry: true };
   }
-  const asked = args.attack ? attackNamed(attacks, args.attack) : null;
-  if (args.attack && !asked) {
+  const named = args.attack ? attackNamed(attacks, args.attack) : null;
+  if (args.attack && !named) {
     return noneNamed(`${found.displayName} has no attack called`, args.attack, attacks.map((attack) => attack.name));
   }
   // The action's attacks: a bonus action's is never one of its swings.
   const actionAttacks = attacks.filter((attack) => !attack.bonusAction);
-  if (!asked && !actionAttacks.length) {
+  if (!named && !actionAttacks.length) {
     return { error: `${found.displayName}'s attacks are bonus actions: name one in attack (${attacks.map((attack) => attack.name).join(", ")}).`, retry: true };
   }
   // Slow: no more than one attack on its turn, Multiattack or not (SRD 5.1).
   // A bonus action's attack is one swing, and spends no legendary strike.
   // Confusion's lash-out is one melee attack, not the routine.
-  const single = bonus || hasteSwing || Boolean(lash) || takeLegendaryStrike(campaign.id, found.id) || conditionTurnShape(found.conditions).slowed;
+  const strike = !bonus && !hasteSwing && !lash && owed;
+  const single = bonus || hasteSwing || Boolean(lash) || strike || conditionTurnShape(found.conditions).slowed;
+  // The one swing the server picks when it plays the turn: a lash-out's is
+  // a melee attack (SRD 5.1, Confusion), any other its first.
+  const picked =
+    !named && single && engine.pickAttack && actionAttacks.length > 1
+      ? (lash ? actionAttacks.find((attack) => enemyAttackProfile(attack, found.stats.traits ?? []).melee) : null) ?? actionAttacks[0]
+      : null;
+  const asked = named ?? picked;
   if (single && !asked && actionAttacks.length > 1) {
     return { error: `${found.displayName} makes one attack this turn: name it in attack (${actionAttacks.map((attack) => attack.name).join(", ")}).`, retry: true };
   }
@@ -266,7 +281,7 @@ export function handleEnemyAttack(
   // Antilife Shell: no melee reaches through it (zone-rules.ts).
   const shell = leadProfile(profiles).melee ? reachThroughProblem(encounter.id, found.id, target.id, found.stats.type, found.displayName) : null;
   if (shell) {
-    return shell;
+    return { ...shell, stop: "target" };
   }
 
   // A prone creature stands before it acts, for half its speed (SRD 5.1,
@@ -280,7 +295,13 @@ export function handleEnemyAttack(
   // character holds a readied action, an enemy out of reach stays put.
   const spatial = approachTarget(campaign, encounter.id, enemy, target.id, leadProfile(profiles), readiedHolder(campaign.id));
   if (spatial.blocked) {
-    return spatial.blocked;
+    // Where the walk left it and what its walk drew: dropped here, the model
+    // heard of neither though the token had moved (issue #666).
+    return {
+      ...spatial.blocked,
+      ...(spatial.movedTo ? { movedTo: spatial.movedTo } : {}),
+      ...(spatial.opportunityAttacks?.length ? { opportunityAttacks: spatial.opportunityAttacks } : {}),
+    };
   }
   // A walk that took it out of a grappled creature's reach let go.
   releaseGrapplesOutOfReach(campaign);
@@ -337,6 +358,9 @@ export function handleEnemyAttack(
   } else if (hasteSwing) {
     recordEnemyTurn(live, enemy.id, { hasteUsed: true });
   } else if (single) {
+    if (strike) {
+      spendLegendaryStrike(live, enemy.id);
+    }
     markEnemyActed(live, enemy.id);
   } else {
     spendEnemyAction(live, enemy.id);

@@ -26,6 +26,7 @@ import { aggressiveSteps } from "@/lib/dm/enemy-aggressive";
 import { missileDeflection, zoneStepsFor } from "@/lib/dm/zone-rules";
 import { zonesAfterMove } from "@/lib/dm/zone-triggers";
 import type { ToolError } from "@/lib/dm/tool-errors";
+import type { AttackStop } from "@/lib/dm/turn-lines-logic";
 
 // An enemy getting to where its attack reaches, on its own turn (SRD 5.1,
 // Movement and Position): it stands up from prone for half its speed, walks
@@ -39,8 +40,9 @@ import type { ToolError } from "@/lib/dm/tool-errors";
 type XY = { x: number; y: number };
 
 export type Approach = {
-  // The refusal, when the attack cannot be made this turn.
-  blocked?: ToolError & { heldGround?: string };
+  // The refusal, when the attack cannot be made this turn, tagged with why
+  // (turn-lines-logic.ts), so the backstop's line names it (issue #666).
+  blocked?: ToolError & { heldGround?: string; stop: AttackStop };
   // A Wind Wall between them: why a ranged weapon swing misses.
   deflected?: string;
   movedTo?: string;
@@ -194,6 +196,7 @@ export function approachTarget(
         error: `${attacker.name} is ${startDistance * 5} ft from ${target.name}, out of reach, and ${holdGround.holder} holds a readied action (${holdGround.trigger}). It does not walk in and attack in one call while someone waits on a trigger: move it with move_token, release ${holdGround.holder}'s readied action if its movement fired the trigger (or let the trigger pass), then call enemy_attack. Nothing was spent.`,
         retry: true,
         heldGround: holdGround.holder,
+        stop: "held",
       },
     };
   }
@@ -274,11 +277,16 @@ export function approachTarget(
       : sightFrom(landing)
         ? `${attacker.name} is ${distance * 5} ft from ${target.name}, beyond this attack's ${profile.longRangeTiles * 5} ft range, and cannot close the gap this turn`
         : `${attacker.name} has no line of sight to ${target.name} and cannot reach a firing position this turn`;
+  const stop: AttackStop = fear ? "fear" : profile.melee ? "reach" : sightFrom(landing) ? "range" : "sight";
+  // The game saying no, not a mistake in the call: the walk was made, its
+  // movement spent and its opportunity attacks rolled, so a retry told the
+  // model nothing had happened (issue #666).
   return {
     ...base,
     blocked: {
       error: `${why}${moved ? `; it moved to (${landing.x},${landing.y})` : ""}. Use a ranged option, a different target, or another action.`,
-      retry: true,
+      refused: "rules",
+      stop,
     },
   };
 }

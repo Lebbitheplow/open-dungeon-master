@@ -472,7 +472,7 @@ test("an older form's field names reach the names the handler reads", () => {
 test("the property scan reads the tools it is pointed at", () => {
   assert.deepEqual(toolProperties("take_action").keys.sort(), [
     "action", "bonus", "characterId", "enemyId", "item", "level", "readied", "reason", "shove", "skill",
-    "spell", "targetCharacterId", "targetEnemyId", "trigger",
+    "spell", "targetCharacterId", "targetEnemyId", "toward", "trigger",
   ]);
   assert.ok(toolProperties("apply_damage").keys.includes("amount"));
   assert.ok(toolProperties("apply_damage").keys.includes("characterId"));
@@ -983,6 +983,26 @@ test("Correct a sheet turns a named field and its value into the sheet's own key
     const value = field.kind === "text" ? "x" : field.kind === "list" ? "prone" : "3";
     assert.ok("args" in foldFieldValue({ field: field.name, value }, SCORES), field.name);
   }
+});
+
+// Issue #666: the console's Dash and Disengage can name whom they go to,
+// and a host without that reads no such field; the enemy field goes to an
+// older host under the key that host reads (it knew only escapingEnemyId).
+const { fieldForHost } = await import("../src/lib/dm/catalog-types.ts");
+test("take_action's destination fields ask for the host, and the enemy field reaches an older host under its old key", () => {
+  const fields = adjudication("take_action").fields;
+  const named = (name) => fields.find((field) => field.name === name);
+  const offers = () => true;
+  const older = () => false;
+  for (const name of ["toward"]) {
+    assert.ok(named(name), name);
+    assert.ok(fieldForHost(named(name), offers), `${name} on a host that has it`);
+    assert.equal(fieldForHost(named(name), older), null, `${name} hidden on an older host`);
+  }
+  assert.equal(fieldForHost(named("enemyId"), offers).name, "enemyId");
+  assert.equal(fieldForHost(named("enemyId"), older).name, "escapingEnemyId");
+  assert.ok(read("src/lib/capabilities.ts").match(/^\s*moveWithAction: true,$/m), "the server flags it");
+  assert.match(read("src/lib/use-capabilities.ts"), /features\?: \{[^}]*moveWithAction\?: boolean/);
 });
 
 console.log(`invoke-catalog: ${passed} tests passed`);

@@ -161,9 +161,11 @@ export function spendKiTechnique(
   } else if (technique === "flurry") {
     applied = `${sheet.name} has ${flags.flurryStrikes === 2 ? "two" : flags.flurryStrikes} Flurry of Blows strikes this turn: resolve each with pc_attack using weapon "unarmed strike". The server spends them.`;
   } else {
+    // Nothing walks with it (issue #666): said, so the GM moves them or
+    // sends the Dash through take_action with somewhere to go.
     applied = dash
-      ? `${sheet.name} Dashes as a bonus action: their speed is added to their movement this turn, and their jump distance is doubled.`
-      : `${sheet.name} Disengages as a bonus action: leaving an enemy's reach provokes nothing this turn, and their jump distance is doubled.`;
+      ? `${sheet.name} Dashes as a bonus action: their speed is added to their movement this turn, and their jump distance is doubled. Nothing has moved yet: walk them with move_token, or use take_action dash with bonus true and toward.`
+      : `${sheet.name} Disengages as a bonus action: leaving an enemy's reach provokes nothing this turn, and their jump distance is doubled. Nothing has moved yet: walk them with move_token, or use take_action disengage with bonus true and toward.`;
   }
   return {
     patch,

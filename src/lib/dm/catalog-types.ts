@@ -108,8 +108,10 @@ export type CatalogField = {
   // Read this way only on a host that offers this server feature
   // (src/lib/capabilities.ts SERVER_FEATURES): the console is compiled into
   // the apps, which can open an older server. There the field reads as
-  // `older` says (what that server does with it), or is not shown.
-  host?: { feature: string; older?: { label: string; help?: string } };
+  // `older` says (what that server does with it), or is not shown. `name`
+  // there is the key that server reads the value under, when it was renamed
+  // since (take_action's enemyId was escapingEnemyId before issue #621).
+  host?: { feature: string; older?: { label: string; help?: string; name?: string } };
 };
 
 // The field as this host should show it, or null when it cannot use it.

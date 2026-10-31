@@ -98,6 +98,10 @@ export const SERVER_FEATURES = {
   // that stopped and why, on Settings > Connected agents (issue 654): the
   // `links` and `stoppedLinks` fields of GET /api/profile/agents.
   agentLinks: true,
+  // take_action's toward (issue #666): a Dash or Disengage walks the mover
+  // beside someone in the same call. The console shows the fields only on a host
+  // that reads them; an older one drops them unread.
+  moveWithAction: true,
 } as const;
 export type ServerFeatures = { [K in keyof typeof SERVER_FEATURES]: boolean };
 

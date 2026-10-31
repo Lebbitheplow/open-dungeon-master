@@ -521,6 +521,80 @@ await test("The console's run-the-monsters helper runs a fleeing creature and ho
   assert.deepEqual(held.notes, [`${calm.displayName} is calmed and holds.`]);
 });
 
+// Issue #666: the run-the-monsters pass played a stunned creature and posted
+// the engine's refusal, written for the model, to the table.
+await test("The console's run-the-monsters pass says a stunned creature cannot act, and an out-of-reach one closed in, in plain words", async () => {
+  const { playMonsterTurns, monstersReady } = await import("../src/lib/dm/delegate.ts");
+  const stunned = await stage({}, { conditions: ["stunned"], conditionMeta: {} });
+  assert.deepEqual(monstersReady(world.campaignId), [], "a stunned creature is not counted as one the press moves");
+  const none = await playMonsterTurns(world.campaign());
+  assert.equal(none.error, "Nothing is left standing to act.");
+  kit.setEnemy(stunned.id, { conditions: [], conditionMeta: {} });
+  kit.openField();
+  const encounter = world.encounter();
+  kit.saveEncounter({ ...encounter, legendary: { ...encounter.legendary, due: [stunned.id] } });
+  const ran = await playMonsterTurns(world.campaign());
+  const line = ran.notes.join(" ");
+  assert.match(line, /closes in on (Kara|Orin) but cannot reach them this turn\./, line);
+  assert.doesNotMatch(line, /cannot: |Use a ranged option|enemy_attack/);
+});
+
+await test("The console's run-the-monsters pass says plainly when a creature's turn has not come yet", async () => {
+  const { playMonsterTurns } = await import("../src/lib/dm/delegate.ts");
+  const waiting = await stage();
+  kit.openField();
+  kit.place(hero.id, 3, 7);
+  // Kara's turn, the goblin's still to come this round, and nothing handed on.
+  const encounter = world.encounter();
+  kit.saveEncounter({ ...encounter, turnIndex: encounter.order.findIndex((entry) => entry.kind === "pc" && entry.characterId === hero.id), legendary: { ...encounter.legendary, due: [] } });
+  const ran = await playMonsterTurns(world.campaign());
+  assert.deepEqual(ran.notes, [`${waiting.displayName}'s turn has not come yet.`], JSON.stringify(ran.notes));
+});
+
+// Issue #666, along the way: the engine's own attacks and the refusals
+// around them.
+const TWO_ATTACKS = { ...DUMMY, attacks: [{ name: "Club", toHit: 4, damage: "1d6+2", type: "bludgeoning" }, { name: "Bite", toHit: 4, damage: "1d4+2", type: "piercing" }] };
+const backstopNote = async () => {
+  const { listRecentMessages } = await import("../src/lib/db/messages.ts");
+  return listRecentMessages(world.campaignId, 50).filter((message) => message.content.startsWith("Skipped enemy turns")).at(-1)?.content ?? "";
+};
+
+await test("A slowed creature with two attacks makes one when the backstop plays it, instead of being refused for want of a name", async () => {
+  const enemy = await stage(TWO_ATTACKS, { conditions: ["slowed"], conditionMeta: { slowed: { spell: "Slow", source: priest.id, rounds: 10 } } });
+  kit.openField();
+  kit.place(hero.id, 3, 7);
+  const turn = aiTurn();
+  backstop(turn, enemy);
+  const note = await backstopNote();
+  assert.match(note, new RegExp(`${enemy.displayName} attacks Kara with Club \\(`), note);
+});
+
+await test("A legendary strike refused for want of an attack's name is still owed: the retry may swing the legendary-only attack, once", async () => {
+  const enemy = await stage({ ...TWO_ATTACKS, legendaryAttacks: [{ name: "Tail Swipe", toHit: 6, damage: "1d8+4", type: "bludgeoning" }] });
+  kit.openField();
+  kit.place(hero.id, 3, 7);
+  const encounter = world.encounter();
+  kit.saveEncounter({ ...encounter, legendary: { ...encounter.legendary, strikes: [enemy.id], acted: { round: encounter.round, ids: [], owed: [enemy.id] } } });
+  const unnamed = await attack(enemy, hero);
+  assert.equal(unnamed.ok, false);
+  assert.match(unnamed.error, /makes one attack this turn: name it in attack/);
+  assert.deepEqual(world.encounter().legendary.strikes, [enemy.id], "the refusal spent no strike");
+  const tail = await attack(enemy, hero, { attack: "Tail Swipe" });
+  assert.equal(tail.ok, true, tail.error);
+  assert.equal(tail.result.swings.length, 1, "one swing, not the routine");
+  assert.deepEqual(world.encounter().legendary.strikes ?? [], [], "the swing spent it");
+});
+
+await test("An attack refused out of reach after the walk is the rules saying no, and says where the walk left it", async () => {
+  const enemy = await stage();
+  kit.openField();
+  const out = await attack(enemy, hero);
+  assert.equal(out.ok, false);
+  assert.equal(out.refused, "rules", "the walk happened, so nothing in the call was wrong");
+  assert.equal(out.why?.stop, "reach");
+  assert.match(String(out.why?.movedTo), /^\(\d+,\d+\)$/);
+});
+
 // ---- an ambusher's owed turn, Haste, Aggressive ----
 
 await test("An ambusher's Dash on the round it was owed carries that turn's movement into its own: three speeds in all.", async () => {
@@ -680,6 +754,27 @@ await test("GAME STATE tells the GM an enemy's movement left once it is not its 
   assert.equal((await act(goblin, "disengage", {})).refused, "rules", "its action is spent on the Dash");
   assert.match(await gameState(), new RegExp(`${goblin.displayName} \\[enemyId=${goblin.id}\\][^"]*movement: 50 ft left this turn \\(Dashed\\)`));
   model.close();
+});
+
+// Issue #666: an enemy's Dash added speed and asked for a move_token the
+// GM had to remember; with somewhere to go it is walked in the same call.
+await test("An enemy's Dash toward a hero walks it there in the same call, on the doubled speed", async () => {
+  const enemy = await stage();
+  kit.openField();
+  kit.place(hero.id, 12, 7);
+  const dash = await act(enemy, "dash", { toward: hero.id });
+  assert.equal(dash.ok, true, dash.error);
+  assert.equal(dash.result.walked?.toward, "Kara", JSON.stringify(dash.result));
+  assert.equal(apart(at(enemy), { x: 12, y: 7 }), 1, "beside Kara, nine squares on 60 feet");
+  assert.equal(acted(enemy), true, "the Dash was its action");
+});
+
+await test("An enemy's Dash toward a name nobody has is refused with its action unspent", async () => {
+  const enemy = await stage();
+  const dash = await act(enemy, "dash", { toward: "the ogre" });
+  assert.equal(dash.ok, false);
+  assert.match(dash.error, /names nobody else on the board/);
+  assert.equal(acted(enemy), false);
 });
 
 await finish();

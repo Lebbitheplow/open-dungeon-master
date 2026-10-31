@@ -60,6 +60,10 @@ export type LegendaryState = {
   // The enemies a pass outside the model's own end_turn walked past that
   // nobody has yet played or waved through (src/lib/dm/enemies-due.ts).
   due?: string[];
+  // The enemies a pass walked past that could not act (stunned, paralyzed,
+  // held by a spell): owed no turn, and owed a line saying they lost it, in
+  // the backstop's note (src/lib/dm/encounter-tools.ts, issue #666).
+  lost?: string[];
   // A stretch with nobody able to act: the round it began, and whether the
   // table was told it ran too long to keep waking the DM
   // (src/lib/dm/encounter-tools.ts idledOut).
@@ -138,6 +142,7 @@ export function normalizeLegendaryState(raw: unknown): LegendaryState {
       : {}),
     ...(bonus ? { bonus: { round: Number(bonus.round) || 0, ids: stringList(bonus.ids) } } : {}),
     ...(stringList(record.due).length ? { due: stringList(record.due) } : {}),
+    ...(stringList(record.lost).length ? { lost: stringList(record.lost) } : {}),
     ...(idle ? { idle: { since: Number(idle.since) || 0, ...(idle.told === true ? { told: true } : {}) } } : {}),
     ...(stringList(record.walked).length ? { walked: stringList(record.walked) } : {}),
     ...(failed && typeof failed.enemyId === "string"
